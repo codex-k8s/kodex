@@ -23,6 +23,15 @@ type ManagedConfigurationGitSourceInput struct {
 	ExpectedConnectionVersion                                                    int64
 }
 
+const CreateProjectAssistantIntegrationConnection Kind = "CREATE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION"
+const ChangeProjectAssistantIntegrationGrant Kind = "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT"
+
+// Получатель разрешается по сохранённому проектному профилю, не выбирается grant payload.
+type ProjectAssistantIntegrationGrantInput struct {
+	AssistantRef string
+	Grant        SystemAssistantIntegrationGrantInput
+}
+
 const (
 	CreateEmailMailboxDraft                   Kind = "CREATE_EMAIL_MAILBOX_DRAFT"
 	SaveEmailMailboxDraft                     Kind = "SAVE_EMAIL_MAILBOX_DRAFT"
@@ -145,6 +154,7 @@ const (
 	TestConnection                            Kind = "TEST_INTEGRATION_CONNECTION"
 	SetConnectionEnabled                      Kind = "SET_INTEGRATION_CONNECTION_ENABLED"
 	ChangeIntegrationGrant                    Kind = "CHANGE_INTEGRATION_GRANT"
+	ChangeSystemAssistantIntegrationGrant     Kind = "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"
 	CreateAssistantConversation               Kind = "CREATE_ASSISTANT_CONVERSATION"
 	UpdateAssistantConversation               Kind = "UPDATE_ASSISTANT_CONVERSATION_TITLE"
 	ArchiveAssistantConversation              Kind = "ARCHIVE_ASSISTANT_CONVERSATION"
@@ -164,6 +174,7 @@ const (
 	ReportExecutionProgress                   Kind = "REPORT_EXECUTION_PROGRESS"
 	CompleteExecution                         Kind = "COMPLETE_EXECUTION"
 	DelegateExecution                         Kind = "DELEGATE_EXECUTION"
+	LaunchWorkflowExecution                   Kind = "LAUNCH_WORKFLOW_EXECUTION"
 	ProposeAssistantPlan                      Kind = "PROPOSE_ASSISTANT_PLAN"
 	ProposeAssistantMetadata                  Kind = "PROPOSE_ASSISTANT_METADATA"
 	ProposeRunMetadata                        Kind = "PROPOSE_RUN_METADATA"
@@ -259,6 +270,7 @@ type AssistantRoleImageRecipeInput struct {
 }
 type AssistantRoleImageUpdateInput struct {
 	ProjectRef, RecipeRef, Name string
+	SpecSHA256                  string
 	Environment                 entity.RoleEnvironmentSelection
 }
 type AgentBindingInput struct {
@@ -266,6 +278,14 @@ type AgentBindingInput struct {
 	Enabled              bool
 }
 type AgentAvatarInput struct{ AgentRef, ArtifactRef string }
+
+// Внутренняя команда применяется только из подтверждённого specialty plan.
+type ProjectAssistantConnectionInput struct {
+	AssistantRef, OrganizationRef, ProjectRef, ProfileRef, DefinitionVersion, DefinitionDigest string
+	AgentVersion, ProfileVersion                                                               int64
+	Connection                                                                                 ConnectionInput
+}
+
 type AgentRuntimeConfigurationInput struct {
 	AgentRef, RuntimeProfileRef, Model, ProviderPolicyMode string
 	ProviderAccounts                                       []entity.ProviderAccountCandidate
@@ -277,11 +297,13 @@ type AssistantRuntimeConfigurationInput struct {
 	RuntimeProfilePin                                           entity.AssistantRuntimeProfilePin
 	Configuration                                               AgentRuntimeConfigurationInput
 	ReasoningEffort                                             string
+	WebSearchMode                                               string
 	ScopeKind, OrganizationRef, ProjectRef, AssistantProfileRef string
 }
 
 type SystemAssistantRoleImageInput struct {
 	SystemAssistantRef, OrganizationRef, RecipeRef, Name string
+	SpecSHA256                                           string
 	AgentVersion                                         int64
 	Environment                                          entity.RoleEnvironmentSelection
 }
@@ -396,8 +418,14 @@ type ConnectionInput struct {
 }
 type IntegrationGrantInput struct {
 	ConnectionRef, CapabilityKey, AgentRef, WorkflowRef string
+	ApprovalPolicy                                      string
 	ApprovalScopePaths                                  []string
 	Enabled                                             bool
+}
+type SystemAssistantIntegrationGrantInput struct {
+	ConnectionRef, CapabilityKey, ApprovalPolicy string
+	ApprovalScopePaths                           []string
+	Enabled                                      bool
 }
 type AssistantConversationInput struct {
 	ProjectRef, AssistantScope string
@@ -440,6 +468,7 @@ type LeaseInput struct {
 	Generation                        int64
 	Limit                             int32
 	Progress                          string
+	Message                           *entity.RunMessage
 }
 type ProviderCredentialRefreshInput struct {
 	LeaseRef, Fence, PreviousCredentialRevisionRef, PreviousContentSHA256 string
@@ -486,7 +515,7 @@ type ProposeRunMetadataInput struct {
 }
 type RunToolCallInput struct {
 	LeaseRef, Fence, CallRef, Tool, CapabilityRef, GrantRef, State, SafeResult string
-	Generation, DurationMS                                                     int64
+	Generation, DurationMS, Revision                                           int64
 	SafeParameters                                                             map[string]any
 }
 type SessionArchiveTaskInput struct {

@@ -47,7 +47,7 @@ operations:
       orderingKey: organizationRef+rootRunRef
       sequenceField: sequence
       deduplicationKey: eventId
-      maximumPayloadBytes: 65536
+      maximumPayloadBytes: 258048
     x-consumers:
       - service: control-api-gateway
         effect: WAKE_AUTHORIZED_RUN_STREAM_CATCH_UP
@@ -169,6 +169,14 @@ components:
         actor: { $ref: '#/components/schemas/RunEventActor' }
         messageKind: { $ref: '#/components/schemas/RunEventMessageKind' }
         toolCall: { $ref: '#/components/schemas/RunToolCall' }
+        integrationInvocationRef:
+          description: Только новый owner completion INTEGRATION_ACTION_*; persisted delta и protected ListRunEvents сохраняют этот exact pin. Duplicate не создаёт повторного события; historical без pin не восстанавливаются.
+          type: string
+          minLength: 8
+          maxLength: 96
+          pattern: '^inv_[A-Za-z0-9_-]+$'
+        execution: { $ref: '#/components/schemas/RunEventExecution' }
+        message: { $ref: '#/components/schemas/RunMessage' }
         state:
           type: string
           enum: [QUEUED, RUNNING, WAITING_OWNER, WAITING_EXTERNAL, SUCCEEDED, FAILED, CANCELLED]
@@ -180,6 +188,29 @@ components:
           maxItems: 12
           uniqueItems: true
           items: { type: string, enum: [CANCEL, RETRY, CONTINUE_SESSION, RESOLVE_GATE, DOWNLOAD_ARTIFACT] }
+    RunEventExecution:
+      type: object
+      additionalProperties: false
+      required: [runRef, nodeRef, sessionRef, turnRef, turnNumber, attempt]
+      properties:
+        runRef: { $ref: '#/components/schemas/OpaqueRef' }
+        nodeRef: { $ref: '#/components/schemas/OpaqueRef' }
+        sessionRef: { $ref: '#/components/schemas/OpaqueRef' }
+        turnRef: { $ref: '#/components/schemas/OpaqueRef' }
+        turnNumber: { type: integer, format: int64, minimum: 1 }
+        attempt: { type: integer, format: int32, minimum: 1 }
+    RunMessage:
+      type: object
+      additionalProperties: false
+      required: [ref, phase, revision, text]
+      properties:
+        ref: { $ref: '#/components/schemas/OpaqueRef' }
+        phase: { $ref: '#/components/schemas/RunMessagePhase' }
+        revision: { type: integer, format: int64, minimum: 1 }
+        text: { type: string, minLength: 1, maxLength: 100000 }
+    RunMessagePhase:
+      type: string
+      enum: [USER, COMMENTARY, FINAL]
     RunEventActor:
       type: object
       additionalProperties: false
@@ -205,12 +236,13 @@ components:
         capabilityRef: { type: string, maxLength: 160 }
         grantRef: { $ref: '#/components/schemas/OpaqueRef' }
         state: { $ref: '#/components/schemas/RunToolCallState' }
+        revision: { type: integer, format: int64, minimum: 1 }
         durationMs: { type: integer, format: int64, minimum: 0, maximum: 86400000 }
         safeResult: { type: string, maxLength: 2000 }
         auditRef: { $ref: '#/components/schemas/OpaqueRef' }
     RunToolCallState:
       type: string
-      enum: [SUCCEEDED, FAILED]
+      enum: [RUNNING, SUCCEEDED, FAILED, CANCELLED]
     PlatformEventEnvelope:
       type: object
       additionalProperties: false

@@ -1,4 +1,4 @@
--- name: role_images_reject_stale_admission_candidates :exec
+-- name: role_images_reject_stale_admission_candidates :many
 WITH rejected_artifacts AS (
     UPDATE control_plane.image_artifacts artifact
     SET admission_state = 'REJECTED',
@@ -21,12 +21,17 @@ WITH rejected_artifacts AS (
           artifact.policy_revision <> @policy_revision
           OR artifact.policy_sha256 <> @policy_sha256
       )
-    RETURNING artifact.id
-)
+    RETURNING artifact.id, artifact.ref, artifact.project_id
+), closed_promotions AS (
 UPDATE control_plane.role_image_promotion_requests request
 SET state = 'FAILED',
     updated_at = clock_timestamp()
 FROM rejected_artifacts artifact
 WHERE request.organization_id = @organization_id::uuid
   AND request.image_artifact_id = artifact.id
-  AND request.state IN ('QUEUED', 'PROMOTING');
+  AND request.state IN ('QUEUED', 'PROMOTING')
+RETURNING request.id
+)
+SELECT artifact.ref, COALESCE(artifact.project_id::text, '')
+FROM rejected_artifacts artifact
+ORDER BY artifact.ref;

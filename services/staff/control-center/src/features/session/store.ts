@@ -41,6 +41,7 @@ import {
   renewOwnerSession,
 } from "@/shared/api/generated/openapi/sdk.gen";
 import type {
+  BootstrapState,
   OwnerAuthorizationInput,
   OwnerSessionMetadata,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -60,9 +61,14 @@ import {
 } from "@/shared/api/problem";
 import { runtimeConfig } from "@/shared/config/runtime";
 import {
+  clearIngressProxyRecovery,
+  ingressProxyRecoveryCode,
+} from "@/shared/api/proxy-session-recovery";
+import {
   assertRuntimeResourceAddressIdentity,
   runtimeResourceAddressScope,
   runtimeResourceScopeKey,
+  requireRuntimeOrganizationRef,
   type RuntimeResourceAddress,
   type RuntimeResourceScope,
 } from "@/features/runtime/resource-scope";
@@ -125,6 +131,13 @@ function ownerSessionRevision(etagValue?: string): number {
 
 export const useSessionStore = defineStore("session", () => {
   const phase = ref<SessionPhase>("checking");
+  const authenticatedBootstrap = ref<BootstrapState>();
+
+  function takeAuthenticatedBootstrap(): BootstrapState | undefined {
+    const value = authenticatedBootstrap.value;
+    authenticatedBootstrap.value = undefined;
+    return value;
+  }
   const problem = ref<AppProblem>();
   const metadata = ref<OwnerSessionMetadata>();
   let timing: BrowserSessionTiming | undefined;
@@ -222,6 +235,7 @@ export const useSessionStore = defineStore("session", () => {
       String(value.sessionRevision),
     );
     problem.value = undefined;
+    clearIngressProxyRecovery();
   }
 
   async function redirectAuthorization(
@@ -293,6 +307,10 @@ export const useSessionStore = defineStore("session", () => {
 
   function handleRenewalFailure(error: unknown): void {
     const normalized = asProblem(error);
+    if (normalized.code === ingressProxyRecoveryCode) {
+      problem.value = normalized;
+      return;
+    }
     if (
       normalized.kind === "unauthorized" ||
       !timing ||
@@ -325,6 +343,7 @@ export const useSessionStore = defineStore("session", () => {
     generation += 1;
     revision.value = 0;
     metadata.value = undefined;
+    authenticatedBootstrap.value = undefined;
     timing = undefined;
     window.sessionStorage.removeItem(authorizationStateKey);
     window.sessionStorage.removeItem(sessionRevisionKey);
@@ -365,6 +384,7 @@ export const useSessionStore = defineStore("session", () => {
         if (current !== generation) return;
         if (observed.data.sessionRevision !== serverRevision)
           throw new Error("Browser session revision does not match bootstrap");
+        requireRuntimeOrganizationRef(response.data.organizationRef);
         acceptMetadata(observed.data, performance.now() - started);
         revision.value = serverRevision;
         renewalBus.observeRevision(serverRevision);
@@ -372,6 +392,7 @@ export const useSessionStore = defineStore("session", () => {
           sessionRevisionKey,
           String(serverRevision),
         );
+        authenticatedBootstrap.value = response.data;
         phase.value = "authenticated";
         startRenewal();
         resetUnauthorizedNotification();
@@ -659,12 +680,25 @@ export const useSessionStore = defineStore("session", () => {
       );
       if (current !== generation)
         throw new Error("OIDC callback was superseded");
+      const bootstrap = await withOwnerSessionRetry(() =>
+        unwrap(
+          getBootstrapState({ signal: requestSignal(), cache: "no-store" }),
+        ),
+      );
+      if (current !== generation)
+        throw new Error("OIDC callback bootstrap was superseded");
+      if (
+        ownerSessionRevision(bootstrap.etag) !== response.data.sessionRevision
+      )
+        throw new Error("Browser session revision does not match bootstrap");
+      requireRuntimeOrganizationRef(bootstrap.data.organizationRef);
       acceptMetadata(response.data, performance.now() - started);
       window.sessionStorage.removeItem(authorizationStateKey);
       const parsedRevision = response.data.sessionRevision;
       revision.value = parsedRevision;
       renewalBus.observeRevision(parsedRevision);
       window.sessionStorage.setItem(sessionRevisionKey, String(parsedRevision));
+      authenticatedBootstrap.value = bootstrap.data;
       phase.value = "authenticated";
       startRenewal();
       resetUnauthorizedNotification();
@@ -943,6 +977,8 @@ export const useSessionStore = defineStore("session", () => {
 
   return {
     phase,
+    authenticatedBootstrap,
+    takeAuthenticatedBootstrap,
     problem,
     loginFailed,
     canLogout,

@@ -28,6 +28,10 @@ const (
 	RoleImageService_ListOrganizationRoleImageRecipeRevisions_FullMethodName = "/controlplane.v1.RoleImageService/ListOrganizationRoleImageRecipeRevisions"
 	RoleImageService_ManageOrganizationRoleImageRecipe_FullMethodName        = "/controlplane.v1.RoleImageService/ManageOrganizationRoleImageRecipe"
 	RoleImageService_RequestOrganizationRoleImagePromotion_FullMethodName    = "/controlplane.v1.RoleImageService/RequestOrganizationRoleImagePromotion"
+	RoleImageService_GetOrganizationImageVulnerabilityReport_FullMethodName  = "/controlplane.v1.RoleImageService/GetOrganizationImageVulnerabilityReport"
+	RoleImageService_GetImageVulnerabilityReport_FullMethodName              = "/controlplane.v1.RoleImageService/GetImageVulnerabilityReport"
+	RoleImageService_DecideOrganizationImageAdmissionRisk_FullMethodName     = "/controlplane.v1.RoleImageService/DecideOrganizationImageAdmissionRisk"
+	RoleImageService_DecideImageAdmissionRisk_FullMethodName                 = "/controlplane.v1.RoleImageService/DecideImageAdmissionRisk"
 	RoleImageService_ClaimImageBuild_FullMethodName                          = "/controlplane.v1.RoleImageService/ClaimImageBuild"
 	RoleImageService_RenewImageBuild_FullMethodName                          = "/controlplane.v1.RoleImageService/RenewImageBuild"
 	RoleImageService_ReportImageBuildProgress_FullMethodName                 = "/controlplane.v1.RoleImageService/ReportImageBuildProgress"
@@ -36,6 +40,10 @@ const (
 	RoleImageService_GetImageSupplyWorkAvailability_FullMethodName           = "/controlplane.v1.RoleImageService/GetImageSupplyWorkAvailability"
 	RoleImageService_ClaimImageAdmission_FullMethodName                      = "/controlplane.v1.RoleImageService/ClaimImageAdmission"
 	RoleImageService_RecordImageAdmission_FullMethodName                     = "/controlplane.v1.RoleImageService/RecordImageAdmission"
+	RoleImageService_FailImageAdmission_FullMethodName                       = "/controlplane.v1.RoleImageService/FailImageAdmission"
+	RoleImageService_ExpireImageAdmissionClaim_FullMethodName                = "/controlplane.v1.RoleImageService/ExpireImageAdmissionClaim"
+	RoleImageService_GetImageAdmissionTerminal_FullMethodName                = "/controlplane.v1.RoleImageService/GetImageAdmissionTerminal"
+	RoleImageService_GetImageAdmissionRecoveryTerminal_FullMethodName        = "/controlplane.v1.RoleImageService/GetImageAdmissionRecoveryTerminal"
 	RoleImageService_ClaimImagePromotion_FullMethodName                      = "/controlplane.v1.RoleImageService/ClaimImagePromotion"
 	RoleImageService_AuthorizeImagePromotion_FullMethodName                  = "/controlplane.v1.RoleImageService/AuthorizeImagePromotion"
 	RoleImageService_CompleteImagePromotion_FullMethodName                   = "/controlplane.v1.RoleImageService/CompleteImagePromotion"
@@ -59,6 +67,12 @@ type RoleImageServiceClient interface {
 	ListOrganizationRoleImageRecipeRevisions(ctx context.Context, in *ListOrganizationRoleImageRecipeRevisionsRequest, opts ...grpc.CallOption) (*ListOrganizationRoleImageRecipeRevisionsResponse, error)
 	ManageOrganizationRoleImageRecipe(ctx context.Context, in *ManageOrganizationRoleImageRecipeRequest, opts ...grpc.CallOption) (*ManageOrganizationRoleImageRecipeResponse, error)
 	RequestOrganizationRoleImagePromotion(ctx context.Context, in *RequestOrganizationRoleImagePromotionRequest, opts ...grpc.CallOption) (*RequestOrganizationRoleImagePromotionResponse, error)
+	// Human OWNER/ADMIN читает только owner-resolved полный безопасный report.
+	GetOrganizationImageVulnerabilityReport(ctx context.Context, in *GetOrganizationImageVulnerabilityReportRequest, opts ...grpc.CallOption) (*GetOrganizationImageVulnerabilityReportResponse, error)
+	GetImageVulnerabilityReport(ctx context.Context, in *GetImageVulnerabilityReportRequest, opts ...grpc.CallOption) (*GetImageVulnerabilityReportResponse, error)
+	// Approval создаёт immutable decision и новую attempt, но не переписывает REJECTED receipt.
+	DecideOrganizationImageAdmissionRisk(ctx context.Context, in *DecideOrganizationImageAdmissionRiskRequest, opts ...grpc.CallOption) (*DecideOrganizationImageAdmissionRiskResponse, error)
+	DecideImageAdmissionRisk(ctx context.Context, in *DecideImageAdmissionRiskRequest, opts ...grpc.CallOption) (*DecideImageAdmissionRiskResponse, error)
 	ClaimImageBuild(ctx context.Context, in *ClaimImageBuildRequest, opts ...grpc.CallOption) (*ClaimImageBuildResponse, error)
 	RenewImageBuild(ctx context.Context, in *RenewImageBuildRequest, opts ...grpc.CallOption) (*RenewImageBuildResponse, error)
 	ReportImageBuildProgress(ctx context.Context, in *ReportImageBuildProgressRequest, opts ...grpc.CallOption) (*ReportImageBuildProgressResponse, error)
@@ -67,6 +81,10 @@ type RoleImageServiceClient interface {
 	GetImageSupplyWorkAvailability(ctx context.Context, in *GetImageSupplyWorkAvailabilityRequest, opts ...grpc.CallOption) (*GetImageSupplyWorkAvailabilityResponse, error)
 	ClaimImageAdmission(ctx context.Context, in *ClaimImageAdmissionRequest, opts ...grpc.CallOption) (*ClaimImageAdmissionResponse, error)
 	RecordImageAdmission(ctx context.Context, in *RecordImageAdmissionRequest, opts ...grpc.CallOption) (*RecordImageAdmissionResponse, error)
+	FailImageAdmission(ctx context.Context, in *FailImageAdmissionRequest, opts ...grpc.CallOption) (*FailImageAdmissionResponse, error)
+	ExpireImageAdmissionClaim(ctx context.Context, in *ExpireImageAdmissionClaimRequest, opts ...grpc.CallOption) (*ExpireImageAdmissionClaimResponse, error)
+	GetImageAdmissionTerminal(ctx context.Context, in *GetImageAdmissionTerminalRequest, opts ...grpc.CallOption) (*GetImageAdmissionTerminalResponse, error)
+	GetImageAdmissionRecoveryTerminal(ctx context.Context, in *GetImageAdmissionRecoveryTerminalRequest, opts ...grpc.CallOption) (*GetImageAdmissionRecoveryTerminalResponse, error)
 	ClaimImagePromotion(ctx context.Context, in *ClaimImagePromotionRequest, opts ...grpc.CallOption) (*ClaimImagePromotionResponse, error)
 	AuthorizeImagePromotion(ctx context.Context, in *AuthorizeImagePromotionRequest, opts ...grpc.CallOption) (*AuthorizeImagePromotionResponse, error)
 	CompleteImagePromotion(ctx context.Context, in *CompleteImagePromotionRequest, opts ...grpc.CallOption) (*CompleteImagePromotionResponse, error)
@@ -170,6 +188,46 @@ func (c *roleImageServiceClient) RequestOrganizationRoleImagePromotion(ctx conte
 	return out, nil
 }
 
+func (c *roleImageServiceClient) GetOrganizationImageVulnerabilityReport(ctx context.Context, in *GetOrganizationImageVulnerabilityReportRequest, opts ...grpc.CallOption) (*GetOrganizationImageVulnerabilityReportResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetOrganizationImageVulnerabilityReportResponse)
+	err := c.cc.Invoke(ctx, RoleImageService_GetOrganizationImageVulnerabilityReport_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *roleImageServiceClient) GetImageVulnerabilityReport(ctx context.Context, in *GetImageVulnerabilityReportRequest, opts ...grpc.CallOption) (*GetImageVulnerabilityReportResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetImageVulnerabilityReportResponse)
+	err := c.cc.Invoke(ctx, RoleImageService_GetImageVulnerabilityReport_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *roleImageServiceClient) DecideOrganizationImageAdmissionRisk(ctx context.Context, in *DecideOrganizationImageAdmissionRiskRequest, opts ...grpc.CallOption) (*DecideOrganizationImageAdmissionRiskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DecideOrganizationImageAdmissionRiskResponse)
+	err := c.cc.Invoke(ctx, RoleImageService_DecideOrganizationImageAdmissionRisk_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *roleImageServiceClient) DecideImageAdmissionRisk(ctx context.Context, in *DecideImageAdmissionRiskRequest, opts ...grpc.CallOption) (*DecideImageAdmissionRiskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DecideImageAdmissionRiskResponse)
+	err := c.cc.Invoke(ctx, RoleImageService_DecideImageAdmissionRisk_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *roleImageServiceClient) ClaimImageBuild(ctx context.Context, in *ClaimImageBuildRequest, opts ...grpc.CallOption) (*ClaimImageBuildResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ClaimImageBuildResponse)
@@ -250,6 +308,46 @@ func (c *roleImageServiceClient) RecordImageAdmission(ctx context.Context, in *R
 	return out, nil
 }
 
+func (c *roleImageServiceClient) FailImageAdmission(ctx context.Context, in *FailImageAdmissionRequest, opts ...grpc.CallOption) (*FailImageAdmissionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FailImageAdmissionResponse)
+	err := c.cc.Invoke(ctx, RoleImageService_FailImageAdmission_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *roleImageServiceClient) ExpireImageAdmissionClaim(ctx context.Context, in *ExpireImageAdmissionClaimRequest, opts ...grpc.CallOption) (*ExpireImageAdmissionClaimResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExpireImageAdmissionClaimResponse)
+	err := c.cc.Invoke(ctx, RoleImageService_ExpireImageAdmissionClaim_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *roleImageServiceClient) GetImageAdmissionTerminal(ctx context.Context, in *GetImageAdmissionTerminalRequest, opts ...grpc.CallOption) (*GetImageAdmissionTerminalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetImageAdmissionTerminalResponse)
+	err := c.cc.Invoke(ctx, RoleImageService_GetImageAdmissionTerminal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *roleImageServiceClient) GetImageAdmissionRecoveryTerminal(ctx context.Context, in *GetImageAdmissionRecoveryTerminalRequest, opts ...grpc.CallOption) (*GetImageAdmissionRecoveryTerminalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetImageAdmissionRecoveryTerminalResponse)
+	err := c.cc.Invoke(ctx, RoleImageService_GetImageAdmissionRecoveryTerminal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *roleImageServiceClient) ClaimImagePromotion(ctx context.Context, in *ClaimImagePromotionRequest, opts ...grpc.CallOption) (*ClaimImagePromotionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ClaimImagePromotionResponse)
@@ -298,6 +396,12 @@ type RoleImageServiceServer interface {
 	ListOrganizationRoleImageRecipeRevisions(context.Context, *ListOrganizationRoleImageRecipeRevisionsRequest) (*ListOrganizationRoleImageRecipeRevisionsResponse, error)
 	ManageOrganizationRoleImageRecipe(context.Context, *ManageOrganizationRoleImageRecipeRequest) (*ManageOrganizationRoleImageRecipeResponse, error)
 	RequestOrganizationRoleImagePromotion(context.Context, *RequestOrganizationRoleImagePromotionRequest) (*RequestOrganizationRoleImagePromotionResponse, error)
+	// Human OWNER/ADMIN читает только owner-resolved полный безопасный report.
+	GetOrganizationImageVulnerabilityReport(context.Context, *GetOrganizationImageVulnerabilityReportRequest) (*GetOrganizationImageVulnerabilityReportResponse, error)
+	GetImageVulnerabilityReport(context.Context, *GetImageVulnerabilityReportRequest) (*GetImageVulnerabilityReportResponse, error)
+	// Approval создаёт immutable decision и новую attempt, но не переписывает REJECTED receipt.
+	DecideOrganizationImageAdmissionRisk(context.Context, *DecideOrganizationImageAdmissionRiskRequest) (*DecideOrganizationImageAdmissionRiskResponse, error)
+	DecideImageAdmissionRisk(context.Context, *DecideImageAdmissionRiskRequest) (*DecideImageAdmissionRiskResponse, error)
 	ClaimImageBuild(context.Context, *ClaimImageBuildRequest) (*ClaimImageBuildResponse, error)
 	RenewImageBuild(context.Context, *RenewImageBuildRequest) (*RenewImageBuildResponse, error)
 	ReportImageBuildProgress(context.Context, *ReportImageBuildProgressRequest) (*ReportImageBuildProgressResponse, error)
@@ -306,6 +410,10 @@ type RoleImageServiceServer interface {
 	GetImageSupplyWorkAvailability(context.Context, *GetImageSupplyWorkAvailabilityRequest) (*GetImageSupplyWorkAvailabilityResponse, error)
 	ClaimImageAdmission(context.Context, *ClaimImageAdmissionRequest) (*ClaimImageAdmissionResponse, error)
 	RecordImageAdmission(context.Context, *RecordImageAdmissionRequest) (*RecordImageAdmissionResponse, error)
+	FailImageAdmission(context.Context, *FailImageAdmissionRequest) (*FailImageAdmissionResponse, error)
+	ExpireImageAdmissionClaim(context.Context, *ExpireImageAdmissionClaimRequest) (*ExpireImageAdmissionClaimResponse, error)
+	GetImageAdmissionTerminal(context.Context, *GetImageAdmissionTerminalRequest) (*GetImageAdmissionTerminalResponse, error)
+	GetImageAdmissionRecoveryTerminal(context.Context, *GetImageAdmissionRecoveryTerminalRequest) (*GetImageAdmissionRecoveryTerminalResponse, error)
 	ClaimImagePromotion(context.Context, *ClaimImagePromotionRequest) (*ClaimImagePromotionResponse, error)
 	AuthorizeImagePromotion(context.Context, *AuthorizeImagePromotionRequest) (*AuthorizeImagePromotionResponse, error)
 	CompleteImagePromotion(context.Context, *CompleteImagePromotionRequest) (*CompleteImagePromotionResponse, error)
@@ -346,6 +454,18 @@ func (UnimplementedRoleImageServiceServer) ManageOrganizationRoleImageRecipe(con
 func (UnimplementedRoleImageServiceServer) RequestOrganizationRoleImagePromotion(context.Context, *RequestOrganizationRoleImagePromotionRequest) (*RequestOrganizationRoleImagePromotionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RequestOrganizationRoleImagePromotion not implemented")
 }
+func (UnimplementedRoleImageServiceServer) GetOrganizationImageVulnerabilityReport(context.Context, *GetOrganizationImageVulnerabilityReportRequest) (*GetOrganizationImageVulnerabilityReportResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetOrganizationImageVulnerabilityReport not implemented")
+}
+func (UnimplementedRoleImageServiceServer) GetImageVulnerabilityReport(context.Context, *GetImageVulnerabilityReportRequest) (*GetImageVulnerabilityReportResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetImageVulnerabilityReport not implemented")
+}
+func (UnimplementedRoleImageServiceServer) DecideOrganizationImageAdmissionRisk(context.Context, *DecideOrganizationImageAdmissionRiskRequest) (*DecideOrganizationImageAdmissionRiskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DecideOrganizationImageAdmissionRisk not implemented")
+}
+func (UnimplementedRoleImageServiceServer) DecideImageAdmissionRisk(context.Context, *DecideImageAdmissionRiskRequest) (*DecideImageAdmissionRiskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DecideImageAdmissionRisk not implemented")
+}
 func (UnimplementedRoleImageServiceServer) ClaimImageBuild(context.Context, *ClaimImageBuildRequest) (*ClaimImageBuildResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimImageBuild not implemented")
 }
@@ -369,6 +489,18 @@ func (UnimplementedRoleImageServiceServer) ClaimImageAdmission(context.Context, 
 }
 func (UnimplementedRoleImageServiceServer) RecordImageAdmission(context.Context, *RecordImageAdmissionRequest) (*RecordImageAdmissionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RecordImageAdmission not implemented")
+}
+func (UnimplementedRoleImageServiceServer) FailImageAdmission(context.Context, *FailImageAdmissionRequest) (*FailImageAdmissionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FailImageAdmission not implemented")
+}
+func (UnimplementedRoleImageServiceServer) ExpireImageAdmissionClaim(context.Context, *ExpireImageAdmissionClaimRequest) (*ExpireImageAdmissionClaimResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExpireImageAdmissionClaim not implemented")
+}
+func (UnimplementedRoleImageServiceServer) GetImageAdmissionTerminal(context.Context, *GetImageAdmissionTerminalRequest) (*GetImageAdmissionTerminalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetImageAdmissionTerminal not implemented")
+}
+func (UnimplementedRoleImageServiceServer) GetImageAdmissionRecoveryTerminal(context.Context, *GetImageAdmissionRecoveryTerminalRequest) (*GetImageAdmissionRecoveryTerminalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetImageAdmissionRecoveryTerminal not implemented")
 }
 func (UnimplementedRoleImageServiceServer) ClaimImagePromotion(context.Context, *ClaimImagePromotionRequest) (*ClaimImagePromotionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ClaimImagePromotion not implemented")
@@ -562,6 +694,78 @@ func _RoleImageService_RequestOrganizationRoleImagePromotion_Handler(srv interfa
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RoleImageService_GetOrganizationImageVulnerabilityReport_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetOrganizationImageVulnerabilityReportRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleImageServiceServer).GetOrganizationImageVulnerabilityReport(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleImageService_GetOrganizationImageVulnerabilityReport_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleImageServiceServer).GetOrganizationImageVulnerabilityReport(ctx, req.(*GetOrganizationImageVulnerabilityReportRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RoleImageService_GetImageVulnerabilityReport_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetImageVulnerabilityReportRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleImageServiceServer).GetImageVulnerabilityReport(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleImageService_GetImageVulnerabilityReport_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleImageServiceServer).GetImageVulnerabilityReport(ctx, req.(*GetImageVulnerabilityReportRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RoleImageService_DecideOrganizationImageAdmissionRisk_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DecideOrganizationImageAdmissionRiskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleImageServiceServer).DecideOrganizationImageAdmissionRisk(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleImageService_DecideOrganizationImageAdmissionRisk_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleImageServiceServer).DecideOrganizationImageAdmissionRisk(ctx, req.(*DecideOrganizationImageAdmissionRiskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RoleImageService_DecideImageAdmissionRisk_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DecideImageAdmissionRiskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleImageServiceServer).DecideImageAdmissionRisk(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleImageService_DecideImageAdmissionRisk_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleImageServiceServer).DecideImageAdmissionRisk(ctx, req.(*DecideImageAdmissionRiskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _RoleImageService_ClaimImageBuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ClaimImageBuildRequest)
 	if err := dec(in); err != nil {
@@ -706,6 +910,78 @@ func _RoleImageService_RecordImageAdmission_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RoleImageService_FailImageAdmission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FailImageAdmissionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleImageServiceServer).FailImageAdmission(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleImageService_FailImageAdmission_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleImageServiceServer).FailImageAdmission(ctx, req.(*FailImageAdmissionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RoleImageService_ExpireImageAdmissionClaim_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExpireImageAdmissionClaimRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleImageServiceServer).ExpireImageAdmissionClaim(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleImageService_ExpireImageAdmissionClaim_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleImageServiceServer).ExpireImageAdmissionClaim(ctx, req.(*ExpireImageAdmissionClaimRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RoleImageService_GetImageAdmissionTerminal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetImageAdmissionTerminalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleImageServiceServer).GetImageAdmissionTerminal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleImageService_GetImageAdmissionTerminal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleImageServiceServer).GetImageAdmissionTerminal(ctx, req.(*GetImageAdmissionTerminalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RoleImageService_GetImageAdmissionRecoveryTerminal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetImageAdmissionRecoveryTerminalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RoleImageServiceServer).GetImageAdmissionRecoveryTerminal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RoleImageService_GetImageAdmissionRecoveryTerminal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RoleImageServiceServer).GetImageAdmissionRecoveryTerminal(ctx, req.(*GetImageAdmissionRecoveryTerminalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _RoleImageService_ClaimImagePromotion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ClaimImagePromotionRequest)
 	if err := dec(in); err != nil {
@@ -804,6 +1080,22 @@ var RoleImageService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _RoleImageService_RequestOrganizationRoleImagePromotion_Handler,
 		},
 		{
+			MethodName: "GetOrganizationImageVulnerabilityReport",
+			Handler:    _RoleImageService_GetOrganizationImageVulnerabilityReport_Handler,
+		},
+		{
+			MethodName: "GetImageVulnerabilityReport",
+			Handler:    _RoleImageService_GetImageVulnerabilityReport_Handler,
+		},
+		{
+			MethodName: "DecideOrganizationImageAdmissionRisk",
+			Handler:    _RoleImageService_DecideOrganizationImageAdmissionRisk_Handler,
+		},
+		{
+			MethodName: "DecideImageAdmissionRisk",
+			Handler:    _RoleImageService_DecideImageAdmissionRisk_Handler,
+		},
+		{
 			MethodName: "ClaimImageBuild",
 			Handler:    _RoleImageService_ClaimImageBuild_Handler,
 		},
@@ -834,6 +1126,22 @@ var RoleImageService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RecordImageAdmission",
 			Handler:    _RoleImageService_RecordImageAdmission_Handler,
+		},
+		{
+			MethodName: "FailImageAdmission",
+			Handler:    _RoleImageService_FailImageAdmission_Handler,
+		},
+		{
+			MethodName: "ExpireImageAdmissionClaim",
+			Handler:    _RoleImageService_ExpireImageAdmissionClaim_Handler,
+		},
+		{
+			MethodName: "GetImageAdmissionTerminal",
+			Handler:    _RoleImageService_GetImageAdmissionTerminal_Handler,
+		},
+		{
+			MethodName: "GetImageAdmissionRecoveryTerminal",
+			Handler:    _RoleImageService_GetImageAdmissionRecoveryTerminal_Handler,
 		},
 		{
 			MethodName: "ClaimImagePromotion",

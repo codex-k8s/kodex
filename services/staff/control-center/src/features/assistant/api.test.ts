@@ -153,6 +153,7 @@ describe("assistant api mutation reconciliation", () => {
     const initial = conversation([]);
     const ownResult = conversation([
       {
+        source: { origin: "ORDINARY" as const },
         ref: "trn_own",
         sequence: 1,
         role: "USER",
@@ -202,6 +203,7 @@ describe("assistant api mutation reconciliation", () => {
     const initial = conversation([]);
     const accepted = conversation([
       {
+        source: { origin: "ORDINARY" as const },
         ref: "trn_immediate",
         sequence: 1,
         role: "USER",
@@ -278,6 +280,7 @@ describe("assistant api mutation reconciliation", () => {
         items: [
           conversation([
             {
+              source: { origin: "ORDINARY" as const },
               ref: "trn_parallel_tab",
               sequence: 1,
               role: "USER",

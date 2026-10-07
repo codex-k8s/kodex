@@ -54,6 +54,22 @@ PROVIDER_BOOTSTRAP_ENV = {
     "CONTROL_PLANE_DEFAULT_PROVIDER_SECRET_RESOURCE_VERSION": "secretResourceVersion",
     "CONTROL_PLANE_DEFAULT_PROVIDER_CREDENTIAL_SHA256": "contentSHA256",
 }
+# В trusted dev-кластере эти точные контейнеры ограничивались CPU при seed
+# полного образа. Память и production base не изменяются.
+TRUSTED_REGISTRY_CPU = {
+    ("kodex-image-registry-staging-read", "registry"): ("250m", "2"),
+    ("kodex-image-registry-promotion", "registry"): ("500m", "4"),
+    ("kodex-image-registry-pull", "pull-authorizer"): ("100m", "1"),
+    ("kodex-image-registry-promotion", "certificate-guard"): ("50m", "500m"),
+    ("kodex-image-registry-pull", "certificate-guard"): ("50m", "500m"),
+    ("kodex-image-registry-evidence", "certificate-guard"): ("50m", "500m"),
+}
+
+
+def registry_cpu_budget(resource, container):
+    if resource.get("kind") != "Deployment" or namespace(resource) != "kodex-system":
+        return None
+    return TRUSTED_REGISTRY_CPU.get((resource["metadata"]["name"], container["name"]))
 
 
 def runtime_admission_profile(resource):
@@ -192,6 +208,11 @@ def materialize(resources, profile):
                 continue
             spec[group] = [container for container in spec[group] if not authority_name(container["name"])]
             for container in spec[group]:
+                cpu = registry_cpu_budget(resource, container) if group == "containers" else None
+                if cpu:
+                    resources_spec = container.setdefault("resources", {})
+                    resources_spec.setdefault("requests", {})["cpu"] = cpu[0]
+                    resources_spec.setdefault("limits", {})["cpu"] = cpu[1]
                 container["volumeMounts"] = [mount for mount in container.get("volumeMounts", [])
                                              if mount["name"] not in removed_volumes]
                 container["env"] = [entry for entry in container.get("env", [])
@@ -251,6 +272,12 @@ def verify(resources, profile):
         require(not spec.get("hostNetwork") and not spec.get("hostPID"), "HOST_NETWORK_FORBIDDEN")
         for group in ("containers", "initContainers"):
             for container in spec.get(group, []):
+                cpu = registry_cpu_budget(resource, container) if group == "containers" else None
+                if cpu:
+                    resources_spec = container.get("resources", {})
+                    require(resources_spec.get("requests", {}).get("cpu") == cpu[0] and
+                            resources_spec.get("limits", {}).get("cpu") == cpu[1],
+                            "TRUSTED_REGISTRY_CPU_BUDGET_REQUIRED:" + name + ":" + container["name"])
                 require(not authority_name(container["name"]), "AUTHORITY_CONTAINER_FORBIDDEN")
                 require(not any(entry["name"].startswith("INTERNAL_RPC_AUTHORITY_")
                                 for entry in container.get("env", [])), "AUTHORITY_ENV_FORBIDDEN")

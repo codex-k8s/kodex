@@ -20,6 +20,24 @@ const lifecycle = readFileSync(
 );
 
 describe("provider account layout", () => {
+  it("сжимает предков таблицы до viewport и переносит мобильные действия под поиск", () => {
+    expect(workspace).toMatch(
+      /\.providers-workspace\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*min-width: 0;/,
+    );
+    expect(workspace).toMatch(
+      /\.providers-workspace > \*\s*\{\s*min-width: 0;/,
+    );
+    expect(workspace).toMatch(/\.providers-toolbar\s*\{[^}]*flex-wrap: wrap;/);
+    const mobile = workspace.slice(
+      workspace.indexOf("@media (max-width: 560px)"),
+    );
+    expect(mobile).toMatch(
+      /\.providers-toolbar__search\s*\{[^}]*min-width: 0;[^}]*flex-basis: 100%;/,
+    );
+    expect(mobile).toMatch(
+      /\.providers-toolbar > \.button\s*\{[^}]*max-width: 100%;[^}]*white-space: normal;/,
+    );
+  });
   it("не показывает API key повторно и не предлагает ввод внутренних ref", () => {
     expect(workspace).toContain('type="password"');
     expect(workspace).toContain('autocomplete="off"');
@@ -85,5 +103,18 @@ describe("provider account layout", () => {
       "await loadProviderAccount(props.account.ref, signal)",
     );
     expect(lifecycle).toContain("props.account.deletion?.version");
+  });
+
+  it("переносит длинный статус внутри ячейки, сохраняя индикатор и локальный scroll таблицы", () => {
+    expect(workspace).toMatch(
+      /\.provider-account-row :deep\(\.status-badge\)\s*\{[^}]*max-width: 100%;[^}]*white-space: normal;/,
+    );
+    expect(workspace).toMatch(
+      /\.provider-account-row :deep\(\.status-badge__dot\)\s*\{\s*flex-shrink: 0;/,
+    );
+    expect(workspace).toMatch(
+      /\.provider-account-list\s*\{[^}]*min-width: 0;[^}]*overflow: auto;/,
+    );
+    expect(workspace).toContain("min-width: 1120px;");
   });
 });

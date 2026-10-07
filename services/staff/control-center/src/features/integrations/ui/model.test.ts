@@ -8,6 +8,7 @@ import {
   integrationCategories,
   isUnboundOpenAPITemplate,
   publicIntegrationConfiguration,
+  allowedIntegrationApprovalPolicies,
 } from "@/features/integrations/ui/model";
 import type {
   IntegrationConnection,
@@ -38,6 +39,7 @@ function definition(
         approvalRequired: false,
         operation: `${key}.read`,
         approvalPolicy: "NONE",
+        allowedApprovalPolicies: ["NONE"],
         resourceKind: "GITHUB_REPOSITORY",
         inputFields: [],
       },
@@ -54,6 +56,50 @@ function definition(
     ...overrides,
   };
 }
+
+describe("allowedIntegrationApprovalPolicies", () => {
+  it("возвращает только авторитетный allowed set, без добавления fallback", () => {
+    const capability = definition("github").capabilities[0];
+    if (!capability) throw new Error("Capability fixture is missing");
+    expect(allowedIntegrationApprovalPolicies(capability)).toEqual(["NONE"]);
+    expect(
+      allowedIntegrationApprovalPolicies({
+        ...capability,
+        approvalPolicy: "HUMAN_EACH_EFFECT",
+        allowedApprovalPolicies: ["HUMAN_EACH_EFFECT", "HUMAN_SCOPED"],
+      }),
+    ).toEqual(["HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]);
+    expect(allowedIntegrationApprovalPolicies(undefined)).toEqual([]);
+  });
+
+  it("закрыто отклоняет пустой, дублированный, неизвестный набор или default вне него", () => {
+    const capability = definition("github").capabilities[0];
+    if (!capability) throw new Error("Capability fixture is missing");
+    expect(
+      allowedIntegrationApprovalPolicies({
+        ...capability,
+        allowedApprovalPolicies: [],
+      }),
+    ).toEqual([]);
+    expect(
+      allowedIntegrationApprovalPolicies({
+        ...capability,
+        allowedApprovalPolicies: ["NONE", "NONE"],
+      }),
+    ).toEqual([]);
+    expect(
+      allowedIntegrationApprovalPolicies({
+        ...capability,
+        allowedApprovalPolicies: ["HUMAN_EACH_EFFECT"],
+      }),
+    ).toEqual([]);
+    const malformed = { ...capability };
+    Reflect.set(malformed, "allowedApprovalPolicies", ["NONE", "UNKNOWN"]);
+    expect(allowedIntegrationApprovalPolicies(malformed)).toEqual([]);
+    Reflect.deleteProperty(malformed, "allowedApprovalPolicies");
+    expect(allowedIntegrationApprovalPolicies(malformed)).toEqual([]);
+  });
+});
 
 function connection(
   ref: string,
@@ -135,6 +181,7 @@ describe("integrations presentation model", () => {
               approvalRequired: false,
               operation: "jira.issue.read",
               approvalPolicy: "NONE",
+              allowedApprovalPolicies: ["NONE"],
               resourceKind: "GITHUB_REPOSITORY",
               inputFields: [],
             },

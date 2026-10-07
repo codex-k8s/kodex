@@ -12,6 +12,13 @@ const template = source.slice(
 );
 
 describe("ProjectOverviewPage layout", () => {
+  it("сохраняет все загруженные результаты и штатный переход ко всем файлам", () => {
+    expect(template).toContain('<ArtifactList :artifacts="recentArtifacts" />');
+    expect(template).toContain(':to="`/projects/${projectRef}/files`"');
+    expect(template).toContain('$t("workboard.allProjectFiles")');
+    expect(source).not.toMatch(/recentArtifacts\.(?:slice|filter)\(/);
+    expect(source).not.toContain("loadMoreArtifacts");
+  });
   it("размещает текущую работу слева, а ресурсы в компактном правом rail", () => {
     const main = template.indexOf('class="project-workboard__main"');
     const resources = template.indexOf('class="project-workboard__resources"');

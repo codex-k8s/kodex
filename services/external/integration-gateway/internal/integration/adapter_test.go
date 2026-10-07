@@ -227,6 +227,65 @@ func TestCredentialReadWaitsForProjectedSecretKey(t *testing.T) {
 	}
 }
 
+func TestHealthProjectionPendingIsReadTestOnly(t *testing.T) {
+	t.Parallel()
+	for _, key := range []string{"github", "context7"} {
+		t.Run(key, func(t *testing.T) {
+			adapter := testAdapter(t)
+			definition := adapter.definitions[key]
+			health, ok := definition.CapabilityByOperation(definition.Spec.HealthCheck.Operation)
+			if !ok {
+				t.Fatal("health capability missing")
+			}
+			credential := &CredentialRevision{Ref: "icr_projected", Revision: 1,
+				SecretRef: exactCredentialSecretPrefix + "not-yet-projected",
+				SecretUID: "3f18ba8c-8829-4c7f-8350-b8ed65f80d41", SecretResourceVersion: "18", ContentSHA256: strings.Repeat("a", 64)}
+			input := map[string]any{}
+			if key == "context7" {
+				input = map[string]any{"library_name": "fixture", "query": "fixture"}
+			}
+			request := invocationRequest(t, definition, health.Key, input, credential)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Millisecond)
+			defer cancel()
+			_, err := adapter.Test(ctx, request)
+			var safe *SafeError
+			if !errors.As(err, &safe) || safe.Code != credentialProjectionPendingCode {
+				t.Fatalf("health projection lag was not pending: %v", err)
+			}
+			// Обычный READ invocation не получает test-only код retry.
+			_, err = adapter.Execute(ctx, request)
+			if !errors.As(err, &safe) || safe.Code != "INTEGRATION_CREDENTIAL_UNAVAILABLE" {
+				t.Fatalf("ordinary invocation became health retry: %v", err)
+			}
+			credential.ContentSHA256 = "invalid"
+			_, err = adapter.Test(t.Context(), request)
+			if !errors.As(err, &safe) || safe.Code != "INTEGRATION_CREDENTIAL_UNAVAILABLE" || safe.Transient {
+				t.Fatalf("invalid metadata became pending: %v", err)
+			}
+		})
+	}
+	adapter := testAdapter(t)
+	credential := testCredential(t, adapter, "test-token")
+	credential.ContentSHA256 = strings.Repeat("0", 64)
+	request := invocationRequest(t, adapter.definitions["github"], "github.repository.metadata.read", map[string]any{}, credential)
+	var safe *SafeError
+	if _, err := adapter.Test(t.Context(), request); !errors.As(err, &safe) || safe.Code != "INTEGRATION_CREDENTIAL_UNAVAILABLE" || safe.Transient {
+		t.Fatalf("health digest mismatch became pending: %v", err)
+	}
+	credential.SecretRef = exactCredentialSecretPrefix + "missing"
+	write := invocationRequest(t, adapter.definitions["github"], "github.issue.create", map[string]any{"title": "fixture", "body": "fixture"}, credential)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Millisecond)
+	defer cancel()
+	if _, err := adapter.Execute(ctx, write); !errors.As(err, &safe) || safe.Code != "INTEGRATION_CREDENTIAL_UNAVAILABLE" {
+		t.Fatalf("WRITE received health retry code: %v", err)
+	}
+	for _, err := range []error{&SafeError{Code: "INTEGRATION_AUTH_REJECTED"}, &SafeError{Code: "INTEGRATION_UNAVAILABLE", Transient: true}} {
+		if healthCredentialError(err) != err {
+			t.Fatal("unrelated provider failure became projection pending")
+		}
+	}
+}
+
 func TestOutcomeExposesOnlySafeCode(t *testing.T) {
 	t.Parallel()
 	success, code := Outcome(errors.New("raw provider response"))
@@ -374,6 +433,8 @@ func invocationRequest(t *testing.T, definition integrationpackage.Package, capa
 		configuration = map[string]string{"base_url": "https://api.example.test", "resource_path": "/v1/status"}
 	case "openapi-mcp":
 		configuration = map[string]string{"base_url": "https://api.example.test"}
+	case "context7":
+		configuration = map[string]string{"base_url": "https://mcp.context7.com"}
 	}
 	scope, err := capability.ResourceScopeValues(configuration)
 	if err != nil {
@@ -401,6 +462,7 @@ func invocationRequest(t *testing.T, definition integrationpackage.Package, capa
 		EmailExecution:    &emailapi.ExecutionBinding{InvocationRef: &invocation, Lease: emailapi.ExecutionLease{Ref: "lease_fixture01", Fence: "fixture-fence", Generation: 1, ExpiresAt: time.Now().Add(time.Minute)}},
 		DefinitionKey:     definition.Metadata.Key, DefinitionVersion: definition.Metadata.Version,
 		DefinitionDigest: definition.Digest, ConnectionRef: "int_test", CapabilityKey: capability.Key,
+		GrantRef: "igr_fixture01", GrantVersion: 1,
 		Operation: capability.Operation, Risk: capability.Risk, ApprovalPolicy: capability.ApprovalPolicy,
 		ResourceKind: capability.ResourceScope.Kind, ResourceScope: scope,
 		ResourceScopeDigest: hex.EncodeToString(scopeDigest[:]), EffectKey: "eff_0123456789abcdef0123456789abcdef",

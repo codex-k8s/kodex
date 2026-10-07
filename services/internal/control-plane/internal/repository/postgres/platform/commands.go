@@ -12,6 +12,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -47,6 +49,10 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		return command.Result{}, fmt.Errorf("begin command transaction: %w", errs.ErrUnavailable)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	launchProjects, err := lockWorkflowLaunchProjects(ctx, tx, scope, input)
+	if err != nil {
+		return command.Result{}, err
+	}
 	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, scope.organizationID, scope.actorID,
 		input.Mutation.Operation, input.Mutation.IdempotencyKey); err != nil {
 		return command.Result{}, fmt.Errorf("lock command idempotency scope: %w", errs.ErrUnavailable)
@@ -106,6 +112,16 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	outcome, err := repository.applyCommand(ctx, tx, scope, input)
 	if err != nil {
 		return command.Result{}, err
+	}
+	if err := repository.reconcileWorkflowLaunches(ctx, tx, scope, launchProjects); err != nil {
+		return command.Result{}, err
+	}
+	if len(launchProjects) > 0 && outcome.result.Run != nil {
+		run, graph, err := repository.readRunGraphTx(ctx, tx, scope, outcome.result.Run.Ref)
+		if err != nil {
+			return command.Result{}, err
+		}
+		outcome.result.Run, outcome.result.Graph = &run, &graph
 	}
 	// Пустой опрос runtime является наблюдением, а не устойчивым доменным действием.
 	// Receipt и аудит для него превращали бы исправный простой в постоянную запись.
@@ -348,8 +364,10 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 	case command.CreateProviderAccount, command.StartProviderDeviceAuth, command.AuthorizeProviderAPIKey,
 		command.RefreshProviderAuthorization, command.VerifyProviderAuthorization, command.CancelProviderAccountQueuedWork, command.RevokeProviderAccount, command.DeleteProviderAccount, command.SetProviderAccountEnabled, command.SetProviderAccountConcurrency:
 		return repository.changeProviderAccount(ctx, tx, scope, input)
+	case command.CreateProjectAssistantIntegrationConnection:
+		return repository.createProjectAssistantConnection(ctx, tx, scope, input)
 	case command.CreateConnection, command.UpdateConnection, command.DeleteConnection, command.ConfigureConnectionCredential,
-		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant:
+		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant, command.ChangeSystemAssistantIntegrationGrant, command.ChangeProjectAssistantIntegrationGrant:
 		return repository.changeConnection(ctx, tx, scope, input)
 	case command.ConfigureEmailCredential:
 		return repository.configureEmailCredential(ctx, tx, scope, input)
@@ -359,7 +377,7 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.changeAssistant(ctx, tx, scope, input)
 	case command.ClaimExecution, command.RenewExecution, command.ReportExecutionProgress, command.CommitProviderCredentialRefresh,
 		command.CompleteExecution,
-		command.DelegateExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
+		command.DelegateExecution, command.LaunchWorkflowExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
 		command.ProposeRunMetadata, command.RecordRunToolCall:
 		return repository.changeExecution(ctx, tx, scope, input)
 	case command.CompleteSessionSnapshot, command.CompleteSessionRestore,
@@ -1536,7 +1554,7 @@ func (repository *Repository) launchRun(ctx context.Context, tx pgx.Tx, scope sc
 
 func (repository *Repository) launchRunWithAttachmentPolicy(ctx context.Context, tx pgx.Tx, scope scope, input command.Command, reuseAttachmentSnapshot bool) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.LaunchRunInput)
-	if !ok || payload.ProjectRef == "" || strings.TrimSpace(payload.Task) == "" || len(payload.Task) > 32768 || len(payload.Title) > 240 || payload.Target.Ref == "" || !validBoundedRunInput(payload.Input) {
+	if !ok || payload.ProjectRef == "" || !runtimecontract.ValidAssistantTurnContent(payload.Task) || len([]rune(payload.Title)) > 240 || payload.Target.Ref == "" || !validBoundedRunInput(payload.Input) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	projectID := mustProjectID(ctx, tx, scope.organizationID, payload.ProjectRef)
@@ -1908,6 +1926,44 @@ func (repository *Repository) emitRunEvent(ctx context.Context, tx pgx.Tx, scope
 }
 
 func (repository *Repository) emitRunEventWithIncident(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef string, incident *entity.Incident, summary, runState, nodeState string) (entity.RunEvent, error) {
+	return repository.emitRunEventWithActivity(ctx, tx, scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef, incident, nil, summary, runState, nodeState)
+}
+
+func (repository *Repository) emitRunEventWithActivity(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef string, incident *entity.Incident, message *entity.RunMessage, summary, runState, nodeState string) (entity.RunEvent, error) {
+	return repository.emitRunEventWithBinding(ctx, tx, scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef, incident, message, summary, runState, nodeState, "")
+}
+
+func (repository *Repository) emitIntegrationActionEvent(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, invocationRef, nodeRef, state string) (entity.RunEvent, error) {
+	if !validIntegrationActionBinding("TURN_PROGRESS", integrationActionOutcomeMessage(state), invocationRef) ||
+		(state != "SUCCEEDED" && state != "FAILED" && state != "UNKNOWN_OUTCOME") {
+		return entity.RunEvent{}, errs.ErrInvalid
+	}
+	// Ref получен из заблокированной owner-строки после проверки lease/fence;
+	// общий aggregateRef никогда не становится публичной привязкой автоматически.
+	return repository.emitRunEventWithBinding(ctx, tx, scope, projectID, rootRunID, invocationRef, "TURN_PROGRESS", nodeRef, "", "", "", nil, nil, integrationActionOutcomeMessage(state), "RUNNING", "RUNNING", invocationRef)
+}
+
+func validIntegrationActionBinding(eventType, summary, ref string) bool {
+	if eventType != "TURN_PROGRESS" || len(ref) < 8 || len(ref) > 96 || !strings.HasPrefix(ref, "inv_") {
+		return false
+	}
+	for _, char := range ref {
+		if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '_' || char == '-') {
+			return false
+		}
+	}
+	return summary == "i18n:INTEGRATION_ACTION_SUCCEEDED" || summary == "i18n:INTEGRATION_ACTION_FAILED" || summary == "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN"
+}
+
+func (repository *Repository) emitRunEventWithBinding(ctx context.Context, tx pgx.Tx, scope scope, projectID, rootRunID, aggregateRef, eventType, nodeRef, edgeRef, gateRef, artifactRef string, incident *entity.Incident, message *entity.RunMessage, summary, runState, nodeState, integrationInvocationRef string) (entity.RunEvent, error) {
+	if integrationInvocationRef != "" && (integrationInvocationRef != aggregateRef || !validIntegrationActionBinding(eventType, summary, integrationInvocationRef)) {
+		return entity.RunEvent{}, errs.ErrInvalid
+	}
+	if eventType != "TOOL_CALL_RECORDED" {
+		if err := repository.closeTerminalToolActivity(ctx, tx, scope, projectID, rootRunID); err != nil {
+			return entity.RunEvent{}, err
+		}
+	}
 	var sequence, version int64
 	var rootRef, projectRef string
 	var projectValue any
@@ -1926,6 +1982,43 @@ func (repository *Repository) emitRunEventWithIncident(ctx context.Context, tx p
 	if err != nil {
 		return entity.RunEvent{}, err
 	}
+	delta.IntegrationInvocationRef = integrationInvocationRef
+	var inputActor *entity.RunEventActor
+	if delta.Node != nil && delta.Node.TurnRef != "" {
+		execution, turnInput, bindingErr := readRuntimeActivityExecution(ctx, tx, scope.organizationID, rootRunID, nodeRef)
+		if bindingErr != nil {
+			return entity.RunEvent{}, bindingErr
+		}
+		delta.Execution = execution
+		if turnInput.Source.Origin == "CALLBACK_CONTINUATION" {
+			delta.Node.InputSummary = callbackContinuationPublicText
+		}
+		if delta.Node.Type == "AGENT_EXECUTION" && (eventType == "TURN_QUEUED" || eventType == "TURN_STARTED" || eventType == "RUN_CREATED" || eventType == "DELEGATION_CREATED") {
+			// Полный пользовательский текст хранится в authoritative turn, а не
+			// восстанавливается из усечённой подписи узла.
+			var existingSequence int64
+			var existingDelta, existingTool []byte
+			existingErr := tx.QueryRow(ctx, queryRuntimeActivityLatest, pgx.StrictNamedArgs{
+				"organization_id": scope.organizationID, "root_run_id": rootRunID, "node_ref": execution.NodeRef,
+				"turn_ref": execution.TurnRef, "attempt": execution.Attempt, "activity_kind": "MESSAGE", "activity_ref": execution.TurnRef,
+			}).Scan(&existingSequence, &existingDelta, &existingTool)
+			if errors.Is(existingErr, pgx.ErrNoRows) {
+				delta.Message = &entity.RunMessage{Ref: execution.TurnRef, Phase: "USER", Revision: 1, Text: turnInput.Content, Source: turnInput.Source}
+				inputActor = &turnInput.Actor
+			} else if existingErr != nil {
+				return entity.RunEvent{}, errs.ErrUnavailable
+			}
+		}
+	}
+	if message != nil {
+		// Provider не может назначить служебное происхождение сообщения.
+		message.Source = entity.MessageSource{Origin: "ORDINARY"}
+		if delta.Execution == nil || !validPublishedMessage(message) {
+			return entity.RunEvent{}, errs.ErrInvalid
+		}
+		messageCopy := *message
+		delta.Message = &messageCopy
+	}
 	runState = ""
 	if delta.Run != nil {
 		runState = delta.Run.State
@@ -1942,12 +2035,31 @@ func (repository *Repository) emitRunEventWithIncident(ctx context.Context, tx p
 	}
 	safeSummary := truncate(summary, 2000)
 	actor, messageKind := runEventPresentation(scope, eventType, delta)
+	if inputActor != nil {
+		actor = *inputActor
+	}
+	if delta.Message != nil && delta.Message.Phase == "USER" {
+		messageKind = "USER_MESSAGE"
+	}
+	if message != nil && message.Phase == "FINAL" {
+		messageKind = "FINAL_MESSAGE"
+	}
 	event := entity.RunEvent{Ref: ref, RunRef: rootRef, Sequence: sequence, GraphRevision: delta.Run.GraphRevision, Type: eventType, NodeRef: nodeRef, EdgeRef: edgeRef, GateRef: gateRef, ArtifactRef: artifactRef, IncidentRef: incidentRef, Summary: safeSummary, RunState: runState, NodeState: nodeState, MessageKind: messageKind, Actor: actor, OccurredAt: time.Now().UTC(), Delta: delta}
 	if _, err := tx.Exec(ctx, queryCommandsEmitruneventInsertRunEventsEventIdOrganizationIdRootRunId, eventID, ref, scope.organizationID, projectValue, rootRunID, aggregateRef, version, sequence, eventType, nodeRef, edgeRef, gateRef, artifactRef, safeSummary, runState, nodeState, asJSON(delta), scope.actorRef, event.OccurredAt, actor.Kind, actor.Ref, actor.Name, messageKind, nil); err != nil {
 		return entity.RunEvent{}, serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	data := map[string]any{"kind": eventKind(eventType), "runRef": rootRef, "safeSummary": safeSummary,
 		"actor": map[string]string{"kind": actor.Kind, "ref": actor.Ref, "name": actor.Name}, "messageKind": messageKind}
+	if integrationInvocationRef != "" {
+		data["integrationInvocationRef"] = integrationInvocationRef
+	}
+	if execution := delta.Execution; execution != nil {
+		data["execution"] = map[string]any{"runRef": execution.RunRef, "nodeRef": execution.NodeRef, "sessionRef": execution.SessionRef,
+			"turnRef": execution.TurnRef, "turnNumber": execution.TurnNumber, "attempt": execution.Attempt}
+	}
+	if message := delta.Message; message != nil {
+		data["message"] = map[string]any{"ref": message.Ref, "phase": message.Phase, "revision": message.Revision, "text": message.Text}
+	}
 	for key, value := range map[string]string{"nodeRef": nodeRef, "edgeRef": edgeRef, "gateRef": gateRef, "artifactRef": artifactRef} {
 		if value != "" {
 			data[key] = value
@@ -2349,6 +2461,27 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 		if _, err := tx.Exec(ctx, queryCommandsChangerunUpdateSessionTurnsStateCompletedAt, rootRunID); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
+		// Отмена закрывает также уже подготовленные эффекты. Начатый WRITE
+		// нельзя считать отменённым без подтверждения внешнего результата.
+		effectRows, err := tx.Query(ctx, queryCommandsChangerunCloseIntegrationEffects, scope.organizationID, rootRunID)
+		if err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		type cancelledEffect struct{ invocationRef, nodeRef, state string }
+		var cancelledEffects []cancelledEffect
+		for effectRows.Next() {
+			var effect cancelledEffect
+			if err := effectRows.Scan(&effect.invocationRef, &effect.nodeRef, &effect.state); err != nil {
+				effectRows.Close()
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			cancelledEffects = append(cancelledEffects, effect)
+		}
+		if err := effectRows.Err(); err != nil {
+			effectRows.Close()
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		effectRows.Close()
 		gateRows, err := tx.Query(ctx, queryCommandsChangerunUpdateOwnerGatesStateDecisionDecisionComment, rootRunID, scope.actorID)
 		if err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
@@ -2378,6 +2511,15 @@ func (repository *Repository) changeRun(ctx context.Context, tx pgx.Tx, scope sc
 		}
 		for _, gate := range cancelledGates {
 			if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, gate.gateRef, "OWNER_GATE_RESOLVED", gate.nodeRef, "", gate.gateRef, "", "i18n:OWNER_GATE_CANCELLED", "CANCELLED", "CANCELLED"); err != nil {
+				return commandOutcome{}, err
+			}
+		}
+		for _, effect := range cancelledEffects {
+			summary := "i18n:RUN_CANCELLED"
+			if effect.state == "UNKNOWN_OUTCOME" {
+				summary = integrationActionOutcomeMessage(effect.state)
+			}
+			if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, effect.invocationRef, "TURN_PROGRESS", effect.nodeRef, "", "", "", summary, "CANCELLED", "CANCELLED"); err != nil {
 				return commandOutcome{}, err
 			}
 		}
@@ -2592,6 +2734,13 @@ func (repository *Repository) resolveGate(ctx context.Context, tx pgx.Tx, scope 
 				runState = "WAITING_HUMAN"
 			} else {
 				runState = "SUCCEEDED"
+				var requiredFailed bool
+				if tx.QueryRow(ctx, queryWorkflowLaunchFailed, pgx.StrictNamedArgs{"root_run_id": rootRunID}).Scan(&requiredFailed) != nil {
+					return commandOutcome{}, errs.ErrUnavailable
+				}
+				if requiredFailed {
+					runState = "FAILED"
+				}
 			}
 		}
 	}

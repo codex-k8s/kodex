@@ -133,6 +133,8 @@ func testResumableSessionAuthority(t *testing.T, ctx context.Context, repository
 	filter := query.Filter{ProjectRef: run.ProjectRef, Query: "Verify immutable provider account affinity.", Page: query.Page{Size: 10}}
 	if items, total, _, err := service.ListRuns(ctx, reader, filter); err != nil || total != 1 || len(items) != 1 {
 		t.Fatalf("reader cannot see ordinary run: total=%d err=%v", total, err)
+	} else if containsString(items[0].NextActions, "ADD_TURN") {
+		t.Fatal("ordinary Run catalog granted continuation without target launch")
 	}
 	filter.ResumableSessionsOnly = true
 	if items, total, _, err := service.ListRuns(ctx, reader, filter); err != nil || total != 0 || len(items) != 0 {
@@ -140,6 +142,11 @@ func testResumableSessionAuthority(t *testing.T, ctx context.Context, repository
 	}
 	if item, err := service.GetRun(ctx, reader, run.Ref); err == nil && containsString(item.NextActions, "ADD_TURN") {
 		t.Fatal("single Run granted continuation without target launch")
+	}
+	if item, _, err := service.GetRunGraph(ctx, reader, run.Ref); err != nil && !errors.Is(err, domainerrs.ErrNotFound) && !errors.Is(err, domainerrs.ErrForbidden) {
+		t.Fatalf("Run graph reader failed outside the closed authority boundary: %v", err)
+	} else if err == nil && containsString(item.NextActions, "ADD_TURN") {
+		t.Fatal("Run graph granted continuation without target launch")
 	}
 	_, err = service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: reader,
 		Mutation: value.Mutation{IdempotencyKey: "resumable-reader-denied-turn"},
@@ -172,6 +179,32 @@ func testResumableSessionCatalog(t *testing.T, ctx context.Context, service *pla
 		}
 	} else if total != 0 || len(items) != 0 || next != "" {
 		t.Fatalf("ineligible Session leaked: total=%d items=%#v", total, items)
+	}
+	// Обычный каталог и realtime snapshot содержат тот же Run DTO,
+	// поэтому nextActions не могут зависеть от выбранного пути чтения.
+	ordinary := filter
+	ordinary.ResumableSessionsOnly = false
+	ordinary.Page.Size = 100
+	ordinaryItems, _, _, err := service.ListRuns(ctx, owner, ordinary)
+	if err != nil {
+		t.Fatalf("ordinary continuation readback: %v", err)
+	}
+	matched := false
+	for _, item := range ordinaryItems {
+		if item.Ref != run.Ref {
+			continue
+		}
+		matched = true
+		if containsString(item.NextActions, "ADD_TURN") != available {
+			t.Fatalf("ordinary Run catalog disagrees with continuation eligibility: available=%v actions=%v", available, item.NextActions)
+		}
+	}
+	if !matched {
+		t.Fatal("ordinary Run catalog omitted the visible continuation fixture")
+	}
+	graphRun, _, err := service.GetRunGraph(ctx, owner, run.Ref)
+	if err != nil || containsString(graphRun.NextActions, "ADD_TURN") != available {
+		t.Fatalf("Run graph disagrees with continuation eligibility: available=%v actions=%v err=%v", available, graphRun.NextActions, err)
 	}
 	attachment, err := service.GetRunAttachmentEligibility(ctx, owner, run.ProjectRef, run.Target, run.Ref)
 	if err != nil {

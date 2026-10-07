@@ -178,8 +178,12 @@ case "$tls_mode" in local-ca|public-acme) ;; *) fail 'development TLS mode is in
 [[ "$kubernetes_endpoint_port" =~ ^[1-9][0-9]{0,4}$ ]] || fail 'Kubernetes API port is invalid'
 [[ "$runner_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
   fail 'local runner image must use an exact manifest digest'
-[[ "$session_archive_image" =~ ^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$ ]] ||
+[[ "$session_archive_image" =~ ^registry\.local\.kodex/kodex/session-archive@sha256:[a-f0-9]{64}$ &&
+  "$session_archive_image" != *@sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
   fail 'local session archive image must use an exact manifest digest'
+[[ "$role_image_builder_image" =~ ^registry\.local\.kodex/kodex/role-image-builder@sha256:[a-f0-9]{64}$ &&
+  "$role_image_builder_image" != *@sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
+  fail 'local role image builder must use an exact platform manifest digest'
 [[ "$stt_hot_reload_image" =~ ^registry\.local\.kodex/kodex/stt-hot-reload@sha256:[a-f0-9]{64}$ &&
   "$stt_hot_reload_image" != *@sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
   fail 'local STT hot-reload image must use an exact manifest digest'
@@ -395,12 +399,16 @@ yq -i '
 
 runner_digest=${runner_image#*@}
 runtime_runner_image="$promoted_pull_host/kodex/agent-runner@$runner_digest"
+session_archive_digest=${session_archive_image#*@}
+runtime_session_archive_image="$promoted_pull_host/kodex/session-archive@$session_archive_digest"
+role_image_builder_digest=${role_image_builder_image#*@}
+runtime_role_image_builder_image="$promoted_pull_host/kodex/role-image-builder@$role_image_builder_digest"
 admission_tools_digest=${image_admission_tools_image#*@}
 admission_tools_sha256=${image_admission_tools_image#*@sha256:}
 frontend_sha256=$("$source_root/tools/dev/resolve-local-dockerfile-frontend.sh" \
   --source-root "$source_root" --format digest)
 [[ "$frontend_sha256" =~ ^[a-f0-9]{64}$ ]] || fail 'Dockerfile frontend digest is invalid'
-ROLE_IMAGE_BUILDER_IMAGE="$role_image_builder_image" \
+ROLE_IMAGE_BUILDER_IMAGE="$runtime_role_image_builder_image" \
 IMAGE_ADMISSION_IMAGE="$image_admission_image" \
 IMAGE_ADMISSION_TOOLS_IMAGE="$image_admission_tools_image" \
 AUTHORITY_IMAGE="$authority_image" \
@@ -508,7 +516,11 @@ PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
     .spec.template.metadata.annotations."kodex.dev/trusted-role-base-repository" =
       "kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner" |
     .spec.template.metadata.annotations."kodex.dev/trusted-role-base-digest" = strenv(RUNNER_DIGEST) |
-    .spec.template.metadata.annotations."kodex.dev/frontend-sha256" = strenv(FRONTEND_SHA256)
+    .spec.template.metadata.annotations."kodex.dev/frontend-sha256" = strenv(FRONTEND_SHA256) |
+    with(.spec.template.spec.containers[] | select(.name == "role-image-builder");
+      .startupProbe.failureThreshold = 225 |
+      .startupProbe.periodSeconds = 2
+    )
   ) |
   with(select(.kind == "Deployment" and .metadata.name == "kodex-image-registry-pull");
     .spec.template.metadata.annotations."kodex.dev/pull-credential-generation" = "1" |
@@ -605,6 +617,19 @@ ADMISSION_POLICY_JSON="$admission_policy_json" yq -i '
   )
 ' "$render"
 
+# Policy задаёт authority процесса CP при старте, а не только mounted данные.
+# Даже при том же source SHA изменение policy обязано заменить его Pod.
+if [[ "$security_profile" == trusted-cluster ]]; then
+# shellcheck disable=SC2016
+ADMISSION_POLICY_JSON="$admission_policy_json" yq -i '
+  (strenv(ADMISSION_POLICY_JSON) | from_json) as $policy |
+  with(select(.kind == "Deployment" and .metadata.namespace == "kodex-system" and
+      .metadata.name == "control-plane");
+    .spec.template.metadata.annotations."kodex.dev/image-policy-revision" = $policy.policyRevision
+  )
+' "$render"
+fi
+
 BACKUP_CONTROLLER_IMAGE="$backup_controller_image" yq -i '
   with(select(.kind == "Deployment" and .metadata.name == "backup-controller");
     (.spec.template.spec.containers[] | select(.name == "backup-controller")) |= (
@@ -662,7 +687,7 @@ OIDC_HOST="$oidc_host" yq -i '
         "image":strenv(RUNTIME_RUNNER_IMAGE),
         "imagePullPolicy":"IfNotPresent",
         "command":["/bin/sh","-ec"],
-        "args":["binary=/usr/local/bin/codex; test -x \"$binary\"; \"$binary\" --version >/dev/null; temporary=/codex/.codex.tmp; rm -f \"$temporary\"; cp \"$binary\" \"$temporary\"; chmod 0555 \"$temporary\"; mv -f \"$temporary\" /codex/codex"],
+        "args":["elf() { test \"$(od -An -tx1 -N4 \"$1\" | tr -d \" \\n\")\" = 7f454c46; }; binary=/usr/local/bin/codex; if ! elf \"$binary\"; then case \"$(uname -m)\" in x86_64) package=codex-linux-x64; triple=x86_64-unknown-linux-musl;; aarch64) package=codex-linux-arm64; triple=aarch64-unknown-linux-musl;; *) exit 1;; esac; binary=/opt/kodex/npm-toolchain/node_modules/@openai/$package/vendor/$triple/bin/codex; fi; test -x \"$binary\"; elf \"$binary\"; temporary=/codex/.codex.tmp; rm -f \"$temporary\"; cp \"$binary\" \"$temporary\"; chmod 0555 \"$temporary\"; elf \"$temporary\"; test \"$(\"$temporary\" --version 2>/dev/null)\" = \"codex-cli 0.160.0\"; mv -f \"$temporary\" /codex/codex"],
         "resources":{"requests":{"cpu":"10m","memory":"64Mi"},"limits":{"cpu":"100m","memory":"256Mi"}},
         "securityContext":{"runAsNonRoot":true,"runAsUser":10001,"runAsGroup":29000,"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},
         "volumeMounts":[{"name":"codex-cli","mountPath":"/codex"}]
@@ -1209,7 +1234,7 @@ PUBLIC_HOST="$public_host" yq -i '
   )
 ' "$render"
 
-SESSION_ARCHIVE_IMAGE="$session_archive_image" \
+SESSION_ARCHIVE_IMAGE="$runtime_session_archive_image" \
 DEPLOYMENT_PROFILE="$deployment_profile" \
 AUTHORITY_SOURCE_REVISION="$authority_source_revision" yq -i '
   with(select(.kind == "ConfigMap" and
@@ -1426,6 +1451,8 @@ yq -o=json -I=0 '.' "$output" | jq -s -e --arg runnerImage "$runtime_runner_imag
       .resources.limits.cpu == "100m" and
       .resources.limits.memory == "256Mi" and
       any(.args[]?; contains("binary=/usr/local/bin/codex")) and
+      any(.args[]?; contains("elf \"$temporary\"")) and
+      any(.args[]?; contains("\"$temporary\" --version 2>/dev/null")) and
       any(.args[]?; contains("mv -f \"$temporary\" /codex/codex")) and
       any(.volumeMounts[]?; .name == "codex-cli" and .mountPath == "/codex")) and
     any(.spec.template.spec.containers[]?;
@@ -1517,7 +1544,7 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
 ' >/dev/null || fail 'dedicated local runtime namespace boundary is invalid'
 yq -e 'select(.kind == "Deployment" and .metadata.name == "integration-synthetic")' "$output" >/dev/null ||
   fail 'integration-synthetic development workload is absent'
-yq -o=json -I=0 '.' "$output" | jq -s -e --arg image "$session_archive_image" '
+yq -o=json -I=0 '.' "$output" | jq -s -e --arg image "$runtime_session_archive_image" '
   any(.[];
     .kind == "Deployment" and .metadata.name == "session-archive" and
     .metadata.namespace == "kodex-system" and
@@ -1694,13 +1721,13 @@ yq -o=json -I=0 '.' "$output" | jq -s -e '
 ' >/dev/null || fail 'Control Plane internal caller ingress is incomplete'
 
 PROMOTED_PULL_HOST="$promoted_pull_host" \
-ROLE_IMAGE_BUILDER_IMAGE="$role_image_builder_image" \
+ROLE_IMAGE_BUILDER_IMAGE="$runtime_role_image_builder_image" \
 IMAGE_ADMISSION_IMAGE="$image_admission_image" \
 IMAGE_ADMISSION_TOOLS_IMAGE="$image_admission_tools_image" \
 AUTHORITY_IMAGE="$authority_image" \
 RUNNER_IMAGE="$runner_image" yq -o=json -I=0 '.' "$output" | jq -s -e \
   --arg pullHost "$promoted_pull_host" \
-  --arg builderImage "$role_image_builder_image" \
+  --arg builderImage "$runtime_role_image_builder_image" \
   --arg admissionImage "$image_admission_image" \
   --arg toolsImage "$image_admission_tools_image" \
   --arg authorityImage "$authority_image" \
@@ -1821,7 +1848,7 @@ if [[ "$security_profile" == trusted-cluster ]]; then
   # использует exact image с вшитым бинарём для краткоживущих archive Jobs.
   protected_render=$render
   render=$output
-  patch_go_container Deployment session-archive session-archive services/jobs/session-archive ./cmd/session-archive
+  patch_go_container Deployment session-archive session-archive services/jobs/session-archive ./cmd/session-archive controller
   render=$protected_render
   yq -o=json -I=0 '.' "$output" | jq -s '.' |
     python3 -B "$repository_root/tools/dev/trusted_cluster_render.py" materialize \

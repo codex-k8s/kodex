@@ -51,6 +51,9 @@ type MCPProxy struct {
 func StartMCPProxy(ctx context.Context, input model.Input, token string, requiredTools []string) (_ *MCPProxy, resultErr error) {
 	stage := mcpStageConfiguration
 	defer func() { resultErr = withMCPStage(resultErr, stage) }()
+	if err := runtimecontract.ValidateManagedMCPReadiness(input, time.Now()); err != nil {
+		return nil, err
+	}
 	if len(requiredTools) == 0 || len(requiredTools) > 256 {
 		return nil, errors.New("required MCP tool catalog is invalid")
 	}
@@ -164,7 +167,7 @@ func StartMCPProxy(ctx context.Context, input model.Input, token string, require
 		socketPath: mcpAuthoritySocket, localToken: localToken, files: fileClient}
 	go func() { done <- server.Serve(secured) }()
 	localEndpoint, _ := url.Parse("http://" + mcpAuthorityHostName + "/mcp")
-	if err := checkMCP(ctx, &http.Client{Transport: localTransport, Timeout: 15 * time.Second}, localEndpoint, localToken, requiredTools); err != nil {
+	if err := checkMCP(ctx, &http.Client{Transport: localTransport, Timeout: 15 * time.Second}, localEndpoint, localToken, requiredTools, input); err != nil {
 		fileClient.Close()
 		_ = server.Close()
 		localTransport.CloseIdleConnections()
@@ -257,9 +260,30 @@ func exactMCPTransport(binding model.TLSBinding) (*http.Transport, error) {
 		MaxResponseHeaderBytes: 16 << 10}, nil
 }
 
-func checkMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token string, requiredTools []string) (resultErr error) {
+func checkMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token string, requiredTools []string, inputs ...runtimecontract.RunnerInput) (resultErr error) {
 	stage := mcpStageInitialize
 	defer func() { resultErr = withMCPStage(resultErr, stage) }()
+	if len(inputs) > 1 {
+		return errors.New("required MCP profile input is invalid")
+	}
+	expectedSchemas := map[string]string{}
+	if len(inputs) == 1 {
+		if err := runtimecontract.ValidateManagedMCPReadiness(inputs[0], time.Now()); err != nil {
+			return err
+		}
+		expectedNames := runtimecontract.RuntimeMCPToolNames(inputs[0])
+		configuredNames := append([]string(nil), requiredTools...)
+		slices.Sort(expectedNames)
+		slices.Sort(configuredNames)
+		if !slices.Equal(expectedNames, configuredNames) {
+			return errors.New("required MCP tool profile does not match RuntimeRevision")
+		}
+		var err error
+		expectedSchemas, err = runtimecontract.ManagedMCPToolSchemas(inputs[0])
+		if err != nil {
+			return err
+		}
+	}
 	initialize := []byte(`{"jsonrpc":"2.0","id":"agent-runner-readiness","method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"kodex-agent-runner","version":"1"}}}`)
 	raw, mediaType, statusCode, err := postMCP(ctx, client, endpoint, token, initialize)
 	if err != nil || len(raw) == 0 || statusCode != http.StatusOK || mediaType != "application/json" {
@@ -331,12 +355,22 @@ func checkMCP(ctx context.Context, client *http.Client, endpoint *url.URL, token
 		}
 		seen[tool.Name] = struct{}{}
 		actual = append(actual, tool.Name)
+		if expected, required := expectedSchemas[tool.Name]; required {
+			wantDigest, wantErr := runtimecontract.ManagedMCPSchemaDigest([]byte(expected))
+			actualDigest, actualErr := runtimecontract.ManagedMCPSchemaDigest(tool.InputSchema)
+			if wantErr != nil || actualErr != nil || wantDigest != actualDigest {
+				return errors.New("required MCP tool schema does not match RuntimeRevision")
+			}
+		}
 	}
 	stage = mcpStageCatalogBinding
 	slices.Sort(want)
 	slices.Sort(actual)
 	if !slices.Equal(actual, want) {
 		return errors.New("required MCP tool catalog does not match RuntimeRevision")
+	}
+	if len(inputs) == 1 {
+		return runtimecontract.ValidateManagedMCPReadiness(inputs[0], time.Now())
 	}
 	return nil
 }

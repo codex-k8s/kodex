@@ -609,35 +609,38 @@ func (e ArtifactPurgeReceiptLifecycleState) Valid() bool {
 
 // Defines values for AssistantContextDescriptorAllowedOperations.
 const (
-	AssistantContextDescriptorAllowedOperationsARCHIVEAGENT                         AssistantContextDescriptorAllowedOperations = "ARCHIVE_AGENT"
-	AssistantContextDescriptorAllowedOperationsARCHIVEWORKFLOW                      AssistantContextDescriptorAllowedOperations = "ARCHIVE_WORKFLOW"
-	AssistantContextDescriptorAllowedOperationsBINDAGENTRUNTIMEENVIRONMENT          AssistantContextDescriptorAllowedOperations = "BIND_AGENT_RUNTIME_ENVIRONMENT"
-	AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY                     AssistantContextDescriptorAllowedOperations = "CHANGE_CAPABILITY"
-	AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT               AssistantContextDescriptorAllowedOperations = "CHANGE_INTEGRATION_GRANT"
-	AssistantContextDescriptorAllowedOperationsCREATEAGENT                          AssistantContextDescriptorAllowedOperations = "CREATE_AGENT"
-	AssistantContextDescriptorAllowedOperationsCREATEINSTRUCTIONDRAFT               AssistantContextDescriptorAllowedOperations = "CREATE_INSTRUCTION_DRAFT"
-	AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION          AssistantContextDescriptorAllowedOperations = "CREATE_INTEGRATION_CONNECTION"
-	AssistantContextDescriptorAllowedOperationsCREATEPROJECT                        AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT"
-	AssistantContextDescriptorAllowedOperationsCREATEPROJECTASSISTANT               AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_ASSISTANT"
-	AssistantContextDescriptorAllowedOperationsCREATEPROJECTFILE                    AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_FILE"
-	AssistantContextDescriptorAllowedOperationsCREATEROLEIMAGERECIPE                AssistantContextDescriptorAllowedOperations = "CREATE_ROLE_IMAGE_RECIPE"
-	AssistantContextDescriptorAllowedOperationsCREATERUNTIMEENVIRONMENTDRAFT        AssistantContextDescriptorAllowedOperations = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-	AssistantContextDescriptorAllowedOperationsCREATESCHEDULE                       AssistantContextDescriptorAllowedOperations = "CREATE_SCHEDULE"
-	AssistantContextDescriptorAllowedOperationsCREATESYSTEMASSISTANTROLEIMAGERECIPE AssistantContextDescriptorAllowedOperations = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
-	AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW                       AssistantContextDescriptorAllowedOperations = "CREATE_WORKFLOW"
-	AssistantContextDescriptorAllowedOperationsLAUNCHRUN                            AssistantContextDescriptorAllowedOperations = "LAUNCH_RUN"
-	AssistantContextDescriptorAllowedOperationsPREPAREASSISTANTRUNTIMECONFIGURATION AssistantContextDescriptorAllowedOperations = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
-	AssistantContextDescriptorAllowedOperationsPREPARERUNTIMEENVIRONMENTREVISION    AssistantContextDescriptorAllowedOperations = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
-	AssistantContextDescriptorAllowedOperationsPUBLISHINTEGRATIONDEFINITION         AssistantContextDescriptorAllowedOperations = "PUBLISH_INTEGRATION_DEFINITION"
-	AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION            AssistantContextDescriptorAllowedOperations = "TEST_INTEGRATION_CONNECTION"
-	AssistantContextDescriptorAllowedOperationsUPDATEAGENT                          AssistantContextDescriptorAllowedOperations = "UPDATE_AGENT"
-	AssistantContextDescriptorAllowedOperationsUPDATEINTEGRATIONCONNECTION          AssistantContextDescriptorAllowedOperations = "UPDATE_INTEGRATION_CONNECTION"
-	AssistantContextDescriptorAllowedOperationsUPDATEPROJECT                        AssistantContextDescriptorAllowedOperations = "UPDATE_PROJECT"
-	AssistantContextDescriptorAllowedOperationsUPDATEROLEIMAGERECIPE                AssistantContextDescriptorAllowedOperations = "UPDATE_ROLE_IMAGE_RECIPE"
-	AssistantContextDescriptorAllowedOperationsUPDATESCHEDULE                       AssistantContextDescriptorAllowedOperations = "UPDATE_SCHEDULE"
-	AssistantContextDescriptorAllowedOperationsUPDATESYSTEMASSISTANTINSTRUCTIONS    AssistantContextDescriptorAllowedOperations = "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
-	AssistantContextDescriptorAllowedOperationsUPDATESYSTEMASSISTANTROLEIMAGERECIPE AssistantContextDescriptorAllowedOperations = "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
-	AssistantContextDescriptorAllowedOperationsUPDATEWORKFLOW                       AssistantContextDescriptorAllowedOperations = "UPDATE_WORKFLOW"
+	AssistantContextDescriptorAllowedOperationsARCHIVEAGENT                                 AssistantContextDescriptorAllowedOperations = "ARCHIVE_AGENT"
+	AssistantContextDescriptorAllowedOperationsARCHIVEWORKFLOW                              AssistantContextDescriptorAllowedOperations = "ARCHIVE_WORKFLOW"
+	AssistantContextDescriptorAllowedOperationsBINDAGENTRUNTIMEENVIRONMENT                  AssistantContextDescriptorAllowedOperations = "BIND_AGENT_RUNTIME_ENVIRONMENT"
+	AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY                             AssistantContextDescriptorAllowedOperations = "CHANGE_CAPABILITY"
+	AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT                       AssistantContextDescriptorAllowedOperations = "CHANGE_INTEGRATION_GRANT"
+	AssistantContextDescriptorAllowedOperationsCHANGEPROJECTASSISTANTINTEGRATIONGRANT       AssistantContextDescriptorAllowedOperations = "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT"
+	AssistantContextDescriptorAllowedOperationsCHANGESYSTEMASSISTANTINTEGRATIONGRANT        AssistantContextDescriptorAllowedOperations = "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"
+	AssistantContextDescriptorAllowedOperationsCREATEAGENT                                  AssistantContextDescriptorAllowedOperations = "CREATE_AGENT"
+	AssistantContextDescriptorAllowedOperationsCREATEINSTRUCTIONDRAFT                       AssistantContextDescriptorAllowedOperations = "CREATE_INSTRUCTION_DRAFT"
+	AssistantContextDescriptorAllowedOperationsCREATEINTEGRATIONCONNECTION                  AssistantContextDescriptorAllowedOperations = "CREATE_INTEGRATION_CONNECTION"
+	AssistantContextDescriptorAllowedOperationsCREATEPROJECT                                AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT"
+	AssistantContextDescriptorAllowedOperationsCREATEPROJECTASSISTANT                       AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_ASSISTANT"
+	AssistantContextDescriptorAllowedOperationsCREATEPROJECTFILE                            AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_FILE"
+	AssistantContextDescriptorAllowedOperationsCREATEROLEIMAGERECIPE                        AssistantContextDescriptorAllowedOperations = "CREATE_ROLE_IMAGE_RECIPE"
+	AssistantContextDescriptorAllowedOperationsCREATERUNTIMEENVIRONMENTDRAFT                AssistantContextDescriptorAllowedOperations = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+	AssistantContextDescriptorAllowedOperationsCREATESCHEDULE                               AssistantContextDescriptorAllowedOperations = "CREATE_SCHEDULE"
+	AssistantContextDescriptorAllowedOperationsCREATESYSTEMASSISTANTROLEIMAGERECIPE         AssistantContextDescriptorAllowedOperations = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+	AssistantContextDescriptorAllowedOperationsCREATEWORKFLOW                               AssistantContextDescriptorAllowedOperations = "CREATE_WORKFLOW"
+	AssistantContextDescriptorAllowedOperationsLAUNCHRUN                                    AssistantContextDescriptorAllowedOperations = "LAUNCH_RUN"
+	AssistantContextDescriptorAllowedOperationsPREPAREASSISTANTRUNTIMECONFIGURATION         AssistantContextDescriptorAllowedOperations = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
+	AssistantContextDescriptorAllowedOperationsPREPAREPROJECTASSISTANTINTEGRATIONCONNECTION AssistantContextDescriptorAllowedOperations = "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION"
+	AssistantContextDescriptorAllowedOperationsPREPARERUNTIMEENVIRONMENTREVISION            AssistantContextDescriptorAllowedOperations = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+	AssistantContextDescriptorAllowedOperationsPUBLISHINTEGRATIONDEFINITION                 AssistantContextDescriptorAllowedOperations = "PUBLISH_INTEGRATION_DEFINITION"
+	AssistantContextDescriptorAllowedOperationsTESTINTEGRATIONCONNECTION                    AssistantContextDescriptorAllowedOperations = "TEST_INTEGRATION_CONNECTION"
+	AssistantContextDescriptorAllowedOperationsUPDATEAGENT                                  AssistantContextDescriptorAllowedOperations = "UPDATE_AGENT"
+	AssistantContextDescriptorAllowedOperationsUPDATEINTEGRATIONCONNECTION                  AssistantContextDescriptorAllowedOperations = "UPDATE_INTEGRATION_CONNECTION"
+	AssistantContextDescriptorAllowedOperationsUPDATEPROJECT                                AssistantContextDescriptorAllowedOperations = "UPDATE_PROJECT"
+	AssistantContextDescriptorAllowedOperationsUPDATEROLEIMAGERECIPE                        AssistantContextDescriptorAllowedOperations = "UPDATE_ROLE_IMAGE_RECIPE"
+	AssistantContextDescriptorAllowedOperationsUPDATESCHEDULE                               AssistantContextDescriptorAllowedOperations = "UPDATE_SCHEDULE"
+	AssistantContextDescriptorAllowedOperationsUPDATESYSTEMASSISTANTINSTRUCTIONS            AssistantContextDescriptorAllowedOperations = "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
+	AssistantContextDescriptorAllowedOperationsUPDATESYSTEMASSISTANTROLEIMAGERECIPE         AssistantContextDescriptorAllowedOperations = "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+	AssistantContextDescriptorAllowedOperationsUPDATEWORKFLOW                               AssistantContextDescriptorAllowedOperations = "UPDATE_WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the AssistantContextDescriptorAllowedOperations enum.
@@ -652,6 +655,10 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsCHANGECAPABILITY:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCHANGEINTEGRATIONGRANT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCHANGEPROJECTASSISTANTINTEGRATIONGRANT:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCHANGESYSTEMASSISTANTINTEGRATIONGRANT:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATEAGENT:
 		return true
@@ -678,6 +685,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsLAUNCHRUN:
 		return true
 	case AssistantContextDescriptorAllowedOperationsPREPAREASSISTANTRUNTIMECONFIGURATION:
+		return true
+	case AssistantContextDescriptorAllowedOperationsPREPAREPROJECTASSISTANTINTEGRATIONCONNECTION:
 		return true
 	case AssistantContextDescriptorAllowedOperationsPREPARERUNTIMEENVIRONMENTREVISION:
 		return true
@@ -804,35 +813,38 @@ func (e AssistantPlanOperationAction) Valid() bool {
 
 // Defines values for AssistantPlanOperationType.
 const (
-	AssistantPlanOperationTypeARCHIVEAGENT                         AssistantPlanOperationType = "ARCHIVE_AGENT"
-	AssistantPlanOperationTypeARCHIVEWORKFLOW                      AssistantPlanOperationType = "ARCHIVE_WORKFLOW"
-	AssistantPlanOperationTypeBINDAGENTRUNTIMEENVIRONMENT          AssistantPlanOperationType = "BIND_AGENT_RUNTIME_ENVIRONMENT"
-	AssistantPlanOperationTypeCHANGECAPABILITY                     AssistantPlanOperationType = "CHANGE_CAPABILITY"
-	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT               AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
-	AssistantPlanOperationTypeCREATEAGENT                          AssistantPlanOperationType = "CREATE_AGENT"
-	AssistantPlanOperationTypeCREATEINSTRUCTIONDRAFT               AssistantPlanOperationType = "CREATE_INSTRUCTION_DRAFT"
-	AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION          AssistantPlanOperationType = "CREATE_INTEGRATION_CONNECTION"
-	AssistantPlanOperationTypeCREATEPROJECT                        AssistantPlanOperationType = "CREATE_PROJECT"
-	AssistantPlanOperationTypeCREATEPROJECTASSISTANT               AssistantPlanOperationType = "CREATE_PROJECT_ASSISTANT"
-	AssistantPlanOperationTypeCREATEPROJECTFILE                    AssistantPlanOperationType = "CREATE_PROJECT_FILE"
-	AssistantPlanOperationTypeCREATEROLEIMAGERECIPE                AssistantPlanOperationType = "CREATE_ROLE_IMAGE_RECIPE"
-	AssistantPlanOperationTypeCREATERUNTIMEENVIRONMENTDRAFT        AssistantPlanOperationType = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
-	AssistantPlanOperationTypeCREATESCHEDULE                       AssistantPlanOperationType = "CREATE_SCHEDULE"
-	AssistantPlanOperationTypeCREATESYSTEMASSISTANTROLEIMAGERECIPE AssistantPlanOperationType = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
-	AssistantPlanOperationTypeCREATEWORKFLOW                       AssistantPlanOperationType = "CREATE_WORKFLOW"
-	AssistantPlanOperationTypeLAUNCHRUN                            AssistantPlanOperationType = "LAUNCH_RUN"
-	AssistantPlanOperationTypePREPAREASSISTANTRUNTIMECONFIGURATION AssistantPlanOperationType = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
-	AssistantPlanOperationTypePREPARERUNTIMEENVIRONMENTREVISION    AssistantPlanOperationType = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
-	AssistantPlanOperationTypePUBLISHINTEGRATIONDEFINITION         AssistantPlanOperationType = "PUBLISH_INTEGRATION_DEFINITION"
-	AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION            AssistantPlanOperationType = "TEST_INTEGRATION_CONNECTION"
-	AssistantPlanOperationTypeUPDATEAGENT                          AssistantPlanOperationType = "UPDATE_AGENT"
-	AssistantPlanOperationTypeUPDATEINTEGRATIONCONNECTION          AssistantPlanOperationType = "UPDATE_INTEGRATION_CONNECTION"
-	AssistantPlanOperationTypeUPDATEPROJECT                        AssistantPlanOperationType = "UPDATE_PROJECT"
-	AssistantPlanOperationTypeUPDATEROLEIMAGERECIPE                AssistantPlanOperationType = "UPDATE_ROLE_IMAGE_RECIPE"
-	AssistantPlanOperationTypeUPDATESCHEDULE                       AssistantPlanOperationType = "UPDATE_SCHEDULE"
-	AssistantPlanOperationTypeUPDATESYSTEMASSISTANTINSTRUCTIONS    AssistantPlanOperationType = "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
-	AssistantPlanOperationTypeUPDATESYSTEMASSISTANTROLEIMAGERECIPE AssistantPlanOperationType = "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
-	AssistantPlanOperationTypeUPDATEWORKFLOW                       AssistantPlanOperationType = "UPDATE_WORKFLOW"
+	AssistantPlanOperationTypeARCHIVEAGENT                                 AssistantPlanOperationType = "ARCHIVE_AGENT"
+	AssistantPlanOperationTypeARCHIVEWORKFLOW                              AssistantPlanOperationType = "ARCHIVE_WORKFLOW"
+	AssistantPlanOperationTypeBINDAGENTRUNTIMEENVIRONMENT                  AssistantPlanOperationType = "BIND_AGENT_RUNTIME_ENVIRONMENT"
+	AssistantPlanOperationTypeCHANGECAPABILITY                             AssistantPlanOperationType = "CHANGE_CAPABILITY"
+	AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT                       AssistantPlanOperationType = "CHANGE_INTEGRATION_GRANT"
+	AssistantPlanOperationTypeCHANGEPROJECTASSISTANTINTEGRATIONGRANT       AssistantPlanOperationType = "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT"
+	AssistantPlanOperationTypeCHANGESYSTEMASSISTANTINTEGRATIONGRANT        AssistantPlanOperationType = "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"
+	AssistantPlanOperationTypeCREATEAGENT                                  AssistantPlanOperationType = "CREATE_AGENT"
+	AssistantPlanOperationTypeCREATEINSTRUCTIONDRAFT                       AssistantPlanOperationType = "CREATE_INSTRUCTION_DRAFT"
+	AssistantPlanOperationTypeCREATEINTEGRATIONCONNECTION                  AssistantPlanOperationType = "CREATE_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypeCREATEPROJECT                                AssistantPlanOperationType = "CREATE_PROJECT"
+	AssistantPlanOperationTypeCREATEPROJECTASSISTANT                       AssistantPlanOperationType = "CREATE_PROJECT_ASSISTANT"
+	AssistantPlanOperationTypeCREATEPROJECTFILE                            AssistantPlanOperationType = "CREATE_PROJECT_FILE"
+	AssistantPlanOperationTypeCREATEROLEIMAGERECIPE                        AssistantPlanOperationType = "CREATE_ROLE_IMAGE_RECIPE"
+	AssistantPlanOperationTypeCREATERUNTIMEENVIRONMENTDRAFT                AssistantPlanOperationType = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
+	AssistantPlanOperationTypeCREATESCHEDULE                               AssistantPlanOperationType = "CREATE_SCHEDULE"
+	AssistantPlanOperationTypeCREATESYSTEMASSISTANTROLEIMAGERECIPE         AssistantPlanOperationType = "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+	AssistantPlanOperationTypeCREATEWORKFLOW                               AssistantPlanOperationType = "CREATE_WORKFLOW"
+	AssistantPlanOperationTypeLAUNCHRUN                                    AssistantPlanOperationType = "LAUNCH_RUN"
+	AssistantPlanOperationTypePREPAREASSISTANTRUNTIMECONFIGURATION         AssistantPlanOperationType = "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
+	AssistantPlanOperationTypePREPAREPROJECTASSISTANTINTEGRATIONCONNECTION AssistantPlanOperationType = "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypePREPARERUNTIMEENVIRONMENTREVISION            AssistantPlanOperationType = "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
+	AssistantPlanOperationTypePUBLISHINTEGRATIONDEFINITION                 AssistantPlanOperationType = "PUBLISH_INTEGRATION_DEFINITION"
+	AssistantPlanOperationTypeTESTINTEGRATIONCONNECTION                    AssistantPlanOperationType = "TEST_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypeUPDATEAGENT                                  AssistantPlanOperationType = "UPDATE_AGENT"
+	AssistantPlanOperationTypeUPDATEINTEGRATIONCONNECTION                  AssistantPlanOperationType = "UPDATE_INTEGRATION_CONNECTION"
+	AssistantPlanOperationTypeUPDATEPROJECT                                AssistantPlanOperationType = "UPDATE_PROJECT"
+	AssistantPlanOperationTypeUPDATEROLEIMAGERECIPE                        AssistantPlanOperationType = "UPDATE_ROLE_IMAGE_RECIPE"
+	AssistantPlanOperationTypeUPDATESCHEDULE                               AssistantPlanOperationType = "UPDATE_SCHEDULE"
+	AssistantPlanOperationTypeUPDATESYSTEMASSISTANTINSTRUCTIONS            AssistantPlanOperationType = "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
+	AssistantPlanOperationTypeUPDATESYSTEMASSISTANTROLEIMAGERECIPE         AssistantPlanOperationType = "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
+	AssistantPlanOperationTypeUPDATEWORKFLOW                               AssistantPlanOperationType = "UPDATE_WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the AssistantPlanOperationType enum.
@@ -847,6 +859,10 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeCHANGECAPABILITY:
 		return true
 	case AssistantPlanOperationTypeCHANGEINTEGRATIONGRANT:
+		return true
+	case AssistantPlanOperationTypeCHANGEPROJECTASSISTANTINTEGRATIONGRANT:
+		return true
+	case AssistantPlanOperationTypeCHANGESYSTEMASSISTANTINTEGRATIONGRANT:
 		return true
 	case AssistantPlanOperationTypeCREATEAGENT:
 		return true
@@ -873,6 +889,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeLAUNCHRUN:
 		return true
 	case AssistantPlanOperationTypePREPAREASSISTANTRUNTIMECONFIGURATION:
+		return true
+	case AssistantPlanOperationTypePREPAREPROJECTASSISTANTINTEGRATIONCONNECTION:
 		return true
 	case AssistantPlanOperationTypePREPARERUNTIMEENVIRONMENTREVISION:
 		return true
@@ -1222,6 +1240,7 @@ const (
 	HistoryPersistence   ConfigOverlayFieldKey = "history.persistence"
 	ModelReasoningEffort ConfigOverlayFieldKey = "model_reasoning_effort"
 	Personality          ConfigOverlayFieldKey = "personality"
+	WebSearch            ConfigOverlayFieldKey = "web_search"
 )
 
 // Valid indicates whether the value is a known member of the ConfigOverlayFieldKey enum.
@@ -1234,6 +1253,8 @@ func (e ConfigOverlayFieldKey) Valid() bool {
 	case ModelReasoningEffort:
 		return true
 	case Personality:
+		return true
+	case WebSearch:
 		return true
 	default:
 		return false
@@ -1840,6 +1861,393 @@ func (e GateResolutionDecision) Valid() bool {
 	}
 }
 
+// Defines values for ImageAdmissionAttemptState.
+const (
+	ImageAdmissionAttemptStateACCEPTED  ImageAdmissionAttemptState = "ACCEPTED"
+	ImageAdmissionAttemptStateCANCELLED ImageAdmissionAttemptState = "CANCELLED"
+	ImageAdmissionAttemptStateCLAIMED   ImageAdmissionAttemptState = "CLAIMED"
+	ImageAdmissionAttemptStateFAILED    ImageAdmissionAttemptState = "FAILED"
+	ImageAdmissionAttemptStatePENDING   ImageAdmissionAttemptState = "PENDING"
+	ImageAdmissionAttemptStateREJECTED  ImageAdmissionAttemptState = "REJECTED"
+)
+
+// Valid indicates whether the value is a known member of the ImageAdmissionAttemptState enum.
+func (e ImageAdmissionAttemptState) Valid() bool {
+	switch e {
+	case ImageAdmissionAttemptStateACCEPTED:
+		return true
+	case ImageAdmissionAttemptStateCANCELLED:
+		return true
+	case ImageAdmissionAttemptStateCLAIMED:
+		return true
+	case ImageAdmissionAttemptStateFAILED:
+		return true
+	case ImageAdmissionAttemptStatePENDING:
+		return true
+	case ImageAdmissionAttemptStateREJECTED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageAdmissionRiskAction.
+const (
+	ImageAdmissionRiskActionACCEPTRISK ImageAdmissionRiskAction = "ACCEPT_RISK"
+	ImageAdmissionRiskActionREJECTRISK ImageAdmissionRiskAction = "REJECT_RISK"
+)
+
+// Valid indicates whether the value is a known member of the ImageAdmissionRiskAction enum.
+func (e ImageAdmissionRiskAction) Valid() bool {
+	switch e {
+	case ImageAdmissionRiskActionACCEPTRISK:
+		return true
+	case ImageAdmissionRiskActionREJECTRISK:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImagePlatformToolInventoryPlatform.
+const (
+	Linuxamd64 ImagePlatformToolInventoryPlatform = "linux/amd64"
+	Linuxarm64 ImagePlatformToolInventoryPlatform = "linux/arm64"
+)
+
+// Valid indicates whether the value is a known member of the ImagePlatformToolInventoryPlatform enum.
+func (e ImagePlatformToolInventoryPlatform) Valid() bool {
+	switch e {
+	case Linuxamd64:
+		return true
+	case Linuxarm64:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageToolInventoryStatus.
+const (
+	ImageToolInventoryStatusUNAVAILABLE ImageToolInventoryStatus = "UNAVAILABLE"
+	ImageToolInventoryStatusVERIFIED    ImageToolInventoryStatus = "VERIFIED"
+)
+
+// Valid indicates whether the value is a known member of the ImageToolInventoryStatus enum.
+func (e ImageToolInventoryStatus) Valid() bool {
+	switch e {
+	case ImageToolInventoryStatusUNAVAILABLE:
+		return true
+	case ImageToolInventoryStatusVERIFIED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageToolObservationName.
+const (
+	Bash            ImageToolObservationName = "bash"
+	Buf             ImageToolObservationName = "buf"
+	Buildctl        ImageToolObservationName = "buildctl"
+	Chromium        ImageToolObservationName = "chromium"
+	Codex           ImageToolObservationName = "codex"
+	Corepack        ImageToolObservationName = "corepack"
+	Curl            ImageToolObservationName = "curl"
+	Docker          ImageToolObservationName = "docker"
+	Eslint          ImageToolObservationName = "eslint"
+	Gh              ImageToolObservationName = "gh"
+	Git             ImageToolObservationName = "git"
+	Gitleaks        ImageToolObservationName = "gitleaks"
+	Go              ImageToolObservationName = "go"
+	Gofumpt         ImageToolObservationName = "gofumpt"
+	Goimports       ImageToolObservationName = "goimports"
+	GolangciLint    ImageToolObservationName = "golangci-lint"
+	Goose           ImageToolObservationName = "goose"
+	Govulncheck     ImageToolObservationName = "govulncheck"
+	Grpcurl         ImageToolObservationName = "grpcurl"
+	Hadolint        ImageToolObservationName = "hadolint"
+	Helm            ImageToolObservationName = "helm"
+	Jq              ImageToolObservationName = "jq"
+	Just            ImageToolObservationName = "just"
+	Kubectl         ImageToolObservationName = "kubectl"
+	Kustomize       ImageToolObservationName = "kustomize"
+	Make            ImageToolObservationName = "make"
+	Mockgen         ImageToolObservationName = "mockgen"
+	Node            ImageToolObservationName = "node"
+	Npm             ImageToolObservationName = "npm"
+	OapiCodegen     ImageToolObservationName = "oapi-codegen"
+	Pip             ImageToolObservationName = "pip"
+	Playwright      ImageToolObservationName = "playwright"
+	PlaywrightMcp   ImageToolObservationName = "playwright-mcp"
+	Pnpm            ImageToolObservationName = "pnpm"
+	Prettier        ImageToolObservationName = "prettier"
+	Protoc          ImageToolObservationName = "protoc"
+	ProtocGenGo     ImageToolObservationName = "protoc-gen-go"
+	ProtocGenGoGrpc ImageToolObservationName = "protoc-gen-go-grpc"
+	Python3         ImageToolObservationName = "python3"
+	Ripgrep         ImageToolObservationName = "ripgrep"
+	Shellcheck      ImageToolObservationName = "shellcheck"
+	Sqlc            ImageToolObservationName = "sqlc"
+	Staticcheck     ImageToolObservationName = "staticcheck"
+	Typescript      ImageToolObservationName = "typescript"
+	Vite            ImageToolObservationName = "vite"
+	Vitest          ImageToolObservationName = "vitest"
+	VueTsc          ImageToolObservationName = "vue-tsc"
+	Wscat           ImageToolObservationName = "wscat"
+	Yarn            ImageToolObservationName = "yarn"
+	Yq              ImageToolObservationName = "yq"
+)
+
+// Valid indicates whether the value is a known member of the ImageToolObservationName enum.
+func (e ImageToolObservationName) Valid() bool {
+	switch e {
+	case Bash:
+		return true
+	case Buf:
+		return true
+	case Buildctl:
+		return true
+	case Chromium:
+		return true
+	case Codex:
+		return true
+	case Corepack:
+		return true
+	case Curl:
+		return true
+	case Docker:
+		return true
+	case Eslint:
+		return true
+	case Gh:
+		return true
+	case Git:
+		return true
+	case Gitleaks:
+		return true
+	case Go:
+		return true
+	case Gofumpt:
+		return true
+	case Goimports:
+		return true
+	case GolangciLint:
+		return true
+	case Goose:
+		return true
+	case Govulncheck:
+		return true
+	case Grpcurl:
+		return true
+	case Hadolint:
+		return true
+	case Helm:
+		return true
+	case Jq:
+		return true
+	case Just:
+		return true
+	case Kubectl:
+		return true
+	case Kustomize:
+		return true
+	case Make:
+		return true
+	case Mockgen:
+		return true
+	case Node:
+		return true
+	case Npm:
+		return true
+	case OapiCodegen:
+		return true
+	case Pip:
+		return true
+	case Playwright:
+		return true
+	case PlaywrightMcp:
+		return true
+	case Pnpm:
+		return true
+	case Prettier:
+		return true
+	case Protoc:
+		return true
+	case ProtocGenGo:
+		return true
+	case ProtocGenGoGrpc:
+		return true
+	case Python3:
+		return true
+	case Ripgrep:
+		return true
+	case Shellcheck:
+		return true
+	case Sqlc:
+		return true
+	case Staticcheck:
+		return true
+	case Typescript:
+		return true
+	case Vite:
+		return true
+	case Vitest:
+		return true
+	case VueTsc:
+		return true
+	case Wscat:
+		return true
+	case Yarn:
+		return true
+	case Yq:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageToolObservationStatus.
+const (
+	ImageToolObservationStatusMISSING     ImageToolObservationStatus = "MISSING"
+	ImageToolObservationStatusPROBEFAILED ImageToolObservationStatus = "PROBE_FAILED"
+	ImageToolObservationStatusVERIFIED    ImageToolObservationStatus = "VERIFIED"
+)
+
+// Valid indicates whether the value is a known member of the ImageToolObservationStatus enum.
+func (e ImageToolObservationStatus) Valid() bool {
+	switch e {
+	case ImageToolObservationStatusMISSING:
+		return true
+	case ImageToolObservationStatusPROBEFAILED:
+		return true
+	case ImageToolObservationStatusVERIFIED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageVulnerabilityAdvisoryKind.
+const (
+	CVE   ImageVulnerabilityAdvisoryKind = "CVE"
+	GHSA  ImageVulnerabilityAdvisoryKind = "GHSA"
+	GO    ImageVulnerabilityAdvisoryKind = "GO"
+	OTHER ImageVulnerabilityAdvisoryKind = "OTHER"
+)
+
+// Valid indicates whether the value is a known member of the ImageVulnerabilityAdvisoryKind enum.
+func (e ImageVulnerabilityAdvisoryKind) Valid() bool {
+	switch e {
+	case CVE:
+		return true
+	case GHSA:
+		return true
+	case GO:
+		return true
+	case OTHER:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageVulnerabilityFixState.
+const (
+	ImageVulnerabilityFixStateFIXED    ImageVulnerabilityFixState = "FIXED"
+	ImageVulnerabilityFixStateNOTFIXED ImageVulnerabilityFixState = "NOT_FIXED"
+	ImageVulnerabilityFixStateUNKNOWN  ImageVulnerabilityFixState = "UNKNOWN"
+	ImageVulnerabilityFixStateWONTFIX  ImageVulnerabilityFixState = "WONT_FIX"
+)
+
+// Valid indicates whether the value is a known member of the ImageVulnerabilityFixState enum.
+func (e ImageVulnerabilityFixState) Valid() bool {
+	switch e {
+	case ImageVulnerabilityFixStateFIXED:
+		return true
+	case ImageVulnerabilityFixStateNOTFIXED:
+		return true
+	case ImageVulnerabilityFixStateUNKNOWN:
+		return true
+	case ImageVulnerabilityFixStateWONTFIX:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageVulnerabilityReportNextActions.
+const (
+	ImageVulnerabilityReportNextActionsACCEPTRISK       ImageVulnerabilityReportNextActions = "ACCEPT_RISK"
+	ImageVulnerabilityReportNextActionsREBUILDFORREPORT ImageVulnerabilityReportNextActions = "REBUILD_FOR_REPORT"
+	ImageVulnerabilityReportNextActionsREJECTRISK       ImageVulnerabilityReportNextActions = "REJECT_RISK"
+)
+
+// Valid indicates whether the value is a known member of the ImageVulnerabilityReportNextActions enum.
+func (e ImageVulnerabilityReportNextActions) Valid() bool {
+	switch e {
+	case ImageVulnerabilityReportNextActionsACCEPTRISK:
+		return true
+	case ImageVulnerabilityReportNextActionsREBUILDFORREPORT:
+		return true
+	case ImageVulnerabilityReportNextActionsREJECTRISK:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageVulnerabilityReportState.
+const (
+	ImageVulnerabilityReportStateFAILED      ImageVulnerabilityReportState = "FAILED"
+	ImageVulnerabilityReportStateREADY       ImageVulnerabilityReportState = "READY"
+	ImageVulnerabilityReportStateUNAVAILABLE ImageVulnerabilityReportState = "UNAVAILABLE"
+)
+
+// Valid indicates whether the value is a known member of the ImageVulnerabilityReportState enum.
+func (e ImageVulnerabilityReportState) Valid() bool {
+	switch e {
+	case ImageVulnerabilityReportStateFAILED:
+		return true
+	case ImageVulnerabilityReportStateREADY:
+		return true
+	case ImageVulnerabilityReportStateUNAVAILABLE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ImageVulnerabilitySeverity.
+const (
+	ImageVulnerabilitySeverityCRITICAL   ImageVulnerabilitySeverity = "CRITICAL"
+	ImageVulnerabilitySeverityHIGH       ImageVulnerabilitySeverity = "HIGH"
+	ImageVulnerabilitySeverityLOW        ImageVulnerabilitySeverity = "LOW"
+	ImageVulnerabilitySeverityMEDIUM     ImageVulnerabilitySeverity = "MEDIUM"
+	ImageVulnerabilitySeverityNEGLIGIBLE ImageVulnerabilitySeverity = "NEGLIGIBLE"
+	ImageVulnerabilitySeverityUNKNOWN    ImageVulnerabilitySeverity = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the ImageVulnerabilitySeverity enum.
+func (e ImageVulnerabilitySeverity) Valid() bool {
+	switch e {
+	case ImageVulnerabilitySeverityCRITICAL:
+		return true
+	case ImageVulnerabilitySeverityHIGH:
+		return true
+	case ImageVulnerabilitySeverityLOW:
+		return true
+	case ImageVulnerabilitySeverityMEDIUM:
+		return true
+	case ImageVulnerabilitySeverityNEGLIGIBLE:
+		return true
+	case ImageVulnerabilitySeverityUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for IncidentSeverity.
 const (
 	IncidentSeverityCRITICAL IncidentSeverity = "CRITICAL"
@@ -1954,6 +2362,27 @@ func (e IntegrationCandidateReason) Valid() bool {
 	case IntegrationCandidateReasonRECIPIENTUNAVAILABLE:
 		return true
 	case IntegrationCandidateReasonWORKFLOWEXCLUDED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationCapabilityAllowedApprovalPolicies.
+const (
+	IntegrationCapabilityAllowedApprovalPoliciesHUMANEACHEFFECT IntegrationCapabilityAllowedApprovalPolicies = "HUMAN_EACH_EFFECT"
+	IntegrationCapabilityAllowedApprovalPoliciesHUMANSCOPED     IntegrationCapabilityAllowedApprovalPolicies = "HUMAN_SCOPED"
+	IntegrationCapabilityAllowedApprovalPoliciesNONE            IntegrationCapabilityAllowedApprovalPolicies = "NONE"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationCapabilityAllowedApprovalPolicies enum.
+func (e IntegrationCapabilityAllowedApprovalPolicies) Valid() bool {
+	switch e {
+	case IntegrationCapabilityAllowedApprovalPoliciesHUMANEACHEFFECT:
+		return true
+	case IntegrationCapabilityAllowedApprovalPoliciesHUMANSCOPED:
+		return true
+	case IntegrationCapabilityAllowedApprovalPoliciesNONE:
 		return true
 	default:
 		return false
@@ -2329,6 +2758,27 @@ func (e IntegrationGrantConnectionCandidateCredentialKind) Valid() bool {
 	case IntegrationGrantConnectionCandidateCredentialKindPASSWORD:
 		return true
 	case IntegrationGrantConnectionCandidateCredentialKindTOKEN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationGrantInputApprovalPolicy.
+const (
+	IntegrationGrantInputApprovalPolicyHUMANEACHEFFECT IntegrationGrantInputApprovalPolicy = "HUMAN_EACH_EFFECT"
+	IntegrationGrantInputApprovalPolicyHUMANSCOPED     IntegrationGrantInputApprovalPolicy = "HUMAN_SCOPED"
+	IntegrationGrantInputApprovalPolicyNONE            IntegrationGrantInputApprovalPolicy = "NONE"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationGrantInputApprovalPolicy enum.
+func (e IntegrationGrantInputApprovalPolicy) Valid() bool {
+	switch e {
+	case IntegrationGrantInputApprovalPolicyHUMANEACHEFFECT:
+		return true
+	case IntegrationGrantInputApprovalPolicyHUMANSCOPED:
+		return true
+	case IntegrationGrantInputApprovalPolicyNONE:
 		return true
 	default:
 		return false
@@ -2974,6 +3424,24 @@ func (e MembershipPlatformRole) Valid() bool {
 	}
 }
 
+// Defines values for MessageSourceOrigin.
+const (
+	CALLBACKCONTINUATION MessageSourceOrigin = "CALLBACK_CONTINUATION"
+	ORDINARY             MessageSourceOrigin = "ORDINARY"
+)
+
+// Valid indicates whether the value is a known member of the MessageSourceOrigin enum.
+func (e MessageSourceOrigin) Valid() bool {
+	switch e {
+	case CALLBACKCONTINUATION:
+		return true
+	case ORDINARY:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NextAction.
 const (
 	NextActionADDTURN                NextAction = "ADD_TURN"
@@ -3181,6 +3649,24 @@ func (e OwnerGateDecision) Valid() bool {
 	case OwnerGateDecisionREJECT:
 		return true
 	case OwnerGateDecisionREQUESTCHANGES:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OwnerGateScopeKind.
+const (
+	OwnerGateScopeKindORGANIZATION OwnerGateScopeKind = "ORGANIZATION"
+	OwnerGateScopeKindPROJECT      OwnerGateScopeKind = "PROJECT"
+)
+
+// Valid indicates whether the value is a known member of the OwnerGateScopeKind enum.
+func (e OwnerGateScopeKind) Valid() bool {
+	switch e {
+	case OwnerGateScopeKindORGANIZATION:
+		return true
+	case OwnerGateScopeKindPROJECT:
 		return true
 	default:
 		return false
@@ -3415,6 +3901,21 @@ func (e ProjectLifecycle) Valid() bool {
 	case ProjectLifecyclePURGEPENDING:
 		return true
 	case ProjectLifecycleTRASHED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProjectAssistantIntegrationGrantCandidatesScopeKind.
+const (
+	ProjectAssistantIntegrationGrantCandidatesScopeKindORGANIZATION ProjectAssistantIntegrationGrantCandidatesScopeKind = "ORGANIZATION"
+)
+
+// Valid indicates whether the value is a known member of the ProjectAssistantIntegrationGrantCandidatesScopeKind enum.
+func (e ProjectAssistantIntegrationGrantCandidatesScopeKind) Valid() bool {
+	switch e {
+	case ProjectAssistantIntegrationGrantCandidatesScopeKindORGANIZATION:
 		return true
 	default:
 		return false
@@ -4089,19 +4590,19 @@ func (e ProviderAccountDeletionState) Valid() bool {
 
 // Defines values for ProviderAccountPolicyVersionMode.
 const (
-	ProviderAccountPolicyVersionModeFIXED     ProviderAccountPolicyVersionMode = "FIXED"
-	ProviderAccountPolicyVersionModeLEASTUSED ProviderAccountPolicyVersionMode = "LEAST_USED"
-	ProviderAccountPolicyVersionModeWEIGHTED  ProviderAccountPolicyVersionMode = "WEIGHTED"
+	FIXED     ProviderAccountPolicyVersionMode = "FIXED"
+	LEASTUSED ProviderAccountPolicyVersionMode = "LEAST_USED"
+	WEIGHTED  ProviderAccountPolicyVersionMode = "WEIGHTED"
 )
 
 // Valid indicates whether the value is a known member of the ProviderAccountPolicyVersionMode enum.
 func (e ProviderAccountPolicyVersionMode) Valid() bool {
 	switch e {
-	case ProviderAccountPolicyVersionModeFIXED:
+	case FIXED:
 		return true
-	case ProviderAccountPolicyVersionModeLEASTUSED:
+	case LEASTUSED:
 		return true
-	case ProviderAccountPolicyVersionModeWEIGHTED:
+	case WEIGHTED:
 		return true
 	default:
 		return false
@@ -4660,9 +5161,49 @@ func (e RoleEnvironmentPlatformOs) Valid() bool {
 	}
 }
 
+// Defines values for RoleImageAdmissionFailureErrorCode.
+const (
+	ADMISSIONEVIDENCEENTRYEXCEEDSBOUND RoleImageAdmissionFailureErrorCode = "ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND"
+	ADMISSIONEVIDENCEEXCEEDSBOUND      RoleImageAdmissionFailureErrorCode = "ADMISSION_EVIDENCE_EXCEEDS_BOUND"
+	ADMISSIONLEASEEXPIRED              RoleImageAdmissionFailureErrorCode = "ADMISSION_LEASE_EXPIRED"
+	ADMISSIONWORKERFAILED              RoleImageAdmissionFailureErrorCode = "ADMISSION_WORKER_FAILED"
+)
+
+// Valid indicates whether the value is a known member of the RoleImageAdmissionFailureErrorCode enum.
+func (e RoleImageAdmissionFailureErrorCode) Valid() bool {
+	switch e {
+	case ADMISSIONEVIDENCEENTRYEXCEEDSBOUND:
+		return true
+	case ADMISSIONEVIDENCEEXCEEDSBOUND:
+		return true
+	case ADMISSIONLEASEEXPIRED:
+		return true
+	case ADMISSIONWORKERFAILED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RoleImageAdmissionFailureState.
+const (
+	RoleImageAdmissionFailureStateFAILED RoleImageAdmissionFailureState = "FAILED"
+)
+
+// Valid indicates whether the value is a known member of the RoleImageAdmissionFailureState enum.
+func (e RoleImageAdmissionFailureState) Valid() bool {
+	switch e {
+	case RoleImageAdmissionFailureStateFAILED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RoleImageArtifactAdmissionVerdict.
 const (
 	RoleImageArtifactAdmissionVerdictACCEPTED RoleImageArtifactAdmissionVerdict = "ACCEPTED"
+	RoleImageArtifactAdmissionVerdictPENDING  RoleImageArtifactAdmissionVerdict = "PENDING"
 	RoleImageArtifactAdmissionVerdictREJECTED RoleImageArtifactAdmissionVerdict = "REJECTED"
 )
 
@@ -4670,6 +5211,8 @@ const (
 func (e RoleImageArtifactAdmissionVerdict) Valid() bool {
 	switch e {
 	case RoleImageArtifactAdmissionVerdictACCEPTED:
+		return true
+	case RoleImageArtifactAdmissionVerdictPENDING:
 		return true
 	case RoleImageArtifactAdmissionVerdictREJECTED:
 		return true
@@ -5371,6 +5914,27 @@ func (e RunEventActorKind) Valid() bool {
 	}
 }
 
+// Defines values for RunEventServiceCode.
+const (
+	ASSISTANTTURNCANCELLED RunEventServiceCode = "ASSISTANT_TURN_CANCELLED"
+	RUNCANCELLED           RunEventServiceCode = "RUN_CANCELLED"
+	RUNNODECANCELLED       RunEventServiceCode = "RUN_NODE_CANCELLED"
+)
+
+// Valid indicates whether the value is a known member of the RunEventServiceCode enum.
+func (e RunEventServiceCode) Valid() bool {
+	switch e {
+	case ASSISTANTTURNCANCELLED:
+		return true
+	case RUNCANCELLED:
+		return true
+	case RUNNODECANCELLED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunInputTargetType.
 const (
 	RunInputTargetTypeAGENT    RunInputTargetType = "AGENT"
@@ -5383,6 +5947,27 @@ func (e RunInputTargetType) Valid() bool {
 	case RunInputTargetTypeAGENT:
 		return true
 	case RunInputTargetTypeWORKFLOW:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunMessagePhase.
+const (
+	RunMessagePhaseCOMMENTARY RunMessagePhase = "COMMENTARY"
+	RunMessagePhaseFINAL      RunMessagePhase = "FINAL"
+	RunMessagePhaseUSER       RunMessagePhase = "USER"
+)
+
+// Valid indicates whether the value is a known member of the RunMessagePhase enum.
+func (e RunMessagePhase) Valid() bool {
+	switch e {
+	case RunMessagePhaseCOMMENTARY:
+		return true
+	case RunMessagePhaseFINAL:
+		return true
+	case RunMessagePhaseUSER:
 		return true
 	default:
 		return false
@@ -5449,6 +6034,177 @@ func (e RunNodeType) Valid() bool {
 	}
 }
 
+// Defines values for RunSessionArchiveTaskKind.
+const (
+	RunSessionArchiveTaskKindDELETEPVC RunSessionArchiveTaskKind = "DELETE_PVC"
+	RunSessionArchiveTaskKindRESTORE   RunSessionArchiveTaskKind = "RESTORE"
+	RunSessionArchiveTaskKindSNAPSHOT  RunSessionArchiveTaskKind = "SNAPSHOT"
+)
+
+// Valid indicates whether the value is a known member of the RunSessionArchiveTaskKind enum.
+func (e RunSessionArchiveTaskKind) Valid() bool {
+	switch e {
+	case RunSessionArchiveTaskKindDELETEPVC:
+		return true
+	case RunSessionArchiveTaskKindRESTORE:
+		return true
+	case RunSessionArchiveTaskKindSNAPSHOT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunSessionArchiveTaskSafeErrorCode.
+const (
+	RunSessionArchiveTaskSafeErrorCodeNONE                                RunSessionArchiveTaskSafeErrorCode = "NONE"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEKUBERNETESUNAVAILABLE RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_KUBERNETES_UNAVAILABLE"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVELEASEEXPIRED          RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_LEASE_EXPIRED"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEOBJECTDELETEFAILED    RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_OBJECT_DELETE_FAILED"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEOBJECTREADBACKFAILED  RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_OBJECT_READBACK_FAILED"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEOBJECTWRITEFAILED     RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_OBJECT_WRITE_FAILED"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEPVCBUSY               RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_PVC_BUSY"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEPVCMISSING            RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_PVC_MISSING"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEPVCREPLACED           RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_PVC_REPLACED"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVERESTOREINVALID        RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_RESTORE_INVALID"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVESOURCEINVALID         RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_SOURCE_INVALID"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVETIMEOUT               RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_TIMEOUT"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEWORKERFAILED          RunSessionArchiveTaskSafeErrorCode = "SESSION_ARCHIVE_WORKER_FAILED"
+	RunSessionArchiveTaskSafeErrorCodeSESSIONBECAMEACTIVE                 RunSessionArchiveTaskSafeErrorCode = "SESSION_BECAME_ACTIVE"
+	RunSessionArchiveTaskSafeErrorCodeUNKNOWN                             RunSessionArchiveTaskSafeErrorCode = "UNKNOWN"
+)
+
+// Valid indicates whether the value is a known member of the RunSessionArchiveTaskSafeErrorCode enum.
+func (e RunSessionArchiveTaskSafeErrorCode) Valid() bool {
+	switch e {
+	case RunSessionArchiveTaskSafeErrorCodeNONE:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEKUBERNETESUNAVAILABLE:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVELEASEEXPIRED:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEOBJECTDELETEFAILED:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEOBJECTREADBACKFAILED:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEOBJECTWRITEFAILED:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEPVCBUSY:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEPVCMISSING:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEPVCREPLACED:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVERESTOREINVALID:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVESOURCEINVALID:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVETIMEOUT:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONARCHIVEWORKERFAILED:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeSESSIONBECAMEACTIVE:
+		return true
+	case RunSessionArchiveTaskSafeErrorCodeUNKNOWN:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunSessionArchiveTaskState.
+const (
+	RunSessionArchiveTaskStateCANCELLED  RunSessionArchiveTaskState = "CANCELLED"
+	RunSessionArchiveTaskStateCLAIMED    RunSessionArchiveTaskState = "CLAIMED"
+	RunSessionArchiveTaskStateDEADLETTER RunSessionArchiveTaskState = "DEAD_LETTER"
+	RunSessionArchiveTaskStateREADY      RunSessionArchiveTaskState = "READY"
+	RunSessionArchiveTaskStateSUCCEEDED  RunSessionArchiveTaskState = "SUCCEEDED"
+)
+
+// Valid indicates whether the value is a known member of the RunSessionArchiveTaskState enum.
+func (e RunSessionArchiveTaskState) Valid() bool {
+	switch e {
+	case RunSessionArchiveTaskStateCANCELLED:
+		return true
+	case RunSessionArchiveTaskStateCLAIMED:
+		return true
+	case RunSessionArchiveTaskStateDEADLETTER:
+		return true
+	case RunSessionArchiveTaskStateREADY:
+		return true
+	case RunSessionArchiveTaskStateSUCCEEDED:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunSessionReadinessReason.
+const (
+	EARLIEREXECUTION          RunSessionReadinessReason = "EARLIER_EXECUTION"
+	NOSESSIONBLOCKER          RunSessionReadinessReason = "NO_SESSION_BLOCKER"
+	SESSIONACCOUNTUNAVAILABLE RunSessionReadinessReason = "SESSION_ACCOUNT_UNAVAILABLE"
+	STORAGENOTLIVE            RunSessionReadinessReason = "STORAGE_NOT_LIVE"
+)
+
+// Valid indicates whether the value is a known member of the RunSessionReadinessReason enum.
+func (e RunSessionReadinessReason) Valid() bool {
+	switch e {
+	case EARLIEREXECUTION:
+		return true
+	case NOSESSIONBLOCKER:
+		return true
+	case SESSIONACCOUNTUNAVAILABLE:
+		return true
+	case STORAGENOTLIVE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunSessionReadinessStorageState.
+const (
+	RunSessionReadinessStorageStateARCHIVED       RunSessionReadinessStorageState = "ARCHIVED"
+	RunSessionReadinessStorageStateDELETEPVCREADY RunSessionReadinessStorageState = "DELETE_PVC_READY"
+	RunSessionReadinessStorageStateERROR          RunSessionReadinessStorageState = "ERROR"
+	RunSessionReadinessStorageStateLIVE           RunSessionReadinessStorageState = "LIVE"
+	RunSessionReadinessStorageStatePURGED         RunSessionReadinessStorageState = "PURGED"
+	RunSessionReadinessStorageStateRESTOREREADY   RunSessionReadinessStorageState = "RESTORE_READY"
+	RunSessionReadinessStorageStateRESTORING      RunSessionReadinessStorageState = "RESTORING"
+	RunSessionReadinessStorageStateSNAPSHOTREADY  RunSessionReadinessStorageState = "SNAPSHOT_READY"
+	RunSessionReadinessStorageStateSNAPSHOTTING   RunSessionReadinessStorageState = "SNAPSHOTTING"
+	RunSessionReadinessStorageStateUNTRACKED      RunSessionReadinessStorageState = "UNTRACKED"
+)
+
+// Valid indicates whether the value is a known member of the RunSessionReadinessStorageState enum.
+func (e RunSessionReadinessStorageState) Valid() bool {
+	switch e {
+	case RunSessionReadinessStorageStateARCHIVED:
+		return true
+	case RunSessionReadinessStorageStateDELETEPVCREADY:
+		return true
+	case RunSessionReadinessStorageStateERROR:
+		return true
+	case RunSessionReadinessStorageStateLIVE:
+		return true
+	case RunSessionReadinessStorageStatePURGED:
+		return true
+	case RunSessionReadinessStorageStateRESTOREREADY:
+		return true
+	case RunSessionReadinessStorageStateRESTORING:
+		return true
+	case RunSessionReadinessStorageStateSNAPSHOTREADY:
+		return true
+	case RunSessionReadinessStorageStateSNAPSHOTTING:
+		return true
+	case RunSessionReadinessStorageStateUNTRACKED:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunTargetType.
 const (
 	RunTargetTypeAGENT           RunTargetType = "AGENT"
@@ -5472,14 +6228,20 @@ func (e RunTargetType) Valid() bool {
 
 // Defines values for RunToolCallState.
 const (
+	RunToolCallStateCANCELLED RunToolCallState = "CANCELLED"
 	RunToolCallStateFAILED    RunToolCallState = "FAILED"
+	RunToolCallStateRUNNING   RunToolCallState = "RUNNING"
 	RunToolCallStateSUCCEEDED RunToolCallState = "SUCCEEDED"
 )
 
 // Valid indicates whether the value is a known member of the RunToolCallState enum.
 func (e RunToolCallState) Valid() bool {
 	switch e {
+	case RunToolCallStateCANCELLED:
+		return true
 	case RunToolCallStateFAILED:
+		return true
+	case RunToolCallStateRUNNING:
 		return true
 	case RunToolCallStateSUCCEEDED:
 		return true
@@ -5829,22 +6591,22 @@ func (e RuntimeVolumeKind) Valid() bool {
 
 // Defines values for RuntimeWebAccessMode.
 const (
-	ALLOWLISTFULL     RuntimeWebAccessMode = "ALLOWLIST_FULL"
-	ALLOWLISTREADONLY RuntimeWebAccessMode = "ALLOWLIST_READ_ONLY"
-	FULLPUBLIC        RuntimeWebAccessMode = "FULL_PUBLIC"
-	NONE              RuntimeWebAccessMode = "NONE"
+	RuntimeWebAccessModeALLOWLISTFULL     RuntimeWebAccessMode = "ALLOWLIST_FULL"
+	RuntimeWebAccessModeALLOWLISTREADONLY RuntimeWebAccessMode = "ALLOWLIST_READ_ONLY"
+	RuntimeWebAccessModeFULLPUBLIC        RuntimeWebAccessMode = "FULL_PUBLIC"
+	RuntimeWebAccessModeNONE              RuntimeWebAccessMode = "NONE"
 )
 
 // Valid indicates whether the value is a known member of the RuntimeWebAccessMode enum.
 func (e RuntimeWebAccessMode) Valid() bool {
 	switch e {
-	case ALLOWLISTFULL:
+	case RuntimeWebAccessModeALLOWLISTFULL:
 		return true
-	case ALLOWLISTREADONLY:
+	case RuntimeWebAccessModeALLOWLISTREADONLY:
 		return true
-	case FULLPUBLIC:
+	case RuntimeWebAccessModeFULLPUBLIC:
 		return true
-	case NONE:
+	case RuntimeWebAccessModeNONE:
 		return true
 	default:
 		return false
@@ -6934,6 +7696,63 @@ const (
 func (e SystemAssistantSystem) Valid() bool {
 	switch e {
 	case True:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy.
+const (
+	SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicyHUMANEACHEFFECT SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy = "HUMAN_EACH_EFFECT"
+	SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicyHUMANSCOPED     SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy = "HUMAN_SCOPED"
+	SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicyNONE            SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy = "NONE"
+)
+
+// Valid indicates whether the value is a known member of the SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy enum.
+func (e SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy) Valid() bool {
+	switch e {
+	case SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicyHUMANEACHEFFECT:
+		return true
+	case SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicyHUMANSCOPED:
+		return true
+	case SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicyNONE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SystemAssistantIntegrationGrantCandidatesScopeKind.
+const (
+	SystemAssistantIntegrationGrantCandidatesScopeKindORGANIZATION SystemAssistantIntegrationGrantCandidatesScopeKind = "ORGANIZATION"
+)
+
+// Valid indicates whether the value is a known member of the SystemAssistantIntegrationGrantCandidatesScopeKind enum.
+func (e SystemAssistantIntegrationGrantCandidatesScopeKind) Valid() bool {
+	switch e {
+	case SystemAssistantIntegrationGrantCandidatesScopeKindORGANIZATION:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SystemAssistantIntegrationGrantInputApprovalPolicy.
+const (
+	SystemAssistantIntegrationGrantInputApprovalPolicyHUMANEACHEFFECT SystemAssistantIntegrationGrantInputApprovalPolicy = "HUMAN_EACH_EFFECT"
+	SystemAssistantIntegrationGrantInputApprovalPolicyHUMANSCOPED     SystemAssistantIntegrationGrantInputApprovalPolicy = "HUMAN_SCOPED"
+	SystemAssistantIntegrationGrantInputApprovalPolicyNONE            SystemAssistantIntegrationGrantInputApprovalPolicy = "NONE"
+)
+
+// Valid indicates whether the value is a known member of the SystemAssistantIntegrationGrantInputApprovalPolicy enum.
+func (e SystemAssistantIntegrationGrantInputApprovalPolicy) Valid() bool {
+	switch e {
+	case SystemAssistantIntegrationGrantInputApprovalPolicyHUMANEACHEFFECT:
+		return true
+	case SystemAssistantIntegrationGrantInputApprovalPolicyHUMANSCOPED:
+		return true
+	case SystemAssistantIntegrationGrantInputApprovalPolicyNONE:
 		return true
 	default:
 		return false
@@ -8061,16 +8880,16 @@ func (e DownloadArtifactParamsPurpose) Valid() bool {
 
 // Defines values for GetArtifactImpactParamsAction.
 const (
-	DELETE GetArtifactImpactParamsAction = "DELETE"
-	PURGE  GetArtifactImpactParamsAction = "PURGE"
+	GetArtifactImpactParamsActionDELETE GetArtifactImpactParamsAction = "DELETE"
+	GetArtifactImpactParamsActionPURGE  GetArtifactImpactParamsAction = "PURGE"
 )
 
 // Valid indicates whether the value is a known member of the GetArtifactImpactParamsAction enum.
 func (e GetArtifactImpactParamsAction) Valid() bool {
 	switch e {
-	case DELETE:
+	case GetArtifactImpactParamsActionDELETE:
 		return true
-	case PURGE:
+	case GetArtifactImpactParamsActionPURGE:
 		return true
 	default:
 		return false
@@ -8346,25 +9165,25 @@ func (e ListArtifactsParamsType) Valid() bool {
 
 // Defines values for ListArtifactsParamsScanState.
 const (
-	CLEAN       ListArtifactsParamsScanState = "CLEAN"
-	FAILED      ListArtifactsParamsScanState = "FAILED"
-	PENDING     ListArtifactsParamsScanState = "PENDING"
-	QUARANTINED ListArtifactsParamsScanState = "QUARANTINED"
-	SCANNING    ListArtifactsParamsScanState = "SCANNING"
+	ListArtifactsParamsScanStateCLEAN       ListArtifactsParamsScanState = "CLEAN"
+	ListArtifactsParamsScanStateFAILED      ListArtifactsParamsScanState = "FAILED"
+	ListArtifactsParamsScanStatePENDING     ListArtifactsParamsScanState = "PENDING"
+	ListArtifactsParamsScanStateQUARANTINED ListArtifactsParamsScanState = "QUARANTINED"
+	ListArtifactsParamsScanStateSCANNING    ListArtifactsParamsScanState = "SCANNING"
 )
 
 // Valid indicates whether the value is a known member of the ListArtifactsParamsScanState enum.
 func (e ListArtifactsParamsScanState) Valid() bool {
 	switch e {
-	case CLEAN:
+	case ListArtifactsParamsScanStateCLEAN:
 		return true
-	case FAILED:
+	case ListArtifactsParamsScanStateFAILED:
 		return true
-	case PENDING:
+	case ListArtifactsParamsScanStatePENDING:
 		return true
-	case QUARANTINED:
+	case ListArtifactsParamsScanStateQUARANTINED:
 		return true
-	case SCANNING:
+	case ListArtifactsParamsScanStateSCANNING:
 		return true
 	default:
 		return false
@@ -8745,16 +9564,16 @@ func (e ListVFSNodesParamsLifecycleState) Valid() bool {
 
 // Defines values for SearchVFSParamsLifecycleState.
 const (
-	ACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
-	DELETED SearchVFSParamsLifecycleState = "DELETED"
+	SearchVFSParamsLifecycleStateACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
+	SearchVFSParamsLifecycleStateDELETED SearchVFSParamsLifecycleState = "DELETED"
 )
 
 // Valid indicates whether the value is a known member of the SearchVFSParamsLifecycleState enum.
 func (e SearchVFSParamsLifecycleState) Valid() bool {
 	switch e {
-	case ACTIVE:
+	case SearchVFSParamsLifecycleStateACTIVE:
 		return true
-	case DELETED:
+	case SearchVFSParamsLifecycleStateDELETED:
 		return true
 	default:
 		return false
@@ -9468,6 +10287,7 @@ type AssistantTurn struct {
 	RunRef           *OpaqueRef         `json:"runRef,omitempty"`
 	RunVersion       *int64             `json:"runVersion,omitempty"`
 	Sequence         int64              `json:"sequence"`
+	Source           MessageSource      `json:"source"`
 	State            AssistantTurnState `json:"state"`
 }
 
@@ -10064,6 +10884,316 @@ type GateResolutionReceipt struct {
 	Run   Run       `json:"run"`
 }
 
+// ImageAdmissionAttempt Безопасная типизированная owner projection.
+type ImageAdmissionAttempt struct {
+	AdmissionReceiptSha256 string    `json:"admissionReceiptSha256"`
+	ArtifactRef            OpaqueRef `json:"artifactRef"`
+	DecisionRef            string    `json:"decisionRef"`
+	EvidenceManifestDigest string    `json:"evidenceManifestDigest"`
+	Fence                  int64     `json:"fence"`
+	Number                 int       `json:"number"`
+	Ref                    OpaqueRef `json:"ref"`
+
+	// State Закрытое значение; неизвестное не даёт новых полномочий.
+	State   ImageAdmissionAttemptState `json:"state"`
+	Version int64                      `json:"version"`
+}
+
+// ImageAdmissionAttemptState Закрытое значение; неизвестное не даёт новых полномочий.
+type ImageAdmissionAttemptState string
+
+// ImageAdmissionRiskAction Закрытое значение; неизвестное не даёт новых полномочий.
+type ImageAdmissionRiskAction string
+
+// ImageAdmissionRiskDecision Безопасная типизированная owner projection.
+type ImageAdmissionRiskDecision struct {
+	// Action Закрытое значение; неизвестное не даёт новых полномочий.
+	Action ImageAdmissionRiskAction `json:"action"`
+
+	// AdmissionRevision Текущая owner revision admission projection.
+	AdmissionRevision int64     `json:"admissionRevision"`
+	ArtifactRef       OpaqueRef `json:"artifactRef"`
+
+	// ArtifactVersion Текущая версия artifact; If-Match относится к ней.
+	ArtifactVersion int64  `json:"artifactVersion"`
+	BindingSha256   string `json:"bindingSha256"`
+
+	// BuildAttempt Точная attempt исходной сборки.
+	BuildAttempt int       `json:"buildAttempt"`
+	BuildRef     OpaqueRef `json:"buildRef"`
+
+	// BuildVersion Версия сохранённого immutable build snapshot.
+	BuildVersion      int64     `json:"buildVersion"`
+	DecidedAt         Timestamp `json:"decidedAt"`
+	DecidedByActorRef OpaqueRef `json:"decidedByActorRef"`
+
+	// ManifestDigest Exact image digest sha256:; tag не является authority.
+	ManifestDigest  string    `json:"manifestDigest"`
+	OrganizationRef OpaqueRef `json:"organizationRef"`
+
+	// PolicyRevision Version-pinned baseline policy.
+	PolicyRevision int64 `json:"policyRevision"`
+
+	// PolicySha256 Exact baseline policy digest.
+	PolicySha256 string `json:"policySha256"`
+
+	// PriorAdmissionReceiptSha256 SHA256 immutable предыдущей receipt.
+	PriorAdmissionReceiptSha256 string `json:"priorAdmissionReceiptSha256"`
+
+	// PriorEvidenceManifestDigest Exact OCI manifest предыдущего evidence bundle.
+	PriorEvidenceManifestDigest string `json:"priorEvidenceManifestDigest"`
+
+	// ProjectRef Точный PROJECT locator; пустой только для ORGANIZATION.
+	ProjectRef string `json:"projectRef"`
+	Reason     string `json:"reason"`
+
+	// RecipeGeneration Неизменяемое поколение recipe/build snapshot.
+	RecipeGeneration int64     `json:"recipeGeneration"`
+	RecipeRef        OpaqueRef `json:"recipeRef"`
+
+	// RecipeVersion Exact версия рецепта для owner OCC.
+	RecipeVersion int64     `json:"recipeVersion"`
+	Ref           OpaqueRef `json:"ref"`
+
+	// SbomSha256 SHA256 исходных полных SBOM bytes.
+	SbomSha256 string                   `json:"sbomSha256"`
+	ScopeKind  RuntimeResourceScopeKind `json:"scopeKind"`
+
+	// SourceAdmissionRevision Original REJECTED terminal revision, закреплённая report.
+	SourceAdmissionRevision int64 `json:"sourceAdmissionRevision"`
+	Version                 int64 `json:"version"`
+
+	// VulnerabilityEvidenceSha256 SHA256 исходных полных scanner bytes.
+	VulnerabilityEvidenceSha256 string `json:"vulnerabilityEvidenceSha256"`
+}
+
+// ImageAdmissionRiskDecisionInput Все pins обязательны; actor/tenant назначает сервер. If-Match совпадает с expectedArtifactVersion, reason 1..2048 UTF8 bytes без controls.
+type ImageAdmissionRiskDecisionInput struct {
+	// Action Закрытое значение; неизвестное не даёт новых полномочий.
+	Action ImageAdmissionRiskAction `json:"action"`
+
+	// ExpectedAdmissionRevision Exact current admission projection revision.
+	ExpectedAdmissionRevision int64 `json:"expectedAdmissionRevision"`
+
+	// ExpectedArtifactVersion OCC artifact; не доказательство владения.
+	ExpectedArtifactVersion int64 `json:"expectedArtifactVersion"`
+
+	// ExpectedBuildAttempt Exact immutable build attempt.
+	ExpectedBuildAttempt int       `json:"expectedBuildAttempt"`
+	ExpectedBuildRef     OpaqueRef `json:"expectedBuildRef"`
+
+	// ExpectedRecipeGeneration Exact recipe generation исходного report.
+	ExpectedRecipeGeneration int64 `json:"expectedRecipeGeneration"`
+
+	// ExpectedRecipeVersion Exact current recipe version.
+	ExpectedRecipeVersion int64 `json:"expectedRecipeVersion"`
+
+	// ManifestDigest Exact image digest, не источник authority.
+	ManifestDigest string `json:"manifestDigest"`
+
+	// PolicyRevision Текущая pinned baseline policy revision.
+	PolicyRevision int64 `json:"policyRevision"`
+
+	// PolicySha256 Текущий exact baseline policy digest.
+	PolicySha256 string `json:"policySha256"`
+
+	// PriorAdmissionReceiptSha256 Exact original REJECTED receipt pin.
+	PriorAdmissionReceiptSha256 string `json:"priorAdmissionReceiptSha256"`
+
+	// PriorEvidenceManifestDigest Exact original immutable evidence manifest.
+	PriorEvidenceManifestDigest string `json:"priorEvidenceManifestDigest"`
+
+	// ProjectionSha256 SHA256 полной safe projection, не hash видимой страницы.
+	ProjectionSha256 string `json:"projectionSha256"`
+
+	// Reason Обязательная bounded причина для audit, не shell.
+	Reason string `json:"reason"`
+
+	// VulnerabilityEvidenceSha256 SHA256 полного исходного report, показанного администратору.
+	VulnerabilityEvidenceSha256 string `json:"vulnerabilityEvidenceSha256"`
+}
+
+// ImageAdmissionRiskDecisionResponse Безопасная типизированная owner projection.
+type ImageAdmissionRiskDecisionResponse struct {
+	// AdmissionAttempt Безопасная типизированная owner projection.
+	AdmissionAttempt *ImageAdmissionAttempt `json:"admissionAttempt,omitempty"`
+	Artifact         RoleImageArtifact      `json:"artifact"`
+
+	// Decision Безопасная типизированная owner projection.
+	Decision ImageAdmissionRiskDecision `json:"decision"`
+}
+
+// ImagePlatformToolInventory defines model for ImagePlatformToolInventory.
+type ImagePlatformToolInventory struct {
+	ManifestSha256 string                             `json:"manifestSha256"`
+	Platform       ImagePlatformToolInventoryPlatform `json:"platform"`
+	PlatformDigest string                             `json:"platformDigest"`
+	Tools          []ImageToolObservation             `json:"tools"`
+}
+
+// ImagePlatformToolInventoryPlatform defines model for ImagePlatformToolInventory.Platform.
+type ImagePlatformToolInventoryPlatform string
+
+// ImageToolInventory defines model for ImageToolInventory.
+type ImageToolInventory struct {
+	ImageDigest      string                       `json:"imageDigest"`
+	Platforms        []ImagePlatformToolInventory `json:"platforms"`
+	ProvenanceSha256 string                       `json:"provenanceSha256"`
+	Sha256           string                       `json:"sha256"`
+	Status           ImageToolInventoryStatus     `json:"status"`
+}
+
+// ImageToolInventoryStatus defines model for ImageToolInventory.Status.
+type ImageToolInventoryStatus string
+
+// ImageToolObservation defines model for ImageToolObservation.
+type ImageToolObservation struct {
+	Name     ImageToolObservationName   `json:"name"`
+	Path     string                     `json:"path"`
+	Required bool                       `json:"required"`
+	Sha256   string                     `json:"sha256"`
+	Status   ImageToolObservationStatus `json:"status"`
+	Version  string                     `json:"version"`
+}
+
+// ImageToolObservationName defines model for ImageToolObservation.Name.
+type ImageToolObservationName string
+
+// ImageToolObservationStatus defines model for ImageToolObservation.Status.
+type ImageToolObservationStatus string
+
+// ImageVulnerabilityAdvisoryKind Закрытое значение; неизвестное не даёт новых полномочий.
+type ImageVulnerabilityAdvisoryKind string
+
+// ImageVulnerabilityFinding Безопасная типизированная owner projection.
+type ImageVulnerabilityFinding struct {
+	AdvisoryId string `json:"advisoryId"`
+
+	// AdvisoryKind Закрытое значение; неизвестное не даёт новых полномочий.
+	AdvisoryKind ImageVulnerabilityAdvisoryKind `json:"advisoryKind"`
+
+	// AdvisoryUrl Только server canonical NVD/GitHub/pkg.go.dev URL; OTHER пуст, raw URL запрещён.
+	AdvisoryUrl string `json:"advisoryUrl"`
+	Blocking    bool   `json:"blocking"`
+	Ecosystem   string `json:"ecosystem"`
+
+	// FixState Закрытое значение; неизвестное не даёт новых полномочий.
+	FixState         ImageVulnerabilityFixState `json:"fixState"`
+	FixedVersions    []string                   `json:"fixedVersions"`
+	Ignored          bool                       `json:"ignored"`
+	InstalledVersion string                     `json:"installedVersion"`
+	Occurrences      int                        `json:"occurrences"`
+	PackageName      string                     `json:"packageName"`
+	Ref              string                     `json:"ref"`
+
+	// Severity Закрытое значение; неизвестное не даёт новых полномочий.
+	Severity ImageVulnerabilitySeverity `json:"severity"`
+}
+
+// ImageVulnerabilityFixState Закрытое значение; неизвестное не даёт новых полномочий.
+type ImageVulnerabilityFixState string
+
+// ImageVulnerabilityReport Безопасная типизированная owner projection.
+type ImageVulnerabilityReport struct {
+	// AdmissionRevision Текущая owner revision admission projection.
+	AdmissionRevision int64     `json:"admissionRevision"`
+	ArtifactRef       OpaqueRef `json:"artifactRef"`
+
+	// ArtifactVersion Текущая версия artifact; If-Match относится к ней.
+	ArtifactVersion    int64 `json:"artifactVersion"`
+	BlockingMatchCount int   `json:"blockingMatchCount"`
+
+	// BuildAttempt Точная attempt исходной сборки.
+	BuildAttempt int       `json:"buildAttempt"`
+	BuildRef     OpaqueRef `json:"buildRef"`
+
+	// BuildVersion Версия сохранённого immutable build snapshot.
+	BuildVersion int64 `json:"buildVersion"`
+
+	// Complete Назначает полный canonical validator, не caller.
+	Complete bool `json:"complete"`
+
+	// ManifestDigest Exact image digest sha256:; tag не является authority.
+	ManifestDigest  string                                `json:"manifestDigest"`
+	MatchCount      int                                   `json:"matchCount"`
+	NextActions     []ImageVulnerabilityReportNextActions `json:"nextActions"`
+	OrganizationRef OpaqueRef                             `json:"organizationRef"`
+
+	// PolicyRevision Version-pinned baseline policy.
+	PolicyRevision int64 `json:"policyRevision"`
+
+	// PolicySha256 Exact baseline policy digest.
+	PolicySha256 string `json:"policySha256"`
+
+	// PriorAdmissionReceiptSha256 SHA256 immutable предыдущей receipt.
+	PriorAdmissionReceiptSha256 string `json:"priorAdmissionReceiptSha256"`
+
+	// PriorEvidenceManifestDigest Exact OCI manifest предыдущего evidence bundle.
+	PriorEvidenceManifestDigest string `json:"priorEvidenceManifestDigest"`
+
+	// ProjectRef Точный PROJECT locator; пустой только для ORGANIZATION.
+	ProjectRef       string `json:"projectRef"`
+	ProjectionSha256 string `json:"projectionSha256"`
+
+	// RecipeGeneration Неизменяемое поколение recipe/build snapshot.
+	RecipeGeneration int64     `json:"recipeGeneration"`
+	RecipeRef        OpaqueRef `json:"recipeRef"`
+
+	// RecipeVersion Exact версия рецепта для owner OCC.
+	RecipeVersion int64 `json:"recipeVersion"`
+
+	// SbomSha256 SHA256 исходных полных SBOM bytes.
+	SbomSha256     string                            `json:"sbomSha256"`
+	ScopeKind      RuntimeResourceScopeKind          `json:"scopeKind"`
+	SeverityCounts []ImageVulnerabilitySeverityCount `json:"severityCounts"`
+
+	// SourceAdmissionRevision Original REJECTED terminal revision, закреплённая report.
+	SourceAdmissionRevision int64 `json:"sourceAdmissionRevision"`
+
+	// State Закрытое значение; неизвестное не даёт новых полномочий.
+	State                     ImageVulnerabilityReportState `json:"state"`
+	SuppressedMatchCount      int                           `json:"suppressedMatchCount"`
+	UniqueAdvisoryCount       int                           `json:"uniqueAdvisoryCount"`
+	UnresolvedNoFixMatchCount int                           `json:"unresolvedNoFixMatchCount"`
+	Version                   int64                         `json:"version"`
+
+	// VulnerabilityEvidenceSha256 SHA256 исходных полных scanner bytes.
+	VulnerabilityEvidenceSha256 string `json:"vulnerabilityEvidenceSha256"`
+}
+
+// ImageVulnerabilityReportNextActions defines model for ImageVulnerabilityReport.NextActions.
+type ImageVulnerabilityReportNextActions string
+
+// ImageVulnerabilityReportPageInfo Безопасная типизированная owner projection.
+type ImageVulnerabilityReportPageInfo struct {
+	NextPageToken string `json:"nextPageToken"`
+}
+
+// ImageVulnerabilityReportResponse Безопасная типизированная owner projection.
+type ImageVulnerabilityReportResponse struct {
+	Findings []ImageVulnerabilityFinding `json:"findings"`
+
+	// Page Безопасная типизированная owner projection.
+	Page ImageVulnerabilityReportPageInfo `json:"page"`
+
+	// Report Безопасная типизированная owner projection.
+	Report ImageVulnerabilityReport `json:"report"`
+}
+
+// ImageVulnerabilityReportState Закрытое значение; неизвестное не даёт новых полномочий.
+type ImageVulnerabilityReportState string
+
+// ImageVulnerabilitySeverity Закрытое значение; неизвестное не даёт новых полномочий.
+type ImageVulnerabilitySeverity string
+
+// ImageVulnerabilitySeverityCount Безопасная типизированная owner projection.
+type ImageVulnerabilitySeverityCount struct {
+	MatchCount int `json:"matchCount"`
+
+	// Severity Закрытое значение; неизвестное не даёт новых полномочий.
+	Severity ImageVulnerabilitySeverity `json:"severity"`
+}
+
 // Incident defines model for Incident.
 type Incident struct {
 	Category     string           `json:"category"`
@@ -10131,18 +11261,22 @@ type IntegrationCandidateReason string
 
 // IntegrationCapability defines model for IntegrationCapability.
 type IntegrationCapability struct {
-	ApprovalPolicy    IntegrationCapabilityApprovalPolicy `json:"approvalPolicy"`
-	ApprovalRequired  bool                                `json:"approvalRequired"`
-	Description       string                              `json:"description"`
-	InputFields       []IntegrationConfigurationField     `json:"inputFields"`
-	InputSchema       *string                             `json:"inputSchema,omitempty"`
-	InputSchemaSha256 *string                             `json:"inputSchemaSha256,omitempty"`
-	Key               string                              `json:"key"`
-	Name              string                              `json:"name"`
-	Operation         string                              `json:"operation"`
-	ResourceKind      IntegrationCapabilityResourceKind   `json:"resourceKind"`
-	Risk              IntegrationCapabilityRisk           `json:"risk"`
+	AllowedApprovalPolicies []IntegrationCapabilityAllowedApprovalPolicies `json:"allowedApprovalPolicies"`
+	ApprovalPolicy          IntegrationCapabilityApprovalPolicy            `json:"approvalPolicy"`
+	ApprovalRequired        bool                                           `json:"approvalRequired"`
+	Description             string                                         `json:"description"`
+	InputFields             []IntegrationConfigurationField                `json:"inputFields"`
+	InputSchema             *string                                        `json:"inputSchema,omitempty"`
+	InputSchemaSha256       *string                                        `json:"inputSchemaSha256,omitempty"`
+	Key                     string                                         `json:"key"`
+	Name                    string                                         `json:"name"`
+	Operation               string                                         `json:"operation"`
+	ResourceKind            IntegrationCapabilityResourceKind              `json:"resourceKind"`
+	Risk                    IntegrationCapabilityRisk                      `json:"risk"`
 }
+
+// IntegrationCapabilityAllowedApprovalPolicies defines model for IntegrationCapability.AllowedApprovalPolicies.
+type IntegrationCapabilityAllowedApprovalPolicies string
 
 // IntegrationCapabilityApprovalPolicy defines model for IntegrationCapability.ApprovalPolicy.
 type IntegrationCapabilityApprovalPolicy string
@@ -10398,12 +11532,16 @@ type IntegrationGrantConnectionCandidatePage struct {
 
 // IntegrationGrantInput defines model for IntegrationGrantInput.
 type IntegrationGrantInput struct {
-	AgentRef           *OpaqueRef `json:"agentRef,omitempty"`
-	ApprovalScopePaths *[]string  `json:"approvalScopePaths,omitempty"`
-	CapabilityKey      string     `json:"capabilityKey"`
-	Enabled            bool       `json:"enabled"`
-	WorkflowRef        *OpaqueRef `json:"workflowRef,omitempty"`
+	AgentRef           *OpaqueRef                          `json:"agentRef,omitempty"`
+	ApprovalPolicy     IntegrationGrantInputApprovalPolicy `json:"approvalPolicy"`
+	ApprovalScopePaths *[]string                           `json:"approvalScopePaths,omitempty"`
+	CapabilityKey      string                              `json:"capabilityKey"`
+	Enabled            bool                                `json:"enabled"`
+	WorkflowRef        *OpaqueRef                          `json:"workflowRef,omitempty"`
 }
+
+// IntegrationGrantInputApprovalPolicy defines model for IntegrationGrantInput.ApprovalPolicy.
+type IntegrationGrantInputApprovalPolicy string
 
 // IntegrationGrantProjectCandidate defines model for IntegrationGrantProjectCandidate.
 type IntegrationGrantProjectCandidate struct {
@@ -10846,6 +11984,14 @@ type MemoryRecordSpecification struct {
 	Title          string     `json:"title"`
 }
 
+// MessageSource defines model for MessageSource.
+type MessageSource struct {
+	Origin MessageSourceOrigin `json:"origin"`
+}
+
+// MessageSourceOrigin defines model for MessageSource.Origin.
+type MessageSourceOrigin string
+
 // ModelCapability defines model for ModelCapability.
 type ModelCapability struct {
 	Available                   bool        `json:"available"`
@@ -10954,11 +12100,13 @@ type OwnerGate struct {
 	NextActions                []NextAction                   `json:"nextActions"`
 	NodeRef                    OpaqueRef                      `json:"nodeRef"`
 	OpenedAt                   Timestamp                      `json:"openedAt"`
-	ProjectRef                 OpaqueRef                      `json:"projectRef"`
+	OrganizationRef            OpaqueRef                      `json:"organizationRef"`
+	ProjectRef                 *OpaqueRef                     `json:"projectRef,omitempty"`
 	Ref                        OpaqueRef                      `json:"ref"`
 	RequestedBy                UserSummary                    `json:"requestedBy"`
 	ResolutionAttachmentSetRef *OpaqueRef                     `json:"resolutionAttachmentSetRef,omitempty"`
 	RunRef                     OpaqueRef                      `json:"runRef"`
+	ScopeKind                  OwnerGateScopeKind             `json:"scopeKind"`
 	SourceAttachmentSetRef     *OpaqueRef                     `json:"sourceAttachmentSetRef,omitempty"`
 	State                      OwnerGateState                 `json:"state"`
 	Title                      string                         `json:"title"`
@@ -10970,6 +12118,9 @@ type OwnerGateAllowedDecisions string
 
 // OwnerGateDecision defines model for OwnerGate.Decision.
 type OwnerGateDecision string
+
+// OwnerGateScopeKind defines model for OwnerGate.ScopeKind.
+type OwnerGateScopeKind string
 
 // OwnerGateState defines model for OwnerGate.State.
 type OwnerGateState string
@@ -11134,6 +12285,27 @@ type ProjectLanguage string
 
 // ProjectLifecycle defines model for Project.Lifecycle.
 type ProjectLifecycle string
+
+// ProjectAssistantIntegrationGrantCandidates defines model for ProjectAssistantIntegrationGrantCandidates.
+type ProjectAssistantIntegrationGrantCandidates struct {
+	AssistantProfileRef OpaqueRef                                           `json:"assistantProfileRef"`
+	AssistantRef        OpaqueRef                                           `json:"assistantRef"`
+	AssistantVersion    int64                                               `json:"assistantVersion"`
+	ConnectionRef       OpaqueRef                                           `json:"connectionRef"`
+	ConnectionVersion   int64                                               `json:"connectionVersion"`
+	DefinitionDigest    string                                              `json:"definitionDigest"`
+	DefinitionVersion   string                                              `json:"definitionVersion"`
+	Items               []SystemAssistantIntegrationGrantCandidate          `json:"items"`
+	NextPageToken       *string                                             `json:"nextPageToken,omitempty"`
+	OrganizationRef     OpaqueRef                                           `json:"organizationRef"`
+	ProfileVersion      int64                                               `json:"profileVersion"`
+	ProjectRef          OpaqueRef                                           `json:"projectRef"`
+	ScopeKind           ProjectAssistantIntegrationGrantCandidatesScopeKind `json:"scopeKind"`
+	Total               int64                                               `json:"total"`
+}
+
+// ProjectAssistantIntegrationGrantCandidatesScopeKind defines model for ProjectAssistantIntegrationGrantCandidates.ScopeKind.
+type ProjectAssistantIntegrationGrantCandidatesScopeKind string
 
 // ProjectAssistantProfile defines model for ProjectAssistantProfile.
 type ProjectAssistantProfile struct {
@@ -11827,30 +12999,59 @@ type RoleEnvironmentView struct {
 	ToolKeys          *[]string `json:"toolKeys,omitempty"`
 }
 
-// RoleImageArtifact defines model for RoleImageArtifact.
-type RoleImageArtifact struct {
-	AdmissionVerdict            RoleImageArtifactAdmissionVerdict `json:"admissionVerdict"`
-	BuildRef                    OpaqueRef                         `json:"buildRef"`
-	ManifestDigest              string                            `json:"manifestDigest"`
-	OrganizationRef             OpaqueRef                         `json:"organizationRef"`
-	ProjectRef                  string                            `json:"projectRef"`
-	PromotedAt                  *Timestamp                        `json:"promotedAt,omitempty"`
-	PromotedReference           *string                           `json:"promotedReference,omitempty"`
-	PromotionReceiptSha256      *string                           `json:"promotionReceiptSha256,omitempty"`
-	PromotionRequested          bool                              `json:"promotionRequested"`
-	PromotionState              RoleImageArtifactPromotionState   `json:"promotionState"`
-	ProvenanceSha256            string                            `json:"provenanceSha256"`
-	RecipeGeneration            int64                             `json:"recipeGeneration"`
-	RecipeRef                   OpaqueRef                         `json:"recipeRef"`
-	Ref                         OpaqueRef                         `json:"ref"`
-	SbomSha256                  *string                           `json:"sbomSha256,omitempty"`
-	ScopeKind                   RuntimeResourceScopeKind          `json:"scopeKind"`
-	Tools                       []RoleImageArtifactTool           `json:"tools"`
-	Version                     int64                             `json:"version"`
-	VulnerabilityEvidenceSha256 *string                           `json:"vulnerabilityEvidenceSha256,omitempty"`
+// RoleImageAdmissionFailure defines model for RoleImageAdmissionFailure.
+type RoleImageAdmissionFailure struct {
+	BuildAttempt     int                                `json:"buildAttempt"`
+	BuildRef         OpaqueRef                          `json:"buildRef"`
+	ErrorCode        RoleImageAdmissionFailureErrorCode `json:"errorCode"`
+	ImageArtifactRef OpaqueRef                          `json:"imageArtifactRef"`
+	OrganizationRef  OpaqueRef                          `json:"organizationRef"`
+	ProjectRef       string                             `json:"projectRef"`
+	RecipeGeneration int64                              `json:"recipeGeneration"`
+	RecipeRef        OpaqueRef                          `json:"recipeRef"`
+	ScopeKind        RuntimeResourceScopeKind           `json:"scopeKind"`
+	State            RoleImageAdmissionFailureState     `json:"state"`
+	Version          int64                              `json:"version"`
 }
 
-// RoleImageArtifactAdmissionVerdict defines model for RoleImageArtifact.AdmissionVerdict.
+// RoleImageAdmissionFailureErrorCode defines model for RoleImageAdmissionFailure.ErrorCode.
+type RoleImageAdmissionFailureErrorCode string
+
+// RoleImageAdmissionFailureState defines model for RoleImageAdmissionFailure.State.
+type RoleImageAdmissionFailureState string
+
+// RoleImageArtifact defines model for RoleImageArtifact.
+type RoleImageArtifact struct {
+	// AdmissionAttempt Безопасная типизированная owner projection.
+	AdmissionAttempt *ImageAdmissionAttempt `json:"admissionAttempt,omitempty"`
+
+	// AdmissionVerdict PENDING обозначает только новую risk-bound attempt до terminal Record; прежний REJECTED остаётся историей.
+	AdmissionVerdict       RoleImageArtifactAdmissionVerdict `json:"admissionVerdict"`
+	BuildRef               OpaqueRef                         `json:"buildRef"`
+	DeclaredTools          []RoleImageArtifactTool           `json:"declaredTools"`
+	ManifestDigest         string                            `json:"manifestDigest"`
+	OrganizationRef        OpaqueRef                         `json:"organizationRef"`
+	ProjectRef             string                            `json:"projectRef"`
+	PromotedAt             *Timestamp                        `json:"promotedAt,omitempty"`
+	PromotedReference      *string                           `json:"promotedReference,omitempty"`
+	PromotionReceiptSha256 *string                           `json:"promotionReceiptSha256,omitempty"`
+	PromotionRequested     bool                              `json:"promotionRequested"`
+	PromotionState         RoleImageArtifactPromotionState   `json:"promotionState"`
+	ProvenanceSha256       string                            `json:"provenanceSha256"`
+	RecipeGeneration       int64                             `json:"recipeGeneration"`
+	RecipeRef              OpaqueRef                         `json:"recipeRef"`
+	Ref                    OpaqueRef                         `json:"ref"`
+
+	// RiskDecision Безопасная типизированная owner projection.
+	RiskDecision                *ImageAdmissionRiskDecision `json:"riskDecision,omitempty"`
+	SbomSha256                  *string                     `json:"sbomSha256,omitempty"`
+	ScopeKind                   RuntimeResourceScopeKind    `json:"scopeKind"`
+	VerifiedToolInventory       ImageToolInventory          `json:"verifiedToolInventory"`
+	Version                     int64                       `json:"version"`
+	VulnerabilityEvidenceSha256 *string                     `json:"vulnerabilityEvidenceSha256,omitempty"`
+}
+
+// RoleImageArtifactAdmissionVerdict PENDING обозначает только новую risk-bound attempt до terminal Record; прежний REJECTED остаётся историей.
 type RoleImageArtifactAdmissionVerdict string
 
 // RoleImageArtifactPromotionState defines model for RoleImageArtifact.PromotionState.
@@ -12087,10 +13288,11 @@ type RoleImageRecipeCreateInput struct {
 
 // RoleImageRecipeDetail defines model for RoleImageRecipeDetail.
 type RoleImageRecipeDetail struct {
-	ActiveArtifact     *RoleImageArtifact `json:"activeArtifact,omitempty"`
-	Builds             []RoleImageBuild   `json:"builds"`
-	PromotionCandidate *RoleImageArtifact `json:"promotionCandidate,omitempty"`
-	Recipe             RoleImageRecipe    `json:"recipe"`
+	ActiveArtifact     *RoleImageArtifact         `json:"activeArtifact,omitempty"`
+	AdmissionFailure   *RoleImageAdmissionFailure `json:"admissionFailure,omitempty"`
+	Builds             []RoleImageBuild           `json:"builds"`
+	PromotionCandidate *RoleImageArtifact         `json:"promotionCandidate,omitempty"`
+	Recipe             RoleImageRecipe            `json:"recipe"`
 }
 
 // RoleImageRecipePage defines model for RoleImageRecipePage.
@@ -12158,16 +13360,19 @@ type Run struct {
 	RootRunRef            OpaqueRef        `json:"rootRunRef"`
 	SafeErrorCode         *string          `json:"safeErrorCode,omitempty"`
 	SafeErrorMessage      *string          `json:"safeErrorMessage,omitempty"`
-	SessionRef            OpaqueRef        `json:"sessionRef"`
-	Source                RunSource        `json:"source"`
-	StartedAt             *Timestamp       `json:"startedAt,omitempty"`
-	State                 RunState         `json:"state"`
-	Target                RunTarget        `json:"target"`
-	Title                 string           `json:"title"`
-	TitleSource           RunTitleSource   `json:"titleSource"`
-	Usage                 TokenUsage       `json:"usage"`
-	Version               int64            `json:"version"`
-	union                 json.RawMessage
+
+	// SessionReadiness Текущие session-gates в одном защищённом read snapshot. NO_SESSION_BLOCKER не доказывает глобальную claim readiness. Отсутствие проекции не означает готовность.
+	SessionReadiness *RunSessionReadiness `json:"sessionReadiness,omitempty"`
+	SessionRef       OpaqueRef            `json:"sessionRef"`
+	Source           RunSource            `json:"source"`
+	StartedAt        *Timestamp           `json:"startedAt,omitempty"`
+	State            RunState             `json:"state"`
+	Target           RunTarget            `json:"target"`
+	Title            string               `json:"title"`
+	TitleSource      RunTitleSource       `json:"titleSource"`
+	Usage            TokenUsage           `json:"usage"`
+	Version          int64                `json:"version"`
+	union            json.RawMessage
 }
 
 // RunSource defines model for Run.Source.
@@ -12267,29 +13472,37 @@ type RunEdgeType string
 
 // RunEvent defines model for RunEvent.
 type RunEvent struct {
-	Actor         *RunEventActor       `json:"actor,omitempty"`
-	Artifact      *Artifact            `json:"artifact,omitempty"`
-	ArtifactRef   *OpaqueRef           `json:"artifactRef,omitempty"`
-	Edge          *RunEdge             `json:"edge,omitempty"`
-	EdgeRef       *OpaqueRef           `json:"edgeRef,omitempty"`
-	Gate          *OwnerGate           `json:"gate,omitempty"`
-	GateRef       *OpaqueRef           `json:"gateRef,omitempty"`
-	GraphRevision int64                `json:"graphRevision"`
-	Incident      *Incident            `json:"incident,omitempty"`
-	MessageKind   *RunEventMessageKind `json:"messageKind,omitempty"`
-	Node          *RunNode             `json:"node,omitempty"`
-	NodeRef       *OpaqueRef           `json:"nodeRef,omitempty"`
-	NodeState     *RunEventNodeState   `json:"nodeState,omitempty"`
-	OccurredAt    Timestamp            `json:"occurredAt"`
-	Progress      *string              `json:"progress,omitempty"`
-	Ref           OpaqueRef            `json:"ref"`
-	Run           RunDelta             `json:"run"`
-	RunRef        OpaqueRef            `json:"runRef"`
-	RunState      *RunEventRunState    `json:"runState,omitempty"`
-	Sequence      int64                `json:"sequence"`
-	Summary       string               `json:"summary"`
-	ToolCall      *RunToolCall         `json:"toolCall,omitempty"`
-	Type          RunEventType         `json:"type"`
+	Actor         *RunEventActor     `json:"actor,omitempty"`
+	Artifact      *Artifact          `json:"artifact,omitempty"`
+	ArtifactRef   *OpaqueRef         `json:"artifactRef,omitempty"`
+	Edge          *RunEdge           `json:"edge,omitempty"`
+	EdgeRef       *OpaqueRef         `json:"edgeRef,omitempty"`
+	Execution     *RunEventExecution `json:"execution,omitempty"`
+	Gate          *OwnerGate         `json:"gate,omitempty"`
+	GateRef       *OpaqueRef         `json:"gateRef,omitempty"`
+	GraphRevision int64              `json:"graphRevision"`
+	Incident      *Incident          `json:"incident,omitempty"`
+
+	// IntegrationInvocationRef Server-owned invocation binding только для новых INTEGRATION_ACTION_* completion-событий; не authority и не ссылка на общий агрегат.
+	IntegrationInvocationRef *string              `json:"integrationInvocationRef,omitempty"`
+	Message                  *RunMessage          `json:"message,omitempty"`
+	MessageKind              *RunEventMessageKind `json:"messageKind,omitempty"`
+	Node                     *RunNode             `json:"node,omitempty"`
+	NodeRef                  *OpaqueRef           `json:"nodeRef,omitempty"`
+	NodeState                *RunEventNodeState   `json:"nodeState,omitempty"`
+	OccurredAt               Timestamp            `json:"occurredAt"`
+	Progress                 *string              `json:"progress,omitempty"`
+	Ref                      OpaqueRef            `json:"ref"`
+	Run                      RunDelta             `json:"run"`
+	RunRef                   OpaqueRef            `json:"runRef"`
+	RunState                 *RunEventRunState    `json:"runState,omitempty"`
+	Sequence                 int64                `json:"sequence"`
+
+	// ServiceCode Необязательный закрытый код служебной отмены из авторитетного события до локализации; не полномочие и не привязка выполнения.
+	ServiceCode *RunEventServiceCode `json:"serviceCode,omitempty"`
+	Summary     string               `json:"summary"`
+	ToolCall    *RunToolCall         `json:"toolCall,omitempty"`
+	Type        RunEventType         `json:"type"`
 }
 
 // RunEventMessageKind defines model for RunEvent.MessageKind.
@@ -12314,12 +13527,25 @@ type RunEventActor struct {
 // RunEventActorKind defines model for RunEventActor.Kind.
 type RunEventActorKind string
 
+// RunEventExecution defines model for RunEventExecution.
+type RunEventExecution struct {
+	Attempt    int32     `json:"attempt"`
+	NodeRef    OpaqueRef `json:"nodeRef"`
+	RunRef     OpaqueRef `json:"runRef"`
+	SessionRef OpaqueRef `json:"sessionRef"`
+	TurnNumber int64     `json:"turnNumber"`
+	TurnRef    OpaqueRef `json:"turnRef"`
+}
+
 // RunEventPage defines model for RunEventPage.
 type RunEventPage struct {
 	Complete        bool       `json:"complete"`
 	CurrentSequence int64      `json:"currentSequence"`
 	Items           []RunEvent `json:"items"`
 }
+
+// RunEventServiceCode Необязательный закрытый код служебной отмены из авторитетного события до локализации; не полномочие и не привязка выполнения.
+type RunEventServiceCode string
 
 // RunGraph defines model for RunGraph.
 type RunGraph struct {
@@ -12344,6 +13570,18 @@ type RunInput struct {
 
 // RunInputTargetType defines model for RunInput.TargetType.
 type RunInputTargetType string
+
+// RunMessage defines model for RunMessage.
+type RunMessage struct {
+	Phase    RunMessagePhase `json:"phase"`
+	Ref      OpaqueRef       `json:"ref"`
+	Revision int64           `json:"revision"`
+	Source   MessageSource   `json:"source"`
+	Text     string          `json:"text"`
+}
+
+// RunMessagePhase defines model for RunMessage.Phase.
+type RunMessagePhase string
 
 // RunNode defines model for RunNode.
 type RunNode struct {
@@ -12385,6 +13623,40 @@ type RunPage struct {
 	Total         int64   `json:"total"`
 }
 
+// RunSessionArchiveTask Последняя задача изменения storage этой exact session, без cleanup DELETE_OBJECT и содержимого архива.
+type RunSessionArchiveTask struct {
+	Attempt         int                                `json:"attempt"`
+	Kind            RunSessionArchiveTaskKind          `json:"kind"`
+	MaximumAttempts int                                `json:"maximumAttempts"`
+	Ref             OpaqueRef                          `json:"ref"`
+	SafeErrorCode   RunSessionArchiveTaskSafeErrorCode `json:"safeErrorCode"`
+	State           RunSessionArchiveTaskState         `json:"state"`
+}
+
+// RunSessionArchiveTaskKind defines model for RunSessionArchiveTask.Kind.
+type RunSessionArchiveTaskKind string
+
+// RunSessionArchiveTaskSafeErrorCode defines model for RunSessionArchiveTask.SafeErrorCode.
+type RunSessionArchiveTaskSafeErrorCode string
+
+// RunSessionArchiveTaskState defines model for RunSessionArchiveTask.State.
+type RunSessionArchiveTaskState string
+
+// RunSessionReadiness Текущие session-gates в одном защищённом read snapshot. NO_SESSION_BLOCKER не доказывает глобальную claim readiness. Отсутствие проекции не означает готовность.
+type RunSessionReadiness struct {
+	// LatestArchiveTask Последняя задача изменения storage этой exact session, без cleanup DELETE_OBJECT и содержимого архива.
+	LatestArchiveTask *RunSessionArchiveTask          `json:"latestArchiveTask,omitempty"`
+	Reason            RunSessionReadinessReason       `json:"reason"`
+	SessionRef        OpaqueRef                       `json:"sessionRef"`
+	StorageState      RunSessionReadinessStorageState `json:"storageState"`
+}
+
+// RunSessionReadinessReason defines model for RunSessionReadiness.Reason.
+type RunSessionReadinessReason string
+
+// RunSessionReadinessStorageState defines model for RunSessionReadiness.StorageState.
+type RunSessionReadinessStorageState string
+
 // RunTarget defines model for RunTarget.
 type RunTarget struct {
 	DisplayName string        `json:"displayName"`
@@ -12403,6 +13675,7 @@ type RunToolCall struct {
 	DurationMs     int64                  `json:"durationMs"`
 	GrantRef       *OpaqueRef             `json:"grantRef,omitempty"`
 	Ref            OpaqueRef              `json:"ref"`
+	Revision       *int64                 `json:"revision,omitempty"`
 	SafeParameters map[string]interface{} `json:"safeParameters"`
 	SafeResult     string                 `json:"safeResult"`
 	State          RunToolCallState       `json:"state"`
@@ -12670,12 +13943,13 @@ type RuntimeNetworkProtocol string
 
 // RuntimeResourcePolicy defines model for RuntimeResourcePolicy.
 type RuntimeResourcePolicy struct {
-	CpuLimitMilli              int64 `json:"cpuLimitMilli"`
-	CpuRequestMilli            int64 `json:"cpuRequestMilli"`
-	EphemeralStorageLimitMib   int64 `json:"ephemeralStorageLimitMib"`
-	EphemeralStorageRequestMib int64 `json:"ephemeralStorageRequestMib"`
-	MemoryLimitMib             int64 `json:"memoryLimitMib"`
-	MemoryRequestMib           int64 `json:"memoryRequestMib"`
+	CpuLimitMilli              int64                   `json:"cpuLimitMilli"`
+	CpuRequestMilli            int64                   `json:"cpuRequestMilli"`
+	EphemeralStorageLimitMib   int64                   `json:"ephemeralStorageLimitMib"`
+	EphemeralStorageRequestMib int64                   `json:"ephemeralStorageRequestMib"`
+	MemoryLimitMib             int64                   `json:"memoryLimitMib"`
+	MemoryRequestMib           int64                   `json:"memoryRequestMib"`
+	WorkspaceLimits            *RuntimeWorkspaceLimits `json:"workspaceLimits,omitempty"`
 }
 
 // RuntimeResourceScopeKind defines model for RuntimeResourceScopeKind.
@@ -12981,6 +14255,12 @@ type RuntimeWebAccessRulePort int32
 
 // RuntimeWebAccessRuleProtocol defines model for RuntimeWebAccessRule.Protocol.
 type RuntimeWebAccessRuleProtocol string
+
+// RuntimeWorkspaceLimits defines model for RuntimeWorkspaceLimits.
+type RuntimeWorkspaceLimits struct {
+	MaxBytes int64 `json:"maxBytes"`
+	MaxFiles int64 `json:"maxFiles"`
+}
 
 // STTModelCatalog defines model for STTModelCatalog.
 type STTModelCatalog struct {
@@ -13517,6 +14797,51 @@ type SystemAssistantRuntimeState string
 
 // SystemAssistantSystem defines model for SystemAssistant.System.
 type SystemAssistantSystem bool
+
+// SystemAssistantIntegrationGrantCandidate defines model for SystemAssistantIntegrationGrantCandidate.
+type SystemAssistantIntegrationGrantCandidate struct {
+	Capability                IntegrationCapability                                          `json:"capability"`
+	CurrentApprovalPolicy     *SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy `json:"currentApprovalPolicy,omitempty"`
+	CurrentApprovalScopePaths []string                                                       `json:"currentApprovalScopePaths"`
+	CurrentGrantEnabled       bool                                                           `json:"currentGrantEnabled"`
+	CurrentGrantRef           *OpaqueRef                                                     `json:"currentGrantRef,omitempty"`
+	CurrentGrantVersion       int64                                                          `json:"currentGrantVersion"`
+	Grantable                 bool                                                           `json:"grantable"`
+	Reason                    IntegrationCandidateReason                                     `json:"reason"`
+}
+
+// SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy defines model for SystemAssistantIntegrationGrantCandidate.CurrentApprovalPolicy.
+type SystemAssistantIntegrationGrantCandidateCurrentApprovalPolicy string
+
+// SystemAssistantIntegrationGrantCandidates defines model for SystemAssistantIntegrationGrantCandidates.
+type SystemAssistantIntegrationGrantCandidates struct {
+	AssistantRef      OpaqueRef                                          `json:"assistantRef"`
+	AssistantVersion  int64                                              `json:"assistantVersion"`
+	ConnectionRef     OpaqueRef                                          `json:"connectionRef"`
+	ConnectionVersion int64                                              `json:"connectionVersion"`
+	DefinitionDigest  string                                             `json:"definitionDigest"`
+	DefinitionVersion string                                             `json:"definitionVersion"`
+	Items             []SystemAssistantIntegrationGrantCandidate         `json:"items"`
+	NextPageToken     *string                                            `json:"nextPageToken,omitempty"`
+	OrganizationRef   OpaqueRef                                          `json:"organizationRef"`
+	ScopeKind         SystemAssistantIntegrationGrantCandidatesScopeKind `json:"scopeKind"`
+	Total             int64                                              `json:"total"`
+}
+
+// SystemAssistantIntegrationGrantCandidatesScopeKind defines model for SystemAssistantIntegrationGrantCandidates.ScopeKind.
+type SystemAssistantIntegrationGrantCandidatesScopeKind string
+
+// SystemAssistantIntegrationGrantInput defines model for SystemAssistantIntegrationGrantInput.
+type SystemAssistantIntegrationGrantInput struct {
+	ApprovalPolicy     SystemAssistantIntegrationGrantInputApprovalPolicy `json:"approvalPolicy"`
+	ApprovalScopePaths *[]string                                          `json:"approvalScopePaths,omitempty"`
+	CapabilityKey      string                                             `json:"capabilityKey"`
+	ConnectionRef      OpaqueRef                                          `json:"connectionRef"`
+	Enabled            bool                                               `json:"enabled"`
+}
+
+// SystemAssistantIntegrationGrantInputApprovalPolicy defines model for SystemAssistantIntegrationGrantInput.ApprovalPolicy.
+type SystemAssistantIntegrationGrantInputApprovalPolicy string
 
 // SystemSTTConfiguration defines model for SystemSTTConfiguration.
 type SystemSTTConfiguration struct {
@@ -15131,6 +16456,24 @@ type UpdateSystemRoleImageRecipeParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// DecideOrganizationImageAdmissionRiskParams defines parameters for DecideOrganizationImageAdmissionRisk.
+type DecideOrganizationImageAdmissionRiskParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// GetOrganizationImageVulnerabilityReportParams defines parameters for GetOrganizationImageVulnerabilityReport.
+type GetOrganizationImageVulnerabilityReportParams struct {
+	PageSize             *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken            *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	PackageQuery         *string                     `form:"packageQuery,omitempty" json:"packageQuery,omitempty"`
+	Severity             *ImageVulnerabilitySeverity `form:"severity,omitempty" json:"severity,omitempty"`
+	AdvisoryQuery        *string                     `form:"advisoryQuery,omitempty" json:"advisoryQuery,omitempty"`
+	BlockingOnly         *bool                       `form:"blockingOnly,omitempty" json:"blockingOnly,omitempty"`
+	ExpectedReportSha256 *string                     `form:"expectedReportSha256,omitempty" json:"expectedReportSha256,omitempty"`
+}
+
 // CommandSystemRoleImageRecipeParams defines parameters for CommandSystemRoleImageRecipe.
 type CommandSystemRoleImageRecipeParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -15319,6 +16662,14 @@ type CreateProjectAssistantParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// GetProjectAssistantIntegrationGrantCandidatesParams defines parameters for GetProjectAssistantIntegrationGrantCandidates.
+type GetProjectAssistantIntegrationGrantCandidatesParams struct {
+	ConnectionRef OpaqueRef  `form:"connectionRef" json:"connectionRef"`
+	Query         *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize      *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken     *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
 // CreateAttachmentSetDraftParams defines parameters for CreateAttachmentSetDraft.
 type CreateAttachmentSetDraftParams struct {
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
@@ -15404,6 +16755,24 @@ type UpdateRoleImageRecipeParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
 	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// DecideImageAdmissionRiskParams defines parameters for DecideImageAdmissionRisk.
+type DecideImageAdmissionRiskParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
+// GetImageVulnerabilityReportParams defines parameters for GetImageVulnerabilityReport.
+type GetImageVulnerabilityReportParams struct {
+	PageSize             *PageSize                   `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken            *PageToken                  `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+	PackageQuery         *string                     `form:"packageQuery,omitempty" json:"packageQuery,omitempty"`
+	Severity             *ImageVulnerabilitySeverity `form:"severity,omitempty" json:"severity,omitempty"`
+	AdvisoryQuery        *string                     `form:"advisoryQuery,omitempty" json:"advisoryQuery,omitempty"`
+	BlockingOnly         *bool                       `form:"blockingOnly,omitempty" json:"blockingOnly,omitempty"`
+	ExpectedReportSha256 *string                     `form:"expectedReportSha256,omitempty" json:"expectedReportSha256,omitempty"`
 }
 
 // CommandRoleImageRecipeParams defines parameters for CommandRoleImageRecipe.
@@ -16276,6 +17645,21 @@ type CommandSystemAssistantParams struct {
 // CommandSystemAssistantJSONBodyAction defines parameters for CommandSystemAssistant.
 type CommandSystemAssistantJSONBodyAction string
 
+// GetSystemAssistantIntegrationGrantCandidatesParams defines parameters for GetSystemAssistantIntegrationGrantCandidates.
+type GetSystemAssistantIntegrationGrantCandidatesParams struct {
+	ConnectionRef OpaqueRef  `form:"connectionRef" json:"connectionRef"`
+	Query         *Query     `form:"query,omitempty" json:"query,omitempty"`
+	PageSize      *PageSize  `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken     *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// ChangeSystemAssistantIntegrationGrantParams defines parameters for ChangeSystemAssistantIntegrationGrant.
+type ChangeSystemAssistantIntegrationGrantParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // CreateSystemSTTConfigurationDraftParams defines parameters for CreateSystemSTTConfigurationDraft.
 type CreateSystemSTTConfigurationDraftParams struct {
 	IdempotencyKey IdempotencyKey   `json:"Idempotency-Key"`
@@ -16556,6 +17940,9 @@ type CreateSystemRoleImageRecipeJSONRequestBody = RoleImageRecipeUpdateInput
 // UpdateSystemRoleImageRecipeJSONRequestBody defines body for UpdateSystemRoleImageRecipe for application/json ContentType.
 type UpdateSystemRoleImageRecipeJSONRequestBody = RoleImageRecipeUpdateInput
 
+// DecideOrganizationImageAdmissionRiskJSONRequestBody defines body for DecideOrganizationImageAdmissionRisk for application/json ContentType.
+type DecideOrganizationImageAdmissionRiskJSONRequestBody = ImageAdmissionRiskDecisionInput
+
 // CommandSystemRoleImageRecipeJSONRequestBody defines body for CommandSystemRoleImageRecipe for application/json ContentType.
 type CommandSystemRoleImageRecipeJSONRequestBody = RoleImageRecipeCommand
 
@@ -16600,6 +17987,9 @@ type CreateRoleImageRecipeJSONRequestBody = RoleImageRecipeCreateInput
 
 // UpdateRoleImageRecipeJSONRequestBody defines body for UpdateRoleImageRecipe for application/json ContentType.
 type UpdateRoleImageRecipeJSONRequestBody = RoleImageRecipeUpdateInput
+
+// DecideImageAdmissionRiskJSONRequestBody defines body for DecideImageAdmissionRisk for application/json ContentType.
+type DecideImageAdmissionRiskJSONRequestBody = ImageAdmissionRiskDecisionInput
 
 // CommandRoleImageRecipeJSONRequestBody defines body for CommandRoleImageRecipe for application/json ContentType.
 type CommandRoleImageRecipeJSONRequestBody = RoleImageRecipeCommand
@@ -16765,6 +18155,9 @@ type UpdateSystemAssistantOwnerInstructionsJSONRequestBody UpdateSystemAssistant
 
 // CommandSystemAssistantJSONRequestBody defines body for CommandSystemAssistant for application/json ContentType.
 type CommandSystemAssistantJSONRequestBody CommandSystemAssistantJSONBody
+
+// ChangeSystemAssistantIntegrationGrantJSONRequestBody defines body for ChangeSystemAssistantIntegrationGrant for application/json ContentType.
+type ChangeSystemAssistantIntegrationGrantJSONRequestBody = SystemAssistantIntegrationGrantInput
 
 // CreateSystemSTTConfigurationDraftJSONRequestBody defines body for CreateSystemSTTConfigurationDraft for application/json ContentType.
 type CreateSystemSTTConfigurationDraftJSONRequestBody = ManagedConfigurationDraftInput
@@ -17401,6 +18794,13 @@ func (t Run) MarshalJSON() ([]byte, error) {
 		}
 	}
 
+	if t.SessionReadiness != nil {
+		object["sessionReadiness"], err = json.Marshal(t.SessionReadiness)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'sessionReadiness': %w", err)
+		}
+	}
+
 	object["sessionRef"], err = json.Marshal(t.SessionRef)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling 'sessionRef': %w", err)
@@ -17621,6 +19021,13 @@ func (t *Run) UnmarshalJSON(b []byte) error {
 		err = json.Unmarshal(raw, &t.SafeErrorMessage)
 		if err != nil {
 			return fmt.Errorf("error reading 'safeErrorMessage': %w", err)
+		}
+	}
+
+	if raw, found := object["sessionReadiness"]; found {
+		err = json.Unmarshal(raw, &t.SessionReadiness)
+		if err != nil {
+			return fmt.Errorf("error reading 'sessionReadiness': %w", err)
 		}
 	}
 
@@ -18184,6 +19591,12 @@ type ServerInterface interface {
 	// (PATCH /api/v1/organization/role-image-recipes/{recipeRef})
 	UpdateSystemRoleImageRecipe(w http.ResponseWriter, r *http.Request, recipeRef RecipeRef, params UpdateSystemRoleImageRecipeParams)
 
+	// (POST /api/v1/organization/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/risk-decision)
+	DecideOrganizationImageAdmissionRisk(w http.ResponseWriter, r *http.Request, recipeRef RecipeRef, artifactRef ArtifactRef, params DecideOrganizationImageAdmissionRiskParams)
+
+	// (GET /api/v1/organization/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/vulnerability-report)
+	GetOrganizationImageVulnerabilityReport(w http.ResponseWriter, r *http.Request, recipeRef RecipeRef, artifactRef ArtifactRef, params GetOrganizationImageVulnerabilityReportParams)
+
 	// (POST /api/v1/organization/role-image-recipes/{recipeRef}/commands)
 	CommandSystemRoleImageRecipe(w http.ResponseWriter, r *http.Request, recipeRef RecipeRef, params CommandSystemRoleImageRecipeParams)
 
@@ -18259,6 +19672,9 @@ type ServerInterface interface {
 	// (POST /api/v1/projects/{projectRef}/assistant)
 	CreateProjectAssistant(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateProjectAssistantParams)
 
+	// (GET /api/v1/projects/{projectRef}/assistant/integration-grant-candidates)
+	GetProjectAssistantIntegrationGrantCandidates(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params GetProjectAssistantIntegrationGrantCandidatesParams)
+
 	// (POST /api/v1/projects/{projectRef}/attachment-sets)
 	CreateAttachmentSetDraft(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params CreateAttachmentSetDraftParams)
 
@@ -18297,6 +19713,12 @@ type ServerInterface interface {
 
 	// (PATCH /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef})
 	UpdateRoleImageRecipe(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, recipeRef RecipeRef, params UpdateRoleImageRecipeParams)
+
+	// (POST /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/risk-decision)
+	DecideImageAdmissionRisk(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, recipeRef RecipeRef, artifactRef ArtifactRef, params DecideImageAdmissionRiskParams)
+
+	// (GET /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/vulnerability-report)
+	GetImageVulnerabilityReport(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, recipeRef RecipeRef, artifactRef ArtifactRef, params GetImageVulnerabilityReportParams)
 
 	// (POST /api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/commands)
 	CommandRoleImageRecipe(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, recipeRef RecipeRef, params CommandRoleImageRecipeParams)
@@ -18684,6 +20106,12 @@ type ServerInterface interface {
 
 	// (POST /api/v1/system-assistant/commands)
 	CommandSystemAssistant(w http.ResponseWriter, r *http.Request, params CommandSystemAssistantParams)
+
+	// (GET /api/v1/system-assistant/integration-grant-candidates)
+	GetSystemAssistantIntegrationGrantCandidates(w http.ResponseWriter, r *http.Request, params GetSystemAssistantIntegrationGrantCandidatesParams)
+
+	// (PUT /api/v1/system-assistant/integration-grants)
+	ChangeSystemAssistantIntegrationGrant(w http.ResponseWriter, r *http.Request, params ChangeSystemAssistantIntegrationGrantParams)
 
 	// (GET /api/v1/system-stt-configuration)
 	GetSystemSTTConfiguration(w http.ResponseWriter, r *http.Request)
@@ -31489,6 +32917,256 @@ func (siw *ServerInterfaceWrapper) UpdateSystemRoleImageRecipe(w http.ResponseWr
 	handler.ServeHTTP(w, r)
 }
 
+// DecideOrganizationImageAdmissionRisk operation middleware
+func (siw *ServerInterfaceWrapper) DecideOrganizationImageAdmissionRisk(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifactRef" -------------
+	var artifactRef ArtifactRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactRef", r.PathValue("artifactRef"), &artifactRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DecideOrganizationImageAdmissionRiskParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DecideOrganizationImageAdmissionRisk(w, r, recipeRef, artifactRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOrganizationImageVulnerabilityReport operation middleware
+func (siw *ServerInterfaceWrapper) GetOrganizationImageVulnerabilityReport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifactRef" -------------
+	var artifactRef ArtifactRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactRef", r.PathValue("artifactRef"), &artifactRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOrganizationImageVulnerabilityReportParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "packageQuery" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "packageQuery", r.URL.Query(), &params.PackageQuery, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "packageQuery"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "packageQuery", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "severity" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "severity", r.URL.Query(), &params.Severity, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "severity"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "severity", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "advisoryQuery" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "advisoryQuery", r.URL.Query(), &params.AdvisoryQuery, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "advisoryQuery"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "advisoryQuery", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "blockingOnly" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "blockingOnly", r.URL.Query(), &params.BlockingOnly, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "blockingOnly"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "blockingOnly", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "expectedReportSha256" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "expectedReportSha256", r.URL.Query(), &params.ExpectedReportSha256, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "expectedReportSha256"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "expectedReportSha256", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrganizationImageVulnerabilityReport(w, r, recipeRef, artifactRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CommandSystemRoleImageRecipe operation middleware
 func (siw *ServerInterfaceWrapper) CommandSystemRoleImageRecipe(w http.ResponseWriter, r *http.Request) {
 
@@ -33483,6 +35161,93 @@ func (siw *ServerInterfaceWrapper) CreateProjectAssistant(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// GetProjectAssistantIntegrationGrantCandidates operation middleware
+func (siw *ServerInterfaceWrapper) GetProjectAssistantIntegrationGrantCandidates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetProjectAssistantIntegrationGrantCandidatesParams
+
+	// ------------- Required query parameter "connectionRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "connectionRef", r.URL.Query(), &params.ConnectionRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "connectionRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProjectAssistantIntegrationGrantCandidates(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateAttachmentSetDraft operation middleware
 func (siw *ServerInterfaceWrapper) CreateAttachmentSetDraft(w http.ResponseWriter, r *http.Request) {
 
@@ -34652,6 +36417,274 @@ func (siw *ServerInterfaceWrapper) UpdateRoleImageRecipe(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateRoleImageRecipe(w, r, projectRef, recipeRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DecideImageAdmissionRisk operation middleware
+func (siw *ServerInterfaceWrapper) DecideImageAdmissionRisk(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifactRef" -------------
+	var artifactRef ArtifactRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactRef", r.PathValue("artifactRef"), &artifactRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DecideImageAdmissionRiskParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DecideImageAdmissionRisk(w, r, projectRef, recipeRef, artifactRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetImageVulnerabilityReport operation middleware
+func (siw *ServerInterfaceWrapper) GetImageVulnerabilityReport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "recipeRef" -------------
+	var recipeRef RecipeRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "recipeRef", r.PathValue("recipeRef"), &recipeRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "recipeRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifactRef" -------------
+	var artifactRef ArtifactRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactRef", r.PathValue("artifactRef"), &artifactRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetImageVulnerabilityReportParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "packageQuery" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "packageQuery", r.URL.Query(), &params.PackageQuery, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "packageQuery"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "packageQuery", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "severity" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "severity", r.URL.Query(), &params.Severity, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "severity"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "severity", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "advisoryQuery" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "advisoryQuery", r.URL.Query(), &params.AdvisoryQuery, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "advisoryQuery"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "advisoryQuery", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "blockingOnly" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "blockingOnly", r.URL.Query(), &params.BlockingOnly, runtime.BindQueryParameterOptions{Type: "boolean", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "blockingOnly"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "blockingOnly", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "expectedReportSha256" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "expectedReportSha256", r.URL.Query(), &params.ExpectedReportSha256, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "expectedReportSha256"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "expectedReportSha256", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetImageVulnerabilityReport(w, r, projectRef, recipeRef, artifactRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -45874,6 +47907,181 @@ func (siw *ServerInterfaceWrapper) CommandSystemAssistant(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// GetSystemAssistantIntegrationGrantCandidates operation middleware
+func (siw *ServerInterfaceWrapper) GetSystemAssistantIntegrationGrantCandidates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSystemAssistantIntegrationGrantCandidatesParams
+
+	// ------------- Required query parameter "connectionRef" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "connectionRef", r.URL.Query(), &params.ConnectionRef, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "connectionRef"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "connectionRef", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "query", r.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "query"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "query", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSystemAssistantIntegrationGrantCandidates(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangeSystemAssistantIntegrationGrant operation middleware
+func (siw *ServerInterfaceWrapper) ChangeSystemAssistantIntegrationGrant(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ChangeSystemAssistantIntegrationGrantParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangeSystemAssistantIntegrationGrant(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSystemSTTConfiguration operation middleware
 func (siw *ServerInterfaceWrapper) GetSystemSTTConfiguration(w http.ResponseWriter, r *http.Request) {
 
@@ -47507,6 +49715,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/organization/role-image-recipes", wrapper.CreateSystemRoleImageRecipe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}", wrapper.GetSystemRoleImageRecipe)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}", wrapper.UpdateSystemRoleImageRecipe)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/risk-decision", wrapper.DecideOrganizationImageAdmissionRisk)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/vulnerability-report", wrapper.GetOrganizationImageVulnerabilityReport)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}/commands", wrapper.CommandSystemRoleImageRecipe)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}/promotion", wrapper.PromoteSystemRoleImage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/organization/role-image-recipes/{recipeRef}/revisions", wrapper.ListSystemRoleImageRecipeRevisions)
@@ -47532,6 +49742,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/artifacts", wrapper.UploadArtifact)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/assistant", wrapper.GetProjectAssistant)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/assistant", wrapper.CreateProjectAssistant)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/assistant/integration-grant-candidates", wrapper.GetProjectAssistantIntegrationGrantCandidates)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/attachment-sets", wrapper.CreateAttachmentSetDraft)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members", wrapper.ListProjectMemberships)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/members", wrapper.AddProjectMembership)
@@ -47545,6 +49756,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes", wrapper.CreateRoleImageRecipe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}", wrapper.GetRoleImageRecipe)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}", wrapper.UpdateRoleImageRecipe)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/risk-decision", wrapper.DecideImageAdmissionRisk)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/vulnerability-report", wrapper.GetImageVulnerabilityReport)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/commands", wrapper.CommandRoleImageRecipe)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/promotions", wrapper.PromoteRoleImage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/revisions", wrapper.ListRoleImageRecipeRevisions)
@@ -47674,6 +49887,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system-assistant", wrapper.GetSystemAssistant)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/v1/system-assistant", wrapper.UpdateSystemAssistantOwnerInstructions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-assistant/commands", wrapper.CommandSystemAssistant)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system-assistant/integration-grant-candidates", wrapper.GetSystemAssistantIntegrationGrantCandidates)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/v1/system-assistant/integration-grants", wrapper.ChangeSystemAssistantIntegrationGrant)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/system-stt-configuration", wrapper.GetSystemSTTConfiguration)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/drafts", wrapper.CreateSystemSTTConfigurationDraft)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/system-stt-configurations/typed-drafts", wrapper.CreateTypedSystemSTTConfigurationDraft)

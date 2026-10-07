@@ -174,7 +174,7 @@ func (r *Repository) applyEnvironmentDraftImpact(ctx context.Context, tx pgx.Tx,
 			nested.Kind = command.RebindRuntimeEnvironment
 			nested.Mutation.ExpectedVersion = &environment.Version
 			nested.Payload = command.RuntimeEnvironmentRebindInput{EnvironmentRef: environment.Ref, VersionRef: environment.CurrentVersion.Ref, Consumers: []entity.RuntimeEnvironmentConsumer{{AgentRef: item.ConsumerRef, AgentVersion: item.ConsumerVersion, BindingRef: item.BindingRef, BindingVersion: item.BindingVersion, VersionRef: item.SourceRevisionRef, ProjectRef: item.ProjectRef, ScopeKind: item.ScopeKind, OrganizationRef: item.OrganizationRef}}}
-			outcome, applyErr := r.rebindRuntimeEnvironment(ctx, attempt, s, nested)
+			outcome, applyErr := r.rebindRuntimeEnvironmentFromPublication(ctx, attempt, s, nested, row.plan.SourceRevisionRef)
 			if applyErr != nil {
 				_ = attempt.Rollback(ctx)
 				item.Outcome = secretDraftImpactError(applyErr)

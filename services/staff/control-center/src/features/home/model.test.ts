@@ -61,6 +61,8 @@ function gate(
   options: Partial<OwnerGate> = {},
 ): OwnerGate {
   return {
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
     ref,
     version: 1,
     projectRef: "project_sales",

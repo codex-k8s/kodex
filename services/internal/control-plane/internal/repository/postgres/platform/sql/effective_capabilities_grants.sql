@@ -8,7 +8,7 @@ SELECT grant_row.ref,grant_row.version,grant_row.capability_key,
  AND (definition.adapter_owner,definition.execution_route) IN
  (('integration-gateway','MANAGED_MCP'),('interaction-gateway','INTERACTION'))
  AND grant_row.definition_version=connection.definition_version
- AND grant_row.definition_digest=connection.definition_digest AS eligible
+ AND grant_row.definition_digest=connection.definition_digest AS eligible,grant_row.approval_policy
 FROM control_plane.integration_grants grant_row
 JOIN control_plane.integration_connections connection ON connection.id=grant_row.connection_id
  AND connection.organization_id=grant_row.organization_id

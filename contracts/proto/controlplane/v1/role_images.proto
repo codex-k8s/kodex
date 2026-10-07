@@ -23,6 +23,13 @@ service RoleImageService {
   rpc ManageOrganizationRoleImageRecipe(ManageOrganizationRoleImageRecipeRequest) returns (ManageOrganizationRoleImageRecipeResponse);
   rpc RequestOrganizationRoleImagePromotion(RequestOrganizationRoleImagePromotionRequest) returns (RequestOrganizationRoleImagePromotionResponse);
 
+  // Human OWNER/ADMIN читает только owner-resolved полный безопасный report.
+  rpc GetOrganizationImageVulnerabilityReport(GetOrganizationImageVulnerabilityReportRequest) returns (GetOrganizationImageVulnerabilityReportResponse);
+  rpc GetImageVulnerabilityReport(GetImageVulnerabilityReportRequest) returns (GetImageVulnerabilityReportResponse);
+  // Approval создаёт immutable decision и новую attempt, но не переписывает REJECTED receipt.
+  rpc DecideOrganizationImageAdmissionRisk(DecideOrganizationImageAdmissionRiskRequest) returns (DecideOrganizationImageAdmissionRiskResponse);
+  rpc DecideImageAdmissionRisk(DecideImageAdmissionRiskRequest) returns (DecideImageAdmissionRiskResponse);
+
   rpc ClaimImageBuild(ClaimImageBuildRequest) returns (ClaimImageBuildResponse);
   rpc RenewImageBuild(RenewImageBuildRequest) returns (RenewImageBuildResponse);
   rpc ReportImageBuildProgress(ReportImageBuildProgressRequest) returns (ReportImageBuildProgressResponse);
@@ -32,6 +39,10 @@ service RoleImageService {
   rpc GetImageSupplyWorkAvailability(GetImageSupplyWorkAvailabilityRequest) returns (GetImageSupplyWorkAvailabilityResponse);
   rpc ClaimImageAdmission(ClaimImageAdmissionRequest) returns (ClaimImageAdmissionResponse);
   rpc RecordImageAdmission(RecordImageAdmissionRequest) returns (RecordImageAdmissionResponse);
+  rpc FailImageAdmission(FailImageAdmissionRequest) returns (FailImageAdmissionResponse);
+  rpc ExpireImageAdmissionClaim(ExpireImageAdmissionClaimRequest) returns (ExpireImageAdmissionClaimResponse);
+  rpc GetImageAdmissionTerminal(GetImageAdmissionTerminalRequest) returns (GetImageAdmissionTerminalResponse);
+  rpc GetImageAdmissionRecoveryTerminal(GetImageAdmissionRecoveryTerminalRequest) returns (GetImageAdmissionRecoveryTerminalResponse);
   rpc ClaimImagePromotion(ClaimImagePromotionRequest) returns (ClaimImagePromotionResponse);
   rpc AuthorizeImagePromotion(AuthorizeImagePromotionRequest) returns (AuthorizeImagePromotionResponse);
   rpc CompleteImagePromotion(CompleteImagePromotionRequest) returns (CompleteImagePromotionResponse);
@@ -207,6 +218,8 @@ enum ImageAdmissionVerdict {
   IMAGE_ADMISSION_VERDICT_UNSPECIFIED = 0;
   IMAGE_ADMISSION_VERDICT_ACCEPTED = 1;
   IMAGE_ADMISSION_VERDICT_REJECTED = 2;
+  // Только публичная текущая risk-bound PENDING/CLAIMED projection; Record не принимает.
+  IMAGE_ADMISSION_VERDICT_PENDING = 3;
 }
 
 enum ImagePromotionState {
@@ -256,12 +269,17 @@ message ImageArtifact {
   google.protobuf.Timestamp promoted_at = 35;
   google.protobuf.Timestamp created_at = 36;
   google.protobuf.Timestamp updated_at = 37;
-  repeated RoleImageTool tools = 38;
+  repeated RoleImageTool declared_tools = 38;
   ImagePromotionState promotion_state = 39;
   bool promotion_requested = 40;
   RuntimeResourceScopeKind scope_kind = 41;
   string organization_ref = 42;
   string project_ref = 43;
+  ImageToolInventory verified_tool_inventory = 44;
+  // Текущая attempt projection не переписывает immutable terminal history.
+  ImageAdmissionAttempt admission_attempt = 45;
+  // Exact owner risk decision не является admission verdict.
+  ImageAdmissionRiskDecision risk_decision = 46;
 }
 
 enum RoleImageRecipeAction {
@@ -297,6 +315,7 @@ message GetRoleImageRecipeResponse {
   repeated ImageBuild builds = 2;
   ImageArtifact active_artifact = 3;
   ImageArtifact promotion_candidate = 4;
+  RoleImageAdmissionFailure admission_failure = 5;
 }
 
 message ManageRoleImageRecipeRequest {
@@ -337,6 +356,7 @@ message GetOrganizationRoleImageRecipeResponse {
   repeated ImageBuild builds = 2;
   ImageArtifact active_artifact = 3;
   ImageArtifact promotion_candidate = 4;
+  RoleImageAdmissionFailure admission_failure = 5;
 }
 message ManageOrganizationRoleImageRecipeRequest {
   MutationContext mutation = 1;
@@ -477,6 +497,20 @@ message ClaimImageAdmissionResponse {
   uint64 fence = 3;
   uint64 authority_generation = 4;
   google.protobuf.Timestamp claim_expires_at = 5;
+  // Свежая server-owned attempt; этот pin не назначает authority.
+  string admission_attempt_ref = 6;
+  // Монотонная admission attempt, отличная от build attempt.
+  uint32 admission_attempt = 7;
+  // Exact canonical owner binding либо пусто только для обычной admission.
+  string risk_acceptance_json = 8;
+  // SHA256 binding, signer подписывает исходные bytes.
+  string risk_acceptance_sha256 = 9;
+  // Immutable original REJECTED receipt; не заменяется новым verdict.
+  string source_admission_receipt_sha256 = 10;
+  // Exact durable source evidence, никакого latest tag lookup.
+  string source_evidence_manifest_digest = 11;
+  // Original terminal revision; не новая attempt number.
+  uint64 source_admission_revision = 12;
 }
 message RecordImageAdmissionRequest {
   string idempotency_key = 1;
@@ -496,9 +530,139 @@ message RecordImageAdmissionRequest {
   string signature_sha256 = 15;
   string admission_receipt_sha256 = 16;
   string admission_receipt_oci_manifest_digest = 17;
+  // Exact signed payload; закрытый decoder проверяет digest и immutable tuple.
+  string tool_inventory_json = 18;
+  string tool_inventory_sha256 = 19;
+  // Exact свежая attempt, сверяемая с заблокированным owner state.
+  string expected_admission_attempt_ref = 20;
+  // Exact монотонная attempt number, не caller authority.
+  uint32 expected_admission_attempt = 21;
+  // Полная safe projection всех matches; canonical decoder общий с worker.
+  string vulnerability_report_json = 22;
+  // SHA256 exact canonical projection bytes; bound 4MiB, без truncation.
+  string vulnerability_report_projection_sha256 = 23;
+  // Exact server-owned risk binding либо пусто для normal admission.
+  string risk_acceptance_sha256 = 24;
 }
 message RecordImageAdmissionResponse {
   ImageArtifact image_artifact = 1;
+}
+
+// Технический отказ не создаёт verdict или evidence receipt.
+message RoleImageAdmissionFailure {
+  string image_artifact_ref = 1;
+  uint64 version = 2;
+  string recipe_ref = 3;
+  uint64 recipe_generation = 4;
+  string build_ref = 5;
+  uint32 build_attempt = 6;
+  RuntimeResourceScopeKind scope_kind = 7;
+  string organization_ref = 8;
+  string project_ref = 9;
+  string state = 10;
+  string error_code = 11;
+}
+message FailImageAdmissionRequest {
+  string idempotency_key = 1;
+  string image_artifact_ref = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string claim_token = 5;
+  string manifest_digest = 6;
+  string immutable_build_sha256 = 7;
+  string provenance_sha256 = 8;
+  uint64 policy_revision = 9;
+  string policy_sha256 = 10;
+  string build_ref = 11;
+  uint32 expected_build_attempt = 12;
+  uint64 recipe_generation = 13;
+  string spec_sha256 = 14;
+  uint64 expected_authority_generation = 15;
+  string error_code = 16;
+  // Exact attempt locator дополняет полный fence tuple, не является authority.
+  string expected_admission_attempt_ref = 17;
+  // Монотонная admission attempt number, не build attempt.
+  uint32 expected_admission_attempt = 18;
+}
+message FailImageAdmissionResponse {
+  RoleImageAdmissionFailure admission_failure = 1;
+}
+// Старый fence является OCC locator, не полномочием. Expiry назначает DBclock владельца.
+message ExpireImageAdmissionClaimRequest {
+  string idempotency_key = 1;
+  string image_artifact_ref = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string manifest_digest = 5;
+  string immutable_build_sha256 = 6;
+  string provenance_sha256 = 7;
+  uint64 policy_revision = 8;
+  string policy_sha256 = 9;
+  string build_ref = 10;
+  uint32 expected_build_attempt = 11;
+  uint64 recipe_generation = 12;
+  string spec_sha256 = 13;
+  uint64 expected_authority_generation = 14;
+  // Exact attempt locator, expiry назначается owner DBclock.
+  string expected_admission_attempt_ref = 15;
+  // Монотонная admission attempt, закрываемая одним terminal receipt.
+  uint32 expected_admission_attempt = 16;
+}
+message ExpireImageAdmissionClaimResponse {
+  RoleImageAdmissionFailure admission_failure = 1;
+}
+// Ключ исходной claim и полный immutable tuple являются locator, не authority.
+// Controller передаёт только managed run locator; actor/tenant и исходный tuple
+// назначает владелец по canonical claim receipt, не из payload.
+message GetImageAdmissionRecoveryTerminalRequest {
+  string admission_run_id = 1;
+}
+message GetImageAdmissionRecoveryTerminalResponse {
+  GetImageAdmissionTerminalResponse terminal_proof = 1;
+}
+message GetImageAdmissionTerminalRequest {
+  string claim_idempotency_key = 1;
+  string image_artifact_ref = 2;
+  uint64 expected_version = 3;
+  uint64 expected_fence = 4;
+  string manifest_digest = 5;
+  string immutable_build_sha256 = 6;
+  string provenance_sha256 = 7;
+  uint64 policy_revision = 8;
+  string policy_sha256 = 9;
+  string build_ref = 10;
+  uint32 expected_build_attempt = 11;
+  uint64 recipe_generation = 12;
+  string spec_sha256 = 13;
+  uint64 expected_authority_generation = 14;
+  string expected_admission_attempt_ref = 15;
+  uint32 expected_admission_attempt = 16;
+  string risk_acceptance_sha256 = 17;
+  uint64 source_admission_revision = 18;
+  string source_admission_receipt_sha256 = 19;
+  string source_evidence_manifest_digest = 20;
+}
+enum ImageAdmissionTerminalState {
+  IMAGE_ADMISSION_TERMINAL_STATE_UNSPECIFIED = 0;
+  IMAGE_ADMISSION_TERMINAL_STATE_ACCEPTED = 1;
+  IMAGE_ADMISSION_TERMINAL_STATE_REJECTED = 2;
+  IMAGE_ADMISSION_TERMINAL_STATE_FAILED = 3;
+  IMAGE_ADMISSION_TERMINAL_STATE_CANCELLED = 4;
+}
+message GetImageAdmissionTerminalResponse {
+  ImageAdmissionTerminalState terminal_state = 1;
+  ImageArtifact claimed_artifact = 2;
+  string admission_attempt_ref = 3;
+  uint32 admission_attempt = 4;
+  uint64 claim_fence = 5;
+  uint64 claim_authority_generation = 6;
+  uint64 terminal_artifact_version = 7;
+  uint64 terminal_fence = 8;
+  uint64 terminal_attempt_version = 9;
+  string risk_acceptance_sha256 = 10;
+  uint64 source_admission_revision = 11;
+  string source_admission_receipt_sha256 = 12;
+  string source_evidence_manifest_digest = 13;
 }
 message ClaimImagePromotionRequest {
   string idempotency_key = 1;
@@ -533,4 +697,420 @@ message CompleteImagePromotionRequest {
 }
 message CompleteImagePromotionResponse {
   ImageArtifact image_artifact = 1;
+}
+
+// Severity безопасного отчёта; UNKNOWN сохраняет исходные нераспознанные совпадения.
+enum ImageVulnerabilitySeverity {
+  // Неизвестное значение закрыто отклоняется на boundary.
+  IMAGE_VULNERABILITY_SEVERITY_UNSPECIFIED = 0;
+  // Критическая уязвимость.
+  IMAGE_VULNERABILITY_SEVERITY_CRITICAL = 1;
+  // Высокая severity.
+  IMAGE_VULNERABILITY_SEVERITY_HIGH = 2;
+  // Средняя severity, не блокирующая baseline.
+  IMAGE_VULNERABILITY_SEVERITY_MEDIUM = 3;
+  // Низкая severity, не блокирующая baseline.
+  IMAGE_VULNERABILITY_SEVERITY_LOW = 4;
+  // Минимальная severity.
+  IMAGE_VULNERABILITY_SEVERITY_NEGLIGIBLE = 5;
+  // Нераспознанная severity, не удаляемая из отчёта.
+  IMAGE_VULNERABILITY_SEVERITY_UNKNOWN = 6;
+}
+// Закрытый вид advisory; OTHER не получает внешнюю ссылку.
+enum ImageVulnerabilityAdvisoryKind {
+  // Неизвестное значение закрыто отклоняется на boundary.
+  IMAGE_VULNERABILITY_ADVISORY_KIND_UNSPECIFIED = 0;
+  // Канонический CVE ID и NVD URL.
+  IMAGE_VULNERABILITY_ADVISORY_KIND_CVE = 1;
+  // Канонический GHSA ID и GitHub URL.
+  IMAGE_VULNERABILITY_ADVISORY_KIND_GHSA = 2;
+  // Канонический GO ID и Go vulnerability URL.
+  IMAGE_VULNERABILITY_ADVISORY_KIND_GO = 3;
+  // Безопасный текст иного ID, без raw URL.
+  IMAGE_VULNERABILITY_ADVISORY_KIND_OTHER = 4;
+}
+// Состояние исправления из полного scanner report.
+enum ImageVulnerabilityFixState {
+  // Неизвестное значение закрыто отклоняется на boundary.
+  IMAGE_VULNERABILITY_FIX_STATE_UNSPECIFIED = 0;
+  // База содержит выпущенное исправление.
+  IMAGE_VULNERABILITY_FIX_STATE_FIXED = 1;
+  // Выпущенное исправление отсутствует.
+  IMAGE_VULNERABILITY_FIX_STATE_NOT_FIXED = 2;
+  // Scanner сообщает отсутствие планируемого исправления.
+  IMAGE_VULNERABILITY_FIX_STATE_WONT_FIX = 3;
+  // Состояние не распознано; запись сохраняется.
+  IMAGE_VULNERABILITY_FIX_STATE_UNKNOWN = 4;
+}
+// Полнота owner-bound безопасной проекции.
+enum ImageVulnerabilityReportState {
+  // Неизвестное значение закрыто отклоняется на boundary.
+  IMAGE_VULNERABILITY_REPORT_STATE_UNSPECIFIED = 0;
+  // Полная валидированная проекция всех совпадений.
+  IMAGE_VULNERABILITY_REPORT_STATE_READY = 1;
+  // Исторический artifact не имеет typed projection; нужна новая сборка.
+  IMAGE_VULNERABILITY_REPORT_STATE_UNAVAILABLE = 2;
+  // Техническая ошибка не разрешает принятие риска.
+  IMAGE_VULNERABILITY_REPORT_STATE_FAILED = 3;
+}
+// Явное решение человека с проверенной административной authority.
+enum ImageAdmissionRiskAction {
+  // Неизвестное значение закрыто отклоняется на boundary.
+  IMAGE_ADMISSION_RISK_ACTION_UNSPECIFIED = 0;
+  // Разрешить новую подписанную attempt для exact image/report tuple, не выставлять verdict.
+  IMAGE_ADMISSION_RISK_ACTION_ACCEPT_RISK = 1;
+  // Сохранить аудируемый отказ; существующий REJECTED остаётся.
+  IMAGE_ADMISSION_RISK_ACTION_REJECT_RISK = 2;
+}
+// Lifecycle отдельной admission attempt; terminal receipt не переписывается.
+enum ImageAdmissionAttemptState {
+  // Неизвестное значение закрыто отклоняется на boundary.
+  IMAGE_ADMISSION_ATTEMPT_STATE_UNSPECIFIED = 0;
+  // Свежая attempt ожидает workload claim.
+  IMAGE_ADMISSION_ATTEMPT_STATE_PENDING = 1;
+  // Одна точная lease с fence и expiry.
+  IMAGE_ADMISSION_ATTEMPT_STATE_CLAIMED = 2;
+  // Новый подписанный допуск успешно записан владельцем.
+  IMAGE_ADMISSION_ATTEMPT_STATE_ACCEPTED = 3;
+  // Технические или baseline guards не разрешили допуск.
+  IMAGE_ADMISSION_ATTEMPT_STATE_REJECTED = 4;
+  // Технический terminal без выдуманного verdict.
+  IMAGE_ADMISSION_ATTEMPT_STATE_FAILED = 5;
+  // Owner graph отменил queued/live attempt.
+  IMAGE_ADMISSION_ATTEMPT_STATE_CANCELLED = 6;
+}
+// Число исходных совпадений severity, включая suppressed occurrences.
+message ImageVulnerabilitySeverityCount {
+  // Закрытая severity, UNKNOWN имеет собственный bucket.
+  ImageVulnerabilitySeverity severity = 1;
+  // Сумма occurrences этой severity, не число grouped rows.
+  uint32 match_count = 2;
+}
+// Полная безопасная grouped строка; locations и raw URLs отсутствуют.
+message ImageVulnerabilityFinding {
+  // SHA256 canonical grouping tuple, стабильный внутри pinned report.
+  string ref = 1;
+  // Безопасное имя пакета без paths и управляющих символов.
+  string package_name = 2;
+  // Версия или bounded range как данные, не shell или новый pin.
+  string installed_version = 3;
+  // Безопасный тип пакета из scanner report.
+  string ecosystem = 4;
+  // Bounded CVE/GHSA/GO либо OTHER ID, без потери исходных совпадений.
+  string advisory_id = 5;
+  // Вид определён серверным canonical decoder.
+  ImageVulnerabilityAdvisoryKind advisory_kind = 6;
+  // Только построенный сервером canonical HTTPS URL; OTHER пуст.
+  string advisory_url = 7;
+  // Severity всех объединённых исходных совпадений.
+  ImageVulnerabilitySeverity severity = 8;
+  // Состояние исправления по immutable report.
+  ImageVulnerabilityFixState fix_state = 9;
+  // Sorted unique bounded версии/ranges; не команда и не pin.
+  repeated string fixed_versions = 10;
+  // Baseline blocker назначается validator, suppressed false.
+  bool blocking = 11;
+  // Совпадения исходного ignoredMatches сохраняются явно.
+  bool ignored = 12;
+  // Положительное число grouped исходных совпадений.
+  uint32 occurrences = 13;
+}
+// Owner-facing metadata полного immutable report; actual page rows выдаются отдельно.
+message ImageVulnerabilityReport {
+  // Область разрешена владельцем из сохранённого artifact.
+  RuntimeResourceScopeKind scope_kind = 1;
+  // Проверенная организация, не actor input.
+  string organization_ref = 2;
+  // Точный PROJECT locator; пустой только для ORGANIZATION.
+  string project_ref = 3;
+  // Owner-resolved рецепт.
+  string recipe_ref = 4;
+  // Exact версия рецепта для owner OCC.
+  uint64 recipe_version = 5;
+  // Неизменяемое поколение recipe/build snapshot.
+  uint64 recipe_generation = 6;
+  // Latest COMPLETED build, разрешённый owner eligibility.
+  string build_ref = 7;
+  // Версия сохранённого immutable build snapshot.
+  uint64 build_version = 8;
+  // Точная attempt исходной сборки.
+  uint32 build_attempt = 9;
+  // Принадлежащий той же scope artifact.
+  string artifact_ref = 10;
+  // Текущая версия artifact; If-Match относится к ней.
+  uint64 artifact_version = 11;
+  // Exact image digest sha256:; tag не является authority.
+  string manifest_digest = 12;
+  // Текущая owner revision admission projection.
+  uint64 admission_revision = 13;
+  // Original REJECTED terminal revision, закреплённая report.
+  uint64 source_admission_revision = 14;
+  // SHA256 immutable предыдущей receipt.
+  string prior_admission_receipt_sha256 = 15;
+  // Exact OCI manifest предыдущего evidence bundle.
+  string prior_evidence_manifest_digest = 16;
+  // SHA256 исходных полных scanner bytes.
+  string vulnerability_evidence_sha256 = 17;
+  // SHA256 исходных полных SBOM bytes.
+  string sbom_sha256 = 18;
+  // Version-pinned baseline policy.
+  uint64 policy_revision = 19;
+  // Exact baseline policy digest.
+  string policy_sha256 = 20;
+  // READY только после полного canonical validation.
+  ImageVulnerabilityReportState state = 21;
+  // Неизменяемая версия безопасной report projection.
+  uint64 version = 22;
+  // SHA256 исходных canonical projection bytes.
+  string projection_sha256 = 23;
+  // Server validator доказал полноту; caller flag не принимается.
+  bool complete = 24;
+  // Все active и suppressed occurrences.
+  uint32 match_count = 25;
+  // Число уникальных advisory ID полного отчёта.
+  uint32 unique_advisory_count = 26;
+  // Baseline active High/Critical с доступным исправлением.
+  uint32 blocking_match_count = 27;
+  // Active High/Critical без доступного исправления.
+  uint32 unresolved_no_fix_match_count = 28;
+  // Все исходные ignoredMatches occurrences.
+  uint32 suppressed_match_count = 29;
+  // Все закрытые severity buckets, включая UNKNOWN.
+  repeated ImageVulnerabilitySeverityCount severity_counts = 30;
+  // Server-only ACCEPT_RISK, REJECT_RISK либо REBUILD_FOR_REPORT по current eligibility.
+  repeated string next_actions = 31;
+}
+// Append-only человеческое решение; оно не является admission verdict.
+message ImageAdmissionRiskDecision {
+  // Server-owned identity решения.
+  string ref = 1;
+  // Неизменяемая revision решения.
+  uint64 version = 2;
+  // Точное ACCEPT_RISK либо REJECT_RISK.
+  ImageAdmissionRiskAction action = 3;
+  // Обязательная причина, 1..2048 UTF8 bytes без controls.
+  string reason = 4;
+  // Проверенный human OWNER/ADMIN actor из transport/domain.
+  string decided_by_actor_ref = 5;
+  // Время решения назначено owner PostgreSQL.
+  google.protobuf.Timestamp decided_at = 6;
+  // Digest canonical owner decision binding, подписываемого signer.
+  string binding_sha256 = 7;
+  // Область разрешена владельцем из сохранённого artifact.
+  RuntimeResourceScopeKind scope_kind = 8;
+  // Проверенная организация, не actor input.
+  string organization_ref = 9;
+  // Точный PROJECT locator; пустой только для ORGANIZATION.
+  string project_ref = 10;
+  // Owner-resolved рецепт.
+  string recipe_ref = 11;
+  // Exact версия рецепта для owner OCC.
+  uint64 recipe_version = 12;
+  // Неизменяемое поколение recipe/build snapshot.
+  uint64 recipe_generation = 13;
+  // Latest COMPLETED build, разрешённый owner eligibility.
+  string build_ref = 14;
+  // Версия сохранённого immutable build snapshot.
+  uint64 build_version = 15;
+  // Точная attempt исходной сборки.
+  uint32 build_attempt = 16;
+  // Принадлежащий той же scope artifact.
+  string artifact_ref = 17;
+  // Версия artifact в неизменном snapshot решения, не текущая версия после Record.
+  uint64 artifact_version = 18;
+  // Exact image digest sha256:; tag не является authority.
+  string manifest_digest = 19;
+  // Owner revision admission projection в snapshot решения.
+  uint64 admission_revision = 20;
+  // Original REJECTED terminal revision, закреплённая report.
+  uint64 source_admission_revision = 21;
+  // SHA256 immutable предыдущей receipt.
+  string prior_admission_receipt_sha256 = 22;
+  // Exact OCI manifest предыдущего evidence bundle.
+  string prior_evidence_manifest_digest = 23;
+  // SHA256 исходных полных scanner bytes.
+  string vulnerability_evidence_sha256 = 24;
+  // SHA256 исходных полных SBOM bytes.
+  string sbom_sha256 = 25;
+  // Version-pinned baseline policy.
+  uint64 policy_revision = 26;
+  // Exact baseline policy digest.
+  string policy_sha256 = 27;
+}
+// Отдельная новая attempt; прежняя terminal history сохраняется.
+message ImageAdmissionAttempt {
+  // Server-owned attempt identity.
+  string ref = 1;
+  // OCC lifecycle этой attempt.
+  uint64 version = 2;
+  // Монотонная attempt number, не build attempt или admission revision.
+  uint32 number = 3;
+  // Точное lifecycle state, неизвестное закрыто отклоняется.
+  ImageAdmissionAttemptState state = 4;
+  // Exact исходный image artifact.
+  string artifact_ref = 5;
+  // Owner risk decision либо пусто для обычной admission.
+  string decision_ref = 6;
+  // Server-owned claim fence; не caller authority.
+  uint64 fence = 7;
+  // Новая immutable terminal receipt либо пусто до Record.
+  string admission_receipt_sha256 = 8;
+  // Новый immutable OCI evidence manifest либо пусто до Record.
+  string evidence_manifest_digest = 9;
+}
+// Организация назначается verified context; GET не выполняет transitions.
+message GetOrganizationImageVulnerabilityReportRequest {
+  // Locator разрешается в owner scope до pins.
+  string recipe_ref = 1;
+  // Locator существующего owner artifact.
+  string artifact_ref = 2;
+  // Страница до 100 строк; cursor закрепляет report и filters.
+  PageRequest page = 3;
+  // Bounded фильтр безопасного имени пакета.
+  string package_query = 4;
+  // Presence отличает отсутствие filter от explicit UNKNOWN.
+  optional ImageVulnerabilitySeverity severity = 5;
+  // Bounded advisory search, не URL.
+  string advisory_query = 6;
+  // Presence отличает отсутствие фильтра от false.
+  optional bool blocking_only = 7;
+  // Exact raw report SHA256 обязателен при продолжении cursor.
+  string expected_report_sha256 = 8;
+}
+// PROJECT report использует owner/project eligibility того же artifact.
+message GetImageVulnerabilityReportRequest {
+  // Locator разрешается в owner scope до pins.
+  string recipe_ref = 1;
+  // Locator существующего owner artifact.
+  string artifact_ref = 2;
+  // Страница до 100 строк; cursor закрепляет report и filters.
+  PageRequest page = 3;
+  // Bounded фильтр безопасного имени пакета.
+  string package_query = 4;
+  // Presence отличает отсутствие filter от explicit UNKNOWN.
+  optional ImageVulnerabilitySeverity severity = 5;
+  // Bounded advisory search, не URL.
+  string advisory_query = 6;
+  // Presence отличает отсутствие фильтра от false.
+  optional bool blocking_only = 7;
+  // Exact raw report SHA256 обязателен при продолжении cursor.
+  string expected_report_sha256 = 8;
+  // PROJECT locator не заменяет trusted organization/human authority.
+  string project_ref = 9;
+}
+// Безопасный owner-scoped report page без raw Grype.
+message GetOrganizationImageVulnerabilityReportResponse {
+  // Полный immutable report metadata и current owner eligibility.
+  ImageVulnerabilityReport report = 1;
+  // Полная запрошенная страница grouped safe rows.
+  repeated ImageVulnerabilityFinding findings = 2;
+  // Pinned next cursor; страница не выдаётся как весь отчёт.
+  PageInfo page = 3;
+}
+// Безопасный PROJECT report page, без расширения tenant.
+message GetImageVulnerabilityReportResponse {
+  // Полный immutable report metadata и current owner eligibility.
+  ImageVulnerabilityReport report = 1;
+  // Полная запрошенная страница grouped safe rows.
+  repeated ImageVulnerabilityFinding findings = 2;
+  // Pinned next cursor; страница не выдаётся как весь отчёт.
+  PageInfo page = 3;
+}
+// Human admin command не доступна assistant/workload и атомарно сохраняет decision/attempt.
+message DecideOrganizationImageAdmissionRiskRequest {
+  // Idempotency/If-Match связаны с exact artifact intent; actor не назначается input.
+  MutationContext mutation = 1;
+  // Owner-resolved current ACTIVE recipe.
+  string recipe_ref = 2;
+  // Owner-resolved current latest COMPLETED build artifact.
+  string artifact_ref = 3;
+  // OCC artifact; не доказательство владения.
+  uint64 expected_artifact_version = 4;
+  // Exact current admission projection revision.
+  uint64 expected_admission_revision = 5;
+  // Exact current recipe version.
+  uint64 expected_recipe_version = 6;
+  // Exact recipe generation исходного report.
+  uint64 expected_recipe_generation = 7;
+  // Latest build locator проверяет владелец.
+  string expected_build_ref = 8;
+  // Exact immutable build attempt.
+  uint32 expected_build_attempt = 9;
+  // Exact image digest, не источник authority.
+  string manifest_digest = 10;
+  // SHA256 полного исходного report, показанного администратору.
+  string vulnerability_evidence_sha256 = 11;
+  // SHA256 полной safe projection, не hash видимой страницы.
+  string projection_sha256 = 12;
+  // Exact original REJECTED receipt pin.
+  string prior_admission_receipt_sha256 = 13;
+  // Exact original immutable evidence manifest.
+  string prior_evidence_manifest_digest = 14;
+  // Текущая pinned baseline policy revision.
+  uint64 policy_revision = 15;
+  // Текущий exact baseline policy digest.
+  string policy_sha256 = 16;
+  // Только human OWNER/ADMIN explicit ACCEPT_RISK или REJECT_RISK.
+  ImageAdmissionRiskAction action = 17;
+  // Обязательная bounded причина для audit, не shell.
+  string reason = 18;
+}
+// PROJECT locator не даёт project-only actor административное право.
+message DecideImageAdmissionRiskRequest {
+  // Idempotency/If-Match связаны с exact artifact intent; actor не назначается input.
+  MutationContext mutation = 1;
+  // Owner-resolved current ACTIVE recipe.
+  string recipe_ref = 2;
+  // Owner-resolved current latest COMPLETED build artifact.
+  string artifact_ref = 3;
+  // OCC artifact; не доказательство владения.
+  uint64 expected_artifact_version = 4;
+  // Exact current admission projection revision.
+  uint64 expected_admission_revision = 5;
+  // Exact current recipe version.
+  uint64 expected_recipe_version = 6;
+  // Exact recipe generation исходного report.
+  uint64 expected_recipe_generation = 7;
+  // Latest build locator проверяет владелец.
+  string expected_build_ref = 8;
+  // Exact immutable build attempt.
+  uint32 expected_build_attempt = 9;
+  // Exact image digest, не источник authority.
+  string manifest_digest = 10;
+  // SHA256 полного исходного report, показанного администратору.
+  string vulnerability_evidence_sha256 = 11;
+  // SHA256 полной safe projection, не hash видимой страницы.
+  string projection_sha256 = 12;
+  // Exact original REJECTED receipt pin.
+  string prior_admission_receipt_sha256 = 13;
+  // Exact original immutable evidence manifest.
+  string prior_evidence_manifest_digest = 14;
+  // Текущая pinned baseline policy revision.
+  uint64 policy_revision = 15;
+  // Текущий exact baseline policy digest.
+  string policy_sha256 = 16;
+  // Только human OWNER/ADMIN explicit ACCEPT_RISK или REJECT_RISK.
+  ImageAdmissionRiskAction action = 17;
+  // Обязательная bounded причина для audit, не shell.
+  string reason = 18;
+  // Owner-resolved PROJECT locator, проверяется до OCC/replay.
+  string project_ref = 19;
+}
+// Атомарный owner decision receipt и свежая projection.
+message DecideOrganizationImageAdmissionRiskResponse {
+  // Authoritative append-only decision receipt.
+  ImageAdmissionRiskDecision decision = 1;
+  // Новая PENDING attempt только при ACCEPT_RISK.
+  ImageAdmissionAttempt admission_attempt = 2;
+  // Свежая owner projection; approval не означает ACCEPTED.
+  ImageArtifact artifact = 3;
+}
+// PROJECT decision с тем же human authority/transaction contract.
+message DecideImageAdmissionRiskResponse {
+  // Authoritative append-only decision receipt.
+  ImageAdmissionRiskDecision decision = 1;
+  // Новая PENDING attempt только при ACCEPT_RISK.
+  ImageAdmissionAttempt admission_attempt = 2;
+  // Свежая owner projection; approval не означает ACCEPTED.
+  ImageArtifact artifact = 3;
 }

@@ -290,6 +290,38 @@ describe("browser-session realtime multiplexer", () => {
     vi.unstubAllGlobals();
   });
 
+  it("закрытие одного чата сохраняет подписку соседнего экрана", async () => {
+    const store = useRealtimeStore();
+    store.openRun("run_realtime01");
+    const releaseFirst = store.acquireRun("run_realtime01");
+    const releaseSecond = store.acquireRun("run_realtime01");
+    await flushProcessing();
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    releaseFirst();
+    releaseFirst();
+    store.closeRun("run_realtime01");
+    expect(store.state.run_realtime01).toBeDefined();
+    expect(socketAt(0).readyState).toBe(FakeWebSocket.CONNECTING);
+    releaseSecond();
+    expect(store.state.run_realtime01).toBeUndefined();
+    // CONNECTING закрывается штатным lifecycle после open, без browser warning.
+    socketAt(0).open();
+    expect(socketAt(0).readyState).toBe(FakeWebSocket.CLOSED);
+  });
+
+  it("поздний release прежней сессии не закрывает новую подписку", async () => {
+    const store = useRealtimeStore();
+    const releaseOld = store.acquireRun("run_realtime01");
+    await flushProcessing();
+    store.closeAll();
+    const releaseNew = store.acquireRun("run_realtime01");
+    await flushProcessing();
+    releaseOld();
+    expect(store.state.run_realtime01).toBeDefined();
+    releaseNew();
+    expect(store.state.run_realtime01).toBeUndefined();
+  });
+
   it("открывает один session socket и возобновляет platform с двумя run", async () => {
     const store = useRealtimeStore();
     store.openPlatform();

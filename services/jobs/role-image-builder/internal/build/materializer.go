@@ -102,9 +102,14 @@ func (materializer *Materializer) Materialize(
 	input *controlplanev1.RoleImageBuildInput,
 	beforeContextValidation func() error,
 ) (string, error) {
-	if input == nil || !filepath.IsAbs(root) || filepath.Clean(root) != root ||
-		!materializer.allowedRef(input.GetContextRef()) {
-		return "INPUT_FETCH_REJECTED", ErrMaterialization
+	if input == nil {
+		return "INPUT_FETCH_REJECTED", rejectInput(inputReasonOwnerScope, ErrMaterialization)
+	}
+	if !filepath.IsAbs(root) || filepath.Clean(root) != root {
+		return "INPUT_FETCH_REJECTED", rejectInput(inputReasonWorkspaceCreate, ErrMaterialization)
+	}
+	if !materializer.allowedRef(input.GetContextRef()) {
+		return "INPUT_FETCH_REJECTED", rejectInput(inputReasonContextRef, ErrMaterialization)
 	}
 	archive := filepath.Join(root, "context.tar")
 	if err := materializer.downloadExact(ctx, input.GetContextRef(), archive, input.GetContextSha256(), maximumContextBytes); err != nil {
@@ -128,8 +133,11 @@ func (materializer *Materializer) Materialize(
 	}
 	for _, item := range input.GetPackages() {
 		digest := strings.TrimPrefix(item.GetDigest(), "sha256:")
-		if !materializer.allowedRef(item.GetSourceRef()) || !plainSHA256(digest) {
-			return "INPUT_FETCH_REJECTED", ErrMaterialization
+		if !materializer.allowedRef(item.GetSourceRef()) {
+			return "INPUT_FETCH_REJECTED", rejectInput(inputReasonContextRef, ErrMaterialization)
+		}
+		if !plainSHA256(digest) {
+			return "INPUT_FETCH_REJECTED", rejectInput(inputReasonSHASchema, ErrMaterialization)
 		}
 		destination := filepath.Join(contextDirectory, ".kodex", "packages", digest)
 		if err := materializer.downloadExact(ctx, item.GetSourceRef(), destination, digest, maximumFileBytes); err != nil {
@@ -137,8 +145,11 @@ func (materializer *Materializer) Materialize(
 		}
 	}
 	for _, item := range input.GetTools() {
-		if !materializer.allowedRef(item.GetSourceRef()) || !plainSHA256(item.GetSha256()) {
-			return "INPUT_FETCH_REJECTED", ErrMaterialization
+		if !materializer.allowedRef(item.GetSourceRef()) {
+			return "INPUT_FETCH_REJECTED", rejectInput(inputReasonContextRef, ErrMaterialization)
+		}
+		if !plainSHA256(item.GetSha256()) {
+			return "INPUT_FETCH_REJECTED", rejectInput(inputReasonSHASchema, ErrMaterialization)
 		}
 		destination := filepath.Join(contextDirectory, ".kodex", "tools", item.GetSha256())
 		if err := materializer.downloadExact(ctx, item.GetSourceRef(), destination, item.GetSha256(), maximumFileBytes); err != nil {

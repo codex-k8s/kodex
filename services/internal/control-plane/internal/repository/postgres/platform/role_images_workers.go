@@ -33,10 +33,17 @@ type buildExpiryReceipt struct {
 }
 
 type admissionClaimReceipt struct {
-	Artifact            entity.ImageArtifact
-	Fence               uint64
-	AuthorityGeneration uint64
-	ClaimExpiresAt      time.Time
+	AdmissionAttemptRef                                        string
+	AdmissionAttempt                                           uint32
+	RiskAcceptanceJSON, RiskAcceptanceSHA256                   string
+	SourceAdmissionReceiptSHA256, SourceEvidenceManifestDigest string
+	SourceAdmissionRevision                                    uint64
+	Expired                                                    []entity.RoleImageAdmissionFailure
+	Rejected                                                   []entity.ImageArtifact
+	Artifact                                                   entity.ImageArtifact
+	Fence                                                      uint64
+	AuthorityGeneration                                        uint64
+	ClaimExpiresAt                                             time.Time
 }
 
 type promotionClaimReceipt struct {

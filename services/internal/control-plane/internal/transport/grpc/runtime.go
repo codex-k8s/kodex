@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +14,9 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -221,13 +225,32 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 	}
 	if grants, ok := values["integrationGrants"].([]map[string]string); ok {
 		for _, grant := range grants {
+			grantVersion, _ := strconv.ParseInt(grant["grantVersion"], 10, 64)
+			connectionVersion, _ := strconv.ParseInt(grant["connectionVersion"], 10, 64)
 			result.IntegrationGrants = append(result.IntegrationGrants, &controlplanev1.IntegrationGrant{
-				Ref: grant["ref"], ConnectionRef: grant["connectionRef"], DefinitionKey: grant["definitionKey"],
+				Version: grantVersion, ConnectionVersion: connectionVersion,
+				ApprovalPolicy: controlplanev1.IntegrationApprovalPolicy(controlplanev1.IntegrationApprovalPolicy_value["INTEGRATION_APPROVAL_POLICY_"+grant["approvalPolicy"]]),
+				Ref:            grant["ref"], ConnectionRef: grant["connectionRef"], DefinitionKey: grant["definitionKey"],
 				DefinitionVersion: grant["definitionVersion"], DefinitionDigest: grant["definitionDigest"],
 				ConnectionName: grant["connectionName"], CapabilityKey: grant["capabilityKey"],
 				CapabilityName: grant["capabilityName"], CapabilityDescription: grant["capabilityDescription"],
 				Operation: grant["operation"], InputSchema: grant["inputSchema"], InputSchemaSha256: grant["inputSchemaSha256"],
 				Risk: grant["risk"], Enabled: true,
+			})
+		}
+	}
+	if profiles, ok := values["managedMCPProfiles"].([]runtimecontract.ManagedMCPProfile); ok {
+		for _, item := range profiles {
+			health := item.Health
+			result.ManagedMcpProfiles = append(result.ManagedMcpProfiles, &controlplanev1.ManagedMCPProfile{
+				Provider: item.Provider, Version: uint32(item.Version), Namespace: item.Namespace, Required: item.Required,
+				ScopeKind: controlplanev1.ManagedMCPScopeKind(controlplanev1.ManagedMCPScopeKind_value["MANAGED_MCP_SCOPE_KIND_"+item.ScopeKind]),
+				ScopeRef:  item.ScopeRef, ResolveGrantRef: item.ResolveGrantRef, QueryGrantRef: item.QueryGrantRef, Digest: item.Digest,
+				Health: &controlplanev1.ManagedMCPHealthProof{TestRef: health.TestRef, Generation: health.Generation,
+					ConnectionRef: health.ConnectionRef, ConnectionVersion: health.ConnectionVersion, ConfigurationSha256: health.ConfigurationSHA256,
+					CredentialRevisionRef: health.CredentialRevisionRef, CredentialRevision: health.CredentialRevision, CredentialSha256: health.CredentialSHA256,
+					DefinitionKey: health.DefinitionKey, DefinitionVersion: health.DefinitionVersion, DefinitionDigest: health.DefinitionDigest,
+					CheckedAt: timestamppb.New(health.CheckedAt), Probe: health.Probe},
 			})
 		}
 	}
@@ -340,17 +363,48 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 		return nil, err
 	}
 	if catalog := request.GetAssistantConfigurationCatalog(); catalog != nil {
-		if request.GetQuery() != "" || request.GetIntegrationDefinitionCatalog() || request.GetDefinitionQuery() != "" || request.GetDefinitionOffset() != 0 {
+		if len(request.ProtoReflect().GetUnknown()) != 0 || len(catalog.ProtoReflect().GetUnknown()) != 0 || request.GetQuery() != "" || request.GetIntegrationDefinitionCatalog() || request.GetDefinitionQuery() != "" || request.GetDefinitionOffset() != 0 {
 			return nil, transportError(errs.ErrInvalid)
 		}
 		kind := strings.TrimPrefix(catalog.GetKind().String(), "ASSISTANT_CONFIGURATION_CATALOG_KIND_")
 		result, err := server.service.ListAssistantConfigurationCatalog(ctx, p, request.GetLeaseRef(), request.GetFence(), request.GetGeneration(), entity.AssistantConfigurationCatalogRequest{Kind: kind, AssistantRef: catalog.GetAssistantRef(), Query: catalog.GetQuery(), Offset: catalog.GetOffset(), AccountRef: catalog.GetAccountRef(), RuntimeProfileRef: catalog.GetRuntimeProfileRef()})
 		if err != nil {
-			return nil, transportError(err)
+			return nil, assistantCatalogTransportError(catalog.GetKind(), err)
 		}
 		response := &controlplanev1.AssistantConfigurationCatalogResponse{Kind: catalog.GetKind(), AssistantRef: result.AssistantRef, ScopeKind: result.ScopeKind, OrganizationRef: result.OrganizationRef, ProjectRef: result.ProjectRef, AssistantProfileRef: result.AssistantProfileRef, NextOffset: result.NextOffset}
+		if recipient := result.RecipientIntegrationGrants; recipient != nil {
+			response.RecipientIntegrationGrants = &controlplanev1.AssistantRecipientIntegrationGrantCatalog{RecipientKind: recipient.RecipientKind, RecipientRef: recipient.RecipientRef, RecipientName: recipient.RecipientName, RecipientVersion: recipient.RecipientVersion, ProjectVersion: recipient.ProjectVersion}
+			for _, entry := range recipient.Entries {
+				candidate, err := castAssistantIntegrationGrantCandidate(entry.Grant.Candidate)
+				if err != nil {
+					return nil, transportError(err)
+				}
+				response.RecipientIntegrationGrants.Entries = append(response.RecipientIntegrationGrants.Entries, &controlplanev1.AssistantRecipientIntegrationGrantCatalogEntry{
+					Grant: &controlplanev1.ProjectAssistantIntegrationGrantCatalogEntry{ConnectionRef: entry.Grant.ConnectionRef, ConnectionName: entry.Grant.ConnectionName, ConnectionVersion: entry.Grant.ConnectionVersion, DefinitionVersion: entry.Grant.DefinitionVersion, DefinitionDigest: entry.Grant.DefinitionDigest, Candidate: candidate}, Pins: castIntegrationCandidatePins(entry.Pins)})
+			}
+		}
+		if result.CurrentConfiguration != nil {
+			response.CurrentConfiguration, err = castAssistantCurrentConfiguration(*result.CurrentConfiguration)
+			if err != nil {
+				return nil, assistantCatalogTransportError(catalog.GetKind(), errs.WithAssistantCurrentConfigurationStage(err, errs.AssistantCurrentTemplateProjection))
+			}
+		}
 		for _, entry := range result.Entries {
-			response.Entries = append(response.Entries, &controlplanev1.AssistantConfigurationCatalogEntry{Ref: entry.Ref, Name: entry.Name, Provider: entry.Provider, Model: entry.Model, Version: entry.Version, RecipeGeneration: entry.RecipeGeneration, Reference: entry.Reference, ManifestDigest: entry.ManifestDigest, CatalogRevision: entry.CatalogRevision, CatalogDigest: entry.CatalogDigest, ReasoningEfforts: entry.ReasoningEfforts, DefaultReasoningEffort: entry.DefaultReasoningEffort, ScopeKind: entry.ScopeKind, OrganizationRef: entry.OrganizationRef, ProjectRef: entry.ProjectRef, AssistantProfileRef: entry.AssistantProfileRef, RuntimeEnvironmentRef: entry.RuntimeEnvironmentRef})
+			item := &controlplanev1.AssistantConfigurationCatalogEntry{Ref: entry.Ref, Name: entry.Name, Provider: entry.Provider, Model: entry.Model, Version: entry.Version, RecipeGeneration: entry.RecipeGeneration, Reference: entry.Reference, ManifestDigest: entry.ManifestDigest, CatalogRevision: entry.CatalogRevision, CatalogDigest: entry.CatalogDigest, ReasoningEfforts: entry.ReasoningEfforts, DefaultReasoningEffort: entry.DefaultReasoningEffort, ScopeKind: entry.ScopeKind, OrganizationRef: entry.OrganizationRef, ProjectRef: entry.ProjectRef, AssistantProfileRef: entry.AssistantProfileRef, RuntimeEnvironmentRef: entry.RuntimeEnvironmentRef,
+				AdmissionVerdict: entry.AdmissionVerdict, PromotionState: entry.PromotionState, EnvironmentKey: entry.EnvironmentKey}
+			if kind == "IMAGE_ARTIFACTS" {
+				item.VerifiedToolInventory = castImageToolInventory(entry.ToolInventory, entry.ToolInventorySHA256)
+			}
+			response.Entries = append(response.Entries, item)
+		}
+		for _, entry := range result.ProjectIntegrationGrants {
+			candidate, err := castAssistantIntegrationGrantCandidate(entry.Candidate)
+			if err != nil {
+				return nil, transportError(err)
+			}
+			response.ProjectIntegrationGrants = append(response.ProjectIntegrationGrants, &controlplanev1.ProjectAssistantIntegrationGrantCatalogEntry{
+				ConnectionRef: entry.ConnectionRef, ConnectionName: entry.ConnectionName, ConnectionVersion: entry.ConnectionVersion,
+				DefinitionVersion: entry.DefinitionVersion, DefinitionDigest: entry.DefinitionDigest, Candidate: candidate})
 		}
 		return &controlplanev1.SearchAssistantResourcesResponse{AssistantConfigurationCatalog: response}, nil
 	}
@@ -388,6 +442,32 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 	return response, nil
 }
 
+// Только own-read получает закрытый этап; остальные RPC и коды не меняются.
+func assistantCatalogTransportError(kind controlplanev1.AssistantConfigurationCatalogKind, err error) error {
+	result := transportError(err)
+	if kind != controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_CURRENT_CONFIGURATION || status.Code(result) != codes.Unavailable {
+		return result
+	}
+	return statusErrorWithReason(codes.Unavailable, status.Convert(result).Message(), errs.AssistantCurrentConfigurationStage(err))
+}
+
+func assistantPlanTransportError(err error) error {
+	result := transportError(err)
+	stage, category, index, ok := errs.AssistantPlanDiagnostic(err)
+	if !ok || status.Code(result) != codes.Aborted {
+		return result
+	}
+	metadata := map[string]string{"category": category}
+	if index > 0 {
+		metadata["operation_index"] = strconv.Itoa(index)
+	}
+	withDetails, detailErr := status.Convert(result).WithDetails(&errdetails.ErrorInfo{Domain: controlPlaneErrorDomain, Reason: stage, Metadata: metadata})
+	if detailErr != nil {
+		return result
+	}
+	return withDetails.Err()
+}
+
 func (server *Server) RenewExecution(ctx context.Context, request *controlplanev1.RenewExecutionRequest) (*controlplanev1.RenewExecutionResponse, error) {
 	payload := command.LeaseInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration()}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_RenewExecution_FullMethodName, command.RenewExecution, nil, payload)
@@ -399,6 +479,9 @@ func (server *Server) RenewExecution(ctx context.Context, request *controlplanev
 
 func (server *Server) ReportExecutionProgress(ctx context.Context, request *controlplanev1.ReportExecutionProgressRequest) (*controlplanev1.ReportExecutionProgressResponse, error) {
 	payload := command.LeaseInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(), Progress: request.GetProgress()}
+	if message := request.GetMessage(); message != nil {
+		payload.Message = &entity.RunMessage{Ref: message.GetRef(), Phase: enumSuffix(message.GetPhase(), "RUN_MESSAGE_PHASE_"), Revision: message.GetRevision(), Text: message.GetText(), Source: entity.MessageSource{Origin: "ORDINARY"}}
+	}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_ReportExecutionProgress_FullMethodName, command.ReportExecutionProgress, nil, payload)
 	if err != nil {
 		return nil, err
@@ -503,7 +586,7 @@ func (server *Server) RecordRunToolCall(ctx context.Context, request *controlpla
 	payload := command.RunToolCallInput{LeaseRef: request.GetLeaseRef(), Fence: request.GetFence(), Generation: request.GetGeneration(),
 		CallRef: request.GetCallRef(), Tool: request.GetTool(), SafeParameters: asMap(request.GetSafeParameters()),
 		CapabilityRef: request.GetCapabilityRef(), GrantRef: request.GetGrantRef(), State: enumSuffix(request.GetState(), "RUN_TOOL_CALL_STATE_"),
-		DurationMS: request.GetDurationMs(), SafeResult: request.GetSafeResult()}
+		DurationMS: request.GetDurationMs(), SafeResult: request.GetSafeResult(), Revision: request.GetRevision()}
 	result, err := execute(ctx, server.service, controlplanev1.RuntimeWorkService_RecordRunToolCall_FullMethodName, command.RecordRunToolCall, request.GetMutation(), payload)
 	if err != nil {
 		return nil, err
@@ -740,6 +823,7 @@ func CastIntegrationInvocationClaim(item map[string]any) *controlplanev1.Integra
 		DefinitionVersion: mapString(item, "definitionVersion"), DefinitionDigest: mapString(item, "definitionDigest"),
 		Operation: mapString(item, "operation"), Risk: integrationRisk(mapString(item, "risk")),
 		ApprovalPolicy: integrationApprovalPolicy(mapString(item, "approvalPolicy")),
+		GrantRef:       mapString(item, "grantRef"), GrantVersion: mapInt64(item, "grantVersion"),
 		ResourceScope: &controlplanev1.IntegrationResourceScope{
 			Kind: integrationResourceKind(mapString(item, "resourceKind")), Values: resourceScope,
 			Digest: mapString(item, "resourceScopeDigest"),

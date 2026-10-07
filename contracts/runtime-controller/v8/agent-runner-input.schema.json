@@ -148,6 +148,7 @@
       "maxItems": 256,
       "items": {"$ref": "#/$defs/integration_grant"}
     },
+    "managed_mcp_profiles": {"type": "array", "maxItems": 1, "items": {"$ref": "#/$defs/managed_mcp_profile"}},
     "assistant_context": {"$ref": "#/$defs/assistant_context"},
     "attachment_set_ref": {"$ref": "#/$defs/opaque_ref"},
     "attachment_set_manifest_digest": {"$ref": "#/$defs/sha256"},
@@ -481,6 +482,9 @@
       "additionalProperties": false,
       "required": [
         "ref",
+        "grant_version",
+        "connection_version",
+        "approval_policy",
         "connection_ref",
         "definition_key",
         "connection_name",
@@ -496,6 +500,9 @@
       ],
       "properties": {
         "ref": {"$ref": "#/$defs/opaque_ref"},
+        "grant_version": {"type": "integer", "minimum": 1},
+        "connection_version": {"type": "integer", "minimum": 1},
+        "approval_policy": {"enum": ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"]},
         "connection_ref": {"$ref": "#/$defs/opaque_ref"},
         "definition_key": {"type": "string", "minLength": 1, "maxLength": 128},
         "connection_name": {"type": "string", "minLength": 1, "maxLength": 160},
@@ -508,6 +515,39 @@
         "input_schema": {"type": "string", "minLength": 1, "maxLength": 65536},
         "input_schema_sha256": {"$ref": "#/$defs/sha256"},
         "risk": {"enum": ["READ", "WRITE", "SENSITIVE", "DESTRUCTIVE"]}
+      }
+    },
+    "managed_mcp_profile": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "version", "namespace", "required", "scope_kind", "scope_ref", "resolve_grant_ref", "query_grant_ref", "digest", "health"],
+      "properties": {
+        "provider": {"const": "CONTEXT7"}, "version": {"const": 1},
+        "namespace": {"const": "kodex"}, "required": {"const": true},
+        "scope_kind": {"enum": ["SYSTEM", "PROJECT", "AGENT"]},
+        "scope_ref": {"$ref": "#/$defs/opaque_ref"},
+        "resolve_grant_ref": {"$ref": "#/$defs/opaque_ref"},
+        "query_grant_ref": {"$ref": "#/$defs/opaque_ref"},
+        "digest": {"$ref": "#/$defs/sha256"},
+        "health": {"$ref": "#/$defs/managed_mcp_health"}
+      }
+    },
+    "managed_mcp_health": {
+      "type": "object", "additionalProperties": false,
+      "required": ["test_ref", "generation", "connection_ref", "connection_version", "configuration_sha256", "credential_revision_ref", "credential_revision", "credential_sha256", "definition_key", "definition_version", "definition_digest", "checked_at", "probe"],
+      "properties": {
+        "test_ref": {"$ref": "#/$defs/opaque_ref"},
+        "generation": {"type": "integer", "minimum": 1},
+        "connection_ref": {"$ref": "#/$defs/opaque_ref"},
+        "connection_version": {"type": "integer", "minimum": 1},
+        "configuration_sha256": {"$ref": "#/$defs/sha256"},
+        "credential_revision_ref": {"$ref": "#/$defs/opaque_ref"},
+        "credential_revision": {"type": "integer", "minimum": 1},
+        "credential_sha256": {"$ref": "#/$defs/sha256"},
+        "definition_key": {"const": "context7"},
+        "definition_version": {"type": "string", "pattern": "^[1-9][0-9]*\\.[0-9]+\\.[0-9]+$"},
+        "definition_digest": {"$ref": "#/$defs/sha256"},
+        "checked_at": {"type": "string", "format": "date-time"},
+        "probe": {"const": "CONTEXT7_INITIALIZE_TOOLS_LIST"}
       }
     },
     "assistant_context": {
@@ -681,7 +721,16 @@
         "memory_request_mib": {"type": "integer", "minimum": 128, "maximum": 32768},
         "memory_limit_mib": {"type": "integer", "minimum": 128, "maximum": 65536},
         "ephemeral_storage_request_mib": {"type": "integer", "minimum": 256, "maximum": 20480},
-        "ephemeral_storage_limit_mib": {"type": "integer", "minimum": 256, "maximum": 102400}
+        "ephemeral_storage_limit_mib": {"type": "integer", "minimum": 256, "maximum": 102400},
+        "workspace_limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["max_bytes", "max_files"],
+          "properties": {
+            "max_bytes": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+            "max_files": {"type": "integer", "minimum": 1, "maximum": 10000}
+          }
+        }
       }
     },
     "runtime_volume": {
@@ -808,8 +857,8 @@
         "revision": {"type": "integer", "minimum": 1},
         "root": {"const": "/workspace"},
         "rules": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"$ref": "#/$defs/workspace_rule"}},
-        "maximum_writable_bytes": {"type": "integer", "minimum": 1},
-        "maximum_file_count": {"type": "integer", "minimum": 1},
+        "maximum_writable_bytes": {"type": "integer", "minimum": 1, "maximum": 1073741824},
+        "maximum_file_count": {"type": "integer", "minimum": 1, "maximum": 10000},
         "digest": {"$ref": "#/$defs/sha256"},
         "denial_reasons": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"enum": ["READ_ONLY", "QUOTA_EXCEEDED", "PATH_OUTSIDE_WORKSPACE", "RUNTIME_IO_ERROR"]}}
       }

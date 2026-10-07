@@ -12,6 +12,7 @@ const props = defineProps<{
   imageSelected: boolean;
   disabled: boolean;
   loading?: boolean;
+  inventoryAvailable: boolean;
 }>();
 const fieldPrefix = `environment-tools-${useId()}`;
 const expandedTools = reactive(new Map<string, boolean>());
@@ -41,7 +42,7 @@ function toggleDetails(command: string, event: Event): void {
 }
 
 function toggle(tool: RoleImageArtifactTool): void {
-  if (props.disabled) return;
+  if (props.disabled || !props.inventoryAvailable) return;
   const existing = selected(tool.name);
   emit(
     "update:tools",
@@ -101,7 +102,20 @@ function update(
     <div v-if="loading" class="secondary-text" role="status">
       {{ $t("common.loading") }}
     </div>
-    <div v-else-if="catalog.length" class="tool-catalog">
+    <div
+      v-else-if="imageSelected && inventoryAvailable === false"
+      class="secondary-text"
+      role="status"
+    >
+      {{ $t("runtime.imageInventoryUnavailable") }}
+    </div>
+    <div
+      v-else-if="catalog.length"
+      class="tool-catalog"
+      role="region"
+      :aria-label="$t('runtime.verifiedTools')"
+      tabindex="0"
+    >
       <article
         v-for="(tool, index) in catalog"
         :key="tool.name"
@@ -123,34 +137,37 @@ function update(
             <small>{{ tool.version }}</small>
           </span>
         </label>
-        <div v-if="selected(tool.name)" class="tool-fields">
-          <label class="field">
-            <span>{{ $t("runtime.toolDisplayName") }}</span>
-            <input
-              :value="selected(tool.name)?.name"
-              :id="`${fieldPrefix}-${index}-name`"
-              :name="`${fieldPrefix}-${index}-name`"
-              maxlength="160"
-              :disabled="disabled"
-              @input="update(tool.name, 'name', $event)"
-            />
-          </label>
-          <label class="field">
-            <span>{{ $t("runtime.toolCommand") }}</span>
-            <input
-              :value="tool.name"
-              :id="`${fieldPrefix}-${index}-command`"
-              :name="`${fieldPrefix}-${index}-command`"
-              readonly
-            />
-          </label>
-          <details
-            class="tool-details field--wide"
-            :open="expandedTools.get(tool.name)"
-            @toggle="toggleDetails(tool.name, $event)"
-          >
-            <summary>{{ $t("runtime.toolDetails") }}</summary>
+        <details
+          v-if="selected(tool.name)"
+          class="tool-details"
+          :open="expandedTools.get(tool.name)"
+          @toggle="toggleDetails(tool.name, $event)"
+        >
+          <summary :aria-label="`${$t('common.edit')}: ${tool.name}`">
+            {{ $t("common.edit") }}
+          </summary>
+          <div class="tool-fields">
             <label class="field">
+              <span>{{ $t("runtime.toolDisplayName") }}</span>
+              <input
+                :value="selected(tool.name)?.name"
+                :id="`${fieldPrefix}-${index}-name`"
+                :name="`${fieldPrefix}-${index}-name`"
+                maxlength="160"
+                :disabled="disabled"
+                @input="update(tool.name, 'name', $event)"
+              />
+            </label>
+            <label class="field">
+              <span>{{ $t("runtime.toolCommand") }}</span>
+              <input
+                :value="tool.name"
+                :id="`${fieldPrefix}-${index}-command`"
+                :name="`${fieldPrefix}-${index}-command`"
+                readonly
+              />
+            </label>
+            <label class="field field--wide">
               <span>{{ $t("common.description") }}</span>
               <VoiceTextarea
                 class="tool-metadata-editor"
@@ -161,7 +178,7 @@ function update(
                 @input="update(tool.name, 'description', $event)"
               />
             </label>
-            <label class="field">
+            <label class="field field--wide">
               <span>{{ $t("runtime.toolUsageHint") }}</span>
               <VoiceTextarea
                 class="tool-metadata-editor"
@@ -171,8 +188,8 @@ function update(
                 @input="update(tool.name, 'usageHint', $event)"
               />
             </label>
-          </details>
-        </div>
+          </div>
+        </details>
       </article>
     </div>
     <p v-else class="secondary-text">
@@ -190,6 +207,14 @@ function update(
 .tool-catalog {
   display: grid;
   gap: 10px;
+}
+.tool-catalog {
+  gap: 6px;
+  max-height: 360px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 2px;
 }
 .tool-heading {
   display: flex;
@@ -209,8 +234,11 @@ function update(
 }
 .tool-option {
   display: grid;
-  gap: 12px;
-  padding: 13px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 48px;
+  gap: 8px 12px;
+  padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
@@ -220,16 +248,24 @@ function update(
   align-items: center;
   gap: 10px;
   cursor: pointer;
+  min-width: 0;
+}
+.tool-option > label > input {
+  flex-shrink: 0;
 }
 .tool-option > label > span {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .tool-fields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-  padding-left: 26px;
+  margin-top: 10px;
 }
 .tool-fields .field--wide {
   grid-column: 1 / -1;
@@ -237,15 +273,20 @@ function update(
 .tool-details > summary {
   cursor: pointer;
   color: var(--text-secondary);
+  line-height: 32px;
 }
-.tool-details > .field {
-  margin-top: 10px;
+.tool-details[open] {
+  grid-column: 1 / -1;
+  min-width: 0;
 }
 :deep(textarea.tool-metadata-editor) {
   min-height: 72px;
   height: 72px;
 }
 @media (max-width: 700px) {
+  .tool-heading {
+    flex-wrap: wrap;
+  }
   .tool-fields {
     grid-template-columns: 1fr;
   }

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	repository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
@@ -935,7 +936,7 @@ func (service *Service) ListAssistantConfigurationCatalog(ctx context.Context, p
 	}
 	validKind := false
 	switch input.Kind {
-	case "ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS":
+	case "ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS", "CURRENT_CONFIGURATION", "PROJECT_INTEGRATION_GRANTS", "RECIPIENT_INTEGRATION_GRANTS":
 		validKind = true
 	}
 	if !validKind || len(input.AssistantRef) < 8 || len(input.AssistantRef) > 128 || len([]rune(input.Query)) > 80 || input.Offset < 0 || input.Offset > 10000 ||
@@ -944,6 +945,9 @@ func (service *Service) ListAssistantConfigurationCatalog(ctx context.Context, p
 		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrInvalid
 	}
 	input.Query = strings.TrimSpace(input.Query)
+	if input.Kind == "CURRENT_CONFIGURATION" && (input.Query != "" || input.Offset != 0) {
+		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrInvalid
+	}
 	return service.repository.ListAssistantConfigurationCatalog(ctx, p, leaseRef, fence, generation, input)
 }
 func (service *Service) OpenExecutionArtifactTransfer(ctx context.Context, p value.Principal, leaseRef, fence string, generation int64, artifactRef string) (repository.ArtifactDownload, error) {
@@ -1116,6 +1120,9 @@ func (service *Service) SimulateAccess(ctx context.Context, p value.Principal, i
 }
 
 func (service *Service) Execute(ctx context.Context, input command.Command) (command.Result, error) {
+	if input.Kind == command.LaunchWorkflowExecution && (input.Principal.CallerWorkload != "runtime-controller" || input.Principal.Permission != "platform.runtime.execution.workflow.launch") {
+		return command.Result{}, errs.ErrForbidden
+	}
 	principal, err := service.principal(ctx, input.Principal)
 	if err != nil {
 		return command.Result{}, err
@@ -1127,6 +1134,12 @@ func (service *Service) Execute(ctx context.Context, input command.Command) (com
 func (service *Service) executeResolved(ctx context.Context, input command.Command) (command.Result, error) {
 	if !knownCommand(input.Kind) || input.Payload == nil {
 		return command.Result{}, errs.ErrInvalid
+	}
+	if input.Kind == command.AddAssistantTurn {
+		payload, ok := input.Payload.(command.AssistantTurnInput)
+		if !ok || !runtimecontract.ValidAssistantTurnContent(payload.Content) {
+			return command.Result{}, errs.ErrInvalid
+		}
 	}
 	input.Mutation.Operation = "controlplane." + strings.ToLower(string(input.Kind))
 	intentPayload := input.Payload
@@ -1379,13 +1392,13 @@ func knownCommand(kind command.Kind) bool {
 		command.RefreshProviderAuthorization, command.VerifyProviderAuthorization, command.CancelProviderAccountQueuedWork, command.RevokeProviderAccount, command.DeleteProviderAccount, command.SetProviderAccountEnabled, command.SetProviderAccountConcurrency,
 		command.CreateConnection, command.UpdateConnection, command.DeleteConnection,
 		command.ConfigureConnectionCredential, command.ConfigureEmailCredential,
-		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant,
+		command.TestConnection, command.SetConnectionEnabled, command.ChangeIntegrationGrant, command.ChangeSystemAssistantIntegrationGrant, command.ChangeProjectAssistantIntegrationGrant,
 		command.CreateProjectAssistant, command.CreateAssistantConversation, command.UpdateAssistantConversation, command.ArchiveAssistantConversation, command.RestoreAssistantConversation, command.PurgeAssistantConversation, command.MoveAssistantConversationToProject, command.AddAssistantTurn, command.CancelAssistantTurn,
 		command.UpdateAssistantPlan, command.ValidateAssistantPlan, command.ApplyAssistantPlan, command.RejectAssistantPlan,
 		command.UpdateAssistantInstructions, command.RecoverAssistant, command.ClaimExecution,
 		command.RenewExecution, command.ReportExecutionProgress, command.CommitProviderCredentialRefresh,
 		command.CompleteExecution,
-		command.DelegateExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
+		command.DelegateExecution, command.LaunchWorkflowExecution, command.ProposeAssistantPlan, command.ProposeAssistantMetadata,
 		command.ProposeRunMetadata, command.RecordRunToolCall,
 		command.CompleteSessionSnapshot, command.CompleteSessionRestore,
 		command.CompleteSessionPVCDeletion, command.CompleteSessionObjectDeletion,

@@ -4,8 +4,10 @@ import type {
   AssistantPlanOperation,
   AssistantPlanOperationInput,
   AssistantPlanTarget,
+  AssistantTurn,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
+import { projectAssistantConnectionPlanOwner } from "./project-connection-plan";
 
 function assistantAppliedResourceRef(
   plan: AssistantPlan,
@@ -384,6 +386,16 @@ export function assistantIntegrationConnectionTarget(
   plan: AssistantPlan,
   operationRef: string,
 ): { connectionRef: string } | undefined {
+  const prepared = plan.operations.find((item) => item.ref === operationRef);
+  const projectPreparedRef =
+    prepared && projectAssistantConnectionPlanOwner(prepared)
+      ? assistantAppliedResourceRef(
+          plan,
+          operationRef,
+          "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION",
+          "PROJECT_ASSISTANT",
+        )
+      : undefined;
   const createdRef = assistantAppliedResourceRef(
     plan,
     operationRef,
@@ -404,6 +416,7 @@ export function assistantIntegrationConnectionTarget(
   );
   const operation = plan.operations.find((item) => item.ref === operationRef);
   const connectionRef =
+    projectPreparedRef ||
     createdRef ||
     (updatedRef === operation?.target.ref ? updatedRef : undefined) ||
     (testedRef === operation?.target.ref ? testedRef : undefined);
@@ -527,16 +540,36 @@ export function assistantLaunchedRunTarget(
     : undefined;
 }
 
+export function assistantActiveUserTurn(
+  conversation?: AssistantConversation,
+): AssistantTurn | undefined {
+  if (conversation?.state !== "ACTIVE") return undefined;
+  let running: AssistantTurn | undefined;
+  let queued: AssistantTurn | undefined;
+  for (const turn of conversation.turns) {
+    if (turn.role !== "USER") continue;
+    if (
+      turn.state === "RUNNING" &&
+      (!running || turn.sequence < running.sequence)
+    )
+      running = turn;
+    if (turn.state === "QUEUED" && (!queued || turn.sequence < queued.sequence))
+      queued = turn;
+  }
+  return running ?? queued;
+}
+
 export function assistantAwaitingReply(
   conversation?: AssistantConversation,
 ): boolean {
-  const latest = conversation?.turns.at(-1);
-  return Boolean(
-    latest &&
-    (latest.state === "QUEUED" ||
-      latest.state === "RUNNING" ||
-      (latest.role === "USER" && latest.state === "COMPLETED")),
+  if (conversation?.state !== "ACTIVE") return false;
+  if (assistantActiveUserTurn(conversation)) return true;
+  const latest = conversation.turns.reduce<AssistantTurn | undefined>(
+    (current, turn) =>
+      !current || turn.sequence > current.sequence ? turn : current,
+    undefined,
   );
+  return latest?.role === "USER" && latest.state === "COMPLETED";
 }
 
 export interface EditablePlanOperation {
@@ -557,6 +590,8 @@ export type FriendlyPlanOperationType =
   | "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS"
   | "CHANGE_CAPABILITY"
   | "CHANGE_INTEGRATION_GRANT"
+  | "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"
+  | "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT"
   | "CREATE_WORKFLOW"
   | "UPDATE_WORKFLOW"
   | "PREPARE_RUNTIME_ENVIRONMENT_REVISION"
@@ -570,6 +605,7 @@ export type FriendlyPlanOperationType =
   | "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
   | "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
   | "CREATE_INTEGRATION_CONNECTION"
+  | "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION"
   | "UPDATE_INTEGRATION_CONNECTION"
   | "TEST_INTEGRATION_CONNECTION"
   | "PUBLISH_INTEGRATION_DEFINITION"
@@ -580,6 +616,27 @@ export type FriendlyPlanOperationType =
 export function friendlyPlanOperationType(
   operation: EditablePlanOperation,
 ): FriendlyPlanOperationType | undefined {
+  if (
+    operation.value.type === "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION"
+  ) {
+    try {
+      return projectAssistantConnectionPlanOwner({
+        ...operation.value,
+        parameters: parseObject(operation.parametersText),
+        before: parseObject(operation.beforeText),
+        after: parseObject(operation.afterText),
+      })
+        ? operation.value.type
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  if (
+    operation.value.type === "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" ||
+    operation.value.type === "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT"
+  )
+    return operation.value.type;
   const operationType: FriendlyPlanOperationType = operation.value.type;
   let parameters: Record<string, unknown>;
   try {
@@ -686,6 +743,8 @@ export function updateOperationParameter(
   if (
     key === "name" &&
     operation.value.action === "CREATE" &&
+    operation.value.type !==
+      "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" &&
     typeof value === "string"
   )
     operation.value.target.name = value;

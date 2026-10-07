@@ -2,6 +2,7 @@ package callback
 
 import (
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -15,7 +16,7 @@ const maximumAssistantCatalogAgents = 20
 func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "get_configuration_catalog",
-		"description": "Discover server refs and schemas. Omit operation_types for the index; request up to four schemas. Agent pages: 20, agent_query/offset; full fields only for current AGENT. Definition pages: 10, definition_query/offset. Fresh assistant_configuration_catalog is exclusive with other selectors and nonempty operation_types; MODELS requires account_ref. Names are not refs.",
+		"description": "Discover refs/schemas; omit operation_types for index. Catalog excludes other selectors. MODELS needs account_ref. CURRENT_CONFIGURATION and RECIPIENT_INTEGRATION_GRANTS use own agent_ref; recipient grants require selected AGENT/WORKFLOW. Catalog reads are fresh; execution_snapshot is turn-pinned.",
 		"inputSchema": objectSchema(nil, map[string]any{
 			"operation_types": map[string]any{"type": "array", "maxItems": maximumAssistantDiscoveredSchemas,
 				"uniqueItems": true, "items": map[string]any{"type": "string", "enum": assistantOperationTypes(input)}},
@@ -35,7 +36,7 @@ func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any 
 			"operation_schemas":               map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
 			"integration_definitions":         map[string]any{"type": "array", "maxItems": 10, "items": map[string]any{"type": "object"}},
 			"definition_next_offset":          map[string]any{"type": "integer", "minimum": 0},
-			"assistant_configuration_catalog": map[string]any{"type": "object", "maxProperties": 8},
+			"assistant_configuration_catalog": map[string]any{"type": "object", "maxProperties": 10},
 		}),
 	}
 }
@@ -95,7 +96,7 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 	if raw, selected := arguments["operation_types"]; selected {
 		requested, ok := raw.([]any)
 		if !ok || len(requested) > maximumAssistantDiscoveredSchemas {
-			return nil, errors.New("configuration catalog selection is invalid")
+			return nil, errAssistantCatalogSelection
 		}
 		allowed := make(map[string]struct{}, len(operationTypes))
 		for _, kind := range operationTypes {
@@ -105,13 +106,13 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 		for _, value := range requested {
 			kind, ok := value.(string)
 			if !ok {
-				return nil, errors.New("configuration catalog selection is invalid")
+				return nil, errAssistantCatalogSelection
 			}
 			if _, permitted := allowed[kind]; !permitted {
-				return nil, errors.New("configuration catalog selection is invalid")
+				return nil, errAssistantCatalogSelection
 			}
 			if _, duplicate := selectedTypes[kind]; duplicate {
-				return nil, errors.New("configuration catalog selection is invalid")
+				return nil, errAssistantCatalogSelection
 			}
 			selectedTypes[kind] = struct{}{}
 		}
@@ -158,6 +159,9 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 		context = map[string]any{"route": input.AssistantContext.Route, "entity_kind": input.AssistantContext.EntityKind,
 			"entity_ref": input.AssistantContext.EntityRef, "entity_name": input.AssistantContext.EntityName,
 			"entity_version": input.AssistantContext.EntityVersion, "allowed_operations": input.AssistantContext.AllowedOperations}
+		if input.AssistantContext.EntityKind == "AGENT" {
+			context["entity_name"] = assistantCatalogResourceName(input, input.AssistantContext.EntityRef, input.AssistantContext.EntityName)
+		}
 	}
 	result := map[string]any{
 		"current_project_ref": input.ProjectRef,
@@ -177,7 +181,7 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 func assistantPlanTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "propose_configuration_plan",
-		"description": "Propose an editable Kodex draft for explicit user approval. First request the exact schema for each operation type from get_configuration_catalog. This compact envelope does not grant fields or authority; control-plane validates every specialized operation. This tool never applies a plan.",
+		"description": "Propose an editable draft for explicit user approval. Read exact schemas from get_configuration_catalog first. Control-plane validates each specialized operation; this tool never applies a plan or grants authority.",
 		"inputSchema": objectSchema([]string{"summary", "operations"}, map[string]any{
 			"summary": stringSchema(1, 2000),
 			"operations": map[string]any{"type": "array", "minItems": 1, "maxItems": 32,
@@ -273,6 +277,10 @@ func environmentPolicySchema() map[string]any {
 		"memoryLimitMib":             map[string]any{"type": "integer", "minimum": 128, "maximum": 65536},
 		"ephemeralStorageRequestMib": map[string]any{"type": "integer", "minimum": 256, "maximum": 20480},
 		"ephemeralStorageLimitMib":   map[string]any{"type": "integer", "minimum": 256, "maximum": 102400},
+		"workspaceLimits": objectSchema([]string{"maxBytes", "maxFiles"}, map[string]any{
+			"maxBytes": map[string]any{"type": "integer", "minimum": 1, "maximum": runtimecontract.RuntimeWorkspaceWritableBytes},
+			"maxFiles": map[string]any{"type": "integer", "minimum": 1, "maximum": runtimecontract.RuntimeWorkspaceMaximumFiles},
+		}),
 	})
 	webAccessRule := objectSchema([]string{"domainPattern", "protocol", "port", "httpMethods"}, map[string]any{
 		"domainPattern": map[string]any{
@@ -402,10 +410,30 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		assistantOperationSchema("LAUNCH_RUN", runInputSchema(projectRef, agentRef)),
 	}
 	if input.IsSystemAssistant() {
+		result = append(result, assistantOperationSchema("CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", objectSchema(
+			[]string{"connectionRef", "capabilityKey", "enabled", "approvalPolicy"}, map[string]any{
+				"connectionRef": opaqueRefSchema(), "capabilityKey": capabilityKeySchema(), "enabled": map[string]any{"type": "boolean"},
+				"approvalPolicy":     enumSchema("NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"),
+				"approvalScopePaths": map[string]any{"type": "array", "maxItems": 16, "uniqueItems": true, "items": stringSchema(1, 200)},
+			})))
 		result = append(result, assistantOperationSchema("CREATE_PROJECT_ASSISTANT", objectSchema(
 			[]string{"projectRef", "name", "purpose", "instructions"}, map[string]any{
 				"projectRef": projectRef, "name": stringSchema(1, 120), "purpose": stringSchema(1, 1000),
 				"instructions": assistantAgentInstructionsSchema(),
+			})))
+	}
+	if input.AssistantScope == runtimecontract.AssistantScopeProject && input.AgentRef != "" {
+		result = append(result, assistantOperationSchema("CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT", objectSchema(
+			[]string{"projectAssistantRef", "connectionRef", "capabilityKey", "enabled", "approvalPolicy"}, map[string]any{
+				"projectAssistantRef": enumSchema(input.AgentRef), "connectionRef": opaqueRefSchema(),
+				"capabilityKey": capabilityKeySchema(), "enabled": map[string]any{"type": "boolean"},
+				"approvalPolicy":     enumSchema("NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"),
+				"approvalScopePaths": map[string]any{"type": "array", "maxItems": 16, "uniqueItems": true, "items": stringSchema(1, 200)},
+			})))
+		result = append(result, assistantOperationSchema("PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION", objectSchema(
+			[]string{"projectAssistantRef", "definitionKey", "name", "publicConfiguration"}, map[string]any{
+				"projectAssistantRef": enumSchema(input.AgentRef), "definitionKey": capabilityKeySchema(), "name": stringSchema(1, 160),
+				"publicConfiguration": map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": map[string]any{"type": "string", "maxLength": 4096}},
 			})))
 	}
 	selfInstructionsOperation := input.IsSystemAssistant() && input.AgentRef != ""
@@ -425,7 +453,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		updateImageSchema["anyOf"] = []map[string]any{{"required": []string{"name"}}, {"required": []string{"environmentKey"}}, {"required": []string{"dockerfile"}}}
 		result = append(result,
 			assistantOperationSchema("CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", objectSchema(
-				[]string{"systemAssistantRef", "name", "environmentKey", "dockerfile"}, map[string]any{
+				[]string{"systemAssistantRef", "name", "environmentKey"}, map[string]any{
 					"systemAssistantRef": enumSchema(input.AgentRef), "name": stringSchema(1, 160),
 					"environmentKey": assistantRoleEnvironmentKeySchema(), "dockerfile": stringSchema(1, 65536),
 				})),
@@ -438,11 +466,21 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 				"instructions":       stringSchema(0, 20000),
 			})))
 	}
-	selfEnvironmentOperation := input.IsSystemAssistant() && input.AgentRef != "" && input.RuntimeEnvironmentRef != "" &&
-		(input.AssistantContext == nil || input.AssistantContext.EntityKind != "ENVIRONMENT")
+	selfEnvironmentOperation := input.IsSystemAssistant() && input.AgentRef != "" && input.RuntimeEnvironmentRef != ""
 	if selfEnvironmentOperation {
+		parameters := environmentRevisionInputSchema(enumSchema(input.RuntimeEnvironmentRef), enumSchema(input.AgentRef))
+		if screen := input.AssistantContext; screen != nil && screen.EntityKind == "ENVIRONMENT" && screen.EntityRef != "" &&
+			slices.Contains(screen.AllowedOperations, "PREPARE_RUNTIME_ENVIRONMENT_REVISION") {
+			parameters["required"] = []string{"environmentRef"}
+			parameters["properties"].(map[string]any)["environmentRef"] = enumSchema(input.RuntimeEnvironmentRef, screen.EntityRef)
+			// Присутствие self locator отделяет собственную среду от точной экранной.
+			parameters["allOf"] = []map[string]any{{"oneOf": []map[string]any{
+				{"required": []string{"systemAssistantRef"}, "properties": map[string]any{"environmentRef": enumSchema(input.RuntimeEnvironmentRef)}},
+				{"not": map[string]any{"required": []string{"systemAssistantRef"}}, "properties": map[string]any{"environmentRef": enumSchema(screen.EntityRef)}},
+			}}}
+		}
 		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION",
-			environmentRevisionInputSchema(enumSchema(input.RuntimeEnvironmentRef), enumSchema(input.AgentRef))))
+			parameters))
 	}
 	projectSelfOperation := input.AssistantScope == runtimecontract.AssistantScopeProject && input.AgentRef != ""
 	if projectSelfOperation {
@@ -477,7 +515,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	if input.AssistantContext.EntityKind == "WORKFLOW" && input.AssistantContext.EntityRef != "" {
 		result = append(result, assistantOperationSchema("UPDATE_WORKFLOW", workflowUpdateInputSchema(input.AssistantContext.EntityRef)))
 	}
-	if input.AssistantContext.EntityKind == "ENVIRONMENT" && input.AssistantContext.EntityRef != "" && !projectSelfEnvironmentOperation {
+	if input.AssistantContext.EntityKind == "ENVIRONMENT" && input.AssistantContext.EntityRef != "" && !projectSelfEnvironmentOperation && !selfEnvironmentOperation {
 		result = append(result, assistantOperationSchema("PREPARE_RUNTIME_ENVIRONMENT_REVISION",
 			environmentRevisionInputSchema(enumSchema(input.AssistantContext.EntityRef), nil)))
 	}
@@ -498,6 +536,8 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 	for _, operation := range result {
 		kind := operation["properties"].(map[string]any)["type"].(map[string]any)["const"].(string)
 		if _, ok := allowed[kind]; ok ||
+			projectSelfOperation && kind == "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT" ||
+			selfInstructionsOperation && kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" ||
 			selfEnvironmentOperation && kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" ||
 			selfInstructionsOperation && kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" ||
 			selfInstructionsOperation && (kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE") ||
@@ -563,13 +603,14 @@ func projectAssistantOperationParameters(input runtimecontract.RunnerInput, kind
 func assistantRuntimeConfigurationSchema(agentRef map[string]any) map[string]any {
 	schema := objectSchema([]string{"agentRef", "runtimeProfileRef", "model", "reasoningEffort", "providerPolicyMode", "providerAccounts"}, map[string]any{
 		"agentRef": agentRef, "runtimeProfileRef": assistantRuntimeProfileKeySchema(), "model": stringSchema(1, 128),
+		"webSearchMode":   enumSchema("disabled", "cached", "indexed", "live"),
 		"reasoningEffort": map[string]any{"type": "string", "minLength": 0, "maxLength": 64, "pattern": `^(?:[a-z][a-z0-9_-]{0,63})?$`}, "providerPolicyMode": enumSchema("FIXED", "LEAST_USED", "WEIGHTED"),
 		"providerAccounts": map[string]any{"type": "array", "minItems": 1, "maxItems": 128,
 			"items": objectSchema([]string{"accountRef", "weight"}, map[string]any{
 				"accountRef": opaqueRefSchema(), "weight": map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
 			})},
 	})
-	schema["description"] = "Prepare a reviewed assistant model configuration, not a TOML patch. Use exact refs from the server catalog. SYSTEM may configure itself or a project assistant; PROJECT may configure only itself. Empty reasoningEffort selects the eligible catalog default. FIXED requires one account; weights must be 1 unless policy is WEIGHTED. Control-plane verifies current catalog eligibility and assigns all versions and pins. Never include credentials or owner fields."
+	schema["description"] = "Prepare a reviewed assistant model configuration, not a TOML patch. Use exact refs from the server catalog. SYSTEM may configure itself or a project assistant; PROJECT may configure only itself. Empty reasoningEffort selects the eligible catalog default. Optional webSearchMode selects Codex 0.160.0 hosted search; omission preserves the published setting. Hosted search is separate from sandbox domain allowlists and does not grant shell egress. A configured mode does not prove a successful search call. FIXED requires one account; weights must be 1 unless policy is WEIGHTED. Control-plane verifies current catalog eligibility and assigns all versions and pins. Never include credentials or owner fields."
 	return schema
 }
 
@@ -698,6 +739,7 @@ func integrationGrantInputSchema(context *runtimecontract.RunnerAssistantContext
 	properties := map[string]any{
 		"connectionRef": opaqueRefSchema(), "capabilityKey": capabilityKeySchema(), "agentRef": opaqueRefSchema(), "workflowRef": opaqueRefSchema(),
 		"enabled":            map[string]any{"type": "boolean"},
+		"approvalPolicy":     enumSchema("NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"),
 		"approvalScopePaths": map[string]any{"type": "array", "maxItems": 16, "uniqueItems": true, "items": stringSchema(1, 200)},
 	}
 	if context != nil && context.EntityRef != "" {
@@ -705,14 +747,14 @@ func integrationGrantInputSchema(context *runtimecontract.RunnerAssistantContext
 		case "AGENT":
 			properties["agentRef"] = enumSchema(context.EntityRef)
 			delete(properties, "workflowRef")
-			return objectSchema([]string{"connectionRef", "capabilityKey", "agentRef", "enabled"}, properties)
+			return objectSchema([]string{"connectionRef", "capabilityKey", "agentRef", "enabled", "approvalPolicy"}, properties)
 		case "WORKFLOW":
 			properties["workflowRef"] = enumSchema(context.EntityRef)
 			delete(properties, "agentRef")
-			return objectSchema([]string{"connectionRef", "capabilityKey", "workflowRef", "enabled"}, properties)
+			return objectSchema([]string{"connectionRef", "capabilityKey", "workflowRef", "enabled", "approvalPolicy"}, properties)
 		}
 	}
-	schema := objectSchema([]string{"connectionRef", "capabilityKey", "enabled"}, properties)
+	schema := objectSchema([]string{"connectionRef", "capabilityKey", "enabled", "approvalPolicy"}, properties)
 	schema["oneOf"] = []map[string]any{
 		{"required": []string{"agentRef"}, "not": map[string]any{"required": []string{"workflowRef"}}},
 		{"required": []string{"workflowRef"}, "not": map[string]any{"required": []string{"agentRef"}}},
@@ -721,11 +763,10 @@ func integrationGrantInputSchema(context *runtimecontract.RunnerAssistantContext
 }
 
 func assistantOperationSchema(kind string, parameters map[string]any) map[string]any {
-	action := "CREATE"
-	requiresVersion := false
-	if kind == "UPDATE_PROJECT" || kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "UPDATE_WORKFLOW" || kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "UPDATE_INTEGRATION_CONNECTION" || kind == "UPDATE_SCHEDULE" || kind == "CHANGE_CAPABILITY" || kind == "CHANGE_INTEGRATION_GRANT" || kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
-		action, requiresVersion = "UPDATE", true
-	} else if kind == "ARCHIVE_AGENT" || kind == "ARCHIVE_WORKFLOW" {
+	// Discovery и нормализатор используют один закрытый реестр действий.
+	action := assistantServerAction(kind)
+	requiresVersion := action == "UPDATE"
+	if kind == "ARCHIVE_AGENT" || kind == "ARCHIVE_WORKFLOW" {
 		action, requiresVersion = "ARCHIVE", true
 	} else if kind == "LAUNCH_RUN" || kind == "TEST_INTEGRATION_CONNECTION" {
 		action = "EXECUTE"

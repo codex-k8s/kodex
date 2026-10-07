@@ -8,12 +8,14 @@ import { providerLifecycleMessages } from "@/features/providers/lifecycle-messag
 import { workflowLaunchMessages } from "@/features/platform/workflow-launch";
 import { entityCardMessages } from "@/features/workflows/catalog/messages";
 import { automationPreviewMessages } from "@/features/automations/prompt-preview-messages";
+import { vulnerabilityMessages } from "@/features/role-images/vulnerability-messages";
 
 import { currentLocale } from "@/shared/locale";
 import { serverMessagesFor } from "@/shared/ui/server-message-catalog";
 import { additionalPermissionMessages } from "@/shared/ui/permission-message-catalog";
 
 const ru = {
+  imageVulnerabilities: vulnerabilityMessages.ru,
   ...sttActivationMessages.ru,
   configurationRestore: restoreRevisionMessages.ru,
   entityCards: entityCardMessages.ru,
@@ -46,6 +48,9 @@ const ru = {
     },
   },
   runtimeOverlay: {
+    environmentShortBase: "База",
+    environmentShortSavedAt: "Сохранено",
+    environmentValidationDigest: "Дайджест проверки",
     environmentBase: "Базовая опубликованная ревизия",
     environmentBaseUnknown:
       "База неизвестна: исторический черновик не содержит точной ссылки",
@@ -652,6 +657,7 @@ const ru = {
       maxAttempts: "Число попыток",
       risk: "Риск",
       approvalPolicy: "Подтверждение",
+      allowedApprovalPolicies: "Допустимые порядки подтверждения",
       resourceScope: "Область ресурсов",
       connectionFields: "Поля области",
       inputFields: "Входные поля",
@@ -968,6 +974,7 @@ const ru = {
     available: "Доступно",
     disabled: "Отключено",
     yes: "Да",
+    no: "Нет",
     name: "Название",
     description: "Описание",
     delete: "Удалить",
@@ -1476,7 +1483,7 @@ const ru = {
     publishRevision: "Опубликовать ревизию",
     reauthCompleted: "Свежая OIDC-аутентификация завершена",
     reauthExplicitSaveRequired:
-      "Черновик восстановлен. Проверьте параметры и явно повторите создание или публикацию.",
+      "Черновик восстановлен. Проверьте параметры, затем нажмите «Проверить» или «Опубликовать».",
     restoredImageSelection:
       "Выбор восстановлен после OIDC-аутентификации; точные сведения загрузятся после публикации.",
     imageNeedsReplacement: "Нужен актуальный образ",
@@ -1545,9 +1552,12 @@ const ru = {
       "Окружение закрепляет точную опубликованную версию образа и разрешает только проверенные программы.",
     exactImage: "Точная ревизия и хеш образа",
     choosePromotedImage: "Выберите собранный и promoted образ",
+    loadingSelectedImage: "Загрузка выбранного образа…",
     searchPromotedImage: "Найти promoted образ",
     promotedAndVerified: "Опубликован и проверен",
     verifiedTools: "Проверенные инструменты",
+    imageInventoryUnavailable:
+      "Проверенный состав программ недоступен. Выбор команд и публикация требуют нового допуска образа.",
     verifiedToolsHelp:
       "Разрешите только нужные программы из выбранного образа и опишите их назначение для инструкции сотрудника.",
     selectedToolsCount: "Выбрано: {selected} из {total}",
@@ -1892,6 +1902,31 @@ const ru = {
     subtitle:
       "Сборки, ревизии и программное окружение для рабочих сред Проекта",
     entity: "Образ ИИ-сотрудника",
+    assistantEntity: "Образ помощника",
+    buildCompleted: "Сборка завершена",
+    awaitingAdmission: "Ожидает допуска",
+    admissionRejected: "Допуск отклонён",
+    admissionRejectedTitle: "Образ не прошёл проверку безопасности",
+    admissionRejectedHelp:
+      "Обновите базовый образ или зависимости и повторите сборку. Публикация недоступна, пока образ не пройдёт проверку допуска.",
+    admissionClosedTitle: "Допуск образа закрыт",
+    admissionClosedHelp:
+      "Выполните новую сборку для проверки по актуальным параметрам платформы.",
+    admissionFailed: "Проверка допуска завершилась с ошибкой",
+    promotionBlockedByFailure: "Публикация недоступна: ошибка проверки",
+    admissionFailureHelp:
+      "Для публикации образ должен успешно пройти проверку допуска.",
+    admissionFailureReasons: {
+      ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND:
+        "Один из файлов проверки превышает допустимый размер.",
+      ADMISSION_EVIDENCE_EXCEEDS_BOUND:
+        "Общий размер данных проверки превышает допустимый предел.",
+      ADMISSION_WORKER_FAILED: "Не удалось выполнить проверку допуска образа.",
+      ADMISSION_LEASE_EXPIRED:
+        "Проверка допуска не завершилась в отведённое время.",
+    },
+    promotionBlockedByAdmission: "Заблокирована допуском",
+    awaitingPromotion: "Ожидает публикации",
     new: "Новый образ",
     editorTitle: "Настройка образа",
     editorSubtitle:
@@ -1937,7 +1972,10 @@ const ru = {
     immutableRevisionHelp:
       "Сохранение создаёт новое поколение; уже собранные поколения и их хеши не изменяются.",
     createRevision: "Создать ревизию",
-    requestBuild: "Запросить сборку",
+    requestBuild: "Собрать",
+    rebuild: "Пересобрать",
+    rebuildConfirm:
+      "Новая сборка заменит прежний результат. Незавершённая проверка прежнего образа будет отменена. Пересобрать образ?",
     cancelBuild: "Остановить сборку",
     cancelBuildConfirm:
       "Остановить эту сборку? Рецепт образа останется доступен для повторной сборки.",
@@ -1961,6 +1999,11 @@ const ru = {
     admissionVerdict: "Результат допуска",
     noPromotedArtifact: "Образ ещё не опубликован.",
     executables: "Обнаруженные исполняемые программы",
+    declaredTools: "Заявленные программы рецепта",
+    verifiedInventory: "Проверенный состав программ образа",
+    inventoryUnavailable: "Нет подтверждённого состава программ",
+    inventoryProbeMissing: "Отсутствует",
+    inventoryProbeFailed: "Проверка версии не выполнена",
     noVerifiedExecutables: "Проверенных исполняемых программ пока нет.",
     usedByEnvironments: "Используется окружениями",
     noEnvironmentDependencies: "Ни одно окружение не использует этот образ.",
@@ -1981,6 +2024,9 @@ const ru = {
     selectCoordinator: "Выберите координатора",
     searchCoordinator: "Найти ИИ-сотрудника",
     steps: "Этапы",
+    untitledStep: "Новый этап",
+    sequential: "Последовательно",
+    stepNeedsAttention: "Проверьте поля этапа",
     stepName: "Название этапа",
     stepAgent: "Исполнитель",
     parallel: "Можно выполнять параллельно",
@@ -2166,18 +2212,99 @@ const ru = {
     graphEdges: "Связи: {count}",
     platformActor: "Платформа",
     toolParameters: "Безопасные параметры",
+    toolDetails: "Подробности",
+    toolDetailsFor: "Подробности: {tool}",
+    workspaceReceipt: "Служебная квитанция",
+    toolTechnicalId: "Идентификатор инструмента",
+    nativeToolDiagnostics: "Технические сведения",
+    nativeToolResultCode: "Код результата",
+    nativeToolFields: {
+      action_count: "Количество действий",
+      action_kinds: "Действия",
+      cwd_scope: "Рабочая папка",
+      exit_code: "Код завершения",
+      codex_item_id: "Идентификатор Codex",
+      source: "Источник",
+    },
+    nativeShellValues: {
+      UNKNOWN: "Не определено",
+      WORKSPACE: "Внутри рабочей папки",
+      OUTSIDE_WORKSPACE: "Вне рабочей папки",
+      ZERO: "0 (успешно)",
+      NONZERO: "Ненулевой (ошибка)",
+      UNAVAILABLE: "Неизвестен",
+    },
+    nativeToolResults: {
+      FAILED: "Не удалось выполнить действие",
+      DECLINED: "Действие отклонено",
+    },
+    nativeToolNames: {
+      CODEX_SHELL: "Работа в терминале",
+      CODEX_FILE_CHANGE: "Изменение файлов",
+      CODEX_WEB_SEARCH: "Поиск в интернете",
+      CODEX_DYNAMIC_TOOL: "Вызов инструмента",
+      CODEX_IMAGE_VIEW: "Просмотр изображения",
+      CODEX_IMAGE_GENERATION: "Создание изображения",
+      CODEX_SLEEP: "Ожидание",
+    },
+    managedToolNames: {
+      get_configuration_catalog: "Каталог настроек",
+      propose_configuration_plan: "Настройки помощника",
+      get_integration_catalog: "Каталог интеграций",
+      find_platform_resources: "Поиск ресурсов",
+      propose_assistant_metadata: "Название диалога",
+      propose_run_metadata: "Описание запуска",
+      delegate_agent: "Передача задания",
+      invoke_integration: "Вызов интеграции",
+      search_files: "Поиск файлов",
+      get_file_metadata: "Сведения о файле",
+      preview_file: "Просмотр файла",
+      get_file_manifest: "Список файлов",
+      context7_resolve_library_id: "Поиск библиотеки",
+      context7_query_docs: "Документация библиотеки",
+    },
+    configurationCatalogNames: {
+      ASSISTANTS: "Каталог помощников",
+      RUNTIME_PROFILES: "Каталог профилей выполнения",
+      PROVIDER_ACCOUNTS: "Каталог учётных записей провайдера",
+      MODELS: "Каталог моделей",
+      ROLE_IMAGE_RECIPES: "Каталог рецептов образов",
+      IMAGE_ARTIFACTS: "Каталог образов",
+      ROLE_ENVIRONMENTS: "Каталог окружений",
+      CURRENT_CONFIGURATION: "Текущие настройки",
+    },
+    nativeShellActions: {
+      READ: "чтение файлов",
+      LIST_FILES: "список файлов",
+      SEARCH: "поиск",
+    },
     toolResult: "Безопасный результат",
+    toolFailed: "Не удалось выполнить действие",
     toolDuration: "Длительность: {duration} мс",
     expandMessage: "Показать полностью",
     collapseMessage: "Свернуть",
+    newMessages: "Новые сообщения ↓",
+    earlierServiceHistory: "Показать предыдущие служебные записи",
+    toolGroup: "Вызовы инструментов: {count}",
+    workIndicator: "Работает",
+    serviceProgress: "Этапы выполнения: {count}",
+    transcriptTurn: "Ход {turn} · попытка {attempt}",
+    messagePhases: {
+      USER: "Задание",
+      COMMENTARY: "Ход работы",
+      FINAL: "Ответ",
+    },
     runtimeProgress: {
       workloadScheduled: "Задание передано исполнителю",
-      modelRequestRunning: "Модель обрабатывает запрос",
+      modelRequestRunning: "Подготовка и выполнение запроса к модели",
+      providerUnavailable:
+        "Провайдер модели временно недоступен. Ход завершён с ошибкой.",
     },
     artifactUnavailable:
       "Событие файла получено, но его безопасное описание недоступно.",
     renderedPromptUnavailable:
       "Полностью отрендеренные инструкции и RuntimeRevision не представлены текущим API. Интерфейс не восстанавливает их из косвенных данных.",
+    promptPreviewSafeHint: "Безопасный состав и версии, не полный ввод модели.",
     usage: {
       title: "Использование токенов",
       total: "Всего",
@@ -2359,6 +2486,8 @@ const ru = {
     credentials: "Учётные данные",
     masked: "Значения скрыты и недоступны браузеру",
     capabilities: "Возможности подключения",
+    showAllCapabilities: "Показать все ({count})",
+    collapseCapabilities: "Свернуть ({count})",
     grants: "Разрешения сотрудникам и Процессам",
     unavailable: "Сейчас недоступна — core-платформа продолжает работать",
     disabled: "Подключение отключено",
@@ -2428,6 +2557,9 @@ const ru = {
     resourceKind: "Вид ресурса",
     resourceScope: "Область ресурсов",
     approvalPolicy: "Порядок подтверждения",
+    chooseApprovalPolicy: "Выберите порядок подтверждения",
+    approvalPolicySelectionHelp:
+      "Выбранное значение сохраняется явно. Доступны только разрешённые для этого действия варианты.",
     technicalDetails: "Технические сведения",
     approvalPolicies: {
       NONE: "без согласования",
@@ -2522,10 +2654,18 @@ const ru = {
     packageCategories: {
       communications: "Коммуникации",
       data: "Данные",
+      documentation: "Документация",
       knowledge: "Знания",
       "source-control": "Разработка",
       testing: "Проверка",
       "work-management": "Задачи",
+    },
+    fieldTypes: {
+      TEXT: "строка",
+      URL: "URL",
+      STRING_LIST: "список строк",
+      INTEGER: "целое число",
+      BOOLEAN: "логическое значение",
     },
     firstParty: "first-party",
     customPackage: "пользовательский пакет",
@@ -2641,6 +2781,8 @@ const ru = {
     consequencesUnavailable:
       "Последствия решения не переданы API. Действие следует выполнять только после проверки запуска.",
     projectUnavailable: "Название Проекта недоступно",
+    scope: "Область",
+    organizationScope: "Организация · общесистемный помощник",
     run: "Запуск",
     process: "Запуск и точный узел",
     runUnavailable: "Название запуска недоступно",
@@ -2675,6 +2817,20 @@ const ru = {
     integrationCapability: "Возможность",
     integrationEffectKey: "Ключ эффекта",
     integrationParameters: "Параметры действия",
+    integrationRepository: "Репозиторий",
+    integrationIssueComment: "Добавить комментарий к Issue #{issue}",
+    integrationCommentBody: "Текст комментария",
+    integrationPreviewIncomplete:
+      "Безопасное описание действия неполное: часть значений скрыта или сокращена. Проверьте ограничения перед решением.",
+    integrationValueHidden: "Значение скрыто в безопасном описании",
+    integrationValueTruncated: "Показана только часть значения",
+    integrationFieldLabels: {
+      issue_number: "Issue",
+      body: "Содержимое",
+      title: "Заголовок",
+      comment: "Комментарий",
+      text: "Текст",
+    },
     comment: "Комментарий",
     commentPlaceholder: "Добавьте контекст для продолжения работы",
     actionsUnavailable: "Ответ сейчас недоступен",
@@ -3606,6 +3762,12 @@ const ru = {
     },
   },
   assistant: {
+    contextRoutes: {
+      images: "Образы помощника",
+      newImage: "Новый образ помощника",
+      image: "Образ помощника",
+      secrets: "Секреты помощника",
+    },
     resources: {
       title: "Образ, секреты и окружение помощника",
       images: "Каталог образов",
@@ -3691,14 +3853,27 @@ const ru = {
       CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Создать черновик окружения",
       PREPARE_RUNTIME_ENVIRONMENT_REVISION:
         "Подготовить новую ревизию окружения",
+      BIND_AGENT_RUNTIME_ENVIRONMENT: "Назначить рабочее окружение",
       CREATE_ROLE_IMAGE_RECIPE: "Создать рецепт образа",
       UPDATE_ROLE_IMAGE_RECIPE: "Изменить рецепт образа",
+      CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE: "Создать рецепт образа Kodex",
+      UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE: "Изменить рецепт образа Kodex",
+      PREPARE_ASSISTANT_RUNTIME_CONFIGURATION:
+        "Подготовить настройки модели помощника",
       CREATE_WORKFLOW: "Создать Workflow",
+      UPDATE_WORKFLOW: "Изменить Workflow",
       CHANGE_CAPABILITY: "Изменить возможности",
       CHANGE_INTEGRATION_GRANT: "Изменить доступ к подключению",
+      CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT:
+        "Изменить доступ общесистемного помощника",
+      CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT:
+        "Изменить доступ помощника Проекта",
       CREATE_SCHEDULE: "Создать Автоматизацию",
+      UPDATE_SCHEDULE: "Изменить Автоматизацию",
       LAUNCH_RUN: "Запустить Run",
       CREATE_INTEGRATION_CONNECTION: "Создать подключение",
+      PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION:
+        "Подготовить подключение помощника Проекта",
       PUBLISH_INTEGRATION_DEFINITION: "Опубликовать интеграцию",
       TEST_INTEGRATION_CONNECTION: "Проверить подключение",
       ARCHIVE_AGENT: "Архивировать сотрудника",
@@ -3740,6 +3915,16 @@ const ru = {
       runtime: "Модель и выполнение",
       environment: "Окружение",
       instructions: "Инструкции",
+      integrations: "Интеграции",
+      integrationsHelp:
+        "Доступы общесистемного помощника назначаются в области организации. Выберите подключение, возможность и явную политику подтверждения. Изменения применятся к следующим ходам.",
+      integrationEnabled: "Разрешить эту возможность помощнику",
+      integrationGranted: "Доступ разрешён",
+      integrationNotGranted: "Доступ не разрешён",
+      integrationsReadOnly:
+        "Изменение этого доступа недоступно. Полномочия проверяет сервер организации.",
+      integrationSaved:
+        "Доступ сохранён. Выберите возможность для проверки актуального состояния.",
       instructionsHelp:
         "Дополнение владельца применяется к следующим ходам. Изменения, предложенные самим Kodex, сначала показываются как подтверждаемый черновик.",
       environmentTitle: "Рабочее окружение Kodex",
@@ -3874,6 +4059,7 @@ const ru = {
     },
     environmentDraft: {
       title: "Окружение сотрудника",
+      systemTitle: "Общесистемное окружение",
       loadFailed:
         "Не удалось получить состояние черновика окружения. Повторите обновление.",
       incomplete:
@@ -3882,7 +4068,16 @@ const ru = {
         "Черновик содержит проверенный образ. Проверьте параметры и опубликуйте окружение.",
       invalid:
         "Проверка не прошла. Откройте редактор и исправьте параметры окружения.",
-      published: "Окружение опубликовано. Привяжите его к нужному сотруднику.",
+      published: "Окружение опубликовано.",
+      bindingChecking: "Проверяем назначенное окружение Kodex.",
+      bindingUnavailable:
+        "Не удалось подтвердить назначенное окружение Kodex. Обновите состояние.",
+      systemBound:
+        "Окружение уже назначено Kodex. Применяемая версия: {revision}.",
+      systemBindingChanged:
+        "Kodex сейчас назначено другое окружение. Проверьте его текущие настройки.",
+      turnBoundary:
+        "Текущий ход сохраняет свою версию. Следующие ходы используют назначенное окружение по подтверждённым настройкам.",
       discarded: "Черновик окружения отброшен.",
       continue: "Продолжить настройку",
       bind: "Назначить сотруднику",
@@ -4001,6 +4196,11 @@ const ru = {
       atomic:
         "Скрытых изменений нет. План применяется одной транзакцией или не применяется вовсе.",
       summary: "Что изменит план",
+      cardSelection: "Выбрано {selected} из {count} операций",
+      cardMore: "Ещё {count} операций",
+      cardProblems: "Требуют проверки: {count}. Откройте полный план.",
+      cardOperationProblem: "Операция требует проверки",
+      cardNotSelected: "Не выбрана",
       editedPlanSummary:
         "План изменён в форме. Проверьте фактические значения операций перед применением.",
       editedOperationSummary:
@@ -4100,6 +4300,11 @@ const ru = {
         "Изменение права вступит в силу только после проверки и подтверждения плана.",
       grantConnection: "Подключение",
       grantRecipient: "Получатель",
+      grantEnableShort: "Выдать",
+      grantDisableShort: "Отозвать",
+      grantRefreshPlan: "Обновить план через помощника",
+      grantRefreshHint:
+        "Данные изменились. Нужен новый план с повторной проверкой разрешений.",
       grantCapability: "Возможность интеграции",
       grantEnable: "Выдать разрешение (снимите, чтобы отозвать существующее)",
       grantLoadFailed:
@@ -4111,6 +4316,12 @@ const ru = {
       grantUnavailable:
         "Это разрешение недоступно для выбранного получателя. Проверьте подключение или попросите другой план.",
       grantNothingToRevoke: "Активного разрешения для отзыва не найдено.",
+      systemGrantFixedTarget:
+        "Подключение и возможность зафиксированы в этой ревизии плана. Получатель — общесистемный помощник организации. Для другого подключения или возможности подготовьте новый план; здесь меняются только включение и порядок подтверждения.",
+      projectGrantFixedTarget:
+        "Получатель — помощник Проекта. Подключение и возможность закреплены в плане; здесь меняются только включение и порядок подтверждения.",
+      systemGrantApplied:
+        "Сохранённое разрешение проверено по точной квитанции",
       grantFixedTarget:
         "Подключение и получатель закреплены в этом плане. Если нужен другой объект, попросите помощника изменить план. Секреты сюда не вводятся.",
       agentNextSteps:
@@ -4138,10 +4349,14 @@ const ru = {
         "Это окружение общесистемного Kodex. Проверьте общесистемный образ, инструменты, переменные, привязки секретов, ресурсы и сетевой доступ. Подтверждение создаст только черновик.",
       environmentPolicyInvalid:
         "Политика окружения повреждена или содержит недопустимые поля. Попросите подготовить новый план.",
+      environmentPolicySummary:
+        "CPU {cpuRequest}/{cpuLimit} mCPU · память {memoryRequest}/{memoryLimit} MiB · томов: {volumes} · интернет: {webMode} · правил: {webRules}. Политика не изменяется.",
+      environmentPolicyReview:
+        "Проверьте политику ресурсов и доступа: изменённые, непроверенные настройки и доступ к интернету показаны полностью. Применение плана не заменяет отдельное подтверждение публикации.",
       environmentPolicyFreshAuthentication:
         "Доступ к собственному исполнению Kubernetes потребует свежего входа перед проверкой или публикацией окружения.",
       environmentToolsUnverified:
-        "Не удалось сверить инструменты с опубликованным образом этого проекта. Выберите готовый образ или обновите план.",
+        "Не удалось сверить инструменты с опубликованным образом в выбранной области. Выберите готовый образ или обновите план.",
       environmentToolsPending:
         "Инструменты из текущей ревизии показаны для проверки; доступность каталога образа пока не подтверждена:",
       environmentRevisionNotReady:
@@ -4166,11 +4381,23 @@ const ru = {
       systemImageBoundary:
         "Образ общесистемного помощника. Область и привязка к помощнику закреплены сервером и здесь не меняются. Сборка, проверка и продвижение выполняются штатным процессом.",
       systemImageNextSteps:
-        "После подтверждения начнётся сборка нового поколения образа. Дождитесь проверки, отдельно подтвердите продвижение и выберите образ в окружении помощника. Текущие ходы сохранят прежний образ.",
+        "Подтверждение сохранит рецепт образа. Затем откройте его и проверьте состояние сборки. После успешного допуска отдельно опубликуйте образ и выберите его в окружении помощника. Текущие ходы сохранят прежний образ.",
       runtimeConfigurationBoundary:
         "Настройки модели применятся только к закреплённому помощнику и следующим ходам. После сохранения и проверки плана отдельно подтвердите применение; текущие ходы сохранят прежнюю конфигурацию.",
       runtimeConfigurationUnavailable:
         "Не удалось подтвердить привязку помощника или каталог. Обновите план; изменения пока недоступны.",
+      webSearchMode: "Поиск в интернете",
+      webSearchUnchanged: "Не менять",
+      webSearchDefault: "Настройка по умолчанию",
+      webSearchInvalid: "Недопустимый режим поиска",
+      webSearchReview: "Сейчас: {before} → После применения: {after}",
+      webSearchHelp: "Поиск провайдера не меняет доступ программ к сети.",
+      webSearchModes: {
+        disabled: "Выключен",
+        cached: "Кэшированный поиск",
+        indexed: "Поиск по индексу",
+        live: "Актуальный поиск",
+      },
       reasoningCatalogDefault: "По умолчанию из каталога",
       reasoningUnsupported: "Модель без степени рассуждения",
       reasoningUnsupportedHelp:
@@ -4183,9 +4410,9 @@ const ru = {
       roleImageCatalogUnavailable:
         "Не удалось загрузить каталог сотрудников и окружений. Обновите страницу и проверьте план снова.",
       roleImageCreateNextSteps:
-        "После подтверждения платформа создаст рецепт и поставит первую сборку в очередь. Образ станет доступен сотруднику только после успешной проверки и публикации.",
+        "Подтверждение создаст рецепт образа. Затем откройте его и проверьте состояние сборки. После успешного допуска отдельно опубликуйте образ и выберите его в окружении сотрудника.",
       roleImageUpdateNextSteps:
-        "После подтверждения платформа создаст новое поколение рецепта и поставит его сборку в очередь. Текущее опубликованное поколение останется доступным до успешной проверки и отдельной публикации нового.",
+        "Подтверждение сохранит новое поколение рецепта образа. Затем откройте его и проверьте состояние сборки. После успешного допуска отдельно опубликуйте образ и выберите его в окружении сотрудника. Текущее опубликованное поколение останется доступным.",
       roleImageHistoricalSource:
         "В сохранённом плане нет исходника Dockerfile. Если образ создан, откройте его рецепт, чтобы посмотреть текущий исходник.",
       connectionDefinition: "Тип интеграции",
@@ -4201,6 +4428,8 @@ const ru = {
       connectionListHint: "Значения разделяются запятыми.",
       connectionCredentialNextSteps:
         "Здесь только общедоступные параметры. Если интеграции нужен ключ или пароль, после создания откроется защищённая форма. Не отправляйте секрет помощнику.",
+      projectConnectionBoundary:
+        "Подключение принадлежит организации и создаётся только после подтверждения владельца. Цель — помощник Проекта:",
       runTitle: "Название запуска",
       runTargetType: "Кого запустить",
       runAgent: "ИИ-сотрудника",
@@ -4389,6 +4618,7 @@ const ru = {
 
 const en = {
   ...ru,
+  imageVulnerabilities: vulnerabilityMessages.en,
   ...sttActivationMessages.en,
   configurationRestore: restoreRevisionMessages.en,
   entityCards: entityCardMessages.en,
@@ -4424,6 +4654,9 @@ const en = {
     },
   },
   runtimeOverlay: {
+    environmentShortBase: "Base",
+    environmentShortSavedAt: "Saved",
+    environmentValidationDigest: "Validation digest",
     environmentBase: "Base published revision",
     environmentBaseUnknown:
       "Unknown base: the historical draft has no exact reference",
@@ -4963,6 +5196,7 @@ const en = {
       maxAttempts: "Maximum attempts",
       risk: "Risk",
       approvalPolicy: "Approval policy",
+      allowedApprovalPolicies: "Allowed approval policies",
       resourceScope: "Resource scope",
       connectionFields: "Scope fields",
       inputFields: "Input fields",
@@ -5346,6 +5580,7 @@ const en = {
     available: "Available",
     disabled: "Disabled",
     yes: "Yes",
+    no: "No",
     name: "Name",
     description: "Description",
     delete: "Delete",
@@ -5388,6 +5623,32 @@ const en = {
     title: "AI employee images",
     subtitle: "Builds, revisions and software environments for this Project",
     entity: "AI employee image",
+    assistantEntity: "Assistant image",
+    buildCompleted: "Build completed",
+    awaitingAdmission: "Awaiting admission",
+    admissionRejected: "Admission rejected",
+    admissionRejectedTitle: "The image did not pass the security check",
+    admissionRejectedHelp:
+      "Update the base image or dependencies and rebuild. Publication is unavailable until the image passes admission.",
+    admissionClosedTitle: "Image admission is closed",
+    admissionClosedHelp:
+      "Rebuild the image to check it against the platform’s current settings.",
+    admissionFailed: "Image admission check failed",
+    promotionBlockedByFailure: "Publication unavailable: check failed",
+    admissionFailureHelp:
+      "The image must pass admission before it can be published.",
+    admissionFailureReasons: {
+      ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND:
+        "One verification file exceeds the allowed size.",
+      ADMISSION_EVIDENCE_EXCEEDS_BOUND:
+        "The total verification data exceeds the allowed size.",
+      ADMISSION_WORKER_FAILED:
+        "The image admission check could not be completed.",
+      ADMISSION_LEASE_EXPIRED:
+        "The image admission check did not finish in time.",
+    },
+    promotionBlockedByAdmission: "Blocked by image admission",
+    awaitingPromotion: "Awaiting promotion",
     new: "New image",
     editorTitle: "Image configuration",
     editorSubtitle: "Dockerfile, build, promotion and supply-chain evidence",
@@ -5432,7 +5693,10 @@ const en = {
     immutableRevisionHelp:
       "Saving creates a new generation; previously built generations and digests remain immutable.",
     createRevision: "Create revision",
-    requestBuild: "Request build",
+    requestBuild: "Build",
+    rebuild: "Rebuild",
+    rebuildConfirm:
+      "The new build will replace the previous result. Any unfinished admission check for the previous image will be cancelled. Rebuild the image?",
     cancelBuild: "Stop build",
     cancelBuildConfirm:
       "Stop this build? The image recipe will remain available for another build.",
@@ -5456,6 +5720,11 @@ const en = {
     admissionVerdict: "Admission verdict",
     noPromotedArtifact: "The image has not been published yet.",
     executables: "Detected executables",
+    declaredTools: "Recipe-declared tools",
+    verifiedInventory: "Verified image tool inventory",
+    inventoryUnavailable: "Verified tool inventory unavailable",
+    inventoryProbeMissing: "Missing",
+    inventoryProbeFailed: "Version probe failed",
     noVerifiedExecutables: "No verified executables are available yet.",
     usedByEnvironments: "Used by environments",
     noEnvironmentDependencies: "No environment uses this artifact.",
@@ -6014,9 +6283,12 @@ const en = {
       "The environment must pin an exact promoted image digest and allow only verified executables.",
     exactImage: "Exact image revision and digest",
     choosePromotedImage: "Choose a built and promoted image",
+    loadingSelectedImage: "Loading the selected image…",
     searchPromotedImage: "Search promoted images",
     promotedAndVerified: "Promoted and verified",
     verifiedTools: "Verified tools",
+    imageInventoryUnavailable:
+      "Verified tool inventory is unavailable. Command selection and publication require new image admission.",
     verifiedToolsHelp:
       "Allow only required executables from the selected image and describe their purpose for the materialized prompt.",
     selectedToolsCount: "Selected: {selected} of {total}",
@@ -6358,6 +6630,9 @@ const en = {
     selectCoordinator: "Select a coordinator",
     searchCoordinator: "Find an AI employee",
     steps: "Steps",
+    untitledStep: "New step",
+    sequential: "Sequential",
+    stepNeedsAttention: "Check step fields",
     stepName: "Step name",
     stepAgent: "Performer",
     parallel: "Can run in parallel",
@@ -6549,18 +6824,95 @@ const en = {
     graphEdges: "Links: {count}",
     platformActor: "Platform",
     toolParameters: "Safe parameters",
+    toolDetails: "Details",
+    toolDetailsFor: "Details: {tool}",
+    workspaceReceipt: "Service receipt",
+    toolTechnicalId: "Tool identifier",
+    nativeToolDiagnostics: "Technical details",
+    nativeToolResultCode: "Result code",
+    nativeToolFields: {
+      action_count: "Action count",
+      action_kinds: "Actions",
+      cwd_scope: "Working directory",
+      exit_code: "Exit code",
+      codex_item_id: "Codex item identifier",
+      source: "Source",
+    },
+    nativeShellValues: {
+      UNKNOWN: "Unspecified",
+      WORKSPACE: "Inside workspace",
+      OUTSIDE_WORKSPACE: "Outside workspace",
+      ZERO: "0 (successful)",
+      NONZERO: "Nonzero (error)",
+      UNAVAILABLE: "Unavailable",
+    },
+    nativeToolResults: {
+      FAILED: "Action failed",
+      DECLINED: "Action declined",
+    },
+    nativeToolNames: {
+      CODEX_SHELL: "Terminal action",
+      CODEX_FILE_CHANGE: "File changes",
+      CODEX_WEB_SEARCH: "Web search",
+      CODEX_DYNAMIC_TOOL: "Tool call",
+      CODEX_IMAGE_VIEW: "View image",
+      CODEX_IMAGE_GENERATION: "Generate image",
+      CODEX_SLEEP: "Waiting",
+    },
+    managedToolNames: {
+      get_configuration_catalog: "Configuration catalog",
+      propose_configuration_plan: "Assistant settings",
+      get_integration_catalog: "Integration catalog",
+      find_platform_resources: "Resource search",
+      propose_assistant_metadata: "Conversation title",
+      propose_run_metadata: "Run description",
+      delegate_agent: "Task delegation",
+      invoke_integration: "Integration call",
+      search_files: "File search",
+      get_file_metadata: "File information",
+      preview_file: "File preview",
+      get_file_manifest: "File list",
+      context7_resolve_library_id: "Library search",
+      context7_query_docs: "Library documentation",
+    },
+    configurationCatalogNames: {
+      ASSISTANTS: "Assistant catalog",
+      RUNTIME_PROFILES: "Runtime profile catalog",
+      PROVIDER_ACCOUNTS: "Provider account catalog",
+      MODELS: "Model catalog",
+      ROLE_IMAGE_RECIPES: "Image recipe catalog",
+      IMAGE_ARTIFACTS: "Image catalog",
+      ROLE_ENVIRONMENTS: "Environment catalog",
+      CURRENT_CONFIGURATION: "Current settings",
+    },
+    nativeShellActions: {
+      READ: "read files",
+      LIST_FILES: "list files",
+      SEARCH: "search",
+    },
     toolResult: "Safe result",
+    toolFailed: "The action could not be completed",
     toolDuration: "Duration: {duration} ms",
     expandMessage: "Show full message",
     collapseMessage: "Collapse",
+    newMessages: "New messages ↓",
+    earlierServiceHistory: "Show earlier service records",
+    toolGroup: "Tool calls: {count}",
+    workIndicator: "Working",
+    serviceProgress: "Execution steps: {count}",
+    transcriptTurn: "Turn {turn} · attempt {attempt}",
+    messagePhases: { USER: "Task", COMMENTARY: "Progress", FINAL: "Answer" },
     runtimeProgress: {
       workloadScheduled: "Task handed to the worker",
-      modelRequestRunning: "Model is processing the request",
+      modelRequestRunning: "Preparing and executing the model request",
+      providerUnavailable:
+        "The model provider is temporarily unavailable. The turn failed.",
     },
     artifactUnavailable:
       "A file event was received, but its safe descriptor is unavailable.",
     renderedPromptUnavailable:
       "Fully rendered instructions and RuntimeRevision are not provided by the current API. The UI does not reconstruct them from indirect data.",
+    promptPreviewSafeHint: "Safe sections and revisions, not full model input.",
     usage: {
       title: "Token usage",
       total: "Total",
@@ -6743,6 +7095,8 @@ const en = {
     credentials: "Credentials",
     masked: "Values are masked and never exposed to the browser",
     capabilities: "Connection capabilities",
+    showAllCapabilities: "Show all ({count})",
+    collapseCapabilities: "Collapse ({count})",
     grants: "Employee and Process grants",
     unavailable: "Currently unavailable — core platform keeps working",
     disabled: "Connection disabled",
@@ -6814,6 +7168,9 @@ const en = {
     resourceScope: "Resource scope",
     approvalPolicy: "Approval policy",
     technicalDetails: "Technical details",
+    chooseApprovalPolicy: "Choose an approval policy",
+    approvalPolicySelectionHelp:
+      "The selected value is saved explicitly. Only policies allowed for this capability are available.",
     approvalPolicies: {
       NONE: "no approval",
       HUMAN_EACH_EFFECT: "approve every action",
@@ -6908,10 +7265,18 @@ const en = {
     packageCategories: {
       communications: "Communications",
       data: "Data",
+      documentation: "Documentation",
       knowledge: "Knowledge",
       "source-control": "Source control",
       testing: "Testing",
       "work-management": "Work management",
+    },
+    fieldTypes: {
+      TEXT: "string",
+      URL: "URL",
+      STRING_LIST: "list of strings",
+      INTEGER: "integer",
+      BOOLEAN: "boolean",
     },
     firstParty: "first-party",
     customPackage: "custom package",
@@ -7027,6 +7392,8 @@ const en = {
     consequencesUnavailable:
       "The consequences were not provided by the API. Inspect the run before taking action.",
     projectUnavailable: "Project name unavailable",
+    scope: "Scope",
+    organizationScope: "Organization · system assistant",
     run: "Run",
     process: "Run and exact node",
     runUnavailable: "Run title unavailable",
@@ -7061,6 +7428,20 @@ const en = {
     integrationCapability: "Capability",
     integrationEffectKey: "Effect key",
     integrationParameters: "Action parameters",
+    integrationRepository: "Repository",
+    integrationIssueComment: "Add a comment to Issue #{issue}",
+    integrationCommentBody: "Comment text",
+    integrationPreviewIncomplete:
+      "The safe action preview is incomplete: some values are hidden or truncated. Check the limitations before deciding.",
+    integrationValueHidden: "Value hidden in the safe preview",
+    integrationValueTruncated: "Only part of the value is shown",
+    integrationFieldLabels: {
+      issue_number: "Issue",
+      body: "Content",
+      title: "Title",
+      comment: "Comment",
+      text: "Text",
+    },
     comment: "Comment",
     commentPlaceholder: "Add context for the next step",
     actionsUnavailable: "Answer is currently unavailable",
@@ -7977,6 +8358,12 @@ const en = {
   },
   assistant: {
     ...ru.assistant,
+    contextRoutes: {
+      images: "Assistant images",
+      newImage: "New assistant image",
+      image: "Assistant image",
+      secrets: "Assistant secrets",
+    },
     resources: {
       title: "Assistant image, secrets, and environment",
       images: "Image catalog",
@@ -8061,14 +8448,27 @@ const en = {
       CREATE_PROJECT_ASSISTANT: "Create project assistant",
       CREATE_RUNTIME_ENVIRONMENT_DRAFT: "Create environment draft",
       PREPARE_RUNTIME_ENVIRONMENT_REVISION: "Prepare environment revision",
+      BIND_AGENT_RUNTIME_ENVIRONMENT: "Assign runtime environment",
       CREATE_ROLE_IMAGE_RECIPE: "Create image recipe",
       UPDATE_ROLE_IMAGE_RECIPE: "Update image recipe",
+      CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE: "Create Kodex image recipe",
+      UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE: "Update Kodex image recipe",
+      PREPARE_ASSISTANT_RUNTIME_CONFIGURATION:
+        "Prepare assistant model settings",
       CREATE_WORKFLOW: "Create Workflow",
+      UPDATE_WORKFLOW: "Update Workflow",
       CHANGE_CAPABILITY: "Change capabilities",
       CHANGE_INTEGRATION_GRANT: "Change connection access",
+      CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT:
+        "Change system assistant access",
+      CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT:
+        "Change project assistant access",
       CREATE_SCHEDULE: "Create Automation",
+      UPDATE_SCHEDULE: "Update Automation",
       LAUNCH_RUN: "Launch Run",
       CREATE_INTEGRATION_CONNECTION: "Create connection",
+      PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION:
+        "Prepare project assistant connection",
       PUBLISH_INTEGRATION_DEFINITION: "Publish integration",
       TEST_INTEGRATION_CONNECTION: "Test connection",
       ARCHIVE_AGENT: "Archive agent",
@@ -8111,6 +8511,16 @@ const en = {
       runtime: "Model and runtime",
       environment: "Environment",
       instructions: "Instructions",
+      integrations: "Integrations",
+      integrationsHelp:
+        "System assistant grants belong to the organization. Choose a connection, capability and explicit approval policy. Changes apply to subsequent turns.",
+      integrationEnabled: "Allow this capability for the assistant",
+      integrationGranted: "Access granted",
+      integrationNotGranted: "Access not granted",
+      integrationsReadOnly:
+        "This grant cannot be changed. The organization server checks permissions.",
+      integrationSaved:
+        "Grant saved. Select the capability to inspect its current state.",
       instructionsHelp:
         "Owner instructions apply to future turns. Changes proposed by Kodex itself are shown as a draft for confirmation first.",
       environmentTitle: "Kodex runtime environment",
@@ -8245,6 +8655,7 @@ const en = {
     },
     environmentDraft: {
       title: "Employee environment",
+      systemTitle: "System environment",
       loadFailed: "Could not load the environment draft. Refresh to try again.",
       incomplete:
         "This is still a draft. Select an admitted image, configure, validate, and publish the environment.",
@@ -8252,8 +8663,16 @@ const en = {
         "The draft contains an admitted image. Review its settings and publish the environment.",
       invalid:
         "Validation failed. Open the editor and correct the environment configuration.",
-      published:
-        "The environment is published. Bind it to the intended employee.",
+      published: "The environment is published.",
+      bindingChecking: "Checking the environment assigned to Kodex.",
+      bindingUnavailable:
+        "Could not confirm the environment assigned to Kodex. Refresh its state.",
+      systemBound:
+        "This environment is already assigned to Kodex. Effective revision: {revision}.",
+      systemBindingChanged:
+        "Kodex is currently assigned a different environment. Check its current settings.",
+      turnBoundary:
+        "The current turn keeps its pinned revision. Subsequent turns use the assigned environment according to the confirmed settings.",
       discarded: "The environment draft was discarded.",
       continue: "Continue setup",
       bind: "Assign to employee",
@@ -8367,6 +8786,11 @@ const en = {
       atomic:
         "There are no hidden changes. The plan is applied in one transaction or not applied at all.",
       summary: "What the plan changes",
+      cardSelection: "{selected} of {count} operations selected",
+      cardMore: "{count} more operations",
+      cardProblems: "{count} operations need review. Open the full plan.",
+      cardOperationProblem: "Operation needs review",
+      cardNotSelected: "Not selected",
       editedPlanSummary:
         "The plan was changed in the form. Review the actual operation values before applying it.",
       editedOperationSummary:
@@ -8466,6 +8890,11 @@ const en = {
         "This permission changes only after the plan is validated and confirmed.",
       grantConnection: "Connection",
       grantRecipient: "Recipient",
+      grantEnableShort: "Grant",
+      grantDisableShort: "Revoke",
+      grantRefreshPlan: "Refresh plan with assistant",
+      grantRefreshHint:
+        "The data changed. A new plan must recheck the permissions.",
       grantCapability: "Integration capability",
       grantEnable: "Grant permission (clear to revoke an existing grant)",
       grantLoadFailed:
@@ -8477,6 +8906,12 @@ const en = {
       grantUnavailable:
         "This permission is unavailable for the selected recipient. Check the connection or request another plan.",
       grantNothingToRevoke: "No active grant was found to revoke.",
+      systemGrantFixedTarget:
+        "The connection and capability are pinned to this plan revision. The recipient is the organization's system assistant. Prepare a new plan for another connection or capability; only enablement and approval policy can be edited here.",
+      projectGrantFixedTarget:
+        "The recipient is the project assistant. The connection and capability are pinned to this plan; only enablement and approval policy can be edited here.",
+      systemGrantApplied:
+        "The saved grant was verified against its exact receipt",
       grantFixedTarget:
         "This plan fixes the connection and recipient. Ask the assistant to revise it for another target. Do not enter secrets here.",
       agentNextSteps:
@@ -8504,6 +8939,10 @@ const en = {
         "This is the system Kodex environment. Review its organization image, tools, values, secret bindings, resources, and network access. Confirmation creates only a draft.",
       environmentPolicyInvalid:
         "The environment policy is damaged or contains unsupported fields. Request a new plan.",
+      environmentPolicySummary:
+        "CPU {cpuRequest}/{cpuLimit} mCPU · memory {memoryRequest}/{memoryLimit} MiB · volumes: {volumes} · internet: {webMode} · rules: {webRules}. The policy is unchanged.",
+      environmentPolicyReview:
+        "Review resource and access policy: changed or unverified settings and internet access remain fully visible. Applying the plan does not replace separate publication approval.",
       environmentPolicyFreshAuthentication:
         "Kubernetes access to the current execution requires fresh sign-in before validating or publishing the environment.",
       environmentToolsUnverified:
@@ -8532,11 +8971,24 @@ const en = {
       systemImageBoundary:
         "System assistant image. The server-pinned scope and assistant cannot be changed here. Building, verification and promotion use the standard pipeline.",
       systemImageNextSteps:
-        "Confirmation queues the new image generation for building. Wait for verification, separately confirm promotion, then select the image in the assistant environment. Current turns keep their existing image.",
+        "Confirmation saves the image recipe. Then open it and check the build status. After successful admission, publish the image separately and select it in the assistant environment. Current turns keep their existing image.",
       runtimeConfigurationBoundary:
         "Model settings apply only to the pinned assistant and future turns. Save and validate the plan, then separately confirm application; current turns keep their existing configuration.",
       runtimeConfigurationUnavailable:
         "The assistant binding or catalog could not be verified. Refresh the plan; changes are unavailable for now.",
+      webSearchMode: "Web search",
+      webSearchUnchanged: "Keep current setting",
+      webSearchDefault: "Default setting",
+      webSearchInvalid: "Invalid search mode",
+      webSearchReview: "Current: {before} → After application: {after}",
+      webSearchHelp:
+        "Provider search does not change network access for programs.",
+      webSearchModes: {
+        disabled: "Disabled",
+        cached: "Cached search",
+        indexed: "Indexed search",
+        live: "Live search",
+      },
       reasoningCatalogDefault: "Catalog default",
       reasoningUnsupported: "Model without reasoning effort",
       reasoningUnsupportedHelp:
@@ -8549,9 +9001,9 @@ const en = {
       roleImageCatalogUnavailable:
         "Could not load the employee and environment catalog. Reload the page and validate the plan again.",
       roleImageCreateNextSteps:
-        "After confirmation, the platform creates a recipe and queues its first build. The employee can use the image only after successful verification and promotion.",
+        "Confirmation creates the image recipe. Then open it and check the build status. After successful admission, publish the image separately and select it in the employee environment.",
       roleImageUpdateNextSteps:
-        "After confirmation, the platform creates a new recipe generation and queues its build. The current promoted generation remains available until the new one is verified and promoted separately.",
+        "Confirmation saves a new image recipe generation. Then open it and check the build status. After successful admission, publish the image separately and select it in the employee environment. The current published generation remains available.",
       roleImageHistoricalSource:
         "This saved plan does not contain the Dockerfile source. If the image was created, open its recipe to inspect the current source.",
       connectionDefinition: "Integration type",
@@ -8567,6 +9019,8 @@ const en = {
       connectionListHint: "Separate values with commas.",
       connectionCredentialNextSteps:
         "Only public settings belong here. If the integration needs a key or password, use the protected form after creation. Never send secrets to the assistant.",
+      projectConnectionBoundary:
+        "This connection belongs to the organization and requires owner confirmation. Intended project assistant:",
       runTitle: "Run title",
       runTargetType: "What to launch",
       runAgent: "AI employee",

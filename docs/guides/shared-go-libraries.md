@@ -4,8 +4,8 @@ title: Общие библиотеки Go
 type: guide
 status: approved
 owner: architect
-version: 1.0.3
-updated: 2026-08-24
+version: 1.0.4
+updated: 2026-10-06
 ---
 
 # Общие библиотеки Go
@@ -194,6 +194,12 @@ JetStream API. Он владеет TLS/credentials connection, exact stream chec
 publish acknowledgement и error classification, но не знает доменный payload.
 `EnsureStream` разрешён только release-managed bootstrap job: он создаёт
 отсутствующий exact stream, но не обновляет несовместимый существующий ресурс.
+Изменение максимального размера сообщения непустого stream выполняет только
+отдельный явный release-bootstrap метод. Он принимает точный прежний контракт,
+меняет только `MaxMsgSize` и повторяет строгий readback; любой иной drift
+отклоняется. Runtime `Check` и обычный `EnsureStream` не выполняют такой upgrade.
+Размер payload проверяется отдельно с резервом для broker headers; объявленный
+сервером `MaxPayload` не должен быть меньше нового stream limit.
 
 Сервис владеет AsyncAPI, `eventName`, payload, sequence, ordering key,
 миграциями runtime-таблиц, точной NATS-конфигурацией и consumer effect.
@@ -329,6 +335,15 @@ Service config:
 
 ## Compatibility
 
+`runtimecontract.ImageToolInventory` задаёт единый закрытый wire/storage schema
+наблюдения образа для trusted producer, admission bridge, CP и controller.
+Probe registry назначает только известные команды/пути/аргументы и не выдаёт
+capabilities. Decoder отклоняет неизвестные/повторные поля, неподписанную
+подстановку деклараций, неканонический inner manifest и digest mismatch;
+историческое отсутствие evidence имеет отдельный `UNAVAILABLE` read status.
+Execution probes принадлежат deployable agent-runner; shared contract не
+создаёт процессов, не читает env и не владеет admission policy либо Secret.
+
 - Удаление или изменение public API требует миграционного плана потребителей.
 - Storage/wire schema общей библиотеки versioned и проверяется readiness.
 - Общий validator различает stable key каталога и opaque ID агрегата по
@@ -337,6 +352,12 @@ Service config:
   полный encode/decode потребителя; расширение одного вида ключа не меняет
   проверки остальных resource refs и не заменяет owner authority.
 - Общая библиотека не применяет миграции скрыто.
+- Предел пользовательского текста в Unicode codepoints проверяется единым
+  validator на transport, domain и storage boundary без усечения или
+  нормализации. JSON-escaping, UTF-8 размер события, outbox, broker headers и
+  session history согласуются с тем же максимальным входом. Invalid UTF-8,
+  NUL и пустой текст отклоняются до mutation; non-USER сообщения сохраняют
+  свой отдельный ограниченный контракт.
 - Каждый сервис включает нужные forward-only migrations в собственный
   migration binary.
 - Provider adapter можно заменить без изменения provider-neutral API и

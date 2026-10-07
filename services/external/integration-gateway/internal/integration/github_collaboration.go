@@ -77,7 +77,7 @@ func (adapter *Adapter) executeGitHubCollaboration(ctx context.Context, client *
 		var response *github.Response
 		var err error
 		if request.Operation == "github.pull_request.create" {
-			item, response, err = client.PullRequests.Create(ctx, owner, repo, &github.NewPullRequest{Title: github.Ptr(in.Title), Head: github.Ptr(in.Head), Base: github.Ptr(in.Base), Body: github.Ptr(in.Body)})
+			item, response, err = client.PullRequests.Create(ctx, owner, repo, &github.NewPullRequest{Title: github.Ptr(in.Title), Head: github.Ptr(in.Head), Base: github.Ptr(in.Base), Body: github.Ptr(in.Body), Draft: github.Ptr(in.Draft)})
 		} else {
 			update := &github.PullRequest{}
 			if _, ok := request.Input["title"]; ok {

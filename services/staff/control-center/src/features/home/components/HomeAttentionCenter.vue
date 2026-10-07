@@ -88,6 +88,23 @@ function formatDate(value?: string): string {
 const serverMessage = useServerMessage();
 const providerRoot = ref<HTMLElement>();
 const providerSentinel = ref<HTMLElement>();
+const visibleLimit = ref(5);
+const visibleGates = computed(() => props.gates.slice(0, visibleLimit.value));
+const visibleFailedRuns = computed(() =>
+  props.failedRuns.slice(
+    0,
+    Math.max(0, visibleLimit.value - props.gates.length),
+  ),
+);
+const visibleProviderAccounts = computed(() =>
+  props.providerAccounts.slice(
+    0,
+    Math.max(
+      0,
+      visibleLimit.value - props.gates.length - props.failedRuns.length,
+    ),
+  ),
+);
 const providerPageSize = useAdaptiveCursorPageSize({
   container: providerRoot,
   itemSelector: ".home-attention__provider-item",
@@ -101,10 +118,15 @@ useCursorInfiniteScroll({
   root: providerRoot,
   sentinel: providerSentinel,
   enabled: () =>
-    Boolean(props.providerNextPageToken) &&
+    (visibleLimit.value < total.value ||
+      Boolean(props.providerNextPageToken)) &&
     !props.providerLoadingMore &&
     !props.providerMoreProblem,
-  loadMore: () => emit("moreProviders", providerPageSize.value),
+  loadMore: () => {
+    if (visibleLimit.value < total.value) visibleLimit.value += 5;
+    else emit("moreProviders", providerPageSize.value);
+  },
+  rootMargin: "0px 0px 40px",
 });
 </script>
 
@@ -143,7 +165,10 @@ useCursorInfiniteScroll({
     </div>
     <div
       v-else
+      ref="providerRoot"
       class="home-attention__body"
+      tabindex="0"
+      :aria-label="$t('workboard.attention')"
       :class="{
         'home-attention__body--single':
           !(gatesCount ?? gates.length) ||
@@ -175,7 +200,7 @@ useCursorInfiniteScroll({
             <RouterLink to="/decisions">{{ $t("common.all") }}</RouterLink>
           </div>
           <RouterLink
-            v-for="gate in gates"
+            v-for="gate in visibleGates"
             :key="gate.ref"
             :to="{
               path: runPath(gate.runRef, gate.projectRef),
@@ -190,7 +215,11 @@ useCursorInfiniteScroll({
               <h4>{{ serverMessage(gate.title) }}</h4>
               <SafeSummary :content="gate.contextSummary" />
               <p>
-                <span>{{ projectName(gate.projectRef) }}</span>
+                <span>{{
+                  gate.scopeKind === "ORGANIZATION"
+                    ? $t("decisions.organizationScope")
+                    : projectName(gate.projectRef)
+                }}</span>
                 <span
                   >{{ $t("workboard.initiator") }}:
                   {{ gate.requestedBy.displayName }}</span
@@ -221,7 +250,7 @@ useCursorInfiniteScroll({
             <RouterLink to="/runs">{{ $t("common.all") }}</RouterLink>
           </div>
           <RouterLink
-            v-for="run in failedRuns"
+            v-for="run in visibleFailedRuns"
             :key="run.ref"
             :to="runPath(run.ref, run.projectRef)"
             class="home-attention__item"
@@ -252,11 +281,10 @@ useCursorInfiniteScroll({
       </slot>
       <div
         v-if="providerAccounts.length"
-        ref="providerRoot"
         class="home-attention__group home-attention__provider-group"
       >
         <RouterLink
-          v-for="account in providerAccounts"
+          v-for="account in visibleProviderAccounts"
           :key="account.ref"
           to="/administration/providers"
           class="home-attention__item home-attention__provider-item"
@@ -275,24 +303,27 @@ useCursorInfiniteScroll({
             $t("home.renewAuthorization")
           }}</span>
         </RouterLink>
-        <div
-          v-if="
-            providerNextPageToken || providerLoadingMore || providerMoreProblem
-          "
-          ref="providerSentinel"
-          class="home-attention__provider-sentinel"
-          role="status"
+      </div>
+      <div
+        v-if="
+          visibleLimit < total ||
+          providerNextPageToken ||
+          providerLoadingMore ||
+          providerMoreProblem
+        "
+        ref="providerSentinel"
+        class="home-attention__provider-sentinel"
+        role="status"
+      >
+        <span v-if="providerLoadingMore">{{ $t("common.loading") }}</span>
+        <button
+          v-else-if="providerMoreProblem"
+          class="button"
+          type="button"
+          @click="emit('retryMoreProviders', providerPageSize)"
         >
-          <span v-if="providerLoadingMore">{{ $t("common.loading") }}</span>
-          <button
-            v-else-if="providerMoreProblem"
-            class="button"
-            type="button"
-            @click="emit('retryMoreProviders', providerPageSize)"
-          >
-            {{ $t("common.retry") }}
-          </button>
-        </div>
+          {{ $t("common.retry") }}
+        </button>
       </div>
       <p
         v-if="
@@ -356,16 +387,14 @@ useCursorInfiniteScroll({
   font-size: 0.8rem;
 }
 .home-attention__provider-group {
-  max-height: 420px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  min-width: 0;
 }
 .home-attention__provider-sentinel {
   display: flex;
   min-height: 1px;
   align-items: center;
   justify-content: center;
-  padding: 6px 16px;
+  padding: 0;
 }
 .home-attention__count,
 .home-attention__group-head > span {
@@ -391,6 +420,10 @@ useCursorInfiniteScroll({
 }
 .home-attention__body {
   display: block;
+  max-height: min(420px, 55vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 .home-attention__body > :deep(.problem-notice) {
   margin: 12px 16px 0;
@@ -427,7 +460,7 @@ useCursorInfiniteScroll({
   grid-template-columns: 32px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 14px;
-  min-height: 68px;
+  min-height: 84px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--hairline);
   color: inherit;

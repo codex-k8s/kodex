@@ -62,7 +62,11 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 	metadata, err := toml.Decode(string(raw), &config)
 	profile := config.Permissions[config.DefaultPermissions]
 	if !metadata.IsDefined("features", "code_mode_host") || config.Features.CodeModeHost ||
-		!metadata.IsDefined("features", "memories") || !metadata.IsDefined("memories", "generate_memories") ||
+		!metadata.IsDefined("features", "code_mode", "enabled") || config.Features.CodeMode.Enabled ||
+		!metadata.IsDefined("features", "code_mode_only") || config.Features.CodeModeOnly {
+		t.Fatal("native tools are not explicitly routed away from the disabled code-mode host")
+	}
+	if !metadata.IsDefined("features", "memories") || !metadata.IsDefined("memories", "generate_memories") ||
 		!metadata.IsDefined("memories", "use_memories") || config.Features.Memories || config.Memories.GenerateMemories || config.Memories.UseMemories {
 		t.Fatal("provider local memory is not explicitly disabled")
 	}
@@ -74,7 +78,7 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 		config.MCPServers["kodex"].BearerTokenEnvVar != "KODEX_MCP_PROXY_TOKEN" ||
 		config.MCPServers["kodex"].DefaultToolsApprovalMode != "approve" ||
 		config.MCPServers["kodex"].ToolTimeoutSeconds != runtimecontract.MaximumSynchronousMCPToolTimeoutSeconds ||
-		!slices.Equal(config.Features.CodeMode.DirectOnlyToolNamespaces, []string{"mcp__kodex"}) {
+		!slices.Equal(config.Features.CodeMode.DirectOnlyToolNamespaces, []string{"functions", "web", "mcp__kodex"}) {
 		t.Fatalf("provider permission boundary is incomplete: %#v", config)
 	}
 	for path := range profile.Filesystem {
@@ -107,7 +111,10 @@ func TestPrepareHomePreservesPinnedSandboxBoundary(t *testing.T) {
 				t.Fatal(err)
 			}
 			var config runtimeConfig
-			if _, err := toml.Decode(string(raw), &config); err != nil || config.Permissions[config.DefaultPermissions].Extends != expected {
+			if _, err := toml.Decode(string(raw), &config); err != nil || config.Permissions[config.DefaultPermissions].Extends != expected ||
+				config.ApprovalPolicy != input.CodexApprovalPolicy || config.Features.CodeModeHost ||
+				config.Features.CodeModeOnly || config.Features.CodeMode.Enabled ||
+				!slices.Equal(config.Features.CodeMode.DirectOnlyToolNamespaces, []string{"functions", "web", "mcp__kodex"}) {
 				t.Fatalf("sandbox %s expanded to %#v: %v", sandbox, config.Permissions, err)
 			}
 		})
@@ -166,6 +173,42 @@ func TestPrepareHomeMaterializesOnlyBoundEnvironment(t *testing.T) {
 	if strings.Contains(string(raw), "synthetic-secret-must-not-persist") || strings.Contains(string(raw), "fixture.signature") ||
 		strings.Contains(string(raw), "include_only") {
 		t.Fatal("configuration persisted credentials or legacy environment filters")
+	}
+}
+
+func TestPrepareHomeMaterializesPinnedHostedSearchWithoutEgressChanges(t *testing.T) {
+	setRuntimeTransportFixture(t)
+	for _, mode := range []string{"", "disabled", "cached", "indexed", "live", "unknown"} {
+		t.Run(mode, func(t *testing.T) {
+			workspace := t.TempDir()
+			auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
+			digest := sha256.Sum256(auth)
+			digestFile := filepath.Join(workspace, "auth.sha256")
+			if err := os.WriteFile(digestFile, []byte(hex.EncodeToString(digest[:])), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			input := model.Input{WorkspaceRoot: workspace, CodexHome: filepath.Join(workspace, ".kodex", "state", "codex-home"), Model: "fixture-model", ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high", CodexApprovalPolicy: "never", CodexSandbox: "workspace-write", ProviderAuthSHA256File: digestFile, ProviderCredentialSHA256: hex.EncodeToString(digest[:])}
+			input.EnvironmentPolicy.Network.WebAccess.Mode = runtimecontract.RuntimeWebAccessNone
+			if mode != "" {
+				input.ConfigOverlay = "web_search = \"" + mode + "\"\n"
+			}
+			err := PrepareHomeWithAuth(input, "http://127.0.0.1:12345/mcp", auth)
+			if mode == "unknown" {
+				if err == nil {
+					t.Fatal("unsupported mode reached writer")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(filepath.Join(input.CodexHome, "config.toml"))
+			var config runtimeConfig
+			metadata, decodeErr := toml.Decode(string(raw), &config)
+			if err != nil || decodeErr != nil || config.WebSearchMode != mode || metadata.IsDefined("web_search") != (mode != "") || config.DefaultPermissions != "kodex-runtime" || config.Permissions[config.DefaultPermissions].Network.Enabled {
+				t.Fatal("mode was lost/defaulted or expanded sandbox egress")
+			}
+		})
 	}
 }
 

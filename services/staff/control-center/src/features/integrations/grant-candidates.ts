@@ -6,6 +6,7 @@ import type {
   IntegrationGrantProjectCandidatePage,
   IntegrationGrantRecipientCandidatePage,
   IntegrationGrantCapabilityCandidatePage,
+  IntegrationGrantInput,
   ListIntegrationGrantConnectionCandidatesData,
   ListIntegrationGrantProjectCandidatesData,
   ListIntegrationGrantRecipientCandidatesData,
@@ -21,6 +22,7 @@ export interface IntegrationGrantSelection {
   recipientKind: "AGENT" | "WORKFLOW";
   recipientRef: string;
   capabilityKey: string;
+  approvalPolicy: IntegrationGrantInput["approvalPolicy"];
   approvalScopePaths?: string[];
 }
 

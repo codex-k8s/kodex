@@ -116,7 +116,7 @@ func testMailboxObservationLifecycle(t *testing.T, ctx context.Context, reposito
 			if err != nil {
 				t.Fatal(err)
 			}
-			result, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: fmt.Sprintf("mailbox-observation-grant-%d", index), ExpectedVersion: &current.Version}, Payload: command.IntegrationGrantInput{ConnectionRef: connectionRef, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: enabled}})
+			result, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: fmt.Sprintf("mailbox-observation-grant-%d", index), ExpectedVersion: &current.Version}, Payload: command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connectionRef, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: enabled}})
 			if err != nil || result.Connection == nil {
 				t.Fatalf("grant lifecycle: %v", err)
 			}

@@ -87,6 +87,14 @@ func (repository *Repository) bootstrapAgentRuntime(ctx context.Context, tx pgx.
 	if updatedAgentID != agentID {
 		return errors.New("bootstrap agent runtime configuration did not update the agent")
 	}
+	// CREATE привязывает новую роль к опубликованной ревизии, но не является
+	// публикацией новой конфигурации существующего общего environment.
+	if currentRuntimeEnvironmentVersionID != "" {
+		if runtimeEnvironmentVersionID != currentRuntimeEnvironmentVersionID {
+			return errors.New("bootstrap agent runtime changed a published environment revision")
+		}
+		return nil
+	}
 	activation, err := tx.Exec(ctx, queryRuntimeConfigurationAdvanceBootstrapEnvironment, pgx.StrictNamedArgs{
 		"environment_id": runtimeEnvironmentID, "current_version_id": currentRuntimeEnvironmentVersionID,
 		"next_version_id": runtimeEnvironmentVersionID,
@@ -734,24 +742,20 @@ func (repository *Repository) resolveScopedRuntimeEnvironmentImage(ctx context.C
 	}
 	var artifactID, storedArtifactRef, recipeRef, reference, manifestDigest string
 	var recipeGeneration int64
-	var rawSpecification []byte
 	err := tx.QueryRow(ctx, queryRuntimeConfigurationResolveImageArtifact, pgx.StrictNamedArgs{
 		"organization_id": organizationID, "project_id": projectID, "scope_kind": scopeKind, "artifact_ref": artifactRef,
-	}).Scan(&artifactID, &storedArtifactRef, &recipeRef, &recipeGeneration, &reference, &manifestDigest, &rawSpecification)
+	}).Scan(&artifactID, &storedArtifactRef, &recipeRef, &recipeGeneration, &reference, &manifestDigest)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrNotFound
 	}
 	if err != nil || storedArtifactRef != artifactRef || recipeGeneration < 1 || reference == "" || manifestDigest == "" {
 		return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrUnavailable
 	}
-	var specification entity.RoleImageRecipeInput
-	if json.Unmarshal(rawSpecification, &specification) != nil {
+	artifact, inventoryErr := scanRoleImageArtifact(tx.QueryRow(ctx, queryRoleImagesGetActiveArtifact, organizationID, storedArtifactRef))
+	if inventoryErr != nil || artifact.ManifestDigest != manifestDigest || artifact.PromotedReference != reference {
 		return "", entity.RuntimeEnvironmentImage{}, nil, nil, errs.ErrUnavailable
 	}
-	available := make(map[string]struct{}, len(specification.Tools))
-	for _, tool := range specification.Tools {
-		available[tool.Name] = struct{}{}
-	}
+	available := verifiedImageToolCommands(artifact.ToolInventory)
 	normalized := append([]entity.RuntimeEnvironmentTool(nil), tools...)
 	if normalized == nil {
 		normalized = []entity.RuntimeEnvironmentTool{}

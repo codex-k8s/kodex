@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -121,7 +122,8 @@ func TestEnsureRestorePVCCreatesBoundedCanonicalVolume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create controller: %v", err)
 	}
-	task := model.Task{PVCName: "runtime-session-0123456789abcdef", InputDigest: strings.Repeat("a", 64)}
+	task := model.Task{OrganizationRef: "org_fixture01", SessionRef: "ses_fixture01", InputDigest: strings.Repeat("a", 64)}
+	task.PVCName, _ = runtimecontract.SessionPVCName(task.SessionRef)
 	if err := controller.ensureRestorePVC(context.Background(), task); err != nil {
 		t.Fatalf("ensure restore PVC: %v", err)
 	}
@@ -131,6 +133,14 @@ func TestEnsureRestorePVCCreatesBoundedCanonicalVolume(t *testing.T) {
 	}
 	if pvc.Annotations[restoreInputAnnotation] != task.InputDigest || pvc.Spec.Resources.Requests.Storage().String() != "20Gi" {
 		t.Fatalf("restore PVC is not bound to the immutable task: %#v", pvc)
+	}
+	wantedLabels, wantedAnnotations, _ := runtimecontract.SessionVolumeMetadata(task.OrganizationRef, task.ProjectRef, task.SessionRef)
+	for _, pair := range []struct{ actual, wanted map[string]string }{{pvc.Labels, wantedLabels}, {pvc.Annotations, wantedAnnotations}} {
+		for key, value := range pair.wanted {
+			if pair.actual[key] != value {
+				t.Fatal("restore PVC cannot pass the runtime managed owner predicate")
+			}
+		}
 	}
 
 	conflict := task
@@ -165,6 +175,61 @@ func TestWorkerJobUsesSessionVolumeGroupWithoutServiceAccountToken(t *testing.T)
 	sessionMount := pod.Containers[0].VolumeMounts[len(pod.Containers[0].VolumeMounts)-1]
 	if sessionMount.Name != "session" || sessionMount.MountPath != "/workspace/.kodex/state" {
 		t.Fatalf("worker session PVC mount не совпадает с runtime workspace: %#v", sessionMount)
+	}
+}
+
+func TestWorkerIdentityKeepsRestoredSourceOwnedByNativeWriter(t *testing.T) {
+	t.Parallel()
+	controller, err := New(fake.NewSimpleClientset(), testConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, scenario := range []struct {
+		kind string
+		uid  int64
+	}{{"SNAPSHOT", 10002}, {"RESTORE", 10002}, {"DELETE_OBJECT", 10002}, {"DELETE_PVC", 10002}} {
+		t.Run(scenario.kind, func(t *testing.T) {
+			job := controller.job("session-archive-test", model.Task{Kind: scenario.kind, PVCName: "runtime-session-0123456789abcdef"}, "pvc-uid")
+			pod := job.Spec.Template.Spec
+			security := pod.Containers[0].SecurityContext
+			if security == nil || security.RunAsUser == nil || *security.RunAsUser != scenario.uid ||
+				security.RunAsGroup == nil || *security.RunAsGroup != scenario.uid {
+				t.Fatalf("%s worker identity must be UID/GID %d", scenario.kind, scenario.uid)
+			}
+			if security.RunAsNonRoot == nil || !*security.RunAsNonRoot || security.AllowPrivilegeEscalation == nil || *security.AllowPrivilegeEscalation ||
+				security.ReadOnlyRootFilesystem == nil || !*security.ReadOnlyRootFilesystem || security.Privileged != nil && *security.Privileged ||
+				security.Capabilities == nil || len(security.Capabilities.Add) != 0 || len(security.Capabilities.Drop) != 1 || security.Capabilities.Drop[0] != "ALL" {
+				t.Fatal("worker identity change weakened the restricted security context")
+			}
+			if pod.SecurityContext.FSGroup == nil || *pod.SecurityContext.FSGroup != 29000 ||
+				pod.AutomountServiceAccountToken == nil || *pod.AutomountServiceAccountToken ||
+				len(pod.Containers[0].Command) != 0 || len(pod.Containers[0].Args) != 1 || pod.Containers[0].Args[0] != "worker" ||
+				job.Annotations[sourcePVCUIDAnnotation] != "pvc-uid" {
+				t.Fatal("worker lost its canonical volume, task entrypoint or source PVC binding")
+			}
+			if scenario.kind != "RESTORE" {
+				if len(pod.InitContainers) != 0 {
+					t.Fatal("non-restore task received a restore preparer")
+				}
+				return
+			}
+			if len(pod.InitContainers) != 1 {
+				t.Fatal("restore task lacks its exact directory preparer")
+			}
+			prepare := pod.InitContainers[0]
+			if prepare.Name != "restore-prepare" || prepare.Image != pod.Containers[0].Image ||
+				len(prepare.Args) != 1 || prepare.Args[0] != "prepare-restore" || len(prepare.Command) != 0 ||
+				prepare.SecurityContext == nil || *prepare.SecurityContext.RunAsUser != 10001 ||
+				*prepare.SecurityContext.RunAsGroup != 10001 || *prepare.SecurityContext.AllowPrivilegeEscalation ||
+				!*prepare.SecurityContext.ReadOnlyRootFilesystem || len(prepare.SecurityContext.Capabilities.Add) != 0 ||
+				len(prepare.SecurityContext.Capabilities.Drop) != 1 || prepare.SecurityContext.Capabilities.Drop[0] != "ALL" ||
+				len(prepare.Env) != 0 || len(prepare.VolumeMounts) != 2 ||
+				prepare.VolumeMounts[0].Name != "task" || !prepare.VolumeMounts[0].ReadOnly ||
+				prepare.VolumeMounts[1].Name != "session" || prepare.VolumeMounts[1].MountPath != "/workspace/.kodex/state" ||
+				len(prepare.Resources.Limits) != 2 {
+				t.Fatal("restore preparer widened identity, mounts, credentials or execution bounds")
+			}
+		})
 	}
 }
 

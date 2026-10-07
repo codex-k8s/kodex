@@ -102,6 +102,64 @@ type streamEvent struct {
 	err     error
 }
 
+// Причина транспортного отказа закрыта и не содержит payload провайдера.
+type appServerCallFailure struct {
+	detail            string
+	code              int64
+	notification      string
+	notificationError string
+	accountRead       string
+	err               error
+}
+
+func (failure *appServerCallFailure) Error() string { return failure.err.Error() }
+func (failure *appServerCallFailure) Unwrap() error { return failure.err }
+
+func callFailure(detail string, err error) error {
+	return &appServerCallFailure{detail: detail, err: err}
+}
+
+// Категория выводится только из точных статических отказов parser; внешние
+// сообщения, неизвестные поля и значения не становятся диагностическими labels.
+func notificationFailure(method string, err error) error {
+	category := "UNKNOWN"
+	switch err.Error() {
+	case "Codex app-server notification method is not allowed":
+		category = "METHOD"
+	case "Codex app-server notification is invalid":
+		category = "ENVELOPE"
+	case "Codex app-server notification tuple is invalid", "Codex app-server token usage tuple is invalid":
+		category = "TUPLE"
+	case "Codex app-server item timestamp is invalid":
+		category = "TIMESTAMP"
+	case "Codex app-server thread item is invalid", "Codex app-server thread item type is invalid",
+		"Codex app-server tagged thread item is invalid", "Codex app-server thread item id is invalid", "Codex app-server MCP UI metadata is invalid":
+		category = "ITEM"
+	case "Codex app-server agent message text is invalid", "Codex app-server agent message phase is invalid",
+		"Codex app-server agent message is invalid", "Codex app-server agent message changed after completion",
+		"Codex app-server published message limit exceeded", "Codex app-server published message exceeds its bound",
+		"Codex app-server emitted duplicate final messages":
+		category = "MESSAGE"
+	case "Codex app-server token usage is invalid", "Codex app-server token usage breakdown is invalid", "Codex app-server token usage delta is invalid":
+		category = "TOKEN_USAGE"
+	case "Codex app-server terminal notification is invalid", "Codex app-server turn lifecycle is incomplete",
+		"Codex app-server successful turn carries an error", "Codex app-server completed with an unfinished native tool",
+		"Codex app-server completed without a final message", "Codex app-server terminal status is invalid":
+		category = "TERMINAL"
+	case "Codex app-server thread started notification is invalid", "Codex app-server turn started notification is invalid":
+		category = "LIFECYCLE"
+	case "Codex app-server MCP startup notification is invalid", "Codex app-server MCP startup thread is invalid",
+		"Codex app-server MCP startup diagnostic is invalid", "Codex app-server MCP startup failure reason is invalid":
+		category = "MCP"
+	case "Codex app-server error notification is invalid", "Codex app-server error retry flag is invalid":
+		category = "PROVIDER_ERROR"
+	}
+	if errors.Is(err, ErrRequiredMCPUnavailable) {
+		category = "MCP"
+	}
+	return &appServerCallFailure{detail: "NOTIFICATION_INVALID", notification: method, notificationError: category, err: err}
+}
+
 type appServer struct {
 	command        *exec.Cmd
 	stdin          io.WriteCloser
@@ -122,7 +180,11 @@ type appServer struct {
 	nextID         int64
 }
 
-func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string) (result Result, resultErr error) {
+func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string, onActivity func(runtimecontract.RuntimeActivity) error) (result Result, resultErr error) {
+	return executeLocalWithInputProof(ctx, input, prompt, mcpProxyToken, onActivity, nil)
+}
+
+func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string, onActivity func(runtimecontract.RuntimeActivity) error, proofObserver providerInputProofObserver) (result Result, resultErr error) {
 	if err := validateRuntimeSelection(input); err != nil {
 		return Result{}, atProviderStage(providerStageSelection, err)
 	}
@@ -135,17 +197,24 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	}
 	ctx, cancelContext := snapshot.BoundExecutionContext(ctx)
 	defer cancelContext()
+	if onActivity == nil {
+		return Result{}, atProviderStage(providerStageSelection, errors.New("Codex runtime activity consumer is unavailable"))
+	}
 	if err := verifyAccountPin(input); err != nil {
 		return Result{}, atProviderStage(providerStageAccountPin, err)
 	}
 	if err := verifyRestoreArchive(input); err != nil {
 		return Result{}, atProviderStage(providerStageArchiveRestore, err)
 	}
+	if err := runtimecontract.ValidateManagedMCPReadiness(input, time.Now()); err != nil {
+		return Result{}, atProviderStage(providerStageMCPReadiness, err)
+	}
 	server, err := startAppServer(input, mcpProxyToken)
 	if err != nil {
 		return Result{}, atProviderStage(providerStageProcessStart, err)
 	}
 	state := newProtocolState(input.CodexSessionID)
+	state.onActivity = onActivity
 	defer func() {
 		if resultErr != nil {
 			// Учитываем только ранее проверенные измерения, даже если terminal,
@@ -197,16 +266,8 @@ func executeLocal(ctx context.Context, input model.Input, prompt []byte, mcpProx
 	if err := state.captureUsageBaseline(); err != nil {
 		return Result{}, atProviderStage(providerStageUsageBaseline, server.abort(ctx, state, err))
 	}
-	turnParams, err := turnStartParams(input, state.threadID, prompt)
-	if err != nil {
-		return Result{}, atProviderStage(providerStageTurnParameters, server.abort(ctx, state, err))
-	}
-	raw, err = server.call(ctx, state, "turn/start", turnParams)
-	if err != nil {
-		return Result{}, atProviderStage(providerStageTurnStart, server.abort(ctx, state, err))
-	}
-	if err := state.bindTurn(raw); err != nil {
-		return Result{}, atProviderStage(providerStageTurnStart, server.abort(ctx, state, err))
+	if err := server.startTurnWithInputProof(ctx, state, input, prompt, proofObserver); err != nil {
+		return Result{}, atProviderStage(providerStageOf(err), server.abort(ctx, state, err))
 	}
 	if err := server.waitTerminal(ctx, state); err != nil {
 		return Result{}, atProviderStage(providerStageTerminalWait, server.abort(ctx, state, err))
@@ -265,12 +326,15 @@ func classifyAccountReadResponse(raw json.RawMessage, callErr error) error {
 	if callErr != nil {
 		return callErr
 	}
-	fields, err := decodeObject(raw, schema([]string{"requiresOpenaiAuth"}, "account", "requiresOpenaiAuth"))
+	fields, err := decodeObject(raw, schema([]string{"requiresOpenaiAuth"}, "account", "requiresOpenaiAuth", "workspaceRouting"))
 	if err != nil {
 		return errAccountReadResponseInvalid
 	}
 	var requiresOpenAIAuth bool
 	if strictDecode(fields["requiresOpenaiAuth"], &requiresOpenAIAuth) != nil {
+		return errAccountReadResponseInvalid
+	}
+	if routing, present := fields["workspaceRouting"]; present && !validAccountReadWorkspaceRouting(routing) {
 		return errAccountReadResponseInvalid
 	}
 	account, present := fields["account"]
@@ -284,6 +348,39 @@ func classifyAccountReadResponse(raw json.RawMessage, callErr error) error {
 		return errAccountReadResponseInvalid
 	}
 	return nil
+}
+
+// Проверяется experimental response field протокола rust-v0.160.0. Значения
+// не сохраняются и не назначают account authority, origin или network policy.
+func validAccountReadWorkspaceRouting(raw json.RawMessage) bool {
+	if len(raw) > 16<<10 {
+		return false
+	}
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return true
+	}
+	fields, err := decodeObject(raw, schema(
+		[]string{"chatgptAccountId", "backendOrigin", "accountRoutingOverride"},
+		"chatgptAccountId", "backendOrigin", "accountRoutingOverride"))
+	if err != nil {
+		return false
+	}
+	if _, err := decodeBoundedString(fields["chatgptAccountId"], 512); err != nil {
+		return false
+	}
+	if _, err := decodeBoundedString(fields["backendOrigin"], 4096); err != nil {
+		return false
+	}
+	override, err := decodeBoundedString(fields["accountRoutingOverride"], 64)
+	if err != nil {
+		return false
+	}
+	switch override {
+	case "NO_CONSTRAINT", "us", "us_cr":
+		return true
+	default:
+		return false
+	}
 }
 
 func validateAccountReadAccount(raw json.RawMessage) error {
@@ -334,7 +431,7 @@ func validAccountPlanType(raw json.RawMessage) bool {
 		return false
 	}
 	switch planType {
-	case "free", "go", "plus", "pro", "prolite", "team", "self_serve_business_prolite",
+	case "free", "go", "plus", "pro", "prolite", "promax", "team", "self_serve_business_prolite",
 		"self_serve_business_usage_based", "business", "ent26", "enterprise_cbp_automation",
 		"enterprise_cbp_usage_based", "enterprise", "edu", "edu_plus", "edu_pro", "unknown":
 		return true
@@ -526,39 +623,39 @@ func (server *appServer) call(ctx context.Context, state *protocolState, method 
 	server.nextID++
 	id := server.nextID
 	if err := server.write(map[string]any{"id": id, "method": method, "params": params}); err != nil {
-		return nil, err
+		return nil, callFailure("REQUEST_WRITE", err)
 	}
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, context.Canceled
+			return nil, callFailure("CONTEXT_CANCELLED", context.Canceled)
 		case event, open := <-server.messages:
 			if !open {
-				return nil, errors.New("Codex app-server closed its response stream")
+				return nil, callFailure("STREAM_CLOSED", errors.New("Codex app-server closed its response stream"))
 			}
 			if event.err != nil {
-				return nil, event.err
+				return nil, callFailure("STREAM_INVALID", event.err)
 			}
 			switch event.message.kind {
 			case messageNotification:
 				if err := state.notification(event.message.method, event.message.payload); err != nil {
-					return nil, err
+					return nil, notificationFailure(event.message.method, err)
 				}
 			case messageRequest:
 				if err := server.handleRequest(state, event.message); err != nil {
-					return nil, err
+					return nil, callFailure("REQUEST_REJECTED", err)
 				}
 			case messageResponse, messageError:
 				responseID, err := numericRequestID(event.message.id)
 				if err != nil || responseID != id {
-					return nil, errors.New("Codex app-server response correlation failed")
+					return nil, callFailure("RESPONSE_CORRELATION", errors.New("Codex app-server response correlation failed"))
 				}
 				if event.message.kind == messageError {
 					return nil, protocolError(method, event.message.payload)
 				}
 				return event.message.payload, nil
 			default:
-				return nil, errors.New("Codex app-server message kind is invalid")
+				return nil, callFailure("MESSAGE_KIND", errors.New("Codex app-server message kind is invalid"))
 			}
 		}
 	}
@@ -569,32 +666,33 @@ func protocolError(method string, raw json.RawMessage) error {
 	if err != nil {
 		return errors.New("Codex app-server returned an invalid protocol error")
 	}
-	return fmt.Errorf("Codex app-server returned a protocol error for %s (code %d)", method, code)
+	return &appServerCallFailure{detail: "RPC_ERROR", code: code, accountRead: closedAccountReadFailure(method, code, raw),
+		err: fmt.Errorf("Codex app-server returned a protocol error for %s (code %d)", method, code)}
 }
 
 func (server *appServer) waitTerminal(ctx context.Context, state *protocolState) error {
 	for state.terminals == 0 {
 		select {
 		case <-ctx.Done():
-			return context.Canceled
+			return callFailure("CONTEXT_CANCELLED", context.Canceled)
 		case event, open := <-server.messages:
 			if !open {
-				return errors.New("Codex app-server closed before a terminal notification")
+				return callFailure("STREAM_CLOSED", errors.New("Codex app-server closed before a terminal notification"))
 			}
 			if event.err != nil {
-				return event.err
+				return callFailure("STREAM_INVALID", event.err)
 			}
 			switch event.message.kind {
 			case messageNotification:
 				if err := state.notification(event.message.method, event.message.payload); err != nil {
-					return err
+					return notificationFailure(event.message.method, err)
 				}
 			case messageRequest:
 				if err := server.handleRequest(state, event.message); err != nil {
-					return err
+					return callFailure("REQUEST_REJECTED", err)
 				}
 			default:
-				return errors.New("Codex app-server emitted an uncorrelated response")
+				return callFailure("RESPONSE_CORRELATION", errors.New("Codex app-server emitted an uncorrelated response"))
 			}
 		}
 	}

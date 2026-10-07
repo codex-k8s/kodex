@@ -631,7 +631,7 @@ func TestAssistantRoleImageRecipeUsesAgentSnapshotAndClosedFields(t *testing.T) 
 func TestAssistantRoleImageUpdateKeepsExactTargetAndClosedFields(t *testing.T) {
 	t.Parallel()
 	version := int64(4)
-	before := map[string]any{"projectRef": "prj_example", "recipeRef": "imgrec_exact", "name": "Old image", "environmentKey": "standard", "dockerfile": "FROM example@sha256:abc\n"}
+	before := map[string]any{"projectRef": "prj_example", "recipeRef": "imgrec_exact", "name": "Old image", "environmentKey": "standard", "dockerfile": "FROM example@sha256:abc\n", "specSha256": strings.Repeat("a", 64)}
 	after := cloneAssistantFields(before)
 	after["name"] = "New image"
 	operation := entity.AssistantPlanOperation{Type: "UPDATE_ROLE_IMAGE_RECIPE", Key: "image-update", Title: "New image",
@@ -649,6 +649,14 @@ func TestAssistantRoleImageUpdateKeepsExactTargetAndClosedFields(t *testing.T) {
 	if payload.ProjectRef != "prj_example" || payload.RecipeRef != "imgrec_exact" || payload.Name != "New image" || payload.Environment.Dockerfile != "FROM example@sha256:abc\n" || *mapped.Mutation.ExpectedVersion != version {
 		t.Fatalf("image update lost trusted target: %#v", payload)
 	}
+	for _, pin := range []any{nil, "", "forged", " " + strings.Repeat("a", 64)} {
+		invalid := normalized
+		invalid.Input = cloneAssistantFields(normalized.Input)
+		invalid.Input["specSha256"] = pin
+		if _, err := assistantOperationCommand(invalid); !errors.Is(err, errs.ErrInvalid) {
+			t.Fatalf("image update accepted malformed specification pin: %v", err)
+		}
+	}
 	edited := operation
 	edited.Parameters = cloneAssistantFields(after)
 	edited.Parameters["environmentKey"] = "documents"
@@ -656,7 +664,7 @@ func TestAssistantRoleImageUpdateKeepsExactTargetAndClosedFields(t *testing.T) {
 	if err != nil || rehydrated.Target.Ref != "imgrec_exact" || assistantString(rehydrated.After, "environmentKey") != "documents" {
 		t.Fatalf("image update edit lost target: operation=%#v err=%v", rehydrated, err)
 	}
-	for _, key := range []string{"projectRef", "recipeRef"} {
+	for _, key := range []string{"projectRef", "recipeRef", "specSha256"} {
 		forged := edited
 		forged.Parameters = cloneAssistantFields(edited.Parameters)
 		forged.Parameters[key] = "forged"
@@ -889,7 +897,7 @@ func TestAssistantOperationCommandBuildsIntegrationOperationsWithOCC(t *testing.
 	}
 
 	grant := entity.AssistantPlanOperation{Type: "CHANGE_INTEGRATION_GRANT", Summary: "Grant CRM read", Input: map[string]any{
-		"connectionRef": "con_12345678", "capabilityKey": "crm.read", "agentRef": "agt_12345678", "enabled": true, "expectedVersion": float64(4),
+		"connectionRef": "con_12345678", "capabilityKey": "crm.read", "agentRef": "agt_12345678", "enabled": true, "expectedVersion": float64(4), "approvalPolicy": "HUMAN_SCOPED",
 	}}
 	mapped, err = assistantOperationCommand(grant)
 	if err != nil || mapped.Kind != command.ChangeIntegrationGrant || mapped.Mutation.ExpectedVersion == nil || *mapped.Mutation.ExpectedVersion != 4 {
@@ -937,6 +945,7 @@ func TestHydrateAssistantIntegrationGrantFieldsUsesAuthoritySnapshot(t *testing.
 	snapshot := assistantIntegrationGrantSnapshot{
 		connectionName: "GitHub", recipientName: "Разработчик", reason: "READY",
 		connectionVersion: 7, recipientVersion: 3, enabled: false, approvalScopePaths: []string{},
+		selectedApprovalPolicy: "HUMAN_SCOPED", defaultApprovalPolicy: "HUMAN_EACH_EFFECT", allowedApprovalPolicies: []string{"NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"},
 	}
 	hydrated, err := hydrateAssistantIntegrationGrantFields(
 		"con_12345678", "github.read", "agt_12345678", "", snapshot, true,

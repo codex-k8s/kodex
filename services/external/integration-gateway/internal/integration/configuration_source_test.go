@@ -77,7 +77,7 @@ func TestConfigurationSourceReadsExactCommitAndRegularBlob(t *testing.T) {
 							definition.Spec.Capabilities[index].ApprovalPolicy = "HUMAN_EACH_EFFECT"
 						}
 					}
-					definition = sealedDefinitionFixture(t, definition)
+					// Недопустимый default вне allowed policies закрывается на parse до provider effect.
 					work.DefinitionPackage, _ = json.Marshal(definition)
 					work.DefinitionVersion, work.DefinitionDigest = definition.Metadata.Version, definition.Digest
 				}

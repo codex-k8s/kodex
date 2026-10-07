@@ -10,6 +10,7 @@ import {
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { format as formatWithPrettier } from "prettier";
+import { withFrontendCodegen } from "./frontend-codegen-barrier.mjs";
 
 const controlCenterRoot = resolve(
   fileURLToPath(new URL("..", import.meta.url)),
@@ -120,6 +121,12 @@ function scalarGoType(schema) {
   if (schema.type === "object" && schema.additionalProperties === true) {
     return "map[string]any";
   }
+  if (
+    schema.type === "object" &&
+    schema.additionalProperties?.type === "string"
+  ) {
+    return "map[string]string";
+  }
   fail(`Unsupported Go schema shape: ${JSON.stringify(schema)}`);
 }
 
@@ -162,6 +169,12 @@ function scalarTypescriptType(schema) {
   if (schema.type === "boolean") return "boolean";
   if (schema.type === "object" && schema.additionalProperties === true) {
     return "Record<string, unknown>";
+  }
+  if (
+    schema.type === "object" &&
+    schema.additionalProperties?.type === "string"
+  ) {
+    return "Record<string, string>";
   }
   fail(`Unsupported TypeScript schema shape: ${JSON.stringify(schema)}`);
 }
@@ -431,51 +444,56 @@ async function main() {
     )
     .filter(Boolean);
 
-  for (const output of [goOutput, typescriptOutput]) {
-    assertGeneratedPath(output);
-    rmSync(output, { force: true, recursive: true });
-    mkdirSync(output, { recursive: true });
-  }
+  const generatedCounts = await withFrontendCodegen("asyncapi", async () => {
+    for (const output of [goOutput, typescriptOutput]) {
+      assertGeneratedPath(output);
+      rmSync(output, { force: true, recursive: true });
+      mkdirSync(output, { recursive: true });
+    }
 
-  for (const [name, schema] of Object.entries(schemas)) {
-    if (aliasSchemas.has(name)) continue;
-    writeFileSync(
-      resolve(goOutput, goFileName(name)),
-      generateGoSchema(name, schema),
-      { encoding: "utf8", mode: 0o644 },
-    );
-    writeFileSync(
-      resolve(typescriptOutput, `${name}.ts`),
-      await formatWithPrettier(generateTypescriptSchema(name, schema), {
-        parser: "typescript",
-      }),
-      { encoding: "utf8", mode: 0o644 },
-    );
-  }
-  for (const stream of streams) {
-    writeFileSync(
-      resolve(goOutput, goFileName(stream.name)),
-      generateGoStream(stream),
-      { encoding: "utf8", mode: 0o644 },
-    );
-    writeFileSync(
-      resolve(typescriptOutput, `${stream.name}.ts`),
-      await formatWithPrettier(generateTypescriptStream(stream), {
-        parser: "typescript",
-      }),
-      { encoding: "utf8", mode: 0o644 },
-    );
-  }
+    for (const [name, schema] of Object.entries(schemas)) {
+      if (aliasSchemas.has(name)) continue;
+      writeFileSync(
+        resolve(goOutput, goFileName(name)),
+        generateGoSchema(name, schema),
+        { encoding: "utf8", mode: 0o644 },
+      );
+      writeFileSync(
+        resolve(typescriptOutput, `${name}.ts`),
+        await formatWithPrettier(generateTypescriptSchema(name, schema), {
+          parser: "typescript",
+        }),
+        { encoding: "utf8", mode: 0o644 },
+      );
+    }
+    for (const stream of streams) {
+      writeFileSync(
+        resolve(goOutput, goFileName(stream.name)),
+        generateGoStream(stream),
+        { encoding: "utf8", mode: 0o644 },
+      );
+      writeFileSync(
+        resolve(typescriptOutput, `${stream.name}.ts`),
+        await formatWithPrettier(generateTypescriptStream(stream), {
+          parser: "typescript",
+        }),
+        { encoding: "utf8", mode: 0o644 },
+      );
+    }
 
-  const goFiles = readdirSync(goOutput).filter((name) => name.endsWith(".go"));
-  const typescriptFiles = readdirSync(typescriptOutput).filter((name) =>
-    name.endsWith(".ts"),
-  );
-  if (goFiles.length !== typescriptFiles.length || goFiles.length < 1) {
-    fail("AsyncAPI generation produced an incomplete model set");
-  }
+    const goFiles = readdirSync(goOutput).filter((name) =>
+      name.endsWith(".go"),
+    );
+    const typescriptFiles = readdirSync(typescriptOutput).filter((name) =>
+      name.endsWith(".ts"),
+    );
+    if (goFiles.length !== typescriptFiles.length || goFiles.length < 1) {
+      fail("AsyncAPI generation produced an incomplete model set");
+    }
+    return { go: goFiles.length, typescript: typescriptFiles.length };
+  });
   process.stdout.write(
-    `AsyncAPI codegen passed: ${goFiles.length} Go and ${typescriptFiles.length} TypeScript models\n`,
+    `AsyncAPI codegen passed: ${generatedCounts.go} Go and ${generatedCounts.typescript} TypeScript models\n`,
   );
 }
 

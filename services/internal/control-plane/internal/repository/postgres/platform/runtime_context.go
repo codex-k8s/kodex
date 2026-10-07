@@ -24,13 +24,6 @@ var queryPromptContextSkills string
 //go:embed sql/prompt_context_memories.sql
 var queryPromptContextMemories string
 
-func runtimeContextSessionID(sessionID, previousDigest, currentDigest string) string {
-	if previousDigest == "" || currentDigest == "" || previousDigest != currentDigest {
-		return ""
-	}
-	return sessionID
-}
-
 func runtimeContextProvenance(p entity.ContextProvenance) runtimecontract.RuntimeContextProvenance {
 	return runtimecontract.RuntimeContextProvenance{ActorRef: p.ActorRef, SourceKind: p.SourceKind, SourceRef: p.SourceRef,
 		SourceRevision: p.SourceRevision, Digest: p.Digest, CreatedAt: p.CreatedAt.UTC()}

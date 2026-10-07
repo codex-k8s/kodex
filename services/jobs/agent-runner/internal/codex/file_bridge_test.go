@@ -85,7 +85,11 @@ func runFileBridgeFixture(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			result := any(map[string]any{"protocolVersion": "2025-06-18"})
 			if rpc.Method == "tools/list" {
-				result = map[string]any{"tools": []any{map[string]any{"name": "search_files", "description": "Fixture file search", "inputSchema": map[string]any{"type": "object"}}}}
+				tools := []any{}
+				for _, name := range runtimecontract.RuntimeMCPToolNames(input) {
+					tools = append(tools, map[string]any{"name": name, "description": "Fixture file tool", "inputSchema": map[string]any{"type": "object"}})
+				}
+				result = map[string]any{"tools": tools}
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": rpc.ID, "result": result})
 			return
@@ -125,7 +129,7 @@ func runFileBridgeFixture(t *testing.T) {
 	input.CallbackURL = upstream.URL
 	input.ExecutionTicketFile = filepath.Join(root, "ticket")
 	input.CallbackTLS = model.TLSBinding{ServerName: upstream.Certificate().DNSNames[0], CAFile: filepath.Join(root, "ca.pem"), CertificateFile: filepath.Join(root, "client.pem"), PrivateKeyFile: filepath.Join(root, "client.key")}
-	proxy, err := readiness.StartMCPProxy(t.Context(), input, ticket, []string{"search_files"})
+	proxy, err := readiness.StartMCPProxy(t.Context(), input, ticket, runtimecontract.RuntimeMCPToolNames(input))
 	if err != nil {
 		t.Fatal(err)
 	}

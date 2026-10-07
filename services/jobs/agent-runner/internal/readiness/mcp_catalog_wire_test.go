@@ -3,7 +3,7 @@ package readiness
 import (
 	"context"
 	"encoding/json"
-	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -12,9 +12,11 @@ import (
 	"os"
 	"sync/atomic"
 	"testing"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
-func checkCatalogFixture(t *testing.T, catalog []byte, names []string) error {
+func checkCatalogFixture(t *testing.T, catalog []byte, names []string, inputs ...runtimecontract.RunnerInput) error {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request struct{ Method string }
@@ -38,7 +40,7 @@ func checkCatalogFixture(t *testing.T, catalog []byte, names []string) error {
 	}))
 	defer server.Close()
 	endpoint, _ := url.Parse(server.URL)
-	return checkMCP(t.Context(), server.Client(), endpoint, "synthetic-capability", names)
+	return checkMCP(t.Context(), server.Client(), endpoint, "synthetic-capability", names, inputs...)
 }
 
 func TestRuntimeMCPCatalogWireConsumer(t *testing.T) {
@@ -55,15 +57,34 @@ func TestRuntimeMCPCatalogWireConsumer(t *testing.T) {
 		Input   runtimecontract.RunnerInput
 		Catalog json.RawMessage
 	}
-	if json.Unmarshal(raw, &fixtures) != nil || len(fixtures) != 6 {
+	if json.Unmarshal(raw, &fixtures) != nil || len(fixtures) != 16 {
 		t.Fatal("catalog fixture invalid")
 	}
+	seen := make(map[string]bool, len(fixtures))
 	for _, fixture := range fixtures {
+		if seen[fixture.Name] {
+			t.Fatal("duplicate catalog fixture")
+		}
+		seen[fixture.Name] = true
 		t.Run(fixture.Name, func(t *testing.T) {
-			if err := checkCatalogFixture(t, fixture.Catalog, runtimecontract.RuntimeMCPToolNames(fixture.Input)); err != nil {
+			if err := checkCatalogFixture(t, fixture.Catalog, runtimecontract.RuntimeMCPToolNames(fixture.Input), fixture.Input); err != nil {
 				t.Fatalf("actual controller catalog rejected: %v stage=%s", err, FailureStage(err))
 			}
 		})
+	}
+	for _, launch := range []bool{false, true} {
+		for _, vfs := range []bool{false, true} {
+			for _, delegation := range []bool{false, true} {
+				if !seen[fmt.Sprintf("ordinary-launch-%t-vfs-%t-delegation-%t", launch, vfs, delegation)] {
+					t.Fatal("ordinary workflow catalog combination missing")
+				}
+			}
+		}
+	}
+	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
+		if !seen["assistant-launch-"+string(scope)] {
+			t.Fatal("assistant workflow exclusion missing")
+		}
 	}
 }
 
@@ -81,6 +102,31 @@ func TestMCPOutputSchemaCompatibilityAndClosedFailures(t *testing.T) {
 				}
 			} else if err == nil || FailureStage(err) != "CATALOG_SCHEMA" {
 				t.Fatal("invalid descriptor did not fail closed at schema stage")
+			}
+		})
+	}
+}
+
+func TestMCPWorkflowLaunchCatalogStillRequiresExactBinding(t *testing.T) {
+	input := runtimecontract.RunnerInput{Mode: runtimecontract.RunnerModeTurn, AssistantScope: runtimecontract.AssistantScopeNone, ProjectRef: "prj_fixture"}
+	for _, launch := range []bool{false, true} {
+		t.Run(fmt.Sprintf("capability-%t", launch), func(t *testing.T) {
+			copy := input
+			if launch {
+				copy.Capabilities = []string{"platform.run.launch"}
+			}
+			tools := []map[string]any{{"name": "propose_run_metadata", "description": "Fixture metadata", "inputSchema": map[string]any{"type": "object"}}}
+			// Подменённый wire-каталог: лишний launch без права либо отсутствующий
+			// launch при назначенном праве. Readiness не принимает ни один вариант.
+			if !launch {
+				tools = append(tools, map[string]any{"name": "launch_workflow", "description": "Fixture workflow", "inputSchema": map[string]any{"type": "object"}})
+			}
+			raw, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": "agent-runner-tools", "result": map[string]any{"tools": tools}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := checkCatalogFixture(t, raw, runtimecontract.RuntimeMCPToolNames(copy), copy); err == nil || FailureStage(err) != "CATALOG_BINDING" {
+				t.Fatal("workflow launch catalog mismatch did not fail closed")
 			}
 		})
 	}

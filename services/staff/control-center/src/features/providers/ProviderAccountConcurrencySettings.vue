@@ -20,16 +20,13 @@ const canEdit = computed(() => accountAllows(props.account, "EDIT"));
 const valid = computed(
   () => Number.isInteger(limit.value) && limit.value >= 1 && limit.value <= 256,
 );
-watch(
-  () => [props.account.ref, props.account.version, canEdit.value],
-  () => {
-    controller.abort();
-    controller = new AbortController();
-    busy.value = false;
-    limit.value = props.account.maximumConcurrentExecutions;
-    problem.value = undefined;
-  },
-);
+watch([() => props.account.ref, () => props.account.version, canEdit], () => {
+  controller.abort();
+  controller = new AbortController();
+  busy.value = false;
+  limit.value = props.account.maximumConcurrentExecutions;
+  problem.value = undefined;
+});
 onBeforeUnmount(() => controller.abort());
 
 async function save(): Promise<void> {

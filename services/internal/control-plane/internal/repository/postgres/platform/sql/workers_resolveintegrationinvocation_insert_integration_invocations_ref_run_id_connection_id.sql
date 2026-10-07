@@ -8,4 +8,7 @@ INSERT INTO control_plane.integration_invocations(
 VALUES($1,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::uuid,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23::uuid,$24,$25::text[])
 ON CONFLICT(node_id,idempotency_key) DO UPDATE SET idempotency_key=EXCLUDED.idempotency_key
 WHERE control_plane.integration_invocations.intent_digest=EXCLUDED.intent_digest
+  AND control_plane.integration_invocations.grant_version=EXCLUDED.grant_version
+  AND control_plane.integration_invocations.grant_version>0
+  AND control_plane.integration_invocations.approval_policy=EXCLUDED.approval_policy
 RETURNING id::text,ref,state

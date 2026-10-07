@@ -3,6 +3,7 @@ import type {
   Project,
   Run,
 } from "@/shared/api/generated/openapi/types.gen";
+import { hasValidGateScope } from "@/features/workboard/gate-scope";
 
 export type HomeAttentionCategory = "HUMAN_GATE" | "RUN_FAILURE";
 
@@ -41,7 +42,8 @@ export function homePriorityProjectRefs(
     projects.set(ref, current);
   };
   for (const gate of gates)
-    if (gate.state === "OPEN") count(gate.projectRef, "gates");
+    if (hasValidGateScope(gate) && gate.state === "OPEN")
+      count(gate.projectRef, "gates");
   for (const run of activeRuns) count(run.projectRef, "runs");
   for (const run of failedRuns) count(run.projectRef, "failures");
   return [...projects]
@@ -71,7 +73,7 @@ function isStoppedByFailure(run: Run): boolean {
 
 export function homeOpenGates(gates: OwnerGate[]): OwnerGate[] {
   return gates
-    .filter((gate) => gate.state === "OPEN")
+    .filter((gate) => hasValidGateScope(gate) && gate.state === "OPEN")
     .sort((left, right) => {
       const leftDeadline = left.expiresAt ?? "9999-12-31T23:59:59Z";
       const rightDeadline = right.expiresAt ?? "9999-12-31T23:59:59Z";

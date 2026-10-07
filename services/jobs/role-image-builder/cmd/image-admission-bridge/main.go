@@ -1,20 +1,25 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/clients/imageowner"
 	"github.com/google/uuid"
+	"google.golang.org/grpc/status"
 )
 
 const maximumStateBytes = 32 << 10
@@ -24,14 +29,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(base, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	if err := run(ctx); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
+		_, _ = fmt.Fprintln(os.Stderr, bridgeDiagnostic(err))
 		os.Exit(1)
 	}
 }
 
 func run(ctx context.Context) error {
 	if len(os.Args) != 2 {
-		return errors.New("usage: image-admission-bridge claim|record|claim-promotion|authorize-promotion|complete")
+		return errors.New("usage: image-admission-bridge claim|record|fail|claim-promotion|authorize-promotion|complete")
 	}
 	operation := os.Args[1]
 	promotionMode := operation == "claim-promotion" || operation == "authorize-promotion" || operation == "complete"
@@ -56,15 +61,36 @@ func run(ctx context.Context) error {
 		return err
 	}
 	switch operation {
+	case "fail":
+		var claim imageowner.Claim
+		if err := readState(statePath, &claim); err != nil {
+			return err
+		}
+		if err := imageowner.ValidateAdmissionClaim(claim); err != nil {
+			return err
+		}
+		code, err := requiredEnv("IMAGE_OWNER_ADMISSION_FAILURE_CODE")
+		if err != nil {
+			return err
+		}
+		switch code {
+		case "ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND", "ADMISSION_EVIDENCE_EXCEEDS_BOUND", "ADMISSION_WORKER_FAILED":
+		default:
+			return errors.New("image admission failure code is invalid")
+		}
+		return client.FailWithTerminalRecovery(ctx, admissionIdempotencyKey(operation, runID, claim), idempotencyKey("claim", runID), claim, code)
 	case "claim":
 		claim, err := client.Claim(ctx, idempotencyKey(operation, runID))
 		if err != nil {
 			return err
 		}
-		return writeState(statePath, claim)
+		return writeClaimState(statePath, claim)
 	case "record":
 		var claim imageowner.Claim
 		if err := readState(statePath, &claim); err != nil {
+			return err
+		}
+		if err := imageowner.ValidateAdmissionClaim(claim); err != nil {
 			return err
 		}
 		sbom, err := readSHAFile("IMAGE_OWNER_SBOM_SHA256_FILE")
@@ -97,7 +123,25 @@ func run(ctx context.Context) error {
 			SignatureIdentity:           signatureIdentity, SignatureSHA256: signature,
 			AdmissionReceiptSHA256: receipt, AdmissionReceiptOCIManifestDigest: receiptManifest,
 			Accepted: verdict == "ACCEPTED"}
-		return client.Record(ctx, idempotencyKey(operation, runID+"\x00"+claim.ArtifactID), claim, evidence)
+		inventoryPath, err := requiredPath("IMAGE_OWNER_TOOL_INVENTORY_FILE")
+		if err != nil {
+			return err
+		}
+		inventoryFile, err := os.Open(inventoryPath)
+		if err != nil {
+			return errors.New("image tool inventory claim binding is invalid")
+		}
+		inventoryRaw, err := io.ReadAll(io.LimitReader(inventoryFile, runtimecontract.MaximumImageInventoryBytes+1))
+		closeErr := inventoryFile.Close()
+		inventory, decodeErr := runtimecontract.DecodeImageToolInventory(inventoryRaw)
+		if err != nil || closeErr != nil || decodeErr != nil || inventory.ImageDigest != claim.ManifestDigest || inventory.ProvenanceSHA256 != claim.ProvenanceSHA256 {
+			return errors.New("image tool inventory claim binding is invalid")
+		}
+		evidence.ToolInventoryJSON, evidence.ToolInventorySHA256 = string(inventoryRaw), runtimecontract.ImageInventorySHA256(inventoryRaw)
+		if err := readVulnerabilityReportEvidence(claim, &evidence); err != nil {
+			return err
+		}
+		return client.Record(ctx, admissionIdempotencyKey(operation, runID, claim), claim, evidence)
 	case "claim-promotion":
 		promotion, err := client.ClaimPromotion(ctx, idempotencyKey(operation, runID))
 		if err != nil {
@@ -183,6 +227,101 @@ func idempotencyKey(operation, seed string) string {
 	return uuid.NewSHA1(uuid.NameSpaceOID, []byte("image-admission-bridge\x00"+operation+"\x00"+seed)).String()
 }
 
+func admissionIdempotencyKey(operation, runID string, claim imageowner.Claim) string {
+	return idempotencyKey(operation, runID+"\x00"+claim.ArtifactID+"\x00"+claim.AdmissionAttemptRef+"\x00"+strconv.FormatUint(uint64(claim.AdmissionAttempt), 10))
+}
+
+func bridgeDiagnostic(err error) string {
+	return "image admission bridge failed: " + status.Code(err).String()
+}
+
+// Первый claim неизменяем: recovery сравнивает весь сохранённый snapshot и
+// никогда не заменяет его новым fence/token либо изменённым risk decision.
+func writeClaimState(path string, claim imageowner.Claim) error {
+	if err := imageowner.ValidateAdmissionClaim(claim); err != nil {
+		return err
+	}
+	raw, err := json.Marshal(claim)
+	if err != nil || len(raw) > maximumStateBytes {
+		return errors.New("encode bounded image owner state")
+	}
+	temporary := path + "." + uuid.NewString() + ".tmp"
+	file, err := os.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0600)
+	if err != nil {
+		return errors.New("write bounded image owner state")
+	}
+	defer os.Remove(temporary)
+	_, writeErr := file.Write(raw)
+	syncErr := file.Sync()
+	closeErr := file.Close()
+	if writeErr != nil || syncErr != nil || closeErr != nil {
+		return errors.New("write bounded image owner state")
+	}
+	if err := os.Link(temporary, path); err == nil {
+		directory, openErr := os.Open(filepath.Dir(path))
+		if openErr != nil {
+			return errors.New("commit bounded image owner state")
+		}
+		syncErr := directory.Sync()
+		closeErr := directory.Close()
+		if syncErr != nil || closeErr != nil {
+			return errors.New("commit bounded image owner state")
+		}
+		return nil
+	} else if !errors.Is(err, os.ErrExist) {
+		return errors.New("commit bounded image owner state")
+	}
+	var retained imageowner.Claim
+	if readState(path, &retained) != nil || imageowner.ValidateAdmissionClaim(retained) != nil {
+		return errors.New("retained image admission claim is invalid")
+	}
+	previous, _ := json.Marshal(retained)
+	if !bytes.Equal(previous, raw) {
+		return errors.New("retained image admission claim is immutable")
+	}
+	return nil
+}
+
+func readVulnerabilityReportEvidence(claim imageowner.Claim, evidence *imageowner.AdmissionEvidence) error {
+	raw, err := readBoundedPrivateFile("IMAGE_OWNER_VULNERABILITY_REPORT_JSON_FILE", runtimecontract.MaximumImageVulnerabilityReportBytes)
+	if err != nil {
+		return err
+	}
+	projectionSHA, err := readSHAFile("IMAGE_OWNER_VULNERABILITY_REPORT_PROJECTION_SHA256_FILE")
+	if err != nil {
+		return err
+	}
+	evidence.VulnerabilityReportJSON = string(raw)
+	evidence.VulnerabilityReportProjectionSHA256 = projectionSHA
+	evidence.RiskAcceptanceSHA256 = claim.RiskAcceptanceSHA256
+	return imageowner.ValidateAdmissionEvidence(claim, *evidence)
+}
+
+func readBoundedPrivateFile(name string, maximum int64) ([]byte, error) {
+	path, err := requiredPath(name)
+	if err != nil {
+		return nil, err
+	}
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, errors.New("read bounded image report evidence")
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 || info.Size() <= 0 || info.Size() > maximum {
+		return nil, errors.New("read bounded image report evidence")
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || stat.Uid != uint32(os.Geteuid()) {
+		return nil, errors.New("read bounded image report evidence")
+	}
+	raw, err := io.ReadAll(io.LimitReader(file, maximum+1))
+	if err != nil || len(raw) == 0 || int64(len(raw)) > maximum {
+		return nil, errors.New("read bounded image report evidence")
+	}
+	return raw, nil
+}
+
 func writeState(path string, value any) error {
 	raw, err := json.Marshal(value)
 	if err != nil || len(raw) > maximumStateBytes {
@@ -199,8 +338,30 @@ func writeState(path string, value any) error {
 }
 
 func readState(path string, target any) error {
-	raw, err := os.ReadFile(path)
-	if err != nil || len(raw) == 0 || len(raw) > maximumStateBytes || json.Unmarshal(raw, target) != nil {
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return errors.New("read bounded image owner state")
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 || info.Size() <= 0 || info.Size() > maximumStateBytes {
+		return errors.New("read bounded image owner state")
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || stat.Uid != uint32(os.Geteuid()) {
+		return errors.New("read bounded image owner state")
+	}
+	raw, err := io.ReadAll(io.LimitReader(file, maximumStateBytes+1))
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err != nil || len(raw) == 0 || len(raw) > maximumStateBytes || decoder.Decode(target) != nil {
+		return errors.New("read bounded image owner state")
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		return errors.New("read bounded image owner state")
+	}
+	canonical, err := json.Marshal(target)
+	if err != nil || !bytes.Equal(canonical, raw) {
 		return errors.New("read bounded image owner state")
 	}
 	return nil

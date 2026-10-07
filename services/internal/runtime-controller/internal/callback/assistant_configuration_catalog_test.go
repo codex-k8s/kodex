@@ -53,7 +53,7 @@ func TestAssistantFreshFutureReasoningTraversesMCPAndSafeProjection(t *testing.T
 		t.Fatal("MCP discovery lost fresh model reasoning or exact read authority")
 	}
 	projection := client.projection
-	if projection == nil || projection.GetLeaseRef() != input.LeaseRef || projection.GetFence() != input.LeaseFence || projection.GetGeneration() != input.LeaseGeneration || len(projection.GetSafeParameters().AsMap()) != 0 || projection.GetCapabilityRef() != "platform.configuration.read" || projection.GetState() != controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_SUCCEEDED {
+	if projection == nil || projection.GetLeaseRef() != input.LeaseRef || projection.GetFence() != input.LeaseFence || projection.GetGeneration() != input.LeaseGeneration || len(projection.GetSafeParameters().AsMap()) != 1 || projection.GetSafeParameters().AsMap()["catalogKind"] != "MODELS" || projection.GetCapabilityRef() != "platform.configuration.read" || projection.GetState() != controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_SUCCEEDED {
 		t.Fatal("MCP activity did not preserve exact lease and credential-free metadata")
 	}
 }
@@ -98,10 +98,13 @@ func assistantFreshCatalogFixture(scope runtimecontract.AssistantScope, kind str
 		selector["account_ref"], selector["runtime_profile_ref"] = input.ProviderAccountRef, input.RuntimeProfileRef
 	case "ROLE_IMAGE_RECIPES":
 		entry.Ref, entry.Version, entry.RecipeGeneration = "imgrec_owned123", 4, 2
+		entry.EnvironmentKey = "standard"
 	case "IMAGE_ARTIFACTS":
 		entry.Ref, entry.Version, entry.RecipeGeneration = "imgart_owned123", 5, 2
 		entry.ManifestDigest = "sha256:" + strings.Repeat("b", 64)
 		entry.Reference = "pull.fixture.invalid/assistant@" + entry.ManifestDigest
+		entry.AdmissionVerdict, entry.PromotionState = "ACCEPTED", "PROMOTED"
+		entry.VerifiedToolInventory = &controlplanev1.ImageToolInventory{Status: "UNAVAILABLE"}
 	case "ROLE_ENVIRONMENTS":
 		entry.Ref = "base"
 	}
@@ -112,6 +115,9 @@ func assistantFreshCatalogFixture(scope runtimecontract.AssistantScope, kind str
 func TestAssistantFreshConfigurationCatalogTraversesExactFencedRPC(t *testing.T) {
 	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
 		for _, kind := range assistantConfigurationCatalogKinds {
+			if kind == "CURRENT_CONFIGURATION" {
+				continue // Собственный полный read проверяется отдельным typed сценарием.
+			}
 			t.Run(string(scope)+"/"+kind, func(t *testing.T) {
 				input, arguments, response := assistantFreshCatalogFixture(scope, kind)
 				client := &assistantDefinitionCatalogClient{response: response}
@@ -129,6 +135,15 @@ func TestAssistantFreshConfigurationCatalogTraversesExactFencedRPC(t *testing.T)
 				catalog := result.(map[string]any)["assistant_configuration_catalog"].(map[string]any)
 				entries := catalog["entries"].([]map[string]any)
 				fieldCount := 16
+				if kind == "ROLE_IMAGE_RECIPES" {
+					if entries[0]["environment_key"] != "standard" {
+						t.Fatal("recipe catalog lost authoritative environment selection")
+					}
+					fieldCount++
+				}
+				if kind == "IMAGE_ARTIFACTS" {
+					fieldCount += 3
+				}
 				if kind == "ASSISTANTS" {
 					fieldCount++
 					if entries[0]["runtime_environment_ref"] != "renv_current123" {
@@ -139,7 +154,7 @@ func TestAssistantFreshConfigurationCatalogTraversesExactFencedRPC(t *testing.T)
 					t.Fatal("catalog lost closed safe entry projection")
 				}
 				parameters, permission, _, ok := safeToolCallParameters(input, "get_configuration_catalog", arguments)
-				if !ok || permission != "platform.configuration.read" || len(parameters) != 0 {
+				if !ok || permission != "platform.configuration.read" || len(parameters) != 1 || parameters["catalogKind"] != kind {
 					t.Fatal("catalog request metadata escaped safe tool projection")
 				}
 			})
@@ -228,6 +243,32 @@ func TestAssistantFreshCatalogEnvironmentLocatorIsOnlyAssistantMetadata(t *testi
 		server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
 		if _, err := server.configurationCatalog(t.Context(), input, arguments); (err == nil) != (ref == "") {
 			t.Fatal("unbound or malformed assistant environment locator was handled incorrectly")
+		}
+	}
+}
+
+func TestAssistantFreshCatalogRecipeEnvironmentKeyIsClosedPerKind(t *testing.T) {
+	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
+		for _, kind := range assistantConfigurationCatalogKinds {
+			t.Run(string(scope)+"/"+kind, func(t *testing.T) {
+				input, arguments, response := assistantFreshCatalogFixture(scope, kind)
+				response.AssistantConfigurationCatalog.Entries[0].EnvironmentKey = "standard"
+				client := &assistantDefinitionCatalogClient{response: response}
+				server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
+				_, err := server.configurationCatalog(t.Context(), input, arguments)
+				if (err == nil) != (kind == "ROLE_IMAGE_RECIPES") {
+					t.Fatal("recipe environment key escaped per-kind closed metadata boundary")
+				}
+			})
+		}
+		for _, key := range []string{"", "Standard", "standard/path", "standard\n", strings.Repeat("a", 101)} {
+			input, arguments, response := assistantFreshCatalogFixture(scope, "ROLE_IMAGE_RECIPES")
+			response.AssistantConfigurationCatalog.Entries[0].EnvironmentKey = key
+			client := &assistantDefinitionCatalogClient{response: response}
+			server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
+			if _, err := server.configurationCatalog(t.Context(), input, arguments); err == nil {
+				t.Fatal("recipe catalog accepted missing or malformed environment key")
+			}
 		}
 	}
 }
@@ -355,6 +396,9 @@ func TestAssistantFreshConfigurationCatalogRejectsResponseBoundaryMismatch(t *te
 
 func TestAssistantFreshConfigurationCatalogChecksEveryEntryKindAndPagination(t *testing.T) {
 	for _, kind := range assistantConfigurationCatalogKinds {
+		if kind == "CURRENT_CONFIGURATION" {
+			continue // Полный read не имеет entries/pagination.
+		}
 		t.Run(kind, func(t *testing.T) {
 			input, arguments, response := assistantFreshCatalogFixture(runtimecontract.AssistantScopeProject, kind)
 			request, err := parseAssistantConfigurationCatalog(input, arguments, arguments["assistant_configuration_catalog"])

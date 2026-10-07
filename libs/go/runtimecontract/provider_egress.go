@@ -12,14 +12,22 @@ func RuntimeProviderAllowsHost(host string) bool {
 }
 
 // Закрытый реестр соответствует transport закреплённого Codex 0.160.0:
-// codex-api endpoints responses/models, login oauth refresh и backend usage.
+// codex-api endpoints responses/models/alpha/search, login oauth refresh, backend usage
+// и bootstrap workspace через GET accounts/check (backend-client/src/client.rs,
+// get_accounts_check, официальный tag rust-v0.160.0).
+// Standalone search: codex-api/src/endpoint/search.rs (POST alpha/search),
+// model-provider-info/src/lib.rs (default base URL ChatGPT и API key).
 func RuntimeProviderAllowsRequest(host, path, method string) bool {
 	switch host {
 	case "api.openai.com":
-		return path == "/v1/responses" && method == "POST" || path == "/v1/models" && method == "GET"
+		return path == "/v1/responses" && method == "POST" ||
+			path == "/v1/alpha/search" && method == "POST" ||
+			path == "/v1/models" && method == "GET"
 	case "chatgpt.com":
 		return path == "/backend-api/codex/responses" && method == "POST" ||
+			path == "/backend-api/codex/alpha/search" && method == "POST" ||
 			path == "/backend-api/codex/models" && method == "GET" ||
+			path == "/backend-api/wham/accounts/check" && method == "GET" ||
 			path == "/backend-api/wham/usage" && method == "GET"
 	case "auth.openai.com":
 		return path == "/oauth/token" && method == "POST"

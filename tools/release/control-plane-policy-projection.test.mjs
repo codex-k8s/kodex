@@ -4,9 +4,13 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { planPolicyProjection,projectionPatch,projectionMatches,withPrivatePatchFile } from "./control-plane-policy-projection.mjs";
 import { fingerprint } from "./scoped-release.mjs";
 
+// Публичный snapshot a388aa9c: адресный repair #1476 принимает только policy77,
+// а не изменяемую policy текущего выпуска.
+const rotationPolicyFixture = new URL("./fixtures/authority-policy-revision77.json", import.meta.url);
+
 function fixture(){
   const deployment={apiVersion:"apps/v1",kind:"Deployment",metadata:{name:"control-plane",namespace:"kodex-system",uid:"00000000-0000-4000-8000-000000000001",resourceVersion:"12",generation:4,labels:{"app.kubernetes.io/part-of":"kodex","kodex.dev/environment":"staging"}},spec:{replicas:2,strategy:{type:"RollingUpdate",rollingUpdate:{maxUnavailable:0,maxSurge:1}},template:{spec:{volumes:[{name:"unchanged",secret:{secretName:"reference-only"}}],containers:[{name:"control-plane",image:"unchanged",env:[{name:"CONTROL_PLANE_OIDC_ISSUER",valueFrom:{configMapKeyRef:{name:"cp-config",key:"issuer"}}},{name:"UNRELATED",valueFrom:{secretKeyRef:{name:"reference-only",key:"key"}}}],volumeMounts:[{name:"unchanged",mountPath:"/unrelated",readOnly:true}]},{name:"verifier",image:"unchanged",env:[{name:"UNCHANGED",value:"sentinel"}]}]}}},status:{observedGeneration:4,availableReplicas:2,updatedReplicas:1,replicas:3}};
-  const registry={kind:"ConfigMap",metadata:{name:"internal-rpc-authority-publisher-target-registry",namespace:"kodex-system",uid:"registry-uid",resourceVersion:"8"},data:{"authority-policy.json":readFileSync(new URL("../../deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",import.meta.url),"utf8"),"key-delivery-targets.yaml":"unchanged-registry"}};
+  const registry={kind:"ConfigMap",metadata:{name:"internal-rpc-authority-publisher-target-registry",namespace:"kodex-system",uid:"registry-uid",resourceVersion:"8"},data:{"authority-policy.json":readFileSync(rotationPolicyFixture,"utf8"),"key-delivery-targets.yaml":"unchanged-registry"}};
   const configMaps=[{kind:"ConfigMap",metadata:{name:"cp-config",namespace:"kodex-system",uid:"config-uid",resourceVersion:"5"},data:{issuer:"https://sso.fixture.test/realms/kodex"}}];
   return {deployment,registry,configMaps};
 }
@@ -38,6 +42,17 @@ test("existing config map content cannot be silently replaced",()=>{
   const f=fixture(),plan=planPolicyProjection(f.deployment,f.registry,f.configMaps);
   const foreign=structuredClone(plan.projection);foreign.data['policy.json']='changed';
   assert.equal(projectionMatches(foreign,plan.projection),false);
+});
+test("проекция отклоняет текущую policy, revision90 и изменённые bytes policy77 без эффекта",()=>{
+  const current=readFileSync(new URL("../../deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",import.meta.url),"utf8");
+  const frozen=readFileSync(rotationPolicyFixture,"utf8"),next=JSON.parse(frozen);
+  next.policy_revision=90;
+  for(const raw of [current,JSON.stringify(next),`${frozen}\n`]){
+    const f=fixture();f.registry.data["authority-policy.json"]=raw;
+    const before=structuredClone(f);
+    assert.throws(()=>planPolicyProjection(f.deployment,f.registry,f.configMaps),/^Error: EXACT_ROTATION_POLICY_REQUIRED$/);
+    assert.deepEqual(f,before);
+  }
 });
 test("kubectl patch uses a private regular file and always removes it",()=>{
   const patch=[{op:"test",path:"/metadata/uid",value:"fixture"}];

@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -37,4 +38,20 @@ func (service *Service) ListIntegrationGrantCapabilityCandidates(ctx context.Con
 		return entity.IntegrationCapabilityCandidates{}, err
 	}
 	return service.repository.ListIntegrationGrantCapabilityCandidates(ctx, p, input)
+}
+
+func (service *Service) GetSystemAssistantIntegrationGrantCandidates(ctx context.Context, p value.Principal, connectionRef, search string, page query.Page) (entity.SystemAssistantIntegrationGrantCandidates, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.SystemAssistantIntegrationGrantCandidates{}, err
+	}
+	return service.repository.GetSystemAssistantIntegrationGrantCandidates(ctx, p, connectionRef, search, page)
+}
+
+func (service *Service) GetProjectAssistantIntegrationGrantCandidates(ctx context.Context, p value.Principal, projectRef, connectionRef, search string, page query.Page) (entity.ProjectAssistantIntegrationGrantCandidates, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.ProjectAssistantIntegrationGrantCandidates{}, err
+	}
+	return service.repository.GetProjectAssistantIntegrationGrantCandidates(ctx, p, projectRef, connectionRef, search, page)
 }

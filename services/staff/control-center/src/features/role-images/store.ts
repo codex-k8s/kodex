@@ -20,6 +20,7 @@ import {
 } from "@/features/role-images/api";
 import type {
   Agent,
+  RoleImageAdmissionFailure,
   RoleEnvironment,
   RoleImageArtifact,
   RoleImageBuild,
@@ -32,6 +33,7 @@ import type {
   RuntimeEnvironmentSet,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { assertRoleImageAdmissionFailure } from "./admission-failure";
 import {
   assertRoleImageResourceIdentity,
   roleImageScopeKey,
@@ -56,6 +58,9 @@ export const useRoleImagesStore = defineStore("role-images", () => {
   const recipes = reactive<Record<string, RoleImageRecipe>>({});
   const builds = reactive<Record<string, RoleImageBuild[]>>({});
   const artifacts = reactive<Record<string, RoleImageArtifact | undefined>>({});
+  const admissionFailures = reactive<
+    Record<string, RoleImageAdmissionFailure | undefined>
+  >({});
   const revisions = reactive<Record<string, RoleImageRecipeRevision[]>>({});
   const revisionNextPageToken = reactive<Record<string, string | undefined>>(
     {},
@@ -213,6 +218,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
       recipes,
       builds,
       artifacts,
+      admissionFailures,
       dependencies,
       revisions,
       revisionNextPageToken,
@@ -239,6 +245,13 @@ export const useRoleImagesStore = defineStore("role-images", () => {
       )
         throw new Error("Invalid role image detail scope");
       assertOwned(scope, detail.recipe);
+      if (detail.admissionFailure)
+        assertOwned(
+          scope,
+          detail.admissionFailure,
+          detail.recipe.organizationRef,
+        );
+      assertRoleImageAdmissionFailure(detail);
       for (const build of detail.builds)
         assertOwned(scope, build, detail.recipe.organizationRef);
       for (const artifact of [
@@ -255,6 +268,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
         builds[detail.recipe.ref] = detail.builds;
         artifacts[detail.recipe.ref] =
           detail.promotionCandidate ?? detail.activeArtifact;
+        admissionFailures[detail.recipe.ref] = detail.admissionFailure;
         return;
       }
       const [dependencyItems, revisionPage] = await Promise.all([
@@ -273,6 +287,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
       builds[detail.recipe.ref] = detail.builds;
       artifacts[detail.recipe.ref] =
         detail.promotionCandidate ?? detail.activeArtifact;
+      admissionFailures[detail.recipe.ref] = detail.admissionFailure;
       dependencies[detail.recipe.ref] = dependencyItems;
       revisions[detail.recipe.ref] = revisionPage.items;
       revisionNextPageToken[detail.recipe.ref] = revisionPage.nextPageToken;
@@ -521,6 +536,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
         recipes,
         builds,
         artifacts,
+        admissionFailures,
         revisions,
         revisionNextPageToken,
         promotionReceipts,
@@ -543,6 +559,7 @@ export const useRoleImagesStore = defineStore("role-images", () => {
     recipes,
     builds,
     artifacts,
+    admissionFailures,
     revisions,
     revisionNextPageToken,
     promotionReceipts,

@@ -33,10 +33,14 @@ def event(kind, target="", delta=0, child=0):
                                          pid=os.getpid(), child=child)) + "\n")
         return active
 if name == "git":
-    print("a" * 40)
+    print(os.environ.get("BUILD_REVISION", "a" * 40))
 elif name == "kubectl":
     if args == ["config", "current-context"]:
-        print("synthetic-staging")
+        print("k3d-import-fixture" if os.environ.get("IMPORT_K3D") else "synthetic-staging")
+    elif "nodes" in args:
+        print(json.dumps({"items": [{"metadata": {"name": "k3d-import-fixture-" + node},
+              "status": {"nodeInfo": {"operatingSystem": "linux", "architecture": os.environ.get("IMPORT_ARCH", "amd64")}}}
+              for node in ("agent-0", "server-0")]}))
     else:
         print(json.dumps({"metadata": {"labels": {
             "app.kubernetes.io/part-of": "kodex", "kodex.dev/environment": "staging"}}}))
@@ -52,6 +56,59 @@ elif name == "import-local-image.sh":
     assert args[args.index("--exact-reference") + 1] == repository + "@sha256:" + "b" * 64
 elif name == "docker" and args[:2] == ["buildx", "version"]:
     pass
+elif name == "k3d":
+    if args[:2] == ["image", "import"]:
+        event("archive_import")
+    elif args == ["node", "list", "-o", "json"]:
+        print(json.dumps([{"name": "k3d-import-fixture-server-0", "role": "server", "runtimeLabels": {"k3d.cluster": "import-fixture"}},
+                          {"name": "k3d-import-fixture-agent-0", "role": "agent", "runtimeLabels": {"k3d.cluster": os.environ.get("IMPORT_CLUSTER", "import-fixture")}},
+                          {"name": "k3d-import-fixture-shadow-server-0", "role": "server", "runtimeLabels": {"k3d.cluster": "import-fixture-shadow"}}]))
+    else:
+        sys.exit(94)
+elif name == "docker" and args[0] == "exec":
+    offset = 2 if args[1] == "-i" else 1
+    node, command = args[offset], args[offset + 1:]
+    if command[0] == "crictl":
+        assert command[1:5] == ["--runtime-endpoint", "unix:///run/k3s/containerd/containerd.sock", "--image-endpoint", "unix:///run/k3s/containerd/containerd.sock"]
+        pinned = os.environ.get("IMPORT_CRI_PINNED", "true") == "true"
+        reference = os.environ["IMPORT_REFERENCE"] if not os.environ.get("IMPORT_CRI_WRONG") else "foreign@sha256:" + "a" * 64
+        print(json.dumps({"status": {"pinned": pinned, "repoDigests": [reference], "id": "sha256:" + "d" * 64},
+                          "info": {"imageSpec": {"os": "linux", "architecture": "amd64"}}}))
+        sys.exit(0)
+    assert command[:5] == ["ctr", "--address", "/run/k3s/containerd/containerd.sock", "-n", "k8s.io"]
+    command = command[5:]
+    if command[:2] == ["images", "import"]:
+        assert "--digests" in command and "--platform" in command and "linux/amd64" in command
+        assert "io.cri-containerd.image=managed" in command and "io.cri-containerd.pinned=pinned" in command
+        assert command[-1] == "-"
+        sys.stdin.buffer.read()
+        event("node_import", node)
+        (root / ("alias-" + node)).unlink(missing_ok=True)
+    elif command[:4] == ["images", "tag", "--local", "--force"]:
+        assert command[4] == os.environ["IMPORT_REFERENCE"].split("@", 1)[0] + ":cached"
+        assert command[5] == os.environ["IMPORT_REFERENCE"]
+        event("node_alias", node)
+        (root / ("alias-" + node)).write_text("copied-pinned-labels")
+    elif command[:2] == ["images", "list"]:
+        if node != os.environ.get("MISSING_IMPORT_NODE"):
+            digest = os.environ["IMPORT_REFERENCE"].split("@", 1)[1]
+            if os.environ.get("IMPORT_WRONG_TARGET"): digest = "sha256:" + "a" * 64
+            pin = "pinned" if not os.environ.get("IMPORT_UNPINNED") else "false"
+            platform = os.environ.get("IMPORT_PLATFORM", "linux/amd64")
+            reference = command[2].removeprefix("name==")
+            if os.environ.get("IMPORT_NAMED_ONLY") and "@" in reference:
+                if not (root / ("alias-" + node)).exists():
+                    sys.exit(0)
+            print(reference, "application/vnd.oci.image.manifest.v1+json", digest,
+                  "10.0 MiB", platform, "io.cri-containerd.image=managed,io.cri-containerd.pinned=" + pin)
+    elif command[:3] == ["images", "check", "--quiet"]:
+        if not os.environ.get("IMPORT_INCOMPLETE"):
+            print(os.environ["IMPORT_REFERENCE"])
+    elif command[:2] == ["content", "get"]:
+        event("node_digest_readback", node)
+        sys.stdout.write(os.environ["IMPORT_MANIFEST"])
+    else:
+        sys.exit(95)
 elif name == "docker" and args[:2] == ["buildx", "build"]:
     tag = args[args.index("--tag") + 1]
     target = tag.split(":")[0].rsplit("/", 1)[-1]
@@ -99,6 +156,7 @@ class BuildLocalImageSupplyChainTest(unittest.TestCase):
         self.state.mkdir()
         for path in (
             "tools/dev/Dockerfile.local-image-supply-chain",
+            "tools/dev/Dockerfile.local-image-supply-chain.dockerignore",
             "infra/dockerfile-frontend/Dockerfile",
             "infra/admission-tools/Dockerfile",
             "tools/render-image-admission-job.sh",
@@ -115,7 +173,7 @@ class BuildLocalImageSupplyChainTest(unittest.TestCase):
         mock = self.root / "mock.py"
         mock.write_text(MOCK)
         mock.chmod(0o700)
-        for name in ("git", "kubectl", "docker"):
+        for name in ("git", "kubectl", "docker", "k3d"):
             (self.bin / name).symlink_to(mock)
         for name in ("ensure-local-buildx-builder.sh", "import-local-image.sh"):
             (self.source / "tools/dev" / name).symlink_to(mock)
@@ -169,11 +227,117 @@ class BuildLocalImageSupplyChainTest(unittest.TestCase):
         self.assertEqual(repeated.returncode, 0, repeated.stderr)
         self.assertEqual([item["target"] for item in self.events()[before:] if item["kind"] == "start"],
                          ["image-admission-tools-load"])
+        self.assertEqual([item["target"] for item in self.events()[before:] if item["kind"] == "import"],
+                         list(IMAGE_NAMES), "cache hit must restore every exact image, not trust previous pointers")
+
+    def test_commit_only_change_invalidates_versioned_recipe_in_all_profiles(self):
+        for component in ("all", "image-admission", "authority-security"):
+            with self.subTest(component=component):
+                first = self.run_build(4, component=component)
+                self.assertEqual(first.returncode, 0, first.stderr)
+                before = len(self.events())
+                revision = {"all": "c", "image-admission": "d", "authority-security": "e"}[component] * 40
+                (self.state / "cache/image-supply-chain" / f"role-input-{revision}.oci.tar").write_text("cached synthetic role input")
+                second = self.run_build(4, component=component, BUILD_REVISION=revision)
+                self.assertEqual(second.returncode, 0, second.stderr)
+                starts = [item["target"] for item in self.events()[before:] if item["kind"] == "start"]
+                expected = list(IMAGE_NAMES) + ["image-admission-tools-load"] if component == "all" else (
+                    ["image-admission"] if component == "image-admission" else ["internal-rpc-authority", "image-admission"])
+                self.assertCountEqual(starts, expected, "new SOURCE_SHA/VERSION must not reuse the old OCI archive")
 
     def test_default_remains_sequential(self):
         result = self.run_build()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(max(item["active"] for item in self.events()), 1)
+
+    def test_context_allowlist_change_invalidates_oci_cache(self):
+        first = self.run_build(1, component="image-admission")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        before = len(self.events())
+        (self.source / "tools/dev/Dockerfile.local-image-supply-chain.dockerignore").write_text("changed fixture rules\n")
+        second = self.run_build(1, component="image-admission")
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual([event["target"] for event in self.events()[before:] if event["kind"] == "start"], ["image-admission"])
+
+    def test_cached_import_requires_exact_reference_and_digest_on_every_node(self):
+        import hashlib
+        manifest = '{"schemaVersion":2,"layers":[]}'
+        digest = "sha256:" + hashlib.sha256(manifest.encode()).hexdigest()
+        repository = "registry.local.kodex/kodex/role-image-builder"
+        reference = repository + "@" + digest
+        archive = self.root / "cached.oci.tar"
+        import io, tarfile
+        index = json.dumps({"manifests": [{"digest": digest, "annotations": {"io.containerd.image.name": repository + ":cached"}}]}).encode()
+        with tarfile.open(archive, "w") as output:
+            info = tarfile.TarInfo("index.json")
+            info.size = len(index)
+            output.addfile(info, io.BytesIO(index))
+        args = ["bash", str(SCRIPT.with_name("import-local-image.sh")),
+                "--context", "k3d-import-fixture", "--archive", str(archive),
+                "--repository", repository, "--tag", repository + ":cached", "--exact-reference", reference]
+        environment = dict(self.environment, IMPORT_K3D="1", IMPORT_MANIFEST=manifest, IMPORT_REFERENCE=reference)
+        result = subprocess.run(args, env=environment, capture_output=True, text=True, timeout=12)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        nodes = {"k3d-import-fixture-server-0", "k3d-import-fixture-agent-0"}
+        self.assertEqual({item["target"] for item in self.events() if item["kind"] == "node_import"}, nodes)
+        self.assertEqual({item["target"] for item in self.events() if item["kind"] == "node_digest_readback"}, nodes)
+        result = subprocess.run(args, env=dict(environment, MISSING_IMPORT_NODE="k3d-import-fixture-server-0"),
+                                capture_output=True, text=True, timeout=12)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("durable pin mismatch", result.stderr)
+        readback_args = args + ["--mode", "readback"]
+        before = sum(item['kind'] == 'node_import' for item in self.events())
+        result = subprocess.run(readback_args, env=environment, capture_output=True, text=True, timeout=12)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(sum(item['kind'] == 'node_import' for item in self.events()), before)
+        for key, value, error in (("IMPORT_WRONG_TARGET", "1", "durable pin mismatch"),
+                                 ("IMPORT_UNPINNED", "1", "durable pin mismatch"),
+                                 ("IMPORT_PLATFORM", "linux/arm64", "durable pin mismatch"),
+                                 ("IMPORT_INCOMPLETE", "1", "native unpack is incomplete"),
+                                 ("IMPORT_ARCH", "arm64", "architecture readback failed"),
+                                 ("IMPORT_CLUSTER", "foreign", "registries mismatch"),
+                                 ("IMPORT_MANIFEST", "corrupted", "manifest digest mismatch")):
+            with self.subTest(key=key):
+                result = subprocess.run(readback_args, env=dict(environment, **{key: value}),
+                                        capture_output=True, text=True, timeout=12)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(error, result.stderr)
+        for key in ("IMPORT_CRI_PINNED", "IMPORT_CRI_WRONG"):
+            with self.subTest(key=key):
+                result = subprocess.run(readback_args, env=dict(environment, **{key: "false" if key == "IMPORT_CRI_PINNED" else "1"}),
+                                        capture_output=True, text=True, timeout=15)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("CRI exact immutable image or durable pin readback failed", result.stderr)
+        outside = args.copy()
+        outside[outside.index('--repository') + 1] = 'registry.local.kodex/kodex/foreign'
+        result = subprocess.run(outside, env=environment, capture_output=True, text=True, timeout=12)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('closed local platform profile', result.stderr)
+        result = subprocess.run(args, env=dict(environment, IMPORT_NAMED_ONLY="1"),
+                                capture_output=True, text=True, timeout=12)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual({item["target"] for item in self.events() if item["kind"] == "node_alias"}, nodes)
+
+    def test_archive_mixed_names_rejected_before_import(self):
+        import io, tarfile
+        repository = "registry.local.kodex/kodex/role-image-builder"
+        digest = "sha256:" + "a" * 64
+        archive = self.root / "mixed-names.oci.tar"
+        for annotations in ({"io.containerd.image.name": "foreign.invalid/image:cached", "org.opencontainers.image.ref.name": repository + ":cached"},
+                            {"io.containerd.image.name": repository + ":cached", "org.opencontainers.image.ref.name": "foreign.invalid/image:cached"}):
+            with self.subTest(annotations=annotations):
+                index = json.dumps({"manifests": [{"digest": digest, "annotations": annotations}]}).encode()
+                with tarfile.open(archive, "w") as output:
+                    info = tarfile.TarInfo("index.json")
+                    info.size = len(index)
+                    output.addfile(info, io.BytesIO(index))
+                result = subprocess.run(["bash", str(SCRIPT.with_name("import-local-image.sh")),
+                    "--context", "k3d-import-fixture", "--archive", str(archive), "--repository", repository,
+                    "--tag", repository + ":cached", "--exact-reference", repository + "@" + digest],
+                    env=dict(self.environment, IMPORT_K3D="1"), capture_output=True, text=True, timeout=5)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("OCI archive exact descriptor or name mismatch", result.stderr)
+                self.assertFalse(any(item["kind"] == "node_import" for item in self.events()))
 
     def test_failed_build_cancels_siblings_without_import_or_pointer(self):
         result = self.run_build(4, FAIL_BUILD="image-admission")
@@ -245,6 +409,28 @@ class BuildLocalImageSupplyChainTest(unittest.TestCase):
             if process.poll() is None:
                 process.send_signal(signal.SIGTERM)
                 process.wait(timeout=8)
+
+
+class AdmissionDatabaseLayerOrderTest(unittest.TestCase):
+    def test_immutable_database_layer_precedes_frequently_changed_validators(self):
+        repository = SCRIPT.parents[2]
+        for name in ("tools/dev/Dockerfile.local-image-supply-chain",
+                     "infra/admission-tools/Dockerfile"):
+            with self.subTest(dockerfile=name):
+                source = (repository / name).read_text()
+                database = source.index("ADD --checksum=sha256:")
+                imported = source.index("&& grype db import /tmp/grype-db.tar.zst")
+                verified = source.index("&& grype db status >/dev/null")
+                for validator in ("image-tool-inventory-validator",
+                                  "image-vulnerability-report-validator"):
+                    materialized = source.index(
+                        f"COPY --from=build --chmod=0555 /out/{validator} ")
+                    self.assertLess(database, imported)
+                    self.assertLess(imported, verified)
+                    self.assertLess(verified, materialized)
+                    self.assertLess(materialized, source.index("RUN for tool in "))
+                self.assertIn("GRYPE_DB_AUTO_UPDATE=false", source)
+                self.assertIn("GRYPE_DB_VALIDATE_AGE=true", source)
 
 
 if __name__ == "__main__":

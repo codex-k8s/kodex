@@ -508,6 +508,7 @@ type Run struct {
 	ArtifactRefs, GateRefs, NextActions                                  []string
 	Incidents                                                            []Incident
 	AssistantPin                                                         *AssistantRunPin
+	SessionReadiness                                                     *RunSessionReadiness
 	CreatedAt                                                            time.Time
 	StartedAt, FinishedAt                                                *time.Time
 }
@@ -533,12 +534,31 @@ type RunDelta struct {
 }
 
 type RunEventDelta struct {
-	Run      *RunDelta
-	Node     *RunNode
-	Edge     *RunEdge
-	Gate     *OwnerGate
-	Artifact *Artifact
-	Incident *Incident
+	IntegrationInvocationRef string `json:",omitempty"`
+	Run                      *RunDelta
+	Node                     *RunNode
+	Edge                     *RunEdge
+	Gate                     *OwnerGate
+	Artifact                 *Artifact
+	Incident                 *Incident
+	Execution                *RunEventExecution
+	Message                  *RunMessage
+}
+
+type RunEventExecution struct {
+	RunRef, NodeRef, SessionRef, TurnRef string
+	TurnNumber                           int64
+	Attempt                              int32
+}
+
+type RunMessage struct {
+	Ref, Phase, Text string
+	Revision         int64
+	Source           MessageSource
+}
+
+type MessageSource struct {
+	Origin string
 }
 
 type RunEventActor struct {
@@ -555,6 +575,7 @@ type RunToolCall struct {
 	DurationMS     int64          `json:"durationMs"`
 	SafeResult     string         `json:"safeResult"`
 	AuditRef       string         `json:"auditRef"`
+	Revision       int64          `json:"revision,omitempty"`
 }
 
 type RunEvent struct {
@@ -575,6 +596,7 @@ type RunGraph struct {
 }
 
 type OwnerGate struct {
+	ScopeKind, OrganizationRef                                      string
 	Ref, ProjectRef, RunRef, NodeRef, Title, Prompt, ContextSummary string
 	ResolutionAttachmentSetRef                                      string
 	State, Decision, DecisionComment, RequestedByRef                string
@@ -686,16 +708,17 @@ type ScheduleRunOccurrence struct {
 }
 
 type IntegrationCapability struct {
-	Key               string                          `json:"key"`
-	Name              string                          `json:"name"`
-	Description       string                          `json:"description"`
-	Operation         string                          `json:"operation"`
-	Risk              string                          `json:"risk"`
-	ApprovalPolicy    string                          `json:"approvalPolicy"`
-	ResourceKind      string                          `json:"resourceKind"`
-	InputFields       []IntegrationConfigurationField `json:"inputFields"`
-	InputSchema       string                          `json:"inputSchema"`
-	InputSchemaSHA256 string                          `json:"inputSchemaSha256"`
+	Key                     string                          `json:"key"`
+	Name                    string                          `json:"name"`
+	Description             string                          `json:"description"`
+	Operation               string                          `json:"operation"`
+	Risk                    string                          `json:"risk"`
+	ApprovalPolicy          string                          `json:"approvalPolicy"`
+	AllowedApprovalPolicies []string                        `json:"allowedApprovalPolicies"`
+	ResourceKind            string                          `json:"resourceKind"`
+	InputFields             []IntegrationConfigurationField `json:"inputFields"`
+	InputSchema             string                          `json:"inputSchema"`
+	InputSchemaSHA256       string                          `json:"inputSchemaSha256"`
 }
 
 type IntegrationConfigurationField struct {
@@ -738,6 +761,7 @@ type IntegrationCredentialRevision struct {
 }
 
 type IntegrationGrant struct {
+	ConnectionVersion                                                     int64
 	Ref, CapabilityKey, TargetType, TargetRef, TargetName, ApprovalPolicy string
 	Risk, ResourceKind, ResourceScopeDigest                               string
 	ResourceScope                                                         map[string]string
@@ -833,6 +857,7 @@ type AssistantTurn struct {
 	Sequence, RunVersion                                            int64
 	CreatedAt                                                       time.Time
 	CompletedAt                                                     *time.Time
+	Source                                                          MessageSource
 }
 
 type AssistantConversation struct {

@@ -22,6 +22,7 @@ WHERE i.organization_id=$1::uuid AND i.ref=$2 AND i.state='RUNNING'
   AND d.enabled AND d.adapter_owner='integration-gateway' AND d.execution_route='MANAGED_MCP' AND d.adapter_readiness='READY'
   AND c.definition_version=i.definition_version AND c.definition_digest=i.definition_digest
   AND g.enabled AND g.target_kind='AGENT' AND g.target_ref=a.ref AND g.capability_key=i.capability_key
+  AND i.grant_version>0 AND g.version=i.grant_version AND g.approval_policy=i.approval_policy
   AND g.definition_version=i.definition_version AND g.definition_digest=i.definition_digest
   AND g.resource_scope_digest=i.resource_scope_digest AND g.resource_scope=i.resource_scope
   AND EXISTS(SELECT 1 FROM control_plane.runtime_revisions revision,
@@ -30,5 +31,6 @@ WHERE i.organization_id=$1::uuid AND i.ref=$2 AND i.state='RUNNING'
         AND revision.generation=(SELECT max(latest.generation) FROM control_plane.runtime_revisions latest WHERE latest.node_id=n.id)
         AND binding->>'ref'=g.ref AND binding->>'capabilityKey'=g.capability_key
 		AND binding->>'grantVersion'=g.version::text
+        AND binding->>'approvalPolicy'=g.approval_policy
         AND binding->>'connectionRef'=c.ref AND binding->>'definitionDigest'=c.definition_digest)
 FOR SHARE OF i,c,d,g,n,r,root,actor,a,p;

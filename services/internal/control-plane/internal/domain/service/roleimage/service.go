@@ -12,6 +12,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	repository "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -334,6 +336,8 @@ func (service *Service) RecordAdmission(ctx context.Context, input repository.Ad
 	}
 	input.Principal = principal
 	if err := authorizeKey(input.Principal, permissionRecordAdmission, "image-admission", input.IdempotencyKey); err != nil ||
+		!validRef(input.ExpectedAdmissionAttemptRef, "imgadm") || input.ExpectedAdmissionAttempt == 0 ||
+		input.VulnerabilityReportJSON == "" || !sha256Pattern.MatchString(input.VulnerabilityReportProjectionSHA256) ||
 		!validRef(input.ArtifactRef, "imgart") || input.ExpectedVersion == 0 || input.ExpectedFence == 0 || input.ClaimToken == "" ||
 		!manifestPattern.MatchString(input.ManifestDigest) || !sha256Pattern.MatchString(input.ImmutableBuildSHA256) ||
 		!sha256Pattern.MatchString(input.ProvenanceSHA256) || !sha256Pattern.MatchString(input.SBOMSHA256) ||
@@ -342,6 +346,14 @@ func (service *Service) RecordAdmission(ctx context.Context, input repository.Ad
 		!signatureIDPattern.MatchString(input.SignatureIdentity) || !sha256Pattern.MatchString(input.SignatureSHA256) ||
 		!sha256Pattern.MatchString(input.AdmissionReceiptSHA256) || !manifestPattern.MatchString(input.AdmissionReceiptOCIManifestDigest) {
 		return entity.ImageArtifact{}, firstError(err, errs.ErrInvalid)
+	}
+	if input.ToolInventoryJSON != "" {
+		inventory, err := runtimecontract.DecodeImageToolInventory([]byte(input.ToolInventoryJSON))
+		if err != nil || runtimecontract.ImageInventorySHA256([]byte(input.ToolInventoryJSON)) != input.ToolInventorySHA256 || inventory.ImageDigest != input.ManifestDigest || inventory.ProvenanceSHA256 != input.ProvenanceSHA256 {
+			return entity.ImageArtifact{}, errs.ErrInvalid
+		}
+	} else if input.Verdict == "ACCEPTED" || input.ToolInventorySHA256 != "" {
+		return entity.ImageArtifact{}, errs.ErrInvalid
 	}
 	return service.repository.RecordAdmission(ctx, input)
 }

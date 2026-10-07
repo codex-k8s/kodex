@@ -20,6 +20,8 @@ func main() {
 	var err error
 	if len(os.Args) == 2 && os.Args[1] == "worker" {
 		err = worker.Run(lifecycle)
+	} else if len(os.Args) == 2 && os.Args[1] == "prepare-restore" {
+		err = worker.PrepareRestore(lifecycle)
 	} else if len(os.Args) == 2 && os.Args[1] == "controller" {
 		err = app.Run(lifecycle, background, version)
 	} else {

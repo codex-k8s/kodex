@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, useId, watch } from "vue";
+import { useServerMessage } from "@/shared/ui/server-message";
+import { environmentDisplayField } from "@/features/runtime/environment-display-field";
 
 import {
   operationParameter,
@@ -17,6 +19,17 @@ const emit = defineEmits<{
   dirty: [];
   parameter: [key: string, value: unknown];
 }>();
+const localizeServerMessage = useServerMessage();
+const nameFieldValue = environmentDisplayField(
+  () => stringField("name"),
+  (value) => changeText("name", value),
+  localizeServerMessage,
+);
+const descriptionFieldValue = environmentDisplayField(
+  () => stringField("description"),
+  (value) => changeText("description", value),
+  localizeServerMessage,
+);
 
 function stringField(key: string): string {
   try {
@@ -42,8 +55,8 @@ const systemAssistantEnvironment = computed(
 );
 watch(valid, (value) => emit("valid", value), { immediate: true });
 
-function changeText(key: string, event: Event): void {
-  emit("parameter", key, (event.target as HTMLInputElement).value);
+function changeText(key: string, value: string): void {
+  emit("parameter", key, value);
   emit("dirty");
 }
 </script>
@@ -62,24 +75,22 @@ function changeText(key: string, event: Event): void {
     <label class="field">
       <span>{{ $t("assistant.planEditor.entityName") }}</span>
       <input
-        :value="stringField('name')"
+        v-model="nameFieldValue"
         :id="`${fieldPrefix}-name`"
         :name="`${fieldPrefix}-name`"
         maxlength="120"
         :disabled="disabled"
-        @input="changeText('name', $event)"
       />
     </label>
     <label class="field">
       <span>{{ $t("assistant.planEditor.environmentDescription") }}</span>
       <textarea
-        :value="stringField('description')"
+        v-model="descriptionFieldValue"
         :id="`${fieldPrefix}-description`"
         :name="`${fieldPrefix}-description`"
         rows="3"
         maxlength="1000"
         :disabled="disabled"
-        @input="changeText('description', $event)"
       />
     </label>
     <p v-if="!valid" class="field-error" role="alert">

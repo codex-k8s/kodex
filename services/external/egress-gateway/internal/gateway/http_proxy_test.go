@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -11,19 +12,435 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/pem"
+	"errors"
+	"fmt"
 	"io"
+	"log"
 	"math/big"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/netip"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/connect"
 	internalpolicy "github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
+
+func TestProviderAccountDiscoveryKeepsExactProxyBoundary(t *testing.T) {
+	const discovery = "/backend-api/wham/accounts/check"
+	for _, test := range []struct {
+		name, host, path, method string
+		provider, allowed        bool
+	}{
+		{name: "exact provider GET", host: "chatgpt.com", path: discovery, method: http.MethodGet, provider: true, allowed: true},
+		{name: "no provider authority", host: "chatgpt.com", path: discovery, method: http.MethodGet},
+		{name: "write rejected", host: "chatgpt.com", path: discovery, method: http.MethodPost, provider: true},
+		{name: "other path rejected", host: "chatgpt.com", path: discovery + "/other", method: http.MethodGet, provider: true},
+		{name: "other host rejected", host: "api.openai.com", path: discovery, method: http.MethodGet, provider: true},
+		{name: "encoded path rejected", host: "chatgpt.com", path: "/backend-api/wham/accounts/%63heck", method: http.MethodGet, provider: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			parsed, err := url.Parse(test.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := &http.Request{Method: test.method, Host: test.host, URL: parsed, RequestURI: test.path, Header: make(http.Header)}
+			access := runtimecontract.RuntimeProxyAccess{ProviderAccess: test.provider, WebAccess: runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessNone}}
+			if got := proxyRequestAllowed(request, connect.Target{Hostname: test.host, Port: 443}, access); got != test.allowed {
+				t.Fatalf("account discovery proxy eligibility=%t, want %t", got, test.allowed)
+			}
+			request.Header.Set("Connection", "Upgrade")
+			request.Header.Set("Upgrade", "websocket")
+			if proxyRequestAllowed(request, connect.Target{Hostname: test.host, Port: 443}, access) {
+				t.Fatal("account discovery acquired WebSocket authority")
+			}
+		})
+	}
+}
+
+func TestProviderDiscoveryDiagnosticContainsOnlyClosedRoute(t *testing.T) {
+	access := runtimecontract.RuntimeProxyAccess{ProviderAccess: true}
+	target := connect.Target{Hostname: "chatgpt.com", Port: 443}
+	request := &http.Request{Method: http.MethodGet, URL: &url.URL{Path: "/backend-api/wham/config/bundle", RawQuery: "private=must-not-log"}}
+	if got := providerDiscoveryRoute(request, target, access); got != "CONFIG_BUNDLE" {
+		t.Fatalf("closed discovery route=%q", got)
+	}
+	request.URL.Path = "/private-account-path"
+	if got := providerDiscoveryRoute(request, target, access); got != "" {
+		t.Fatalf("unknown path was exposed: %q", got)
+	}
+	request.URL.Path = "/backend-api/wham/accounts/check"
+	access.ProviderAccess = false
+	if got := providerDiscoveryRoute(request, target, access); got != "" {
+		t.Fatalf("unverified provider route classified: %q", got)
+	}
+	access.ProviderAccess = true
+	target.Port = 8443
+	if got := providerDiscoveryRoute(request, target, access); got != "" {
+		t.Fatalf("unverified provider port classified: %q", got)
+	}
+	target.Port = 443
+	request.URL.RawPath = "/backend-api/wham/accounts/%63heck"
+	if got := providerDiscoveryRoute(request, target, access); got != "" {
+		t.Fatalf("encoded provider path classified: %q", got)
+	}
+}
+
+type discoveryHTTP2Dialer struct{ address string }
+
+func (dialer discoveryHTTP2Dialer) DialContext(ctx context.Context, _ netip.AddrPort) (net.Conn, error) {
+	var loopbackDialer net.Dialer
+	return loopbackDialer.DialContext(ctx, "tcp", dialer.address)
+}
+
+type discoveryReadFailure struct{ err error }
+
+func (reader discoveryReadFailure) Read([]byte) (int, error) { return 0, reader.err }
+
+func TestProviderDiscoveryHTTP2UpstreamUsesHTTP1Downstream(t *testing.T) {
+	certificate, roots := serverCertificateFixture(t, "chatgpt.com")
+	upstreamProtocol := make(chan int, 1)
+	upstream := httptest.NewUnstartedServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		upstreamProtocol <- request.ProtoMajor
+		writer.Header().Set("Trailer", "X-Fixture-Trailer")
+		writer.WriteHeader(http.StatusOK)
+		writer.(http.Flusher).Flush()
+		_, _ = io.WriteString(writer, "private-body-sentinel")
+		writer.Header().Set("X-Fixture-Trailer", "private-trailer-sentinel")
+	}))
+	upstream.EnableHTTP2 = true
+	upstream.TLS = &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{certificate}}
+	upstream.StartTLS()
+	defer upstream.Close()
+	server, client, _, _, done := providerProxyFixture(t, "chatgpt.com", runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessNone}, roots)
+	server.dialer = discoveryHTTP2Dialer{address: upstream.Listener.Addr().String()}
+	request, err := http.NewRequest(http.MethodGet, "https://chatgpt.com/backend-api/wham/accounts/check", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := request.Write(client.conn); err != nil {
+		t.Fatal(err)
+	}
+	statusLine, err := client.reader.ReadString('\n')
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.ReadResponse(bufio.NewReader(io.MultiReader(strings.NewReader(statusLine), client.reader)), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, bodyErr := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	<-done
+	if protocol := <-upstreamProtocol; protocol != 2 {
+		t.Fatalf("upstream protocol=%d, want 2", protocol)
+	}
+	if client.conn.ConnectionState().NegotiatedProtocol != "http/1.1" || statusLine != "HTTP/1.1 200 OK\r\n" {
+		t.Fatalf("HTTP/1.1 downstream received status line %q", statusLine)
+	}
+	if bodyErr != nil || string(body) != "private-body-sentinel" || len(response.TransferEncoding) != 1 || response.TransferEncoding[0] != "chunked" || response.Trailer.Get("X-Fixture-Trailer") != "private-trailer-sentinel" {
+		t.Fatalf("streaming H2 response lost downstream framing/body/trailers: transfer_encoding=%v body_error=%t", response.TransferEncoding, bodyErr != nil)
+	}
+}
+
+func TestProxyResponseChunkedEligibilityIsClosed(t *testing.T) {
+	for _, test := range []struct {
+		name, method string
+		status       int
+		length       int64
+		body         io.ReadCloser
+		want         bool
+	}{
+		{name: "unknown body", method: http.MethodGet, status: 200, length: -1, body: io.NopCloser(strings.NewReader("fixture")), want: true},
+		{name: "unknown error body", method: http.MethodGet, status: 503, length: -1, body: io.NopCloser(strings.NewReader("fixture")), want: true},
+		{name: "HEAD", method: http.MethodHead, status: 200, length: -1, body: io.NopCloser(strings.NewReader("fixture"))},
+		{name: "known length", method: http.MethodGet, status: 200, length: 7, body: io.NopCloser(strings.NewReader("fixture"))},
+		{name: "zero length", method: http.MethodGet, status: 200, length: 0, body: http.NoBody},
+		{name: "nil body", method: http.MethodGet, status: 200, length: -1},
+		{name: "no body marker", method: http.MethodGet, status: 200, length: -1, body: http.NoBody},
+		{name: "upgrade", method: http.MethodGet, status: 101, length: -1, body: io.NopCloser(strings.NewReader("fixture"))},
+		{name: "informational", method: http.MethodGet, status: 199, length: -1, body: io.NopCloser(strings.NewReader("fixture"))},
+		{name: "no content", method: http.MethodGet, status: 204, length: -1, body: io.NopCloser(strings.NewReader("fixture"))},
+		{name: "reset content", method: http.MethodGet, status: 205, length: -1, body: io.NopCloser(strings.NewReader("fixture"))},
+		{name: "not modified", method: http.MethodGet, status: 304, length: -1, body: io.NopCloser(strings.NewReader("fixture"))},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			response := &http.Response{StatusCode: test.status, ContentLength: test.length, Body: test.body}
+			if got := proxyResponseNeedsChunked(response, test.method); got != test.want {
+				t.Fatalf("chunked eligibility=%t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
+func TestProviderDiscoveryProxyDiagnosticsAreClosed(t *testing.T) {
+	for _, test := range []struct {
+		name, path, failure, statusClass string
+		body, encoding, contentType      string
+		shape                            string
+		status                           int
+		resolverFailure, tlsFailure      bool
+		truncated, readFailure           bool
+	}{
+		{name: "successful body", status: http.StatusOK, statusClass: "2XX"},
+		{name: "valid identity JSON unchanged", status: http.StatusOK, statusClass: "2XX", body: `{"accounts":[]}`, contentType: "application/json", shape: "SCHEMA_OK_LIST"},
+		{name: "encoded body unchanged", status: http.StatusOK, statusClass: "2XX", body: "private-encoded-body-sentinel", encoding: "br", contentType: "application/json; private=private-parameter-sentinel", shape: "ENCODED_NOT_CHECKED"},
+		{name: "capture bound preserves stream", status: http.StatusOK, statusClass: "2XX", body: strings.Repeat("private-large-body-sentinel", 50000), shape: "BOUND_EXCEEDED"},
+		{name: "truncated body", status: http.StatusOK, statusClass: "2XX", truncated: true},
+		{name: "body read failure", status: http.StatusOK, statusClass: "2XX", readFailure: true},
+		{name: "upstream forbidden", status: http.StatusForbidden, statusClass: "4XX"},
+		{name: "upstream unavailable", status: http.StatusServiceUnavailable, statusClass: "5XX"},
+		{name: "DNS failure", resolverFailure: true, failure: "DNS"},
+		{name: "TLS failure", tlsFailure: true, failure: "TLS"},
+		{name: "known route denied", path: "/backend-api/wham/config/bundle", status: http.StatusForbidden},
+		{name: "unknown route omitted", path: "/private-account-path", status: http.StatusForbidden},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var output bytes.Buffer
+			previousWriter, previousFlags, previousPrefix := log.Writer(), log.Flags(), log.Prefix()
+			log.SetOutput(&output)
+			log.SetFlags(0)
+			log.SetPrefix("")
+			t.Cleanup(func() { log.SetOutput(previousWriter); log.SetFlags(previousFlags); log.SetPrefix(previousPrefix) })
+			certificate, roots := serverCertificateFixture(t, "chatgpt.com")
+			if test.tlsFailure {
+				_, _, roots = certificateAuthorityFixture(t, "untrusted-fixture")
+			}
+			_, client, resolver, dialer, done := providerProxyFixture(t, "chatgpt.com", runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessNone}, roots)
+			if test.resolverFailure {
+				resolver.err = errors.New("private-dns-error-sentinel")
+			}
+			upstreamResult := make(chan error, 1)
+			if test.path == "" && !test.resolverFailure {
+				go func() {
+					peer := <-dialer.peers
+					defer peer.Close()
+					_ = peer.SetDeadline(time.Now().Add(2 * time.Second))
+					upstream := tls.Server(peer, &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{certificate}})
+					if test.tlsFailure {
+						if err := upstream.Handshake(); err == nil {
+							upstreamResult <- errors.New("untrusted TLS fixture accepted")
+						} else {
+							upstreamResult <- nil
+						}
+						return
+					}
+					request, err := http.ReadRequest(bufio.NewReader(upstream))
+					if err != nil {
+						upstreamResult <- err
+						return
+					}
+					_ = request.Body.Close()
+					body := "private-upstream-body-sentinel"
+					if test.body != "" {
+						body = test.body
+					}
+					response := &http.Response{StatusCode: test.status, ProtoMajor: 1, ProtoMinor: 1, Header: http.Header{"X-Private": []string{"private-response-header-sentinel"}}, Body: io.NopCloser(strings.NewReader(body)), ContentLength: int64(len(body)), Close: true}
+					if test.encoding != "" {
+						response.Header.Set("Content-Encoding", test.encoding)
+					}
+					if test.contentType != "" {
+						response.Header.Set("Content-Type", test.contentType)
+					}
+					readFailure := errors.New("private-body-read-error-sentinel")
+					if test.truncated {
+						response.ContentLength += 7
+					}
+					if test.readFailure {
+						response.ContentLength = -1
+						response.TransferEncoding = []string{"chunked"}
+						response.Body = io.NopCloser(io.MultiReader(strings.NewReader(body), discoveryReadFailure{err: readFailure}))
+					}
+					writeErr := response.Write(upstream)
+					if test.truncated && writeErr != nil || test.readFailure && errors.Is(writeErr, readFailure) {
+						writeErr = nil
+					}
+					upstreamResult <- writeErr
+				}()
+			}
+			path := test.path
+			if path == "" {
+				path = "/backend-api/wham/accounts/check"
+			}
+			request, err := http.NewRequest(http.MethodGet, "https://chatgpt.com"+path+"?private-query-sentinel=private-identity-sentinel", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request.Header.Set("Authorization", "Bearer private-request-header-sentinel")
+			if err := request.Write(client.conn); err != nil {
+				t.Fatal(err)
+			}
+			response, err := http.ReadResponse(client.reader, request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, bodyErr := io.ReadAll(response.Body)
+			_ = response.Body.Close()
+			if (test.truncated || test.readFailure) != (bodyErr != nil) {
+				t.Fatal("unexpected downstream body completion")
+			}
+			if test.path == "" && test.failure == "" {
+				wantBody := test.body
+				if wantBody == "" {
+					wantBody = "private-upstream-body-sentinel"
+				}
+				if string(body) != wantBody || response.Header.Get("Content-Encoding") != test.encoding || response.Header.Get("Content-Type") != test.contentType {
+					t.Fatal("diagnostic capture changed forwarded body or content headers")
+				}
+			}
+			wantStatus := test.status
+			if test.failure != "" {
+				wantStatus = http.StatusBadGateway
+			}
+			if response.StatusCode != wantStatus {
+				t.Fatalf("proxy status=%d, want %d", response.StatusCode, wantStatus)
+			}
+			select {
+			case <-done:
+			case <-time.After(2 * time.Second):
+				t.Fatal("diagnostic proxy handler did not join")
+			}
+			if test.path == "" && !test.resolverFailure {
+				if err := <-upstreamResult; err != nil {
+					t.Fatal(err)
+				}
+			} else if len(dialer.targets) != 0 {
+				t.Fatal("failed DNS or denied route crossed dial boundary")
+			}
+			want := ""
+			switch {
+			case test.path == "/backend-api/wham/config/bundle":
+				want = fmt.Sprintf(runtimeProxyProviderDiscoveryLog, "CONFIG_BUNDLE", "POLICY", "DENIED", "NONE", "NONE") + "\n"
+			case test.path == "":
+				want = fmt.Sprintf(runtimeProxyProviderDiscoveryLog, "ACCOUNTS_CHECK", "POLICY", "ALLOWED", "NONE", "NONE") + "\n"
+				if test.failure != "" {
+					want += fmt.Sprintf(runtimeProxyProviderDiscoveryLog, "ACCOUNTS_CHECK", "UPSTREAM", "FAILED", "NONE", test.failure) + "\n"
+				} else {
+					want += fmt.Sprintf(runtimeProxyProviderDiscoveryLog, "ACCOUNTS_CHECK", "UPSTREAM", "RESPONSE", test.statusClass, "NONE") + "\n"
+					if test.truncated || test.readFailure {
+						want += fmt.Sprintf(runtimeProxyProviderDiscoveryLog, "ACCOUNTS_CHECK", "UPSTREAM_BODY", "FAILED", test.statusClass, "IO") + "\n"
+					} else {
+						want += fmt.Sprintf(runtimeProxyProviderDiscoveryLog, "ACCOUNTS_CHECK", "UPSTREAM_BODY", "COMPLETED", test.statusClass, "NONE") + "\n"
+						encoding, contentType, shape := "IDENTITY", "UNKNOWN", "JSON_INVALID"
+						if test.encoding == "br" {
+							encoding = "BR"
+						}
+						if test.contentType != "" {
+							contentType = "JSON"
+						}
+						if test.shape != "" {
+							shape = test.shape
+						}
+						want += fmt.Sprintf(runtimeProxyProviderDiscoveryShapeLog, encoding, contentType, shape) + "\n"
+					}
+				}
+			}
+			if output.String() != want {
+				t.Fatal("provider diagnostic differs from closed event sequence or exposes private fixture data")
+			}
+		})
+	}
+}
+
+func TestDiscoveryBodyCapturePreservesStreamErrorsAndClears(t *testing.T) {
+	input := strings.Repeat("private-capture-sentinel", 50000)
+	readFailure := errors.New("private-read-error-sentinel")
+	capture := &discoveryBodyCapture{body: make([]byte, 0, maximumDiscoveryBodyBytes+1)}
+	source := io.MultiReader(strings.NewReader(input), discoveryReadFailure{err: readFailure})
+	forwarded, err := io.ReadAll(io.TeeReader(source, capture))
+	if string(forwarded) != input || !errors.Is(err, readFailure) || len(capture.body) != maximumDiscoveryBodyBytes+1 {
+		t.Fatal("bounded capture changed stream, read error or capture bound")
+	}
+	retained := capture.body
+	capture.clear()
+	if capture.body != nil {
+		t.Fatal("capture retained private buffer")
+	}
+	for _, value := range retained {
+		if value != 0 {
+			t.Fatal("capture did not zero private bytes")
+		}
+	}
+}
+
+func TestProviderDiscoveryResponseMetadataRemainsClosed(t *testing.T) {
+	for _, test := range []struct {
+		encoding, want string
+		uncompressed   bool
+	}{
+		{"", "IDENTITY", false}, {"identity", "IDENTITY", false}, {" GZIP ", "GZIP", false},
+		{"br", "BR", false}, {"zstd", "ZSTD", false}, {"deflate", "DEFLATE", false},
+		{"gzip, br", "UNKNOWN", false}, {"private-encoding-sentinel", "UNKNOWN", false},
+		{"gzip", "IDENTITY", true},
+	} {
+		response := &http.Response{Header: http.Header{"Content-Encoding": []string{test.encoding}}, Uncompressed: test.uncompressed}
+		if got := providerDiscoveryEncoding(response); got != test.want {
+			t.Fatalf("closed encoding=%q, want %q", got, test.want)
+		}
+	}
+	for _, test := range []struct{ contentType, want string }{
+		{"application/json; private=private-parameter-sentinel", "JSON"}, {"application/problem+json", "JSON"},
+		{"text/html", "HTML"}, {"text/plain; charset=utf-8", "TEXT"}, {"", "UNKNOWN"},
+		{"private-type-sentinel", "UNKNOWN"}, {"application/json; private", "UNKNOWN"},
+	} {
+		response := &http.Response{Header: http.Header{"Content-Type": []string{test.contentType}}}
+		if got := providerDiscoveryContentType(response); got != test.want {
+			t.Fatalf("closed content type=%q, want %q", got, test.want)
+		}
+	}
+	response := &http.Response{Header: http.Header{"Content-Encoding": []string{"gzip", "br"}, "Content-Type": []string{"application/json", "text/html"}}}
+	if providerDiscoveryEncoding(response) != "UNKNOWN" || providerDiscoveryContentType(response) != "UNKNOWN" {
+		t.Fatal("ambiguous content metadata was classified")
+	}
+}
+
+func TestProviderDiscoveryFailureAndStatusClassesRemainClosed(t *testing.T) {
+	for _, test := range []struct {
+		err       error
+		tlsFailed bool
+		want      string
+	}{
+		{proxyUpstreamDNSFailure, false, "DNS"},
+		{fmt.Errorf("private-wrapped-sentinel: %w", proxyUpstreamDialFailure), false, "DIAL"},
+		{fmt.Errorf("private-cancel-sentinel: %w", context.Canceled), true, "CANCELLED"},
+		{context.DeadlineExceeded, true, "TIMEOUT"},
+		{errors.New("private-tls-error-sentinel"), true, "TLS"},
+		{errors.New("TLS DNS private-error-sentinel"), false, "UNKNOWN"},
+		{proxyUpstreamFailure("private-unknown-kind-sentinel"), false, "UNKNOWN"},
+	} {
+		if got := providerDiscoveryFailure(test.err, test.tlsFailed); got != test.want {
+			t.Fatalf("failure class=%q, want %q", got, test.want)
+		}
+	}
+	for _, test := range []struct {
+		err  error
+		want string
+	}{
+		{errors.New("private-body-read-error-sentinel"), "IO"},
+		{io.ErrUnexpectedEOF, "IO"},
+		{fmt.Errorf("private-cancel-sentinel: %w", context.Canceled), "CANCELLED"},
+		{context.DeadlineExceeded, "TIMEOUT"},
+		{proxyUpstreamFailure("private-unknown-kind-sentinel"), "IO"},
+	} {
+		if got := providerDiscoveryBodyFailure(test.err); got != test.want {
+			t.Fatalf("body failure class=%q, want %q", got, test.want)
+		}
+	}
+	for _, test := range []struct {
+		status int
+		want   string
+	}{{99, "UNKNOWN"}, {100, "1XX"}, {199, "1XX"}, {200, "2XX"}, {299, "2XX"}, {300, "3XX"}, {399, "3XX"}, {400, "4XX"}, {499, "4XX"}, {500, "5XX"}, {599, "5XX"}, {600, "UNKNOWN"}} {
+		if got := providerDiscoveryStatusClass(test.status); got != test.want {
+			t.Fatalf("status class=%q, want %q", got, test.want)
+		}
+	}
+}
 
 func TestAuthenticatedProxyTerminatesTLSAndForwardsAllowedRequest(t *testing.T) {
 	proxyCA, proxyRoots := proxyAuthorityFixture(t)

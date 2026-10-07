@@ -77,7 +77,9 @@ spec:
             httpGet: {path: /healthz, port: metrics}
             timeoutSeconds: 2
             periodSeconds: 2
-            failureThreshold: 30
+            # Максимум инициализации 120 с + проверки 300 с; первый probe
+            # может идти сразу: (225 - 1) * 2 = 448 с оставляет 28 с запаса.
+            failureThreshold: 225
           readinessProbe:
             !!merge <<: *technicalProbe
             httpGet: {path: /readyz, port: metrics}

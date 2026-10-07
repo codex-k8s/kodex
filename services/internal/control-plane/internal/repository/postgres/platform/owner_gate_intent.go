@@ -26,6 +26,9 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 	if gate == nil {
 		return nil
 	}
+	if err := repository.projectOwnerGateScope(ctx, runner, current, gate, actorScoped); err != nil {
+		return err
+	}
 	var integration, delivery, completesRun bool
 	var scopeJSON, input []byte
 	var inputDigest, risk, approval, definitionVersion, definitionDigest string
@@ -52,7 +55,11 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 		if !ok {
 			return errs.ErrUnavailable
 		}
-		if err := repository.requireAccess(ctx, tx, current, "project.view", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROJECT", ResourceRef: gate.ProjectRef}); err != nil {
+		permission, target := "project.view", entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "PROJECT", ResourceRef: gate.ProjectRef}
+		if gate.ScopeKind == "ORGANIZATION" {
+			permission, target = "organization.view", organizationTarget(gate.OrganizationRef)
+		}
+		if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {
 			if !errors.Is(err, errs.ErrForbidden) && !errors.Is(err, errs.ErrNotFound) {
 				return err
 			}
@@ -73,8 +80,6 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 		if approval == string(integrationpackage.ApprovalHumanScoped) {
 			// Для параметризованного согласования исходные аргументы не входят
 			// в событие запуска и не раскрываются тем, кто видит Gate без права решения.
-			intent.EffectPreview["fields"] = []any{}
-			intent.EffectPreview["contentComplete"] = false
 			showScopeValues := false
 			if actorScoped {
 				tx, ok := runner.(pgx.Tx)
@@ -89,20 +94,31 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 				}
 				showScopeValues = accessErr == nil
 			}
+			if !showScopeValues {
+				intent.EffectPreview["fields"] = []any{}
+				intent.EffectPreview["contentComplete"] = false
+			}
 			definition, definitionErr := repository.integrationPackage(ctx, runner, current.organizationID,
 				intent.ConnectionRef, intent.DefinitionKey, definitionVersion, definitionDigest)
 			if definitionErr != nil {
-				return definitionErr
+				if !errors.Is(definitionErr, errs.ErrForbidden) || !terminalOwnerGateHistory(gate.State) {
+					return definitionErr
+				}
+				// Завершённая история не исполняет retired пакет и не интерпретирует
+				// его параметры по новой схеме. Owner scope и input digest уже проверены.
+				intent.EffectPreview["fields"] = []any{}
+				intent.EffectPreview["contentComplete"] = false
+			} else {
+				capability, ok := definition.Capability(intent.CapabilityKey)
+				if !ok || capability.Operation != intent.Operation {
+					return errs.ErrUnavailable
+				}
+				scopePreview, scopeErr := integrationScopedGatePreview(capability, input, approvalScopePaths, showScopeValues)
+				if scopeErr != nil {
+					return scopeErr
+				}
+				intent.EffectPreview["approvalScope"] = scopePreview
 			}
-			capability, ok := definition.Capability(intent.CapabilityKey)
-			if !ok || capability.Operation != intent.Operation {
-				return errs.ErrUnavailable
-			}
-			scopePreview, scopeErr := integrationScopedGatePreview(capability, input, approvalScopePaths, showScopeValues)
-			if scopeErr != nil {
-				return scopeErr
-			}
-			intent.EffectPreview["approvalScope"] = scopePreview
 		}
 		gate.IntegrationIntent = intent
 	}
@@ -113,6 +129,15 @@ func (repository *Repository) projectGateIntent(ctx context.Context, runner quer
 		return errs.ErrUnavailable
 	}
 	return nil
+}
+
+func terminalOwnerGateHistory(state string) bool {
+	switch state {
+	case "APPROVED", "REJECTED", "CHANGES_REQUESTED", "CANCELLED", "EXPIRED":
+		return true
+	default:
+		return false
+	}
 }
 
 const gatePreviewFieldBytes = 4 << 10

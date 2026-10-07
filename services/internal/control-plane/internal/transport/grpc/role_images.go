@@ -153,6 +153,16 @@ func castImageBuild(input entity.ImageBuild) *controlplanev1.ImageBuild {
 	return result
 }
 
+func castRoleImageAdmissionFailure(input *entity.RoleImageAdmissionFailure) *controlplanev1.RoleImageAdmissionFailure {
+	if input == nil {
+		return nil
+	}
+	return &controlplanev1.RoleImageAdmissionFailure{ImageArtifactRef: input.ImageArtifactRef,
+		Version: input.Version, RecipeRef: input.RecipeRef, RecipeGeneration: input.RecipeGeneration,
+		BuildRef: input.BuildRef, BuildAttempt: input.BuildAttempt, ScopeKind: roleImageScopeKind(input.ScopeKind),
+		OrganizationRef: input.OrganizationRef, ProjectRef: input.ProjectRef, State: input.State, ErrorCode: input.ErrorCode}
+}
+
 func imageAdmissionVerdict(verdict string) controlplanev1.ImageAdmissionVerdict {
 	value, exists := controlplanev1.ImageAdmissionVerdict_value["IMAGE_ADMISSION_VERDICT_"+verdict]
 	if !exists {
@@ -205,9 +215,15 @@ func castImageArtifact(input entity.ImageArtifact) *controlplanev1.ImageArtifact
 			Os: item.OS, Architecture: item.Architecture, Variant: item.Variant,
 		})
 	}
-	for _, item := range input.Tools {
-		result.Tools = append(result.Tools, &controlplanev1.RoleImageTool{Name: item.Name, Version: item.Version})
+	for _, item := range input.DeclaredTools {
+		result.DeclaredTools = append(result.DeclaredTools, &controlplanev1.RoleImageTool{Name: item.Name, Version: item.Version, SourceRef: item.SourceRef, Sha256: item.SHA256})
 	}
+	result.VerifiedToolInventory = castImageToolInventory(input.ToolInventory, input.ToolInventorySHA256)
+	result.AdmissionAttempt = castImageAdmissionAttempt(input.AdmissionAttempt)
+	if input.AdmissionVerdict == "" && input.AdmissionAttempt != nil && (input.AdmissionAttempt.State == "PENDING" || input.AdmissionAttempt.State == "CLAIMED") {
+		result.AdmissionVerdict = controlplanev1.ImageAdmissionVerdict_IMAGE_ADMISSION_VERDICT_PENDING
+	}
+	result.RiskDecision = castImageRiskDecision(input.RiskDecision)
 	return result
 }
 
@@ -291,7 +307,7 @@ func (server *RoleImageServer) GetRoleImageRecipe(ctx context.Context, request *
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.GetRoleImageRecipeResponse{Recipe: castRoleImageRecipe(detail.Recipe)}
+	response := &controlplanev1.GetRoleImageRecipeResponse{Recipe: castRoleImageRecipe(detail.Recipe), AdmissionFailure: castRoleImageAdmissionFailure(detail.AdmissionFailure)}
 	for _, item := range detail.Builds {
 		response.Builds = append(response.Builds, castImageBuild(item))
 	}
@@ -423,7 +439,11 @@ func (server *RoleImageServer) ClaimImageAdmission(ctx context.Context, request 
 	return &controlplanev1.ClaimImageAdmissionResponse{
 		ImageArtifact: castImageArtifact(claim.Artifact), ClaimToken: claim.ClaimToken,
 		Fence: claim.Fence, AuthorityGeneration: claim.AuthorityGeneration,
-		ClaimExpiresAt: timestamp(claim.ClaimExpiresAt),
+		ClaimExpiresAt:      timestamp(claim.ClaimExpiresAt),
+		AdmissionAttemptRef: claim.AdmissionAttemptRef, AdmissionAttempt: claim.AdmissionAttempt,
+		RiskAcceptanceJson: claim.RiskAcceptanceJSON, RiskAcceptanceSha256: claim.RiskAcceptanceSHA256,
+		SourceAdmissionReceiptSha256: claim.SourceAdmissionReceiptSHA256, SourceEvidenceManifestDigest: claim.SourceEvidenceManifestDigest,
+		SourceAdmissionRevision: claim.SourceAdmissionRevision,
 	}, nil
 }
 
@@ -448,6 +468,8 @@ func (server *RoleImageServer) RecordImageAdmission(ctx context.Context, request
 		return nil, err
 	}
 	artifact, err := server.service.RecordAdmission(ctx, roleimagerepository.AdmissionRecordInput{
+		ExpectedAdmissionAttemptRef: request.GetExpectedAdmissionAttemptRef(), ExpectedAdmissionAttempt: request.GetExpectedAdmissionAttempt(),
+		VulnerabilityReportJSON: request.GetVulnerabilityReportJson(), VulnerabilityReportProjectionSHA256: request.GetVulnerabilityReportProjectionSha256(), RiskAcceptanceSHA256: request.GetRiskAcceptanceSha256(),
 		Principal: p, IdempotencyKey: request.GetIdempotencyKey(), ArtifactRef: request.GetImageArtifactRef(),
 		ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(),
 		ClaimToken: request.GetClaimToken(), ManifestDigest: request.GetManifestDigest(),
@@ -458,11 +480,45 @@ func (server *RoleImageServer) RecordImageAdmission(ctx context.Context, request
 		SignatureIdentity: request.GetSignatureIdentity(), SignatureSHA256: request.GetSignatureSha256(),
 		AdmissionReceiptSHA256:            request.GetAdmissionReceiptSha256(),
 		AdmissionReceiptOCIManifestDigest: request.GetAdmissionReceiptOciManifestDigest(),
+		ToolInventoryJSON:                 request.GetToolInventoryJson(), ToolInventorySHA256: request.GetToolInventorySha256(),
 	})
 	if err != nil {
 		return nil, transportError(err)
 	}
 	return &controlplanev1.RecordImageAdmissionResponse{ImageArtifact: castImageArtifact(artifact)}, nil
+}
+
+func (server *RoleImageServer) FailImageAdmission(ctx context.Context, request *controlplanev1.FailImageAdmissionRequest) (*controlplanev1.FailImageAdmissionResponse, error) {
+	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_FailImageAdmission_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	failure, err := server.service.FailAdmission(ctx, roleimagerepository.AdmissionFailureInput{
+		ExpectedAdmissionAttemptRef: request.GetExpectedAdmissionAttemptRef(), ExpectedAdmissionAttempt: request.GetExpectedAdmissionAttempt(),
+		Principal: p, IdempotencyKey: request.GetIdempotencyKey(), ArtifactRef: request.GetImageArtifactRef(),
+		ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(), ClaimToken: request.GetClaimToken(),
+		ExpectedAuthorityGeneration: request.GetExpectedAuthorityGeneration(), ManifestDigest: request.GetManifestDigest(),
+		ImmutableBuildSHA256: request.GetImmutableBuildSha256(), ProvenanceSHA256: request.GetProvenanceSha256(),
+		PolicyRevision: request.GetPolicyRevision(), PolicySHA256: request.GetPolicySha256(), BuildRef: request.GetBuildRef(),
+		ExpectedBuildAttempt: request.GetExpectedBuildAttempt(), RecipeGeneration: request.GetRecipeGeneration(),
+		SpecSHA256: request.GetSpecSha256(), ErrorCode: request.GetErrorCode(),
+	})
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.FailImageAdmissionResponse{AdmissionFailure: castRoleImageAdmissionFailure(&failure)}, nil
+}
+
+func (server *RoleImageServer) ExpireImageAdmissionClaim(ctx context.Context, request *controlplanev1.ExpireImageAdmissionClaimRequest) (*controlplanev1.ExpireImageAdmissionClaimResponse, error) {
+	p, err := roleImagePrincipal(ctx, controlplanev1.RoleImageService_ExpireImageAdmissionClaim_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	failure, err := server.service.ExpireAdmission(ctx, roleimagerepository.AdmissionExpiryInput{ExpectedAdmissionAttemptRef: request.GetExpectedAdmissionAttemptRef(), ExpectedAdmissionAttempt: request.GetExpectedAdmissionAttempt(), Principal: p, IdempotencyKey: request.GetIdempotencyKey(), ArtifactRef: request.GetImageArtifactRef(), ExpectedVersion: request.GetExpectedVersion(), ExpectedFence: request.GetExpectedFence(), ExpectedAuthorityGeneration: request.GetExpectedAuthorityGeneration(), ManifestDigest: request.GetManifestDigest(), ImmutableBuildSHA256: request.GetImmutableBuildSha256(), ProvenanceSHA256: request.GetProvenanceSha256(), PolicyRevision: request.GetPolicyRevision(), PolicySHA256: request.GetPolicySha256(), BuildRef: request.GetBuildRef(), ExpectedBuildAttempt: request.GetExpectedBuildAttempt(), RecipeGeneration: request.GetRecipeGeneration(), SpecSHA256: request.GetSpecSha256()})
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.ExpireImageAdmissionClaimResponse{AdmissionFailure: castRoleImageAdmissionFailure(&failure)}, nil
 }
 
 func (server *RoleImageServer) ClaimImagePromotion(ctx context.Context, request *controlplanev1.ClaimImagePromotionRequest) (*controlplanev1.ClaimImagePromotionResponse, error) {
@@ -556,7 +612,7 @@ func (server *RoleImageServer) GetOrganizationRoleImageRecipe(ctx context.Contex
 	if err != nil {
 		return nil, transportError(err)
 	}
-	response := &controlplanev1.GetOrganizationRoleImageRecipeResponse{Recipe: castRoleImageRecipe(detail.Recipe)}
+	response := &controlplanev1.GetOrganizationRoleImageRecipeResponse{Recipe: castRoleImageRecipe(detail.Recipe), AdmissionFailure: castRoleImageAdmissionFailure(detail.AdmissionFailure)}
 	for _, item := range detail.Builds {
 		response.Builds = append(response.Builds, castImageBuild(item))
 	}

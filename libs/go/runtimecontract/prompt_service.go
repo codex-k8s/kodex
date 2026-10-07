@@ -140,7 +140,13 @@ func DecodePromptService(input RunnerInput) (PromptServiceEnvelope, error) {
 // encoding/json принимает последнее значение duplicate key; на authority boundary
 // до typed decode запрещаем неоднозначную JSON форму целиком.
 func promptJSONUnique(decoder *json.Decoder, depth int) error {
-	if depth > 8 {
+	return boundedJSONUnique(decoder, depth, 8)
+}
+
+// Общая проверка неоднозначных ключей сохраняет независимый лимит каждой
+// закрытой схемы; scanner metadata не наследует глубину prompt sections.
+func boundedJSONUnique(decoder *json.Decoder, depth, maximumDepth int) error {
+	if depth > maximumDepth {
 		return errPromptService
 	}
 	token, err := decoder.Token()
@@ -164,13 +170,13 @@ func promptJSONUnique(decoder *json.Decoder, depth int) error {
 				return errPromptService
 			}
 			seen[name] = true
-			if promptJSONUnique(decoder, depth+1) != nil {
+			if boundedJSONUnique(decoder, depth+1, maximumDepth) != nil {
 				return errPromptService
 			}
 		}
 	case '[':
 		for decoder.More() {
-			if promptJSONUnique(decoder, depth+1) != nil {
+			if boundedJSONUnique(decoder, depth+1, maximumDepth) != nil {
 				return errPromptService
 			}
 		}

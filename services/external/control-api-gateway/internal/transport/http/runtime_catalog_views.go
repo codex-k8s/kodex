@@ -40,13 +40,13 @@ type canonicalOverlaySchema struct {
 }
 
 func validOverlaySchema(schema *cp.ConfigOverlaySchema) bool {
-	if schema == nil || schema.MaximumBytes != 65536 || len(schema.Fields) != 4 || !modelCatalogDigest.MatchString(schema.Digest) || schema.Revision != "cos_"+schema.Digest {
+	if schema == nil || schema.MaximumBytes != 65536 || len(schema.Fields) != 5 || !modelCatalogDigest.MatchString(schema.Digest) || schema.Revision != "cos_"+schema.Digest {
 		return false
 	}
 	canonical := canonicalOverlaySchema{MaximumBytes: schema.MaximumBytes, Fields: []canonicalOverlayField{}}
 	seen := map[string]bool{}
 	for _, field := range schema.Fields {
-		if field == nil || seen[field.Key] || !slices.Contains([]string{"model_reasoning_effort", "personality", "allow_login_shell", "history.persistence"}, field.Key) || len(field.AllowedValues) > 16 || !safeOverlayText(field.Description, 512) || !safeOverlayText(field.Completion, 256) || !safeOverlayText(field.Hover, 1024) {
+		if field == nil || seen[field.Key] || !slices.Contains([]string{"model_reasoning_effort", "web_search", "personality", "allow_login_shell", "history.persistence"}, field.Key) || len(field.AllowedValues) > 16 || !safeOverlayText(field.Description, 512) || !safeOverlayText(field.Completion, 256) || !safeOverlayText(field.Hover, 1024) {
 			return false
 		}
 		seen[field.Key] = true
@@ -64,6 +64,9 @@ func validOverlaySchema(schema *cp.ConfigOverlaySchema) bool {
 			return false
 		}
 		if field.Key == "allow_login_shell" && (!slices.Equal(field.AllowedValues, []string{"false"}) || field.DefaultValue != "false") {
+			return false
+		}
+		if field.Key == "web_search" && (!slices.Equal(field.AllowedValues, []string{"disabled", "cached", "indexed", "live"}) || field.DefaultValue != "cached") {
 			return false
 		}
 		canonical.Fields = append(canonical.Fields, canonicalOverlayField{field.Key, field.ValueType, append([]string{}, field.AllowedValues...), field.DefaultValue, field.Description, field.Completion, field.Hover})
@@ -84,7 +87,7 @@ func validOverlayDiagnostic(diagnostic *cp.ConfigOverlayDiagnostic) bool {
 	if diagnostic == nil || diagnostic.Line < 0 || diagnostic.Line > 65537 || diagnostic.Column < 0 || diagnostic.Column > 65537 {
 		return false
 	}
-	if diagnostic.Key != "" && !slices.Contains([]string{"model_reasoning_effort", "personality", "allow_login_shell", "history.persistence", "model", "model_provider", "model_providers", "api_key", "approval_policy", "sandbox_mode", "permissions", "mcp_servers", "shell_environment_policy", "cli_auth_credentials_store"}, diagnostic.Key) {
+	if diagnostic.Key != "" && !slices.Contains([]string{"model_reasoning_effort", "web_search", "personality", "allow_login_shell", "history.persistence", "model", "model_provider", "model_providers", "api_key", "approval_policy", "sandbox_mode", "permissions", "mcp_servers", "shell_environment_policy", "cli_auth_credentials_store"}, diagnostic.Key) {
 		return false
 	}
 	switch diagnostic.Code {

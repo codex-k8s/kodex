@@ -6,6 +6,7 @@ import {
   createRoleImage,
   loadRoleDefinitionOptions,
   loadRoleImageDependencies,
+  loadRoleImageDetail,
   loadRoleImageCreateAccess,
   loadRoleImageSourceCreateAccess,
   loadRoleImagePage,
@@ -13,12 +14,17 @@ import {
   promoteRoleImageArtifact,
   updateRoleImage,
 } from "@/features/role-images/api";
-import type { RoleImageRecipe } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  RoleImageRecipe,
+  RoleImageBuild,
+} from "@/shared/api/generated/openapi/types.gen";
+import { imageAdmissionFailureFixture } from "@/test-utils/image-admission-failure-fixture";
 
 const api = vi.hoisted(() => ({
   commandRoleImageRecipe: vi.fn(),
   createRoleImageRecipe: vi.fn(),
   getRoleImageRecipe: vi.fn(),
+  getSystemRoleImageRecipe: vi.fn(),
   listAgents: vi.fn(),
   listRoleEnvironments: vi.fn(),
   listRoleImageRecipeRevisions: vi.fn(),
@@ -80,6 +86,69 @@ describe("role image API adapter", () => {
         }),
     );
   });
+
+  it.each(["PROJECT", "ORGANIZATION"] as const)(
+    "читает technical failure только exactcurrent %s owner",
+    async (scopeKind) => {
+      const currentRecipe = {
+        ...recipe,
+        scopeKind,
+        projectRef: scopeKind === "PROJECT" ? recipe.projectRef : "",
+      };
+      const build: RoleImageBuild = {
+        ref: "imgbld_current",
+        version: 1,
+        scopeKind,
+        organizationRef: recipe.organizationRef,
+        projectRef: currentRecipe.projectRef,
+        recipeRef: recipe.ref,
+        recipeGeneration: recipe.generation,
+        sourceAvailable: false,
+        attempt: 1,
+        stage: "COMPLETED",
+        progressPercent: 100,
+        createdAt: recipe.createdAt,
+        updatedAt: recipe.updatedAt,
+      };
+      const failure = imageAdmissionFailureFixture(currentRecipe, build);
+      const scope =
+        scopeKind === "PROJECT"
+          ? currentRecipe.projectRef
+          : {
+              kind: "ORGANIZATION" as const,
+              organizationRef: recipe.organizationRef,
+            };
+      const read =
+        scopeKind === "PROJECT"
+          ? api.getRoleImageRecipe
+          : api.getSystemRoleImageRecipe;
+      read.mockImplementation(() =>
+        response({
+          recipe: currentRecipe,
+          builds: [build],
+          admissionFailure: failure,
+        }),
+      );
+      expect(
+        (await loadRoleImageDetail(scope, recipe.ref)).admissionFailure,
+      ).toEqual(failure);
+      for (const change of [
+        { organizationRef: "org_foreign" },
+        { projectRef: "prj_foreign" },
+        { buildRef: "imgbld_old" },
+        { recipeGeneration: 0 },
+      ]) {
+        read.mockImplementation(() =>
+          response({
+            recipe: currentRecipe,
+            builds: [build],
+            admissionFailure: { ...failure, ...change },
+          }),
+        );
+        await expect(loadRoleImageDetail(scope, recipe.ref)).rejects.toThrow();
+      }
+    },
+  );
 
   it("разрешает create только по трём точным self decisions этого проекта", async () => {
     const target = { kind: "PROJECT", projectRef: "project_1" };

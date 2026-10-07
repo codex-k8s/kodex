@@ -20,6 +20,10 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { selectedProjectRef, selectProjectRef } from "@/shared/project-context";
 import { resetOwnerRequests } from "@/shared/api/owner-lifetime";
+import type {
+  AssistantConversation,
+  SystemAssistant,
+} from "@/shared/api/generated/openapi/types.gen";
 
 const listProjectsMock = vi.hoisted(() => vi.fn());
 const getOverviewMock = vi.hoisted(() => vi.fn());
@@ -141,6 +145,8 @@ function ownerGate(): OwnerGate {
   return {
     ref: "gate_synthetic",
     version: 1,
+    scopeKind: "PROJECT",
+    organizationRef: "org_synthetic",
     projectRef: "project_synthetic",
     runRef: "run_synthetic",
     nodeRef: "node_synthetic",
@@ -360,6 +366,23 @@ function auditEvent(ref: string, occurredAt: string): AuditEvent {
 }
 
 describe("platform store", () => {
+  it("unavailable помощника очищает page cache и rejoin scope", () => {
+    const store = usePlatformStore();
+    selectProjectRef(undefined);
+    store.assistant = { ref: "ast_fixture" } as SystemAssistant;
+    store.conversations.cnv_fixture = {
+      ref: "cnv_fixture",
+    } as AssistantConversation;
+    store.assistantConversationNextPageToken = "ws-next";
+    store.assistantRealtimeScopeKey = "";
+    store.markRealtimeSnapshot("SYSTEM_ASSISTANT", undefined);
+    store.applyRealtimeAvailability([], undefined);
+    expect(store.assistant).toBeUndefined();
+    expect(store.conversations).toEqual({});
+    expect(store.assistantConversationNextPageToken).toBeUndefined();
+    expect(store.assistantRealtimeScopeKey).toBeUndefined();
+    expect(store.realtimeSnapshot("SYSTEM_ASSISTANT")).toBeUndefined();
+  });
   it("не принимает чужой assistant pin через RUN или overview realtime cache", async () => {
     const store = usePlatformStore();
     const invalid: Run = {
@@ -991,6 +1014,209 @@ describe("platform store", () => {
     ]);
   });
 
+  it("сохраняет обе истории при параллельных чтениях разных root run", async () => {
+    const first = deferred<{ data: RunWorkspace; response: Response }>();
+    const second = deferred<{ data: RunWorkspace; response: Response }>();
+    getRunGraphMock
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    listRunEventsMock.mockImplementation(
+      (options: { path: { runRef: string } }) => ({
+        data: {
+          items: [
+            {
+              ...runEvent(1),
+              runRef: options.path.runRef,
+              run: { ...runEvent(1).run, ref: options.path.runRef },
+            },
+          ],
+          currentSequence: 1,
+          complete: true,
+        },
+        response: new Response(null, { status: 200 }),
+      }),
+    );
+    const store = usePlatformStore();
+    const readingFirst = store.loadRun("run_firstroot01");
+    const readingSecond = store.loadRun("run_secondroot1");
+    expect(store.runLoading.run_firstroot01).toBe(true);
+    expect(store.runLoading.run_secondroot1).toBe(true);
+    second.resolve({
+      data: {
+        run: {
+          ...run(1),
+          ref: "run_secondroot1",
+          rootRunRef: "run_secondroot1",
+        },
+        graph: {
+          runRef: "run_secondroot1",
+          revision: 1,
+          sequence: 1,
+          nodes: [],
+          edges: [],
+        },
+      },
+      response: new Response(null, { status: 200 }),
+    });
+    await readingSecond;
+    expect(store.runLoading.run_firstroot01).toBe(true);
+    expect(store.runLoading.run_secondroot1).toBe(false);
+    first.resolve({
+      data: {
+        run: {
+          ...run(1),
+          ref: "run_firstroot01",
+          rootRunRef: "run_firstroot01",
+        },
+        graph: {
+          runRef: "run_firstroot01",
+          revision: 1,
+          sequence: 1,
+          nodes: [],
+          edges: [],
+        },
+      },
+      response: new Response(null, { status: 200 }),
+    });
+    await readingFirst;
+    expect(Object.keys(store.events)).toEqual(
+      expect.arrayContaining(["run_firstroot01", "run_secondroot1"]),
+    );
+    expect(store.events.run_firstroot01?.[1]?.runRef).toBe("run_firstroot01");
+    expect(store.runProblems).toEqual({});
+  });
+
+  it("применяет только последнее чтение одного root и не завершает его loading старым ответом", async () => {
+    const old = deferred<{ data: RunWorkspace; response: Response }>();
+    const fresh = deferred<{ data: RunWorkspace; response: Response }>();
+    getRunGraphMock
+      .mockReturnValueOnce(old.promise)
+      .mockReturnValueOnce(fresh.promise);
+    listRunEventsMock.mockResolvedValue({
+      data: {
+        items: [runEvent(1), runEvent(2)],
+        currentSequence: 2,
+        complete: true,
+      },
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+    const oldRead = store.loadRun("run_consistent01");
+    const freshRead = store.loadRun("run_consistent01");
+    old.resolve({
+      data: {
+        run: run(1),
+        graph: {
+          runRef: "run_consistent01",
+          revision: 1,
+          sequence: 1,
+          nodes: [],
+          edges: [],
+        },
+      },
+      response: new Response(null, { status: 200 }),
+    });
+    await oldRead;
+    expect(store.runLoading.run_consistent01).toBe(true);
+    expect(store.runs.run_consistent01).toBeUndefined();
+    expect(listRunEventsMock).not.toHaveBeenCalled();
+    fresh.resolve({
+      data: {
+        run: run(2),
+        graph: {
+          runRef: "run_consistent01",
+          revision: 2,
+          sequence: 2,
+          nodes: [],
+          edges: [],
+        },
+      },
+      response: new Response(null, { status: 200 }),
+    });
+    await freshRead;
+    expect(store.runs.run_consistent01?.version).toBe(2);
+    expect(store.runLoading.run_consistent01).toBe(false);
+  });
+
+  it("сброс owner очищает per-run индексы и запоздалая ошибка не загрязняет новый scope", async () => {
+    const old = deferred<{
+      error: { status: number; code: string };
+      response: Response;
+    }>();
+    const fresh = deferred<{ data: RunWorkspace; response: Response }>();
+    getRunGraphMock
+      .mockReturnValueOnce(old.promise)
+      .mockReturnValueOnce(fresh.promise);
+    listRunEventsMock.mockResolvedValue({
+      data: { items: [runEvent(1)], currentSequence: 1, complete: true },
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+    const oldRead = store.loadRun("run_consistent01");
+    store.clearOwnerState();
+    expect(store.runLoading).toEqual({});
+    expect(store.runProblems).toEqual({});
+    store.bootstrap = { organizationRef: "org_synthetic" } as BootstrapState;
+    const freshRead = store.loadRun("run_consistent01");
+    old.resolve({
+      error: { status: 503, code: "STALE_RUN_ERROR" },
+      response: new Response(null, { status: 503 }),
+    });
+    await oldRead;
+    expect(store.runProblems.run_consistent01).toBeUndefined();
+    expect(store.runLoading.run_consistent01).toBe(true);
+    fresh.resolve({
+      data: {
+        run: run(1),
+        graph: {
+          runRef: "run_consistent01",
+          revision: 1,
+          sequence: 1,
+          nodes: [],
+          edges: [],
+        },
+      },
+      response: new Response(null, { status: 200 }),
+    });
+    await freshRead;
+    expect(store.runs.run_consistent01?.version).toBe(1);
+    expect(store.runLoading.run_consistent01).toBe(false);
+  });
+
+  it("не продолжает пагинацию истории после смены owner во время catch-up", async () => {
+    getRunGraphMock.mockResolvedValue({
+      data: {
+        run: run(2),
+        graph: {
+          runRef: "run_consistent01",
+          revision: 2,
+          sequence: 2,
+          nodes: [],
+          edges: [],
+        },
+      },
+      response: new Response(null, { status: 200 }),
+    });
+    const oldHistory = deferred<{
+      data: { items: RunEvent[]; currentSequence: number; complete: boolean };
+      response: Response;
+    }>();
+    listRunEventsMock.mockReturnValueOnce(oldHistory.promise);
+    const store = usePlatformStore();
+    const oldRead = store.loadRun("run_consistent01");
+    await vi.waitFor(() => expect(listRunEventsMock).toHaveBeenCalledTimes(1));
+    store.clearOwnerState();
+    oldHistory.resolve({
+      data: { items: [runEvent(1)], currentSequence: 2, complete: false },
+      response: new Response(null, { status: 200 }),
+    });
+    await oldRead;
+    expect(listRunEventsMock).toHaveBeenCalledTimes(1);
+    expect(store.events).toEqual({});
+    expect(store.runLoading).toEqual({});
+    expect(store.runProblems).toEqual({});
+  });
+
   it("не публикует новый Run и граф при временной ошибке event catch-up", async () => {
     const workspace: RunWorkspace = {
       run: run(2),
@@ -1021,11 +1247,11 @@ describe("platform store", () => {
 
     expect(store.runs.run_consistent01).toBeUndefined();
     expect(store.graphs.run_consistent01).toBeUndefined();
-    expect(store.problems.run).toMatchObject({
+    expect(store.runProblems.run_consistent01).toMatchObject({
       code: "RUN_EVENTS_UNAVAILABLE",
       kind: "unavailable",
     });
-    expect(store.loading.run).toBe(false);
+    expect(store.runLoading.run_consistent01).toBe(false);
   });
 
   it("пагинирует события до sequence авторитетного graph snapshot", async () => {

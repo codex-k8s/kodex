@@ -4,6 +4,18 @@ AUTOMATION_VARIABLE_NAME:
   other: Automation name
 PROJECT_ASSISTANT_ROLE:
   other: Project assistant
+CALLBACK_CONTINUATION_PUBLIC:
+  other: Continuing after the decision or action result
+IMAGE_ADMISSION_FAILED:
+  other: Image admission check failed
+IMAGE_ADMISSION_LEASE_EXPIRED:
+  other: Admission worker lease expired; image admission failed
+IMAGE_ADMISSION_POLICY_CHANGED:
+  other: Image admission policy changed
+INTEGRATION_ACTION_STARTED:
+  other: Integration action started
+PROTECTED_INPUT:
+  other: Protected input
 PROJECT_ASSISTANT_CREATED:
   other: Project assistant created
 AUTOMATION_VARIABLE_TASK:

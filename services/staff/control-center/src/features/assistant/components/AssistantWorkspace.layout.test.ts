@@ -1,4 +1,7 @@
 import { readFileSync } from "node:fs";
+import { compileStyle } from "@vue/compiler-sfc";
+import { createSSRApp } from "vue";
+import { renderToString } from "vue/server-renderer";
 
 import { describe, expect, it } from "vitest";
 
@@ -45,6 +48,170 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it("сохраняет принятую переписку при обновлении, но не подменяет начальную загрузку и ошибку", async () => {
+    const loadingBranch = template.match(
+      /<div\s+v-else-if="store\.loading[^"]*"[\s\S]*?<\/div>/,
+    )?.[0];
+    expect(loadingBranch).toBeDefined();
+    if (!loadingBranch) throw new Error("Loading branch is missing");
+    expect(template).toContain('v-if="store.problem"');
+
+    const cases = [
+      {
+        loading: true,
+        selectedConversation: { turns: ["USER"] },
+        expected: "transcript",
+      },
+      {
+        loading: false,
+        selectedConversation: { turns: ["USER"] },
+        expected: "transcript",
+      },
+      { loading: true, selectedConversation: undefined, expected: "loading" },
+      {
+        loading: true,
+        selectedConversation: undefined,
+        problem: true,
+        expected: "problem",
+      },
+      {
+        loading: true,
+        selectedConversation: { turns: ["USER"] },
+        problem: true,
+        expected: "problem",
+      },
+    ];
+    for (const state of cases) {
+      const app = createSSRApp({
+        data: () => ({ store: state }),
+        template: `<p v-if="store.problem" data-problem>problem</p>${loadingBranch}<p v-else data-transcript>transcript</p>`,
+      });
+      app.config.globalProperties.$t = () => "loading";
+      const html = await renderToString(app);
+      expect(html).toContain(state.expected);
+      if (state.expected !== "loading") expect(html).not.toContain("spinner");
+      if (state.expected !== "transcript")
+        expect(html).not.toContain("data-transcript");
+    }
+  });
+
+  it("не перекрывает отправку в панели запуска и действия в модалках", () => {
+    const rule = styles
+      .split(
+        ':global(body:has([aria-modal="true"], .run-activity-overlay) .assistant-fab) {',
+      )[1]
+      ?.split("}")[0];
+    expect(rule).toContain("visibility: hidden");
+    expect(rule).toContain("pointer-events: none");
+    const compiled = compileStyle({
+      source: styles.replace("<style scoped>", "").replace("</style>", ""),
+      filename: "AssistantWorkspace.vue",
+      id: "data-v-test",
+      scoped: true,
+    });
+    expect(compiled.errors).toEqual([]);
+    expect(compiled.code).toContain(
+      'body:has([aria-modal="true"], .run-activity-overlay) .assistant-fab {',
+    );
+    expect(compiled.code).not.toContain(
+      'body:has([aria-modal="true"], .run-activity-overlay) {',
+    );
+    const formSlot = template
+      .split('class="assistant-form-slot"')[1]
+      ?.split(">\n")[0];
+    expect(formSlot).toContain(
+      ':aria-modal="open && assistantFormActive ? true : undefined"',
+    );
+  });
+  it("называет главную страницу понятно и не дублирует маршрут в компактном контексте", () => {
+    expect(source).toContain('route.name === "home"');
+    expect(source).toContain('return t("nav.home")');
+    const contextStrip = template
+      .split('class="assistant-context-strip"')[1]
+      ?.split("</button>")[0];
+    expect(contextStrip).toContain("{{ contextTitle }}");
+    expect(contextStrip).not.toContain("{{ context.route }}");
+  });
+  it("не создаёт пустой successful fallback bubble только при авторитетном terminal binding", () => {
+    expect(source).toContain("assistantTurnIsEmptyTerminalReceipt(");
+    expect(source).toContain("!turnIsEmptyTerminalReceipt(turn)");
+    const rule = source.slice(
+      source.indexOf("function turnIsEmptyTerminalReceipt"),
+      source.indexOf("const transcriptTurns"),
+    );
+    expect(rule).toContain("store.selectedConversation");
+    expect(rule).toContain("platform.bootstrap?.organizationRef");
+    expect(rule).toContain("graph?.nodes ?? []");
+    expect(rule).toContain("conversationRunEvents.value");
+  });
+  it("помещает применённый план в одну компактную карточку без внешнего повторного статуса", () => {
+    expect(template).toContain("'assistant-message--applied-plan'");
+    expect(template).toContain("turn.plan?.state !== 'APPLIED'");
+    const applied = styles
+      .slice(styles.indexOf(".assistant-message--applied-plan {"))
+      .split("}")[0];
+    expect(applied).toContain("padding: 0");
+    expect(applied).toContain("border: 0");
+    expect(applied).toContain("background: transparent");
+    const record = template.slice(
+      template.indexOf("<AssistantPlanRecord"),
+      template.indexOf("</AssistantPlanRecord>"),
+    );
+    expect(record).toContain("turn.plan.state === 'APPLIED'");
+    expect(record).toContain(':content="transcriptTurnContent(turn)"');
+  });
+  it("не дублирует exact активный transcript нижним working fallback", () => {
+    expect(template).toContain(
+      'v-if="showWorkingFallback && !store.loading && !store.problem"',
+    );
+    expect(source).toContain("assistantTranscriptReplacesWorkingFallback(");
+    const typingStyle = styles
+      .slice(styles.indexOf(".assistant-message--typing {"))
+      .split("}")[0];
+    expect(typingStyle).toContain("padding: 6px 10px");
+    expect(typingStyle).toContain("border: 0");
+    expect(source).toContain(
+      "assistantActiveUserTurn(store.selectedConversation)?.runRef",
+    );
+    expect(template).toContain(
+      "'assistant-composer__field--active': awaitingReply",
+    );
+  });
+  it("объединяет owner-checked историю run в чат без отдельного cache и отпускает scoped subscriptions", () => {
+    expect(source).toContain("Object.values(platform.events[runRef] ?? {})");
+    expect(source).toContain("await platform.loadRun(runRef)");
+    expect(source).toContain("realtime.acquireRun(runRef)");
+    expect(source).toContain(
+      "for (const release of transcriptLeases.values()) release()",
+    );
+    expect(template).toContain('v-for="entry in chatTimeline"');
+    expect(template).toContain(':events="entry.events"');
+    expect(template).toContain(
+      ':active-item-id="entry.isolated ? null : chatActiveItemId"',
+    );
+    expect(source).toContain("buildAssistantChatTimeline(");
+    expect(template).toContain(
+      ':closed-execution-keys="closedTranscriptExecutionKeys"',
+    );
+    expect(source).toContain("assistantTerminalTranscriptScopes(");
+    expect(source).toContain("platform.bootstrap?.organizationRef");
+    expect(template).not.toContain("runs.unscopedHistory");
+    expect(source).not.toContain("hasHistoricalTurns");
+    expect(source).toContain("assistantTurnHasAuthoritativeActivity(");
+    expect(source).toContain('turn.role === "ASSISTANT"');
+    expect(source).toContain(
+      "assistantFailureMessageKey(turn.content, turn.state)",
+    );
+    expect(template).toContain("turn.plan?.state !== 'APPLIED'");
+  });
+
+  it("сохраняет позицию чтения истории и предлагает кнопку новых сообщений", () => {
+    expect(source).toContain("if (!chatFollowing.value)");
+    expect(source).toContain("chatUnread.value = true");
+    expect(template).toContain('@scroll.passive="onChatScroll"');
+    expect(template).toContain('v-if="chatUnread"');
+    expect(template).toContain('$t("runs.newMessages")');
+  });
   it("подготовка настроек заполняет только черновик сообщения и не отправляет его", () => {
     const helper = source.slice(
       source.indexOf("function prepareAssistantSettings("),
@@ -126,6 +293,20 @@ describe("AssistantWorkspace layout", () => {
     expect(mobile).toMatch(/border-radius:\s*0/);
   });
 
+  it("сжимает название на узком mobile, сохраняя кнопки header в одном ряду", () => {
+    const mobile = styles.slice(
+      styles.indexOf(
+        "@media (max-width: 720px) {",
+        styles.indexOf(".assistant-composer__protected-link:focus-visible"),
+      ),
+    );
+    const identity = mobile
+      .split(".assistant-drawer__identity {")[1]
+      ?.split("}")[0];
+    expect(identity).toContain("flex: 1 1 0");
+    expect(identity).not.toContain("80px");
+  });
+
   it("оставляет scroll только логу и закрепляет composer", () => {
     expect(styles).toMatch(
       /\.assistant-chat-log\s*\{[\s\S]*?flex:\s*1 1 auto[\s\S]*?overflow:\s*auto/,
@@ -146,6 +327,26 @@ describe("AssistantWorkspace layout", () => {
       /\.assistant-message\s*\{[\s\S]*?width:\s*min\(86%, 760px\)/,
     );
     expect(template).not.toContain("assistant-plan-card__parameters");
+  });
+
+  it("fallback реплики владельца справа, агента и квитанции слева с переносом длинного текста", () => {
+    const rule = (selector: string) =>
+      styles.slice(styles.indexOf(`${selector} {`)).split("}")[0];
+    expect(template).toContain(
+      "`assistant-message--${turn.role.toLowerCase()}`",
+    );
+    expect(rule(".assistant-message")).toContain("margin-left: 0");
+    expect(rule(".assistant-message")).toContain("margin-right: auto");
+    expect(rule(".assistant-message")).toContain("max-width: 100%");
+    expect(rule(".assistant-message")).toContain("overflow-wrap: anywhere");
+    expect(rule(".assistant-message--user")).toContain("margin-left: auto");
+    expect(rule(".assistant-message--user")).toContain("margin-right: 0");
+    expect(rule(".assistant-message--system_receipt")).not.toContain(
+      "width: 100%",
+    );
+    expect(styles.slice(styles.indexOf("@media (max-width: 720px)"))).toMatch(
+      /\.assistant-message\s*\{\s*width: 94%/,
+    );
   });
 
   it("передаёт точный Project context в файловый composer", () => {
@@ -394,11 +595,13 @@ describe("AssistantWorkspace layout", () => {
       'nextActions.includes("CREATE_CONVERSATION")',
     );
     expect(sendAccess).toContain('nextActions.includes("ADD_TURN")');
+    expect(sendAccess).toContain("!store.loading");
     expect(sendAccess).toContain(
       "store.selectedConversation || canCreateConversation.value",
     );
     expect(sendAccess).not.toContain("store.problem");
-    expect(startAccess).toContain("!store.loading");
+    expect(startAccess).toContain("store.conversationCreationReady");
+    expect(startAccess).toContain("props.live");
     expect(startAccess).toContain("!store.busy");
     expect(startAccess).toContain("canCreateConversation.value");
     expect(startAccess).not.toContain("store.problem");
@@ -436,8 +639,8 @@ describe("AssistantWorkspace layout", () => {
       'PROJECT: "assistant.planEditor.targetKinds.PROJECT"',
     );
     expect(template).not.toContain("operation.parameters");
-    expect(template).toContain(
-      "turn.plan.auditSummary.trim() !== turn.content.trim()",
+    expect(template).toMatch(
+      /turn\.plan\.auditSummary\.trim\(\) !==\s*turn\.content\.trim\(\)/,
     );
   });
 

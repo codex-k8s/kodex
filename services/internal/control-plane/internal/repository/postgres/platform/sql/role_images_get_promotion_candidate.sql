@@ -1,7 +1,7 @@
 -- name: role_images_get_promotion_candidate :one
 SELECT artifact.ref, recipe.ref, artifact.spec_sha256, build.ref, artifact.staging_reference,
        artifact.manifest_digest, artifact.immutable_build_sha256, artifact.provenance_sha256,
-       artifact.specification, artifact.policy_sha256, artifact.sbom_sha256,
+       artifact.specification, artifact.tool_inventory_json, artifact.tool_inventory_sha256, artifact.policy_sha256, artifact.sbom_sha256,
        artifact.vulnerability_evidence_sha256,
        CASE WHEN artifact.admission_state = 'REJECTED' THEN 'REJECTED' ELSE artifact.admission_verdict END,
        artifact.signature_identity, artifact.signature_sha256,
@@ -60,6 +60,10 @@ WHERE artifact.organization_id = $1::uuid
           artifact.admission_state = 'REJECTED'
           AND artifact.promotion_state = 'REJECTED'
       )
+      OR (artifact.admission_state IN ('PENDING','CLAIMED') AND EXISTS (
+          SELECT 1 FROM control_plane.image_admission_attempts attempt
+          WHERE attempt.artifact_id=artifact.id AND attempt.organization_id=artifact.organization_id
+            AND attempt.risk_decision_id IS NOT NULL AND attempt.state IN ('PENDING','CLAIMED')))
   )
 ORDER BY artifact.created_at DESC, artifact.ref DESC
 LIMIT 1

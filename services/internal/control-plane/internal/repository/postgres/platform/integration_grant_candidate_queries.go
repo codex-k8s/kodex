@@ -99,7 +99,8 @@ func (repository *Repository) ListIntegrationGrantCapabilityCandidates(ctx conte
 		result.Items = append(result.Items, entity.IntegrationCapabilityCandidate{Capability: entity.IntegrationCapability{
 			Key: capability.Key, Name: capability.Name, Description: capability.Description, Operation: capability.Operation,
 			Risk: capability.Risk, ApprovalPolicy: capability.ApprovalPolicy, ResourceKind: capability.ResourceScope.Kind,
-			InputFields: integrationConfigurationFields(capability.InputFields), InputSchema: string(schema), InputSchemaSHA256: digest,
+			AllowedApprovalPolicies: append([]string{}, capability.AllowedApprovalPolicies...),
+			InputFields:             integrationConfigurationFields(capability.InputFields), InputSchema: string(schema), InputSchemaSHA256: digest,
 		}, Grantable: row.Reason == "READY", Reason: row.Reason, CurrentGrantRef: grantRef, CurrentGrantVersion: grantVersion, Pins: pins})
 		return nil
 	})

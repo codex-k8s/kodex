@@ -37,4 +37,4 @@ data:
   signerIdentity: kodex-image-signer
   admissionOwnerIdentity: kodex-image-admission-owner
   promotionIdentity: kodex-image-promotion-writer
-  requiredTools: base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft,wc
+  requiredTools: base64,cmp,cosign,grype,image-admission-bridge,image-tool-inventory-validator,image-vulnerability-report-validator,jq,regctl,sha256sum,syft,tr,wc

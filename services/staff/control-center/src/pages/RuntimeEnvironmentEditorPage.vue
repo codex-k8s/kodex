@@ -3,6 +3,15 @@ import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import EnvironmentImpactDialog from "@/features/runtime/EnvironmentImpactDialog.vue";
 import RuntimeEnvironmentFieldListsEditor from "@/features/runtime/RuntimeEnvironmentFieldListsEditor.vue";
 import RuntimeEnvironmentToolsEditor from "@/features/runtime/RuntimeEnvironmentToolsEditor.vue";
+import { environmentDisplayField } from "@/features/runtime/environment-display-field";
+import {
+  assertPromotedRuntimeImage,
+  restoreRuntimeImageOption,
+} from "@/features/runtime/image-tools-selection";
+import {
+  verifiedImageInventoryAvailable,
+  verifiedImageTools,
+} from "@/shared/lib/verified-image-tools";
 import RuntimeEnvironmentPolicyFields from "@/features/runtime/RuntimeEnvironmentPolicyFields.vue";
 import PublicationImpactSelection from "@/features/runtime/PublicationImpactSelection.vue";
 import {
@@ -31,6 +40,8 @@ import {
   Save,
   Send,
   Link2,
+  Ellipsis,
+  RotateCcw,
 } from "@lucide/vue";
 import {
   computed,
@@ -112,7 +123,7 @@ type EditorSection =
 
 const route = useRoute();
 const router = useRouter();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const localizeServerMessage = useServerMessage();
 const runtime = useRuntimeStore();
 const session = useSessionStore();
@@ -150,6 +161,16 @@ watch(environmentRef, () => {
 });
 const discardDraftOpen = ref(false);
 const serverDraft = ref<RuntimeEnvironmentDraft>();
+const draftSavedAtDisplay = computed(() => {
+  const savedAt = serverDraft.value?.savedAt;
+  const date = savedAt ? new Date(savedAt) : undefined;
+  return date && Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat(locale.value, {
+        dateStyle: "short",
+        timeStyle: "short",
+      }).format(date)
+    : t("runtimeOverlay.environmentSavedUnknown");
+});
 const publicationPlan = ref<RevisionImpactPlan>();
 const publicationUnknown = ref(false);
 const publicationAttempt = ref<PublicationAttempt>();
@@ -209,6 +230,20 @@ const input = reactive<RuntimeEnvironmentInput>({
   secretBindings: [],
   policy: defaultRuntimeEnvironmentPolicy(),
 });
+const nameFieldValue = environmentDisplayField(
+  () => input.name,
+  (value) => {
+    input.name = value;
+  },
+  localizeServerMessage,
+);
+const descriptionFieldValue = environmentDisplayField(
+  () => input.description,
+  (value) => {
+    input.description = value;
+  },
+  localizeServerMessage,
+);
 const selectedImage = ref<AsyncEntityOption>();
 const imageArtifact = ref<RoleImageArtifact>();
 const imageLoading = ref(false);
@@ -278,6 +313,11 @@ const canPublish = computed(
       serverDraft.value?.ref === draftReference.value) &&
     (!environmentRef.value || !!current.value) &&
     (!current.value || hasEnvironmentAction(current.value, "UPDATE")),
+);
+const imageInventoryReady = computed(
+  () =>
+    imageArtifact.value?.ref === input.imageArtifactRef &&
+    verifiedImageInventoryAvailable(imageArtifact.value),
 );
 const versionDigest = computed(() =>
   current.value
@@ -371,6 +411,9 @@ function resetInput(): void {
 }
 
 function applyRestoredInput(value: RuntimeEnvironmentInput): void {
+  const restoreImage =
+    !!value.imageArtifactRef &&
+    imageArtifact.value?.ref !== value.imageArtifactRef;
   input.name = value.name;
   input.description = value.description;
   input.imageArtifactRef = value.imageArtifactRef;
@@ -404,10 +447,11 @@ function applyRestoredInput(value: RuntimeEnvironmentInput): void {
       : undefined;
     imageArtifact.value = undefined;
   }
+  if (restoreImage) void loadImageArtifact(undefined, value.imageArtifactRef);
 }
 
 async function loadImageArtifact(
-  recipeRef: string,
+  recipeRef: string | undefined,
   artifactRef: string,
 ): Promise<void> {
   cancelImageRequest();
@@ -426,18 +470,52 @@ async function loadImageArtifact(
   imageLoading.value = true;
   imageProblem.value = undefined;
   try {
+    const restored = recipeRef
+      ? undefined
+      : await restoreRuntimeImageOption(
+          {
+            loadPage: (_scope, query, cursor, signal, pageSize) =>
+              runtime.searchPromotedRoleImagePage(
+                project,
+                query,
+                cursor,
+                signal,
+                pageSize,
+              ),
+            loadArtifact: (_scope, recipe, artifact, signal) =>
+              runtime.loadPromotedRoleImageArtifact(
+                project,
+                recipe,
+                artifact,
+                signal,
+              ),
+          },
+          { kind: "PROJECT", projectRef: project },
+          artifactRef,
+          controller.signal,
+        );
+    if (!applicable()) return;
+    const recipe = recipeRef ?? restored?.recipeRef;
+    if (!recipe)
+      throw new Error("Restored image recipe identity is unavailable");
     const result = await runtime.loadPromotedRoleImageArtifact(
       project,
-      recipeRef,
+      recipe,
       artifactRef,
       controller.signal,
     );
     if (applicable()) {
+      if (restored)
+        assertPromotedRuntimeImage(result.artifact, {
+          artifactRef,
+          recipeRef: restored.recipeRef,
+          recipeGeneration: restored.generation,
+        });
       imageArtifact.value = result.artifact;
       selectedImage.value = {
         ...selectedImage.value,
         ref: artifactRef,
-        title: result.recipeName,
+        title: localizeServerMessage(result.recipeName),
         description: result.artifact.promotedReference,
       };
     }
@@ -527,16 +605,34 @@ async function restoreAfterFreshAuthentication(): Promise<void> {
     },
   );
   if (!completed) return;
-  const ref = consumeEnvironmentDraftReference(
+  const reference = consumeEnvironmentDraftReference(
     projectRef.value,
     environmentRef.value,
     window.sessionStorage,
   );
-  if (!ref) return;
-  applyServerDraft(
-    await readEnvironmentDraft(projectRef.value, ref, draftController.signal),
+  if (!reference) return;
+  const project = projectRef.value;
+  const environment = environmentRef.value;
+  const generation = initializationGeneration;
+  const draft = await readEnvironmentDraft(
+    project,
+    reference.ref,
+    draftController.signal,
   );
-  await router.replace({ query: { ...route.query, draftRef: ref } });
+  if (
+    disposed ||
+    draftController.signal.aborted ||
+    generation !== initializationGeneration ||
+    project !== projectRef.value ||
+    environment !== environmentRef.value
+  )
+    return;
+  if (draft.ref !== reference.ref || draft.version !== reference.version)
+    throw new Error(
+      "Runtime environment draft version changed during reauthentication",
+    );
+  applyServerDraft(draft);
+  await router.replace({ query: { ...route.query, draftRef: reference.ref } });
   reauthRestored.value = true;
 }
 
@@ -622,18 +718,53 @@ async function validateDraft(): Promise<void> {
     return;
   busy.value = true;
   problem.value = undefined;
+  const draft = serverDraft.value;
   try {
     applyServerDraft(
       await transitionEnvironmentDraft(
         "validate",
-        serverDraft.value,
+        draft,
         draftController.signal,
       ),
     );
   } catch (error) {
-    if (!disposed) problem.value = asProblem(error);
+    await handleDraftPolicyProblem(asProblem(error), draft);
   } finally {
     if (!disposed) busy.value = false;
+  }
+}
+
+function matchesCurrentDraft(draft: RuntimeEnvironmentDraft): boolean {
+  return (
+    !disposed &&
+    !draftController.signal.aborted &&
+    serverDraft.value?.ref === draft.ref &&
+    serverDraft.value.version === draft.version &&
+    draft.projectRef === projectRef.value &&
+    (draft.environmentRef || undefined) === environmentRef.value
+  );
+}
+
+async function handleDraftPolicyProblem(
+  normalized: AppProblem,
+  draft: RuntimeEnvironmentDraft,
+): Promise<void> {
+  if (!matchesCurrentDraft(draft)) return;
+  if (!requiresRuntimeEnvironmentPolicyReauth(normalized)) {
+    problem.value = normalized;
+    return;
+  }
+  try {
+    rememberEnvironmentDraft(draft, window.sessionStorage);
+    await session.beginRuntimeEnvironmentPolicyReauth({
+      ...(environmentRef.value ? { environmentRef: environmentRef.value } : {}),
+      operation: currentOperation(),
+      projectRef: projectRef.value,
+      ...(assistantForm.value ? { surface: "assistant" as const } : {}),
+    });
+  } catch (reauthError) {
+    window.sessionStorage.removeItem(environmentDraftReauthKey);
+    if (matchesCurrentDraft(draft)) problem.value = asProblem(reauthError);
   }
 }
 
@@ -697,6 +828,7 @@ async function preparePublication(): Promise<void> {
       }
       return;
     }
+    if (!imageInventoryReady.value) return;
     publicationPlan.value = await prepareEnvironmentPublication(
       serverDraft.value,
       draftController.signal,
@@ -809,6 +941,7 @@ async function publish(selected: string[]): Promise<void> {
     !serverDraft.value.validationDigest ||
     draftDirty.value ||
     !canPublish.value ||
+    (!hadUnknownAttempt && !imageInventoryReady.value) ||
     !publicationPlan.value ||
     publicationUnknown.value
   )
@@ -876,24 +1009,7 @@ async function publish(selected: string[]): Promise<void> {
       publicationAttempt.value = undefined;
       publicationUnknown.value = false;
     }
-    if (!requiresRuntimeEnvironmentPolicyReauth(normalized)) {
-      problem.value = normalized;
-      return;
-    }
-    try {
-      rememberEnvironmentDraft(serverDraft.value, window.sessionStorage);
-      await session.beginRuntimeEnvironmentPolicyReauth({
-        ...(environmentRef.value
-          ? { environmentRef: environmentRef.value }
-          : {}),
-        operation: currentOperation(),
-        projectRef: projectRef.value,
-        ...(assistantForm.value ? { surface: "assistant" as const } : {}),
-      });
-    } catch (reauthError) {
-      window.sessionStorage.removeItem(environmentDraftReauthKey);
-      problem.value = asProblem(reauthError);
-    }
+    await handleDraftPolicyProblem(normalized, serverDraft.value);
   } finally {
     if (!disposed) busy.value = false;
   }
@@ -1047,83 +1163,108 @@ onBeforeUnmount(() => {
   <Teleport to="#assistant-form-slot" :disabled="!assistantForm" defer>
     <PageFrame :title="current?.name ?? $t('runtime.newEnvironment')">
       <template #actions>
-        <button
-          v-if="current && hasEnvironmentAction(current, 'DISABLE')"
-          class="button"
-          type="button"
-          :disabled="busy || localChanges"
-          @click="setEnabled(false)"
-        >
-          <PowerOff :size="16" aria-hidden="true" />
-          {{ $t("common.disable") }}
-        </button>
-        <button
-          v-if="current && hasEnvironmentAction(current, 'ENABLE')"
-          class="button"
-          type="button"
-          :disabled="busy || localChanges"
-          @click="setEnabled(true)"
-        >
-          <Power :size="16" aria-hidden="true" />
-          {{ $t("common.enable") }}
-        </button>
-        <button
-          v-if="current && hasEnvironmentAction(current, 'DELETE')"
-          class="button button--danger"
-          type="button"
-          :disabled="busy"
-          @click="deleteOpen = true"
-        >
-          <Trash2 :size="16" aria-hidden="true" />
-          {{ $t("common.delete") }}
-        </button>
-        <RouterLink
-          class="button"
-          :to="`/projects/${encodeURIComponent(projectRef)}/environments`"
-        >
-          {{ $t("common.cancel") }}
-        </RouterLink>
-        <button
-          class="button button--primary"
-          type="button"
-          :disabled="busy || !canPublish || !draftEditable || !draftDirty"
-          @click="save"
-        >
-          <Save :size="16" />{{ $t("managed.saveDraft") }}
-        </button>
-        <button
-          class="button"
-          type="button"
-          :disabled="busy || !serverDraft || !draftEditable || draftDirty"
-          @click="validateDraft"
-        >
-          <CheckCircle2 :size="16" />{{ $t("managed.validate") }}
-        </button>
-        <button
-          class="button button--primary"
-          type="button"
-          :disabled="
-            busy ||
-            !canPublish ||
-            serverDraft?.state !== 'VALID' ||
-            !serverDraft?.validationDigest ||
-            draftDirty
-          "
-          @click="preparePublication"
-        >
-          <Send :size="16" />{{ $t("managed.publish") }}
-        </button>
-        <button
-          v-if="serverDraft && draftEditable"
-          class="icon-button"
-          type="button"
-          :disabled="busy"
-          :aria-label="$t('runtime.discardDraft')"
-          :title="$t('runtime.discardDraft')"
-          @click="discardDraftOpen = true"
-        >
-          <Trash2 :size="16" />
-        </button>
+        <div class="environment-editor-actions">
+          <button
+            class="button button--primary"
+            type="button"
+            :aria-label="$t('managed.saveDraft')"
+            :disabled="busy || !canPublish || !draftEditable || !draftDirty"
+            @click="save"
+          >
+            <Save :size="16" aria-hidden="true" />{{ $t("common.save") }}
+          </button>
+          <button
+            class="button"
+            type="button"
+            :disabled="busy || !serverDraft || !draftEditable || draftDirty"
+            @click="validateDraft"
+          >
+            <CheckCircle2 :size="16" aria-hidden="true" />{{
+              $t("managed.validate")
+            }}
+          </button>
+          <button
+            class="button button--primary"
+            type="button"
+            :disabled="
+              busy ||
+              !canPublish ||
+              !imageInventoryReady ||
+              serverDraft?.state !== 'VALID' ||
+              !serverDraft?.validationDigest ||
+              draftDirty
+            "
+            @click="preparePublication"
+          >
+            <Send :size="16" aria-hidden="true" />{{ $t("managed.publish") }}
+          </button>
+          <details class="environment-secondary-actions">
+            <summary class="button">
+              <Ellipsis :size="16" aria-hidden="true" />{{
+                $t("common.actions")
+              }}
+            </summary>
+            <div class="environment-secondary-actions__menu">
+              <RouterLink
+                class="button"
+                :to="`/projects/${encodeURIComponent(projectRef)}/environments`"
+              >
+                {{ $t("common.cancel") }}
+              </RouterLink>
+              <button
+                v-if="serverDraft && !draftDirty"
+                class="button"
+                type="button"
+                :disabled="busy"
+                @click="preparePublication"
+              >
+                {{ $t("publicationImpact.restore") }}
+              </button>
+              <button
+                v-if="current && hasEnvironmentAction(current, 'DISABLE')"
+                class="button"
+                type="button"
+                :disabled="busy || localChanges"
+                @click="setEnabled(false)"
+              >
+                <PowerOff :size="16" aria-hidden="true" />{{
+                  $t("common.disable")
+                }}
+              </button>
+              <button
+                v-if="current && hasEnvironmentAction(current, 'ENABLE')"
+                class="button"
+                type="button"
+                :disabled="busy || localChanges"
+                @click="setEnabled(true)"
+              >
+                <Power :size="16" aria-hidden="true" />{{ $t("common.enable") }}
+              </button>
+              <button
+                v-if="serverDraft && draftEditable"
+                class="button button--danger"
+                type="button"
+                :disabled="busy"
+                @click="discardDraftOpen = true"
+              >
+                <Trash2 :size="16" aria-hidden="true" />{{
+                  $t("runtime.discardDraft")
+                }}
+              </button>
+              <button
+                v-if="current && hasEnvironmentAction(current, 'DELETE')"
+                class="button button--danger"
+                type="button"
+                :disabled="busy"
+                @click="deleteOpen = true"
+              >
+                <Trash2 :size="16" aria-hidden="true" />{{
+                  $t("common.delete")
+                }}
+              </button>
+            </div>
+          </details>
+        </div>
       </template>
 
       <section class="environment-draft-state" role="status">
@@ -1134,32 +1275,58 @@ onBeforeUnmount(() => {
         <span v-if="serverDraft">{{
           $t("managed.revision", { revision: serverDraft.version })
         }}</span>
-        <p v-if="serverDraft">
-          {{ $t("runtimeOverlay.environmentBase") }}:
-          <template
-            v-if="serverDraft.baseVersionRef && serverDraft.baseRevision"
-          >
-            {{ serverDraft.baseRevision }} ·
-            <code>{{ serverDraft.baseVersionRef }}</code>
-          </template>
-          <template v-else>{{
-            $t(
-              serverDraft.environmentRef
-                ? "runtimeOverlay.environmentBaseUnknown"
-                : "runtimeOverlay.environmentNew",
-            )
-          }}</template>
-        </p>
-        <p v-if="serverDraft">
-          {{ $t("runtimeOverlay.environmentSavedAt") }}:
+        <span v-if="serverDraft?.baseVersionRef && serverDraft.baseRevision">
+          {{ $t("runtimeOverlay.environmentShortBase") }}:
+          {{ serverDraft.baseRevision }}
+        </span>
+        <span v-if="serverDraft" class="environment-draft-state__saved">
+          {{ $t("runtimeOverlay.environmentShortSavedAt") }}:
           <time v-if="serverDraft.savedAt" :datetime="serverDraft.savedAt">{{
-            serverDraft.savedAt
+            draftSavedAtDisplay
           }}</time>
-          <span v-else>{{ $t("runtimeOverlay.environmentSavedUnknown") }}</span>
-        </p>
-        <code v-if="serverDraft?.validationDigest">{{
-          serverDraft.validationDigest
-        }}</code>
+          <span v-else>{{ draftSavedAtDisplay }}</span>
+        </span>
+        <details v-if="serverDraft" class="environment-draft-state__details">
+          <summary>
+            {{ $t("common.details") }}
+            <code v-if="serverDraft.validationDigest">{{
+              compactIdentifier(serverDraft.validationDigest)
+            }}</code>
+          </summary>
+          <dl>
+            <div>
+              <dt>{{ $t("runtimeOverlay.environmentBase") }}</dt>
+              <dd v-if="serverDraft.baseVersionRef && serverDraft.baseRevision">
+                {{ serverDraft.baseRevision }} ·
+                <code>{{ serverDraft.baseVersionRef }}</code>
+              </dd>
+              <dd v-else>
+                {{
+                  $t(
+                    serverDraft.environmentRef
+                      ? "runtimeOverlay.environmentBaseUnknown"
+                      : "runtimeOverlay.environmentNew",
+                  )
+                }}
+              </dd>
+            </div>
+            <div>
+              <dt>{{ $t("runtimeOverlay.environmentSavedAt") }}</dt>
+              <dd>
+                <code>{{
+                  serverDraft.savedAt ??
+                  $t("runtimeOverlay.environmentSavedUnknown")
+                }}</code>
+              </dd>
+            </div>
+            <div v-if="serverDraft.validationDigest">
+              <dt>{{ $t("runtimeOverlay.environmentValidationDigest") }}</dt>
+              <dd>
+                <code>{{ serverDraft.validationDigest }}</code>
+              </dd>
+            </div>
+          </dl>
+        </details>
         <p
           v-for="diagnostic in serverDraft?.diagnostics"
           :key="diagnostic"
@@ -1176,15 +1343,6 @@ onBeforeUnmount(() => {
           :to="`/projects/${encodeURIComponent(projectRef)}/environments/${encodeURIComponent(serverDraft.publishedEnvironmentRef)}`"
           >{{ $t("common.open") }}</RouterLink
         >
-        <button
-          v-if="serverDraft && !draftDirty"
-          class="button"
-          type="button"
-          :disabled="busy"
-          @click="preparePublication"
-        >
-          {{ $t("publicationImpact.restore") }}
-        </button>
       </section>
       <ModalDialog
         v-if="leaveOpen"
@@ -1304,7 +1462,7 @@ onBeforeUnmount(() => {
                 <label class="field">
                   <span>{{ $t("common.name") }}</span>
                   <input
-                    v-model="input.name"
+                    v-model="nameFieldValue"
                     name="runtime-environment-name"
                     required
                     maxlength="120"
@@ -1313,7 +1471,7 @@ onBeforeUnmount(() => {
                 <label class="field">
                   <span>{{ $t("common.description") }}</span>
                   <VoiceTextarea
-                    v-model="input.description"
+                    v-model="descriptionFieldValue"
                     name="runtime-environment-description"
                     :disabled="busy || !draftEditable || !canPublish"
                     maxlength="1000"
@@ -1404,7 +1562,10 @@ onBeforeUnmount(() => {
 
                 <RuntimeEnvironmentToolsEditor
                   :tools="input.tools"
-                  :catalog="imageArtifact?.tools ?? []"
+                  :catalog="verifiedImageTools(imageArtifact)"
+                  :inventory-available="
+                    verifiedImageInventoryAvailable(imageArtifact)
+                  "
                   :image-selected="!!input.imageArtifactRef"
                   :loading="imageLoading"
                   :disabled="busy || !draftEditable || !canPublish"
@@ -1710,40 +1871,48 @@ onBeforeUnmount(() => {
               "
             >
               <article v-for="version in versions" :key="version.ref">
-                <div>
-                  <strong>rev {{ version.revision }}</strong>
-                  <small>{{
-                    new Date(version.createdAt).toLocaleString()
-                  }}</small>
-                  <code>{{ compactIdentifier(version.digest) }}</code>
+                <div class="revision-meta">
+                  <div class="revision-summary">
+                    <strong>rev {{ version.revision }}</strong>
+                    <small>{{
+                      new Date(version.createdAt).toLocaleString()
+                    }}</small>
+                  </div>
+                  <code :title="version.digest">{{
+                    compactIdentifier(version.digest)
+                  }}</code>
                 </div>
-                <button
-                  v-if="
-                    version.ref !== current?.currentVersion.ref &&
-                    current &&
-                    hasEnvironmentAction(current, 'ROLLBACK')
-                  "
-                  class="button"
-                  type="button"
-                  :disabled="busy || localChanges"
-                  @click="rollback(version.ref)"
-                >
-                  {{ $t("runtime.rollback") }}
-                </button>
-                <StatusBadge
-                  v-else-if="version.ref === current?.currentVersion.ref"
-                  state="ACTIVE"
-                />
-                <button
-                  class="icon-button"
-                  type="button"
-                  :disabled="busy"
-                  :title="$t('impact.inspect')"
-                  :aria-label="$t('impact.inspect')"
-                  @click="impactVersionRef = version.ref"
-                >
-                  <Link2 :size="18" />
-                </button>
+                <div class="revision-actions">
+                  <button
+                    v-if="
+                      version.ref !== current?.currentVersion.ref &&
+                      current &&
+                      hasEnvironmentAction(current, 'ROLLBACK')
+                    "
+                    class="icon-button"
+                    type="button"
+                    :disabled="busy || localChanges"
+                    :title="$t('runtime.rollback')"
+                    :aria-label="$t('runtime.rollback')"
+                    @click="rollback(version.ref)"
+                  >
+                    <RotateCcw :size="18" aria-hidden="true" />
+                  </button>
+                  <StatusBadge
+                    v-else-if="version.ref === current?.currentVersion.ref"
+                    state="ACTIVE"
+                  />
+                  <button
+                    class="icon-button"
+                    type="button"
+                    :disabled="busy"
+                    :title="$t('impact.inspect')"
+                    :aria-label="$t('impact.inspect')"
+                    @click="impactVersionRef = version.ref"
+                  >
+                    <Link2 :size="18" aria-hidden="true" />
+                  </button>
+                </div>
               </article>
               <div
                 v-if="
@@ -1860,10 +2029,90 @@ onBeforeUnmount(() => {
 }
 .environment-draft-state {
   display: flex;
-  gap: 12px;
+  gap: 8px 12px;
   align-items: center;
   flex-wrap: wrap;
   min-width: 0;
+}
+.environment-editor-actions {
+  display: flex;
+  min-width: 0;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.environment-editor-actions > .button,
+.environment-secondary-actions > summary.button {
+  min-height: var(--control-height, 32px);
+  height: var(--control-height, 32px);
+  flex: 0 0 auto;
+}
+.environment-secondary-actions {
+  position: relative;
+  min-width: 0;
+}
+.environment-secondary-actions > summary {
+  list-style: none;
+}
+.environment-secondary-actions > summary::-webkit-details-marker {
+  display: none;
+}
+.environment-secondary-actions__menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  width: min(280px, calc(100vw - 32px));
+  max-height: 320px;
+  overflow-y: auto;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--floating-shadow, 0 8px 20px #0002);
+}
+.environment-secondary-actions__menu .button {
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: var(--control-height, 32px);
+  white-space: normal;
+  text-align: left;
+}
+.environment-draft-state__saved {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.environment-draft-state__details {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.environment-draft-state__details summary {
+  cursor: pointer;
+}
+.environment-draft-state__details[open] {
+  flex-basis: 100%;
+}
+.environment-draft-state__details dl {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+}
+.environment-draft-state__details dl > div {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.5fr) minmax(0, 1fr);
+  gap: 4px 12px;
+}
+.environment-draft-state__details dd {
+  min-width: 0;
+  margin: 0;
+}
+.environment-draft-state > p[role="alert"] {
+  flex-basis: 100%;
+  margin: 0;
 }
 .environment-draft-state code {
   overflow-wrap: anywhere;
@@ -2216,24 +2465,45 @@ code {
 }
 .revision-scroll > article {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  padding: 12px 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding: 10px 0;
   border-bottom: 1px solid var(--hairline);
+}
+.revision-meta {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.revision-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 10px;
+}
+.revision-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.revision-actions > .icon-button {
+  flex-shrink: 0;
 }
 .revision-loading {
   padding: 10px 0;
   text-align: center;
 }
-.revision-panel article > div,
 .revision-panel small,
 .revision-panel code {
   display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .revision-panel small,
 .revision-panel code {
-  margin-top: 3px;
+  margin: 0;
   color: var(--text-secondary);
 }
 .icon-button--danger {
@@ -2251,6 +2521,22 @@ code {
   }
 }
 @media (max-width: 700px) {
+  .environment-editor-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .environment-editor-actions > .button,
+  .environment-secondary-actions > summary.button {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 8px;
+    justify-content: center;
+  }
+  .environment-draft-state__details dl > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .environment-field-row,
   .secret-binding-fields,
   .safe-summary,

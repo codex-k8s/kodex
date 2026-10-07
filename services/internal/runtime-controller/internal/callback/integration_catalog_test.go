@@ -15,7 +15,8 @@ func TestIntegrationCatalogIsPagedAndBoundToExactGrant(t *testing.T) {
 	input := runtimecontract.RunnerInput{}
 	for index := range 20 {
 		input.IntegrationGrants = append(input.IntegrationGrants, runtimecontract.RunnerIntegrationGrant{
-			Ref:           fmt.Sprintf("igr_%08d", index),
+			Ref:          fmt.Sprintf("igr_%08d", index),
+			GrantVersion: 1, ConnectionVersion: 1, ApprovalPolicy: "NONE",
 			ConnectionRef: fmt.Sprintf("int_%08d", index), ConnectionName: fmt.Sprintf("Connection %02d", index),
 			DefinitionKey: "test", DefinitionVersion: "1.0.0", DefinitionDigest: strings.Repeat("a", 64),
 			CapabilityKey: "test.read", CapabilityName: "Read", CapabilityDescription: "Read test data",
@@ -76,7 +77,7 @@ func TestIntegrationCatalogSchemaSeparatesSearchAndExactSelection(t *testing.T) 
 
 func TestIntegrationToolListDoesNotEmbedGrantSchemas(t *testing.T) {
 	input := runtimecontract.RunnerInput{IntegrationGrants: []runtimecontract.RunnerIntegrationGrant{{
-		ConnectionRef: "int_12345678", CapabilityKey: "test.read", InputSchema: `{"type":"object","additionalProperties":false,"properties":{"secret-marker":{"type":"string"}}}`,
+		GrantVersion: 1, ConnectionVersion: 1, ApprovalPolicy: "NONE", ConnectionRef: "int_12345678", CapabilityKey: "test.read", InputSchema: `{"type":"object","additionalProperties":false,"properties":{"secret-marker":{"type":"string"}}}`,
 	}}}
 	encoded, err := json.Marshal(tools(input))
 	if err != nil || strings.Contains(string(encoded), "secret-marker") || len(encoded) > 6000 {

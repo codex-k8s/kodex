@@ -330,7 +330,17 @@ var errPublicProviderStatusReason = errors.New("public provider status reason is
 var errPublicAvatarShape = errors.New("public agent avatar response is invalid")
 var errPublicRuntimeEnvironmentShape = errors.New("public runtime environment response is invalid")
 
-func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.MessageDescriptor) error {
+func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.MessageDescriptor) (normalizationErr error) {
+	if descriptor.FullName() == "controlplane.v1.RunMessage" || descriptor.FullName() == "controlplane.v1.AssistantTurn" {
+		if source, ok := value["source"].(map[string]any); !ok || source["origin"] == nil {
+			return errors.New("public message source is missing")
+		}
+	}
+	defer func() {
+		if normalizationErr != nil && descriptor.FullName() == "controlplane.v1.OwnerGate" {
+			normalizationErr = errOwnerGateShape
+		}
+	}()
 	if descriptor.FullName() == "controlplane.v1.IntegrationDefinition" {
 		version, ok := value["version"].(string)
 		parsed, err := strconv.ParseInt(version, 10, 64)
@@ -425,12 +435,48 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 		}
 		value[field.JSONName()] = normalized
 	}
+	if descriptor.FullName() == "controlplane.v1.RunEvent" {
+		if message, ok := value["message"].(map[string]any); ok {
+			if source, ok := message["source"].(map[string]any); ok && source["origin"] == "CALLBACK_CONTINUATION" {
+				actor, actorOK := value["actor"].(map[string]any)
+				execution, executionOK := value["execution"].(map[string]any)
+				if !actorOK || actor["kind"] != "RUN_EVENT_ACTOR_KIND_AGENT" || !executionOK || execution["turnRef"] != message["ref"] || message["phase"] != "RUN_MESSAGE_PHASE_USER" {
+					return errors.New("public callback message binding is invalid")
+				}
+			}
+		}
+	}
+	if descriptor.FullName() == "controlplane.v1.AssistantTurn" {
+		if source := value["source"].(map[string]any); source["origin"] == "CALLBACK_CONTINUATION" && value["role"] != "SYSTEM_RECEIPT" {
+			return errors.New("public callback turn role is invalid")
+		}
+	}
 	if descriptor.FullName() == "controlplane.v1.WorkflowVersion" {
 		for _, key := range []string{"version", "revision"} {
 			number, ok := value[key].(float64)
 			if !ok || number < 1 || number > float64(maximumSafeJSONInteger) || number != float64(int64(number)) {
 				return errors.New("workflow revision number is invalid")
 			}
+		}
+	}
+	if descriptor.FullName() == "controlplane.v1.OwnerGate" {
+		organizationRef, ok := value["organizationRef"].(string)
+		if !ok || !fileTargetRef(organizationRef) {
+			return errors.New("public owner gate organization is invalid")
+		}
+		projectRef, projectPresent := value["projectRef"]
+		switch value["scopeKind"] {
+		case "ORGANIZATION":
+			if projectPresent {
+				return errors.New("public organization gate cannot carry project")
+			}
+		case "PROJECT":
+			ref, valid := projectRef.(string)
+			if !projectPresent || !valid || !fileTargetRef(ref) {
+				return errors.New("public project gate reference is invalid")
+			}
+		default:
+			return errors.New("public owner gate scope is invalid")
 		}
 	}
 	if descriptor.FullName() == "controlplane.v1.AgentInstructionsBinding" {
@@ -447,6 +493,15 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 		default:
 			return errPublicAvatarShape
 		}
+	}
+	if err := validateRunSessionReadinessShape(value, descriptor); err != nil {
+		return err
+	}
+	if err := validateRunIntegrationBinding(value, descriptor); err != nil {
+		return err
+	}
+	if descriptor.FullName() == "controlplane.v1.RunEvent" {
+		projectRunEventServiceCode(value)
 	}
 	return normalizeIntegrationShape(value, descriptor)
 }
@@ -550,6 +605,9 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	if descriptor.FullName() == "controlplane.v1.ConfigOverlayDiagnostic" && field.Kind() == protoreflect.Int32Kind {
 		return float64(0), field.JSONName() == "line" || field.JSONName() == "column"
 	}
+	if descriptor.FullName() == "controlplane.v1.RunSessionArchiveTask" && field.Kind() == protoreflect.Int32Kind {
+		return float64(0), field.JSONName() == "attempt"
+	}
 	if descriptor.FullName() == "controlplane.v1.ProviderAccount" && field.Kind() == protoreflect.BoolKind {
 		return false, field.JSONName() == "enabled" || field.JSONName() == "ready"
 	}
@@ -615,6 +673,19 @@ func normalizeProtoField(value any, field protoreflect.FieldDescriptor) (any, er
 	}
 	switch field.Kind() {
 	case protoreflect.EnumKind:
+		if field.Enum().FullName() == "controlplane.v1.MessageOrigin" {
+			switch value {
+			case "MESSAGE_ORIGIN_ORDINARY":
+				return "ORDINARY", nil
+			case "MESSAGE_ORIGIN_CALLBACK_CONTINUATION":
+				return "CALLBACK_CONTINUATION", nil
+			default:
+				return nil, errors.New("public message origin is invalid")
+			}
+		}
+		if normalized, owned, err := normalizeRunSessionReadinessEnum(value, field); owned {
+			return normalized, err
+		}
 		if field.Enum().FullName() == "controlplane.v1.RuntimeResourceScopeKind" {
 			name, ok := value.(string)
 			kind := runtimeResourceScopeKind(name)
@@ -719,7 +790,13 @@ func LocalizeSafeErrors(value any, localize func(string) string) {
 			return
 		}
 		for key, item := range current {
-			if key == "integrationIntent" {
+			_, publishedMessage := current["phase"]
+			if publishedMessage && (key == "text" || key == "ref") {
+				continue
+			}
+			// Session readiness — закрытая code-only проекция: добавление
+			// generic safeErrorMessage нарушает её публичный контракт.
+			if key == "integrationIntent" || key == "sessionReadiness" {
 				continue
 			}
 			LocalizeSafeErrors(item, localize)
@@ -741,7 +818,7 @@ var enumPrefixes = []string{
 	"PLATFORM_ROLE_", "PROJECT_PERMISSION_", "NEXT_ACTION_", "ENTITY_LIFECYCLE_",
 	"AGENT_STATE_", "INSTRUCTION_STATE_", "WORKFLOW_STATE_", "RUN_STATE_", "RUN_SOURCE_",
 	"RUN_NODE_TYPE_", "RUN_NODE_STATE_", "RUN_EDGE_TYPE_", "RUN_EVENT_TYPE_",
-	"RUN_EVENT_ACTOR_KIND_", "RUN_EVENT_MESSAGE_KIND_", "RUN_TOOL_CALL_STATE_",
+	"RUN_EVENT_ACTOR_KIND_", "RUN_EVENT_MESSAGE_KIND_", "RUN_TOOL_CALL_STATE_", "RUN_MESSAGE_PHASE_",
 	"OWNER_GATE_STATE_", "OWNER_GATE_DECISION_", "ARTIFACT_SCAN_STATE_", "ARTIFACT_SOURCE_", "ARTIFACT_LIFECYCLE_STATE_",
 	"ATTACHMENT_SET_STATE_", "ATTACHMENT_SET_PURPOSE_",
 	"SCHEDULE_STATE_", "CONNECTION_STATE_", "ASSISTANT_RUNTIME_STATE_", "ASSISTANT_PLAN_STATE_", "ASSISTANT_CONVERSATION_STATE_", "ASSISTANT_SCOPE_",
@@ -766,6 +843,12 @@ func normalize(value any) {
 		}
 	case map[string]any:
 		for key, item := range current {
+			// Публичный текст и стабильные идентификаторы сообщения — literal data.
+			// Их нельзя превращать в enum даже при совпадении с его префиксом.
+			_, publishedMessage := current["phase"]
+			if publishedMessage && (key == "text" || key == "ref") {
+				continue
+			}
 			// Ссылка — literal owner data, даже если совпала с префиксом enum.
 			if key == "currentRunRef" {
 				continue

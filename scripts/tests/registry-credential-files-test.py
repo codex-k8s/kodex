@@ -70,7 +70,7 @@ if sys.argv[1:3] == ["image", "digest"]:
 
 
 class CredentialFiles(unittest.TestCase):
-    def run_case(self, case, fail=False, missing=False):
+    def run_case(self, case, fail=False, missing=False, component="all", readback=False):
         with tempfile.TemporaryDirectory(prefix="kodex-credentials-") as directory:
             root = Path(directory)
             work = root / "material"
@@ -90,9 +90,9 @@ class CredentialFiles(unittest.TestCase):
                            "REAL_JQ": shutil.which("jq"), "REAL_AWK": shutil.which("busybox"), "CASE": case,
                            "FAIL_REGISTRY": "1" if fail else "0", "TMPDIR": str(work)}
             digest = "sha256:" + "a"*64
-            for name in ["RUNNER", "FRONTEND", "ROLE_INPUT"]:
+            for name in ["RUNNER", "FRONTEND", "ROLE_INPUT", "SESSION_ARCHIVE", "ROLE_IMAGE_BUILDER"]:
                 environment["KODEX_"+name+"_DIGEST"] = digest
-            environment.update(KODEX_SEED_COMPONENT="all", KODEX_SEED_READBACK_ONLY="false",
+            environment.update(KODEX_SEED_COMPONENT=component, KODEX_SEED_READBACK_ONLY="true" if readback else "false",
                                KODEX_FRONTEND_REFERENCE="public.invalid/frontend@"+digest,
                                KODEX_SOURCE_REVISION="b"*40)
             if case == "seed":
@@ -125,6 +125,15 @@ class CredentialFiles(unittest.TestCase):
                 self.assertTrue((root / "validated").exists(), result.stderr)
             calls_path = root / "calls.jsonl"
             calls = calls_path.read_text() if calls_path.exists() else ""
+            if case == "seed" and component in ("session-archive", "role-image-builder"):
+                if not fail:
+                    self.assertIn("kodex/" + component + "@sha256:", calls)
+                self.assertNotIn("kodex/agent-runner", calls)
+                self.assertNotIn("kodex/roles", calls)
+                if readback:
+                    self.assertNotIn('"import"', calls)
+                else:
+                    self.assertIn('"import"', calls)
             for secret in [*VALUES.values(), *[v.strip() for v in VALUES.values()]]:
                 self.assertNotIn(secret, calls+result.stdout+result.stderr)
             if case == "seed":
@@ -140,6 +149,24 @@ class CredentialFiles(unittest.TestCase):
 
     def test_seed_failure_cleanup(self):
         self.run_case("seed", True)
+
+    def test_platform_archive_exact_publication(self):
+        self.run_case("seed", component="session-archive")
+
+    def test_platform_archive_readback_has_no_write(self):
+        self.run_case("seed", component="session-archive", readback=True)
+
+    def test_platform_archive_failure_cleanup(self):
+        self.run_case("seed", True, component="session-archive")
+
+    def test_platform_builder_exact_publication(self):
+        self.run_case("seed", component="role-image-builder")
+
+    def test_platform_builder_readback_has_no_write(self):
+        self.run_case("seed", component="role-image-builder", readback=True)
+
+    def test_platform_builder_failure_cleanup(self):
+        self.run_case("seed", True, component="role-image-builder")
 
     def test_admission_multi_host_success(self):
         self.run_case("admission")

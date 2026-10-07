@@ -56,7 +56,7 @@ func integrationGrantFixture() runtimecontract.RunnerIntegrationGrant {
 	inputSchema := `{"additionalProperties":false,"properties":{"value":{"maxLength":4096,"minLength":1,"type":"string"}},"required":["value"],"type":"object"}`
 	digest := sha256.Sum256([]byte(inputSchema))
 	return runtimecontract.RunnerIntegrationGrant{
-		Ref: "igr_12345678", ConnectionRef: "icon_12345678", DefinitionKey: "synthetic",
+		Ref: "igr_12345678", GrantVersion: 1, ConnectionRef: "icon_12345678", ConnectionVersion: 1, ApprovalPolicy: "HUMAN_EACH_EFFECT", DefinitionKey: "synthetic",
 		ConnectionName: "Synthetic", CapabilityKey: "synthetic.journal.write", CapabilityName: "Write journal",
 		CapabilityDescription: "Write one bounded journal value.", Risk: "WRITE", DefinitionVersion: "3.1.0",
 		DefinitionDigest: strings.Repeat("a", 64), Operation: "synthetic.journal.write", InputSchema: inputSchema,
@@ -65,11 +65,7 @@ func integrationGrantFixture() runtimecontract.RunnerIntegrationGrant {
 }
 
 func integrationArguments(grant runtimecontract.RunnerIntegrationGrant, value string) map[string]any {
-	return map[string]any{
-		"connection_ref": grant.ConnectionRef, "capability_key": grant.CapabilityKey,
-		"definition_version": grant.DefinitionVersion, "definition_digest": grant.DefinitionDigest,
-		"input_schema_sha256": grant.InputSchemaSHA256, "input": map[string]any{"value": value},
-	}
+	return map[string]any{"grant_ref": grant.Ref, "input": map[string]any{"value": value}}
 }
 
 func integrationRefArguments(grant runtimecontract.RunnerIntegrationGrant, value string) map[string]any {
@@ -176,7 +172,7 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		t.Fatal("assistant plan envelope lost the allowed operation types")
 	}
 	oneOf := assistantPlanOperationSchemas(input)
-	if len(oneOf) != 18 {
+	if len(oneOf) != 19 {
 		t.Fatalf("unexpected specialized operation count: %d", len(oneOf))
 	}
 	byType := make(map[string]map[string]any, len(oneOf))
@@ -188,6 +184,9 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 		byType[operationType] = properties["parameters"].(map[string]any)
 		operationByType[operationType] = properties
 		schemaByType[operationType] = operation
+	}
+	if byType["CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"] == nil {
+		t.Fatal("specialized system assistant integration grant operation is absent")
 	}
 	fileProperties := byType["CREATE_PROJECT_FILE"]["properties"].(map[string]any)
 	if fileProperties["projectRef"] == nil || fileProperties["fileName"] == nil ||
@@ -308,15 +307,24 @@ func TestConfigurationCatalogReturnsOnlyServerOwnedBindings(t *testing.T) {
 	agents := catalog["agents"].([]map[string]string)
 	schemas := catalog["operation_schemas"].([]map[string]any)
 	if catalog["current_project_ref"] != input.ProjectRef || len(agents) != 2 || agents[0]["ref"] != "agt_analyst1" || len(schemas) != 0 ||
-		len(catalog["operation_types"].([]string)) != 18 {
+		len(catalog["operation_types"].([]string)) != 19 {
 		t.Fatalf("unexpected configuration catalog: %#v", catalog)
+	}
+	foundSystemGrant := false
+	for _, operation := range catalog["operation_types"].([]string) {
+		if operation == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
+			foundSystemGrant = true
+		}
+	}
+	if !foundSystemGrant {
+		t.Fatal("specialized system assistant grant operation missing")
 	}
 	if _, err := configurationCatalog(input, map[string]any{"projectRef": "untrusted"}); err == nil {
 		t.Fatal("configuration catalog accepted caller input")
 	}
 	compact, err := configurationCatalog(input, map[string]any{"operation_types": []any{}})
 	if err != nil || len(compact.(map[string]any)["operation_schemas"].([]map[string]any)) != 0 ||
-		len(compact.(map[string]any)["operation_types"].([]string)) != 18 {
+		len(compact.(map[string]any)["operation_types"].([]string)) != 19 {
 		t.Fatalf("compact configuration catalog is invalid: %v", err)
 	}
 	selected, err := configurationCatalog(input, map[string]any{"operation_types": []any{"CREATE_AGENT", "LAUNCH_RUN", "CREATE_WORKFLOW"}})
@@ -699,6 +707,68 @@ func TestDelegationToolPinsWorkflowTargetsAndStepKeys(t *testing.T) {
 	}
 }
 
+func TestDelegationToolExposesNamedServerOwnedTargets(t *testing.T) {
+	t.Parallel()
+	for _, workflow := range []bool{false, true} {
+		t.Run(fmt.Sprintf("workflow_%t", workflow), func(t *testing.T) {
+			t.Parallel()
+			target := runtimecontract.RunnerDelegationTarget{
+				Ref: "agt_12345678", Name: "Developer \"Кодекс\"", Purpose: "Реализовать изменение",
+				RoleDescription: strings.Repeat("Я", 300), Instructions: "private-instructions-sentinel",
+				ExpectedResult: "private-expected-result-sentinel",
+			}
+			if workflow {
+				target.WorkflowStepKey, target.WorkflowStepName = "implement", "Разработка"
+			}
+			tool := delegationTool([]runtimecontract.RunnerDelegationTarget{target})
+			properties := tool["inputSchema"].(map[string]any)["properties"].(map[string]any)
+			description := properties["target_agent_ref"].(map[string]any)["description"].(string)
+			_, encoded, found := strings.Cut(description, delegationTargetsDescriptionPrefix)
+			var metadata []map[string]string
+			if !found || json.Unmarshal([]byte(encoded), &metadata) != nil || len(metadata) != 1 {
+				t.Fatal("delegation identity metadata must be a closed JSON projection")
+			}
+			item := metadata[0]
+			if item["ref"] != target.Ref || item["name"] != target.Name || item["purpose"] != target.Purpose ||
+				item["role_description"] != strings.Repeat("Я", 240) || item["workflow_step_key"] != target.WorkflowStepKey ||
+				strings.Contains(description, "private-") {
+				t.Fatal("delegation identity metadata lost its target or leaked instructions")
+			}
+			expectedFields := 4
+			if workflow {
+				expectedFields = 6
+			}
+			if !reflect.DeepEqual(properties["target_agent_ref"].(map[string]any)["enum"], []string{target.Ref}) ||
+				(properties["workflow_step_key"] != nil) != workflow || len(item) != expectedFields {
+				t.Fatal("delegation metadata changed the server-owned target or step boundary")
+			}
+		})
+	}
+}
+
+func TestDelegationToolDescriptionStaysBoundedForManyTargets(t *testing.T) {
+	t.Parallel()
+	targets := make([]runtimecontract.RunnerDelegationTarget, 128)
+	for index := range targets {
+		targets[index] = runtimecontract.RunnerDelegationTarget{
+			Ref: fmt.Sprintf("agt_fixture_%03d", index), Name: strings.Repeat("Я", 160),
+			Purpose: strings.Repeat("Я", 240), RoleDescription: strings.Repeat("Я", 240),
+		}
+	}
+	tool := delegationTool(targets)
+	if len(tool["description"].(string)) > 2000 {
+		t.Fatal("delegation tool description exceeds the runner readiness limit")
+	}
+	properties := tool["inputSchema"].(map[string]any)["properties"].(map[string]any)
+	field := properties["target_agent_ref"].(map[string]any)
+	_, encoded, found := strings.Cut(field["description"].(string), delegationTargetsDescriptionPrefix)
+	var metadata []map[string]string
+	if !found || json.Unmarshal([]byte(encoded), &metadata) != nil || len(metadata) != len(targets) ||
+		len(field["enum"].([]string)) != len(targets) {
+		t.Fatal("bounded delegation description lost allowed target metadata")
+	}
+}
+
 func TestDecodeMCPToolCallParamsAcceptsStandardMetadata(t *testing.T) {
 	t.Parallel()
 	params, err := decodeMCPToolCallParams(json.RawMessage(`{
@@ -935,5 +1005,73 @@ func TestNormalizeRoleImageUpdatePinsCurrentProjectAndRecipe(t *testing.T) {
 	if parameters["projectRef"] != "prj_current1" || parameters["recipeRef"] != "imgrec_exact" ||
 		assistantServerTarget("UPDATE_ROLE_IMAGE_RECIPE", parameters, nil)["kind"] != "ROLE_IMAGE_RECIPE" {
 		t.Fatalf("role image update was not server-bound: %#v", operation)
+	}
+}
+
+func TestRoleImageUpdateCatalogUsesCanonicalServerAction(t *testing.T) {
+	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
+		t.Run(string(scope), func(t *testing.T) {
+			input := assistantConfigurationFixture(scope)
+			input.AssistantContext.AllowedOperations = []string{"CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE"}
+			catalog, err := configurationCatalog(input, map[string]any{"operation_types": []any{"CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE"}})
+			if err != nil {
+				t.Fatal("canonical role image schema discovery failed")
+			}
+			schemas := catalog.(map[string]any)["operation_schemas"].([]map[string]any)
+			if len(schemas) != 2 {
+				t.Fatal("discovery lost the distinct create and update operations")
+			}
+			for _, schema := range schemas {
+				kind := assistantSchemaType(schema)
+				properties := schema["properties"].(map[string]any)
+				if properties["action"].(map[string]any)["const"] != assistantServerAction(kind) {
+					t.Fatal("discovered role image action differs from the server normalizer")
+				}
+				if !reflect.DeepEqual(schema["required"], []string{"type", "title", "summary", "parameters"}) {
+					t.Fatal("role image discovery requires caller-owned action, target or OCC pins")
+				}
+				parameters := properties["parameters"].(map[string]any)
+				fields := parameters["properties"].(map[string]any)
+				if fields["expectedVersion"] != nil || fields["specSha256"] != nil || fields["action"] != nil {
+					t.Fatal("role image parameters expose server-owned hydration fields")
+				}
+				if kind == "UPDATE_ROLE_IMAGE_RECIPE" {
+					target := properties["target"].(map[string]any)
+					if fields["recipeRef"] == nil || fields["environmentKey"] == nil || properties["expectedVersion"] == nil ||
+						!reflect.DeepEqual(target["required"], []string{"kind", "name", "ref", "version"}) {
+						t.Fatal("optional update envelope does not describe complete OCC target pins")
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestServerHydratedCatalogActionsMatchClosedRegistry(t *testing.T) {
+	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
+		input := assistantConfigurationFixture(scope)
+		input.AssistantContext = nil
+		input.RuntimeEnvironmentRef = "renv_fixture123"
+		for _, schema := range assistantPlanOperationSchemas(input) {
+			kind := assistantSchemaType(schema)
+			if !assistantServerHydratedOperation(kind) {
+				continue
+			}
+			properties := schema["properties"].(map[string]any)
+			if properties["action"].(map[string]any)["const"] != assistantServerAction(kind) {
+				t.Fatalf("server-hydrated descriptor action diverged for %s", kind)
+			}
+			if !reflect.DeepEqual(schema["required"], []string{"type", "title", "summary", "parameters"}) {
+				t.Fatalf("server-hydrated descriptor requires authority fields for %s", kind)
+			}
+		}
+		for _, kind := range assistantOperationTypes(input) {
+			if kind == "UPDATE_UNKNOWN_RESOURCE" {
+				t.Fatal("discovery expanded the closed operation registry")
+			}
+		}
+	}
+	if assistantServerHydratedOperation("UPDATE_UNKNOWN_RESOURCE") || assistantServerAction("UPDATE_UNKNOWN_RESOURCE") != "CREATE" {
+		t.Fatal("unknown UPDATE prefix acquired a registered action")
 	}
 }

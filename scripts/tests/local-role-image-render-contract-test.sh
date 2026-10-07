@@ -206,6 +206,20 @@ render="$temporary_directory/render.yaml"
   >/dev/null
 
 stt_image=registry.local.kodex/kodex/stt-hot-reload@sha256:5555555555555555555555555555555555555555555555555555555555555555
+platform_builder_image=pull.127.0.0.1.nip.io/kodex/role-image-builder@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+yq -o=json -I=0 '.' "$render" | jq -s -e --arg image "$platform_builder_image" '
+  any(.[]; .kind == "Deployment" and .metadata.name == "role-image-builder" and
+    any(.spec.template.spec.containers[];
+      .name == "role-image-builder" and .image == $image and .imagePullPolicy == "IfNotPresent"))
+' >/dev/null || fail 'platform builder does not use the durable promoted pull pin'
+platform_archive_image=pull.127.0.0.1.nip.io/kodex/session-archive@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+yq -o=json -I=0 '.' "$render" | jq -s -e --arg image "$platform_archive_image" '
+  [.[] | select(.kind == "Deployment" and .metadata.name == "session-archive")] as $deployments |
+  [$deployments[0].spec.template.spec.containers[] | select(.name == "session-archive")] as $containers |
+  ($deployments | length) == 1 and ($containers | length) == 1 and
+  $containers[0].image == $image and
+  ([$containers[0].env[] | select(.name == "SESSION_ARCHIVE_WORKER_IMAGE").value] == [$image])
+' >/dev/null || fail 'platform archive controller or worker still depends on an ephemeral node cache'
 "$source_root/tools/dev/verify-local-profile-render.sh" "$render" "$deployment_profile"
 opposite_profile=web-only
 [[ "$deployment_profile" != web-only ]] || opposite_profile=web-with-mattermost

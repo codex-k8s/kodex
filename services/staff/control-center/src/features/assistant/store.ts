@@ -21,7 +21,11 @@ import {
   validatePlanDraft,
 } from "@/features/assistant/api";
 import { conversationMatchesContext } from "@/features/assistant/context";
-import { restoreAssistantConversationRef } from "@/features/assistant/workspace-state";
+import {
+  persistAssistantScope,
+  restoreAssistantConversationRef,
+  restoreAssistantScope,
+} from "@/features/assistant/workspace-state";
 import type {
   AssistantContextDescriptor,
   AssistantConversation,
@@ -35,6 +39,17 @@ import type {
   ListAssistantConversationsResponse,
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem, type AppProblem } from "@/shared/api/problem";
+import { ownerRequestSignal } from "@/shared/api/owner-lifetime";
+
+const realtimeHistoryPageLimit = 10;
+
+type HistoryRequest = {
+  projectRef?: string;
+  filter: NonNullable<Parameters<typeof readConversations>[3]>;
+  pageSize: number;
+  assistantPin?: string;
+  profileRef?: string;
+};
 
 function mergeConversation(
   previous: AssistantConversation | undefined,
@@ -63,10 +78,13 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       : assistant.value?.ref,
   );
   const conversations = ref<AssistantConversation[]>([]);
+  const pendingCreatedConversationVersions = new Map<string, number>();
   const selectedRef = ref<string>();
   const context = ref<AssistantContextDescriptor>();
   const projectRef = ref<string>();
   const loading = ref(false);
+  const foregroundLoading = ref(false);
+  const historyRefreshing = ref(false);
   const busy = ref(false);
   const problem = ref<AppProblem>();
   const receipt = ref<AssistantPlanReceipt>();
@@ -81,14 +99,56 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   const historyQuery = ref("");
   const historyState = ref<AssistantConversation["state"]>("ACTIVE");
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  const retainedSelectedDetail = ref<AssistantConversation>();
+  let historyReadDepth = 1;
+  let historyOwnerLoaded = false;
+  let historyRequest: HistoryRequest | undefined;
+  let realtimeReadController: AbortController | undefined;
+  let realtimeReadRevision = 0;
+  let realtimeReadAgain = false;
+
+  const conversationCreationReady = computed(() => {
+    if (
+      busy.value ||
+      foregroundLoading.value ||
+      problem.value?.status === 401 ||
+      problem.value?.status === 403 ||
+      (loading.value && !historyRefreshing.value)
+    )
+      return false;
+    if (assistantScope.value !== "PROJECT") return true;
+    const profile = projectAssistant.value;
+    const agent = projectAssistantAgent.value;
+    return Boolean(
+      projectRef.value &&
+      profile?.state === "ACTIVE" &&
+      profile.projectRef === projectRef.value &&
+      agent?.ref === profile.agentRef &&
+      agent.projectRef === projectRef.value &&
+      agent.enabled &&
+      !agent.system,
+    );
+  });
+
+  function cancelRealtimeRead(): void {
+    if (realtimeReadController) loading.value = false;
+    realtimeReadController?.abort();
+    realtimeReadController = undefined;
+    realtimeReadRevision += 1;
+    realtimeReadAgain = false;
+    historyRefreshing.value = false;
+    retainedSelectedDetail.value = undefined;
+  }
 
   function cancelReads(): void {
+    cancelRealtimeRead();
     clearTimeout(searchTimer);
     controller?.abort();
     profileController?.abort();
     profileReadGeneration += 1;
     generation += 1;
     loading.value = false;
+    foregroundLoading.value = false;
     loadingMore.value = false;
   }
 
@@ -121,9 +181,25 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       : value.assistantProfileRef === undefined;
   }
 
-  const selectedConversation = computed(() =>
-    conversations.value.find((item) => item.ref === selectedRef.value),
-  );
+  const selectedConversation = computed(() => {
+    const listed = conversations.value.find(
+      (item) => item.ref === selectedRef.value,
+    );
+    if (
+      listed &&
+      matchesAssistantPin(listed) &&
+      (!projectRef.value || listed.projectRef === projectRef.value)
+    )
+      return listed;
+    const retained = retainedSelectedDetail.value;
+    return loading.value &&
+      retained &&
+      retained.ref === selectedRef.value &&
+      matchesAssistantPin(retained) &&
+      (!projectRef.value || retained.projectRef === projectRef.value)
+      ? retained
+      : undefined;
+  });
   const sortedConversations = computed(() =>
     [...conversations.value].sort((a, b) =>
       b.updatedAt.localeCompare(a.updatedAt),
@@ -135,28 +211,37 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     historyPageSize.value = Math.min(100, Math.max(1, Math.floor(value)));
   }
 
+  function captureHistoryRequest(
+    nextProjectRef = projectRef.value,
+  ): HistoryRequest {
+    return {
+      projectRef: nextProjectRef,
+      filter: {
+        query: historyQuery.value,
+        state: historyState.value,
+        assistantScope: assistantScope.value,
+        ...(activeAssistantRef.value
+          ? { assistantRef: activeAssistantRef.value }
+          : {}),
+      },
+      pageSize: historyPageSize.value ?? 40,
+      assistantPin: activeAssistantRef.value,
+      profileRef: projectAssistant.value?.ref,
+    };
+  }
+
   function readHistory(
-    nextProjectRef: string | undefined,
+    request: HistoryRequest,
     pageToken: string | undefined,
     signal: AbortSignal,
   ) {
-    const filter = {
-      query: historyQuery.value,
-      state: historyState.value,
-      assistantScope: assistantScope.value,
-      ...(activeAssistantRef.value
-        ? { assistantRef: activeAssistantRef.value }
-        : {}),
-    };
-    return historyPageSize.value
-      ? readConversations(
-          nextProjectRef,
-          pageToken,
-          signal,
-          filter,
-          historyPageSize.value,
-        )
-      : readConversations(nextProjectRef, pageToken, signal, filter);
+    return readConversations(
+      request.projectRef,
+      pageToken,
+      signal,
+      request.filter,
+      request.pageSize,
+    );
   }
 
   function selectMatchingConversation(): void {
@@ -180,7 +265,9 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     nextProjectRef?: string,
     select = true,
     nextAssistantScope: AssistantScope = nextProjectRef
-      ? assistantScope.value
+      ? projectRef.value === nextProjectRef
+        ? assistantScope.value
+        : restoreAssistantScope(nextProjectRef)
       : "SYSTEM",
   ): Promise<void> {
     cancelReads();
@@ -201,19 +288,24 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       projectRef.value !== nextProjectRef ||
       assistantScope.value !== nextAssistantScope
     ) {
+      pendingCreatedConversationVersions.clear();
       conversations.value = [];
       selectedRef.value = undefined;
       projectAssistant.value = undefined;
       projectAssistantAgent.value = undefined;
+      historyOwnerLoaded = false;
+      historyReadDepth = 1;
     }
     controller = new AbortController();
     const signal = controller.signal;
     nextPageToken.value = undefined;
+    historyRequest = undefined;
     historyProblem.value = undefined;
     historyCursors.clear();
     context.value = nextContext;
     projectRef.value = nextProjectRef;
     assistantScope.value = nextAssistantScope;
+    foregroundLoading.value = true;
     loading.value = true;
     problem.value = undefined;
     try {
@@ -236,11 +328,12 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
           return;
         }
       }
+      const request = captureHistoryRequest(nextProjectRef);
       const [assistantValue, firstPage] = await Promise.all([
         assistant.value
           ? Promise.resolve(assistant.value)
           : readAssistant(signal),
-        readHistory(nextProjectRef, undefined, signal),
+        readHistory(request, undefined, signal),
       ]);
       if (current !== generation) return;
       assistant.value = assistantValue;
@@ -255,12 +348,15 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       ) {
         if (count++ >= 30) break;
         historyCursors.add(page.nextPageToken);
-        page = await readHistory(nextProjectRef, page.nextPageToken, signal);
+        page = await readHistory(request, page.nextPageToken, signal);
         if (current !== generation) return;
         checkPage(page, nextProjectRef);
         conversationValues.push(...page.items);
       }
       nextPageToken.value = page.nextPageToken;
+      historyRequest = { ...request, assistantPin: activeAssistantRef.value };
+      historyReadDepth = count;
+      historyOwnerLoaded = true;
       assistant.value = assistantValue;
       const previousByRef = new Map(
         conversations.value.map((conversation) => [
@@ -299,21 +395,39 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         receipt.value = undefined;
       }
     } finally {
-      if (current === generation) loading.value = false;
+      if (current === generation) {
+        foregroundLoading.value = false;
+        loading.value = historyRefreshing.value;
+      }
     }
   }
 
   async function loadMoreHistory(pageSize?: number): Promise<void> {
     const cursor = nextPageToken.value;
     if (!cursor || loading.value || loadingMore.value || busy.value) return;
+    if (pageSize !== undefined) setHistoryPageSize(pageSize);
+    const request = historyRequest;
+    if (
+      !request ||
+      request.projectRef !== projectRef.value ||
+      request.filter.assistantScope !== assistantScope.value ||
+      request.assistantPin !== activeAssistantRef.value ||
+      request.profileRef !== projectAssistant.value?.ref ||
+      request.filter.query !== historyQuery.value ||
+      request.filter.state !== historyState.value
+    ) {
+      // Общий realtime cursor не доказывает параметры owner-истории.
+      // Один свежий read создаёт её цепочку; чужой token не отправляем.
+      if (context.value) await load(context.value, projectRef.value);
+      return;
+    }
     const current = generation;
     controller ??= new AbortController();
     loadingMore.value = true;
     historyProblem.value = undefined;
-    if (pageSize !== undefined) setHistoryPageSize(pageSize);
     try {
       const page = await readHistory(
-        projectRef.value,
+        { ...request, pageSize: historyPageSize.value ?? 40 },
         cursor,
         controller.signal,
       );
@@ -321,6 +435,8 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       historyCursors.add(cursor);
       checkPage(page, projectRef.value);
       for (const item of page.items) upsertConversation(item, false, true);
+      historyReadDepth += 1;
+      historyOwnerLoaded = true;
       nextPageToken.value = page.nextPageToken;
     } catch (error) {
       if (current === generation) historyProblem.value = asProblem(error);
@@ -338,9 +454,13 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     cancelReads();
     historyQuery.value = query;
     historyState.value = state;
+    historyOwnerLoaded = false;
+    historyReadDepth = 1;
+    pendingCreatedConversationVersions.clear();
     conversations.value = [];
     selectedRef.value = undefined;
     nextPageToken.value = undefined;
+    historyRequest = undefined;
     historyProblem.value = undefined;
     problem.value = undefined;
     loading.value = true;
@@ -436,6 +556,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       conversations.value = [];
       selectedRef.value = undefined;
       nextPageToken.value = undefined;
+      historyRequest = undefined;
     });
   }
 
@@ -468,13 +589,18 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     const projectChanged = projectRef.value !== nextProjectRef;
     context.value = nextContext;
     projectRef.value = nextProjectRef;
-    if (!nextProjectRef && assistantScope.value === "PROJECT")
-      assistantScope.value = "SYSTEM";
+    if (projectChanged)
+      assistantScope.value = restoreAssistantScope(nextProjectRef);
+    else if (!nextProjectRef) assistantScope.value = "SYSTEM";
     if (projectChanged) {
       cancelReads();
+      pendingCreatedConversationVersions.clear();
       conversations.value = [];
       nextPageToken.value = undefined;
+      historyRequest = undefined;
       historyCursors.clear();
+      historyOwnerLoaded = false;
+      historyReadDepth = 1;
       selectedRef.value = undefined;
       projectAssistant.value = undefined;
       projectAssistantAgent.value = undefined;
@@ -533,13 +659,40 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     const scoped = sourceProjectRef
       ? values.filter((value) => value.projectRef === sourceProjectRef)
       : values;
-    const visible = scoped.filter(matchesAssistantPin);
+    const visible = scoped.filter(
+      (value) =>
+        matchesAssistantPin(value) && value.state === historyState.value,
+    );
     const previousByRef = new Map(
       conversations.value.map((conversation) => [
         conversation.ref,
         conversation,
       ]),
     );
+    const requiresOwnerRead =
+      Boolean(historyQuery.value || historyState.value !== "ACTIVE") ||
+      ((Boolean(sourceNextPageToken) ||
+        (assistantScope.value === "PROJECT" && !visible.length)) &&
+        [...previousByRef.values()].some(
+          (previous) =>
+            matchesAssistantPin(previous) &&
+            (!sourceProjectRef || previous.projectRef === sourceProjectRef) &&
+            !visible.some((incoming) => incoming.ref === previous.ref),
+        ));
+    if (requiresOwnerRead) {
+      // Частичная страница не является tombstone. Старое тело остаётся
+      // readonly до ограниченной owner-сверки, а не навсегда в merged cache.
+      retainedSelectedDetail.value ??= selectedConversation.value;
+      for (const incoming of visible) {
+        const previous = previousByRef.get(incoming.ref);
+        if (previous)
+          Object.assign(previous, mergeConversation(previous, incoming, true));
+        else conversations.value.push(incoming);
+      }
+      refreshPartialHistory();
+      return;
+    }
+    cancelRealtimeRead();
     const reconciled = visible.map((incoming) => {
       const previous = previousByRef.get(incoming.ref);
       const merged = mergeConversation(previous, incoming, true);
@@ -547,12 +700,215 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       Object.assign(previous, merged);
       return previous;
     });
+    // ACK создания опережает общий realtime-кэш. Отсутствие нового диалога
+    // в этом кэше ещё не означает удаление и не отменяет выбор пользователя.
+    const visibleByRef = new Map(visible.map((value) => [value.ref, value]));
+    for (const [ref, version] of pendingCreatedConversationVersions) {
+      const previous = previousByRef.get(ref);
+      const incoming = visibleByRef.get(ref);
+      if (
+        !previous ||
+        !matchesAssistantPin(previous) ||
+        (incoming && incoming.version >= version)
+      ) {
+        pendingCreatedConversationVersions.delete(ref);
+        continue;
+      }
+      if (!incoming) reconciled.push(previous);
+    }
     conversations.value.splice(0, conversations.value.length, ...reconciled);
     // Курсор общего cache-снимка не относится к отдельно фильтрованной
     // истории помощника. PROJECT продолжает собственный авторитетный cursor.
-    if (assistantScope.value === "SYSTEM")
+    if (
+      assistantScope.value === "SYSTEM" &&
+      (!sourceNextPageToken || !historyOwnerLoaded)
+    ) {
       nextPageToken.value = sourceNextPageToken;
+      historyRequest = undefined;
+      historyOwnerLoaded = false;
+    }
+    if (
+      selectedRef.value === undefined &&
+      typeof window !== "undefined" &&
+      !historyQuery.value &&
+      historyState.value === "ACTIVE"
+    ) {
+      const retained = restoreAssistantConversationRef(
+        sourceProjectRef,
+        undefined,
+        assistantScope.value,
+      );
+      // Storage хранит только предпочтение: выбирать можно лишь диалог,
+      // уже прошедший scope/pin-проверки авторитетного снимка.
+      if (
+        retained &&
+        visible.some(
+          (value) => value.ref === retained && value.state === "ACTIVE",
+        )
+      )
+        selectedRef.value = retained;
+    }
     selectMatchingConversation();
+  }
+
+  function clearRealtimeState(): void {
+    cancelReads();
+    pendingCreatedConversationVersions.clear();
+    conversations.value = [];
+    selectedRef.value = undefined;
+    nextPageToken.value = undefined;
+    historyRequest = undefined;
+    assistant.value = undefined;
+    projectAssistant.value = undefined;
+    projectAssistantAgent.value = undefined;
+    receipt.value = undefined;
+    historyReadDepth = 1;
+    historyOwnerLoaded = false;
+    historyCursors.clear();
+  }
+
+  function refreshPartialHistory(): void {
+    realtimeReadRevision += 1;
+    if (realtimeReadController) {
+      realtimeReadAgain = true;
+      return;
+    }
+    const currentContext = context.value;
+    if (!currentContext) return;
+    const current = generation;
+    const revision = realtimeReadRevision;
+    const ownerSignal = ownerRequestSignal();
+    const readController = new AbortController();
+    realtimeReadController = readController;
+    const signal = AbortSignal.any([readController.signal, ownerSignal]);
+    const sourceProject = projectRef.value;
+    const sourceScope = assistantScope.value;
+    const sourceAssistant = activeAssistantRef.value;
+    const sourceProfile = projectAssistant.value?.ref;
+    const retainedRef = selectedRef.value;
+    const filter = {
+      query: historyQuery.value,
+      state: historyState.value,
+      assistantScope: sourceScope,
+      assistantRef: sourceAssistant,
+    };
+    const depth = Math.min(
+      realtimeHistoryPageLimit,
+      Math.max(1, historyReadDepth),
+    );
+    const pageSize = Math.min(
+      100,
+      Math.max(historyPageSize.value ?? 40, conversations.value.length),
+    );
+    const isCurrent = () =>
+      !signal.aborted &&
+      current === generation &&
+      revision === realtimeReadRevision &&
+      sourceProject === projectRef.value &&
+      sourceScope === assistantScope.value &&
+      sourceAssistant === activeAssistantRef.value &&
+      sourceProfile === projectAssistant.value?.ref;
+    loading.value = true;
+    historyRefreshing.value = true;
+    if (problem.value?.status !== 401 && problem.value?.status !== 403)
+      problem.value = undefined;
+    void (async () => {
+      try {
+        const items = new Map<string, AssistantConversation>();
+        const cursors = new Set<string>();
+        let cursor: string | undefined;
+        let count = 0;
+        do {
+          const page = await readConversations(
+            sourceProject,
+            cursor,
+            signal,
+            filter,
+            pageSize,
+          );
+          if (!isCurrent()) return;
+          if (
+            page.items.some(
+              (item) =>
+                !matchesAssistantPin(item) ||
+                item.state !== filter.state ||
+                (sourceProject && item.projectRef !== sourceProject),
+            )
+          )
+            throw new Error("Assistant history scope mismatch");
+          for (const item of page.items)
+            items.set(
+              item.ref,
+              mergeConversation(items.get(item.ref), item, true),
+            );
+          if (cursor) cursors.add(cursor);
+          cursor = page.nextPageToken;
+          if (cursor && cursors.has(cursor))
+            throw new Error("Assistant history cursor repeated");
+          count += 1;
+        } while (
+          cursor &&
+          count < realtimeHistoryPageLimit &&
+          (count < depth || (retainedRef && !items.has(retainedRef)))
+        );
+        if (!isCurrent()) return;
+        problem.value = undefined;
+        const previous = new Map(
+          conversations.value.map((item) => [item.ref, item]),
+        );
+        conversations.value = [...items.values()].map((item) =>
+          mergeConversation(previous.get(item.ref), item, true),
+        );
+        historyCursors.clear();
+        for (const consumed of cursors) historyCursors.add(consumed);
+        nextPageToken.value = cursor;
+        historyRequest = {
+          projectRef: sourceProject,
+          filter,
+          pageSize,
+          assistantPin: sourceAssistant,
+          profileRef: sourceProfile,
+        };
+        historyReadDepth = count;
+        historyOwnerLoaded = true;
+        retainedSelectedDetail.value = undefined;
+        selectMatchingConversation();
+      } catch (error) {
+        if (!isCurrent()) return;
+        problem.value = asProblem(error);
+        conversations.value = [];
+        retainedSelectedDetail.value = undefined;
+        selectedRef.value = undefined;
+        nextPageToken.value = undefined;
+      } finally {
+        if (
+          realtimeReadController === readController &&
+          current === generation
+        ) {
+          realtimeReadController = undefined;
+          if (ownerSignal.aborted) clearRealtimeState();
+          else if (
+            sourceProject !== projectRef.value ||
+            sourceScope !== assistantScope.value ||
+            sourceAssistant !== activeAssistantRef.value ||
+            sourceProfile !== projectAssistant.value?.ref
+          ) {
+            conversations.value = [];
+            retainedSelectedDetail.value = undefined;
+            selectedRef.value = undefined;
+            nextPageToken.value = undefined;
+            loading.value = false;
+            historyRefreshing.value = false;
+          } else if (realtimeReadAgain) {
+            realtimeReadAgain = false;
+            refreshPartialHistory();
+          } else {
+            historyRefreshing.value = false;
+            loading.value = foregroundLoading.value;
+          }
+        }
+      }
+    })();
   }
 
   function replacePlan(value: AssistantPlan): void {
@@ -580,12 +936,14 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       )
         throw new Error("Created assistant conversation scope mismatch");
       if (historyQuery.value || historyState.value !== "ACTIVE") {
+        pendingCreatedConversationVersions.clear();
         conversations.value = [];
         nextPageToken.value = undefined;
       }
       historyQuery.value = "";
       historyState.value = "ACTIVE";
       upsertConversation(value);
+      pendingCreatedConversationVersions.set(value.ref, value.version);
       return value;
     });
   }
@@ -625,6 +983,10 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
           assistantScope.value,
         );
         upsertConversation(conversation);
+        pendingCreatedConversationVersions.set(
+          conversation.ref,
+          conversation.version,
+        );
       }
       if (!context.value) throw new Error("Assistant context is unavailable");
       const appended = attachmentSetRef
@@ -648,7 +1010,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
 
   async function stopActiveTurn(): Promise<void> {
     const conversation = selectedConversation.value;
-    if (!conversation) return;
+    if (!conversation || conversation.state !== "ACTIVE") return;
     await runMutation(async () => {
       const runRef = await cancelAssistantTurn(conversation);
       upsertConversation({
@@ -689,13 +1051,22 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       const value = await applyPlanDraft(plan);
       if (
         value.conversation.ref !== plan.conversationRef ||
-        value.plan.ref !== plan.ref
+        value.plan.ref !== plan.ref ||
+        value.plan.conversationRef !== plan.conversationRef ||
+        value.plan.revision !== plan.revision ||
+        value.receipt.planRef !== value.plan.ref ||
+        value.receipt.planRevision !== value.plan.revision ||
+        !(
+          (value.plan.state === "APPLIED" &&
+            value.receipt.outcome === "APPLIED") ||
+          (value.plan.state === "STALE" && value.receipt.outcome === "CONFLICT")
+        )
       )
         throw new Error("Assistant plan application response mismatch");
       receipt.value = value.receipt;
-      // Ответ применения содержит только ref диалога. Полный снимок придёт
-      // из авторитетного чтения при выходе из редактора плана.
-      replacePlan(value.plan);
+      // Ответ применения содержит отдельную авторитетную квитанцию и только
+      // ref диалога. Привязываем её к точной ревизии, не подменяя весь диалог.
+      replacePlan({ ...value.plan, receipt: value.receipt });
       return value.receipt;
     });
   }
@@ -720,6 +1091,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       (scope === "PROJECT" && !projectRef.value)
     )
       return;
+    persistAssistantScope(projectRef.value, scope);
     await load(context.value, projectRef.value, true, scope);
   }
 
@@ -805,6 +1177,8 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     context,
     projectRef,
     loading,
+    historyRefreshing,
+    conversationCreationReady,
     busy,
     problem,
     receipt,
@@ -828,6 +1202,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     load,
     setContext,
     applyRealtimeSnapshot,
+    clearRealtimeState,
     startConversation,
     changeTitle,
     send,

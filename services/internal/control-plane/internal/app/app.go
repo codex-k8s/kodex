@@ -25,6 +25,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/s3store"
 	"github.com/codex-k8s/kodex/libs/go/oidcverifier"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	sttv1 "github.com/codex-k8s/kodex/libs/go/sttapi/gen/stt/v1"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/credentialmaterializer"
@@ -227,7 +228,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		CertificateFile: config.NATSCertificateFile, PrivateKeyFile: config.NATSPrivateKeyFile,
 		CredentialsFile: config.NATSCredentialsFile, Stream: config.NATSStream,
 		Subjects: []string{"control_plane.run.*.*.events", "control_plane.platform.*.events"},
-		Replicas: config.NATSReplicas, MaxMessageBytes: 64 << 10, MaxMessages: 10_000_000,
+		Replicas: config.NATSReplicas, MaxMessageBytes: runtimecontract.MaximumControlPlaneStreamMessageBytes, MaxMessages: 10_000_000,
 		MaxBytes: config.NATSMaxBytes, MaxPerSubject: 1_000_000, MaxAge: 30 * 24 * time.Hour,
 		DuplicateWindow: 2 * time.Minute, ConnectTimeout: 2 * time.Second,
 	})
@@ -250,6 +251,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		return fmt.Errorf("construct role image transport: %w", err)
 	}
 	serverOptions := append(transportOptions,
+		grpc.MaxRecvMsgSize(8<<20),
 		grpc.ForceServerCodec(grpcserver.StrictProtoCodec()),
 		grpc.ChainUnaryInterceptor(
 			grpcserver.ErrorBoundary(grpcserver.ErrorObserverFunc(func(_ context.Context, method string, code codes.Code, _ error) {

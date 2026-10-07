@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -32,6 +34,7 @@ const (
 )
 
 type Config struct {
+	Logger                                                                               *slog.Logger
 	WorkerNamespace, Environment, WorkerImage, WorkerServiceAccount, ObjectStorageSecret string
 	StorageClass, SessionPVCSize                                                         string
 	ObjectStorageEndpoint, ObjectStorageRegion, ObjectStorageBucket                      string
@@ -141,11 +144,13 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 		Labels: map[string]string{managedLabel: "true"}, Annotations: pvcBindingAnnotation(sourcePVCUID)},
 		Immutable: &immutable, Data: map[string]string{"task.json": string(raw)}}
 	if _, err := controller.client.CoreV1().ConfigMaps(controller.config.WorkerNamespace).Create(ctx, configMap, metav1.CreateOptions{}); err != nil {
+		controller.observeAPIFailure(ctx, task, archiveAPICreateInput, err)
 		return model.Result{}, errors.New("create session archive task input")
 	}
 	defer controller.cleanup(ctx, name)
 	job := controller.job(name, task, sourcePVCUID)
 	if _, err := controller.client.BatchV1().Jobs(controller.config.WorkerNamespace).Create(ctx, job, metav1.CreateOptions{}); err != nil {
+		controller.observeAPIFailure(ctx, task, archiveAPICreateJob, err)
 		return model.Result{}, errors.New("create session archive worker job")
 	}
 	ticker := time.NewTicker(controller.poll)
@@ -172,12 +177,13 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 			}
 			job, err := controller.client.BatchV1().Jobs(controller.config.WorkerNamespace).Get(ctx, name, metav1.GetOptions{})
 			if err != nil {
+				controller.observeAPIFailure(ctx, task, archiveAPIObserveJob, err)
 				return model.Result{}, errors.New("observe session archive worker job")
 			}
 			if job.Status.Succeeded == 0 && job.Status.Failed == 0 {
 				continue
 			}
-			return controller.readResult(ctx, name, job.Status.Succeeded > 0)
+			return controller.readResult(ctx, task, job, sourcePVCUID)
 		}
 	}
 }
@@ -221,6 +227,15 @@ func pvcFailure(code string) *model.Result {
 }
 
 func (controller *Controller) ensureRestorePVC(ctx context.Context, task model.Task) error {
+	volumeLabels, volumeAnnotations, err := runtimecontract.SessionVolumeMetadata(task.OrganizationRef, task.ProjectRef, task.SessionRef)
+	if err != nil {
+		return err
+	}
+	expectedName, err := runtimecontract.SessionPVCName(task.SessionRef)
+	if err != nil || task.PVCName != expectedName {
+		return errors.New("restored session PVC name is invalid")
+	}
+	volumeAnnotations[restoreInputAnnotation] = task.InputDigest
 	pvcs := controller.client.CoreV1().PersistentVolumeClaims(controller.config.WorkerNamespace)
 	existing, err := pvcs.Get(ctx, task.PVCName, metav1.GetOptions{})
 	if err == nil {
@@ -234,7 +249,7 @@ func (controller *Controller) ensureRestorePVC(ctx context.Context, task model.T
 		storageClassName = &controller.config.StorageClass
 	}
 	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: controller.config.WorkerNamespace,
-		Annotations: map[string]string{restoreInputAnnotation: task.InputDigest}}, Spec: corev1.PersistentVolumeClaimSpec{
+		Labels: volumeLabels, Annotations: volumeAnnotations}, Spec: corev1.PersistentVolumeClaimSpec{
 		AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}, StorageClassName: storageClassName,
 		Resources: corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: controller.pvcRequest}},
 	}}
@@ -249,6 +264,17 @@ func (controller *Controller) ensureRestorePVC(ctx context.Context, task model.T
 }
 
 func (controller *Controller) validateRestorePVC(pvc *corev1.PersistentVolumeClaim, task model.Task) error {
+	wantedLabels, wantedAnnotations, err := runtimecontract.SessionVolumeMetadata(task.OrganizationRef, task.ProjectRef, task.SessionRef)
+	if err != nil {
+		return err
+	}
+	for _, pair := range []struct{ actual, wanted map[string]string }{{pvc.Labels, wantedLabels}, {pvc.Annotations, wantedAnnotations}} {
+		for key, value := range pair.wanted {
+			if pair.actual[key] != value {
+				return errors.New("restored session PVC owner conflicts with immutable task input")
+			}
+		}
+	}
 	wantedClass := controller.config.StorageClass
 	actualClass := ""
 	if pvc.Spec.StorageClassName != nil {
@@ -308,26 +334,6 @@ func (controller *Controller) deletePVC(ctx context.Context, task model.Task) (m
 	}
 }
 
-func (controller *Controller) readResult(ctx context.Context, jobName string, succeeded bool) (model.Result, error) {
-	pods, err := controller.client.CoreV1().Pods(controller.config.WorkerNamespace).List(ctx, metav1.ListOptions{LabelSelector: "job-name=" + jobName})
-	if err != nil || len(pods.Items) != 1 {
-		return model.Result{}, errors.New("read session archive worker pod")
-	}
-	for _, status := range pods.Items[0].Status.ContainerStatuses {
-		if status.Name == "worker" && status.State.Terminated != nil {
-			var result model.Result
-			if json.Unmarshal([]byte(status.State.Terminated.Message), &result) != nil {
-				return model.Result{}, errors.New("decode session archive worker result")
-			}
-			if succeeded != result.Success {
-				return model.Result{}, errors.New("session archive worker status conflicts")
-			}
-			return result, nil
-		}
-	}
-	return model.Result{}, errors.New("session archive worker result is missing")
-}
-
 func (controller *Controller) job(name string, task model.Task, sourcePVCUID types.UID) *batchv1.Job {
 	zero, deadline, ttl := int32(0), int64(controller.config.WorkerTimeout/time.Second), int32(300)
 	falseValue := false
@@ -345,6 +351,9 @@ func (controller *Controller) job(name string, task model.Task, sourcePVCUID typ
 		// геометрию путей для snapshot и restore.
 		mounts = append(mounts, corev1.VolumeMount{Name: "session", MountPath: "/workspace/.kodex/state"})
 	}
+	// RESTORE создаёт rollout от UID native writer: app-server и capture
+	// исполняются в provider-runtime, а не в контейнере main runner.
+	const workerUID int64 = 10002
 	container := corev1.Container{Name: "worker", Image: controller.config.WorkerImage, Args: []string{"worker"},
 		Env: []corev1.EnvVar{{Name: "DEPLOYMENT_ENVIRONMENT", Value: controller.config.Environment},
 			{Name: "SESSION_ARCHIVE_OBJECT_STORAGE_ENDPOINT", Value: controller.config.ObjectStorageEndpoint},
@@ -354,15 +363,30 @@ func (controller *Controller) job(name string, task model.Task, sourcePVCUID typ
 			{Name: "SESSION_ARCHIVE_OBJECT_STORAGE_USE_PATH_STYLE", Value: "true"},
 			{Name: "SESSION_ARCHIVE_WORKER_TIMEOUT", Value: controller.config.WorkerTimeout.String()}},
 		VolumeMounts: mounts, TerminationMessagePath: "/dev/termination-log", TerminationMessagePolicy: corev1.TerminationMessageReadFile,
-		SecurityContext: restricted(10002)}
-	return &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: controller.config.WorkerNamespace,
-		Labels: map[string]string{managedLabel: "true"}, Annotations: pvcBindingAnnotation(sourcePVCUID)},
+		SecurityContext: restricted(workerUID)}
+	job := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: controller.config.WorkerNamespace,
+		Labels: map[string]string{managedLabel: "true"}, Annotations: workerDiagnosticAnnotations(task, sourcePVCUID)},
 		Spec: batchv1.JobSpec{BackoffLimit: &zero, ActiveDeadlineSeconds: &deadline, TTLSecondsAfterFinished: &ttl,
 			Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{managedLabel: "true"}}, Spec: corev1.PodSpec{
 				ServiceAccountName: controller.config.WorkerServiceAccount, AutomountServiceAccountToken: &falseValue,
 				RestartPolicy: corev1.RestartPolicyNever, EnableServiceLinks: &falseValue, Containers: []corev1.Container{container}, Volumes: volumes,
 				SecurityContext: &corev1.PodSecurityContext{RunAsNonRoot: boolPtr(true), FSGroup: int64Ptr(29000), SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}},
 			}}}}
+	if task.Kind == "RESTORE" {
+		job.Spec.Template.Spec.InitContainers = []corev1.Container{{
+			Name: "restore-prepare", Image: controller.config.WorkerImage, ImagePullPolicy: corev1.PullIfNotPresent,
+			Args: []string{"prepare-restore"}, SecurityContext: restricted(10001),
+			VolumeMounts: []corev1.VolumeMount{
+				{Name: "task", MountPath: "/var/run/config/kodex/session-archive", ReadOnly: true},
+				{Name: "session", MountPath: "/workspace/.kodex/state"},
+			},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{corev1.ResourceCPU: *quantity("50m"), corev1.ResourceMemory: *quantity("32Mi")},
+				Limits:   corev1.ResourceList{corev1.ResourceCPU: *quantity("200m"), corev1.ResourceMemory: *quantity("128Mi")},
+			},
+		}}
+	}
+	return job
 }
 
 func pvcBindingAnnotation(uid types.UID) map[string]string {

@@ -1,6 +1,6 @@
 -- name: commands_emitrunevent_select_gate_delta :one
 SELECT gate.ref,
-       project.ref,
+       COALESCE(project.ref,''),
        root.ref,
        node.ref,
        gate.title,
@@ -16,11 +16,12 @@ SELECT gate.ref,
        gate.version,
        gate.created_at,
        gate.resolved_at,
-       COALESCE(attachment_set.ref, '')
+       COALESCE(attachment_set.ref, ''),gate.scope_kind,organization.ref
 FROM control_plane.owner_gates gate
 LEFT JOIN control_plane.attachment_sets attachment_set
   ON attachment_set.id = gate.resolution_attachment_set_id
-JOIN control_plane.projects project ON project.id = gate.project_id
+LEFT JOIN control_plane.projects project ON project.id = gate.project_id
+JOIN control_plane.organizations organization ON organization.id=gate.organization_id
 JOIN control_plane.runs root ON root.id = gate.root_run_id
 JOIN control_plane.run_nodes node ON node.id = gate.node_id
 JOIN control_plane.subjects initiator ON initiator.id = root.initiated_by
@@ -29,3 +30,5 @@ LEFT JOIN control_plane.agents requester_agent ON requester_agent.id = requester
 LEFT JOIN control_plane.subjects subject ON subject.id = gate.resolved_by
 WHERE gate.organization_id = $1::uuid
   AND gate.ref = $2
+  AND ((gate.scope_kind='PROJECT' AND project.id IS NOT NULL) OR
+       (gate.scope_kind='ORGANIZATION' AND control_plane.owned_organization_assistant_run(gate.organization_id,gate.root_run_id)))

@@ -394,12 +394,20 @@ func seedPromotionArtifact(t *testing.T, ctx context.Context, repository *Reposi
 	var version, admissionRevision uint64
 	var verdict string
 	var updatedAt time.Time
+	inventoryArtifact, err := scanRoleImageArtifact(repository.pool.QueryRow(ctx, queryRoleImagesGetActiveArtifact, current.organizationID, artifactRef))
+	if err != nil {
+		t.Fatal("read synthetic inventory fixture")
+	}
+	if decision == "PENDING" {
+		return inventoryArtifact
+	}
+	inventoryJSON, inventorySHA256 := imageInventoryFixture(inventoryArtifact)
 	if err := repository.pool.QueryRow(ctx, queryRoleImagesRecordAdmission,
 		current.organizationID, artifactID, uint64(1), decision,
 		strings.Repeat("2", 64), strings.Repeat("3", 64),
 		"spiffe://kodex.local/ns/kodex-system/sa/image-admission",
 		strings.Repeat("4", 64), strings.Repeat("5", 64),
-		"sha256:"+strings.Repeat("6", 64)).Scan(
+		"sha256:"+strings.Repeat("6", 64), inventoryJSON, inventorySHA256).Scan(
 		&version, &verdict, &admissionRevision, &updatedAt); err != nil {
 		t.Fatalf("record promotion fixture admission: %v", err)
 	}

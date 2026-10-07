@@ -9,6 +9,7 @@ export function rememberEnvironmentDraft(
     environmentDraftReauthKey,
     JSON.stringify({
       ref: draft.ref,
+      version: draft.version,
       projectRef: draft.projectRef,
       environmentRef: draft.environmentRef ?? "",
       expiresAt: Date.now() + 5 * 60_000,
@@ -19,7 +20,7 @@ export function consumeEnvironmentDraftReference(
   projectRef: string,
   environmentRef: string | undefined,
   storage: Storage,
-): string | undefined {
+): { ref: string; version: number } | undefined {
   const source = storage.getItem(environmentDraftReauthKey);
   storage.removeItem(environmentDraftReauthKey);
   if (!source) return;
@@ -30,6 +31,10 @@ export function consumeEnvironmentDraftReference(
     !("ref" in value) ||
     typeof value.ref !== "string" ||
     !/^[A-Za-z0-9_-]{8,128}$/.test(value.ref) ||
+    !("version" in value) ||
+    typeof value.version !== "number" ||
+    !Number.isSafeInteger(value.version) ||
+    value.version <= 0 ||
     !("projectRef" in value) ||
     value.projectRef !== projectRef ||
     !("environmentRef" in value) ||
@@ -41,5 +46,5 @@ export function consumeEnvironmentDraftReference(
     value.expiresAt > Date.now() + 5 * 60_000
   )
     throw new Error("Invalid environment draft reauthentication reference");
-  return value.ref;
+  return { ref: value.ref, version: value.version };
 }

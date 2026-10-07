@@ -18,23 +18,27 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 )
 
 const (
-	orchestratedLabel = "kodex.dev/image-admission-orchestrated"
-	idLabel           = "kodex.dev/image-admission-id"
-	phaseLabel        = "kodex.dev/image-admission-phase"
-	runIDAnnotation   = "kodex.dev/admission-run-id"
-	proofHoldLabel    = "kodex.dev/executable-proof-hold"
-	proofAttempt      = "kodex.dev/executable-proof-attempt"
-	proofReservation  = "kodex.dev/executable-proof-reservation"
-	policyName        = "kodex-image-admission-policy"
+	orchestratedLabel       = "kodex.dev/image-admission-orchestrated"
+	idLabel                 = "kodex.dev/image-admission-id"
+	phaseLabel              = "kodex.dev/image-admission-phase"
+	runIDAnnotation         = "kodex.dev/admission-run-id"
+	proofHoldLabel          = "kodex.dev/executable-proof-hold"
+	proofAttempt            = "kodex.dev/executable-proof-attempt"
+	proofReservation        = "kodex.dev/executable-proof-reservation"
+	policyName              = "kodex-image-admission-policy"
+	recoveryUIDAnnotation   = "kodex.dev/admission-recovery-uid"
+	recoveryAfterAnnotation = "kodex.dev/admission-recovery-after"
 )
 
 var (
 	revisionPattern = regexp.MustCompile(`^[a-f0-9]{40}$`)
 	idPattern       = regexp.MustCompile(`^[a-f0-9]{32}$`)
+	uidPattern      = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$`)
 	phaseOrder      = []string{"claim", "scan", "sign", "admit"}
 	phaseAccounts   = map[string]string{
 		"claim": "image-admission", "scan": "kodex-image-scanner",
@@ -207,6 +211,29 @@ func (controller *Controller) reconcileAdmissions(ctx context.Context, policy *c
 			continue
 		}
 		phase, terminal, failed := nextAdmissionPhase(workspace.Labels[idLabel], jobs)
+		if workspace.Annotations[recoveryUIDAnnotation] != "" && !terminal {
+			active = true
+			if err := controller.recoverFailedAdmission(ctx, policy, workspace, runID, jobs, now); err != nil {
+				return err
+			}
+			continue
+		}
+		if failed {
+			var failedAdmit *batchv1.Job
+			for j := range jobs {
+				if jobs[j].Labels[idLabel] == workspace.Labels[idLabel] && jobs[j].Labels[phaseLabel] == "admit" && jobFailed(&jobs[j]) {
+					failedAdmit = &jobs[j]
+					break
+				}
+			}
+			if failedAdmit != nil {
+				active = true
+				if err := controller.recoverFailedAdmission(ctx, policy, workspace, runID, jobs, now); err != nil {
+					return err
+				}
+				continue
+			}
+		}
 		if terminal || failed {
 			if err := controller.deleteAdmissionJobs(ctx, workspace.Labels[idLabel], jobs); err != nil {
 				return err
@@ -219,7 +246,7 @@ func (controller *Controller) reconcileAdmissions(ctx context.Context, policy *c
 		}
 		active = true
 		if phase != "" {
-			if err := controller.ensurePhase(ctx, policy, runID, phase); err != nil {
+			if err := controller.ensureAdmissionPhase(ctx, policy, workspace, runID, phase, jobs); err != nil {
 				return err
 			}
 		}
@@ -240,6 +267,80 @@ func (controller *Controller) reconcileAdmissions(ctx context.Context, policy *c
 	}
 	controller.lastAdmissionAttempt = now
 	return nil
+}
+
+// Cursor сохраняется до удаления конкретного FAILED admit. Перезапуск controller
+// не теряет claim/PVC и не создаёт новую owner attempt при callback outage.
+func (controller *Controller) recoverFailedAdmission(ctx context.Context, policy *corev1.ConfigMap, workspace *corev1.PersistentVolumeClaim, runID string, jobs []batchv1.Job, now time.Time) error {
+	freshWorkspace, err := controller.client.CoreV1().PersistentVolumeClaims(controller.config.Namespace).Get(ctx, workspace.Name, metav1.GetOptions{})
+	if err != nil || workspace.UID == "" || freshWorkspace.UID != workspace.UID || freshWorkspace.Annotations[runIDAnnotation] != runID || !validManagedWorkspace(freshWorkspace, controller.config.Namespace) {
+		return errors.New("image admission recovery workspace conflicts")
+	}
+	uid := freshWorkspace.Annotations[recoveryUIDAnnotation]
+	deadline := freshWorkspace.Annotations[recoveryAfterAnnotation]
+	if (uid == "") != (deadline == "") || (uid != "" && !uidPattern.MatchString(uid)) {
+		return errors.New("image admission recovery cursor is invalid")
+	}
+	if deadline != "" {
+		after, err := time.Parse(time.RFC3339Nano, deadline)
+		if err != nil || after.After(now.Add(controller.config.RetryInterval)) {
+			return errors.New("image admission recovery deadline is invalid")
+		}
+		if now.Before(after) {
+			return nil
+		}
+	}
+	name := "mc-admit-" + workspace.Labels[idLabel] + "-admit"
+	previous, err := controller.client.BatchV1().Jobs(controller.config.Namespace).Get(ctx, name, metav1.GetOptions{})
+	if uid != "" && (apierrors.IsNotFound(err) || err == nil && jobFailed(previous)) {
+		if closed, proofErr := controller.cleanupOwnerTerminalRecovery(ctx, freshWorkspace, runID, jobs); proofErr != nil || closed {
+			return proofErr
+		}
+	}
+	if err == nil {
+		if !validManagedJob(previous, controller.config.Namespace, "admit") || previous.Annotations[runIDAnnotation] != runID || !uidPattern.MatchString(string(previous.UID)) {
+			return errors.New("image admission recovery job conflicts")
+		}
+		if uid != "" && string(previous.UID) != uid && previous.Annotations[failedPredecessorUID] != uid {
+			return errors.New("image admission recovery lineage conflicts")
+		}
+		if !jobFailed(previous) {
+			if uid == "" || previous.Annotations[failedPredecessorUID] != uid || len(previous.Spec.Template.Spec.Containers[0].Command) != 4 || previous.Spec.Template.Spec.Containers[0].Command[3] != "ADMIT_PREDECESSOR_FAILED" {
+				return errors.New("image admission recovery receipt job conflicts")
+			}
+			if jobSucceeded(previous) {
+				if err := controller.deleteAdmissionJobs(ctx, workspace.Labels[idLabel], jobs); err != nil {
+					return err
+				}
+				if err := controller.deleteWorkspace(ctx, freshWorkspace); err != nil {
+					return err
+				}
+				controller.lastAdmissionAttempt = now
+			}
+			return nil
+		}
+		updated := freshWorkspace.DeepCopy()
+		if updated.Annotations == nil {
+			updated.Annotations = map[string]string{}
+		}
+		updated.Annotations[recoveryUIDAnnotation] = string(previous.UID)
+		updated.Annotations[recoveryAfterAnnotation] = now.Add(controller.config.RetryInterval).UTC().Format(time.RFC3339Nano)
+		if freshWorkspace.CreationTimestamp.IsZero() || now.Add(controller.config.RetryInterval).After(freshWorkspace.CreationTimestamp.Add(24*time.Hour)) {
+			return errors.New("image admission recovery budget exceeded")
+		}
+		if _, err := controller.client.CoreV1().PersistentVolumeClaims(controller.config.Namespace).Update(ctx, updated, metav1.UpdateOptions{}); err != nil {
+			return errors.New("persist image admission recovery cursor")
+		}
+		return controller.deleteAdmissionJob(ctx, previous, "delete failed image admission for receipt recovery")
+	}
+	if !apierrors.IsNotFound(err) {
+		return errors.New("read image admission recovery job")
+	}
+	if uid == "" {
+		return errors.New("image admission recovery predecessor is absent")
+	}
+	predecessor := &batchv1.Job{ObjectMeta: metav1.ObjectMeta{UID: types.UID(uid), Labels: map[string]string{phaseLabel: "admit"}}}
+	return controller.ensurePhaseWithFailure(ctx, policy, runID, "admit", predecessor)
 }
 
 func (controller *Controller) reconcilePromotions(ctx context.Context, policy *corev1.ConfigMap, revision string, jobs []batchv1.Job, now time.Time) error {
@@ -286,12 +387,46 @@ func (controller *Controller) reconcilePromotions(ctx context.Context, policy *c
 }
 
 func (controller *Controller) ensurePhase(ctx context.Context, policy *corev1.ConfigMap, runID, phase string) error {
+	return controller.ensurePhaseWithFailure(ctx, policy, runID, phase, nil)
+}
+
+func (controller *Controller) ensureAdmissionPhase(ctx context.Context, policy *corev1.ConfigMap, workspace *corev1.PersistentVolumeClaim, runID, phase string, jobs []batchv1.Job) error {
+	if phase != "admit" {
+		return controller.ensurePhase(ctx, policy, runID, phase)
+	}
+	for index := range jobs {
+		previous := &jobs[index]
+		previousPhase := previous.Labels[phaseLabel]
+		if previous.Labels[idLabel] != workspace.Labels[idLabel] ||
+			(previousPhase != "scan" && previousPhase != "sign") || !jobFailed(previous) {
+			continue
+		}
+		fresh, err := controller.client.BatchV1().Jobs(controller.config.Namespace).Get(ctx, previous.Name, metav1.GetOptions{})
+		if err != nil || previous.UID == "" || fresh.UID != previous.UID ||
+			fresh.Annotations[runIDAnnotation] != runID || !jobFailed(fresh) ||
+			!validManagedJob(fresh, controller.config.Namespace, previousPhase) {
+			return errors.New("failed image admission predecessor conflicts")
+		}
+		return controller.ensurePhaseWithFailure(ctx, policy, runID, phase, fresh)
+	}
+	return controller.ensurePhase(ctx, policy, runID, phase)
+}
+
+func (controller *Controller) ensurePhaseWithFailure(ctx context.Context, policy *corev1.ConfigMap, runID, phase string, previous *batchv1.Job) error {
 	rendered, err := controller.renderer.Render(ctx, policy, controller.config.Environment, runID, phase)
 	if err != nil {
 		return err
 	}
 	if err := prepareRendered(rendered, controller.config.Namespace, runID, phase); err != nil {
 		return err
+	}
+	if previous != nil {
+		code := strings.ToUpper(previous.Labels[phaseLabel]) + "_PREDECESSOR_FAILED"
+		rendered.Job.Spec.Template.Spec.Containers[0].Command = append(rendered.Job.Spec.Template.Spec.Containers[0].Command, code)
+		rendered.Job.Annotations[failedPredecessorUID] = string(previous.UID)
+		if !validManagedJob(rendered.Job, controller.config.Namespace, phase) {
+			return errors.New("failed image admission recovery is invalid")
+		}
 	}
 	if controller.config.HoldProofJobs && (phase == "claim" || phase == "promote") {
 		prepareProofReservation(rendered.Job, runID, phase)
@@ -323,7 +458,9 @@ func (controller *Controller) ensureJob(ctx context.Context, job *batchv1.Job, r
 	_, err := controller.client.BatchV1().Jobs(controller.config.Namespace).Create(ctx, job, metav1.CreateOptions{})
 	if apierrors.IsAlreadyExists(err) {
 		existing, getErr := controller.client.BatchV1().Jobs(controller.config.Namespace).Get(ctx, job.Name, metav1.GetOptions{})
-		if getErr != nil || existing.Annotations[runIDAnnotation] != runID || !validManagedJob(existing, controller.config.Namespace, phase) {
+		if getErr != nil || existing.Annotations[runIDAnnotation] != runID || !validManagedJob(existing, controller.config.Namespace, phase) ||
+			strings.Join(existing.Spec.Template.Spec.Containers[0].Command, "\x00") != strings.Join(job.Spec.Template.Spec.Containers[0].Command, "\x00") ||
+			existing.Annotations[failedPredecessorUID] != job.Annotations[failedPredecessorUID] {
 			return errors.New("existing image admission job conflicts")
 		}
 		return nil
@@ -478,11 +615,26 @@ func validManagedJob(job *batchv1.Job, namespace, phase string) bool {
 		job.Name != "mc-admit-"+job.Labels[idLabel]+"-"+phase || job.Spec.Template.Spec.ServiceAccountName != phaseAccounts[phase] ||
 		job.Spec.Template.Spec.AutomountServiceAccountToken == nil || *job.Spec.Template.Spec.AutomountServiceAccountToken ||
 		job.Spec.Template.Spec.RestartPolicy != corev1.RestartPolicyNever || len(job.Spec.Template.Spec.Containers) != 1 ||
-		job.Spec.Template.Spec.Containers[0].Name != phase || len(job.Spec.Template.Spec.Containers[0].Command) != 3 ||
-		job.Spec.Template.Spec.Containers[0].Command[2] != phase || !validProofReservation(job, phase) {
+		job.Spec.Template.Spec.Containers[0].Name != phase || !validPhaseCommand(job, phase) || !validProofReservation(job, phase) {
 		return false
 	}
 	return true
+}
+
+const failedPredecessorUID = "kodex.dev/admission-failed-predecessor-uid"
+
+func validPhaseCommand(job *batchv1.Job, phase string) bool {
+	command := job.Spec.Template.Spec.Containers[0].Command
+	if len(command) < 3 || command[0] != "/bin/sh" || command[1] != "/opt/kodex/image-admission.sh" || command[2] != phase {
+		return false
+	}
+	if len(command) == 3 {
+		_, present := job.Annotations[failedPredecessorUID]
+		return !present
+	}
+	return phase == "admit" && len(command) == 4 &&
+		(command[3] == "SCAN_PREDECESSOR_FAILED" || command[3] == "SIGN_PREDECESSOR_FAILED" || command[3] == "ADMIT_PREDECESSOR_FAILED") &&
+		uidPattern.MatchString(job.Annotations[failedPredecessorUID])
 }
 
 func prepareProofReservation(job *batchv1.Job, runID, phase string) {

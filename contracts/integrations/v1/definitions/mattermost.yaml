@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: mattermost
-  version: 2.2.0
+  version: 2.2.1
   origin: SHIPPED
 spec:
   name: Mattermost
@@ -36,6 +36,7 @@ spec:
       operation: mattermost.inbound
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields: []
       outputFields:
@@ -47,6 +48,7 @@ spec:
       operation: mattermost.notifications
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields:
         - {key: message, type: STRING, format: PLAIN, required: true, maximumLength: 16384}
@@ -59,6 +61,7 @@ spec:
       operation: mattermost.result_mirror
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields:
         - {key: message, type: STRING, format: PLAIN, required: true, maximumLength: 16384}
@@ -71,6 +74,7 @@ spec:
       operation: mattermost.gate_decisions
       risk: SENSITIVE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields:
         - {key: decision_ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 120}
@@ -84,6 +88,7 @@ spec:
       operation: mattermost.team.read
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields: []
       outputFields:
@@ -97,6 +102,7 @@ spec:
       operation: mattermost.channel.read
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields: []
       outputFields:
@@ -112,6 +118,7 @@ spec:
       operation: mattermost.channel.members.list
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields:
         - {key: page, type: INTEGER, required: false, minimum: 0, maximum: 10000}
@@ -127,6 +134,7 @@ spec:
       operation: mattermost.post.list
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields:
         - {key: page, type: INTEGER, required: false, minimum: 0, maximum: 10000}
@@ -142,6 +150,7 @@ spec:
       operation: mattermost.post.read
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields:
         - {key: post_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
@@ -159,6 +168,7 @@ spec:
       operation: mattermost.thread.read
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields:
         - {key: post_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
@@ -175,6 +185,7 @@ spec:
       operation: mattermost.post.search
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields:
         - {key: query, type: STRING, format: PLAIN, required: true, maximumLength: 256}
@@ -191,6 +202,7 @@ spec:
       operation: mattermost.file.list
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields:
         - {key: post_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
@@ -204,6 +216,7 @@ spec:
       operation: mattermost.file.read
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields:
         - {key: post_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
@@ -225,6 +238,7 @@ spec:
       operation: mattermost.reaction.list
       risk: READ
       approvalPolicy: NONE
+      allowedApprovalPolicies: [NONE]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields:
         - {key: post_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
@@ -238,6 +252,7 @@ spec:
       operation: mattermost.post.send
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields:
         - {key: message, type: STRING, format: PLAIN, required: true, maximumLength: 16384}
@@ -251,6 +266,7 @@ spec:
       operation: mattermost.post.update
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields:
         - {key: post_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
@@ -264,6 +280,7 @@ spec:
       operation: mattermost.reaction.add
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields:
         - {key: post_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}
@@ -277,6 +294,7 @@ spec:
       operation: mattermost.reaction.remove
       risk: WRITE
       approvalPolicy: HUMAN_EACH_EFFECT
+      allowedApprovalPolicies: [HUMAN_EACH_EFFECT]
       resourceScope: {kind: MATTERMOST_CHANNEL, connectionFields: [base_url, team_name, channel_name]}
       inputFields:
         - {key: post_id, type: STRING, format: IDENTIFIER, required: true, maximumLength: 26}

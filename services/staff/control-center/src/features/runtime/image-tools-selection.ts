@@ -4,6 +4,10 @@ import type {
   RuntimeEnvironmentTool,
 } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem } from "@/shared/api/problem";
+import {
+  verifiedImageInventoryAvailable,
+  verifiedImageTools,
+} from "@/shared/lib/verified-image-tools";
 import type {
   AsyncEntityOption,
   AsyncEntityOptionPage,
@@ -38,6 +42,24 @@ export function assertPromotedRuntimeImage(
     "artifactRef" | "recipeRef" | "recipeGeneration"
   >,
 ): void {
+  assertPromotedRuntimeImageIdentity(artifact, expected);
+  if (!verifiedImageInventoryAvailable(artifact))
+    throw new AppProblem({
+      status: 409,
+      code: "IMAGE_ARTIFACT_NOT_CURRENT",
+      retryable: false,
+      kind: "conflict",
+    });
+}
+
+// Только проверка metadata. Выбор образа дополнительно требует VERIFIED inventory.
+export function assertPromotedRuntimeImageIdentity(
+  artifact: RoleImageArtifact,
+  expected: Pick<
+    RuntimeEnvironmentImage,
+    "artifactRef" | "recipeRef" | "recipeGeneration"
+  >,
+): void {
   const digest = artifact.manifestDigest.replace(/^sha256:/, "");
   if (
     artifact.ref !== expected.artifactRef ||
@@ -60,7 +82,9 @@ export function toolsForRuntimeImage(
   tools: readonly RuntimeEnvironmentTool[],
   artifact: RoleImageArtifact,
 ): RuntimeEnvironmentTool[] {
-  const commands = new Set(artifact.tools.map((tool) => tool.name));
+  const commands = new Set(
+    verifiedImageTools(artifact).map((tool) => tool.name),
+  );
   return tools
     .filter((tool) => commands.has(tool.command))
     .map((tool) => ({ ...tool }));

@@ -121,6 +121,25 @@ func TestSessionContextReachesFreshColdAndResumedPromptOnce(t *testing.T) {
 	}
 }
 
+func TestSessionContextPreservesWholeBoundedUserJSON(t *testing.T) {
+	for _, content := range []string{
+		`{"operations":[{"instructions":"` + strings.Repeat("Исходный JSON <>& 😀 ", 600) + `"}],"complete":true}`,
+		strings.Repeat("😀", runtimecontract.MaximumAssistantTurnCodepoints),
+		strings.Repeat("\x01", runtimecontract.MaximumAssistantTurnCodepoints),
+	} {
+		input := semanticRunnerFixture("AGENT")
+		input.SessionContext = []runtimecontract.RunnerSessionMessage{{Role: "USER", Content: content}}
+		prompt, err := buildPrompt(input)
+		if err != nil {
+			t.Fatal("whole bounded USER history rejected")
+		}
+		messages := promptSessionMessages(t, prompt)
+		if len(messages) != 1 || messages[0].Content != content || !strings.HasSuffix(string(prompt), input.Task) {
+			t.Fatal("provider prompt changed complete USER history or current task")
+		}
+	}
+}
+
 func TestSessionContextRejectsStaleNoticeAndInvalidHistory(t *testing.T) {
 	for _, mode := range []string{"revision", "session", "turn", "attempt", "role", "size", "utf8", "count"} {
 		t.Run(mode, func(t *testing.T) {

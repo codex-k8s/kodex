@@ -1439,7 +1439,7 @@ export type ConfigOverlayDiagnostic = {
 };
 
 export type ConfigOverlayField = {
-    key: 'model_reasoning_effort' | 'personality' | 'allow_login_shell' | 'history.persistence';
+    key: 'model_reasoning_effort' | 'web_search' | 'personality' | 'allow_login_shell' | 'history.persistence';
     valueType: 'string' | 'boolean';
     allowedValues: Array<string>;
     defaultValue: string;
@@ -1453,6 +1453,7 @@ export type ConfigOverlaySchema = {
     digest: string;
     maximumBytes: 65536;
     fields: [
+        ConfigOverlayField,
         ConfigOverlayField,
         ConfigOverlayField,
         ConfigOverlayField,
@@ -1660,12 +1661,18 @@ export type RuntimeWebAccess = {
 export type RuntimeKubernetesAccessKind = 'NONE';
 
 export type RuntimeResourcePolicy = {
+    workspaceLimits?: RuntimeWorkspaceLimits;
     cpuRequestMilli: number;
     cpuLimitMilli: number;
     memoryRequestMib: number;
     memoryLimitMib: number;
     ephemeralStorageRequestMib: number;
     ephemeralStorageLimitMib: number;
+};
+
+export type RuntimeWorkspaceLimits = {
+    maxBytes: number;
+    maxFiles: number;
 };
 
 export type RuntimeVolumeInput = {
@@ -2415,6 +2422,351 @@ export type RoleImageRecipeDetail = {
     builds: Array<RoleImageBuild>;
     activeArtifact?: RoleImageArtifact;
     promotionCandidate?: RoleImageArtifact;
+    admissionFailure?: RoleImageAdmissionFailure;
+};
+
+export type RoleImageAdmissionFailure = {
+    imageArtifactRef: OpaqueRef;
+    version: number;
+    recipeRef: OpaqueRef;
+    recipeGeneration: number;
+    buildRef: OpaqueRef;
+    buildAttempt: number;
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
+    projectRef: string;
+    state: 'FAILED';
+    errorCode: 'ADMISSION_EVIDENCE_ENTRY_EXCEEDS_BOUND' | 'ADMISSION_EVIDENCE_EXCEEDS_BOUND' | 'ADMISSION_WORKER_FAILED' | 'ADMISSION_LEASE_EXPIRED';
+};
+
+/**
+ * Закрытое значение; неизвестное не даёт новых полномочий.
+ */
+export type ImageVulnerabilitySeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'NEGLIGIBLE' | 'UNKNOWN';
+
+/**
+ * Закрытое значение; неизвестное не даёт новых полномочий.
+ */
+export type ImageVulnerabilityAdvisoryKind = 'CVE' | 'GHSA' | 'GO' | 'OTHER';
+
+/**
+ * Закрытое значение; неизвестное не даёт новых полномочий.
+ */
+export type ImageVulnerabilityFixState = 'FIXED' | 'NOT_FIXED' | 'WONT_FIX' | 'UNKNOWN';
+
+/**
+ * Закрытое значение; неизвестное не даёт новых полномочий.
+ */
+export type ImageVulnerabilityReportState = 'READY' | 'UNAVAILABLE' | 'FAILED';
+
+/**
+ * Закрытое значение; неизвестное не даёт новых полномочий.
+ */
+export type ImageAdmissionRiskAction = 'ACCEPT_RISK' | 'REJECT_RISK';
+
+/**
+ * Закрытое значение; неизвестное не даёт новых полномочий.
+ */
+export type ImageAdmissionAttemptState = 'PENDING' | 'CLAIMED' | 'ACCEPTED' | 'REJECTED' | 'FAILED' | 'CANCELLED';
+
+/**
+ * Безопасная типизированная owner projection.
+ */
+export type ImageVulnerabilitySeverityCount = {
+    severity: ImageVulnerabilitySeverity;
+    matchCount: number;
+};
+
+/**
+ * Безопасная типизированная owner projection.
+ */
+export type ImageVulnerabilityFinding = {
+    ref: string;
+    packageName: string;
+    installedVersion: string;
+    ecosystem: string;
+    advisoryId: string;
+    advisoryKind: ImageVulnerabilityAdvisoryKind;
+    /**
+     * Только server canonical NVD/GitHub/pkg.go.dev URL; OTHER пуст, raw URL запрещён.
+     */
+    advisoryUrl: string;
+    severity: ImageVulnerabilitySeverity;
+    fixState: ImageVulnerabilityFixState;
+    fixedVersions: Array<string>;
+    blocking: boolean;
+    ignored: boolean;
+    occurrences: number;
+};
+
+/**
+ * Безопасная типизированная owner projection.
+ */
+export type ImageVulnerabilityReport = {
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
+    /**
+     * Точный PROJECT locator; пустой только для ORGANIZATION.
+     */
+    projectRef: string;
+    recipeRef: OpaqueRef;
+    /**
+     * Exact версия рецепта для owner OCC.
+     */
+    recipeVersion: number;
+    /**
+     * Неизменяемое поколение recipe/build snapshot.
+     */
+    recipeGeneration: number;
+    buildRef: OpaqueRef;
+    /**
+     * Версия сохранённого immutable build snapshot.
+     */
+    buildVersion: number;
+    /**
+     * Точная attempt исходной сборки.
+     */
+    buildAttempt: number;
+    artifactRef: OpaqueRef;
+    /**
+     * Текущая версия artifact; If-Match относится к ней.
+     */
+    artifactVersion: number;
+    /**
+     * Exact image digest sha256:; tag не является authority.
+     */
+    manifestDigest: string;
+    /**
+     * Текущая owner revision admission projection.
+     */
+    admissionRevision: number;
+    /**
+     * Original REJECTED terminal revision, закреплённая report.
+     */
+    sourceAdmissionRevision: number;
+    /**
+     * SHA256 immutable предыдущей receipt.
+     */
+    priorAdmissionReceiptSha256: string;
+    /**
+     * Exact OCI manifest предыдущего evidence bundle.
+     */
+    priorEvidenceManifestDigest: string;
+    /**
+     * SHA256 исходных полных scanner bytes.
+     */
+    vulnerabilityEvidenceSha256: string;
+    /**
+     * SHA256 исходных полных SBOM bytes.
+     */
+    sbomSha256: string;
+    /**
+     * Version-pinned baseline policy.
+     */
+    policyRevision: number;
+    /**
+     * Exact baseline policy digest.
+     */
+    policySha256: string;
+    state: ImageVulnerabilityReportState;
+    version: number;
+    projectionSha256: string;
+    /**
+     * Назначает полный canonical validator, не caller.
+     */
+    complete: boolean;
+    matchCount: number;
+    uniqueAdvisoryCount: number;
+    blockingMatchCount: number;
+    unresolvedNoFixMatchCount: number;
+    suppressedMatchCount: number;
+    severityCounts: [
+        ImageVulnerabilitySeverityCount,
+        ImageVulnerabilitySeverityCount,
+        ImageVulnerabilitySeverityCount,
+        ImageVulnerabilitySeverityCount,
+        ImageVulnerabilitySeverityCount,
+        ImageVulnerabilitySeverityCount
+    ];
+    nextActions: Array<'ACCEPT_RISK' | 'REJECT_RISK' | 'REBUILD_FOR_REPORT'>;
+};
+
+/**
+ * Безопасная типизированная owner projection.
+ */
+export type ImageVulnerabilityReportPageInfo = {
+    nextPageToken: string;
+};
+
+/**
+ * Безопасная типизированная owner projection.
+ */
+export type ImageVulnerabilityReportResponse = {
+    report: ImageVulnerabilityReport;
+    findings: Array<ImageVulnerabilityFinding>;
+    page: ImageVulnerabilityReportPageInfo;
+};
+
+/**
+ * Безопасная типизированная owner projection.
+ */
+export type ImageAdmissionRiskDecision = {
+    ref: OpaqueRef;
+    version: number;
+    action: ImageAdmissionRiskAction;
+    reason: string;
+    decidedByActorRef: OpaqueRef;
+    decidedAt: Timestamp;
+    bindingSha256: string;
+    scopeKind: RuntimeResourceScopeKind;
+    organizationRef: OpaqueRef;
+    /**
+     * Точный PROJECT locator; пустой только для ORGANIZATION.
+     */
+    projectRef: string;
+    recipeRef: OpaqueRef;
+    /**
+     * Exact версия рецепта для owner OCC.
+     */
+    recipeVersion: number;
+    /**
+     * Неизменяемое поколение recipe/build snapshot.
+     */
+    recipeGeneration: number;
+    buildRef: OpaqueRef;
+    /**
+     * Версия сохранённого immutable build snapshot.
+     */
+    buildVersion: number;
+    /**
+     * Точная attempt исходной сборки.
+     */
+    buildAttempt: number;
+    artifactRef: OpaqueRef;
+    /**
+     * Текущая версия artifact; If-Match относится к ней.
+     */
+    artifactVersion: number;
+    /**
+     * Exact image digest sha256:; tag не является authority.
+     */
+    manifestDigest: string;
+    /**
+     * Текущая owner revision admission projection.
+     */
+    admissionRevision: number;
+    /**
+     * Original REJECTED terminal revision, закреплённая report.
+     */
+    sourceAdmissionRevision: number;
+    /**
+     * SHA256 immutable предыдущей receipt.
+     */
+    priorAdmissionReceiptSha256: string;
+    /**
+     * Exact OCI manifest предыдущего evidence bundle.
+     */
+    priorEvidenceManifestDigest: string;
+    /**
+     * SHA256 исходных полных scanner bytes.
+     */
+    vulnerabilityEvidenceSha256: string;
+    /**
+     * SHA256 исходных полных SBOM bytes.
+     */
+    sbomSha256: string;
+    /**
+     * Version-pinned baseline policy.
+     */
+    policyRevision: number;
+    /**
+     * Exact baseline policy digest.
+     */
+    policySha256: string;
+};
+
+/**
+ * Безопасная типизированная owner projection.
+ */
+export type ImageAdmissionAttempt = {
+    ref: OpaqueRef;
+    version: number;
+    number: number;
+    state: ImageAdmissionAttemptState;
+    artifactRef: OpaqueRef;
+    decisionRef: string;
+    fence: number;
+    admissionReceiptSha256: string;
+    evidenceManifestDigest: string;
+};
+
+/**
+ * Все pins обязательны; actor/tenant назначает сервер. If-Match совпадает с expectedArtifactVersion, reason 1..2048 UTF8 bytes без controls.
+ */
+export type ImageAdmissionRiskDecisionInput = {
+    /**
+     * OCC artifact; не доказательство владения.
+     */
+    expectedArtifactVersion: number;
+    /**
+     * Exact current admission projection revision.
+     */
+    expectedAdmissionRevision: number;
+    /**
+     * Exact current recipe version.
+     */
+    expectedRecipeVersion: number;
+    /**
+     * Exact recipe generation исходного report.
+     */
+    expectedRecipeGeneration: number;
+    expectedBuildRef: OpaqueRef;
+    /**
+     * Exact immutable build attempt.
+     */
+    expectedBuildAttempt: number;
+    /**
+     * Exact image digest, не источник authority.
+     */
+    manifestDigest: string;
+    /**
+     * SHA256 полного исходного report, показанного администратору.
+     */
+    vulnerabilityEvidenceSha256: string;
+    /**
+     * SHA256 полной safe projection, не hash видимой страницы.
+     */
+    projectionSha256: string;
+    /**
+     * Exact original REJECTED receipt pin.
+     */
+    priorAdmissionReceiptSha256: string;
+    /**
+     * Exact original immutable evidence manifest.
+     */
+    priorEvidenceManifestDigest: string;
+    /**
+     * Текущая pinned baseline policy revision.
+     */
+    policyRevision: number;
+    /**
+     * Текущий exact baseline policy digest.
+     */
+    policySha256: string;
+    action: ImageAdmissionRiskAction;
+    /**
+     * Обязательная bounded причина для audit, не shell.
+     */
+    reason: string;
+};
+
+/**
+ * Безопасная типизированная owner projection.
+ */
+export type ImageAdmissionRiskDecisionResponse = {
+    decision: ImageAdmissionRiskDecision;
+    admissionAttempt?: ImageAdmissionAttempt;
+    artifact: RoleImageArtifact;
 };
 
 export type RoleImageArtifactTool = {
@@ -2434,14 +2786,95 @@ export type RoleImageArtifact = {
     manifestDigest: string;
     provenanceSha256: string;
     promotedReference?: string;
-    admissionVerdict: 'ACCEPTED' | 'REJECTED';
+    /**
+     * PENDING обозначает только новую risk-bound attempt до terminal Record; прежний REJECTED остаётся историей.
+     */
+    admissionVerdict: 'ACCEPTED' | 'REJECTED' | 'PENDING';
     promotionState: 'PENDING' | 'CLAIMED' | 'AUTHORIZED' | 'PROMOTED' | 'REJECTED';
     promotionRequested: boolean;
     sbomSha256?: string;
     vulnerabilityEvidenceSha256?: string;
-    tools: Array<RoleImageArtifactTool>;
+    declaredTools: Array<RoleImageArtifactTool>;
+    verifiedToolInventory: ImageToolInventory;
+    admissionAttempt?: ImageAdmissionAttempt;
+    riskDecision?: ImageAdmissionRiskDecision;
     promotedAt?: Timestamp;
     promotionReceiptSha256?: string;
+};
+
+export type ImageToolInventory = {
+    status: 'VERIFIED' | 'UNAVAILABLE';
+    sha256: string;
+    imageDigest: string;
+    provenanceSha256: string;
+    platforms: Array<ImagePlatformToolInventory>;
+};
+
+export type ImagePlatformToolInventory = {
+    platform: 'linux/amd64' | 'linux/arm64';
+    platformDigest: string;
+    manifestSha256: string;
+    tools: [
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation,
+        ImageToolObservation
+    ];
+};
+
+export type ImageToolObservation = {
+    name: 'bash' | 'curl' | 'git' | 'gh' | 'jq' | 'yq' | 'ripgrep' | 'make' | 'just' | 'go' | 'goimports' | 'gofumpt' | 'golangci-lint' | 'staticcheck' | 'goose' | 'sqlc' | 'buf' | 'protoc' | 'protoc-gen-go' | 'protoc-gen-go-grpc' | 'grpcurl' | 'mockgen' | 'oapi-codegen' | 'node' | 'npm' | 'pnpm' | 'yarn' | 'typescript' | 'eslint' | 'prettier' | 'vite' | 'vue-tsc' | 'vitest' | 'playwright' | 'chromium' | 'playwright-mcp' | 'wscat' | 'codex' | 'corepack' | 'python3' | 'pip' | 'kubectl' | 'kustomize' | 'helm' | 'buildctl' | 'docker' | 'shellcheck' | 'hadolint' | 'govulncheck' | 'gitleaks';
+    required: boolean;
+    status: 'VERIFIED' | 'MISSING' | 'PROBE_FAILED';
+    path: string;
+    version: string;
+    sha256: string;
 };
 
 export type RoleImageRecipeCommandReceipt = {
@@ -2662,6 +3095,7 @@ export type Run = ({
     version: number;
     projectRef?: OpaqueRef;
     assistantPin?: AssistantRunPin;
+    sessionReadiness?: RunSessionReadiness;
     sessionRef: OpaqueRef;
     rootRunRef: OpaqueRef;
     parentRunRef?: OpaqueRef;
@@ -2757,6 +3191,11 @@ export type RunDelta = {
     nextActions: Array<NextAction>;
 };
 
+/**
+ * Необязательный закрытый код служебной отмены из авторитетного события до локализации; не полномочие и не привязка выполнения.
+ */
+export type RunEventServiceCode = 'RUN_CANCELLED' | 'RUN_NODE_CANCELLED' | 'ASSISTANT_TURN_CANCELLED';
+
 export type RunEvent = {
     ref: OpaqueRef;
     runRef: OpaqueRef;
@@ -2767,12 +3206,19 @@ export type RunEvent = {
     gateRef?: OpaqueRef;
     artifactRef?: OpaqueRef;
     summary: string;
+    serviceCode?: RunEventServiceCode;
     progress?: string;
     runState?: 'QUEUED' | 'RUNNING' | 'WAITING_HUMAN' | 'CANCELLING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
     nodeState?: 'PLANNED' | 'QUEUED' | 'RUNNING' | 'WAITING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'SKIPPED';
     actor?: RunEventActor;
     messageKind?: 'STATE' | 'USER_MESSAGE' | 'ASSISTANT_MESSAGE' | 'INTERMEDIATE_MESSAGE' | 'FINAL_MESSAGE' | 'TOOL_CALL' | 'PLAN_UPDATE' | 'ARTIFACT' | 'INCIDENT' | 'OWNER_GATE';
     toolCall?: RunToolCall;
+    /**
+     * Server-owned invocation binding только для новых INTEGRATION_ACTION_* completion-событий; не authority и не ссылка на общий агрегат.
+     */
+    integrationInvocationRef?: string;
+    execution?: RunEventExecution;
+    message?: RunMessage;
     occurredAt: Timestamp;
     graphRevision: number;
     run: RunDelta;
@@ -2781,6 +3227,27 @@ export type RunEvent = {
     gate?: OwnerGate;
     artifact?: Artifact;
     incident?: Incident;
+};
+
+export type RunEventExecution = {
+    runRef: OpaqueRef;
+    nodeRef: OpaqueRef;
+    sessionRef: OpaqueRef;
+    turnRef: OpaqueRef;
+    turnNumber: number;
+    attempt: number;
+};
+
+export type MessageSource = {
+    origin: 'ORDINARY' | 'CALLBACK_CONTINUATION';
+};
+
+export type RunMessage = {
+    ref: OpaqueRef;
+    phase: 'USER' | 'COMMENTARY' | 'FINAL';
+    revision: number;
+    text: string;
+    source: MessageSource;
 };
 
 export type RunEventActor = {
@@ -2797,7 +3264,8 @@ export type RunToolCall = {
     };
     capabilityRef?: string;
     grantRef?: OpaqueRef;
-    state: 'SUCCEEDED' | 'FAILED';
+    state: 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
+    revision?: number;
     durationMs: number;
     safeResult: string;
     auditRef: OpaqueRef;
@@ -2809,6 +3277,28 @@ export type RunGraph = {
     sequence: number;
     nodes: Array<RunNode>;
     edges: Array<RunEdge>;
+};
+
+/**
+ * Текущие session-gates в одном защищённом read snapshot. NO_SESSION_BLOCKER не доказывает глобальную claim readiness. Отсутствие проекции не означает готовность.
+ */
+export type RunSessionReadiness = {
+    sessionRef: OpaqueRef;
+    storageState: 'UNTRACKED' | 'LIVE' | 'SNAPSHOT_READY' | 'SNAPSHOTTING' | 'DELETE_PVC_READY' | 'ARCHIVED' | 'RESTORE_READY' | 'RESTORING' | 'ERROR' | 'PURGED';
+    reason: 'STORAGE_NOT_LIVE' | 'SESSION_ACCOUNT_UNAVAILABLE' | 'EARLIER_EXECUTION' | 'NO_SESSION_BLOCKER';
+    latestArchiveTask?: RunSessionArchiveTask;
+};
+
+/**
+ * Последняя задача изменения storage этой exact session, без cleanup DELETE_OBJECT и содержимого архива.
+ */
+export type RunSessionArchiveTask = {
+    ref: OpaqueRef;
+    kind: 'SNAPSHOT' | 'RESTORE' | 'DELETE_PVC';
+    state: 'READY' | 'CLAIMED' | 'SUCCEEDED' | 'DEAD_LETTER' | 'CANCELLED';
+    attempt: number;
+    maximumAttempts: number;
+    safeErrorCode: 'NONE' | 'UNKNOWN' | 'SESSION_ARCHIVE_SOURCE_INVALID' | 'SESSION_ARCHIVE_OBJECT_WRITE_FAILED' | 'SESSION_ARCHIVE_OBJECT_READBACK_FAILED' | 'SESSION_ARCHIVE_OBJECT_DELETE_FAILED' | 'SESSION_ARCHIVE_RESTORE_INVALID' | 'SESSION_ARCHIVE_PVC_BUSY' | 'SESSION_ARCHIVE_PVC_MISSING' | 'SESSION_ARCHIVE_PVC_REPLACED' | 'SESSION_ARCHIVE_KUBERNETES_UNAVAILABLE' | 'SESSION_ARCHIVE_WORKER_FAILED' | 'SESSION_ARCHIVE_TIMEOUT' | 'SESSION_ARCHIVE_LEASE_EXPIRED' | 'SESSION_BECAME_ACTIVE';
 };
 
 export type PublicRuntimeRevisionIdentity = {
@@ -2886,10 +3376,62 @@ export type RunEventPage = {
     complete: boolean;
 };
 
+export type SystemAssistantIntegrationGrantInput = {
+    connectionRef: OpaqueRef;
+    capabilityKey: string;
+    enabled: boolean;
+    approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
+    approvalScopePaths?: Array<string>;
+};
+
+export type SystemAssistantIntegrationGrantCandidate = {
+    capability: IntegrationCapability;
+    grantable: boolean;
+    reason: IntegrationCandidateReason;
+    currentGrantRef?: OpaqueRef;
+    currentGrantVersion: number;
+    currentGrantEnabled: boolean;
+    currentApprovalPolicy?: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
+    currentApprovalScopePaths: Array<string>;
+};
+
+export type SystemAssistantIntegrationGrantCandidates = {
+    scopeKind: 'ORGANIZATION';
+    organizationRef: OpaqueRef;
+    assistantRef: OpaqueRef;
+    assistantVersion: number;
+    connectionRef: OpaqueRef;
+    connectionVersion: number;
+    definitionVersion: string;
+    definitionDigest: string;
+    items: Array<SystemAssistantIntegrationGrantCandidate>;
+    total: number;
+    nextPageToken?: string;
+};
+
+export type ProjectAssistantIntegrationGrantCandidates = {
+    scopeKind: 'ORGANIZATION';
+    organizationRef: OpaqueRef;
+    projectRef: OpaqueRef;
+    assistantProfileRef: OpaqueRef;
+    profileVersion: number;
+    assistantRef: OpaqueRef;
+    assistantVersion: number;
+    connectionRef: OpaqueRef;
+    connectionVersion: number;
+    definitionVersion: string;
+    definitionDigest: string;
+    items: Array<SystemAssistantIntegrationGrantCandidate>;
+    total: number;
+    nextPageToken?: string;
+};
+
 export type OwnerGate = {
     ref: OpaqueRef;
     version: number;
-    projectRef: OpaqueRef;
+    scopeKind: 'ORGANIZATION' | 'PROJECT';
+    organizationRef: OpaqueRef;
+    projectRef?: OpaqueRef;
     runRef: OpaqueRef;
     nodeRef: OpaqueRef;
     title: string;
@@ -3532,6 +4074,7 @@ export type IntegrationCapability = {
     approvalRequired: boolean;
     operation: string;
     approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
+    allowedApprovalPolicies: Array<'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED'>;
     resourceKind: 'SYNTHETIC_JOURNAL' | 'GITHUB_REPOSITORY' | 'MATTERMOST_CHANNEL' | 'GITLAB_PROJECT' | 'JIRA_PROJECT' | 'CONFLUENCE_SPACE' | 'EMAIL_SENDER' | 'HTTPS_RESOURCE';
     inputFields: Array<IntegrationConfigurationField>;
     inputSchema?: string;
@@ -3829,6 +4372,7 @@ export type IntegrationConnectionCommand = {
 
 export type IntegrationGrantInput = {
     capabilityKey: string;
+    approvalPolicy: 'NONE' | 'HUMAN_EACH_EFFECT' | 'HUMAN_SCOPED';
     agentRef?: OpaqueRef;
     workflowRef?: OpaqueRef;
     enabled: boolean;
@@ -3837,7 +4381,7 @@ export type IntegrationGrantInput = {
 
 export type AssistantPlanOperation = {
     ref: OpaqueRef;
-    type: 'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION';
+    type: 'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT' | 'CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT' | 'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION';
     action: 'CREATE' | 'UPDATE' | 'ARCHIVE' | 'EXECUTE';
     title: string;
     summary: string;
@@ -3890,6 +4434,7 @@ export type AssistantTurn = {
     ref: OpaqueRef;
     sequence: number;
     role: 'USER' | 'ASSISTANT' | 'SYSTEM_RECEIPT';
+    source: MessageSource;
     content: string;
     state: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
     runRef?: OpaqueRef;
@@ -3936,7 +4481,7 @@ export type AssistantContextDescriptor = {
     entityRef: string;
     entityName: string;
     entityVersion?: number;
-    allowedOperations: Array<'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION'>;
+    allowedOperations: Array<'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT' | 'CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT' | 'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION'>;
 };
 
 export type AssistantPlanReceipt = {
@@ -8796,6 +9341,146 @@ export type PromoteSystemRoleImageResponses = {
 
 export type PromoteSystemRoleImageResponse = PromoteSystemRoleImageResponses[keyof PromoteSystemRoleImageResponses];
 
+export type GetOrganizationImageVulnerabilityReportData = {
+    body?: never;
+    path: {
+        recipeRef: OpaqueRef;
+        artifactRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+        packageQuery?: string;
+        severity?: ImageVulnerabilitySeverity;
+        advisoryQuery?: string;
+        blockingOnly?: boolean;
+        expectedReportSha256?: string;
+    };
+    url: '/api/v1/organization/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/vulnerability-report';
+};
+
+export type GetOrganizationImageVulnerabilityReportErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetOrganizationImageVulnerabilityReportError = GetOrganizationImageVulnerabilityReportErrors[keyof GetOrganizationImageVulnerabilityReportErrors];
+
+export type GetOrganizationImageVulnerabilityReportResponses = {
+    /**
+     * Exact report page, включая все severity и suppressed occurrences
+     */
+    200: ImageVulnerabilityReportResponse;
+};
+
+export type GetOrganizationImageVulnerabilityReportResponse = GetOrganizationImageVulnerabilityReportResponses[keyof GetOrganizationImageVulnerabilityReportResponses];
+
+export type DecideOrganizationImageAdmissionRiskData = {
+    body: ImageAdmissionRiskDecisionInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        recipeRef: OpaqueRef;
+        artifactRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/organization/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/risk-decision';
+};
+
+export type DecideOrganizationImageAdmissionRiskErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DecideOrganizationImageAdmissionRiskError = DecideOrganizationImageAdmissionRiskErrors[keyof DecideOrganizationImageAdmissionRiskErrors];
+
+export type DecideOrganizationImageAdmissionRiskResponses = {
+    /**
+     * Durable immutable decision receipt и свежий owner artifact
+     */
+    200: ImageAdmissionRiskDecisionResponse;
+};
+
+export type DecideOrganizationImageAdmissionRiskResponse = DecideOrganizationImageAdmissionRiskResponses[keyof DecideOrganizationImageAdmissionRiskResponses];
+
+export type GetImageVulnerabilityReportData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+        recipeRef: OpaqueRef;
+        artifactRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+        packageQuery?: string;
+        severity?: ImageVulnerabilitySeverity;
+        advisoryQuery?: string;
+        blockingOnly?: boolean;
+        expectedReportSha256?: string;
+    };
+    url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/vulnerability-report';
+};
+
+export type GetImageVulnerabilityReportErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetImageVulnerabilityReportError = GetImageVulnerabilityReportErrors[keyof GetImageVulnerabilityReportErrors];
+
+export type GetImageVulnerabilityReportResponses = {
+    /**
+     * Exact report page, включая все severity и suppressed occurrences
+     */
+    200: ImageVulnerabilityReportResponse;
+};
+
+export type GetImageVulnerabilityReportResponse = GetImageVulnerabilityReportResponses[keyof GetImageVulnerabilityReportResponses];
+
+export type DecideImageAdmissionRiskData = {
+    body: ImageAdmissionRiskDecisionInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+        recipeRef: OpaqueRef;
+        artifactRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}/artifacts/{artifactRef}/risk-decision';
+};
+
+export type DecideImageAdmissionRiskErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DecideImageAdmissionRiskError = DecideImageAdmissionRiskErrors[keyof DecideImageAdmissionRiskErrors];
+
+export type DecideImageAdmissionRiskResponses = {
+    /**
+     * Durable immutable decision receipt и свежий owner artifact
+     */
+    200: ImageAdmissionRiskDecisionResponse;
+};
+
+export type DecideImageAdmissionRiskResponse = DecideImageAdmissionRiskResponses[keyof DecideImageAdmissionRiskResponses];
+
 export type ListSystemRuntimeSecretsData = {
     body?: never;
     path?: never;
@@ -10988,6 +11673,98 @@ export type UpdateSystemAssistantOwnerInstructionsResponses = {
 };
 
 export type UpdateSystemAssistantOwnerInstructionsResponse = UpdateSystemAssistantOwnerInstructionsResponses[keyof UpdateSystemAssistantOwnerInstructionsResponses];
+
+export type GetSystemAssistantIntegrationGrantCandidatesData = {
+    body?: never;
+    path?: never;
+    query: {
+        connectionRef: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/system-assistant/integration-grant-candidates';
+};
+
+export type GetSystemAssistantIntegrationGrantCandidatesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetSystemAssistantIntegrationGrantCandidatesError = GetSystemAssistantIntegrationGrantCandidatesErrors[keyof GetSystemAssistantIntegrationGrantCandidatesErrors];
+
+export type GetSystemAssistantIntegrationGrantCandidatesResponses = {
+    /**
+     * Безопасные capabilities и точные server-owned grant pins
+     */
+    200: SystemAssistantIntegrationGrantCandidates;
+};
+
+export type GetSystemAssistantIntegrationGrantCandidatesResponse = GetSystemAssistantIntegrationGrantCandidatesResponses[keyof GetSystemAssistantIntegrationGrantCandidatesResponses];
+
+export type GetProjectAssistantIntegrationGrantCandidatesData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query: {
+        connectionRef: OpaqueRef;
+        query?: string;
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/projects/{projectRef}/assistant/integration-grant-candidates';
+};
+
+export type GetProjectAssistantIntegrationGrantCandidatesErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetProjectAssistantIntegrationGrantCandidatesError = GetProjectAssistantIntegrationGrantCandidatesErrors[keyof GetProjectAssistantIntegrationGrantCandidatesErrors];
+
+export type GetProjectAssistantIntegrationGrantCandidatesResponses = {
+    /**
+     * Exact профиль, подключение и capability policy
+     */
+    200: ProjectAssistantIntegrationGrantCandidates;
+};
+
+export type GetProjectAssistantIntegrationGrantCandidatesResponse = GetProjectAssistantIntegrationGrantCandidatesResponses[keyof GetProjectAssistantIntegrationGrantCandidatesResponses];
+
+export type ChangeSystemAssistantIntegrationGrantData = {
+    body: SystemAssistantIntegrationGrantInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/api/v1/system-assistant/integration-grants';
+};
+
+export type ChangeSystemAssistantIntegrationGrantErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ChangeSystemAssistantIntegrationGrantError = ChangeSystemAssistantIntegrationGrantErrors[keyof ChangeSystemAssistantIntegrationGrantErrors];
+
+export type ChangeSystemAssistantIntegrationGrantResponses = {
+    /**
+     * Selected policy сохранена и аудирована в точном grant; активный effect блокирует изменение policy
+     */
+    200: IntegrationConnection;
+};
+
+export type ChangeSystemAssistantIntegrationGrantResponse = ChangeSystemAssistantIntegrationGrantResponses[keyof ChangeSystemAssistantIntegrationGrantResponses];
 
 export type CommandSystemAssistantData = {
     body: {

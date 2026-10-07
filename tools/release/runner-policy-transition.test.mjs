@@ -24,7 +24,7 @@ function fixtures() {
     promotionEvidenceRepository: "kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/evidence",
     evidenceRepository: "kodex-image-registry-evidence.kodex-system.svc.cluster.local:5007/evidence/role-image-admission",
     promotedPullRepository: "pull.kodex.test/kodex/roles",
-    requiredTools: "base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft,wc",
+    requiredTools: "base64,cmp,cosign,grype,image-admission-bridge,image-tool-inventory-validator,image-vulnerability-report-validator,jq,regctl,sha256sum,syft,tr,wc",
     builderIdentity: "spiffe://kodex.local/ns/kodex-system/sa/role-image-builder",
     buildType: "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md",
   });

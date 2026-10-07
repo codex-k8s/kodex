@@ -402,7 +402,9 @@ SELECT n.id::text,
            SELECT jsonb_agg(jsonb_build_object(
                'ref', integration_grant.ref,
 		       'grantVersion', integration_grant.version::text,
+               'approvalPolicy', integration_grant.approval_policy,
                'connectionRef', connection.ref,
+               'connectionVersion', connection.version::text,
                'definitionKey', connection.definition_key,
                'definitionVersion', connection.definition_version,
                'definitionDigest', connection.definition_digest,
@@ -436,7 +438,7 @@ SELECT n.id::text,
              AND connection.state = 'CONNECTED'
            ), '[]'::jsonb),
            CASE
-               WHEN a.system_key <> 'system-assistant'
+               WHEN a.system_key IS DISTINCT FROM 'system-assistant'
                 AND 'platform.run.delegate' <> ALL(a.capabilities)
                 AND NOT (root.workflow_version_id IS NOT NULL
                          AND n.workflow_step_key LIKE 'workflow.coordinator.%') THEN '[]'::jsonb
@@ -463,13 +465,6 @@ SELECT n.id::text,
                               0::bigint AS position
                        FROM control_plane.agents candidate
                        WHERE root.workflow_version_id IS NULL
-                         AND NOT EXISTS (
-                             SELECT 1
-                             FROM control_plane.run_edges continuation
-                             WHERE continuation.root_run_id = root.id
-                               AND continuation.target_node_id = n.id
-                               AND continuation.type = 'CONTINUES'
-                         )
                          AND candidate.organization_id = r.organization_id
                          AND candidate.project_id = r.project_id
                          AND candidate.id <> a.id
@@ -528,10 +523,11 @@ SELECT n.id::text,
                             ORDER BY history.turn_number)
            FROM (
                SELECT previous.actor_kind,
-                      left(previous.content, 4000) AS content,
+                      previous.content,
                       previous.turn_number
                FROM control_plane.session_turns previous
                WHERE previous.session_id = r.session_id
+                 AND previous.organization_id = r.organization_id
                  AND previous.id <> COALESCE(n.turn_id, '00000000-0000-0000-0000-000000000000'::uuid)
                  AND previous.state = 'COMPLETED'
                ORDER BY previous.turn_number DESC
@@ -584,8 +580,7 @@ SELECT n.id::text,
        runtime_environment.volumes_digest,
        runtime_environment.network_digest,
        runtime_environment.rbac_digest,
-       COALESCE(session_storage.codex_session_id::text, ''),
-       COALESCE(storage_revision.safe_snapshot #>> '{contextSnapshot,digest}', '')
+       COALESCE(session_storage.codex_session_id::text, '')
 FROM control_plane.run_nodes n
 JOIN control_plane.runs r ON r.id = n.run_id
 JOIN control_plane.runs root ON root.id = r.root_run_id
@@ -611,10 +606,6 @@ JOIN control_plane.organizations organization ON organization.id = r.organizatio
 LEFT JOIN control_plane.projects p ON p.id = r.project_id
 JOIN control_plane.sessions s ON s.id = r.session_id
 LEFT JOIN control_plane.session_storage session_storage ON session_storage.session_id = s.id
-LEFT JOIN control_plane.runtime_revisions storage_revision
-  ON storage_revision.id = session_storage.runtime_revision_id
- AND storage_revision.organization_id = r.organization_id
- AND storage_revision.session_id = s.id
 JOIN control_plane.provider_accounts pa
   ON pa.id = s.provider_account_id
  AND pa.organization_id = r.organization_id

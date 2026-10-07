@@ -39,6 +39,28 @@ func TestRuntimeExecutionFailureCodePreservesAuthorityBoundary(t *testing.T) {
 	}
 }
 
+func TestRuntimeArtifactFailureCodeRemainsClosed(t *testing.T) {
+	t.Parallel()
+	if safeFailureCode("RUNTIME_ARTIFACT_INVALID") != "RUNTIME_ARTIFACT_INVALID" ||
+		safeFailureCode("RUNTIME_ARTIFACT_INTERNAL_DIAGNOSTIC") != "RUNTIME_UNAVAILABLE" {
+		t.Fatal("artifact failure normalization changed its closed boundary")
+	}
+}
+
+func TestCollectArtifactsRejectsHardlinkWithoutReadingTarget(t *testing.T) {
+	root := t.TempDir()
+	if os.MkdirAll(filepath.Join(root, ".kodex/outbox"), 0o770) != nil {
+		t.Fatal("prepare isolated outbox")
+	}
+	outside := filepath.Join(t.TempDir(), "private-sentinel")
+	if os.WriteFile(outside, []byte("private synthetic payload"), 0o600) != nil || os.Link(outside, filepath.Join(root, ".kodex/outbox", "linked.md")) != nil {
+		t.Fatal("prepare isolated hardlink")
+	}
+	if _, err := collectArtifacts(model.Input{WorkspaceRoot: root}, "done"); err == nil || strings.Contains(err.Error(), outside) || strings.Contains(err.Error(), "payload") {
+		t.Fatal("collector accepted an outside hardlink or exposed its content")
+	}
+}
+
 func TestRuntimeMCPFailureCodeIsPreservedForCompletion(t *testing.T) {
 	t.Parallel()
 
@@ -46,11 +68,6 @@ func TestRuntimeMCPFailureCodeIsPreservedForCompletion(t *testing.T) {
 	if got := safeFailureCode(code); got != "RUNTIME_MCP_UNAVAILABLE" {
 		t.Fatalf("safeFailureCode(runtimeExecutionFailureCode()) = %q, want %q", got, "RUNTIME_MCP_UNAVAILABLE")
 	}
-}
-
-type nativeToolRecorderStub struct {
-	calls []runtimecontract.NativeToolCall
-	err   error
 }
 
 func runnerInputArtifact(ref, fileName, mediaType, scope string, position, version int64, source string) runtimecontract.RunnerInputArtifact {
@@ -96,11 +113,6 @@ func bindAttachmentCatalog(input model.Input) model.Input {
 		}
 	}
 	return input
-}
-
-func (stub *nativeToolRecorderStub) RecordNativeToolCall(_ context.Context, _ model.Input, call runtimecontract.NativeToolCall) error {
-	stub.calls = append(stub.calls, call)
-	return stub.err
 }
 
 func materializedInstructions(kind string, capabilities []string) string {
@@ -442,25 +454,5 @@ func TestReadinessCanaryReturnsOnlySafeSymlinkDenial(t *testing.T) {
 		strings.TrimSpace(response.Body.String()) != "workspace readiness denied: PATH_OUTSIDE_WORKSPACE" ||
 		strings.Contains(response.Body.String(), root) {
 		t.Fatalf("unsafe readiness response: status=%d body=%q", response.Code, response.Body.String())
-	}
-}
-
-func TestRecordNativeToolTimelinePreservesOrderAndStopsOnCallbackFailure(t *testing.T) {
-	calls := []runtimecontract.NativeToolCall{
-		{CallID: "call-1", Kind: runtimecontract.NativeToolKindWebSearch, State: runtimecontract.NativeToolStateSucceeded,
-			SafeResult: runtimecontract.NativeToolResultCompleted, SafeParameters: map[string]any{"action": "SEARCH", "query_count": 1}},
-		{CallID: "call-2", Kind: runtimecontract.NativeToolKindSleep, State: runtimecontract.NativeToolStateSucceeded,
-			DurationMS: 25, SafeResult: runtimecontract.NativeToolResultCompleted, SafeParameters: map[string]any{"requested_duration_ms": int64(25)}},
-	}
-	recorder := &nativeToolRecorderStub{}
-	if err := recordNativeToolTimeline(context.Background(), model.Input{}, recorder, calls); err != nil {
-		t.Fatalf("recordNativeToolTimeline() error = %v", err)
-	}
-	if len(recorder.calls) != 2 || recorder.calls[0].CallID != "call-1" || recorder.calls[1].CallID != "call-2" {
-		t.Fatalf("recorded calls = %#v", recorder.calls)
-	}
-	recorder = &nativeToolRecorderStub{err: errors.New("unavailable")}
-	if err := recordNativeToolTimeline(context.Background(), model.Input{}, recorder, calls); err == nil || len(recorder.calls) != 1 {
-		t.Fatalf("callback failure was not propagated: calls=%#v err=%v", recorder.calls, err)
 	}
 }

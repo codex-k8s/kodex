@@ -4,6 +4,7 @@ import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 import standaloneCode from "ajv/dist/standalone/index.js";
 import { build } from "esbuild";
+import { withFrontendCodegen } from "./frontend-codegen-barrier.mjs";
 
 const schemaUrl = new URL(
   "../../../../contracts/integrations/v1/integration-package.schema.json",
@@ -43,17 +44,19 @@ const result = await build({
 if (result.warnings.length > 0) {
   throw new Error("Generated schema bundle contains compiler warnings");
 }
-await mkdir(output, { recursive: true });
-await writeFile(
-  new URL("schema.json", output),
-  `${JSON.stringify(schema, null, 2)}\n`,
-);
-await writeFile(
-  new URL("validate.js", output),
-  "// Сгенерировано tools/generate-integration-schema.mjs. Не редактировать.\n" +
-    result.outputFiles[0].text,
-);
-await writeFile(
-  new URL("validate.d.ts", output),
-  'import type { ValidateFunction } from "ajv";\ndeclare const validate: ValidateFunction;\nexport default validate;\n',
-);
+await withFrontendCodegen("integration-schema", async () => {
+  await mkdir(output, { recursive: true });
+  await writeFile(
+    new URL("schema.json", output),
+    `${JSON.stringify(schema, null, 2)}\n`,
+  );
+  await writeFile(
+    new URL("validate.js", output),
+    "// Сгенерировано tools/generate-integration-schema.mjs. Не редактировать.\n" +
+      result.outputFiles[0].text,
+  );
+  await writeFile(
+    new URL("validate.d.ts", output),
+    'import type { ValidateFunction } from "ajv";\ndeclare const validate: ValidateFunction;\nexport default validate;\n',
+  );
+});

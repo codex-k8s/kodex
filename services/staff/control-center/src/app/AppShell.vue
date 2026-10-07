@@ -38,6 +38,7 @@ import {
   routeProjectRef,
 } from "@/app/navigation-context";
 import { resolveShellRealtimeState } from "@/app/realtime-presentation";
+import { synchronizeSessionBootstrap } from "@/app/session-bootstrap";
 import AssistantWorkspace from "@/features/assistant/components/AssistantWorkspace.vue";
 import { resolveAssistantContext } from "@/features/assistant/context";
 import { useAssistantStore } from "@/features/assistant/store";
@@ -83,6 +84,7 @@ const realtime = useRealtimeStore();
 const roleImages = useRoleImagesStore();
 const runtime = useRuntimeStore();
 const session = useSessionStore();
+synchronizeSessionBootstrap(session, platform);
 useSpeechInput();
 const { locale, t } = useI18n();
 const serverMessage = useServerMessage();
@@ -270,27 +272,30 @@ const assistantRunEvents = computed(() => {
     (a, b) => a.sequence - b.sequence,
   );
 });
-const assistantRefreshRevision = computed(() =>
+watch(
   [
-    platform.assistant?.version ?? 0,
-    ...Object.values(platform.conversations)
-      .sort((a, b) => a.ref.localeCompare(b.ref))
-      .map(
-        (item) =>
-          `${item.ref}:${String(item.version)}:${String(item.turns.length)}`,
-      ),
-  ].join("|"),
+    () =>
+      platform.realtimeSnapshot("SYSTEM_ASSISTANT", assistantStore.projectRef),
+    () => platform.assistant,
+  ],
+  () => {
+    if (!platform.assistant) {
+      assistantStore.clearRealtimeState();
+      return;
+    }
+    if (
+      !assistantStore.context ||
+      platform.assistantRealtimeScopeKey !== (assistantStore.projectRef ?? "")
+    )
+      return;
+    assistantStore.applyRealtimeSnapshot(
+      platform.assistant,
+      Object.values(platform.conversations),
+      assistantStore.projectRef,
+      platform.assistantConversationNextPageToken,
+    );
+  },
 );
-
-watch(assistantRefreshRevision, (value, previous) => {
-  if (!assistantStore.context || value === previous) return;
-  assistantStore.applyRealtimeSnapshot(
-    platform.assistant,
-    Object.values(platform.conversations),
-    assistantStore.projectRef,
-    platform.assistantConversationNextPageToken,
-  );
-});
 
 const globalLinks = computed(() => [
   { name: "home", label: t("nav.home"), path: "/", icon: Home },
@@ -546,7 +551,9 @@ onBeforeUnmount(() => {
   realtime.closePlatform();
   runtime.clear();
   access.clearOwnerState();
-  platform.clearOwnerState();
+  // Public route не меняет владельца. Сохраняем единственный актуальный
+  // bootstrap; logout/ошибка сессии по-прежнему закрывают owner state.
+  if (session.phase !== "authenticated") platform.clearOwnerState();
 });
 </script>
 

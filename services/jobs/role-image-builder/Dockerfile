@@ -15,6 +15,7 @@ COPY libs/go/internalrpcauth/go.mod libs/go/internalrpcauth/go.mod
 COPY libs/go/observability/go.mod libs/go/observability/go.mod
 COPY libs/go/serviceruntime/go.mod libs/go/serviceruntime/go.mod
 COPY libs/go/securefile/go.mod libs/go/securefile/go.mod
+COPY libs/go/runtimecontract/go.mod libs/go/runtimecontract/go.mod
 COPY services/jobs/role-image-builder/go.mod services/jobs/role-image-builder/go.sum services/jobs/role-image-builder/
 WORKDIR /workspace/services/jobs/role-image-builder
 RUN go mod download
@@ -28,6 +29,7 @@ COPY libs/go/internalrpcauth/ libs/go/internalrpcauth/
 COPY libs/go/observability/ libs/go/observability/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY libs/go/securefile/ libs/go/securefile/
+COPY libs/go/runtimecontract/ libs/go/runtimecontract/
 COPY services/jobs/role-image-builder/ services/jobs/role-image-builder/
 WORKDIR /workspace/services/jobs/role-image-builder
 RUN test "$(go env GOVERSION)" = "go1.26.6"
@@ -37,6 +39,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w" \
     -o /out/image-admission-bridge ./cmd/image-admission-bridge
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+    -ldflags="-s -w" \
+    -o /out/image-vulnerability-report-validator ./cmd/image-vulnerability-report-validator
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -o /out/image-admission-controller ./cmd/image-admission-controller
@@ -58,8 +63,10 @@ ENTRYPOINT ["/usr/local/bin/role-image-builder"]
 
 FROM ${ADMISSION_TOOLS_IMAGE} AS admission-runtime
 COPY --from=build --chmod=0555 /out/image-admission-bridge /usr/local/bin/image-admission-bridge
+COPY --from=build --chmod=0555 /out/image-vulnerability-report-validator /usr/local/bin/image-vulnerability-report-validator
 COPY --from=build --chmod=0555 /out/image-admission-controller /usr/local/bin/image-admission-controller
 COPY --from=build --chmod=0555 /out/registry-write-authorizer /usr/local/bin/registry-write-authorizer
 COPY --from=build --chmod=0555 /out/registry-pull-authorizer /usr/local/bin/registry-pull-authorizer
 COPY --chmod=0555 tools/render-image-admission-job.sh /opt/kodex/render-image-admission-job.sh
+RUN command -v image-vulnerability-report-validator >/dev/null
 USER 10001:10001

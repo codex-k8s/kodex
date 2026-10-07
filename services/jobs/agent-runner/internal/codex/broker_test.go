@@ -158,6 +158,25 @@ func TestProviderBrokerFailurePreservesSafeClass(t *testing.T) {
 	}
 }
 
+func TestProviderSafeFailureClassDoesNotExposeDiagnostics(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "account schema", err: atProviderStage(providerStageAccountRead, errAccountReadResponseInvalid), want: "ACCOUNT_RESPONSE_SCHEMA"},
+		{name: "authentication", err: atProviderStage(providerStageAccountRead, ErrProviderAuthentication), want: "AUTHENTICATION"},
+		{name: "external diagnostic", err: errors.New("fixture secret and account details must stay private"), want: "PROVIDER"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := providerSafeFailureClass(test.err); got != test.want {
+				t.Fatalf("safe provider failure class = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestProviderBrokerEarlyFailureLogsOnlySafeStage(t *testing.T) {
 	var response bytes.Buffer
 	var diagnostic bytes.Buffer
@@ -175,9 +194,42 @@ func TestProviderBrokerEarlyFailureLogsOnlySafeStage(t *testing.T) {
 	if !strings.Contains(diagnostic.String(), "HOME_PREPARE") {
 		t.Fatalf("safe diagnostic = %q", diagnostic.String())
 	}
-	var envelope brokerResponse
-	if err := json.Unmarshal(response.Bytes(), &envelope); err != nil || envelope.OK || envelope.Failure != providerBrokerFailureProvider {
-		t.Fatalf("broker response = %#v, error = %v", envelope, err)
+	var frame brokerFrame
+	if err := json.Unmarshal(response.Bytes(), &frame); err != nil || frame.Version != providerBrokerVersion || frame.Kind != brokerFrameTerminal || frame.Terminal == nil || frame.Terminal.OK || frame.Terminal.Failure != providerBrokerFailureProvider {
+		t.Fatalf("broker response = %#v, error = %v", frame, err)
+	}
+}
+
+func TestProviderSafeFailureDetailsRemainClosed(t *testing.T) {
+	var diagnostic bytes.Buffer
+	previous := log.Writer()
+	log.SetOutput(&diagnostic)
+	t.Cleanup(func() { log.SetOutput(previous) })
+	for _, test := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "RPC code", err: protocolError("account/read", json.RawMessage(`{"code":-32603,"message":"private-upstream-detail"}`)), want: "detail: RPC_ERROR; rpc_code: -32603"},
+		{name: "notification", err: callFailure("NOTIFICATION_INVALID", errors.New("private-upstream-detail")), want: "detail: NOTIFICATION_INVALID; rpc_code: 0"},
+		{name: "unknown detail", err: &appServerCallFailure{detail: "private-upstream-detail", code: 42, err: errors.New("private-upstream-detail")}, want: "detail: NONE; rpc_code: 0"},
+		{name: "registered notification", err: &appServerCallFailure{detail: "NOTIFICATION_INVALID", notification: "account/updated", err: errors.New("private-upstream-detail")}, want: "notification: account/updated"},
+		{name: "unknown notification", err: &appServerCallFailure{detail: "NOTIFICATION_INVALID", notification: "private-upstream-detail", err: errors.New("private-upstream-detail")}, want: "notification: UNKNOWN"},
+		{name: "SDK diagnostic only method", err: notificationFailure("thread/attachment/updated", errors.New("Codex app-server notification method is not allowed")), want: "notification: thread/attachment/updated; account_read: NONE; notification_error: METHOD"},
+		{name: "known parser category", err: notificationFailure("item/started", errors.New("Codex app-server tagged thread item is invalid")), want: "notification_error: ITEM"},
+		{name: "unknown parser category", err: notificationFailure("item/started", errors.New("private-upstream-detail")), want: "notification_error: UNKNOWN"},
+		{name: "injected category", err: &appServerCallFailure{detail: "NOTIFICATION_INVALID", notification: "item/started", notificationError: "private-upstream-detail", err: errors.New("private-upstream-detail")}, want: "notification_error: UNKNOWN"},
+		{name: "known account failure", err: &appServerCallFailure{detail: "RPC_ERROR", code: -32603, accountRead: "DISCOVERY_FAILED", err: errors.New("private-upstream-detail")}, want: "account_read: DISCOVERY_FAILED"},
+		{name: "unknown account failure", err: &appServerCallFailure{detail: "RPC_ERROR", code: -32603, accountRead: "private-upstream-detail", err: errors.New("private-upstream-detail")}, want: "account_read: UNKNOWN"},
+		{name: "different RPC code", err: &appServerCallFailure{detail: "RPC_ERROR", code: -32602, accountRead: "DISCOVERY_FAILED", err: errors.New("private-upstream-detail")}, want: "account_read: NONE"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			diagnostic.Reset()
+			logProviderSafeFailure(providerStageAccountRead, atProviderStage(providerStageAccountRead, test.err))
+			if strings.Contains(diagnostic.String(), "private-upstream-detail") || !strings.Contains(diagnostic.String(), test.want) {
+				t.Fatalf("unsafe or incomplete provider diagnostic: %q", diagnostic.String())
+			}
+		})
 	}
 }
 

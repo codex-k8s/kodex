@@ -89,7 +89,11 @@ func saveRuntimeOverlayDiagnostics(ctx context.Context, tx pgx.Tx, current scope
 		target = view.DraftOverlay
 	}
 	schema := view.OverlaySchema
-	diagnostics := runtimecontract.DiagnoseConfigOverlay(target.Content, schema.Fields[0].AllowedValues)
+	efforts, err := runtimeOverlayReasoningValues(schema)
+	if err != nil {
+		return err
+	}
+	diagnostics := runtimecontract.DiagnoseConfigOverlay(target.Content, efforts)
 	if diagnostics == nil {
 		diagnostics = []runtimecontract.ConfigOverlayDiagnostic{}
 	}
@@ -107,4 +111,26 @@ func saveRuntimeOverlayDiagnostics(ctx context.Context, tx pgx.Tx, current scope
 	}
 	target.SchemaRevision, target.SchemaDigest, target.Diagnostics = schema.Revision, schema.Digest, diagnostics
 	return nil
+}
+
+// Порядок presentation полей не является источником model compatibility.
+func runtimeOverlayReasoningValues(schema runtimecontract.ConfigOverlaySchema) ([]string, error) {
+	var values []string
+	found := false
+	for _, field := range schema.Fields {
+		if field.Key != "model_reasoning_effort" {
+			continue
+		}
+		if found || field.ValueType != "string" {
+			return nil, errs.ErrUnavailable
+		}
+		found = true
+		// nil в Diagnose означает отсутствие compatibility проверки; пустой
+		// подтверждённый набор обязан оставаться явным закрытым ограничением.
+		values = append([]string{}, field.AllowedValues...)
+	}
+	if !found {
+		return nil, errs.ErrUnavailable
+	}
+	return values, nil
 }

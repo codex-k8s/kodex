@@ -200,6 +200,9 @@ func execute(ctx context.Context, service *platformservice.Service, method strin
 	}
 	result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: p, Mutation: commandMutation, Payload: payload})
 	if err != nil {
+		if kind == command.ProposeAssistantPlan {
+			return command.Result{}, assistantPlanTransportError(err)
+		}
 		return command.Result{}, transportError(err)
 	}
 	return result, nil

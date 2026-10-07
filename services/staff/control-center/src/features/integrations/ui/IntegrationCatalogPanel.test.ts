@@ -1,7 +1,10 @@
 import { renderToString } from "@vue/server-renderer";
 import { createI18n } from "vue-i18n";
 import { createSSRApp, h } from "vue";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
+import { i18n } from "@/app/i18n";
 
 import IntegrationCatalogPanel from "@/features/integrations/ui/IntegrationCatalogPanel.vue";
 import { buildIntegrationPackages } from "@/features/integrations/ui/model";
@@ -71,6 +74,7 @@ function githubDefinition(): IntegrationDefinition {
         approvalRequired: false,
         operation: "github.repository.read",
         approvalPolicy: "NONE",
+        allowedApprovalPolicies: ["NONE"],
         resourceKind: "GITHUB_REPOSITORY",
         inputFields: [
           {
@@ -104,6 +108,25 @@ function githubDefinition(): IntegrationDefinition {
 }
 
 describe("IntegrationCatalogPanel", () => {
+  it("переводит категорию документации в строке пакета и фильтре", async () => {
+    const definition = { ...githubDefinition(), category: "documentation" };
+    const app = createSSRApp({
+      render: () =>
+        h(IntegrationCatalogPanel, {
+          packages: buildIntegrationPackages([definition], true),
+          categories: ["documentation"],
+          search: "",
+          category: "",
+        }),
+    });
+    app.use(i18n);
+    const html = await renderToString(app);
+    expect(html).toMatch(
+      /<option value="documentation"[^>]*>Документация<\/option>/,
+    );
+    expect(html).toMatch(/class="package-cell-text"[^>]*>Документация<\/span>/);
+    expect(html).not.toContain("documentation ·");
+  });
   it("показывает только определения, подтверждённые сервером", async () => {
     const packages = buildIntegrationPackages([githubDefinition()], true);
     const app = createSSRApp({

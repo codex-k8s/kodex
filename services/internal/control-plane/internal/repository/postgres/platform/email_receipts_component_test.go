@@ -41,6 +41,26 @@ func testEmailReceiptReconciliation(t *testing.T, ctx context.Context, repositor
 	if err != nil || run.Run == nil {
 		t.Fatalf("email run: %v", err)
 	}
+	runRef := run.Run.Ref
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		current, err := service.GetRun(cleanupCtx, owner, runRef)
+		if err != nil {
+			t.Errorf("read synthetic email receipt run for cleanup: %v", err)
+			return
+		}
+		if current.Ref != runRef || current.ProjectRef != project.Project.Ref || current.Target.Type != "AGENT" || current.Target.Ref != agent.Ref {
+			t.Error("synthetic email receipt run cleanup identity mismatch")
+			return
+		}
+		cancelled, err := service.Execute(cleanupCtx, command.Command{Kind: command.CancelRun, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: "email-receipt-cleanup-cancel", ExpectedVersion: &current.Version},
+			Payload:  command.RunCommandInput{RunRef: runRef}})
+		if err != nil || cancelled.Run == nil || cancelled.Run.Ref != runRef || cancelled.Run.State != "CANCELLED" {
+			t.Errorf("cancel synthetic email receipt run for cleanup: %v", err)
+		}
+	}()
 	if _, err := pool.Exec(ctx, emailReceiptFixtureQuery, project.Project.Ref, run.Run.Ref, agent.Ref); err != nil {
 		t.Fatal(err)
 	}
@@ -216,14 +236,5 @@ func testEmailReceiptReconciliation(t *testing.T, ctx context.Context, repositor
 	var observations int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.email_effect_observations o JOIN control_plane.email_effect_receipts e ON e.id=o.receipt_id WHERE e.ref='emrc_email_fixture' AND ((o.version=1 AND o.outcome='UNKNOWN_OUTCOME') OR (o.version=2 AND o.outcome='EFFECT_CONFIRMED'))`).Scan(&observations); err != nil || observations != 2 {
 		t.Fatalf("email source observation history: count=%d err=%v", observations, err)
-	}
-	currentRun, err := service.GetRun(ctx, owner, run.Run.Ref)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner,
-		Mutation: value.Mutation{IdempotencyKey: "email-fixture-cleanup", ExpectedVersion: &currentRun.Version},
-		Payload:  command.RunCommandInput{RunRef: currentRun.Ref, Reason: "Email receipt fixture completed"}}); err != nil {
-		t.Fatalf("email fixture cleanup: %v", err)
 	}
 }

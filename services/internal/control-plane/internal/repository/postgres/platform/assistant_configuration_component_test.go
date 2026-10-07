@@ -7,11 +7,13 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
+	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
@@ -33,8 +35,29 @@ var queryAssistantConfigurationComponentProfileClone string
 //go:embed testdata/sql/assistant_configuration_component_account_binding_constraint.sql
 var queryAssistantConfigurationComponentAccountBindingConstraint string
 
+//go:embed testdata/sql/assistant_current_configuration_expire.sql
+var queryAssistantCurrentConfigurationExpire string
+
+//go:embed testdata/sql/assistant_current_configuration_restore_expiry.sql
+var queryAssistantCurrentConfigurationRestoreExpiry string
+
 // Сценарий вызывается публичной обязательной profile suite; callbacks только
 // синтетические, provider и пользовательский браузер не используются.
+func testAssistantRecipeCatalogEnvironmentKey(t *testing.T, ctx context.Context, service *platformservice.Service, reader value.Principal, lease map[string]any, recipe entity.RoleImageRecipe) {
+	t.Helper()
+	result, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64),
+		entity.AssistantConfigurationCatalogRequest{Kind: "ROLE_IMAGE_RECIPES", AssistantRef: stringMap(lease, "agentRef"), Query: recipe.Ref})
+	if err != nil || len(result.Entries) != 1 {
+		t.Fatal("exact scoped recipe discovery failed")
+	}
+	entry := result.Entries[0]
+	if entry.Ref != recipe.Ref || entry.Version != int64(recipe.Version) || entry.RecipeGeneration != int64(recipe.Generation) ||
+		entry.ScopeKind != recipe.ScopeKind || entry.OrganizationRef != recipe.OrganizationRef || entry.ProjectRef != recipe.ProjectRef ||
+		entry.EnvironmentKey != recipe.Input.EnvironmentKey || entry.EnvironmentKey == "" || entry.Reference != "" || entry.ManifestDigest != "" || entry.ToolInventory != nil {
+		t.Fatal("recipe discovery lost exact persisted environment/owner/version or disclosed artifact-only metadata")
+	}
+}
+
 func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, owner, worker, reader value.Principal, lease map[string]any, sourceScope string) {
 	t.Helper()
 	prefix := "helper-configuration-" + sourceScope
@@ -46,6 +69,9 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 	}
 	catalog, _ := promotionComponentCatalog(t)
 	r.ConfigureRoleImageCatalog(catalog)
+	t.Run("fresh catalog survives concurrent lease renew", func(t *testing.T) {
+		testAssistantLockedReadConcurrentLeaseRenew(t, ctx, r, reader, lease)
+	})
 	readCatalog := func(kind string) entity.AssistantConfigurationCatalogResponse {
 		t.Helper()
 		input := entity.AssistantConfigurationCatalogRequest{Kind: kind, AssistantRef: agentRef}
@@ -59,6 +85,21 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		for _, entry := range result.Entries {
 			if entry.OrganizationRef != result.OrganizationRef || kind != "ASSISTANTS" && (entry.ScopeKind != result.ScopeKind || entry.ProjectRef != result.ProjectRef || entry.AssistantProfileRef != result.AssistantProfileRef) {
 				t.Fatalf("%s catalog mixed owner", kind)
+			}
+		}
+		if kind == "ROLE_IMAGE_RECIPES" {
+			for _, entry := range result.Entries {
+				if entry.EnvironmentKey == "" {
+					t.Fatal("recipe catalog lost persisted environment selection")
+				}
+			}
+		}
+		if kind == "IMAGE_ARTIFACTS" {
+			for _, entry := range result.Entries {
+				if entry.AdmissionVerdict != "ACCEPTED" || entry.PromotionState != "PROMOTED" ||
+					entry.ToolInventory != nil && (entry.ToolInventory.ImageDigest != entry.ManifestDigest || entry.ToolInventorySHA256 == "") {
+					t.Fatal("image candidate lost exact eligibility or evidence pins")
+				}
 			}
 		}
 		return result
@@ -82,6 +123,56 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 				}
 			}
 		}
+	}
+	resolvedOwnRead, err := r.ResolvePrincipal(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownReadScope, err := r.resolveScope(ctx, resolvedOwnRead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ownReadEffectsBefore, ownReadEffectsAfter string
+	if err := r.pool.QueryRow(ctx, queryAssistantConfigurationComponentEffects, ownReadScope.organizationID).Scan(&ownReadEffectsBefore); err != nil {
+		t.Fatal(err)
+	}
+	current := readCatalog("CURRENT_CONFIGURATION")
+	if len(current.Entries) != 0 || current.NextOffset != 0 || current.CurrentConfiguration == nil ||
+		current.CurrentConfiguration.AgentVersion != view.AgentVersion || current.CurrentConfiguration.Configuration.Digest != view.Configuration.Digest ||
+		current.CurrentConfiguration.Environment.Digest != view.Environment.CurrentVersion.Digest || current.CurrentConfiguration.PublishedInstructions == "" ||
+		len(current.CurrentConfiguration.TemplateVariables) == 0 || len(current.CurrentConfiguration.Environment.SecretDescriptors) != 0 {
+		t.Fatal("own current configuration lost fresh safe authoritative settings")
+	}
+	if sourceScope == "SYSTEM" && (current.CurrentConfiguration.SystemCoreRevision == "" || current.CurrentConfiguration.SystemCoreInstructions == "" || current.CurrentConfiguration.OwnerInstructionsRevision < 1) {
+		t.Fatal("SYSTEM current configuration lost versioned core/owner instructions")
+	}
+	for _, denied := range []struct {
+		ref, lease, fence string
+		generation        int64
+	}{
+		{agentRef + "foreign", stringMap(lease, "leaseRef"), stringMap(lease, "fence"), generation},
+		{agentRef, "lease_missing123", stringMap(lease, "fence"), generation},
+		{agentRef, stringMap(lease, "leaseRef"), "stale-fence", generation},
+		{agentRef, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), generation + 1},
+	} {
+		_, err := service.ListAssistantConfigurationCatalog(ctx, reader, denied.lease, denied.fence, denied.generation, entity.AssistantConfigurationCatalogRequest{Kind: "CURRENT_CONFIGURATION", AssistantRef: denied.ref})
+		if !errors.Is(err, errs.ErrForbidden) && !errors.Is(err, errs.ErrNotFound) {
+			t.Fatal("current configuration accepted foreign target or inactive exact lease")
+		}
+	}
+	var originalExpiry time.Time
+	if err := r.pool.QueryRow(ctx, queryAssistantCurrentConfigurationExpire, stringMap(lease, "leaseRef")).Scan(&originalExpiry); err != nil {
+		t.Fatal(err)
+	}
+	_, expiredErr := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), generation, entity.AssistantConfigurationCatalogRequest{Kind: "CURRENT_CONFIGURATION", AssistantRef: agentRef})
+	if tag, err := r.pool.Exec(ctx, queryAssistantCurrentConfigurationRestoreExpiry, stringMap(lease, "leaseRef"), originalExpiry); err != nil || tag.RowsAffected() != 1 {
+		t.Fatal("could not restore disposable exact lease fixture")
+	}
+	if !errors.Is(expiredErr, errs.ErrNotFound) {
+		t.Fatal("expired lease disclosed own configuration")
+	}
+	if err := r.pool.QueryRow(ctx, queryAssistantConfigurationComponentEffects, ownReadScope.organizationID).Scan(&ownReadEffectsAfter); err != nil || ownReadEffectsBefore != ownReadEffectsAfter {
+		t.Fatal("own configuration query changed audit/receipt/state/events")
 	}
 	invalid := entity.AssistantConfigurationCatalogRequest{Kind: "MODELS", AssistantRef: agentRef}
 	if _, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), generation, invalid); !errors.Is(err, errs.ErrInvalid) {
@@ -140,6 +231,7 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		}
 	}
 	operation := entity.AssistantPlanOperation{Key: "model", Type: "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", Title: "Prepare model", Summary: "Synthetic versioned model configuration", Parameters: map[string]any{"agentRef": agentRef, "runtimeProfileRef": view.Configuration.RuntimeProfileRef, "model": "gpt-5", "reasoningEffort": "low", "providerPolicyMode": view.Configuration.ProviderPolicy.Mode, "providerAccounts": minimalAssistantRuntimeAccounts(view.Configuration.ProviderPolicy.AccountCandidates)}}
+	operation.Parameters["webSearchMode"] = "cached"
 	propose := func(op entity.AssistantPlanOperation, key string) entity.AssistantPlan {
 		t.Helper()
 		return *executeWorkerAssistantPlan(t, ctx, service, worker, lease, prefix+"-"+key, op).Plan
@@ -187,6 +279,7 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 	edited := plan.Operations[0]
 	edited.Parameters = cloneAssistantFields(edited.Parameters)
 	edited.Parameters["reasoningEffort"] = "medium"
+	edited.Parameters["webSearchMode"] = "live"
 	updated := execute(command.UpdateAssistantPlan, "model-edit", plan, command.AssistantPlanDraftInput{PlanRef: plan.Ref, Summary: plan.Summary, Operations: []entity.AssistantPlanOperation{edited}})
 	plan = *updated.Plan
 	validated := validate(plan, "model-validate")
@@ -203,8 +296,72 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		t.Fatalf("model config not published: %v", err)
 	}
 	parsed, err := runtimecontract.ParseConfigOverlay(changed.PublishedOverlay.Content)
-	if err != nil || parsed.ModelReasoningEffort != "medium" {
+	if err != nil || parsed.ModelReasoningEffort != "medium" || parsed.WebSearchMode != "live" || changed.PublishedOverlay.Digest == view.PublishedOverlay.Digest || changed.PublishedOverlay.Version <= view.PublishedOverlay.Version {
 		t.Fatalf("reasoning overlay not published: %v", err)
+	}
+	noChange := operation
+	noChange.Key = "unchanged-runtime"
+	noChange.Parameters = cloneAssistantFields(operation.Parameters)
+	noChange.Parameters["reasoningEffort"] = "medium"
+	delete(noChange.Parameters, "webSearchMode") // отсутствие сохраняет опубликованный режим
+	actualChange := noChange
+	actualChange.Key = "changed-runtime"
+	actualChange.Parameters = cloneAssistantFields(noChange.Parameters)
+	actualChange.Parameters["reasoningEffort"] = "high"
+	mixed, mixedErr := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: prefix + "-mixed-no-change"}, Payload: command.ProposeAssistantPlanInput{
+			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: generation,
+			Summary: "Synthetic unchanged and effective configuration", Operations: []entity.AssistantPlanOperation{noChange, actualChange},
+		}})
+	if mixedErr != nil || mixed.Plan == nil || mixed.Plan.State != "DRAFT" || len(mixed.Plan.Operations) != 1 || mixed.Plan.Operations[0].Key != actualChange.Key {
+		t.Fatalf("unchanged runtime prevented an authorized effective draft: %v", mixedErr)
+	}
+	_, emptyErr := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: prefix + "-all-no-change"}, Payload: command.ProposeAssistantPlanInput{
+			LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: generation,
+			Summary: "Synthetic unchanged configuration", Operations: []entity.AssistantPlanOperation{noChange},
+		}})
+	stage, category, _, diagnostic := errs.AssistantPlanDiagnostic(emptyErr)
+	if !errors.Is(emptyErr, errs.ErrConflict) || !diagnostic || stage != errs.AssistantPlanEmpty || category != "CONFLICT" {
+		t.Fatal("all unchanged operations created an empty plan or lost the closed EMPTY result")
+	}
+	for _, invalid := range []struct {
+		name     string
+		expected error
+	}{
+		{"invalid-title", errs.ErrInvalid},
+		{"invalid-search-mode", errs.ErrInvalid},
+		{"null-search-mode", errs.ErrInvalid},
+		{"ineligible-account", errs.ErrConflict},
+		{"stale-lease", errs.ErrForbidden},
+	} {
+		candidate := noChange
+		candidate.Parameters = cloneAssistantFields(noChange.Parameters)
+		fence := stringMap(lease, "fence")
+		switch invalid.name {
+		case "invalid-title":
+			candidate.Title = ""
+		case "invalid-search-mode":
+			candidate.Parameters["webSearchMode"] = "future-mode"
+		case "null-search-mode":
+			candidate.Parameters["webSearchMode"] = nil
+		case "ineligible-account":
+			candidate.Parameters["providerAccounts"] = []map[string]any{{"accountRef": "pacc_absent_synthetic", "weight": 1}}
+		case "stale-lease":
+			fence = "stale-synthetic-fence"
+		}
+		_, candidateErr := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker,
+			Mutation: value.Mutation{IdempotencyKey: prefix + "-no-change-" + invalid.name}, Payload: command.ProposeAssistantPlanInput{
+				LeaseRef: stringMap(lease, "leaseRef"), Fence: fence, Generation: generation,
+				Summary: "Synthetic no-change boundary rejection", Operations: []entity.AssistantPlanOperation{candidate, actualChange},
+			}})
+		if !errors.Is(candidateErr, invalid.expected) {
+			t.Fatalf("no-change skipped %s boundary", invalid.name)
+		}
+	}
+	afterNoChange, noChangeReadErr := service.GetAgentRuntimeConfiguration(ctx, owner, agentRef)
+	if noChangeReadErr != nil || !assistantJSONEqual(changed, afterNoChange) {
+		t.Fatal("preparing a mixed no-change draft changed current configuration")
 	}
 	if err := r.pool.QueryRow(ctx, queryAssistantConfigurationComponentRevision, stringMap(lease, "leaseRef")).Scan(&afterRevision); err != nil || string(beforeRevision) != string(afterRevision) {
 		t.Fatal("self-config rewrote active immutable runtime")
@@ -320,6 +477,22 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 	if !errors.Is(catalogEditErr, errs.ErrConflict) {
 		t.Fatalf("DRAFT edit silently healed selected account catalog: %v", catalogEditErr)
 	}
+	catalogRefreshView, catalogRefreshErr := service.GetAgentRuntimeConfiguration(ctx, owner, agentRef)
+	if catalogRefreshErr != nil {
+		t.Fatal(catalogRefreshErr)
+	}
+	catalogRefreshOverlay, catalogRefreshErr := runtimecontract.ParseConfigOverlay(catalogRefreshView.PublishedOverlay.Content)
+	if catalogRefreshErr != nil {
+		t.Fatal(catalogRefreshErr)
+	}
+	catalogRefresh := operation
+	catalogRefresh.Parameters = map[string]any{"agentRef": agentRef, "runtimeProfileRef": catalogRefreshView.Configuration.RuntimeProfileRef,
+		"model": catalogRefreshView.Configuration.Model, "reasoningEffort": catalogRefreshOverlay.ModelReasoningEffort,
+		"providerPolicyMode": catalogRefreshView.Configuration.ProviderPolicy.Mode, "providerAccounts": minimalAssistantRuntimeAccounts(catalogRefreshView.Configuration.ProviderPolicy.AccountCandidates)}
+	catalogRefreshPlan := propose(catalogRefresh, "catalog-pins-refresh")
+	if len(catalogRefreshPlan.Operations) != 1 || assistantJSONEqual(catalogRefreshView.Configuration.ProviderPolicy.AccountCandidates, catalogRefreshPlan.Operations[0].Parameters["providerCatalogPins"]) {
+		t.Fatal("same settings with advanced catalog pins were discarded as a no-op")
+	}
 	operation.Parameters["reasoningEffort"] = "medium"
 	if sourceScope == "SYSTEM" {
 		compoundModel := operation
@@ -401,6 +574,28 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		t.Fatalf("preexisting manual draft superseded by prepare: %v", err)
 	}
 	if sourceScope == "PROJECT" {
+		candidateView, err := service.GetAgentRuntimeConfiguration(ctx, owner, agentRef)
+		if err != nil {
+			t.Fatal(err)
+		}
+		created, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantRoleImageRecipe, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: prefix + "-inventory-recipe"}, Payload: command.AssistantRoleImageRecipeInput{
+				ProjectRef: stringMap(lease, "projectRef"), AgentRef: agentRef, AgentVersion: candidateView.AgentVersion,
+				Name: "Assistant inventory candidate", Environment: entity.RoleEnvironmentSelection{EnvironmentKey: "promotion"}}})
+		if err != nil || len(created.CreatedRefs) != 1 {
+			t.Fatal("canonical project candidate recipe creation failed")
+		}
+		resolved, err := r.ResolvePrincipal(ctx, owner)
+		if err != nil {
+			t.Fatal(err)
+		}
+		detail, err := r.Get(ctx, resolved, created.CreatedRefs[0])
+		if err != nil || len(detail.Builds) != 1 {
+			t.Fatal("canonical project candidate build missing")
+		}
+		testAssistantRecipeCatalogEnvironmentKey(t, ctx, service, reader, lease, detail.Recipe)
+		testAssistantCatalogCandidatePromotion(t, ctx, r, service, owner, reader, lease, catalog, detail, prefix, readCatalog)
+		testAssistantProjectImageTemplateSelection(t, ctx, r, service, owner, lease)
 		system, err := service.GetSystemAssistant(ctx, owner)
 		if err != nil {
 			t.Fatal(err)
@@ -437,6 +632,12 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 	}
 	if len(readCatalog("ROLE_IMAGE_RECIPES").Entries) == 0 {
 		t.Fatal("owned recipe absent from discovery")
+	}
+	testAssistantRecipeCatalogEnvironmentKey(t, ctx, service, reader, lease, detail.Recipe)
+	testAssistantCatalogCandidatePromotion(t, ctx, r, service, owner, reader, lease, catalog, detail, prefix, readCatalog)
+	detail, err = r.GetOrganization(ctx, resolved, recipeRef)
+	if err != nil {
+		t.Fatal(err)
 	}
 	image.Parameters = map[string]any{"systemAssistantRef": agentRef, "recipeRef": recipeRef, "name": "Updated assistant configuration image", "environmentKey": "promotion", "dockerfile": detail.Recipe.Input.Dockerfile + "\nRUN echo synthetic\n"}
 	image.Type = "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE"
@@ -495,6 +696,143 @@ func testAssistantConfigurationPipeline(t *testing.T, ctx context.Context, r *Re
 		t.Fatal("STALE image update did not refresh its versioned snapshot")
 	}
 	apply(validate(*imageRefreshed.Plan, "image-refresh-validate"), "image-refresh-apply")
+	// Обновление опубликованного каталога не переписывает исходный recipe.
+	// Только новый owner-confirmed UPDATE создаёт immutable input поколения 2.
+	beforeRepair, err := r.GetOrganization(ctx, resolved, recipeRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nameOnly := image
+	nameOnly.Parameters = map[string]any{"systemAssistantRef": agentRef, "recipeRef": recipeRef, "name": "Name-only custom image"}
+	nameOnlyPlan := propose(nameOnly, "image-name-only-custom-proposal")
+	if assistantImageDockerfile(nameOnlyPlan.Operations[0].After) != beforeRepair.Recipe.Input.Dockerfile {
+		t.Fatal("name-only proposal discarded the existing custom Dockerfile")
+	}
+	environments := catalog.List()
+	environments[0].Input.SourceRevision = "revision-2"
+	environments[0].Input.SourceSHA256 = strings.Repeat("c", 64)
+	environments[0].Input.ContextRef = "oci://registry.internal/role-input@sha256:" + strings.Repeat("c", 64)
+	environments[0].Input.ContextSHA256 = strings.Repeat("c", 64)
+	environments[0].Input.ToolchainSHA256 = strings.Repeat("c", 64)
+	environments[0].Input.BaseImageDigest = "sha256:" + strings.Repeat("c", 64)
+	repairCatalog, err := roleimageservice.NewCatalog(environments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.ConfigureRoleImageCatalog(repairCatalog)
+	freshTemplate, err := repairCatalog.Resolve(entity.RoleEnvironmentSelection{EnvironmentKey: "promotion"})
+	if err != nil || freshTemplate.Dockerfile == beforeRepair.Recipe.Input.Dockerfile {
+		t.Fatal("changed base did not produce a fresh server Dockerfile template")
+	}
+	for index, parameters := range []map[string]any{
+		nameOnly.Parameters,
+		{"systemAssistantRef": agentRef, "recipeRef": recipeRef, "environmentKey": "promotion", "dockerfile": beforeRepair.Recipe.Input.Dockerfile},
+	} {
+		invalid := image
+		invalid.Parameters = parameters
+		_, denied := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker,
+			Mutation: value.Mutation{IdempotencyKey: prefix + "-image-old-base-" + string(rune('a'+index))},
+			Payload:  command.ProposeAssistantPlanInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: generation, Summary: invalid.Summary, Operations: []entity.AssistantPlanOperation{invalid}}})
+		if !errors.Is(denied, errs.ErrInvalid) {
+			t.Fatal("old explicit or name-only Dockerfile was silently repinned")
+		}
+	}
+	repairImage := image
+	repairImage.Parameters = map[string]any{"systemAssistantRef": agentRef, "recipeRef": recipeRef, "environmentKey": "promotion"}
+	callerPinned := repairImage
+	callerPinned.Parameters = cloneAssistantFields(repairImage.Parameters)
+	callerPinned.Parameters["specSha256"] = strings.Repeat("c", 64)
+	_, callerPinErr := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: prefix + "-image-catalog-caller-pin"},
+		Payload:  command.ProposeAssistantPlanInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: generation, Summary: repairImage.Summary, Operations: []entity.AssistantPlanOperation{callerPinned}}})
+	if !errors.Is(callerPinErr, errs.ErrInvalid) {
+		t.Fatal("caller assigned server-owned build specification pin")
+	}
+	repairPlan := propose(repairImage, "image-catalog-repair-proposal")
+	repairOperation := repairPlan.Operations[0]
+	if assistantString(repairOperation.Before, "specSha256") != beforeRepair.Recipe.SpecSHA256 ||
+		assistantString(repairOperation.After, "specSha256") == beforeRepair.Recipe.SpecSHA256 ||
+		!exactSHA256(assistantString(repairOperation.After, "specSha256")) ||
+		assistantString(repairOperation.After, "name") != beforeRepair.Recipe.Name ||
+		assistantImageDockerfile(repairOperation.Before) != beforeRepair.Recipe.Input.Dockerfile ||
+		assistantImageDockerfile(repairOperation.After) != freshTemplate.Dockerfile {
+		t.Fatal("same textual selection did not pin an explicit immutable catalog repair")
+	}
+	stillFrozen, err := r.GetOrganization(ctx, resolved, recipeRef)
+	if err != nil || !assistantJSONEqual(stillFrozen.Recipe.Input, beforeRepair.Recipe.Input) {
+		t.Fatal("proposal auto-repinned the saved recipe")
+	}
+	for _, field := range []string{"specSha256", "organizationRef", "recipeRef"} {
+		forged := repairOperation
+		forged.Parameters = cloneAssistantFields(repairOperation.Parameters)
+		forged.Parameters[field] = strings.Repeat("d", 64)
+		v := repairPlan.Version
+		_, denied := service.Execute(ctx, command.Command{Kind: command.UpdateAssistantPlan, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: prefix + "-image-repair-forged-" + field, ExpectedVersion: &v},
+			Payload:  command.AssistantPlanDraftInput{PlanRef: repairPlan.Ref, Summary: repairPlan.Summary, Operations: []entity.AssistantPlanOperation{forged}}})
+		if !errors.Is(denied, errs.ErrForbidden) {
+			t.Fatalf("caller changed immutable repair pin %s: %v", field, denied)
+		}
+	}
+	repairValidated := validate(repairPlan, "image-catalog-repair-validate")
+	wrongRepairVersion := repairValidated.Version + 99
+	_, wrongRepairErr := service.Execute(ctx, command.Command{Kind: command.ApplyAssistantPlan, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: prefix + "-image-catalog-repair-wrong-version", ExpectedVersion: &wrongRepairVersion},
+		Payload:  command.AssistantPlanInput{PlanRef: repairValidated.Ref, Revision: repairValidated.Revision}})
+	if !errors.Is(wrongRepairErr, errs.ErrVersionMismatch) {
+		t.Fatal("repair ignored confirmed plan OCC version")
+	}
+	draftRepair := propose(repairImage, "image-catalog-repair-draft-drift")
+	// Каталог, изменённый после человеческого подтверждения, не усыновляется.
+	environments[0].Input.SourceRevision = "revision-3"
+	environments[0].Input.SourceSHA256 = strings.Repeat("d", 64)
+	environments[0].Input.ContextSHA256 = strings.Repeat("d", 64)
+	environments[0].Input.ToolchainSHA256 = strings.Repeat("d", 64)
+	newCatalog, err := roleimageservice.NewCatalog(environments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.ConfigureRoleImageCatalog(newCatalog)
+	draftEditVersion := draftRepair.Version
+	_, draftEditErr := service.Execute(ctx, command.Command{Kind: command.UpdateAssistantPlan, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: prefix + "-image-catalog-repair-draft-heal", ExpectedVersion: &draftEditVersion},
+		Payload:  command.AssistantPlanDraftInput{PlanRef: draftRepair.Ref, Summary: draftRepair.Summary, Operations: draftRepair.Operations}})
+	if !errors.Is(draftEditErr, errs.ErrConflict) {
+		t.Fatal("ordinary DRAFT edit silently refreshed changed catalog pins")
+	}
+	drifted := execute(command.ApplyAssistantPlan, "image-catalog-repair-drift", repairValidated, command.AssistantPlanInput{PlanRef: repairValidated.Ref, Revision: repairValidated.Revision})
+	if drifted.Plan == nil || drifted.Plan.State != "STALE" || drifted.PlanReceipt == nil || drifted.PlanReceipt.Outcome != "CONFLICT" {
+		t.Fatal("changed catalog silently replaced confirmed build input")
+	}
+	stillFrozen, err = r.GetOrganization(ctx, resolved, recipeRef)
+	if err != nil || !assistantJSONEqual(stillFrozen.Recipe.Input, beforeRepair.Recipe.Input) || len(stillFrozen.Builds) != len(beforeRepair.Builds) {
+		t.Fatal("stale repair mutated generation or enqueued a build")
+	}
+	freshRepair := execute(command.UpdateAssistantPlan, "image-catalog-repair-new-revision", *drifted.Plan, command.AssistantPlanDraftInput{PlanRef: drifted.Plan.Ref, Summary: drifted.Plan.Summary, Operations: drifted.Plan.Operations})
+	if freshRepair.Plan == nil || freshRepair.Plan.Revision != repairPlan.Revision+1 || freshRepair.Plan.State != "DRAFT" ||
+		assistantString(freshRepair.Plan.Operations[0].After, "specSha256") == assistantString(repairOperation.After, "specSha256") {
+		t.Fatal("explicit STALE repair did not freeze fresh server input in a new revision")
+	}
+	freshValidated := validate(*freshRepair.Plan, "image-catalog-repair-fresh-validate")
+	repaired := apply(freshValidated, "image-catalog-repair-fresh-apply")
+	afterRepair, err := r.GetOrganization(ctx, resolved, recipeRef)
+	if err != nil || afterRepair.Recipe.Generation != beforeRepair.Recipe.Generation+1 ||
+		afterRepair.Recipe.SpecSHA256 != assistantString(freshRepair.Plan.Operations[0].After, "specSha256") ||
+		afterRepair.Recipe.Input.SourceRevision != "revision-3" || afterRepair.Recipe.Input.ToolchainSHA256 != strings.Repeat("d", 64) ||
+		len(afterRepair.Builds) != len(beforeRepair.Builds)+1 || afterRepair.Builds[0].ConfigurationRevisionRef == "" || afterRepair.Builds[0].SpecSHA256 != afterRepair.Recipe.SpecSHA256 {
+		t.Fatal("confirmed catalog repair lost immutable input/generation/managed lineage")
+	}
+	repairReplay := execute(command.ApplyAssistantPlan, "image-catalog-repair-fresh-apply", freshValidated, command.AssistantPlanInput{PlanRef: freshValidated.Ref, Revision: freshValidated.Revision})
+	if !assistantJSONEqual(repaired.PlanReceipt, repairReplay.PlanReceipt) {
+		t.Fatal("repair replay changed its atomic receipt")
+	}
+	// Новый запрос той же спецификации не выдаётся за meaningful repair.
+	_, unchangedErr := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker,
+		Mutation: value.Mutation{IdempotencyKey: prefix + "-image-catalog-repair-no-op"},
+		Payload:  command.ProposeAssistantPlanInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: generation, Summary: repairImage.Summary, Operations: []entity.AssistantPlanOperation{repairImage}}})
+	if !errors.Is(unchangedErr, errs.ErrConflict) {
+		t.Fatal("unchanged catalog repair was accepted")
+	}
 	ownerScope, err := r.resolveScope(ctx, resolved)
 	if err != nil {
 		t.Fatal(err)

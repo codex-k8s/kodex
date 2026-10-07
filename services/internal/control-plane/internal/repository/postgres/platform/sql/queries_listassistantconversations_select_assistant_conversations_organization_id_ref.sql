@@ -4,7 +4,9 @@ SELECT c.ref,c.title,c.title_source,c.title_revision,COALESCE(p.ref,''),s.ref,c.
        context.entity_version,context.allowed_operations || CASE
            WHEN control_plane.assistant_project_profile_creation_allowed(c.organization_id,
                @actor_id::uuid,c.project_id,c.assistant_scope,c.context_entity_kind)
-               THEN ARRAY['CREATE_PROJECT_ASSISTANT']::text[] ELSE '{}'::text[] END,c.created_at,c.updated_at,
+               THEN ARRAY['CREATE_PROJECT_ASSISTANT']::text[] ELSE '{}'::text[] END
+       || control_plane.assistant_system_integration_grant_operations(c.organization_id,
+           @actor_id::uuid,c.assistant_agent_id,c.assistant_scope,NULLIF(@authority_project,'')::uuid),c.created_at,c.updated_at,
        c.assistant_scope,assistant.ref,COALESCE(profile.ref,'')
 FROM control_plane.assistant_conversations c
 LEFT JOIN control_plane.projects p ON p.id=c.project_id

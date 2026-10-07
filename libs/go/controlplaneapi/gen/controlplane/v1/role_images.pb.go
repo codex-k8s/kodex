@@ -113,6 +113,8 @@ const (
 	ImageAdmissionVerdict_IMAGE_ADMISSION_VERDICT_UNSPECIFIED ImageAdmissionVerdict = 0
 	ImageAdmissionVerdict_IMAGE_ADMISSION_VERDICT_ACCEPTED    ImageAdmissionVerdict = 1
 	ImageAdmissionVerdict_IMAGE_ADMISSION_VERDICT_REJECTED    ImageAdmissionVerdict = 2
+	// Только публичная текущая risk-bound PENDING/CLAIMED projection; Record не принимает.
+	ImageAdmissionVerdict_IMAGE_ADMISSION_VERDICT_PENDING ImageAdmissionVerdict = 3
 )
 
 // Enum value maps for ImageAdmissionVerdict.
@@ -121,11 +123,13 @@ var (
 		0: "IMAGE_ADMISSION_VERDICT_UNSPECIFIED",
 		1: "IMAGE_ADMISSION_VERDICT_ACCEPTED",
 		2: "IMAGE_ADMISSION_VERDICT_REJECTED",
+		3: "IMAGE_ADMISSION_VERDICT_PENDING",
 	}
 	ImageAdmissionVerdict_value = map[string]int32{
 		"IMAGE_ADMISSION_VERDICT_UNSPECIFIED": 0,
 		"IMAGE_ADMISSION_VERDICT_ACCEPTED":    1,
 		"IMAGE_ADMISSION_VERDICT_REJECTED":    2,
+		"IMAGE_ADMISSION_VERDICT_PENDING":     3,
 	}
 )
 
@@ -273,6 +277,431 @@ func (x RoleImageRecipeAction) Number() protoreflect.EnumNumber {
 // Deprecated: Use RoleImageRecipeAction.Descriptor instead.
 func (RoleImageRecipeAction) EnumDescriptor() ([]byte, []int) {
 	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{3}
+}
+
+type ImageAdmissionTerminalState int32
+
+const (
+	ImageAdmissionTerminalState_IMAGE_ADMISSION_TERMINAL_STATE_UNSPECIFIED ImageAdmissionTerminalState = 0
+	ImageAdmissionTerminalState_IMAGE_ADMISSION_TERMINAL_STATE_ACCEPTED    ImageAdmissionTerminalState = 1
+	ImageAdmissionTerminalState_IMAGE_ADMISSION_TERMINAL_STATE_REJECTED    ImageAdmissionTerminalState = 2
+	ImageAdmissionTerminalState_IMAGE_ADMISSION_TERMINAL_STATE_FAILED      ImageAdmissionTerminalState = 3
+	ImageAdmissionTerminalState_IMAGE_ADMISSION_TERMINAL_STATE_CANCELLED   ImageAdmissionTerminalState = 4
+)
+
+// Enum value maps for ImageAdmissionTerminalState.
+var (
+	ImageAdmissionTerminalState_name = map[int32]string{
+		0: "IMAGE_ADMISSION_TERMINAL_STATE_UNSPECIFIED",
+		1: "IMAGE_ADMISSION_TERMINAL_STATE_ACCEPTED",
+		2: "IMAGE_ADMISSION_TERMINAL_STATE_REJECTED",
+		3: "IMAGE_ADMISSION_TERMINAL_STATE_FAILED",
+		4: "IMAGE_ADMISSION_TERMINAL_STATE_CANCELLED",
+	}
+	ImageAdmissionTerminalState_value = map[string]int32{
+		"IMAGE_ADMISSION_TERMINAL_STATE_UNSPECIFIED": 0,
+		"IMAGE_ADMISSION_TERMINAL_STATE_ACCEPTED":    1,
+		"IMAGE_ADMISSION_TERMINAL_STATE_REJECTED":    2,
+		"IMAGE_ADMISSION_TERMINAL_STATE_FAILED":      3,
+		"IMAGE_ADMISSION_TERMINAL_STATE_CANCELLED":   4,
+	}
+)
+
+func (x ImageAdmissionTerminalState) Enum() *ImageAdmissionTerminalState {
+	p := new(ImageAdmissionTerminalState)
+	*p = x
+	return p
+}
+
+func (x ImageAdmissionTerminalState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ImageAdmissionTerminalState) Descriptor() protoreflect.EnumDescriptor {
+	return file_controlplane_v1_role_images_proto_enumTypes[4].Descriptor()
+}
+
+func (ImageAdmissionTerminalState) Type() protoreflect.EnumType {
+	return &file_controlplane_v1_role_images_proto_enumTypes[4]
+}
+
+func (x ImageAdmissionTerminalState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ImageAdmissionTerminalState.Descriptor instead.
+func (ImageAdmissionTerminalState) EnumDescriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{4}
+}
+
+// Severity безопасного отчёта; UNKNOWN сохраняет исходные нераспознанные совпадения.
+type ImageVulnerabilitySeverity int32
+
+const (
+	// Неизвестное значение закрыто отклоняется на boundary.
+	ImageVulnerabilitySeverity_IMAGE_VULNERABILITY_SEVERITY_UNSPECIFIED ImageVulnerabilitySeverity = 0
+	// Критическая уязвимость.
+	ImageVulnerabilitySeverity_IMAGE_VULNERABILITY_SEVERITY_CRITICAL ImageVulnerabilitySeverity = 1
+	// Высокая severity.
+	ImageVulnerabilitySeverity_IMAGE_VULNERABILITY_SEVERITY_HIGH ImageVulnerabilitySeverity = 2
+	// Средняя severity, не блокирующая baseline.
+	ImageVulnerabilitySeverity_IMAGE_VULNERABILITY_SEVERITY_MEDIUM ImageVulnerabilitySeverity = 3
+	// Низкая severity, не блокирующая baseline.
+	ImageVulnerabilitySeverity_IMAGE_VULNERABILITY_SEVERITY_LOW ImageVulnerabilitySeverity = 4
+	// Минимальная severity.
+	ImageVulnerabilitySeverity_IMAGE_VULNERABILITY_SEVERITY_NEGLIGIBLE ImageVulnerabilitySeverity = 5
+	// Нераспознанная severity, не удаляемая из отчёта.
+	ImageVulnerabilitySeverity_IMAGE_VULNERABILITY_SEVERITY_UNKNOWN ImageVulnerabilitySeverity = 6
+)
+
+// Enum value maps for ImageVulnerabilitySeverity.
+var (
+	ImageVulnerabilitySeverity_name = map[int32]string{
+		0: "IMAGE_VULNERABILITY_SEVERITY_UNSPECIFIED",
+		1: "IMAGE_VULNERABILITY_SEVERITY_CRITICAL",
+		2: "IMAGE_VULNERABILITY_SEVERITY_HIGH",
+		3: "IMAGE_VULNERABILITY_SEVERITY_MEDIUM",
+		4: "IMAGE_VULNERABILITY_SEVERITY_LOW",
+		5: "IMAGE_VULNERABILITY_SEVERITY_NEGLIGIBLE",
+		6: "IMAGE_VULNERABILITY_SEVERITY_UNKNOWN",
+	}
+	ImageVulnerabilitySeverity_value = map[string]int32{
+		"IMAGE_VULNERABILITY_SEVERITY_UNSPECIFIED": 0,
+		"IMAGE_VULNERABILITY_SEVERITY_CRITICAL":    1,
+		"IMAGE_VULNERABILITY_SEVERITY_HIGH":        2,
+		"IMAGE_VULNERABILITY_SEVERITY_MEDIUM":      3,
+		"IMAGE_VULNERABILITY_SEVERITY_LOW":         4,
+		"IMAGE_VULNERABILITY_SEVERITY_NEGLIGIBLE":  5,
+		"IMAGE_VULNERABILITY_SEVERITY_UNKNOWN":     6,
+	}
+)
+
+func (x ImageVulnerabilitySeverity) Enum() *ImageVulnerabilitySeverity {
+	p := new(ImageVulnerabilitySeverity)
+	*p = x
+	return p
+}
+
+func (x ImageVulnerabilitySeverity) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ImageVulnerabilitySeverity) Descriptor() protoreflect.EnumDescriptor {
+	return file_controlplane_v1_role_images_proto_enumTypes[5].Descriptor()
+}
+
+func (ImageVulnerabilitySeverity) Type() protoreflect.EnumType {
+	return &file_controlplane_v1_role_images_proto_enumTypes[5]
+}
+
+func (x ImageVulnerabilitySeverity) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ImageVulnerabilitySeverity.Descriptor instead.
+func (ImageVulnerabilitySeverity) EnumDescriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{5}
+}
+
+// Закрытый вид advisory; OTHER не получает внешнюю ссылку.
+type ImageVulnerabilityAdvisoryKind int32
+
+const (
+	// Неизвестное значение закрыто отклоняется на boundary.
+	ImageVulnerabilityAdvisoryKind_IMAGE_VULNERABILITY_ADVISORY_KIND_UNSPECIFIED ImageVulnerabilityAdvisoryKind = 0
+	// Канонический CVE ID и NVD URL.
+	ImageVulnerabilityAdvisoryKind_IMAGE_VULNERABILITY_ADVISORY_KIND_CVE ImageVulnerabilityAdvisoryKind = 1
+	// Канонический GHSA ID и GitHub URL.
+	ImageVulnerabilityAdvisoryKind_IMAGE_VULNERABILITY_ADVISORY_KIND_GHSA ImageVulnerabilityAdvisoryKind = 2
+	// Канонический GO ID и Go vulnerability URL.
+	ImageVulnerabilityAdvisoryKind_IMAGE_VULNERABILITY_ADVISORY_KIND_GO ImageVulnerabilityAdvisoryKind = 3
+	// Безопасный текст иного ID, без raw URL.
+	ImageVulnerabilityAdvisoryKind_IMAGE_VULNERABILITY_ADVISORY_KIND_OTHER ImageVulnerabilityAdvisoryKind = 4
+)
+
+// Enum value maps for ImageVulnerabilityAdvisoryKind.
+var (
+	ImageVulnerabilityAdvisoryKind_name = map[int32]string{
+		0: "IMAGE_VULNERABILITY_ADVISORY_KIND_UNSPECIFIED",
+		1: "IMAGE_VULNERABILITY_ADVISORY_KIND_CVE",
+		2: "IMAGE_VULNERABILITY_ADVISORY_KIND_GHSA",
+		3: "IMAGE_VULNERABILITY_ADVISORY_KIND_GO",
+		4: "IMAGE_VULNERABILITY_ADVISORY_KIND_OTHER",
+	}
+	ImageVulnerabilityAdvisoryKind_value = map[string]int32{
+		"IMAGE_VULNERABILITY_ADVISORY_KIND_UNSPECIFIED": 0,
+		"IMAGE_VULNERABILITY_ADVISORY_KIND_CVE":         1,
+		"IMAGE_VULNERABILITY_ADVISORY_KIND_GHSA":        2,
+		"IMAGE_VULNERABILITY_ADVISORY_KIND_GO":          3,
+		"IMAGE_VULNERABILITY_ADVISORY_KIND_OTHER":       4,
+	}
+)
+
+func (x ImageVulnerabilityAdvisoryKind) Enum() *ImageVulnerabilityAdvisoryKind {
+	p := new(ImageVulnerabilityAdvisoryKind)
+	*p = x
+	return p
+}
+
+func (x ImageVulnerabilityAdvisoryKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ImageVulnerabilityAdvisoryKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_controlplane_v1_role_images_proto_enumTypes[6].Descriptor()
+}
+
+func (ImageVulnerabilityAdvisoryKind) Type() protoreflect.EnumType {
+	return &file_controlplane_v1_role_images_proto_enumTypes[6]
+}
+
+func (x ImageVulnerabilityAdvisoryKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ImageVulnerabilityAdvisoryKind.Descriptor instead.
+func (ImageVulnerabilityAdvisoryKind) EnumDescriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{6}
+}
+
+// Состояние исправления из полного scanner report.
+type ImageVulnerabilityFixState int32
+
+const (
+	// Неизвестное значение закрыто отклоняется на boundary.
+	ImageVulnerabilityFixState_IMAGE_VULNERABILITY_FIX_STATE_UNSPECIFIED ImageVulnerabilityFixState = 0
+	// База содержит выпущенное исправление.
+	ImageVulnerabilityFixState_IMAGE_VULNERABILITY_FIX_STATE_FIXED ImageVulnerabilityFixState = 1
+	// Выпущенное исправление отсутствует.
+	ImageVulnerabilityFixState_IMAGE_VULNERABILITY_FIX_STATE_NOT_FIXED ImageVulnerabilityFixState = 2
+	// Scanner сообщает отсутствие планируемого исправления.
+	ImageVulnerabilityFixState_IMAGE_VULNERABILITY_FIX_STATE_WONT_FIX ImageVulnerabilityFixState = 3
+	// Состояние не распознано; запись сохраняется.
+	ImageVulnerabilityFixState_IMAGE_VULNERABILITY_FIX_STATE_UNKNOWN ImageVulnerabilityFixState = 4
+)
+
+// Enum value maps for ImageVulnerabilityFixState.
+var (
+	ImageVulnerabilityFixState_name = map[int32]string{
+		0: "IMAGE_VULNERABILITY_FIX_STATE_UNSPECIFIED",
+		1: "IMAGE_VULNERABILITY_FIX_STATE_FIXED",
+		2: "IMAGE_VULNERABILITY_FIX_STATE_NOT_FIXED",
+		3: "IMAGE_VULNERABILITY_FIX_STATE_WONT_FIX",
+		4: "IMAGE_VULNERABILITY_FIX_STATE_UNKNOWN",
+	}
+	ImageVulnerabilityFixState_value = map[string]int32{
+		"IMAGE_VULNERABILITY_FIX_STATE_UNSPECIFIED": 0,
+		"IMAGE_VULNERABILITY_FIX_STATE_FIXED":       1,
+		"IMAGE_VULNERABILITY_FIX_STATE_NOT_FIXED":   2,
+		"IMAGE_VULNERABILITY_FIX_STATE_WONT_FIX":    3,
+		"IMAGE_VULNERABILITY_FIX_STATE_UNKNOWN":     4,
+	}
+)
+
+func (x ImageVulnerabilityFixState) Enum() *ImageVulnerabilityFixState {
+	p := new(ImageVulnerabilityFixState)
+	*p = x
+	return p
+}
+
+func (x ImageVulnerabilityFixState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ImageVulnerabilityFixState) Descriptor() protoreflect.EnumDescriptor {
+	return file_controlplane_v1_role_images_proto_enumTypes[7].Descriptor()
+}
+
+func (ImageVulnerabilityFixState) Type() protoreflect.EnumType {
+	return &file_controlplane_v1_role_images_proto_enumTypes[7]
+}
+
+func (x ImageVulnerabilityFixState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ImageVulnerabilityFixState.Descriptor instead.
+func (ImageVulnerabilityFixState) EnumDescriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{7}
+}
+
+// Полнота owner-bound безопасной проекции.
+type ImageVulnerabilityReportState int32
+
+const (
+	// Неизвестное значение закрыто отклоняется на boundary.
+	ImageVulnerabilityReportState_IMAGE_VULNERABILITY_REPORT_STATE_UNSPECIFIED ImageVulnerabilityReportState = 0
+	// Полная валидированная проекция всех совпадений.
+	ImageVulnerabilityReportState_IMAGE_VULNERABILITY_REPORT_STATE_READY ImageVulnerabilityReportState = 1
+	// Исторический artifact не имеет typed projection; нужна новая сборка.
+	ImageVulnerabilityReportState_IMAGE_VULNERABILITY_REPORT_STATE_UNAVAILABLE ImageVulnerabilityReportState = 2
+	// Техническая ошибка не разрешает принятие риска.
+	ImageVulnerabilityReportState_IMAGE_VULNERABILITY_REPORT_STATE_FAILED ImageVulnerabilityReportState = 3
+)
+
+// Enum value maps for ImageVulnerabilityReportState.
+var (
+	ImageVulnerabilityReportState_name = map[int32]string{
+		0: "IMAGE_VULNERABILITY_REPORT_STATE_UNSPECIFIED",
+		1: "IMAGE_VULNERABILITY_REPORT_STATE_READY",
+		2: "IMAGE_VULNERABILITY_REPORT_STATE_UNAVAILABLE",
+		3: "IMAGE_VULNERABILITY_REPORT_STATE_FAILED",
+	}
+	ImageVulnerabilityReportState_value = map[string]int32{
+		"IMAGE_VULNERABILITY_REPORT_STATE_UNSPECIFIED": 0,
+		"IMAGE_VULNERABILITY_REPORT_STATE_READY":       1,
+		"IMAGE_VULNERABILITY_REPORT_STATE_UNAVAILABLE": 2,
+		"IMAGE_VULNERABILITY_REPORT_STATE_FAILED":      3,
+	}
+)
+
+func (x ImageVulnerabilityReportState) Enum() *ImageVulnerabilityReportState {
+	p := new(ImageVulnerabilityReportState)
+	*p = x
+	return p
+}
+
+func (x ImageVulnerabilityReportState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ImageVulnerabilityReportState) Descriptor() protoreflect.EnumDescriptor {
+	return file_controlplane_v1_role_images_proto_enumTypes[8].Descriptor()
+}
+
+func (ImageVulnerabilityReportState) Type() protoreflect.EnumType {
+	return &file_controlplane_v1_role_images_proto_enumTypes[8]
+}
+
+func (x ImageVulnerabilityReportState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ImageVulnerabilityReportState.Descriptor instead.
+func (ImageVulnerabilityReportState) EnumDescriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{8}
+}
+
+// Явное решение человека с проверенной административной authority.
+type ImageAdmissionRiskAction int32
+
+const (
+	// Неизвестное значение закрыто отклоняется на boundary.
+	ImageAdmissionRiskAction_IMAGE_ADMISSION_RISK_ACTION_UNSPECIFIED ImageAdmissionRiskAction = 0
+	// Разрешить новую подписанную attempt для exact image/report tuple, не выставлять verdict.
+	ImageAdmissionRiskAction_IMAGE_ADMISSION_RISK_ACTION_ACCEPT_RISK ImageAdmissionRiskAction = 1
+	// Сохранить аудируемый отказ; существующий REJECTED остаётся.
+	ImageAdmissionRiskAction_IMAGE_ADMISSION_RISK_ACTION_REJECT_RISK ImageAdmissionRiskAction = 2
+)
+
+// Enum value maps for ImageAdmissionRiskAction.
+var (
+	ImageAdmissionRiskAction_name = map[int32]string{
+		0: "IMAGE_ADMISSION_RISK_ACTION_UNSPECIFIED",
+		1: "IMAGE_ADMISSION_RISK_ACTION_ACCEPT_RISK",
+		2: "IMAGE_ADMISSION_RISK_ACTION_REJECT_RISK",
+	}
+	ImageAdmissionRiskAction_value = map[string]int32{
+		"IMAGE_ADMISSION_RISK_ACTION_UNSPECIFIED": 0,
+		"IMAGE_ADMISSION_RISK_ACTION_ACCEPT_RISK": 1,
+		"IMAGE_ADMISSION_RISK_ACTION_REJECT_RISK": 2,
+	}
+)
+
+func (x ImageAdmissionRiskAction) Enum() *ImageAdmissionRiskAction {
+	p := new(ImageAdmissionRiskAction)
+	*p = x
+	return p
+}
+
+func (x ImageAdmissionRiskAction) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ImageAdmissionRiskAction) Descriptor() protoreflect.EnumDescriptor {
+	return file_controlplane_v1_role_images_proto_enumTypes[9].Descriptor()
+}
+
+func (ImageAdmissionRiskAction) Type() protoreflect.EnumType {
+	return &file_controlplane_v1_role_images_proto_enumTypes[9]
+}
+
+func (x ImageAdmissionRiskAction) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ImageAdmissionRiskAction.Descriptor instead.
+func (ImageAdmissionRiskAction) EnumDescriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{9}
+}
+
+// Lifecycle отдельной admission attempt; terminal receipt не переписывается.
+type ImageAdmissionAttemptState int32
+
+const (
+	// Неизвестное значение закрыто отклоняется на boundary.
+	ImageAdmissionAttemptState_IMAGE_ADMISSION_ATTEMPT_STATE_UNSPECIFIED ImageAdmissionAttemptState = 0
+	// Свежая attempt ожидает workload claim.
+	ImageAdmissionAttemptState_IMAGE_ADMISSION_ATTEMPT_STATE_PENDING ImageAdmissionAttemptState = 1
+	// Одна точная lease с fence и expiry.
+	ImageAdmissionAttemptState_IMAGE_ADMISSION_ATTEMPT_STATE_CLAIMED ImageAdmissionAttemptState = 2
+	// Новый подписанный допуск успешно записан владельцем.
+	ImageAdmissionAttemptState_IMAGE_ADMISSION_ATTEMPT_STATE_ACCEPTED ImageAdmissionAttemptState = 3
+	// Технические или baseline guards не разрешили допуск.
+	ImageAdmissionAttemptState_IMAGE_ADMISSION_ATTEMPT_STATE_REJECTED ImageAdmissionAttemptState = 4
+	// Технический terminal без выдуманного verdict.
+	ImageAdmissionAttemptState_IMAGE_ADMISSION_ATTEMPT_STATE_FAILED ImageAdmissionAttemptState = 5
+	// Owner graph отменил queued/live attempt.
+	ImageAdmissionAttemptState_IMAGE_ADMISSION_ATTEMPT_STATE_CANCELLED ImageAdmissionAttemptState = 6
+)
+
+// Enum value maps for ImageAdmissionAttemptState.
+var (
+	ImageAdmissionAttemptState_name = map[int32]string{
+		0: "IMAGE_ADMISSION_ATTEMPT_STATE_UNSPECIFIED",
+		1: "IMAGE_ADMISSION_ATTEMPT_STATE_PENDING",
+		2: "IMAGE_ADMISSION_ATTEMPT_STATE_CLAIMED",
+		3: "IMAGE_ADMISSION_ATTEMPT_STATE_ACCEPTED",
+		4: "IMAGE_ADMISSION_ATTEMPT_STATE_REJECTED",
+		5: "IMAGE_ADMISSION_ATTEMPT_STATE_FAILED",
+		6: "IMAGE_ADMISSION_ATTEMPT_STATE_CANCELLED",
+	}
+	ImageAdmissionAttemptState_value = map[string]int32{
+		"IMAGE_ADMISSION_ATTEMPT_STATE_UNSPECIFIED": 0,
+		"IMAGE_ADMISSION_ATTEMPT_STATE_PENDING":     1,
+		"IMAGE_ADMISSION_ATTEMPT_STATE_CLAIMED":     2,
+		"IMAGE_ADMISSION_ATTEMPT_STATE_ACCEPTED":    3,
+		"IMAGE_ADMISSION_ATTEMPT_STATE_REJECTED":    4,
+		"IMAGE_ADMISSION_ATTEMPT_STATE_FAILED":      5,
+		"IMAGE_ADMISSION_ATTEMPT_STATE_CANCELLED":   6,
+	}
+)
+
+func (x ImageAdmissionAttemptState) Enum() *ImageAdmissionAttemptState {
+	p := new(ImageAdmissionAttemptState)
+	*p = x
+	return p
+}
+
+func (x ImageAdmissionAttemptState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ImageAdmissionAttemptState) Descriptor() protoreflect.EnumDescriptor {
+	return file_controlplane_v1_role_images_proto_enumTypes[10].Descriptor()
+}
+
+func (ImageAdmissionAttemptState) Type() protoreflect.EnumType {
+	return &file_controlplane_v1_role_images_proto_enumTypes[10]
+}
+
+func (x ImageAdmissionAttemptState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ImageAdmissionAttemptState.Descriptor instead.
+func (ImageAdmissionAttemptState) EnumDescriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{10}
 }
 
 type RoleImagePlatform struct {
@@ -1625,14 +2054,19 @@ type ImageArtifact struct {
 	PromotedAt                        *timestamppb.Timestamp   `protobuf:"bytes,35,opt,name=promoted_at,json=promotedAt,proto3" json:"promoted_at,omitempty"`
 	CreatedAt                         *timestamppb.Timestamp   `protobuf:"bytes,36,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt                         *timestamppb.Timestamp   `protobuf:"bytes,37,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	Tools                             []*RoleImageTool         `protobuf:"bytes,38,rep,name=tools,proto3" json:"tools,omitempty"`
+	DeclaredTools                     []*RoleImageTool         `protobuf:"bytes,38,rep,name=declared_tools,json=declaredTools,proto3" json:"declared_tools,omitempty"`
 	PromotionState                    ImagePromotionState      `protobuf:"varint,39,opt,name=promotion_state,json=promotionState,proto3,enum=controlplane.v1.ImagePromotionState" json:"promotion_state,omitempty"`
 	PromotionRequested                bool                     `protobuf:"varint,40,opt,name=promotion_requested,json=promotionRequested,proto3" json:"promotion_requested,omitempty"`
 	ScopeKind                         RuntimeResourceScopeKind `protobuf:"varint,41,opt,name=scope_kind,json=scopeKind,proto3,enum=controlplane.v1.RuntimeResourceScopeKind" json:"scope_kind,omitempty"`
 	OrganizationRef                   string                   `protobuf:"bytes,42,opt,name=organization_ref,json=organizationRef,proto3" json:"organization_ref,omitempty"`
 	ProjectRef                        string                   `protobuf:"bytes,43,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
-	unknownFields                     protoimpl.UnknownFields
-	sizeCache                         protoimpl.SizeCache
+	VerifiedToolInventory             *ImageToolInventory      `protobuf:"bytes,44,opt,name=verified_tool_inventory,json=verifiedToolInventory,proto3" json:"verified_tool_inventory,omitempty"`
+	// Текущая attempt projection не переписывает immutable terminal history.
+	AdmissionAttempt *ImageAdmissionAttempt `protobuf:"bytes,45,opt,name=admission_attempt,json=admissionAttempt,proto3" json:"admission_attempt,omitempty"`
+	// Exact owner risk decision не является admission verdict.
+	RiskDecision  *ImageAdmissionRiskDecision `protobuf:"bytes,46,opt,name=risk_decision,json=riskDecision,proto3" json:"risk_decision,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ImageArtifact) Reset() {
@@ -1924,9 +2358,9 @@ func (x *ImageArtifact) GetUpdatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
-func (x *ImageArtifact) GetTools() []*RoleImageTool {
+func (x *ImageArtifact) GetDeclaredTools() []*RoleImageTool {
 	if x != nil {
-		return x.Tools
+		return x.DeclaredTools
 	}
 	return nil
 }
@@ -1964,6 +2398,27 @@ func (x *ImageArtifact) GetProjectRef() string {
 		return x.ProjectRef
 	}
 	return ""
+}
+
+func (x *ImageArtifact) GetVerifiedToolInventory() *ImageToolInventory {
+	if x != nil {
+		return x.VerifiedToolInventory
+	}
+	return nil
+}
+
+func (x *ImageArtifact) GetAdmissionAttempt() *ImageAdmissionAttempt {
+	if x != nil {
+		return x.AdmissionAttempt
+	}
+	return nil
+}
+
+func (x *ImageArtifact) GetRiskDecision() *ImageAdmissionRiskDecision {
+	if x != nil {
+		return x.RiskDecision
+	}
+	return nil
 }
 
 type ListRoleImageRecipesRequest struct {
@@ -2147,11 +2602,12 @@ func (x *GetRoleImageRecipeRequest) GetRecipeRef() string {
 }
 
 type GetRoleImageRecipeResponse struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	Recipe             *RoleImageRecipe       `protobuf:"bytes,1,opt,name=recipe,proto3" json:"recipe,omitempty"`
-	Builds             []*ImageBuild          `protobuf:"bytes,2,rep,name=builds,proto3" json:"builds,omitempty"`
-	ActiveArtifact     *ImageArtifact         `protobuf:"bytes,3,opt,name=active_artifact,json=activeArtifact,proto3" json:"active_artifact,omitempty"`
-	PromotionCandidate *ImageArtifact         `protobuf:"bytes,4,opt,name=promotion_candidate,json=promotionCandidate,proto3" json:"promotion_candidate,omitempty"`
+	state              protoimpl.MessageState     `protogen:"open.v1"`
+	Recipe             *RoleImageRecipe           `protobuf:"bytes,1,opt,name=recipe,proto3" json:"recipe,omitempty"`
+	Builds             []*ImageBuild              `protobuf:"bytes,2,rep,name=builds,proto3" json:"builds,omitempty"`
+	ActiveArtifact     *ImageArtifact             `protobuf:"bytes,3,opt,name=active_artifact,json=activeArtifact,proto3" json:"active_artifact,omitempty"`
+	PromotionCandidate *ImageArtifact             `protobuf:"bytes,4,opt,name=promotion_candidate,json=promotionCandidate,proto3" json:"promotion_candidate,omitempty"`
+	AdmissionFailure   *RoleImageAdmissionFailure `protobuf:"bytes,5,opt,name=admission_failure,json=admissionFailure,proto3" json:"admission_failure,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -2210,6 +2666,13 @@ func (x *GetRoleImageRecipeResponse) GetActiveArtifact() *ImageArtifact {
 func (x *GetRoleImageRecipeResponse) GetPromotionCandidate() *ImageArtifact {
 	if x != nil {
 		return x.PromotionCandidate
+	}
+	return nil
+}
+
+func (x *GetRoleImageRecipeResponse) GetAdmissionFailure() *RoleImageAdmissionFailure {
+	if x != nil {
+		return x.AdmissionFailure
 	}
 	return nil
 }
@@ -2547,11 +3010,12 @@ func (x *GetOrganizationRoleImageRecipeRequest) GetRecipeRef() string {
 }
 
 type GetOrganizationRoleImageRecipeResponse struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	Recipe             *RoleImageRecipe       `protobuf:"bytes,1,opt,name=recipe,proto3" json:"recipe,omitempty"`
-	Builds             []*ImageBuild          `protobuf:"bytes,2,rep,name=builds,proto3" json:"builds,omitempty"`
-	ActiveArtifact     *ImageArtifact         `protobuf:"bytes,3,opt,name=active_artifact,json=activeArtifact,proto3" json:"active_artifact,omitempty"`
-	PromotionCandidate *ImageArtifact         `protobuf:"bytes,4,opt,name=promotion_candidate,json=promotionCandidate,proto3" json:"promotion_candidate,omitempty"`
+	state              protoimpl.MessageState     `protogen:"open.v1"`
+	Recipe             *RoleImageRecipe           `protobuf:"bytes,1,opt,name=recipe,proto3" json:"recipe,omitempty"`
+	Builds             []*ImageBuild              `protobuf:"bytes,2,rep,name=builds,proto3" json:"builds,omitempty"`
+	ActiveArtifact     *ImageArtifact             `protobuf:"bytes,3,opt,name=active_artifact,json=activeArtifact,proto3" json:"active_artifact,omitempty"`
+	PromotionCandidate *ImageArtifact             `protobuf:"bytes,4,opt,name=promotion_candidate,json=promotionCandidate,proto3" json:"promotion_candidate,omitempty"`
+	AdmissionFailure   *RoleImageAdmissionFailure `protobuf:"bytes,5,opt,name=admission_failure,json=admissionFailure,proto3" json:"admission_failure,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -2610,6 +3074,13 @@ func (x *GetOrganizationRoleImageRecipeResponse) GetActiveArtifact() *ImageArtif
 func (x *GetOrganizationRoleImageRecipeResponse) GetPromotionCandidate() *ImageArtifact {
 	if x != nil {
 		return x.PromotionCandidate
+	}
+	return nil
+}
+
+func (x *GetOrganizationRoleImageRecipeResponse) GetAdmissionFailure() *RoleImageAdmissionFailure {
+	if x != nil {
+		return x.AdmissionFailure
 	}
 	return nil
 }
@@ -4007,8 +4478,22 @@ type ClaimImageAdmissionResponse struct {
 	Fence               uint64                 `protobuf:"varint,3,opt,name=fence,proto3" json:"fence,omitempty"`
 	AuthorityGeneration uint64                 `protobuf:"varint,4,opt,name=authority_generation,json=authorityGeneration,proto3" json:"authority_generation,omitempty"`
 	ClaimExpiresAt      *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=claim_expires_at,json=claimExpiresAt,proto3" json:"claim_expires_at,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Свежая server-owned attempt; этот pin не назначает authority.
+	AdmissionAttemptRef string `protobuf:"bytes,6,opt,name=admission_attempt_ref,json=admissionAttemptRef,proto3" json:"admission_attempt_ref,omitempty"`
+	// Монотонная admission attempt, отличная от build attempt.
+	AdmissionAttempt uint32 `protobuf:"varint,7,opt,name=admission_attempt,json=admissionAttempt,proto3" json:"admission_attempt,omitempty"`
+	// Exact canonical owner binding либо пусто только для обычной admission.
+	RiskAcceptanceJson string `protobuf:"bytes,8,opt,name=risk_acceptance_json,json=riskAcceptanceJson,proto3" json:"risk_acceptance_json,omitempty"`
+	// SHA256 binding, signer подписывает исходные bytes.
+	RiskAcceptanceSha256 string `protobuf:"bytes,9,opt,name=risk_acceptance_sha256,json=riskAcceptanceSha256,proto3" json:"risk_acceptance_sha256,omitempty"`
+	// Immutable original REJECTED receipt; не заменяется новым verdict.
+	SourceAdmissionReceiptSha256 string `protobuf:"bytes,10,opt,name=source_admission_receipt_sha256,json=sourceAdmissionReceiptSha256,proto3" json:"source_admission_receipt_sha256,omitempty"`
+	// Exact durable source evidence, никакого latest tag lookup.
+	SourceEvidenceManifestDigest string `protobuf:"bytes,11,opt,name=source_evidence_manifest_digest,json=sourceEvidenceManifestDigest,proto3" json:"source_evidence_manifest_digest,omitempty"`
+	// Original terminal revision; не новая attempt number.
+	SourceAdmissionRevision uint64 `protobuf:"varint,12,opt,name=source_admission_revision,json=sourceAdmissionRevision,proto3" json:"source_admission_revision,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *ClaimImageAdmissionResponse) Reset() {
@@ -4076,6 +4561,55 @@ func (x *ClaimImageAdmissionResponse) GetClaimExpiresAt() *timestamppb.Timestamp
 	return nil
 }
 
+func (x *ClaimImageAdmissionResponse) GetAdmissionAttemptRef() string {
+	if x != nil {
+		return x.AdmissionAttemptRef
+	}
+	return ""
+}
+
+func (x *ClaimImageAdmissionResponse) GetAdmissionAttempt() uint32 {
+	if x != nil {
+		return x.AdmissionAttempt
+	}
+	return 0
+}
+
+func (x *ClaimImageAdmissionResponse) GetRiskAcceptanceJson() string {
+	if x != nil {
+		return x.RiskAcceptanceJson
+	}
+	return ""
+}
+
+func (x *ClaimImageAdmissionResponse) GetRiskAcceptanceSha256() string {
+	if x != nil {
+		return x.RiskAcceptanceSha256
+	}
+	return ""
+}
+
+func (x *ClaimImageAdmissionResponse) GetSourceAdmissionReceiptSha256() string {
+	if x != nil {
+		return x.SourceAdmissionReceiptSha256
+	}
+	return ""
+}
+
+func (x *ClaimImageAdmissionResponse) GetSourceEvidenceManifestDigest() string {
+	if x != nil {
+		return x.SourceEvidenceManifestDigest
+	}
+	return ""
+}
+
+func (x *ClaimImageAdmissionResponse) GetSourceAdmissionRevision() uint64 {
+	if x != nil {
+		return x.SourceAdmissionRevision
+	}
+	return 0
+}
+
 type RecordImageAdmissionRequest struct {
 	state                             protoimpl.MessageState `protogen:"open.v1"`
 	IdempotencyKey                    string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
@@ -4095,8 +4629,21 @@ type RecordImageAdmissionRequest struct {
 	SignatureSha256                   string                 `protobuf:"bytes,15,opt,name=signature_sha256,json=signatureSha256,proto3" json:"signature_sha256,omitempty"`
 	AdmissionReceiptSha256            string                 `protobuf:"bytes,16,opt,name=admission_receipt_sha256,json=admissionReceiptSha256,proto3" json:"admission_receipt_sha256,omitempty"`
 	AdmissionReceiptOciManifestDigest string                 `protobuf:"bytes,17,opt,name=admission_receipt_oci_manifest_digest,json=admissionReceiptOciManifestDigest,proto3" json:"admission_receipt_oci_manifest_digest,omitempty"`
-	unknownFields                     protoimpl.UnknownFields
-	sizeCache                         protoimpl.SizeCache
+	// Exact signed payload; закрытый decoder проверяет digest и immutable tuple.
+	ToolInventoryJson   string `protobuf:"bytes,18,opt,name=tool_inventory_json,json=toolInventoryJson,proto3" json:"tool_inventory_json,omitempty"`
+	ToolInventorySha256 string `protobuf:"bytes,19,opt,name=tool_inventory_sha256,json=toolInventorySha256,proto3" json:"tool_inventory_sha256,omitempty"`
+	// Exact свежая attempt, сверяемая с заблокированным owner state.
+	ExpectedAdmissionAttemptRef string `protobuf:"bytes,20,opt,name=expected_admission_attempt_ref,json=expectedAdmissionAttemptRef,proto3" json:"expected_admission_attempt_ref,omitempty"`
+	// Exact монотонная attempt number, не caller authority.
+	ExpectedAdmissionAttempt uint32 `protobuf:"varint,21,opt,name=expected_admission_attempt,json=expectedAdmissionAttempt,proto3" json:"expected_admission_attempt,omitempty"`
+	// Полная safe projection всех matches; canonical decoder общий с worker.
+	VulnerabilityReportJson string `protobuf:"bytes,22,opt,name=vulnerability_report_json,json=vulnerabilityReportJson,proto3" json:"vulnerability_report_json,omitempty"`
+	// SHA256 exact canonical projection bytes; bound 4MiB, без truncation.
+	VulnerabilityReportProjectionSha256 string `protobuf:"bytes,23,opt,name=vulnerability_report_projection_sha256,json=vulnerabilityReportProjectionSha256,proto3" json:"vulnerability_report_projection_sha256,omitempty"`
+	// Exact server-owned risk binding либо пусто для normal admission.
+	RiskAcceptanceSha256 string `protobuf:"bytes,24,opt,name=risk_acceptance_sha256,json=riskAcceptanceSha256,proto3" json:"risk_acceptance_sha256,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *RecordImageAdmissionRequest) Reset() {
@@ -4248,6 +4795,55 @@ func (x *RecordImageAdmissionRequest) GetAdmissionReceiptOciManifestDigest() str
 	return ""
 }
 
+func (x *RecordImageAdmissionRequest) GetToolInventoryJson() string {
+	if x != nil {
+		return x.ToolInventoryJson
+	}
+	return ""
+}
+
+func (x *RecordImageAdmissionRequest) GetToolInventorySha256() string {
+	if x != nil {
+		return x.ToolInventorySha256
+	}
+	return ""
+}
+
+func (x *RecordImageAdmissionRequest) GetExpectedAdmissionAttemptRef() string {
+	if x != nil {
+		return x.ExpectedAdmissionAttemptRef
+	}
+	return ""
+}
+
+func (x *RecordImageAdmissionRequest) GetExpectedAdmissionAttempt() uint32 {
+	if x != nil {
+		return x.ExpectedAdmissionAttempt
+	}
+	return 0
+}
+
+func (x *RecordImageAdmissionRequest) GetVulnerabilityReportJson() string {
+	if x != nil {
+		return x.VulnerabilityReportJson
+	}
+	return ""
+}
+
+func (x *RecordImageAdmissionRequest) GetVulnerabilityReportProjectionSha256() string {
+	if x != nil {
+		return x.VulnerabilityReportProjectionSha256
+	}
+	return ""
+}
+
+func (x *RecordImageAdmissionRequest) GetRiskAcceptanceSha256() string {
+	if x != nil {
+		return x.RiskAcceptanceSha256
+	}
+	return ""
+}
+
 type RecordImageAdmissionResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ImageArtifact *ImageArtifact         `protobuf:"bytes,1,opt,name=image_artifact,json=imageArtifact,proto3" json:"image_artifact,omitempty"`
@@ -4292,6 +4888,995 @@ func (x *RecordImageAdmissionResponse) GetImageArtifact() *ImageArtifact {
 	return nil
 }
 
+// Технический отказ не создаёт verdict или evidence receipt.
+type RoleImageAdmissionFailure struct {
+	state            protoimpl.MessageState   `protogen:"open.v1"`
+	ImageArtifactRef string                   `protobuf:"bytes,1,opt,name=image_artifact_ref,json=imageArtifactRef,proto3" json:"image_artifact_ref,omitempty"`
+	Version          uint64                   `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+	RecipeRef        string                   `protobuf:"bytes,3,opt,name=recipe_ref,json=recipeRef,proto3" json:"recipe_ref,omitempty"`
+	RecipeGeneration uint64                   `protobuf:"varint,4,opt,name=recipe_generation,json=recipeGeneration,proto3" json:"recipe_generation,omitempty"`
+	BuildRef         string                   `protobuf:"bytes,5,opt,name=build_ref,json=buildRef,proto3" json:"build_ref,omitempty"`
+	BuildAttempt     uint32                   `protobuf:"varint,6,opt,name=build_attempt,json=buildAttempt,proto3" json:"build_attempt,omitempty"`
+	ScopeKind        RuntimeResourceScopeKind `protobuf:"varint,7,opt,name=scope_kind,json=scopeKind,proto3,enum=controlplane.v1.RuntimeResourceScopeKind" json:"scope_kind,omitempty"`
+	OrganizationRef  string                   `protobuf:"bytes,8,opt,name=organization_ref,json=organizationRef,proto3" json:"organization_ref,omitempty"`
+	ProjectRef       string                   `protobuf:"bytes,9,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
+	State            string                   `protobuf:"bytes,10,opt,name=state,proto3" json:"state,omitempty"`
+	ErrorCode        string                   `protobuf:"bytes,11,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *RoleImageAdmissionFailure) Reset() {
+	*x = RoleImageAdmissionFailure{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RoleImageAdmissionFailure) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RoleImageAdmissionFailure) ProtoMessage() {}
+
+func (x *RoleImageAdmissionFailure) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RoleImageAdmissionFailure.ProtoReflect.Descriptor instead.
+func (*RoleImageAdmissionFailure) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *RoleImageAdmissionFailure) GetImageArtifactRef() string {
+	if x != nil {
+		return x.ImageArtifactRef
+	}
+	return ""
+}
+
+func (x *RoleImageAdmissionFailure) GetVersion() uint64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *RoleImageAdmissionFailure) GetRecipeRef() string {
+	if x != nil {
+		return x.RecipeRef
+	}
+	return ""
+}
+
+func (x *RoleImageAdmissionFailure) GetRecipeGeneration() uint64 {
+	if x != nil {
+		return x.RecipeGeneration
+	}
+	return 0
+}
+
+func (x *RoleImageAdmissionFailure) GetBuildRef() string {
+	if x != nil {
+		return x.BuildRef
+	}
+	return ""
+}
+
+func (x *RoleImageAdmissionFailure) GetBuildAttempt() uint32 {
+	if x != nil {
+		return x.BuildAttempt
+	}
+	return 0
+}
+
+func (x *RoleImageAdmissionFailure) GetScopeKind() RuntimeResourceScopeKind {
+	if x != nil {
+		return x.ScopeKind
+	}
+	return RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED
+}
+
+func (x *RoleImageAdmissionFailure) GetOrganizationRef() string {
+	if x != nil {
+		return x.OrganizationRef
+	}
+	return ""
+}
+
+func (x *RoleImageAdmissionFailure) GetProjectRef() string {
+	if x != nil {
+		return x.ProjectRef
+	}
+	return ""
+}
+
+func (x *RoleImageAdmissionFailure) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *RoleImageAdmissionFailure) GetErrorCode() string {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return ""
+}
+
+type FailImageAdmissionRequest struct {
+	state                       protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey              string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	ImageArtifactRef            string                 `protobuf:"bytes,2,opt,name=image_artifact_ref,json=imageArtifactRef,proto3" json:"image_artifact_ref,omitempty"`
+	ExpectedVersion             uint64                 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
+	ExpectedFence               uint64                 `protobuf:"varint,4,opt,name=expected_fence,json=expectedFence,proto3" json:"expected_fence,omitempty"`
+	ClaimToken                  string                 `protobuf:"bytes,5,opt,name=claim_token,json=claimToken,proto3" json:"claim_token,omitempty"`
+	ManifestDigest              string                 `protobuf:"bytes,6,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
+	ImmutableBuildSha256        string                 `protobuf:"bytes,7,opt,name=immutable_build_sha256,json=immutableBuildSha256,proto3" json:"immutable_build_sha256,omitempty"`
+	ProvenanceSha256            string                 `protobuf:"bytes,8,opt,name=provenance_sha256,json=provenanceSha256,proto3" json:"provenance_sha256,omitempty"`
+	PolicyRevision              uint64                 `protobuf:"varint,9,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	PolicySha256                string                 `protobuf:"bytes,10,opt,name=policy_sha256,json=policySha256,proto3" json:"policy_sha256,omitempty"`
+	BuildRef                    string                 `protobuf:"bytes,11,opt,name=build_ref,json=buildRef,proto3" json:"build_ref,omitempty"`
+	ExpectedBuildAttempt        uint32                 `protobuf:"varint,12,opt,name=expected_build_attempt,json=expectedBuildAttempt,proto3" json:"expected_build_attempt,omitempty"`
+	RecipeGeneration            uint64                 `protobuf:"varint,13,opt,name=recipe_generation,json=recipeGeneration,proto3" json:"recipe_generation,omitempty"`
+	SpecSha256                  string                 `protobuf:"bytes,14,opt,name=spec_sha256,json=specSha256,proto3" json:"spec_sha256,omitempty"`
+	ExpectedAuthorityGeneration uint64                 `protobuf:"varint,15,opt,name=expected_authority_generation,json=expectedAuthorityGeneration,proto3" json:"expected_authority_generation,omitempty"`
+	ErrorCode                   string                 `protobuf:"bytes,16,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	// Exact attempt locator дополняет полный fence tuple, не является authority.
+	ExpectedAdmissionAttemptRef string `protobuf:"bytes,17,opt,name=expected_admission_attempt_ref,json=expectedAdmissionAttemptRef,proto3" json:"expected_admission_attempt_ref,omitempty"`
+	// Монотонная admission attempt number, не build attempt.
+	ExpectedAdmissionAttempt uint32 `protobuf:"varint,18,opt,name=expected_admission_attempt,json=expectedAdmissionAttempt,proto3" json:"expected_admission_attempt,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *FailImageAdmissionRequest) Reset() {
+	*x = FailImageAdmissionRequest{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FailImageAdmissionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FailImageAdmissionRequest) ProtoMessage() {}
+
+func (x *FailImageAdmissionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FailImageAdmissionRequest.ProtoReflect.Descriptor instead.
+func (*FailImageAdmissionRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *FailImageAdmissionRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *FailImageAdmissionRequest) GetImageArtifactRef() string {
+	if x != nil {
+		return x.ImageArtifactRef
+	}
+	return ""
+}
+
+func (x *FailImageAdmissionRequest) GetExpectedVersion() uint64 {
+	if x != nil {
+		return x.ExpectedVersion
+	}
+	return 0
+}
+
+func (x *FailImageAdmissionRequest) GetExpectedFence() uint64 {
+	if x != nil {
+		return x.ExpectedFence
+	}
+	return 0
+}
+
+func (x *FailImageAdmissionRequest) GetClaimToken() string {
+	if x != nil {
+		return x.ClaimToken
+	}
+	return ""
+}
+
+func (x *FailImageAdmissionRequest) GetManifestDigest() string {
+	if x != nil {
+		return x.ManifestDigest
+	}
+	return ""
+}
+
+func (x *FailImageAdmissionRequest) GetImmutableBuildSha256() string {
+	if x != nil {
+		return x.ImmutableBuildSha256
+	}
+	return ""
+}
+
+func (x *FailImageAdmissionRequest) GetProvenanceSha256() string {
+	if x != nil {
+		return x.ProvenanceSha256
+	}
+	return ""
+}
+
+func (x *FailImageAdmissionRequest) GetPolicyRevision() uint64 {
+	if x != nil {
+		return x.PolicyRevision
+	}
+	return 0
+}
+
+func (x *FailImageAdmissionRequest) GetPolicySha256() string {
+	if x != nil {
+		return x.PolicySha256
+	}
+	return ""
+}
+
+func (x *FailImageAdmissionRequest) GetBuildRef() string {
+	if x != nil {
+		return x.BuildRef
+	}
+	return ""
+}
+
+func (x *FailImageAdmissionRequest) GetExpectedBuildAttempt() uint32 {
+	if x != nil {
+		return x.ExpectedBuildAttempt
+	}
+	return 0
+}
+
+func (x *FailImageAdmissionRequest) GetRecipeGeneration() uint64 {
+	if x != nil {
+		return x.RecipeGeneration
+	}
+	return 0
+}
+
+func (x *FailImageAdmissionRequest) GetSpecSha256() string {
+	if x != nil {
+		return x.SpecSha256
+	}
+	return ""
+}
+
+func (x *FailImageAdmissionRequest) GetExpectedAuthorityGeneration() uint64 {
+	if x != nil {
+		return x.ExpectedAuthorityGeneration
+	}
+	return 0
+}
+
+func (x *FailImageAdmissionRequest) GetErrorCode() string {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return ""
+}
+
+func (x *FailImageAdmissionRequest) GetExpectedAdmissionAttemptRef() string {
+	if x != nil {
+		return x.ExpectedAdmissionAttemptRef
+	}
+	return ""
+}
+
+func (x *FailImageAdmissionRequest) GetExpectedAdmissionAttempt() uint32 {
+	if x != nil {
+		return x.ExpectedAdmissionAttempt
+	}
+	return 0
+}
+
+type FailImageAdmissionResponse struct {
+	state            protoimpl.MessageState     `protogen:"open.v1"`
+	AdmissionFailure *RoleImageAdmissionFailure `protobuf:"bytes,1,opt,name=admission_failure,json=admissionFailure,proto3" json:"admission_failure,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *FailImageAdmissionResponse) Reset() {
+	*x = FailImageAdmissionResponse{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FailImageAdmissionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FailImageAdmissionResponse) ProtoMessage() {}
+
+func (x *FailImageAdmissionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FailImageAdmissionResponse.ProtoReflect.Descriptor instead.
+func (*FailImageAdmissionResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *FailImageAdmissionResponse) GetAdmissionFailure() *RoleImageAdmissionFailure {
+	if x != nil {
+		return x.AdmissionFailure
+	}
+	return nil
+}
+
+// Старый fence является OCC locator, не полномочием. Expiry назначает DBclock владельца.
+type ExpireImageAdmissionClaimRequest struct {
+	state                       protoimpl.MessageState `protogen:"open.v1"`
+	IdempotencyKey              string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
+	ImageArtifactRef            string                 `protobuf:"bytes,2,opt,name=image_artifact_ref,json=imageArtifactRef,proto3" json:"image_artifact_ref,omitempty"`
+	ExpectedVersion             uint64                 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
+	ExpectedFence               uint64                 `protobuf:"varint,4,opt,name=expected_fence,json=expectedFence,proto3" json:"expected_fence,omitempty"`
+	ManifestDigest              string                 `protobuf:"bytes,5,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
+	ImmutableBuildSha256        string                 `protobuf:"bytes,6,opt,name=immutable_build_sha256,json=immutableBuildSha256,proto3" json:"immutable_build_sha256,omitempty"`
+	ProvenanceSha256            string                 `protobuf:"bytes,7,opt,name=provenance_sha256,json=provenanceSha256,proto3" json:"provenance_sha256,omitempty"`
+	PolicyRevision              uint64                 `protobuf:"varint,8,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	PolicySha256                string                 `protobuf:"bytes,9,opt,name=policy_sha256,json=policySha256,proto3" json:"policy_sha256,omitempty"`
+	BuildRef                    string                 `protobuf:"bytes,10,opt,name=build_ref,json=buildRef,proto3" json:"build_ref,omitempty"`
+	ExpectedBuildAttempt        uint32                 `protobuf:"varint,11,opt,name=expected_build_attempt,json=expectedBuildAttempt,proto3" json:"expected_build_attempt,omitempty"`
+	RecipeGeneration            uint64                 `protobuf:"varint,12,opt,name=recipe_generation,json=recipeGeneration,proto3" json:"recipe_generation,omitempty"`
+	SpecSha256                  string                 `protobuf:"bytes,13,opt,name=spec_sha256,json=specSha256,proto3" json:"spec_sha256,omitempty"`
+	ExpectedAuthorityGeneration uint64                 `protobuf:"varint,14,opt,name=expected_authority_generation,json=expectedAuthorityGeneration,proto3" json:"expected_authority_generation,omitempty"`
+	// Exact attempt locator, expiry назначается owner DBclock.
+	ExpectedAdmissionAttemptRef string `protobuf:"bytes,15,opt,name=expected_admission_attempt_ref,json=expectedAdmissionAttemptRef,proto3" json:"expected_admission_attempt_ref,omitempty"`
+	// Монотонная admission attempt, закрываемая одним terminal receipt.
+	ExpectedAdmissionAttempt uint32 `protobuf:"varint,16,opt,name=expected_admission_attempt,json=expectedAdmissionAttempt,proto3" json:"expected_admission_attempt,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
+}
+
+func (x *ExpireImageAdmissionClaimRequest) Reset() {
+	*x = ExpireImageAdmissionClaimRequest{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExpireImageAdmissionClaimRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExpireImageAdmissionClaimRequest) ProtoMessage() {}
+
+func (x *ExpireImageAdmissionClaimRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExpireImageAdmissionClaimRequest.ProtoReflect.Descriptor instead.
+func (*ExpireImageAdmissionClaimRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *ExpireImageAdmissionClaimRequest) GetIdempotencyKey() string {
+	if x != nil {
+		return x.IdempotencyKey
+	}
+	return ""
+}
+
+func (x *ExpireImageAdmissionClaimRequest) GetImageArtifactRef() string {
+	if x != nil {
+		return x.ImageArtifactRef
+	}
+	return ""
+}
+
+func (x *ExpireImageAdmissionClaimRequest) GetExpectedVersion() uint64 {
+	if x != nil {
+		return x.ExpectedVersion
+	}
+	return 0
+}
+
+func (x *ExpireImageAdmissionClaimRequest) GetExpectedFence() uint64 {
+	if x != nil {
+		return x.ExpectedFence
+	}
+	return 0
+}
+
+func (x *ExpireImageAdmissionClaimRequest) GetManifestDigest() string {
+	if x != nil {
+		return x.ManifestDigest
+	}
+	return ""
+}
+
+func (x *ExpireImageAdmissionClaimRequest) GetImmutableBuildSha256() string {
+	if x != nil {
+		return x.ImmutableBuildSha256
+	}
+	return ""
+}
+
+func (x *ExpireImageAdmissionClaimRequest) GetProvenanceSha256() string {
+	if x != nil {
+		return x.ProvenanceSha256
+	}
+	return ""
+}
+
+func (x *ExpireImageAdmissionClaimRequest) GetPolicyRevision() uint64 {
+	if x != nil {
+		return x.PolicyRevision
+	}
+	return 0
+}
+
+func (x *ExpireImageAdmissionClaimRequest) GetPolicySha256() string {
+	if x != nil {
+		return x.PolicySha256
+	}
+	return ""
+}
+
+func (x *ExpireImageAdmissionClaimRequest) GetBuildRef() string {
+	if x != nil {
+		return x.BuildRef
+	}
+	return ""
+}
+
+func (x *ExpireImageAdmissionClaimRequest) GetExpectedBuildAttempt() uint32 {
+	if x != nil {
+		return x.ExpectedBuildAttempt
+	}
+	return 0
+}
+
+func (x *ExpireImageAdmissionClaimRequest) GetRecipeGeneration() uint64 {
+	if x != nil {
+		return x.RecipeGeneration
+	}
+	return 0
+}
+
+func (x *ExpireImageAdmissionClaimRequest) GetSpecSha256() string {
+	if x != nil {
+		return x.SpecSha256
+	}
+	return ""
+}
+
+func (x *ExpireImageAdmissionClaimRequest) GetExpectedAuthorityGeneration() uint64 {
+	if x != nil {
+		return x.ExpectedAuthorityGeneration
+	}
+	return 0
+}
+
+func (x *ExpireImageAdmissionClaimRequest) GetExpectedAdmissionAttemptRef() string {
+	if x != nil {
+		return x.ExpectedAdmissionAttemptRef
+	}
+	return ""
+}
+
+func (x *ExpireImageAdmissionClaimRequest) GetExpectedAdmissionAttempt() uint32 {
+	if x != nil {
+		return x.ExpectedAdmissionAttempt
+	}
+	return 0
+}
+
+type ExpireImageAdmissionClaimResponse struct {
+	state            protoimpl.MessageState     `protogen:"open.v1"`
+	AdmissionFailure *RoleImageAdmissionFailure `protobuf:"bytes,1,opt,name=admission_failure,json=admissionFailure,proto3" json:"admission_failure,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ExpireImageAdmissionClaimResponse) Reset() {
+	*x = ExpireImageAdmissionClaimResponse{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExpireImageAdmissionClaimResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExpireImageAdmissionClaimResponse) ProtoMessage() {}
+
+func (x *ExpireImageAdmissionClaimResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExpireImageAdmissionClaimResponse.ProtoReflect.Descriptor instead.
+func (*ExpireImageAdmissionClaimResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *ExpireImageAdmissionClaimResponse) GetAdmissionFailure() *RoleImageAdmissionFailure {
+	if x != nil {
+		return x.AdmissionFailure
+	}
+	return nil
+}
+
+// Ключ исходной claim и полный immutable tuple являются locator, не authority.
+// Controller передаёт только managed run locator; actor/tenant и исходный tuple
+// назначает владелец по canonical claim receipt, не из payload.
+type GetImageAdmissionRecoveryTerminalRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	AdmissionRunId string                 `protobuf:"bytes,1,opt,name=admission_run_id,json=admissionRunId,proto3" json:"admission_run_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetImageAdmissionRecoveryTerminalRequest) Reset() {
+	*x = GetImageAdmissionRecoveryTerminalRequest{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetImageAdmissionRecoveryTerminalRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetImageAdmissionRecoveryTerminalRequest) ProtoMessage() {}
+
+func (x *GetImageAdmissionRecoveryTerminalRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetImageAdmissionRecoveryTerminalRequest.ProtoReflect.Descriptor instead.
+func (*GetImageAdmissionRecoveryTerminalRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *GetImageAdmissionRecoveryTerminalRequest) GetAdmissionRunId() string {
+	if x != nil {
+		return x.AdmissionRunId
+	}
+	return ""
+}
+
+type GetImageAdmissionRecoveryTerminalResponse struct {
+	state         protoimpl.MessageState             `protogen:"open.v1"`
+	TerminalProof *GetImageAdmissionTerminalResponse `protobuf:"bytes,1,opt,name=terminal_proof,json=terminalProof,proto3" json:"terminal_proof,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetImageAdmissionRecoveryTerminalResponse) Reset() {
+	*x = GetImageAdmissionRecoveryTerminalResponse{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetImageAdmissionRecoveryTerminalResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetImageAdmissionRecoveryTerminalResponse) ProtoMessage() {}
+
+func (x *GetImageAdmissionRecoveryTerminalResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetImageAdmissionRecoveryTerminalResponse.ProtoReflect.Descriptor instead.
+func (*GetImageAdmissionRecoveryTerminalResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{51}
+}
+
+func (x *GetImageAdmissionRecoveryTerminalResponse) GetTerminalProof() *GetImageAdmissionTerminalResponse {
+	if x != nil {
+		return x.TerminalProof
+	}
+	return nil
+}
+
+type GetImageAdmissionTerminalRequest struct {
+	state                        protoimpl.MessageState `protogen:"open.v1"`
+	ClaimIdempotencyKey          string                 `protobuf:"bytes,1,opt,name=claim_idempotency_key,json=claimIdempotencyKey,proto3" json:"claim_idempotency_key,omitempty"`
+	ImageArtifactRef             string                 `protobuf:"bytes,2,opt,name=image_artifact_ref,json=imageArtifactRef,proto3" json:"image_artifact_ref,omitempty"`
+	ExpectedVersion              uint64                 `protobuf:"varint,3,opt,name=expected_version,json=expectedVersion,proto3" json:"expected_version,omitempty"`
+	ExpectedFence                uint64                 `protobuf:"varint,4,opt,name=expected_fence,json=expectedFence,proto3" json:"expected_fence,omitempty"`
+	ManifestDigest               string                 `protobuf:"bytes,5,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
+	ImmutableBuildSha256         string                 `protobuf:"bytes,6,opt,name=immutable_build_sha256,json=immutableBuildSha256,proto3" json:"immutable_build_sha256,omitempty"`
+	ProvenanceSha256             string                 `protobuf:"bytes,7,opt,name=provenance_sha256,json=provenanceSha256,proto3" json:"provenance_sha256,omitempty"`
+	PolicyRevision               uint64                 `protobuf:"varint,8,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	PolicySha256                 string                 `protobuf:"bytes,9,opt,name=policy_sha256,json=policySha256,proto3" json:"policy_sha256,omitempty"`
+	BuildRef                     string                 `protobuf:"bytes,10,opt,name=build_ref,json=buildRef,proto3" json:"build_ref,omitempty"`
+	ExpectedBuildAttempt         uint32                 `protobuf:"varint,11,opt,name=expected_build_attempt,json=expectedBuildAttempt,proto3" json:"expected_build_attempt,omitempty"`
+	RecipeGeneration             uint64                 `protobuf:"varint,12,opt,name=recipe_generation,json=recipeGeneration,proto3" json:"recipe_generation,omitempty"`
+	SpecSha256                   string                 `protobuf:"bytes,13,opt,name=spec_sha256,json=specSha256,proto3" json:"spec_sha256,omitempty"`
+	ExpectedAuthorityGeneration  uint64                 `protobuf:"varint,14,opt,name=expected_authority_generation,json=expectedAuthorityGeneration,proto3" json:"expected_authority_generation,omitempty"`
+	ExpectedAdmissionAttemptRef  string                 `protobuf:"bytes,15,opt,name=expected_admission_attempt_ref,json=expectedAdmissionAttemptRef,proto3" json:"expected_admission_attempt_ref,omitempty"`
+	ExpectedAdmissionAttempt     uint32                 `protobuf:"varint,16,opt,name=expected_admission_attempt,json=expectedAdmissionAttempt,proto3" json:"expected_admission_attempt,omitempty"`
+	RiskAcceptanceSha256         string                 `protobuf:"bytes,17,opt,name=risk_acceptance_sha256,json=riskAcceptanceSha256,proto3" json:"risk_acceptance_sha256,omitempty"`
+	SourceAdmissionRevision      uint64                 `protobuf:"varint,18,opt,name=source_admission_revision,json=sourceAdmissionRevision,proto3" json:"source_admission_revision,omitempty"`
+	SourceAdmissionReceiptSha256 string                 `protobuf:"bytes,19,opt,name=source_admission_receipt_sha256,json=sourceAdmissionReceiptSha256,proto3" json:"source_admission_receipt_sha256,omitempty"`
+	SourceEvidenceManifestDigest string                 `protobuf:"bytes,20,opt,name=source_evidence_manifest_digest,json=sourceEvidenceManifestDigest,proto3" json:"source_evidence_manifest_digest,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
+}
+
+func (x *GetImageAdmissionTerminalRequest) Reset() {
+	*x = GetImageAdmissionTerminalRequest{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetImageAdmissionTerminalRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetImageAdmissionTerminalRequest) ProtoMessage() {}
+
+func (x *GetImageAdmissionTerminalRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetImageAdmissionTerminalRequest.ProtoReflect.Descriptor instead.
+func (*GetImageAdmissionTerminalRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetClaimIdempotencyKey() string {
+	if x != nil {
+		return x.ClaimIdempotencyKey
+	}
+	return ""
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetImageArtifactRef() string {
+	if x != nil {
+		return x.ImageArtifactRef
+	}
+	return ""
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetExpectedVersion() uint64 {
+	if x != nil {
+		return x.ExpectedVersion
+	}
+	return 0
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetExpectedFence() uint64 {
+	if x != nil {
+		return x.ExpectedFence
+	}
+	return 0
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetManifestDigest() string {
+	if x != nil {
+		return x.ManifestDigest
+	}
+	return ""
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetImmutableBuildSha256() string {
+	if x != nil {
+		return x.ImmutableBuildSha256
+	}
+	return ""
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetProvenanceSha256() string {
+	if x != nil {
+		return x.ProvenanceSha256
+	}
+	return ""
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetPolicyRevision() uint64 {
+	if x != nil {
+		return x.PolicyRevision
+	}
+	return 0
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetPolicySha256() string {
+	if x != nil {
+		return x.PolicySha256
+	}
+	return ""
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetBuildRef() string {
+	if x != nil {
+		return x.BuildRef
+	}
+	return ""
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetExpectedBuildAttempt() uint32 {
+	if x != nil {
+		return x.ExpectedBuildAttempt
+	}
+	return 0
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetRecipeGeneration() uint64 {
+	if x != nil {
+		return x.RecipeGeneration
+	}
+	return 0
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetSpecSha256() string {
+	if x != nil {
+		return x.SpecSha256
+	}
+	return ""
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetExpectedAuthorityGeneration() uint64 {
+	if x != nil {
+		return x.ExpectedAuthorityGeneration
+	}
+	return 0
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetExpectedAdmissionAttemptRef() string {
+	if x != nil {
+		return x.ExpectedAdmissionAttemptRef
+	}
+	return ""
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetExpectedAdmissionAttempt() uint32 {
+	if x != nil {
+		return x.ExpectedAdmissionAttempt
+	}
+	return 0
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetRiskAcceptanceSha256() string {
+	if x != nil {
+		return x.RiskAcceptanceSha256
+	}
+	return ""
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetSourceAdmissionRevision() uint64 {
+	if x != nil {
+		return x.SourceAdmissionRevision
+	}
+	return 0
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetSourceAdmissionReceiptSha256() string {
+	if x != nil {
+		return x.SourceAdmissionReceiptSha256
+	}
+	return ""
+}
+
+func (x *GetImageAdmissionTerminalRequest) GetSourceEvidenceManifestDigest() string {
+	if x != nil {
+		return x.SourceEvidenceManifestDigest
+	}
+	return ""
+}
+
+type GetImageAdmissionTerminalResponse struct {
+	state                        protoimpl.MessageState      `protogen:"open.v1"`
+	TerminalState                ImageAdmissionTerminalState `protobuf:"varint,1,opt,name=terminal_state,json=terminalState,proto3,enum=controlplane.v1.ImageAdmissionTerminalState" json:"terminal_state,omitempty"`
+	ClaimedArtifact              *ImageArtifact              `protobuf:"bytes,2,opt,name=claimed_artifact,json=claimedArtifact,proto3" json:"claimed_artifact,omitempty"`
+	AdmissionAttemptRef          string                      `protobuf:"bytes,3,opt,name=admission_attempt_ref,json=admissionAttemptRef,proto3" json:"admission_attempt_ref,omitempty"`
+	AdmissionAttempt             uint32                      `protobuf:"varint,4,opt,name=admission_attempt,json=admissionAttempt,proto3" json:"admission_attempt,omitempty"`
+	ClaimFence                   uint64                      `protobuf:"varint,5,opt,name=claim_fence,json=claimFence,proto3" json:"claim_fence,omitempty"`
+	ClaimAuthorityGeneration     uint64                      `protobuf:"varint,6,opt,name=claim_authority_generation,json=claimAuthorityGeneration,proto3" json:"claim_authority_generation,omitempty"`
+	TerminalArtifactVersion      uint64                      `protobuf:"varint,7,opt,name=terminal_artifact_version,json=terminalArtifactVersion,proto3" json:"terminal_artifact_version,omitempty"`
+	TerminalFence                uint64                      `protobuf:"varint,8,opt,name=terminal_fence,json=terminalFence,proto3" json:"terminal_fence,omitempty"`
+	TerminalAttemptVersion       uint64                      `protobuf:"varint,9,opt,name=terminal_attempt_version,json=terminalAttemptVersion,proto3" json:"terminal_attempt_version,omitempty"`
+	RiskAcceptanceSha256         string                      `protobuf:"bytes,10,opt,name=risk_acceptance_sha256,json=riskAcceptanceSha256,proto3" json:"risk_acceptance_sha256,omitempty"`
+	SourceAdmissionRevision      uint64                      `protobuf:"varint,11,opt,name=source_admission_revision,json=sourceAdmissionRevision,proto3" json:"source_admission_revision,omitempty"`
+	SourceAdmissionReceiptSha256 string                      `protobuf:"bytes,12,opt,name=source_admission_receipt_sha256,json=sourceAdmissionReceiptSha256,proto3" json:"source_admission_receipt_sha256,omitempty"`
+	SourceEvidenceManifestDigest string                      `protobuf:"bytes,13,opt,name=source_evidence_manifest_digest,json=sourceEvidenceManifestDigest,proto3" json:"source_evidence_manifest_digest,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
+}
+
+func (x *GetImageAdmissionTerminalResponse) Reset() {
+	*x = GetImageAdmissionTerminalResponse{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetImageAdmissionTerminalResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetImageAdmissionTerminalResponse) ProtoMessage() {}
+
+func (x *GetImageAdmissionTerminalResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetImageAdmissionTerminalResponse.ProtoReflect.Descriptor instead.
+func (*GetImageAdmissionTerminalResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *GetImageAdmissionTerminalResponse) GetTerminalState() ImageAdmissionTerminalState {
+	if x != nil {
+		return x.TerminalState
+	}
+	return ImageAdmissionTerminalState_IMAGE_ADMISSION_TERMINAL_STATE_UNSPECIFIED
+}
+
+func (x *GetImageAdmissionTerminalResponse) GetClaimedArtifact() *ImageArtifact {
+	if x != nil {
+		return x.ClaimedArtifact
+	}
+	return nil
+}
+
+func (x *GetImageAdmissionTerminalResponse) GetAdmissionAttemptRef() string {
+	if x != nil {
+		return x.AdmissionAttemptRef
+	}
+	return ""
+}
+
+func (x *GetImageAdmissionTerminalResponse) GetAdmissionAttempt() uint32 {
+	if x != nil {
+		return x.AdmissionAttempt
+	}
+	return 0
+}
+
+func (x *GetImageAdmissionTerminalResponse) GetClaimFence() uint64 {
+	if x != nil {
+		return x.ClaimFence
+	}
+	return 0
+}
+
+func (x *GetImageAdmissionTerminalResponse) GetClaimAuthorityGeneration() uint64 {
+	if x != nil {
+		return x.ClaimAuthorityGeneration
+	}
+	return 0
+}
+
+func (x *GetImageAdmissionTerminalResponse) GetTerminalArtifactVersion() uint64 {
+	if x != nil {
+		return x.TerminalArtifactVersion
+	}
+	return 0
+}
+
+func (x *GetImageAdmissionTerminalResponse) GetTerminalFence() uint64 {
+	if x != nil {
+		return x.TerminalFence
+	}
+	return 0
+}
+
+func (x *GetImageAdmissionTerminalResponse) GetTerminalAttemptVersion() uint64 {
+	if x != nil {
+		return x.TerminalAttemptVersion
+	}
+	return 0
+}
+
+func (x *GetImageAdmissionTerminalResponse) GetRiskAcceptanceSha256() string {
+	if x != nil {
+		return x.RiskAcceptanceSha256
+	}
+	return ""
+}
+
+func (x *GetImageAdmissionTerminalResponse) GetSourceAdmissionRevision() uint64 {
+	if x != nil {
+		return x.SourceAdmissionRevision
+	}
+	return 0
+}
+
+func (x *GetImageAdmissionTerminalResponse) GetSourceAdmissionReceiptSha256() string {
+	if x != nil {
+		return x.SourceAdmissionReceiptSha256
+	}
+	return ""
+}
+
+func (x *GetImageAdmissionTerminalResponse) GetSourceEvidenceManifestDigest() string {
+	if x != nil {
+		return x.SourceEvidenceManifestDigest
+	}
+	return ""
+}
+
 type ClaimImagePromotionRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	IdempotencyKey string                 `protobuf:"bytes,1,opt,name=idempotency_key,json=idempotencyKey,proto3" json:"idempotency_key,omitempty"`
@@ -4301,7 +5886,7 @@ type ClaimImagePromotionRequest struct {
 
 func (x *ClaimImagePromotionRequest) Reset() {
 	*x = ClaimImagePromotionRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[45]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4313,7 +5898,7 @@ func (x *ClaimImagePromotionRequest) String() string {
 func (*ClaimImagePromotionRequest) ProtoMessage() {}
 
 func (x *ClaimImagePromotionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[45]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4326,7 +5911,7 @@ func (x *ClaimImagePromotionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimImagePromotionRequest.ProtoReflect.Descriptor instead.
 func (*ClaimImagePromotionRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{45}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *ClaimImagePromotionRequest) GetIdempotencyKey() string {
@@ -4349,7 +5934,7 @@ type ClaimImagePromotionResponse struct {
 
 func (x *ClaimImagePromotionResponse) Reset() {
 	*x = ClaimImagePromotionResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[46]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4361,7 +5946,7 @@ func (x *ClaimImagePromotionResponse) String() string {
 func (*ClaimImagePromotionResponse) ProtoMessage() {}
 
 func (x *ClaimImagePromotionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[46]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4374,7 +5959,7 @@ func (x *ClaimImagePromotionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClaimImagePromotionResponse.ProtoReflect.Descriptor instead.
 func (*ClaimImagePromotionResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{46}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *ClaimImagePromotionResponse) GetImageArtifact() *ImageArtifact {
@@ -4425,7 +6010,7 @@ type AuthorizeImagePromotionRequest struct {
 
 func (x *AuthorizeImagePromotionRequest) Reset() {
 	*x = AuthorizeImagePromotionRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[47]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4437,7 +6022,7 @@ func (x *AuthorizeImagePromotionRequest) String() string {
 func (*AuthorizeImagePromotionRequest) ProtoMessage() {}
 
 func (x *AuthorizeImagePromotionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[47]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4450,7 +6035,7 @@ func (x *AuthorizeImagePromotionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthorizeImagePromotionRequest.ProtoReflect.Descriptor instead.
 func (*AuthorizeImagePromotionRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{47}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *AuthorizeImagePromotionRequest) GetIdempotencyKey() string {
@@ -4499,7 +6084,7 @@ type AuthorizeImagePromotionResponse struct {
 
 func (x *AuthorizeImagePromotionResponse) Reset() {
 	*x = AuthorizeImagePromotionResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[48]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4511,7 +6096,7 @@ func (x *AuthorizeImagePromotionResponse) String() string {
 func (*AuthorizeImagePromotionResponse) ProtoMessage() {}
 
 func (x *AuthorizeImagePromotionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[48]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4524,7 +6109,7 @@ func (x *AuthorizeImagePromotionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthorizeImagePromotionResponse.ProtoReflect.Descriptor instead.
 func (*AuthorizeImagePromotionResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{48}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *AuthorizeImagePromotionResponse) GetImageArtifact() *ImageArtifact {
@@ -4563,7 +6148,7 @@ type CompleteImagePromotionRequest struct {
 
 func (x *CompleteImagePromotionRequest) Reset() {
 	*x = CompleteImagePromotionRequest{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[49]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4575,7 +6160,7 @@ func (x *CompleteImagePromotionRequest) String() string {
 func (*CompleteImagePromotionRequest) ProtoMessage() {}
 
 func (x *CompleteImagePromotionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[49]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4588,7 +6173,7 @@ func (x *CompleteImagePromotionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteImagePromotionRequest.ProtoReflect.Descriptor instead.
 func (*CompleteImagePromotionRequest) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{49}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *CompleteImagePromotionRequest) GetIdempotencyKey() string {
@@ -4649,7 +6234,7 @@ type CompleteImagePromotionResponse struct {
 
 func (x *CompleteImagePromotionResponse) Reset() {
 	*x = CompleteImagePromotionResponse{}
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[50]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4661,7 +6246,7 @@ func (x *CompleteImagePromotionResponse) String() string {
 func (*CompleteImagePromotionResponse) ProtoMessage() {}
 
 func (x *CompleteImagePromotionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_controlplane_v1_role_images_proto_msgTypes[50]
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4674,12 +6259,1825 @@ func (x *CompleteImagePromotionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteImagePromotionResponse.ProtoReflect.Descriptor instead.
 func (*CompleteImagePromotionResponse) Descriptor() ([]byte, []int) {
-	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{50}
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *CompleteImagePromotionResponse) GetImageArtifact() *ImageArtifact {
 	if x != nil {
 		return x.ImageArtifact
+	}
+	return nil
+}
+
+// Число исходных совпадений severity, включая suppressed occurrences.
+type ImageVulnerabilitySeverityCount struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Закрытая severity, UNKNOWN имеет собственный bucket.
+	Severity ImageVulnerabilitySeverity `protobuf:"varint,1,opt,name=severity,proto3,enum=controlplane.v1.ImageVulnerabilitySeverity" json:"severity,omitempty"`
+	// Сумма occurrences этой severity, не число grouped rows.
+	MatchCount    uint32 `protobuf:"varint,2,opt,name=match_count,json=matchCount,proto3" json:"match_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImageVulnerabilitySeverityCount) Reset() {
+	*x = ImageVulnerabilitySeverityCount{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[60]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImageVulnerabilitySeverityCount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImageVulnerabilitySeverityCount) ProtoMessage() {}
+
+func (x *ImageVulnerabilitySeverityCount) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[60]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImageVulnerabilitySeverityCount.ProtoReflect.Descriptor instead.
+func (*ImageVulnerabilitySeverityCount) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{60}
+}
+
+func (x *ImageVulnerabilitySeverityCount) GetSeverity() ImageVulnerabilitySeverity {
+	if x != nil {
+		return x.Severity
+	}
+	return ImageVulnerabilitySeverity_IMAGE_VULNERABILITY_SEVERITY_UNSPECIFIED
+}
+
+func (x *ImageVulnerabilitySeverityCount) GetMatchCount() uint32 {
+	if x != nil {
+		return x.MatchCount
+	}
+	return 0
+}
+
+// Полная безопасная grouped строка; locations и raw URLs отсутствуют.
+type ImageVulnerabilityFinding struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// SHA256 canonical grouping tuple, стабильный внутри pinned report.
+	Ref string `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
+	// Безопасное имя пакета без paths и управляющих символов.
+	PackageName string `protobuf:"bytes,2,opt,name=package_name,json=packageName,proto3" json:"package_name,omitempty"`
+	// Версия или bounded range как данные, не shell или новый pin.
+	InstalledVersion string `protobuf:"bytes,3,opt,name=installed_version,json=installedVersion,proto3" json:"installed_version,omitempty"`
+	// Безопасный тип пакета из scanner report.
+	Ecosystem string `protobuf:"bytes,4,opt,name=ecosystem,proto3" json:"ecosystem,omitempty"`
+	// Bounded CVE/GHSA/GO либо OTHER ID, без потери исходных совпадений.
+	AdvisoryId string `protobuf:"bytes,5,opt,name=advisory_id,json=advisoryId,proto3" json:"advisory_id,omitempty"`
+	// Вид определён серверным canonical decoder.
+	AdvisoryKind ImageVulnerabilityAdvisoryKind `protobuf:"varint,6,opt,name=advisory_kind,json=advisoryKind,proto3,enum=controlplane.v1.ImageVulnerabilityAdvisoryKind" json:"advisory_kind,omitempty"`
+	// Только построенный сервером canonical HTTPS URL; OTHER пуст.
+	AdvisoryUrl string `protobuf:"bytes,7,opt,name=advisory_url,json=advisoryUrl,proto3" json:"advisory_url,omitempty"`
+	// Severity всех объединённых исходных совпадений.
+	Severity ImageVulnerabilitySeverity `protobuf:"varint,8,opt,name=severity,proto3,enum=controlplane.v1.ImageVulnerabilitySeverity" json:"severity,omitempty"`
+	// Состояние исправления по immutable report.
+	FixState ImageVulnerabilityFixState `protobuf:"varint,9,opt,name=fix_state,json=fixState,proto3,enum=controlplane.v1.ImageVulnerabilityFixState" json:"fix_state,omitempty"`
+	// Sorted unique bounded версии/ranges; не команда и не pin.
+	FixedVersions []string `protobuf:"bytes,10,rep,name=fixed_versions,json=fixedVersions,proto3" json:"fixed_versions,omitempty"`
+	// Baseline blocker назначается validator, suppressed false.
+	Blocking bool `protobuf:"varint,11,opt,name=blocking,proto3" json:"blocking,omitempty"`
+	// Совпадения исходного ignoredMatches сохраняются явно.
+	Ignored bool `protobuf:"varint,12,opt,name=ignored,proto3" json:"ignored,omitempty"`
+	// Положительное число grouped исходных совпадений.
+	Occurrences   uint32 `protobuf:"varint,13,opt,name=occurrences,proto3" json:"occurrences,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImageVulnerabilityFinding) Reset() {
+	*x = ImageVulnerabilityFinding{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[61]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImageVulnerabilityFinding) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImageVulnerabilityFinding) ProtoMessage() {}
+
+func (x *ImageVulnerabilityFinding) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[61]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImageVulnerabilityFinding.ProtoReflect.Descriptor instead.
+func (*ImageVulnerabilityFinding) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{61}
+}
+
+func (x *ImageVulnerabilityFinding) GetRef() string {
+	if x != nil {
+		return x.Ref
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityFinding) GetPackageName() string {
+	if x != nil {
+		return x.PackageName
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityFinding) GetInstalledVersion() string {
+	if x != nil {
+		return x.InstalledVersion
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityFinding) GetEcosystem() string {
+	if x != nil {
+		return x.Ecosystem
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityFinding) GetAdvisoryId() string {
+	if x != nil {
+		return x.AdvisoryId
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityFinding) GetAdvisoryKind() ImageVulnerabilityAdvisoryKind {
+	if x != nil {
+		return x.AdvisoryKind
+	}
+	return ImageVulnerabilityAdvisoryKind_IMAGE_VULNERABILITY_ADVISORY_KIND_UNSPECIFIED
+}
+
+func (x *ImageVulnerabilityFinding) GetAdvisoryUrl() string {
+	if x != nil {
+		return x.AdvisoryUrl
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityFinding) GetSeverity() ImageVulnerabilitySeverity {
+	if x != nil {
+		return x.Severity
+	}
+	return ImageVulnerabilitySeverity_IMAGE_VULNERABILITY_SEVERITY_UNSPECIFIED
+}
+
+func (x *ImageVulnerabilityFinding) GetFixState() ImageVulnerabilityFixState {
+	if x != nil {
+		return x.FixState
+	}
+	return ImageVulnerabilityFixState_IMAGE_VULNERABILITY_FIX_STATE_UNSPECIFIED
+}
+
+func (x *ImageVulnerabilityFinding) GetFixedVersions() []string {
+	if x != nil {
+		return x.FixedVersions
+	}
+	return nil
+}
+
+func (x *ImageVulnerabilityFinding) GetBlocking() bool {
+	if x != nil {
+		return x.Blocking
+	}
+	return false
+}
+
+func (x *ImageVulnerabilityFinding) GetIgnored() bool {
+	if x != nil {
+		return x.Ignored
+	}
+	return false
+}
+
+func (x *ImageVulnerabilityFinding) GetOccurrences() uint32 {
+	if x != nil {
+		return x.Occurrences
+	}
+	return 0
+}
+
+// Owner-facing metadata полного immutable report; actual page rows выдаются отдельно.
+type ImageVulnerabilityReport struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Область разрешена владельцем из сохранённого artifact.
+	ScopeKind RuntimeResourceScopeKind `protobuf:"varint,1,opt,name=scope_kind,json=scopeKind,proto3,enum=controlplane.v1.RuntimeResourceScopeKind" json:"scope_kind,omitempty"`
+	// Проверенная организация, не actor input.
+	OrganizationRef string `protobuf:"bytes,2,opt,name=organization_ref,json=organizationRef,proto3" json:"organization_ref,omitempty"`
+	// Точный PROJECT locator; пустой только для ORGANIZATION.
+	ProjectRef string `protobuf:"bytes,3,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
+	// Owner-resolved рецепт.
+	RecipeRef string `protobuf:"bytes,4,opt,name=recipe_ref,json=recipeRef,proto3" json:"recipe_ref,omitempty"`
+	// Exact версия рецепта для owner OCC.
+	RecipeVersion uint64 `protobuf:"varint,5,opt,name=recipe_version,json=recipeVersion,proto3" json:"recipe_version,omitempty"`
+	// Неизменяемое поколение recipe/build snapshot.
+	RecipeGeneration uint64 `protobuf:"varint,6,opt,name=recipe_generation,json=recipeGeneration,proto3" json:"recipe_generation,omitempty"`
+	// Latest COMPLETED build, разрешённый owner eligibility.
+	BuildRef string `protobuf:"bytes,7,opt,name=build_ref,json=buildRef,proto3" json:"build_ref,omitempty"`
+	// Версия сохранённого immutable build snapshot.
+	BuildVersion uint64 `protobuf:"varint,8,opt,name=build_version,json=buildVersion,proto3" json:"build_version,omitempty"`
+	// Точная attempt исходной сборки.
+	BuildAttempt uint32 `protobuf:"varint,9,opt,name=build_attempt,json=buildAttempt,proto3" json:"build_attempt,omitempty"`
+	// Принадлежащий той же scope artifact.
+	ArtifactRef string `protobuf:"bytes,10,opt,name=artifact_ref,json=artifactRef,proto3" json:"artifact_ref,omitempty"`
+	// Текущая версия artifact; If-Match относится к ней.
+	ArtifactVersion uint64 `protobuf:"varint,11,opt,name=artifact_version,json=artifactVersion,proto3" json:"artifact_version,omitempty"`
+	// Exact image digest sha256:; tag не является authority.
+	ManifestDigest string `protobuf:"bytes,12,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
+	// Текущая owner revision admission projection.
+	AdmissionRevision uint64 `protobuf:"varint,13,opt,name=admission_revision,json=admissionRevision,proto3" json:"admission_revision,omitempty"`
+	// Original REJECTED terminal revision, закреплённая report.
+	SourceAdmissionRevision uint64 `protobuf:"varint,14,opt,name=source_admission_revision,json=sourceAdmissionRevision,proto3" json:"source_admission_revision,omitempty"`
+	// SHA256 immutable предыдущей receipt.
+	PriorAdmissionReceiptSha256 string `protobuf:"bytes,15,opt,name=prior_admission_receipt_sha256,json=priorAdmissionReceiptSha256,proto3" json:"prior_admission_receipt_sha256,omitempty"`
+	// Exact OCI manifest предыдущего evidence bundle.
+	PriorEvidenceManifestDigest string `protobuf:"bytes,16,opt,name=prior_evidence_manifest_digest,json=priorEvidenceManifestDigest,proto3" json:"prior_evidence_manifest_digest,omitempty"`
+	// SHA256 исходных полных scanner bytes.
+	VulnerabilityEvidenceSha256 string `protobuf:"bytes,17,opt,name=vulnerability_evidence_sha256,json=vulnerabilityEvidenceSha256,proto3" json:"vulnerability_evidence_sha256,omitempty"`
+	// SHA256 исходных полных SBOM bytes.
+	SbomSha256 string `protobuf:"bytes,18,opt,name=sbom_sha256,json=sbomSha256,proto3" json:"sbom_sha256,omitempty"`
+	// Version-pinned baseline policy.
+	PolicyRevision uint64 `protobuf:"varint,19,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	// Exact baseline policy digest.
+	PolicySha256 string `protobuf:"bytes,20,opt,name=policy_sha256,json=policySha256,proto3" json:"policy_sha256,omitempty"`
+	// READY только после полного canonical validation.
+	State ImageVulnerabilityReportState `protobuf:"varint,21,opt,name=state,proto3,enum=controlplane.v1.ImageVulnerabilityReportState" json:"state,omitempty"`
+	// Неизменяемая версия безопасной report projection.
+	Version uint64 `protobuf:"varint,22,opt,name=version,proto3" json:"version,omitempty"`
+	// SHA256 исходных canonical projection bytes.
+	ProjectionSha256 string `protobuf:"bytes,23,opt,name=projection_sha256,json=projectionSha256,proto3" json:"projection_sha256,omitempty"`
+	// Server validator доказал полноту; caller flag не принимается.
+	Complete bool `protobuf:"varint,24,opt,name=complete,proto3" json:"complete,omitempty"`
+	// Все active и suppressed occurrences.
+	MatchCount uint32 `protobuf:"varint,25,opt,name=match_count,json=matchCount,proto3" json:"match_count,omitempty"`
+	// Число уникальных advisory ID полного отчёта.
+	UniqueAdvisoryCount uint32 `protobuf:"varint,26,opt,name=unique_advisory_count,json=uniqueAdvisoryCount,proto3" json:"unique_advisory_count,omitempty"`
+	// Baseline active High/Critical с доступным исправлением.
+	BlockingMatchCount uint32 `protobuf:"varint,27,opt,name=blocking_match_count,json=blockingMatchCount,proto3" json:"blocking_match_count,omitempty"`
+	// Active High/Critical без доступного исправления.
+	UnresolvedNoFixMatchCount uint32 `protobuf:"varint,28,opt,name=unresolved_no_fix_match_count,json=unresolvedNoFixMatchCount,proto3" json:"unresolved_no_fix_match_count,omitempty"`
+	// Все исходные ignoredMatches occurrences.
+	SuppressedMatchCount uint32 `protobuf:"varint,29,opt,name=suppressed_match_count,json=suppressedMatchCount,proto3" json:"suppressed_match_count,omitempty"`
+	// Все закрытые severity buckets, включая UNKNOWN.
+	SeverityCounts []*ImageVulnerabilitySeverityCount `protobuf:"bytes,30,rep,name=severity_counts,json=severityCounts,proto3" json:"severity_counts,omitempty"`
+	// Server-only ACCEPT_RISK, REJECT_RISK либо REBUILD_FOR_REPORT по current eligibility.
+	NextActions   []string `protobuf:"bytes,31,rep,name=next_actions,json=nextActions,proto3" json:"next_actions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImageVulnerabilityReport) Reset() {
+	*x = ImageVulnerabilityReport{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[62]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImageVulnerabilityReport) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImageVulnerabilityReport) ProtoMessage() {}
+
+func (x *ImageVulnerabilityReport) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[62]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImageVulnerabilityReport.ProtoReflect.Descriptor instead.
+func (*ImageVulnerabilityReport) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{62}
+}
+
+func (x *ImageVulnerabilityReport) GetScopeKind() RuntimeResourceScopeKind {
+	if x != nil {
+		return x.ScopeKind
+	}
+	return RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED
+}
+
+func (x *ImageVulnerabilityReport) GetOrganizationRef() string {
+	if x != nil {
+		return x.OrganizationRef
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityReport) GetProjectRef() string {
+	if x != nil {
+		return x.ProjectRef
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityReport) GetRecipeRef() string {
+	if x != nil {
+		return x.RecipeRef
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityReport) GetRecipeVersion() uint64 {
+	if x != nil {
+		return x.RecipeVersion
+	}
+	return 0
+}
+
+func (x *ImageVulnerabilityReport) GetRecipeGeneration() uint64 {
+	if x != nil {
+		return x.RecipeGeneration
+	}
+	return 0
+}
+
+func (x *ImageVulnerabilityReport) GetBuildRef() string {
+	if x != nil {
+		return x.BuildRef
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityReport) GetBuildVersion() uint64 {
+	if x != nil {
+		return x.BuildVersion
+	}
+	return 0
+}
+
+func (x *ImageVulnerabilityReport) GetBuildAttempt() uint32 {
+	if x != nil {
+		return x.BuildAttempt
+	}
+	return 0
+}
+
+func (x *ImageVulnerabilityReport) GetArtifactRef() string {
+	if x != nil {
+		return x.ArtifactRef
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityReport) GetArtifactVersion() uint64 {
+	if x != nil {
+		return x.ArtifactVersion
+	}
+	return 0
+}
+
+func (x *ImageVulnerabilityReport) GetManifestDigest() string {
+	if x != nil {
+		return x.ManifestDigest
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityReport) GetAdmissionRevision() uint64 {
+	if x != nil {
+		return x.AdmissionRevision
+	}
+	return 0
+}
+
+func (x *ImageVulnerabilityReport) GetSourceAdmissionRevision() uint64 {
+	if x != nil {
+		return x.SourceAdmissionRevision
+	}
+	return 0
+}
+
+func (x *ImageVulnerabilityReport) GetPriorAdmissionReceiptSha256() string {
+	if x != nil {
+		return x.PriorAdmissionReceiptSha256
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityReport) GetPriorEvidenceManifestDigest() string {
+	if x != nil {
+		return x.PriorEvidenceManifestDigest
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityReport) GetVulnerabilityEvidenceSha256() string {
+	if x != nil {
+		return x.VulnerabilityEvidenceSha256
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityReport) GetSbomSha256() string {
+	if x != nil {
+		return x.SbomSha256
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityReport) GetPolicyRevision() uint64 {
+	if x != nil {
+		return x.PolicyRevision
+	}
+	return 0
+}
+
+func (x *ImageVulnerabilityReport) GetPolicySha256() string {
+	if x != nil {
+		return x.PolicySha256
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityReport) GetState() ImageVulnerabilityReportState {
+	if x != nil {
+		return x.State
+	}
+	return ImageVulnerabilityReportState_IMAGE_VULNERABILITY_REPORT_STATE_UNSPECIFIED
+}
+
+func (x *ImageVulnerabilityReport) GetVersion() uint64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *ImageVulnerabilityReport) GetProjectionSha256() string {
+	if x != nil {
+		return x.ProjectionSha256
+	}
+	return ""
+}
+
+func (x *ImageVulnerabilityReport) GetComplete() bool {
+	if x != nil {
+		return x.Complete
+	}
+	return false
+}
+
+func (x *ImageVulnerabilityReport) GetMatchCount() uint32 {
+	if x != nil {
+		return x.MatchCount
+	}
+	return 0
+}
+
+func (x *ImageVulnerabilityReport) GetUniqueAdvisoryCount() uint32 {
+	if x != nil {
+		return x.UniqueAdvisoryCount
+	}
+	return 0
+}
+
+func (x *ImageVulnerabilityReport) GetBlockingMatchCount() uint32 {
+	if x != nil {
+		return x.BlockingMatchCount
+	}
+	return 0
+}
+
+func (x *ImageVulnerabilityReport) GetUnresolvedNoFixMatchCount() uint32 {
+	if x != nil {
+		return x.UnresolvedNoFixMatchCount
+	}
+	return 0
+}
+
+func (x *ImageVulnerabilityReport) GetSuppressedMatchCount() uint32 {
+	if x != nil {
+		return x.SuppressedMatchCount
+	}
+	return 0
+}
+
+func (x *ImageVulnerabilityReport) GetSeverityCounts() []*ImageVulnerabilitySeverityCount {
+	if x != nil {
+		return x.SeverityCounts
+	}
+	return nil
+}
+
+func (x *ImageVulnerabilityReport) GetNextActions() []string {
+	if x != nil {
+		return x.NextActions
+	}
+	return nil
+}
+
+// Append-only человеческое решение; оно не является admission verdict.
+type ImageAdmissionRiskDecision struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Server-owned identity решения.
+	Ref string `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
+	// Неизменяемая revision решения.
+	Version uint64 `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+	// Точное ACCEPT_RISK либо REJECT_RISK.
+	Action ImageAdmissionRiskAction `protobuf:"varint,3,opt,name=action,proto3,enum=controlplane.v1.ImageAdmissionRiskAction" json:"action,omitempty"`
+	// Обязательная причина, 1..2048 UTF8 bytes без controls.
+	Reason string `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
+	// Проверенный human OWNER/ADMIN actor из transport/domain.
+	DecidedByActorRef string `protobuf:"bytes,5,opt,name=decided_by_actor_ref,json=decidedByActorRef,proto3" json:"decided_by_actor_ref,omitempty"`
+	// Время решения назначено owner PostgreSQL.
+	DecidedAt *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=decided_at,json=decidedAt,proto3" json:"decided_at,omitempty"`
+	// Digest canonical owner decision binding, подписываемого signer.
+	BindingSha256 string `protobuf:"bytes,7,opt,name=binding_sha256,json=bindingSha256,proto3" json:"binding_sha256,omitempty"`
+	// Область разрешена владельцем из сохранённого artifact.
+	ScopeKind RuntimeResourceScopeKind `protobuf:"varint,8,opt,name=scope_kind,json=scopeKind,proto3,enum=controlplane.v1.RuntimeResourceScopeKind" json:"scope_kind,omitempty"`
+	// Проверенная организация, не actor input.
+	OrganizationRef string `protobuf:"bytes,9,opt,name=organization_ref,json=organizationRef,proto3" json:"organization_ref,omitempty"`
+	// Точный PROJECT locator; пустой только для ORGANIZATION.
+	ProjectRef string `protobuf:"bytes,10,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
+	// Owner-resolved рецепт.
+	RecipeRef string `protobuf:"bytes,11,opt,name=recipe_ref,json=recipeRef,proto3" json:"recipe_ref,omitempty"`
+	// Exact версия рецепта для owner OCC.
+	RecipeVersion uint64 `protobuf:"varint,12,opt,name=recipe_version,json=recipeVersion,proto3" json:"recipe_version,omitempty"`
+	// Неизменяемое поколение recipe/build snapshot.
+	RecipeGeneration uint64 `protobuf:"varint,13,opt,name=recipe_generation,json=recipeGeneration,proto3" json:"recipe_generation,omitempty"`
+	// Latest COMPLETED build, разрешённый owner eligibility.
+	BuildRef string `protobuf:"bytes,14,opt,name=build_ref,json=buildRef,proto3" json:"build_ref,omitempty"`
+	// Версия сохранённого immutable build snapshot.
+	BuildVersion uint64 `protobuf:"varint,15,opt,name=build_version,json=buildVersion,proto3" json:"build_version,omitempty"`
+	// Точная attempt исходной сборки.
+	BuildAttempt uint32 `protobuf:"varint,16,opt,name=build_attempt,json=buildAttempt,proto3" json:"build_attempt,omitempty"`
+	// Принадлежащий той же scope artifact.
+	ArtifactRef string `protobuf:"bytes,17,opt,name=artifact_ref,json=artifactRef,proto3" json:"artifact_ref,omitempty"`
+	// Версия artifact в неизменном snapshot решения, не текущая версия после Record.
+	ArtifactVersion uint64 `protobuf:"varint,18,opt,name=artifact_version,json=artifactVersion,proto3" json:"artifact_version,omitempty"`
+	// Exact image digest sha256:; tag не является authority.
+	ManifestDigest string `protobuf:"bytes,19,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
+	// Owner revision admission projection в snapshot решения.
+	AdmissionRevision uint64 `protobuf:"varint,20,opt,name=admission_revision,json=admissionRevision,proto3" json:"admission_revision,omitempty"`
+	// Original REJECTED terminal revision, закреплённая report.
+	SourceAdmissionRevision uint64 `protobuf:"varint,21,opt,name=source_admission_revision,json=sourceAdmissionRevision,proto3" json:"source_admission_revision,omitempty"`
+	// SHA256 immutable предыдущей receipt.
+	PriorAdmissionReceiptSha256 string `protobuf:"bytes,22,opt,name=prior_admission_receipt_sha256,json=priorAdmissionReceiptSha256,proto3" json:"prior_admission_receipt_sha256,omitempty"`
+	// Exact OCI manifest предыдущего evidence bundle.
+	PriorEvidenceManifestDigest string `protobuf:"bytes,23,opt,name=prior_evidence_manifest_digest,json=priorEvidenceManifestDigest,proto3" json:"prior_evidence_manifest_digest,omitempty"`
+	// SHA256 исходных полных scanner bytes.
+	VulnerabilityEvidenceSha256 string `protobuf:"bytes,24,opt,name=vulnerability_evidence_sha256,json=vulnerabilityEvidenceSha256,proto3" json:"vulnerability_evidence_sha256,omitempty"`
+	// SHA256 исходных полных SBOM bytes.
+	SbomSha256 string `protobuf:"bytes,25,opt,name=sbom_sha256,json=sbomSha256,proto3" json:"sbom_sha256,omitempty"`
+	// Version-pinned baseline policy.
+	PolicyRevision uint64 `protobuf:"varint,26,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	// Exact baseline policy digest.
+	PolicySha256  string `protobuf:"bytes,27,opt,name=policy_sha256,json=policySha256,proto3" json:"policy_sha256,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImageAdmissionRiskDecision) Reset() {
+	*x = ImageAdmissionRiskDecision{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[63]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImageAdmissionRiskDecision) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImageAdmissionRiskDecision) ProtoMessage() {}
+
+func (x *ImageAdmissionRiskDecision) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[63]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImageAdmissionRiskDecision.ProtoReflect.Descriptor instead.
+func (*ImageAdmissionRiskDecision) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{63}
+}
+
+func (x *ImageAdmissionRiskDecision) GetRef() string {
+	if x != nil {
+		return x.Ref
+	}
+	return ""
+}
+
+func (x *ImageAdmissionRiskDecision) GetVersion() uint64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *ImageAdmissionRiskDecision) GetAction() ImageAdmissionRiskAction {
+	if x != nil {
+		return x.Action
+	}
+	return ImageAdmissionRiskAction_IMAGE_ADMISSION_RISK_ACTION_UNSPECIFIED
+}
+
+func (x *ImageAdmissionRiskDecision) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *ImageAdmissionRiskDecision) GetDecidedByActorRef() string {
+	if x != nil {
+		return x.DecidedByActorRef
+	}
+	return ""
+}
+
+func (x *ImageAdmissionRiskDecision) GetDecidedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.DecidedAt
+	}
+	return nil
+}
+
+func (x *ImageAdmissionRiskDecision) GetBindingSha256() string {
+	if x != nil {
+		return x.BindingSha256
+	}
+	return ""
+}
+
+func (x *ImageAdmissionRiskDecision) GetScopeKind() RuntimeResourceScopeKind {
+	if x != nil {
+		return x.ScopeKind
+	}
+	return RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_UNSPECIFIED
+}
+
+func (x *ImageAdmissionRiskDecision) GetOrganizationRef() string {
+	if x != nil {
+		return x.OrganizationRef
+	}
+	return ""
+}
+
+func (x *ImageAdmissionRiskDecision) GetProjectRef() string {
+	if x != nil {
+		return x.ProjectRef
+	}
+	return ""
+}
+
+func (x *ImageAdmissionRiskDecision) GetRecipeRef() string {
+	if x != nil {
+		return x.RecipeRef
+	}
+	return ""
+}
+
+func (x *ImageAdmissionRiskDecision) GetRecipeVersion() uint64 {
+	if x != nil {
+		return x.RecipeVersion
+	}
+	return 0
+}
+
+func (x *ImageAdmissionRiskDecision) GetRecipeGeneration() uint64 {
+	if x != nil {
+		return x.RecipeGeneration
+	}
+	return 0
+}
+
+func (x *ImageAdmissionRiskDecision) GetBuildRef() string {
+	if x != nil {
+		return x.BuildRef
+	}
+	return ""
+}
+
+func (x *ImageAdmissionRiskDecision) GetBuildVersion() uint64 {
+	if x != nil {
+		return x.BuildVersion
+	}
+	return 0
+}
+
+func (x *ImageAdmissionRiskDecision) GetBuildAttempt() uint32 {
+	if x != nil {
+		return x.BuildAttempt
+	}
+	return 0
+}
+
+func (x *ImageAdmissionRiskDecision) GetArtifactRef() string {
+	if x != nil {
+		return x.ArtifactRef
+	}
+	return ""
+}
+
+func (x *ImageAdmissionRiskDecision) GetArtifactVersion() uint64 {
+	if x != nil {
+		return x.ArtifactVersion
+	}
+	return 0
+}
+
+func (x *ImageAdmissionRiskDecision) GetManifestDigest() string {
+	if x != nil {
+		return x.ManifestDigest
+	}
+	return ""
+}
+
+func (x *ImageAdmissionRiskDecision) GetAdmissionRevision() uint64 {
+	if x != nil {
+		return x.AdmissionRevision
+	}
+	return 0
+}
+
+func (x *ImageAdmissionRiskDecision) GetSourceAdmissionRevision() uint64 {
+	if x != nil {
+		return x.SourceAdmissionRevision
+	}
+	return 0
+}
+
+func (x *ImageAdmissionRiskDecision) GetPriorAdmissionReceiptSha256() string {
+	if x != nil {
+		return x.PriorAdmissionReceiptSha256
+	}
+	return ""
+}
+
+func (x *ImageAdmissionRiskDecision) GetPriorEvidenceManifestDigest() string {
+	if x != nil {
+		return x.PriorEvidenceManifestDigest
+	}
+	return ""
+}
+
+func (x *ImageAdmissionRiskDecision) GetVulnerabilityEvidenceSha256() string {
+	if x != nil {
+		return x.VulnerabilityEvidenceSha256
+	}
+	return ""
+}
+
+func (x *ImageAdmissionRiskDecision) GetSbomSha256() string {
+	if x != nil {
+		return x.SbomSha256
+	}
+	return ""
+}
+
+func (x *ImageAdmissionRiskDecision) GetPolicyRevision() uint64 {
+	if x != nil {
+		return x.PolicyRevision
+	}
+	return 0
+}
+
+func (x *ImageAdmissionRiskDecision) GetPolicySha256() string {
+	if x != nil {
+		return x.PolicySha256
+	}
+	return ""
+}
+
+// Отдельная новая attempt; прежняя terminal history сохраняется.
+type ImageAdmissionAttempt struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Server-owned attempt identity.
+	Ref string `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
+	// OCC lifecycle этой attempt.
+	Version uint64 `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
+	// Монотонная attempt number, не build attempt или admission revision.
+	Number uint32 `protobuf:"varint,3,opt,name=number,proto3" json:"number,omitempty"`
+	// Точное lifecycle state, неизвестное закрыто отклоняется.
+	State ImageAdmissionAttemptState `protobuf:"varint,4,opt,name=state,proto3,enum=controlplane.v1.ImageAdmissionAttemptState" json:"state,omitempty"`
+	// Exact исходный image artifact.
+	ArtifactRef string `protobuf:"bytes,5,opt,name=artifact_ref,json=artifactRef,proto3" json:"artifact_ref,omitempty"`
+	// Owner risk decision либо пусто для обычной admission.
+	DecisionRef string `protobuf:"bytes,6,opt,name=decision_ref,json=decisionRef,proto3" json:"decision_ref,omitempty"`
+	// Server-owned claim fence; не caller authority.
+	Fence uint64 `protobuf:"varint,7,opt,name=fence,proto3" json:"fence,omitempty"`
+	// Новая immutable terminal receipt либо пусто до Record.
+	AdmissionReceiptSha256 string `protobuf:"bytes,8,opt,name=admission_receipt_sha256,json=admissionReceiptSha256,proto3" json:"admission_receipt_sha256,omitempty"`
+	// Новый immutable OCI evidence manifest либо пусто до Record.
+	EvidenceManifestDigest string `protobuf:"bytes,9,opt,name=evidence_manifest_digest,json=evidenceManifestDigest,proto3" json:"evidence_manifest_digest,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *ImageAdmissionAttempt) Reset() {
+	*x = ImageAdmissionAttempt{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[64]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImageAdmissionAttempt) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImageAdmissionAttempt) ProtoMessage() {}
+
+func (x *ImageAdmissionAttempt) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[64]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImageAdmissionAttempt.ProtoReflect.Descriptor instead.
+func (*ImageAdmissionAttempt) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{64}
+}
+
+func (x *ImageAdmissionAttempt) GetRef() string {
+	if x != nil {
+		return x.Ref
+	}
+	return ""
+}
+
+func (x *ImageAdmissionAttempt) GetVersion() uint64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *ImageAdmissionAttempt) GetNumber() uint32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+func (x *ImageAdmissionAttempt) GetState() ImageAdmissionAttemptState {
+	if x != nil {
+		return x.State
+	}
+	return ImageAdmissionAttemptState_IMAGE_ADMISSION_ATTEMPT_STATE_UNSPECIFIED
+}
+
+func (x *ImageAdmissionAttempt) GetArtifactRef() string {
+	if x != nil {
+		return x.ArtifactRef
+	}
+	return ""
+}
+
+func (x *ImageAdmissionAttempt) GetDecisionRef() string {
+	if x != nil {
+		return x.DecisionRef
+	}
+	return ""
+}
+
+func (x *ImageAdmissionAttempt) GetFence() uint64 {
+	if x != nil {
+		return x.Fence
+	}
+	return 0
+}
+
+func (x *ImageAdmissionAttempt) GetAdmissionReceiptSha256() string {
+	if x != nil {
+		return x.AdmissionReceiptSha256
+	}
+	return ""
+}
+
+func (x *ImageAdmissionAttempt) GetEvidenceManifestDigest() string {
+	if x != nil {
+		return x.EvidenceManifestDigest
+	}
+	return ""
+}
+
+// Организация назначается verified context; GET не выполняет transitions.
+type GetOrganizationImageVulnerabilityReportRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Locator разрешается в owner scope до pins.
+	RecipeRef string `protobuf:"bytes,1,opt,name=recipe_ref,json=recipeRef,proto3" json:"recipe_ref,omitempty"`
+	// Locator существующего owner artifact.
+	ArtifactRef string `protobuf:"bytes,2,opt,name=artifact_ref,json=artifactRef,proto3" json:"artifact_ref,omitempty"`
+	// Страница до 100 строк; cursor закрепляет report и filters.
+	Page *PageRequest `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
+	// Bounded фильтр безопасного имени пакета.
+	PackageQuery string `protobuf:"bytes,4,opt,name=package_query,json=packageQuery,proto3" json:"package_query,omitempty"`
+	// Presence отличает отсутствие filter от explicit UNKNOWN.
+	Severity *ImageVulnerabilitySeverity `protobuf:"varint,5,opt,name=severity,proto3,enum=controlplane.v1.ImageVulnerabilitySeverity,oneof" json:"severity,omitempty"`
+	// Bounded advisory search, не URL.
+	AdvisoryQuery string `protobuf:"bytes,6,opt,name=advisory_query,json=advisoryQuery,proto3" json:"advisory_query,omitempty"`
+	// Presence отличает отсутствие фильтра от false.
+	BlockingOnly *bool `protobuf:"varint,7,opt,name=blocking_only,json=blockingOnly,proto3,oneof" json:"blocking_only,omitempty"`
+	// Exact raw report SHA256 обязателен при продолжении cursor.
+	ExpectedReportSha256 string `protobuf:"bytes,8,opt,name=expected_report_sha256,json=expectedReportSha256,proto3" json:"expected_report_sha256,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
+}
+
+func (x *GetOrganizationImageVulnerabilityReportRequest) Reset() {
+	*x = GetOrganizationImageVulnerabilityReportRequest{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOrganizationImageVulnerabilityReportRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOrganizationImageVulnerabilityReportRequest) ProtoMessage() {}
+
+func (x *GetOrganizationImageVulnerabilityReportRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOrganizationImageVulnerabilityReportRequest.ProtoReflect.Descriptor instead.
+func (*GetOrganizationImageVulnerabilityReportRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{65}
+}
+
+func (x *GetOrganizationImageVulnerabilityReportRequest) GetRecipeRef() string {
+	if x != nil {
+		return x.RecipeRef
+	}
+	return ""
+}
+
+func (x *GetOrganizationImageVulnerabilityReportRequest) GetArtifactRef() string {
+	if x != nil {
+		return x.ArtifactRef
+	}
+	return ""
+}
+
+func (x *GetOrganizationImageVulnerabilityReportRequest) GetPage() *PageRequest {
+	if x != nil {
+		return x.Page
+	}
+	return nil
+}
+
+func (x *GetOrganizationImageVulnerabilityReportRequest) GetPackageQuery() string {
+	if x != nil {
+		return x.PackageQuery
+	}
+	return ""
+}
+
+func (x *GetOrganizationImageVulnerabilityReportRequest) GetSeverity() ImageVulnerabilitySeverity {
+	if x != nil && x.Severity != nil {
+		return *x.Severity
+	}
+	return ImageVulnerabilitySeverity_IMAGE_VULNERABILITY_SEVERITY_UNSPECIFIED
+}
+
+func (x *GetOrganizationImageVulnerabilityReportRequest) GetAdvisoryQuery() string {
+	if x != nil {
+		return x.AdvisoryQuery
+	}
+	return ""
+}
+
+func (x *GetOrganizationImageVulnerabilityReportRequest) GetBlockingOnly() bool {
+	if x != nil && x.BlockingOnly != nil {
+		return *x.BlockingOnly
+	}
+	return false
+}
+
+func (x *GetOrganizationImageVulnerabilityReportRequest) GetExpectedReportSha256() string {
+	if x != nil {
+		return x.ExpectedReportSha256
+	}
+	return ""
+}
+
+// PROJECT report использует owner/project eligibility того же artifact.
+type GetImageVulnerabilityReportRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Locator разрешается в owner scope до pins.
+	RecipeRef string `protobuf:"bytes,1,opt,name=recipe_ref,json=recipeRef,proto3" json:"recipe_ref,omitempty"`
+	// Locator существующего owner artifact.
+	ArtifactRef string `protobuf:"bytes,2,opt,name=artifact_ref,json=artifactRef,proto3" json:"artifact_ref,omitempty"`
+	// Страница до 100 строк; cursor закрепляет report и filters.
+	Page *PageRequest `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
+	// Bounded фильтр безопасного имени пакета.
+	PackageQuery string `protobuf:"bytes,4,opt,name=package_query,json=packageQuery,proto3" json:"package_query,omitempty"`
+	// Presence отличает отсутствие filter от explicit UNKNOWN.
+	Severity *ImageVulnerabilitySeverity `protobuf:"varint,5,opt,name=severity,proto3,enum=controlplane.v1.ImageVulnerabilitySeverity,oneof" json:"severity,omitempty"`
+	// Bounded advisory search, не URL.
+	AdvisoryQuery string `protobuf:"bytes,6,opt,name=advisory_query,json=advisoryQuery,proto3" json:"advisory_query,omitempty"`
+	// Presence отличает отсутствие фильтра от false.
+	BlockingOnly *bool `protobuf:"varint,7,opt,name=blocking_only,json=blockingOnly,proto3,oneof" json:"blocking_only,omitempty"`
+	// Exact raw report SHA256 обязателен при продолжении cursor.
+	ExpectedReportSha256 string `protobuf:"bytes,8,opt,name=expected_report_sha256,json=expectedReportSha256,proto3" json:"expected_report_sha256,omitempty"`
+	// PROJECT locator не заменяет trusted organization/human authority.
+	ProjectRef    string `protobuf:"bytes,9,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetImageVulnerabilityReportRequest) Reset() {
+	*x = GetImageVulnerabilityReportRequest{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[66]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetImageVulnerabilityReportRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetImageVulnerabilityReportRequest) ProtoMessage() {}
+
+func (x *GetImageVulnerabilityReportRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[66]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetImageVulnerabilityReportRequest.ProtoReflect.Descriptor instead.
+func (*GetImageVulnerabilityReportRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{66}
+}
+
+func (x *GetImageVulnerabilityReportRequest) GetRecipeRef() string {
+	if x != nil {
+		return x.RecipeRef
+	}
+	return ""
+}
+
+func (x *GetImageVulnerabilityReportRequest) GetArtifactRef() string {
+	if x != nil {
+		return x.ArtifactRef
+	}
+	return ""
+}
+
+func (x *GetImageVulnerabilityReportRequest) GetPage() *PageRequest {
+	if x != nil {
+		return x.Page
+	}
+	return nil
+}
+
+func (x *GetImageVulnerabilityReportRequest) GetPackageQuery() string {
+	if x != nil {
+		return x.PackageQuery
+	}
+	return ""
+}
+
+func (x *GetImageVulnerabilityReportRequest) GetSeverity() ImageVulnerabilitySeverity {
+	if x != nil && x.Severity != nil {
+		return *x.Severity
+	}
+	return ImageVulnerabilitySeverity_IMAGE_VULNERABILITY_SEVERITY_UNSPECIFIED
+}
+
+func (x *GetImageVulnerabilityReportRequest) GetAdvisoryQuery() string {
+	if x != nil {
+		return x.AdvisoryQuery
+	}
+	return ""
+}
+
+func (x *GetImageVulnerabilityReportRequest) GetBlockingOnly() bool {
+	if x != nil && x.BlockingOnly != nil {
+		return *x.BlockingOnly
+	}
+	return false
+}
+
+func (x *GetImageVulnerabilityReportRequest) GetExpectedReportSha256() string {
+	if x != nil {
+		return x.ExpectedReportSha256
+	}
+	return ""
+}
+
+func (x *GetImageVulnerabilityReportRequest) GetProjectRef() string {
+	if x != nil {
+		return x.ProjectRef
+	}
+	return ""
+}
+
+// Безопасный owner-scoped report page без raw Grype.
+type GetOrganizationImageVulnerabilityReportResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Полный immutable report metadata и current owner eligibility.
+	Report *ImageVulnerabilityReport `protobuf:"bytes,1,opt,name=report,proto3" json:"report,omitempty"`
+	// Полная запрошенная страница grouped safe rows.
+	Findings []*ImageVulnerabilityFinding `protobuf:"bytes,2,rep,name=findings,proto3" json:"findings,omitempty"`
+	// Pinned next cursor; страница не выдаётся как весь отчёт.
+	Page          *PageInfo `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetOrganizationImageVulnerabilityReportResponse) Reset() {
+	*x = GetOrganizationImageVulnerabilityReportResponse{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[67]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetOrganizationImageVulnerabilityReportResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetOrganizationImageVulnerabilityReportResponse) ProtoMessage() {}
+
+func (x *GetOrganizationImageVulnerabilityReportResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[67]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetOrganizationImageVulnerabilityReportResponse.ProtoReflect.Descriptor instead.
+func (*GetOrganizationImageVulnerabilityReportResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{67}
+}
+
+func (x *GetOrganizationImageVulnerabilityReportResponse) GetReport() *ImageVulnerabilityReport {
+	if x != nil {
+		return x.Report
+	}
+	return nil
+}
+
+func (x *GetOrganizationImageVulnerabilityReportResponse) GetFindings() []*ImageVulnerabilityFinding {
+	if x != nil {
+		return x.Findings
+	}
+	return nil
+}
+
+func (x *GetOrganizationImageVulnerabilityReportResponse) GetPage() *PageInfo {
+	if x != nil {
+		return x.Page
+	}
+	return nil
+}
+
+// Безопасный PROJECT report page, без расширения tenant.
+type GetImageVulnerabilityReportResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Полный immutable report metadata и current owner eligibility.
+	Report *ImageVulnerabilityReport `protobuf:"bytes,1,opt,name=report,proto3" json:"report,omitempty"`
+	// Полная запрошенная страница grouped safe rows.
+	Findings []*ImageVulnerabilityFinding `protobuf:"bytes,2,rep,name=findings,proto3" json:"findings,omitempty"`
+	// Pinned next cursor; страница не выдаётся как весь отчёт.
+	Page          *PageInfo `protobuf:"bytes,3,opt,name=page,proto3" json:"page,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetImageVulnerabilityReportResponse) Reset() {
+	*x = GetImageVulnerabilityReportResponse{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[68]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetImageVulnerabilityReportResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetImageVulnerabilityReportResponse) ProtoMessage() {}
+
+func (x *GetImageVulnerabilityReportResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[68]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetImageVulnerabilityReportResponse.ProtoReflect.Descriptor instead.
+func (*GetImageVulnerabilityReportResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{68}
+}
+
+func (x *GetImageVulnerabilityReportResponse) GetReport() *ImageVulnerabilityReport {
+	if x != nil {
+		return x.Report
+	}
+	return nil
+}
+
+func (x *GetImageVulnerabilityReportResponse) GetFindings() []*ImageVulnerabilityFinding {
+	if x != nil {
+		return x.Findings
+	}
+	return nil
+}
+
+func (x *GetImageVulnerabilityReportResponse) GetPage() *PageInfo {
+	if x != nil {
+		return x.Page
+	}
+	return nil
+}
+
+// Human admin command не доступна assistant/workload и атомарно сохраняет decision/attempt.
+type DecideOrganizationImageAdmissionRiskRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Idempotency/If-Match связаны с exact artifact intent; actor не назначается input.
+	Mutation *MutationContext `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
+	// Owner-resolved current ACTIVE recipe.
+	RecipeRef string `protobuf:"bytes,2,opt,name=recipe_ref,json=recipeRef,proto3" json:"recipe_ref,omitempty"`
+	// Owner-resolved current latest COMPLETED build artifact.
+	ArtifactRef string `protobuf:"bytes,3,opt,name=artifact_ref,json=artifactRef,proto3" json:"artifact_ref,omitempty"`
+	// OCC artifact; не доказательство владения.
+	ExpectedArtifactVersion uint64 `protobuf:"varint,4,opt,name=expected_artifact_version,json=expectedArtifactVersion,proto3" json:"expected_artifact_version,omitempty"`
+	// Exact current admission projection revision.
+	ExpectedAdmissionRevision uint64 `protobuf:"varint,5,opt,name=expected_admission_revision,json=expectedAdmissionRevision,proto3" json:"expected_admission_revision,omitempty"`
+	// Exact current recipe version.
+	ExpectedRecipeVersion uint64 `protobuf:"varint,6,opt,name=expected_recipe_version,json=expectedRecipeVersion,proto3" json:"expected_recipe_version,omitempty"`
+	// Exact recipe generation исходного report.
+	ExpectedRecipeGeneration uint64 `protobuf:"varint,7,opt,name=expected_recipe_generation,json=expectedRecipeGeneration,proto3" json:"expected_recipe_generation,omitempty"`
+	// Latest build locator проверяет владелец.
+	ExpectedBuildRef string `protobuf:"bytes,8,opt,name=expected_build_ref,json=expectedBuildRef,proto3" json:"expected_build_ref,omitempty"`
+	// Exact immutable build attempt.
+	ExpectedBuildAttempt uint32 `protobuf:"varint,9,opt,name=expected_build_attempt,json=expectedBuildAttempt,proto3" json:"expected_build_attempt,omitempty"`
+	// Exact image digest, не источник authority.
+	ManifestDigest string `protobuf:"bytes,10,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
+	// SHA256 полного исходного report, показанного администратору.
+	VulnerabilityEvidenceSha256 string `protobuf:"bytes,11,opt,name=vulnerability_evidence_sha256,json=vulnerabilityEvidenceSha256,proto3" json:"vulnerability_evidence_sha256,omitempty"`
+	// SHA256 полной safe projection, не hash видимой страницы.
+	ProjectionSha256 string `protobuf:"bytes,12,opt,name=projection_sha256,json=projectionSha256,proto3" json:"projection_sha256,omitempty"`
+	// Exact original REJECTED receipt pin.
+	PriorAdmissionReceiptSha256 string `protobuf:"bytes,13,opt,name=prior_admission_receipt_sha256,json=priorAdmissionReceiptSha256,proto3" json:"prior_admission_receipt_sha256,omitempty"`
+	// Exact original immutable evidence manifest.
+	PriorEvidenceManifestDigest string `protobuf:"bytes,14,opt,name=prior_evidence_manifest_digest,json=priorEvidenceManifestDigest,proto3" json:"prior_evidence_manifest_digest,omitempty"`
+	// Текущая pinned baseline policy revision.
+	PolicyRevision uint64 `protobuf:"varint,15,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	// Текущий exact baseline policy digest.
+	PolicySha256 string `protobuf:"bytes,16,opt,name=policy_sha256,json=policySha256,proto3" json:"policy_sha256,omitempty"`
+	// Только human OWNER/ADMIN explicit ACCEPT_RISK или REJECT_RISK.
+	Action ImageAdmissionRiskAction `protobuf:"varint,17,opt,name=action,proto3,enum=controlplane.v1.ImageAdmissionRiskAction" json:"action,omitempty"`
+	// Обязательная bounded причина для audit, не shell.
+	Reason        string `protobuf:"bytes,18,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) Reset() {
+	*x = DecideOrganizationImageAdmissionRiskRequest{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[69]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DecideOrganizationImageAdmissionRiskRequest) ProtoMessage() {}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[69]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DecideOrganizationImageAdmissionRiskRequest.ProtoReflect.Descriptor instead.
+func (*DecideOrganizationImageAdmissionRiskRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{69}
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetMutation() *MutationContext {
+	if x != nil {
+		return x.Mutation
+	}
+	return nil
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetRecipeRef() string {
+	if x != nil {
+		return x.RecipeRef
+	}
+	return ""
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetArtifactRef() string {
+	if x != nil {
+		return x.ArtifactRef
+	}
+	return ""
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetExpectedArtifactVersion() uint64 {
+	if x != nil {
+		return x.ExpectedArtifactVersion
+	}
+	return 0
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetExpectedAdmissionRevision() uint64 {
+	if x != nil {
+		return x.ExpectedAdmissionRevision
+	}
+	return 0
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetExpectedRecipeVersion() uint64 {
+	if x != nil {
+		return x.ExpectedRecipeVersion
+	}
+	return 0
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetExpectedRecipeGeneration() uint64 {
+	if x != nil {
+		return x.ExpectedRecipeGeneration
+	}
+	return 0
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetExpectedBuildRef() string {
+	if x != nil {
+		return x.ExpectedBuildRef
+	}
+	return ""
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetExpectedBuildAttempt() uint32 {
+	if x != nil {
+		return x.ExpectedBuildAttempt
+	}
+	return 0
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetManifestDigest() string {
+	if x != nil {
+		return x.ManifestDigest
+	}
+	return ""
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetVulnerabilityEvidenceSha256() string {
+	if x != nil {
+		return x.VulnerabilityEvidenceSha256
+	}
+	return ""
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetProjectionSha256() string {
+	if x != nil {
+		return x.ProjectionSha256
+	}
+	return ""
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetPriorAdmissionReceiptSha256() string {
+	if x != nil {
+		return x.PriorAdmissionReceiptSha256
+	}
+	return ""
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetPriorEvidenceManifestDigest() string {
+	if x != nil {
+		return x.PriorEvidenceManifestDigest
+	}
+	return ""
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetPolicyRevision() uint64 {
+	if x != nil {
+		return x.PolicyRevision
+	}
+	return 0
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetPolicySha256() string {
+	if x != nil {
+		return x.PolicySha256
+	}
+	return ""
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetAction() ImageAdmissionRiskAction {
+	if x != nil {
+		return x.Action
+	}
+	return ImageAdmissionRiskAction_IMAGE_ADMISSION_RISK_ACTION_UNSPECIFIED
+}
+
+func (x *DecideOrganizationImageAdmissionRiskRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+// PROJECT locator не даёт project-only actor административное право.
+type DecideImageAdmissionRiskRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Idempotency/If-Match связаны с exact artifact intent; actor не назначается input.
+	Mutation *MutationContext `protobuf:"bytes,1,opt,name=mutation,proto3" json:"mutation,omitempty"`
+	// Owner-resolved current ACTIVE recipe.
+	RecipeRef string `protobuf:"bytes,2,opt,name=recipe_ref,json=recipeRef,proto3" json:"recipe_ref,omitempty"`
+	// Owner-resolved current latest COMPLETED build artifact.
+	ArtifactRef string `protobuf:"bytes,3,opt,name=artifact_ref,json=artifactRef,proto3" json:"artifact_ref,omitempty"`
+	// OCC artifact; не доказательство владения.
+	ExpectedArtifactVersion uint64 `protobuf:"varint,4,opt,name=expected_artifact_version,json=expectedArtifactVersion,proto3" json:"expected_artifact_version,omitempty"`
+	// Exact current admission projection revision.
+	ExpectedAdmissionRevision uint64 `protobuf:"varint,5,opt,name=expected_admission_revision,json=expectedAdmissionRevision,proto3" json:"expected_admission_revision,omitempty"`
+	// Exact current recipe version.
+	ExpectedRecipeVersion uint64 `protobuf:"varint,6,opt,name=expected_recipe_version,json=expectedRecipeVersion,proto3" json:"expected_recipe_version,omitempty"`
+	// Exact recipe generation исходного report.
+	ExpectedRecipeGeneration uint64 `protobuf:"varint,7,opt,name=expected_recipe_generation,json=expectedRecipeGeneration,proto3" json:"expected_recipe_generation,omitempty"`
+	// Latest build locator проверяет владелец.
+	ExpectedBuildRef string `protobuf:"bytes,8,opt,name=expected_build_ref,json=expectedBuildRef,proto3" json:"expected_build_ref,omitempty"`
+	// Exact immutable build attempt.
+	ExpectedBuildAttempt uint32 `protobuf:"varint,9,opt,name=expected_build_attempt,json=expectedBuildAttempt,proto3" json:"expected_build_attempt,omitempty"`
+	// Exact image digest, не источник authority.
+	ManifestDigest string `protobuf:"bytes,10,opt,name=manifest_digest,json=manifestDigest,proto3" json:"manifest_digest,omitempty"`
+	// SHA256 полного исходного report, показанного администратору.
+	VulnerabilityEvidenceSha256 string `protobuf:"bytes,11,opt,name=vulnerability_evidence_sha256,json=vulnerabilityEvidenceSha256,proto3" json:"vulnerability_evidence_sha256,omitempty"`
+	// SHA256 полной safe projection, не hash видимой страницы.
+	ProjectionSha256 string `protobuf:"bytes,12,opt,name=projection_sha256,json=projectionSha256,proto3" json:"projection_sha256,omitempty"`
+	// Exact original REJECTED receipt pin.
+	PriorAdmissionReceiptSha256 string `protobuf:"bytes,13,opt,name=prior_admission_receipt_sha256,json=priorAdmissionReceiptSha256,proto3" json:"prior_admission_receipt_sha256,omitempty"`
+	// Exact original immutable evidence manifest.
+	PriorEvidenceManifestDigest string `protobuf:"bytes,14,opt,name=prior_evidence_manifest_digest,json=priorEvidenceManifestDigest,proto3" json:"prior_evidence_manifest_digest,omitempty"`
+	// Текущая pinned baseline policy revision.
+	PolicyRevision uint64 `protobuf:"varint,15,opt,name=policy_revision,json=policyRevision,proto3" json:"policy_revision,omitempty"`
+	// Текущий exact baseline policy digest.
+	PolicySha256 string `protobuf:"bytes,16,opt,name=policy_sha256,json=policySha256,proto3" json:"policy_sha256,omitempty"`
+	// Только human OWNER/ADMIN explicit ACCEPT_RISK или REJECT_RISK.
+	Action ImageAdmissionRiskAction `protobuf:"varint,17,opt,name=action,proto3,enum=controlplane.v1.ImageAdmissionRiskAction" json:"action,omitempty"`
+	// Обязательная bounded причина для audit, не shell.
+	Reason string `protobuf:"bytes,18,opt,name=reason,proto3" json:"reason,omitempty"`
+	// Owner-resolved PROJECT locator, проверяется до OCC/replay.
+	ProjectRef    string `protobuf:"bytes,19,opt,name=project_ref,json=projectRef,proto3" json:"project_ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DecideImageAdmissionRiskRequest) Reset() {
+	*x = DecideImageAdmissionRiskRequest{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[70]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DecideImageAdmissionRiskRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DecideImageAdmissionRiskRequest) ProtoMessage() {}
+
+func (x *DecideImageAdmissionRiskRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[70]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DecideImageAdmissionRiskRequest.ProtoReflect.Descriptor instead.
+func (*DecideImageAdmissionRiskRequest) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{70}
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetMutation() *MutationContext {
+	if x != nil {
+		return x.Mutation
+	}
+	return nil
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetRecipeRef() string {
+	if x != nil {
+		return x.RecipeRef
+	}
+	return ""
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetArtifactRef() string {
+	if x != nil {
+		return x.ArtifactRef
+	}
+	return ""
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetExpectedArtifactVersion() uint64 {
+	if x != nil {
+		return x.ExpectedArtifactVersion
+	}
+	return 0
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetExpectedAdmissionRevision() uint64 {
+	if x != nil {
+		return x.ExpectedAdmissionRevision
+	}
+	return 0
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetExpectedRecipeVersion() uint64 {
+	if x != nil {
+		return x.ExpectedRecipeVersion
+	}
+	return 0
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetExpectedRecipeGeneration() uint64 {
+	if x != nil {
+		return x.ExpectedRecipeGeneration
+	}
+	return 0
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetExpectedBuildRef() string {
+	if x != nil {
+		return x.ExpectedBuildRef
+	}
+	return ""
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetExpectedBuildAttempt() uint32 {
+	if x != nil {
+		return x.ExpectedBuildAttempt
+	}
+	return 0
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetManifestDigest() string {
+	if x != nil {
+		return x.ManifestDigest
+	}
+	return ""
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetVulnerabilityEvidenceSha256() string {
+	if x != nil {
+		return x.VulnerabilityEvidenceSha256
+	}
+	return ""
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetProjectionSha256() string {
+	if x != nil {
+		return x.ProjectionSha256
+	}
+	return ""
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetPriorAdmissionReceiptSha256() string {
+	if x != nil {
+		return x.PriorAdmissionReceiptSha256
+	}
+	return ""
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetPriorEvidenceManifestDigest() string {
+	if x != nil {
+		return x.PriorEvidenceManifestDigest
+	}
+	return ""
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetPolicyRevision() uint64 {
+	if x != nil {
+		return x.PolicyRevision
+	}
+	return 0
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetPolicySha256() string {
+	if x != nil {
+		return x.PolicySha256
+	}
+	return ""
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetAction() ImageAdmissionRiskAction {
+	if x != nil {
+		return x.Action
+	}
+	return ImageAdmissionRiskAction_IMAGE_ADMISSION_RISK_ACTION_UNSPECIFIED
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *DecideImageAdmissionRiskRequest) GetProjectRef() string {
+	if x != nil {
+		return x.ProjectRef
+	}
+	return ""
+}
+
+// Атомарный owner decision receipt и свежая projection.
+type DecideOrganizationImageAdmissionRiskResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Authoritative append-only decision receipt.
+	Decision *ImageAdmissionRiskDecision `protobuf:"bytes,1,opt,name=decision,proto3" json:"decision,omitempty"`
+	// Новая PENDING attempt только при ACCEPT_RISK.
+	AdmissionAttempt *ImageAdmissionAttempt `protobuf:"bytes,2,opt,name=admission_attempt,json=admissionAttempt,proto3" json:"admission_attempt,omitempty"`
+	// Свежая owner projection; approval не означает ACCEPTED.
+	Artifact      *ImageArtifact `protobuf:"bytes,3,opt,name=artifact,proto3" json:"artifact,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DecideOrganizationImageAdmissionRiskResponse) Reset() {
+	*x = DecideOrganizationImageAdmissionRiskResponse{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[71]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DecideOrganizationImageAdmissionRiskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DecideOrganizationImageAdmissionRiskResponse) ProtoMessage() {}
+
+func (x *DecideOrganizationImageAdmissionRiskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[71]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DecideOrganizationImageAdmissionRiskResponse.ProtoReflect.Descriptor instead.
+func (*DecideOrganizationImageAdmissionRiskResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{71}
+}
+
+func (x *DecideOrganizationImageAdmissionRiskResponse) GetDecision() *ImageAdmissionRiskDecision {
+	if x != nil {
+		return x.Decision
+	}
+	return nil
+}
+
+func (x *DecideOrganizationImageAdmissionRiskResponse) GetAdmissionAttempt() *ImageAdmissionAttempt {
+	if x != nil {
+		return x.AdmissionAttempt
+	}
+	return nil
+}
+
+func (x *DecideOrganizationImageAdmissionRiskResponse) GetArtifact() *ImageArtifact {
+	if x != nil {
+		return x.Artifact
+	}
+	return nil
+}
+
+// PROJECT decision с тем же human authority/transaction contract.
+type DecideImageAdmissionRiskResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Authoritative append-only decision receipt.
+	Decision *ImageAdmissionRiskDecision `protobuf:"bytes,1,opt,name=decision,proto3" json:"decision,omitempty"`
+	// Новая PENDING attempt только при ACCEPT_RISK.
+	AdmissionAttempt *ImageAdmissionAttempt `protobuf:"bytes,2,opt,name=admission_attempt,json=admissionAttempt,proto3" json:"admission_attempt,omitempty"`
+	// Свежая owner projection; approval не означает ACCEPTED.
+	Artifact      *ImageArtifact `protobuf:"bytes,3,opt,name=artifact,proto3" json:"artifact,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DecideImageAdmissionRiskResponse) Reset() {
+	*x = DecideImageAdmissionRiskResponse{}
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[72]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DecideImageAdmissionRiskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DecideImageAdmissionRiskResponse) ProtoMessage() {}
+
+func (x *DecideImageAdmissionRiskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_controlplane_v1_role_images_proto_msgTypes[72]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DecideImageAdmissionRiskResponse.ProtoReflect.Descriptor instead.
+func (*DecideImageAdmissionRiskResponse) Descriptor() ([]byte, []int) {
+	return file_controlplane_v1_role_images_proto_rawDescGZIP(), []int{72}
+}
+
+func (x *DecideImageAdmissionRiskResponse) GetDecision() *ImageAdmissionRiskDecision {
+	if x != nil {
+		return x.Decision
+	}
+	return nil
+}
+
+func (x *DecideImageAdmissionRiskResponse) GetAdmissionAttempt() *ImageAdmissionAttempt {
+	if x != nil {
+		return x.AdmissionAttempt
+	}
+	return nil
+}
+
+func (x *DecideImageAdmissionRiskResponse) GetArtifact() *ImageArtifact {
+	if x != nil {
+		return x.Artifact
 	}
 	return nil
 }
@@ -4837,7 +8235,7 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"scope_kind\x18\x18 \x01(\x0e2).controlplane.v1.RuntimeResourceScopeKindR\tscopeKind\x12)\n" +
 	"\x10organization_ref\x18\x19 \x01(\tR\x0forganizationRef\x12\x1f\n" +
 	"\vproject_ref\x18\x1a \x01(\tR\n" +
-	"projectRef\"\xb1\x10\n" +
+	"projectRef\"\xc6\x12\n" +
 	"\rImageArtifact\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x04R\aversion\x12\x1d\n" +
@@ -4882,15 +8280,18 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18$ \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18% \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x124\n" +
-	"\x05tools\x18& \x03(\v2\x1e.controlplane.v1.RoleImageToolR\x05tools\x12M\n" +
+	"updated_at\x18% \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12E\n" +
+	"\x0edeclared_tools\x18& \x03(\v2\x1e.controlplane.v1.RoleImageToolR\rdeclaredTools\x12M\n" +
 	"\x0fpromotion_state\x18' \x01(\x0e2$.controlplane.v1.ImagePromotionStateR\x0epromotionState\x12/\n" +
 	"\x13promotion_requested\x18( \x01(\bR\x12promotionRequested\x12H\n" +
 	"\n" +
 	"scope_kind\x18) \x01(\x0e2).controlplane.v1.RuntimeResourceScopeKindR\tscopeKind\x12)\n" +
 	"\x10organization_ref\x18* \x01(\tR\x0forganizationRef\x12\x1f\n" +
 	"\vproject_ref\x18+ \x01(\tR\n" +
-	"projectRef\"\xcc\x01\n" +
+	"projectRef\x12[\n" +
+	"\x17verified_tool_inventory\x18, \x01(\v2#.controlplane.v1.ImageToolInventoryR\x15verifiedToolInventory\x12S\n" +
+	"\x11admission_attempt\x18- \x01(\v2&.controlplane.v1.ImageAdmissionAttemptR\x10admissionAttempt\x12P\n" +
+	"\rrisk_decision\x18. \x01(\v2+.controlplane.v1.ImageAdmissionRiskDecisionR\friskDecision\"\xcc\x01\n" +
 	"\x1bListRoleImageRecipesRequest\x12\x1f\n" +
 	"\vproject_ref\x18\x01 \x01(\tR\n" +
 	"projectRef\x12.\n" +
@@ -4904,12 +8305,13 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\x05total\x18\x03 \x01(\x03R\x05total\":\n" +
 	"\x19GetRoleImageRecipeRequest\x12\x1d\n" +
 	"\n" +
-	"recipe_ref\x18\x01 \x01(\tR\trecipeRef\"\xa5\x02\n" +
+	"recipe_ref\x18\x01 \x01(\tR\trecipeRef\"\xfe\x02\n" +
 	"\x1aGetRoleImageRecipeResponse\x128\n" +
 	"\x06recipe\x18\x01 \x01(\v2 .controlplane.v1.RoleImageRecipeR\x06recipe\x123\n" +
 	"\x06builds\x18\x02 \x03(\v2\x1b.controlplane.v1.ImageBuildR\x06builds\x12G\n" +
 	"\x0factive_artifact\x18\x03 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\x0eactiveArtifact\x12O\n" +
-	"\x13promotion_candidate\x18\x04 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\x12promotionCandidate\"\x97\x03\n" +
+	"\x13promotion_candidate\x18\x04 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\x12promotionCandidate\x12W\n" +
+	"\x11admission_failure\x18\x05 \x01(\v2*.controlplane.v1.RoleImageAdmissionFailureR\x10admissionFailure\"\x97\x03\n" +
 	"\x1cManageRoleImageRecipeRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12>\n" +
 	"\x06action\x18\x02 \x01(\x0e2&.controlplane.v1.RoleImageRecipeActionR\x06action\x12\x1d\n" +
@@ -4937,12 +8339,13 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\x05total\x18\x03 \x01(\x03R\x05total\"F\n" +
 	"%GetOrganizationRoleImageRecipeRequest\x12\x1d\n" +
 	"\n" +
-	"recipe_ref\x18\x01 \x01(\tR\trecipeRef\"\xb1\x02\n" +
+	"recipe_ref\x18\x01 \x01(\tR\trecipeRef\"\x8a\x03\n" +
 	"&GetOrganizationRoleImageRecipeResponse\x128\n" +
 	"\x06recipe\x18\x01 \x01(\v2 .controlplane.v1.RoleImageRecipeR\x06recipe\x123\n" +
 	"\x06builds\x18\x02 \x03(\v2\x1b.controlplane.v1.ImageBuildR\x06builds\x12G\n" +
 	"\x0factive_artifact\x18\x03 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\x0eactiveArtifact\x12O\n" +
-	"\x13promotion_candidate\x18\x04 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\x12promotionCandidate\"\xc5\x02\n" +
+	"\x13promotion_candidate\x18\x04 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\x12promotionCandidate\x12W\n" +
+	"\x11admission_failure\x18\x05 \x01(\v2*.controlplane.v1.RoleImageAdmissionFailureR\x10admissionFailure\"\xc5\x02\n" +
 	"(ManageOrganizationRoleImageRecipeRequest\x12<\n" +
 	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12>\n" +
 	"\x06action\x18\x02 \x01(\x0e2&.controlplane.v1.RoleImageRecipeActionR\x06action\x12\x1d\n" +
@@ -5077,14 +8480,22 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\x13admission_available\x18\x01 \x01(\bR\x12admissionAvailable\x12/\n" +
 	"\x13promotion_available\x18\x02 \x01(\bR\x12promotionAvailable\"E\n" +
 	"\x1aClaimImageAdmissionRequest\x12'\n" +
-	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\"\x94\x02\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\"\xa7\x05\n" +
 	"\x1bClaimImageAdmissionResponse\x12E\n" +
 	"\x0eimage_artifact\x18\x01 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\rimageArtifact\x12\x1f\n" +
 	"\vclaim_token\x18\x02 \x01(\tR\n" +
 	"claimToken\x12\x14\n" +
 	"\x05fence\x18\x03 \x01(\x04R\x05fence\x121\n" +
 	"\x14authority_generation\x18\x04 \x01(\x04R\x13authorityGeneration\x12D\n" +
-	"\x10claim_expires_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x0eclaimExpiresAt\"\xce\x06\n" +
+	"\x10claim_expires_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x0eclaimExpiresAt\x122\n" +
+	"\x15admission_attempt_ref\x18\x06 \x01(\tR\x13admissionAttemptRef\x12+\n" +
+	"\x11admission_attempt\x18\a \x01(\rR\x10admissionAttempt\x120\n" +
+	"\x14risk_acceptance_json\x18\b \x01(\tR\x12riskAcceptanceJson\x124\n" +
+	"\x16risk_acceptance_sha256\x18\t \x01(\tR\x14riskAcceptanceSha256\x12E\n" +
+	"\x1fsource_admission_receipt_sha256\x18\n" +
+	" \x01(\tR\x1csourceAdmissionReceiptSha256\x12E\n" +
+	"\x1fsource_evidence_manifest_digest\x18\v \x01(\tR\x1csourceEvidenceManifestDigest\x12:\n" +
+	"\x19source_admission_revision\x18\f \x01(\x04R\x17sourceAdmissionRevision\"\xfc\t\n" +
 	"\x1bRecordImageAdmissionRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12,\n" +
 	"\x12image_artifact_ref\x18\x02 \x01(\tR\x10imageArtifactRef\x12)\n" +
@@ -5105,9 +8516,122 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\x12signature_identity\x18\x0e \x01(\tR\x11signatureIdentity\x12)\n" +
 	"\x10signature_sha256\x18\x0f \x01(\tR\x0fsignatureSha256\x128\n" +
 	"\x18admission_receipt_sha256\x18\x10 \x01(\tR\x16admissionReceiptSha256\x12P\n" +
-	"%admission_receipt_oci_manifest_digest\x18\x11 \x01(\tR!admissionReceiptOciManifestDigest\"e\n" +
+	"%admission_receipt_oci_manifest_digest\x18\x11 \x01(\tR!admissionReceiptOciManifestDigest\x12.\n" +
+	"\x13tool_inventory_json\x18\x12 \x01(\tR\x11toolInventoryJson\x122\n" +
+	"\x15tool_inventory_sha256\x18\x13 \x01(\tR\x13toolInventorySha256\x12C\n" +
+	"\x1eexpected_admission_attempt_ref\x18\x14 \x01(\tR\x1bexpectedAdmissionAttemptRef\x12<\n" +
+	"\x1aexpected_admission_attempt\x18\x15 \x01(\rR\x18expectedAdmissionAttempt\x12:\n" +
+	"\x19vulnerability_report_json\x18\x16 \x01(\tR\x17vulnerabilityReportJson\x12S\n" +
+	"&vulnerability_report_projection_sha256\x18\x17 \x01(\tR#vulnerabilityReportProjectionSha256\x124\n" +
+	"\x16risk_acceptance_sha256\x18\x18 \x01(\tR\x14riskAcceptanceSha256\"e\n" +
 	"\x1cRecordImageAdmissionResponse\x12E\n" +
-	"\x0eimage_artifact\x18\x01 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\rimageArtifact\"E\n" +
+	"\x0eimage_artifact\x18\x01 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\rimageArtifact\"\xbc\x03\n" +
+	"\x19RoleImageAdmissionFailure\x12,\n" +
+	"\x12image_artifact_ref\x18\x01 \x01(\tR\x10imageArtifactRef\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\x04R\aversion\x12\x1d\n" +
+	"\n" +
+	"recipe_ref\x18\x03 \x01(\tR\trecipeRef\x12+\n" +
+	"\x11recipe_generation\x18\x04 \x01(\x04R\x10recipeGeneration\x12\x1b\n" +
+	"\tbuild_ref\x18\x05 \x01(\tR\bbuildRef\x12#\n" +
+	"\rbuild_attempt\x18\x06 \x01(\rR\fbuildAttempt\x12H\n" +
+	"\n" +
+	"scope_kind\x18\a \x01(\x0e2).controlplane.v1.RuntimeResourceScopeKindR\tscopeKind\x12)\n" +
+	"\x10organization_ref\x18\b \x01(\tR\x0forganizationRef\x12\x1f\n" +
+	"\vproject_ref\x18\t \x01(\tR\n" +
+	"projectRef\x12\x14\n" +
+	"\x05state\x18\n" +
+	" \x01(\tR\x05state\x12\x1d\n" +
+	"\n" +
+	"error_code\x18\v \x01(\tR\terrorCode\"\xc6\x06\n" +
+	"\x19FailImageAdmissionRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12,\n" +
+	"\x12image_artifact_ref\x18\x02 \x01(\tR\x10imageArtifactRef\x12)\n" +
+	"\x10expected_version\x18\x03 \x01(\x04R\x0fexpectedVersion\x12%\n" +
+	"\x0eexpected_fence\x18\x04 \x01(\x04R\rexpectedFence\x12\x1f\n" +
+	"\vclaim_token\x18\x05 \x01(\tR\n" +
+	"claimToken\x12'\n" +
+	"\x0fmanifest_digest\x18\x06 \x01(\tR\x0emanifestDigest\x124\n" +
+	"\x16immutable_build_sha256\x18\a \x01(\tR\x14immutableBuildSha256\x12+\n" +
+	"\x11provenance_sha256\x18\b \x01(\tR\x10provenanceSha256\x12'\n" +
+	"\x0fpolicy_revision\x18\t \x01(\x04R\x0epolicyRevision\x12#\n" +
+	"\rpolicy_sha256\x18\n" +
+	" \x01(\tR\fpolicySha256\x12\x1b\n" +
+	"\tbuild_ref\x18\v \x01(\tR\bbuildRef\x124\n" +
+	"\x16expected_build_attempt\x18\f \x01(\rR\x14expectedBuildAttempt\x12+\n" +
+	"\x11recipe_generation\x18\r \x01(\x04R\x10recipeGeneration\x12\x1f\n" +
+	"\vspec_sha256\x18\x0e \x01(\tR\n" +
+	"specSha256\x12B\n" +
+	"\x1dexpected_authority_generation\x18\x0f \x01(\x04R\x1bexpectedAuthorityGeneration\x12\x1d\n" +
+	"\n" +
+	"error_code\x18\x10 \x01(\tR\terrorCode\x12C\n" +
+	"\x1eexpected_admission_attempt_ref\x18\x11 \x01(\tR\x1bexpectedAdmissionAttemptRef\x12<\n" +
+	"\x1aexpected_admission_attempt\x18\x12 \x01(\rR\x18expectedAdmissionAttempt\"u\n" +
+	"\x1aFailImageAdmissionResponse\x12W\n" +
+	"\x11admission_failure\x18\x01 \x01(\v2*.controlplane.v1.RoleImageAdmissionFailureR\x10admissionFailure\"\x8d\x06\n" +
+	" ExpireImageAdmissionClaimRequest\x12'\n" +
+	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\x12,\n" +
+	"\x12image_artifact_ref\x18\x02 \x01(\tR\x10imageArtifactRef\x12)\n" +
+	"\x10expected_version\x18\x03 \x01(\x04R\x0fexpectedVersion\x12%\n" +
+	"\x0eexpected_fence\x18\x04 \x01(\x04R\rexpectedFence\x12'\n" +
+	"\x0fmanifest_digest\x18\x05 \x01(\tR\x0emanifestDigest\x124\n" +
+	"\x16immutable_build_sha256\x18\x06 \x01(\tR\x14immutableBuildSha256\x12+\n" +
+	"\x11provenance_sha256\x18\a \x01(\tR\x10provenanceSha256\x12'\n" +
+	"\x0fpolicy_revision\x18\b \x01(\x04R\x0epolicyRevision\x12#\n" +
+	"\rpolicy_sha256\x18\t \x01(\tR\fpolicySha256\x12\x1b\n" +
+	"\tbuild_ref\x18\n" +
+	" \x01(\tR\bbuildRef\x124\n" +
+	"\x16expected_build_attempt\x18\v \x01(\rR\x14expectedBuildAttempt\x12+\n" +
+	"\x11recipe_generation\x18\f \x01(\x04R\x10recipeGeneration\x12\x1f\n" +
+	"\vspec_sha256\x18\r \x01(\tR\n" +
+	"specSha256\x12B\n" +
+	"\x1dexpected_authority_generation\x18\x0e \x01(\x04R\x1bexpectedAuthorityGeneration\x12C\n" +
+	"\x1eexpected_admission_attempt_ref\x18\x0f \x01(\tR\x1bexpectedAdmissionAttemptRef\x12<\n" +
+	"\x1aexpected_admission_attempt\x18\x10 \x01(\rR\x18expectedAdmissionAttempt\"|\n" +
+	"!ExpireImageAdmissionClaimResponse\x12W\n" +
+	"\x11admission_failure\x18\x01 \x01(\v2*.controlplane.v1.RoleImageAdmissionFailureR\x10admissionFailure\"T\n" +
+	"(GetImageAdmissionRecoveryTerminalRequest\x12(\n" +
+	"\x10admission_run_id\x18\x01 \x01(\tR\x0eadmissionRunId\"\x86\x01\n" +
+	")GetImageAdmissionRecoveryTerminalResponse\x12Y\n" +
+	"\x0eterminal_proof\x18\x01 \x01(\v22.controlplane.v1.GetImageAdmissionTerminalResponseR\rterminalProof\"\x98\b\n" +
+	" GetImageAdmissionTerminalRequest\x122\n" +
+	"\x15claim_idempotency_key\x18\x01 \x01(\tR\x13claimIdempotencyKey\x12,\n" +
+	"\x12image_artifact_ref\x18\x02 \x01(\tR\x10imageArtifactRef\x12)\n" +
+	"\x10expected_version\x18\x03 \x01(\x04R\x0fexpectedVersion\x12%\n" +
+	"\x0eexpected_fence\x18\x04 \x01(\x04R\rexpectedFence\x12'\n" +
+	"\x0fmanifest_digest\x18\x05 \x01(\tR\x0emanifestDigest\x124\n" +
+	"\x16immutable_build_sha256\x18\x06 \x01(\tR\x14immutableBuildSha256\x12+\n" +
+	"\x11provenance_sha256\x18\a \x01(\tR\x10provenanceSha256\x12'\n" +
+	"\x0fpolicy_revision\x18\b \x01(\x04R\x0epolicyRevision\x12#\n" +
+	"\rpolicy_sha256\x18\t \x01(\tR\fpolicySha256\x12\x1b\n" +
+	"\tbuild_ref\x18\n" +
+	" \x01(\tR\bbuildRef\x124\n" +
+	"\x16expected_build_attempt\x18\v \x01(\rR\x14expectedBuildAttempt\x12+\n" +
+	"\x11recipe_generation\x18\f \x01(\x04R\x10recipeGeneration\x12\x1f\n" +
+	"\vspec_sha256\x18\r \x01(\tR\n" +
+	"specSha256\x12B\n" +
+	"\x1dexpected_authority_generation\x18\x0e \x01(\x04R\x1bexpectedAuthorityGeneration\x12C\n" +
+	"\x1eexpected_admission_attempt_ref\x18\x0f \x01(\tR\x1bexpectedAdmissionAttemptRef\x12<\n" +
+	"\x1aexpected_admission_attempt\x18\x10 \x01(\rR\x18expectedAdmissionAttempt\x124\n" +
+	"\x16risk_acceptance_sha256\x18\x11 \x01(\tR\x14riskAcceptanceSha256\x12:\n" +
+	"\x19source_admission_revision\x18\x12 \x01(\x04R\x17sourceAdmissionRevision\x12E\n" +
+	"\x1fsource_admission_receipt_sha256\x18\x13 \x01(\tR\x1csourceAdmissionReceiptSha256\x12E\n" +
+	"\x1fsource_evidence_manifest_digest\x18\x14 \x01(\tR\x1csourceEvidenceManifestDigest\"\xa0\x06\n" +
+	"!GetImageAdmissionTerminalResponse\x12S\n" +
+	"\x0eterminal_state\x18\x01 \x01(\x0e2,.controlplane.v1.ImageAdmissionTerminalStateR\rterminalState\x12I\n" +
+	"\x10claimed_artifact\x18\x02 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\x0fclaimedArtifact\x122\n" +
+	"\x15admission_attempt_ref\x18\x03 \x01(\tR\x13admissionAttemptRef\x12+\n" +
+	"\x11admission_attempt\x18\x04 \x01(\rR\x10admissionAttempt\x12\x1f\n" +
+	"\vclaim_fence\x18\x05 \x01(\x04R\n" +
+	"claimFence\x12<\n" +
+	"\x1aclaim_authority_generation\x18\x06 \x01(\x04R\x18claimAuthorityGeneration\x12:\n" +
+	"\x19terminal_artifact_version\x18\a \x01(\x04R\x17terminalArtifactVersion\x12%\n" +
+	"\x0eterminal_fence\x18\b \x01(\x04R\rterminalFence\x128\n" +
+	"\x18terminal_attempt_version\x18\t \x01(\x04R\x16terminalAttemptVersion\x124\n" +
+	"\x16risk_acceptance_sha256\x18\n" +
+	" \x01(\tR\x14riskAcceptanceSha256\x12:\n" +
+	"\x19source_admission_revision\x18\v \x01(\x04R\x17sourceAdmissionRevision\x12E\n" +
+	"\x1fsource_admission_receipt_sha256\x18\f \x01(\tR\x1csourceAdmissionReceiptSha256\x12E\n" +
+	"\x1fsource_evidence_manifest_digest\x18\r \x01(\tR\x1csourceEvidenceManifestDigest\"E\n" +
 	"\x1aClaimImagePromotionRequest\x12'\n" +
 	"\x0fidempotency_key\x18\x01 \x01(\tR\x0eidempotencyKey\"\x9c\x02\n" +
 	"\x1bClaimImagePromotionResponse\x12E\n" +
@@ -5135,7 +8659,195 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\x0fmanifest_digest\x18\x06 \x01(\tR\x0emanifestDigest\x12:\n" +
 	"\x19promotion_readback_sha256\x18\a \x01(\tR\x17promotionReadbackSha256\"g\n" +
 	"\x1eCompleteImagePromotionResponse\x12E\n" +
-	"\x0eimage_artifact\x18\x01 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\rimageArtifact*\xa3\x04\n" +
+	"\x0eimage_artifact\x18\x01 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\rimageArtifact\"\x8b\x01\n" +
+	"\x1fImageVulnerabilitySeverityCount\x12G\n" +
+	"\bseverity\x18\x01 \x01(\x0e2+.controlplane.v1.ImageVulnerabilitySeverityR\bseverity\x12\x1f\n" +
+	"\vmatch_count\x18\x02 \x01(\rR\n" +
+	"matchCount\"\xc7\x04\n" +
+	"\x19ImageVulnerabilityFinding\x12\x10\n" +
+	"\x03ref\x18\x01 \x01(\tR\x03ref\x12!\n" +
+	"\fpackage_name\x18\x02 \x01(\tR\vpackageName\x12+\n" +
+	"\x11installed_version\x18\x03 \x01(\tR\x10installedVersion\x12\x1c\n" +
+	"\tecosystem\x18\x04 \x01(\tR\tecosystem\x12\x1f\n" +
+	"\vadvisory_id\x18\x05 \x01(\tR\n" +
+	"advisoryId\x12T\n" +
+	"\radvisory_kind\x18\x06 \x01(\x0e2/.controlplane.v1.ImageVulnerabilityAdvisoryKindR\fadvisoryKind\x12!\n" +
+	"\fadvisory_url\x18\a \x01(\tR\vadvisoryUrl\x12G\n" +
+	"\bseverity\x18\b \x01(\x0e2+.controlplane.v1.ImageVulnerabilitySeverityR\bseverity\x12H\n" +
+	"\tfix_state\x18\t \x01(\x0e2+.controlplane.v1.ImageVulnerabilityFixStateR\bfixState\x12%\n" +
+	"\x0efixed_versions\x18\n" +
+	" \x03(\tR\rfixedVersions\x12\x1a\n" +
+	"\bblocking\x18\v \x01(\bR\bblocking\x12\x18\n" +
+	"\aignored\x18\f \x01(\bR\aignored\x12 \n" +
+	"\voccurrences\x18\r \x01(\rR\voccurrences\"\xcf\v\n" +
+	"\x18ImageVulnerabilityReport\x12H\n" +
+	"\n" +
+	"scope_kind\x18\x01 \x01(\x0e2).controlplane.v1.RuntimeResourceScopeKindR\tscopeKind\x12)\n" +
+	"\x10organization_ref\x18\x02 \x01(\tR\x0forganizationRef\x12\x1f\n" +
+	"\vproject_ref\x18\x03 \x01(\tR\n" +
+	"projectRef\x12\x1d\n" +
+	"\n" +
+	"recipe_ref\x18\x04 \x01(\tR\trecipeRef\x12%\n" +
+	"\x0erecipe_version\x18\x05 \x01(\x04R\rrecipeVersion\x12+\n" +
+	"\x11recipe_generation\x18\x06 \x01(\x04R\x10recipeGeneration\x12\x1b\n" +
+	"\tbuild_ref\x18\a \x01(\tR\bbuildRef\x12#\n" +
+	"\rbuild_version\x18\b \x01(\x04R\fbuildVersion\x12#\n" +
+	"\rbuild_attempt\x18\t \x01(\rR\fbuildAttempt\x12!\n" +
+	"\fartifact_ref\x18\n" +
+	" \x01(\tR\vartifactRef\x12)\n" +
+	"\x10artifact_version\x18\v \x01(\x04R\x0fartifactVersion\x12'\n" +
+	"\x0fmanifest_digest\x18\f \x01(\tR\x0emanifestDigest\x12-\n" +
+	"\x12admission_revision\x18\r \x01(\x04R\x11admissionRevision\x12:\n" +
+	"\x19source_admission_revision\x18\x0e \x01(\x04R\x17sourceAdmissionRevision\x12C\n" +
+	"\x1eprior_admission_receipt_sha256\x18\x0f \x01(\tR\x1bpriorAdmissionReceiptSha256\x12C\n" +
+	"\x1eprior_evidence_manifest_digest\x18\x10 \x01(\tR\x1bpriorEvidenceManifestDigest\x12B\n" +
+	"\x1dvulnerability_evidence_sha256\x18\x11 \x01(\tR\x1bvulnerabilityEvidenceSha256\x12\x1f\n" +
+	"\vsbom_sha256\x18\x12 \x01(\tR\n" +
+	"sbomSha256\x12'\n" +
+	"\x0fpolicy_revision\x18\x13 \x01(\x04R\x0epolicyRevision\x12#\n" +
+	"\rpolicy_sha256\x18\x14 \x01(\tR\fpolicySha256\x12D\n" +
+	"\x05state\x18\x15 \x01(\x0e2..controlplane.v1.ImageVulnerabilityReportStateR\x05state\x12\x18\n" +
+	"\aversion\x18\x16 \x01(\x04R\aversion\x12+\n" +
+	"\x11projection_sha256\x18\x17 \x01(\tR\x10projectionSha256\x12\x1a\n" +
+	"\bcomplete\x18\x18 \x01(\bR\bcomplete\x12\x1f\n" +
+	"\vmatch_count\x18\x19 \x01(\rR\n" +
+	"matchCount\x122\n" +
+	"\x15unique_advisory_count\x18\x1a \x01(\rR\x13uniqueAdvisoryCount\x120\n" +
+	"\x14blocking_match_count\x18\x1b \x01(\rR\x12blockingMatchCount\x12@\n" +
+	"\x1dunresolved_no_fix_match_count\x18\x1c \x01(\rR\x19unresolvedNoFixMatchCount\x124\n" +
+	"\x16suppressed_match_count\x18\x1d \x01(\rR\x14suppressedMatchCount\x12Y\n" +
+	"\x0fseverity_counts\x18\x1e \x03(\v20.controlplane.v1.ImageVulnerabilitySeverityCountR\x0eseverityCounts\x12!\n" +
+	"\fnext_actions\x18\x1f \x03(\tR\vnextActions\"\xc5\t\n" +
+	"\x1aImageAdmissionRiskDecision\x12\x10\n" +
+	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\x04R\aversion\x12A\n" +
+	"\x06action\x18\x03 \x01(\x0e2).controlplane.v1.ImageAdmissionRiskActionR\x06action\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\x12/\n" +
+	"\x14decided_by_actor_ref\x18\x05 \x01(\tR\x11decidedByActorRef\x129\n" +
+	"\n" +
+	"decided_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tdecidedAt\x12%\n" +
+	"\x0ebinding_sha256\x18\a \x01(\tR\rbindingSha256\x12H\n" +
+	"\n" +
+	"scope_kind\x18\b \x01(\x0e2).controlplane.v1.RuntimeResourceScopeKindR\tscopeKind\x12)\n" +
+	"\x10organization_ref\x18\t \x01(\tR\x0forganizationRef\x12\x1f\n" +
+	"\vproject_ref\x18\n" +
+	" \x01(\tR\n" +
+	"projectRef\x12\x1d\n" +
+	"\n" +
+	"recipe_ref\x18\v \x01(\tR\trecipeRef\x12%\n" +
+	"\x0erecipe_version\x18\f \x01(\x04R\rrecipeVersion\x12+\n" +
+	"\x11recipe_generation\x18\r \x01(\x04R\x10recipeGeneration\x12\x1b\n" +
+	"\tbuild_ref\x18\x0e \x01(\tR\bbuildRef\x12#\n" +
+	"\rbuild_version\x18\x0f \x01(\x04R\fbuildVersion\x12#\n" +
+	"\rbuild_attempt\x18\x10 \x01(\rR\fbuildAttempt\x12!\n" +
+	"\fartifact_ref\x18\x11 \x01(\tR\vartifactRef\x12)\n" +
+	"\x10artifact_version\x18\x12 \x01(\x04R\x0fartifactVersion\x12'\n" +
+	"\x0fmanifest_digest\x18\x13 \x01(\tR\x0emanifestDigest\x12-\n" +
+	"\x12admission_revision\x18\x14 \x01(\x04R\x11admissionRevision\x12:\n" +
+	"\x19source_admission_revision\x18\x15 \x01(\x04R\x17sourceAdmissionRevision\x12C\n" +
+	"\x1eprior_admission_receipt_sha256\x18\x16 \x01(\tR\x1bpriorAdmissionReceiptSha256\x12C\n" +
+	"\x1eprior_evidence_manifest_digest\x18\x17 \x01(\tR\x1bpriorEvidenceManifestDigest\x12B\n" +
+	"\x1dvulnerability_evidence_sha256\x18\x18 \x01(\tR\x1bvulnerabilityEvidenceSha256\x12\x1f\n" +
+	"\vsbom_sha256\x18\x19 \x01(\tR\n" +
+	"sbomSha256\x12'\n" +
+	"\x0fpolicy_revision\x18\x1a \x01(\x04R\x0epolicyRevision\x12#\n" +
+	"\rpolicy_sha256\x18\x1b \x01(\tR\fpolicySha256\"\xee\x02\n" +
+	"\x15ImageAdmissionAttempt\x12\x10\n" +
+	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\x04R\aversion\x12\x16\n" +
+	"\x06number\x18\x03 \x01(\rR\x06number\x12A\n" +
+	"\x05state\x18\x04 \x01(\x0e2+.controlplane.v1.ImageAdmissionAttemptStateR\x05state\x12!\n" +
+	"\fartifact_ref\x18\x05 \x01(\tR\vartifactRef\x12!\n" +
+	"\fdecision_ref\x18\x06 \x01(\tR\vdecisionRef\x12\x14\n" +
+	"\x05fence\x18\a \x01(\x04R\x05fence\x128\n" +
+	"\x18admission_receipt_sha256\x18\b \x01(\tR\x16admissionReceiptSha256\x128\n" +
+	"\x18evidence_manifest_digest\x18\t \x01(\tR\x16evidenceManifestDigest\"\xbd\x03\n" +
+	".GetOrganizationImageVulnerabilityReportRequest\x12\x1d\n" +
+	"\n" +
+	"recipe_ref\x18\x01 \x01(\tR\trecipeRef\x12!\n" +
+	"\fartifact_ref\x18\x02 \x01(\tR\vartifactRef\x120\n" +
+	"\x04page\x18\x03 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\x12#\n" +
+	"\rpackage_query\x18\x04 \x01(\tR\fpackageQuery\x12L\n" +
+	"\bseverity\x18\x05 \x01(\x0e2+.controlplane.v1.ImageVulnerabilitySeverityH\x00R\bseverity\x88\x01\x01\x12%\n" +
+	"\x0eadvisory_query\x18\x06 \x01(\tR\radvisoryQuery\x12(\n" +
+	"\rblocking_only\x18\a \x01(\bH\x01R\fblockingOnly\x88\x01\x01\x124\n" +
+	"\x16expected_report_sha256\x18\b \x01(\tR\x14expectedReportSha256B\v\n" +
+	"\t_severityB\x10\n" +
+	"\x0e_blocking_only\"\xd2\x03\n" +
+	"\"GetImageVulnerabilityReportRequest\x12\x1d\n" +
+	"\n" +
+	"recipe_ref\x18\x01 \x01(\tR\trecipeRef\x12!\n" +
+	"\fartifact_ref\x18\x02 \x01(\tR\vartifactRef\x120\n" +
+	"\x04page\x18\x03 \x01(\v2\x1c.controlplane.v1.PageRequestR\x04page\x12#\n" +
+	"\rpackage_query\x18\x04 \x01(\tR\fpackageQuery\x12L\n" +
+	"\bseverity\x18\x05 \x01(\x0e2+.controlplane.v1.ImageVulnerabilitySeverityH\x00R\bseverity\x88\x01\x01\x12%\n" +
+	"\x0eadvisory_query\x18\x06 \x01(\tR\radvisoryQuery\x12(\n" +
+	"\rblocking_only\x18\a \x01(\bH\x01R\fblockingOnly\x88\x01\x01\x124\n" +
+	"\x16expected_report_sha256\x18\b \x01(\tR\x14expectedReportSha256\x12\x1f\n" +
+	"\vproject_ref\x18\t \x01(\tR\n" +
+	"projectRefB\v\n" +
+	"\t_severityB\x10\n" +
+	"\x0e_blocking_only\"\xeb\x01\n" +
+	"/GetOrganizationImageVulnerabilityReportResponse\x12A\n" +
+	"\x06report\x18\x01 \x01(\v2).controlplane.v1.ImageVulnerabilityReportR\x06report\x12F\n" +
+	"\bfindings\x18\x02 \x03(\v2*.controlplane.v1.ImageVulnerabilityFindingR\bfindings\x12-\n" +
+	"\x04page\x18\x03 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\xdf\x01\n" +
+	"#GetImageVulnerabilityReportResponse\x12A\n" +
+	"\x06report\x18\x01 \x01(\v2).controlplane.v1.ImageVulnerabilityReportR\x06report\x12F\n" +
+	"\bfindings\x18\x02 \x03(\v2*.controlplane.v1.ImageVulnerabilityFindingR\bfindings\x12-\n" +
+	"\x04page\x18\x03 \x01(\v2\x19.controlplane.v1.PageInfoR\x04page\"\xd0\a\n" +
+	"+DecideOrganizationImageAdmissionRiskRequest\x12<\n" +
+	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x1d\n" +
+	"\n" +
+	"recipe_ref\x18\x02 \x01(\tR\trecipeRef\x12!\n" +
+	"\fartifact_ref\x18\x03 \x01(\tR\vartifactRef\x12:\n" +
+	"\x19expected_artifact_version\x18\x04 \x01(\x04R\x17expectedArtifactVersion\x12>\n" +
+	"\x1bexpected_admission_revision\x18\x05 \x01(\x04R\x19expectedAdmissionRevision\x126\n" +
+	"\x17expected_recipe_version\x18\x06 \x01(\x04R\x15expectedRecipeVersion\x12<\n" +
+	"\x1aexpected_recipe_generation\x18\a \x01(\x04R\x18expectedRecipeGeneration\x12,\n" +
+	"\x12expected_build_ref\x18\b \x01(\tR\x10expectedBuildRef\x124\n" +
+	"\x16expected_build_attempt\x18\t \x01(\rR\x14expectedBuildAttempt\x12'\n" +
+	"\x0fmanifest_digest\x18\n" +
+	" \x01(\tR\x0emanifestDigest\x12B\n" +
+	"\x1dvulnerability_evidence_sha256\x18\v \x01(\tR\x1bvulnerabilityEvidenceSha256\x12+\n" +
+	"\x11projection_sha256\x18\f \x01(\tR\x10projectionSha256\x12C\n" +
+	"\x1eprior_admission_receipt_sha256\x18\r \x01(\tR\x1bpriorAdmissionReceiptSha256\x12C\n" +
+	"\x1eprior_evidence_manifest_digest\x18\x0e \x01(\tR\x1bpriorEvidenceManifestDigest\x12'\n" +
+	"\x0fpolicy_revision\x18\x0f \x01(\x04R\x0epolicyRevision\x12#\n" +
+	"\rpolicy_sha256\x18\x10 \x01(\tR\fpolicySha256\x12A\n" +
+	"\x06action\x18\x11 \x01(\x0e2).controlplane.v1.ImageAdmissionRiskActionR\x06action\x12\x16\n" +
+	"\x06reason\x18\x12 \x01(\tR\x06reason\"\xe5\a\n" +
+	"\x1fDecideImageAdmissionRiskRequest\x12<\n" +
+	"\bmutation\x18\x01 \x01(\v2 .controlplane.v1.MutationContextR\bmutation\x12\x1d\n" +
+	"\n" +
+	"recipe_ref\x18\x02 \x01(\tR\trecipeRef\x12!\n" +
+	"\fartifact_ref\x18\x03 \x01(\tR\vartifactRef\x12:\n" +
+	"\x19expected_artifact_version\x18\x04 \x01(\x04R\x17expectedArtifactVersion\x12>\n" +
+	"\x1bexpected_admission_revision\x18\x05 \x01(\x04R\x19expectedAdmissionRevision\x126\n" +
+	"\x17expected_recipe_version\x18\x06 \x01(\x04R\x15expectedRecipeVersion\x12<\n" +
+	"\x1aexpected_recipe_generation\x18\a \x01(\x04R\x18expectedRecipeGeneration\x12,\n" +
+	"\x12expected_build_ref\x18\b \x01(\tR\x10expectedBuildRef\x124\n" +
+	"\x16expected_build_attempt\x18\t \x01(\rR\x14expectedBuildAttempt\x12'\n" +
+	"\x0fmanifest_digest\x18\n" +
+	" \x01(\tR\x0emanifestDigest\x12B\n" +
+	"\x1dvulnerability_evidence_sha256\x18\v \x01(\tR\x1bvulnerabilityEvidenceSha256\x12+\n" +
+	"\x11projection_sha256\x18\f \x01(\tR\x10projectionSha256\x12C\n" +
+	"\x1eprior_admission_receipt_sha256\x18\r \x01(\tR\x1bpriorAdmissionReceiptSha256\x12C\n" +
+	"\x1eprior_evidence_manifest_digest\x18\x0e \x01(\tR\x1bpriorEvidenceManifestDigest\x12'\n" +
+	"\x0fpolicy_revision\x18\x0f \x01(\x04R\x0epolicyRevision\x12#\n" +
+	"\rpolicy_sha256\x18\x10 \x01(\tR\fpolicySha256\x12A\n" +
+	"\x06action\x18\x11 \x01(\x0e2).controlplane.v1.ImageAdmissionRiskActionR\x06action\x12\x16\n" +
+	"\x06reason\x18\x12 \x01(\tR\x06reason\x12\x1f\n" +
+	"\vproject_ref\x18\x13 \x01(\tR\n" +
+	"projectRef\"\x88\x02\n" +
+	",DecideOrganizationImageAdmissionRiskResponse\x12G\n" +
+	"\bdecision\x18\x01 \x01(\v2+.controlplane.v1.ImageAdmissionRiskDecisionR\bdecision\x12S\n" +
+	"\x11admission_attempt\x18\x02 \x01(\v2&.controlplane.v1.ImageAdmissionAttemptR\x10admissionAttempt\x12:\n" +
+	"\bartifact\x18\x03 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\bartifact\"\xfc\x01\n" +
+	" DecideImageAdmissionRiskResponse\x12G\n" +
+	"\bdecision\x18\x01 \x01(\v2+.controlplane.v1.ImageAdmissionRiskDecisionR\bdecision\x12S\n" +
+	"\x11admission_attempt\x18\x02 \x01(\v2&.controlplane.v1.ImageAdmissionAttemptR\x10admissionAttempt\x12:\n" +
+	"\bartifact\x18\x03 \x01(\v2\x1e.controlplane.v1.ImageArtifactR\bartifact*\xa3\x04\n" +
 	"\x0fImageBuildStage\x12!\n" +
 	"\x1dIMAGE_BUILD_STAGE_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18IMAGE_BUILD_STAGE_QUEUED\x10\x01\x12(\n" +
@@ -5152,11 +8864,12 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\x1dIMAGE_BUILD_STAGE_DEAD_LETTER\x10\v\x12%\n" +
 	"!IMAGE_BUILD_STAGE_MATERIALIZATION\x10\f\x12\"\n" +
 	"\x1eIMAGE_BUILD_STAGE_INSTALLATION\x10\r\x122\n" +
-	".IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION\x10\x0e*\x8c\x01\n" +
+	".IMAGE_BUILD_STAGE_TRUSTED_RUNTIME_FINALIZATION\x10\x0e*\xb1\x01\n" +
 	"\x15ImageAdmissionVerdict\x12'\n" +
 	"#IMAGE_ADMISSION_VERDICT_UNSPECIFIED\x10\x00\x12$\n" +
 	" IMAGE_ADMISSION_VERDICT_ACCEPTED\x10\x01\x12$\n" +
-	" IMAGE_ADMISSION_VERDICT_REJECTED\x10\x02*\xf0\x01\n" +
+	" IMAGE_ADMISSION_VERDICT_REJECTED\x10\x02\x12#\n" +
+	"\x1fIMAGE_ADMISSION_VERDICT_PENDING\x10\x03*\xf0\x01\n" +
 	"\x13ImagePromotionState\x12%\n" +
 	"!IMAGE_PROMOTION_STATE_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dIMAGE_PROMOTION_STATE_PENDING\x10\x01\x12!\n" +
@@ -5171,7 +8884,50 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	" ROLE_IMAGE_RECIPE_ACTION_ARCHIVE\x10\x03\x12$\n" +
 	" ROLE_IMAGE_RECIPE_ACTION_RESTORE\x10\x04\x12*\n" +
 	"&ROLE_IMAGE_RECIPE_ACTION_REQUEST_BUILD\x10\x05\x12)\n" +
-	"%ROLE_IMAGE_RECIPE_ACTION_CANCEL_BUILD\x10\x062\x8e\x14\n" +
+	"%ROLE_IMAGE_RECIPE_ACTION_CANCEL_BUILD\x10\x06*\x80\x02\n" +
+	"\x1bImageAdmissionTerminalState\x12.\n" +
+	"*IMAGE_ADMISSION_TERMINAL_STATE_UNSPECIFIED\x10\x00\x12+\n" +
+	"'IMAGE_ADMISSION_TERMINAL_STATE_ACCEPTED\x10\x01\x12+\n" +
+	"'IMAGE_ADMISSION_TERMINAL_STATE_REJECTED\x10\x02\x12)\n" +
+	"%IMAGE_ADMISSION_TERMINAL_STATE_FAILED\x10\x03\x12,\n" +
+	"(IMAGE_ADMISSION_TERMINAL_STATE_CANCELLED\x10\x04*\xc2\x02\n" +
+	"\x1aImageVulnerabilitySeverity\x12,\n" +
+	"(IMAGE_VULNERABILITY_SEVERITY_UNSPECIFIED\x10\x00\x12)\n" +
+	"%IMAGE_VULNERABILITY_SEVERITY_CRITICAL\x10\x01\x12%\n" +
+	"!IMAGE_VULNERABILITY_SEVERITY_HIGH\x10\x02\x12'\n" +
+	"#IMAGE_VULNERABILITY_SEVERITY_MEDIUM\x10\x03\x12$\n" +
+	" IMAGE_VULNERABILITY_SEVERITY_LOW\x10\x04\x12+\n" +
+	"'IMAGE_VULNERABILITY_SEVERITY_NEGLIGIBLE\x10\x05\x12(\n" +
+	"$IMAGE_VULNERABILITY_SEVERITY_UNKNOWN\x10\x06*\x81\x02\n" +
+	"\x1eImageVulnerabilityAdvisoryKind\x121\n" +
+	"-IMAGE_VULNERABILITY_ADVISORY_KIND_UNSPECIFIED\x10\x00\x12)\n" +
+	"%IMAGE_VULNERABILITY_ADVISORY_KIND_CVE\x10\x01\x12*\n" +
+	"&IMAGE_VULNERABILITY_ADVISORY_KIND_GHSA\x10\x02\x12(\n" +
+	"$IMAGE_VULNERABILITY_ADVISORY_KIND_GO\x10\x03\x12+\n" +
+	"'IMAGE_VULNERABILITY_ADVISORY_KIND_OTHER\x10\x04*\xf8\x01\n" +
+	"\x1aImageVulnerabilityFixState\x12-\n" +
+	")IMAGE_VULNERABILITY_FIX_STATE_UNSPECIFIED\x10\x00\x12'\n" +
+	"#IMAGE_VULNERABILITY_FIX_STATE_FIXED\x10\x01\x12+\n" +
+	"'IMAGE_VULNERABILITY_FIX_STATE_NOT_FIXED\x10\x02\x12*\n" +
+	"&IMAGE_VULNERABILITY_FIX_STATE_WONT_FIX\x10\x03\x12)\n" +
+	"%IMAGE_VULNERABILITY_FIX_STATE_UNKNOWN\x10\x04*\xdc\x01\n" +
+	"\x1dImageVulnerabilityReportState\x120\n" +
+	",IMAGE_VULNERABILITY_REPORT_STATE_UNSPECIFIED\x10\x00\x12*\n" +
+	"&IMAGE_VULNERABILITY_REPORT_STATE_READY\x10\x01\x120\n" +
+	",IMAGE_VULNERABILITY_REPORT_STATE_UNAVAILABLE\x10\x02\x12+\n" +
+	"'IMAGE_VULNERABILITY_REPORT_STATE_FAILED\x10\x03*\xa1\x01\n" +
+	"\x18ImageAdmissionRiskAction\x12+\n" +
+	"'IMAGE_ADMISSION_RISK_ACTION_UNSPECIFIED\x10\x00\x12+\n" +
+	"'IMAGE_ADMISSION_RISK_ACTION_ACCEPT_RISK\x10\x01\x12+\n" +
+	"'IMAGE_ADMISSION_RISK_ACTION_REJECT_RISK\x10\x02*\xd0\x02\n" +
+	"\x1aImageAdmissionAttemptState\x12-\n" +
+	")IMAGE_ADMISSION_ATTEMPT_STATE_UNSPECIFIED\x10\x00\x12)\n" +
+	"%IMAGE_ADMISSION_ATTEMPT_STATE_PENDING\x10\x01\x12)\n" +
+	"%IMAGE_ADMISSION_ATTEMPT_STATE_CLAIMED\x10\x02\x12*\n" +
+	"&IMAGE_ADMISSION_ATTEMPT_STATE_ACCEPTED\x10\x03\x12*\n" +
+	"&IMAGE_ADMISSION_ATTEMPT_STATE_REJECTED\x10\x04\x12(\n" +
+	"$IMAGE_ADMISSION_ATTEMPT_STATE_FAILED\x10\x05\x12+\n" +
+	"'IMAGE_ADMISSION_ATTEMPT_STATE_CANCELLED\x10\x062\x85\x1d\n" +
 	"\x10RoleImageService\x12s\n" +
 	"\x14ListRoleEnvironments\x12,.controlplane.v1.ListRoleEnvironmentsRequest\x1a-.controlplane.v1.ListRoleEnvironmentsResponse\x12s\n" +
 	"\x14ListRoleImageRecipes\x12,.controlplane.v1.ListRoleImageRecipesRequest\x1a-.controlplane.v1.ListRoleImageRecipesResponse\x12m\n" +
@@ -5181,7 +8937,11 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\x1eGetOrganizationRoleImageRecipe\x126.controlplane.v1.GetOrganizationRoleImageRecipeRequest\x1a7.controlplane.v1.GetOrganizationRoleImageRecipeResponse\x12\xaf\x01\n" +
 	"(ListOrganizationRoleImageRecipeRevisions\x12@.controlplane.v1.ListOrganizationRoleImageRecipeRevisionsRequest\x1aA.controlplane.v1.ListOrganizationRoleImageRecipeRevisionsResponse\x12\x9a\x01\n" +
 	"!ManageOrganizationRoleImageRecipe\x129.controlplane.v1.ManageOrganizationRoleImageRecipeRequest\x1a:.controlplane.v1.ManageOrganizationRoleImageRecipeResponse\x12\xa6\x01\n" +
-	"%RequestOrganizationRoleImagePromotion\x12=.controlplane.v1.RequestOrganizationRoleImagePromotionRequest\x1a>.controlplane.v1.RequestOrganizationRoleImagePromotionResponse\x12d\n" +
+	"%RequestOrganizationRoleImagePromotion\x12=.controlplane.v1.RequestOrganizationRoleImagePromotionRequest\x1a>.controlplane.v1.RequestOrganizationRoleImagePromotionResponse\x12\xac\x01\n" +
+	"'GetOrganizationImageVulnerabilityReport\x12?.controlplane.v1.GetOrganizationImageVulnerabilityReportRequest\x1a@.controlplane.v1.GetOrganizationImageVulnerabilityReportResponse\x12\x88\x01\n" +
+	"\x1bGetImageVulnerabilityReport\x123.controlplane.v1.GetImageVulnerabilityReportRequest\x1a4.controlplane.v1.GetImageVulnerabilityReportResponse\x12\xa3\x01\n" +
+	"$DecideOrganizationImageAdmissionRisk\x12<.controlplane.v1.DecideOrganizationImageAdmissionRiskRequest\x1a=.controlplane.v1.DecideOrganizationImageAdmissionRiskResponse\x12\x7f\n" +
+	"\x18DecideImageAdmissionRisk\x120.controlplane.v1.DecideImageAdmissionRiskRequest\x1a1.controlplane.v1.DecideImageAdmissionRiskResponse\x12d\n" +
 	"\x0fClaimImageBuild\x12'.controlplane.v1.ClaimImageBuildRequest\x1a(.controlplane.v1.ClaimImageBuildResponse\x12d\n" +
 	"\x0fRenewImageBuild\x12'.controlplane.v1.RenewImageBuildRequest\x1a(.controlplane.v1.RenewImageBuildResponse\x12\x7f\n" +
 	"\x18ReportImageBuildProgress\x120.controlplane.v1.ReportImageBuildProgressRequest\x1a1.controlplane.v1.ReportImageBuildProgressResponse\x12m\n" +
@@ -5189,7 +8949,11 @@ const file_controlplane_v1_role_images_proto_rawDesc = "" +
 	"\x0eFailImageBuild\x12&.controlplane.v1.FailImageBuildRequest\x1a'.controlplane.v1.FailImageBuildResponse\x12\x91\x01\n" +
 	"\x1eGetImageSupplyWorkAvailability\x126.controlplane.v1.GetImageSupplyWorkAvailabilityRequest\x1a7.controlplane.v1.GetImageSupplyWorkAvailabilityResponse\x12p\n" +
 	"\x13ClaimImageAdmission\x12+.controlplane.v1.ClaimImageAdmissionRequest\x1a,.controlplane.v1.ClaimImageAdmissionResponse\x12s\n" +
-	"\x14RecordImageAdmission\x12,.controlplane.v1.RecordImageAdmissionRequest\x1a-.controlplane.v1.RecordImageAdmissionResponse\x12p\n" +
+	"\x14RecordImageAdmission\x12,.controlplane.v1.RecordImageAdmissionRequest\x1a-.controlplane.v1.RecordImageAdmissionResponse\x12m\n" +
+	"\x12FailImageAdmission\x12*.controlplane.v1.FailImageAdmissionRequest\x1a+.controlplane.v1.FailImageAdmissionResponse\x12\x82\x01\n" +
+	"\x19ExpireImageAdmissionClaim\x121.controlplane.v1.ExpireImageAdmissionClaimRequest\x1a2.controlplane.v1.ExpireImageAdmissionClaimResponse\x12\x82\x01\n" +
+	"\x19GetImageAdmissionTerminal\x121.controlplane.v1.GetImageAdmissionTerminalRequest\x1a2.controlplane.v1.GetImageAdmissionTerminalResponse\x12\x9a\x01\n" +
+	"!GetImageAdmissionRecoveryTerminal\x129.controlplane.v1.GetImageAdmissionRecoveryTerminalRequest\x1a:.controlplane.v1.GetImageAdmissionRecoveryTerminalResponse\x12p\n" +
 	"\x13ClaimImagePromotion\x12+.controlplane.v1.ClaimImagePromotionRequest\x1a,.controlplane.v1.ClaimImagePromotionResponse\x12|\n" +
 	"\x17AuthorizeImagePromotion\x12/.controlplane.v1.AuthorizeImagePromotionRequest\x1a0.controlplane.v1.AuthorizeImagePromotionResponse\x12y\n" +
 	"\x16CompleteImagePromotion\x12..controlplane.v1.CompleteImagePromotionRequest\x1a/.controlplane.v1.CompleteImagePromotionResponseBWZUgithub.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1;controlplanev1b\x06proto3"
@@ -5206,195 +8970,283 @@ func file_controlplane_v1_role_images_proto_rawDescGZIP() []byte {
 	return file_controlplane_v1_role_images_proto_rawDescData
 }
 
-var file_controlplane_v1_role_images_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_controlplane_v1_role_images_proto_msgTypes = make([]protoimpl.MessageInfo, 51)
+var file_controlplane_v1_role_images_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
+var file_controlplane_v1_role_images_proto_msgTypes = make([]protoimpl.MessageInfo, 73)
 var file_controlplane_v1_role_images_proto_goTypes = []any{
 	(ImageBuildStage)(0),                                     // 0: controlplane.v1.ImageBuildStage
 	(ImageAdmissionVerdict)(0),                               // 1: controlplane.v1.ImageAdmissionVerdict
 	(ImagePromotionState)(0),                                 // 2: controlplane.v1.ImagePromotionState
 	(RoleImageRecipeAction)(0),                               // 3: controlplane.v1.RoleImageRecipeAction
-	(*RoleImagePlatform)(nil),                                // 4: controlplane.v1.RoleImagePlatform
-	(*ListOrganizationRoleImageRecipeRevisionsRequest)(nil),  // 5: controlplane.v1.ListOrganizationRoleImageRecipeRevisionsRequest
-	(*ListOrganizationRoleImageRecipeRevisionsResponse)(nil), // 6: controlplane.v1.ListOrganizationRoleImageRecipeRevisionsResponse
-	(*RoleImagePackage)(nil),                                 // 7: controlplane.v1.RoleImagePackage
-	(*RoleImageTool)(nil),                                    // 8: controlplane.v1.RoleImageTool
-	(*RoleEnvironment)(nil),                                  // 9: controlplane.v1.RoleEnvironment
-	(*RoleEnvironmentSelection)(nil),                         // 10: controlplane.v1.RoleEnvironmentSelection
-	(*ListRoleEnvironmentsRequest)(nil),                      // 11: controlplane.v1.ListRoleEnvironmentsRequest
-	(*ListRoleEnvironmentsResponse)(nil),                     // 12: controlplane.v1.ListRoleEnvironmentsResponse
-	(*RoleImageRecipeInput)(nil),                             // 13: controlplane.v1.RoleImageRecipeInput
-	(*RoleImageRecipe)(nil),                                  // 14: controlplane.v1.RoleImageRecipe
-	(*RoleImageManagedLineage)(nil),                          // 15: controlplane.v1.RoleImageManagedLineage
-	(*ImageBuild)(nil),                                       // 16: controlplane.v1.ImageBuild
-	(*ImageArtifact)(nil),                                    // 17: controlplane.v1.ImageArtifact
-	(*ListRoleImageRecipesRequest)(nil),                      // 18: controlplane.v1.ListRoleImageRecipesRequest
-	(*ListRoleImageRecipesResponse)(nil),                     // 19: controlplane.v1.ListRoleImageRecipesResponse
-	(*GetRoleImageRecipeRequest)(nil),                        // 20: controlplane.v1.GetRoleImageRecipeRequest
-	(*GetRoleImageRecipeResponse)(nil),                       // 21: controlplane.v1.GetRoleImageRecipeResponse
-	(*ManageRoleImageRecipeRequest)(nil),                     // 22: controlplane.v1.ManageRoleImageRecipeRequest
-	(*ManageRoleImageRecipeResponse)(nil),                    // 23: controlplane.v1.ManageRoleImageRecipeResponse
-	(*ListOrganizationRoleImageRecipesRequest)(nil),          // 24: controlplane.v1.ListOrganizationRoleImageRecipesRequest
-	(*ListOrganizationRoleImageRecipesResponse)(nil),         // 25: controlplane.v1.ListOrganizationRoleImageRecipesResponse
-	(*GetOrganizationRoleImageRecipeRequest)(nil),            // 26: controlplane.v1.GetOrganizationRoleImageRecipeRequest
-	(*GetOrganizationRoleImageRecipeResponse)(nil),           // 27: controlplane.v1.GetOrganizationRoleImageRecipeResponse
-	(*ManageOrganizationRoleImageRecipeRequest)(nil),         // 28: controlplane.v1.ManageOrganizationRoleImageRecipeRequest
-	(*ManageOrganizationRoleImageRecipeResponse)(nil),        // 29: controlplane.v1.ManageOrganizationRoleImageRecipeResponse
-	(*RequestOrganizationRoleImagePromotionRequest)(nil),     // 30: controlplane.v1.RequestOrganizationRoleImagePromotionRequest
-	(*RequestOrganizationRoleImagePromotionResponse)(nil),    // 31: controlplane.v1.RequestOrganizationRoleImagePromotionResponse
-	(*RoleImageBuildInput)(nil),                              // 32: controlplane.v1.RoleImageBuildInput
-	(*ClaimImageBuildRequest)(nil),                           // 33: controlplane.v1.ClaimImageBuildRequest
-	(*ClaimImageBuildResponse)(nil),                          // 34: controlplane.v1.ClaimImageBuildResponse
-	(*RenewImageBuildRequest)(nil),                           // 35: controlplane.v1.RenewImageBuildRequest
-	(*RenewImageBuildResponse)(nil),                          // 36: controlplane.v1.RenewImageBuildResponse
-	(*ReportImageBuildProgressRequest)(nil),                  // 37: controlplane.v1.ReportImageBuildProgressRequest
-	(*ReportImageBuildProgressResponse)(nil),                 // 38: controlplane.v1.ReportImageBuildProgressResponse
-	(*CompleteImageBuildRequest)(nil),                        // 39: controlplane.v1.CompleteImageBuildRequest
-	(*CompleteImageBuildResponse)(nil),                       // 40: controlplane.v1.CompleteImageBuildResponse
-	(*FailImageBuildRequest)(nil),                            // 41: controlplane.v1.FailImageBuildRequest
-	(*FailImageBuildResponse)(nil),                           // 42: controlplane.v1.FailImageBuildResponse
-	(*GetImageSupplyWorkAvailabilityRequest)(nil),            // 43: controlplane.v1.GetImageSupplyWorkAvailabilityRequest
-	(*GetImageSupplyWorkAvailabilityResponse)(nil),           // 44: controlplane.v1.GetImageSupplyWorkAvailabilityResponse
-	(*ClaimImageAdmissionRequest)(nil),                       // 45: controlplane.v1.ClaimImageAdmissionRequest
-	(*ClaimImageAdmissionResponse)(nil),                      // 46: controlplane.v1.ClaimImageAdmissionResponse
-	(*RecordImageAdmissionRequest)(nil),                      // 47: controlplane.v1.RecordImageAdmissionRequest
-	(*RecordImageAdmissionResponse)(nil),                     // 48: controlplane.v1.RecordImageAdmissionResponse
-	(*ClaimImagePromotionRequest)(nil),                       // 49: controlplane.v1.ClaimImagePromotionRequest
-	(*ClaimImagePromotionResponse)(nil),                      // 50: controlplane.v1.ClaimImagePromotionResponse
-	(*AuthorizeImagePromotionRequest)(nil),                   // 51: controlplane.v1.AuthorizeImagePromotionRequest
-	(*AuthorizeImagePromotionResponse)(nil),                  // 52: controlplane.v1.AuthorizeImagePromotionResponse
-	(*CompleteImagePromotionRequest)(nil),                    // 53: controlplane.v1.CompleteImagePromotionRequest
-	(*CompleteImagePromotionResponse)(nil),                   // 54: controlplane.v1.CompleteImagePromotionResponse
-	(*PageRequest)(nil),                                      // 55: controlplane.v1.PageRequest
-	(*RoleImageRecipeRevision)(nil),                          // 56: controlplane.v1.RoleImageRecipeRevision
-	(*PageInfo)(nil),                                         // 57: controlplane.v1.PageInfo
-	(*timestamppb.Timestamp)(nil),                            // 58: google.protobuf.Timestamp
-	(RuntimeResourceScopeKind)(0),                            // 59: controlplane.v1.RuntimeResourceScopeKind
-	(*MutationContext)(nil),                                  // 60: controlplane.v1.MutationContext
-	(*RoleImagePromotionReceipt)(nil),                        // 61: controlplane.v1.RoleImagePromotionReceipt
+	(ImageAdmissionTerminalState)(0),                         // 4: controlplane.v1.ImageAdmissionTerminalState
+	(ImageVulnerabilitySeverity)(0),                          // 5: controlplane.v1.ImageVulnerabilitySeverity
+	(ImageVulnerabilityAdvisoryKind)(0),                      // 6: controlplane.v1.ImageVulnerabilityAdvisoryKind
+	(ImageVulnerabilityFixState)(0),                          // 7: controlplane.v1.ImageVulnerabilityFixState
+	(ImageVulnerabilityReportState)(0),                       // 8: controlplane.v1.ImageVulnerabilityReportState
+	(ImageAdmissionRiskAction)(0),                            // 9: controlplane.v1.ImageAdmissionRiskAction
+	(ImageAdmissionAttemptState)(0),                          // 10: controlplane.v1.ImageAdmissionAttemptState
+	(*RoleImagePlatform)(nil),                                // 11: controlplane.v1.RoleImagePlatform
+	(*ListOrganizationRoleImageRecipeRevisionsRequest)(nil),  // 12: controlplane.v1.ListOrganizationRoleImageRecipeRevisionsRequest
+	(*ListOrganizationRoleImageRecipeRevisionsResponse)(nil), // 13: controlplane.v1.ListOrganizationRoleImageRecipeRevisionsResponse
+	(*RoleImagePackage)(nil),                                 // 14: controlplane.v1.RoleImagePackage
+	(*RoleImageTool)(nil),                                    // 15: controlplane.v1.RoleImageTool
+	(*RoleEnvironment)(nil),                                  // 16: controlplane.v1.RoleEnvironment
+	(*RoleEnvironmentSelection)(nil),                         // 17: controlplane.v1.RoleEnvironmentSelection
+	(*ListRoleEnvironmentsRequest)(nil),                      // 18: controlplane.v1.ListRoleEnvironmentsRequest
+	(*ListRoleEnvironmentsResponse)(nil),                     // 19: controlplane.v1.ListRoleEnvironmentsResponse
+	(*RoleImageRecipeInput)(nil),                             // 20: controlplane.v1.RoleImageRecipeInput
+	(*RoleImageRecipe)(nil),                                  // 21: controlplane.v1.RoleImageRecipe
+	(*RoleImageManagedLineage)(nil),                          // 22: controlplane.v1.RoleImageManagedLineage
+	(*ImageBuild)(nil),                                       // 23: controlplane.v1.ImageBuild
+	(*ImageArtifact)(nil),                                    // 24: controlplane.v1.ImageArtifact
+	(*ListRoleImageRecipesRequest)(nil),                      // 25: controlplane.v1.ListRoleImageRecipesRequest
+	(*ListRoleImageRecipesResponse)(nil),                     // 26: controlplane.v1.ListRoleImageRecipesResponse
+	(*GetRoleImageRecipeRequest)(nil),                        // 27: controlplane.v1.GetRoleImageRecipeRequest
+	(*GetRoleImageRecipeResponse)(nil),                       // 28: controlplane.v1.GetRoleImageRecipeResponse
+	(*ManageRoleImageRecipeRequest)(nil),                     // 29: controlplane.v1.ManageRoleImageRecipeRequest
+	(*ManageRoleImageRecipeResponse)(nil),                    // 30: controlplane.v1.ManageRoleImageRecipeResponse
+	(*ListOrganizationRoleImageRecipesRequest)(nil),          // 31: controlplane.v1.ListOrganizationRoleImageRecipesRequest
+	(*ListOrganizationRoleImageRecipesResponse)(nil),         // 32: controlplane.v1.ListOrganizationRoleImageRecipesResponse
+	(*GetOrganizationRoleImageRecipeRequest)(nil),            // 33: controlplane.v1.GetOrganizationRoleImageRecipeRequest
+	(*GetOrganizationRoleImageRecipeResponse)(nil),           // 34: controlplane.v1.GetOrganizationRoleImageRecipeResponse
+	(*ManageOrganizationRoleImageRecipeRequest)(nil),         // 35: controlplane.v1.ManageOrganizationRoleImageRecipeRequest
+	(*ManageOrganizationRoleImageRecipeResponse)(nil),        // 36: controlplane.v1.ManageOrganizationRoleImageRecipeResponse
+	(*RequestOrganizationRoleImagePromotionRequest)(nil),     // 37: controlplane.v1.RequestOrganizationRoleImagePromotionRequest
+	(*RequestOrganizationRoleImagePromotionResponse)(nil),    // 38: controlplane.v1.RequestOrganizationRoleImagePromotionResponse
+	(*RoleImageBuildInput)(nil),                              // 39: controlplane.v1.RoleImageBuildInput
+	(*ClaimImageBuildRequest)(nil),                           // 40: controlplane.v1.ClaimImageBuildRequest
+	(*ClaimImageBuildResponse)(nil),                          // 41: controlplane.v1.ClaimImageBuildResponse
+	(*RenewImageBuildRequest)(nil),                           // 42: controlplane.v1.RenewImageBuildRequest
+	(*RenewImageBuildResponse)(nil),                          // 43: controlplane.v1.RenewImageBuildResponse
+	(*ReportImageBuildProgressRequest)(nil),                  // 44: controlplane.v1.ReportImageBuildProgressRequest
+	(*ReportImageBuildProgressResponse)(nil),                 // 45: controlplane.v1.ReportImageBuildProgressResponse
+	(*CompleteImageBuildRequest)(nil),                        // 46: controlplane.v1.CompleteImageBuildRequest
+	(*CompleteImageBuildResponse)(nil),                       // 47: controlplane.v1.CompleteImageBuildResponse
+	(*FailImageBuildRequest)(nil),                            // 48: controlplane.v1.FailImageBuildRequest
+	(*FailImageBuildResponse)(nil),                           // 49: controlplane.v1.FailImageBuildResponse
+	(*GetImageSupplyWorkAvailabilityRequest)(nil),            // 50: controlplane.v1.GetImageSupplyWorkAvailabilityRequest
+	(*GetImageSupplyWorkAvailabilityResponse)(nil),           // 51: controlplane.v1.GetImageSupplyWorkAvailabilityResponse
+	(*ClaimImageAdmissionRequest)(nil),                       // 52: controlplane.v1.ClaimImageAdmissionRequest
+	(*ClaimImageAdmissionResponse)(nil),                      // 53: controlplane.v1.ClaimImageAdmissionResponse
+	(*RecordImageAdmissionRequest)(nil),                      // 54: controlplane.v1.RecordImageAdmissionRequest
+	(*RecordImageAdmissionResponse)(nil),                     // 55: controlplane.v1.RecordImageAdmissionResponse
+	(*RoleImageAdmissionFailure)(nil),                        // 56: controlplane.v1.RoleImageAdmissionFailure
+	(*FailImageAdmissionRequest)(nil),                        // 57: controlplane.v1.FailImageAdmissionRequest
+	(*FailImageAdmissionResponse)(nil),                       // 58: controlplane.v1.FailImageAdmissionResponse
+	(*ExpireImageAdmissionClaimRequest)(nil),                 // 59: controlplane.v1.ExpireImageAdmissionClaimRequest
+	(*ExpireImageAdmissionClaimResponse)(nil),                // 60: controlplane.v1.ExpireImageAdmissionClaimResponse
+	(*GetImageAdmissionRecoveryTerminalRequest)(nil),         // 61: controlplane.v1.GetImageAdmissionRecoveryTerminalRequest
+	(*GetImageAdmissionRecoveryTerminalResponse)(nil),        // 62: controlplane.v1.GetImageAdmissionRecoveryTerminalResponse
+	(*GetImageAdmissionTerminalRequest)(nil),                 // 63: controlplane.v1.GetImageAdmissionTerminalRequest
+	(*GetImageAdmissionTerminalResponse)(nil),                // 64: controlplane.v1.GetImageAdmissionTerminalResponse
+	(*ClaimImagePromotionRequest)(nil),                       // 65: controlplane.v1.ClaimImagePromotionRequest
+	(*ClaimImagePromotionResponse)(nil),                      // 66: controlplane.v1.ClaimImagePromotionResponse
+	(*AuthorizeImagePromotionRequest)(nil),                   // 67: controlplane.v1.AuthorizeImagePromotionRequest
+	(*AuthorizeImagePromotionResponse)(nil),                  // 68: controlplane.v1.AuthorizeImagePromotionResponse
+	(*CompleteImagePromotionRequest)(nil),                    // 69: controlplane.v1.CompleteImagePromotionRequest
+	(*CompleteImagePromotionResponse)(nil),                   // 70: controlplane.v1.CompleteImagePromotionResponse
+	(*ImageVulnerabilitySeverityCount)(nil),                  // 71: controlplane.v1.ImageVulnerabilitySeverityCount
+	(*ImageVulnerabilityFinding)(nil),                        // 72: controlplane.v1.ImageVulnerabilityFinding
+	(*ImageVulnerabilityReport)(nil),                         // 73: controlplane.v1.ImageVulnerabilityReport
+	(*ImageAdmissionRiskDecision)(nil),                       // 74: controlplane.v1.ImageAdmissionRiskDecision
+	(*ImageAdmissionAttempt)(nil),                            // 75: controlplane.v1.ImageAdmissionAttempt
+	(*GetOrganizationImageVulnerabilityReportRequest)(nil),   // 76: controlplane.v1.GetOrganizationImageVulnerabilityReportRequest
+	(*GetImageVulnerabilityReportRequest)(nil),               // 77: controlplane.v1.GetImageVulnerabilityReportRequest
+	(*GetOrganizationImageVulnerabilityReportResponse)(nil),  // 78: controlplane.v1.GetOrganizationImageVulnerabilityReportResponse
+	(*GetImageVulnerabilityReportResponse)(nil),              // 79: controlplane.v1.GetImageVulnerabilityReportResponse
+	(*DecideOrganizationImageAdmissionRiskRequest)(nil),      // 80: controlplane.v1.DecideOrganizationImageAdmissionRiskRequest
+	(*DecideImageAdmissionRiskRequest)(nil),                  // 81: controlplane.v1.DecideImageAdmissionRiskRequest
+	(*DecideOrganizationImageAdmissionRiskResponse)(nil),     // 82: controlplane.v1.DecideOrganizationImageAdmissionRiskResponse
+	(*DecideImageAdmissionRiskResponse)(nil),                 // 83: controlplane.v1.DecideImageAdmissionRiskResponse
+	(*PageRequest)(nil),                                      // 84: controlplane.v1.PageRequest
+	(*RoleImageRecipeRevision)(nil),                          // 85: controlplane.v1.RoleImageRecipeRevision
+	(*PageInfo)(nil),                                         // 86: controlplane.v1.PageInfo
+	(*timestamppb.Timestamp)(nil),                            // 87: google.protobuf.Timestamp
+	(RuntimeResourceScopeKind)(0),                            // 88: controlplane.v1.RuntimeResourceScopeKind
+	(*ImageToolInventory)(nil),                               // 89: controlplane.v1.ImageToolInventory
+	(*MutationContext)(nil),                                  // 90: controlplane.v1.MutationContext
+	(*RoleImagePromotionReceipt)(nil),                        // 91: controlplane.v1.RoleImagePromotionReceipt
 }
 var file_controlplane_v1_role_images_proto_depIdxs = []int32{
-	55, // 0: controlplane.v1.ListOrganizationRoleImageRecipeRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
-	56, // 1: controlplane.v1.ListOrganizationRoleImageRecipeRevisionsResponse.revisions:type_name -> controlplane.v1.RoleImageRecipeRevision
-	57, // 2: controlplane.v1.ListOrganizationRoleImageRecipeRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
-	4,  // 3: controlplane.v1.RoleEnvironment.platforms:type_name -> controlplane.v1.RoleImagePlatform
-	9,  // 4: controlplane.v1.ListRoleEnvironmentsResponse.environments:type_name -> controlplane.v1.RoleEnvironment
-	4,  // 5: controlplane.v1.RoleImageRecipeInput.platforms:type_name -> controlplane.v1.RoleImagePlatform
-	7,  // 6: controlplane.v1.RoleImageRecipeInput.packages:type_name -> controlplane.v1.RoleImagePackage
-	8,  // 7: controlplane.v1.RoleImageRecipeInput.tools:type_name -> controlplane.v1.RoleImageTool
-	58, // 8: controlplane.v1.RoleImageRecipe.created_at:type_name -> google.protobuf.Timestamp
-	58, // 9: controlplane.v1.RoleImageRecipe.updated_at:type_name -> google.protobuf.Timestamp
-	10, // 10: controlplane.v1.RoleImageRecipe.environment:type_name -> controlplane.v1.RoleEnvironmentSelection
-	15, // 11: controlplane.v1.RoleImageRecipe.managed_lineage:type_name -> controlplane.v1.RoleImageManagedLineage
-	59, // 12: controlplane.v1.RoleImageRecipe.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
-	0,  // 13: controlplane.v1.ImageBuild.stage:type_name -> controlplane.v1.ImageBuildStage
-	58, // 14: controlplane.v1.ImageBuild.lease_expires_at:type_name -> google.protobuf.Timestamp
-	58, // 15: controlplane.v1.ImageBuild.created_at:type_name -> google.protobuf.Timestamp
-	58, // 16: controlplane.v1.ImageBuild.updated_at:type_name -> google.protobuf.Timestamp
-	59, // 17: controlplane.v1.ImageBuild.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
-	4,  // 18: controlplane.v1.ImageArtifact.platforms:type_name -> controlplane.v1.RoleImagePlatform
-	1,  // 19: controlplane.v1.ImageArtifact.admission_verdict:type_name -> controlplane.v1.ImageAdmissionVerdict
-	58, // 20: controlplane.v1.ImageArtifact.promoted_at:type_name -> google.protobuf.Timestamp
-	58, // 21: controlplane.v1.ImageArtifact.created_at:type_name -> google.protobuf.Timestamp
-	58, // 22: controlplane.v1.ImageArtifact.updated_at:type_name -> google.protobuf.Timestamp
-	8,  // 23: controlplane.v1.ImageArtifact.tools:type_name -> controlplane.v1.RoleImageTool
-	2,  // 24: controlplane.v1.ImageArtifact.promotion_state:type_name -> controlplane.v1.ImagePromotionState
-	59, // 25: controlplane.v1.ImageArtifact.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
-	55, // 26: controlplane.v1.ListRoleImageRecipesRequest.page:type_name -> controlplane.v1.PageRequest
-	14, // 27: controlplane.v1.ListRoleImageRecipesResponse.recipes:type_name -> controlplane.v1.RoleImageRecipe
-	57, // 28: controlplane.v1.ListRoleImageRecipesResponse.page:type_name -> controlplane.v1.PageInfo
-	14, // 29: controlplane.v1.GetRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
-	16, // 30: controlplane.v1.GetRoleImageRecipeResponse.builds:type_name -> controlplane.v1.ImageBuild
-	17, // 31: controlplane.v1.GetRoleImageRecipeResponse.active_artifact:type_name -> controlplane.v1.ImageArtifact
-	17, // 32: controlplane.v1.GetRoleImageRecipeResponse.promotion_candidate:type_name -> controlplane.v1.ImageArtifact
-	60, // 33: controlplane.v1.ManageRoleImageRecipeRequest.mutation:type_name -> controlplane.v1.MutationContext
-	3,  // 34: controlplane.v1.ManageRoleImageRecipeRequest.action:type_name -> controlplane.v1.RoleImageRecipeAction
-	10, // 35: controlplane.v1.ManageRoleImageRecipeRequest.environment:type_name -> controlplane.v1.RoleEnvironmentSelection
-	14, // 36: controlplane.v1.ManageRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
-	16, // 37: controlplane.v1.ManageRoleImageRecipeResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	17, // 38: controlplane.v1.ManageRoleImageRecipeResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	55, // 39: controlplane.v1.ListOrganizationRoleImageRecipesRequest.page:type_name -> controlplane.v1.PageRequest
-	14, // 40: controlplane.v1.ListOrganizationRoleImageRecipesResponse.recipes:type_name -> controlplane.v1.RoleImageRecipe
-	57, // 41: controlplane.v1.ListOrganizationRoleImageRecipesResponse.page:type_name -> controlplane.v1.PageInfo
-	14, // 42: controlplane.v1.GetOrganizationRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
-	16, // 43: controlplane.v1.GetOrganizationRoleImageRecipeResponse.builds:type_name -> controlplane.v1.ImageBuild
-	17, // 44: controlplane.v1.GetOrganizationRoleImageRecipeResponse.active_artifact:type_name -> controlplane.v1.ImageArtifact
-	17, // 45: controlplane.v1.GetOrganizationRoleImageRecipeResponse.promotion_candidate:type_name -> controlplane.v1.ImageArtifact
-	60, // 46: controlplane.v1.ManageOrganizationRoleImageRecipeRequest.mutation:type_name -> controlplane.v1.MutationContext
-	3,  // 47: controlplane.v1.ManageOrganizationRoleImageRecipeRequest.action:type_name -> controlplane.v1.RoleImageRecipeAction
-	10, // 48: controlplane.v1.ManageOrganizationRoleImageRecipeRequest.environment:type_name -> controlplane.v1.RoleEnvironmentSelection
-	14, // 49: controlplane.v1.ManageOrganizationRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
-	16, // 50: controlplane.v1.ManageOrganizationRoleImageRecipeResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	17, // 51: controlplane.v1.ManageOrganizationRoleImageRecipeResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	60, // 52: controlplane.v1.RequestOrganizationRoleImagePromotionRequest.mutation:type_name -> controlplane.v1.MutationContext
-	61, // 53: controlplane.v1.RequestOrganizationRoleImagePromotionResponse.receipt:type_name -> controlplane.v1.RoleImagePromotionReceipt
-	4,  // 54: controlplane.v1.RoleImageBuildInput.platforms:type_name -> controlplane.v1.RoleImagePlatform
-	7,  // 55: controlplane.v1.RoleImageBuildInput.packages:type_name -> controlplane.v1.RoleImagePackage
-	8,  // 56: controlplane.v1.RoleImageBuildInput.tools:type_name -> controlplane.v1.RoleImageTool
-	59, // 57: controlplane.v1.RoleImageBuildInput.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
-	16, // 58: controlplane.v1.ClaimImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	32, // 59: controlplane.v1.ClaimImageBuildResponse.input:type_name -> controlplane.v1.RoleImageBuildInput
-	58, // 60: controlplane.v1.ClaimImageBuildResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
-	16, // 61: controlplane.v1.RenewImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	58, // 62: controlplane.v1.RenewImageBuildResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
-	0,  // 63: controlplane.v1.ReportImageBuildProgressRequest.stage:type_name -> controlplane.v1.ImageBuildStage
-	16, // 64: controlplane.v1.ReportImageBuildProgressResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	16, // 65: controlplane.v1.CompleteImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	17, // 66: controlplane.v1.CompleteImageBuildResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	16, // 67: controlplane.v1.FailImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
-	17, // 68: controlplane.v1.ClaimImageAdmissionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	58, // 69: controlplane.v1.ClaimImageAdmissionResponse.claim_expires_at:type_name -> google.protobuf.Timestamp
-	1,  // 70: controlplane.v1.RecordImageAdmissionRequest.verdict:type_name -> controlplane.v1.ImageAdmissionVerdict
-	17, // 71: controlplane.v1.RecordImageAdmissionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	17, // 72: controlplane.v1.ClaimImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	58, // 73: controlplane.v1.ClaimImagePromotionResponse.claim_expires_at:type_name -> google.protobuf.Timestamp
-	17, // 74: controlplane.v1.AuthorizeImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	58, // 75: controlplane.v1.AuthorizeImagePromotionResponse.authorization_expires_at:type_name -> google.protobuf.Timestamp
-	17, // 76: controlplane.v1.CompleteImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
-	11, // 77: controlplane.v1.RoleImageService.ListRoleEnvironments:input_type -> controlplane.v1.ListRoleEnvironmentsRequest
-	18, // 78: controlplane.v1.RoleImageService.ListRoleImageRecipes:input_type -> controlplane.v1.ListRoleImageRecipesRequest
-	20, // 79: controlplane.v1.RoleImageService.GetRoleImageRecipe:input_type -> controlplane.v1.GetRoleImageRecipeRequest
-	22, // 80: controlplane.v1.RoleImageService.ManageRoleImageRecipe:input_type -> controlplane.v1.ManageRoleImageRecipeRequest
-	24, // 81: controlplane.v1.RoleImageService.ListOrganizationRoleImageRecipes:input_type -> controlplane.v1.ListOrganizationRoleImageRecipesRequest
-	26, // 82: controlplane.v1.RoleImageService.GetOrganizationRoleImageRecipe:input_type -> controlplane.v1.GetOrganizationRoleImageRecipeRequest
-	5,  // 83: controlplane.v1.RoleImageService.ListOrganizationRoleImageRecipeRevisions:input_type -> controlplane.v1.ListOrganizationRoleImageRecipeRevisionsRequest
-	28, // 84: controlplane.v1.RoleImageService.ManageOrganizationRoleImageRecipe:input_type -> controlplane.v1.ManageOrganizationRoleImageRecipeRequest
-	30, // 85: controlplane.v1.RoleImageService.RequestOrganizationRoleImagePromotion:input_type -> controlplane.v1.RequestOrganizationRoleImagePromotionRequest
-	33, // 86: controlplane.v1.RoleImageService.ClaimImageBuild:input_type -> controlplane.v1.ClaimImageBuildRequest
-	35, // 87: controlplane.v1.RoleImageService.RenewImageBuild:input_type -> controlplane.v1.RenewImageBuildRequest
-	37, // 88: controlplane.v1.RoleImageService.ReportImageBuildProgress:input_type -> controlplane.v1.ReportImageBuildProgressRequest
-	39, // 89: controlplane.v1.RoleImageService.CompleteImageBuild:input_type -> controlplane.v1.CompleteImageBuildRequest
-	41, // 90: controlplane.v1.RoleImageService.FailImageBuild:input_type -> controlplane.v1.FailImageBuildRequest
-	43, // 91: controlplane.v1.RoleImageService.GetImageSupplyWorkAvailability:input_type -> controlplane.v1.GetImageSupplyWorkAvailabilityRequest
-	45, // 92: controlplane.v1.RoleImageService.ClaimImageAdmission:input_type -> controlplane.v1.ClaimImageAdmissionRequest
-	47, // 93: controlplane.v1.RoleImageService.RecordImageAdmission:input_type -> controlplane.v1.RecordImageAdmissionRequest
-	49, // 94: controlplane.v1.RoleImageService.ClaimImagePromotion:input_type -> controlplane.v1.ClaimImagePromotionRequest
-	51, // 95: controlplane.v1.RoleImageService.AuthorizeImagePromotion:input_type -> controlplane.v1.AuthorizeImagePromotionRequest
-	53, // 96: controlplane.v1.RoleImageService.CompleteImagePromotion:input_type -> controlplane.v1.CompleteImagePromotionRequest
-	12, // 97: controlplane.v1.RoleImageService.ListRoleEnvironments:output_type -> controlplane.v1.ListRoleEnvironmentsResponse
-	19, // 98: controlplane.v1.RoleImageService.ListRoleImageRecipes:output_type -> controlplane.v1.ListRoleImageRecipesResponse
-	21, // 99: controlplane.v1.RoleImageService.GetRoleImageRecipe:output_type -> controlplane.v1.GetRoleImageRecipeResponse
-	23, // 100: controlplane.v1.RoleImageService.ManageRoleImageRecipe:output_type -> controlplane.v1.ManageRoleImageRecipeResponse
-	25, // 101: controlplane.v1.RoleImageService.ListOrganizationRoleImageRecipes:output_type -> controlplane.v1.ListOrganizationRoleImageRecipesResponse
-	27, // 102: controlplane.v1.RoleImageService.GetOrganizationRoleImageRecipe:output_type -> controlplane.v1.GetOrganizationRoleImageRecipeResponse
-	6,  // 103: controlplane.v1.RoleImageService.ListOrganizationRoleImageRecipeRevisions:output_type -> controlplane.v1.ListOrganizationRoleImageRecipeRevisionsResponse
-	29, // 104: controlplane.v1.RoleImageService.ManageOrganizationRoleImageRecipe:output_type -> controlplane.v1.ManageOrganizationRoleImageRecipeResponse
-	31, // 105: controlplane.v1.RoleImageService.RequestOrganizationRoleImagePromotion:output_type -> controlplane.v1.RequestOrganizationRoleImagePromotionResponse
-	34, // 106: controlplane.v1.RoleImageService.ClaimImageBuild:output_type -> controlplane.v1.ClaimImageBuildResponse
-	36, // 107: controlplane.v1.RoleImageService.RenewImageBuild:output_type -> controlplane.v1.RenewImageBuildResponse
-	38, // 108: controlplane.v1.RoleImageService.ReportImageBuildProgress:output_type -> controlplane.v1.ReportImageBuildProgressResponse
-	40, // 109: controlplane.v1.RoleImageService.CompleteImageBuild:output_type -> controlplane.v1.CompleteImageBuildResponse
-	42, // 110: controlplane.v1.RoleImageService.FailImageBuild:output_type -> controlplane.v1.FailImageBuildResponse
-	44, // 111: controlplane.v1.RoleImageService.GetImageSupplyWorkAvailability:output_type -> controlplane.v1.GetImageSupplyWorkAvailabilityResponse
-	46, // 112: controlplane.v1.RoleImageService.ClaimImageAdmission:output_type -> controlplane.v1.ClaimImageAdmissionResponse
-	48, // 113: controlplane.v1.RoleImageService.RecordImageAdmission:output_type -> controlplane.v1.RecordImageAdmissionResponse
-	50, // 114: controlplane.v1.RoleImageService.ClaimImagePromotion:output_type -> controlplane.v1.ClaimImagePromotionResponse
-	52, // 115: controlplane.v1.RoleImageService.AuthorizeImagePromotion:output_type -> controlplane.v1.AuthorizeImagePromotionResponse
-	54, // 116: controlplane.v1.RoleImageService.CompleteImagePromotion:output_type -> controlplane.v1.CompleteImagePromotionResponse
-	97, // [97:117] is the sub-list for method output_type
-	77, // [77:97] is the sub-list for method input_type
-	77, // [77:77] is the sub-list for extension type_name
-	77, // [77:77] is the sub-list for extension extendee
-	0,  // [0:77] is the sub-list for field type_name
+	84,  // 0: controlplane.v1.ListOrganizationRoleImageRecipeRevisionsRequest.page:type_name -> controlplane.v1.PageRequest
+	85,  // 1: controlplane.v1.ListOrganizationRoleImageRecipeRevisionsResponse.revisions:type_name -> controlplane.v1.RoleImageRecipeRevision
+	86,  // 2: controlplane.v1.ListOrganizationRoleImageRecipeRevisionsResponse.page:type_name -> controlplane.v1.PageInfo
+	11,  // 3: controlplane.v1.RoleEnvironment.platforms:type_name -> controlplane.v1.RoleImagePlatform
+	16,  // 4: controlplane.v1.ListRoleEnvironmentsResponse.environments:type_name -> controlplane.v1.RoleEnvironment
+	11,  // 5: controlplane.v1.RoleImageRecipeInput.platforms:type_name -> controlplane.v1.RoleImagePlatform
+	14,  // 6: controlplane.v1.RoleImageRecipeInput.packages:type_name -> controlplane.v1.RoleImagePackage
+	15,  // 7: controlplane.v1.RoleImageRecipeInput.tools:type_name -> controlplane.v1.RoleImageTool
+	87,  // 8: controlplane.v1.RoleImageRecipe.created_at:type_name -> google.protobuf.Timestamp
+	87,  // 9: controlplane.v1.RoleImageRecipe.updated_at:type_name -> google.protobuf.Timestamp
+	17,  // 10: controlplane.v1.RoleImageRecipe.environment:type_name -> controlplane.v1.RoleEnvironmentSelection
+	22,  // 11: controlplane.v1.RoleImageRecipe.managed_lineage:type_name -> controlplane.v1.RoleImageManagedLineage
+	88,  // 12: controlplane.v1.RoleImageRecipe.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	0,   // 13: controlplane.v1.ImageBuild.stage:type_name -> controlplane.v1.ImageBuildStage
+	87,  // 14: controlplane.v1.ImageBuild.lease_expires_at:type_name -> google.protobuf.Timestamp
+	87,  // 15: controlplane.v1.ImageBuild.created_at:type_name -> google.protobuf.Timestamp
+	87,  // 16: controlplane.v1.ImageBuild.updated_at:type_name -> google.protobuf.Timestamp
+	88,  // 17: controlplane.v1.ImageBuild.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	11,  // 18: controlplane.v1.ImageArtifact.platforms:type_name -> controlplane.v1.RoleImagePlatform
+	1,   // 19: controlplane.v1.ImageArtifact.admission_verdict:type_name -> controlplane.v1.ImageAdmissionVerdict
+	87,  // 20: controlplane.v1.ImageArtifact.promoted_at:type_name -> google.protobuf.Timestamp
+	87,  // 21: controlplane.v1.ImageArtifact.created_at:type_name -> google.protobuf.Timestamp
+	87,  // 22: controlplane.v1.ImageArtifact.updated_at:type_name -> google.protobuf.Timestamp
+	15,  // 23: controlplane.v1.ImageArtifact.declared_tools:type_name -> controlplane.v1.RoleImageTool
+	2,   // 24: controlplane.v1.ImageArtifact.promotion_state:type_name -> controlplane.v1.ImagePromotionState
+	88,  // 25: controlplane.v1.ImageArtifact.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	89,  // 26: controlplane.v1.ImageArtifact.verified_tool_inventory:type_name -> controlplane.v1.ImageToolInventory
+	75,  // 27: controlplane.v1.ImageArtifact.admission_attempt:type_name -> controlplane.v1.ImageAdmissionAttempt
+	74,  // 28: controlplane.v1.ImageArtifact.risk_decision:type_name -> controlplane.v1.ImageAdmissionRiskDecision
+	84,  // 29: controlplane.v1.ListRoleImageRecipesRequest.page:type_name -> controlplane.v1.PageRequest
+	21,  // 30: controlplane.v1.ListRoleImageRecipesResponse.recipes:type_name -> controlplane.v1.RoleImageRecipe
+	86,  // 31: controlplane.v1.ListRoleImageRecipesResponse.page:type_name -> controlplane.v1.PageInfo
+	21,  // 32: controlplane.v1.GetRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
+	23,  // 33: controlplane.v1.GetRoleImageRecipeResponse.builds:type_name -> controlplane.v1.ImageBuild
+	24,  // 34: controlplane.v1.GetRoleImageRecipeResponse.active_artifact:type_name -> controlplane.v1.ImageArtifact
+	24,  // 35: controlplane.v1.GetRoleImageRecipeResponse.promotion_candidate:type_name -> controlplane.v1.ImageArtifact
+	56,  // 36: controlplane.v1.GetRoleImageRecipeResponse.admission_failure:type_name -> controlplane.v1.RoleImageAdmissionFailure
+	90,  // 37: controlplane.v1.ManageRoleImageRecipeRequest.mutation:type_name -> controlplane.v1.MutationContext
+	3,   // 38: controlplane.v1.ManageRoleImageRecipeRequest.action:type_name -> controlplane.v1.RoleImageRecipeAction
+	17,  // 39: controlplane.v1.ManageRoleImageRecipeRequest.environment:type_name -> controlplane.v1.RoleEnvironmentSelection
+	21,  // 40: controlplane.v1.ManageRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
+	23,  // 41: controlplane.v1.ManageRoleImageRecipeResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	24,  // 42: controlplane.v1.ManageRoleImageRecipeResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	84,  // 43: controlplane.v1.ListOrganizationRoleImageRecipesRequest.page:type_name -> controlplane.v1.PageRequest
+	21,  // 44: controlplane.v1.ListOrganizationRoleImageRecipesResponse.recipes:type_name -> controlplane.v1.RoleImageRecipe
+	86,  // 45: controlplane.v1.ListOrganizationRoleImageRecipesResponse.page:type_name -> controlplane.v1.PageInfo
+	21,  // 46: controlplane.v1.GetOrganizationRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
+	23,  // 47: controlplane.v1.GetOrganizationRoleImageRecipeResponse.builds:type_name -> controlplane.v1.ImageBuild
+	24,  // 48: controlplane.v1.GetOrganizationRoleImageRecipeResponse.active_artifact:type_name -> controlplane.v1.ImageArtifact
+	24,  // 49: controlplane.v1.GetOrganizationRoleImageRecipeResponse.promotion_candidate:type_name -> controlplane.v1.ImageArtifact
+	56,  // 50: controlplane.v1.GetOrganizationRoleImageRecipeResponse.admission_failure:type_name -> controlplane.v1.RoleImageAdmissionFailure
+	90,  // 51: controlplane.v1.ManageOrganizationRoleImageRecipeRequest.mutation:type_name -> controlplane.v1.MutationContext
+	3,   // 52: controlplane.v1.ManageOrganizationRoleImageRecipeRequest.action:type_name -> controlplane.v1.RoleImageRecipeAction
+	17,  // 53: controlplane.v1.ManageOrganizationRoleImageRecipeRequest.environment:type_name -> controlplane.v1.RoleEnvironmentSelection
+	21,  // 54: controlplane.v1.ManageOrganizationRoleImageRecipeResponse.recipe:type_name -> controlplane.v1.RoleImageRecipe
+	23,  // 55: controlplane.v1.ManageOrganizationRoleImageRecipeResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	24,  // 56: controlplane.v1.ManageOrganizationRoleImageRecipeResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	90,  // 57: controlplane.v1.RequestOrganizationRoleImagePromotionRequest.mutation:type_name -> controlplane.v1.MutationContext
+	91,  // 58: controlplane.v1.RequestOrganizationRoleImagePromotionResponse.receipt:type_name -> controlplane.v1.RoleImagePromotionReceipt
+	11,  // 59: controlplane.v1.RoleImageBuildInput.platforms:type_name -> controlplane.v1.RoleImagePlatform
+	14,  // 60: controlplane.v1.RoleImageBuildInput.packages:type_name -> controlplane.v1.RoleImagePackage
+	15,  // 61: controlplane.v1.RoleImageBuildInput.tools:type_name -> controlplane.v1.RoleImageTool
+	88,  // 62: controlplane.v1.RoleImageBuildInput.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	23,  // 63: controlplane.v1.ClaimImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	39,  // 64: controlplane.v1.ClaimImageBuildResponse.input:type_name -> controlplane.v1.RoleImageBuildInput
+	87,  // 65: controlplane.v1.ClaimImageBuildResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
+	23,  // 66: controlplane.v1.RenewImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	87,  // 67: controlplane.v1.RenewImageBuildResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
+	0,   // 68: controlplane.v1.ReportImageBuildProgressRequest.stage:type_name -> controlplane.v1.ImageBuildStage
+	23,  // 69: controlplane.v1.ReportImageBuildProgressResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	23,  // 70: controlplane.v1.CompleteImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	24,  // 71: controlplane.v1.CompleteImageBuildResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	23,  // 72: controlplane.v1.FailImageBuildResponse.image_build:type_name -> controlplane.v1.ImageBuild
+	24,  // 73: controlplane.v1.ClaimImageAdmissionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	87,  // 74: controlplane.v1.ClaimImageAdmissionResponse.claim_expires_at:type_name -> google.protobuf.Timestamp
+	1,   // 75: controlplane.v1.RecordImageAdmissionRequest.verdict:type_name -> controlplane.v1.ImageAdmissionVerdict
+	24,  // 76: controlplane.v1.RecordImageAdmissionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	88,  // 77: controlplane.v1.RoleImageAdmissionFailure.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	56,  // 78: controlplane.v1.FailImageAdmissionResponse.admission_failure:type_name -> controlplane.v1.RoleImageAdmissionFailure
+	56,  // 79: controlplane.v1.ExpireImageAdmissionClaimResponse.admission_failure:type_name -> controlplane.v1.RoleImageAdmissionFailure
+	64,  // 80: controlplane.v1.GetImageAdmissionRecoveryTerminalResponse.terminal_proof:type_name -> controlplane.v1.GetImageAdmissionTerminalResponse
+	4,   // 81: controlplane.v1.GetImageAdmissionTerminalResponse.terminal_state:type_name -> controlplane.v1.ImageAdmissionTerminalState
+	24,  // 82: controlplane.v1.GetImageAdmissionTerminalResponse.claimed_artifact:type_name -> controlplane.v1.ImageArtifact
+	24,  // 83: controlplane.v1.ClaimImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	87,  // 84: controlplane.v1.ClaimImagePromotionResponse.claim_expires_at:type_name -> google.protobuf.Timestamp
+	24,  // 85: controlplane.v1.AuthorizeImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	87,  // 86: controlplane.v1.AuthorizeImagePromotionResponse.authorization_expires_at:type_name -> google.protobuf.Timestamp
+	24,  // 87: controlplane.v1.CompleteImagePromotionResponse.image_artifact:type_name -> controlplane.v1.ImageArtifact
+	5,   // 88: controlplane.v1.ImageVulnerabilitySeverityCount.severity:type_name -> controlplane.v1.ImageVulnerabilitySeverity
+	6,   // 89: controlplane.v1.ImageVulnerabilityFinding.advisory_kind:type_name -> controlplane.v1.ImageVulnerabilityAdvisoryKind
+	5,   // 90: controlplane.v1.ImageVulnerabilityFinding.severity:type_name -> controlplane.v1.ImageVulnerabilitySeverity
+	7,   // 91: controlplane.v1.ImageVulnerabilityFinding.fix_state:type_name -> controlplane.v1.ImageVulnerabilityFixState
+	88,  // 92: controlplane.v1.ImageVulnerabilityReport.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	8,   // 93: controlplane.v1.ImageVulnerabilityReport.state:type_name -> controlplane.v1.ImageVulnerabilityReportState
+	71,  // 94: controlplane.v1.ImageVulnerabilityReport.severity_counts:type_name -> controlplane.v1.ImageVulnerabilitySeverityCount
+	9,   // 95: controlplane.v1.ImageAdmissionRiskDecision.action:type_name -> controlplane.v1.ImageAdmissionRiskAction
+	87,  // 96: controlplane.v1.ImageAdmissionRiskDecision.decided_at:type_name -> google.protobuf.Timestamp
+	88,  // 97: controlplane.v1.ImageAdmissionRiskDecision.scope_kind:type_name -> controlplane.v1.RuntimeResourceScopeKind
+	10,  // 98: controlplane.v1.ImageAdmissionAttempt.state:type_name -> controlplane.v1.ImageAdmissionAttemptState
+	84,  // 99: controlplane.v1.GetOrganizationImageVulnerabilityReportRequest.page:type_name -> controlplane.v1.PageRequest
+	5,   // 100: controlplane.v1.GetOrganizationImageVulnerabilityReportRequest.severity:type_name -> controlplane.v1.ImageVulnerabilitySeverity
+	84,  // 101: controlplane.v1.GetImageVulnerabilityReportRequest.page:type_name -> controlplane.v1.PageRequest
+	5,   // 102: controlplane.v1.GetImageVulnerabilityReportRequest.severity:type_name -> controlplane.v1.ImageVulnerabilitySeverity
+	73,  // 103: controlplane.v1.GetOrganizationImageVulnerabilityReportResponse.report:type_name -> controlplane.v1.ImageVulnerabilityReport
+	72,  // 104: controlplane.v1.GetOrganizationImageVulnerabilityReportResponse.findings:type_name -> controlplane.v1.ImageVulnerabilityFinding
+	86,  // 105: controlplane.v1.GetOrganizationImageVulnerabilityReportResponse.page:type_name -> controlplane.v1.PageInfo
+	73,  // 106: controlplane.v1.GetImageVulnerabilityReportResponse.report:type_name -> controlplane.v1.ImageVulnerabilityReport
+	72,  // 107: controlplane.v1.GetImageVulnerabilityReportResponse.findings:type_name -> controlplane.v1.ImageVulnerabilityFinding
+	86,  // 108: controlplane.v1.GetImageVulnerabilityReportResponse.page:type_name -> controlplane.v1.PageInfo
+	90,  // 109: controlplane.v1.DecideOrganizationImageAdmissionRiskRequest.mutation:type_name -> controlplane.v1.MutationContext
+	9,   // 110: controlplane.v1.DecideOrganizationImageAdmissionRiskRequest.action:type_name -> controlplane.v1.ImageAdmissionRiskAction
+	90,  // 111: controlplane.v1.DecideImageAdmissionRiskRequest.mutation:type_name -> controlplane.v1.MutationContext
+	9,   // 112: controlplane.v1.DecideImageAdmissionRiskRequest.action:type_name -> controlplane.v1.ImageAdmissionRiskAction
+	74,  // 113: controlplane.v1.DecideOrganizationImageAdmissionRiskResponse.decision:type_name -> controlplane.v1.ImageAdmissionRiskDecision
+	75,  // 114: controlplane.v1.DecideOrganizationImageAdmissionRiskResponse.admission_attempt:type_name -> controlplane.v1.ImageAdmissionAttempt
+	24,  // 115: controlplane.v1.DecideOrganizationImageAdmissionRiskResponse.artifact:type_name -> controlplane.v1.ImageArtifact
+	74,  // 116: controlplane.v1.DecideImageAdmissionRiskResponse.decision:type_name -> controlplane.v1.ImageAdmissionRiskDecision
+	75,  // 117: controlplane.v1.DecideImageAdmissionRiskResponse.admission_attempt:type_name -> controlplane.v1.ImageAdmissionAttempt
+	24,  // 118: controlplane.v1.DecideImageAdmissionRiskResponse.artifact:type_name -> controlplane.v1.ImageArtifact
+	18,  // 119: controlplane.v1.RoleImageService.ListRoleEnvironments:input_type -> controlplane.v1.ListRoleEnvironmentsRequest
+	25,  // 120: controlplane.v1.RoleImageService.ListRoleImageRecipes:input_type -> controlplane.v1.ListRoleImageRecipesRequest
+	27,  // 121: controlplane.v1.RoleImageService.GetRoleImageRecipe:input_type -> controlplane.v1.GetRoleImageRecipeRequest
+	29,  // 122: controlplane.v1.RoleImageService.ManageRoleImageRecipe:input_type -> controlplane.v1.ManageRoleImageRecipeRequest
+	31,  // 123: controlplane.v1.RoleImageService.ListOrganizationRoleImageRecipes:input_type -> controlplane.v1.ListOrganizationRoleImageRecipesRequest
+	33,  // 124: controlplane.v1.RoleImageService.GetOrganizationRoleImageRecipe:input_type -> controlplane.v1.GetOrganizationRoleImageRecipeRequest
+	12,  // 125: controlplane.v1.RoleImageService.ListOrganizationRoleImageRecipeRevisions:input_type -> controlplane.v1.ListOrganizationRoleImageRecipeRevisionsRequest
+	35,  // 126: controlplane.v1.RoleImageService.ManageOrganizationRoleImageRecipe:input_type -> controlplane.v1.ManageOrganizationRoleImageRecipeRequest
+	37,  // 127: controlplane.v1.RoleImageService.RequestOrganizationRoleImagePromotion:input_type -> controlplane.v1.RequestOrganizationRoleImagePromotionRequest
+	76,  // 128: controlplane.v1.RoleImageService.GetOrganizationImageVulnerabilityReport:input_type -> controlplane.v1.GetOrganizationImageVulnerabilityReportRequest
+	77,  // 129: controlplane.v1.RoleImageService.GetImageVulnerabilityReport:input_type -> controlplane.v1.GetImageVulnerabilityReportRequest
+	80,  // 130: controlplane.v1.RoleImageService.DecideOrganizationImageAdmissionRisk:input_type -> controlplane.v1.DecideOrganizationImageAdmissionRiskRequest
+	81,  // 131: controlplane.v1.RoleImageService.DecideImageAdmissionRisk:input_type -> controlplane.v1.DecideImageAdmissionRiskRequest
+	40,  // 132: controlplane.v1.RoleImageService.ClaimImageBuild:input_type -> controlplane.v1.ClaimImageBuildRequest
+	42,  // 133: controlplane.v1.RoleImageService.RenewImageBuild:input_type -> controlplane.v1.RenewImageBuildRequest
+	44,  // 134: controlplane.v1.RoleImageService.ReportImageBuildProgress:input_type -> controlplane.v1.ReportImageBuildProgressRequest
+	46,  // 135: controlplane.v1.RoleImageService.CompleteImageBuild:input_type -> controlplane.v1.CompleteImageBuildRequest
+	48,  // 136: controlplane.v1.RoleImageService.FailImageBuild:input_type -> controlplane.v1.FailImageBuildRequest
+	50,  // 137: controlplane.v1.RoleImageService.GetImageSupplyWorkAvailability:input_type -> controlplane.v1.GetImageSupplyWorkAvailabilityRequest
+	52,  // 138: controlplane.v1.RoleImageService.ClaimImageAdmission:input_type -> controlplane.v1.ClaimImageAdmissionRequest
+	54,  // 139: controlplane.v1.RoleImageService.RecordImageAdmission:input_type -> controlplane.v1.RecordImageAdmissionRequest
+	57,  // 140: controlplane.v1.RoleImageService.FailImageAdmission:input_type -> controlplane.v1.FailImageAdmissionRequest
+	59,  // 141: controlplane.v1.RoleImageService.ExpireImageAdmissionClaim:input_type -> controlplane.v1.ExpireImageAdmissionClaimRequest
+	63,  // 142: controlplane.v1.RoleImageService.GetImageAdmissionTerminal:input_type -> controlplane.v1.GetImageAdmissionTerminalRequest
+	61,  // 143: controlplane.v1.RoleImageService.GetImageAdmissionRecoveryTerminal:input_type -> controlplane.v1.GetImageAdmissionRecoveryTerminalRequest
+	65,  // 144: controlplane.v1.RoleImageService.ClaimImagePromotion:input_type -> controlplane.v1.ClaimImagePromotionRequest
+	67,  // 145: controlplane.v1.RoleImageService.AuthorizeImagePromotion:input_type -> controlplane.v1.AuthorizeImagePromotionRequest
+	69,  // 146: controlplane.v1.RoleImageService.CompleteImagePromotion:input_type -> controlplane.v1.CompleteImagePromotionRequest
+	19,  // 147: controlplane.v1.RoleImageService.ListRoleEnvironments:output_type -> controlplane.v1.ListRoleEnvironmentsResponse
+	26,  // 148: controlplane.v1.RoleImageService.ListRoleImageRecipes:output_type -> controlplane.v1.ListRoleImageRecipesResponse
+	28,  // 149: controlplane.v1.RoleImageService.GetRoleImageRecipe:output_type -> controlplane.v1.GetRoleImageRecipeResponse
+	30,  // 150: controlplane.v1.RoleImageService.ManageRoleImageRecipe:output_type -> controlplane.v1.ManageRoleImageRecipeResponse
+	32,  // 151: controlplane.v1.RoleImageService.ListOrganizationRoleImageRecipes:output_type -> controlplane.v1.ListOrganizationRoleImageRecipesResponse
+	34,  // 152: controlplane.v1.RoleImageService.GetOrganizationRoleImageRecipe:output_type -> controlplane.v1.GetOrganizationRoleImageRecipeResponse
+	13,  // 153: controlplane.v1.RoleImageService.ListOrganizationRoleImageRecipeRevisions:output_type -> controlplane.v1.ListOrganizationRoleImageRecipeRevisionsResponse
+	36,  // 154: controlplane.v1.RoleImageService.ManageOrganizationRoleImageRecipe:output_type -> controlplane.v1.ManageOrganizationRoleImageRecipeResponse
+	38,  // 155: controlplane.v1.RoleImageService.RequestOrganizationRoleImagePromotion:output_type -> controlplane.v1.RequestOrganizationRoleImagePromotionResponse
+	78,  // 156: controlplane.v1.RoleImageService.GetOrganizationImageVulnerabilityReport:output_type -> controlplane.v1.GetOrganizationImageVulnerabilityReportResponse
+	79,  // 157: controlplane.v1.RoleImageService.GetImageVulnerabilityReport:output_type -> controlplane.v1.GetImageVulnerabilityReportResponse
+	82,  // 158: controlplane.v1.RoleImageService.DecideOrganizationImageAdmissionRisk:output_type -> controlplane.v1.DecideOrganizationImageAdmissionRiskResponse
+	83,  // 159: controlplane.v1.RoleImageService.DecideImageAdmissionRisk:output_type -> controlplane.v1.DecideImageAdmissionRiskResponse
+	41,  // 160: controlplane.v1.RoleImageService.ClaimImageBuild:output_type -> controlplane.v1.ClaimImageBuildResponse
+	43,  // 161: controlplane.v1.RoleImageService.RenewImageBuild:output_type -> controlplane.v1.RenewImageBuildResponse
+	45,  // 162: controlplane.v1.RoleImageService.ReportImageBuildProgress:output_type -> controlplane.v1.ReportImageBuildProgressResponse
+	47,  // 163: controlplane.v1.RoleImageService.CompleteImageBuild:output_type -> controlplane.v1.CompleteImageBuildResponse
+	49,  // 164: controlplane.v1.RoleImageService.FailImageBuild:output_type -> controlplane.v1.FailImageBuildResponse
+	51,  // 165: controlplane.v1.RoleImageService.GetImageSupplyWorkAvailability:output_type -> controlplane.v1.GetImageSupplyWorkAvailabilityResponse
+	53,  // 166: controlplane.v1.RoleImageService.ClaimImageAdmission:output_type -> controlplane.v1.ClaimImageAdmissionResponse
+	55,  // 167: controlplane.v1.RoleImageService.RecordImageAdmission:output_type -> controlplane.v1.RecordImageAdmissionResponse
+	58,  // 168: controlplane.v1.RoleImageService.FailImageAdmission:output_type -> controlplane.v1.FailImageAdmissionResponse
+	60,  // 169: controlplane.v1.RoleImageService.ExpireImageAdmissionClaim:output_type -> controlplane.v1.ExpireImageAdmissionClaimResponse
+	64,  // 170: controlplane.v1.RoleImageService.GetImageAdmissionTerminal:output_type -> controlplane.v1.GetImageAdmissionTerminalResponse
+	62,  // 171: controlplane.v1.RoleImageService.GetImageAdmissionRecoveryTerminal:output_type -> controlplane.v1.GetImageAdmissionRecoveryTerminalResponse
+	66,  // 172: controlplane.v1.RoleImageService.ClaimImagePromotion:output_type -> controlplane.v1.ClaimImagePromotionResponse
+	68,  // 173: controlplane.v1.RoleImageService.AuthorizeImagePromotion:output_type -> controlplane.v1.AuthorizeImagePromotionResponse
+	70,  // 174: controlplane.v1.RoleImageService.CompleteImagePromotion:output_type -> controlplane.v1.CompleteImagePromotionResponse
+	147, // [147:175] is the sub-list for method output_type
+	119, // [119:147] is the sub-list for method input_type
+	119, // [119:119] is the sub-list for extension type_name
+	119, // [119:119] is the sub-list for extension extendee
+	0,   // [0:119] is the sub-list for field type_name
 }
 
 func init() { file_controlplane_v1_role_images_proto_init() }
@@ -5403,13 +9255,15 @@ func file_controlplane_v1_role_images_proto_init() {
 		return
 	}
 	file_controlplane_v1_control_plane_proto_init()
+	file_controlplane_v1_role_images_proto_msgTypes[65].OneofWrappers = []any{}
+	file_controlplane_v1_role_images_proto_msgTypes[66].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_controlplane_v1_role_images_proto_rawDesc), len(file_controlplane_v1_role_images_proto_rawDesc)),
-			NumEnums:      4,
-			NumMessages:   51,
+			NumEnums:      11,
+			NumMessages:   73,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -422,7 +422,14 @@ describe("runtime store", () => {
           admissionVerdict: "ACCEPTED",
           promotionState: "PROMOTED",
           promotionRequested: true,
-          tools: [{ name: "gh", version: "2.80.0" }],
+          declaredTools: [{ name: "gh", version: "2.80.0" }],
+          verifiedToolInventory: {
+            status: "UNAVAILABLE",
+            sha256: "",
+            imageDigest: "",
+            provenanceSha256: "",
+            platforms: [],
+          },
           promotedAt: "2026-08-29T11:00:00Z",
         },
       }),
@@ -444,9 +451,10 @@ describe("runtime store", () => {
       "imgrec_main",
       "imgart_main",
     );
-    expect(promoted.artifact.tools).toEqual([
+    expect(promoted.artifact.declaredTools).toEqual([
       { name: "gh", version: "2.80.0" },
     ]);
+    expect(promoted.artifact.verifiedToolInventory.status).toBe("UNAVAILABLE");
     expect(promoted.recipeName).toBe("Инструменты продаж");
   });
 

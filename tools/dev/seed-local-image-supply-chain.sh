@@ -9,7 +9,7 @@ fail() {
 usage() {
   printf '%s\n' \
     'Usage: seed-local-image-supply-chain.sh --context <exact-context>' \
-    '  --state-directory <path> [--render <path>] [--component all|runner]' \
+    '  --state-directory <path> [--render <path>] [--component all|runner|session-archive|role-image-builder]' \
     '  [--tool-state-directory <path>] [--readback-only] [--evidence <new-jsonl>] [--k3s-sudo]' >&2
 }
 
@@ -44,16 +44,16 @@ done
 # Docker остаётся процессом исходного оператора, без sudo и копий kubeconfig.
 [[ "$state_directory" == /* && -d "$state_directory" && ! -L "$state_directory" ]] ||
   fail 'state directory is invalid'
-[[ "$component" == all || "$component" == runner ]] || fail 'component is invalid'
+[[ "$component" == all || "$component" == runner || "$component" == session-archive || "$component" == role-image-builder ]] || fail 'component is invalid'
 if [[ "$component" == all ]]; then
   [[ -f "$render" && -s "$render" && ! -L "$render" ]] || fail 'local render is invalid'
-  [[ "$readback_only" == false && -z "$evidence" ]] || fail 'runner-only option requires runner component'
+  [[ "$readback_only" == false && -z "$evidence" ]] || fail 'single-component option requires an exact component'
 else
   [[ "$evidence" == /* && ! -e "$evidence" && ! -L "$evidence" ]] || fail 'new evidence path is required'
 fi
 tool_state_directory=${tool_state_directory:-$state_directory}
 [[ "$tool_state_directory" == /* && -d "$tool_state_directory" && ! -L "$tool_state_directory" ]] || fail 'tool state directory is invalid'
-for command_name in docker jq sha256sum tar yq "${kubectl_command[0]}"; do
+for command_name in docker jq sha256sum tar yq python3 timeout "${kubectl_command[0]}"; do
   command -v "$command_name" >/dev/null 2>&1 || fail "$command_name is required"
 done
 
@@ -68,10 +68,13 @@ tools_tag=$(<"$tool_state_directory/image-supply-chain-tools-docker-tag")
   fail 'local admission tools Docker tag is invalid'
 tools_image=$(docker image inspect --format '{{.Id}}' "$tools_tag")
 [[ "$tools_image" =~ ^sha256:[a-f0-9]{64}$ ]] || fail 'local admission tools image ID is invalid'
-runner_reference=$(<"$state_directory/agent-runner-image")
-[[ "$runner_reference" =~ @sha256:[a-f0-9]{64}$ ]] || fail 'local runner reference is invalid'
-runner_digest=${runner_reference#*@}
-source_revision=runner
+runner_digest=""
+if [[ "$component" == all || "$component" == runner ]]; then
+  runner_reference=$(<"$state_directory/agent-runner-image")
+  [[ "$runner_reference" =~ @sha256:[a-f0-9]{64}$ ]] || fail 'local runner reference is invalid'
+  runner_digest=${runner_reference#*@}
+fi
+source_revision="$component"
 role_input_archive=""
 role_input_digest=""
 frontend_reference=""
@@ -90,6 +93,8 @@ source_revision=$(jq -er '.sourceRevision' "$role_input_metadata")
 fi
 
 runner_archive=""
+runner_mounts=()
+if [[ "$component" == all || "$component" == runner ]]; then
 while IFS= read -r candidate; do
   [[ -f "$candidate" && -s "$candidate" && ! -L "$candidate" ]] || continue
   candidate_digest=$(tar -xOf "$candidate" index.json 2>/dev/null | jq -er '
@@ -103,6 +108,8 @@ while IFS= read -r candidate; do
 done < <(find "$state_directory/cache" -maxdepth 1 -type f \
   -name 'agent-runner-*.oci.tar' -print | LC_ALL=C sort)
 [[ -n "$runner_archive" ]] || fail 'exact local runner OCI archive is absent'
+runner_mounts=(-v "$runner_archive:/input/runner.oci.tar:ro")
+fi
 
 if [[ "$component" == all ]]; then
 source_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
@@ -139,6 +146,29 @@ cleanup() {
 }
 trap cleanup EXIT
 
+archive_digest=""
+builder_digest=""
+archive_mounts=()
+publication_digest="$runner_digest"
+source_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
+for platform_component in session-archive role-image-builder; do
+  [[ "$component" == all || "$component" == "$platform_component" ]] || continue
+  platform_reference=$(<"$state_directory/$platform_component-image")
+  [[ "$platform_reference" =~ ^registry\.local\.kodex/kodex/$platform_component@sha256:[a-f0-9]{64}$ &&
+    "$platform_reference" != *@sha256:0000000000000000000000000000000000000000000000000000000000000000 ]] ||
+    fail 'exact platform image reference is invalid'
+  platform_digest=${platform_reference#*@}
+  platform_cache="$state_directory/cache"
+  [[ "$platform_component" != role-image-builder ]] || platform_cache="$platform_cache/image-supply-chain"
+  # Проверяем preserved OCI целиком и публикуем private копию тех же байтов.
+  # Node cache не является durable источником после kubelet image GC.
+  timeout 120s python3 "$source_root/tools/dev/verify-platform-image-archive.py" \
+    "$platform_component" "$platform_cache" "$platform_digest" "$temporary_directory/$platform_component.oci.tar" ||
+    fail 'platform image OCI verification failed'
+  archive_mounts+=(-v "$temporary_directory/$platform_component.oci.tar:/input/$platform_component.oci.tar:ro")
+  if [[ "$platform_component" == session-archive ]]; then archive_digest="$platform_digest"; else builder_digest="$platform_digest"; fi
+  [[ "$component" == all ]] || publication_digest="$platform_digest"
+done
 secret=$("${kubectl_command[@]}" --context "$context" -n "$namespace" get secret/kodex-image-promotion-writer -o json) ||
   fail 'promotion writer Secret is absent'
 for entry in \
@@ -168,27 +198,30 @@ for attempt in $(seq 1 60); do
   sleep 1
 done
 
-# В отдельном runner-профиле intent фиксируется до первого возможного registry effect.
+# Для отдельного компонента intent фиксируется до первого registry effect.
 # Неопределённый результат разрешается через --readback-only, без повторного import.
 extra_mounts=()
 if [[ "$component" == all ]]; then
   extra_mounts=(-v "$role_input_archive:/input/role-input.oci.tar:ro")
 else
-  (umask 077; set -C; jq -cn --arg digest "$runner_digest" --arg tools "$tools_image" \
-    --arg mode "$readback_only" '{version:1,status:"INTENT",component:"runner",digest:$digest,toolsImageID:$tools,readbackOnly:($mode=="true"),at:(now|todateiso8601)}' >"$evidence") || fail 'exclusive intent creation failed'
+  (umask 077; set -C; jq -cn --arg digest "$publication_digest" --arg tools "$tools_image" --arg component "$component" \
+    --arg mode "$readback_only" '{version:1,status:"INTENT",component:$component,digest:$digest,toolsImageID:$tools,readbackOnly:($mode=="true"),at:(now|todateiso8601)}' >"$evidence") || fail 'exclusive intent creation failed'
   sync "$evidence"
 fi
 # Root в rootless Docker отображается на владельца daemon и private temporary directory.
 docker run --rm --network host --user 0:0 \
   --add-host kodex-image-registry-promotion.kodex-system.svc.cluster.local:127.0.0.1 \
   -v "$temporary_directory:/work" \
-  -v "$runner_archive:/input/runner.oci.tar:ro" \
+  "${runner_mounts[@]}" \
+  "${archive_mounts[@]}" \
   "${extra_mounts[@]}" \
   -e "KODEX_SEED_COMPONENT=$component" \
   -e "KODEX_SEED_READBACK_ONLY=$readback_only" \
   -e "KODEX_FRONTEND_REFERENCE=$frontend_reference" \
   -e "KODEX_FRONTEND_DIGEST=$frontend_digest" \
   -e "KODEX_RUNNER_DIGEST=$runner_digest" \
+  -e "KODEX_SESSION_ARCHIVE_DIGEST=$archive_digest" \
+  -e "KODEX_ROLE_IMAGE_BUILDER_DIGEST=$builder_digest" \
   -e "KODEX_SOURCE_REVISION=$source_revision" \
   -e "KODEX_ROLE_INPUT_DIGEST=$role_input_digest" \
   --entrypoint /bin/sh "$tools_image" -ec '
@@ -204,6 +237,20 @@ docker run --rm --network host --user 0:0 \
       "{version:1,hosts:{(\$target):{tls:\"enabled\",regcert:\$ca,
         clientCert:\$cert,clientKey:\$key,user:(\$user|gsub(\"[\\r\\n]\";\"\")),
         pass:(\$pass|gsub(\"[\\r\\n]\";\"\"))}}}" >"$REGCTL_CONFIG"
+    if [ "$KODEX_SEED_COMPONENT" = all ] || [ "$KODEX_SEED_COMPONENT" = session-archive ]; then
+      if [ "$KODEX_SEED_READBACK_ONLY" = false ]; then
+        regctl image import "$target/kodex/session-archive:local-platform" /input/session-archive.oci.tar
+      fi
+      test "$(regctl image digest "$target/kodex/session-archive@$KODEX_SESSION_ARCHIVE_DIGEST")" = "$KODEX_SESSION_ARCHIVE_DIGEST"
+      if [ "$KODEX_SEED_COMPONENT" = session-archive ]; then exit 0; fi
+    fi
+    if [ "$KODEX_SEED_COMPONENT" = all ] || [ "$KODEX_SEED_COMPONENT" = role-image-builder ]; then
+      if [ "$KODEX_SEED_READBACK_ONLY" = false ]; then
+        regctl image import "$target/kodex/role-image-builder:local-platform" /input/role-image-builder.oci.tar
+      fi
+      test "$(regctl image digest "$target/kodex/role-image-builder@$KODEX_ROLE_IMAGE_BUILDER_DIGEST")" = "$KODEX_ROLE_IMAGE_BUILDER_DIGEST"
+      if [ "$KODEX_SEED_COMPONENT" = role-image-builder ]; then exit 0; fi
+    fi
     if [ "$KODEX_SEED_READBACK_ONLY" = false ]; then
       regctl image import "$target/kodex/agent-runner:local-base" /input/runner.oci.tar
     fi
@@ -222,7 +269,7 @@ docker run --rm --network host --user 0:0 \
     test "$(regctl image digest "$target/kodex/role-image-inputs:$KODEX_SOURCE_REVISION")" = \
       "$KODEX_ROLE_INPUT_DIGEST"
   ' >"$temporary_directory/registry-operation.log" 2>&1 || {
-    if [[ "$component" == runner ]]; then
+    if [[ "$component" != all ]]; then
       jq -cn '{status:"UNKNOWN",code:"REGISTRY_OPERATION_OR_READBACK_FAILED",at:(now|todateiso8601)}' >>"$evidence"
       sync "$evidence"
     fi
@@ -231,8 +278,8 @@ docker run --rm --network host --user 0:0 \
 
 "${kubectl_command[@]}" --context "$context" -n "$namespace" rollout status deployment/kodex-image-registry-pull --timeout=10m >/dev/null ||
   fail 'pull registry did not become ready after seed'
-if [[ "$component" == runner ]]; then
-  jq -cn --arg digest "$runner_digest" '{status:"PASS",digest:$digest,at:(now|todateiso8601)}' >>"$evidence"
+if [[ "$component" != all ]]; then
+  jq -cn --arg digest "$publication_digest" '{status:"PASS",digest:$digest,at:(now|todateiso8601)}' >>"$evidence"
   sync "$evidence"
 fi
 printf 'Kodex local image supply-chain seed completed for source %s\n' "$source_revision"

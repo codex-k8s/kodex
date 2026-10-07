@@ -214,6 +214,9 @@ func (repository *Repository) getRoleImageRecipe(ctx context.Context, querier ro
 			return roleimagerepo.Detail{}, errs.ErrUnavailable
 		}
 		activeArtifact = &item
+		if err := repository.hydrateImageRiskHistory(ctx, querier, current, activeArtifact); err != nil {
+			return roleimagerepo.Detail{}, err
+		}
 	}
 	var promotionCandidate *entity.ImageArtifact
 	var candidateCanBePromoted bool
@@ -221,6 +224,9 @@ func (repository *Repository) getRoleImageRecipe(ctx context.Context, querier ro
 		current.organizationID, internalID), &candidateCanBePromoted)
 	if candidateErr == nil {
 		promotionCandidate = &item
+		if err := repository.hydrateImageRiskHistory(ctx, querier, current, promotionCandidate); err != nil {
+			return roleimagerepo.Detail{}, err
+		}
 		if canPromote && candidateCanBePromoted {
 			recipe.NextActions = append(recipe.NextActions, "PROMOTE")
 		}
@@ -235,9 +241,21 @@ func (repository *Repository) getRoleImageRecipe(ctx context.Context, querier ro
 			return roleimagerepo.Detail{}, err
 		}
 	}
+	var failure entity.RoleImageAdmissionFailure
+	err = querier.QueryRow(ctx, queryRoleImagesGetAdmissionFailure, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "recipe_id": internalID,
+	}).Scan(&failure.ImageArtifactRef, &failure.Version, &failure.RecipeRef, &failure.RecipeGeneration,
+		&failure.BuildRef, &failure.BuildAttempt, &failure.ScopeKind, &failure.OrganizationRef, &failure.ProjectRef,
+		&failure.State, &failure.ErrorCode)
+	var admissionFailure *entity.RoleImageAdmissionFailure
+	if err == nil {
+		admissionFailure = &failure
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return roleimagerepo.Detail{}, errs.ErrUnavailable
+	}
 	return roleimagerepo.Detail{
 		Recipe: recipe, Builds: builds, ActiveArtifact: activeArtifact,
-		PromotionCandidate: promotionCandidate,
+		PromotionCandidate: promotionCandidate, AdmissionFailure: admissionFailure,
 	}, nil
 }
 

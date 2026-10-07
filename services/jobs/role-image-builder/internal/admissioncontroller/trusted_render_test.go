@@ -9,6 +9,41 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+func TestTrustedAdmissionScanResourcesAreScoped(t *testing.T) {
+	renderer, err := NewScriptRenderer(filepath.Join(repositoryRoot(), "tools", "render-image-admission-job.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, environment := range []string{"staging", "production"} {
+		for _, profile := range []string{"protected", "trusted-cluster"} {
+			for _, phase := range phases {
+				t.Run(environment+"/"+profile+"/"+phase, func(t *testing.T) {
+					policy := completeTestPolicy()
+					policy.Labels["kodex.dev/security-profile"] = profile
+					rendered, err := renderer.Render(t.Context(), policy, environment, "v20260916120000-"+testOrchestrationRevision, phase)
+					if err != nil {
+						t.Fatal(err)
+					}
+					resources := rendered.Job.Spec.Template.Spec.Containers[0].Resources
+					request, limit := int64(100), int64(1000)
+					memoryRequest, memoryLimit := int64(128<<20), int64(1<<30)
+					if phase == "scan" {
+						memoryRequest, memoryLimit = 256<<20, 2<<30
+						if profile == "trusted-cluster" {
+							request, limit = 1000, 4000
+							memoryRequest, memoryLimit = 2<<30, 16<<30
+						}
+					}
+					if resources.Requests.Cpu().MilliValue() != request || resources.Limits.Cpu().MilliValue() != limit ||
+						resources.Requests.Memory().Value() != memoryRequest || resources.Limits.Memory().Value() != memoryLimit {
+						t.Fatal("phase resource budget differs from the exact profile")
+					}
+				})
+			}
+		}
+	}
+}
+
 func TestTrustedAdmissionRenderRemovesAuthorityWithoutChangingProtectedProfile(t *testing.T) {
 	renderer, err := NewScriptRenderer(filepath.Join(repositoryRoot(), "tools", "render-image-admission-job.sh"))
 	if err != nil {

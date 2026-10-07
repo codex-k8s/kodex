@@ -26,7 +26,9 @@ WHERE invocation.id=@invocation_id::uuid
   AND run.organization_id=invocation.organization_id
   AND root.organization_id=invocation.organization_id
   AND gate.organization_id=invocation.organization_id
-  AND gate.project_id=run.project_id
+  AND gate.project_id IS NOT DISTINCT FROM run.project_id
+  AND (gate.scope_kind='PROJECT' OR (gate.scope_kind='ORGANIZATION'
+       AND control_plane.owned_organization_assistant_run(gate.organization_id,root.id)))
   AND gate.root_run_id=root.id
   AND node.state='SUCCEEDED'
   AND node.finished_at IS NOT NULL

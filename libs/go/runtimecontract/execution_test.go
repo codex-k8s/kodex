@@ -3,6 +3,7 @@ package runtimecontract
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -141,7 +142,7 @@ func TestRunnerInputNestedCatalogMatchesV6SchemaBoundary(t *testing.T) {
 	inputSchema := `{"additionalProperties":false,"properties":{},"required":[],"type":"object"}`
 	inputSchemaDigest := sha256.Sum256([]byte(inputSchema))
 	valid.IntegrationGrants = []RunnerIntegrationGrant{{
-		Ref: "grant_abcdefgh", ConnectionRef: "conn_abcdefgh", DefinitionKey: "crm",
+		Ref: "grant_abcdefgh", GrantVersion: 1, ConnectionRef: "conn_abcdefgh", ConnectionVersion: 1, ApprovalPolicy: "NONE", DefinitionKey: "crm",
 		ConnectionName: "CRM", CapabilityKey: "crm.read", CapabilityName: "Read CRM",
 		CapabilityDescription: "Read bounded CRM records.", Risk: "READ", DefinitionVersion: "1.2.3",
 		DefinitionDigest: strings.Repeat("8", 64), Operation: "crm.records.read", InputSchema: inputSchema,
@@ -399,4 +400,29 @@ func validRunnerInputFixture() RunnerInput {
 
 func refreshRunnerInputBindings(input *RunnerInput) {
 	input.ExecutionBindingDigest, input.MCPBindingDigest, _ = RuntimeExecutionBindingDigests(*input)
+}
+
+func TestRunnerWorkspaceQuotaMatchesImmutableEnvironmentBudget(t *testing.T) {
+	input := validRunnerInputFixture()
+	input.EnvironmentPolicy.Resources.WorkspaceLimits = &RuntimeWorkspaceLimits{MaxBytes: 4096, MaxFiles: 10}
+	input.EnvironmentPolicy, _ = NormalizeRuntimeEnvironmentPolicy(input.EnvironmentPolicy)
+	input.RuntimeEnvironmentDigest, _ = RuntimeEnvironmentDigest(input.EnvironmentValues, input.SecretProjections, input.EnvironmentImage, input.EnvironmentTools, input.EnvironmentPolicy)
+	refreshRunnerInputBindings(&input)
+	if input.Validate() == nil {
+		t.Fatal("default workspace ignored configured immutable budget")
+	}
+	input.WorkspacePolicy, _ = RuntimeWorkspacePolicyWithLimits(input.EnvironmentPolicy.Resources.WorkspaceLimits)
+	refreshRunnerInputBindings(&input)
+	if err := input.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	input.WorkspacePolicy.MaximumFileCount = 11
+	input.WorkspacePolicy.Digest = ""
+	raw, _ := json.Marshal(input.WorkspacePolicy)
+	sum := sha256.Sum256(raw)
+	input.WorkspacePolicy.Digest = hex.EncodeToString(sum[:])
+	refreshRunnerInputBindings(&input)
+	if input.Validate() == nil {
+		t.Fatal("foreign attempt quota accepted")
+	}
 }

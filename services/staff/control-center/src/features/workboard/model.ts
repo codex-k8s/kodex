@@ -7,6 +7,7 @@ import type {
   Schedule,
 } from "@/shared/api/generated/openapi/types.gen";
 export { runListSummary } from "@/shared/ui/run-summary";
+import { gateScopeKey, hasValidGateScope } from "./gate-scope";
 
 export type RunFilter = "ALL" | "ACTIVE" | "TERMINAL";
 export type RunView = "KANBAN" | "LIST";
@@ -127,7 +128,7 @@ export function collectAttention(
   const items: AttentionItem[] = [];
 
   for (const gate of gates) {
-    if (gate.state !== "OPEN") continue;
+    if (gate.state !== "OPEN" || !hasValidGateScope(gate)) continue;
     items.push({
       kind: "GATE",
       ref: gate.ref,
@@ -182,6 +183,7 @@ export function decisionInbox(
   return gates
     .filter(
       (gate) =>
+        hasValidGateScope(gate) &&
         gate.state === "OPEN" &&
         (!projectRef || gate.projectRef === projectRef),
     )
@@ -190,7 +192,9 @@ export function decisionInbox(
       const hasConsequences = gate.consequencesSummary.trim().length > 0;
       return {
         gate,
-        project: projectsByRef.get(gate.projectRef),
+        project: gate.projectRef
+          ? projectsByRef.get(gate.projectRef)
+          : undefined,
         run: runsByRef.get(gate.runRef),
         urgency: decisionUrgency(gate, now),
         hasQuestion,
@@ -225,12 +229,13 @@ export function decisionHistory(
   return gates
     .filter(
       (gate) =>
+        hasValidGateScope(gate) &&
         gate.state !== "OPEN" &&
         (!projectRef || gate.projectRef === projectRef),
     )
     .map((gate) => ({
       gate,
-      project: projectsByRef.get(gate.projectRef),
+      project: gate.projectRef ? projectsByRef.get(gate.projectRef) : undefined,
       run: runsByRef.get(gate.runRef),
       urgency: "NORMAL" as const,
       hasQuestion: gate.contextSummary.trim().length > 0,
@@ -249,7 +254,7 @@ export function groupDecisionInbox(
 ): DecisionInboxGroup[] {
   const groups = new Map<string, DecisionInboxGroup>();
   for (const item of items) {
-    const key = [item.urgency, item.gate.projectRef].join(":");
+    const key = JSON.stringify([item.urgency, gateScopeKey(item.gate)]);
     const group = groups.get(key) ?? {
       key,
       urgency: item.urgency,

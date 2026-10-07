@@ -25,6 +25,13 @@ describe("AppShell navigation", () => {
 
   it("сливает realtime-снимок помощника без повторной загрузки открытого чата", () => {
     expect(source).toContain("assistantStore.applyRealtimeSnapshot(");
+    expect(source).toContain(
+      'platform.realtimeSnapshot("SYSTEM_ASSISTANT", assistantStore.projectRef)',
+    );
+    expect(source).toContain(
+      'platform.assistantRealtimeScopeKey !== (assistantStore.projectRef ?? "")',
+    );
+    expect(source).toContain("assistantStore.clearRealtimeState()");
     expect(source).not.toContain(
       ':refresh-revision="assistantRefreshRevision"',
     );
@@ -38,6 +45,10 @@ describe("AppShell navigation", () => {
     expect(source).toContain('route.name === "onboarding"');
     expect(source).toContain("routeProjectRef(route.query)");
     expect(source).toContain("realtime.openPlatform()");
+    expect(source).toContain("synchronizeSessionBootstrap(session, platform)");
+    expect(
+      source.indexOf("synchronizeSessionBootstrap(session, platform)"),
+    ).toBeLessThan(source.indexOf("realtime.openPlatform()"));
     expect(source).not.toContain("platform.loadPendingGateCount()");
     expect(source).not.toContain("platform.loadBootstrap()");
     expect(source).not.toContain("platform.loadGates()");

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -18,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"time"
 
@@ -35,6 +37,7 @@ const (
 	providerRefreshCommitTimeout = 40 * time.Second
 	providerSandboxProbeTimeout  = 5 * time.Second
 	providerResultDeliveryGrace  = processGrace + terminationGrace + providerRefreshCommitTimeout + 5*time.Second
+	providerSafeFailureLog       = "Codex provider request failed at safe stage: %s; class: %s; detail: %s; rpc_code: %d; notification: %s; account_read: %s; notification_error: %s"
 )
 
 var (
@@ -44,6 +47,7 @@ var (
 )
 
 type brokerRequest struct {
+	Version       int         `json:"version"`
 	Input         model.Input `json:"input"`
 	Prompt        []byte      `json:"prompt"`
 	MCPSocket     string      `json:"mcp_socket"`
@@ -77,8 +81,11 @@ type providerCredentialRefreshCommitter func(context.Context, model.Input, runti
 
 // ExecuteViaBroker передаёт provider-only данные отдельному UID по UDS.
 // Ни app-server, ни запускаемый им shell не получают authority mounts runner.
-func ExecuteViaBroker(ctx context.Context, input model.Input, prompt []byte, mcpSocket, mcpProxyToken string) (Result, error) {
-	return executeViaBroker(ctx, input, prompt, mcpSocket, mcpProxyToken)
+func ExecuteViaBroker(ctx context.Context, input model.Input, prompt []byte, mcpSocket, mcpProxyToken string, onActivity func(runtimecontract.RuntimeActivity) error) (Result, error) {
+	if onActivity == nil {
+		return Result{}, errProviderBrokerResponseInvalid
+	}
+	return executeViaBroker(ctx, input, prompt, mcpSocket, mcpProxyToken, onActivity)
 }
 
 func readProviderAuthentication(input model.Input) ([]byte, error) {
@@ -133,7 +140,7 @@ func supportedProviderAuthentication(mode string, apiKey *string, tokens json.Ra
 	}
 }
 
-func executeViaBroker(ctx context.Context, input model.Input, prompt []byte, mcpSocket, mcpProxyToken string) (Result, error) {
+func executeViaBroker(ctx context.Context, input model.Input, prompt []byte, mcpSocket, mcpProxyToken string, onActivity func(runtimecontract.RuntimeActivity) error) (Result, error) {
 	dialer := net.Dialer{}
 	var connection net.Conn
 	var err error
@@ -156,15 +163,11 @@ func executeViaBroker(ctx context.Context, input model.Input, prompt []byte, mcp
 	stopContext := bindBrokerConnectionContext(ctx, connection)
 	defer stopContext()
 	encoder := json.NewEncoder(connection)
-	if err := encoder.Encode(brokerRequest{Input: input, Prompt: prompt,
+	if err := encoder.Encode(brokerRequest{Version: providerBrokerVersion, Input: input, Prompt: prompt,
 		MCPSocket: mcpSocket, MCPProxyToken: mcpProxyToken}); err != nil {
 		return Result{}, errors.New("send isolated Codex provider request")
 	}
-	unixConnection, ok := connection.(*net.UnixConn)
-	if !ok || unixConnection.CloseWrite() != nil {
-		return Result{}, errors.New("seal isolated Codex provider request")
-	}
-	return readProviderBrokerResponse(connection)
+	return readProviderBrokerResponse(connection, onActivity)
 }
 
 // После отмены больше не посылаем request, но даём изолированному процессу
@@ -177,8 +180,7 @@ func bindBrokerConnectionContext(ctx context.Context, connection net.Conn) func(
 	done := make(chan struct{})
 	stop := context.AfterFunc(ctx, func() {
 		defer close(done)
-		_ = connection.SetWriteDeadline(time.Now())
-		_ = connection.SetReadDeadline(time.Now().Add(providerResultDeliveryGrace))
+		interruptBrokerRequest(connection)
 	})
 	return func() {
 		if !stop() {
@@ -187,12 +189,17 @@ func bindBrokerConnectionContext(ctx context.Context, connection net.Conn) func(
 	}
 }
 
-func readProviderBrokerResponse(reader io.Reader) (Result, error) {
-	decoder := json.NewDecoder(bufio.NewReaderSize(&boundedReader{reader: reader, remaining: maximumBrokerBytes}, 64<<10))
-	decoder.DisallowUnknownFields()
-	var response brokerResponse
-	if err := decoder.Decode(&response); err != nil || !decodeEOF(decoder) {
-		return Result{}, errProviderBrokerFailed
+func interruptBrokerRequest(connection net.Conn) {
+	_ = connection.SetWriteDeadline(time.Now())
+	if unixConnection, ok := connection.(*net.UnixConn); ok {
+		_ = unixConnection.CloseWrite()
+	}
+	_ = connection.SetReadDeadline(time.Now().Add(providerResultDeliveryGrace))
+}
+
+func validateBrokerTerminal(response brokerResponse) (Result, error) {
+	if response.Result.Usage.Validate() != nil || len(response.Result.ToolCalls) != 0 || len(response.Result.FinalMessage) > maximumFinalBytes {
+		return Result{}, errProviderBrokerResponseInvalid
 	}
 	if !response.OK {
 		switch response.Failure {
@@ -201,17 +208,9 @@ func readProviderBrokerResponse(reader io.Reader) (Result, error) {
 		default:
 			return Result{}, errProviderBrokerResponseInvalid
 		}
-		if response.Result.Usage.Validate() != nil || len(response.Result.ToolCalls) > runtimecontract.MaximumNativeToolCalls {
-			return Result{}, errProviderBrokerResponseInvalid
-		}
-		for _, call := range response.Result.ToolCalls {
-			if call.Validate() != nil {
-				return Result{}, errProviderBrokerResponseInvalid
-			}
-		}
 		return failedProviderResult(response.Result), providerBrokerError(response.Failure)
 	}
-	if response.Failure != "" {
+	if response.Failure != "" || response.Result.Outcome != "SUCCEEDED" && response.Result.Outcome != "FAILED" {
 		return Result{}, errProviderBrokerResponseInvalid
 	}
 	return response.Result, nil
@@ -249,9 +248,67 @@ func classifyProviderBrokerFailure(err error) providerBrokerFailure {
 	}
 }
 
+// Закрытая диагностическая классификация не передаёт исходный ответ,
+// аккаунт, credential или текст ошибки внешнего провайдера в логи.
+func providerSafeFailureClass(err error) string {
+	if errors.Is(err, errAccountReadResponseInvalid) {
+		return "ACCOUNT_RESPONSE_SCHEMA"
+	}
+	return string(classifyProviderBrokerFailure(err))
+}
+
+func logProviderSafeFailure(stage providerExecutionStage, err error) {
+	detail, code := "NONE", int64(0)
+	notification := "NONE"
+	notificationError := "NONE"
+	accountRead := "NONE"
+	var failure *appServerCallFailure
+	if errors.As(err, &failure) {
+		switch failure.detail {
+		case "REQUEST_WRITE", "CONTEXT_CANCELLED", "STREAM_CLOSED", "STREAM_INVALID",
+			"NOTIFICATION_INVALID", "REQUEST_REJECTED", "RESPONSE_CORRELATION", "MESSAGE_KIND", "RPC_ERROR":
+			detail = failure.detail
+			if detail == "RPC_ERROR" {
+				code = failure.code
+				if stage == providerStageAccountRead && code == -32603 {
+					accountRead = safeAccountReadFailure(failure.accountRead)
+				}
+			}
+			if detail == "NOTIFICATION_INVALID" {
+				notification = safeNotificationMethod(failure.notification)
+				notificationError = "UNKNOWN"
+				switch failure.notificationError {
+				case "METHOD", "ENVELOPE", "TUPLE", "ITEM", "TIMESTAMP", "MESSAGE", "TOKEN_USAGE", "TERMINAL", "LIFECYCLE", "MCP", "PROVIDER_ERROR":
+					notificationError = failure.notificationError
+				}
+			}
+		}
+	}
+	log.Printf(providerSafeFailureLog, stage, providerSafeFailureClass(err), detail, code, notification, accountRead, notificationError)
+}
+
+// Дополнительные методы Codex 0.160.0 разрешены только для закрытой диагностики,
+// а не для исполнения notification или расширения authority.
+func safeNotificationMethod(method string) string {
+	if _, allowed := serverNotificationMethods[method]; allowed {
+		return method
+	}
+	switch method {
+	case "thread/reverted", "thread/attachment/updated", "thread/queue/changed", "project/changed",
+		"thread/project/updated", "thread/environment/connected", "thread/environment/disconnected",
+		"autoApprovalReview/strictReviewRequired", "mcpServer/event/stream/notification", "account/gatewayOAuth/changed",
+		"modelProvider/authRecoveryStarted", "modelProvider/authRecoveryCompleted", "thread/realtime/item/started",
+		"thread/realtime/item/transcript/delta", "thread/realtime/item/completed":
+		return method
+	default:
+		return "UNKNOWN"
+	}
+}
+
 // ServeProviderBroker запускается только в container UID 10002 без Kubernetes
 // token, application grants, mTLS keys, MCP bearer и handoff signing key.
 func ServeProviderBroker(ctx context.Context) error {
+	proofObserver := providerInputProofLogger(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 	if os.Geteuid() != 10002 {
 		return errors.New("Codex provider broker UID is invalid")
 	}
@@ -282,8 +339,8 @@ func ServeProviderBroker(ctx context.Context) error {
 			}
 			return errors.New("accept isolated Codex provider request")
 		}
-		if err := serveBrokerRequest(ctx, connection); err != nil {
-			log.Printf("Codex provider request failed at safe stage: %s", providerStageOf(err))
+		if err := serveBrokerRequest(ctx, connection, proofObserver); err != nil {
+			logProviderSafeFailure(providerStageOf(err), err)
 			_ = connection.Close()
 			continue
 		}
@@ -308,7 +365,7 @@ func verifyProviderSandbox(ctx context.Context, execute func(*exec.Cmd) error) e
 	return nil
 }
 
-func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
+func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver providerInputProofObserver) error {
 	unixConnection, ok := connection.(*net.UnixConn)
 	if !ok {
 		return atProviderStage(providerStageBrokerRequest, errors.New("provider broker transport is invalid"))
@@ -324,10 +381,13 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	}); err != nil || controlErr != nil || credential == nil || credential.Uid != 10001 {
 		return atProviderStage(providerStageBrokerRequest, errors.New("provider broker peer is unauthorized"))
 	}
-	decoder := json.NewDecoder(bufio.NewReaderSize(&boundedReader{reader: connection, remaining: maximumBrokerBytes}, 64<<10))
-	decoder.DisallowUnknownFields()
+	if connection.SetReadDeadline(time.Now().Add(30*time.Second)) != nil {
+		return atProviderStage(providerStageBrokerRequest, errProviderBrokerFailed)
+	}
+	scanner := bufio.NewScanner(connection)
+	scanner.Buffer(make([]byte, 64<<10), maximumBrokerBytes)
 	var request brokerRequest
-	if decoder.Decode(&request) != nil || !decodeEOF(decoder) || request.Input.Validate() != nil ||
+	if !scanner.Scan() || rejectDuplicateJSONKeys(scanner.Bytes()) != nil || strictDecode(scanner.Bytes(), &request) != nil || request.Version != providerBrokerVersion || request.Input.Validate() != nil ||
 		len(request.Prompt) == 0 || len(request.Prompt) > 1<<20 {
 		return atProviderStage(providerStageBrokerRequest, errors.New("provider broker request is invalid"))
 	}
@@ -340,6 +400,11 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	}
 	ctx, cancelContext := snapshot.BoundExecutionContext(ctx)
 	defer cancelContext()
+	if connection.SetReadDeadline(time.Time{}) != nil {
+		return errProviderBrokerFailed
+	}
+	ctx, joinPeer := bindBrokerPeerContext(ctx, connection, scanner)
+	defer joinPeer()
 	auth, err := readProviderAuthentication(request.Input)
 	if err != nil {
 		return writeProviderBrokerFailureAtStage(connection, providerStageAuthRead, err)
@@ -367,15 +432,19 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn) error {
 	if err := PrepareHomeWithAuth(request.Input, bridge.URL(), auth); err != nil {
 		return writeProviderBrokerFailureAtStage(connection, providerStageHomePrepare, err)
 	}
-	result, err := executeProviderTurn(ctx, request.Input, request.Prompt, request.MCPProxyToken, executeLocal, credentialrelay.Commit)
+	frames := &brokerFrameWriter{writer: connection}
+	execute := func(ctx context.Context, input model.Input, prompt []byte, token string) (Result, error) {
+		return executeLocalWithInputProof(ctx, input, prompt, token, frames.activity, proofObserver)
+	}
+	result, err := executeProviderTurn(ctx, request.Input, request.Prompt, request.MCPProxyToken, execute, credentialrelay.Commit)
 	if err != nil {
-		log.Printf("Codex provider request failed at safe stage: %s", providerStageOf(err))
-		return writeProviderBrokerResultFailure(connection, result, err)
+		logProviderSafeFailure(providerStageOf(err), err)
+		return writeProviderBrokerResultFailure(frames, result, err)
 	}
 	if result.Outcome != "SUCCEEDED" {
 		log.Printf("Codex provider turn completed with safe failure code: %s", result.FailureCode)
 	}
-	return json.NewEncoder(connection).Encode(brokerResponse{Result: result, OK: true})
+	return frames.finish(brokerResponse{Result: result, OK: true})
 }
 
 func writeProviderBrokerFailure(connection io.Writer, err error) error {
@@ -383,7 +452,7 @@ func writeProviderBrokerFailure(connection io.Writer, err error) error {
 }
 
 func writeProviderBrokerFailureAtStage(connection io.Writer, stage providerExecutionStage, err error) error {
-	log.Printf("Codex provider request failed at safe stage: %s", stage)
+	logProviderSafeFailure(stage, err)
 	return writeProviderBrokerFailure(connection, err)
 }
 
@@ -394,7 +463,7 @@ func failedProviderResult(result Result) Result {
 }
 
 func writeProviderBrokerResultFailure(connection io.Writer, result Result, err error) error {
-	return json.NewEncoder(connection).Encode(brokerResponse{
+	return writeBrokerTerminal(connection, brokerResponse{
 		Result:  failedProviderResult(result),
 		Failure: classifyProviderBrokerFailure(err),
 		OK:      false,
@@ -423,6 +492,13 @@ func executeProviderTurn(ctx context.Context, input model.Input, prompt []byte, 
 		defer cancel()
 		if err := commit(commitContext, input, payload); err != nil {
 			return result, errors.New("commit refreshed provider authentication")
+		}
+	}
+	if executionErr == nil && result.Outcome == "SUCCEEDED" && !input.IsAssistant() && slices.Contains(input.Capabilities, runtimecontract.ArtifactCapability) {
+		if err := publishProviderOutbox(ctx, input); err != nil {
+			result.Outcome = "FAILED"
+			result.FailureCode = "RUNTIME_ARTIFACT_INVALID"
+			result.FinalMessage = "i18n:RUNTIME_ARTIFACT_INVALID"
 		}
 	}
 	return result, executionErr

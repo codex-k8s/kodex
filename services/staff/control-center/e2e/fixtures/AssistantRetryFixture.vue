@@ -61,7 +61,7 @@ const diagnostic = computed(() =>
     route: route.fullPath,
     state: realtime.platformState.state,
     runState: realtime.state,
-    runLoading: platform.loading.run,
+    runLoading: platform.runLoading,
     selectedRef: assistant.selectedRef,
     conversations: assistant.conversations,
     runs: platform.runs,

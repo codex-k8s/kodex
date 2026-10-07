@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -113,6 +114,8 @@ func (repository *Repository) changeExecution(ctx context.Context, tx pgx.Tx, sc
 		return repository.completeExecution(ctx, tx, scope, input)
 	case command.DelegateExecution:
 		return repository.delegateExecution(ctx, tx, scope, input)
+	case command.LaunchWorkflowExecution:
+		return repository.launchWorkflowExecution(ctx, tx, scope, input)
 	case command.ProposeAssistantPlan:
 		return repository.proposeAssistantPlan(ctx, tx, scope, input)
 	case command.ProposeAssistantMetadata:
@@ -128,8 +131,8 @@ func (repository *Repository) changeExecution(ctx context.Context, tx pgx.Tx, sc
 
 func (repository *Repository) proposeAssistantMetadata(ctx context.Context, tx pgx.Tx, machineScope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.ProposeAssistantMetadataInput)
-	title := strings.TrimSpace(payload.Title)
-	if !ok || title == "" || len([]rune(title)) > 160 {
+	title := assistantAutomaticTitleText(payload.Title)
+	if !ok || title == "" || len([]rune(strings.TrimSpace(payload.Title))) > 160 {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	lease, err := repository.lease(ctx, tx, machineScope, command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}, true)
@@ -213,20 +216,31 @@ func (repository *Repository) recordRunToolCall(ctx context.Context, tx pgx.Tx, 
 		return commandOutcome{}, err
 	}
 	var actorRef, actorName string
-	var systemAssistant, grantAllowed bool
+	var systemAssistant, eligibleConfigurationAssistant, grantAllowed bool
 	if err := tx.QueryRow(ctx, queryRuntimeRecordtoolcallSelectActorAndGrant, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID, "node_id": lease["nodeID"], "generation": payload.Generation,
 		"grant_ref": payload.GrantRef, "capability_ref": payload.CapabilityRef,
 		"tool": payload.Tool, "purpose": filePurpose,
-	}).Scan(&actorRef, &actorName, &systemAssistant, &grantAllowed); errors.Is(err, pgx.ErrNoRows) {
+	}).Scan(&actorRef, &actorName, &systemAssistant, &eligibleConfigurationAssistant, &grantAllowed); errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrNotFound
 	} else if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	} else if !grantAllowed {
 		return commandOutcome{}, errs.ErrForbidden
 	}
-	if !toolCapabilityMatches(payload.Tool, payload.CapabilityRef, payload.GrantRef != "", systemAssistant) {
+	if !toolCapabilityMatches(payload.Tool, payload.CapabilityRef, payload.GrantRef != "", eligibleConfigurationAssistant) {
 		return commandOutcome{}, errs.ErrInvalid
+	}
+	previous, err := latestRuntimeActivity(ctx, tx, scope, lease, "TOOL", payload.CallRef)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if previous != nil {
+		old := previous.ToolCall
+		if old == nil || old.Tool != payload.Tool || old.GrantRef != payload.GrantRef || old.CapabilityRef != payload.CapabilityRef ||
+			payload.Revision <= old.Revision || old.State != "RUNNING" || payload.State == "RUNNING" {
+			return commandOutcome{}, errs.ErrConflict
+		}
 	}
 	auditRef, err := newRef("aud")
 	if err != nil {
@@ -240,7 +254,7 @@ func (repository *Repository) recordRunToolCall(ctx context.Context, tx pgx.Tx, 
 	}
 	toolCall := &entity.RunToolCall{Ref: payload.CallRef, Tool: payload.Tool, SafeParameters: payload.SafeParameters,
 		CapabilityRef: payload.CapabilityRef, GrantRef: payload.GrantRef, State: payload.State,
-		DurationMS: payload.DurationMS, SafeResult: strings.TrimSpace(payload.SafeResult), AuditRef: auditRef}
+		DurationMS: payload.DurationMS, SafeResult: strings.TrimSpace(payload.SafeResult), AuditRef: auditRef, Revision: payload.Revision}
 	event, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"),
 		payload.CallRef, "TOOL_CALL_RECORDED", stringMap(lease, "nodeRef"), "", "", "",
 		"i18n:RUNTIME_TOOL_CALL_RECORDED", "", "")
@@ -251,15 +265,9 @@ func (repository *Repository) recordRunToolCall(ctx context.Context, tx pgx.Tx, 
 	if systemAssistant {
 		actorKind = "SYSTEM_ASSISTANT"
 	}
-	if _, err := tx.Exec(ctx, queryRuntimeRecordtoolcallUpdateEvent, scope.organizationID, actorKind, actorRef,
-		actorName, asJSON(toolCall), event.Ref); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
+	if err := attachToolCallActivity(ctx, tx, scope, &event, entity.RunEventActor{Kind: actorKind, Ref: actorRef, Name: actorName}, toolCall); err != nil {
+		return commandOutcome{}, err
 	}
-	if _, err := tx.Exec(ctx, queryRuntimeRecordtoolcallUpdateOutbox, scope.organizationID, asJSON(toolCall), event.Ref); err != nil {
-		return commandOutcome{}, errs.ErrUnavailable
-	}
-	event.Actor = entity.RunEventActor{Kind: actorKind, Ref: actorRef, Name: actorName}
-	event.MessageKind, event.ToolCall = "TOOL_CALL", toolCall
 	return commandOutcome{result: command.Result{Event: &event}, projectID: stringMap(lease, "projectID"),
 		projectRef: stringMap(lease, "projectRef"), resourceKind: "RUN_TOOL_CALL", resourceRef: payload.CallRef,
 		summary: "i18n:RUNTIME_TOOL_CALL_RECORDED"}, nil
@@ -267,7 +275,7 @@ func (repository *Repository) recordRunToolCall(ctx context.Context, tx pgx.Tx, 
 
 func validToolCallProjection(input command.RunToolCallInput) bool {
 	if len(input.CallRef) < 8 || len(input.CallRef) > 96 || len(input.Tool) < 1 || len(input.Tool) > 120 ||
-		(input.State != "SUCCEEDED" && input.State != "FAILED") || input.DurationMS < 0 || input.DurationMS > 86_400_000 ||
+		!validToolActivityLifecycle(input.State, input.Revision, input.SafeResult, input.DurationMS) || input.DurationMS < 0 || input.DurationMS > 86_400_000 ||
 		len([]rune(input.SafeResult)) > 2000 || input.SafeParameters == nil || len(input.SafeParameters) > 32 ||
 		len(asJSON(input.SafeParameters)) > 4096 {
 		return false
@@ -296,12 +304,19 @@ func containsSensitiveToolKey(value any) bool {
 	return false
 }
 
-func toolCapabilityMatches(tool, capability string, integration, systemAssistant bool) bool {
+func toolCapabilityMatches(tool, capability string, integration, configurationAssistant bool) bool {
 	if runtimecontract.IsRuntimeFileTool(tool) {
 		return integration && capability == ""
 	}
 	if integration {
-		return tool == "invoke_integration" && capability != ""
+		switch tool {
+		case runtimecontract.Context7ResolveTool:
+			return capability == runtimecontract.Context7ResolveCapability
+		case runtimecontract.Context7QueryTool:
+			return capability == runtimecontract.Context7QueryCapability
+		default:
+			return tool == "invoke_integration" && capability != ""
+		}
 	}
 	switch tool {
 	case runtimecontract.NativeToolKindShell, runtimecontract.NativeToolKindFileChange,
@@ -318,8 +333,9 @@ func toolCapabilityMatches(tool, capability string, integration, systemAssistant
 		"propose_assistant_metadata": "platform.presentation.propose",
 		"propose_run_metadata":       "platform.presentation.propose",
 		"delegate_agent":             "platform.run.delegate",
+		"launch_workflow":            "platform.run.launch",
 	}
-	if (tool == "get_configuration_catalog" || tool == "find_platform_resources" || tool == "propose_configuration_plan" || tool == "propose_assistant_metadata") && !systemAssistant {
+	if (tool == "get_configuration_catalog" || tool == "find_platform_resources" || tool == "propose_configuration_plan" || tool == "propose_assistant_metadata") && !configurationAssistant {
 		return false
 	}
 	return expected[tool] != "" && expected[tool] == capability
@@ -346,7 +362,7 @@ type claimableExecution struct {
 	environmentBindingID, environmentBindingRef, environmentBindingDigest                        string
 	runtimeEnvironmentID, runtimeEnvironmentRef, runtimeEnvironmentDigest                        string
 	inputAttachmentSetRef, inputAttachmentSetManifestDigest, inputAttachmentContext              string
-	codexSessionID, previousContextDigest                                                        string
+	codexSessionID                                                                               string
 	providerCredentialRevisionNumber, generation, roleImageRecipeGeneration, turnNumber          int64
 	roleRuntimeContractRevision                                                                  int64
 	runtimeConfigVersion, providerPolicyVersion, configOverlayVersion                            int64
@@ -376,6 +392,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	expired, err := repository.expireRuntimeClaimLeases(ctx, tx, scope, input)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	terminalStorage, err := repository.reconcileTerminalSessionStorage(ctx, tx, scope, input, payload.Limit)
 	if err != nil {
 		return commandOutcome{}, err
 	}
@@ -421,7 +441,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			&candidate.rawEnvironmentValues, &candidate.rawSecretProjections, &candidate.rawEnvironmentTools,
 			&candidate.rawResourcePolicy, &candidate.rawVolumePolicy, &candidate.rawNetworkPolicy, &candidate.rawKubernetesAccessProfile,
 			&candidate.resourcesDigest, &candidate.volumesDigest, &candidate.networkDigest, &candidate.rbacDigest,
-			&candidate.codexSessionID, &candidate.previousContextDigest); err != nil {
+			&candidate.codexSessionID); err != nil {
 			return commandOutcome{}, fmt.Errorf("scan claimable execution: %v: %w", err, errs.ErrUnavailable)
 		}
 		claimable = append(claimable, candidate)
@@ -453,6 +473,12 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	var items []map[string]any
 	var firstProjectID, firstProjectRef, firstRunRef string
 	failedRoots := make(map[string]bool)
+	for _, candidate := range terminalStorage {
+		failedRoots[candidate.rootRunID] = true
+		if firstRunRef == "" {
+			firstProjectID, firstProjectRef, firstRunRef = candidate.projectID, candidate.projectRef, candidate.runRef
+		}
+	}
 	claimedRoots := make(map[string]string)
 	for _, candidate := range claimable {
 		if failedRoots[candidate.rootRunID] {
@@ -472,6 +498,16 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		}
 		eligibilityStage := "provider_profile"
 		_, candidateErr := func(tx pgx.Tx) (commandOutcome, error) {
+			var originAllowed bool
+			if err := tx.QueryRow(ctx, queryWorkflowLaunchClaimOrigin, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "root_run_id": candidate.rootRunID}).Scan(&originAllowed); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			if !originAllowed {
+				return commandOutcome{}, errs.ErrForbidden
+			}
+			if err := repository.validateRequiredWorkflowAuthorities(ctx, tx, scope, candidate.rootRunID); err != nil {
+				return commandOutcome{}, err
+			}
 			runtimeProvider, err := runtimeExecutionProvider(candidate.provider)
 			if err != nil {
 				return commandOutcome{}, err
@@ -584,7 +620,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			var attachmentSets []map[string]string
 			_ = jsonUnmarshal(rawAttachmentSets, &attachmentSets)
 			var sessionContext []map[string]string
-			_ = jsonUnmarshal(rawSessionContext, &sessionContext)
+			if err := jsonUnmarshal(rawSessionContext, &sessionContext); err != nil {
+				return commandOutcome{}, errs.ErrConflict
+			}
+			sessionContext = boundedRuntimeSessionHistory(sessionContext)
 			eligibilityStage = "runtime_environment"
 			var environmentValues []runtimecontract.RuntimeEnvironmentValue
 			var secretProjections []runtimecontract.RuntimeSecretProjection
@@ -761,6 +800,20 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			instructions = materializedPrompt.Prompt
 			capabilities = materializedPrompt.EffectiveCapabilities
 			integrationGrants = filterIntegrationGrants(integrationGrants, capabilities)
+			mcpScopeKind, mcpScopeRef := "AGENT", agentRef
+			if runtimeAssistantScope(stableKey) == runtimecontract.AssistantScopeSystem {
+				mcpScopeKind = "SYSTEM"
+			} else if runtimeAssistantScope(stableKey) == runtimecontract.AssistantScopeProject {
+				mcpScopeKind, mcpScopeRef = "PROJECT", candidate.assistantProfileRef
+			}
+			eligibilityStage = "managed_mcp"
+			if err := requireManagedMCPStartupDependencies(ctx, tx, scope.organizationID, agentRef, runtimeRevisionGrants(integrationGrants), workflowCapabilities, humanGateCapabilities); err != nil {
+				return commandOutcome{}, err
+			}
+			managedMCPProfiles, err := runtimeManagedMCPProfilesForStartup(ctx, tx, scope.organizationID, mcpScopeKind, mcpScopeRef, agentRef, projectRef, runtimeRevisionGrants(integrationGrants))
+			if err != nil {
+				return commandOutcome{}, err
+			}
 			rawEffectiveIntegrationGrants, err := json.Marshal(integrationGrants)
 			if err != nil {
 				return commandOutcome{}, errs.ErrConflict
@@ -781,7 +834,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 					return commandOutcome{}, errs.ErrConflict
 				}
 			}
-			workspacePolicy := runtimeWorkspacePolicy()
+			workspacePolicy, err := runtimeWorkspacePolicyWithLimits(environmentPolicy.Resources.WorkspaceLimits)
+			if err != nil {
+				return commandOutcome{}, errs.ErrConflict
+			}
 			revisionRef, err := newRef("rrev")
 			if err != nil {
 				return commandOutcome{}, err
@@ -816,6 +872,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 					"connection": connectionCapabilities, "humanGate": humanGateCapabilities,
 				},
 				"capabilities": capabilities, "integrationGrants": integrationGrants,
+				"managedMCPProfiles":    managedMCPProfiles,
 				"knowledgeArtifactRefs": knowledge, "artifacts": artifacts,
 				"attachmentSetRef": inputAttachmentSetRef, "attachmentSetManifestDigest": inputAttachmentSetManifestDigest,
 				"attachmentContext": inputAttachmentContext,
@@ -857,7 +914,10 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 				return commandOutcome{}, err
 			}
 			snapshot["contextSnapshot"] = contextSnapshot
-			snapshot["codexSessionID"] = runtimeContextSessionID(codexSessionID, candidate.previousContextDigest, contextSnapshot.Digest)
+			snapshot["codexSessionID"], err = runtimeSessionResumeID(ctx, tx, scope, snapshot, codexSessionID)
+			if err != nil {
+				return commandOutcome{}, err
+			}
 			var continuationNotice *preparedContinuationNotice
 			if candidate.turnNumber > 1 {
 				continuationNotice, err = repository.prepareRuntimeContinuationNotice(ctx, tx, scope, snapshot, promptSnapshot)
@@ -943,6 +1003,9 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		}
 		if err := candidateTx.Rollback(ctx); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if errors.Is(candidateErr, errManagedMCPHealthPending) {
+			continue
 		}
 		if !runtimeCandidateEligibilityFailure(candidateErr) {
 			return commandOutcome{}, candidateErr
@@ -1134,7 +1197,15 @@ func capabilityEnabled(capabilities []string, expected string) bool {
 }
 
 func runtimeWorkspacePolicy() entity.RuntimeWorkspacePolicy {
-	shared := runtimecontract.RuntimeWorkspacePolicyV1()
+	policy, _ := runtimeWorkspacePolicyWithLimits(nil)
+	return policy
+}
+
+func runtimeWorkspacePolicyWithLimits(limits *runtimecontract.RuntimeWorkspaceLimits) (entity.RuntimeWorkspacePolicy, error) {
+	shared, err := runtimecontract.RuntimeWorkspacePolicyWithLimits(limits)
+	if err != nil {
+		return entity.RuntimeWorkspacePolicy{}, err
+	}
 	policy := entity.RuntimeWorkspacePolicy{
 		Revision: shared.Revision, Root: shared.Root, Digest: shared.Digest,
 		MaximumWritableBytes: shared.MaximumWritableBytes, MaximumFileCount: shared.MaximumFileCount,
@@ -1144,7 +1215,7 @@ func runtimeWorkspacePolicy() entity.RuntimeWorkspacePolicy {
 	for _, rule := range shared.Rules {
 		policy.Rules = append(policy.Rules, entity.RuntimeWorkspacePathRule{Path: rule.Path, Access: rule.Access})
 	}
-	return policy
+	return policy, nil
 }
 
 func runtimeAssistantScope(stableKey string) runtimecontract.AssistantScope {
@@ -1231,6 +1302,9 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 		}
 	}
 	input.IntegrationGrants = runtimeRevisionGrants(values["integrationGrants"])
+	if profiles, ok := values["managedMCPProfiles"].([]runtimecontract.ManagedMCPProfile); ok {
+		input.ManagedMCPProfiles = profiles
+	}
 	input.AttachmentSets = runtimeRevisionAttachmentSets(values["attachmentSets"])
 	input.InputArtifacts = runtimeRevisionArtifacts(values["artifacts"])
 	input.DelegationTargets = runtimeRevisionDelegationTargets(values["delegationTargets"])
@@ -1323,7 +1397,10 @@ func runtimeRevisionGrants(value any) []runtimecontract.RunnerIntegrationGrant {
 	values, _ := value.([]map[string]string)
 	result := make([]runtimecontract.RunnerIntegrationGrant, 0, len(values))
 	for _, item := range values {
+		grantVersion, _ := strconv.ParseInt(item["grantVersion"], 10, 64)
+		connectionVersion, _ := strconv.ParseInt(item["connectionVersion"], 10, 64)
 		result = append(result, runtimecontract.RunnerIntegrationGrant{Ref: item["ref"], ConnectionRef: item["connectionRef"],
+			GrantVersion: grantVersion, ConnectionVersion: connectionVersion, ApprovalPolicy: item["approvalPolicy"],
 			DefinitionKey: item["definitionKey"], ConnectionName: item["connectionName"], CapabilityKey: item["capabilityKey"],
 			DefinitionVersion: item["definitionVersion"], DefinitionDigest: item["definitionDigest"],
 			Operation: item["operation"], InputSchema: item["inputSchema"], InputSchemaSHA256: item["inputSchemaSha256"],
@@ -1454,10 +1531,31 @@ func (repository *Repository) reportProgress(ctx context.Context, tx pgx.Tx, sco
 		return commandOutcome{}, err
 	}
 	progress := truncate(payload.Progress, 2000)
+	if payload.Message != nil {
+		if payload.Progress != "" || !validPublishedMessage(payload.Message) {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		previous, readErr := latestRuntimeActivity(ctx, tx, scope, lease, "MESSAGE", payload.Message.Ref)
+		if readErr != nil {
+			return commandOutcome{}, readErr
+		}
+		if previous != nil {
+			if previous.Delta.Message == nil || *previous.Delta.Message != *payload.Message {
+				return commandOutcome{}, errs.ErrIdempotencyReuse
+			}
+			run, graph, readErr := repository.readRunGraphTx(ctx, tx, scope, stringMap(lease, "runRef"))
+			if readErr != nil {
+				return commandOutcome{}, readErr
+			}
+			return commandOutcome{result: command.Result{Run: &run, Graph: &graph, Event: previous}, resourceKind: "RUN_NODE",
+				resourceRef: stringMap(lease, "nodeRef"), projectID: stringMap(lease, "projectID"), projectRef: stringMap(lease, "projectRef"), summary: "i18n:RUNTIME_PROGRESS_RECORDED"}, nil
+		}
+		progress = "i18n:RUNTIME_PROGRESS_RECORDED"
+	}
 	if _, err := tx.Exec(ctx, queryRuntimeReportprogressUpdateRunNodesProgressSummaryVersion, lease["nodeID"], progress); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	event, err := repository.emitRunEvent(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), stringMap(lease, "nodeRef"), "TURN_PROGRESS", stringMap(lease, "nodeRef"), "", "", "", progress, "RUNNING", "RUNNING")
+	event, err := repository.emitRunEventWithActivity(ctx, tx, scope, stringMap(lease, "projectID"), stringMap(lease, "rootRunID"), stringMap(lease, "nodeRef"), "TURN_PROGRESS", stringMap(lease, "nodeRef"), "", "", "", nil, payload.Message, progress, "RUNNING", "RUNNING")
 	if err != nil {
 		return commandOutcome{}, err
 	}
@@ -1532,8 +1630,8 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunsId, lease["runID"]).Scan(&sessionID, &targetType); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
-	if hasArchiveBinding && targetType != "SYSTEM_ASSISTANT" {
-		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpsertSessionStorage, pgx.StrictNamedArgs{
+	if hasArchiveBinding {
+		stored, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpsertSessionStorage, pgx.StrictNamedArgs{
 			"organization_id":      scope.organizationID,
 			"session_id":           sessionID,
 			"runtime_revision_id":  lease["runtimeRevisionID"],
@@ -1542,7 +1640,8 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			"source_sha256":        payload.ArchiveSHA256,
 			"source_size_bytes":    payload.ArchiveSizeBytes,
 			"retention_seconds":    int64((30 * 24 * time.Hour) / time.Second),
-		}); err != nil {
+		})
+		if err != nil || stored.RowsAffected() != 1 {
 			return commandOutcome{}, fmt.Errorf("record session storage binding: %w", errs.ErrUnavailable)
 		}
 	}
@@ -1601,10 +1700,25 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateCurrentRunOutcome, lease["runID"], map[bool]string{true: "SUCCEEDED", false: "FAILED"}[payload.Success], truncate(payload.ResultSummary, 4000), truncate(payload.SafeErrorCode, 100), ""); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	var requiredPending, hasRequiredOrigin bool
+	if tx.QueryRow(ctx, queryWorkflowLaunchRunPending, pgx.StrictNamedArgs{"run_id": lease["runID"], "node_id": lease["nodeID"]}).Scan(&requiredPending, &hasRequiredOrigin) != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if requiredPending {
+		humanGateAfter = false
+	}
 	if payload.Success {
+		continued := false
+		if hasRequiredOrigin {
+			var continuationErr error
+			continued, continuationErr = repository.scheduleCallbackContinuation(ctx, tx, scope, stringMap(lease, "nodeID"), stringMap(lease, "projectID"))
+			if continuationErr != nil {
+				return commandOutcome{}, continuationErr
+			}
+		}
 		var callbackEdgeID, callbackEdgeRef, parentNodeID, parentNodeRef, parentRunID string
 		err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionSelectRunEdgesRootRunIdSourceNodeIdType, lease["rootRunID"], lease["nodeID"]).Scan(&callbackEdgeID, &callbackEdgeRef, &parentNodeID, &parentNodeRef, &parentRunID)
-		if err == nil {
+		if err == nil && !requiredPending && !continued {
 			if _, callbackErr := repository.recordChildCallback(ctx, tx, scope, callbackRecord{
 				childRunID: lease["runID"].(string), childRunRef: stringMap(lease, "runRef"),
 				rootRunID: stringMap(lease, "rootRunID"), projectID: stringMap(lease, "projectID"),
@@ -1613,17 +1727,19 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			}); callbackErr != nil {
 				return commandOutcome{}, callbackErr
 			}
-		} else if !errors.Is(err, pgx.ErrNoRows) {
+		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
-		if _, continuationErr := repository.scheduleCallbackContinuation(ctx, tx, scope, stringMap(lease, "nodeID"), stringMap(lease, "projectID")); continuationErr != nil {
-			return commandOutcome{}, continuationErr
+		if !hasRequiredOrigin {
+			if _, continuationErr := repository.scheduleCallbackContinuation(ctx, tx, scope, stringMap(lease, "nodeID"), stringMap(lease, "projectID")); continuationErr != nil {
+				return commandOutcome{}, continuationErr
+			}
 		}
 	}
 	if targetType == "SYSTEM_ASSISTANT" {
 		if err := repository.recordSystemAssistantTerminalTurn(ctx, tx, scope,
 			sessionID, stringMap(lease, "runID"), nonEmptyResult(payload),
-			map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success], assistantConversationTitle(payload)); err != nil {
+			map[bool]string{true: "COMPLETED", false: "FAILED"}[payload.Success]); err != nil {
 			return commandOutcome{}, err
 		}
 	}
@@ -1680,9 +1796,16 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		}
 		if active == 0 {
 			rootBecameTerminal = true
-			if planned > 0 {
+			var requiredFailed bool
+			if tx.QueryRow(ctx, queryWorkflowLaunchFailed, pgx.StrictNamedArgs{"root_run_id": lease["rootRunID"]}).Scan(&requiredFailed) != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			if planned > 0 || requiredFailed {
 				runState = "FAILED"
 				terminalSafeErrorCode = "RUNTIME_WORKFLOW_INCOMPLETE"
+				if requiredFailed {
+					terminalSafeErrorCode = "REQUIRED_WORKFLOW_FAILED"
+				}
 				if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionFailRootRun, lease["rootRunID"], "i18n:WORKFLOW_STEPS_UNFULFILLED", terminalSafeErrorCode, ""); err != nil {
 					return commandOutcome{}, errs.ErrUnavailable
 				}
@@ -1804,33 +1927,9 @@ func nonEmptyResult(payload command.CompleteExecutionInput) string {
 	return "i18n:" + payload.SafeErrorCode
 }
 
-func assistantConversationTitle(payload command.CompleteExecutionInput) string {
-	if !payload.Success {
-		return ""
-	}
-	text := strings.TrimSpace(payload.ResultSummary)
-	if text == "" || strings.HasPrefix(text, "i18n:") {
-		return ""
-	}
-	text = strings.TrimSpace(strings.TrimLeft(strings.Join(strings.Fields(text), " "), "#*->"))
-	const maximumRunes = 96
-	runes := []rune(text)
-	limit := min(len(runes), maximumRunes)
-	for index := 23; index < limit; index++ {
-		switch runes[index] {
-		case '.', '!', '?':
-			return strings.TrimSpace(string(runes[:index+1]))
-		}
-	}
-	if len(runes) <= maximumRunes {
-		return text
-	}
-	return strings.TrimSpace(string(runes[:maximumRunes]))
-}
-
 func runtimeSafeErrorCode(code string) bool {
 	switch code {
-	case "PROVIDER_AUTH_UNAVAILABLE", "PROVIDER_AUTH_REJECTED", "PROVIDER_UNAVAILABLE", "PROVIDER_RATE_LIMITED", "PROVIDER_REQUEST_REJECTED", "PROVIDER_RESPONSE_INVALID", "PROVIDER_EMPTY_RESULT", "PROVIDER_TOOL_INVALID", "PROVIDER_TOOL_LIMIT", "RUNTIME_PROFILE_UNSUPPORTED", "RUNTIME_INPUT_INVALID", "RUNTIME_INPUT_TOO_LARGE", "RUNTIME_MCP_UNAVAILABLE", "RUNTIME_UNAVAILABLE", "RUNTIME_LIMIT_EXCEEDED":
+	case "PROVIDER_AUTH_UNAVAILABLE", "PROVIDER_AUTH_REJECTED", "PROVIDER_UNAVAILABLE", "PROVIDER_RATE_LIMITED", "PROVIDER_REQUEST_REJECTED", "PROVIDER_RESPONSE_INVALID", "PROVIDER_EMPTY_RESULT", "PROVIDER_TOOL_INVALID", "PROVIDER_TOOL_LIMIT", "RUNTIME_PROFILE_UNSUPPORTED", "RUNTIME_INPUT_INVALID", "RUNTIME_INPUT_TOO_LARGE", "RUNTIME_MCP_UNAVAILABLE", "RUNTIME_UNAVAILABLE", "RUNTIME_LIMIT_EXCEEDED", "RUNTIME_ARTIFACT_INVALID":
 		return true
 	default:
 		return false
@@ -2033,12 +2132,14 @@ func (repository *Repository) recordChildCallback(ctx context.Context, tx pgx.Tx
 }
 
 func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, tx pgx.Tx, scope scope, parentNodeID, projectID string) (bool, error) {
-	var parentRunID, rootRunID, agentID, displayName, role, sessionID, agentRef, workflowVersionID string
+	var parentRunID, rootRunID, agentID, displayName, role, sessionID, agentRef, workflowVersionID, originStepKey, originNodeRef string
+	var originHumanGate, requiredContinuation bool
 	var attempt int32
+	var callbackContext []byte
 	err := tx.QueryRow(ctx, queryRuntimeCallbackResolveContinuation, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
 		"parent_node_id":  parentNodeID,
-	}).Scan(&parentRunID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID)
+	}).Scan(&parentRunID, &rootRunID, &agentID, &attempt, &displayName, &role, &sessionID, &agentRef, &workflowVersionID, &originStepKey, &originHumanGate, &requiredContinuation, &originNodeRef, &callbackContext)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -2053,7 +2154,10 @@ func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, 
 	}).Scan(&lockedSessionID, &turnNumber); err != nil || lockedSessionID != sessionID {
 		return false, errs.ErrUnavailable
 	}
-	const continuationTask = "Continue the task using all completed child-agent results in the session context. Produce the final response and do not repeat completed delegations."
+	continuationTask, err := callbackContinuationTask(callbackContext)
+	if err != nil {
+		return false, err
+	}
 	turnRef, _ := newRef("trn")
 	var turnID string
 	if err := tx.QueryRow(ctx, queryRuntimeCallbackInsertContinuationTurn, pgx.StrictNamedArgs{
@@ -2069,6 +2173,25 @@ func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, 
 	}
 	if _, err := tx.Exec(ctx, queryRuntimeCallbackUpdateSession, pgx.StrictNamedArgs{"session_id": sessionID}); err != nil {
 		return false, errs.ErrUnavailable
+	}
+	if workflowVersionID != "" && requiredContinuation && !strings.HasPrefix(originStepKey, "workflow.coordinator.") {
+		// Published step сохраняет единственный canonical node/key. Как у
+		// owner CHANGES_REQUESTED, callback создаёт новый Turn и attempt,
+		// не придумывая coordinator alias и не меняя immutable launch origin.
+		tag, err := tx.Exec(ctx, queryCommandsResolvegateRequeuePredecessorNode, parentNodeID, turnID, truncate(continuationTask, 1000))
+		if err != nil {
+			return false, errs.ErrUnavailable
+		}
+		if tag.RowsAffected() != 1 {
+			return false, errs.ErrConflict
+		}
+		if _, err = tx.Exec(ctx, queryWorkflowLaunchResumeStepRun, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "run_id": parentRunID}); err != nil {
+			return false, errs.ErrUnavailable
+		}
+		if _, err = repository.emitRunEvent(ctx, tx, scope, projectID, rootRunID, originNodeRef, "TURN_QUEUED", originNodeRef, "", "", "", "i18n:CALLBACK_CONTINUATION_QUEUED", "RUNNING", "QUEUED"); err != nil {
+			return false, err
+		}
+		return true, nil
 	}
 	nodeRef, _ := newRef("nod")
 	workflowStepKey := ""
@@ -2087,7 +2210,7 @@ func (repository *Repository) scheduleCallbackContinuation(ctx context.Context, 
 		"agent_id":          agentID,
 		"turn_id":           turnID,
 		"workflow_step_key": workflowStepKey,
-		"human_gate_after":  false,
+		"human_gate_after":  requiredContinuation && originHumanGate,
 		"attempt":           attempt + 1,
 		"input_summary":     continuationTask,
 	}).Scan(&nodeID); err != nil {

@@ -19,7 +19,7 @@ func TestMailboxApprovalExceptionIsEmailOnly(t *testing.T) {
 			changed.Spec.Capabilities = append(changed.Spec.Capabilities[:0:0], original.Spec.Capabilities...)
 			changed.Spec.Capabilities[index].ApprovalPolicy = "NONE"
 			err := validate(&changed)
-			if (err == nil) != (key == "email") {
+			if (err == nil) != (key == "email" || original.CollaborativeWrite(capability)) {
 				t.Fatalf("NONE approval boundary for %s: %v", capability.Operation, err)
 			}
 		}
@@ -42,11 +42,11 @@ func TestLoadShippedDefinitions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(definitions) != 9 {
-		t.Fatalf("LoadShipped() returned %d definitions; want 9", len(definitions))
+	if len(definitions) != 10 {
+		t.Fatalf("LoadShipped() returned %d definitions; want 10", len(definitions))
 	}
 	github := definitions["github"]
-	if github.Digest == "" || github.Metadata.Version != "2.3.0" || github.Spec.Credential.SecretKey != "token" {
+	if github.Digest == "" || github.Metadata.Version != "2.5.0" || github.Spec.Credential.SecretKey != "token" {
 		t.Fatalf("GitHub definition metadata is incomplete: %#v", github)
 	}
 	for _, key := range []string{"github.repository.metadata.read", "github.issue.create", "github.issue.update"} {

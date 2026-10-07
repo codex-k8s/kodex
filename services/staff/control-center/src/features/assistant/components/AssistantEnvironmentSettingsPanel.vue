@@ -9,6 +9,7 @@ import RuntimeEnvironmentImageToolsSelector from "@/features/runtime/RuntimeEnvi
 import RuntimeResourceManagementLinks from "@/features/runtime/RuntimeResourceManagementLinks.vue";
 import RuntimeEnvironmentDraftActions from "@/features/runtime/RuntimeEnvironmentDraftActions.vue";
 import { useSessionStore } from "@/features/session/store";
+import { usePlatformStore } from "@/features/platform/store";
 import { useRoute, useRouter } from "vue-router";
 import {
   assertActiveRuntimeResourceIdentity,
@@ -34,6 +35,8 @@ import { asProblem, type AppProblem } from "@/shared/api/problem";
 import AsyncState from "@/shared/ui/AsyncState.vue";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
+import { useServerMessage } from "@/shared/ui/server-message";
+import { environmentDisplayField } from "@/features/runtime/environment-display-field";
 
 const props = defineProps<{
   agentRef: string;
@@ -47,6 +50,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ draftSaved: [draft: RuntimeEnvironmentDraft] }>();
 const session = useSessionStore();
+const platform = usePlatformStore();
 const route = useRoute();
 const router = useRouter();
 const view = ref<Awaited<ReturnType<typeof loadAgentRuntime>>>();
@@ -79,8 +83,34 @@ const input = reactive<RuntimeEnvironmentInput>({
     kubernetesAccess: "NONE",
   },
 });
+const localizeServerMessage = useServerMessage();
+const nameFieldValue = environmentDisplayField(
+  () => input.name,
+  (value) => {
+    input.name = value;
+  },
+  localizeServerMessage,
+);
+const descriptionFieldValue = environmentDisplayField(
+  () => input.description,
+  (value) => {
+    input.description = value;
+  },
+  localizeServerMessage,
+);
 const initial = ref("");
 const environment = computed(() => view.value?.environment);
+const consumerNames = computed<Record<string, string>>(() => {
+  const bootstrap = platform.bootstrap;
+  if (
+    props.resourceScope.kind !== "ORGANIZATION" ||
+    bootstrap?.organizationRef !== props.resourceScope.organizationRef ||
+    bootstrap.assistant.ref !== props.agentRef ||
+    !bootstrap.assistant.name
+  )
+    return {};
+  return { [bootstrap.assistant.ref]: bootstrap.assistant.name };
+});
 const normalized = computed(() => normalizeRuntimeEnvironmentInput(input));
 const validation = computed(() => validateEnvironmentInput(normalized.value));
 
@@ -201,7 +231,7 @@ onBeforeUnmount(reset);
           <label class="field">
             <span>{{ $t("common.name") }}</span>
             <input
-              v-model="input.name"
+              v-model="nameFieldValue"
               maxlength="120"
               :disabled="busy || !canEdit"
             />
@@ -210,7 +240,7 @@ onBeforeUnmount(reset);
             <span>{{ $t("common.description") }}</span>
             <VoiceTextarea
               class="assistant-environment-description"
-              v-model="input.description"
+              v-model="descriptionFieldValue"
               maxlength="1000"
               :disabled="busy || !canEdit"
             />
@@ -303,6 +333,7 @@ onBeforeUnmount(reset);
             : resourceScope
         "
         :environment="environment"
+        :consumer-names="consumerNames"
         :specification="normalized"
         :can-edit="canEdit"
         :valid="!validation.length && Boolean(imageCatalog) && imageAvailable"

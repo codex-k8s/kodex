@@ -10,6 +10,8 @@ for (const width of [390, 2900]) {
     const reads: string[] = [];
     const lists: URLSearchParams[] = [];
     const gate: OwnerGate = {
+      scopeKind: "PROJECT",
+      organizationRef: "org_synthetic",
       ref: "gate_addressed",
       version: 2,
       projectRef: "project_navigation",

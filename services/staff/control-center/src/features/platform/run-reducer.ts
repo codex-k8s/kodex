@@ -72,6 +72,15 @@ export function mergeRunGraph(
 
 function isConsistent(event: RunEvent): boolean {
   if (
+    event.serviceCode !== undefined &&
+    ![
+      "RUN_CANCELLED",
+      "RUN_NODE_CANCELLED",
+      "ASSISTANT_TURN_CANCELLED",
+    ].includes(event.serviceCode)
+  )
+    return false;
+  if (
     event.run.ref !== event.runRef ||
     event.run.lastEventSequence !== event.sequence ||
     event.run.graphRevision !== event.graphRevision

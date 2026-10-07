@@ -15,6 +15,7 @@ import (
 type capabilityGrant struct {
 	ref, key, connectionRef, definitionKey, definitionVersion, definitionDigest string
 	connectionName                                                              string
+	approvalPolicy                                                              string
 	version, connectionVersion                                                  int64
 	eligible                                                                    bool
 }
@@ -27,7 +28,7 @@ func (repository *Repository) effectiveIntegrationCapabilities(ctx context.Conte
 	grants := []capabilityGrant{}
 	for rows.Next() {
 		var grant capabilityGrant
-		if rows.Scan(&grant.ref, &grant.version, &grant.key, &grant.connectionRef, &grant.connectionVersion, &grant.definitionKey, &grant.definitionVersion, &grant.definitionDigest, &grant.connectionName, &grant.eligible) != nil {
+		if rows.Scan(&grant.ref, &grant.version, &grant.key, &grant.connectionRef, &grant.connectionVersion, &grant.definitionKey, &grant.definitionVersion, &grant.definitionDigest, &grant.connectionName, &grant.eligible, &grant.approvalPolicy) != nil {
 			rows.Close()
 			return nil, errs.ErrUnavailable
 		}
@@ -53,7 +54,7 @@ func (repository *Repository) effectiveIntegrationCapabilities(ctx context.Conte
 			return nil, err
 		}
 		capability, known := definition.Capability(grant.key)
-		if !known || !capability.CallableByAgent() {
+		if !known || !capability.CallableByAgent() || !capability.AllowsApprovalPolicy(grant.approvalPolicy) {
 			item.Reason = capabilityPackageUnavailable
 			items = append(items, item)
 			continue
@@ -90,13 +91,13 @@ func (repository *Repository) agentCapabilityAuthority(ctx context.Context, tx p
 	count := 0
 	for rows.Next() {
 		var grant capabilityGrant
-		if rows.Scan(&grant.ref, &grant.version, &grant.key, &grant.connectionRef, &grant.connectionVersion, &grant.definitionKey, &grant.definitionVersion, &grant.definitionDigest, &grant.connectionName, &grant.eligible) != nil {
+		if rows.Scan(&grant.ref, &grant.version, &grant.key, &grant.connectionRef, &grant.connectionVersion, &grant.definitionKey, &grant.definitionVersion, &grant.definitionDigest, &grant.connectionName, &grant.eligible, &grant.approvalPolicy) != nil {
 			rows.Close()
 			return nil, nil, errs.ErrUnavailable
 		}
 		count++
 		if grant.eligible {
-			grants = append(grants, map[string]string{"ref": grant.ref, "grantVersion": strconv.FormatInt(grant.version, 10), "connectionRef": grant.connectionRef, "connectionName": grant.connectionName, "connectionVersion": strconv.FormatInt(grant.connectionVersion, 10), "definitionKey": grant.definitionKey, "definitionVersion": grant.definitionVersion, "definitionDigest": grant.definitionDigest, "capabilityKey": grant.key})
+			grants = append(grants, map[string]string{"ref": grant.ref, "grantVersion": strconv.FormatInt(grant.version, 10), "approvalPolicy": grant.approvalPolicy, "connectionRef": grant.connectionRef, "connectionName": grant.connectionName, "connectionVersion": strconv.FormatInt(grant.connectionVersion, 10), "definitionKey": grant.definitionKey, "definitionVersion": grant.definitionVersion, "definitionDigest": grant.definitionDigest, "capabilityKey": grant.key})
 		}
 	}
 	rows.Close()
@@ -137,7 +138,7 @@ func (repository *Repository) runtimeCapabilityAuthority(ctx context.Context, tx
 			return nil, nil, err
 		}
 		capability, ok := definition.Capability(grant["capabilityKey"])
-		if !ok || !capability.CallableByAgent() {
+		if !ok || !capability.CallableByAgent() || !capability.AllowsApprovalPolicy(grant["approvalPolicy"]) {
 			continue
 		}
 		target, err := repository.resolveAccessTarget(ctx, tx, current.organizationID, entity.AccessScope{Kind: "RESOURCE_INSTANCE", ResourceKind: "INTEGRATION", ResourceRef: grant["connectionRef"]})

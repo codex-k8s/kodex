@@ -1,6 +1,13 @@
 import { readFileSync } from "node:fs";
+import { renderToString } from "@vue/server-renderer";
+import { createSSRApp, defineComponent, h } from "vue";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { i18n } from "@/app/i18n";
+import type { Run } from "@/shared/api/generated/openapi/types.gen";
+import HomeAttentionCenter from "./HomeAttentionCenter.vue";
+
+vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
 
 const source = readFileSync(
   new URL("./HomeAttentionCenter.vue", import.meta.url),
@@ -36,7 +43,90 @@ describe("HomeAttentionCenter states", () => {
     expect(source).toContain("useAdaptiveCursorPageSize");
     expect(source).toContain("useCursorInfiniteScroll");
     expect(template).toContain('ref="providerSentinel"');
-    expect(template).toContain("providerNextPageToken || providerLoadingMore");
+    expect(template).toContain("visibleLimit < total");
     expect(template).toContain("emit('retryMoreProviders', providerPageSize)");
+  });
+
+  it("оставляет не больше пяти компактных строк в viewport без пустого footer", () => {
+    const bodyStyle = source.match(/\.home-attention__body \{([^}]+)\}/)?.[1];
+    const itemStyle = source.match(/\.home-attention__item \{([^}]+)\}/)?.[1];
+    const sentinelStyle = source.match(
+      /\.home-attention__provider-sentinel \{([^}]+)\}/,
+    )?.[1];
+    expect(bodyStyle).toContain("max-height: min(420px, 55vh)");
+    expect(bodyStyle).toContain("overflow-y: auto");
+    expect(itemStyle).toContain("min-height: 84px");
+    expect(sentinelStyle).toContain("padding: 0");
+    expect(template).not.toContain("<footer");
+    expect(source).not.toContain("setInterval");
+  });
+
+  it("ограничивает первый render пятью записями, сохраняя общий счётчик", async () => {
+    const failedRuns = Array.from(
+      { length: 15 },
+      (_, index): Run => ({
+        ref: `run_${String(index)}`,
+        version: 1,
+        rootRunRef: `run_${String(index)}`,
+        sessionRef: `session_${String(index)}`,
+        activitySummary: "Ошибка запуска",
+        target: {
+          type: "AGENT",
+          ref: "agent_example",
+          displayName: "Помощник",
+          version: 1,
+        },
+        title: `Запуск ${String(index)}`,
+        titleSource: "SERVER_DEFAULT",
+        state: "FAILED",
+        source: "CONTROL_CENTER",
+        initiator: { ref: "owner", displayName: "Владелец" },
+        attempt: 1,
+        graphRevision: 1,
+        lastEventSequence: 1,
+        usage: {
+          totalTokens: 0,
+          inputTokens: 0,
+          cachedInputTokens: 0,
+          cacheWriteInputTokens: 0,
+          outputTokens: 0,
+          reasoningOutputTokens: 0,
+          modelContextWindow: 0,
+        },
+        artifactRefs: [],
+        gateRefs: [],
+        nextActions: [],
+        createdAt: "2026-10-04T11:00:00Z",
+      }),
+    );
+    const app = createSSRApp({
+      render: () =>
+        h(HomeAttentionCenter, {
+          gates: [],
+          failedRuns,
+          providerAccounts: [],
+          projects: [],
+          gatesReady: true,
+          runsReady: true,
+          providerReady: true,
+        }),
+    });
+    app.use(i18n);
+    app.component(
+      "RouterLink",
+      defineComponent({
+        setup:
+          (_, { slots }) =>
+          () =>
+            h("a", slots.default?.()),
+      }),
+    );
+    const html = await renderToString(app);
+    expect((html.match(/class="home-attention__item"/g) ?? []).length).toBe(5);
+    expect(html).toMatch(/home-attention__count[^>]*>15</);
+    expect(source).toContain("visibleLimit.value += 5");
+    expect(source).toContain("max-height: min(420px, 55vh)");
+    expect(source).toContain("overflow-y: auto");
+    expect(html).toContain('tabindex="0"');
   });
 });

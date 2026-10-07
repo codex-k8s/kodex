@@ -71,7 +71,7 @@ func testManagedRuntimeCapabilityAuthority(t *testing.T, ctx context.Context, re
 		t.Fatal("second connection readiness was not materialized")
 	}
 	for _, connection := range []entity.IntegrationConnection{allowed, *other} {
-		if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "managed-cap-grant-" + connection.Ref, ExpectedVersion: &connection.Version}, Payload: command.IntegrationGrantInput{ConnectionRef: connection.Ref, AgentRef: agent.Ref, CapabilityKey: "synthetic.journal.write", Enabled: true}}); err != nil {
+		if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "managed-cap-grant-" + connection.Ref, ExpectedVersion: &connection.Version}, Payload: command.IntegrationGrantInput{ApprovalPolicy: "HUMAN_EACH_EFFECT", ConnectionRef: connection.Ref, AgentRef: agent.Ref, CapabilityKey: "synthetic.journal.write", Enabled: true}}); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -4,15 +4,34 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
-for (const sudo of [false, true]) test(`runner seed uses exact ${sudo ? 'sudo k3s' : 'ordinary kubectl'} prefix through port-forward`, () => {
+for (const component of ['runner', 'session-archive', 'role-image-builder']) for (const sudo of [false, true]) test(`${component} seed uses exact ${sudo ? 'sudo k3s' : 'ordinary kubectl'} prefix through port-forward`, () => {
   const root=mkdtempSync(join(tmpdir(),'kodex-seed-prefix-'));
   try {
     const bin=join(root,'bin'), state=join(root,'state'), log=join(root,'calls.jsonl');
-    mkdirSync(bin); mkdirSync(state); mkdirSync(join(state,'cache'));
+    mkdirSync(bin); mkdirSync(state); mkdirSync(join(state,'cache'), {mode:0o700});
     writeFileSync(join(state,'image-supply-chain-tools-docker-tag'),`kodex-local/image-admission-tools:${'a'.repeat(64)}`);
     writeFileSync(join(state,'agent-runner-image'),`registry.invalid/runner@sha256:${'b'.repeat(64)}`);
     writeFileSync(join(state,'cache','agent-runner-fixture.oci.tar'),'fixture');
+    if (component !== 'runner') {
+      const platformCache=component==='role-image-builder'?join(state,'cache','image-supply-chain'):join(state,'cache');
+      if(component==='role-image-builder')mkdirSync(platformCache,{mode:0o700});
+      const oci=join(root,'oci'); mkdirSync(oci); mkdirSync(join(oci,'blobs')); mkdirSync(join(oci,'blobs','sha256'));
+      const blob=(value,mediaType)=>{const bytes=Buffer.from(value),sha=createHash('sha256').update(bytes).digest('hex');writeFileSync(join(oci,'blobs','sha256',sha),bytes);return {mediaType,digest:`sha256:${sha}`,size:bytes.length};};
+      const layer=blob('preserved fixture layer','application/vnd.oci.image.layer.v1.tar');
+      const config=blob(JSON.stringify({os:'linux',architecture:'amd64',config:{Entrypoint:[`/usr/local/bin/${component}`]}}),'application/vnd.oci.image.config.v1+json');
+      const manifest=blob(JSON.stringify({schemaVersion:2,config,layers:[layer]}),'application/vnd.oci.image.manifest.v1+json');
+      manifest.annotations={'org.opencontainers.image.ref.name':`local-${'c'.repeat(64)}`,'io.containerd.image.name':`registry.local.kodex/kodex/${component}:local-${'c'.repeat(64)}`};
+      writeFileSync(join(oci,'index.json'),JSON.stringify({schemaVersion:2,manifests:[manifest]}));
+      writeFileSync(join(oci,'oci-layout'),JSON.stringify({imageLayoutVersion:'1.0.0'}));
+      writeFileSync(join(state,`${component}-image`),`registry.local.kodex/kodex/${component}@${manifest.digest}`);
+      const archive=spawnSync('/usr/bin/tar',['-cf',join(platformCache,`${component}-${'c'.repeat(64)}.oci.tar`),'-C',oci,'index.json','oci-layout','blobs'],{encoding:'utf8'});
+      assert.equal(archive.status,0,archive.stderr);
+      // Отдельный archive consumer не зависит от runner cache/state.
+      rmSync(join(state,'agent-runner-image'));
+      rmSync(join(state,'cache','agent-runner-fixture.oci.tar'));
+    }
     const stub=`#!${process.execPath}
 const fs=require('node:fs'),path=require('node:path');
 let name=path.basename(process.argv[1]),args=process.argv.slice(2),prefix=[];
@@ -28,7 +47,7 @@ if(name==='kubectl'){
 else if(name==='tar')process.stdout.write(JSON.stringify({manifests:[{digest:'sha256:'+'b'.repeat(64)}]}));
 `;
     for(const name of ['sudo','kubectl','docker','tar','yq'])writeFileSync(join(bin,name),stub,{mode:0o755});
-    const result=spawnSync('bash',['tools/dev/seed-local-image-supply-chain.sh','--context','fixture','--state-directory',state,'--component','runner','--readback-only','--evidence',join(root,'evidence.jsonl'),...(sudo?['--k3s-sudo']:[])],{env:{...process.env,PATH:`${bin}:${process.env.PATH}`,CALLS:log,TMPDIR:root},encoding:'utf8',timeout:10000});
+    const result=spawnSync('bash',['tools/dev/seed-local-image-supply-chain.sh','--context','fixture','--state-directory',state,'--component',component,'--readback-only','--evidence',join(root,'evidence.jsonl'),...(sudo?['--k3s-sudo']:[])],{env:{...process.env,PATH:`${bin}:${process.env.PATH}`,CALLS:log,TMPDIR:root},encoding:'utf8',timeout:10000});
     assert.notEqual(result.status,0,'stub port-forward must stop before a real registry operation');
     const raw=readFileSync(log,'utf8'), calls=raw.trim().split('\n').map(JSON.parse), kube=calls.filter(item=>item.name==='kubectl');
     assert.ok(kube.some(item=>item.args.includes('config')));

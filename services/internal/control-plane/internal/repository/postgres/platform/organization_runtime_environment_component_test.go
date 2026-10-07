@@ -91,8 +91,12 @@ func TestOrganizationRuntimeEnvironmentComponent(t *testing.T) {
 	if err != nil || view.Environment.ScopeKind != "ORGANIZATION" || view.Environment.OrganizationRef == "" || view.Environment.CurrentVersion.Image.ArtifactRef == "" {
 		t.Fatalf("exact organization bootstrap environment: %v", err)
 	}
+	t.Run("initial SYSTEM binding is selected and pinned by owner publication", func(t *testing.T) {
+		testInitialSystemEnvironmentPublication(t, ctx, repository, service, owner, s, assistant.Ref)
+	})
 	spec := entity.RuntimeEnvironmentDraftSpecification{Name: "Organization environment", ImageArtifactRef: view.Environment.CurrentVersion.Image.ArtifactRef,
 		Values: []entity.RuntimeEnvironmentValue{{Name: "MODE", Value: "safe"}}, Policy: runtimecontract.DefaultRuntimeEnvironmentPolicy()}
+	spec.Policy.Resources.WorkspaceLimits = &runtimecontract.RuntimeWorkspaceLimits{MaxBytes: 4096, MaxFiles: 10}
 	invoke := func(p value.Principal, kind command.Kind, key string, version *int64, payload command.RuntimeEnvironmentDraftInput) (command.Result, error) {
 		return service.Execute(ctx, command.Command{Kind: kind, Principal: p, Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: version}, Payload: payload})
 	}
@@ -126,8 +130,14 @@ func TestOrganizationRuntimeEnvironmentComponent(t *testing.T) {
 	if err != nil || replay.RuntimeEnvironment.Ref != published.RuntimeEnvironment.Ref {
 		t.Fatalf("organization publication replay: %v", err)
 	}
-	if _, err := service.GetRuntimeEnvironment(ctx, owner, published.RuntimeEnvironment.Ref); err != nil {
+	readEnvironment, err := service.GetRuntimeEnvironment(ctx, owner, published.RuntimeEnvironment.Ref)
+	if err != nil {
 		t.Fatalf("published organization read: %v", err)
+	}
+	limits := readEnvironment.CurrentVersion.Policy.Resources.WorkspaceLimits
+	if limits == nil || limits.MaxBytes != 4096 || limits.MaxFiles != 10 ||
+		readEnvironment.CurrentVersion.Policy.ResourcesDigest != published.RuntimeEnvironment.CurrentVersion.Policy.ResourcesDigest {
+		t.Fatal("published immutable workspace quota was not preserved")
 	}
 	if _, err := service.GetRuntimeEnvironmentDraft(ctx, owner, draft.Ref); err != nil {
 		t.Fatalf("published draft read: %v", err)

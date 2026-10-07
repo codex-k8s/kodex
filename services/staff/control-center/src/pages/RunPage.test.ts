@@ -9,6 +9,7 @@ import { usePlatformStore } from "@/features/platform/store";
 import RunPage from "@/pages/RunPage.vue";
 import type { Run } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem } from "@/shared/api/problem";
+import { serverTokenTranslations } from "@/shared/ui/server-message-catalog";
 
 beforeAll(() => {
   vi.stubGlobal("window", {
@@ -25,6 +26,8 @@ function messages() {
   return {
     serverMessages: {
       RUN_COORDINATION_ROLE: "Координатор запуска",
+      REQUIRED_WORKFLOW_FAILED:
+        serverTokenTranslations.REQUIRED_WORKFLOW_FAILED[0],
     },
     common: {
       status: "Состояние",
@@ -45,6 +48,11 @@ function messages() {
       title: "Запуски",
       queued: "Задача поставлена в очередь",
       graph: "Граф выполнения",
+      graphNodes: "Узлы: {count}",
+      graphEdges: "Связи: {count}",
+      runtimeProgress: {
+        workloadScheduled: "Задание передано исполнителю",
+      },
       activity: "Ход работы",
       context: "Контекст узла",
       workspaceTools: "Инструменты запуска",
@@ -219,7 +227,7 @@ describe("RunPage runtime presentation", () => {
         },
       },
     };
-    platform.problems.run = asProblem({
+    platform.runProblems[currentRun.ref] = asProblem({
       status: 503,
       code: "RUN_EVENTS_UNAVAILABLE",
       title: "История событий временно недоступна",
@@ -247,6 +255,12 @@ describe("RunPage runtime presentation", () => {
     expect(html).toContain("run-page-body");
     expect(html).toContain("run-workspace");
     expect(html).toContain("run-canvas-summary");
+    expect(html).toContain("run-canvas-summary__heading");
+    expect(html).toMatch(
+      /class="run-canvas-summary__toggle[^"]*"[^>]*aria-expanded="false"[^>]*aria-controls="run-canvas-summary-details"/,
+    );
+    expect(html).toContain('id="run-canvas-summary-details"');
+    expect(html).not.toContain("run-canvas-summary__details--expanded");
     expect(html).toContain("История запуска завершена");
     expect(html).toContain("· #1");
     expect(html).not.toContain("Данные поступают в реальном времени");
@@ -276,5 +290,21 @@ describe("RunPage runtime presentation", () => {
     const noEventsHtml = await renderToString(noEventsApp);
     expect(noEventsHtml).toContain("История запуска завершена");
     expect(noEventsHtml).not.toContain("· #");
+
+    currentRun.state = "FAILED";
+    currentRun.safeErrorCode = "REQUIRED_WORKFLOW_FAILED";
+    currentRun.safeErrorMessage = "REQUIRED_WORKFLOW_FAILED";
+    const failedApp = createSSRApp(RunPage);
+    failedApp.use(pinia);
+    failedApp.use(router);
+    failedApp.use(
+      createI18n({ legacy: false, locale: "ru", messages: { ru: messages() } }),
+    );
+    const failedHtml = await renderToString(failedApp);
+    expect(failedHtml).toMatch(
+      /Запуск завершён с ошибкой: обязательный дочерний процесс не выполнен\. <code[^>]*>REQUIRED_WORKFLOW_FAILED<\/code>/,
+    );
+    expect(failedHtml).not.toContain("REQUIRED_WORKFLOW_FAILED <code>");
+    expect(failedHtml).not.toContain("i18n:REQUIRED_WORKFLOW_FAILED");
   });
 });

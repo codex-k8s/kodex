@@ -103,7 +103,9 @@ spec:
                 signerIdentity: {type: string, minLength: 1}
                 admissionOwnerIdentity: {type: string, minLength: 1}
                 promotionIdentity: {type: string, minLength: 1}
-                requiredTools: {type: string, minLength: 1}
+                requiredTools:
+                  type: string
+                  enum: ['base64,cmp,cosign,grype,image-admission-bridge,image-tool-inventory-validator,image-vulnerability-report-validator,jq,regctl,sha256sum,syft,tr,wc']
               x-kubernetes-validations:
                 - rule: self == oldSelf
                   message: Image admission policy parameters are immutable.
@@ -144,4 +146,4 @@ spec:
   signerIdentity: kodex-image-signer
   admissionOwnerIdentity: kodex-image-admission-owner
   promotionIdentity: kodex-image-promotion-writer
-  requiredTools: base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft,wc
+  requiredTools: base64,cmp,cosign,grype,image-admission-bridge,image-tool-inventory-validator,image-vulnerability-report-validator,jq,regctl,sha256sum,syft,tr,wc

@@ -3,12 +3,12 @@ UPDATE control_plane.assistant_conversations
 SET version = version + 1,
     latest_plan_id = NULL,
     title = CASE
-      WHEN title_source = 'SERVER_DEFAULT' AND title = 'i18n:NEW_ASSISTANT_CONVERSATION'
-      THEN left(regexp_replace(trim($8), '[[:space:]]+', ' ', 'g'), 80)
+      WHEN title_source = 'SERVER_DEFAULT' AND title = 'i18n:NEW_ASSISTANT_CONVERSATION' AND $8 <> ''
+      THEN $8
       ELSE title
     END,
     title_revision = CASE
-      WHEN title_source = 'SERVER_DEFAULT' AND title = 'i18n:NEW_ASSISTANT_CONVERSATION'
+      WHEN title_source = 'SERVER_DEFAULT' AND title = 'i18n:NEW_ASSISTANT_CONVERSATION' AND $8 <> ''
       THEN title_revision + 1
       ELSE title_revision
     END,

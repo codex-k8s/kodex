@@ -4,8 +4,8 @@ title: Локальный запуск Kodex
 type: guide
 status: approved
 owner: manager
-version: 1.0.1
-updated: 2026-09-16
+version: 1.0.2
+updated: 2026-10-07
 ---
 
 # Локальный запуск
@@ -103,6 +103,47 @@ loopback API. Сам service запускает узкий reconcile; если A
 После установки отдельно проверяют `systemctl --user list-timers
 kodex-local-ingress-reconcile.timer`, readback `reconcile-local-ingress.sh` и
 HTTPS без `-k`. Фактический reboot-тест остаётся отдельной проверкой.
+
+## Защищённый ввод credential интеграции
+
+После отдельного разрешения владельца helper настраивает только credential
+уже созданного точного Context7/GitHub connection. Перед запуском штатным
+owner GET подтверждают ref, version, package pins, `credentialsConfigured=false`
+и `CONFIGURE_CREDENTIAL`. Ключи SSO и выбранной интеграции helper читает только
+из `/home/s/.codex/agent-secrets.env`; значения не передают через CLI.
+
+Для Node24 локальный HTTPS с установленным выше системным CA требует явного
+`NODE_USE_SYSTEM_CA=1` при запуске Node. Это включает системное доверие вместе
+с bundled CA и сохраняет проверки TLS/hostname. Успешный Chromium SSO отдельно
+не доказывает, что Node fetch использует то же хранилище. Параметр применяют к
+Node-процессу; секреты или дополнительное окружение Chromium не наследует.
+
+Из корня клона, с несекретными переменными из свежего GET:
+
+```bash
+NODE_USE_SYSTEM_CA=1 node tools/dev/protected-secret-input.mjs \
+  --mode integration-credential \
+  --origin https://control.127.0.0.1.nip.io \
+  --identity-origin https://sso.127.0.0.1.nip.io \
+  --connection-ref "$connection_ref" --expected-version "$connection_version" \
+  --definition-key github --secret-key CODEX_GITHUB_AGENT_INTEGRATION_TOKEN \
+  --idempotency-key "$credential_operation_uuid" \
+  --confirm CONFIGURE_EXACT_INTEGRATION_CREDENTIAL
+```
+
+Для Context7 выбирают только `--definition-key context7 --secret-key CONTEXT7_API_KEY`.
+UI-копия GitHub требует также всех четырёх exact managed pins по штатному
+owner history/impact; отсутствие этих pins не разрешает копию автоматически.
+`PASS` включает один PUT с OCC/idempotency, receipt и fresh readback.
+Отказ выводит только `status`, прежний закрытый `code` и локальный `phase`:
+`PREFLIGHT|SSO|BOOTSTRAP|CONNECTION|CATALOG|CREDENTIAL|READBACK`.
+`BOOTSTRAP` включает первый owner-session metadata GET до bootstrap API.
+`UNKNOWN` сохраняет прежний запрет повторять mutation до штатного readback.
+TLS verification не отключают, origins и credential scope не расширяют.
+
+Node24 CLI и `NODE_USE_SYSTEM_CA=1` проверены через Context7
+`/websites/nodejs_latest-v24_x_api` и
+[официальный Node CLI](https://nodejs.org/docs/latest-v24.x/api/cli.html#node_use_system_ca1).
 
 ## Исходники hot reload
 

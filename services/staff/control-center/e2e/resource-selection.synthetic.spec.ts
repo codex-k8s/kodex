@@ -29,6 +29,7 @@ const capability: IntegrationCapability = {
   approvalRequired: false,
   operation: "READ",
   approvalPolicy: "NONE",
+  allowedApprovalPolicies: ["NONE"],
   resourceKind: "GITHUB_REPOSITORY",
   inputFields: [],
 };

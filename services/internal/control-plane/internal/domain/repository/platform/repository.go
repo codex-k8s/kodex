@@ -355,6 +355,8 @@ type Repository interface {
 	ListIntegrationGrantProjectCandidates(context.Context, value.Principal, query.IntegrationCandidates) (entity.IntegrationProjectCandidates, error)
 	ListIntegrationGrantRecipientCandidates(context.Context, value.Principal, query.IntegrationCandidates) (entity.IntegrationRecipientCandidates, error)
 	ListIntegrationGrantCapabilityCandidates(context.Context, value.Principal, query.IntegrationCandidates) (entity.IntegrationCapabilityCandidates, error)
+	GetSystemAssistantIntegrationGrantCandidates(context.Context, value.Principal, string, string, query.Page) (entity.SystemAssistantIntegrationGrantCandidates, error)
+	GetProjectAssistantIntegrationGrantCandidates(context.Context, value.Principal, string, string, string, query.Page) (entity.ProjectAssistantIntegrationGrantCandidates, error)
 	GetIntegrationConnection(context.Context, value.Principal, string) (entity.IntegrationConnection, error)
 	GetSystemAssistant(context.Context, value.Principal) (entity.SystemAssistant, error)
 	GetProjectAssistant(context.Context, value.Principal, string) (entity.ProjectAssistantProfile, error)

@@ -38,7 +38,14 @@ for (const width of [1440, 390]) {
           admissionVerdict: "ACCEPTED",
           promotionState: "PENDING",
           promotionRequested: true,
-          tools: [],
+          declaredTools: [],
+          verifiedToolInventory: {
+            status: "UNAVAILABLE",
+            sha256: "",
+            imageDigest: "",
+            provenanceSha256: "",
+            platforms: [],
+          },
         };
         let promotionState: RoleImageArtifact["promotionState"] = "PENDING";
         let reads = 0;
@@ -442,6 +449,19 @@ for (const width of [1440, 390]) {
           await page
             .locator('input[name^="assistant-role-image-name-"]')
             .fill("Образ помощника после правки");
+          const dockerfile = page.locator(
+            ".assistant-plan-dockerfile .cm-editor",
+          );
+          const editorBounds = await dockerfile.boundingBox();
+          expect(editorBounds?.height).toBeGreaterThanOrEqual(240);
+          expect(editorBounds?.height).toBeLessThanOrEqual(
+            width === 390 ? 300 : 360,
+          );
+          expect(
+            await dockerfile
+              .locator(".cm-scroller")
+              .evaluate((element) => getComputedStyle(element).overflowY),
+          ).toBe("auto");
         }
         const save = page.getByRole("button", {
           name: "Сохранить новую ревизию",

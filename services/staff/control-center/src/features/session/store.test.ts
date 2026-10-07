@@ -1,5 +1,7 @@
 import { createPinia, disposePinia, setActivePinia, type Pinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { watch } from "vue";
+import type { BootstrapState } from "@/shared/api/generated/openapi/types.gen";
 import type { OwnerSessionMetadata } from "@/shared/api/generated/openapi/types.gen";
 
 const api = vi.hoisted(() => ({
@@ -31,6 +33,43 @@ vi.mock("@/shared/api/problem", () => ({
   unwrap: async (request: Promise<unknown>) => await request,
 }));
 import { useSessionStore } from "./store";
+import {
+  ingressProxyRecoveryCode,
+  ingressProxyRecoveryKey,
+} from "@/shared/api/proxy-session-recovery";
+
+test("proxy recovery сохраняет BFF identity и durable receipts до validated readback", async () => {
+  const session = useSessionStore();
+  await session.probe();
+  const identity = session.connectionIdentity;
+  values.set(ingressProxyRecoveryKey, "1");
+  values.set("existing-unknown-receipt", "receipt-fixture");
+  api.getOwnerSession.mockRejectedValueOnce({
+    code: ingressProxyRecoveryCode,
+    kind: "unavailable",
+    retryable: false,
+  });
+  await session.refreshMetadata();
+  expect(session.phase).toBe("authenticated");
+  expect(session.connectionIdentity).toBe(identity);
+  expect(values.get(ingressProxyRecoveryKey)).toBe("1");
+  expect(values.get("existing-unknown-receipt")).toBe("receipt-fixture");
+  await session.refreshMetadata();
+  expect(session.phase).toBe("authenticated");
+  expect(values.has(ingressProxyRecoveryKey)).toBe(false);
+  expect(values.get("existing-unknown-receipt")).toBe("receipt-fixture");
+});
+
+test("не сбрасывает proxy loop guard при невалидном metadata", async () => {
+  const session = useSessionStore();
+  await session.probe();
+  values.set(ingressProxyRecoveryKey, "1");
+  api.getOwnerSession.mockResolvedValueOnce({
+    data: metadata({ version: 0 }),
+  });
+  await session.refreshMetadata();
+  expect(values.get(ingressProxyRecoveryKey)).toBe("1");
+});
 
 const state = "a".repeat(43);
 const authorizationUrl = `https://identity.example.test/auth?state=${state}`;
@@ -135,6 +174,57 @@ afterEach(() => {
 });
 
 describe("BFF session lifecycle", () => {
+  test("материализует проверенный bootstrap до authenticated", async () => {
+    const session = useSessionStore();
+    const observed: Array<string | undefined> = [];
+    const stop = watch(
+      () => session.phase,
+      (phase) => {
+        if (phase === "authenticated")
+          observed.push(session.authenticatedBootstrap?.organizationRef);
+      },
+      { flush: "sync" },
+    );
+    await session.probe();
+    expect(observed).toEqual(["org_synthetic"]);
+    expect(session.authenticatedBootstrap?.organizationRef).toBe(
+      "org_synthetic",
+    );
+    session.invalidate();
+    expect(session.authenticatedBootstrap).toBeUndefined();
+    stop();
+  });
+
+  test("поздний bootstrap отменённого probe не принимает новую owner-сессию", async () => {
+    let resolve!: (value: { data: BootstrapState; etag: string }) => void;
+    api.getBootstrapState.mockImplementationOnce(
+      () =>
+        new Promise((ready) => {
+          resolve = ready;
+        }),
+    );
+    const session = useSessionStore();
+    const pending = session.probe();
+    session.invalidate();
+    resolve({
+      data: { organizationRef: "org_foreign" } as BootstrapState,
+      etag: '"7"',
+    });
+    await pending;
+    expect(session.phase).toBe("unauthenticated");
+    expect(session.authenticatedBootstrap).toBeUndefined();
+  });
+
+  test("bootstrap другой sessionRevision не становится anchor", async () => {
+    api.getBootstrapState.mockResolvedValueOnce({
+      data: { organizationRef: "org_foreign" },
+      etag: '"8"',
+    });
+    const session = useSessionStore();
+    await session.probe();
+    expect(session.phase).toBe("error");
+    expect(session.authenticatedBootstrap).toBeUndefined();
+  });
   test("две вкладки делят один refresh и завершаются на исходной absolute границе", async () => {
     const absolute = Date.now() + 60_000;
     const initial = metadata({

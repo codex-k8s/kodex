@@ -5,12 +5,14 @@ import type {
   AssistantContextDescriptor,
   AssistantConversation,
   AssistantPlan,
+  AssistantPlanReceipt,
   SystemAssistant,
   ListAssistantConversationsResponse,
   ProjectAssistantProfile,
   Agent,
 } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem } from "@/shared/api/problem";
+import { resetOwnerRequests } from "@/shared/api/owner-lifetime";
 
 const createConversationMock = vi.hoisted(() => vi.fn());
 const appendTurnMock = vi.hoisted(() => vi.fn());
@@ -41,6 +43,7 @@ vi.mock("@/features/assistant/api", () => ({
 }));
 
 import { useAssistantStore } from "@/features/assistant/store";
+import { assistantRoleImageBuildTarget } from "@/features/assistant/model";
 
 const context: AssistantContextDescriptor = {
   route: "/projects/prj_sales",
@@ -98,6 +101,7 @@ function conversation(value: AssistantPlan = plan()): AssistantConversation {
     projectRef: "prj_sales",
     turns: [
       {
+        source: { origin: "ORDINARY" as const },
         ref: "trn_sales",
         sequence: 1,
         role: "ASSISTANT",
@@ -113,6 +117,7 @@ function conversation(value: AssistantPlan = plan()): AssistantConversation {
 
 function userTurn(state: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED") {
   return {
+    source: { origin: "ORDINARY" as const },
     ref: "trn_user",
     sequence: 2,
     role: "USER" as const,
@@ -187,6 +192,366 @@ describe("assistant workspace store", () => {
     turns: [],
   });
 
+  it("разрешает новый диалог при фоновой сверке старой страницы, не подтверждая выбранное сообщение", async () => {
+    const selected = projectConversation();
+    const older = { ...selected, ref: "cnv_older_project" };
+    const pending = deferred<ListAssistantConversationsResponse>();
+    readConversationsMock.mockReturnValue(pending.promise);
+    const store = useAssistantStore();
+    store.setContext(context, profile.projectRef);
+    store.assistantScope = "PROJECT";
+    store.projectAssistant = profile;
+    store.projectAssistantAgent = projectAgent;
+    store.assistant = systemAssistant();
+    store.conversations = [selected, older];
+    store.selectedRef = selected.ref;
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [selected],
+      profile.projectRef,
+      "ws-partial",
+    );
+    expect(store.loading).toBe(true);
+    expect(store.historyRefreshing).toBe(true);
+    expect(store.conversationCreationReady).toBe(true);
+    expect(store.selectedRef).toBe(selected.ref);
+    store.projectAssistantAgent = undefined;
+    expect(store.conversationCreationReady).toBe(false);
+    store.projectAssistantAgent = { ...projectAgent, projectRef: "prj_other" };
+    expect(store.conversationCreationReady).toBe(false);
+    store.projectAssistantAgent = projectAgent;
+    store.projectAssistant = { ...profile, state: "DISABLED" };
+    expect(store.conversationCreationReady).toBe(false);
+    store.projectAssistant = profile;
+    store.busy = true;
+    expect(store.conversationCreationReady).toBe(false);
+    store.busy = false;
+    pending.resolve({ items: [selected, older] });
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+    expect(store.historyRefreshing).toBe(false);
+    expect(store.conversationCreationReady).toBe(true);
+  });
+
+  it("не снимает initial loading barrier из-за частичного WS во время owner load", async () => {
+    const selected = conversation();
+    const older = { ...selected, ref: "cnv_older_initial" };
+    const initial = deferred<ListAssistantConversationsResponse>();
+    const refresh = deferred<ListAssistantConversationsResponse>();
+    readConversationsMock
+      .mockReturnValueOnce(initial.promise)
+      .mockReturnValueOnce(refresh.promise);
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    store.conversations = [selected, older];
+    store.selectedRef = selected.ref;
+    const loading = store.load(context, "prj_sales");
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [selected],
+      "prj_sales",
+      "ws-partial",
+    );
+    expect(store.conversationCreationReady).toBe(false);
+    initial.resolve({ items: [selected, older] });
+    await loading;
+    expect(store.loading).toBe(true);
+    refresh.resolve({ items: [selected, older] });
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+  });
+
+  it.each(["scope", "forbidden"] as const)(
+    "закрывает background creation при %s и не принимает старую сверку",
+    async (change) => {
+      const selected = projectConversation();
+      const older = { ...selected, ref: "cnv_older_revoked" };
+      let reject: (reason: unknown) => void = () => {};
+      const pending = deferred<ListAssistantConversationsResponse>();
+      readConversationsMock.mockReturnValue(
+        new Promise((resolve, fail) => {
+          reject = fail;
+          void pending.promise.then(resolve);
+        }),
+      );
+      const store = useAssistantStore();
+      store.setContext(context, profile.projectRef);
+      store.assistantScope = "PROJECT";
+      store.projectAssistant = profile;
+      store.projectAssistantAgent = projectAgent;
+      store.assistant = systemAssistant();
+      store.conversations = [selected, older];
+      store.selectedRef = selected.ref;
+      store.applyRealtimeSnapshot(
+        systemAssistant(),
+        [selected],
+        "prj_sales",
+        "ws",
+      );
+      expect(store.conversationCreationReady).toBe(true);
+      if (change === "scope") {
+        store.setContext({ ...context, entityRef: "prj_other" }, "prj_other");
+        store.assistantScope = "PROJECT";
+        pending.resolve({ items: [selected, older] });
+        await Promise.resolve();
+        expect(store.historyRefreshing).toBe(false);
+        expect(store.selectedConversation).toBeUndefined();
+      } else {
+        reject(
+          new AppProblem({
+            status: 403,
+            code: "FORBIDDEN",
+            retryable: false,
+            kind: "forbidden",
+          }),
+        );
+        await vi.waitFor(() => expect(store.loading).toBe(false));
+        expect(store.selectedConversation).toBeUndefined();
+      }
+      expect(store.conversationCreationReady).toBe(false);
+    },
+  );
+
+  it("после навигации не передаёт общий WS cursor в фильтрованную историю SYSTEM", async () => {
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.setHistoryPageSize(22);
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+      "ws-cursor",
+    );
+    store.setContext(
+      {
+        ...context,
+        route: "/projects/prj_sales/agents/agt_developer",
+        entityKind: "AGENT",
+        entityRef: "agt_developer",
+      },
+      "prj_sales",
+    );
+    store.setHistoryPageSize(17);
+    readConversationsMock.mockResolvedValue({
+      items: [conversation()],
+      nextPageToken: "owner-17",
+    });
+
+    await store.loadMoreHistory(17);
+
+    expect(readConversationsMock).toHaveBeenCalledExactlyOnceWith(
+      "prj_sales",
+      undefined,
+      expect.any(AbortSignal),
+      {
+        query: "",
+        state: "ACTIVE",
+        assistantScope: "SYSTEM",
+        assistantRef: systemAssistant().ref,
+      },
+      17,
+    );
+    expect(store.nextPageToken).toBe("owner-17");
+    expect(store.selectedRef).toBe(conversation().ref);
+    expect(store.historyProblem).toBeUndefined();
+  });
+
+  it("сохраняет фильтр owner cursor и адаптивный размер после viewport22→17", async () => {
+    const store = useAssistantStore();
+    store.assistant = systemAssistant();
+    store.setHistoryPageSize(22);
+    readConversationsMock
+      .mockResolvedValueOnce({
+        items: [conversation()],
+        nextPageToken: "owner-22",
+      })
+      .mockResolvedValueOnce({
+        items: [{ ...conversation(), ref: "cnv_more" }],
+      });
+    await store.load(context, "prj_sales");
+    store.setHistoryPageSize(17);
+    await store.loadMoreHistory(17);
+    expect(readConversationsMock.mock.calls[1]?.[1]).toBe("owner-22");
+    expect(readConversationsMock.mock.calls[1]?.[4]).toBe(17);
+    expect(readConversationsMock.mock.calls[1]?.[3]).toEqual(
+      readConversationsMock.mock.calls[0]?.[3],
+    );
+    expect(store.conversations).toHaveLength(2);
+    await store.load(context, "prj_sales");
+    expect(readConversationsMock.mock.calls[2]?.[4]).toBe(17);
+  });
+
+  it("не добавляет assistantRef к cursor первого параллельного SYSTEM чтения", async () => {
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readConversationsMock
+      .mockResolvedValueOnce({
+        items: [conversation()],
+        nextPageToken: "owner-unpinned",
+      })
+      .mockResolvedValueOnce({ items: [] });
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales");
+    await store.loadMoreHistory();
+    expect(readConversationsMock.mock.calls[1]?.[3]).toEqual(
+      readConversationsMock.mock.calls[0]?.[3],
+    );
+  });
+
+  it("сохраняет фильтр expanded owner cursor после rejoin и возвращает viewport17", async () => {
+    const items = Array.from({ length: 42 }, (_, index) => ({
+      ...conversation(),
+      ref: `cnv_${String(index)}`,
+    }));
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    store.setHistoryPageSize(17);
+    store.conversations = items;
+    store.selectedRef = "cnv_41";
+    readConversationsMock
+      .mockResolvedValueOnce({ items, nextPageToken: "expanded-42" })
+      .mockResolvedValueOnce({ items: [] });
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      items.slice(0, 12),
+      "prj_sales",
+      "ws-next",
+    );
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+    await store.loadMoreHistory(17);
+    expect(readConversationsMock.mock.calls[0]?.[4]).toBe(42);
+    expect(readConversationsMock.mock.calls[1]?.[1]).toBe("expanded-42");
+    expect(readConversationsMock.mock.calls[1]?.[4]).toBe(17);
+  });
+
+  it("fresh чтение вместо WS cursor объединяет повторный scroll и игнорирует late ACK после смены проекта", async () => {
+    const first = deferred<ListAssistantConversationsResponse>();
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+      "ws-cursor",
+    );
+    readConversationsMock.mockReturnValueOnce(first.promise);
+    const read = store.loadMoreHistory(17);
+    await store.loadMoreHistory(17);
+    expect(readConversationsMock).toHaveBeenCalledTimes(1);
+    const signal = readConversationsMock.mock.calls[0]?.[2] as AbortSignal;
+    store.setContext({ ...context, entityRef: "prj_other" }, "prj_other");
+    expect(signal.aborted).toBe(true);
+    first.resolve({ items: [conversation()], nextPageToken: "old-owner" });
+    await read;
+    expect(store.conversations).toEqual([]);
+    expect(store.nextPageToken).toBeUndefined();
+    expect(store.loading).toBe(false);
+  });
+
+  it.each([403, 404])(
+    "fresh чтение вместо WS cursor сохраняет закрытый отказ %s без повторного GET",
+    async (status) => {
+      const store = useAssistantStore();
+      store.setContext(context, "prj_sales");
+      store.applyRealtimeSnapshot(
+        systemAssistant(),
+        [conversation()],
+        "prj_sales",
+        "ws-cursor",
+      );
+      readConversationsMock.mockRejectedValueOnce(
+        new AppProblem({
+          status,
+          code: status === 403 ? "FORBIDDEN" : "NOT_FOUND",
+          kind: status === 403 ? "forbidden" : "not-found",
+          retryable: false,
+        }),
+      );
+      await store.loadMoreHistory(17);
+      await store.loadMoreHistory(17);
+      expect(readConversationsMock).toHaveBeenCalledTimes(1);
+      expect(readConversationsMock.mock.calls[0]?.[1]).toBeUndefined();
+      expect(store.problem?.status).toBe(status);
+      expect(store.conversations).toEqual([]);
+      expect(store.selectedRef).toBeUndefined();
+      expect(store.nextPageToken).toBeUndefined();
+    },
+  );
+
+  it("смена SYSTEM pin начинает новую историю без старого owner cursor", async () => {
+    const store = useAssistantStore();
+    store.assistant = systemAssistant();
+    readConversationsMock.mockResolvedValueOnce({
+      items: [conversation()],
+      nextPageToken: "old-owner",
+    });
+    await store.load(context, "prj_sales");
+    store.assistant = { ...systemAssistant(), ref: "ast_new" };
+    readConversationsMock.mockResolvedValueOnce({
+      items: [{ ...conversation(), assistantRef: "ast_new" }],
+    });
+    await store.loadMoreHistory();
+    expect(readConversationsMock.mock.calls[1]?.[1]).toBeUndefined();
+    expect(readConversationsMock.mock.calls[1]?.[3]).toMatchObject({
+      assistantScope: "SYSTEM",
+      assistantRef: "ast_new",
+    });
+    expect(store.selectedConversation?.assistantRef).toBe("ast_new");
+  });
+
+  it("полный WS snapshot закрывает прежнюю cursor цепочку, новая partial страница требует свежий owner read", async () => {
+    const store = useAssistantStore();
+    store.assistant = systemAssistant();
+    readConversationsMock.mockResolvedValueOnce({ items: [conversation()] });
+    await store.load(context, "prj_sales");
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+    );
+    expect(store.nextPageToken).toBeUndefined();
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+      "new-ws-page",
+    );
+    expect(store.nextPageToken).toBe("new-ws-page");
+    readConversationsMock.mockResolvedValueOnce({
+      items: [conversation()],
+      nextPageToken: "fresh-owner",
+    });
+    await store.loadMoreHistory(17);
+    expect(readConversationsMock.mock.calls[1]?.[1]).toBeUndefined();
+    expect(store.nextPageToken).toBe("fresh-owner");
+    expect(readConversationsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("поиск и ARCHIVED начинают отдельную owner цепочку и сохраняют её cursor", async () => {
+    const store = useAssistantStore();
+    store.assistant = systemAssistant();
+    readConversationsMock.mockResolvedValueOnce({
+      items: [conversation()],
+      nextPageToken: "active-owner",
+    });
+    await store.load(context, "prj_sales");
+    store.filterHistory("архив", "ARCHIVED");
+    readConversationsMock.mockResolvedValueOnce({
+      items: [{ ...conversation(), state: "ARCHIVED" }],
+      nextPageToken: "archive-owner",
+    });
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+    readConversationsMock.mockResolvedValueOnce({ items: [] });
+    await store.loadMoreHistory(17);
+    expect(readConversationsMock.mock.calls[1]?.[1]).toBeUndefined();
+    expect(readConversationsMock.mock.calls[2]?.[1]).toBe("archive-owner");
+    expect(readConversationsMock.mock.calls[2]?.[3]).toEqual({
+      query: "архив",
+      state: "ARCHIVED",
+      assistantScope: "SYSTEM",
+      assistantRef: systemAssistant().ref,
+    });
+  });
+
   it("читает профиль Проекта отдельно и не смешивает историю двух помощников", async () => {
     readAssistantMock.mockResolvedValue(systemAssistant());
     readProjectAssistantMock.mockResolvedValue(profile);
@@ -251,7 +616,11 @@ describe("assistant workspace store", () => {
       runtimeReady: true,
       nextActions: ["EDIT", "LAUNCH"],
     });
-    await store.invalidateProjectAssistantFromRealtime("prj_sales");
+    const refreshing =
+      store.invalidateProjectAssistantFromRealtime("prj_sales");
+    expect(store.conversationCreationReady).toBe(false);
+    await refreshing;
+    expect(store.conversationCreationReady).toBe(true);
     expect(readProjectAssistantMock).toHaveBeenCalledTimes(before + 1);
     expect(store.projectAssistantAgent?.runtimeReady).toBe(true);
     expect(store.selectedConversation?.assistantRef).toBe(profile.agentRef);
@@ -343,6 +712,7 @@ describe("assistant workspace store", () => {
         assistantScope: "SYSTEM",
         assistantRef: "ast_system_assistant",
       },
+      40,
     );
     pending.resolve({ items: [conversation()] });
     await more;
@@ -379,10 +749,12 @@ describe("assistant workspace store", () => {
     expect(appendTurnMock).not.toHaveBeenCalled();
   });
   beforeEach(() => {
+    resetOwnerRequests();
     vi.useFakeTimers();
     setActivePinia(createPinia());
     createConversationMock.mockReset();
     appendTurnMock.mockReset();
+    cancelAssistantTurnMock.mockReset();
     archiveConversationMock.mockReset();
     applyPlanDraftMock.mockReset();
     readAssistantMock.mockReset();
@@ -423,6 +795,252 @@ describe("assistant workspace store", () => {
     expect(readConversationsMock).toHaveBeenCalledTimes(2);
     expect(store.selectedRef).toBe(selected.ref);
     expect(store.selectedConversation?.title).toBe(selected.title);
+  });
+
+  it.each([undefined, "prj_sales"])(
+    "восстанавливает сохранённый SYSTEM диалог из scoped realtime snapshot %s",
+    (scope) => {
+      const selected = { ...conversation(), projectRef: scope };
+      const newer = {
+        ...selected,
+        ref: "cnv_newer",
+        updatedAt: "2026-09-26T00:00:00Z",
+      };
+      vi.stubGlobal("window", {
+        sessionStorage: {
+          getItem: (key: string) =>
+            key ===
+            `kodex.assistant.workspace.conversation.SYSTEM.${scope ?? "all"}`
+              ? selected.ref
+              : "cnv_foreign_scope",
+        },
+      });
+      const store = useAssistantStore();
+      store.setContext(context, scope);
+      store.applyRealtimeSnapshot(systemAssistant(), [newer, selected], scope);
+
+      expect(store.selectedRef).toBe(selected.ref);
+      expect(readConversationsMock).not.toHaveBeenCalled();
+      store.selectedRef = newer.ref;
+      store.applyRealtimeSnapshot(systemAssistant(), [selected, newer], scope);
+      expect(store.selectedRef).toBe(newer.ref);
+    },
+  );
+
+  it("не принимает сохранённый ref с чужим project или assistant pin", () => {
+    vi.stubGlobal("window", {
+      sessionStorage: { getItem: () => "cnv_foreign" },
+    });
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    const foreign = { ...conversation(), ref: "cnv_foreign" };
+    for (const invalid of [
+      { ...foreign, projectRef: "prj_other" },
+      { ...foreign, assistantRef: "agt_other" },
+      { ...foreign, assistantProfileRef: "asstp_foreign" },
+      { ...projectConversation(), ref: foreign.ref },
+    ]) {
+      store.selectedRef = undefined;
+      store.applyRealtimeSnapshot(
+        systemAssistant(),
+        [invalid, conversation()],
+        "prj_sales",
+      );
+      expect(store.selectedRef).toBe("cnv_sales");
+    }
+    expect(readConversationsMock).not.toHaveBeenCalled();
+  });
+
+  it("восстанавливает PROJECT выбор только с точным профилем и отдельным storage ключом", async () => {
+    const selected = projectConversation();
+    const newer = {
+      ...selected,
+      ref: "cnv_project_newer",
+      updatedAt: "2026-09-26T00:00:00Z",
+    };
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: (key: string) =>
+          key === "kodex.assistant.workspace.conversation.PROJECT.prj_sales"
+            ? selected.ref
+            : "cnv_system_saved",
+      },
+    });
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readProjectAssistantMock.mockResolvedValue(profile);
+    readProjectAssistantAgentMock.mockResolvedValue(projectAgent);
+    readConversationsMock.mockResolvedValue({ items: [newer, selected] });
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales", false, "PROJECT");
+    const before = readConversationsMock.mock.calls.length;
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [newer, selected, conversation()],
+      "prj_sales",
+    );
+    expect(store.selectedRef).toBe(selected.ref);
+    expect(store.conversations.map((value) => value.ref)).toEqual([
+      newer.ref,
+      selected.ref,
+    ]);
+    expect(readConversationsMock).toHaveBeenCalledTimes(before);
+    store.selectedRef = newer.ref;
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [selected, newer],
+      "prj_sales",
+    );
+    expect(store.selectedRef).toBe(newer.ref);
+  });
+
+  it("после reload восстанавливает PROJECT режим до чтения истории и выбранный диалог", async () => {
+    const selected = projectConversation();
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: (key: string) =>
+          key === "kodex.assistant.workspace.scope.prj_sales"
+            ? "PROJECT"
+            : key === "kodex.assistant.workspace.conversation.PROJECT.prj_sales"
+              ? selected.ref
+              : null,
+      },
+    });
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readProjectAssistantMock.mockResolvedValue(profile);
+    readProjectAssistantAgentMock.mockResolvedValue(projectAgent);
+    readConversationsMock.mockResolvedValue({ items: [selected] });
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    expect(store.assistantScope).toBe("PROJECT");
+    await store.load(context, "prj_sales");
+    expect(readProjectAssistantMock).toHaveBeenCalledWith(
+      "prj_sales",
+      expect.any(AbortSignal),
+    );
+    expect(readConversationsMock.mock.calls[0]?.[3]).toMatchObject({
+      assistantScope: "PROJECT",
+      assistantRef: profile.agentRef,
+    });
+    expect(store.selectedRef).toBe(selected.ref);
+    expect(store.selectedConversation?.assistantProfileRef).toBe(profile.ref);
+  });
+
+  it("direct load и новый чат без saved ref используют сохранённый PROJECT режим", async () => {
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: (key: string) =>
+          key === "kodex.assistant.workspace.scope.prj_sales"
+            ? "PROJECT"
+            : null,
+      },
+    });
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readProjectAssistantMock.mockResolvedValue(profile);
+    readProjectAssistantAgentMock.mockResolvedValue(projectAgent);
+    readConversationsMock.mockResolvedValue({ items: [] });
+    createConversationMock.mockResolvedValue(projectConversation());
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales");
+    expect(store.assistantScope).toBe("PROJECT");
+    await store.startConversation();
+    expect(createConversationMock).toHaveBeenCalledWith(
+      context,
+      "prj_sales",
+      "PROJECT",
+    );
+  });
+
+  it("сохраняет явный SYSTEM выбор и не сбрасывает его повторным setContext", async () => {
+    const values = new Map([
+      ["kodex.assistant.workspace.scope.prj_sales", "PROJECT"],
+    ]);
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+      },
+    });
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readConversationsMock.mockResolvedValue({ items: [conversation()] });
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    await store.selectAssistantScope("SYSTEM");
+    expect(values.get("kodex.assistant.workspace.scope.prj_sales")).toBe(
+      "SYSTEM",
+    );
+    store.setContext({ ...context }, "prj_sales");
+    expect(store.assistantScope).toBe("SYSTEM");
+  });
+
+  it("не переносит режим и выбранный диалог между проектами или в общий контекст", () => {
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: (key: string) =>
+          key === "kodex.assistant.workspace.scope.prj_sales"
+            ? "PROJECT"
+            : null,
+      },
+    });
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    expect(store.assistantScope).toBe("PROJECT");
+    store.conversations = [projectConversation()];
+    store.selectedRef = projectConversation().ref;
+    store.setContext({ ...context, entityRef: "prj_other" }, "prj_other");
+    expect(store.assistantScope).toBe("SYSTEM");
+    expect(store.selectedRef).toBeUndefined();
+    expect(store.conversations).toEqual([]);
+    store.setContext(context, "prj_sales");
+    expect(store.assistantScope).toBe("PROJECT");
+    store.setContext(context);
+    expect(store.assistantScope).toBe("SYSTEM");
+  });
+
+  it("восстанавливает выбор после пустого initial snapshot и смены scope, не после ручного выбора", () => {
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: (key: string) =>
+          key.endsWith(".prj_other") ? "cnv_other_selected" : "cnv_sales",
+      },
+    });
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.applyRealtimeSnapshot(systemAssistant(), [], "prj_sales");
+    expect(store.selectedRef).toBeUndefined();
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+    );
+    expect(store.selectedRef).toBe("cnv_sales");
+    store.setContext({ ...context, entityRef: "prj_other" }, "prj_other");
+    const other = { ...conversation(), projectRef: "prj_other" };
+    const selected = { ...other, ref: "cnv_other_selected" };
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [other, selected],
+      "prj_other",
+    );
+    expect(store.selectedRef).toBe(selected.ref);
+  });
+
+  it("не восстанавливает архивный сохранённый диалог в ACTIVE истории", () => {
+    vi.stubGlobal("window", {
+      sessionStorage: { getItem: () => "cnv_archived" },
+    });
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    const archived = {
+      ...conversation(),
+      ref: "cnv_archived",
+      state: "ARCHIVED" as const,
+    };
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation(), archived],
+      "prj_sales",
+    );
+    expect(store.selectedRef).toBe("cnv_sales");
   });
 
   it("не ломает историю, если сохранённый диалог исчез из длинного списка", async () => {
@@ -794,6 +1412,61 @@ describe("assistant workspace store", () => {
     ).toBe("RUNNING");
   });
 
+  it("Stop после позднего ответа отменяет только серверный run, сохраняя очередь", async () => {
+    const current: AssistantConversation = {
+      ...conversation(),
+      turns: [
+        {
+          ...userTurn("COMPLETED"),
+          ref: "trn_first",
+          sequence: 1,
+          runRef: "run_first",
+        },
+        {
+          ...userTurn("RUNNING"),
+          ref: "trn_q1",
+          sequence: 2,
+          runRef: "run_q1",
+        },
+        { ...userTurn("QUEUED"), ref: "trn_q2", sequence: 3, runRef: "run_q2" },
+        {
+          ...userTurn("COMPLETED"),
+          ref: "trn_reply",
+          sequence: 4,
+          role: "ASSISTANT",
+          runRef: "run_first",
+        },
+      ],
+    };
+    cancelAssistantTurnMock.mockResolvedValue("run_q1");
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.conversations = [current];
+    store.selectedRef = current.ref;
+    await store.stopActiveTurn();
+    expect(cancelAssistantTurnMock).toHaveBeenCalledExactlyOnceWith(current);
+    expect(store.selectedConversation?.turns.map((turn) => turn.state)).toEqual(
+      ["COMPLETED", "CANCELLED", "QUEUED", "COMPLETED"],
+    );
+  });
+
+  it.each(["CLOSED", "ARCHIVED"] as const)(
+    "Stop не отправляет mutation для %s",
+    async (state) => {
+      const current: AssistantConversation = {
+        ...conversation(),
+        state,
+        turns: [{ ...userTurn("RUNNING"), runRef: "run_old" }],
+      };
+      const store = useAssistantStore();
+      store.setContext(context, "prj_sales");
+      store.conversations = [current];
+      store.selectedRef = current.ref;
+      await store.stopActiveTurn();
+      expect(cancelAssistantTurnMock).not.toHaveBeenCalled();
+    },
+  );
+
   it("применяет terminal ответ из realtime snapshot без polling", async () => {
     const initial = conversation();
     const queued = {
@@ -807,6 +1480,7 @@ describe("assistant workspace store", () => {
       turns: [
         userTurn("COMPLETED"),
         {
+          source: { origin: "ORDINARY" as const },
           ref: "trn_result",
           sequence: 3,
           role: "ASSISTANT" as const,
@@ -838,6 +1512,114 @@ describe("assistant workspace store", () => {
     );
   });
 
+  it.each(["SYSTEM", "PROJECT"] as const)(
+    "%s сохраняет новый выбранный диалог, пока realtime обновляет прежний ход",
+    async (scope) => {
+      const base = scope === "PROJECT" ? projectConversation() : conversation();
+      const running = { ...base, turns: [userTurn("RUNNING")] };
+      const created = {
+        ...base,
+        ref: "cnv_created",
+        title: "Новый диалог",
+        turns: [],
+      };
+      const store = useAssistantStore();
+      store.setContext(context, "prj_sales");
+      store.assistant = systemAssistant();
+      store.assistantScope = scope;
+      if (scope === "PROJECT") store.projectAssistant = profile;
+      store.conversations = [running];
+      store.selectedRef = running.ref;
+      createConversationMock.mockResolvedValue(created);
+
+      await store.startConversation();
+      expect(store.selectedRef).toBe(created.ref);
+      const updated = { ...running, version: running.version + 1 };
+      store.applyRealtimeSnapshot(systemAssistant(), [updated], "prj_sales");
+
+      expect(store.selectedRef).toBe(created.ref);
+      expect(store.selectedConversation?.turns).toEqual([]);
+      expect(
+        store.conversations.find((item) => item.ref === running.ref)?.version,
+      ).toBe(updated.version);
+      store.selectedRef = running.ref;
+      store.applyRealtimeSnapshot(systemAssistant(), [updated], "prj_sales");
+      expect(store.selectedRef).toBe(running.ref);
+      expect(store.conversations.some((item) => item.ref === created.ref)).toBe(
+        true,
+      );
+
+      store.selectedRef = created.ref;
+      store.applyRealtimeSnapshot(
+        systemAssistant(),
+        [updated, { ...created, version: created.version - 1 }],
+        "prj_sales",
+      );
+      store.applyRealtimeSnapshot(systemAssistant(), [updated], "prj_sales");
+      expect(store.selectedRef).toBe(created.ref);
+      store.applyRealtimeSnapshot(
+        systemAssistant(),
+        [updated, created],
+        "prj_sales",
+      );
+      store.applyRealtimeSnapshot(systemAssistant(), [updated], "prj_sales");
+      expect(store.selectedRef).toBe(running.ref);
+      expect(store.conversations.some((item) => item.ref === created.ref)).toBe(
+        false,
+      );
+    },
+  );
+
+  it("сохраняет диалог, автоматически созданный при отправке, до realtime readback", async () => {
+    const created = { ...conversation(), ref: "cnv_created", turns: [] };
+    const appended = {
+      ...created,
+      version: created.version + 1,
+      turns: [userTurn("RUNNING")],
+    };
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    store.conversations = [conversation()];
+    store.selectedRef = undefined;
+    createConversationMock.mockResolvedValue(created);
+    appendTurnMock.mockResolvedValue(appended);
+
+    await store.send("Новый запрос");
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+    );
+
+    expect(store.selectedRef).toBe(created.ref);
+    expect(store.selectedConversation?.version).toBe(appended.version);
+    expect(store.selectedConversation?.turns).toEqual(appended.turns);
+  });
+
+  it("не переносит ещё не доставленный в realtime новый диалог в другой проект", async () => {
+    const created = { ...conversation(), ref: "cnv_created", turns: [] };
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    createConversationMock.mockResolvedValue(created);
+    await store.startConversation();
+
+    store.setContext({ ...context, entityRef: "prj_other" }, "prj_other");
+    const other = {
+      ...conversation(),
+      ref: "cnv_other",
+      projectRef: "prj_other",
+    };
+    store.applyRealtimeSnapshot(systemAssistant(), [other], "prj_other");
+    expect(store.selectedRef).toBe(other.ref);
+    expect(store.conversations.map((item) => item.ref)).toEqual([other.ref]);
+    store.setContext(context, "prj_sales");
+    store.applyRealtimeSnapshot(systemAssistant(), [], "prj_sales");
+    expect(store.conversations).toEqual([]);
+    expect(store.selectedRef).toBeUndefined();
+  });
+
   it("не сбрасывает вручную выбранный диалог при realtime из другого контекста проекта", () => {
     const selected = conversation();
     const environmentContext: AssistantContextDescriptor = {
@@ -856,6 +1638,314 @@ describe("assistant workspace store", () => {
 
     expect(store.selectedRef).toBe(selected.ref);
     expect(store.selectedConversation?.context.route).toBe(context.route);
+  });
+
+  it("сверяет выбранный диалог вне частичного snapshot и сохраняет owner cursor", async () => {
+    const older = { ...conversation(), ref: "cnv_older" };
+    const readback = deferred<{
+      items: AssistantConversation[];
+      nextPageToken: string;
+    }>();
+    readConversationsMock.mockReturnValue(readback.promise);
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    store.conversations = [conversation(), older];
+    store.selectedRef = older.ref;
+    store.nextPageToken = "owner-next";
+
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+      "ws-next",
+    );
+
+    expect(store.selectedRef).toBe(older.ref);
+    expect(store.selectedConversation?.ref).toBe(older.ref);
+    expect(store.loading).toBe(true);
+    expect(store.nextPageToken).toBe("owner-next");
+    expect(readConversationsMock).toHaveBeenCalledTimes(1);
+    readback.resolve({
+      items: [conversation(), older],
+      nextPageToken: "fresh-owner-next",
+    });
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+    expect(store.selectedRef).toBe(older.ref);
+    expect(store.nextPageToken).toBe("fresh-owner-next");
+  });
+
+  it("сжатие WS страницы 42→12 требует только одного owner read", async () => {
+    const items = Array.from({ length: 42 }, (_, index) => ({
+      ...conversation(),
+      ref: `cnv_${String(index)}`,
+    }));
+    readConversationsMock.mockResolvedValue({ items });
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    store.conversations = items;
+    store.selectedRef = "cnv_41";
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      items.slice(0, 12),
+      "prj_sales",
+      "ws-next",
+    );
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+    expect(readConversationsMock).toHaveBeenCalledTimes(1);
+    expect(readConversationsMock.mock.calls[0]?.[4]).toBe(42);
+    expect(store.selectedRef).toBe("cnv_41");
+    expect(store.conversations).toHaveLength(42);
+  });
+
+  it("объединяет partial invalidations без перекрывающихся owner reads", async () => {
+    const older = { ...conversation(), ref: "cnv_older" };
+    const first = deferred<{ items: AssistantConversation[] }>();
+    const second = deferred<{ items: AssistantConversation[] }>();
+    readConversationsMock
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    store.conversations = [conversation(), older];
+    store.selectedRef = older.ref;
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+      "ws-1",
+    );
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [{ ...conversation(), version: 9 }],
+      "prj_sales",
+      "ws-2",
+    );
+    expect(readConversationsMock).toHaveBeenCalledTimes(1);
+    first.resolve({ items: [conversation()] });
+    await vi.waitFor(() =>
+      expect(readConversationsMock).toHaveBeenCalledTimes(2),
+    );
+    expect(store.selectedRef).toBe(older.ref);
+    expect(store.loading).toBe(true);
+    second.resolve({ items: [conversation(), older] });
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+    expect(store.selectedRef).toBe(older.ref);
+    expect(
+      store.conversations.find((item) => item.ref === "cnv_sales")?.version,
+    ).toBe(9);
+  });
+
+  it.each(["gone", "forbidden"])(
+    "сверка %s убирает отсутствующий selected detail",
+    async (result) => {
+      const store = useAssistantStore();
+      store.setContext(context, "prj_sales");
+      store.assistant = systemAssistant();
+      store.conversations = [
+        conversation(),
+        { ...conversation(), ref: "cnv_gone" },
+      ];
+      store.selectedRef = "cnv_gone";
+      if (result === "gone")
+        readConversationsMock.mockResolvedValue({ items: [conversation()] });
+      else
+        readConversationsMock.mockRejectedValue(
+          new AppProblem({
+            status: 403,
+            code: "FORBIDDEN",
+            retryable: false,
+            kind: "forbidden",
+          }),
+        );
+      store.applyRealtimeSnapshot(
+        systemAssistant(),
+        [conversation()],
+        "prj_sales",
+        "ws-next",
+      );
+      await vi.waitFor(() => expect(store.loading).toBe(false));
+      expect(store.selectedConversation?.ref).not.toBe("cnv_gone");
+      expect(store.conversations.some((item) => item.ref === "cnv_gone")).toBe(
+        false,
+      );
+      if (result === "forbidden") expect(store.conversations).toEqual([]);
+    },
+  );
+
+  it.each(["scope", "owner", "complete", "unavailable"])(
+    "поздний readback не проходит границу %s",
+    async (boundary) => {
+      const response = deferred<{ items: AssistantConversation[] }>();
+      readConversationsMock.mockReturnValue(response.promise);
+      const store = useAssistantStore();
+      store.setContext(context, "prj_sales");
+      store.assistant = systemAssistant();
+      const older = { ...conversation(), ref: "cnv_older" };
+      store.conversations = [conversation(), older];
+      store.selectedRef = older.ref;
+      store.applyRealtimeSnapshot(
+        systemAssistant(),
+        [conversation()],
+        "prj_sales",
+        "ws-next",
+      );
+      if (boundary === "scope")
+        store.setContext({ ...context, entityRef: "prj_other" }, "prj_other");
+      else if (boundary === "owner") resetOwnerRequests();
+      else if (boundary === "complete")
+        store.applyRealtimeSnapshot(systemAssistant(), [], "prj_sales");
+      else store.clearRealtimeState();
+      response.resolve({ items: [conversation(), older] });
+      await vi.waitFor(() => expect(store.loading).toBe(false));
+      expect(store.conversations).toEqual([]);
+      expect(store.selectedConversation).toBeUndefined();
+    },
+  );
+
+  it("сверяет PROJECT историю отдельно от полной SYSTEM страницы", async () => {
+    readConversationsMock.mockResolvedValue({ items: [projectConversation()] });
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    store.assistantScope = "PROJECT";
+    store.projectAssistant = profile;
+    store.conversations = [projectConversation()];
+    store.selectedRef = "cnv_project_assistant";
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+    );
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+    expect(store.selectedConversation?.assistantProfileRef).toBe(profile.ref);
+    expect(readConversationsMock).toHaveBeenCalledWith(
+      "prj_sales",
+      undefined,
+      expect.any(AbortSignal),
+      expect.objectContaining({
+        assistantScope: "PROJECT",
+        assistantRef: profile.agentRef,
+      }),
+      40,
+    );
+    expect(store.conversations).toEqual([projectConversation()]);
+  });
+
+  it("смена profile pin закрывает pending readonly detail", async () => {
+    const response = deferred<{ items: AssistantConversation[] }>();
+    readConversationsMock.mockReturnValue(response.promise);
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    store.assistantScope = "PROJECT";
+    store.projectAssistant = profile;
+    store.conversations = [projectConversation()];
+    store.selectedRef = "cnv_project_assistant";
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+      "ws-next",
+    );
+    store.projectAssistant = {
+      ...profile,
+      ref: "aprf_other",
+      agentRef: "agt_other",
+    };
+    response.resolve({ items: [projectConversation()] });
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+    expect(store.conversations).toEqual([]);
+    expect(store.selectedConversation).toBeUndefined();
+    expect(store.projectAssistant.ref).toBe("aprf_other");
+  });
+
+  it("не принимает чужой project при owner read", async () => {
+    readConversationsMock.mockResolvedValue({
+      items: [{ ...conversation(), projectRef: "prj_other" }],
+    });
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    store.conversations = [
+      conversation(),
+      { ...conversation(), ref: "cnv_older" },
+    ];
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+      "ws-next",
+    );
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+    expect(store.conversations).toEqual([]);
+    expect(store.problem).toBeDefined();
+  });
+
+  it("сохраняет загруженные owner страницы и продолжение вместо WS cursor", async () => {
+    const older = { ...conversation(), ref: "cnv_older" };
+    readAssistantMock.mockResolvedValue(systemAssistant());
+    readConversationsMock
+      .mockResolvedValueOnce({
+        items: [conversation()],
+        nextPageToken: "owner-2",
+      })
+      .mockResolvedValueOnce({ items: [older], nextPageToken: "owner-3" })
+      .mockResolvedValueOnce({
+        items: [conversation()],
+        nextPageToken: "new-owner-2",
+      })
+      .mockResolvedValueOnce({ items: [older], nextPageToken: "new-owner-3" });
+    const store = useAssistantStore();
+    await store.load(context, "prj_sales");
+    await store.loadMoreHistory();
+    store.selectedRef = older.ref;
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+      "ws-next",
+    );
+    expect(store.nextPageToken).toBe("owner-3");
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+    expect(store.conversations.map((item) => item.ref)).toEqual([
+      "cnv_sales",
+      "cnv_older",
+    ]);
+    expect(store.nextPageToken).toBe("new-owner-3");
+  });
+
+  it("owner read ограничен 10 страницами и оставляет реальную дозагрузку", async () => {
+    let page = 0;
+    readConversationsMock.mockImplementation(() => {
+      page += 1;
+      return Promise.resolve({
+        items: [{ ...conversation(), ref: `cnv_page_${String(page)}` }],
+        nextPageToken: `owner-${String(page)}`,
+      });
+    });
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    store.conversations = [
+      conversation(),
+      { ...conversation(), ref: "cnv_after_limit" },
+    ];
+    store.selectedRef = "cnv_after_limit";
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+      "ws-next",
+    );
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+    expect(readConversationsMock).toHaveBeenCalledTimes(10);
+    expect(store.selectedConversation?.ref).not.toBe("cnv_after_limit");
+    expect(store.nextPageToken).toBe("owner-10");
+    await store.loadMoreHistory();
+    expect(readConversationsMock.mock.calls.at(-1)?.[1]).toBe("owner-10");
   });
 
   it("после загрузки показывает последний диалог проекта, если контекст экрана не совпал", async () => {
@@ -945,5 +2035,130 @@ describe("assistant workspace store", () => {
     );
     expect(store.selectedConversation?.title).toBe("Настройка отдела продаж");
     expect(store.selectedConversation?.turns[0]?.plan?.state).toBe("APPLIED");
+    expect(store.selectedConversation?.turns[0]?.plan?.receipt).toEqual(
+      receipt,
+    );
+  });
+
+  function systemImageApplication() {
+    const original = plan();
+    const owner = {
+      scopeKind: "ORGANIZATION",
+      organizationRef: "org_synthetic",
+      systemAssistantRef: "ast_system_assistant",
+      recipeRef: "imgrec_synthetic",
+    };
+    const selected = original.operations[0];
+    if (!selected) throw new Error("Plan fixture has no operation");
+    const source: AssistantPlan = {
+      ...original,
+      projectRef: undefined,
+      operations: [
+        {
+          ...selected,
+          type: "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE",
+          action: "UPDATE",
+          target: {
+            kind: "ROLE_IMAGE_RECIPE",
+            ref: owner.recipeRef,
+            name: "Собственный образ",
+            version: 10,
+          },
+          expectedVersion: 10,
+          parameters: owner,
+          after: owner,
+        },
+      ],
+    };
+    const receipt: AssistantPlanReceipt = {
+      ref: "rct_system_image",
+      planRef: source.ref,
+      planRevision: source.revision,
+      outcome: "APPLIED",
+      operationReceipts: [
+        {
+          operationRef: selected.ref,
+          resourceRef: owner.recipeRef,
+          outcome: "APPLIED",
+          auditRef: "aud_image",
+        },
+      ],
+      conflicts: [],
+      auditRefs: [],
+      createdResourceRefs: [owner.recipeRef],
+      createdAt: "2026-10-05T18:00:00Z",
+    };
+    return {
+      source,
+      response: {
+        conversation: { ref: source.conversationRef },
+        plan: {
+          ...source,
+          version: source.version + 1,
+          state: "APPLIED" as const,
+          applied: true,
+        },
+        receipt,
+        createdResourceRefs: [owner.recipeRef],
+      },
+    };
+  }
+
+  it("сразу связывает native SYSTEM UPDATE со сборкой через отдельную квитанцию ответа без reload", async () => {
+    const { source, response } = systemImageApplication();
+    expect(response.plan.receipt).toBeUndefined();
+    applyPlanDraftMock.mockResolvedValue(response);
+    const store = useAssistantStore();
+    store.conversations = [conversation(source)];
+    store.selectedRef = source.conversationRef;
+    const receipt = await store.apply(source);
+    const applied = store.selectedConversation?.turns[0]?.plan;
+    expect(applied?.receipt).toEqual(receipt);
+    expect(applied).toBeDefined();
+    if (!applied) throw new Error("Applied plan was not retained");
+    expect(
+      assistantRoleImageBuildTarget(applied, "op_sales", "org_synthetic"),
+    ).toEqual({
+      resourceScope: { kind: "ORGANIZATION", organizationRef: "org_synthetic" },
+      recipeRef: "imgrec_synthetic",
+    });
+    expect(
+      assistantRoleImageBuildTarget(applied, "op_sales", "org_foreign"),
+    ).toBeUndefined();
+    expect(readConversationsMock).not.toHaveBeenCalled();
+    expect(store.conversations.at(0)?.turns).toHaveLength(1);
+  });
+
+  it.each([
+    "receipt-plan",
+    "receipt-revision",
+    "plan-revision",
+    "plan-conversation",
+    "outcome",
+    "state",
+  ])("не присоединяет неверно связанную квитанцию: %s", async (kind) => {
+    const { source, response } = systemImageApplication();
+    if (kind === "receipt-plan") response.receipt.planRef = "pln_foreign";
+    if (kind === "receipt-revision") response.receipt.planRevision += 1;
+    if (kind === "plan-revision") {
+      response.plan.revision += 1;
+      response.receipt.planRevision = response.plan.revision;
+    }
+    if (kind === "plan-conversation")
+      response.plan.conversationRef = "cnv_foreign";
+    if (kind === "outcome") response.receipt.outcome = "CONFLICT";
+    const invalid =
+      kind === "state"
+        ? { ...response, plan: { ...response.plan, state: "VALID" as const } }
+        : response;
+    applyPlanDraftMock.mockResolvedValue(invalid);
+    const store = useAssistantStore();
+    store.conversations = [conversation(source)];
+    store.selectedRef = source.conversationRef;
+    await expect(store.apply(source)).rejects.toBeInstanceOf(AppProblem);
+    expect(store.receipt).toBeUndefined();
+    expect(store.selectedConversation?.turns[0]?.plan?.state).toBe("VALID");
+    expect(store.selectedConversation?.turns[0]?.plan?.receipt).toBeUndefined();
+    expect(readConversationsMock).not.toHaveBeenCalled();
   });
 });

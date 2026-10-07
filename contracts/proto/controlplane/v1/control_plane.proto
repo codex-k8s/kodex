@@ -81,6 +81,9 @@ service PlatformQueryService {
   rpc ListIntegrationGrantProjectCandidates(ListIntegrationGrantProjectCandidatesRequest) returns (ListIntegrationGrantProjectCandidatesResponse);
   rpc ListIntegrationGrantRecipientCandidates(ListIntegrationGrantRecipientCandidatesRequest) returns (ListIntegrationGrantRecipientCandidatesResponse);
   rpc ListIntegrationGrantCapabilityCandidates(ListIntegrationGrantCapabilityCandidatesRequest) returns (ListIntegrationGrantCapabilityCandidatesResponse);
+  // Кандидаты exact общесистемного помощника; owner и assistant назначаются сервером.
+  rpc GetSystemAssistantIntegrationGrantCandidates(GetSystemAssistantIntegrationGrantCandidatesRequest) returns (GetSystemAssistantIntegrationGrantCandidatesResponse);
+  rpc GetProjectAssistantIntegrationGrantCandidates(GetProjectAssistantIntegrationGrantCandidatesRequest) returns (GetProjectAssistantIntegrationGrantCandidatesResponse);
   rpc GetIntegrationConnection(GetIntegrationConnectionRequest) returns (GetIntegrationConnectionResponse);
   rpc GetAdministration(GetAdministrationRequest) returns (GetAdministrationResponse);
   rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
@@ -246,6 +249,8 @@ service PlatformCommandService {
   rpc TestIntegrationConnection(TestIntegrationConnectionRequest) returns (TestIntegrationConnectionResponse);
   rpc SetIntegrationConnectionEnabled(SetIntegrationConnectionEnabledRequest) returns (SetIntegrationConnectionEnabledResponse);
   rpc ChangeIntegrationGrant(ChangeIntegrationGrantRequest) returns (ChangeIntegrationGrantResponse);
+  // Выдача/отзыв exact grant общесистемного помощника без фиктивного проекта.
+  rpc ChangeSystemAssistantIntegrationGrant(ChangeSystemAssistantIntegrationGrantRequest) returns (ChangeSystemAssistantIntegrationGrantResponse);
   rpc PublishAgentRuntimeConfiguration(PublishAgentRuntimeConfigurationRequest) returns (PublishAgentRuntimeConfigurationResponse);
   rpc CreateConfigOverlayDraft(CreateConfigOverlayDraftRequest) returns (CreateConfigOverlayDraftResponse);
   rpc ValidateConfigOverlayDraft(ValidateConfigOverlayDraftRequest) returns (ValidateConfigOverlayDraftResponse);
@@ -388,6 +393,9 @@ service RuntimeWorkService {
   rpc CommitProviderCredentialRefresh(CommitProviderCredentialRefreshRequest) returns (CommitProviderCredentialRefreshResponse);
   rpc CompleteExecution(CompleteExecutionRequest) returns (CompleteExecutionResponse);
   rpc DelegateExecution(DelegateExecutionRequest) returns (DelegateExecutionResponse);
+  // Запускает опубликованный Workflow из exact active execution; actor/project
+  // и обязательную связь родителя назначает владелец, не caller payload.
+  rpc LaunchWorkflowExecution(LaunchWorkflowExecutionRequest) returns (LaunchWorkflowExecutionResponse);
   rpc ProposeAssistantPlan(ProposeAssistantPlanRequest) returns (ProposeAssistantPlanResponse);
   rpc ProposeAssistantMetadata(ProposeAssistantMetadataRequest) returns (ProposeAssistantMetadataResponse);
   rpc ProposeRunMetadata(ProposeRunMetadataRequest) returns (ProposeRunMetadataResponse);
@@ -669,6 +677,15 @@ enum RunToolCallState {
   RUN_TOOL_CALL_STATE_UNSPECIFIED = 0;
   RUN_TOOL_CALL_STATE_SUCCEEDED = 1;
   RUN_TOOL_CALL_STATE_FAILED = 2;
+  RUN_TOOL_CALL_STATE_RUNNING = 3;
+  RUN_TOOL_CALL_STATE_CANCELLED = 4;
+}
+
+enum RunMessagePhase {
+  RUN_MESSAGE_PHASE_UNSPECIFIED = 0;
+  RUN_MESSAGE_PHASE_USER = 1;
+  RUN_MESSAGE_PHASE_COMMENTARY = 2;
+  RUN_MESSAGE_PHASE_FINAL = 3;
 }
 
 enum OwnerGateState {
@@ -1077,6 +1094,8 @@ message Run {
   // Только SYSTEM_ASSISTANT target с SYSTEM_ASSISTANT source; server-owned
   // conversation pin различает системную и проектную конфигурации помощника.
   AssistantRunPin assistant_pin = 33;
+  // Текущий авторитетный read-only snapshot session gates, только GetRun.
+  RunSessionReadiness session_readiness = 34;
 }
 
 message RunNode {
@@ -1181,6 +1200,41 @@ message RunEvent {
   RunEventActor actor = 21;
   RunEventMessageKind message_kind = 22;
   RunToolCall tool_call = 23;
+  // Координаты назначаются владельцем по исходному execution, не текущему UI.
+  RunEventExecution execution = 24;
+  RunMessage message = 25;
+  // Только новые INTEGRATION_ACTION_* completion-события: ref invocation,
+  // назначенный владельцем после проверки lease/fence, не общий aggregate_ref.
+  optional string integration_invocation_ref = 26;
+}
+
+message RunEventExecution {
+  string run_ref = 1;
+  string node_ref = 2;
+  string session_ref = 3;
+  string turn_ref = 4;
+  int64 turn_number = 5;
+  int32 attempt = 6;
+}
+
+// Происхождение назначает владелец по persisted turn и canonical lineage.
+enum MessageOrigin {
+  MESSAGE_ORIGIN_UNSPECIFIED = 0;
+  MESSAGE_ORIGIN_ORDINARY = 1;
+  MESSAGE_ORIGIN_CALLBACK_CONTINUATION = 2;
+}
+
+message MessageSource {
+  MessageOrigin origin = 1;
+}
+
+message RunMessage {
+  string ref = 1;
+  RunMessagePhase phase = 2;
+  int64 revision = 3;
+  // Только опубликованное сообщение, не reasoning; UTF-8, максимум 64 KiB.
+  string text = 4;
+  MessageSource source = 5;
 }
 
 message RunEventActor {
@@ -1199,6 +1253,7 @@ message RunToolCall {
   int64 duration_ms = 7;
   string safe_result = 8;
   string audit_ref = 9;
+  int64 revision = 10;
 }
 
 message RunGraph {
@@ -1234,6 +1289,10 @@ message OwnerGate {
   repeated OwnerGateDecisionConsequence decision_consequences = 21;
   string source_attachment_set_ref = 22;
   IntegrationIntent integration_intent = 23;
+  // Область назначается owner из exact root/session/assistant lineage.
+  // ORGANIZATION разрешается только системному помощнику без project locator.
+  RuntimeResourceScopeKind scope_kind = 24;
+  string organization_ref = 25;
 }
 
 message OwnerGateDecisionConsequence {
@@ -1380,6 +1439,7 @@ message IntegrationCapability {
   repeated IntegrationConfigurationField input_fields = 10;
   string input_schema = 11;
   string input_schema_sha256 = 12;
+  repeated IntegrationApprovalPolicy allowed_approval_policies = 13;
 }
 
 message IntegrationConfigurationField {
@@ -1464,6 +1524,7 @@ message IntegrationGrant {
   string input_schema = 21;
   string input_schema_sha256 = 22;
   repeated string approval_scope_paths = 23;
+  int64 connection_version = 24;
 }
 
 message IntegrationConnection {
@@ -1549,6 +1610,12 @@ message AssistantPlanOperation {
     TYPE_UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE = 28;
     // Подготовить подтверждаемую атомарную настройку модели, аккаунтов и reasoning помощника.
     TYPE_PREPARE_ASSISTANT_RUNTIME_CONFIGURATION = 29;
+    // Подготовить exact integration grant системного помощника для human confirmation.
+    TYPE_CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT = 30;
+    // Подготовить организационное подключение для exact PROJECT помощника, без выдачи grants.
+    TYPE_PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION = 31;
+    // Подготовить grant собственного PROJECT помощника для human confirmation.
+    TYPE_CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT = 32;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;
@@ -1653,6 +1720,7 @@ message AssistantTurn {
   string attachment_set_ref = 8;
   string run_ref = 9;
   int64 run_version = 10;
+  MessageSource source = 11;
 }
 
 enum AssistantTurnDeliveryMode {
@@ -1877,6 +1945,9 @@ enum AssistantConfigurationCatalogKind {
   ASSISTANT_CONFIGURATION_CATALOG_KIND_ROLE_IMAGE_RECIPES = 5;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_IMAGE_ARTIFACTS = 6;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_ROLE_ENVIRONMENTS = 7;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_CURRENT_CONFIGURATION = 8;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_PROJECT_INTEGRATION_GRANTS = 9;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_RECIPIENT_INTEGRATION_GRANTS = 10;
 }
 
 message AssistantConfigurationCatalogRequest {
@@ -1908,6 +1979,14 @@ message AssistantConfigurationCatalogEntry {
   string assistant_profile_ref = 16;
   // Только ASSISTANTS: locator опубликованного окружения; не источник прав.
   string runtime_environment_ref = 17;
+  // Только IMAGE_ARTIFACTS: подтверждённый допуск exact артефакта.
+  string admission_verdict = 18;
+  // Только IMAGE_ARTIFACTS: серверный PROMOTED, не намерение публикации.
+  string promotion_state = 19;
+  // Только IMAGE_ARTIFACTS: полный безопасный inventory с immutable evidence pins.
+  ImageToolInventory verified_tool_inventory = 20;
+  // Только ROLE_IMAGE_RECIPES: текущий сохранённый ключ окружения рецепта.
+  string environment_key = 22;
 }
 
 message AssistantConfigurationCatalogResponse {
@@ -1919,6 +1998,85 @@ message AssistantConfigurationCatalogResponse {
   string assistant_profile_ref = 6;
   repeated AssistantConfigurationCatalogEntry entries = 7;
   int32 next_offset = 8;
+  // Только собственный помощник exact lease; свежие настройки, не snapshot хода.
+  AssistantCurrentConfiguration current_configuration = 9;
+  repeated ProjectAssistantIntegrationGrantCatalogEntry project_integration_grants = 10;
+  // Получатель разрешён из сохранённого контекста exact lease, не из request.
+  AssistantRecipientIntegrationGrantCatalog recipient_integration_grants = 11;
+}
+
+message AssistantRecipientIntegrationGrantCatalog {
+  string recipient_kind = 1;
+  string recipient_ref = 2;
+  string recipient_name = 3;
+  int64 recipient_version = 4;
+  int64 project_version = 5;
+  repeated AssistantRecipientIntegrationGrantCatalogEntry entries = 6;
+}
+
+message AssistantRecipientIntegrationGrantCatalogEntry {
+  ProjectAssistantIntegrationGrantCatalogEntry grant = 1;
+  IntegrationGrantCandidatePins pins = 2;
+}
+
+message ProjectAssistantIntegrationGrantCatalogEntry {
+  string connection_ref = 1;
+  string connection_name = 2;
+  int64 connection_version = 3;
+  string definition_version = 4;
+  string definition_digest = 5;
+  SystemAssistantIntegrationGrantCandidate candidate = 6;
+}
+
+// Закрытая безопасная модель: секреты представлены только логическими bindings.
+message AssistantCurrentConfiguration {
+  int64 agent_version = 1;
+  AgentRuntimeConfiguration configuration = 2;
+  ConfigOverlayVersion published_overlay = 3;
+  AgentRuntimeEnvironmentBinding environment_binding = 4;
+  string environment_ref = 5;
+  int64 environment_version = 6;
+  string environment_version_ref = 7;
+  int64 environment_revision = 8;
+  string environment_digest = 9;
+  RuntimeEnvironmentImage image = 10;
+  repeated RuntimeEnvironmentTool tools = 11;
+  repeated RuntimeEnvironmentValue values = 12;
+  repeated RuntimeSecretBinding secret_bindings = 13;
+  RuntimeEnvironmentPolicy policy = 14;
+  string instruction_template_ref = 15;
+  string instruction_template_digest = 16;
+  string published_instructions = 17;
+  string system_core_revision = 18;
+  string system_core_instructions = 19;
+  string owner_instructions = 20;
+  int64 owner_instructions_revision = 21;
+  repeated TemplateVariable template_variables = 22;
+  // Наблюдаемый signed inventory текущего образа, не selected capabilities tools.
+  ImageToolInventory image_tool_inventory = 23;
+}
+
+message ImageToolObservation {
+  string name = 1;
+  string status = 2;
+  string path = 3;
+  string version = 4;
+  string sha256 = 5;
+  bool required = 6;
+}
+message ImagePlatformToolInventory {
+  string platform = 1;
+  string platform_digest = 2;
+  string manifest_sha256 = 3;
+  repeated ImageToolObservation tools = 4;
+}
+message ImageToolInventory {
+  // VERIFIED либо UNAVAILABLE; отсутствие evidence не превращается в декларацию.
+  string status = 1;
+  string sha256 = 2;
+  string image_digest = 3;
+  string provenance_sha256 = 4;
+  repeated ImagePlatformToolInventory platforms = 5;
 }
 
 enum VFSNodeKind {
@@ -2906,9 +3064,73 @@ message ChangeIntegrationGrantRequest {
   string workflow_ref = 5;
   bool enabled = 6;
   repeated string approval_scope_paths = 7;
+  IntegrationApprovalPolicy approval_policy = 8;
 }
 message ChangeIntegrationGrantResponse {
   IntegrationConnection connection = 1;
+}
+
+message ChangeSystemAssistantIntegrationGrantRequest {
+  MutationContext mutation = 1;
+  string connection_ref = 2;
+  string capability_key = 3;
+  bool enabled = 4;
+  IntegrationApprovalPolicy approval_policy = 5;
+  repeated string approval_scope_paths = 6;
+}
+message ChangeSystemAssistantIntegrationGrantResponse {
+  IntegrationConnection connection = 1;
+}
+message GetSystemAssistantIntegrationGrantCandidatesRequest {
+  string connection_ref = 1;
+  string query = 2;
+  PageRequest page = 3;
+}
+message GetProjectAssistantIntegrationGrantCandidatesRequest {
+  string project_ref = 1;
+  string connection_ref = 2;
+  string query = 3;
+  PageRequest page = 4;
+}
+message GetProjectAssistantIntegrationGrantCandidatesResponse {
+  // Область connection, не область профиля получателя.
+  RuntimeResourceScopeKind scope_kind = 1;
+  string organization_ref = 2;
+  string project_ref = 3;
+  string assistant_profile_ref = 4;
+  int64 profile_version = 5;
+  string assistant_ref = 6;
+  int64 assistant_version = 7;
+  string connection_ref = 8;
+  int64 connection_version = 9;
+  string definition_version = 10;
+  string definition_digest = 11;
+  repeated SystemAssistantIntegrationGrantCandidate items = 12;
+  int64 total = 13;
+  PageInfo page = 14;
+}
+message SystemAssistantIntegrationGrantCandidate {
+  IntegrationCapability capability = 1;
+  bool grantable = 2;
+  IntegrationCandidateReason reason = 3;
+  string current_grant_ref = 4;
+  int64 current_grant_version = 5;
+  IntegrationApprovalPolicy current_approval_policy = 6;
+  repeated string current_approval_scope_paths = 7;
+  bool current_grant_enabled = 8;
+}
+message GetSystemAssistantIntegrationGrantCandidatesResponse {
+  RuntimeResourceScopeKind scope_kind = 1;
+  string organization_ref = 2;
+  string assistant_ref = 3;
+  int64 assistant_version = 4;
+  string connection_ref = 5;
+  int64 connection_version = 6;
+  string definition_version = 7;
+  string definition_digest = 8;
+  repeated SystemAssistantIntegrationGrantCandidate items = 9;
+  int64 total = 10;
+  PageInfo page = 11;
 }
 
 message GetSystemAssistantRequest {}
@@ -3146,6 +3368,42 @@ enum RuntimeReasoningMode {
   RUNTIME_REASONING_MODE_UNSUPPORTED = 2;
 }
 
+enum ManagedMCPScopeKind {
+  MANAGED_MCP_SCOPE_KIND_UNSPECIFIED = 0;
+  MANAGED_MCP_SCOPE_KIND_SYSTEM = 1;
+  MANAGED_MCP_SCOPE_KIND_PROJECT = 2;
+  MANAGED_MCP_SCOPE_KIND_AGENT = 3;
+}
+
+message ManagedMCPHealthProof {
+  string test_ref = 1;
+  int64 generation = 2;
+  string connection_ref = 3;
+  int64 connection_version = 4;
+  string configuration_sha256 = 5;
+  string credential_revision_ref = 6;
+  int64 credential_revision = 7;
+  string credential_sha256 = 8;
+  string definition_key = 9;
+  string definition_version = 10;
+  string definition_digest = 11;
+  google.protobuf.Timestamp checked_at = 12;
+  string probe = 13;
+}
+
+message ManagedMCPProfile {
+  string provider = 1;
+  uint32 version = 2;
+  string namespace = 3;
+  bool required = 4;
+  ManagedMCPScopeKind scope_kind = 5;
+  string scope_ref = 6;
+  string resolve_grant_ref = 7;
+  string query_grant_ref = 8;
+  string digest = 9;
+  ManagedMCPHealthProof health = 10;
+}
+
 message RuntimeRevisionSnapshot {
   string ref = 1;
   int64 version = 2;
@@ -3230,6 +3488,7 @@ message RuntimeRevisionSnapshot {
   string prompt_service_template_digest = 75;
   string prompt_target_kind = 76;
   string assistant_profile_ref = 77;
+  repeated ManagedMCPProfile managed_mcp_profiles = 78;
 }
 
 enum RuntimeFilePurpose {
@@ -3575,6 +3834,8 @@ message ReportExecutionProgressRequest {
   string fence = 2;
   int64 generation = 3;
   string progress = 4;
+  // Сообщение публикуется отдельно от служебного progress, после completed item.
+  RunMessage message = 5;
 }
 message ReportExecutionProgressResponse {
   Run run = 1;
@@ -3781,6 +4042,27 @@ message DelegateExecutionResponse {
   RunGraph root_graph = 2;
   string callback_edge_ref = 3;
 }
+// Закрытая команда ordinary runtime, не owner-facing LaunchRun.
+message LaunchWorkflowExecutionRequest {
+  MutationContext mutation = 1;
+  // Exact lease/fence/generation берутся controller из immutable execution.
+  string lease_ref = 2;
+  string fence = 3;
+  int64 generation = 4;
+  // Locator опубликованного Workflow внутри проекта leased execution.
+  string workflow_ref = 5;
+  string task = 6;
+  google.protobuf.Struct input = 7;
+  string title = 8;
+}
+// Workflow сохраняет собственный root и canonical claim/step область.
+message LaunchWorkflowExecutionResponse {
+  Run run = 1;
+  RunGraph graph = 2;
+  // Server-owned required launch и callback; не источник новых полномочий.
+  string launch_ref = 3;
+  string callback_edge_ref = 4;
+}
 message ProposeAssistantPlanRequest {
   MutationContext mutation = 1;
   string lease_ref = 2;
@@ -3828,6 +4110,7 @@ message RecordRunToolCallRequest {
   RunToolCallState state = 10;
   int64 duration_ms = 11;
   string safe_result = 12;
+  int64 revision = 13;
 }
 message RecordRunToolCallResponse {
   RunEvent event = 1;
@@ -4045,6 +4328,8 @@ message IntegrationInvocationClaim {
   string input_digest = 17;
   bytes definition_package = 18;
   IntegrationInvocationWorkMode work_mode = 19;
+  string grant_ref = 20;
+  int64 grant_version = 21;
 }
 message ClaimIntegrationInvocationsRequest {
   string workload_instance = 1;
@@ -5324,12 +5609,18 @@ enum RuntimeKubernetesAccessKind {
 }
 
 message RuntimeResourcePolicy {
+  RuntimeWorkspaceLimits workspace_limits = 7;
   int64 cpu_request_milli = 1;
   int64 cpu_limit_milli = 2;
   int64 memory_request_mib = 3;
   int64 memory_limit_mib = 4;
   int64 ephemeral_storage_request_mib = 5;
   int64 ephemeral_storage_limit_mib = 6;
+}
+
+message RuntimeWorkspaceLimits {
+  int64 max_bytes = 1;
+  int64 max_files = 2;
 }
 
 message RuntimeVolumeInput {
@@ -8249,4 +8540,53 @@ message AssistantIntegrationDefinition {
   repeated IntegrationConfigurationField configuration_fields = 7;
   repeated string capability_keys = 8;
   string origin = 9;
+}
+
+enum RunSessionStorageState {
+  RUN_SESSION_STORAGE_STATE_UNSPECIFIED = 0;
+  RUN_SESSION_STORAGE_STATE_UNTRACKED = 1;
+  RUN_SESSION_STORAGE_STATE_LIVE = 2;
+  RUN_SESSION_STORAGE_STATE_SNAPSHOT_READY = 3;
+  RUN_SESSION_STORAGE_STATE_SNAPSHOTTING = 4;
+  RUN_SESSION_STORAGE_STATE_DELETE_PVC_READY = 5;
+  RUN_SESSION_STORAGE_STATE_ARCHIVED = 6;
+  RUN_SESSION_STORAGE_STATE_RESTORE_READY = 7;
+  RUN_SESSION_STORAGE_STATE_RESTORING = 8;
+  RUN_SESSION_STORAGE_STATE_ERROR = 9;
+  RUN_SESSION_STORAGE_STATE_PURGED = 10;
+}
+
+enum RunSessionReadinessReason {
+  RUN_SESSION_READINESS_REASON_UNSPECIFIED = 0;
+  RUN_SESSION_READINESS_REASON_STORAGE_NOT_LIVE = 1;
+  RUN_SESSION_READINESS_REASON_SESSION_ACCOUNT_UNAVAILABLE = 2;
+  RUN_SESSION_READINESS_REASON_EARLIER_EXECUTION = 3;
+  RUN_SESSION_READINESS_REASON_NO_SESSION_BLOCKER = 4;
+}
+
+enum RunSessionArchiveTaskState {
+  RUN_SESSION_ARCHIVE_TASK_STATE_UNSPECIFIED = 0;
+  RUN_SESSION_ARCHIVE_TASK_STATE_READY = 1;
+  RUN_SESSION_ARCHIVE_TASK_STATE_CLAIMED = 2;
+  RUN_SESSION_ARCHIVE_TASK_STATE_SUCCEEDED = 3;
+  RUN_SESSION_ARCHIVE_TASK_STATE_DEAD_LETTER = 4;
+  RUN_SESSION_ARCHIVE_TASK_STATE_CANCELLED = 5;
+}
+
+message RunSessionReadiness {
+  string session_ref = 1;
+  RunSessionStorageState storage_state = 2;
+  RunSessionReadinessReason reason = 3;
+  // Последняя задача, меняющая storage; DELETE_OBJECT cleanup не подменяет её.
+  RunSessionArchiveTask latest_archive_task = 4;
+}
+
+message RunSessionArchiveTask {
+  string ref = 1;
+  SessionArchiveTaskKind kind = 2;
+  RunSessionArchiveTaskState state = 3;
+  int32 attempt = 4;
+  int32 maximum_attempts = 5;
+  // Закрытый producer whitelist; неизвестный сохранённый код становится UNKNOWN.
+  string safe_error_code = 6;
 }

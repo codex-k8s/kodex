@@ -227,6 +227,8 @@ export const useRealtimeStore = defineStore("realtime", () => {
   });
   const platformSequence = ref(0);
   const activeRuns = new Map<string, ActiveRun>();
+  const runConsumers = new Map<string, Set<symbol>>();
+  const screenRunConsumer = Symbol("run-screen");
   const session: SessionConnection = { attempt: 0, stopped: false };
   let platformWanted = false;
   let platformSnapshotReady = false;
@@ -602,7 +604,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       };
       await platform.loadRun(runRef);
       if (
-        platform.problems.run ||
+        platform.runProblems[runRef] ||
         !hasCompleteRunSnapshot(
           platform.graphs[runRef],
           platform.events[runRef],
@@ -992,6 +994,13 @@ export const useRealtimeStore = defineStore("realtime", () => {
   }
 
   function openRun(runRef: string): void {
+    retainRun(runRef, screenRunConsumer);
+  }
+
+  function retainRun(runRef: string, consumer: symbol): void {
+    const consumers = runConsumers.get(runRef) ?? new Set<symbol>();
+    consumers.add(consumer);
+    runConsumers.set(runRef, consumers);
     if (activeRuns.has(runRef)) return;
     const active: ActiveRun = {};
     activeRuns.set(runRef, active);
@@ -1002,6 +1011,25 @@ export const useRealtimeStore = defineStore("realtime", () => {
   }
 
   function closeRun(runRef: string): void {
+    releaseRun(runRef, screenRunConsumer);
+  }
+
+  // Отдельный владелец подписки не может отключить соседний экран или чат.
+  function acquireRun(runRef: string): () => void {
+    const consumer = Symbol("run-consumer");
+    retainRun(runRef, consumer);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      releaseRun(runRef, consumer);
+    };
+  }
+
+  function releaseRun(runRef: string, consumer: symbol): void {
+    const consumers = runConsumers.get(runRef);
+    if (!consumers?.delete(consumer) || consumers.size > 0) return;
+    runConsumers.delete(runRef);
     const active = activeRuns.get(runRef);
     if (!active) return;
     if (active.timer !== undefined) window.clearTimeout(active.timer);
@@ -1063,6 +1091,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     for (const active of activeRuns.values())
       if (active.timer !== undefined) window.clearTimeout(active.timer);
     activeRuns.clear();
+    runConsumers.clear();
     for (const runRef of Object.keys(state))
       Reflect.deleteProperty(state, runRef);
     platformWanted = false;
@@ -1126,6 +1155,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     platformSequence,
     openRun,
     closeRun,
+    acquireRun,
     openPlatform,
     closePlatform,
     closeAll,

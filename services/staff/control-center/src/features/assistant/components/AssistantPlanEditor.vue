@@ -9,21 +9,34 @@ import {
   AlertTriangle,
   ArrowLeft,
   Check,
+  ChevronDown,
   Maximize2,
   Save,
   Trash2,
 } from "@lucide/vue";
-import { computed, ref, watch } from "vue";
+import { computed, onScopeDispose, ref, shallowRef, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import AssistantCodeEditorModal from "@/features/assistant/components/AssistantCodeEditorModal.vue";
 import AssistantCapabilityPlanForm from "@/features/assistant/components/AssistantCapabilityPlanForm.vue";
 import AssistantIntegrationGrantPlanForm from "@/features/assistant/components/AssistantIntegrationGrantPlanForm.vue";
+import { createIntegrationGrantReadBundle } from "../integration-grant-read-bundle";
+import { createProjectIntegrationGrantReadBundle } from "../project-integration-grant-read-bundle";
+import {
+  commonProjectGrantBatchContext,
+  type ProjectGrantBatchContext,
+} from "../project-grant-batch-context";
+import AssistantSystemIntegrationGrantPlanForm from "./AssistantSystemIntegrationGrantPlanForm.vue";
+import AssistantProjectIntegrationGrantPlanForm from "./AssistantProjectIntegrationGrantPlanForm.vue";
+import { projectIntegrationGrantReceiptRef } from "../project-integration-grant-plan";
+import { systemIntegrationGrantReceiptRef } from "../system-integration-grant-plan";
+import { projectAssistantConnectionPlanOwner } from "../project-connection-plan";
 import AssistantLaunchRunForm from "@/features/assistant/components/AssistantLaunchRunForm.vue";
 import AssistantSchedulePlanForm from "@/features/assistant/components/AssistantSchedulePlanForm.vue";
 import AssistantRuntimeConfigurationPlanForm from "./AssistantRuntimeConfigurationPlanForm.vue";
 import AssistantWorkflowPlanForm from "@/features/assistant/components/AssistantWorkflowPlanForm.vue";
 import AssistantEnvironmentRevisionForm from "@/features/assistant/components/AssistantEnvironmentRevisionForm.vue";
+import AssistantEnvironmentDraftCard from "@/features/assistant/components/AssistantEnvironmentDraftCard.vue";
 import AssistantEnvironmentFieldsForm from "@/features/assistant/components/AssistantEnvironmentFieldsForm.vue";
 import AssistantEnvironmentToolsForm from "@/features/assistant/components/AssistantEnvironmentToolsForm.vue";
 import AssistantEnvironmentPolicyForm from "@/features/assistant/components/AssistantEnvironmentPolicyForm.vue";
@@ -75,6 +88,7 @@ import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import DismissiblePopover from "@/shared/ui/DismissiblePopover.vue";
 import { requestConfirmation } from "@/shared/ui/confirmation";
 
 const props = defineProps<{
@@ -98,6 +112,41 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const runtime = useRuntimeStore();
 const platform = usePlatformStore();
+const footerActionsOpen = ref(false);
+const draftContinuationPlan = computed(() => {
+  const receipt = props.receipt ?? props.plan.receipt;
+  if (
+    props.plan.state !== "APPLIED" ||
+    !receipt ||
+    receipt.outcome !== "APPLIED" ||
+    receipt.planRef !== props.plan.ref ||
+    receipt.planRevision !== props.plan.revision
+  )
+    return;
+  return { ...props.plan, receipt };
+});
+function projectConnectionReady(operation: EditablePlanOperation): boolean {
+  try {
+    const input = operationInputs([operation])[0];
+    return Boolean(
+      platform.bootstrap &&
+      input &&
+      projectAssistantConnectionPlanOwner(
+        input,
+        platform.bootstrap.organizationRef,
+      ),
+    );
+  } catch {
+    return false;
+  }
+}
+function allowRawOperationEdit(operation: EditablePlanOperation): boolean {
+  return (
+    operation.value.type !==
+      "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" &&
+    !friendlyPlanOperationType(operation)
+  );
+}
 const systemResourceScope = computed(() =>
   organizationRuntimeResourceScope(platform.bootstrap),
 );
@@ -138,6 +187,14 @@ function imageOperation(operation: EditablePlanOperation): boolean {
     operation.value.type === "CREATE_ROLE_IMAGE_RECIPE" ||
     operation.value.type === "UPDATE_ROLE_IMAGE_RECIPE"
   );
+}
+function roleImageEnvironmentName(
+  operation: EditablePlanOperation,
+): string | undefined {
+  const environment = roleImageEnvironments.value.find(
+    (item) => item.key === fieldValue(operation, "environmentKey"),
+  );
+  return environment ? t(environment.nameMessageKey) : undefined;
 }
 const projectTextMediaTypes = [
   "text/plain",
@@ -287,6 +344,73 @@ const capabilityFormValidity = ref<Record<string, boolean>>({});
 const capabilityFormTouched = ref(false);
 const integrationGrantValidity = ref<Record<string, boolean>>({});
 const integrationGrantTouched = ref(false);
+const grantExpanded = ref<Record<string, boolean>>({});
+const grantContextId = `assistant-grant-context-${useId()}`;
+const projectGrantContexts = ref<
+  Record<string, ProjectGrantBatchContext | undefined>
+>({});
+const commonProjectGrantContext = computed(() => {
+  try {
+    return commonProjectGrantBatchContext(
+      operationInputs(operations.value),
+      projectGrantContexts.value,
+      platform.bootstrap?.organizationRef,
+    );
+  } catch {
+    return undefined;
+  }
+});
+function compactGrantOperation(operation: EditablePlanOperation): boolean {
+  return (
+    (operation.value.type === "CHANGE_INTEGRATION_GRANT" &&
+      compactGrantBatch.value) ||
+    (operation.value.type === "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT" &&
+      compactProjectGrantBatch.value)
+  );
+}
+function grantOperationDetailsVisible(
+  operation: EditablePlanOperation,
+): boolean {
+  return (
+    !compactGrantOperation(operation) ||
+    showPlanDetails.value ||
+    grantExpanded.value[operation.value.ref] === true
+  );
+}
+const grantReadBundle = shallowRef(createIntegrationGrantReadBundle());
+onScopeDispose(() => grantReadBundle.value.close());
+const projectGrantReadBundle = shallowRef(
+  createProjectIntegrationGrantReadBundle(),
+);
+onScopeDispose(() => projectGrantReadBundle.value.close());
+const compactProjectGrantBatch = computed(
+  () =>
+    operations.value.filter(
+      (operation) =>
+        operation.value.type === "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT",
+    ).length > 1,
+);
+const compactGrantBatch = computed(
+  () =>
+    operations.value.filter(
+      (operation) => operation.value.type === "CHANGE_INTEGRATION_GRANT",
+    ).length > 1,
+);
+const grantSnapshotConflict = computed(
+  () =>
+    props.plan.state === "INVALID" &&
+    props.plan.operations.some(
+      (operation) =>
+        [
+          "CHANGE_INTEGRATION_GRANT",
+          "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT",
+        ].includes(operation.type) &&
+        operation.validationProblems.some(
+          (problem) =>
+            problem === "snapshot-conflict" || problem === "version-conflict",
+        ),
+    ),
+);
 const inputProblem = ref("");
 const draftGeneration = ref(0);
 const validationProblemKeys: Record<string, string> = {
@@ -306,6 +430,13 @@ type EditorTarget =
 const editorTarget = ref<EditorTarget>();
 
 function resetDraft(): void {
+  footerActionsOpen.value = false;
+  grantExpanded.value = {};
+  projectGrantContexts.value = {};
+  grantReadBundle.value.close();
+  grantReadBundle.value = createIntegrationGrantReadBundle();
+  projectGrantReadBundle.value.close();
+  projectGrantReadBundle.value = createProjectIntegrationGrantReadBundle();
   // Дочерние формы сообщают о валидности при монтировании. После обновления
   // плана их нужно создать заново, даже если ссылки на операции не изменились.
   draftGeneration.value += 1;
@@ -317,6 +448,8 @@ function resetDraft(): void {
       .filter(
         (operation) =>
           operation.value.type === "CREATE_INTEGRATION_CONNECTION" ||
+          operation.value.type ===
+            "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" ||
           operation.value.type === "UPDATE_INTEGRATION_CONNECTION",
       )
       .map((operation) => {
@@ -400,6 +533,8 @@ watch(
           .filter(
             (operation) =>
               operation.type === "CREATE_INTEGRATION_CONNECTION" ||
+              operation.type ===
+                "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" ||
               operation.type === "UPDATE_INTEGRATION_CONNECTION",
           )
           .map((operation) => operation.parameters.definitionKey)
@@ -471,6 +606,14 @@ function connectionProblems(
   try {
     const definition = connectionDefinition(operation);
     if (!definition?.available) return { definitionKey: "UNAVAILABLE" };
+    if (
+      operation.value.type ===
+        "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" &&
+      (definition.definitionVersion !==
+        operationParameter(operation, "definitionVersion") ||
+        definition.digest !== operationParameter(operation, "definitionDigest"))
+    )
+      return { definitionKey: "UNAVAILABLE" };
     const raw = connectionInputs.value[operation.value.ref] ?? {};
     const initial = operationParameter(operation, "publicConfiguration");
     if (
@@ -643,9 +786,14 @@ const friendlyInputsReady = computed(() =>
           Boolean(operationProjectRef(operation))) &&
         (!(
           operation.value.type === "CREATE_INTEGRATION_CONNECTION" ||
+          operation.value.type ===
+            "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" ||
           operation.value.type === "UPDATE_INTEGRATION_CONNECTION"
         ) ||
           !Object.keys(connectionProblems(operation)).length) &&
+        (operation.value.type !==
+          "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" ||
+          projectConnectionReady(operation)) &&
         (operation.value.type !== "LAUNCH_RUN" ||
           runFormValidity.value[operation.value.ref] === true) &&
         ((operation.value.type !== "CREATE_WORKFLOW" &&
@@ -691,7 +839,11 @@ const friendlyInputsReady = computed(() =>
           scheduleFormValidity.value[operation.value.ref] === true) &&
         (operation.value.type !== "CHANGE_CAPABILITY" ||
           capabilityFormValidity.value[operation.value.ref] === true) &&
-        (operation.value.type !== "CHANGE_INTEGRATION_GRANT" ||
+        ((operation.value.type !== "CHANGE_INTEGRATION_GRANT" &&
+          operation.value.type !==
+            "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" &&
+          operation.value.type !==
+            "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT") ||
           integrationGrantValidity.value[operation.value.ref] === true) &&
         (!imageOperation(operation) || roleImageReady(operation)) &&
         (operation.value.type !== "CREATE_PROJECT_FILE" ||
@@ -723,6 +875,12 @@ const canApply = computed(
     props.plan.nextActions.includes("APPLY_PLAN"),
 );
 const canReject = computed(() => editable.value);
+watch(
+  () => props.busy || props.readonly,
+  (inactive) => {
+    if (inactive) footerActionsOpen.value = false;
+  },
+);
 
 async function requestChanges(): Promise<void> {
   if (!editable.value || !props.canRequestChanges) return;
@@ -743,6 +901,8 @@ function save(): void {
       if (
         !operation.value.selected ||
         (operation.value.type !== "CREATE_INTEGRATION_CONNECTION" &&
+          operation.value.type !==
+            "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" &&
           operation.value.type !== "UPDATE_INTEGRATION_CONNECTION")
       )
         continue;
@@ -1220,6 +1380,20 @@ function validationProblemLabel(problem: string): string {
         </p>
       </section>
 
+      <template v-if="draftContinuationPlan">
+        <AssistantEnvironmentDraftCard
+          v-for="operation in draftContinuationPlan.operations.filter(
+            (item) =>
+              item.type === 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' ||
+              item.type === 'CREATE_RUNTIME_ENVIRONMENT_DRAFT',
+          )"
+          :key="`environment-continuation-${operation.ref}`"
+          :plan="draftContinuationPlan"
+          :operation-ref="operation.ref"
+          @navigate="emit('close')"
+        />
+      </template>
+
       <button
         v-if="hasFriendlyOperations"
         class="button button--ghost assistant-plan-details-toggle"
@@ -1259,12 +1433,40 @@ function validationProblemLabel(problem: string): string {
         />
       </div>
 
-      <div class="assistant-plan-operations">
+      <p
+        v-if="commonProjectGrantContext"
+        :id="grantContextId"
+        class="assistant-plan-editor__grant-context"
+      >
+        <strong>{{ $t("assistant.settings.projectScope") }}</strong>
+        <span
+          >{{ $t("assistant.planEditor.grantConnection") }}:
+          {{ commonProjectGrantContext.connectionName }}</span
+        >
+      </p>
+      <div
+        class="assistant-plan-operations"
+        :role="commonProjectGrantContext ? 'group' : undefined"
+        :aria-labelledby="
+          commonProjectGrantContext ? grantContextId : undefined
+        "
+        :class="{
+          'assistant-plan-operations--grant-batch':
+            compactGrantBatch || compactProjectGrantBatch,
+        }"
+      >
         <article
           v-for="(operation, index) in operations"
           :key="`${draftGeneration}:${operation.value.ref}`"
           class="assistant-plan-operation"
-          :class="`assistant-plan-operation--${operationActionLabel(operation.value.action)}`"
+          :class="[
+            `assistant-plan-operation--${operationActionLabel(operation.value.action)}`,
+            {
+              'assistant-plan-operation--compact-grant':
+                compactGrantOperation(operation) &&
+                !grantOperationDetailsVisible(operation),
+            },
+          ]"
         >
           <header>
             <label class="assistant-plan-operation__select">
@@ -1273,8 +1475,17 @@ function validationProblemLabel(problem: string): string {
                 :name="`assistant-operation-selected-${index}`"
                 type="checkbox"
                 :disabled="!editable || !operation.value.permitted"
+                :aria-label="
+                  compactGrantOperation(operation)
+                    ? operation.value.title ||
+                      operationTargetLabel(operation.value.target)
+                    : undefined
+                "
               />
-              <span class="assistant-operation-kind">
+              <span
+                v-show="grantOperationDetailsVisible(operation)"
+                class="assistant-operation-kind"
+              >
                 {{
                   $t(
                     `assistant.planEditor.actions.${operationActionLabel(operation.value.action)}`,
@@ -1282,7 +1493,10 @@ function validationProblemLabel(problem: string): string {
                 }}
               </span>
             </label>
-            <span class="assistant-plan-operation__title">
+            <span
+              v-show="grantOperationDetailsVisible(operation)"
+              class="assistant-plan-operation__title"
+            >
               {{
                 operation.value.title ||
                 operationTargetLabel(operation.value.target)
@@ -1374,7 +1588,7 @@ function validationProblemLabel(problem: string): string {
               }}</strong>
               <small>{{ operation.value.target.kind }}</small>
             </div>
-            <label v-if="!friendlyPlanOperationType(operation)" class="field">
+            <label v-if="allowRawOperationEdit(operation)" class="field">
               <span>{{ $t("assistant.planEditor.targetKind") }}</span>
               <input
                 v-model="operation.value.target.kind"
@@ -1383,7 +1597,7 @@ function validationProblemLabel(problem: string): string {
                 :disabled="!editable"
               />
             </label>
-            <label v-if="!friendlyPlanOperationType(operation)" class="field">
+            <label v-if="allowRawOperationEdit(operation)" class="field">
               <span>{{ $t("assistant.planEditor.targetName") }}</span>
               <input
                 v-model="operation.value.target.name"
@@ -1392,7 +1606,7 @@ function validationProblemLabel(problem: string): string {
                 :disabled="!editable"
               />
             </label>
-            <label v-if="!friendlyPlanOperationType(operation)" class="field">
+            <label v-if="allowRawOperationEdit(operation)" class="field">
               <span>{{ $t("assistant.planEditor.targetRef") }}</span>
               <input
                 v-model="operation.value.target.ref"
@@ -1401,7 +1615,7 @@ function validationProblemLabel(problem: string): string {
                 :disabled="!editable"
               />
             </label>
-            <label v-if="!friendlyPlanOperationType(operation)" class="field">
+            <label v-if="allowRawOperationEdit(operation)" class="field">
               <span>{{ $t("assistant.planEditor.targetVersion") }}</span>
               <input
                 type="number"
@@ -1413,7 +1627,7 @@ function validationProblemLabel(problem: string): string {
                 @input="operation.value.target.version = optionalNumber($event)"
               />
             </label>
-            <label v-if="!friendlyPlanOperationType(operation)" class="field">
+            <label v-if="allowRawOperationEdit(operation)" class="field">
               <span>{{ $t("assistant.planEditor.expectedVersion") }}</span>
               <input
                 type="number"
@@ -1433,7 +1647,11 @@ function validationProblemLabel(problem: string): string {
             v-if="friendlyPlanOperationType(operation)"
             class="assistant-plan-friendly"
           >
-            <p v-if="editable" class="assistant-plan-friendly__hint">
+            <p
+              v-if="editable"
+              class="assistant-plan-friendly__hint"
+              v-show="grantOperationDetailsVisible(operation)"
+            >
               {{ $t("assistant.planEditor.friendlyHint") }}
             </p>
             <AssistantLaunchRunForm
@@ -1524,6 +1742,7 @@ function validationProblemLabel(problem: string): string {
                 :resource-scope="environmentResourceScope(operation)"
                 :image-catalog="resourceCatalogs?.images"
                 :disabled="!editable"
+                @resolved-image="rememberSelectedImage"
                 @valid="environmentToolsValidity[operation.value.ref] = $event"
                 @dirty="environmentToolsTouched = true"
                 @parameter="
@@ -1584,6 +1803,54 @@ function validationProblemLabel(problem: string): string {
               v-else-if="operation.value.type === 'CHANGE_INTEGRATION_GRANT'"
               :operation="operation"
               :project-ref="plan.projectRef"
+              :read-bundle="grantReadBundle"
+              :compact="compactGrantBatch"
+              @expanded="grantExpanded[operation.value.ref] = $event"
+              :disabled="!editable"
+              @valid="integrationGrantValidity[operation.value.ref] = $event"
+              @dirty="integrationGrantTouched = true"
+              @parameter="
+                (key, value) => updateOperationParameter(operation, key, value)
+              "
+            />
+            <AssistantProjectIntegrationGrantPlanForm
+              v-else-if="
+                operation.value.type ===
+                'CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT'
+              "
+              :operation="operation"
+              :read-bundle="projectGrantReadBundle"
+              :compact="compactProjectGrantBatch"
+              :shared-context="Boolean(commonProjectGrantContext)"
+              @context="projectGrantContexts[operation.value.ref] = $event"
+              @expanded="grantExpanded[operation.value.ref] = $event"
+              :applied-grant-ref="
+                projectIntegrationGrantReceiptRef(
+                  plan,
+                  operation.value.ref,
+                  receipt ?? plan.receipt,
+                )
+              "
+              :disabled="!editable"
+              @valid="integrationGrantValidity[operation.value.ref] = $event"
+              @dirty="integrationGrantTouched = true"
+              @parameter="
+                (key, value) => updateOperationParameter(operation, key, value)
+              "
+            />
+            <AssistantSystemIntegrationGrantPlanForm
+              v-else-if="
+                operation.value.type ===
+                'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT'
+              "
+              :operation="operation"
+              :applied-grant-ref="
+                systemIntegrationGrantReceiptRef(
+                  plan,
+                  operation.value.ref,
+                  receipt ?? plan.receipt,
+                )
+              "
               :disabled="!editable"
               @valid="integrationGrantValidity[operation.value.ref] = $event"
               @dirty="integrationGrantTouched = true"
@@ -1699,6 +1966,8 @@ function validationProblemLabel(problem: string): string {
                   operation.value.target.kind !== 'RUNTIME_ENVIRONMENT_DRAFT' &&
                   operation.value.target.kind !== 'ROLE_IMAGE_RECIPE' &&
                   operation.value.target.kind !== 'INTEGRATION_CONNECTION' &&
+                  operation.value.type !==
+                    'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' &&
                   operation.value.type !== 'CREATE_AGENT' &&
                   operation.value.type !== 'UPDATE_AGENT' &&
                   operation.value.type !==
@@ -1928,6 +2197,7 @@ function validationProblemLabel(problem: string): string {
                   :project-ref="plan.projectRef || ''"
                   :selected-image="selectedImage(operation)"
                   :disabled="!editable"
+                  @resolved-image="rememberSelectedImage"
                   @valid="
                     environmentToolsValidity[operation.value.ref] = $event
                   "
@@ -1996,9 +2266,21 @@ function validationProblemLabel(problem: string): string {
               </template>
               <template
                 v-else-if="
-                  operation.value.target.kind === 'INTEGRATION_CONNECTION'
+                  operation.value.target.kind === 'INTEGRATION_CONNECTION' ||
+                  operation.value.type ===
+                    'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION'
                 "
               >
+                <p
+                  v-if="
+                    operation.value.type ===
+                    'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION'
+                  "
+                  class="assistant-plan-friendly__hint"
+                >
+                  {{ $t("assistant.planEditor.projectConnectionBoundary") }}
+                  {{ operation.value.target.name }}
+                </p>
                 <div class="field">
                   <span>{{
                     $t("assistant.planEditor.connectionDefinition")
@@ -2062,7 +2344,11 @@ function validationProblemLabel(problem: string): string {
                   {{ $t("assistant.planEditor.systemImageBoundary") }}
                 </p>
                 <div
-                  v-if="operation.value.type === 'CREATE_ROLE_IMAGE_RECIPE'"
+                  v-if="
+                    operation.value.type === 'CREATE_ROLE_IMAGE_RECIPE' &&
+                    (editable ||
+                      roleImageAgentNames[fieldValue(operation, 'agentRef')])
+                  "
                   class="field"
                 >
                   <span>{{ $t("assistant.planEditor.roleImageAgent") }}</span>
@@ -2070,7 +2356,7 @@ function validationProblemLabel(problem: string): string {
                     roleImageAgentNames[fieldValue(operation, "agentRef")] ||
                     $t("assistant.planEditor.roleImageAgentUnavailable")
                   }}</strong>
-                  <small>{{
+                  <small v-if="editable">{{
                     $t("assistant.planEditor.roleImageAgentFixed")
                   }}</small>
                 </div>
@@ -2084,7 +2370,7 @@ function validationProblemLabel(problem: string): string {
                     @input="setField(operation, 'name', $event)"
                   />
                 </label>
-                <label class="field">
+                <label v-if="editable" class="field">
                   <span>{{
                     $t("assistant.planEditor.roleImageEnvironment")
                   }}</span>
@@ -2125,8 +2411,18 @@ function validationProblemLabel(problem: string): string {
                     </option>
                   </select>
                 </label>
+                <div
+                  v-else-if="roleImageEnvironmentName(operation)"
+                  class="field"
+                >
+                  <span>{{
+                    $t("assistant.planEditor.roleImageEnvironment")
+                  }}</span>
+                  <strong>{{ roleImageEnvironmentName(operation) }}</strong>
+                </div>
                 <RoleImageDockerfileEditor
                   v-if="editable || fieldValue(operation, 'dockerfile')"
+                  class="assistant-plan-dockerfile"
                   :model-value="fieldValue(operation, 'dockerfile')"
                   :label="$t('roleImages.dockerfile')"
                   :validation-messages="
@@ -2143,7 +2439,7 @@ function validationProblemLabel(problem: string): string {
                   {{ $t("assistant.planEditor.roleImageHistoricalSource") }}
                 </p>
                 <p
-                  v-if="roleImageCatalogProblem"
+                  v-if="editable && roleImageCatalogProblem"
                   class="field-error"
                   role="alert"
                 >
@@ -2307,7 +2603,10 @@ function validationProblemLabel(problem: string): string {
                 </p>
               </template>
             </template>
-            <details class="assistant-plan-friendly__snapshot">
+            <details
+              v-show="grantOperationDetailsVisible(operation)"
+              class="assistant-plan-friendly__snapshot"
+            >
               <summary>
                 {{ $t("assistant.planEditor.transitionDetails") }}
               </summary>
@@ -2325,7 +2624,7 @@ function validationProblemLabel(problem: string): string {
           </div>
 
           <div
-            v-if="!friendlyPlanOperationType(operation)"
+            v-if="allowRawOperationEdit(operation)"
             class="field field--code"
           >
             <span class="assistant-field-label">
@@ -2352,7 +2651,7 @@ function validationProblemLabel(problem: string): string {
             />
           </div>
           <div
-            v-if="!friendlyPlanOperationType(operation)"
+            v-if="allowRawOperationEdit(operation)"
             class="assistant-plan-transition"
           >
             <div class="field field--code">
@@ -2424,6 +2723,12 @@ function validationProblemLabel(problem: string): string {
     </div>
 
     <footer class="assistant-plan-editor__footer">
+      <p
+        v-if="grantSnapshotConflict && canRequestChanges && editable"
+        class="assistant-plan-editor__grant-conflict"
+      >
+        {{ $t("assistant.planEditor.grantRefreshHint") }}
+      </p>
       <span>
         {{
           $t("assistant.planEditor.selected", {
@@ -2432,54 +2737,137 @@ function validationProblemLabel(problem: string): string {
           })
         }}
       </span>
-      <div>
-        <button
-          v-if="canRequestChanges && editable"
-          class="button"
-          type="button"
-          :disabled="busy"
-          @click="requestChanges"
+      <div class="assistant-plan-editor__actions">
+        <div class="assistant-plan-editor__secondary-actions">
+          <button
+            v-if="canRequestChanges && editable"
+            class="button"
+            type="button"
+            :disabled="busy"
+            @click="requestChanges"
+          >
+            {{
+              $t(
+                grantSnapshotConflict
+                  ? "assistant.planEditor.grantRefreshPlan"
+                  : "common.requestChanges",
+              )
+            }}
+          </button>
+          <button
+            v-if="canReject"
+            class="button button--danger"
+            type="button"
+            :disabled="busy"
+            @click="emit('reject')"
+          >
+            <Trash2 :size="17" aria-hidden="true" />
+            {{ $t("common.reject") }}
+          </button>
+          <button
+            v-if="canSave"
+            class="button"
+            type="button"
+            :disabled="busy"
+            @click="save"
+          >
+            <Save :size="17" aria-hidden="true" />
+            {{ $t("assistant.planEditor.saveRevision") }}
+          </button>
+        </div>
+        <div
+          v-if="(canRequestChanges && editable) || canReject || canSave"
+          class="assistant-plan-editor__mobile-actions"
         >
-          {{ $t("common.requestChanges") }}
-        </button>
-        <button
-          v-if="canReject"
-          class="button button--danger"
-          type="button"
-          :disabled="busy"
-          @click="emit('reject')"
-        >
-          <Trash2 :size="17" aria-hidden="true" />
-          {{ $t("common.reject") }}
-        </button>
-        <button
-          v-if="canSave"
-          class="button"
-          type="button"
-          :disabled="busy"
-          @click="save"
-        >
-          <Save :size="17" aria-hidden="true" />
-          {{ $t("assistant.planEditor.saveRevision") }}
-        </button>
-        <button
-          v-if="canValidate"
-          class="button"
-          type="button"
-          :disabled="busy"
-          @click="emit('validate')"
-        >
-          {{ $t("assistant.planEditor.validate") }}
-        </button>
-        <button
-          v-if="canApply"
-          class="button button--primary"
-          type="button"
-          :disabled="busy"
-          @click="emit('apply')"
-        >
-          {{ $t("assistant.planEditor.apply") }}
-        </button>
+          <DismissiblePopover
+            v-model:open="footerActionsOpen"
+            :ariaLabel="$t('common.actions')"
+            placement="bottom-end"
+            width="sm"
+            block
+          >
+            <template #trigger="{ toggle, attrs }">
+              <button
+                v-bind="attrs"
+                class="button"
+                type="button"
+                :disabled="busy"
+                @click="toggle"
+              >
+                {{ $t("common.actions") }}
+                <ChevronDown :size="16" aria-hidden="true" />
+              </button>
+            </template>
+            <template #default="{ close }">
+              <div class="assistant-plan-editor__action-menu">
+                <button
+                  v-if="canRequestChanges && editable"
+                  class="button"
+                  type="button"
+                  :disabled="busy"
+                  @click="
+                    close();
+                    requestChanges();
+                  "
+                >
+                  {{
+                    $t(
+                      grantSnapshotConflict
+                        ? "assistant.planEditor.grantRefreshPlan"
+                        : "common.requestChanges",
+                    )
+                  }}
+                </button>
+                <button
+                  v-if="canReject"
+                  class="button button--danger"
+                  type="button"
+                  :disabled="busy"
+                  @click="
+                    close();
+                    emit('reject');
+                  "
+                >
+                  <Trash2 :size="17" aria-hidden="true" />
+                  {{ $t("common.reject") }}
+                </button>
+                <button
+                  v-if="canSave"
+                  class="button"
+                  type="button"
+                  :disabled="busy"
+                  @click="
+                    close();
+                    save();
+                  "
+                >
+                  <Save :size="17" aria-hidden="true" />
+                  {{ $t("assistant.planEditor.saveRevision") }}
+                </button>
+              </div>
+            </template>
+          </DismissiblePopover>
+        </div>
+        <div class="assistant-plan-editor__primary-actions">
+          <button
+            v-if="canValidate"
+            class="button button--primary"
+            type="button"
+            :disabled="busy"
+            @click="emit('validate')"
+          >
+            {{ $t("assistant.planEditor.validate") }}
+          </button>
+          <button
+            v-if="canApply"
+            class="button button--primary"
+            type="button"
+            :disabled="busy"
+            @click="emit('apply')"
+          >
+            {{ $t("assistant.planEditor.apply") }}
+          </button>
+        </div>
       </div>
     </footer>
     <AssistantCodeEditorModal
@@ -2496,6 +2884,22 @@ function validationProblemLabel(problem: string): string {
 </template>
 
 <style scoped>
+.assistant-plan-dockerfile :deep(.dockerfile-editor__viewport) {
+  min-height: 240px;
+}
+.assistant-plan-dockerfile :deep(.cm-editor) {
+  height: clamp(240px, 36dvh, 360px);
+  min-height: 240px;
+}
+.assistant-plan-dockerfile :deep(.cm-scroller) {
+  min-height: 0;
+  overflow: auto;
+}
+@media (max-width: 640px) {
+  .assistant-plan-dockerfile :deep(.cm-editor) {
+    height: clamp(240px, 36dvh, 300px);
+  }
+}
 .assistant-plan-editor {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -2588,6 +2992,28 @@ function validationProblemLabel(problem: string): string {
   gap: 12px;
   margin-top: 14px;
 }
+.assistant-plan-editor__grant-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 12px 0 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+}
+.assistant-plan-operations--grant-batch {
+  max-height: 480px;
+  overflow-y: auto;
+  min-width: 0;
+}
+.assistant-plan-operations--grant-batch > .assistant-plan-operation {
+  padding: 8px;
+  gap: 6px;
+}
+.assistant-plan-editor__grant-conflict {
+  flex-basis: 100%;
+  margin: 0;
+}
 .assistant-plan-operation {
   display: grid;
   gap: 12px;
@@ -2602,6 +3028,33 @@ function validationProblemLabel(problem: string): string {
 }
 .assistant-plan-operation--update {
   border-left-color: var(--warning);
+}
+.assistant-plan-operation--compact-grant {
+  grid-template-columns: 24px minmax(0, 1fr) 28px;
+  align-items: start;
+}
+.assistant-plan-operation.assistant-plan-operation--compact-grant > header {
+  display: contents;
+}
+.assistant-plan-operation--compact-grant .assistant-plan-operation__select {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 32px;
+}
+.assistant-plan-operation--compact-grant .assistant-plan-operation__number {
+  grid-column: 3;
+  grid-row: 1;
+  line-height: 32px;
+}
+.assistant-plan-operation--compact-grant > .assistant-plan-friendly {
+  grid-column: 2;
+  grid-row: 1;
+  gap: 0;
+  min-width: 0;
+}
+.assistant-plan-operation--compact-grant > .field-error,
+.assistant-plan-operation--compact-grant > .assistant-validation-list {
+  grid-column: 2 / -1;
 }
 .assistant-plan-operation > header,
 .assistant-plan-operation__select,
@@ -2873,18 +3326,61 @@ function validationProblemLabel(problem: string): string {
 }
 .assistant-plan-editor__footer {
   justify-content: space-between;
+  flex-wrap: wrap;
   border-top: 1px solid var(--border);
   border-bottom: 0;
 }
-@media (max-width: 640px) {
-  .assistant-plan-editor__footer,
-  .assistant-plan-editor__footer > div {
+.assistant-plan-editor__secondary-actions,
+.assistant-plan-editor__primary-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.assistant-plan-editor__mobile-actions {
+  display: none;
+}
+.assistant-plan-editor__action-menu {
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+}
+.assistant-plan-editor__action-menu .button {
+  justify-content: flex-start;
+  min-height: 44px;
+  white-space: normal;
+  text-align: left;
+}
+@media (max-width: 600px) {
+  .assistant-plan-editor__footer {
     align-items: stretch;
     flex-direction: column;
+    gap: 6px;
+    padding: 8px 12px;
   }
-  .assistant-plan-editor__footer .button {
+  .assistant-plan-editor__footer > .assistant-plan-editor__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+  .assistant-plan-editor__secondary-actions {
+    display: none;
+  }
+  .assistant-plan-editor__mobile-actions {
+    display: block;
+    min-width: 0;
+  }
+  .assistant-plan-editor__primary-actions {
+    display: contents;
+  }
+  .assistant-plan-editor__actions .button {
     width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 6px 10px;
+    white-space: normal;
   }
+}
+@media (max-width: 640px) {
   .assistant-plan-target {
     grid-template-columns: 1fr;
   }

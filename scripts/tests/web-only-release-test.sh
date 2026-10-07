@@ -630,6 +630,66 @@ yq -o=json -I=0 '.' "$render" | jq -s -e '
     .data.ROLE_IMAGE_BUILDER_WORKSPACE_ROOT == "/work")
 ' >/dev/null || fail 'role image builder workspace configuration disagrees with its mount'
 
+# Проверяем probes после настоящего kustomize и тех же адресных local transforms,
+# не запуская cache/bootstrap/сборки из entrypoint локального renderer.
+check_builder_startup_probes() {
+  yq -o=json -I=0 'select(.kind == "Deployment" and .metadata.name == "role-image-builder")' "$1" |
+    jq -s -e '
+      [.[].spec.template.spec.containers[] | select(.name == "role-image-builder")] as $containers |
+      ($containers | length) == 1 and
+      ($containers[0] |
+        .startupProbe.httpGet == {path:"/healthz", port:"metrics"} and
+        .startupProbe.timeoutSeconds == 2 and .startupProbe.periodSeconds == 2 and
+        .startupProbe.failureThreshold == 225 and
+        ((.startupProbe.failureThreshold - 1) * .startupProbe.periodSeconds) >= (120 + 300) and
+        .readinessProbe == {httpGet:{path:"/readyz", port:"metrics"}, timeoutSeconds:2, periodSeconds:5, failureThreshold:2} and
+        .livenessProbe == {httpGet:{path:"/healthz", port:"metrics"}, timeoutSeconds:2, periodSeconds:10, failureThreshold:3})
+    ' >/dev/null || return 1
+  yq -o=json -I=0 'select(.kind == "ConfigMap" and .metadata.name == "role-image-builder-runtime")' "$1" |
+    jq -s -e 'length == 1 and
+      .[0].data.ROLE_IMAGE_BUILDER_STARTUP_TIMEOUT == "30s" and
+      .[0].data.ROLE_IMAGE_BUILDER_INFRASTRUCTURE_READINESS_TIMEOUT == "180s"' >/dev/null
+}
+local_generic_probe_transform=$(awk \
+  '$0 == "  with(select(.kind == \"Deployment\" or .kind == \"StatefulSet\" or .kind == \"Job\");" {capture=1}
+   capture {print; if ($0 == "  ) |") exit}' \
+  "$repository_root/tools/dev/render-local.sh" | sed '$s/ |$//')
+local_builder_probe_transform=$(awk \
+  '$0 == "  with(select(.kind == \"Deployment\" and .metadata.name == \"role-image-builder\");" {capture=1}
+   capture {print; if ($0 == "  ) |") exit}' \
+  "$repository_root/tools/dev/render-local.sh" | sed '$s/ |$//')
+[[ -n "$local_generic_probe_transform" && -n "$local_builder_probe_transform" ]] ||
+  fail 'local builder startup transformations are absent'
+for profile_render in "$render" "$optional_render"; do
+  check_builder_startup_probes "$profile_render" ||
+    fail 'release builder probes do not preserve the maximum cold startup budget'
+  SOURCE_REVISION=1 SOURCE_DIGEST=fixture DEPLOYMENT_PROFILE=fixture \
+    yq "$local_generic_probe_transform" "$profile_render" >"$temporary_directory/generic-probes.yaml"
+  if check_builder_startup_probes "$temporary_directory/generic-probes.yaml"; then
+    fail 'generic local startup budget unexpectedly satisfies the builder cold path'
+  fi
+  SOURCE_REVISION=1 RUNNER_DIGEST=fixture FRONTEND_SHA256=fixture \
+    yq "$local_builder_probe_transform" "$temporary_directory/generic-probes.yaml" >"$temporary_directory/local-builder-probes.yaml"
+  check_builder_startup_probes "$temporary_directory/local-builder-probes.yaml" ||
+    fail 'local builder transform loses the maximum cold startup budget or changes readiness/liveness'
+  for probe_render in generic-probes local-builder-probes; do
+    yq -o=json -I=0 'select(.kind == "Deployment" or .kind == "StatefulSet" or .kind == "Job")' \
+      "$temporary_directory/$probe_render.yaml" |
+      jq -s -S 'map({name:.metadata.name, containers:[(.spec.template.spec.containers[]?, .spec.template.spec.initContainers[]?) |
+        {name, startupProbe, readinessProbe, livenessProbe} |
+        if .name == "role-image-builder" then del(.startupProbe) else . end]})' \
+      >"$temporary_directory/$probe_render.json"
+  done
+  cmp -s "$temporary_directory/generic-probes.json" "$temporary_directory/local-builder-probes.json" ||
+    fail 'builder local exception changes probes of another container'
+done
+for environment in staging production; do
+  kubectl kustomize "$repository_root/deploy/k8s/overlays/$environment/role-image-builder" \
+    >"$temporary_directory/$environment-builder.yaml"
+  check_builder_startup_probes "$temporary_directory/$environment-builder.yaml" ||
+    fail "$environment builder probes do not preserve the maximum cold startup budget"
+done
+
 for script in "$repository_root/install.sh" "$repository_root/tools/install"/*.sh; do
   bash -n "$script"
 done

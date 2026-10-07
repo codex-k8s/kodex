@@ -6,6 +6,42 @@ import {
 
 // Закрытый реестр безопасных сообщений владельца состояния: ru, en.
 export const serverTokenTranslations = {
+  PROVIDER_RESULT_UNVERIFIABLE: [
+    "Не удалось подтвердить ответ модели. Начните новый ход.",
+    "The model response could not be verified. Start a new turn.",
+  ],
+  PROVIDER_RESULT_UNKNOWN: [
+    "Не удалось получить подтверждённый ответ модели. Начните новый ход.",
+    "A verified model response was not received. Start a new turn.",
+  ],
+  PROVIDER_AUTHENTICATION_REQUIRED: [
+    "Для продолжения нужно подключить аккаунт модели.",
+    "Connect a model account to continue.",
+  ],
+  PROVIDER_USAGE_LIMIT_EXCEEDED: [
+    "Достигнут лимит использования модели. Проверьте квоту аккаунта.",
+    "The model usage limit was reached. Check the account quota.",
+  ],
+  PROVIDER_OVERLOADED: [
+    "Модель временно перегружена. Повторите запрос позже.",
+    "The model is temporarily overloaded. Try again later.",
+  ],
+  PROVIDER_POLICY_DENIED: [
+    "Запрос отклонён политикой провайдера. Проверьте настройки доступа.",
+    "The provider policy rejected the request. Check the access settings.",
+  ],
+  RUNTIME_CONFIGURATION_STALE: [
+    "Настройки запуска изменились. Начните новый ход.",
+    "The run settings changed. Start a new turn.",
+  ],
+  RUNTIME_PROVIDER_UNAVAILABLE: [
+    "Провайдер модели временно недоступен. Повторите запрос позже.",
+    "The model provider is temporarily unavailable. Try again later.",
+  ],
+  REQUIRED_WORKFLOW_FAILED: [
+    "Запуск завершён с ошибкой: обязательный дочерний процесс не выполнен.",
+    "The run failed because a required child workflow did not complete successfully.",
+  ],
   RUNTIME_LEASE_EXPIRED: [
     "Срок аренды исполнения истёк",
     "Runtime lease expired",
@@ -204,6 +240,10 @@ export const serverTokenTranslations = {
   RUNTIME_INPUT_TOO_LARGE: [
     "Входные данные превышают допустимый размер",
     "Runtime input exceeds the size limit",
+  ],
+  RUNTIME_ARTIFACT_INVALID: [
+    "Не удалось подготовить файлы результата",
+    "Could not prepare result files",
   ],
   RUNTIME_WORKFLOW_INCOMPLETE: [
     "Процесс завершился до выполнения всех этапов",
@@ -424,6 +464,10 @@ export const serverTokenTranslations = {
     "Продолжение по результату поставлено в очередь",
     "Result callback continuation queued",
   ],
+  CALLBACK_CONTINUATION_PUBLIC: [
+    "Продолжаю работу после решения или результата действия",
+    "Continuing after the decision or action result",
+  ],
   CHILD_AGENT_RESULT_DELIVERED: [
     "Результат дочернего сотрудника доставлен",
     "Child employee result delivered",
@@ -491,6 +535,11 @@ export const serverTokenTranslations = {
     "Действие интеграции завершено",
     "Integration action completed",
   ],
+  INTEGRATION_ACTION_STARTED: [
+    "Действие интеграции началось",
+    "Integration action started",
+  ],
+  PROTECTED_INPUT: ["Защищённые входные данные", "Protected input"],
   INTEGRATION_ACTION_SUCCEEDED: [
     "Действие интеграции выполнено успешно",
     "Integration action succeeded",
@@ -713,6 +762,18 @@ export const serverTokenTranslations = {
   RESULT_ARTIFACT_AVAILABLE: [
     "Файл результата доступен",
     "Result file available",
+  ],
+  IMAGE_ADMISSION_POLICY_CHANGED: [
+    "Политика допуска образа изменилась",
+    "Image admission policy changed",
+  ],
+  IMAGE_ADMISSION_FAILED: [
+    "Проверка допуска образа завершилась с ошибкой",
+    "Image admission check failed",
+  ],
+  IMAGE_ADMISSION_LEASE_EXPIRED: [
+    "Срок работы проверки истёк; допуск образа завершён с ошибкой",
+    "Admission worker lease expired; image admission failed",
   ],
   ROLE_IMAGE_BUILD_COMPLETED: [
     "Сборка образа роли завершена",

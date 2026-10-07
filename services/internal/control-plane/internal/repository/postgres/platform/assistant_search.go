@@ -31,21 +31,27 @@ var queryAssistantSearchExtra string
 var queryAssistantIntegrationDefinitions string
 
 func (repository *Repository) ListAssistantIntegrationDefinitions(ctx context.Context, principal value.Principal, leaseRef, fence string, generation int64, search string, offset int32) ([]entity.AssistantIntegrationDefinition, int32, error) {
+	type page struct {
+		entries []entity.AssistantIntegrationDefinition
+		next    int32
+	}
+	result, err := retryAssistantLockedRead(ctx, func(attemptCtx context.Context) (page, error) {
+		entries, next, err := repository.listAssistantIntegrationDefinitionsOnce(attemptCtx, principal, leaseRef, fence, generation, search, offset)
+		return page{entries: entries, next: next}, err
+	})
+	return result.entries, result.next, err
+}
+
+func (repository *Repository) listAssistantIntegrationDefinitionsOnce(ctx context.Context, principal value.Principal, leaseRef, fence string, generation int64, search string, offset int32) (_ []entity.AssistantIntegrationDefinition, _ int32, resultError error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return nil, 0, err
 	}
-	ctx, stop := context.WithTimeout(ctx, 5*time.Second)
-	defer stop()
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
-		return nil, 0, errs.ErrUnavailable
+		return nil, 0, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
-	defer func() {
-		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
-		defer cancel()
-		_ = tx.Rollback(cleanup)
-	}()
+	defer rollbackAssistantLockedRead(ctx, tx, &resultError)
 	fenceDigest := sha256.Sum256([]byte(fence))
 	var actorRef, actorID, authorityProjectID, assistantProjectRef string
 	err = tx.QueryRow(ctx, queryAssistantSearchResolveLease, pgx.StrictNamedArgs{
@@ -56,7 +62,7 @@ func (repository *Repository) ListAssistantIntegrationDefinitions(ctx context.Co
 		return nil, 0, errs.ErrNotFound
 	}
 	if err != nil {
-		return nil, 0, errs.ErrUnavailable
+		return nil, 0, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
 	if _, err := repository.resolveAccessSubject(ctx, tx, current.organizationID, actorRef); err != nil {
 		return nil, 0, err
@@ -65,7 +71,7 @@ func (repository *Repository) ListAssistantIntegrationDefinitions(ctx context.Co
 		"query": search, "limit": maximumAssistantIntegrationDefinitions + 1, "offset": offset,
 	})
 	if err != nil {
-		return nil, 0, errs.ErrUnavailable
+		return nil, 0, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
 	definitions := make([]entity.AssistantIntegrationDefinition, 0, maximumAssistantIntegrationDefinitions)
 	for rows.Next() {
@@ -74,12 +80,12 @@ func (repository *Repository) ListAssistantIntegrationDefinitions(ctx context.Co
 		if err := rows.Scan(&item.Key, &item.Name, &item.Description, &item.Category,
 			&item.Adapter, &item.CredentialSecretKey, &schema, &capabilities, &item.Origin); err != nil {
 			rows.Close()
-			return nil, 0, errs.ErrUnavailable
+			return nil, 0, assistantLockedReadError(err, errs.ErrUnavailable)
 		}
 		if len(definitions) == maximumAssistantIntegrationDefinitions {
 			rows.Close()
 			if err := tx.Commit(ctx); err != nil {
-				return nil, 0, errs.ErrUnavailable
+				return nil, 0, assistantLockedReadError(err, errs.ErrUnavailable)
 			}
 			return definitions, offset + maximumAssistantIntegrationDefinitions, nil
 		}
@@ -94,33 +100,39 @@ func (repository *Repository) ListAssistantIntegrationDefinitions(ctx context.Co
 		}
 		definitions = append(definitions, item)
 	}
-	if rows.Err() != nil {
+	if err := rows.Err(); err != nil {
 		rows.Close()
-		return nil, 0, errs.ErrUnavailable
+		return nil, 0, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
 	rows.Close()
 	if err := tx.Commit(ctx); err != nil {
-		return nil, 0, errs.ErrUnavailable
+		return nil, 0, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
 	return definitions, 0, nil
 }
 
 func (repository *Repository) SearchAssistantResources(ctx context.Context, principal value.Principal, leaseRef, fence string, generation int64, search string) ([]entity.SearchResult, bool, error) {
+	type page struct {
+		entries   []entity.SearchResult
+		truncated bool
+	}
+	result, err := retryAssistantLockedRead(ctx, func(attemptCtx context.Context) (page, error) {
+		entries, truncated, err := repository.searchAssistantResourcesOnce(attemptCtx, principal, leaseRef, fence, generation, search)
+		return page{entries: entries, truncated: truncated}, err
+	})
+	return result.entries, result.truncated, err
+}
+
+func (repository *Repository) searchAssistantResourcesOnce(ctx context.Context, principal value.Principal, leaseRef, fence string, generation int64, search string) (_ []entity.SearchResult, _ bool, resultError error) {
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return nil, false, err
 	}
-	ctx, stop := context.WithTimeout(ctx, 5*time.Second)
-	defer stop()
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
-		return nil, false, errs.ErrUnavailable
+		return nil, false, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
-	defer func() {
-		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
-		defer cancel()
-		_ = tx.Rollback(cleanup)
-	}()
+	defer rollbackAssistantLockedRead(ctx, tx, &resultError)
 	fenceDigest := sha256.Sum256([]byte(fence))
 	var assistantProjectRef string
 	err = tx.QueryRow(ctx, queryAssistantSearchResolveLease, pgx.StrictNamedArgs{
@@ -131,7 +143,7 @@ func (repository *Repository) SearchAssistantResources(ctx context.Context, prin
 		return nil, false, errs.ErrNotFound
 	}
 	if err != nil {
-		return nil, false, errs.ErrUnavailable
+		return nil, false, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
 	subject, err := repository.resolveAccessSubject(ctx, tx, current.organizationID, current.actorRef)
 	if err != nil {
@@ -152,7 +164,7 @@ func (repository *Repository) SearchAssistantResources(ctx context.Context, prin
 			"organization_id": current.organizationID, "query": search, "project_ref": assistantProjectRef,
 		})
 		if queryErr != nil {
-			return nil, false, errs.ErrUnavailable
+			return nil, false, assistantLockedReadError(queryErr, errs.ErrUnavailable)
 		}
 		for rows.Next() {
 			if len(candidates) == maximumAssistantSearchCandidates {
@@ -163,13 +175,13 @@ func (repository *Repository) SearchAssistantResources(ctx context.Context, prin
 			if err := rows.Scan(&item.Kind, &item.Ref, &item.ProjectRef, &item.Title, &item.Subtitle,
 				&item.State, &item.UpdatedAt, &item.relevance, &item.orderTime); err != nil {
 				rows.Close()
-				return nil, false, errs.ErrUnavailable
+				return nil, false, assistantLockedReadError(err, errs.ErrUnavailable)
 			}
 			candidates = append(candidates, item)
 		}
-		if rows.Err() != nil {
+		if err := rows.Err(); err != nil {
 			rows.Close()
-			return nil, false, errs.ErrUnavailable
+			return nil, false, assistantLockedReadError(err, errs.ErrUnavailable)
 		}
 		rows.Close()
 	}
@@ -211,7 +223,7 @@ func (repository *Repository) SearchAssistantResources(ctx context.Context, prin
 		result = append(result, item.SearchResult)
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, false, errs.ErrUnavailable
+		return nil, false, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
 	return result, truncated, nil
 }

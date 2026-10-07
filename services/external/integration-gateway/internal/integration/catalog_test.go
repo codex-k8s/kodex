@@ -144,6 +144,8 @@ func catalogInputs() map[string]string {
 		"email.draft.update":        `{"uid":"1","uid_validity":1,"expected_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","to":"recipient@example.test","subject":"Title","body_text":"Text"}`,
 		"email.draft.delete":        `{"uid":"1","uid_validity":1}`,
 		"synthetic.journal.read":    `{}`, "synthetic.journal.write": `{"value":"Text"}`,
+		"context7.library.resolve": `{"library_name":"sdk","query":"usage"}`,
+		"context7.docs.query":      `{"library_id":"/modelcontextprotocol/go-sdk","query":"usage"}`,
 	}
 }
 
@@ -166,6 +168,10 @@ func TestEveryAdvertisedOperation(t *testing.T) {
 				var input map[string]any
 				if err := json.Unmarshal([]byte(raw), &input); err != nil {
 					t.Fatal(err)
+				}
+				if key == "context7" {
+					testContext7CatalogOperation(t, capability.Operation, input)
+					return
 				}
 				adapter := testAdapter(t)
 				var credential *CredentialRevision
@@ -507,12 +513,16 @@ func TestReadOperationsHandleRateLimits(t *testing.T) {
 				return response, nil
 			})}
 			adapter.providerHTTPClient, adapter.githubHTTPClient, adapter.emailHTTPClient = client, client, client
+			adapter.context7HTTPClient = client
 			var input map[string]any
 			_ = json.Unmarshal([]byte(raw), &input)
 			_, err := adapter.Execute(t.Context(), invocationRequest(t, definition, operation, input, credential))
-			if provider == "email" {
+			if provider == "email" || provider == "context7" {
 				if err == nil || calls != 1 {
-					t.Fatal("email rate limit must fail closed without retry")
+					t.Fatal("read-only adapter rate limit must fail closed without retry")
+				}
+				if provider == "context7" && err.Error() != "INTEGRATION_RATE_LIMITED" {
+					t.Fatalf("Context7 rate limit class changed: %v", err)
 				}
 				return
 			}

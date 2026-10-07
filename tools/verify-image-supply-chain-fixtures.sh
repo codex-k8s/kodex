@@ -6,6 +6,18 @@ set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repository_root=$(cd -- "$script_dir/.." && pwd)
 policy="$repository_root/deploy/k8s/base/image-supply-chain/provenance-policy.jq"
+admission_script=${IMAGE_ADMISSION_FIXTURE_SCRIPT:-$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh}
+[[ -f $admission_script && ! -L $admission_script && -r $admission_script ]] || {
+  echo "admission fixture source is not a readable regular file" >&2; exit 1;
+}
+admission_source_sha256=$(sha256sum "$admission_script" | awk '{print $1}')
+fixture_go_args=()
+if [[ -n ${IMAGE_ADMISSION_FIXTURE_GO_OVERLAY:-} ]]; then
+  [[ -f $IMAGE_ADMISSION_FIXTURE_GO_OVERLAY && ! -L $IMAGE_ADMISSION_FIXTURE_GO_OVERLAY && -r $IMAGE_ADMISSION_FIXTURE_GO_OVERLAY ]] || {
+    echo "admission fixture Go overlay is not a readable regular file" >&2; exit 1;
+  }
+  fixture_go_args+=("-overlay=$IMAGE_ADMISSION_FIXTURE_GO_OVERLAY")
+fi
 temporary_directory=$(mktemp -d)
 trap 'rm -rf -- "$temporary_directory"' EXIT
 
@@ -415,6 +427,18 @@ done
 for dockerfile in \
   "$repository_root/infra/admission-tools/Dockerfile" \
   "$repository_root/tools/dev/Dockerfile.local-image-supply-chain"; do
+  if ! grep -Fq './cmd/image-tool-inventory-validator' "$dockerfile" ||
+    ! grep -Fq '/out/image-tool-inventory-validator /usr/local/bin/image-tool-inventory-validator' "$dockerfile" ||
+    ! grep -Eq 'RUN for tool in .*image-tool-inventory-validator' "$dockerfile"; then
+    echo "admission tools image omits the bounded inventory validator" >&2
+    exit 1
+  fi
+  if ! grep -Fq './cmd/image-vulnerability-report-validator' "$dockerfile" ||
+    ! grep -Fq '/out/image-vulnerability-report-validator /usr/local/bin/image-vulnerability-report-validator' "$dockerfile" ||
+    ! grep -Eq 'RUN for tool in .*image-vulnerability-report-validator' "$dockerfile"; then
+    echo "admission tools image omits the bounded vulnerability report validator" >&2
+    exit 1
+  fi
   grep -Fq "ADD --checksum=sha256:$grype_database_sha256" "$dockerfile" || {
     echo "admission tools image does not pin the Grype database checksum: $dockerfile" >&2
     exit 1
@@ -469,7 +493,7 @@ cat >"$temporary_directory/bin/kubectl" <<EOF
 #!/bin/sh
 policy_revision=\${FIXTURE_POLICY_REVISION:-7}
 cat <<JSON
-{"immutable":true,"metadata":{"labels":{"kodex.dev/owner-intent":"true"},"annotations":{"kodex.dev/admission-tools-sha256":"$tools_digest"}},"data":{"toolsImage":"$tools_image","admissionImage":"$admission_image","authorityImage":"registry.example.test/kodex/internal-rpc-authority@$authority_digest","promotionRepository":"kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/roles","promotionEvidenceRepository":"kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/evidence","evidenceRepository":"kodex-image-registry-evidence.kodex-system.svc.cluster.local:5007/evidence/role-image-admission","promotedPullRepository":"registry.example.test/kodex/roles","policyRevision":"\$policy_revision","policySHA256":"$policy_sha256","builderIdentity":"$builder_identity","buildType":"$build_type","trustedRoleBaseRepository":"registry.example.test/kodex/agent-runner","trustedRoleBaseDigest":"$trusted_base_digest","roleRuntimeContractRevision":"1","roleRuntimeContractSHA256":"$runtime_contract_sha256","requiredTools":"base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft,wc"}}
+{"immutable":true,"metadata":{"labels":{"kodex.dev/owner-intent":"true"},"annotations":{"kodex.dev/admission-tools-sha256":"$tools_digest"}},"data":{"toolsImage":"$tools_image","admissionImage":"$admission_image","authorityImage":"registry.example.test/kodex/internal-rpc-authority@$authority_digest","promotionRepository":"kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/roles","promotionEvidenceRepository":"kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/evidence","evidenceRepository":"kodex-image-registry-evidence.kodex-system.svc.cluster.local:5007/evidence/role-image-admission","promotedPullRepository":"registry.example.test/kodex/roles","policyRevision":"\$policy_revision","policySHA256":"$policy_sha256","builderIdentity":"$builder_identity","buildType":"$build_type","trustedRoleBaseRepository":"registry.example.test/kodex/agent-runner","trustedRoleBaseDigest":"$trusted_base_digest","roleRuntimeContractRevision":"1","roleRuntimeContractSHA256":"$runtime_contract_sha256","requiredTools":"base64,cmp,cosign,grype,image-admission-bridge,image-tool-inventory-validator,image-vulnerability-report-validator,jq,regctl,sha256sum,syft,tr,wc"}}
 JSON
 EOF
 chmod 0555 "$temporary_directory/bin/kubectl"
@@ -515,7 +539,7 @@ if ! yq eval-all -e '
   select(.kind == "Job" and .metadata.labels."kodex.dev/image-admission-phase" == "scan") |
   .spec.template.spec.containers[0].resources.requests.memory == "256Mi" and
   .spec.template.spec.containers[0].resources.limits.memory == "2Gi" and
-  (.spec.template.spec.volumes[] | select(.name == "tmp") | .emptyDir.sizeLimit) == "1Gi"
+  (.spec.template.spec.volumes[] | select(.name == "tmp") | .emptyDir.sizeLimit) == "32Gi"
 ' "$temporary_directory/admission.yaml" >/dev/null 2>&1; then
   echo "scan Job does not have its bounded memory and temporary storage profile" >&2
   exit 1
@@ -561,41 +585,41 @@ claim_8=$(yq eval-all 'select(.kind == "PersistentVolumeClaim") | .metadata.name
 grep -Fq 'serviceAccountName: role-image-builder' \
   "$repository_root/deploy/k8s/base/role-image-builder/deployment.yaml"
 grep -Fq 'image-admission-bridge claim' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+  "$admission_script"
 grep -Fq 'IMAGE_OWNER_PROMOTION_READBACK_SHA256_FILE' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+  "$admission_script"
 grep -Fq 'IMAGE_OWNER_ADMISSION_RECEIPT_OCI_MANIFEST_DIGEST_FILE' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+  "$admission_script"
 grep -Fq 'signatureSHA256:$signature_sha' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+  "$admission_script"
 grep -Fq 'regctl artifact put "$@" "$evidence_tag"' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+  "$admission_script"
 grep -Fq 'regctl artifact get "$evidence_reference" --file "$evidence_name"' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+  "$admission_script"
 grep -Fq '"check-for-app-update": false' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+  "$admission_script"
 grep -Fq 'parallelism: 1' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+  "$admission_script"
 grep -Fq '"ca-cert": "/identity/ca.pem"' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+  "$admission_script"
 grep -Fq '"tls-cert": "/identity/registry-client.crt"' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+  "$admission_script"
 grep -Fq '"tls-key": "/identity/registry-client.key"' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+  "$admission_script"
 grep -Fq 'syft --config /tmp/syft.json --from registry "$source_ref"' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+  "$admission_script"
 grep -Fq 'fail "SBOM generation failed"' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+  "$admission_script"
 grep -Fq 'fail "vulnerability scan failed"' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+  "$admission_script"
 grep -Fq 'kodex.dev/fix-available-high-or-critical/v1' \
   "$repository_root/deploy/k8s/base/image-supply-chain/vulnerability-policy.jq"
 grep -Fq 'unresolvedNoFixMatchCount' \
   "$repository_root/deploy/k8s/base/image-supply-chain/vulnerability-policy.jq"
-grep -Fq '.kodexPolicy.blockingMatchCount == 0' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+grep -Fq '.blockingMatchCount == 0' \
+  "$admission_script"
 if grep -Fq -- '--fail-on high' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"; then
+  "$admission_script"; then
   echo "admission discards the complete vulnerability report through fail-on" >&2
   exit 1
 fi
@@ -623,27 +647,26 @@ jq -e '
   .kodexPolicy.unresolvedNoFixMatchCount == 0 and
   (.matches | length) == 1
 ' "$temporary_directory/vulnerability-fixable.result.json" >/dev/null
-if rg -q -- '--slurpfile|admission\.evidence\.json' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"; then
+if rg -q -- 'admission\.evidence\.json' "$admission_script"; then
   echo "admission evidence still reserializes signed payloads" >&2
   exit 1
 fi
 if grep -Fq 'issuedAt' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"; then
+  "$admission_script"; then
   echo "admission receipt contains non-deterministic issue time" >&2
   exit 1
 fi
 if grep -Eq -- '--output-signature|--signature([ =]|$)' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"; then
+  "$admission_script"; then
   echo "admission still uses removed Cosign detached-signature flags" >&2
   exit 1
 fi
 grep -Fq -- '--bundle /work/image-digest.sigstore.json' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+  "$admission_script"
 grep -Fq -- '--bundle "$evidence_directory/$signed_name.sigstore.json"' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+  "$admission_script"
 grep -Fq 'load_promotion_claim' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
+  "$admission_script"
 promotion_uses_emptydir=$(yq eval-all 'select(.kind == "Job" and .metadata.labels."kodex.dev/image-admission-phase" == "promote") |
   .spec.template.spec.volumes[] | select(.name == "work") | .emptyDir != null' "$temporary_directory/admission.yaml")
 [[ $promotion_uses_emptydir == "true" ]] || {
@@ -651,20 +674,19 @@ promotion_uses_emptydir=$(yq eval-all 'select(.kind == "Job" and .metadata.label
   exit 1
 }
 if sed -n '/^  promote)/,/^  \*)/p' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" |
+  "$admission_script" |
   grep -Fq 'load_owner_claim'; then
   echo "promotion still depends on admission PVC claim" >&2
   exit 1
 fi
 promotion_body=$(sed -n '/^  promote)/,/^  \*)/p' \
-  "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh")
+  "$admission_script")
 grep -Fq 'restore_evidence_entries "$evidence_reference"' <<<"$promotion_body"
 grep -Fq 'verify_recovered_evidence /work/evidence' <<<"$promotion_body"
 if grep -Eq 'cosign\.key|sign-blob' <<<"$promotion_body"; then
   echo "promotion received evidence signing authority" >&2
   exit 1
 fi
-admission_script="$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh"
 grep -Fq 'cosign signing-config create' "$admission_script" || {
   echo "image admission does not materialize an explicit signing configuration" >&2
   exit 1
@@ -681,7 +703,7 @@ for offline_signing_contract in \
     exit 1
   }
 done
-[[ $(grep -Fc -- '--insecure-ignore-tlog' "$admission_script") -eq 3 ]] || {
+[[ $(grep -Fc 'cosign verify-blob' "$admission_script") -eq $(grep -Fc -- '--insecure-ignore-tlog' "$admission_script") ]] || {
   echo "not every key-based blob verification disables the unavailable transparency log" >&2
   exit 1
 }
@@ -736,19 +758,56 @@ provenance.json|application/vnd.kodex.provenance-binding.v2+json
 provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 native-provenance.json|application/vnd.kodex.native-provenance.v1+json
 native-provenance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
-sbom.json|application/spdx+json
+tool-inventory.json|application/vnd.kodex.image-tool-inventory-binding.v1+json
+tool-inventory.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
+sbom.json.part-0|application/vnd.kodex.sbom-byte-part.v1+octet-stream
+sbom.json.part-1|application/vnd.kodex.sbom-byte-part.v1+octet-stream
+sbom.json.part-2|application/vnd.kodex.sbom-byte-part.v1+octet-stream
+sbom.json.part-3|application/vnd.kodex.sbom-byte-part.v1+octet-stream
 sbom.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
-vulnerability.json|application/vnd.kodex.vulnerability-report.v1+json
+vulnerability.json.part-0|application/vnd.kodex.vulnerability-byte-part.v1+octet-stream
+vulnerability.json.part-1|application/vnd.kodex.vulnerability-byte-part.v1+octet-stream
+vulnerability.json.part-2|application/vnd.kodex.vulnerability-byte-part.v1+octet-stream
+vulnerability.json.part-3|application/vnd.kodex.vulnerability-byte-part.v1+octet-stream
 vulnerability.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
-signature.binding.json|application/vnd.kodex.signature-binding.v1+json
-admission.receipt.json|application/vnd.kodex.admission-receipt.v1+json
+vulnerability-report.json|application/vnd.kodex.image-vulnerability-report.v1+json
+vulnerability-report.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
+risk-acceptance.json|application/vnd.kodex.image-risk-acceptance.v1+json
+risk-acceptance.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
+signature.binding.json|application/vnd.kodex.signature-binding.v2+json
+admission.receipt.json|application/vnd.kodex.admission-receipt.v3+json
+admission.receipt.sigstore.json|application/vnd.dev.sigstore.bundle.v0.3+json
 cosign.pub|application/vnd.dev.cosign.public-key.v1+pem
 EOF
+}
+
+# Исполняем producer из исходника, а не отдельную копию разбиения fixture.
+prepare_evidence_chunks_fixture() {
+  chunks_function=$(awk '
+    $0 == "prepare_evidence_chunks() {" { found = 1 }
+    found { print }
+    found && $0 == "}" { exit }
+  ' "$admission_script")
+  [[ -n $chunks_function ]] || { echo 'evidence chunk producer is absent' >&2; exit 1; }
+  sh -eu -c 'fail() { echo "image admission failed: $1" >&2; exit 1; }
+    eval "$1"
+    prepare_evidence_chunks "$2"' fixture "$chunks_function" "$1"
+}
+
+production_entries_function=$(awk '
+  $0 == "evidence_entries() {" { found = 1 }
+  found { print }
+  found && $0 == "}" { exit }
+' "$admission_script")
+production_entries=$(sh -eu -c 'eval "$1"; evidence_entries' fixture "$production_entries_function")
+[[ "$production_entries" == "$(evidence_entries_fixture)" ]] || {
+  echo 'OCI v5 fixture entry registry differs from production' >&2; exit 1;
 }
 
 write_evidence_manifest_fixture() {
   evidence_directory=$1
   manifest_file=$2
+  prepare_evidence_chunks_fixture "$evidence_directory"
   layer_file=$manifest_file.layers
   : >"$layer_file"
   while IFS='|' read -r evidence_name evidence_media_type; do
@@ -762,15 +821,15 @@ write_evidence_manifest_fixture() {
   done <<EOF
 $(evidence_entries_fixture)
 EOF
-  jq -Ssc --arg artifact artifact-1 --arg image "$image_digest" \
+  jq -Ssc --arg artifact imgart_fixture123 --arg image "$image_digest" \
     --arg policy "$policy_revision" --arg policy_sha "$policy_sha256" \
     '{schemaVersion:2,mediaType:"application/vnd.oci.image.manifest.v1+json",
-      artifactType:"application/vnd.kodex.image-admission-evidence.v2",
-      config:{mediaType:"application/vnd.kodex.image-admission-evidence.config.v2+json",
+      artifactType:"application/vnd.kodex.image-admission-evidence.v5",
+      config:{mediaType:"application/vnd.kodex.image-admission-evidence.config.v5+json",
         digest:"sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",size:2},
       layers:.,annotations:{
         "kodex.dev/artifact-id":$artifact,
-        "kodex.dev/evidence-schema":"kodex.dev/image-admission-evidence/v2",
+        "kodex.dev/evidence-schema":"kodex.dev/image-admission-evidence/v5",
         "kodex.dev/image-digest":$image,
         "kodex.dev/policy-revision":$policy,
         "kodex.dev/policy-sha256":$policy_sha}}' "$layer_file" >"$manifest_file"
@@ -792,10 +851,11 @@ expect_evidence_failure() {
   failure_name=$1
   evidence_directory=$2
   evidence_manifest=$3
+  expected_receipt=${4:-$receipt_sha}
   evidence_manifest_digest="sha256:$(sha256sum "$evidence_manifest" | awk '{print $1}')"
   if PATH="$temporary_directory/bin:$PATH" \
-    sh "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" validate-evidence \
-    artifact-1 "$image_digest" "$receipt_sha" "$evidence_directory" "$evidence_manifest" \
+    sh "$admission_script" validate-evidence \
+    imgart_fixture123 "$image_digest" "$expected_receipt" "$evidence_directory" "$evidence_manifest" \
     "$evidence_manifest_digest" "$policy_revision" "$policy_sha256" ACCEPTED PROJECT org_fixture123 prj_fixture123 >/dev/null 2>&1; then
     echo "$failure_name was accepted" >&2
     exit 1
@@ -844,7 +904,45 @@ cat >"$evidence_source/vulnerability.json" <<'EOF'
   "descriptor": { "configuration": { "fail-on-severity": "high" }, "name": "grype" }
 }
 EOF
-for signed_name in image-digest provenance native-provenance sbom vulnerability; do
+# Полные JSON остаются крупнее отдельного OCI layer; подпись закрепляет их целиком.
+jq -cn --slurpfile sbom "$evidence_source/sbom.json" \
+  '$sbom[0] + {retainedContent:("x" * 25663211)}' >"$evidence_source/sbom.next.json"
+mv "$evidence_source/sbom.next.json" "$evidence_source/sbom.json"
+jq -cn --slurpfile report "$evidence_source/vulnerability.json" \
+  '$report[0] + {retainedContent:("y" * 18000000)}' >"$evidence_source/vulnerability.next.json"
+mv "$evidence_source/vulnerability.next.json" "$evidence_source/vulnerability.json"
+provenance_sha=$(sha256sum "$evidence_source/provenance.json" | awk '{print $1}')
+# Canonical manifest fixture: все probes честно MISSING, capabilities не назначаются.
+jq -jcn --argjson names '["bash","curl","git","gh","jq","yq","ripgrep","make","just","go","goimports","gofumpt","golangci-lint","staticcheck","goose","sqlc","buf","protoc","protoc-gen-go","protoc-gen-go-grpc","grpcurl","mockgen","oapi-codegen","node","npm","pnpm","yarn","typescript","eslint","prettier","vite","vue-tsc","vitest","playwright","chromium","playwright-mcp","wscat","codex","corepack","python3","pip","kubectl","kustomize","helm","buildctl","docker","shellcheck","hadolint","govulncheck","gitleaks"]' \
+  '{schema:"kodex.dev/image-tool-inventory/v1",specSHA256:("1"*64),immutableBuildSHA256:("2"*64),runtimeContractSHA256:("3"*64),platform:"linux/amd64",tools:[$names|to_entries[]|{name:.value,status:"MISSING",path:"",version:"",sha256:"",required:(.key<38)}]}' \
+  >"$temporary_directory/tool-manifest.json"
+tool_manifest_sha=$(sha256sum "$temporary_directory/tool-manifest.json" | awk '{print $1}')
+jq -cn --arg image "$image_digest" --arg provenance "$provenance_sha" --arg sha "$tool_manifest_sha" \
+  --slurpfile manifest "$temporary_directory/tool-manifest.json" \
+  '{schema:"kodex.dev/image-tool-inventory-binding/v1",imageDigest:$image,provenanceSHA256:$provenance,platforms:[{platformDigest:$image,manifestSHA256:$sha,manifest:$manifest[0]}]}' \
+  >"$evidence_source/tool-inventory.json"
+(cd "$repository_root/services/jobs/role-image-builder" &&
+  GOTOOLCHAIN=go1.26.6 go build "${fixture_go_args[@]}" -o "$temporary_directory/bin/image-tool-inventory-validator" ./cmd/image-tool-inventory-validator &&
+  GOTOOLCHAIN=go1.26.6 go build "${fixture_go_args[@]}" -o "$temporary_directory/bin/image-vulnerability-report-validator" ./cmd/image-vulnerability-report-validator)
+export PATH="$temporary_directory/bin:$PATH"
+sbom_sha=$(sha256sum "$evidence_source/sbom.json" | awk '{print $1}')
+jq --argjson policy_revision "$policy_revision" --arg policy_sha256 "$policy_sha256" \
+  -f "$repository_root/deploy/k8s/base/image-supply-chain/vulnerability-policy.jq" \
+  "$evidence_source/vulnerability.json" >"$evidence_source/vulnerability.next.json"
+mv "$evidence_source/vulnerability.next.json" "$evidence_source/vulnerability.json"
+base64 <"$evidence_source/vulnerability.json" | tr -d '\n' >"$temporary_directory/report.base64"
+jq -cn --rawfile source "$temporary_directory/report.base64" \
+  --arg image "$image_digest" --arg sbom "$sbom_sha" --argjson policy "$policy_revision" --arg policy_sha "$policy_sha256" \
+  '{binding:{schema:"kodex.dev/image-vulnerability-report/v1",artifactRef:"imgart_fixture123",imageDigest:$image,
+    reportSHA256:"",sbomSHA256:$sbom,scopeKind:"PROJECT",organizationRef:"org_fixture123",projectRef:"prj_fixture123",
+    recipeRef:"imgrec_fixture123",recipeVersion:1,recipeGeneration:1,buildRef:"imgbld_fixture123",buildVersion:1,
+    buildAttempt:1,policyRevision:$policy,policySHA256:$policy_sha},reportBytesBase64:$source}' \
+  >"$temporary_directory/report.input.json"
+image-vulnerability-report-validator project <"$temporary_directory/report.input.json" >"$evidence_source/vulnerability-report.json"
+projection_sha=$(sha256sum "$evidence_source/vulnerability-report.json" | awk '{print $1}')
+: >"$evidence_source/risk-acceptance.json"
+: >"$evidence_source/risk-acceptance.sigstore.json"
+for signed_name in image-digest provenance native-provenance tool-inventory sbom vulnerability vulnerability-report; do
   signed_file="$evidence_source/$signed_name.json"
   [[ $signed_name == image-digest ]] && signed_file="$evidence_source/image-digest.subject"
   sign_evidence_fixture "$signed_file" "$evidence_source/$signed_name.sigstore.json"
@@ -852,7 +950,9 @@ done
 signature_identity=$(sha256sum "$evidence_source/cosign.pub" | awk '{print $1}')
 cat >"$evidence_source/signature.binding.json" <<EOF
 {
-  "verification": "cosign-key-v1", "version": "v1",
+  "verification": "cosign-key-v1", "version": "v2",
+  "admissionAttemptRef": "imgadm_fixture123", "admissionAttempt": 1, "fence": 1,
+  "vulnerabilityReportProjectionSHA256": "$projection_sha", "riskAcceptanceSHA256": "",
   "verdict": "ACCEPTED", "signatureIdentity": "$signature_identity",
   "policySHA256": "$policy_sha256", "policyRevision": "$policy_revision",
   "imageDigest": "$image_digest"
@@ -862,10 +962,14 @@ provenance_sha=$(sha256sum "$evidence_source/provenance.json" | awk '{print $1}'
 sbom_sha=$(sha256sum "$evidence_source/sbom.json" | awk '{print $1}')
 vulnerability_sha=$(sha256sum "$evidence_source/vulnerability.json" | awk '{print $1}')
 signature_sha=$(sha256sum "$evidence_source/signature.binding.json" | awk '{print $1}')
+inventory_sha=$(sha256sum "$evidence_source/tool-inventory.json" | awk '{print $1}')
 cat >"$evidence_source/admission.receipt.json" <<EOF
 {
   "verdict": "ACCEPTED",
-  "version": "v1", "artifactId": "artifact-1",
+  "version": "v3", "artifactId": "imgart_fixture123",
+  "admissionAttemptRef": "imgadm_fixture123", "admissionAttempt": 1, "fence": 1,
+  "vulnerabilityReportProjectionSHA256": "$projection_sha", "riskAcceptanceSHA256": "",
+  "toolInventorySHA256": "$inventory_sha",
   "signatureSHA256": "$signature_sha",
   "imageDigest": "$image_digest",
   "policySHA256": "$policy_sha256", "policyRevision": "$policy_revision",
@@ -877,6 +981,7 @@ cat >"$evidence_source/admission.receipt.json" <<EOF
   "provenanceSHA256": "$provenance_sha"
 }
 EOF
+sign_evidence_fixture "$evidence_source/admission.receipt.json" "$evidence_source/admission.receipt.sigstore.json"
 receipt_sha=$(sha256sum "$evidence_source/admission.receipt.json" | awk '{print $1}')
 jq -S . "$evidence_source/admission.receipt.json" >"$temporary_directory/evidence-reencoded.json"
 if cmp -s "$evidence_source/admission.receipt.json" "$temporary_directory/evidence-reencoded.json"; then
@@ -894,8 +999,8 @@ evidence_manifest_digest="sha256:$(sha256sum "$evidence_manifest" | awk '{print 
 evidence_reference="fixture.invalid/evidence@$evidence_manifest_digest"
 FIXTURE_EVIDENCE_REFERENCE="$evidence_reference" FIXTURE_EVIDENCE_MANIFEST="$evidence_manifest" \
   FIXTURE_EVIDENCE_BLOBS="$evidence_blobs" PATH="$temporary_directory/bin:$PATH" \
-  sh "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" validate-evidence-recovery \
-  artifact-1 "$image_digest" "$receipt_sha" "$evidence_reference" "$evidence_manifest" \
+  sh "$admission_script" validate-evidence-recovery \
+  imgart_fixture123 "$image_digest" "$receipt_sha" "$evidence_reference" "$evidence_manifest" \
   "$evidence_manifest_digest" "$policy_revision" "$policy_sha256" ACCEPTED "$evidence_recovered" PROJECT org_fixture123 prj_fixture123
 while IFS='|' read -r evidence_name evidence_media_type; do
   cmp -s "$evidence_source/$evidence_name" "$evidence_recovered/$evidence_name" || {
@@ -907,6 +1012,51 @@ $(evidence_entries_fixture)
 EOF
 [[ $(sha256sum "$evidence_recovered/admission.receipt.json" | awk '{print $1}') == "$receipt_sha" ]]
 [[ $(sha256sum "$evidence_recovered/signature.binding.json" | awk '{print $1}') == "$signature_sha" ]]
+[[ $(jq '.layers | length' "$evidence_manifest") == 26 ]]
+for logical_name in sbom vulnerability; do
+  cmp -s "$evidence_source/$logical_name.json" "$evidence_recovered/$logical_name.json" || {
+    echo 'chunked logical evidence did not retain all signed bytes' >&2; exit 1;
+  }
+done
+[[ $(wc -c <"$evidence_recovered/sbom.json") -gt 25663211 ]]
+[[ $(wc -c <"$evidence_recovered/sbom.json.part-0") == 16777216 ]]
+[[ ! -s "$evidence_recovered/sbom.json.part-2" && ! -s "$evidence_recovered/sbom.json.part-3" ]]
+jq '.artifactType = "application/vnd.kodex.image-admission-evidence.v3" |
+  .config.mediaType = "application/vnd.kodex.image-admission-evidence.config.v3+json" |
+  .annotations["kodex.dev/evidence-schema"] = "kodex.dev/image-admission-evidence/v3"' \
+  "$evidence_manifest" >"$temporary_directory/evidence-old-schema.json"
+expect_evidence_failure 'old v3 evidence schema' "$evidence_recovered" "$temporary_directory/evidence-old-schema.json"
+jq '.layers |= reverse' "$evidence_manifest" >"$temporary_directory/evidence-reordered.json"
+expect_evidence_failure 'reordered evidence chunks' "$evidence_recovered" "$temporary_directory/evidence-reordered.json"
+jq '(.layers[] | select(.annotations["org.opencontainers.image.title"] == "sbom.json.part-0") | .size) = 1' \
+  "$evidence_manifest" >"$temporary_directory/evidence-short-first.json"
+expect_evidence_failure 'short nonfinal evidence chunk' "$evidence_recovered" "$temporary_directory/evidence-short-first.json"
+jq '(.layers[] | select(.annotations["org.opencontainers.image.title"] == "sbom.json.part-2") | .size) = 1' \
+  "$evidence_manifest" >"$temporary_directory/evidence-nontrailing-empty.json"
+expect_evidence_failure 'nontrailing empty evidence chunk' "$evidence_recovered" "$temporary_directory/evidence-nontrailing-empty.json"
+jq '(.layers[] | select(.annotations["org.opencontainers.image.title"] == "sbom.json.part-0") | .size) = 16777217' \
+  "$evidence_manifest" >"$temporary_directory/evidence-oversized-chunk.json"
+expect_evidence_failure 'oversized evidence chunk' "$evidence_recovered" "$temporary_directory/evidence-oversized-chunk.json"
+jq '(.layers[] | select(.annotations["org.opencontainers.image.title"] | startswith("sbom.json.part-")) | .size) = 0' \
+  "$evidence_manifest" >"$temporary_directory/evidence-empty-logical.json"
+expect_evidence_failure 'empty logical chunk sequence' "$evidence_recovered" "$temporary_directory/evidence-empty-logical.json"
+jq '.layers |= map(.size = 16777216)' "$evidence_manifest" >"$temporary_directory/evidence-total-overflow.json"
+expect_evidence_failure 'evidence exceeding global 64Mi bound' "$evidence_recovered" "$temporary_directory/evidence-total-overflow.json"
+cp -a "$evidence_recovered" "$temporary_directory/evidence-chunk-mutated"
+printf 'x' >>"$temporary_directory/evidence-chunk-mutated/sbom.json.part-1"
+expect_evidence_failure 'mutated evidence chunk bytes' "$temporary_directory/evidence-chunk-mutated" "$evidence_manifest"
+cp -a "$evidence_recovered" "$temporary_directory/evidence-chunk-missing"
+rm "$temporary_directory/evidence-chunk-missing/sbom.json.part-3"
+expect_evidence_failure 'missing trailing empty chunk' "$temporary_directory/evidence-chunk-missing" "$evidence_manifest"
+# Producer не обрезает источник за пределами фиксированного четырёхчастного бюджета.
+mkdir "$temporary_directory/evidence-source-overflow"
+dd if=/dev/zero of="$temporary_directory/evidence-source-overflow/sbom.json" \
+  bs=16777216 count=4 2>/dev/null
+printf 'x' >>"$temporary_directory/evidence-source-overflow/sbom.json"
+printf '{}\n' >"$temporary_directory/evidence-source-overflow/vulnerability.json"
+if prepare_evidence_chunks_fixture "$temporary_directory/evidence-source-overflow" >/dev/null 2>&1; then
+  echo 'oversized logical source was truncated into accepted evidence chunks' >&2; exit 1;
+fi
 
 cp -a "$evidence_recovered" "$temporary_directory/evidence-byte-mutated"
 printf ' ' >>"$temporary_directory/evidence-byte-mutated/sbom.json"
@@ -934,6 +1084,148 @@ write_evidence_manifest_fixture "$temporary_directory/evidence-signature-mutated
   "$temporary_directory/evidence-signature-mutated.json"
 expect_evidence_failure "mutated Sigstore evidence bundle" \
   "$temporary_directory/evidence-signature-mutated" "$temporary_directory/evidence-signature-mutated.json"
+
+# Полный отказ относится только к реальным blocking findings, не к technical failure.
+rejected_source="$temporary_directory/evidence-rejected"
+cp -a "$evidence_recovered" "$rejected_source"
+jq '.matches = [
+  {artifact:{name:"fixture",version:"1.0",type:"go-module"},
+    vulnerability:{id:"CVE-2026-12345",severity:"High",fix:{state:"fixed",versions:["2.0.0"]}}},
+  {artifact:{name:"fixture-low",version:"1.0",type:"npm"},
+    vulnerability:{id:"GHSA-2345-2345-2345",severity:"Low",fix:{state:"fixed",versions:[">= 2.0.0"]}}},
+  {artifact:{name:"fixture-medium",version:"1.0",type:"npm"},
+    vulnerability:{id:"GO-2026-1234",severity:"Medium",fix:{state:"not-fixed",versions:[]}}},
+  {artifact:{name:"fixture-unknown",version:"1.0",type:"npm"},
+    vulnerability:{id:"OTHER-1234",severity:"Unknown",fix:{state:"unknown",versions:[]}}}
+] | .ignoredMatches = [
+  {artifact:{name:"fixture-ignored",version:"1.0",type:"npm"},
+    vulnerability:{id:"CVE-2026-12346",severity:"Critical",fix:{state:"fixed",versions:["2.0.0"]}}}
+]' "$rejected_source/vulnerability.json" >"$rejected_source/vulnerability.next.json"
+jq --argjson policy_revision "$policy_revision" --arg policy_sha256 "$policy_sha256" \
+  -f "$repository_root/deploy/k8s/base/image-supply-chain/vulnerability-policy.jq" \
+  "$rejected_source/vulnerability.next.json" >"$rejected_source/vulnerability.json"
+rm "$rejected_source/vulnerability.next.json"
+base64 <"$rejected_source/vulnerability.json" | tr -d '\n' >"$temporary_directory/rejected-report.base64"
+jq -cn --slurpfile report "$rejected_source/vulnerability-report.json" \
+  --rawfile source "$temporary_directory/rejected-report.base64" \
+  '{binding:($report[0] + {reportSHA256:""}),reportBytesBase64:$source}' \
+  >"$temporary_directory/rejected-report.input.json"
+image-vulnerability-report-validator project <"$temporary_directory/rejected-report.input.json" \
+  >"$rejected_source/vulnerability-report.json"
+jq -e '.matchCount == 5 and .blockingMatchCount == 1 and .suppressedMatchCount == 1 and
+  .uniqueAdvisoryCount == 5 and
+  any(.severityCounts[]; .severity == "LOW" and .matchCount == 1) and
+  any(.severityCounts[]; .severity == "MEDIUM" and .matchCount == 1) and
+  any(.severityCounts[]; .severity == "UNKNOWN" and .matchCount == 1)' \
+  "$rejected_source/vulnerability-report.json" >/dev/null
+rejected_projection_sha=$(sha256sum "$rejected_source/vulnerability-report.json" | awk '{print $1}')
+rejected_report_sha=$(sha256sum "$rejected_source/vulnerability.json" | awk '{print $1}')
+jq -cn --slurpfile binding "$rejected_source/signature.binding.json" --arg projection "$rejected_projection_sha" \
+  '$binding[0] + {verdict:"REJECTED",signatureIdentity:"not-applicable-rejected",vulnerabilityReportProjectionSHA256:$projection}' \
+  >"$rejected_source/signature.next.json"
+mv "$rejected_source/signature.next.json" "$rejected_source/signature.binding.json"
+rejected_signature_sha=$(sha256sum "$rejected_source/signature.binding.json" | awk '{print $1}')
+jq -cn --slurpfile receipt "$rejected_source/admission.receipt.json" \
+  --arg projection "$rejected_projection_sha" --arg report "$rejected_report_sha" --arg signature "$rejected_signature_sha" \
+  '$receipt[0] + {verdict:"REJECTED",signatureIdentity:"not-applicable-rejected",signatureSHA256:$signature,
+    vulnerabilityEvidenceSHA256:$report,vulnerabilityReportProjectionSHA256:$projection}' \
+  >"$rejected_source/receipt.next.json"
+mv "$rejected_source/receipt.next.json" "$rejected_source/admission.receipt.json"
+for rejected_bundle in "$rejected_source"/*.sigstore.json; do : >"$rejected_bundle"; done
+rejected_receipt_sha=$(sha256sum "$rejected_source/admission.receipt.json" | awk '{print $1}')
+rejected_manifest="$temporary_directory/evidence-rejected-manifest.json"
+write_evidence_manifest_fixture "$rejected_source" "$rejected_manifest"
+rejected_manifest_digest="sha256:$(sha256sum "$rejected_manifest" | awk '{print $1}')"
+sh "$admission_script" validate-evidence imgart_fixture123 "$image_digest" "$rejected_receipt_sha" \
+  "$rejected_source" "$rejected_manifest" "$rejected_manifest_digest" "$policy_revision" "$policy_sha256" \
+  REJECTED PROJECT org_fixture123 prj_fixture123
+
+# Новое решение и свежая attempt не изменяют исходные rejected bytes/receipt.
+risk_source="$temporary_directory/evidence-risk-accepted"
+cp -a "$rejected_source" "$risk_source"
+jq -jcn --slurpfile report "$risk_source/vulnerability-report.json" \
+  --arg projection "$rejected_projection_sha" --arg receipt "$rejected_receipt_sha" \
+  --arg evidence "$rejected_manifest_digest" '
+  $report[0] as $r |
+  {schema:"kodex.dev/image-risk-acceptance/v1",decisionRef:"imgrisk_fixture123",decisionVersion:1,action:"ACCEPT_RISK",
+   scopeKind:$r.scopeKind,organizationRef:$r.organizationRef,projectRef:$r.projectRef,artifactRef:$r.artifactRef,
+   imageDigest:$r.imageDigest,reportSHA256:$r.reportSHA256,projectionSHA256:$projection,sourceAdmissionRevision:1,
+   sourceAdmissionReceiptSHA256:$receipt,sourceEvidenceManifestDigest:$evidence,recipeRef:$r.recipeRef,
+   recipeVersion:$r.recipeVersion,recipeGeneration:$r.recipeGeneration,buildRef:$r.buildRef,buildVersion:$r.buildVersion,
+   buildAttempt:$r.buildAttempt,policyRevision:$r.policyRevision,policySHA256:$r.policySHA256,
+   reason:"Риск оценён для точного тестового образа",decidedByActorRef:"act_fixture123",decidedAt:"2026-10-05T06:00:00Z"}' \
+  >"$risk_source/risk-acceptance.json"
+image-vulnerability-report-validator risk <"$risk_source/risk-acceptance.json"
+risk_sha=$(sha256sum "$risk_source/risk-acceptance.json" | awk '{print $1}')
+signature_identity=$(sha256sum "$risk_source/cosign.pub" | awk '{print $1}')
+jq -cn --slurpfile binding "$risk_source/signature.binding.json" --arg identity "$signature_identity" --arg risk "$risk_sha" '
+  $binding[0] + {verdict:"ACCEPTED",signatureIdentity:$identity,admissionAttemptRef:"imgadm_fixture456",
+    admissionAttempt:2,fence:2,riskAcceptanceSHA256:$risk}' >"$risk_source/signature.next.json"
+mv "$risk_source/signature.next.json" "$risk_source/signature.binding.json"
+risk_signature_sha=$(sha256sum "$risk_source/signature.binding.json" | awk '{print $1}')
+jq -cn --slurpfile receipt "$risk_source/admission.receipt.json" \
+  --arg identity "$signature_identity" --arg risk "$risk_sha" --arg signature "$risk_signature_sha" '
+  $receipt[0] + {verdict:"ACCEPTED",signatureIdentity:$identity,signatureSHA256:$signature,
+    admissionAttemptRef:"imgadm_fixture456",admissionAttempt:2,fence:2,riskAcceptanceSHA256:$risk}' \
+  >"$risk_source/receipt.next.json"
+mv "$risk_source/receipt.next.json" "$risk_source/admission.receipt.json"
+for signed_name in image-digest provenance native-provenance tool-inventory sbom vulnerability \
+  vulnerability-report risk-acceptance admission.receipt; do
+  signed_file="$risk_source/$signed_name.json"
+  [[ $signed_name == image-digest ]] && signed_file="$risk_source/image-digest.subject"
+  sign_evidence_fixture "$signed_file" "$risk_source/$signed_name.sigstore.json"
+done
+risk_receipt_sha=$(sha256sum "$risk_source/admission.receipt.json" | awk '{print $1}')
+risk_manifest="$temporary_directory/evidence-risk-manifest.json"
+write_evidence_manifest_fixture "$risk_source" "$risk_manifest"
+risk_manifest_digest="sha256:$(sha256sum "$risk_manifest" | awk '{print $1}')"
+sh "$admission_script" validate-evidence imgart_fixture123 "$image_digest" "$risk_receipt_sha" \
+  "$risk_source" "$risk_manifest" "$risk_manifest_digest" "$policy_revision" "$policy_sha256" \
+  ACCEPTED PROJECT org_fixture123 prj_fixture123
+[[ $(sha256sum "$rejected_source/admission.receipt.json" | awk '{print $1}') == "$rejected_receipt_sha" ]]
+for retained_name in provenance.json native-provenance.json tool-inventory.json sbom.json vulnerability.json vulnerability-report.json; do
+  cmp -s "$rejected_source/$retained_name" "$risk_source/$retained_name" || {
+    echo "risk acceptance changed retained immutable source bytes" >&2; exit 1;
+  }
+done
+
+# Даже согласованные новые hashes/signatures не легализуют чужую decision tuple.
+for risk_mutation in recipe-generation report-hash attempt-fence; do
+  mutated_risk="$temporary_directory/evidence-risk-$risk_mutation"
+  cp -a "$risk_source" "$mutated_risk"
+  if [[ $risk_mutation == attempt-fence ]]; then
+    jq -cn --slurpfile binding "$mutated_risk/signature.binding.json" \
+      '$binding[0] + {fence:1}' >"$mutated_risk/signature.next.json"
+  else
+    mutation_filter='.recipeGeneration = 2'
+    [[ $risk_mutation != report-hash ]] || mutation_filter='.reportSHA256 = ("f" * 64)'
+    jq -jc "$mutation_filter" "$mutated_risk/risk-acceptance.json" >"$mutated_risk/risk.next.json"
+    mv "$mutated_risk/risk.next.json" "$mutated_risk/risk-acceptance.json"
+    mutated_risk_sha=$(sha256sum "$mutated_risk/risk-acceptance.json" | awk '{print $1}')
+    jq -cn --slurpfile binding "$mutated_risk/signature.binding.json" --arg risk "$mutated_risk_sha" \
+      '$binding[0] + {riskAcceptanceSHA256:$risk}' >"$mutated_risk/signature.next.json"
+    jq -cn --slurpfile receipt "$mutated_risk/admission.receipt.json" --arg risk "$mutated_risk_sha" \
+      '$receipt[0] + {riskAcceptanceSHA256:$risk}' >"$mutated_risk/receipt.next.json"
+    mv "$mutated_risk/receipt.next.json" "$mutated_risk/admission.receipt.json"
+  fi
+  mv "$mutated_risk/signature.next.json" "$mutated_risk/signature.binding.json"
+  mutated_signature_sha=$(sha256sum "$mutated_risk/signature.binding.json" | awk '{print $1}')
+  jq -cn --slurpfile receipt "$mutated_risk/admission.receipt.json" --arg signature "$mutated_signature_sha" \
+    '$receipt[0] + {signatureSHA256:$signature}' >"$mutated_risk/receipt.next.json"
+  mv "$mutated_risk/receipt.next.json" "$mutated_risk/admission.receipt.json"
+  sign_evidence_fixture "$mutated_risk/risk-acceptance.json" "$mutated_risk/risk-acceptance.sigstore.json"
+  sign_evidence_fixture "$mutated_risk/admission.receipt.json" "$mutated_risk/admission.receipt.sigstore.json"
+  mutated_receipt_sha=$(sha256sum "$mutated_risk/admission.receipt.json" | awk '{print $1}')
+  mutated_manifest="$temporary_directory/evidence-risk-$risk_mutation.json"
+  write_evidence_manifest_fixture "$mutated_risk" "$mutated_manifest"
+  expect_evidence_failure "risk acceptance with foreign $risk_mutation" "$mutated_risk" "$mutated_manifest" "$mutated_receipt_sha"
+done
+cp -a "$risk_source" "$temporary_directory/evidence-risk-unsigned-receipt"
+: >"$temporary_directory/evidence-risk-unsigned-receipt/admission.receipt.sigstore.json"
+write_evidence_manifest_fixture "$temporary_directory/evidence-risk-unsigned-receipt" \
+  "$temporary_directory/evidence-risk-unsigned-receipt.json"
+expect_evidence_failure "risk acceptance without signed new receipt" \
+  "$temporary_directory/evidence-risk-unsigned-receipt" "$temporary_directory/evidence-risk-unsigned-receipt.json" "$risk_receipt_sha"
 
 auth=$(printf 'pull-reader:current-password' | base64 | tr -d '\n')
 jq -n --arg host "$pull_host" --arg auth "$auth" '{auths:{($host):{auth:$auth}}}' \
@@ -963,14 +1255,17 @@ fi
 jq -n '{User:"10001:10001",
   Entrypoint:["/usr/local/bin/kodex-init","entrypoint","/usr/local/bin/kodex-agent-runner"],
   Cmd:["runtime-session"]}' >"$temporary_directory/runtime-config.json"
-sh "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" \
+sh "$admission_script" \
   validate-runtime-config "$temporary_directory/runtime-config.json"
 jq '.Entrypoint = ["/bin/sh"]' "$temporary_directory/runtime-config.json" \
   >"$temporary_directory/unsafe-runtime-config.json"
-if sh "$repository_root/deploy/k8s/base/image-supply-chain/image-admission.sh" \
+if sh "$admission_script" \
   validate-runtime-config "$temporary_directory/unsafe-runtime-config.json" >/dev/null 2>&1; then
   echo "unsafe role runtime ABI was accepted" >&2
   exit 1
 fi
 
+[[ $(sha256sum "$admission_script" | awk '{print $1}') == "$admission_source_sha256" ]] || {
+  echo "admission fixture source changed during verification" >&2; exit 1;
+}
 echo "image supply-chain negative fixtures passed"

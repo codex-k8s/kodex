@@ -21,6 +21,16 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 		return err
 	}
 	switch input.Kind {
+	case command.LaunchWorkflowExecution:
+		return repository.validateWorkflowLaunchAuthority(ctx, tx, current, input)
+	case command.CreateProjectAssistantIntegrationConnection:
+		payload, valid := input.Payload.(command.ProjectAssistantConnectionInput)
+		if !valid {
+			return errs.ErrInvalid
+		}
+		return repository.authorizeProjectAssistantConnection(ctx, tx, current, payload, true)
+	case command.ResolveOwnerGate:
+		return repository.authorizeOwnerGateCommand(ctx, tx, current, input.Payload)
 	case command.RetryRun:
 		if handled, err := repository.authorizeAssistantRetry(ctx, tx, current, input); handled {
 			return err
@@ -63,7 +73,13 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 			return errs.ErrInvalid
 		}
 		_, _, err := repository.assistantRoleImageUpdateInput(ctx, tx, current, input.Mutation, payload)
-		return err
+		if err != nil {
+			return err
+		}
+		if !exactSHA256(payload.SpecSHA256) {
+			return errs.ErrInvalid
+		}
+		return nil
 	case command.TrashProject, command.RestoreProject, command.PurgeProject:
 		_, ok := input.Payload.(command.ProjectLifecycleInput)
 		if !ok {
@@ -79,6 +95,12 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 			return errs.ErrInvalid
 		}
 		return repository.authorizeIntegrationGrant(ctx, tx, current, payload)
+	case command.ChangeProjectAssistantIntegrationGrant:
+		_, _, err := repository.projectAssistantIntegrationGrantInput(ctx, tx, current, input.Payload)
+		return err
+	case command.ChangeSystemAssistantIntegrationGrant:
+		_, _, err := repository.systemAssistantIntegrationGrantInput(ctx, tx, current, input.Payload)
+		return err
 	case command.PrepareRoleImageImpactPlan, command.RebindRoleImage:
 		return repository.authorizeRoleImageImpact(ctx, tx, current, input)
 	case command.PrepareRoleImageGitWriteBack, command.PrepareIntegrationDefinitionGitWriteBack, command.ApproveManagedConfigurationGitWriteBack, command.RejectManagedConfigurationGitWriteBack, command.CancelManagedConfigurationGitWriteBack:
@@ -143,6 +165,9 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 	}
 	if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {
 		return errs.ErrNotFound
+	}
+	if err := repository.authorizeSystemAssistantIntegrationGrantPlan(ctx, tx, current, input); err != nil {
+		return err
 	}
 	if input.Kind == command.ArchiveAgent {
 		payload, ok := input.Payload.(command.AgentInput)

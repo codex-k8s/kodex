@@ -49,3 +49,37 @@ func serializableTransactionConflict(err error) bool {
 	var pgError *pgconn.PgError
 	return errors.As(err, &pgError) && (pgError.Code == "40001" || pgError.Code == "40P01")
 }
+
+// Assistant read удерживает lease до завершения одного snapshot. Renew может
+// изменить строку между snapshot и FOR SHARE; повтор начинает всю операцию
+// заново после rollback. Общий цикл сохраняет максимум три попытки и backoff.
+func retryAssistantLockedRead[T any](ctx context.Context, operation func(context.Context) (T, error)) (T, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return retrySerializableTransaction(ctx, func() (T, error) {
+		if ctx.Err() != nil {
+			var zero T
+			return zero, errs.ErrUnavailable
+		}
+		return operation(ctx)
+	})
+}
+
+// Read path не наследует retry deadlock/unknown commit outcome от commands.
+// SQL text и driver payload не входят в возвращаемую ошибку.
+func assistantLockedReadError(err, fallback error) error {
+	var pgError *pgconn.PgError
+	if errors.As(err, &pgError) && pgError.Code == "40001" {
+		return errors.Join(errSerializableTransactionRetry, fallback)
+	}
+	return fallback
+}
+
+func rollbackAssistantLockedRead(ctx context.Context, tx pgx.Tx, resultError *error) {
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+	defer cancel()
+	if err := tx.Rollback(cleanup); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+		// До следующей попытки завершение старой транзакции обязательно.
+		*resultError = errs.ErrUnavailable
+	}
+}

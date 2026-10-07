@@ -16,6 +16,64 @@ const editor = readFileSync(
 );
 
 describe("каталог образов ИИ-сотрудников", () => {
+  it("на любом экране отделяет lifecycle заголовок от статуса и не обрезает дату сборки", () => {
+    const desktop = editor.slice(
+      editor.indexOf(".image-lifecycle {"),
+      editor.indexOf("@media (max-width: 1000px)"),
+    );
+    expect(desktop).toMatch(
+      /\.lifecycle-step\s*\{[^}]*grid-template-columns: 28px minmax\(0, 1fr\);/s,
+    );
+    expect(desktop).toMatch(
+      /\.lifecycle-step > \.status-badge\s*\{[^}]*grid-column: 2;[^}]*max-width: 100%;[^}]*white-space: normal;[^}]*overflow: visible;/s,
+    );
+    expect(desktop).toMatch(
+      /\.lifecycle-step > div > span,\s*\.lifecycle-step > div > \.lifecycle-step__build-meta\s*\{[^}]*white-space: normal;[^}]*overflow: visible;[^}]*text-overflow: clip;/s,
+    );
+    expect(editor).toContain(
+      '<small v-if="currentBuild" class="lifecycle-step__build-meta">',
+    );
+    expect(editor).toContain(
+      "new Date(currentBuild.updatedAt).toLocaleString()",
+    );
+  });
+  it("ограничивает видимую историю пятью карточками и оставляет доступную прокрутку", () => {
+    expect(editor).toMatch(
+      /class="build-history__scroll build-history__scroll--builds"\s+role="region"\s+:aria-label="t\('roleImages.buildHistory'\)"\s+tabindex="0"/,
+    );
+    expect(editor).toMatch(
+      /\.build-history__scroll--builds\s*\{[^}]*max-height: min\(480px, 70dvh\);[^}]*overflow-x: hidden;[^}]*overflow-y: auto;/s,
+    );
+    expect(editor).toMatch(
+      /\.build-history__scroll--builds \.build-row\s*\{[^}]*min-height: 96px;[^}]*overflow-wrap: anywhere;/s,
+    );
+    expect(editor).toMatch(
+      /\.build-history__scroll--builds \.build-debug-action\s*\{[^}]*max-width: 100%;[^}]*min-height: 32px;[^}]*height: auto;[^}]*white-space: normal;/s,
+    );
+    expect(editor).toContain('v-for="build in builds"');
+    expect(editor).not.toContain("builds.slice(");
+  });
+  it("на телефоне переносит lifecycle status на отдельную строку и оставляет место помощнику", () => {
+    const mobile = editor.slice(editor.indexOf("@media (max-width: 640px)"));
+    expect(mobile).toContain(
+      "padding-bottom: calc(144px + env(safe-area-inset-bottom))",
+    );
+    expect(mobile).toMatch(
+      /\.lifecycle-step\s*\{[^}]*grid-template-columns: 28px minmax\(0, 1fr\)/s,
+    );
+    expect(mobile).toMatch(
+      /\.lifecycle-step\s*\{[^}]*padding-inline-end: 76px/s,
+    );
+    expect(mobile).toMatch(
+      /\.lifecycle-step > \.status-badge\s*\{[^}]*grid-column: 1 \/ -1;[^}]*white-space: normal;[^}]*overflow: visible;/s,
+    );
+    expect(mobile).toMatch(
+      /\.lifecycle-step > \.status-badge\s*\{[^}]*box-sizing: border-box;[^}]*width: 100%;/s,
+    );
+    expect(mobile).toMatch(
+      /\.lifecycle-step > div > span\s*\{[^}]*white-space: normal;[^}]*overflow: visible;/s,
+    );
+  });
   it("скрывает внутренние ссылки конфигурации в технических сведениях", () => {
     expect(catalog).toContain("<RoleImageLineage");
     expect(catalog).toContain("collapsible");

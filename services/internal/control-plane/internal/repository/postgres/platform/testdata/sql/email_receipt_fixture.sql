@@ -12,9 +12,9 @@ WITH connection AS (
 ), invocation AS (
     INSERT INTO control_plane.integration_invocations
         (ref,organization_id,run_id,node_id,connection_id,grant_id,capability_key,operation,idempotency_key,
-         intent_digest,input_digest,bounded_input,state,effect_key,risk,approval_policy,resource_kind)
+         intent_digest,input_digest,bounded_input,state,effect_key,risk,approval_policy,resource_kind,grant_version)
     SELECT 'email_receipt_invocation',r.organization_id,r.id,n.id,g.connection_id,g.id,'email.send','email.send','email-receipt-fixture',
-           repeat('a',64),repeat('a',64),'{}','UNKNOWN_OUTCOME','eff_opaque:email','WRITE','HUMAN_EACH_EFFECT','EMAIL_SENDER'
+           repeat('a',64),repeat('a',64),'{}','UNKNOWN_OUTCOME','eff_opaque:email','WRITE','HUMAN_EACH_EFFECT','EMAIL_SENDER',g.version
     FROM control_plane.runs r JOIN control_plane.run_nodes n ON n.run_id=r.id CROSS JOIN grant_row g
     WHERE r.ref=$2 ORDER BY n.ref LIMIT 1 RETURNING *
 )

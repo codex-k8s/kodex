@@ -1023,6 +1023,9 @@ func (repository *Repository) ListRuns(ctx context.Context, principal value.Prin
 				return err
 			}
 			item.NextActions = runActions(item.State, allowed("run.cancel") || allowed("run.cancel.own"), false)
+			if err := repository.applyContinuationAction(ctx, tx, scope, item); err != nil {
+				return err
+			}
 			return projectArtifactResults(ctx, tx, scope, &command.Result{Run: item})
 		}, func(ctx context.Context, tx pgx.Tx) (int64, error) {
 			var total int64
@@ -1248,6 +1251,20 @@ func (repository *Repository) applyResultActionPermissions(
 		return err
 	}
 	if projectRef == "" {
+		for _, gate := range []*entity.OwnerGate{result.Gate} {
+			if gate != nil {
+				if err := repository.projectGateIntent(ctx, runner, scope, gate, true); err != nil {
+					return err
+				}
+				gate.NextActions = gateActions(gate.State, true)
+			}
+		}
+		if result.Event != nil && result.Event.Delta.Gate != nil {
+			if err := repository.projectGateIntent(ctx, runner, scope, result.Event.Delta.Gate, true); err != nil {
+				return err
+			}
+			result.Event.Delta.Gate.NextActions = gateActions(result.Event.Delta.Gate.State, true)
+		}
 		return nil
 	}
 	permissions, err := repository.projectActionPermissions(ctx, runner, scope, projectRef)
@@ -1370,6 +1387,9 @@ func (repository *Repository) GetRun(ctx context.Context, principal value.Princi
 	if err != nil {
 		return entity.Run{}, err
 	}
+	if err := attachRunSessionReadiness(ctx, tx, scope, &item); err != nil {
+		return entity.Run{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return entity.Run{}, errs.ErrUnavailable
 	}
@@ -1470,6 +1490,19 @@ func (repository *Repository) GetRunGraph(ctx context.Context, principal value.P
 		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 	}
 	edgeRows.Close()
+	for index := range graph.Nodes {
+		node := &graph.Nodes[index]
+		if node.Type != "AGENT_EXECUTION" || node.TurnRef == "" || (node.ParentNodeRef == "" && node.Attempt <= 1) {
+			continue
+		}
+		source, err := readRuntimeMessageSource(ctx, tx, scope.organizationID, node.RunRef, node.TurnRef, node.Ref)
+		if err != nil {
+			return entity.Run{}, entity.RunGraph{}, err
+		}
+		if source.Origin == "CALLBACK_CONTINUATION" {
+			node.InputSummary = callbackContinuationPublicText
+		}
+	}
 	if err := projectArtifactResults(ctx, tx, scope, &command.Result{Graph: &graph}); err != nil {
 		return entity.Run{}, entity.RunGraph{}, err
 	}
@@ -1530,6 +1563,9 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 		if err := json.Unmarshal(delta, &e.Delta); err != nil || e.Delta.Run == nil {
 			return nil, 0, false, errs.ErrUnavailable
 		}
+		if e.Delta.IntegrationInvocationRef != "" && !validIntegrationActionBinding(e.Type, e.Summary, e.Delta.IntegrationInvocationRef) {
+			return nil, 0, false, errs.ErrUnavailable
+		}
 		if e.Delta.Incident != nil {
 			e.IncidentRef = e.Delta.Incident.Ref
 		}
@@ -1553,6 +1589,31 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 		return nil, 0, false, err
 	}
 	for index := range result {
+		if node := result[index].Delta.Node; node != nil && node.Type == "AGENT_EXECUTION" && node.TurnRef != "" && (node.ParentNodeRef != "" || node.Attempt > 1) {
+			source, err := readRuntimeMessageSource(ctx, tx, scope.organizationID, node.RunRef, node.TurnRef, node.Ref)
+			if err != nil {
+				return nil, 0, false, err
+			}
+			if source.Origin == "CALLBACK_CONTINUATION" {
+				node.InputSummary = callbackContinuationPublicText
+			}
+		}
+		if message := result[index].Delta.Message; message != nil {
+			message.Source = entity.MessageSource{Origin: "ORDINARY"}
+			if message.Phase == "USER" {
+				execution := result[index].Delta.Execution
+				if execution == nil || message.Ref != execution.TurnRef {
+					return nil, 0, false, errs.ErrUnavailable
+				}
+				message.Source, err = readRuntimeMessageSource(ctx, tx, scope.organizationID, execution.RunRef, execution.TurnRef, execution.NodeRef)
+				if err != nil {
+					return nil, 0, false, err
+				}
+				if message.Source.Origin == "CALLBACK_CONTINUATION" {
+					message.Text = callbackContinuationPublicText
+				}
+			}
+		}
 		if err := repository.projectGateIntent(ctx, tx, scope, result[index].Delta.Gate, true); err != nil {
 			return nil, 0, false, err
 		}
@@ -1567,7 +1628,7 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 func scanGate(row rowScanner, actorScoped bool) (entity.OwnerGate, error) {
 	var item entity.OwnerGate
 	canResolve := true
-	destinations := []any{&item.Ref, &item.ProjectRef, &item.RunRef, &item.NodeRef, &item.Title, &item.Prompt, &item.ContextSummary, &item.RequestedByRef, &item.RequestedByName, &item.AllowedDecisions, &item.State, &item.Decision, &item.DecisionComment, &item.ResolvedByName, &item.Version, &item.CreatedAt, &item.ResolvedAt, &item.ResolutionAttachmentSetRef}
+	destinations := []any{&item.Ref, &item.ProjectRef, &item.RunRef, &item.NodeRef, &item.Title, &item.Prompt, &item.ContextSummary, &item.RequestedByRef, &item.RequestedByName, &item.AllowedDecisions, &item.State, &item.Decision, &item.DecisionComment, &item.ResolvedByName, &item.Version, &item.CreatedAt, &item.ResolvedAt, &item.ResolutionAttachmentSetRef, &item.ScopeKind, &item.OrganizationRef}
 	if actorScoped {
 		canResolve = false
 		destinations = append(destinations, &canResolve)
@@ -1601,6 +1662,11 @@ func (repository *Repository) GetOwnerGate(ctx context.Context, principal value.
 	gate, err := scanGate(tx.QueryRow(ctx, queryQueriesGetownergateSelectOwnerGatesOrganizationIdRefProjectId, scope.organizationID, ref, scope.role, scope.actorID), true)
 	if err != nil {
 		return entity.OwnerGate{}, err
+	}
+	if gate.ScopeKind == "ORGANIZATION" {
+		if err := repository.requireOrganizationRoleImageAccess(ctx, tx, scope); err != nil {
+			return entity.OwnerGate{}, err
+		}
 	}
 	if err := repository.projectGateIntent(ctx, tx, scope, &gate, true); err != nil {
 		return entity.OwnerGate{}, err
@@ -2118,7 +2184,7 @@ func attachConnection(ctx context.Context, querier connectionQuerier, scope scop
 	if err := projectConnectionPackage(ctx, querier, scope, item); err != nil {
 		return err
 	}
-	rows, err := querier.Query(ctx, queryQueriesAttachconnectionSelectIntegrationGrantsOrganizationIdConnectionIdRef, scope.organizationID, item.Ref, scope.actorID)
+	rows, err := querier.Query(ctx, queryQueriesAttachconnectionSelectIntegrationGrantsOrganizationIdConnectionIdRef, scope.organizationID, item.Ref, scope.actorID, scope.authorityProjectID, scope.role)
 	if err != nil {
 		return err
 	}
@@ -2136,6 +2202,7 @@ func attachConnection(ctx context.Context, querier connectionQuerier, scope scop
 		if json.Unmarshal(resourceScope, &grant.ResourceScope) != nil {
 			return errors.New("decode integration grant resource scope")
 		}
+		grant.ConnectionVersion = item.Version
 		item.Grants = append(item.Grants, grant)
 	}
 	return rows.Err()
@@ -2301,6 +2368,20 @@ func (repository *Repository) attachConversation(ctx context.Context, tx pgx.Tx,
 		return errs.ErrUnavailable
 	}
 	rows.Close()
+	for index := range item.Turns {
+		turn := &item.Turns[index]
+		turn.Source = entity.MessageSource{Origin: "ORDINARY"}
+		if turn.Actor != "AGENT" || turn.RunRef == "" {
+			continue
+		}
+		turn.Source, err = readRuntimeMessageSource(ctx, tx, scope.organizationID, turn.RunRef, turn.Ref, "")
+		if err != nil {
+			return err
+		}
+		if turn.Source.Origin == "CALLBACK_CONTINUATION" {
+			turn.Content = callbackContinuationPublicText
+		}
+	}
 	planRows, err := tx.Query(ctx, queryQueriesAttachconversationSelectAssistantPlansOrganizationIdRef, scope.organizationID, item.Ref)
 	if err != nil {
 		return errs.ErrUnavailable

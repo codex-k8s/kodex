@@ -1,4 +1,5 @@
 import { initializeRuntimeOwnerFixture } from "@/test-utils/runtime-owner-fixture";
+import { readFileSync } from "node:fs";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { Ref } from "vue";
 import { captureSetupState } from "@/test-utils/setup-harness";
@@ -32,6 +33,15 @@ vi.mock("@/shared/api/mutation", () => ({
   idempotencyKey: mutation.key,
 }));
 import Component from "./RuntimeEnvironmentDraftActions.vue";
+it("передаёт подписи потребителей в impact selector без изменения выбранных item refs", () => {
+  const source = readFileSync(
+    new URL("./RuntimeEnvironmentDraftActions.vue", import.meta.url),
+    "utf8",
+  );
+  expect(Component.props).toHaveProperty("consumerNames");
+  expect(source).toContain(':consumer-names="consumerNames"');
+  expect(source).toContain('@publish="publish"');
+});
 const scope = { kind: "ORGANIZATION", organizationRef: "org_fixture" } as const;
 const specification = {
   name: "Среда",
@@ -203,7 +213,10 @@ it("NOT_FOUND с новым validation digest не разрешает переп
   await value.reprepareMissingPlan();
   expect(api.prepareEnvironmentPublication).not.toHaveBeenCalled();
 });
-async function state(input = specification) {
+async function state(
+  input = specification,
+  extra: Record<string, unknown> = {},
+) {
   const i18n = createI18n({
     legacy: false,
     locale: "ru",
@@ -225,6 +238,7 @@ async function state(input = specification) {
     specification: input,
     canEdit: true,
     valid: true,
+    ...extra,
   })) as unknown as State;
 }
 it("Save draft не публикует среду и последовательно включает validation/impact", async () => {
@@ -298,3 +312,47 @@ it("lost publication ACK блокирует новую mutation и сохран�
 });
 
 beforeEach(() => initializeRuntimeOwnerFixture("org_fixture"));
+
+it("reload опубликованного собственного draft не требует прежнюю source version и не повторяет mutation", async () => {
+  api.readEnvironmentDraft.mockResolvedValue({
+    ...draft,
+    state: "PUBLISHED",
+    version: 3,
+    publishedEnvironmentRef: environment.ref,
+  });
+  const value = await state(specification, {
+    environment: { ...environment, version: 3 },
+    initialDraftRef: draft.ref,
+  });
+  expect(value.draft.value?.state).toBe("PUBLISHED");
+  expect(value.problem.value).toBeUndefined();
+  await value.validate();
+  await value.preview();
+  await value.publish([]);
+  expect(api.transitionEnvironmentDraft).not.toHaveBeenCalled();
+  expect(api.prepareEnvironmentPublication).not.toHaveBeenCalled();
+  expect(api.publishEnvironmentDraft).not.toHaveBeenCalled();
+});
+
+it("reload published draft не принимает чужой ref, scope или невозможную source version", async () => {
+  for (const invalid of [
+    { publishedEnvironmentRef: "environment_foreign" },
+    { organizationRef: "org_foreign" },
+    { expectedEnvironmentVersion: 3 },
+  ]) {
+    api.readEnvironmentDraft.mockResolvedValue({
+      ...draft,
+      state: "PUBLISHED",
+      version: 3,
+      publishedEnvironmentRef: environment.ref,
+      ...invalid,
+    });
+    const value = await state(specification, {
+      environment: { ...environment, version: 3 },
+      initialDraftRef: draft.ref,
+    });
+    expect(value.draft.value).toBeUndefined();
+    expect(value.problem.value).toBeDefined();
+  }
+  expect(api.publishEnvironmentDraft).not.toHaveBeenCalled();
+});

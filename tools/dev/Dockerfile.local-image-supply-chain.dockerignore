@@ -1,0 +1,27 @@
+# Только COPY-входы всех targets этого Dockerfile; private exclusions последними.
+**
+!libs
+!libs/go
+!libs/go/**
+!services
+!services/jobs
+!services/jobs/role-image-builder
+!services/jobs/role-image-builder/**
+!tools
+!tools/dev
+!tools/dev/Dockerfile.local-image-supply-chain
+!tools/dev/Dockerfile.local-image-supply-chain.dockerignore
+!tools/render-image-admission-job.sh
+**/.env
+**/.env.*
+**/.kodex-env
+**/.kodex-remote-env
+**/credentials.env
+**/credentials.json
+**/secrets.env
+**/secrets/**
+**/*.key
+**/*.pem
+**/kubeconfig
+**/.git/**
+**/node_modules/**

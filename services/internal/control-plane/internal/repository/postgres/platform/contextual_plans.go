@@ -103,7 +103,7 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 			continue
 		}
 		switch operation.Type {
-		case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
+		case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", changeProjectAssistantIntegrationGrant, prepareProjectAssistantConnection:
 			updated, err := repository.rehydrateEditedAssistantConfiguration(ctx, tx, scope, original, operation, state == "STALE")
 			if err != nil {
 				return commandOutcome{}, err
@@ -134,7 +134,7 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 			}
 			payload.Operations[index] = updated
 		case "CHANGE_INTEGRATION_GRANT":
-			updated, err := repository.rehydrateEditedAssistantIntegrationGrant(ctx, tx, scope, projectRef, original, operation)
+			updated, err := repository.rehydrateEditedAssistantIntegrationGrant(ctx, tx, scope, projectRef, original, operation, state == "STALE")
 			if err != nil {
 				return commandOutcome{}, err
 			}
@@ -176,7 +176,7 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 			}
 			payload.Operations[index] = updated
 		case "UPDATE_ROLE_IMAGE_RECIPE":
-			updated, err := rehydrateEditedAssistantRoleImageUpdate(original, operation)
+			updated, err := repository.refreshEditedAssistantRoleImageUpdate(ctx, tx, scope, projectRef, original, operation, state == "STALE")
 			if err != nil {
 				return commandOutcome{}, err
 			}
@@ -193,7 +193,7 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 		// snapshot, сохранив только разрешённые пользовательские поля формы.
 		// Для обычного DRAFT прежний snapshot остаётся неизменным: скрытый rebase
 		// без явного конфликта владельцу не допускается.
-		if state == "STALE" && payload.Operations[index].ExpectedVersion != nil && !assistantConfigurationOperationType(operation.Type) {
+		if state == "STALE" && payload.Operations[index].ExpectedVersion != nil && !assistantConfigurationOperationType(operation.Type) && operation.Type != "UPDATE_ROLE_IMAGE_RECIPE" {
 			selected := payload.Operations[index].Selected
 			refreshed, refreshErr := repository.hydrateAssistantOperation(ctx, tx, scope, projectRef, payload.Operations[index])
 			if refreshErr != nil {
@@ -335,9 +335,25 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 		return commandOutcome{}, err
 	}
 	problems := make([]string, 0)
+	grantTargets := make(map[string]struct{})
 	for index, operation := range operations {
 		if !operation.Selected {
 			continue
+		}
+		if connectionRef := assistantGrantConnection(operation); connectionRef != "" {
+			ownerRef := assistantString(operation.Parameters, "agentRef")
+			if operation.Type == changeProjectAssistantIntegrationGrant {
+				ownerRef = assistantString(operation.Parameters, "projectAssistantRef")
+			}
+			if operation.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
+				ownerRef = assistantString(operation.Parameters, "systemAssistantRef")
+			}
+			grantTarget := connectionRef + "\x00" + ownerRef + "\x00" + assistantString(operation.Parameters, "capabilityKey")
+			if _, duplicate := grantTargets[grantTarget]; duplicate {
+				problems = append(problems, fmt.Sprintf("operation-%d-duplicate-integration-grant", index+1))
+				continue
+			}
+			grantTargets[grantTarget] = struct{}{}
 		}
 		if !assistantProjectFileContentReady(operation) {
 			problems = append(problems, fmt.Sprintf("operation-%d-content-required", index+1))
@@ -348,9 +364,16 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 			problems = append(problems, fmt.Sprintf("operation-%d-invalid", index+1))
 			continue
 		}
-		if commandErr = repository.authorizeCommand(ctx, tx, scope, planned); commandErr != nil {
+		if commandErr = repository.authorizeAssistantPreparedOperation(ctx, tx, scope, operation, planned); commandErr != nil {
 			problems = append(problems, assistantPlanAuthorizationProblem(index, commandErr))
 			continue
+		}
+		if operation.Type == prepareProjectAssistantConnection {
+			matching, snapshotErr := repository.projectAssistantConnectionSnapshotMatches(ctx, tx, scope, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
 		}
 		if operation.Type == "LAUNCH_RUN" {
 			if readinessErr := repository.validateAssistantLaunchReadiness(ctx, tx, scope, operation); readinessErr != nil {
@@ -430,6 +453,20 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 		}
 		if operation.Type == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" {
 			matching, snapshotErr := repository.systemAssistantImageSnapshotMatches(ctx, tx, scope, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
+		if operation.Type == changeProjectAssistantIntegrationGrant {
+			matching, snapshotErr := repository.projectAssistantIntegrationGrantSnapshotMatches(ctx, tx, scope, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
+		}
+		if operation.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
+			matching, snapshotErr := repository.systemAssistantIntegrationGrantSnapshotMatches(ctx, tx, scope, operation)
 			if snapshotErr != nil || !matching {
 				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
 				continue
@@ -684,15 +721,22 @@ func (repository *Repository) rehydrateEditedAssistantIntegrationGrant(
 	current scope,
 	projectRef string,
 	original, edited entity.AssistantPlanOperation,
+	refreshStale bool,
 ) (entity.AssistantPlanOperation, error) {
 	if original.Type != "CHANGE_INTEGRATION_GRANT" || original.Key != edited.Key ||
 		original.Target.Kind != "INTEGRATION_CONNECTION" || original.Target.Ref == "" ||
 		original.ExpectedVersion == nil || *original.ExpectedVersion < 1 || edited.Parameters == nil ||
-		!onlyAssistantFields(edited.Parameters, "connectionRef", "capabilityKey", "agentRef", "workflowRef", "enabled", "approvalScopePaths") ||
+		!onlyAssistantFields(edited.Parameters, "connectionRef", "capabilityKey", "agentRef", "workflowRef", "enabled", "approvalScopePaths", "approvalPolicy") ||
 		assistantString(edited.Parameters, "connectionRef") != original.Target.Ref ||
 		assistantString(edited.Parameters, "agentRef") != assistantString(original.Before, "agentRef") ||
 		assistantString(edited.Parameters, "workflowRef") != assistantString(original.Before, "workflowRef") {
 		return entity.AssistantPlanOperation{}, errs.ErrForbidden
+	}
+	if !refreshStale {
+		matching, err := repository.assistantIntegrationGrantSnapshotMatches(ctx, tx, current, projectRef, original)
+		if err != nil || !matching {
+			return edited, errs.ErrConflict
+		}
 	}
 	selected := edited.Selected
 	hydrated, err := repository.hydrateAssistantIntegrationGrant(ctx, tx, current, projectRef, edited)
@@ -766,25 +810,7 @@ func (repository *Repository) assistantIntegrationGrantSnapshotMatches(
 	projectRef string,
 	operation entity.AssistantPlanOperation,
 ) (bool, error) {
-	agentRef, workflowRef := assistantString(operation.Parameters, "agentRef"), assistantString(operation.Parameters, "workflowRef")
-	recipientKind, recipientRef := "AGENT", agentRef
-	if workflowRef != "" {
-		recipientKind, recipientRef = "WORKFLOW", workflowRef
-	}
-	enabled, enabledOK := assistantBoolValue(operation.Parameters, "enabled")
-	scopePaths, scopeOK := assistantStringsValue(operation.Parameters, "approvalScopePaths")
-	if !enabledOK || !scopeOK || (agentRef == "") == (workflowRef == "") {
-		return false, errs.ErrInvalid
-	}
-	snapshot, err := repository.readAssistantIntegrationGrantSnapshot(ctx, tx, current, projectRef,
-		assistantString(operation.Parameters, "connectionRef"), assistantString(operation.Parameters, "capabilityKey"), recipientKind, recipientRef)
-	if err != nil {
-		return false, err
-	}
-	hydrated, err := hydrateAssistantIntegrationGrantFields(
-		assistantString(operation.Parameters, "connectionRef"), assistantString(operation.Parameters, "capabilityKey"),
-		agentRef, workflowRef, snapshot, enabled, scopePaths, operation,
-	)
+	hydrated, err := repository.hydrateAssistantIntegrationGrant(ctx, tx, current, projectRef, operation)
 	if err != nil {
 		return false, err
 	}

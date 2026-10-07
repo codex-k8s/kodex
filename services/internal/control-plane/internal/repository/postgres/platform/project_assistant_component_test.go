@@ -56,7 +56,10 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 		t.Fatal("read project purge graph")
 	}
 	t.Logf("project purge graph: nodes=%d digest=%s edges=%d digest=%s", graphNodes, graphNodeDigest, graphEdges, graphEdgeDigest)
-	if graphNodes != 97 || graphNodeDigest != "02b472590335b8fb7370804b386cdf32" || graphEdges != 248 || graphEdgeDigest != "1d12e5e5a6c4475ccc79b868af564679" {
+	// Точный FK-граф после 20261006000300_required_workflow_launch.sql:
+	// required_workflow_launches добавляет один узел и 11 рёбер внутри project closure.
+	// FK к organizations/subjects не входят в closure; 00400 не добавляет таблиц/FK.
+	if graphNodes != 101 || graphNodeDigest != "fd84f327b771b83de59d0839d477432c" || graphEdges != 264 || graphEdgeDigest != "149c59d0b352b832823e09f10a28f55b" {
 		t.Fatal("project assistant purge graph changed")
 	}
 	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())

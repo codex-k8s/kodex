@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	scheduleservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/schedule"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -391,7 +392,7 @@ func attachScheduleDisplay(item *entity.Schedule) error {
 }
 
 func (repository *Repository) changeConnection(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
-	if input.Kind == command.ChangeIntegrationGrant {
+	if input.Kind == command.ChangeIntegrationGrant || input.Kind == command.ChangeSystemAssistantIntegrationGrant || input.Kind == command.ChangeProjectAssistantIntegrationGrant {
 		return repository.changeIntegrationGrant(ctx, tx, scope, input)
 	}
 	payload, ok := input.Payload.(command.ConnectionInput)
@@ -707,7 +708,24 @@ func (repository *Repository) deleteIntegrationConnection(
 
 func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.IntegrationGrantInput)
-	if !ok || payload.ConnectionRef == "" || payload.CapabilityKey == "" || input.Mutation.ExpectedVersion == nil || (payload.AgentRef == "") == (payload.WorkflowRef == "") {
+	var systemTarget systemAssistantIntegrationGrantTarget
+	if input.Kind == command.ChangeProjectAssistantIntegrationGrant {
+		var err error
+		payload, _, err = repository.projectAssistantIntegrationGrantInput(ctx, tx, scope, input.Payload)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		ok = true
+	}
+	if input.Kind == command.ChangeSystemAssistantIntegrationGrant {
+		var err error
+		payload, systemTarget, err = repository.systemAssistantIntegrationGrantInput(ctx, tx, scope, input.Payload)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		ok = true
+	}
+	if !ok || payload.ConnectionRef == "" || payload.CapabilityKey == "" || !validIntegrationApprovalPolicy(payload.ApprovalPolicy) || input.Mutation.ExpectedVersion == nil || (payload.AgentRef == "") == (payload.WorkflowRef == "") {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	targetType, targetRef := "AGENT", payload.AgentRef
@@ -727,8 +745,18 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	// Повтор после ожидания connection lock предшествует OCC и новому effect.
-	if err := repository.authorizeIntegrationGrant(ctx, tx, scope, payload); err != nil {
-		return commandOutcome{}, err
+	if input.Kind == command.ChangeProjectAssistantIntegrationGrant {
+		if _, _, err := repository.projectAssistantIntegrationGrantInput(ctx, tx, scope, input.Payload); err != nil {
+			return commandOutcome{}, err
+		}
+	} else if input.Kind == command.ChangeSystemAssistantIntegrationGrant {
+		if _, _, err := repository.systemAssistantIntegrationGrantInput(ctx, tx, scope, input.Payload); err != nil {
+			return commandOutcome{}, err
+		}
+	} else {
+		if err := repository.authorizeIntegrationGrant(ctx, tx, scope, payload); err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	if connectionVersion != *input.Mutation.ExpectedVersion {
 		return commandOutcome{}, errs.ErrVersionMismatch
@@ -741,7 +769,9 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	if targetType == "WORKFLOW" {
 		targetQuery = queryConfigurationChangeintegrationgrantSelectWorkflowOrganizationIdRef
 	}
-	if err := tx.QueryRow(ctx, targetQuery, scope.organizationID, targetRef).Scan(&projectID, &projectRef, &targetName); errors.Is(err, pgx.ErrNoRows) {
+	if input.Kind == command.ChangeSystemAssistantIntegrationGrant {
+		targetName = systemTarget.name
+	} else if err := tx.QueryRow(ctx, targetQuery, scope.organizationID, targetRef).Scan(&projectID, &projectRef, &targetName); errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrNotFound
 	} else if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -751,8 +781,11 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 	if packageErr != nil || !valid || definition.Metadata.Version != definitionVersion || definition.Digest != definitionDigest {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	if !capability.AllowsApprovalPolicy(payload.ApprovalPolicy) {
+		return commandOutcome{}, errs.ErrInvalid
+	}
 	if payload.Enabled {
-		if capability.ApprovalPolicy == "HUMAN_SCOPED" {
+		if payload.ApprovalPolicy == "HUMAN_SCOPED" {
 			if capability.ValidateApprovalScopePaths(payload.ApprovalScopePaths) != nil {
 				return commandOutcome{}, errs.ErrInvalid
 			}
@@ -761,6 +794,9 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 		}
 	} else if len(payload.ApprovalScopePaths) != 0 {
 		return commandOutcome{}, errs.ErrInvalid
+	}
+	if err := requireIntegrationGrantPolicyChangeIdle(ctx, tx, scope.organizationID, connectionID, payload); err != nil {
+		return commandOutcome{}, err
 	}
 	configuration := map[string]string{}
 	if json.Unmarshal(encodedConfiguration, &configuration) != nil || definition.ValidateConfiguration(configuration) != nil {
@@ -780,7 +816,7 @@ func (repository *Repository) changeIntegrationGrant(ctx context.Context, tx pgx
 		grantRef, _ = newRef("grt")
 		err := tx.QueryRow(ctx, queryConfigurationChangeintegrationgrantInsertIntegrationGrantsRefConnectionIdTargetKind,
 			grantRef, scope.organizationID, connectionID, payload.CapabilityKey, targetType, targetRef,
-			capability.ApprovalPolicy, scope.actorID, capability.Risk, capability.ResourceScope.Kind,
+			payload.ApprovalPolicy, scope.actorID, capability.Risk, capability.ResourceScope.Kind,
 			encodedScope, hex.EncodeToString(scopeDigest[:]), definition.Metadata.Version, definition.Digest,
 			sortedApprovalScopePaths(payload.ApprovalScopePaths),
 		).Scan(&grantRef)
@@ -1042,7 +1078,7 @@ func (repository *Repository) addAssistantTurnCommand(ctx context.Context, tx pg
 
 func (repository *Repository) addAssistantTurnWithAttachmentPolicy(ctx context.Context, tx pgx.Tx, scope scope, input command.Command, reuseAttachmentSnapshot bool) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.AssistantTurnInput)
-	if !ok || payload.ConversationRef == "" || strings.TrimSpace(payload.Content) == "" ||
+	if !ok || payload.ConversationRef == "" || !runtimecontract.ValidAssistantTurnContent(payload.Content) ||
 		!contains([]string{"QUEUE", "INTERRUPT_ACTIVE"}, payload.DeliveryMode) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
@@ -1148,7 +1184,7 @@ func (repository *Repository) addAssistantTurnWithAttachmentPolicy(ctx context.C
 		queryConfigurationAddassistantturncommandUpdateAssistantConversationsVersionUpdatedAt,
 		conversationID, resolvedContext.Route, resolvedContext.EntityKind, resolvedContext.EntityRef,
 		resolvedContext.EntityName, resolvedContext.EntityVersion, resolvedContext.AllowedOperations,
-		payload.Content,
+		assistantUserMessageTitle(payload.Content),
 	).Scan(
 		&conversation.Title,
 		&conversation.TitleSource,
@@ -1169,7 +1205,7 @@ func (repository *Repository) addAssistantTurnWithAttachmentPolicy(ctx context.C
 	if _, err := repository.emitRunEvent(ctx, tx, scope, projectID, runID, runRef, "TURN_QUEUED", nodeRef, "", "", "", "i18n:ASSISTANT_TURN_QUEUED", "RUNNING", "QUEUED"); err != nil {
 		return commandOutcome{}, err
 	}
-	conversation.Turns = []entity.AssistantTurn{{Ref: turnRef, Sequence: turnNumber, Actor: "USER", ActorName: scope.actorName, Content: payload.Content, AttachmentSetRef: payload.AttachmentSetRef, State: "QUEUED", RunRef: runRef, RunVersion: 1, CreatedAt: time.Now().UTC()}}
+	conversation.Turns = []entity.AssistantTurn{{Ref: turnRef, Sequence: turnNumber, Actor: "USER", ActorName: scope.actorName, Content: payload.Content, AttachmentSetRef: payload.AttachmentSetRef, State: "QUEUED", RunRef: runRef, RunVersion: 1, CreatedAt: time.Now().UTC(), Source: entity.MessageSource{Origin: "ORDINARY"}}}
 	result := command.Result{Conversation: &conversation}
 	if identity.Scope == "SYSTEM" {
 		assistant, err := repository.getAssistantTx(ctx, tx, scope)
@@ -1230,6 +1266,9 @@ func (repository *Repository) cancelActiveAssistantRun(ctx context.Context, tx p
 }
 
 func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	// Исходный verified browser scope хранится отдельно. Только новая specialty
+	// использует его после owner gate; проектная граница остальных effects не меняется.
+	ownerEffectScope := scope
 	payload, ok := input.Payload.(command.AssistantPlanInput)
 	if !ok || payload.PlanRef == "" || payload.Revision < 1 || input.Mutation.ExpectedVersion == nil {
 		return commandOutcome{}, errs.ErrInvalid
@@ -1268,12 +1307,30 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 	}
 	created := []string{}
 	operationReceipts := []entity.AssistantPlanOperationReceipt{}
+	grantPreflightConflict, err := repository.preflightAssistantGrantPlan(ctx, operationEffectsTx, scope, conversationProjectRef, operations)
+	if err != nil {
+		_ = operationEffectsTx.Rollback(ctx)
+		_ = effectTx.Rollback(ctx)
+		return commandOutcome{}, err
+	}
+	appliedGrantConnectionVersions := map[string]int64{}
 	appliedAgentVersions := map[string]int64{}
 	appliedBindingPins := map[string]map[string]any{}
 	var projectID, projectRef string
 	for _, operation := range operations {
 		if !operation.Selected {
 			continue
+		}
+		operationScope := scope
+		if operation.Type == prepareProjectAssistantConnection {
+			operationScope = ownerEffectScope
+		}
+		if grantPreflightConflict != nil {
+			operation = *grantPreflightConflict
+		}
+		grantConnectionRef := assistantGrantConnection(operation)
+		if version, carried := appliedGrantConnectionVersions[grantConnectionRef]; carried {
+			operation = carryAssistantGrantConnectionVersion(operation, version)
 		}
 		agentVersionKey := assistantPlanAgentVersionKey(operation)
 		if version, carried := appliedAgentVersions[agentVersionKey]; carried {
@@ -1301,12 +1358,39 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			projectFile.Content = nil
 			planned.Payload = projectFile
 		}
-		if err := repository.authorizeCommand(ctx, operationEffectsTx, scope, planned); err != nil {
+		if err := repository.authorizeCommand(ctx, operationEffectsTx, operationScope, planned); err != nil {
 			_ = operationEffectsTx.Rollback(ctx)
 			_ = effectTx.Rollback(ctx)
 			return commandOutcome{}, err
 		}
 		var outcome commandOutcome
+		if operation.Type == prepareProjectAssistantConnection {
+			matching, matchErr := repository.projectAssistantConnectionSnapshotMatches(ctx, operationEffectsTx, operationScope, operation)
+			if matchErr != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
+		if grantPreflightConflict != nil {
+			err = errs.ErrConflict
+		}
+		if operation.Type == "CHANGE_INTEGRATION_GRANT" {
+			matching, matchErr := repository.assistantIntegrationGrantSnapshotMatches(ctx, operationEffectsTx, scope, conversationProjectRef, operation)
+			if matchErr != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
+		if operation.Type == changeProjectAssistantIntegrationGrant {
+			matching, matchErr := repository.projectAssistantIntegrationGrantSnapshotMatches(ctx, operationEffectsTx, scope, operation)
+			if matchErr != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
+		if operation.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
+			matching, matchErr := repository.systemAssistantIntegrationGrantSnapshotMatches(ctx, operationEffectsTx, scope, operation)
+			if matchErr != nil || !matching {
+				err = errs.ErrConflict
+			}
+		}
 		if operation.Type == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || operation.Type == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" {
 			matching, matchErr := repository.systemAssistantImageSnapshotMatches(ctx, operationEffectsTx, scope, operation)
 			if matchErr != nil || !matching {
@@ -1384,7 +1468,7 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			}
 		}
 		if err == nil {
-			outcome, err = repository.applyCommand(ctx, operationEffectsTx, scope, planned)
+			outcome, err = repository.applyCommand(ctx, operationEffectsTx, operationScope, planned)
 		}
 		if err != nil {
 			if errors.Is(err, errs.ErrVersionMismatch) || errors.Is(err, errs.ErrConflict) || errors.Is(err, errs.ErrNotFound) {
@@ -1420,6 +1504,9 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			return commandOutcome{}, fmt.Errorf("apply assistant plan operation: %w", err)
 		}
 		created = append(created, outcome.resourceRef)
+		if connection := outcome.result.Connection; grantConnectionRef != "" && connection != nil && connection.Ref == grantConnectionRef && connection.Version > 0 {
+			appliedGrantConnectionVersions[grantConnectionRef] = connection.Version
+		}
 		if agentVersionKey != "" && outcome.result.Agent != nil && outcome.result.Agent.Ref == agentVersionKey && outcome.result.Agent.Version > 0 {
 			appliedAgentVersions[agentVersionKey] = outcome.result.Agent.Version
 		}

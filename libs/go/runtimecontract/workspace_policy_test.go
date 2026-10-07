@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"reflect"
 	"testing"
 )
 
@@ -47,5 +48,42 @@ func TestRuntimeWorkspacePolicyRejectsDigestAndUnsafePath(t *testing.T) {
 	p.Digest = hex.EncodeToString(sum[:])
 	if err := p.Validate(); err == nil {
 		t.Fatal("unsafe path accepted")
+	}
+}
+
+func TestRuntimeWorkspacePolicyAcceptsBoundedResourceQuotaWithoutChangingPaths(t *testing.T) {
+	base := RuntimeWorkspacePolicyV1()
+	limited := base
+	limited.MaximumWritableBytes = 4096
+	limited.MaximumFileCount = 10
+	limited.Digest = ""
+	raw, _ := json.Marshal(limited)
+	sum := sha256.Sum256(raw)
+	limited.Digest = hex.EncodeToString(sum[:])
+	if limited.Validate() != nil || !reflect.DeepEqual(limited.Rules, base.Rules) {
+		t.Fatal("bounded quota rejected or protected rules changed")
+	}
+}
+
+func TestRuntimeWorkspaceLimitsBoundsAndNilPreserveCanonicalPolicy(t *testing.T) {
+	base := RuntimeWorkspacePolicyV1()
+	nilPolicy, err := RuntimeWorkspacePolicyWithLimits(nil)
+	if err != nil || !reflect.DeepEqual(base, nilPolicy) {
+		t.Fatal("absent limits changed immutable default")
+	}
+	for _, limits := range []RuntimeWorkspaceLimits{
+		{MaxBytes: 0, MaxFiles: 10}, {MaxBytes: 1, MaxFiles: 0},
+		{MaxBytes: RuntimeWorkspaceWritableBytes + 1, MaxFiles: 10},
+		{MaxBytes: 1, MaxFiles: RuntimeWorkspaceMaximumFiles + 1},
+	} {
+		if _, err := RuntimeWorkspacePolicyWithLimits(&limits); err == nil {
+			t.Fatal("invalid or excessive limits accepted")
+		}
+	}
+	limits := &RuntimeWorkspaceLimits{MaxBytes: 4096, MaxFiles: 10}
+	policy, err := RuntimeWorkspacePolicyWithLimits(limits)
+	if err != nil || policy.Validate() != nil || policy.Root != base.Root ||
+		!reflect.DeepEqual(policy.Rules, base.Rules) || policy.Digest == base.Digest {
+		t.Fatal("quota did not preserve protected policy or digest binding")
 	}
 }

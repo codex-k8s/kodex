@@ -13,6 +13,10 @@ import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import { useServerMessage } from "@/shared/ui/server-message";
 import RuntimeEnvironmentToolsEditor from "./RuntimeEnvironmentToolsEditor.vue";
 import {
+  verifiedImageInventoryAvailable,
+  verifiedImageTools,
+} from "@/shared/lib/verified-image-tools";
+import {
   assertPromotedRuntimeImage,
   runtimeImageOption,
   restoreRuntimeImageOption,
@@ -48,6 +52,13 @@ const localizedSelected = computed(() =>
     : undefined,
 );
 const loading = ref(false);
+const pickerPlaceholder = computed(() =>
+  t(
+    loading.value && props.imageArtifactRef
+      ? "runtime.loadingSelectedImage"
+      : "runtime.choosePromotedImage",
+  ),
+);
 const problem = ref<AppProblem>();
 const scopeKey = computed(() => runtimeResourceScopeKey(props.resourceScope));
 let generation = 0;
@@ -78,14 +89,15 @@ async function load(
       props.imageArtifactRef,
       signal,
     );
-    if (signal.aborted || current !== generation) return;
+    const obsolete = () => signal.aborted || current !== generation;
+    if (obsolete()) return;
     const result = await props.catalog.loadArtifact(
       props.resourceScope,
       option.recipeRef,
       option.ref,
       signal,
     );
-    if (signal.aborted || current !== generation) return;
+    if (obsolete()) return;
     assertPromotedRuntimeImage(result.artifact, {
       artifactRef: option.ref,
       recipeRef: option.recipeRef,
@@ -190,7 +202,7 @@ async function loadPage(
         :selected="localizedSelected"
         :context-key="scopeKey"
         :load-page="loadPage"
-        :placeholder="$t('runtime.choosePromotedImage')"
+        :placeholder="pickerPlaceholder"
         :search-placeholder="$t('runtime.searchPromotedImage')"
         :disabled="disabled || loading"
         @update:model-value="clear"
@@ -200,7 +212,8 @@ async function loadPage(
     <ProblemNotice v-if="problem" :problem="problem" compact />
     <RuntimeEnvironmentToolsEditor
       :tools="tools"
-      :catalog="artifact?.tools ?? []"
+      :catalog="verifiedImageTools(artifact)"
+      :inventory-available="verifiedImageInventoryAvailable(artifact)"
       :image-selected="Boolean(imageArtifactRef)"
       :loading="loading"
       :disabled="disabled || loading || !artifact || !!problem"

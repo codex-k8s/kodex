@@ -3,8 +3,10 @@ import { listOwnerGates } from "@/shared/api/generated/openapi/sdk.gen";
 import type { OwnerGate } from "@/shared/api/generated/openapi/types.gen";
 import { requestSignal } from "@/shared/api/client";
 import { asProblem, unwrap, type AppProblem } from "@/shared/api/problem";
+import { assertGateScope, hasValidGateScope } from "./gate-scope";
 
 export interface GateCatalogScope {
+  organizationRef?: string;
   projectRef?: string;
   query: string;
   view: "PENDING" | "HISTORY";
@@ -33,7 +35,12 @@ export function useGateCatalog() {
   const matchesView = (gate: OwnerGate, scope: GateCatalogScope): boolean =>
     statesFor(scope.view).includes(gate.state);
   function keyFor(scope: GateCatalogScope): string {
-    return JSON.stringify([scope.projectRef, scope.query, scope.view]);
+    return JSON.stringify([
+      scope.organizationRef,
+      scope.projectRef,
+      scope.query,
+      scope.view,
+    ]);
   }
   function invalidate(scope: GateCatalogScope): void {
     if (keyFor(scope) !== scopeKey) return;
@@ -66,6 +73,7 @@ export function useGateCatalog() {
     values: OwnerGate[],
     nextPageToken?: string,
   ): void {
+    for (const gate of values) assertGateScope(gate, scope.organizationRef);
     controller?.abort();
     generation++;
     clearTimeout(refreshTimer);
@@ -129,6 +137,7 @@ export function useGateCatalog() {
         page.total < page.items.length ||
         page.items.some(
           (gate) =>
+            !hasValidGateScope(gate, scope.organizationRef) ||
             (!filterLocally && !states.includes(gate.state)) ||
             (scope.projectRef && gate.projectRef !== scope.projectRef),
         ) ||

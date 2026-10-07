@@ -1322,7 +1322,8 @@ func TestBuildTurnRejectsRuntimeRevisionDigestMismatch(t *testing.T) {
 		"workspace": func(revision *controlplanev1.RuntimeRevisionSnapshot) { revision.WorkspacePolicy.MaximumFileCount-- },
 		"MCP grant": func(revision *controlplanev1.RuntimeRevisionSnapshot) {
 			revision.IntegrationGrants = append(revision.IntegrationGrants, &controlplanev1.IntegrationGrant{
-				Ref: "grant_abcdefgh", ConnectionRef: "conn_abcdefgh", DefinitionKey: "calendar",
+				Ref: "grant_abcdefgh", Version: 1, ConnectionRef: "conn_abcdefgh", ConnectionVersion: 1,
+				ApprovalPolicy: controlplanev1.IntegrationApprovalPolicy_INTEGRATION_APPROVAL_POLICY_NONE, DefinitionKey: "calendar",
 				ConnectionName: "Calendar", CapabilityKey: "calendar.read", CapabilityName: "Read calendar", Enabled: true,
 			})
 		},

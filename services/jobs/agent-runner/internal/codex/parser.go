@@ -37,7 +37,7 @@ type Result struct {
 	ArchiveSHA256       string
 	ArchiveSizeBytes    int64
 	Usage               runtimecontract.TokenUsage
-	ToolCalls           []runtimecontract.NativeToolCall
+	ToolCalls           []runtimecontract.NativeToolCall `json:"ToolCalls,omitempty"`
 }
 
 type messageKind uint8
@@ -183,6 +183,9 @@ type protocolState struct {
 	workspaceRoot     string
 	finalID           string
 	fallbackID        string
+	onActivity        func(runtimecontract.RuntimeActivity) error
+	activityErr       error
+	startedToolCalls  map[string]runtimecontract.NativeToolCall
 }
 
 type agentMessage struct {
@@ -192,7 +195,7 @@ type agentMessage struct {
 
 func newProtocolState(expectedSessionID string) *protocolState {
 	return &protocolState{expectedSessionID: expectedSessionID, agentMessages: make(map[string]agentMessage),
-		toolCalls: make(map[string]runtimecontract.NativeToolCall), itemStartedAtMS: make(map[string]int64)}
+		toolCalls: make(map[string]runtimecontract.NativeToolCall), itemStartedAtMS: make(map[string]int64), startedToolCalls: make(map[string]runtimecontract.NativeToolCall)}
 }
 
 func (state *protocolState) captureUsageBaseline() error {
@@ -223,10 +226,16 @@ func (state *protocolState) initialize(raw json.RawMessage, expectedHome string)
 
 func (state *protocolState) bindThread(raw json.RawMessage, expectedModel, expectedWorkspace, expectedApproval string) error {
 	fields, err := decodeObject(raw, schema([]string{"approvalPolicy", "approvalsReviewer", "cwd", "model", "modelProvider", "sandbox", "thread"},
-		"activePermissionProfile", "approvalPolicy", "approvalsReviewer", "cwd", "initialTurnsPage", "instructionSources", "itemsBackwardsCursor",
+		"activePermissionProfile", "approvalPolicy", "approvalsReviewer", "collaborationMode", "cwd", "disabledPluginIds", "initialTurnsPage", "instructionSources", "itemsBackwardsCursor",
 		"model", "modelProvider", "multiAgentMode", "reasoningEffort", "runtimeWorkspaceRoots", "sandbox", "serviceTier", "thread", "turnsBackwardsCursor"))
 	if err != nil {
 		return errors.New("Codex app-server thread response is invalid")
+	}
+	if plugins, present := fields["disabledPluginIds"]; present && !validThreadMetadataStrings(plugins, 256, 512) {
+		return errors.New("Codex app-server thread plugin metadata is invalid")
+	}
+	if collaboration, present := fields["collaborationMode"]; present && !validThreadCollaborationMetadata(collaboration) {
+		return errors.New("Codex app-server thread collaboration metadata is invalid")
 	}
 	model, modelErr := decodeBoundedString(fields["model"], 128)
 	cwd, cwdErr := decodeBoundedString(fields["cwd"], 4096)
@@ -248,6 +257,41 @@ func (state *protocolState) bindThread(raw json.RawMessage, expectedModel, expec
 	return nil
 }
 
+// ThreadResumeResponse rust-v0.160.0 добавляет nullable collaborationMode.
+// Проверенные метаданные не подменяют immutable выбор модели, reasoning,
+// инструкций или полномочий текущего хода и не попадают в результат/логи.
+func validThreadCollaborationMetadata(raw json.RawMessage) bool {
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return true
+	}
+	fields, err := decodeObject(raw, schema([]string{"mode", "settings"}, "mode", "settings"))
+	if err != nil {
+		return false
+	}
+	mode, err := decodeBoundedString(fields["mode"], 16)
+	if err != nil || (mode != "default" && mode != "plan") {
+		return false
+	}
+	settings, err := decodeObject(fields["settings"], schema([]string{"model"}, "model", "reasoning_effort", "developer_instructions"))
+	if err != nil {
+		return false
+	}
+	model, err := decodeBoundedString(settings["model"], 128)
+	if err != nil || model == "" {
+		return false
+	}
+	for key, maximum := range map[string]int{"reasoning_effort": 128, "developer_instructions": 64 << 10} {
+		value, present := settings[key]
+		if !present || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			continue
+		}
+		if !validThreadMetadataString(value, maximum) {
+			return false
+		}
+	}
+	return true
+}
+
 func (state *protocolState) bindThreadRead(raw json.RawMessage) error {
 	fields, err := decodeObject(raw, schema([]string{"thread"}, "thread"))
 	if err != nil {
@@ -264,11 +308,14 @@ func (state *protocolState) bindThreadRead(raw json.RawMessage) error {
 func parseThread(raw json.RawMessage) (string, string, error) {
 	fields, err := decodeObject(raw, schema([]string{"cliVersion", "createdAt", "cwd", "ephemeral", "id", "modelProvider",
 		"preview", "sessionId", "source", "status", "turns", "updatedAt"}, "agentNickname", "agentRole", "canAcceptDirectInput",
-		"cliVersion", "createdAt", "cwd", "ephemeral", "extra", "forkedFromId", "gitInfo", "historyMode", "id", "modelProvider",
-		"model", "name", "parentThreadId", "path", "preview", "projectId", "reasoningEffort", "recencyAt", "section",
+		"cliVersion", "createdAt", "cwd", "daybreakEnabled", "environments", "ephemeral", "extra", "forkedFromId", "gitInfo", "historyMode", "id", "modelProvider",
+		"model", "name", "originator", "parentThreadId", "path", "preview", "projectId", "reasoningEffort", "recencyAt", "section",
 		"sectionEnteredAt", "sessionId", "source", "status", "threadSource", "turns", "updatedAt"))
 	if err != nil {
 		return "", "", err
+	}
+	if !validThreadDiscardedMetadata(fields) {
+		return "", "", errors.New("Codex app-server thread metadata is invalid")
 	}
 	id, idErr := decodeBoundedString(fields["id"], 128)
 	sessionID, sessionErr := decodeBoundedString(fields["sessionId"], 128)
@@ -294,6 +341,55 @@ func parseThread(raw json.RawMessage) (string, string, error) {
 	return id, path, nil
 }
 
+// Метаданные rust-v0.160.0 проверяются по типам и отбрасываются: они не
+// назначают identity, authority, workspace или разрешения текущей attempt.
+func validThreadDiscardedMetadata(fields map[string]json.RawMessage) bool {
+	if value, present := fields["daybreakEnabled"]; present && !bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+		var enabled bool
+		if strictDecode(value, &enabled) != nil {
+			return false
+		}
+	}
+	if value, present := fields["originator"]; present && !bytes.Equal(bytes.TrimSpace(value), []byte("null")) && !validThreadMetadataString(value, 512) {
+		return false
+	}
+	value, present := fields["environments"]
+	if !present || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+		return true
+	}
+	var environments []json.RawMessage
+	if len(value) > 1<<20 || len(bytes.TrimSpace(value)) == 0 || bytes.TrimSpace(value)[0] != '[' || strictDecode(value, &environments) != nil || len(environments) > 64 {
+		return false
+	}
+	for _, environment := range environments {
+		entry, err := decodeObject(environment, schema([]string{"cwd", "environmentId", "runtimeWorkspaceRoots"}, "cwd", "environmentId", "runtimeWorkspaceRoots"))
+		if err != nil || !validThreadMetadataString(entry["environmentId"], 512) || !validThreadMetadataString(entry["cwd"], 4096) || !validThreadMetadataStrings(entry["runtimeWorkspaceRoots"], 256, 4096) {
+			return false
+		}
+	}
+	return true
+}
+
+func validThreadMetadataString(raw json.RawMessage, maximum int) bool {
+	value := bytes.TrimSpace(raw)
+	var text string
+	return len(value) > 0 && value[0] == '"' && utf8.Valid(value) && strictDecode(value, &text) == nil && len(text) <= maximum
+}
+
+func validThreadMetadataStrings(raw json.RawMessage, maximumEntries, maximumBytes int) bool {
+	value := bytes.TrimSpace(raw)
+	var entries []json.RawMessage
+	if len(value) == 0 || len(value) > 1<<20 || value[0] != '[' || strictDecode(value, &entries) != nil || len(entries) > maximumEntries {
+		return false
+	}
+	for _, entry := range entries {
+		if !validThreadMetadataString(entry, maximumBytes) {
+			return false
+		}
+	}
+	return true
+}
+
 func (state *protocolState) bindTurn(raw json.RawMessage) error {
 	fields, err := decodeObject(raw, schema([]string{"turn"}, "turn"))
 	if err != nil {
@@ -309,6 +405,9 @@ func (state *protocolState) bindTurn(raw json.RawMessage) error {
 }
 
 func (state *protocolState) notification(method string, raw json.RawMessage) error {
+	if state.activityErr != nil {
+		return state.activityErr
+	}
 	if _, allowed := serverNotificationMethods[method]; !allowed {
 		return errors.New("Codex app-server notification method is not allowed")
 	}
@@ -417,7 +516,7 @@ func (state *protocolState) notification(method string, raw json.RawMessage) err
 			return errors.New("Codex app-server error notification is invalid")
 		}
 		var willRetry bool
-		if strictDecode(fields["willRetry"], &willRetry) != nil {
+		if bytes.Equal(bytes.TrimSpace(fields["willRetry"]), []byte("null")) || strictDecode(fields["willRetry"], &willRetry) != nil {
 			return errors.New("Codex app-server error retry flag is invalid")
 		}
 	case "warning":
@@ -454,13 +553,29 @@ func (state *protocolState) bindRequiredMCPStatus(raw json.RawMessage, requiredT
 		return false, errors.New("Codex app-server MCP status inventory is invalid")
 	}
 	found := false
+	connected := false
 	for _, entry := range entries {
 		server, err := decodeObject(entry, schema(
 			[]string{"authStatus", "name", "resourceTemplates", "resources", "tools"},
-			"authStatus", "name", "pluginId", "resourceTemplates", "resources", "runtimeStatus", "serverInfo", "tools",
+			"authStatus", "httpOrigin", "name", "pluginId", "resourceTemplates", "resources", "runtimeStatus", "serverCapabilities", "serverInfo", "tools", "toolsError",
 		))
 		if err != nil {
 			return false, errors.New("Codex app-server MCP status entry is invalid")
+		}
+		// Новые метаданные rust-v0.160.0 не назначают endpoint или capabilities:
+		// authority по-прежнему определяется exact thread, auth и набором tools.
+		if origin, present := server["httpOrigin"]; present && !bytes.Equal(bytes.TrimSpace(origin), []byte("null")) && !validThreadMetadataString(origin, 4096) {
+			return false, errors.New("Codex app-server MCP origin metadata is invalid")
+		}
+		if capabilities, present := server["serverCapabilities"]; present && (len(capabilities) > 64<<10 || !utf8.Valid(capabilities) || !json.Valid(capabilities)) {
+			return false, errors.New("Codex app-server MCP capability metadata is invalid")
+		}
+		toolsFailed := false
+		if diagnostic, present := server["toolsError"]; present && !bytes.Equal(bytes.TrimSpace(diagnostic), []byte("null")) {
+			if !validThreadMetadataString(diagnostic, maximumDiagnosticBytes) {
+				return false, errors.New("Codex app-server MCP tool diagnostic is invalid")
+			}
+			toolsFailed = true
 		}
 		name, err := decodeBoundedString(server["name"], 128)
 		if err != nil {
@@ -473,6 +588,9 @@ func (state *protocolState) bindRequiredMCPStatus(raw json.RawMessage, requiredT
 			return false, errors.New("Codex app-server required MCP status is duplicated")
 		}
 		found = true
+		if toolsFailed {
+			return false, ErrRequiredMCPUnavailable
+		}
 		runtimeStatus := ""
 		if rawStatus, present := server["runtimeStatus"]; present && !bytes.Equal(rawStatus, []byte("null")) {
 			runtimeStatus, err = decodeBoundedString(rawStatus, 32)
@@ -487,18 +605,22 @@ func (state *protocolState) bindRequiredMCPStatus(raw json.RawMessage, requiredT
 			if authErr != nil || authStatus != "bearerToken" || toolsErr != nil || !sameStringSet(toolNames, requiredTools) {
 				return false, ErrRequiredMCPUnavailable
 			}
-			state.requiredMCPReady = true
-			state.requiredMCPStatus = "ready"
-			return true, nil
+			connected = true
 		case "notStarted", "starting":
-			return false, nil
 		case "authenticationRequired", "failed", "cancelled", "disabled", "":
 			return false, ErrRequiredMCPUnavailable
 		default:
 			return false, errors.New("Codex app-server MCP runtime status is invalid")
 		}
 	}
-	return false, ErrRequiredMCPUnavailable
+	if !found {
+		return false, ErrRequiredMCPUnavailable
+	}
+	if connected {
+		state.requiredMCPReady = true
+		state.requiredMCPStatus = "ready"
+	}
+	return connected, nil
 }
 
 func decodeDynamicObjectKeys(raw json.RawMessage, maximum int) ([]string, error) {
@@ -707,6 +829,9 @@ func (state *protocolState) consumeItem(raw json.RawMessage, authoritative bool,
 		return errors.New("Codex app-server thread item id is invalid")
 	}
 	if typeName == "mcpToolCall" {
+		if ui, present := fields["mcpAppUi"]; present && !validMCPAppUi(ui) {
+			return errors.New("Codex app-server MCP UI metadata is invalid")
+		}
 		// MCP callbacks уже проецируются runtime-controller вместе с capability
 		// и grant. Повторная запись app-server item создала бы дубль аудита.
 		return nil
@@ -722,7 +847,21 @@ func (state *protocolState) consumeItem(raw json.RawMessage, authoritative bool,
 			if timestampMS > 0 {
 				state.itemStartedAtMS[id] = timestampMS
 			}
-			return nil
+			call, _, parseErr := state.parseNativeToolCall(typeName, id, fields, timestampMS, true)
+			if parseErr != nil {
+				return parseErr
+			}
+			if previous, exists := state.startedToolCalls[id]; exists {
+				if previous.Kind != call.Kind {
+					return errors.New("Codex app-server native tool kind changed")
+				}
+				return nil
+			}
+			if _, completed := state.toolCalls[id]; completed || len(state.startedToolCalls) >= runtimecontract.MaximumNativeToolCalls {
+				return errors.New("Codex app-server native tool start is invalid")
+			}
+			state.startedToolCalls[id] = call
+			return state.publishActivity(runtimecontract.RuntimeActivity{ToolCall: &call})
 		}
 		call, terminal, parseErr := state.parseNativeToolCall(typeName, id, fields, timestampMS)
 		if parseErr != nil {
@@ -752,8 +891,17 @@ func (state *protocolState) consumeItem(raw json.RawMessage, authoritative bool,
 		return nil
 	}
 	value := agentMessage{text: text, phase: phase}
-	if previous, duplicate := state.agentMessages[id]; duplicate && previous != value {
-		return errors.New("Codex app-server agent message changed after completion")
+	if previous, duplicate := state.agentMessages[id]; duplicate {
+		if previous != value {
+			return errors.New("Codex app-server agent message changed after completion")
+		}
+		return nil
+	}
+	if len(state.agentMessages) >= maximumPublishedMessages {
+		return errors.New("Codex app-server published message limit exceeded")
+	}
+	if phase != "" && len(text) > runtimecontract.MaximumRuntimeMessageBytes {
+		return errors.New("Codex app-server published message exceeds its bound")
 	}
 	state.agentMessages[id] = value
 	if phase == "final_answer" {
@@ -764,11 +912,34 @@ func (state *protocolState) consumeItem(raw json.RawMessage, authoritative bool,
 	} else if phase == "" {
 		state.fallbackID = id
 	}
+	if phase != "" {
+		messagePhase := runtimecontract.RuntimeMessageCommentary
+		if phase == "final_answer" {
+			messagePhase = runtimecontract.RuntimeMessageFinal
+		}
+		message := runtimecontract.RuntimeAgentMessage{ItemID: id, Phase: messagePhase, Revision: 1, Text: text}
+		return state.publishActivity(runtimecontract.RuntimeActivity{Message: &message})
+	}
 	return nil
 }
 
-func (state *protocolState) parseNativeToolCall(typeName, id string, fields map[string]json.RawMessage, completedAtMS int64) (runtimecontract.NativeToolCall, bool, error) {
-	call := runtimecontract.NativeToolCall{CallID: id}
+func validMCPAppUi(raw json.RawMessage) bool {
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return true
+	}
+	if len(raw) > 16<<10 {
+		return false
+	}
+	fields, err := decodeObject(raw, schema([]string{"preferredModelDisplayMode", "resourceUri"}, "preferredModelDisplayMode", "resourceUri"))
+	if err != nil || !validThreadMetadataString(fields["resourceUri"], 4096) {
+		return false
+	}
+	mode, err := decodeBoundedString(fields["preferredModelDisplayMode"], 32)
+	return err == nil && (mode == "inline" || mode == "fullscreen")
+}
+
+func (state *protocolState) parseNativeToolCall(typeName, id string, fields map[string]json.RawMessage, completedAtMS int64, running ...bool) (runtimecontract.NativeToolCall, bool, error) {
+	call := runtimecontract.NativeToolCall{CallID: id, Revision: 2}
 	var durationPresent bool
 	var err error
 	switch typeName {
@@ -778,9 +949,6 @@ func (state *protocolState) parseNativeToolCall(typeName, id string, fields map[
 		call.State, call.SafeResult, _, err = terminalNativeState(statusValue, nil)
 		if statusErr != nil || err != nil {
 			return runtimecontract.NativeToolCall{}, false, errors.New("Codex app-server command status is invalid")
-		}
-		if statusValue == "inProgress" {
-			return runtimecontract.NativeToolCall{}, false, nil
 		}
 		actions, actionErr := safeCommandActions(fields["commandActions"])
 		cwd, cwdErr := decodeBoundedString(fields["cwd"], 4096)
@@ -814,9 +982,6 @@ func (state *protocolState) parseNativeToolCall(typeName, id string, fields map[
 		if statusErr != nil || err != nil {
 			return runtimecontract.NativeToolCall{}, false, errors.New("Codex app-server file change status is invalid")
 		}
-		if statusValue == "inProgress" {
-			return runtimecontract.NativeToolCall{}, false, nil
-		}
 		changes, changeErr := state.safeFileChanges(fields["changes"])
 		if changeErr != nil {
 			return runtimecontract.NativeToolCall{}, false, changeErr
@@ -844,9 +1009,6 @@ func (state *protocolState) parseNativeToolCall(typeName, id string, fields map[
 		call.State, call.SafeResult, _, err = terminalNativeState(statusValue, success)
 		if statusErr != nil || err != nil {
 			return runtimecontract.NativeToolCall{}, false, errors.New("Codex app-server dynamic tool status is invalid")
-		}
-		if statusValue == "inProgress" {
-			return runtimecontract.NativeToolCall{}, false, nil
 		}
 		tool, toolErr := safeNativeLabel(fields["tool"])
 		namespace := "UNSPECIFIED"
@@ -882,9 +1044,6 @@ func (state *protocolState) parseNativeToolCall(typeName, id string, fields map[
 		if statusErr != nil || err != nil {
 			return runtimecontract.NativeToolCall{}, false, errors.New("Codex app-server image generation status is invalid")
 		}
-		if statusValue == "inProgress" {
-			return runtimecontract.NativeToolCall{}, false, nil
-		}
 		var result string
 		if strictDecode(fields["result"], &result) != nil || len(result) > maximumJSONLLineBytes || !utf8.ValidString(result) {
 			return runtimecontract.NativeToolCall{}, false, errors.New("Codex app-server image generation result is invalid")
@@ -909,14 +1068,22 @@ func (state *protocolState) parseNativeToolCall(typeName, id string, fields map[
 			call.DurationMS = completedAtMS - startedAt
 		}
 	}
-	delete(state.itemStartedAtMS, id)
+	wantRunning := len(running) == 1 && running[0]
+	if wantRunning || call.State == runtimecontract.NativeToolStateRunning {
+		call.Revision, call.State, call.SafeResult, call.DurationMS = 1, runtimecontract.NativeToolStateRunning, "", 0
+	} else {
+		delete(state.itemStartedAtMS, id)
+	}
 	if call.Validate() != nil {
 		return runtimecontract.NativeToolCall{}, false, errors.New("Codex app-server native tool projection is invalid")
 	}
-	return call, true, nil
+	return call, call.State != runtimecontract.NativeToolStateRunning, nil
 }
 
 func (state *protocolState) recordNativeToolCall(call runtimecontract.NativeToolCall) error {
+	if started, exists := state.startedToolCalls[call.CallID]; exists && started.Kind != call.Kind {
+		return errors.New("Codex app-server native tool kind changed")
+	}
 	if previous, exists := state.toolCalls[call.CallID]; exists {
 		previousDuration, currentDuration := previous.DurationMS, call.DurationMS
 		previous.DurationMS, call.DurationMS = 0, 0
@@ -934,6 +1101,20 @@ func (state *protocolState) recordNativeToolCall(call runtimecontract.NativeTool
 	}
 	state.toolCalls[call.CallID] = call
 	state.toolCallOrder = append(state.toolCallOrder, call.CallID)
+	return state.publishActivity(runtimecontract.RuntimeActivity{ToolCall: &call})
+}
+
+func (state *protocolState) publishActivity(activity runtimecontract.RuntimeActivity) error {
+	if state.activityErr != nil {
+		return state.activityErr
+	}
+	if activity.Validate() != nil {
+		return errors.New("Codex app-server runtime activity is invalid")
+	}
+	if state.onActivity != nil && state.onActivity(activity) != nil {
+		state.activityErr = errors.New("Codex runtime activity delivery failed")
+		return state.activityErr
+	}
 	return nil
 }
 
@@ -1033,14 +1214,19 @@ func (state *protocolState) safeFileChanges(raw json.RawMessage) (safeFileChange
 }
 
 func safeWebSearch(fields map[string]json.RawMessage) (string, int, error) {
-	query, err := decodeBoundedString(fields["query"], 64<<10)
-	if err != nil {
+	// rust-v0.160.0 начинает webSearch с пустой отображаемой query; Other
+	// также может завершиться без неё. Эти данные не назначают полномочия.
+	if !validThreadMetadataString(fields["query"], 64<<10) {
 		return "", 0, errors.New("Codex app-server web search query is invalid")
 	}
-	action, count := "UNSPECIFIED", 1
+	var query string
+	_ = strictDecode(fields["query"], &query)
+	action, count := "UNSPECIFIED", 0
+	if query != "" {
+		count = 1
+	}
 	rawAction, present := fields["action"]
 	if !present || bytes.Equal(rawAction, []byte("null")) {
-		_ = query
 		return action, count, nil
 	}
 	actionFields, err := decodeObject(rawAction, schema([]string{"type"}, "pattern", "queries", "query", "type", "url"))
@@ -1121,7 +1307,7 @@ func safeCommandSource(raw json.RawMessage) (string, error) {
 func terminalNativeState(statusValue string, success *bool) (string, string, bool, error) {
 	switch statusValue {
 	case "inProgress":
-		return "", "", false, nil
+		return runtimecontract.NativeToolStateRunning, "", false, nil
 	case "completed":
 		if success != nil && !*success {
 			return runtimecontract.NativeToolStateFailed, runtimecontract.NativeToolResultFailed, true, nil
@@ -1196,6 +1382,11 @@ func (state *protocolState) complete(turn parsedTurn) error {
 		if turn.errorValue != nil {
 			return errors.New("Codex app-server successful turn carries an error")
 		}
+		for id := range state.startedToolCalls {
+			if _, completed := state.toolCalls[id]; !completed {
+				return errors.New("Codex app-server completed with an unfinished native tool")
+			}
+		}
 		messageID := state.finalID
 		if messageID == "" {
 			messageID = state.fallbackID
@@ -1232,7 +1423,7 @@ type parsedTurnError struct {
 }
 
 func parseTurnError(raw json.RawMessage) (parsedTurnError, error) {
-	fields, err := decodeObject(raw, schema([]string{"message"}, "additionalDetails", "codexErrorInfo", "message"))
+	fields, err := decodeObject(raw, schema([]string{"message"}, "additionalDetails", "codexErrorInfo", "message", "misalignment"))
 	if err != nil {
 		return parsedTurnError{}, err
 	}
@@ -1244,11 +1435,42 @@ func parseTurnError(raw json.RawMessage) (parsedTurnError, error) {
 			return parsedTurnError{}, err
 		}
 	}
+	if metadata, present := fields["misalignment"]; present && !validMisalignmentMetadata(metadata) {
+		return parsedTurnError{}, errors.New("Codex app-server error metadata is invalid")
+	}
 	info := fields["codexErrorInfo"]
 	if bytes.Equal(info, []byte("null")) {
 		info = nil
 	}
 	return parsedTurnError{codexErrorInfo: info}, nil
+}
+
+// Пояснение и предлагаемое SDK продолжение проверяются по типу и отбрасываются:
+// они не назначают authority, не публикуются и не запускают следующий turn.
+func validMisalignmentMetadata(raw json.RawMessage) bool {
+	value := bytes.TrimSpace(raw)
+	if bytes.Equal(value, []byte("null")) {
+		return true
+	}
+	if len(value) > 24*maximumDiagnosticBytes {
+		return false
+	}
+	fields, err := decodeObject(value, schema(nil, "errorType", "detailedExplanation", "steer"))
+	if err != nil {
+		return false
+	}
+	for _, name := range []string{"errorType", "detailedExplanation"} {
+		if text, present := fields[name]; present && !bytes.Equal(bytes.TrimSpace(text), []byte("null")) && !validThreadMetadataString(text, maximumDiagnosticBytes) {
+			return false
+		}
+	}
+	if steer, present := fields["steer"]; present && !bytes.Equal(bytes.TrimSpace(steer), []byte("null")) {
+		instruction, err := decodeObject(steer, schema([]string{"message"}, "message"))
+		if err != nil || !validThreadMetadataString(instruction["message"], maximumDiagnosticBytes) {
+			return false
+		}
+	}
+	return true
 }
 
 func classifyCodexErrorInfo(raw json.RawMessage) string {
@@ -1512,7 +1734,7 @@ func stringSet(values ...string) map[string]struct{} {
 var itemFieldUniverse = []string{
 	"action", "agentPath", "agentThreadId", "agentsStates", "aggregatedOutput", "appContext", "arguments", "changes", "clientId",
 	"command", "commandActions", "content", "contentItems", "cwd", "delivery", "durationMs", "error", "exitCode", "failure", "fragments", "id",
-	"kind", "memoryCitation", "model", "mcpAppResourceUri", "namespace", "path", "phase", "pluginId", "processId",
+	"kind", "memoryCitation", "model", "mcpAppResourceUri", "mcpAppUi", "namespace", "path", "phase", "pluginId", "processId",
 	"output", "prompt", "query", "questions", "readOnlyHint", "reasoningEffort", "receiverThreadIds", "result", "results", "review", "revisedPrompt", "savedPath", "scriptPath", "server",
 	"senderThreadId", "source", "status", "success", "summary", "text", "tool", "transparentBackground", "type",
 }
@@ -1598,7 +1820,7 @@ var threadItemSchemas = map[string]objectSchema{
 	"reasoning":           schema([]string{"id", "type"}, "content", "id", "summary", "type"),
 	"commandExecution":    schema([]string{"command", "commandActions", "cwd", "id", "status", "type"}, "aggregatedOutput", "command", "commandActions", "cwd", "durationMs", "exitCode", "id", "pluginId", "processId", "scriptPath", "source", "status", "type"),
 	"fileChange":          schema([]string{"changes", "id", "status", "type"}, "changes", "id", "status", "type"),
-	"mcpToolCall":         schema([]string{"arguments", "id", "server", "status", "tool", "type"}, "appContext", "arguments", "durationMs", "error", "id", "mcpAppResourceUri", "pluginId", "readOnlyHint", "result", "server", "status", "tool", "type"),
+	"mcpToolCall":         schema([]string{"arguments", "id", "server", "status", "tool", "type"}, "appContext", "arguments", "durationMs", "error", "id", "mcpAppResourceUri", "mcpAppUi", "pluginId", "readOnlyHint", "result", "server", "status", "tool", "type"),
 	"dynamicToolCall":     schema([]string{"arguments", "id", "status", "tool", "type"}, "arguments", "contentItems", "durationMs", "id", "namespace", "status", "success", "tool", "type"),
 	"collabAgentToolCall": schema([]string{"agentsStates", "id", "receiverThreadIds", "senderThreadId", "status", "tool", "type"}, "agentsStates", "id", "model", "prompt", "reasoningEffort", "receiverThreadIds", "senderThreadId", "status", "tool", "type"),
 	"subAgentActivity":    schema([]string{"agentPath", "agentThreadId", "id", "kind", "type"}, "agentPath", "agentThreadId", "id", "kind", "type"),

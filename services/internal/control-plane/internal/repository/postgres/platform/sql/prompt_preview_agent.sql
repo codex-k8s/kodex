@@ -5,8 +5,9 @@ SELECT agent.ref, agent.name, agent.purpose, agent.version,
            WHEN agent.system_key = 'system-assistant' AND COALESCE(assistant.owner_instructions, '') <> ''
                THEN E'\n\n<owner-instructions>\n' || assistant.owner_instructions || E'\n</owner-instructions>'
            ELSE '' END,
-       instruction.digest, agent.capabilities
+       instruction.digest, agent.capabilities, organization.name
 FROM control_plane.agents agent
+JOIN control_plane.organizations organization ON organization.id = agent.organization_id
 LEFT JOIN control_plane.projects project ON project.id = agent.project_id
 LEFT JOIN control_plane.assistant_runtime assistant ON assistant.agent_id = agent.id
 JOIN LATERAL (

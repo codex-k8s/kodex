@@ -93,6 +93,8 @@ const run: Run = {
 
 const gate: OwnerGate = {
   ref: "gat_offer",
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   version: 1,
   projectRef: project.ref,
   runRef: run.ref,
@@ -143,6 +145,226 @@ const auditEvent: AuditEvent = {
 };
 
 describe("DecisionsPage", () => {
+  async function renderIntegration(
+    intent: NonNullable<OwnerGate["integrationIntent"]>,
+    locale: "ru" | "en" = "ru",
+  ): Promise<string> {
+    const original = gate.integrationIntent;
+    gate.integrationIntent = intent;
+    try {
+      const pinia = createPinia();
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: "/decisions", component: DecisionsPage }],
+      });
+      await router.push("/decisions");
+      await router.isReady();
+      const platform = usePlatformStore(pinia);
+      platform.projects[project.ref] = project;
+      platform.runs[run.ref] = run;
+      platform.gates[gate.ref] = gate;
+      const i18n = createI18n({
+        legacy: false,
+        locale,
+        messages: { [locale]: applicationI18n.global.getLocaleMessage(locale) },
+      });
+      const app = createSSRApp(DecisionsPage);
+      app.use(pinia);
+      app.use(router);
+      app.use(i18n);
+      return await renderToString(app);
+    } finally {
+      gate.integrationIntent = original;
+    }
+  }
+  const commentIntent = (
+    fields: unknown[],
+    contentComplete = true,
+  ): NonNullable<OwnerGate["integrationIntent"]> => ({
+    connectionRef: "intconn_fixture",
+    connectionName: "Fixture GitHub",
+    definitionKey: "github",
+    capabilityKey: "github.issue.comment.create",
+    operation: "github.issue.comment.create",
+    resourceScope: {
+      kind: "GITHUB_REPOSITORY",
+      values: { owner: "fixture-owner", repository: "fixture-repo" },
+      digest: "a".repeat(64),
+    },
+    effectPreview: {
+      risk: "WRITE",
+      contentComplete,
+      fields,
+      inputDigest: "b".repeat(64),
+      inputBytes: 42,
+    },
+    effectKey: "effect_fixture",
+  });
+
+  it.each(["ru", "en"] as const)(
+    "показывает repo/Issue/comment из actual typed key fields ДО решения (%s)",
+    async (locale) => {
+      const html = await renderIntegration(
+        commentIntent([
+          { key: "issue_number", type: "INTEGER", value: 17, opaque: false },
+          {
+            key: "body",
+            type: "STRING",
+            value: "Точный внешний комментарий\nВторая строка",
+            opaque: false,
+            truncated: false,
+          },
+        ]),
+        locale,
+      );
+      const details =
+        /<details\b[^>]*class="decision-technical-details"[^>]*>[^]*?<\/details>/.exec(
+          html,
+        )?.[0] ?? "";
+      expect(details).not.toBe("");
+      const primary = html.replace(details, "");
+      expect(primary).toContain("fixture-owner/fixture-repo");
+      expect(primary).toContain(
+        locale === "ru"
+          ? "Добавить комментарий к Issue #17"
+          : "Add a comment to Issue #17",
+      );
+      expect(primary).toContain(
+        locale === "ru" ? "Текст комментария" : "Comment text",
+      );
+      expect(primary).toContain("Точный внешний комментарий\nВторая строка");
+      expect(primary).not.toContain("Безопасное описание действия неполное");
+      expect(primary).not.toMatch(
+        /effect_fixture|github.issue.comment.create|inputDigest/,
+      );
+      expect(primary.indexOf("Точный внешний комментарий")).toBeLessThan(
+        primary.indexOf('class="decision-actions"'),
+      );
+      expect(details).toContain("effect_fixture");
+      expect(details).not.toContain("Точный внешний комментарий");
+      expect(details).not.toMatch(/<details[^>]*\bopen\b/);
+      expect(html.match(/type="radio"/g)).toHaveLength(3);
+    },
+  );
+
+  it("opaque/header/secret value никогда не появляются даже в technical details", async () => {
+    const intent = commentIntent([
+      {
+        key: "body",
+        type: "STRING",
+        value: "OPAQUE_VALUE_SENTINEL",
+        opaque: true,
+        truncated: false,
+      },
+      {
+        key: "authorization",
+        type: "STRING",
+        value: "HEADER_VALUE_SENTINEL",
+        opaque: false,
+        truncated: false,
+      },
+      {
+        key: "secret",
+        type: "STRING",
+        value: "SECRET_VALUE_SENTINEL",
+        opaque: false,
+        truncated: false,
+      },
+    ]);
+    intent.effectPreview.headers = { authorization: "EXTRA_HEADER_SENTINEL" };
+    const html = await renderIntegration(intent);
+    expect(html).not.toMatch(
+      /OPAQUE_VALUE_SENTINEL|HEADER_VALUE_SENTINEL|SECRET_VALUE_SENTINEL|EXTRA_HEADER_SENTINEL/,
+    );
+    expect(html).toContain("Значение скрыто в безопасном описании");
+    expect(html).toContain("Безопасное описание действия неполное");
+    expect(html).toContain("Риск внешнего действия");
+  });
+
+  it("показывает безопасный truncated prefix с явным предупреждением, не как полный body", async () => {
+    const html = await renderIntegration(
+      commentIntent(
+        [
+          {
+            key: "body",
+            type: "STRING",
+            value: "Доступный префикс",
+            opaque: false,
+            truncated: true,
+          },
+        ],
+        false,
+      ),
+    );
+    expect(html).toContain("Доступный префикс");
+    expect(html).toContain("Показана только часть значения");
+    expect(html).toContain("Безопасное описание действия неполное");
+    expect(html.indexOf("Безопасное описание действия неполное")).toBeLessThan(
+      html.indexOf('class="decision-actions"'),
+    );
+  });
+
+  it("показывает неполноту при отсутствующем safe preview и сохраняет generic action/risk", async () => {
+    const intent = commentIntent([]);
+    intent.effectPreview = { risk: "DESTRUCTIVE" };
+    const html = await renderIntegration(intent);
+    expect(html).toContain("Безопасное описание действия неполное");
+    expect(html).toContain("необратимое изменение");
+    expect(html).not.toContain("Добавить комментарий к Issue #");
+  });
+
+  it("body остаётся буквальным escaped text без исполняемого HTML/Markdown", async () => {
+    const html = await renderIntegration(
+      commentIntent([
+        {
+          key: "body",
+          type: "STRING",
+          value:
+            '<img src=x onerror="unexpected()"> [link](https://fixture.invalid)',
+          opaque: false,
+          truncated: false,
+        },
+      ]),
+    );
+    expect(html).toContain("&lt;img");
+    expect(html).not.toContain("<img src=x");
+    expect(html).not.toContain('href="https://fixture.invalid"');
+  });
+
+  it("показывает организационный SYSTEM gate без фиктивного проекта", async () => {
+    const originalProject = gate.projectRef;
+    gate.scopeKind = "ORGANIZATION";
+    Reflect.deleteProperty(gate, "projectRef");
+    try {
+      const pinia = createPinia();
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [
+          { path: "/decisions", component: DecisionsPage },
+          {
+            path: "/:pathMatch(.*)*",
+            component: defineComponent({ render: () => h("div") }),
+          },
+        ],
+      });
+      await router.push("/decisions");
+      await router.isReady();
+      const platform = usePlatformStore(pinia);
+      platform.gates[gate.ref] = gate;
+      const app = createSSRApp(DecisionsPage);
+      app.use(pinia);
+      app.use(router);
+      app.use(applicationI18n);
+      const html = await renderToString(app);
+      expect(html).toContain("Организация · общесистемный помощник");
+      expect(html).not.toContain("Название Проекта недоступно");
+      expect(html).not.toContain("/projects/undefined");
+      expect(html).not.toContain("/projects/prj_sales");
+    } finally {
+      gate.scopeKind = "PROJECT";
+      gate.projectRef = originalProject;
+    }
+  });
   it("не раскрывает имя из старого общего кэша после отказа адресного чтения", async () => {
     gateProjectReadback.available = false;
     try {

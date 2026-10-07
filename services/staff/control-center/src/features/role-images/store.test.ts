@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   Agent,
+  RoleImageBuild,
   RoleEnvironment,
   RoleImageRecipe,
   RoleImageRecipePage,
@@ -16,6 +17,7 @@ vi.mock("./api", () => api);
 import { useRoleImagesStore } from "./store";
 import { usePlatformStore } from "@/features/platform/store";
 import type { BootstrapState } from "@/shared/api/generated/openapi/types.gen";
+import { imageAdmissionFailureFixture } from "@/test-utils/image-admission-failure-fixture";
 
 const recipe: RoleImageRecipe = {
   scopeKind: "PROJECT",
@@ -41,6 +43,80 @@ describe("role image catalog store", () => {
       organizationRef: "org_synthetic",
     } as BootstrapState;
     vi.resetAllMocks();
+  });
+  it("обновляет и очищает failurecache при новой сборке/owner вместо вечного ожидания", async () => {
+    const build: RoleImageBuild = {
+      ref: "imgbld_current",
+      version: 1,
+      scopeKind: recipe.scopeKind,
+      organizationRef: recipe.organizationRef,
+      projectRef: recipe.projectRef,
+      recipeRef: recipe.ref,
+      recipeGeneration: recipe.generation,
+      sourceAvailable: false,
+      attempt: 1,
+      stage: "COMPLETED",
+      progressPercent: 100,
+      createdAt: recipe.createdAt,
+      updatedAt: recipe.updatedAt,
+    };
+    const failure = imageAdmissionFailureFixture(recipe, build);
+    const store = useRoleImagesStore();
+    api.loadRoleImageDetail.mockResolvedValueOnce({
+      recipe,
+      builds: [build],
+      admissionFailure: failure,
+    });
+    await store.loadDetail(recipe.projectRef, recipe.ref, false);
+    expect(store.admissionFailures[recipe.ref]).toEqual(failure);
+    api.loadRoleImageDetail.mockResolvedValueOnce({
+      recipe,
+      builds: [{ ...build, ref: "imgbld_new", stage: "QUEUED" }],
+    });
+    await store.loadDetail(recipe.projectRef, recipe.ref, false);
+    expect(store.admissionFailures[recipe.ref]).toBeUndefined();
+    api.loadRoleImageDetail.mockResolvedValueOnce({
+      recipe,
+      builds: [build],
+      admissionFailure: failure,
+    });
+    await store.loadDetail(recipe.projectRef, recipe.ref, false);
+    usePlatformStore().bootstrap = {
+      organizationRef: "org_new",
+    } as BootstrapState;
+    expect(store.admissionFailures[recipe.ref]).toBeUndefined();
+  });
+  it("отклоняет старый или чужой failure и очищает прежний detail", async () => {
+    const build: RoleImageBuild = {
+      ref: "imgbld_current",
+      version: 1,
+      scopeKind: recipe.scopeKind,
+      organizationRef: recipe.organizationRef,
+      projectRef: recipe.projectRef,
+      recipeRef: recipe.ref,
+      recipeGeneration: recipe.generation,
+      sourceAvailable: false,
+      attempt: 1,
+      stage: "COMPLETED",
+      progressPercent: 100,
+      createdAt: recipe.createdAt,
+      updatedAt: recipe.updatedAt,
+    };
+    const store = useRoleImagesStore();
+    for (const changes of [
+      { buildRef: "imgbld_old" },
+      { organizationRef: "org_foreign" },
+    ]) {
+      api.loadRoleImageDetail.mockResolvedValueOnce({
+        recipe,
+        builds: [build],
+        admissionFailure: imageAdmissionFailureFixture(recipe, build, changes),
+      });
+      await store.loadDetail(recipe.projectRef, recipe.ref, false);
+      expect(store.problem).toBeDefined();
+      expect(store.recipes[recipe.ref]).toBeUndefined();
+      expect(store.admissionFailures[recipe.ref]).toBeUndefined();
+    }
   });
   it("закрывает PROJECT snapshot без bootstrap org вместо доверия owner из DTO", () => {
     usePlatformStore().bootstrap = undefined;

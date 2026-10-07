@@ -48,6 +48,10 @@ func normalizeIntegrationShape(value map[string]any, descriptor protoreflect.Mes
 	case "controlplane.v1.IntegrationConnection":
 		delete(value, "credentialRevision")
 	case "controlplane.v1.IntegrationCapability", "controlplane.v1.IntegrationGrant":
+		if descriptor.FullName() == "controlplane.v1.IntegrationGrant" {
+			// Публичный pin принадлежит parent connection; runtime pin остаётся в Proto.
+			delete(value, "connectionVersion")
+		}
 		schema, hasSchema := value["inputSchema"]
 		digest, hasDigest := value["inputSchemaSha256"]
 		if hasSchema || hasDigest {

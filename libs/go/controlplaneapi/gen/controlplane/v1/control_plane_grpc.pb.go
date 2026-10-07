@@ -19,101 +19,103 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PlatformQueryService_ListEmailMailboxConfigurations_FullMethodName           = "/controlplane.v1.PlatformQueryService/ListEmailMailboxConfigurations"
-	PlatformQueryService_GetEmailMailboxConfiguration_FullMethodName             = "/controlplane.v1.PlatformQueryService/GetEmailMailboxConfiguration"
-	PlatformQueryService_ListEmailMailboxCredentials_FullMethodName              = "/controlplane.v1.PlatformQueryService/ListEmailMailboxCredentials"
-	PlatformQueryService_GetEmailMailboxCredentialReceipt_FullMethodName         = "/controlplane.v1.PlatformQueryService/GetEmailMailboxCredentialReceipt"
-	PlatformQueryService_PreviewEmailMailboxConfiguration_FullMethodName         = "/controlplane.v1.PlatformQueryService/PreviewEmailMailboxConfiguration"
-	PlatformQueryService_GetRuntimeSecretDraftImpact_FullMethodName              = "/controlplane.v1.PlatformQueryService/GetRuntimeSecretDraftImpact"
-	PlatformQueryService_GetRuntimeSecretDraft_FullMethodName                    = "/controlplane.v1.PlatformQueryService/GetRuntimeSecretDraft"
-	PlatformQueryService_GetRuntimeRevisionDiff_FullMethodName                   = "/controlplane.v1.PlatformQueryService/GetRuntimeRevisionDiff"
-	PlatformQueryService_GetEmailEffectReceipt_FullMethodName                    = "/controlplane.v1.PlatformQueryService/GetEmailEffectReceipt"
-	PlatformQueryService_ListSkillBundles_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListSkillBundles"
-	PlatformQueryService_GetSkillBundle_FullMethodName                           = "/controlplane.v1.PlatformQueryService/GetSkillBundle"
-	PlatformQueryService_ListSkillBundleRevisions_FullMethodName                 = "/controlplane.v1.PlatformQueryService/ListSkillBundleRevisions"
-	PlatformQueryService_ListMemoryRecords_FullMethodName                        = "/controlplane.v1.PlatformQueryService/ListMemoryRecords"
-	PlatformQueryService_GetMemoryRecord_FullMethodName                          = "/controlplane.v1.PlatformQueryService/GetMemoryRecord"
-	PlatformQueryService_ListMemoryRecordRevisions_FullMethodName                = "/controlplane.v1.PlatformQueryService/ListMemoryRecordRevisions"
-	PlatformQueryService_GetBootstrapState_FullMethodName                        = "/controlplane.v1.PlatformQueryService/GetBootstrapState"
-	PlatformQueryService_GetPlatformEventCursor_FullMethodName                   = "/controlplane.v1.PlatformQueryService/GetPlatformEventCursor"
-	PlatformQueryService_GetOverview_FullMethodName                              = "/controlplane.v1.PlatformQueryService/GetOverview"
-	PlatformQueryService_ListPlatformCapabilities_FullMethodName                 = "/controlplane.v1.PlatformQueryService/ListPlatformCapabilities"
-	PlatformQueryService_ListRuntimeSelections_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListRuntimeSelections"
-	PlatformQueryService_SearchPlatform_FullMethodName                           = "/controlplane.v1.PlatformQueryService/SearchPlatform"
-	PlatformQueryService_ListVFSNodes_FullMethodName                             = "/controlplane.v1.PlatformQueryService/ListVFSNodes"
-	PlatformQueryService_SearchVFS_FullMethodName                                = "/controlplane.v1.PlatformQueryService/SearchVFS"
-	PlatformQueryService_ListProjects_FullMethodName                             = "/controlplane.v1.PlatformQueryService/ListProjects"
-	PlatformQueryService_ListTrashedProjects_FullMethodName                      = "/controlplane.v1.PlatformQueryService/ListTrashedProjects"
-	PlatformQueryService_GetProject_FullMethodName                               = "/controlplane.v1.PlatformQueryService/GetProject"
-	PlatformQueryService_ListPlatformMemberships_FullMethodName                  = "/controlplane.v1.PlatformQueryService/ListPlatformMemberships"
-	PlatformQueryService_ListPlatformMembershipCandidates_FullMethodName         = "/controlplane.v1.PlatformQueryService/ListPlatformMembershipCandidates"
-	PlatformQueryService_ListProjectMemberships_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ListProjectMemberships"
-	PlatformQueryService_ListProjectMembershipCandidates_FullMethodName          = "/controlplane.v1.PlatformQueryService/ListProjectMembershipCandidates"
-	PlatformQueryService_ListAgents_FullMethodName                               = "/controlplane.v1.PlatformQueryService/ListAgents"
-	PlatformQueryService_GetAgent_FullMethodName                                 = "/controlplane.v1.PlatformQueryService/GetAgent"
-	PlatformQueryService_ListAgentInstructionVersions_FullMethodName             = "/controlplane.v1.PlatformQueryService/ListAgentInstructionVersions"
-	PlatformQueryService_ListWorkflows_FullMethodName                            = "/controlplane.v1.PlatformQueryService/ListWorkflows"
-	PlatformQueryService_GetWorkflow_FullMethodName                              = "/controlplane.v1.PlatformQueryService/GetWorkflow"
-	PlatformQueryService_ListRuns_FullMethodName                                 = "/controlplane.v1.PlatformQueryService/ListRuns"
-	PlatformQueryService_GetRun_FullMethodName                                   = "/controlplane.v1.PlatformQueryService/GetRun"
-	PlatformQueryService_GetRunGraph_FullMethodName                              = "/controlplane.v1.PlatformQueryService/GetRunGraph"
-	PlatformQueryService_ListRunEvents_FullMethodName                            = "/controlplane.v1.PlatformQueryService/ListRunEvents"
-	PlatformQueryService_ListOwnerGates_FullMethodName                           = "/controlplane.v1.PlatformQueryService/ListOwnerGates"
-	PlatformQueryService_GetOwnerGate_FullMethodName                             = "/controlplane.v1.PlatformQueryService/GetOwnerGate"
-	PlatformQueryService_ListArtifacts_FullMethodName                            = "/controlplane.v1.PlatformQueryService/ListArtifacts"
-	PlatformQueryService_GetArtifact_FullMethodName                              = "/controlplane.v1.PlatformQueryService/GetArtifact"
-	PlatformQueryService_GetArtifactImpact_FullMethodName                        = "/controlplane.v1.PlatformQueryService/GetArtifactImpact"
-	PlatformQueryService_GetAttachmentSet_FullMethodName                         = "/controlplane.v1.PlatformQueryService/GetAttachmentSet"
-	PlatformQueryService_ListSchedules_FullMethodName                            = "/controlplane.v1.PlatformQueryService/ListSchedules"
-	PlatformQueryService_GetSchedule_FullMethodName                              = "/controlplane.v1.PlatformQueryService/GetSchedule"
-	PlatformQueryService_ListScheduleRevisions_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListScheduleRevisions"
-	PlatformQueryService_ListScheduleRuns_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListScheduleRuns"
-	PlatformQueryService_PreviewSchedule_FullMethodName                          = "/controlplane.v1.PlatformQueryService/PreviewSchedule"
-	PlatformQueryService_ListProviderAccounts_FullMethodName                     = "/controlplane.v1.PlatformQueryService/ListProviderAccounts"
-	PlatformQueryService_GetProviderAccount_FullMethodName                       = "/controlplane.v1.PlatformQueryService/GetProviderAccount"
-	PlatformQueryService_ListProviderAccountBlockers_FullMethodName              = "/controlplane.v1.PlatformQueryService/ListProviderAccountBlockers"
-	PlatformQueryService_ListIntegrationDefinitions_FullMethodName               = "/controlplane.v1.PlatformQueryService/ListIntegrationDefinitions"
-	PlatformQueryService_ListIntegrationConnections_FullMethodName               = "/controlplane.v1.PlatformQueryService/ListIntegrationConnections"
-	PlatformQueryService_ListIntegrationGrantConnectionCandidates_FullMethodName = "/controlplane.v1.PlatformQueryService/ListIntegrationGrantConnectionCandidates"
-	PlatformQueryService_ListIntegrationGrantProjectCandidates_FullMethodName    = "/controlplane.v1.PlatformQueryService/ListIntegrationGrantProjectCandidates"
-	PlatformQueryService_ListIntegrationGrantRecipientCandidates_FullMethodName  = "/controlplane.v1.PlatformQueryService/ListIntegrationGrantRecipientCandidates"
-	PlatformQueryService_ListIntegrationGrantCapabilityCandidates_FullMethodName = "/controlplane.v1.PlatformQueryService/ListIntegrationGrantCapabilityCandidates"
-	PlatformQueryService_GetIntegrationConnection_FullMethodName                 = "/controlplane.v1.PlatformQueryService/GetIntegrationConnection"
-	PlatformQueryService_GetAdministration_FullMethodName                        = "/controlplane.v1.PlatformQueryService/GetAdministration"
-	PlatformQueryService_ListAuditEvents_FullMethodName                          = "/controlplane.v1.PlatformQueryService/ListAuditEvents"
-	PlatformQueryService_GetAgentRuntimeConfiguration_FullMethodName             = "/controlplane.v1.PlatformQueryService/GetAgentRuntimeConfiguration"
-	PlatformQueryService_GetAgentEffectiveCapabilities_FullMethodName            = "/controlplane.v1.PlatformQueryService/GetAgentEffectiveCapabilities"
-	PlatformQueryService_ListArtifactBindingTargets_FullMethodName               = "/controlplane.v1.PlatformQueryService/ListArtifactBindingTargets"
-	PlatformQueryService_GetRunAttachmentEligibility_FullMethodName              = "/controlplane.v1.PlatformQueryService/GetRunAttachmentEligibility"
-	PlatformQueryService_ListConfigOverlayRevisions_FullMethodName               = "/controlplane.v1.PlatformQueryService/ListConfigOverlayRevisions"
-	PlatformQueryService_GetConfigOverlayRevision_FullMethodName                 = "/controlplane.v1.PlatformQueryService/GetConfigOverlayRevision"
-	PlatformQueryService_ListAgentRuntimeConfigurationVersions_FullMethodName    = "/controlplane.v1.PlatformQueryService/ListAgentRuntimeConfigurationVersions"
-	PlatformQueryService_ListRuntimeEnvironmentSets_FullMethodName               = "/controlplane.v1.PlatformQueryService/ListRuntimeEnvironmentSets"
-	PlatformQueryService_GetRuntimeEnvironmentSet_FullMethodName                 = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentSet"
-	PlatformQueryService_ListRuntimeEnvironmentVersions_FullMethodName           = "/controlplane.v1.PlatformQueryService/ListRuntimeEnvironmentVersions"
-	PlatformQueryService_GetRuntimeEnvironmentReadiness_FullMethodName           = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentReadiness"
-	PlatformQueryService_ListRuntimeEnvironmentAgents_FullMethodName             = "/controlplane.v1.PlatformQueryService/ListRuntimeEnvironmentAgents"
-	PlatformQueryService_ListTemplateVariables_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListTemplateVariables"
-	PlatformQueryService_ListProviderDefinitions_FullMethodName                  = "/controlplane.v1.PlatformQueryService/ListProviderDefinitions"
-	PlatformQueryService_ListModelCapabilities_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListModelCapabilities"
-	PlatformQueryService_ListRoleImageRecipeRevisions_FullMethodName             = "/controlplane.v1.PlatformQueryService/ListRoleImageRecipeRevisions"
-	PlatformQueryService_ValidatePromptTemplate_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ValidatePromptTemplate"
-	PlatformQueryService_PreviewPromptTemplate_FullMethodName                    = "/controlplane.v1.PlatformQueryService/PreviewPromptTemplate"
-	PlatformQueryService_ListRuntimeSecrets_FullMethodName                       = "/controlplane.v1.PlatformQueryService/ListRuntimeSecrets"
-	PlatformQueryService_ListOrganizationRuntimeSecrets_FullMethodName           = "/controlplane.v1.PlatformQueryService/ListOrganizationRuntimeSecrets"
-	PlatformQueryService_GetRuntimeSecret_FullMethodName                         = "/controlplane.v1.PlatformQueryService/GetRuntimeSecret"
-	PlatformQueryService_ListManagedConfigurationHistory_FullMethodName          = "/controlplane.v1.PlatformQueryService/ListManagedConfigurationHistory"
-	PlatformQueryService_ListManagedConfigurations_FullMethodName                = "/controlplane.v1.PlatformQueryService/ListManagedConfigurations"
-	PlatformQueryService_GetManagedConfigurationImpact_FullMethodName            = "/controlplane.v1.PlatformQueryService/GetManagedConfigurationImpact"
-	PlatformQueryService_GetRoleImageImpactPlan_FullMethodName                   = "/controlplane.v1.PlatformQueryService/GetRoleImageImpactPlan"
-	PlatformQueryService_GetRevisionImpactPlan_FullMethodName                    = "/controlplane.v1.PlatformQueryService/GetRevisionImpactPlan"
-	PlatformQueryService_GetManagedConfigurationGitWriteBack_FullMethodName      = "/controlplane.v1.PlatformQueryService/GetManagedConfigurationGitWriteBack"
-	PlatformQueryService_ListManagedConfigurationGitWriteBacks_FullMethodName    = "/controlplane.v1.PlatformQueryService/ListManagedConfigurationGitWriteBacks"
-	PlatformQueryService_GetSystemSTTConfiguration_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetSystemSTTConfiguration"
-	PlatformQueryService_GetRuntimeEnvironmentDraft_FullMethodName               = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentDraft"
-	PlatformQueryService_GetRuntimeEnvironmentImpact_FullMethodName              = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentImpact"
-	PlatformQueryService_GetRuntimeSecretImpact_FullMethodName                   = "/controlplane.v1.PlatformQueryService/GetRuntimeSecretImpact"
-	PlatformQueryService_ListInteractionIdentities_FullMethodName                = "/controlplane.v1.PlatformQueryService/ListInteractionIdentities"
+	PlatformQueryService_ListEmailMailboxConfigurations_FullMethodName                = "/controlplane.v1.PlatformQueryService/ListEmailMailboxConfigurations"
+	PlatformQueryService_GetEmailMailboxConfiguration_FullMethodName                  = "/controlplane.v1.PlatformQueryService/GetEmailMailboxConfiguration"
+	PlatformQueryService_ListEmailMailboxCredentials_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ListEmailMailboxCredentials"
+	PlatformQueryService_GetEmailMailboxCredentialReceipt_FullMethodName              = "/controlplane.v1.PlatformQueryService/GetEmailMailboxCredentialReceipt"
+	PlatformQueryService_PreviewEmailMailboxConfiguration_FullMethodName              = "/controlplane.v1.PlatformQueryService/PreviewEmailMailboxConfiguration"
+	PlatformQueryService_GetRuntimeSecretDraftImpact_FullMethodName                   = "/controlplane.v1.PlatformQueryService/GetRuntimeSecretDraftImpact"
+	PlatformQueryService_GetRuntimeSecretDraft_FullMethodName                         = "/controlplane.v1.PlatformQueryService/GetRuntimeSecretDraft"
+	PlatformQueryService_GetRuntimeRevisionDiff_FullMethodName                        = "/controlplane.v1.PlatformQueryService/GetRuntimeRevisionDiff"
+	PlatformQueryService_GetEmailEffectReceipt_FullMethodName                         = "/controlplane.v1.PlatformQueryService/GetEmailEffectReceipt"
+	PlatformQueryService_ListSkillBundles_FullMethodName                              = "/controlplane.v1.PlatformQueryService/ListSkillBundles"
+	PlatformQueryService_GetSkillBundle_FullMethodName                                = "/controlplane.v1.PlatformQueryService/GetSkillBundle"
+	PlatformQueryService_ListSkillBundleRevisions_FullMethodName                      = "/controlplane.v1.PlatformQueryService/ListSkillBundleRevisions"
+	PlatformQueryService_ListMemoryRecords_FullMethodName                             = "/controlplane.v1.PlatformQueryService/ListMemoryRecords"
+	PlatformQueryService_GetMemoryRecord_FullMethodName                               = "/controlplane.v1.PlatformQueryService/GetMemoryRecord"
+	PlatformQueryService_ListMemoryRecordRevisions_FullMethodName                     = "/controlplane.v1.PlatformQueryService/ListMemoryRecordRevisions"
+	PlatformQueryService_GetBootstrapState_FullMethodName                             = "/controlplane.v1.PlatformQueryService/GetBootstrapState"
+	PlatformQueryService_GetPlatformEventCursor_FullMethodName                        = "/controlplane.v1.PlatformQueryService/GetPlatformEventCursor"
+	PlatformQueryService_GetOverview_FullMethodName                                   = "/controlplane.v1.PlatformQueryService/GetOverview"
+	PlatformQueryService_ListPlatformCapabilities_FullMethodName                      = "/controlplane.v1.PlatformQueryService/ListPlatformCapabilities"
+	PlatformQueryService_ListRuntimeSelections_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListRuntimeSelections"
+	PlatformQueryService_SearchPlatform_FullMethodName                                = "/controlplane.v1.PlatformQueryService/SearchPlatform"
+	PlatformQueryService_ListVFSNodes_FullMethodName                                  = "/controlplane.v1.PlatformQueryService/ListVFSNodes"
+	PlatformQueryService_SearchVFS_FullMethodName                                     = "/controlplane.v1.PlatformQueryService/SearchVFS"
+	PlatformQueryService_ListProjects_FullMethodName                                  = "/controlplane.v1.PlatformQueryService/ListProjects"
+	PlatformQueryService_ListTrashedProjects_FullMethodName                           = "/controlplane.v1.PlatformQueryService/ListTrashedProjects"
+	PlatformQueryService_GetProject_FullMethodName                                    = "/controlplane.v1.PlatformQueryService/GetProject"
+	PlatformQueryService_ListPlatformMemberships_FullMethodName                       = "/controlplane.v1.PlatformQueryService/ListPlatformMemberships"
+	PlatformQueryService_ListPlatformMembershipCandidates_FullMethodName              = "/controlplane.v1.PlatformQueryService/ListPlatformMembershipCandidates"
+	PlatformQueryService_ListProjectMemberships_FullMethodName                        = "/controlplane.v1.PlatformQueryService/ListProjectMemberships"
+	PlatformQueryService_ListProjectMembershipCandidates_FullMethodName               = "/controlplane.v1.PlatformQueryService/ListProjectMembershipCandidates"
+	PlatformQueryService_ListAgents_FullMethodName                                    = "/controlplane.v1.PlatformQueryService/ListAgents"
+	PlatformQueryService_GetAgent_FullMethodName                                      = "/controlplane.v1.PlatformQueryService/GetAgent"
+	PlatformQueryService_ListAgentInstructionVersions_FullMethodName                  = "/controlplane.v1.PlatformQueryService/ListAgentInstructionVersions"
+	PlatformQueryService_ListWorkflows_FullMethodName                                 = "/controlplane.v1.PlatformQueryService/ListWorkflows"
+	PlatformQueryService_GetWorkflow_FullMethodName                                   = "/controlplane.v1.PlatformQueryService/GetWorkflow"
+	PlatformQueryService_ListRuns_FullMethodName                                      = "/controlplane.v1.PlatformQueryService/ListRuns"
+	PlatformQueryService_GetRun_FullMethodName                                        = "/controlplane.v1.PlatformQueryService/GetRun"
+	PlatformQueryService_GetRunGraph_FullMethodName                                   = "/controlplane.v1.PlatformQueryService/GetRunGraph"
+	PlatformQueryService_ListRunEvents_FullMethodName                                 = "/controlplane.v1.PlatformQueryService/ListRunEvents"
+	PlatformQueryService_ListOwnerGates_FullMethodName                                = "/controlplane.v1.PlatformQueryService/ListOwnerGates"
+	PlatformQueryService_GetOwnerGate_FullMethodName                                  = "/controlplane.v1.PlatformQueryService/GetOwnerGate"
+	PlatformQueryService_ListArtifacts_FullMethodName                                 = "/controlplane.v1.PlatformQueryService/ListArtifacts"
+	PlatformQueryService_GetArtifact_FullMethodName                                   = "/controlplane.v1.PlatformQueryService/GetArtifact"
+	PlatformQueryService_GetArtifactImpact_FullMethodName                             = "/controlplane.v1.PlatformQueryService/GetArtifactImpact"
+	PlatformQueryService_GetAttachmentSet_FullMethodName                              = "/controlplane.v1.PlatformQueryService/GetAttachmentSet"
+	PlatformQueryService_ListSchedules_FullMethodName                                 = "/controlplane.v1.PlatformQueryService/ListSchedules"
+	PlatformQueryService_GetSchedule_FullMethodName                                   = "/controlplane.v1.PlatformQueryService/GetSchedule"
+	PlatformQueryService_ListScheduleRevisions_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListScheduleRevisions"
+	PlatformQueryService_ListScheduleRuns_FullMethodName                              = "/controlplane.v1.PlatformQueryService/ListScheduleRuns"
+	PlatformQueryService_PreviewSchedule_FullMethodName                               = "/controlplane.v1.PlatformQueryService/PreviewSchedule"
+	PlatformQueryService_ListProviderAccounts_FullMethodName                          = "/controlplane.v1.PlatformQueryService/ListProviderAccounts"
+	PlatformQueryService_GetProviderAccount_FullMethodName                            = "/controlplane.v1.PlatformQueryService/GetProviderAccount"
+	PlatformQueryService_ListProviderAccountBlockers_FullMethodName                   = "/controlplane.v1.PlatformQueryService/ListProviderAccountBlockers"
+	PlatformQueryService_ListIntegrationDefinitions_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListIntegrationDefinitions"
+	PlatformQueryService_ListIntegrationConnections_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListIntegrationConnections"
+	PlatformQueryService_ListIntegrationGrantConnectionCandidates_FullMethodName      = "/controlplane.v1.PlatformQueryService/ListIntegrationGrantConnectionCandidates"
+	PlatformQueryService_ListIntegrationGrantProjectCandidates_FullMethodName         = "/controlplane.v1.PlatformQueryService/ListIntegrationGrantProjectCandidates"
+	PlatformQueryService_ListIntegrationGrantRecipientCandidates_FullMethodName       = "/controlplane.v1.PlatformQueryService/ListIntegrationGrantRecipientCandidates"
+	PlatformQueryService_ListIntegrationGrantCapabilityCandidates_FullMethodName      = "/controlplane.v1.PlatformQueryService/ListIntegrationGrantCapabilityCandidates"
+	PlatformQueryService_GetSystemAssistantIntegrationGrantCandidates_FullMethodName  = "/controlplane.v1.PlatformQueryService/GetSystemAssistantIntegrationGrantCandidates"
+	PlatformQueryService_GetProjectAssistantIntegrationGrantCandidates_FullMethodName = "/controlplane.v1.PlatformQueryService/GetProjectAssistantIntegrationGrantCandidates"
+	PlatformQueryService_GetIntegrationConnection_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetIntegrationConnection"
+	PlatformQueryService_GetAdministration_FullMethodName                             = "/controlplane.v1.PlatformQueryService/GetAdministration"
+	PlatformQueryService_ListAuditEvents_FullMethodName                               = "/controlplane.v1.PlatformQueryService/ListAuditEvents"
+	PlatformQueryService_GetAgentRuntimeConfiguration_FullMethodName                  = "/controlplane.v1.PlatformQueryService/GetAgentRuntimeConfiguration"
+	PlatformQueryService_GetAgentEffectiveCapabilities_FullMethodName                 = "/controlplane.v1.PlatformQueryService/GetAgentEffectiveCapabilities"
+	PlatformQueryService_ListArtifactBindingTargets_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListArtifactBindingTargets"
+	PlatformQueryService_GetRunAttachmentEligibility_FullMethodName                   = "/controlplane.v1.PlatformQueryService/GetRunAttachmentEligibility"
+	PlatformQueryService_ListConfigOverlayRevisions_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListConfigOverlayRevisions"
+	PlatformQueryService_GetConfigOverlayRevision_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetConfigOverlayRevision"
+	PlatformQueryService_ListAgentRuntimeConfigurationVersions_FullMethodName         = "/controlplane.v1.PlatformQueryService/ListAgentRuntimeConfigurationVersions"
+	PlatformQueryService_ListRuntimeEnvironmentSets_FullMethodName                    = "/controlplane.v1.PlatformQueryService/ListRuntimeEnvironmentSets"
+	PlatformQueryService_GetRuntimeEnvironmentSet_FullMethodName                      = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentSet"
+	PlatformQueryService_ListRuntimeEnvironmentVersions_FullMethodName                = "/controlplane.v1.PlatformQueryService/ListRuntimeEnvironmentVersions"
+	PlatformQueryService_GetRuntimeEnvironmentReadiness_FullMethodName                = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentReadiness"
+	PlatformQueryService_ListRuntimeEnvironmentAgents_FullMethodName                  = "/controlplane.v1.PlatformQueryService/ListRuntimeEnvironmentAgents"
+	PlatformQueryService_ListTemplateVariables_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListTemplateVariables"
+	PlatformQueryService_ListProviderDefinitions_FullMethodName                       = "/controlplane.v1.PlatformQueryService/ListProviderDefinitions"
+	PlatformQueryService_ListModelCapabilities_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListModelCapabilities"
+	PlatformQueryService_ListRoleImageRecipeRevisions_FullMethodName                  = "/controlplane.v1.PlatformQueryService/ListRoleImageRecipeRevisions"
+	PlatformQueryService_ValidatePromptTemplate_FullMethodName                        = "/controlplane.v1.PlatformQueryService/ValidatePromptTemplate"
+	PlatformQueryService_PreviewPromptTemplate_FullMethodName                         = "/controlplane.v1.PlatformQueryService/PreviewPromptTemplate"
+	PlatformQueryService_ListRuntimeSecrets_FullMethodName                            = "/controlplane.v1.PlatformQueryService/ListRuntimeSecrets"
+	PlatformQueryService_ListOrganizationRuntimeSecrets_FullMethodName                = "/controlplane.v1.PlatformQueryService/ListOrganizationRuntimeSecrets"
+	PlatformQueryService_GetRuntimeSecret_FullMethodName                              = "/controlplane.v1.PlatformQueryService/GetRuntimeSecret"
+	PlatformQueryService_ListManagedConfigurationHistory_FullMethodName               = "/controlplane.v1.PlatformQueryService/ListManagedConfigurationHistory"
+	PlatformQueryService_ListManagedConfigurations_FullMethodName                     = "/controlplane.v1.PlatformQueryService/ListManagedConfigurations"
+	PlatformQueryService_GetManagedConfigurationImpact_FullMethodName                 = "/controlplane.v1.PlatformQueryService/GetManagedConfigurationImpact"
+	PlatformQueryService_GetRoleImageImpactPlan_FullMethodName                        = "/controlplane.v1.PlatformQueryService/GetRoleImageImpactPlan"
+	PlatformQueryService_GetRevisionImpactPlan_FullMethodName                         = "/controlplane.v1.PlatformQueryService/GetRevisionImpactPlan"
+	PlatformQueryService_GetManagedConfigurationGitWriteBack_FullMethodName           = "/controlplane.v1.PlatformQueryService/GetManagedConfigurationGitWriteBack"
+	PlatformQueryService_ListManagedConfigurationGitWriteBacks_FullMethodName         = "/controlplane.v1.PlatformQueryService/ListManagedConfigurationGitWriteBacks"
+	PlatformQueryService_GetSystemSTTConfiguration_FullMethodName                     = "/controlplane.v1.PlatformQueryService/GetSystemSTTConfiguration"
+	PlatformQueryService_GetRuntimeEnvironmentDraft_FullMethodName                    = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentDraft"
+	PlatformQueryService_GetRuntimeEnvironmentImpact_FullMethodName                   = "/controlplane.v1.PlatformQueryService/GetRuntimeEnvironmentImpact"
+	PlatformQueryService_GetRuntimeSecretImpact_FullMethodName                        = "/controlplane.v1.PlatformQueryService/GetRuntimeSecretImpact"
+	PlatformQueryService_ListInteractionIdentities_FullMethodName                     = "/controlplane.v1.PlatformQueryService/ListInteractionIdentities"
 )
 
 // PlatformQueryServiceClient is the client API for PlatformQueryService service.
@@ -181,6 +183,9 @@ type PlatformQueryServiceClient interface {
 	ListIntegrationGrantProjectCandidates(ctx context.Context, in *ListIntegrationGrantProjectCandidatesRequest, opts ...grpc.CallOption) (*ListIntegrationGrantProjectCandidatesResponse, error)
 	ListIntegrationGrantRecipientCandidates(ctx context.Context, in *ListIntegrationGrantRecipientCandidatesRequest, opts ...grpc.CallOption) (*ListIntegrationGrantRecipientCandidatesResponse, error)
 	ListIntegrationGrantCapabilityCandidates(ctx context.Context, in *ListIntegrationGrantCapabilityCandidatesRequest, opts ...grpc.CallOption) (*ListIntegrationGrantCapabilityCandidatesResponse, error)
+	// Кандидаты exact общесистемного помощника; owner и assistant назначаются сервером.
+	GetSystemAssistantIntegrationGrantCandidates(ctx context.Context, in *GetSystemAssistantIntegrationGrantCandidatesRequest, opts ...grpc.CallOption) (*GetSystemAssistantIntegrationGrantCandidatesResponse, error)
+	GetProjectAssistantIntegrationGrantCandidates(ctx context.Context, in *GetProjectAssistantIntegrationGrantCandidatesRequest, opts ...grpc.CallOption) (*GetProjectAssistantIntegrationGrantCandidatesResponse, error)
 	GetIntegrationConnection(ctx context.Context, in *GetIntegrationConnectionRequest, opts ...grpc.CallOption) (*GetIntegrationConnectionResponse, error)
 	GetAdministration(ctx context.Context, in *GetAdministrationRequest, opts ...grpc.CallOption) (*GetAdministrationResponse, error)
 	ListAuditEvents(ctx context.Context, in *ListAuditEventsRequest, opts ...grpc.CallOption) (*ListAuditEventsResponse, error)
@@ -817,6 +822,26 @@ func (c *platformQueryServiceClient) ListIntegrationGrantCapabilityCandidates(ct
 	return out, nil
 }
 
+func (c *platformQueryServiceClient) GetSystemAssistantIntegrationGrantCandidates(ctx context.Context, in *GetSystemAssistantIntegrationGrantCandidatesRequest, opts ...grpc.CallOption) (*GetSystemAssistantIntegrationGrantCandidatesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSystemAssistantIntegrationGrantCandidatesResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetSystemAssistantIntegrationGrantCandidates_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) GetProjectAssistantIntegrationGrantCandidates(ctx context.Context, in *GetProjectAssistantIntegrationGrantCandidatesRequest, opts ...grpc.CallOption) (*GetProjectAssistantIntegrationGrantCandidatesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetProjectAssistantIntegrationGrantCandidatesResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetProjectAssistantIntegrationGrantCandidates_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformQueryServiceClient) GetIntegrationConnection(ctx context.Context, in *GetIntegrationConnectionRequest, opts ...grpc.CallOption) (*GetIntegrationConnectionResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetIntegrationConnectionResponse)
@@ -1242,6 +1267,9 @@ type PlatformQueryServiceServer interface {
 	ListIntegrationGrantProjectCandidates(context.Context, *ListIntegrationGrantProjectCandidatesRequest) (*ListIntegrationGrantProjectCandidatesResponse, error)
 	ListIntegrationGrantRecipientCandidates(context.Context, *ListIntegrationGrantRecipientCandidatesRequest) (*ListIntegrationGrantRecipientCandidatesResponse, error)
 	ListIntegrationGrantCapabilityCandidates(context.Context, *ListIntegrationGrantCapabilityCandidatesRequest) (*ListIntegrationGrantCapabilityCandidatesResponse, error)
+	// Кандидаты exact общесистемного помощника; owner и assistant назначаются сервером.
+	GetSystemAssistantIntegrationGrantCandidates(context.Context, *GetSystemAssistantIntegrationGrantCandidatesRequest) (*GetSystemAssistantIntegrationGrantCandidatesResponse, error)
+	GetProjectAssistantIntegrationGrantCandidates(context.Context, *GetProjectAssistantIntegrationGrantCandidatesRequest) (*GetProjectAssistantIntegrationGrantCandidatesResponse, error)
 	GetIntegrationConnection(context.Context, *GetIntegrationConnectionRequest) (*GetIntegrationConnectionResponse, error)
 	GetAdministration(context.Context, *GetAdministrationRequest) (*GetAdministrationResponse, error)
 	ListAuditEvents(context.Context, *ListAuditEventsRequest) (*ListAuditEventsResponse, error)
@@ -1464,6 +1492,12 @@ func (UnimplementedPlatformQueryServiceServer) ListIntegrationGrantRecipientCand
 }
 func (UnimplementedPlatformQueryServiceServer) ListIntegrationGrantCapabilityCandidates(context.Context, *ListIntegrationGrantCapabilityCandidatesRequest) (*ListIntegrationGrantCapabilityCandidatesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListIntegrationGrantCapabilityCandidates not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetSystemAssistantIntegrationGrantCandidates(context.Context, *GetSystemAssistantIntegrationGrantCandidatesRequest) (*GetSystemAssistantIntegrationGrantCandidatesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSystemAssistantIntegrationGrantCandidates not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetProjectAssistantIntegrationGrantCandidates(context.Context, *GetProjectAssistantIntegrationGrantCandidatesRequest) (*GetProjectAssistantIntegrationGrantCandidatesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetProjectAssistantIntegrationGrantCandidates not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) GetIntegrationConnection(context.Context, *GetIntegrationConnectionRequest) (*GetIntegrationConnectionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetIntegrationConnection not implemented")
@@ -2656,6 +2690,42 @@ func _PlatformQueryService_ListIntegrationGrantCapabilityCandidates_Handler(srv 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformQueryService_GetSystemAssistantIntegrationGrantCandidates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSystemAssistantIntegrationGrantCandidatesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetSystemAssistantIntegrationGrantCandidates(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetSystemAssistantIntegrationGrantCandidates_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetSystemAssistantIntegrationGrantCandidates(ctx, req.(*GetSystemAssistantIntegrationGrantCandidatesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_GetProjectAssistantIntegrationGrantCandidates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetProjectAssistantIntegrationGrantCandidatesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetProjectAssistantIntegrationGrantCandidates(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetProjectAssistantIntegrationGrantCandidates_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetProjectAssistantIntegrationGrantCandidates(ctx, req.(*GetProjectAssistantIntegrationGrantCandidatesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformQueryService_GetIntegrationConnection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetIntegrationConnectionRequest)
 	if err := dec(in); err != nil {
@@ -3548,6 +3618,14 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformQueryService_ListIntegrationGrantCapabilityCandidates_Handler,
 		},
 		{
+			MethodName: "GetSystemAssistantIntegrationGrantCandidates",
+			Handler:    _PlatformQueryService_GetSystemAssistantIntegrationGrantCandidates_Handler,
+		},
+		{
+			MethodName: "GetProjectAssistantIntegrationGrantCandidates",
+			Handler:    _PlatformQueryService_GetProjectAssistantIntegrationGrantCandidates_Handler,
+		},
+		{
 			MethodName: "GetIntegrationConnection",
 			Handler:    _PlatformQueryService_GetIntegrationConnection_Handler,
 		},
@@ -3818,6 +3896,7 @@ const (
 	PlatformCommandService_TestIntegrationConnection_FullMethodName                 = "/controlplane.v1.PlatformCommandService/TestIntegrationConnection"
 	PlatformCommandService_SetIntegrationConnectionEnabled_FullMethodName           = "/controlplane.v1.PlatformCommandService/SetIntegrationConnectionEnabled"
 	PlatformCommandService_ChangeIntegrationGrant_FullMethodName                    = "/controlplane.v1.PlatformCommandService/ChangeIntegrationGrant"
+	PlatformCommandService_ChangeSystemAssistantIntegrationGrant_FullMethodName     = "/controlplane.v1.PlatformCommandService/ChangeSystemAssistantIntegrationGrant"
 	PlatformCommandService_PublishAgentRuntimeConfiguration_FullMethodName          = "/controlplane.v1.PlatformCommandService/PublishAgentRuntimeConfiguration"
 	PlatformCommandService_CreateConfigOverlayDraft_FullMethodName                  = "/controlplane.v1.PlatformCommandService/CreateConfigOverlayDraft"
 	PlatformCommandService_ValidateConfigOverlayDraft_FullMethodName                = "/controlplane.v1.PlatformCommandService/ValidateConfigOverlayDraft"
@@ -4001,6 +4080,8 @@ type PlatformCommandServiceClient interface {
 	TestIntegrationConnection(ctx context.Context, in *TestIntegrationConnectionRequest, opts ...grpc.CallOption) (*TestIntegrationConnectionResponse, error)
 	SetIntegrationConnectionEnabled(ctx context.Context, in *SetIntegrationConnectionEnabledRequest, opts ...grpc.CallOption) (*SetIntegrationConnectionEnabledResponse, error)
 	ChangeIntegrationGrant(ctx context.Context, in *ChangeIntegrationGrantRequest, opts ...grpc.CallOption) (*ChangeIntegrationGrantResponse, error)
+	// Выдача/отзыв exact grant общесистемного помощника без фиктивного проекта.
+	ChangeSystemAssistantIntegrationGrant(ctx context.Context, in *ChangeSystemAssistantIntegrationGrantRequest, opts ...grpc.CallOption) (*ChangeSystemAssistantIntegrationGrantResponse, error)
 	PublishAgentRuntimeConfiguration(ctx context.Context, in *PublishAgentRuntimeConfigurationRequest, opts ...grpc.CallOption) (*PublishAgentRuntimeConfigurationResponse, error)
 	CreateConfigOverlayDraft(ctx context.Context, in *CreateConfigOverlayDraftRequest, opts ...grpc.CallOption) (*CreateConfigOverlayDraftResponse, error)
 	ValidateConfigOverlayDraft(ctx context.Context, in *ValidateConfigOverlayDraftRequest, opts ...grpc.CallOption) (*ValidateConfigOverlayDraftResponse, error)
@@ -5290,6 +5371,16 @@ func (c *platformCommandServiceClient) ChangeIntegrationGrant(ctx context.Contex
 	return out, nil
 }
 
+func (c *platformCommandServiceClient) ChangeSystemAssistantIntegrationGrant(ctx context.Context, in *ChangeSystemAssistantIntegrationGrantRequest, opts ...grpc.CallOption) (*ChangeSystemAssistantIntegrationGrantResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChangeSystemAssistantIntegrationGrantResponse)
+	err := c.cc.Invoke(ctx, PlatformCommandService_ChangeSystemAssistantIntegrationGrant_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *platformCommandServiceClient) PublishAgentRuntimeConfiguration(ctx context.Context, in *PublishAgentRuntimeConfigurationRequest, opts ...grpc.CallOption) (*PublishAgentRuntimeConfigurationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PublishAgentRuntimeConfigurationResponse)
@@ -5930,6 +6021,8 @@ type PlatformCommandServiceServer interface {
 	TestIntegrationConnection(context.Context, *TestIntegrationConnectionRequest) (*TestIntegrationConnectionResponse, error)
 	SetIntegrationConnectionEnabled(context.Context, *SetIntegrationConnectionEnabledRequest) (*SetIntegrationConnectionEnabledResponse, error)
 	ChangeIntegrationGrant(context.Context, *ChangeIntegrationGrantRequest) (*ChangeIntegrationGrantResponse, error)
+	// Выдача/отзыв exact grant общесистемного помощника без фиктивного проекта.
+	ChangeSystemAssistantIntegrationGrant(context.Context, *ChangeSystemAssistantIntegrationGrantRequest) (*ChangeSystemAssistantIntegrationGrantResponse, error)
 	PublishAgentRuntimeConfiguration(context.Context, *PublishAgentRuntimeConfigurationRequest) (*PublishAgentRuntimeConfigurationResponse, error)
 	CreateConfigOverlayDraft(context.Context, *CreateConfigOverlayDraftRequest) (*CreateConfigOverlayDraftResponse, error)
 	ValidateConfigOverlayDraft(context.Context, *ValidateConfigOverlayDraftRequest) (*ValidateConfigOverlayDraftResponse, error)
@@ -6353,6 +6446,9 @@ func (UnimplementedPlatformCommandServiceServer) SetIntegrationConnectionEnabled
 }
 func (UnimplementedPlatformCommandServiceServer) ChangeIntegrationGrant(context.Context, *ChangeIntegrationGrantRequest) (*ChangeIntegrationGrantResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ChangeIntegrationGrant not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) ChangeSystemAssistantIntegrationGrant(context.Context, *ChangeSystemAssistantIntegrationGrantRequest) (*ChangeSystemAssistantIntegrationGrantResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ChangeSystemAssistantIntegrationGrant not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) PublishAgentRuntimeConfiguration(context.Context, *PublishAgentRuntimeConfigurationRequest) (*PublishAgentRuntimeConfigurationResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PublishAgentRuntimeConfiguration not implemented")
@@ -8667,6 +8763,24 @@ func _PlatformCommandService_ChangeIntegrationGrant_Handler(srv interface{}, ctx
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PlatformCommandService_ChangeSystemAssistantIntegrationGrant_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ChangeSystemAssistantIntegrationGrantRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformCommandServiceServer).ChangeSystemAssistantIntegrationGrant(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformCommandService_ChangeSystemAssistantIntegrationGrant_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformCommandServiceServer).ChangeSystemAssistantIntegrationGrant(ctx, req.(*ChangeSystemAssistantIntegrationGrantRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PlatformCommandService_PublishAgentRuntimeConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(PublishAgentRuntimeConfigurationRequest)
 	if err := dec(in); err != nil {
@@ -10059,6 +10173,10 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ChangeIntegrationGrant",
 			Handler:    _PlatformCommandService_ChangeIntegrationGrant_Handler,
+		},
+		{
+			MethodName: "ChangeSystemAssistantIntegrationGrant",
+			Handler:    _PlatformCommandService_ChangeSystemAssistantIntegrationGrant_Handler,
 		},
 		{
 			MethodName: "PublishAgentRuntimeConfiguration",
@@ -12322,6 +12440,7 @@ const (
 	RuntimeWorkService_CommitProviderCredentialRefresh_FullMethodName                 = "/controlplane.v1.RuntimeWorkService/CommitProviderCredentialRefresh"
 	RuntimeWorkService_CompleteExecution_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/CompleteExecution"
 	RuntimeWorkService_DelegateExecution_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/DelegateExecution"
+	RuntimeWorkService_LaunchWorkflowExecution_FullMethodName                         = "/controlplane.v1.RuntimeWorkService/LaunchWorkflowExecution"
 	RuntimeWorkService_ProposeAssistantPlan_FullMethodName                            = "/controlplane.v1.RuntimeWorkService/ProposeAssistantPlan"
 	RuntimeWorkService_ProposeAssistantMetadata_FullMethodName                        = "/controlplane.v1.RuntimeWorkService/ProposeAssistantMetadata"
 	RuntimeWorkService_ProposeRunMetadata_FullMethodName                              = "/controlplane.v1.RuntimeWorkService/ProposeRunMetadata"
@@ -12369,6 +12488,9 @@ type RuntimeWorkServiceClient interface {
 	CommitProviderCredentialRefresh(ctx context.Context, in *CommitProviderCredentialRefreshRequest, opts ...grpc.CallOption) (*CommitProviderCredentialRefreshResponse, error)
 	CompleteExecution(ctx context.Context, in *CompleteExecutionRequest, opts ...grpc.CallOption) (*CompleteExecutionResponse, error)
 	DelegateExecution(ctx context.Context, in *DelegateExecutionRequest, opts ...grpc.CallOption) (*DelegateExecutionResponse, error)
+	// Запускает опубликованный Workflow из exact active execution; actor/project
+	// и обязательную связь родителя назначает владелец, не caller payload.
+	LaunchWorkflowExecution(ctx context.Context, in *LaunchWorkflowExecutionRequest, opts ...grpc.CallOption) (*LaunchWorkflowExecutionResponse, error)
 	ProposeAssistantPlan(ctx context.Context, in *ProposeAssistantPlanRequest, opts ...grpc.CallOption) (*ProposeAssistantPlanResponse, error)
 	ProposeAssistantMetadata(ctx context.Context, in *ProposeAssistantMetadataRequest, opts ...grpc.CallOption) (*ProposeAssistantMetadataResponse, error)
 	ProposeRunMetadata(ctx context.Context, in *ProposeRunMetadataRequest, opts ...grpc.CallOption) (*ProposeRunMetadataResponse, error)
@@ -12587,6 +12709,16 @@ func (c *runtimeWorkServiceClient) DelegateExecution(ctx context.Context, in *De
 	return out, nil
 }
 
+func (c *runtimeWorkServiceClient) LaunchWorkflowExecution(ctx context.Context, in *LaunchWorkflowExecutionRequest, opts ...grpc.CallOption) (*LaunchWorkflowExecutionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LaunchWorkflowExecutionResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_LaunchWorkflowExecution_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *runtimeWorkServiceClient) ProposeAssistantPlan(ctx context.Context, in *ProposeAssistantPlanRequest, opts ...grpc.CallOption) (*ProposeAssistantPlanResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ProposeAssistantPlanResponse)
@@ -12785,6 +12917,9 @@ type RuntimeWorkServiceServer interface {
 	CommitProviderCredentialRefresh(context.Context, *CommitProviderCredentialRefreshRequest) (*CommitProviderCredentialRefreshResponse, error)
 	CompleteExecution(context.Context, *CompleteExecutionRequest) (*CompleteExecutionResponse, error)
 	DelegateExecution(context.Context, *DelegateExecutionRequest) (*DelegateExecutionResponse, error)
+	// Запускает опубликованный Workflow из exact active execution; actor/project
+	// и обязательную связь родителя назначает владелец, не caller payload.
+	LaunchWorkflowExecution(context.Context, *LaunchWorkflowExecutionRequest) (*LaunchWorkflowExecutionResponse, error)
 	ProposeAssistantPlan(context.Context, *ProposeAssistantPlanRequest) (*ProposeAssistantPlanResponse, error)
 	ProposeAssistantMetadata(context.Context, *ProposeAssistantMetadataRequest) (*ProposeAssistantMetadataResponse, error)
 	ProposeRunMetadata(context.Context, *ProposeRunMetadataRequest) (*ProposeRunMetadataResponse, error)
@@ -12867,6 +13002,9 @@ func (UnimplementedRuntimeWorkServiceServer) CompleteExecution(context.Context, 
 }
 func (UnimplementedRuntimeWorkServiceServer) DelegateExecution(context.Context, *DelegateExecutionRequest) (*DelegateExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DelegateExecution not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) LaunchWorkflowExecution(context.Context, *LaunchWorkflowExecutionRequest) (*LaunchWorkflowExecutionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method LaunchWorkflowExecution not implemented")
 }
 func (UnimplementedRuntimeWorkServiceServer) ProposeAssistantPlan(context.Context, *ProposeAssistantPlanRequest) (*ProposeAssistantPlanResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ProposeAssistantPlan not implemented")
@@ -13257,6 +13395,24 @@ func _RuntimeWorkService_DelegateExecution_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RuntimeWorkService_LaunchWorkflowExecution_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LaunchWorkflowExecutionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).LaunchWorkflowExecution(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_LaunchWorkflowExecution_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).LaunchWorkflowExecution(ctx, req.(*LaunchWorkflowExecutionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _RuntimeWorkService_ProposeAssistantPlan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ProposeAssistantPlanRequest)
 	if err := dec(in); err != nil {
@@ -13637,6 +13793,10 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DelegateExecution",
 			Handler:    _RuntimeWorkService_DelegateExecution_Handler,
+		},
+		{
+			MethodName: "LaunchWorkflowExecution",
+			Handler:    _RuntimeWorkService_LaunchWorkflowExecution_Handler,
 		},
 		{
 			MethodName: "ProposeAssistantPlan",

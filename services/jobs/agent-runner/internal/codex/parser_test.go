@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -193,6 +194,106 @@ func TestNativeToolTerminalStateIsClosedAndCorrelatedByItemID(t *testing.T) {
 	}
 }
 
+func TestCodex160WebSearchLifecycleAcceptsEmptyStartedQuery(t *testing.T) {
+	// rust-v0.160.0/ext/web-search/src/tool.rs сначала публикует query="",
+	// action=null и results=null; итоговые сведения появляются при completed.
+	for _, test := range []struct {
+		name, query, action, expectedAction string
+		expectedCount                       int
+	}{
+		{"search", "SECRET_QUERY", `{"type":"search","query":"SECRET_QUERY","queries":null}`, "SEARCH", 1},
+		{"queries", "SECRET_QUERY", `{"type":"search","query":null,"queries":["SECRET_QUERY","SECRET_QUERY_2"]}`, "SEARCH", 2},
+		{"open", "https://example.com/SECRET_URL", `{"type":"openPage","url":"https://example.com/SECRET_URL"}`, "OPEN_PAGE", 1},
+		{"find", "SECRET_PATTERN", `{"type":"findInPage","url":null,"pattern":"SECRET_PATTERN"}`, "FIND_IN_PAGE", 1},
+		{"other", "", `{"type":"other"}`, "OTHER", 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			state := newProtocolState(testThreadID)
+			state.threadID, state.turnID = testThreadID, testTurnID
+			state.result.SessionID = testThreadID
+			var activities []runtimecontract.RuntimeActivity
+			state.onActivity = func(activity runtimecontract.RuntimeActivity) error {
+				activities = append(activities, activity)
+				return nil
+			}
+			if err := state.notification("turn/started", raw(`{"threadId":"`+testThreadID+`","turn":{"id":"`+testTurnID+`","items":[],"status":"inProgress"}}`)); err != nil {
+				t.Fatal(err)
+			}
+			started := `{"id":"web-run-1","type":"webSearch","query":"","action":null,"results":null}`
+			if err := state.notification("item/started", raw(`{"threadId":"`+testThreadID+`","turnId":"`+testTurnID+`","startedAtMs":100,"item":`+started+`}`)); err != nil {
+				t.Fatalf("pinned web search start rejected: %v", err)
+			}
+			if len(activities) != 1 || activities[0].ToolCall == nil {
+				t.Fatal("web search start did not produce one activity")
+			}
+			initial := activities[0].ToolCall
+			if initial.State != runtimecontract.NativeToolStateRunning || initial.SafeResult != "" || initial.SafeParameters["action"] != "UNSPECIFIED" || initial.SafeParameters["query_count"] != 0 {
+				t.Fatalf("empty start invented completed search metadata: %#v", initial)
+			}
+			completed := `{"id":"web-run-1","type":"webSearch","query":` + strconv.Quote(test.query) + `,"action":` + test.action + `,"results":[{"type":"text_result","snippet":"SECRET_RESULT","future_field":{"preserved":true}}]}`
+			if err := state.notification("item/completed", raw(`{"threadId":"`+testThreadID+`","turnId":"`+testTurnID+`","completedAtMs":140,"item":`+completed+`}`)); err != nil {
+				t.Fatalf("pinned web search completion rejected: %v", err)
+			}
+			message := `{"id":"message-1","text":"готово","phase":"final_answer","type":"agentMessage"}`
+			if err := state.notification("turn/completed", raw(`{"threadId":"`+testThreadID+`","turn":{"id":"`+testTurnID+`","items":[`+completed+`,`+message+`],"status":"completed"}}`)); err != nil {
+				t.Fatalf("pinned web search terminal rejected: %v", err)
+			}
+			if state.result.Outcome != "SUCCEEDED" || len(state.toolCalls) != 1 || len(state.toolCallOrder) != 1 || len(activities) != 3 {
+				t.Fatal("web search completion was lost or duplicated on authoritative rejoin")
+			}
+			call := state.toolCalls["web-run-1"]
+			if call.Kind != runtimecontract.NativeToolKindWebSearch || call.State != runtimecontract.NativeToolStateSucceeded || call.DurationMS != 40 || call.SafeParameters["action"] != test.expectedAction || call.SafeParameters["query_count"] != test.expectedCount {
+				t.Fatalf("unexpected completed web search projection: %#v", call)
+			}
+			if bytes.Contains(marshalProtocolFixture(t, activities), []byte("SECRET_")) || bytes.Contains(marshalProtocolFixture(t, state.result), []byte("SECRET_")) {
+				t.Fatal("discarded web search content escaped safe projection")
+			}
+		})
+	}
+}
+
+func TestCodex160WebSearchRejectsInvalidMetadataAndTuple(t *testing.T) {
+	valid := map[string]any{"id": "web-run-1", "type": "webSearch", "query": "", "action": nil, "results": nil}
+	for _, test := range []struct {
+		name   string
+		mutate func(map[string]any)
+	}{
+		{"missing_query", func(item map[string]any) { delete(item, "query") }},
+		{"null_query", func(item map[string]any) { item["query"] = nil }},
+		{"non_string_query", func(item map[string]any) { item["query"] = 1 }},
+		{"oversized_query", func(item map[string]any) { item["query"] = strings.Repeat("x", (64<<10)+1) }},
+		{"unknown_item_field", func(item map[string]any) { item["authority"] = "owner" }},
+		{"unknown_action", func(item map[string]any) { item["action"] = map[string]any{"type": "future"} }},
+		{"responses_action", func(item map[string]any) { item["action"] = map[string]any{"type": "open_page", "url": nil} }},
+		{"unknown_action_field", func(item map[string]any) { item["action"] = map[string]any{"type": "search", "authority": "owner"} }},
+		{"invalid_action_query", func(item map[string]any) { item["action"] = map[string]any{"type": "search", "query": 1} }},
+		{"invalid_action_queries", func(item map[string]any) { item["action"] = map[string]any{"type": "search", "queries": []any{1}} }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			item := make(map[string]any, len(valid))
+			for key, value := range valid {
+				item[key] = value
+			}
+			test.mutate(item)
+			state := newProtocolState(testThreadID)
+			state.threadID, state.turnID = testThreadID, testTurnID
+			payload := map[string]any{"threadId": testThreadID, "turnId": testTurnID, "startedAtMs": 100, "item": item}
+			if err := state.notification("item/started", marshalProtocolFixture(t, payload)); err == nil {
+				t.Fatal("invalid web search metadata accepted")
+			}
+		})
+	}
+	for _, field := range []string{"threadId", "turnId"} {
+		state := newProtocolState(testThreadID)
+		state.threadID, state.turnID = testThreadID, testTurnID
+		payload := map[string]any{"threadId": testThreadID, "turnId": testTurnID, "startedAtMs": 100, "item": valid}
+		payload[field] = "01980000-0000-7000-8000-000000000099"
+		if err := state.notification("item/started", marshalProtocolFixture(t, payload)); err == nil {
+			t.Fatal("foreign web search tuple accepted")
+		}
+	}
+}
+
 func reflectStringSlice(value any, expected []string) bool {
 	items, ok := value.([]string)
 	if !ok || len(items) != len(expected) {
@@ -223,6 +324,139 @@ func TestThreadBindingAcceptsCurrentAppServerOptionalFields(t *testing.T) {
 		"status":{"type":"idle"},"turns":[],"updatedAt":1}}`)
 	if err := state.bindThread(response, "codex", "/workspace", "never"); err != nil {
 		t.Fatalf("current app-server thread response was rejected: %v", err)
+	}
+}
+
+func codex160ThreadFixture(t *testing.T) map[string]any {
+	t.Helper()
+	return map[string]any{
+		"cliVersion": "0.160.0", "createdAt": 1, "cwd": "/workspace", "daybreakEnabled": nil,
+		"environments": []any{}, "ephemeral": false, "id": testThreadID, "modelProvider": "openai",
+		"originator": "kodex-agent-runner", "path": "/workspace/rollout.jsonl", "preview": "", "projectId": nil,
+		"sessionId": testThreadID, "source": "appServer", "status": map[string]any{"type": "idle"}, "turns": []any{}, "updatedAt": 1,
+	}
+}
+
+func marshalProtocolFixture(t *testing.T, value any) json.RawMessage {
+	t.Helper()
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal("marshal synthetic protocol fixture")
+	}
+	return encoded
+}
+
+func TestThreadResumeAcceptsCodex160CollaborationModeMetadata(t *testing.T) {
+	for _, metadata := range []any{nil,
+		map[string]any{"mode": "default", "settings": map[string]any{"model": "codex", "reasoning_effort": nil, "developer_instructions": nil}},
+		map[string]any{"mode": "plan", "settings": map[string]any{"model": "codex", "reasoning_effort": "high", "developer_instructions": "discarded-private-instructions"}},
+	} {
+		state := newProtocolState(testThreadID)
+		response := map[string]any{"approvalPolicy": "never", "approvalsReviewer": "user", "cwd": "/workspace", "model": "codex", "modelProvider": "openai", "sandbox": map[string]any{"type": "readOnly"}, "thread": codex160ThreadFixture(t), "collaborationMode": metadata}
+		if err := state.bindThread(marshalProtocolFixture(t, response), "codex", "/workspace", "never"); err != nil {
+			t.Fatal("pinned Codex resume collaboration metadata rejected")
+		}
+		if state.threadID != testThreadID || state.workspaceRoot != "/workspace" || bytes.Contains(marshalProtocolFixture(t, state.result), []byte("discarded-private")) {
+			t.Fatal("resume metadata changed authority or leaked discarded instructions")
+		}
+	}
+}
+
+func TestThreadResumeRejectsInvalidCollaborationModeMetadata(t *testing.T) {
+	for _, metadata := range []any{1, "private", []any{},
+		map[string]any{"mode": "unknown", "settings": map[string]any{"model": "codex"}},
+		map[string]any{"mode": "default"},
+		map[string]any{"mode": "default", "settings": map[string]any{"model": nil}},
+		map[string]any{"mode": "default", "settings": map[string]any{"model": "codex", "reasoning_effort": 2}},
+		map[string]any{"mode": "default", "settings": map[string]any{"model": "codex", "developer_instructions": false}},
+		map[string]any{"mode": "default", "settings": map[string]any{"model": "codex", "unknown": "private"}},
+		map[string]any{"mode": "default", "settings": map[string]any{"model": "codex"}, "unknown": "private"},
+	} {
+		state := newProtocolState(testThreadID)
+		response := map[string]any{"approvalPolicy": "never", "approvalsReviewer": "user", "cwd": "/workspace", "model": "codex", "modelProvider": "openai", "sandbox": map[string]any{"type": "readOnly"}, "thread": codex160ThreadFixture(t), "collaborationMode": metadata}
+		if err := state.bindThread(marshalProtocolFixture(t, response), "codex", "/workspace", "never"); err == nil || state.threadID != "" || state.result.SessionID != "" {
+			t.Fatal("invalid resume metadata accepted or partially bound")
+		}
+	}
+}
+
+func TestCodex160ThreadMetadataIsTypedAndDiscarded(t *testing.T) {
+	for _, nullable := range []bool{false, true} {
+		thread := codex160ThreadFixture(t)
+		if nullable {
+			thread["environments"], thread["originator"], thread["daybreakEnabled"] = nil, nil, nil
+		} else {
+			thread["daybreakEnabled"] = true
+			thread["environments"] = []any{map[string]any{"environmentId": "metadata-only", "cwd": "metadata-only-path", "runtimeWorkspaceRoots": []string{"metadata-only-root"}}}
+		}
+		state := newProtocolState(testThreadID)
+		response := map[string]any{"approvalPolicy": "never", "approvalsReviewer": "user", "cwd": "/workspace", "disabledPluginIds": []string{"metadata-only-plugin"}, "model": "codex", "modelProvider": "openai", "sandbox": map[string]any{"type": "readOnly"}, "thread": thread}
+		if err := state.bindThread(marshalProtocolFixture(t, response), "codex", "/workspace", "never"); err != nil {
+			t.Fatal("Codex 0.160.0 known typed metadata rejected")
+		}
+		if state.threadID != testThreadID || state.workspaceRoot != "/workspace" || state.threadPath != "/workspace/rollout.jsonl" {
+			t.Fatal("discarded metadata changed authoritative thread binding")
+		}
+		if err := state.notification("thread/started", marshalProtocolFixture(t, map[string]any{"thread": thread})); err != nil {
+			t.Fatal("Codex 0.160.0 thread started metadata rejected")
+		}
+		if err := state.bindThreadRead(marshalProtocolFixture(t, map[string]any{"thread": thread})); err != nil {
+			t.Fatal("Codex 0.160.0 thread read metadata rejected")
+		}
+		encoded := marshalProtocolFixture(t, state.result)
+		if bytes.Contains(encoded, []byte("metadata-only")) {
+			t.Fatal("discarded metadata leaked into provider result")
+		}
+	}
+}
+
+func TestCodex160ThreadMetadataRejectsWrongTypesBoundsAndUnknownFields(t *testing.T) {
+	const private = "private-metadata-sentinel"
+	for _, test := range []struct {
+		name, target, field string
+		value               any
+	}{
+		{"plugin null", "response", "disabledPluginIds", nil},
+		{"plugin object", "response", "disabledPluginIds", map[string]any{"private": private}},
+		{"plugin mixed type", "response", "disabledPluginIds", []any{private, 1}},
+		{"plugin null entry", "response", "disabledPluginIds", []any{nil}},
+		{"plugin count", "response", "disabledPluginIds", make([]string, 257)},
+		{"plugin size", "response", "disabledPluginIds", []string{strings.Repeat(private, 32)}},
+		{"daybreak number", "thread", "daybreakEnabled", 1},
+		{"daybreak string", "thread", "daybreakEnabled", private},
+		{"originator number", "thread", "originator", 1},
+		{"originator object", "thread", "originator", map[string]any{"private": private}},
+		{"originator size", "thread", "originator", strings.Repeat(private, 32)},
+		{"environment object", "thread", "environments", map[string]any{"private": private}},
+		{"environment null entry", "thread", "environments", []any{nil}},
+		{"environment count", "thread", "environments", make([]any, 65)},
+		{"environment missing fields", "thread", "environments", []any{map[string]any{"environmentId": private}}},
+		{"environment id type", "thread", "environments", []any{map[string]any{"environmentId": 1, "cwd": private, "runtimeWorkspaceRoots": []string{}}}},
+		{"environment id size", "thread", "environments", []any{map[string]any{"environmentId": strings.Repeat(private, 32), "cwd": private, "runtimeWorkspaceRoots": []string{}}}},
+		{"environment cwd type", "thread", "environments", []any{map[string]any{"environmentId": private, "cwd": nil, "runtimeWorkspaceRoots": []string{}}}},
+		{"environment cwd size", "thread", "environments", []any{map[string]any{"environmentId": private, "cwd": strings.Repeat(private, 200), "runtimeWorkspaceRoots": []string{}}}},
+		{"environment roots null", "thread", "environments", []any{map[string]any{"environmentId": private, "cwd": private, "runtimeWorkspaceRoots": nil}}},
+		{"environment root type", "thread", "environments", []any{map[string]any{"environmentId": private, "cwd": private, "runtimeWorkspaceRoots": []any{1}}}},
+		{"environment root count", "thread", "environments", []any{map[string]any{"environmentId": private, "cwd": private, "runtimeWorkspaceRoots": make([]string, 257)}}},
+		{"environment root size", "thread", "environments", []any{map[string]any{"environmentId": private, "cwd": private, "runtimeWorkspaceRoots": []string{strings.Repeat(private, 200)}}}},
+		{"environment unknown field", "thread", "environments", []any{map[string]any{"environmentId": private, "cwd": private, "runtimeWorkspaceRoots": []string{}, private: private}}},
+		{"response unknown field", "response", private, private},
+		{"thread unknown field", "thread", private, private},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			thread := codex160ThreadFixture(t)
+			response := map[string]any{"approvalPolicy": "never", "approvalsReviewer": "user", "cwd": "/workspace", "disabledPluginIds": []string{}, "model": "codex", "modelProvider": "openai", "sandbox": map[string]any{"type": "readOnly"}, "thread": thread}
+			if test.target == "thread" {
+				thread[test.field] = test.value
+			} else {
+				response[test.field] = test.value
+			}
+			state := newProtocolState(testThreadID)
+			err := state.bindThread(marshalProtocolFixture(t, response), "codex", "/workspace", "never")
+			if err == nil || strings.Contains(err.Error(), private) || state.threadID != "" || state.workspaceRoot != "" || state.result.SessionID != "" {
+				t.Fatal("invalid metadata accepted, exposed private data or changed authoritative binding")
+			}
+		})
 	}
 }
 
@@ -270,6 +504,124 @@ func TestRequiredMCPStatusRejectsCatalogDrift(t *testing.T) {
 	}
 }
 
+func TestCodex160MCPStatusMetadataIsBoundedAndNonAuthoritative(t *testing.T) {
+	const private = "private-mcp-status-sentinel"
+	for _, capabilities := range []any{nil, map[string]any{"tools": map[string]any{"listChanged": true}, "private": private}, private, []any{true, private}, false} {
+		var response map[string]any
+		if json.Unmarshal(mcpStatusResponse("connected", []string{"delegate_agent"}), &response) != nil {
+			t.Fatal("decode synthetic MCP fixture")
+		}
+		entry := response["data"].([]any)[0].(map[string]any)
+		entry["httpOrigin"], entry["serverCapabilities"] = "https://metadata-only.invalid", capabilities
+		state := newProtocolState(testThreadID)
+		state.threadID = testThreadID
+		ready, err := state.bindRequiredMCPStatus(marshalProtocolFixture(t, response), []string{"delegate_agent"})
+		if err != nil || !ready || !state.requiredMCPReady || state.threadID != testThreadID || bytes.Contains(marshalProtocolFixture(t, state.result), []byte(private)) {
+			t.Fatal("known MCP metadata rejected, exposed or changed authority")
+		}
+		ready, err = state.bindRequiredMCPStatus(marshalProtocolFixture(t, response), []string{"delegate_agent", "missing_tool"})
+		if ready || !errors.Is(err, ErrRequiredMCPUnavailable) {
+			t.Fatal("arbitrary capabilities expanded authoritative tool catalog")
+		}
+	}
+}
+
+func TestCodex160MCPStatusMetadataFailsClosed(t *testing.T) {
+	const private = "private-mcp-status-sentinel"
+	for _, test := range []struct {
+		name, field string
+		value       any
+		unavailable bool
+	}{
+		{"origin type", "httpOrigin", true, false},
+		{"origin bound", "httpOrigin", strings.Repeat(private, 200), false},
+		{"capabilities bound", "serverCapabilities", strings.Repeat(private, 3000), false},
+		{"tools error type", "toolsError", map[string]any{"private": private}, false},
+		{"tools error bound", "toolsError", strings.Repeat(private, 3000), false},
+		{"tools error nonnull", "toolsError", private, true},
+		{"tools error empty", "toolsError", "", true},
+		{"unknown metadata", private, private, false},
+		{"auth mismatch", "authStatus", "unsupported", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var response map[string]any
+			if json.Unmarshal(mcpStatusResponse("connected", []string{"delegate_agent"}), &response) != nil {
+				t.Fatal("decode synthetic MCP fixture")
+			}
+			response["data"].([]any)[0].(map[string]any)[test.field] = test.value
+			state := newProtocolState(testThreadID)
+			state.threadID = testThreadID
+			ready, err := state.bindRequiredMCPStatus(marshalProtocolFixture(t, response), []string{"delegate_agent"})
+			if ready || err == nil || strings.Contains(err.Error(), private) || state.requiredMCPReady || test.unavailable && !errors.Is(err, ErrRequiredMCPUnavailable) {
+				t.Fatal("invalid MCP status accepted, exposed private data or lost discovery failure")
+			}
+		})
+	}
+	for _, field := range []string{"httpOrigin", "serverCapabilities", "toolsError"} {
+		encoded := bytes.Replace(mcpStatusResponse("connected", []string{"delegate_agent"}), []byte(`"`+field+`":null`), []byte(`"`+field+`":null,"`+field+`":null`), 1)
+		state := newProtocolState(testThreadID)
+		state.threadID = testThreadID
+		ready, err := state.bindRequiredMCPStatus(encoded, []string{"delegate_agent"})
+		if ready || err == nil || state.requiredMCPReady {
+			t.Fatal("duplicate MCP metadata accepted")
+		}
+	}
+	entry := json.RawMessage{}
+	var response struct {
+		Data []json.RawMessage `json:"data"`
+	}
+	if json.Unmarshal(mcpStatusResponse("connected", []string{"delegate_agent"}), &response) != nil {
+		t.Fatal("decode synthetic MCP inventory")
+	}
+	entry = response.Data[0]
+	state := newProtocolState(testThreadID)
+	state.threadID = testThreadID
+	ready, err := state.bindRequiredMCPStatus(marshalProtocolFixture(t, map[string]any{"data": []json.RawMessage{entry, entry}, "nextCursor": nil}), []string{"delegate_agent"})
+	if ready || err == nil || state.requiredMCPReady {
+		t.Fatal("duplicate required MCP inventory bound readiness before complete validation")
+	}
+}
+
+func TestCodex160MCPAppUiIsTypedDiscardedAndTupleBound(t *testing.T) {
+	const private = "private-mcp-ui-sentinel"
+	for _, ui := range []any{nil, map[string]any{"resourceUri": private, "preferredModelDisplayMode": "inline"}, map[string]any{"resourceUri": private, "preferredModelDisplayMode": "fullscreen"}} {
+		state := newProtocolState(testThreadID)
+		state.threadID, state.turnID = testThreadID, testTurnID
+		emitted := false
+		state.onActivity = func(runtimecontract.RuntimeActivity) error { emitted = true; return nil }
+		item := map[string]any{"id": "call-mcp", "server": "kodex", "tool": "delegate_agent", "status": "completed", "arguments": map[string]any{"token": private}, "result": map[string]any{"content": private}, "mcpAppUi": ui, "type": "mcpToolCall"}
+		event := map[string]any{"completedAtMs": 1, "item": item, "threadId": testThreadID, "turnId": testTurnID}
+		if err := state.notification("item/completed", marshalProtocolFixture(t, event)); err != nil || emitted || len(state.result.ToolCalls) != 0 || bytes.Contains(marshalProtocolFixture(t, state.result), []byte(private)) {
+			t.Fatal("known MCP UI metadata rejected, exposed or duplicated authoritative tool activity")
+		}
+		event["turnId"] = testThreadID
+		if err := state.notification("item/completed", marshalProtocolFixture(t, event)); err == nil {
+			t.Fatal("MCP UI metadata bypassed exact turn tuple")
+		}
+	}
+}
+
+func TestCodex160MCPAppUiRejectsUnknownTypesAndBounds(t *testing.T) {
+	const private = "private-mcp-ui-sentinel"
+	for _, ui := range []any{
+		private, []any{}, true, map[string]any{},
+		map[string]any{"resourceUri": nil, "preferredModelDisplayMode": "inline"},
+		map[string]any{"resourceUri": strings.Repeat(private, 200), "preferredModelDisplayMode": "inline"},
+		map[string]any{"resourceUri": private, "preferredModelDisplayMode": nil},
+		map[string]any{"resourceUri": private, "preferredModelDisplayMode": private},
+		map[string]any{"resourceUri": private, "preferredModelDisplayMode": "inline", private: private},
+	} {
+		state := newProtocolState(testThreadID)
+		state.threadID, state.turnID = testThreadID, testTurnID
+		item := map[string]any{"id": "call-mcp", "server": "kodex", "tool": "delegate_agent", "status": "completed", "arguments": map[string]any{}, "mcpAppUi": ui, "type": "mcpToolCall"}
+		event := map[string]any{"completedAtMs": 1, "item": item, "threadId": testThreadID, "turnId": testTurnID}
+		err := state.notification("item/completed", marshalProtocolFixture(t, event))
+		if err == nil || strings.Contains(err.Error(), private) {
+			t.Fatal("invalid MCP UI metadata accepted or exposed")
+		}
+	}
+}
+
 func TestMCPStartupNotificationValidatesStructuredFailure(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	valid := raw(`{"error":"","failureReason":"reauthenticationRequired","name":"kodex","status":"failed","threadId":"` + testThreadID + `"}`)
@@ -293,6 +645,7 @@ func mcpStatusResponse(runtimeStatus string, tools []string) json.RawMessage {
 	encoded, err := json.Marshal(map[string]any{
 		"data": []map[string]any{{
 			"authStatus": "bearerToken", "name": "kodex", "pluginId": nil,
+			"httpOrigin": nil, "serverCapabilities": nil, "toolsError": nil,
 			"resourceTemplates": []any{}, "resources": []any{}, "runtimeStatus": runtimeStatus,
 			"serverInfo": nil, "tools": catalog,
 		}},
@@ -444,6 +797,65 @@ func TestUnknownTypedErrorNotificationWaitsForSafeTerminal(t *testing.T) {
 	}
 	if state.result.FailureCode != "provider_error_info_invalid" || !BlockedFailure(state.result.FailureCode) {
 		t.Fatalf("unknown error info was not converted to a safe terminal: %#v", state.result)
+	}
+}
+
+func TestCodex160ErrorNotificationAllowsDiscardedMisalignment(t *testing.T) {
+	for _, metadata := range []string{`null`, `{}`, `{"errorType":null,"detailedExplanation":null,"steer":null}`,
+		`{"errorType":"private-sentinel","detailedExplanation":"private-sentinel","steer":{"message":"private-sentinel"}}`,
+		`{"errorType":"","detailedExplanation":"","steer":{"message":""}}`} {
+		state := newProtocolState(testThreadID)
+		state.threadID, state.turnID = testThreadID, testTurnID
+		err := state.notification("error", raw(`{"error":{"message":"diagnostic","codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":null}},"additionalDetails":null,"misalignment":`+metadata+`},"threadId":"`+testThreadID+`","turnId":"`+testTurnID+`","willRetry":false}`))
+		if err != nil {
+			t.Fatal("SDK error metadata was rejected")
+		}
+		if state.terminals != 0 || state.result.Outcome != "" || state.result.FinalMessage != "" || len(state.agentMessages) != 0 {
+			t.Fatal("discarded error metadata affected lifecycle or public messages")
+		}
+		if err := state.notification("turn/started", raw(`{"threadId":"`+testThreadID+`","turn":{"id":"`+testTurnID+`","items":[],"status":"inProgress"}}`)); err != nil {
+			t.Fatal("fixture turn did not start")
+		}
+		if err := state.notification("turn/completed", raw(`{"threadId":"`+testThreadID+`","turn":{"id":"`+testTurnID+`","items":[],"status":"failed","error":{"message":"diagnostic","codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":null}},"misalignment":`+metadata+`}}}`)); err != nil || state.terminals != 1 || state.result.Outcome != "FAILED" || state.result.FailureCode != "provider_transport_failure" || strings.Contains(state.result.FinalMessage, "private-sentinel") {
+			t.Fatal("metadata changed safe terminal classification or was published")
+		}
+	}
+}
+
+func TestCodex160ErrorMisalignmentRejectsTypesBoundsAndUnknownFields(t *testing.T) {
+	for _, metadata := range []string{`true`, `[]`, `"private-sentinel"`,
+		`{"errorType":false}`, `{"detailedExplanation":{}}`, `{"steer":false}`, `{"steer":{}}`,
+		`{"steer":{"message":null}}`, `{"steer":{"message":3}}`, `{"steer":{"message":"valid","private-sentinel":true}}`,
+		`{"private-sentinel":true}`, `{"errorType":null,"errorType":null}`,
+		`{"steer":{"message":"valid","message":"duplicate"}}`,
+		`{"errorType":"\xff"}`,
+		`{"errorType":"` + strings.Repeat("x", 24*maximumDiagnosticBytes+1) + `"}`,
+		`{"errorType":"` + strings.Repeat("x", maximumDiagnosticBytes+1) + `"}`,
+		`{"detailedExplanation":"` + strings.Repeat("x", maximumDiagnosticBytes+1) + `"}`,
+		`{"steer":{"message":"` + strings.Repeat("x", maximumDiagnosticBytes+1) + `"}}`} {
+		state := newProtocolState(testThreadID)
+		state.threadID, state.turnID = testThreadID, testTurnID
+		err := state.notification("error", raw(`{"error":{"message":"diagnostic","misalignment":`+metadata+`},"threadId":"`+testThreadID+`","turnId":"`+testTurnID+`","willRetry":false}`))
+		if err == nil || strings.Contains(err.Error(), "private-sentinel") || state.terminals != 0 {
+			t.Fatal("malformed error metadata was accepted or exposed")
+		}
+	}
+}
+
+func TestCodex160ErrorNotificationKeepsBindingAndBooleanClosed(t *testing.T) {
+	for _, mutation := range []string{
+		`{"error":{"message":"diagnostic","misalignment":null},"threadId":"other","turnId":"` + testTurnID + `","willRetry":false}`,
+		`{"error":{"message":"diagnostic","misalignment":null},"threadId":"` + testThreadID + `","turnId":"other","willRetry":false}`,
+		`{"error":{"message":"diagnostic","misalignment":null},"threadId":"` + testThreadID + `","turnId":"` + testTurnID + `","willRetry":null}`,
+		`{"error":{"message":"diagnostic","misalignment":null},"threadId":"` + testThreadID + `","turnId":"` + testTurnID + `","willRetry":"false"}`,
+		`{"error":{"message":"diagnostic","misalignment":null,"private-sentinel":true},"threadId":"` + testThreadID + `","turnId":"` + testTurnID + `","willRetry":false}`,
+	} {
+		state := newProtocolState(testThreadID)
+		state.threadID, state.turnID = testThreadID, testTurnID
+		err := state.notification("error", raw(mutation))
+		if err == nil || strings.Contains(err.Error(), "private-sentinel") || state.terminals != 0 {
+			t.Fatal("invalid SDK error binding or shape was accepted or exposed")
+		}
 	}
 }
 

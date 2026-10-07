@@ -4,8 +4,8 @@ title: Образы ролей и BuildKit
 type: decision
 status: approved
 owner: architect
-version: 0.4.0
-updated: 2026-09-01
+version: 0.5.0
+updated: 2026-10-05
 ---
 
 # ADR-MC-008. Образы ролей и BuildKit
@@ -40,6 +40,36 @@ digest и выдаёт короткоживущий подписанный claim
 Ошибка scanner, базы, разбора отчёта или вычисления policy всегда блокирует образ.
 Переход к более строгому порогу выполняется новой policy revision и требует новой
 сборки/admission, а не изменения прежнего terminal verdict.
+
+Решение владельца от 2026-10-05 (#1797) разрешает human OWNER/ADMIN организации
+явно принять риск только точного image digest и полного неизменного отчёта.
+Безопасная projection показывает все severity, advisory/fix и occurrences;
+LOW/MEDIUM baseline не блокируют. Обязательные reason, свежая проверка owner,
+OCC/idempotency и exact recipe/build/report/evidence/policy pins фиксируются
+в immutable decision и audit. Ассистент и service/PROJECT actor такого права
+не получают. REJECT_RISK сохраняет исходный отказ.
+
+ACCEPT_RISK не переписывает immutable REJECTED receipt и не назначает ACCEPTED
+флаг: owner создаёт новую PENDING admission attempt с fresh fence. Worker
+восстанавливает исходные report/SBOM bytes и повторно проверяет immutable image,
+provenance, runtime ABI/tools и policy. Отдельный signer подписывает исходные
+доказательства, decision binding и новый receipt; promotion проверяет новый
+evidence manifest и все signatures. Scanner/parser/integrity/provenance/ABI/tools
+и signature failures не могут быть приняты как риск. Решение постоянно только
+для утверждённого tuple, не является временным waiver и не переносится на
+изменённый рецепт или следующую сборку.
+
+Новый producer сохраняет полную typed projection сразу. Старые artifacts без
+неё получают UNAVAILABLE/REBUILD_FOR_REPORT и требуют новой штатной сборки;
+backfill, историческая CP evidence-reader identity и legacy decoder запрещены.
+Forward migration и новые policies/binaries/render предшествуют возобновлению
+controller. Полный контракт и lifecycle зафиксированы в DOM-MC-010.
+
+Неизменность history действует в ACTIVE/ARCHIVED/trash. Существующий authorized
+permanent Project purge может удалить только project history через exact
+protected owner purge context; organization history сохраняется. Это retention
+исключение не разрешает менять receipt/decision, отключать triggers, использовать
+caller GUC или отдельно очищать историю активного либо архивного ресурса.
 
 BuildKit работает с process sandbox от namespace-root внутри обязательного
 Kubernetes Pod user namespace (`hostUsers: false`). Контейнеру нужен

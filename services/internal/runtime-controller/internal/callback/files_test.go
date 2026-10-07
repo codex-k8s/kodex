@@ -254,12 +254,23 @@ func TestRuntimeFileToolsUseAuthenticatedCallbackAndGeneratedRPC(t *testing.T) {
 		writer := httptest.NewRecorder()
 		server.route(writer, request)
 		var response struct {
+			Error *struct {
+				Code    int    `json:"code"`
+				Message string `json:"message"`
+			} `json:"error"`
 			Result struct {
 				IsError    bool           `json:"isError"`
 				Structured map[string]any `json:"structuredContent"`
 			} `json:"result"`
 		}
-		if writer.Code != http.StatusOK || json.Unmarshal(writer.Body.Bytes(), &response) != nil || response.Result.IsError != fail || response.Result.Structured == nil {
+		if writer.Code != http.StatusOK || json.Unmarshal(writer.Body.Bytes(), &response) != nil {
+			t.Fatal("MCP file response is invalid")
+		}
+		if fail {
+			if response.Error == nil || response.Error.Code != -32603 || response.Error.Message != "Tool authorization unavailable" || response.Result.Structured != nil {
+				t.Fatal("failed RUNNING activity did not reject file read before effect")
+			}
+		} else if response.Error != nil || response.Result.IsError || response.Result.Structured == nil {
 			t.Fatalf("MCP file response status=%d, isError=%t, expected failure=%t", writer.Code, response.Result.IsError, fail)
 		}
 		if fail && strings.Contains(writer.Body.String(), runtimeFileFixtureText) {
@@ -270,12 +281,17 @@ func TestRuntimeFileToolsUseAuthenticatedCallbackAndGeneratedRPC(t *testing.T) {
 		invoke(tool, false)
 	}
 	owner.mu.Lock()
-	if owner.reads != 4 || owner.audits != 4 {
+	if owner.reads != 4 || owner.audits != 8 {
 		t.Error("file calls omitted a generated RPC or durable activity")
 	}
 	owner.failAudit = true
 	owner.mu.Unlock()
 	invoke(runtimecontract.FileToolPreview, true)
+	owner.mu.Lock()
+	defer owner.mu.Unlock()
+	if owner.reads != 4 {
+		t.Fatal("failed RUNNING activity performed a file read")
+	}
 }
 
 func TestRuntimeFileReplyAndInputSubstitutionFailClosed(t *testing.T) {

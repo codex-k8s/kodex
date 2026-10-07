@@ -225,7 +225,17 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	for _, execution := range response.GetExecutions() {
+	keepers := runtime.keepMaterializationClaims(ctx, response.GetExecutions())
+	defer func() {
+		for _, keeper := range keepers {
+			keeper.stop()
+		}
+	}()
+	for index, execution := range response.GetExecutions() {
+		keeper := keepers[index]
+		if keeper.await() != nil {
+			continue
+		}
 		input, providerBinding, buildErr := runtime.manager.BuildTurnInput(execution)
 		if buildErr != nil {
 			stage := "unknown"
@@ -246,9 +256,19 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 			runtime.warmMu.RUnlock()
 			turnCompatibility, compatibilityErr := runtimecontract.WarmCompatibilityDigest(input)
 			if compatibilityErr == nil && warmCompatibility == turnCompatibility && warmTicket != "" && warmFileProjectionEligible(input) {
-				if err := runtime.manager.RegisterWarmTurn(ctx, input, warmTicket); err != nil || runtime.coordinator.EnqueueWarm(input, turnCompatibility) != nil {
+				err := keeper.publish(func(dispatchContext context.Context) error {
+					if err := runtime.manager.RegisterWarmTurn(dispatchContext, input, warmTicket); err != nil {
+						return err
+					}
+					return runtime.coordinator.EnqueueWarm(input, turnCompatibility)
+				})
+				if err != nil {
 					<-runtime.capacity
-					runtime.failClaim(ctx, input, execution, "SYSTEM_ASSISTANT_DISPATCH_FAILED")
+					if context.Cause(keeper.ctx) != nil {
+						runtime.closeRevokedTurn(ctx, input, done)
+					} else {
+						runtime.failClaim(ctx, input, execution, "SYSTEM_ASSISTANT_DISPATCH_FAILED")
+					}
 					continue
 				}
 				warmExecution = true
@@ -256,19 +276,24 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 			}
 		}
 		if !warmExecution {
-			projectionContext, cancelProjection := context.WithTimeout(ctx, runtime.config.RequestTimeout)
+			projectionContext, cancelProjection := context.WithTimeout(keeper.ctx, runtime.config.RequestTimeout)
 			projection, projectionErr := runtime.credentials.Materialize(projectionContext, input)
 			cancelProjection()
 			failureStage := "credential_projection"
 			if projectionErr == nil {
 				failureStage = "ensure_turn"
-				projectionErr = runtime.manager.EnsureTurn(ctx, input, providerBinding, workload.CredentialProjection{
+				projectionErr = runtime.manager.EnsureTurnGuarded(keeper.ctx, input, providerBinding, workload.CredentialProjection{
 					Namespace: projection.Namespace, SecretName: projection.SecretName, SecretUID: projection.SecretUID,
 					SecretResourceVersion: projection.SecretResourceVersion, ContentSHA256: projection.ContentSHA256,
 					ProviderAuthKey: projection.ProviderAuthKey, RuntimeSecretKeys: projection.RuntimeSecretKeys,
-				})
+				}, keeper.publish)
 			}
 			if projectionErr != nil {
+				if context.Cause(keeper.ctx) != nil {
+					runtime.closeRevokedTurn(ctx, input, done)
+					<-runtime.capacity
+					continue
+				}
 				attributes := []any{"error_class", "dependency", "stage", failureStage, "error", boundedRPCFailure(turnMaterializationFailure, projectionErr)}
 				if failureStage == "ensure_turn" {
 					attributes = append(attributes, "ensure_turn_reason", boundedEnsureTurnReason(projectionErr))
@@ -284,6 +309,11 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 				runtime.failClaim(ctx, input, execution, "RUNTIME_MATERIALIZATION_FAILED")
 				continue
 			}
+		}
+		if keeper.handoff() != nil {
+			runtime.closeRevokedTurn(ctx, input, done)
+			<-runtime.capacity
+			continue
 		}
 		runtime.trackers.Add(1)
 		go func() {

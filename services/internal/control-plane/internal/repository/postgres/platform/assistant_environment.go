@@ -88,6 +88,15 @@ func (repository *Repository) readAssistantEnvironmentSnapshot(ctx context.Conte
 
 func assistantEnvironmentPolicyInput(policy runtimecontract.RuntimeEnvironmentPolicy) map[string]any {
 	resources := policy.Resources
+	resourceInput := map[string]any{
+		"cpuRequestMilli": resources.CPURequestMilli, "cpuLimitMilli": resources.CPULimitMilli,
+		"memoryRequestMib": resources.MemoryRequestMiB, "memoryLimitMib": resources.MemoryLimitMiB,
+		"ephemeralStorageRequestMib": resources.EphemeralStorageRequestMiB,
+		"ephemeralStorageLimitMib":   resources.EphemeralStorageLimitMiB,
+	}
+	if resources.WorkspaceLimits != nil {
+		resourceInput["workspaceLimits"] = map[string]any{"maxBytes": resources.WorkspaceLimits.MaxBytes, "maxFiles": resources.WorkspaceLimits.MaxFiles}
+	}
 	volumes := make([]map[string]any, 0, len(policy.Volumes))
 	for _, volume := range policy.Volumes {
 		volumes = append(volumes, map[string]any{"name": volume.Name, "kind": volume.Kind, "sizeMib": volume.SizeMiB})
@@ -106,13 +115,8 @@ func assistantEnvironmentPolicyInput(policy runtimecontract.RuntimeEnvironmentPo
 		webRules = []map[string]any{}
 	}
 	return map[string]any{
-		"resources": map[string]any{
-			"cpuRequestMilli": resources.CPURequestMilli, "cpuLimitMilli": resources.CPULimitMilli,
-			"memoryRequestMib": resources.MemoryRequestMiB, "memoryLimitMib": resources.MemoryLimitMiB,
-			"ephemeralStorageRequestMib": resources.EphemeralStorageRequestMiB,
-			"ephemeralStorageLimitMib":   resources.EphemeralStorageLimitMiB,
-		},
-		"volumes": volumes, "networkDestinations": destinations,
+		"resources": resourceInput,
+		"volumes":   volumes, "networkDestinations": destinations,
 		"webAccess": map[string]any{
 			"mode": policy.Network.WebAccess.Mode, "rules": webRules,
 		},

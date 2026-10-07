@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.5.5
-updated: 2026-10-04
+version: 1.7.9
+updated: 2026-10-06
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -36,14 +36,21 @@ fallback при ошибке защищённого транспорта. Сох
   минимальные ServiceAccount/RBAC; внутренние Service только ClusterIP;
 - TLS с hostname verification к внешним провайдерам и защита secret values.
 
+Каждый рабочий сервис самостоятельно разрешает exact DNS egress к
+`kube-system/kube-dns` по UDP/TCP53, если его рабочий путь использует имена
+Service. Такое правило не должно зависеть от issuer sidecar label: в
+`trusted-cluster` sidecar отсутствует, но DNS нужен тому же domain consumer.
+Readiness фонового controller подтверждает фактический owner RPC, а не только
+доступность Kubernetes API; отказ claim закрывает readiness до успешного цикла.
+
 Карта транспортного перехода (доменные события и переходы не меняются):
 
-| Инициатор | Источник полномочий и путь | Владелец и результат |
-| --- | --- | --- |
-| Browser navigation/project API | HTTPS gateway → проверенная OIDC session → внутренний RPC с пользовательским credential; projectRef только locator | CP повторно проверяет credential, разрешает tenant/project и permission; query либо прежняя owner-транзакция с OCC/idempotency/audit/outbox |
-| Browser WebSocket | Проверенная session и одноразовый ticket → gateway → тот же CP authorization | Прежние cursor/rejoin и разрешённая realtime projection; транспорт не выдаёт дополнительных прав |
-| Служебный worker | Разрешённая NetworkPolicy пара и exact caller/method → owner-resolved служебный principal | CP проверяет текущие claim/lease/attempt; прежние атомарные complete/cancel/retry/expiry и события |
-| Runtime/task или внешний provider effect | Отдельное server-owned делегирование с exact session/turn/attempt/input | Не понижается до SERVICE_OWNER_RESOLVED; нужны прежние доменные grant/revoke/receipt проверки |
+| Инициатор                                | Источник полномочий и путь                                                                                         | Владелец и результат                                                                                                                        |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Browser navigation/project API           | HTTPS gateway → проверенная OIDC session → внутренний RPC с пользовательским credential; projectRef только locator | CP повторно проверяет credential, разрешает tenant/project и permission; query либо прежняя owner-транзакция с OCC/idempotency/audit/outbox |
+| Browser WebSocket                        | Проверенная session и одноразовый ticket → gateway → тот же CP authorization                                       | Прежние cursor/rejoin и разрешённая realtime projection; транспорт не выдаёт дополнительных прав                                            |
+| Служебный worker                         | Разрешённая NetworkPolicy пара и exact caller/method → owner-resolved служебный principal                          | CP проверяет текущие claim/lease/attempt; прежние атомарные complete/cancel/retry/expiry и события                                          |
+| Runtime/task или внешний provider effect | Отдельное server-owned делегирование с exact session/turn/attempt/input                                            | Не понижается до SERVICE_OWNER_RESOLVED; нужны прежние доменные grant/revoke/receipt проверки                                               |
 
 Для служебного principal `trusted-cluster` читает server-owned PostgreSQL-реестр
 `trusted_workload_generations`, а не создаёт фиктивный подписанный worker grant.
@@ -56,13 +63,13 @@ SELECT. Reader не понижает ранее сохранённый generatio
 Runtime credential projection в этом профиле не имитирует подписанный proof.
 Её сквозной контракт (#1728) имеет следующие отдельные переходы:
 
-| Переход | Полномочия и проверка | Результат и авторитетное чтение |
-| --- | --- | --- |
+| Переход                              | Полномочия и проверка                                                                                                                                  | Результат и авторитетное чтение                                                                                                                                                                            |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Materialize runtime/system assistant | Runtime controller → разрешённый exact RPC secret-broker → owner RPC CP; broker передаёт только profile/caller/method и точную execution lease с fence | CP в одном repeatable-read snapshot назначает actor/org/project из lease/revision/root run, проверяет весь существующий execution и provider/secret scope; broker создаёт projection по точным descriptors |
-| Повтор materialize | Те же lease/generation/attempt/input/revision и действующий fence; серверное поколение workload не от caller | Прежний идемпотентный content-addressed projection; изменение входа не расширяет старый допуск |
-| Recovery/validate | Broker повторно читает owner по сохранённому snapshot без fence; CP заново разрешает lineage и сравнивает все authority поля и generation | Только boolean current; нельзя продлить исходный срок projection. Нет нового доменного события, read path — ValidateRuntimeCredentialProjection |
-| Cancel/delete/terminal/lease expiry | Прежняя owner-транзакция закрывает lease/grants; последующий owner read не находит активный exact execution | Recovery удаляет только exact projection descriptor по прежним UID/resourceVersion preconditions; нового события projection нет, состояние владельца читается через ValidateRuntimeCredentialProjection |
-| Retry | Новая attempt/lease/revision и прежние owner events/grants | Старый snapshot не подходит новой attempt; новый materialize проходит весь путь заново |
+| Повтор materialize                   | Те же lease/generation/attempt/input/revision и действующий fence; серверное поколение workload не от caller                                           | Прежний идемпотентный content-addressed projection; изменение входа не расширяет старый допуск                                                                                                             |
+| Recovery/validate                    | Broker повторно читает owner по сохранённому snapshot без fence; CP заново разрешает lineage и сравнивает все authority поля и generation              | Только boolean current; нельзя продлить исходный срок projection. Нет нового доменного события, read path — ValidateRuntimeCredentialProjection                                                            |
+| Cancel/delete/terminal/lease expiry  | Прежняя owner-транзакция закрывает lease/grants; последующий owner read не находит активный exact execution                                            | Recovery удаляет только exact projection descriptor по прежним UID/resourceVersion preconditions; нового события projection нет, состояние владельца читается через ValidateRuntimeCredentialProjection    |
+| Retry                                | Новая attempt/lease/revision и прежние owner events/grants                                                                                             | Старый snapshot не подходит новой attempt; новый materialize проходит весь путь заново                                                                                                                     |
 
 Поле `rpc_profile` в authority является discriminator, но не источником прав:
 его принимает только явно настроенный trusted owner от разрешённого broker.
@@ -99,11 +106,11 @@ owner policy, а admission сверяет его с server-owned parameters. Lab
 Job не разрешает понижение защиты. `trusted-cluster` входит в digest run,
 поэтому Jobs двух профилей не разделяют immutable execution identity.
 
-| Фаза image flow | Транспорт и полномочия | Неизменённый результат |
-| --- | --- | --- |
-| claim / admit | image-admission → exact CP RPC по разрешённой NetworkPolicy; закрытый method registry и CP principal; без issuer/socket/grant-agent | Прежние owner claim, attempt, lease, version/idempotency и admission state; artifact tuple назначает CP |
-| promote | image-promotion → exact CP RPC; отдельные ServiceAccount, capability и registry credential | Прежний owner promotion record и проверка exact artifact/evidence; простой RPC не выдаёт право произвольного push |
-| scan / sign | RPC profile не выдаётся; прежние точные scanner/signer images, ServiceAccount и scoped registry credentials | Прежние отчёты и подписи; успешность сканирования не синтезируется |
+| Фаза image flow | Транспорт и полномочия                                                                                                              | Неизменённый результат                                                                                            |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| claim / admit   | image-admission → exact CP RPC по разрешённой NetworkPolicy; закрытый method registry и CP principal; без issuer/socket/grant-agent | Прежние owner claim, attempt, lease, version/idempotency и admission state; artifact tuple назначает CP           |
+| promote         | image-promotion → exact CP RPC; отдельные ServiceAccount, capability и registry credential                                          | Прежний owner promotion record и проверка exact artifact/evidence; простой RPC не выдаёт право произвольного push |
+| scan / sign     | RPC profile не выдаётся; прежние точные scanner/signer images, ServiceAccount и scoped registry credentials                         | Прежние отчёты и подписи; успешность сканирования не синтезируется                                                |
 
 Retry, cancellation, cleanup и executable proof hold не меняются этим
 транспортным render: авторитетными остаются CP owner records и admission
@@ -420,8 +427,52 @@ UI/Git revision. Выдача capability проверяет полномочия
 созданного grant. Selector исполнения дополнительно проверяет существующий
 grant и пересечение текущих полномочий с фактическим пакетом и этапом Workflow.
 Право выдать разрешение не является доказательством возможности его исполнить.
+Capability пакета назначает default и обязательное непустое уникальное
+`allowedApprovalPolicies`. Grant сохраняет явно выбранную policy из этого
+множества; свежая immutable RuntimeRevision и invocation закрепляют exact
+grant/version/selected policy во всех режимах. CP, gateway и adapter сверяют
+выбор с фактической pinned package revision, не с её default. Автономная
+запись `NONE` разрешена только закрытым collaborative GitHub operation keys;
+`review.create` в этом режиме допускает только `COMMENT`, не решение владельца.
+Destructive операции не получают автономный grant. Изменение policy/path
+при незавершённом effect закрыто отклоняется; `UNKNOWN_OUTCOME` требует
+штатного reconciliation. Исторические shipped package/Email descriptors
+не декодируются через fallback и не переписываются: нужны новая каноническая
+revision соединения и свежие exact grants. Исторический terminal receipt
+остаётся read-only и не возобновляет effect.
+Глобальные числовые GitHub provider ID (`review_id`, `comment_id`, check,
+workflow, run и job ID) не ограничиваются `int32`: request, adapter и output
+сохраняют точное целое до `9007199254740991`, безопасное для JSON/JavaScript.
+Номера Issue/PR внутри репозитория и границы пагинации являются отдельными
+полями и не расширяются вместе с provider ID. Более крупное, дробное или
+неизвестное значение закрыто отклоняется; ошибка проверки результата записи
+сохраняет `UNKNOWN_OUTCOME` и не разрешает повтор эффекта. Изменение этих
+схем выпускается новой immutable package revision, без переписывания старых
+digest, grants и terminal receipts.
 Общий каталог соединений применяет `integration.view` к каждой строке до
 выдачи; фильтр UI, cursor и idempotency receipt не заменяют эту проверку.
+
+Leased каталог помощника `RECIPIENT_INTEGRATION_GRANTS` перечисляет безопасные
+кандидаты разрешений только выбранного Agent/Workflow. Источник сценария —
+адресная настройка staff-ролей помощником после подтверждения владельца:
+`get_configuration_catalog` → generated adapter существующего
+`RuntimeWorkService.SearchAssistantResources` →
+`ListAssistantConfigurationCatalog` → owner PostgreSQL → typed callback.
+Request содержит собственный `assistant_ref` как locator, но не recipient или
+Project. Сервер разрешает root USER и SYSTEM/PROJECT source из действующей
+lease/fence/generation, затем получателя из сохранённого контекста Run.
+Контекст immutable RuntimeRevision и свежая owner-проекция должны совпадать
+по kind/ref/version и разрешать `CHANGE_INTEGRATION_GRANT`. PROJECT не выходит
+за свой Project; SYSTEM читает только Project выбранного получателя.
+Каждая строка повторяет канонический `GRANT` admission и `integration.view`;
+disabled или ещё не созданный grant не исключает кандидата. Ответ несёт exact
+connection/package/project/recipient pins и текущее состояние grant без
+credentials. Обычная роль, неверный source locator, потеря authority,
+изменённый recipient/context pin, устаревшая generation, expiry/cancel/retry
+старой lease закрыто отклоняются. Read не меняет state, не создаёт receipt
+или event и не выдаёт разрешение; mutation/owner confirmation/OCC остаются
+на существующем специализированном пути. Каталог собственных разрешений
+PROJECT-помощника является отдельным видом и не подменяет получателя.
 
 Повтор запуска и продолжение сессии заново разрешают сохранённую цель и её
 канонический launch permission до receipt и OCC. Право чтения Run и locator
@@ -497,7 +548,12 @@ grant и не продлевает срок при чтении.
 новую generation и токены одной записью, полностью проверяет новый bearer и
 сохраняет issuer/sub/organization/sid/session_revision/auth_time. Свежий
 application proof строится из нового bearer. Absolute SSO ceiling не растёт;
-Keycloak refresh rotation включена с нулевым reuse, idle/max SSO не изменены.
+Keycloak refresh rotation включена с нулевым reuse. Обычные и Remember Me SSO
+idle/max задаются отдельно узким repo-owned stage `tools/deploy/keycloak-session-policy.py`:
+по утверждённой политике все четыре лимита равны 12 часам. Применение новой
+политики не расширяет существующую immutable browser family; новое полное
+окно требует повторного входа. Прикладной idle TTL и protected fresh-auth gate
+не меняются этим stage.
 
 Family/tombstone retention превышает абсолютный SSO срок. Runtime не имеет
 delete/purge/create/update stream authority; bootstrap и readiness проверяют
@@ -565,6 +621,130 @@ token, а запрос нового токена закрыто отклоняе
 владельца соответствующего жизненного цикла. Дочерний процесс имеет закрытый
 env, exact egress, ограниченный вывод, deadline и cancel/join до удаления
 временного credential state; inherited proxy bypass и прямой fallback запрещены.
+
+Настройка hosted native search материализуется только из опубликованного
+version/digest-pinned ConfigOverlay. Для Codex 0.160.0 закрытые режимы
+`disabled|cached|indexed|live` входят в существующий reviewed
+`PREPARE_ASSISTANT_RUNTIME_CONFIGURATION`; отсутствие параметра сохраняет
+текущую настройку. Это не sandbox WebAccess: domain allowlist shell egress
+не ограничивает hosted search, и настройка search не выдаёт shell/network
+authority. Readback различает свежую owner-конфигурацию и immutable snapshot
+хода; запрошенный режим либо SDK default не доказывает effective поведение
+provider или успешный native call. Неизвестные режимы и вложенный arbitrary
+TOML закрыто отклоняются, без legacy feature flags.
+
+Маршрутизация native tools не является источником полномочий. Для закреплённого
+Codex0.160.0 provider-owned `model.tool_mode` может иметь приоритет над
+отключением code mode: `CodeModeOnly` не получает обычный Direct fallback.
+При выключенном code-mode host платформа явно материализует DirectModelOnly
+только для закрытых namespace `functions`, `web`, `mcp__kodex`; feature
+flags host/only/enabled остаются false. Это изменение способа вызова, не
+выдача sandbox, shell egress, MCP grants или credential access. Проверка
+tool policy и прежние deny paths сохраняются; произвольный namespace и
+arbitrary TOML от клиента не принимаются. При обновлении SDK требуется
+проверить точные namespace и parser/spec_plan закреплённой версии, затем
+реальные shell/web/MCP ходы с новым admitted image и immutable runtime pins.
+Наличие executable в inventory или успешный Go test этого не заменяет.
+
+Authenticated runtime CONNECT поддерживает стандартную proxy authentication
+negotiation Git/libcurl: полный корректный bodyless CONNECT без
+`Proxy-Authorization` получает ограниченный `407 Basic` challenge и закрытие
+соединения, без проверки grant, DNS или upstream dial. Challenge не выдаёт
+authority: новый CONNECT заново проходит signed grant, exact destination,
+TLS/SNI/CA и HTTP method policy. Присутствующие malformed/duplicate credentials,
+invalid signature, прежний signer и запрещённый destination закрыто отклоняются
+без challenge; неизвестный метод, неверный envelope или содержащий body запрос
+не получают исключения.
+Ответ не отражает credential/request values, не имеет body и использует прежний
+write deadline и cancel/join. Static и другие listeners не получают anonymous
+fallback; header/body/credential bytes не записываются в диагностику.
+
+Закрытый реестр provider transport проверяется по закреплённой версии SDK:
+штатный standalone search Codex0.160 использует только POST
+`chatgpt.com/backend-api/codex/alpha/search` либо `api.openai.com/v1/alpha/search`
+в зависимости от provider credential. Он проходит прежний verified
+ProviderAccess grant и exact HTTPS443/SNI/CA, не выдавая пользовательский
+WebAccess или новые hosts. Mock override path не становится production route.
+Начальное событие app-server webSearch может содержать query="", action=null:
+безопасная проекция сообщает RUNNING и отсутствие query, не выдуманный result;
+проверки типа, размера и привязки thread/turn сохраняются.
+В него входят точные обязательные bootstrap/account-discovery маршруты,
+а не только inference endpoint. Read-only discovery не расширяет shell/WebAccess
+агента, не разрешает соседние paths, HTTP writes или WebSocket upgrade.
+Добавление маршрута требует доказательства host/path/method из первичного
+источника и отрицательных проверок boundary; неизвестный маршрут закрыто
+отклоняется. Диагностика отказа содержит только закрытый этап/класс/route и
+числовой RPC code, не account payload, URL/query, headers или credentials.
+
+Прокси с разными upstream/downstream HTTP versions формирует ответ в
+протоколе, согласованном с клиентом. Upstream HTTP/2 не сериализуется текстовой
+строкой `HTTP/2.0` в HTTP/1.1 connection; HTTP status, end-to-end headers и body
+сохраняются с корректным downstream framing. WebSocket upgrade проверяется и
+передаётся отдельным HTTP/1.1 path. Успешные upstream headers не доказывают
+доставку body: закрытая диагностика различает upstream response и завершённую
+либо ошибочную передачу до EOF, без содержимого/хеша ответа и credentials.
+Regression проверяет реальный HTTP/2 upstream и HTTP/1.1 downstream, а не
+только два HTTP/1.1 fixture endpoints.
+Ответ с неизвестной длиной и допустимым body получает явное HTTP/1.1 chunked
+framing с завершающим chunk и сохранением trailers. Закрытие сырого TCP
+соединения не заменяет завершение HTTP body: строгий TLS-клиент может отвергнуть
+close-delimited ответ без close_notify, даже после записи всех payload bytes.
+Regression использует streaming upstream без Content-Length; HEAD, no-body
+status и WebSocket не получают искусственного body или chunked encoding.
+Протокол закреплённого provider SDK сверяется с его фактическим codegen и
+сериализацией, включая известные experimental response поля: их отсутствие
+в публичной schema не доказывает отсутствия в wire response. Допустимые
+метаданные проходят строгую bounded type/enum проверку и отбрасываются;
+account origin, environment paths или plugin IDs из такого ответа не
+назначают authority, workspace текущей попытки или сетевые grants.
+
+Provider Responses WebSocket допускает только закрытый профиль RFC 7692
+`permessage-deflate`: отсутствие extension либо один header не более 256 байт,
+один extension и не более четырёх уникальных параметров. Разрешены только
+`server_no_context_takeover`, `client_no_context_takeover` без значения,
+`server_max_window_bits` с числом 9..15 и `client_max_window_bits` без значения
+в offer либо с числом 9..15. В response оба window parameters имеют числовое
+значение. Используются только lowercase tokens и канонические decimal числа
+без leading zero; quoted values, неизвестные/повторные параметры, несколько
+headers/extensions, control characters и превышение bounds закрыто отклоняются.
+Диапазон 9..15 принадлежит закреплённому Codex 0.160.0 tungstenite fork, а не
+является заявлением поддержки всего диапазона RFC 8..15.
+
+Response связан с фактическим request: unsolicited extension запрещён;
+отсутствие extension означает отказ сервера от compression и допустимо.
+`client_max_window_bits` разрешён только при его наличии в offer и не превышает
+явный offer bound. Явный `server_max_window_bits` требует такой же либо меньший
+response bound; предложенный `server_no_context_takeover` требует подтверждения.
+RFC допускает дополнительные известные server/client no-context ограничения
+и server window без соответствующего offer; это не разрешает произвольные
+extensions. Любой subprotocol остаётся запрещён. Header negotiation сохраняется,
+compressed frames передаются непрозрачно и побайтно, без decompression в gateway.
+Downstream HTTP101 сначала сериализуется целиком в буфер не больше действующего
+`MaximumHeaderBytes` и 64KiB, затем передаётся одним bounded Write с прежним
+deadline. Переполнение отклоняется до первого downstream Write; credential bytes
+буфера очищаются. Это сохраняет те же wire headers, но не разбивает handshake на
+десятки крошечных TLS records, способных сработать как slow-read attack в
+закреплённом SDK. Проверка byte equality и overflow не заменяет живое доказательство
+обмена frames и завершения хода через WebSocket.
+Прежние exact CONNECT/host/path/method/SNI/CA, ProviderAccess, DNS/public-IP,
+NetworkPolicy, resource limits, idle/write/shutdown и cancel/join проверки
+остаются обязательными; extension не выдаёт WebAccess или новый destination.
+
+Для точных provider Responses routes HTTP-ответ200 с единственным корректным
+`Content-Type: text/event-stream` получает `WriteTimeout` на каждый socket
+Write, а не на полную длительность активного SSE. Отдельный `IdleTimeout`
+ограничивает каждое upstream body Read; idle и остановка lifecycle отменяют
+upstream transport и закрывают поток в прежних bounded shutdown границах.
+Значения timeout policy не увеличиваются. Другие provider ответы, неизвестные
+Content-Type и произвольные non-provider/non-SSE paths сохраняют прежний
+write deadline; stream diagnostics не содержат headers, body и raw errors.
+
+Первичные источники: Codex
+[`rust-v0.160.0 websocket_config`](https://github.com/openai/codex/blob/rust-v0.160.0/codex-rs/codex-api/src/endpoint/responses_websocket.rs#L514-L520),
+его pinned tungstenite
+[`4fffad30 default offer`](https://github.com/openai-oss-forks/tungstenite-rs/blob/4fffad30fe373adbdcffab9545e9e9bf4f2fc19f/src/handshake/client.rs#L400-L426),
+[`supported windows`](https://github.com/openai-oss-forks/tungstenite-rs/blob/4fffad30fe373adbdcffab9545e9e9bf4f2fc19f/src/extensions/compression/deflate/config.rs#L33-L43)
+и [RFC7692 §7.1](https://www.rfc-editor.org/rfc/rfc7692.html#section-7.1).
 
 ## Многоуровневая межсервисная авторизация
 
@@ -954,7 +1134,6 @@ snapshot получает новый origin. Legacy lookup ограничен н
 policy или догадка по revision такую связь не доказывают. Исправление не
 переписывает published history, ключи и revocation/replay boundaries.
 
-
 Ротация является протоколом, а не заменой файла. Он обязан закрывать:
 
 - независимую смену ключа авторизации и сертификата подписанта;
@@ -1206,6 +1385,34 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   OpenAPI вызов получает ограниченный отказ; прежний Pod с устаревшими pins
   не обслуживает запросы через Service. Остальные listener используют свой
   Service и не зависят от переключения OpenAPI selector.
+- Закрытый Context7 adapter использует тот же owner-managed integration
+  CONNECT listener `egress-gateway-openapi:8083`, а не общий SaaS listener
+  `8080`. SHIPPED подключение без managed binding участвует в проекции только
+  при ACTIVE/enabled connection и точном совпадении key/version/digest с
+  текущим enabled definition и immutable shipped registry. Существующий
+  managed binding не обходится shipped ветвью: действуют прежние published/
+  current revision pins, проверка package/config и обязательного destination.
+  До успешного owner DNS/CNI/policy/Service/Deployment readback доступ закрыт;
+  credential/configuration values не входят в сетевую проекцию. Отсутствие
+  CONNECT origin не разрешает прямой внешний dial, другой listener или URL.
+  Свежесть required managed MCP подтверждается реальным owner ledger probe
+  `initialize/tools/list`, не `last_test_outcome` и не readiness самого worker.
+  CP ставит закрытые Context7 refresh tasks через прежний разрешённый claim RPC:
+  active connection, current package/credential и точная пара READ/NONE grants.
+  Успех для CONNECTED обновляет только immutable receipt, не configuration/
+  connectionVersion. TTL остаётся пять минут. На каждом invocation CP читает
+  текущий ledger и сравнивает config/credential/package и обе grant версии с
+  неизменной RuntimeRevision; новый receipt не переписывает её input/digest.
+  Failure закрывает readiness, а recovery допустим только после собственного
+  probe failure с теми же semantic inputs. Disable, revoke, delete и drift не
+  исправляются фоновой проверкой. Task origin, predecessor, lease/fence и
+  поколения сохраняются; три попытки и устойчивый backoff ограничивают retry.
+  Первый/expired proof допускает только ограниченное ожидание собственного
+  exact DUE/CLAIMED probe: не более 30 секунд от durable первой attempt,
+  без RuntimeRevision, Pod grant и health PASS. Retry/restart не продлевают
+  бюджет, другие candidates не блокируются. Missing probe, stale lease,
+  failed refresh, drift/revoke и истёкшее ожидание закрыто отклоняются;
+  DEGRADED не превращает enabled required dependency в отсутствующий tool.
 - Почтовый bridge использует отдельный listener `8082` профиля `email-mail`.
   Он не получает direct outbound: producer из того же version-pinned typed
   mailbox document выводит exact FQDN/port/mode и проверенные публичные IP.
@@ -1237,11 +1444,136 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   принимает только exact digest и bounded подписанный claim admission owner,
   связанный с provenance, SBOM, vulnerability policy/version и проверенной
   signature identity; missing/stale/rejected evidence закрыто отклоняется.
+- Обновление установленного компилятора не исправляет stdlib готового Go ELF.
+  Security-ревизия проверяет build metadata каждого CLI и при необходимости
+  собирает точный upstream module/version закреплённым компилятором. Нижние
+  границы зависимостей применяются только к присутствующим модулям через MVS,
+  без понижения более новых версий; замыкание проверяется ограниченным числом
+  повторов и по итоговому ELF. Неполное замыкание закрыто останавливает сборку.
+- npm overrides не исправляют зависимости внутри опубликованного bundle.
+  В таком случае CLI строится из exact официального source tarball с проверкой
+  integrity и безопасных путей в свежий каталог, без переноса bundled modules
+  и upstream lock. Отдельные manifest/lock входят в provenance; `npm ci` без
+  install hooks и проверка фактического дерева предшествуют публикации CLI.
+  Переписывание установленного node_modules, удаление SBOM findings и ослабление
+  admission policy не являются исправлением уязвимого образа. Проверки CLI на
+  хосте не заменяют допуск итогового OCI digest.
 - Durable evidence сохраняет подписанный payload побайтно. Разбор и повторная
   JSON-сериализация не могут быть storage boundary: один авторитетный OCI
   manifest задаёт закрытый набор layers с exact title, media type, size и
   digest, а recovery повторно проверяет descriptors, owner binding и detached
   signature над восстановленными байтами.
+- Явное human admin принятие vulnerability-риска не меняет immutable исходный
+  отчёт, REJECTED receipt или общий policy threshold. Owner сначала разрешает
+  ресурс и проверяет свежую human роль, затем OCC/idempotency exact tuple:
+  tenant/scope, recipe/build generation/attempt, artifact/image, полный report,
+  projection, исходные receipt/evidence и policy digests. Обязательные reason,
+  actor/time и decision назначаются или проверяются владельцем; payload actor,
+  assistant grant и PROJECT/service identity не дают права одобрения.
+  ACCEPT_RISK атомарно сохраняет append-only decision/history/audit/event и
+  создаёт новую PENDING attempt/fence, а не меняет прежний verdict на ACCEPTED.
+  Worker восстанавливает исходные bytes и получает новый подписанный receipt
+  вместе с подписанным decision binding; promotion проверяет всю цепочку.
+  Scanner/integrity/provenance/runtime ABI/tools/signature failures никогда
+  не override. Решение действует только для exact immutable tuple, без broad
+  temporary waiver, автоматического переноса на новую сборку или fallback.
+  Без полной typed projection разрешён только UNAVAILABLE/REBUILD_FOR_REPORT:
+  ни backfill, ни исторический reader, ни ручной DB repair не создают eligibility.
+  Чтение выдаёт все severity и grouped occurrences через bounded version-pinned
+  page; arbitrary URLs/raw paths не выходят наружу. Превышение бюджета —
+  технический отказ, не усечение отчёта. Новый evidence format/policy и migration,
+  CP/gateway/worker/signer/promotion материализуются до controller resume.
+  Внешнее явно пустое scanner fix state вместе с явно пустым массивом версий
+  допускается проецировать только в канонический UNKNOWN. Отсутствующие/null
+  поля, неизвестный state и противоречащие версии не получают неявных defaults.
+  Immutable history не допускает UPDATE/DELETE в active/archive/trash lifecycle.
+  Retention-исключение принадлежит только existing authorized permanent Project
+  purge с exact server-owned protected purge context и полным terminal graph;
+  оно очищает только project history, никогда organization history. Caller-set
+  GUC, disable triggers и произвольный history cleanup не являются authority.
+- Размер транспортного layer не ограничивает полноту логического SBOM:
+  evidence v5 хранит SBOM и исходный vulnerability report четырьмя фиксированными
+  последовательными частями. Каждая часть не больше 16MiB, сумма всех layers
+  не больше 64MiB; короткая последняя непустая часть допускает только пустые
+  завершающие части. Закрытый набор из 26 descriptors связывает exact title,
+  media type, порядок, размер и digest. Помимо исходных payload и signatures,
+  он включает полную `vulnerability-report.json` projection с её signature,
+  `risk-acceptance.json` с её signature и signature самого admission receipt.
+  В normal admission оба risk layers присутствуют пустыми; отсутствие decision
+  не разрешает произвольный binding. Receipt v3 и signature binding v2 связывают
+  точные attempt/fence, projection SHA256 и risk SHA256. Recovery сначала проверяет транспорт,
+  затем восстанавливает исходные байты и сверяет исходные hashes/signatures.
+  Урезание данных, увеличение бюджета и совместимый запасной decoder прежнего
+  формата запрещены; прежний неподходящий artifact требует новой штатной сборки
+  и допуска, а не перезаписи immutable evidence.
+- Технический отказ worker не является vulnerability verdict. Отдельная
+  owner-команда закрывает точный artifact/build/attempt по immutable digest,
+  fence и authority generation, отзывает claim и фиксирует audit/event/receipt
+  одной транзакцией; evidence и verdict остаются неназначенными. Истечение
+  claim определяется часами PostgreSQL и закрывается свежей maintenance
+  identity, а не просроченным grant. Jobs и workspace удаляются только после
+  подтверждённого owner terminal; повтор сохраняет исходный closed error code.
+  Сбой terminal callback сохраняет закрытую диагностику gRPC code без remote
+  error, claim или payload; marker завершения появляется только после receipt.
+  Если owner уже закрыл прежнюю attempt при смене сборки, worker читает её
+  через отдельный типизированный owner RPC с обычной проверенной identity.
+  Исходная квитанция claim разрешается внутри точных tenant/actor/workload
+  границ; полный immutable tuple и terminal snapshot связывают artifact,
+  build, attempt, version, fence, generation и source/risk digests. Только
+  известный terminal enum разрешает штатную очистку прежних Job/workspace и
+  новый claim. `PermissionDenied`, `NotFound`, expiry старого tuple и отсутствие
+  ресурса не доказывают terminal. Чтение не меняет verdict/history, не
+  возобновляет claim/grant и не разрешает stale completion либо promotion.
+  Если consumer — controller, отдельный readonly caller profile разрешает
+  только original receipt внутри server-resolved actor/tenant; координаты
+  прежнего claimant и source pins не принимаются из payload. Поколения
+  credentials разных workloads не сравниваются. Reader-first delivery меняет
+  только exact controller image и pause-флаг по UID/resourceVersion/spec CAS,
+  сохраняет прежнюю immutable policy и orchestration revision. Такой reader
+  удаляет только завершённые exact managed Jobs/PVC после owner terminal proof;
+  отказ, live claim и активный Job сохраняют workspace. Новая работа остаётся
+  приостановленной до canonical supply-chain apply/readback нового worker image.
+  Canonical Deployment явно задаёт resume-флаг `false`; отсутствие временно
+  добавленного env в manifest не снимает его при merge apply. Readback проверяет
+  ровно один literal `false` одновременно в render и живом Deployment, а не
+  выводит возобновление из Ready либо успешного применения остальных ресурсов.
+  Если прежний recovery PATCH владеет pause.value, canonical SSA не применяет
+  broad force-conflicts: штатная доставка передаёт только это поле своему
+  manager после owner/source/policy readback и пустого managed inventory.
+  Контроллер должен быть остановлен; UID/resourceVersion/full-spec CAS и
+  exact single-field readback обязательны. Неизвестный или неоднозначный
+  field owner закрыто отклоняется; failure не возобновляет controller через EXIT.
+  Проверка прежнего trusted checkout для paused image-only reader не является
+  protected source cutover: она сохраняет exact realpath/clean HEAD, закрытый
+  credential-free GitHub origin (с `.git` либо без), runtime file access и
+  существующие readonly mounts CP/gateway/PWA. Ignored owner-private `.env`
+  допускается только по metadata, без чтения, загрузки, переноса или нового
+  mount. Общий protected source inspector не ослабляется. Dockerfile-specific
+  context задаётся deny-all allowlist фактических COPY-входов с последними
+  private exclusions; ignore-файл входит в input digest/cache key. Closed COPY
+  сам по себе не доказывает исключение private files из передаваемого context.
+- Read-only availability включает не только claimable admission, но и
+  owner-maintenance устаревших PENDING/CLAIMED внутри того же tenant. Иначе
+  новая policy скрывает единственную старую работу раньше достижения её
+  terminalization. Maintenance использует прежний специализированный claim,
+  не расширяет candidate eligibility и не создаёт scanner verdict. Owner
+  одной транзакцией закрывает artifact/attempt/promotion, отзывает authority,
+  сохраняет точные terminal snapshots в idempotency receipt и аудит; при
+  отсутствии нового candidate возвращает NotFound только после commit.
+  Replay прежнего receipt не выполняет новые effects. Если отдельного события
+  нет, существующее eligible чтение latest recipe/candidate является
+  авторитетным terminal read path; REJECTED не даёт права promotion.
+  Повторная сборка получает свежие server-owned policy/runtime pins, а не
+  принимает прежний immutable artifact под обновлённой policy.
+- Локальный одноразовый helper доступа к credentials задаёт каждому kubectl
+  явный приватный cache-dir вне repository и проверяет owner/mode/inode перед
+  ограниченным cleanup. Отсутствие HOME в очищенном окружении не доказывает
+  отсутствие credential/discovery cache в рабочем каталоге. Значения выбранных
+  credentials передаются только exact HTTPS native form, без tool arguments,
+  логов, cookie injection и отключения TLS/CSP.
+  Owner-approved UI fill отдельно связывает local same-UID Chrome PID/start/socket, exact page и свежие server-owned project/environment/sole-consumer OCC pins; Node-only credentials не получают этого исключения.
+  Только пустое masked поле exact Secret заполняется закреплённым DOM handle, без navigation retarget, reveal, trace/body/логов или автоматического Save/Publish.
+  Fresh-auth, owner confirmation и impact selection остаются штатными UI guards; неизвестный исход fill не повторяется, наружу выходят только закрытые коды.
 - Materializer недоверенного build input принадлежит deployable, получает
   отдельную pull-only mTLS/application identity и destination-bound egress.
   Он принимает только exact OCI manifest digest и single-layer descriptor,
@@ -1284,6 +1616,19 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   Host runtime получает pull credential code-first через k3s `registries.yaml`;
   конфигурация использует HTTPS и exact registry host, а её изменение требует
   restart/readback k3s на каждом node.
+  Локальный preload не заменяет durable публикацию platform worker: kubelet
+  вправе удалить неиспользуемый cache до следующей фоновой задачи. Repo-owned
+  session-archive и role-image-builder OCI перед публикацией проходят bounded проверку всех blobs,
+  descriptors, platform и exact manifest digest; private копия исходных байтов
+  передаётся существующему promotion writer по mTLS/application identity.
+  Controller и его worker используют один exact digest через настроенный
+  promoted pull host. Node и installer получают только закрытый repository
+  `kodex/session-archive` и `kodex/role-image-builder`, не право произвольной
+  публикации или role admission. Одинаковые guards связывают repository,
+  entrypoint, cache input digest/tag и platform; builder использует тот же
+  promoted pull host без зависимости от сохранности preload.
+  Unknown исход публикации проверяется отдельным readback без повторного import;
+  task/lease/grants, UID, content generation и immutable receipts не меняются.
 - `RuntimeRevision`, runtime-controller client, credential broker, workload
   admission и `ValidatingAdmissionPolicy` используют один exact promoted
   `repository@sha256`, ABI revision/digest и закрытую форму Pod: два init и три
@@ -1305,7 +1650,105 @@ control-plane. Политика строится из фактического S
 трафика. Значения
 одного контура не переносятся в другой.
 
+## Безопасное локальное обслуживание
+
+Локальное обслуживание разрешено только отдельным owner-approved repo-owned
+путём. До эффекта и после него заново проверяются exact cluster/nodes, resource
+UID/spec/resourceVersion/OCC, immutable опубликованные image/policy/runtime pins
+и authoritative owner idle. Namespace, label или отсутствие видимого Pod сами
+по себе не доказывают отсутствие незавершённых runs, tasks, claims, leases,
+grants и внешних effects. Неизвестное состояние, неполное чтение или изменение
+pins закрыто останавливают обслуживание; history/receipts не удаляются для
+получения искусственного idle.
+
+Terminal проверяется по полному закрытому набору каждого вида: для Run это
+`SUCCEEDED|FAILED|CANCELLED`, для RunNode также `SKIPPED`; `QUEUED`, `PLANNED`,
+`RUNNING`, состояния ожидания и `CANCELLING` не являются terminal. У Job отдельно
+проверяются `Complete|Failed`, у Pod — `Succeeded|Failed`, и фактическое состояние
+всех обычных, init и native sidecar containers. Успешно завершённый одноразовый
+init с `reason=Completed`, `exitCode=0` и `ready=true` не считается живым
+контейнером; это исключение не применяется к работающему native sidecar с
+`restartPolicy=Always`. Неизвестный статус закрыто отклоняется.
+
+Исторический Pod `Failed/Evicted` с оставшимся runtime status допускается как
+отсутствующий только после двух независимых native CRI наблюдений: exact Pod UID
+не имеет sandbox или containers на каждой из двух exact trusted nodes. Node
+недоступен, проверена только одна нода либо CRI identity неоднозначна — idle не
+доказан. Kubernetes history сохраняется; удаление исторического Pod не заменяет
+это доказательство.
+
+Пауза controller сохраняется при ошибке, timeout и неизвестном исходе;
+автоматический resume через `EXIT` trap запрещён. Перед отдельным возобновлением
+материализуются и читаются заново forward migrations, exact policy/CRD,
+NetworkPolicy, CP/gateway и необходимые worker/bridge binaries. Только после
+этого повторные owner idle и exact serving readback разрешают controller resume.
+
+CEL-проверка Quantity учитывает точную OpenAPI-схему целевого API server:
+`oneOf(string, number)` без `type` может исключить Quantity и содержащую его
+карту из статической модели. `dyn` допускается только на точной границе
+`resources` или `emptyDir`; прежние storage/resource limits сохраняются.
+Regression использует реальный schema-to-CEL adapter закреплённой версии,
+воспроизводит прежний warning и проверяет отрицательные значения. Пустой список
+warnings значим только при свежем `observedGeneration == generation`; ошибка
+компиляции не разрешает возобновить controller. Публичная ограниченная проверка —
+`make test-workspace-policy-contract`, локальный предел процесса 120 секунд.
+
+Для policy, объединяющей Role/RoleBinding, динамическая граница ограничена
+полями `rules`/`subjects`/`roleRef` внутри точной ветки `kind` с проверкой наличия.
+Для списка обычных/init контейнеров `dyn` ограничен единственным элементом
+`initContainers`; пути metadata/spec и точные image/command/resource ограничения
+сохраняют прежние проверки. До запуска CP/controller и в конечном readback один
+native snapshot связывает полный ожидаемый spec, текущую generation и завершённую
+type checking без warnings. Авторитетный status controller Kubernetes сначала
+выполняет `Check`, затем одним `ApplyStatus` фиксирует observedGeneration и warnings;
+точное совпадение generation доказывает завершение этой проверки. Пустые optional
+`typeChecking`/`expressionWarnings` могут отсутствовать после SSA/omitempty и не
+означают отказ. Устаревшая либо отсутствующая observedGeneration, неверные типы
+status и любые warnings закрыто отклоняются. Это закрепляется по
+[исходнику целевой версии Kubernetes](https://github.com/kubernetes/kubernetes/blob/v1.35.5/pkg/controller/validatingadmissionpolicystatus/controller.go),
+а не по наличию необязательного JSON-поля. Адресная проверка этого
+gate — `make test-runtime-admission-gate`, предел процесса 60 секунд.
+
+Очистка воспроизводимых локальных кэшей и образов выбирает только явный
+проверенный список. Перед каждым эффектом заново сверяются владелец, текущие
+процессы и mounts, image current/restore pins и runtime references всех локальных
+нод. Docker image удаляется без force и с `--no-prune`, чтобы не удалить
+невыбранные untagged parents. Dependency conflict оставляет образ; timeout или
+потерянный ACK требуют authoritative readback без слепого повтора. Квитанция
+отдельно фиксирует подтверждённые targets, неизвестные побочные исходы,
+логический объём слоёв и фактическое изменение свободного места. Общий кэш
+активного пользователя не считается мусором.
+
 ## Полнота deployable
+
+Outbox текущего execution публикует фактический provider writer после штатного
+stop/join app-server и до terminal handoff. UID10002 через nofollow directory/file
+descriptors проверяет provider-owned regular inode, единственную hard link,
+размер и текущую pathname identity, назначает только group29000/read0640
+и сверяет результат. Private0600 и atomic replace не требуют действий модели.
+Runner UID10001 не получает CAP_CHOWN, приватный provider home или authority
+другого execution; symlink, foreign owner, специальные файлы и превышение
+границ закрывают completion с безопасным `RUNTIME_ARTIFACT_INVALID`.
+Публикация согласуется с workspace canary/cleanup через прежний directory lock.
+
+Восстановленный native history принадлежит фактическому writer/capture UID,
+а не UID контейнера, передающего запрос. В текущем Pod ABI Codex app-server
+и захват rollout исполняются в `provider-runtime` с UID10002; RESTORE создаёт
+файлы с тем же UID, group29000 и mode0640. Отдельный non-root init RESTORE
+с UID10001 заранее создаёт только точный корень `codex-home` с group29000,
+setgid и mode2770: существующие init/provider guards требуют эту directory
+identity. Init читает тот же immutable RESTORE task, не получает credentials
+object storage, RPC tokens, произвольные paths или новую authority.
+Main runner UID10001 не получает
+CAP_CHOWN или право менять чужой rollout. Kernel-регрессия проверяет append
+новых history bytes и их последующий exact digest от UID10002, а чужой UID10001
+остаётся отрицательным случаем. Полная kernel-проверка проходит directory
+preparation → restore → текущий workspace guard → native append/capture;
+чужой владелец, symlink и mismatched task закрыто отклоняются.
+SNAPSHOT/DELETE сохраняют прежние identities,
+claim/fence и минимальные capabilities. Уже созданный wrong-owner PVC не
+исправляется ручным chown: нужен штатный архив и новый owner-bound RESTORE
+с проверенным immutable archive receipt, без подмены terminal outcome.
 
 Материализованные общие input/knowledge отделены от приватного spool: non-root
 init защищает принадлежащие ему файлы и потомков через дескрипторы без symlink.

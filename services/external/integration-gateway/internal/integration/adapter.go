@@ -26,11 +26,12 @@ import (
 )
 
 const (
-	maximumResponseBytes        = 64 << 10
-	githubAPIBaseURL            = "https://api.github.com/"
-	syntheticServiceHost        = "integration-synthetic.kodex-system.svc.cluster.local"
-	exactCredentialSecretPrefix = "kodex-system/kodex-integration-credentials#"
-	credentialReadRetryInterval = 250 * time.Millisecond
+	maximumResponseBytes            = 64 << 10
+	githubAPIBaseURL                = "https://api.github.com/"
+	syntheticServiceHost            = "integration-synthetic.kodex-system.svc.cluster.local"
+	exactCredentialSecretPrefix     = "kodex-system/kodex-integration-credentials#"
+	credentialReadRetryInterval     = 250 * time.Millisecond
+	credentialProjectionPendingCode = "INTEGRATION_CREDENTIAL_PROJECTION_PENDING"
 )
 
 type Config struct {
@@ -56,6 +57,8 @@ type Request struct {
 	Configuration, Input                                              map[string]any
 	ResourceScope                                                     map[string]string
 	Credential                                                        *CredentialRevision
+	GrantRef                                                          string
+	GrantVersion                                                      int64
 }
 
 type Receipt struct {
@@ -108,6 +111,7 @@ type Adapter struct {
 	githubBaseURL       *url.URL
 	providerHTTPClient  *http.Client
 	openAPIHTTPClient   *http.Client
+	context7HTTPClient  *http.Client
 	localOpenAPIClient  *http.Client
 	emailHTTPClient     *http.Client
 	syntheticClient     *http.Client
@@ -164,10 +168,15 @@ func New(config Config) (*Adapter, error) {
 	if err != nil {
 		return nil, err
 	}
+	context7Client, err := newContext7HTTPClient(config)
+	if err != nil {
+		return nil, err
+	}
 	return &Adapter{
-		proxyURL:        config.ProxyURL,
-		emailHTTPClient: emailClient,
-		credentials:     credentials, definitions: definitions,
+		proxyURL:           config.ProxyURL,
+		emailHTTPClient:    emailClient,
+		context7HTTPClient: context7Client,
+		credentials:        credentials, definitions: definitions,
 		githubHTTPClient: &http.Client{Transport: githubTransport, Timeout: config.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("GitHub redirect is forbidden") }},
 		githubBaseURL:    mustURL(githubAPIBaseURL),
 		providerHTTPClient: &http.Client{
@@ -230,6 +239,7 @@ func RequestFromInvocation(claim *controlplanev1.IntegrationInvocationClaim) Req
 		ResourceKind:   resourceKind, ResourceScope: resourceScope, ResourceScopeDigest: resourceScopeDigest,
 		EffectKey: claim.GetEffectKey(), InputDigest: claim.GetInputDigest(), Configuration: configuration,
 		Input: input, Credential: credentialFromProto(claim.GetCredentialRevision()),
+		GrantRef: claim.GetGrantRef(), GrantVersion: claim.GetGrantVersion(),
 	}
 }
 
@@ -268,8 +278,12 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 		return "", &SafeError{Code: "INTEGRATION_CONFIGURATION_INVALID"}
 	}
 	capability, ok := definition.CapabilityByOperation(definition.Spec.HealthCheck.Operation)
-	if !ok || capability.ApprovalPolicy != "NONE" {
+	if !ok || capability.Risk != "READ" || capability.ApprovalPolicy != "NONE" {
 		return "", &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
+	}
+	if definition.Spec.Adapter == "CONTEXT7" {
+		summary, err := adapter.testContext7(ctx, request)
+		return summary, healthCredentialError(err)
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(definition.Spec.HealthCheck.TimeoutSeconds)*time.Second)
 	defer cancel()
@@ -287,12 +301,7 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 	request.Input, request.EffectKey = map[string]any{}, "health-check"
 	result, err := adapter.Execute(ctx, request)
 	var safe *SafeError
-	if definition.Spec.Adapter == string(integrationpackage.AdapterOpenAPIMCP) &&
-		errors.As(err, &safe) && safe.Code == "INTEGRATION_CREDENTIAL_UNAVAILABLE" && safe.Transient {
-		// Монтирование нового Kubernetes Secret может отстать от owner-команды.
-		// Повторяется только READ health-test, без внешнего WRITE-эффекта.
-		return "", &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
-	}
+	err = healthCredentialError(err)
 	if errors.As(err, &safe) && safe.Code == emailapi.HealthNotReadyCode {
 		return safe.HealthSummary, err
 	}
@@ -303,6 +312,16 @@ func (adapter *Adapter) Test(ctx context.Context, request Request) (string, erro
 		return "i18n:INTEGRATION_TEST_SUCCEEDED", nil
 	}
 	return "i18n:INTEGRATION_TEST_SUCCEEDED", err
+}
+
+func healthCredentialError(err error) error {
+	var safe *SafeError
+	if errors.As(err, &safe) && safe.Code == "INTEGRATION_CREDENTIAL_UNAVAILABLE" && safe.Transient {
+		// Только READ health-test: ожидание exact проекции не означает неверный
+		// credential и не разрешает повтор обычного invocation/WRITE.
+		return &SafeError{Code: credentialProjectionPendingCode}
+	}
+	return err
 }
 
 func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, error) {
@@ -332,6 +351,8 @@ func (adapter *Adapter) Execute(ctx context.Context, request Request) (Result, e
 		result, err = adapter.executeHTTPSJSONRead(ctx, request, capability, configuration)
 	case "OPENAPI_MCP":
 		result, err = adapter.executeOpenAPI(ctx, request, capability, configuration, canonicalInput)
+	case "CONTEXT7":
+		result, err = adapter.executeContext7(ctx, request, capability, configuration, canonicalInput)
 	default:
 		err = &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}
@@ -404,8 +425,7 @@ func (adapter *Adapter) validateDefinition(request Request) (integrationpackage.
 	if !definition.ExecutableBy(integrationpackage.OwnerIntegrationGateway, integrationpackage.RouteManagedMCP) {
 		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_ROUTE_NOT_OWNED"}
 	}
-	if definition.RequiresConnectionCredential() != (request.Credential != nil) &&
-		!(definition.HasLegacyEmailCredentialDescriptor(shipped) && validLegacyEmailCredentialMetadata(request.Credential)) {
+	if definition.RequiresConnectionCredential() != (request.Credential != nil) {
 		return integrationpackage.Package{}, &SafeError{Code: "INTEGRATION_CREDENTIAL_UNAVAILABLE"}
 	}
 	return definition, nil
@@ -418,13 +438,16 @@ func (adapter *Adapter) validateInvocation(request Request) (
 	map[string]string,
 	error,
 ) {
+	if !request.healthCheck && (request.GrantRef == "" || request.GrantVersion < 1) {
+		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_GRANT_INVALID"}
+	}
 	definition, err := adapter.validateDefinition(request)
 	if err != nil {
 		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, err
 	}
 	capability, exists := definition.Capability(request.CapabilityKey)
 	if !exists || capability.Operation != request.Operation || capability.Risk != request.Risk ||
-		capability.ApprovalPolicy != request.ApprovalPolicy || capability.ResourceScope.Kind != request.ResourceKind ||
+		!capability.AllowsApprovalPolicy(request.ApprovalPolicy) || capability.ResourceScope.Kind != request.ResourceKind ||
 		request.EffectKey == "" || len(request.InputDigest) != sha256.Size*2 {
 		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_CAPABILITY_UNSUPPORTED"}
 	}
@@ -446,6 +469,9 @@ func (adapter *Adapter) validateInvocation(request Request) (
 	canonicalInput, err := capability.ValidateInput(encodedInput)
 	inputDigest := sha256.Sum256(canonicalInput)
 	if err != nil || hex.EncodeToString(inputDigest[:]) != request.InputDigest {
+		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+	}
+	if definition.ValidateInvocationApprovalPolicy(capability, request.ApprovalPolicy, canonicalInput) != nil {
 		return integrationpackage.Package{}, integrationpackage.Capability{}, nil, nil, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
 	if strings.HasPrefix(request.Operation, "github.") || strings.HasPrefix(request.Operation, "gitlab.") {

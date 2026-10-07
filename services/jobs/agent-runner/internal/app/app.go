@@ -29,6 +29,7 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/codex"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/contextfiles"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/credentialrelay"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/imageinventory"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/readiness"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/security"
@@ -47,6 +48,12 @@ type health struct {
 }
 
 func Run(baseContext, lifecycleContext context.Context, args []string, buildVersion string) (resultErr error) {
+	if len(args) > 1 && args[1] == imageinventory.SandboxExecMode {
+		return imageinventory.RunSandboxedTool(args[2:])
+	}
+	if len(args) > 1 && args[1] == imageinventory.Mode {
+		return imageinventory.Run(lifecycleContext, args)
+	}
 	if len(args) != 2 {
 		return errors.New("agent-runner mode is required")
 	}
@@ -203,7 +210,7 @@ type preparedTurn struct {
 
 type turnRuntime struct {
 	prepare        func(context.Context, model.Input, *callback.Client) (preparedTurn, string, error)
-	execute        func(context.Context, model.Input, []byte, string, string) (codex.Result, error)
+	execute        func(context.Context, model.Input, []byte, string, string, func(runtimecontract.RuntimeActivity) error) (codex.Result, error)
 	checkWorkspace func(context.Context) error
 }
 
@@ -265,10 +272,22 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 	if err != nil {
 		return completeFailure(ctx, input, client, "RUNTIME_INPUT_INVALID")
 	}
-	result, executionErr := runtime.execute(ctx, input, prompt, prepared.proxy.SocketPath(), prepared.proxy.LocalBearerToken())
-	// Уже совершённые native effects сохраняются и при последующем отказе
-	// workspace/quota; такой отказ не превращает выполнение в отсутствие действий.
-	if err := recordNativeToolTimeline(ctx, input, client, result.ToolCalls); err != nil {
+	activityFailed := false
+	result, executionErr := runtime.execute(ctx, input, prompt, prepared.proxy.SocketPath(), prepared.proxy.LocalBearerToken(), func(activity runtimecontract.RuntimeActivity) error {
+		if err := activity.Validate(); err != nil {
+			activityFailed = true
+			return errors.New("runtime activity is invalid")
+		}
+		var err error
+		if activity.Message != nil {
+			err = client.PublishedMessage(ctx, input, *activity.Message)
+		} else {
+			err = client.RecordNativeToolCall(ctx, input, *activity.ToolCall)
+		}
+		activityFailed = activityFailed || err != nil
+		return err
+	})
+	if activityFailed {
 		return completeFailureWithSummaryAndUsage(ctx, input, client, "RUNTIME_UNAVAILABLE", "i18n:RUNTIME_UNAVAILABLE", result.Usage)
 	}
 	if executionErr != nil {
@@ -286,6 +305,9 @@ func completeExecutedTurn(ctx context.Context, input model.Input, client *callba
 	}
 	if result.Outcome != "SUCCEEDED" {
 		_, message, _ := codex.TerminalPresentation(result.FailureCode)
+		if result.FailureCode == "RUNTIME_ARTIFACT_INVALID" {
+			message = "i18n:RUNTIME_ARTIFACT_INVALID"
+		}
 		return completeResultFailure(ctx, input, client, result, message)
 	}
 	if strings.TrimSpace(result.FinalMessage) == "" || len(result.FinalMessage) > 64<<10 || !utf8.ValidString(result.FinalMessage) {
@@ -309,25 +331,6 @@ func completeExecutedTurn(ctx context.Context, input model.Input, client *callba
 		return completeFailureWithSummaryAndUsage(ctx, input, client, "RUNTIME_RESULT_INVALID", "i18n:RUNTIME_RESULT_INVALID", result.Usage)
 	}
 	return client.Complete(ctx, input, payload)
-}
-
-type nativeToolCallRecorder interface {
-	RecordNativeToolCall(context.Context, model.Input, runtimecontract.NativeToolCall) error
-}
-
-func recordNativeToolTimeline(ctx context.Context, input model.Input, recorder nativeToolCallRecorder, calls []runtimecontract.NativeToolCall) error {
-	if len(calls) > runtimecontract.MaximumNativeToolCalls {
-		return errors.New("native tool timeline is invalid")
-	}
-	for _, call := range calls {
-		if call.Validate() != nil {
-			return errors.New("native tool timeline is invalid")
-		}
-		if err := recorder.RecordNativeToolCall(ctx, input, call); err != nil {
-			return errors.New("record native tool timeline")
-		}
-	}
-	return nil
 }
 
 func completeResultFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, summary string) error {
@@ -385,7 +388,9 @@ func safeFailureCode(code string) string {
 		return "RUNTIME_PROFILE_UNSUPPORTED"
 	case "context_window_exceeded", "session_budget_exceeded", "thread_rollback_failed", "active_turn_not_steerable":
 		return "RUNTIME_PROFILE_UNSUPPORTED"
-	case "provider_error_info_invalid", "provider_interrupted", "provider_other_error", "RUNTIME_RESULT_INVALID", "RUNTIME_ARTIFACT_INVALID":
+	case "RUNTIME_ARTIFACT_INVALID":
+		return "RUNTIME_ARTIFACT_INVALID"
+	case "provider_error_info_invalid", "provider_interrupted", "provider_other_error", "RUNTIME_RESULT_INVALID":
 		return "PROVIDER_RESPONSE_INVALID"
 	case "RUNTIME_INPUT_INVALID", "RUNTIME_WORKSPACE_INVALID":
 		return "RUNTIME_INPUT_INVALID"
@@ -969,6 +974,11 @@ func collectArtifacts(input model.Input, markdown string) ([]runtimecontract.Run
 		if statErr != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > 1<<20 {
 			file.Close()
 			continue
+		}
+		metadata, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || metadata.Nlink != 1 {
+			file.Close()
+			return nil, errors.New("runtime artifact metadata is invalid")
 		}
 		raw, readErr := io.ReadAll(io.LimitReader(file, 1<<20+1))
 		closeErr := file.Close()

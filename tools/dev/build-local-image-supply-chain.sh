@@ -32,6 +32,7 @@ done
 [[ "$build_jobs" =~ ^[1-4]$ ]] || fail 'build jobs must be between 1 and 4'
 
 [[ "$source_root" == /* && -f "$source_root/tools/dev/Dockerfile.local-image-supply-chain" &&
+  -f "$source_root/tools/dev/Dockerfile.local-image-supply-chain.dockerignore" &&
   -f "$source_root/services/jobs/role-image-builder/Dockerfile" &&
   -f "$source_root/services/internal/internal-rpc-authority/Dockerfile" ]] ||
   fail 'source root is invalid'
@@ -103,6 +104,7 @@ compute_input_digest() {
     tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
       -C "$source_root" -cf - \
       tools/dev/Dockerfile.local-image-supply-chain \
+      tools/dev/Dockerfile.local-image-supply-chain.dockerignore \
       infra/dockerfile-frontend/Dockerfile \
       tools/render-image-admission-job.sh \
       infra/admission-tools/Dockerfile \
@@ -112,11 +114,9 @@ compute_input_digest() {
       sha256sum | awk '{print $1}'
   ) || fail 'supply-chain inputs cannot be read'
   [[ "$digest" =~ ^[a-f0-9]{64}$ ]] || fail 'supply-chain input digest is invalid'
-  if [[ "$component" == authority-security ]]; then
-    # VERSION/SOURCE_SHA входят в recipe: одинаковое дерево нового commit не
-    # должно возвращать старую versioned binary из прежнего cache key.
-    digest=$(printf '%s\n%s\n%s\n' "$digest" "$source_revision" "$component" | sha256sum | awk '{print $1}')
-  fi
+  # VERSION/SOURCE_SHA входят во все recipes: новый commit с тем же деревом
+  # не должен возвращать прежнюю binary или OCI revision label из кэша.
+  digest=$(printf '%s\n%s\n%s\n' "$digest" "$source_revision" "$component" | sha256sum | awk '{print $1}')
   printf '%s' "$digest"
 }
 input_digest=$(compute_input_digest)

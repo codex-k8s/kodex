@@ -167,21 +167,37 @@ func (executor *Executor) Prepare(
 	input *controlplanev1.RoleImageBuildInput,
 	beforeContextValidation func() error,
 ) (*Prepared, string, error) {
-	if !validBuildOwner(input) || !plainSHA256(input.GetContextSha256()) || !plainSHA256(input.GetSourceSha256()) ||
-		!plainSHA256(input.GetSpecSha256()) || !plainSHA256(input.GetImmutableBuildSha256()) ||
-		input.GetFrontendSha256() != executor.config.ExpectedFrontendSHA256 || !digestPattern.MatchString(input.GetBaseImageDigest()) ||
-		!executor.allowedBases.Allows(input.GetBaseImageReference(), input.GetBaseImageDigest()) ||
-		input.GetBuilderSha256() != executor.config.ExpectedBuilderSHA256 ||
-		input.GetToolchainSha256() != executor.config.ExpectedToolchainSHA256 ||
-		input.GetRoleRuntimeContractRevision() != executor.config.RoleRuntimeContractRevision ||
-		input.GetRoleRuntimeContractSha256() != executor.config.RoleRuntimeContractSHA256 ||
-		!strings.HasPrefix(input.GetContextRef(), "oci://") ||
-		strings.ContainsAny(input.GetInstallationBlock(), "\x00\r") || !validOwnerDockerfile(input) {
-		return nil, "INPUT_FETCH_REJECTED", ErrInvalidContext
+	reason := ""
+	switch {
+	case !validBuildOwner(input):
+		reason = inputReasonOwnerScope
+	case !plainSHA256(input.GetContextSha256()) || !plainSHA256(input.GetSourceSha256()) ||
+		!plainSHA256(input.GetSpecSha256()) || !plainSHA256(input.GetImmutableBuildSha256()):
+		reason = inputReasonSHASchema
+	case input.GetFrontendSha256() != executor.config.ExpectedFrontendSHA256:
+		reason = inputReasonFrontendPin
+	case !digestPattern.MatchString(input.GetBaseImageDigest()):
+		reason = inputReasonSHASchema
+	case !executor.allowedBases.Allows(input.GetBaseImageReference(), input.GetBaseImageDigest()):
+		reason = inputReasonBaseAllowlist
+	case input.GetBuilderSha256() != executor.config.ExpectedBuilderSHA256:
+		reason = inputReasonBuilderPin
+	case input.GetToolchainSha256() != executor.config.ExpectedToolchainSHA256:
+		reason = inputReasonToolchainPin
+	case input.GetRoleRuntimeContractRevision() != executor.config.RoleRuntimeContractRevision ||
+		input.GetRoleRuntimeContractSha256() != executor.config.RoleRuntimeContractSHA256:
+		reason = inputReasonRuntimeContract
+	case !strings.HasPrefix(input.GetContextRef(), "oci://"):
+		reason = inputReasonContextRef
+	case strings.ContainsAny(input.GetInstallationBlock(), "\x00\r") || !validOwnerDockerfile(input):
+		reason = inputReasonOwnerDockerfile
+	}
+	if reason != "" {
+		return nil, "INPUT_FETCH_REJECTED", rejectInput(reason, ErrInvalidContext)
 	}
 	root, err := os.MkdirTemp(executor.config.WorkspaceRoot, "image-build-")
 	if err != nil {
-		return nil, "INPUT_FETCH_REJECTED", ErrInvalidContext
+		return nil, "INPUT_FETCH_REJECTED", rejectInput(inputReasonWorkspaceCreate, ErrInvalidContext)
 	}
 	prepared := &Prepared{root: root, contextDirectory: filepath.Join(root, "context"),
 		dockerfile: filepath.Join(root, "dockerfile"), installation: filepath.Join(root, "installation"),
@@ -380,10 +396,27 @@ func dockerfile(
 		"--mount=type=bind,target=/workspace/source,readonly",
 		"--mount=type=bind,from=kodex-install,source=install.sh,target=/run/kodex/install.sh,readonly",
 	}
-	return []byte(fmt.Sprintf("# syntax=%s@sha256:%s\nFROM %s@%s AS trusted-runtime\n%s\nUSER root\nRUN %s /bin/sh /run/kodex/install.sh\nCOPY --from=trusted-runtime /usr/local/bin/kodex-init /usr/local/bin/kodex-init\nCOPY --from=trusted-runtime /usr/local/bin/kodex-agent-runner /usr/local/bin/kodex-agent-runner\nUSER 10001:10001\nENTRYPOINT [\"/usr/local/bin/kodex-init\",\"entrypoint\",\"/usr/local/bin/kodex-agent-runner\"]\nCMD [\"runtime-session\"]\nLABEL kodex.dev/spec-sha256=%q kodex.dev/runtime-contract-sha256=%q\n",
+	return []byte(fmt.Sprintf("# syntax=%s@sha256:%s\nFROM %s@%s AS trusted-runtime\n%s\nUSER root\nRUN %s /bin/sh /run/kodex/install.sh\nCOPY --from=trusted-runtime /usr/local/bin/kodex-init /usr/local/bin/kodex-init\nCOPY --from=trusted-runtime /usr/local/bin/kodex-agent-runner /usr/local/bin/kodex-agent-runner\nUSER 10001:10001\nENTRYPOINT [\"/usr/local/bin/kodex-init\",\"entrypoint\",\"/usr/local/bin/kodex-agent-runner\"]\nCMD [\"runtime-session\"]\nLABEL kodex.dev/spec-sha256=%q kodex.dev/runtime-contract-sha256=%q\nFROM kodex-final-rootfs AS kodex-tool-probe\nUSER root\nRUN --network=none --mount=type=bind,from=kodex-final-rootfs,source=/,target=/image,readonly [\"/usr/local/bin/kodex-agent-runner\",\"image-tool-inventory\",%q,%q,%q]\nFROM kodex-final-rootfs\nCOPY --from=kodex-tool-probe /tmp/kodex-tool-inventory.json /usr/share/kodex/tool-inventory.json\n",
 		frontendRepository, input.GetFrontendSha256(), trustedRuntimeRepository, trustedRuntimeDigest,
-		strings.TrimSpace(input.GetDockerfile()), strings.Join(mounts, " "), input.GetSpecSha256(),
-		input.GetRoleRuntimeContractSha256()))
+		finalRootStage(input.GetDockerfile()), strings.Join(mounts, " "), input.GetSpecSha256(),
+		input.GetRoleRuntimeContractSha256(), input.GetSpecSha256(), input.GetImmutableBuildSha256(), input.GetRoleRuntimeContractSha256()))
+}
+
+func finalRootStage(source string) string {
+	lines := strings.Split(strings.TrimSpace(source), "\n")
+	alias := "kodex-user-rootfs"
+	for index, line := range lines {
+		fields := strings.Fields(strings.TrimSpace(line))
+		if len(fields) >= 2 && strings.EqualFold(fields[0], "FROM") {
+			if len(fields) == 4 {
+				alias = fields[3]
+			} else {
+				lines[index] = "FROM " + fields[1] + " AS " + alias
+			}
+			break
+		}
+	}
+	return strings.Join(lines, "\n") + "\nFROM " + alias + " AS kodex-final-rootfs"
 }
 
 func validOwnerDockerfile(input *controlplanev1.RoleImageBuildInput) bool {
@@ -412,6 +445,9 @@ func validOwnerDockerfile(input *controlplanev1.RoleImageBuildInput) bool {
 				return false
 			}
 			foundFrom = true
+			if len(fields) == 4 && (strings.HasPrefix(strings.ToLower(fields[3]), "kodex-") || strings.EqualFold(fields[3], "trusted-runtime")) {
+				return false
+			}
 			continue
 		}
 		if !foundFrom {

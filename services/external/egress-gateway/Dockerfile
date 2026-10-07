@@ -11,6 +11,7 @@ WORKDIR /workspace
 COPY libs/go/grpcserver/go.mod libs/go/grpcserver/go.mod
 COPY libs/go/httpserver/go.mod libs/go/httpserver/go.mod
 COPY libs/go/observability/go.mod libs/go/observability/go.mod
+COPY libs/go/runtimecontract/go.mod libs/go/runtimecontract/go.mod
 COPY libs/go/serviceruntime/go.mod libs/go/serviceruntime/go.mod
 COPY libs/go/securefile/go.mod libs/go/securefile/go.mod
 COPY libs/go/emailbridgeapi/go.mod libs/go/emailbridgeapi/go.mod
@@ -26,6 +27,7 @@ WORKDIR /workspace
 COPY libs/go/grpcserver/ libs/go/grpcserver/
 COPY libs/go/httpserver/ libs/go/httpserver/
 COPY libs/go/observability/ libs/go/observability/
+COPY libs/go/runtimecontract/ libs/go/runtimecontract/
 COPY libs/go/serviceruntime/ libs/go/serviceruntime/
 COPY libs/go/securefile/ libs/go/securefile/
 COPY libs/go/emailbridgeapi/ libs/go/emailbridgeapi/

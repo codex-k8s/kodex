@@ -39,25 +39,6 @@ func TestPromptProvenanceVersionPreservesHistoricalDigest(t *testing.T) {
 	}
 }
 
-func TestRuntimeContextSessionID(t *testing.T) {
-	digest := strings.Repeat("a", 64)
-	for _, test := range []struct {
-		name, previous, current, expected string
-	}{
-		{"unchanged", digest, digest, "session"},
-		{"changed", digest, strings.Repeat("b", 64), ""},
-		{"legacy", "", digest, ""},
-		{"missing_current", digest, "", ""},
-		{"missing_both", "", "", ""},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			if got := runtimeContextSessionID("session", test.previous, test.current); got != test.expected {
-				t.Fatalf("session continuation = %q, want %q", got, test.expected)
-			}
-		})
-	}
-}
-
 func TestRuntimeRevisionIncludesExplicitContext(t *testing.T) {
 	values := map[string]any{"runtimeRevisionRef": "revision", "runtimeRevisionVersion": int64(1),
 		"providerSecretName": "secret", "providerSecretUID": "uid", "providerSecretResourceVersion": "1"}

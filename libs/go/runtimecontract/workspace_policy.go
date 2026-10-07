@@ -33,6 +33,37 @@ type RuntimeWorkspacePathRule struct {
 	Access string `json:"access"`
 }
 
+// RuntimeWorkspaceLimits сужает только ресурсные квоты platform policy.
+// Root, protected paths и источники томов не настраиваются владельцем.
+type RuntimeWorkspaceLimits struct {
+	MaxBytes int64 `json:"max_bytes"`
+	MaxFiles int64 `json:"max_files"`
+}
+
+func (limits RuntimeWorkspaceLimits) Validate() error {
+	if limits.MaxBytes < 1 || limits.MaxBytes > RuntimeWorkspaceWritableBytes ||
+		limits.MaxFiles < 1 || limits.MaxFiles > RuntimeWorkspaceMaximumFiles {
+		return errors.New("runtime workspace limits are invalid")
+	}
+	return nil
+}
+
+func RuntimeWorkspacePolicyWithLimits(limits *RuntimeWorkspaceLimits) (RuntimeWorkspacePolicy, error) {
+	policy := RuntimeWorkspacePolicyV1()
+	if limits == nil {
+		return policy, nil
+	}
+	if err := limits.Validate(); err != nil {
+		return RuntimeWorkspacePolicy{}, err
+	}
+	policy.MaximumWritableBytes, policy.MaximumFileCount = limits.MaxBytes, limits.MaxFiles
+	policy.Digest = ""
+	raw, _ := json.Marshal(policy)
+	digest := sha256.Sum256(raw)
+	policy.Digest = hex.EncodeToString(digest[:])
+	return policy, nil
+}
+
 type RuntimeWorkspacePolicy struct {
 	Revision             int64                      `json:"revision"`
 	Root                 string                     `json:"root"`
@@ -62,8 +93,7 @@ func RuntimeWorkspacePolicyV1() RuntimeWorkspacePolicy {
 
 func (policy RuntimeWorkspacePolicy) Validate() error {
 	if policy.Revision != 1 || policy.Root != RuntimeWorkspaceRoot ||
-		policy.MaximumWritableBytes != RuntimeWorkspaceWritableBytes ||
-		policy.MaximumFileCount != RuntimeWorkspaceMaximumFiles || len(policy.Rules) != 5 {
+		(RuntimeWorkspaceLimits{MaxBytes: policy.MaximumWritableBytes, MaxFiles: policy.MaximumFileCount}).Validate() != nil || len(policy.Rules) != 5 {
 		return errors.New("runtime workspace policy is invalid")
 	}
 	expectedRules := map[string]string{

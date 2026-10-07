@@ -3,6 +3,7 @@ package callback
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"regexp"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func (server *Server) configurationCatalog(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
@@ -108,15 +110,30 @@ const maximumAssistantIntegrationDefinitions = 10
 
 const maximumAssistantConfigurationEntries = 10
 
-var assistantConfigurationCatalogKinds = []string{"ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS"}
+// Имя только для модельной проекции: refs, scope и owner snapshot не меняются.
+func assistantCatalogResourceName(input runtimecontract.RunnerInput, ref, name string) string {
+	if input.IsSystemAssistant() && ref != "" && ref == input.AgentRef && name == "i18n:SYSTEM_ASSISTANT_NAME" {
+		return "Системный помощник"
+	}
+	return name
+}
+
+var assistantConfigurationCatalogKinds = []string{"ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS", "CURRENT_CONFIGURATION"}
 
 func assistantConfigurationCatalogInputSchema(input runtimecontract.RunnerInput) map[string]any {
 	assistantRef := opaqueRefSchema()
 	if input.AssistantScope == runtimecontract.AssistantScopeProject {
 		assistantRef = enumSchema(input.AgentRef)
 	}
+	kinds := append([]string{}, assistantConfigurationCatalogKinds...)
+	if input.AssistantScope == runtimecontract.AssistantScopeProject {
+		kinds = append(kinds, "PROJECT_INTEGRATION_GRANTS")
+	}
+	if assistantRecipientIntegrationCatalogAvailable(input) {
+		kinds = append(kinds, "RECIPIENT_INTEGRATION_GRANTS")
+	}
 	return objectSchema([]string{"kind", "assistant_ref"}, map[string]any{
-		"kind": enumSchema(assistantConfigurationCatalogKinds...), "assistant_ref": assistantRef,
+		"kind": enumSchema(kinds...), "assistant_ref": assistantRef,
 		"query": stringSchema(0, 80), "offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 10000},
 		"account_ref": opaqueRefSchema(), "runtime_profile_ref": assistantRuntimeProfileKeySchema(),
 	})
@@ -188,13 +205,27 @@ func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, argum
 			}
 		}
 	}
+	if kind == "PROJECT_INTEGRATION_GRANTS" && (input.AssistantScope != runtimecontract.AssistantScopeProject || request.AccountRef != "" || request.RuntimeProfileRef != "") {
+		return nil, invalid
+	}
+	if kind == "RECIPIENT_INTEGRATION_GRANTS" && (!assistantRecipientIntegrationCatalogAvailable(input) || assistantRef != input.AgentRef) {
+		return nil, invalid
+	}
 	if kind == "MODELS" && request.AccountRef == "" {
+		return nil, invalid
+	}
+	if kind == "CURRENT_CONFIGURATION" && (assistantRef != input.AgentRef || request.Query != "" || request.Offset != 0 ||
+		input.RuntimeRevisionRef == "" || input.RuntimeRevisionVersion < 1 || !validAssistantCatalogDigest(input.RuntimeRevisionDigest) ||
+		!validAssistantResourceRef(input.RunRef) || !validAssistantResourceRef(input.NodeRef) || !validAssistantResourceRef(input.SessionRef) || !validAssistantResourceRef(input.TurnRef) || input.Attempt < 1) {
 		return nil, invalid
 	}
 	return request, nil
 }
 
 func assistantConfigurationCatalogKindKnown(kind string) bool {
+	if kind == "PROJECT_INTEGRATION_GRANTS" || kind == "RECIPIENT_INTEGRATION_GRANTS" {
+		return true
+	}
 	for _, candidate := range assistantConfigurationCatalogKinds {
 		if candidate == kind {
 			return true
@@ -229,7 +260,11 @@ func (server *Server) assistantConfigurationCatalog(ctx context.Context, input r
 
 func castAssistantConfigurationCatalog(input runtimecontract.RunnerInput, request *controlplanev1.AssistantConfigurationCatalogRequest, response *controlplanev1.AssistantConfigurationCatalogResponse) (map[string]any, error) {
 	invalid := errors.New("assistant configuration catalog response is invalid")
+	if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_RECIPIENT_INTEGRATION_GRANTS {
+		return castAssistantRecipientIntegrationCatalog(input, request, response)
+	}
 	if response == nil || len(response.ProtoReflect().GetUnknown()) != 0 || response.GetKind() != request.GetKind() ||
+		response.GetRecipientIntegrationGrants() != nil ||
 		response.GetAssistantRef() != request.GetAssistantRef() || response.GetOrganizationRef() != input.OrganizationRef ||
 		!validAssistantCatalogScope(response.GetScopeKind(), response.GetProjectRef(), response.GetAssistantProfileRef()) ||
 		len(response.GetEntries()) > maximumAssistantConfigurationEntries || response.GetNextOffset() < 0 || response.GetNextOffset() > 10000 ||
@@ -242,6 +277,18 @@ func castAssistantConfigurationCatalog(input runtimecontract.RunnerInput, reques
 	}
 	if input.IsSystemAssistant() && ((request.GetAssistantRef() == input.AgentRef && response.GetScopeKind() != "ORGANIZATION") ||
 		(request.GetAssistantRef() != input.AgentRef && response.GetScopeKind() != "PROJECT")) {
+		return nil, invalid
+	}
+	if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_PROJECT_INTEGRATION_GRANTS {
+		return castProjectAssistantIntegrationCatalog(input, request, response)
+	}
+	if len(response.GetProjectIntegrationGrants()) != 0 {
+		return nil, invalid
+	}
+	if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_CURRENT_CONFIGURATION {
+		return castAssistantOwnCurrentConfiguration(input, request, response)
+	}
+	if response.GetCurrentConfiguration() != nil {
 		return nil, invalid
 	}
 	entries := make([]map[string]any, 0, len(response.GetEntries()))
@@ -261,8 +308,26 @@ func castAssistantConfigurationCatalog(input runtimecontract.RunnerInput, reques
 			"version": entry.GetVersion(), "recipe_generation": entry.GetRecipeGeneration(), "reference": entry.GetReference(),
 			"manifest_digest": entry.GetManifestDigest(), "catalog_revision": entry.GetCatalogRevision(), "catalog_digest": entry.GetCatalogDigest(),
 			"reasoning_efforts": append([]string{}, entry.GetReasoningEfforts()...), "default_reasoning_effort": entry.GetDefaultReasoningEffort()}
+		if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_ROLE_IMAGE_RECIPES {
+			projection["environment_key"] = entry.GetEnvironmentKey()
+		}
 		if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_ASSISTANTS {
+			if entry.GetScopeKind() == "ORGANIZATION" {
+				projection["name"] = assistantCatalogResourceName(input, entry.GetRef(), entry.GetName())
+			}
 			projection["runtime_environment_ref"] = entry.GetRuntimeEnvironmentRef()
+		}
+		if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_IMAGE_ARTIFACTS {
+			raw, err := (protojson.MarshalOptions{UseProtoNames: true, EmitUnpopulated: true}).Marshal(entry.GetVerifiedToolInventory())
+			if err != nil || len(raw) > maximumAssistantCurrentConfigurationBytes {
+				return nil, invalid
+			}
+			var inventory map[string]any
+			if json.Unmarshal(raw, &inventory) != nil {
+				return nil, invalid
+			}
+			projection["admission_verdict"], projection["promotion_state"] = entry.GetAdmissionVerdict(), entry.GetPromotionState()
+			projection["verified_tool_inventory"] = inventory
 		}
 		entries = append(entries, projection)
 	}
@@ -317,17 +382,21 @@ func validAssistantConfigurationCatalogEntry(input runtimecontract.RunnerInput, 
 		}
 		allowed["provider"], allowed["model"], allowed["catalog_revision"], allowed["catalog_digest"], allowed["reasoning_efforts"], allowed["default_reasoning_effort"] = true, true, true, true, true, true
 	case controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_ROLE_IMAGE_RECIPES:
-		if !validAssistantResourceRef(entry.GetRef()) || entry.GetVersion() < 1 || entry.GetRecipeGeneration() < 1 {
+		if !validAssistantResourceRef(entry.GetRef()) || entry.GetVersion() < 1 || entry.GetRecipeGeneration() < 1 || !assistantCatalogEnvironmentKeyPattern.MatchString(entry.GetEnvironmentKey()) {
 			return false
 		}
-		allowed["version"], allowed["recipe_generation"] = true, true
+		allowed["version"], allowed["recipe_generation"], allowed["environment_key"] = true, true, true
 	case controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_IMAGE_ARTIFACTS:
 		if !validAssistantResourceRef(entry.GetRef()) || entry.GetVersion() < 1 || entry.GetRecipeGeneration() < 1 ||
 			!strings.HasPrefix(entry.GetManifestDigest(), "sha256:") || !validAssistantCatalogDigest(strings.TrimPrefix(entry.GetManifestDigest(), "sha256:")) ||
-			!assistantCatalogPinnedImagePattern.MatchString(entry.GetReference()) || !strings.HasSuffix(entry.GetReference(), "@"+entry.GetManifestDigest()) {
+			!assistantCatalogPinnedImagePattern.MatchString(entry.GetReference()) || !strings.HasSuffix(entry.GetReference(), "@"+entry.GetManifestDigest()) ||
+			entry.GetAdmissionVerdict() != "ACCEPTED" || entry.GetPromotionState() != "PROMOTED" ||
+			entry.GetVerifiedToolInventory() == nil || !validAssistantCurrentReadMessage(entry.GetVerifiedToolInventory().ProtoReflect(), 0) ||
+			!validAssistantImageToolInventory(entry.GetVerifiedToolInventory(), &controlplanev1.RuntimeEnvironmentImage{ArtifactRef: entry.GetRef(), Digest: entry.GetManifestDigest()}) {
 			return false
 		}
 		allowed["version"], allowed["recipe_generation"], allowed["reference"], allowed["manifest_digest"] = true, true, true, true
+		allowed["admission_verdict"], allowed["promotion_state"], allowed["verified_tool_inventory"] = true, true, true
 	case controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_ROLE_ENVIRONMENTS:
 		if !assistantCatalogEnvironmentKeyPattern.MatchString(entry.GetRef()) {
 			return false
@@ -338,7 +407,9 @@ func validAssistantConfigurationCatalogEntry(input runtimecontract.RunnerInput, 
 	present := map[string]bool{"provider": entry.GetProvider() != "", "model": entry.GetModel() != "", "version": entry.GetVersion() != 0,
 		"recipe_generation": entry.GetRecipeGeneration() != 0, "reference": entry.GetReference() != "", "manifest_digest": entry.GetManifestDigest() != "",
 		"catalog_revision": entry.GetCatalogRevision() != "", "catalog_digest": entry.GetCatalogDigest() != "", "reasoning_efforts": len(entry.GetReasoningEfforts()) != 0,
-		"default_reasoning_effort": entry.GetDefaultReasoningEffort() != "", "runtime_environment_ref": entry.GetRuntimeEnvironmentRef() != ""}
+		"default_reasoning_effort": entry.GetDefaultReasoningEffort() != "", "runtime_environment_ref": entry.GetRuntimeEnvironmentRef() != "",
+		"admission_verdict": entry.GetAdmissionVerdict() != "", "promotion_state": entry.GetPromotionState() != "", "verified_tool_inventory": entry.GetVerifiedToolInventory() != nil,
+		"environment_key": entry.GetEnvironmentKey() != ""}
 	for field, supplied := range present {
 		if supplied && !allowed[field] {
 			return false

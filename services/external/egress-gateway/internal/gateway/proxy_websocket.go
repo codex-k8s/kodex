@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/sha1"
 	"encoding/base64"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -15,6 +16,46 @@ import (
 )
 
 const webSocketMagic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+var errProviderWebSocketHeaderBound = errors.New("websocket response headers exceed bounded serialization limit")
+
+type providerWebSocketHeaderBuffer struct {
+	data    []byte
+	maximum int
+}
+
+func (buffer *providerWebSocketHeaderBuffer) Write(data []byte) (int, error) {
+	if len(data) > buffer.maximum-len(buffer.data) {
+		return 0, errProviderWebSocketHeaderBound
+	}
+	buffer.data = append(buffer.data, data...)
+	return len(data), nil
+}
+
+// Сериализует прежний 101 без body до первого downstream Write. Один Write
+// убирает tiny TLS records, не переписывая headers или ослабляя SDK AttackCheck.
+// Буфер ограничен действующей policy и SDK bound; credential bytes очищаются.
+func writeProviderWebSocketHandshake(response *http.Response, writer io.Writer, maximum int) error {
+	if maximum <= 0 {
+		return errProviderWebSocketHeaderBound
+	}
+	if maximum > 64<<10 {
+		maximum = 64 << 10
+	}
+	buffer := providerWebSocketHeaderBuffer{data: make([]byte, 0, maximum), maximum: maximum}
+	defer func() { clear(buffer.data) }()
+	if err := response.Write(&buffer); err != nil {
+		return err
+	}
+	n, err := writer.Write(buffer.data)
+	if err != nil {
+		return err
+	}
+	if n != len(buffer.data) {
+		return io.ErrShortWrite
+	}
+	return nil
+}
 
 func headerToken(header http.Header, name, token string) bool {
 	for _, value := range header.Values(name) {
@@ -38,7 +79,7 @@ func validWebSocketRequest(request *http.Request) bool {
 		len(request.Header.Values("Connection")) == 1 && strings.EqualFold(strings.TrimSpace(request.Header.Get("Connection")), "upgrade") &&
 		len(request.Header.Values("Sec-WebSocket-Version")) == 1 && request.Header.Get("Sec-WebSocket-Version") == "13" &&
 		len(request.Header.Values("Sec-WebSocket-Key")) == 1 && err == nil && len(key) == 16 &&
-		len(request.Header.Values("Sec-WebSocket-Protocol")) == 0 && len(request.Header.Values("Sec-WebSocket-Extensions")) == 0
+		len(request.Header.Values("Sec-WebSocket-Protocol")) == 0 && validWebSocketExtensionOffer(request.Header)
 }
 
 func validWebSocketResponse(response *http.Response, request *http.Request) bool {
@@ -48,69 +89,87 @@ func validWebSocketResponse(response *http.Response, request *http.Request) bool
 		len(response.Header.Values("Connection")) == 1 && strings.EqualFold(strings.TrimSpace(response.Header.Get("Connection")), "upgrade") &&
 		len(response.Header.Values("Sec-WebSocket-Accept")) == 1 &&
 		response.Header.Get("Sec-WebSocket-Accept") == base64.StdEncoding.EncodeToString(digest[:]) &&
-		len(response.Header.Values("Sec-WebSocket-Protocol")) == 0 && len(response.Header.Values("Sec-WebSocket-Extensions")) == 0
+		len(response.Header.Values("Sec-WebSocket-Protocol")) == 0 && validWebSocketExtensionResponse(response.Header, request.Header)
 }
 
 // Upgraded stream имеет прежние CONNECT/host/SNI/CA проверки. Закрывается при
 // idle, остановке listener либо EOF любого направления; обе pump всегда joined.
-func (server *Server) forwardWebSocket(client net.Conn, reader *bufio.Reader, response *http.Response, limits policy.Limits) {
+func (server *Server) forwardWebSocket(client net.Conn, reader *bufio.Reader, response *http.Response, limits policy.Limits, diagnostic providerResponsesDiagnostic) {
 	upstream := response.Body.(io.ReadWriteCloser)
 	defer upstream.Close()
 	response.Body = nil
 	response.ContentLength = 0
 	response.Header.Del("Proxy-Authorization")
 	response.Header.Del("Proxy-Authenticate")
-	if client.SetWriteDeadline(time.Now().Add(duration(limits.WriteTimeoutMilliseconds))) != nil || response.Write(client) != nil {
+	handshakeWriter := &providerWebSocketHandshakeWriter{Writer: client}
+	if client.SetWriteDeadline(time.Now().Add(duration(limits.WriteTimeoutMilliseconds))) != nil || writeProviderWebSocketHandshake(response, handshakeWriter, limits.MaximumHeaderBytes) != nil {
+		diagnostic.upgrade("WRITE_FAILED", response.StatusCode)
 		return
 	}
+	diagnostic.handshake(response, handshakeWriter)
+	diagnostic.upgrade("ACCEPTED", response.StatusCode)
 	_ = client.SetDeadline(time.Time{})
 	activity := make(chan struct{}, 1)
-	results := make(chan error, 2)
+	results := make(chan string, 2)
 	var closeOnce sync.Once
-	closeBoth := func() { closeOnce.Do(func() { _ = client.Close(); _ = upstream.Close() }) }
-	defer closeBoth()
-	pump := func(destination io.Writer, source io.Reader) {
+	var clientData, upstreamData bool
+	reason := "UNKNOWN"
+	closeBoth := func(cause string) {
+		closeOnce.Do(func() { reason = cause; _ = client.Close(); _ = upstream.Close() })
+	}
+	defer closeBoth("UNKNOWN")
+	pump := func(destination io.Writer, source io.Reader, fromClient bool) {
 		buffer := make([]byte, 32<<10)
 		for {
 			n, err := source.Read(buffer)
 			if n > 0 {
+				if fromClient {
+					clientData = true
+				} else {
+					upstreamData = true
+				}
 				select {
 				case activity <- struct{}{}:
 				default:
 				}
-				writeTimer := time.AfterFunc(duration(limits.WriteTimeoutMilliseconds), closeBoth)
+				writeTimer := time.AfterFunc(duration(limits.WriteTimeoutMilliseconds), func() { closeBoth("WRITE_FAILED") })
 				written, writeErr := destination.Write(buffer[:n])
 				writeTimer.Stop()
 				if writeErr != nil || written != n {
-					results <- io.ErrShortWrite
+					results <- "WRITE_FAILED"
 					return
 				}
 			}
 			if err != nil {
-				results <- err
+				results <- providerWebSocketReadFailure(err, fromClient)
 				return
 			}
 		}
 	}
-	go pump(upstream, reader)
-	go pump(client, upstream)
+	go pump(upstream, reader, true)
+	go pump(client, upstream, false)
 	timer := time.NewTimer(duration(limits.IdleTimeoutMilliseconds))
 	defer timer.Stop()
 	completed := 0
 	shutdown := server.context.Done()
 	for completed < 2 {
 		select {
-		case <-results:
+		case result := <-results:
 			completed++
-			closeBoth()
+			closeBoth(result)
 		case <-activity:
 			timer.Reset(duration(limits.IdleTimeoutMilliseconds))
 		case <-timer.C:
-			closeBoth()
+			closeBoth("IDLE")
 		case <-shutdown:
-			closeBoth()
+			closeBoth("SHUTDOWN")
 			shutdown = nil
 		}
 	}
+	// closeOnce сохраняет причину победившего закрытия, а join синхронизирует
+	// чтение: вторичный IO после closeBoth не подменяет write timeout.
+	// Каждая pump пишет только свой флаг; оба результата получены после этих
+	// записей. Наличие данных не доказывает успешного декодирования SDK.
+	diagnostic.pump(reason, clientData, upstreamData)
 	server.metrics.Connection("completed", "proxy", "none")
 }

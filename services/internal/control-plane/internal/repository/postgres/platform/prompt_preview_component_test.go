@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -29,6 +30,21 @@ func testPromptContextPreview(t *testing.T, ctx context.Context, repository *Rep
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "prompt-preview-agent", "Preview agent")
 	context := query.PromptPreviewContext{ExpectedAgentVersion: agent.Version}
+	readOwner, err := repository.ResolvePrincipal(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := repository.resolveScope(ctx, readOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var organizationName string
+	if err := repository.pool.QueryRow(ctx, `SELECT name FROM control_plane.organizations WHERE id=$1::uuid`, current.organizationID).Scan(&organizationName); err != nil || organizationName == "" {
+		t.Fatal("fixture organization name is unavailable")
+	}
+	t.Run("agent organization name", func(t *testing.T) {
+		testProspectiveOrganizationName(t, ctx, repository, service, owner, "AGENT", agent.Ref, context, current.organizationRef, organizationName)
+	})
 	first, err := service.PreviewPromptTemplateWithContext(ctx, owner, `Agent {{.agent.name}} {{slot "PURPOSE"}}`, "AGENT", agent.Ref, false, context, "")
 	if err != nil || first.ServiceTemplateRevision != promptservice.ServiceTemplateRevision || first.ContextPin.AgentRef != agent.Ref || first.ContextPin.RuntimeConfigurationRef == "" {
 		t.Fatalf("agent preview: %#v err=%v", first.ContextPin, err)
@@ -66,6 +82,9 @@ func testPromptContextPreview(t *testing.T, ctx context.Context, repository *Rep
 		t.Fatal(err)
 	}
 	stageContext := query.PromptPreviewContext{WorkflowRevisionRef: created.Workflow.Draft.Ref, WorkflowStageKey: "analyze", ExpectedWorkflowVersion: created.Workflow.Version}
+	t.Run("workflow stage organization name", func(t *testing.T) {
+		testProspectiveOrganizationName(t, ctx, repository, service, owner, "WORKFLOW_STAGE", created.Workflow.Ref, stageContext, current.organizationRef, organizationName)
+	})
 	stage, err := service.PreviewPromptTemplateWithContext(ctx, owner, `{{slot "PURPOSE"}} {{slot "EXPECTED_RESULT"}}`, "WORKFLOW_STAGE", created.Workflow.Ref, false, stageContext, "")
 	if err != nil || !strings.Contains(stage.Prompt, "Analyze Preview project.") || !strings.Contains(stage.Prompt, "Result by Preview agent.") || stage.ContextPin.WorkflowStageKey != "analyze" {
 		t.Fatalf("stage preview: prompt=%q err=%v", stage.Prompt, err)
@@ -84,6 +103,49 @@ func testPromptContextPreview(t *testing.T, ctx context.Context, repository *Rep
 		Payload: command.ManagedConfigurationInput{ConfigurationRef: staleScope.ManagedConfiguration.Ref, RevisionRef: staleScope.ManagedRevision.Ref}})
 	if !errors.Is(err, errs.ErrVersionMismatch) {
 		t.Fatalf("stale declared scope was accepted: %v", err)
+	}
+}
+
+func testProspectiveOrganizationName(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, kind, ref string, selection query.PromptPreviewContext, organizationRef, organizationName string) {
+	t.Helper()
+	readOwner, err := repository.ResolvePrincipal(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := repository.GetPromptPreviewContextSnapshot(ctx, readOwner, kind, ref, selection)
+	if err != nil || snapshot.Variables["organization.name"] != organizationName || snapshot.Variables["organization.ref"] != organizationRef {
+		t.Fatal("prospective snapshot does not contain the authoritative organization identity")
+	}
+	filter := query.Filter{Query: "organization.name", Page: query.Page{Size: 100}, TemplateContext: &query.TemplateVariableContext{TargetKind: kind, TargetRef: ref, Preview: selection}}
+	catalog, err := service.ListPromptContextVariables(ctx, owner, filter)
+	if err != nil || len(catalog.Variables) != 1 || catalog.Variables[0].Name != "organization.name" || !catalog.Variables[0].Available || catalog.Variables[0].Reason != variableAvailable {
+		t.Fatal("prospective catalog does not advertise the authoritative organization name")
+	}
+	preview, err := service.PreviewPromptTemplateWithContext(ctx, owner, `Organization {{.organization.name}}`, kind, ref, false, selection, catalog.ContextPin.Digest)
+	if err != nil || !preview.Complete || len(preview.Diagnostics) != 0 || preview.ContextPin.Digest != catalog.ContextPin.Digest {
+		t.Fatal("organization name preview does not match the catalog pin")
+	}
+	var rendered struct {
+		Sections []struct{ Content string } `json:"sections"`
+	}
+	if json.Unmarshal([]byte(preview.Prompt), &rendered) != nil {
+		t.Fatal("organization name preview is not a canonical JSON envelope")
+	}
+	found := false
+	for _, section := range rendered.Sections {
+		if section.Content == "Organization "+organizationName {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("organization name was not rendered from the authoritative snapshot")
+	}
+	filter.ProjectRef = "prj_foreignpreview"
+	if _, err := service.ListPromptContextVariables(ctx, owner, filter); !errors.Is(err, errs.ErrNotFound) {
+		t.Fatal("organization name catalog accepted a foreign project")
+	}
+	if _, err := service.PreviewPromptTemplateWithContext(ctx, owner, `Organization {{.organization.name}}`, kind, ref, false, selection, strings.Repeat("f", 64)); !errors.Is(err, errs.ErrVersionMismatch) {
+		t.Fatal("organization name preview accepted a stale context pin")
 	}
 }
 

@@ -629,8 +629,10 @@ onBeforeUnmount(reset);
               @availability-change="modelAvailable = $event"
               @selection-change="modelSelection = $event"
             />
-            <label class="field" :for="reasoningEffortId">
-              <span>{{ $t("runtimeOverlay.effort") }}</span>
+            <div class="field">
+              <label :for="reasoningEffortId">{{
+                $t("runtimeOverlay.effort")
+              }}</label>
               <select
                 :id="reasoningEffortId"
                 name="agent-runtime-reasoning-effort"
@@ -668,16 +670,21 @@ onBeforeUnmount(reset);
                   {{ effort }}
                 </option>
               </select>
-              <small>{{
-                $t("runtimeOverlay.effortHelp", {
-                  model: view.configuration.model,
-                })
-              }}</small>
               <small>{{ $t("runtimeOverlay.effortCost") }}</small>
+              <details class="runtime-effort-help">
+                <summary>{{ $t("common.details") }}</summary>
+                <p>
+                  {{
+                    $t("runtimeOverlay.effortHelp", {
+                      model: view.configuration.model,
+                    })
+                  }}
+                </p>
+              </details>
               <small v-if="selectedEffort === undefined">{{
                 $t("runtimeOverlay.repairBeforeEffort")
               }}</small>
-            </label>
+            </div>
           </div>
           <label class="field">
             <span>{{ copy.runtime.profile }}</span>
@@ -943,9 +950,23 @@ onBeforeUnmount(reset);
 .runtime-panel__head,
 .overlay-panel__head {
   display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+.runtime-panel__head > div,
+.overlay-panel__head > div {
+  min-width: 0;
+  flex: 1 1 220px;
+  overflow-wrap: anywhere;
+}
+.runtime-panel__head > .status-badge,
+.overlay-panel__head > .status-badge {
+  align-self: flex-start;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .runtime-panel h2,
 .overlay-panel h3,
@@ -970,6 +991,15 @@ onBeforeUnmount(reset);
 .runtime-panel__selectors {
   display: grid;
   gap: 12px;
+}
+.runtime-effort-help {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.runtime-effort-help summary {
+  cursor: pointer;
 }
 .runtime-panel__summary {
   display: grid;
@@ -1056,6 +1086,16 @@ onBeforeUnmount(reset);
   margin-inline-start: 0;
 }
 @media (max-width: 640px) {
+  .runtime-panel__head,
+  .overlay-panel__head {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .runtime-panel__head > div,
+  .overlay-panel__head > div {
+    width: 100%;
+    flex: none;
+  }
   .runtime-panel__summary {
     grid-template-columns: 1fr;
   }

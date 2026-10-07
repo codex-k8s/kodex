@@ -75,8 +75,21 @@ func assistantEnvironmentPolicy(input map[string]any) (runtimecontract.RuntimeEn
 	}
 	resources, ok := item["resources"].(map[string]any)
 	fields := []string{"cpuRequestMilli", "cpuLimitMilli", "memoryRequestMib", "memoryLimitMib", "ephemeralStorageRequestMib", "ephemeralStorageLimitMib"}
-	if !ok || !onlyAssistantFields(resources, fields...) || !hasAssistantFields(resources, fields...) {
+	if !ok || !onlyAssistantFields(resources, append(append([]string{}, fields...), "workspaceLimits")...) || !hasAssistantFields(resources, fields...) {
 		return runtimecontract.RuntimeEnvironmentPolicy{}, false
+	}
+	var workspaceLimits *runtimecontract.RuntimeWorkspaceLimits
+	if rawLimits, supplied := resources["workspaceLimits"]; supplied {
+		limits, valid := rawLimits.(map[string]any)
+		if !valid || !onlyAssistantFields(limits, "maxBytes", "maxFiles") || !hasAssistantFields(limits, "maxBytes", "maxFiles") {
+			return runtimecontract.RuntimeEnvironmentPolicy{}, false
+		}
+		maxBytes, bytesOK := assistantInt64(limits, "maxBytes")
+		maxFiles, filesOK := assistantInt64(limits, "maxFiles")
+		workspaceLimits = &runtimecontract.RuntimeWorkspaceLimits{MaxBytes: maxBytes, MaxFiles: maxFiles}
+		if !bytesOK || !filesOK || workspaceLimits.Validate() != nil {
+			return runtimecontract.RuntimeEnvironmentPolicy{}, false
+		}
 	}
 	numbers := make([]int64, len(fields))
 	for index, field := range fields {
@@ -166,6 +179,7 @@ func assistantEnvironmentPolicy(input map[string]any) (runtimecontract.RuntimeEn
 	}
 	policy, err := runtimecontract.RuntimeEnvironmentPolicyFromInput(runtimecontract.RuntimeEnvironmentPolicyInput{
 		Resources: runtimecontract.RuntimeResourcePolicy{
+			WorkspaceLimits: workspaceLimits,
 			CPURequestMilli: numbers[0], CPULimitMilli: numbers[1], MemoryRequestMiB: numbers[2], MemoryLimitMiB: numbers[3],
 			EphemeralStorageRequestMiB: numbers[4], EphemeralStorageLimitMiB: numbers[5],
 		},

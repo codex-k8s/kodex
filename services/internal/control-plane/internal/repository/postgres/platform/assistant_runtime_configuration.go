@@ -5,6 +5,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"sort"
 
@@ -17,15 +18,59 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-var assistantRuntimeEditable = []string{"agentRef", "runtimeProfileRef", "model", "reasoningEffort", "providerPolicyMode", "providerAccounts"}
+var assistantRuntimeEditable = []string{"agentRef", "runtimeProfileRef", "model", "reasoningEffort", "webSearchMode", "providerPolicyMode", "providerAccounts"}
 var assistantRuntimeOwnerFields = []string{"agentRef", "assistantScope", "scopeKind", "organizationRef", "projectRef", "assistantProfileRef"}
 
-func assistantReasoningOverlay(current, effort string) (string, error) {
+// Маркер относится только к полностью проверенной подготовке; обычный conflict
+// и ошибки готовности не означают отсутствие изменений.
+var errAssistantRuntimeConfigurationNoChange = errors.Join(errs.ErrConflict, errors.New("assistant runtime configuration is unchanged"))
+
+func assistantRuntimeConfigurationUnchanged(before, after map[string]any, persisted []entity.ProviderAccountCandidate) bool {
+	if assistantString(before, "webSearchMode") != assistantString(after, "webSearchMode") {
+		return false
+	}
+	for _, field := range []string{"runtimeProfileRef", "model", "reasoningEffort", "providerPolicyMode"} {
+		previous, previousOK := before[field].(string)
+		prepared, preparedOK := after[field].(string)
+		if !previousOK || !preparedOK || previous != prepared {
+			return false
+		}
+	}
+	if !assistantJSONEqual(before["runtimeProfilePin"], after["runtimeProfilePin"]) ||
+		!assistantJSONEqual(before["providerAccounts"], after["providerAccounts"]) {
+		return false
+	}
+	prepared, ok := after["providerCatalogPins"].([]entity.ProviderAccountCandidate)
+	if !ok || len(persisted) == 0 || len(persisted) != len(prepared) {
+		return false
+	}
+	// Эти два поля publication намеренно не сохраняет. Catalog revision/digest
+	// и provider identity остаются обязательной частью точного сравнения.
+	canonical := func(entries []entity.ProviderAccountCandidate) []entity.ProviderAccountCandidate {
+		result := append([]entity.ProviderAccountCandidate(nil), entries...)
+		for index := range result {
+			result[index].DefaultReasoningEffort = ""
+			result[index].ModelCapabilityDigest = ""
+		}
+		sort.Slice(result, func(i, j int) bool { return result[i].AccountRef < result[j].AccountRef })
+		return result
+	}
+	return assistantJSONEqual(canonical(persisted), canonical(prepared))
+}
+
+// Пустой mode означает отсутствие изменения, а не произвольный SDK режим.
+func assistantRuntimeOverlay(current, effort, mode string) (string, error) {
 	overlay, err := runtimecontract.ParseConfigOverlay(current)
 	if err != nil {
 		return "", errs.ErrConflict
 	}
 	overlay.ModelReasoningEffort = effort
+	if mode != "" {
+		if !runtimecontract.ValidWebSearchMode(mode) {
+			return "", errs.ErrInvalid
+		}
+		overlay.WebSearchMode = mode
+	}
 	var encoded bytes.Buffer
 	if err := toml.NewEncoder(&encoded).Encode(overlay); err != nil {
 		return "", errs.ErrInvalid
@@ -111,6 +156,9 @@ func assistantRuntimeBefore(target assistantConfigurationTarget, current scope, 
 	}
 	if parsed, err := runtimecontract.ParseConfigOverlay(view.PublishedOverlay.Content); err == nil {
 		before["reasoningEffort"] = parsed.ModelReasoningEffort
+		if parsed.WebSearchMode != "" {
+			before["webSearchMode"] = parsed.WebSearchMode
+		}
 	}
 	return before
 }
@@ -162,7 +210,17 @@ func (repository *Repository) hydrateAssistantRuntimeConfiguration(ctx context.C
 	if !ok {
 		return operation, errs.ErrInvalid
 	}
-	overlay, err := assistantReasoningOverlay(view.PublishedOverlay.Content, effort)
+	mode := ""
+	if raw, present := operation.Parameters["webSearchMode"]; present {
+		var valid bool
+		mode, valid = raw.(string)
+		if !valid || !runtimecontract.ValidWebSearchMode(mode) {
+			return operation, errs.ErrInvalid
+		}
+	} else if parsed, parseErr := runtimecontract.ParseConfigOverlay(view.PublishedOverlay.Content); parseErr == nil {
+		mode = parsed.WebSearchMode
+	}
+	overlay, err := assistantRuntimeOverlay(view.PublishedOverlay.Content, effort, mode)
 	if err != nil {
 		return operation, err
 	}
@@ -171,6 +229,9 @@ func (repository *Repository) hydrateAssistantRuntimeConfiguration(ctx context.C
 		return operation, err
 	}
 	after := assistantRuntimeOwner(target, current, agentRef)
+	if mode != "" {
+		after["webSearchMode"] = mode
+	}
 	for _, field := range []string{"runtimeProfileRef", "model", "reasoningEffort", "providerPolicyMode"} {
 		after[field] = operation.Parameters[field]
 	}
@@ -185,19 +246,19 @@ func (repository *Repository) hydrateAssistantRuntimeConfiguration(ctx context.C
 		return operation, err
 	}
 	before := assistantRuntimeBefore(target, current, view, currentPin)
-	if assistantString(before, "runtimeProfileRef") == assistantString(after, "runtimeProfileRef") && assistantString(before, "model") == assistantString(after, "model") && assistantString(before, "reasoningEffort") == effort && assistantString(before, "providerPolicyMode") == assistantString(after, "providerPolicyMode") && assistantJSONEqual(before["providerAccounts"], after["providerAccounts"]) {
-		return operation, errs.ErrConflict
-	}
 	version := view.AgentVersion
 	operation.Action = "UPDATE"
 	operation.Target = entity.AssistantPlanTarget{Kind: "AGENT", Ref: agentRef, Name: target.name, Version: &version}
 	operation.Before, operation.Parameters, operation.After = before, after, cloneAssistantFields(after)
 	operation.ExpectedVersion, operation.Selected, operation.Input = &version, true, nil
+	if assistantRuntimeConfigurationUnchanged(before, after, view.Configuration.ProviderPolicy.AccountCandidates) {
+		return operation, errAssistantRuntimeConfigurationNoChange
+	}
 	return operation, nil
 }
 
 func assistantRuntimeConfigurationCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
-	if !onlyAssistantFields(operation.Input, "agentRef", "assistantScope", "scopeKind", "organizationRef", "projectRef", "assistantProfileRef", "runtimeProfileRef", "model", "reasoningEffort", "providerPolicyMode", "providerAccounts", "providerCatalogPins", "runtimeProfilePin", "expectedVersion") {
+	if !onlyAssistantFields(operation.Input, "agentRef", "assistantScope", "scopeKind", "organizationRef", "projectRef", "assistantProfileRef", "runtimeProfileRef", "model", "reasoningEffort", "webSearchMode", "providerPolicyMode", "providerAccounts", "providerCatalogPins", "runtimeProfilePin", "expectedVersion") {
 		return command.Command{}, errs.ErrInvalid
 	}
 	minimal, err := assistantRuntimeAccounts(operation.Input)
@@ -225,8 +286,17 @@ func assistantRuntimeConfigurationCommand(operation entity.AssistantPlanOperatio
 	if !ok {
 		return command.Command{}, errs.ErrInvalid
 	}
+	mode := ""
+	if raw, present := operation.Input["webSearchMode"]; present {
+		var valid bool
+		mode, valid = raw.(string)
+		if !valid || !runtimecontract.ValidWebSearchMode(mode) {
+			return command.Command{}, errs.ErrInvalid
+		}
+	}
 	payload := command.AssistantRuntimeConfigurationInput{Configuration: command.AgentRuntimeConfigurationInput{AgentRef: assistantString(operation.Input, "agentRef"), RuntimeProfileRef: assistantString(operation.Input, "runtimeProfileRef"), Model: assistantString(operation.Input, "model"), ProviderPolicyMode: assistantString(operation.Input, "providerPolicyMode"), ProviderAccounts: pins}, ReasoningEffort: effort,
-		ScopeKind: assistantString(operation.Input, "scopeKind"), OrganizationRef: assistantString(operation.Input, "organizationRef"), ProjectRef: assistantString(operation.Input, "projectRef"), AssistantProfileRef: assistantString(operation.Input, "assistantProfileRef")}
+		WebSearchMode: mode,
+		ScopeKind:     assistantString(operation.Input, "scopeKind"), OrganizationRef: assistantString(operation.Input, "organizationRef"), ProjectRef: assistantString(operation.Input, "projectRef"), AssistantProfileRef: assistantString(operation.Input, "assistantProfileRef")}
 	profileRaw, err := json.Marshal(operation.Input["runtimeProfilePin"])
 	if err != nil || decodeStrict(profileRaw, &payload.RuntimeProfilePin) != nil || payload.RuntimeProfilePin.Ref != payload.Configuration.RuntimeProfileRef || payload.RuntimeProfilePin.Version < 1 || payload.RuntimeProfilePin.RuntimeRevision == "" {
 		return command.Command{}, errs.ErrInvalid
@@ -278,7 +348,7 @@ func (repository *Repository) assistantRuntimeConfigurationSnapshotMatches(ctx c
 	if view.DraftOverlay != nil || selectedPin != payload.RuntimeProfilePin || view.AgentVersion != *planned.Mutation.ExpectedVersion || !assistantJSONEqual(assistantRuntimeBefore(target, current, view, currentPin), operation.Before) || !reflect.DeepEqual(operation.Parameters, operation.After) {
 		return false, nil
 	}
-	overlay, err := assistantReasoningOverlay(view.PublishedOverlay.Content, payload.ReasoningEffort)
+	overlay, err := assistantRuntimeOverlay(view.PublishedOverlay.Content, payload.ReasoningEffort, payload.WebSearchMode)
 	if err != nil {
 		return false, err
 	}
@@ -311,7 +381,7 @@ func (repository *Repository) publishAssistantRuntimeConfiguration(ctx context.C
 	if view.DraftOverlay != nil || selectedPin != payload.RuntimeProfilePin {
 		return commandOutcome{}, errs.ErrConflict
 	}
-	overlay, err := assistantReasoningOverlay(view.PublishedOverlay.Content, payload.ReasoningEffort)
+	overlay, err := assistantRuntimeOverlay(view.PublishedOverlay.Content, payload.ReasoningEffort, payload.WebSearchMode)
 	if err != nil {
 		return commandOutcome{}, err
 	}

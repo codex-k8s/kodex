@@ -266,6 +266,9 @@ func castRuntimeEnvironmentPolicy(value runtimecontract.RuntimeEnvironmentPolicy
 		}, ResourcesDigest: value.ResourcesDigest, VolumesDigest: value.VolumesDigest,
 		NetworkDigest: value.NetworkDigest, RbacDigest: value.RBACDigest,
 	}
+	if limits := value.Resources.WorkspaceLimits; limits != nil {
+		result.Resources.WorkspaceLimits = &controlplanev1.RuntimeWorkspaceLimits{MaxBytes: limits.MaxBytes, MaxFiles: limits.MaxFiles}
+	}
 	for _, volume := range value.Volumes {
 		result.Volumes = append(result.Volumes, &controlplanev1.RuntimeVolume{
 			Name: volume.Name, Kind: castRuntimeVolumeKind(volume.Kind), SizeMib: volume.SizeMiB, MountPath: volume.MountPath,
@@ -361,6 +364,9 @@ func castIntegrationCapability(value entity.IntegrationCapability) *controlplane
 		Risk: value.Risk, TypedRisk: integrationRisk(value.Risk), ApprovalRequired: value.ApprovalPolicy != "NONE",
 		ApprovalPolicy: integrationApprovalPolicy(value.ApprovalPolicy), ResourceKind: integrationResourceKind(value.ResourceKind),
 		InputSchema: value.InputSchema, InputSchemaSha256: value.InputSchemaSHA256,
+	}
+	for _, policy := range value.AllowedApprovalPolicies {
+		result.AllowedApprovalPolicies = append(result.AllowedApprovalPolicies, integrationApprovalPolicy(policy))
 	}
 	for _, field := range value.InputFields {
 		result.InputFields = append(result.InputFields, castIntegrationField(field))
@@ -491,6 +497,7 @@ func castRun(value entity.Run) *controlplanev1.Run {
 	for _, incident := range value.Incidents {
 		result.Incidents = append(result.Incidents, castIncident(incident))
 	}
+	result.SessionReadiness = castRunSessionReadiness(value.SessionReadiness)
 	if pin := value.AssistantPin; pin != nil {
 		result.AssistantPin = &controlplanev1.AssistantRunPin{
 			Scope: controlplanev1.AssistantScope(controlplanev1.AssistantScope_value["ASSISTANT_SCOPE_"+pin.Scope]), OrganizationRef: pin.OrganizationRef,
@@ -514,8 +521,23 @@ func castRunDelta(value *entity.RunDelta) *controlplanev1.RunDelta {
 }
 func castEvent(value entity.RunEvent) *controlplanev1.RunEvent {
 	event := &controlplanev1.RunEvent{Ref: value.Ref, RunRef: value.RunRef, Sequence: value.Sequence, Type: eventType(value.Type), NodeRef: value.NodeRef, EdgeRef: value.EdgeRef, GateRef: value.GateRef, ArtifactRef: value.ArtifactRef, Summary: value.Summary, Progress: value.Progress, RunState: runState(value.RunState), NodeState: nodeState(value.NodeState), OccurredAt: timestamp(value.OccurredAt), GraphRevision: value.GraphRevision, Run: castRunDelta(value.Delta.Run), Actor: &controlplanev1.RunEventActor{Kind: controlplanev1.RunEventActorKind(controlplanev1.RunEventActorKind_value["RUN_EVENT_ACTOR_KIND_"+value.Actor.Kind]), Ref: value.Actor.Ref, Name: value.Actor.Name}, MessageKind: controlplanev1.RunEventMessageKind(controlplanev1.RunEventMessageKind_value["RUN_EVENT_MESSAGE_KIND_"+value.MessageKind])}
+	if value.Delta.IntegrationInvocationRef != "" {
+		event.IntegrationInvocationRef = &value.Delta.IntegrationInvocationRef
+	}
 	if value.ToolCall != nil {
+		// Нулевая revision допустима только при чтении старого terminal receipt;
+		// новые команды проходят строгую owner lifecycle validation.
 		event.ToolCall = &controlplanev1.RunToolCall{Ref: value.ToolCall.Ref, Tool: value.ToolCall.Tool, SafeParameters: structure(value.ToolCall.SafeParameters), CapabilityRef: value.ToolCall.CapabilityRef, GrantRef: value.ToolCall.GrantRef, State: controlplanev1.RunToolCallState(controlplanev1.RunToolCallState_value["RUN_TOOL_CALL_STATE_"+value.ToolCall.State]), DurationMs: value.ToolCall.DurationMS, SafeResult: value.ToolCall.SafeResult, AuditRef: value.ToolCall.AuditRef}
+	}
+	if value.ToolCall != nil {
+		event.ToolCall.Revision = value.ToolCall.Revision
+	}
+	if execution := value.Delta.Execution; execution != nil {
+		event.Execution = &controlplanev1.RunEventExecution{RunRef: execution.RunRef, NodeRef: execution.NodeRef, SessionRef: execution.SessionRef,
+			TurnRef: execution.TurnRef, TurnNumber: execution.TurnNumber, Attempt: execution.Attempt}
+	}
+	if message := value.Delta.Message; message != nil {
+		event.Message = &controlplanev1.RunMessage{Ref: message.Ref, Phase: controlplanev1.RunMessagePhase(controlplanev1.RunMessagePhase_value["RUN_MESSAGE_PHASE_"+message.Phase]), Revision: message.Revision, Text: message.Text, Source: castMessageSource(message.Source)}
 	}
 	if value.Delta.Node != nil {
 		event.Node = castNode(*value.Delta.Node)
@@ -550,6 +572,8 @@ func castGate(value entity.OwnerGate) *controlplanev1.OwnerGate {
 		gate.DecidedBy = &controlplanev1.UserSummary{DisplayName: value.ResolvedByName}
 	}
 	gate.SourceAttachmentSetRef = value.SourceAttachmentSetRef
+	gate.ScopeKind = runtimeSecretScopeKind(value.ScopeKind)
+	gate.OrganizationRef = value.OrganizationRef
 	for _, consequence := range value.DecisionConsequences {
 		gate.DecisionConsequences = append(gate.DecisionConsequences, &controlplanev1.OwnerGateDecisionConsequence{Decision: gateDecision(consequence.Decision), SafeSummary: consequence.SafeSummary, ExecutesExternalEffect: consequence.ExecutesExternalEffect, TerminalForRun: consequence.TerminalForRun})
 	}
@@ -614,7 +638,7 @@ func castDefinition(value entity.IntegrationDefinition) *controlplanev1.Integrat
 }
 func castGrant(value entity.IntegrationGrant) *controlplanev1.IntegrationGrant {
 	grant := &controlplanev1.IntegrationGrant{
-		Ref: value.Ref, Version: value.Version, CapabilityKey: value.CapabilityKey, TargetName: value.TargetName, Enabled: value.Enabled,
+		Ref: value.Ref, Version: value.Version, ConnectionVersion: value.ConnectionVersion, CapabilityKey: value.CapabilityKey, TargetName: value.TargetName, Enabled: value.Enabled,
 		Risk: value.Risk, TypedRisk: integrationRisk(value.Risk), ApprovalPolicy: integrationApprovalPolicy(value.ApprovalPolicy),
 		ResourceScope:      &controlplanev1.IntegrationResourceScope{Kind: integrationResourceKind(value.ResourceKind), Values: value.ResourceScope, Digest: value.ResourceScopeDigest},
 		ApprovalScopePaths: append([]string(nil), value.ApprovalScopePaths...),
@@ -688,7 +712,7 @@ func castPlan(value *entity.AssistantPlan) *controlplanev1.AssistantPlan {
 func assistantPlanOperationTitle(operation entity.AssistantPlanOperation) string {
 	field := ""
 	switch operation.Type {
-	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_INTEGRATION_CONNECTION", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE":
+	case "CREATE_PROJECT", "CREATE_AGENT", "CREATE_WORKFLOW", "CREATE_SCHEDULE", "CREATE_INTEGRATION_CONNECTION", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION":
 		field = "name"
 	case "CREATE_PROJECT_FILE":
 		field = "fileName"
@@ -736,10 +760,10 @@ func castConversation(value entity.AssistantConversation) *controlplanev1.Assist
 	}
 	nextPlan := 0
 	appendPlan := func(plan *entity.AssistantPlan, sequence int64) {
-		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: plan.Ref, Sequence: sequence, Role: "ASSISTANT", Content: plan.Summary, State: "COMPLETED", Plan: castPlan(plan), CreatedAt: timestamp(plan.CreatedAt)})
+		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: plan.Ref, Sequence: sequence, Role: "ASSISTANT", Content: plan.Summary, State: "COMPLETED", Plan: castPlan(plan), CreatedAt: timestamp(plan.CreatedAt), Source: castMessageSource(entity.MessageSource{Origin: "ORDINARY"})})
 	}
 	for _, turn := range value.Turns {
-		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: turn.Ref, Sequence: turn.Sequence, Role: publicAssistantTurnRole(turn.Actor), Content: turn.Content, State: turn.State, AttachmentSetRef: turn.AttachmentSetRef, RunRef: turn.RunRef, RunVersion: turn.RunVersion, CreatedAt: timestamp(turn.CreatedAt)})
+		result.Turns = append(result.Turns, &controlplanev1.AssistantTurn{Ref: turn.Ref, Sequence: turn.Sequence, Role: publicAssistantTurnRole(turn.Actor), Content: turn.Content, State: turn.State, AttachmentSetRef: turn.AttachmentSetRef, RunRef: turn.RunRef, RunVersion: turn.RunVersion, CreatedAt: timestamp(turn.CreatedAt), Source: castMessageSource(turn.Source)})
 		if turn.Sequence >= nextSequence {
 			nextSequence = turn.Sequence + 1
 		}
@@ -760,6 +784,10 @@ func castConversation(value entity.AssistantConversation) *controlplanev1.Assist
 		nextPlan++
 	}
 	return result
+}
+
+func castMessageSource(source entity.MessageSource) *controlplanev1.MessageSource {
+	return &controlplanev1.MessageSource{Origin: controlplanev1.MessageOrigin(controlplanev1.MessageOrigin_value["MESSAGE_ORIGIN_"+source.Origin])}
 }
 
 func publicAssistantTurnRole(role string) string {

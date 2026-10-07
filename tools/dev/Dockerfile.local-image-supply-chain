@@ -17,6 +17,12 @@ RUN CGO_ENABLED=0 GOOS=linux go -C services/jobs/role-image-builder build \
       -o /out/image-admission-bridge ./cmd/image-admission-bridge \
     && CGO_ENABLED=0 GOOS=linux go -C services/jobs/role-image-builder build \
       -trimpath -buildvcs=false -ldflags="-s -w" \
+      -o /out/image-tool-inventory-validator ./cmd/image-tool-inventory-validator \
+    && CGO_ENABLED=0 GOOS=linux go -C services/jobs/role-image-builder build \
+      -trimpath -buildvcs=false -ldflags="-s -w" \
+      -o /out/image-vulnerability-report-validator ./cmd/image-vulnerability-report-validator \
+    && CGO_ENABLED=0 GOOS=linux go -C services/jobs/role-image-builder build \
+      -trimpath -buildvcs=false -ldflags="-s -w" \
       -o /out/image-admission-controller ./cmd/image-admission-controller \
     && CGO_ENABLED=0 GOOS=linux go -C services/jobs/role-image-builder build \
       -trimpath -buildvcs=false -ldflags="-s -w" \
@@ -52,7 +58,10 @@ RUN install -d -m 0755 "$GRYPE_DB_CACHE_DIR" \
     && grype db status >/dev/null \
     && rm -f /tmp/grype-db.tar.zst \
     && chown -R 10001:10001 /var/lib/grype
-RUN for tool in base64 bash cmp cosign curl grype jq openssl pgrep regctl sha256sum syft wc; do \
+# Изменение валидаторов не должно повторять импорт неизменяемой базы Grype.
+COPY --from=build --chmod=0555 /out/image-tool-inventory-validator /usr/local/bin/image-tool-inventory-validator
+COPY --from=build --chmod=0555 /out/image-vulnerability-report-validator /usr/local/bin/image-vulnerability-report-validator
+RUN for tool in base64 bash cmp cosign curl grype image-tool-inventory-validator image-vulnerability-report-validator jq openssl pgrep regctl sha256sum syft tr wc; do \
       command -v "$tool" >/dev/null || exit 1; \
     done
 ARG SOURCE_SHA=unknown

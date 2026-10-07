@@ -59,7 +59,9 @@ class Verifier(unittest.TestCase):
         self.git('add', '.')
         self.git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'fixture')
         self.revision = self.git('rev-parse', 'HEAD').strip()
-        self.input_digest = m.source_input(str(self.source), self.revision)
+        self.profile = 'local'
+        self.source_digest = m.source_input(str(self.source), self.revision)
+        self.input_digest = m.profile_input(self.source_digest, self.profile)
         self.archive = self.root / f'agent-runner-{self.input_digest}.oci.tar'
         self.output = self.root / 'provenance.json'
 
@@ -82,7 +84,8 @@ class Verifier(unittest.TestCase):
             compressed = gzip.compress(plain, mtime=0) if gzip_layers else plain
             layer_descriptors.append(blob(compressed, m.OCI + 'layer.v1.tar' + ('+gzip' if gzip_layers else '')))
             diffids.append('sha256:' + m.sha(plain))
-        config = {'architecture': 'amd64', 'os': 'linux', 'rootfs': {'type': 'layers', 'diff_ids': diffids}}
+        config = {'architecture': 'amd64', 'os': 'linux', 'rootfs': {'type': 'layers', 'diff_ids': diffids},
+                  'config': {'Labels': {m.PROFILE_LABEL: self.profile}}}
         manifest = {'schemaVersion': 2, 'mediaType': m.OCI + 'manifest.v1+json', 'config': None, 'layers': layer_descriptors}
         if change:
             change('config', config)
@@ -103,7 +106,7 @@ class Verifier(unittest.TestCase):
         return self.archive
 
     def cli(self, phase='verify', extra=None, source=None):
-        args = [sys.executable, '-B', str(CLI), phase, '--source-root', str(source or self.source), '--revision', self.revision]
+        args = [sys.executable, '-B', str(CLI), phase, '--source-root', str(source or self.source), '--revision', self.revision, '--image-profile', self.profile]
         if phase != 'input':
             args += ['--archive', str(self.archive), '--expected-manifest', self.expected,
                      '--expected-input-digest', self.input_digest, '--repository', 'registry.fixture.invalid/kodex/agent-runner', '--output', str(self.output)]
@@ -124,7 +127,9 @@ class Verifier(unittest.TestCase):
         value = json.loads(self.output.read_bytes())
         self.assertEqual(value['binarySHA256'], m.sha(BINARY))
         self.assertEqual(value['sourceRevision'], self.revision)
-        self.assertEqual(value['sourceInputSHA256'], self.input_digest)
+        self.assertEqual(value['sourceInputSHA256'], self.source_digest)
+        self.assertEqual(value['buildInputSHA256'], self.input_digest)
+        self.assertEqual(value['imageProfile'], self.profile)
         self.assertEqual(value['archiveSHA256'], m.sha(self.archive.read_bytes()))
         self.assertEqual(self.output.stat().st_mode & 0o777, 0o600)
         previous = self.output.read_bytes()
@@ -153,7 +158,37 @@ class Verifier(unittest.TestCase):
         result = self.cli('input')
         self.assertEqual(result.returncode, 0, result.stderr)
         original = subprocess.check_output(['tar', '--sort=name', "--mtime=UTC 1970-01-01", '--owner=0', '--group=0', '--numeric-owner', '-C', str(self.source), '-cf', '-', *m.INPUTS])
-        self.assertEqual(result.stdout.strip(), m.sha(original))
+        self.assertEqual(result.stdout.strip(), m.profile_input(m.sha(original), self.profile))
+
+    def test_full_profile_has_distinct_cache_and_provenance_identity(self):
+        local_digest = self.input_digest
+        self.profile = 'full'
+        self.input_digest = m.profile_input(self.source_digest, self.profile)
+        self.assertNotEqual(local_digest, self.input_digest)
+        self.archive = self.root / f'agent-runner-{self.input_digest}.oci.tar'
+        self.fixture()
+        result = self.cli()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        proof = json.loads(self.output.read_bytes())
+        self.assertEqual(proof['imageProfile'], 'full')
+        self.assertEqual(proof['buildInputSHA256'], self.input_digest)
+        self.assertEqual(self.cli('check').returncode, 0)
+
+    def test_missing_or_mismatched_profile_label_is_rejected(self):
+        for labels in [{}, {m.PROFILE_LABEL: 'full'}, {m.PROFILE_LABEL: None}, {m.PROFILE_LABEL: 'LOCAL'}]:
+            self.fixture(change=lambda at, value: value['config'].update(Labels=labels) if at == 'config' else None)
+            self.reject('IMAGE_PROFILE_BINDING_MISMATCH')
+
+    def test_cli_profile_rejects_unknown_and_duplicate_arguments(self):
+        for extra in [['--image-profile', 'unknown'], ['--image-profile', 'full']]:
+            self.assertNotEqual(self.cli('input', extra=extra).returncode, 0)
+
+    def test_profile_identity_rejects_other_stage_and_digest(self):
+        for profile in ['', 'FULL', 'future', None]:
+            with self.assertRaises(m.Failure):
+                m.profile_input(self.source_digest, profile)
+        with self.assertRaises(m.Failure):
+            m.profile_input('not-a-digest', 'full')
 
     def test_uncompressed_layer(self):
         self.fixture(gzip_layers=False)
@@ -277,6 +312,42 @@ class Verifier(unittest.TestCase):
             self.reject('TAR_PATH_INVALID')
         self.fixture([[file(), file('./' + TARGET)]])
         self.reject('TAR_DUPLICATE_PATH')
+
+    def test_full_profile_preserves_literal_systemd_escaped_filename(self):
+        self.profile = 'full'
+        self.input_digest = m.profile_input(self.source_digest, self.profile)
+        self.archive = self.root / f'agent-runner-{self.input_digest}.oci.tar'
+        escaped = r'usr/lib/systemd/system/system-systemd\x2dcryptsetup.slice'
+        self.fixture([[file(), file(escaped, b'public unit fixture')]])
+        result = self.cli()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(m.member_path(escaped), escaped)
+        self.assertEqual(json.loads(self.output.read_bytes())['binarySHA256'], m.sha(BINARY))
+        self.assertEqual(self.cli('check').returncode, 0)
+
+    def test_literal_escape_does_not_allow_traversal_absolute_or_windows_paths(self):
+        for name in (r'usr\local\file', r'usr\..\file', r'usr/lib/\x2zescape',
+                     r'usr/lib/\x2', r'usr/lib/\xGG', r'usr/lib/\X2dfile',
+                     r'/usr/lib/\x2dfile', r'usr/../\x2dfile', r'usr//lib/\x2dfile'):
+            with self.subTest(name=name):
+                self.fixture([[file(), file(name)]])
+                self.reject('TAR_PATH_INVALID')
+
+    def test_literal_encoded_parent_never_decodes_or_selects_runner(self):
+        escaped = r'usr/\x2e\x2e/file'
+        self.assertEqual(m.member_path(escaped), escaped)
+        tree = {}
+        m.overlay_layer(tree, io.BytesIO(tar_bytes([file(escaped)])))
+        self.assertIn(escaped, tree)
+        self.assertNotIn('file', tree)
+        self.fixture([[file(r'\x2e\x2e/' + TARGET)]])
+        self.reject('RUNNER_EXECUTABLE_REQUIRED')
+
+    def test_literal_escapes_do_not_allow_runner_or_parent_links(self):
+        for kind in (tarfile.SYMTYPE, tarfile.LNKTYPE):
+            for path in (TARGET, 'usr/local/bin'):
+                self.fixture([[(path, rb'\x2e\x2e/foreign', kind, 0o777)]])
+                self.reject()
 
     def test_outer_duplicates_and_link(self):
         self.fixture(outer=lambda entries: entries + [entries[0]])

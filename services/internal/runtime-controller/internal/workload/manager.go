@@ -699,8 +699,13 @@ func runtimeEnvironmentPolicyFromProto(value *controlplanev1.RuntimeEnvironmentP
 		return runtimecontract.RuntimeEnvironmentPolicy{}, errors.New("runtime environment policy is incomplete")
 	}
 	resources := value.GetResources()
+	var workspaceLimits *runtimecontract.RuntimeWorkspaceLimits
+	if limits := resources.GetWorkspaceLimits(); limits != nil {
+		workspaceLimits = &runtimecontract.RuntimeWorkspaceLimits{MaxBytes: limits.GetMaxBytes(), MaxFiles: limits.GetMaxFiles()}
+	}
 	policy := runtimecontract.RuntimeEnvironmentPolicy{
 		Resources: runtimecontract.RuntimeResourcePolicy{
+			WorkspaceLimits: workspaceLimits,
 			CPURequestMilli: resources.GetCpuRequestMilli(), CPULimitMilli: resources.GetCpuLimitMilli(),
 			MemoryRequestMiB: resources.GetMemoryRequestMib(), MemoryLimitMiB: resources.GetMemoryLimitMib(),
 			EphemeralStorageRequestMiB: resources.GetEphemeralStorageRequestMib(),
@@ -854,11 +859,29 @@ func (manager *Manager) addCatalog(input *runtimecontract.RunnerInput, revision 
 			continue
 		}
 		input.IntegrationGrants = append(input.IntegrationGrants, runtimecontract.RunnerIntegrationGrant{
-			Ref: grant.GetRef(), ConnectionRef: grant.GetConnectionRef(), DefinitionKey: grant.GetDefinitionKey(),
+			Ref: grant.GetRef(), GrantVersion: grant.GetVersion(), ConnectionRef: grant.GetConnectionRef(), ConnectionVersion: grant.GetConnectionVersion(),
+			ApprovalPolicy: strings.TrimPrefix(grant.GetApprovalPolicy().String(), "INTEGRATION_APPROVAL_POLICY_"), DefinitionKey: grant.GetDefinitionKey(),
 			DefinitionVersion: grant.GetDefinitionVersion(), DefinitionDigest: grant.GetDefinitionDigest(),
 			ConnectionName: grant.GetConnectionName(), CapabilityKey: grant.GetCapabilityKey(),
 			CapabilityName: grant.GetCapabilityName(), CapabilityDescription: grant.GetCapabilityDescription(),
 			Operation: grant.GetOperation(), InputSchema: grant.GetInputSchema(), InputSchemaSHA256: grant.GetInputSchemaSha256(), Risk: grant.GetRisk(),
+		})
+	}
+	for _, profile := range revision.GetManagedMcpProfiles() {
+		health := profile.GetHealth()
+		checkedAt := time.Time{}
+		if health.GetCheckedAt() != nil && health.GetCheckedAt().CheckValid() == nil {
+			checkedAt = health.GetCheckedAt().AsTime()
+		}
+		input.ManagedMCPProfiles = append(input.ManagedMCPProfiles, runtimecontract.ManagedMCPProfile{
+			Provider: profile.GetProvider(), Version: int64(profile.GetVersion()), Namespace: profile.GetNamespace(), Required: profile.GetRequired(),
+			ScopeKind: strings.TrimPrefix(profile.GetScopeKind().String(), "MANAGED_MCP_SCOPE_KIND_"), ScopeRef: profile.GetScopeRef(),
+			ResolveGrantRef: profile.GetResolveGrantRef(), QueryGrantRef: profile.GetQueryGrantRef(), Digest: profile.GetDigest(),
+			Health: runtimecontract.ManagedMCPHealthProof{TestRef: health.GetTestRef(), Generation: health.GetGeneration(), ConnectionRef: health.GetConnectionRef(),
+				ConnectionVersion: health.GetConnectionVersion(), ConfigurationSHA256: health.GetConfigurationSha256(),
+				CredentialRevisionRef: health.GetCredentialRevisionRef(), CredentialRevision: health.GetCredentialRevision(), CredentialSHA256: health.GetCredentialSha256(),
+				DefinitionKey: health.GetDefinitionKey(), DefinitionVersion: health.GetDefinitionVersion(), DefinitionDigest: health.GetDefinitionDigest(),
+				CheckedAt: checkedAt, Probe: health.GetProbe()},
 		})
 	}
 	input.AttachmentSetRef = revision.GetAttachmentSetRef()
@@ -903,6 +926,17 @@ func runnerArtifactSource(source controlplanev1.ArtifactSource) string {
 }
 
 func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.RunnerInput, providerBinding ProviderSecretBinding, credentials CredentialProjection) error {
+	return manager.EnsureTurnGuarded(ctx, input, providerBinding, credentials, func(publish func(context.Context) error) error {
+		return publish(ctx)
+	})
+}
+
+// Guard разрешает публикацию только после свежего exact lease renew. Остальные
+// шаги материализации не блокируют периодическое продление ожидающего batch.
+func (manager *Manager) EnsureTurnGuarded(ctx context.Context, input runtimecontract.RunnerInput, providerBinding ProviderSecretBinding, credentials CredentialProjection, guard func(func(context.Context) error) error) error {
+	if guard == nil {
+		return errors.New("runtime publication guard is invalid")
+	}
 	if input.Mode != runtimecontract.RunnerModeTurn || input.Validate() != nil || manager.validateImage(input) != nil {
 		return errors.New("runtime turn input is invalid")
 	}
@@ -934,18 +968,23 @@ func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.Ru
 	if pod == nil {
 		return errors.New("materialize runtime egress grant")
 	}
-	_, err = manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Create(ctx, pod, metav1.CreateOptions{})
-	if apierrors.IsAlreadyExists(err) {
-		existing, getErr := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, podName, metav1.GetOptions{})
-		if getErr != nil || !runtimePodMatches(existing, pod) {
-			return errors.New("existing runtime turn pod conflicts with immutable revision")
+	return guard(func(publishContext context.Context) error {
+		if err := publishContext.Err(); err != nil {
+			return err
+		}
+		_, err = manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Create(publishContext, pod, metav1.CreateOptions{})
+		if apierrors.IsAlreadyExists(err) {
+			existing, getErr := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(publishContext, podName, metav1.GetOptions{})
+			if getErr != nil || !runtimePodMatches(existing, pod) {
+				return errors.New("existing runtime turn pod conflicts with immutable revision")
+			}
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("create runtime turn pod: %w", err)
 		}
 		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("create runtime turn pod: %w", err)
-	}
-	return nil
+	})
 }
 
 func (manager *Manager) ensureExecutionPolicy(ctx context.Context, input runtimecontract.RunnerInput, podName string) error {
@@ -1740,6 +1779,10 @@ func runtimeTicketMatches(existing *corev1.Secret, podName, mode string, input r
 }
 
 func (manager *Manager) ensureSessionPVC(ctx context.Context, input runtimecontract.RunnerInput) error {
+	volumeLabels, volumeAnnotations, err := runtimecontract.SessionVolumeMetadata(input.OrganizationRef, input.ProjectRef, input.SessionRef)
+	if err != nil {
+		return err
+	}
 	name, err := runtimecontract.SessionPVCName(input.SessionRef)
 	if err != nil {
 		return err
@@ -1749,8 +1792,8 @@ func (manager *Manager) ensureSessionPVC(ctx context.Context, input runtimecontr
 		storageClassName = &manager.config.StorageClass
 	}
 	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: manager.config.RuntimeNamespace,
-		Labels:      map[string]string{managedLabel: "true", sessionHashAnnotation: shortHash(input.SessionRef)},
-		Annotations: map[string]string{organizationHashAnnotation: shortHash(input.OrganizationRef), projectHashAnnotation: shortHash(input.ProjectRef)}},
+		Labels:      volumeLabels,
+		Annotations: volumeAnnotations},
 		Spec: corev1.PersistentVolumeClaimSpec{AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}, StorageClassName: storageClassName,
 			Resources: corev1.VolumeResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceStorage: manager.pvcRequest}}}}
 	existing, err := manager.client.CoreV1().PersistentVolumeClaims(manager.config.RuntimeNamespace).Get(ctx, name, metav1.GetOptions{})

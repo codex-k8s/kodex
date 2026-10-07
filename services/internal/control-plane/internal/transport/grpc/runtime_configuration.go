@@ -220,6 +220,10 @@ func domainRuntimeEnvironmentPolicy(input *controlplanev1.RuntimeEnvironmentPoli
 		return runtimecontract.RuntimeEnvironmentPolicy{}, errs.ErrInvalid
 	}
 	resources := input.GetResources()
+	var workspaceLimits *runtimecontract.RuntimeWorkspaceLimits
+	if limits := resources.GetWorkspaceLimits(); limits != nil {
+		workspaceLimits = &runtimecontract.RuntimeWorkspaceLimits{MaxBytes: limits.GetMaxBytes(), MaxFiles: limits.GetMaxFiles()}
+	}
 	volumes := make([]runtimecontract.RuntimeVolume, 0, len(input.GetVolumes()))
 	for _, volume := range input.GetVolumes() {
 		volumes = append(volumes, runtimecontract.RuntimeVolume{Name: volume.GetName(), Kind: domainRuntimeVolumeKind(volume.GetKind()), SizeMiB: volume.GetSizeMib()})
@@ -236,6 +240,7 @@ func domainRuntimeEnvironmentPolicy(input *controlplanev1.RuntimeEnvironmentPoli
 	}
 	return runtimecontract.RuntimeEnvironmentPolicyFromInput(runtimecontract.RuntimeEnvironmentPolicyInput{
 		Resources: runtimecontract.RuntimeResourcePolicy{
+			WorkspaceLimits: workspaceLimits,
 			CPURequestMilli: resources.GetCpuRequestMilli(), CPULimitMilli: resources.GetCpuLimitMilli(),
 			MemoryRequestMiB: resources.GetMemoryRequestMib(), MemoryLimitMiB: resources.GetMemoryLimitMib(),
 			EphemeralStorageRequestMiB: resources.GetEphemeralStorageRequestMib(),

@@ -58,7 +58,7 @@ func (runner *Runner) Cycle(ctx context.Context) error {
 			errorCode = "CONTEXT_INVALID"
 		}
 		return errors.Join(err, runner.client.Fail(ctx, claim, uuid.NewString(), errorCode,
-			diagnostic, "Immutable build input was rejected"))
+			diagnostic, build.InputRejectionSummary(err)))
 	}
 	defer prepared.Close()
 	runner.metrics.Observe("materialize", "success")

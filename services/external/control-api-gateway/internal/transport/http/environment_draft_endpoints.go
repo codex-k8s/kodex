@@ -335,7 +335,7 @@ func environmentDraftPolicyView(input *controlplanev1.RuntimeEnvironmentPolicyIn
 		CpuRequestMilli: resources.GetCpuRequestMilli(), CpuLimitMilli: resources.GetCpuLimitMilli(), MemoryRequestMib: resources.GetMemoryRequestMib(), MemoryLimitMib: resources.GetMemoryLimitMib(),
 		EphemeralStorageRequestMib: resources.GetEphemeralStorageRequestMib(), EphemeralStorageLimitMib: resources.GetEphemeralStorageLimitMib(),
 	}, Volumes: []generated.RuntimeVolumeInput{}, NetworkDestinations: []generated.RuntimeNetworkDestination{},
-		WebAccess: generated.RuntimeWebAccess{Mode: generated.NONE, Rules: []generated.RuntimeWebAccessRule{}}}
+		WebAccess: generated.RuntimeWebAccess{Mode: generated.RuntimeWebAccessMode("NONE"), Rules: []generated.RuntimeWebAccessRule{}}}
 	switch input.GetKubernetesAccess() {
 	case controlplanev1.RuntimeKubernetesAccessKind_RUNTIME_KUBERNETES_ACCESS_KIND_NONE:
 		result.KubernetesAccess = generated.RuntimeKubernetesAccessKind(strings.TrimPrefix(input.GetKubernetesAccess().String(), "RUNTIME_KUBERNETES_ACCESS_KIND_"))

@@ -3,6 +3,7 @@ import {
   Archive,
   Bot,
   Box,
+  ChevronDown,
   Hammer,
   Maximize2,
   Link2,
@@ -12,13 +13,27 @@ import {
   Square,
   TerminalSquare,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  useId,
+  watch,
+} from "vue";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import RoleImageDockerfileEditor from "@/features/role-images/RoleImageDockerfileEditor.vue";
 import RoleImageLineage from "./RoleImageLineage.vue";
+import RoleImageAdmissionFailureNotice from "./RoleImageAdmissionFailureNotice.vue";
+import RoleImageAdmissionRejectionNotice from "./RoleImageAdmissionRejectionNotice.vue";
+import RoleImageVulnerabilityReportWorkspace from "./RoleImageVulnerabilityReportWorkspace.vue";
+import { currentRoleImageAdmissionRejected } from "./admission-rejection";
+import { currentRoleImageAdmissionFailure } from "./admission-failure";
 import ConfigurationCopyDialog from "@/features/managed-configurations/ConfigurationCopyDialog.vue";
+import { verifiedImageInventoryAvailable } from "@/shared/lib/verified-image-tools";
 import { recipeCopySource } from "@/features/managed-configurations/copy-source";
 import type { ManagedConfiguration } from "@/shared/api/generated/openapi/types.gen";
 import {
@@ -79,6 +94,7 @@ const buildsExpanded = ref(false);
 const revisionsExpanded = ref(false);
 const revisionRoot = ref<HTMLElement>();
 const revisionSentinel = ref<HTMLElement>();
+const vulnerabilityReportRoot = ref<HTMLElement>();
 const openedBuildSources = ref(new Set<string>());
 function toggleBuildSource(ref: string, event: Event): void {
   const details = event.currentTarget;
@@ -87,6 +103,7 @@ function toggleBuildSource(ref: string, event: Event): void {
   else openedBuildSources.value.delete(ref);
 }
 const confirmationAction = ref<"ARCHIVE" | "RESTORE">();
+const buildConfirmationPending = ref(false);
 const copyOpen = ref(false);
 const copySource = computed(() =>
   recipe.value && !props.organizationScope
@@ -118,6 +135,13 @@ const recipe = computed(() => {
 const recipeDisplayName = computed(() =>
   recipe.value ? localizeServerMessage(recipe.value.name) : t("roleImages.new"),
 );
+const entityLabel = computed(() =>
+  t(
+    recipe.value?.scopeKind === "ORGANIZATION"
+      ? "roleImages.assistantEntity"
+      : "roleImages.entity",
+  ),
+);
 const nameFieldValue = computed({
   get: () =>
     recipe.value && !recipe.value.nextActions.includes("UPDATE")
@@ -139,6 +163,39 @@ const builds = computed(() =>
 const currentBuild = computed(() => latestBuild(builds.value));
 const artifact = computed(() =>
   props.recipeRef ? store.artifacts[props.recipeRef] : undefined,
+);
+const currentArtifact = computed(() =>
+  currentBuild.value?.recipeGeneration === recipe.value?.generation &&
+  artifact.value?.buildRef === currentBuild.value?.ref &&
+  artifact.value?.recipeGeneration === currentBuild.value?.recipeGeneration
+    ? artifact.value
+    : undefined,
+);
+const admissionFailure = computed(() =>
+  currentRoleImageAdmissionFailure(
+    recipe.value,
+    currentBuild.value,
+    props.recipeRef ? store.admissionFailures[props.recipeRef] : undefined,
+  ),
+);
+const admissionRejected = computed(
+  () =>
+    !admissionFailure.value &&
+    currentRoleImageAdmissionRejected(
+      recipe.value,
+      currentBuild.value,
+      artifact.value,
+    ),
+);
+const rejectedWithScannerEvidence = computed(
+  () =>
+    admissionRejected.value &&
+    [
+      currentArtifact.value?.sbomSha256,
+      currentArtifact.value?.vulnerabilityEvidenceSha256,
+    ].every(
+      (digest) => typeof digest === "string" && /^[a-f0-9]{64}$/.test(digest),
+    ),
 );
 const revisions = computed(() =>
   props.recipeRef ? (store.revisions[props.recipeRef] ?? []) : [],
@@ -175,9 +232,35 @@ const promotionEvidenceState = computed(() => {
   return promotionReceipt.value?.state;
 });
 const promotionVisualState = computed(() => {
+  if (admissionFailure.value) return "FAILED";
+  if (
+    currentArtifact.value?.admissionVerdict === "REJECTED" ||
+    currentArtifact.value?.promotionState === "REJECTED"
+  )
+    return "REJECTED";
   if (recipe.value?.promotedImageReady) return "PROMOTED";
   if (promotionReceipt.value?.state === "PROMOTING") return "RUNNING";
   return promotionReceipt.value?.state ?? "PENDING";
+});
+const summaryStatus = computed<{ state: string; label?: string }>(() => {
+  if (!recipe.value) return { state: "PENDING" };
+  if (admissionFailure.value)
+    return { state: "FAILED", label: t("roleImages.admissionFailed") };
+  const state = roleImageState(recipe.value, currentBuild.value);
+  if (state === "PROMOTED") return { state, label: t("roleImages.promoted") };
+  if (state !== "COMPLETED") return { state };
+  if (!currentArtifact.value)
+    return { state: "PENDING", label: t("roleImages.awaitingAdmission") };
+  if (currentArtifact.value.admissionVerdict === "REJECTED")
+    return { state: "REJECTED", label: t("roleImages.admissionRejected") };
+  if (currentArtifact.value.admissionVerdict !== "ACCEPTED")
+    return { state: "PENDING", label: t("roleImages.awaitingAdmission") };
+  if (promotionReceipt.value?.imageArtifactRef === currentArtifact.value.ref) {
+    if (promotionReceipt.value.state === "FAILED") return { state: "FAILED" };
+    if (promotionReceipt.value.state === "PROMOTING")
+      return { state: "PROMOTING" };
+  }
+  return { state: "PENDING", label: t("roleImages.awaitingPromotion") };
 });
 const dependencies = computed(() =>
   props.recipeRef ? (store.dependencies[props.recipeRef] ?? []) : [],
@@ -196,6 +279,13 @@ const hasLocalChanges = computed(() =>
       environmentKey.value !== recipe.value.environment.environmentKey ||
       dockerfile.value !== recipe.value.environment.dockerfile),
   ),
+);
+const requestBuildBlocked = computed(
+  () =>
+    store.mutating ||
+    hasLocalChanges.value ||
+    buildConfirmationPending.value ||
+    Boolean(currentBuild.value && buildIsActive(currentBuild.value)),
 );
 const canSave = computed(
   () =>
@@ -222,6 +312,38 @@ const environmentLabel = computed(() => {
 });
 let disposed = false;
 let loadGeneration = 0;
+
+const supportingCatalogVersion = computed(() =>
+  props.organizationScope
+    ? undefined
+    : JSON.stringify([
+        props.projectRef,
+        Object.values(platform.agents)
+          .filter((agent) => agent.projectRef === props.projectRef)
+          .map((agent) => [
+            agent.ref,
+            agent.version,
+            agent.roleDefinitionRef,
+            agent.roleDefinitionName,
+            agent.roleDescription,
+            agent.name,
+          ]),
+        Object.values(platform.roleEnvironments).map((environment) => [
+          environment.key,
+          environment.nameMessageKey,
+          environment.available,
+        ]),
+      ]),
+);
+watch(supportingCatalogVersion, () => {
+  if (disposed || props.organizationScope) return;
+  store.applySupportingCatalogSnapshot(
+    Object.values(platform.agents).filter(
+      (agent) => agent.projectRef === props.projectRef,
+    ),
+    Object.values(platform.roleEnvironments),
+  );
+});
 
 function sync(): void {
   if (!recipe.value) return;
@@ -330,6 +452,57 @@ async function runCommand(
   }
 }
 
+function buildRequestRecipe() {
+  const current = recipe.value;
+  return !disposed &&
+    current &&
+    canRequestBuild(current) &&
+    !requestBuildBlocked.value
+    ? current
+    : undefined;
+}
+
+async function requestBuild(): Promise<void> {
+  const current = buildRequestRecipe();
+  if (!current) return;
+  const previous = currentBuild.value;
+  const expected = {
+    scopeKey: scopeKey.value,
+    recipeRef: current.ref,
+    recipeVersion: current.version,
+    generation: current.generation,
+    buildRef: previous?.ref,
+    buildVersion: previous?.version,
+  };
+  if (previous) {
+    buildConfirmationPending.value = true;
+    let confirmed = false;
+    try {
+      confirmed = await requestConfirmation({
+        title: t("roleImages.rebuild"),
+        message: t("roleImages.rebuildConfirm"),
+        confirmLabel: t("roleImages.rebuild"),
+        tone: "primary",
+      });
+    } finally {
+      buildConfirmationPending.value = false;
+    }
+    if (!confirmed) return;
+  }
+  const fresh = buildRequestRecipe();
+  if (
+    !fresh ||
+    scopeKey.value !== expected.scopeKey ||
+    fresh.ref !== expected.recipeRef ||
+    fresh.version !== expected.recipeVersion ||
+    fresh.generation !== expected.generation ||
+    currentBuild.value?.ref !== expected.buildRef ||
+    currentBuild.value?.version !== expected.buildVersion
+  )
+    return;
+  await runCommand("REQUEST_BUILD");
+}
+
 async function cancelCurrentBuild(): Promise<void> {
   const current = currentBuild.value;
   if (
@@ -366,6 +539,7 @@ async function confirmLifecycle(): Promise<void> {
 
 async function promote(): Promise<void> {
   if (
+    admissionFailure.value ||
     !recipe.value ||
     !artifact.value ||
     store.mutating ||
@@ -410,6 +584,16 @@ watch(
   },
 );
 onMounted(() => void load());
+watch(
+  [() => route.hash, () => currentArtifact.value?.ref],
+  async () => {
+    if (route.hash !== "#vulnerability-report") return;
+    await nextTick();
+    if (!disposed)
+      vulnerabilityReportRoot.value?.scrollIntoView({ block: "start" });
+  },
+  { flush: "post" },
+);
 onBeforeUnmount(() => {
   disposed = true;
   loadGeneration += 1;
@@ -433,19 +617,15 @@ onBeforeUnmount(() => {
         <div class="image-summary__identity">
           <span class="image-summary__icon"><Box :size="22" /></span>
           <div>
-            <span class="eyebrow">{{ t("roleImages.entity") }}</span>
+            <span class="eyebrow">{{ entityLabel }}</span>
             <h2>{{ recipeDisplayName }}</h2>
             <p>{{ roleLabel }}</p>
           </div>
         </div>
         <StatusBadge
           v-if="recipe"
-          :state="roleImageState(recipe, currentBuild)"
-          :label="
-            recipe.promotedImageReady && currentBuild?.stage === 'COMPLETED'
-              ? t('roleImages.promoted')
-              : undefined
-          "
+          :state="summaryStatus.state"
+          :label="summaryStatus.label"
         />
         <div v-if="recipe" class="image-summary__actions">
           <ConfigurationCopyDialog
@@ -492,11 +672,13 @@ onBeforeUnmount(() => {
             v-if="canRequestBuild(recipe)"
             class="button button--primary"
             type="button"
-            :disabled="store.mutating || hasLocalChanges"
-            @click="runCommand('REQUEST_BUILD')"
+            :disabled="requestBuildBlocked"
+            @click="requestBuild"
           >
             <Hammer :size="16" aria-hidden="true" />
-            {{ t("roleImages.requestBuild") }}
+            {{
+              t(currentBuild ? "roleImages.rebuild" : "roleImages.requestBuild")
+            }}
           </button>
           <button
             v-if="
@@ -533,7 +715,7 @@ onBeforeUnmount(() => {
             {{ t("roleImages.restore") }}
           </button>
           <button
-            v-if="canPromoteRoleImage(recipe, artifact)"
+            v-if="!admissionFailure && canPromoteRoleImage(recipe, artifact)"
             class="button button--primary"
             type="button"
             :disabled="store.mutating || hasLocalChanges"
@@ -556,14 +738,7 @@ onBeforeUnmount(() => {
           <Hammer :size="18" aria-hidden="true" />
           <div>
             <span>{{ t("roleImages.buildHistory") }}</span>
-            <strong>
-              {{
-                currentBuild
-                  ? t(`states.${currentBuild.stage}`)
-                  : t("states.PENDING")
-              }}
-            </strong>
-            <small v-if="currentBuild">
+            <small v-if="currentBuild" class="lifecycle-step__build-meta">
               {{ currentBuild.progressPercent }}% ·
               {{ new Date(currentBuild.updatedAt).toLocaleString() }}
             </small>
@@ -575,25 +750,35 @@ onBeforeUnmount(() => {
               >{{ t("roleImages.retryPending") }}</small
             >
           </div>
-          <StatusBadge :state="currentBuild?.stage ?? 'PENDING'" />
+          <StatusBadge
+            :state="currentBuild?.stage ?? 'PENDING'"
+            :label="
+              currentBuild?.stage === 'COMPLETED'
+                ? t('roleImages.buildCompleted')
+                : undefined
+            "
+          />
         </article>
         <article class="panel lifecycle-step">
           <ShieldCheck :size="18" aria-hidden="true" />
           <div>
             <span>{{ t("roleImages.admissionVerdict") }}</span>
-            <strong>
-              {{ artifact ? t("roleImages.evidence") : t("states.PENDING") }}
-            </strong>
             <small v-if="artifact">{{ artifact.manifestDigest }}</small>
           </div>
           <StatusBadge
-            :state="artifact?.admissionVerdict ?? 'PENDING'"
+            :state="
+              admissionFailure
+                ? 'FAILED'
+                : (artifact?.admissionVerdict ?? 'PENDING')
+            "
             :label="
-              artifact?.admissionVerdict === 'ACCEPTED'
-                ? t('states.APPROVED')
-                : artifact?.admissionVerdict === 'REJECTED'
-                  ? t('states.REJECTED')
-                  : t('states.PENDING')
+              admissionFailure
+                ? t('roleImages.admissionFailed')
+                : artifact?.admissionVerdict === 'ACCEPTED'
+                  ? t('states.APPROVED')
+                  : artifact?.admissionVerdict === 'REJECTED'
+                    ? t('states.REJECTED')
+                    : t('states.PENDING')
             "
           />
         </article>
@@ -601,14 +786,56 @@ onBeforeUnmount(() => {
           <PackageCheck :size="18" aria-hidden="true" />
           <div>
             <span>{{ t("roleImages.promotion") }}</span>
-            <strong>{{ t(`states.${promotionVisualState}`) }}</strong>
             <small v-if="recipe.promotedImageReference">
               {{ recipe.promotedImageReference }}
             </small>
           </div>
-          <StatusBadge :state="promotionVisualState" />
+          <StatusBadge
+            :state="promotionVisualState"
+            :label="
+              admissionFailure
+                ? t('roleImages.promotionBlockedByFailure')
+                : promotionVisualState === 'REJECTED'
+                  ? t('roleImages.promotionBlockedByAdmission')
+                  : undefined
+            "
+          />
         </article>
       </section>
+
+      <RoleImageAdmissionFailureNotice
+        v-if="admissionFailure"
+        :failure="admissionFailure"
+      />
+      <RoleImageAdmissionRejectionNotice
+        v-else-if="rejectedWithScannerEvidence"
+      />
+      <section
+        v-else-if="admissionRejected"
+        class="admission-closed"
+        role="alert"
+      >
+        <strong>{{ t("roleImages.admissionClosedTitle") }}</strong>
+        <p>{{ t("roleImages.admissionClosedHelp") }}</p>
+      </section>
+      <div
+        id="vulnerability-report"
+        ref="vulnerabilityReportRoot"
+        v-if="
+          recipe &&
+          currentBuild?.stage === 'COMPLETED' &&
+          currentArtifact &&
+          !admissionFailure
+        "
+      >
+        <RoleImageVulnerabilityReportWorkspace
+          v-if="recipe && currentBuild && currentArtifact"
+          :scope="resourceScope"
+          :recipe="recipe"
+          :build="currentBuild"
+          :artifact="currentArtifact"
+        />
+      </div>
 
       <div class="editor-layout">
         <main class="editor-main">
@@ -642,60 +869,82 @@ onBeforeUnmount(() => {
               </label>
               <label v-if="!organizationScope" class="field">
                 <span>{{ t("roleImages.role") }}</span>
-                <select
-                  v-model="roleDefinitionRef"
-                  :id="`${fieldNamePrefix}-role`"
-                  :name="`${fieldNamePrefix}-role`"
-                  :disabled="!!recipe || !store.roleDefinitions.length"
-                >
-                  <option value="" disabled>
-                    {{ t("roleImages.chooseRole") }}
-                  </option>
-                  <option
-                    v-for="role in store.roleDefinitions"
-                    :key="role.ref"
-                    :value="role.ref"
+                <span class="select-title-only">
+                  <select
+                    v-model="roleDefinitionRef"
+                    :id="`${fieldNamePrefix}-role`"
+                    :name="`${fieldNamePrefix}-role`"
+                    :disabled="!!recipe || !store.roleDefinitions.length"
                   >
-                    {{ role.label }} ·
-                    {{
-                      t("roleImages.agentsCount", { count: role.agentCount })
-                    }}
-                  </option>
-                </select>
+                    <option value="" disabled>
+                      {{ t("roleImages.chooseRole") }}
+                    </option>
+                    <option
+                      v-for="role in store.roleDefinitions"
+                      :key="role.ref"
+                      :value="role.ref"
+                    >
+                      {{ role.label }} ·
+                      {{
+                        t("roleImages.agentsCount", { count: role.agentCount })
+                      }}
+                    </option>
+                  </select>
+                  <span class="select-title-only__title" aria-hidden="true">{{
+                    roleLabel
+                  }}</span>
+                  <ChevronDown
+                    class="select-title-only__arrow"
+                    :size="16"
+                    aria-hidden="true"
+                  />
+                </span>
               </label>
               <label class="field">
                 <span>{{ t("roleImages.environment") }}</span>
-                <select
-                  :id="`${fieldNamePrefix}-environment`"
-                  :name="`${fieldNamePrefix}-environment`"
-                  :value="environmentKey"
-                  :disabled="
-                    !store.environments.length ||
-                    (!!recipe && !recipe.nextActions.includes('UPDATE'))
-                  "
-                  @change="
-                    selectEnvironment(
-                      ($event.currentTarget as HTMLSelectElement).value,
-                    )
-                  "
-                >
-                  <option value="" disabled>
-                    {{ t("roleImages.chooseEnvironment") }}
-                  </option>
-                  <option
-                    v-for="environment in store.environments"
-                    :key="environment.key"
-                    :value="environment.key"
-                    :disabled="!environment.available"
+                <span class="select-title-only">
+                  <select
+                    :id="`${fieldNamePrefix}-environment`"
+                    :name="`${fieldNamePrefix}-environment`"
+                    :value="environmentKey"
+                    :disabled="
+                      !store.environments.length ||
+                      (!!recipe && !recipe.nextActions.includes('UPDATE'))
+                    "
+                    @change="
+                      selectEnvironment(
+                        ($event.currentTarget as HTMLSelectElement).value,
+                      )
+                    "
                   >
-                    {{ t(environment.nameMessageKey) }}
-                    {{
-                      environment.recommended
-                        ? `· ${t("roleImages.recommended")}`
-                        : ""
-                    }}
-                  </option>
-                </select>
+                    <option value="" disabled>
+                      {{ t("roleImages.chooseEnvironment") }}
+                    </option>
+                    <option
+                      v-for="environment in store.environments"
+                      :key="environment.key"
+                      :value="environment.key"
+                      :disabled="!environment.available"
+                    >
+                      {{ t(environment.nameMessageKey) }}
+                      {{
+                        environment.recommended
+                          ? `· ${t("roleImages.recommended")}`
+                          : ""
+                      }}
+                    </option>
+                  </select>
+                  <span class="select-title-only__title" aria-hidden="true">{{
+                    environmentKey
+                      ? environmentLabel
+                      : t("roleImages.chooseEnvironment")
+                  }}</span>
+                  <ChevronDown
+                    class="select-title-only__arrow"
+                    :size="16"
+                    aria-hidden="true"
+                  />
+                </span>
               </label>
             </div>
             <RoleImageDockerfileEditor
@@ -776,7 +1025,12 @@ onBeforeUnmount(() => {
                 <Maximize2 :size="20" />
               </button>
             </header>
-            <div class="build-history__scroll">
+            <div
+              class="build-history__scroll build-history__scroll--builds"
+              role="region"
+              :aria-label="t('roleImages.buildHistory')"
+              tabindex="0"
+            >
               <div v-if="!builds.length" class="empty-section">
                 {{ t("roleImages.noBuilds") }}
               </div>
@@ -944,9 +1198,11 @@ onBeforeUnmount(() => {
                 <dt>{{ t("roleImages.promotion") }}</dt>
                 <dd>
                   {{
-                    recipe?.promotedImageReady
-                      ? t("roleImages.promoted")
-                      : t("roleImages.notPromoted")
+                    admissionRejected
+                      ? t("roleImages.promotionBlockedByAdmission")
+                      : recipe?.promotedImageReady
+                        ? t("roleImages.promoted")
+                        : t("roleImages.notPromoted")
                   }}
                 </dd>
               </div>
@@ -970,42 +1226,48 @@ onBeforeUnmount(() => {
           <section class="panel artifact-card">
             <ShieldCheck :size="20" aria-hidden="true" />
             <h2>{{ t("roleImages.evidence") }}</h2>
-            <dl v-if="artifact">
-              <div>
-                <dt>{{ t("roleImages.manifestDigest") }}</dt>
-                <dd>
-                  <code>{{ artifact.manifestDigest }}</code>
-                </dd>
-              </div>
-              <div>
-                <dt>SBOM SHA-256</dt>
-                <dd>
-                  <code>{{ artifact.sbomSha256 ?? "—" }}</code>
-                </dd>
-              </div>
-              <div>
-                <dt>{{ t("roleImages.vulnerabilityEvidence") }}</dt>
-                <dd>
-                  <code>{{ artifact.vulnerabilityEvidenceSha256 ?? "—" }}</code>
-                </dd>
-              </div>
-              <div>
-                <dt>{{ t("roleImages.admissionVerdict") }}</dt>
-                <dd><StatusBadge :state="artifact.admissionVerdict" /></dd>
-              </div>
-              <div>
-                <dt>Provenance</dt>
-                <dd>
-                  <code>{{ artifact.provenanceSha256 }}</code>
-                </dd>
-              </div>
-              <div v-if="artifact.promotionReceiptSha256">
-                <dt>{{ t("roleImages.promotion") }}</dt>
-                <dd>
-                  <code>{{ artifact.promotionReceiptSha256 }}</code>
-                </dd>
-              </div>
-            </dl>
+            <StatusBadge v-if="artifact" :state="artifact.admissionVerdict" />
+            <details v-if="artifact">
+              <summary>{{ t("roleImages.technicalDetails") }}</summary>
+              <dl>
+                <div>
+                  <dt>{{ t("roleImages.manifestDigest") }}</dt>
+                  <dd>
+                    <code>{{ artifact.manifestDigest }}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>SBOM SHA-256</dt>
+                  <dd>
+                    <code>{{ artifact.sbomSha256 ?? "—" }}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ t("roleImages.vulnerabilityEvidence") }}</dt>
+                  <dd>
+                    <code>{{
+                      artifact.vulnerabilityEvidenceSha256 ?? "—"
+                    }}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{{ t("roleImages.admissionVerdict") }}</dt>
+                  <dd><StatusBadge :state="artifact.admissionVerdict" /></dd>
+                </div>
+                <div>
+                  <dt>Provenance</dt>
+                  <dd>
+                    <code>{{ artifact.provenanceSha256 }}</code>
+                  </dd>
+                </div>
+                <div v-if="artifact.promotionReceiptSha256">
+                  <dt>{{ t("roleImages.promotion") }}</dt>
+                  <dd>
+                    <code>{{ artifact.promotionReceiptSha256 }}</code>
+                  </dd>
+                </div>
+              </dl>
+            </details>
             <StatusBadge
               v-if="promotionEvidenceState"
               :state="promotionEvidenceState"
@@ -1014,14 +1276,44 @@ onBeforeUnmount(() => {
           </section>
           <section class="panel artifact-card">
             <TerminalSquare :size="20" aria-hidden="true" />
-            <h2>{{ t("roleImages.executables") }}</h2>
-            <ul v-if="artifact?.tools.length" class="tool-list">
-              <li v-for="tool in artifact.tools" :key="tool.name">
+            <h2>{{ t("roleImages.declaredTools") }}</h2>
+            <ul v-if="artifact?.declaredTools.length" class="tool-list">
+              <li v-for="tool in artifact.declaredTools" :key="tool.name">
                 <code>{{ tool.name }}</code
                 ><span>{{ tool.version }}</span>
               </li>
             </ul>
-            <p v-else>{{ t("roleImages.noVerifiedExecutables") }}</p>
+            <h2>{{ t("roleImages.verifiedInventory") }}</h2>
+            <template
+              v-if="artifact && verifiedImageInventoryAvailable(artifact)"
+            >
+              <code>{{ artifact.verifiedToolInventory.sha256 }}</code>
+              <details
+                v-for="platform in artifact.verifiedToolInventory.platforms"
+                :key="platform.platform"
+              >
+                <summary>{{ platform.platform }}</summary>
+                <code>{{ platform.platformDigest }}</code>
+                <code>{{ platform.manifestSha256 }}</code>
+                <ul class="tool-list">
+                  <li v-for="tool in platform.tools" :key="tool.name">
+                    <code>{{ tool.name }}</code>
+                    <span v-if="tool.status === 'VERIFIED'"
+                      >{{ tool.version }} · {{ tool.path }}</span
+                    >
+                    <span v-else>{{
+                      t(
+                        tool.status === "MISSING"
+                          ? "roleImages.inventoryProbeMissing"
+                          : "roleImages.inventoryProbeFailed",
+                      )
+                    }}</span>
+                    <code v-if="tool.sha256">{{ tool.sha256 }}</code>
+                  </li>
+                </ul>
+              </details>
+            </template>
+            <p v-else>{{ t("roleImages.inventoryUnavailable") }}</p>
           </section>
           <section class="panel artifact-card">
             <Link2 :size="20" aria-hidden="true" />
@@ -1118,6 +1410,19 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.admission-closed {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--warning);
+  border-radius: 8px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.admission-closed p {
+  margin: 4px 0 0;
+}
 .role-image-editor,
 .editor-main,
 .editor-aside,
@@ -1140,6 +1445,39 @@ onBeforeUnmount(() => {
   display: grid;
   min-height: 420px;
   place-items: center;
+}
+.select-title-only {
+  position: relative;
+  min-width: 0;
+  height: var(--control-height, 32px);
+}
+.select-title-only > select {
+  height: 100%;
+  color: transparent;
+  appearance: none;
+}
+.select-title-only option {
+  color: var(--text);
+}
+.select-title-only__title {
+  position: absolute;
+  inset: 0 30px 0 10px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: var(--control-height, 32px);
+  pointer-events: none;
+}
+.select-title-only__arrow {
+  position: absolute;
+  top: 50%;
+  right: 9px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.select-title-only:has(> select:disabled) > .select-title-only__title,
+.select-title-only:has(> select:disabled) > .select-title-only__arrow {
+  opacity: 0.6;
 }
 .image-summary {
   display: grid;
@@ -1184,7 +1522,7 @@ onBeforeUnmount(() => {
 }
 .lifecycle-step {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-columns: 28px minmax(0, 1fr);
   align-items: start;
   gap: 10px;
 }
@@ -1197,12 +1535,29 @@ onBeforeUnmount(() => {
   min-width: 0;
   gap: 3px;
 }
+.lifecycle-step > .status-badge {
+  grid-column: 2;
+  justify-self: start;
+  box-sizing: border-box;
+  max-width: 100%;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
 .lifecycle-step span,
 .lifecycle-step small {
   overflow: hidden;
   color: var(--text-secondary);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.lifecycle-step > div > span,
+.lifecycle-step > div > .lifecycle-step__build-meta {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
 }
 .editor-layout {
   display: grid;
@@ -1335,8 +1690,25 @@ onBeforeUnmount(() => {
   max-height: 768px;
   overflow: auto;
 }
-.build-history__scroll .build-row {
-  min-height: 128px;
+.build-history__scroll--builds {
+  min-width: 0;
+  max-height: min(480px, 70dvh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.build-history__scroll--builds .build-row {
+  min-height: 96px;
+  overflow-wrap: anywhere;
+}
+.build-history__scroll--builds .build-row > * {
+  min-width: 0;
+}
+.build-history__scroll--builds .build-debug-action {
+  max-width: 100%;
+  min-height: 32px;
+  height: auto;
+  white-space: normal;
 }
 .build-history__scroll--revisions {
   max-height: 528px;
@@ -1463,6 +1835,32 @@ onBeforeUnmount(() => {
   .save-boundary {
     align-items: stretch;
     flex-direction: column;
+  }
+}
+@media (max-width: 640px) {
+  .role-image-editor {
+    padding-bottom: calc(144px + env(safe-area-inset-bottom));
+  }
+  .lifecycle-step {
+    grid-template-columns: 28px minmax(0, 1fr);
+    padding-inline-end: 76px;
+  }
+  .lifecycle-step > .status-badge {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
+  .lifecycle-step > div > span {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
   }
 }
 </style>

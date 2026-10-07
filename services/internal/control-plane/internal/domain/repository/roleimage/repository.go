@@ -40,6 +40,7 @@ type Detail struct {
 	Builds             []entity.ImageBuild
 	ActiveArtifact     *entity.ImageArtifact
 	PromotionCandidate *entity.ImageArtifact
+	AdmissionFailure   *entity.RoleImageAdmissionFailure
 }
 
 type BuildLeaseInput struct {
@@ -66,19 +67,83 @@ type BuildFailureInput struct {
 }
 
 type AdmissionRecordInput struct {
-	Principal                                                  value.Principal
-	IdempotencyKey, ArtifactRef, ClaimToken, ManifestDigest    string
-	ImmutableBuildSHA256, ProvenanceSHA256, SBOMSHA256         string
-	VulnerabilityEvidenceSHA256, PolicySHA256, Verdict         string
-	SignatureIdentity, SignatureSHA256, AdmissionReceiptSHA256 string
-	AdmissionReceiptOCIManifestDigest                          string
-	ExpectedVersion, ExpectedFence, PolicyRevision             uint64
+	Principal                                                                                                       value.Principal
+	IdempotencyKey, ArtifactRef, ClaimToken, ManifestDigest                                                         string
+	ImmutableBuildSHA256, ProvenanceSHA256, SBOMSHA256                                                              string
+	VulnerabilityEvidenceSHA256, PolicySHA256, Verdict                                                              string
+	SignatureIdentity, SignatureSHA256, AdmissionReceiptSHA256                                                      string
+	AdmissionReceiptOCIManifestDigest                                                                               string
+	ToolInventoryJSON, ToolInventorySHA256                                                                          string
+	ExpectedVersion, ExpectedFence, PolicyRevision                                                                  uint64
+	ExpectedAdmissionAttemptRef, VulnerabilityReportJSON, VulnerabilityReportProjectionSHA256, RiskAcceptanceSHA256 string
+	ExpectedAdmissionAttempt                                                                                        uint32
+}
+
+type VulnerabilityReportFilter struct {
+	ScopeKind, ProjectRef, RecipeRef, ArtifactRef               string
+	PackageQuery, Severity, AdvisoryQuery, ExpectedReportSHA256 string
+	BlockingOnly                                                *bool
+	Page                                                        query.Page
+}
+
+type AdmissionRiskInput struct {
+	Principal                                                                                           value.Principal
+	Mutation                                                                                            value.Mutation
+	ScopeKind, ProjectRef, RecipeRef, ArtifactRef                                                       string
+	ExpectedArtifactVersion, ExpectedAdmissionRevision, ExpectedRecipeVersion, ExpectedRecipeGeneration uint64
+	ExpectedBuildRef                                                                                    string
+	ExpectedBuildAttempt                                                                                uint32
+	ManifestDigest, VulnerabilityEvidenceSHA256, ProjectionSHA256                                       string
+	PriorAdmissionReceiptSHA256, PriorEvidenceManifestDigest                                            string
+	PolicyRevision                                                                                      uint64
+	PolicySHA256, Action, Reason                                                                        string
+}
+
+type AdmissionFailureInput struct {
+	ExpectedAdmissionAttemptRef                                                                   string
+	ExpectedAdmissionAttempt                                                                      uint32
+	Principal                                                                                     value.Principal
+	IdempotencyKey, ArtifactRef, ClaimToken                                                       string
+	ManifestDigest, ImmutableBuildSHA256, ProvenanceSHA256, PolicySHA256                          string
+	BuildRef, SpecSHA256, ErrorCode                                                               string
+	ExpectedVersion, ExpectedFence, ExpectedAuthorityGeneration, PolicyRevision, RecipeGeneration uint64
+	ExpectedBuildAttempt                                                                          uint32
+}
+
+// Expiry не принимает worker token или назначаемую caller причину.
+type AdmissionExpiryInput struct {
+	ExpectedAdmissionAttemptRef                                                                   string
+	ExpectedAdmissionAttempt                                                                      uint32
+	Principal                                                                                     value.Principal
+	IdempotencyKey, ArtifactRef, ManifestDigest, ImmutableBuildSHA256, ProvenanceSHA256           string
+	PolicySHA256, BuildRef, SpecSHA256                                                            string
+	ExpectedVersion, ExpectedFence, ExpectedAuthorityGeneration, PolicyRevision, RecipeGeneration uint64
+	ExpectedBuildAttempt                                                                          uint32
 }
 
 type PromotionAuthorizeInput struct {
 	Principal                                                   value.Principal
 	IdempotencyKey, ArtifactRef, PromotionClaim, ManifestDigest string
 	ExpectedVersion                                             uint64
+}
+
+// Чтение не возобновляет claim: исходный ключ разрешается внутри owner boundary.
+type AdmissionTerminalInput struct {
+	AdmissionExpiryInput
+	ClaimIdempotencyKey                                                              string
+	RiskAcceptanceSHA256, SourceAdmissionReceiptSHA256, SourceEvidenceManifestDigest string
+	SourceAdmissionRevision                                                          uint64
+}
+
+type AdmissionTerminalProof struct {
+	RiskAcceptanceSHA256, SourceAdmissionReceiptSHA256, SourceEvidenceManifestDigest string
+	SourceAdmissionRevision                                                          uint64
+	State                                                                            string
+	ClaimedArtifact                                                                  entity.ImageArtifact
+	AttemptRef                                                                       string
+	Attempt                                                                          uint32
+	ClaimFence, ClaimAuthorityGeneration                                             uint64
+	TerminalArtifactVersion, TerminalFence, TerminalAttemptVersion                   uint64
 }
 
 type PromotionCompleteInput struct {
@@ -101,6 +166,8 @@ type SupplyWorkAvailability struct {
 }
 
 type Repository interface {
+	GetVulnerabilityReport(context.Context, value.Principal, VulnerabilityReportFilter) (entity.ImageVulnerabilityReport, error)
+	DecideAdmissionRisk(context.Context, AdmissionRiskInput) (entity.ImageAdmissionRiskResult, error)
 	ListOrganizationRevisions(context.Context, value.Principal, string, query.Page) ([]entity.RoleImageRecipeRevision, string, error)
 	ResolvePrincipal(context.Context, value.Principal) (value.Principal, error)
 	List(context.Context, value.Principal, Filter) ([]entity.RoleImageRecipe, string, int64, error)
@@ -118,6 +185,10 @@ type Repository interface {
 	GetSupplyWorkAvailability(context.Context, value.Principal) (SupplyWorkAvailability, error)
 	ClaimAdmission(context.Context, value.Principal, string) (entity.ImageAdmissionClaim, error)
 	RecordAdmission(context.Context, AdmissionRecordInput) (entity.ImageArtifact, error)
+	FailAdmission(context.Context, AdmissionFailureInput) (entity.RoleImageAdmissionFailure, error)
+	ExpireAdmission(context.Context, AdmissionExpiryInput) (entity.RoleImageAdmissionFailure, error)
+	GetAdmissionTerminal(context.Context, AdmissionTerminalInput) (AdmissionTerminalProof, error)
+	GetAdmissionRecoveryTerminal(context.Context, value.Principal, string) (AdmissionTerminalProof, error)
 	ClaimPromotion(context.Context, value.Principal, string) (entity.ImagePromotionClaim, error)
 	RequestPromotion(context.Context, PromotionRequestInput) (entity.RoleImagePromotionReceipt, error)
 	AuthorizePromotion(context.Context, PromotionAuthorizeInput) (entity.ImagePromotionAuthorization, error)

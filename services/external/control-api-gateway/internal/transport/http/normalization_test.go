@@ -619,7 +619,8 @@ func TestMessageMapNormalizesAssistantConversationToOpenAPIShape(t *testing.T) {
 		Ref: "cnv-example", Version: 3, Title: "Диалог", TitleSource: "SERVER_DEFAULT", TitleRevision: 1,
 		Context: &controlplanev1.AssistantContextDescriptor{Route: "/onboarding"},
 		Turns: []*controlplanev1.AssistantTurn{{
-			Ref: "pln-example", Sequence: 2, Role: "ASSISTANT", State: "COMPLETED",
+			Source: &controlplanev1.MessageSource{Origin: controlplanev1.MessageOrigin_MESSAGE_ORIGIN_ORDINARY},
+			Ref:    "pln-example", Sequence: 2, Role: "ASSISTANT", State: "COMPLETED",
 			Plan: &controlplanev1.AssistantPlan{
 				Ref: "pln-example", Version: 1, Revision: 1, ConversationRef: "cnv-example",
 				State: controlplanev1.AssistantPlanState_ASSISTANT_PLAN_STATE_DRAFT, AuditSummary: "Создать проект",

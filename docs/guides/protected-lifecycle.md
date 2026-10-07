@@ -4,11 +4,19 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.3
-updated: 2026-09-08
+version: 1.1.8
+updated: 2026-10-07
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Aggregate catalog не должен выдавать недопущенную exact ревизию и не должен
+позволять ей блокировать соседние допустимые объекты. Пропуск разрешён только
+по различимому отказу eligibility/отсутствию ресурса владельца; адресный read
+сохраняет отказ. Повреждение найденного package, mismatch current pins и
+ошибка чтения не относятся к отсутствию eligibility и закрывают весь read.
+Фильтр и cursor применяются после единого authoritative eligibility rule;
+пропуск не включает исторический decoder и не создаёт права на mutation.
 
 Перепривязка consumer между configuration sets проверяет глобальную связь по
 организации/kind/consumer, а не только версию нового set. Явное expected absence
@@ -20,9 +28,35 @@ Stale digest/pins возвращают version mismatch без частичны�
 audit или events. Успех сохраняет их в одной owner-транзакции; exact replay
 возвращает прежний receipt и не перепривязывает consumer повторно.
 
+Initial SYSTEM binding без физического version pin включается в owner impact
+по effective текущей ревизии только для канонического организационного помощника.
+После публикации выбранный consumer получает явный exact pin: прежний snapshot
+проверяется по неизменившимся agent/binding versions и exact parent новой ревизии.
+Это исключение принадлежит одной publication-транзакции; обычный rebind, PROJECT
+и другие агенты не получают NULL fallback либо обход OCC.
+
 Пустой результат claim не доказывает отсутствие изменений: истечение lease и
 terminal непригодного кандидата сохраняют audit и command receipt в той же
 транзакции. Только действительно неизменившийся idle poll может их пропустить.
+Queued execution с terminal SessionStorage `ERROR|PURGED` сверяется до join
+runtime eligibility: отсутствующая credential или конфигурация не скрывает
+неисполняемый граф. Server-owned ClaimExecution ограниченно блокирует точные
+tenant/session/node/storage, закрывает весь root graph существующим atomic
+terminal path и сохраняет audit, receipt и ordered run/node/gate events.
+Storage не переводится обратно в `LIVE`, свежий grant/RuntimeRevision не выдаётся.
+`SNAPSHOT_READY|SNAPSHOTTING|DELETE_PVC_READY|ARCHIVED|RESTORE_READY|RESTORING`
+остаются ожиданием, а не terminal failure.
+
+| Переход storage-blocked execution | Результат владельца |
+| --- | --- |
+| create во время snapshot/restore | Queue сохраняется; claim не запускает provider до `LIVE` |
+| claim при `ERROR|PURGED` | Одна owner-транзакция завершает root tree как `FAILED`, закрывает leases/turns/gates/effects; durable receipt, audit и ordered events |
+| claim при transit state | Нет terminal-перехода и новых runtime grants; очередь ждёт штатный archive/restore |
+| renew/complete после terminal reconcile | Прежняя lease/grant закрыто отклоняется существующим terminal fence |
+| owner cancel до reconcile | Штатный OCC cancel закрывает весь граф независимо storage; последующий reconcile не повторяет эффект |
+| replay/повторный poll после reconcile | Сохранённый command receipt либо отсутствие открытого кандидата; новых terminal events нет |
+| retry/continuation | Новая attempt проходит обычную свежую authority и storage eligibility; terminal storage не восстанавливается автоматически |
+
 Устойчивый cleanup receipt может повторно сообщать прежний produced descriptor
 после его отдельной очистки. Владелец принимает доказанное exact terminal
 завершение идемпотентно, не создаёт повторный эффект и сохраняет защиту от
@@ -152,7 +186,56 @@ Schedule
 row/OCC/fence-моделью с одним победителем. Повтор с тем же idempotency scope и
 request hash возвращает сохранённый результат; новый эффект не создаётся.
 
+Полученный batch runtime claims продлевается с момента получения ответа, а
+не только после последовательной материализации Pod. Каждый keeper немедленно
+и периодически вызывает существующий exact lease/fence/generation renew;
+отказ отменяет материализацию. Финальная публикация Pod и warm dispatch
+сериализованы с renew и проходят свежий owner fence до эффекта. Передача tracker
+сначала отменяет и дожидается keeper, затем продлевает ту же lease: двух
+конкурирующих владельцев heartbeat нет. Shutdown отменяет и дожидается всех
+keepers до закрытия RPC клиента. TTL, attempt, authority и owner expiry/requeue
+при этом не расширяются; transport 404 сам по себе не доказывает expiry.
+
 ## Решение владельца
+
+### Обязательный дочерний Workflow обычного сотрудника
+
+Native `launch_workflow` использует только closed
+`RuntimeWorkService.LaunchWorkflowExecution`; runtime-controller не получает
+owner `LaunchRun`. CP разрешает organization/project/root actor из текущих
+lease/fence/generation и immutable revision, проверяет materialized и current
+`platform.run.launch`, а также exact `workflow.launch` корневого пользователя.
+Клиент передаёт только locator существующего опубликованного Workflow, task,
+title и input. `AGENT_DELEGATION` назначается сервером. Configuration plan и
+право SYSTEM/PROJECT помощника для этого пути не требуются и не наследуются.
+
+Workflow сохраняет собственный root, version-pinned steps и canonical claim
+scope. Отдельная required relation закрепляет origin root/run/node/session/
+turn/attempt/generation/input/revision, дочерний root, опубликованную workflow
+version и local callback edge. Parent/root не подменяет workflow step scope.
+Graph содержит local proxy node; события и durable callback receipts используют
+существующий ordered run-event и continuation путь.
+
+| Переход required Workflow | Owner-транзакция и результат |
+| --- | --- |
+| launch/materialize | Project-scoped сериализация до row locks; свежая authority; canonical WF root, immutable relation, proxy/edges, receipt/audit/events |
+| claim/start | Текущие root actor, origin capability и exact workflow permission всех required ancestors; собственный свежий RuntimeRevision W |
+| renew | Exact W lease/fence/attempt; parent cancel атомарно отзывает W lease, поэтому stale renew закрыто отклоняется |
+| parent complete | `OPEN` relation не допускает terminal parent; continuation ждёт все required results |
+| W complete | Один terminal relation/proxy transition и durable callback P; FAILED/CANCELLED result не допускает parent SUCCEEDED |
+| parent/root terminal или cancel | Та же транзакция закрывает все required roots и их leases/turns/gates/effects; terminal parent не получает новый callback turn |
+| owner W cancel/reject | Закрывает собственный canonical graph W и required subtree; живой P получает durable CANCELLED/FAILED callback |
+| retry | Новый origin/root/attempt и новая relation; прежние coordinates и result не переписываются |
+| lease expiry / eligibility failure | Существующий ClaimExecution terminal path и та же required reconciliation; не новый timer |
+| owner gate / changes requested | Существующий OCC gate и fresh continuation; required results остаются обязательными; generic gate expiry — NONE/N/A |
+| delete / purge | Сначала штатный terminal/trash, затем exact project purge graph и row-targeted protected cleanup; обычный delete relation запрещён |
+| replay / unknown response | Exact active authority проверяется до receipt replay; accepted intent не создаёт второй child при новом transport key |
+
+Bounded required graph ограничивает cardinality и глубину; переход terminal
+не допускает частично закрытый envelope. Ошибка audit/event/receipt откатывает
+все вложенные terminal transitions. Авторитетный readback: canonical Run/Graph,
+server-owned launch/callback refs в ответе native operation и callback Turn;
+payload actor, tenant, source и parent/root lineage не являются authority.
 
 `OwnerGate` закрепляет назначенные сервером root actor, recipient, process,
 current session/turn/attempt/input, policy, schedule/occurrence/`ScheduledRun`,
@@ -176,6 +259,16 @@ delivery ID, canonical payload digest и фактический post/interaction
 
 ## Свежая `RuntimeRevision`
 
+Право помощника использовать configuration tools выводится из принадлежащего
+серверу SYSTEM либо PROJECT профиля и точной связки organization/project,
+root actor, conversation/session/turn/node/attempt и immutable revision.
+Классификация автора события не является источником этого права: проектный
+помощник сохраняет автора AGENT, не становится SYSTEM_ASSISTANT и не выдаёт
+прав обычному сотруднику. Неизвестный профиль, чужой владелец, несовпадающий
+snapshot либо terminal execution закрыто отклоняются. До выполнения эффекта
+сохраняется RUNNING; SUCCEEDED/FAILED используют ту же привязку и terminal
+fence. Этот путь не заменяет отдельную проверку точного integration grant.
+
 Материализованные `SessionContext` и continuation notice имеют исполняемый
 consumer вплоть до фактического provider input, а не только запись в snapshot
 или projection. Свежий provider thread получает ограниченную историю как данные;
@@ -184,6 +277,17 @@ consumer вплоть до фактического provider input, а не то
 Это сообщение доставляется один раз без дополнительного дублирующего delta;
 повтор terminal callback не запускает provider turn заново. Роль сообщения
 в истории не становится источником новых полномочий.
+Continuation после дочерней работы несёт в самом новом вводе результаты
+из точных server-owned callback receipts: run/node, terminal state, безопасное
+резюме и ссылки на artifacts. Для Workflow туда же входят ещё не
+материализованные шаги закреплённой опубликованной версии. Отсутствующие
+шаги без нового завершённого дочернего результата не создают continuation:
+иначе пустое ожидание превращается в бесконечный цикл попыток. Resume
+provider thread не считается доставкой обновлённого SessionContext;
+результаты остаются недоверенными данными, не источником authority.
+Прежний USER ввод сохраняется целиком либо полностью исключается вместе с
+более старым контекстом при исчерпании JSON-encoded бюджета; обрезанный префикс
+не выдаётся за исходное сообщение, JSON или завершённую typed-операцию.
 
 Версия immutable исполняемой спецификации не совпадает с OCC-версией её
 наблюдаемого lifecycle. Heartbeat, provisioning и health report могут менять
@@ -198,6 +302,13 @@ digest у consumer сохраняется; исключать из неё versio
 разрешает итоговую конфигурацию из точного набора активных grants и
 авторитетных версий. Запрос не выбирает существующую revision как источник
 полномочий.
+
+Callback обычного сотрудника сохраняет каталог делегирования по текущей
+`platform.run.delegate` и тем же project/tenant/target eligibility. Входящее
+ребро `CONTINUES` само по себе не отзывает эту capability: следующий child
+получает новое server-owned ребро от текущего узла и свежую revision.
+Отзыв capability закрывает каталог и команду; опубликованный Workflow
+по-прежнему предлагает только ещё не материализованные шаги своей версии.
 
 Снимок неизменяемо закрепляет как минимум:
 
@@ -287,6 +398,15 @@ component, contract, render и lifecycle suites выполняются по `GOV
 Связанные документы: `AGENT-DOC-001`, `GO-DOC-001`, `GO-DOC-002`,
 `GO-DOC-004`, `GO-DOC-005`, `GUIDE-DOC-003`, `GUIDE-DOC-004`,
 `INFRA-DOC-001`.
+
+Задержка проекции exact credential не равна отклонению credential провайдером.
+Только специализированный owner READ/NONE health-test может передать закрытый
+код ожидания проекции. Owner повторяет его с прежним immutable snapshot,
+новой fenced attempt и bounded бюджетом; current package/credential/config,
+enabled и workload route проверяются снова. Обычный invocation, WRITE,
+auth rejection, digest mismatch и произвольная сетевая ошибка нового retry
+не получают. Исчерпание ожидания проекции означает недоступность, не доказанную
+невалидность credential; authoritative read path — ledger test/connection.
 
 При сравнении delivery precondition с общим OCC агрегата служебный HEALTH или
 изменение отдельного grant не должны молча становиться отзывом неизменённой

@@ -5,11 +5,12 @@ SELECT i.id::text,i.ref,i.generation,i.state,c.ref,c.definition_key,c.public_con
 	COALESCE(cr.ref,''),COALESCE(cr.revision,0),COALESCE(cr.secret_ref,''),COALESCE(cr.secret_uid::text,''),
 	COALESCE(cr.secret_resource_version,''),COALESCE(cr.content_sha256,''),cr.created_at,initiator.ref,
 	COALESCE(approval.scope_paths,'{}'::text[]),COALESCE(approval.scope_digest,''),
-	COALESCE(approval.input_schema_digest,'')
+	COALESCE(approval.input_schema_digest,''),g.ref,i.grant_version,n.id::text
 FROM control_plane.integration_invocations i
 JOIN control_plane.integration_connections c ON c.id=i.connection_id
 JOIN control_plane.integration_definitions d ON d.stable_key=c.definition_key
 JOIN control_plane.integration_grants g ON g.id=i.grant_id AND g.enabled
+  AND i.grant_version>0 AND g.version=i.grant_version AND g.approval_policy=i.approval_policy
 JOIN control_plane.run_nodes n ON n.id=i.node_id AND n.state IN ('RUNNING','SUCCEEDED')
 JOIN control_plane.runs r ON r.id=i.run_id
 JOIN control_plane.runs root ON root.id=r.root_run_id
@@ -17,6 +18,7 @@ JOIN control_plane.subjects initiator ON initiator.id=root.initiated_by
 LEFT JOIN control_plane.integration_credential_revisions cr ON cr.id=c.credential_revision_id
 LEFT JOIN control_plane.integration_approval_scopes approval ON approval.id=i.approval_scope_id
 WHERE i.organization_id=$1::uuid
+  AND (r.project_id IS NOT NULL OR control_plane.owned_organization_assistant_run(r.organization_id,r.root_run_id))
   AND root.state IN ('RUNNING','WAITING_HUMAN')
   AND (n.state='RUNNING' OR (
     n.state='SUCCEEDED' AND root.state='WAITING_HUMAN' AND EXISTS (
@@ -24,7 +26,7 @@ WHERE i.organization_id=$1::uuid
       WHERE approved_gate.integration_invocation_id=i.id
         AND approved_gate.organization_id=i.organization_id
         AND approved_gate.root_run_id=r.root_run_id
-        AND approved_gate.project_id=r.project_id
+        AND approved_gate.project_id IS NOT DISTINCT FROM r.project_id
         AND approved_gate.state='APPROVED'
     )
   ))
@@ -46,12 +48,16 @@ WHERE i.organization_id=$1::uuid
       AND revision.generation=(SELECT max(latest.generation) FROM control_plane.runtime_revisions latest WHERE latest.node_id=n.id)
       AND binding->>'ref'=g.ref AND binding->>'capabilityKey'=g.capability_key
 	  AND binding->>'grantVersion'=g.version::text
+      AND binding->>'approvalPolicy'=g.approval_policy
   )
-  AND (((i.risk='READ' OR c.definition_key='email') AND i.approval_policy='NONE'
+  AND (((i.risk='READ' OR c.definition_key='email' OR
+          (c.definition_key='github' AND i.risk='WRITE' AND i.operation=i.capability_key AND
+           i.operation IN ('github.issue.comment.create','github.issue.comment.update','github.pull_request.create',
+                           'github.pull_request.update','github.pull_request.review.create'))) AND i.approval_policy='NONE'
         AND NOT i.mailbox_gate_required) OR
     (i.approval_policy='HUMAN_SCOPED' AND approval.id IS NOT NULL
       AND i.grant_version=g.version AND i.approval_scope_paths=g.approval_scope_paths
-      AND approval.organization_id=i.organization_id AND approval.project_id=r.project_id
+      AND approval.organization_id=i.organization_id AND approval.project_id IS NOT DISTINCT FROM r.project_id
       AND approval.root_run_id=r.root_run_id AND approval.agent_id=n.agent_id
       AND approval.connection_id=c.id AND approval.grant_id=g.id
       AND approval.grant_version=g.version AND approval.capability_key=i.capability_key
@@ -59,7 +65,7 @@ WHERE i.organization_id=$1::uuid
       AND approval.scope_paths=g.approval_scope_paths
       AND approval.revoked_at IS NULL AND approval.expires_at>clock_timestamp()
       AND root.state IN ('RUNNING','WAITING_HUMAN')) OR
-    (i.approval_policy<>'HUMAN_SCOPED' AND EXISTS(
+    (i.approval_policy='HUMAN_EACH_EFFECT' AND EXISTS(
       SELECT 1 FROM control_plane.owner_gates gate
       WHERE gate.integration_invocation_id=i.id AND gate.state='APPROVED'
   )))

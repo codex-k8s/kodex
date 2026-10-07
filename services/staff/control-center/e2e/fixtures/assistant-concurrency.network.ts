@@ -48,6 +48,7 @@ function makeConversation(
     },
     turns: [
       {
+        source: { origin: "ORDINARY" as const },
         ref: `turn_${ref}_1`,
         sequence: 1,
         role: "USER",
@@ -166,6 +167,7 @@ export class AssistantConcurrencyNetwork {
     const value = this.values.get(ref);
     if (!value) throw new Error("Synthetic retry conversation is missing");
     value.turns.push({
+      source: { origin: "ORDINARY" as const },
       ref: `turn_${ref}_retry_${String(this.epoch)}`,
       sequence: value.turns.length + 1,
       role: "USER",
@@ -352,6 +354,7 @@ export class AssistantConcurrencyNetwork {
             for (const turn of value.turns)
               if (turn.state === "RUNNING") turn.state = "CANCELLED";
           const turn: AssistantTurn = {
+            source: { origin: "ORDINARY" as const },
             ref: `turn_${ref}_${String(value.turns.length + 1)}`,
             sequence: value.turns.length + 1,
             role: "USER",

@@ -16,9 +16,13 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/controller"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 	"github.com/google/uuid"
+	"google.golang.org/grpc/status"
 )
 
 const issuerUID, issuerGID = 29001, 29000
+
+const archiveClaimFailureMessage = "session archive claim failed"
+const archiveRPCCodeAttribute = "rpc_code"
 
 func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	config, err := loadConfig()
@@ -56,7 +60,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 		StorageClass: config.StorageClass, SessionPVCSize: config.SessionPVCSize,
 		ObjectStorageEndpoint: config.ObjectStorageEndpoint, ObjectStorageRegion: config.ObjectStorageRegion,
 		ObjectStorageBucket: config.ObjectStorageBucket, ObjectStorageAllowInsecureLocal: config.ObjectStorageAllowInsecureLocal,
-		WorkerTimeout: config.WorkerTimeout})
+		WorkerTimeout: config.WorkerTimeout, Logger: logger})
 	if err != nil {
 		_ = control.Close()
 		return err
@@ -78,8 +82,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 	if err := technical.Listen(); err != nil {
 		return err
 	}
-	readiness.Set(true, "ready")
-	metrics.SetReady(true)
+	readiness.Set(false, "control_plane_unchecked")
+	metrics.SetReady(false)
 	workers := serviceruntime.StartWorkers(lifecycle, serveTechnical(technical), runLoop(control, kubernetes, readiness, metrics, owned, logger, config))
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	readiness.Set(false, "stopping")
@@ -122,9 +126,6 @@ func runLoop(control *controlplaneclient.Client, kube *controller.Controller, re
 					readiness.Set(false, "kubernetes_unavailable")
 					metrics.SetReady(false)
 					logger.WarnContext(ctx, "session archive Kubernetes check failed", "error_class", "kubernetes_api")
-				} else {
-					readiness.Set(true, "ready")
-					metrics.SetReady(true)
 				}
 			}
 			if !kubernetesReady {
@@ -133,13 +134,14 @@ func runLoop(control *controlplaneclient.Client, kube *controller.Controller, re
 				cycle, cancel := context.WithTimeout(ctx, config.RPCDeadline)
 				claimed, err := control.SessionArchive.ClaimSessionArchiveTasks(cycle, &controlplanev1.ClaimSessionArchiveTasksRequest{WorkloadInstance: config.InstanceID, Limit: 1})
 				cancel()
+				setArchiveClaimReadiness(readiness, metrics, err)
 				if err != nil {
 					owned.cycles.WithLabelValues("error").Inc()
-					logger.WarnContext(ctx, "session archive claim failed", "error_class", "control_plane")
+					logger.WarnContext(ctx, archiveClaimFailureMessage, "error_class", "control_plane", archiveRPCCodeAttribute, status.Code(err).String())
 				} else {
 					owned.cycles.WithLabelValues("success").Inc()
 					if len(claimed.GetTasks()) > 0 {
-						if err := process(ctx, control, kube, claimed.GetTasks()[0], owned, config); err != nil {
+						if err := process(ctx, control, kube, claimed.GetTasks()[0], owned, logger, config); err != nil {
 							logger.WarnContext(ctx, "session archive task processing failed", "error_class", "task_processing")
 						}
 					}
@@ -158,7 +160,18 @@ func runLoop(control *controlplaneclient.Client, kube *controller.Controller, re
 	}
 }
 
-func process(ctx context.Context, control *controlplaneclient.Client, kube *controller.Controller, claim *controlplanev1.SessionArchiveTask, metrics *archiveMetrics, config Config) error {
+// Готовность подтверждает рабочий owner RPC, а не только Kubernetes API.
+func setArchiveClaimReadiness(readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, err error) {
+	if err != nil {
+		readiness.Set(false, "control_plane_unavailable")
+		metrics.SetReady(false)
+		return
+	}
+	readiness.Set(true, "ready")
+	metrics.SetReady(true)
+}
+
+func process(ctx context.Context, control *controlplaneclient.Client, kube *controller.Controller, claim *controlplanev1.SessionArchiveTask, metrics *archiveMetrics, logger *slog.Logger, config Config) error {
 	if claim == nil || claim.GetLease() == nil {
 		return errors.New("claimed session archive task is incomplete")
 	}
@@ -181,6 +194,9 @@ func process(ctx context.Context, control *controlplaneclient.Client, kube *cont
 		rpc, c := context.WithTimeout(call, config.RPCDeadline)
 		defer c()
 		_, err := control.SessionArchive.RenewSessionArchiveTask(rpc, &controlplanev1.RenewSessionArchiveTaskRequest{TaskRef: task.TaskRef, LeaseRef: lease.GetRef(), Fence: lease.GetFence(), Generation: lease.GetGeneration()})
+		if err != nil {
+			observeArchiveRPC(call, logger, task, archiveRPCRenew, err)
+		}
 		return err
 	}
 	result, runErr := kube.Execute(work, task, renew)
@@ -194,20 +210,26 @@ func process(ctx context.Context, control *controlplaneclient.Client, kube *cont
 		return lease.GetRef(), lease.GetFence(), task.TaskRef, lease.GetGeneration()
 	}
 	lr, lf, tr, g := base()
+	stage := archiveRPCFail
 	if !result.Success {
 		_, err = control.SessionArchive.FailSessionArchiveTask(rpc, &controlplanev1.FailSessionArchiveTaskRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, SafeErrorCode: result.SafeErrorCode})
 	} else {
 		switch task.Kind {
 		case "SNAPSHOT":
+			stage = archiveRPCCompleteSnapshot
 			_, err = control.SessionArchive.CompleteSessionSnapshot(rpc, &controlplanev1.CompleteSessionSnapshotRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, FormatVersion: result.FormatVersion, ObjectKey: result.ObjectKey, ObjectVersion: result.ObjectVersion, ObjectEtag: result.ObjectETag, ObjectDigest: result.ObjectDigest, ObjectSizeBytes: result.ObjectSizeBytes, SourceSizeBytes: result.SourceSizeBytes})
 		case "RESTORE":
+			stage = archiveRPCCompleteRestore
 			_, err = control.SessionArchive.CompleteSessionRestore(rpc, &controlplanev1.CompleteSessionRestoreRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, FormatVersion: result.FormatVersion, ObjectKey: result.ObjectKey, ObjectVersion: result.ObjectVersion, ObjectEtag: result.ObjectETag, ObjectDigest: result.ObjectDigest, ObjectSizeBytes: result.ObjectSizeBytes, RestoredSourceSha256: result.SourceSHA256, RestoredSourceSizeBytes: result.SourceSizeBytes})
 		case "DELETE_PVC":
+			stage = archiveRPCCompletePVCDeletion
 			_, err = control.SessionArchive.CompleteSessionPVCDeletion(rpc, &controlplanev1.CompleteSessionPVCDeletionRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, PvcName: task.PVCName})
 		case "DELETE_OBJECT":
+			stage = archiveRPCCompleteObjectDeletion
 			_, err = control.SessionArchive.CompleteSessionObjectDeletion(rpc, &controlplanev1.CompleteSessionObjectDeletionRequest{Mutation: mutation, TaskRef: tr, LeaseRef: lr, Fence: lf, Generation: g, ObjectKey: task.TargetObjectKey, ObjectVersion: task.TargetObjectVersion})
 		}
 	}
+	observeArchiveRPC(rpc, logger, task, stage, err)
 	outcome := "success"
 	if err != nil {
 		outcome = "error"

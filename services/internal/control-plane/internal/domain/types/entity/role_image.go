@@ -1,6 +1,10 @@
 package entity
 
-import "time"
+import (
+	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+)
 
 // RoleImagePlatform задаёт одну точную целевую платформу образа роли.
 type RoleImagePlatform struct {
@@ -73,6 +77,8 @@ type RoleImageManagedLineage struct {
 }
 
 type ImageArtifact struct {
+	AdmissionAttempt                                                              *ImageAdmissionAttempt
+	RiskDecision                                                                  *ImageAdmissionRiskDecision
 	ScopeKind, OrganizationRef, ProjectRef                                        string
 	Ref, RecipeRef, SpecSHA256, BuildRef, StagingReference, ManifestDigest        string
 	ImmutableBuildSHA256, ProvenanceSHA256, BaseImageDigest, SourceSHA256         string
@@ -87,7 +93,9 @@ type ImageArtifact struct {
 	AdmissionRevision, RoleRuntimeContractRevision                                uint64
 	BuildAttempt                                                                  uint32
 	Platforms                                                                     []RoleImagePlatform
-	Tools                                                                         []RoleImageTool
+	DeclaredTools                                                                 []RoleImageTool
+	ToolInventorySHA256                                                           string
+	ToolInventory                                                                 *runtimecontract.ImageToolInventory
 	PromotedAt                                                                    *time.Time
 	CreatedAt, UpdatedAt                                                          time.Time
 }
@@ -115,11 +123,25 @@ type ImageBuildClaim struct {
 }
 
 type ImageAdmissionClaim struct {
-	Artifact            ImageArtifact
-	ClaimToken          string
-	Fence               uint64
-	AuthorityGeneration uint64
-	ClaimExpiresAt      time.Time
+	Artifact                                                   ImageArtifact
+	ClaimToken                                                 string
+	Fence                                                      uint64
+	AuthorityGeneration                                        uint64
+	ClaimExpiresAt                                             time.Time
+	AdmissionAttemptRef                                        string
+	AdmissionAttempt                                           uint32
+	RiskAcceptanceJSON, RiskAcceptanceSHA256                   string
+	SourceAdmissionReceiptSHA256, SourceEvidenceManifestDigest string
+	SourceAdmissionRevision                                    uint64
+}
+
+// RoleImageAdmissionFailure — авторитетный технический исход, не admission verdict.
+type RoleImageAdmissionFailure struct {
+	ImageArtifactRef, RecipeRef, BuildRef  string
+	ScopeKind, OrganizationRef, ProjectRef string
+	Version, RecipeGeneration              uint64
+	BuildAttempt                           uint32
+	State, ErrorCode                       string
 }
 
 type ImagePromotionClaim struct {

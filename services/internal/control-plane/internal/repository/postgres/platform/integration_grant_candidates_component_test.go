@@ -122,7 +122,7 @@ func testIntegrationGrantRevocation(t *testing.T, ctx context.Context, repositor
 	if err != nil {
 		t.Fatal(err)
 	}
-	grant := command.Command{Kind: command.ChangeIntegrationGrant, Principal: actor, Mutation: value.Mutation{IdempotencyKey: "selector-authorized-grant", ExpectedVersion: &fresh.Version}, Payload: command.IntegrationGrantInput{ConnectionRef: connection.Ref, AgentRef: agent.Ref, CapabilityKey: "synthetic.journal.read", Enabled: true}}
+	grant := command.Command{Kind: command.ChangeIntegrationGrant, Principal: actor, Mutation: value.Mutation{IdempotencyKey: "selector-authorized-grant", ExpectedVersion: &fresh.Version}, Payload: command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, AgentRef: agent.Ref, CapabilityKey: "synthetic.journal.read", Enabled: true}}
 	if _, err := service.Execute(ctx, grant); err != nil {
 		t.Fatalf("fresh candidate grant: %v", err)
 	}
@@ -153,7 +153,7 @@ func testIntegrationGrantRevocation(t *testing.T, ctx context.Context, repositor
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "selector-cleanup-grant", ExpectedVersion: &fresh.Version}, Payload: command.IntegrationGrantInput{ConnectionRef: connection.Ref, AgentRef: agent.Ref, CapabilityKey: "synthetic.journal.read", Enabled: false}}); err != nil {
+	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "selector-cleanup-grant", ExpectedVersion: &fresh.Version}, Payload: command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, AgentRef: agent.Ref, CapabilityKey: "synthetic.journal.read", Enabled: false}}); err != nil {
 		t.Fatal(err)
 	}
 	unavailable, err := service.Execute(ctx, command.Command{Kind: command.CreateConnection, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "selector-unavailable"}, Payload: command.ConnectionInput{DefinitionKey: "synthetic", Name: "Selector unavailable connection", PublicConfiguration: map[string]any{"journal": "selector-unavailable"}}})
@@ -161,7 +161,7 @@ func testIntegrationGrantRevocation(t *testing.T, ctx context.Context, repositor
 		t.Fatal(err)
 	}
 	stale := int64(999)
-	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "selector-unavailable-grant", ExpectedVersion: &stale}, Payload: command.IntegrationGrantInput{ConnectionRef: unavailable.Connection.Ref, AgentRef: agent.Ref, CapabilityKey: "synthetic.journal.read", Enabled: true}}); !errors.Is(err, errs.ErrConflict) {
+	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "selector-unavailable-grant", ExpectedVersion: &stale}, Payload: command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: unavailable.Connection.Ref, AgentRef: agent.Ref, CapabilityKey: "synthetic.journal.read", Enabled: true}}); !errors.Is(err, errs.ErrConflict) {
 		t.Fatalf("unavailable connection before OCC: %v", err)
 	}
 	projection, err := service.ListIntegrationGrantConnectionCandidates(ctx, owner, query.IntegrationCandidates{Purpose: "GRANT", Filter: query.Filter{Query: unavailable.Connection.Name}})
@@ -189,7 +189,7 @@ func testIntegrationGrantWorkflow(t *testing.T, ctx context.Context, service *pl
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "selector-workflow-grant", ExpectedVersion: &fresh.Version}, Payload: command.IntegrationGrantInput{ConnectionRef: connection.Ref, WorkflowRef: created.Workflow.Ref, CapabilityKey: "synthetic.journal.read", Enabled: true}}); err != nil {
+	if _, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "selector-workflow-grant", ExpectedVersion: &fresh.Version}, Payload: command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, WorkflowRef: created.Workflow.Ref, CapabilityKey: "synthetic.journal.read", Enabled: true}}); err != nil {
 		t.Fatalf("Workflow grant owner transition: %v", err)
 	}
 	validated, err := service.Execute(ctx, command.Command{Kind: command.ValidateWorkflow, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "selector-workflow-validate", ExpectedVersion: &created.Workflow.Version}, Payload: command.WorkflowInput{Ref: created.Workflow.Ref}})

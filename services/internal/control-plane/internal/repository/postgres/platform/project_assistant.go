@@ -39,6 +39,9 @@ var queryProjectAssistantProtectedAgent string
 //go:embed sql/project_assistant__context_creation_allowed.sql
 var queryProjectAssistantContextCreationAllowed string
 
+//go:embed sql/system_assistant_integration_grants__operations.sql
+var querySystemAssistantIntegrationGrantOperations string
+
 func (repository *Repository) rejectAssistantAgentArchive(ctx context.Context, tx pgx.Tx, current scope, agentRef string) error {
 	var protected bool
 	if err := tx.QueryRow(ctx, queryProjectAssistantProtectedAgent, current.organizationID, agentRef).Scan(&protected); errors.Is(err, pgx.ErrNoRows) {
@@ -127,6 +130,32 @@ func (repository *Repository) expandAssistantContext(ctx context.Context, tx pgx
 	if allowed && !contains(descriptor.AllowedOperations, "CREATE_PROJECT_ASSISTANT") {
 		descriptor.AllowedOperations = append(descriptor.AllowedOperations, "CREATE_PROJECT_ASSISTANT")
 	}
+	var grantOperations []string
+	if err := tx.QueryRow(ctx, querySystemAssistantIntegrationGrantOperations, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "actor_id": current.actorID,
+		"assistant_agent_id": assistant.ID, "assistant_scope": assistant.Scope,
+		"authority_project": current.authorityProjectID,
+	}).Scan(&grantOperations); err != nil {
+		return errs.ErrUnavailable
+	}
+	for _, operation := range grantOperations {
+		if !contains(descriptor.AllowedOperations, operation) {
+			descriptor.AllowedOperations = append(descriptor.AllowedOperations, operation)
+		}
+	}
+	var connectionOperations []string
+	if err := tx.QueryRow(ctx, queryProjectAssistantConnectionOperations, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "actor_id": current.actorID,
+		"assistant_agent_id": assistant.ID, "assistant_scope": assistant.Scope,
+		"authority_project": current.authorityProjectID,
+	}).Scan(&connectionOperations); err != nil {
+		return errs.ErrUnavailable
+	}
+	for _, operation := range connectionOperations {
+		if !contains(descriptor.AllowedOperations, operation) {
+			descriptor.AllowedOperations = append(descriptor.AllowedOperations, operation)
+		}
+	}
 	return nil
 }
 
@@ -143,6 +172,9 @@ func (repository *Repository) constrainAssistantPlanScope(ctx context.Context, t
 		return errs.ErrNotFound
 	}
 	for _, operation := range operations {
+		if operation.Type == prepareProjectAssistantConnection && assistantString(operation.Parameters, "projectAssistantRef") != assistant.Ref {
+			return errs.ErrForbidden
+		}
 		if assistantProjectConfigurationOperation(operation) && assistantString(operation.Parameters, "projectAssistantRef") != assistant.Ref {
 			return errs.ErrForbidden
 		}

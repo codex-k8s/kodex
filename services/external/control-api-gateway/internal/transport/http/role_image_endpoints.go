@@ -99,14 +99,28 @@ func (server *Server) GetRoleImageRecipe(writer http.ResponseWriter, request *ht
 		result.Builds = append(result.Builds, publicRoleImageBuild(build))
 	}
 	if response.GetActiveArtifact() != nil {
+		if !validImageRiskHistory(response.GetActiveArtifact()) {
+			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+			return
+		}
 		artifact := publicRoleImageArtifact(response.GetActiveArtifact())
 		result.ActiveArtifact = &artifact
 	}
 	if response.GetPromotionCandidate() != nil {
+		if !validImageRiskHistory(response.GetPromotionCandidate()) {
+			writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+			return
+		}
 		artifact := publicRoleImageArtifact(response.GetPromotionCandidate())
 		result.PromotionCandidate = &artifact
 	}
 	setVersionETag(writer, response.GetRecipe().GetVersion())
+	failure, validFailure := publicRoleImageAdmissionFailure(response.GetAdmissionFailure(), response.GetRecipe(), response.GetBuilds())
+	if !validFailure {
+		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return
+	}
+	result.AdmissionFailure = failure
 	writeJSON(writer, http.StatusOK, result)
 }
 
@@ -126,6 +140,10 @@ func validRoleImageLineage(lineage *controlplanev1.RoleImageManagedLineage) bool
 
 func validRoleImageReceipt(writer http.ResponseWriter, response *controlplanev1.ManageRoleImageRecipeResponse, projectRef, recipeRef string) bool {
 	recipe := response.GetRecipe()
+	if artifact := response.GetImageArtifact(); artifact != nil && !validImageRiskHistory(artifact) {
+		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
+		return false
+	}
 	if recipe == nil || recipe.GetProjectRef() != projectRef || recipeRef != "" && recipe.GetRef() != recipeRef ||
 		!validRoleImageLineage(recipe.GetManagedLineage()) || !validRoleImageSource(recipe) || !validRoleImageBuildSource(response.GetImageBuild()) || response.GetImageBuild().GetConfigurationRevisionRef() != "" && !effectiveCapabilityRef(response.GetImageBuild().GetConfigurationRevisionRef()) {
 		writeLocalProblem(writer, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
@@ -377,7 +395,7 @@ func publicRoleImageArtifact(input *controlplanev1.ImageArtifact) generated.Role
 		AdmissionVerdict:   generated.RoleImageArtifactAdmissionVerdict(strings.TrimPrefix(input.GetAdmissionVerdict().String(), "IMAGE_ADMISSION_VERDICT_")),
 		PromotionState:     generated.RoleImageArtifactPromotionState(strings.TrimPrefix(input.GetPromotionState().String(), "IMAGE_PROMOTION_STATE_")),
 		PromotionRequested: input.GetPromotionRequested(),
-		Tools:              make([]generated.RoleImageArtifactTool, 0, len(input.GetTools())),
+		DeclaredTools:      make([]generated.RoleImageArtifactTool, 0, len(input.GetDeclaredTools())),
 	}
 	if value := input.GetPromotedReference(); value != "" {
 		result.PromotedReference = &value
@@ -395,8 +413,37 @@ func publicRoleImageArtifact(input *controlplanev1.ImageArtifact) generated.Role
 	if value := input.GetVulnerabilityEvidenceSha256(); value != "" {
 		result.VulnerabilityEvidenceSha256 = &value
 	}
-	for _, tool := range input.GetTools() {
-		result.Tools = append(result.Tools, generated.RoleImageArtifactTool{Name: tool.GetName(), Version: tool.GetVersion()})
+	for _, tool := range input.GetDeclaredTools() {
+		result.DeclaredTools = append(result.DeclaredTools, generated.RoleImageArtifactTool{Name: tool.GetName(), Version: tool.GetVersion()})
+	}
+	result.VerifiedToolInventory = publicImageToolInventory(input.GetVerifiedToolInventory())
+	if input.GetAdmissionAttempt() != nil {
+		value, ok := imageRiskPublic[generated.ImageAdmissionAttempt](input.GetAdmissionAttempt())
+		if ok {
+			result.AdmissionAttempt = &value
+		}
+	}
+	if input.GetRiskDecision() != nil {
+		value, ok := imageRiskPublic[generated.ImageAdmissionRiskDecision](input.GetRiskDecision())
+		if ok {
+			result.RiskDecision = &value
+		}
+	}
+	return result
+}
+
+func publicImageToolInventory(input *controlplanev1.ImageToolInventory) generated.ImageToolInventory {
+	result := generated.ImageToolInventory{Status: generated.ImageToolInventoryStatusUNAVAILABLE, Platforms: []generated.ImagePlatformToolInventory{}}
+	if input == nil || input.GetStatus() != "VERIFIED" {
+		return result
+	}
+	result.Status, result.Sha256, result.ImageDigest, result.ProvenanceSha256 = generated.ImageToolInventoryStatusVERIFIED, input.GetSha256(), input.GetImageDigest(), input.GetProvenanceSha256()
+	for _, platform := range input.GetPlatforms() {
+		item := generated.ImagePlatformToolInventory{Platform: generated.ImagePlatformToolInventoryPlatform(platform.GetPlatform()), PlatformDigest: platform.GetPlatformDigest(), ManifestSha256: platform.GetManifestSha256(), Tools: []generated.ImageToolObservation{}}
+		for _, tool := range platform.GetTools() {
+			item.Tools = append(item.Tools, generated.ImageToolObservation{Name: generated.ImageToolObservationName(tool.GetName()), Status: generated.ImageToolObservationStatus(tool.GetStatus()), Path: tool.GetPath(), Version: tool.GetVersion(), Sha256: tool.GetSha256(), Required: tool.GetRequired()})
+		}
+		result.Platforms = append(result.Platforms, item)
 	}
 	return result
 }

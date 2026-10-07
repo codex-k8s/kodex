@@ -74,6 +74,7 @@ function conversation(index: number): AssistantConversation {
       assistantImportFixture && index === 0
         ? [
             {
+              source: { origin: "ORDINARY" as const },
               ref: "turn_openapi_import_fixture",
               sequence: 1,
               role: "ASSISTANT",
@@ -198,6 +199,7 @@ if (projectAssistantFixture) {
       assistantProfileRef: profile.ref,
       turns: [
         {
+          source: { origin: "ORDINARY" as const },
           ref: "turn_helper_fixture",
           sequence: 1,
           role: "ASSISTANT",

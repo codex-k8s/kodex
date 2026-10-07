@@ -9,6 +9,8 @@ import type { OwnerGate } from "@/shared/api/generated/openapi/types.gen";
 const gate: OwnerGate = {
   ref: "gate_addressed",
   version: 2,
+  scopeKind: "PROJECT",
+  organizationRef: "org_synthetic",
   projectRef: "project_addressed",
   runRef: "run_addressed",
   nodeRef: "node_addressed",
@@ -23,6 +25,41 @@ const gate: OwnerGate = {
   nextActions: [],
 };
 describe("owner gate navigation", () => {
+  it("читает организационное решение без фиктивного проекта и отвергает чужую организацию", async () => {
+    const organizationGate = {
+      ...gate,
+      scopeKind: "ORGANIZATION" as const,
+      projectRef: undefined,
+    };
+    sdk.getOwnerGate.mockResolvedValue({
+      data: organizationGate,
+      response: new Response(),
+    });
+    await expect(
+      readAddressedGate(
+        gate.ref,
+        undefined,
+        new AbortController().signal,
+        gate.organizationRef,
+      ),
+    ).resolves.toEqual(organizationGate);
+    await expect(
+      readAddressedGate(
+        gate.ref,
+        undefined,
+        new AbortController().signal,
+        "foreign_org",
+      ),
+    ).rejects.toThrow("Invalid owner gate readback");
+    await expect(
+      readAddressedGate(
+        gate.ref,
+        gate.projectRef,
+        new AbortController().signal,
+        gate.organizationRef,
+      ),
+    ).rejects.toThrow("Invalid owner gate readback");
+  });
   it("не подставляет другое решение до exact read, даже если адресат был в старом списке", () => {
     expect(gateSelection(["other"], "", "wanted")).toBe("");
     expect(gateSelection(["wanted"], "wanted", "wanted")).toBe("");

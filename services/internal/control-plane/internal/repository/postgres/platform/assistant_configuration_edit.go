@@ -3,18 +3,28 @@ package platform
 import (
 	"context"
 	"fmt"
+
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 )
 
 func assistantConfigurationOperationType(kind string) bool {
-	return kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION"
+	return kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" || kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" || kind == prepareProjectAssistantConnection || kind == changeProjectAssistantIntegrationGrant
 }
 
 func (repository *Repository) rehydrateEditedAssistantConfiguration(ctx context.Context, tx pgx.Tx, current scope, original, edited entity.AssistantPlanOperation, refreshStale bool) (entity.AssistantPlanOperation, error) {
 	if original.Type != edited.Type || original.Key != edited.Key || edited.Parameters == nil {
 		return edited, errs.ErrForbidden
+	}
+	if original.Type == changeProjectAssistantIntegrationGrant {
+		return repository.rehydrateEditedProjectAssistantGrant(ctx, tx, current, original, edited, refreshStale)
+	}
+	if original.Type == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" {
+		return repository.rehydrateEditedSystemAssistantGrant(ctx, tx, current, original, edited, refreshStale)
+	}
+	if original.Type == prepareProjectAssistantConnection {
+		return repository.rehydrateEditedProjectAssistantConnection(ctx, tx, current, original, edited, refreshStale)
 	}
 	request := cloneAssistantFields(edited.Parameters)
 	var refreshed entity.AssistantPlanOperation
@@ -42,15 +52,27 @@ func (repository *Repository) rehydrateEditedAssistantConfiguration(ctx context.
 		}
 		parameters := map[string]any{}
 		for _, field := range assistantRuntimeEditable {
-			parameters[field] = request[field]
+			if value, exists := request[field]; exists {
+				parameters[field] = value
+			}
 		}
 		edited.Parameters = parameters
 		refreshed, err = repository.hydrateAssistantRuntimeConfiguration(ctx, tx, current, edited)
 	} else {
-		if !onlyAssistantFields(request, "systemAssistantRef", "scopeKind", "organizationRef", "agentVersion", "recipeRef", "name", "environmentKey", "dockerfile") {
+		if !refreshStale {
+			frozen, normalizeErr := normalizeAssistantOperation(original)
+			if normalizeErr != nil {
+				return edited, normalizeErr
+			}
+			matching, snapshotErr := repository.systemAssistantImageSnapshotMatches(ctx, tx, current, frozen)
+			if snapshotErr != nil || !matching {
+				return edited, errs.ErrConflict
+			}
+		}
+		if !onlyAssistantFields(request, "systemAssistantRef", "scopeKind", "organizationRef", "agentVersion", "recipeRef", "name", "environmentKey", "dockerfile", "specSha256") {
 			return edited, errs.ErrInvalid
 		}
-		for _, field := range []string{"systemAssistantRef", "scopeKind", "organizationRef", "agentVersion", "recipeRef"} {
+		for _, field := range []string{"systemAssistantRef", "scopeKind", "organizationRef", "agentVersion", "recipeRef", "specSha256"} {
 			if !assistantJSONEqual(request[field], original.Parameters[field]) {
 				return edited, errs.ErrForbidden
 			}

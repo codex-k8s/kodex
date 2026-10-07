@@ -75,7 +75,7 @@ done
   { echo "promotion evidence repository binding is invalid" >&2; exit 78; }
 [[ $policy_revision =~ ^[1-9][0-9]*$ ]] || { echo "policy revision is invalid" >&2; exit 78; }
 [[ $policy_sha256 =~ ^[a-f0-9]{64}$ ]] || { echo "policy digest is invalid" >&2; exit 78; }
-[[ $required_tools == base64,cmp,cosign,grype,image-admission-bridge,jq,regctl,sha256sum,syft,wc ]] ||
+[[ $required_tools == base64,cmp,cosign,grype,image-admission-bridge,image-tool-inventory-validator,image-vulnerability-report-validator,jq,regctl,sha256sum,syft,tr,wc ]] ||
   { echo "admission tools contract is invalid" >&2; exit 78; }
 [[ $builder_identity == spiffe://kodex.local/ns/kodex-system/sa/role-image-builder ]] ||
   { echo "builder identity is invalid" >&2; exit 78; }
@@ -123,11 +123,17 @@ EOF
 
 emit_job() {
   local phase=$1 service_account=$2 identity_secret=$3 protected=${4:-false}
-  local workload="" grant_signer_secret="" memory_request=128Mi memory_limit=1Gi tmp_limit=64Mi
+  local workload="" grant_signer_secret="" cpu_request=100m cpu_limit=1 memory_request=128Mi memory_limit=1Gi tmp_limit=64Mi
   if [[ $phase == scan ]]; then
     memory_request=256Mi
     memory_limit=2Gi
-    tmp_limit=1Gi
+    tmp_limit=32Gi
+    if [[ $security_profile == trusted-cluster ]]; then
+      cpu_request=1
+      cpu_limit=4
+      memory_request=2Gi
+      memory_limit=16Gi
+    fi
   fi
   if [[ $phase == claim || $phase == admit ]]; then
     workload='image-admission'
@@ -320,6 +326,12 @@ EOF
             - {name: IMAGE_OWNER_PROMOTION_FILE, value: /work/owner-promotion.json}
 EOF
   fi
+  if [[ $phase == admit ]]; then
+    cat <<EOF
+            - {name: IMAGE_OWNER_VULNERABILITY_REPORT_JSON_FILE, value: /work/vulnerability-report.json}
+            - {name: IMAGE_OWNER_VULNERABILITY_REPORT_PROJECTION_SHA256_FILE, value: /work/vulnerability-report.sha256}
+EOF
+  fi
   cat <<EOF
           volumeMounts:
             - {name: work, mountPath: /work}
@@ -336,7 +348,7 @@ EOF
 EOF
   fi
   cat <<EOF
-          resources: {requests: {cpu: 100m, memory: ${memory_request}}, limits: {cpu: "1", memory: ${memory_limit}}}
+          resources: {requests: {cpu: "${cpu_request}", memory: ${memory_request}}, limits: {cpu: "${cpu_limit}", memory: ${memory_limit}}}
           securityContext: {runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
       volumes:
 EOF

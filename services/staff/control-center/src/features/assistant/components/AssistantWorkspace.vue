@@ -34,8 +34,11 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 
 import AssistantPlanEditor from "@/features/assistant/components/AssistantPlanEditor.vue";
+import AssistantPlanRecord from "./AssistantPlanRecord.vue";
+import AssistantPlanCard from "./AssistantPlanCard.vue";
 import AgentRuntimePanel from "@/features/agents/detail/AgentRuntimePanel.vue";
 import AssistantEnvironmentSettingsPanel from "@/features/assistant/components/AssistantEnvironmentSettingsPanel.vue";
+import SystemAssistantIntegrationGrantsPanel from "./SystemAssistantIntegrationGrantsPanel.vue";
 import AssistantProjectProfileSetup from "./AssistantProjectProfileSetup.vue";
 import AssistantCreatedScheduleCard from "@/features/assistant/components/AssistantCreatedScheduleCard.vue";
 import AssistantCreatedEntityCard from "@/features/assistant/components/AssistantCreatedEntityCard.vue";
@@ -53,6 +56,7 @@ import AssistantHistoryFilter from "./AssistantHistoryFilter.vue";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import {
   assistantContextIdentity,
+  assistantContextRouteLabelKey,
   assistantContextTitle,
   conversationMatchesContext,
   readableContextOperations,
@@ -68,6 +72,7 @@ import {
   type AssistantIntegrationPublicationRequest,
 } from "@/features/assistant/events";
 import {
+  assistantActiveUserTurn,
   assistantAwaitingReply,
   assistantEffectiveRuntimeState,
   assistantRequiresProviderAccount,
@@ -77,6 +82,7 @@ import {
 } from "@/features/assistant/model";
 import { useAssistantStore } from "@/features/assistant/store";
 import { usePlatformStore } from "@/features/platform/store";
+import { useRealtimeStore } from "@/features/realtime/store";
 import { organizationRuntimeResourceScope } from "@/features/runtime/resource-scope";
 import {
   persistAssistantConversationRef,
@@ -84,6 +90,20 @@ import {
   restoreAssistantWorkspaceOpen,
 } from "@/features/assistant/workspace-state";
 import RunActivityView from "@/features/runs/RunActivityView.vue";
+import {
+  buildAssistantChatTimeline,
+  activeAssistantChatItemId,
+} from "@/features/assistant/chat-timeline";
+import {
+  assistantTurnHasAuthoritativeActivity,
+  assistantTurnIsEmptyTerminalReceipt,
+  assistantTurnIsDuplicateFailureReceipt,
+  assistantTerminalTranscriptScopes,
+  assistantTranscriptReplacesWorkingFallback,
+  assistantFailureMessageKey,
+  isTranscriptNearBottom,
+} from "@/features/runs/run-activity";
+import { runtimeProgressKey } from "@/features/runs/runtime-text";
 import RuntimeSecretDraftDialog from "@/features/runtime-secrets/RuntimeSecretDraftDialog.vue";
 import type { RuntimeSecretDraftSuggestion } from "@/features/runtime-secrets/model";
 import { consumeRuntimeSecretReauthSuggestion } from "@/features/runtime-secrets/reauth-suggestion";
@@ -93,6 +113,7 @@ import type {
   AssistantPlanReceipt,
   RunEvent,
   AssistantScope,
+  AssistantTurn,
 } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem } from "@/shared/api/problem";
 import {
@@ -110,6 +131,7 @@ import { requestConfirmation } from "@/shared/ui/confirmation";
 import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useServerMessage } from "@/shared/ui/server-message";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 import { runPath } from "@/shared/routes";
 
@@ -146,12 +168,109 @@ function operationTargetKindLabel(kind: string): string {
 }
 
 const { t } = useI18n();
+const serverMessage = useServerMessage();
 const route = useRoute();
 const router = useRouter();
 const assistantFormActive = computed(() => route.query.assistantForm === "1");
 const store = useAssistantStore();
 const titleFieldName = `assistant-conversation-title-${useId()}`;
 const platform = usePlatformStore();
+const realtime = useRealtimeStore();
+const conversationRunRefs = computed(() => [
+  ...new Set(
+    store.selectedConversation?.turns.flatMap((turn) =>
+      turn.runRef ? [turn.runRef] : [],
+    ) ?? [],
+  ),
+]);
+const conversationRunEvents = computed(() =>
+  conversationRunRefs.value.flatMap((runRef) =>
+    Object.values(platform.events[runRef] ?? {}),
+  ),
+);
+const closedTranscriptExecutionKeys = computed(() =>
+  conversationRunRefs.value.flatMap((runRef) => {
+    const run = platform.runs[runRef];
+    const graph = run
+      ? (platform.graphs[run.rootRunRef] ?? platform.graphs[run.ref])
+      : undefined;
+    return assistantTerminalTranscriptScopes(
+      store.selectedConversation,
+      platform.bootstrap?.organizationRef,
+      run,
+      graph?.nodes ?? [],
+      conversationRunEvents.value,
+    );
+  }),
+);
+function turnHasPublishedMessage(turn: AssistantTurn): boolean {
+  const run = turn.runRef ? platform.runs[turn.runRef] : undefined;
+  const graph = run
+    ? (platform.graphs[run.rootRunRef] ?? platform.graphs[run.ref])
+    : undefined;
+  return assistantTurnHasAuthoritativeActivity(
+    turn,
+    store.selectedConversation?.turns ?? [],
+    run,
+    graph?.nodes ?? [],
+    conversationRunEvents.value,
+  );
+}
+function transcriptTurnContent(turn: AssistantTurn): string {
+  if (turn.source.origin === "CALLBACK_CONTINUATION")
+    return serverMessage("i18n:CALLBACK_CONTINUATION_PUBLIC");
+  const failureKey =
+    turn.role === "ASSISTANT"
+      ? assistantFailureMessageKey(turn.content, turn.state)
+      : undefined;
+  if (failureKey) return t(failureKey);
+  const key =
+    turn.role !== "USER" ? runtimeProgressKey(turn.content) : undefined;
+  return key ? t(key) : turn.content;
+}
+function turnIsEmptyTerminalReceipt(turn: AssistantTurn): boolean {
+  const run = turn.runRef ? platform.runs[turn.runRef] : undefined;
+  const graph = run
+    ? (platform.graphs[run.rootRunRef] ?? platform.graphs[run.ref])
+    : undefined;
+  const args = [
+    turn,
+    store.selectedConversation,
+    platform.bootstrap?.organizationRef,
+    run,
+    graph?.nodes ?? [],
+    conversationRunEvents.value,
+  ] as const;
+  return (
+    assistantTurnIsEmptyTerminalReceipt(...args) ||
+    assistantTurnIsDuplicateFailureReceipt(...args)
+  );
+}
+const transcriptTurns = computed(() =>
+  (store.selectedConversation?.turns ?? []).filter(
+    (turn) =>
+      turn.plan ||
+      (!turnHasPublishedMessage(turn) && !turnIsEmptyTerminalReceipt(turn)),
+  ),
+);
+const chatTimeline = computed(() =>
+  buildAssistantChatTimeline(
+    store.selectedConversation,
+    transcriptTurns.value,
+    platform.bootstrap?.organizationRef,
+    platform.runs,
+    platform.graphs,
+    conversationRunEvents.value,
+  ),
+);
+const chatActiveItemId = computed(() =>
+  activeAssistantChatItemId(
+    chatTimeline.value,
+    closedTranscriptExecutionKeys.value,
+  ),
+);
+const transcriptLeases = new Map<string, () => void>();
+let transcriptReadGeneration = 0;
 const systemResourceScope = computed(() =>
   organizationRuntimeResourceScope(platform.bootstrap),
 );
@@ -217,7 +336,16 @@ const messageDrafts = new Map<string, string>();
 const titleDraft = ref("");
 const titleEditing = ref(false);
 const settingsOpen = ref(false);
-const settingsTab = ref<"RUNTIME" | "ENVIRONMENT" | "INSTRUCTIONS">("RUNTIME");
+const settingsTab = ref<
+  "RUNTIME" | "ENVIRONMENT" | "INSTRUCTIONS" | "INTEGRATIONS"
+>("RUNTIME");
+watch(
+  () => store.assistantScope,
+  (scope) => {
+    if (scope !== "SYSTEM" && settingsTab.value === "INTEGRATIONS")
+      settingsTab.value = "RUNTIME";
+  },
+);
 const assistantInstructions = ref("");
 const settingsBusy = ref(false);
 const settingsProblem = ref<AppProblem>();
@@ -262,6 +390,9 @@ const planDialog = ref<HTMLElement>();
 const formSlot = ref<HTMLElement>();
 const composer = ref<{ focus(): void }>();
 const chatLog = ref<HTMLElement>();
+const chatFollowing = ref(true);
+const chatUnread = ref(false);
+const expandedHistoryMessages = ref<Record<string, boolean>>({});
 let followLatestAfterLoad = false;
 let chatResizeObserver: ResizeObserver | undefined;
 let latestRestoreTimer: number | undefined;
@@ -286,6 +417,13 @@ const configurationKinds = new Set([
   "SYSTEM_STT",
 ]);
 const contextTitle = computed(() => {
+  if (
+    route.name === "home" &&
+    !props.context.entityRef &&
+    !checkedContext.value?.entityRef
+  ) {
+    return t("nav.home");
+  }
   const kind = route.params.kind;
   if (
     !props.context.entityName &&
@@ -297,7 +435,12 @@ const contextTitle = computed(() => {
   ) {
     return t(`managed.kinds.${kind}`);
   }
-  return assistantContextTitle(props.context, checkedContext.value);
+  const routeLabelKey = assistantContextRouteLabelKey(route.name);
+  return assistantContextTitle(
+    props.context,
+    checkedContext.value,
+    routeLabelKey ? t(routeLabelKey) : undefined,
+  );
 });
 const checkedOperations = computed(() =>
   checkedContext.value
@@ -328,6 +471,21 @@ const assistantRuntimeState = computed(() =>
 const awaitingReply = computed(() =>
   assistantAwaitingReply(store.selectedConversation),
 );
+const showWorkingFallback = computed(() => {
+  if (!awaitingReply.value) return false;
+  const runRef = assistantActiveUserTurn(store.selectedConversation)?.runRef;
+  const run = runRef ? platform.runs[runRef] : undefined;
+  const graph = run
+    ? (platform.graphs[run.rootRunRef] ?? platform.graphs[run.ref])
+    : undefined;
+  return !assistantTranscriptReplacesWorkingFallback(
+    store.selectedConversation,
+    platform.bootstrap?.organizationRef,
+    run,
+    graph?.nodes ?? [],
+    conversationRunEvents.value,
+  );
+});
 const providerAccountRequired = computed(
   () =>
     store.assistant !== undefined &&
@@ -383,7 +541,10 @@ const canSend = computed(
 );
 const canStartConversation = computed(
   () =>
-    props.live && !store.loading && !store.busy && canCreateConversation.value,
+    props.live &&
+    store.conversationCreationReady &&
+    !store.busy &&
+    canCreateConversation.value,
 );
 const isRunContext = computed(() => props.context.entityKind === "RUN");
 for (const [root, sentinel, visible] of [
@@ -914,7 +1075,17 @@ async function saveAssistantInstructions(): Promise<void> {
 }
 
 function scrollToLatest(): void {
+  chatFollowing.value = true;
+  chatUnread.value = false;
   chatLog.value?.scrollTo({ top: chatLog.value.scrollHeight });
+}
+
+function onChatScroll(): void {
+  const log = chatLog.value;
+  if (!log) return;
+  chatFollowing.value = isTranscriptNearBottom(log);
+  if (chatFollowing.value) chatUnread.value = false;
+  else cancelLatestRestore();
 }
 
 function cancelLatestRestore(): void {
@@ -926,7 +1097,7 @@ function restoreLatestAfterRender(): void {
   cancelLatestRestore();
   let remaining = 5;
   const advance = () => {
-    if (!open.value || !chatLog.value) return;
+    if (!open.value || !chatLog.value || !chatFollowing.value) return;
     scrollToLatest();
     if (remaining-- > 0) latestRestoreTimer = window.setTimeout(advance, 160);
     else latestRestoreTimer = undefined;
@@ -1171,6 +1342,7 @@ async function applyPlan(): Promise<void> {
         kinds.add("RUN");
         break;
       case "CREATE_INTEGRATION_CONNECTION":
+      case "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION":
       case "UPDATE_INTEGRATION_CONNECTION":
       case "TEST_INTEGRATION_CONNECTION":
         kinds.add("INTEGRATION_CONNECTION");
@@ -1297,6 +1469,9 @@ watch(
 watch(
   () => store.selectedConversation?.ref,
   async () => {
+    chatFollowing.value = true;
+    chatUnread.value = false;
+    expandedHistoryMessages.value = {};
     if (store.selectedConversation?.ref)
       persistAssistantConversationRef(
         props.projectRef,
@@ -1320,9 +1495,16 @@ watch(
   },
 );
 watch(
-  () => store.selectedConversation?.turns.length,
+  () => [
+    store.selectedConversation?.turns.length,
+    ...conversationRunEvents.value.map((event) => event.ref),
+  ],
   async () => {
     if (!open.value || openPlanRef.value) return;
+    if (!chatFollowing.value) {
+      chatUnread.value = true;
+      return;
+    }
     await nextTick();
     restoreLatestAfterRender();
   },
@@ -1343,6 +1525,36 @@ watch(
   },
 );
 
+watch(
+  [
+    open,
+    () => props.live,
+    () => store.selectedConversation?.ref,
+    conversationRunRefs,
+  ],
+  async () => {
+    const generation = ++transcriptReadGeneration;
+    const wanted =
+      open.value && props.live
+        ? new Set(conversationRunRefs.value)
+        : new Set<string>();
+    for (const [runRef, release] of transcriptLeases) {
+      if (wanted.has(runRef)) continue;
+      release();
+      transcriptLeases.delete(runRef);
+    }
+    // Общий owner-checked history path; чтения пока последовательны.
+    for (const runRef of wanted) {
+      if (transcriptLeases.has(runRef)) continue;
+      await platform.loadRun(runRef);
+      if (generation !== transcriptReadGeneration) return;
+      if (!platform.runProblems[runRef] && platform.graphs[runRef])
+        transcriptLeases.set(runRef, realtime.acquireRun(runRef));
+    }
+  },
+  { immediate: true },
+);
+
 onMounted(() => {
   workspaceMounted = true;
   historyMedia?.addEventListener("change", syncHistoryViewport);
@@ -1354,6 +1566,9 @@ onMounted(() => {
   else if (open.value) void show();
 });
 onBeforeUnmount(() => {
+  ++transcriptReadGeneration;
+  for (const release of transcriptLeases.values()) release();
+  transcriptLeases.clear();
   workspaceMounted = false;
   cancelLatestRestore();
   chatResizeObserver?.disconnect();
@@ -1741,7 +1956,6 @@ onBeforeUnmount(() => {
             >
               <span>{{ $t("assistant.context") }}</span>
               <strong>{{ contextTitle }}</strong>
-              <small>{{ context.route }}</small>
             </button>
             <section
               v-if="createdDefinitionRef"
@@ -1861,6 +2075,7 @@ onBeforeUnmount(() => {
               aria-live="polite"
               @wheel.passive="cancelLatestRestore"
               @touchstart.passive="cancelLatestRestore"
+              @scroll.passive="onChatScroll"
             >
               <ProblemNotice
                 v-if="store.problem"
@@ -1868,7 +2083,7 @@ onBeforeUnmount(() => {
                 @retry="store.load(context, projectRef)"
               />
               <div
-                v-else-if="store.loading"
+                v-else-if="store.loading && !store.selectedConversation"
                 class="assistant-empty-state"
                 role="status"
               >
@@ -1914,210 +2129,280 @@ onBeforeUnmount(() => {
                   </div>
                 </template>
               </div>
-              <article
-                v-for="turn in store.selectedConversation?.turns ?? []"
-                v-else
-                :key="turn.ref"
-                class="assistant-message"
-                :class="[
-                  `assistant-message--${turn.role.toLowerCase()}`,
-                  { 'assistant-message--with-plan': Boolean(turn.plan) },
-                ]"
-                :data-turn-ref="turn.ref"
-                :data-turn-sequence="turn.sequence"
-                @click.capture="handleAssistantLink"
-              >
-                <header>
-                  <strong>{{
-                    turn.role === "USER"
-                      ? $t("common.input")
-                      : turn.role === "SYSTEM_RECEIPT"
-                        ? $t("assistant.receipt")
-                        : "Kodex"
-                  }}</strong>
-                  <StatusBadge :state="turn.state" />
-                  <RouterLink
-                    v-if="turn.runRef"
-                    class="button assistant-message__run-link"
-                    :to="
-                      runPath(
-                        turn.runRef,
-                        store.selectedConversation?.projectRef,
-                      )
-                    "
-                    @click.prevent="openAssistantTurnRun(turn.runRef)"
-                  >
-                    {{ $t("assistant.launchedRun.open") }}
-                  </RouterLink>
-                </header>
-                <SafeMarkdown :content="turn.content" />
-                <section v-if="turn.plan" class="assistant-plan-card">
-                  <header>
-                    <ListChecks :size="19" aria-hidden="true" />
-                    <div>
-                      <strong>{{
-                        $t("assistant.planVariant", {
-                          variant: planVariantNumber(turn.plan.ref),
-                        })
-                      }}</strong>
-                      <span>{{
-                        $t("assistant.planEditor.revision", {
-                          revision: turn.plan.revision,
-                          count: turn.plan.operations.length,
-                        })
-                      }}</span>
-                    </div>
-                    <StatusBadge :state="turn.plan.state" />
-                  </header>
-                  <SafeMarkdown
-                    v-if="turn.plan.auditSummary.trim() !== turn.content.trim()"
-                    :content="turn.plan.auditSummary"
+              <template v-else>
+                <template v-for="entry in chatTimeline" :key="entry.id">
+                  <RunActivityView
+                    v-if="entry.kind === 'ACTIVITY'"
+                    :events="entry.events"
+                    :closed-execution-keys="closedTranscriptExecutionKeys"
+                    :active-item-id="entry.isolated ? null : chatActiveItemId"
+                    embedded
                   />
-                  <ol class="assistant-plan-card__operations">
-                    <li
-                      v-for="operation in turn.plan.operations"
-                      :key="operation.ref"
+                  <template v-else v-for="turn in [entry.turn]" :key="turn.ref"
+                    ><article
+                      class="assistant-message"
+                      :class="[
+                        `assistant-message--${turn.role.toLowerCase()}`,
+                        { 'assistant-message--with-plan': Boolean(turn.plan) },
+                        {
+                          'assistant-message--applied-plan':
+                            turn.plan?.state === 'APPLIED',
+                        },
+                      ]"
+                      :data-turn-ref="turn.ref"
+                      :data-turn-sequence="turn.sequence"
+                      @click.capture="handleAssistantLink"
                     >
-                      <header>
-                        <span class="assistant-plan-card__action">
-                          {{
-                            $t(
-                              `assistant.planEditor.actions.${operationActionLabel(operation.action)}`,
+                      <header
+                        v-if="
+                          !turnHasPublishedMessage(turn) &&
+                          turn.plan?.state !== 'APPLIED'
+                        "
+                      >
+                        <strong>{{
+                          turn.role === "USER"
+                            ? $t("common.input")
+                            : turn.role === "SYSTEM_RECEIPT"
+                              ? $t("assistant.receipt")
+                              : "Kodex"
+                        }}</strong>
+                        <StatusBadge :state="turn.state" />
+                        <RouterLink
+                          v-if="turn.runRef"
+                          class="button assistant-message__run-link"
+                          :to="
+                            runPath(
+                              turn.runRef,
+                              store.selectedConversation?.projectRef,
                             )
-                          }}
-                        </span>
-                        <small>{{
-                          operationTargetKindLabel(operation.target.kind)
-                        }}</small>
+                          "
+                          @click.prevent="openAssistantTurnRun(turn.runRef)"
+                        >
+                          {{ $t("assistant.launchedRun.open") }}
+                        </RouterLink>
                       </header>
-                      <strong class="assistant-plan-card__target">
-                        {{ operationTargetLabel(operation.target) }}
-                      </strong>
-                      <span v-if="operationSupportingTitle(operation)">{{
-                        operationSupportingTitle(operation)
-                      }}</span>
-                      <p>{{ operation.summary }}</p>
-                    </li>
-                  </ol>
-                  <AssistantRoleImageBuildCard
-                    v-for="operation in turn.plan.operations.filter(
-                      (item) =>
-                        item.type === 'CREATE_ROLE_IMAGE_RECIPE' ||
-                        item.type === 'UPDATE_ROLE_IMAGE_RECIPE' ||
-                        item.type ===
-                          'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' ||
-                        item.type ===
-                          'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE',
-                    )"
-                    :key="`build-${operation.ref}`"
-                    :plan="turn.plan"
-                    :operation-ref="operation.ref"
-                    @debug="suggestSetup"
-                  />
-                  <AssistantCreatedEntityCard
-                    v-for="operation in turn.plan.operations.filter(
-                      (item) =>
-                        item.type === 'CREATE_PROJECT' ||
-                        item.type === 'UPDATE_PROJECT' ||
-                        item.type === 'CREATE_AGENT' ||
-                        item.type === 'CREATE_PROJECT_ASSISTANT' ||
-                        item.type === 'UPDATE_AGENT',
-                    )"
-                    :key="`entity-${operation.ref}`"
-                    :plan="turn.plan"
-                    :operation-ref="operation.ref"
-                  />
-                  <AssistantCreatedProjectFileCard
-                    v-for="operation in turn.plan.operations.filter(
-                      (item) => item.type === 'CREATE_PROJECT_FILE',
-                    )"
-                    :key="`file-${operation.ref}`"
-                    :plan="turn.plan"
-                    :operation-ref="operation.ref"
-                  />
-                  <AssistantInstructionDraftCard
-                    v-for="operation in turn.plan.operations.filter(
-                      (item) => item.type === 'CREATE_INSTRUCTION_DRAFT',
-                    )"
-                    :key="`instruction-${operation.ref}`"
-                    :plan="turn.plan"
-                    :operation-ref="operation.ref"
-                  />
-                  <AssistantEnvironmentDraftCard
-                    v-for="operation in turn.plan.operations.filter(
-                      (item) =>
-                        item.type === 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' ||
-                        item.type === 'PREPARE_RUNTIME_ENVIRONMENT_REVISION',
-                    )"
-                    :key="`environment-${operation.ref}`"
-                    :plan="turn.plan"
-                    :operation-ref="operation.ref"
-                  />
-                  <AssistantAgentEnvironmentBindingCard
-                    v-for="operation in turn.plan.operations.filter(
-                      (item) => item.type === 'BIND_AGENT_RUNTIME_ENVIRONMENT',
-                    )"
-                    :key="`binding-${operation.ref}`"
-                    :plan="turn.plan"
-                    :operation-ref="operation.ref"
-                  />
-                  <AssistantIntegrationConnectionCard
-                    v-for="operation in turn.plan.operations.filter(
-                      (item) =>
-                        item.type === 'CREATE_INTEGRATION_CONNECTION' ||
-                        item.type === 'UPDATE_INTEGRATION_CONNECTION' ||
-                        item.type === 'TEST_INTEGRATION_CONNECTION',
-                    )"
-                    :key="`connection-${operation.ref}`"
-                    :plan="turn.plan"
-                    :operation-ref="operation.ref"
-                    :refresh-token="connectionRefreshToken"
-                    @prepare-credential="credentialConnectionRef = $event"
-                  />
-                  <AssistantCreatedScheduleCard
-                    v-for="operation in turn.plan.operations.filter(
-                      (item) =>
-                        item.type === 'CREATE_SCHEDULE' ||
-                        item.type === 'UPDATE_SCHEDULE',
-                    )"
-                    :key="`schedule-${operation.ref}`"
-                    :plan="turn.plan"
-                    :operation-ref="operation.ref"
-                  />
-                  <AssistantCreatedWorkflowCard
-                    v-for="operation in turn.plan.operations.filter(
-                      (item) =>
-                        item.type === 'CREATE_WORKFLOW' ||
-                        item.type === 'UPDATE_WORKFLOW',
-                    )"
-                    :key="`workflow-${operation.ref}`"
-                    :plan="turn.plan"
-                    :operation-ref="operation.ref"
-                  />
-                  <AssistantLaunchedRunCard
-                    v-for="operation in turn.plan.operations.filter(
-                      (item) => item.type === 'LAUNCH_RUN',
-                    )"
-                    :key="`run-${operation.ref}`"
-                    :plan="turn.plan"
-                    :operation-ref="operation.ref"
-                    @navigate="close"
-                  />
-                  <button
-                    class="button button--primary"
-                    type="button"
-                    @click="openPlan(turn.plan, $event)"
+                      <SafeMarkdown
+                        v-if="
+                          !turnHasPublishedMessage(turn) &&
+                          turn.plan?.state !== 'APPLIED'
+                        "
+                        :content="transcriptTurnContent(turn)"
+                        :class="{
+                          'assistant-transcript-message--collapsed':
+                            turn.content.length > 1200 &&
+                            !expandedHistoryMessages[turn.ref],
+                        }"
+                      />
+                      <button
+                        v-if="
+                          !turnHasPublishedMessage(turn) &&
+                          turn.plan?.state !== 'APPLIED' &&
+                          turn.content.length > 1200
+                        "
+                        type="button"
+                        class="button button--ghost"
+                        :aria-expanded="
+                          Boolean(expandedHistoryMessages[turn.ref])
+                        "
+                        @click="
+                          expandedHistoryMessages[turn.ref] =
+                            !expandedHistoryMessages[turn.ref]
+                        "
+                      >
+                        {{
+                          $t(
+                            expandedHistoryMessages[turn.ref]
+                              ? "runs.collapseMessage"
+                              : "runs.expandMessage",
+                          )
+                        }}
+                      </button>
+                      <AssistantPlanRecord
+                        v-if="turn.plan"
+                        :plan="turn.plan"
+                        :variant="planVariantNumber(turn.plan.ref)"
+                      >
+                        <SafeMarkdown
+                          v-if="
+                            turn.plan.state === 'APPLIED' &&
+                            !turnHasPublishedMessage(turn)
+                          "
+                          :content="transcriptTurnContent(turn)"
+                        />
+                        <header>
+                          <ListChecks :size="19" aria-hidden="true" />
+                          <div>
+                            <strong>{{
+                              $t("assistant.planVariant", {
+                                variant: planVariantNumber(turn.plan.ref),
+                              })
+                            }}</strong>
+                            <span>{{
+                              $t("assistant.planEditor.revision", {
+                                revision: turn.plan.revision,
+                                count: turn.plan.operations.length,
+                              })
+                            }}</span>
+                          </div>
+                          <StatusBadge :state="turn.plan.state" />
+                        </header>
+                        <SafeMarkdown
+                          v-if="
+                            turn.plan.auditSummary.trim() !==
+                            turn.content.trim()
+                          "
+                          :content="turn.plan.auditSummary"
+                        />
+                        <AssistantPlanCard :operations="turn.plan.operations">
+                          <template #operation="{ operation }">
+                            <header>
+                              <span class="assistant-plan-card__action">
+                                {{
+                                  $t(
+                                    `assistant.planEditor.actions.${operationActionLabel(operation.action)}`,
+                                  )
+                                }}
+                              </span>
+                              <small>{{
+                                operationTargetKindLabel(operation.target.kind)
+                              }}</small>
+                            </header>
+                            <strong class="assistant-plan-card__target">
+                              {{ operationTargetLabel(operation.target) }}
+                            </strong>
+                            <span v-if="operationSupportingTitle(operation)">{{
+                              operationSupportingTitle(operation)
+                            }}</span>
+                            <p>{{ operation.summary }}</p>
+                          </template>
+                        </AssistantPlanCard>
+                        <AssistantRoleImageBuildCard
+                          v-for="operation in turn.plan.operations.filter(
+                            (item) =>
+                              item.type === 'CREATE_ROLE_IMAGE_RECIPE' ||
+                              item.type === 'UPDATE_ROLE_IMAGE_RECIPE' ||
+                              item.type ===
+                                'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' ||
+                              item.type ===
+                                'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE',
+                          )"
+                          :key="`build-${operation.ref}`"
+                          :plan="turn.plan"
+                          :operation-ref="operation.ref"
+                          @debug="suggestSetup"
+                        />
+                        <AssistantCreatedEntityCard
+                          v-for="operation in turn.plan.operations.filter(
+                            (item) =>
+                              item.type === 'CREATE_PROJECT' ||
+                              item.type === 'UPDATE_PROJECT' ||
+                              item.type === 'CREATE_AGENT' ||
+                              item.type === 'CREATE_PROJECT_ASSISTANT' ||
+                              item.type === 'UPDATE_AGENT',
+                          )"
+                          :key="`entity-${operation.ref}`"
+                          :plan="turn.plan"
+                          :operation-ref="operation.ref"
+                        />
+                        <AssistantCreatedProjectFileCard
+                          v-for="operation in turn.plan.operations.filter(
+                            (item) => item.type === 'CREATE_PROJECT_FILE',
+                          )"
+                          :key="`file-${operation.ref}`"
+                          :plan="turn.plan"
+                          :operation-ref="operation.ref"
+                        />
+                        <AssistantInstructionDraftCard
+                          v-for="operation in turn.plan.operations.filter(
+                            (item) => item.type === 'CREATE_INSTRUCTION_DRAFT',
+                          )"
+                          :key="`instruction-${operation.ref}`"
+                          :plan="turn.plan"
+                          :operation-ref="operation.ref"
+                        />
+                        <AssistantEnvironmentDraftCard
+                          v-for="operation in turn.plan.operations.filter(
+                            (item) =>
+                              item.type ===
+                                'CREATE_RUNTIME_ENVIRONMENT_DRAFT' ||
+                              item.type ===
+                                'PREPARE_RUNTIME_ENVIRONMENT_REVISION',
+                          )"
+                          :key="`environment-${operation.ref}`"
+                          :plan="turn.plan"
+                          :operation-ref="operation.ref"
+                        />
+                        <AssistantAgentEnvironmentBindingCard
+                          v-for="operation in turn.plan.operations.filter(
+                            (item) =>
+                              item.type === 'BIND_AGENT_RUNTIME_ENVIRONMENT',
+                          )"
+                          :key="`binding-${operation.ref}`"
+                          :plan="turn.plan"
+                          :operation-ref="operation.ref"
+                        />
+                        <AssistantIntegrationConnectionCard
+                          v-for="operation in turn.plan.operations.filter(
+                            (item) =>
+                              item.type === 'CREATE_INTEGRATION_CONNECTION' ||
+                              item.type ===
+                                'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' ||
+                              item.type === 'UPDATE_INTEGRATION_CONNECTION' ||
+                              item.type === 'TEST_INTEGRATION_CONNECTION',
+                          )"
+                          :key="`connection-${operation.ref}`"
+                          :plan="turn.plan"
+                          :operation-ref="operation.ref"
+                          :refresh-token="connectionRefreshToken"
+                          @prepare-credential="credentialConnectionRef = $event"
+                        />
+                        <AssistantCreatedScheduleCard
+                          v-for="operation in turn.plan.operations.filter(
+                            (item) =>
+                              item.type === 'CREATE_SCHEDULE' ||
+                              item.type === 'UPDATE_SCHEDULE',
+                          )"
+                          :key="`schedule-${operation.ref}`"
+                          :plan="turn.plan"
+                          :operation-ref="operation.ref"
+                        />
+                        <AssistantCreatedWorkflowCard
+                          v-for="operation in turn.plan.operations.filter(
+                            (item) =>
+                              item.type === 'CREATE_WORKFLOW' ||
+                              item.type === 'UPDATE_WORKFLOW',
+                          )"
+                          :key="`workflow-${operation.ref}`"
+                          :plan="turn.plan"
+                          :operation-ref="operation.ref"
+                        />
+                        <AssistantLaunchedRunCard
+                          v-for="operation in turn.plan.operations.filter(
+                            (item) => item.type === 'LAUNCH_RUN',
+                          )"
+                          :key="`run-${operation.ref}`"
+                          :plan="turn.plan"
+                          :operation-ref="operation.ref"
+                          @navigate="close"
+                        />
+                        <button
+                          class="button button--primary"
+                          type="button"
+                          @click="openPlan(turn.plan, $event)"
+                        >
+                          {{
+                            ["APPLIED", "REJECTED"].includes(turn.plan.state)
+                              ? $t("assistant.viewPlan")
+                              : $t("assistant.openPlan")
+                          }}
+                        </button>
+                      </AssistantPlanRecord>
+                    </article></template
                   >
-                    {{
-                      ["APPLIED", "REJECTED"].includes(turn.plan.state)
-                        ? $t("assistant.viewPlan")
-                        : $t("assistant.openPlan")
-                    }}
-                  </button>
-                </section>
-              </article>
+                </template>
+              </template>
               <div
-                v-if="awaitingReply && !store.loading && !store.problem"
+                v-if="showWorkingFallback && !store.loading && !store.problem"
                 class="assistant-message assistant-message--typing"
                 role="status"
                 :aria-label="$t('assistant.working')"
@@ -2130,6 +2415,14 @@ onBeforeUnmount(() => {
             </section>
 
             <footer class="assistant-composer">
+              <button
+                v-if="chatUnread"
+                class="button"
+                type="button"
+                @click="scrollToLatest"
+              >
+                {{ $t("runs.newMessages") }}
+              </button>
               <AttachmentComposer
                 ref="attachmentComposer"
                 compact
@@ -2371,9 +2664,20 @@ onBeforeUnmount(() => {
           >
             {{ $t("assistant.settings.instructions") }}
           </button>
+          <button
+            v-if="store.assistantScope === 'SYSTEM'"
+            type="button"
+            :class="{ selected: settingsTab === 'INTEGRATIONS' }"
+            @click="settingsTab = 'INTEGRATIONS'"
+          >
+            {{ $t("assistant.settings.integrations") }}
+          </button>
         </nav>
         <div class="assistant-settings-dialog__body">
-          <section class="assistant-settings-dialog__prepare">
+          <section
+            v-if="settingsTab !== 'INTEGRATIONS'"
+            class="assistant-settings-dialog__prepare"
+          >
             <p>{{ $t("assistant.settings.prepareHelp") }}</p>
             <button
               class="button"
@@ -2397,8 +2701,17 @@ onBeforeUnmount(() => {
               <Sparkles :size="16" />{{ $t("assistant.settings.prepareImage") }}
             </button>
           </section>
+          <SystemAssistantIntegrationGrantsPanel
+            v-if="
+              settingsTab === 'INTEGRATIONS' &&
+              store.assistantScope === 'SYSTEM' &&
+              store.assistant
+            "
+            :assistant="store.assistant"
+            :can-edit="store.assistant.nextActions.includes('EDIT')"
+          />
           <AgentRuntimePanel
-            v-if="settingsTab === 'RUNTIME' && activeSettingsAgentRef"
+            v-else-if="settingsTab === 'RUNTIME' && activeSettingsAgentRef"
             :agent-ref="activeSettingsAgentRef"
             :can-edit="activeSettingsCanEdit"
             advanced-collapsed
@@ -2480,7 +2793,7 @@ onBeforeUnmount(() => {
     ref="formSlot"
     class="assistant-form-slot"
     role="dialog"
-    aria-modal="true"
+    :aria-modal="open && assistantFormActive ? true : undefined"
     :aria-label="$t('assistant.planEditor.parametersTitle')"
     :inert="
       integrationImportOpen ||
@@ -2679,6 +2992,11 @@ onBeforeUnmount(() => {
 .assistant-fab:hover,
 .assistant-fab:focus-visible {
   filter: brightness(0.94);
+}
+/* Контекстная панель и модалка не должны делить кнопки с помощником. */
+:global(body:has([aria-modal="true"], .run-activity-overlay) .assistant-fab) {
+  visibility: hidden;
+  pointer-events: none;
 }
 .assistant-overlay {
   position: fixed;
@@ -3163,31 +3481,52 @@ onBeforeUnmount(() => {
   min-width: 0;
   width: 100%;
 }
+.assistant-transcript-message--collapsed {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 8;
+  overflow: hidden;
+}
 .assistant-message {
+  box-sizing: border-box;
   width: min(86%, 760px);
+  min-width: 0;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: auto;
   margin-bottom: 14px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
+  overflow-wrap: anywhere;
 }
 .assistant-message--user {
   margin-left: auto;
+  margin-right: 0;
   border-color: var(--accent);
   background: var(--accent-soft);
 }
 .assistant-message--system_receipt {
-  width: 100%;
   background: var(--panel);
 }
 .assistant-message--with-plan {
   width: min(96%, 1180px);
+}
+.assistant-message--applied-plan {
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 .assistant-message--typing {
   display: flex;
   align-items: center;
   gap: 10px;
   color: var(--muted);
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  font-size: 0.85rem;
 }
 .assistant-typing-dots {
   display: inline-flex;
@@ -3453,7 +3792,7 @@ onBeforeUnmount(() => {
     padding-top: 14px;
   }
   .assistant-drawer__identity {
-    flex: 1 1 80px;
+    flex: 1 1 0;
   }
   .assistant-scope-selector {
     order: 1;

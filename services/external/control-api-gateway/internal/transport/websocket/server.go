@@ -546,28 +546,27 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignal(signal platformSignal
 	if platformSignalOutsideScope(signal, multiplexer.projectRef) {
 		return multiplexer.advancePlatformCursor(signal)
 	}
-	rawSnapshot, err := multiplexer.server.projectPlatformSnapshot(multiplexer.ctx, signal.Kind, multiplexer.projectRef, multiplexer.localize)
-	if err != nil {
-		if status.Code(err) == codes.PermissionDenied {
-			return multiplexer.advancePlatformCursor(signal)
-		}
-		multiplexer.platformAvailable = false
-		return multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, "PLATFORM_UNAVAILABLE")
-	}
-	snapshot, err := typedPlatformSnapshot(signal.Kind, rawSnapshot)
-	if err != nil {
-		multiplexer.platformAvailable = false
-		return multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, "INTERNAL")
-	}
 	eventName := generated.PlatformEventName(signal.EventName)
 	envelope := generated.PlatformSnapshotEnvelope{
 		Type: "PLATFORM_SNAPSHOT", RequestRef: multiplexer.platformRequestRef,
 		StreamKind: "PLATFORM", StreamRef: platformStreamRef, Cursor: signal.Sequence,
 		Mode: generated.PlatformSnapshotModeDelta, EventName: &eventName,
-		Kind: generated.PlatformResourceKind(signal.Kind), Snapshot: snapshot,
+		Kind: generated.PlatformResourceKind(signal.Kind),
 	}
 	if multiplexer.projectRef != "" {
 		envelope.ProjectRef = &multiplexer.projectRef
+	}
+	envelope, err := multiplexer.boundedPlatformSnapshot(envelope)
+	if err != nil {
+		if status.Code(err) == codes.PermissionDenied {
+			return multiplexer.advancePlatformCursor(signal)
+		}
+		multiplexer.platformAvailable = false
+		code := "PLATFORM_UNAVAILABLE"
+		if errors.Is(err, errPlatformSnapshotInvalid) {
+			code = "INTERNAL"
+		}
+		return multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, code)
 	}
 	if !multiplexer.send(envelope) {
 		return false

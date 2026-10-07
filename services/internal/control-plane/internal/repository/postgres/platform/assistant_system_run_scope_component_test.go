@@ -104,6 +104,26 @@ func TestAssistantSystemRunProjectScopeComponent(t *testing.T) {
 		run.Target.Version != expectedTarget.AgentVersion || expectedTarget.AgentVersion < 1 {
 		t.Fatal("system run lost exact assistant owner/target version")
 	}
+	t.Run("fresh catalog survives concurrent lease renew", func(t *testing.T) {
+		catalog, _ := promotionComponentCatalog(t)
+		r.ConfigureRoleImageCatalog(catalog)
+		worker := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim"}, "runtime-controller")
+		claimed, err := service.Execute(ctx, command.Command{Kind: command.ClaimExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "system-run-scope-catalog-renew-claim"}, Payload: command.LeaseInput{WorkloadInstance: "system-run-scope-catalog-renew", Limit: 10}})
+		if err != nil {
+			t.Fatal("claim synthetic SYSTEM catalog execution")
+		}
+		var lease map[string]any
+		for _, item := range claimed.RuntimeItems {
+			if stringMap(item, "runRef") == runRef {
+				lease = item
+			}
+		}
+		if lease == nil {
+			t.Fatal("synthetic SYSTEM lease missing")
+		}
+		reader := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.assistant.resources.search"}, "runtime-controller")
+		testAssistantLockedReadConcurrentLeaseRenew(t, ctx, r, reader, lease)
+	})
 	signed := owner
 	signed.ProjectRef = gateTestProjectID(t, ctx, r, owner, project.Ref)
 	t.Run("run", func(t *testing.T) {

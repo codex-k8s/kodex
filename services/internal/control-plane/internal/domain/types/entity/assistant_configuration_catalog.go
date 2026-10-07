@@ -1,5 +1,7 @@
 package entity
 
+import "github.com/codex-k8s/kodex/libs/go/runtimecontract"
+
 type AssistantRuntimeProfilePin struct {
 	Ref             string `json:"ref"`
 	Version         int64  `json:"version"`
@@ -16,12 +18,48 @@ type AssistantConfigurationCatalogEntry struct {
 	ScopeKind, OrganizationRef, ProjectRef, AssistantProfileRef string
 	CatalogRevision, CatalogDigest, DefaultReasoningEffort      string
 	RuntimeEnvironmentRef                                       string
+	EnvironmentKey                                              string
 	ReasoningEfforts                                            []string
 	Version, RecipeGeneration                                   int64
+	AdmissionVerdict, PromotionState                            string
+	ToolInventorySHA256                                         string
+	ToolInventory                                               *runtimecontract.ImageToolInventory
 }
 
 type AssistantConfigurationCatalogResponse struct {
 	Kind, AssistantRef, ScopeKind, OrganizationRef, ProjectRef, AssistantProfileRef string
 	Entries                                                                         []AssistantConfigurationCatalogEntry
 	NextOffset                                                                      int32
+	CurrentConfiguration                                                            *AssistantCurrentConfiguration
+	ProjectIntegrationGrants                                                        []ProjectAssistantIntegrationGrantCatalogEntry
+	RecipientIntegrationGrants                                                      *AssistantRecipientIntegrationGrantCatalog
+}
+
+type AssistantRecipientIntegrationGrantCatalog struct {
+	RecipientKind, RecipientRef, RecipientName string
+	RecipientVersion, ProjectVersion           int64
+	Entries                                    []AssistantRecipientIntegrationGrantCatalogEntry
+}
+
+type AssistantRecipientIntegrationGrantCatalogEntry struct {
+	Grant ProjectAssistantIntegrationGrantCatalogEntry
+	Pins  IntegrationCandidatePins
+}
+
+// Свежая read-модель не содержит materialized secret values или transport metadata.
+type AssistantCurrentConfiguration struct {
+	AgentVersion                                                             int64
+	Configuration                                                            AgentRuntimeConfiguration
+	PublishedOverlay                                                         ConfigOverlayVersion
+	EnvironmentBinding                                                       AgentRuntimeEnvironmentBinding
+	EnvironmentRef                                                           string
+	EnvironmentVersion                                                       int64
+	Environment                                                              RuntimeEnvironmentVersion
+	SecretBindings                                                           []RuntimeSecretBinding
+	InstructionTemplateRef, InstructionTemplateDigest, PublishedInstructions string
+	SystemCoreRevision, SystemCoreInstructions, OwnerInstructions            string
+	OwnerInstructionsRevision                                                int64
+	TemplateVariables                                                        []TemplateVariable
+	ImageToolInventorySHA256                                                 string
+	ImageToolInventory                                                       *runtimecontract.ImageToolInventory
 }

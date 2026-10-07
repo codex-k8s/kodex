@@ -94,7 +94,7 @@ func (repository *Repository) recordSystemAssistantTerminalTurn(
 	ctx context.Context,
 	tx pgx.Tx,
 	current scope,
-	sessionID, runID, content, state, title string,
+	sessionID, runID, content, state string,
 ) error {
 	turnRef, err := newRef("trn")
 	if err != nil {
@@ -111,7 +111,7 @@ func (repository *Repository) recordSystemAssistantTerminalTurn(
 	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateSessionsNextTurnNumberVersionUpdatedAt, sessionID); err != nil {
 		return errs.ErrUnavailable
 	}
-	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateAssistantConversationsVersionUpdatedAt, sessionID, title); err != nil {
+	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateAssistantConversationsVersionUpdatedAt, sessionID); err != nil {
 		return errs.ErrUnavailable
 	}
 	return nil
@@ -163,7 +163,7 @@ func (repository *Repository) failRuntimeCandidateGraph(ctx context.Context, tx 
 	}
 	if candidate.stableKey == "system-assistant" {
 		if err := repository.recordSystemAssistantTerminalTurn(ctx, tx, current,
-			candidate.sessionID, candidate.runID, "i18n:RUNTIME_INPUT_INVALID", "FAILED", ""); err != nil {
+			candidate.sessionID, candidate.runID, "i18n:RUNTIME_INPUT_INVALID", "FAILED"); err != nil {
 			return err
 		}
 	}

@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { useServerMessage } from "@/shared/ui/server-message";
+import { runListSummary } from "@/shared/ui/run-summary";
+import { ownerRequestSignal } from "@/shared/api/owner-lifetime";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
-import { Activity, Bot, ListChecks, PanelRightOpen } from "@lucide/vue";
+import {
+  Activity,
+  Bot,
+  ChevronDown,
+  ListChecks,
+  PanelRightOpen,
+} from "@lucide/vue";
 import {
   type ComponentPublicInstance,
   computed,
@@ -21,6 +29,7 @@ import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
 import { requestAssistantRunDebug } from "@/features/assistant/events";
 import { isTerminalRun } from "@/features/workboard/model";
+import { hasValidGateScope } from "@/features/workboard/gate-scope";
 import RunActivityDrawer from "@/features/runs/RunActivityDrawer.vue";
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
 import RunNodeInspector from "@/features/runs/RunNodeInspector.vue";
@@ -204,7 +213,11 @@ const gateList = computed(() =>
   ),
 );
 const openGateList = computed(() =>
-  gateList.value.filter((gate) => gate.state === "OPEN"),
+  gateList.value.filter(
+    (gate) =>
+      gate.state === "OPEN" &&
+      hasValidGateScope(gate, platform.bootstrap?.organizationRef),
+  ),
 );
 const artifactList = computed(() =>
   Object.values(platform.artifacts).filter((artifact) =>
@@ -298,6 +311,7 @@ const downloadBusyRef = ref("");
 const problem = ref<AppProblem>();
 const artifactProblem = ref<AppProblem>();
 const activityOpen = ref(false);
+const summaryExpanded = ref(false);
 const activityNodeRef = ref<string>();
 const activityDrawer = ref<HTMLElement>();
 const nodeInspectorOpen = ref(false);
@@ -308,12 +322,14 @@ const hasAuthoritativeSnapshot = computed(() =>
   Boolean(run.value && graph.value),
 );
 const fatalLoadProblem = computed(() =>
-  hasAuthoritativeSnapshot.value ? undefined : platform.problems.run,
+  hasAuthoritativeSnapshot.value
+    ? undefined
+    : platform.runProblems[runRef.value],
 );
 const refreshProblem = computed(() =>
   hasAuthoritativeSnapshot.value
     ? (artifactProblem.value ??
-      platform.problems.run ??
+      platform.runProblems[runRef.value] ??
       platform.problems.gates ??
       platform.problems.artifacts)
     : undefined,
@@ -388,7 +404,7 @@ async function refreshAuthoritativeState(ref: string): Promise<void> {
   if (runRef.value !== ref) return;
   await platform.loadRun(ref);
   if (runRef.value !== ref) return;
-  if (platform.problems.run) throw platform.problems.run;
+  if (platform.runProblems[ref]) throw platform.runProblems[ref];
   const snapshot = platform.runs[ref];
   if (!snapshot) return;
   const snapshotGraph =
@@ -649,6 +665,41 @@ function openCurrentStream(): void {
   realtime.openRun(ref);
   openedStreamRef.value = ref;
 }
+watch(
+  [runRef, () => platform.bootstrap?.organizationRef, hasAuthoritativeSnapshot],
+  (
+    [ref, organizationRef, hasSnapshot],
+    [previousRef, previousOrganizationRef, hadSnapshot],
+  ) => {
+    if (
+      ref !== previousRef ||
+      !organizationRef ||
+      hasSnapshot ||
+      (!hadSnapshot && organizationRef === previousOrganizationRef) ||
+      platform.runLoading[runRef.value] ||
+      platform.runProblems[runRef.value]
+    )
+      return;
+    // Отсутствие RUN в общем rejoin не доказывает отказ exact route.
+    // Старый граф не заменяет новое авторитетное чтение и его проверку доступа.
+    refreshScheduler.cancel();
+    lastRefreshKey = undefined;
+    if (openedStreamRef.value) {
+      realtime.closeRun(openedStreamRef.value);
+      openedStreamRef.value = undefined;
+    }
+    const generation = mutationGeneration;
+    const ownerScope = ownerRequestSignal();
+    void load(ref).then(() => {
+      if (
+        !ownerScope.aborted &&
+        mutationCurrent(generation, ref) &&
+        hasAuthoritativeSnapshot.value
+      )
+        openCurrentStream();
+    });
+  },
+);
 watch(refreshKey, (next) => {
   if (!next || next === lastRefreshKey) return;
   lastRefreshKey = next;
@@ -757,7 +808,7 @@ onBeforeUnmount(() => {
         {{ $t("runs.retry") }}
       </button></template
     ><AsyncState
-      :loading="platform.loading.run && !hasAuthoritativeSnapshot"
+      :loading="platform.runLoading[runRef] && !hasAuthoritativeSnapshot"
       :problem="fatalLoadProblem"
       @retry="load"
     >
@@ -820,41 +871,68 @@ onBeforeUnmount(() => {
           </nav>
 
           <aside class="run-canvas-summary">
-            <div>
-              <strong>{{ run.target.displayName }}</strong>
-              <span>{{ $t(`runs.source.${run.source}`) }}</span>
-            </div>
-            <StatusBadge :state="run.state" />
-            <span>{{ $t("runs.attempt", { attempt: run.attempt }) }}</span>
-            <p
-              v-if="run.safeErrorCode"
-              class="run-canvas-summary__error"
-              role="status"
-            >
-              {{ serverMessage(run.safeErrorMessage || run.safeErrorCode) }}
-              <code>{{ run.safeErrorCode }}</code>
-            </p>
-            <RouterLink
-              v-if="run.retryOfRunRef"
-              :to="
-                runPath(run.retryOfRunRef, routeProjectRef ?? run.projectRef)
-              "
-            >
-              {{ $t("runs.previousAttempt") }}
-            </RouterLink>
-            <span
-              class="live-indicator"
-              :class="`live-indicator--${streamState?.state ?? 'connecting'}`"
-            >
-              ●
-              {{
-                $t(isTerminalRun(run) ? "runs.historyComplete" : "runs.live")
-              }}
-              <template v-if="sessionGraph.sequence > 0">
-                · #{{ sessionGraph.sequence }}</template
+            <div class="run-canvas-summary__heading">
+              <strong :title="run.target.displayName">{{
+                run.target.displayName
+              }}</strong>
+              <StatusBadge :state="run.state" />
+              <button
+                type="button"
+                class="run-canvas-summary__toggle icon-button"
+                :aria-expanded="summaryExpanded"
+                aria-controls="run-canvas-summary-details"
+                :aria-label="$t('common.details')"
+                :title="$t('common.details')"
+                @click="summaryExpanded = !summaryExpanded"
               >
-            </span>
-            <RunTokenUsage :usage="run.usage" compact />
+                <ChevronDown :size="16" aria-hidden="true" />
+              </button>
+            </div>
+            <div
+              id="run-canvas-summary-details"
+              class="run-canvas-summary__details"
+              :class="{
+                'run-canvas-summary__details--expanded': summaryExpanded,
+              }"
+            >
+              <span>{{ $t(`runs.source.${run.source}`) }}</span>
+              <span>{{ $t("runs.attempt", { attempt: run.attempt }) }}</span>
+              <p
+                v-if="run.safeErrorCode"
+                class="run-canvas-summary__error"
+                role="status"
+              >
+                {{
+                  serverMessage(
+                    run.state === "FAILED"
+                      ? (runListSummary(run) ?? "")
+                      : run.safeErrorMessage || run.safeErrorCode,
+                  )
+                }}
+                <code>{{ run.safeErrorCode }}</code>
+              </p>
+              <RouterLink
+                v-if="run.retryOfRunRef"
+                :to="
+                  runPath(run.retryOfRunRef, routeProjectRef ?? run.projectRef)
+                "
+              >
+                {{ $t("runs.previousAttempt") }}
+              </RouterLink>
+              <span
+                class="live-indicator"
+                :class="`live-indicator--${streamState?.state ?? 'connecting'}`"
+              >
+                ●
+                {{
+                  $t(isTerminalRun(run) ? "runs.historyComplete" : "runs.live")
+                }}
+                <template v-if="sessionGraph.sequence > 0">
+                  · #{{ sessionGraph.sequence }}</template
+                >
+              </span>
+              <RunTokenUsage :usage="run.usage" compact />
+            </div>
           </aside>
 
           <section id="run-graph-panel" class="graph-panel">
@@ -887,6 +965,10 @@ onBeforeUnmount(() => {
                 <p class="eyebrow">{{ $t("decisions.question") }}</p>
                 <h2>{{ gateDisplayTitle(gate) }}</h2>
                 <dl>
+                  <div v-if="gate.scopeKind === 'ORGANIZATION'">
+                    <dt>{{ $t("decisions.scope") }}</dt>
+                    <dd>{{ $t("decisions.organizationScope") }}</dd>
+                  </div>
                   <div>
                     <dt>{{ $t("decisions.requestedBy") }}</dt>
                     <dd>{{ gate.requestedBy.displayName }}</dd>
@@ -1322,7 +1404,6 @@ onBeforeUnmount(() => {
   top: 14px;
   left: 14px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
   width: min(360px, calc(100% - 190px));
   gap: 6px 10px;
   padding: 11px 12px;
@@ -1332,9 +1413,16 @@ onBeforeUnmount(() => {
   box-shadow: 0 8px 24px rgba(16, 22, 30, 0.1);
   backdrop-filter: blur(8px);
 }
-.run-canvas-summary > div {
+.run-canvas-summary__heading,
+.run-canvas-summary__details {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 6px 10px;
   min-width: 0;
+}
+.run-canvas-summary__toggle {
+  display: none;
 }
 .run-canvas-summary strong,
 .run-canvas-summary span,
@@ -1343,8 +1431,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.run-canvas-summary > div span,
-.run-canvas-summary > span,
+.run-canvas-summary__details > span,
 .run-canvas-summary a {
   color: var(--muted);
   font-size: 0.75rem;
@@ -1424,6 +1511,15 @@ onBeforeUnmount(() => {
     box-shadow: inset 0 0 0 1px var(--warning);
   }
 }
+@media (min-width: 761px) {
+  .run-workspace--activity .run-canvas-summary {
+    top: 70px;
+    width: min(360px, calc((100% - min(720px, 54%)) / 2 - 86px));
+  }
+  .run-workspace--activity .run-workspace-toolbar {
+    top: 70px;
+  }
+}
 @media (max-width: 760px) {
   .run-page-body {
     min-height: 0;
@@ -1442,6 +1538,37 @@ onBeforeUnmount(() => {
     top: 62px;
     left: 8px;
     width: min(320px, calc(100% - 16px));
+    padding: 6px 8px;
+  }
+  .run-canvas-summary__heading {
+    grid-template-columns: minmax(0, 1fr) auto 32px;
+    align-items: center;
+    gap: 6px;
+  }
+  .run-canvas-summary__heading strong {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 0.8rem;
+    line-height: 1.3;
+  }
+  .run-canvas-summary__toggle {
+    display: inline-flex;
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+  }
+  .run-canvas-summary__toggle[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+  }
+  .run-canvas-summary__details {
+    display: none;
+  }
+  .run-canvas-summary__details--expanded {
+    display: grid;
+    max-height: min(260px, 40dvh);
+    overflow: auto;
   }
   .run-workspace-toolbar {
     top: 8px;

@@ -3,12 +3,16 @@
 import type { UserSummary } from "./UserSummary";
 import type { OwnerGateState } from "./OwnerGateState";
 import type { OwnerGateDecision } from "./OwnerGateDecision";
+import type { OwnerGateDecisionConsequence } from "./OwnerGateDecisionConsequence";
+import type { IntegrationIntent } from "./IntegrationIntent";
 import type { NextAction } from "./NextAction";
 
 export interface OwnerGate {
   ref: string;
   version: number;
-  projectRef: string;
+  scopeKind: string;
+  organizationRef: string;
+  projectRef?: string;
   runRef: string;
   nodeRef: string;
   title: string;
@@ -20,7 +24,12 @@ export interface OwnerGate {
   decision?: OwnerGateDecision;
   decisionComment?: string;
   openedAt: string;
+  expiresAt?: string;
   decidedAt?: string;
-  artifactRefs: string[];
+  decidedBy?: UserSummary;
+  resolutionAttachmentSetRef?: string;
+  sourceAttachmentSetRef?: string;
+  decisionConsequences: OwnerGateDecisionConsequence[];
+  integrationIntent?: IntegrationIntent;
   nextActions: NextAction[];
 }

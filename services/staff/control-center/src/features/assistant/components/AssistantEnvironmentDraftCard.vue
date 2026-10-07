@@ -1,24 +1,34 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 
 import AssistantEnvironmentBindingDialog from "@/features/assistant/components/AssistantEnvironmentBindingDialog.vue";
+import { loadAgentRuntime } from "@/features/agents/detail/runtime-api";
 import {
   assistantEnvironmentDraftTarget,
   assistantSystemEnvironmentDraftTarget,
 } from "@/features/assistant/model";
 import { usePlatformStore } from "@/features/platform/store";
 import { readAssistantProjectHelper } from "@/features/assistant/project-helper-readback";
-import { organizationRuntimeResourceScope } from "@/features/runtime/resource-scope";
+import {
+  assertRuntimeResourceIdentity,
+  organizationRuntimeResourceScope,
+  type RuntimeResourceScope,
+} from "@/features/runtime/resource-scope";
 import { readEnvironmentDraft } from "@/features/runtime/environment-drafts";
 import type {
   AssistantPlan,
+  AgentRuntimeConfigurationView,
   RuntimeEnvironmentDraft,
 } from "@/shared/api/generated/openapi/types.gen";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
+import { useServerMessage } from "@/shared/ui/server-message";
 
 const props = defineProps<{ plan: AssistantPlan; operationRef: string }>();
 const emit = defineEmits<{ navigate: [] }>();
 const platform = usePlatformStore();
+const { t } = useI18n();
+const serverMessage = useServerMessage();
 const systemTarget = computed(() =>
   assistantSystemEnvironmentDraftTarget(props.plan, props.operationRef),
 );
@@ -35,10 +45,68 @@ const target = computed(() =>
       ),
 );
 const draft = ref<RuntimeEnvironmentDraft>();
+const draftTitle = computed(() =>
+  t(
+    draft.value?.scopeKind === "ORGANIZATION"
+      ? "assistant.environmentDraft.systemTitle"
+      : "assistant.environmentDraft.title",
+  ),
+);
+const draftName = computed(() =>
+  draft.value ? serverMessage(draft.value.specification.name) : "",
+);
 const loading = ref(false);
 const problem = ref(false);
 const bindingOpen = ref(false);
 const boundAgentName = ref("");
+const systemBinding = ref<AgentRuntimeConfigurationView>();
+const systemBindingUnavailable = ref(false);
+const systemBindingMessage = computed(() => {
+  if (!systemTarget.value || draft.value?.state !== "PUBLISHED") return;
+  if (systemBindingUnavailable.value)
+    return t("assistant.environmentDraft.bindingUnavailable");
+  if (!systemBinding.value)
+    return t("assistant.environmentDraft.bindingChecking");
+  if (
+    systemBinding.value.environmentBinding.environmentRef !==
+    draft.value.publishedEnvironmentRef
+  )
+    return t("assistant.environmentDraft.systemBindingChanged");
+  return t("assistant.environmentDraft.systemBound", {
+    revision: systemBinding.value.environment.currentVersion.revision,
+  });
+});
+async function readSystemBinding(
+  assistantRef: string,
+  scope: Extract<RuntimeResourceScope, { kind: "ORGANIZATION" }>,
+  signal: AbortSignal,
+): Promise<void> {
+  if (signal.aborted) return;
+  try {
+    const next = await loadAgentRuntime(assistantRef, signal);
+    if (
+      next.configuration.agentRef !== assistantRef ||
+      next.environmentBinding.agentRef !== assistantRef ||
+      next.environmentBinding.environmentRef !== next.environment.ref ||
+      !next.environmentBinding.versionRef ||
+      next.environmentBinding.versionRef !==
+        next.environment.currentVersion.ref ||
+      !Number.isSafeInteger(next.environment.currentVersion.revision) ||
+      next.environment.currentVersion.revision < 1
+    )
+      throw new Error("System assistant environment binding readback mismatch");
+    assertRuntimeResourceIdentity(
+      scope,
+      next.environment,
+      scope.organizationRef,
+    );
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Запрос может завершиться после закрытия watcher lifetime.
+    if (!signal.aborted) systemBinding.value = next;
+  } catch {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Запрос может завершиться после закрытия watcher lifetime.
+    if (!signal.aborted) systemBindingUnavailable.value = true;
+  }
+}
 const destination = computed(() => {
   const exact = target.value;
   const current = draft.value;
@@ -95,6 +163,8 @@ watch(
     problem.value = false;
     bindingOpen.value = false;
     boundAgentName.value = "";
+    systemBinding.value = undefined;
+    systemBindingUnavailable.value = false;
     const exact = value.target;
     const system = value.system;
     if (
@@ -113,6 +183,8 @@ watch(
     refresh = async () => {
       if (controller.signal.aborted) return;
       loading.value = true;
+      systemBinding.value = undefined;
+      systemBindingUnavailable.value = false;
       try {
         const operation = props.plan.operations.find(
           (item) => item.ref === props.operationRef,
@@ -140,6 +212,12 @@ watch(
           throw new Error("Assistant revision draft environment mismatch");
         draft.value = next;
         problem.value = false;
+        if (system && value.scope && next.state === "PUBLISHED")
+          await readSystemBinding(
+            system.assistantRef,
+            value.scope,
+            controller.signal,
+          );
       } catch {
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
         if (!controller.signal.aborted) problem.value = true;
@@ -161,7 +239,7 @@ watch(
     aria-live="polite"
   >
     <header>
-      <strong>{{ $t("assistant.environmentDraft.title") }}</strong>
+      <strong>{{ draftTitle }}</strong>
       <StatusBadge v-if="draft" :state="draft.state" />
     </header>
     <p v-if="loading && !draft">{{ $t("common.loading") }}</p>
@@ -169,7 +247,7 @@ watch(
       {{ $t("assistant.environmentDraft.loadFailed") }}
     </p>
     <template v-if="draft">
-      <p>{{ draft.specification.name }}</p>
+      <p>{{ draftName }}</p>
       <p v-if="draft.state === 'PUBLISHED'">
         {{ $t("assistant.environmentDraft.published") }}
       </p>
@@ -186,6 +264,12 @@ watch(
       <p v-if="boundAgentName">
         {{ $t("assistant.environmentDraft.bound", { agent: boundAgentName }) }}
       </p>
+      <template v-if="systemBindingMessage">
+        <p role="status">{{ systemBindingMessage }}</p>
+        <p class="secondary-text">
+          {{ $t("assistant.environmentDraft.turnBoundary") }}
+        </p>
+      </template>
     </template>
     <div class="assistant-environment-card__actions">
       <button
