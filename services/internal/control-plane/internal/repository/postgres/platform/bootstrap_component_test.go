@@ -407,6 +407,8 @@ func TestBootstrapComponent(t *testing.T) {
 }
 
 func testManagedConfigurationLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+	// Адресный запуск сам завершает owner catalog tasks, не зависит от соседних сценариев.
+	seedObservedCatalogFixture(t, ctx, repository)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
 		ExternalDisplayName: "Managed configuration owner", CallerWorkload: "control-api-gateway",
@@ -818,17 +820,12 @@ WHERE account.ref = $1
   AND credential.provider_account_id = account.id`, sttProviderAccountRef, credentialProjection.ProviderCredential.CredentialRevisionRef); err != nil {
 		t.Fatalf("restore system STT account fixture: %v", err)
 	}
-	var environmentRef, environmentProjectRef string
-	if err := pool.QueryRow(ctx, `
-SELECT environment.ref, project.ref
-FROM control_plane.runtime_environment_sets environment
-JOIN control_plane.projects project ON project.id = environment.project_id
-WHERE environment.organization_id = $1::uuid
-  AND environment.name = 'Runtime lifecycle second'
-  AND environment.state = 'ACTIVE'
-LIMIT 1`, ownerScope.organizationID).Scan(&environmentRef, &environmentProjectRef); err != nil {
+	// Consumer принадлежит этому сценарию, а не окружению соседнего lifecycle-теста.
+	consumerConfiguration, err := service.GetAgentRuntimeConfiguration(ctx, owner, agent.Ref)
+	if err != nil || consumerConfiguration.Environment.Ref == "" || consumerConfiguration.Environment.ProjectRef != projectResult.Project.Ref {
 		t.Fatalf("read runtime environment consumer fixture: %v", err)
 	}
+	environmentRef, environmentProjectRef := consumerConfiguration.Environment.Ref, projectResult.Project.Ref
 	roleCatalog, _ := promotionComponentCatalog(t)
 	repository.ConfigureRoleImageCatalog(roleCatalog)
 	roleAgent := createLifecycleAgent(t, ctx, service, owner, environmentProjectRef, "managed-role-image-agent", "Managed image role")
