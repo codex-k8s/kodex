@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 fail() {
   printf 'Kodex k3d node registry configuration failed: %s\n' "$*" >&2
@@ -51,6 +52,8 @@ for input_file in "$username_file" "$password_file" "$ca_file" "$certificate_fil
   (((8#$input_mode & 8#077) == 0)) || fail 'node pull material permissions are too broad'
 done
 
+# Не наследуем export attribute одноимённых переменных вызывающей стороны.
+export -n username password actual expected actual_host expected_host
 username=$(<"$username_file")
 password=$(<"$password_file")
 [[ -n "$username" && "$username" != *$'\n'* && "$username" != *$'\r'* ]] ||
@@ -95,9 +98,14 @@ system_certificate="$system_directory/client.crt"
 system_private_key="$system_directory/client.key"
 registry_configuration=/etc/rancher/k3s/registries.yaml
 temporary_directory=$(mktemp -d)
-trap 'rm -rf -- "$temporary_directory"; unset password' EXIT
+trap 'rm -rf -- "$temporary_directory"; unset username password' EXIT
 
-existing_json='{}'
+printf '%s' "$username" >"$temporary_directory/username"
+printf '%s' "$password" >"$temporary_directory/password"
+unset username password
+
+existing_json_file="$temporary_directory/existing.json"
+printf '{}\n' >"$existing_json_file"
 existing_digest=""
 for node in "${nodes[@]}"; do
   if docker exec "$node" test -f "$registry_configuration"; then
@@ -107,23 +115,25 @@ for node in "${nodes[@]}"; do
     [[ -z "$existing_digest" || "$node_digest" == "$existing_digest" ]] ||
       fail 'k3d node registry configurations differ'
     existing_digest=$node_digest
-    existing_json=$(<"$temporary_directory/$node.json")
+    existing_json_file="$temporary_directory/$node.json"
   elif [[ -n "$existing_digest" ]]; then
     fail 'k3d node registry configurations are incomplete'
   fi
 done
 
-expected_json=$(jq -cn --argjson existing "$existing_json" --arg host "$promoted_pull_host" \
-  --arg username "$username" --arg password "$password" --arg ca "$system_ca" \
+expected_json_file="$temporary_directory/expected.json"
+jq -cn --slurpfile existing "$existing_json_file" --arg host "$promoted_pull_host" \
+  --rawfile username "$temporary_directory/username" --rawfile password "$temporary_directory/password" --arg ca "$system_ca" \
   --arg certificate "$system_certificate" --arg private_key "$system_private_key" '
-    $existing |
+    (if ($existing | length) == 1 then $existing[0]
+     else error("registry configuration must contain one JSON value") end) |
     .mirrors = ((.mirrors // {}) + {($host):{endpoint:[("https://" + $host)]}}) |
     .configs = ((.configs // {}) + {($host):{
       auth:{username:$username,password:$password},
       tls:{ca_file:$ca,cert_file:$certificate,key_file:$private_key}
     }})
-  ')
-printf '%s\n' "$expected_json" | yq -P >"$temporary_directory/registries.yaml"
+  ' >"$expected_json_file"
+yq -P <"$expected_json_file" >"$temporary_directory/registries.yaml"
 chmod 0600 "$temporary_directory/registries.yaml"
 
 changed=false
@@ -133,7 +143,7 @@ for node in "${nodes[@]}"; do
     continue
   fi
   actual=$(docker exec "$node" cat "$registry_configuration" | yq -o=json | jq -cS .)
-  [[ "$actual" == "$(jq -cS . <<<"$expected_json")" ]] || changed=true
+  [[ "$actual" == "$(jq -cS . "$expected_json_file")" ]] || changed=true
   for pair in "$ca_file:$system_ca" "$certificate_file:$system_certificate" "$private_key_file:$system_private_key"; do
     source_path=${pair%%:*}
     target_path=${pair#*:}
@@ -169,16 +179,18 @@ for attempt in $(seq 1 120); do
 done
 
 for node in "${nodes[@]}"; do
-  docker exec "$node" sh -c '
-    grep -v " $2$" /etc/hosts > /tmp/kodex-hosts
-    printf "%s %s\n" "$1" "$2" >> /tmp/kodex-hosts
-    cat /tmp/kodex-hosts > /etc/hosts
-    rm -f /tmp/kodex-hosts
-  ' sh "$load_balancer_ip" "$promoted_pull_host"
+  if [[ "$mode" == apply ]]; then
+    docker exec "$node" sh -c '
+      grep -v " $2$" /etc/hosts > /tmp/kodex-hosts
+      printf "%s %s\n" "$1" "$2" >> /tmp/kodex-hosts
+      cat /tmp/kodex-hosts > /etc/hosts
+      rm -f /tmp/kodex-hosts
+    ' sh "$load_balancer_ip" "$promoted_pull_host"
+  fi
   actual_host=$(docker exec "$node" cat "$registry_configuration" | yq -o=json |
     jq -cS --arg host "$promoted_pull_host" '{mirror:.mirrors[$host],config:.configs[$host]}')
   expected_host=$(jq -cS --arg host "$promoted_pull_host" \
-    '{mirror:.mirrors[$host],config:.configs[$host]}' <<<"$expected_json")
+    '{mirror:.mirrors[$host],config:.configs[$host]}' "$expected_json_file")
   [[ "$actual_host" == "$expected_host" ]] || fail 'k3d promoted pull configuration mismatch'
   docker exec "$node" grep -Fqx "$load_balancer_ip $promoted_pull_host" /etc/hosts ||
     fail 'k3d promoted pull host alias mismatch'

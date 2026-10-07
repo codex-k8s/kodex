@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Проверки исходника сопоставляют литеральные переменные, а не значения окружения.
+# shellcheck disable=SC2016
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
@@ -19,12 +21,40 @@ done
 python3 -B "$root/tools/dev/test_session_archive_seed.py"
 
 image_import="$root/tools/dev/import-local-image.sh"
-grep -Fq 'k3d image import "$archive"' "$image_import" ||
-  fail 'k3d archive import is absent'
-grep -Fq 'ctr -n k8s.io images import --base-name "$repository" "$archive"' "$image_import" ||
-  fail 'single-host k3s archive import is absent'
-grep -Fq 'ctr -n k8s.io images tag --force "$tag" "$exact_reference"' "$image_import" ||
-  fail 'exact digest tagging is absent'
+grep -Fq 'docker exec -i "$node" ctr --address "$runtime_socket" -n k8s.io images import' "$image_import" ||
+  fail 'native per-node k3d archive import is absent'
+grep -Fq 'ctr_command=(sudo -n k3s ctr --address "$runtime_socket" -n k8s.io)' "$image_import" ||
+  fail 'single-host k3s containerd boundary is absent'
+grep -Fq '"${ctr_command[@]}" images import --platform linux/amd64 --base-name "$repository" --digests' "$image_import" ||
+  fail 'single-host k3s native archive import is absent'
+[[ $(grep -Fc -- '--platform linux/amd64 --base-name "$repository" --digests' "$image_import") -eq 2 ]] ||
+  fail 'both import profiles must preserve the exact native platform and repository digest'
+[[ $(grep -Fc -- '--label io.cri-containerd.image=managed --label io.cri-containerd.pinned=pinned' "$image_import") -eq 2 ]] ||
+  fail 'both import profiles must publish managed and durable pin labels atomically'
+grep -Fq '"${ctr_command[@]}" images tag --local --force "$tag" "$exact_reference"' "$image_import" ||
+  fail 'atomic pinned exact digest alias is absent'
+[[ $(grep -Fc '    publish_digest_alias' "$image_import") -eq 2 ]] ||
+  fail 'both import profiles must publish the exact digest alias'
+[[ $(grep -Fc '  verify_imported_image' "$image_import") -eq 2 ]] ||
+  fail 'both import profiles must verify the imported immutable image'
+grep -Fq 'verify_image_descriptor "$exact_reference"' "$image_import" ||
+  fail 'exact digest descriptor readback is absent'
+grep -Fq 'if (!managed || !pinned) exit 1' "$image_import" ||
+  fail 'descriptor readback must require both durable labels'
+grep -Fq '"${ctr_command[@]}" content get "$manifest_digest"' "$image_import" ||
+  fail 'immutable manifest content hash readback is absent'
+grep -Fq '"${ctr_command[@]}" images check --quiet "name==$exact_reference"' "$image_import" ||
+  fail 'exact native unpack readback is absent'
+grep -Fq '"${cri_command[@]}" inspecti "$exact_reference"' "$image_import" ||
+  fail 'exact CRI image readback is absent'
+grep -Fq '.status.pinned == true and (.status.repoDigests | index($reference) != null)' "$image_import" ||
+  fail 'CRI readback must require the durable pin and exact repository digest'
+grep -Fq '.info.imageSpec.os == "linux" and .info.imageSpec.architecture == "amd64"' "$image_import" ||
+  fail 'CRI readback must verify the native platform'
+grep -Fq 'select(.runtimeLabels["k3d.cluster"] == $cluster and' "$image_import" ||
+  fail 'k3d node selection must use the exact cluster label'
+grep -Fq '[[ "$nodes_json" == "$(jq -c '\''[.[].name]'\'' <<<"$node_inventory")" ]]' "$image_import" ||
+  fail 'k3d and Kubernetes exact node inventories must match'
 
 k3d_registry="$root/tools/dev/configure-k3d-node-registry.sh"
 grep -Fq 'wait_container_stable "$node"' "$k3d_registry" ||

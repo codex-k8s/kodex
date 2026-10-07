@@ -202,6 +202,55 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 07.10.2026 05:44 UTC — registry preflight исправлен и проверен
+
+Заморожены5 dev/test файлов и3 ROOT документа поверх657613c0. Оба node
+registry scripts используют private0600 snapshots/file-fed JSON merge,
+сбрасывают inherited export attribute credential/JSON vars; k3d readback
+не меняет hosts, files или node state. Сторонний registry/password сохраняются.
+ROOT: public `make test-registry-credential-files` PASS16tests/33.561s;
+`make test-local-image-cache-import-contract` PASS19tests/1.376s и guards.
+Shell syntax/diff-check PASS, точные file hashes подтверждены. Старый30s budget
+не вместил расширенный full-script synthetic suite; public budget теперь60s,
+не меняющий negative assertions. Исторический stale-import guard FAIL сохранён.
+Реальных node/cluster настроек этими tests не выполнялось.
+
+GUIDE-DOC-003 закрепляет file-fed existing credentials JSON и отсутствие
+repair/write в readback. Context7 `/jqlang/jq`: raw/slurp file bindings;
+merge проверен fixtures против настоящего jq, а host-команды заменены stubs.
+Native cutover пока NOT RUN. После нового clean checkpoint нужно связать тот
+же exact runner input/image с новым SHA и создать свежий render, а не подставить
+старый source revision. Whole65/33 OPEN; Chrome5 reload05:43, чужие вкладки
+не изменялись.
+
+### 07.10.2026 05:40 UTC — образы готовы; preflight registry перед активацией
+
+Source/remote/Draft1800 exact `657613c0d3872b02adcb31dbe7314599f8dc9f45`
+PASS. Первый publisher встретил временное несоответствие PR readback после
+успешного push; отдельный read-only readback подтвердил remote/head657,
+затем обновлён только PR body, повторного push не было.
+
+Параллельные canonical builds PASS: full runner manifest
+`sha256:2d1efe7f4391323883adeffb195f073e247c741ad7be17c358d40af099e57dda`,
+binary SHA `40f3268a257abb9ed21e016069baf3cbfbf16698c4634da7fa102fa1508fc93b`,
+provenance SHA `567a212e32992dcaf22ef198cc791551428e51351c633eef9af311d2887b1008`.
+Session-archive manifest
+`sha256:0db667ffecf540d3362599e220a88acdf9d8dc7a311f09b7acc7529dfdddf961`.
+Node immutable/pinned import и component registry seed/readback обоих PASS;
+это ещё не activation либо новый RoleImage consumer.
+
+Read-only preflight нашёл два общих дефекта node registry scripts: credentials
+в argv JSON merge и изменение host aliases даже в readback. Узкое исправление
+обоих k3d/k3s путей с synthetic fixtures готовится отдельно; сами scripts,
+supply-chain apply/readback до устранения не запускались. Existing cache-import
+contract FAIL требовал устаревший `k3d image import`, хотя текущий importer
+использует exact per-node ctr, atomic labels/alias и CRI pin readback. Исправляется
+только stale test assertion, production importer не меняется.
+
+Chrome5 reload05:39, desktop screenshot внешних раздельных обратных дуг PASS;
+Console error/warn0, данные/API200. CP/RC/gateway/frontend/archive Ready1.
+Новые image/typed recipes/ENV/native full read/full33 всё ещё NOT RUN.
+
 ### 07.10.2026 05:33 UTC — проверенный capture при FAILED и terminal decoder
 
 Frozen tree поверх `69eb3552`:8 runner файлов,2 CP файла и3 документа.

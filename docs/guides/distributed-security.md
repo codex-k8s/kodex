@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.11
+version: 1.7.12
 updated: 2026-10-07
 ---
 
@@ -1907,6 +1907,10 @@ Registry credentials, private PEM и обратимый Docker auth не пер�
 создаются с mode0600 в private каталоге и удаляются при завершении, включая
 ошибку. CLI-флаг, принимающий PEM contents, нельзя заменять путём к файлу:
 нужен поддерживаемый config/file loader с прежней exact TLS/mTLS identity.
+Это относится и к сохранённому JSON сторонних registry: он может содержать
+credentials, поэтому merge получает его через private file, не `--argjson`.
+Режим readback не исправляет host aliases, registry files и состояние нод;
+несовпадение закрыто отклоняется, запись разрешена только явному apply.
 
 Промежуточные каталоги вложенных workspace mounts создаются узким non-root init
 до контейнера с nested mounts: OCI runtime иначе может создать parent с UID 0.

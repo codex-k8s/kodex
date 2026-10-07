@@ -10,6 +10,33 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+07.10.2026 05:44 UTC:5 dev/test+3 ROOT files FROZEN поверх657. ROOT public
+registry credentials16PASS33.561s, cache-import19PASS1.376s+guards, syntax/
+diffcheck/hash PASS. Private argv/env и readback mutation исправлены в обоих
+scripts. Public fixture budget30→60s, assertions не ослаблены. Реальный apply
+не выполнялся. Все agents закончили, ROOT checkpoint/push→повторная provenance
+на clean SHA/cache hit→fresh render→fresh owner-idle→supply-chain apply/readback
+→archive core/readback→native PROJECT G5 recipe+3 ENV groups→SYSTEM recipe/ENV
+→read_file contiguous EOF/full33. Native сценарии не подменять host config.
+Runner2d1efe7f/binary40f3268a и archive0db667ff seeded, пока не default activated.
+Chrome5 reload05:43, следующий≤05:48, чужие6/13–17 не трогать. Goal ACTIVE.
+
+## Предыдущий checkpoint05:40
+
+07.10.2026 05:40 UTC: source/remote/Draft1800 exact657 PASS. Full runner build
+manifest2d1efe7f/binary40f3268a/provenance567a212e, worker manifest0db667ff
+и обе component seed/readback PASS. Default/RoleImage activation НЕ выполнена.
+Preflight обнаружил credentials в jq argv и k3d readback hosts-write;
+archive_failure_diagnostics исправляет ровно два registry scripts и synthetic
+test. assistant_architecture исправляет только stale cache-import assertion.
+ROOT владеет GUIDE003/журналами. Новые файлы пока НЕ frozen и НЕ commit.
+После freeze/tests — checkpoint/push → provenance нового clean SHA/cache hit
+→ fresh render → fresh owner idle → supply-chain apply/readback → archive core
+→ typed recipes/ENV/полное native read/full33. Не запускать registry readback
+до mode guard fix. Chrome5 reload05:39, следующий≤05:44; Full65 OPEN.
+
+## Предыдущий checkpoint05:33
+
 07.10.2026 05:33 UTC: frozen runner generic failure capture8files + CP nullable
 terminal decoder/FAILED generation component2files +ROOT docs3files готовы
 к checkpoint поверх69eb. Whole runner unit/build/targeted race/vet PASS;

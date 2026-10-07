@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 fail() {
   printf 'Kodex local node registry configuration failed: %s\n' "$*" >&2
@@ -59,6 +60,8 @@ for input_file in "$username_file" "$password_file" "$ca_file" "$certificate_fil
   (((8#$input_mode & 0077) == 0)) || fail 'node pull material permissions are too broad'
 done
 
+# Не наследуем export attribute одноимённых переменных вызывающей стороны.
+export -n username password actual expected actual_host expected_host
 username=$(<"$username_file")
 password=$(<"$password_file")
 [[ -n "$username" && "$username" != *$'\n'* && "$username" != *$'\r'* ]] ||
@@ -72,25 +75,31 @@ system_certificate="$system_directory/client.crt"
 system_private_key="$system_directory/client.key"
 registry_configuration=/etc/rancher/k3s/registries.yaml
 temporary_directory=$(mktemp -d)
-trap 'rm -rf -- "$temporary_directory"; unset password' EXIT
+trap 'rm -rf -- "$temporary_directory"; unset username password' EXIT
 
-existing_json='{}'
+printf '%s' "$username" >"$temporary_directory/username"
+printf '%s' "$password" >"$temporary_directory/password"
+unset username password
+
+existing_json_file="$temporary_directory/existing.json"
+printf '{}\n' >"$existing_json_file"
 if sudo -n test -f "$registry_configuration"; then
   sudo -n yq -o=json "$registry_configuration" |
-    jq -c . >"$temporary_directory/existing.json"
-  existing_json=$(jq -c 'if type == "object" then . else {} end' "$temporary_directory/existing.json")
+    jq -c 'if type == "object" then . else {} end' >"$existing_json_file"
 fi
-expected_json=$(jq -cn --argjson existing "$existing_json" --arg host "$promoted_pull_host" \
-  --arg username "$username" --arg password "$password" --arg ca "$system_ca" \
+expected_json_file="$temporary_directory/expected.json"
+jq -cn --slurpfile existing "$existing_json_file" --arg host "$promoted_pull_host" \
+  --rawfile username "$temporary_directory/username" --rawfile password "$temporary_directory/password" --arg ca "$system_ca" \
   --arg certificate "$system_certificate" --arg private_key "$system_private_key" '
-    $existing |
+    (if ($existing | length) == 1 then $existing[0]
+     else error("registry configuration must contain one JSON value") end) |
     .mirrors = ((.mirrors // {}) + {($host):{endpoint:[("https://" + $host)]}}) |
     .configs = ((.configs // {}) + {($host):{
       auth:{username:$username,password:$password},
       tls:{ca_file:$ca,cert_file:$certificate,key_file:$private_key}
     }})
-  ')
-printf '%s\n' "$expected_json" | yq -P >"$temporary_directory/registries.yaml"
+  ' >"$expected_json_file"
+yq -P <"$expected_json_file" >"$temporary_directory/registries.yaml"
 chmod 0600 "$temporary_directory/registries.yaml"
 
 changed=false
@@ -98,7 +107,7 @@ if ! sudo -n test -f "$registry_configuration"; then
   changed=true
 else
   actual=$(sudo -n yq -o=json "$registry_configuration" | jq -cS .)
-  expected=$(jq -cS . <<<"$expected_json")
+  expected=$(jq -cS . "$expected_json_file")
   [[ "$actual" == "$expected" ]] || changed=true
 fi
 for pair in "$ca_file:$system_ca" "$certificate_file:$system_certificate" "$private_key_file:$system_private_key"; do
@@ -135,7 +144,7 @@ actual_host=$(sudo -n yq -o=json "$registry_configuration" | jq -cS --arg host "
 ')
 expected_host=$(jq -cS --arg host "$promoted_pull_host" '
   {mirror:.mirrors[$host],config:.configs[$host]}
-' <<<"$expected_json")
+' "$expected_json_file")
 [[ "$actual_host" == "$expected_host" ]] || fail 'K3s promoted pull configuration mismatch'
 for pair in "$ca_file:$system_ca" "$certificate_file:$system_certificate" "$private_key_file:$system_private_key"; do
   source_path=${pair%%:*}
