@@ -1131,6 +1131,7 @@ onBeforeUnmount(() => {
           <RunActivityDrawer
             :open="true"
             :run="run"
+            :activity-runs="Object.values(platform.runs)"
             :nodes="allRunNodes"
             :events="eventList"
             :artifacts="artifactList"

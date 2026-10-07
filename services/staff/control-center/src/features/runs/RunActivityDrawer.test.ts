@@ -127,12 +127,15 @@ async function render(
   artifacts: Artifact[] = [],
   initialNodeRef?: string,
   initiatorSummary = run.inputSummary ?? "",
+  currentRun: Run = run,
+  activityRuns: Run[] = [],
 ): Promise<string> {
   const app = createSSRApp({
     render: () =>
       h(RunActivityDrawer, {
         open: true,
-        run,
+        run: currentRun,
+        activityRuns,
         nodes,
         events,
         artifacts,
@@ -180,6 +183,259 @@ async function render(
 }
 
 describe("RunActivityDrawer", () => {
+  const pinnedNode = { ...node, turnRef: "trn_example" };
+  const completedTool: PresentedRunEvent = {
+    ...event,
+    ref: "evt_tool_completed",
+    sequence: 2,
+    message: undefined,
+    type: "TOOL_CALL_RECORDED",
+    messageKind: "TOOL_CALL",
+    toolCall: {
+      ref: "call_completed",
+      tool: "files.lookup",
+      revision: 2,
+      state: "SUCCEEDED",
+      safeParameters: {},
+      safeResult: "Найдены материалы",
+      durationMs: 10,
+      auditRef: "audit_completed",
+    },
+  };
+
+  it("между инструментами показывает один индикатор на ответе, сохраняя завершённый tool", async () => {
+    const html = await render([pinnedNode], [event, completedTool]);
+    expect(html.match(/class="run-transcript__work"/g)).toHaveLength(1);
+    expect(html.indexOf('class="run-transcript__work"')).toBeLessThan(
+      html.indexOf("files.lookup"),
+    );
+    expect(html).toContain("Найдены материалы");
+    expect(html).toContain('data-state="SUCCEEDED"');
+    const nextTool = {
+      ...completedTool,
+      ref: "evt_next_tool",
+      sequence: 3,
+      toolCall: {
+        ...required(completedTool.toolCall),
+        ref: "call_next",
+        state: "RUNNING" as const,
+        revision: 1,
+      },
+    };
+    const running = await render(
+      [pinnedNode],
+      [event, completedTool, nextTool],
+    );
+    expect(running.match(/class="run-transcript__work"/g)).toHaveLength(1);
+    expect(running.indexOf('class="run-transcript__work"')).toBeGreaterThan(
+      running.indexOf("Собираю данные"),
+    );
+  });
+
+  it("показывает только текущий callback attempt узла независимо от retry attempt run", async () => {
+    const callbackNode: RunNode = {
+      ...pinnedNode,
+      ref: "nod_callback",
+      turnRef: "trn_callback",
+      attempt: 2,
+    };
+    const previousFinal: PresentedRunEvent = {
+      ...event,
+      ref: "evt_previous_final",
+      sequence: 2,
+      nodeState: "SUCCEEDED",
+      message: {
+        ...required(event.message),
+        ref: "msg_previous_final",
+        phase: "FINAL",
+        text: "Старый ход завершён",
+      },
+    };
+    const callbackEvents: PresentedRunEvent[] = [event, completedTool].map(
+      (entry, index) => ({
+        ...entry,
+        ref: `evt_callback_${String(index)}`,
+        sequence: 3 + index,
+        nodeRef: callbackNode.ref,
+        execution: {
+          ...required(entry.execution),
+          nodeRef: callbackNode.ref,
+          turnRef: required(callbackNode.turnRef),
+          turnNumber: 2,
+          attempt: callbackNode.attempt,
+        },
+        message: entry.message
+          ? {
+              ...entry.message,
+              ref: "msg_callback_commentary",
+              text: "Продолжаю после callback",
+            }
+          : undefined,
+      }),
+    );
+    const html = await render(
+      [{ ...pinnedNode, state: "SUCCEEDED" }, callbackNode],
+      [event, previousFinal, ...callbackEvents],
+    );
+    expect(run.attempt).toBe(1);
+    expect(html.match(/class="run-transcript__work"/g)).toHaveLength(1);
+    const indicator = html.indexOf('class="run-transcript__work"');
+    expect(indicator).toBeGreaterThan(html.indexOf("Старый ход завершён"));
+    expect(indicator).toBeLessThan(html.indexOf("Продолжаю после callback"));
+    expect(indicator).toBeLessThan(html.indexOf("files.lookup"));
+    expect(html).toContain('data-state="SUCCEEDED"');
+  });
+
+  it("между инструментами сохраняет компактный индикатор без commentary", async () => {
+    const started: PresentedRunEvent = {
+      ...event,
+      message: undefined,
+      type: "TURN_STARTED",
+      messageKind: "STATE",
+      summary: "i18n:MODEL_REQUEST_RUNNING",
+      displaySummary: "i18n:MODEL_REQUEST_RUNNING",
+    };
+    const html = await render([pinnedNode], [started, completedTool]);
+    expect(html.match(/class="run-transcript__work"/g)).toHaveLength(1);
+    expect(html).toContain('data-state="SUCCEEDED"');
+  });
+
+  it("сохраняет прежний предикат индикатора системного помощника", async () => {
+    const html = await render(
+      [pinnedNode],
+      [event, completedTool],
+      [],
+      undefined,
+      "",
+      { ...run, source: "SYSTEM_ASSISTANT" },
+    );
+    expect(html).not.toContain('class="run-transcript__work"');
+    expect(html).toContain('data-state="SUCCEEDED"');
+  });
+
+  it.each([
+    "SUCCEEDED",
+    "FAILED",
+    "CANCELLED",
+    "WAITING_HUMAN",
+    "CANCELLING",
+  ] as const)("убирает индикатор при состоянии run %s", async (state) => {
+    const html = await render(
+      [pinnedNode],
+      [event, completedTool],
+      [],
+      undefined,
+      "",
+      { ...run, state },
+    );
+    expect(html).not.toContain('class="run-transcript__work"');
+  });
+
+  it.each([
+    { state: "SUCCEEDED" as const },
+    { state: "FAILED" as const },
+    { state: "CANCELLED" as const },
+    { turnRef: "trn_other" },
+    { attempt: 2 },
+    { runRef: "run_child" },
+    { turnRef: undefined },
+  ])(
+    "не выводит индикатор для terminal/другого выбранного узла %j",
+    async (change) => {
+      const html = await render(
+        [{ ...pinnedNode, ...change }],
+        [event, completedTool],
+        [],
+        pinnedNode.ref,
+      );
+      expect(html).not.toContain('class="run-transcript__work"');
+    },
+  );
+
+  it.each([
+    { sessionRef: "ses_other" },
+    { attempt: 2 },
+    { turnRef: "trn_other" },
+    { runRef: "run_other" },
+  ])("не переносит индикатор из другого execution %j", async (change) => {
+    const foreign = [event, completedTool].map((entry) => ({
+      ...entry,
+      execution: { ...required(entry.execution), ...change },
+    }));
+    const html = await render([pinnedNode], foreign);
+    expect(html).not.toContain('class="run-transcript__work"');
+  });
+
+  it("FINAL закрывает индикатор даже до обновления RUNNING snapshot", async () => {
+    const final = {
+      ...event,
+      ref: "evt_final",
+      sequence: 3,
+      message: {
+        ...required(event.message),
+        ref: "msg_final",
+        phase: "FINAL" as const,
+      },
+    };
+    const html = await render([pinnedNode], [event, completedTool, final]);
+    expect(html).not.toContain('class="run-transcript__work"');
+  });
+
+  it("использует exact child snapshot и не наследует состояние root", async () => {
+    const child: Run = {
+      ...run,
+      ref: "run_child",
+      sessionRef: "ses_child",
+      parentRunRef: run.ref,
+    };
+    const childNode = { ...pinnedNode, runRef: child.ref };
+    const childEvents = [event, completedTool].map((entry) => ({
+      ...entry,
+      execution: {
+        ...required(entry.execution),
+        runRef: child.ref,
+        sessionRef: child.sessionRef,
+      },
+    }));
+    const html = await render(
+      [childNode],
+      childEvents,
+      [],
+      childNode.ref,
+      "",
+      run,
+      [child],
+    );
+    expect(html.match(/class="run-transcript__work"/g)).toHaveLength(1);
+    for (const snapshots of [[], [{ ...child, state: "SUCCEEDED" as const }]]) {
+      const closed = await render(
+        [childNode],
+        childEvents,
+        [],
+        childNode.ref,
+        "",
+        run,
+        snapshots,
+      );
+      expect(closed).not.toContain('class="run-transcript__work"');
+    }
+  });
+
+  it("terminal event закрывает fallback, даже если это не компактная служебная запись", async () => {
+    const terminal = {
+      ...event,
+      ref: "evt_terminal",
+      sequence: 3,
+      message: undefined,
+      nodeState: "FAILED" as const,
+      type: "TURN_PROGRESS" as const,
+      summary: "Сбой",
+      displaySummary: "Сбой",
+    };
+    const html = await render([pinnedNode], [event, completedTool, terminal]);
+    expect(html).not.toContain('class="run-transcript__work"');
+  });
+
   it("отображает commentary, вызов с итоговым revision и final в общей хронологии", async () => {
     const started: PresentedRunEvent = {
       ...event,

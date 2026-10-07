@@ -10,6 +10,120 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 17:13 UTC — уточнение INTAKE и индикатор работы
+
+База текущего пакета `d8195317f478495bff519e2b717a55f463be6c81`;
+ROOT повторно сверил remote/Draft1800 и main `b5f6fcde`: exact readback PASS.
+Checklist11/13/14/15 остаётся OPEN, bootstrap не заменяет полный dogfooding.
+
+### Новый native запуск после исправления входного задания
+
+Предыдущие Manager `run_XrSQ3mwXYkiV1OQMztkLsowq` и Workflow
+`run_IiwY_MWXvabNvleji5g4FWRq` завершились FAILED. В задании ROOT была
+неоднозначная фраза о «трёх обязательных результатах INTAKE». Опубликованный
+step-001 требует один business output `manager-plan.md`; автоматически
+создаваемые AGENT_RESULT/INTEGRATION_RESULT — технические квитанции, а не
+два дополнительных бизнес-файла. После подтверждённого terminal исправлен
+только текст нового пользовательского задания, не Workflow, grants или gate.
+Точный native full-read gate по обязательным документам сохранён.
+
+Предыдущий browser capture нового trimmed задания:7944B, SHA256
+`f8432f162977cc68942b801019fc0b26abe4b9662fd27272bfc1cc7a912c3032`.
+Новый ordinary Manager `run_Ss6A8yDmwgp_eGR1v6LDouiP`, session
+`ses_8ZnaM1DmCXKEDG3818KZq18k`, turn
+`trn_Iq9aawIUZ56Uva_XjEc6L9Iw`/attempt1, самостоятельно создал Workflow
+`run_H9IrGdsDy0QlhiJzLlOY_2AX`, session
+`ses_z0jYagaTU4qqiTUYQAW6KTlq`. Actual publication15/revision5,33steps
+не изменялись. Owner graph/read/rejoin прошлого checkpoint подтверждали
+35nodes/32planned и отсутствие Console errors; это не новый visual PASS.
+
+Перечитан owned closed proof:32NDJSON records, SHA256
+`d09fb5729b40aa0919deed3b86137276fc6dd2774a2a2474a6b3f242de7ce7a7`.
+Ранние ACK координатора attempt1 и step-001 child
+`run_fNymg91-hQhas8VnYsXLEcVf` совпали с owner lineage/session/turn/node,
+provider/inbox и instructions/file EQUAL, same-Pod UID/rejoin PASS.
+Координатор имеет tools38/grants0/caps1, а child tools38/grants21/caps24;
+оба G5/ENV5/binding6. Image-file binary `40f3268a` совпал с ожидаемым,
+actual serving-process и независимый expected child task — NOT RUN.
+
+Current authoritative READ ONLY snapshot17:10:42: child SUCCEEDED,
+его node `nod_EbbFFyH8aIV7kv78qhohMI-8` привязан сервером к step-001,
+turn `trn_SI4DBQbJFxx28pX0iSy8Z6sf` COMPLETED/attempt1. Workflow
+получил штатный callback continuation attempt2
+`trn_i4llyi6jUUS-tHXISzm0ZoVJ`, node `nod_Ae2fx_8EJCwjLIb86eNqPKSh`.
+Повтор17:12:02: Workflow FAILED3/seq257,
+`RUNTIME_WORKFLOW_INCOMPLETE`; Manager ещё RUNNING2/seq185 и получил
+собственный callback attempt2. Причина нового semantic stop пока UNKNOWN;
+технический SUCCEEDED child не объявлен доказательством full-read gate.
+Новый запуск или Retry по observation timeout не выполнялся.
+
+### Индикатор обычной переписки
+
+Исправлены RunActivityDrawer, run-activity и одна binding в RunPage:
+между вызовами инструментов индикатор остаётся на последнем ответе либо
+компактной служебной записи точного текущего выполнения. Завершённый tool
+сохраняет SUCCEEDED. Child использует собственный authoritative snapshot,
+а не RUNNING родителя; terminal/FINAL/чужие run/session/turn/attempt не
+получают индикатор. Поведение SYSTEM_ASSISTANT не менялось.
+
+- PASS ROOT:285/285 unit в четырёх файлах,4.34с; forced typecheck,
+  scoped ESLint/Prettier, production build8.55с и diff check.
+  Сохранено штатное предупреждение о chunks>500kB, лимит не повышен.
+- PASS source/Pod: RunActivityDrawer.vue `b7e305b9`, run-activity.ts
+  `58126b7d`, RunPage.vue `0b026b5a` совпали с ready Pod.
+  Deployment16/16,desired1/ready1/available1; два прежних Pod не считаются
+  дополнительными требуемыми replicas. Bounded frontend log read10мин
+  содержит0строк, это не доказательство отсутствия всех backend ошибок.
+- NOT RUN текущего visual/reload/Console/Network: запрос list_pages Chrome
+  с17:05 не вернулся, ожидание остановлено; отдельный повтор списка также
+  пока ожидает. Рабочие вкладки не закрывались, доступ не объявлен
+  восстановленным без ответа. Ранее screenshot графа завершился protocol
+  timeout; старый снимок не выдан за proof нового интерфейса.
+
+Повтор17:14:39: Manager FAILED3/seq231, REQUIRED_WORKFLOW_FAILED;
+оба callback continuation2 SUCCEEDED/COMPLETED. Проверка17:15:42:
+required Workflow relation FAILED,5leases COMPLETED, CLAIMED отсутствуют.
+Новый owned closed proof:14records/62825B, SHA256
+`ba530fba910f603a16cffceb46477dedb0b1f13269a870c97a3bf95787ce7eee`.
+Оба continuation ACK/rejoin совпали; ожидаемая child task/serving NOT RUN.
+
+Узкий анализ опубликованных сообщений показывает self-report полного EOF
+четырёх документов и созданный manager-plan;130tool-state rows step-001
+не содержат FAILED. Это не независимый proof содержимого файлов и не
+подтверждение причины BLOCKED. Координатор сообщает semantic BLOCKED и
+прочтение actual callback manifest до EOF, но первичная причина остаётся
+UNKNOWN до owner read exact нового manager-plan. Прямое чтение Blob в обход
+авторитетного artifact API не выполнялось.
+
+Отдельный UI guard исправлен по фактической модели: Run.attempt1 остаётся
+попыткой запуска/retry, callback continuation node/turn имеет attempt2.
+Индикатор привязывается к текущему RUNNING AGENT_EXECUTION и его exact
+node/turn/attempt, а не к равенству attempt узла и запуска. Старые/чужие
+scope и FINAL по-прежнему закрыты. Первая сборка выше относится к пакету
+до этого уточнения; результаты итогового пакета записываются отдельно.
+
+Final metadata readback17:19:33: новый callback manifest содержит ровно3
+actual outputs, все CLEAN/AVAILABLE/ACTIVE и current pins совпадают.
+Нужный для owner API `manager-plan.md`:
+`art_i6ozYAPM-0HweYiy1AEslB-h`, revision16/v1,40345B, SHA256
+`b604df794ca39bf64d610daead4af52fa6694801272d44f5f2c6179132d75b55`.
+Blob не читался. Итоговый closed proof:15records/64551B, SHA256
+`cf1029a3cb495b29c9d2dd41572e76219a2b654bc9358a01e3c518d64011de50`;
+прежний hash выше относится к snapshot до добавления manifest metadata.
+
+Итоговая callback-regression ROOT:286/286 tests в4файлах PASS4.34с;
+forced typecheck, scoped lint/format и production build7.80с PASS.
+Штатные chunk/plugin timing warnings сохранены, пороги не ослаблены.
+Mounted source/Pod совпали: Drawer.vue `b7e305b9`, run-activity.ts
+`2eb4e52c`, RunPage.vue `0b026b5a`. Test source hash `1f14a70e`.
+Контракты/API/БД/owner states не менялись: исправление только представления.
+Новый browser list повтор всё ещё ожидает ответа, без нового screenshot PASS.
+
+Дальше: получить опубликованную причину semantic stop через штатный owner
+read path, исправить root cause и повторить native gate после подтверждённого
+terminal; проверить новый индикатор в Chrome. Architect full handoff,
+Developer PR, внутренние reviews/fixes и final READY по-прежнему OPEN.
+
 ## Checkpoint 07.10.2026 16:35 UTC — новый Manager и actual input proof
 
 HEAD/remote/Draft1800 `9927da5796b104b239cb8fc419a661974e408488`

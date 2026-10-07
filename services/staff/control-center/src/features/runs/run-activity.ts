@@ -536,6 +536,57 @@ export function activeTranscriptItemId(
     : (latest?.id ?? null);
 }
 
+// Обычный drawer сохраняет индикатор между инструментами на последнем ответе
+// или компактной служебной записи. Завершённый инструмент не становится busy.
+export function ordinaryRunActiveTranscriptItemId(
+  run: Run,
+  nodes: readonly RunNode[],
+  items: readonly RunActivityItem[],
+): string | null {
+  if (run.state !== "RUNNING") return null;
+  const bound = items.filter((item) => {
+    const execution = item.execution;
+    return Boolean(
+      executionKey(execution) &&
+      execution &&
+      !item.historical &&
+      execution.runRef === run.ref &&
+      execution.sessionRef === run.sessionRef &&
+      nodes.some(
+        (node) =>
+          node.ref === execution.nodeRef &&
+          node.runRef === run.ref &&
+          node.type === "AGENT_EXECUTION" &&
+          node.state === "RUNNING" &&
+          node.turnRef === execution.turnRef &&
+          node.attempt === execution.attempt,
+      ),
+    );
+  });
+  const active = activeTranscriptItemId(bound);
+  if (active) return active;
+  const closed = bound.flatMap((item) => {
+    const scope = executionKey(item.execution);
+    return scope &&
+      !item.toolCall &&
+      !item.artifact &&
+      (item.phase === "FINAL" || terminalTranscriptStates.has(item.state ?? ""))
+      ? [scope]
+      : [];
+  });
+  // FINAL и terminal остаются в наборе: общий предикат закрывает exact scope.
+  return activeTranscriptItemId(
+    bound.filter(
+      (item) =>
+        !item.toolCall &&
+        !item.artifact &&
+        !item.artifactRef &&
+        (Boolean(item.phase) || isTranscriptService(item)),
+    ),
+    closed,
+  );
+}
+
 // Terminal receipt может прийти раньше terminal RunEvent. Привязка проверяется
 // по owner snapshot и persisted USER/node, а не по текущему экрану или receipt ref.
 export function assistantTerminalTranscriptScopes(
