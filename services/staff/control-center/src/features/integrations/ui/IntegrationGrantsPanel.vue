@@ -1099,19 +1099,19 @@ const canManageSelected = computed(
   font-weight: 600;
 }
 .grant-table th:nth-child(1) {
-  width: 32%;
+  width: calc((100% - 144px) * 0.36);
 }
 .grant-table th:nth-child(2) {
-  width: 26%;
+  width: calc((100% - 144px) * 0.28);
 }
 .grant-table th:nth-child(3) {
-  width: 22%;
+  width: calc((100% - 144px) * 0.22);
 }
 .grant-table th:nth-child(4) {
-  width: 10%;
+  width: calc((100% - 144px) * 0.14);
 }
 .grant-table th:nth-child(5) {
-  width: 10%;
+  width: 144px;
 }
 .grant-row {
   height: 68px;
