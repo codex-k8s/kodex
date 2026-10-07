@@ -4,8 +4,8 @@ title: Integration gateway
 type: service
 status: approved
 owner: backend
-version: 2.4.0
-updated: 2026-09-05
+version: 2.4.1
+updated: 2026-10-07
 ---
 
 # integration-gateway
@@ -64,6 +64,16 @@ FQDN в policy egress gateway; отсутствие host в policy являет�
 fail-closed отказом подключения. Redirect запрещён.
 
 READ повторяется только на bounded network/`429`/`502`/`503`/`504` отказах.
+Для GitHub сырой успешный SDK-ответ ограничен 2 МиБ до декодирования,
+ошибочный — 64 КиБ; безопасная итоговая проекция по-прежнему ограничена
+64 КиБ и проверяется package output schema. `github.pull_request.list`
+возвращает компактный указатель с number/title/state/head/base/SHA/draft/URL.
+Полное описание читается через `github.pull_request.read`; create/update
+также сохраняют полный body. Страница не усекается и не меняет `per_page`
+или `next_cursor`: слишком большой ответ закрыто отклоняется. Локальный
+`INTEGRATION_RESPONSE_INVALID` не маскируется под недоступность провайдера
+и не повторяется. Это не расширяет resource scope, grants или сетевые права.
+
 Любая provider mutation, включая `PROVIDER_NATIVE`, автоматически не повторяется
 после неоднозначного сетевого исхода; immutable invocation receipt защищает от
 повторного выполнения уже подтверждённого effect. Email bridge обязан принимать
@@ -83,8 +93,10 @@ worker проверяет durable `UNKNOWN_OUTCOME`, сохранённый inte
 Полный закрытый набор MVP-UI-42 находится в [OPERATION_MATRIX.md](OPERATION_MATRIX.md).
 `EFFECT_KEY` новых vendor-команд означает durable дедупликацию invocation у
 control-plane, а не вымышленную поддержку idempotency header провайдером.
-Файлы и ответы SDK/HTTP ограничены 64 KiB до декодирования; итоговая JSON/base64
-проекция также входит в этот бюджет. Большие результаты отклоняются без выдачи
+Ответы HTTP остальных провайдеров и итоговая безопасная JSON-проекция
+ограничены 64 КиБ. GitHub SDK использует отдельный сырой бюджет, описанный
+выше; это не увеличивает допустимый размер исходного файла или результата.
+Большие результаты отклоняются без выдачи
 частичного файла. GitHub Contents API возвращает каталог без pagination;
 страницы остальных списков используют provider cursor. Jira transitions,
 links/attachments и exact Confluence space возвращают ограниченный полный набор.
@@ -105,7 +117,7 @@ GitHub workflow dispatch принимает `workflow_inputs`: JSON-объект
 
 ## Обновление каталога
 
-Текущие версии: GitHub `2.3.0`, GitLab/Jira/Confluence `1.2.0`, Email `1.4.0`,
+Текущие версии: GitHub `3.0.0`, GitLab/Jira/Confluence `1.2.0`, Email `1.4.0`,
 Mattermost `2.2.0`, Synthetic `3.1.0`.
 Публикация новых packages не расширяет существующие grants автоматически.
 Старая pinned revision не переинтерпретируется: владелец публикует новую

@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -16,6 +17,11 @@ func githubRead[T any](ctx context.Context, capability integrationpackage.Capabi
 		value, response, err := call()
 		if err == nil {
 			return value, nil
+		}
+		var safe *SafeError
+		if errors.As(err, &safe) {
+			// Локальная проверка ответа не является временной сетевой ошибкой.
+			return value, safe
 		}
 		retryAfter := ""
 		retry := response == nil

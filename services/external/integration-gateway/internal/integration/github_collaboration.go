@@ -25,6 +25,23 @@ func projectGitHubPull(value *github.PullRequest) githubPullView {
 	return githubPullView{value.GetNumber(), value.GetTitle(), value.GetBody(), value.GetState(), value.GetHead().GetRef(), value.GetBase().GetRef(), value.GetHead().GetSHA(), value.GetDraft(), value.GetHTMLURL()}
 }
 
+// Список является указателем, не пакетным чтением всех полных описаний.
+// Полное body возвращают отдельные read/create/update, без усечения текста.
+type githubPullIndex struct {
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	State  string `json:"state"`
+	Head   string `json:"head"`
+	Base   string `json:"base"`
+	SHA    string `json:"sha"`
+	Draft  bool   `json:"draft"`
+	URL    string `json:"url"`
+}
+
+func projectGitHubPullIndex(value *github.PullRequest) githubPullIndex {
+	return githubPullIndex{value.GetNumber(), value.GetTitle(), value.GetState(), value.GetHead().GetRef(), value.GetBase().GetRef(), value.GetHead().GetSHA(), value.GetDraft(), value.GetHTMLURL()}
+}
+
 type githubReviewView struct {
 	ID       int64  `json:"id"`
 	Body     string `json:"body"`
@@ -53,11 +70,11 @@ func (adapter *Adapter) executeGitHubCollaboration(ctx context.Context, client *
 			return projected, response, err
 		})
 	case "github.pull_request.list":
-		return githubCatalogPage(ctx, capability, request, in.Limit, in.Cursor, func() ([]githubPullView, *github.Response, error) {
+		return githubCatalogPage(ctx, capability, request, in.Limit, in.Cursor, func() ([]githubPullIndex, *github.Response, error) {
 			items, response, err := client.PullRequests.List(ctx, owner, repo, &github.PullRequestListOptions{State: in.State, Head: in.Head, Base: in.Base, ListOptions: options})
-			views := make([]githubPullView, 0, len(items))
+			views := make([]githubPullIndex, 0, len(items))
 			for _, item := range items {
-				views = append(views, projectGitHubPull(item))
+				views = append(views, projectGitHubPullIndex(item))
 			}
 			return views, response, err
 		})

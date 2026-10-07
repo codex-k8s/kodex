@@ -10,6 +10,73 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 11:47 UTC — исправлено живое чтение истории PR
+
+Рабочий tree поверх `cf060b1c49a0cf581dbcc1853244b0352662adb0`;
+точный последующий source checkpoint определяется commit этого раздела.
+Старый Workflow `run_DBoj7UpTwj-D0nuA6AsTSQ26` не считается acceptance:
+Architect и Developer технически завершились, но вернули semantic BLOCKED
+на `github.pull_request.list state=all`, реализации/PR не было. Coordinator
+передал этот результат Documentation Reviewer; ROOT остановил именно данный
+run штатным owner UI CANCEL. POST commands200, authoritative GET200:
+CANCELLED/version3/sequence476; граф38nodes/56edges —31CANCELLED,
+7SUCCEEDED, активных узлов нет. Новый запуск пока NOT RUN.
+Watcher2115 завершился по observation deadline: NOT_CAPTURED,
+FAILURE_NOT_OBSERVED_BEFORE_DEADLINE; это не agent terminal и не причина retry.
+
+Причина подтверждена отдельным bounded READ без вывода provider body:
+state=all/limit20 —389598B upstream,92963B безопасной прежней проекции;
+state=open —39543B/9998B. Оба ограничения64КиБ нарушались только для all.
+Transport SafeError с nil SDK response ошибочно превращался в UNAVAILABLE
+и вызывал три READ-попытки. Адресный regression до исправления FAIL
+именно на этом пути; отдельное полное PR read уже работало.
+
+Исправление: успешный raw GitHub SDK response ограничен2МиБ до декодирования,
+ошибочный64КиБ; итоговый result/schema/file64КиБ неизменны. PR list —
+компактный указатель без body, full read/create/update сохраняют описание.
+Provider per_page/next_cursor не меняются, строки не отбрасываются.
+SafeError RESPONSE_INVALID сохраняется без retry; mutation с неоднозначным
+ответом остаётся UNKNOWN_OUTCOME. Нет новых grants, API, migrations,
+сетевых destinations или изменения package schema/digest.
+
+- PASS: Go1.26.6 полный gateway unit22.003s, vet/build, package codegen.
+  Предыдущий host запуск Go1.27.1 unit16.094s/vet/build — отдельный факт;
+  первый make codegen FAIL на требовании1.26.6, повтор закреплённой версией PASS.
+- PASS: адресные новые regression/file-boundary tests0.178s;
+  host1.27 race5.552s. Повтор race1.26.6 PASS5.643s.
+- PASS: host/Pod `/workspace` transport SHA88b1bda08900820d7eaaefc25e51bd5c642fc0bfa79a254e2080022534254e59,
+  collaboration1ea696b6cad3f2b78c26372e6390631f4e1f8b1667d4731bb26709cb316d8b92 EQUAL.
+  Air build11:41:20→running11:41:24. Независимый CGO0/trimpath/buildvcsfalse
+  Go1.26.6 binary и обслуживаемый `/proc/4776/exe` в gateway Pod одинаковы:
+  SHA8e814baeea112898cac12380175fe948042ef460efc609e1c34e7ecbc19da9ef.
+- PASS: новый PROJECT helper `cnv_FSo2U-Vm6qMyyXl_THLRXEDV`,
+  run `run_7OGBxOVxZC6AFGB2KX1A6LrD`, session `ses__ZjVgxRFiZmlphi8oSibpPC0`,
+  turn `trn_EPv9dnNBZq971BZeYt4lL9A3`, attempt1 SUCCEEDED/sequence27.
+  all/page1 count20/next2 `inv_9JZmeGZCCZq1hivMrwNhmlrZ`;
+  all/page2 count20/next3 `inv_maeMOdRwOS4HYRZx6zTU7nu8`;
+  full read1798 `inv_pRlAnCID1N_TEbsfg6ZfjPUp`;
+  open count2/EOF `inv_-KaY4NGewFg2r4YrBLtNqzlu`.
+  Все четыре native invocation SUCCEEDED; модель подтвердила40 уникальных
+  PR/head SHA и отсутствие усечения отдельного description.
+  Это две страницы, не доказательство EOF всей истории PR.
+- PASS: ранний ACK CAPTURED/rejoined Podruntime-turn-2a2df79e8f05176a,
+  UID00d07870-8636-4480-9692-17a9a308cebf. Task/provider/inbox
+  SHA1fdcae6a3422a1cdde0291b0bbb77d0d65f183feede121b455f1bec94ddecfb6,
+  instructions1d3c2c05446c36bbf2e395000dd40a29481295f134870c8e3e164860b3b9818a;
+  file/inbox EQUAL, independent task comparison NOT RUN. G5/ENV8/binding7,
+  tools38/grants23/capabilities23; same-Pod runner40f3268a не является
+  доказательством servicing runner process.
+- PASS: Chrome scoped Console0, relevant API200, отмена commands200,
+  modal/page без horizontal overflow, два scroll container. Транзитный
+  «Внутренняя ошибка» исчез после успешного CANCEL/readback/reload;
+  его primary cause UNKNOWN, без заявления общего UI PASS.
+- NOT RUN: свежий screenshot после прежнего protocol timeout;
+  полный33/Developer PR/reviews и прочие пункты full65 остаются OPEN.
+
+Context7 `/google/go-github`: официальные README/CONTRIBUTING,
+ListOptions/NextPage и custom transport. Библиотека не обновлялась.
+Нормативный общий SDK/projection/retry invariant закреплён в GO-DOC-001.
+
 ## Checkpoint 07.10.2026 11:23 UTC — настоящий Architect и полные входы
 
 Source/remote/Draft1800 `010d0fb042598260e1a6b5a56ab6012d67beef0c`.

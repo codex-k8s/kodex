@@ -10,6 +10,31 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 11:47 UTC: исправлено доказанное превышение бюджета PR list:
+raw SDK budget2МиБ, безопасный result64КиБ, компактный list без body,
+full read/create/update без усечения; SafeError без READ retry,
+mutation UNKNOWN_OUTCOME сохранён. Рабочий tree поверх cf060b1c;
+последующий exact checkpoint — commit этого раздела. Go1.26.6 gateway
+unit22.003s/vet/build/codegen и race5.643s закреплённой версией PASS.
+Source/Pod hashes EQUAL; независимо собранный бинарник и обслуживаемый
+gateway `/proc/4776/exe` SHA8e814baeea112898cac12380175fe948042ef460efc609e1c34e7ecbc19da9ef EQUAL.
+
+Native PROJECT READ `run_7OGBxOVxZC6AFGB2KX1A6LrD` SUCCEEDED:
+all20/page1,next2 и page2,next3 —40 unique; fullPR1798; open2/EOF.
+Четыре invocation SUCCEEDED, подробные refs/ACK в журнале11:47.
+Ранний ACK CAPTURED/rejoined, source/file/inbox EQUAL. Не выдавать две страницы
+за EOF всей истории. Старый SOFTWARE_CHANGE `run_DBoj7UpTwj-D0nuA6AsTSQ26`
+штатно owner CANCELLED/version3/sequence476 после semantic BLOCKED
+Architect/Developer;31CANCELLED+7SUCCEEDED, активных узлов0. Не retry/resume.
+Далее clean commit/push в Draft1800, новый обычный Manager должен сам запустить
+новый33 с проверенным исправленным READ и полным stage evidence.
+Host не реализует1796 вместо Developer. Финальный внутреннийPR не merge.
+Chrome page5/Console0/relevantAPI200, screenshot NOT RUN. Full65 OPEN.
+Failure watcher2115 terminal observation deadline не является agent failure.
+Publisher previouscf060b1c; source allowlist дополнен gateway6+GO-DOC-001.
+
+## Предыдущий checkpoint11:23
+
 07.10.2026 11:23 UTC: HEAD/remote/Draft1800
 `010d0fb042598260e1a6b5a56ab6012d67beef0c`; fresh source/Pod journal hash
 и candidates hash EQUAL. Workflow `run_DBoj7UpTwj-D0nuA6AsTSQ26` RUNNING.
