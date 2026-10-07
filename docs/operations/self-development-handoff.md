@@ -10,6 +10,33 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 07.10.2026 19:27 UTC
+
+HEAD/remote/Draft1800 `3a216d4cf892a93359c1cac25f61916bf7b6c226`
+EQUAL, main `b5f6fcde` неизменен. CP history fix опубликован;
+live page100 повтор HTTP200/2357ms. Полный65 и checklist11/13/14/15 OPEN.
+
+Native Developer24 `pln_55Q2RjjerNGG6C3hkEpNqfLq` VALID2→APPLIED3,
+receipt `rct_Ha1zl44XSmgAFhbW9kZ-tI8G`, connection319/64enabled.
+Native Architect16 `pln_mEJGttAigGK4p9A1FUXKeCv6` VALID2→APPLIED3,
+receipt `rct_OgWCEdQKkWTzBh1_E5QKLvSi`, connection335/80enabled.
+Оба owner diff проверены по прежнему baseline: unique capability/recipient,
+только enabledfalse→true; NONE/[] и остальные before/after поля сохранены.
+Documentation14 run `run_FVxiVo9BNk4QzyeQwNgvOYMx` RUNNING,
+conversation `cnv_S24WRVBGRZXVe2Nt8OXniTqe`, exact AGENT context подтверждён.
+Далее Security13 и Lexical13 последовательно с fresh connection pins;
+затем полное semantic baseline120 readback и один новый Manager/Workflow.
+
+Chrome19:26 screenshot PASS: user справа, commentary слева, компактный
+сворачиваемый блок tool calls, индикатор «Работает» с точками только на
+последнем активном сообщении; composer/Stop не перекрывают историю.
+Native create201/turn202/history200; ошибочный ROOT diagnostic GET по
+несуществующему /integrations endpoint дал404, затем исправлен на канонический
+/integration-connections (200). Это не продуктовый дефект и не скрытый PASS.
+Reload19:24 PASS. Page4 владельца и чужие вкладки не тронуты.
+Cross-configuration binding409 остаётся OPEN: выделен исполнитель frontend
+picker/unit fix, без live writes/расширения authority. Full Workflow ещё NOT RUN.
+
 ## Checkpoint 07.10.2026 19:01 UTC
 
 HEAD/remote/Draft1800 `3745da7ef088f3e4966624434bf6574596870b7b`

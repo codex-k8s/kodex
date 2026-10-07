@@ -10,6 +10,33 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 19:27 UTC — права исполнителей и компактный ход работы
+
+На опубликованном `3a216d4cf892a93359c1cac25f61916bf7b6c226`
+(remote/Draft1800 EQUAL; main `b5f6fcde` неизменен) live page100 повтор
+HTTP200/2357ms. Полный65/checklist11/13/14/15 не закрыты.
+
+- PASS native Developer24: `pln_55Q2RjjerNGG6C3hkEpNqfLq`, VALID2→APPLIED3,
+  receipt `rct_Ha1zl44XSmgAFhbW9kZ-tI8G`, connection319/64enabled.
+- PASS native Architect16: `pln_mEJGttAigGK4p9A1FUXKeCv6`, VALID2→APPLIED3,
+  receipt `rct_OgWCEdQKkWTzBh1_E5QKLvSi`, connection335/80enabled.
+  В обоих планах exact baseline unique keys/recipients совпадают; только
+  enabledfalse→true, NONE/[] и остальные before/after поля неизменны.
+- IN PROGRESS Documentation14: exact AGENT conversation
+  `cnv_S24WRVBGRZXVe2Nt8OXniTqe`, run `run_FVxiVo9BNk4QzyeQwNgvOYMx`.
+  Security13/Lexical13 и полное semantic120 readback ещё NOT RUN.
+- PASS Chrome19:26 screenshot: user справа/commentary слева, tool calls
+  компактны и раскрываются, «Работает» с точками на последнем активном
+  сообщении; видны доступный Stop и отдельный composer без перекрытия истории.
+  Native create201/turn202/history200, reload19:24 PASS. ROOT диагностический
+  ошибочный /integrations GET404 исправлен на /integration-connections200;
+  не выдаётся за дефект платформы. Чужие вкладки/page4 не изменялись.
+- OPEN cross-configuration binding409: параллельная адресная реализация
+  frontend picker с exact OCC/Impact, без обходов серверного admission.
+- NOT RUN новый Manager, native source536156B EOF, полный33-step Workflow
+  и reviews/fix/re-review/READY. После exact120 restoration запускается один
+  новый реальный Manager; исторические failed roots не повторяются вслепую.
+
 ## Checkpoint 07.10.2026 19:01 UTC — история без повторных context projections
 
 Source/remote/Draft1800 `3745da7ef088f3e4966624434bf6574596870b7b`
