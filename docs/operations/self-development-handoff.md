@@ -10,6 +10,41 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 07.10.2026 23:05 UTC
+
+Full65 ACTIVE: автономно до08.10 14:00 Саратов /10:00UTC, выбор рекомендуемых
+решений в согласованном scope; существующая цель сохранена без дубликата.
+HEAD/remote/Draft1800 4de745eec76f7e4a1be2fd6eec948d7c5327ec81 EQUAL,
+mainb5f6fcde неизменен. Frozen11-file пакет опубликован; tree перед apply чистый.
+Full runner manifest a22d2003e62bfeeadc7918d30617a5c74887caafd6d3efbeab5d16e2bb79dc49,
+binary0505713c393835b084cb4ff9a7f086f998e64ccf72405ebf7791ba866b9ae7b3,
+inputfb81349acf9630e6a90e99cb555ee4ded6431969881276a822cd0d120a815b8b;
+provenancecb104dcb934ba17d354c42f5837085d23a8c48c6da1de4141a1b00faa9294177.
+Repo-owned import/runner-only seed PASS22:51:39; common cache/state согласованы.
+Fresh render0380ecf0 PASS, idle quiesce/apply/readback PASS: пять Deployment
+Ready1/source4de745ee, migration Succeeded, admission pause=false,
+policySHA dce36b7fac4daa12f34b149a20cf164e9ef8981f147b13866929524f84282dfe
+и exact basea22 EQUAL. Это supply-chain evidence, не полная native acceptance.
+
+Chrome1 connected/reload23:01; owner4 untouched. Recipe desktop screenshot,
+Console0 и relevant API200 проверены. Report уже показывает4–5строк с
+собственным scroll320px; нового UX diff не требуется. PROJECT новый диалог
+cnv_blYZu1oBZy5B7hBfJfQvNxpm: один запрос image-only DRAFT для текущего recipe;
+план/Apply/build ещё OPEN, дубликат не отправлять. SYSTEM recipe тоже старый.
+23:06 fresh list readback: PROJECT run_HZCG_ypfdJ65DU95JcsEGcz- COMPLETED,
+но FINAL BLOCKED/noDRAFT: требование полного native recipe/template READ
+избыточно для exposed schema. Read-only server path доказал безопасный
+environmentKey=standard без dockerfile: гидратация назначает current template,
+сохраняет package/tool keys и installation block; Apply создаёт одну сборку.
+Дальше уточнить native запрос в том же диалоге, не обходить owner confirmation.
+SYSTEM cnv_O73OQA9tWxcb8arlnKDqZwq_/run_g9GLIgPBhpNfifz-mUneL3Dk RUNNING;
+один DRAFT запрошен, outcome ещё OPEN. Новых effects не повторять вслепую.
+Следом native планы SYSTEM/PROJECT → по одной сборке, полный report/fresh
+risk/admission/promotion → native publication трёх PROJECT ENV и SYSTEM ENV →
+actual binary/ACK proof → ONE native EOF repeat → полный33-step Workflow.
+Previous diagnostic FAILED3/noEOF не retry/resume. Full65/11/13/14/15 OPEN;
+итоговый внутренний PR не merge/approve; STT/device-code NOT RUN.
+
 ## Checkpoint 07.10.2026 22:48 UTC
 
 Frozen11-file пакет поверх91c9248f готов к commit/push того жеDraft1800.

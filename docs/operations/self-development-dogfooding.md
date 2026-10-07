@@ -10,6 +10,55 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 23:05 UTC — новый runner и завершённая штатная активация
+
+- Existing Full65 goal ACTIVE; автономия владельца до08.10 14:00 Саратов
+  (10:00UTC), рекомендованные решения в согласованном scope. Дубликат goal
+  не создавался. Local/remote/Draft1800 HEAD4de745eec76f7e4a1be2fd6eec948d7c5327ec81
+  EQUAL по fresh bot readback, Issue1797 open/mainb5f6fcde неизменен.
+- Full runner build/import PASS: manifest
+  a22d2003e62bfeeadc7918d30617a5c74887caafd6d3efbeab5d16e2bb79dc49,
+  compiled source4de745ee, binary
+  0505713c393835b084cb4ff9a7f086f998e64ccf72405ebf7791ba866b9ae7b3,
+  immutable inputfb81349acf9630e6a90e99cb555ee4ded6431969881276a822cd0d120a815b8b,
+  provenancecb104dcb934ba17d354c42f5837085d23a8c48c6da1de4141a1b00faa9294177.
+  Private runner-only seed INTENT22:51:15→PASS22:51:39. Common cache/state
+  согласованы тем же repo-owned build путем; остальные component pins неизменны.
+- Fresh render SHA2560380ecf0acd9001852c15e685180de01ae530b5508c92d6369e4b4b1612183c6
+  PASS. Canonical supply-chain idle quiesce/apply/readback PASS: migration
+  Succeeded, BuildKit Ready, пять затронутых Deployment Ready1/source4de745ee;
+  admission pause=false. New policySHA
+  dce36b7fac4daa12f34b149a20cf164e9ef8981f147b13866929524f84282dfe
+  и namespaced parameter exact basea22 совпали. Частичное состояние rollout
+  не подменялось ручным restart/resume. Это deployment evidence, не full QA.
+- Chrome own1 connected/reload23:01; owner4 не менялась. Recipe desktop
+  screenshot/Console error-warn0/relevant API200 PASS. Report имеет внутренний
+  scroll320px и4–5видимыхстрок; редактор достигается обычной прокруткой.
+  Дополнительный UX diff без дефекта не нужен. Host Vue4e9abcd3/parser6ce07c2c
+  сохранились, actual serving role images пока старые G5/SYSTEMG11.
+- Native PROJECT запрос отправлен ОДИН раз: conversation
+  cnv_blYZu1oBZy5B7hBfJfQvNxpm, markerQA1797_RUNNER160_PROJECT_G6_20261007_2305.
+  Только image-only DRAFT UPDATE_ROLE_IMAGE_RECIPE с fresh standard catalog
+  и OCC; Apply/build/admission/promotion/ENV publication OPEN. SYSTEM новый
+  план далее. Не запускать повторный запрос без авторитетного outcome.
+- Уточнение23:06: PROJECT run_HZCG_ypfdJ65DU95JcsEGcz- COMPLETED, но FINAL
+  BLOCKED/noDRAFT из-за запрошенного полного recipe/template READ, которого
+  native каталог не предоставляет. Это не успешная самонастройка. ROOT и
+  read-only agent подтвердили существующий server-owned путь: передать только
+  recipeRef и прежний environmentKey=standard, не старый dockerfile/spec и
+  не несуществующий triggerBuild. Гидратация назначает текущий template/pins,
+  сохраняет package/tool keys/installation block; Apply делает одну сборку.
+  Перед Apply owner readback сравнивает точную спецификацию. Уточнение запроса
+  в том же PROJECT диалоге далее, прежние effects отсутствуют. SYSTEM отдельный
+  cnv_O73OQA9tWxcb8arlnKDqZwq_/run_g9GLIgPBhpNfifz-mUneL3Dk RUNNING;
+  один image-only DRAFT запрошен, outcome OPEN.
+- Затем native новые SYSTEM/PROJECT generations и свежие risk/report pins,
+  admitted/promoted publication трёх PROJECT ENV и SYSTEM ENV, actual ACK/binary
+  proof, ONE EOF диагностический проход, полный33-step native Workflow.
+  Старый diagnostic FAILED3/257successfulREAD/noEOF не retry/resume.
+  Full65/11/13/14/15 OPEN, final internal PR не merge/approve; STT/device-code
+  NOT RUN. Chrome screenshot/Console/Network/backend/UX проверять по ходу.
+
 ## Checkpoint 07.10.2026 22:48 UTC — final-tree проверки перед публикацией
 
 - ROOT полный agent-runner Go1.26.6 unit PASS: app16.506s/codex4.735s,
