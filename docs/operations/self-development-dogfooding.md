@@ -158,6 +158,45 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 07.10.2026 00:07 UTC — восстановлены все права; каталог получателя
+
+Source `49cbed1d`; последний подтверждённый remote/PR `50947a8f`.
+
+- PASS native: семь штатных подтверждённых планов восстановили прежние117
+  GitHub grants. Fresh connection version245/CONNECTED/package2.4.0,
+  enabled117/117; независимое сравнение всех прежних ref, recipient,
+  capability, resourceScope и NONE/[] дало diff0. Новых grants нет.
+  Documentation13/Security13/Lexical13 application200, итоговые версии
+  connection219/232/245. Это не произвольное расширение прав.
+- PASS ранний provider ACK Documentation/Security/Lexical: реальные задачи
+  совпали с provider prompt/inbox, instructions-file comparisons EQUAL.
+  Все три использовали exact admitted G4 manifest, tools38, grants23.
+  Documentation initial expected hash ошибочно включал завершающий LF;
+  persisted trimmed6712B самостоятельно сверены, повтор capture EQUAL.
+  Это ошибка проверочной команды, не потеря текста платформой.
+- PASS native UX: desktop экраны ролей, компактные карточки предложений,
+  Validate/Apply и доступная прокрутка; Console0. Один диагностический400
+  принадлежал неверному ROOT SDK locator listWorkflows, исправлен на path;
+  не выдаётся за ошибку пользовательского экрана.
+- Интегрирован закрытый readonly `RECIPIENT_INTEGRATION_GRANTS`: получатель
+  выводится из leased persisted AGENT/WORKFLOW context; fresh source/root
+  eligibility и version/pins проверяются сервером. Чужой project/recipient,
+  stale lease/version и отозванный root закрыто отклоняются. Source/Pod hashes
+  CP/runtime совпали; ROOT full callback units PASS0.941с.
+- PARTIAL native catalog `run_42JdPrkKkM5dgEvplcLsvfCI`: три страницы30
+  записей реально прочитаны; получатель Developer v8, source helper,
+  connection245 и definition2.4/digest совпали. Проверочное задание ошибочно
+  ограничило общий бюджет четырьмя MCP calls и требовало outbox на readonly
+  helper filesystem. Финальный BLOCKED честный; полнота не объявлена PASS.
+  Новый readonly ход разрешает до8 страниц, не требует outbox/эффектов.
+- PASS локальный frontend proof exact50947a8f:566tests/28suites10.76с,
+  scoped ESLint25 handwritten files0warnings, forced vue-tsc и Vite build
+  2773modules/9.05с. SSR locale fixture/chunk-size warnings сохранены;
+  это не whole baseline или native concurrency acceptance.
+
+Chrome5 собственная;6 чужая не изменялась. SSO absolute07.10 06:23UTC
+покрывает deadline04:30UTC. Native Git-cycle/10-chats/full33 ещё OPEN.
+
 ### 06.10.2026 23:53 UTC — компактный план, история и роли
 
 Source `732d74f0`; remote/PR последний readback `ada2f0f9`.

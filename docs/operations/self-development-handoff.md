@@ -10,6 +10,23 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+07.10.2026 00:07UTC: source49cbed1d, remote/PR50947a8f. Семь native
+APPLIED restore plans завершены: fresh GitHub C245/CONNECTED2.4.0,
+enabled117/117, independently all117 tuples diff0. Documentation/Security/
+Lexical real ACK task/provider/inbox/instructions EQUAL; G4tools38/grants23.
+Закрытый leased readonly recipient catalog интегрирован; ROOT callback
+PASS0.941с и host/Pod hashes equal. Первый native catalog ход прочитал30
+записей, но ошибочный ROOT бюджет4calls/readonly-outbox дал честный BLOCKED;
+не полный PASS. Повтор run_Xo9fgF5JgdpCWphiSvBfkpoe,
+conversation cnv_ioictNGtP-abQPAaHkWx19IH, task позволяет8 страниц без
+outbox/эффектов. Не повторять неизвестный effect. Локальный frontend
+exact50947:566tests/28suites, lint/types/build PASS. Current Go/PG baseline
+в isolated worktree; native Git-cycle → concurrency → bootstrap merge/
+fresh main → full33 остаются следующими этапами. Chrome5 own/6 foreign,
+reload00:05UTC, SSO06:23UTC, autonomous deadline04:30UTC. Цель ACTIVE.
+
+## Предыдущий checkpoint23:53
+
 06.10.2026 23:53UTC: source `732d74f0`, remote/PR последний подтверждён
 `ada2f0f9`. Native APPLIED restore: helper21, Developer24, Manager17,
 Architect16; fresh C206/CONNECTED, enabled78/117. Все117 прежних refs,
