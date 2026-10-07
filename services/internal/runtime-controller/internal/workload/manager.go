@@ -926,6 +926,17 @@ func runnerArtifactSource(source controlplanev1.ArtifactSource) string {
 }
 
 func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.RunnerInput, providerBinding ProviderSecretBinding, credentials CredentialProjection) error {
+	return manager.EnsureTurnGuarded(ctx, input, providerBinding, credentials, func(publish func(context.Context) error) error {
+		return publish(ctx)
+	})
+}
+
+// Guard разрешает публикацию только после свежего exact lease renew. Остальные
+// шаги материализации не блокируют периодическое продление ожидающего batch.
+func (manager *Manager) EnsureTurnGuarded(ctx context.Context, input runtimecontract.RunnerInput, providerBinding ProviderSecretBinding, credentials CredentialProjection, guard func(func(context.Context) error) error) error {
+	if guard == nil {
+		return errors.New("runtime publication guard is invalid")
+	}
 	if input.Mode != runtimecontract.RunnerModeTurn || input.Validate() != nil || manager.validateImage(input) != nil {
 		return errors.New("runtime turn input is invalid")
 	}
@@ -957,18 +968,23 @@ func (manager *Manager) EnsureTurn(ctx context.Context, input runtimecontract.Ru
 	if pod == nil {
 		return errors.New("materialize runtime egress grant")
 	}
-	_, err = manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Create(ctx, pod, metav1.CreateOptions{})
-	if apierrors.IsAlreadyExists(err) {
-		existing, getErr := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(ctx, podName, metav1.GetOptions{})
-		if getErr != nil || !runtimePodMatches(existing, pod) {
-			return errors.New("existing runtime turn pod conflicts with immutable revision")
+	return guard(func(publishContext context.Context) error {
+		if err := publishContext.Err(); err != nil {
+			return err
+		}
+		_, err = manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Create(publishContext, pod, metav1.CreateOptions{})
+		if apierrors.IsAlreadyExists(err) {
+			existing, getErr := manager.client.CoreV1().Pods(manager.config.RuntimeNamespace).Get(publishContext, podName, metav1.GetOptions{})
+			if getErr != nil || !runtimePodMatches(existing, pod) {
+				return errors.New("existing runtime turn pod conflicts with immutable revision")
+			}
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("create runtime turn pod: %w", err)
 		}
 		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("create runtime turn pod: %w", err)
-	}
-	return nil
+	})
 }
 
 func (manager *Manager) ensureExecutionPolicy(ctx context.Context, input runtimecontract.RunnerInput, podName string) error {

@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.7
+version: 1.1.8
 updated: 2026-10-07
 ---
 
@@ -177,6 +177,16 @@ Schedule
 Гонка claim/renew/cancel, owner click/expiry и complete/retry разрешается
 row/OCC/fence-моделью с одним победителем. Повтор с тем же idempotency scope и
 request hash возвращает сохранённый результат; новый эффект не создаётся.
+
+Полученный batch runtime claims продлевается с момента получения ответа, а
+не только после последовательной материализации Pod. Каждый keeper немедленно
+и периодически вызывает существующий exact lease/fence/generation renew;
+отказ отменяет материализацию. Финальная публикация Pod и warm dispatch
+сериализованы с renew и проходят свежий owner fence до эффекта. Передача tracker
+сначала отменяет и дожидается keeper, затем продлевает ту же lease: двух
+конкурирующих владельцев heartbeat нет. Shutdown отменяет и дожидается всех
+keepers до закрытия RPC клиента. TTL, attempt, authority и owner expiry/requeue
+при этом не расширяются; transport 404 сам по себе не доказывает expiry.
 
 ## Решение владельца
 
