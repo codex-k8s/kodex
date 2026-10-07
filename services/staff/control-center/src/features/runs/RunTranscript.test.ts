@@ -1189,6 +1189,112 @@ describe("RunTranscript: компактная работа", () => {
     expect(header).not.toMatch(/#1|Ход 1|попытка 1/);
   });
 
+  it.each(["ru", "en"] as const)(
+    "сохраняет самостоятельный успешный результат интеграции в компактных details (%s)",
+    async (locale) => {
+      const previous = i18n.global.locale.value;
+      i18n.global.locale.value = locale;
+      try {
+        for (const summary of [
+          "i18n:INTEGRATION_ACTION_SUCCEEDED",
+          i18n.global.t("serverMessages.INTEGRATION_ACTION_SUCCEEDED"),
+        ]) {
+          const item = progress("integration-success", {
+            messageKind: "INTERMEDIATE_MESSAGE",
+            summary,
+            integrationInvocationRef: "inv_fixture123",
+          });
+          const key = executionKey(item.execution);
+          if (!key) throw new Error("Missing synthetic execution key");
+          const html = await transcript([item], [key]);
+          expect(html.match(/class="run-activity-item /g)).toHaveLength(1);
+          expect(html).toContain("run-activity-item--service");
+          expect(html).toContain("run-transcript__service-history");
+          expect(html).toContain(
+            i18n.global.t("serverMessages.INTEGRATION_ACTION_SUCCEEDED"),
+          );
+          expect(html).toContain('data-turn-ref="trn_exact"');
+          expect(html).toContain('data-attempt="1"');
+          expect(html).not.toContain("<header");
+          expect(html).not.toContain('class="run-transcript__execution"');
+          expect(html).not.toContain('class="run-activity-item__message"');
+          expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+          expect(item.summary).toBe(summary);
+        }
+      } finally {
+        i18n.global.locale.value = previous;
+      }
+    },
+  );
+
+  it("не сворачивает неизвестный/failed исход, полезный текст, сообщения и записи без exact pins", async () => {
+    const success = progress("integration-result", {
+      messageKind: "INTERMEDIATE_MESSAGE",
+      summary: "i18n:INTEGRATION_ACTION_SUCCEEDED",
+      integrationInvocationRef: "inv_fixture123",
+    });
+    const key = executionKey(success.execution);
+    if (!key) throw new Error("Missing synthetic execution key");
+    for (const changes of [
+      { summary: "i18n:INTEGRATION_ACTION_FAILED" },
+      { summary: "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN" },
+      { summary: "Действие интеграции выполнено успешно. Важный результат" },
+      { state: "FAILED" as const },
+      { state: "CANCELLED" as const },
+      { execution: undefined, historical: true },
+      { execution: { ...execution, attempt: 0 } },
+      { integrationInvocationRef: undefined },
+      { integrationInvocationRef: "inv_short" },
+      { progress: "Важный результат" },
+      { phase: "COMMENTARY" as const, kind: "agent" as const },
+      { eventType: "TOOL_CALL_RECORDED" as const },
+      { messageKind: "TOOL_CALL" as const },
+      { artifactRef: "art_fixture123" },
+    ]) {
+      const html = await transcript([{ ...success, ...changes }], [key]);
+      expect(html).toContain("<header");
+      expect(html).not.toContain("run-transcript__service-history");
+    }
+  });
+
+  it("не объединяет compact success с соседним tool без совпадающего invocation pin", async () => {
+    const success = progress("integration-success", {
+      messageKind: "INTERMEDIATE_MESSAGE",
+      summary: "Действие интеграции выполнено успешно",
+      integrationInvocationRef: "inv_fixture123",
+    });
+    const tool = progress("integration-tool", {
+      kind: "tool",
+      eventType: "TOOL_CALL_RECORDED",
+      messageKind: "TOOL_CALL",
+      summary: undefined,
+      toolCall: {
+        ref: "tcl_fixture123",
+        tool: "invoke_integration",
+        state: "SUCCEEDED",
+        revision: 2,
+        durationMs: 10,
+        safeParameters: {},
+        safeResult: JSON.stringify({
+          version: 1,
+          invocationRef: "inv_fixture123",
+          state: "SUCCEEDED",
+          inputSHA256: "a".repeat(64),
+        }),
+        auditRef: "aud_fixture123",
+      },
+    });
+    const html = await transcript([success, tool]);
+    expect(html.match(/class="run-activity-item /g)).toHaveLength(2);
+    expect(html.match(/<header\b/g)).toHaveLength(1);
+    expect(html).toContain("run-transcript__service-history");
+    expect(html).toContain("Вызов интеграции");
+    expect(html).not.toContain('class="run-transcript__execution"');
+    expect(html).not.toContain('role="status"');
+    expect(success).not.toHaveProperty("serviceHistory");
+    expect(tool.integrationInvocationRef).toBeUndefined();
+  });
+
   it("переносит работу на последнюю COMMENTARY, сохраняя полный FINAL и единственную terminal ошибку", async () => {
     const comment = progress("comment", {
       kind: "agent",

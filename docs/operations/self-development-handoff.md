@@ -10,6 +10,32 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 07.10.2026 20:44 UTC
+
+Продолжать Full65 ACTIVE до08.10 14:00 Саратов; текущая ветка
+`kodex-agent/issue-1797-post-bootstrap-qa`, Issue1797/Draft1800.
+Опубликованный HEAD/remote/PR `26a468fb699e0f438ad7fd836655156fbe4de7c9`
+EQUAL, mainb5f6fcde неизменен. Новый компактный presentation пакет
+RunTranscript.vue/test.ts: ROOT258tests/lint/format/typecheck/build9.51s PASS,
+component host/Pod hash EQUAL; exact grouping/authority не менялись.
+Live screenshot Architect scroll/controls PASS, standalone compact receipt
+ветка NOT RUN в этой полной истории, unit PASS. Impact screenshot single
+command после26a получен PASS; Apply не выполнялся.
+
+Предыдущий Manager `run_G8w6OtYD4eUm31LZOPk-7Od1` FAILED3 20:38:12,
+Workflow `run_VZcHUSUfqhZf6JruCzjjAVaF` FAILED3. Architect остановлен
+по404 выбранной upstream ссылки, не по доказанному отсутствию API.
+Официальные OpenAI Docs описывают account/rateLimits/read; exact0.160.0
+compatibility/read-path должен самостоятельно доказать Architect.
+Новый ОДИН UI Manager `run_h2oExBQKp1LV87QHuxxmZciJ` RUNNING,
+task12138B/sha256 df6ee4de94392f2a3cf1825d1af246993b05137e6602e9ad16b4802db1c84776.
+ACK NOT RUN; новый процесс, не Retry/Resume прежних closed roots.
+Передано правило исходного QA§50 выбора следующей supported реальной Issue,
+если1796 действительно невозможно; workflow/grants/config неизменны.
+Следующее: capture ACK → native Workflow/Architect → Developer/reviews/fixes/
+READY; Full65/11/13/14/15 OPEN, итоговый внутренний PR не merge/approve.
+Chrome page1 рабочая; чужие вкладки не закрывать, literal reload каждые5мин.
+
 ## Checkpoint 07.10.2026 20:27 UTC
 
 HEAD/remote/Draft1800 `149379869554bd7de161f8371da6686341097449`

@@ -10,6 +10,42 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 20:44 UTC — upstream источник и компактные квитанции
+
+- Цель Full65 остаётся ACTIVE. Автономное окно владельца — до08.10 14:00
+  Саратов /10:00UTC; Chrome подключён, list_pages и обновления продолжаются.
+- HEAD/remote/Draft1800 `26a468fb699e0f438ad7fd836655156fbe4de7c9`
+  EQUAL, main `b5f6fcde` неизменен, bot identity подтверждена.
+  Полученный после публикации cropped Impact screenshot PASS: имя выбранного
+  подключения и одна команда, без Apply; прежний awaiting закрыт доказательством.
+- Новый presentation-only пакет RunTranscript: самостоятельная успешная
+  integration квитанция с собственными execution/invocation pins компактна
+  в закрытых details. Association/suppression не менялись, error/unknown и
+  содержательные ответы не скрываются. ROOT258/258 unit2.37s, lint/format/
+  typecheck/build9.51s PASS, прежнее предупреждение chunk>500KB сохранено.
+  Component host/Pod SHA256 `ea31fa5a1921b0e5a1b3c07bf29875a7247722379877c4b692ff1306c8c951ef`
+  EQUAL. Chrome screenshot истории Architect PASS: scroll/controls читаемы,
+  горизонтального overflow нет. После полной догрузки success квитанция этого
+  запуска уже поглощена прежним exact tool grouping; отдельная новая compact
+  ветка в живой истории NOT RUN, она доказана адресными unit, не скриншотом.
+- Manager `run_G8w6OtYD4eUm31LZOPk-7Od1` FAILED3 20:38:12;
+  Workflow `run_VZcHUSUfqhZf6JruCzjjAVaF` FAILED3 20:34:24.
+  Architect technical SUCCEEDED2, semantic BLOCKED: выбранный Context7
+  version-pinned upstream URL вернул404. Developer/reviews NOT RUN;
+  404 этой ссылки не доказывает отсутствия supported API.
+- По OpenAI Docs проверен официальный app-server auth endpoints документ:
+  `account/rateLimits/read` описан, но exact installed compatibility остаётся
+  задачей внутреннего Architect. Repository Dockerfile pin0.160.0 и отдельный
+  warm `codex --version`0.160.0 — ориентиры, не proof всех role Pods.
+  Рассмотрены корректный источник/следующая supported Issue/остановка;
+  выбран новый отдельный процесс с корректным источником и исходным правилом
+  выбора QA§50. Старые закрытые roots/дети не Retry/Resume.
+- ONE native UI Manager `run_h2oExBQKp1LV87QHuxxmZciJ` RUNNING;
+  task12138B SHA256 `df6ee4de94392f2a3cf1825d1af246993b05137e6602e9ad16b4802db1c84776`.
+  Runtime ACK ещё NOT RUN. Workflow33/DAG/grants/config не изменялись,
+  host не реализует Issue вместо команды. Full65 и11/13/14/15 OPEN,
+  финальный внутренний PR не merge/approve, owner gate OPEN.
+
 ## Checkpoint 07.10.2026 20:27 UTC — две адресные UX регрессии
 
 - Публикация `149379869554bd7de161f8371da6686341097449`: bot identity,

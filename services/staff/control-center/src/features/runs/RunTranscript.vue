@@ -25,6 +25,7 @@ import {
   isUnboundRunCancellation,
   presentRunTranscriptItems,
   type RunActivityItem,
+  type PresentedTranscriptItem,
 } from "@/features/runs/run-activity";
 import {
   presentRuntimeText,
@@ -92,20 +93,52 @@ const displayItems = computed(() =>
         ...item,
         summary: key ? t(key) : item.summary,
         completedServiceHistory,
+        compactIntegrationSuccess: false,
       };
     }
+    const summary = summaryText(item);
+    const progress = text(item.progress);
+    const compactIntegrationSuccess = isStandaloneIntegrationSuccess(item);
     return {
       ...item,
-      summary: summaryText(item),
-      progress: text(item.progress),
-      serviceHistory: item.serviceHistory?.map((step) => ({
-        ...step,
-        summary: summaryText(step),
-        progress: text(step.progress, step.messageKind),
-      })),
+      summary,
+      progress,
+      compactIntegrationSuccess,
+      serviceHistory: compactIntegrationSuccess
+        ? [{ ...item, summary, progress }]
+        : item.serviceHistory?.map((step) => ({
+            ...step,
+            summary: summaryText(step),
+            progress: text(step.progress, step.messageKind),
+          })),
     };
   }),
 );
+
+// Самостоятельная квитанция сохраняет свои pins: с соседним tool не объединяется.
+function isStandaloneIntegrationSuccess(
+  item: PresentedTranscriptItem,
+): boolean {
+  return Boolean(
+    !item.historical &&
+    !item.working &&
+    executionKey(item.execution) &&
+    item.integrationInvocationRef &&
+    /^inv_[A-Za-z0-9_-]{8,124}$/.test(item.integrationInvocationRef) &&
+    item.kind === "system" &&
+    item.eventType === "TURN_PROGRESS" &&
+    item.messageKind === "INTERMEDIATE_MESSAGE" &&
+    !item.phase &&
+    !item.progress?.trim() &&
+    !item.toolCall &&
+    !item.artifact &&
+    !item.artifactRef &&
+    !["FAILED", "CANCELLED"].includes(item.state ?? "") &&
+    (item.summary === "i18n:INTEGRATION_ACTION_SUCCEEDED" ||
+      item.summary === t("serverMessages.INTEGRATION_ACTION_SUCCEEDED")),
+  );
+}
+
 // Только представление зарезервированной runner-квитанции; доступ не меняется.
 function isWorkspaceReceipt(item: RunActivityItem): boolean {
   const artifact = item.artifact;
@@ -307,6 +340,7 @@ function toolPreview(
 }
 
 function compactServiceRow(item: (typeof displayItems.value)[number]): boolean {
+  if (item.compactIntegrationSuccess) return true;
   if (isUnboundRunCancellation(item)) return Boolean(item.serviceHistory);
   const scope = executionKey(item.execution);
   return Boolean(
