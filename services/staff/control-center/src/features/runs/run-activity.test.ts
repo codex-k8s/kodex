@@ -11,6 +11,7 @@ import {
   assistantTurnIsDuplicateFailureReceipt,
   isAssistantPlanToolReceipt,
   isSuccessfulIntegrationToolReceipt,
+  integrationToolPresentationState,
   activeTranscriptItemId,
   assistantTerminalTranscriptScopes,
   assistantTranscriptReplacesWorkingFallback,
@@ -165,6 +166,72 @@ describe("закрытая успешная квитанция интеграц�
       expect(isSuccessfulIntegrationToolReceipt({ ...tool, safeResult })).toBe(
         false,
       );
+  });
+});
+
+describe("закрытая проекция результата интеграции", () => {
+  const receipt = {
+    version: 1,
+    invocationRef: "inv_fixture123",
+    state: "FAILED",
+    inputSHA256: "a".repeat(64),
+  };
+  const tool: NonNullable<RunActivityItem["toolCall"]> = {
+    ref: "tcl_example",
+    tool: "invoke_integration",
+    state: "SUCCEEDED",
+    revision: 2,
+    durationMs: 10,
+    safeParameters: {},
+    safeResult: JSON.stringify(receipt),
+    auditRef: "aud_example",
+  };
+  it.each([
+    ["SUCCEEDED", "SUCCEEDED"],
+    ["FAILED", "FAILED"],
+    ["REJECTED", "REJECTED"],
+    ["CANCELLED", "CANCELLED"],
+    ["WAITING_APPROVAL", "WAITING_HUMAN"],
+    ["UNKNOWN_OUTCOME", "NEEDS_ATTENTION"],
+  ])(
+    "отображает %s как %s без изменения исходной квитанции",
+    (state, presented) => {
+      const value = Object.freeze({
+        ...tool,
+        safeResult: JSON.stringify({ ...receipt, state }),
+      });
+      expect(integrationToolPresentationState(value)).toBe(presented);
+      expect(value.state).toBe("SUCCEEDED");
+      expect(value.safeResult).toBe(JSON.stringify({ ...receipt, state }));
+      expect(isSuccessfulIntegrationToolReceipt(value)).toBe(
+        state === "SUCCEEDED",
+      );
+    },
+  );
+  it("не интерпретирует произвольный payload, незавершённую или failed обёртку", () => {
+    for (const safeResult of [
+      "FAILED",
+      "{invalid}",
+      "null",
+      "[]",
+      JSON.stringify({ ...receipt, version: 2 }),
+      JSON.stringify({ ...receipt, state: "UNKNOWN" }),
+      JSON.stringify({ ...receipt, invocationRef: "run_fixture123" }),
+      JSON.stringify({ ...receipt, inputSHA256: "A".repeat(64) }),
+      JSON.stringify({ ...receipt, extra: "Содержательный результат" }),
+      `${JSON.stringify(receipt)} `,
+      `{"version":1,"version":1,"invocationRef":"inv_fixture123","state":"FAILED","inputSHA256":"${"a".repeat(64)}"}`,
+    ])
+      expect(
+        integrationToolPresentationState({ ...tool, safeResult }),
+      ).toBeUndefined();
+    expect(
+      integrationToolPresentationState({ ...tool, tool: "unknown_tool" }),
+    ).toBeUndefined();
+    for (const state of ["RUNNING", "FAILED", "CANCELLED"] as const)
+      expect(
+        integrationToolPresentationState({ ...tool, state }),
+      ).toBeUndefined();
   });
 });
 

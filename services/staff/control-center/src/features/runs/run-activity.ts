@@ -62,6 +62,38 @@ export function isSuccessfulIntegrationToolReceipt(
 function successfulIntegrationInvocationRef(
   tool: NonNullable<RunActivityItem["toolCall"]>,
 ): string | undefined {
+  const receipt = integrationToolReceipt(tool);
+  return receipt?.state === "SUCCEEDED" ? receipt.invocationRef : undefined;
+}
+
+type IntegrationReceiptState =
+  | "SUCCEEDED"
+  | "FAILED"
+  | "REJECTED"
+  | "CANCELLED"
+  | "WAITING_APPROVAL"
+  | "UNKNOWN_OUTCOME";
+
+// Состояние отображения не заменяет исходное состояние вызова в аудите.
+export function integrationToolPresentationState(
+  tool: NonNullable<RunActivityItem["toolCall"]>,
+):
+  | "SUCCEEDED"
+  | "FAILED"
+  | "REJECTED"
+  | "CANCELLED"
+  | "WAITING_HUMAN"
+  | "NEEDS_ATTENTION"
+  | undefined {
+  const receipt = integrationToolReceipt(tool);
+  if (receipt?.state === "WAITING_APPROVAL") return "WAITING_HUMAN";
+  if (receipt?.state === "UNKNOWN_OUTCOME") return "NEEDS_ATTENTION";
+  return receipt?.state;
+}
+
+function integrationToolReceipt(
+  tool: NonNullable<RunActivityItem["toolCall"]>,
+): { invocationRef: string; state: IntegrationReceiptState } | undefined {
   if (
     tool.state !== "SUCCEEDED" ||
     tool.safeResult.length > 512 ||
@@ -79,7 +111,15 @@ function successfulIntegrationInvocationRef(
     const receipt = value as Record<string, unknown>;
     const valid =
       receipt.version === 1 &&
-      receipt.state === "SUCCEEDED" &&
+      typeof receipt.state === "string" &&
+      [
+        "SUCCEEDED",
+        "FAILED",
+        "REJECTED",
+        "CANCELLED",
+        "WAITING_APPROVAL",
+        "UNKNOWN_OUTCOME",
+      ].includes(receipt.state) &&
       typeof receipt.invocationRef === "string" &&
       /^inv_[A-Za-z0-9_-]{8,124}$/.test(receipt.invocationRef) &&
       typeof receipt.inputSHA256 === "string" &&
@@ -88,10 +128,15 @@ function successfulIntegrationInvocationRef(
         JSON.stringify({
           version: 1,
           invocationRef: receipt.invocationRef,
-          state: "SUCCEEDED",
+          state: receipt.state,
           inputSHA256: receipt.inputSHA256,
         });
-    return valid ? String(receipt.invocationRef) : undefined;
+    return valid
+      ? {
+          invocationRef: String(receipt.invocationRef),
+          state: receipt.state as IntegrationReceiptState,
+        }
+      : undefined;
   } catch {
     return undefined;
   }

@@ -10,6 +10,63 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 15:35 UTC: localHEAD91834677, опубликованный code/source56191240.
+В рабочем дереве подготовлена адресная frontend-правка четырёх файлов:
+FAILED/REJECTED внутри канонической integration receipt больше не показывается
+как SUCCEEDED wrapper; audit, grants, порядок и success-only dedup не менялись.
+ROOT252/252 unit2.47s, scoped lint/format, forced typecheck и build9.11s PASS;
+прежнее предупреждение о больших chunks сохранено. Host/Pod два production
+source hashes EQUAL. Live visual ещё проверяется, commit/push следующий шаг.
+
+Прежний Workflowrun_VBfbPKdFWcUnqIpTxJpxqQc6 завершён FAILED3/seq205,
+parentrun_uQG_mO6fATJvlnbDpTqEvKBN FAILED3/seq161. Но intrinsic coordinator
+READ нового callback доказан: manager-plan14672B и два receipt749B/328B
+прочитаны до EOF, exact artifact pins в основном журнале. INTAKE semantic
+BLOCKED из-за неустановленных точных путей обязательных документов;
+technicalSUCCEEDED не является готовностью, steps002–033 не делегировались.
+
+Без расширения grants через штатную форму принят ровно один НОВЫЙ Manager:
+run_JGvOAGNFrrp_zPTFuilNxRJR, ses_WAUVfSyib08vDchDfKWBQhTr,
+trn_pX3n7R2x3idIBeh2ZMjLa3nP/attempt1. Task5356B с тремя точными
+каноническими путями GOV001/GUIDE004/GOV003 на freshmainb5;
+SHA8641ef46c1d4406f537f06c5105cc6da1c7f4210f3333986296d508497a18304
+независимо вычислен до UIclick и совпал с provider/task/inbox ACK.
+Podruntime-turn-b9b8acd82f1849bc/UIDfe392f99-3681-4821-a3c2-9f625dcb9bdb,
+sameUID/Ready/restarts0; servingPID14/imagefile SHA40f3268a EQUAL.
+Instructions/file31638B/129404cb EQUAL; rrev_zdWey6gjvXMa0uPRHcikS6Vy/v1,
+recipeG5/f8b60814/ENV5/binding6/tools38/grants21/caps24. RUNNING2/seq130;
+новый Workflow/INTAKE/Architect ещё NOT RUN. Следить за этим exactrun,
+не запускать дубликат по timeout; final65/Developer/reviews/READY OPEN.
+Chrome5 reload15:31; foreign tabs не трогались. GitHub READ main/PR/remote
+подтверждает56191240; прежний push918 был remote Internal Server Error.
+Следующий push только после clean scoped checkpoint и нового readback.
+
+Повтор15:38: на terminal child INTAKE граф/artifacts/gates/ticket200 и Console0,
+но history/rejoin FAIL: Не подключено/Внутренняя ошибка и пустой drawer.
+Exactfailed receiptseq142 подтверждён ownerGET, screenshot bounded NOT RUN,
+следующийlist_pages без ответа. Подготовленная presentation-правка прошла
+unit/build, но live visual ещё не доказан. Read-only child диагностирует
+root/child WS selection. Не запускать дубликаты; Manager lastGET RUNNING2/seq161.
+
+## Предыдущий checkpoint15:17
+
+07.10.2026 15:17 UTC: code/source56191240 наremote/Draft1800;
+локальный journalcommit918346778d2b20bbb607ac83961f21b5b426ddeb пока НЕ push:
+GitHub remote rejected Internal Server Error; remote readback остаётся561.
+Не force/не обходитьchecks. После восстановления опубликовать журнал.
+Workflowrun_VBfbPKdFWcUnqIpTxJpxqQc6 RUNNING2,seq124; INTAKE
+run_rmVVR0gOBIPOU586lNi6YFe- nativeREAD progressing.
+Coordinator earlyACK CAPTURED/rejoin: task56682B/efc3d504,ins24855B/9ba68a04,
+rrev_iBlsYJoK-YUKyWmc3pgD_FFn/v1/d4e6aa45, servicingNOTRUNcleanup.
+INTAKE earlyACK CAPTURED/rejoin: Podruntime-turn-a88ac2b72a5ace1a,
+UID968d2648-60fe-46a4-9e5b-baa9c5e10def,task1571B/2234cae9,ins35453B/7abd70a8,
+rrev_WmMa9bzO4hqv8iH6xVuiscmO/v1/f36e5359,servicingPID14/imagefile40f3268a EQUAL.
+Оба actual recipeG5/f8b60814/ENV5/binding6; независимыйexpectedtaskNOTRUN.
+Watcherbounded10мин завершён, нет фоновогоwatch; новыхPod не было.
+Следующее exactcallbackresultREAD, Architect и fullworkflow; не новыйretry.
+
+## Предыдущий checkpoint15:11
+
 07.10.2026 15:07 UTC:11scopedfiles зафиксированы и опубликованы:
 HEAD/remote/Draft1800 `5619124028dc67108ab0f51583e2a3e82ca0575b`.
 Первый publisher readback FAIL из-за ещё старого PR head после push;

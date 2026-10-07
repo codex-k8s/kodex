@@ -20,7 +20,7 @@ import {
   activeTranscriptItemId,
   assistantFailureMessageKey,
   isAssistantPlanToolReceipt,
-  isSuccessfulIntegrationToolReceipt,
+  integrationToolPresentationState,
   isTranscriptNearBottom,
   isUnboundRunCancellation,
   presentRunTranscriptItems,
@@ -145,6 +145,25 @@ function visibleState(state: string | undefined, working: boolean): boolean {
       !["CREATED", "QUEUED", "PENDING", "READY", "CLAIMED", "RUNNING"].includes(
         state,
       )),
+  );
+}
+function toolState(tool: NonNullable<RunActivityItem["toolCall"]>): string {
+  return integrationToolPresentationState(tool) ?? tool.state;
+}
+function groupToolState(items: readonly RunActivityItem[]): string {
+  const states = items.map((item) =>
+    item.toolCall ? toolState(item.toolCall) : "",
+  );
+  return (
+    [
+      "FAILED",
+      "REJECTED",
+      "CANCELLED",
+      "WAITING_HUMAN",
+      "NEEDS_ATTENTION",
+      "RUNNING",
+      "SUCCEEDED",
+    ].find((state) => states.includes(state)) ?? ""
   );
 }
 function expandableMessage(item: RunActivityItem): boolean {
@@ -282,7 +301,7 @@ function toolPreview(
     managedTools.has(toolCall.tool) &&
     toolCall.safeResult === `${toolCall.tool}:completed`) ||
     isAssistantPlanToolReceipt(toolCall) ||
-    isSuccessfulIntegrationToolReceipt(toolCall)
+    Boolean(integrationToolPresentationState(toolCall))
     ? undefined
     : toolCall.safeResult || undefined;
 }
@@ -468,27 +487,8 @@ function bytes(value: number): string {
                     /></span>
                   </span>
                   <StatusBadge
-                    v-else-if="
-                      group.items.some(
-                        (item) =>
-                          item.toolCall?.state === 'FAILED' ||
-                          item.toolCall?.state === 'CANCELLED',
-                      ) ||
-                      group.items.every(
-                        (item) => item.toolCall?.state === 'SUCCEEDED',
-                      )
-                    "
-                    :state="
-                      group.items.some(
-                        (item) => item.toolCall?.state === 'FAILED',
-                      )
-                        ? 'FAILED'
-                        : group.items.some(
-                              (item) => item.toolCall?.state === 'CANCELLED',
-                            )
-                          ? 'CANCELLED'
-                          : 'SUCCEEDED'
-                    "
+                    v-else-if="visibleState(groupToolState(group.items), false)"
+                    :state="groupToolState(group.items)"
                   />
                 </summary>
                 <RunTranscript
@@ -573,9 +573,9 @@ function bytes(value: number): string {
                     <StatusBadge
                       v-if="
                         item.toolCall &&
-                        visibleState(item.toolCall.state, false)
+                        visibleState(toolState(item.toolCall), false)
                       "
-                      :state="item.toolCall.state"
+                      :state="toolState(item.toolCall)"
                     />
                     <time :datetime="item.occurredAt">{{
                       time(item.occurredAt)

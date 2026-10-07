@@ -10,6 +10,114 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 15:35 UTC — intrinsic callback READ доказан, новый Manager с exact источниками
+
+Source production56191240, localHEAD91834677; текущие четыре frontend-файла
+и журнал ещё не закоммичены. Прежний push918 отклонён GitHub Internal Server
+Error; fresh bot READ подтверждает mainb5f6fcde и Draft1800/remote56191240.
+Никакого force, обхода checks или повторного запуска по observation timeout.
+
+- PASS intrinsic read coordinator после callback INTAKE: Workflow
+  run_VBfbPKdFWcUnqIpTxJpxqQc6/session ses_DcQAwBX-Rr4GbP0Ynj6uEOYZ,
+  resumed turn trn_31GOBRqV-gyp1EusEr_lTs7U/attempt2,
+  node nod_QfdQnOeddDZXJqFRTXCUQ4uc. Native get_file_manifest seq161–162,
+  read seq165–170 до EOF всех трёх exact дочерних артефактов:
+  manager-plan14672B, art_qfMjUtYLqWrHWjSP7FFrlIFh/revision13,
+  SHA668ccf97b43ee1eae27bdfffe71a01994227bd84c517f3dc8bc65951a7af6d0b;
+  receipt749B art_T1Y0ACZYmws1KfvWbQCg_ySJ/revision79,
+  SHAb8465dbcc8b2629f2ad0181340d7bce36f9b57b9c611c71d5d3d7ded6a129e1d;
+  receipt328B art_BDx4VJ-fPtVLWNeXfwWDwPTr/revision79,
+  SHAb6a120c38c3e6ac4845af423670d6b2f81eec12e4d51fc504ae5325150ca8be4.
+  Catalog vfc_DtprnObojD7WSv_6Kqr1YmfJ pinned digest
+  7bc542fce5022be5e1572810e763e8d897b320be0160be591bdc658915f28f25.
+  Первый read seq163–164 TOOL_UNAVAILABLE не скрыт; точные args UNKNOWN.
+  Ни project-wide READ/WRITE, ни новые grants координатору не назначались.
+- FAIL полный старый Workflow: semantic INTAKE BLOCKED, mandatory docs не
+  прочитаны. Native content.read inv_LI6RbSgLjBfOlwdysLOENvSG FAILED,
+  INTEGRATION_RESPONSE_INVALID. Модель сообщает directory docs/governance,
+  exact upstream args UNKNOWN. Fresh owner READ Manager21grants/24caps:
+  GitHub19 и Context7two, content.list не выдан и отсутствует в исходном
+  requirement для Manager. Отдельный list adapter не подменён file.read.
+  Coordinator явно остановил steps002–033; Workflow FAILED3/seq205,
+  parent run_uQG_mO6fATJvlnbDpTqEvKBN FAILED3/seq161. Technical success
+  INTAKE не отмечен semantic PASS, full QA/Developer/reviews OPEN.
+- PASS новый initiating input: из fresh mainb5 verified exact источники
+  docs/governance/codification.md, docs/guides/delivery-waves.md,
+  docs/governance/testing-strategy.md. Пути добавлены в новое задание Manager,
+  требуется передать их INTAKE и читать EOF; grants/config не менялись.
+  Native UI submit один раз15:26, новыйrun_JGvOAGNFrrp_zPTFuilNxRJR,
+  session ses_WAUVfSyib08vDchDfKWBQhTr,
+  turn trn_pX3n7R2x3idIBeh2ZMjLa3nP/attempt1,
+  node nod_oRFTRnrOiP7EMkyePbdJKMuB. Task5356B independently hashed до
+  submit, SHA8641ef46c1d4406f537f06c5105cc6da1c7f4210f3333986296d508497a18304.
+  Early ACK/rejoin CAPTURED: task/provider/inbox EQUAL5356B;
+  instructions/file31638B SHA129404cb628faafae5cddbf6fda4c52def56e68228a28c0e343106185f63096f EQUAL.
+  Podruntime-turn-b9b8acd82f1849bc UIDfe392f99-3681-4821-a3c2-9f625dcb9bdb,
+  sameUID/Ready/restarts0. Actual servingPID14 and samePod imagefile
+  SHA40f3268a257abb9ed21e016069baf3cbfbf16698c4634da7fa102fa1508fc93b EQUAL.
+  RuntimeRevision rrev_zdWey6gjvXMa0uPRHcikS6Vy/v1,
+  SHAd141e5fc93b21c2f5bb286e4bd707f5c855dc2271d6acf529a43811f86cb426e.
+  RecipeG5/exactf8b60814/ENV5/binding6/tools38/grants21/caps24.
+  Independent runner build NOT RUN; seq130 RUNNING2, новые child steps
+  ещё NOT RUN. Чтение новых exact docs не считать PASS до фактического EOF.
+- PASS frozen frontend patch fourfiles: существующий strict canonical
+  integration receipt parser различает шесть closed outcome states;
+  wrapperSUCCEEDED больше не окрашивает FAILED/REJECTED зелёным. Audit/source
+  state не меняются, success-only dedup ограничен receiptSUCCEEDED,
+  malformed/extra/duplicate/noncanonical payload не скрывается.
+  ROOT252/252 unit2.47s, scoped ESLint/Prettier, forced vue-tsc и production
+  build9.11s PASS. Обычное предупреждение chunk>500kB сохраняется.
+  Host/Pod source run-activity SHAa0bdc237bdc34cbd9626a32fb4a7c502985b2631644b5cd800d4a9d5739a018a
+  и RunTranscript SHAd7149edf44aad685d957b4620cf8d000b7c226e0317d19870d46a6fa0b5aae48
+  EQUAL. Изолированный RED2/121 → GREEN252/252, parser privacy/negative tests;
+  Context7 Vue derived props/one-way flow проверен. Live visual ещё NOT RUN,
+  root источник соответствует frozen patch. Commit/push следующий шаг.
+
+Chrome5 reload15:31, current run131 realtime/overflowfalse, foreign tabs
+не трогались. Ни полный65-разделовый QA, ни final READY не заявлены.
+
+Повтор15:38: canonical source/Pod двух production files EQUAL, lint/typecheck/
+build PASS. Existing terminal INTAKE ownerGET200 подтверждает exact failed
+receipt seq142/inv_LI6RbSgLjBfOlwdysLOENvSG: wrapperSUCCEEDED при stateFAILED.
+При штатном открытии childrun graph/artifacts/gates/sessionticket200, Console0,
+но UI «Не подключено»/«Внутренняя ошибка», activity drawer без transcript.
+Это новый live FAIL history/rejoin; cause пока UNKNOWN, read-only диагностика
+идёт. Native screenshot не получен за bounded ожидание, NOT RUN visual;
+последующий list_pages тоже не ответил за bounded ожидание, новая mutation
+не выполнялась. Новая Manager run_JGv последним ownerGET RUNNING2/seq161.
+
+## Checkpoint 07.10.2026 15:17 UTC — coordinator и INTAKE ACK, публикация журнала ожидает GitHub
+
+Code/source56191240 опубликован в Draft1800. Журнал локально дополнен commit
+`918346778d2b20bbb607ac83961f21b5b426ddeb`; его push пока FAIL:
+remote rejected `Internal Server Error`. Remote/PR остаются56191240,
+не non-fast-forward/auth и не обход checks. Повторять только после readback;
+это не препятствует уже принятому текущему Workflow.
+
+- PASS coordinator early ACK/rejoin exact Workflow/session/turn из checkpoint15:11:
+  Pod `runtime-turn-187e7c99ba1208fb`, UIDc56ade66-7446-4e8d-b218-fb193a4af5fd,
+  task/provider/inbox56682B/SHAefc3d50449266dcee7c196f91b40771d216b2da759aeb92e3500b0f7c3558ec7
+  EQUAL, instructions/file24855B/SHA9ba68a0486844477e71ae431000880bdc4d3a58168a5103d614088549124d6be
+  EQUAL. RecipeG5/exactf8b60814/ENV5/binding6/tools38/grants0/caps1.
+  RuntimeRevision `rrev_iBlsYJoK-YUKyWmc3pgD_FFn`/v1,
+  digestd4e6aa45455340ff768cb5ca15a883c115ed4e9a3f72a3a519ba61f8a3332cb5.
+  Expected independent task и actual servicing NOT RUN; контейнер удалён
+  штатным cleanup до serving read, новый turn для proof не запускался.
+- PASS INTAKE early ACK/rejoin exact rootWorkflow и delegatedrun из15:11:
+  Pod `runtime-turn-a88ac2b72a5ace1a`, UID968d2648-60fe-46a4-9e5b-baa9c5e10def,
+  task/provider/inbox1571B/SHA2234cae9b4e0b9199a51740daa1250310fdd72e968eb28a48d59fdc06842cb31
+  EQUAL; instructions/file35453B/SHA7abd70a85cccd0d383e544aa78c666be07145620130740023ad83f4025b6c6c2
+  EQUAL. RecipeG5/exactf8b60814/ENV5/binding6/tools38/grants21/caps24;
+  RuntimeRevision `rrev_WmMa9bzO4hqv8iH6xVuiscmO`/v1,
+  digestf36e5359a18191cd0c7389fd9c9337209e1e030d1501f586ce49bee1de841c12.
+  Actual servicing PID14 SHA40f3268a EQUAL image file sameUID/Ready/restarts0.
+  Independent expected task NOT RUN; coordinator proof не подменяет INTAKE.
+
+Exact Workflow RUNNING2; seq124 подтверждает native repository/file READ
+INTAKE без прежнего missing capability. Callback result READ/Architect/
+Developer/final reviews пока NOT RUN. Chrome5 reload15:15, foreign tabs
+не трогались. Полный65-разделовый QA остаётся OPEN.
+
 ## Checkpoint 07.10.2026 15:07 UTC — пакет опубликован, новый Manager принят
 
 HEAD/remote/Draft1800 `5619124028dc67108ab0f51583e2a3e82ca0575b`,

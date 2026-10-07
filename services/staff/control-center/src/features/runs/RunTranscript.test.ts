@@ -71,6 +71,110 @@ function title(html: string): string {
   );
 }
 
+describe("RunTranscript: результат интеграции, а не успех обёртки", () => {
+  it("оставляет malformed результат видимым, не переопределяя статус обёртки", async () => {
+    const malformed = JSON.stringify({
+      version: 1,
+      invocationRef: "inv_fixture123",
+      state: "FAILED",
+      inputSHA256: "a".repeat(64),
+      extra: "Данные",
+    });
+    const html = await render("invoke_integration", {}, "ru", malformed);
+    const visibleHeader = (
+      html.match(/<header[^>]*>[^]*?<\/header>/)?.[0] ?? ""
+    ).split("<details")[0];
+    expect(visibleHeader).toContain('data-state="SUCCEEDED"');
+    expect(html).toContain("run-transcript__preview");
+  });
+  it("показывает ошибку вложенной интеграции в свёрнутой группе инструментов", async () => {
+    const items: RunActivityItem[] = [
+      "SUCCEEDED",
+      "FAILED",
+      "SUCCEEDED",
+      "SUCCEEDED",
+    ].map((state, index) => ({
+      id: `tool_${String(index)}`,
+      kind: "tool",
+      historical: false,
+      actor: "Сотрудник",
+      occurredAt: "2026-10-04T10:00:00Z",
+      execution: {
+        runRef: "run_fixture",
+        nodeRef: "nod_fixture",
+        sessionRef: "ses_fixture",
+        turnRef: "trn_fixture",
+        turnNumber: 1,
+        attempt: 1,
+      },
+      toolCall: {
+        ref: `tcl_${String(index)}`,
+        tool: "invoke_integration",
+        state: "SUCCEEDED",
+        durationMs: 10,
+        safeParameters: {},
+        auditRef: "aud_fixture",
+        safeResult: JSON.stringify({
+          version: 1,
+          invocationRef: `inv_fixture000${String(index)}`,
+          state,
+          inputSHA256: "a".repeat(64),
+        }),
+      },
+    }));
+    const html = await renderToString(
+      createSSRApp({
+        render: () =>
+          h(RunTranscript, { items, embedded: true, activeItemId: null }),
+      }).use(i18n),
+    );
+    const summary =
+      html.match(
+        /class="run-transcript__tool-group"[^]*?<summary[^>]*>[^]*?<\/summary>/,
+      )?.[0] ?? "";
+    expect(summary).toContain('data-state="FAILED"');
+    expect(summary).toContain("status-badge--danger");
+    expect(summary).not.toContain('data-state="SUCCEEDED"');
+    expect(items.every((item) => item.toolCall?.state === "SUCCEEDED")).toBe(
+      true,
+    );
+  });
+  it.each(["ru", "en"] as const)(
+    "показывает FAILED/REJECTED exact квитанции, не скрывая детали (%s)",
+    async (locale) => {
+      for (const tool of [
+        "invoke_integration",
+        "context7_resolve_library_id",
+        "context7_query_docs",
+      ]) {
+        for (const state of ["FAILED", "REJECTED"] as const) {
+          const receipt = JSON.stringify({
+            version: 1,
+            invocationRef: "inv_fixture123",
+            state,
+            inputSHA256: "a".repeat(64),
+          });
+          const html = await render(tool, {}, locale, receipt);
+          const header =
+            (html.match(/<header[^>]*>[^]*?<\/header>/)?.[0] ?? "").split(
+              "<details",
+            )[0] ?? "";
+          expect(header).toContain(`data-state="${state}"`);
+          expect(header).toContain("status-badge--danger");
+          expect(header).not.toContain('data-state="SUCCEEDED"');
+          expect(html).not.toContain("run-transcript__preview");
+          expect(html).toContain("Invocation Ref");
+          expect(html).toContain("Input SHA256");
+          expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+          expect(html).not.toMatch(
+            /RAW_COMMAND_SENTINEL|RAW_OUTPUT_SENTINEL|HIDDEN_REASONING_SENTINEL/,
+          );
+        }
+      }
+    },
+  );
+});
+
 describe("RunTranscript: компактные файлы результата", () => {
   const artifact: Artifact = {
     ref: "art_fixture_result",
