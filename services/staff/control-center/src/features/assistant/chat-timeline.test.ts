@@ -243,9 +243,10 @@ describe("server-owned callback continuation", () => {
     execution.message.source = { origin: "ORDINARY" };
     const item = buildRunTranscriptItems([execution])[0];
     expect(item?.summary).toBe("Continue the original task");
-    expect(item?.kind).toBe("initiator");
-    execution.message.source = callback.source;
+    expect(item?.kind).toBe("agent");
     execution.actor.kind = "USER";
+    expect(buildRunTranscriptItems([execution])[0]?.kind).toBe("initiator");
+    execution.message.source = callback.source;
     expect(buildRunTranscriptItems([execution])[0]?.summary).toBeUndefined();
   });
 });
