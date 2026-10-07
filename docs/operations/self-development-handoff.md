@@ -10,6 +10,64 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+07.10.2026 02:34UTC: source `8ca601bb60d649b181647f7734a14a675c7ad08d`;
+подтверждённый remote/PR `3a26d78a`. Цель ACTIVE, полный65/33step OPEN.
+
+- Все118grants/C127CONNECTED сохранены. Ordinary Manager native Retry
+  `run_21I5JzcubfPYBu7dwq2RPbSB` → one Developer child
+  `run_Pio3apegtYAvt4LBfmIKn_O_` → callbackedg_zRTaMQq2QiNRBcb8DjVzf8Mw → finalPASS.
+  One Issue1797 comment6029569613/WRITEinv_eMGIvAYpDX7lHmxMkmhAPf_x knownSUCCEEDED,
+  child+parent freshREAD; независимый GitHub200/bodyExact. Ничего не повторять.
+- New bounded Reviewer COMMENT5436892791/H=a22785d6… knownSUCCEEDED/readbackPASS;
+  oldUNKNOWN inv_Iz_O8YmcvEH_q7Q9FUldQBpO не replay. Это не formal review.
+- 52f7 initialFAIL compact8147>8000 + nativeMCPdescription>2000 сохранены.
+  8ca corrected schema metadata: wholeRC868PASS/0FAIL/3SKIP/vetPASS,
+  public wire16fixtures/128targetsPASS; source/servingPodhash9757f5d9… одинаков.
+- Current Manager/Dev/Security ACK и protected full RUN instruction SHA equal.
+  Six templates stablevariables/dynamicintegrations/PUBLISHED/effective/v8,
+  freshvalidation200/valid/diag[]; sixsavedfull previews200. organization.name
+  catalogNOT_MATERIALIZED в отдельной sourceдиагностике; actualhistorical6ACK
+  hashes здесь не пересверены. Не утверждать completevariableproof по placeholders.
+- Own PROJECT helper README.md managedREADknownSUCCESS/blobExact4375B;
+  вспомогательный outboxBLOCKEDread-only не requiredrepositoryREADfailure.
+- Последний собственный explicitreload02:28:50, затемfreshauth02:31:49;
+  tab5dashboard, чужие6/13не трогать. Следующийreload≤02:33:50/02:36:49
+  с учётом текущего штатного входа; передfullpromptоперациейfreshauthboundary
+  не обходить. Журнал содержит только безопасные refs/digests/statuses.
+
+Далее: checkpoint commit/push/PRreadback → закрыть organizationvariable и
+sixruntimeproof gaps → §44/45fullacceptance → merge/freshmain/pins → full33Issue1796.
+
+## Предыдущий checkpoint02:11
+
+07.10.2026 02:11UTC: source `8b6d1a2a11c13aaeeea3f98f0511e22669a1ffb5`;
+последний подтверждённый remote/PR `3a26d78a`. Цель ACTIVE, полный65/33step OPEN.
+
+- Все118 GitHub2.5 права перенесены native helper typed plans и exact tuples
+  совпадают с прежними. Новый connection127/CONNECTED после native TEST;
+  helper21/dev24/manager17/architect16/doc14/security13/lexical13, NONE/[],
+  exact repository. Старый247DISABLED/enabled0, UNKNOWN effects не повторять.
+- Обычный Manager на новом127 получил один bounded task: прочитать existing
+  PR1799/review5436151248/H=a22785d6…, delegate Developer, один comment в Issue1797,
+  независимый managed read и durable callback. Только запуск принят интерфейсом;
+  эффект/delegation/callback пока не доказаны. Не дублировать этот task.
+- Exact3a26:4789Go PASS/54existingSKIP, четыре vet PASS. Public BootstrapPG
+  exactdda27127:153nested PASS/0FAIL/0SKIP. Exact8b6d frontend511PASS;
+  scopedlint/format/forcedtype/build PASS. Production3a неизменен test-only8b.
+- Synthetic Chromium9PASS/1fixtureFAIL до UI; адресный repeat того же mobileRU
+  PASS без изменений. Полного10/10 одним запуском нет, исходный FAIL сохранён.
+- Exact8b6d codegen/SQL/registry/оба release+IG render profiles/MCP5 PASS.
+  Initial PATH/yq FAIL и Unix socket fixture FAIL сохранены с safe repeats;
+  это не deployment-specific immutable render или полный live Workflow PASS.
+- Chrome callback дуга выше всех карточек, Console0/graph+events200/13unit PASS;
+  integrations native TEST screenshot/Console0 проверены. Own tab5, чужие6/13
+  не закрывать. Последний explicit reload02:10–02:11; следующий≤02:16.
+
+Далее: текущий Manager/Developer response и callback → checkpoint publish →
+полная§44acceptance → bootstrap merge/freshmain/source pins → full33 Issue1796.
+
+## Предыдущий checkpoint01:47
+
 07.10.2026 01:47 UTC: source `dda27127e10e022deac2ad1680bd900a7ac892a9`;
 последний подтверждённый remote/PR `1b9c7b56`. Цель ACTIVE, полный65/33step OPEN.
 

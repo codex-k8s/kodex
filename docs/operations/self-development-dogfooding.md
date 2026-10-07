@@ -158,6 +158,105 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 07.10.2026 02:34 UTC — обычное делегирование и известные GitHub эффекты
+
+Source `8ca601bb60d649b181647f7734a14a675c7ad08d`; последний подтверждённый
+remote/PR `3a26d78a`. Полный65/33step остаётся OPEN.
+
+- Первый обычный Manager `run_Xj97wu9yRnDRS0kT4qgRLcM9` получил успешные
+  managed PR/review READ, но корректно завершился BLOCKED: opaque target enum
+  не объяснял, какой ref принадлежит Developer. `52f7db38` добавил именованные
+  метаданные, но whole RC FAIL866/1/3: tools/list8147bytes превышал8000.
+  Native `run_8lPOMKZrwG-m45lfh6f7PBbe` FAILED до модели с
+  RUNTIME_MCP_UNAVAILABLE: top tool description превысил2000bytes. WRITE0,
+  child0; оба отказа сохранены, лимиты и authority не ослаблены.
+- `8ca601bb` переносит name/purpose/role/paired step metadata в description
+  schema-параметра target_agent_ref; top description краткий, пустые optional
+  поля не дублируются. Exact enums/step pairing и server validation сохранены.
+  Whole RC868PASS/0FAIL/3existingSKIP, vetPASS; отдельный public MCP wire
+  producer/runner readiness consumer16fixtures PASS, включая128targets.
+  Host/serving Pod server.go SHA9757f5d9…cc1890 совпал, READY=true.
+- Один native Retry принят: `run_21I5JzcubfPYBu7dwq2RPbSB`, прежняя session,
+  новая попытка/turn/RuntimeRevision. Обычный Manager выбрал Developer по
+  server-owned schema metadata, одна delegation принята:
+  child `run_Pio3apegtYAvt4LBfmIKn_O_`, callback `edg_zRTaMQq2QiNRBcb8DjVzf8Mw`.
+  Child fresh PR1799/review5436151248/H=a22785d6… проверки PASS; один WRITE
+  `inv_eMGIvAYpDX7lHmxMkmhAPf_x` SUCCEEDED, comment6029569613/Issue1797;
+  child READ `inv_AKGEQTXmZyqPtMspy-5XAdwq` SUCCEEDED. После matching callback
+  parent READ `inv_gTP-ab_Hrytr7A75wDc5rJtl` SUCCEEDED и финальный bounded PASS.
+  Артефакт ответа `art_2eOtsqBkNxL6XC8AEVBntd8G`; parent root SUCCEEDED.
+  Это подтверждение ознакомления, не исправление кода или approval.
+- Отдельный обычный Security Reviewer `run_n6JS2ZEXhvBwdnSCbTWmJpkC`
+  создал ровно один НОВЫЙ COMMENT review5436892791 на exact H:
+  CREATE `inv_RGJ7ort0NCd7K8Hq8-oXR20H` SUCCEEDED,
+  READ `inv_q4Xhb5KsNgBx2FU12DY0Yjgv` SUCCEEDED. Независимый GitHub read200
+  подтвердил оба реальных ID, COMMENTED/H/author и точные bodies с серверными
+  effect markers. Старый UNKNOWN review не повторялся; это транспортный QA,
+  не formal security review bootstrap.
+- Current Manager/Developer/Security sameUID G4/38tools ACK CAPTURED,
+  task/provider/inbox и instructions/file EQUAL. Protected full RUN previews
+  Manager/Developer/Security HTTP200: полный SHA равен exact ACK instructions
+  SHA, template/materialization pins совпадают; project/role подставлены,
+  template syntax отсутствует. Полные prompt/секреты/headers не выводились.
+- Fresh GET/validation всех6 instructions: PUBLISHED/effective/v8, три stable
+  variables и dynamic integrations присутствуют; validation200/valid/diagnostics[].
+  Six saved RUN previews200/complete/errors[]/exact template digests; full
+  protected previews раскрывают rendered project/role (Architect ampersand
+  штатно JSON escaped). Повторное сравнение шести historical ACK SHA здесь
+  NOT RUN. organization.name в catalog NOT_MATERIALIZED — причина отдельно
+  исследуется; это не выдаётся за доказанный rendered organization name.
+- Own PROJECT helper managed README.md READ `inv_GzA5X93sNuWhKM2mthtRKfNa`
+  успешен на exact main d43bd605…:4375bytes/blob d93bb23e…de2100, совпал с Git
+  blob. `run_71_qt4Kc_dktAUddGonJRW2J` semantic BLOCKED только по дополнительно
+  запрошенному outbox файлу: helper filesystem read-only; required repository
+  content READ доказан, неподдержанный file publish не объявлен PASS.
+- Chrome1692: callback широкая внешняя дуга над всеми5карточками, стрелка
+  видима; Console0, graph/events200. Предварительный screenshot до DOM ready
+  был пустым; settled повтор проверен. Runtime graph показывает child и
+  продолжение Manager, без повторной delegation. Полный QA/merge пока OPEN.
+
+### 07.10.2026 02:11 UTC — все права GitHub 2.5 и адресный baseline
+
+Проверенный source `8b6d1a2a11c13aaeeea3f98f0511e22669a1ffb5`;
+последний подтверждённый remote/PR `3a26d78a`. Полный65/33step остаётся OPEN.
+
+- Security13 plan `pln_b5IQnfMDDXosg5L_Vu96u-BE`: exact13keys/C99/
+  recipient8/package2.5/NONE[], Validatev2VALID, один Applyv3APPLIED;
+  fresh read connection112/CONNECTED/105enabled. Lexical13 plan
+  `pln__sMedyPZyGYViPRPfBEyz03L`: exact13keys/C112/recipient8/package2.5/
+  NONE[], Validatev2VALID, один Applyv3APPLIED; fresh125CONNECTED/118enabled.
+  Все118 canonical tuples совпали с прежним snapshot: recipient, capability,
+  enabled, selected policy, paths и exact repository scope. Семь получателей:
+  helper21/Developer24/Manager17/Architect16/Documentation14/Security13/Lexical13.
+  Старое подключение247/DISABLED/enabled0; UNKNOWN effects не повторялись.
+- Штатный native TEST нового подключения:126TESTING→127CONNECTED,118grants
+  сохранены. Desktop screenshot/Console0/API200 PASS. Fresh Manager/Developer
+  runtimeReady=true, нужные PR/review/comment READ, comment CREATE и Manager
+  delegate effective на exact connection127/package digest133fd4b1…4cd500.
+  Обычный Manager получил один новый bounded task для Developer response;
+  принятие delegation/WRITE/callback ещё не подтверждено.
+- Security/Lexical helper provider ACK: same Pod UID/G4/38tools/23grants,
+  task/provider/inbox и instructions/file EQUAL. Original task и serving
+  process comparison NOT RUN; это не ordinary Reviewer runtime proof.
+- Exact3a26 герметичные Go: CP1532/45SKIP, RC864/3SKIP, IG1750/1SKIP,
+  runner643/5SKIP —4789PASS/54SKIP; четыре vet PASS. Первый runner FAIL
+  вызван fixture Unix socket path115bytes; повтор всего runner на том же SHA
+  с коротким собственным TMPDIR прошёл, исходный FAIL сохранён.
+- `8b6d1a2a` меняет только stale test expectation: AGENT/ORDINARY слева,
+  USER/ORDINARY справа, production unchanged. Exact frontend subtree
+  `742da3cfe867750127315fa5b15f08780825c52f`:511/511unit PASS; scopedlint/
+  format/forcedtype/build PASS. Chrome callback screenshot и13graph tests PASS.
+- Actual synthetic Chromium: первый общий запуск9PASS/1FAIL до загрузки UI
+  на локальном JS asset socket hang up; причина reset UNKNOWN. Повтор только
+  mobile RU на том же source без rebuild/edits:1/1PASS. Все10 сценариев имеют
+  успешный запуск, но общий10/10 одним запуском не заявляется.14screenshots,
+  успешные Console/network assertions PASS; не live inference acceptance.
+- Exact8b6d public integration package codegen, SQL boundary, contract registry,
+  web-only/web-with-mattermost release и IG render PASS; MCP entrypoint5/5PASS.
+  Три initial PATH/yq FAIL до assertions сохранены, повтор с существующим yq
+  без изменения assertions PASS. Deployment-specific immutable render NOT RUN;
+  unchanged Proto/OpenAPI/AsyncAPI/policy этим запуском не повторялись.
+
 ### 07.10.2026 01:47 UTC — подтверждённые рабочие исходники и первые права GitHub 2.5
 
 Source `dda27127e10e022deac2ad1680bd900a7ac892a9`; последний проверенный
@@ -201,6 +300,18 @@ remote/PR `1b9c7b56`. Полный65/33step остаётся OPEN.
   helper21 + Developer24 + Manager17, все exact repository scope/NONE[].
   Архитектор и три Reviewer ещё OPEN. Ранний sameUID helper ACK G4/38tools/
   23grants/inbox/instructions EQUAL; это не обычный Manager runtime proof.
+- Native Architect16 plan `pln_zqjy6g3Wt0kh4EuFJcLj5Z3G`: exact16keys/
+  recipient8/C69/package2.5/NONE[], Validatev2VALID/problems[], один Apply
+  завершился v3APPLIED. Fresh read200: connection85/CONNECTED/78enabled,
+  helper21 + Developer24 + Manager17 + Architect16, все exact scope/NONE[].
+  Повторный screenshot подтверждённой модалки: bounded scroll, без
+  горизонтального overflow, Console0. Три Reviewer пока OPEN.
+- Native Documentation14 plan `pln_fBYE7-6rmfc8I0YvTRY8tiKd`:
+  exact14keys/recipient8/C85/package2.5/NONE[], Validatev2VALID/problems[],
+  один Apply завершился v3APPLIED. Fresh read200: connection99/CONNECTED/
+  92enabled, прежние78 + Documentation14, все exact scope/NONE[].
+  SameUID helper ACK G4/38tools/23grants/inbox/instructions EQUAL;
+  обычный Reviewer на новом connection пока не запускался.
 
 ### 07.10.2026 01:38 UTC — внешняя callback-дуга и точные source проверки
 
