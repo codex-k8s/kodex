@@ -10,6 +10,58 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 16:23 UTC — runtime-local file handoff, без изменения прав
+
+WS checkpoint `c90d16f1cc21ca73f1ff41f19406554ecdf42a1b` запушен;
+remote/Draft1800 exact readback PASS. Поверх него четыре callback-файла
+получили компактное правило делегирования immutable artifact pins и поиска
+собственного entry в новом runtime catalog. Все пять file tools объясняют
+runtime-local entry/catalog/cursor, поиск по имени, exact pins и pagination;
+одна страница100 не равна216-entry каталогу. Новый backend-go invariant закреплён.
+Schema, target pairing, lease/fence/generation, SQL, grants и error mapping
+не менялись; remote NotFound/PermissionDenied/Unknown/Unavailable остаются
+nonretryable TOOL_UNAVAILABLE без correction и fallback.
+
+Owner read-only metadata lookup (точные ограниченные выборки, rollback)
+подтверждает frozen собственный catalog Architect
+`vfc__X91QBN52hwHp0I7rX3wW66u`, digest
+`a19708566445db6d5d0dec32fe9a7c1ada86de1fb7750598006bf4daf3788c5f`,
+run/session/turn/attempt1 equal, entries216/216. Переданный coordinator entry
+`vfe_f61b818c422242eb8c8a2e12b32cbc57` в нём отсутствует. Для того же
+`art_QrkY-oCzBDolbX4Zg9_45MOh` revision14/version1, digest
+`sha256:ac34d579aacbc65a867ef8533db5bcbe04900c83767bbe580395fdd310c3f3ff`
+существует own entry `vfe_52ace2eb14264b8fbbdd6ed083b8e4ef`, visible_now=true.
+Own catalog + foreign entry детерминированно NotFound; actual seq216 args
+по-прежнему UNKNOWN, модельный self-report не выдаётся за actual call proof.
+Exact session archive AVAILABLE/ARCHIVED подтверждён metadata-only; rollout
+не читался, restore/DB writes/restart/new grants не выполнялись.
+
+- PASS frozen child: final fullcallback4.686s/vet/format/diff. Два
+  intermediate FAIL8676B/8561B tools/list сохранены; фактический guard8000B
+  не повышен, сокращена повторная delegation guidance. Optional wire producer
+  и container-spool fixtures SKIP, не PASS.
+- PASS ROOT: fullcallback Go1.26.6 4.670s/vet/build/diffcheck; production
+  files.go e316af6a и server.go f0f60a4e host/Pod EQUAL. Независимый host
+  binary и actual serving `/proc/2193/exe` SHA256
+  `ea5c3ece843acc59b8afd14f3717549803d6ba3308b2a3576971978691b329a7` EQUAL.
+- Chrome38 NewRun: Manager выбран, задача6868B с правилом own-catalog
+  независимо вычислена Node и browser WebCrypto, SHA256
+  `56bc05e45d4295482721dd43339469839f4a904d6a4c1be94be37b02b8a68194` EQUAL.
+  Launch пока НЕ нажат. После clean commit/push будет ровно один новый run;
+  прежние два запуска terminal FAILED, не retry по observation timeout.
+- Browser screenshot16:04 графа PASS; последующие drawer/form capture дали
+  protocol timeout, screenshot этих состояний NOT RUN. После таймаута MCP
+  list/evaluate/reload вновь ответили, fonts loaded. Рабочий reload16:19,
+  несохранённая задача остаётся в форме и имеет независимый hash proof.
+
+Карта неизменённого сценария: Coordinator authenticated execution/closed
+target+step → owner delegated edge и fresh child RuntimeRevision → child
+immutable file catalog с текущими permissions → own filename search/pages →
+exact artifact pins/own entry → metadata/full source до EOF → semantic review
+и server-owned callback receipt. Подсказка не становится authority или
+автоматическим retry; cancel/delete/retry/expiry и terminal графа не меняются.
+Full65/11/13/14/15/actual Developer/reviews/final READY OPEN.
+
 ## Checkpoint 07.10.2026 16:06 UTC — исправлен контракт planned, Chrome восстановлен
 
 Рабочее дерево поверх `23b3fa32205c68c04ae9dee7212fc3a418d7a8d7`:

@@ -780,6 +780,43 @@ func TestDelegationToolDescriptionStaysBoundedForManyTargets(t *testing.T) {
 	}
 }
 
+func TestDelegationToolExplainsCatalogLocalFileHandoff(t *testing.T) {
+	t.Parallel()
+	for _, workflow := range []bool{false, true} {
+		t.Run(fmt.Sprintf("workflow_%t", workflow), func(t *testing.T) {
+			t.Parallel()
+			target := runtimecontract.RunnerDelegationTarget{Ref: "agt_12345678", Name: "Architect"}
+			if workflow {
+				target.WorkflowStepKey = "architect"
+			}
+			tool := delegationTool([]runtimecontract.RunnerDelegationTarget{target})
+			description := tool["description"].(string)
+			for _, hint := range []string{
+				"Delegate exact pairs", "end turn, await callback",
+				"Immutable file pins: artifact_ref/revision/digest+file_name only", "child resolves own entry",
+			} {
+				if !strings.Contains(description, hint) {
+					t.Fatal("delegation description omitted catalog-local handoff guidance")
+				}
+			}
+			if len(description) > 2000 {
+				t.Fatal("handoff guidance exceeds the runner description budget")
+			}
+			schema := tool["inputSchema"].(map[string]any)
+			properties := schema["properties"].(map[string]any)
+			wanted := 3
+			if workflow {
+				wanted++
+			}
+			if schema["additionalProperties"] != false || len(properties) != wanted ||
+				!reflect.DeepEqual(properties["input"], map[string]any{"type": "object", "additionalProperties": true}) ||
+				properties["entry_ref"] != nil || properties["catalog"] != nil || properties["artifact_ref"] != nil {
+				t.Fatal("handoff guidance changed the delegation input boundary")
+			}
+		})
+	}
+}
+
 func TestDecodeMCPToolCallParamsAcceptsStandardMetadata(t *testing.T) {
 	t.Parallel()
 	params, err := decodeMCPToolCallParams(json.RawMessage(`{

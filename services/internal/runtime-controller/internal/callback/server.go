@@ -677,7 +677,7 @@ func delegationTool(targets []runtimecontract.RunnerDelegationTarget) map[string
 	}
 	return map[string]any{
 		"name":        "delegate_agent",
-		"description": "Delegate using named schema targets and paired workflow steps. End this turn after acceptance; results arrive in a callback.",
+		"description": "Delegate exact pairs; end turn, await callback. " + runtimeFileHandoffGuidance,
 		"inputSchema": map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties},
 	}
 }

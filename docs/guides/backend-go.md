@@ -615,6 +615,18 @@ coordinator, не по refs из input и не по всем файлам root/p
 current owner eligibility. Историческая квитанция без pins не получает
 предполагаемое полномочие; WRITE остаётся отдельным разрешением.
 
+`entry_ref`, catalog ref/digest и pagination cursor принадлежат конкретному
+runtime snapshot; они не переносятся как готовый read selector другой роли
+или попытке. Handoff передаёт immutable artifact ref/revision/digest и имя
+файла для поиска, но не parent `entry_ref`. Получатель находит exact artifact
+pins в собственном разрешённом search/manifest и использует свой `entry_ref`.
+Поиск по имени не заменяется поиском по artifact ref, если такой selector
+контрактом не предусмотрен. Одна страница каталога не означает EOF: cursor
+проходится с теми же purpose/query до нужного exact descriptor. Отсутствующий
+descriptor закрывает gate; чужой entry, grant expansion и guessed pins не
+становятся запасным путём. Переданные pins идентифицируют файл, но не выдают
+полномочия и не обновляют frozen snapshot.
+
 ## Доменные события
 
 Producer сохраняет бизнесовое изменение и событие одной PostgreSQL-транзакцией

@@ -388,6 +388,102 @@ func TestRuntimeFileReplyAndInputSubstitutionFailClosed(t *testing.T) {
 	}
 }
 
+func TestRuntimeFileToolsExplainCatalogLocalFileSelection(t *testing.T) {
+	input := validWarmExecutionInput()
+	input.FileCatalog = &runtimecontract.RuntimeFileCatalog{Ref: "vfc_filefixture1", Digest: strings.Repeat("a", 64), Total: 216, Purposes: []string{runtimecontract.FilePurposeRunResult}}
+	count := 0
+	for _, tool := range tools(input) {
+		name := tool["name"].(string)
+		if !runtimecontract.IsRuntimeFileTool(name) {
+			continue
+		}
+		count++
+		description := tool["description"].(string)
+		for _, hint := range []string{
+			"never copy from parent, sibling or another turn/attempt",
+			"own search_files by file name (not artifact_ref) or get_file_manifest pages", "matched own entry_ref",
+			"artifact_ref/revision/digest", "Follow next_cursor with the same purpose/query",
+			"page_size=100 is not the whole catalog", "Missing exact pins or remote denial stay blocked",
+			"no automatic remote-error retry",
+		} {
+			if !strings.Contains(description, hint) {
+				t.Fatal("file tool description omitted catalog-local selection guidance")
+			}
+		}
+		if len(description) > 2000 {
+			t.Fatal("file selection guidance exceeds the runner description budget")
+		}
+		schema := tool["inputSchema"].(map[string]any)
+		properties := schema["properties"].(map[string]any)
+		if schema["additionalProperties"] != false || properties["catalog"] != nil || properties["lease_ref"] != nil || properties["file_name"] != nil {
+			t.Fatal("file selection guidance changed the execution input boundary")
+		}
+	}
+	if count != 5 || !strings.Contains(runtimeFileInputGuidance, "Correct the arguments once") ||
+		!strings.Contains(runtimeFileInputGuidance, "from your own runtime catalog") {
+		t.Fatal("file selection omitted a tool or bounded local input correction")
+	}
+}
+
+type runtimeFileMetadataFailureClient struct {
+	cp.RuntimeWorkServiceClient
+	code        codes.Code
+	requests    []*cp.GetExecutionFileMetadataRequest
+	projections []*cp.RecordRunToolCallRequest
+}
+
+func (client *runtimeFileMetadataFailureClient) GetExecutionFileMetadata(_ context.Context, request *cp.GetExecutionFileMetadataRequest, _ ...grpc.CallOption) (*cp.GetExecutionFileMetadataResponse, error) {
+	client.requests = append(client.requests, request)
+	return nil, status.Error(client.code, "PRIVATE_FILE_METADATA_FAILURE")
+}
+
+func (client *runtimeFileMetadataFailureClient) RecordRunToolCall(_ context.Context, request *cp.RecordRunToolCallRequest, _ ...grpc.CallOption) (*cp.RecordRunToolCallResponse, error) {
+	client.projections = append(client.projections, request)
+	return &cp.RecordRunToolCallResponse{Event: &cp.RunEvent{Ref: "evt_filefixture1"}}, nil
+}
+
+func TestRuntimeFileMetadataRemoteFailureHasNoCorrectionOrRetry(t *testing.T) {
+	for _, code := range []codes.Code{codes.NotFound, codes.PermissionDenied, codes.Unknown, codes.Unavailable} {
+		t.Run(code.String(), func(t *testing.T) {
+			input := validWarmExecutionInput()
+			input.FileCatalog = &runtimecontract.RuntimeFileCatalog{Ref: "vfc_filefixture1", Digest: strings.Repeat("a", 64), Total: 216, Purposes: []string{runtimecontract.FilePurposeRunResult}}
+			_, file := fileFixture(input)
+			client := &runtimeFileMetadataFailureClient{code: code}
+			var diagnostic bytes.Buffer
+			server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client},
+				logger: slog.New(slog.NewJSONHandler(&diagnostic, nil))}
+			params, err := json.Marshal(map[string]any{"name": runtimecontract.FileToolMetadata, "arguments": map[string]any{
+				"purpose": runtimecontract.FilePurposeRunResult, "entry_ref": "vfe_parentfixture", "artifact_ref": file.ArtifactRef,
+				"revision": file.Revision, "digest": file.Digest,
+			}})
+			if err != nil {
+				t.Fatal("fixture encoding failed")
+			}
+			writer := httptest.NewRecorder()
+			server.callTool(writer, httptest.NewRequest(http.MethodPost, "/mcp", nil), mcpRequest{ID: json.RawMessage(`"metadata-fixture"`), Params: params}, input)
+			var response struct {
+				Result struct {
+					IsError    bool           `json:"isError"`
+					Structured map[string]any `json:"structuredContent"`
+				} `json:"result"`
+			}
+			if json.Unmarshal(writer.Body.Bytes(), &response) != nil || !response.Result.IsError ||
+				response.Result.Structured["error_code"] != "TOOL_UNAVAILABLE" || response.Result.Structured["retryable"] != false ||
+				response.Result.Structured["guidance"] != nil || len(client.requests) != 1 || len(client.projections) != 2 ||
+				client.projections[1].State != cp.RunToolCallState_RUN_TOOL_CALL_STATE_FAILED {
+				t.Fatal("remote file failure gained correction guidance or automatic replay")
+			}
+			execution := client.requests[0].GetContext()
+			if execution.GetLeaseRef() != input.LeaseRef || execution.GetFence() != input.LeaseFence || execution.GetGeneration() != input.LeaseGeneration ||
+				execution.GetCatalogRef() != input.FileCatalog.Ref || execution.GetCatalogDigest() != input.FileCatalog.Digest ||
+				client.requests[0].GetFile().GetEntryRef() != "vfe_parentfixture" ||
+				strings.Contains(writer.Body.String(), "PRIVATE_FILE_METADATA_FAILURE") || strings.Contains(diagnostic.String(), "PRIVATE_FILE_METADATA_FAILURE") {
+				t.Fatal("file handoff changed execution pins, selected for the caller or exposed private error data")
+			}
+		})
+	}
+}
+
 func TestRuntimeRunResultPreviewBoundsAndBinding(t *testing.T) {
 	for _, scenario := range []string{"full", "26276 bytes", "39301 bytes", "UTF8 boundary", "wrong digest", "wrong catalog", "wrong pin", "wrong size", "oversized", "invalid UTF8", "NUL", "wrong input digest", "string revision", "maximum exceeded"} {
 		t.Run(scenario, func(t *testing.T) {

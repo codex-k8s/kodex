@@ -10,6 +10,29 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 16:23 UTC: source/remote/Draft1800 c90d16f1; поверх него frozen
+4callback hints/tests +backend invariant +2journals готовы к commit/push.
+ROOT fullcallbackGo1.26.6 4.670s/vet/build/diff PASS; host/Pod files/server
+EQUAL, независимый binary и actualPID2193 ea5c3ece EQUAL. Child final4.686s,
+2intermediateFAIL8676/8561 вышеexisting8000B сохранены; guard неизменен,
+optionalwire/container fixtures SKIP. Schema/authority/SQL/grants unchanged.
+
+Owner readonly exactcatalogproof: ownArchitectvfc__X91...frozen216entries,
+foreigncoordinatorvfe_f61... отсутствует; sameartifact14/v1/ac34d579 имеет
+ownvfe_52ace2... и visible_now=true. Actualseq216argsUNKNOWN; archivedrollout
+не читался, restore/grants/DBwrites не выполнялись. Следующая проверка native
+fullhandoff, не объявлять prompt hint уже пройденным Architect gate.
+
+Chrome38 NewRun/Manager подготовлен: task6868B/56bc05e45d4295482721dd43339469839f4a904d6a4c1be94be37b02b8a68194
+Node/browserEQUAL; LaunchНЕнажат. Послеcommit/push/exactreadback ровно один
+новыйManager, earlyACK +actual serving +следующий Workflowplanned/rejoin.
+Нельзя reload без сохранения/восстановления этой задачи; последнийreload16:19.
+Screenshot графа16:04 PASS, последующиеform/drawerprotocoltimeout NOT RUN;
+послеtimeoutread/list/reloadMCP восстановились безrestart, foreignне трогать.
+Full65/Developer/reviews/fixes/READY OPEN.
+
+## Предыдущий checkpoint16:06
+
 07.10.2026 16:06 UTC: поверх23b3fa32 интегрирован WS planned fix: sourceAsyncAPI,
 штатный Go/TS codegen, новый graph/event/unknownfield regression и общий
 контрактный инвариант. ROOT fullWSunit0.989s/vet, realtime35/35/typecheck,

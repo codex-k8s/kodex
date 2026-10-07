@@ -24,7 +24,9 @@ const (
 	runtimeFileInputFailureClass = "file_input_invalid"
 	runtimeFileReplyFailureClass = "file_reply_binding_invalid"
 	runtimeFileInputInvalidCode  = "FILE_INPUT_INVALID"
-	runtimeFileInputGuidance     = "Correct the arguments once using the current tool schema and exact entry_ref, artifact_ref, revision and sha256: digest from the manifest. For read_file use offset_bytes=0 first, then the returned next_offset_bytes; maximum_bytes must be 4..16384. This is not an authority denial."
+	runtimeFileInputGuidance     = "Correct the arguments once using the current tool schema and exact entry_ref, artifact_ref, revision and sha256: digest from your own runtime catalog. For read_file use offset_bytes=0 first, then the returned next_offset_bytes; maximum_bytes must be 4..16384. This is not an authority denial."
+	runtimeFileHandoffGuidance   = "Immutable file pins: artifact_ref/revision/digest+file_name only; child resolves own entry."
+	runtimeFileCatalogGuidance   = "entry_ref, catalog and cursors are runtime-local: never copy from parent, sibling or another turn/attempt. Resolve artifact_ref/revision/digest via your own search_files by file name (not artifact_ref) or get_file_manifest pages; use the matched own entry_ref for metadata/preview/read_file. Follow next_cursor with the same purpose/query; page_size=100 is not the whole catalog. Missing exact pins or remote denial stay blocked; no automatic remote-error retry."
 )
 
 var (
@@ -89,7 +91,7 @@ func runtimeFileTools(input runtimecontract.RunnerInput) []map[string]any {
 				properties["offset_bytes"] = map[string]any{"type": "integer", "minimum": 0, "maximum": runtimecontract.MaximumArtifactTransferBytes, "default": 0}
 			}
 		}
-		result = append(result, map[string]any{"name": tool.name, "description": tool.description,
+		result = append(result, map[string]any{"name": tool.name, "description": tool.description + " " + runtimeFileCatalogGuidance,
 			"inputSchema": objectSchema(required, properties)})
 	}
 	return result
