@@ -344,7 +344,8 @@ export function buildRunTranscriptItems(
   return items.sort(
     (left, right) =>
       Number(left.historical) - Number(right.historical) ||
-      (left.execution?.turnNumber ?? 0) - (right.execution?.turnNumber ?? 0) ||
+      // Номера ходов и sequence разных сессий не задают общую хронологию.
+      Date.parse(left.occurredAt) - Date.parse(right.occurredAt) ||
       (left.sequence ?? 0) - (right.sequence ?? 0) ||
       left.id.localeCompare(right.id),
   );

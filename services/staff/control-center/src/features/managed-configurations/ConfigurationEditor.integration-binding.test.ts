@@ -15,6 +15,7 @@ import { renderToString } from "@vue/server-renderer";
 import { createI18n } from "vue-i18n";
 import type {
   ManagedConfiguration,
+  ManagedConfigurationImpact,
   ManagedConfigurationRevision,
 } from "@/shared/api/generated/openapi/types.gen";
 import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
@@ -107,6 +108,11 @@ interface State {
   connectionBindingPlan: Ref<IntegrationConnectionBindingPlan | undefined>;
   connectionBindingLoading: Ref<boolean>;
   connectionBindingProblem: Ref<unknown>;
+  connectionBindingLabel: ComputedRef<string>;
+  impactValue: Ref<ManagedConfigurationImpact | undefined>;
+  impactLoading: Ref<boolean>;
+  impactProblem: Ref<unknown>;
+  bulkRebindVisible: ComputedRef<boolean>;
   showImpact(): Promise<void>;
   closeImpact(): void;
   bindNewConnection(): Promise<void>;
@@ -174,6 +180,57 @@ beforeEach(() => {
 });
 
 describe("picker точной привязки подключения", () => {
+  it("скрывает bulk command только для прочитанного пустого списка consumers", async () => {
+    const state = await setup();
+    expect(state.bulkRebindVisible.value).toBe(false);
+    state.impactValue.value = {
+      ...projection,
+      total: 1,
+      consumers: [
+        {
+          kind: "INTEGRATION_CONNECTION",
+          ref: "connection_bound",
+          revisionRef: "revision_source",
+          version: 19,
+        },
+      ],
+    };
+    expect(state.bulkRebindVisible.value).toBe(true);
+    state.impactValue.value = undefined;
+    state.impactLoading.value = true;
+    expect(state.bulkRebindVisible.value).toBe(true);
+    state.impactLoading.value = false;
+    state.impactProblem.value = { code: "VERSION_OR_STATE_CONFLICT" };
+    expect(state.bulkRebindVisible.value).toBe(true);
+    expect(bindIntegrationConnection).not.toHaveBeenCalled();
+  });
+
+  it("различает подпись одиночного MATCH и первой ABSENT привязки", async () => {
+    const state = await setup();
+    expect(state.connectionBindingLabel.value).toBe(
+      "managed.bindNewConnection",
+    );
+    state.connectionBindingPlan.value = plan("connection_selected");
+    expect(state.connectionBindingLabel.value).toBe("managed.rebindConnection");
+    state.connectionBindingPlan.value = {
+      ...plan("connection_selected"),
+      input: {
+        impactDigest: projection.digest,
+        consumers: [
+          {
+            kind: "INTEGRATION_CONNECTION",
+            ref: "connection_selected",
+            expectedAbsent: true,
+          },
+        ],
+      },
+    };
+    expect(state.connectionBindingLabel.value).toBe(
+      "managed.bindNewConnection",
+    );
+    expect(bindIntegrationConnection).not.toHaveBeenCalled();
+  });
+
   it("сохраняет имя из native select после закрытия picker и очистки каталога", async () => {
     const editor = await setup();
     const option: AsyncEntityOption = {

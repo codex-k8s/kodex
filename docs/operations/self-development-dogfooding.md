@@ -10,6 +10,31 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 20:27 UTC — две адресные UX регрессии
+
+- Публикация `149379869554bd7de161f8371da6686341097449`: bot identity,
+  remote/Draft1800 head EQUAL, mainb5f6fcde неизменен, дерево было чистым.
+  PR body сокращён; full65 не объявлен завершённым.
+- Chrome cropped Impact screenshot получил видимое имя selector: PASS.
+  Две одинаковые команды при0consumers — UX FAIL; исправлены минимально:
+  authoritative пустой bulk скрыт, single MATCH «Перепривязать подключение»,
+  прежние ABSENT/loading/error/OCC guards сохранены.
+- Chrome run screenshot: читаемый canvas/правая scroll panel/controls PASS,
+  общая хронология FAIL: Architect00:19:57 выше Coordinator00:11:53/13:33.
+  Регрессионный тест сначала FAIL, затем comparator occurredAt→sequence/id
+  PASS, exact execution scope/dedup/tool grouping не ослаблены.
+- ROOT current299tests4.53s/typecheck/build9.66s PASS (прежний chunk warning),
+  исполнитель binding73tests и transcript254tests/lint/format/typecheck PASS.
+  Context7 Vitest4.1.6 проверен. Activity/editor/i18n host/Pod hashes EQUAL.
+  Fresh reload20:25 DOM chronology/Console0/overflowfalse и новый cropped
+  drawer screenshot chronology PASS. Updated Impact live DOM preview PASS:
+  имя сохранено, ровно одна active команда «Перепривязать подключение».
+  Новый cropped Impact screenshot ожидается; Apply не выполнялся.
+- Architect independently native READ Issue/main/PR выполнен; upstream
+  контракт пока UNKNOWN, Developer/reviews/fix/READY и Full65 OPEN.
+  Пустой --since5m stdout CP/gateway/runtime-controller не выдаётся за
+  полное доказательство отсутствия исторических ошибок.
+
 ## Checkpoint 07.10.2026 20:20 UTC — native переход к Architect
 
 - ROOT PASS: current focused binding/graph59tests3.93s. Picker native event и

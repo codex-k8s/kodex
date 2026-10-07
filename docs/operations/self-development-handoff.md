@@ -10,6 +10,35 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+## Checkpoint 07.10.2026 20:27 UTC
+
+HEAD/remote/Draft1800 `149379869554bd7de161f8371da6686341097449`
+EQUAL; read/UI/graph пакет опубликован, main `b5f6fcde` неизменен.
+PR body сокращён до сценариев/проверок/ручной приемки и ссылок на журнал.
+
+Свежие Chrome скриншоты получены: static Impact PASS по имени selector,
+но выявлены две одинаковые команды; run drawer PASS по читаемым controls,
+scroll/graph canvas, FAIL общей хронологии: Architect00:19:57 выше
+Coordinator00:11:53/00:13:33. Эти дефекты исправлены новым working пакетом:
+bulk скрывается лишь при authoritative пустом consumers, single MATCH имеет
+собственную подпись; общий transcript сортируется occurredAt→sequence/id,
+а не несопоставимым turnNumber разных сессий. Scope/dedup не изменялись.
+ROOT299/299 unit4.53s, final typecheck/build9.66s PASS (chunk warning).
+Исполнители73/254 tests/lint/format/typecheck PASS; Context7 Vitest4.1.6.
+Host/Pod activity/editor/i18n SHA256 EQUAL. Fresh reload20:25 и DOM порядок
+Coordinator00:11:53→FINAL00:13:33→Architect00:19:57 PASS, Console0,
+horizontal overflowfalse. Новый cropped drawer screenshot после исправления
+получен: хронологический хвост19:57→24:29→26:34 PASS. Новый single/bulk
+browser DOM preview PASS: одна команда «Перепривязать подключение», видимое
+имя и connection375/binding2 сохранены, Console0. Повтор изображения Impact
+ожидается; Apply запрещён при active QA.
+
+Architect `run_P8RfAT13uCHGlqF1eqRIt6jJ` RUNNING, подтверждённые input pins
+сохраняются; Issue и bootstrap PR независимо прочитаны native READ.
+Внутренний upstream contract/Developer/reviews/READY/full65 всё ещё OPEN.
+Read-only logs --since5m вернули пустой stdout трёх сервисов; это отсутствие
+новых строк, а не доказательство отсутствия ошибок за весь запуск.
+
 ## Checkpoint 07.10.2026 20:20 UTC
 
 Текущий read/UI/graph пакет проверен ROOT: 59/59 адресных frontend tests

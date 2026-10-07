@@ -188,6 +188,10 @@ const comparison = computed(() => {
   }
 });
 const impactValue = ref<ManagedConfigurationImpact>();
+const bulkRebindVisible = computed(
+  () =>
+    props.kind !== "SYSTEM_STT" && impactValue.value?.consumers.length !== 0,
+);
 const impactList = ref<HTMLElement>();
 const impactSentinel = ref<HTMLElement>();
 const impactPageSize = useAdaptiveCursorPageSize({
@@ -205,6 +209,11 @@ const impactLoading = ref(false);
 const impactProblem = ref<AppProblem>();
 const newConnection = ref<AsyncEntityOption>();
 const connectionBindingPlan = ref<IntegrationConnectionBindingPlan>();
+const connectionBindingLabel = computed(() =>
+  connectionBindingPlan.value?.input.consumers[0]?.expectedAbsent === false
+    ? "managed.rebindConnection"
+    : "managed.bindNewConnection",
+);
 const connectionBindingLoading = ref(false);
 const connectionBindingProblem = ref<AppProblem>();
 let connectionBindingController: AbortController | undefined;
@@ -1836,18 +1845,11 @@ watch(
           "
           @click="bindNewConnection"
         >
-          {{
-            $t(
-              connectionBindingPlan?.input.consumers[0]?.expectedAbsent ===
-                false
-                ? "managed.rebind"
-                : "managed.bindNewConnection",
-            )
-          }}
+          {{ $t(connectionBindingLabel) }}
         </button>
       </div>
       <button
-        v-if="kind !== 'SYSTEM_STT'"
+        v-if="bulkRebindVisible"
         class="button button--primary"
         :disabled="
           busy ||
