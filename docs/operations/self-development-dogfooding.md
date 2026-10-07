@@ -10,6 +10,45 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 11:23 UTC — настоящий Architect и полные входы
+
+Source/remote/Draft1800 `010d0fb042598260e1a6b5a56ab6012d67beef0c`.
+Host/Pod handoff hashbb9c42c7 и candidatescb25db63 EQUAL, рабочий клон
+примонтирован в `/workspace`; app source после cleanup не менялся.
+INTAKE technical SUCCEEDED, но semantic BLOCKED/UNKNOWN сохранён:
+по исходному §37 Manager имеет metadata/Issue/PR READ, не repository content
+READ/готовность команды. Это не причина выдавать новые права или считать
+отсутствующие доказательства PASS. Сохранённый manager-plan полностью
+прочитан штатным artifact DOWNLOAD200: `art_Oqqn_6LA_Xp7nrDWayBIUsax`,23821B,
+SHAe481ea4b86d25bf7008dac0c57941c6bd4a19e1cb5abbbc5dfb214b8b4e72770 EQUAL.
+Предыдущая попытка DOWNLOAD без обязательного purpose дала400 до чтения;
+исправлено штатным query, без mutation. Native stage не обязан знать
+назначенные сервером artifact refs до автоматического callback/публикации.
+
+Coordinator самостоятельно передал step-002 Architect
+`run_X2XeYRFZz4sLRI44zgPaPy-4`, session `ses_GLRiFj_btA4ceTCbwvUEM-wi`,
+turn `trn_GCnALmiAcRvTSVkqzGpXkJMN`, attempt1 RUNNING.
+Actual commentary149: все три текущих Manager artifacts и project plan
+прочитаны доEOF со сверкой pins; свежий managed READ main b5f6fcde885c4e6369255a86559b3ed2c785043f,
+#1796 OPEN.5 read_file и6 integration READ SUCCEEDED в scoped observed
+window; это реальный predecessor read, не synthetic/unit замена.
+Обязательные repository documents/gate ещё в работе, readiness Developer
+не объявлена. Root не implements1796, не повторяет workflow/retry.
+
+Architect ACK CAPTURED/rejoined sameUID:
+Pod `runtime-turn-b89f5a8faa5f5d0f`, UIDcec90cfd-087a-4099-a130-e5f992412376;
+task/provider/inbox SHA5a1700f74577127f9fb9bddf501ab1cf2a79c57020bc015361adc15d955df7c2,
+instructions SHA7c8268a7af86e0ca9720603e9a7fbf043930470a0f78b4cfdfb771344c48cbbd;
+template99e61fae3c098c32513c2eaa34e4ab64cff0b22a038f6754f5fd5593218bf5c8,
+materialization9b47f0763a56d4ea3fe5fdd3d34ad19ab2c3a1f4a1a7ba2619119d1a099cb31f.
+G5 exact image f8b60814/ENV5/binding6, tools38/grants18/capabilities19,
+file/inbox EQUAL; binary40f3268a same-Pod image file, serving/independent
+expected comparison NOT RUN. Попытка exact failure watcher900s отклонена
+TIMEOUT_INVALID локально до Kubernetes; контракт позволяет30..240s.
+Следом watcher240s этого tuple принят: exec session2115 RUNNING11:24,
+terminal outcome пока UNKNOWN. Chrome same root/history
+reload/Console0/API200; screenshot NOT RUN. Full65 и finalPR OPEN.
+
 ## Checkpoint 07.10.2026 11:15 UTC — actual Workflow и INTAKE
 
 Обычный Manager сам успешно вызвал native launch_workflow ровно один раз:
