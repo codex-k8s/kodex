@@ -202,6 +202,75 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 07.10.2026 09:12–09:18 UTC — realtime интегрирован, Developer начал работу
+
+- Frozen backend patch SHA256
+  `2578d4ee40213df3a73b9d2655f77577853f4fd5a8e1ce98a61c4df1c29d3095`
+  применён в ROOT; hashes commands и нового component fixture совпали.
+  CREATE/VALIDATE создают существующий AGENT_CHANGED в той же транзакции,
+  aggregateVersion равна новой Agent version. Publish/rollback сохраняют
+  один INSTRUCTIONS_PUBLISHED; replay/stale не создают новых событий.
+  Схема событий, полномочия, grants и migrations не менялись.
+- Путь: changeInstructions → Execute либо helper plan operationEffectsTx
+  → owner outbox → relay/WS registry → authoritative ListAgents/GetAgent
+  → platform AGENT/INSTRUCTIONS invalidation → чистая форма detail.
+  Dirty пользовательский ввод не заменяется, foreign/stale route result
+  игнорируется. Нового polling нет.
+- ROOT unit0.063s, go vet/gofmt/diff-check PASS. Disposable host-loopback
+  PostgreSQL: PROJECT/SYSTEM helper → ordinary Agent реальные
+  propose/validate/apply/replay/readback PASS46.271s; standalone
+  CREATE/VALIDATE/publish/rollback/replay/stale и helper profile PASS4.976s.
+  Первый root filter не запускал standalone subtest из-за несовпадения
+  имени; это не было его PASS, он проверен отдельно точным именем.
+- ROOT FE39/39 (пять suites), ESLint/Prettier/forced typecheck/build PASS,
+  build10.22s с предупреждением о chunks>500kB. Context7 Vue watch sources
+  и Vue Flow BaseEdge/path проверены. Host/Pod hashes совпали для
+  commands, AgentDetailPage и run-graph-layout; serving CP SHA
+  `bd71747e48df85cc32ad86bad0bc84aa2dd73a358c0cfe60df798c484ec139cc`.
+  Живой новый helper Apply в уже открытой форме пока NOT RUN.
+- Architect ранний ACK CAPTURED: `run_VYY0945ccXgXtIv6PTF5GE4Z` /
+  `ses_RjQ1eUTZWzKXDRY2If8x-_V8` / `trn_KSKS1LCSUzaba0hILdU4fTya`;
+  Pod UID28425195-a8ec-418c-8fd3-da57656a8d6a, G5/ENV5/binding6,
+  tools38/grants18, template99e61fae…bf5c8,
+  materializationa445fdec…0fead, input/inbox/instructions EQUAL.
+- Затем запущен настоящий Developer, не host-подмена Issue1796:
+  `run_ftXVaXVkxr6zEx2_T0woFn8v` / `ses_oBhbUXHaSWoaHB-C4_viJVpy` /
+  `trn_YNcit--tXDMZA0kJe7busltw`, attempt1. Pod
+  runtime-turn-4cb6abff4f025835 UIDf60c204c-60d7-467c-b9e7-2ee4319a8094;
+  G5/ENV5/binding6, tools38/grants26. Ранний ACK CAPTURED;
+  task/inbox SHA `d5b69ed143763ed9a803521e5a8b306b55f358e9fa81eb9b0c67fcc72c57462d`,
+  templatec4665019…65eca, materializationfe363c47…6f61a,
+  instruction file9b95dd4c…766e60, сравнения EQUAL. Native Developer
+  PR/reviews/full33 ещё OPEN. Failure watcher этого exact tuple запущен;
+  завершение ещё UNKNOWN, повторного AI-запуска не делали.
+- Chrome после screenshot hang не отвечает и на ROOT/child list_pages;
+  не подменять pending terminal исходом и не наслаивать UI mutations.
+  Кластер продолжает запускать следующие роли; браузер не перезапускался,
+  чужие вкладки не трогали. Последние scoped Network/Console PASS относятся
+  к09:08 до hang, а не к новой realtime live acceptance.
+
+### 07.10.2026 09:02–09:10 UTC — новый full33 и широкая дуга ответа
+
+- На опубликованной инструкции Manager запущен новый full33:
+  `run_TKTiAp9pDr6dbXxn5vI6vTQm`, session
+  `ses_fmvMuYm1wcO8cvmiOeA8ypQD`, turn
+  `trn_OdKX5ZWTpPTGSo61UclIEmxs`, attempt1. Ранний ACK подтвердил
+  template digest `acd059570e70841d23b49d7df708f2e28f4400f984717f0e94e7764e8a9f6ece`
+  новой инструкции; workflow revision3 содержит все33 шага. По native
+  snapshot Manager завершил делегирование, Architect выполняется;
+  это ещё не PASS полного33 и не внутренний Developer PR.
+- По замечанию владельца увеличен вертикальный радиус CALLBACK_TO:
+  50 → 99px, независимо от горизонтального межколоночного зазора.
+  Верхняя обратная дуга проходит с большим отступом; bounds учитывают её
+  при вписывании. Схема делегирования и authoritative состояние не менялись.
+  ROOT graph unit23/23, ESLint, Prettier, forced typecheck и diff-check PASS
+  на рабочем дереве от `594d455f9ddba0f67fabce03f85621dc2661a6b5`.
+- После reload Chrome получил новые SVG paths с увеличенным радиусом,
+  Console errors/warnings0; graph/events/bootstrap/session запросы200.
+  Screenshot capture завис, поэтому свежая визуальная проверка NOT RUN,
+  а не PASS. Чужие вкладки не изменены. Context7 Vue Flow BaseEdge/path
+  проверен; проверка пересечений кривых с карточками покрыта unit-тестами.
+
 ### 07.10.2026 08:49–08:53 UTC — Manager исправлен штатным планом
 
 - Helper создал единственный `pln_bpIYxKQa2dSZ00TSVEbi1Hxb`, операция

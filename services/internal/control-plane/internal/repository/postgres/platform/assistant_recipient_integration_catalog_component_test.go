@@ -306,6 +306,9 @@ func testAssistantRecipientIntegrationCatalog(t *testing.T, ctx context.Context,
 				if _, err := repository.pool.Exec(ctx, queryAssistantCurrentConfigurationRestoreExpiry, stringMap(lease, "leaseRef"), expiry); err != nil {
 					t.Fatal(err)
 				}
+				if recipient.kind == "AGENT" {
+					agent = testAssistantInstructionRealtime(t, ctx, repository, service, owner, worker, lease, agent.Ref, prefix+"-instruction-realtime")
+				}
 				if scope == "SYSTEM" && recipient.kind == "AGENT" {
 					changed := execute(command.SetAgentEnabled, owner, "stale-recipient", &agent.Version, command.AgentInput{Ref: agent.Ref, Enabled: false})
 					if changed.Agent == nil {

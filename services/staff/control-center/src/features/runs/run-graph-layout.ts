@@ -169,7 +169,9 @@ function callbackRunEdgeGeometry(
   // Боковые участки остаются в межколоночном зазоре, а обратная дуга
   // проходит над всеми карточками, включая продолжение в колонке исполнителя.
   const bend = horizontalGap / (target.x > source.x ? 3 : 2);
-  const radius = Math.min(bend, runGraphNodeHeight / 2);
+  // Горизонтальный вынос ограничен зазором между колонками, но радиус
+  // верхней дуги независим от него: узкий зазор не сжимает обратную связь.
+  const radius = runGraphNodeHeight * 0.75;
   const corridorY =
     Math.min(source.y, target.y, ...nodes.map((node) => node.y)) -
     radius * 2 -

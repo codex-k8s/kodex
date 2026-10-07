@@ -10,6 +10,41 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 09:18 UTC: HEAD/remote/Draft1800
+`594d455f9ddba0f67fabce03f85621dc2661a6b5`; ROOT realtime backend5/FE2,
+callback geometry2 и журнал/handoff DIRTY, адресные проверки PASS.
+Backend instruction CREATE/VALIDATE теперь выдаёт existing AGENT_CHANGED
+в owner transaction, exact Agent version; publish/rollback сохраняют один
+INSTRUCTIONS_PUBLISHED. ROOT unit0.063s/vet/gofmt/diff PASS; disposable
+PROJECT/SYSTEM helper → ordinary Agent propose/validate/apply/replay PASS
+46.271s; standalone lifecycle и helper profile PASS4.976s. Frontend39/39,
+ESLint/Prettier/forced typecheck/build PASS; build предупреждает о больших
+chunks, это не error. Подтверждены host/Pod source hashes и serving CP
+`bd71747e48df85cc32ad86bad0bc84aa2dd73a358c0cfe60df798c484ec139cc`.
+Live realtime instruction Apply/reload acceptance ещё NOT RUN.
+
+НОВЫЙ full33 root `run_TKTiAp9pDr6dbXxn5vI6vTQm` запущен09:01,
+новая инструкция Manager12/native rev2 подтверждена actual template ACK.
+Manager завершил делегирование Architect; затем запущен реальный Developer
+`run_ftXVaXVkxr6zEx2_T0woFn8v` / `ses_oBhbUXHaSWoaHB-C4_viJVpy` /
+`trn_YNcit--tXDMZA0kJe7busltw`, attempt1. Ранний Developer ACK CAPTURED,
+same image G5/ENV5/binding6, input/inbox/instructions EQUAL, tools38/grants26.
+НЕ запускать ещё один root/retry: актуальную работу наблюдать по exact tuple.
+Failure watcher Developer запущен, exec session82497; финальный результат
+ещё UNKNOWN. Предыдущий watcher root завершение не наблюдено, не PASS.
+
+Рабочая Chrome page5 остаётся на новом root; reload09:08. Screenshot завис,
+последующие ROOT list_pages/evaluate и независимый readonly child list_pages
+тоже pending; исход процесса браузера не объявлен terminal. Не ставить
+новые browser effects поверх unknown результата, не перезапускать/закрывать
+чужие вкладки. Source/live browser path новых callback дуг подтверждён
+до screenshot hang, свежая визуальная проверка NOT RUN.
+Следом commit/push этих исправлений в1800, восстановить observation Chrome,
+следить за actual Developer PR/3review/fix/full33. Goal ACTIVE; полный65 и
+финальный internal PR ещё OPEN, final PR не merge.
+
+## Предыдущий checkpoint08:53
+
 07.10.2026 08:53 UTC: runtime HEAD60762898 + ROOT watcher2/docs2 DIRTY.
 Manager native instruction фазовое actual PR требование исправлено штатно:
 helper plan `pln_bpIYxKQa2dSZ00TSVEbi1Hxb` APPLIED3 → instruction Validate

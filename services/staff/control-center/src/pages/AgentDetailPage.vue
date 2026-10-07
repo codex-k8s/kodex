@@ -80,7 +80,10 @@ const projectRef = computed(() =>
 const storedAgent = computed(() => platform.agents[agentRef.value]);
 const agent = computed(() => {
   const current = storedAgent.value;
-  return current?.projectRef === projectRef.value ? current : undefined;
+  return current?.ref === agentRef.value &&
+    current.projectRef === projectRef.value
+    ? current
+    : undefined;
 });
 const canEdit = computed(
   () => agent.value?.nextActions.includes("EDIT") ?? false,
@@ -324,6 +327,15 @@ watch(currentProfile, (current, previous) => {
 function syncInstructions(): void {
   instructions.value = authoritativeInstructions.value;
 }
+
+watch(
+  [authoritativeInstructions, () => Boolean(agent.value)],
+  ([current, available], [previous]) => {
+    if (!loaded.value) return;
+    if (!available) instructions.value = "";
+    else if (instructions.value === previous) instructions.value = current;
+  },
+);
 
 async function load(): Promise<void> {
   if (!projectRef.value || !agentRef.value) return;

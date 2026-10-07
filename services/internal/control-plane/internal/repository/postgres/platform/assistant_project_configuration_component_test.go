@@ -205,7 +205,13 @@ func testAssistantProjectConfiguration(t *testing.T, ctx context.Context, r *Rep
 	modelOperation.Parameters["reasoningEffort"] = "high"
 	apply(prepareMany("model-then-binding", modelOperation, bindingOperation), "model-then-binding")
 	instructions := prepare("CREATE_INSTRUCTION_DRAFT", "instructions", map[string]any{"projectAssistantRef": target.Ref, "instructions": "Use the explicitly configured project environment and tools only."})
+	instructionEvents := instructionRealtimeEventCount(t, ctx, r, target.Ref)
 	instructionApplied := apply(instructions, "instructions")
+	instructionTarget, err := service.GetAgent(ctx, owner, target.Ref)
+	if err != nil || instructionTarget.DraftInstructions == nil || instructionTarget.DraftInstructions.State != "DRAFT" {
+		t.Fatal("project helper instruction draft readback", err)
+	}
+	assertInstructionRealtimeEvent(t, ctx, r, instructionTarget, instructionEvents, "AGENT_CHANGED")
 	resolvedOwner, err := r.ResolvePrincipal(ctx, owner)
 	if err != nil {
 		t.Fatal(err)

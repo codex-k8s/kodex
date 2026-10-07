@@ -1136,11 +1136,11 @@ func (repository *Repository) changeInstructions(ctx context.Context, tx pgx.Tx,
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	agent := entity.Agent{Ref: payload.Ref, ProjectRef: projectRef, Version: agentVersion + 1}
-	event := ""
+	event := "AGENT_CHANGED"
 	if input.Kind == command.PublishInstructions || input.Kind == command.RollbackInstructions {
 		event = "INSTRUCTIONS_PUBLISHED"
 	}
-	return commandOutcome{result: command.Result{Agent: &agent, RevisionImpactPlan: impactPlan}, projectID: projectID, projectRef: projectRef, resourceKind: "INSTRUCTIONS", resourceRef: payload.Ref, summary: "i18n:AGENT_INSTRUCTIONS_UPDATED", platformEvent: event}, nil
+	return commandOutcome{result: command.Result{Agent: &agent, RevisionImpactPlan: impactPlan}, projectID: projectID, projectRef: projectRef, resourceKind: "INSTRUCTIONS", resourceRef: payload.Ref, summary: "i18n:AGENT_INSTRUCTIONS_UPDATED", platformEvent: event, platformAggregateVersion: agent.Version}, nil
 }
 
 func (repository *Repository) changeAgentBinding(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {

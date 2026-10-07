@@ -214,7 +214,7 @@ describe("layoutRunGraph", () => {
     expect(path).not.toContain(" L ");
     const points = sampleCurve(path);
     expect(Math.min(...points.map((point) => point.y))).toBeLessThan(
-      Math.min(...layout.nodes.map((item) => item.y)) - 80,
+      Math.min(...layout.nodes.map((item) => item.y)) - 200,
     );
     for (const point of points) {
       expect(
