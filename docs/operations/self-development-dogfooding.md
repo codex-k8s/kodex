@@ -10,6 +10,67 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 12:26 UTC — доступное полное чтение больших конфигураций
+
+Рабочий tree поверх опубликованного `8456fc5356f26e6bf91fad7ba59d78cd832a9868`.
+Root cause semantic BLOCKED подтверждён: owner выдавал полный корректный
+WORKFLOW snapshot, но unbounded native MCP ответ не помещался в model output;
+отдельного artifact descriptor/code mode пути для него не было.
+Исправлен RC consumer для WORKFLOW_CONFIGURATION и системного аналога
+AGENT_CONFIGURATION: после прежнего полного closed caster/read возвращает
+UTF-8 `configuration_page`4..4096bytes, size/offset/next/EOF/pageSHA.
+Continuation требует exact общий configuration_sha256; CP request всегда
+прежний offset0/exact lease/fence/generation/contextversion, без Proto,
+прав, миграций или нового источника данных. Общий JSON модельной выдачи≤8KiB,
+escaping учитывается уменьшением честной страницы. Wire full JSON удалён,
+внутренняя полная проверка retained; endpoint не стал generic доступом.
+
+- PASS Go1.26.6: полный runtime-controller unit (`callback`4.146s,
+  `workload`1.088s, `app`0.186s, `credentialprojection`0.034s), vet/build.
+  Native MCP full-read fixtures33steps и большие SYSTEM/PROJECT инструкции
+  реконструируются доEOF в исходные canonical bytes; negative scope/version/
+  unknown fields/digest/UTF8/offset и отсутствующий continuation digest закрыты.
+- PASS: адресные configuration MCP/page race7.272s; отдельные helper unit0.270s,
+  helper race3.684s. Первые full callback runs FAIL по tools/list8000byte budget;
+  сокращена инструкция descriptor, без повышения бюджета; повтор full unit PASS.
+- PASS: source/Pod catalogSHA18ce8ec7ce51f0d55498dd62b8806dd2cf2295cd7cb5267b35bfb9a625bb024f,
+  toolsSHA37d2e282180e08f0f55947ab57b481aaf3187f3ce7e62b0fdff041884788e46e,
+  helperSHA75467c11abc0cab8b31ed434be26690b008aba6c82775076ae3b1cab2cc6d7b0 EQUAL.
+  Hot reload12:22:58 running/readiness/leader. Независимый CGO0/trimpath/
+  buildvcsfalse binary и `/proc/965/exe` SHA
+  cf7e98baff85ea56b3da7ff3928c390b3d3998f39104700986911ad338010ca4 EQUAL.
+
+Первый новый read-only helper continuation `run_Nnc60Qd6KsG72iH5Nr6rqj3n`
+FAILED/RUNTIME_PROVIDER_UNAVAILABLE после четырёх SUCCEEDED catalog calls,
+совпав с hot-reload restart. Никакого плана/effect не было; causality restart
+не объявляется доказанной без failure diagnostic. Ранний ACK CAPTURED/rejoined,
+instruction/file и provider/inbox EQUAL; servicing runner binary NOT RUN.
+
+После стабилизации кода принят ровно один свежий PROJECT ход:
+conversation `cnv_cVXKGdFDvamZNQTQDuYTk3UR`,
+run `run_mrVVUzI6doaXEiuR98KOZuhc`, session `ses_Q-40jcYi03wJpt7eXJNGIfMl`,
+turn `trn_HianCH59KnOBQZrxxnsJZygO`, attempt1 RUNNING.
+Helper сам читает bounded pages и готовит text-only DRAFT; EOF/DRAFT/
+Validate/Apply/WorkflowPublish пока OPEN. Не повторять submit при UNKNOWN.
+До успешной native публикации новый33 не запускать.
+
+ACK CAPTURED/rejoined: Podruntime-turn-f3439d2676fe7f06,
+UIDc336a7eb-ace4-4bce-9f52-af7150bfc6b6; G5/ENV8/binding7/tools38/grants23.
+Task/provider/inbox SHA2e9e5f2eb3c53c20813af31715b9ed0e4b08b3339b2547d48709784e9264003c,
+instructions/file SHAec6758f8508e29a6949d35b48ffa0161c2663f96f6dc28910a8ab55a56b3fd26 EQUAL;
+materializationed077d7fbe78c23ea579ce65b976682cf8f613de613ab1db30a94af7daeda65c.
+Expected task independent comparison NOT RUN; same-Pod runner file40f3268a
+не выдаётся за обслуживающий executable. Новый handler уже достигнут native.
+
+Fresh parent run_HlZ_jAiNMRgOAewB2OxpEC4Z FAILED/version3/seq124 после
+cancelled required Workflow; больше не ждать старый callback как live.
+Root run_L… CANCELLED/version3/seq173 неизменён, старые attempts не retry.
+Chrome page5/Console0/relevantAPI200, reload12:22 с пустым вводом.
+Context7 /golang/go: UTF8 Valid/RuneStart и json escaping; зависимости не менялись.
+Общий инвариант bounded model full-read закреплён в GO-DOC-001/README.
+Full65, внутренний Developer1796 PR/review/fix/READY остаются OPEN.
+
+
 ## Checkpoint 07.10.2026 12:13 UTC — честное состояние realtime и semantic gates
 
 Рабочее дерево поверх `369e5f4cb06ed8683d17b158c3c05e9bf691e0d9`.

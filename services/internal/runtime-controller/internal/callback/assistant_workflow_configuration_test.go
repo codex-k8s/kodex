@@ -1,6 +1,7 @@
 package callback
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -59,26 +60,68 @@ func TestAssistantWorkflowConfigurationTraversesNativeMCP(t *testing.T) {
 	input, arguments, response := assistantWorkflowConfigurationFixture(t)
 	client := &assistantFreshCatalogMCPClient{assistantDefinitionCatalogClient: &assistantDefinitionCatalogClient{response: &controlplanev1.SearchAssistantResourcesResponse{AssistantConfigurationCatalog: response}}}
 	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
-	params, _ := json.Marshal(map[string]any{"name": "get_configuration_catalog", "arguments": arguments})
-	recorder := httptest.NewRecorder()
-	server.callTool(recorder, httptest.NewRequest("POST", "/mcp", nil), mcpRequest{ID: json.RawMessage(`"workflow-read"`), Params: params}, input)
-	var wire struct {
-		Result struct {
-			IsError           bool           `json:"isError"`
-			StructuredContent map[string]any `json:"structuredContent"`
-		} `json:"result"`
-	}
-	if json.Unmarshal(recorder.Body.Bytes(), &wire) != nil || wire.Result.IsError || client.request == nil {
-		t.Fatal("native Workflow read did not reach generated adapter")
-	}
+	readAssistantConfigurationMCP(t, input, arguments, server, "workflow_configuration", response.GetWorkflowConfiguration().GetConfigurationJson())
 	request := client.request.GetAssistantConfigurationCatalog()
 	if request.GetEntityKind() != "WORKFLOW" || request.GetEntityRef() != input.AssistantContext.EntityRef || request.GetAssistantRef() != input.AgentRef || client.request.GetLeaseRef() != input.LeaseRef {
 		t.Fatal("native read lost exact target/lease")
 	}
-	projection := wire.Result.StructuredContent["assistant_configuration_catalog"].(map[string]any)["workflow_configuration"].(map[string]any)["configuration"].(map[string]any)
-	if len(projection["steps"].([]any)) != 33 {
-		t.Fatal("native wire truncated Workflow graph")
+}
+
+func readAssistantConfigurationMCP(t *testing.T, input runtimecontract.RunnerInput, arguments map[string]any, server *Server, key string, expected []byte) {
+	t.Helper()
+	selector := arguments["assistant_configuration_catalog"].(map[string]any)
+	defer func() {
+		delete(selector, "configuration_offset_bytes")
+		delete(selector, "configuration_sha256")
+	}()
+	var full bytes.Buffer
+	var digest string
+	for count := 0; count < 1024; count++ {
+		selector["configuration_offset_bytes"] = float64(full.Len())
+		if count > 0 {
+			selector["configuration_sha256"] = digest
+		}
+		params, _ := json.Marshal(map[string]any{"name": "get_configuration_catalog", "arguments": arguments})
+		recorder := httptest.NewRecorder()
+		id, _ := json.Marshal(fmt.Sprintf("configuration-page-%d", count))
+		server.callTool(recorder, httptest.NewRequest("POST", "/mcp", nil), mcpRequest{ID: id, Params: params}, input)
+		var wire struct {
+			Result struct {
+				IsError           bool           `json:"isError"`
+				StructuredContent map[string]any `json:"structuredContent"`
+			} `json:"result"`
+		}
+		if json.Unmarshal(recorder.Body.Bytes(), &wire) != nil || wire.Result.IsError || recorder.Body.Len() > 24576 {
+			t.Fatal("native configuration page failed or exceeded wire budget")
+		}
+		configuration := wire.Result.StructuredContent["assistant_configuration_catalog"].(map[string]any)[key].(map[string]any)
+		if _, legacy := configuration["configuration"]; legacy {
+			t.Fatal("native wire exposed an unbounded alternate full snapshot")
+		}
+		page := configuration["configuration_page"].(map[string]any)
+		if count == 0 {
+			digest = configuration["configuration_sha256"].(string)
+		}
+		text := page["text"].(string)
+		hash := sha256.Sum256([]byte(text))
+		if configuration["configuration_sha256"] != digest || page["offset_bytes"] != float64(full.Len()) || page["size_bytes"] != float64(len(expected)) || page["page_sha256"] != hex.EncodeToString(hash[:]) || len(text) > 4096 {
+			t.Fatal("native page lost immutable digest, offset, size or byte budget")
+		}
+		full.WriteString(text)
+		if page["next_offset_bytes"] != float64(full.Len()) {
+			t.Fatal("native page introduced a gap or overlap")
+		}
+		if page["eof"] == true {
+			if !bytes.Equal(full.Bytes(), expected) {
+				t.Fatal("native full-read changed or truncated configuration")
+			}
+			return
+		}
+		if len(text) == 0 {
+			t.Fatal("native page did not advance")
+		}
 	}
+	t.Fatal("native configuration read never reached EOF")
 }
 
 func TestAssistantWorkflowConfigurationClosedRead(t *testing.T) {

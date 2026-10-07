@@ -148,6 +148,29 @@ Consumer agent-runner требует согласования HTTP timeout и о
 download bridge; этот хвост и live protected transfer пока NOT RUN.
 Эти проверки не заменяют live agent/workspace acceptance.
 
+### Полное чтение конфигурации помощником
+
+Native `get_configuration_catalog` для `WORKFLOW_CONFIGURATION` и
+`AGENT_CONFIGURATION` возвращает только `configuration_page`, а не огромный
+альтернативный полный JSON. Владелец по-прежнему разрешает точные
+lease/fence/generation, organization/project, выбранные entity/ref/version;
+controller проверяет полный закрытый snapshot и canonical SHA до страницы.
+Внутренний Proto, права и авторитетное состояние не меняются.
+
+Первое чтение использует `configuration_offset_bytes:0`. Продолжение передаёт
+точные `next_offset_bytes` и `configuration_sha256` из предыдущего ответа;
+отсутствующий или несовпадающий digest закрыто отклоняется. `maximum_bytes`
+ограничен4..4096, page сохраняет UTF-8 boundary, общий размер, фактические
+offset/next, `eof` и `page_sha256`. Полное чтение означает конкатенацию
+непересекающихся text страниц доEOF и проверку общего digest. Страница не
+считается полным snapshot. Объём JSON-encoded модельной выдачи не более8KiB:
+при escaping уменьшается именно размер страницы с честным next offset,
+не отбрасываются поля и не вставляется ellipsis.
+
+Каждая страница заново проходит owner read и exact version: drift, terminal,
+отзыв, чужой context или повреждённый snapshot не выдаёт partial text.
+Не создаются файлы, credentials, новые grants, кэш или второй источник данных.
+
 ## System assistant
 
 Системный помощник использует отдельный always-hot Pod. Reconciler поддерживает

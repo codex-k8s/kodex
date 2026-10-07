@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -42,27 +41,10 @@ func TestAssistantAgentConfigurationNativeFullRead(t *testing.T) {
 			input.AssistantScope = scope
 			client := &assistantFreshCatalogMCPClient{assistantDefinitionCatalogClient: &assistantDefinitionCatalogClient{response: &controlplanev1.SearchAssistantResourcesResponse{AssistantConfigurationCatalog: response}}}
 			server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
-			params, _ := json.Marshal(map[string]any{"name": "get_configuration_catalog", "arguments": arguments})
-			recorder := httptest.NewRecorder()
-			server.callTool(recorder, httptest.NewRequest("POST", "/mcp", nil), mcpRequest{ID: json.RawMessage(`"agent-read"`), Params: params}, input)
-			var wire struct {
-				Result struct {
-					IsError           bool           `json:"isError"`
-					StructuredContent map[string]any `json:"structuredContent"`
-				} `json:"result"`
-			}
-			if json.Unmarshal(recorder.Body.Bytes(), &wire) != nil || wire.Result.IsError || client.request == nil {
-				t.Fatal("native full agent read failed")
-			}
+			readAssistantConfigurationMCP(t, input, arguments, server, "agent_configuration", response.AgentConfiguration.ConfigurationJson)
 			request := client.request
 			if request.GetLeaseRef() != input.LeaseRef || request.GetFence() != input.LeaseFence || request.GetGeneration() != input.LeaseGeneration || request.GetAssistantConfigurationCatalog().GetEntityRef() != input.AssistantContext.EntityRef {
 				t.Fatal("read lost exact lease/target pins")
-			}
-			configuration := wire.Result.StructuredContent["assistant_configuration_catalog"].(map[string]any)["agent_configuration"].(map[string]any)["configuration"].(map[string]any)
-			var before map[string]any
-			_ = json.Unmarshal(response.AgentConfiguration.ConfigurationJson, &before)
-			if configuration["publishedInstructions"].(map[string]any)["content"] != before["publishedInstructions"].(map[string]any)["content"] || configuration["effectiveInstructions"].(map[string]any)["content"] != before["effectiveInstructions"].(map[string]any)["content"] {
-				t.Fatal("native projection truncated or rendered published template")
 			}
 		})
 	}

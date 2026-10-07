@@ -10,6 +10,30 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 12:26 UTC: HEAD8456fc53/remoteDraft1800; RC paging patch+docs DIRTY
+до последующего scoped commit. Полный runtime-controller Go1.26.6 unit/vet/
+build PASS, native MCP page/full-read fixtures+race7.272s PASS. Source/Pod
+hashes и независимо собранный serving `/proc/965/exe` cf7e98ba EQUAL.
+Код стабилен с12:22:58; не менять Go во время текущего живого helper хода.
+Большие WORKFLOW/AGENT конфигурации теперь canonical paged model read,
+UTF84..4096/JSON8KiB/exact digest/contextversion; никакого CP API/rights change.
+
+PROJECT helper cnv_cVXKGdFDvamZNQTQDuYTk3UR,
+run_mrVVUzI6doaXEiuR98KOZuhc/ses_Q-40jcYi03wJpt7eXJNGIfMl,
+trn_HianCH59KnOBQZrxxnsJZygO/attempt1 RUNNING. ACK CAPTURED/rejoined/EQUAL.
+Свежие pages читает сам, первая shape ошибка исправлена моделью.
+НЕ повторять Send. Далее EOF/один DRAFT, independently compare native
+before/after только texts, UIValidateApply и WorkflowValidatePublish, затем
+один NEW ordinary Manager.33step graph/caps/agents/owner gate сохранить.
+Predicates preflight/semanticBLOCKED исправляет помощник, не hostAPI/SQL.
+Старый run_Nnc… FAILED после4SUCCESS при hotreload; DRAFT/effect не было.
+Original parent run_HlZ… теперь FAILED/version3/seq124; childrun_L… CANCELLED,
+никакого ожидания старого handle. Full65/final internalPR OPEN/не merge.
+Chrome page5 helper, reload12:22/Console0; screenshots работают.
+Publisher previous8456fc53/allowlist RC7+GUIDE+docs, body актуализировано.
+
+## Предыдущий checkpoint12:13
+
 07.10.2026 12:13 UTC: HEAD369e5f4c, dirty frontend3+docs2; затем scoped commit.
 RunPage исправляет ложную live подпись при recovering/offline/connecting,
 не заявляет исправление primary cause задержки WS.34unit5.37s/lint/typecheck/
