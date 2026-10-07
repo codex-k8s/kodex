@@ -939,6 +939,7 @@ components:
           maxItems: 500
           items: { $ref: "#/components/schemas/OpaqueRef" }
         callbackSummary: { type: string, maxLength: 2000 }
+        planned: { type: boolean }
         safeErrorCode: { type: string, maxLength: 100 }
         safeErrorMessage: { type: string, maxLength: 2000 }
         createdAt: { $ref: "#/components/schemas/Timestamp" }

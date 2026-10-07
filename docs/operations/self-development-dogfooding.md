@@ -10,6 +10,165 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 16:06 UTC — исправлен контракт planned, Chrome восстановлен
+
+Рабочее дерево поверх `23b3fa32205c68c04ae9dee7212fc3a418d7a8d7`:
+канонический AsyncAPI получил optional `RunNode.planned`; штатная генерация
+обновила Go/TypeScript. Новый regression покрывает снимок 37 узлов с 31
+planned, событие с true/false и закрытый отказ неизвестного private-поля либо
+неверного типа. Mapper, actor/grants, immutable graph и strict decoder не менялись.
+
+- PASS: `make gen-control-api-gateway-asyncapi lint-control-api-gateway-asyncapi`,
+  воспроизводимый codegen 70 Go/70 TypeScript; прежняя информационная рекомендация
+  parser перейти с 3.0 на 3.1 не скрыта, версия контракта не менялась.
+- PASS ROOT: весь WebSocket unit 0.989s, vet; три realtime suite 35/35 за1.58s;
+  forced frontend typecheck и `git diff --check`.
+- PASS source/Pod generated RunNode SHA256
+  `24b67e0b3ed794e74af51fed779c9331496337eab716c56cc398bfdc8765a510`.
+  Serving `/proc/868/exe` и hot build SHA256
+  `0d1fe736d98c978524905fcb674f197e2cb858eff94594fdd6a2fd206cbab5b8` EQUAL.
+  Независимое host сравнение ещё NOT RUN: первый command path `cmd/cli` дал
+  setup FAIL; правильный cmd/control-api-gateway собран Go1.27.1, поэтому его
+  digest не сравнивается с Pod Go1.26.6. Повтор exact toolchain выполняется.
+- PASS Chrome: после переоткрытия владельцем рабочая вкладка38 доступна,
+  screenshot графа получен и просмотрен16:04; крупные внешние callback-дуги
+  не скрываются за карточками. Console error/warn0; graph/events/ticket,
+  session/bootstrap и metadata артефактов HTTP200; document overflowfalse.
+  Прежняя попытка screenshot вкладки5 NOT RUN после bounded ожидания,
+  последующее No page found объясняется переоткрытием, чужие вкладки не закрывались.
+- NOT RUN: новый live снимок с planned=true. Завершённый root уже не содержит
+  таких будущих узлов, его connected-state не объявляется проверкой нового поля.
+
+Свежий owner GET подтвердил оба exact запуска terminal FAILED:
+Manager `run_JGvOAGNFrrp_zPTFuilNxRJR` v3/seq218, Workflow
+`run_qRQXY59Hddm4Fsx1zbujAdaq` v3/seq276. Дубликаты не создавались.
+Architect report8635B сообщает полученный собственный catalog
+`vfc__X91QBN52hwHp0I7rX3wW66u` с пагинацией, но входной entry
+`vfe_f61b818c422242eb8c8a2e12b32cbc57` принадлежит ранее прочитанному
+coordinator catalog. Это self-report, а не actual tool arguments; public
+events содержат только purpose. В bounded RC логах один metadata NotFound /
+control_notfound без session/turn binding, поэтому exact причина пока UNKNOWN.
+Диагностируется перенос catalog-local entry между ролями; immutable artifact
+pins можно передавать, entry необходимо разрешать заново в собственном catalog.
+Full65/Developer PR/reviews/fixes/READY остаются OPEN.
+
+Повтор16:08 UTC: независимый host build с exact `GOTOOLCHAIN=go1.26.6`,
+CGO_ENABLED=0/GOWORK=off/trimpath/buildvcs=false дал SHA256
+`0d1fe736d98c978524905fcb674f197e2cb858eff94594fdd6a2fd206cbab5b8`,
+совпадающий с фактически обслуживающим `/proc/868/exe` в Pod. Это отдельный
+executable proof, не только mounted-source readback. Повтор full WebSocket
+unit на том же Go1.26.6 PASS1.217s/vetPASS. Chrome38 platformState live/attempt0,
+overflowfalse. Проверка planned=true по живому новому Workflow ещё NOT RUN.
+
+## Checkpoint 07.10.2026 15:52 UTC — INTAKE PASS, Architect semantic BLOCKED; причина RUN INTERNAL доказана
+
+Source23b3fa32/Draft1800. Native INTAKE завершён технически и semantic PASS
+только в пределах четырёх mandatory EOF reads и плана: finalseq186.
+Implementation/acceptance/tests NOT RUN, ownergate OPEN/WAITING_HUMAN.
+Coordinator resumedattempt2 прочитал exact manager-plan18999B/revision14
+art_QrkY-oCzBDolbX4Zg9_45MOh доEOF страницами16384+2615,
+sourceSHAac34d579aacbc65a867ef8533db5bcbe04900c83767bbe580395fdd310c3f3ff;
+catalogvfc_HoSwwiIfo80eugGTDYiiY3pU/digest0f8f2ccbc5b438fabc1c7798f28b207695b508714b7a29f266b4cf1191c81996.
+Прочитаны также callback939B art_Kjd7xS4RGzHd938xOSU5GZfj/revision82/
+SHA85aa6dc694d7f9f507a1c7dae55f33bbbec8543a85de268565a6b35e406aa414
+и328B art_81aXYJ0byRimA5UqHZ_2RlF3/revision82/
+SHA1658f0c0a5b55f8a452e793d6e44c4bebc1ace9150723df2705727c9c028408e.
+Первыйread193–194TOOL_UNAVAILABLE не скрыт, последующие195–202EOF PASS.
+
+Coordinator передал Architect: run_Qwdc0UHodlXY1tQRSw9At8Lw,
+ses_f_dO666Ak9zWbwKPrpRxWzDD/trn_EWXRQAUaKb_gUuZG_OuGPY6b/attempt1,
+node nod_JhCB_U0pRPYdADq5PufQlcoK. Actual get_file_manifest RUN_RESULT
+seq213–214SUCCEEDED, get_file_metadata seq215–216FAILED/TOOL_UNAVAILABLE.
+Exactmetadataargs не опубликованы; causeUNKNOWN, wronginput/transfer/authority
+не смешивать. Final228architecture-review.md semanticBLOCKED: full-read gate
+не пройден, source/upstream не подтверждены. Coordinator resumedattempt3
+ses_-k52-BbA4oKHZUa7wWmanqOM/trn_q31kbUhu7aOrpvYIQEyaXcMH,
+node nod_ue97JAq_zWbAgTuuRIkShRh6 прочитал все три Architect artifactsEOF
+и применил semanticSTOP003–033. Actual Workflow FAILED3/seq276 (ownerGET200),
+не READY. Capture resumedattempt2/Architect bounded30seconds NOTCAPTURED,
+ACK_NOT_CAPTURED_BEFORE_DEADLINE; UID/rejoin/serving NOT RUN. Старые/новые
+прогоны радиcapture не повторялись. Handoff metadata root cause диагностируется.
+
+**RUN realtime root cause BOUND.** MCP safe Piniaread показал RUNstateoffline,
+attempt6/problemCodeINTERNAL; globaloffline безproblemCode. HTTPgraph/events200.
+Live ownerGET exactroot sequence231/nodes37/31plannedtrue, полеplanned31раз
+присутствует. Proto RunNode.planned=23 и OpenAPI RunNode.plannedboolean уже
+каноничны; AsyncAPI closed RunNode это поле не содержит. WSprojectRunGraph
+→ ProtoMap → decodeClosed DisallowUnknownFields отвергает plannedtrue,
+sendRunSnapshot возвращаетRUN/INTERNAL. False Proto3 поле опускается, поэтому
+обычный или завершённый граф проходил. Изолированный overlay RED наexact23b3,
+Go1.26.6/graph37/seq231/31planned: FAIL0.045s
+`json: unknown field "planned"`; тот же граф безplannedtrue проходит.
+ExistingfullWSunitPASS1.645s не покрывал этот инвариант. ROOT/cluster не менялись
+при диагностике, strictparser/authorityguards не ослаблены. Новый focused fix
+готовится в изолированном worktree; production activation пока NOT RUN.
+
+Карта исправляемого read/rejoin сценария: требование полной читаемой переписки
+и графа → owner browser с проверенным OIDC session actor/org → WSS
+/api/v1/session/stream SUBSCRIBE_RUN exactroot → gateway signed/contextual
+GetRunGraph → авторитетный CP immutable Workflow snapshot/version/sequence
+→ public OpenAPI ProtoMap → closed generated AsyncAPI RunNode →
+RUN_GRAPH_SNAPSHOT/RUN_EVENT.node → frontend atomic graph/event cursor,
+dedup/rejoin, drawer и layout. Planned boolean описывает уже имеющийся узел,
+не выдаёт lease/grant и не создаёт новое исполнение. Query не меняет state,
+idempotency receipt/audit/outbox отсутствуют по read-only контракту; ошибки
+projection остаются закрытыми. Scope/transport/root eligibility/version и
+terminal/cancel/retry lineage не меняются. Единственный source — AsyncAPI
+плюс штатный Go/TS codegen; unknownfields negative сохраняется, stripplanned
+и permissive decoder запрещены. Один и тот же RunNode покрывает snapshot
+и event consumer. Forwardmigration/новый runtime grant не нужны.
+
+Context7 /asyncapi/spec проверен: named closed SchemaObject, optionaltyped
+boolean/properties/required; локальный CONTRACT-DOC-003 прочитан полностью.
+Chrome5 reload15:50: terminalroot Подключено/alerts0/overflowfalse15:52,
+foreignне трогались. Это восстановление не доказывает planned fix.
+Full65/Developer/reviews/fixes/finalREADY остаются OPEN.
+
+## Checkpoint 07.10.2026 15:44 UTC — публикация PASS, новый Workflow и INTAKE реально выполняются
+
+HEAD/remote/Draft1800 23b3fa32205c68c04ae9dee7212fc3a418d7a8d7;
+bot publisher push/update/exactreadback PASS. Прежний journal918 теперь
+опубликован в его ancestry, temporary GitHub server blocker снят.
+ROOT повтор252/252 unit2.40s на exact23b3 PASS; clean tree до этого журнала.
+
+- PASS live DOM presentation existing exactreceipt inv_LI6RbSgLjBfOlwdysLOENvSG:
+  rowFAILED/Ошибка и collapsedgroup22FAILED/Ошибка. Detailsclosed, rawJSON
+  preview отсутствует, drawer719px, documentoverflowfalse. RootWorkflowroute
+  подключена, история доступна. Native element screenshot опять не получен
+  заboundedожидание, visualNOTRUN. Subsequent MCPevaluate/list/navigation
+  восстановились безrestart; fontstatusloaded. Foreign tabs не трогались.
+- UNKNOWN transient child history/rejoin: source openCurrentStream использует
+  rootRunRef, graph/history кладутся в rootbucket; childsubscribe дал бы
+  RUN_UNAVAILABLE, не INTERNAL. Gateway exact-safe logparser за15мин читает0B;
+  отсутствие лога не доказывает отсутствие дефекта. PLATFORM snapshot и RUN
+  projection оба могут датьINTERNAL, последний безdiagnosticlog. Exact WS
+  envelope не захвачен, authority/ref guard не ослаблялся, workaround не вносился.
+- PASS native ordinaryManager launch_workflow seq162–165/SUCCEEDED;
+  final169 сообщает AGENTS.md и три mandatory docs/PROJECTplan прочитаныEOF,
+  input/pins переданы Workflow. Родитель ждётcallback, semanticREADY не заявлен.
+  Новый root run_qRQXY59Hddm4Fsx1zbujAdaq RUNNING2/seq173;
+  targetWorkflow опубликован15/revision5, DAG33 не менялся.
+- PASS native coordinator delegate_agent seq9: INTAKE
+  run_oAkmlbajPTgbHJ6DfC2qpnVv принят; coordinator
+  ses_-k52-BbA4oKHZUa7wWmanqOM/trn_JtiyzhUKGJf8m2h6ixgss--G/attempt1,
+  node nod_NvYPOemzuI6xMKPwgbNIg-pX. EarlyACK30sec NOTCAPTURED,
+  PROVIDER_ACK_CAPTURE_FAILED; Pod absent, servingNOTRUN. Нового turn
+  радиcapture не создавалось, причина отсутствия не назначается по timeout.
+- PASS INTAKE earlyACK/rejoin: session ses_8M4EypI85B6WilvG2-qko_7I,
+  turn trn_ghWAi_aZ0r7muCOAmvgO-JSp/attempt1/node nod_6qHNhwVRvBlhBlTXwRZjnS2s;
+  Podruntime-turn-bcb09215501aa93f UID6d01db01-51f0-43bc-8542-fd5f30d5d8fb,
+  sameUID/Ready/restarts0. Task/provider/inbox5277B
+  SHA01a490e10442177730b31e4cd463457539480dd2de2c99624ab285730f5d4246 EQUAL;
+  instructions/file29050B SHAb09c70604ef7b14648ece22e439746b2c4cd30b0c5c38a16b94cbdacfe74bcb3 EQUAL.
+  RuntimeRevision rrev_Zja9QATZxxqCUVrjRAI2pv62/v1,
+  SHA4fdcd0c24d7f5d3f0693fe7bf08cffb47a827fef2c31de0bfdff704b487ef486.
+  ActualPID14 /proc/exe and samePod imagefile40f3268a EQUAL,
+  G5/exactf8b60814/ENV5/binding6/grants21/caps24. IndependentexpectedtaskNOTRUN.
+  Seq173 nativeREAD progressing; final/semanticPASS ещё отсутствуют.
+
+Chrome5 новыйWorkflow15:44, Console0. Продолжать exactcurrentrun и capture
+следующих actualturns; Full65/11/13/14/15/DeveloperPR/reviews/READY OPEN.
+
 ## Checkpoint 07.10.2026 15:35 UTC — intrinsic callback READ доказан, новый Manager с exact источниками
 
 Source production56191240, localHEAD91834677; текущие четыре frontend-файла

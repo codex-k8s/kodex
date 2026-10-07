@@ -10,6 +10,81 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 16:06 UTC: поверх23b3fa32 интегрирован WS planned fix: sourceAsyncAPI,
+штатный Go/TS codegen, новый graph/event/unknownfield regression и общий
+контрактный инвариант. ROOT fullWSunit0.989s/vet, realtime35/35/typecheck,
+codegen/validation/diffcheck PASS. Host/Pod generatedRunNode24b67e0b EQUAL;
+servingPID868/hotfile0d1fe736 EQUAL. Независимый sameGo1.26.6 build выполняется:
+первыйpathsetupFAIL, Go1.27.1 hostdigest не выдавался за matching.
+Следующее: exactbuild/readback, commit/push sameDraft1800, liveplanned proof.
+
+Владелец переоткрыл Chrome: рабочая38, screenshot16:04 получен/просмотрен,
+callback-дуги крупные и вне карточек; Console0/API200/overflowfalse.
+Прежняя5 отсутствует, не обращаться; чужие вкладки не трогались.
+Оба actualroot FAILED3 (Managerseq218/Workflowseq276), не повторять вслепую.
+Architect architecture-review8635B self-report содержит inherited coordinator
+vfe_f61b... и собственный vfc__X91... с pagination. Actualmetadataargs UNKNOWN;
+RC closed NotFound без exactturn binding. READONLY archive child ищет exactpins,
+callback child проверяет source правила передачи catalog-localentry.
+Не расширять grants и не выдавать self-report за runtimeargsproof.
+Full65/11/13/14/15/Developer/reviews/finalREADY OPEN.
+Повтор16:08: независимый exactGo1.26.6 host binary0d1fe736 EQUAL actual
+servingPID868; fullWSunit1.217s/vetPASS. Chrome38 live/attempt0/overflowfalse.
+Следующее commit/push семи scoped файлов и exactreadback; plannedlive NOT RUN.
+
+## Предыдущий checkpoint15:52
+
+07.10.2026 15:52 UTC: source23b3fa32,2docsdirty. Новый fullWorkflow
+run_qRQXY59Hddm4Fsx1zbujAdaq terminalFAILED3/seq276, не повторять.
+INTAKE semanticPASSread/plan/4docsEOF, но Architect входной metadata gate
+get_file_manifestRUN_RESULTSUCCEEDED→get_file_metadataFAILED/TOOL_UNAVAILABLE.
+ExactargsUNKNOWN; causeпоканевыводитьизсловаmetadata. Coordinatorпрочитал
+Architectresults иSTOP003–033. Полныеrefs/pins/EOF вmainjournal.
+Capture coordinatorresumedattempt2/ArchitectNOTCAPTURED30сек; servingNOTRUN.
+
+WS причина отдельно ДОКАЗАНА: livegraph37/seq231 содержит31plannedtrue,
+Proto/OpenAPIplannedесть,closedAsyncAPI RunNodeplannedнет; decoderrejects→
+RUNINTERNAL. OverlayRED exact23b3/Go1.26.6 reproducesunknownfieldplanned,
+controlfalsepasses. catalog_input_diagnostics готовит isolatedpatch ONLY
+canonicalAsync planned +штатныйGo/TScodegen+graph/event/strictunknown regression.
+ROOT прочиталCONTRACT003 иContext7AsyncAPI, картаread/rejoin вjournal.
+callback_delegation_resume READONLY диагностирует actualArchitectfilehandoff.
+Ниactor/grants/graphlifecycle/unknownfieldguard не ослаблять. Следующее:
+получить frozenWSpatch, интегрироватьsource/testчерезapply_patch/codegen,
+адресныеunit/vet/typecheck иhotservingreadback; новая liveplanned-проверка.
+Chrome5 reload15:50/rootterminalconnected15:52; screenshotNOTRUN.
+Full65/11/13/14/15/actualDeveloper/reviews/READY OPEN.
+
+## Предыдущий checkpoint15:44
+
+07.10.2026 15:44 UTC: HEAD/remote/Draft1800
+23b3fa32205c68c04ae9dee7212fc3a418d7a8d7, bot publisher readback PASS;
+прежние918/561 теперь предки опубликованного checkpoint, push blocker снят.
+ПовторROOT252/252 unit2.40s на exact23b3 PASS. Live DOM через rootWorkflow
+показывает failedintegration и group22 как FAILED, без rawJSONpreview,
+detailsclosed, drawer719px/overflowfalse; native screenshot NOT RUN.
+Childroute transient history/rejoin FAIL остаётся UNKNOWN: source проверяет
+root subscription, gateway logs safe exact stages за15мин0B; это не PASS.
+
+Обычный Manager сам вызвал launch_workflow SUCCEEDED/seq165, final169
+сообщает полный EOF четырёх mandatory sources. Новый rootWorkflow
+run_qRQXY59Hddm4Fsx1zbujAdaq RUNNING2/seq173, публикация15/revision5.
+Coordinator ses_-k52-BbA4oKHZUa7wWmanqOM/trn_JtiyzhUKGJf8m2h6ixgss--G/attempt1
+ужеSUCCEEDED и delegatedINTAKE run_oAkmlbajPTgbHJ6DfC2qpnVv,
+ses_8M4EypI85B6WilvG2-qko_7I/trn_ghWAi_aZ0r7muCOAmvgO-JSp/attempt1.
+Coordinator ACK заbounded30sec NOT CAPTURED, Pod отсутствует; servingNOTRUN.
+INTAKE earlyACK CAPTURED/rejoin/task5277B/SHA01a490e1 EQUAL,
+instructions29050B/b09c7060 EQUAL; Podruntime-turn-bcb09215501aa93f,
+UID6d01db01-51f0-43bc-8542-fd5f30d5d8fb sameUID/Ready/restarts0,
+servingPID14/imagefile40f3268a EQUAL; G5/f8b60814/ENV5/binding6/grants21/caps24.
+Независимый expectedtaskNOTRUN. Native repository READ progressing, новых
+final/semanticPASS пока нет. Chrome5 навигирован на новыйWorkflow15:44,
+Console0, foreignне трогались. Продолжать этот exactrun, capture следующего
+resumedcoordinator/Architect при появлении; не старыйretry и не новыйduplicate.
+Full65/actualDeveloper/reviews/fixes/READY остаются OPEN.
+
+## Предыдущий checkpoint15:35
+
 07.10.2026 15:35 UTC: localHEAD91834677, опубликованный code/source56191240.
 В рабочем дереве подготовлена адресная frontend-правка четырёх файлов:
 FAILED/REJECTED внутри канонической integration receipt больше не показывается
