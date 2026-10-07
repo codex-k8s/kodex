@@ -159,6 +159,44 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 
 ## Журнал
 
+### 07.10.2026 04:10 UTC — штатное применение плана и новая опубликованная версия
+
+Source `a2c2a385cc5cdc2b38dd6019c6b86d4888605d17` запушен и точно
+прочитан в Draft PR1800; source closure23files, clean tree, bot identity.
+Callback layout повторно проверен на этом SHA:13/13 PASS735ms.
+Chrome помощника: компактные группы tool calls, публикуемый ход работы,
+индикатор только последнего активного сообщения, доступная кнопка Stop;
+Console error/warn0, relevant bootstrap/Workflow/agent/catalog HTTP200.
+
+Helper `run_f7dC8OHmUvIGyE4xIG10Hew8` SUCCEEDED: все36страниц шести
+ролей прочитаны native catalog, каждый из12 filtered queries завершён до
+next_offset0. Получен ровно один typed UPDATE_WORKFLOW
+`pln_v_yIBi9Eq1rmUZcpfKJh12BO`. Проверка before/after исключает только
+requiredCapabilityKeys: иных изменений editable state нет; все прежние keys
+сохранены, все добавленные keys принадлежат enabled grants назначенной роли,
+duplicates0. Fresh GitHub v127 и Context7 v26 совпадают с исходными pins.
+33steps,4inputs,concurrency3 и единственный humanGate step-033 сохранены.
+
+Штатные owner-команды выполнены однократно с fresh OCC/idempotency:
+Validate plan200/VALIDv2 → Apply200/APPLIEDv3, receipt
+`rct_Rf3e3KQ8uCvE_RQ72NIReOut` → Workflow Validate200/VALIDv5 →
+Publish200/PUBLISHEDv6/revision2, publishedRef
+`wfv_0n-pUpfWDJxEUHYwPN7Dc1FF`. После publication fresh API semantic
+snapshot совпал с исходным19183-byte baseline, исключая только capability keys;
+launchReadiness READY. Server hydration сохраняет exact DependsOn при
+неизменных order/parallelism. Дополнительный native read полного draft после
+применения запрошен в `run_mxpavwTyJDoow17GHLs8j5LX`; его итог ещё ожидается.
+
+Новый обычный Manager запущен один раз, не старый Retry:
+`run_9L2rPXkDFpkkAKGuKp__eNxd`, session`ses_kV5drLfta8sxZCNcBVv-GNDu`,
+turn`trn_dXeMlyJtyn9LFzo2Tj2OiLlw`. Он сам читает Issue1796/PR/каталог и
+должен штатно запустить full33 новой revision. Ранний полный ACK CAPTURED:
+task0b80e668…5b64/file/inbox EQUAL, instructions27240bytes SHAd45fccf5…e0ef,
+G4 image/binary EQUAL, RR`rrev_O7YNWePEiS8lYRMjW3OCtbxB`, grants19,
+capabilities22, оба runtime контейнера0restarts. На checkpoint RUNNING;
+полный SOFTWARE_CHANGE/review/final dogfooding PR ещё не принят. Не запускать
+второй процесс и не повторять эффект при UNKNOWN. Whole65/33 OPEN.
+
 ### 07.10.2026 04:04 UTC — чтение недоступных пакетов и повтор визуальной проверки
 
 Exact published package теперь читается отдельно от возможности исполнения:
