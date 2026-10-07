@@ -104,6 +104,7 @@ describe("RunTranscript: компактные файлы результата", 
     locale: "ru" | "en" = "ru",
     embedded = true,
     historical = false,
+    overrides: Partial<RunActivityItem> = {},
   ): Promise<string> {
     const item: RunActivityItem = {
       id: "artifact-fixture",
@@ -117,6 +118,7 @@ describe("RunTranscript: компактные файлы результата", 
       occurredAt: artifact.createdAt,
       artifact: nextArtifact,
       execution,
+      ...overrides,
     };
     const previous = i18n.global.locale.value;
     i18n.global.locale.value = locale;
@@ -165,6 +167,81 @@ describe("RunTranscript: компактные файлы результата", 
       expect(artifact).toEqual(before);
     },
   );
+
+  it.each(["ru", "en"] as const)(
+    "сворачивает exact служебную квитанцию, сохраняя download, metadata и tuple (%s)",
+    async (locale) => {
+      const receipt = {
+        ...artifact,
+        fileName: "workspace-write-result.json",
+        mediaType: "application/json",
+      };
+      const before = structuredClone(receipt);
+      const html = await fileHtml(receipt, locale);
+      expect(html).toMatch(
+        /<details[^>]*class="run-file-receipt"[^>]*><summary/,
+      );
+      expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+      expect(html).toContain(
+        locale === "ru" ? "Служебная квитанция" : "Service receipt",
+      );
+      expect(html).toContain(
+        `aria-label="${locale === "ru" ? "Скачать" : "Download"}: workspace-write-result.json"`,
+      );
+      expect(html).toContain("application/json");
+      expect(html).toContain("v3");
+      expect(html).toContain('data-turn-ref="turn_fixture"');
+      expect(html).toContain('data-attempt="1"');
+      const visible = html.replace(/<details[^>]*>[^]*?<\/details>/g, "");
+      expect(visible).not.toContain("workspace-write-result.json");
+      expect(receipt).toEqual(before);
+    },
+  );
+
+  it.each([
+    { source: "CONTROL_CENTER" },
+    { source: "INTEGRATION_RESULT" },
+    { fileName: "other-workspace-write-result.json" },
+    { mediaType: "text/plain" },
+    { scanState: "PENDING" },
+    { scanState: "SCANNING" },
+    { scanState: "QUARANTINED" },
+    { scanState: "FAILED" },
+    { runRef: "run_other" },
+    { sessionRef: "ses_other" },
+    { runRef: undefined },
+    { sessionRef: undefined },
+  ] satisfies Partial<Artifact>[])(
+    "оставляет unmatched или небезопасную квитанцию видимой: %j",
+    async (patch) => {
+      const receipt = {
+        ...artifact,
+        fileName: "workspace-write-result.json",
+        mediaType: "application/json",
+        ...patch,
+      };
+      const html = await fileHtml(receipt);
+      expect(html).not.toContain('class="run-file-receipt"');
+      expect(html).toContain(receipt.fileName);
+      expect(html).toContain(`data-state="${receipt.scanState}"`);
+    },
+  );
+
+  it("не сворачивает квитанцию без exact execution", async () => {
+    const html = await fileHtml(
+      {
+        ...artifact,
+        fileName: "workspace-write-result.json",
+        mediaType: "application/json",
+      },
+      "ru",
+      true,
+      false,
+      { execution: undefined },
+    );
+    expect(html).not.toContain('class="run-file-receipt"');
+    expect(html).toContain("workspace-write-result.json");
+  });
 
   it.each([
     [true, false],

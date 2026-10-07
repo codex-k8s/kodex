@@ -10,6 +10,36 @@ updated: 2026-10-06
 
 # Текущее состояние
 
+07.10.2026 03:10 UTC: bootstrap acceptance §44/45 сверена; пункты2–5/8–10
+отмечены по фактическим доказательствам. На source53143869 frozen3frontend
+файла сворачивают служебные квитанции; 119unit/lint/format/types/build PASS,
+полный375suites/3224tests PASS с type-only cleanup оговоркой; новый isolated
+Chromium10/10 одним запуском48.8s. Native Chrome screenshot/closed details/
+раскрытие/download/Console0/HTTP200 проверены. Все21Deployment готовы,
+repo-owned trusted hot-reload verify PASS. Whole65/33 остаётся OPEN.
+
+Далее: commit/push этих3files и2docs, exact PR body/gates → разрешённый
+bootstrap merge → fresh main/source/Pod/runtime pins → native Manager запускает
+полный SOFTWARE_CHANGE33 наIssue1796. Финальный dogfooding PR не сливать.
+Own Chrome5 reload03:10; чужие6/13не трогать. GitHub checks0 не CI PASS.
+
+## Предыдущий checkpoint02:57
+
+07.10.2026 02:57 UTC: source/remote/Draft PR1798
+`5314386988d8611d09ca6fddbc00c3fcbf08447e`, body readback PASS; dirty только
+новый checkpoint docs. Literal §43 теперь PASS на новом distinct READ-only
+root `run_fm-f-zh-FncAs0zbwbGNEN-d`: два child, два durable callback,
+Doc own-catalog search/metadata/preview и Manager actual reads/final PASS.
+Все три full artifact bytes/SHA прочитаны и сверены, точные refs в журнале.
+Прежний run_pp2… остаётся BLOCKED, его effects не повторялись.
+
+Следующий шаг: сохранить acceptance matrix §44/45, проверить GitHub gates,
+commit/push checkpoint → разрешённый bootstrap merge → fresh main/Pod/pins →
+native full33 Issue1796 силами внутренней команды. Whole65/33 OPEN.
+Own Chrome5 reload02:57, чужие6/13не трогать. GitHub checks0 — не CI PASS.
+
+## Предыдущий checkpoint02:46
+
 07.10.2026 02:46UTC: source/remote/PR `e2e9e52da5e0fbd99cb6ccca26d0bf6fad29a998`
 подтверждены. Dirty4 CP organization-name fix + journal; цель ACTIVE, full65/33OPEN.
 

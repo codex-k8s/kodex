@@ -106,6 +106,21 @@ const displayItems = computed(() =>
     };
   }),
 );
+// Только представление зарезервированной runner-квитанции; доступ не меняется.
+function isWorkspaceReceipt(item: RunActivityItem): boolean {
+  const artifact = item.artifact;
+  return Boolean(
+    artifact?.source === "AGENT_RESULT" &&
+    artifact.fileName === "workspace-write-result.json" &&
+    artifact.mediaType === "application/json" &&
+    artifact.scanState === "CLEAN" &&
+    artifact.runRef &&
+    artifact.sessionRef &&
+    artifact.runRef === item.execution?.runRef &&
+    artifact.sessionRef === item.execution.sessionRef,
+  );
+}
+
 function toolIcon(item: RunActivityItem) {
   switch (item.toolCall?.tool) {
     case "CODEX_SHELL":
@@ -692,52 +707,64 @@ function bytes(value: number): string {
                       })
                     }}</small
                   >
-                  <section v-if="item.artifact" class="run-file-event">
-                    <FileText
-                      class="run-file-event__icon"
-                      :size="20"
-                      aria-hidden="true"
-                    />
-                    <div class="run-file-event__body">
-                      <strong
-                        class="run-file-event__name"
-                        :title="item.artifact.fileName"
-                        >{{ item.artifact.fileName }}</strong
-                      >
-                      <div class="run-file-event__metadata">
-                        <small>{{ bytes(item.artifact.sizeBytes) }}</small>
-                        <StatusBadge :state="item.artifact.scanState" />
+                  <component
+                    :is="isWorkspaceReceipt(item) ? 'details' : 'div'"
+                    v-if="item.artifact"
+                    :class="{ 'run-file-receipt': isWorkspaceReceipt(item) }"
+                  >
+                    <summary v-if="isWorkspaceReceipt(item)">
+                      {{ $t("runs.workspaceReceipt") }}
+                    </summary>
+                    <section class="run-file-event">
+                      <FileText
+                        class="run-file-event__icon"
+                        :size="20"
+                        aria-hidden="true"
+                      />
+                      <div class="run-file-event__body">
+                        <strong
+                          class="run-file-event__name"
+                          :title="item.artifact.fileName"
+                          >{{ item.artifact.fileName }}</strong
+                        >
+                        <div class="run-file-event__metadata">
+                          <small>{{ bytes(item.artifact.sizeBytes) }}</small>
+                          <StatusBadge :state="item.artifact.scanState" />
+                        </div>
                       </div>
-                    </div>
-                    <button
-                      v-if="item.artifact.nextActions.includes('DOWNLOAD')"
-                      type="button"
-                      class="button button--ghost run-file-event__download"
-                      :aria-label="`${$t('common.download')}: ${item.artifact.fileName}`"
-                      :title="$t('common.download')"
-                      @click="emit('download', item.artifact)"
+                      <button
+                        v-if="item.artifact.nextActions.includes('DOWNLOAD')"
+                        type="button"
+                        class="button button--ghost run-file-event__download"
+                        :aria-label="`${$t('common.download')}: ${item.artifact.fileName}`"
+                        :title="$t('common.download')"
+                        @click="emit('download', item.artifact)"
+                      >
+                        <Download :size="18" aria-hidden="true" />
+                      </button>
+                    </section>
+                    <details
+                      v-if="item.artifact"
+                      class="run-file-event__details"
                     >
-                      <Download :size="18" aria-hidden="true" />
-                    </button>
-                  </section>
-                  <details v-if="item.artifact" class="run-file-event__details">
-                    <summary>{{ $t("runs.toolDetails") }}</summary>
-                    <p>
-                      {{ item.actor || $t("runs.platformActor") }} ·
-                      <time :datetime="item.occurredAt">{{
-                        time(item.occurredAt)
-                      }}</time>
-                      · {{ item.artifact.mediaType }} · v{{
-                        item.artifact.revision
-                      }}
-                    </p>
-                    <small v-if="item.execution">{{
-                      $t("runs.transcriptTurn", {
-                        turn: item.execution.turnNumber,
-                        attempt: item.execution.attempt,
-                      })
-                    }}</small>
-                  </details>
+                      <summary>{{ $t("runs.toolDetails") }}</summary>
+                      <p>
+                        {{ item.actor || $t("runs.platformActor") }} ·
+                        <time :datetime="item.occurredAt">{{
+                          time(item.occurredAt)
+                        }}</time>
+                        · {{ item.artifact.mediaType }} · v{{
+                          item.artifact.revision
+                        }}
+                      </p>
+                      <small v-if="item.execution">{{
+                        $t("runs.transcriptTurn", {
+                          turn: item.execution.turnNumber,
+                          attempt: item.execution.attempt,
+                        })
+                      }}</small>
+                    </details>
+                  </component>
                   <template v-if="item.toolCall">
                     <SafeMarkdown
                       v-if="toolPreview(item.toolCall, item.working)"
@@ -1051,6 +1078,18 @@ small {
   margin-top: 2px;
   color: var(--muted);
   font-size: 0.75rem;
+}
+.run-file-receipt > summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.run-file-receipt[open] > summary {
+  margin-bottom: 6px;
+}
+.run-file-receipt > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .run-file-event__details > summary:focus-visible {
   outline: 2px solid var(--accent);

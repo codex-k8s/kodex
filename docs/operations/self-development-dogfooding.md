@@ -72,15 +72,15 @@ Bootstrap PR: https://github.com/codex-k8s/kodex/pull/1798 (Draft).
 
 - [x] 1. Создать связанное Issue, ветку от свежего main и один Draft bootstrap
   PR; фиксировать результаты PASS/FAIL/NOT RUN/BLOCKED на точном SHA.
-- [ ] 2. Полные управляемые MCP/tool profiles системного помощника,
+- [x] 2. Полные управляемые MCP/tool profiles системного помощника,
   проектного помощника и каждого сотрудника; управляемый Context7 profile,
   immutable RuntimeRevision, scoped Secret binding, exact network/readiness.
   Ключ Context7 доступен только доверенному MCP adapter/server, не shell агента.
-- [ ] 3. Настраиваемая ApprovalPolicy grant: package default/allowed policies,
+- [x] 3. Настраиваемая ApprovalPolicy grant: package default/allowed policies,
   durable/versioned/audited selected policy, CP/gateway/adapter/runtime pins.
   Collaborative GitHub writes допускают NONE только в разрешённом реестре;
   destructive операции не становятся автономными.
-- [ ] 4. Сессия для её владельца отображается как переписка: пользовательские
+- [x] 4. Сессия для её владельца отображается как переписка: пользовательские
   сообщения, публикуемые промежуточные сообщения и итоговые ответы агента.
   В общей хронологии показываются вызовы инструментов, название действия,
   статус и раскрываемые безопасные детали/результат, как в интерфейсе Codex.
@@ -88,7 +88,7 @@ Bootstrap PR: https://github.com/codex-k8s/kodex/pull/1798 (Draft).
   session/turn/attempt нельзя перепутать. Realtime/rejoin/reload сохраняют
   порядок, сообщения и дедупликацию; длинный вывод сворачивается, прокрутка
   не прыгает. Секреты, сырые bearer headers и скрытые рассуждения не выводятся.
-- [ ] 5. Безопасный observability/read path фактически materialized prompt:
+- [x] 5. Безопасный observability/read path фактически materialized prompt:
   instructions, template variables, integrations, identity, tools/MCP,
   files, user/task input с harmless marker, model/reasoning и exact pins.
 - [x] 6. Общий admitted/promoted образ kodex-selfdev со всем требуемым
@@ -103,14 +103,14 @@ Bootstrap PR: https://github.com/codex-k8s/kodex/pull/1798 (Draft).
   admission, не переписывает прежнее evidence и не выдаётся самим агентом.
 - [x] 7. System Assistant сам настраивает себя typed plan; подтверждение,
   публикация, Context7/web/GitHub read и prompt proof реальных ходов.
-- [ ] 8. System Assistant создаёт Kodex | Dev и отдельного Project Assistant;
+- [x] 8. System Assistant создаёт Kodex | Dev и отдельного Project Assistant;
   authoritative ownership/version/audit readback; project isolation,
   Context7/repository/network/runtime/prompt proof.
-- [ ] 9. Project Assistant создаёт шесть сотрудников (Manager, Architect,
+- [x] 9. Project Assistant создаёт шесть сотрудников (Manager, Architect,
   Developer, Documentation Reviewer, Security Reviewer, Lexical Guardian),
   selfdev-write/selfdev-review, Project Files/Secrets, GitHub connection и
   least-privilege grants. Raw git push token только Developer.
-- [ ] 10. Проверить реальные тестовые ходы каждой роли, template validate/
+- [x] 10. Проверить реальные тестовые ходы каждой роли, template validate/
   preview/publish/materialization, scoped grants, NONE writes, оба Human Gate
   режима, delegation и handoff через файлы/артефакты.
 - [ ] 11. SOFTWARE_CHANGE: Manager → Architect → Developer → параллельные
@@ -157,6 +157,94 @@ Lifecycle cancel/delete/retry/terminal, deduplication и возможные ча
 | UI consumer acquire/release | Независимый lease подписки в одном realtime store; logout очищает прежних владельцев | Закрытие модалки не отключает соседний экран; старый release не влияет на новую сессию |
 
 ## Журнал
+
+### 07.10.2026 03:10 UTC — bootstrap acceptance и компактная история файлов
+
+Acceptance §44: все 22 обязательных bootstrap-сценария имеют фактическое
+доказательство в предыдущих checkpoint: SYSTEM/PROJECT самонастройка, Context7,
+web/repository READ, шесть ролей, actual prompt materialization, NONE и оба
+Human Gate режима, Git push/PR/COMMENT/response, durable delegation и literal
+двухдочерний handoff. Поэтому пункты 2–5 и 8–10 отмечены. Полный SOFTWARE_CHANGE
+из 33 этапов, внутренние reviews и финальный dogfooding PR не выполнены;
+пункты 11–15 остаются открытыми. Исторические FAIL/UNKNOWN не переписаны.
+
+§45: исходники RC/IG/runner/libs и контрактные inputs/outputs не менялись после
+точных успешных проверок, описанных выше. CP отличается от полного проверенного
+closure только четырьмя organization-name файлами: новый unit21/PG4/vet/SQL PASS.
+Whole current CP rerun NOT RUN. GitHub check-runs/context0 не означает CI PASS.
+
+На базе `5314386988d8611d09ca6fddbc00c3fcbf08447e` заморожены три frontend-файла:
+RunTranscript.vue/test и i18n. Без изменения authority/history/download служебные
+`workspace-write-result.json` квитанции свёрнуты в native details. Только exact
+AGENT_RESULT/CLEAN/JSON и совпадающие run/session; mismatch остаётся видимым.
+Source SHA256: Vue `97fb7d4e02d2b4d4d30b4a11e9ef9e588acc89aaf037a708d35c77a5041890b6`,
+test `bdee1c8c30cef38b6ffce482bfbd289890943a11b3860e6785cd03c0cfdf072b`,
+i18n `67dd504ecac526f0aff846d4404e60b23474627322a9c2339da4d4477e24bb9d`.
+
+Проверки: RED2/119 до реализации; initial scoped lint FAIL исправлен удалением
+избыточного optional chain. Frozen119/119, scoped lint/format/diffcheck,
+forced typecheck/canonical build PASS. Полный frontend375suites/3224tests PASS
+до этого type-only cleanup; финальные bytes отдельно проверены119tests/types/build.
+Новый public isolated Chromium10/10 одним запуском48.8s, worker1/retries0,
+14 screenshots/errors[]/unexpected[]; preview процесс завершён. Это synthetic
+regression, не вместо native скриншота. Context7: официальная документация Vue
+`/websites/vuejs`, native component:is; dependencies неизменны.
+
+Chrome5: пять квитанций закрыты; раскрытие последней сохранило файл328B,
+metadata/revision и кнопку скачивания. Новый screenshot показывает компактную
+историю, опубликованный ответ и свернутые tool groups. Console0; graph/events/
+artifact GET200. Две внешние скруглённые callback-дуги обходят карточки шести узлов.
+Explicit reload03:10; чужие вкладки не трогались.
+
+Repo-owned trusted hot-reload verify PASS, все21Deployment готовы, source/Pod
+readback сохранён. Первоначальный verify с ошибочным UID/GID1000 закрыто отклонён;
+повтор с фактическими1001/1001 PASS без ослабления checks. Это local debug,
+не staging/production или immutable release acceptance.
+
+### 07.10.2026 02:57 UTC — буквальный handoff двух дочерних запусков PASS
+
+Source `5314386988d8611d09ca6fddbc00c3fcbf08447e` опубликован; remote и
+Draft PR1798 head совпали, компактное тело PR обновлено. GitHub threads0,
+mergeable=true/CLEAN. Check runs и status contexts отсутствуют; это НЕ CI PASS.
+
+Новый distinct READ-only root `run_fm-f-zh-FncAs0zbwbGNEN-d` завершился
+SUCCEEDED, все6nodes terminal,92events. Architect child
+`run_0rUBCMyDigc0hxD8IyfVbxj9` и Documentation child
+`run_ZhZ0NLcdSKiE3zIALZkuaU5-` последовательны; callback edges
+`edg_MhZ3BsnZnB79wP7UE1S1cra-` и `edg_nk9l5yucyz82_KKBabWnrEYN` доставлены.
+Manager после каждого accepted delegation закончил ход и возобновился только
+после callback; после первого фактически прочёл Architect result, после
+второго — Doc result. Workflow и GitHub WRITE не запускались.
+
+Doc выполнил в своём RuntimeRevision search_files по filename → metadata →
+preview_file, все канонические receipts SUCCEEDED. Его собственный entry
+`vfe_eb36cd7e34ac48cb93d3af3dce240942`, source artifact
+`art_3z2vjqpa5VivMZTtgu9MwLVZ`/revision1/2016B/digest
+`sha256:8fa9b8a1f11be9517c2c73147c6f87caf8bbacf29db9ef92ce79c9aa7745bf8b`.
+Actual preview не усечён, отдельный маркер QA1797_OWN_CATALOG_ARCH_OK подтверждён.
+Owner DOWNLOAD200 прочёл ПОЛНОСТЬЮ и сверил exact bytes/SHA:
+
+- Architect source2016B: SHA `8fa9b8a1f11be9517c2c73147c6f87caf8bbacf29db9ef92ce79c9aa7745bf8b`.
+- Doc `art_fA85MOKPqc7YNz_YIc7xODEE`/revision1/2869B:
+  SHA `e7a07b34a83bb6e0e9352bb7efca2e46c51dba37076f36d4a3c74b928f28d6cf`;
+  exact собственный tuple, actual чтение и QA1797_OWN_CATALOG_DOC_OK.
+- Manager final `art_M4n2QFELB31kcmsGWPO4RX_H`/revision44/362B:
+  SHA `aa23e692d207a209e661526a843d7e97736f0a829fcd09e75396bac465c37f40`;
+  semantic PASS обоих actual handoff, не только состояния SUCCEEDED.
+
+Initial root ACK CAPTURED/same UID/rejoin: task/provider/inbox SHA
+`0201138fdb6d7ed78987ef7e9326adc4b50a39f20d093c3dd074665bc3fc16dd`
+EQUAL, instruction/file EQUAL, G4/38tools. Doc ACK CAPTURED/file/inbox EQUAL,
+taskExpected NOT RUN, instruction SHA
+`c8f9e3f2dd19c2226719531dc810b2b8bada294e632e63ff62ca32bce203ff04`.
+Первый Architect честно отметил отсутствие своего нового файла в immutable
+каталоге ДО outbox upload; это не отказ последующего handoff после callback.
+Предыдущий run_pp2… BLOCKED не переписан в PASS, actual причины его плохих
+параметров не объявлены доказанными. Guards и production code не изменены.
+
+Chrome5: screenshot живого graph6/edges7 проверен, оба широких callback loop
+над карточками, Console error/warn0, graph/events/download HTTP200. После
+reload опубликованная история сохранилась. Полный33step всё ещё NOT RUN.
 
 ### 07.10.2026 02:51 UTC — диагностика точного файлового каталога
 
