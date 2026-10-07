@@ -10,6 +10,68 @@ updated: 2026-10-07
 
 # Текущее состояние
 
+07.10.2026 11:15 UTC: Manager сам запустил новый SOFTWARE_CHANGE33
+`run_DBoj7UpTwj-D0nuA6AsTSQ26`, receipt `wlaunch_QMWqHbihTcuAvcFbMPJyd1e3`,
+callback `edg_4oGk3Z7m3CpOtcTHPRjvY5po`.33steps/35nodes/47edges,
+target Workflowv9/revision3; coordinator turn завершён, процесс RUNNING.
+Новый INTAKE `run_pL0MSm4ovgFmT0rexB8hh7Zn`, session
+`ses_zAkuApto82xPg4th4FNz3-Uh`, turn `trn_VL1O1klZAEOR4RYrjTcHTpQ1`,
+attempt1 RUNNING. Actual early ACK CAPTURED/rejoined G5/ENV5/binding6,
+tools38/grants19/capabilities22, current Manager rev2 templateacd05957;
+input/inbox/instructions EQUAL. Не повторять launch/retry. Дальше наблюдать
+тот же процесс, capture Architect/Developer/Reviewers до cleanup и actualPR.
+Page5 новый Workflow root, reload/navigation11:14, Console0, DOM35nodes/47edges
+без horizontaloverflow. Screenshot NOT RUN. HEAD766c21a3, journal DIRTY,
+publisher previous766c21a3; последующий commit/push exactscope docs2.
+Полный65 и итоговый internalPR остаются OPEN, финальныйPR не merge.
+
+## Предыдущий checkpoint11:13
+
+07.10.2026 11:13 UTC: source/remote/Draft1800
+`766c21a3bd2856c90f8392ca92c46f43055fb4c8`; journal DIRTY.
+Lexical13 Validate/Apply PASS: `pln_7hpXFE6pC342XMWqMaWKV6FI`,
+receipt `rct_P3TiPYdaJMxnjzuHpIpxXyUe`,13APPLIED/conflicts0.
+Fresh connection249 CONNECTED,118/118 прежних grants ON, все NONE/[].
+Новый ordinary Manager отправлен ОДИН РАЗ штатным UI Run, не helper plan:
+`run_yzlgaSYdzWm71rnmX9j4Ij99`, session `ses_VisQgTNdiCPw0OAryyhCQeOW`,
+turn `trn_14DlaVAzjayyiyIZ08_3Bu2b`, attempt1 RUNNING. Задача просит Manager
+самостоятельно запустить SOFTWARE_CHANGE33 по1796 с четырьмя inputs,
+fresh complete READ и запретом merge финального PR.
+ACK CAPTURED/rejoined, actual Manager native templateacd05957 новой rev2;
+G5/ENV, tools38/grants19/capabilities22, task/inbox/instructions EQUAL.
+До confirmed workflow receipt не называть процесс запущенным; не повторять
+Run/Launch из-за UNKNOWN. После delegation capture всех значимых ролей до
+cleanup, проследить actual Developer PR/3review/fix/READY. Host не пишет1796.
+Chrome page5 новый root, navigation11:13/Console0; screenshot NOT RUN.
+Cleanup PASS/restore refs сохраняются; publisher previous766c21a3.
+Full65 и internalPR OPEN; финальный internalPR не merge.
+
+## Предыдущий checkpoint11:10
+
+07.10.2026 11:10 UTC: HEAD/remote/Draft1800
+`766c21a3bd2856c90f8392ca92c46f43055fb4c8`, дерево чистое.
+Security13 APPLIED3 receipt `rct_zHk6EA3IMfkGCpo-ulj-3EP6`, conflicts0;
+connection236 CONNECTED,105/118 прежних grants ON. Lexical13 native
+отправлен один раз: conversation `cnv_vmc5oLGEn7PoyfY3FqXCj6Ya`,
+run `run_yapl4K5GKAj4Q6rNRdXXfS6R`, turn `trn_Qv1DEBttj7OkrgRu-AJTpNUu`.
+RUNNING: пять страниц до next_offset0,13 прежних grantsv2/NONE/[];
+не повторять Send. ACK CAPTURED/rejoined с G5, сравнения EQUAL.
+После DRAFT проверить13 unique enabled-only/fresh236, Validate/Apply,
+затем Manager сам запускает NEW SOFTWARE_CHANGE33 для Issue1796.
+Workflow v9/revision3 PUBLISHED,33steps/четыре обязательных input поля.
+
+Repo-owned cleanup Apply PASS на exact766c21a3: удалены только три
+завершённых чистых worktree из списка11:04; SHA сохранены в
+`refs/kodex/cleanup-preserved/<SHA>`, path/registry absence и ref readback PASS.
+Свободных inode `/tmp`:553 →21838. Все три worktree восстановимы по SHA,
+основной source и Pod mounts не изменены; dirty/unknown/чужие caches сохранены.
+ROOT повторил9 unit на766c21a3: PASS0.779s. Chrome page5 Lexical,
+reload11:09/Console0, screenshot NOT RUN; foreign tabs не затрагивались.
+Publisher previous766c21a3; этот checkpoint DIRTY до следующей публикации.
+Full65/internalPR OPEN; финальный internalPR не merge.
+
+## Предыдущий checkpoint11:04
+
 07.10.2026 11:04 UTC: HEAD/remote/Draft1800
 `52fc105655d6588456a918e9b627911bfdaa5aea`; новый адресный checkpoint DIRTY.
 Architect16 и Documentation14 завершены штатными Validate/Apply:

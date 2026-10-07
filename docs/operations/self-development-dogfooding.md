@@ -10,6 +10,105 @@ updated: 2026-10-07
 
 # Цель и источники
 
+## Checkpoint 07.10.2026 11:15 UTC — actual Workflow и INTAKE
+
+Обычный Manager сам успешно вызвал native launch_workflow ровно один раз:
+child Workflow `run_DBoj7UpTwj-D0nuA6AsTSQ26`, receipt
+`wlaunch_QMWqHbihTcuAvcFbMPJyd1e3`, callback `edg_4oGk3Z7m3CpOtcTHPRjvY5po`.
+Запуск target Workflowv9/revision3/33steps,35nodes/47edges; coordinator
+turn SUCCEEDED, Workflow RUNNING. Coordinator самостоятельно передал INTAKE
+Manager `run_pL0MSm4ovgFmT0rexB8hh7Zn`, не host bypass.
+Session `ses_zAkuApto82xPg4th4FNz3-Uh`, turn `trn_VL1O1klZAEOR4RYrjTcHTpQ1`,
+attempt1 RUNNING; реальный итог INTAKE ещё UNKNOWN.
+
+Ранний INTAKE ACK CAPTURED/rejoined:
+Pod `runtime-turn-daa25369b3f63b8a`, UIDe8c1c800-ef42-42ef-904d-3969055738d4;
+task/provider/inbox SHA9d9b4eb8f9273396e991e9d59300ed6a03f3d9e53c8893b414fcdb9720abbaf1,
+instructions SHAd16f37f4c1eeb6775e7120147b8363b9f5dd19a6d5c20aac7693695dcda89921;
+Manager rev2 templateacd059570e70841d23b49d7df708f2e28f4400f984717f0e94e7764e8a9f6ece,
+materializationc391a1be3853c1a2abc93a9d851e9209fd8317750cd269459b79ffef4a481dcc.
+G5 image f8b60814, reviewENV5/binding6; tools38/grants19/capabilities22,
+file/inbox EQUAL. Binary40f3268a scope same-Pod image file;
+serving process/independent expected comparison NOT RUN.
+Workflow coordinator отдельный ранний capture до cleanup NOT RUN; первый
+обычный Manager ACK не объявляется доказательством второго хода.
+Browser scoped root/graph/events200, Console0, DOM35nodes/47edges без
+horizontaloverflow. Screenshot NOT RUN; финальныйPR/три review/READY и
+whole65 остаются OPEN. Host не реализовал #1796 вместо сотрудников.
+
+## Checkpoint 07.10.2026 11:13 UTC — все права восстановлены, новый Manager
+
+На source `766c21a3bd2856c90f8392ca92c46f43055fb4c8` Lexical typed plan
+`pln_7hpXFE6pC342XMWqMaWKV6FI` проверен independently по history/current
+connection236:13 unique прежних grantsv2, единственный changed key enabled,
+NONE/[] неизменны. Native Validate VALID2/problems0 → Apply APPLIED3,
+receipt `rct_P3TiPYdaJMxnjzuHpIpxXyUe`,13APPLIED/conflicts0.
+Fresh connection249 CONNECTED:118/118 прежних grants ON, все NONE/[];
+ничего не добавлено. Old disabled connection не изменялся.
+
+Manager запущен ровно один раз штатным UI agent Run из exact AGENT:
+`run_yzlgaSYdzWm71rnmX9j4Ij99`, session `ses_VisQgTNdiCPw0OAryyhCQeOW`,
+turn `trn_14DlaVAzjayyiyIZ08_3Bu2b`, attempt1. RUNNING;
+его задача — самостоятельно вызвать launch_workflow опубликованного
+SOFTWARE_CHANGE v9/revision3 `wfv_gudwoKZU1WRJMn4E2qmENORd`,33steps,
+четыре обязательных input. #1796 сначала проверяется самим Manager/Architect
+на supported upstream/актуальность; другие реальные Issues только по исходному
+правилу выбора. Полное GitHub3 paged READ до EOF, текущий exact main;
+никакой подмены разработки/review host-агентом или merge итогового PR.
+Предыдущий root CANCELLED, он не retry/resume. Workflow readiness READY
+allowedToSubmit=true, finalHumanGate=true. Actual workflow receipt ещё UNKNOWN.
+
+Ранний Manager ACK CAPTURED/rejoined sameUID:
+Pod `runtime-turn-3dcf3ffe4d0ca03d`, UIDa303684f-e8ca-4ef9-a591-39ec49b6b726;
+task/provider/inbox SHA63feeaa2e62a38538c45a5ba66bb877d4fb75c9408f4d4b2472102f48215d17c,
+instructions SHA7b9c9498c62c287a397af6b6307b989852a1ad631b3cf090520b8ddef4f53b3b;
+published templateacd059570e70841d23b49d7df708f2e28f4400f984717f0e94e7764e8a9f6ece,
+materialization99bb2e4e0b86ce9a66c37e1623577b3075cc4794ba69d522ea8654305690f7e8.
+G5 exact image f8b60814; tools38/grants19/capabilities22,
+file/inbox comparisons EQUAL. Binary40f3268a same-Pod image file captured,
+serving process и independent expected comparison NOT RUN.
+Browser родительский root/graph/events200 и Console0; чужие вкладки не трогали.
+Нового screenshot нет. Full33/Developer PR/review/fix/full65 не PASS.
+
+## Checkpoint 07.10.2026 11:10 UTC — Apply и фактическая очистка
+
+Source/remote/Draft1800 `766c21a3bd2856c90f8392ca92c46f43055fb4c8`
+подтверждены bot publisher. ROOT9 unit повторно PASS0.779s на этом SHA.
+Repo-owned cleanup Apply PASS для всех трёх exact worktree/HEAD из11:04.
+Каждый SHA сохранён direct ref `refs/kodex/cleanup-preserved/<SHA>`;
+path и registry entry удалены, ref readback EQUAL. Non-force remove,
+без Git GC, без очистки dirty/unknown или общих caches. Inode `/tmp`
+553 →21838; источник приложения и mounts не менялись. Это фактическое
+удаление завершённых worktree, не только результат dry run.
+
+Security native plan `pln_CsWeFx1NBuYdfcM3tZazUFhu`:13 unique UPDATE,
+fresh connection223, existing grantv2; beforefalse/aftertrue, единственный
+changed key enabled, exact AGENT/current connection, NONE/[] сохранены.
+Validate PASS VALID2/problems0 → Apply PASS APPLIED3,
+receipt `rct_zHk6EA3IMfkGCpo-ulj-3EP6`,13APPLIED/conflicts0.
+Fresh connection236: все13 Security ON/grantv3. Неподдерживаемый одиночный
+GET assistant-plan диагностически дал не-JSON404; mutation не делалась,
+план прочитан по авторитетному conversation history, не через обход.
+
+Lexical native run `run_yapl4K5GKAj4Q6rNRdXXfS6R` RUNNING;
+conversation `cnv_vmc5oLGEn7PoyfY3FqXCj6Ya`,
+turn `trn_Qv1DEBttj7OkrgRu-AJTpNUu`.
+Commentary подтверждает пять каталоговых страниц до0,13 прежних grantsv2,
+NONE/[] и connection236. DRAFT/Apply ещё UNKNOWN, повтор не делался.
+Actual ACK CAPTURED/rejoined: Pod `runtime-turn-5521869b2d1e5876`,
+UID75659b30-c164-406f-ac48-8a51270e7af5, session
+`ses__zaa_2WIghwmUclmU-_F1aUJ`; task/provider/inbox
+SHA660e832077390c541857d5ddf7e5b3fe329af547ac0d2c391a916b0e5233af95,
+instructions SHA1dcec69d064f3f96121e1a6f52a28f7a701e57180b2b353acaec16bae721e7b4.
+Binary40f3268a scope SAME_POD_IMAGE_FILE_NOT_SERVING_PROCESS;
+serving/independent expected comparison NOT RUN.
+Workflow readback200: PUBLISHED v9/revision3/33steps/four required fields.
+После Lexical Apply Manager сам запускает Workflow, не host вместо команды.
+Chrome reload/history PASS11:09, Console0, observed штатные API200.
+Backend bounded log parse вернул0 structured lines: это не доказательство
+отсутствия ошибок, логовая проверка по-прежнему неполная. Screenshot NOT RUN.
+Full65/final internalPR не закрыты.
+
 ## Checkpoint 07.10.2026 11:04 UTC — восстановление ролей и очистка
 
 Исходный точный source `52fc105655d6588456a918e9b627911bfdaa5aea`;
