@@ -20,6 +20,24 @@ const lifecycle = readFileSync(
 );
 
 describe("provider account layout", () => {
+  it("сжимает предков таблицы до viewport и переносит мобильные действия под поиск", () => {
+    expect(workspace).toMatch(
+      /\.providers-workspace\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*min-width: 0;/,
+    );
+    expect(workspace).toMatch(
+      /\.providers-workspace > \*\s*\{\s*min-width: 0;/,
+    );
+    expect(workspace).toMatch(/\.providers-toolbar\s*\{[^}]*flex-wrap: wrap;/);
+    const mobile = workspace.slice(
+      workspace.indexOf("@media (max-width: 560px)"),
+    );
+    expect(mobile).toMatch(
+      /\.providers-toolbar__search\s*\{[^}]*min-width: 0;[^}]*flex-basis: 100%;/,
+    );
+    expect(mobile).toMatch(
+      /\.providers-toolbar > \.button\s*\{[^}]*max-width: 100%;[^}]*white-space: normal;/,
+    );
+  });
   it("не показывает API key повторно и не предлагает ввод внутренних ref", () => {
     expect(workspace).toContain('type="password"');
     expect(workspace).toContain('autocomplete="off"');

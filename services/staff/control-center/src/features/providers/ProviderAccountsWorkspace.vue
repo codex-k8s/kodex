@@ -1207,10 +1207,16 @@ onBeforeUnmount(() => {
 }
 .providers-workspace {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 16px;
+}
+.providers-workspace > * {
+  min-width: 0;
 }
 .providers-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
@@ -1447,13 +1453,19 @@ onBeforeUnmount(() => {
     align-items: stretch;
     flex-direction: column;
   }
-  .providers-toolbar,
   .authorization-methods {
     align-items: stretch;
     flex-direction: column;
   }
   .providers-toolbar__search {
     min-width: 0;
+    flex-basis: 100%;
+  }
+  .providers-toolbar > .button {
+    min-width: 0;
+    max-width: 100%;
+    flex: 1 1 auto;
+    white-space: normal;
   }
 }
 </style>
