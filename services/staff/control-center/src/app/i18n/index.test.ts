@@ -15,6 +15,21 @@ function entries(value: unknown, prefix = ""): [string, string][] {
   );
 }
 describe("Control Center translations", () => {
+  it.each([
+    ["ru", "Да", "Нет"],
+    ["en", "Yes", "No"],
+  ] as const)(
+    "явно переводит обе boolean подписи в %s без fallback или сырого ключа",
+    (locale, yes, no) => {
+      for (const [key, expected] of [
+        ["common.yes", yes],
+        ["common.no", no],
+      ] as const) {
+        expect(i18n.global.te(key, locale), key).toBe(true);
+        expect(i18n.global.t(key, {}, { locale }), key).toBe(expected);
+      }
+    },
+  );
   it.each(["ru", "en"] as const)(
     "объясняет сохранение рецепта, проверку сборки и отдельную публикацию в %s",
     (locale) => {
