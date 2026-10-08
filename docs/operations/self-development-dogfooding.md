@@ -10,6 +10,45 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 01:47 UTC — новый длинный ход G7
+
+- Commit/remote/Draft1800 `46748f8362d777ac55380e3caef74b3dbeb3b139`
+  совпали, дерево чистое до этого checkpoint. ROOT production build/typecheck
+  PASS, Vite8.88s; штатное предупреждение chunk>500kB не скрыто.
+  Screenshot1438 успешно получен: каталог kodex-selfdev/38из42 и история
+  ревизий читаются, horizontal overflow=false/controls32px/Console0.
+  Предыдущий1431 остаётся отдельным FAIL protocol timeout без изображения.
+- ONE native обычный Manager принят POST201, без Workflow/детей/GitHub writes:
+  `run_PS6YI_JYpT4abCl059kfeRjS` RUNNING2;
+  session`ses_cS1AqWOjMauM5Q9jfS-v-t1N`,
+  turn`trn_a9kZwPhQ1jWOPnw1jycdeE4T`/attempt1.
+  Task2547B/SHA
+  `5b8ef4f10d430b95aa3d300736b9def0481a27e1abc25cba89f2186dd4c85521`.
+  Source только pinnedmainb5f6fcde, blob4deec6d9,536156B/SHAc227c64d;
+  новая диагностика не повторяет terminal FAILED root.
+- Early ACK CAPTURED/rejoin VERIFIED: expected task/provider/inbox EQUAL,
+  instructions file/inbox EQUAL. Обычный Manager/assistantScopeNONE,
+  ENV7/binding8/G7,38tools/21grants/24capabilities, gpt-6.1-sol/medium.
+  Instructions29720eb2, template2ae45fb6, materialization7e1d0994.
+  Exact Podruntime-turn-097b61ca966294b7,
+  UIDf59e44ba-b3ff-4e6a-a9dd-9da5ed0e6cf9; обоих containers imageIDsb48644ce,
+  restarts0. Binary9b560789 EQUAL,
+  SAME_POD_IMAGE_FILE_NOT_SERVING_PROCESS, не serving-process proof.
+  Repo-owned bounded failure observer41860 активен на exact tuple/PodUID.
+- Native Manager начал с0; ответ первой страницы подтвердил commit/blob/
+  размер/sourceSHA и next_offset2047. Модель отметила, что guessed
+  expected_sha256 отсутствует в схеме: она сверяет digest ответов, не
+  расширяет контракт. Неподдерживаемый code-mode не заменяется обходным
+  raw HTTP/shelldownload. На sequence56:17 unique tool calls SUCCEEDED,
+  включая два каталога; EOF и native-read-proof.md ещё NOT RUN.
+- Session dialog actual screenshot PASS01:46:1080x954, собственная
+  прокрутка639/749, user справа/commentary слева, инструменты компактны,
+  последняя активная группа с точками. Console0; run/history/graphHTTP200.
+  Bounded backend logs CP/gateway/runtime за15мин содержат0 строк:
+  panic/errors не обнаружены; пустой журнал не доказывает полный путь.
+- После actualEOF и артефакта запустить один подготовленный full33.
+  Full65/11/13/14/15 OPEN, внутренний итоговый PR не merge/approve.
+
 ## Checkpoint 08.10.2026 01:42 UTC — каталог после публикации
 
 - На базе925d1f9d обнаружен и регрессионно воспроизведён missing-read path:
