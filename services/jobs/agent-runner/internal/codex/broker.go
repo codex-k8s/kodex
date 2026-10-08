@@ -274,7 +274,7 @@ func interruptBrokerRequest(connection net.Conn) {
 }
 
 func validateBrokerTerminal(response brokerResponse) (Result, error) {
-	if response.Result.Usage.Validate() != nil || len(response.Result.ToolCalls) != 0 || len(response.Result.FinalMessage) > maximumFinalBytes {
+	if response.Result.Usage.Validate() != nil || response.Result.UsageCompleteness > UsageComplete || len(response.Result.ToolCalls) != 0 || len(response.Result.FinalMessage) > maximumFinalBytes {
 		return Result{}, errProviderBrokerResponseInvalid
 	}
 	if !response.OK {
@@ -540,7 +540,7 @@ func writeProviderBrokerFailureAtStage(connection io.Writer, stage providerExecu
 // Ошибка не подтверждает итог или credential effect. Измеренный расход и
 // безопасная native timeline сохраняются независимо от этого исхода.
 func failedProviderResult(result Result) Result {
-	failed := Result{Usage: result.Usage, ToolCalls: result.ToolCalls}
+	failed := Result{Usage: result.Usage, UsageCompleteness: result.UsageCompleteness, ToolCalls: result.ToolCalls}
 	if result.rolloutCapture != nil && result.rolloutCapture.sealed && result.matchesCapture(result.rolloutCapture) {
 		failed = withRolloutCapture(failed, result.rolloutCapture)
 		failed.ArchivePath = result.ArchivePath

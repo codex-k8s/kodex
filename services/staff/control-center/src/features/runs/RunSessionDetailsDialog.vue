@@ -403,10 +403,10 @@ function formatTokenCount(value: number): string {
 </template>
 
 <style scoped>
-.session-details-dialog :deep(.modal) {
+.session-details-dialog > :deep(.modal) {
   height: calc(100dvh - 40px);
 }
-.session-details-dialog :deep(.modal__body) {
+.session-details-dialog > :deep(.modal > .modal__body) {
   display: flex;
   overflow: hidden;
 }

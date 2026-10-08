@@ -657,7 +657,7 @@ func mcpStatusResponse(runtimeStatus string, tools []string) json.RawMessage {
 	return encoded
 }
 
-func TestTokenUsageNotificationProducesCurrentTurnDelta(t *testing.T) {
+func TestTokenUsageNotificationDoesNotChargeRestoredThread(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	state.threadID = testThreadID
 	state.threadPath = "/workspace/.kodex/state/codex-home/sessions/2026/08/27/rollout-test.jsonl"
@@ -676,6 +676,9 @@ func TestTokenUsageNotificationProducesCurrentTurnDelta(t *testing.T) {
 	)); err != nil {
 		t.Fatalf("final usage rejected: %v", err)
 	}
+	if err := state.notification("rawResponse/completed", responseUsageNotification("response-current", `{"totalTokens":70,"inputTokens":60,"cachedInputTokens":40,"cacheWriteInputTokens":10,"outputTokens":10,"reasoningOutputTokens":3}`)); err != nil {
+		t.Fatal(err)
+	}
 	state.terminals = 1
 	state.result.Outcome = "SUCCEEDED"
 	result, err := state.terminalResult()
@@ -693,19 +696,16 @@ func TestTokenUsageNotificationProducesCurrentTurnDelta(t *testing.T) {
 	}
 }
 
-func TestTokenUsageDeltaNeverBecomesNegative(t *testing.T) {
-	baseline, err := parseTokenUsage(raw(`{"total":{"totalTokens":100,"inputTokens":80,"cachedInputTokens":20,"cacheWriteInputTokens":10,"outputTokens":20,"reasoningOutputTokens":5},"last":{"totalTokens":50,"inputTokens":40,"cachedInputTokens":10,"cacheWriteInputTokens":5,"outputTokens":10,"reasoningOutputTokens":2},"modelContextWindow":200000}`))
-	if err != nil {
-		t.Fatal(err)
+func TestTokenUsageDisplayResetDoesNotInventMeasurement(t *testing.T) {
+	state := measuredUsageState(t)
+	for _, total := range []int64{100, 90} {
+		if err := state.notification("thread/tokenUsage/updated", tokenUsageNotification(testTurnID, total, total-20, 15, 8, 20, 4)); err != nil {
+			t.Fatal(err)
+		}
 	}
-	final, err := parseTokenUsage(raw(`{"total":{"totalTokens":90,"inputTokens":70,"cachedInputTokens":15,"cacheWriteInputTokens":8,"outputTokens":20,"reasoningOutputTokens":4},"last":{"totalTokens":40,"inputTokens":30,"cachedInputTokens":5,"cacheWriteInputTokens":3,"outputTokens":10,"reasoningOutputTokens":2},"modelContextWindow":200000}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	delta, err := tokenUsageDelta(final, baseline)
-	if err != nil || delta.TotalTokens != 0 || delta.InputTokens != 0 || delta.CachedInputTokens != 0 ||
-		delta.CacheWriteInputTokens != 0 || delta.OutputTokens != 0 || delta.ReasoningOutputTokens != 0 {
-		t.Fatalf("usage reset was not clamped: usage=%#v err=%v", delta, err)
+	result := state.measuredResult()
+	if result.Usage.TotalTokens != 0 || result.UsageCompleteness != UsageUnknown {
+		t.Fatal("display reset invented a confirmed zero measurement")
 	}
 }
 
@@ -736,7 +736,7 @@ func TestTokenUsageAllowsUnknownContextWindow(t *testing.T) {
 		raw(`{"total":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"cacheWriteInputTokens":0,"outputTokens":10,"reasoningOutputTokens":2},"last":{"totalTokens":20,"inputTokens":10,"cachedInputTokens":5,"cacheWriteInputTokens":0,"outputTokens":10,"reasoningOutputTokens":2},"modelContextWindow":null}`),
 	} {
 		usage, err := parseTokenUsage(input)
-		if err != nil || usage.ModelContextWindow != 0 || usage.CacheWriteInputTokens != 0 {
+		if err != nil || usage.ModelContextWindow != 0 || usage.Total.CacheWriteInputTokens != 0 {
 			t.Fatalf("unknown context window was rejected: usage=%#v err=%v", usage, err)
 		}
 	}

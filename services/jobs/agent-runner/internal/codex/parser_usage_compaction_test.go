@@ -43,7 +43,6 @@ func TestTokenUsageClosedFailureReasons(t *testing.T) {
 		{"type optional", envelope(changed("cacheWriteInputTokens", `"PRIVATE_SECRET_BODY_SENTINEL"`), codex160UsageBreakdownFixture), tokenUsageOptionalType},
 		{"context type", `{"total":` + codex160UsageBreakdownFixture + `,"last":` + codex160UsageBreakdownFixture + `,"modelContextWindow":true}`, tokenUsageOptionalType},
 		{"negative", envelope(changed("inputTokens", `-1`), codex160UsageBreakdownFixture), tokenUsageNegative},
-		{"arithmetic", envelope(changed("totalTokens", `101`), codex160UsageBreakdownFixture), tokenUsageTotalArithmetic},
 		{"cache bound", envelope(changed("cachedInputTokens", `81`), codex160UsageBreakdownFixture), tokenUsageCacheInputBound},
 		{"write bound", envelope(changed("cacheWriteInputTokens", `81`), codex160UsageBreakdownFixture), tokenUsageCacheInputBound},
 		{"reasoning bound", envelope(changed("reasoningOutputTokens", `21`), codex160UsageBreakdownFixture), tokenUsageReasoningOutputBound},
@@ -58,7 +57,7 @@ func TestTokenUsageClosedFailureReasons(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			usage, err := parseTokenUsage(raw(test.input))
 			var failure *tokenUsageFailure
-			if !errors.As(err, &failure) || failure.reason != test.reason || usage != (runtimecontract.TokenUsage{}) {
+			if !errors.As(err, &failure) || failure.reason != test.reason || usage != (providerDisplayUsage{}) {
 				t.Fatalf("unexpected closed failure: %v", err)
 			}
 			if err.Error() != "Codex app-server token usage is invalid" {
@@ -163,7 +162,7 @@ func TestCodex160UsageOptionalCacheWriteInTotalAndLast(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			usage, err := parseTokenUsage(raw(`{"total":` + test.total + `,"last":` + test.last + `,"modelContextWindow":258400}`))
-			if err != nil || usage.CacheWriteInputTokens != test.cacheWrite || usage.InputTokens != 80 || usage.CachedInputTokens != 20 || usage.OutputTokens != 20 {
+			if err != nil || usage.Total.CacheWriteInputTokens != test.cacheWrite || usage.Total.InputTokens != 80 || usage.Total.CachedInputTokens != 20 || usage.Total.OutputTokens != 20 {
 				t.Fatalf("optional total/last mismatch: usage=%#v err=%v", usage, err)
 			}
 		})
@@ -189,6 +188,7 @@ func TestCodex160CompactionAndOptionalUsageReachOrdinaryTerminal(t *testing.T) {
 	message := `{"id":"message-1","type":"agentMessage","text":"готово","phase":"final_answer"}`
 	notifications := []struct{ method, payload string }{
 		{"turn/started", `{"threadId":"` + testThreadID + `","turn":{"id":"` + testTurnID + `","items":[],"status":"inProgress"}}`},
+		{"rawResponse/completed", string(responseUsageNotification("response-compaction", codex160UsageBreakdownFixture))},
 		{"item/started", `{"threadId":"` + testThreadID + `","turnId":"` + testTurnID + `","startedAtMs":100,"item":` + compaction + `}`},
 		{"item/completed", `{"threadId":"` + testThreadID + `","turnId":"` + testTurnID + `","completedAtMs":140,"item":` + compaction + `}`},
 		{"thread/tokenUsage/updated", `{"threadId":"` + testThreadID + `","turnId":"` + testTurnID + `","tokenUsage":{"total":` + codex160UsageBreakdownFixture + `,"last":` + codex160UsageBreakdownFixture + `,"modelContextWindow":258400}}`},

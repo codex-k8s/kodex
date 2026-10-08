@@ -10,6 +10,104 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 00:38 UTC — frozen runner usage fix
+
+- База849823b13d1a7a9a472e65136f23041af0ba28a1;8 runner файлов frozen.
+  Display estimate отделён от rawResponse/completed numeric receipts.
+  Strict required/type/nonnegative/arithmetic/cache/reasoning, exact tuple,
+  bounded opaque response ID/dedup/conflict,10k receipt budget и checked sum
+  overflow сохранены. rawResponseItem/completed остаётся suppressed;
+  usageMetadata не выходит в result/diagnostic. UNKNOWN zero-value enum,
+  closed wire UNKNOWN/PARTIAL/COMPLETE сохраняется в broker failure.
+- Исполнитель RED→GREEN, полный agent-runner go test ./... -count=1 PASS
+  (codex4.752s/app16.578s), vet/build/gofmt/diffcheck PASS. ROOT независимо
+  повторил ResponseUsage/UsageCompleteness/Codex160/MeasuredResult regressions
+  на frozen MAIN tree: PASS0.084s, exact Go1.26.6/GOWORKoff.
+  Production SHA256 parser46fdbfd0/process6b2caacb/broker72e02131,
+  новые tests5dd4f998 EQUAL с frozen исполнителя. Это local proof, не live.
+- Exact upstream tag79b1b666 → commit
+  a956835d020762cb2b570053af06f643a11c0ecc:
+  https://github.com/openai/codex/tree/a956835d020762cb2b570053af06f643a11c0ecc .
+  recompute_token_usage после compaction сбрасывает last breakdown и задаёт
+  оценочный total; fill_to_context_window/append_last_usage тоже не billable
+  arithmetic. RawResponseCompleted несёт тот же numeric usage, который core
+  сохраняет в TokenUsageRecord. ExactCLI0.160 notification не experimental.
+- Новый image/build/activation/native EOF всё ещё NOT RUN. Callback содержит
+  только подтверждённый server-observed subtotal без внешнего quality поля;
+  не выдавать его за полный invoice. Full65/11/13/14/15 OPEN.
+
+## Checkpoint 08.10.2026 00:34 UTC — автономная работа и разделение usage
+
+- Действующая Full65 цель сохранена без дубликата. Подтверждено поручение
+  владельца работать автономно до14:00 Саратов/10:00UTC, сравнивать варианты
+  и выбирать рекомендуемый внутри согласованного scope. На каждом новом
+  экране проверять screenshot/Console/Network и удобство; Chrome page1,
+  чужие вкладки не изменять, обновлять рабочую страницу каждые5мин.
+- Exact history read на849823b1:812 событий,500+312, complete=false/true,
+  последовательности1..812 без пропуска,250 уникальных SUCCEEDED
+  github.repository.content.read. Root FAILED3 и EOF/artifact всё ещё OPEN.
+- Exact upstream rust-v0.160.0 commit
+  a956835d020762cb2b570053af06f643a11c0ecc подтверждает: display tokenUsage
+  после compaction содержит оценку истории/context window, а отдельный
+  rawResponse/completed содержит actual per-response usage. Выбран вариант
+  раздельных display metadata и строгой суммы подтверждённого расхода.
+  Глобальный TokenUsage.Validate не ослабляется. Valid usage=null не считать
+  измеренным нулём; внутренняя UNKNOWN/PARTIAL/COMPLETE сохраняет качество
+  наблюдения. Callback по действующему контракту передаёт только
+  server-observed subtotal, не полный invoice; внешнего completeness поля
+  сейчас нет. Реализация и immutable активация ещё NOT RUN.
+- Nested context layout исправлен в4 frontend файлах: outer deep selectors
+  ограничены прямой собственной modal/body, preview full-width vertical grid.
+  ROOT55/55 unit PASS2.12s, ESLint/Prettier/forced typecheck PASS.
+  Desktop actual screenshot: preview1080x611.56, content1038px, две колонки,
+  статус сверху; прежняя узкая343px колонка устранена. Host/Pod SHA256
+  RunPromptPreview dfeda841 и RunSessionDetailsDialog3250d159 EQUAL.
+  Mobile390x844 actual screenshot PASS: одна колонка348px, document390px,
+  оба dialogs390px/overflow=false, body scroll1037/client664. INPUT copy
+  «Блок3скопирован», Escape закрывает только preview и возвращает focus
+  opener. Console0, история500+312HTTP200; desktop viewport восстановлен.
+- Read-only live idle00:33:17: active runs/claimed leases/open builds/pending
+  admissions/promotions все0, managed admission Jobs/PVC0;11 выбранных
+  Deployments ready1, обе nodes Ready. Это preflight, НЕ новая активация.
+  Full65/11/13/14/15 остаются OPEN; full33 Workflow ещё не запущен.
+- Contract/read adapter GitHub3.1 ограничивают maximum_bytes2048,2049
+  отклоняется до provider call; source1МиБ/native envelope8192Б. Для536156Б
+  нужно минимум262 pages. Большего штатного full-file/download capability
+  нет; raw fallback запрещён. После активации использовать exact commit,
+  expected_sha и returned next_offset_bytes, без обхода бюджетов/authority.
+
+## Checkpoint 08.10.2026 00:25 UTC — точная причина нового отказа
+
+- HEAD/remote/Draft1800 849823b13d1a7a9a472e65136f23041af0ba28a1 EQUAL,
+  чистое дерево до этого checkpoint. ROOT самостоятельно повторил весь
+  gateway Go unit на данном SHA: PASS, HTTP11.420s, websocket1.867s.
+- ONE EOF root run_wFMGTAGfkOhNK9RuY0tbVvvj FAILED3, graph812; обе
+  nodesFAILED и artifactRefs пустые. Последний опубликованный checkpoint:
+  240pages/491466Б, затем ещё9 успешных вызовов в группе. EOF и итоговый
+  native-read-proof.md не получены; не считать полный READ успешным.
+  Repo-owned observer92093 CAPTURED/VERIFIED на exact PodUID/image/session/
+  turn/attempt: stageTERMINAL_WAIT, classPROVIDER, detailNOTIFICATION_INVALID,
+  notificationthread/tokenUsage/updated, reasonTOKEN_USAGE_TOTAL_ARITHMETIC.
+  Сырые логи и ввод не выведены. Это доказанное место отказа; конкретные
+  входные счётчики ещё не захвачены, происхождение mismatch исследуется.
+- Context7 /openai/codex и fetched OpenAI Docs app-server проверены:
+  https://learn.chatgpt.com/docs/app-server . Текущий upstream описывает
+  compaction и usage notifications; main source TokenUsageInfo может
+  заменять display total на context window с нулевым breakdown. ExactCLI0.160
+  source/mapper ещё проверяются; это пока гипотеза текущего числового отказа,
+  не основание отключать глобальный runtimecontract.Validate или придумывать
+  billable counters. Старые FAILED roots не Retry/Resume, дублей нет.
+- Native preview текущего terminal RUN: POST200, Console0; INPUT copy
+  сообщает «Блок 3 скопирован», Escape закрывает только вложенную модалку
+  и возвращает фокус opener. LIVE visual FAIL: modal1080x954, status
+  слева по центру, context343.5625px/одна колонка и пустая правая область.
+  Исправление scoped nested layout выполняется отдельно; preview invalidation
+  на version/attempt не ослаблять. Terminal run правильно показывает FAILED
+  и больше не отображает активную работу после reload.
+- Full65/11/13/14/15 OPEN; следующий полный33 Workflow НЕ запущен до
+  устранения нового runtime blocker. Рабочая Chrome page1 reload00:21:38;
+  чужие вкладки не закрывались и не изменялись.
+
 ## Checkpoint 08.10.2026 00:18 UTC — полный HTTP-контракт истории
 
 - База5f802bb0: живой RunEventPage нарушал действующий OpenAPI required:

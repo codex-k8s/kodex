@@ -1,4 +1,5 @@
 import { renderToString } from "@vue/server-renderer";
+import { compileStyle } from "@vue/compiler-sfc";
 import {
   createRenderer,
   createSSRApp,
@@ -427,7 +428,7 @@ describe("RunSessionDetailsDialog", () => {
 
   it("ограничивает dialog и оставляет единственный scroll переписки на desktop и mobile", () => {
     expect(dialogSource).toMatch(
-      /\.session-details-dialog :deep\(\.modal__body\) \{[^}]*overflow: hidden;/,
+      /\.session-details-dialog > :deep\(\.modal > \.modal__body\) \{[^}]*overflow: hidden;/,
     );
     expect(dialogSource).toMatch(
       /\.session-details__activity \{[^}]*grid-template-rows: auto minmax\(0, 1fr\);[^}]*overflow: hidden;/,
@@ -436,6 +437,28 @@ describe("RunSessionDetailsDialog", () => {
       "grid-template-rows: minmax(0, 0.18fr) minmax(0, 0.82fr)",
     );
     expect(dialogSource).not.toContain("overflow: visible");
+  });
+
+  it("не передаёт высоту и горизонтальный flex внешнего dialog во вложенный preview", () => {
+    const css = dialogSource.match(/<style scoped>([\s\S]*?)<\/style>/)?.[1];
+    expect(css).toBeDefined();
+    const compiled = compileStyle({
+      source: css ?? "",
+      filename: "RunSessionDetailsDialog.vue",
+      id: "data-v-session-layout",
+      scoped: true,
+    });
+    expect(compiled.errors).toEqual([]);
+    const selectors = compiled.code.replace(/\s+/g, " ");
+    expect(selectors).toContain(
+      ".session-details-dialog[data-v-session-layout] > .modal {",
+    );
+    expect(selectors).toContain(
+      ".session-details-dialog[data-v-session-layout] > .modal > .modal__body {",
+    );
+    expect(selectors).not.toMatch(
+      /\.session-details-dialog\[data-v-session-layout\] \.modal(?:__body)? \{/,
+    );
   });
 
   it("ограничивает краткую роль двумя строками и сохраняет компактную mobile сводку", () => {

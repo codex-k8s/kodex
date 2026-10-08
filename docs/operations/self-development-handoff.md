@@ -10,6 +10,54 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 00:38 UTC
+
+На849823b1 frozen8 runner files: exactCLI0.160 display metadata отдельно от
+actual rawResponse/completed numeric subtotal; tuple/dedup/overflow/strict
+Validate сохранены, nullUNKNOWN/PARTIAL, closed internal quality в broker.
+Local full runner unit/vet/build PASS, ROOT targeted0.084s PASS; parser46fdbfd0/
+process6b2caacb/broker72e02131/newtests5dd4f998 EQUAL. Nested preview desktop/
+mobile55tests/visual/copy/focus/scroll/Console/sourcePod PASS. Далее clean
+commit/push Draft1800 → canonical full runner build/import/seed/fresh render/
+quiesce/apply/readback → native recipes/admission/promotion →4ENV →actualACK
+→ONE EOF →full33. Старый rootFAILED3 не Retry/Resume. Full65 OPEN.
+
+## Checkpoint 08.10.2026 00:34 UTC
+
+Full65 ACTIVE до14:00 Саратов/10:00UTC, без дубликата goal. HEAD849823b1,
+dirty ROOT docs +4 frozen frontend files. ROOT55unit/lint/format/typecheck PASS;
+desktop nested preview1080x611/content1038/two-columns screenshot PASS,
+host/Pod dfeda841/3250d159 EQUAL. Mobile390x844 screenshot/one-column348px/
+scroll/overflowfalse/copy/Escape/focus/Console0 PASS. Exact terminal history
+812events/250unique succeeded reads, EOF/artifact отсутствует, rootFAILED3.
+Exact upstream0.160 source подтверждает display estimate после compaction;
+runner executor делает раздельный display/numeric receipt fix. Выбран
+server-observed subtotal +internal completeness, без fake0/full invoice;
+global Validate неизменен. Broker flag сохранение и enum guard разрешены.
+После frozen/tests → clean commit/push Draft1800 → canonical full runner
+build/import/seed/fresh render/quiesce/apply/readback → native SYSTEM/PROJECT
+recipes/admission/promotion → четыре ENV → exact ACK → ONE EOF → full33.
+Idle preflight00:33:17 PASS,11deploymentsReady; это не новая активация.
+11/13/14/15 OPEN, final internalPR не merge/approve. Chrome ownpage1,
+ownerpage4 не трогать; reload5мин и постоянная UX проверка.
+
+## Checkpoint 08.10.2026 00:25 UTC
+
+HEAD/remote/Draft1800 849823b13d1a7a9a472e65136f23041af0ba28a1 EQUAL.
+ROOT full gateway Go unit на этом SHA PASS, HTTP11.420s. ONE EOF root
+run_wFMGTAGfkOhNK9RuY0tbVvvj FAILED3/graph812, обе nodesFAILED,
+artifactRefs пустые; последний commentary240pages/offset491466, ещё9
+успешных вызовов в группе, exact EOF не получен. Observer92093 завершился
+CAPTURED/VERIFIED: TERMINAL_WAIT/PROVIDER/NOTIFICATION_INVALID,
+thread/tokenUsage/updated/TOKEN_USAGE_TOTAL_ARITHMETIC. Не network/authority
+диагноз; точный upstream numeric mismatch пока требует source proof.
+Никакого Retry/Resume/нового full33 до исправления. Два read-only исполнителя
+готовят exactCLI0.160 usage source и code-first runner activation; отдельный
+frontend исполнитель исправляет новый nested context modal layout FAIL.
+Copy INPUT/Escape/focus Console0 PASS, но screenshot узкой343px колонки
+в модалке1080px — FAIL, не выдавать за visualPASS. Full65 OPEN.
+Chrome reload00:21:38, следующая до00:26:38; ownerpage4 не трогать.
+
 ## Checkpoint 08.10.2026 00:18 UTC
 
 Full65 ACTIVE до14:00 Саратов. База5f802bb0; исправлены обязательные

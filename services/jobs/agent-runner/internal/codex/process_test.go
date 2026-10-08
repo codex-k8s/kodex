@@ -589,15 +589,15 @@ func TestAppServerEnvironmentPreservesOnlyRequiredEgressProxy(t *testing.T) {
 func TestTokenUsageNotificationRemainsEnabled(t *testing.T) {
 	t.Parallel()
 	for _, method := range suppressedNotificationMethods {
-		if method == "thread/tokenUsage/updated" {
-			t.Fatal("token usage notification is required for authoritative per-turn accounting")
+		if method == "thread/tokenUsage/updated" || method == "rawResponse/completed" {
+			t.Fatal("usage observation notification is required")
 		}
 	}
 }
 
-func TestRawProviderResponseNotificationsRemainSuppressed(t *testing.T) {
+func TestRawProviderResponseItemsRemainSuppressed(t *testing.T) {
 	t.Parallel()
-	for _, required := range []string{"rawResponseItem/completed", "rawResponse/completed"} {
+	for _, required := range []string{"rawResponseItem/completed"} {
 		if !slices.Contains(suppressedNotificationMethods, required) {
 			t.Fatalf("sensitive provider notification %q is not suppressed", required)
 		}

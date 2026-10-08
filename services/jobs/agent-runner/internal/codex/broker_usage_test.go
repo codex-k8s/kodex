@@ -142,6 +142,9 @@ func TestMeasuredResultUsesOnlyPreviouslyValidatedTurnObservations(t *testing.T)
 		t.Fatal(err)
 	}
 	state.turnID = testTurnID
+	if err := state.notification("rawResponse/completed", responseUsageNotification("response-current", `{"totalTokens":70,"inputTokens":60,"cachedInputTokens":40,"cacheWriteInputTokens":10,"outputTokens":10,"reasoningOutputTokens":3}`)); err != nil {
+		t.Fatal(err)
+	}
 	if err := state.notification("thread/tokenUsage/updated", tokenUsageNotification(testTurnID, 170, 140, 60, 20, 30, 8)); err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +152,7 @@ func TestMeasuredResultUsesOnlyPreviouslyValidatedTurnObservations(t *testing.T)
 	if before.Usage.TotalTokens != 70 || before.Usage.InputTokens != 60 || before.Usage.OutputTokens != 10 || before.Outcome != "" || before.SessionID != "" {
 		t.Fatal("partial turn lost measured delta or invented a terminal")
 	}
-	if err := state.notification("thread/tokenUsage/updated", tokenUsageNotification(testTurnID, 1, 140, 60, 20, 30, 8)); err == nil {
+	if err := state.notification("rawResponse/completed", responseUsageNotification("response-invalid", `{"totalTokens":1,"inputTokens":140,"cachedInputTokens":60,"cacheWriteInputTokens":20,"outputTokens":30,"reasoningOutputTokens":8}`)); err == nil {
 		t.Fatal("malformed later observation was accepted")
 	}
 	if !reflect.DeepEqual(state.measuredResult(), before) {

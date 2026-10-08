@@ -20,6 +20,7 @@ import { createI18n } from "vue-i18n";
 const api = vi.hoisted(() => ({ loadRunPromptPreview: vi.fn() }));
 vi.mock("./run-prompt-preview", () => api);
 import RunPromptPreview from "./RunPromptPreview.vue";
+import previewSource from "./RunPromptPreview.vue?raw";
 
 const preview: PromptTemplatePreview = {
   safePreview: "[protected input]",
@@ -183,8 +184,15 @@ describe("RunPromptPreview", () => {
     expect(html).toMatch(/class="[^"]*\bmodal--xl\b[^"]*"/u);
     expect(html).toContain('role="dialog"');
     expect(html).toContain("Контекст исполнения");
+    expect(html).toContain('class="run-prompt-preview__content"');
     expect(html).toContain('class="prompt-context-details"');
     expect(html).toContain("preview_fixture");
+  });
+
+  it("располагает статус над адаптивным контекстом во всю доступную ширину", () => {
+    expect(previewSource).toMatch(
+      /\.run-prompt-preview__content \{[^}]*display: grid;[^}]*width: 100%;[^}]*min-width: 0;[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*align-items: start;/,
+    );
   });
 
   it("закрывает полученный preview и открывает новый только по явному запросу", async () => {

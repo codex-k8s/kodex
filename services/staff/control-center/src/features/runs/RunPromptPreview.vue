@@ -91,8 +91,21 @@ async function refresh(): Promise<void> {
       @close="closePreview"
       @keydown.stop
     >
-      <StatusBadge :state="preview.complete ? 'AVAILABLE' : 'DRAFT'" />
-      <PromptContextDetails :preview="preview" />
+      <div class="run-prompt-preview__content">
+        <StatusBadge :state="preview.complete ? 'AVAILABLE' : 'DRAFT'" />
+        <PromptContextDetails :preview="preview" />
+      </div>
     </ModalDialog>
   </div>
 </template>
+
+<style scoped>
+.run-prompt-preview__content {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+</style>

@@ -2,10 +2,12 @@ package codex
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -18,14 +20,56 @@ import (
 )
 
 const (
-	maximumJSONLLineBytes  = 1 << 20
-	maximumJSONLMessages   = 100_000
-	maximumFinalBytes      = 480_000
-	maximumDiagnosticBytes = 16 << 10
+	maximumJSONLLineBytes   = 1 << 20
+	maximumJSONLMessages    = 100_000
+	maximumFinalBytes       = 480_000
+	maximumDiagnosticBytes  = 16 << 10
+	maximumResponseReceipts = 10_000
 )
 
 var nativeToolCallIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$`)
 var nativeSafeLabelPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$`)
+
+// Полнота относится только к наблюдениям этого процесса; callback передаёт
+// подтверждённый subtotal, а не счёт провайдера за весь ход.
+type UsageCompleteness uint8
+
+const (
+	UsageUnknown UsageCompleteness = iota
+	UsagePartial
+	UsageComplete
+)
+
+func (quality UsageCompleteness) MarshalJSON() ([]byte, error) {
+	switch quality {
+	case UsageUnknown:
+		return []byte(`"UNKNOWN"`), nil
+	case UsagePartial:
+		return []byte(`"PARTIAL"`), nil
+	case UsageComplete:
+		return []byte(`"COMPLETE"`), nil
+	default:
+		return nil, errors.New("Codex usage completeness is invalid")
+	}
+}
+
+func (quality *UsageCompleteness) UnmarshalJSON(raw []byte) error {
+	var value string
+	if strictDecode(raw, &value) != nil {
+		return errors.New("Codex usage completeness is invalid")
+	}
+	switch value {
+	case "UNKNOWN":
+		*quality = UsageUnknown
+	case "PARTIAL":
+		*quality = UsagePartial
+	case "COMPLETE":
+		*quality = UsageComplete
+	default:
+		return errors.New("Codex usage completeness is invalid")
+	}
+	return nil
+}
 
 type Result struct {
 	SessionID           string
@@ -37,6 +81,7 @@ type Result struct {
 	ArchiveSHA256       string
 	ArchiveSizeBytes    int64
 	Usage               runtimecontract.TokenUsage
+	UsageCompleteness   UsageCompleteness                `json:"UsageCompleteness,omitempty"`
 	ToolCalls           []runtimecontract.NativeToolCall `json:"ToolCalls,omitempty"`
 	rolloutCapture      *rolloutCaptureProof
 }
@@ -164,29 +209,32 @@ func decodeRPCError(raw json.RawMessage) (int64, error) {
 }
 
 type protocolState struct {
-	expectedSessionID string
-	threadID          string
-	threadPath        string
-	requiredMCPThread string
-	requiredMCPStatus string
-	requiredMCPReady  bool
-	turnID            string
-	turnStarted       uint32
-	terminals         uint32
-	result            Result
-	latestUsage       runtimecontract.TokenUsage
-	usageBaseline     runtimecontract.TokenUsage
-	baselineCaptured  bool
-	agentMessages     map[string]agentMessage
-	toolCalls         map[string]runtimecontract.NativeToolCall
-	toolCallOrder     []string
-	itemStartedAtMS   map[string]int64
-	workspaceRoot     string
-	finalID           string
-	fallbackID        string
-	onActivity        func(runtimecontract.RuntimeActivity) error
-	activityErr       error
-	startedToolCalls  map[string]runtimecontract.NativeToolCall
+	expectedSessionID    string
+	threadID             string
+	threadPath           string
+	requiredMCPThread    string
+	requiredMCPStatus    string
+	requiredMCPReady     bool
+	turnID               string
+	turnStarted          uint32
+	terminals            uint32
+	result               Result
+	latestDisplayUsage   providerDisplayUsage
+	measuredUsage        runtimecontract.TokenUsage
+	responseReceipts     map[string][sha256.Size]byte
+	missingResponseUsage bool
+	measuredResponses    uint32
+	baselineCaptured     bool
+	agentMessages        map[string]agentMessage
+	toolCalls            map[string]runtimecontract.NativeToolCall
+	toolCallOrder        []string
+	itemStartedAtMS      map[string]int64
+	workspaceRoot        string
+	finalID              string
+	fallbackID           string
+	onActivity           func(runtimecontract.RuntimeActivity) error
+	activityErr          error
+	startedToolCalls     map[string]runtimecontract.NativeToolCall
 }
 
 type agentMessage struct {
@@ -196,14 +244,14 @@ type agentMessage struct {
 
 func newProtocolState(expectedSessionID string) *protocolState {
 	return &protocolState{expectedSessionID: expectedSessionID, agentMessages: make(map[string]agentMessage),
-		toolCalls: make(map[string]runtimecontract.NativeToolCall), itemStartedAtMS: make(map[string]int64), startedToolCalls: make(map[string]runtimecontract.NativeToolCall)}
+		responseReceipts: make(map[string][sha256.Size]byte),
+		toolCalls:        make(map[string]runtimecontract.NativeToolCall), itemStartedAtMS: make(map[string]int64), startedToolCalls: make(map[string]runtimecontract.NativeToolCall)}
 }
 
 func (state *protocolState) captureUsageBaseline() error {
-	if state.baselineCaptured || state.turnID != "" || state.latestUsage.Validate() != nil {
+	if state.baselineCaptured || state.turnID != "" {
 		return errors.New("Codex app-server token usage baseline is invalid")
 	}
-	state.usageBaseline = state.latestUsage
 	state.baselineCaptured = true
 	return nil
 }
@@ -481,7 +529,10 @@ func (state *protocolState) notification(method string, raw json.RawMessage) err
 		if err != nil {
 			return err
 		}
-		state.latestUsage = usage
+		state.latestDisplayUsage = usage
+	case "rawResponse/completed":
+		fields, _ := decodeObject(raw, notificationSchema(method))
+		return state.observeResponseUsage(fields)
 	case "item/started", "item/completed":
 		fields, _ := decodeObject(raw, notificationSchema(method))
 		if err := state.validateTurnTuple(fields); err != nil {
@@ -700,6 +751,9 @@ const (
 	tokenUsageCacheInputBound      tokenUsageFailureReason = "TOKEN_USAGE_CACHE_INPUT_BOUND"
 	tokenUsageReasoningOutputBound tokenUsageFailureReason = "TOKEN_USAGE_REASONING_OUTPUT_BOUND"
 	tokenUsageLastExceedsTotal     tokenUsageFailureReason = "TOKEN_USAGE_LAST_EXCEEDS_TOTAL"
+	tokenUsageReceiptConflict      tokenUsageFailureReason = "TOKEN_USAGE_RECEIPT_CONFLICT"
+	tokenUsageReceiptLimit         tokenUsageFailureReason = "TOKEN_USAGE_RECEIPT_LIMIT"
+	tokenUsageOverflow             tokenUsageFailureReason = "TOKEN_USAGE_OVERFLOW"
 )
 
 // Ошибка содержит только закрытую причину, без поля, значения или исходного JSON.
@@ -711,68 +765,93 @@ func safeTokenUsageFailureReason(reason tokenUsageFailureReason) string {
 	switch reason {
 	case tokenUsageStructure, tokenUsageRequiredMissing, tokenUsageRequiredNull, tokenUsageRequiredType,
 		tokenUsageOptionalNull, tokenUsageOptionalType, tokenUsageNegative, tokenUsageTotalArithmetic,
-		tokenUsageCacheInputBound, tokenUsageReasoningOutputBound, tokenUsageLastExceedsTotal:
+		tokenUsageCacheInputBound, tokenUsageReasoningOutputBound, tokenUsageLastExceedsTotal,
+		tokenUsageReceiptConflict, tokenUsageReceiptLimit, tokenUsageOverflow:
 		return string(reason)
 	default:
 		return "UNKNOWN"
 	}
 }
 
-func parseTokenUsage(raw json.RawMessage) (runtimecontract.TokenUsage, error) {
+// Display counters CLI включают оценки истории и заполнения context window.
+// Их арифметика не является арифметикой измеренного billable расхода.
+type providerUsageCounters runtimecontract.TokenUsage
+
+type providerDisplayUsage struct {
+	Total, Last        providerUsageCounters
+	ModelContextWindow int64
+}
+
+func parseTokenUsage(raw json.RawMessage) (providerDisplayUsage, error) {
 	fields, err := decodeObject(raw, schema(nil, "last", "modelContextWindow", "total"))
 	if err != nil {
-		return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageStructure}
+		return providerDisplayUsage{}, &tokenUsageFailure{tokenUsageStructure}
 	}
 	for _, field := range []string{"last", "total"} {
 		value, present := fields[field]
 		if !present {
-			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageRequiredMissing}
+			return providerDisplayUsage{}, &tokenUsageFailure{tokenUsageRequiredMissing}
 		}
 		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageRequiredNull}
+			return providerDisplayUsage{}, &tokenUsageFailure{tokenUsageRequiredNull}
 		}
 	}
 	var contextWindow int64
 	if rawWindow, present := fields["modelContextWindow"]; present && !bytes.Equal(rawWindow, []byte("null")) {
 		if strictDecode(rawWindow, &contextWindow) != nil {
-			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageOptionalType}
+			return providerDisplayUsage{}, &tokenUsageFailure{tokenUsageOptionalType}
 		}
 		if contextWindow < 0 {
-			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageNegative}
+			return providerDisplayUsage{}, &tokenUsageFailure{tokenUsageNegative}
 		}
 	}
-	total, err := parseTokenUsageBreakdown(fields["total"], contextWindow)
+	total, err := decodeProviderUsageBreakdown(fields["total"], contextWindow)
 	if err != nil {
-		return runtimecontract.TokenUsage{}, err
+		return providerDisplayUsage{}, err
 	}
-	last, err := parseTokenUsageBreakdown(fields["last"], contextWindow)
+	last, err := decodeProviderUsageBreakdown(fields["last"], contextWindow)
 	if err != nil {
-		return runtimecontract.TokenUsage{}, err
+		return providerDisplayUsage{}, err
 	}
-	if last.TotalTokens > total.TotalTokens || last.InputTokens > total.InputTokens ||
-		last.CachedInputTokens > total.CachedInputTokens || last.CacheWriteInputTokens > total.CacheWriteInputTokens ||
-		last.OutputTokens > total.OutputTokens || last.ReasoningOutputTokens > total.ReasoningOutputTokens {
-		return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageLastExceedsTotal}
+	if last.InputTokens > total.InputTokens || last.CachedInputTokens > total.CachedInputTokens ||
+		last.CacheWriteInputTokens > total.CacheWriteInputTokens || last.OutputTokens > total.OutputTokens ||
+		last.ReasoningOutputTokens > total.ReasoningOutputTokens {
+		return providerDisplayUsage{}, &tokenUsageFailure{tokenUsageLastExceedsTotal}
 	}
-	return total, nil
+	return providerDisplayUsage{Total: total, Last: last, ModelContextWindow: contextWindow}, nil
 }
 
 func parseTokenUsageBreakdown(raw json.RawMessage, contextWindow int64) (runtimecontract.TokenUsage, error) {
+	counters, err := decodeProviderUsageBreakdown(raw, contextWindow)
+	if err != nil {
+		return runtimecontract.TokenUsage{}, err
+	}
+	usage := runtimecontract.TokenUsage(counters)
+	if usage.InputTokens > math.MaxInt64-usage.OutputTokens {
+		return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageOverflow}
+	}
+	if usage.Validate() != nil {
+		return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageTotalArithmetic}
+	}
+	return usage, nil
+}
+
+func decodeProviderUsageBreakdown(raw json.RawMessage, contextWindow int64) (providerUsageCounters, error) {
 	fields, err := decodeObject(raw, schema(
 		nil,
 		"cacheWriteInputTokens", "cachedInputTokens", "inputTokens", "outputTokens", "reasoningOutputTokens", "totalTokens",
 	))
 	if err != nil {
-		return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageStructure}
+		return providerUsageCounters{}, &tokenUsageFailure{tokenUsageStructure}
 	}
-	usage := runtimecontract.TokenUsage{ModelContextWindow: contextWindow}
+	usage := providerUsageCounters{ModelContextWindow: contextWindow}
 	// В schema rust-v0.160.0 поле необязательно с default 0, но null не разрешён.
 	if cacheWrite, present := fields["cacheWriteInputTokens"]; present {
 		if bytes.Equal(bytes.TrimSpace(cacheWrite), []byte("null")) {
-			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageOptionalNull}
+			return providerUsageCounters{}, &tokenUsageFailure{tokenUsageOptionalNull}
 		}
 		if strictDecode(cacheWrite, &usage.CacheWriteInputTokens) != nil {
-			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageOptionalType}
+			return providerUsageCounters{}, &tokenUsageFailure{tokenUsageOptionalType}
 		}
 	}
 	values := []struct {
@@ -787,53 +866,120 @@ func parseTokenUsageBreakdown(raw json.RawMessage, contextWindow int64) (runtime
 	}
 	for _, value := range values {
 		if len(value.raw) == 0 {
-			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageRequiredMissing}
+			return providerUsageCounters{}, &tokenUsageFailure{tokenUsageRequiredMissing}
 		}
 		if bytes.Equal(bytes.TrimSpace(value.raw), []byte("null")) {
-			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageRequiredNull}
+			return providerUsageCounters{}, &tokenUsageFailure{tokenUsageRequiredNull}
 		}
 		if strictDecode(value.raw, value.target) != nil {
-			return runtimecontract.TokenUsage{}, &tokenUsageFailure{tokenUsageRequiredType}
+			return providerUsageCounters{}, &tokenUsageFailure{tokenUsageRequiredType}
 		}
 	}
-	if usage.Validate() != nil {
-		reason := tokenUsageTotalArithmetic
-		switch {
-		case usage.TotalTokens < 0 || usage.InputTokens < 0 || usage.CachedInputTokens < 0 || usage.CacheWriteInputTokens < 0 || usage.OutputTokens < 0 || usage.ReasoningOutputTokens < 0 || usage.ModelContextWindow < 0:
-			reason = tokenUsageNegative
-		case usage.TotalTokens != usage.InputTokens+usage.OutputTokens:
-			reason = tokenUsageTotalArithmetic
-		case usage.CachedInputTokens > usage.InputTokens || usage.CacheWriteInputTokens > usage.InputTokens:
-			reason = tokenUsageCacheInputBound
-		case usage.ReasoningOutputTokens > usage.OutputTokens:
-			reason = tokenUsageReasoningOutputBound
-		}
-		return runtimecontract.TokenUsage{}, &tokenUsageFailure{reason}
+	if usage.TotalTokens < 0 || usage.InputTokens < 0 || usage.CachedInputTokens < 0 || usage.CacheWriteInputTokens < 0 || usage.OutputTokens < 0 || usage.ReasoningOutputTokens < 0 || usage.ModelContextWindow < 0 {
+		return providerUsageCounters{}, &tokenUsageFailure{tokenUsageNegative}
+	}
+	if usage.CachedInputTokens > usage.InputTokens || usage.CacheWriteInputTokens > usage.InputTokens {
+		return providerUsageCounters{}, &tokenUsageFailure{tokenUsageCacheInputBound}
+	}
+	if usage.ReasoningOutputTokens > usage.OutputTokens {
+		return providerUsageCounters{}, &tokenUsageFailure{tokenUsageReasoningOutputBound}
 	}
 	return usage, nil
 }
 
-func tokenUsageDelta(final, baseline runtimecontract.TokenUsage) (runtimecontract.TokenUsage, error) {
-	delta := runtimecontract.TokenUsage{
-		TotalTokens:           nonNegativeDelta(final.TotalTokens, baseline.TotalTokens),
-		InputTokens:           nonNegativeDelta(final.InputTokens, baseline.InputTokens),
-		CachedInputTokens:     nonNegativeDelta(final.CachedInputTokens, baseline.CachedInputTokens),
-		CacheWriteInputTokens: nonNegativeDelta(final.CacheWriteInputTokens, baseline.CacheWriteInputTokens),
-		OutputTokens:          nonNegativeDelta(final.OutputTokens, baseline.OutputTokens),
-		ReasoningOutputTokens: nonNegativeDelta(final.ReasoningOutputTokens, baseline.ReasoningOutputTokens),
-		ModelContextWindow:    final.ModelContextWindow,
+func (state *protocolState) observeResponseUsage(fields map[string]json.RawMessage) error {
+	if state.turnID == "" || state.terminals != 0 || state.validateTurnTuple(fields) != nil {
+		return errors.New("Codex app-server response usage tuple is invalid")
 	}
-	if delta.Validate() != nil {
-		return runtimecontract.TokenUsage{}, errors.New("Codex app-server token usage delta is invalid")
+	responseID, err := decodeBoundedString(fields["responseId"], 256)
+	if err != nil {
+		return &tokenUsageFailure{tokenUsageRequiredType}
 	}
-	return delta, nil
+	metadata := fields["usageMetadata"]
+	if !bytes.Equal(bytes.TrimSpace(metadata), []byte("null")) {
+		values, err := decodeObject(metadata, schema(nil, "amount", "metadata"))
+		if err != nil || rejectDuplicateJSONKeys(metadata) != nil {
+			return &tokenUsageFailure{tokenUsageStructure}
+		}
+		if amount, present := values["amount"]; present && !bytes.Equal(bytes.TrimSpace(amount), []byte("null")) {
+			var value string
+			if strictDecode(amount, &value) != nil || len(value) > maximumDiagnosticBytes || !utf8.ValidString(value) {
+				return &tokenUsageFailure{tokenUsageOptionalType}
+			}
+		}
+	}
+	missing := bytes.Equal(bytes.TrimSpace(fields["usage"]), []byte("null"))
+	var observed runtimecontract.TokenUsage
+	if !missing {
+		observed, err = parseTokenUsageBreakdown(fields["usage"], 0)
+		if err != nil {
+			return err
+		}
+	}
+	// Только digest семантического payload хранится для replay fence. Произвольные
+	// usage metadata не становятся ни результатом, ни диагностикой, ни биллингом.
+	encoded, err := json.Marshal(fields)
+	if err != nil {
+		return &tokenUsageFailure{tokenUsageStructure}
+	}
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.UseNumber()
+	var payload any
+	if decoder.Decode(&payload) != nil {
+		return &tokenUsageFailure{tokenUsageStructure}
+	}
+	canonical, err := json.Marshal(payload)
+	if err != nil {
+		return &tokenUsageFailure{tokenUsageStructure}
+	}
+	digest := sha256.Sum256(canonical)
+	if previous, duplicate := state.responseReceipts[responseID]; duplicate {
+		if previous != digest {
+			return &tokenUsageFailure{tokenUsageReceiptConflict}
+		}
+		return nil
+	}
+	if len(state.responseReceipts) >= maximumResponseReceipts {
+		return &tokenUsageFailure{tokenUsageReceiptLimit}
+	}
+	next := state.measuredUsage
+	if !missing {
+		pairs := []struct {
+			target *int64
+			value  int64
+		}{
+			{&next.TotalTokens, observed.TotalTokens}, {&next.InputTokens, observed.InputTokens},
+			{&next.CachedInputTokens, observed.CachedInputTokens}, {&next.CacheWriteInputTokens, observed.CacheWriteInputTokens},
+			{&next.OutputTokens, observed.OutputTokens}, {&next.ReasoningOutputTokens, observed.ReasoningOutputTokens},
+		}
+		for _, pair := range pairs {
+			if *pair.target > math.MaxInt64-pair.value {
+				return &tokenUsageFailure{tokenUsageOverflow}
+			}
+			*pair.target += pair.value
+		}
+		if next.Validate() != nil {
+			return &tokenUsageFailure{tokenUsageTotalArithmetic}
+		}
+	}
+	state.responseReceipts[responseID] = digest
+	state.measuredUsage = next
+	if missing {
+		state.missingResponseUsage = true
+	} else {
+		state.measuredResponses++
+	}
+	return nil
 }
 
-func nonNegativeDelta(final, baseline int64) int64 {
-	if final <= baseline {
-		return 0
+func (state *protocolState) usageCompleteness() UsageCompleteness {
+	if state.measuredResponses == 0 {
+		return UsageUnknown
 	}
-	return final - baseline
+	if state.terminals != 1 || state.missingResponseUsage {
+		return UsagePartial
+	}
+	return UsageComplete
 }
 
 func (state *protocolState) validateTurnTuple(fields map[string]json.RawMessage) error {
@@ -1621,11 +1767,9 @@ func (state *protocolState) terminalResult() (Result, error) {
 	if state.terminals != 1 || state.result.SessionID == "" || state.result.Outcome == "" || state.threadPath == "" || !state.baselineCaptured {
 		return Result{}, errors.New("Codex app-server lifecycle is incomplete")
 	}
-	usage, err := tokenUsageDelta(state.latestUsage, state.usageBaseline)
-	if err != nil {
-		return Result{}, err
-	}
-	state.result.Usage = usage
+	state.result.Usage = state.measuredUsage
+	state.result.Usage.ModelContextWindow = state.latestDisplayUsage.ModelContextWindow
+	state.result.UsageCompleteness = state.usageCompleteness()
 	state.result.ToolCalls = make([]runtimecontract.NativeToolCall, 0, len(state.toolCallOrder))
 	for _, callID := range state.toolCallOrder {
 		state.result.ToolCalls = append(state.result.ToolCalls, state.toolCalls[callID])
@@ -1639,11 +1783,9 @@ func (state *protocolState) measuredResult() Result {
 	if !state.baselineCaptured || state.turnID == "" {
 		return Result{}
 	}
-	usage, err := tokenUsageDelta(state.latestUsage, state.usageBaseline)
-	if err != nil {
-		return Result{}
-	}
-	result := Result{Usage: usage}
+	usage := state.measuredUsage
+	usage.ModelContextWindow = state.latestDisplayUsage.ModelContextWindow
+	result := Result{Usage: usage, UsageCompleteness: state.usageCompleteness()}
 	for _, callID := range state.toolCallOrder {
 		call := state.toolCalls[callID]
 		if call.Validate() == nil {
