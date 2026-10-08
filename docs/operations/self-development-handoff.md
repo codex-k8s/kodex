@@ -5,10 +5,28 @@ type: operations
 status: approved
 owner: manager
 version: 1.1.0
-updated: 2026-10-07
+updated: 2026-10-08
 ---
 
 # Текущее состояние
+
+## Checkpoint 08.10.2026 00:18 UTC
+
+Full65 ACTIVE до14:00 Саратов. База5f802bb0; исправлены обязательные
+complete=false/currentSequence=0 в HTTP RunEventPage, без глобального
+EmitUnpopulated и изменения optional fields. Регрессионный исходный FAIL
+воспроизведён; адресные ROOT Go tests0.090s PASS; полный gateway unit/vet/build
+PASS исполнителя. ROOT independent binary и serving /proc/369/exe SHA256
+fb6d0885cad8aa3a2fb34b1123cb679b0359874e6477ad36e45ace71b6b5644f EQUAL.
+Chrome reload00:17: HTTP200, страницы1..500/501..726, complete=false/true,
+без пропусков; screenshot/scroll/Console0/overflowfalse PASS. Native Manager
+RUNNING2, подтверждены220pages/offset450508; EOF ещё OPEN. Одна ошибка
+сокращённого SHA после141pages закрыто отклонена, Manager исправил запрос
+и продолжил с offset288734 без дубликата запуска. Observer92093 активен.
+Mobile390x844 и история/realtime72unit ранее PASS на5f802bb0. После actual
+EOF/artifact proof → ONE prepared33-step Workflow.11/13/14/15 OPEN.
+Рабочая Chromepage1; ownerpage4 не трогать, reload5мин. Final internalPR
+не merge/approve; host Draft1800 фиксируется отдельно.
 
 ## Checkpoint 08.10.2026 00:00 UTC
 

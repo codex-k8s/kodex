@@ -5,10 +5,43 @@ type: operations
 status: approved
 owner: manager
 version: 1.1.0
-updated: 2026-10-07
+updated: 2026-10-08
 ---
 
 # Цель и источники
+
+## Checkpoint 08.10.2026 00:18 UTC — полный HTTP-контракт истории
+
+- База5f802bb0: живой RunEventPage нарушал действующий OpenAPI required:
+  protojson опускал complete=false и currentSequence=0. Исправлена только
+  descriptor-specific нормализация ListRunEventsResponse; optional поля других
+  ответов, authority и пагинация не изменены. Старый код воспроизвёл FAIL
+  двух новых regressions; новый messageMap и настоящий HTTP→RPC stub path
+  проверяют partial/final/empty pages, обязательные ключи и cursor.
+- ROOT адресные Go1.26.6 tests PASS0.090s. Исполнитель: полный gateway
+  go test ./... PASS (HTTP10.842s), vet/build/gofmt/diff-check PASS.
+  ROOT отдельно собрал CGO_ENABLED=0/GOWORK=off/trimpath/buildvcs=false;
+  host binary и обслуживаемый /proc/369/exe имеют одинаковый SHA256
+  fb6d0885cad8aa3a2fb34b1123cb679b0359874e6477ad36e45ace71b6b5644f.
+  Host/Pod server.go fba2ea9ca02b2409669133643b7947bdec78075ad8eee34b9a24e9e89784e675
+  EQUAL. Context7 /protocolbuffers/protobuf-go подтвердил default omission;
+  глобальное EmitUnpopulated не включалось.
+- Chrome fresh reload00:17: history GET200, 500+226 events, sequence1..726
+  без пропусков, complete=false первой страницы/true последней. Native UI
+  восстанавливает предыдущие commentary и tools, realtime продолжает историю;
+  Console error/warn0. Desktop screenshot PASS: modal1080x954,
+  log639px/scroll3407px/bottom0, horizontal overflow=false. Ранее на5f802bb0
+  ROOT platform/store+realtime72/72 PASS1.54s, мобильный390x844 screenshot
+  PASS: modal390x742.7, log314px/scroll4205px/bottom0, подписи переносятся,
+  horizontal overflow=false. Это локальное QA, не release acceptance.
+- ONE run_wFMGTAGfkOhNK9RuY0tbVvvj RUNNING2: 220 успешных страниц,
+  offset450508 из536156Б, EOF ещё false. После141pages одна попытка с
+  ошибочно сокращённым commit SHA отклонена INTEGRATION_REQUEST_REJECTED;
+  Manager явно сообщил ошибку и продолжил с последнего подтверждённого
+  offset288734 с полным SHA. Не скрывать этот отказ и не считать его
+  authority failure. Observer92093 активен; повторного run/retry нет.
+  Full65/11/13/14/15 OPEN, следующим остаётся actual EOF/file proof и ONE
+  полный33-step Workflow силами внутренней команды.
 
 ## Checkpoint 08.10.2026 00:00 UTC — черновики и подписи инструментов
 
