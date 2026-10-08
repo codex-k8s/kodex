@@ -2,6 +2,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  Run,
   RunEvent,
   RunGraph,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -194,7 +195,44 @@ function runSnapshot(
     type: "RUN_GRAPH_SNAPSHOT",
     cursor: sequence,
     snapshot: graph(runRef, sequence),
+    runs: [fullRun(runRef, sequence)],
   });
+}
+
+function fullRun(ref: string, sequence: number): Run {
+  return {
+    ...event(ref, sequence).run,
+    ref,
+    version: sequence,
+    rootRunRef: ref,
+    graphRevision: sequence,
+    lastEventSequence: sequence,
+    projectRef: "project_realtime01",
+    sessionRef: "session_realtime01",
+    sessionReadiness: {
+      sessionRef: "session_realtime01",
+      storageState: "LIVE",
+      reason: "NO_SESSION_BLOCKER",
+    },
+    source: "CONTROL_CENTER",
+    target: {
+      type: "AGENT",
+      ref: "agent_realtime01",
+      displayName: "Сотрудник",
+      version: 1,
+    },
+    title: "Синтетический запуск",
+    titleSource: "SERVER_DEFAULT",
+    activitySummary: "",
+    initiator: { ref: "actor_realtime01", displayName: "Владелец" },
+    attempt: 1,
+    createdAt: "2026-08-23T00:00:03Z",
+    artifactRefs: [],
+    gateRefs: [],
+    nextActions: [],
+    state: "RUNNING",
+    usage: event(ref, sequence).run.usage,
+  };
 }
 
 describe("browser-session realtime multiplexer", () => {
@@ -1001,7 +1039,7 @@ describe("browser-session realtime multiplexer", () => {
     store.closeAll();
   });
 
-  it("не принимает snapshot без непрерывной авторитетной истории", async () => {
+  it("отклоняет неполный snapshot без обязательного runs без HTTP fallback", async () => {
     const store = useRealtimeStore();
     store.openRun("run_realtime01");
     await flushProcessing();
@@ -1017,14 +1055,9 @@ describe("browser-session realtime multiplexer", () => {
     );
     await flushProcessing();
 
-    expect(socket.readyState).toBe(FakeWebSocket.OPEN);
-    expect(store.state.run_realtime01).toMatchObject({
-      state: "recovering",
-      attempt: 1,
-    });
-    expect(
-      [...scheduled.values()].filter((timer) => timer.delay === 1_000),
-    ).toHaveLength(1);
+    expect(socket.closeCode).toBe(1002);
+    expect(socket.closeReason).toBe("INVALID_SESSION_ENVELOPE");
+    expect(usePlatformStore().loadRun).not.toHaveBeenCalled();
     store.closeAll();
   });
 

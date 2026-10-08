@@ -1436,6 +1436,14 @@ func (repository *Repository) readRunWithIncidents(ctx context.Context, runner q
 }
 
 func (repository *Repository) GetRunGraph(ctx context.Context, principal value.Principal, ref string) (entity.Run, entity.RunGraph, error) {
+	return repository.getRunGraph(ctx, principal, ref, false)
+}
+
+func (repository *Repository) GetRunGraphSnapshot(ctx context.Context, principal value.Principal, ref string) (entity.Run, entity.RunGraph, error) {
+	return repository.getRunGraph(ctx, principal, ref, true)
+}
+
+func (repository *Repository) getRunGraph(ctx context.Context, principal value.Principal, ref string, includeRuns bool) (entity.Run, entity.RunGraph, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, err
@@ -1510,6 +1518,20 @@ func (repository *Repository) GetRunGraph(ctx context.Context, principal value.P
 	}
 	if err := projectArtifactResults(ctx, tx, scope, &command.Result{Graph: &graph}); err != nil {
 		return entity.Run{}, entity.RunGraph{}, err
+	}
+	if includeRuns {
+		if run.Ref != graph.RunRef {
+			return entity.Run{}, entity.RunGraph{}, errs.ErrInvalid
+		}
+		if err := repository.attachGraphRuns(ctx, tx, scope, &graph); err != nil {
+			return entity.Run{}, entity.RunGraph{}, err
+		}
+		for _, item := range graph.Runs {
+			if item.Ref == graph.RunRef {
+				run = item
+				break
+			}
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable

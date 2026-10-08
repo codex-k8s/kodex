@@ -328,11 +328,19 @@ func (server *Server) GetRunGraph(ctx context.Context, request *controlplanev1.G
 	if err != nil {
 		return nil, err
 	}
-	run, graph, err := server.service.GetRunGraph(ctx, p, request.GetRunRef())
+	readGraph := server.service.GetRunGraph
+	if request.GetIncludeRunSnapshots() {
+		readGraph = server.service.GetRunGraphSnapshot
+	}
+	run, graph, err := readGraph(ctx, p, request.GetRunRef())
 	if err != nil {
 		return nil, transportError(err)
 	}
-	return &controlplanev1.GetRunGraphResponse{Run: castRun(run), Graph: castGraph(graph)}, nil
+	runs := make([]*controlplanev1.Run, 0, len(graph.Runs))
+	for _, item := range graph.Runs {
+		runs = append(runs, castRun(item))
+	}
+	return &controlplanev1.GetRunGraphResponse{Run: castRun(run), Graph: castGraph(graph), Runs: runs}, nil
 }
 
 func (server *Server) ListRunEvents(ctx context.Context, request *controlplanev1.ListRunEventsRequest) (*controlplanev1.ListRunEventsResponse, error) {

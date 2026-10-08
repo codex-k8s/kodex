@@ -52,11 +52,30 @@ func (repository *Repository) ClaimSessionArchiveTasks(ctx context.Context, prin
 		return nil, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, querySessionArchiveMaterializeTasks, pgx.StrictNamedArgs{
+	changedRows, err := tx.Query(ctx, querySessionArchiveMaterializeTasks, pgx.StrictNamedArgs{
 		"idle_seconds": int64(sessionArchiveIdleAfter / time.Second), "retention_seconds": int64(sessionArchiveRetention / time.Second),
 		"maximum_attempts": sessionArchiveMaxAttempts,
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, fmt.Errorf("materialize session archive tasks: %w", errs.ErrUnavailable)
+	}
+	var changedSessions []string
+	for changedRows.Next() {
+		var sessionID string
+		if err := changedRows.Scan(&sessionID); err != nil {
+			changedRows.Close()
+			return nil, errs.ErrUnavailable
+		}
+		changedSessions = append(changedSessions, sessionID)
+	}
+	changedRows.Close()
+	if changedRows.Err() != nil {
+		return nil, errs.ErrUnavailable
+	}
+	for _, sessionID := range changedSessions {
+		if err := repository.emitSessionStorageRunChanged(ctx, tx, scope, sessionID); err != nil {
+			return nil, err
+		}
 	}
 	rows, err := tx.Query(ctx, querySessionArchiveSelectClaimableTasks, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "limit": limit})
 	if err != nil {
@@ -120,6 +139,11 @@ func (repository *Repository) ClaimSessionArchiveTasks(ctx context.Context, prin
 			"fence_digest": hex.EncodeToString(fenceDigest[:]), "lease_expires_at": expiresAt,
 		}).Scan(&attempt, &generation); err != nil {
 			return nil, errs.ErrConflict
+		}
+		if candidate.kind != "DELETE_OBJECT" {
+			if err := repository.emitSessionStorageRunChanged(ctx, tx, scope, candidate.sessionRef); err != nil {
+				return nil, err
+			}
 		}
 		pvcName, err := runtimecontract.SessionPVCName(candidate.sessionRef)
 		if err != nil {

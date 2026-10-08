@@ -97,6 +97,11 @@ operations:
       platformCursor: controlplane.v1.PlatformQueryService.GetPlatformEventCursor
       platformSnapshot: CONTROL_PLANE_TYPED_QUERY_FOR_EXACT_RESOURCE_KIND_AND_SCOPE
       runEligibilityAndSnapshot: controlplane.v1.PlatformQueryService.GetRunGraph
+      runSnapshotSelector: include_run_snapshots=true
+      runSnapshotTransaction: OWNER_REPEATABLE_READ_GRAPH_RUNS_AND_SESSION_STORAGE
+      runWakeFanout: ONLY_REGISTERED_ROOTS_MAXIMUM_32
+      runSnapshotMembers: UNIQUE_GRAPH_NODE_RUN_REF_AND_CHILD_RUN_REFS_MAXIMUM_128
+      runSnapshotFailure: RUN_UNAVAILABLE_AND_EXACT_KNOWN_ROOT_CHILD_CACHE_INVALIDATION
       runCatchUp: controlplane.v1.PlatformQueryService.ListRunEvents
       liveWakeSignal: CORE_NATS_CONTROL_PLANE_PLATFORM_AND_RUN_EVENTS
       durableRunSource: CONTROL_PLANE_RUN_EVENT_STORE
@@ -278,7 +283,7 @@ components:
     RunSnapshotEnvelope:
       type: object
       additionalProperties: false
-      required: [type, requestRef, streamKind, streamRef, cursor, snapshot]
+      required: [type, requestRef, streamKind, streamRef, cursor, snapshot, runs]
       properties:
         type: { type: string, const: RUN_GRAPH_SNAPSHOT }
         requestRef: { $ref: "#/components/schemas/OpaqueRef" }
@@ -286,6 +291,18 @@ components:
         streamRef: { $ref: "#/components/schemas/OpaqueRef" }
         cursor: { type: integer, format: int64, minimum: 0 }
         snapshot: { $ref: "#/components/schemas/RunGraph" }
+        runs:
+          type: array
+          minItems: 1
+          maxItems: 128
+          description: Полный owner snapshot корня и unique node.RunRef∪node.ChildRunRefs из того же защищённого graph; каждый ref owner-resolved в той же RepeatableRead tx, graph/run identity проверяется до изменения cache.
+          items:
+            type: object
+            x-go-type: httpgenerated.Run
+            x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+            x-go-import-alias: httpgenerated
+            x-typescript-type: Run
+            x-typescript-import: ../openapi/types.gen
     RunEventEnvelope:
       type: object
       additionalProperties: false

@@ -575,6 +575,8 @@ export const useRealtimeStore = defineStore("realtime", () => {
     return false;
   }
 
+  // Сохраняем Promise и прежнюю microtask-границу последовательной обработки envelope.
+  // eslint-disable-next-line @typescript-eslint/require-await
   async function processRunEnvelope(
     socket: WebSocket,
     envelope: Record<string, unknown>,
@@ -602,16 +604,11 @@ export const useRealtimeStore = defineStore("realtime", () => {
         state: "recovering",
         attempt: state[runRef]?.attempt ?? 0,
       };
-      await platform.loadRun(runRef);
-      if (
-        platform.runProblems[runRef] ||
-        !hasCompleteRunSnapshot(
-          platform.graphs[runRef],
-          platform.events[runRef],
-          cursor,
-        )
-      )
-        scheduleRunRecovery(runRef);
+      try {
+        platform.applyRunReadinessSnapshot(snapshot, envelope.runs);
+      } catch {
+        return false;
+      }
       return true;
     }
     if (envelope.type === "RUN_EVENT") {
@@ -628,6 +625,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     }
     if (envelope.type === "RUN_READY") {
       if (
+        !platform.hasRunReadinessSnapshot(runRef, cursor) &&
         !hasCompleteRunSnapshot(
           platform.graphs[runRef],
           platform.events[runRef],
@@ -695,6 +693,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       return true;
     if (envelope.streamKind === "RUN") {
       if (
+        !platform.hasRunReadinessSnapshot(envelope.streamRef, cursor) &&
         !hasCompleteRunSnapshot(
           platform.graphs[envelope.streamRef],
           platform.events[envelope.streamRef],
@@ -725,6 +724,8 @@ export const useRealtimeStore = defineStore("realtime", () => {
     if (envelope.streamKind === "RUN") {
       const active = activeRuns.get(envelope.streamRef);
       if (!active || envelope.requestRef !== active.requestRef) return true;
+      if (envelope.code === "RUN_UNAVAILABLE")
+        platform.clearRunReadinessSnapshot(envelope.streamRef);
       if (envelope.requestRef === session.requestRef)
         session.resumeRunRefs?.delete(envelope.streamRef);
       state[envelope.streamRef] = {
@@ -816,6 +817,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
             return cursor === platformSequence.value;
           return (
             !activeRuns.has(ref) ||
+            platform.hasRunReadinessSnapshot(ref, Number(cursor)) ||
             hasCompleteRunSnapshot(
               platform.graphs[ref],
               platform.events[ref],

@@ -185,7 +185,25 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		if pool.QueryRow(ctx, queryWorkflowLaunchOriginDiagnostics, pgx.StrictNamedArgs{"lease_ref": stringMap(lease, "leaseRef")}).Scan(&diagnostics) == nil {
 			t.Logf("launch %s origin states: %v", key, diagnostics)
 		}
-		return execute(command.LaunchWorkflowExecution, launcher, key, command.LaunchWorkflowInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), WorkflowRef: selectedWorkflow, Task: "Complete the exact published workflow."}, nil)
+		result := execute(command.LaunchWorkflowExecution, launcher, key, command.LaunchWorkflowInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), WorkflowRef: selectedWorkflow, Task: "Complete the exact published workflow."}, nil)
+		parent, err := service.GetRun(ctx, owner, result.Run.ParentRunRef)
+		if err != nil {
+			t.Fatal("workflow parent owner read denied", err)
+		}
+		_, graph, err := service.GetRunGraphSnapshot(ctx, owner, parent.RootRunRef)
+		if err != nil {
+			t.Fatal("manager to workflow snapshot denied", err)
+		}
+		found := false
+		for _, run := range graph.Runs {
+			if run.Ref == result.Run.Ref {
+				found = run.RootRunRef == result.Run.Ref && run.ParentRunRef == result.Run.ParentRunRef
+			}
+		}
+		if !found {
+			t.Fatal("canonical cross-root workflow snapshot absent")
+		}
+		return result
 	}
 	cancelRun := func(key, ref string) {
 		t.Helper()

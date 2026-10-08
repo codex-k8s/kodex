@@ -413,7 +413,7 @@ func (multiplexer *sessionMultiplexer) applyCommand(command sessionCommand) bool
 }
 
 func (multiplexer *sessionMultiplexer) subscribeRun(runRef string, after int64, requestRef string) bool {
-	snapshot, err := multiplexer.server.query.GetRunGraph(multiplexer.ctx, &controlplanev1.GetRunGraphRequest{RunRef: runRef})
+	snapshot, err := multiplexer.readRunSnapshot(runRef)
 	if err != nil || snapshot.GetRun().GetRootRunRef() != runRef || !safeRef.MatchString(runRef) {
 		return multiplexer.sendStreamProblem(requestRef, "RUN", runRef, after, "RUN_UNAVAILABLE")
 	}
@@ -440,7 +440,7 @@ func (multiplexer *sessionMultiplexer) subscribeRun(runRef string, after int64, 
 		}
 		return multiplexer.sendStreamProblem(requestRef, "RUN", runRef, after, "STREAM_UNAVAILABLE")
 	}
-	snapshot, err = multiplexer.server.query.GetRunGraph(multiplexer.ctx, &controlplanev1.GetRunGraphRequest{RunRef: runRef})
+	snapshot, err = multiplexer.readRunSnapshot(runRef)
 	if err != nil || snapshot.GetRun().GetRootRunRef() != runRef {
 		_ = subscription.subscription.Unsubscribe()
 		return multiplexer.sendStreamProblem(requestRef, "RUN", runRef, after, "RUN_UNAVAILABLE")
@@ -481,6 +481,20 @@ func (multiplexer *sessionMultiplexer) recoverRun(subscription *runSubscription,
 		}
 		subscription.cursor = latest
 	}
+	// Rejoin всегда перечитывает storage в owner snapshot даже при прежнем
+	// run cursor: archive transition не увеличивает run event sequence.
+	snapshot, err := multiplexer.readRunSnapshot(subscription.rootRef)
+	if err != nil || !multiplexer.sendRunSnapshot(subscription, snapshot) {
+		subscription.available = false
+		if err != nil {
+			return multiplexer.sendStreamProblem(subscription.requestRef, "RUN", subscription.rootRef, subscription.cursor, "RUN_UNAVAILABLE")
+		}
+		return false
+	}
+	subscription.cursor = snapshot.GetGraph().GetSequence()
+	if !subscription.available {
+		return true
+	}
 	if !multiplexer.send(generated.RunReadyEnvelope{
 		Type: "RUN_READY", RequestRef: subscription.requestRef, StreamKind: "RUN",
 		StreamRef: subscription.rootRef, Cursor: subscription.cursor,
@@ -501,7 +515,7 @@ func (multiplexer *sessionMultiplexer) synchronizeRun(subscription *runSubscript
 	if errors.Is(err, errOutboundOverflow) {
 		return false
 	}
-	snapshot, snapshotErr := multiplexer.server.query.GetRunGraph(multiplexer.ctx, &controlplanev1.GetRunGraphRequest{RunRef: subscription.rootRef})
+	snapshot, snapshotErr := multiplexer.readRunSnapshot(subscription.rootRef)
 	if snapshotErr != nil {
 		subscription.available = false
 		return multiplexer.sendStreamProblem(subscription.requestRef, "RUN", subscription.rootRef, subscription.cursor, "RUN_UNAVAILABLE")
@@ -526,14 +540,14 @@ func (multiplexer *sessionMultiplexer) catchUp(subscription *runSubscription, af
 }
 
 func (multiplexer *sessionMultiplexer) sendRunSnapshot(subscription *runSubscription, snapshot *controlplanev1.GetRunGraphResponse) bool {
-	projected, err := projectRunGraph(snapshot.GetGraph(), multiplexer.localize)
+	envelope, err := projectCompleteRunSnapshot(snapshot, subscription, multiplexer.localize)
 	if err != nil {
-		return multiplexer.sendStreamProblem(subscription.requestRef, "RUN", subscription.rootRef, subscription.cursor, "INTERNAL")
+		subscription.available = false
+		return multiplexer.sendStreamProblem(subscription.requestRef, "RUN", subscription.rootRef, subscription.cursor, "RUN_UNAVAILABLE")
 	}
-	return multiplexer.send(generated.RunSnapshotEnvelope{
-		Type: "RUN_GRAPH_SNAPSHOT", RequestRef: subscription.requestRef, StreamKind: "RUN",
-		StreamRef: subscription.rootRef, Cursor: snapshot.GetGraph().GetSequence(), Snapshot: projected,
-	})
+	subscription.cursor = envelope.Cursor
+	subscription.available = true
+	return multiplexer.send(envelope)
 }
 
 func (multiplexer *sessionMultiplexer) applyPlatformSignal(signal platformSignal) bool {
@@ -559,6 +573,9 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignal(signal platformSignal
 	envelope, err := multiplexer.boundedPlatformSnapshot(envelope)
 	if err != nil {
 		if status.Code(err) == codes.PermissionDenied {
+			if signal.EventName == "RUN_CHANGED" && !multiplexer.refreshSubscribedRuns() {
+				return false
+			}
 			return multiplexer.advancePlatformCursor(signal)
 		}
 		multiplexer.platformAvailable = false
@@ -570,6 +587,11 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignal(signal platformSignal
 	}
 	if !multiplexer.send(envelope) {
 		return false
+	}
+	if signal.EventName == "RUN_CHANGED" {
+		if !multiplexer.refreshSubscribedRuns() {
+			return false
+		}
 	}
 	multiplexer.platformCursor = signal.Sequence
 	return true
@@ -618,7 +640,8 @@ func (multiplexer *sessionMultiplexer) synchronizePlatform() bool {
 		return false
 	}
 	multiplexer.platformCursor = current
-	return true
+	// Пропущенный org wake не меняет обязательно Run.version или run cursor.
+	return multiplexer.refreshSubscribedRuns()
 }
 
 func (multiplexer *sessionMultiplexer) heartbeat(now time.Time) bool {

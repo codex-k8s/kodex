@@ -2553,10 +2553,14 @@ message GetRunResponse {
 }
 message GetRunGraphRequest {
   string run_ref = 1;
+  // Selector формы read-only ответа, не источник полномочий.
+  bool include_run_snapshots = 2;
 }
 message GetRunGraphResponse {
   Run run = 1;
   RunGraph graph = 2;
+  // Один owner REPEATABLE READ: root и уникальные защищённые graph runs (<=128).
+  repeated Run runs = 3;
 }
 message ListRunEventsRequest {
   string run_ref = 1;

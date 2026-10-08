@@ -16,6 +16,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -79,11 +80,32 @@ func TestRunSessionReadinessComponent(t *testing.T) {
 	failPrincipal := sessionArchivePrincipal(t, ctx, r, "platform.session-archive.tasks.fail")
 	var taskRef string
 	for attempt := 1; attempt <= sessionArchiveMaxAttempts; attempt++ {
+		cursor := func() int64 {
+			t.Helper()
+			var sequence int64
+			if err := pool.QueryRow(ctx, queryQueriesGetplatformeventcursorSelectInstallationPlatformSequence).Scan(&sequence); err != nil {
+				t.Fatal(err)
+			}
+			return sequence
+		}
+		beforeClaim := cursor()
 		task := claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "SNAPSHOT")
+		afterClaim := cursor()
+		if afterClaim <= beforeClaim {
+			t.Fatal("archive materialize/claim did not emit transactional run wake")
+		}
 		taskRef = stringMap(task, "taskRef")
 		payload := claimedSessionArchivePayload(task)
 		payload.SafeErrorCode = "SESSION_ARCHIVE_SOURCE_INVALID"
 		execute(command.FailSessionArchiveTask, failPrincipal, fmt.Sprintf("fail-%d", attempt), payload)
+		afterFailure := cursor()
+		if afterFailure <= afterClaim {
+			t.Fatal("archive failure did not wake existing run subscribers")
+		}
+		execute(command.FailSessionArchiveTask, failPrincipal, fmt.Sprintf("fail-%d", attempt), payload)
+		if cursor() != afterFailure {
+			t.Fatal("idempotent archive failure replay duplicated wake")
+		}
 		if attempt < sessionArchiveMaxAttempts {
 			if _, err := pool.Exec(ctx, "UPDATE control_plane.session_archive_tasks SET available_at=clock_timestamp()-interval '1 second' WHERE ref=$1", taskRef); err != nil {
 				t.Fatal(err)
@@ -103,6 +125,10 @@ func TestRunSessionReadinessComponent(t *testing.T) {
 		t.Fatalf("protected session diagnostic: %v", err)
 	}
 	proof := read.SessionReadiness
+	_, snapshot, err := service.GetRunGraphSnapshot(ctx, owner, run.Ref)
+	if err != nil || len(snapshot.Runs) != 1 || snapshot.Runs[0].SessionReadiness == nil || !reflect.DeepEqual(snapshot.Runs[0].SessionReadiness, proof) {
+		t.Fatal("same owner graph snapshot lost terminal storage readiness", err)
+	}
 	if proof.SessionRef != run.SessionRef || proof.StorageState != "ERROR" || proof.Reason != "STORAGE_NOT_LIVE" || proof.LatestArchiveTask == nil || proof.LatestArchiveTask.Ref != taskRef || proof.LatestArchiveTask.State != "DEAD_LETTER" || proof.LatestArchiveTask.Attempt != 5 || proof.LatestArchiveTask.SafeErrorCode != "SESSION_ARCHIVE_SOURCE_INVALID" {
 		t.Fatal("exact exhausted snapshot/session binding missing")
 	}
@@ -113,6 +139,55 @@ func TestRunSessionReadinessComponent(t *testing.T) {
 	if before != effects() {
 		t.Fatal("diagnostic read changed durable state")
 	}
+	t.Run("storage-only-mvcc-drift", func(t *testing.T) {
+		resolved, err := r.ResolvePrincipal(ctx, owner)
+		if err != nil {
+			t.Fatal(err)
+		}
+		current, err := r.resolveScope(ctx, resolved)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+		pinned, err := r.readRunWithIncidents(ctx, tx, current, run.Ref)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := attachRunSessionReadiness(ctx, tx, current, &pinned); err != nil || pinned.SessionReadiness.StorageState != "ERROR" {
+			t.Fatal("initial MVCC state missing", err)
+		}
+		if _, err := pool.Exec(ctx, "UPDATE control_plane.session_storage SET state='LIVE',version=version+1 WHERE session_id=(SELECT id FROM control_plane.sessions WHERE ref=$1)", run.SessionRef); err != nil {
+			t.Fatal(err)
+		}
+		graph := entity.RunGraph{RunRef: run.Ref}
+		if err := r.attachGraphRuns(ctx, tx, current, &graph); err != nil || len(graph.Runs) != 1 || graph.Runs[0].SessionReadiness.StorageState != "ERROR" {
+			t.Fatal("storage drift escaped repeatable snapshot", err)
+		}
+		for _, locator := range []string{"private/foreign", "run_missing_fixture"} {
+			invalid := entity.RunGraph{RunRef: run.Ref, Nodes: []entity.RunNode{{RunRef: run.Ref, ChildRunRefs: []string{locator}}}}
+			if err := r.attachGraphRuns(ctx, tx, current, &invalid); err == nil || len(invalid.Runs) != 0 {
+				t.Fatal("malformed or missing child published partial owner snapshot")
+			}
+		}
+		invalid := entity.RunGraph{RunRef: run.Ref, Nodes: []entity.RunNode{{RunRef: run.Ref}}}
+		for i := 0; i < maximumGraphRunSnapshots; i++ {
+			invalid.Nodes[0].ChildRunRefs = append(invalid.Nodes[0].ChildRunRefs, fmt.Sprintf("run_bound_%03d", i))
+		}
+		if err := r.attachGraphRuns(ctx, tx, current, &invalid); !errors.Is(err, errs.ErrUnavailable) || len(invalid.Runs) != 0 {
+			t.Fatal("snapshot owner read escaped member bound")
+		}
+		fresh, _, err := service.GetRunGraphSnapshot(ctx, owner, run.Ref)
+		if err != nil || fresh.Version != pinned.Version || fresh.EventSequence != pinned.EventSequence || fresh.SessionReadiness.StorageState != "LIVE" {
+			t.Fatal("fresh owner read missed storage-only transition", err)
+		}
+		if _, err := pool.Exec(ctx, "UPDATE control_plane.session_storage SET state='ERROR',version=version+1 WHERE session_id=(SELECT id FROM control_plane.sessions WHERE ref=$1)", run.SessionRef); err != nil {
+			t.Fatal(err)
+		}
+	})
 	foreignProject := execute(command.CreateProject, owner, "foreign-project", command.ProjectInput{Name: "Other scope", Language: "en"}).Project
 	signed := owner
 	signed.ProjectRef = gateTestProjectID(t, ctx, r, owner, foreignProject.Ref)

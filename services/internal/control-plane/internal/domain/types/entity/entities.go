@@ -589,6 +589,7 @@ type RunEvent struct {
 }
 
 type RunGraph struct {
+	Runs               []Run `json:"-"`
 	RunRef             string
 	Revision, Sequence int64
 	Nodes              []RunNode

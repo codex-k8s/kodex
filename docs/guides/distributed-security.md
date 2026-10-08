@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.14
+version: 1.7.15
 updated: 2026-10-08
 ---
 
@@ -579,6 +579,22 @@ WebSocket handshake не продлевает API session: его CSRF subprotoc
 realtime transport после общей HTTP boundary. Sliding activity фиксирует
 только полностью проверенная session renewal mutation; reconnect с истёкшей
 API session проходит новый warm SSO flow.
+
+Зависимое состояние хранения сессии не выводится из `Run.version` или cursor
+событий запуска. Archive transition будит потребителей через транзакционный
+`RUN_CHANGED` с назначенным сервером anchor. Gateway перечитывает только свои
+зарегистрированные корневые подписки; один owner `REPEATABLE READ` разрешает
+граф, все уникальные `node.RunRef`/`node.ChildRunRefs` (не более128) и readiness.
+Selector `include_run_snapshots` меняет форму ответа, но не полномочия.
+Каждый участник повторно проходит owner eligibility; cross-root child требует
+серверный parent, retry predecessor — owner pin и точное `RETRY_OF` ребро того
+же снимка. Частичный envelope, неизвестный storage/task, чужой scope или
+повреждённая lineage закрыто отклоняются. Frontend проверяет весь снимок до
+атомарной замены cache; `RUN_UNAVAILABLE` удаляет только известные записи
+точного root/child набора. `ERROR`/`ARCHIVED` — безопасное видимое состояние,
+не доказательство утраты владения. HTTP exact-resource read не получает
+дополнительного sibling authority; reconnect и пропущенный org wake требуют
+свежего owner snapshot даже при прежнем run cursor, без фонового polling.
 
 Срок idle, совпавший с immutable absolute expiry, не создаёт новые refresh:
 сервер планирует только действительно продлеваемый idle либо access credential.

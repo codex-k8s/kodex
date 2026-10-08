@@ -325,6 +325,7 @@ type Repository interface {
 	ListRuns(context.Context, value.Principal, query.Filter) ([]entity.Run, int64, string, error)
 	GetRun(context.Context, value.Principal, string) (entity.Run, error)
 	GetRunGraph(context.Context, value.Principal, string) (entity.Run, entity.RunGraph, error)
+	GetRunGraphSnapshot(context.Context, value.Principal, string) (entity.Run, entity.RunGraph, error)
 	ListRunEvents(context.Context, value.Principal, query.Filter) ([]entity.RunEvent, int64, bool, error)
 	ListOwnerGates(context.Context, value.Principal, query.Filter) ([]entity.OwnerGate, int64, string, error)
 	GetOwnerGate(context.Context, value.Principal, string) (entity.OwnerGate, error)

@@ -10,6 +10,107 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 15:10 UTC — командные окружения и атомарный realtime snapshot
+
+- Проверяется tree поверх `5d30bd86f35a40e2fc5d710b46d224628ac71247`,
+  та же ветка и Draft1800/Issue1797. Новые изменения ещё не опубликованы.
+  Демонстрационный проект владельца не изменялся.
+- SYSTEM повторный native run `run_J7HrclGD5GRzgKVPcGOAc0CB` SUCCEEDED:
+  восстановление сессии, CURRENT_CONFIG, Context7 resolve/query и git version
+  подтверждены событиями инструментов. Ранний ACK exact Pod UID и G15 pins
+  захвачен: task/provider/inbox и materialization EQUAL, tools38.
+- PROJECT native read `run_TqoWxHuSB4JevffJJdlnUxCI` SUCCEEDED:
+  current18 прочитан11страниц/179853B до EOF, digestcbc7e62f…9557,
+  39этапов/4поля/concurrency3/timeout86400/sole human gate033. Ранний ACK G9
+  захвачен. Каталог по-прежнему не выдаёт published version ref/revision:
+  independent native published-pin proof NOT RUN; owner pins доказаны отдельно.
+  Предыдущий READ3 semantic BLOCKED неправильного контекста не скрыт.
+- PROJECT создал два image-only плана для командных окружений. Developer:
+  run `run_U8Fg80SwnddFiSNVMORYka9X`, plan `pln_CN1Flfe9LwYexfXKzU36gm59`,
+  draft `renvd_E_01-Jz5IIQn0XkirM43WSiV`. Остальные пять ролей:
+  run `run_FYFC3wK1odK2tp-VA9wdecRN`, plan `pln_JUgs0bXgYvpJ5oIEKmD0C_Z3`,
+  draft `renvd_hnRU_lcKFUEH-vIYhjYxNYon`. Обе цепочки native plan → owner
+  Validate/Apply → fresh SSO → impact/Publish завершены; drafts PUBLISHED3.
+- Developer ENV `renv_NjHA7WWnyjCtNggYCTdLeV5W` version9/revision9/current
+  `renvv_STPsdJhWoS490usefHFaLmEb`. Review ENV
+  `renv_am09ABl3ulJb9PRi4QQ_E_I4` version9/revision9/current
+  `renvv_5CsUv8nBw1dq77oUz_C-YGou`. Оба ready; все шесть bindings version10
+  ссылаются на соответствующую новую версию и G9 promoted artifact.
+  Полные immutable old/new policy/tools/values/secretDescriptors EQUAL;
+  по38tools, Developer secrets1, Review secrets0. Выбрано ровно1 и5 consumers;
+  дополнительных BIND или расширения grants не было.
+- ACK второго native плана: Pod `runtime-turn-52808067cc4d0c23`, UID
+  `7bdea09d-f490-4be3-9092-14e37dc4b7ec`; runner47a8fc35…66b3d,
+  manifest615bab9c…a6e4cc, tools38/grants23/caps23. Provider/inbox SHA
+  `f5085da4d4e369dde6d2f08b961b7ef4eb353bc8e0cef82d7e2be5749ea06661`
+  и instructions9cc79f44…0f80c EQUAL; runtime revision
+  `rrev__zK3ypJvP_jYXg6-C-KnEofs`, materializationa8748168…840d.
+- Интегрирован same-transaction storage RUN_CHANGED и bounded single-owner
+  REPEATABLE READ graph/root/children/readiness snapshot. WebSocket re-resolves
+  только авторитетные подписки; frontend проверяет весь snapshot до atomic
+  cache update, stale HTTP reply не перезаписывает realtime. Нет нового polling,
+  расширения полномочий или legacy fallback. Общий инвариант закреплён в
+  GUIDE-DOC-003. Cross-root и retry lineage проверяются owner rows/graph edges.
+- Combined MAIN Go tree hash88b856fa…91b4 до/после EQUAL: CP platform/grpc/service
+  unit0.915/0.570/0.238s, gateway HTTP/WS10.956/1.628s и оба vet PASS.
+  Public disposable PostgreSQL RootCursor/Readiness/WorkflowLaunch PASS38.897s,
+  readbacks/cleanup PASS. AsyncAPI validation/codegen и buf lint PASS;
+  Proto regenerated каноническим local template, generated code не правился вручную.
+- ROOT final frontend64/64 PASS2.07s; forced typecheck/build PASS10.38s.
+  После исправления ESLint nullable wire fixtures и require-await сохранена
+  прежняя Promise-сериализация. `i18n:RUNTIME_TIMEOUT` получил закрытый RU/EN
+  текст с regression tests, произвольные diagnostic tokens по-прежнему отклоняются.
+  Предупреждение о bundle >500kB остаётся предупреждением, не скрыто.
+- Host/Pod source EQUAL: CP graph b7e93b0f…4e09f, storage wake2ea82579…16d2,
+  gateway snapshota81402c6…3a39. Serving ELF совпадает с rebuilt main:
+  CP650cfe2a…3415, gatewaycb00268c…3daf. Все21deployments Ready,
+  observedGeneration совпадает. Это trusted-local hot reload, не release acceptance.
+- Chrome own page1: Console error/warn0, overflowfalse, owner API200;
+  description совпадает с сохранённым значением, composer пуст, reload безопасен.
+  Screenshot NOT RUN: отдельная read-only capture диагностика остановилась
+  DEADLINE_EXCEEDED на CONNECT; причина UNKNOWN, общие настройки/чужие вкладки
+  не менялись. DOM/API не заменяют визуальную приёмку.
+- Естественный late-storage переход подтверждён backend без ручных SQL/cache
+  mutations или новых turns: session ses_xiVtCgZJL1yJvqoEb2SAP069 generation6,
+  SNAPSHOT sat_368b734b-b56e-4bc8-ba2d-924d3e7d3a73 WORKER_REPORTED_SUCCESS/
+  exit0 и COMPLETE_SNAPSHOT OK15:12:48UTC; DELETE_PVC
+  sat_bb6755f4-32ae-4954-9b7a-ed12a5bdab0b COMPLETE_PVC_DELETION OK15:12:50UTC,
+  owner SQL переводит storage в ARCHIVED. Worker active0, loop продвигается.
+  Actual frontend late-wake proof NOT RUN: штатный screenshot на уже
+  одобренном MCP тоже завис, следующее cache чтение ожидает transport.
+  Внешняя CDP попытка остановилась до Target/capture, на CONNECT; это не
+  доказательство зависшего renderer или конкретного permission denial.
+  Bootstrap merge/fresh-main readback, ordinary Manager→39Workflow,
+  внутренние business reviews и Full65 остаются OPEN.
+
+## Checkpoint 08.10.2026 14:27 UTC — новые образы и image-only окружения опубликованы
+
+- Source `5d30bd86f35a40e2fc5d710b46d224628ac71247` запушен в ту же
+  ветку/Draft1800. Оба новых артефакта прошли attempt2 ACCEPTED и PROMOTED:
+  SYSTEM G15 `imgart_Yz-SNOEgQ1PCphnai2_71jnC`, manifest1897062b…4133d;
+  PROJECT G9 `imgart_5Ncrgh8Xntev661AhuehLGG0`, manifest615bab9c…a6e4cc.
+  Старые решения о риске и rejected receipts не переписывались.
+- Штатный owner UI создал/проверил/опубликовал ровно два image-only draft.
+  SYSTEM `renvd_hhDQjNcuL4hhOj8KbcZvREcS`, PROJECT
+  `renvd_lenM0QUpm4463bJz0bylvWrP`: PUBLISHED/version3. Перед публикацией
+  полное сравнение tools/values/secret revision pins/resources/volumes/
+  webAccess было EQUAL; по38tools, Kubernetes access NONE.
+- SYSTEM ENV version30/revision30/current
+  `renvv_jV_vz3rd6iq5rrr4zFgmGXvs`, binding version10. PROJECT ENV
+  version11/revision12/current `renvv_W6yf2XW2bgZ3ESP1lmwyclk5`, binding
+  version11. Оба ACTIVE/ready. В каждом immutable impact plan выбран ровно
+  один собственный помощник; plan APPLIED/item APPLIED. Публикация атомарно
+  обновила binding, дополнительного BIND не выполнялось.
+- Fresh SSO guard штатно запросил повторный вход; после него выполнены явные
+  Validate/impact/Publish, без обхода freshness. Relevant API201/200,
+  Console error/warn0, горизонтального overflow нет. Screenshot NOT RUN:
+  ранее выявленная недоступность capture MCP не устранена. Эти readbacks
+  не заменяют следующую native runtime/prompt/session проверку.
+- Следующее: native ходы новых образов и проверка восстановления, настройка
+  командных окружений средствами PROJECT, интеграция storage realtime packet,
+  bootstrap merge/readback и реальный SOFTWARE_CHANGE с внутренними review.
+  Full65 и итоговая ручная приёмка остаются OPEN.
+
 ## Checkpoint 08.10.2026 14:11 UTC — исправлена пагинация отчёта допуска
 
 - Live FAIL воспроизведён: вторая страница vulnerability report возвращала

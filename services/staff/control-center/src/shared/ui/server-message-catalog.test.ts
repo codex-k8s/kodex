@@ -34,6 +34,24 @@ function closedCases(path: string, functionName: string): string[] {
 
 describe("полнота закрытого реестра server tokens", () => {
   it.each([
+    ["ru", "Превышено время выполнения"],
+    ["en", "Execution time limit exceeded"],
+  ] as const)(
+    "объясняет истечение runtime deadline в %s",
+    (locale, expected) => {
+      expect(
+        source("repository/postgres/platform/runtime_deadline.go"),
+      ).toContain('const runtimeTimeoutSummary = "i18n:RUNTIME_TIMEOUT"');
+      const key = serverMessageKey("i18n:RUNTIME_TIMEOUT");
+      expect(key).toBe("serverMessages.RUNTIME_TIMEOUT");
+      expect(i18n.global.t(key ?? "", {}, { locale })).toBe(expected);
+      expect(serverMessageKey("RUNTIME_TIMEOUT")).toBeUndefined();
+      expect(
+        serverMessageKey("i18n:RUNTIME_TIMEOUT_PRIVATE_DETAILS"),
+      ).toBeUndefined();
+    },
+  );
+  it.each([
     [
       "ru",
       "Запуск завершён с ошибкой: обязательный дочерний процесс не выполнен.",

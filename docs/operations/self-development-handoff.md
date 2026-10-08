@@ -10,6 +10,54 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 15:10 UTC — команда G9 готова, realtime пакет проверен
+
+Source HEAD/remote/Draft1800 пока `5d30bd86f35a40e2fc5d710b46d224628ac71247`.
+MAIN dirty содержит bounded atomic graph/readiness realtime packet, канонический
+Proto codegen, RUNTIME_TIMEOUT RU/EN и журнал; не reset/clean. Все шесть ролей
+имеют G9 ENV version9/current published version и binding10; immutable старые/
+новые policy/tools/values/secretDescriptors EQUAL, по38tools. Developer1 и
+Review5 consumers обновлены через native typed plans/owner impact/Publish.
+Повтор SYSTEM и PROJECT native чтения/restore прошли; ACK exact runtime/tool/
+prompt pins captured. Independent native published-version pin недоступен в
+каталоге и остаётся NOT RUN, owner readback есть.
+
+Combined MAIN Go/vet/disposable PG PASS, ROOT frontend64/64/forced typecheck/
+build PASS10.38s. Source/Pod и serving ELF CP/GW EQUAL;21deployments Ready.
+Chrome Console0/overflowfalse/API200, screenshot NOT RUN CONNECT timeout;
+DOM не визуальная приёмка. Новые dependencies отсутствуют. Естественный15min
+idle переход session ses_xiVtCgZJL1yJvqoEb2SAP069 generation6 подтверждён:
+SNAPSHOT/DELETE_PVC OK15:12:48/50UTC, owner ARCHIVED. Frontend wake NOT RUN:
+одобренный MCP screenshot тоже завис, следующий cache read ждёт transport.
+Latest run_FYFC3wK1odK2tp-VA9wdecRN version2; не запускать лишние agent turns,
+не менять SQL или cache вручную. Browser соединение восстановить штатно,
+не обходить permission gate и не перезапускать чужие вкладки.
+
+Следующее: зафиксировать late-storage результат и final lint/codegen →
+commit/push в ту же ветку → разрешённый bootstrap merge без обхода protections →
+fresh main/source/Pod readback → один ordinary Manager и один published39
+SOFTWARE_CHANGE для Issue1796 → native Developer PR/internal reviews/fixes/
+final human gate → Full65. Финальный business PR не merge/approve автоматически.
+Owner demo не затрагивался; исторические ERROR/FAIL и source causes не переписаны.
+
+## Checkpoint 08.10.2026 14:27 UTC — оба own helper image-only rebind завершены
+
+Current source/remote/Draft1800 `5d30bd86f35a40e2fc5d710b46d224628ac71247`.
+SYSTEM G15 и PROJECT G9 ACCEPTED/PROMOTED; exact manifest1897062b…4133d и
+615bab9c…a6e4cc. Owner UI draft/Validate/impact/Publish завершены200/201 после
+штатного fresh SSO. Оба draft PUBLISHED/version3, impact APPLIED и ровно один
+helper item APPLIED; tools38 и полные values/secret revision pins/resources/
+volumes/webAccess сохранены EQUAL. Нет отдельного BIND или расширения grants.
+
+SYSTEM ENV30/revision30/current `renvv_jV_vz3rd6iq5rrr4zFgmGXvs`, binding10;
+PROJECT ENV11/revision12/current `renvv_W6yf2XW2bgZ3ESP1lmwyclk5`, binding11.
+Оба ready=true. Старые archive tuples/session ERROR не переписывались,
+демонстрационные ресурсы владельца не удалялись. Chrome own page1, Console0,
+overflowfalse; screenshot capture NOT RUN. Следующее: native READ/restore с
+ранним ACK на новых образах; typed WRITE/REVIEW ENV через PROJECT; frozen
+single-owner MVCC/storage wake packet, bootstrap merge и fresh-main readback,
+затем ordinary Manager→published39 Workflow. Полная приёмка не завершена.
+
 ## Checkpoint 08.10.2026 14:11 UTC — отчёты прочитаны, promotion в процессе
 
 Поверх6e581 исправлена пагинация risk report: optional expected digest

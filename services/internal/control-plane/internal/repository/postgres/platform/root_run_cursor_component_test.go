@@ -124,6 +124,15 @@ func TestRootRunCursorComponent(t *testing.T) {
 		return graph.Sequence
 	}
 	t.Run("child-and-sibling-root-pages", func(t *testing.T) {
+		_, graph, err := service.GetRunGraphSnapshot(ctx, owner, root.Ref)
+		if err != nil || len(graph.Runs) != len(children)+1 {
+			t.Fatal("bounded shared-root snapshots missing", err)
+		}
+		for _, item := range graph.Runs {
+			if item.RootRunRef != root.Ref || item.ProjectRef != project.Ref || item.SessionReadiness == nil || item.SessionReadiness.SessionRef != item.SessionRef {
+				t.Fatal("owner child/storage snapshot binding mismatch")
+			}
+		}
 		for _, child := range children {
 			assertRead(t, child)
 		}
@@ -222,6 +231,9 @@ func TestRootRunCursorComponent(t *testing.T) {
 			t.Fatalf("root-only reader lost its exact eligibility: %v", err)
 		}
 		assertPublicRead(root.Ref)
+		if _, _, err := service.GetRunGraphSnapshot(ctx, reader, root.Ref); !errors.Is(err, errs.ErrNotFound) && !errors.Is(err, errs.ErrForbidden) {
+			t.Fatalf("full websocket snapshot accepted hidden sibling: %v", err)
+		}
 		assertDenied(children[0].Ref)
 		execute(command.RevokeAccessBinding, owner, "revoke-root-reader", command.AccessBindingInput{BindingRef: rootBinding.Ref}, &rootBinding.Version)
 		assertDenied(root.Ref)

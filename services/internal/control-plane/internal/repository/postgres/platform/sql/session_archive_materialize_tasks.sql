@@ -1,4 +1,4 @@
--- name: session_archive_materialize_tasks :exec
+-- name: session_archive_materialize_tasks :many
 WITH expired_locked AS MATERIALIZED (
     SELECT task.id, task.session_id, task.kind, task.object_key, task.object_version,
            task.content_generation, task.attempt, task.maximum_attempts, task.organization_id,
@@ -191,4 +191,7 @@ WITH expired_locked AS MATERIALIZED (
     ON CONFLICT DO NOTHING
     RETURNING id
 )
-SELECT 1;
+SELECT session_id::text FROM expired_storage
+UNION SELECT session_id::text FROM cancelled_storage
+UNION SELECT session_id::text FROM snapshots_marked
+UNION SELECT session_id::text FROM restores_marked;

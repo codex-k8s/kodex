@@ -725,6 +725,13 @@ func (service *Service) GetRunGraph(ctx context.Context, p value.Principal, ref 
 	}
 	return service.repository.GetRunGraph(ctx, p, ref)
 }
+func (service *Service) GetRunGraphSnapshot(ctx context.Context, p value.Principal, ref string) (entity.Run, entity.RunGraph, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.Run{}, entity.RunGraph{}, err
+	}
+	return service.repository.GetRunGraphSnapshot(ctx, p, ref)
+}
 func (service *Service) ListRunEvents(ctx context.Context, p value.Principal, filter query.Filter) ([]entity.RunEvent, int64, bool, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {

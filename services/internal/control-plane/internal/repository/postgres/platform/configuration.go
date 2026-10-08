@@ -1605,7 +1605,7 @@ func (repository *Repository) promoteAssistantConversationProject(ctx context.Co
 	).Scan(&promotedRef); err != nil || promotedRef != conversationRef {
 		return fmt.Errorf("promote assistant conversation project: %w", errs.ErrConflict)
 	}
-	return nil
+	return repository.emitSessionStorageRunChanged(ctx, tx, scope, sessionID)
 }
 
 func valueOrNil(value *int64) any {

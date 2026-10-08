@@ -320,6 +320,9 @@ func messageMap(message proto.Message) (map[string]any, error) {
 		return nil, err
 	}
 	normalize(value)
+	if message.ProtoReflect().Descriptor().FullName() == "controlplane.v1.GetRunGraphResponse" {
+		delete(value, "runs")
+	}
 	return value, nil
 }
 

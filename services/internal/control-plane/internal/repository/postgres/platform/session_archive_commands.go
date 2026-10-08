@@ -109,6 +109,11 @@ func (repository *Repository) changeSessionArchive(ctx context.Context, tx pgx.T
 	if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
+	if locked.kind != "DELETE_OBJECT" || (input.Kind == command.CompleteSessionObjectDeletion && locked.currentArchiveID != "" && locked.currentArchiveID == locked.archiveID) {
+		if err := repository.emitSessionStorageRunChanged(ctx, tx, scope, locked.sessionID); err != nil {
+			return commandOutcome{}, err
+		}
+	}
 	return commandOutcome{
 		result:    command.Result{Runtime: map[string]any{"taskRef": locked.ref, "state": state, "archiveRef": archiveRef, "retryScheduled": retryScheduled}},
 		projectID: locked.projectID, resourceKind: "SESSION_ARCHIVE_TASK", resourceRef: locked.ref,
