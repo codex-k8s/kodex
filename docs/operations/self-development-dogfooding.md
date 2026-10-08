@@ -10,6 +10,42 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 03:43 UTC — опубликованный UI и подготовка backend
+
+- HEAD, удалённая ветка и Draft PR1800 совпадают:
+  `38a6f0a6dcb4939eb05a9c0466c32f6cf1247dce`. Публикация 03:31:58 PASS;
+  повторный GitHub readback 03:42 PASS, main `b5f6fcde` не изменился.
+  Проверки клавиатуры и reduced-motion из checkpoint 03:29 относятся
+  к этому точному UI source. Рабочее дерево перед записью журнала чистое.
+- Новый SOFTWARE_CHANGE `run_Ol_zK37v_11loSybRaDHmVeX` продолжает INTAKE
+  `run_0M4_jAbdwktAxAY5RUUfwZHL`: sequence623 на 03:42, свежие ошибки
+  инструментов отсутствуют. Backend/security/observability читаются штатными
+  инструментами; Architect, Developer и независимые reviews ещё NOT RUN.
+  После reload 03:41 Chrome подключён, graph/history HTTP200, Console0,
+  горизонтального переполнения нет; actual screenshot 03:43 выполнен.
+- Root cursor: подготовлены ровно шесть файлов; ROOT прочитал production
+  diff, SQL, unit и component fixtures. Исправление читает только root counters
+  после eligibility requested child, в той же RR/owner-транзакции; identity,
+  lifecycle и permissions child не подменяются. Изолированные full unit,
+  vet/build и две disposable PostgreSQL suites PASS. Делегация RED→GREEN,
+  параллельный writer не меняет RR snapshot. MAIN adoption и live rollout
+  пока NOT RUN: текущий процесс нельзя прерывать сменой serving control-plane.
+- Отдельный public exact-resource `run.view` probe вернул NotFound: positive
+  probe FAIL, соответствие ожидаемой канонике UNKNOWN. Это не скрывается
+  helper-тестами и не исправляется расширением прав; идёт адресное read-only
+  исследование action permissions. GitHub4.0 также остаётся изолированным до
+  quiescence текущего процесса и полного owner binding readback.
+- Наблюдатель первоначального ordinary turn17132 завершён
+  `NOT_CAPTURED/FOLLOW_STREAM_ENDED`: Pod штатно ушёл после передачи Workflow.
+  Это не является captured provider failure. INTAKE observer68428 активен.
+- `/tmp` ограничен inode, не дисковыми байтами. Без доказанного владения
+  чужие каталоги не удалялись; безопасных кандидатов для очистки не найдено.
+  Go-проверки используют отдельный GOTMPDIR на файловой системе `/home`.
+  Глобальные переменные и зависимости других процессов не менялись.
+- Full65/11/13/14/15 остаются OPEN. Автономная работа до 14:00 Саратов;
+  свой Chrome reload каждые пять минут, чужие вкладки не трогать.
+  Финальный внутренний PR не merge/approve.
+
 ## Checkpoint 08.10.2026 03:14 UTC — новая область Workflow и клавиатура
 
 ### Проверка исправления клавиатуры 03:29 UTC

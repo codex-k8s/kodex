@@ -10,6 +10,31 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 03:43 UTC
+
+HEAD/remote/Draft1800 `38a6f0a6dcb4939eb05a9c0466c32f6cf1247dce` EQUAL,
+publish03:31:58 PASS/readback03:42 PASS; mainb5f6fcde прежний. Следующий
+publisher previous необходимо поменять с8498d8a3 на38a6f0a6.
+Full33 Workflow run_Ol_zK37v_11loSybRaDHmVeX RUNNING; INTAKE
+run_0M4_jAbdwktAxAY5RUUfwZHL читает security/observability, seq623,
+ошибок инструментов в свежих страницах нет. Architect/Developer/reviews NOT RUN.
+OwnChrome1 reload03:41:23, следующий≤03:46:23; Console0/HTTP200/overflowfalse,
+actual graph screenshot03:43. Owner4 не трогать.
+
+Root cursor frozen6files готов в /tmp/kodex-root-cursor.SItYyJ/frozen/HANDOFF.md;
+ROOT полностью прочитал production/SQL/новые unit/component. Child full unit/
+vet/build PASS; disposable root-cursor6.03s/workflow15.53s PASS,
+RR concurrent writer PASS. MAIN не менялся. Public exact-resource positive
+NotFound FAIL, expected contract UNKNOWN: assistant_architecture ведёт
+read-only canon investigation отдельно, permissions не расширять.
+Не применять cursor или GitHub4.0 к serving Pod пока текущий3.1 Workflow
+активен. GitHub frozen12files прежний, ROOT читает оставшиеся тесты.
+Ordinary observer17132 joined NOT_CAPTURED/FOLLOW_STREAM_ENDED после cleanup;
+INTAKE observer68428 active. /tmp inode shortage: ничего не удалено;
+ROOT Go temp /home/s/.local/state/kodex-dev/root-go-tmp.zq7BUE использовать
+per-command GOTMPDIR. Full65/11/13/14/15 OPEN, final PR NOmerge/approve,
+автономно до14:00 Саратов. Цель ACTIVE, повторно не создавать.
+
 ## Checkpoint 08.10.2026 03:14 UTC
 
 Дополнение03:29: MAIN keyboard4+docs2 готовыкcommit. ROOT42/4suites/lint/
