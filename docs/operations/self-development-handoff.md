@@ -10,6 +10,113 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 19:01 UTC — GitHub5 опубликован, queued-wake fix обслуживается
+
+ROOT в kodex-agent/issue-1797-full39-qa, Draft PR1805, HEADce1190e5 плюс
+точный P0/P1 diff. GitHub LIST теперь commit-pinned, cursor-offset/limit20
+(max50), digest полного каталога, явный EOF и byte budget64KiB. Каталог
+>=1000 закрыто отклоняется; конец индекса не означает чтение source файлов.
+Codegen штатный; все16 P0 frozen hashes EQUAL. Unit-all integrationpackage
+PASS3.445s, IG integration PASS28.584s, vet/build обоих модулей PASS.
+
+P1 обрабатывает перед heartbeat только уже queued prefix, максимум4 wake
+и общий2s context для добавленной фазы. Decode/owner/cursor/permission/
+backpressure guards сохранены. Unit56+128 PASS1.397s, race PASS15.186s,
+vet/build PASS; четыре frozen hashes EQUAL. Полный unpublished outbox lag
+НЕ исправлен, причина прежнего live resync UNKNOWN; весь heartbeat не
+объявляется ограниченным2s. Source/Pod server.go4d84b72d…32b4d EQUAL;
+actual GW PID1084 ELF0c3de0d4…34454 EQUAL независимой ROOT сборке.
+
+SYSTEM run_hR6GBuXdichA8TKZ6LJvQoY8 предложил единственный typed publication
+plan pln_RMlTFUfCIxrOyjOeO05AdNtz. Native Validate/Apply APPLIED, config17;
+UI GitHub revision6 mrev_Tz0YW0jAeFgHqa88rokynjDE PUBLISHED,
+digestb64de75ef0a31832e578540b63f5667b9ff2043401eaf42e40cacff6fc999d83.
+Owner impact/rebind существующего int_Pn1ALY1e8kAn67vrr1-okIKe: config18,
+binding4/MATCH, connection500/NOT_CONNECTED,120 прежних grants отключены.
+Защищённый repo-owned credential input PASS/connection501. Никакой смены
+publicConfiguration, получателей или расширения прав. Baseline120 grants
+SHA7ae920b1edd6fbfaab76c568db49f8e61d337fac5b1c3637ca95b450ff2ec971.
+
+PROJECT run_wahXhZgMNd2HqUY4ulAVxUMA восстанавливает21 собственный grant
+штатным планом, пока RUNNING. Ранний ACK/rejoin CAPTURED: G9/ENV12/binding11,
+38tools, task6898B/fa8e246a…a95ed EQUAL; image-file47a8fc35…66b3d EQUAL.
+Далее native восстановление99 grants шести ролей и Test, exact baseline
+сверка, commit/push/обычный bootstrap merge1805/fresh main, один новый
+ordinary Manager/full39. Developer/reviews/Gate033 ещё NOT RUN.
+
+Chrome owner SSO штатно восстановлен18:33; Console0, API200, overflowfalse.
+Поддерживаемый capture завершился Page.captureScreenshot protocol timeout:
+pixel screenshot не получен, нижележащая причина UNKNOWN. Не заменяем
+пиксельную проверку DOM. Все Running системные Pods Ready; старые terminal
+Pods не трактуются как отказ текущих workload. Демо не менялось; Full65 OPEN.
+
+## Checkpoint 08.10.2026 18:30 UTC — полный процесс остановлен на GitHub LIST
+
+Ветка kodex-agent/issue-1797-full39-qa, Draft PR1805, исходный SHA51decc34
+на main c9b899eb. INTAKE run_fHAjpRgte0HpgQHgGr0MYg34 завершён;
+Coordinator самостоятельно прочитал его восемь артефактов до EOF.
+Architect run_DezlVquvBux12QRp9BOsTDxs: ранний ACK/rejoin CAPTURED,
+own input4040B SHA0d11d1ec8fc013f3a7ebdcdb4e7f3a909611a0dc82a88078560db681e45b512b
+EQUAL actual task/inbox; инструкции45600B/c50db550…1e28 EQUAL. Собственный
+handoff53813B и обязательные документы159879B прочитаны до EOF.
+
+Architecture review семантически BLOCKED: github.repository.content.list
+для services/internal/control-plane/internal/repository/postgres/platform
+на exact c9b899eb вернул INTEGRATION_RESPONSE_INVALID. Точная локальная Git
+проекция содержит507 элементов; двойная JSON-сериализация102009B превышает
+64KiB. Это доказательство механизма, не захваченный remote response.
+Owner DOWNLOAD architecture-review.md200/17722B/rev10,
+SHA6de9f508298140e3bd0d7c746287493ebc0c7fc75b1067aaca815e3d284e3c13 EQUAL;
+Coordinator прочитал весь review до EOF и не продолжил запрещённые стадии.
+Manager run_TAs8_e4U5myrunCXDlmcJWWt и full39 run_hlDPZ_fbxbIeGsUhFh7OE7-R
+FAILED; старые root не Retry. Developer/reviews/Gate033 NOT RUN.
+
+Следующее: GitHub5.0.0 с commit-pinned offset/limit и проверяемым digest
+полного каталога; byte-bounded страницы без повышения64KiB. Contents API
+при1000 элементах закрыто отклоняется как потенциально усечённый. После
+адресных проверок — compiled source/Pod readback и штатная новая revision
+definition/rebind/test/grants, затем один новый ordinary Manager/full39.
+
+Chrome записал настоящий server PLATFORM_RESYNC_REQUIRED26272 после
+READY26221, close4000/wasClean=true, затем READY26272 на новой connection.
+Wire/schema mismatch не найден; live причина outbox lag/queue race UNKNOWN.
+Наблюдатель не записывал DELTA, поэтому отсутствие событий не доказано.
+Первое параллельное owner download артефактов дало412/503, последовательный
+повтор200/hash EQUAL; причина начального отказа UNKNOWN, native EOF PASS.
+Screenshot NOT RUN/capture hang UNKNOWN. Демо не менялось, Full65 OPEN.
+
+## Checkpoint 08.10.2026 18:07 UTC — PR1804 слит, один свежий полный процесс
+
+PR1804 слит обычным squash: author188426c9ef738509784b797d4a36b454e3365d06,
+main/GitHub/origin/local c9b899eb4fe176573f1360e2ea44cbb19332cd5f EQUAL.
+Защита main не обходилась; checks отсутствуют, CI PASS не заявлен. ROOT на
+committed188426c9: disposable TestRuntimeFilesLockedReadComponent PASS9.767s,
+unit AssistantLockedRead/ExecutionPreview PASS0.082s. Source/Pod runtime_files
+8a5eb209…4bbd9 и actual serving ELF101c7da0…b6355 после merge EQUAL прежнему
+точному rebuild. Продолжение в kodex-agent/issue-1797-full39-qa от fresh main.
+
+Штатный Manager run_TAs8_e4U5myrunCXDlmcJWWt/session
+ses_1V5ZluDOXjB_oUAFoawDaHI0 запустил ровно один опубликованный SOFTWARE_CHANGE
+run_hlDPZ_fbxbIeGsUhFh7OE7-R/session ses_k7SxyOuvyeiOOb1tYNwuPQx8.
+Actual Manager input11963B SHA d9ab59fa764481ad82f631c36f7e15a553fba44ba2c33db183b017751fdc5d2c
+EQUAL provider task/inbox; ранний ACK/rejoin CAPTURED18:01, G9/image-file
+47a8fc35…66b3d EQUAL, ENV9/binding10, tools38/grants21/capabilities24.
+
+INTAKE run_fHAjpRgte0HpgQHgGr0MYg34/session ses__o-g3ehLwgWHwvT8qZBJ9FjY,
+turn trn_OgzJ-wUxqbPgUxmVk-7cB8zj/attempt1 RUNNING. ACK/rejoin CAPTURED18:06:
+same Pod runtime-turn-5b20122e366d552a/UIDa86dfea7-b6ba-42c7-9fde-3e3b56a30016,
+G9/image-file47a8fc35…66b3d EQUAL, ENV9/binding10, tools38. Owner input2725B
+SHA07b3e18c19aa1fb7917b194d303aa66a781b517c1aa86824848ba9bfef066c55 EQUAL
+actual task/inbox; instructions48715B/fbd440bc…35ff0 EQUAL. Первое неудачное
+ACK-чтение было адресовано root, а не фактической дочерней сессии; это ошибка
+host-диагностики, не дефект платформы. Полный workflow пока не завершён.
+
+Chrome own page1 reload18:06, platform/run LIVE/attempt0, Console errors/warns0,
+owner API200, horizontal overflow=false. Pixel capture всё ещё NOT RUN:
+поддерживаемый вызов зависает; причина UNKNOWN, обходов нет. Демо владельца
+не изменено. Checklist11/13/14/15 OPEN; далее native EOF/Architect/Developer/
+четыре exact-SHA reviews/Manager/Gate033. Финальный business PR не сливать.
+
 ## Checkpoint 08.10.2026 17:56 UTC — catalog renewal fix интегрирован и обслуживается
 
 Ветка kodex-agent/issue-1797-catalog-continuation, Draft PR1804. Frozen patch

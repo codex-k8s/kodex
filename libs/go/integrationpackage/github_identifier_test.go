@@ -13,7 +13,7 @@ func TestGitHubProviderIdentifiersUseExactJSONIntegerBounds(t *testing.T) {
 		t.Fatal(err)
 	}
 	definition := definitions["github"]
-	if definition.Metadata.Version != "4.0.0" {
+	if definition.Metadata.Version != "5.0.0" {
 		t.Fatal("unexpected GitHub package version")
 	}
 	if _, ok := ResolveShippedRevision(definition, "2.4.0", definition.Digest); ok {
@@ -38,8 +38,8 @@ func TestGitHubProviderIdentifiersUseExactJSONIntegerBounds(t *testing.T) {
 					}
 				} else if field.Key == "limit" || field.Key == "count" {
 					expected := int64(100)
-					if capability.Operation == "github.repository.content.list" && field.Key == "count" {
-						expected = 1000
+					if capability.Operation == "github.repository.content.list" {
+						expected = 50
 					}
 					if capability.Operation == "github.pull_request.file.list" {
 						expected = 4
@@ -48,7 +48,11 @@ func TestGitHubProviderIdentifiersUseExactJSONIntegerBounds(t *testing.T) {
 						t.Fatal("pagination cardinality changed")
 					}
 				} else if field.Key == "cursor" || field.Key == "next_cursor" {
-					if field.Maximum != 10000 {
+					expected := int64(10000)
+					if capability.Operation == "github.repository.content.list" {
+						expected = 999
+					}
+					if field.Maximum != expected {
 						t.Fatal("pagination cursor bound changed")
 					}
 				}

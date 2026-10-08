@@ -13,37 +13,38 @@ import (
 )
 
 type githubCatalogInput struct {
-	Path                 string `json:"path"`
-	Ref                  string `json:"ref"`
-	SHA                  string `json:"sha"`
-	Branch               string `json:"branch"`
-	Content              string `json:"content_base64"`
-	Message              string `json:"message"`
-	Title                string `json:"title"`
-	Body                 string `json:"body"`
-	State                string `json:"state"`
-	Head                 string `json:"head"`
-	Base                 string `json:"base"`
-	Draft                bool   `json:"draft"`
-	Event                string `json:"event"`
-	MergeMethod          string `json:"merge_method"`
-	Number               int    `json:"pull_request_number"`
-	IssueNumber          int    `json:"issue_number"`
-	CommentID            int64  `json:"comment_id"`
-	ReviewID             int64  `json:"review_id"`
-	CheckID              int64  `json:"check_run_id"`
-	WorkflowID           int64  `json:"workflow_id"`
-	WorkflowInputs       string `json:"workflow_inputs"`
-	RunID                int64  `json:"run_id"`
-	JobID                int64  `json:"job_id"`
-	Limit                int    `json:"limit"`
-	Cursor               int    `json:"cursor"`
-	OffsetBytes          int64  `json:"offset_bytes"`
-	MaximumBytes         *int   `json:"maximum_bytes"`
-	ExpectedSHA          string `json:"expected_sha"`
-	ExpectedHeadSHA      string `json:"expected_head_sha"`
-	ExpectedBaseSHA      string `json:"expected_base_sha"`
-	ExpectedChangedFiles *int   `json:"expected_changed_files"`
+	Path                  string `json:"path"`
+	Ref                   string `json:"ref"`
+	SHA                   string `json:"sha"`
+	Branch                string `json:"branch"`
+	Content               string `json:"content_base64"`
+	Message               string `json:"message"`
+	Title                 string `json:"title"`
+	Body                  string `json:"body"`
+	State                 string `json:"state"`
+	Head                  string `json:"head"`
+	Base                  string `json:"base"`
+	Draft                 bool   `json:"draft"`
+	Event                 string `json:"event"`
+	MergeMethod           string `json:"merge_method"`
+	Number                int    `json:"pull_request_number"`
+	IssueNumber           int    `json:"issue_number"`
+	CommentID             int64  `json:"comment_id"`
+	ReviewID              int64  `json:"review_id"`
+	CheckID               int64  `json:"check_run_id"`
+	WorkflowID            int64  `json:"workflow_id"`
+	WorkflowInputs        string `json:"workflow_inputs"`
+	RunID                 int64  `json:"run_id"`
+	JobID                 int64  `json:"job_id"`
+	Limit                 int    `json:"limit"`
+	Cursor                int    `json:"cursor"`
+	OffsetBytes           int64  `json:"offset_bytes"`
+	MaximumBytes          *int   `json:"maximum_bytes"`
+	ExpectedSHA           string `json:"expected_sha"`
+	ExpectedCatalogDigest string `json:"expected_catalog_digest"`
+	ExpectedHeadSHA       string `json:"expected_head_sha"`
+	ExpectedBaseSHA       string `json:"expected_base_sha"`
+	ExpectedChangedFiles  *int   `json:"expected_changed_files"`
 }
 
 type githubContentView struct {
@@ -136,6 +137,10 @@ func (adapter *Adapter) executeGitHubCatalog(ctx context.Context, client *github
 	if json.Unmarshal(raw, &in) != nil {
 		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
 	}
+	// Cursor каталога — offset, не provider page; ноль сохраняется.
+	if request.Operation == "github.repository.content.list" {
+		return executeGitHubDirectoryList(ctx, client, owner, repo, request, capability, in)
+	}
 	if in.Limit == 0 {
 		in.Limit = 20
 		if request.Operation == "github.pull_request.file.list" {
@@ -149,32 +154,6 @@ func (adapter *Adapter) executeGitHubCatalog(ctx context.Context, client *github
 	switch request.Operation {
 	case "github.repository.content.read":
 		return executeGitHubContentRead(ctx, client, owner, repo, request, capability, in)
-	case "github.repository.content.list":
-		var directory []*github.RepositoryContent
-		file, err := githubRead(ctx, capability, func() (*github.RepositoryContent, *github.Response, error) {
-			file, entries, response, err := client.Repositories.GetContents(ctx, owner, repo, in.Path, &github.RepositoryContentGetOptions{Ref: in.Ref})
-			directory = entries
-			return file, response, err
-		})
-		if err != nil {
-			return Result{}, err
-		}
-		if file != nil || len(directory) > 1000 {
-			return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
-		}
-		items := make([]githubContentView, 0, len(directory))
-		for _, entry := range directory {
-			prefix := in.Path
-			if prefix != "" {
-				prefix += "/"
-			}
-			if entry == nil || !strings.HasPrefix(entry.GetPath(), prefix) || !validRepositoryPath(entry.GetPath(), false) || strings.Contains(strings.TrimPrefix(entry.GetPath(), prefix), "/") {
-				return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
-			}
-			items = append(items, githubContentView{Path: entry.GetPath(), Type: entry.GetType(), SHA: entry.GetSHA(), Size: entry.GetSize()})
-		}
-		// Contents API не имеет pagination: выдаём ограниченный полный каталог.
-		return githubCatalogPage(ctx, capability, request, 1000, 1, func() ([]githubContentView, *github.Response, error) { return items, nil, nil })
 	case "github.repository.content.create", "github.repository.content.update", "github.repository.content.delete":
 		content, err := base64.StdEncoding.Strict().DecodeString(in.Content)
 		if err != nil || len(content) > maximumResponseBytes {

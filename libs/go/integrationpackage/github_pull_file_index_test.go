@@ -12,7 +12,7 @@ func TestGitHubPullFileIndexVersionAndRequiredBoundedPins(t *testing.T) {
 		t.Fatal(err)
 	}
 	definition := definitions["github"]
-	if definition.Metadata.Version != "4.0.0" {
+	if definition.Metadata.Version != "5.0.0" {
 		t.Fatal("unexpected metadata-only contract revision")
 	}
 	if _, ok := ResolveShippedRevision(definition, "3.1.0", definition.Digest); ok {

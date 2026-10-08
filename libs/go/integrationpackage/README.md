@@ -38,3 +38,12 @@ GitHub `content.update.content_base64` имеет maximumLength 349528 для ф
 циклы проверяются в полных unit #1046 и #1028; библиотечный PASS не заменяет
 их сквозную проверку. Для YAML parser проверена документация Context7
 `/yaml/go-yaml`: Node traversal и Decoder.KnownFields.
+
+GitHub 5.0.0 задаёт единственный bounded `repository.content.list` contract:
+immutable commit ref, offset cursor, count/total/next/eof и общий catalog digest.
+Схема допускает cursor 0..999 и limit 1..50; adapter проверяет 40hex commit,
+continuation digest, весь immediate-child индекс и окончательный native byte
+budget. Старый 4.0.0 не получает новые semantics через decoder fallback.
+EOF каталога не является EOF исходных файлов; upstream Contents cap >=1000
+закрыто отклоняется. Публикация новой ревизии и exact owner rebind не заменяются
+автоматическим изменением уже закреплённых connection/grant/runtime snapshots.

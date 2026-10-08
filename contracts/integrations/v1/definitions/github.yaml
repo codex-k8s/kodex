@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: github
-  version: 4.0.0
+  version: 5.0.0
   origin: SHIPPED
 spec:
   name: GitHub
@@ -178,7 +178,7 @@ spec:
         retryBackoffMilliseconds: 500
     - key: github.repository.content.list
       name: Получить содержимое каталога
-      description: Получить содержимое каталога в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      description: "Индекс каталога: ref=40 lowercase hex; cursor=offset, limit=20/max50. До eof копировать next_cursor, expected_catalog_digest=catalog_digest. Byte budget может уменьшить count; eof не означает чтение файлов. Contents cap >=1000 отклоняется."
       operation: github.repository.content.list
       risk: READ
       approvalPolicy: NONE
@@ -188,11 +188,20 @@ spec:
         connectionFields: [owner, repository]
       inputFields:
         - {"key":"path","type":"STRING","format":"PLAIN","required":false,"maximumLength":1024}
-        - {"key":"ref","type":"STRING","format":"PLAIN","required":false,"maximumLength":256}
+        - {key: ref, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: cursor, type: INTEGER, required: false, minimum: 0, maximum: 999}
+        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 50}
+        - {key: expected_catalog_digest, type: STRING, format: PLAIN, required: false, maximumLength: 71}
       outputFields:
         - {"key":"items","type":"STRING","format":"PLAIN","required":true,"maximumLength":65536}
-        - {"key":"count","type":"INTEGER","required":true,"minimum":0,"maximum":1000}
-        - {"key":"next_cursor","type":"INTEGER","required":false,"minimum":1,"maximum":10000}
+        - {key: path, type: STRING, format: PLAIN, required: true, allowEmpty: true, maximumLength: 1024}
+        - {key: commit_sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: catalog_digest, type: STRING, format: PLAIN, required: true, maximumLength: 71}
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 50}
+        - {key: total_count, type: INTEGER, required: true, minimum: 0, maximum: 999}
+        - {key: cursor, type: INTEGER, required: true, minimum: 0, maximum: 999}
+        - {key: next_cursor, type: INTEGER, required: false, minimum: 1, maximum: 999}
+        - {key: eof, type: BOOLEAN, required: true}
       execution:
         idempotency: READ_ONLY
         timeoutSeconds: 30

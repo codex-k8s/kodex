@@ -97,8 +97,9 @@ control-plane, а не вымышленную поддержку idempotency hea
 ограничены 64 КиБ. GitHub SDK использует отдельный сырой бюджет, описанный
 выше; это не увеличивает допустимый размер итогового результата.
 Большие результаты отклоняются без выдачи
-частичного файла. GitHub Contents API возвращает каталог без pagination;
-страницы остальных списков используют provider cursor. Jira transitions,
+частичного файла. GitHub Contents API возвращает каталог без upstream pagination;
+adapter выдаёт его проверенный индекс страницами по offset, как описано ниже.
+Страницы остальных списков используют provider cursor. Jira transitions,
 links/attachments и exact Confluence space возвращают ограниченный полный набор.
 
 `github.repository.content.read` проверяет полный UTF-8 файл до 1 МиБ,
@@ -116,9 +117,32 @@ partial-success, download URL, redirect, raw fallback или автоматич�
 → integration-gateway → SDK Contents API разрешённого repository/commit/path
 → проверенная bounded страница и receipt → owner completion/audit/event
 → исходный runtime consumer. `READ_ONLY/NONE`, tenant/repository authority,
-idempotency, leases, grants и события остаются прежними. Новый package `4.0.0`
+idempotency, leases, grants и события остаются прежними. Новый package `5.0.0`
 подключается новой owner revision с явным rebind; уже закреплённые revisions
 не переинтерпретируются и не получают новые лимиты молча.
+
+`github.repository.content.list` читает только immediate children закреплённого
+repository/path на обязательном 40 lowercase hex commit `ref`. Весь ответ
+Contents API проверяется до страницы: SHA, тип, размер, граница каталога и
+уникальность путей; порядок канонический по path. Каталог с 1000 и более
+элементами отклоняется: upstream cap не доказывает полноту, скрытого Trees
+fallback нет. Сырой SDK budget и canonical полный индекс ограничены 2 МиБ.
+`catalog_digest` SHA256 связывает
+полный проверенный индекс с repository, path и commit; `total_count` не больше 999.
+`cursor` — offset элементов от нуля, `limit` по умолчанию 20 и максимум 50.
+Продолжение требует прежний `expected_catalog_digest`; mismatch закрыто
+отклоняется. Страница адаптивно сокращается по окончательному native MCP
+envelope с обоими представлениями и JSON escaping до 64 КиБ. `next_cursor`
+равен offset плюс фактически выданный count и присутствует только до `eof`.
+Exact offset == total_count возвращает пустой EOF; больший offset отклоняется.
+Малый count не означает EOF. EOF индекса не подтверждает чтение исходников:
+содержимое каждого нужного blob читается отдельно через content.read.
+
+Package 5.0.0 имеет новый несовместимый LIST contract и не принимает исторический
+4.0.0 как текущий. CP и gateway обновляют compiled package совместно; forward
+owner publication/rebind, fresh TEST и новые runtime snapshots требуются до
+следующего запуска. Apply миграций, runtime-controller/runner ABI, grants и
+network destinations этим изменением не меняются.
 
 `github.pull_request.read` сохраняет полное описание PR и возвращает точные
 `head_sha`, `base_sha`, `changed_files`. `github.pull_request.file.list`
@@ -150,7 +174,7 @@ GitHub workflow dispatch принимает `workflow_inputs`: JSON-объект
 
 ## Обновление каталога
 
-Текущие версии: GitHub `4.0.0`, GitLab/Jira/Confluence `1.2.0`, Email `1.4.0`,
+Текущие версии: GitHub `5.0.0`, GitLab/Jira/Confluence `1.2.0`, Email `1.4.0`,
 Mattermost `2.2.0`, Synthetic `3.1.0`.
 Публикация новых packages не расширяет существующие grants автоматически.
 Старая pinned revision не переинтерпретируется: владелец публикует новую
