@@ -10,6 +10,22 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 15:16 UTC — realtime live PASS, source опубликован
+
+HEAD/remote/Draft1800 `d7fa89d04137cb5c97ae9fe654189184de29f13b` EQUAL.
+Source tree clean. Scoped lint/format и deterministic Proto regeneration PASS.
+После reload15:10:26 естественный archive15:12:50 обновил оба exact run cache
+с LIVE на ARCHIVED/version2 без reload/loadRun/manual cache mutation;
+15:14:53 realtime live/attempt0/heartbeat,15:16:14 owner GET200 EQUAL.
+Screenshot NOT RUN, queued MCP evaluate снова работает. Чужие вкладки не трогать.
+Предыдущий late-wake NOT RUN ниже является историческим состоянием, не текущим.
+
+Все шесть новых G9 bindings готовы, checks CP/GW/PG/FE PASS. Следующее:
+разрешённый bootstrap merge с обычными protection/checks → fresh main и
+source/Pod/serving readback → один ordinary Manager→published39 SOFTWARE_CHANGE
+для Issue1796 → native Developer PR/внутренние reviews/fixes/final human gate →
+Full65. Финальный business PR автоматически не merge/approve. Цель активна.
+
 ## Checkpoint 08.10.2026 15:10 UTC — команда G9 готова, realtime пакет проверен
 
 Source HEAD/remote/Draft1800 пока `5d30bd86f35a40e2fc5d710b46d224628ac71247`.

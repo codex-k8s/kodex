@@ -10,6 +10,29 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 15:16 UTC — живой storage wake подтверждён, пакет опубликован
+
+Source/remote/Draft1800 `d7fa89d04137cb5c97ae9fe654189184de29f13b` EQUAL,
+publisher bot identity проверена, PR остаётся Draft. Scoped frontend ESLint/
+Prettier PASS; повторный canonical Proto generation дал прежние hashes
+pb.go f9aa0fd2…ae01c1 и grpc.pb.go09181bc6…92e9e. Дерево кода не менялось
+между проверками и коммитом; README/журналы не являются доказательством CI.
+
+Live realtime PASS: после reload15:10:26UTC cache обоих точных runs
+run_FYFC3wK1odK2tp-VA9wdecRN/run_U8Fg80SwnddFiSNVMORYka9X имел LIVE/version2.
+Без последующего reload/loadRun/cache mutation после естественного15min idle
+оба cache значения15:14:53UTC стали ARCHIVED/version2, DELETE_PVC SUCCEEDED,
+realtime live/attempt0 и свежий heartbeat. Отдельный owner GET20015:16:14UTC
+подтвердил точное равенство cached/authoritative readiness. Worker commit
+15:12:50UTC и socket update — разные доказательства; оба теперь подтверждены.
+Console0/overflowfalse/composer пуст. Screenshot всё ещё NOT RUN: MCP capture
+не вернул изображения, но queued evaluate завершился; постоянная потеря
+browser access не подтверждена. Не повторять capture бесконечно.
+
+Следующее: разрешённый bootstrap merge/fresh-main readback без обхода
+protection/checks, затем ordinary Manager→published39 Workflow и Full65.
+Финальный business PR не сливать/не выдавать owner approve автоматически.
+
 ## Checkpoint 08.10.2026 15:10 UTC — командные окружения и атомарный realtime snapshot
 
 - Проверяется tree поверх `5d30bd86f35a40e2fc5d710b46d224628ac71247`,
