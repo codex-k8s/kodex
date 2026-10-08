@@ -10,6 +10,34 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 04:39 UTC
+
+HEAD/remote/Draft1800 `316a732d4fd84cb562e4b025dacc4566481d5229` EQUAL;
+source tests и публикация PASS. Clean-SHA fresh render/apply только CP и
+integration-gateway PASS, новый CP Ready/0restarts, source/Pod hashes EQUAL.
+Owner root/INTAKE/Architect history полностью до EOF1096 и empty tail PASS.
+
+GitHub4 activation частично LIVE PASS: SYSTEM native publish plan
+`pln_qcndwUSwLQh-jl8z9utXvHLb` APPLIED3; configuration14,
+revision `mrev_beiJOS9o2x9PmZqbhsOEHR9B` PUBLISHED,
+digest `ae1855fe87ff18d988f7fa9368296cc448ac0f559a3ca13c7390b94b19ebb7a9`.
+Exact active connection rebind376/binding3 MATCH; protected credential377 PASS,
+native Test379 CONNECTED. Первые credential attempts FAIL до записи:
+Node TLS UNABLE_TO_VERIFY_LEAF_SIGNATURE; штатный system CA исправил invocation,
+TLS/hostname/auth guards не отключались. Все120 прежних grants ещё disabled.
+
+PROJECT own21 restore native run `run_tCdSfAb7MGjT7TEnCIAvhDSl` RUNNING,
+conversation `cnv_G_p5cdo6kjXYLIrSnjuVcuCt` с Workflow context15.
+ACK/rejoin04:38 PASS/task2112Б/2c67602f/instructions34e6a7b5/G7/
+ENV10binding9/tools38/grants2; exact binary9b56 FILE_ONLY EQUAL.
+Failure observer25847 active exact Pod UID1a94a5ef; затем Validate/Apply только
+exact native21 plan, остальные99 через fresh recipient catalogs/typed plans.
+Новый ordinary Manager rev5/max16384 ещё NOT RUN. Старые closed roots не Retry.
+Full65/11/13/14/15 OPEN; goal ACTIVE, автономно до14:00 Саратов.
+Системный тайм-аут consumer gap анализируется read-only отдельно.
+OwnChrome1 reload04:36/workflow navigate04:37; следующая reload≤04:42.
+Итоговый internal PR NOmerge/approve. Следующий publisher previous316a732d.
+
 ## Checkpoint 08.10.2026 04:20 UTC
 
 HEAD/remote/Draft1800 70d70cb14d20ea5f01cf791814d999396e0883c0 до этого пакета.

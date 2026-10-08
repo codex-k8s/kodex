@@ -10,6 +10,37 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 04:39 UTC — GitHub4 подключён, разрешения восстанавливаются
+
+- Source/remote/Draft1800 `316a732d4fd84cb562e4b025dacc4566481d5229`
+  EQUAL. Clean-SHA repo-owned fresh render и apply только control-plane/
+  integration-gateway PASS; exact production source/Pod hashes EQUAL.
+  CP Ready без рестартов. ROOT full unit и targeted race6.973s PASS.
+- Live root/INTAKE/Architect history: страницы500+500+96, seq1..1096,
+  complete=true и empty tail после1096 PASS; graphrevision1097 одинаковая,
+  собственная identity/state child сохранена. Live exact-resource actor NOT RUN.
+- SYSTEM native publication одного GitHub4 draft: run
+  `run_F21nCjVlsfovRqGawv35j9mw`, plan `pln_qcndwUSwLQh-jl8z9utXvHLb`
+  VALID2→APPLIED3; configuration14/revision5 PUBLISHED. Exact binding3 MATCH,
+  только прежний active connection обновлён. Ранний SYSTEM ACK/rejoin PASS,
+  task/provider/inbox и instructions совпали; binary proof NOT RUN.
+- Защищённый credential helper: первые attempts FAIL/BOOTSTRAP до mutation;
+  безопасная диагностика доказала Node TLS UNABLE_TO_VERIFY_LEAF_SIGNATURE.
+  Штатный Node24 system CA (Context7 CLI/TLS checked) устранил invocation
+  без отключения TLS/hostname/authority guards. Protected receipt/fresh readback
+  version377 PASS, штатный native Test379 CONNECTED. Disabled connection не менялась.
+- Прежние120 grants сохранены, пока enabled0. PROJECT helper готовит own21
+  restore одним typed plan, NONE/[] и exact keys без расширения; native run
+  `run_tCdSfAb7MGjT7TEnCIAvhDSl` RUNNING, ACK04:38 EQUAL,
+  task2112Б/2c67602f, instructions34e6a7b5, ENV10/binding9/G7/tools38/grants2.
+  Exact same-Pod image file binary9b560789 EQUAL, serving process NOT RUN.
+  Ранний failure observer активен до завершения. Остальные99 и fresh full33
+  ещё NOT RUN; старые terminal roots не возобновляются.
+- Chrome own1 доступен: Console0, relevant owner GET200, чужие вкладки не
+  изменялись. Служебные ошибочные GET405/404 принадлежали ROOT-диагностике,
+  не штатному приложению. Full65/11/13/14/15 OPEN, goal ACTIVE до14:00 Саратов.
+  Тайм-аут execution consumer gap не объявляется исправленным.
+
 ## Checkpoint 08.10.2026 04:20 UTC — курсор графа, контекст и GitHub4
 
 - До фиксации этого пакета HEAD/remote/Draft1800:
