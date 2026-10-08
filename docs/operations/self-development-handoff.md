@@ -10,6 +10,55 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 05:14 UTC
+
+GitHub4 полностью восстановлен native: connection499/CONNECTED/120enabled/
+120total/7recipients/credentialtrue/binding3MATCH. Exact baseline semantic
+comparison всех прежних refs/keys/scopes/NONE/[]/risk/enabled EQUAL, кроме OCC
+version; changed/missing/extra0. Все7typedplans APPLIED3. Ничего не повторять.
+Eight runtime bindings/currentVersionRef HTTP200/EQUAL, four-ENV preservation
+SYSTEM730d753f/OWN053978e5/WRITE87d163a9/REVIEW178fd8ba EQUAL; tools38.
+
+Compact-tool UI3+docs2 ready to commit; ROOT137unit/lint/format/typecheck/
+build9.40s/desktop+mobile screenshots PASS. HEAD/remote/Draft1800 до пакета e0ade7ff.
+Перед новымfull33 сначала strictdeadlineABI9 candidate, tests/freeze,
+quiescentcoordinatedpolicy/CP/RC/migration и G14SYSTEM/G8PROJECT/4ENV/8bindings.
+Owner maintenance existingUI-path дляbootstrapownimages уточняется; прямой
+recipeUPDATE не использовать при managedlineage без подтверждённого authority.
+Изолированный candidate ещё не adopted, activationNOT RUN.
+
+Taskrev5 prepared private, не отправлен. Старые terminal runs не Retry.
+Full65/11/13/14/15 OPEN, goalACTIVE. OwnChrome1 lastreload05:12:41;
+nextreload≤05:17:41, owner4never touch. Publisher previous=e0ade7ff передpush.
+Итоговый internal business PR NOmerge/approve. Автономно до14:00 Саратов.
+
+## Checkpoint 08.10.2026 05:02 UTC
+
+HEAD/remote/Draft1800 e0ade7ff EQUAL до пакета. MAIN dirty только compact
+tool-group3files + journal/handoff. ROOT137unit2.77s/lint/format/typecheck/
+build9.40s PASS; sourcePod EQUAL. Actual screenshot05:00 compact13calls/
+Завершены+Ошибок1 PASS, Console0/GET200/overflowfalse. Transient realtime
+после HMR восстановился05:01; не повторять принятые native mutations.
+
+GitHub4 CONNECTED/version459/enabled80: own21+Manager19+Architect16+
+Developer24 exact typed plans APPLIED3, onlyenable/NONE/[] PASS.
+Documentation14 conversation cnv_wCi5fF9CBiUwtxbSC20xyUtn/native
+run_x0iygXMYyHILcQGFNPKyYvA_ RUNNING; ACK/rejoin PASS, observer23855active.
+Следом Security13/Lexical13 через fresh AGENT dialogs, exact plan diff,
+Validate→Apply; суммарно120 и сравнение baseline без расширения.
+После этого новый ordinaryManager taskrev5/16K, ONE full33 launch.
+Старые closed roots не Retry/Resume. Full65/11/13/14/15 OPEN.
+
+Durable timeout isolated candidate ещё в работе, MAIN не меняет;
+runner ABI v9 cutover только после полного read/test и quiescent graph.
+Выбран strict ABI9/contract3 и существующий owner maintenance ROLE_IMAGE/
+assistant-settings для новых own images до новых helperturns; B CP→RC-only
+отклонён без independent provider cancel при RC outage. Новые permissions/
+legacy/ручной SQL запрещены; nativebusinessimplementation остаётся команде.
+OwnChrome1 последний navigate04:59; reload≤05:04, foreign owner4 не трогать.
+Publisher previous перед следующим push установить e0ade7ff.
+Итоговый internal business PR NOmerge/approve; goal ACTIVE до14:00 Саратов.
+
 ## Checkpoint 08.10.2026 04:39 UTC
 
 HEAD/remote/Draft1800 `316a732d4fd84cb562e4b025dacc4566481d5229` EQUAL;

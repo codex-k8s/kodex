@@ -10,6 +10,87 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 05:14 UTC — GitHub4 разрешения восстановлены полностью
+
+- Семь отдельных native typed plans APPLIED3 восстановили ровно120 grants:
+  own21/Manager19/Architect16/Developer24/Documentation14/Security13/Lexical13.
+  Последние планы `pln_vIqupkJw9hMSjUNqtQ5nGa41`,
+  `pln_BvULu5oc3IBxRCVgB6pIsD8a`, `pln_cC6DqYW5nXNmKaPObJaxd5Bd`.
+  Каждый exact diff/keys/selected/NONE/[] проверен до UI Validate/Apply.
+  Fresh owner readback CONNECTED499/credentialConfiguredtrue/binding3MATCH/
+  definition4.0.0/enabled120,total120,recipients7. Каноническая сверка каждого
+  прежнего ref/agent/capability/risk/approval/resourceScope/enabled, исключая
+  только OCC version, EQUAL; changed/missing/extra0. Это выполненный restore,
+  не доказательство полного business Workflow.
+- Security и Lexical helper runs `run_ZDQpPuqmafRRIvzg2v5MLQhs` и
+  `run_WDwoDfxqvuLf-8wEjg0K5MEv` COMPLETED; ранние ACK/rejoin EQUAL.
+  Native failure observers соединены до завершения, завершились FOLLOW_STREAM_ENDED
+  после успеха; отдельного captured failure нет. Старые closed roots не Retry.
+- Все8 runtime bindings повторно HTTP200/EQUAL с опубликованными versionRef.
+  Four-ENV preservation SHA совпали с прежними01:33 proof:
+  SYSTEM730d753f, OWN053978e5, WRITE87d163a9, REVIEW178fd8ba.
+  Tools38 у каждой роли; secret descriptor только WRITE. Это безопасный baseline
+  для будущей image-only ABI9 migration, значения не публикуются.
+- ROOT compact-group unit137/lint/format/typecheck/build и desktop/mobile
+  screenshots PASS текущего пакета. Следующая фиксация включает только UI3 и
+  журнал/продолжение2. Native33 и timeoutABI9 activation пока NOT RUN;
+  Full65/11/13/14/15 OPEN, цель ACTIVE, автономно до14:00 Саратов.
+
+## Checkpoint 08.10.2026 05:02 UTC — восстановлены 80 grants, компактные статусы инструментов
+
+- HEAD/remote/Draft1800 `e0ade7ffad584d7183dc87bd24aa493e08352bd3`
+  EQUAL до этого пакета. Автономная работа до14:00 Саратов; цель ACTIVE,
+  Full65/11/13/14/15 OPEN. Доказательства ниже относятся к текущему working tree,
+  а не immutable release или финальной приёмке.
+- Через отдельные AGENT contexts PROJECT helper подготовил точные typed plans:
+  own21 `pln_X72F-F7LCJgJclIqH6Qsscf9`, Manager19
+  `pln_2h7ogn8lgshNrkXgRxaEimHV`, Architect16
+  `pln_GmCib5ZDqIqI9XRdqNZcv6QS`, Developer24
+  `pln_mswnEtDy_8w7PY4RBuG218vg`. ROOT независимо сверил exact keys,
+  только enabledfalse→true, NONE/[], selected/permitted, неизменность остальных
+  полей. Каждый план DRAFT1→VALID2→APPLIED3 через UI; fresh connection
+  CONNECTED/version459/enabled80. Оставшиеся40 ещё NOT RUN.
+- Ранние ACK/rejoin четырёх native runs PASS: task/provider/inbox и instructions
+  EQUAL, G7/ENV10/binding9/tools38. Developer run
+  `run_Z6xS8MDgHYYlovr6xBUAp5t_`, session
+  `ses_vl3wrvLEMM52LZYmtLUvvDcs`, turn
+  `trn_ZS9KIF9qyU-CPYi4cLlKWGqF`, attempt1,
+  taskSHA `6ca56108be70681468fe8f89c3bea569ddc0d62d1dbcb95101be940b284c77f1`.
+  Exact same-Pod image binary FILE_ONLY; serving process NOT RUN.
+  Failure observers завершились FOLLOW_STREAM_ENDED/NOT_CAPTURED уже после
+  SUCCEEDED — это не provider failure и не дополнительный PASS.
+- Documentation14 native helper `run_x0iygXMYyHILcQGFNPKyYvA_`
+  RUNNING; ранний ACK/rejoin PASS05:00, task1767Б/SHAdea47400,
+  actual tuple `ses_a0dKPR-D_IZUzu6Bwo6FuARz`/
+  `trn_KAiiooT00R4kiryTGp9oZih5`/1. Exact Pod failure observer активен.
+- UX: завершённая группа инструментов больше не выглядит целиком упавшей
+  из-за исправленного вызова. Нейтральное «Завершены» и отдельное warning
+  «Ошибок: N»; детали ошибок сохранены, working только у текущего RUNNING
+  exact execution, без historical/closed attempt. ROOT137unit2.77s,
+  scoped ESLint/Prettier, forced typecheck/build9.40s PASS; прежний chunk-size
+  warning сохранён. Три source/Pod hashes EQUAL. Actual Chrome screenshot05:00
+  показывает13calls/Завершены/Ошибок1, user справа/assistant слева,
+  компактные строки, overflowfalse; Console0, relevant owner GET200.
+  Mobile390x844 screenshot05:04 PASS: summary325.75x41px, оба статуса
+  видны, composer и controls не перекрываются, Console0/overflowfalse.
+  Первый capture после изменения viewport попал в пустой initial render;
+  он не был выдан за PASS, подтверждённый снимок сделан после render.
+  Краткий realtime reconnect после HMR восстановился05:01 до «Подключено»;
+  нет доказательства постоянного network defect. Старые terminal roots не Retry.
+- Durable root/stage wall-clock timeout consumer реализуется отдельно;
+  пока NOT RUN, не объявляется исправленным. Новый обычный Manager revision5
+  подготовлен, но ещё не отправлен до восстановления всех120 grants.
+- Решение05:10 по deadline rollout: сохраняется строгий новый RunnerInputv9/
+  role contract3. Вариант только CP→RC без нового runner отклонён: DB terminal
+  отзывает права, но при RC outage прежний provider может продолжить работу;
+  полного независимого cancel/join proof нет. После quiescent coordinated
+  migration/policy/CP/RC cutover новые SYSTEM/PROJECT own images и image-only
+  bindings обновляются существующим owner ROLE_IMAGE/assistant-settings путём,
+  без новых прав/API/legacy и без подмены business Developer/reviewers.
+  Остальной cohort и свежая самонастройка проверяются native помощниками после
+  восстановления own runtimes. Старые планы после policy drift не считаются
+  действительными без fresh owner readback/OCC. Активация пока NOT RUN.
+
 ## Checkpoint 08.10.2026 04:39 UTC — GitHub4 подключён, разрешения восстанавливаются
 
 - Source/remote/Draft1800 `316a732d4fd84cb562e4b025dacc4566481d5229`

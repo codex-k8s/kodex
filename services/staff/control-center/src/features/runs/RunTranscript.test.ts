@@ -135,12 +135,121 @@ describe("RunTranscript: результат интеграции, а не усп
         /class="run-transcript__tool-group"[^]*?<summary[^>]*>[^]*?<\/summary>/,
       )?.[0] ?? "";
     expect(summary).toContain('data-state="FAILED"');
-    expect(summary).toContain("status-badge--danger");
+    expect(summary).toContain('data-state="COMPLETED"');
+    expect(summary).toContain("Завершены");
+    expect(summary).toContain("Ошибок: 1");
+    expect(summary).toContain("status-badge--warning");
+    expect(summary).not.toContain("status-badge--danger");
     expect(summary).not.toContain('data-state="SUCCEEDED"');
+    expect(html.slice(html.indexOf("</summary>"))).toContain(
+      "status-badge--danger",
+    );
     expect(items.every((item) => item.toolCall?.state === "SUCCEEDED")).toBe(
       true,
     );
   });
+  it.each(["ru", "en"] as const)(
+    "отделяет прошлую ошибку от завершённой или активной группы (%s)",
+    async (locale) => {
+      const previous = i18n.global.locale.value;
+      i18n.global.locale.value = locale;
+      try {
+        const items: RunActivityItem[] = Array.from(
+          { length: 12 },
+          (_, index) => ({
+            id: `group_${String(index)}`,
+            kind: "tool",
+            historical: false,
+            actor: "Помощник",
+            occurredAt: "2026-10-04T10:00:00Z",
+            execution: {
+              runRef: "run_group",
+              nodeRef: "nod_group",
+              sessionRef: "ses_group",
+              turnRef: "trn_group",
+              turnNumber: 1,
+              attempt: 1,
+            },
+            toolCall: Object.assign(
+              {
+                ref: `tcl_group_${String(index)}`,
+                tool: "get_configuration_catalog",
+                state:
+                  index === 0 ? ("FAILED" as const) : ("SUCCEEDED" as const),
+                durationMs: 10,
+                safeParameters: {},
+                safeResult: "",
+                auditRef: "aud_group",
+              },
+              {
+                arguments: "RAW_COMMAND_SENTINEL",
+                output: "RAW_OUTPUT_SENTINEL",
+              },
+            ),
+          }),
+        );
+        const renderGroup = async (
+          activeItemId: string | null,
+          closedExecutionKeys: string[] = [],
+        ) =>
+          renderToString(
+            createSSRApp({
+              render: () =>
+                h(RunTranscript, {
+                  items,
+                  embedded: true,
+                  activeItemId,
+                  closedExecutionKeys,
+                }),
+            }).use(i18n),
+          );
+        const groupSummary = (html: string) =>
+          html.match(
+            /class="run-transcript__tool-group"[^]*?<summary[^>]*>[^]*?<\/summary>/,
+          )?.[0] ?? "";
+        const html = await renderGroup(null);
+        expect(groupSummary(html)).toContain(
+          locale === "ru" ? "Вызовы инструментов: 12" : "Tool calls: 12",
+        );
+        expect(groupSummary(html)).toContain(
+          locale === "ru" ? "Ошибок: 1" : "Errors: 1",
+        );
+        expect(groupSummary(html)).toContain('data-state="COMPLETED"');
+        expect(groupSummary(html)).not.toContain("status-badge--danger");
+        expect(html).toContain("status-badge--danger");
+        expect(html).not.toContain("RAW_COMMAND_SENTINEL");
+        expect(html).not.toContain("RAW_OUTPUT_SENTINEL");
+        expect(groupSummary(await renderGroup("group_11"))).not.toContain(
+          'role="status"',
+        );
+        const last = items.at(-1);
+        const execution = last?.execution;
+        const scope = executionKey(execution);
+        if (!last?.toolCall || !execution || !scope)
+          throw new Error("Invalid tool group fixture");
+        last.toolCall.state = "RUNNING";
+        const active = groupSummary(await renderGroup("group_11"));
+        expect(active).toContain('role="status"');
+        expect(active).toContain(locale === "ru" ? "Ошибок: 1" : "Errors: 1");
+        expect(active).not.toContain('data-state="COMPLETED"');
+        expect(groupSummary(await renderGroup(null))).not.toContain(
+          'role="status"',
+        );
+        expect(
+          groupSummary(await renderGroup("group_11", [scope])),
+        ).not.toContain('role="status"');
+        last.execution = { ...execution, attempt: 2 };
+        expect(groupSummary(await renderGroup("group_11"))).not.toContain(
+          'role="status"',
+        );
+        expect(
+          items.filter((item) => item.toolCall?.state === "FAILED"),
+        ).toHaveLength(1);
+      } finally {
+        i18n.global.locale.value = previous;
+      }
+    },
+  );
   it.each(["ru", "en"] as const)(
     "показывает FAILED/REJECTED exact квитанции, не скрывая детали (%s)",
     async (locale) => {

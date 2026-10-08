@@ -187,17 +187,36 @@ function groupToolState(items: readonly RunActivityItem[]): string {
   const states = items.map((item) =>
     item.toolCall ? toolState(item.toolCall) : "",
   );
-  return (
-    [
-      "FAILED",
-      "REJECTED",
-      "CANCELLED",
-      "WAITING_HUMAN",
-      "NEEDS_ATTENTION",
-      "RUNNING",
-      "SUCCEEDED",
-    ].find((state) => states.includes(state)) ?? ""
+  const pending = ["NEEDS_ATTENTION", "WAITING_HUMAN", "RUNNING"].find(
+    (state) => states.includes(state),
   );
+  if (pending) return pending;
+  if (states.every((state) => state === "CANCELLED")) return "CANCELLED";
+  return states.every((state) =>
+    ["SUCCEEDED", "FAILED", "REJECTED", "CANCELLED"].includes(state),
+  )
+    ? "COMPLETED"
+    : "";
+}
+function groupToolErrorCount(items: readonly RunActivityItem[]): number {
+  return items.filter(
+    (item) =>
+      item.toolCall &&
+      ["FAILED", "REJECTED"].includes(toolState(item.toolCall)),
+  ).length;
+}
+function groupToolWorking(items: readonly PresentedTranscriptItem[]): boolean {
+  return items.some((item) => {
+    const scope = executionKey(item.execution);
+    return Boolean(
+      scope &&
+      !item.historical &&
+      !props.closedExecutionKeys.includes(scope) &&
+      item.working &&
+      item.toolCall &&
+      toolState(item.toolCall) === "RUNNING",
+    );
+  });
 }
 function expandableMessage(item: RunActivityItem): boolean {
   return Boolean(
@@ -519,7 +538,7 @@ function bytes(value: number): string {
                   {{ group.items[0]?.actor || $t("runs.platformActor") }} ·
                   {{ $t("runs.toolGroup", { count: group.items.length }) }}
                   <span
-                    v-if="group.items.some((item) => item.working)"
+                    v-if="groupToolWorking(group.items)"
                     class="run-transcript__work"
                     role="status"
                   >
@@ -531,6 +550,21 @@ function bytes(value: number): string {
                   <StatusBadge
                     v-else-if="visibleState(groupToolState(group.items), false)"
                     :state="groupToolState(group.items)"
+                    :label="
+                      groupToolState(group.items) === 'COMPLETED'
+                        ? $t('runs.toolGroupCompleted')
+                        : undefined
+                    "
+                  />
+                  <StatusBadge
+                    v-if="groupToolErrorCount(group.items)"
+                    state="FAILED"
+                    tone="warning"
+                    :label="
+                      $t('runs.toolGroupErrors', {
+                        count: groupToolErrorCount(group.items),
+                      })
+                    "
                   />
                 </summary>
                 <RunTranscript
