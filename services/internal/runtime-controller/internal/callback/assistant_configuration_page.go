@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	maximumAssistantConfigurationPageBytes   = 4096
+	maximumAssistantConfigurationPageBytes   = 16 << 10
 	assistantConfigurationPageInvalidMessage = "assistant configuration page is invalid"
 )
 

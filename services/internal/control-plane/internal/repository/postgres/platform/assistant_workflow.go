@@ -150,10 +150,30 @@ func hydrateAssistantWorkflowFields(before map[string]any, version int64,
 	operation.ExpectedVersion = &version
 	operation.Selected = true
 	operation.Input = nil
-	if _, _, err := assistantUpdateWorkflow(operation); err != nil {
+	payload, _, err := assistantUpdateWorkflow(operation)
+	if err != nil {
+		return entity.AssistantPlanOperation{}, err
+	}
+	operation.After, err = assistantWorkflowAfterSnapshot(operation.Parameters, *payload.Draft)
+	if err != nil {
 		return entity.AssistantPlanOperation{}, err
 	}
 	return operation, nil
+}
+
+func assistantWorkflowAfterSnapshot(parameters map[string]any, draft entity.WorkflowVersion) (map[string]any, error) {
+	raw, err := json.Marshal(draft)
+	if err != nil {
+		return nil, errs.ErrInvalid
+	}
+	var normalized map[string]any
+	if json.Unmarshal(raw, &normalized) != nil {
+		return nil, errs.ErrInvalid
+	}
+	after := cloneAssistantFields(parameters)
+	after["inputFields"], after["steps"] = assistantWorkflowGraphFields(draft)
+	after["draft"] = normalized
+	return after, nil
 }
 
 func assistantUpdateWorkflow(operation entity.AssistantPlanOperation) (command.WorkflowInput, int64, error) {
@@ -324,22 +344,49 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 			step.DependsOn[dependencyIndex] = remap[dependency]
 		}
 	}
-	if len(parsed.Draft.Steps) == len(draft.Steps) {
-		sameOrderAndParallelism := true
-		for index, step := range parsed.Draft.Steps {
-			old := draft.Steps[index]
-			if step.Key != old.Key || step.Parallel != old.Parallel || step.ParallelGroup != old.ParallelGroup {
-				sameOrderAndParallelism = false
-				break
-			}
-		}
-		if sameOrderAndParallelism {
-			for index := range parsed.Draft.Steps {
-				parsed.Draft.Steps[index].DependsOn = append([]string(nil), draft.Steps[index].DependsOn...)
-			}
-		}
+	if err := retainAssistantWorkflowDependencies(draft.Steps, parsed.Draft.Steps); err != nil {
+		return err
 	}
 	draft.Inputs, draft.Steps = parsed.Draft.Inputs, parsed.Draft.Steps
+	return nil
+}
+
+func retainAssistantWorkflowDependencies(original, proposed []entity.WorkflowStep) error {
+	previous := make(map[string]entity.WorkflowStep, len(original))
+	unchanged := len(original) == len(proposed)
+	for index, step := range original {
+		previous[step.Key] = step
+		if unchanged && (step.Key != proposed[index].Key || step.Parallel != proposed[index].Parallel || step.ParallelGroup != proposed[index].ParallelGroup) {
+			unchanged = false
+		}
+	}
+	seen := make(map[string]bool, len(proposed))
+	for index := range proposed {
+		step := &proposed[index]
+		dependencies := append([]string(nil), step.DependsOn...)
+		if old, exists := previous[step.Key]; exists {
+			// Изменение структуры добавляет зависимости фронта, не удаляя исходные рёбра.
+			step.DependsOn = append([]string(nil), old.DependsOn...)
+			if !unchanged {
+				for _, dependency := range dependencies {
+					if !contains(step.DependsOn, dependency) {
+						step.DependsOn = append(step.DependsOn, dependency)
+					}
+				}
+			}
+		}
+		unique := make(map[string]bool, len(step.DependsOn))
+		for _, dependency := range step.DependsOn {
+			if !seen[dependency] || unique[dependency] {
+				return errs.ErrInvalid
+			}
+			unique[dependency] = true
+		}
+		if seen[step.Key] {
+			return errs.ErrInvalid
+		}
+		seen[step.Key] = true
+	}
 	return nil
 }
 
@@ -385,11 +432,23 @@ func (repository *Repository) assistantWorkflowUpdateSnapshotMatches(ctx context
 	if err != nil {
 		return false, err
 	}
-	return operation.ExpectedVersion != nil && *operation.ExpectedVersion == version &&
-		operation.Target.Version != nil && *operation.Target.Version == version &&
-		operation.Target.Name == assistantString(before, "name") &&
-		reflect.DeepEqual(operation.Before, before) &&
-		reflect.DeepEqual(operation.Parameters, operation.After) &&
-		assistantString(operation.Parameters, "workflowRef") == operation.Target.Ref &&
-		assistantString(operation.Parameters, "projectRef") == projectRef, nil
+	if operation.ExpectedVersion == nil || *operation.ExpectedVersion != version ||
+		operation.Target.Version == nil || *operation.Target.Version != version ||
+		operation.Target.Name != assistantString(before, "name") || !reflect.DeepEqual(operation.Before, before) ||
+		assistantString(operation.Parameters, "workflowRef") != operation.Target.Ref ||
+		assistantString(operation.Parameters, "projectRef") != projectRef {
+		return false, nil
+	}
+	// After — только проекция заново проверенного command, не caller authority.
+	canonical := operation
+	canonical.Input = nil
+	payload, _, err := assistantUpdateWorkflow(canonical)
+	if err != nil {
+		return false, err
+	}
+	after, err := assistantWorkflowAfterSnapshot(operation.Parameters, *payload.Draft)
+	if err != nil {
+		return false, err
+	}
+	return assistantJSONEqual(operation.After, after), nil
 }

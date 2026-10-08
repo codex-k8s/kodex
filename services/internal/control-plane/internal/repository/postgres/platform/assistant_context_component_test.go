@@ -183,6 +183,9 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 	if err := workflowTx.Rollback(ctx); err != nil {
 		t.Fatal(err)
 	}
+	t.Run("workflow33-to39-frontier", func(t *testing.T) {
+		testAssistantWorkflowFrontier(t, ctx, repository, service, owner, project.Project.Ref, agent.Ref)
+	})
 	schedule, err := service.Execute(ctx, command.Command{Kind: command.CreateSchedule, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-context-schedule"}, Payload: command.ScheduleInput{
 			ProjectRef: project.Project.Ref, Name: "Context schedule", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref},

@@ -10,6 +10,41 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 12:00 UTC — DAG, увеличенные страницы и параметры чтения
+
+- База 802e8423035e7363bec8965b91bb0ab7e6f07140. Приняты три замороженных
+  адресных пакета: structural UPDATE_WORKFLOW, страницы конфигурации 16KiB
+  и безопасные координаты запроса чтения в tool transcript. ABI/RPC/grants,
+  runner image и миграции не изменены. Две пересекающиеся RC правки объединены
+  отдельными hunks, без подмены чужого файла.
+- Structural update сохраняет все прежние retained edges и добавляет новый
+  frontier; same-order update сохраняет exact DAG. After показывает assigned
+  keys и actual draft. Fresh Before/OCC и exact recomputation After обязательны;
+  удалённые/forward/duplicate зависимости и forged After закрыто отклоняются.
+- ROOT combined CP platform unit PASS0.892s, RC callback PASS5.303s, оба vet
+  и SQL-boundary PASS. Public disposable PostgreSQL targeted frontier PASS:
+  четыре tests/subtests, package3.475s, migration/readbacks/cleanup PASS.
+  Проверены Create33/Validate/Publish, hydrate39/Apply/OCC, Publish39,
+  все33 исходных edges, шесть агрегаций по четыре reviewers, четыре inputs,
+  defaults/ResultSchema/sole final gate и immutable old root/spec/input/graph.
+  Unit без DB не выдан за component acceptance; исходные fixture FAIL сохранены.
+- Default/max page16KiB, отдельный encoded model budget64KiB; UTF8/offset,
+  version/digest/EOF и adaptive shrinking сохранены. Fixture149159B требует
+  10 страниц вместо37; максимальный wire48674B. Safe parameters содержат только
+  catalogKind/offset_bytes/maximum_bytes после canonical parsing. Это request
+  coordinates, не receipt фактически прочитанного диапазона/EOF.
+- Host CP source d12270f3…4150; объединённый RC tools988bd67c…68ea и
+  server1e4a38c1…1537. Ready CP/RC подтверждены; exact mounted source и
+  executable delivery проверяются отдельно перед следующим native turn.
+  Exact mounted CP/RC hashes EQUAL; bounded Air logs после hot delivery
+  показывают building/running без compile failure/error-level. Source proof
+  не подменяет serving-process или native effect proof.
+- Chrome собственная вкладка: Workflow GET200/version15/PUBLISHED/33steps,
+  Console error/warn0, DOM overflowfalse. Screenshot NOT RUN после предыдущих
+  отказов/зависаний MCP, DOM не выдан за visual PASS. Демонстрационный проект
+  не мешает и не изменён. Native16KiB/39-stage proposal/Apply/Publish и новый
+  business Workflow ещё NOT RUN; Full65/11/13/14/15 OPEN.
+
 ## Checkpoint 08.10.2026 11:30 UTC — наследование input исправлено; DAG-plan BLOCKED
 
 - Рабочая база e3265b297bf7de13075347fcea9d8e2261e1f33b. Принят замороженный

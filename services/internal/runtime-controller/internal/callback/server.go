@@ -1802,8 +1802,18 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 		parameters := map[string]any{}
 		if catalog, ok := arguments["assistant_configuration_catalog"].(map[string]any); ok {
 			if kind, ok := catalog["kind"].(string); ok && assistantConfigurationCatalogKindKnown(kind) {
-				// Публикуется только закрытый вид каталога, без аргументов и координат ресурса.
+				// Вид и проверенные координаты запроса страницы не раскрывают ресурс или содержимое.
 				parameters["catalogKind"] = kind
+				if kind == "WORKFLOW_CONFIGURATION" || kind == "AGENT_CONFIGURATION" {
+					if _, err := configurationCatalog(input, arguments); err == nil {
+						if _, err := parseAssistantConfigurationCatalog(input, arguments, catalog); err == nil {
+							if page, err := parseAssistantConfigurationPage(catalog, kind); err == nil {
+								parameters["offset_bytes"] = page.offset
+								parameters["maximum_bytes"] = page.maximum
+							}
+						}
+					}
+				}
 			}
 		}
 		return parameters, "platform.configuration.read", "", input.IsAssistant()

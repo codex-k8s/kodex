@@ -10,6 +10,17 @@ updated: 2026-10-04
 
 # Совместная отладка прототипа
 
+## Checkpoint 08.10.2026 12:00 UTC — подтверждаемое изменение Workflow
+
+Issue1797/Draft1800, база802e8423: structural UPDATE сохраняет прежние DAG
+edges, назначает новые keys сервером и показывает exact normalized After.
+ROOT CP/RC unit, vet, SQL-boundary и disposable PostgreSQL33→39 PASS;
+исторические pins/inputs/graph не меняются. Configuration pages увеличены
+до16KiB при64KiB encoded budget; transcript показывает только безопасные
+координаты read request. Native proposal/Apply/Publish и новый business run
+пока NOT RUN. Chrome API200/Console0, screenshot NOT RUN из-за MCP.
+Подробности и дальнейшие шаги: self-development-dogfooding.md.
+
 ## Checkpoint 07.10.2026 17:13 UTC — обычная переписка и native dogfooding
 
 Текущая работа относится к Issue1797/Draft1800, ветка

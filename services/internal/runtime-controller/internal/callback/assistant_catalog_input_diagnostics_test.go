@@ -117,7 +117,7 @@ func TestAssistantCatalogLocalInputWireRecoveryIsProjectionBound(t *testing.T) {
 				s["configuration_offset_bytes"] = maximumAssistantCurrentConfigurationBytes + 1
 			}},
 			{"maximum below bound", assistantCatalogPageInvalid, func(_, s map[string]any) { s["maximum_bytes"] = 3 }},
-			{"maximum above bound", assistantCatalogPageInvalid, func(_, s map[string]any) { s["maximum_bytes"] = 4097 }},
+			{"maximum above bound", assistantCatalogPageInvalid, func(_, s map[string]any) { s["maximum_bytes"] = 16385 }},
 			{"maximum fraction", assistantCatalogPageInvalid, func(_, s map[string]any) { s["maximum_bytes"] = 4.5 }},
 			{"maximum type", assistantCatalogPageInvalid, func(_, s map[string]any) { s["maximum_bytes"] = "PRIVATE_SENTINEL" }},
 			{"digest type", assistantCatalogPageInvalid, func(_, s map[string]any) { s["configuration_sha256"] = 7 }},
@@ -366,6 +366,8 @@ func TestAssistantWorkflowUpdateSchemaExplainsDependencyRetentionWithoutNewField
 	step := steps["items"].(map[string]any)
 	properties := step["properties"].(map[string]any)
 	if !ok || !strings.Contains(guidance, "count, order, keys and parallelism") || !strings.Contains(guidance, "numeric parallelGroup") || !strings.Contains(guidance, "draft.Steps[].DependsOn") ||
+		!strings.Contains(guidance, "retain ALL original edges") || !strings.Contains(guidance, "waits for ALL peers") || !strings.Contains(guidance, "After.draft") || !strings.Contains(guidance, "Omit key for new steps") ||
+		!strings.Contains(guidance, "owner must verify") || !strings.Contains(guidance, "returns plan locators") || !strings.Contains(guidance, "After Apply, read full WORKFLOW_CONFIGURATION") ||
 		!strings.Contains(guidance, "ResultSchema is retained") || !strings.Contains(guidance, "input defaults are preserved by input key") || step["additionalProperties"] != false || properties["dependsOn"] != nil || properties["draft"] != nil {
 		t.Fatal("workflow update guidance changed editable fields or omitted dependency retention conditions")
 	}

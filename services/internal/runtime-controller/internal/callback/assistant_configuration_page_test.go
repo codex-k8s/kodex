@@ -89,7 +89,7 @@ func TestAssistantConfigurationPageReconstructsExactUTF8Source(t *testing.T) {
 func TestAssistantConfigurationPageParserClosedInputs(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	page, err := parseAssistantConfigurationPage(map[string]any{"kind": "WORKFLOW_CONFIGURATION"}, "WORKFLOW_CONFIGURATION")
-	if err != nil || page != (assistantConfigurationPageRequest{maximum: 4096}) {
+	if err != nil || page != (assistantConfigurationPageRequest{maximum: 16384}) {
 		t.Fatal("неверные значения по умолчанию")
 	}
 	valid := map[string]any{"kind": "AGENT_CONFIGURATION", "configuration_offset_bytes": float64(10), "maximum_bytes": float64(4), "configuration_sha256": digest}
@@ -102,7 +102,7 @@ func TestAssistantConfigurationPageParserClosedInputs(t *testing.T) {
 		value any
 	}{
 		{"configuration_offset_bytes", -1}, {"configuration_offset_bytes", 0.5}, {"configuration_offset_bytes", math.NaN()}, {"configuration_offset_bytes", math.Inf(1)}, {"configuration_offset_bytes", maximumAssistantCurrentConfigurationBytes + 1}, {"configuration_offset_bytes", "0"},
-		{"maximum_bytes", 3}, {"maximum_bytes", 4097}, {"maximum_bytes", 4.5}, {"configuration_sha256", strings.Repeat("A", 64)}, {"configuration_sha256", ""}, {"configuration_sha256", 7}, {"unknown", "PRIVATE_SENTINEL"},
+		{"maximum_bytes", 3}, {"maximum_bytes", 16385}, {"maximum_bytes", 4.5}, {"configuration_sha256", strings.Repeat("A", 64)}, {"configuration_sha256", ""}, {"configuration_sha256", 7}, {"unknown", "PRIVATE_SENTINEL"},
 	} {
 		t.Run(item.key+"/"+reflect.TypeOf(item.value).String(), func(t *testing.T) {
 			selector := map[string]any{}
@@ -116,6 +116,12 @@ func TestAssistantConfigurationPageParserClosedInputs(t *testing.T) {
 		})
 	}
 	delete(valid, "configuration_sha256")
+	for _, maximum := range []int{4, 4096, 16384} {
+		page, err := parseAssistantConfigurationPage(map[string]any{"maximum_bytes": maximum}, "WORKFLOW_CONFIGURATION")
+		if err != nil || page.maximum != int64(maximum) {
+			t.Fatal("допустимый размер страницы не принят")
+		}
+	}
 	if _, err := parseAssistantConfigurationPage(valid, "AGENT_CONFIGURATION"); err == nil {
 		t.Fatal("продолжение без дайджеста принято")
 	}
@@ -166,5 +172,73 @@ func TestAssistantConfigurationPageRejectsMismatchWithoutContent(t *testing.T) {
 				t.Fatal("ошибка выдала снимок или скрылась")
 			}
 		})
+	}
+}
+
+func TestAssistantConfigurationPageAdaptiveEncodedBudget(t *testing.T) {
+	if maximumAssistantCurrentConfigurationBytes != 1<<20 {
+		t.Fatal("полный исходный snapshot расширен")
+	}
+	for _, kind := range []string{"WORKFLOW_CONFIGURATION", "AGENT_CONFIGURATION"} {
+		t.Run(kind, func(t *testing.T) {
+			configuration, _, _ := assistantConfigurationPageFixture(t, kind)
+			key := "workflow_configuration"
+			if kind == "AGENT_CONFIGURATION" {
+				key = "agent_configuration"
+			}
+			inner := configuration[key].(map[string]any)
+			inner["configuration"].(map[string]any)["instructions"] = strings.Repeat("\"\\\n<>&😀", 5000)
+			source, _ := json.Marshal(inner["configuration"])
+			hash := sha256.Sum256(source)
+			digest := hex.EncodeToString(hash[:])
+			inner["configuration_sha256"] = digest
+			before, _ := json.Marshal(configuration)
+			var full []byte
+			for count := 0; count <= len(source)/4; count++ {
+				// Меньший внутренний budget проверяет shrink; MCP caller его не задаёт.
+				catalog, err := boundedAssistantConfigurationPageCatalog(configuration, assistantConfigurationPageRequest{offset: int64(len(full)), maximum: 16384, digest: digest}, "prj_fixture123", 8192)
+				if err != nil {
+					t.Fatal(err)
+				}
+				encoded, err := json.Marshal(catalog)
+				result := catalog["assistant_configuration_catalog"].(map[string]any)[key].(map[string]any)
+				page := result["configuration_page"].(map[string]any)
+				text := page["text"].(string)
+				pageHash := sha256.Sum256([]byte(text))
+				if err != nil || len(encoded) > 8192 || !utf8.ValidString(text) || page["offset_bytes"] != int64(len(full)) || page["next_offset_bytes"] != int64(len(full)+len(text)) || page["page_sha256"] != hex.EncodeToString(pageHash[:]) || result["configuration_sha256"] != digest || result["version"] != int64(7) || page["size_bytes"] != len(source) {
+					t.Fatal("адаптивная страница потеряла budget, границы или pins")
+				}
+				if count == 0 && len(text) >= 16384 {
+					t.Fatal("escaping не уменьшил страницу при ограниченном внутреннем budget")
+				}
+				full = append(full, text...)
+				if page["eof"] == true {
+					break
+				}
+				if len(text) == 0 {
+					t.Fatal("адаптивная страница не продвигается")
+				}
+			}
+			after, _ := json.Marshal(configuration)
+			if !bytes.Equal(full, source) || !bytes.Equal(before, after) {
+				t.Fatal("адаптивное чтение изменило source или не дошло до EOF")
+			}
+			if result, err := boundedAssistantConfigurationPageCatalog(configuration, assistantConfigurationPageRequest{maximum: 16384}, "prj_fixture123", 1); result != nil || !errors.Is(err, errAssistantConfigurationPage) {
+				t.Fatal("невмещающийся envelope выдан частично")
+			}
+		})
+	}
+}
+
+func TestAssistantConfigurationPageSchemaBudget(t *testing.T) {
+	input, _, _ := assistantWorkflowConfigurationFixture(t)
+	properties := assistantConfigurationCatalogInputSchema(input)["properties"].(map[string]any)
+	maximum := properties["maximum_bytes"].(map[string]any)
+	if maximum["minimum"] != 4 || maximum["maximum"] != 16384 || maximum["default"] != 16384 || !strings.Contains(configurationCatalogTool(input)["description"].(string), "4..16384") || !strings.Contains(assistantCatalogReadInputGuidance, "4..16384") {
+		t.Fatal("schema, parser и guidance расходятся по размеру страницы")
+	}
+	input.AssistantContext = nil
+	if _, exposed := assistantConfigurationCatalogInputSchema(input)["properties"].(map[string]any)["maximum_bytes"]; exposed {
+		t.Fatal("страницы раскрыты вне доступного exact resource context")
 	}
 }

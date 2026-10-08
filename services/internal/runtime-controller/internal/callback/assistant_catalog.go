@@ -109,7 +109,7 @@ func (server *Server) configurationCatalog(ctx context.Context, input runtimecon
 const maximumAssistantIntegrationDefinitions = 10
 
 const maximumAssistantConfigurationEntries = 10
-const maximumAssistantConfigurationModelBytes = 8192
+const maximumAssistantConfigurationPageModelBytes = 64 << 10
 
 // Имя только для модельной проекции: refs, scope и owner snapshot не меняются.
 func assistantCatalogResourceName(input runtimecontract.RunnerInput, ref, name string) string {
@@ -149,7 +149,7 @@ func assistantConfigurationCatalogInputSchema(input runtimecontract.RunnerInput)
 	}
 	if assistantWorkflowConfigurationAvailable(input) || assistantAgentConfigurationAvailable(input) {
 		properties["configuration_offset_bytes"] = map[string]any{"type": "integer", "minimum": 0, "maximum": maximumAssistantCurrentConfigurationBytes, "default": 0}
-		properties["maximum_bytes"] = map[string]any{"type": "integer", "minimum": 4, "maximum": 4096, "default": 4096}
+		properties["maximum_bytes"] = map[string]any{"type": "integer", "minimum": 4, "maximum": maximumAssistantConfigurationPageBytes, "default": maximumAssistantConfigurationPageBytes}
 		properties["configuration_sha256"] = map[string]any{"type": "string", "pattern": "^[a-f0-9]{64}$"}
 	}
 	return objectSchema([]string{"kind", "assistant_ref"}, properties)
@@ -328,27 +328,31 @@ func (server *Server) assistantConfigurationCatalog(ctx context.Context, input r
 		if pageErr != nil {
 			return nil, pageErr
 		}
-		// Это отдельное чтение snapshot, а не повтор общего индекса сотрудников.
-		// Полные данные проходят прежний caster до выдачи ограниченной страницы.
-		for {
-			projected, projectionErr := pageAssistantConfigurationSnapshot(configuration, page)
-			if projectionErr != nil {
-				return nil, projectionErr
-			}
-			catalog = map[string]any{"current_project_ref": input.ProjectRef, "agents": []any{}, "assistant_configuration_catalog": projected}
-			encoded, encodeErr := json.Marshal(catalog)
-			if encodeErr == nil && len(encoded) <= maximumAssistantConfigurationModelBytes {
-				return catalog, nil
-			}
-			if encodeErr != nil || page.maximum <= utf8.UTFMax {
-				return nil, errAssistantConfigurationPage
-			}
-			// JSON escaping тоже учитывается; next offset описывает фактически выданные bytes.
-			page.maximum = max(utf8.UTFMax, page.maximum/2)
-		}
+		return boundedAssistantConfigurationPageCatalog(configuration, page, input.ProjectRef, maximumAssistantConfigurationPageModelBytes)
 	}
 	catalog["assistant_configuration_catalog"] = configuration
 	return catalog, nil
+}
+
+// Полный owner snapshot проходит прежний caster; размер модельной страницы
+// задаёт только сервер, независимо от бюджета общего индекса сотрудников.
+func boundedAssistantConfigurationPageCatalog(configuration map[string]any, page assistantConfigurationPageRequest, projectRef string, maximumModelBytes int) (map[string]any, error) {
+	for {
+		projected, projectionErr := pageAssistantConfigurationSnapshot(configuration, page)
+		if projectionErr != nil {
+			return nil, projectionErr
+		}
+		catalog := map[string]any{"current_project_ref": projectRef, "agents": []any{}, "assistant_configuration_catalog": projected}
+		encoded, encodeErr := json.Marshal(catalog)
+		if encodeErr == nil && len(encoded) <= maximumModelBytes {
+			return catalog, nil
+		}
+		if encodeErr != nil || page.maximum <= utf8.UTFMax {
+			return nil, errAssistantConfigurationPage
+		}
+		// Escaping учитывается до выдачи; next offset описывает фактические bytes.
+		page.maximum = max(utf8.UTFMax, page.maximum/2)
+	}
 }
 
 func castAssistantConfigurationCatalog(input runtimecontract.RunnerInput, request *controlplanev1.AssistantConfigurationCatalogRequest, response *controlplanev1.AssistantConfigurationCatalogResponse) (map[string]any, error) {

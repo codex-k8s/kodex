@@ -6,8 +6,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http/httptest"
+	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,8 +71,11 @@ func TestAssistantWorkflowConfigurationTraversesNativeMCP(t *testing.T) {
 	}
 }
 
-func readAssistantConfigurationMCP(t *testing.T, input runtimecontract.RunnerInput, arguments map[string]any, server *Server, key string, expected []byte) {
+func readAssistantConfigurationMCP(t *testing.T, input runtimecontract.RunnerInput, arguments map[string]any, server *Server, key string, expected []byte) int {
 	t.Helper()
+	if server.logger == nil {
+		server.logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
 	selector := arguments["assistant_configuration_catalog"].(map[string]any)
 	defer func() {
 		delete(selector, "configuration_offset_bytes")
@@ -76,6 +83,7 @@ func readAssistantConfigurationMCP(t *testing.T, input runtimecontract.RunnerInp
 	}()
 	var full bytes.Buffer
 	var digest string
+	var maximumWireBytes int
 	for count := 0; count < 1024; count++ {
 		selector["configuration_offset_bytes"] = float64(full.Len())
 		if count > 0 {
@@ -85,14 +93,21 @@ func readAssistantConfigurationMCP(t *testing.T, input runtimecontract.RunnerInp
 		recorder := httptest.NewRecorder()
 		id, _ := json.Marshal(fmt.Sprintf("configuration-page-%d", count))
 		server.callTool(recorder, httptest.NewRequest("POST", "/mcp", nil), mcpRequest{ID: id, Params: params}, input)
+		maximumWireBytes = max(maximumWireBytes, recorder.Body.Len())
 		var wire struct {
 			Result struct {
-				IsError           bool           `json:"isError"`
-				StructuredContent map[string]any `json:"structuredContent"`
+				Content           []struct{ Type, Text string } `json:"content"`
+				IsError           bool                          `json:"isError"`
+				StructuredContent map[string]any                `json:"structuredContent"`
 			} `json:"result"`
 		}
-		if json.Unmarshal(recorder.Body.Bytes(), &wire) != nil || wire.Result.IsError || recorder.Body.Len() > 24576 {
+		if json.Unmarshal(recorder.Body.Bytes(), &wire) != nil || wire.Result.IsError || recorder.Body.Len() > 256<<10 {
 			t.Fatal("native configuration page failed or exceeded wire budget")
+		}
+		var textual map[string]any
+		encoded, encodeErr := json.Marshal(wire.Result.StructuredContent)
+		if len(wire.Result.Content) != 1 || wire.Result.Content[0].Type != "text" || json.Unmarshal([]byte(wire.Result.Content[0].Text), &textual) != nil || !reflect.DeepEqual(textual, wire.Result.StructuredContent) || encodeErr != nil || len(encoded) > 64<<10 {
+			t.Fatal("native text and structured content differ or exceed page budget")
 		}
 		configuration := wire.Result.StructuredContent["assistant_configuration_catalog"].(map[string]any)[key].(map[string]any)
 		if _, legacy := configuration["configuration"]; legacy {
@@ -104,7 +119,7 @@ func readAssistantConfigurationMCP(t *testing.T, input runtimecontract.RunnerInp
 		}
 		text := page["text"].(string)
 		hash := sha256.Sum256([]byte(text))
-		if configuration["configuration_sha256"] != digest || page["offset_bytes"] != float64(full.Len()) || page["size_bytes"] != float64(len(expected)) || page["page_sha256"] != hex.EncodeToString(hash[:]) || len(text) > 4096 {
+		if configuration["configuration_sha256"] != digest || configuration["version"] != float64(*input.AssistantContext.EntityVersion) || page["offset_bytes"] != float64(full.Len()) || page["size_bytes"] != float64(len(expected)) || page["page_sha256"] != hex.EncodeToString(hash[:]) || len(text) > 16384 {
 			t.Fatal("native page lost immutable digest, offset, size or byte budget")
 		}
 		full.WriteString(text)
@@ -115,13 +130,63 @@ func readAssistantConfigurationMCP(t *testing.T, input runtimecontract.RunnerInp
 			if !bytes.Equal(full.Bytes(), expected) {
 				t.Fatal("native full-read changed or truncated configuration")
 			}
-			return
+			t.Logf("native configuration: source_bytes=%d pages=%d max_wire_bytes=%d", len(expected), count+1, maximumWireBytes)
+			return count + 1
 		}
 		if len(text) == 0 {
 			t.Fatal("native page did not advance")
 		}
 	}
 	t.Fatal("native configuration read never reached EOF")
+	return 0
+}
+
+func TestAssistantWorkflowConfigurationNativeLargePageBudget(t *testing.T) {
+	for _, escaped := range []bool{false, true} {
+		t.Run(fmt.Sprintf("escaped-%t", escaped), func(t *testing.T) {
+			input, arguments, response := assistantWorkflowConfigurationFixture(t)
+			var snapshot map[string]any
+			if json.Unmarshal(response.WorkflowConfiguration.ConfigurationJson, &snapshot) != nil {
+				t.Fatal("invalid configuration fixture")
+			}
+			draft := snapshot["draft"].(map[string]any)
+			text := strings.Repeat("x", 50000)
+			if escaped {
+				text = strings.Repeat("Я😀中é\n\"\\<>&\u2028", 1500)
+			}
+			snapshot["instructions"], draft["Instructions"] = text, text
+			draft["ResultSchema"] = map[string]any{"padding": ""}
+			raw, err := json.Marshal(snapshot)
+			const size = 149159
+			if err != nil || len(raw) >= size {
+				t.Fatal("large configuration fixture has invalid initial size")
+			}
+			draft["ResultSchema"].(map[string]any)["padding"] = strings.Repeat("x", size-len(raw))
+			raw, err = json.Marshal(snapshot)
+			if err != nil || len(raw) != size {
+				t.Fatal("large configuration fixture is not exact size")
+			}
+			hash := sha256.Sum256(raw)
+			response.WorkflowConfiguration.ConfigurationJson = raw
+			response.WorkflowConfiguration.ConfigurationSha256 = hex.EncodeToString(hash[:])
+			for _, maximum := range []int{4096, 16384} {
+				selector := arguments["assistant_configuration_catalog"].(map[string]any)
+				selector["maximum_bytes"] = maximum
+				client := &assistantFreshCatalogMCPClient{assistantDefinitionCatalogClient: &assistantDefinitionCatalogClient{response: &controlplanev1.SearchAssistantResourcesResponse{AssistantConfigurationCatalog: response}}}
+				server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
+				pages := readAssistantConfigurationMCP(t, input, arguments, server, "workflow_configuration", raw)
+				if pages != (size+maximum-1)/maximum {
+					t.Fatalf("native pagination used %d pages for maximum %d", pages, maximum)
+				}
+			}
+			delete(arguments["assistant_configuration_catalog"].(map[string]any), "maximum_bytes")
+			client := &assistantFreshCatalogMCPClient{assistantDefinitionCatalogClient: &assistantDefinitionCatalogClient{response: &controlplanev1.SearchAssistantResourcesResponse{AssistantConfigurationCatalog: response}}}
+			server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
+			if readAssistantConfigurationMCP(t, input, arguments, server, "workflow_configuration", raw) != 10 {
+				t.Fatal("default pagination did not use ten bounded pages")
+			}
+		})
+	}
 }
 
 func TestAssistantWorkflowConfigurationClosedRead(t *testing.T) {
