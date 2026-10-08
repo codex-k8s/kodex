@@ -11917,3 +11917,26 @@ AGENTS.md/inbox hashes совпал с ACK, текст файлов не рас�
 typed network plan, без ручного обхода policy/DNS/TLS, wildcard или credential.
 Header UX root35/35 unit PASS, native mobile screenshot после patch ещё
 проверяется. Console error/warn0; Full65 и checklist8 остаются OPEN.
+
+### 08.10.2026 17:39 UTC — PR1803 merged, native catalog continuation STOP
+
+Author4731d3c29fbe417462e2d94fd71349de46fbbf0f: ROOT CP3/9 PASS0.049s,
+gateway50/108 PASS1.339s; узкие Unicode/frame-cap проверки, не full acceptance.
+PR1803 обычный squash, main d413a7cbd34765bf26909b8a299cd7bd02676a4f
+GitHub/origin/local EQUAL. Checks отсутствуют, CI PASS не заявлен.
+Новая bootstrap ветка kodex-agent/issue-1797-catalog-continuation от fresh main.
+
+Full39 root run_VbhKXNWsog_CwsLJhKbpANXR FAILED/333. INTAKE и собственный
+Coordinator EOF трёх handoff artifacts выполнены; Architect
+run_EWQkAOIcEe0-HgSDT_vFKITL остановился на search_files continuation.
+Его manager-plan.md EOF18451 PASS; обязательный workspace-write-result.json
+ещё не прочитан. Failed262 duration389ms; RC17:31:07.597 операция вернула
+grpc Unavailable/control_unavailable, не локальную ошибку arguments.
+Exact cause UNKNOWN; нельзя объявлять доказанными timeout/InvalidArgument/
+network/serialization без дальнейшей диагностики. Architecture result
+art_sySrPaJeb9jQEneQYyWUsZJm/revision9/8154B owner200, SHA
+b354268332a4072dc6cde3182c95eb68cb97e44a4c286b1c0c1b8d44d9484bdd EQUAL.
+STOP соблюдён: Developer и последующие native reviews NOT RUN; старый root
+не Retry. После устранения причины нужен новый штатный полный проход.
+Chrome reload17:37/Console0/platform LIVE/overflowfalse, screenshot NOT RUN.
+Демо не изменено. Full65/checklist11/13/14/15 OPEN, цель ACTIVE.
