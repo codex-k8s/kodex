@@ -10,6 +10,46 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 04:20 UTC
+
+HEAD/remote/Draft1800 70d70cb14d20ea5f01cf791814d999396e0883c0 до этого пакета.
+MAIN dirty только adopted cursor/action8, UI4, GitHub4/source+tests+generated15,
+README и journal/handoff. ROOT CP full unit/vet/build PASS, disposable cursor/
+workflow20.936s PASS, gateway26.860s/package3.410s/codegen/vet/build PASS,
+targeted race6.973s PASS. UI18/lint/format/typecheck/build9.25s PASS.
+Следующий publisherprevious поменять на70d70cb1, дополнить точный whitelist.
+
+Full33 run_Ol_zK37v_11loSybRaDHmVeX FAILED3/rootsequence1096/graph1097.
+INTAKE run_0M4_jAbdwktAxAY5RUUfwZHL SUCCEEDED2,268nativepages/15sourceEOF.
+manager-plan.md art_jxWovnuw9yCDDHq-YUKmqn8Q/v1/rev20/22347Б,
+SHAcaeb779a93fedae5421cc0137986d9b0dafabb5da57353c95a65a6a1b47d58e3
+owner metadata/fullcontent/hash EQUAL. Continuation coordinator attempt2
+ACK03:58PASS. Architect run_qs13uZPfxouqqeiEhzTBj4N6 FAILED2/
+RUNTIME_PROVIDER_UNAVAILABLE; actual ACK/task/inbox/instructions/G7 PASS,
+последний READ1061SUCCEEDED, terminal1064. Причина UNKNOWN: early observer
+для Architect не запущен, Pod удалён. Новый observer запускать сразу для
+каждого actualtuple. Developer/reviews NOT RUN, descendantsCANCELLED;
+projectactive[]/quiescent. Старые roots не Retry/Resume.
+
+Live owner root/INTAKE/Architect graph/history200 теперь rootrevision1097/
+currentSequence1096, собственные state/identity не меняются. Resource-only
+positive/negative доказаны disposablePG, liveactor NOT RUN. Полный EOF ещё проверить.
+UIcompact screenshot04:05/sourcePodEQUAL; detailed DOM1080px/contextonly/
+overflowfalsePASS, screenshot04:19–04:20NOT RUN из-за долгого ожидания Chrome.
+OwnChrome1/owner4never touch; lastreload04:17, следующий немедленно.
+
+GitHub4 adopted/source checks PASS, НО nativeactivationNOT RUN. Baseline
+int_Pn1ALY1e8kAn67vrr1-okIKe v375/CONNECTED/GitHub3.1/configv9/
+binding2MATCH/120enabledgrants/7recipients. Сохранённый exact baseline обязателен.
+Далее commit/pushDraft1800 → clean-SHA repoowned fresh render/apply только
+CP/integration-gateway → source/Pod+readiness → UIimmutable4draftValidate →
+SYSTEMtypedpublish → impact/rebindтолькоactiveconnection → protectedTest →
+PROJECTnativeexact120grantsrestore → freshpins/ENVpreservation → newordinary
+ManagerTaskrev5/max16384/default и full33. No old3.1invocation после новогоcompiledcatalog.
+G7/G13, runnercompiled58324826/binary9b560789 не переименовывать по UI/docsHEAD.
+Timeout consumer gap отдельно NOT RUN/не исправлен. Full65/11/13/14/15OPEN,
+до14:00Саратов autonomous; goalACTIVE, финальный internalPR NOmerge/approve.
+
 ## Checkpoint 08.10.2026 03:43 UTC
 
 HEAD/remote/Draft1800 `38a6f0a6dcb4939eb05a9c0466c32f6cf1247dce` EQUAL,

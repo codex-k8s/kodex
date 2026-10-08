@@ -10,6 +10,87 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 04:20 UTC — курсор графа, контекст и GitHub4
+
+- До фиксации этого пакета HEAD/remote/Draft1800:
+  `70d70cb14d20ea5f01cf791814d999396e0883c0`; main `b5f6fcde`.
+  Цель ACTIVE; автономно до 14:00 Саратов. Full65/11/13/14/15 OPEN,
+  итоговый внутренний PR не merge/approve. Следующие локальные результаты
+  относятся к рабочему дереву этого commit, не к immutable release.
+- Новый full33 `run_Ol_zK37v_11loSybRaDHmVeX` FAILED3,
+  graph1097/sequence1096. Ordinary root `run_dTID2XxnEBdEXUbp6y_NIjKV`
+  также FAILED3. INTAKE `run_0M4_jAbdwktAxAY5RUUfwZHL` SUCCEEDED2:
+  268 native страниц, EOF пятнадцати обязательных документов, самостоятельный
+  immutable handoff. `manager-plan.md`:
+  `art_jxWovnuw9yCDDHq-YUKmqn8Q`/v1/revision20, ACTIVE/CLEAN, 22347Б,
+  SHA `caeb779a93fedae5421cc0137986d9b0dafabb5da57353c95a65a6a1b47d58e3`.
+  Независимые owner metadata/content200, размер и полный SHA совпали.
+- Координатор continuation attempt2 ACK/rejoin03:58:24 PASS:
+  `ses_2HGLFhevCh_GacTfa5Xm4BSd`/
+  `trn__TtaEYdgJyWyCIL6R0A4CYb1`; provider/inbox20956Б/
+  `742b314a0686e250eef4471483ecca17a19818ff1782c8bd080afc8044efb282`
+  совпали, инструкции348650ce, ENV7/binding8/G7. Expected Task NOT RUN.
+- Architect `run_qs13uZPfxouqqeiEhzTBj4N6` реально принял handoff и прочитал
+  его до EOF; затем FAILED2/RUNTIME_PROVIDER_UNAVAILABLE. Exact tuple:
+  `ses_3q_H4YiAETAO6nDm9SlrQPCn`/
+  `trn_lpim-u9h4fLe5uL1ZOjb0Noh`/attempt1, ранний ACK PASS.
+  Task/provider/inbox3395Б/
+  `e78e0c5af544ab5d2e4cd3a50ea7b4bbdc83ee996cea27dc29e8babfdb030547`
+  и instructions/inbox27393Б/
+  `0ce953e7571fd6a980caee793910faa80228a532cf6b8ae060d77e7a0939234f`
+  EQUAL. Pod UID `922c7eb9-3f5c-4ffa-a512-c1c333409aae`, G7,
+  рестартов0; binary9b560789 FILE_ONLY, serving process NOT RUN.
+  Последний remote READ1061 SUCCEEDED, terminal1064; точная причина провайдера
+  UNKNOWN. Ранний failure observer для Architect не был запущен, Pod уже удалён,
+  архив не содержит provider stderr. Это diagnostic gap, не доказанный сетевой
+  дефект. В следующем запуске observer включать немедленно для каждого tuple.
+  Developer и reviews NOT RUN; все оставшиеся planned nodes CANCELLED.
+  Fresh project active runs пуст; старые roots не Retry/Resume.
+- Root cursor: adopted восемь файлов с action presentation. Child eligibility
+  проверяется первым, counters берутся из root в том же RR/owner snapshot.
+  Identity, lifecycle и собственные permissions child не подменяются.
+  Отсутствие project membership у exact-resource actor не превращает безопасное
+  представление действий в NotFound; SQL-ошибки не скрываются, права не выдаются.
+  ROOT targeted21 tests PASS0.044s; disposable PostgreSQL cursor5.57s и
+  workflow15.31s PASS, включая resource-only positive, revoked/sibling/tenant/
+  signed-project negatives и concurrent writer. Полный CP unit/vet/build PASS.
+  Первый full unit FAIL из-за отсутствия node в PATH; повтор с Node24 PASS.
+  Live owner GET root/INTAKE/Architect graph/history200: единые graph1097,
+  currentSequence1096, собственные identity/state сохранены. Live resource-only
+  actor NOT RUN; полный cursor EOF дополнительно проверяется.
+- UI: при неизвестном расходе и известном размере контекста не показываются
+  четыре нулевых счётчика. ROOT18/2suites, scoped lint/format/typecheck и
+  production build9.25s PASS; прежний large chunk warning сохранён.
+  Два production source/Pod SHA EQUAL. Desktop detailed modal1080px:
+  только «Контекст 258400», переполнениеfalse. Compact screenshot04:05 PASS;
+  новый detailed screenshot04:19–04:20 задержан, ожидание остановлено без изображения:
+  detailed visual screenshot NOT RUN, DOM proof не выдаётся за screenshot.
+- GitHub package4.0.0: metadata-only PR file index с exact head/base/count,
+  limit1..4 и проверкой полного provider cursor; >3000 закрыто отклоняется.
+  PR read сохраняет body и добавляет pins; create/update/list не менялись.
+  Content page default/max16384 UTF-8 bytes с адаптивным JSON escaping,
+  точным offset, source hash и EOF. Full-index EOF не заменяет source/diff EOF.
+  Уменьшение запросов для ASCII/RU536156Б:262→33; wall-clock ускорение не доказано.
+  Оценка native envelope не гарантирует 64КиБ при произвольном большом caller ID;
+  общий wire parser и guards не ослаблены. Старые immutable packages не меняются.
+- ROOT gateway full unit26.860s/vet/build PASS; package unit3.410s/vet PASS;
+  codegen/check PASS. Targeted race6.973s PASS. Первый codegen FAIL toolchain
+  PATH, повтор с Go1.26.6 PASS. Downstream semantic fixtures проверены:
+  Synthetic3.1 и foreign-version negatives не переписываются под GitHub4.
+  Context7: Vue computed/props, pgx QueryRow/ErrNoRows/RR, GitHub REST pins/files.
+- GitHub4 activation NOT RUN. Fresh authoritative baseline: active connection
+  `int_Pn1ALY1e8kAn67vrr1-okIKe` v375/CONNECTED/GitHub3.1,
+  published configuration v9, exact binding MATCH/v2; enabled grants120,
+  recipients7, approval NONE. Далее clean-SHA repo-owned render/apply,
+  immutable4 draft/validate/native publish, impact/rebind только этого connection,
+  штатный Test и native восстановление ровно прежних120 grants без расширения.
+  Новый ordinary Manager получит Task revision5 с maximum_bytes16384 или default,
+  прежние inputs не редактируются.
+- Известный отдельный gap: сохранённые Workflow step timeouts не имеют
+  доказанного execution consumer; source/contract fix и live proof NOT RUN.
+  Fixed runner1h не выдаётся за исполнение каждого step timeout. Это не устранено
+  текущим cursor/index/UI пакетом. Новые authority/lifecycle semantics не вводились.
+
 ## Checkpoint 08.10.2026 03:43 UTC — опубликованный UI и подготовка backend
 
 - HEAD, удалённая ветка и Draft PR1800 совпадают:

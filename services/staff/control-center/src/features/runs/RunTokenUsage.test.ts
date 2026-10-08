@@ -5,7 +5,51 @@ import { describe, expect, it } from "vitest";
 
 import RunTokenUsage from "@/features/runs/RunTokenUsage.vue";
 
+async function renderContextOnly(compact: boolean): Promise<string> {
+  const app = createSSRApp({
+    render: () =>
+      h(RunTokenUsage, {
+        compact,
+        usage: {
+          totalTokens: 0,
+          inputTokens: 0,
+          cachedInputTokens: 0,
+          cacheWriteInputTokens: 0,
+          outputTokens: 0,
+          reasoningOutputTokens: 0,
+          modelContextWindow: 258400,
+        },
+      }),
+  });
+  app.use(
+    createI18n({
+      legacy: false,
+      locale: "ru",
+      missingWarn: false,
+      fallbackWarn: false,
+      messages: { ru: {} },
+    }),
+  );
+  return renderToString(app);
+}
+
 describe("RunTokenUsage", () => {
+  it("не выдаёт размер контекстного окна за расход в компактном виде", async () => {
+    expect(await renderContextOnly(true)).not.toContain("token-usage");
+  });
+
+  it("показывает только контекстное окно до появления измеренного расхода", async () => {
+    const html = await renderContextOnly(false);
+    expect(html).toContain("runs.usage.contextWindow");
+    expect(html).toContain(new Intl.NumberFormat("ru").format(258400));
+    expect(html.match(/<dt\b/gu)).toHaveLength(1);
+    expect(html).not.toContain("runs.usage.total");
+    expect(html).not.toContain("runs.usage.input");
+    expect(html).not.toContain("runs.usage.cached");
+    expect(html).not.toContain("runs.usage.output");
+    expect(html).not.toContain("runs.usage.reasoning");
+  });
+
   it("показывает измеренную сводку запуска в локали пользователя", async () => {
     const usage = {
       totalTokens: 43034,

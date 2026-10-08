@@ -78,7 +78,7 @@ func TestGitHubPullReadStillReturnsEntireDescription(t *testing.T) {
 	text := strings.Repeat("Полное описание 🙂\n", 250)
 	adapter.githubHTTPClient = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		body, _ := json.Marshal(map[string]any{"number": 3, "title": "Изменение", "body": text, "state": "open",
-			"head": map[string]string{"ref": "feature", "sha": strings.Repeat("a", 40)}, "base": map[string]string{"ref": "main"},
+			"head": map[string]string{"ref": "feature", "sha": strings.Repeat("a", 40)}, "base": map[string]string{"ref": "main", "sha": strings.Repeat("b", 40)}, "changed_files": 1,
 			"html_url": "https://github.com/acme/repo/pull/3"})
 		return &http.Response{Request: r, StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(string(body)))}, nil
 	})}

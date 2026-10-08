@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/base64"
@@ -18,6 +19,35 @@ import (
 )
 
 const githubPageFixtureCommit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+func TestGitHubContentPagesDefaultSixteenKiB(t *testing.T) {
+	file := githubPageFixtureFile(strings.Repeat("x", 32<<10), "docs/source.md")
+	adapter, credential, _ := githubPageFixtureAdapter(t, file)
+	page := githubPageFixtureRead(t, adapter, credential, map[string]any{"path": file.GetPath(), "ref": githubPageFixtureCommit})
+	if len(page.Text) != 16<<10 || page.NextOffsetBytes != 16<<10 || page.EOF {
+		t.Fatalf("default page is not sixteen KiB: bytes=%d next=%d eof=%v", len(page.Text), page.NextOffsetBytes, page.EOF)
+	}
+}
+
+func githubPageFixtureNativeWire(t *testing.T, page githubContentPage, id any) []byte {
+	t.Helper()
+	summary, err := json.Marshal(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	native := map[string]any{"ok": true, "invocationRef": strings.Repeat("i", 128), "result": string(summary)}
+	encoded, err := json.Marshal(native)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire bytes.Buffer
+	if err := json.NewEncoder(&wire).Encode(map[string]any{"jsonrpc": "2.0", "id": id, "result": map[string]any{
+		"content": []map[string]string{{"type": "text", "text": string(encoded)}}, "structuredContent": native, "isError": false,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	return wire.Bytes()
+}
 
 func githubPageFixtureFile(content, path string) *github.RepositoryContent {
 	// SHA-1 здесь проверяет Git object protocol, а не служит security digest.
@@ -70,11 +100,15 @@ func TestGitHubContentPagesReadFullPinnedSourceToEOF(t *testing.T) {
 		name, content string
 		maximum       int
 	}{
-		{"instructions_45730_bytes", strings.Repeat("x", 45730), 2048},
-		{"source_over_projection_budget", strings.Repeat("x", 96<<10), 2048},
+		{"instructions_45730_bytes", strings.Repeat("x", 45730), 16 << 10},
+		{"source_over_projection_budget", strings.Repeat("x", 96<<10), 16 << 10},
+		{"entire_one_mib", strings.Repeat("x", 1<<20), 16 << 10},
+		{"explicit_small_page", strings.Repeat("x", 45730), 2048},
+		{"escaped_source", strings.Repeat("\x01", 32<<10), 16 << 10},
+		{"russian_source", strings.Repeat("Привет, мир!\n", 3000), 16 << 10},
 		{"unicode", strings.Repeat("Я🙂e\u0301\n", 300), 7},
 		{"four_byte_runes", strings.Repeat("🙂", 9), 4},
-		{"empty", "", 2048},
+		{"empty", "", 16 << 10},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			file := githubPageFixtureFile(fixture.content, "AGENTS.md")
@@ -84,7 +118,7 @@ func TestGitHubContentPagesReadFullPinnedSourceToEOF(t *testing.T) {
 			var reconstructed strings.Builder
 			for iteration := 0; iteration < len(fixture.content)+1; iteration++ {
 				input := map[string]any{"path": file.GetPath(), "ref": githubPageFixtureCommit}
-				if fixture.maximum != 2048 {
+				if fixture.maximum != 16<<10 {
 					input["maximum_bytes"] = fixture.maximum
 				}
 				if offset > 0 {
@@ -107,6 +141,9 @@ func TestGitHubContentPagesReadFullPinnedSourceToEOF(t *testing.T) {
 			}
 			if reconstructed.String() != fixture.content || offset != int64(len(fixture.content)) || *count == 0 {
 				t.Fatal("pages did not reconstruct the entire source to EOF")
+			}
+			if fixture.name == "entire_one_mib" && *count != 64 {
+				t.Fatalf("one MiB source did not use exactly 64 complete pages: %d", *count)
 			}
 			// Повтор страницы EOF возвращает только пустой текст с теми же pins.
 			page := githubPageFixtureRead(t, adapter, credential, map[string]any{"path": file.GetPath(), "ref": githubPageFixtureCommit,
@@ -136,7 +173,7 @@ func TestGitHubContentPagesRejectInvalidInput(t *testing.T) {
 		{"invalid_expected_sha", func(in *githubCatalogInput) { in.ExpectedSHA = "abc" }},
 		{"maximum_zero", func(in *githubCatalogInput) { in.MaximumBytes = github.Ptr(0) }},
 		{"maximum_small", func(in *githubCatalogInput) { in.MaximumBytes = github.Ptr(3) }},
-		{"maximum_large", func(in *githubCatalogInput) { in.MaximumBytes = github.Ptr(2049) }},
+		{"maximum_large", func(in *githubCatalogInput) { in.MaximumBytes = github.Ptr((16 << 10) + 1) }},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			in := githubCatalogInput{Path: "AGENTS.md", Ref: githubPageFixtureCommit}
@@ -166,14 +203,14 @@ func TestGitHubContentPagesLargeSourcePreservesPinsAndDeliveryBudget(t *testing.
 			sourceHash := sha256.Sum256([]byte(content))
 			// Проверяется весь executable adapter, включая generated package
 			// input/output schema, а не только локальное разбиение строки.
-			for _, offset := range []int64{0, (64 << 10) + 3, int64(size - 2048), int64(size)} {
+			for _, offset := range []int64{0, (64 << 10) + 3, int64(size - (16 << 10)), int64(size)} {
 				input := map[string]any{"path": file.GetPath(), "ref": githubPageFixtureCommit,
-					"offset_bytes": offset, "maximum_bytes": 2048}
+					"offset_bytes": offset, "maximum_bytes": 16 << 10}
 				if offset > 0 {
 					input["expected_sha"] = file.GetSHA()
 				}
 				page := githubPageFixtureRead(t, adapter, credential, input)
-				end := min(offset+2048, int64(size))
+				end := min(offset+(16<<10), int64(size))
 				chunkHash := sha256.Sum256([]byte(content[offset:end]))
 				if page.Text != content[offset:end] || page.OffsetBytes != offset || page.NextOffsetBytes != end ||
 					page.Size != size || page.SHA != file.GetSHA() || page.CommitSHA != githubPageFixtureCommit ||
@@ -218,16 +255,16 @@ func TestGitHubContentPagesVerifyEntireSourceAndMetadata(t *testing.T) {
 		{"invalid_sha", func(file *github.RepositoryContent) { file.SHA = github.Ptr("abc") }},
 		{"wrong_git_blob_sha", func(file *github.RepositoryContent) { file.SHA = github.Ptr(strings.Repeat("b", 40)) }},
 		{"invalid_utf8_after_page", func(file *github.RepositoryContent) {
-			*file = *githubPageFixtureFile(strings.Repeat("x", 2048)+"\xff", "AGENTS.md")
+			*file = *githubPageFixtureFile(strings.Repeat("x", 16<<10)+"\xff", "AGENTS.md")
 		}},
 		{"nul_after_page", func(file *github.RepositoryContent) {
-			*file = *githubPageFixtureFile(strings.Repeat("x", 2048)+"\x00", "AGENTS.md")
+			*file = *githubPageFixtureFile(strings.Repeat("x", 16<<10)+"\x00", "AGENTS.md")
 		}},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			file := githubPageFixtureFile("Text", "AGENTS.md")
 			fixture.edit(file)
-			_, err := projectGitHubContentPage(file, githubCatalogInput{Path: "AGENTS.md", Ref: githubPageFixtureCommit}, 2048)
+			_, err := projectGitHubContentPage(file, githubCatalogInput{Path: "AGENTS.md", Ref: githubPageFixtureCommit}, 16<<10)
 			assertGitHubPageError(t, err, "INTEGRATION_RESPONSE_INVALID")
 		})
 	}
@@ -237,38 +274,97 @@ func TestGitHubContentPagesVerifyEntireSourceAndMetadata(t *testing.T) {
 		{Path: file.GetPath(), Ref: githubPageFixtureCommit, OffsetBytes: int64(file.GetSize() + 1), ExpectedSHA: file.GetSHA()},
 		{Path: file.GetPath(), Ref: githubPageFixtureCommit, OffsetBytes: 1, ExpectedSHA: file.GetSHA()},
 	} {
-		_, err := projectGitHubContentPage(file, in, 2048)
+		_, err := projectGitHubContentPage(file, in, 16<<10)
 		assertGitHubPageError(t, err, "INTEGRATION_REQUEST_REJECTED")
 	}
 }
 
 func TestGitHubContentPagesBoundActualSerializedNativeEnvelope(t *testing.T) {
-	for _, text := range []string{strings.Repeat("\x01", 2048), strings.Repeat("\\\"<>&", 500), strings.Repeat("🙂", 512)} {
+	for _, text := range []string{strings.Repeat("\x01", 16<<10), strings.Repeat("\\\"<>&", 4000), strings.Repeat("🙂", 4096)} {
 		path := strings.Repeat("p", 1024)
 		file := githubPageFixtureFile(text, path)
 		adapter, credential, _ := githubPageFixtureAdapter(t, file)
 		page := githubPageFixtureRead(t, adapter, credential, map[string]any{"path": path, "ref": githubPageFixtureCommit})
-		summary, _ := json.Marshal(page)
-		// Независимо собираем реальный wire, включая два MCP представления и
-		// JSON-RPC envelope; не используем проверяемый budget helper.
-		native := map[string]any{"ok": true, "invocationRef": strings.Repeat("i", 128), "result": string(summary)}
-		encoded, _ := json.Marshal(native)
-		wire, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": strings.Repeat("i", 128), "result": map[string]any{
-			"content": []map[string]string{{"type": "text", "text": string(encoded)}}, "structuredContent": native, "isError": false,
-		}})
-		if err != nil || len(wire) > 8192 || page.Text == "" || !utf8.ValidString(page.Text) {
-			t.Fatalf("native envelope exceeds byte budget: %d, %v", len(wire), err)
+		// Независимая сериализация обоих native представлений включает LF.
+		for _, id := range []any{int64(1), int64(9223372036854775807), strings.Repeat("i", 128)} {
+			wire := githubPageFixtureNativeWire(t, page, id)
+			if len(wire) > 64<<10 || page.Text == "" || !utf8.ValidString(page.Text) {
+				t.Fatalf("native response model exceeds byte budget: %d", len(wire))
+			}
 		}
-		if strings.HasPrefix(text, "\x01") && (len(page.Text) >= 2048 || page.EOF) {
+		if strings.HasPrefix(text, "\x01") && (len(page.Text) >= 16<<10 || page.EOF) {
 			t.Fatal("escaping did not shorten the page or expose continuation")
 		}
 	}
 	// Недопустимо возвращать пустую non-EOF страницу, если metadata уже
 	// исчерпала бюджет доставки.
-	path := strings.Repeat("\x01", 1024)
+	// Проверка закрытого отказа helper сохраняется, даже если oversized
+	// metadata уже отвергается input guard до provider: 4096 > path limit1024.
+	path := strings.Repeat("\x01", 4096)
 	file := githubPageFixtureFile("Text", path)
-	_, err := projectGitHubContentPage(file, githubCatalogInput{Path: path, Ref: githubPageFixtureCommit}, 2048)
+	_, err := projectGitHubContentPage(file, githubCatalogInput{Path: path, Ref: githubPageFixtureCommit}, 16<<10)
 	assertGitHubPageError(t, err, "INTEGRATION_RESPONSE_INVALID")
+}
+
+func TestGitHubContentPagesNativeBudgetSavingsAndCallerIDLimit(t *testing.T) {
+	for _, fixture := range []struct{ name, text, path string }{
+		{"ascii", strings.Repeat("x", 536156), "AGENTS.md"},
+		{"russian", strings.Repeat("Я", 268078), "AGENTS.md"},
+		{"control_escaping", strings.Repeat("\x01", 536156), "AGENTS.md"},
+		{"html_quote_escaping", strings.Repeat("\\\"<>&", 107232), "AGENTS.md"},
+		{"ascii_path1024", strings.Repeat("x", 536156), strings.Repeat("p", 1024)},
+		{"escaped_path1024", strings.Repeat("x", 536156), strings.Repeat("<", 1024)},
+		{"control_path1024", strings.Repeat("\x01", 536156), strings.Repeat("<", 1024)},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			file := githubPageFixtureFile(fixture.text, fixture.path)
+			page, err := projectGitHubContentPage(file, githubCatalogInput{Path: fixture.path, Ref: githubPageFixtureCommit}, 16<<10)
+			if err != nil || len(page.Text) == 0 || !utf8.ValidString(page.Text) || page.NextOffsetBytes != int64(len(page.Text)) || page.EOF {
+				t.Fatal("larger native page lost continuation or source integrity")
+			}
+			// Старый профиль моделируется с тем же Encoder/LF. Если старому
+			// envelope не хватает места даже для metadata, успешный old read
+			// не выдумывается: old_bytes остаётся нулём.
+			end := min(2048, len(fixture.text))
+			for !utf8.RuneStart(fixture.text[end]) {
+				end--
+			}
+			runes := []rune(fixture.text[:end])
+			oldBytes := 0
+			for lower, upper := 0, len(runes); lower <= upper; {
+				middle := (lower + upper) / 2
+				old := githubContentPageWithText(page, string(runes[:middle]))
+				if len(githubPageFixtureNativeWire(t, old, strings.Repeat("i", 128))) <= 8192 {
+					oldBytes = len(old.Text)
+					lower = middle + 1
+				} else {
+					upper = middle - 1
+				}
+			}
+			wire := githubPageFixtureNativeWire(t, page, strings.Repeat("i", 128))
+			if len(wire) > 64<<10 || oldBytes > 0 && len(page.Text) < oldBytes*7 {
+				t.Fatal("native model did not retain the bounded page improvement")
+			}
+			summary, _ := json.Marshal(page)
+			if len(summary) > 64<<10 {
+				t.Fatal("page exceeded the unchanged safe summary boundary")
+			}
+			t.Logf("old_bytes=%d new_bytes=%d summary_bytes=%d model_wire_bytes=%d typical_numeric_wire_bytes=%d int64_numeric_wire_bytes=%d", oldBytes, len(page.Text), len(summary), len(wire), len(githubPageFixtureNativeWire(t, page, int64(1))), len(githubPageFixtureNativeWire(t, page, int64(9223372036854775807))))
+		})
+	}
+	file := githubPageFixtureFile(strings.Repeat("x", 32<<10), "AGENTS.md")
+	page, err := projectGitHubContentPage(file, githubCatalogInput{Path: file.GetPath(), Ref: githubPageFixtureCommit}, 16<<10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Callback принимает caller RPC id в request до 1 МиБ без id128 guard.
+	// Это явный контрпример обещанию unconditional actual wire <=64 КиБ;
+	// numeric generation range upstream этим fixture не доказывается.
+	oversizedID := strings.Repeat("i", 70<<10)
+	request, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": oversizedID, "method": "tools/call", "params": map[string]any{}})
+	if len(request) >= 1<<20 || len(githubPageFixtureNativeWire(t, page, oversizedID)) <= 64<<10 {
+		t.Fatal("caller ID counterexample does not match the existing transport boundary")
+	}
 }
 
 func assertGitHubPageError(t *testing.T, err error, code string) {

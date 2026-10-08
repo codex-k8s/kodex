@@ -96,7 +96,11 @@ const sessionNode = computed(
 );
 const usageItems = computed(() => {
   const usage = props.run.usage;
-  if (usage.totalTokens === 0 && usage.modelContextWindow === 0) return [];
+  if (usage.totalTokens === 0) {
+    return usage.modelContextWindow > 0
+      ? ([["contextWindow", usage.modelContextWindow]] as const)
+      : [];
+  }
   return [
     ["total", usage.totalTokens],
     ["input", usage.inputTokens],

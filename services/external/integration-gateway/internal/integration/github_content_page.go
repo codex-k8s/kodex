@@ -12,9 +12,9 @@ import (
 	"github.com/google/go-github/v74/github"
 )
 
-const maximumGitHubContentPageBytes = 2048
+const maximumGitHubContentPageBytes = 16 << 10
 
-const maximumGitHubContentEnvelopeBytes = 8192
+const maximumGitHubContentEnvelopeBytes = 64 << 10
 
 // Полный UTF-8 источник имеет отдельный бюджет: страница и provider JSON
 // не определяют его размер. Contents API используется без download fallback.
@@ -129,8 +129,9 @@ func githubContentPageFitsEnvelope(page githubContentPage) bool {
 	if err != nil {
 		return false
 	}
-	// InvocationRef в callback ограничен 128 байтами. Дополнительный JSON-RPC
-	// envelope с id той же длины оставляет запас поверх фактического tool result.
+	// InvocationRef в callback ограничен 128 ASCII байтами. JSON-RPC id такой
+	// длины — консервативная модель, не transport bound произвольного caller id.
+	// Модель включает оба представления результата и финальный LF Encoder.
 	native := map[string]any{"ok": true, "invocationRef": strings.Repeat("i", 128), "result": string(summary)}
 	encoded, err := json.Marshal(native)
 	if err != nil {
@@ -139,5 +140,5 @@ func githubContentPageFitsEnvelope(page githubContentPage) bool {
 	wire, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": strings.Repeat("i", 128), "result": map[string]any{
 		"content": []map[string]string{{"type": "text", "text": string(encoded)}}, "structuredContent": native, "isError": false,
 	}})
-	return err == nil && len(wire) <= maximumGitHubContentEnvelopeBytes
+	return err == nil && len(wire)+1 <= maximumGitHubContentEnvelopeBytes
 }

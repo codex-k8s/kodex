@@ -4,8 +4,8 @@ title: Integration gateway
 type: service
 status: approved
 owner: backend
-version: 2.5.0
-updated: 2026-10-07
+version: 2.6.0
+updated: 2026-10-08
 ---
 
 # integration-gateway
@@ -102,9 +102,9 @@ control-plane, а не вымышленную поддержку idempotency hea
 links/attachments и exact Confluence space возвращают ограниченный полный набор.
 
 `github.repository.content.read` проверяет полный UTF-8 файл до 1 МиБ,
-но возвращает только страницу до 2048 байт с отдельным receipt, Git blob SHA,
+но возвращает только страницу до 16 КиБ с отдельным receipt, Git blob SHA,
 SHA-256 источника и страницы, byte offset, next и EOF. Native MCP envelope
-остаётся ограничен 8192 байтами, итоговая проекция — 64 КиБ, сырой SDK-ответ —
+сохраняет общий предел 64 КиБ, итоговая проекция — 64 КиБ, сырой SDK-ответ —
 2 МиБ. `ref` закрепляет commit, continuation требует `expected_sha`;
 проверяются весь UTF-8, NUL и Git blob SHA до выдачи первой страницы.
 Файлы больше 1 МиБ, `encoding: none` и повреждённые источники отклоняются без
@@ -116,9 +116,23 @@ partial-success, download URL, redirect, raw fallback или автоматич�
 → integration-gateway → SDK Contents API разрешённого repository/commit/path
 → проверенная bounded страница и receipt → owner completion/audit/event
 → исходный runtime consumer. `READ_ONLY/NONE`, tenant/repository authority,
-idempotency, leases, grants и события остаются прежними. Новый package `3.1.0`
+idempotency, leases, grants и события остаются прежними. Новый package `4.0.0`
 подключается новой owner revision с явным rebind; уже закреплённые revisions
 не переинтерпретируются и не получают новые лимиты молча.
+
+`github.pull_request.read` сохраняет полное описание PR и возвращает точные
+`head_sha`, `base_sha`, `changed_files`. `github.pull_request.file.list`
+возвращает только метаданные, без patch или исходного текста: до четырёх файлов
+на страницу с обязательными ожидаемыми SHA и общим числом изменённых файлов.
+До и после чтения проверяются неизменность PR и согласованность provider cursor.
+Предел GitHub в 3000 файлов не превращается в частичный успешный индекс.
+Полный индекс до EOF не заменяет чтение исходников закреплённых commit/blob.
+
+Страница текста адаптивно сокращается с учётом JSON escaping и UTF-8 границ,
+сохраняя точный offset и хеш всего источника. Проверка native envelope относится
+к закреплённому генератору обычных идентификаторов вызова, а не гарантирует
+размер произвольного JSON-RPC ответа с неограниченным caller ID. Общие wire
+guards не ослаблены. Явно заданный меньший `maximum_bytes` сохраняется.
 
 Jira users ограничены assignable users выбранного проекта, без email/address
 профиля пользователя. JQL не может выйти из project-условия; верхнеуровневый
@@ -136,7 +150,7 @@ GitHub workflow dispatch принимает `workflow_inputs`: JSON-объект
 
 ## Обновление каталога
 
-Текущие версии: GitHub `3.1.0`, GitLab/Jira/Confluence `1.2.0`, Email `1.4.0`,
+Текущие версии: GitHub `4.0.0`, GitLab/Jira/Confluence `1.2.0`, Email `1.4.0`,
 Mattermost `2.2.0`, Synthetic `3.1.0`.
 Публикация новых packages не расширяет существующие grants автоматически.
 Старая pinned revision не переинтерпретируется: владелец публикует новую

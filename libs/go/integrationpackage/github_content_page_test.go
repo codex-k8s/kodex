@@ -13,11 +13,13 @@ func TestGitHubContentReadSeparatesSourceAndPageBudgets(t *testing.T) {
 		t.Fatal(err)
 	}
 	definition := definitions["github"]
-	if definition.Metadata.Version != "3.1.0" {
+	if definition.Metadata.Version != "4.0.0" {
 		t.Fatal("unexpected GitHub source budget revision")
 	}
-	if _, ok := ResolveShippedRevision(definition, "3.0.0", definition.Digest); ok {
-		t.Fatal("old shipped revision was silently reinterpreted")
+	for _, version := range []string{"3.0.0", "3.1.0"} {
+		if _, ok := ResolveShippedRevision(definition, version, definition.Digest); ok {
+			t.Fatal("old shipped revision was silently reinterpreted")
+		}
 	}
 	capability, ok := definition.Capability("github.repository.content.read")
 	if !ok || capability.Risk != "READ" || capability.ApprovalPolicy != "NONE" ||
@@ -26,10 +28,30 @@ func TestGitHubContentReadSeparatesSourceAndPageBudgets(t *testing.T) {
 	}
 	for _, offset := range []int{65536, 65537, 536156, 1048576} {
 		input := `{"path":"docs/source.md","ref":"` + strings.Repeat("a", 40) +
-			`","expected_sha":"` + strings.Repeat("b", 40) + `","offset_bytes":` + strconv.Itoa(offset) + `,"maximum_bytes":2048}`
+			`","expected_sha":"` + strings.Repeat("b", 40) + `","offset_bytes":` + strconv.Itoa(offset) + `,"maximum_bytes":16384}`
 		if _, err := capability.ValidateInput([]byte(input)); err != nil {
 			t.Fatalf("valid source offset rejected: %d, %v", offset, err)
 		}
+	}
+	for _, maximum := range []int{4, 2048, 16384, 16385} {
+		input := `{"path":"docs/source.md","ref":"` + strings.Repeat("a", 40) + `","maximum_bytes":` + strconv.Itoa(maximum) + `}`
+		_, err := capability.ValidateInput([]byte(input))
+		if (err == nil) != (maximum <= 16384) {
+			t.Fatalf("page input schema did not preserve exact bounds: %d, %v", maximum, err)
+		}
+	}
+	schemaRaw, err := capability.InputSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Properties map[string]struct {
+			Minimum int `json:"minimum"`
+			Maximum int `json:"maximum"`
+		} `json:"properties"`
+	}
+	if json.Unmarshal(schemaRaw, &schema) != nil || schema.Properties["maximum_bytes"].Minimum != 4 || schema.Properties["maximum_bytes"].Maximum != 16384 {
+		t.Fatal("native input schema lost the sixteen KiB page bound")
 	}
 	input := `{"path":"docs/source.md","ref":"` + strings.Repeat("a", 40) + `","offset_bytes":1048577}`
 	if _, err := capability.ValidateInput([]byte(input)); err == nil {
@@ -51,7 +73,7 @@ func TestGitHubContentReadSeparatesSourceAndPageBudgets(t *testing.T) {
 		original := output[key]
 		output[key] = 1048577
 		if key == "text" {
-			output[key] = strings.Repeat("x", 2049)
+			output[key] = strings.Repeat("x", 16385)
 		}
 		encoded, err := json.Marshal(output)
 		if err != nil {

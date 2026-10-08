@@ -205,6 +205,46 @@ const toolEvent: PresentedRunEvent = {
 };
 
 describe("RunSessionDetailsDialog", () => {
+  it("показывает только размер контекстного окна без нулевых строк расхода", async () => {
+    const html = await renderActivity([], {
+      ...run,
+      usage: { ...run.usage, modelContextWindow: 258400 },
+    });
+    expect(html).toContain("runs.usage.contextWindow");
+    expect(html).toContain(new Intl.NumberFormat("ru").format(258400));
+    for (const key of ["total", "input", "cached", "output", "reasoning"]) {
+      expect(html).not.toContain(`runs.usage.${key}`);
+    }
+  });
+
+  it("сохраняет все строки измеренного расхода и скрывает полностью пустую сводку", async () => {
+    const empty = await renderActivity([]);
+    expect(empty).not.toContain("runs.usage.title");
+
+    const measured = await renderActivity([], {
+      ...run,
+      usage: {
+        ...run.usage,
+        totalTokens: 100,
+        inputTokens: 80,
+        cachedInputTokens: 20,
+        outputTokens: 20,
+        reasoningOutputTokens: 5,
+        modelContextWindow: 258400,
+      },
+    });
+    for (const key of [
+      "total",
+      "input",
+      "cached",
+      "output",
+      "reasoning",
+      "contextWindow",
+    ]) {
+      expect(measured).toContain(`runs.usage.${key}`);
+    }
+  });
+
   it("использует canonical компактный transcript с actual USER/FINAL и одной revision инструмента", async () => {
     const service = (
       ref: string,

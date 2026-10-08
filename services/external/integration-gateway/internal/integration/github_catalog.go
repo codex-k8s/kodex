@@ -13,34 +13,37 @@ import (
 )
 
 type githubCatalogInput struct {
-	Path           string `json:"path"`
-	Ref            string `json:"ref"`
-	SHA            string `json:"sha"`
-	Branch         string `json:"branch"`
-	Content        string `json:"content_base64"`
-	Message        string `json:"message"`
-	Title          string `json:"title"`
-	Body           string `json:"body"`
-	State          string `json:"state"`
-	Head           string `json:"head"`
-	Base           string `json:"base"`
-	Draft          bool   `json:"draft"`
-	Event          string `json:"event"`
-	MergeMethod    string `json:"merge_method"`
-	Number         int    `json:"pull_request_number"`
-	IssueNumber    int    `json:"issue_number"`
-	CommentID      int64  `json:"comment_id"`
-	ReviewID       int64  `json:"review_id"`
-	CheckID        int64  `json:"check_run_id"`
-	WorkflowID     int64  `json:"workflow_id"`
-	WorkflowInputs string `json:"workflow_inputs"`
-	RunID          int64  `json:"run_id"`
-	JobID          int64  `json:"job_id"`
-	Limit          int    `json:"limit"`
-	Cursor         int    `json:"cursor"`
-	OffsetBytes    int64  `json:"offset_bytes"`
-	MaximumBytes   *int   `json:"maximum_bytes"`
-	ExpectedSHA    string `json:"expected_sha"`
+	Path                 string `json:"path"`
+	Ref                  string `json:"ref"`
+	SHA                  string `json:"sha"`
+	Branch               string `json:"branch"`
+	Content              string `json:"content_base64"`
+	Message              string `json:"message"`
+	Title                string `json:"title"`
+	Body                 string `json:"body"`
+	State                string `json:"state"`
+	Head                 string `json:"head"`
+	Base                 string `json:"base"`
+	Draft                bool   `json:"draft"`
+	Event                string `json:"event"`
+	MergeMethod          string `json:"merge_method"`
+	Number               int    `json:"pull_request_number"`
+	IssueNumber          int    `json:"issue_number"`
+	CommentID            int64  `json:"comment_id"`
+	ReviewID             int64  `json:"review_id"`
+	CheckID              int64  `json:"check_run_id"`
+	WorkflowID           int64  `json:"workflow_id"`
+	WorkflowInputs       string `json:"workflow_inputs"`
+	RunID                int64  `json:"run_id"`
+	JobID                int64  `json:"job_id"`
+	Limit                int    `json:"limit"`
+	Cursor               int    `json:"cursor"`
+	OffsetBytes          int64  `json:"offset_bytes"`
+	MaximumBytes         *int   `json:"maximum_bytes"`
+	ExpectedSHA          string `json:"expected_sha"`
+	ExpectedHeadSHA      string `json:"expected_head_sha"`
+	ExpectedBaseSHA      string `json:"expected_base_sha"`
+	ExpectedChangedFiles *int   `json:"expected_changed_files"`
 }
 
 type githubContentView struct {
@@ -135,6 +138,9 @@ func (adapter *Adapter) executeGitHubCatalog(ctx context.Context, client *github
 	}
 	if in.Limit == 0 {
 		in.Limit = 20
+		if request.Operation == "github.pull_request.file.list" {
+			in.Limit = maximumGitHubPullFilePageSize
+		}
 	}
 	if in.Cursor == 0 {
 		in.Cursor = 1

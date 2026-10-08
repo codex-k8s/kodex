@@ -2,7 +2,7 @@ apiVersion: integrations.kodex.io/v1
 kind: IntegrationPackage
 metadata:
   key: github
-  version: 3.1.0
+  version: 4.0.0
   origin: SHIPPED
 spec:
   name: GitHub
@@ -200,7 +200,7 @@ spec:
         retryBackoffMilliseconds: 250
     - key: github.repository.content.read
       name: Прочитать файл
-      description: Читать UTF-8 файл размером до 1 МиБ страницами до eof в одном разрешённом репозитории. ref — точный commit SHA; после первой страницы передавать expected_sha и next_offset_bytes. Ответ содержит дайджесты полного файла и страницы. Каждая страница до 2048 байт имеет отдельный receipt.
+      description: UTF-8 файл до 1 МиБ; ref — commit SHA. Читать до eof с expected_sha и next_offset_bytes. maximum_bytes по умолчанию/максимум 16384 байта. JSON escaping может уменьшить страницу для модели native ответа 64 КиБ; это не EOF и не усечение. source_digest/chunk_digest и отдельный receipt сохраняются.
       operation: github.repository.content.read
       risk: READ
       approvalPolicy: NONE
@@ -213,13 +213,13 @@ spec:
         - {"key":"ref","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
         - {"key":"expected_sha","type":"STRING","format":"PLAIN","required":false,"maximumLength":40}
         - {"key":"offset_bytes","type":"INTEGER","required":false,"minimum":0,"maximum":1048576}
-        - {"key":"maximum_bytes","type":"INTEGER","required":false,"minimum":4,"maximum":2048}
+        - {"key":"maximum_bytes","type":"INTEGER","required":false,"minimum":4,"maximum":16384}
       outputFields:
         - {"key":"path","type":"STRING","format":"PLAIN","required":true,"maximumLength":1024}
         - {"key":"type","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
         - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":40}
         - {"key":"size","type":"INTEGER","required":true,"minimum":0,"maximum":1048576}
-        - {"key":"text","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048,"allowEmpty":true}
+        - {"key":"text","type":"STRING","format":"PLAIN","required":true,"maximumLength":16384,"allowEmpty":true}
         - {"key":"commit_sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":40}
         - {"key":"offset_bytes","type":"INTEGER","required":true,"minimum":0,"maximum":1048576}
         - {"key":"next_offset_bytes","type":"INTEGER","required":true,"minimum":0,"maximum":1048576}
@@ -462,7 +462,7 @@ spec:
         retryBackoffMilliseconds: 250
     - key: github.pull_request.read
       name: Прочитать pull request
-      description: Прочитать pull request в одном разрешённом репозитории; ограниченный результат и отдельный receipt эффекта.
+      description: Прочитать полное описание и состояние pull request с точными head SHA (sha), base_sha и changed_files для закрепления индекса. Это не чтение содержимого изменённых файлов.
       operation: github.pull_request.read
       risk: READ
       approvalPolicy: NONE
@@ -479,7 +479,9 @@ spec:
         - {"key":"state","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
         - {"key":"head","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
         - {"key":"base","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
-        - {"key":"sha","type":"STRING","format":"PLAIN","required":true,"maximumLength":256}
+        - {key: sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: base_sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: changed_files, type: INTEGER, required: true, minimum: 0, maximum: 2147483647}
         - {"key":"draft","type":"BOOLEAN","required":true}
         - {"key":"url","type":"STRING","format":"PLAIN","required":true,"maximumLength":2048}
       execution:
@@ -979,8 +981,18 @@ spec:
         maxAttempts: 3
         retryBackoffMilliseconds: 250
     - key: github.pull_request.file.list
-      name: Прочитать изменения файлов pull request
-      description: Возвращает страницу типизированных изменений файлов без произвольных download URL.
+      name: Получить индекс изменённых файлов pull request
+      # next_cursor только от GitHub. Полный индекс: непрерывные offset
+      # 0..total_count, одинаковые pins/page_size; отдельная страница не полный read.
+      # Nullable blob SHA не заменяется hash. Удаление читается из base, rename
+      # использует previous_filename. Binary, отсутствующий source и raw >2 MiB
+      # остаются отказом. Path <=1024 UTF-8 байт без control characters; 4 максимально
+      # экранированных rename записи помещаются в общий 64 KiB envelope.
+      description: >-
+        Только метаданные, без patch/source. Pins из pull_request.read; drift запрещён.
+        limit 1..4 (default 4), cursor номер страницы (default 1); limit неизменен.
+        eof — конец индекса, НЕ source read; >3000 файлов: отказ без усечения.
+        Полный source: repository.content.read до EOF на точном head/base SHA.
       operation: github.pull_request.file.list
       risk: READ
       approvalPolicy: NONE
@@ -988,10 +1000,19 @@ spec:
       resourceScope: {kind: GITHUB_REPOSITORY, connectionFields: [owner, repository]}
       inputFields:
         - {key: pull_request_number, type: INTEGER, required: true, minimum: 1, maximum: 2147483647}
-        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 100}
+        - {key: expected_head_sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: expected_base_sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: expected_changed_files, type: INTEGER, required: true, minimum: 0, maximum: 3000}
+        - {key: limit, type: INTEGER, required: false, minimum: 1, maximum: 4}
         - {key: cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
       outputFields:
         - {key: items, type: STRING, format: PLAIN, required: true, maximumLength: 65536}
-        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 100}
+        - {key: count, type: INTEGER, required: true, minimum: 0, maximum: 4}
         - {key: next_cursor, type: INTEGER, required: false, minimum: 1, maximum: 10000}
+        - {key: head_sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: base_sha, type: STRING, format: IDENTIFIER, required: true, maximumLength: 40}
+        - {key: total_count, type: INTEGER, required: true, minimum: 0, maximum: 3000}
+        - {key: page_size, type: INTEGER, required: true, minimum: 1, maximum: 4}
+        - {key: offset, type: INTEGER, required: true, minimum: 0, maximum: 3000}
+        - {key: eof, type: BOOLEAN, required: true}
       execution: {idempotency: READ_ONLY, timeoutSeconds: 30, maxAttempts: 3, retryBackoffMilliseconds: 250}

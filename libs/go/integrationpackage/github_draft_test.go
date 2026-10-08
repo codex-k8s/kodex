@@ -15,7 +15,7 @@ func TestGitHubPullRequestDraftInputIsOptionalAndClosed(t *testing.T) {
 		t.Fatal("pull request create capability is missing")
 	}
 	github := definitions["github"]
-	if github.Metadata.Version != "3.1.0" || !github.ExecutableBy(OwnerIntegrationGateway, RouteManagedMCP) || !github.RequiresConnectionCredential() {
+	if github.Metadata.Version != "4.0.0" || !github.ExecutableBy(OwnerIntegrationGateway, RouteManagedMCP) || !github.RequiresConnectionCredential() {
 		t.Fatal("draft field changed the executable package or credential boundary")
 	}
 	if _, ok := ResolveShippedRevision(github, "2.3.1", github.Digest); ok {
