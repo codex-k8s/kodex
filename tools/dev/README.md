@@ -12,15 +12,17 @@ updated: 2026-10-07
 
 ## Ранний provider ACK
 
-`provider-input-ack-capture.py --assistant-scope SYSTEM` по умолчанию принимает
+Наблюдатели `provider-input-ack-capture.py` и `provider-failure-capture.py`
+с `--assistant-scope SYSTEM` по умолчанию принимают
 только глобальный SYSTEM без проектного контекста. Для SYSTEM на странице
 проекта требуется явный `--expected-project-ref <точный-project-ref>` из
 свежего owner readback: ACK должен содержать ровно этот opaque ref. Scope не
 выводится из project, и контекст экрана не становится источником полномочий.
 Для `NONE` и `PROJECT` флаг добавляет ту же точную проверку. Неверный или
 несовпадающий pin закрыто отклоняется; tuple, image, task, redaction и повторное
-чтение того же Pod UID сохраняются. Флаг относится только к ACK-наблюдателю,
-не к отдельному `provider-failure-capture.py`.
+чтение того же Pod UID сохраняются. Failure-наблюдатель проверяет этот pin
+при initial ACK, в follow stream и при каждом ограниченном rejoin; непустой
+project никогда не выводится автоматически из наблюдаемого ACK.
 
 Точные параметры доступны через `./dev.sh identity --help` и `--help`
 соответствующего helper. Перед запуском проверяются локальный kubeconfig,

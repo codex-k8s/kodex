@@ -123,6 +123,9 @@ def validate_options(options):
     require(type(options.attempt) is int and 0 < options.attempt <= (1 << 53) - 1, 'ATTEMPT_INVALID')
     require(ACK.matches('sha256:' + ACK.HASH, options.image_manifest), 'IMAGE_DIGEST_INVALID')
     require(options.assistant_scope in ('NONE', 'PROJECT', 'SYSTEM'), 'ASSISTANT_SCOPE_INVALID')
+    expected_project_ref = getattr(options, 'expected_project_ref', None)
+    require(expected_project_ref is None or ACK.matches(ACK.REF, expected_project_ref),
+            'EXPECTED_PROJECT_REFERENCE_INVALID')
     require(type(options.timeout_seconds) is int and 30 <= options.timeout_seconds <= 3600,
             'TIMEOUT_INVALID')
     require(options.pod_name is None or ACK.matches(r'[a-z0-9-]{1,253}', options.pod_name), 'POD_NAME_INVALID')
@@ -189,7 +192,7 @@ def chunks(process, deadline, maximum=MAX_BYTES, now=time.monotonic):
 
 
 def diagnostic_from_chunks(stream, expected_ack=None, run_ref=None, scope='NONE',
-                           deadline=None, now=time.monotonic):
+                           deadline=None, now=time.monotonic, expected_project_ref=None):
     pending = bytearray()
     dropping = False
     acknowledged = expected_ack is None
@@ -197,7 +200,7 @@ def diagnostic_from_chunks(stream, expected_ack=None, run_ref=None, scope='NONE'
     def consume(line):
         nonlocal acknowledged
         if expected_ack is not None and ACK.EVENT.encode() in line:
-            proof = ACK.ack_from_logs(line, run_ref, scope)
+            proof = ACK.ack_from_logs(line, run_ref, scope, expected_project_ref)
             if proof is not None:
                 require(proof == expected_ack, 'FOLLOW_ACK_BINDING_MISMATCH')
                 acknowledged = True
@@ -284,6 +287,7 @@ class Kubectl:
 
 def capture(options, read, follow, now=time.monotonic, sleep=time.sleep):
     validate_options(options)
+    expected_project_ref = getattr(options, 'expected_project_ref', None)
     deadline = now() + options.timeout_seconds
     pod, proof = None, None
     while now() < deadline:
@@ -291,7 +295,7 @@ def capture(options, read, follow, now=time.monotonic, sleep=time.sleep):
         if pod is not None:
             raw = read(['logs', pod['name'], '-n', ACK.NAMESPACE, '-c', 'provider-runtime',
                         '--tail=256', '--limit-bytes=524288', '--timestamps=false'])
-            proof = ACK.ack_from_logs(raw, options.run_ref, options.assistant_scope)
+            proof = ACK.ack_from_logs(raw, options.run_ref, options.assistant_scope, expected_project_ref)
             if proof is not None:
                 require(proof['session_ref'] == options.session_ref and proof['turn_ref'] == options.turn_ref and
                         proof['attempt'] == options.attempt and proof['image_manifest_digest'] == options.image_manifest,
@@ -310,7 +314,7 @@ def capture(options, read, follow, now=time.monotonic, sleep=time.sleep):
         try:
             diagnostic = diagnostic_from_chunks(stream, expected_ack=proof,
                                                 run_ref=options.run_ref, scope=options.assistant_scope,
-                                                deadline=deadline, now=now)
+                                                deadline=deadline, now=now, expected_project_ref=expected_project_ref)
             break
         except Failure as error:
             if str(error) != 'FOLLOW_STREAM_ENDED':
@@ -328,7 +332,7 @@ def capture(options, read, follow, now=time.monotonic, sleep=time.sleep):
         require(rejoins < MAX_FOLLOW_REJOINS, 'FOLLOW_STREAM_ENDED')
         raw = read(['logs', current['name'], '-n', ACK.NAMESPACE, '-c', 'provider-runtime',
                     '--tail=256', '--limit-bytes=524288', '--timestamps=false'])
-        rejoined = ACK.ack_from_logs(raw, options.run_ref, options.assistant_scope)
+        rejoined = ACK.ack_from_logs(raw, options.run_ref, options.assistant_scope, expected_project_ref)
         require(rejoined is not None, 'FOLLOW_ACK_NOT_OBSERVED')
         require(rejoined == proof, 'FOLLOW_ACK_BINDING_MISMATCH')
         rejoins += 1
@@ -347,10 +351,13 @@ def capture(options, read, follow, now=time.monotonic, sleep=time.sleep):
             require(current['uid'] == pod['uid'], 'POD_CHANGED_AFTER_CAPTURE')
             ACK.bind_pod(current, proof)
             rejoin = 'VERIFIED'
-    return {'status': 'CAPTURED', 'run_ref': options.run_ref, 'session_ref': options.session_ref,
+    result = {'status': 'CAPTURED', 'run_ref': options.run_ref, 'session_ref': options.session_ref,
             'turn_ref': options.turn_ref, 'attempt': options.attempt, 'assistant_scope': options.assistant_scope,
             'pod': {'name': pod['name'], 'uid': pod['uid'], 'namespace': ACK.NAMESPACE},
             'image_manifest_digest': options.image_manifest, 'rejoin': rejoin, 'diagnostic': diagnostic}
+    if expected_project_ref is not None:
+        result['project_ref'] = proof['project_ref']
+    return result
 
 
 class PrivateParser(argparse.ArgumentParser):
@@ -368,6 +375,8 @@ def main(argv=None):
         parser.add_argument('--' + field, required=True)
     parser.add_argument('--attempt', type=int, required=True)
     parser.add_argument('--assistant-scope', choices=('NONE', 'PROJECT', 'SYSTEM'), default='NONE')
+    parser.add_argument('--expected-project-ref',
+                        help='Exact project context pin; SYSTEM without this flag requires no project')
     parser.add_argument('--timeout-seconds', type=int, default=120)
     parser.add_argument('--pod-name')
     parser.add_argument('--pod-uid')

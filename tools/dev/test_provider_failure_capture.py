@@ -109,6 +109,72 @@ class CaptureTests(unittest.TestCase):
                 result, _, _, _ = self.exercise(proof, columns, options)
                 self.assertEqual(result['assistant_scope'], scope)
 
+    def test_system_project_pin_capture_preserves_exact_binding_and_privacy(self):
+        proof, columns, options = fixture()
+        proof['assistant_scope'] = options.assistant_scope = 'SYSTEM'
+        options.expected_project_ref = proof['project_ref']
+        result, _, followed, closed = self.exercise(proof, columns, options)
+        self.assertEqual(result['status'], 'CAPTURED')
+        self.assertEqual(result['project_ref'], proof['project_ref'])
+        self.assertEqual(result['assistant_scope'], 'SYSTEM')
+        self.assertEqual(result['rejoin'], 'VERIFIED')
+        self.assertEqual(len(followed), 1)
+        self.assertEqual(closed, [True])
+        self.assertNotIn(SENTINEL, json.dumps(result))
+
+    def test_system_project_default_and_wrong_pin_cannot_follow(self):
+        proof, columns, options = fixture()
+        proof['assistant_scope'] = options.assistant_scope = 'SYSTEM'
+        for expected, code in ((None, 'ACK_PROJECT_SCOPE_INVALID'),
+                               ('project_foreign', 'EXPECTED_PROJECT_PIN_MISMATCH')):
+            options.expected_project_ref = expected
+            with self.subTest(expected=expected), self.assertRaisesRegex(CAPTURE.Failure, '^'+code+'$'):
+                self.exercise(proof, columns, options)
+
+    def test_none_and_project_pin_remain_additional_exact_restrictions(self):
+        for scope in ('NONE', 'PROJECT'):
+            proof, columns, options = fixture()
+            proof['assistant_scope'] = options.assistant_scope = scope
+            options.expected_project_ref = proof['project_ref']
+            with self.subTest(scope=scope):
+                result, _, _, _ = self.exercise(proof, columns, options)
+                self.assertEqual(result['project_ref'], proof['project_ref'])
+                options.expected_project_ref = 'project_foreign'
+                with self.assertRaisesRegex(CAPTURE.Failure, '^EXPECTED_PROJECT_PIN_MISMATCH$'):
+                    self.exercise(proof, columns, options)
+
+    def test_invalid_project_pin_fails_before_any_read(self):
+        for expected in ('', 'short', SENTINEL+'/', 'x'*129, 123, True):
+            _, _, options = fixture()
+            options.expected_project_ref = expected
+            with self.subTest(expected=expected), self.assertRaisesRegex(
+                    CAPTURE.Failure, '^EXPECTED_PROJECT_REFERENCE_INVALID$'):
+                CAPTURE.capture(options, lambda args: self.fail('invalid pin reached read'),
+                                lambda pod: self.fail('invalid pin reached follow'))
+
+    def test_follow_project_pin_requires_exact_full_ack_and_no_scope_inference(self):
+        proof, _, options = fixture()
+        proof['assistant_scope'] = options.assistant_scope = 'SYSTEM'
+        expected = CAPTURE.ACK.project_ack({'event': CAPTURE.ACK.EVENT, 'proof': proof},
+                                         options.run_ref, 'SYSTEM', proof['project_ref'])
+        for changed, code in (({}, None), ({'project_ref': 'project_foreign'}, 'EXPECTED_PROJECT_PIN_MISMATCH'),
+                              ({'assistant_scope': 'PROJECT'}, 'ACK_SCOPE_INVALID'),
+                              ({'lease_generation': 2}, 'FOLLOW_ACK_BINDING_MISMATCH')):
+            line = json.dumps({'event': CAPTURE.ACK.EVENT, 'proof': dict(proof, **changed),
+                               'private': SENTINEL}).encode()+b'\n'
+            with self.subTest(changed=changed):
+                if code is None:
+                    result = CAPTURE.diagnostic_from_chunks(iter([line, request()]), expected,
+                        options.run_ref, 'SYSTEM', expected_project_ref=proof['project_ref'])
+                    self.assertEqual(result['kind'], 'REQUEST_FAILURE')
+                    self.assertNotIn(SENTINEL, json.dumps(result))
+                else:
+                    with self.assertRaisesRegex(CAPTURE.Failure, '^'+code+'$'):
+                        CAPTURE.diagnostic_from_chunks(iter([line, request()]), expected,
+                            options.run_ref, 'SYSTEM', expected_project_ref=proof['project_ref'])
+        with self.assertRaisesRegex(CAPTURE.Failure, '^ACK_PROJECT_SCOPE_INVALID$'):
+            CAPTURE.diagnostic_from_chunks(iter([line, request()]), expected, options.run_ref, 'SYSTEM')
+
     def test_pod_cleanup_does_not_forge_rejoin(self):
         result, _, _, _ = self.exercise(after=b'')
         self.assertEqual(result['rejoin'], 'POD_CLEANED_AFTER_CAPTURE')
@@ -193,12 +259,16 @@ class CaptureTests(unittest.TestCase):
             self.exercise(proof, columns, options)
 
     def test_ack_wrong_scope_or_pin_fails_closed(self):
-        for field, value in (('assistant_scope', 'PROJECT'), ('runtime_revision_digest', 'c' * 64),
-                             ('session_ref', 'ses_foreign01'), ('attempt', 2)):
-            proof, columns, options = fixture()
-            proof[field] = value
-            with self.subTest(field=field), self.assertRaises(CAPTURE.Failure):
-                self.exercise(proof, columns, options)
+        for system_project in (False, True):
+            for field, value in (('assistant_scope', 'PROJECT'), ('runtime_revision_digest', 'c' * 64),
+                                 ('session_ref', 'ses_foreign01'), ('attempt', 2)):
+                proof, columns, options = fixture()
+                if system_project:
+                    proof['assistant_scope'] = options.assistant_scope = 'SYSTEM'
+                    options.expected_project_ref = proof['project_ref']
+                proof[field] = value
+                with self.subTest(field=field, system_project=system_project), self.assertRaises(CAPTURE.Failure):
+                    self.exercise(proof, columns, options)
 
     def test_same_uid_rebound_before_follow_rejected(self):
         proof, columns, options = fixture()
@@ -351,8 +421,11 @@ class CaptureTests(unittest.TestCase):
             CAPTURE.diagnostic_from_chunks(iter([SENTINEL.encode()]), expected, options.run_ref)
 
     def exercise_early_eof(self, after=None, rejoined_proof=None, later_diagnostic=False,
-                           transport_error=False, deadline_on_eof=False):
+                           transport_error=False, deadline_on_eof=False, expected_project_ref=None):
         proof, columns, options = fixture()
+        if expected_project_ref is not None:
+            proof['assistant_scope'] = options.assistant_scope = 'SYSTEM'
+            options.expected_project_ref = expected_project_ref
         clock, follows, closed, calls = FakeClock(), [], [], []
         gets, logs = 0, 0
 
@@ -395,6 +468,18 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(len(follows), 2)
         self.assertEqual(len(set(follows)), 1)
         self.assertEqual(elapsed, 0.5)
+
+    def test_system_project_pin_survives_eof_rejoin_without_adopting_foreign_context(self):
+        proof, _, _ = fixture()
+        expected = proof['project_ref']
+        result, follows, _, _ = self.exercise_early_eof(later_diagnostic=True, expected_project_ref=expected)
+        self.assertEqual(result['status'], 'CAPTURED')
+        self.assertEqual(result['project_ref'], expected)
+        self.assertEqual(len(follows), 2)
+        proof['assistant_scope'], proof['project_ref'] = 'SYSTEM', 'project_foreign'
+        result, follows, _, _ = self.exercise_early_eof(rejoined_proof=proof, expected_project_ref=expected)
+        self.assertEqual(result['code'], 'EXPECTED_PROJECT_PIN_MISMATCH')
+        self.assertEqual(len(follows), 1)
 
     def test_clean_eof_rejoin_budget_is_bounded_and_not_provider_pass(self):
         result, follows, _, elapsed = self.exercise_early_eof()
@@ -539,6 +624,29 @@ class CaptureTests(unittest.TestCase):
         kubectl.assert_not_called()
         temporary.assert_not_called()
         self.assertEqual(json.loads(output.getvalue()), {'status': 'NOT_CAPTURED', 'code': 'TIMEOUT_INVALID'})
+
+    def test_cli_project_pin_validation_and_default_are_private_before_io(self):
+        _, _, options = fixture()
+        args = ['--run-ref', options.run_ref, '--session-ref', options.session_ref,
+                '--turn-ref', options.turn_ref, '--attempt', str(options.attempt),
+                '--image-manifest', options.image_manifest, '--assistant-scope', 'SYSTEM']
+        for expected in (None, 'project_fixture'):
+            extra = [] if expected is None else ['--expected-project-ref', expected]
+            with self.subTest(expected=expected), patch('sys.stdout', io.StringIO()), patch.object(
+                    CAPTURE, 'capture', return_value={'status': 'CAPTURED'}) as captured:
+                self.assertEqual(CAPTURE.main(args+extra), 0)
+                self.assertEqual(captured.call_args.args[0].expected_project_ref, expected)
+        for extra in (['--expected-project-ref', SENTINEL+'/'], ['--expected-project-ref', ''],
+                      ['--expected-project-ref', 'short'], ['--expected-project-ref', 'x'*129],
+                      ['--expected-project-ref']):
+            output = io.StringIO()
+            with self.subTest(extra=extra), patch('sys.stdout', output), patch.object(
+                    CAPTURE, 'Kubectl') as kubectl, patch.object(CAPTURE.tempfile, 'TemporaryDirectory') as temporary:
+                self.assertEqual(CAPTURE.main(args+extra), 1)
+            kubectl.assert_not_called()
+            temporary.assert_not_called()
+            self.assertNotIn(SENTINEL, output.getvalue())
+            self.assertEqual(json.loads(output.getvalue())['status'], 'NOT_CAPTURED')
 
     def test_cli_follow_failures_emit_only_closed_code_and_no_private_exception(self):
         _, _, options = fixture()

@@ -10,6 +10,27 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 02:24 UTC
+
+HEAD/remote/Draft1800 ed538f55 EQUAL до diagnostic3files и этого checkpoint.
+Failure observer exact project pin проходит initial/follow/rejoin, default
+SYSTEM-empty unchanged; ROOT81 tests PASS1.591s/diffcheckPASS. Runnercompiled
+58324826 и G7/G13 не переименовывать по observer/docHEAD.
+SYSTEM run_mHyvmvO3ezsmEP02d-YnKxp6 SUCCEEDED2: public README/web/context,
+exact ACK02:14/rejoin/task/inbox/instructions/template/materialization EQUAL,
+ENV28/binding8/G13/PodUIDaf1476a7-b01d-443a-87ac-6e4363e9b609.
+BinaryNOTRUN доcleanup, nativeGitHubgrantNOTPROVIDED. Actual screenshot02:23
+PASSlayout/Console0/overflowfalse; reconnect на снимке, DOM02:24 Connected.
+ClusterNodes2/2/Deployments6x1/1/currentgeneration/noWarnings15min,
+boundedlogs readsuccess/empty; это не fullQA.
+Manager run_PS6YI_JYpT4abCl059kfeRjS RUNNING2/sequence849, commentary256pages/
+524231Б из536156Б; не дублировать, observer41860 active. Только после actual
+EOF/native-read-proof.md ONE prepared full33. Full65/11/13/14/15 OPEN.
+SYSTEM/PROJECT shortsmokes, delayedcreate/liveunread PASS; sixroles/full33,
+actual ENV publication послеeditorfix и internalPR/reviews ещё OPEN.
+Автономно до14:00 Саратов, ownChrome1/reload5мин/чужие не трогать.
+Следующий publisherprevious заменить наed538f55 перед commit/pushDraft1800.
+
 ## Checkpoint 08.10.2026 02:11 UTC
 
 HEAD27c5f985/remote/Draft1800 EQUAL до новых observer5files и этого journal.

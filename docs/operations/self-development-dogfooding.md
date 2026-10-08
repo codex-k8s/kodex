@@ -10,6 +10,41 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 02:24 UTC — SYSTEM context и строгий rejoin
+
+- Source `ed538f55d01834a9c02aefce11797ff3e7c2ce29`: SYSTEM G13
+  follow-up `run_mHyvmvO3ezsmEP02d-YnKxp6` SUCCEEDED2/history11,
+  session`ses_oCPDX-hyzUbRIR7Nl_G_cUwB`,
+  turn`trn_jbDlMCf550fXpQAEh5xlpMHb`/attempt1. Реальные configuration read
+  и CODEX_WEB_SEARCH/open публичного README подтверждены. SYSTEM authority
+  остаётся ORGANIZATION; контекст страницы проекта её не расширяет.
+  Native GitHub grant не предоставлен и не заявлен PASS.
+- Ранний ACK02:14 captured/rejoin VERIFIED с явным exact project pin:
+  task1390Б/SHAc50101f1; provider/inbox SHA83be4f73 EQUAL, task_in_prompt=true.
+  Continuation prompt не обязан совпадать с текстом task. Instructions
+  f0b8efd9/67705Б EQUAL, templatef4926f1b/materialization52de31d9;
+  ENV28/binding8/G13/tools38/grants2. Podruntime-turn-cefdff0d18fdb64d,
+  UIDaf1476a7-b01d-443a-87ac-6e4363e9b609, оба imageID6e73a0c5/restarts0.
+  Binary sampling NOT RUN: не успел до cleanup; serving-process proof не заявлен.
+- Actual SYSTEM dialog screenshot02:23 получен: компактные tools, агент слева,
+  читаемый sidebar, overflow=false/Console0. В момент снимка reconnect ещё
+  восстанавливался; freshDOM02:24 Connected=true. Задержка изучается отдельно,
+  screenshot не выдаётся за доказательство мгновенного reconnect.
+- Failure collector теперь также принимает optional exact project pin и
+  сохраняет его через initial ACK/follow/rejoin; default SYSTEM-empty и
+  authority/tuple/lease/image guards неизменны. ROOT независимо81 tests
+  PASS1.591s и diffcheck PASS; scope только diagnostic tooling, не runtime.
+- Read-only cluster preflight02:16–02:18: Nodes2/2 Ready/no pressure,
+  шесть целевых Deployments1/1 и observed generation current. Warning15min0;
+  четыре bounded log-read successful/0строк. Исторические restart/Failed Pod
+  сохранены отдельно, не текущий блокер и не доказательство full QA.
+- Manager `run_PS6YI_JYpT4abCl059kfeRjS` RUNNING2/sequence849:
+  commentary256страниц/524231Б из536156Б, EOFfalse. Исправление ручного
+  счётчика страниц опубликовано агентом; source offsets/pins неизменны.
+  Actual EOF/native-read-proof.md ещё OPEN; observer41860 active.
+  После подтверждения — ONE full33, Full65/11/13/14/15 остаются OPEN.
+  Автономно до14:00 Саратов; финальный внутренний PR не merge/approve.
+
 ## Checkpoint 08.10.2026 02:11 UTC — PROJECT smoke и диагностическая оснастка
 
 - [x] Новый PROJECT G7 smoke `run_6MNW1hzhCQnksm2e2m4Psni4` SUCCEEDED,
