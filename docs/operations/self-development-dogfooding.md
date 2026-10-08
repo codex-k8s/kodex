@@ -4068,6 +4068,26 @@ Bootstrap-изменения вошли в один сквозной PR как �
 
 ## План с доказательствами
 
+Решение владельца от 08.10.2026: для нового текущего живого
+`SOFTWARE_CHANGE` действует явное исключение из порядка нескольких внутренних
+рецензентов — одно независимое комплексное ревью фактического diff на точном
+SHA (архитектура, безопасность, документация и лексика), затем продуктовая
+приёмка Manager. После первоначального ревью исправления и повторное комплексное
+ревью нового SHA допустимы не более пяти циклов; шестой требует решения
+владельца. Единственный финальный
+Human Gate остаётся у владельца после приёмки Manager и устранения замечаний.
+Исключение относится к новому текущему процессу; исторические результаты и
+закреплённые версии прежних запусков не переписываются. В 20:07:52 UTC
+Workflow опубликован: version 22 / revision 7, 21 шаг, publishedRevisionRef
+`wfv_vERJPIFmeE24bKG_hpDKyTAm`; единственный Human Gate —
+`FINAL_MANAGER_REVIEW`, step-057. Инструкции Manager и комплексного рецензента
+опубликованы, все 120 прежних grants восстановлены с точным совпадением исходной
+проекции. Историческая валидация 19:56 UTC — FAIL / INVALID_REQUEST сохранена.
+Штатный план удалил только ошибочный
+`github.repository.content.metadata.read` из DEVELOPER_FIX_5 / step-054;
+VALIDATE VALID и PUBLISH PUBLISHED подтверждены. Это PASS конфигурации и
+публикации; полный Workflow и его сквозная проверка ещё NOT RUN.
+
 - [x] 1. Создать связанное Issue, ветку от свежего main и один Draft bootstrap
       PR; фиксировать результаты PASS/FAIL/NOT RUN/BLOCKED на точном SHA.
 - [x] 2. Полные управляемые MCP/tool profiles системного помощника,
@@ -4111,8 +4131,14 @@ Bootstrap-изменения вошли в один сквозной PR как �
 - [x] 10. Проверить реальные тестовые ходы каждой роли, template validate/
       preview/publish/materialization, scoped grants, NONE writes, оба Human Gate
       режима, delegation и handoff через файлы/артефакты.
-- [ ] 11. SOFTWARE_CHANGE: Manager → Architect → Developer → параллельные
-      Documentation/Security/Lexical reviews → fixes/re-review → final Manager.
+- [ ] 11. SOFTWARE_CHANGE по явному исключению владельца от 08.10.2026:
+      Manager → Architect → Developer → один независимый комплексный рецензент
+      фактического diff на точном SHA (архитектура, безопасность, документация,
+      лексика) → продуктовая приёмка Manager → исправления и повторное ревью
+      нового SHA, не более пяти циклов после первоначального ревью → единственный
+      финальный Human Gate.
+      Живой Workflow опубликован: 21 шаг, version 22 / revision 7.
+      Публикация/конфигурация PASS; полный процесс и сквозная проверка NOT RUN.
       Проверить небольшой disposable delegated run до настоящей Issue.
 - [x] 12. При bootstrap acceptance зафиксировать и автономно слить bootstrap
       PR, обновить стенд на свежий main и повторно сверить созданные ресурсы,
@@ -4123,8 +4149,14 @@ Bootstrap-изменения вошли в один сквозной PR как �
 - [ ] 14. Выполнить полный реальный Workflow силами команды Kodex; host
       проверяет каждый значимый transition и исправляет дефекты платформы,
       но не пишет финальную задачу вместо Developer и не подменяет reviewers.
-- [ ] 15. Internal reviews/fixes/responses на exact SHA, final-readiness.md,
-      финальный PR READY_FOR_HUMAN_REVIEW и отчёт по разделу 64 исходного задания.
+- [ ] 15. По явному исключению владельца от 08.10.2026: одно независимое
+      комплексное ревью фактического diff на точном SHA, продуктовая приёмка
+      Manager, исправления/ответы и повторное ревью нового SHA до пяти циклов
+      после первоначального ревью,
+      final-readiness.md, финальный PR READY_FOR_HUMAN_REVIEW и отчёт по
+      разделу 64 исходного задания. Единственный финальный Human Gate — владелец.
+      Живой Workflow опубликован: 21 шаг, version 22 / revision 7;
+      полный процесс по новому порядку ещё NOT RUN.
       Этот PR не merge, не auto-merge, не approve от имени владельца.
 
 ## Карта новых пользовательских сценариев
@@ -12079,3 +12111,173 @@ protocol timeout — screenshot не получен, причина нижеле
 DOM evidence не является pixel PASS. Демо владельца не менялось. Далее native
 grants/Test, exact committed проверки/merge1805/fresh main, новый full39;
 Full65/checklist11/13/14/15 OPEN. Финальный business PR не сливать.
+
+### 08.10.2026 19:21 UTC — PR1805 слит, частичное восстановление прав и решение об одном ревью
+
+Issue #1797 остаётся OPEN. PR1805 MERGED обычным squash:
+SHA ветки автора `0d7eafb4a8546e130a57e94c5fe99afee4fc8465`, main
+`e422cdc7b67feea8a1354e9efd98171e59704808`.
+Текущая ветка — `kodex-agent/issue-1797-full39-v6`.
+
+В интерфейсе GitHub опубликованы revision 6 / package 5; дайджест определения
+`b64de75ef0a31832e578540b63f5667b9ff2043401eaf42e40cacff6fc999d83`.
+Штатный SYSTEM Test plan `pln_0oAoVUkHfUFOwmevl0JH56jy` — APPLIED,
+connection 503 — CONNECTED. План проектного помощника
+`pln_v6Q9p27dm_nv72PlgJWzmwKH` для 21 собственного grant:
+Validate VALID → Apply APPLIED в 19:21 UTC; connection 524 — CONNECTED.
+Авторитетная проекция содержит 120 grants: включён 21, отключены 99.
+Восстановление оставшихся 99 — NOT DONE. Исходная семантическая проекция всех
+120 grants с минимально необходимыми правами:
+`7ae920b1edd6fbfaab76c568db49f8e61d337fac5b1c3637ca95b450ff2ec971`.
+CONNECTED и применение 21 grant не доказывают восстановление всей исходной проекции.
+
+Скриншот desktop в Chrome MCP — PASS в 19:15 UTC после повторного штатного
+снимка без `filePath`; снимок с настроенным `filePath` получил access denied.
+Отказ доступа инструмента к файлу не классифицирован как дефект продукта.
+В 19:21 UTC Console не содержит ошибок/предупреждений; относящиеся к сценарию API 200/201/202.
+Mobile — NOT RUN. Ранее записанные timeout/NOT RUN скриншотов сохраняются
+как результаты своих попыток; новый desktop PASS их не переписывает.
+
+Владелец 08.10.2026 принял явное исключение для нового текущего живого
+процесса: после Developer один независимый рецензент проверяет фактический
+diff на точном SHA по архитектуре, безопасности, документации и лексике;
+затем Manager выполняет продуктовую приёмку. Исправления и повторное
+комплексное ревью нового SHA — не более пяти циклов. После устранения
+замечаний и приёмки Manager остаётся единственный финальный Human Gate
+владельца. Исторические FAIL/PASS и закреплённые версии запусков не меняются.
+
+Опубликованный Workflow пока прежний: ревизия 6 / 39 шагов, NOT CHANGED.
+Далее штатно восстановить оставшиеся grants с точной сверкой исходной
+семантической проекции, применить и опубликовать новый порядок Workflow через
+платформу, проверить его новый неизменяемый DAG и запустить один новый обычный
+процесс. Checklist 11/13/14/15 и Full65 остаются OPEN; финальный PR по
+бизнес-задаче не сливать, не включать auto-merge и не approve от имени владельца.
+
+### 08.10.2026 19:41 UTC — черновик 21 шаг, инструкции опубликованы, grants восстановлены 64/120
+
+Текущая ветка `kodex-agent/issue-1797-full39-v6`; принятый main после PR1805
+`e422cdc7b67feea8a1354e9efd98171e59704808`, Issue #1797 OPEN.
+Штатный `UPDATE_WORKFLOW` plan `pln_h-Ncm0nOic8xh7zuEEWjvwVJ` APPLIED,
+receipt `rct_qwqHa1JKkLb4qgzIa_c5J_SY`. Новый draft
+`wfv_f16561071501be5b1f510678`, version 19, содержит 21 шаг.
+Все шаги последовательны, единственный Human Gate — `FINAL_MANAGER_REVIEW`,
+`step-057`. Сохранены четыре исходных input, coordinator, timeout и пределы
+capabilities. Проверены условия одного комплексного ревью, пяти циклов
+исправлений после первоначального ревью, собственного штатного чтения до EOF,
+фактического GitHub `COMMENT` и запрета слияния финального PR.
+Это проверка черновика: опубликованный Workflow остаётся revision 6 / 39
+шагов, публикация нового порядка и его сквозное выполнение ещё NOT RUN.
+
+Инструкции Manager: plan `pln_GK1oFt1txhDbXH1pIlk-LwIM` APPLIED,
+receipt `rct_PJRotq4QQnRnZ0_Rk9ZpdumQ`, publication
+`rvip_7TvckLhdgeuTg7KBjG9HOaXi` APPLIED. Agent 22, instructions
+`ins_M6EHFesL4dkYfzzKhEMfkKPE`, revision 4 PUBLISHED, binding 4 effective.
+Инструкции комплексного рецензента сначала опубликованы как revision 2
+планом `pln_l0-WqeJtpsTEjlWlvHShc-M0` APPLIED. Неточность подсчёта циклов
+исправлена штатным plan `pln_GRdXs6Rtzq4iXluLqHPrUqL2` APPLIED,
+receipt `rct_u4q5cHx4jqUGM8t5hmVYOLIw`, publication
+`rvip_HaUqrRmNEIpvNcCzStqLLnuW` APPLIED. Итог: reviewer agent 19,
+instructions `ins_xjgAopwp1AeMODc_cIOXHZBR`, revision 3 PUBLISHED,
+binding 3 effective. Лимит — пять циклов исправления/повторного ревью после
+первоначального ревью; первоначальное ревью в этот лимит не входит.
+
+Восстановление прав Developer — 24 grants: plan
+`pln_EHO40CwYbexj1Mv7ctOrGnQl` APPLIED, receipt
+`rct_LIWDnIySiHhXDeugsVPGW2ZJ`, connection 548, enabled 45.
+Восстановление прав Manager — 19 grants: plan
+`pln_B1bHUiybW2bmEIYwKf4PbDul` APPLIED, receipt
+`rct_go-3KmmKLhvtI5yymcEmGQDf`, connection 567, enabled 64 из 120.
+Отключены 56; полное восстановление — NOT DONE. Исходная семантическая
+проекция всех 120 grants с минимально необходимыми правами:
+`7ae920b1edd6fbfaab76c568db49f8e61d337fac5b1c3637ca95b450ff2ec971`.
+
+Попытка ускорить восстановление двух получателей через контекст `WORKFLOW`
+дала семантически неверный proposal: plan `pln_lWb-iGYy0q6bABKH0owNukov`
+предлагал 29 операций с `workflowRef` вместо `agentRef`, пустыми/нулевыми
+`grantRef` в before и новыми workflow grants. ROOT остановил его точной
+сверкой исходной проекции до Validate/Apply;
+plan REJECTED в 19:41 UTC. Connection 567, count 120 и enabled 64 UNCHANGED,
+новых grants нет. Причина — неверное предположение ROOT о контексте и
+семантически неверный proposal; дефект API authority этим не доказан.
+Продолжение — только отдельные контексты `AGENT`, точные существующие
+`grantRef` из исходной проекции и непустой grant в before.
+
+Штатное восстановление 16 grants Architect продолжается: run
+`run_dXQw6bQCL-tNO63ocnqMkTHz`, conversation
+`cnv_3zifIknZdNvj2RwarEaTL42u`, RUNNING.
+Chrome MCP desktop capture PASS в 19:34 UTC; Console ошибок/предупреждений
+не содержит, текущие API 200, горизонтального переполнения нет. После reload
+начальное восстановление соединения сменилось CONNECTED в 19:34:49 UTC.
+Mobile NOT RUN. Исторические FAIL/PASS сохраняются. Checklist 11/13/14/15
+по-прежнему [ ], Full65 OPEN; финальный PR по бизнес-задаче не сливать,
+не включать auto-merge и не approve от имени владельца.
+
+### 08.10.2026 около 20:05 UTC — все 120 grants восстановлены, валидация Workflow закрыто отклонена
+
+Ветка `kodex-agent/issue-1797-full39-v6`, Issue #1797 OPEN; принятый main
+`e422cdc7b67feea8a1354e9efd98171e59704808` после PR1805.
+Все 120 прежних GitHub5 grants enabled, disabled 0; connection 623 CONNECTED.
+Точная семантическая проекция совпала с исходной: SHA256
+`7ae920b1edd6fbfaab76c568db49f8e61d337fac5b1c3637ca95b450ff2ec971` EQUAL.
+Восстановление прав выполнено; новых grants и расширения исходных прав нет.
+
+Планы и receipts последних четырёх получателей:
+
+- Architect, 16 grants: plan `pln_jl1Ad6nmgyhC6Mur9pp1WGRP`,
+  receipt `rct_7VMCyAZh69e4GjNMouzpY3uT`.
+- Security, 13 grants: plan `pln_i-YiFWX2z5sGfP9UYy5y8rii`,
+  receipt `rct_bc0NPMkh8Fl9GAbL18_uxuVw`.
+- Documentation, 14 grants: plan `pln_KOMWMXKfI3si0-Z5Fkfc3RUZ`,
+  receipt `rct_bQEIBlr5SrH2jBv0KrCU7naP`.
+- Lexical, 13 grants: plan `pln_yrFKL_slN0zvapfe8DW5CSGB`,
+  receipt `rct_AGlEZVxX6nyIYka7Ctkm-N1c`.
+
+В 19:56 UTC штатный VALIDATE черновика Workflow version 19 вернул HTTP 400,
+INVALID_REQUEST, correlation `52c028db-39ff-43c0-94c4-a0f8b51fab5e`.
+Результат валидации — FAIL. Причина подтверждена авторитетным owner read
+effective-capabilities: у Developer в `requiredCapabilityKeys` добавлен
+несуществующий `github.repository.content.metadata.read`; остальные требования
+доступны. Полное восстановление grants не делает неизвестную capability
+существующей и не доказывает пригодность нового Workflow.
+
+Около 20:05 UTC создан штатный PROJECT assistant в контексте `WORKFLOW`:
+conversation `cnv_FPj3NYhHqGBfeb1Tsh8pTwuG`, run
+`run_KHjMVKSLm8wzY_iOQJocLR7E`. ROOT ведёт адресное исправление только
+этого ключа, без новых grants. Исправление, повторная успешная валидация и
+публикация ещё не подтверждены. Опубликованный Workflow по-прежнему revision 6
+/ 39 шагов; черновик 21 шаг / version 19 не выдан за опубликованный результат.
+Сквозное выполнение нового порядка NOT RUN. Исторические FAIL/PASS сохранены;
+checklist 11/13/14/15 остаются [ ], Full65 OPEN. Финальный PR по бизнес-задаче
+не сливать, не включать auto-merge и не approve от имени владельца.
+
+### 08.10.2026 20:07:52 UTC — адресное исправление и публикация Workflow revision 7 PASS
+
+Штатный plan `pln_2xLSLiTD-aP4RqeeM9qcjogl` APPLIED, receipt
+`rct_uEKbaX_TmzxhJ_D8q2wdSXlI`. Удалён ровно ошибочный
+`github.repository.content.metadata.read` из `requiredCapabilityKeys` этапа
+`DEVELOPER_FIX_5`, step-054; другого diff нет. VALIDATE → VALID / version 21;
+PUBLISH → PUBLISHED / version 22 / revision 7, publishedRevisionRef
+`wfv_vERJPIFmeE24bKG_hpDKyTAm`. Авторитетный GET после reload подтверждает
+badCaps 0 и план APPLIED. Исторический HTTP 400 / INVALID_REQUEST в 19:56 UTC
+сохранён как результат прежней валидации.
+
+Опубликован 21 шаг: INTAKE001 → ARCH002 → IMPLEMENTATION003 →
+SINGLE_COMPREHENSIVE_REVIEW040 → AGG041 → пять циклов исправления / комплексного
+ревью / агрегации → FINAL_MANAGER_REVIEW057. Единственный Human Gate —
+FINAL_MANAGER_REVIEW057, четыре решения. Первоначальное комплексное ревью
+не входит в лимит пяти циклов. Публикация и конфигурация — PASS; полный
+Workflow и сквозное выполнение — NOT RUN. Checklist 11/13/14/15 остаются [ ].
+
+Desktop screenshot в 20:06 UTC — PASS: компактные инструменты, сообщения
+агента слева, пользователя справа, горизонтального переполнения нет.
+Console HTTP 400 до reload относится к ошибочной синтетической операции ROOT
+createConversation с неверными именами полей context; новый дефект продукта
+этим не доказан. В 20:08 UTC после reload Chrome Console errors/warnings 0;
+Network содержит 46 запросов, все 25 просмотренных относящихся к сценарию API
+имеют HTTP 200. Эти результаты не означают проверки остальных запросов.
+Ограниченный вывод backend CP/GW (`--since=3m --tail=100`) содержит 0 строк
+у обоих: в этом выводе ошибок нет, активность backend этим не доказана.
+В 20:08:37 UTC точный bot readback: identity `kodex-agent`, Issue #1797 OPEN,
+main `e422cdc7b67feea8a1354e9efd98171e59704808`.
+Full65 OPEN; финальный PR по бизнес-задаче не сливать, не включать auto-merge
+и не approve от имени владельца.
