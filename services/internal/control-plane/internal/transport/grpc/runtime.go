@@ -101,6 +101,11 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 		return nil
 	}
 	result.FileCatalog = fileCatalog
+	deadline, validDeadline := castRuntimeExecutionDeadline(values["executionDeadline"])
+	if !validDeadline {
+		return nil
+	}
+	result.ExecutionDeadline = deadline
 	result.InstructionRef = mapString(values, "instructionRef")
 	result.InstructionDigest = mapString(values, "instructionDigest")
 	result.PromptTemplateRef = mapString(values, "promptTemplateRef")

@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	RunnerInputSchemaV8       = "kodex.agent-runner-input.v8"
+	RunnerInputSchemaV9       = "kodex.agent-runner-input.v9"
 	RunnerModeTurn            = "TURN"
 	RunnerModeWarm            = "WARM"
 	MaximumRunnerInputBytes   = 2 << 20
@@ -221,6 +221,7 @@ type RunnerInput struct {
 	SecretProjections                 []RuntimeSecretProjection `json:"secret_projections,omitempty"`
 	EnvironmentPolicy                 RuntimeEnvironmentPolicy  `json:"environment_policy"`
 	WorkspacePolicy                   RuntimeWorkspacePolicy    `json:"workspace_policy"`
+	ExecutionDeadline                 *RuntimeExecutionDeadline `json:"execution_deadline,omitempty"`
 	EffectiveKubernetesAccess         RuntimeKubernetesAccess   `json:"effective_kubernetes_access"`
 	CodexSandbox                      string                    `json:"codex_sandbox"`
 	CodexApprovalPolicy               string                    `json:"codex_approval_policy"`
@@ -272,7 +273,7 @@ func (input RunnerInput) Validate() error {
 	if input.ContextSnapshot != nil && input.ContextSnapshot.ValidateFor(input, time.Now()) != nil {
 		return ErrRuntimeContext
 	}
-	if input.Schema != RunnerInputSchemaV8 || (input.Mode != RunnerModeTurn && input.Mode != RunnerModeWarm) ||
+	if input.Schema != RunnerInputSchemaV9 || (input.Mode != RunnerModeTurn && input.Mode != RunnerModeWarm) ||
 		input.WorkloadInstance == "" || len(input.WorkloadInstance) > 128 || !opaqueReferencePattern.MatchString(input.OrganizationRef) ||
 		!opaqueReferencePattern.MatchString(input.SessionRef) || !opaqueReferencePattern.MatchString(input.AgentRef) ||
 		!(opaqueReferencePattern.MatchString(input.RuntimeRevisionRef) || systemRuntimeRevisionPattern.MatchString(input.RuntimeRevisionRef)) || input.RuntimeRevisionVersion < 1 ||
@@ -310,6 +311,12 @@ func (input RunnerInput) Validate() error {
 	}
 	if err := ValidateManagedMCPProfiles(input); err != nil {
 		return err
+	}
+	if err := input.ExecutionDeadline.Validate(); err != nil {
+		return err
+	}
+	if input.ExecutionDeadline != nil && (input.Mode != RunnerModeTurn || input.AssistantScope != AssistantScopeNone) {
+		return errors.New("workflow execution deadline scope is invalid")
 	}
 	usesSTT := containsString(input.Capabilities, "platform.stt.use")
 	if usesSTT != (opaqueReferencePattern.MatchString(input.SystemSTTConfigurationRef) && opaqueReferencePattern.MatchString(input.SystemSTTConfigurationRevisionRef) && input.SystemSTTConfigurationVersion > 0 && sha256Pattern.MatchString(input.SystemSTTConfigurationDigest)) ||

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
@@ -32,6 +33,30 @@ func TestExecuteProviderTurnSkipsRefreshForUnchangedAPIKey(t *testing.T) {
 	}
 	if got.Outcome != want.Outcome || called {
 		t.Fatalf("executeProviderTurn() = %#v, callback called = %v", got, called)
+	}
+	assertRemoved(t, authPath)
+}
+
+func TestProviderIndependentlyEnforcesPinnedWorkflowDeadline(t *testing.T) {
+	input, authPath := providerTurnFixture(t, []byte(`{"auth_mode":"apikey","OPENAI_API_KEY":"test-key"}`))
+	started := time.Now().UTC().Add(-900 * time.Millisecond)
+	clock := runtimecontract.RuntimeExecutionClock{RunRef: "run_deadline01", WorkflowVersionRef: "wfv_deadline01", WorkflowVersionDigest: strings.Repeat("a", 64), TimeoutSeconds: 1, StartedAt: started, DeadlineAt: started.Add(time.Second)}
+	input.ExecutionDeadline = &runtimecontract.RuntimeExecutionDeadline{Policy: runtimecontract.WorkflowExecutionDeadlinePolicy, EffectiveDeadlineAt: clock.DeadlineAt, Clocks: []runtimecontract.RuntimeExecutionClock{clock}}
+	joined := false
+	_, err := executeProviderTurn(t.Context(), input, []byte("synthetic task"), strings.Repeat("a", 64), func(ctx context.Context, _ model.Input, _ []byte, _ string) (Result, error) {
+		actual, ok := ctx.Deadline()
+		if !ok || !actual.Equal(clock.DeadlineAt) {
+			t.Fatal("provider did not receive absolute immutable clock")
+		}
+		<-ctx.Done()
+		joined = true
+		return Result{}, ctx.Err()
+	}, func(context.Context, model.Input, runtimecontract.RunnerProviderCredentialRefreshRequest) error {
+		t.Fatal("unchanged credential triggered refresh")
+		return nil
+	})
+	if !joined || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("provider survived absolute deadline without controller or runner cancellation")
 	}
 	assertRemoved(t, authPath)
 }

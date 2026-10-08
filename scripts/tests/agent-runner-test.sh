@@ -24,10 +24,10 @@ done
 
 "$repository_root/scripts/tests/runtime-mcp-catalog-test.sh"
 
-schema="$repository_root/contracts/runtime-controller/v8/agent-runner-input.schema.json"
+schema="$repository_root/contracts/runtime-controller/v9/agent-runner-input.schema.json"
 jq -e '
   .additionalProperties == false and
-  .properties.schema.const == "kodex.agent-runner-input.v8" and
+  .properties.schema.const == "kodex.agent-runner-input.v9" and
   (["runtime_revision_ref", "runtime_revision_version", "runtime_revision_digest",
     "instruction_ref", "instruction_digest", "prompt_template_ref",
     "prompt_template_digest", "prompt_materialization_digest", "workspace_policy",

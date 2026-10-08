@@ -7,7 +7,7 @@ JOIN control_plane.run_nodes node ON node.id=revision.node_id AND node.state='RU
 JOIN control_plane.runs run ON run.id=node.run_id
 JOIN control_plane.runs root ON root.id=run.root_run_id
 WHERE revision.organization_id=@organization_id::uuid AND revision.node_id=@node_id::uuid
-  AND lease.state='CLAIMED' AND lease.expires_at>clock_timestamp()
+  AND lease.state='CLAIMED' AND lease.expires_at>clock_timestamp() AND control_plane.runtime_execution_before_deadline(lease.organization_id,lease.run_id)
   AND root.state IN ('RUNNING','WAITING_HUMAN')
   AND revision.generation=(SELECT max(latest.generation)
                            FROM control_plane.runtime_revisions latest WHERE latest.node_id=revision.node_id)

@@ -14,7 +14,7 @@ JOIN control_plane.organizations organization ON organization.id=lease.organizat
 JOIN control_plane.agents agent ON agent.id=node.agent_id AND agent.organization_id=lease.organization_id AND agent.project_id=project.id
 JOIN control_plane.subjects actor ON actor.id=root.initiated_by AND actor.organization_id=lease.organization_id AND actor.active AND actor.kind='USER'
 WHERE lease.organization_id=@organization_id::uuid AND lease.ref=@lease_ref
- AND lease.fence_digest=@fence_digest AND lease.generation=@generation AND lease.state='CLAIMED' AND lease.expires_at>clock_timestamp()
+ AND lease.fence_digest=@fence_digest AND lease.generation=@generation AND lease.state='CLAIMED' AND lease.expires_at>clock_timestamp() AND control_plane.runtime_execution_before_deadline(lease.organization_id,lease.run_id)
  AND root.state IN ('RUNNING','WAITING_HUMAN') AND run.state='RUNNING' AND node.state='RUNNING' AND turn.state IN ('QUEUED','RUNNING')
  AND agent.enabled AND agent.state IN ('READY','RUNNING') AND agent.system_key IS NULL
  AND revision.run_id=run.id AND revision.node_id=node.id AND revision.root_run_id=root.id

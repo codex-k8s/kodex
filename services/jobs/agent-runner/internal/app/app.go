@@ -223,11 +223,18 @@ func prepareRuntimeTurn(ctx context.Context, input model.Input, client *callback
 		return preparedTurn{}, "RUNTIME_INPUT_INVALID", errors.New("runtime context is invalid")
 	}
 	ctx, cancelContext := snapshot.BoundExecutionContext(ctx)
+	deadlineContext, cancelDeadline := input.BoundExecutionDeadline(ctx, 0)
+	previousCancel := cancelContext
+	ctx = deadlineContext
+	cancelContext = func() { cancelDeadline(); previousCancel() }
 	defer func() {
 		if resultErr != nil {
 			cancelContext()
 		}
 	}()
+	if input.ExecutionDeadline != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return preparedTurn{}, "RUNTIME_TIMEOUT", ctx.Err()
+	}
 	if err := materializeWorkspace(ctx, input); err != nil {
 		return preparedTurn{}, "RUNTIME_WORKSPACE_INVALID", err
 	}
@@ -287,11 +294,17 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 		activityFailed = activityFailed || err != nil
 		return err
 	})
+	if input.ExecutionDeadline != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_TIMEOUT")
+	}
 	if activityFailed {
 		return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_UNAVAILABLE")
 	}
 	if executionErr != nil {
 		code := runtimeExecutionFailureCode(executionErr)
+		if input.ExecutionDeadline != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			code = "RUNTIME_TIMEOUT"
+		}
 		return completeMeasuredFailure(ctx, input, client, result, code)
 	}
 	return completeExecutedTurn(ctx, input, client, result, runtime.checkWorkspace)
@@ -420,6 +433,8 @@ func safeFailureCode(code string) string {
 		return "RUNTIME_INPUT_INVALID"
 	case "RUNTIME_MCP_UNAVAILABLE":
 		return "RUNTIME_MCP_UNAVAILABLE"
+	case "RUNTIME_TIMEOUT":
+		return "RUNTIME_TIMEOUT"
 	default:
 		return "RUNTIME_UNAVAILABLE"
 	}

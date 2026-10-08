@@ -353,7 +353,7 @@ func validRunnerInputFixture() RunnerInput {
 	policy := DefaultRuntimeEnvironmentPolicy()
 	environmentDigest, _ := RuntimeEnvironmentDigest(nil, nil, image, nil, policy)
 	input := RunnerInput{
-		Schema: RunnerInputSchemaV8, AssistantScope: AssistantScopeNone, Mode: RunnerModeTurn, WorkloadInstance: "runtime-controller-1",
+		Schema: RunnerInputSchemaV9, AssistantScope: AssistantScopeNone, Mode: RunnerModeTurn, WorkloadInstance: "runtime-controller-1",
 		OrganizationRef: "org_abcdefgh",
 		RunRef:          "run_abcdefgh", NodeRef: "node_abcdefgh", SessionRef: "session_abcdefgh",
 		ProjectRef: "prj_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh", Attempt: 1,

@@ -486,6 +486,8 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver 
 	}
 	ctx, joinPeer := bindBrokerPeerContext(ctx, connection, scanner)
 	defer joinPeer()
+	ctx, cancelDeadline := request.Input.BoundExecutionDeadline(ctx, 0)
+	defer cancelDeadline()
 	auth, err := readProviderAuthentication(request.Input)
 	if err != nil {
 		return writeProviderBrokerFailureAtStage(connection, providerStageAuthRead, err)
@@ -559,6 +561,11 @@ func writeProviderBrokerResultFailure(connection io.Writer, result Result, err e
 func executeProviderTurn(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string,
 	execute providerExecutor, commit providerCredentialRefreshCommitter,
 ) (Result, error) {
+	if input.ExecutionDeadline.Validate() != nil {
+		return Result{}, ErrRuntimeProfile
+	}
+	ctx, cancelDeadline := input.BoundExecutionDeadline(ctx, 0)
+	defer cancelDeadline()
 	authenticationPath := filepath.Join(input.CodexHome, "auth.json")
 	defer os.Remove(authenticationPath)
 	result, executionErr := execute(ctx, input, prompt, mcpProxyToken)

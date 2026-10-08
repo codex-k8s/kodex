@@ -3438,6 +3438,23 @@ message ManagedMCPProfile {
   ManagedMCPHealthProof health = 10;
 }
 
+// Неизменяемые часы назначаются control-plane при первом исполнении owner Run.
+message RuntimeExecutionClock {
+  string run_ref = 1;
+  string workflow_version_ref = 2;
+  string workflow_version_digest = 3;
+  string step_key = 4;
+  int32 timeout_seconds = 5;
+  google.protobuf.Timestamp started_at = 6;
+  google.protobuf.Timestamp deadline_at = 7;
+}
+
+message RuntimeExecutionDeadline {
+  string policy = 1;
+  google.protobuf.Timestamp effective_deadline_at = 2;
+  repeated RuntimeExecutionClock clocks = 3;
+}
+
 message RuntimeRevisionSnapshot {
   string ref = 1;
   int64 version = 2;
@@ -3523,6 +3540,7 @@ message RuntimeRevisionSnapshot {
   string prompt_target_kind = 76;
   string assistant_profile_ref = 77;
   repeated ManagedMCPProfile managed_mcp_profiles = 78;
+  RuntimeExecutionDeadline execution_deadline = 79;
 }
 
 enum RuntimeFilePurpose {

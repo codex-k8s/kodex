@@ -94,7 +94,7 @@ const buildsExpanded = ref(false);
 const revisionsExpanded = ref(false);
 const revisionRoot = ref<HTMLElement>();
 const revisionSentinel = ref<HTMLElement>();
-const vulnerabilityReportRoot = ref<HTMLElement>();
+const vulnerabilityReportRoot = ref<HTMLDetailsElement>();
 const openedBuildSources = ref(new Set<string>());
 function toggleBuildSource(ref: string, event: Event): void {
   const details = event.currentTarget;
@@ -589,8 +589,10 @@ watch(
   async () => {
     if (route.hash !== "#vulnerability-report") return;
     await nextTick();
-    if (!disposed)
-      vulnerabilityReportRoot.value?.scrollIntoView({ block: "start" });
+    if (!disposed && vulnerabilityReportRoot.value) {
+      vulnerabilityReportRoot.value.open = true;
+      vulnerabilityReportRoot.value.scrollIntoView({ block: "start" });
+    }
   },
   { flush: "post" },
 );
@@ -818,25 +820,6 @@ onBeforeUnmount(() => {
         <strong>{{ t("roleImages.admissionClosedTitle") }}</strong>
         <p>{{ t("roleImages.admissionClosedHelp") }}</p>
       </section>
-      <div
-        id="vulnerability-report"
-        ref="vulnerabilityReportRoot"
-        v-if="
-          recipe &&
-          currentBuild?.stage === 'COMPLETED' &&
-          currentArtifact &&
-          !admissionFailure
-        "
-      >
-        <RoleImageVulnerabilityReportWorkspace
-          v-if="recipe && currentBuild && currentArtifact"
-          :scope="resourceScope"
-          :recipe="recipe"
-          :build="currentBuild"
-          :artifact="currentArtifact"
-        />
-      </div>
-
       <div class="editor-layout">
         <main class="editor-main">
           <section class="panel recipe-form">
@@ -999,6 +982,28 @@ onBeforeUnmount(() => {
               </button>
             </div>
           </section>
+
+          <details
+            id="vulnerability-report"
+            ref="vulnerabilityReportRoot"
+            v-if="
+              recipe &&
+              currentBuild?.stage === 'COMPLETED' &&
+              currentArtifact &&
+              !admissionFailure
+            "
+            class="panel vulnerability-report-disclosure"
+            :open="route.hash === '#vulnerability-report'"
+          >
+            <summary>{{ t("imageVulnerabilities.title") }}</summary>
+            <RoleImageVulnerabilityReportWorkspace
+              v-if="recipe && currentBuild && currentArtifact"
+              :scope="resourceScope"
+              :recipe="recipe"
+              :build="currentBuild"
+              :artifact="currentArtifact"
+            />
+          </details>
 
           <component
             v-if="recipe"
@@ -1564,6 +1569,16 @@ onBeforeUnmount(() => {
   grid-template-columns: minmax(0, 1fr) minmax(300px, 0.3fr);
   align-items: start;
   gap: 16px;
+}
+.vulnerability-report-disclosure {
+  min-width: 0;
+}
+.vulnerability-report-disclosure > summary {
+  padding: 12px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 .section-header {
   display: flex;

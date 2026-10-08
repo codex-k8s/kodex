@@ -10,6 +10,43 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 05:44 UTC — согласованная остановка и перенос ABI9
+
+- Цель ACTIVE до14:00 Саратов; Full65/11/13/14/15 OPEN. Работа продолжается
+  по тому же плану, без отдельного review host-доработок; внутренние reviews
+  реального business Workflow остаются обязательными.
+- Repo-owned supply-chain-quiesce apply и readback EXIT0/PASS на точном прежнем
+  согласованном render SHAecca6656. Все пять затронутых deployments0/0;
+  данные, опубликованные артефакты и PVC не удалялись. Прежний STATE/render.yaml
+  устарел и для остановки не использован. Временная недоступность API ожидаема.
+- Принят frozen deadline пакет68files: RunnerInputv9/role contract3,
+  immutable root/stage clock от первого claim, очередь до него исключена;
+  Human Gate, ожидание и reclaim не сбрасывают срок. CP закрывает полный граф,
+  RC и provider независимо ограничены pinned absolute deadline. Late Complete
+  сохраняет измеренный Usage и проверенные archive pins без фиктивного успеха.
+  Миграция только новая20261008000100, прежние applied миграции не изменены.
+- Official make gen-proto EXIT0, все68 frozen file hashes EQUAL. ROOT public
+  runner suite, proto codegen и SQL boundary PASS. Registry первый FAIL из-за
+  ещё untracked новой schema; после обычного git add повтор5/5 PASS. Assertions
+  не ослаблялись. Полный новый render, immutable activation и live timeout
+  пока NOT RUN; package unit не выдаётся за сквозную приёмку.
+- UI редактора образа: исходник и создание ревизии теперь выше отчёта;
+  отчёт в закрытом по умолчанию details, штатная ссылка раскрывает его.
+  Report остаётся mounted, права/pins/решения не меняются. MAIN unit69/69,
+  scoped lint/format/forced typecheck/build9.80s PASS; прежний chunk warning
+  сохранён, Chrome visual NOT RUN. ROOT PostgreSQL14subtests27.351s PASS,
+  включая nested published versions, поздний Complete/archive/Usage и reclaim.
+  ROOT shared374 и CP962unit PASS; component45SKIP без DSN не считаются PASS.
+  ROOT RC race279PASS/1SKIP и vet трёх Go-модулей PASS; before/after source
+  manifest2521files EQUAL. bash-n PASS; raw ShellCheck четыре прежних SC2016
+  FAIL, без новых диагностик; адресное исключение SC2016 PASS, baseline FAIL
+  не скрывается. Frozen input hashes сохранены для привязки к следующему commit.
+- Fresh main/remote/Draft1800 подтверждены на исходномda06bb4b;
+  GitHub4 CONNECTED499/120grants и eight-binding preservation baseline
+  сохранены до остановки. После нового runner сначала существующий owner UI
+  image-only bootstrap своих двух помощников, затем native обновление остальных
+  окружений и полный33. Старые terminal runs не повторяются.
+
 ## Checkpoint 08.10.2026 05:14 UTC — GitHub4 разрешения восстановлены полностью
 
 - Семь отдельных native typed plans APPLIED3 восстановили ровно120 grants:

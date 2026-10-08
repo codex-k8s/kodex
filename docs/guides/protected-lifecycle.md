@@ -164,6 +164,19 @@ Schedule
 `RuntimeRevision` и итогового входа. Retry создаёт новую attempt и сохраняет
 предыдущую, а не перезаписывает привязку.
 
+Для Workflow и опубликованного этапа deadline назначается DB clock при первом
+допустимом claim и далее неизменен: очередь до claim исключена, Human Gate,
+continuation, ожидание и reclaim входят в wall-clock. Immutable RuntimeRevision
+и exact runner ABI связывают все ancestor clocks с version/digest источника;
+controller keeper и runner/provider независимо cancel/join по их минимуму.
+Lease продление, делегирование, leased read и новый integration effect не
+продлевают срок. Owner expiry атомарно закрывает полный граф как
+`FAILED/RUNTIME_TIMEOUT`, сохраняя уже начатый WRITE как `UNKNOWN_OUTCOME`.
+Late success не меняет terminal verdict; подтверждённые usage/archive pins
+сохраняются только после исходной проверки результата и до отзыва lease.
+Полная матрица и forward-only cutover приведены в
+[ARCH-MC-007](../architecture/runtime-and-sessions.md#устойчивый-срок-workflow-и-этапа).
+
 ### Матрица переходов
 
 До реализации developer составляет отдельную строку для каждого применимого

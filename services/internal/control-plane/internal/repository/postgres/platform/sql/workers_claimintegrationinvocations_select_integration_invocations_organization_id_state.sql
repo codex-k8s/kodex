@@ -5,7 +5,7 @@ SELECT i.id::text,i.ref,i.generation,i.state,c.ref,c.definition_key,c.public_con
 	COALESCE(cr.ref,''),COALESCE(cr.revision,0),COALESCE(cr.secret_ref,''),COALESCE(cr.secret_uid::text,''),
 	COALESCE(cr.secret_resource_version,''),COALESCE(cr.content_sha256,''),cr.created_at,initiator.ref,
 	COALESCE(approval.scope_paths,'{}'::text[]),COALESCE(approval.scope_digest,''),
-	COALESCE(approval.input_schema_digest,''),g.ref,i.grant_version,n.id::text
+	COALESCE(approval.input_schema_digest,''),g.ref,i.grant_version,n.id::text,r.id::text
 FROM control_plane.integration_invocations i
 JOIN control_plane.integration_connections c ON c.id=i.connection_id
 JOIN control_plane.integration_definitions d ON d.stable_key=c.definition_key
@@ -20,6 +20,7 @@ LEFT JOIN control_plane.integration_approval_scopes approval ON approval.id=i.ap
 WHERE i.organization_id=$1::uuid
   AND (r.project_id IS NOT NULL OR control_plane.owned_organization_assistant_run(r.organization_id,r.root_run_id))
   AND root.state IN ('RUNNING','WAITING_HUMAN')
+  AND control_plane.runtime_execution_before_deadline(i.organization_id,i.run_id)
   AND (n.state='RUNNING' OR (
     n.state='SUCCEEDED' AND root.state='WAITING_HUMAN' AND EXISTS (
       SELECT 1 FROM control_plane.owner_gates approved_gate

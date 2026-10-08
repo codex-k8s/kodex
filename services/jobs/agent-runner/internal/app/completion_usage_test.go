@@ -179,7 +179,7 @@ func (proxy *turnProxyFixture) Close(ctx context.Context) error {
 }
 
 func TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures(t *testing.T) {
-	for _, mode := range []string{"timeline", "cancelled timeline", "partial broker", "cancelled broker", "verified timeline", "verified broker", "success", "preparation", "provider before effect"} {
+	for _, mode := range []string{"timeline", "cancelled timeline", "partial broker", "cancelled broker", "verified timeline", "verified broker", "verified deadline", "success", "preparation", "provider before effect"} {
 		t.Run(mode, func(t *testing.T) {
 			usage := runtimecontract.TokenUsage{TotalTokens: 70, InputTokens: 60, CachedInputTokens: 20, OutputTokens: 10, ReasoningOutputTokens: 3}
 			input := model.Input{Mode: runtimecontract.RunnerModeTurn, Task: "synthetic task", RuntimeRevisionDigest: strings.Repeat("a", 64), Attempt: 3, LeaseRef: "lease_fixture", ExecutionBindingDigest: strings.Repeat("b", 64)}
@@ -196,6 +196,10 @@ func TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures(t *testing.T
 			}
 			if mode == "success" {
 				wantCode = ""
+			}
+			if mode == "verified deadline" {
+				wantCode = "RUNTIME_TIMEOUT"
+				input.ExecutionDeadline = &runtimecontract.RuntimeExecutionDeadline{}
 			}
 			if mode == "preparation" || mode == "provider before effect" {
 				wantUsage = runtimecontract.TokenUsage{}
@@ -290,9 +294,14 @@ func TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures(t *testing.T
 					if mode == "preparation" {
 						return preparedTurn{}, "RUNTIME_INPUT_INVALID", errors.New("synthetic preparation failure")
 					}
+					if mode == "verified deadline" {
+						input.ExecutionDeadline.EffectiveDeadlineAt = time.Now().UTC().Add(100 * time.Millisecond)
+						bounded, cancelDeadline := input.BoundExecutionDeadline(ctx, 0)
+						return preparedTurn{ctx: bounded, proxy: proxy, cancel: func() { cancelDeadline(); cleaned = true }}, "", nil
+					}
 					return preparedTurn{ctx: ctx, proxy: proxy, cancel: func() { cleaned = true }}, "", nil
 				},
-				execute: func(_ context.Context, _ model.Input, prompt []byte, socket, token string, onActivity func(runtimecontract.RuntimeActivity) error) (codex.Result, error) {
+				execute: func(executionContext context.Context, _ model.Input, prompt []byte, socket, token string, onActivity func(runtimecontract.RuntimeActivity) error) (codex.Result, error) {
 					executions++
 					mu.Lock()
 					if !ready || progress != 1 || string(prompt) != input.Task || socket != proxy.SocketPath() || token != proxy.LocalBearerToken() {
@@ -304,6 +313,10 @@ func TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures(t *testing.T
 					}
 					if mode == "provider before effect" {
 						return codex.Result{}, errors.New("synthetic pre-effect failure")
+					}
+					if mode == "verified deadline" {
+						<-executionContext.Done()
+						return result, executionContext.Err()
 					}
 					if mode != "cancelled broker" {
 						if err := onActivity(runtimecontract.RuntimeActivity{ToolCall: &result.ToolCalls[0]}); err != nil {
@@ -330,7 +343,7 @@ func TestRunTurnDeliversMeasuredUsageAfterBrokerAndTimelineFailures(t *testing.T
 				wantExecutions = 0
 			}
 			wantTimeline := 1
-			if mode == "preparation" || mode == "provider before effect" || strings.HasPrefix(mode, "cancelled") {
+			if mode == "preparation" || mode == "provider before effect" || strings.HasPrefix(mode, "cancelled") || mode == "verified deadline" {
 				wantTimeline = 0
 			}
 			if executions != wantExecutions || progress != wantExecutions || completions != 2 || timeline != wantTimeline ||

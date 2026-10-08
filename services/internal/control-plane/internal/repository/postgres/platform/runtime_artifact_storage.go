@@ -67,6 +67,28 @@ func (repository *Repository) prepareCommandObjects(ctx context.Context, scope s
 	if err := repository.requireRuntimeArtifactWrite(ctx, tx, scope, lease); err != nil {
 		return nil, err
 	}
+	_, expired, err := readRuntimeExecutionDeadline(ctx, tx, scope.organizationID, stringMap(lease, "runID"))
+	if err != nil {
+		return nil, err
+	}
+	if expired {
+		// Expiry будет committed основной owner-транзакцией. До неё нельзя
+		// публиковать новые objects; исходная валидация bytes сохраняется.
+		var total int64
+		for _, artifact := range payload.Artifacts {
+			if len(payload.Artifacts) > 16 || artifact.Prepared != nil || artifact.FileName == "" || safeFileName(artifact.FileName) != artifact.FileName ||
+				artifact.SizeBytes != int64(len(artifact.Content)) || artifact.SizeBytes < 0 || artifact.SizeBytes > 1<<20 {
+				return nil, errs.ErrInvalid
+			}
+			total += artifact.SizeBytes
+			digest := sha256.Sum256(artifact.Content)
+			if total > maximumArtifactBytes || !strings.EqualFold(strings.TrimSpace(artifact.SHA256), hex.EncodeToString(digest[:])) ||
+				artifactpolicy.Inspect(artifact.FileName, artifact.MediaType, artifact.Content).ScanState != artifactpolicy.ScanClean {
+				return nil, errs.ErrInvalid
+			}
+		}
+		return nil, nil
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, errs.ErrConflict
 	}

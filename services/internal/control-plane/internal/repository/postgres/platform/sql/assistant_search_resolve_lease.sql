@@ -31,7 +31,7 @@ WHERE lease.organization_id=@organization_id::uuid
   AND lease.fence_digest=@fence_digest
   AND lease.generation=@generation
   AND lease.state='CLAIMED'
-  AND lease.expires_at>clock_timestamp()
+  AND lease.expires_at>clock_timestamp() AND control_plane.runtime_execution_before_deadline(lease.organization_id,lease.run_id)
   AND run.state NOT IN ('SUCCEEDED','FAILED','CANCELLED','CANCELED')
   AND root.state NOT IN ('SUCCEEDED','FAILED','CANCELLED','CANCELED')
   AND run.target_type='SYSTEM_ASSISTANT' AND run.target_ref=agent.ref

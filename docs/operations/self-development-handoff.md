@@ -10,6 +10,34 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 05:44 UTC
+
+ROOT старый согласованный supply-chain-quiesce apply/readback EXIT0/PASS;
+пять deployments остановлены штатно. Frozen ABI9/revision3 semantic пакет
+принят, официальный gen-proto и68 file hashes EQUAL. Public runner/codegen/
+SQL PASS; registry после staging новойschema5/5PASS. PG и CP/RC/vet checks
+выполняются. MAIN исходный HEADda06bb4b плюс deadline68/UI2/journal2;
+не запускать старые roles и не восстанавливать старый render. ROOT RC race279/
+shared374/CP962 и vet PASS;45component/1warm SKIP честно сохранены. ShellCheck
+raw baseline4SC2016 FAIL, scoped exclusion PASS. Все проверки joined.
+
+Следом: закончить ROOT проверки→commit/push Draft1800→новый full runner→
+exact seed→fresh clean-SHA render→forward migration/coherent supply-chain
+apply/readback. Затем existing owner ROLE_IMAGE UPDATE собственных SYSTEMG14
+и PROJECTG8, admit/promote, image-only own ENV; preservation38tools/grants/
+secrets metadata сверить. Native helpers обновляют остальные четыре ENV/
+восемь bindings, fresh ACK смоки, затем ordinaryManager revision5/full33.
+Managed UI recipe UPDATE подтверждён canonical authority; ORG DRAFT API не
+добавлять. Новые права, обход lineage и ручной SQL запрещены.
+
+UI source-first69unit/lint/format PASS; forced typecheck/build выполняются,
+build9.80s и forcedtypecheck PASS; PG14subtests27.351s PASS. Visual после
+восстановления сервисов NOT RUN. Полный65/11/13/14/15 OPEN,
+goalACTIVE до14:00 Саратов; чужие вкладки не трогать. Текущая SSO absolute
+expiry06:27UTC; свежий password login не продлил старую Keycloak session.
+Не заявлять12h extension без фактического readback; при expiry штатный fresh
+вход. Итоговый business PR NOmerge/approve; bootstrap1800 остаётся Draft.
+
 ## Checkpoint 08.10.2026 05:14 UTC
 
 GitHub4 полностью восстановлен native: connection499/CONNECTED/120enabled/

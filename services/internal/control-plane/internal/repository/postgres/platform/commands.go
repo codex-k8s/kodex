@@ -63,7 +63,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		if err := tx.Commit(ctx); err != nil {
 			return command.Result{}, errs.ErrConflict
 		}
-		return result, nil
+		return result, executionDeadlineReceiptError(result)
 	}
 	if err := repository.authorizeCommand(ctx, tx, scope, input); err != nil {
 		return command.Result{}, err
@@ -99,7 +99,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		if err := tx.Commit(ctx); err != nil {
 			return command.Result{}, errs.ErrConflict
 		}
-		return result, nil
+		return result, executionDeadlineReceiptError(result)
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return command.Result{}, fmt.Errorf("read idempotency receipt: %w", errs.ErrUnavailable)
@@ -109,7 +109,13 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 			return command.Result{}, errs.ErrUnavailable
 		}
 	}
-	outcome, err := repository.applyCommand(ctx, tx, scope, input)
+	outcome, expiredExecution, err := repository.executionDeadlineCommand(ctx, tx, scope, input)
+	if err != nil {
+		return command.Result{}, err
+	}
+	if !expiredExecution {
+		outcome, err = repository.applyCommand(ctx, tx, scope, input)
+	}
 	if err != nil {
 		return command.Result{}, err
 	}
@@ -169,7 +175,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 		return command.Result{}, fmt.Errorf("commit command transaction: %w", errs.ErrConflict)
 	}
 	keepPrepared = resultContainsPreparedObjects(outcome.result, prepared)
-	return outcome.result, nil
+	return outcome.result, executionDeadlineReceiptError(outcome.result)
 }
 
 func clearDeletedResultActions(result *command.Result) {

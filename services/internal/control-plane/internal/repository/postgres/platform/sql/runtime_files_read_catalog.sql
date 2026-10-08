@@ -16,7 +16,7 @@ LEFT JOIN control_plane.catalog_access_targets agent
 JOIN control_plane.agents current_agent ON current_agent.id=catalog.agent_id AND current_agent.organization_id=catalog.organization_id
 WHERE lease.organization_id=@organization_id::uuid AND catalog.organization_id=lease.organization_id
   AND lease.ref=@lease_ref AND lease.fence_digest=@fence_digest AND lease.generation=@generation
-  AND lease.generation=catalog.generation AND lease.state='CLAIMED' AND lease.expires_at>clock_timestamp()
+  AND lease.generation=catalog.generation AND lease.state='CLAIMED' AND lease.expires_at>clock_timestamp() AND control_plane.runtime_execution_before_deadline(lease.organization_id,lease.run_id)
   AND catalog.ref=@catalog_ref AND catalog.digest=@catalog_digest AND @purpose=ANY(catalog.purposes)
   AND (@authority_project='' OR catalog.project_id=NULLIF(@authority_project,'')::uuid)
   AND run.state NOT IN ('SUCCEEDED','FAILED','CANCELLED','CANCELED')

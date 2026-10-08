@@ -67,7 +67,7 @@ fence/generation, image `repository@sha256`, runtime ABI, ServiceAccount,
 resources, PVC и callback ticket. Display role name, prompt или caller-supplied
 Kubernetes locator не являются authority.
 
-`kodex.agent-runner-input.v8` должен пройти schema validation. Область
+`kodex.agent-runner-input.v9` должен пройти schema validation. Область
 `NONE|SYSTEM|PROJECT` обязательна; PROJECT закрепляет exact profile ref,
 SYSTEM использует организационные credentials независимо от проекта контекста.
 Старый bool и декодер предыдущей версии не обслуживаются. Mutable

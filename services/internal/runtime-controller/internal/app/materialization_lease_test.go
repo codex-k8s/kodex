@@ -48,6 +48,22 @@ func awaitKeeperTest(t *testing.T, channel <-chan struct{}) {
 	}
 }
 
+func TestMaterializationExpiredDeadlineCannotPublishPod(t *testing.T) {
+	client := &materializationRenewClient{}
+	runtime := keeperTestRuntime(client)
+	input := runtimeTrackingInput()
+	input.ExecutionDeadline = &runtimecontract.RuntimeExecutionDeadline{EffectiveDeadlineAt: time.Now().Add(-time.Second)}
+	keeper := runtime.keepMaterializationLease(t.Context(), input)
+	defer keeper.stop()
+	if keeper.await() == nil {
+		t.Fatal("expired materialization became ready")
+	}
+	called := false
+	if keeper.publish(func(context.Context) error { called = true; return nil }) == nil || called {
+		t.Fatal("expired deadline published Pod")
+	}
+}
+
 func TestMaterializationKeepersRenewLaterLeaseWhileFirstIsDelayed(t *testing.T) {
 	// Масштабированная модель: owner TTL 30ms, первая материализация 90ms.
 	// Изменения production TTL или конфигурации для теста не требуются.

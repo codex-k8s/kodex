@@ -5,4 +5,4 @@ SELECT @audit_ref,catalog.organization_id,catalog.project_id,catalog.actor_id,@a
 FROM control_plane.runtime_file_catalogs catalog
 JOIN control_plane.runtime_revisions revision ON revision.ref=catalog.runtime_revision_ref
 JOIN control_plane.runtime_leases lease ON lease.runtime_revision_id=revision.id
-WHERE catalog.id=@catalog_id::uuid AND lease.state='CLAIMED' AND lease.expires_at>clock_timestamp();
+WHERE catalog.id=@catalog_id::uuid AND lease.state='CLAIMED' AND lease.expires_at>clock_timestamp() AND control_plane.runtime_execution_before_deadline(lease.organization_id,lease.run_id);
