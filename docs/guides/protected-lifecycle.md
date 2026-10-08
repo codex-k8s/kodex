@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.11
+version: 1.1.12
 updated: 2026-10-08
 ---
 
@@ -161,6 +161,15 @@ key/dependency и явный caller-controlled DAG отклоняются до e
 в owner boundary; After содержит точный применяемый draft, а не выдаёт authority.
 Агрегация ждёт всех parallel peers; публикация создаёт новую immutable версию,
 не переписывая historical execution pins, граф и inputs прежних запусков.
+
+Ограничения human-text Workflow согласованы с Unicode `maxLength` схемы;
+некорректный UTF-8 отклоняется, общий размер инструкций остаётся байтовым.
+Обычная команда и подтверждаемый план используют один predicate. Диагностика
+invalid proposal сохраняет прежний отказ и содержит только закрытые stage/field
+реального rejecting guard, а не текст payload или ошибку зависимости. Consumer
+принимает лишь точный canonical code/domain/detail и закрытый набор metadata;
+неизвестные поля не становятся подсказкой, locator или разрешением повторить
+эффект. Native ошибка и durable FAILED receipt сообщают согласованный код.
 
 ## Авторитетный граф выполнения
 

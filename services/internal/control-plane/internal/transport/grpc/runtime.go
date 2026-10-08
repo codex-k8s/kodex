@@ -465,12 +465,15 @@ func assistantCatalogTransportError(kind controlplanev1.AssistantConfigurationCa
 func assistantPlanTransportError(err error) error {
 	result := transportError(err)
 	stage, category, index, ok := errs.AssistantPlanDiagnostic(err)
-	if !ok || status.Code(result) != codes.Aborted {
+	if !ok || category == "INVALID" && status.Code(result) != codes.InvalidArgument || category != "INVALID" && status.Code(result) != codes.Aborted {
 		return result
 	}
 	metadata := map[string]string{"category": category}
 	if index > 0 {
 		metadata["operation_index"] = strconv.Itoa(index)
+	}
+	if field := errs.AssistantPlanField(err); category == "INVALID" && field != "" {
+		metadata["field"] = field
 	}
 	withDetails, detailErr := status.Convert(result).WithDetails(&errdetails.ErrorInfo{Domain: controlPlaneErrorDomain, Reason: stage, Metadata: metadata})
 	if detailErr != nil {

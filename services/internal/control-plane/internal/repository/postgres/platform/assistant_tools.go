@@ -118,7 +118,7 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 		}
 		planned, err := assistantOperationCommand(operation)
 		if err != nil {
-			return commandOutcome{}, err
+			return commandOutcome{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanCommand, index+1)
 		}
 		if err := repository.authorizeAssistantPreparedOperation(ctx, tx, actorScope, operation, planned); err != nil {
 			return commandOutcome{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanAuthorize, index+1)
@@ -1526,7 +1526,7 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 		gateDecisions, gateDecisionsOK := assistantStringsValue(stepInput, "gateDecisions")
 		requiredCapabilities, requiredCapabilitiesOK := assistantStringsValue(stepInput, "requiredCapabilityKeys")
 		if !parallelOK || !humanGateOK || !parallelGroupOK || !timeoutOK || !gateDecisionsOK || !requiredCapabilitiesOK {
-			return command.WorkflowInput{}, errs.ErrInvalid
+			return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_SHAPE")
 		}
 		key := "step-" + leftPad(index+1, 3)
 		dependencies := append([]string(nil), frontier...)
@@ -1550,7 +1550,11 @@ func assistantWorkflow(input map[string]any) (command.WorkflowInput, error) {
 			GateDecisions: gateDecisions, RequiredCapabilityKeys: requiredCapabilities})
 	}
 	if projectRef == "" || !validWorkflowVersion(draft) {
-		return command.WorkflowInput{}, errs.ErrInvalid
+		field := "WORKFLOW_BINDING"
+		if projectRef != "" {
+			field = workflowVersionInvalidField(draft)
+		}
+		return command.WorkflowInput{}, errs.WithAssistantPlanField(errs.ErrInvalid, field)
 	}
 	return command.WorkflowInput{ProjectRef: projectRef, Name: name, Purpose: draft.Purpose, CoordinatorAgentRef: coordinator, Draft: &draft}, nil
 }

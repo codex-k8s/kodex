@@ -10,6 +10,36 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 12:33 UTC
+
+HEAD/remote/Draft1800 f9f3ae106a5fdf70ccc0ed5f19a54eea52e3f60e EQUAL,
+base main b5f6fcde. MAIN12source files + guide/journal/handoff dirty:
+Unicode predicate и closed InvalidArgument plan diagnostics, frozen hashes
+EQUAL. ROOT combined CP/RC unit/vet и disposable PG frontier PASS3.452s.
+Mounted sources и actual serving ELF CP788add7b/RCe813aa28 EQUAL build/main.
+До следующего native повторить exact readback и commit/push этого пакета.
+
+PROJECT native plan pln_TmPx4CG2wv5hqA21Zkkcu56A revision1 APPLIED3;
+ROOT exact39 DAG/33retained edges/4inputs/defaults/caps/limits/finalgate PASS.
+Workflow wfl_1G05mcW4c7pweOjzfIzFYr6c VALID/OCC17,
+draft wfv_f16561071501be5b1f51067839steps. Publish НЕ делался.
+Нужен контрольный native full-read39/current17 до EOF перед Publish.
+
+Первый read run_hV_gqWf-lYWLdrdzS3A_85D2 FAILED PROVIDER_UNAVAILABLE
+12:31:13UTC после10s, session ses_8wVRFiG3vd1QSxrkJV_vywrC,
+turn trn_0\_\_Qi7rY1U6DGmcQLKFzYtTc/attempt1. Задача — только READ,
+taskSHA0f3507f5…df6f8. Storage LIVE/restore SUCCEEDED. Причина пока UNKNOWN;
+readonly диагностика active, capture87468 bounded. Не повторять unknown WRITE.
+Failure observer старого успешного planrun24010 joined/NOT_CAPTURED.
+
+Own Chrome1 жив/reload12:31, Screenshot NOT RUN из-за hung MCP, DOM/API
+не visualPASS. Foreign tabs не закрывать. Ровно3 clean ownWT cleanup DONE,
+recoverable refs сохранены; userdemo не тронут. После nativeEOF39 → Publish
+→ bootstrap commit/push/merge/freshmain по прежним exactguards → ONE fresh
+ordinaryManager с4явными input и boundedпредварительнымdesign → internal
+Developer/reviews/fixes/READY_FOR_HUMAN_REVIEW. Full65/11/13/14/15 OPEN,
+businessPR NOmerge/ownerapprove. Цель active.
+
 ## Checkpoint 08.10.2026 11:30 UTC
 
 База e3265b29, MAIN имеет принятый шестифайловый inheritance fix и журнал;

@@ -747,7 +747,9 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		failureClass := controlFailureClass(err)
 		var planInputErr *assistantPlanInputError
 		if errors.As(err, &planInputErr) {
-			failureClass = "assistant_plan_" + planInputErr.reason
+			if _, ok := assistantPlanInvalidDetails(err); !ok {
+				failureClass = "assistant_plan_" + planInputErr.reason
+			}
 		}
 		var catalogInputErr *integrationCatalogInputError
 		if errors.As(err, &catalogInputErr) {
@@ -760,6 +762,9 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		attributes := []any{"tool", params.Name, "stage", "operation", "grpc_code", status.Code(err).String(), "failure_class", failureClass}
 		if _, index := assistantPlanFailureDiagnostic(err); index > 0 {
 			attributes = append(attributes, "operation_index", index)
+		}
+		if diagnostic, ok := assistantPlanInvalidDetails(err); ok && diagnostic.field != "" {
+			attributes = append(attributes, "failure_field", diagnostic.field)
 		}
 		server.logger.WarnContext(request.Context(), "runtime MCP tool operation failed", attributes...)
 	}
@@ -807,6 +812,13 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 				"retryable":  true,
 				"guidance":   guidance,
 			}
+			if diagnostic, ok := assistantPlanInvalidDetails(err); ok {
+				guidanceResult := structured.(map[string]any)
+				guidanceResult["failure_stage"] = diagnostic.stage
+				if diagnostic.field != "" {
+					guidanceResult["failure_field"] = diagnostic.field
+				}
+			}
 		}
 		var catalogInputErr *integrationCatalogInputError
 		if errors.As(err, &catalogInputErr) {
@@ -832,7 +844,10 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	server.writeMCPResult(writer, rpc.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": string(encoded)}}, "structuredContent": structured, "isError": err != nil})
 }
 
-type assistantPlanInputError struct{ reason string }
+type assistantPlanInputError struct {
+	reason     string
+	diagnostic *assistantPlanInvalidDiagnostic
+}
 
 func (planErr *assistantPlanInputError) Error() string { return "assistant plan input is invalid" }
 
@@ -900,6 +915,9 @@ func controlFailureClass(err error) string {
 
 // Метаданные принимаются только из точного внутреннего RPC и закрытой схемы.
 func assistantPlanFailureDiagnostic(err error) (string, int) {
+	if diagnostic, ok := assistantPlanInvalidDetails(err); ok {
+		return "assistant_plan_" + diagnostic.stage + "_invalid", diagnostic.index
+	}
 	value := status.Convert(err)
 	if value.Code() != codes.Aborted || len(value.Details()) != 1 {
 		return "", 0
@@ -914,6 +932,8 @@ func assistantPlanFailureDiagnostic(err error) (string, int) {
 		stage = "hydrate"
 	case "ASSISTANT_PLAN_NORMALIZE":
 		stage = "normalize"
+	case "ASSISTANT_PLAN_COMMAND":
+		stage = "command"
 	case "ASSISTANT_PLAN_BIND":
 		stage = "bind"
 	case "ASSISTANT_PLAN_AUTHORIZE":
@@ -1080,6 +1100,9 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 		if _, index := assistantPlanFailureDiagnostic(err); index > 0 {
 			attributes = append(attributes, "operation_index", index)
 		}
+		if diagnostic, ok := assistantPlanInvalidDetails(err); ok && diagnostic.field != "" {
+			attributes = append(attributes, "failure_field", diagnostic.field)
+		}
 		server.logger.WarnContext(ctx, "control-plane assistant plan request failed", attributes...)
 		return nil, assistantPlanControlError(err)
 	}
@@ -1092,7 +1115,11 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 
 func assistantPlanControlError(err error) error {
 	if status.Code(err) == codes.InvalidArgument {
-		return invalidAssistantPlan("server_validation")
+		planErr := &assistantPlanInputError{reason: "server_validation"}
+		if diagnostic, ok := assistantPlanInvalidDetails(err); ok {
+			planErr.diagnostic = &diagnostic
+		}
+		return planErr
 	}
 	if class, _ := assistantPlanFailureDiagnostic(err); class != "" {
 		info := status.Convert(err).Details()[0].(*errdetails.ErrorInfo)
@@ -1909,6 +1936,10 @@ func safeInvocationRef(value string) bool {
 
 func safeToolCallResult(tool string, result any, toolErr error) string {
 	if toolErr != nil {
+		var planErr *assistantPlanInputError
+		if tool == "propose_configuration_plan" && errors.As(toolErr, &planErr) {
+			return "PLAN_INPUT_INVALID"
+		}
 		return "TOOL_UNAVAILABLE"
 	}
 	// У read_file нет нового successful legacy fallback: terminal проекция

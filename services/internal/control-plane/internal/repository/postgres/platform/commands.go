@@ -1356,44 +1356,68 @@ func (repository *Repository) changeWorkflow(ctx context.Context, tx pgx.Tx, sco
 }
 
 func validWorkflowVersion(version entity.WorkflowVersion) bool {
-	// Критерии завершения соблюдают общий лимит OpenAPI в Unicode-символах.
-	if !utf8.ValidString(version.CompletionCriteria) || utf8.RuneCountInString(version.CompletionCriteria) > 2000 {
-		return false
+	return workflowVersionInvalidField(version) == ""
+}
+
+const (
+	workflowInvalidStepsInstructions   = "STEPS_INSTRUCTIONS"
+	workflowInvalidStepsExpectedResult = "STEPS_EXPECTED_RESULT"
+	workflowInvalidInvariants          = "WORKFLOW_INVARIANTS"
+)
+
+// Закрытый код не раскрывает содержимое поля или индекс этапа.
+func workflowVersionInvalidField(version entity.WorkflowVersion) string {
+	// maxLength считается в Unicode-символах, общий бюджет ниже остаётся байтовым.
+	if !validWorkflowText(version.Name, 160) || !validWorkflowText(version.Purpose, 2000) || !validWorkflowText(version.CompletionCriteria, 2000) || !utf8.ValidString(version.Instructions) {
+		return workflowInvalidInvariants
 	}
-	if strings.TrimSpace(version.Name) == "" || len(version.Name) > 160 || len(version.Purpose) > 2000 || strings.TrimSpace(version.CoordinatorAgentRef) == "" || version.Concurrency < 1 || version.Concurrency > 100 || version.TimeoutSeconds < 1 || version.TimeoutSeconds > 7*24*60*60 || len(version.Inputs) > 100 || len(version.Steps) < 1 || len(version.Steps) > 200 || !validWorkflowInputFields(version.Inputs) {
-		return false
+	if strings.TrimSpace(version.Name) == "" || strings.TrimSpace(version.CoordinatorAgentRef) == "" || version.Concurrency < 1 || version.Concurrency > 100 || version.TimeoutSeconds < 1 || version.TimeoutSeconds > 7*24*60*60 || len(version.Inputs) > 100 || len(version.Steps) < 1 || len(version.Steps) > 200 || !validWorkflowInputFields(version.Inputs) {
+		return workflowInvalidInvariants
 	}
 	knownSteps := make(map[string]struct{}, len(version.Steps))
 	totalInstructions := len(version.Instructions) + len(version.CompletionCriteria)
 	for index, step := range version.Steps {
-		if step.Key == "" || len(step.Key) > 96 || step.Position != int32(index+1) || strings.TrimSpace(step.Name) == "" || len(step.Name) > 160 || strings.TrimSpace(step.AgentRef) == "" || strings.TrimSpace(step.Instructions) == "" || len(step.Instructions) > 1000 || step.TimeoutSeconds < 1 || step.TimeoutSeconds > 24*60*60 || step.ParallelGroup < 0 || step.ParallelGroup > 50 || len(step.ExpectedResult) > 1000 || len(step.GateDecisions) > 4 || len(step.RequiredCapabilityKeys) > 50 {
-			return false
+		if strings.TrimSpace(step.Instructions) == "" || !validWorkflowText(step.Instructions, 1000) {
+			return workflowInvalidStepsInstructions
+		}
+		if !validWorkflowText(step.ExpectedResult, 1000) {
+			return workflowInvalidStepsExpectedResult
+		}
+		if step.Key == "" || len(step.Key) > 96 || !utf8.ValidString(step.Key) || step.Position != int32(index+1) || strings.TrimSpace(step.Name) == "" || !validWorkflowText(step.Name, 160) || strings.TrimSpace(step.AgentRef) == "" || step.TimeoutSeconds < 1 || step.TimeoutSeconds > 24*60*60 || step.ParallelGroup < 0 || step.ParallelGroup > 50 || len(step.GateDecisions) > 4 || len(step.RequiredCapabilityKeys) > 50 {
+			return workflowInvalidInvariants
 		}
 		if _, duplicate := knownSteps[step.Key]; duplicate {
-			return false
+			return workflowInvalidInvariants
 		}
 		for _, dependency := range step.DependsOn {
 			if _, exists := knownSteps[dependency]; !exists {
-				return false
+				return workflowInvalidInvariants
 			}
 		}
 		for _, decision := range step.GateDecisions {
 			if !contains([]string{"APPROVE", "REJECT", "REQUEST_CHANGES", "CANCEL"}, decision) {
-				return false
+				return workflowInvalidInvariants
 			}
 		}
 		if step.HumanGateAfter && len(step.GateDecisions) == 0 {
-			return false
+			return workflowInvalidInvariants
 		}
 		for _, capability := range step.RequiredCapabilityKeys {
 			if !validCapabilityKey(capability) {
-				return false
+				return workflowInvalidInvariants
 			}
 		}
 		knownSteps[step.Key] = struct{}{}
 		totalInstructions += len(step.Name) + len(step.Instructions) + len(step.ExpectedResult)
 	}
-	return totalInstructions <= 64<<10
+	if totalInstructions > 64<<10 {
+		return workflowInvalidInvariants
+	}
+	return ""
+}
+
+func validWorkflowText(value string, maximumCharacters int) bool {
+	return utf8.ValidString(value) && utf8.RuneCountInString(value) <= maximumCharacters
 }
 
 // Draft identity назначает server. Старые записи использовали literal
@@ -1415,7 +1439,7 @@ func normalizeWorkflowDraftIdentity(workflowRef string, version *entity.Workflow
 func validWorkflowInputFields(fields []entity.WorkflowInputField) bool {
 	known := make(map[string]struct{}, len(fields))
 	for _, field := range fields {
-		if !validWorkflowInputKey(field.Key) || strings.TrimSpace(field.Label) == "" || len(field.Label) > 160 || len(field.Help) > 500 || !contains([]string{"TEXT", "LONG_TEXT", "NUMBER", "BOOLEAN", "DATE", "SELECT"}, field.Type) || len(field.Options) > 50 {
+		if !validWorkflowInputKey(field.Key) || strings.TrimSpace(field.Label) == "" || !validWorkflowText(field.Label, 160) || !validWorkflowText(field.Help, 500) || !contains([]string{"TEXT", "LONG_TEXT", "NUMBER", "BOOLEAN", "DATE", "SELECT"}, field.Type) || len(field.Options) > 50 {
 			return false
 		}
 		if _, duplicate := known[field.Key]; duplicate {
@@ -1424,7 +1448,7 @@ func validWorkflowInputFields(fields []entity.WorkflowInputField) bool {
 		known[field.Key] = struct{}{}
 		options := make(map[string]struct{}, len(field.Options))
 		for _, option := range field.Options {
-			if strings.TrimSpace(option) == "" || len(option) > 160 {
+			if strings.TrimSpace(option) == "" || !validWorkflowText(option, 160) {
 				return false
 			}
 			if _, duplicate := options[option]; duplicate {

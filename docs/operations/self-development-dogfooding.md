@@ -10,6 +10,63 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 12:33 UTC — native план39, Unicode и закрытая диагностика
+
+- HEAD/remote/Draft1800 f9f3ae106a5fdf70ccc0ed5f19a54eea52e3f60e EQUAL,
+  fresh main b5f6fcde. После commit whole CP и RC module unit PASS; новый
+  двенадцатифайловый пакет принят отдельными frozen patches поверх этого SHA.
+- PROJECT helper run_F5ywREEEjCbcykiCchMvoeG9 технически SUCCEEDED12:17:14UTC.
+  Native catalog149159B/version15/digestfea0ff51…47e21 прочитан до EOF за10
+  страниц. Первый proposed отказ12:09:54 PLAN_INPUT_INVALID не скрыт: допустимые
+  инструкции937Unicode symbols/1181bytes отклонял byte-based guard1000.
+  Единственный corrected proposal12:17:06 создал pln_TmPx4CG2wv5hqA21Zkkcu56A.
+- ROOT проверил exact Before/After: все33 retained keys/edges/roles/caps,
+  четыре inputFields/defaults, ResultSchema/concurrency3/timeout86400/coordinator
+  EQUAL. Новые step034..039: Architect, timeout3600, прежний ceiling step002;
+  каждая группа1..6 содержит4peers, aggregation ждёт всех4; sole gate step033.
+  Изменены только оговорённые phase/review тексты. Ни старые roots, ни grants
+  не переписывались. Validate plan200/VALID2 → Apply200/APPLIED3/revision1,
+  receipt rct_jh3RQIzPj4EqV1R153QNZyWL. Workflow draft
+  wfv_f16561071501be5b1f510678/39steps, OCC16 → Validate200/VALID17.
+  Publish и бизнес-запуск ещё NOT RUN.
+- ROOT validation request сначала получил400 INVALID_REQUEST из-за некавыченного
+  If-Match; readback подтвердил отсутствие эффекта. Повтор с canonical ETag
+  прошёл200. Эта ошибка оснастки отдельно объясняет одну Console resource400;
+  не приписана дефекту пользовательского интерфейса.
+- Новый source validator считает Unicode codepoints во всех human-text аналогах,
+  fail-closed UTF8 и прежний64KiB byte sum сохранены. Единый predicate даёт
+  закрытые field codes. CP hydrate/normalize/command → canonical InvalidArgument
+  ErrorInfo → strict RC consumer → FAILED PLAN_INPUT_INVALID receipt/guidance;
+  payload/ref/credentials не входят в diagnostics. ABI/RPC/schema/migration,
+  права и retry budget не менялись. Системный invariant закреплён в GUIDE006.
+- ROOT combined errs/grpc/platform unit PASS0.006/0.612/0.886s;
+  RC callback PASS5.882s, оба vet PASS. Public disposable PG frontier
+  PASS4/package3.452s, readbacks/cleanup PASS. Unit RED и прежние fixture FAIL
+  сохранены в private receipts, не переименованы в PASS; component без DB SKIP.
+- Mounted CP commands6cf05d12…2d8b / workflow7b9f3623…691fe и RC
+  server8592e987…990ce / helpera94add82…fb9f EQUAL host/frozen manifest.
+  Actual CP /proc/1718/exe == build/main SHA788add7b…dc83f;
+  RC /proc/1167/exe == build/main SHAe813aa28…15284. Это delivery proof,
+  не immutable release либо доказательство native INVALID details.
+- Контрольное native чтение послеApply run_hV_gqWf-lYWLdrdzS3A_85D2
+  /ses_8wVRFiG3vd1QSxrkJV_vywrC/trn_0\_\_Qi7rY1U6DGmcQLKFzYtTc/attempt1
+  FAILED PROVIDER_UNAVAILABLE12:31:13UTC после10s. Task independent SHA
+  0f3507f5…df6f8; читать39draft до EOF не успел. Backend SessionStorage LIVE,
+  restore SUCCEEDED; причина provider отказа пока UNKNOWN. Публикация не
+  выполняется до контрольного native чтения. Исторический FAILED не скрыт.
+- Own Chrome1 восстановлен, page/relevant API200, DOM overflowfalse; native
+  plan editor показывает39steps. Screenshot NOT RUN: JPEG снова завис,
+  bounded call остановлен; соединение восстановилось без закрытия чужих вкладок.
+  DOM не называется визуальной приемкой. Failure observer24010 joined
+  FAILURE_NOT_OBSERVED_BEFORE_DEADLINE/NOT_CAPTURED, не provider PASS.
+- Выполнена согласованная recoverable очистка ровно3 собственных clean inactive
+  worktrees: admission-baseline, callback-delegation-integrated, canary-baseline.
+  Перед каждым удалением проверены references/PIDs/mount namespaces/containers;
+  recovery refs на прежние exact SHA сохранены. Освобождены21236inodes и
+  232943616bytes; MAIN/user данные/чужие worktrees/кэши/образы не удалялись.
+- Full65/11/13/14/15 OPEN; Developer business PR/internal reviews/fixes/final
+  acceptance NOT RUN. Демонстрационный проект не мешает и не изменён.
+
 ## Checkpoint 08.10.2026 12:00 UTC — DAG, увеличенные страницы и параметры чтения
 
 - База 802e8423035e7363bec8965b91bb0ab7e6f07140. Приняты три замороженных

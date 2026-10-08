@@ -90,11 +90,11 @@ func (repository *Repository) hydrateAssistantWorkflowOperation(ctx context.Cont
 	projectRef string, operation entity.AssistantPlanOperation,
 ) (entity.AssistantPlanOperation, error) {
 	if projectRef == "" || !onlyAssistantFields(operation.Parameters, append([]string{"workflowRef"}, assistantWorkflowEditableFields...)...) {
-		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		return entity.AssistantPlanOperation{}, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_SHAPE")
 	}
 	ref := assistantString(operation.Parameters, "workflowRef")
 	if ref == "" {
-		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		return entity.AssistantPlanOperation{}, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_REF")
 	}
 	before, version, err := repository.readAssistantWorkflowSnapshot(ctx, tx, actorScope, projectRef, ref)
 	if err != nil {
@@ -121,17 +121,25 @@ func hydrateAssistantWorkflowFields(before map[string]any, version int64,
 			integer, valid := assistantInt64(operation.Parameters, key)
 			if !valid || integer < 1 || (key == "maxConcurrency" && integer > 100) ||
 				(key == "timeoutSeconds" && integer > 7*24*60*60) {
-				return entity.AssistantPlanOperation{}, errs.ErrInvalid
+				field := "MAX_CONCURRENCY"
+				if key == "timeoutSeconds" {
+					field = "TIMEOUT_SECONDS"
+				}
+				return entity.AssistantPlanOperation{}, errs.WithAssistantPlanField(errs.ErrInvalid, field)
 			}
 			value = float64(integer)
 		case "inputFields", "steps":
 			if _, valid := value.([]any); !valid {
-				return entity.AssistantPlanOperation{}, errs.ErrInvalid
+				field := "INPUT_FIELDS"
+				if key == "steps" {
+					field = "STEPS"
+				}
+				return entity.AssistantPlanOperation{}, errs.WithAssistantPlanField(errs.ErrInvalid, field)
 			}
 		default:
 			text, valid := value.(string)
 			if !valid {
-				return entity.AssistantPlanOperation{}, errs.ErrInvalid
+				return entity.AssistantPlanOperation{}, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_TEXT")
 			}
 			value = strings.TrimSpace(text)
 		}
@@ -185,31 +193,35 @@ func assistantUpdateWorkflow(operation entity.AssistantPlanOperation) (command.W
 		"coordinatorAgentRef", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps", "expectedVersion") ||
 		!hasAssistantFields(input, "workflowRef", "projectRef", "name", "purpose", "instructions",
 			"coordinatorAgentRef", "completionCriteria", "maxConcurrency", "timeoutSeconds", "inputFields", "steps", "expectedVersion") {
-		return command.WorkflowInput{}, 0, errs.ErrInvalid
+		return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_SHAPE")
 	}
 	version, valid := assistantInt64(input, "expectedVersion")
 	if !valid || version < 1 || assistantString(input, "workflowRef") == "" ||
 		assistantString(input, "projectRef") == "" || assistantString(input, "workflowRef") != assistantString(operation.Before, "workflowRef") ||
 		assistantString(input, "projectRef") != assistantString(operation.Before, "projectRef") {
-		return command.WorkflowInput{}, 0, errs.ErrInvalid
+		return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_BINDING")
 	}
 	concurrency, validConcurrency := assistantInt64(input, "maxConcurrency")
 	timeout, validTimeout := assistantInt64(input, "timeoutSeconds")
 	if !validConcurrency || !validTimeout || concurrency < 1 || concurrency > 100 || timeout < 1 || timeout > 7*24*60*60 {
-		return command.WorkflowInput{}, 0, errs.ErrInvalid
+		field := "TIMEOUT_SECONDS"
+		if !validConcurrency || concurrency < 1 || concurrency > 100 {
+			field = "MAX_CONCURRENCY"
+		}
+		return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, field)
 	}
 	raw, err := json.Marshal(operation.Before["draft"])
 	if err != nil {
-		return command.WorkflowInput{}, 0, errs.ErrInvalid
+		return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_DRAFT")
 	}
 	var draft entity.WorkflowVersion
 	if json.Unmarshal(raw, &draft) != nil || !validWorkflowVersion(draft) {
-		return command.WorkflowInput{}, 0, errs.ErrInvalid
+		return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_DRAFT")
 	}
 	for _, key := range []string{"name", "purpose", "instructions", "completionCriteria"} {
 		value, ok := input[key].(string)
 		if !ok {
-			return command.WorkflowInput{}, 0, errs.ErrInvalid
+			return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_TEXT")
 		}
 		switch key {
 		case "name":
@@ -226,7 +238,7 @@ func assistantUpdateWorkflow(operation entity.AssistantPlanOperation) (command.W
 	if coordinator, ok := input["coordinatorAgentRef"].(string); ok {
 		draft.CoordinatorAgentRef = strings.TrimSpace(coordinator)
 	} else {
-		return command.WorkflowInput{}, 0, errs.ErrInvalid
+		return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_TEXT")
 	}
 	if !reflect.DeepEqual(input["inputFields"], operation.Before["inputFields"]) ||
 		!reflect.DeepEqual(input["steps"], operation.Before["steps"]) {
@@ -235,7 +247,7 @@ func assistantUpdateWorkflow(operation entity.AssistantPlanOperation) (command.W
 		}
 	}
 	if !validWorkflowVersion(draft) {
-		return command.WorkflowInput{}, 0, errs.ErrInvalid
+		return command.WorkflowInput{}, 0, errs.WithAssistantPlanField(errs.ErrInvalid, workflowVersionInvalidField(draft))
 	}
 	return command.WorkflowInput{Ref: assistantString(input, "workflowRef"), ProjectRef: assistantString(input, "projectRef"),
 		Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: draft.CoordinatorAgentRef, Draft: &draft}, version, nil
@@ -245,7 +257,7 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 	fields, fieldsOK := input["inputFields"].([]any)
 	steps, stepsOK := input["steps"].([]any)
 	if !fieldsOK || !stepsOK || len(fields) > 100 || len(steps) == 0 || len(steps) > 200 {
-		return errs.ErrInvalid
+		return errs.WithAssistantPlanField(errs.ErrInvalid, "WORKFLOW_SHAPE")
 	}
 	previousFields := make(map[string]struct{}, len(draft.Inputs))
 	for _, field := range draft.Inputs {
@@ -261,12 +273,12 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 	for index, raw := range fields {
 		field, ok := raw.(map[string]any)
 		if !ok || !onlyAssistantFields(field, "key", "label", "description", "valueType", "required", "options") {
-			return errs.ErrInvalid
+			return errs.WithAssistantPlanField(errs.ErrInvalid, "INPUT_FIELDS")
 		}
 		key := assistantString(field, "key")
 		if key != "" {
 			if _, known := previousFields[key]; !known {
-				return errs.ErrInvalid
+				return errs.WithAssistantPlanField(errs.ErrInvalid, "INPUT_FIELD_KEY")
 			}
 		} else {
 			for candidate := 1; ; candidate++ {
@@ -279,7 +291,7 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 			}
 		}
 		if _, duplicate := usedFields[key]; duplicate {
-			return errs.ErrInvalid
+			return errs.WithAssistantPlanField(errs.ErrInvalid, "INPUT_FIELD_KEY")
 		}
 		usedFields[key], fieldKeys[index] = struct{}{}, key
 		clean := cloneAssistantFields(field)
@@ -289,12 +301,12 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 	for index, raw := range steps {
 		step, ok := raw.(map[string]any)
 		if !ok || !onlyAssistantFields(step, "key", "name", "purpose", "agentRef", "parallel", "parallelGroup", "timeoutSeconds", "expectedResult", "humanGate", "gateDecisions", "requiredCapabilityKeys") {
-			return errs.ErrInvalid
+			return errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_SHAPE")
 		}
 		key := assistantString(step, "key")
 		if key != "" {
 			if _, known := previousSteps[key]; !known {
-				return errs.ErrInvalid
+				return errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_KEY")
 			}
 		} else {
 			for candidate := 1; ; candidate++ {
@@ -307,7 +319,7 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 			}
 		}
 		if _, duplicate := usedSteps[key]; duplicate {
-			return errs.ErrInvalid
+			return errs.WithAssistantPlanField(errs.ErrInvalid, "STEP_KEY")
 		}
 		usedSteps[key], stepKeys[index] = struct{}{}, key
 		clean := cloneAssistantFields(step)
@@ -322,7 +334,11 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 		"completionCriteria": assistantString(input, "completionCriteria")}
 	parsed, err := assistantWorkflow(proposal)
 	if err != nil || parsed.Draft == nil {
-		return errs.ErrInvalid
+		field := errs.AssistantPlanField(err)
+		if field == "" {
+			field = "WORKFLOW_INVARIANTS"
+		}
+		return errs.WithAssistantPlanField(errs.ErrInvalid, field)
 	}
 	for index := range parsed.Draft.Inputs {
 		parsed.Draft.Inputs[index].Key = fieldKeys[index]
@@ -345,7 +361,7 @@ func assistantUpdateWorkflowGraph(input map[string]any, draft *entity.WorkflowVe
 		}
 	}
 	if err := retainAssistantWorkflowDependencies(draft.Steps, parsed.Draft.Steps); err != nil {
-		return err
+		return errs.WithAssistantPlanField(err, "STEPS_GRAPH")
 	}
 	draft.Inputs, draft.Steps = parsed.Draft.Inputs, parsed.Draft.Steps
 	return nil
