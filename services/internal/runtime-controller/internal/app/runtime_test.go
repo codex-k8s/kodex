@@ -276,3 +276,61 @@ func runtimeTrackingInput() runtimecontract.RunnerInput {
 		LeaseGeneration: 3,
 	}
 }
+
+func TestTrackPinnedWorkflowDeadlineDoesNotUseShorterFallback(t *testing.T) {
+	input := runtimeTrackingInput()
+	input.ExecutionDeadline = &runtimecontract.RuntimeExecutionDeadline{EffectiveDeadlineAt: time.Now().Add(time.Hour)}
+	coordinator := callback.NewCoordinator()
+	done := coordinator.Register(input)
+	client := &runtimeWorkClientStub{}
+	turns := &turnLifecycleStub{}
+	runtime := trackingRuntime(client, turns, coordinator)
+	runtime.config.ExecutionTimeout = time.Millisecond
+	finished := make(chan struct{})
+	go func() { runtime.track(t.Context(), input, done, false); close(finished) }()
+	time.Sleep(20 * time.Millisecond)
+	coordinator.Complete(input.LeaseRef)
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("tracker did not join")
+	}
+	if turns.stops.Load() != 0 || client.count() != 0 {
+		t.Fatal("fallback truncated pinned workflow deadline")
+	}
+}
+
+func TestTrackExpiredWorkflowDeadlineClosesWithTimeoutAndJoins(t *testing.T) {
+	input := runtimeTrackingInput()
+	input.ExecutionDeadline = &runtimecontract.RuntimeExecutionDeadline{EffectiveDeadlineAt: time.Now().Add(-time.Second)}
+	coordinator := callback.NewCoordinator()
+	done := coordinator.Register(input)
+	client := &runtimeWorkClientStub{}
+	turns := &turnLifecycleStub{}
+	runtime := trackingRuntime(client, turns, coordinator)
+	runtime.track(t.Context(), input, done, false)
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	if turns.stops.Load() != 1 || turns.deletions.Load() != 1 || len(client.requests) != 1 || client.requests[0].SafeErrorCode != "RUNTIME_TIMEOUT" {
+		t.Fatal("expired workflow did not cancel/join through durable timeout completion")
+	}
+}
+
+func TestWorkflowDeadlineOwnerDenialClosesRevokedPodWithoutRetry(t *testing.T) {
+	input := runtimeTrackingInput()
+	input.ExecutionDeadline = &runtimecontract.RuntimeExecutionDeadline{EffectiveDeadlineAt: time.Now().UTC().Add(-time.Second)}
+	coordinator := callback.NewCoordinator()
+	done := coordinator.Register(input)
+	client := &runtimeWorkClientStub{complete: func(int) error { return status.Error(codes.PermissionDenied, "lease revoked") }}
+	turns := &turnLifecycleStub{}
+	runtime := trackingRuntime(client, turns, coordinator)
+	runtime.track(t.Context(), input, done, false)
+	if client.count() != 1 || turns.deletions.Load() != 1 || turns.stops.Load() != 2 {
+		t.Fatal("owner expiry denial retained old Pod or retried authority")
+	}
+	select {
+	case <-done:
+	default:
+		t.Fatal("revoked tracker not joined")
+	}
+}

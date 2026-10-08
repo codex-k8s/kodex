@@ -65,6 +65,16 @@ operations:
     summary: Опубликовать изменение owner-visible конфигурации платформы.
     x-publisher: control-plane-outbox-relay
     x-transaction: BUSINESS_STATE_AUDIT_IDEMPOTENCY_AND_OUTBOX
+    x-run-storage-wake:
+      condition: SESSION_STORAGE_OR_EXPOSED_ARCHIVE_TASK_TRANSITION
+      event: RUN_CHANGED
+      origin: EXACT_OWNER_TRANSACTION
+      anchor: ONE_SERVER_RESOLVED_ROOT_FROM_CHANGED_SESSION
+      aggregateVersion: CURRENT_ANCHOR_RUN_VERSION_NOT_SESSION_STORAGE_VERSION
+      scope: ORGANIZATION_WITHOUT_PROJECT_NARROWING
+      cardinality: ONE_PER_CHANGED_SESSION_AND_OWNER_TRANSITION
+      consumers: BOUNDED_GATEWAY_SUBSCRIPTIONS_WITH_FRESH_OWNER_GRAPH_SNAPSHOT
+      absent: LEASE_RENEWAL_AND_UNRELATED_DELETE_OBJECT_CLEANUP
     x-delivery:
       mode: AT_LEAST_ONCE
       orderingKey: organizationRef

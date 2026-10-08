@@ -53,7 +53,7 @@ WHERE lease.organization_id = @organization_id::uuid
   AND lease.workload_instance = @workload_instance
   AND lease.generation = @generation
   AND lease.state = 'CLAIMED'
-  AND lease.expires_at > clock_timestamp()
+  AND lease.expires_at > clock_timestamp() AND control_plane.runtime_execution_before_deadline(lease.organization_id,lease.run_id)
   AND (@fence = '' OR lease.fence_digest = encode(digest(convert_to(@fence, 'UTF8'), 'sha256'), 'hex'))
   AND revision.ref = @runtime_revision_ref
   AND revision.revision_digest = @runtime_revision_digest

@@ -1148,7 +1148,8 @@ func (repository *Repository) projectActionPermissions(
 		projectRef,
 		scope.actorID,
 	).Scan(&permissions); errors.Is(err, pgx.ErrNoRows) {
-		return actorActionPermissions{}, errs.ErrNotFound
+		// Membership — только presentation: exact eligibility проверяется caller.
+		return actorActionPermissions{}, nil
 	} else if err != nil {
 		return actorActionPermissions{}, errs.ErrUnavailable
 	}
@@ -1268,9 +1269,7 @@ func (repository *Repository) applyResultActionPermissions(
 		return nil
 	}
 	permissions, err := repository.projectActionPermissions(ctx, runner, scope, projectRef)
-	if errors.Is(err, errs.ErrNotFound) {
-		permissions = actorActionPermissions{}
-	} else if err != nil {
+	if err != nil {
 		return err
 	}
 	if result.Agent != nil {
@@ -1437,6 +1436,14 @@ func (repository *Repository) readRunWithIncidents(ctx context.Context, runner q
 }
 
 func (repository *Repository) GetRunGraph(ctx context.Context, principal value.Principal, ref string) (entity.Run, entity.RunGraph, error) {
+	return repository.getRunGraph(ctx, principal, ref, false)
+}
+
+func (repository *Repository) GetRunGraphSnapshot(ctx context.Context, principal value.Principal, ref string) (entity.Run, entity.RunGraph, error) {
+	return repository.getRunGraph(ctx, principal, ref, true)
+}
+
+func (repository *Repository) getRunGraph(ctx context.Context, principal value.Principal, ref string, includeRuns bool) (entity.Run, entity.RunGraph, error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, err
@@ -1450,11 +1457,17 @@ func (repository *Repository) GetRunGraph(ctx context.Context, principal value.P
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, err
 	}
+	if err := attachRunSessionReadiness(ctx, tx, scope, &run); err != nil {
+		return entity.Run{}, entity.RunGraph{}, err
+	}
 	permissions, err := repository.projectActionPermissions(ctx, tx, scope, run.ProjectRef)
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, err
 	}
-	graph := entity.RunGraph{RunRef: run.RootRunRef, Revision: run.GraphRevision, Sequence: run.EventSequence}
+	graph, err := readRootRunGraphCursor(ctx, tx, scope, run)
+	if err != nil {
+		return entity.Run{}, entity.RunGraph{}, err
+	}
 	rows, err := tx.Query(ctx, queryQueriesGetrungraphSelectArtifactsNodeIdRef, scope.organizationID, run.RootRunRef)
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
@@ -1506,6 +1519,20 @@ func (repository *Repository) GetRunGraph(ctx context.Context, principal value.P
 	if err := projectArtifactResults(ctx, tx, scope, &command.Result{Graph: &graph}); err != nil {
 		return entity.Run{}, entity.RunGraph{}, err
 	}
+	if includeRuns {
+		if run.Ref != graph.RunRef {
+			return entity.Run{}, entity.RunGraph{}, errs.ErrInvalid
+		}
+		if err := repository.attachGraphRuns(ctx, tx, scope, &graph); err != nil {
+			return entity.Run{}, entity.RunGraph{}, err
+		}
+		for _, item := range graph.Runs {
+			if item.Ref == graph.RunRef {
+				run = item
+				break
+			}
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return entity.Run{}, entity.RunGraph{}, errs.ErrUnavailable
 	}
@@ -1534,6 +1561,10 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	run, err := repository.readRunWithIncidents(ctx, tx, scope, filter.ResourceRef)
+	if err != nil {
+		return nil, 0, false, err
+	}
+	graph, err := readRootRunGraphCursor(ctx, tx, scope, run)
 	if err != nil {
 		return nil, 0, false, err
 	}
@@ -1580,7 +1611,7 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 		return nil, 0, false, errs.ErrUnavailable
 	}
 	rows.Close()
-	complete := len(result) < int(limit) || len(result) > 0 && result[len(result)-1].Sequence == run.EventSequence
+	complete := len(result) < int(limit) || len(result) > 0 && result[len(result)-1].Sequence == graph.Sequence
 	projections := make([]*command.Result, len(result))
 	for index := range result {
 		projections[index] = &command.Result{Event: &result[index]}
@@ -1622,7 +1653,7 @@ func (repository *Repository) ListRunEvents(ctx context.Context, principal value
 	if err := tx.Commit(ctx); err != nil {
 		return nil, 0, false, errs.ErrUnavailable
 	}
-	return result, run.EventSequence, complete, nil
+	return result, graph.Sequence, complete, nil
 }
 
 func scanGate(row rowScanner, actorScoped bool) (entity.OwnerGate, error) {
@@ -2239,6 +2270,9 @@ func (repository *Repository) GetIntegrationConnection(ctx context.Context, prin
 	}
 	item, err := readConnection(ctx, tx, scope, ref)
 	if err != nil {
+		return entity.IntegrationConnection{}, err
+	}
+	if err := repository.attachIntegrationDefinitionBinding(ctx, tx, scope, &item); err != nil {
 		return entity.IntegrationConnection{}, err
 	}
 	if tx.Commit(ctx) != nil {

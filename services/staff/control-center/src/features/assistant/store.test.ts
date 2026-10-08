@@ -10,6 +10,7 @@ import type {
   ListAssistantConversationsResponse,
   ProjectAssistantProfile,
   Agent,
+  Run,
 } from "@/shared/api/generated/openapi/types.gen";
 import { AppProblem } from "@/shared/api/problem";
 import { resetOwnerRequests } from "@/shared/api/owner-lifetime";
@@ -43,6 +44,7 @@ vi.mock("@/features/assistant/api", () => ({
 }));
 
 import { useAssistantStore } from "@/features/assistant/store";
+import { usePlatformStore } from "@/features/platform/store";
 import { assistantRoleImageBuildTarget } from "@/features/assistant/model";
 
 const context: AssistantContextDescriptor = {
@@ -1220,6 +1222,77 @@ describe("assistant workspace store", () => {
     );
     expect(store.selectedConversation?.turns).toHaveLength(1);
   });
+
+  it.each(["ERROR", "PURGED"] as const)(
+    "не отправляет и не ставит в очередь сообщение при exact session %s",
+    async (storageState) => {
+      const store = useAssistantStore();
+      store.assistant = systemAssistant();
+      store.setContext(context, "prj_sales");
+      const selected = {
+        ...conversation(),
+        turns: [
+          { ...userTurn("FAILED"), runRef: "run_storage", runVersion: 2 },
+        ],
+      };
+      store.conversations = [selected];
+      store.selectedRef = selected.ref;
+      const platform = usePlatformStore();
+      platform.bootstrap = {
+        organizationRef: "org_storage",
+      } as NonNullable<typeof platform.bootstrap>;
+      platform.runs.run_storage = {
+        ref: "run_storage",
+        version: 2,
+        projectRef: selected.projectRef,
+        sessionRef: "ses_storage",
+        state: "FAILED",
+        source: "SYSTEM_ASSISTANT",
+        target: { type: "SYSTEM_ASSISTANT", ref: selected.assistantRef },
+        assistantPin: {
+          scope: selected.assistantScope,
+          organizationRef: "org_storage",
+          conversationRef: selected.ref,
+          assistantRef: selected.assistantRef,
+          projectRef: selected.projectRef,
+        },
+        sessionReadiness: {
+          sessionRef: "ses_storage",
+          storageState,
+          reason: "STORAGE_NOT_LIVE",
+        },
+      } as Run;
+      for (const mode of ["QUEUE", "INTERRUPT_ACTIVE"] as const) {
+        await expect(
+          store.send("Сохранённый ввод", undefined, mode),
+        ).rejects.toThrow("session storage is unavailable");
+      }
+      expect(appendTurnMock).not.toHaveBeenCalled();
+      expect(createConversationMock).not.toHaveBeenCalled();
+      expect(store.selectedConversation).toEqual(selected);
+      expect(store.busy).toBe(false);
+      expect(store.sessionStorageBlocker).toBe(storageState);
+      const currentRun = platform.runs.run_storage;
+      currentRun.state = "RUNNING";
+      const currentTurn = selected.turns[0];
+      if (!currentTurn) throw new Error("Synthetic USER turn is missing");
+      currentTurn.state = "RUNNING";
+      cancelAssistantTurnMock.mockResolvedValue("run_storage");
+      await store.stopActiveTurn();
+      expect(cancelAssistantTurnMock).toHaveBeenCalledOnce();
+      expect(store.selectedConversation?.turns[0]?.state).toBe("CANCELLED");
+      const fresh = { ...selected, ref: "cnv_storage_new", turns: [] };
+      createConversationMock.mockResolvedValue(fresh);
+      await store.startConversation();
+      expect(store.selectedConversation?.ref).toBe(fresh.ref);
+      expect(store.sessionStorageBlocker).toBeUndefined();
+      expect(appendTurnMock).not.toHaveBeenCalled();
+      expect(
+        store.conversations.find((item) => item.ref === selected.ref)?.turns[0]
+          ?.content,
+      ).toBe("Создай сотрудника");
+    },
+  );
 
   it("создаёт и выбирает отдельный диалог до первого сообщения", async () => {
     const existing = conversation();

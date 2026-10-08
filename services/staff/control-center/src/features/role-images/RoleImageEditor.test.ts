@@ -23,7 +23,10 @@ import {
   assertRoleImageAdmissionFailure,
 } from "./admission-failure";
 
-const state = vi.hoisted(() => ({ store: {} as Record<string, unknown> }));
+const state = vi.hoisted(() => ({
+  store: {} as Record<string, unknown>,
+  routeHash: "",
+}));
 vi.mock("./store", () => ({ useRoleImagesStore: () => state.store }));
 vi.mock("./RoleImageVulnerabilityReportWorkspace.vue", () => ({
   default: defineComponent({
@@ -39,7 +42,7 @@ vi.mock("@/features/platform/store", () => ({
   }),
 }));
 vi.mock("vue-router", () => ({
-  useRoute: () => ({ query: {} }),
+  useRoute: () => ({ query: {}, hash: state.routeHash }),
   useRouter: () => ({ push: vi.fn() }),
 }));
 vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
@@ -172,6 +175,7 @@ async function summary(
 }
 beforeEach(() => {
   i18n.global.locale.value = "ru";
+  state.routeHash = "";
   recipe = {
     scopeKind: "ORGANIZATION",
     organizationRef: "org_synthetic",
@@ -207,6 +211,50 @@ beforeEach(() => {
 });
 
 const disposers: Array<() => void> = [];
+
+describe("редактор исходника перед раскрываемым отчётом", () => {
+  it.each(["ORGANIZATION", "PROJECT"] as const)(
+    "сохраняет текущий report boundary, но не вытесняет source form (%s)",
+    async (scopeKind) => {
+      recipe.scopeKind = scopeKind;
+      recipe.projectRef = scopeKind === "PROJECT" ? "project_synthetic" : "";
+      build.scopeKind = scopeKind;
+      build.projectRef = recipe.projectRef;
+      const html = await summary(artifact(), true);
+      const report = html.match(/<details[^>]*id="vulnerability-report"[^>]*>/);
+      expect(report).not.toBeNull();
+      expect(report?.[0]).not.toMatch(/\sopen(?:[\s=>])/);
+      expect(html.indexOf('class="save-boundary"')).toBeGreaterThan(0);
+      expect(html.indexOf('class="save-boundary"')).toBeLessThan(
+        html.indexOf('id="vulnerability-report"'),
+      );
+      expect(html.indexOf('id="vulnerability-report"')).toBeLessThan(
+        html.indexOf('class="build-history"'),
+      );
+      expect(html.slice(html.indexOf('id="vulnerability-report"'))).toMatch(
+        new RegExp(
+          `<summary[^>]*>${i18n.global.t("imageVulnerabilities.title")}</summary>`,
+        ),
+      );
+      expect(html).toContain("data-report-boundary");
+    },
+  );
+  it("раскрывает отчёт по штатной ссылке, не скрывая failure notice", async () => {
+    state.routeHash = "#vulnerability-report";
+    const html = await summary(artifact(), true);
+    expect(html).toMatch(
+      /<details[^>]*id="vulnerability-report"[^>]*\sopen(?:[\s=>])/,
+    );
+    const failed = await summary(
+      artifact(),
+      true,
+      imageAdmissionFailureFixture(recipe, build),
+    );
+    expect(failed).toContain('class="admission-failure"');
+    expect(failed).not.toContain('id="vulnerability-report"');
+    expect(failed).not.toContain("data-report-boundary");
+  });
+});
 
 describe("названия выбранных роли и окружения без метаданных", () => {
   it.each(["ru", "en"] as const)(

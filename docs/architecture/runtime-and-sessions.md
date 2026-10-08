@@ -62,6 +62,46 @@ terminal state локально.
 Mutation любой зависимости влияет только на следующий RuntimeRevision и не
 изменяет уже выполняемую attempt.
 
+### Устойчивый срок Workflow и этапа
+
+Workflow `timeoutSeconds` и срок каждого опубликованного этапа измеряются
+wall-clock от первого допустимого claim, назначенного control-plane по часам
+PostgreSQL. Очередь до первого claim не входит в срок. После старта ожидание
+дочерних результатов, Human Gate, continuation и reclaim входят в срок; часы
+не приостанавливаются и не сбрасываются. Новая owner-authorized retry создаёт
+новый Run со своими часами, но не продлевает старый Run.
+
+Immutable RuntimeRevision содержит `workflow-wall-clock-v1`: exact Run и
+WorkflowVersion refs/digest, step key, configured seconds, first-start/deadline
+и минимум сроков принадлежащей серверу цепочки родителей. RunnerInput ABI9 и
+role runtime contract3 передают те же pins runner и controller. Оба независимо
+ограничивают выполнение абсолютным deadline; прежний часовой controller
+fallback применяется только к Ordinary Agent без Workflow-часов.
+
+| Переход | Авторитетный результат |
+| --- | --- |
+| First claim | DB clock назначает неизменяемые root/step часы из pinned published WorkflowVersion; очередь исключена. |
+| Renew, delegate, native effect, credential/file read | Exact lease/fence/generation и текущая authority обязательны; истёкший срок закрыто отклоняется. Invocation lease не переживает срок Workflow. |
+| Continuation, reclaim | Свежая RuntimeRevision сохраняет прежние clocks; controller keeper отменяет и joins до публикации Pod при expired/denied lease. |
+| Human Gate/ожидание без lease | Claim poll или свежая owner gate command фиксирует expiry, не выдаёт новый lease и не возобновляет исполнение. |
+| Expiry, late complete | Одна owner transaction фиксирует `FAILED/RUNTIME_TIMEOUT`, закрывает весь Run graph, leases, grants, gates и pending effects; уже начатый WRITE сохраняется как `UNKNOWN_OUTCOME`, а не повторяется. |
+| Валидный late complete до закрытия lease | Consumption usage и подтверждённый archive tuple сохраняются; success verdict и артефакты не публикуются. Невалидный tuple не принимается. |
+| Owner cancel/delete | Существующая eligibility/OCC и полный terminal/purge graph сохраняются; immutable clocks не переписываются. |
+| Retry | Только существующая owner command, новая lineage/attempt/RuntimeRevision; старый terminal verdict и clocks неизменны. |
+
+Terminal событие и version-pinned graph readback принадлежат control-plane.
+Controller ограниченно cancel/join останавливает Pod, runner независимо
+останавливает provider и сохраняет подтверждённые usage/archive pins. При
+недоступном control-plane физическая отмена не ждёт его восстановления;
+устойчивый terminal commit выполняется после восстановления owner-path.
+
+Cutover forward-only: сначала owner-idle/quiesce, затем новая migration,
+CP/controller/runner/schema/policy3 вместе. Историческим Run first-start не
+выдумывается. Старые admitted образы не проходят новый exact contract;
+владелец штатными ROLE_IMAGE и image-only ENV командами восстанавливает own
+SYSTEM/PROJECT helper, затем помощники обновляют остальные ENV. Fresh OCC и
+baseline preservation обязательны; новых maintenance permissions нет.
+
 RuntimeRevision создаётся заново перед каждым turn, retry и continuation после
 авторитетного чтения текущих published versions. Она не содержит «latest»
 ссылок: runtime-controller получает точные refs, versions и digests всех

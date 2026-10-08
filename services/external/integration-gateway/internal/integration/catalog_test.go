@@ -18,7 +18,7 @@ import (
 func catalogInputs() map[string]string {
 	return map[string]string{
 		"https_json.resource.read":             `{}`,
-		"github.pull_request.file.list":        `{"pull_request_number":3,"limit":1,"cursor":2}`,
+		"github.pull_request.file.list":        `{"pull_request_number":3,"limit":1,"cursor":2,"expected_head_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","expected_base_sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","expected_changed_files":3}`,
 		"gitlab.merge_request.diff.list":       `{"merge_request_iid":3,"limit":1,"cursor":2}`,
 		"confluence.space.list":                `{}`,
 		"confluence.page.descendant.list":      `{"page_id":"3","limit":1,"cursor":"cursor-2"}`,
@@ -69,7 +69,7 @@ func catalogInputs() map[string]string {
 		"gitlab.job.cancel":                    `{"job_id":4}`,
 		"gitlab.job.trace.read":                `{"job_id":4}`,
 		"github.repository.content.list":       `{"path":"src","ref":"main"}`,
-		"github.repository.content.read":       `{"path":"src/a.txt","ref":"main"}`,
+		"github.repository.content.read":       `{"path":"src/a.txt","ref":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`,
 		"github.repository.content.create":     `{"path":"src/a.txt","branch":"main","message":"Change","content_base64":"VGV4dA=="}`,
 		"github.repository.content.update":     `{"path":"src/a.txt","branch":"main","message":"Change","content_base64":"VGV4dA==","sha":"abc"}`,
 		"github.repository.content.delete":     `{"path":"src/a.txt","branch":"main","message":"Change","sha":"abc"}`,
@@ -508,6 +508,9 @@ func TestReadOperationsHandleRateLimits(t *testing.T) {
 					body = `{}`
 				} else {
 					body = catalogResponse(t, provider, operation, r)
+					if operation == "github.pull_request.file.list" && strings.HasSuffix(r.URL.Path, "/files") {
+						response.Header.Set("Link", `<https://api.github.com/repos/acme/repo/pulls/3/files?page=3>; rel="next"`)
+					}
 				}
 				response.Body = io.NopCloser(strings.NewReader(body))
 				return response, nil
@@ -527,6 +530,9 @@ func TestReadOperationsHandleRateLimits(t *testing.T) {
 				return
 			}
 			expectedCalls := 2
+			if operation == "github.pull_request.file.list" {
+				expectedCalls = 4
+			}
 			if strings.HasPrefix(operation, "confluence.") && operation != "confluence.space.list" && operation != "confluence.space.read" && operation != "confluence.page.read" && operation != "confluence.page.search" {
 				expectedCalls = 3
 			}

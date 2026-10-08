@@ -2,9 +2,11 @@ package platform
 
 import (
 	"context"
+	"errors"
 	"github.com/jackc/pgx/v5"
 	"testing"
 
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
@@ -32,13 +34,27 @@ func testInstructionBindingLifecycle(t *testing.T, ctx context.Context, r *Repos
 			payload.PlanRef = page.Plan.Ref
 			payload.SelectedItemRefs = []string{page.Items[0].Ref}
 		}
-		_, err = service.Execute(ctx, command.Command{Kind: kind, Principal: owner, Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: &agent.Version}, Payload: payload})
+		before := instructionRealtimeEventCount(t, ctx, r, agentRef)
+		version := agent.Version
+		input := command.Command{Kind: kind, Principal: owner, Mutation: value.Mutation{IdempotencyKey: key, ExpectedVersion: &version}, Payload: payload}
+		_, err = service.Execute(ctx, input)
 		if err != nil {
 			t.Fatalf("instruction lifecycle %s: %v", key, err)
 		}
 		agent, err = service.GetAgent(ctx, owner, agentRef)
 		if err != nil {
 			t.Fatal(err)
+		}
+		event := "AGENT_CHANGED"
+		if kind == command.PublishInstructions || kind == command.RollbackInstructions {
+			event = "INSTRUCTIONS_PUBLISHED"
+		}
+		assertInstructionRealtimeEvent(t, ctx, r, agent, before, event)
+		if _, err := service.Execute(ctx, input); err != nil {
+			t.Fatalf("instruction lifecycle replay %s: %v", key, err)
+		}
+		if count := instructionRealtimeEventCount(t, ctx, r, agentRef); count != before+1 {
+			t.Fatal("instruction lifecycle replay emitted a duplicate event")
 		}
 	}
 	run(command.ValidateInstructions, "instruction-binding-validate", "")
@@ -76,6 +92,15 @@ func testInstructionBindingLifecycle(t *testing.T, ctx context.Context, r *Repos
 	run(command.RollbackInstructions, "instruction-binding-rollback", original.RevisionRef)
 	if agent.InstructionBinding.Ref != original.Ref || agent.InstructionBinding.Version != 3 || agent.InstructionBinding.RevisionRef == original.RevisionRef || agent.InstructionBinding.RevisionRef == published || agent.PublishedInstructions.ParentRef != original.RevisionRef {
 		t.Fatal("rollback did not create and bind immutable revision")
+	}
+	events := instructionRealtimeEventCount(t, ctx, r, agentRef)
+	stale := agent.Version - 1
+	if _, err := service.Execute(ctx, command.Command{Kind: command.CreateInstructions, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "instruction-binding-stale-draft", ExpectedVersion: &stale}, Payload: command.AgentInput{Ref: agentRef, Instructions: "A stale request must not change instructions or append an event."}}); !errors.Is(err, errs.ErrVersionMismatch) {
+		t.Fatalf("stale instruction mutation: %v", err)
+	}
+	unchanged, err := service.GetAgent(ctx, owner, agentRef)
+	if err != nil || unchanged.Version != agent.Version || unchanged.DraftInstructions != nil || instructionRealtimeEventCount(t, ctx, r, agentRef) != events {
+		t.Fatal("rejected stale instruction mutation changed Agent or outbox")
 	}
 	var dependenciesRef, digest string
 	var version int64

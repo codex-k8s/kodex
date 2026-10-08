@@ -169,6 +169,9 @@ func (repository *Repository) GetVulnerabilityReport(ctx context.Context, princi
 func (repository *Repository) pageImageVulnerabilityReport(result *entity.ImageVulnerabilityReport, current scope, filter roleimagerepo.VulnerabilityReportFilter) error {
 	page := filter.Page
 	filter.Page.Token = ""
+	// Проверенный report pin — предусловие чтения, не фильтр страницы.
+	// Первая страница узнаёт его из ответа; следующая уже передаёт явно.
+	filter.ExpectedReportSHA256 = ""
 	filterDigest := roleImageDigest(struct {
 		Actor, Organization, Projection string
 		Revision                        uint64

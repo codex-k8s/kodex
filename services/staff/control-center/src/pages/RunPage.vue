@@ -40,7 +40,10 @@ import {
   runArtifactReferences,
 } from "@/features/runs/run-artifacts";
 import type { PresentedRunEvent } from "@/features/runs/run-activity";
-import { runNodeExecutionLabels } from "@/features/runs/run-owner";
+import {
+  runNodeExecutionLabels,
+  runSessionStorageBlocker,
+} from "@/features/runs/run-owner";
 import {
   presentRuntimeText,
   runtimeProgressKey,
@@ -87,6 +90,9 @@ const routeProjectRef = computed(() =>
     : undefined,
 );
 const run = computed(() => platform.runs[runRef.value]);
+const sessionStorageBlocker = computed(() =>
+  runSessionStorageBlocker(run.value, platform.bootstrap?.organizationRef),
+);
 const graph = computed(
   () =>
     platform.graphs[run.value?.rootRunRef ?? runRef.value] ??
@@ -95,6 +101,19 @@ const graph = computed(
 const streamState = computed(
   () => realtime.state[graph.value?.runRef ?? runRef.value],
 );
+const streamStatusKey = computed(() => {
+  if (run.value && isTerminalRun(run.value)) return "runs.historyComplete";
+  switch (streamState.value?.state) {
+    case "live":
+      return "runs.live";
+    case "recovering":
+      return "runs.streamRecovering";
+    case "offline":
+      return "runs.streamOffline";
+    default:
+      return "runs.streamConnecting";
+  }
+});
 function safeRuntimeText(
   value?: string,
   messageKind?: RunEvent["messageKind"],
@@ -450,6 +469,7 @@ async function continueRun() {
   if (
     busy.value ||
     !current?.nextActions.includes("ADD_TURN") ||
+    sessionStorageBlocker.value ||
     !turn.value.trim() ||
     !turnAttachmentState.value.ready
   )
@@ -468,6 +488,10 @@ async function continueRun() {
   try {
     const attachmentSetRef = await composer?.finalize();
     if (!mutationCurrent(generation, current.ref)) return;
+    if (
+      runSessionStorageBlocker(run.value, platform.bootstrap?.organizationRef)
+    )
+      return;
     const next = await platform.continueSession(sessionRef, {
       ...input,
       ...(attachmentSetRef ? { attachmentSetRef } : {}),
@@ -827,6 +851,9 @@ onBeforeUnmount(() => {
             compact
           />
           <ProblemNotice v-if="problem" :problem="problem" compact />
+          <p v-if="sessionStorageBlocker" class="offline-banner" role="alert">
+            {{ $t("common.sessionStorageUnavailable") }}
+          </p>
         </div>
         <div
           class="run-workspace"
@@ -924,9 +951,7 @@ onBeforeUnmount(() => {
                 :class="`live-indicator--${streamState?.state ?? 'connecting'}`"
               >
                 ●
-                {{
-                  $t(isTerminalRun(run) ? "runs.historyComplete" : "runs.live")
-                }}
+                {{ $t(streamStatusKey) }}
                 <template v-if="sessionGraph.sequence > 0">
                   · #{{ sessionGraph.sequence }}</template
                 >
@@ -938,7 +963,6 @@ onBeforeUnmount(() => {
           <section id="run-graph-panel" class="graph-panel">
             <div class="graph-panel__canvas">
               <RunGraphCanvas
-                :key="activityOpen ? 'with-activity' : 'full-width'"
                 :compact="activityOpen"
                 :nodes="sessionGraph.nodes"
                 :edges="sessionGraph.edges"
@@ -1120,6 +1144,7 @@ onBeforeUnmount(() => {
           <RunActivityDrawer
             :open="true"
             :run="run"
+            :activity-runs="Object.values(platform.runs)"
             :nodes="allRunNodes"
             :events="eventList"
             :artifacts="artifactList"
@@ -1149,7 +1174,12 @@ onBeforeUnmount(() => {
                 <button
                   class="button button--primary"
                   type="submit"
-                  :disabled="busy || !turn.trim() || !turnAttachmentState.ready"
+                  :disabled="
+                    busy ||
+                    Boolean(sessionStorageBlocker) ||
+                    !turn.trim() ||
+                    !turnAttachmentState.ready
+                  "
                 >
                   {{ $t("common.send") }}
                 </button>
@@ -1203,6 +1233,7 @@ onBeforeUnmount(() => {
   flex: 0 0 auto;
 }
 .run-page-body {
+  --run-activity-width: clamp(520px, 54%, 720px);
   position: relative;
   display: flex;
   min-width: 0;
@@ -1464,10 +1495,10 @@ onBeforeUnmount(() => {
   background: var(--canvas);
 }
 .run-workspace--activity .graph-panel {
-  right: min(720px, 54%);
+  right: var(--run-activity-width);
 }
 .run-workspace--activity .run-workspace-toolbar {
-  left: calc((100% - min(720px, 54%)) / 2);
+  left: calc((100% - var(--run-activity-width)) / 2);
 }
 .graph-panel__canvas {
   width: 100%;
@@ -1480,8 +1511,7 @@ onBeforeUnmount(() => {
   inset-block: 0;
   right: 0;
   display: flex;
-  width: min(720px, 54%);
-  min-width: 520px;
+  width: var(--run-activity-width);
   min-height: 0;
   border: 0;
   border-left: 1px solid var(--border);
@@ -1514,7 +1544,7 @@ onBeforeUnmount(() => {
 @media (min-width: 761px) {
   .run-workspace--activity .run-canvas-summary {
     top: 70px;
-    width: min(360px, calc((100% - min(720px, 54%)) / 2 - 86px));
+    width: min(360px, calc((100% - var(--run-activity-width)) / 2 - 86px));
   }
   .run-workspace--activity .run-workspace-toolbar {
     top: 70px;

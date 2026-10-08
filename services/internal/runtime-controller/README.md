@@ -4,8 +4,8 @@ title: runtime-controller
 type: service
 status: approved
 owner: developer
-version: 3.2.0
-updated: 2026-09-05
+version: 3.3.0
+updated: 2026-10-07
 ---
 
 # runtime-controller
@@ -44,8 +44,8 @@ Typed Skills/Memory materialization и карта owner→controller→runner о
 эти виды. Исполняемый input требует явный `context_snapshot`, даже для пустого
 контекста. Changed pins меняют RuntimeRevision и warm compatibility digests.
 
-Канонический input — `kodex.agent-runner-input.v8`, схема находится в
-`contracts/runtime-controller/v8/agent-runner-input.schema.json`, типы — в
+Канонический input — `kodex.agent-runner-input.v9`, схема находится в
+`contracts/runtime-controller/v9/agent-runner-input.schema.json`, типы — в
 `libs/go/runtimecontract`. Input связывает organization/project/agent/session/
 turn/run/node/attempt, revision digest, role image digest, bounded input,
 capabilities и credential references. Payload не назначает owner или lineage.
@@ -93,8 +93,8 @@ turn/attempt, RuntimeRevision digest, input digest, method и binding digest.
 Проверка capability/grant выполняется по той же RuntimeRevision и не расширяет
 eligibility из payload.
 
-Execution с owner `file_catalog` получает четыре read-only инструмента:
-`search_files`, `get_file_metadata`, `preview_file`, `get_file_manifest`.
+Execution с owner `file_catalog` получает пять read-only инструментов:
+`search_files`, `get_file_metadata`, `preview_file`, `get_file_manifest`, `read_file`.
 Контроллер закрепляет descriptor в RuntimeRevision и execution/MCP digest до
 materialization. Tools берут lease/fence/generation/catalog из проверенного
 callback input; caller выбирает только объявленный purpose, query/page либо
@@ -102,6 +102,34 @@ exact entry/ref/revision/digest. Search и manifest ограничены 100 с�
 cursor — 512 символами, preview — 16KiB. Произвольного path/project selector
 нет. Ответ проверяется по catalog, purpose, project и exact file pins до
 выдачи агенту; activity содержит только purpose и catalog grant.
+
+`read_file` читает UTF-8 без NUL страницами до16KiB: exact entry/artifact/revision/
+digest сохраняются между вызовами, первый `offset_bytes=0`, следующий равен
+`next_offset_bytes` предыдущего ответа. `eof=true` означает конец файла;
+отдельная страница не доказывает полное чтение сотрудником. Перед каждой
+страницей controller принимает полный источник в существующий private spool,
+проверяет полный SHA/размер, owner Complete и EOF, валидирует весь UTF-8 текст,
+затем снова проверяет exact metadata и текущие права. `chunk_digest` связывает
+только страницу, `source_digest` — полностью проверенный источник. Тексты,
+spool paths и credentials не входят в activity или диагностику. Offset внутри
+UTF-8 rune отклоняется; размер страницы4..16384 байта обеспечивает progress.
+Операция ограничена45секундами с резервом RequestTimeout для terminal audit;
+общий MCP timeout60секунд и transfer limits сохраняются. Кэш отсутствует:
+каждая страница заново читает источник, поэтому стоимость пропорциональна
+числу страниц и размеру файла. Ошибка/отмена/отзыв не выдают partial text.
+
+Локальная ошибка формы параметров возвращает `FILE_INPUT_INVALID` и безопасную
+подсказку исправить вызов один раз по schema/exact manifest pins. Это не отказ
+authority и не автоматический повтор прежнего запроса. Недоступный terminal
+audit, owner denial, checksum или metadata mismatch сохраняют закрытый
+`TOOL_UNAVAILABLE` без retry; тела/идентификаторы из input не отражаются в ошибке.
+
+Новый каталог требует согласованной доставки controller, control-plane и
+role image agent-runner с тем же закрытым набором из пяти file tools. До
+активации exact role image новые executions с `file_catalog` не запускаются:
+старый consumer закономерно отклоняет несовпадение фактического tools/list.
+Catalog readiness не ослабляется. Execution без `file_catalog` сохраняет
+свой прежний профиль; отсутствие artifact capability не выдаёт file tools.
 
 Вклад owner642: `ccefadda86f25370924a5a4fd19f57d7ace7ae85`.
 Локальные generated gRPC и authenticated callback tests проверяют все четыре
@@ -125,6 +153,29 @@ Timeout owner stream до2m, HTTP delivery имеет отдельный огр�
 Consumer agent-runner требует согласования HTTP timeout и отдельного local
 download bridge; этот хвост и live protected transfer пока NOT RUN.
 Эти проверки не заменяют live agent/workspace acceptance.
+
+### Полное чтение конфигурации помощником
+
+Native `get_configuration_catalog` для `WORKFLOW_CONFIGURATION` и
+`AGENT_CONFIGURATION` возвращает только `configuration_page`, а не огромный
+альтернативный полный JSON. Владелец по-прежнему разрешает точные
+lease/fence/generation, organization/project, выбранные entity/ref/version;
+controller проверяет полный закрытый snapshot и canonical SHA до страницы.
+Внутренний Proto, права и авторитетное состояние не меняются.
+
+Первое чтение использует `configuration_offset_bytes:0`. Продолжение передаёт
+точные `next_offset_bytes` и `configuration_sha256` из предыдущего ответа;
+отсутствующий или несовпадающий digest закрыто отклоняется. `maximum_bytes`
+ограничен4..4096, page сохраняет UTF-8 boundary, общий размер, фактические
+offset/next, `eof` и `page_sha256`. Полное чтение означает конкатенацию
+непересекающихся text страниц доEOF и проверку общего digest. Страница не
+считается полным snapshot. Объём JSON-encoded модельной выдачи не более8KiB:
+при escaping уменьшается именно размер страницы с честным next offset,
+не отбрасываются поля и не вставляется ellipsis.
+
+Каждая страница заново проходит owner read и exact version: drift, terminal,
+отзыв, чужой context или повреждённый snapshot не выдаёт partial text.
+Не создаются файлы, credentials, новые grants, кэш или второй источник данных.
 
 ## System assistant
 

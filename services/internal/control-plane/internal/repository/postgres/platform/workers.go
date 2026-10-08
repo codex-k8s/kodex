@@ -1373,18 +1373,18 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		return nil, errs.ErrUnavailable
 	}
 	type candidate struct {
-		id, ref, state, connectionRef, definitionKey, capabilityKey, nodeID  string
-		initiatorRef                                                         string
-		definitionVersion, definitionDigest, operation, risk, approvalPolicy string
-		resourceKind, resourceScopeDigest, effectKey, inputDigest            string
-		approvalScopeDigest, approvalSchemaDigest                            string
-		approvalScopePaths                                                   []string
-		grantRef                                                             string
-		grantVersion                                                         int64
-		generation                                                           int64
-		configuration, boundedInput, resourceScope                           []byte
-		credential                                                           entity.IntegrationCredentialRevision
-		credentialCreatedAt                                                  *time.Time
+		id, ref, state, connectionRef, definitionKey, capabilityKey, nodeID, runID string
+		initiatorRef                                                               string
+		definitionVersion, definitionDigest, operation, risk, approvalPolicy       string
+		resourceKind, resourceScopeDigest, effectKey, inputDigest                  string
+		approvalScopeDigest, approvalSchemaDigest                                  string
+		approvalScopePaths                                                         []string
+		grantRef                                                                   string
+		grantVersion                                                               int64
+		generation                                                                 int64
+		configuration, boundedInput, resourceScope                                 []byte
+		credential                                                                 entity.IntegrationCredentialRevision
+		credentialCreatedAt                                                        *time.Time
 	}
 	candidates := make([]candidate, 0, limit)
 	for rows.Next() {
@@ -1398,7 +1398,7 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 			&item.credential.SecretUID, &item.credential.SecretResourceVersion, &item.credential.ContentSHA256,
 			&item.credentialCreatedAt, &item.initiatorRef,
 			&item.approvalScopePaths, &item.approvalScopeDigest, &item.approvalSchemaDigest,
-			&item.grantRef, &item.grantVersion, &item.nodeID,
+			&item.grantRef, &item.grantVersion, &item.nodeID, &item.runID,
 		); err != nil {
 			rows.Close()
 			return nil, errs.ErrUnavailable
@@ -1444,6 +1444,16 @@ func (repository *Repository) ClaimIntegrationInvocations(ctx context.Context, p
 		digest := sha256.Sum256([]byte(fence))
 		generation := item.generation + 1
 		expiresAt := time.Now().UTC().Add(30 * time.Second)
+		deadline, expired, deadlineErr := readRuntimeExecutionDeadline(ctx, tx, scope.organizationID, item.runID)
+		if deadlineErr != nil {
+			return nil, deadlineErr
+		}
+		if expired {
+			continue
+		}
+		if deadline != nil && deadline.EffectiveDeadlineAt.Before(expiresAt) {
+			expiresAt = deadline.EffectiveDeadlineAt
+		}
 		tag, err := tx.Exec(ctx, queryWorkersClaimintegrationinvocationsClaimInvocationLease, item.id, leaseRef, hex.EncodeToString(digest[:]), generation, instance, expiresAt, principal.CallerWorkload, item.state)
 		if err != nil || tag.RowsAffected() != 1 {
 			return nil, errs.ErrConflict

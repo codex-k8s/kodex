@@ -10,6 +10,20 @@ updated: 2026-10-07
 
 # Локальный запуск
 
+## Ранний provider ACK
+
+Наблюдатели `provider-input-ack-capture.py` и `provider-failure-capture.py`
+с `--assistant-scope SYSTEM` по умолчанию принимают
+только глобальный SYSTEM без проектного контекста. Для SYSTEM на странице
+проекта требуется явный `--expected-project-ref <точный-project-ref>` из
+свежего owner readback: ACK должен содержать ровно этот opaque ref. Scope не
+выводится из project, и контекст экрана не становится источником полномочий.
+Для `NONE` и `PROJECT` флаг добавляет ту же точную проверку. Неверный или
+несовпадающий pin закрыто отклоняется; tuple, image, task, redaction и повторное
+чтение того же Pod UID сохраняются. Failure-наблюдатель проверяет этот pin
+при initial ACK, в follow stream и при каждом ограниченном rejoin; непустой
+project никогда не выводится автоматически из наблюдаемого ACK.
+
 Точные параметры доступны через `./dev.sh identity --help` и `--help`
 соответствующего helper. Перед запуском проверяются локальный kubeconfig,
 принадлежность существующих ресурсов и приватный каталог состояния.
@@ -134,6 +148,14 @@ NODE_USE_SYSTEM_CA=1 node tools/dev/protected-secret-input.mjs \
 Для Context7 выбирают только `--definition-key context7 --secret-key CONTEXT7_API_KEY`.
 UI-копия GitHub требует также всех четырёх exact managed pins по штатному
 owner history/impact; отсутствие этих pins не разрешает копию автоматически.
+Новая опубликованная UI-ревизия может соответствовать следующей версии
+SHIPPED-пакета: текущие content, digest и capability schemas должны точно
+совпасть с актуальным каталогом после нормализации только `origin`. Исторический
+copy provenance доказывает исходную копию, а не полномочия новой ревизии.
+При обновлении дополнительно проверяются исходная ревизия `SUPERSEDED`, её
+точный digest и строго возрастающая версия пакета; drift, произвольное
+редактирование и rollback закрыто отклоняются. Привязку новой ревизии
+подтверждает свежий owner impact, а не переданные CLI идентификаторы.
 `PASS` включает один PUT с OCC/idempotency, receipt и fresh readback.
 Отказ выводит только `status`, прежний закрытый `code` и локальный `phase`:
 `PREFLIGHT|SSO|BOOTSTRAP|CONNECTION|CATALOG|CREDENTIAL|READBACK`.

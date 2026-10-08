@@ -20,6 +20,7 @@ async function render(
   safeResult = "",
   state: NonNullable<RunActivityItem["toolCall"]>["state"] = "SUCCEEDED",
   working = false,
+  capabilityRef?: string,
 ): Promise<string> {
   const item: RunActivityItem = {
     id: "tool-example",
@@ -32,6 +33,7 @@ async function render(
         ref: "call_example",
         tool,
         safeParameters,
+        capabilityRef,
         state,
         revision: 1,
         durationMs: 10,
@@ -70,6 +72,219 @@ function title(html: string): string {
     )?.[1] ?? ""
   );
 }
+
+describe("RunTranscript: результат интеграции, а не успех обёртки", () => {
+  it("оставляет malformed результат видимым, не переопределяя статус обёртки", async () => {
+    const malformed = JSON.stringify({
+      version: 1,
+      invocationRef: "inv_fixture123",
+      state: "FAILED",
+      inputSHA256: "a".repeat(64),
+      extra: "Данные",
+    });
+    const html = await render("invoke_integration", {}, "ru", malformed);
+    const visibleHeader = (
+      html.match(/<header[^>]*>[^]*?<\/header>/)?.[0] ?? ""
+    ).split("<details")[0];
+    expect(visibleHeader).toContain('data-state="SUCCEEDED"');
+    expect(html).toContain("run-transcript__preview");
+  });
+  it("показывает ошибку вложенной интеграции в свёрнутой группе инструментов", async () => {
+    const items: RunActivityItem[] = [
+      "SUCCEEDED",
+      "FAILED",
+      "SUCCEEDED",
+      "SUCCEEDED",
+    ].map((state, index) => ({
+      id: `tool_${String(index)}`,
+      kind: "tool",
+      historical: false,
+      actor: "Сотрудник",
+      occurredAt: "2026-10-04T10:00:00Z",
+      execution: {
+        runRef: "run_fixture",
+        nodeRef: "nod_fixture",
+        sessionRef: "ses_fixture",
+        turnRef: "trn_fixture",
+        turnNumber: 1,
+        attempt: 1,
+      },
+      toolCall: {
+        ref: `tcl_${String(index)}`,
+        tool: "invoke_integration",
+        state: "SUCCEEDED",
+        durationMs: 10,
+        safeParameters: {},
+        auditRef: "aud_fixture",
+        safeResult: JSON.stringify({
+          version: 1,
+          invocationRef: `inv_fixture000${String(index)}`,
+          state,
+          inputSHA256: "a".repeat(64),
+        }),
+      },
+    }));
+    const html = await renderToString(
+      createSSRApp({
+        render: () =>
+          h(RunTranscript, { items, embedded: true, activeItemId: null }),
+      }).use(i18n),
+    );
+    const summary =
+      html.match(
+        /class="run-transcript__tool-group"[^]*?<summary[^>]*>[^]*?<\/summary>/,
+      )?.[0] ?? "";
+    expect(summary).toContain('data-state="FAILED"');
+    expect(summary).toContain('data-state="COMPLETED"');
+    expect(summary).toContain("Завершены");
+    expect(summary).toContain("Ошибок: 1");
+    expect(summary).toContain("status-badge--warning");
+    expect(summary).not.toContain("status-badge--danger");
+    expect(summary).not.toContain('data-state="SUCCEEDED"');
+    expect(html.slice(html.indexOf("</summary>"))).toContain(
+      "status-badge--danger",
+    );
+    expect(items.every((item) => item.toolCall?.state === "SUCCEEDED")).toBe(
+      true,
+    );
+  });
+  it.each(["ru", "en"] as const)(
+    "отделяет прошлую ошибку от завершённой или активной группы (%s)",
+    async (locale) => {
+      const previous = i18n.global.locale.value;
+      i18n.global.locale.value = locale;
+      try {
+        const items: RunActivityItem[] = Array.from(
+          { length: 12 },
+          (_, index) => ({
+            id: `group_${String(index)}`,
+            kind: "tool",
+            historical: false,
+            actor: "Помощник",
+            occurredAt: "2026-10-04T10:00:00Z",
+            execution: {
+              runRef: "run_group",
+              nodeRef: "nod_group",
+              sessionRef: "ses_group",
+              turnRef: "trn_group",
+              turnNumber: 1,
+              attempt: 1,
+            },
+            toolCall: Object.assign(
+              {
+                ref: `tcl_group_${String(index)}`,
+                tool: "get_configuration_catalog",
+                state:
+                  index === 0 ? ("FAILED" as const) : ("SUCCEEDED" as const),
+                durationMs: 10,
+                safeParameters: {},
+                safeResult: "",
+                auditRef: "aud_group",
+              },
+              {
+                arguments: "RAW_COMMAND_SENTINEL",
+                output: "RAW_OUTPUT_SENTINEL",
+              },
+            ),
+          }),
+        );
+        const renderGroup = async (
+          activeItemId: string | null,
+          closedExecutionKeys: string[] = [],
+        ) =>
+          renderToString(
+            createSSRApp({
+              render: () =>
+                h(RunTranscript, {
+                  items,
+                  embedded: true,
+                  activeItemId,
+                  closedExecutionKeys,
+                }),
+            }).use(i18n),
+          );
+        const groupSummary = (html: string) =>
+          html.match(
+            /class="run-transcript__tool-group"[^]*?<summary[^>]*>[^]*?<\/summary>/,
+          )?.[0] ?? "";
+        const html = await renderGroup(null);
+        expect(groupSummary(html)).toContain(
+          locale === "ru" ? "Вызовы инструментов: 12" : "Tool calls: 12",
+        );
+        expect(groupSummary(html)).toContain(
+          locale === "ru" ? "Ошибок: 1" : "Errors: 1",
+        );
+        expect(groupSummary(html)).toContain('data-state="COMPLETED"');
+        expect(groupSummary(html)).not.toContain("status-badge--danger");
+        expect(html).toContain("status-badge--danger");
+        expect(html).not.toContain("RAW_COMMAND_SENTINEL");
+        expect(html).not.toContain("RAW_OUTPUT_SENTINEL");
+        expect(groupSummary(await renderGroup("group_11"))).not.toContain(
+          'role="status"',
+        );
+        const last = items.at(-1);
+        const execution = last?.execution;
+        const scope = executionKey(execution);
+        if (!last?.toolCall || !execution || !scope)
+          throw new Error("Invalid tool group fixture");
+        last.toolCall.state = "RUNNING";
+        const active = groupSummary(await renderGroup("group_11"));
+        expect(active).toContain('role="status"');
+        expect(active).toContain(locale === "ru" ? "Ошибок: 1" : "Errors: 1");
+        expect(active).not.toContain('data-state="COMPLETED"');
+        expect(groupSummary(await renderGroup(null))).not.toContain(
+          'role="status"',
+        );
+        expect(
+          groupSummary(await renderGroup("group_11", [scope])),
+        ).not.toContain('role="status"');
+        last.execution = { ...execution, attempt: 2 };
+        expect(groupSummary(await renderGroup("group_11"))).not.toContain(
+          'role="status"',
+        );
+        expect(
+          items.filter((item) => item.toolCall?.state === "FAILED"),
+        ).toHaveLength(1);
+      } finally {
+        i18n.global.locale.value = previous;
+      }
+    },
+  );
+  it.each(["ru", "en"] as const)(
+    "показывает FAILED/REJECTED exact квитанции, не скрывая детали (%s)",
+    async (locale) => {
+      for (const tool of [
+        "invoke_integration",
+        "context7_resolve_library_id",
+        "context7_query_docs",
+      ]) {
+        for (const state of ["FAILED", "REJECTED"] as const) {
+          const receipt = JSON.stringify({
+            version: 1,
+            invocationRef: "inv_fixture123",
+            state,
+            inputSHA256: "a".repeat(64),
+          });
+          const html = await render(tool, {}, locale, receipt);
+          const header =
+            (html.match(/<header[^>]*>[^]*?<\/header>/)?.[0] ?? "").split(
+              "<details",
+            )[0] ?? "";
+          expect(header).toContain(`data-state="${state}"`);
+          expect(header).toContain("status-badge--danger");
+          expect(header).not.toContain('data-state="SUCCEEDED"');
+          expect(html).not.toContain("run-transcript__preview");
+          expect(html).toContain("Invocation Ref");
+          expect(html).toContain("Input SHA256");
+          expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+          expect(html).not.toMatch(
+            /RAW_COMMAND_SENTINEL|RAW_OUTPUT_SENTINEL|HIDDEN_REASONING_SENTINEL/,
+          );
+        }
+      }
+    },
+  );
+});
 
 describe("RunTranscript: компактные файлы результата", () => {
   const artifact: Artifact = {
@@ -565,6 +780,63 @@ describe("RunTranscript: названия native инструментов", () =
 });
 
 describe("RunTranscript: managed инструменты", () => {
+  it.each(["ru", "en"] as const)(
+    "называет действие интеграции по опубликованной capability, без input (%s)",
+    async (locale) => {
+      const capability = "github.repository.pull_requests.list";
+      const html = await render(
+        "invoke_integration",
+        {
+          capability_key: capability,
+          connection_ref: "icn_fixture123",
+          input: { command: "RAW_INPUT_SENTINEL" },
+          displayName: "UNTRUSTED_NAME_SENTINEL",
+        },
+        locale,
+        "",
+        "RUNNING",
+        true,
+        capability,
+      );
+      const expected = `${locale === "ru" ? "Вызов интеграции" : "Integration call"} · ${capability}`;
+      expect(title(html)).toBe(expected);
+      expect(html).toContain(
+        `aria-label="${locale === "ru" ? "Подробности" : "Details"}: ${expected}"`,
+      );
+      const compactHeader = (
+        html.match(/<header[^>]*>[^]*?<\/header>/)?.[0] ?? ""
+      ).split("<details")[0];
+      expect(compactHeader).not.toMatch(
+        /RAW_INPUT_SENTINEL|UNTRUSTED_NAME_SENTINEL|icn_fixture123/,
+      );
+      expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+    },
+  );
+  it.each([
+    undefined,
+    "",
+    "github.read\nunsafe",
+    "<script>unsafe</script>",
+    "https://example.invalid/?token=sentinel",
+    "a".repeat(161),
+  ])(
+    "не берёт название из input при невалидной capability %s",
+    async (capabilityRef) => {
+      const html = await render(
+        "invoke_integration",
+        {
+          capability_key: "github.repository.read",
+          operation: "UNTRUSTED_OPERATION",
+        },
+        "ru",
+        "",
+        "SUCCEEDED",
+        false,
+        capabilityRef,
+      );
+      expect(title(html)).toBe("Вызов интеграции");
+    },
+  );
   it.each(["ru", "en"] as const)(
     "сворачивает служебные сведения в одно доступное раскрытие внутри header (%s)",
     async (locale) => {
@@ -1083,6 +1355,112 @@ describe("RunTranscript: компактная работа", () => {
     expect(html).not.toContain('data-state="RUNNING"');
     const header = html.match(/<header[^>]*>([^]*?)<\/header>/)?.[1] ?? "";
     expect(header).not.toMatch(/#1|Ход 1|попытка 1/);
+  });
+
+  it.each(["ru", "en"] as const)(
+    "сохраняет самостоятельный успешный результат интеграции в компактных details (%s)",
+    async (locale) => {
+      const previous = i18n.global.locale.value;
+      i18n.global.locale.value = locale;
+      try {
+        for (const summary of [
+          "i18n:INTEGRATION_ACTION_SUCCEEDED",
+          i18n.global.t("serverMessages.INTEGRATION_ACTION_SUCCEEDED"),
+        ]) {
+          const item = progress("integration-success", {
+            messageKind: "INTERMEDIATE_MESSAGE",
+            summary,
+            integrationInvocationRef: "inv_fixture123",
+          });
+          const key = executionKey(item.execution);
+          if (!key) throw new Error("Missing synthetic execution key");
+          const html = await transcript([item], [key]);
+          expect(html.match(/class="run-activity-item /g)).toHaveLength(1);
+          expect(html).toContain("run-activity-item--service");
+          expect(html).toContain("run-transcript__service-history");
+          expect(html).toContain(
+            i18n.global.t("serverMessages.INTEGRATION_ACTION_SUCCEEDED"),
+          );
+          expect(html).toContain('data-turn-ref="trn_exact"');
+          expect(html).toContain('data-attempt="1"');
+          expect(html).not.toContain("<header");
+          expect(html).not.toContain('class="run-transcript__execution"');
+          expect(html).not.toContain('class="run-activity-item__message"');
+          expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+          expect(item.summary).toBe(summary);
+        }
+      } finally {
+        i18n.global.locale.value = previous;
+      }
+    },
+  );
+
+  it("не сворачивает неизвестный/failed исход, полезный текст, сообщения и записи без exact pins", async () => {
+    const success = progress("integration-result", {
+      messageKind: "INTERMEDIATE_MESSAGE",
+      summary: "i18n:INTEGRATION_ACTION_SUCCEEDED",
+      integrationInvocationRef: "inv_fixture123",
+    });
+    const key = executionKey(success.execution);
+    if (!key) throw new Error("Missing synthetic execution key");
+    for (const changes of [
+      { summary: "i18n:INTEGRATION_ACTION_FAILED" },
+      { summary: "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN" },
+      { summary: "Действие интеграции выполнено успешно. Важный результат" },
+      { state: "FAILED" as const },
+      { state: "CANCELLED" as const },
+      { execution: undefined, historical: true },
+      { execution: { ...execution, attempt: 0 } },
+      { integrationInvocationRef: undefined },
+      { integrationInvocationRef: "inv_short" },
+      { progress: "Важный результат" },
+      { phase: "COMMENTARY" as const, kind: "agent" as const },
+      { eventType: "TOOL_CALL_RECORDED" as const },
+      { messageKind: "TOOL_CALL" as const },
+      { artifactRef: "art_fixture123" },
+    ]) {
+      const html = await transcript([{ ...success, ...changes }], [key]);
+      expect(html).toContain("<header");
+      expect(html).not.toContain("run-transcript__service-history");
+    }
+  });
+
+  it("не объединяет compact success с соседним tool без совпадающего invocation pin", async () => {
+    const success = progress("integration-success", {
+      messageKind: "INTERMEDIATE_MESSAGE",
+      summary: "Действие интеграции выполнено успешно",
+      integrationInvocationRef: "inv_fixture123",
+    });
+    const tool = progress("integration-tool", {
+      kind: "tool",
+      eventType: "TOOL_CALL_RECORDED",
+      messageKind: "TOOL_CALL",
+      summary: undefined,
+      toolCall: {
+        ref: "tcl_fixture123",
+        tool: "invoke_integration",
+        state: "SUCCEEDED",
+        revision: 2,
+        durationMs: 10,
+        safeParameters: {},
+        safeResult: JSON.stringify({
+          version: 1,
+          invocationRef: "inv_fixture123",
+          state: "SUCCEEDED",
+          inputSHA256: "a".repeat(64),
+        }),
+        auditRef: "aud_fixture123",
+      },
+    });
+    const html = await transcript([success, tool]);
+    expect(html.match(/class="run-activity-item /g)).toHaveLength(2);
+    expect(html.match(/<header\b/g)).toHaveLength(1);
+    expect(html).toContain("run-transcript__service-history");
+    expect(html).toContain("Вызов интеграции");
+    expect(html).not.toContain('class="run-transcript__execution"');
+    expect(html).not.toContain('role="status"');
+    expect(success).not.toHaveProperty("serviceHistory");
+    expect(tool.integrationInvocationRef).toBeUndefined();
   });
 
   it("переносит работу на последнюю COMMENTARY, сохраняя полный FINAL и единственную terminal ошибку", async () => {

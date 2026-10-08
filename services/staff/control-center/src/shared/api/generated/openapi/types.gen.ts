@@ -4347,8 +4347,21 @@ export type IntegrationConnection = {
     publicConfiguration: {
         [key: string]: unknown;
     };
+    definitionConfigurationBinding?: IntegrationDefinitionConfigurationBinding;
     createdAt?: Timestamp;
     updatedAt?: Timestamp;
+};
+
+/**
+ * Авторитетная связь INTEGRATION_DEFINITION; MATCH содержит текущие глобальные pins для OCC, ABSENT разрешает явную проверку отсутствия. Pins не выдают права.
+ */
+export type IntegrationDefinitionConfigurationBinding = {
+    state: 'ABSENT';
+} | {
+    state: 'MATCH';
+    configurationRef: OpaqueRef;
+    revisionRef: OpaqueRef;
+    bindingVersion: number;
 };
 
 export type IntegrationConnectionInput = {

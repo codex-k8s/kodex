@@ -16,7 +16,7 @@ const maximumAssistantCatalogAgents = 20
 func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "get_configuration_catalog",
-		"description": "Discover refs/schemas; omit operation_types for index. Catalog excludes other selectors. MODELS needs account_ref. CURRENT_CONFIGURATION and RECIPIENT_INTEGRATION_GRANTS use own agent_ref; recipient grants require selected AGENT/WORKFLOW. Catalog reads are fresh; execution_snapshot is turn-pinned.",
+		"description": "Discover refs/schemas; omit operation_types for index. No mixed selectors; MODELS needs account_ref. WORKFLOW/AGENT_CONFIGURATION: read configuration_page.text from configuration_offset_bytes=0 via next_offset_bytes to eof=true; pin configuration_sha256 on continuation, maximum_bytes 4..16384. Fresh catalog; execution_snapshot turn-pinned.",
 		"inputSchema": objectSchema(nil, map[string]any{
 			"operation_types": map[string]any{"type": "array", "maxItems": maximumAssistantDiscoveredSchemas,
 				"uniqueItems": true, "items": map[string]any{"type": "string", "enum": assistantOperationTypes(input)}},
@@ -62,14 +62,17 @@ func runMetadataTool() map[string]any {
 }
 
 func configurationCatalog(input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
-	if !input.IsAssistant() || !onlyKeys(arguments, "operation_types", "agent_query", "agent_offset", "definition_query", "definition_offset", "assistant_configuration_catalog") {
+	if !input.IsAssistant() {
 		return nil, errors.New("configuration catalog is not available")
+	}
+	if !onlyKeys(arguments, "operation_types", "agent_query", "agent_offset", "definition_query", "definition_offset", "assistant_configuration_catalog") {
+		return nil, invalidAssistantCatalogInput(assistantCatalogShapeInvalid)
 	}
 	agentQuery := ""
 	if raw, supplied := arguments["agent_query"]; supplied {
 		query, ok := raw.(string)
 		if !ok || utf8.RuneCountInString(query) > 80 {
-			return nil, errors.New("configuration catalog agent query is invalid")
+			return nil, invalidAssistantCatalogInput(assistantCatalogSelectorInvalid)
 		}
 		agentQuery = strings.ToLower(strings.TrimSpace(query))
 	}
@@ -80,14 +83,14 @@ func configurationCatalog(input runtimecontract.RunnerInput, arguments map[strin
 			agentOffset = value
 		case float64:
 			if value < 0 || value > 128 || value != float64(int(value)) {
-				return nil, errors.New("configuration catalog agent offset is invalid")
+				return nil, invalidAssistantCatalogInput(assistantCatalogSelectorInvalid)
 			}
 			agentOffset = int(value)
 		default:
-			return nil, errors.New("configuration catalog agent offset is invalid")
+			return nil, invalidAssistantCatalogInput(assistantCatalogSelectorInvalid)
 		}
 		if agentOffset < 0 || agentOffset > 128 {
-			return nil, errors.New("configuration catalog agent offset is invalid")
+			return nil, invalidAssistantCatalogInput(assistantCatalogSelectorInvalid)
 		}
 	}
 	allSchemas := assistantPlanOperationSchemas(input)
@@ -681,6 +684,7 @@ func workflowUpdateInputSchema(workflowRef string) map[string]any {
 	field["properties"].(map[string]any)["key"] = map[string]any{"type": "string", "pattern": "^[a-z][a-z0-9_-]{0,79}$",
 		"description": "Preserve the existing field key from the workflow readback; omit only for a new field."}
 	steps := graph["steps"].(map[string]any)
+	steps["description"] = "For UPDATE_WORKFLOW, copy the complete ordered steps array from the full WORKFLOW_CONFIGURATION readback and preserve every existing key, parallel and numeric parallelGroup value. Omit key for new steps; unknown explicit keys and dependsOn are rejected. If count, order, keys and parallelism remain unchanged, every original draft.Steps[].DependsOn is retained exactly. Structural edits retain ALL original edges of retained steps and add inferred frontier dependencies; removing or moving a prerequisite after its dependent is rejected. Contiguous parallel=true steps with the same numeric parallelGroup share the preceding frontier; the following nonparallel step waits for ALL peers. To add a fourth reviewer, insert a keyless parallel peer in the existing group before aggregation. The server-owned After.steps exposes assigned keys and After.draft exposes the complete normalized DAG before Apply. The owner must verify every original edge and all peer dependencies in After.draft.Steps[].DependsOn before Apply. propose_assistant_plan returns plan locators, not this snapshot. After Apply, read full WORKFLOW_CONFIGURATION again and verify the normalized graph before publishing. Omitted workflow fields retain their values; ResultSchema is retained and existing input defaults are preserved by input key. Capability-only edits must preserve the complete ordered steps and change only requiredCapabilityKeys."
 	step := steps["items"].(map[string]any)
 	step["properties"].(map[string]any)["key"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 96,
 		"description": "Preserve the existing step key from the workflow readback; omit only for a new step."}
@@ -688,7 +692,7 @@ func workflowUpdateInputSchema(workflowRef string) map[string]any {
 		"workflowRef": enumSchema(workflowRef), "name": stringSchema(1, 160),
 		"purpose": stringSchema(0, 2000), "coordinatorAgentRef": opaqueRefSchema(),
 		"instructions":       stringSchema(0, 65536),
-		"completionCriteria": stringSchema(0, 65536),
+		"completionCriteria": stringSchema(0, 2000),
 		"maxConcurrency":     map[string]any{"type": "integer", "minimum": 1, "maximum": 100},
 		"timeoutSeconds":     map[string]any{"type": "integer", "minimum": 1, "maximum": 604800},
 		"inputFields":        fields, "steps": steps,
@@ -821,7 +825,7 @@ func workflowInputSchema(projectRef, agentRef map[string]any) map[string]any {
 		}},
 		"timeoutSeconds": map[string]any{"type": "integer", "minimum": 1, "maximum": 86400}, "expectedResult": stringSchema(0, 1000),
 		"humanGate": map[string]any{"type": "boolean"}, "gateDecisions": stringArraySchema(0, 4, []string{"APPROVE", "REJECT", "REQUEST_CHANGES", "CANCEL"}),
-		"requiredCapabilityKeys": map[string]any{"type": "array", "maxItems": 50, "uniqueItems": true, "items": capabilityKeySchema()},
+		"requiredCapabilityKeys": map[string]any{"type": "array", "maxItems": 50, "uniqueItems": true, "items": capabilityKeySchema(), "description": "Complete stage capability ceiling, not additional requirements. Include needed platform keys and exact existing enabled integration keys of this step's agent. Empty denies all capabilities; this list never grants permissions."},
 	})
 	return objectSchema([]string{"projectRef", "name", "purpose", "coordinatorAgentRef", "steps"}, map[string]any{
 		"projectRef": projectRef, "name": stringSchema(1, 160), "purpose": stringSchema(1, 1000), "coordinatorAgentRef": agentRef,

@@ -73,7 +73,6 @@ import {
 } from "@/features/assistant/events";
 import {
   assistantActiveUserTurn,
-  assistantAwaitingReply,
   assistantEffectiveRuntimeState,
   assistantRequiresProviderAccount,
   operationActionLabel,
@@ -389,6 +388,7 @@ const panel = ref<HTMLElement>();
 const planDialog = ref<HTMLElement>();
 const formSlot = ref<HTMLElement>();
 const composer = ref<{ focus(): void }>();
+const startingConversation = ref(false);
 const chatLog = ref<HTMLElement>();
 const chatFollowing = ref(true);
 const chatUnread = ref(false);
@@ -468,12 +468,17 @@ const assistantRuntimeState = computed(() =>
       ? assistantEffectiveRuntimeState(store.assistant)
       : "RECOVERING",
 );
-const awaitingReply = computed(() =>
-  assistantAwaitingReply(store.selectedConversation),
+const activeUserTurn = computed(() =>
+  assistantActiveUserTurn(
+    store.selectedConversation,
+    platform.runs,
+    platform.bootstrap?.organizationRef,
+  ),
 );
+const awaitingReply = computed(() => Boolean(activeUserTurn.value));
 const showWorkingFallback = computed(() => {
   if (!awaitingReply.value) return false;
-  const runRef = assistantActiveUserTurn(store.selectedConversation)?.runRef;
+  const runRef = activeUserTurn.value?.runRef;
   const run = runRef ? platform.runs[runRef] : undefined;
   const graph = run
     ? (platform.graphs[run.rootRunRef] ?? platform.graphs[run.ref])
@@ -528,7 +533,9 @@ const canSend = computed(
     props.live &&
     !store.loading &&
     !store.busy &&
+    !startingConversation.value &&
     assistantRuntimeState.value === "READY" &&
+    !store.sessionStorageBlocker &&
     (store.assistantScope === "PROJECT"
       ? projectAssistantCanRun.value
       : Boolean(store.assistant?.nextActions.includes("ADD_TURN"))) &&
@@ -544,7 +551,16 @@ const canStartConversation = computed(
     props.live &&
     store.conversationCreationReady &&
     !store.busy &&
+    !startingConversation.value &&
     canCreateConversation.value,
+);
+const composerDisabled = computed(
+  () =>
+    startingConversation.value ||
+    store.busy ||
+    !props.live ||
+    store.selectedConversation?.state === "ARCHIVED" ||
+    store.selectedConversation?.state === "CLOSED",
 );
 const isRunContext = computed(() => props.context.entityKind === "RUN");
 for (const [root, sentinel, visible] of [
@@ -591,72 +607,128 @@ const currentDraftKey = computed(
     store.selectedRef ??
     `${store.assistantScope}:${store.activeAssistantRef ?? "unconfigured"}:context:${contextIdentity.value}`,
 );
+const prefillGeneration = ref(0);
+watch(
+  [contextIdentity, () => store.assistantScope, open],
+  ([identity, scope, isOpen], [previousIdentity, previousScope]) => {
+    if (identity !== previousIdentity || scope !== previousScope || !isOpen)
+      ++prefillGeneration.value;
+  },
+  { flush: "sync" },
+);
+
+async function replaceMessageDraft(
+  value: string,
+  confirmationKey: string,
+  generation: number,
+): Promise<void> {
+  const identity = contextIdentity.value;
+  const assistantScope = store.assistantScope;
+  const isCurrent = () =>
+    generation === prefillGeneration.value &&
+    open.value &&
+    identity === contextIdentity.value &&
+    assistantScope === store.assistantScope;
+  const waitingForSelection = () =>
+    store.loading ||
+    (assistantScope === "SYSTEM" &&
+      (!platform.assistant ||
+        platform.assistantRealtimeScopeKey !== (props.projectRef ?? "")));
+
+  // nextTick ждёт только отрисовку: история и восстановление выбранного диалога
+  // могут завершиться позже. Запрос относится к окончательно выбранному черновику.
+  do {
+    if (isCurrent() && waitingForSelection()) {
+      await new Promise<void>((resolve) => {
+        const stop = watch(
+          () => isCurrent() && waitingForSelection(),
+          (waiting) => {
+            if (waiting) return;
+            stop();
+            resolve();
+          },
+          { flush: "post" },
+        );
+      });
+    }
+    await nextTick();
+  } while (isCurrent() && waitingForSelection());
+  if (!isCurrent()) return;
+
+  const draftKey = currentDraftKey.value;
+  const previousMessage = message.value;
+  if (
+    previousMessage.trim() &&
+    !(await requestConfirmation(t(confirmationKey)))
+  )
+    return;
+  if (
+    !isCurrent() ||
+    waitingForSelection() ||
+    currentDraftKey.value !== draftKey ||
+    message.value !== previousMessage
+  )
+    return;
+  message.value = value;
+  await nextTick();
+  if (isCurrent() && currentDraftKey.value === draftKey)
+    composer.value?.focus();
+}
 
 function handleOpenAssistant(event: Event): void {
+  const generation = ++prefillGeneration.value;
   void (async () => {
     const request =
       event instanceof CustomEvent ? (event.detail as unknown) : undefined;
     await show();
+    if (generation !== prefillGeneration.value || !open.value) return;
     if (isAssistantSettingsRequest(request)) {
       await store.selectAssistantScope("SYSTEM");
       openAssistantSettings();
       return;
     }
     if (isAssistantSetupRequest(request)) {
-      if (
-        message.value.trim() &&
-        !(await requestConfirmation(t("assistant.replaceDraftConfirm")))
-      )
-        return;
-      message.value = t(`onboarding.assistantPrompts.${request.step}`);
-      await nextTick();
-      composer.value?.focus();
+      await replaceMessageDraft(
+        t(`onboarding.assistantPrompts.${request.step}`),
+        "assistant.replaceDraftConfirm",
+        generation,
+      );
       return;
     }
     if (isAssistantRoleImageBuildDebugRequest(request)) {
-      if (
-        message.value.trim() &&
-        !(await requestConfirmation(
-          t("assistant.replaceDraftWithBuildDebugConfirm"),
-        ))
-      )
-        return;
-      message.value = t("assistant.roleImageBuild.debugPrompt", {
-        recipeRef: request.recipeRef,
-        buildRef: request.buildRef,
-        attempt: request.attempt,
-        stage: request.stage,
-        safeErrorCode: request.safeErrorCode || "NONE",
-        diagnosticCode: request.diagnosticCode || "NONE",
-        diagnosticSummary: request.diagnosticSummary || "NONE",
-      });
-      await nextTick();
-      composer.value?.focus();
+      await replaceMessageDraft(
+        t("assistant.roleImageBuild.debugPrompt", {
+          recipeRef: request.recipeRef,
+          buildRef: request.buildRef,
+          attempt: request.attempt,
+          stage: request.stage,
+          safeErrorCode: request.safeErrorCode || "NONE",
+          diagnosticCode: request.diagnosticCode || "NONE",
+          diagnosticSummary: request.diagnosticSummary || "NONE",
+        }),
+        "assistant.replaceDraftWithBuildDebugConfirm",
+        generation,
+      );
       return;
     }
     if (isAssistantRunDebugRequest(request)) {
-      if (
-        message.value.trim() &&
-        !(await requestConfirmation(
-          t("assistant.replaceDraftWithRunDebugConfirm"),
-        ))
-      )
-        return;
-      message.value = t("assistant.runDebug.prompt", {
-        runRef: request.runRef,
-        rootRunRef: request.rootRunRef,
-        targetType: request.targetType,
-        attempt: request.attempt,
-        safeErrorCode: request.safeErrorCode || "NONE",
-        failedNodes: request.failedNodes
-          .map(
-            (node) =>
-              `nodeRef=${node.nodeRef},type=${node.type},agentRef=${node.agentRef || "NONE"},safeErrorCode=${node.safeErrorCode || "NONE"}`,
-          )
-          .join(" | "),
-      });
-      await nextTick();
-      composer.value?.focus();
+      await replaceMessageDraft(
+        t("assistant.runDebug.prompt", {
+          runRef: request.runRef,
+          rootRunRef: request.rootRunRef,
+          targetType: request.targetType,
+          attempt: request.attempt,
+          safeErrorCode: request.safeErrorCode || "NONE",
+          failedNodes: request.failedNodes
+            .map(
+              (node) =>
+                `nodeRef=${node.nodeRef},type=${node.type},agentRef=${node.agentRef || "NONE"},safeErrorCode=${node.safeErrorCode || "NONE"}`,
+            )
+            .join(" | "),
+        }),
+        "assistant.replaceDraftWithRunDebugConfirm",
+        generation,
+      );
       return;
     }
     const publication = request as
@@ -668,17 +740,14 @@ function handleOpenAssistant(event: Event): void {
       !/^mrev_[A-Za-z0-9_-]{1,91}$/.test(publication.revisionRef)
     )
       return;
-    if (
-      message.value.trim() &&
-      !(await requestConfirmation(t("assistant.replaceDraftConfirm")))
-    )
-      return;
-    message.value = t("assistant.publishIntegrationRequest", {
-      configurationRef: publication.configurationRef,
-      revisionRef: publication.revisionRef,
-    });
-    await nextTick();
-    composer.value?.focus();
+    await replaceMessageDraft(
+      t("assistant.publishIntegrationRequest", {
+        configurationRef: publication.configurationRef,
+        revisionRef: publication.revisionRef,
+      }),
+      "assistant.replaceDraftConfirm",
+      generation,
+    );
   })();
 }
 
@@ -849,13 +918,28 @@ function chooseConversation(ref?: string): void {
 }
 
 async function startConversation(): Promise<void> {
+  if (!canStartConversation.value) return;
+  startingConversation.value = true;
+  const generation = prefillGeneration.value;
+  const isCurrent = () => open.value && generation === prefillGeneration.value;
   historyOpen.value = false;
   titleEditing.value = false;
   openPlanRef.value = undefined;
-  if (!(await handleStoreMutation(() => store.startConversation()))) return;
-  attachmentComposer.value?.clear();
+  try {
+    if (!(await handleStoreMutation(() => store.startConversation()))) return;
+    if (!isCurrent()) return;
+    attachmentComposer.value?.clear();
+    await nextTick();
+  } finally {
+    startingConversation.value = false;
+  }
   await nextTick();
-  composer.value?.focus();
+  if (isCurrent()) composer.value?.focus();
+}
+
+function updateMessage(value: string): void {
+  if (composerDisabled.value || !open.value) return;
+  message.value = value;
 }
 
 async function handleStoreMutation(
@@ -984,21 +1068,34 @@ async function saveTitle(): Promise<void> {
 async function send(
   deliveryMode: "QUEUE" | "INTERRUPT_ACTIVE" = "QUEUE",
 ): Promise<void> {
-  const value = message.value.trim();
-  if (!value || !canSend.value) return;
+  const draft = message.value;
+  const draftKey = currentDraftKey.value;
+  const generation = prefillGeneration.value;
+  const isCurrent = () =>
+    open.value &&
+    generation === prefillGeneration.value &&
+    currentDraftKey.value === draftKey;
+  const value = draft.trim();
+  const readyToSend = () => canSend.value;
+  if (!value || !readyToSend()) return;
   const attachmentSetRef = await attachmentComposer.value?.finalize();
+  if (!isCurrent() || !readyToSend() || message.value !== draft) return;
   if (
     !(await handleStoreMutation(() =>
       store.send(value, attachmentSetRef, deliveryMode),
     ))
   )
     return;
-  messageDrafts.delete(currentDraftKey.value);
+  if (messageDrafts.get(draftKey) === draft) messageDrafts.delete(draftKey);
+  if (!isCurrent() || message.value !== draft) return;
+  messageDrafts.delete(draftKey);
   message.value = "";
   attachmentComposer.value?.clear();
   await nextTick();
-  scrollToLatest();
-  composer.value?.focus();
+  if (isCurrent()) {
+    scrollToLatest();
+    composer.value?.focus();
+  }
 }
 
 async function stopActiveTurn(): Promise<void> {
@@ -1411,6 +1508,16 @@ watch(assistantFormActive, (active) => {
   if (active && !open.value) void show();
 });
 watch(
+  () =>
+    Boolean(currentPlan.value) ||
+    assistantFormActive.value ||
+    Boolean(pendingProjectMove.value),
+  (drawerInert) => {
+    if (drawerInert) contextOpen.value = false;
+  },
+  { flush: "sync" },
+);
+watch(
   [() => props.context, () => props.projectRef] as const,
   ([nextContext, nextProjectRef], [previousContext, previousProjectRef]) => {
     if (
@@ -1566,6 +1673,7 @@ onMounted(() => {
   else if (open.value) void show();
 });
 onBeforeUnmount(() => {
+  ++prefillGeneration.value;
   ++transcriptReadGeneration;
   for (const release of transcriptLeases.values()) release();
   transcriptLeases.clear();
@@ -2415,6 +2523,13 @@ onBeforeUnmount(() => {
             </section>
 
             <footer class="assistant-composer">
+              <p
+                v-if="store.sessionStorageBlocker"
+                class="assistant-composer__storage-notice"
+                role="alert"
+              >
+                {{ $t("common.sessionStorageUnavailable") }}
+              </p>
               <button
                 v-if="chatUnread"
                 class="button"
@@ -2428,12 +2543,7 @@ onBeforeUnmount(() => {
                 compact
                 purpose="ASSISTANT_MESSAGE"
                 :project-ref="projectRef"
-                :disabled="
-                  store.busy ||
-                  !live ||
-                  store.selectedConversation?.state === 'ARCHIVED' ||
-                  store.selectedConversation?.state === 'CLOSED'
-                "
+                :disabled="composerDisabled"
                 @change="attachmentState = $event"
               />
               <div
@@ -2444,18 +2554,15 @@ onBeforeUnmount(() => {
               >
                 <VoiceTextarea
                   ref="composer"
-                  v-model="message"
+                  :key="currentDraftKey"
+                  :model-value="message"
                   name="assistant-message"
                   rows="2"
                   maxlength="32768"
                   :aria-label="$t('assistant.message')"
                   :placeholder="$t('assistant.message')"
-                  :disabled="
-                    store.busy ||
-                    !live ||
-                    store.selectedConversation?.state === 'ARCHIVED' ||
-                    store.selectedConversation?.state === 'CLOSED'
-                  "
+                  :disabled="composerDisabled"
+                  @update:model-value="updateMessage"
                   @keydown="handleComposerKeydown"
                 />
                 <div>
@@ -3653,6 +3760,11 @@ onBeforeUnmount(() => {
 }
 .assistant-composer__field {
   position: relative;
+}
+.assistant-composer__storage-notice {
+  margin: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 .assistant-composer :deep(textarea) {
   width: 100%;

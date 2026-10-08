@@ -62,6 +62,38 @@ export function isSuccessfulIntegrationToolReceipt(
 function successfulIntegrationInvocationRef(
   tool: NonNullable<RunActivityItem["toolCall"]>,
 ): string | undefined {
+  const receipt = integrationToolReceipt(tool);
+  return receipt?.state === "SUCCEEDED" ? receipt.invocationRef : undefined;
+}
+
+type IntegrationReceiptState =
+  | "SUCCEEDED"
+  | "FAILED"
+  | "REJECTED"
+  | "CANCELLED"
+  | "WAITING_APPROVAL"
+  | "UNKNOWN_OUTCOME";
+
+// Состояние отображения не заменяет исходное состояние вызова в аудите.
+export function integrationToolPresentationState(
+  tool: NonNullable<RunActivityItem["toolCall"]>,
+):
+  | "SUCCEEDED"
+  | "FAILED"
+  | "REJECTED"
+  | "CANCELLED"
+  | "WAITING_HUMAN"
+  | "NEEDS_ATTENTION"
+  | undefined {
+  const receipt = integrationToolReceipt(tool);
+  if (receipt?.state === "WAITING_APPROVAL") return "WAITING_HUMAN";
+  if (receipt?.state === "UNKNOWN_OUTCOME") return "NEEDS_ATTENTION";
+  return receipt?.state;
+}
+
+function integrationToolReceipt(
+  tool: NonNullable<RunActivityItem["toolCall"]>,
+): { invocationRef: string; state: IntegrationReceiptState } | undefined {
   if (
     tool.state !== "SUCCEEDED" ||
     tool.safeResult.length > 512 ||
@@ -79,7 +111,15 @@ function successfulIntegrationInvocationRef(
     const receipt = value as Record<string, unknown>;
     const valid =
       receipt.version === 1 &&
-      receipt.state === "SUCCEEDED" &&
+      typeof receipt.state === "string" &&
+      [
+        "SUCCEEDED",
+        "FAILED",
+        "REJECTED",
+        "CANCELLED",
+        "WAITING_APPROVAL",
+        "UNKNOWN_OUTCOME",
+      ].includes(receipt.state) &&
       typeof receipt.invocationRef === "string" &&
       /^inv_[A-Za-z0-9_-]{8,124}$/.test(receipt.invocationRef) &&
       typeof receipt.inputSHA256 === "string" &&
@@ -88,10 +128,15 @@ function successfulIntegrationInvocationRef(
         JSON.stringify({
           version: 1,
           invocationRef: receipt.invocationRef,
-          state: "SUCCEEDED",
+          state: receipt.state,
           inputSHA256: receipt.inputSHA256,
         });
-    return valid ? String(receipt.invocationRef) : undefined;
+    return valid
+      ? {
+          invocationRef: String(receipt.invocationRef),
+          state: receipt.state as IntegrationReceiptState,
+        }
+      : undefined;
   } catch {
     return undefined;
   }
@@ -102,6 +147,7 @@ interface ActivityContext {
   target?: string;
   platform?: string;
   nodes?: readonly RunNode[];
+  graphRootRunRef?: string;
 }
 
 export function isTranscriptNearBottom(position: {
@@ -206,9 +252,29 @@ export function buildRunTranscriptItems(
       previousPosition !== undefined ? items[previousPosition] : undefined;
     const presented = event as Partial<PresentedRunEvent>;
     // Привязка повторного подтверждения не выводится из текста или aggregateRef.
+    const graphExecutionNodes = context.nodes?.filter(
+      (node) => node.ref === event.execution?.nodeRef,
+    );
+    const graphExecutionNode = graphExecutionNodes?.[0];
+    // Root stream хранит события дочернего run: lineage берётся из owner graph.
+    const graphChildBound = Boolean(
+      scope &&
+      context.graphRootRunRef &&
+      event.runRef === context.graphRootRunRef &&
+      event.execution?.runRef !== context.graphRootRunRef &&
+      graphExecutionNodes?.length === 1 &&
+      graphExecutionNode?.type === "AGENT_EXECUTION" &&
+      graphExecutionNode.runRef === event.execution?.runRef &&
+      graphExecutionNode.turnRef === event.execution.turnRef &&
+      graphExecutionNode.attempt === event.execution.attempt &&
+      context.nodes?.some((node) =>
+        node.childRunRefs.includes(graphExecutionNode.runRef),
+      ),
+    );
     const integrationBound = Boolean(
       scope &&
-      event.runRef === event.execution?.runRef &&
+      event.execution &&
+      (event.runRef === event.execution.runRef || graphChildBound) &&
       event.nodeRef === event.execution.nodeRef &&
       event.run.ref === event.runRef &&
       Number.isSafeInteger(event.run.version) &&
@@ -278,7 +344,8 @@ export function buildRunTranscriptItems(
   return items.sort(
     (left, right) =>
       Number(left.historical) - Number(right.historical) ||
-      (left.execution?.turnNumber ?? 0) - (right.execution?.turnNumber ?? 0) ||
+      // Номера ходов и sequence разных сессий не задают общую хронологию.
+      Date.parse(left.occurredAt) - Date.parse(right.occurredAt) ||
       (left.sequence ?? 0) - (right.sequence ?? 0) ||
       left.id.localeCompare(right.id),
   );
@@ -468,6 +535,57 @@ export function activeTranscriptItemId(
   return latest?.toolCall && latest.toolCall.state !== "RUNNING"
     ? null
     : (latest?.id ?? null);
+}
+
+// Обычный drawer сохраняет индикатор между инструментами на последнем ответе
+// или компактной служебной записи. Завершённый инструмент не становится busy.
+export function ordinaryRunActiveTranscriptItemId(
+  run: Run,
+  nodes: readonly RunNode[],
+  items: readonly RunActivityItem[],
+): string | null {
+  if (run.state !== "RUNNING") return null;
+  const bound = items.filter((item) => {
+    const execution = item.execution;
+    return Boolean(
+      executionKey(execution) &&
+      execution &&
+      !item.historical &&
+      execution.runRef === run.ref &&
+      execution.sessionRef === run.sessionRef &&
+      nodes.some(
+        (node) =>
+          node.ref === execution.nodeRef &&
+          node.runRef === run.ref &&
+          node.type === "AGENT_EXECUTION" &&
+          node.state === "RUNNING" &&
+          node.turnRef === execution.turnRef &&
+          node.attempt === execution.attempt,
+      ),
+    );
+  });
+  const active = activeTranscriptItemId(bound);
+  if (active) return active;
+  const closed = bound.flatMap((item) => {
+    const scope = executionKey(item.execution);
+    return scope &&
+      !item.toolCall &&
+      !item.artifact &&
+      (item.phase === "FINAL" || terminalTranscriptStates.has(item.state ?? ""))
+      ? [scope]
+      : [];
+  });
+  // FINAL и terminal остаются в наборе: общий предикат закрывает exact scope.
+  return activeTranscriptItemId(
+    bound.filter(
+      (item) =>
+        !item.toolCall &&
+        !item.artifact &&
+        !item.artifactRef &&
+        (Boolean(item.phase) || isTranscriptService(item)),
+    ),
+    closed,
+  );
 }
 
 // Terminal receipt может прийти раньше terminal RunEvent. Привязка проверяется
@@ -960,6 +1078,7 @@ export function buildRunActivityItems(
     initiator: run.initiator.displayName,
     target: run.target.displayName,
     platform: run.title,
+    graphRootRunRef: run.rootRunRef,
   });
   if (
     initiatorSummary?.trim() &&

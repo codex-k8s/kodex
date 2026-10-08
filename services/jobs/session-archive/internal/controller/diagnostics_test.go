@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -90,7 +91,7 @@ func TestArchiveAPIFailureIsClosedAndExact(t *testing.T) {
 
 func TestWorkerTerminalDiagnosticIsBoundedAndExact(t *testing.T) {
 	t.Parallel()
-	for _, name := range []string{"failure", "success", "exit zero malformed", "status conflict", "foreign pod", "forged task", "forged attempt", "replaced pvc", "unknown reason", "missing result"} {
+	for _, name := range []string{"failure", "failure before cleanup", "source identity", "source digest", "object write", "object readback", "unknown failure stage", "success", "exit zero malformed", "status conflict", "foreign pod", "forged task", "forged attempt", "replaced pvc", "unknown reason", "missing result"} {
 		t.Run(name, func(t *testing.T) {
 			var logs bytes.Buffer
 			cfg := testConfig()
@@ -116,10 +117,22 @@ func TestWorkerTerminalDiagnosticIsBoundedAndExact(t *testing.T) {
 				Spec:   job.Spec.Template.Spec,
 				Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{{Name: "worker", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1, Reason: "Error", Message: `{"success":false,"safe_error_code":"SESSION_ARCHIVE_WORKER_FAILED","object_key":"private sentinel"}`}}}}}}
 			wantStage, wantCode, wantReason, wantErr := "WORKER_REPORTED_FAILURE", "SESSION_ARCHIVE_WORKER_FAILED", "Error", false
+			wantFailureStage := "UNKNOWN"
+			if name == "foreign pod" || strings.HasPrefix(name, "forged") || name == "replaced pvc" {
+				pod.Status.ContainerStatuses[0].State.Terminated.Message = `{"success":false,"safe_error_code":"SESSION_ARCHIVE_WORKER_FAILED","failure_stage":"SOURCE_DIGEST"}`
+			}
 			switch name {
+			case "failure before cleanup":
+				wantFailureStage = "SOURCE_DIGEST"
+				pod.Status.ContainerStatuses[0].State.Terminated.Message = `{"success":false,"safe_error_code":"SESSION_ARCHIVE_WORKER_FAILED","failure_stage":"SOURCE_DIGEST"}`
+			case "source identity", "source digest", "object write", "object readback":
+				wantFailureStage = strings.ToUpper(strings.ReplaceAll(name, " ", "_"))
+				pod.Status.ContainerStatuses[0].State.Terminated.Message = fmt.Sprintf(`{"success":false,"safe_error_code":"SESSION_ARCHIVE_WORKER_FAILED","failure_stage":%q,"object_key":"private sentinel"}`, wantFailureStage)
+			case "unknown failure stage":
+				pod.Status.ContainerStatuses[0].State.Terminated.Message = `{"success":false,"safe_error_code":"SESSION_ARCHIVE_WORKER_FAILED","failure_stage":"private sentinel"}`
 			case "success":
 				job.Status.Failed, job.Status.Succeeded = 0, 1
-				pod.Status.ContainerStatuses[0].State.Terminated.Message = `{"success":true}`
+				pod.Status.ContainerStatuses[0].State.Terminated.Message = `{"success":true,"failure_stage":"SOURCE_IDENTITY"}`
 				pod.Status.ContainerStatuses[0].State.Terminated.ExitCode = 0
 				wantStage, wantCode = "WORKER_REPORTED_SUCCESS", "NONE"
 			case "exit zero malformed":
@@ -127,7 +140,7 @@ func TestWorkerTerminalDiagnosticIsBoundedAndExact(t *testing.T) {
 				pod.Status.ContainerStatuses[0].State.Terminated.ExitCode = 0
 				wantStage, wantCode, wantErr = "RESULT_DECODE_INVALID", "UNKNOWN", true
 			case "status conflict":
-				pod.Status.ContainerStatuses[0].State.Terminated.Message = `{"success":true}`
+				pod.Status.ContainerStatuses[0].State.Terminated.Message = `{"success":true,"failure_stage":"SOURCE_IDENTITY"}`
 				wantStage, wantCode, wantErr = "RESULT_STATUS_CONFLICT", "NONE", true
 			case "foreign pod":
 				pod.OwnerReferences[0].UID = "foreign-job-uid"
@@ -150,7 +163,27 @@ func TestWorkerTerminalDiagnosticIsBoundedAndExact(t *testing.T) {
 				wantStage, wantCode, wantReason, wantErr = "RESULT_MISSING", "UNKNOWN", "UNKNOWN", true
 			}
 			controller.client = fake.NewSimpleClientset(pod)
-			_, err = controller.readResult(t.Context(), task, job, uid)
+			var result model.Result
+			if name == "failure before cleanup" {
+				client := fake.NewSimpleClientset(pod, &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: exactWorkerNamespace, UID: uid}})
+				client.PrependReactor("get", "jobs", func(action clienttesting.Action) (bool, runtime.Object, error) {
+					if _, err := client.Tracker().Get(action.GetResource(), action.GetNamespace(), action.(clienttesting.GetAction).GetName()); err != nil {
+						return false, nil, nil
+					}
+					return true, job.DeepCopy(), nil
+				})
+				client.PrependReactor("delete", "jobs", func(clienttesting.Action) (bool, runtime.Object, error) {
+					if !strings.Contains(logs.String(), `"failure_stage":"SOURCE_DIGEST"`) {
+						t.Fatal("worker failure stage was lost before cleanup")
+					}
+					return false, nil, nil
+				})
+				controller.client, controller.poll = client, time.Millisecond
+				result, err = controller.Execute(t.Context(), task, func(context.Context) error { return nil })
+				assertWorkerResourcesRemoved(t, client, job.Name)
+			} else {
+				result, err = controller.readResult(t.Context(), task, job, uid)
+			}
 			if strings.HasPrefix(name, "forged") || name == "replaced pvc" {
 				if len(controller.client.(*fake.Clientset).Actions()) != 0 {
 					t.Fatal("forged job reached private result read")
@@ -159,11 +192,14 @@ func TestWorkerTerminalDiagnosticIsBoundedAndExact(t *testing.T) {
 			if (err != nil) != wantErr {
 				t.Fatal("terminal outcome changed")
 			}
+			if name == "failure before cleanup" && (result.Success || result.SafeErrorCode != wantCode) {
+				t.Fatal("diagnostics changed the canonical worker failure")
+			}
 			var record map[string]any
 			if json.Unmarshal(logs.Bytes(), &record) != nil {
 				t.Fatal("closed worker observation missing")
 			}
-			if record["msg"] != workerObservationMessage || record["stage"] != wantStage || record["safe_error_code"] != wantCode || record["termination_reason"] != wantReason || record["task_ref"] != task.TaskRef || record["session_ref"] != task.SessionRef || strings.Contains(logs.String(), "private sentinel") {
+			if record["msg"] != workerObservationMessage || record["stage"] != wantStage || record["safe_error_code"] != wantCode || record["termination_reason"] != wantReason || record[archiveFailureStageAttribute] != wantFailureStage || record["task_ref"] != task.TaskRef || record["session_ref"] != task.SessionRef || strings.Contains(logs.String(), "private sentinel") {
 				t.Fatal("closed diagnostic binding or redaction failed")
 			}
 		})

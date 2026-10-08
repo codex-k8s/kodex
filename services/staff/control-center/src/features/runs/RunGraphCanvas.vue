@@ -2,7 +2,6 @@
 import { Background } from "@vue-flow/background";
 import {
   VueFlow,
-  getTransformForBounds,
   useVueFlow,
   type GraphNode,
   type NodeMouseEvent,
@@ -34,6 +33,7 @@ import { runNodePresentationKey } from "@/features/runs/run-owner";
 import {
   createRunGraphFlowElements,
   runGraphFitViewOptions,
+  runGraphFitTransform,
   runGraphInitialFitOptions,
   runGraphRetryAttempts,
   runGraphMaximumZoom,
@@ -81,6 +81,7 @@ const legendExpanded = ref(false);
 const outline = ref<HTMLElement>();
 const userAdjustedView = ref(false);
 const programmaticViewportChange = ref(false);
+const minimumZoom = ref(runGraphMinimumZoom);
 const futureRefs = computed(() => new Set(props.futureNodeRefs));
 const activeRefs = computed(() => new Set(props.activeNodeRefs));
 const nodeByRef = computed(
@@ -221,6 +222,33 @@ watch(runSignature, (current, previous) => {
 watch(graphSignature, () => {
   if (!userAdjustedView.value) void nextTick(() => fit(false));
 });
+watch(
+  [() => dimensions.value.width, () => dimensions.value.height],
+  async ([width, height], [previousWidth, previousHeight]) => {
+    if (!width || !height || viewMode.value !== "graph") return;
+    if (!userAdjustedView.value) {
+      await fit(false);
+      return;
+    }
+    if (!previousWidth || !previousHeight) return;
+    // Resize сохраняет выбранный пользователем центр и масштаб графа.
+    const viewport = getViewport();
+    programmaticViewportChange.value = true;
+    try {
+      await setViewport(
+        {
+          x: viewport.x + (width - previousWidth) / 2,
+          y: viewport.y + (height - previousHeight) / 2,
+          zoom: viewport.zoom,
+        },
+        { duration: 0 },
+      );
+    } finally {
+      programmaticViewportChange.value = false;
+    }
+  },
+  { flush: "post" },
+);
 
 async function fit(userInitiated = true): Promise<void> {
   if (userInitiated) userAdjustedView.value = true;
@@ -240,19 +268,18 @@ async function fit(userInitiated = true): Promise<void> {
           props.edges,
           props.selectedRef,
           props.compact,
+          dimensions.value.height,
         );
     const bounds = runGraphContentBounds(layout.value, options.nodes);
-    await setViewport(
-      getTransformForBounds(
-        bounds,
-        dimensions.value.width,
-        dimensions.value.height,
-        options.minZoom ?? runGraphMinimumZoom,
-        options.maxZoom ?? runGraphMaximumZoom,
-        options.padding,
-      ),
-      { duration: options.duration },
+    const viewport = runGraphFitTransform(
+      bounds,
+      dimensions.value.width,
+      dimensions.value.height,
+      options,
     );
+    minimumZoom.value = Math.min(runGraphMinimumZoom, viewport.zoom);
+    await nextTick();
+    await setViewport(viewport, { duration: options.duration });
   } finally {
     programmaticViewportChange.value = false;
   }
@@ -545,7 +572,7 @@ function compareNodes(left: RunNode, right: RunNode): number {
         class="run-flow"
         :nodes="flowElements.nodes"
         :edges="flowElements.edges"
-        :min-zoom="runGraphMinimumZoom"
+        :min-zoom="minimumZoom"
         :max-zoom="runGraphMaximumZoom"
         :nodes-draggable="false"
         :nodes-connectable="false"

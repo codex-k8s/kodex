@@ -104,7 +104,7 @@ func TestCatalogResourceIdentifiersBeforeCredentialRead(t *testing.T) {
 		operation string
 		input     map[string]any
 	}{
-		{"github.repository.content.read", map[string]any{"path": "../other"}},
+		{"github.repository.content.read", map[string]any{"path": "../other", "ref": githubPageFixtureCommit}},
 		{"github.commit.read", map[string]any{"ref": "../../other"}},
 		{"gitlab.branch.read", map[string]any{"branch": ".."}},
 		{"gitlab.commit.read", map[string]any{"ref": "../other"}},

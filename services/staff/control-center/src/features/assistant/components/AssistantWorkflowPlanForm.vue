@@ -430,7 +430,7 @@ const valid = computed(() =>
     Number.isInteger(Number(parameter("timeoutSeconds") ?? 7200)) &&
     Number(parameter("timeoutSeconds") ?? 7200) >= 1 &&
     Number(parameter("timeoutSeconds") ?? 7200) <= 604800 &&
-    text(parameter("completionCriteria")).length <= 2000 &&
+    Array.from(text(parameter("completionCriteria"))).length <= 2000 &&
     fields.value &&
     fields.value.length <= 100 &&
     fields.value.every(validField) &&

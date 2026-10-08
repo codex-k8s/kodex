@@ -147,7 +147,7 @@ func validRelayFixture() (model.Input, request) {
 		runtimecontract.RuntimeServiceAccountName("lease_abcdefgh"), runtimecontract.RuntimeTurnPodName("lease_abcdefgh"))
 	environmentDigest, _ := runtimecontract.RuntimeEnvironmentDigest(nil, nil, image, nil, policy)
 	input := model.Input{
-		Schema: runtimecontract.RunnerInputSchemaV8, AssistantScope: runtimecontract.AssistantScopeNone, Mode: runtimecontract.RunnerModeTurn,
+		Schema: runtimecontract.RunnerInputSchemaV9, AssistantScope: runtimecontract.AssistantScopeNone, Mode: runtimecontract.RunnerModeTurn,
 		OrganizationRef:  "org_abcdefgh",
 		WorkloadInstance: "runtime-controller-1", RunRef: "run_abcdefgh", NodeRef: "node_abcdefgh",
 		ProjectRef: "prj_abcdefgh", SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh",

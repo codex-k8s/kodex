@@ -39,7 +39,7 @@ WITH candidates AS (
     LEFT JOIN control_plane.runs run ON run.id=artifact.run_id
     WHERE candidates.purpose=ANY(catalog.purposes)
       AND control_plane.runtime_file_source_visible(catalog.organization_id,catalog.actor_id,catalog.project_id,
-          catalog.agent_id,candidates.id,candidates.purpose,candidates.source_revision_ref)
+          catalog.agent_id,candidates.id,candidates.purpose,candidates.source_revision_ref,catalog.node_id)
 )
 INSERT INTO control_plane.runtime_file_catalog_entries(ref,catalog_id,artifact_id,artifact_ref,artifact_revision,
     artifact_version,artifact_digest,file_name,media_type,size_bytes,purpose,project_ref,run_ref,source,source_ref,source_revision_ref,entry_digest)

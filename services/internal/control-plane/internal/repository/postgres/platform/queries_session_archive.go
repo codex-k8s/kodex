@@ -3,6 +3,8 @@ package platform
 import _ "embed"
 
 var (
+	//go:embed sql/session_archive_run_wake.sql
+	querySessionArchiveRunWake string
 	//go:embed sql/session_archive_materialize_tasks.sql
 	querySessionArchiveMaterializeTasks string
 	//go:embed sql/session_archive_select_claimable_tasks.sql

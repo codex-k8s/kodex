@@ -265,6 +265,10 @@ export const serverTokenTranslations = {
     "Достигнут лимит исполнения",
     "Runtime limit exceeded",
   ],
+  RUNTIME_TIMEOUT: [
+    "Превышено время выполнения",
+    "Execution time limit exceeded",
+  ],
   INTEGRATION_AUTH_REJECTED: [
     "Интеграция отклонила авторизацию",
     "Integration rejected authorization",

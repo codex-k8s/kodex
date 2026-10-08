@@ -24,7 +24,7 @@ command deadlines и exact RuntimeRevision/catalog authority.
 
 Runner:
 
-- читает и строго валидирует immutable `kodex.agent-runner-input.v8`;
+- читает и строго валидирует immutable `kodex.agent-runner-input.v9`;
 - принимает только явный `assistant_scope=NONE|SYSTEM|PROJECT`; PROJECT
   связывается с точным профилем и проектом. Обе разновидности помощника получают
   toolkit, но только SYSTEM допускается в warm runtime; прежний boolean
@@ -225,7 +225,7 @@ make test-agent-runner
 | MVP-UI-61, положительная запись | `app.TestWorkspaceSubprocessWriteAndCompletionProvenance`: отдельный детерминированный процесс в bubblewrap создаёт вложенный файл, читает, заменяет inode через rename, читает и удаляет; runner собирает result и exact revision/attempt provenance в валидный completion |
 | Отдельные отрицательные записи | `app.TestWorkspaceSubprocessRejectsProtectedWrites`: immutable, credential, foreign, symlink, traversal; `workspace.TestRunCanaryRejectsSymlinkEscape` |
 | Bounded completion | `app.TestCompletionKeepsProvenanceAtArtifactLimit`; `TestCollectArtifactsDoesNotBlockOnFIFO`; `callback.TestCompleteRejectsMismatchedAttemptBeforeTransport` |
-| Readiness/deploy | `make test-agent-runner`: runtimecontract, runner, v8 schema assertions и локальный render `runtime-workloads`, ServiceAccount/RBAC/default-deny/exact warm egress |
+| Readiness/deploy | `make test-agent-runner`: runtimecontract, runner, v9 schema assertions и локальный render `runtime-workloads`, ServiceAccount/RBAC/default-deny/exact warm egress |
 
 Subprocess acceptance проверяет реальные операции файловой системы, но заменяет
 недетерминированную модель тестовым процессом. Это не live Codex/API smoke и не
@@ -259,7 +259,7 @@ Runner не владеет PostgreSQL/OCC, pagination, schedule или terminal 
 (`effort`, `personality`). Источник:
 https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md.
 
-Schema: `contracts/runtime-controller/v8/agent-runner-input.schema.json`.
+Schema: `contracts/runtime-controller/v9/agent-runner-input.schema.json`.
 Поле `runtime_profile_ref` содержит существующий `RuntimeSelection.ref`, то есть
 stable key профиля CP (в том числе `builtin-safe-runtime`), а не prefixed ID
 агрегата. Его отдельный validator совпадает с внешним контрактом: 8–128 ASCII

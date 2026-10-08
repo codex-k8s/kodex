@@ -1546,6 +1546,21 @@ message IntegrationConnection {
   IntegrationCredentialRevision credential_revision = 16;
   google.protobuf.Timestamp created_at = 17;
   google.protobuf.Timestamp updated_at = 18;
+  // Только адресный GetIntegrationConnection; omitted не означает ABSENT.
+  IntegrationDefinitionConfigurationBinding definition_configuration_binding = 19;
+}
+
+// Безопасные pins текущей связи; не являются grant на чтение или изменение.
+message IntegrationDefinitionConfigurationBinding {
+  enum State {
+    STATE_UNSPECIFIED = 0;
+    STATE_ABSENT = 1;
+    STATE_MATCH = 2;
+  }
+  State state = 1;
+  string configuration_ref = 2;
+  string revision_ref = 3;
+  int64 binding_version = 4;
 }
 
 message AssistantPlanOperation {
@@ -1948,6 +1963,8 @@ enum AssistantConfigurationCatalogKind {
   ASSISTANT_CONFIGURATION_CATALOG_KIND_CURRENT_CONFIGURATION = 8;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_PROJECT_INTEGRATION_GRANTS = 9;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_RECIPIENT_INTEGRATION_GRANTS = 10;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_WORKFLOW_CONFIGURATION = 11;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_AGENT_CONFIGURATION = 12;
 }
 
 message AssistantConfigurationCatalogRequest {
@@ -1958,6 +1975,9 @@ message AssistantConfigurationCatalogRequest {
   int32 offset = 4;
   string account_ref = 5;
   string runtime_profile_ref = 6;
+  // Парные locators: разрешённый target повторно выводится из exact lease context.
+  string entity_kind = 7;
+  string entity_ref = 8;
 }
 
 message AssistantConfigurationCatalogEntry {
@@ -2003,6 +2023,17 @@ message AssistantConfigurationCatalogResponse {
   repeated ProjectAssistantIntegrationGrantCatalogEntry project_integration_grants = 10;
   // Получатель разрешён из сохранённого контекста exact lease, не из request.
   AssistantRecipientIntegrationGrantCatalog recipient_integration_grants = 11;
+  AssistantWorkflowConfiguration workflow_configuration = 12;
+  AssistantAgentConfiguration agent_configuration = 13;
+}
+
+message AssistantWorkflowConfiguration {
+  string workflow_ref = 1;
+  string project_ref = 2;
+  int64 version = 3;
+  // Полный canonical before snapshot UPDATE_WORKFLOW, не caller input.
+  bytes configuration_json = 4;
+  string configuration_sha256 = 5;
 }
 
 message AssistantRecipientIntegrationGrantCatalog {
@@ -2012,6 +2043,9 @@ message AssistantRecipientIntegrationGrantCatalog {
   int64 recipient_version = 4;
   int64 project_version = 5;
   repeated AssistantRecipientIntegrationGrantCatalogEntry entries = 6;
+  string context_entity_kind = 7;
+  string context_entity_ref = 8;
+  int64 context_entity_version = 9;
 }
 
 message AssistantRecipientIntegrationGrantCatalogEntry {
@@ -2519,10 +2553,14 @@ message GetRunResponse {
 }
 message GetRunGraphRequest {
   string run_ref = 1;
+  // Selector формы read-only ответа, не источник полномочий.
+  bool include_run_snapshots = 2;
 }
 message GetRunGraphResponse {
   Run run = 1;
   RunGraph graph = 2;
+  // Один owner REPEATABLE READ: root и уникальные защищённые graph runs (<=128).
+  repeated Run runs = 3;
 }
 message ListRunEventsRequest {
   string run_ref = 1;
@@ -3404,6 +3442,23 @@ message ManagedMCPProfile {
   ManagedMCPHealthProof health = 10;
 }
 
+// Неизменяемые часы назначаются control-plane при первом исполнении owner Run.
+message RuntimeExecutionClock {
+  string run_ref = 1;
+  string workflow_version_ref = 2;
+  string workflow_version_digest = 3;
+  string step_key = 4;
+  int32 timeout_seconds = 5;
+  google.protobuf.Timestamp started_at = 6;
+  google.protobuf.Timestamp deadline_at = 7;
+}
+
+message RuntimeExecutionDeadline {
+  string policy = 1;
+  google.protobuf.Timestamp effective_deadline_at = 2;
+  repeated RuntimeExecutionClock clocks = 3;
+}
+
 message RuntimeRevisionSnapshot {
   string ref = 1;
   int64 version = 2;
@@ -3489,6 +3544,7 @@ message RuntimeRevisionSnapshot {
   string prompt_target_kind = 76;
   string assistant_profile_ref = 77;
   repeated ManagedMCPProfile managed_mcp_profiles = 78;
+  RuntimeExecutionDeadline execution_deadline = 79;
 }
 
 enum RuntimeFilePurpose {
@@ -8589,4 +8645,13 @@ message RunSessionArchiveTask {
   int32 maximum_attempts = 5;
   // Закрытый producer whitelist; неизвестный сохранённый код становится UNKNOWN.
   string safe_error_code = 6;
+}
+
+message AssistantAgentConfiguration {
+  string agent_ref = 1;
+  string project_ref = 2;
+  int64 version = 3;
+  // Полная безопасная конфигурация только текущего AGENT context, не runtime materialization.
+  bytes configuration_json = 4;
+  string configuration_sha256 = 5;
 }

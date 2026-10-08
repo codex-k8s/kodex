@@ -223,6 +223,9 @@ watch(workflow, (current) => {
   savedForm.value = JSON.stringify(form);
 });
 useUnsavedChanges(dirty, () => t("managed.discard"));
+const validCompletionText = computed(
+  () => Array.from(form.completionCriteria).length <= 2000,
+);
 const validStepText = computed(() =>
   form.steps.every(
     (step) =>
@@ -323,7 +326,13 @@ async function load() {
   }
 }
 async function save() {
-  if (!workflow.value || !canEdit.value || busy.value || !validStepText.value)
+  if (
+    !workflow.value ||
+    !canEdit.value ||
+    busy.value ||
+    !validStepText.value ||
+    !validCompletionText.value
+  )
     return;
   const current = loadGeneration;
   busy.value = true;
@@ -764,7 +773,7 @@ onBeforeUnmount(() => {
               v-if="canEdit"
               class="button button--primary workflow-save"
               type="button"
-              :disabled="busy || !validStepText"
+              :disabled="busy || !validStepText || !validCompletionText"
               @click="save"
             >
               <Save :size="16" />{{ $t("common.save") }}

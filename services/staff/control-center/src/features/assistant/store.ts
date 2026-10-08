@@ -21,6 +21,8 @@ import {
   validatePlanDraft,
 } from "@/features/assistant/api";
 import { conversationMatchesContext } from "@/features/assistant/context";
+import { assistantConversationStorageBlocker } from "@/features/assistant/model";
+import { usePlatformStore } from "@/features/platform/store";
 import {
   persistAssistantScope,
   restoreAssistantConversationRef,
@@ -199,6 +201,14 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
       (!projectRef.value || retained.projectRef === projectRef.value)
       ? retained
       : undefined;
+  });
+  const sessionStorageBlocker = computed(() => {
+    const platform = usePlatformStore();
+    return assistantConversationStorageBlocker(
+      selectedConversation.value,
+      platform.runs,
+      platform.bootstrap?.organizationRef,
+    );
   });
   const sortedConversations = computed(() =>
     [...conversations.value].sort((a, b) =>
@@ -968,6 +978,8 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   ): Promise<void> {
     const normalized = content.trim();
     if (!normalized) return;
+    if (sessionStorageBlocker.value)
+      throw new Error("Assistant session storage is unavailable");
     if (
       selectedConversation.value &&
       selectedConversation.value.state !== "ACTIVE"
@@ -989,6 +1001,8 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         );
       }
       if (!context.value) throw new Error("Assistant context is unavailable");
+      if (sessionStorageBlocker.value)
+        throw new Error("Assistant session storage is unavailable");
       const appended = attachmentSetRef
         ? await appendTurn(
             conversation,
@@ -1183,6 +1197,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     problem,
     receipt,
     selectedConversation,
+    sessionStorageBlocker,
     sortedConversations,
     nextPageToken,
     loadingMore,

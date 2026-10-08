@@ -223,11 +223,18 @@ func prepareRuntimeTurn(ctx context.Context, input model.Input, client *callback
 		return preparedTurn{}, "RUNTIME_INPUT_INVALID", errors.New("runtime context is invalid")
 	}
 	ctx, cancelContext := snapshot.BoundExecutionContext(ctx)
+	deadlineContext, cancelDeadline := input.BoundExecutionDeadline(ctx, 0)
+	previousCancel := cancelContext
+	ctx = deadlineContext
+	cancelContext = func() { cancelDeadline(); previousCancel() }
 	defer func() {
 		if resultErr != nil {
 			cancelContext()
 		}
 	}()
+	if input.ExecutionDeadline != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return preparedTurn{}, "RUNTIME_TIMEOUT", ctx.Err()
+	}
 	if err := materializeWorkspace(ctx, input); err != nil {
 		return preparedTurn{}, "RUNTIME_WORKSPACE_INVALID", err
 	}
@@ -287,21 +294,38 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 		activityFailed = activityFailed || err != nil
 		return err
 	})
+	if input.ExecutionDeadline != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_TIMEOUT")
+	}
 	if activityFailed {
-		return completeFailureWithSummaryAndUsage(ctx, input, client, "RUNTIME_UNAVAILABLE", "i18n:RUNTIME_UNAVAILABLE", result.Usage)
+		return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_UNAVAILABLE")
 	}
 	if executionErr != nil {
 		code := runtimeExecutionFailureCode(executionErr)
-		return completeFailureWithSummaryAndUsage(ctx, input, client, code, "i18n:"+code, result.Usage)
+		if input.ExecutionDeadline != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			code = "RUNTIME_TIMEOUT"
+		}
+		return completeMeasuredFailure(ctx, input, client, result, code)
 	}
 	return completeExecutedTurn(ctx, input, client, result, runtime.checkWorkspace)
+}
+
+// Ошибка execute не подтверждает итог; только отдельное подтверждение capture
+// позволяет передать новые source pins в неизменённом failed completion.
+func completeMeasuredFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, code string) error {
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt,
+		Success: false, SafeErrorCode: safeFailureCode(code), ResultSummary: "i18n:" + code, Usage: result.Usage}
+	if result.HasVerifiedRollout(input) {
+		payload.CodexSessionID, payload.ArchiveRelativePath, payload.ArchiveSHA256, payload.ArchiveSizeBytes = result.SessionID, result.ArchiveRelativePath, result.ArchiveSHA256, result.ArchiveSizeBytes
+	}
+	return client.Complete(context.WithoutCancel(ctx), input, payload)
 }
 
 // Завершение учитывает расход провайдера даже при отказе последующей проверки
 // workspace или публикации результата; повтор callback сохраняет тот же Usage.
 func completeExecutedTurn(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, checkWorkspace func(context.Context) error) error {
 	if err := checkWorkspace(ctx); err != nil {
-		return completeFailureWithSummaryAndUsage(ctx, input, client, "RUNTIME_WORKSPACE_INVALID", "i18n:RUNTIME_WORKSPACE_INVALID", result.Usage)
+		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_WORKSPACE_INVALID", "i18n:RUNTIME_WORKSPACE_INVALID")
 	}
 	if result.Outcome != "SUCCEEDED" {
 		_, message, _ := codex.TerminalPresentation(result.FailureCode)
@@ -311,7 +335,7 @@ func completeExecutedTurn(ctx context.Context, input model.Input, client *callba
 		return completeResultFailure(ctx, input, client, result, message)
 	}
 	if strings.TrimSpace(result.FinalMessage) == "" || len(result.FinalMessage) > 64<<10 || !utf8.ValidString(result.FinalMessage) {
-		return completeFailureWithSummaryAndUsage(ctx, input, client, "RUNTIME_RESULT_INVALID", "i18n:RUNTIME_RESULT_INVALID", result.Usage)
+		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_RESULT_INVALID", "i18n:RUNTIME_RESULT_INVALID")
 	}
 	if input.CodexSandbox == "workspace-write" && hasCapability(input, runtimecontract.ArtifactCapability) {
 		if err := workspacepolicy.PublishResult(ctx, input.WorkspaceRoot, input.WorkspacePolicy, workspacepolicy.ResultProvenance{
@@ -319,18 +343,31 @@ func completeExecutedTurn(ctx context.Context, input model.Input, client *callba
 			RuntimeRevisionVersion: input.RuntimeRevisionVersion, RuntimeRevisionDigest: input.RuntimeRevisionDigest,
 			Attempt: input.Attempt, ExecutionBindingDigest: input.ExecutionBindingDigest,
 		}); err != nil {
-			return completeFailureWithSummaryAndUsage(ctx, input, client, "RUNTIME_WORKSPACE_INVALID", "i18n:RUNTIME_WORKSPACE_INVALID", result.Usage)
+			return completeExecutedFailure(ctx, input, client, result, "RUNTIME_WORKSPACE_INVALID", "i18n:RUNTIME_WORKSPACE_INVALID")
 		}
 	}
 	artifacts, err := completionArtifacts(input, result.FinalMessage)
 	if err != nil {
-		return completeFailureWithSummaryAndUsage(ctx, input, client, "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID", result.Usage)
+		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID")
 	}
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: result.FinalMessage, Usage: result.Usage, Artifacts: artifacts, CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
 	if payload.Validate() != nil {
-		return completeFailureWithSummaryAndUsage(ctx, input, client, "RUNTIME_RESULT_INVALID", "i18n:RUNTIME_RESULT_INVALID", result.Usage)
+		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_RESULT_INVALID", "i18n:RUNTIME_RESULT_INVALID")
 	}
 	return client.Complete(ctx, input, payload)
+}
+
+// Только результат завершённого execute может сохранить проверенный rollout
+// при последующем отказе публикации. Generic execution failures сюда не входят.
+func completeExecutedFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, code, summary string) error {
+	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt,
+		Success: false, ResultSummary: summary, SafeErrorCode: safeFailureCode(code), Usage: result.Usage,
+		CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath,
+		ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
+	if (result.Outcome != "SUCCEEDED" && result.Outcome != "FAILED") || payload.Validate() != nil {
+		return completeFailureWithSummaryAndUsage(ctx, input, client, code, summary, result.Usage)
+	}
+	return client.Complete(context.WithoutCancel(ctx), input, payload)
 }
 
 func completeResultFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, summary string) error {
@@ -396,6 +433,8 @@ func safeFailureCode(code string) string {
 		return "RUNTIME_INPUT_INVALID"
 	case "RUNTIME_MCP_UNAVAILABLE":
 		return "RUNTIME_MCP_UNAVAILABLE"
+	case "RUNTIME_TIMEOUT":
+		return "RUNTIME_TIMEOUT"
 	default:
 		return "RUNTIME_UNAVAILABLE"
 	}

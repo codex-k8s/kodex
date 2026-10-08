@@ -18,7 +18,7 @@ terminal state.
 
 Проверить:
 
-1. input schema `kodex.agent-runner-input.v8`, явная область
+1. input schema `kodex.agent-runner-input.v9`, явная область
    `NONE|SYSTEM|PROJECT` и bounded file mode/size; PROJECT дополнительно закрепляет
    exact assistant profile ref, SYSTEM не наследует область секретов из контекста;
 2. exact execution/revision/turn/attempt/fence;

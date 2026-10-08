@@ -348,7 +348,7 @@ func warmFileProjectionEligible(input runtimecontract.RunnerInput) bool {
 
 func (runtime *runtime) track(parent context.Context, input runtimecontract.RunnerInput, done <-chan struct{}, warmExecution bool) {
 	defer func() { <-runtime.capacity }()
-	execution, cancel := context.WithTimeout(parent, runtime.config.ExecutionTimeout)
+	execution, cancel := input.BoundExecutionDeadline(parent, runtime.config.ExecutionTimeout)
 	defer cancel()
 	renew := time.NewTicker(runtime.config.LeaseRenewInterval)
 	defer renew.Stop()
@@ -474,7 +474,11 @@ func (runtime *runtime) progress(ctx context.Context, input runtimecontract.Runn
 }
 
 func (runtime *runtime) completeFailure(base context.Context, input runtimecontract.RunnerInput, code, diagnosticCode string) {
-	request := &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableIdempotency(input.LeaseRef, "failure:"+code)}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: false, ResultSummary: "i18n:" + code, SafeErrorCode: safeRuntimeErrorCode(code)}
+	safeCode := safeRuntimeErrorCode(code)
+	if input.ExecutionDeadline != nil && code == "RUNTIME_TIMEOUT" {
+		safeCode = code
+	}
+	request := &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableIdempotency(input.LeaseRef, "failure:"+code)}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: false, ResultSummary: "i18n:" + code, SafeErrorCode: safeCode}
 	var err error
 	for attempt := 0; attempt < failureCompletionMaximumTries; attempt++ {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(base), runtime.config.RequestTimeout)
@@ -492,6 +496,12 @@ func (runtime *runtime) completeFailure(base context.Context, input runtimecontr
 		}
 	}
 	if err != nil {
+		if input.ExecutionDeadline != nil && status.Code(err) == codes.PermissionDenied {
+			// Owner expiry уже committed и отозвал exact lease. Этот отказ
+			// не является outage: прежний Pod больше нельзя сохранять.
+			runtime.closeRevokedTurn(base, input, nil)
+			return
+		}
 		runtime.logger.ErrorContext(base, "complete failed runtime execution failed", "error_class", "control_plane", "diagnostic_code", diagnosticCode)
 		return
 	}

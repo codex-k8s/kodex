@@ -400,6 +400,9 @@ func TestBootstrapComponent(t *testing.T) {
 	t.Run("managed binding global CAS rejects stale absence and pins", func(t *testing.T) {
 		testManagedBindingCAS(t, ctx, repository)
 	})
+	t.Run("integration definition binding read is authoritative and permission scoped", func(t *testing.T) {
+		testIntegrationDefinitionBindingRead(t, ctx, repository)
+	})
 	// Последний сценарий намеренно отключает выбранный аккаунт; последующих runtime fixtures нет.
 	t.Run("account selection rechecks disabled account after lock wait", func(t *testing.T) {
 		testProviderSelectionAfterLockWait(t, ctx, repository)

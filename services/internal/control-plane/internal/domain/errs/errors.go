@@ -74,6 +74,7 @@ const (
 	AssistantPlanBind      = "ASSISTANT_PLAN_BIND"
 	AssistantPlanAuthorize = "ASSISTANT_PLAN_AUTHORIZE"
 	AssistantPlanEmpty     = "ASSISTANT_PLAN_EMPTY"
+	AssistantPlanCommand   = "ASSISTANT_PLAN_COMMAND"
 )
 
 type assistantPlanFailure struct {
@@ -87,7 +88,7 @@ func (failure *assistantPlanFailure) Unwrap() error { return failure.cause }
 
 // Диагностика не меняет status boundary и не хранит параметры операции.
 func WithAssistantPlanStage(err error, stage string, index int) error {
-	if !errors.Is(err, ErrConflict) && !errors.Is(err, ErrVersionMismatch) || !validAssistantPlanStage(stage, index) {
+	if !errors.Is(err, ErrConflict) && !errors.Is(err, ErrVersionMismatch) && !errors.Is(err, ErrInvalid) || !validAssistantPlanStage(stage, index) {
 		return err
 	}
 	return &assistantPlanFailure{stage: stage, index: index, cause: err}
@@ -103,6 +104,8 @@ func AssistantPlanDiagnostic(err error) (stage, category string, index int, ok b
 		category = "VERSION"
 	} else if errors.Is(failure.cause, ErrConflict) {
 		category = "CONFLICT"
+	} else if errors.Is(failure.cause, ErrInvalid) {
+		category = "INVALID"
 	} else {
 		return "", "", 0, false
 	}
@@ -111,10 +114,46 @@ func AssistantPlanDiagnostic(err error) (stage, category string, index int, ok b
 
 func validAssistantPlanStage(stage string, index int) bool {
 	switch stage {
-	case AssistantPlanHydrate, AssistantPlanNormalize, AssistantPlanBind, AssistantPlanAuthorize:
+	case AssistantPlanHydrate, AssistantPlanNormalize, AssistantPlanBind, AssistantPlanAuthorize, AssistantPlanCommand:
 		return index >= 1 && index <= 32
 	case AssistantPlanEmpty:
 		return index == 0
+	default:
+		return false
+	}
+}
+
+type assistantPlanFieldFailure struct {
+	field string
+	cause error
+}
+
+func (failure *assistantPlanFieldFailure) Error() string { return "assistant plan input is invalid" }
+func (failure *assistantPlanFieldFailure) Unwrap() error { return failure.cause }
+
+// Поле назначает только реальный rejecting guard; caller key не является диагностикой.
+func WithAssistantPlanField(err error, field string) error {
+	if !errors.Is(err, ErrInvalid) || !validAssistantPlanField(field) {
+		return err
+	}
+	return &assistantPlanFieldFailure{field: field, cause: err}
+}
+
+func AssistantPlanField(err error) string {
+	var failure *assistantPlanFieldFailure
+	if !errors.Is(err, ErrInvalid) || !errors.As(err, &failure) || !validAssistantPlanField(failure.field) {
+		return ""
+	}
+	return failure.field
+}
+
+func validAssistantPlanField(field string) bool {
+	switch field {
+	case "WORKFLOW_SHAPE", "WORKFLOW_REF", "WORKFLOW_VERSION", "WORKFLOW_BINDING",
+		"MAX_CONCURRENCY", "TIMEOUT_SECONDS", "WORKFLOW_TEXT", "INPUT_FIELDS", "STEPS",
+		"INPUT_FIELD_KEY", "STEP_SHAPE", "STEP_KEY", "STEPS_GRAPH", "WORKFLOW_DRAFT",
+		"STEPS_INSTRUCTIONS", "STEPS_EXPECTED_RESULT", "WORKFLOW_INVARIANTS":
+		return true
 	default:
 		return false
 	}

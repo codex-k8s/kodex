@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.9
-updated: 2026-10-06
+version: 1.7.15
+updated: 2026-10-08
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -322,6 +322,18 @@ eligibility перед terminal receipt. Consumer держит partial bytes в 
 пути и удостоверения не попадают в диагностику. Разрешённый размер файла не
 обеспечивается увеличением общего unary buffer до размера всего файла.
 
+Постраничное native-чтение текста сохраняет тот же полный verified source:
+каждая страница выдаётся только после проверки всего размера, SHA256,
+owner Complete и clean EOF, полного UTF-8/NUL scan и свежего exact owner read.
+Offset и следующий offset измеряются в байтах и лежат на границе UTF-8 rune;
+непустой остаток требует продвижения. Source digest не подменяется digest
+страницы, а отдельная страница или preview не доказывает полного чтения.
+Используются прежние private spool quota, lease/fence/generation/catalog/purpose
+и terminal audit. Отзыв, timeout, несовпадение pins или отказ terminal audit
+закрывают выдачу текста; shell не получает credential, direct URL или filesystem
+authority. Повтор той же read-only страницы не создаёт внешнего эффекта и не
+разрешает authority cache либо legacy decoder.
+
 ## Карта доверия
 
 До реализации или изменения границы безопасности фиксируются:
@@ -567,6 +579,22 @@ WebSocket handshake не продлевает API session: его CSRF subprotoc
 realtime transport после общей HTTP boundary. Sliding activity фиксирует
 только полностью проверенная session renewal mutation; reconnect с истёкшей
 API session проходит новый warm SSO flow.
+
+Зависимое состояние хранения сессии не выводится из `Run.version` или cursor
+событий запуска. Archive transition будит потребителей через транзакционный
+`RUN_CHANGED` с назначенным сервером anchor. Gateway перечитывает только свои
+зарегистрированные корневые подписки; один owner `REPEATABLE READ` разрешает
+граф, все уникальные `node.RunRef`/`node.ChildRunRefs` (не более128) и readiness.
+Selector `include_run_snapshots` меняет форму ответа, но не полномочия.
+Каждый участник повторно проходит owner eligibility; cross-root child требует
+серверный parent, retry predecessor — owner pin и точное `RETRY_OF` ребро того
+же снимка. Частичный envelope, неизвестный storage/task, чужой scope или
+повреждённая lineage закрыто отклоняются. Frontend проверяет весь снимок до
+атомарной замены cache; `RUN_UNAVAILABLE` удаляет только известные записи
+точного root/child набора. `ERROR`/`ARCHIVED` — безопасное видимое состояние,
+не доказательство утраты владения. HTTP exact-resource read не получает
+дополнительного sibling authority; reconnect и пропущенный org wake требуют
+свежего owner snapshot даже при прежнем run cursor, без фонового polling.
 
 Срок idle, совпавший с immutable absolute expiry, не создаёт новые refresh:
 сервер планирует только действительно продлеваемый idle либо access credential.
@@ -1491,6 +1519,13 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   purge с exact server-owned protected purge context и полным terminal graph;
   оно очищает только project history, никогда organization history. Caller-set
   GUC, disable triggers и произвольный history cleanup не являются authority.
+- Курсор страницы связывает проверенные actor/tenant, immutable projection,
+  admission revision, фактические фильтры и размер страницы. Optional expected
+  digest, узнанный из первой страницы и переданный в следующей, отдельно
+  проверяется против авторитетного report до выдачи результата; он не меняет
+  filter fingerprint самого курсора. Переход от отсутствующего expected pin
+  к точному pin не инвалидирует курсор, а неверный pin, изменённые filters,
+  tenant, actor, revision либо projection закрыто отклоняются.
 - Размер транспортного layer не ограничивает полноту логического SBOM:
   evidence v5 хранит SBOM и исходный vulnerability report четырьмя фиксированными
   последовательными частями. Каждая часть не больше 16MiB, сумма всех layers
@@ -1750,6 +1785,24 @@ claim/fence и минимальные capabilities. Уже созданный wr
 исправляется ручным chown: нужен штатный архив и новый owner-bound RESTORE
 с проверенным immutable archive receipt, без подмены terminal outcome.
 
+Ошибка после native append не означает отсутствия новой истории. Проверенный
+rollout tuple сохраняется и при generic process/activity/credential-refresh
+отказе, но только после ограниченной остановки и join фактического writer и
+readers. Произвольные exported result fields и JSON-флаг не являются proof:
+внутреннее доказательство связывает source identity/SHA/size с точными
+execution binding, RuntimeRevision и attempt. Между изолированными UID это
+доказательство передаётся через строгий versioned IPC с аутентификацией
+фактического Unix peer; consumer заново проверяет source, не получая право
+chown или authority provider. Success и failure используют один verifier.
+Lost ACK повторяет тот же failed completion; owner-транзакция обновляет source
+и content generation без fake success, artifacts или credential effect.
+Если join или проверка source не доказаны, tuple отсутствует; такой отказ
+нельзя выдавать за исправленное архивирование либо заменять старыми pins.
+Отозванные authority-поля lease/fence/expiry могут быть NULL в terminal
+строке. Adapter сохраняет эту nullable семантику до lifecycle-проверки:
+закрытая задача или отсутствующее поле дают штатный отказ полномочий, а не
+ошибку декодирования, ошибочно классифицированную как временная недоступность.
+
 Материализованные общие input/knowledge отделены от приватного spool: non-root
 init защищает принадлежащие ему файлы и потомков через дескрипторы без symlink.
 Исключение chmod допускается только для точного root-owned корня тома из Pod ABI
@@ -1801,6 +1854,19 @@ grants. Подмена enum/profile ref меняет digest и закрыто о
 переход на новый ABI требует новой server-owned revision и exact admission.
 
 ## Доказательство результата
+
+Квитанция полного файлового чтения подтверждает только проверенную страницу
+доверенного обработчика, не отдельный ACK её получения моделью. Она создаётся
+после проверки полного source digest/size, UTF-8 без NUL и повторного exact
+descriptor; связывается с lease/fence/generation, frozen catalog/purpose и
+file revision/version. Terminal-проекция принимает только private typed proof,
+а не caller JSON/map; потеря или нарушение proof закрывает успешную запись.
+В durable SafeResult разрешён только bounded whitelist metadata: catalog/file
+refs и commitments, offset/next offset, size и EOF. Имена, содержимое, сырые
+аргументы, transport headers и download credentials не сохраняются. Полное
+чтение доказывается последовательностью actual успешных квитанций от нуля
+до EOF=size с неизменными pins, без пропусков и перекрытий; итоговый ответ
+модели, старый статус completed или одна последняя страница это не заменяют.
 
 Kodex выбирает формат проверок по `GOV-DOC-003`, но ревью должно иметь
 воспроизводимые доказательства:
@@ -1877,6 +1943,10 @@ Registry credentials, private PEM и обратимый Docker auth не пер�
 создаются с mode0600 в private каталоге и удаляются при завершении, включая
 ошибку. CLI-флаг, принимающий PEM contents, нельзя заменять путём к файлу:
 нужен поддерживаемый config/file loader с прежней exact TLS/mTLS identity.
+Это относится и к сохранённому JSON сторонних registry: он может содержать
+credentials, поэтому merge получает его через private file, не `--argjson`.
+Режим readback не исправляет host aliases, registry files и состояние нод;
+несовпадение закрыто отклоняется, запись разрешена только явному apply.
 
 Промежуточные каталоги вложенных workspace mounts создаются узким non-root init
 до контейнера с nested mounts: OCI runtime иначе может создать parent с UID 0.

@@ -7,6 +7,8 @@ import { environmentDisplayField } from "@/features/runtime/environment-display-
 import {
   assertPromotedRuntimeImage,
   restoreRuntimeImageOption,
+  runtimeImageOption,
+  toolsForRuntimeImage,
 } from "@/features/runtime/image-tools-selection";
 import {
   verifiedImageInventoryAvailable,
@@ -248,6 +250,15 @@ const selectedImage = ref<AsyncEntityOption>();
 const imageArtifact = ref<RoleImageArtifact>();
 const imageLoading = ref(false);
 const imageProblem = ref<AppProblem>();
+const imageBadgeLabel = computed(() =>
+  imageLoading.value
+    ? t("common.loading")
+    : imageProblem.value
+      ? t("runtime.imageNeedsReplacement")
+      : imageArtifact.value
+        ? t("runtime.promotedAndVerified")
+        : t("runtime.imageInventoryUnavailable"),
+);
 let imageGeneration = 0;
 let imageController: AbortController | undefined;
 function cancelImageRequest(): void {
@@ -453,7 +464,7 @@ function applyRestoredInput(value: RuntimeEnvironmentInput): void {
 async function loadImageArtifact(
   recipeRef: string | undefined,
   artifactRef: string,
-): Promise<void> {
+): Promise<RoleImageArtifact | undefined> {
   cancelImageRequest();
   const generation = imageGeneration;
   const project = projectRef.value;
@@ -518,6 +529,7 @@ async function loadImageArtifact(
         title: localizeServerMessage(result.recipeName),
         description: result.artifact.promotedReference,
       };
+      return result.artifact;
     }
   } catch (error) {
     if (applicable()) imageProblem.value = asProblem(error);
@@ -550,10 +562,38 @@ async function loadImagePage(
 
 async function selectImage(option: AsyncEntityOption): Promise<void> {
   if (!("recipeRef" in option) || !("artifactRef" in option)) return;
+  const tools = input.tools.map((tool) => ({ ...tool }));
+  const project = projectRef.value;
+  const environment = environmentRef.value;
   selectedImage.value = option;
   input.imageArtifactRef = String(option.artifactRef);
-  input.tools = [];
-  await loadImageArtifact(String(option.recipeRef), String(option.artifactRef));
+  const request = loadImageArtifact(
+    String(option.recipeRef),
+    String(option.artifactRef),
+  );
+  const generation = imageGeneration;
+  const artifact = await request;
+  if (
+    !artifact ||
+    disposed ||
+    generation !== imageGeneration ||
+    project !== projectRef.value ||
+    environment !== environmentRef.value ||
+    artifact.ref !== input.imageArtifactRef
+  )
+    return;
+  try {
+    const selected = runtimeImageOption(option);
+    assertPromotedRuntimeImage(artifact, {
+      artifactRef: selected.ref,
+      recipeRef: selected.recipeRef,
+      recipeGeneration: selected.generation,
+    });
+    input.tools = toolsForRuntimeImage(tools, artifact);
+  } catch (error) {
+    imageArtifact.value = undefined;
+    imageProblem.value = asProblem(error);
+  }
 }
 
 async function load(): Promise<void> {
@@ -996,6 +1036,10 @@ async function publish(selected: string[]): Promise<void> {
       throw new Error("Published environment readback is unavailable");
     reauthRestored.value = false;
     sync(saved);
+    await loadImageArtifact(
+      saved.currentVersion.image.recipeRef,
+      saved.currentVersion.image.artifactRef,
+    );
     await runtime.loadEnvironmentVersions(ref, true, versionPageSize.value);
   } catch (error) {
     if (disposed) return;
@@ -1537,27 +1581,29 @@ onBeforeUnmount(() => {
                   :aria-busy="imageLoading"
                 >
                   <Boxes :size="22" aria-hidden="true" />
-                  <div>
-                    <strong>{{ selectedImage.title }}</strong>
-                    <p>{{ selectedImage.description }}</p>
-                    <code>{{ input.imageArtifactRef }}</code>
+                  <div class="selected-image__content">
+                    <div class="selected-image__header">
+                      <strong>{{ selectedImage.title }}</strong>
+                      <StatusBadge
+                        class="selected-image__badge"
+                        :state="
+                          imageArtifact
+                            ? 'ACCEPTED'
+                            : imageProblem
+                              ? 'CONFLICT'
+                              : imageLoading
+                                ? 'PENDING'
+                                : 'UNAVAILABLE'
+                        "
+                        :label="imageBadgeLabel"
+                      />
+                    </div>
+                    <details class="selected-image__details">
+                      <summary>{{ $t("common.details") }}</summary>
+                      <p>{{ selectedImage.description }}</p>
+                      <code>{{ input.imageArtifactRef }}</code>
+                    </details>
                   </div>
-                  <StatusBadge
-                    :state="
-                      imageArtifact
-                        ? 'ACCEPTED'
-                        : imageProblem
-                          ? 'CONFLICT'
-                          : 'PENDING'
-                    "
-                    :label="
-                      imageArtifact
-                        ? $t('runtime.promotedAndVerified')
-                        : imageProblem
-                          ? $t('runtime.imageNeedsReplacement')
-                          : $t('common.loading')
-                    "
-                  />
                 </article>
 
                 <RuntimeEnvironmentToolsEditor
@@ -2345,7 +2391,7 @@ onBeforeUnmount(() => {
 }
 .selected-image {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 22px minmax(0, 1fr);
   align-items: start;
   gap: 12px;
   padding: 14px;
@@ -2353,17 +2399,46 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   background: var(--surface);
 }
+.selected-image__content {
+  min-width: 0;
+}
+.selected-image__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
+}
+.selected-image__header > strong {
+  flex: 1 1 180px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.selected-image__badge {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.selected-image__details {
+  min-width: 0;
+  margin-top: 6px;
+  font-size: 12px;
+}
+.selected-image__details > summary {
+  cursor: pointer;
+}
 .selected-image p {
   margin: 3px 0 0;
   color: var(--text-secondary);
+  overflow-wrap: anywhere;
 }
 .selected-image code {
   display: block;
-  overflow: hidden;
+  overflow-wrap: anywhere;
   margin-top: 6px;
   color: var(--text-secondary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 .capability-row > svg,
 .readiness-icon {

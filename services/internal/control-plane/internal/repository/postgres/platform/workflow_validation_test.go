@@ -1,9 +1,12 @@
 package platform
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
@@ -13,6 +16,96 @@ func TestValidWorkflowVersionAcceptsBoundedExecutionGraph(t *testing.T) {
 	version := validWorkflowFixture()
 	if !validWorkflowVersion(version) {
 		t.Fatal("ожидалась валидная версия workflow")
+	}
+}
+
+func TestWorkflowCompletionCriteriaBounds(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name     string
+		criteria string
+		valid    bool
+	}{
+		{name: "empty", valid: true},
+		{name: "ascii-2000", criteria: strings.Repeat("x", 2000), valid: true},
+		{name: "ascii-2001", criteria: strings.Repeat("x", 2001)},
+		{name: "cyrillic-2000", criteria: strings.Repeat("я", 2000), valid: true},
+		{name: "cyrillic-2001", criteria: strings.Repeat("я", 2001)},
+		{name: "unicode-2000", criteria: strings.Repeat("😀", 2000), valid: true},
+		{name: "unicode-2001", criteria: strings.Repeat("😀", 2001)},
+		{name: "invalid-utf8", criteria: "result\xff"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			draft := validWorkflowFixture()
+			draft.CompletionCriteria = test.criteria
+			if got := validWorkflowVersion(draft); got != test.valid {
+				t.Fatalf("проверка версии workflow: получено %v, ожидалось %v", got, test.valid)
+			}
+
+			create := entity.AssistantPlanOperation{Type: "CREATE_WORKFLOW", Summary: "Создать workflow", Input: map[string]any{
+				"projectRef": "prj_12345678", "name": draft.Name, "purpose": draft.Purpose,
+				"coordinatorAgentRef": draft.CoordinatorAgentRef, "completionCriteria": test.criteria,
+				"steps": []any{map[string]any{
+					"name": "Подготовка", "purpose": "Подготовить ответ", "agentRef": "agt_12345678",
+					"parallel": false, "parallelGroup": float64(0), "timeoutSeconds": float64(600),
+					"expectedResult": "Ответ", "humanGate": false,
+					"gateDecisions": []any{}, "requiredCapabilityKeys": []any{},
+				}},
+			}}
+
+			previous := validWorkflowFixture()
+			fields, steps := assistantWorkflowGraphFields(previous)
+			before := map[string]any{
+				"workflowRef": "wfl_12345678", "projectRef": "prj_12345678",
+				"name": previous.Name, "purpose": previous.Purpose,
+				"coordinatorAgentRef": previous.CoordinatorAgentRef, "instructions": previous.Instructions,
+				"completionCriteria": previous.CompletionCriteria, "inputFields": fields, "steps": steps,
+				"maxConcurrency": float64(previous.Concurrency), "timeoutSeconds": float64(previous.TimeoutSeconds),
+				"draft": previous,
+			}
+			t.Run("UPDATE_WORKFLOW_hydrate", func(t *testing.T) {
+				_, err := hydrateAssistantWorkflowFields(before, 7, entity.AssistantPlanOperation{
+					Type: "UPDATE_WORKFLOW", Parameters: map[string]any{
+						"workflowRef": "wfl_12345678", "name": "Обновлённая версия", "completionCriteria": test.criteria,
+					},
+				})
+				if !test.valid {
+					if !errors.Is(err, errs.ErrInvalid) {
+						t.Fatalf("некорректные критерии допущены в план обновления: %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("допустимые критерии отклонены при подготовке плана: %v", err)
+				}
+			})
+			input := cloneAssistantFields(before)
+			delete(input, "draft")
+			input["completionCriteria"], input["expectedVersion"] = test.criteria, float64(7)
+			update := entity.AssistantPlanOperation{Type: "UPDATE_WORKFLOW", Summary: "Обновить workflow", Before: before, Input: input}
+
+			for _, operation := range []entity.AssistantPlanOperation{create, update} {
+				t.Run(operation.Type, func(t *testing.T) {
+					mapped, err := assistantOperationCommand(operation)
+					if !test.valid {
+						if !errors.Is(err, errs.ErrInvalid) {
+							t.Fatalf("некорректные критерии не отклонены: %v", err)
+						}
+						return
+					}
+					if err != nil {
+						t.Fatalf("допустимые критерии отклонены: %v", err)
+					}
+					payload := mapped.Payload.(command.WorkflowInput)
+					if payload.Draft == nil || payload.Draft.CompletionCriteria != test.criteria {
+						t.Fatal("критерии завершения изменились при построении команды")
+					}
+				})
+			}
+		})
 	}
 }
 

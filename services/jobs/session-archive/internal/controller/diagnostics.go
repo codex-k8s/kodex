@@ -16,20 +16,21 @@ import (
 )
 
 const (
-	workerObservationMessage   = "session archive worker terminal observation"
-	archiveAPIFailureMessage   = "session archive Kubernetes operation failed"
-	archiveTaskRefAttribute    = "task_ref"
-	archiveSessionRefAttribute = "session_ref"
-	archiveTaskKindAttribute   = "task_kind"
-	archiveGenerationAttribute = "content_generation"
-	archiveAttemptAttribute    = "attempt"
-	archiveAPIStageAttribute   = "api_stage"
-	archiveAPIReasonAttribute  = "api_reason"
-	archiveAPIStatusAttribute  = "api_status_code"
-	taskRefAnnotation          = "session-archive.kodex.dev/task-ref"
-	taskKindAnnotation         = "session-archive.kodex.dev/task-kind"
-	taskGenerationAnnotation   = "session-archive.kodex.dev/content-generation"
-	taskAttemptAnnotation      = "session-archive.kodex.dev/attempt"
+	workerObservationMessage     = "session archive worker terminal observation"
+	archiveAPIFailureMessage     = "session archive Kubernetes operation failed"
+	archiveTaskRefAttribute      = "task_ref"
+	archiveSessionRefAttribute   = "session_ref"
+	archiveTaskKindAttribute     = "task_kind"
+	archiveGenerationAttribute   = "content_generation"
+	archiveAttemptAttribute      = "attempt"
+	archiveAPIStageAttribute     = "api_stage"
+	archiveAPIReasonAttribute    = "api_reason"
+	archiveAPIStatusAttribute    = "api_status_code"
+	archiveFailureStageAttribute = "failure_stage"
+	taskRefAnnotation            = "session-archive.kodex.dev/task-ref"
+	taskKindAnnotation           = "session-archive.kodex.dev/task-kind"
+	taskGenerationAnnotation     = "session-archive.kodex.dev/content-generation"
+	taskAttemptAnnotation        = "session-archive.kodex.dev/attempt"
 )
 
 type archiveAPIStage string
@@ -148,6 +149,7 @@ func validWorkerPod(task model.Task, job *batchv1.Job, pod *corev1.Pod) bool {
 
 func (controller *Controller) readResult(ctx context.Context, task model.Task, job *batchv1.Job, uid types.UID) (model.Result, error) {
 	stage, reason, code, exit := "JOB_BINDING_INVALID", "UNKNOWN", "UNKNOWN", int32(-1)
+	failureStage := model.FailureStageUnknown
 	podRef := "UNKNOWN"
 	jobRef := "UNKNOWN"
 	if job != nil {
@@ -166,7 +168,7 @@ func (controller *Controller) readResult(ctx context.Context, task model.Task, j
 		controller.config.Logger.InfoContext(ctx, workerObservationMessage,
 			archiveTaskRefAttribute, ref(task.TaskRef), archiveSessionRefAttribute, ref(task.SessionRef), archiveTaskKindAttribute, diagnosticTaskKind(task.Kind),
 			archiveGenerationAttribute, task.ContentGeneration, archiveAttemptAttribute, task.Attempt, "job_ref", ref(jobRef), "pod_ref", ref(podRef),
-			"stage", stage, "termination_reason", reason, "exit_code", exit, "safe_error_code", code)
+			"stage", stage, "termination_reason", reason, "exit_code", exit, "safe_error_code", code, archiveFailureStageAttribute, string(failureStage))
 	}()
 	if !validWorkerJob(task, job, uid) {
 		return model.Result{}, errors.New("session archive worker job binding is invalid")
@@ -205,6 +207,8 @@ func (controller *Controller) readResult(ctx context.Context, task model.Task, j
 		stage = "WORKER_REPORTED_FAILURE"
 		if result.Success {
 			stage = "WORKER_REPORTED_SUCCESS"
+		} else {
+			failureStage = model.NormalizeFailureStage(result.FailureStage)
 		}
 		return result, nil
 	}

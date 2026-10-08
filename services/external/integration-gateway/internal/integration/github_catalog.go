@@ -13,39 +13,44 @@ import (
 )
 
 type githubCatalogInput struct {
-	Path           string `json:"path"`
-	Ref            string `json:"ref"`
-	SHA            string `json:"sha"`
-	Branch         string `json:"branch"`
-	Content        string `json:"content_base64"`
-	Message        string `json:"message"`
-	Title          string `json:"title"`
-	Body           string `json:"body"`
-	State          string `json:"state"`
-	Head           string `json:"head"`
-	Base           string `json:"base"`
-	Draft          bool   `json:"draft"`
-	Event          string `json:"event"`
-	MergeMethod    string `json:"merge_method"`
-	Number         int    `json:"pull_request_number"`
-	IssueNumber    int    `json:"issue_number"`
-	CommentID      int64  `json:"comment_id"`
-	ReviewID       int64  `json:"review_id"`
-	CheckID        int64  `json:"check_run_id"`
-	WorkflowID     int64  `json:"workflow_id"`
-	WorkflowInputs string `json:"workflow_inputs"`
-	RunID          int64  `json:"run_id"`
-	JobID          int64  `json:"job_id"`
-	Limit          int    `json:"limit"`
-	Cursor         int    `json:"cursor"`
+	Path                 string `json:"path"`
+	Ref                  string `json:"ref"`
+	SHA                  string `json:"sha"`
+	Branch               string `json:"branch"`
+	Content              string `json:"content_base64"`
+	Message              string `json:"message"`
+	Title                string `json:"title"`
+	Body                 string `json:"body"`
+	State                string `json:"state"`
+	Head                 string `json:"head"`
+	Base                 string `json:"base"`
+	Draft                bool   `json:"draft"`
+	Event                string `json:"event"`
+	MergeMethod          string `json:"merge_method"`
+	Number               int    `json:"pull_request_number"`
+	IssueNumber          int    `json:"issue_number"`
+	CommentID            int64  `json:"comment_id"`
+	ReviewID             int64  `json:"review_id"`
+	CheckID              int64  `json:"check_run_id"`
+	WorkflowID           int64  `json:"workflow_id"`
+	WorkflowInputs       string `json:"workflow_inputs"`
+	RunID                int64  `json:"run_id"`
+	JobID                int64  `json:"job_id"`
+	Limit                int    `json:"limit"`
+	Cursor               int    `json:"cursor"`
+	OffsetBytes          int64  `json:"offset_bytes"`
+	MaximumBytes         *int   `json:"maximum_bytes"`
+	ExpectedSHA          string `json:"expected_sha"`
+	ExpectedHeadSHA      string `json:"expected_head_sha"`
+	ExpectedBaseSHA      string `json:"expected_base_sha"`
+	ExpectedChangedFiles *int   `json:"expected_changed_files"`
 }
 
 type githubContentView struct {
-	Path    string `json:"path"`
-	Type    string `json:"type"`
-	SHA     string `json:"sha"`
-	Size    int    `json:"size"`
-	Content string `json:"content_base64,omitempty"`
+	Path string `json:"path"`
+	Type string `json:"type"`
+	SHA  string `json:"sha"`
+	Size int    `json:"size"`
 }
 
 type githubBranchView struct {
@@ -133,13 +138,18 @@ func (adapter *Adapter) executeGitHubCatalog(ctx context.Context, client *github
 	}
 	if in.Limit == 0 {
 		in.Limit = 20
+		if request.Operation == "github.pull_request.file.list" {
+			in.Limit = maximumGitHubPullFilePageSize
+		}
 	}
 	if in.Cursor == 0 {
 		in.Cursor = 1
 	}
 	options := github.ListOptions{Page: in.Cursor, PerPage: in.Limit}
 	switch request.Operation {
-	case "github.repository.content.read", "github.repository.content.list":
+	case "github.repository.content.read":
+		return executeGitHubContentRead(ctx, client, owner, repo, request, capability, in)
+	case "github.repository.content.list":
 		var directory []*github.RepositoryContent
 		file, err := githubRead(ctx, capability, func() (*github.RepositoryContent, *github.Response, error) {
 			file, entries, response, err := client.Repositories.GetContents(ctx, owner, repo, in.Path, &github.RepositoryContentGetOptions{Ref: in.Ref})
@@ -148,16 +158,6 @@ func (adapter *Adapter) executeGitHubCatalog(ctx context.Context, client *github
 		})
 		if err != nil {
 			return Result{}, err
-		}
-		if request.Operation == "github.repository.content.read" {
-			if file == nil || file.GetPath() != in.Path || file.GetType() != "file" || file.GetEncoding() != "base64" || file.GetSize() > maximumResponseBytes {
-				return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
-			}
-			content, err := file.GetContent()
-			if err != nil || len(content) != file.GetSize() {
-				return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
-			}
-			return providerResult(request, "github-content:"+file.GetSHA(), githubContentView{file.GetPath(), file.GetType(), file.GetSHA(), file.GetSize(), base64.StdEncoding.EncodeToString([]byte(content))})
 		}
 		if file != nil || len(directory) > 1000 {
 			return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}

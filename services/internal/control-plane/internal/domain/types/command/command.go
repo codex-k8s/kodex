@@ -581,6 +581,8 @@ type EmailMailboxInput struct {
 }
 
 type Result struct {
+	// Только внутренний receipt: owner expiry committed, поздний effect запрещён.
+	ExecutionDeadlineExpired  bool `json:"executionDeadlineExpired,omitempty"`
 	ProviderQueuedWorkResults []entity.ProviderQueuedWorkCancellationResult
 	EmailMailbox              *entity.EmailMailboxConfigurationView
 	EmailPublication          *entity.EmailMailboxPublication

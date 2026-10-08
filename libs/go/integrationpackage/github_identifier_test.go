@@ -13,7 +13,7 @@ func TestGitHubProviderIdentifiersUseExactJSONIntegerBounds(t *testing.T) {
 		t.Fatal(err)
 	}
 	definition := definitions["github"]
-	if definition.Metadata.Version != "2.5.0" {
+	if definition.Metadata.Version != "4.0.0" {
 		t.Fatal("unexpected GitHub package version")
 	}
 	if _, ok := ResolveShippedRevision(definition, "2.4.0", definition.Digest); ok {
@@ -40,6 +40,9 @@ func TestGitHubProviderIdentifiersUseExactJSONIntegerBounds(t *testing.T) {
 					expected := int64(100)
 					if capability.Operation == "github.repository.content.list" && field.Key == "count" {
 						expected = 1000
+					}
+					if capability.Operation == "github.pull_request.file.list" {
+						expected = 4
 					}
 					if field.Maximum != expected {
 						t.Fatal("pagination cardinality changed")

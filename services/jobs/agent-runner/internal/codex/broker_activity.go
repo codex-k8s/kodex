@@ -11,10 +11,11 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
 const (
-	providerBrokerVersion    = 1
+	providerBrokerVersion    = 2
 	maximumPublishedMessages = 1024
 	maximumBrokerFrameBytes  = 1 << 20
 	maximumBrokerStreamBytes = 64 << 20
@@ -53,12 +54,16 @@ func (writer *brokerFrameWriter) activity(activity runtimecontract.RuntimeActivi
 func (writer *brokerFrameWriter) finish(response brokerResponse) error {
 	// Факты tool call уже доставлены в ACTIVITY; terminal переносит только итог.
 	response.Result.ToolCalls = nil
+	response.RolloutCapture = nil
+	if response.Result.rolloutCapture != nil && response.Result.rolloutCapture.sealed && response.Result.matchesCapture(response.Result.rolloutCapture) {
+		response.RolloutCapture = response.Result.rolloutCapture
+	}
 	err := writer.frame(brokerFrame{Kind: brokerFrameTerminal, Terminal: &response})
 	if !errors.Is(err, errProviderBrokerResponseInvalid) || writer.terminal {
 		return err
 	}
 	// Ограниченный отказ сохраняет измеренный usage, не подтверждая большой итог.
-	failure := brokerResponse{Failure: providerBrokerFailureProvider, Result: Result{Usage: response.Result.Usage}}
+	failure := brokerResponse{Failure: providerBrokerFailureProvider, Result: failedProviderResult(response.Result), RolloutCapture: response.RolloutCapture}
 	return writer.frame(brokerFrame{Kind: brokerFrameTerminal, Terminal: &failure})
 }
 
@@ -108,6 +113,10 @@ func bindBrokerPeerContext(ctx context.Context, connection net.Conn, scanner *bu
 }
 
 func readProviderBrokerResponse(reader io.Reader, callbacks ...func(runtimecontract.RuntimeActivity) error) (Result, error) {
+	return readBoundProviderBrokerResponse(reader, nil, 0, callbacks...)
+}
+
+func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, writerUID uint32, callbacks ...func(runtimecontract.RuntimeActivity) error) (Result, error) {
 	if len(callbacks) > 1 {
 		return Result{}, errProviderBrokerResponseInvalid
 	}
@@ -172,7 +181,7 @@ func readProviderBrokerResponse(reader io.Reader, callbacks ...func(runtimecontr
 			if frame.Activity != nil || frame.Terminal == nil {
 				return Result{}, errProviderBrokerResponseInvalid
 			}
-			terminalFields, err := decodeObject(fields["terminal"], schema([]string{"result", "ok"}, "result", "ok", "failure"))
+			terminalFields, err := decodeObject(fields["terminal"], schema([]string{"result", "ok"}, "result", "ok", "failure", "rollout_capture"))
 			if err != nil {
 				return Result{}, errProviderBrokerResponseInvalid
 			}
@@ -180,6 +189,16 @@ func readProviderBrokerResponse(reader io.Reader, callbacks ...func(runtimecontr
 				return Result{}, errProviderBrokerResponseInvalid
 			}
 			terminal = frame.Terminal
+			if raw, present := terminalFields["rollout_capture"]; present {
+				keys := []string{"schema", "execution_binding_digest", "runtime_revision_digest", "input_digest", "attempt", "session_ref", "turn_ref", "codex_session_id", "archive_relative_path", "archive_sha256", "archive_size_bytes"}
+				if _, err := decodeObject(raw, schema(keys, keys...)); err != nil || input == nil || terminal.RolloutCapture == nil || verifyRolloutCapture(*input, terminal.Result, terminal.RolloutCapture, writerUID) != nil {
+					return Result{}, errProviderBrokerResponseInvalid
+				}
+				terminal.RolloutCapture.sealed = true
+				terminal.Result = withRolloutCapture(terminal.Result, terminal.RolloutCapture)
+			} else if terminal.Result.SessionID != "" || terminal.Result.ArchivePath != "" || terminal.Result.ArchiveRelativePath != "" || terminal.Result.ArchiveSHA256 != "" || terminal.Result.ArchiveSizeBytes != 0 {
+				return Result{}, errProviderBrokerResponseInvalid
+			}
 		default:
 			return Result{}, errProviderBrokerResponseInvalid
 		}

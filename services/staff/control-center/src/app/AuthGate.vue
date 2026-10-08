@@ -22,8 +22,10 @@ function retryAuthentication(): void {
       <div class="brand-mark" aria-hidden="true">
         <img src="/logo.png" alt="" />
       </div>
-      <h1>{{ $t("auth.title") }}</h1>
-      <p>{{ $t("auth.description") }}</p>
+      <template v-if="session.phase !== 'checking'">
+        <h1>{{ $t("auth.title") }}</h1>
+        <p>{{ $t("auth.description") }}</p>
+      </template>
       <p v-if="session.phase === 'checking'" role="status">
         {{ $t("auth.checking") }}
       </p>

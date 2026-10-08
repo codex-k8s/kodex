@@ -373,6 +373,9 @@ func TestWorkflowUpdateSchemaIsExactAndIncludesEditableGraph(t *testing.T) {
 	}
 	parameters := properties["parameters"].(map[string]any)
 	fields := parameters["properties"].(map[string]any)
+	if fields["completionCriteria"].(map[string]any)["maxLength"] != 2000 {
+		t.Fatal("workflow completion criteria exceeded the canonical character limit")
+	}
 	if fields["workflowRef"].(map[string]any)["enum"].([]string)[0] != "wfl_12345678" ||
 		fields["steps"] == nil || fields["inputFields"] == nil || fields["coordinatorAgentRef"] == nil || fields["projectRef"] != nil {
 		t.Fatalf("workflow update schema lost editable graph or exposed project authority: %#v", fields)
@@ -381,6 +384,14 @@ func TestWorkflowUpdateSchemaIsExactAndIncludesEditableGraph(t *testing.T) {
 	fieldSchema := fields["inputFields"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
 	if stepSchema["key"] == nil || fieldSchema["key"] == nil || stepSchema["requiredCapabilityKeys"] == nil {
 		t.Fatalf("workflow update schema lost graph identity or capabilities: %#v %#v", stepSchema, fieldSchema)
+	}
+	create := workflowInputSchema(opaqueRefSchema(), opaqueRefSchema())["properties"].(map[string]any)["steps"].(map[string]any)["items"].(map[string]any)["properties"].(map[string]any)
+	for _, schema := range []map[string]any{stepSchema, create} {
+		capabilities := schema["requiredCapabilityKeys"].(map[string]any)
+		description, _ := capabilities["description"].(string)
+		if !strings.Contains(description, "Complete stage capability ceiling") || !strings.Contains(description, "existing enabled integration keys") || !strings.Contains(description, "never grants permissions") || capabilities["maxItems"] != 50 {
+			t.Fatal("Workflow schema did not explain exact capability attenuation")
+		}
 	}
 }
 
@@ -766,6 +777,43 @@ func TestDelegationToolDescriptionStaysBoundedForManyTargets(t *testing.T) {
 	if !found || json.Unmarshal([]byte(encoded), &metadata) != nil || len(metadata) != len(targets) ||
 		len(field["enum"].([]string)) != len(targets) {
 		t.Fatal("bounded delegation description lost allowed target metadata")
+	}
+}
+
+func TestDelegationToolExplainsCatalogLocalFileHandoff(t *testing.T) {
+	t.Parallel()
+	for _, workflow := range []bool{false, true} {
+		t.Run(fmt.Sprintf("workflow_%t", workflow), func(t *testing.T) {
+			t.Parallel()
+			target := runtimecontract.RunnerDelegationTarget{Ref: "agt_12345678", Name: "Architect"}
+			if workflow {
+				target.WorkflowStepKey = "architect"
+			}
+			tool := delegationTool([]runtimecontract.RunnerDelegationTarget{target})
+			description := tool["description"].(string)
+			for _, hint := range []string{
+				"Delegate exact pairs", "end turn, await callback",
+				"Immutable file pins: artifact_ref/revision/digest+file_name only", "child resolves own entry",
+			} {
+				if !strings.Contains(description, hint) {
+					t.Fatal("delegation description omitted catalog-local handoff guidance")
+				}
+			}
+			if len(description) > 2000 {
+				t.Fatal("handoff guidance exceeds the runner description budget")
+			}
+			schema := tool["inputSchema"].(map[string]any)
+			properties := schema["properties"].(map[string]any)
+			wanted := 3
+			if workflow {
+				wanted++
+			}
+			if schema["additionalProperties"] != false || len(properties) != wanted ||
+				!reflect.DeepEqual(properties["input"], map[string]any{"type": "object", "additionalProperties": true}) ||
+				properties["entry_ref"] != nil || properties["catalog"] != nil || properties["artifact_ref"] != nil {
+				t.Fatal("handoff guidance changed the delegation input boundary")
+			}
+		})
 	}
 }
 

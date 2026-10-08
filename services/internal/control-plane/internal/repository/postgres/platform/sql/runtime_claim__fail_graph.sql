@@ -4,14 +4,14 @@ WITH graph AS MATERIALIZED (
     WHERE organization_id = @organization_id::uuid AND root_run_id = @root_run_id::uuid
     ORDER BY id FOR UPDATE
 ), failed_runs AS (
-    UPDATE control_plane.runs SET state = 'FAILED', safe_error_code = 'RUNTIME_INPUT_INVALID',
+    UPDATE control_plane.runs SET state = 'FAILED', safe_error_code = @safe_error_code,
         safe_error_message = '', finished_at = clock_timestamp(), updated_at = clock_timestamp(), version = version + 1
     WHERE id IN (SELECT id FROM graph) AND state IN ('QUEUED', 'RUNNING', 'WAITING_HUMAN', 'CANCELLING')
     RETURNING ref
 ), closed_nodes AS (
     UPDATE control_plane.run_nodes
     SET state = CASE WHEN id = @failed_node_id::uuid OR type = 'ROOT_PROCESS' THEN 'FAILED' ELSE 'CANCELLED' END,
-        safe_error_code = 'RUNTIME_INPUT_INVALID', safe_error_message = '', next_actions = '{}',
+        safe_error_code = @safe_error_code, safe_error_message = '', next_actions = '{}',
         finished_at = clock_timestamp(), version = version + 1
     WHERE run_id IN (SELECT id FROM graph) AND state IN ('PLANNED', 'QUEUED', 'RUNNING', 'WAITING')
     RETURNING ref, state
@@ -30,7 +30,7 @@ WITH graph AS MATERIALIZED (
     UPDATE control_plane.integration_invocations
     SET state = CASE WHEN state = 'RUNNING' AND risk <> 'READ' THEN 'UNKNOWN_OUTCOME' ELSE 'CANCELLED' END, lease_ref = NULL,
         effect_fence_digest = NULL, workload_instance = NULL, lease_expires_at = NULL,
-        safe_error_code = CASE WHEN state = 'RUNNING' AND risk <> 'READ' THEN 'INTEGRATION_OUTCOME_UNKNOWN' ELSE 'RUNTIME_INPUT_INVALID' END,
+        safe_error_code = CASE WHEN state = 'RUNNING' AND risk <> 'READ' THEN 'INTEGRATION_OUTCOME_UNKNOWN' ELSE @safe_error_code END,
         version = version + 1, updated_at = clock_timestamp()
     WHERE run_id IN (SELECT id FROM graph) AND state IN ('WAITING_APPROVAL', 'READY', 'RUNNING')
 ), closed_gates AS (

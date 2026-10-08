@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
-import { useId } from "vue";
+import { computed, useId } from "vue";
 import type {
   AsyncEntityOption,
   AsyncEntityOptionPage,
 } from "@/shared/ui/async-entity-picker";
 import VoiceTextarea from "@/shared/ui/VoiceTextarea.vue";
 
-defineProps<{
+const props = defineProps<{
   name: string;
   purpose: string;
   coordinatorAgentRef: string;
@@ -33,6 +33,22 @@ const emit = defineEmits<{
   "update:completionCriteria": [value: string];
 }>();
 const fieldPrefix = `workflow-overview-${useId()}`;
+const completionCriteriaMaxLength = 2000;
+// OpenAPI maxLength считает Unicode code points, включая emoji как один символ.
+const completionCriteriaLength = computed(
+  () => Array.from(props.completionCriteria).length,
+);
+const completionCriteriaTooLong = computed(
+  () => completionCriteriaLength.value > completionCriteriaMaxLength,
+);
+const completionCriteriaDescription = computed(() =>
+  [
+    `${fieldPrefix}-completion-count`,
+    ...(completionCriteriaTooLong.value
+      ? [`${fieldPrefix}-completion-error`]
+      : []),
+  ].join(" "),
+);
 </script>
 
 <template>
@@ -113,13 +129,35 @@ const fieldPrefix = `workflow-overview-${useId()}`;
       />
     </label>
     <label class="field field--wide">
-      <span>{{ $t("workflows.completion") }}</span>
+      <span :id="`${fieldPrefix}-completion-label`">{{
+        $t("workflows.completion")
+      }}</span>
       <VoiceTextarea
+        :id="`${fieldPrefix}-completion`"
         :model-value="completionCriteria"
-        maxlength="2000"
+        :aria-labelledby="`${fieldPrefix}-completion-label`"
+        :aria-describedby="completionCriteriaDescription"
+        :aria-invalid="completionCriteriaTooLong"
         :disabled="disabled"
         @update:model-value="emit('update:completionCriteria', $event.trim())"
       />
+      <small :id="`${fieldPrefix}-completion-count`">{{
+        $t("workflows.completionLength", {
+          count: completionCriteriaLength,
+          max: completionCriteriaMaxLength,
+        })
+      }}</small>
+      <small
+        v-if="completionCriteriaTooLong"
+        :id="`${fieldPrefix}-completion-error`"
+        class="field-error workflow-overview-fields__error"
+        role="status"
+        >{{
+          $t("workflows.completionTooLong", {
+            max: completionCriteriaMaxLength,
+          })
+        }}</small
+      >
     </label>
   </div>
 </template>
@@ -130,5 +168,10 @@ const fieldPrefix = `workflow-overview-${useId()}`;
 }
 .workflow-overview-fields > .field {
   align-content: start;
+}
+.workflow-overview-fields .workflow-overview-fields__error {
+  margin: 0;
+  padding: 6px 10px;
+  color: var(--danger);
 }
 </style>

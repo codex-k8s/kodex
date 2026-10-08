@@ -20,7 +20,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-func TestRunnerInputSchemaV8MatchesRuntimePayload(t *testing.T) {
+func TestRunnerInputSchemaV9MatchesRuntimePayload(t *testing.T) {
 	compiled, properties, required := loadRunnerInputSchema(t)
 	assertRunnerInputShape(t, properties, required)
 
@@ -64,7 +64,7 @@ func TestRunnerInputSchemaV8MatchesRuntimePayload(t *testing.T) {
 	}
 }
 
-func TestRunnerInputSchemaV8CarriesOnlySecretDescriptors(t *testing.T) {
+func TestRunnerInputSchemaV9CarriesOnlySecretDescriptors(t *testing.T) {
 	compiled, _, _ := loadRunnerInputSchema(t)
 	secretValue := []byte("runner-schema-secret-fixture")
 	digest := sha256.Sum256(secretValue)
@@ -118,7 +118,7 @@ func TestRunnerInputSchemaV8CarriesOnlySecretDescriptors(t *testing.T) {
 	}
 }
 
-func TestRunnerInputSchemaV8RejectsDetachedAttachmentLineage(t *testing.T) {
+func TestRunnerInputSchemaV9RejectsDetachedAttachmentLineage(t *testing.T) {
 	compiled, _, _ := loadRunnerInputSchema(t)
 	manager := newTestManager(t, fake.NewSimpleClientset())
 	input, _, err := manager.BuildTurnInput(testExecution(false))
@@ -155,7 +155,7 @@ func TestRunnerInputSchemaV8RejectsDetachedAttachmentLineage(t *testing.T) {
 func loadRunnerInputSchema(t *testing.T) (*jsonschema.Resolved, map[string]json.RawMessage, []string) {
 	t.Helper()
 	root := filepath.Join("..", "..", "..", "..", "..")
-	raw, err := os.ReadFile(filepath.Join(root, "contracts", "runtime-controller", "v8", "agent-runner-input.schema.json"))
+	raw, err := os.ReadFile(filepath.Join(root, "contracts", "runtime-controller", "v9", "agent-runner-input.schema.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

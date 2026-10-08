@@ -276,6 +276,271 @@ func TestAssistantSessionResumeComponent(t *testing.T) {
 	}
 }
 
+// Проверяется owner-переход с synthetic tuple. Происхождение байтов rollout
+// подтверждает runner; PostgreSQL не умеет независимо проверять произвольный SHA.
+func TestAssistantFailedRolloutStorageComponent(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
+	defer cancel()
+	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	r, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Bootstrap(ctx); err != nil {
+		t.Fatal(err)
+	}
+	prepareObservedWarmFixture(t, ctx, r)
+	owner := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.assistant.turns.add"}, "control-api-gateway")
+	worker := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.claim"}, "runtime-controller")
+	service, err := platformservice.New(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assistant, err := service.GetSystemAssistant(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	warm := worker
+	warm.Permission = "platform.runtime.warm.report"
+	if _, err := service.ReportWarmRuntime(ctx, warm, command.WarmRuntimeInput{WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: assistant.DesiredRuntimeRevision, State: "READY"}); err != nil {
+		t.Fatal(err)
+	}
+	claimPrincipal := sessionArchivePrincipal(t, ctx, r, "platform.session-archive.tasks.claim")
+	snapshotPrincipal := sessionArchivePrincipal(t, ctx, r, "platform.session-archive.snapshot.complete")
+	for index, scopeKind := range []string{"SYSTEM", "PROJECT"} {
+		t.Run(scopeKind, func(t *testing.T) {
+			execute := func(kind command.Kind, actor value.Principal, key string, payload any) command.Result {
+				t.Helper()
+				result, err := service.Execute(ctx, command.Command{Kind: kind, Principal: actor, Mutation: value.Mutation{IdempotencyKey: "failed-rollout-" + scopeKind + key}, Payload: payload})
+				if err != nil {
+					t.Fatalf("%s %s: %v", kind, key, err)
+				}
+				return result
+			}
+			projectRef := ""
+			if scopeKind == "PROJECT" {
+				projectRef = execute(command.CreateProject, owner, "-project", command.ProjectInput{Name: "Failed rollout fixture", Language: "en"}).Project.Ref
+				execute(command.CreateProjectAssistant, owner, "-profile", command.ProjectAssistantInput{ProjectRef: projectRef, Name: "Failed rollout helper", Purpose: "Synthetic failed rollout", Instructions: "Use approved resources."})
+			}
+			conversation := execute(command.CreateAssistantConversation, owner, "-conversation", command.AssistantConversationInput{AssistantScope: scopeKind, ProjectRef: projectRef}).Conversation
+			queue := func(key string) {
+				execute(command.AddAssistantTurn, owner, key+"-turn", command.AssistantTurnInput{ConversationRef: conversation.Ref, Content: "Synthetic " + key, DeliveryMode: "QUEUE"})
+			}
+			claim := func(key string) map[string]any {
+				t.Helper()
+				items := execute(command.ClaimExecution, worker, key+"-claim", command.LeaseInput{WorkloadInstance: "failed-rollout-worker", Limit: 1}).RuntimeItems
+				if len(items) != 1 || stringMap(items[0], "sessionRef") != conversation.SessionRef {
+					t.Fatal("runtime claim crossed the exact failed rollout session")
+				}
+				return items[0]
+			}
+			storage := func() string {
+				t.Helper()
+				var result string
+				if err := pool.QueryRow(ctx, `SELECT to_jsonb(storage)::text FROM control_plane.session_storage storage JOIN control_plane.sessions session ON session.id=storage.session_id WHERE session.ref=$1`, conversation.SessionRef).Scan(&result); err != nil {
+					t.Fatal("read exact failed rollout storage")
+				}
+				return result
+			}
+			idle := func() {
+				t.Helper()
+				if _, err := pool.Exec(ctx, `UPDATE control_plane.session_storage SET idle_since=clock_timestamp()-interval '1 hour' WHERE session_id=(SELECT id FROM control_plane.sessions WHERE ref=$1)`, conversation.SessionRef); err != nil {
+					t.Fatal(err)
+				}
+			}
+			snapshotPayload := func(task map[string]any, size int64) command.SessionArchiveTaskInput {
+				payload := claimedSessionArchivePayload(task)
+				payload.FormatVersion, payload.ObjectKey = 1, stringMap(task, "objectKey")
+				payload.ObjectVersion, payload.ObjectETag = "synthetic-version", "synthetic-etag"
+				payload.ObjectDigest, payload.ObjectSizeBytes, payload.SourceSizeBytes = "sha256:"+strings.Repeat("c", 64), size+1024, size
+				return payload
+			}
+			queue("-first")
+			first := claim("-first")
+			thread := fmt.Sprintf("00000000-0000-4000-8000-%012d", index+20)
+			initial := command.CompleteExecutionInput{LeaseRef: stringMap(first, "leaseRef"), Fence: stringMap(first, "fence"), Generation: runtimeRevisionMapInt64(first, "generation"), Success: true, ResultSummary: "Synthetic initial result", Usage: turnUsageFixture(), CodexSessionID: thread, ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/10/04/rollout-2026-10-04T00-00-00-" + thread + ".jsonl", ArchiveSHA256: strings.Repeat("a", 64), ArchiveSizeBytes: 128}
+			execute(command.CompleteExecution, worker, "-initial-complete", initial)
+			idle()
+			oldSnapshot := claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "SNAPSHOT")
+			oldSnapshotPayload := snapshotPayload(oldSnapshot, initial.ArchiveSizeBytes)
+			oldArchive := stringMap(execute(command.CompleteSessionSnapshot, snapshotPrincipal, "-old-snapshot", oldSnapshotPayload).Runtime, "archiveRef")
+			var oldDeleteRef string
+			if err := pool.QueryRow(ctx, `SELECT ref FROM control_plane.session_archive_tasks WHERE archive_id=(SELECT id FROM control_plane.session_archives WHERE ref=$1) AND kind='DELETE_PVC' AND state='READY'`, oldArchive).Scan(&oldDeleteRef); err != nil {
+				t.Fatal("old snapshot did not create exact PVC deletion task")
+			}
+			oldDeletePayload := command.SessionArchiveTaskInput{TaskRef: oldDeleteRef, LeaseRef: "rls_absent_fixture", Fence: "fnc_absent_fixture", Generation: 1, PVCName: stringMap(oldSnapshot, "pvcName")}
+			pvcPrincipal := sessionArchivePrincipal(t, ctx, r, "platform.session-archive.pvc-delete.complete")
+			forbiddenDelete := func(key string) {
+				t.Helper()
+				before := storage()
+				if _, err := service.Execute(ctx, command.Command{Kind: command.CompleteSessionPVCDeletion, Principal: pvcPrincipal, Mutation: value.Mutation{IdempotencyKey: "failed-rollout-" + scopeKind + key}, Payload: oldDeletePayload}); !errors.Is(err, errs.ErrForbidden) || storage() != before {
+					t.Fatalf("unleased PVC deletion did not return typed authority rejection: %v", err)
+				}
+			}
+			t.Run("ready-task", func(t *testing.T) { forbiddenDelete("-ready-delete") })
+			queue("-failed")
+			// Штатный owner materialize отменяет DELETE_PVC из-за queued turn.
+			if tasks, err := service.ClaimSessionArchiveTasks(ctx, claimPrincipal, "failed-rollout-archive", 1); err != nil || len(tasks) != 0 {
+				t.Fatal("pending turn retained archive work before runtime claim")
+			}
+			t.Run("cancelled-task", func(t *testing.T) { forbiddenDelete("-cancelled-delete") })
+			second := claim("-failed")
+			if stringMap(second, "runtimeRevisionRef") == stringMap(first, "runtimeRevisionRef") || stringMap(second, "codexSessionID") != thread {
+				t.Fatal("failed turn did not receive a fresh exact native-resume snapshot")
+			}
+			failed := initial
+			failed.LeaseRef, failed.Fence, failed.Generation = stringMap(second, "leaseRef"), stringMap(second, "fence"), runtimeRevisionMapInt64(second, "generation")
+			failed.Success, failed.SafeErrorCode, failed.ResultSummary = false, "PROVIDER_RESPONSE_INVALID", "Synthetic failed result"
+			failed.ArchiveRelativePath, failed.ArchiveSHA256, failed.ArchiveSizeBytes = ".kodex/state/codex-home/sessions/2026/10/07/rollout-2026-10-07T00-00-00-"+thread+".jsonl", strings.Repeat("b", 64), 193
+			before := storage()
+			for _, test := range []struct {
+				name   string
+				mutate func(*command.CompleteExecutionInput)
+				want   error
+			}{
+				{"thread-path", func(p *command.CompleteExecutionInput) { p.CodexSessionID = "00000000-0000-4000-8000-000000000099" }, errs.ErrInvalid},
+				{"unknown-lease", func(p *command.CompleteExecutionInput) { p.LeaseRef = "rls_foreign_fixture" }, errs.ErrNotFound},
+				{"foreign-fence", func(p *command.CompleteExecutionInput) { p.Fence += "-foreign" }, errs.ErrForbidden},
+				{"stale-generation", func(p *command.CompleteExecutionInput) { p.Generation++ }, errs.ErrForbidden},
+				{"closed-old-lease", func(p *command.CompleteExecutionInput) {
+					p.LeaseRef, p.Fence, p.Generation = initial.LeaseRef, initial.Fence, initial.Generation
+				}, errs.ErrForbidden},
+			} {
+				t.Run(test.name, func(t *testing.T) {
+					bad := failed
+					test.mutate(&bad)
+					_, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "failed-rollout-" + scopeKind + test.name}, Payload: bad})
+					if !errors.Is(err, test.want) {
+						t.Fatalf("mismatched failed rollout accepted: %v", err)
+					}
+					if storage() != before {
+						t.Fatal("rejected completion changed source pins")
+					}
+				})
+			}
+			completion := command.Command{Kind: command.CompleteExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "failed-rollout-" + scopeKind + "-complete"}, Payload: failed}
+			func() {
+				original := queryCommandsExecuteInsertAuditEventsRefProjectIdAction
+				queryCommandsExecuteInsertAuditEventsRefProjectIdAction = queryRuntimeClaimAuditUnavailable
+				defer func() { queryCommandsExecuteInsertAuditEventsRefProjectIdAction = original }()
+				if _, err := service.Execute(ctx, completion); !errors.Is(err, errs.ErrUnavailable) || storage() != before {
+					t.Fatal("failed audit committed rollout tuple or terminal state")
+				}
+			}()
+			result, err := service.Execute(ctx, completion)
+			if err != nil || result.Run == nil || result.Run.State != "FAILED" {
+				t.Fatalf("failed rollout completion: %v", err)
+			}
+			var generation, sourceSize int64
+			var sourcePath, sourceSHA, codexID, revisionRef, state string
+			var currentArchiveNull bool
+			if err := pool.QueryRow(ctx, `SELECT storage.content_generation,storage.source_relative_path,storage.source_sha256,storage.source_size_bytes,storage.codex_session_id::text,revision.ref,storage.state,storage.current_archive_id IS NULL FROM control_plane.session_storage storage JOIN control_plane.sessions session ON session.id=storage.session_id JOIN control_plane.runtime_revisions revision ON revision.id=storage.runtime_revision_id WHERE session.ref=$1`, conversation.SessionRef).Scan(&generation, &sourcePath, &sourceSHA, &sourceSize, &codexID, &revisionRef, &state, &currentArchiveNull); err != nil || generation != 2 || sourcePath != failed.ArchiveRelativePath || sourceSHA != failed.ArchiveSHA256 || sourceSize != failed.ArchiveSizeBytes || codexID != failed.CodexSessionID || revisionRef != stringMap(second, "runtimeRevisionRef") || state != "LIVE" || !currentArchiveNull {
+				t.Fatal("FAILED completion did not publish exact fresh generation and tuple")
+			}
+			var oldDeleteState, oldArchiveState string
+			var oldDeleteUnleased bool
+			if err := pool.QueryRow(ctx, `SELECT task.state,task.lease_ref IS NULL AND task.fence_digest IS NULL AND task.lease_expires_at IS NULL,archive.lifecycle_state FROM control_plane.session_archive_tasks task JOIN control_plane.session_archives archive ON archive.id=task.archive_id WHERE task.ref=$1`, oldDeleteRef).Scan(&oldDeleteState, &oldDeleteUnleased, &oldArchiveState); err != nil || oldDeleteState != "CANCELLED" || !oldDeleteUnleased || oldArchiveState != "SUPERSEDED" {
+				t.Fatal("previous snapshot retained PVC deletion authority")
+			}
+			for _, node := range result.Graph.Nodes {
+				if contains([]string{"PLANNED", "QUEUED", "RUNNING", "WAITING"}, node.State) {
+					t.Fatal("FAILED completion left an open process node")
+				}
+			}
+			if _, err := service.Execute(ctx, command.Command{Kind: command.RenewExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "failed-rollout-" + scopeKind + "-late-renew"}, Payload: command.LeaseInput{LeaseRef: failed.LeaseRef, Fence: failed.Fence, Generation: failed.Generation}}); !errors.Is(err, errs.ErrForbidden) {
+				t.Fatal("completed failed lease retained renew authority")
+			}
+			counts := func() [3]int64 {
+				t.Helper()
+				var counts [3]int64
+				if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM control_plane.audit_events WHERE resource_ref=$1),(SELECT count(*) FROM control_plane.idempotency_receipts WHERE idempotency_key=$2),(SELECT count(*) FROM control_plane.run_events WHERE root_run_id=(SELECT id FROM control_plane.runs WHERE ref=$3))`, stringMap(second, "nodeRef"), completion.Mutation.IdempotencyKey, stringMap(second, "runRef")).Scan(&counts[0], &counts[1], &counts[2]); err != nil {
+					t.Fatal("read failed completion durable effects")
+				}
+				return counts
+			}
+			durableCounts, completedStorage := counts(), storage()
+			if durableCounts[0] < 1 || durableCounts[1] != 1 || durableCounts[2] < 1 {
+				t.Fatal("FAILED tuple lacks atomic audit, receipt and events")
+			}
+			replay, err := service.Execute(ctx, completion)
+			if err != nil || replay.Run == nil || replay.Run.Ref != result.Run.Ref || replay.Run.State != "FAILED" || storage() != completedStorage || counts() != durableCounts {
+				t.Fatal("lost-ACK FAILED replay changed source generation or durable effects")
+			}
+			changed := completion
+			changedTuple := failed
+			changedTuple.ArchiveSHA256 = strings.Repeat("d", 64)
+			changed.Payload = changedTuple
+			if _, err := service.Execute(ctx, changed); !errors.Is(err, errs.ErrIdempotencyReuse) || storage() != completedStorage || counts() != durableCounts {
+				t.Fatal("changed failed tuple reused accepted idempotency key")
+			}
+			if _, err := service.Execute(ctx, command.Command{Kind: command.CompleteSessionSnapshot, Principal: snapshotPrincipal, Mutation: value.Mutation{IdempotencyKey: "failed-rollout-" + scopeKind + "-old-snapshot-late"}, Payload: oldSnapshotPayload}); !errors.Is(err, errs.ErrForbidden) {
+				t.Errorf("closed snapshot grant did not return typed authority rejection: %v", err)
+			}
+			if storage() != completedStorage || counts() != durableCounts {
+				t.Fatal("closed snapshot completion changed current source or durable effects")
+			}
+			idle()
+			freshSnapshot := claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "SNAPSHOT")
+			if freshSnapshot["contentGeneration"].(int64) != 2 || stringMap(freshSnapshot, "sourceRelativePath") != failed.ArchiveRelativePath || stringMap(freshSnapshot, "sourceSHA256") != failed.ArchiveSHA256 || freshSnapshot["sourceSizeBytes"].(int64) != failed.ArchiveSizeBytes || stringMap(freshSnapshot, "runtimeRevisionRef") != stringMap(second, "runtimeRevisionRef") || stringMap(freshSnapshot, "inputDigest") == stringMap(oldSnapshot, "inputDigest") {
+				t.Fatal("fresh snapshot reused the old failed source tuple or revision")
+			}
+			freshPayload := snapshotPayload(freshSnapshot, failed.ArchiveSizeBytes)
+			// Штатный retry отзывает весь старый claim, не нарушая schema CHECK.
+			failPayload := claimedSessionArchivePayload(freshSnapshot)
+			failPayload.SafeErrorCode = "SESSION_ARCHIVE_WORKER_FAILED"
+			if result := execute(command.FailSessionArchiveTask, sessionArchivePrincipal(t, ctx, r, "platform.session-archive.tasks.fail"), "-revoke-snapshot", failPayload); stringMap(result.Runtime, "state") != "READY" {
+				t.Fatal("snapshot failure did not revoke the first claim for retry")
+			}
+			t.Run("revoked-task", func(t *testing.T) {
+				before := storage()
+				if _, err := service.Execute(ctx, command.Command{Kind: command.CompleteSessionSnapshot, Principal: snapshotPrincipal, Mutation: value.Mutation{IdempotencyKey: "failed-rollout-" + scopeKind + "-revoked-snapshot"}, Payload: freshPayload}); !errors.Is(err, errs.ErrForbidden) || storage() != before {
+					t.Fatalf("revoked snapshot claim did not return typed rejection: %v", err)
+				}
+			})
+			cleanup := claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "DELETE_OBJECT")
+			cleanupPayload := claimedSessionArchivePayload(cleanup)
+			cleanupPayload.ObjectKey, cleanupPayload.ObjectVersion = stringMap(cleanup, "objectKey"), stringMap(cleanup, "objectVersion")
+			execute(command.CompleteSessionObjectDeletion, sessionArchivePrincipal(t, ctx, r, "platform.session-archive.object-delete.complete"), "-retry-object-cleanup", cleanupPayload)
+			if _, err := pool.Exec(ctx, `UPDATE control_plane.session_archive_tasks SET available_at=clock_timestamp()-interval '1 second' WHERE ref=$1 AND state='READY'`, freshPayload.TaskRef); err != nil {
+				t.Fatal("advance exact disposable retry clock")
+			}
+			reclaimed := claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "SNAPSHOT")
+			if stringMap(reclaimed, "taskRef") != stringMap(freshSnapshot, "taskRef") || reclaimed["contentGeneration"].(int64) != 2 || reclaimed["generation"].(int64) != freshSnapshot["generation"].(int64)+1 || reclaimed["attempt"].(int32) != freshSnapshot["attempt"].(int32)+1 || stringMap(reclaimed, "sourceSHA256") != failed.ArchiveSHA256 || stringMap(reclaimed, "leaseRef") == stringMap(freshSnapshot, "leaseRef") {
+				t.Fatal("fresh snapshot retry changed source or reused revoked claim")
+			}
+			freshPayload = snapshotPayload(reclaimed, failed.ArchiveSizeBytes)
+			badSnapshot := freshPayload
+			badSnapshot.SourceSizeBytes = initial.ArchiveSizeBytes
+			if _, err := service.Execute(ctx, command.Command{Kind: command.CompleteSessionSnapshot, Principal: snapshotPrincipal, Mutation: value.Mutation{IdempotencyKey: "failed-rollout-" + scopeKind + "-old-source-size"}, Payload: badSnapshot}); !errors.Is(err, errs.ErrInvalid) {
+				t.Fatal("new snapshot accepted old source size")
+			}
+			freshArchive := stringMap(execute(command.CompleteSessionSnapshot, snapshotPrincipal, "-fresh-snapshot", freshPayload).Runtime, "archiveRef")
+			if err := pool.QueryRow(ctx, `SELECT content_generation,source_relative_path,source_sha256,source_size_bytes FROM control_plane.session_archives WHERE ref=$1`, freshArchive).Scan(&generation, &sourcePath, &sourceSHA, &sourceSize); err != nil || generation != 2 || sourcePath != failed.ArchiveRelativePath || sourceSHA != failed.ArchiveSHA256 || sourceSize != failed.ArchiveSizeBytes {
+				t.Fatal("fresh archive receipt did not retain exact FAILED rollout tuple")
+			}
+			// Потерянный ACK completion не оживляет LIVE после последующей публикации.
+			publishedStorage := storage()
+			if _, err := service.Execute(ctx, completion); err != nil || storage() != publishedStorage || counts() != durableCounts {
+				t.Fatal("late FAILED replay invalidated the fresh archive")
+			}
+			deletion := claimSingleSessionArchiveTask(t, ctx, service, claimPrincipal, "DELETE_PVC")
+			deletePayload := claimedSessionArchivePayload(deletion)
+			deletePayload.PVCName = stringMap(deletion, "pvcName")
+			execute(command.CompleteSessionPVCDeletion, sessionArchivePrincipal(t, ctx, r, "platform.session-archive.pvc-delete.complete"), "-fresh-delete", deletePayload)
+		})
+	}
+}
+
 func prepareAssistantSessionArchiveRoundTrip(t *testing.T, ctx context.Context, r *Repository, service *platformservice.Service, worker, owner value.Principal, conversationRef, sessionRef, suffix string) func() {
 	t.Helper()
 	if _, err := r.pool.Exec(ctx, `UPDATE control_plane.session_storage SET idle_since=clock_timestamp()-interval '1 hour' WHERE session_id=(SELECT id FROM control_plane.sessions WHERE ref=$1)`, sessionRef); err != nil {

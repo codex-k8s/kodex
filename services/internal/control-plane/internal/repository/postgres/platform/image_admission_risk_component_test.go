@@ -25,8 +25,8 @@ func imageRiskReportFixture(t *testing.T, artifact entity.ImageArtifact, sbom st
 	matches := "[]"
 	count := "0"
 	if blocking {
-		count = "1"
-		matches = `[{"artifact":{"name":"synthetic-package","version":"1.0.0","type":"go-module"},"vulnerability":{"id":"CVE-2026-12345","severity":"High","fix":{"state":"fixed","versions":["1.0.1"]}}}]`
+		count = "2"
+		matches = `[{"artifact":{"name":"synthetic-package","version":"1.0.0","type":"go-module"},"vulnerability":{"id":"CVE-2026-12345","severity":"High","fix":{"state":"fixed","versions":["1.0.1"]}}},{"artifact":{"name":"synthetic-package-next","version":"1.0.0","type":"go-module"},"vulnerability":{"id":"CVE-2026-12346","severity":"High","fix":{"state":"fixed","versions":["1.0.1"]}}}]`
 	}
 	raw := []byte(`{"matches":` + matches + `,"ignoredMatches":[],"kodexPolicy":{"schema":"kodex.dev/fix-available-high-or-critical/v1","policyRevision":1,"policySHA256":"` + artifact.PolicySHA256 + `","highOrCriticalMatchCount":` + count + `,"blockingMatchCount":` + count + `,"unresolvedNoFixMatchCount":0}}`)
 	report, err := runtimecontract.ProjectImageVulnerabilityReport(raw, runtimecontract.ImageVulnerabilityReport{ArtifactRef: artifact.Ref, ImageDigest: artifact.ManifestDigest, SBOMSHA256: sbom, ScopeKind: artifact.ScopeKind, OrganizationRef: artifact.OrganizationRef, ProjectRef: artifact.ProjectRef, RecipeRef: artifact.RecipeRef, RecipeVersion: artifact.RecipeVersion, RecipeGeneration: artifact.RecipeGeneration, BuildRef: artifact.BuildRef, BuildVersion: artifact.BuildVersion, BuildAttempt: artifact.BuildAttempt, PolicyRevision: artifact.PolicyRevision, PolicySHA256: artifact.PolicySHA256})
@@ -126,8 +126,25 @@ func TestImageAdmissionRiskComponent(t *testing.T) {
 			}
 			filter := roleimagerepo.VulnerabilityReportFilter{ScopeKind: scopeKind, ProjectRef: created.Recipe.ProjectRef, RecipeRef: created.Recipe.Ref, ArtifactRef: a.Ref, Page: query.Page{Size: 1}}
 			report, err := r.GetVulnerabilityReport(ctx, owner, filter)
-			if err != nil || !report.Available || len(report.Findings) != 1 || report.Report.BlockingMatchCount != 1 {
+			if err != nil || !report.Available || len(report.Findings) != 1 || report.Report.BlockingMatchCount != 2 || report.NextPageToken == "" {
 				t.Fatalf("report unavailable: %v", err)
+			}
+			nextPage := filter
+			nextPage.Page.Token = report.NextPageToken
+			nextPage.ExpectedReportSHA256 = report.Report.ReportSHA256
+			continued, err := r.GetVulnerabilityReport(ctx, owner, nextPage)
+			if err != nil || len(continued.Findings) != 1 || continued.NextPageToken != "" || continued.Findings[0].Ref == report.Findings[0].Ref || continued.ProjectionSHA256 != report.ProjectionSHA256 {
+				t.Fatalf("pinned second page changed its cursor binding: %v", err)
+			}
+			changedFilter := nextPage
+			changedFilter.AdvisoryQuery = "CVE-2026"
+			if _, err := r.GetVulnerabilityReport(ctx, owner, changedFilter); !errors.Is(err, errs.ErrConflict) {
+				t.Fatalf("cursor accepted changed filter: %v", err)
+			}
+			changedSize := nextPage
+			changedSize.Page.Size = 2
+			if _, err := r.GetVulnerabilityReport(ctx, owner, changedSize); !errors.Is(err, errs.ErrConflict) {
+				t.Fatalf("cursor accepted changed page size: %v", err)
 			}
 			wrongHash := filter
 			wrongHash.ExpectedReportSHA256 = strings.Repeat("0", 64)

@@ -47,4 +47,6 @@ var (
 	queryManagedConfigurationEffectivePrompt string
 	//go:embed sql/managed_configuration_get_consumer_binding.sql
 	queryManagedConfigurationGetConsumerBinding string
+	//go:embed sql/managed_configuration_consumer_binding_exists.sql
+	queryManagedConfigurationConsumerBindingExists string
 )

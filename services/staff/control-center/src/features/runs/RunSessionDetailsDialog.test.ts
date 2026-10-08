@@ -1,11 +1,27 @@
 import { renderToString } from "@vue/server-renderer";
-import { createSSRApp, h } from "vue";
+import { compileStyle } from "@vue/compiler-sfc";
+import {
+  createRenderer,
+  createSSRApp,
+  defineComponent,
+  h,
+  nextTick,
+  reactive,
+  ssrContextKey,
+  type ComputedRef,
+  type Ref,
+  type SetupContext,
+} from "vue";
 import { createI18n } from "vue-i18n";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import RunSessionDetailsDialog from "@/features/runs/RunSessionDetailsDialog.vue";
 import dialogSource from "@/features/runs/RunSessionDetailsDialog.vue?raw";
-import type { PresentedRunEvent } from "@/features/runs/run-activity";
+import RunTranscript from "@/features/runs/RunTranscript.vue";
+import type {
+  PresentedRunEvent,
+  RunActivityItem,
+} from "@/features/runs/run-activity";
 import type {
   Artifact,
   Run,
@@ -189,6 +205,46 @@ const toolEvent: PresentedRunEvent = {
 };
 
 describe("RunSessionDetailsDialog", () => {
+  it("показывает только размер контекстного окна без нулевых строк расхода", async () => {
+    const html = await renderActivity([], {
+      ...run,
+      usage: { ...run.usage, modelContextWindow: 258400 },
+    });
+    expect(html).toContain("runs.usage.contextWindow");
+    expect(html).toContain(new Intl.NumberFormat("ru").format(258400));
+    for (const key of ["total", "input", "cached", "output", "reasoning"]) {
+      expect(html).not.toContain(`runs.usage.${key}`);
+    }
+  });
+
+  it("сохраняет все строки измеренного расхода и скрывает полностью пустую сводку", async () => {
+    const empty = await renderActivity([]);
+    expect(empty).not.toContain("runs.usage.title");
+
+    const measured = await renderActivity([], {
+      ...run,
+      usage: {
+        ...run.usage,
+        totalTokens: 100,
+        inputTokens: 80,
+        cachedInputTokens: 20,
+        outputTokens: 20,
+        reasoningOutputTokens: 5,
+        modelContextWindow: 258400,
+      },
+    });
+    for (const key of [
+      "total",
+      "input",
+      "cached",
+      "output",
+      "reasoning",
+      "contextWindow",
+    ]) {
+      expect(measured).toContain(`runs.usage.${key}`);
+    }
+  });
+
   it("использует canonical компактный transcript с actual USER/FINAL и одной revision инструмента", async () => {
     const service = (
       ref: string,
@@ -270,7 +326,8 @@ describe("RunSessionDetailsDialog", () => {
       ],
       { ...run, resultSummary: "ACTUAL_FINAL_RESULT_SENTINEL" },
     );
-    expect(html).toContain("run-transcript--embedded");
+    expect(html).not.toContain("run-transcript--embedded");
+    expect(html).toContain('role="log" aria-live="polite"');
     expect(html).toContain("run-activity-item--initiator");
     expect(html).toContain("run-activity-item--agent");
     expect(html.match(/ACTUAL_USER_INPUT_SENTINEL/g)).toHaveLength(1);
@@ -284,6 +341,177 @@ describe("RunSessionDetailsDialog", () => {
       /RUN_CREATED|TURN_QUEUED|TURN_STARTED|TURN_COMPLETED/,
     );
     expect(html).toContain("run-transcript__service-history");
+  });
+
+  it("открывает последние события, следует новым и сохраняет ручную прокрутку до нажатия кнопки", async () => {
+    const log = {
+      scrollHeight: 1200,
+      clientHeight: 300,
+      scrollTop: 0,
+      scrollTo: vi.fn(({ top }: { top: number }) => {
+        log.scrollTop = Math.min(top, log.scrollHeight - log.clientHeight);
+      }),
+    };
+    const renderer = createRenderer<object, object>({
+      createElement: () => ({}),
+      createText: () => ({}),
+      createComment: () => ({}),
+      setText() {},
+      setElementText() {},
+      patchProp() {},
+      insert() {},
+      remove() {},
+      parentNode: () => null,
+      nextSibling: () => null,
+    });
+    const message = (sequence: number): PresentedRunEvent => ({
+      ...event,
+      ref: `evt_message_${String(sequence)}`,
+      sequence,
+      execution,
+      messageKind: "INTERMEDIATE_MESSAGE",
+      message: {
+        source: { origin: "ORDINARY" },
+        ref: `msg_${String(sequence)}`,
+        revision: 1,
+        phase: "COMMENTARY",
+        text: `Подтверждённое сообщение ${String(sequence)}`,
+      },
+    });
+    const props = reactive({
+      run,
+      node,
+      nodes: [node, toolNode],
+      events: [message(1)],
+      artifacts: [],
+    });
+    type TranscriptState = {
+      log: Ref<HTMLElement | undefined>;
+      unread: Ref<boolean>;
+      latest(): void;
+      onScroll(): void;
+    };
+    let state!: TranscriptState;
+    const dialog = RunSessionDetailsDialog as unknown as {
+      setup(
+        props: object,
+        context: SetupContext,
+      ): {
+        transcriptItems: ComputedRef<RunActivityItem[]>;
+      };
+    };
+    const transcript = RunTranscript as unknown as {
+      setup(props: object, context: SetupContext): TranscriptState;
+    };
+    const app = renderer.createApp(
+      defineComponent({
+        setup(_props, context) {
+          const activity = dialog.setup(props, context);
+          state = transcript.setup(
+            {
+              get items() {
+                return activity.transcriptItems.value;
+              },
+              embedded: false,
+              groupTools: true,
+              closedExecutionKeys: [],
+            },
+            context,
+          );
+          state.log.value = log as unknown as HTMLElement;
+          return () => null;
+        },
+      }),
+    );
+    app.use(
+      createI18n({
+        legacy: false,
+        locale: "ru",
+        missingWarn: false,
+        fallbackWarn: false,
+        messages: { ru: {} },
+      }),
+    );
+    app.provide(ssrContextKey, {});
+    try {
+      app.mount({});
+      await nextTick();
+      expect(log.scrollTop).toBe(900);
+      log.scrollHeight = 1400;
+      props.events.push(message(2));
+      await nextTick();
+      await nextTick();
+      expect(log.scrollTop).toBe(1100);
+
+      log.scrollTop = 120;
+      state.onScroll();
+      log.scrollHeight = 1600;
+      props.events.push(message(3));
+      await nextTick();
+      await nextTick();
+      expect(log.scrollTop).toBe(120);
+      expect(state.unread.value).toBe(true);
+      state.latest();
+      await nextTick();
+      expect(log.scrollTop).toBe(1300);
+      expect(state.unread.value).toBe(false);
+
+      log.scrollHeight = 1800;
+      props.events.push(message(4));
+      await nextTick();
+      await nextTick();
+      expect(log.scrollTop).toBe(1500);
+    } finally {
+      app.unmount();
+    }
+  });
+
+  it("ограничивает dialog и оставляет единственный scroll переписки на desktop и mobile", () => {
+    expect(dialogSource).toMatch(
+      /\.session-details-dialog > :deep\(\.modal > \.modal__body\) \{[^}]*overflow: hidden;/,
+    );
+    expect(dialogSource).toMatch(
+      /\.session-details__activity \{[^}]*grid-template-rows: auto minmax\(0, 1fr\);[^}]*overflow: hidden;/,
+    );
+    expect(dialogSource).toContain(
+      "grid-template-rows: minmax(0, 0.18fr) minmax(0, 0.82fr)",
+    );
+    expect(dialogSource).not.toContain("overflow: visible");
+  });
+
+  it("не передаёт высоту и горизонтальный flex внешнего dialog во вложенный preview", () => {
+    const css = dialogSource.match(/<style scoped>([\s\S]*?)<\/style>/)?.[1];
+    expect(css).toBeDefined();
+    const compiled = compileStyle({
+      source: css ?? "",
+      filename: "RunSessionDetailsDialog.vue",
+      id: "data-v-session-layout",
+      scoped: true,
+    });
+    expect(compiled.errors).toEqual([]);
+    const selectors = compiled.code.replace(/\s+/g, " ");
+    expect(selectors).toContain(
+      ".session-details-dialog[data-v-session-layout] > .modal {",
+    );
+    expect(selectors).toContain(
+      ".session-details-dialog[data-v-session-layout] > .modal > .modal__body {",
+    );
+    expect(selectors).not.toMatch(
+      /\.session-details-dialog\[data-v-session-layout\] \.modal(?:__body)? \{/,
+    );
+  });
+
+  it("ограничивает краткую роль двумя строками и сохраняет компактную mobile сводку", () => {
+    expect(dialogSource).toMatch(
+      /\.session-details__summary strong \{[^}]*-webkit-line-clamp: 2;[^}]*overflow: hidden;[^}]*overflow-wrap: anywhere;/,
+    );
+    const mobile = dialogSource.split("@media (max-width: 760px)")[1];
+    expect(mobile).toMatch(
+      /\.session-details__summary p \{[^}]*-webkit-line-clamp: 2;/,
+    );
+    expect(mobile).toMatch(
+      /\.session-details__summary \{[^}]*gap: 8px;[^}]*padding: 10px;/,
+    );
   });
 
   it("сохраняет несвязанные диагностики/ошибки и не придумывает USER из inputSummary", async () => {
@@ -348,7 +576,7 @@ describe("RunSessionDetailsDialog", () => {
     expect(html).toContain("Иной авторитетный результат RUN");
   });
 
-  it("ограничивает только сводку шапки тремя строками, не усекая полный результат", () => {
+  it("ограничивает сводку шапки тремя строками на desktop, не усекая полный результат", () => {
     const headerStyle = dialogSource.match(
       /\.session-details__summary p \{([^}]+)\}/,
     )?.[1];
@@ -356,7 +584,15 @@ describe("RunSessionDetailsDialog", () => {
     expect(headerStyle).toContain("-webkit-box-orient: vertical");
     expect(headerStyle).toContain("overflow: hidden");
     expect(headerStyle).toContain("min-width: 0");
-    expect(dialogSource.match(/-webkit-line-clamp:/g)).toHaveLength(1);
+    for (const selector of [
+      "session-details__input",
+      "session-details__long-value",
+    ]) {
+      const fullTextStyle = dialogSource.match(
+        new RegExp(`\\.${selector} \\{([^}]+)\\}`),
+      )?.[1];
+      expect(fullTextStyle).not.toContain("-webkit-line-clamp");
+    }
     expect(dialogSource).toContain("node.progressSummary ||");
     expect(dialogSource).toContain("<SafeMarkdown");
   });

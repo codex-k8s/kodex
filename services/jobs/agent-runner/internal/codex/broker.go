@@ -37,6 +37,8 @@ const (
 	providerRefreshCommitTimeout = 40 * time.Second
 	providerSandboxProbeTimeout  = 5 * time.Second
 	providerResultDeliveryGrace  = processGrace + terminationGrace + providerRefreshCommitTimeout + 5*time.Second
+	providerWriterUID            = 10002
+	rolloutCaptureSchema         = "kodex.provider-rollout-capture.v1"
 	providerSafeFailureLog       = "Codex provider request failed at safe stage: %s; class: %s; detail: %s; rpc_code: %d; notification: %s; account_read: %s; notification_error: %s"
 )
 
@@ -55,9 +57,79 @@ type brokerRequest struct {
 }
 
 type brokerResponse struct {
-	Result  Result                `json:"result"`
-	Failure providerBrokerFailure `json:"failure,omitempty"`
-	OK      bool                  `json:"ok"`
+	Result         Result                `json:"result"`
+	Failure        providerBrokerFailure `json:"failure,omitempty"`
+	OK             bool                  `json:"ok"`
+	RolloutCapture *rolloutCaptureProof  `json:"rollout_capture,omitempty"`
+}
+
+// Подтверждение создаётся только чтением настоящего источника. Exported поля
+// Result сами по себе не подтверждают происхождение и никогда его не заменяют.
+type rolloutCaptureProof struct {
+	Schema                 string `json:"schema"`
+	ExecutionBindingDigest string `json:"execution_binding_digest"`
+	RuntimeRevisionDigest  string `json:"runtime_revision_digest"`
+	InputDigest            string `json:"input_digest"`
+	Attempt                int32  `json:"attempt"`
+	SessionRef             string `json:"session_ref"`
+	TurnRef                string `json:"turn_ref"`
+	SessionID              string `json:"codex_session_id"`
+	RelativePath           string `json:"archive_relative_path"`
+	SHA256                 string `json:"archive_sha256"`
+	SizeBytes              int64  `json:"archive_size_bytes"`
+	sealed                 bool
+}
+
+func (proof *rolloutCaptureProof) bound(input model.Input) bool {
+	return proof != nil && proof.Schema == rolloutCaptureSchema && input.Mode == runtimecontract.RunnerModeTurn &&
+		validCaptureDigest(input.ExecutionBindingDigest) && validCaptureDigest(input.RuntimeRevisionDigest) && validCaptureDigest(input.InputDigest) &&
+		proof.ExecutionBindingDigest == input.ExecutionBindingDigest && proof.RuntimeRevisionDigest == input.RuntimeRevisionDigest && proof.InputDigest == input.InputDigest &&
+		input.Attempt > 0 && proof.Attempt == input.Attempt && input.SessionRef != "" && input.TurnRef != "" && proof.SessionRef == input.SessionRef && proof.TurnRef == input.TurnRef &&
+		(input.CodexSessionID == "" || proof.SessionID == input.CodexSessionID) && runtimecontract.ValidateCodexArchiveIdentity(proof.SessionID, proof.RelativePath) == nil &&
+		validCaptureDigest(proof.SHA256) && proof.SizeBytes > 0 && proof.SizeBytes <= maximumArchiveBytes &&
+		filepath.IsAbs(input.WorkspaceRoot) && filepath.Clean(input.WorkspaceRoot) == input.WorkspaceRoot && input.CodexHome == filepath.Join(input.WorkspaceRoot, ".kodex/state/codex-home")
+}
+
+func validCaptureDigest(value string) bool {
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == sha256.Size && hex.EncodeToString(decoded) == value
+}
+
+func withRolloutCapture(result Result, proof *rolloutCaptureProof) Result {
+	if proof == nil || !proof.sealed {
+		return result
+	}
+	result.rolloutCapture = proof
+	result.SessionID, result.ArchiveRelativePath, result.ArchiveSHA256, result.ArchiveSizeBytes = proof.SessionID, proof.RelativePath, proof.SHA256, proof.SizeBytes
+	return result
+}
+
+func (result Result) matchesCapture(proof *rolloutCaptureProof) bool {
+	return proof != nil && result.SessionID == proof.SessionID && result.ArchiveRelativePath == proof.RelativePath && result.ArchiveSHA256 == proof.SHA256 && result.ArchiveSizeBytes == proof.SizeBytes
+}
+
+// HasVerifiedRollout не принимает tuple, восстановленный из произвольного JSON.
+func (result Result) HasVerifiedRollout(input model.Input) bool {
+	return result.rolloutCapture != nil && result.rolloutCapture.sealed && result.rolloutCapture.bound(input) && result.matchesCapture(result.rolloutCapture) && result.ArchivePath == filepath.Join(input.WorkspaceRoot, filepath.FromSlash(result.ArchiveRelativePath))
+}
+
+func brokerPeerUID(connection net.Conn) (uint32, error) {
+	peer, ok := connection.(*net.UnixConn)
+	if !ok {
+		return 0, errProviderBrokerResponseInvalid
+	}
+	raw, err := peer.SyscallConn()
+	if err != nil {
+		return 0, errProviderBrokerResponseInvalid
+	}
+	var credential *unix.Ucred
+	var credentialErr error
+	if raw.Control(func(fd uintptr) {
+		credential, credentialErr = unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
+	}) != nil || credentialErr != nil || credential == nil {
+		return 0, errProviderBrokerResponseInvalid
+	}
+	return credential.Uid, nil
 }
 
 type providerBrokerFailure string
@@ -160,6 +232,10 @@ func executeViaBroker(ctx context.Context, input model.Input, prompt []byte, mcp
 		}
 	}
 	defer connection.Close()
+	peerUID, peerErr := brokerPeerUID(connection)
+	if peerErr != nil || peerUID != providerWriterUID {
+		return Result{}, errProviderBrokerResponseInvalid
+	}
 	stopContext := bindBrokerConnectionContext(ctx, connection)
 	defer stopContext()
 	encoder := json.NewEncoder(connection)
@@ -167,7 +243,7 @@ func executeViaBroker(ctx context.Context, input model.Input, prompt []byte, mcp
 		MCPSocket: mcpSocket, MCPProxyToken: mcpProxyToken}); err != nil {
 		return Result{}, errors.New("send isolated Codex provider request")
 	}
-	return readProviderBrokerResponse(connection, onActivity)
+	return readBoundProviderBrokerResponse(connection, &input, providerWriterUID, onActivity)
 }
 
 // После отмены больше не посылаем request, но даём изолированному процессу
@@ -198,7 +274,7 @@ func interruptBrokerRequest(connection net.Conn) {
 }
 
 func validateBrokerTerminal(response brokerResponse) (Result, error) {
-	if response.Result.Usage.Validate() != nil || len(response.Result.ToolCalls) != 0 || len(response.Result.FinalMessage) > maximumFinalBytes {
+	if response.Result.Usage.Validate() != nil || response.Result.UsageCompleteness > UsageComplete || len(response.Result.ToolCalls) != 0 || len(response.Result.FinalMessage) > maximumFinalBytes {
 		return Result{}, errProviderBrokerResponseInvalid
 	}
 	if !response.OK {
@@ -280,6 +356,11 @@ func logProviderSafeFailure(stage providerExecutionStage, err error) {
 				switch failure.notificationError {
 				case "METHOD", "ENVELOPE", "TUPLE", "ITEM", "TIMESTAMP", "MESSAGE", "TOKEN_USAGE", "TERMINAL", "LIFECYCLE", "MCP", "PROVIDER_ERROR":
 					notificationError = failure.notificationError
+				}
+				if notification == "thread/tokenUsage/updated" {
+					if reason := safeTokenUsageFailureReason(tokenUsageFailureReason(failure.notificationError)); reason != "UNKNOWN" {
+						notificationError = reason
+					}
 				}
 			}
 		}
@@ -405,6 +486,8 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver 
 	}
 	ctx, joinPeer := bindBrokerPeerContext(ctx, connection, scanner)
 	defer joinPeer()
+	ctx, cancelDeadline := request.Input.BoundExecutionDeadline(ctx, 0)
+	defer cancelDeadline()
 	auth, err := readProviderAuthentication(request.Input)
 	if err != nil {
 		return writeProviderBrokerFailureAtStage(connection, providerStageAuthRead, err)
@@ -459,7 +542,12 @@ func writeProviderBrokerFailureAtStage(connection io.Writer, stage providerExecu
 // Ошибка не подтверждает итог или credential effect. Измеренный расход и
 // безопасная native timeline сохраняются независимо от этого исхода.
 func failedProviderResult(result Result) Result {
-	return Result{Usage: result.Usage, ToolCalls: result.ToolCalls}
+	failed := Result{Usage: result.Usage, UsageCompleteness: result.UsageCompleteness, ToolCalls: result.ToolCalls}
+	if result.rolloutCapture != nil && result.rolloutCapture.sealed && result.matchesCapture(result.rolloutCapture) {
+		failed = withRolloutCapture(failed, result.rolloutCapture)
+		failed.ArchivePath = result.ArchivePath
+	}
+	return failed
 }
 
 func writeProviderBrokerResultFailure(connection io.Writer, result Result, err error) error {
@@ -473,6 +561,11 @@ func writeProviderBrokerResultFailure(connection io.Writer, result Result, err e
 func executeProviderTurn(ctx context.Context, input model.Input, prompt []byte, mcpProxyToken string,
 	execute providerExecutor, commit providerCredentialRefreshCommitter,
 ) (Result, error) {
+	if input.ExecutionDeadline.Validate() != nil {
+		return Result{}, ErrRuntimeProfile
+	}
+	ctx, cancelDeadline := input.BoundExecutionDeadline(ctx, 0)
+	defer cancelDeadline()
 	authenticationPath := filepath.Join(input.CodexHome, "auth.json")
 	defer os.Remove(authenticationPath)
 	result, executionErr := execute(ctx, input, prompt, mcpProxyToken)

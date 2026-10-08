@@ -10,6 +10,39 @@ updated: 2026-10-04
 
 # Совместная отладка прототипа
 
+## Checkpoint 08.10.2026 12:00 UTC — подтверждаемое изменение Workflow
+
+Issue1797/Draft1800, база802e8423: structural UPDATE сохраняет прежние DAG
+edges, назначает новые keys сервером и показывает exact normalized After.
+ROOT CP/RC unit, vet, SQL-boundary и disposable PostgreSQL33→39 PASS;
+исторические pins/inputs/graph не меняются. Configuration pages увеличены
+до16KiB при64KiB encoded budget; transcript показывает только безопасные
+координаты read request. Native proposal/Apply/Publish и новый business run
+пока NOT RUN. Chrome API200/Console0, screenshot NOT RUN из-за MCP.
+Подробности и дальнейшие шаги: self-development-dogfooding.md.
+
+## Checkpoint 07.10.2026 17:13 UTC — обычная переписка и native dogfooding
+
+Текущая работа относится к Issue1797/Draft1800, ветка
+`kodex-agent/issue-1797-post-bootstrap-qa`, база `d8195317`.
+У обычного запуска исправлен пропадающий между инструментами индикатор:
+последний ответ остаётся активным, завершённый tool не становится RUNNING.
+Точные run/session/node/turn/attempt и child snapshot сохраняются;
+callback attempt узла не сравнивается с retry attempt запуска.
+Terminal/FINAL закрывают индикатор. Итоговые ROOT286/286 unit,
+lint/format/typecheck, build7.80с и source/Pod readback PASS; visual проверка нового состояния
+NOT RUN, так как Chrome list_pages пока не отвечает. Чужие вкладки не трогались.
+
+Новый native Manager запустил настоящий Workflow после уточнения единственного
+business output INTAKE. Step-001 child технически SUCCEEDED, но Workflow
+17:12:02 завершился FAILED/RUNTIME_WORKFLOW_INCOMPLETE; semantic cause пока
+UNKNOWN, следующий Manager callback выполнялся штатно. На17:14:39 Manager
+также FAILED, callbacks COMPLETED; leases закрыты по readback17:15:42. Ничего не
+перезапускалось только из-за истечения времени наблюдения. Полный Workflow,
+Architect/Developer/reviews/READY остаются OPEN. Exact refs, ACK hashes,
+исторические FAIL/NOT RUN и следующий шаг записаны в
+`docs/operations/self-development-dogfooding.md`, checkpoint17:13.
+
 Область: локальный `trusted-cluster`, единственный обслуживаемый клон
 `/home/s/projects/kodex`, эпик #1763, текущие Issue #1789 и Draft PR #1790.
 Это рабочий журнал, а не доказательство приёмки. Слияние PR — только по

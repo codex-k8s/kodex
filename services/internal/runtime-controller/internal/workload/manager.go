@@ -602,7 +602,7 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		return runtimecontract.RunnerInput{}, err
 	}
 	input := runtimecontract.RunnerInput{
-		Schema: runtimecontract.RunnerInputSchemaV8, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
+		Schema: runtimecontract.RunnerInputSchemaV9, Mode: mode, WorkloadInstance: manager.config.ControllerPodUID,
 		OrganizationRef:    revision.GetOrganizationRef(),
 		RuntimeRevisionRef: revision.GetRef(), RuntimeRevisionVersion: revision.GetVersion(), RuntimeRevisionDigest: revision.GetRevisionDigest(),
 		ImageReference: revision.GetImageReference(), ImageManifestDigest: revision.GetImageManifestDigest(),
@@ -659,6 +659,11 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		return runtimecontract.RunnerInput{}, err
 	}
 	input.WorkspacePolicy = workspacePolicy
+	executionDeadline, err := RuntimeExecutionDeadlineFromProto(revision.GetExecutionDeadline())
+	if err != nil {
+		return runtimecontract.RunnerInput{}, err
+	}
+	input.ExecutionDeadline = executionDeadline
 	for _, item := range revision.GetEnvironmentValues() {
 		input.EnvironmentValues = append(input.EnvironmentValues, runtimecontract.RuntimeEnvironmentValue{Name: item.GetName(), Value: item.GetValue()})
 	}

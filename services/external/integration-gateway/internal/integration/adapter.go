@@ -769,6 +769,10 @@ func githubError(response *github.Response, err error) error {
 	if err == nil {
 		return nil
 	}
+	var safe *SafeError
+	if errors.As(err, &safe) {
+		return safe
+	}
 	if response == nil {
 		return &SafeError{Code: "INTEGRATION_UNAVAILABLE"}
 	}

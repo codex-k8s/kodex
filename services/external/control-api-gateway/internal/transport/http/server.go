@@ -320,6 +320,9 @@ func messageMap(message proto.Message) (map[string]any, error) {
 		return nil, err
 	}
 	normalize(value)
+	if message.ProtoReflect().Descriptor().FullName() == "controlplane.v1.GetRunGraphResponse" {
+		delete(value, "runs")
+	}
 	return value, nil
 }
 
@@ -507,6 +510,14 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 }
 
 func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field protoreflect.FieldDescriptor) (any, bool) {
+	if descriptor.FullName() == "controlplane.v1.ListRunEventsResponse" {
+		if field.Kind() == protoreflect.BoolKind && field.JSONName() == "complete" {
+			return false, true
+		}
+		if field.Kind() == protoreflect.Int64Kind && field.JSONName() == "currentSequence" {
+			return float64(0), true
+		}
+	}
 	if descriptor.FullName() == "controlplane.v1.Agent" && field.Kind() == protoreflect.BoolKind {
 		return false, field.JSONName() == "system" || field.JSONName() == "enabled"
 	}

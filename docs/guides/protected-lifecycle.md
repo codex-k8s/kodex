@@ -4,8 +4,8 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.8
-updated: 2026-10-07
+version: 1.1.14
+updated: 2026-10-08
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
@@ -17,6 +17,14 @@ Aggregate catalog не должен выдавать недопущенную ex
 ошибка чтения не относятся к отсутствию eligibility и закрывают весь read.
 Фильтр и cursor применяются после единого authoritative eligibility rule;
 пропуск не включает исторический decoder и не создаёт права на mutation.
+
+Каталог собственных прав помощника использует ту же проверенную read-only
+проекцию exact published package, что каталог назначенного сотрудника.
+Корректный, но несовместимый с текущим executable registry пакет доступен
+для диагностики как `PACKAGE_UNAVAILABLE`, `grantable=false`. Enable и
+invocation по-прежнему проходят отдельный executable decoder и закрыто
+отклоняются. Ошибки owner scope, binding, content digest, parser и чтения не
+превращаются в диагностический успех и не скрываются blanket suppression.
 
 Перепривязка consumer между configuration sets проверяет глобальную связь по
 организации/kind/consumer, а не только версию нового set. Явное expected absence
@@ -46,6 +54,29 @@ terminal path и сохраняет audit, receipt и ordered run/node/gate even
 Storage не переводится обратно в `LIVE`, свежий grant/RuntimeRevision не выдаётся.
 `SNAPSHOT_READY|SNAPSHOTTING|DELETE_PVC_READY|ARCHIVED|RESTORE_READY|RESTORING`
 остаются ожиданием, а не terminal failure.
+
+Terminal storage reconciliation сохраняет различимую закрытую диагностику
+до terminal command: stage/class и exact run/node/session refs, без archive
+descriptor, исходного содержимого и credentials. Наличие такого наблюдения
+не доказывает commit транзакции; replay или rollback не объявляются новым
+terminal effect. Отсутствие общего eligibility warning не является
+доказательством пригодности сессии.
+
+Адресный Run и workspace RunGraph вычисляют session readiness одним owner
+predicate в той же защищённой read-транзакции. Отсутствующая или повреждённая
+storage metadata не превращается в готовность. UI блокирует продолжение только
+по точной текущей conversation/session/run привязке; историческая ошибка другого
+хода не переносится на новую сессию. Read-проекция не выдаёт grant и не заменяет
+повторную серверную проверку перед claim.
+
+Перед возобновлением provider thread подтверждённый read-only locator rollout
+хранится отдельно от execution binding. Он проверяется по trusted session,
+canonical workspace, regular single-link inode, owner/mode и размеру. Отказ
+resume/bind не назначает thread/turn или usage. Только после bounded abort/join
+writer тот же подтверждённый inode может дать свежий sealed archive descriptor;
+старые size/digest не переиспользуются. Замена inode, неизвестный writer либо
+невалидный locator закрывают capture. Исторический storage ERROR не чинится
+переписыванием tuple или ослаблением admission.
 
 | Переход storage-blocked execution | Результат владельца |
 | --- | --- |
@@ -132,6 +163,37 @@ audience, полным методом, permission, session, turn, attempt, не�
 - завершение parent либо закрывает весь обязательный дочерний граф, либо
   отклоняется при незавершённом дочернем процессе.
 
+При материализации этапа Workflow CP передаёт в child input исходные значения
+exact canonical root и его immutable опубликованной версии. Дополнительный
+input делегирования может только дополнять их: совпадающее значение допустимо,
+отличающаяся подмена закрыто отклоняется до создания child и его effects.
+Общий key/byte budget проверяется после объединения. Повреждённый root/spec
+является недоступностью авторитетного источника, не caller validation и не
+основанием terminal eligibility. Ordinary delegation без Workflow сохраняет
+прежний input; nested Workflow использует собственный canonical root.
+История новой Session, callback artifacts и имя Workflow не заменяют эту
+передачу. Значения данных не становятся authority, grants либо файловым доступом;
+исторические inputs/RuntimeRevision не переписываются.
+
+Подтверждаемое структурное изменение Workflow сохраняет каждое исходное ребро
+оставленных этапов и объединяет его с зависимостями нового серверного фронта.
+Без изменения порядка и parallel-групп исходный DAG сохраняется точно.
+Удалённый либо перемещённый после своего потребителя prerequisite, повторный
+key/dependency и явный caller-controlled DAG отклоняются до effects. Новым
+этапам ключ назначает сервер. Before/OCC и вычисленный заново After проверяются
+в owner boundary; After содержит точный применяемый draft, а не выдаёт authority.
+Агрегация ждёт всех parallel peers; публикация создаёт новую immutable версию,
+не переписывая historical execution pins, граф и inputs прежних запусков.
+
+Ограничения human-text Workflow согласованы с Unicode `maxLength` схемы;
+некорректный UTF-8 отклоняется, общий размер инструкций остаётся байтовым.
+Обычная команда и подтверждаемый план используют один predicate. Диагностика
+invalid proposal сохраняет прежний отказ и содержит только закрытые stage/field
+реального rejecting guard, а не текст payload или ошибку зависимости. Consumer
+принимает лишь точный canonical code/domain/detail и закрытый набор metadata;
+неизвестные поля не становятся подсказкой, locator или разрешением повторить
+эффект. Native ошибка и durable FAILED receipt сообщают согласованный код.
+
 ## Авторитетный граф выполнения
 
 Минимальный граф для запуска по расписанию:
@@ -155,6 +217,19 @@ Schedule
 каждую отдельную attempt с точными версиями session, turn, process,
 `RuntimeRevision` и итогового входа. Retry создаёт новую attempt и сохраняет
 предыдущую, а не перезаписывает привязку.
+
+Для Workflow и опубликованного этапа deadline назначается DB clock при первом
+допустимом claim и далее неизменен: очередь до claim исключена, Human Gate,
+continuation, ожидание и reclaim входят в wall-clock. Immutable RuntimeRevision
+и exact runner ABI связывают все ancestor clocks с version/digest источника;
+controller keeper и runner/provider независимо cancel/join по их минимуму.
+Lease продление, делегирование, leased read и новый integration effect не
+продлевают срок. Owner expiry атомарно закрывает полный граф как
+`FAILED/RUNTIME_TIMEOUT`, сохраняя уже начатый WRITE как `UNKNOWN_OUTCOME`.
+Late success не меняет terminal verdict; подтверждённые usage/archive pins
+сохраняются только после исходной проверки результата и до отзыва lease.
+Полная матрица и forward-only cutover приведены в
+[ARCH-MC-007](../architecture/runtime-and-sessions.md#устойчивый-срок-workflow-и-этапа).
 
 ### Матрица переходов
 
@@ -309,6 +384,16 @@ Callback обычного сотрудника сохраняет каталог
 получает новое server-owned ребро от текущего узла и свежую revision.
 Отзыв capability закрывает каталог и команду; опубликованный Workflow
 по-прежнему предлагает только ещё не материализованные шаги своей версии.
+
+Исправление локально неверного входа делегирования не является повтором
+исполняемой команды. Различимый typed отказ shape/recipient-step/task/input
+возникает до owner command; ограниченная подсказка модели разрешается только
+после принятого владельцем terminal FAILED activity receipt. Модель может
+исправить вход один раз по текущему server-owned каталогу. Сервер не выбирает
+пару за неё, не расширяет targets и не повторяет RPC. Принятый effect,
+неизвестный outcome, transport/permission/stale/expiry либо отказ activity
+projection сохраняют закрытый отказ без recoverable guidance. Текст ошибки
+удалённого сервиса не может приобрести полномочия локального typed маркера.
 
 Снимок неизменяемо закрепляет как минимум:
 

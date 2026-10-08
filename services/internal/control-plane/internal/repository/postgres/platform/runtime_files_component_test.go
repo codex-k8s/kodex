@@ -136,6 +136,32 @@ func testRuntimeFileQueries(t *testing.T, ctx context.Context, repository *Repos
 	if err != nil || recorded.Event == nil || recorded.Event.ToolCall == nil || recorded.Event.ToolCall.CapabilityRef != "" || recorded.Event.ToolCall.GrantRef != execution.CatalogRef {
 		t.Fatalf("read-only catalog tool activity failed: %v", err)
 	}
+	// Полное постраничное чтение использует тот же frozen catalog grant и
+	// фиксирует lifecycle без body, offset, filename или digest в activity.
+	readProjection := projection
+	readProjection.CallRef, readProjection.Tool = "tcl_fullreadfixture1", runtimecontract.FileToolRead
+	readProjection.State, readProjection.Revision, readProjection.DurationMS, readProjection.SafeResult = "RUNNING", 1, 0, ""
+	for _, phase := range []string{"running", "complete"} {
+		if phase == "complete" {
+			readProjection.State, readProjection.Revision, readProjection.DurationMS, readProjection.SafeResult = "SUCCEEDED", 2, 1, "read_file:completed"
+		}
+		readRecorded, err := service.Execute(ctx, command.Command{Kind: command.RecordRunToolCall, Principal: activity,
+			Mutation: value.Mutation{IdempotencyKey: "runtime-full-file-activity-" + phase}, Payload: readProjection})
+		if err != nil || readRecorded.Event == nil || readRecorded.Event.ToolCall == nil || readRecorded.Event.ToolCall.GrantRef != execution.CatalogRef || readRecorded.Event.ToolCall.Tool != runtimecontract.FileToolRead {
+			t.Fatalf("full file catalog lifecycle activity failed: %v", err)
+		}
+	}
+	readProjection.SafeParameters = map[string]any{"purpose": execution.Purpose, "offset_bytes": 0}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.RecordRunToolCall, Principal: activity,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-full-file-activity-sensitive"}, Payload: readProjection}); !errors.Is(err, errs.ErrInvalid) {
+		t.Fatalf("file byte range entered activity projection: %v", err)
+	}
+	readProjection.SafeParameters = map[string]any{"purpose": execution.Purpose}
+	readProjection.GrantRef = "vfc_foreignfullfile1"
+	if _, err := service.Execute(ctx, command.Command{Kind: command.RecordRunToolCall, Principal: activity,
+		Mutation: value.Mutation{IdempotencyKey: "runtime-full-file-activity-foreign"}, Payload: readProjection}); !errors.Is(err, errs.ErrNotFound) && !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("foreign full file catalog grant entered activity: %v", err)
+	}
 	projection.SafeParameters = map[string]any{"purpose": execution.Purpose, "query": "private query must not be retained"}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.RecordRunToolCall, Principal: activity,
 		Mutation: value.Mutation{IdempotencyKey: "runtime-files-activity-sensitive"}, Payload: projection}); !errors.Is(err, errs.ErrInvalid) {

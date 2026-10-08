@@ -14,8 +14,11 @@ const props = withDefaults(
 const { locale } = useI18n();
 
 const items = computed(() => {
-  if (props.usage.totalTokens === 0 && props.usage.modelContextWindow === 0)
-    return [];
+  if (props.usage.totalTokens === 0) {
+    return !props.compact && props.usage.modelContextWindow > 0
+      ? ([["contextWindow", props.usage.modelContextWindow]] as const)
+      : [];
+  }
   const all = [
     ["total", props.usage.totalTokens],
     ["input", props.usage.inputTokens],

@@ -22,7 +22,7 @@ func githubExtendedResponse(t *testing.T, operation string, r *http.Request) (st
 		}
 		return "[" + item + "]", true
 	}
-	pull := `{"number":3,"title":"Title","body":"Text","state":"open","head":{"ref":"feature","sha":"abc"},"base":{"ref":"main"},"html_url":"https://github.com/acme/repo/pull/3"}`
+	pull := `{"number":3,"title":"Title","body":"Text","state":"open","head":{"ref":"feature","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"base":{"ref":"main","sha":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},"changed_files":3,"html_url":"https://github.com/acme/repo/pull/3"}`
 	review := `{"id":4,"body":"Text","state":"COMMENTED","commit_id":"abc"}`
 	branch := `{"name":"main","commit":{"sha":"abc"},"protected":false}`
 	commit := `{"sha":"abc","commit":{"message":"Text"},"html_url":"https://github.com/acme/repo/commit/abc"}`
@@ -40,10 +40,13 @@ func githubExtendedResponse(t *testing.T, operation string, r *http.Request) (st
 	comment := fmt.Sprintf(`{"id":4,"body":"Text","issue_url":"%s://%s/repos/acme/repo/issues/3"}`, scheme, host)
 	switch operation {
 	case "github.pull_request.file.list":
+		if path == "/pulls/3" && r.Method == "GET" {
+			return pull, true
+		}
 		if path != "/pulls/3/files" {
 			t.Error("pull files route changed")
 		}
-		return list(`{"sha":"abc","filename":"a.txt","status":"modified","additions":1,"deletions":0,"patch":"@@ -0,0 +1 @@\n+Text"}`)
+		return list(`{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","filename":"a.txt","status":"modified","additions":1,"deletions":0,"changes":1,"patch":"@@ -0,0 +1 @@\n+Text"}`)
 	case "github.repository.content.list":
 		if path != "/contents/src" || r.Method != "GET" {
 			t.Error("content list route changed")
@@ -53,7 +56,7 @@ func githubExtendedResponse(t *testing.T, operation string, r *http.Request) (st
 		if path != "/contents/src/a.txt" || r.Method != "GET" {
 			t.Error("content read route changed")
 		}
-		return `{"path":"src/a.txt","type":"file","sha":"abc","size":4,"encoding":"base64","content":"VGV4dA=="}`, true
+		return `{"path":"src/a.txt","type":"file","sha":"4add785dafe43f11202c6b7286b47c3b62401dd2","size":4,"encoding":"base64","content":"VGV4dA=="}`, true
 	case "github.repository.content.create", "github.repository.content.update", "github.repository.content.delete":
 		method := "PUT"
 		if strings.HasSuffix(operation, "delete") {

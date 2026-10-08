@@ -24,6 +24,22 @@ func TestMessageSourceCasterPreservesClosedOrigins(t *testing.T) {
 	}
 }
 
+func TestConnectionCasterPreservesDefinitionBindingPresence(t *testing.T) {
+	if castConnection(entity.IntegrationConnection{}).DefinitionConfigurationBinding != nil {
+		t.Fatal("omitted binding became authoritative absence")
+	}
+	for _, state := range []string{"ABSENT", "MATCH"} {
+		binding := &entity.IntegrationDefinitionConfigurationBinding{State: state}
+		if state == "MATCH" {
+			binding.ConfigurationRef, binding.RevisionRef, binding.BindingVersion = "mconf_fixture", "mrev_fixture", 7
+		}
+		result := castConnection(entity.IntegrationConnection{DefinitionConfigurationBinding: binding}).DefinitionConfigurationBinding
+		if result.State.String() != "STATE_"+state || result.ConfigurationRef != binding.ConfigurationRef || result.RevisionRef != binding.RevisionRef || result.BindingVersion != binding.BindingVersion {
+			t.Fatal("authoritative binding pins changed at transport")
+		}
+	}
+}
+
 func TestCatalogCardsPreserveAbsentActivityAndOwnerProjection(t *testing.T) {
 	t.Parallel()
 	empty := castProject(entity.Project{IntegrationState: "NONE"})

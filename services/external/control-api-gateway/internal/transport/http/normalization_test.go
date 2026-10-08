@@ -2,6 +2,7 @@ package httptransport
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -409,6 +410,94 @@ func TestMessageMapMaterializesRequiredProviderAccountZeroValues(t *testing.T) {
 	}
 	if value["externalAccountMasked"] != "" || value["enabled"] != false || value["ready"] != false {
 		t.Fatalf("обязательные нулевые поля provider account потеряны: %#v", value)
+	}
+}
+
+func TestMessageMapMaterializesRequiredRunEventsPageScalars(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name     string
+		sequence int64
+		complete bool
+	}{
+		{name: "zero"},
+		{name: "partial", sequence: 566},
+		{name: "complete", sequence: 566, complete: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			value, err := messageMap(&controlplanev1.ListRunEventsResponse{CurrentSequence: test.sequence, Complete: test.complete})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if complete, ok := value["complete"].(bool); !ok || complete != test.complete {
+				t.Fatalf("required page completeness missing or changed: %#v", value)
+			}
+			if sequence, ok := value["currentSequence"].(float64); !ok || sequence != float64(test.sequence) {
+				t.Fatalf("required page sequence missing or changed: %#v", value)
+			}
+			if events, ok := value["events"].([]any); !ok || len(events) != 0 {
+				t.Fatal("empty events must remain an array")
+			}
+		})
+	}
+}
+
+func TestRunEventsEndpointPreservesRequiredPageScalars(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name     string
+		after    int64
+		sequence int64
+		count    int
+		complete bool
+	}{
+		{name: "empty", complete: true},
+		{name: "partial-500", sequence: 566, count: 500},
+		{name: "final-66", after: 500, sequence: 566, count: 66, complete: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			response := &controlplanev1.ListRunEventsResponse{CurrentSequence: test.sequence, Complete: test.complete}
+			for index := range test.count {
+				event := cancellationProjectionEvent("RUN_CANCELLED")
+				event.Ref, event.RunRef = fmt.Sprintf("revt_fixture%04d", index), "run_fixture01"
+				event.Sequence = test.after + int64(index) + 1
+				response.Events = append(response.Events, event)
+			}
+			client := &catalogRPCRecorder{response: response}
+			writer := httptest.NewRecorder()
+			// Проверяем обслуживающий generated route, RPC и конечный JSON, а не DTO отдельно.
+			catalogTestHandler(client).ServeHTTP(writer, httptest.NewRequest("GET",
+				fmt.Sprintf("/api/v1/runs/run_fixture01/events?afterSequence=%d&limit=500", test.after), nil))
+			var body map[string]any
+			if err := json.Unmarshal(writer.Body.Bytes(), &body); err != nil || writer.Code != http.StatusOK {
+				t.Fatalf("invalid run events response: status=%d error=%v", writer.Code, err)
+			}
+			if complete, ok := body["complete"].(bool); !ok || complete != test.complete {
+				t.Fatal("required wire completeness missing or changed")
+			}
+			if sequence, ok := body["currentSequence"].(float64); !ok || sequence != float64(test.sequence) {
+				t.Fatal("required wire sequence missing or changed")
+			}
+			items, ok := body["items"].([]any)
+			if !ok || len(items) != test.count || len(body) != 3 {
+				t.Fatal("run events page keys or item count changed")
+			}
+			for index, item := range items {
+				event, ok := item.(map[string]any)
+				if !ok || event["sequence"] != float64(test.after+int64(index)+1) || event["runRef"] != "run_fixture01" {
+					t.Fatal("run event order or identity changed")
+				}
+			}
+			request, ok := client.request.(*controlplanev1.ListRunEventsRequest)
+			if !ok || client.method != controlplanev1.PlatformQueryService_ListRunEvents_FullMethodName || request.RunRef != "run_fixture01" || request.AfterSequence != test.after || request.Limit != 500 {
+				t.Fatal("run events request pins changed")
+			}
+			if writer.Header().Get("Content-Type") != "application/json" || writer.Header().Get("Cache-Control") != "no-store" {
+				t.Fatal("run events response headers changed")
+			}
+		})
 	}
 }
 

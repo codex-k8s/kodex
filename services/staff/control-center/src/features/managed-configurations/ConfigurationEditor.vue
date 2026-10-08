@@ -36,6 +36,11 @@ import { useCursorInfiniteScroll } from "@/shared/ui/async-entity-picker";
 import { useAdaptiveCursorPageSize } from "@/shared/ui/cursor-list";
 import { useUnsavedChanges } from "@/shared/ui/unsaved-changes";
 import * as api from "./api";
+import {
+  bindIntegrationConnection,
+  prepareIntegrationConnectionBinding,
+  type IntegrationConnectionBindingPlan,
+} from "./integration-binding";
 import { archiveConfiguration } from "./lifecycle";
 import { managedCopySource, canArchiveConfiguration } from "./copy-source";
 import ConfigurationCopyDialog from "./ConfigurationCopyDialog.vue";
@@ -183,6 +188,10 @@ const comparison = computed(() => {
   }
 });
 const impactValue = ref<ManagedConfigurationImpact>();
+const bulkRebindVisible = computed(
+  () =>
+    props.kind !== "SYSTEM_STT" && impactValue.value?.consumers.length !== 0,
+);
 const impactList = ref<HTMLElement>();
 const impactSentinel = ref<HTMLElement>();
 const impactPageSize = useAdaptiveCursorPageSize({
@@ -199,6 +208,15 @@ const impactQuery = ref("");
 const impactLoading = ref(false);
 const impactProblem = ref<AppProblem>();
 const newConnection = ref<AsyncEntityOption>();
+const connectionBindingPlan = ref<IntegrationConnectionBindingPlan>();
+const connectionBindingLabel = computed(() =>
+  connectionBindingPlan.value?.input.consumers[0]?.expectedAbsent === false
+    ? "managed.rebindConnection"
+    : "managed.bindNewConnection",
+);
+const connectionBindingLoading = ref(false);
+const connectionBindingProblem = ref<AppProblem>();
+let connectionBindingController: AbortController | undefined;
 const impactDefinitionKey = computed(() => {
   if (props.kind !== "INTEGRATION_DEFINITION" || !revision.value)
     return undefined;
@@ -236,6 +254,10 @@ function closeImpact(): void {
   impactOpen.value = false;
   impactValue.value = undefined;
   impactLoading.value = false;
+  connectionBindingController?.abort();
+  connectionBindingPlan.value = undefined;
+  connectionBindingLoading.value = false;
+  connectionBindingProblem.value = undefined;
   newConnection.value = undefined;
 }
 const selected = ref<string[]>([]);
@@ -1011,6 +1033,8 @@ async function bindNewConnection(): Promise<void> {
   const target = revision.value;
   const impact = impactValue.value;
   const candidate = newConnection.value;
+  const plan = connectionBindingPlan.value;
+  const bindingSignal = connectionBindingController?.signal;
   if (
     !current ||
     current.kind !== "INTEGRATION_DEFINITION" ||
@@ -1019,7 +1043,12 @@ async function bindNewConnection(): Promise<void> {
     target.state !== "PUBLISHED" ||
     !impact ||
     !candidate ||
+    !plan ||
+    !bindingSignal ||
+    plan.connectionRef !== candidate.ref ||
     !impactDefinitionKey.value ||
+    connectionBindingLoading.value ||
+    connectionBindingProblem.value ||
     busy.value ||
     impactLoading.value ||
     impactProblem.value ||
@@ -1028,19 +1057,47 @@ async function bindNewConnection(): Promise<void> {
     return;
   await perform(async () =>
     accept(
-      await api.rebind(current, target, {
-        impactDigest: impact.digest,
-        consumers: [
-          {
-            kind: "INTEGRATION_CONNECTION",
-            ref: candidate.ref,
-            expectedAbsent: true,
-          },
-        ],
-      }),
+      await bindIntegrationConnection(
+        plan,
+        AbortSignal.any([controller.signal, bindingSignal]),
+      ),
     ),
   );
 }
+watch(
+  newConnection,
+  async (candidate) => {
+    connectionBindingController?.abort();
+    const active = new AbortController();
+    connectionBindingController = active;
+    connectionBindingPlan.value = undefined;
+    connectionBindingProblem.value = undefined;
+    connectionBindingLoading.value = false;
+    const current = configuration.value;
+    const target = revision.value;
+    const key = impactDefinitionKey.value;
+    if (!candidate || !current || !target || !key || !impactOpen.value) return;
+    connectionBindingLoading.value = true;
+    try {
+      const plan = await prepareIntegrationConnectionBinding(
+        current,
+        target,
+        candidate.ref,
+        key,
+        AbortSignal.any([active.signal, controller.signal]),
+      );
+      if (!disposed && !active.signal.aborted)
+        connectionBindingPlan.value = plan;
+    } catch (error) {
+      if (!disposed && !active.signal.aborted)
+        connectionBindingProblem.value = asProblem(error);
+    } finally {
+      if (!disposed && !active.signal.aborted)
+        connectionBindingLoading.value = false;
+    }
+  },
+  { flush: "sync" },
+);
 async function applyRoleImage(selected: string[]): Promise<void> {
   const hadUnknownAttempt = imageAttempt.value !== undefined;
   const plan = imagePlan.value;
@@ -1766,6 +1823,13 @@ watch(
           @select="newConnection = $event"
           @update:model-value="!$event && (newConnection = undefined)"
         />
+        <p v-if="connectionBindingLoading" role="status">
+          {{ $t("common.loading") }}
+        </p>
+        <ProblemNotice
+          v-if="connectionBindingProblem"
+          :problem="connectionBindingProblem"
+        />
         <button
           class="button button--primary"
           type="button"
@@ -1774,15 +1838,18 @@ watch(
             impactLoading ||
             !!impactProblem ||
             !!problem ||
-            !newConnection
+            !newConnection ||
+            connectionBindingLoading ||
+            !!connectionBindingProblem ||
+            !connectionBindingPlan
           "
           @click="bindNewConnection"
         >
-          {{ $t("managed.bindNewConnection") }}
+          {{ $t(connectionBindingLabel) }}
         </button>
       </div>
       <button
-        v-if="kind !== 'SYSTEM_STT'"
+        v-if="bulkRebindVisible"
         class="button button--primary"
         :disabled="
           busy ||

@@ -21,6 +21,7 @@ export interface RunNode {
   artifactRefs: string[];
   childRunRefs: string[];
   callbackSummary?: string;
+  planned?: boolean;
   safeErrorCode?: string;
   safeErrorMessage?: string;
   createdAt: string;

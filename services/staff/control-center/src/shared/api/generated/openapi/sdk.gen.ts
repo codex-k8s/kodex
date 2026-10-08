@@ -2571,6 +2571,9 @@ export const deleteIntegrationConnection = <ThrowOnError extends boolean = false
     ...options
 });
 
+/**
+ * Адресное авторитетное чтение. definitionConfigurationBinding возвращается только после organization.manage и проверки доступа к текущему set. Отсутствующее поле не означает ABSENT; ABSENT доказывает отсутствие связи в том же snapshot. Каталоги и командные ответы поле не обещают.
+ */
 export const getIntegrationConnection = <ThrowOnError extends boolean = false>(options: Options<GetIntegrationConnectionData, ThrowOnError>): RequestResult<GetIntegrationConnectionResponses, GetIntegrationConnectionErrors, ThrowOnError> => (options.client ?? client).get<GetIntegrationConnectionResponses, GetIntegrationConnectionErrors, ThrowOnError>({
     security: [{
             in: 'cookie',

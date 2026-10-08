@@ -8,6 +8,7 @@ import (
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/internal/runtime-controller/internal/workload"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -17,37 +18,48 @@ var errMaterializationLeaseStopped = errors.New("runtime materialization lease k
 // Keeper принадлежит только промежутку claim→tracker. Публикация Pod и renew
 // сериализованы: уже полученный отказ не может разрешить новый Pod.
 type materializationLeaseKeeper struct {
-	runtime *runtime
-	input   runtimecontract.RunnerInput
-	parent  context.Context
-	ctx     context.Context
-	cancel  context.CancelCauseFunc
-	ready   chan struct{}
-	done    chan struct{}
-	mu      sync.Mutex
-	failure error
+	runtime        *runtime
+	input          runtimecontract.RunnerInput
+	parent         context.Context
+	ctx            context.Context
+	cancel         context.CancelCauseFunc
+	cancelDeadline context.CancelFunc
+	ready          chan struct{}
+	done           chan struct{}
+	mu             sync.Mutex
+	failure        error
 }
 
 func (runtime *runtime) keepMaterializationClaims(parent context.Context, executions []*controlplanev1.ClaimedExecution) []*materializationLeaseKeeper {
 	keepers := make([]*materializationLeaseKeeper, len(executions))
 	for index, execution := range executions {
 		lease := execution.GetLease()
-		keepers[index] = runtime.keepMaterializationLease(parent, runtimecontract.RunnerInput{
-			LeaseRef: lease.GetRef(), LeaseFence: lease.GetFence(), LeaseGeneration: lease.GetGeneration()})
+		input := runtimecontract.RunnerInput{LeaseRef: lease.GetRef(), LeaseFence: lease.GetFence(), LeaseGeneration: lease.GetGeneration()}
+		deadline, err := workload.RuntimeExecutionDeadlineFromProto(execution.GetRevision().GetExecutionDeadline())
+		input.ExecutionDeadline = deadline
+		keeperParent := parent
+		if err != nil {
+			rejected, cancel := context.WithCancelCause(parent)
+			cancel(err)
+			keeperParent = rejected
+		}
+		keepers[index] = runtime.keepMaterializationLease(keeperParent, input)
 	}
 	return keepers
 }
 
 func (runtime *runtime) keepMaterializationLease(parent context.Context, input runtimecontract.RunnerInput) *materializationLeaseKeeper {
-	ctx, cancel := context.WithCancelCause(parent)
+	bounded, cancelDeadline := input.BoundExecutionDeadline(parent, 0)
+	ctx, cancel := context.WithCancelCause(bounded)
 	keeper := &materializationLeaseKeeper{runtime: runtime, input: input, parent: parent,
-		ctx: ctx, cancel: cancel, ready: make(chan struct{}), done: make(chan struct{})}
+		ctx: ctx, cancel: cancel, cancelDeadline: cancelDeadline, ready: make(chan struct{}), done: make(chan struct{})}
 	go keeper.run()
 	return keeper
 }
 
 func (keeper *materializationLeaseKeeper) run() {
 	defer close(keeper.done)
+	defer keeper.cancelDeadline()
 	err := keeper.renew()
 	close(keeper.ready)
 	if err != nil {

@@ -126,7 +126,7 @@ func readSecret(path string) (string, error) {
 }
 
 func writeFailure(path, code string, cause error) error {
-	writeErr := writeResult(path, model.Result{Success: false, SafeErrorCode: code})
+	writeErr := writeResult(path, model.Result{Success: false, SafeErrorCode: code, FailureStage: archive.ClassifyFailureStage(cause)})
 	return errors.Join(fmt.Errorf("session archive worker failed: %w", cause), writeErr)
 }
 

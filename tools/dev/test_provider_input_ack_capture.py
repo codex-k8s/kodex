@@ -2,6 +2,7 @@
 import argparse
 import copy
 import importlib.util
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -21,7 +22,7 @@ def fixture():
     proof.update({field: 1 for field in CAPTURE.NUMBER_FIELDS})
     proof.update(image_reference='registry.fixture/roles@sha256:' + 'b' * 64,
                  image_manifest_digest='sha256:' + 'b' * 64,
-                 model='gpt-6.1-sol', reasoning_effort='medium', reasoning_mode='SUPPORTED',
+                 assistant_scope='NONE', model='gpt-6.1-sol', reasoning_effort='medium', reasoning_mode='SUPPORTED',
                  task_in_prompt=True, instructions_file_comparison='EQUAL',
                  instructions_file_sha256='a' * 64, inbox_prompt_comparison='EQUAL',
                  inbox_prompt_sha256='a' * 64, tools=[{}] * 38, grants=[], capabilities=[])
@@ -34,11 +35,206 @@ def fixture():
     options = argparse.Namespace(run_ref=proof['run_ref'], session_ref=proof['session_ref'],
                                  turn_ref=proof['turn_ref'], attempt=1, pod_name=None,
                                  task_sha256='a' * 64, image_manifest='sha256:' + 'b' * 64,
-                                 binary_sha256='c' * 64, timeout_seconds=1)
+                                 binary_sha256='c' * 64, timeout_seconds=1, assistant_scope='NONE')
     return proof, columns, options
 
 
 class CaptureTest(unittest.TestCase):
+    def test_system_project_context_requires_explicit_exact_pin(self):
+        proof, _, _ = fixture()
+        proof['assistant_scope'] = 'SYSTEM'
+        record = {'event': CAPTURE.EVENT, 'proof': proof}
+        result = CAPTURE.project_ack(record, proof['run_ref'], 'SYSTEM', proof['project_ref'])
+        self.assertEqual(result['project_ref'], proof['project_ref'])
+        with self.assertRaisesRegex(CAPTURE.Failure, '^ACK_PROJECT_SCOPE_INVALID$'):
+            CAPTURE.project_ack(record, proof['run_ref'], 'SYSTEM')
+        for actual in ('project_foreign', '', None):
+            candidate = dict(proof, project_ref=actual)
+            with self.subTest(actual=actual), self.assertRaisesRegex(
+                    CAPTURE.Failure, '^EXPECTED_PROJECT_PIN_MISMATCH$'):
+                CAPTURE.project_ack({'event': CAPTURE.EVENT, 'proof': candidate},
+                                    proof['run_ref'], 'SYSTEM', proof['project_ref'])
+
+    def test_expected_project_pin_invalid_and_never_inferred(self):
+        proof, _, _ = fixture()
+        proof['assistant_scope'] = 'SYSTEM'
+        for expected in ('', 'short', 'PRIVATE project', 'x' * 129, 123, True):
+            with self.subTest(expected=expected), self.assertRaisesRegex(
+                    CAPTURE.Failure, '^EXPECTED_PROJECT_REFERENCE_INVALID$'):
+                CAPTURE.project_ack({'event': CAPTURE.EVENT, 'proof': proof},
+                                    proof['run_ref'], 'SYSTEM', expected)
+        self.assertIsNone(CAPTURE.project_ack({'event': CAPTURE.EVENT, 'proof': proof},
+                                             'run_foreign01', 'SYSTEM', proof['project_ref']))
+        with self.assertRaisesRegex(CAPTURE.Failure, '^ACK_SCOPE_INVALID$'):
+            CAPTURE.project_ack({'event': CAPTURE.EVENT, 'proof': proof},
+                                proof['run_ref'], 'PROJECT', proof['project_ref'])
+
+    def test_none_and_project_optional_pin_adds_only_exact_restriction(self):
+        proof, _, _ = fixture()
+        for scope in ('NONE', 'PROJECT'):
+            proof['assistant_scope'] = scope
+            record = {'event': CAPTURE.EVENT, 'proof': proof}
+            with self.subTest(scope=scope):
+                self.assertEqual(CAPTURE.project_ack(record, proof['run_ref'], scope),
+                                 CAPTURE.project_ack(record, proof['run_ref'], scope, proof['project_ref']))
+                with self.assertRaisesRegex(CAPTURE.Failure, '^EXPECTED_PROJECT_PIN_MISMATCH$'):
+                    CAPTURE.project_ack(record, proof['run_ref'], scope, 'project_foreign')
+
+    def test_system_project_capture_retains_privacy_checkpoint_binary_and_rejoin(self):
+        proof, columns, options = fixture()
+        proof['assistant_scope'], options.assistant_scope = 'SYSTEM', 'SYSTEM'
+        options.expected_project_ref = proof['project_ref']
+        proof.update(input={'secret': 'PRIVATE_INPUT'}, tools=[{'command': 'PRIVATE_COMMAND'}])
+        logs = json.dumps({'event': CAPTURE.EVENT, 'proof': proof, 'body': 'PRIVATE_BODY'}).encode()
+        calls, checkpoints = [], []
+
+        def read(args):
+            calls.append(args)
+            if args[0] == 'get':
+                return columns
+            if args[0] == 'logs':
+                return logs
+            return ('c' * 64 + '  ' + CAPTURE.BINARY + '\n').encode()
+
+        result = CAPTURE.capture(options, read=read, on_ack=checkpoints.append)
+        self.assertEqual(result['status'], 'CAPTURED')
+        self.assertEqual(result['proof']['project_ref'], options.expected_project_ref)
+        self.assertEqual(result['proof']['assistant_scope'], 'SYSTEM')
+        self.assertEqual(result['binary']['expected_comparison'], 'EQUAL')
+        self.assertEqual([call[0] for call in calls], ['get', 'logs', 'exec', 'get'])
+        self.assertEqual(checkpoints[0]['proof'], result['proof'])
+        self.assertEqual(checkpoints[0]['status'], 'ACK_CAPTURED_POD_REJOIN_PENDING')
+        self.assertNotIn('PRIVATE', json.dumps([result, checkpoints]))
+        options.expected_project_ref = 'project_foreign'
+        calls.clear()
+        checkpoints.clear()
+        with self.assertRaisesRegex(CAPTURE.Failure, '^EXPECTED_PROJECT_PIN_MISMATCH$'):
+            CAPTURE.capture(options, read=read, on_ack=checkpoints.append)
+        self.assertEqual([call[0] for call in calls], ['get', 'logs'])
+        self.assertEqual(checkpoints, [])
+
+    def test_invalid_project_capture_pin_fails_before_any_read(self):
+        _, _, options = fixture()
+        options.expected_project_ref = 'PRIVATE invalid'
+        with self.assertRaisesRegex(CAPTURE.Failure, '^EXPECTED_PROJECT_REFERENCE_INVALID$'):
+            CAPTURE.capture(options, read=lambda args: self.fail('invalid pin reached kubectl'))
+
+    def test_system_project_pin_keeps_all_remaining_capture_guards(self):
+        for changed in ('task', 'image', 'revision', 'tuple', 'false_equal', 'binary', 'rejoin'):
+            proof, columns, options = fixture()
+            proof['assistant_scope'], options.assistant_scope = 'SYSTEM', 'SYSTEM'
+            options.expected_project_ref = proof['project_ref']
+            if changed == 'task':
+                options.task_sha256 = 'd' * 64
+            elif changed == 'image':
+                proof['image_reference'] = 'registry.fixture/foreign@sha256:' + 'b' * 64
+            elif changed == 'revision':
+                proof['runtime_revision_digest'] = 'd' * 64
+            elif changed == 'tuple':
+                proof['turn_ref'] = 'turn_foreign01'
+            elif changed == 'false_equal':
+                proof['inbox_prompt_sha256'] = 'd' * 64
+            reads = 0
+
+            def read(args):
+                nonlocal reads
+                if args[0] == 'get':
+                    reads += 1
+                    if changed == 'rejoin' and reads == 2:
+                        return columns.replace(b'123456789abc', b'123456789abd')
+                    return columns
+                if args[0] == 'logs':
+                    return json.dumps({'event': CAPTURE.EVENT, 'proof': proof}).encode()
+                digest = 'd' if changed == 'binary' else 'c'
+                return (digest * 64 + '  ' + CAPTURE.BINARY + '\n').encode()
+
+            with self.subTest(changed=changed), self.assertRaises(CAPTURE.Failure):
+                CAPTURE.capture(options, read=read)
+
+    def test_cli_passes_exact_project_pin_without_changing_default(self):
+        for scope, expected in (('SYSTEM', None), ('SYSTEM', 'project_fixture'),
+                                ('NONE', 'project_fixture'), ('PROJECT', 'project_fixture')):
+            args = ['capture', '--run-ref', 'run_fixture', '--assistant-scope', scope]
+            if expected is not None:
+                args += ['--expected-project-ref', expected]
+            with self.subTest(scope=scope, expected=expected), patch.object(sys, 'argv', args), \
+                    patch.object(CAPTURE, 'capture', return_value={'status': 'CAPTURED'}) as captured, \
+                    patch('sys.stdout', io.StringIO()):
+                CAPTURE.main()
+                self.assertEqual(captured.call_args.args[0].expected_project_ref, expected)
+                self.assertEqual(captured.call_args.args[0].assistant_scope, scope)
+
+    def test_none_default_and_explicit_project_require_current_source_scope(self):
+        proof, _, _ = fixture()
+        record = {'event': CAPTURE.EVENT, 'proof': proof}
+        self.assertEqual(CAPTURE.project_ack(record, proof['run_ref'])['assistant_scope'], 'NONE')
+        proof['assistant_scope'] = 'PROJECT'
+        self.assertEqual(CAPTURE.project_ack(record, proof['run_ref'], 'PROJECT')['project_ref'], proof['project_ref'])
+        with self.assertRaises(CAPTURE.Failure):
+            CAPTURE.project_ack(record, proof['run_ref'])
+
+    def test_explicit_system_without_project_retains_exact_pod_and_binary_binding(self):
+        proof, columns, options = fixture()
+        proof['assistant_scope'], options.assistant_scope = 'SYSTEM', 'SYSTEM'
+        del proof['project_ref']
+        logs = json.dumps({'event': CAPTURE.EVENT, 'proof': proof}).encode()
+
+        def read(args):
+            if args[0] == 'get':
+                return columns
+            if args[0] == 'logs':
+                return logs
+            return ('c' * 64 + '  ' + CAPTURE.BINARY + '\n').encode()
+
+        result = CAPTURE.capture(options, read=read)
+        self.assertEqual(result['status'], 'CAPTURED')
+        self.assertEqual(result['proof']['assistant_scope'], 'SYSTEM')
+        self.assertNotIn('project_ref', result['proof'])
+        self.assertEqual(result['proof']['run_ref'], options.run_ref)
+        self.assertEqual(result['binary']['expected_comparison'], 'EQUAL')
+        self.assertEqual(result['pod']['uid'], '12345678-1234-1234-1234-123456789abc')
+
+    def test_scope_missing_project_and_cross_scope_fail_closed(self):
+        proof, _, _ = fixture()
+        for selected, scope, project in (
+                ('NONE', 'NONE', None), ('NONE', 'NONE', ''),
+                ('NONE', 'PROJECT', 'project_fixture'), ('PROJECT', 'NONE', 'project_fixture'),
+                ('NONE', 'SYSTEM', None), ('SYSTEM', 'NONE', None),
+                ('PROJECT', 'PROJECT', None), ('PROJECT', 'PROJECT', ''),
+                ('PROJECT', 'SYSTEM', None), ('SYSTEM', 'PROJECT', None),
+                ('SYSTEM', 'SYSTEM', 'project_foreign'), ('SYSTEM', 'SYSTEM', None),
+                ('SYSTEM', 'UNKNOWN', None), ('UNKNOWN', 'SYSTEM', None),
+                ('SYSTEM', None, None)):
+            candidate = dict(proof)
+            if scope is None:
+                del candidate['assistant_scope']
+            else:
+                candidate['assistant_scope'] = scope
+            if project is None:
+                candidate.pop('project_ref')
+            else:
+                candidate['project_ref'] = project
+            record = {'event': CAPTURE.EVENT, 'proof': candidate}
+            with self.subTest(selected=selected, scope=scope, project=project):
+                if selected == scope == 'SYSTEM' and project is None:
+                    self.assertEqual(CAPTURE.project_ack(record, proof['run_ref'], selected)['assistant_scope'], 'SYSTEM')
+                else:
+                    with self.assertRaises(CAPTURE.Failure):
+                        CAPTURE.project_ack(record, proof['run_ref'], selected)
+
+    def test_system_does_not_relax_other_pins_or_requested_run(self):
+        proof, _, _ = fixture()
+        proof['assistant_scope'] = 'SYSTEM'
+        del proof['project_ref']
+        for field, bad in [('lease_ref', ''), ('image_recipe_ref', ''), ('runtime_revision_digest', ''), ('attempt', 0)]:
+            candidate = dict(proof)
+            candidate[field] = bad
+            with self.subTest(field=field), self.assertRaises(CAPTURE.Failure):
+                CAPTURE.ack_from_logs(json.dumps({'event': CAPTURE.EVENT, 'proof': candidate}).encode(), proof['run_ref'], 'SYSTEM')
+        self.assertIsNone(CAPTURE.project_ack({'event': CAPTURE.EVENT, 'proof': proof}, 'run_foreign01', 'SYSTEM'))
+        with self.assertRaises(CAPTURE.Failure):
+            CAPTURE.project_ack({'event': CAPTURE.EVENT, 'proof': proof}, proof['run_ref'])
+
     def test_closed_projection_privacy_and_exact_equal(self):
         proof, columns, options = fixture()
         record = {'event': CAPTURE.EVENT, 'proof': proof, 'message': 'PRIVATE_COOKIE_SENTINEL'}
@@ -150,7 +346,13 @@ class CaptureTest(unittest.TestCase):
 
     def test_invalid_cli_never_echoes_argument_values(self):
         for args in (['--run-ref', 'PRIVATE PASSWORD'],
-                     ['--run-ref', 'run_fixture', '--unknown', 'PRIVATE_TOKEN']):
+                     ['--run-ref', 'run_fixture', '--unknown', 'PRIVATE_TOKEN'],
+                     ['--run-ref', 'run_fixture', '--assistant-scope', 'PRIVATE_SCOPE'],
+                     ['--run-ref', 'run_fixture', '--expected-project-ref', 'PRIVATE project'],
+                     ['--run-ref', 'run_fixture', '--expected-project-ref', ''],
+                     ['--run-ref', 'run_fixture', '--expected-project-ref', 'short'],
+                     ['--run-ref', 'run_fixture', '--expected-project-ref', 'x' * 129],
+                     ['--run-ref', 'run_fixture', '--expected-project-ref']):
             result = subprocess.run([sys.executable, str(SOURCE), *args],
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
             self.assertEqual(result.returncode, 1)

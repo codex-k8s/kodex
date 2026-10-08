@@ -4,6 +4,7 @@ import { computed, ref, useId, watch } from "vue";
 
 import {
   buildRunActivityItems,
+  ordinaryRunActiveTranscriptItemId,
   type PresentedRunEvent,
 } from "@/features/runs/run-activity";
 import { isRunSessionNode } from "@/features/runs/run-session-graph";
@@ -18,6 +19,7 @@ const props = withDefaults(
   defineProps<{
     open: boolean;
     run: Run;
+    activityRuns?: readonly Run[];
     nodes: RunNode[];
     events: PresentedRunEvent[];
     artifacts: Artifact[];
@@ -26,6 +28,7 @@ const props = withDefaults(
   }>(),
   {
     initiatorSummary: undefined,
+    activityRuns: () => [],
     initialNodeRef: undefined,
   },
 );
@@ -59,6 +62,23 @@ const filteredItems = computed(() =>
       )
     : items.value,
 );
+const activeRun = computed(() => {
+  const node = props.nodes.find((entry) => entry.ref === selectedNodeRef.value);
+  const runRef = node?.runRef ?? props.run.ref;
+  return runRef === props.run.ref
+    ? props.run
+    : props.activityRuns.find((entry) => entry.ref === runRef);
+});
+const activeItemId = computed(() => {
+  if (!activeRun.value) return null;
+  return activeRun.value.source === "SYSTEM_ASSISTANT"
+    ? undefined
+    : ordinaryRunActiveTranscriptItemId(
+        activeRun.value,
+        props.nodes,
+        filteredItems.value,
+      );
+});
 
 watch(
   () => props.initialNodeRef,
@@ -117,6 +137,7 @@ watch(
     <RunTranscript
       class="run-activity-drawer__body"
       :items="filteredItems"
+      :active-item-id="activeItemId"
       @download="emit('download', $event)"
     />
     <footer v-if="$slots.composer" class="run-activity-drawer__composer">

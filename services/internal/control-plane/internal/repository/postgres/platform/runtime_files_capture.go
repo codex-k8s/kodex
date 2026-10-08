@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"sort"
 	"time"
 
@@ -15,6 +16,10 @@ import (
 )
 
 var (
+	//go:embed sql/runtime_callback_receipt_exists.sql
+	queryRuntimeCallbackReceiptExists string
+	//go:embed sql/runtime_files_coordinator.sql
+	queryRuntimeFilesCoordinator string
 	//go:embed sql/runtime_files_capture_catalog.sql
 	queryRuntimeFilesCaptureCatalog string
 	//go:embed sql/runtime_files_capture_entries.sql
@@ -36,6 +41,18 @@ func captureRuntimeFileCatalog(ctx context.Context, tx pgx.Tx, current scope, sn
 	purposes := make([]string, 0, 4)
 	if capabilityEnabled(runtimeRevisionStringSlice(snapshot["capabilities"]), runtimecontract.ArtifactCapability) {
 		purposes = append(purposes, runtimecontract.FilePurposeProject, runtimecontract.FilePurposeRunResult)
+	} else {
+		// Право чтения результата координатора принадлежит server-owned графу,
+		// а не capabilities либо refs из его task/input.
+		var coordinator bool
+		if err := tx.QueryRow(ctx, queryRuntimeFilesCoordinator, pgx.StrictNamedArgs{
+			"organization_id": current.organizationID, "run_ref": stringMap(snapshot, "runRef"), "node_ref": stringMap(snapshot, "nodeRef"),
+		}).Scan(&coordinator); err != nil {
+			return errors.Join(errs.ErrUnavailable, err)
+		}
+		if coordinator {
+			purposes = append(purposes, runtimecontract.FilePurposeRunResult)
+		}
 	}
 	if len(runtimeRevisionArtifacts(snapshot["artifacts"])) > 0 {
 		purposes = append(purposes, runtimecontract.FilePurposeWorkspaceInput)
@@ -57,7 +74,10 @@ func captureRuntimeFileCatalog(ctx context.Context, tx pgx.Tx, current scope, sn
 		"run_ref": stringMap(snapshot, "runRef"), "node_ref": stringMap(snapshot, "nodeRef"),
 		"revision_ref": stringMap(snapshot, "runtimeRevisionRef"), "generation": runtimeRevisionMapInt64(snapshot, "runtimeRevisionVersion"), "purposes": purposes,
 	}).Scan(&catalogID); err != nil {
-		return errs.ErrConflict
+		if errors.Is(err, pgx.ErrNoRows) {
+			return errs.ErrConflict
+		}
+		return errors.Join(errs.ErrUnavailable, err)
 	}
 	inputs, err := json.Marshal(snapshot["artifacts"])
 	if err != nil {
@@ -76,11 +96,11 @@ func captureRuntimeFileCatalog(ctx context.Context, tx pgx.Tx, current scope, sn
 	if _, err := tx.Exec(ctx, queryRuntimeFilesCaptureEntries, pgx.StrictNamedArgs{
 		"catalog_id": catalogID, "inputs": inputs, "skills": skillFiles,
 	}); err != nil {
-		return errs.ErrConflict
+		return errors.Join(errs.ErrUnavailable, err)
 	}
 	rows, err := tx.Query(ctx, queryRuntimeFilesCaptureDigests, pgx.StrictNamedArgs{"catalog_id": catalogID})
 	if err != nil {
-		return errs.ErrUnavailable
+		return errors.Join(errs.ErrUnavailable, err)
 	}
 	// Streaming commitment не материализует все файлы проекта в памяти Go
 	// или bounded RuntimeRevision JSON. Каждый entry digest имеет фиксированную длину.
@@ -90,7 +110,11 @@ func captureRuntimeFileCatalog(ctx context.Context, tx pgx.Tx, current scope, sn
 	for rows.Next() {
 		var entryRef string
 		var entryDigest []byte
-		if rows.Scan(&entryRef, &entryDigest) != nil || len(entryDigest) != sha256.Size {
+		if err := rows.Scan(&entryRef, &entryDigest); err != nil {
+			rows.Close()
+			return errors.Join(errs.ErrUnavailable, err)
+		}
+		if len(entryDigest) != sha256.Size {
 			rows.Close()
 			return errs.ErrConflict
 		}
@@ -101,14 +125,17 @@ func captureRuntimeFileCatalog(ctx context.Context, tx pgx.Tx, current scope, sn
 	err = rows.Err()
 	rows.Close()
 	if err != nil {
-		return errs.ErrUnavailable
+		return errors.Join(errs.ErrUnavailable, err)
 	}
 	catalog := runtimecontract.RuntimeFileCatalog{Ref: ref, Digest: hex.EncodeToString(hash.Sum(nil)), Total: total, Purposes: purposes}
 	if catalog.Validate() != nil {
 		return errs.ErrConflict
 	}
 	tag, err := tx.Exec(ctx, queryRuntimeFilesFreezeCatalog, pgx.StrictNamedArgs{"catalog_id": catalogID, "digest": catalog.Digest, "total": total})
-	if err != nil || tag.RowsAffected() != 1 {
+	if err != nil {
+		return errors.Join(errs.ErrUnavailable, err)
+	}
+	if tag.RowsAffected() != 1 {
 		return errs.ErrConflict
 	}
 	snapshot["fileCatalog"] = catalog

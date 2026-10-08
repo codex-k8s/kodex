@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 import { compileStyle } from "@vue/compiler-sfc";
-import { createSSRApp } from "vue";
+import { createSSRApp, effectScope, ref, watch } from "vue";
 import { renderToString } from "vue/server-renderer";
 
 import { describe, expect, it } from "vitest";
@@ -48,6 +49,103 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it("блокирует Send/Queue при session blocker, сохраняя черновик, Stop и штатный новый диалог", () => {
+    const eligibility = source.slice(
+      source.indexOf("const canSend = computed"),
+      source.indexOf("const canStartConversation"),
+    );
+    expect(eligibility).toContain("!store.sessionStorageBlocker");
+    expect(template).toMatch(
+      /v-if="store\.sessionStorageBlocker"\s+class="assistant-composer__storage-notice"\s+role="alert"/,
+    );
+    expect(template).toContain("common.sessionStorageUnavailable");
+    const composerState = source.slice(
+      source.indexOf("const composerDisabled"),
+      source.indexOf("const isRunContext"),
+    );
+    expect(composerState).not.toContain("sessionStorageBlocker");
+    expect(template).toContain(':model-value="message"');
+    const stop = template.match(
+      /<button\s+v-if="awaitingReply"[^]*?<\/button>/,
+    )?.[0];
+    expect(stop).toContain(':disabled="store.busy"');
+    expect(stop).not.toContain("sessionStorageBlocker");
+    const newDialog = source.slice(
+      source.indexOf("const canStartConversation"),
+      source.indexOf("const composerDisabled"),
+    );
+    expect(newDialog).not.toContain("sessionStorageBlocker");
+  });
+  it("блокирует composer во время создания и связывает ввод с точным черновиком диалога", () => {
+    const composer = template.match(
+      /<VoiceTextarea[^]*?name="assistant-message"[^]*?\/>/,
+    )?.[0];
+    expect(composer).toBeDefined();
+    expect(composer).toContain(':key="currentDraftKey"');
+    expect(composer).toContain(':disabled="composerDisabled"');
+    expect(composer).toContain(':model-value="message"');
+    expect(composer).toContain('@update:model-value="updateMessage"');
+    expect(composer).not.toContain('v-model="message"');
+  });
+
+  it("использует один exact lifecycle turn для индикатора, Stop и очереди", () => {
+    const lifecycle = source.slice(
+      source.indexOf("const activeUserTurn = computed"),
+      source.indexOf("const providerAccountRequired"),
+    );
+    expect(lifecycle).toContain("store.selectedConversation,");
+    expect(lifecycle).toContain("platform.runs,");
+    expect(lifecycle).toContain("platform.bootstrap?.organizationRef,");
+    expect(lifecycle).toContain(
+      "const awaitingReply = computed(() => Boolean(activeUserTurn.value))",
+    );
+    expect(lifecycle).toContain("const runRef = activeUserTurn.value?.runRef");
+    expect(template).toContain('v-if="awaitingReply"');
+    expect(template).toContain(
+      'v-if="showWorkingFallback && !store.loading && !store.problem"',
+    );
+  });
+
+  it.each(["plan", "form", "move"] as const)(
+    "закрывает вложенный контекст до inert-перехода drawer: %s",
+    (transition) => {
+      const contextWatcher = source.match(
+        /watch\(\s*\(\) =>\s*Boolean\(currentPlan\.value\) \|\|\s*assistantFormActive\.value \|\|\s*Boolean\(pendingProjectMove\.value\),[\s\S]*?\{ flush: "sync" \},\s*\);/,
+      )?.[0];
+      expect(contextWatcher).toBeDefined();
+      if (!contextWatcher) throw new Error("Context inert watcher is missing");
+      const currentPlan = ref<object>();
+      const assistantFormActive = ref(false);
+      const pendingProjectMove = ref<object>();
+      const contextOpen = ref(true);
+      const scope = effectScope();
+      try {
+        scope.run(() => {
+          runInNewContext(contextWatcher, {
+            watch,
+            currentPlan,
+            assistantFormActive,
+            pendingProjectMove,
+            contextOpen,
+          });
+        });
+        expect(contextOpen.value).toBe(true);
+        if (transition === "plan") currentPlan.value = {};
+        if (transition === "form") assistantFormActive.value = true;
+        if (transition === "move") pendingProjectMove.value = {};
+        expect(contextOpen.value).toBe(false);
+        currentPlan.value = undefined;
+        assistantFormActive.value = false;
+        pendingProjectMove.value = undefined;
+        expect(contextOpen.value).toBe(false);
+        contextOpen.value = true;
+        expect(contextOpen.value).toBe(true);
+      } finally {
+        scope.stop();
+      }
+    },
+  );
+
   it("сохраняет принятую переписку при обновлении, но не подменяет начальную загрузку и ошибку", async () => {
     const loadingBranch = template.match(
       /<div\s+v-else-if="store\.loading[^"]*"[\s\S]*?<\/div>/,
@@ -170,9 +268,7 @@ describe("AssistantWorkspace layout", () => {
       .split("}")[0];
     expect(typingStyle).toContain("padding: 6px 10px");
     expect(typingStyle).toContain("border: 0");
-    expect(source).toContain(
-      "assistantActiveUserTurn(store.selectedConversation)?.runRef",
-    );
+    expect(source).toContain("activeUserTurn.value?.runRef");
     expect(template).toContain(
       "'assistant-composer__field--active': awaitingReply",
     );

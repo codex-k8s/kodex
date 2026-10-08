@@ -59,6 +59,11 @@ const pickerPlaceholder = computed(() =>
       : "runtime.choosePromotedImage",
   ),
 );
+const pickerTriggerLabel = computed(() =>
+  localizedSelected.value?.ref === props.imageArtifactRef
+    ? localizedSelected.value.title
+    : pickerPlaceholder.value,
+);
 const problem = ref<AppProblem>();
 const scopeKey = computed(() => runtimeResourceScopeKey(props.resourceScope));
 let generation = 0;
@@ -203,6 +208,7 @@ async function loadPage(
         :context-key="scopeKey"
         :load-page="loadPage"
         :placeholder="pickerPlaceholder"
+        :trigger-label="pickerTriggerLabel"
         :search-placeholder="$t('runtime.searchPromotedImage')"
         :disabled="disabled || loading"
         @update:model-value="clear"

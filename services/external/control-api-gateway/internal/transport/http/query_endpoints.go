@@ -266,7 +266,7 @@ func (server *Server) GetRunGraph(w http.ResponseWriter, r *http.Request, ref ge
 		writeRPCProblem(w, err)
 		return
 	}
-	writeMessage(w, http.StatusOK, response, "", "")
+	writeMessage(w, http.StatusOK, &controlplanev1.GetRunGraphResponse{Run: response.GetRun(), Graph: response.GetGraph()}, "", "")
 }
 func (server *Server) ListRunEvents(w http.ResponseWriter, r *http.Request, ref generated.RunRef, p generated.ListRunEventsParams) {
 	after, limit := int64(0), int32(200)

@@ -399,6 +399,11 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	deadlineFailures, err := repository.reconcileExecutionDeadlines(ctx, tx, scope, input, payload.Limit)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	terminalStorage = append(terminalStorage, deadlineFailures...)
 	rows, err := tx.Query(ctx, queryRuntimeClaimExecutionSelectClaimableAgentExecutions,
 		scope.organizationID, payload.Limit, repository.roleImages.RoleRuntimeContractRevision,
 		repository.roleImages.RoleRuntimeContractSHA256)
@@ -842,6 +847,13 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			if err != nil {
 				return commandOutcome{}, err
 			}
+			if _, err := tx.Exec(ctx, queryRuntimeDeadlineStart, pgx.StrictNamedArgs{"organization_id": scope.organizationID, "run_id": candidate.runID, "root_run_id": candidate.rootRunID}); err != nil {
+				return commandOutcome{}, errs.ErrUnavailable
+			}
+			executionDeadline, _, err := readRuntimeExecutionDeadline(ctx, tx, scope.organizationID, candidate.runID)
+			if err != nil {
+				return commandOutcome{}, err
+			}
 			snapshot := map[string]any{
 				"organizationRef": candidate.organizationRef, "runRef": runRef, "projectRef": projectRef, "nodeRef": nodeRef, "sessionRef": sessionRef,
 				"turnRef": turnRef, "attempt": attempt, "task": task,
@@ -898,6 +910,9 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 				"environmentPolicy": environmentPolicy, "effectiveKubernetesAccess": effectiveKubernetesAccess,
 				"workspacePolicy": workspacePolicy,
 				"codexSessionID":  codexSessionID,
+			}
+			if executionDeadline != nil {
+				snapshot["executionDeadline"] = executionDeadline
 			}
 			if sttConfiguration.ConfigurationRef != "" {
 				snapshot["systemSTTConfigurationRef"] = sttConfiguration.ConfigurationRef
@@ -1274,6 +1289,13 @@ func runtimeRevisionDigestFromSnapshot(values map[string]any) (string, error) {
 	if value, ok := values["input"].(map[string]any); ok {
 		input.BoundedInput = value
 	}
+	if value := values["executionDeadline"]; value != nil {
+		deadline, err := runtimecontract.DecodeRuntimeExecutionDeadline(value)
+		if err != nil {
+			return "", errs.ErrInvalid
+		}
+		input.ExecutionDeadline = deadline
+	}
 	if value, ok := values["environmentImage"].(runtimecontract.RuntimeEnvironmentImage); ok {
 		input.EnvironmentImage = value
 	}
@@ -1573,15 +1595,10 @@ func stringMap(values map[string]any, key string) string {
 
 func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.CompleteExecutionInput)
-	if !ok || !payload.Usage.Valid() || payload.Success && payload.SafeErrorCode != "" || !payload.Success && !runtimeSafeErrorCode(payload.SafeErrorCode) {
+	if !ok || validateRuntimeCompletion(payload) != nil {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	hasArchiveBinding := payload.CodexSessionID != "" || payload.ArchiveRelativePath != "" || payload.ArchiveSHA256 != "" || payload.ArchiveSizeBytes != 0
-	if hasArchiveBinding && (runtimecontract.ValidateCodexArchiveIdentity(payload.CodexSessionID, payload.ArchiveRelativePath) != nil ||
-		len(payload.ArchiveSHA256) != 64 ||
-		payload.ArchiveSizeBytes < 1 || payload.ArchiveSizeBytes > runtimecontract.MaximumSessionSourceBytes) {
-		return commandOutcome{}, errs.ErrInvalid
-	}
 	lease, err := repository.lease(ctx, tx, scope, command.LeaseInput{LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation}, true)
 	if err != nil {
 		return commandOutcome{}, err
@@ -1722,6 +1739,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 			if _, callbackErr := repository.recordChildCallback(ctx, tx, scope, callbackRecord{
 				childRunID: lease["runID"].(string), childRunRef: stringMap(lease, "runRef"),
 				rootRunID: stringMap(lease, "rootRunID"), projectID: stringMap(lease, "projectID"),
+				runtimeRevisionID: stringMap(lease, "runtimeRevisionID"), artifactRefs: artifactRefs,
 				parentRunID: parentRunID, resultSummary: payload.ResultSummary, callbackEdgeID: callbackEdgeID,
 				callbackEdgeRef: callbackEdgeRef, parentNodeID: parentNodeID, parentNodeRef: parentNodeRef,
 			}); callbackErr != nil {
@@ -1960,11 +1978,22 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 	}
 	childRef, _ := newRef("run")
 	var initiatorID, parentRunID string
+	var hasWorkflow bool
+	var rootInput, workflowSpec []byte
 	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionSelectRunsId, pgx.StrictNamedArgs{
 		"parent_run_id":   lease["runID"],
+		"root_run_id":     lease["rootRunID"],
+		"project_id":      lease["projectID"],
 		"organization_id": scope.organizationID,
-	}).Scan(&initiatorID, &parentRunID); err != nil {
+	}).Scan(&initiatorID, &parentRunID, &hasWorkflow, &rootInput, &workflowSpec); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	childInput := payload.Input
+	if hasWorkflow {
+		childInput, err = workflowDelegateInput(rootInput, workflowSpec, payload.Input)
+		if err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	providerAccountID, err := repository.selectProviderAccountForAgent(ctx, tx, scope.organizationID, payload.TargetAgentRef)
 	if err != nil {
@@ -2005,7 +2034,7 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 		"target_agent_ref": payload.TargetAgentRef,
 		"title":            childTitle,
 		"task":             childTask,
-		"input":            asJSON(payload.Input),
+		"input":            asJSON(childInput),
 		"initiated_by":     initiatorID,
 	}).Scan(&childID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -2081,14 +2110,32 @@ type callbackRecord struct {
 	childRunID, childRunRef, rootRunID, projectID, parentRunID string
 	resultSummary, callbackEdgeID, callbackEdgeRef             string
 	parentNodeID, parentNodeRef                                string
+	runtimeRevisionID                                          string
+	artifactRefs                                               []string
 }
 
 func (repository *Repository) recordChildCallback(ctx context.Context, tx pgx.Tx, scope scope, record callbackRecord) (bool, error) {
-	tag, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertCallbackReceiptsChildRunId, record.childRunID, record.callbackEdgeID)
+	if record.artifactRefs == nil {
+		record.artifactRefs = []string{}
+	}
+	tag, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertCallbackReceiptsChildRunId, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID, "child_run_id": record.childRunID,
+		"callback_edge_id": record.callbackEdgeID, "runtime_revision_id": record.runtimeRevisionID,
+		"artifact_refs": record.artifactRefs,
+	})
 	if err != nil {
 		return false, errs.ErrUnavailable
 	}
 	if tag.RowsAffected() == 0 {
+		var replay bool
+		if err := tx.QueryRow(ctx, queryRuntimeCallbackReceiptExists, pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID, "child_run_id": record.childRunID, "callback_edge_id": record.callbackEdgeID,
+		}).Scan(&replay); err != nil {
+			return false, errs.ErrUnavailable
+		}
+		if !replay {
+			return false, errs.ErrConflict
+		}
 		return true, nil
 	}
 	if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionUpdateRunNodesCallbackSummaryVersion, record.parentNodeID, truncate(record.resultSummary, 2000)); err != nil {

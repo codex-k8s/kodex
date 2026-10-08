@@ -4,6 +4,7 @@ import { computed, reactive } from "vue";
 import {
   assistantAgentEnvironmentBindingTarget,
   assistantActiveUserTurn,
+  assistantConversationStorageBlocker,
   assistantAwaitingReply,
   assistantCreatedScheduleTarget,
   assistantCreatedEntityTarget,
@@ -30,6 +31,7 @@ import type {
   AssistantPlan,
   AssistantPlanReceipt,
   AssistantPlanOperation,
+  Run,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
 
@@ -157,9 +159,9 @@ describe("assistant reply indicator", () => {
       turns: [{ role, state, sequence: 1 }],
     }) as AssistantConversation;
 
-  it("ожидает ответ после принятого сообщения пользователя", () => {
+  it("ожидает активный USER, но не выводит активность из отсутствия ответа", () => {
     expect(assistantAwaitingReply(conversation("USER", "COMPLETED"))).toBe(
-      true,
+      false,
     );
     expect(assistantAwaitingReply(conversation("USER", "QUEUED"))).toBe(true);
   });
@@ -270,6 +272,308 @@ describe("assistant очередь после позднего ответа пр
     expect(assistantAwaitingReply(value)).toBe(false);
     expect(assistantActiveUserTurn(value)).toBeUndefined();
     expect(assistantActiveUserTurn()).toBeUndefined();
+  });
+});
+
+describe("assistant авторитетный lifecycle без финальной реплики", () => {
+  const organizationRef = "org_lifecycle_fixture";
+  const userTurn: AssistantTurn = {
+    ref: "trn_lifecycle_fixture",
+    sequence: 1,
+    role: "USER",
+    state: "COMPLETED",
+    source: { origin: "ORDINARY" },
+    runRef: "run_lifecycle_fixture",
+    runVersion: 1,
+    content: "Синтетический запрос",
+    createdAt: "2026-10-07T00:00:00Z",
+  };
+  const conversation: AssistantConversation = {
+    ref: "cnv_lifecycle_fixture",
+    version: 1,
+    title: "Проверка",
+    titleSource: "SERVER_DEFAULT",
+    titleRevision: 1,
+    assistantScope: "SYSTEM",
+    assistantRef: "agt_lifecycle_fixture",
+    state: "ACTIVE",
+    context: {
+      route: "/",
+      entityKind: "",
+      entityRef: "",
+      entityName: "",
+      allowedOperations: [],
+    },
+    turns: [userTurn],
+    updatedAt: userTurn.createdAt,
+  };
+  const run = (state: Run["state"]): Run => ({
+    ref: userTurn.runRef ?? "",
+    rootRunRef: userTurn.runRef ?? "",
+    sessionRef: "ses_lifecycle_fixture",
+    version: 2,
+    state,
+    source: "SYSTEM_ASSISTANT",
+    target: {
+      type: "SYSTEM_ASSISTANT",
+      ref: conversation.assistantRef,
+      version: 1,
+      displayName: "Помощник",
+    },
+    assistantPin: {
+      scope: "SYSTEM",
+      organizationRef,
+      assistantRef: conversation.assistantRef,
+      conversationRef: conversation.ref,
+    },
+    title: "Проверка",
+    titleSource: "SERVER_DEFAULT",
+    activitySummary: "Проверка",
+    initiator: { ref: "usr_lifecycle_fixture", displayName: "Владелец" },
+    attempt: 1,
+    graphRevision: 1,
+    lastEventSequence: 3,
+    usage: {
+      totalTokens: 0,
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheWriteInputTokens: 0,
+      outputTokens: 0,
+      reasoningOutputTokens: 0,
+      modelContextWindow: 0,
+    },
+    artifactRefs: [],
+    gateRefs: [],
+    nextActions: [],
+    createdAt: userTurn.createdAt,
+  });
+
+  it.each(["SYSTEM", "PROJECT"] as const)(
+    "привязывает blocker только к последнему USER и exact %s owner/profile",
+    (scope) => {
+      const currentConversation: AssistantConversation = {
+        ...conversation,
+        assistantScope: scope,
+        ...(scope === "PROJECT"
+          ? {
+              projectRef: "prj_storage_fixture",
+              assistantProfileRef: "asstp_storage_fixture",
+            }
+          : {}),
+      };
+      const current = run("FAILED");
+      current.projectRef = currentConversation.projectRef;
+      current.assistantPin = {
+        scope,
+        organizationRef,
+        conversationRef: currentConversation.ref,
+        assistantRef: currentConversation.assistantRef,
+        projectRef: currentConversation.projectRef,
+        profileRef: currentConversation.assistantProfileRef,
+      };
+      current.sessionReadiness = {
+        sessionRef: current.sessionRef,
+        storageState: "ERROR",
+        reason: "STORAGE_NOT_LIVE",
+      };
+      const runs = { [current.ref]: current };
+      const blocker = (value = currentConversation) =>
+        assistantConversationStorageBlocker(value, runs, organizationRef);
+      expect(blocker()).toBe("ERROR");
+      expect(
+        assistantConversationStorageBlocker(
+          currentConversation,
+          runs,
+          "org_foreign_fixture",
+        ),
+      ).toBeUndefined();
+      for (const key of [
+        "conversationRef",
+        "assistantRef",
+        "projectRef",
+        "profileRef",
+        "scope",
+      ] as const) {
+        const pin = current.assistantPin;
+        expect(
+          assistantConversationStorageBlocker(
+            currentConversation,
+            {
+              [current.ref]: {
+                ...current,
+                assistantPin: { ...pin, [key]: "foreign_fixture" },
+              } as Run,
+            },
+            organizationRef,
+          ),
+        ).toBeUndefined();
+      }
+      expect(
+        blocker({ ...currentConversation, state: "CLOSED" }),
+      ).toBeUndefined();
+      expect(
+        blocker({
+          ...currentConversation,
+          turns: [{ ...userTurn, runVersion: 3 }],
+        }),
+      ).toBeUndefined();
+      const latest = {
+        ...userTurn,
+        ref: "trn_latest_fixture",
+        sequence: 3,
+        runRef: "run_missing_fixture",
+      };
+      for (const turns of [
+        [latest, userTurn],
+        [userTurn, latest],
+      ]) {
+        expect(blocker({ ...currentConversation, turns })).toBeUndefined();
+      }
+      expect(
+        blocker({
+          ...currentConversation,
+          turns: [{ ...userTurn, role: "ASSISTANT" }],
+        }),
+      ).toBeUndefined();
+      current.sessionReadiness.storageState = "LIVE";
+      current.sessionReadiness.reason = "NO_SESSION_BLOCKER";
+      expect(blocker()).toBeUndefined();
+      current.sessionReadiness = undefined;
+      expect(blocker()).toBeUndefined();
+    },
+  );
+
+  it.each(["SUCCEEDED", "FAILED", "CANCELLED"] as const)(
+    "terminal run %s закрывает каждый stale USER без ASSISTANT",
+    (state) => {
+      const value = run(state);
+      for (const turnState of ["QUEUED", "RUNNING", "COMPLETED"] as const) {
+        const history = {
+          ...conversation,
+          turns: [{ ...userTurn, state: turnState }],
+        };
+        const runs = { [value.ref]: value };
+        expect(assistantAwaitingReply(history, runs, organizationRef)).toBe(
+          false,
+        );
+        expect(
+          assistantActiveUserTurn(history, runs, organizationRef),
+        ).toBeUndefined();
+      }
+    },
+  );
+
+  it.each(["QUEUED", "RUNNING", "WAITING_HUMAN", "CANCELLING"] as const)(
+    "active run %s сохраняет ожидание после принятого USER",
+    (state) => {
+      const value = run(state);
+      const runs = { [value.ref]: value };
+      expect(assistantAwaitingReply(conversation, runs, organizationRef)).toBe(
+        true,
+      );
+      expect(
+        assistantActiveUserTurn(conversation, runs, organizationRef)?.ref,
+      ).toBe(userTurn.ref);
+    },
+  );
+
+  it("не принимает чужую organization/conversation/assistant/project/profile и старую runVersion", () => {
+    const value = run("RUNNING");
+    const pin = value.assistantPin;
+    if (!pin) throw new Error("Assistant fixture pin is missing");
+    for (const foreign of [
+      { ...value, ref: "run_foreign_fixture" },
+      { ...value, version: 0 },
+      ...[
+        "organizationRef",
+        "conversationRef",
+        "assistantRef",
+        "projectRef",
+        "profileRef",
+      ].map((key) => ({
+        ...value,
+        assistantPin: { ...pin, [key]: "ref_foreign_fixture" },
+      })),
+    ]) {
+      expect(
+        assistantAwaitingReply(
+          conversation,
+          { [value.ref]: foreign },
+          organizationRef,
+        ),
+      ).toBe(false);
+    }
+  });
+
+  it("не отключает известный RUNNING/QUEUED USER пока run ещё загружается", () => {
+    for (const state of ["RUNNING", "QUEUED"] as const) {
+      expect(
+        assistantAwaitingReply(
+          { ...conversation, turns: [{ ...userTurn, state }] },
+          {},
+          organizationRef,
+        ),
+      ).toBe(true);
+    }
+    expect(assistantAwaitingReply(conversation, {}, organizationRef)).toBe(
+      false,
+    );
+  });
+
+  it("terminal старого run не отключает другой текущий turn", () => {
+    const old = run("FAILED");
+    const current: AssistantTurn = {
+      ...userTurn,
+      ref: "trn_current_fixture",
+      runRef: "run_current_fixture",
+      sequence: 2,
+      state: "QUEUED",
+    };
+    const next: Run = {
+      ...run("RUNNING"),
+      ref: current.runRef ?? "",
+      rootRunRef: current.runRef ?? "",
+    };
+    const history = { ...conversation, turns: [userTurn, current] };
+    expect(
+      assistantActiveUserTurn(
+        history,
+        { [old.ref]: old, [next.ref]: next },
+        organizationRef,
+      )?.ref,
+    ).toBe(current.ref);
+    expect(
+      assistantAwaitingReply(
+        { ...history, turns: [...history.turns].reverse() },
+        { [old.ref]: old },
+        organizationRef,
+      ),
+    ).toBe(true);
+  });
+
+  it("следует terminal WS, history/rejoin и замене выбранного диалога без локальной latch", () => {
+    const state = reactive({
+      conversation,
+      runs: { [userTurn.runRef ?? ""]: run("RUNNING") },
+    });
+    const awaiting = computed(() =>
+      assistantAwaitingReply(state.conversation, state.runs, organizationRef),
+    );
+    expect(awaiting.value).toBe(true);
+    state.runs[userTurn.runRef ?? ""] = run("FAILED");
+    expect(awaiting.value).toBe(false);
+    state.conversation = {
+      ...conversation,
+      version: 2,
+      turns: [{ ...userTurn }],
+    };
+    state.runs = { [userTurn.runRef ?? ""]: run("FAILED") };
+    expect(awaiting.value).toBe(false);
+    state.conversation = { ...conversation, ref: "cnv_other_fixture" };
+    state.runs[userTurn.runRef ?? ""] = run("RUNNING");
+    expect(awaiting.value).toBe(false);
+    state.conversation = conversation;
+    expect(awaiting.value).toBe(true);
   });
 });
 

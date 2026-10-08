@@ -23,6 +23,8 @@ func normalizeIntegrationEnum(value any, descriptor protoreflect.EnumDescriptor)
 		prefix = "INTEGRATION_RESOURCE_KIND_"
 	case "controlplane.v1.IntegrationDefinitionOrigin":
 		prefix = "INTEGRATION_DEFINITION_ORIGIN_"
+	case "controlplane.v1.IntegrationDefinitionConfigurationBinding.State":
+		prefix = "STATE_"
 	case "controlplane.v1.OwnerGateDecision":
 		prefix = "OWNER_GATE_DECISION_"
 	case "controlplane.v1.OwnerGateState":
@@ -47,6 +49,23 @@ func normalizeIntegrationShape(value map[string]any, descriptor protoreflect.Mes
 		return validateOwnerGateProjection(value)
 	case "controlplane.v1.IntegrationConnection":
 		delete(value, "credentialRevision")
+	case "controlplane.v1.IntegrationDefinitionConfigurationBinding":
+		switch value["state"] {
+		case "ABSENT":
+			if len(value) != 1 {
+				return errPublicIntegrationShape
+			}
+		case "MATCH":
+			configurationRef, configurationOK := value["configurationRef"].(string)
+			revisionRef, revisionOK := value["revisionRef"].(string)
+			version, versionOK := value["bindingVersion"].(float64)
+			if len(value) != 4 || !configurationOK || !fileTargetRef(configurationRef) || !revisionOK || !fileTargetRef(revisionRef) ||
+				!versionOK || version < 1 || version > float64(maximumSafeJSONInteger) || version != float64(int64(version)) {
+				return errPublicIntegrationShape
+			}
+		default:
+			return errPublicIntegrationShape
+		}
 	case "controlplane.v1.IntegrationCapability", "controlplane.v1.IntegrationGrant":
 		if descriptor.FullName() == "controlplane.v1.IntegrationGrant" {
 			// Публичный pin принадлежит parent connection; runtime pin остаётся в Proto.

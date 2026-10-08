@@ -19,6 +19,7 @@ type RunNode struct {
 	ArtifactRefs     []string     `json:"artifactRefs"`
 	ChildRunRefs     []string     `json:"childRunRefs"`
 	CallbackSummary  *string      `json:"callbackSummary,omitempty"`
+	Planned          bool         `json:"planned,omitempty"`
 	SafeErrorCode    *string      `json:"safeErrorCode,omitempty"`
 	SafeErrorMessage *string      `json:"safeErrorMessage,omitempty"`
 	CreatedAt        string       `json:"createdAt"`

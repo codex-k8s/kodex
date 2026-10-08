@@ -2,8 +2,10 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"net/url"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/libs/go/integrationpackage"
 	"github.com/google/go-github/v74/github"
@@ -25,6 +27,167 @@ func projectGitHubPull(value *github.PullRequest) githubPullView {
 	return githubPullView{value.GetNumber(), value.GetTitle(), value.GetBody(), value.GetState(), value.GetHead().GetRef(), value.GetBase().GetRef(), value.GetHead().GetSHA(), value.GetDraft(), value.GetHTMLURL()}
 }
 
+// Полный read отдельно закрепляет источник. Mutation replies не получают
+// дополнительных обязательных полей и сохраняют прежнюю семантику outcome.
+type githubPullReadView struct {
+	githubPullView
+	BaseSHA      string `json:"base_sha"`
+	ChangedFiles int    `json:"changed_files"`
+}
+
+func projectGitHubPullRead(value *github.PullRequest, number int) (githubPullReadView, error) {
+	if value == nil || value.GetNumber() != number || value.Head == nil || value.Base == nil ||
+		!sourceCommitPattern.MatchString(value.Head.GetSHA()) || !sourceCommitPattern.MatchString(value.Base.GetSHA()) ||
+		value.ChangedFiles == nil || value.GetChangedFiles() < 0 || value.GetChangedFiles() > 2147483647 ||
+		(value.GetState() != "open" && value.GetState() != "closed") {
+		return githubPullReadView{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+	}
+	return githubPullReadView{projectGitHubPull(value), value.Base.GetSHA(), value.GetChangedFiles()}, nil
+}
+
+const maximumGitHubPullFilePageSize = 4
+const maximumGitHubPullFiles = 3000
+const maximumGitHubFilePathBytes = 1024
+const maximumGitHubFileChangeCount = int64(9007199254740991)
+
+// Это индекс метаданных, не прочитанный patch или содержимое файла.
+// Nullable SHA сохраняет отсутствие provider blob identity без фиктивного hash.
+type githubPullFileIndex struct {
+	Filename         string  `json:"filename"`
+	PreviousFilename string  `json:"previous_filename,omitempty"`
+	SHA              *string `json:"sha"`
+	Status           string  `json:"status"`
+	Additions        int     `json:"additions"`
+	Deletions        int     `json:"deletions"`
+}
+
+type githubPullFilePage struct {
+	Items    string `json:"items"`
+	Count    int    `json:"count"`
+	Next     int    `json:"next_cursor,omitempty"`
+	HeadSHA  string `json:"head_sha"`
+	BaseSHA  string `json:"base_sha"`
+	Total    int    `json:"total_count"`
+	PageSize int    `json:"page_size"`
+	Offset   int    `json:"offset"`
+	EOF      bool   `json:"eof"`
+}
+
+func validGitHubIndexPath(path string, allowEmpty bool) bool {
+	if len(path) > maximumGitHubFilePathBytes || !utf8.ValidString(path) || !validRepositoryPath(path, allowEmpty) {
+		return false
+	}
+	for _, character := range path {
+		if character < 0x20 || character == 0x7f {
+			return false
+		}
+	}
+	return true
+}
+
+func projectGitHubPullFiles(files []*github.CommitFile) ([]githubPullFileIndex, error) {
+	result := make([]githubPullFileIndex, 0, len(files))
+	seen := make(map[string]bool, len(files))
+	for _, file := range files {
+		if file == nil || !validGitHubIndexPath(file.GetFilename(), false) || !validGitHubIndexPath(file.GetPreviousFilename(), true) ||
+			seen[file.GetFilename()] || file.SHA != nil && !sourceCommitPattern.MatchString(*file.SHA) ||
+			file.Additions == nil || file.Deletions == nil || file.Changes == nil ||
+			file.GetAdditions() < 0 || file.GetDeletions() < 0 || file.GetChanges() < 0 ||
+			int64(file.GetAdditions()) > maximumGitHubFileChangeCount || int64(file.GetDeletions()) > maximumGitHubFileChangeCount ||
+			int64(file.GetChanges()) > maximumGitHubFileChangeCount || int64(file.GetAdditions())+int64(file.GetDeletions()) != int64(file.GetChanges()) {
+			return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		}
+		switch file.GetStatus() {
+		case "added", "removed", "modified", "copied", "changed", "unchanged":
+		case "renamed":
+			if file.GetPreviousFilename() == "" {
+				return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+			}
+		default:
+			return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		}
+		seen[file.GetFilename()] = true
+		result = append(result, githubPullFileIndex{file.GetFilename(), file.GetPreviousFilename(), file.SHA, file.GetStatus(), file.GetAdditions(), file.GetDeletions()})
+	}
+	return result, nil
+}
+
+func executeGitHubPullFileIndex(ctx context.Context, client *github.Client, owner, repo string, request Request, capability integrationpackage.Capability, in githubCatalogInput) (Result, error) {
+	if in.Limit < 1 || in.Limit > maximumGitHubPullFilePageSize || in.Cursor < 1 || in.Cursor > 10000 ||
+		!sourceCommitPattern.MatchString(in.ExpectedHeadSHA) || !sourceCommitPattern.MatchString(in.ExpectedBaseSHA) ||
+		in.ExpectedChangedFiles == nil || *in.ExpectedChangedFiles < 0 || *in.ExpectedChangedFiles > maximumGitHubPullFiles {
+		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+	}
+	offset := (in.Cursor - 1) * in.Limit
+	if offset > *in.ExpectedChangedFiles || in.Cursor > 1 && offset == *in.ExpectedChangedFiles {
+		return Result{}, &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+	}
+	readPinned := func() error {
+		pull, err := githubRead(ctx, capability, func() (*github.PullRequest, *github.Response, error) {
+			return client.PullRequests.Get(ctx, owner, repo, in.Number)
+		})
+		if err != nil {
+			return err
+		}
+		view, err := projectGitHubPullRead(pull, in.Number)
+		if err != nil {
+			return err
+		}
+		if view.SHA != in.ExpectedHeadSHA || view.BaseSHA != in.ExpectedBaseSHA || view.ChangedFiles != *in.ExpectedChangedFiles {
+			return &SafeError{Code: "INTEGRATION_REQUEST_REJECTED"}
+		}
+		return nil
+	}
+	if err := readPinned(); err != nil {
+		return Result{}, err
+	}
+	var response *github.Response
+	files, err := githubRead(ctx, capability, func() ([]*github.CommitFile, *github.Response, error) {
+		items, current, err := client.PullRequests.ListFiles(ctx, owner, repo, in.Number, &github.ListOptions{Page: in.Cursor, PerPage: in.Limit})
+		response = current
+		return items, current, err
+	})
+	if err != nil {
+		return Result{}, err
+	}
+	remaining := *in.ExpectedChangedFiles - offset
+	wantedCount := min(in.Limit, remaining)
+	eof := len(files) == remaining
+	if response == nil || len(files) != wantedCount || eof && response.NextPage != 0 || !eof && response.NextPage != in.Cursor+1 {
+		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+	}
+	index, err := projectGitHubPullFiles(files)
+	if err != nil {
+		return Result{}, err
+	}
+	if err := readPinned(); err != nil {
+		return Result{}, err
+	}
+	encoded, err := json.Marshal(index)
+	if err != nil {
+		return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+	}
+	return providerResult(request, "github-pull-files:"+strconv.Itoa(in.Number)+":"+in.ExpectedHeadSHA+":"+in.ExpectedBaseSHA+":"+strconv.Itoa(in.Cursor),
+		githubPullFilePage{string(encoded), len(index), response.NextPage, in.ExpectedHeadSHA, in.ExpectedBaseSHA, *in.ExpectedChangedFiles, in.Limit, offset, eof})
+}
+
+// Список является указателем, не пакетным чтением всех полных описаний.
+// Полное body возвращают отдельные read/create/update, без усечения текста.
+type githubPullIndex struct {
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	State  string `json:"state"`
+	Head   string `json:"head"`
+	Base   string `json:"base"`
+	SHA    string `json:"sha"`
+	Draft  bool   `json:"draft"`
+	URL    string `json:"url"`
+}
+
+func projectGitHubPullIndex(value *github.PullRequest) githubPullIndex {
+	return githubPullIndex{value.GetNumber(), value.GetTitle(), value.GetState(), value.GetHead().GetRef(), value.GetBase().GetRef(), value.GetHead().GetSHA(), value.GetDraft(), value.GetHTMLURL()}
+}
+
 type githubReviewView struct {
 	ID       int64  `json:"id"`
 	Body     string `json:"body"`
@@ -44,20 +207,13 @@ type githubCommentView struct {
 func (adapter *Adapter) executeGitHubCollaboration(ctx context.Context, client *github.Client, owner, repo string, request Request, capability integrationpackage.Capability, in githubCatalogInput, options github.ListOptions) (Result, error) {
 	switch request.Operation {
 	case "github.pull_request.file.list":
-		return githubCatalogPage(ctx, capability, request, in.Limit, in.Cursor, func() ([]githubFileChange, *github.Response, error) {
-			files, response, err := client.PullRequests.ListFiles(ctx, owner, repo, in.Number, &options)
-			if err != nil {
-				return nil, response, err
-			}
-			projected, err := projectGitHubFiles(files)
-			return projected, response, err
-		})
+		return executeGitHubPullFileIndex(ctx, client, owner, repo, request, capability, in)
 	case "github.pull_request.list":
-		return githubCatalogPage(ctx, capability, request, in.Limit, in.Cursor, func() ([]githubPullView, *github.Response, error) {
+		return githubCatalogPage(ctx, capability, request, in.Limit, in.Cursor, func() ([]githubPullIndex, *github.Response, error) {
 			items, response, err := client.PullRequests.List(ctx, owner, repo, &github.PullRequestListOptions{State: in.State, Head: in.Head, Base: in.Base, ListOptions: options})
-			views := make([]githubPullView, 0, len(items))
+			views := make([]githubPullIndex, 0, len(items))
 			for _, item := range items {
-				views = append(views, projectGitHubPull(item))
+				views = append(views, projectGitHubPullIndex(item))
 			}
 			return views, response, err
 		})
@@ -68,10 +224,11 @@ func (adapter *Adapter) executeGitHubCollaboration(ctx context.Context, client *
 		if err != nil {
 			return Result{}, err
 		}
-		if item == nil || item.GetNumber() != in.Number {
-			return Result{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+		view, err := projectGitHubPullRead(item, in.Number)
+		if err != nil {
+			return Result{}, err
 		}
-		return providerResult(request, "github-pull:"+strconv.Itoa(in.Number), projectGitHubPull(item))
+		return providerResult(request, "github-pull:"+strconv.Itoa(in.Number), view)
 	case "github.pull_request.create", "github.pull_request.update":
 		var item *github.PullRequest
 		var response *github.Response

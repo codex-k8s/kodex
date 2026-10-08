@@ -34,7 +34,7 @@ LEFT JOIN control_plane.project_assistant_profiles assistant_profile
   AND assistant_profile.project_id = agent.project_id
 WHERE lease.materialization_operation = @operation
   AND lease.materialization_request_digest = @request_digest
-  AND lease.state = 'CLAIMED' AND lease.expires_at > clock_timestamp()
+  AND lease.state = 'CLAIMED' AND lease.expires_at > clock_timestamp() AND control_plane.runtime_execution_before_deadline(lease.organization_id,lease.run_id)
   AND lease.run_id = revision.run_id AND lease.node_id = revision.node_id
   AND lease.generation = revision.generation AND lease.input_digest = revision.input_digest
   AND node.run_id = execution_run.id AND node.root_run_id = root_run.id

@@ -1,6 +1,7 @@
 import {
   MarkerType,
   Position,
+  getTransformForBounds,
   type Edge,
   type FitViewParams,
   type Node,
@@ -8,8 +9,10 @@ import {
 
 import {
   layoutRunGraph,
+  runGraphContentBounds,
   runGraphNodeHeight,
   runGraphNodeWidth,
+  type RunGraphBounds,
 } from "@/features/runs/run-graph-layout";
 import type {
   RunEdge,
@@ -51,6 +54,7 @@ export function runGraphInitialFitOptions(
   edges: RunEdge[],
   selectedRef?: string,
   compact = false,
+  viewportHeight = 480,
 ): FitViewParams {
   const options = runGraphFitViewOptions(viewportWidth, compact);
   if (nodes.length <= 16) return options;
@@ -65,9 +69,8 @@ export function runGraphInitialFitOptions(
     )[0]?.ref;
   if (!root) return options;
 
-  const positions = new Map(
-    layoutRunGraph(nodes, edges).nodes.map((item) => [item.node.ref, item]),
-  );
+  const layout = layoutRunGraph(nodes, edges);
+  const positions = new Map(layout.nodes.map((item) => [item.node.ref, item]));
   const rootY = positions.get(root)?.y ?? 0;
   const firstChildren = edges
     .filter(
@@ -83,11 +86,50 @@ export function runGraphInitialFitOptions(
     )
     .slice(0, 3)
     .map((edge) => edge.targetNodeRef);
+  const visibleRefs = [root];
+  for (const ref of firstChildren) {
+    const candidateRefs = [...visibleRefs, ref];
+    const viewport = getTransformForBounds(
+      runGraphContentBounds(layout, candidateRefs),
+      viewportWidth,
+      viewportHeight,
+      0,
+      options.maxZoom ?? 1.1,
+      options.padding,
+    );
+    // Начальная окрестность остаётся читаемой. Далёкая карточка или внешняя
+    // обратная дуга не должны сдвигать выбранный узел за границу экрана.
+    if (viewport.zoom >= 0.85) visibleRefs.push(ref);
+  }
+  const viewport = getTransformForBounds(
+    runGraphContentBounds(layout, visibleRefs),
+    viewportWidth,
+    viewportHeight,
+    0,
+    options.maxZoom ?? 1.1,
+    options.padding,
+  );
   return {
     ...options,
-    nodes: [root, ...firstChildren],
-    minZoom: 0.85,
+    nodes: visibleRefs,
+    minZoom: Math.min(0.85, viewport.zoom),
   };
+}
+
+export function runGraphFitTransform(
+  bounds: RunGraphBounds,
+  viewportWidth: number,
+  viewportHeight: number,
+  options: FitViewParams,
+) {
+  return getTransformForBounds(
+    bounds,
+    viewportWidth,
+    viewportHeight,
+    options.nodes ? (options.minZoom ?? runGraphMinimumZoom) : 0,
+    options.maxZoom ?? runGraphMaximumZoom,
+    options.padding,
+  );
 }
 
 export type RunGraphNodeSurface = "session" | "control";

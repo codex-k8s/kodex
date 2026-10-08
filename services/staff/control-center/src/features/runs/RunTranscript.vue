@@ -20,11 +20,12 @@ import {
   activeTranscriptItemId,
   assistantFailureMessageKey,
   isAssistantPlanToolReceipt,
-  isSuccessfulIntegrationToolReceipt,
+  integrationToolPresentationState,
   isTranscriptNearBottom,
   isUnboundRunCancellation,
   presentRunTranscriptItems,
   type RunActivityItem,
+  type PresentedTranscriptItem,
 } from "@/features/runs/run-activity";
 import {
   presentRuntimeText,
@@ -92,20 +93,52 @@ const displayItems = computed(() =>
         ...item,
         summary: key ? t(key) : item.summary,
         completedServiceHistory,
+        compactIntegrationSuccess: false,
       };
     }
+    const summary = summaryText(item);
+    const progress = text(item.progress);
+    const compactIntegrationSuccess = isStandaloneIntegrationSuccess(item);
     return {
       ...item,
-      summary: summaryText(item),
-      progress: text(item.progress),
-      serviceHistory: item.serviceHistory?.map((step) => ({
-        ...step,
-        summary: summaryText(step),
-        progress: text(step.progress, step.messageKind),
-      })),
+      summary,
+      progress,
+      compactIntegrationSuccess,
+      serviceHistory: compactIntegrationSuccess
+        ? [{ ...item, summary, progress }]
+        : item.serviceHistory?.map((step) => ({
+            ...step,
+            summary: summaryText(step),
+            progress: text(step.progress, step.messageKind),
+          })),
     };
   }),
 );
+
+// Самостоятельная квитанция сохраняет свои pins: с соседним tool не объединяется.
+function isStandaloneIntegrationSuccess(
+  item: PresentedTranscriptItem,
+): boolean {
+  return Boolean(
+    !item.historical &&
+    !item.working &&
+    executionKey(item.execution) &&
+    item.integrationInvocationRef &&
+    /^inv_[A-Za-z0-9_-]{8,124}$/.test(item.integrationInvocationRef) &&
+    item.kind === "system" &&
+    item.eventType === "TURN_PROGRESS" &&
+    item.messageKind === "INTERMEDIATE_MESSAGE" &&
+    !item.phase &&
+    !item.progress?.trim() &&
+    !item.toolCall &&
+    !item.artifact &&
+    !item.artifactRef &&
+    !["FAILED", "CANCELLED"].includes(item.state ?? "") &&
+    (item.summary === "i18n:INTEGRATION_ACTION_SUCCEEDED" ||
+      item.summary === t("serverMessages.INTEGRATION_ACTION_SUCCEEDED")),
+  );
+}
+
 // Только представление зарезервированной runner-квитанции; доступ не меняется.
 function isWorkspaceReceipt(item: RunActivityItem): boolean {
   const artifact = item.artifact;
@@ -146,6 +179,44 @@ function visibleState(state: string | undefined, working: boolean): boolean {
         state,
       )),
   );
+}
+function toolState(tool: NonNullable<RunActivityItem["toolCall"]>): string {
+  return integrationToolPresentationState(tool) ?? tool.state;
+}
+function groupToolState(items: readonly RunActivityItem[]): string {
+  const states = items.map((item) =>
+    item.toolCall ? toolState(item.toolCall) : "",
+  );
+  const pending = ["NEEDS_ATTENTION", "WAITING_HUMAN", "RUNNING"].find(
+    (state) => states.includes(state),
+  );
+  if (pending) return pending;
+  if (states.every((state) => state === "CANCELLED")) return "CANCELLED";
+  return states.every((state) =>
+    ["SUCCEEDED", "FAILED", "REJECTED", "CANCELLED"].includes(state),
+  )
+    ? "COMPLETED"
+    : "";
+}
+function groupToolErrorCount(items: readonly RunActivityItem[]): number {
+  return items.filter(
+    (item) =>
+      item.toolCall &&
+      ["FAILED", "REJECTED"].includes(toolState(item.toolCall)),
+  ).length;
+}
+function groupToolWorking(items: readonly PresentedTranscriptItem[]): boolean {
+  return items.some((item) => {
+    const scope = executionKey(item.execution);
+    return Boolean(
+      scope &&
+      !item.historical &&
+      !props.closedExecutionKeys.includes(scope) &&
+      item.working &&
+      item.toolCall &&
+      toolState(item.toolCall) === "RUNNING",
+    );
+  });
 }
 function expandableMessage(item: RunActivityItem): boolean {
   return Boolean(
@@ -282,12 +353,13 @@ function toolPreview(
     managedTools.has(toolCall.tool) &&
     toolCall.safeResult === `${toolCall.tool}:completed`) ||
     isAssistantPlanToolReceipt(toolCall) ||
-    isSuccessfulIntegrationToolReceipt(toolCall)
+    Boolean(integrationToolPresentationState(toolCall))
     ? undefined
     : toolCall.safeResult || undefined;
 }
 
 function compactServiceRow(item: (typeof displayItems.value)[number]): boolean {
+  if (item.compactIntegrationSuccess) return true;
   if (isUnboundRunCancellation(item)) return Boolean(item.serviceHistory);
   const scope = executionKey(item.execution);
   return Boolean(
@@ -308,6 +380,14 @@ function compactServiceRow(item: (typeof displayItems.value)[number]): boolean {
 }
 
 function toolLabel(toolCall: NonNullable<RunActivityItem["toolCall"]>): string {
+  if (toolCall.tool === "invoke_integration") {
+    const label = t("runs.managedToolNames.invoke_integration");
+    const capability = toolCall.capabilityRef;
+    return typeof capability === "string" &&
+      /^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$/.test(capability)
+      ? `${label} · ${capability}`
+      : label;
+  }
   if (toolCall.tool === "get_configuration_catalog") {
     const kind = toolCall.safeParameters.catalogKind;
     if (typeof kind === "string" && configurationCatalogKinds.has(kind))
@@ -458,7 +538,7 @@ function bytes(value: number): string {
                   {{ group.items[0]?.actor || $t("runs.platformActor") }} ·
                   {{ $t("runs.toolGroup", { count: group.items.length }) }}
                   <span
-                    v-if="group.items.some((item) => item.working)"
+                    v-if="groupToolWorking(group.items)"
                     class="run-transcript__work"
                     role="status"
                   >
@@ -468,26 +548,22 @@ function bytes(value: number): string {
                     /></span>
                   </span>
                   <StatusBadge
-                    v-else-if="
-                      group.items.some(
-                        (item) =>
-                          item.toolCall?.state === 'FAILED' ||
-                          item.toolCall?.state === 'CANCELLED',
-                      ) ||
-                      group.items.every(
-                        (item) => item.toolCall?.state === 'SUCCEEDED',
-                      )
+                    v-else-if="visibleState(groupToolState(group.items), false)"
+                    :state="groupToolState(group.items)"
+                    :label="
+                      groupToolState(group.items) === 'COMPLETED'
+                        ? $t('runs.toolGroupCompleted')
+                        : undefined
                     "
-                    :state="
-                      group.items.some(
-                        (item) => item.toolCall?.state === 'FAILED',
-                      )
-                        ? 'FAILED'
-                        : group.items.some(
-                              (item) => item.toolCall?.state === 'CANCELLED',
-                            )
-                          ? 'CANCELLED'
-                          : 'SUCCEEDED'
+                  />
+                  <StatusBadge
+                    v-if="groupToolErrorCount(group.items)"
+                    state="FAILED"
+                    tone="warning"
+                    :label="
+                      $t('runs.toolGroupErrors', {
+                        count: groupToolErrorCount(group.items),
+                      })
                     "
                   />
                 </summary>
@@ -573,9 +649,9 @@ function bytes(value: number): string {
                     <StatusBadge
                       v-if="
                         item.toolCall &&
-                        visibleState(item.toolCall.state, false)
+                        visibleState(toolState(item.toolCall), false)
                       "
-                      :state="item.toolCall.state"
+                      :state="toolState(item.toolCall)"
                     />
                     <time :datetime="item.occurredAt">{{
                       time(item.occurredAt)

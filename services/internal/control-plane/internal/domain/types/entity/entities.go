@@ -589,6 +589,7 @@ type RunEvent struct {
 }
 
 type RunGraph struct {
+	Runs               []Run `json:"-"`
 	RunRef             string
 	Revision, Sequence int64
 	Nodes              []RunNode
@@ -775,6 +776,7 @@ type IntegrationConnection struct {
 	Ref, DefinitionKey, DefinitionName, Name, State, MaskedCredentialsState string
 	CredentialSecretKey                                                     string
 	DefinitionVersion, DefinitionDigest                                     string
+	DefinitionConfigurationBinding                                          *IntegrationDefinitionConfigurationBinding
 	LastTestSummary                                                         string
 	Enabled                                                                 bool
 	Version                                                                 int64
@@ -786,6 +788,13 @@ type IntegrationConnection struct {
 	CreatedAt, UpdatedAt                                                    time.Time
 	NextActions                                                             []string
 	LifecycleState                                                          string
+}
+
+// IntegrationDefinitionConfigurationBinding — авторитетная проекция адресного
+// чтения. nil не доказывает отсутствие связи и не разрешает expected absence.
+type IntegrationDefinitionConfigurationBinding struct {
+	State, ConfigurationRef, RevisionRef string
+	BindingVersion                       int64
 }
 
 type AssistantContextDescriptor struct {

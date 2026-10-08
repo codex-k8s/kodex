@@ -30,6 +30,46 @@ const publicationImpactSource = readFileSync(
 );
 
 describe("runtime editors layout", () => {
+  it("карточка образа переносит badge и сохраняет полную ссылку под доступным раскрытием", () => {
+    const card = environmentSource.slice(
+      environmentSource.indexOf('class="selected-image"'),
+      environmentSource.indexOf(
+        "</article>",
+        environmentSource.indexOf('class="selected-image"'),
+      ),
+    );
+    const details = card.slice(
+      card.indexOf('<details class="selected-image__details">'),
+    );
+    expect(card).toContain('class="selected-image__content"');
+    expect(card).toContain('class="selected-image__header"');
+    expect(card).toContain('class="selected-image__badge"');
+    expect(card.indexOf("<StatusBadge")).toBeLessThan(card.indexOf("<details"));
+    expect(card).toContain(':label="imageBadgeLabel"');
+    expect(details).toContain('$t("common.details")');
+    expect(details).toContain("{{ selectedImage.description }}");
+    expect(details).toContain("{{ input.imageArtifactRef }}");
+    expect(details).not.toMatch(/<details[^>]*\sopen(?:[\s=>])/);
+    expect(environmentSource).toMatch(
+      /\.selected-image\s*{[^}]*grid-template-columns: 22px minmax\(0, 1fr\);/,
+    );
+    expect(environmentSource).toMatch(
+      /\.selected-image__header\s*{[^}]*flex-wrap: wrap;/,
+    );
+    expect(environmentSource).toMatch(
+      /\.selected-image__content\s*{[^}]*min-width: 0;/,
+    );
+    expect(environmentSource).toMatch(
+      /\.selected-image__badge\s*{[^}]*white-space: normal;[^}]*overflow-wrap: anywhere;/,
+    );
+    expect(environmentSource).toMatch(
+      /\.selected-image code\s*{[^}]*overflow-wrap: anywhere;[^}]*white-space: normal;/,
+    );
+    expect(environmentSource).not.toMatch(
+      /\.selected-image code\s*{[^}]*text-overflow: ellipsis;/,
+    );
+  });
+
   it("разделяет постоянный draft lifecycle и контекстные действия вкладок", () => {
     const template = environmentSource.slice(
       environmentSource.indexOf("<template>"),

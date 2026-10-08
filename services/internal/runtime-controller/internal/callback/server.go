@@ -677,7 +677,7 @@ func delegationTool(targets []runtimecontract.RunnerDelegationTarget) map[string
 	}
 	return map[string]any{
 		"name":        "delegate_agent",
-		"description": "Delegate using named schema targets and paired workflow steps. End this turn after acceptance; results arrive in a callback.",
+		"description": "Delegate exact pairs; end turn, await callback. " + runtimeFileHandoffGuidance,
 		"inputSchema": map[string]any{"type": "object", "additionalProperties": false, "required": required, "properties": properties},
 	}
 }
@@ -687,6 +687,11 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	if err != nil {
 		server.writeMCPError(writer, rpc.ID, -32602, "Invalid params")
 		return
+	}
+	if params.Name == runtimecontract.FileToolRead {
+		bounded, cancel := context.WithTimeout(request.Context(), maximumFileReadDuration)
+		defer cancel()
+		request = request.WithContext(bounded)
 	}
 	if params.Name == "invoke_integration" {
 		if _, valid := integrationGrantForCall(input, params.Arguments); !valid {
@@ -731,7 +736,7 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		if err == nil {
 			result, err = server.invoke(request.Context(), input, invokeArguments, rpc.ID)
 		}
-	case runtimecontract.FileToolSearch, runtimecontract.FileToolMetadata, runtimecontract.FileToolPreview, runtimecontract.FileToolManifest:
+	case runtimecontract.FileToolSearch, runtimecontract.FileToolMetadata, runtimecontract.FileToolPreview, runtimecontract.FileToolManifest, runtimecontract.FileToolRead:
 		result, err = server.callFileTool(request.Context(), input, params.Name, params.Arguments)
 	default:
 		err = errors.New("tool is not available")
@@ -742,7 +747,9 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		failureClass := controlFailureClass(err)
 		var planInputErr *assistantPlanInputError
 		if errors.As(err, &planInputErr) {
-			failureClass = "assistant_plan_" + planInputErr.reason
+			if _, ok := assistantPlanInvalidDetails(err); !ok {
+				failureClass = "assistant_plan_" + planInputErr.reason
+			}
 		}
 		var catalogInputErr *integrationCatalogInputError
 		if errors.As(err, &catalogInputErr) {
@@ -755,6 +762,9 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		attributes := []any{"tool", params.Name, "stage", "operation", "grpc_code", status.Code(err).String(), "failure_class", failureClass}
 		if _, index := assistantPlanFailureDiagnostic(err); index > 0 {
 			attributes = append(attributes, "operation_index", index)
+		}
+		if diagnostic, ok := assistantPlanInvalidDetails(err); ok && diagnostic.field != "" {
+			attributes = append(attributes, "failure_field", diagnostic.field)
 		}
 		server.logger.WarnContext(request.Context(), "runtime MCP tool operation failed", attributes...)
 	}
@@ -770,9 +780,19 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	structured := result
 	if err != nil {
 		structured = map[string]any{"error_code": "TOOL_UNAVAILABLE", "retryable": false}
-		if params.Name == "get_configuration_catalog" && projectionErr == nil && errors.Is(err, errAssistantCatalogSelection) {
-			structured = map[string]any{"error_code": assistantCatalogInputInvalidCode, "retryable": true,
-				"guidance": assistantCatalogInputInvalidGuidance}
+		if runtimecontract.IsRuntimeFileTool(params.Name) && projectionErr == nil && errors.Is(err, errRuntimeFileInput) {
+			structured = map[string]any{"error_code": runtimeFileInputInvalidCode, "retryable": true,
+				"guidance": runtimeFileInputGuidance}
+		}
+		if params.Name == "delegate_agent" && projectionErr == nil && delegationInputFailureClass(err) != "" {
+			structured = map[string]any{"error_code": delegationInputInvalidCode, "retryable": true,
+				"guidance": delegationInputInvalidGuidance}
+		}
+		if params.Name == "get_configuration_catalog" && projectionErr == nil {
+			if guidance := assistantCatalogRecoveryGuidance(err); guidance != "" {
+				structured = map[string]any{"error_code": assistantCatalogInputInvalidCode, "retryable": true,
+					"guidance": guidance}
+			}
 		}
 		if params.Name == "find_platform_resources" && projectionErr == nil {
 			switch assistantSearchFailureClass(err) {
@@ -791,6 +811,13 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 				"error_code": "PLAN_INPUT_INVALID",
 				"retryable":  true,
 				"guidance":   guidance,
+			}
+			if diagnostic, ok := assistantPlanInvalidDetails(err); ok {
+				guidanceResult := structured.(map[string]any)
+				guidanceResult["failure_stage"] = diagnostic.stage
+				if diagnostic.field != "" {
+					guidanceResult["failure_field"] = diagnostic.field
+				}
 			}
 		}
 		var catalogInputErr *integrationCatalogInputError
@@ -817,7 +844,10 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	server.writeMCPResult(writer, rpc.ID, map[string]any{"content": []map[string]string{{"type": "text", "text": string(encoded)}}, "structuredContent": structured, "isError": err != nil})
 }
 
-type assistantPlanInputError struct{ reason string }
+type assistantPlanInputError struct {
+	reason     string
+	diagnostic *assistantPlanInvalidDiagnostic
+}
 
 func (planErr *assistantPlanInputError) Error() string { return "assistant plan input is invalid" }
 
@@ -826,6 +856,15 @@ func invalidAssistantPlan(reason string) error {
 }
 
 func controlFailureClass(err error) string {
+	if class := delegationInputFailureClass(err); class != "" {
+		return class
+	}
+	if errors.Is(err, errRuntimeFileInput) {
+		return runtimeFileInputFailureClass
+	}
+	if errors.Is(err, errRuntimeFileReply) {
+		return runtimeFileReplyFailureClass
+	}
 	if class := assistantCatalogFailureClass(err); class != "" {
 		return class
 	}
@@ -876,6 +915,9 @@ func controlFailureClass(err error) string {
 
 // Метаданные принимаются только из точного внутреннего RPC и закрытой схемы.
 func assistantPlanFailureDiagnostic(err error) (string, int) {
+	if diagnostic, ok := assistantPlanInvalidDetails(err); ok {
+		return "assistant_plan_" + diagnostic.stage + "_invalid", diagnostic.index
+	}
 	value := status.Convert(err)
 	if value.Code() != codes.Aborted || len(value.Details()) != 1 {
 		return "", 0
@@ -890,6 +932,8 @@ func assistantPlanFailureDiagnostic(err error) (string, int) {
 		stage = "hydrate"
 	case "ASSISTANT_PLAN_NORMALIZE":
 		stage = "normalize"
+	case "ASSISTANT_PLAN_COMMAND":
+		stage = "command"
 	case "ASSISTANT_PLAN_BIND":
 		stage = "bind"
 	case "ASSISTANT_PLAN_AUTHORIZE":
@@ -1056,6 +1100,9 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 		if _, index := assistantPlanFailureDiagnostic(err); index > 0 {
 			attributes = append(attributes, "operation_index", index)
 		}
+		if diagnostic, ok := assistantPlanInvalidDetails(err); ok && diagnostic.field != "" {
+			attributes = append(attributes, "failure_field", diagnostic.field)
+		}
 		server.logger.WarnContext(ctx, "control-plane assistant plan request failed", attributes...)
 		return nil, assistantPlanControlError(err)
 	}
@@ -1068,7 +1115,11 @@ func (server *Server) proposeAssistantPlan(ctx context.Context, input runtimecon
 
 func assistantPlanControlError(err error) error {
 	if status.Code(err) == codes.InvalidArgument {
-		return invalidAssistantPlan("server_validation")
+		planErr := &assistantPlanInputError{reason: "server_validation"}
+		if diagnostic, ok := assistantPlanInvalidDetails(err); ok {
+			planErr.diagnostic = &diagnostic
+		}
+		return planErr
 	}
 	if class, _ := assistantPlanFailureDiagnostic(err); class != "" {
 		info := status.Convert(err).Details()[0].(*errdetails.ErrorInfo)
@@ -1734,6 +1785,12 @@ func (server *Server) recordToolCallPhase(ctx context.Context, input runtimecont
 		state = controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_FAILED
 	}
 	safeResult := safeToolCallResult(tool, result, toolErr)
+	if tool == runtimecontract.FileToolRead && revision == 2 && toolErr == nil {
+		safeResult, err = safeFileReadReceipt(input, arguments, result)
+		if err != nil {
+			return err
+		}
+	}
 	if revision == 1 {
 		state, safeResult = controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_RUNNING, ""
 	}
@@ -1772,8 +1829,18 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 		parameters := map[string]any{}
 		if catalog, ok := arguments["assistant_configuration_catalog"].(map[string]any); ok {
 			if kind, ok := catalog["kind"].(string); ok && assistantConfigurationCatalogKindKnown(kind) {
-				// Публикуется только закрытый вид каталога, без аргументов и координат ресурса.
+				// Вид и проверенные координаты запроса страницы не раскрывают ресурс или содержимое.
 				parameters["catalogKind"] = kind
+				if kind == "WORKFLOW_CONFIGURATION" || kind == "AGENT_CONFIGURATION" {
+					if _, err := configurationCatalog(input, arguments); err == nil {
+						if _, err := parseAssistantConfigurationCatalog(input, arguments, catalog); err == nil {
+							if page, err := parseAssistantConfigurationPage(catalog, kind); err == nil {
+								parameters["offset_bytes"] = page.offset
+								parameters["maximum_bytes"] = page.maximum
+							}
+						}
+					}
+				}
 			}
 		}
 		return parameters, "platform.configuration.read", "", input.IsAssistant()
@@ -1869,6 +1936,15 @@ func safeInvocationRef(value string) bool {
 
 func safeToolCallResult(tool string, result any, toolErr error) string {
 	if toolErr != nil {
+		var planErr *assistantPlanInputError
+		if tool == "propose_configuration_plan" && errors.As(toolErr, &planErr) {
+			return "PLAN_INPUT_INVALID"
+		}
+		return "TOOL_UNAVAILABLE"
+	}
+	// У read_file нет нового successful legacy fallback: terminal проекция
+	// требует private evidence и authenticated input в recordToolCallPhase.
+	if tool == runtimecontract.FileToolRead {
 		return "TOOL_UNAVAILABLE"
 	}
 	if tool == "invoke_integration" || tool == runtimecontract.Context7ResolveTool || tool == runtimecontract.Context7QueryTool {
@@ -1912,26 +1988,9 @@ func assistantPlanTextWithinLimit(value string, maximum int) bool {
 }
 
 func (server *Server) delegate(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any, callID json.RawMessage) (any, error) {
-	if !onlyKeys(arguments, "target_agent_ref", "workflow_step_key", "task", "input") {
-		return nil, errors.New("delegation input is invalid")
-	}
-	target, _ := arguments["target_agent_ref"].(string)
-	stepKey, _ := arguments["workflow_step_key"].(string)
-	task, _ := arguments["task"].(string)
-	allowed := false
-	for _, item := range input.DelegationTargets {
-		if item.Ref == target && item.WorkflowStepKey == stepKey {
-			allowed = true
-			break
-		}
-	}
-	if !allowed || strings.TrimSpace(task) == "" || len(task) > 64<<10 {
-		return nil, errors.New("delegation is not allowed")
-	}
-	bounded, _ := arguments["input"].(map[string]any)
-	structure, err := structpb.NewStruct(bounded)
+	target, stepKey, task, structure, err := validateDelegationInput(input, arguments)
 	if err != nil {
-		return nil, errors.New("delegation input is invalid")
+		return nil, err
 	}
 	requestContext, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	defer cancel()

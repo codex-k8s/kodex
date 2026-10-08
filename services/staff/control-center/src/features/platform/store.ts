@@ -170,6 +170,7 @@ import {
 } from "@/features/platform/run-reducer";
 import { instructionCommandInput } from "@/features/platform/instruction-command";
 import { runBoundedPlatformReload } from "@/features/platform/platform-reload";
+import { validateRunSnapshot } from "@/features/platform/run-snapshot";
 import {
   assertAssistantRetryIdentity,
   assertRunOwner,
@@ -327,6 +328,10 @@ export const usePlatformStore = defineStore("platform", () => {
   const runLoading = reactive<Record<string, boolean>>({});
   const runProblems = reactive<Partial<Record<string, AppProblem>>>({});
   const runReadGeneration = new Map<string, number>();
+  const runSnapshotRefs = new Map<
+    string,
+    { refs: Set<string>; sequence: number }
+  >();
   const consumedSearchPageTokens = new Set<string>();
   const consumedAuditPageTokens = new Set<string>();
   let platformReloadPromise: Promise<void> | undefined;
@@ -2100,6 +2105,57 @@ export const usePlatformStore = defineStore("platform", () => {
     graphs[graph.runRef] = mergeRunGraph(graphs[graph.runRef], graph);
   }
 
+  function applyRunReadinessSnapshot(graph: RunGraph, values: unknown): void {
+    const ownerSignal = ownerRequestSignal();
+    const checked = validateRunSnapshot(
+      graph,
+      values,
+      bootstrap.value?.organizationRef,
+      runs,
+      graphs[graph.runRef],
+    );
+    const mergedGraph = mergeRunGraph(graphs[graph.runRef], graph);
+    assertOwnerRequest(ownerSignal);
+    for (const run of checked) {
+      runReadGeneration.set(run.ref, (runReadGeneration.get(run.ref) ?? 0) + 1);
+      runLoading[run.ref] = false;
+      runs[run.ref] = run;
+      Reflect.deleteProperty(runProblems, run.ref);
+    }
+    runSnapshotRefs.set(graph.runRef, {
+      refs: new Set(checked.map((run) => run.ref)),
+      sequence: graph.sequence,
+    });
+    graphs[graph.runRef] = mergedGraph;
+  }
+
+  function clearRunReadinessSnapshot(rootRef: string): void {
+    // Только уже известная точная root lineage; чужие cache записи не затрагиваются.
+    const refs = new Set([
+      rootRef,
+      ...(runSnapshotRefs.get(rootRef)?.refs ?? []),
+    ]);
+    for (const run of Object.values(runs)) {
+      if (run.rootRunRef === rootRef) refs.add(run.ref);
+    }
+    for (const ref of refs) {
+      runReadGeneration.set(ref, (runReadGeneration.get(ref) ?? 0) + 1);
+      runLoading[ref] = false;
+      Reflect.deleteProperty(runs, ref);
+      Reflect.deleteProperty(graphs, ref);
+      runSnapshotRefs.delete(ref);
+    }
+    runSnapshotRefs.delete(rootRef);
+  }
+
+  function hasRunReadinessSnapshot(rootRef: string, cursor: number): boolean {
+    return (
+      Boolean(runs[rootRef]) &&
+      (runSnapshotRefs.get(rootRef)?.sequence ?? -1) >= cursor &&
+      (graphs[rootRef]?.sequence ?? -1) >= cursor
+    );
+  }
+
   function applyRunEvent(event: RunEvent): RunEventOutcome {
     return reduceRunEvent({ runs, graphs, events, gates, artifacts }, event);
   }
@@ -2925,6 +2981,7 @@ export const usePlatformStore = defineStore("platform", () => {
     platformReloadScope = undefined;
     generation.clear();
     runReadGeneration.clear();
+    runSnapshotRefs.clear();
     for (const target of [
       runtimes,
       projects,
@@ -3142,6 +3199,9 @@ export const usePlatformStore = defineStore("platform", () => {
     changeConnectionGrant,
     updateAssistantInstructions,
     applyRunSnapshot,
+    applyRunReadinessSnapshot,
+    clearRunReadinessSnapshot,
+    hasRunReadinessSnapshot,
     applyRunEvent,
     applyPlatformSnapshot,
     markRealtimeSnapshot,

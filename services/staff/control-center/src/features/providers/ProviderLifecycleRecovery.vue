@@ -60,7 +60,9 @@ async function retry(): Promise<void> {
     if (!signal.aborted) busy.value = false;
   }
 }
-watch(() => [props.account.ref, props.problem], read, { immediate: true });
+watch([() => props.account.ref, () => props.problem], read, {
+  immediate: true,
+});
 onBeforeUnmount(() => controller.abort());
 </script>
 <template>

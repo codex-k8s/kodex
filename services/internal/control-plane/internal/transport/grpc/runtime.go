@@ -101,6 +101,11 @@ func castRuntimeRevision(values map[string]any) *controlplanev1.RuntimeRevisionS
 		return nil
 	}
 	result.FileCatalog = fileCatalog
+	deadline, validDeadline := castRuntimeExecutionDeadline(values["executionDeadline"])
+	if !validDeadline {
+		return nil
+	}
+	result.ExecutionDeadline = deadline
 	result.InstructionRef = mapString(values, "instructionRef")
 	result.InstructionDigest = mapString(values, "instructionDigest")
 	result.PromptTemplateRef = mapString(values, "promptTemplateRef")
@@ -367,13 +372,19 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 			return nil, transportError(errs.ErrInvalid)
 		}
 		kind := strings.TrimPrefix(catalog.GetKind().String(), "ASSISTANT_CONFIGURATION_CATALOG_KIND_")
-		result, err := server.service.ListAssistantConfigurationCatalog(ctx, p, request.GetLeaseRef(), request.GetFence(), request.GetGeneration(), entity.AssistantConfigurationCatalogRequest{Kind: kind, AssistantRef: catalog.GetAssistantRef(), Query: catalog.GetQuery(), Offset: catalog.GetOffset(), AccountRef: catalog.GetAccountRef(), RuntimeProfileRef: catalog.GetRuntimeProfileRef()})
+		result, err := server.service.ListAssistantConfigurationCatalog(ctx, p, request.GetLeaseRef(), request.GetFence(), request.GetGeneration(), entity.AssistantConfigurationCatalogRequest{Kind: kind, AssistantRef: catalog.GetAssistantRef(), Query: catalog.GetQuery(), Offset: catalog.GetOffset(), AccountRef: catalog.GetAccountRef(), RuntimeProfileRef: catalog.GetRuntimeProfileRef(), EntityKind: catalog.GetEntityKind(), EntityRef: catalog.GetEntityRef()})
 		if err != nil {
 			return nil, assistantCatalogTransportError(catalog.GetKind(), err)
 		}
 		response := &controlplanev1.AssistantConfigurationCatalogResponse{Kind: catalog.GetKind(), AssistantRef: result.AssistantRef, ScopeKind: result.ScopeKind, OrganizationRef: result.OrganizationRef, ProjectRef: result.ProjectRef, AssistantProfileRef: result.AssistantProfileRef, NextOffset: result.NextOffset}
+		if agent := result.AgentConfiguration; agent != nil {
+			response.AgentConfiguration = &controlplanev1.AssistantAgentConfiguration{AgentRef: agent.AgentRef, ProjectRef: agent.ProjectRef, Version: agent.Version, ConfigurationJson: agent.ConfigurationJSON, ConfigurationSha256: agent.ConfigurationSHA256}
+		}
+		if workflow := result.WorkflowConfiguration; workflow != nil {
+			response.WorkflowConfiguration = &controlplanev1.AssistantWorkflowConfiguration{WorkflowRef: workflow.WorkflowRef, ProjectRef: workflow.ProjectRef, Version: workflow.Version, ConfigurationJson: workflow.ConfigurationJSON, ConfigurationSha256: workflow.ConfigurationSHA256}
+		}
 		if recipient := result.RecipientIntegrationGrants; recipient != nil {
-			response.RecipientIntegrationGrants = &controlplanev1.AssistantRecipientIntegrationGrantCatalog{RecipientKind: recipient.RecipientKind, RecipientRef: recipient.RecipientRef, RecipientName: recipient.RecipientName, RecipientVersion: recipient.RecipientVersion, ProjectVersion: recipient.ProjectVersion}
+			response.RecipientIntegrationGrants = &controlplanev1.AssistantRecipientIntegrationGrantCatalog{RecipientKind: recipient.RecipientKind, RecipientRef: recipient.RecipientRef, RecipientName: recipient.RecipientName, RecipientVersion: recipient.RecipientVersion, ProjectVersion: recipient.ProjectVersion, ContextEntityKind: recipient.ContextEntityKind, ContextEntityRef: recipient.ContextEntityRef, ContextEntityVersion: recipient.ContextEntityVersion}
 			for _, entry := range recipient.Entries {
 				candidate, err := castAssistantIntegrationGrantCandidate(entry.Grant.Candidate)
 				if err != nil {
@@ -454,12 +465,15 @@ func assistantCatalogTransportError(kind controlplanev1.AssistantConfigurationCa
 func assistantPlanTransportError(err error) error {
 	result := transportError(err)
 	stage, category, index, ok := errs.AssistantPlanDiagnostic(err)
-	if !ok || status.Code(result) != codes.Aborted {
+	if !ok || category == "INVALID" && status.Code(result) != codes.InvalidArgument || category != "INVALID" && status.Code(result) != codes.Aborted {
 		return result
 	}
 	metadata := map[string]string{"category": category}
 	if index > 0 {
 		metadata["operation_index"] = strconv.Itoa(index)
+	}
+	if field := errs.AssistantPlanField(err); category == "INVALID" && field != "" {
+		metadata["field"] = field
 	}
 	withDetails, detailErr := status.Convert(result).WithDetails(&errdetails.ErrorInfo{Domain: controlPlaneErrorDomain, Reason: stage, Metadata: metadata})
 	if detailErr != nil {

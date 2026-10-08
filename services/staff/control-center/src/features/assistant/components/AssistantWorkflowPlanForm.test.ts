@@ -251,6 +251,29 @@ it("ожидание каталога нейтрально, но неполны�
   expect(state.validStep({ ...steps[1], purpose: "" }, true)).toBe(false);
 });
 
+it.each(["я", "🧭"])(
+  "проверяет критерий завершения по Unicode-символам на границе 2000/2001 (%s)",
+  async (character) => {
+    const { props, state, events } = mount(2);
+    await vi.waitFor(() => expect(state.valid.value).toBe(true));
+    const value = character.repeat(2000);
+    updateOperationParameter(props.operation, "completionCriteria", value);
+    await nextTick();
+    expect(state.valid.value).toBe(true);
+    updateOperationParameter(
+      props.operation,
+      "completionCriteria",
+      `${value}я`,
+    );
+    await nextTick();
+    expect(state.valid.value).toBe(false);
+    expect(
+      operationInputs([props.operation])[0]?.parameters.completionCriteria,
+    ).toBe(`${value}я`);
+    expect(events.filter(([name]) => name === "parameter")).toHaveLength(0);
+  },
+);
+
 it("общий свернутый шаг не монтирует slot, но показывает ошибку и gate", async () => {
   let mounted = 0;
   const app = createSSRApp(

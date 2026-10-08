@@ -120,10 +120,17 @@ func (repository *Repository) recordSystemAssistantTerminalTurn(
 // Отказ кандидата закрывает весь принадлежащий владельцу граф. Независимые
 // root run той же пачки сохраняют свои leases и продолжают исполняться.
 func (repository *Repository) failRuntimeCandidateGraph(ctx context.Context, tx pgx.Tx, current scope, input command.Command, candidate claimableExecution) error {
+	return repository.failRuntimeGraph(ctx, tx, current, input, candidate, "RUNTIME_INPUT_INVALID", runtimeClaimEligibilityChanged)
+}
+
+func (repository *Repository) failRuntimeGraph(ctx context.Context, tx pgx.Tx, current scope, input command.Command, candidate claimableExecution, code, summary string) error {
+	if (code != "RUNTIME_INPUT_INVALID" || summary != runtimeClaimEligibilityChanged) && (code != "RUNTIME_TIMEOUT" || summary != runtimeTimeoutSummary) {
+		return errs.ErrInvalid
+	}
 	rows, err := tx.Query(ctx, queryRuntimeClaimFailGraph, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "root_run_id": candidate.rootRunID,
 		"failed_node_id": candidate.nodeID, "actor_id": current.actorID,
-		"summary": runtimeClaimEligibilityChanged,
+		"summary": summary, "safe_error_code": code,
 	})
 	if err != nil {
 		return errs.ErrUnavailable
@@ -145,7 +152,7 @@ func (repository *Repository) failRuntimeCandidateGraph(ctx context.Context, tx 
 	}
 	for _, item := range transitions {
 		if item.kind == "RUN" {
-			if err := repository.auditRuntimeClaimTransition(ctx, tx, current, input, candidate.projectID, item.ref, runtimeClaimEligibilityChanged); err != nil {
+			if err := repository.auditRuntimeClaimTransition(ctx, tx, current, input, candidate.projectID, item.ref, summary); err != nil {
 				return err
 			}
 		}
@@ -157,7 +164,7 @@ func (repository *Repository) failRuntimeCandidateGraph(ctx context.Context, tx 
 			eventKind, gateRef, nodeState = "OWNER_GATE_RESOLVED", item.ref, "CANCELLED"
 		}
 		if _, err := repository.emitRunEvent(ctx, tx, current, candidate.projectID, candidate.rootRunID,
-			item.ref, eventKind, item.nodeRef, "", gateRef, "", runtimeClaimEligibilityChanged, "FAILED", nodeState); err != nil {
+			item.ref, eventKind, item.nodeRef, "", gateRef, "", summary, "FAILED", nodeState); err != nil {
 			return err
 		}
 	}

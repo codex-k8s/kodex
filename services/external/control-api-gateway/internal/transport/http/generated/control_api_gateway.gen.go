@@ -2665,6 +2665,36 @@ func (e IntegrationDefinitionOrigin) Valid() bool {
 	}
 }
 
+// Defines values for IntegrationDefinitionConfigurationBinding0State.
+const (
+	ABSENT IntegrationDefinitionConfigurationBinding0State = "ABSENT"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationDefinitionConfigurationBinding0State enum.
+func (e IntegrationDefinitionConfigurationBinding0State) Valid() bool {
+	switch e {
+	case ABSENT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntegrationDefinitionConfigurationBinding1State.
+const (
+	MATCH IntegrationDefinitionConfigurationBinding1State = "MATCH"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationDefinitionConfigurationBinding1State enum.
+func (e IntegrationDefinitionConfigurationBinding1State) Valid() bool {
+	switch e {
+	case MATCH:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for IntegrationDefinitionGitSourceInputContentFormat.
 const (
 	IntegrationDefinitionGitSourceInputContentFormatJSON IntegrationDefinitionGitSourceInputContentFormat = "JSON"
@@ -11311,23 +11341,26 @@ type IntegrationConfigurationFieldValueType string
 
 // IntegrationConnection defines model for IntegrationConnection.
 type IntegrationConnection struct {
-	Capabilities          []IntegrationCapability    `json:"capabilities"`
-	CreatedAt             *Timestamp                 `json:"createdAt,omitempty"`
-	CredentialsConfigured bool                       `json:"credentialsConfigured"`
-	CredentialsHint       string                     `json:"credentialsHint"`
-	DefinitionDigest      string                     `json:"definitionDigest"`
-	DefinitionKey         string                     `json:"definitionKey"`
-	DefinitionVersion     string                     `json:"definitionVersion"`
-	Grants                []IntegrationGrant         `json:"grants"`
-	LastTestOutcome       *string                    `json:"lastTestOutcome,omitempty"`
-	LastTestedAt          *Timestamp                 `json:"lastTestedAt,omitempty"`
-	Name                  string                     `json:"name"`
-	NextActions           []NextAction               `json:"nextActions"`
-	PublicConfiguration   map[string]interface{}     `json:"publicConfiguration"`
-	Ref                   OpaqueRef                  `json:"ref"`
-	State                 IntegrationConnectionState `json:"state"`
-	UpdatedAt             *Timestamp                 `json:"updatedAt,omitempty"`
-	Version               int64                      `json:"version"`
+	Capabilities          []IntegrationCapability `json:"capabilities"`
+	CreatedAt             *Timestamp              `json:"createdAt,omitempty"`
+	CredentialsConfigured bool                    `json:"credentialsConfigured"`
+	CredentialsHint       string                  `json:"credentialsHint"`
+
+	// DefinitionConfigurationBinding Авторитетная связь INTEGRATION_DEFINITION; MATCH содержит текущие глобальные pins для OCC, ABSENT разрешает явную проверку отсутствия. Pins не выдают права.
+	DefinitionConfigurationBinding *IntegrationDefinitionConfigurationBinding `json:"definitionConfigurationBinding,omitempty"`
+	DefinitionDigest               string                                     `json:"definitionDigest"`
+	DefinitionKey                  string                                     `json:"definitionKey"`
+	DefinitionVersion              string                                     `json:"definitionVersion"`
+	Grants                         []IntegrationGrant                         `json:"grants"`
+	LastTestOutcome                *string                                    `json:"lastTestOutcome,omitempty"`
+	LastTestedAt                   *Timestamp                                 `json:"lastTestedAt,omitempty"`
+	Name                           string                                     `json:"name"`
+	NextActions                    []NextAction                               `json:"nextActions"`
+	PublicConfiguration            map[string]interface{}                     `json:"publicConfiguration"`
+	Ref                            OpaqueRef                                  `json:"ref"`
+	State                          IntegrationConnectionState                 `json:"state"`
+	UpdatedAt                      *Timestamp                                 `json:"updatedAt,omitempty"`
+	Version                        int64                                      `json:"version"`
 }
 
 // IntegrationConnectionState defines model for IntegrationConnection.State.
@@ -11403,6 +11436,30 @@ type IntegrationDefinitionNextActions string
 
 // IntegrationDefinitionOrigin defines model for IntegrationDefinition.Origin.
 type IntegrationDefinitionOrigin string
+
+// IntegrationDefinitionConfigurationBinding Авторитетная связь INTEGRATION_DEFINITION; MATCH содержит текущие глобальные pins для OCC, ABSENT разрешает явную проверку отсутствия. Pins не выдают права.
+type IntegrationDefinitionConfigurationBinding struct {
+	union json.RawMessage
+}
+
+// IntegrationDefinitionConfigurationBinding0 defines model for .
+type IntegrationDefinitionConfigurationBinding0 struct {
+	State IntegrationDefinitionConfigurationBinding0State `json:"state"`
+}
+
+// IntegrationDefinitionConfigurationBinding0State defines model for IntegrationDefinitionConfigurationBinding.0.State.
+type IntegrationDefinitionConfigurationBinding0State string
+
+// IntegrationDefinitionConfigurationBinding1 defines model for .
+type IntegrationDefinitionConfigurationBinding1 struct {
+	BindingVersion   int64                                           `json:"bindingVersion"`
+	ConfigurationRef OpaqueRef                                       `json:"configurationRef"`
+	RevisionRef      OpaqueRef                                       `json:"revisionRef"`
+	State            IntegrationDefinitionConfigurationBinding1State `json:"state"`
+}
+
+// IntegrationDefinitionConfigurationBinding1State defines model for IntegrationDefinitionConfigurationBinding.1.State.
+type IntegrationDefinitionConfigurationBinding1State string
 
 // IntegrationDefinitionConfigurationCopyInput defines model for IntegrationDefinitionConfigurationCopyInput.
 type IntegrationDefinitionConfigurationCopyInput struct {
@@ -18333,6 +18390,68 @@ func (t *AssistantRunPin) UnmarshalJSON(b []byte) error {
 		}
 	}
 
+	return err
+}
+
+// AsIntegrationDefinitionConfigurationBinding0 returns the union data inside the IntegrationDefinitionConfigurationBinding as a IntegrationDefinitionConfigurationBinding0
+func (t IntegrationDefinitionConfigurationBinding) AsIntegrationDefinitionConfigurationBinding0() (IntegrationDefinitionConfigurationBinding0, error) {
+	var body IntegrationDefinitionConfigurationBinding0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromIntegrationDefinitionConfigurationBinding0 overwrites any union data inside the IntegrationDefinitionConfigurationBinding as the provided IntegrationDefinitionConfigurationBinding0
+func (t *IntegrationDefinitionConfigurationBinding) FromIntegrationDefinitionConfigurationBinding0(v IntegrationDefinitionConfigurationBinding0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeIntegrationDefinitionConfigurationBinding0 performs a merge with any union data inside the IntegrationDefinitionConfigurationBinding, using the provided IntegrationDefinitionConfigurationBinding0
+func (t *IntegrationDefinitionConfigurationBinding) MergeIntegrationDefinitionConfigurationBinding0(v IntegrationDefinitionConfigurationBinding0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsIntegrationDefinitionConfigurationBinding1 returns the union data inside the IntegrationDefinitionConfigurationBinding as a IntegrationDefinitionConfigurationBinding1
+func (t IntegrationDefinitionConfigurationBinding) AsIntegrationDefinitionConfigurationBinding1() (IntegrationDefinitionConfigurationBinding1, error) {
+	var body IntegrationDefinitionConfigurationBinding1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromIntegrationDefinitionConfigurationBinding1 overwrites any union data inside the IntegrationDefinitionConfigurationBinding as the provided IntegrationDefinitionConfigurationBinding1
+func (t *IntegrationDefinitionConfigurationBinding) FromIntegrationDefinitionConfigurationBinding1(v IntegrationDefinitionConfigurationBinding1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeIntegrationDefinitionConfigurationBinding1 performs a merge with any union data inside the IntegrationDefinitionConfigurationBinding, using the provided IntegrationDefinitionConfigurationBinding1
+func (t *IntegrationDefinitionConfigurationBinding) MergeIntegrationDefinitionConfigurationBinding1(v IntegrationDefinitionConfigurationBinding1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t IntegrationDefinitionConfigurationBinding) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *IntegrationDefinitionConfigurationBinding) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
 	return err
 }
 

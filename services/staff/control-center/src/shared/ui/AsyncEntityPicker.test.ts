@@ -1,5 +1,17 @@
 import { readFileSync } from "node:fs";
-import { createSSRApp, effectScope, h, nextTick } from "vue";
+import {
+  createRenderer,
+  createSSRApp,
+  defineComponent,
+  effectScope,
+  h,
+  nextTick,
+  reactive,
+  ssrContextKey,
+  type ComponentPublicInstance,
+  type Ref,
+  type SetupContext,
+} from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { createI18n } from "vue-i18n";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -451,6 +463,175 @@ describe("virtual window", () => {
 });
 
 describe("AsyncEntityPicker", () => {
+  function mountKeyboardPicker(loader: ReturnType<typeof vi.fn>) {
+    const props = reactive({ loadPage: loader, disabled: false });
+    interface State {
+      handlePopoverOpen(value: boolean): void;
+      handleTriggerArrowDown(): void;
+      handlePopoverReady(): void;
+      loadMore(): Promise<void>;
+      items: Ref<{ id: string }[]>;
+      activeIndex: Ref<number>;
+      open: Ref<boolean>;
+      searchInput: Ref<HTMLInputElement | undefined>;
+    }
+    let state!: State;
+    const renderer = createRenderer<object, object>({
+      patchProp() {},
+      insert() {},
+      remove() {},
+      createElement: () => ({}),
+      createText: () => ({}),
+      createComment: () => ({}),
+      setText() {},
+      setElementText() {},
+      parentNode: () => null,
+      nextSibling: () => null,
+    });
+    const source = AsyncEntityPicker as unknown as {
+      setup(props: unknown, context: SetupContext): State;
+    };
+    const app = renderer.createApp(
+      defineComponent({
+        setup(_props, context) {
+          state = source.setup(props, context);
+          return () => null;
+        },
+      }),
+    );
+    app.provide(ssrContextKey, {});
+    app.mount({});
+    return { state, props, unmount: () => app.unmount() };
+  }
+
+  it("повторное открытие сохраняет шесть строк, догруженный хвост и cursor", async () => {
+    vi.useFakeTimers();
+    const firstPage = Array.from({ length: 6 }, (_, index) => ({
+      ref: `agent_${String(index)}`,
+      title: `Сотрудник ${String(index)}`,
+    }));
+    const loader = vi
+      .fn()
+      .mockResolvedValueOnce({ items: firstPage, nextPageToken: "tail" })
+      .mockResolvedValueOnce({
+        items: [{ ref: "developer", title: "Разработчик" }],
+        nextPageToken: "last",
+      })
+      .mockResolvedValueOnce({ items: [] });
+    const picker = mountKeyboardPicker(loader);
+    try {
+      picker.state.handlePopoverOpen(true);
+      await vi.runAllTimersAsync();
+      await picker.state.loadMore();
+      await nextTick();
+      picker.state.activeIndex.value = 6;
+      for (let index = 0; index < 6; index += 1)
+        picker.state.handlePopoverOpen(true);
+      picker.state.searchInput.value = {
+        focus: vi.fn(),
+      } as unknown as HTMLInputElement;
+      for (let index = 0; index < 6; index += 1)
+        picker.state.handleTriggerArrowDown();
+      await vi.runAllTimersAsync();
+      expect(loader).toHaveBeenCalledTimes(2);
+      expect(picker.state.items.value.map((item) => item.id)).toEqual([
+        ...firstPage.map((item) => item.ref),
+        "developer",
+      ]);
+      expect(picker.state.activeIndex.value).toBe(6);
+      await picker.state.loadMore();
+      expect(loader.mock.calls[2]?.[1]).toBe("last");
+    } finally {
+      picker.unmount();
+    }
+  });
+
+  it("ArrowDown фокусирует поиск без повторного чтения и не фокусирует закрытый или disabled dropdown", async () => {
+    vi.useFakeTimers();
+    const loader = vi.fn().mockResolvedValue({ items: [] });
+    const picker = mountKeyboardPicker(loader);
+    const focus = vi.fn();
+    picker.state.searchInput.value = { focus } as unknown as HTMLInputElement;
+    try {
+      picker.state.handleTriggerArrowDown();
+      expect(focus).not.toHaveBeenCalled();
+      picker.state.handlePopoverReady();
+      await vi.runAllTimersAsync();
+      expect(focus).toHaveBeenCalledOnce();
+      for (let index = 0; index < 6; index += 1)
+        picker.state.handleTriggerArrowDown();
+      await vi.runAllTimersAsync();
+      expect(loader).toHaveBeenCalledOnce();
+      expect(focus).toHaveBeenCalledTimes(7);
+      picker.state.handlePopoverOpen(false);
+      picker.state.handleTriggerArrowDown();
+      picker.state.handlePopoverOpen(false);
+      picker.state.handlePopoverReady();
+      expect(focus).toHaveBeenCalledTimes(7);
+      picker.props.disabled = true;
+      picker.state.handleTriggerArrowDown();
+      picker.state.handlePopoverReady();
+      await vi.runAllTimersAsync();
+      expect(picker.state.open.value).toBe(false);
+      expect(loader).toHaveBeenCalledOnce();
+      expect(focus).toHaveBeenCalledTimes(7);
+      const source = readFileSync(
+        new URL("./AsyncEntityPicker.vue", import.meta.url),
+        "utf8",
+      );
+      expect(source).toContain(
+        '@keydown.down.prevent="handleTriggerArrowDown"',
+      );
+      expect(source).toContain('@click="toggle"');
+    } finally {
+      picker.unmount();
+    }
+  });
+
+  it("ограничивает dropdown пятью строками и сохраняет явную высоту и inline", async () => {
+    for (const [inline, requestedHeight, expectedHeight] of [
+      [false, undefined, 348],
+      [false, 480, 480],
+      [true, undefined, undefined],
+    ] as const) {
+      const heights: (number | undefined)[] = [];
+      const app = createSSRApp(AsyncEntityPicker, {
+        ...(inline
+          ? { loadItems: () => Promise.resolve({ items: [] }) }
+          : { loadPage: vi.fn() }),
+        popoverMaxHeight: requestedHeight,
+        labels: {
+          label: "Выбор сущности",
+          searchPlaceholder: "Найти",
+          loading: "Загрузка",
+          loadingMore: "Загружаем ещё",
+          empty: "Пусто",
+          error: "Ошибка",
+          retry: "Повторить",
+        },
+      });
+      app.mixin({
+        created(this: ComponentPublicInstance) {
+          if (this.$options.__name === "DismissiblePopover")
+            heights.push((this.$props as { maxHeight?: number }).maxHeight);
+        },
+      });
+
+      const html = await renderToString(app);
+
+      expect(heights).toEqual(inline ? [] : [expectedHeight]);
+      if (inline) expect(html).toContain("async-picker--inline");
+      const source = readFileSync(
+        new URL("./AsyncEntityPicker.vue", import.meta.url),
+        "utf8",
+      );
+      expect(source).toContain(':max-height="popoverMaxHeight"');
+      expect(source).toMatch(
+        /\.async-picker__options \{[^}]*min-height: 0;[^}]*overflow-y: auto;/,
+      );
+    }
+  });
+
   it("передаёт стабильный id элементов loadItems в dropdown-режиме", () => {
     const componentSource = readFileSync(
       new URL("./AsyncEntityPicker.vue", import.meta.url),

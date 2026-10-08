@@ -69,6 +69,11 @@ func TestRuntimeMCPCatalogWireProducer(t *testing.T) {
 		inputs = append(inputs, fixture{Name: "assistant-launch-" + string(scope), Input: input})
 	}
 	for i := range inputs {
+		if inputs[i].Name == "system-assistant" || inputs[i].Name == "project-assistant" {
+			version := int64(9)
+			inputs[i].Input.AgentRef = "agt_fixture123"
+			inputs[i].Input.AssistantContext = &runtimecontract.RunnerAssistantContext{EntityKind: "AGENT", EntityRef: "agt_recipient123", EntityVersion: &version, AllowedOperations: []string{"CREATE_INSTRUCTION_DRAFT", "UPDATE_AGENT"}}
+		}
 		request := httptest.NewRequest(http.MethodPost, "/mcp", bytes.NewBufferString(`{"jsonrpc":"2.0","id":"agent-runner-tools","method":"tools/list","params":{}}`))
 		response := httptest.NewRecorder()
 		(&Server{}).serveMCP(response, request, inputs[i].Input)

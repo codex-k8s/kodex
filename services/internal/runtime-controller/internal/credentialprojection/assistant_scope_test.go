@@ -70,7 +70,7 @@ func scopeCredentialInput() runtimecontract.RunnerInput {
 	access, _ := runtimecontract.RuntimeKubernetesAccessForExecution(policy.KubernetesAccess, "agent-runner", "system-assistant-warm")
 	environmentDigest, _ := runtimecontract.RuntimeEnvironmentDigest(nil, nil, image, nil, policy)
 	input := runtimecontract.RunnerInput{
-		Schema: runtimecontract.RunnerInputSchemaV8, Mode: runtimecontract.RunnerModeTurn,
+		Schema: runtimecontract.RunnerInputSchemaV9, Mode: runtimecontract.RunnerModeTurn,
 		OrganizationRef:  "org_abcdefgh",
 		WorkloadInstance: "runtime-controller", RunRef: "run_abcdefgh", NodeRef: "node_abcdefgh",
 		ProjectRef: "prj_abcdefgh", SessionRef: "session_abcdefgh", TurnRef: "turn_abcdefgh", AgentRef: "agent_abcdefgh", Attempt: 1,

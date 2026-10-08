@@ -60,6 +60,49 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 	if err != nil || len(listed) != 1 || listed[0].Context.EntityName != agent.Name {
 		t.Fatalf("context list: count=%d err=%v", len(listed), err)
 	}
+	projectContext, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: reader,
+		Mutation: value.Mutation{IdempotencyKey: "assistant-context-visible-project"},
+		Payload: command.AssistantConversationInput{AssistantScope: "SYSTEM", ProjectRef: project.Project.Ref,
+			Context: entity.AssistantContextDescriptor{EntityKind: "PROJECT", EntityRef: project.Project.Ref}}})
+	if err != nil || projectContext.Conversation == nil {
+		t.Fatal("create independently visible project context")
+	}
+	for _, key := range []string{"first", "second", "third"} {
+		duplicate := create
+		duplicate.Mutation.IdempotencyKey = "assistant-context-duplicate-" + key
+		if _, err := service.Execute(ctx, duplicate); err != nil {
+			t.Fatal("create repeated exact context")
+		}
+	}
+	assertAssistantContextProjectionReused(t, ctx, repository, resolvedReader, project.Project.Ref, 2)
+	filter := query.AssistantConversationFilter{Filter: query.Filter{ProjectRef: project.Project.Ref, Page: query.Page{Size: 2}}}
+	seen := make(map[string]bool)
+	for {
+		page, next, err := service.ListAssistantConversations(ctx, reader, filter)
+		if err != nil || len(page) == 0 || len(page) > 2 {
+			t.Fatal("read bounded repeated-context page")
+		}
+		for _, item := range page {
+			if seen[item.Ref] {
+				t.Fatal("repeated-context pagination duplicated a conversation")
+			}
+			seen[item.Ref] = true
+			if item.Context.EntityKind == "AGENT" && (item.Context.EntityName != agent.Name ||
+				item.Context.EntityVersion == nil || *item.Context.EntityVersion != agent.Version || len(item.Context.AllowedOperations) != 0) {
+				t.Fatal("reused context lost exact resource version or authority")
+			}
+		}
+		if next == "" {
+			break
+		}
+		filter.Page.Token = next
+		if len(seen) > 5 {
+			t.Fatal("repeated-context cursor did not advance")
+		}
+	}
+	if len(seen) != 5 {
+		t.Fatal("repeated-context pagination omitted a conversation")
+	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.RevokeAccessBinding, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "assistant-context-revoke", ExpectedVersion: &binding.AccessBinding.Version}, Payload: command.AccessBindingInput{BindingRef: binding.AccessBinding.Ref}}); err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +110,7 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 		t.Fatalf("revoked context receipt replay: %v", err)
 	}
 	listed, _, err = service.ListAssistantConversations(ctx, reader, query.AssistantConversationFilter{Filter: query.Filter{ProjectRef: project.Project.Ref, Page: query.Page{Size: 1}}})
-	if err != nil || len(listed) != 0 {
+	if err != nil || len(listed) != 1 || listed[0].Ref != projectContext.Conversation.Ref {
 		t.Fatalf("revoked context remained before pagination: count=%d err=%v", len(listed), err)
 	}
 	unknown := create
@@ -140,6 +183,9 @@ func testAssistantContextAuthority(t *testing.T, ctx context.Context, repository
 	if err := workflowTx.Rollback(ctx); err != nil {
 		t.Fatal(err)
 	}
+	t.Run("workflow33-to39-frontier", func(t *testing.T) {
+		testAssistantWorkflowFrontier(t, ctx, repository, service, owner, project.Project.Ref, agent.Ref)
+	})
 	schedule, err := service.Execute(ctx, command.Command{Kind: command.CreateSchedule, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-context-schedule"}, Payload: command.ScheduleInput{
 			ProjectRef: project.Project.Ref, Name: "Context schedule", Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref},

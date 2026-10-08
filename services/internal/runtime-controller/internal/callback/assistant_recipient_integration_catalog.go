@@ -27,13 +27,22 @@ func castAssistantRecipientIntegrationCatalog(input runtimecontract.RunnerInput,
 	if !assistantRecipientIntegrationCatalogAvailable(input) || request.GetAssistantRef() != input.AgentRef || response == nil || !validAssistantCurrentReadMessage(response.ProtoReflect(), 0) ||
 		response.GetKind() != request.GetKind() || response.GetAssistantRef() != input.AgentRef || response.GetOrganizationRef() != input.OrganizationRef ||
 		response.GetScopeKind() != "PROJECT" || !validAssistantResourceRef(response.GetProjectRef()) || response.GetAssistantProfileRef() != "" ||
-		input.AssistantScope == runtimecontract.AssistantScopeProject && response.GetProjectRef() != input.ProjectRef || response.GetCurrentConfiguration() != nil || len(response.GetEntries()) != 0 || len(response.GetProjectIntegrationGrants()) != 0 ||
+		input.AssistantScope == runtimecontract.AssistantScopeProject && response.GetProjectRef() != input.ProjectRef || response.GetCurrentConfiguration() != nil || response.GetWorkflowConfiguration() != nil || response.GetAgentConfiguration() != nil || len(response.GetEntries()) != 0 || len(response.GetProjectIntegrationGrants()) != 0 ||
 		response.GetNextOffset() < 0 || response.GetNextOffset() > 10000 || response.GetNextOffset() != 0 && response.GetNextOffset() != request.GetOffset()+10 {
 		return nil, invalid
 	}
 	catalog := response.GetRecipientIntegrationGrants()
-	if catalog == nil || catalog.GetRecipientKind() != input.AssistantContext.EntityKind || catalog.GetRecipientRef() != input.AssistantContext.EntityRef ||
-		catalog.GetRecipientVersion() != *input.AssistantContext.EntityVersion || catalog.GetProjectVersion() < 1 || strings.TrimSpace(catalog.GetRecipientName()) == "" ||
+	kind, ref := request.GetEntityKind(), request.GetEntityRef()
+	if kind == "" {
+		kind, ref = input.AssistantContext.EntityKind, input.AssistantContext.EntityRef
+	}
+	if (kind != input.AssistantContext.EntityKind || ref != input.AssistantContext.EntityRef) && (kind != "AGENT" || !assistantWorkflowConfigurationAvailable(input)) {
+		return nil, invalid
+	}
+	if catalog == nil || catalog.GetRecipientKind() != kind || catalog.GetRecipientRef() != ref || catalog.GetRecipientVersion() < 1 ||
+		catalog.GetContextEntityKind() != input.AssistantContext.EntityKind || catalog.GetContextEntityRef() != input.AssistantContext.EntityRef || catalog.GetContextEntityVersion() != *input.AssistantContext.EntityVersion ||
+		kind == input.AssistantContext.EntityKind && ref == input.AssistantContext.EntityRef && catalog.GetRecipientVersion() != *input.AssistantContext.EntityVersion ||
+		catalog.GetProjectVersion() < 1 || strings.TrimSpace(catalog.GetRecipientName()) == "" ||
 		!utf8.ValidString(catalog.GetRecipientName()) || utf8.RuneCountInString(catalog.GetRecipientName()) > 160 || len(catalog.GetEntries()) > maximumAssistantConfigurationEntries ||
 		response.GetNextOffset() != 0 && len(catalog.GetEntries()) != 10 {
 		return nil, invalid
@@ -62,5 +71,5 @@ func castAssistantRecipientIntegrationCatalog(input runtimecontract.RunnerInput,
 			"pins": map[string]any{"context_digest": pins.GetContextDigest(), "connection_version": pins.GetConnectionVersion(), "definition_version": pins.GetDefinitionVersion(), "definition_digest": pins.GetDefinitionDigest(), "project_version": pins.GetProjectVersion(), "recipient_version": pins.GetRecipientVersion()}})
 	}
 	return map[string]any{"kind": "RECIPIENT_INTEGRATION_GRANTS", "assistant_ref": response.GetAssistantRef(), "scope_kind": "PROJECT", "organization_ref": response.GetOrganizationRef(), "project_ref": response.GetProjectRef(), "next_offset": response.GetNextOffset(),
-		"recipient_integration_grants": map[string]any{"recipient_kind": catalog.GetRecipientKind(), "recipient_ref": catalog.GetRecipientRef(), "recipient_name": catalog.GetRecipientName(), "recipient_version": catalog.GetRecipientVersion(), "project_version": catalog.GetProjectVersion(), "entries": entries}}, nil
+		"recipient_integration_grants": map[string]any{"recipient_kind": catalog.GetRecipientKind(), "recipient_ref": catalog.GetRecipientRef(), "recipient_name": catalog.GetRecipientName(), "recipient_version": catalog.GetRecipientVersion(), "project_version": catalog.GetProjectVersion(), "context_entity_kind": catalog.GetContextEntityKind(), "context_entity_ref": catalog.GetContextEntityRef(), "context_entity_version": catalog.GetContextEntityVersion(), "entries": entries}}, nil
 }

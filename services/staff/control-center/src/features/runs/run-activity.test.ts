@@ -11,6 +11,7 @@ import {
   assistantTurnIsDuplicateFailureReceipt,
   isAssistantPlanToolReceipt,
   isSuccessfulIntegrationToolReceipt,
+  integrationToolPresentationState,
   activeTranscriptItemId,
   assistantTerminalTranscriptScopes,
   assistantTranscriptReplacesWorkingFallback,
@@ -165,6 +166,72 @@ describe("закрытая успешная квитанция интеграц�
       expect(isSuccessfulIntegrationToolReceipt({ ...tool, safeResult })).toBe(
         false,
       );
+  });
+});
+
+describe("закрытая проекция результата интеграции", () => {
+  const receipt = {
+    version: 1,
+    invocationRef: "inv_fixture123",
+    state: "FAILED",
+    inputSHA256: "a".repeat(64),
+  };
+  const tool: NonNullable<RunActivityItem["toolCall"]> = {
+    ref: "tcl_example",
+    tool: "invoke_integration",
+    state: "SUCCEEDED",
+    revision: 2,
+    durationMs: 10,
+    safeParameters: {},
+    safeResult: JSON.stringify(receipt),
+    auditRef: "aud_example",
+  };
+  it.each([
+    ["SUCCEEDED", "SUCCEEDED"],
+    ["FAILED", "FAILED"],
+    ["REJECTED", "REJECTED"],
+    ["CANCELLED", "CANCELLED"],
+    ["WAITING_APPROVAL", "WAITING_HUMAN"],
+    ["UNKNOWN_OUTCOME", "NEEDS_ATTENTION"],
+  ])(
+    "отображает %s как %s без изменения исходной квитанции",
+    (state, presented) => {
+      const value = Object.freeze({
+        ...tool,
+        safeResult: JSON.stringify({ ...receipt, state }),
+      });
+      expect(integrationToolPresentationState(value)).toBe(presented);
+      expect(value.state).toBe("SUCCEEDED");
+      expect(value.safeResult).toBe(JSON.stringify({ ...receipt, state }));
+      expect(isSuccessfulIntegrationToolReceipt(value)).toBe(
+        state === "SUCCEEDED",
+      );
+    },
+  );
+  it("не интерпретирует произвольный payload, незавершённую или failed обёртку", () => {
+    for (const safeResult of [
+      "FAILED",
+      "{invalid}",
+      "null",
+      "[]",
+      JSON.stringify({ ...receipt, version: 2 }),
+      JSON.stringify({ ...receipt, state: "UNKNOWN" }),
+      JSON.stringify({ ...receipt, invocationRef: "run_fixture123" }),
+      JSON.stringify({ ...receipt, inputSHA256: "A".repeat(64) }),
+      JSON.stringify({ ...receipt, extra: "Содержательный результат" }),
+      `${JSON.stringify(receipt)} `,
+      `{"version":1,"version":1,"invocationRef":"inv_fixture123","state":"FAILED","inputSHA256":"${"a".repeat(64)}"}`,
+    ])
+      expect(
+        integrationToolPresentationState({ ...tool, safeResult }),
+      ).toBeUndefined();
+    expect(
+      integrationToolPresentationState({ ...tool, tool: "unknown_tool" }),
+    ).toBeUndefined();
+    for (const state of ["RUNNING", "FAILED", "CANCELLED"] as const)
+      expect(
+        integrationToolPresentationState({ ...tool, state }),
+      ).toBeUndefined();
   });
 });
 
@@ -1174,7 +1241,8 @@ describe("terminal receipt раньше terminal RunEvent", () => {
       };
       const parallelItems = buildRunTranscriptItems([progress, other]);
       expect(activeTranscriptItemId(parallelItems, closed)).toBe(
-        parallelItems[1]?.id,
+        parallelItems.find((item) => item.execution?.runRef === other.runRef)
+          ?.id,
       );
     },
   );
@@ -1903,6 +1971,70 @@ describe("buildRunActivityItems", () => {
       expect(show([...input].reverse())).toEqual(result);
     });
 
+    it("сводит child completion из root stream только по owner graph lineage и exact execution", () => {
+      const input = completionFixture().map((event) => ({
+        ...event,
+        displaySummary: event.summary,
+        nodeRef: "nod_child_fixture",
+        execution: {
+          ...required(event.execution),
+          runRef: "run_child_fixture",
+          nodeRef: "nod_child_fixture",
+        },
+      }));
+      const execution = required(input[0]?.execution);
+      const child: RunNode = {
+        ...node,
+        ref: execution.nodeRef,
+        runRef: execution.runRef,
+        turnRef: execution.turnRef,
+        attempt: execution.attempt,
+      };
+      const parent = { ...node, childRunRefs: [child.runRef] };
+      const renderGraph = (nodes: RunNode[]) =>
+        presentRunTranscriptItems(buildRunActivityItems(run, nodes, input));
+      expect(renderGraph([parent, child])).toHaveLength(1);
+      expect(show(input)).toHaveLength(2);
+      for (const nodes of [
+        [parent],
+        [child],
+        [parent, child, child],
+        [parent, { ...child, runRef: "run_other_fixture" }],
+        [parent, { ...child, turnRef: "trn_other_fixture" }],
+        [parent, { ...child, attempt: execution.attempt + 1 }],
+        [parent, { ...child, type: "EXTERNAL_ACTION" as const }],
+      ])
+        expect(renderGraph(nodes)).toHaveLength(2);
+      const foreignRoot = { ...run, rootRunRef: "run_other_root" };
+      expect(
+        presentRunTranscriptItems(
+          buildRunActivityItems(foreignRoot, [parent, child], input),
+        ),
+      ).toHaveLength(2);
+      for (const field of ["sessionRef", "turnNumber"] as const) {
+        const completion = required(input[1]);
+        const mismatched = {
+          ...completion,
+          execution: {
+            ...execution,
+            [field]:
+              field === "sessionRef"
+                ? "ses_other_fixture"
+                : execution.turnNumber + 1,
+          },
+        };
+        expect(
+          presentRunTranscriptItems(
+            buildRunActivityItems(
+              run,
+              [parent, child],
+              [required(input[0]), mismatched],
+            ),
+          ),
+        ).toHaveLength(2);
+      }
+    });
+
     it("не связывает receipt с presentation-переводом summary", () => {
       const [tool, completion] = completionFixture();
       const translated: PresentedRunEvent = {
@@ -2155,6 +2287,7 @@ describe("buildRunActivityItems", () => {
       ...started,
       ref: "evt_complete",
       sequence: 4,
+      occurredAt: "2026-08-28T08:00:04Z",
       toolCall: {
         ...tool,
         revision: 2,
@@ -2171,6 +2304,7 @@ describe("buildRunActivityItems", () => {
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
       sequence: 2,
+      occurredAt: started.occurredAt,
       toolCall: { revision: 2, state: "SUCCEEDED", safeResult: "Готово" },
     });
     expect(buildRunTranscriptItems([completed, started])).toEqual(result);
@@ -2215,13 +2349,80 @@ describe("buildRunActivityItems", () => {
     expect(result).toHaveLength(2);
   });
 
-  it("показывает полный текст сообщения и сортирует ход до sequence разных запусков", () => {
+  it("сохраняет общую хронологию сессий с независимыми номерами ходов и sequence", () => {
+    const base = required(events[0]);
+    const execution = required(base.execution);
+    const message = required(base.message);
+    const commentary: PresentedRunEvent = {
+      ...base,
+      ref: "evt_coordinator_commentary",
+      sequence: 90,
+      occurredAt: "2026-10-08T00:11:53+04:00",
+      actor: { kind: "AGENT", ref: "agt_coordinator", name: "Координатор" },
+      execution: { ...execution, turnRef: "trn_coordinator", turnNumber: 2 },
+      message: {
+        ...message,
+        ref: "msg_coordinator",
+        text: "Продолжаю процесс",
+      },
+    };
+    const final: PresentedRunEvent = {
+      ...commentary,
+      ref: "evt_coordinator_final",
+      sequence: 91,
+      occurredAt: "2026-10-08T00:13:33+04:00",
+      message: {
+        ...message,
+        ref: "msg_coordinator_final",
+        phase: "FINAL",
+        text: "Передал задачу архитектору",
+      },
+    };
+    const architect: PresentedRunEvent = {
+      ...base,
+      ref: "evt_architect_commentary",
+      sequence: 3,
+      occurredAt: "2026-10-08T00:19:57+04:00",
+      actor: { kind: "AGENT", ref: "agt_architect", name: "Архитектор" },
+      execution: {
+        ...execution,
+        runRef: "run_architect",
+        nodeRef: "nod_architect",
+        sessionRef: "ses_architect",
+        turnRef: "trn_architect",
+        turnNumber: 1,
+      },
+      message: {
+        ...message,
+        ref: "msg_architect",
+        text: "Проверяю архитектуру",
+      },
+    };
+    const input = [architect, final, commentary];
+    const items = buildRunActivityItems(run, [node], input);
+    expect(items.map((item) => item.summary)).toEqual([
+      "Продолжаю процесс",
+      "Передал задачу архитектору",
+      "Проверяю архитектуру",
+    ]);
+    expect(items.map((item) => item.execution)).toEqual([
+      commentary.execution,
+      final.execution,
+      architect.execution,
+    ]);
+    expect(buildRunActivityItems(run, [node], [...input].reverse())).toEqual(
+      items,
+    );
+  });
+
+  it("показывает полный текст сообщения в хронологии разных запусков", () => {
     const base = required(events[0]);
     const items = buildRunTranscriptItems([
       {
         ...base,
         ref: "evt_later_turn",
         sequence: 1,
+        occurredAt: "2026-08-28T08:00:03Z",
         execution: { ...required(base.execution), turnNumber: 2 },
         message: {
           source: { origin: "ORDINARY" as const },
@@ -2249,6 +2450,33 @@ describe("buildRunActivityItems", () => {
       "Полное промежуточное сообщение",
       "Полный ответ",
     ]);
+  });
+
+  it("сравнивает occurredAt с учётом timezone и разрешает равное время детерминированно", () => {
+    const base = required(events[0]);
+    const execution = required(base.execution);
+    const event = (ref: string, occurredAt: string, sequence: number) => ({
+      ...base,
+      ref,
+      occurredAt,
+      sequence,
+      execution: { ...execution, sessionRef: `ses_${ref}` },
+      message: { ...required(base.message), ref },
+    });
+    const input = [
+      event("msg_z", "2026-10-08T00:13:33+04:00", 9),
+      event("msg_a", "2026-10-07T20:13:33Z", 9),
+      event("msg_first_sequence", "2026-10-07T20:13:33Z", 3),
+      event("msg_earlier", "2026-10-07T20:11:53Z", 90),
+    ];
+    const items = buildRunTranscriptItems(input);
+    expect(items.map((item) => item.execution?.sessionRef)).toEqual([
+      "ses_msg_earlier",
+      "ses_msg_first_sequence",
+      "ses_msg_a",
+      "ses_msg_z",
+    ]);
+    expect(buildRunTranscriptItems([...input].reverse())).toEqual(items);
   });
 
   it("не назначает исторической записи текущий node/turn/attempt и не склеивает старый call", () => {
