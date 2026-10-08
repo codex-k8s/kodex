@@ -34,6 +34,8 @@ func (repository *Repository) hydrateRuntimePromptContext(ctx context.Context, t
 		return errs.ErrConflict
 	}
 	version.Ref = revisionRef
+	// Spec сохраняет draft number; published identity принадлежит строке version.
+	version.VersionNumber = int32(revision)
 	step, ok := promptWorkflowStep(version, snapshot.Variables["workflow.stage.key"])
 	if !ok || step.AgentRef != snapshot.Variables["agent.ref"] {
 		return errs.ErrConflict
@@ -71,4 +73,44 @@ func applyWorkflowPromptContext(snapshot *entity.PromptMaterializationSnapshot, 
 	snapshot.Variables["step.purpose"], snapshot.Variables["step.expected_result"] = step.Instructions, step.ExpectedResult
 	snapshot.StagePurposeTemplate, snapshot.StageExpectedResultTemplate = step.Instructions, step.ExpectedResult
 	snapshot.WorkflowStage = step.Name
+	if snapshot.StructuredVariables == nil {
+		snapshot.StructuredVariables = make(map[string]any)
+	}
+	workflow, ok := snapshot.StructuredVariables["workflow"].(map[string]any)
+	if !ok {
+		workflow = make(map[string]any)
+		snapshot.StructuredVariables["workflow"] = workflow
+	}
+	// Полный pinned DAG — данные, не текущий frontier и не право делегирования.
+	steps := make([]promptWorkflowStepDescriptor, 0, len(version.Steps))
+	for _, published := range version.Steps {
+		steps = append(steps, promptWorkflowStepDescriptor{
+			Key: published.Key, Name: published.Name, AgentRef: published.AgentRef, Position: published.Position,
+			DependsOn: append([]string{}, published.DependsOn...), Parallel: published.Parallel, ParallelGroup: published.ParallelGroup,
+			HumanGateAfter: published.HumanGateAfter, GateDecisions: append([]string{}, published.GateDecisions...),
+		})
+	}
+	workflow["publication"] = promptWorkflowPublication{
+		RevisionRef: version.Ref, VersionNumber: version.VersionNumber, CoordinatorAgentRef: version.CoordinatorAgentRef, Steps: steps,
+	}
+}
+
+// Инструкции, input values, result schema и capabilities не входят в компактный DAG.
+type promptWorkflowPublication struct {
+	RevisionRef         string                         `json:"revision_ref"`
+	VersionNumber       int32                          `json:"version_number"`
+	CoordinatorAgentRef string                         `json:"coordinator_agent_ref"`
+	Steps               []promptWorkflowStepDescriptor `json:"steps"`
+}
+
+type promptWorkflowStepDescriptor struct {
+	Key            string   `json:"step_key"`
+	Name           string   `json:"name"`
+	AgentRef       string   `json:"agent_ref"`
+	Position       int32    `json:"position"`
+	DependsOn      []string `json:"depends_on"`
+	Parallel       bool     `json:"parallel"`
+	ParallelGroup  int32    `json:"parallel_group"`
+	HumanGateAfter bool     `json:"human_gate_after"`
+	GateDecisions  []string `json:"gate_decisions"`
 }

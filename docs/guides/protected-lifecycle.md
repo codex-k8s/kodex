@@ -4,11 +4,27 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.14
+version: 1.1.15
 updated: 2026-10-08
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+`childRunRefs` принадлежит точному узлу, а не всем узлам родительского run.
+Ordinary child подтверждается серверными `DELEGATED_TO`/`CALLBACK_TO` и
+materialized target внутри одного organization/root. Required Workflow
+подтверждается persisted launch с exact origin/proxy/child root и связанными
+рёбрами. Parent run сам по себе не доказывает происхождение. `PLANNED` и
+`ROOT_PROCESS` не наследуют children; историческая связь materialized узлов
+сохраняется после terminal. HTTP graph, полный realtime snapshot и event delta
+используют одинаковое правило, не декодируют payload/summary как authority.
+
+Workflow prompt получает компактный полный DAG из exact pinned опубликованной
+ревизии: назначения, зависимости, порядок, parallel group и Human Gate.
+Эта owner-проекция является данными, не эффективным frontier или разрешением
+делегирования. Published version number берётся из authoritative version row,
+а не сохранённого draft spec или workflow OCC. Snapshot/materialization digests
+связывают новое содержание; исторические snapshots не переписываются.
 
 Aggregate catalog не должен выдавать недопущенную exact ревизию и не должен
 позволять ей блокировать соседние допустимые объекты. Пропуск разрешён только
