@@ -103,6 +103,8 @@ const pageSize = useAdaptiveCursorPageSize({
   maximum: 100,
 });
 let resizeObserver: ResizeObserver | undefined;
+let popoverReady = false;
+let keyboardFocusRequested = false;
 
 const loader: AsyncEntityLoader<PickerEntry> = async (request) => {
   if (props.loadItems) {
@@ -412,6 +414,8 @@ function handleScroll(event: Event): void {
   viewportHeight.value = target.clientHeight || viewportHeight.value;
 }
 function close(): void {
+  popoverReady = false;
+  keyboardFocusRequested = false;
   open.value = false;
   activeIndex.value = -1;
   cancel();
@@ -426,12 +430,27 @@ function handlePopoverOpen(value: boolean): void {
     close();
     return;
   }
+  if (value === open.value) return;
+  popoverReady = false;
   open.value = value;
   if (value) {
     refresh();
   } else {
     close();
   }
+}
+function handleTriggerArrowDown(): void {
+  handlePopoverOpen(true);
+  if (!open.value || props.disabled) return;
+  if (popoverReady) searchInput.value?.focus();
+  else keyboardFocusRequested = true;
+}
+function handlePopoverReady(): void {
+  if (!open.value || props.disabled) return;
+  popoverReady = true;
+  if (!keyboardFocusRequested) return;
+  keyboardFocusRequested = false;
+  searchInput.value?.focus();
 }
 watch(
   () => props.disabled,
@@ -630,6 +649,7 @@ watch(
       contained
       :max-height="popoverMaxHeight"
       @update:open="handlePopoverOpen"
+      @ready="handlePopoverReady"
     >
       <template #trigger="{ toggle, attrs }">
         <div class="async-picker__trigger-row">
@@ -641,7 +661,7 @@ watch(
             :aria-label="popoverLabel"
             :disabled="disabled"
             @click="toggle"
-            @keydown.down.prevent="handlePopoverOpen(true)"
+            @keydown.down.prevent="handleTriggerArrowDown"
           >
             <span
               v-if="multiple && selectedIds.length"

@@ -10,6 +10,57 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 03:14 UTC
+
+Дополнение03:29: MAIN keyboard4+docs2 готовыкcommit. ROOT42/4suites/lint/
+format/typecheck/finalbuild9.43PASS. Firstfocus desktop workflow+agent и
+mobile PASS: ONEArrowDown fromclosed -> search; tailDeveloper/7/108visible,
+croppeddesktop03:27/mobile03:28screenshotsPASS/Console0/overflowfalse.
+ReadyeventalonebrowserFAILfromglobal reduced-motion visibilitytransition;
+finalscopedpopover+descendants transition-property:none underreduce fixedPASS.
+Host/Podpicker7fb74419/popover6de6b600EQUAL. INTAKEseq289 ownREADcontinues,
+ArchitectещёNOTRUN. Child rootcursorfixisolatedRED→GREENdisposablePG,
+finalscope/authoritytests+freezeещёOPEN; MAINbackend unchanged.
+OwnChrome1 returnedWorkflow03:28:36, reload≤03:33:36. Commitpublisher6files,
+previous8498d8a3; GO/GitHub4.0notadopted.
+
+HEAD/remote/Draft1800 8498d8a39308ffed71e85bb41ecdba702b597b49 EQUAL.
+MAIN dirty только picker2 и journal/handoff2. Keyboard40unit/lint/format/
+forcedtypecheck PASS; stable browser tail7/Developer/scrollTop108/348 и
+actual03:13screenshot PASS. Firstfocus FAIL: child positioned DOM готов позже
+parent2ticks. assistant_frontend готовит isolated ready event в4files, approved.
+Новыйordinary run_dTID2XxnEBdEXUbp6y_NIjKV RUNNING2/seq255,
+ses_t0yfeKqHO_BvGCjFZphAD1-g/trn_si4zw7Cd1hL16lFCfKtXEqO-/attempt1.
+ONE nativeaccepted03:01:54; rawTaskd86b3f48/18310Б -> canonicaltrim
+af2969d9/18309Б. InitialACKmismatch НЕPASS; correctedstrictACK/rejoin03:03:50
+PASS task/provider/inboxEQUAL/instructionse0afea5d/template2ae45/materialization
+b725d177/RRevf9332a79/ENV7/binding8/G7. PodUID7d0b96a7-df92-48e7-932a-5ef4ec5e70b1,
+binaryfile-onlyEQUAL, servingprocessNOTRUN. Failureobserver17132 active.
+Manager62repositorypages+PROJECTplanEOF; nativeWorkflowlaunch SUCCEEDED,
+ONE run_Ol_zK37v_11loSybRaDHmVeX RUNNING2. Coordinator
+ses_2HGLFhevCh_GacTfa5Xm4BSd/trn_h2D8SOVmZ3aDLfJCwsp8iKyv/attempt1
+ACK/rejoin03:15:16PASS/Taskec8a5d2b57905Б/instructions348650ce/template2ae45/
+materialization7877da67/RRevd100500f/cap1grants0/G7. BinaryNOTRUN.
+NativeINTAKE run_0M4_jAbdwktAxAY5RUUfwZHL RUNNING,
+ses_w9Fsjrihdru6fo8OqfIcWbwi/trn_lgaCprRoH4jicUACS0Bi8woV/attempt1,
+ACK/rejoin03:16PASS/task1ad407b62561Б/instructionsf3f12574/RRev6894f79d/
+materialization3dd823b2/ENV7binding8/tools38grants21cap24/G7. Binaryfile9b56
+captured, expectedbinarycomparison/servingPIDNOTRUN. Observer68428activeexactUID.
+ActualWorkflow03:16screenshot35nodes47edges/Console0/overflowfalsePASS.
+RootcursorbackendBUG: child events.currentSequence0 приrootitems1..66;
+childgraphrootnodesbutchildrevision1, sourcequeries.go1457/1583/1625.
+Child assistant_terminal_busy read-onlyisolatedauthority/consumeranalysis,
+MAINbackendнеправитьдоscope/testgate/currentrunquiescence.
+Scope поправлен:1799/1800 относятся1797 внеbusiness1796; oldroot/WorkflowFAILED,
+noRetry. Child assistant_terminal_busy frozen12filesGitHub4.0
+/tmp/kodex-file-list-diag.fRL7yH/frozen/HANDOFF.md, isolatedchecksPASS,
+ROOTprod diffпрочитан, MAIN3.1/activationNOTRUN. Не применять4.0 доterminal/
+quiescence current3.1! Rebind новойimmutable4.0 отключитgrants/credential;
+freshownerbaseline+protectedsetup/test/nativeexactgrantsrestore обязательны.
+Full65/11/13/14/15 OPEN, finalinternalPR NOmerge/approve.
+OwnChrome1 Workflowpage/2179x994; reload03:17:27, nextreload≤03:22:27.
+Следующийpublisherprevious8498d8a3. До14:00 Саратов автономно.
+
 ## Checkpoint 08.10.2026 02:51 UTC
 
 HEAD5c741742 до компактного picker и этого checkpoint. Picker348: ROOT34

@@ -10,6 +10,98 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 03:14 UTC — новая область Workflow и клавиатура
+
+### Проверка исправления клавиатуры 03:29 UTC
+
+- [x] Общий picker: повторное открытие не перечитывает первую страницу,
+  cursor и active item сохраняются. Первый ArrowDown фокусирует поиск после
+  ready позиционированного popover; close/disabled отменяют intent.
+  ROOT42/4suites PASS1.72s, ESLint/Prettier/forced typecheck PASS.
+  Final-tree production build PASS9.43s; прежний chunk warning и plugin
+  timing warning сохранены, не скрываются. Git diff --check PASS.
+- [x] Actual Chrome desktop: закрытый workflow picker -> ONE ArrowDown ->
+  поиск focused; закрытый agent picker -> ONE ArrowDown -> поиск focused,
+  six ArrowDown -> Developer active/visible, rows7/scrollTop108/panel420x348.
+  Actual cropped screenshot03:27 PASS. Mobile390x844: первый ArrowDown
+  focused/panel374x348 at8,446.7/весь в viewport/overflowfalse,
+  actual screenshot03:28 PASS, Console0. Никаких дополнительных Submit/Run.
+- Найденная первая версия ready-контракта сама по себе browser FAIL:
+  global reduced-motion duration0.01ms создавал непредусмотренный visibility
+  transition не только панели, но и потомков. Captured focus calls на
+  connected input видели computedvisibilityhidden; отдельный parent CSS
+  fix тоже FAIL. Final scoped reduced-motion rule запрещает transition
+  панели и её потомков. Это устраняет причину, не добавляет таймер или
+  повторную попытку focus; проверено без diagnostic wrappers.
+- Host/Pod source EQUAL: picker7fb7441996d4c6612533120c0ff42ce4070e7555a7d8fc1142b05f184c83bbc5,
+  popover6de6b600061449bf101c2d79eaea7a1391951f7d475d9967f8aff53b7af752b8.
+  Итоговый SHA будет у commit этого checkpoint; backend runtime source/G7
+  не менялись. Новый full33 продолжает INTAKE; полная acceptance OPEN.
+
+- Первый Workflow `run_EF1o9OVCcHd7VV9fMn1CBpou` и ordinary root
+  `run_WTw70Hbcy1LJnJSSmLFDB3Au` завершены FAILED3. Причина full33 остаётся
+  semantic BLOCKED на file.list PR1800; исходная точная причина invocation
+  UNKNOWN. Host PR1799/1800 относятся к1797, а не к бизнес-задаче1796.
+  Повтор старого хода или объявление этого READ успешным не выполнялись.
+- ONE fresh ordinary Manager принят штатной формой03:01:54:
+  `run_dTID2XxnEBdEXUbp6y_NIjKV`, `ses_t0yfeKqHO_BvGCjFZphAD1-g`,
+  `trn_si4zw7Cd1hL16lFCfKtXEqO-` attempt1/NONE. Уточнённая область:
+  business PR1796 обязателен для проверки, host PR1797 не является gate.
+  На03:13 seq255 root RUNNING2; Manager прочитал62 repository-страницы и
+  PROJECT manager-plan.md до EOF. Затем native launch_workflow SUCCEEDED:
+  ONE `run_Ol_zK37v_11loSybRaDHmVeX`, штатная revision5/33steps.
+  Координатор делегировал INTAKE `step-001` отдельному Manager:
+  `run_0M4_jAbdwktAxAY5RUUfwZHL`; реализация и reviews ещё NOT RUN.
+- Initial collector с raw Task18310Б/d86b3f48 дал NOT_CAPTURED из-за
+  EXPECTED_ACK_PIN_MISMATCH. NewRunPage штатно trim удаляет terminal newline.
+  Независимо вычисленный canonical Task18309Б/
+  `af2969d9e83ca3f4b106a8108115933952bb6946791c181b0739abc958588cd3`
+  дал CAPTURED/same-UID rejoin PASS03:03:50: task/provider/inbox EQUAL,
+  instructions46871Б/e0afea5d EQUAL, template2ae45fb6,
+  materializationb725d177, RRevf9332a79, ENV7/binding8/G7/tools38/grants21.
+  Podruntime-turn-8eb97453abe9819f UID7d0b96a7-df92-48e7-932a-5ef4ec5e70b1,
+  binary9b560789 file-only EQUAL; serving-process proof NOT RUN. Failure
+  observer17132 active на exact tuple/UID, capture ещё не заявлен.
+- ROOT keyboard patch на базе8498d8a3:40tests/4suites PASS1.89s,
+  ESLint/Prettier/forced typecheck/diffcheck PASS. Host/Pod vue300c32d7 EQUAL.
+  На stable открытом picker повторное ArrowDown не сбрасывает список:
+  семь строк, Developer active/visible, scrollTop108, panel420x348,
+  actual cropped screenshot03:13 PASS/Console0. Запуска из QA-формы нет.
+  Первый фокус сразу после открытия ещё FAIL: parent focus опережает
+  positioned child DOM. Готовится ready-сигнал popover без таймерного обхода;
+  весь keyboard пункт пока не отмечается завершённым.
+- GitHub4.0 metadata-only file index подготовлен в изоляции: child unit/vet/
+  build/race/codegen PASS, worst fixture envelope58183Б. ROOT начал чтение
+  production diff, MAIN и serving3.1 не менялись. Активация4.0 NOT RUN до
+  terminal/quiescence текущего3.1 Workflow. Индекс EOF не является source EOF;
+  старые immutable package/grants не переписываются.
+- Full65/11/13/14/15 OPEN. Автономно до14:00 Саратов; ownChrome1,
+  owner4 не трогать, reload5мин. Final internal PR не merge/approve.
+
+### Дополнение 03:18 UTC
+
+- Coordinator ACK/rejoin03:15:16 PASS: session
+  ses_2HGLFhevCh_GacTfa5Xm4BSd/turntrn_h2D8SOVmZ3aDLfJCwsp8iKyv/attempt1,
+  Podruntime-turn-2229316fdecf2791/UID8fb3bca5-6b6a-41fe-ad61-871e31685090,
+  G7/ENV7/binding8/tools38/cap1/grants0. Task/provider/inbox57905Б/ec8a5d2b
+  EQUAL, instructions34069Б/348650ce EQUAL, template2ae45/materialization7877da67,
+  RRevd100500f. ExpectedTask/binary/serving-process proof NOT RUN.
+- INTAKE ACK/rejoin03:16:00 PASS: session
+  ses_w9Fsjrihdru6fo8OqfIcWbwi/turntrn_lgaCprRoH4jicUACS0Bi8woV/attempt1,
+  Podruntime-turn-5de3f4bdb6f3ec6a/UID0c0ccd8c-2c9a-467b-a71d-e96ec8d97d10.
+  Task/provider/inbox2561Б/1ad407b6 EQUAL, instructions40895Б/f3f12574 EQUAL,
+  RRev6894f79d/template2ae45/materialization3dd823b2;
+  G7/ENV7/binding8/tools38/grants21/cap24. Binaryfile9b560789 captured,
+  expected comparison/serving PID NOT RUN. Failureobserver68428 activeexactUID.
+- Workflow actual screenshot03:16 PASS:35nodes/47edges, Console0/Connected/
+  overflowfalse. CP и integration gateway bounded logs10min/500lines readPASS,
+  returned0lines: отсутствие записи не доказывает отсутствие всех ошибок.
+- Обнаружен новый read-path FAIL: child events возвращает rootitems1..66,
+  но currentSequence0; child graph возвращает root35nodes при childrevision1
+  без rootsequence82. SQL читает root, query code возвращает counters child.
+  Изолированный анализ trustedroot/eligibility начат; MAIN backend не менялся,
+  живой Workflow продолжает INTAKE. Ошибка не скрывается фронтенд-обходом.
+
 ## Checkpoint 08.10.2026 02:51 UTC — компактный селектор и блокер INTAKE
 
 - [x] Общий AsyncEntityPicker ограничен по умолчанию 348px: поиск, пять

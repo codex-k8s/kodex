@@ -50,6 +50,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   "update:open": [open: boolean];
   close: [reason: DismissiblePopoverCloseReason];
+  ready: [];
 }>();
 
 const anchor = ref<HTMLElement>();
@@ -201,6 +202,7 @@ watch(
         : undefined;
       target?.focus();
     }
+    if (isCurrent()) emit("ready");
   },
   { immediate: true },
 );
@@ -279,5 +281,12 @@ onBeforeUnmount(() => {
 }
 .dismissible-popover--anchor {
   width: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Общая малая duration не должна создавать visibility transition до focus. */
+  .dismissible-popover,
+  .dismissible-popover :deep(*) {
+    transition-property: none;
+  }
 }
 </style>
