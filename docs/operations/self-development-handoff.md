@@ -10,6 +10,28 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 02:28 UTC
+
+HEAD/remote/Draft1800 e9c606cbedff66e2b54e53edc9a9ac26765c899f EQUAL,
+ROOT81observerPASS. NativeEOF run_PS6YI_JYpT4abCl059kfeRjS SUCCEEDED3:
+262contentREAD/536156Б/872contiguoushistory/284SUCCEEDEDcalls. Durablefile
+art_TRG8TojxKOcTIHXsmVkaESLm/rev1/SHAbd687e8f/3147Б ACTIVE/CLEAN,
+metadata/content200/hashEQUAL. Observer41860finishedNOT_CAPTURED/FOLLOW_STREAM_ENDED,
+успешныйrunнеfailurecapture; terminal НЕRetry.
+ONE freshManagerfull33 run_WTw70Hbcy1LJnJSSmLFDB3Au RUNNING2,
+ses_ZhFmLTUul1GaRwa8-_WR4XrK/trn_B0hMExFgsE1Fi49yEhZLtzHg/attempt1,
+task23801553/14089Б. NativeUIaccepted02:26, Manager собственныйlaunchещёOPEN.
+EarlyACK/rejoin02:26:32 task/provider/inbox/instructionsEQUAL,
+instructions29794d7d/template2ae45fb6/materialization67caab9f,
+ENV7/binding8/G7/tools38/grants21/RRev2e7964d1. Podruntime-turn-96cfdc68c4dd3f56,
+UIDa6368723-fc5d-405a-a4dd-c558776c79b0/binary9b560789file-onlyEQUAL.
+Failure observer8627 ACTIVE exacttuple/UID, не новый/дублирующийrun.
+OwnChrome1 sessiondialog actual02:27screenshotPASS/Console0/overflowfalse;
+reload due≤02:31 с сохранениемввода. Owner4 не трогать. Full65/11/13/14/15OPEN.
+Ждать nativeWorkflowlaunch, передавать childACK толькоexacttuple каждогоrole.
+FinalinternalPR NOmerge/approve. Следующий publisherpreviouse9c606cb;
+checkpointscommit/pushsameDraft1800. Автономно до14:00 Саратов.
+
 ## Checkpoint 08.10.2026 02:24 UTC
 
 HEAD/remote/Draft1800 ed538f55 EQUAL до diagnostic3files и этого checkpoint.

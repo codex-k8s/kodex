@@ -10,6 +10,46 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 02:28 UTC — EOF подтверждён, полный процесс принят
+
+- [x] Новый Manager native READ на G7 завершён SUCCEEDED3 в02:23:38UTC:
+  `run_PS6YI_JYpT4abCl059kfeRjS`, 872events/contiguous1..872,
+  284unique tools SUCCEEDED,262content.read. Actual EOF536156Б,
+  pinnedmainb5f6fcde/blob4deec6d9/sourceSHAc227c64d совпали.
+  Firstinv_7vie_PbkCCQfJw7yWkzv3sQl, lastinv_mOJCLW7msaBLOtrPW9UN8ofm,
+  lastoffset534470/next536156/eoftrue. Пропуски или дубли не обнаружены.
+- Durable native-read-proof.md опубликован платформой при terminal:
+  `art_TRG8TojxKOcTIHXsmVkaESLm` revision1/version1, ACTIVE/CLEAN/3147Б,
+  sameproject/run/session. Metadata/contentHTTP200; independently downloaded
+  SHAbd687e8f457b0bb56c1abb8500306e050126dc85353ddbd4d6bf44308f0c06e7
+  EQUAL. Агент до terminal честно указал refs UNKNOWN: search ещё не видел
+  outbox; host не подменял файл или receipt. Failure observer41860 закончился
+  NOT_CAPTURED/FOLLOW_STREAM_ENDED: failure-диагностики на успешном ходе нет,
+  это не утверждение CAPTURED. Ранний ACK остаётся отдельным PASS.
+- ONE новый ordinaryManager full33 принят native UI02:26:02:
+  `run_WTw70Hbcy1LJnJSSmLFDB3Au`,
+  session`ses_ZhFmLTUul1GaRwa8-_WR4XrK`,
+  turn`trn_B0hMExFgsE1Fi49yEhZLtzHg`/attempt1. Task14089Б/
+  SHA23801553b029c0e807f439497ca3ee91482b0fab9f9d353c4867248c39d40b8b
+  проверен в native form до single submit. Manager сам читает Issue1796,
+  freshmain/PR1799/manager-plan.md и документы; host не запускает Workflow
+  вместо него. Root сейчас RUNNING2, internal launch ещё OPEN.
+- EarlyACK02:26:32 captured/rejoin VERIFIED: task/provider/inbox EQUAL,
+  instructions29794d7d/42645Б EQUAL, template2ae45fb6/materialization67caab9f;
+  NONE/exact project/ENV7/binding8/G7/tools38/grants21. RuntimeRevision
+  rrev_mRhhNW1DJecV_iKjWu7rIO7U/version1/digest2e7964d1. Pod
+  runtime-turn-96cfdc68c4dd3f56/UIDa6368723-fc5d-405a-a4dd-c558776c79b0,
+  exactimageIDs/restarts0/binary9b560789 EQUAL FILE_ONLY. Новый bounded
+  failure observer8627 active на exact tuple/UID; не дублировать запуск.
+- Actual session screenshot02:27 PASS: user справа, комментарий/tools слева,
+  длинное задание свёрнуто, отдельная прокрутка, overflowfalse/Console0.
+  Native context read/historyHTTP200. Final-treee9c606cb remote/PR1800
+  readbackPASS: первый publish readbackFAIL из-за временного отставания GitHub,
+  freshinspect уже подтвердил SHA; безопасный повтор завершёнPASS бездублированияPR.
+- Full65/11/13/14/15 OPEN. Следующие обязательные: собственный launch полного
+  Workflow, sixrole prompt/tool proof, Developer PR, три reviews/fixes/re-review
+  и final-readiness. HostDraft1800 и финальный внутренний PR не merge/approve.
+
 ## Checkpoint 08.10.2026 02:24 UTC — SYSTEM context и строгий rejoin
 
 - Source `ed538f55d01834a9c02aefce11797ff3e7c2ce29`: SYSTEM G13
