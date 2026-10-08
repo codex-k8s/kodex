@@ -10,6 +10,38 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 18:07 UTC — PR1804 слит, один свежий полный процесс
+
+PR1804 слит обычным squash: author188426c9ef738509784b797d4a36b454e3365d06,
+main/GitHub/origin/local c9b899eb4fe176573f1360e2ea44cbb19332cd5f EQUAL.
+Защита main не обходилась; checks отсутствуют, CI PASS не заявлен. ROOT на
+committed188426c9: disposable TestRuntimeFilesLockedReadComponent PASS9.767s,
+unit AssistantLockedRead/ExecutionPreview PASS0.082s. Source/Pod runtime_files
+8a5eb209…4bbd9 и actual serving ELF101c7da0…b6355 после merge EQUAL прежнему
+точному rebuild. Продолжение в kodex-agent/issue-1797-full39-qa от fresh main.
+
+Штатный Manager run_TAs8_e4U5myrunCXDlmcJWWt/session
+ses_1V5ZluDOXjB_oUAFoawDaHI0 запустил ровно один опубликованный SOFTWARE_CHANGE
+run_hlDPZ_fbxbIeGsUhFh7OE7-R/session ses_k7SxyOuvyeiOOb1tYNwuPQx8.
+Actual Manager input11963B SHA d9ab59fa764481ad82f631c36f7e15a553fba44ba2c33db183b017751fdc5d2c
+EQUAL provider task/inbox; ранний ACK/rejoin CAPTURED18:01, G9/image-file
+47a8fc35…66b3d EQUAL, ENV9/binding10, tools38/grants21/capabilities24.
+
+INTAKE run_fHAjpRgte0HpgQHgGr0MYg34/session ses__o-g3ehLwgWHwvT8qZBJ9FjY,
+turn trn_OgzJ-wUxqbPgUxmVk-7cB8zj/attempt1 RUNNING. ACK/rejoin CAPTURED18:06:
+same Pod runtime-turn-5b20122e366d552a/UIDa86dfea7-b6ba-42c7-9fde-3e3b56a30016,
+G9/image-file47a8fc35…66b3d EQUAL, ENV9/binding10, tools38. Owner input2725B
+SHA07b3e18c19aa1fb7917b194d303aa66a781b517c1aa86824848ba9bfef066c55 EQUAL
+actual task/inbox; instructions48715B/fbd440bc…35ff0 EQUAL. Первое неудачное
+ACK-чтение было адресовано root, а не фактической дочерней сессии; это ошибка
+host-диагностики, не дефект платформы. Полный workflow пока не завершён.
+
+Chrome own page1 reload18:06, platform/run LIVE/attempt0, Console errors/warns0,
+owner API200, horizontal overflow=false. Pixel capture всё ещё NOT RUN:
+поддерживаемый вызов зависает; причина UNKNOWN, обходов нет. Демо владельца
+не изменено. Checklist11/13/14/15 OPEN; далее native EOF/Architect/Developer/
+четыре exact-SHA reviews/Manager/Gate033. Финальный business PR не сливать.
+
 ## Checkpoint 08.10.2026 17:56 UTC — catalog renewal fix интегрирован и обслуживается
 
 Ветка kodex-agent/issue-1797-catalog-continuation, Draft PR1804. Frozen patch

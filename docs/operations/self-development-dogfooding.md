@@ -11964,3 +11964,30 @@ ROOT rebuild. Chrome LIVE/Console0/session+graph200/overflowfalse.
 Pixel screenshot NOT RUN (новая штатная попытка >120s не создала файл).
 PR1804 ещё Draft; native verification продолжения поиска в новом полном
 Workflow, Developer/reviews/Gate033/final business PR пока NOT RUN.
+
+### 08.10.2026 18:07 UTC — merged catalog fix и новый полный Workflow
+
+PR1804 обычный squash: author188426c9ef738509784b797d4a36b454e3365d06,
+main c9b899eb4fe176573f1360e2ea44cbb19332cd5f GitHub/origin/local EQUAL.
+ROOT повтор на committed SHA: disposable catalog concurrency PASS9.767s;
+read-retry/privacy/preview unit PASS0.082s. Source/Pod8a5eb209…4bbd9 и
+actual CP serving ELF101c7da0…b6355 после merge EQUAL. Checks отсутствуют,
+это не CI PASS. Новая ветка kodex-agent/issue-1797-full39-qa от fresh main.
+
+Обычный Manager run_TAs8_e4U5myrunCXDlmcJWWt запустил ровно один
+run_hlDPZ_fbxbIeGsUhFh7OE7-R; old FAILED roots не Retry. Manager input11963B
+SHA d9ab59fa764481ad82f631c36f7e15a553fba44ba2c33db183b017751fdc5d2c
+EQUAL actual task/inbox, ACK/rejoin CAPTURED18:01. INTAKE
+run_fHAjpRgte0HpgQHgGr0MYg34/session ses__o-g3ehLwgWHwvT8qZBJ9FjY/
+turn trn_OgzJ-wUxqbPgUxmVk-7cB8zj/attempt1 RUNNING. Actual ACK/rejoin CAPTURED:
+G9 manifest615bab9c…6e4cc и image-file47a8fc35…66b3d EQUAL, ENV9/binding10,
+tools38/grants21/capabilities24, task2725B/SHA07b3e18c19aa1fb7917b194d303aa66a781b517c1aa86824848ba9bfef066c55
+EQUAL owner input/provider task/inbox. Instructions48715B/fbd440bc…35ff0 EQUAL.
+Начальный root-addressed ACK probe NOT CAPTURED: host выбрал не фактическую
+дочернюю сессию; последующее exact child capture PASS, это не product failure.
+
+Chrome reload18:06/platform+run LIVE/Console0/API200/overflowfalse.
+Screenshot NOT RUN/capture hang UNKNOWN. Демо не изменено. Native continuation
+EOF, Developer/reviews/final Gate033 всё ещё проверяются; checklist11/13/14/15
+не закрыты историческими smoke или адресными тестами. Финальный business PR
+не merge/auto-merge/owner approve.
