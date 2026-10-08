@@ -42,6 +42,9 @@ var queryRuntimeDeadlineArchiveProof string
 //go:embed testdata/sql/runtime_deadline_reset_denied.sql
 var queryRuntimeDeadlineResetDenied string
 
+//go:embed testdata/sql/runtime_delegate_input_missing.sql
+var queryRuntimeDelegateInputMissing string
+
 func TestWorkflowLaunchComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -210,6 +213,131 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		}
 		return state, origin, root, exact, leases, turns
 	}
+	t.Run("workflow-input-inheritance", func(t *testing.T) {
+		inputDraft := draft
+		inputDraft.Name = "Immutable input workflow"
+		inputDraft.Inputs = []entity.WorkflowInputField{
+			{Key: "field-001", Label: "Issue", Type: "TEXT", Required: true},
+			{Key: "field-002", Label: "Business", Type: "TEXT", Required: true},
+			{Key: "field-003", Label: "Repository", Type: "TEXT", Required: true},
+			{Key: "field-004", Label: "Constraints", Type: "TEXT", Required: true},
+		}
+		inputDraft.Steps = append([]entity.WorkflowStep{}, draft.Steps...)
+		second := inputDraft.Steps[0]
+		second.Key, second.Position, second.Name = "second", 2, "Second"
+		second.DependsOn = []string{"step"}
+		inputDraft.Steps = append(inputDraft.Steps, second)
+		publish := func(key string, specification entity.WorkflowVersion) *entity.Workflow {
+			t.Helper()
+			wf := execute(command.CreateWorkflow, owner, key+"-create", command.WorkflowInput{ProjectRef: project.Ref, Name: specification.Name, Purpose: specification.Purpose, CoordinatorAgentRef: coordinator.Ref, Draft: &specification}, nil).Workflow
+			wf = execute(command.ValidateWorkflow, owner, key+"-validate", command.WorkflowInput{Ref: wf.Ref}, &wf.Version).Workflow
+			return execute(command.PublishWorkflow, owner, key+"-publish", command.WorkflowInput{Ref: wf.Ref}, &wf.Version).Workflow
+		}
+		wf := publish("input", inputDraft)
+		original := map[string]any{"field-001": "Issue1796", "field-002": strings.Repeat("business ", 30), "field-003": "Repository", "field-004": "Exact owner constraints"}
+		root := execute(command.LaunchRun, owner, "input-root", command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "WORKFLOW", Ref: wf.Ref}, Task: "Preserve original fields", Input: original}, nil).Run
+		defer cancelRun("input-cleanup", root.Ref)
+		current := claim("input-coordinator", root.Ref)
+		delegate := func(key, step string, additions map[string]any) (command.Result, error) {
+			return service.Execute(ctx, command.Command{Kind: command.DelegateExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "workflow-input-" + key}, Payload: command.DelegateInput{LeaseRef: stringMap(current, "leaseRef"), Fence: stringMap(current, "fence"), Generation: runtimeRevisionMapInt64(current, "generation"), TargetAgentRef: specialist.Ref, WorkflowStepKey: step, Task: "Read exact input", Input: additions}})
+		}
+		_, before, err := service.GetRunGraph(ctx, owner, root.Ref)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tooMany := map[string]any{}
+		for index := 0; index < 99; index++ {
+			tooMany[string(rune('A'+index))] = true
+		}
+		for key, additions := range map[string]map[string]any{
+			"collision": {"field-001": "Another Issue"},
+			"type":      {"field-001": false},
+			"null":      {"field-001": nil},
+			"keys":      tooMany,
+			"bytes":     {"handoff": strings.Repeat("x", 65450)},
+		} {
+			if _, err := delegate(key, "step", additions); !errors.Is(err, errs.ErrInvalid) {
+				t.Fatalf("%s did not reject invalid merged input: %v", key, err)
+			}
+		}
+		_, after, err := service.GetRunGraph(ctx, owner, root.Ref)
+		if err != nil || len(before.Nodes) != len(after.Nodes) || len(before.Edges) != len(after.Edges) {
+			t.Fatal("invalid input changed execution graph")
+		}
+		originalQuery := queryRuntimeDelegateexecutionSelectRunsId
+		queryRuntimeDelegateexecutionSelectRunsId = queryRuntimeClaimAuditUnavailable
+		_, unavailableErr := delegate("sql-failure", "step", nil)
+		queryRuntimeDelegateexecutionSelectRunsId = originalQuery
+		if !errors.Is(unavailableErr, errs.ErrUnavailable) {
+			t.Fatalf("SQL failure did not remain unavailable: %v", unavailableErr)
+		}
+		queryRuntimeDelegateexecutionSelectRunsId = queryRuntimeDelegateInputMissing
+		_, missingErr := delegate("missing-root", "step", nil)
+		queryRuntimeDelegateexecutionSelectRunsId = originalQuery
+		if !errors.Is(missingErr, errs.ErrUnavailable) {
+			t.Fatalf("missing root did not remain unavailable: %v", missingErr)
+		}
+		_, after, err = service.GetRunGraph(ctx, owner, root.Ref)
+		beforeJSON, _ := json.Marshal(before)
+		afterJSON, _ := json.Marshal(after)
+		if err != nil || string(beforeJSON) != string(afterJSON) {
+			t.Fatal("rejected merge or unavailable source changed graph")
+		}
+		child, err := delegate("first", "step", map[string]any{"field-001": original["field-001"], "handoff": "Read predecessor"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		complete("input-first-coordinator-complete", current, true)
+		childLease := claim("input-first-child", child.Run.Ref)
+		assertInput := func(lease map[string]any, expected map[string]any) {
+			t.Helper()
+			actual, err := json.Marshal(lease["input"])
+			want, marshalErr := json.Marshal(expected)
+			if err != nil || marshalErr != nil || string(actual) != string(want) {
+				t.Fatalf("immutable child input mismatch: got %s, want %s", actual, want)
+			}
+			digest, digestErr := runtimecontract.RuntimeBoundedInputDigest(expected)
+			if digestErr != nil || stringMap(lease, "inputDigest") != digest {
+				t.Fatal("claim digest does not bind merged input")
+			}
+			for _, value := range expected {
+				if text, ok := value.(string); ok && !strings.Contains(stringMap(lease, "instructions"), text) {
+					t.Fatal("materialized INPUT omitted inherited value")
+				}
+			}
+		}
+		merged := map[string]any{}
+		for key, val := range original {
+			merged[key] = val
+		}
+		merged["handoff"] = "Read predecessor"
+		assertInput(childLease, merged)
+		complete("input-first-child-complete", childLease, true)
+		current = claim("input-first-callback", root.Ref)
+		child, err = delegate("second", "second", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		complete("input-second-coordinator-complete", current, true)
+		childLease = claim("input-second-child", child.Run.Ref)
+		assertInput(childLease, original)
+		// Вложенный Workflow выбирает собственный root/version, не внешний input.
+		innerDraft := inputDraft
+		innerDraft.Name = "Nested immutable input"
+		innerDraft.Steps = append([]entity.WorkflowStep{}, draft.Steps...)
+		inner := publish("input-inner", innerDraft)
+		innerInput := map[string]any{"field-001": "Inner Issue", "field-002": "Inner business", "field-003": "Inner repository", "field-004": "Inner constraints"}
+		nested := execute(command.LaunchWorkflowExecution, launcher, "input-inner-launch", command.LaunchWorkflowInput{LeaseRef: stringMap(childLease, "leaseRef"), Fence: stringMap(childLease, "fence"), Generation: runtimeRevisionMapInt64(childLease, "generation"), WorkflowRef: inner.Ref, Task: "Nested workflow", Input: innerInput}, nil)
+		complete("input-second-child-waits", childLease, true)
+		current = claim("input-inner-coordinator", nested.Run.Ref)
+		assertInput(current, innerInput)
+		child, err = delegate("inner", "step", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		complete("input-inner-coordinator-complete", current, true)
+		assertInput(claim("input-inner-child", child.Run.Ref), innerInput)
+	})
 	t.Run("durable-workflow-deadline", func(t *testing.T) {
 		short := draft
 		short.TimeoutSeconds = 1
@@ -375,7 +503,7 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		// текущую capability. Каждая делегация принадлежит свежей attempt.
 		agent := createLifecycleAgent(t, ctx, service, owner, project.Ref, "ordinary-manager", "Ordinary manager")
 		agent = *execute(command.ChangeAgentCapability, owner, "ordinary-manager-cap", command.AgentBindingInput{AgentRef: agent.Ref, BindingRef: "platform.run.delegate", Enabled: true}, &agent.Version).Agent
-		parent := execute(command.LaunchRun, owner, "ordinary-parent", command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, Task: "Delegate review, then delegate response."}, nil).Run
+		parent := execute(command.LaunchRun, owner, "ordinary-parent", command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, Task: "Delegate review, then delegate response.", Input: map[string]any{"root-only": "Must not inherit"}}, nil).Run
 		initial := claim("ordinary-initial-claim", parent.Ref)
 		current := initial
 		for index, stage := range []string{"review", "response"} {
@@ -387,7 +515,7 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 			if !ok || !found || !strings.Contains(strings.Join(runtimecontract.RuntimeMCPToolNames(runtimecontract.RunnerInput{DelegationTargets: runtimeRevisionDelegationTargets(current["delegationTargets"])}), ","), "delegate_agent") {
 				t.Fatalf("ordinary %s lost its delegation catalog", stage)
 			}
-			delegated := execute(command.DelegateExecution, worker, "ordinary-"+stage+"-delegate", command.DelegateInput{LeaseRef: stringMap(current, "leaseRef"), Fence: stringMap(current, "fence"), Generation: runtimeRevisionMapInt64(current, "generation"), TargetAgentRef: specialist.Ref, Task: "Complete bounded " + stage}, nil)
+			delegated := execute(command.DelegateExecution, worker, "ordinary-"+stage+"-delegate", command.DelegateInput{LeaseRef: stringMap(current, "leaseRef"), Fence: stringMap(current, "fence"), Generation: runtimeRevisionMapInt64(current, "generation"), TargetAgentRef: specialist.Ref, Task: "Complete bounded " + stage, Input: map[string]any{"child-only": stage}}, nil)
 			child := delegated.Run
 			bound := false
 			for _, node := range delegated.Graph.Nodes {
@@ -398,6 +526,10 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 			}
 			complete("ordinary-"+stage+"-parent-complete", current, true)
 			childLease := claim("ordinary-"+stage+"-child-claim", child.Ref)
+			childInput, ok := childLease["input"].(map[string]any)
+			if !ok || len(childInput) != 1 || childInput["child-only"] != stage {
+				t.Fatal("ordinary delegation changed its payload-only input")
+			}
 			complete("ordinary-"+stage+"-child-complete", childLease, true)
 			if index == 0 {
 				current = claim("ordinary-review-callback", parent.Ref)

@@ -10,6 +10,62 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 11:30 UTC
+
+База e3265b29, MAIN имеет принятый шестифайловый inheritance fix и журнал;
+новый commit/push ещё не выполнен. Frozen hashes EQUAL, ROOT helper/vet PASS,
+public disposable Workflow15subtests PASS29.441s. Source/CP Pod EQUAL и Ready;
+native acceptance на новом Workflow ещё NOT RUN. Lifecycle общие invariants
+записаны в GUIDE006, исторические snapshots не переписаны.
+
+PROJECT helper run_8zFHObHJyLCH6qtGagVwjiRZ technical SUCCEEDED/semantic BLOCKED:
+полный catalog EOF149159B/version15, но текущая схема не даёт гарантию exact
+DAG при33→39. Proposed plan отсутствует, Apply/Publish не делались.
+Его expectedTask/provider/inbox и instructions ACK EQUAL; binary FILE_ONLY;
+failure observer90405 joined/NOT_CAPTURED. Не повторять тот же blind prompt.
+
+Отдельный implementation в изолированном worktree: structural UPDATE union
+прежних retained edges + inferred frontier, invalid source graph закрыто
+отклоняется; explicit dependsOn/новых ABI/RPC/grants нет. После freeze/tests
+принять CP+RC patch, проверить source/hot reload, запросить новый typed план
+у того же PROJECT helper (новые steps без caller key), inspect exact39 DAG,
+Apply/Validate/Publish новой версии. Затем ONE fresh ordinary Manager root с
+четырьмя явными inputs и bounded product decisions; old FAILED roots не retry.
+
+Chrome собственная Workflow page1 authenticated200, Console0/overflowfalse;
+screenshot NOT RUN из-за denied path/hung attachment. Последний list_pages
+также bounded stopped; нужно восстановить MCP без закрытия чужих вкладок.
+Full65/11/13/14/15 OPEN; business PR NOmerge/approve. Демопроект не тронут.
+
+## Checkpoint 08.10.2026 11:03 UTC — продолжение после ручной проверки
+
+Владелец возобновил работу; созданный для демонстрации проект разрешил считать
+тестовым. Он не мешает текущему сценарию и не изменён. HEAD и отдельный remote
+readback `e3265b297bf7de13075347fcea9d8e2261e1f33b` совпали; Draft1800 OPEN,
+Issues1797/1796 OPEN, main `b5f6fcde885c4e6369255a86559b3ed2c785043f`.
+Chrome own page1 доступна, authenticated artifact/Workflow GET200, reload
+11:01UTC; чужие вкладки не трогались.
+
+Обычный root `run_smv87THy-ht62Ul3PLL_cCv7` и Workflow
+`run_OK71xRY6HCjPhETbezFzuCdB` теперь FAILED/version3. INTAKE SUCCEEDED;
+Architect `run_hQwZMN430H-lH7rbKDVjwOeL` технически SUCCEEDED, но semantic
+BLOCKED. Его exact `architecture-review.md`
+`art_uUB7raBcbcp2ykYxSH9f-q7V`/revision7,
+sha256:eddfc5dac84f74ec5b517bb3cac05922f2f6a40f1b8d1fc8dd15684a3bb10240
+прочитан через защищённый artifact content PREVIEW для host-диагностики
+(это не native EOF evidence сотрудника). В отчёте отсутствуют четыре исходных
+TEXT inputs и проверяемые продуктовые решения; итоговые gates смешаны с
+допуском до реализации. Coordinator корректно остановил steps003–033:
+CANCELLED, Developer и внутренние reviews не запускались. Исторические roots
+не retry/resume; причина передачи inputs исследуется по CP/RC исходникам,
+порядок gates — по опубликованному DAG и actual manager-plan.
+
+Bounded watcher закончился08:15UTC, активных observer threads0; новые
+демонстрационные Pods не приписаны исходному Workflow. Full65/11/13/14/15 OPEN;
+новый native запуск и готовность бизнес-PR пока NOT RUN. Следующий шаг:
+доказать причину, исправить её и повторить новый согласованный процесс без
+ослабления authority, semantic STOP и финального owner gate.
+
 ## Checkpoint 08.10.2026 07:17 UTC
 
 HEAD/remote/Draft1800 `95d375c6a1438778a4d796f8c77f6fa515b73cf2` EQUAL,

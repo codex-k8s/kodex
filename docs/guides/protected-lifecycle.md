@@ -4,8 +4,8 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.9
-updated: 2026-10-07
+version: 1.1.10
+updated: 2026-10-08
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
@@ -139,6 +139,18 @@ audience, полным методом, permission, session, turn, attempt, не�
   скрыто отклоняется;
 - завершение parent либо закрывает весь обязательный дочерний граф, либо
   отклоняется при незавершённом дочернем процессе.
+
+При материализации этапа Workflow CP передаёт в child input исходные значения
+exact canonical root и его immutable опубликованной версии. Дополнительный
+input делегирования может только дополнять их: совпадающее значение допустимо,
+отличающаяся подмена закрыто отклоняется до создания child и его effects.
+Общий key/byte budget проверяется после объединения. Повреждённый root/spec
+является недоступностью авторитетного источника, не caller validation и не
+основанием terminal eligibility. Ordinary delegation без Workflow сохраняет
+прежний input; nested Workflow использует собственный canonical root.
+История новой Session, callback artifacts и имя Workflow не заменяют эту
+передачу. Значения данных не становятся authority, grants либо файловым доступом;
+исторические inputs/RuntimeRevision не переписываются.
 
 ## Авторитетный граф выполнения
 

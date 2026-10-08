@@ -10,6 +10,144 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 11:30 UTC — наследование input исправлено; DAG-plan BLOCKED
+
+- Рабочая база e3265b297bf7de13075347fcea9d8e2261e1f33b. Принят замороженный
+  CP-пакет из шести файлов: trusted canonical Workflow root/version передаёт
+  исходные поля каждому stage; дополнительный input не подменяет их. Ordinary
+  delegation остаётся payload-only, nested Workflow использует собственный root.
+  Collision, общий budget, испорченный источник и NoRows отклоняются до effects.
+- Доказанный disposable RED differing collision возвращал nil до исправления.
+  После исправления: helper22subtests, platform807/transport178 unit PASS,
+  45 SKIP не выданы за component PASS; vet/SQL boundary PASS. Первоначальные
+  ошибки fixture tuple и урезанного PATH без Node сохранены как FAIL оснастки.
+  ROOT повтор helper0.051s/vet PASS; public whole TestWorkflowLaunchComponent
+  15subtests PASS29.441s, включая inherited INPUT/digest, nested/ordinary,
+  budget/collision и terminal/clock/gate/retry. Первая ROOT-команда с неверным
+  вариантом Go flag завершилась setup FAIL; повтор с `-p 2` прошёл.
+- Шесть host-файлов EQUAL frozen manifest. CP Pod UID
+  a5839e19-c71f-4815-8213-2385590f9ef6 Ready(true,true), mounted source EQUAL:
+  runtime.go ec4db684…7469, helper a4650611…d059, SQL38a6956a…0177.
+  Bounded CP logs: compile failure/error-level не обнаружены; это не
+  доказательство обслуживания конкретного ELF и не native Workflow acceptance.
+- PROJECT helper conversation cnv_6_Y67gkwZyn8gB6BK8MlEmcD, run
+  run_8zFHObHJyLCH6qtGagVwjiRZ, session ses_8wVRFiG3vd1QSxrkJV_vywrC,
+  turn trn_Akuk5Zq5It2UPFad-_b8z07c/attempt1 технически SUCCEEDED11:21:20UTC,
+  semantic BLOCKED: схема UPDATE_WORKFLOW не выражает требуемый exact DAG.
+  Native WORKFLOW_CONFIGURATION прочитан до EOF149159B/version15/digest
+  fea0ff51d12e13e9e05ace8ead0005f87006f3b0957e411024c361838a747e21.
+  Proposed plan не создан, drafts/published version/старые roots не менялись.
+- Его independent expectedTask/provider/inbox SHA8ad3ea24…33d8 EQUAL,
+  instructions/file6b13cc51…ac3 EQUAL, same Pod UID
+  b52b6762-eecb-46ed-8a36-c1a405c8049d/G8. Binary proof FILE_ONLY,
+  не serving-process proof. Failure observer joined FOLLOW_STREAM_ENDED /
+  NOT_CAPTURED, не provider failure.
+- Новый узкий DAG-фикс реализуется отдельно: structural UPDATE сохраняет все
+  прежние edges retained steps и добавляет выведенные frontier-зависимости;
+  неизвестный/удалённый/forward predecessor закрыто отклоняется. Same-order
+  update сохраняет exact прежний DAG. Новые keys назначает сервер; explicit
+  caller dependsOn, новый ABI/RPC/grants не добавляются. Actual After обязателен.
+- Chrome reload11:26UTC, own Workflow GET200/Console0/overflowfalse. Screenshot
+  NOT RUN: filePath отклонён MCP, attached screenshot завис и bounded call
+  остановлен; последующий list_pages также завис. DOM не выдан за визуальный PASS.
+  Чужие вкладки и демонстрационный проект не изменены. Full65/11/13/14/15 OPEN;
+  новый business Workflow/Developer PR/internal reviews/final acceptance NOT RUN.
+
+### Матрица подтверждаемого изменения DAG
+
+| Переход | Авторитетное состояние и ожидаемый результат |
+| --- | --- |
+| proposed UPDATE | Owner-context/project и exact Workflow version разрешены сервером; полный current catalog читается до EOF. |
+| normalized plan | Старые retained dependencies сохраняются; новый parallel peer получает общий prerequisite, следующий aggregation ждёт всех четырёх. Actual Before/After содержит серверные keys и DAG. |
+| invalid graph | Missing/deleted/forward/duplicate/cycle отклоняются до draft/effects, без ослабления grants или authority. |
+| Apply/Validate/Publish | Owner OCC и прежний versioned lifecycle создают только новую draft/published version; старые snapshots immutable. |
+| новый run | Создаётся после exact39-stage DAG readback; прежние FAILED roots не retry/resume. |
+| final review/gate | Final product/architecture/security proofs относятся к одному фактическому SHA; sole human gate остаётся владельцу. |
+
+## Checkpoint 08.10.2026 11:03 UTC — возобновление, semantic BLOCKED архитектора
+
+- Владелец возобновил работу. Демонстрационный проект тестовый, но не мешает;
+  не удалён и не изменён. HEAD/remote `e3265b297bf7de13075347fcea9d8e2261e1f33b`
+  EQUAL, Draft1800 OPEN, protected main b5f6fcde, Issues1797/1796 OPEN.
+- Обычный Manager root и full33 Workflow FAILED/version3. INTAKE SUCCEEDED;
+  Architect технически SUCCEEDED, semantic BLOCKED: не получил четыре исходных
+  TEXT inputs и обязательные продуктовые решения. Exact architecture artifact
+  `art_uUB7raBcbcp2ykYxSH9f-q7V`/revision7,
+  sha256:eddfc5dac84f74ec5b517bb3cac05922f2f6a40f1b8d1fc8dd15684a3bb10240
+  прочитан host через защищённый PREVIEW, не выдан за native full-read proof.
+  Coordinator сохранил semantic STOP: steps003–033 CANCELLED, Developer/reviews
+  NOT RUN. Старые terminal roots не возобновляются.
+- Исследуются отдельно доставка immutable Workflow inputs в delegate_agent и
+  смешение pre-implementation решений с final product/security/architecture
+  reviews. Публичное upstream API подтверждено сотрудником документально;
+  поддержка exact установленного runtime остаётся UNKNOWN, не PASS.
+- Chrome own page1 работает, artifact/Workflow GET200, reload11:01UTC.
+  Bounded наблюдатель завершился08:15UTC/threads0; чужие демонстрационные Pods
+  не приписаны этой lineage. Full65/11/13/14/15 OPEN; новый native запуск,
+  Developer PR и итоговая готовность ещё NOT RUN.
+
+### Исправление передачи исходных полей — сценарий и lifecycle до реализации
+
+Источник: Full65 §54–56 и GUIDE-DOC-006. Инициатор — текущий Coordinator,
+actor/organization/project/root и WorkflowVersion разрешаются CP по действующей
+lease/fence/generation, а не по input. Путь: native delegate_agent → RC
+validateDelegationInput → RuntimeWorkService.DelegateExecution → CP domain
+command → owner-транзакция delegateExecution → runs.input → claim → immutable
+RuntimeRevision/BoundedInput → INPUT.values → provider. Новый внешний endpoint,
+RPC, grant, event kind и отдельный источник состояния не добавляются.
+
+| Переход | Семантика входа и сохранённая граница |
+| --- | --- |
+| create/materialize Workflow stage | Exact canonical root/version даёт неизменённые исходные поля; additional input дополняет их. Отличающаяся подмена исходного поля и превышение общего bounded budget закрыто отклоняются до записи child/receipt/audit/events. |
+| ordinary delegation | Нет WorkflowVersion — прежний payload.Input без наследования соседних/проектных данных. |
+| nested Workflow | Собственный canonical Workflow root, не верхний ordinary Manager. |
+| claim/start | Объединённый child input закрепляется новым digest и RuntimeRevision по прежней authority; поля данных не выдаются за полномочия. |
+| renew/reclaim/continuation | Не меняют immutable input; callback results сохраняют отдельные server-owned pins. |
+| complete/cancel/delete/expiry | Прежняя атомарная terminal/fence семантика полного графа, без новых effects. |
+| retry/replay | Существующие idempotency и новые attempts; исторические snapshots не переписываются. |
+| owner decision/dead-letter | Новые виды переходов не добавляются, действуют прежние owner paths. |
+
+Source failure доказан на e3265b29: child runs.input хранит payload.Input;
+claim читает именно child, INPUT.values получает этот object; WORKFLOW и новая
+SessionContext не содержат исходные значения. Конкретный live child snapshot
+ещё не прочитан, source-path не выдаётся за его отдельную проверку.
+Регресс: required поля → дочерние этапы, пустой/дополнительный/одинаковый input,
+конфликт, общий budget, ordinary/nested scope, сохранение claim/reclaim pins.
+Context7 /jackc/pgx: StrictNamedArgs, QueryRow/Scan и ошибки transaction проверены.
+Реализация и её проверки пока NOT RUN.
+
+### Уточнение нового процесса после semantic STOP
+
+Рекомендованные продуктовые детали выбираются в рамках выданного владельцем
+автономного режима, а не выдаются за выполненный human approval: постоянная
+компактная сводка в шапке Control Center, максимум три видимых элемента.
+Подтверждённо исчерпанные аккаунты образуют один раскрываемый элемент внутри
+этого лимита; неизвестные/устаревшие данные не считаются исчерпанием.
+Для достоверных окон остаток — 100 минус usedPercent; при нескольких окнах
+приоритет задаёт минимальный остаток, стабильный tie-break — account ref.
+Unknown/stale не ранжируются как доказанный минимальный остаток. Credits/reset
+выводятся только при наличии supported upstream значения; freshness и lifecycle
+должны следовать действующей account policy, устанавливаемой Architect по source.
+Manager и Architect фиксируют эти правила в собственных результатах, без
+придумывания провайдерских полей или расширения owner eligibility.
+
+Product/security/architecture review готовой реализации требуется ПОСЛЕ кода
+на exact final SHA, а не как заранее отсутствующее доказательство на INTAKE.
+Архитектор до Developer обязан дать проверенный bounded дизайн и ограничения,
+не approval ещё не существующего PR. PR1799/1800 остаются вне Issue1796.
+Исторические BLOCKED artifacts не становятся gates нового root.
+
+В опубликованном SOFTWARE_CHANGE есть три review направления Full65
+(Documentation/Security/Lexical), но отсутствует архитектурная перепроверка
+реального diff. Для выполнения GUIDE-DOC-004/006 будет запрошен typed
+UPDATE_WORKFLOW план у PROJECT помощника: сохранить исходные33 этапа/их keys,
+четыре input keys, исходные scopes и единственный final owner gate;
+добавить Architect в каждую из шести review волн (39 этапов), без новых grants.
+Manager отдельно проверяет продуктовые criteria на том же SHA.
+Это новая опубликованная версия с проверкой Before/After/DAG; старые
+версии/terminal runs не изменяются. План, его применение и новый запуск пока
+NOT RUN; отсутствие содержимого полного допустимого readback не обходится.
+
 ## Checkpoint 08.10.2026 07:17 UTC — INTAKE и callback завершены, Architect выполняется
 
 - `95d375c6a1438778a4d796f8c77f6fa515b73cf2` опубликован в Draft1800,

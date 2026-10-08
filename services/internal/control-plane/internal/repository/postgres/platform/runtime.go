@@ -1978,11 +1978,22 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 	}
 	childRef, _ := newRef("run")
 	var initiatorID, parentRunID string
+	var hasWorkflow bool
+	var rootInput, workflowSpec []byte
 	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionSelectRunsId, pgx.StrictNamedArgs{
 		"parent_run_id":   lease["runID"],
+		"root_run_id":     lease["rootRunID"],
+		"project_id":      lease["projectID"],
 		"organization_id": scope.organizationID,
-	}).Scan(&initiatorID, &parentRunID); err != nil {
+	}).Scan(&initiatorID, &parentRunID, &hasWorkflow, &rootInput, &workflowSpec); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	childInput := payload.Input
+	if hasWorkflow {
+		childInput, err = workflowDelegateInput(rootInput, workflowSpec, payload.Input)
+		if err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	providerAccountID, err := repository.selectProviderAccountForAgent(ctx, tx, scope.organizationID, payload.TargetAgentRef)
 	if err != nil {
@@ -2023,7 +2034,7 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 		"target_agent_ref": payload.TargetAgentRef,
 		"title":            childTitle,
 		"task":             childTask,
-		"input":            asJSON(payload.Input),
+		"input":            asJSON(childInput),
 		"initiated_by":     initiatorID,
 	}).Scan(&childID); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
