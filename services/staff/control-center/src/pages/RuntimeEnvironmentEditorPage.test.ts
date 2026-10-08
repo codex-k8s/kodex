@@ -19,6 +19,8 @@ import type {
   RoleImageArtifact,
   RuntimeEnvironmentInput,
   RuntimeEnvironmentDraft,
+  RuntimeEnvironmentSet,
+  RevisionImpactPlan,
 } from "@/shared/api/generated/openapi/types.gen";
 
 const runtime = vi.hoisted(() => ({
@@ -42,6 +44,7 @@ const draftApi = vi.hoisted(() => ({
   createEnvironmentDraft: vi.fn(),
   saveEnvironmentDraft: vi.fn(),
   publishEnvironmentDraft: vi.fn(),
+  prepareEnvironmentPublication: vi.fn(),
   readEnvironmentDraft: vi.fn(),
   transitionEnvironmentDraft: vi.fn(),
 }));
@@ -102,12 +105,16 @@ async function editor(localized = false) {
     imageInventoryReady: Ref<boolean>;
     imageLoading: Ref<boolean>;
     imageProblem: Ref<unknown>;
+    imageBadgeLabel: Ref<string>;
+    publicationPlan: Ref<RevisionImpactPlan | undefined>;
     selectedImage: Ref<{ ref: string; title: string } | undefined>;
     applyRestoredInput(input: RuntimeEnvironmentInput): void;
     applyServerDraft(draft: RuntimeEnvironmentDraft): void;
     loadImageArtifact(recipe: string, artifact: string): Promise<void>;
     load(): Promise<void>;
     validateDraft(): Promise<void>;
+    publish(selected: string[]): Promise<void>;
+    preparePublication(): Promise<void>;
     restoreAfterFreshAuthentication(): Promise<void>;
   };
 }
@@ -560,6 +567,129 @@ const ownImageOption = {
 };
 
 describe("восстановление точного образа серверного draft", () => {
+  it("после публикации читает точный образ даже без повторной инициализации маршрута", async () => {
+    vi.stubGlobal("window", { sessionStorage: browserStorage() });
+    Reflect.deleteProperty(route.params, "environmentRef");
+    const state = await editor(true);
+    state.input.imageArtifactRef = "image_own";
+    state.imageArtifact.value = promotedArtifact("image_own");
+    state.selectedImage.value = { ref: "image_own", title: "Свой образ" };
+    const tools = [
+      { name: "Git", command: "git", description: "", usageHint: "" },
+    ];
+    state.input.tools = tools;
+    const draft = {
+      ...savedDraft(),
+      environmentRef: undefined,
+      state: "VALID" as const,
+      validationDigest: "c".repeat(64),
+      specification: { ...state.specification.value },
+    } as RuntimeEnvironmentDraft;
+    state.applyServerDraft(draft);
+    expect(state.imageInventoryReady.value).toBe(true);
+    expect(state.draftDirty.value).toBe(false);
+    draftApi.prepareEnvironmentPublication.mockResolvedValueOnce({
+      ref: "plan_synthetic",
+      version: 1,
+      kind: "RUNTIME_ENVIRONMENT",
+      sourceVersion: 0,
+      draftRef: draft.ref,
+      draftVersion: draft.version,
+      targetDigest: "d".repeat(64),
+      digest: "e".repeat(64),
+      total: 0,
+      state: "PREPARED",
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    await state.preparePublication();
+    expect(state.problem.value).toBeUndefined();
+    expect(state.publicationPlan.value).toBeDefined();
+    const saved: RuntimeEnvironmentSet = {
+      scopeKind: "PROJECT",
+      organizationRef: "org_synthetic",
+      ref: "environment_published",
+      version: 1,
+      projectRef: "project_1",
+      name: state.input.name,
+      description: state.input.description,
+      state: "ACTIVE",
+      updatedAt: new Date().toISOString(),
+      ready: true,
+      readinessBlockers: [],
+      nextActions: ["UPDATE"],
+      currentVersion: {
+        ref: "environment_version_published",
+        version: 1,
+        revision: 1,
+        digest: "f".repeat(64),
+        createdAt: new Date().toISOString(),
+        image: {
+          artifactRef: "image_own",
+          recipeRef: "recipe_own",
+          recipeGeneration: 3,
+          reference: `registry.example.test/own@sha256:${"a".repeat(64)}`,
+          digest: "a".repeat(64),
+        },
+        tools,
+        values: [],
+        secretDescriptors: [],
+        policy: {
+          resources: state.input.policy.resources,
+          volumes: [],
+          network: {
+            denyByDefault: true,
+            egress: [
+              { destination: "DNS", protocol: "TCP", port: 53 },
+              { destination: "DNS", protocol: "UDP", port: 53 },
+              { destination: "PROVIDER_PROXY", protocol: "TCP", port: 8084 },
+              { destination: "RUNTIME_CALLBACK", protocol: "TCP", port: 8444 },
+            ],
+            webAccess: state.input.policy.webAccess,
+          },
+          kubernetesAccess: { kind: "NONE", namespace: "kodex-runtime" },
+          resourcesDigest: "1".repeat(64),
+          volumesDigest: "2".repeat(64),
+          networkDigest: "3".repeat(64),
+          rbacDigest: "4".repeat(64),
+        },
+      },
+    };
+    Object.assign(runtime.environments, { environment_published: saved });
+    draftApi.publishEnvironmentDraft.mockResolvedValueOnce({
+      draft: {
+        ...draft,
+        state: "PUBLISHED",
+        publishedEnvironmentRef: saved.ref,
+      },
+    });
+    router.replace.mockImplementationOnce(() => {
+      route.params.environmentRef = saved.ref;
+      return Promise.resolve();
+    });
+    runtime.loadPromotedRoleImageArtifact.mockResolvedValueOnce({
+      artifact: promotedArtifact("image_own"),
+      recipeName: "Свой образ",
+    });
+    await state.publish([]);
+    expect(draftApi.publishEnvironmentDraft).toHaveBeenCalledOnce();
+    expect(state.problem.value).toBeUndefined();
+    expect(runtime.loadPromotedRoleImageArtifact).toHaveBeenCalledOnce();
+    expect(
+      runtime.loadPromotedRoleImageArtifact.mock.calls[0]?.slice(0, 3),
+    ).toEqual(["project_1", "recipe_own", "image_own"]);
+    expect(state.imageInventoryReady.value).toBe(true);
+    expect(state.selectedImage.value.title).toBe("Свой образ");
+    expect(state.input.tools).toEqual(tools);
+  });
+  it("пустое состояние образа не объявляет загрузкой", async () => {
+    const state = await editor(true);
+    state.input.imageArtifactRef = "image_own";
+    expect(state.imageLoading.value).toBe(false);
+    expect(state.imageBadgeLabel.value).toBe(
+      i18n.global.t("runtime.imageInventoryUnavailable"),
+    );
+  });
   it("после замены baseline читает exact promoted artifact и сохраняет tools", async () => {
     const state = await editor(true);
     state.input.imageArtifactRef = "image_baseline";

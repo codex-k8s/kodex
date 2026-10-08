@@ -10,6 +10,114 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 01:42 UTC — каталог после публикации
+
+- На базе925d1f9d обнаружен и регрессионно воспроизведён missing-read path:
+  owner publication успешна, sync(saved) очищает прежний imageArtifact через
+  watcher, а explicit чтение опубликованного образа отсутствует. Кроме того,
+  idle/missing показывался как Loading. Исправлены только editor и его тесты:
+  exact image read после published readback, label Loading только при
+  imageLoading=true. Abort/generation/scope fences и receipt/UNKNOWN contract
+  сохранены, дополнительной publication mutation нет.
+- Исполнитель RED→GREEN,81tests/4 suites, полный typecheck/scoped lint/format
+  PASS. ROOT независимо45tests/2 suites PASS3.62s и diffcheck PASS.
+  Host/Pod editor SHA
+  `d31f21bee6b1f66300cdbbcd1daa5ff428647503465d26ae05565f7ff6a43295`
+  EQUAL; test39f08b4f. Браузер reload и imageTab: kodex-selfdev,
+  38из42, controls32px, overflow=false, Console0. Это live reload proof;
+  повторная publication после fix NOT RUN, её path доказан regression.
+- Screenshot imageTab попытка1431 завершилась protocol timeout без картинки;
+  повторная1438 ещё ожидается. Не считать это visual PASS и не менять
+  собственную вкладку до завершения. Публикация всех окружений и exact bindings
+  остаётся ранее подтверждённой. ONE новый EOF/full33 ещё NOT RUN.
+
+## Checkpoint 08.10.2026 01:33 UTC — все окружения на исправленном runner
+
+- Проверены действующая Full65 цель, Issue1797/1796 и Draft1800; HEAD,
+  remote и PR `925d1f9d5299ddd38ac94c9d56c84185ccba9632` совпадают,
+  fresh main `b5f6fcde885c4e6369255a86559b3ed2c785043f` неизменен.
+  Автономный режим до14:00 Саратов сохранён; обязательные11/13/14/15 OPEN.
+- PROJECT G7 `imgart_Z-HLVfkH6Pri-ENydW1VpA6J` ACCEPTED/PROMOTED10,
+  recipe14. Однократный штатный promotion завершился01:19:48;
+  exact manifest `b48644cec381e2370db9d62a8af93e5ce8c858efbeee987c4eb00e84822dd726`.
+  SYSTEM G13/ENV28/binding8 и compiled runner58324826/binary9b560789
+  сохраняются. Короткий SYSTEM smoke завершён; его screenshot01:17 получен:
+  user справа, commentary/final слева, компактные закрытые tool groups,
+  читаемые sidebar/scroll, Console0/relevant API200. Это не длинный EOF.
+- Три независимых native PROJECT image-only плана прошли DRAFT1/VALID2/
+  APPLIED3 без конфликтов и повторных effects:
+  OWN `pln__OJGlBBR7TP6ce2nIMc9wqcb` →
+  `renvd_S9dSYIaeVL3Hoz7mJUJalSln`;
+  WRITE `pln_4jKXG3gt64lZb-_oBa5fKvvR` →
+  `renvd_TkYdNDkRoko_rMTt37F7L5SK`;
+  REVIEW `pln_Chq4xznSejfVBnJBqenwkUb9` →
+  `renvd_GSQ0AXIkcYX5oEcTGjFDYLIq`.
+  Каждый draft проверен и опубликован отдельно. Fresh SSO сохранил тот же
+  OWN draft/version1; ограничение свежести не отключалось.
+- OWNER impact выбрал OWN1/Developer1/REVIEW5. Authoritative readback200:
+  OWN ENV9/rev10 `renvv_Y5mDtVjlAF_YYgQrJ4_Uuoi9`, helper binding9;
+  WRITE ENV7/rev7 `renvv_ryUS4cb70QV-MconV06RHsYz`, Developer binding8;
+  REVIEW ENV7/rev7 `renvv_j5OIwdV2lUsaRx9GjEsTZkmC`, пять bindings8.
+  Все семь exact versionRef совпали с опубликованными окружениями.
+  Published before/after preservation EQUAL для имени/описания/tools/values/
+  secret descriptors/policy: OWN053978e5, WRITE87d163a9, REVIEW178fd8ba.
+  По38 инструментов, secret descriptor только WRITE; новые grants не выдавались.
+- Native publication modal screenshot получен01:29: адаптивные вложенные
+  окна читаются, controls32px, Console0. После REVIEW publication вкладка
+  образа пока показывает loading/38из0; screenshot и свежая инвентаризация
+  ещё проверяются, не объявлены PASS. Document horizontal overflow=false.
+- Наблюдение раннего Send после создания диалога не доказало lostsend:
+  при disabled guard текст сохранён, Network не имел POSTturn. Последующий
+  fresh enabled snapshot и ровно один click создали turn202. Отдельное
+  read-only исследование подтвердило единый readiness guard, но точная
+  причина самого первого раннего клика UNKNOWN. Автоматического blind retry нет.
+- Далее ONE новый обычный Manager EOF на G7 с early input ACK и failure
+  observer, затем ONE полный33-step Workflow. Старые FAILED roots не Retry/
+  Resume; реальные EOF/artifact/internal PR/reviews ещё NOT RUN на новомG7.
+
+## Checkpoint 08.10.2026 01:16 UTC — опубликованный SYSTEM G13
+
+- HEAD/remote/Draft1800 `925d1f9d5299ddd38ac94c9d56c84185ccba9632` EQUAL;
+  immutable runner compiled58324826, binary9b560789 не переименован в новыйSHA.
+  SYSTEM exact G13 artifactimgart_rVAqw6JWrHMt8fa7bdihIAA4 ACCEPTED/PROMOTED10,
+  recipe22. Managed promotion Job Completed01:06:00, машинный marker подтвердил
+  ровно manifest6e73a0c5. Никакого повторного promotion effect.
+- SYSTEM own plan `pln_P0krffgJyWWk6ei3XcnX0RNJ` DRAFT1/VALID2/APPLIED3
+  создал draft `renvd_jLdh1fnc27_C4HyG5XLfKRLH`. Native validation сначала
+  закрыто403/FRESH_AUTHENTICATION_REQUIRED, затем защищённый SSO fresh login
+  восстановил тот же draft/version1. Повторная validation VALID2,
+  digestd52607e4; impact выбрал только SYSTEM1, однократная publication
+  завершилась. ENV28/rev28/versionRef`renvv_MjAyVMzo5UdT-7g_zGPUSrcQ`,
+  binding8 с exactversionRef. Before/after canonical preservation
+  `730d753f4c5cf03c00b1092ee3efa11041158ff825f2a493b9e9b033185afc83`
+  EQUAL: имя/описание/tools/values/secret descriptors/policy сохранены.
+  Новые38 tools и точный G13; UI имя выбранного образа и controls32px,
+  Console0 после freshlogin. Draft specification и published policy имеют
+  разные writable/compiled представления; сравнение именно опубликованных
+  before/after, без ошибочного объявления потери настройки.
+- Новый SYSTEM conversation`cnv_BtvVAiMT_1CbuCtq0JHjxYk3`,
+  run`run_TnP3I7mOdIFel5pmoDVCV6Gw` SUCCEEDED2; Context7 resolve/query Vue
+  и terminal git --version PASS, четыре tool invocations завершены.
+  Early ACK CAPTURED/rejoin EQUAL: session`ses___uKci-yDN-j9SYvydJ9-qt8`,
+  turn`trn_tREDz7vg6i3VUiUTESO6rOwA`/attempt1, ENV28/binding8/G13,
+  task/input/inbox SHA`ee394386d3108708d07caaa3c00853b56256f3d41f4f6ac19b64d295c67826db`,
+  instructions06e69464, templatef4926f1b, materializationfe6028ef.
+  Podruntime-turn-2fded0af5e37aeed/UID80ea13c4-bd5d-42d5-a0db-295f75ca2f92,
+  обоих containers imageIDs6e73a0c5/restarts0; binary9b560789 EQUAL с
+  scopeSAME_POD_IMAGE_FILE_NOT_SERVING_PROCESS, не process-proof.
+- PROJECT G7 candidate`imgart_Z-HLVfkH6Pri-ENydW1VpA6J`, manifest
+  `sha256:b48644cec381e2370db9d62a8af93e5ce8c858efbeee987c4eb00e84822dd726`.
+  Fresh READY/complete report evidence
+  `44699946d576dfb2a105df4702178ebe9cab8c604ec0ef022cd443c168a08bf4`,
+  две те же blocking HIGH. Native отдельное localQA-only решение принято;
+  новый admission-run64e7d9d7b19193a1657b721654c0adf3 завершил claim/scan/
+  sign/admit Completed01:14:11/01:14:26/01:14:45/01:15:26, Warning/Failed0.
+  Fresh owner candidate/promotion и три ENV ещё OPEN. После decision один
+  диагностический GET report503 в transient state отдельно от product fail.
+- Длинный EOF и полный33-step Workflow ещё NOT RUN на новомG7; короткий
+  SYSTEMsmoke их не заменяет. Full65/11/13/14/15 OPEN. Browser screenshot
+  короткого SYSTEMsmoke запрошен; ожидание MCP пока не visualPASS.
+
 ## Checkpoint 08.10.2026 01:02 UTC — активация исправленного runner
 
 - HEAD/remote/Draft1800 `5832482644ea29f4e4a2b634b76ad68a30b9eef0`.

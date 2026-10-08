@@ -10,6 +10,62 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 01:42 UTC
+
+Интегрирован frozen2-file editor fix поверх925d1f9d: после successful
+publication явно читается exact published image; idle не выдаётся заLoading.
+ROOT45tests PASS3.62s, исполнитель81/4 suites/lint/format/typecheck PASS,
+host/Pod editord31f21be EQUAL. Chrome reload01:39/imageTab имяkodex-selfdev,
+38из42/controls32px/overflowfalse/Console0; повторнаяpublicationпослеfixNOTRUN.
+Screenshot1431 protocoltimeout, повторный1438 ожидается, visualNOTRUN;
+ownpage1 не менять до окончания. Все четыре ENV/native publications и
+восемьbindings PASS, preservationEQUAL. ROOTjournalи2frontendfiles требуется
+commit/push Draft1800; publisherprevious уже925d1f9d/scopelistобновлён.
+Затем ONE новый Manager EOF/G7 → толькопослеactualEOFartifact полный33.
+Full65/11/13/14/15 OPEN, finalinternalPR неmerge/approve.
+
+## Checkpoint 08.10.2026 01:33 UTC
+
+HEAD/remote/Draft1800 925d1f9d, fresh mainb5f6fcde EQUAL. SYSTEMG13 и
+PROJECTG7 ACCEPTED/PROMOTED; последний promotion Completed01:19:48.
+Три PROJECT native image-only plans APPLIED3, три draft отдельно validation/
+impact/publication PASS, preservation fingerprints OWN053978e5/
+WRITE87d163a9/REVIEW178fd8ba EQUAL. OWN ENV9/rev10/helperbinding9;
+WRITE7/rev7/Developerbinding8; REVIEW7/rev7/пятьbindings8. Все sevenbindings
+exact published versionRefs. SYSTEM ENV28/binding8 сохраняется;
+binary9b560789/compiled58324826 не переименовать по doc/frontendHEAD.
+SYSTEM shortsmoke Context7/terminal SUCCEEDED, ACK EQUAL/file-onlybinary;
+actual screenshot01:17 PASS. Publication modal screenshot01:29 PASS,
+Console0/controls32px. REVIEW imageTab сейчас loading/38из0, screenshot
+ожидается; собственнуюChrome1 не менять до завершения. Ownerpage4 не трогать.
+ROOT dirty journal checkpoint надо commit/push в тот же Draft1800;
+publisher previous сначала перевести на925d1f9d. Затем ONE nativeEOFTaskG7
+(maximum_bytes2048) обычнымManager, earlyACK/observer, после actualEOF+
+native-read-proof.md ONE managerRevision3Task/full33 Workflow.
+Все required11/13/14/15 OPEN; никаких finalinternalPR merge/approve.
+Автономно до14:00 Саратов/10:00UTC, reload/listChrome≤5мин с сохранением ввода.
+
+## Checkpoint 08.10.2026 01:16 UTC
+
+HEAD/remote/Draft1800 925d1f9d5299ddd38ac94c9d56c84185ccba9632 clean
+до этого журнала. SYSTEMG13 artifactimgart_rVAqw6JWrHMt8fa7bdihIAA4
+ACCEPTED/PROMOTED10, recipe22. Native image-only plan
+pln_P0krffgJyWWk6ei3XcnX0RNJ APPLIED3 создал
+renvd_jLdh1fnc27_C4HyG5XLfKRLH; ownerfreshSSO через защищённый механизм,
+validationVALID2/impactSYSTEM1/publicationPUBLISHED выполнены.
+ENV28/rev28/renvv_MjAyVMzo5UdT-7g_zGPUSrcQ, binding8exactversionRef;
+before/after preservation730d753f EQUAL,38tools. Native short Context7/
+terminal smoke run_TnP3I7mOdIFel5pmoDVCV6Gw SUCCEEDED2; actualACK EQUAL,
+PodUID80ea13c4-bd5d-42d5-a0db-295f75ca2f92/G13/binary9b560789file-only.
+PROJECTG7 candidateimgart_Z-HLVfkH6Pri-ENydW1VpA6J/manifestb48644ce;
+report44699946 READY/complete с теми же двумяHIGH, отдельный native localQA
+risk decision выполнен один раз. Admission новой цепочки Completed01:15:26;
+fresh candidate/Promotion и три ENV ещё OPEN. Не повторятьrisk/build.
+Далее PROJECTpromotion → native image-only plans/ownerpublish helper/WRITE/
+REVIEW →ONEG7EOF task (fresh maximum_bytes2048)/earlyACK/observer →full33.
+SYSTEM screenshot запрошен, MCP ожидает; ownpage1 не менять до завершения.
+Full65/11/13/14/15 OPEN; финальный internalPR не merge/approve.
+
 ## Checkpoint 08.10.2026 01:02 UTC
 
 HEAD/remote/Draft1800 5832482644ea29f4e4a2b634b76ad68a30b9eef0.

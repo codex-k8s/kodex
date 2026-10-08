@@ -248,6 +248,15 @@ const selectedImage = ref<AsyncEntityOption>();
 const imageArtifact = ref<RoleImageArtifact>();
 const imageLoading = ref(false);
 const imageProblem = ref<AppProblem>();
+const imageBadgeLabel = computed(() =>
+  imageLoading.value
+    ? t("common.loading")
+    : imageProblem.value
+      ? t("runtime.imageNeedsReplacement")
+      : imageArtifact.value
+        ? t("runtime.promotedAndVerified")
+        : t("runtime.imageInventoryUnavailable"),
+);
 let imageGeneration = 0;
 let imageController: AbortController | undefined;
 function cancelImageRequest(): void {
@@ -996,6 +1005,10 @@ async function publish(selected: string[]): Promise<void> {
       throw new Error("Published environment readback is unavailable");
     reauthRestored.value = false;
     sync(saved);
+    await loadImageArtifact(
+      saved.currentVersion.image.recipeRef,
+      saved.currentVersion.image.artifactRef,
+    );
     await runtime.loadEnvironmentVersions(ref, true, versionPageSize.value);
   } catch (error) {
     if (disposed) return;
@@ -1548,15 +1561,11 @@ onBeforeUnmount(() => {
                         ? 'ACCEPTED'
                         : imageProblem
                           ? 'CONFLICT'
-                          : 'PENDING'
+                          : imageLoading
+                            ? 'PENDING'
+                            : 'UNAVAILABLE'
                     "
-                    :label="
-                      imageArtifact
-                        ? $t('runtime.promotedAndVerified')
-                        : imageProblem
-                          ? $t('runtime.imageNeedsReplacement')
-                          : $t('common.loading')
-                    "
+                    :label="imageBadgeLabel"
                   />
                 </article>
 
