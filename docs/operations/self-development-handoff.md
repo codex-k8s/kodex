@@ -10,6 +10,77 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 15:56 UTC — оба исправления на стенде, combined PASS
+
+Source base709ca821, ветка kodex-agent/issue-1797-live-software-change-qa,
+семь файлов кода/тестов frozen. Combined file-manifest SHA
+8c6473f0310c5b1f6e622f4dd808f72fec2d4131b643e4f3bea1b15e0a3e3a9c.
+Полный CP module unit PASS; первый запуск FAIL из-за отсутствующего Node в
+изолированном PATH, повтор с Node24 PASS без правок кода. Scoped vet/SQL boundary
+PASS. Canonical disposable PostgreSQL три suites PASS39.897s, включая новую
+node-bound regression2.78s; fixture cleanup/readback PASS, живая БД не использована.
+
+Root build/source/Pod/serving ELF15c3aece96a81ef92c4bc7f0769be16d959257243a98f70a579167cc95d339f6
+EQUAL, serving/proc974. HTTP graph200 первого workflow15:53:10:42nodes,
+PLANNED-with-children0, ROOT_PROCESS children[], ровно source coordinator связан
+с INTAKE. Required Workflow origin и proxy parent root15:55:33 сохраняют exact
+child root; новые callback/coordinator nodes не наследуют чужие links.
+Это live query proof, не переписывание исторических delta/snapshots.
+
+Prompt owner projection даёт полный39-step DAG без bodies instructions/input/
+capabilities. Producer→current runtimecontract PASS, envelope v2/section shape
+и parser semantics неизменны; variable/materialization digests меняются при
+изменении publication. Native actual нового prompt ещё NOT RUN. Старый workflow
+FAILED сохранён, source-proven omission не выдаётся за полную live причинность.
+Console0/API200/realtime live/overflowfalse; screenshot повторно NOT RUN:
+existing MCP capture завис, очередь после прекращения ожидания восстановилась.
+Не обходить browser permission и не повторять capture бесконечно.
+
+Следующее: commit/push/Draft host QA по Issue1797, штатный bootstrap merge,
+fresh main/source readback, один новый ordinary Manager с точной schema и
+docs locator как данными → SOFTWARE_CHANGE → native команда/business PR/reviews.
+Full65 OPEN; final business PR не merge/approve. Owner demo не изменён.
+
+## Checkpoint 08.10.2026 15:32 UTC — bootstrap слит, реальный SOFTWARE_CHANGE запущен
+
+PR1800 MERGED штатным squash без обхода GitHub protection. Fresh main
+`709ca821a8dd19f9f80a8339eae6fe7faa5b7aea` совпадает с origin/main и GitHub;
+source/Pod hashes CP/GW/FE EQUAL,21deployments Ready. GitHub checks отсутствуют:
+это не CI PASS; адресные локальные проверки и live storage wake зафиксированы ниже.
+Продолжение host QA — ветка `kodex-agent/issue-1797-live-software-change-qa`
+от этого main, тот же Issue1797. Финальный business PR по Issue1796 не merge/approve.
+
+Ordinary Manager run_1KUJMOFT-KTx7R-xT_Xbbmr8 завершился SUCCEEDED, но
+семантически BLOCKED: отсутствовало доступное обычному сотруднику чтение input
+schema. Owner GET200 передал точную опубликованную схему как данные задания,
+без новых полномочий; продолжение run_-i-H07Jv_c9brW6HkYEByZRm вызвало
+launch_workflow SUCCEEDED ровно один раз. Принят real workflow
+run_5S7fqirFW-0J_DSWm9yW7L0H, target18/published wfv_4Jd_v_nm5K9-XQ07SC5UlHit.
+INTAKE run_5feK0U4sfIcN-_nhm05PpXTA выполняется; native Issue/repository READ
+подтвердил main709ca821, AGENTS.md EOF. Directory READ docs/governance вернул
+INTEGRATION_RESPONSE_INVALID; причина диагностируется, не выдаётся за PASS.
+
+Ранний ACK INTAKE CAPTURED, exact Pod UIDc0a940a2-1910-40b1-a414-d953af226723,
+NONE/G9/ENV9/binding10/tools38, task/provider/inbox digest fbbfc3c6…b59b0,
+instructions/file EQUAL. Same-Pod rejoin CAPTURED, runner image-file digest
+47a8fc35…66b3d EQUAL; это не serving-process proof. Task expected comparison
+NOT RUN. Ошибочный первый observer указал session корня вместо
+собственной session дочернего; NOT_CAPTURED не является provider failure.
+Screenshot NOT RUN, MCP DOM/API доступны. Full65 и business результат не завершены.
+Демонстрационные ресурсы владельца не изменялись.
+
+15:35UTC дополнение: root SOFTWARE_CHANGE FAILED/RUNTIME_WORKFLOW_INCOMPLETE
+после semantic STOP INTAKE и BLOCKED coordinator callback, sequence153.
+Callback native READ прочитал три дочерних артефакта до EOF; plan
+art_L8SKsRz-9oQ10wnIIGyMEnjV/revision22/digest ee79e921…dac2 сохраняет STOP.
+Directory FILE READ отклонён штатно: отдельная content.list существует,
+decoder bug не доказан. GOV-DOC-001: docs/governance/codification.md.
+Fresh claim точно pin-ит published workflow/stage и delegate targets, но
+semantic WORKFLOW_CONTEXT не содержит компактный полный DAG. Дорабатываются
+server-owned prompt projection и node-bound children graph projection;
+подтверждённый отказ не переименовывать в успех и не возобновлять ручным SQL.
+Новый retry/launch допустим после исправления причины и адресных проверок.
+
 ## Checkpoint 08.10.2026 15:16 UTC — realtime live PASS, source опубликован
 
 HEAD/remote/Draft1800 `d7fa89d04137cb5c97ae9fe654189184de29f13b` EQUAL.

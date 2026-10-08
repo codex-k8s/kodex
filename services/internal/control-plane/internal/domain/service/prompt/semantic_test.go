@@ -263,6 +263,50 @@ func TestOneAgentTemplateSupportsDirectAndWorkflowWithoutMarkerSuppression(t *te
 	}
 }
 
+func TestWorkflowPublicationContentSurvivesWithoutChangingEnvelope(t *testing.T) {
+	snapshot := semanticFixture()
+	snapshot.StructuredVariables = map[string]any{"workflow": map[string]any{
+		"publication": map[string]any{"revision_ref": "wfv_exact", "steps": []any{
+			map[string]any{"step_key": "step-002", "agent_ref": "agt_exact", "depends_on": []any{"step-001"}},
+		}},
+	}}
+	for _, text := range []string{"Agent", `Agent {{slot "WORKFLOW"}}`, `{{if false}}{{slot "WORKFLOW"}}{{end}} Agent`} {
+		result, err := Materialize(text, snapshot)
+		if err != nil || !result.Complete {
+			t.Fatalf("materialization: %v", err)
+		}
+		var workflowSections int
+		for _, section := range result.FullSections {
+			if section.Slot != SlotWorkflow {
+				continue
+			}
+			workflowSections++
+			var content map[string]json.RawMessage
+			if json.Unmarshal([]byte(section.Content), &content) != nil || content["publication"] == nil || !strings.Contains(string(content["publication"]), "wfv_exact") {
+				t.Fatal("mandatory workflow slot omitted published DAG")
+			}
+		}
+		if workflowSections != 1 || strings.Contains(result.SafePrompt, "wfv_exact") || strings.Contains(result.SafePrompt, "agt_exact") {
+			t.Fatal("workflow publication duplicated or leaked through safe preview")
+		}
+	}
+	snapshot.TargetKind = TargetAgent
+	result, err := Materialize("Agent", snapshot)
+	if err != nil || strings.Contains(result.Prompt, "wfv_exact") {
+		t.Fatal("ordinary agent received an inapplicable workflow slot")
+	}
+	snapshot.TargetKind = TargetWorkflowStage
+	snapshot.StructuredVariables = nil
+	result, err = Materialize("Agent", snapshot)
+	if err != nil || strings.Contains(result.Prompt, "publication") {
+		t.Fatal("absent owner publication was invented")
+	}
+	snapshot.StructuredVariables = map[string]any{"workflow": map[string]any{"publication": strings.Repeat("X", 256<<10)}}
+	if result, err := Materialize("Agent", snapshot); err == nil || result.Complete {
+		t.Fatal("oversized publication was truncated or accepted")
+	}
+}
+
 func TestSemanticDigestPinsLocaleAndContextWithoutChangingLegacy(t *testing.T) {
 	snapshot := semanticFixture()
 	first, _ := Materialize("Agent", snapshot)

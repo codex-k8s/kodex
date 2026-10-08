@@ -231,6 +231,117 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		}
 		return state, origin, root, exact, leases, turns
 	}
+	t.Run("node-bound-child-attribution", func(t *testing.T) {
+		assertChildren := func(root string, expected map[string][]string) {
+			t.Helper()
+			_, graph, err := service.GetRunGraph(ctx, owner, root)
+			if err != nil {
+				t.Fatal("read node-bound graph", err)
+			}
+			_, snapshot, err := service.GetRunGraphSnapshot(ctx, owner, root)
+			if err != nil {
+				t.Fatal("read complete node-bound snapshot", err)
+			}
+			actor, err := r.ResolvePrincipal(ctx, owner)
+			if err != nil {
+				t.Fatal("resolve verified node-bound actor", err)
+			}
+			currentScope, err := r.resolveScope(ctx, actor)
+			if err != nil {
+				t.Fatal("resolve node-bound owner", err)
+			}
+			seen := map[string]bool{}
+			for _, node := range graph.Nodes {
+				seen[node.Ref] = true
+				want := strings.Join(expected[node.Ref], ",")
+				if strings.Join(node.ChildRunRefs, ",") != want {
+					t.Fatalf("node %s (%s/%s) has unrelated children: got %v, want %v", node.Ref, node.Type, node.MaterializationState, node.ChildRunRefs, expected[node.Ref])
+				}
+				// Проверяем именно SQL producer event delta, а не копию snapshot.
+				delta, err := scanRunNode(pool.QueryRow(ctx, queryCommandsEmitruneventSelectNodeDelta, currentScope.organizationID, node.Ref))
+				if err != nil || strings.Join(delta.ChildRunRefs, ",") != want {
+					t.Fatal("event node delta differs from owner graph", err)
+				}
+				matched := false
+				for _, fullNode := range snapshot.Nodes {
+					if fullNode.Ref == node.Ref {
+						matched = strings.Join(fullNode.ChildRunRefs, ",") == want
+					}
+				}
+				if !matched {
+					t.Fatal("complete snapshot differs from owner graph")
+				}
+			}
+			for node := range expected {
+				if !seen[node] {
+					t.Fatal("expected owner-bound node is absent")
+				}
+				for _, child := range expected[node] {
+					found := false
+					for _, run := range snapshot.Runs {
+						found = found || run.Ref == child
+					}
+					if !found {
+						t.Fatal("complete snapshot omitted an attributed child")
+					}
+				}
+			}
+			events, _, _, err := service.ListRunEvents(ctx, owner, query.Filter{ResourceRef: root, Limit: 200})
+			if err != nil {
+				t.Fatal("read node-bound event projection", err)
+			}
+			for _, event := range events {
+				if node := event.Delta.Node; node != nil && node.State == "CANCELLED" && strings.Join(node.ChildRunRefs, ",") != strings.Join(expected[node.Ref], ",") {
+					t.Fatal("terminal event lost exact node-bound history")
+				}
+			}
+		}
+		agent := createLifecycleAgent(t, ctx, service, owner, project.Ref, "node-bound-manager", "Node-bound manager")
+		agent = *execute(command.ChangeAgentCapability, owner, "node-bound-delegate-cap", command.AgentBindingInput{AgentRef: agent.Ref, BindingRef: "platform.run.delegate", Enabled: true}, &agent.Version).Agent
+		ordinary := execute(command.LaunchRun, owner, "node-bound-ordinary", command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "AGENT", Ref: agent.Ref}, Task: "Delegate once."}, nil).Run
+		origin := claim("node-bound-ordinary-claim", ordinary.Ref)
+		delegated := execute(command.DelegateExecution, worker, "node-bound-ordinary-delegate", command.DelegateInput{LeaseRef: stringMap(origin, "leaseRef"), Fence: stringMap(origin, "fence"), Generation: runtimeRevisionMapInt64(origin, "generation"), TargetAgentRef: specialist.Ref, Task: "Exact child."}, nil).Run
+		ordinaryExpected := map[string][]string{stringMap(origin, "nodeRef"): {delegated.Ref}}
+		assertChildren(ordinary.Ref, ordinaryExpected)
+		cancelRun("node-bound-ordinary-cancel", ordinary.Ref)
+		assertChildren(ordinary.Ref, ordinaryExpected)
+
+		two := draft
+		two.Steps = append([]entity.WorkflowStep{}, draft.Steps...)
+		second := two.Steps[0]
+		second.Key, second.Position, second.Name = "unstarted", 2, "Unstarted"
+		two.Steps = append(two.Steps, second)
+		wf := execute(command.CreateWorkflow, owner, "node-bound-wf-create", command.WorkflowInput{ProjectRef: project.Ref, Name: "Node-bound workflow", Purpose: two.Purpose, CoordinatorAgentRef: coordinator.Ref, Draft: &two}, nil).Workflow
+		wf = execute(command.ValidateWorkflow, owner, "node-bound-wf-validate", command.WorkflowInput{Ref: wf.Ref}, &wf.Version).Workflow
+		wf = execute(command.PublishWorkflow, owner, "node-bound-wf-publish", command.WorkflowInput{Ref: wf.Ref}, &wf.Version).Workflow
+		root := execute(command.LaunchRun, owner, "node-bound-wf-root", command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "WORKFLOW", Ref: wf.Ref}, Task: "Keep unstarted step unbound."}, nil).Run
+		coord := claim("node-bound-coord", root.Ref)
+		first := execute(command.DelegateExecution, worker, "node-bound-first", command.DelegateInput{LeaseRef: stringMap(coord, "leaseRef"), Fence: stringMap(coord, "fence"), Generation: runtimeRevisionMapInt64(coord, "generation"), TargetAgentRef: specialist.Ref, WorkflowStepKey: "step", Task: "Launch nested workflow."}, nil).Run
+		expected := map[string][]string{stringMap(coord, "nodeRef"): {first.Ref}}
+		assertChildren(root.Ref, expected)
+		complete("node-bound-coord-complete", coord, true)
+		step := claim("node-bound-step", first.Ref)
+		nested := execute(command.LaunchWorkflowExecution, launcher, "node-bound-nested", command.LaunchWorkflowInput{LeaseRef: stringMap(step, "leaseRef"), Fence: stringMap(step, "fence"), Generation: runtimeRevisionMapInt64(step, "generation"), WorkflowRef: workflow.Ref, Task: "Exact required workflow."}, nil).Run
+		expected[stringMap(step, "nodeRef")] = []string{nested.Ref}
+		_, graph, err := service.GetRunGraph(ctx, owner, root.Ref)
+		if err != nil {
+			t.Fatal(err)
+		}
+		proxyFound, plannedFound := false, false
+		for _, node := range graph.Nodes {
+			if node.Type == "EXTERNAL_ACTION" && node.ParentNodeRef == stringMap(step, "nodeRef") {
+				expected[node.Ref] = []string{nested.Ref}
+				proxyFound = true
+			}
+			plannedFound = plannedFound || node.MaterializationState == "PLANNED"
+		}
+		if !proxyFound || !plannedFound {
+			t.Fatal("required proxy or unstarted sibling fixture absent")
+		}
+		assertChildren(root.Ref, expected)
+		cancelRun("node-bound-wf-cancel", root.Ref)
+		assertChildren(root.Ref, expected)
+	})
 	t.Run("workflow-input-inheritance", func(t *testing.T) {
 		inputDraft := draft
 		inputDraft.Name = "Immutable input workflow"

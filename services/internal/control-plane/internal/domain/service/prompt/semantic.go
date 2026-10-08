@@ -461,8 +461,12 @@ func semanticValues(snapshot Snapshot, data map[string]any, effective []string) 
 		"directory":   "/workspace/.kodex/outbox",
 		"instruction": resultInstruction,
 	}
+	workflowContext := map[string]any{"ref": workflow["ref"], "name": workflow["name"], "purpose": workflow["purpose"]}
+	if publication, ok := workflow["publication"]; ok {
+		workflowContext["publication"] = publication
+	}
 	values := map[SemanticSlot]string{
-		SlotWorkflow: encode(map[string]any{"ref": workflow["ref"], "name": workflow["name"], "purpose": workflow["purpose"]}), SlotStage: snapshot.WorkflowStage,
+		SlotWorkflow: encode(workflowContext), SlotStage: snapshot.WorkflowStage,
 		SlotPurpose: snapshot.Variables["task"], SlotExpectedResult: snapshot.Variables["step.expected_result"],
 		SlotInput: encode(input["values"]), SlotConstraints: "Only the effective capabilities and provided resources are available.",
 		SlotCapabilities: strings.Join(effective, "\n"), SlotFiles: encode(files),

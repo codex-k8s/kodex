@@ -10,6 +10,69 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 15:56 UTC — контекст процесса и связи узлов проверены
+
+Ветка kodex-agent/issue-1797-live-software-change-qa от main709ca821.
+Семь source/test файлов frozen, combined manifest8c6473f0…a3e3a9c.
+Полный CP unit PASS после исправления только isolated PATH (первый FAIL: Node
+не найден). Scoped vet/SQL boundary PASS; disposable PG suites readiness/cursor/
+WorkflowLaunch PASS39.897s, node-bound child regression2.78s. Child WT отдельно
+доказал настоящий RED старого SQL и GREEN16/16; fixture error не смешан с RED.
+Root source/Pod hashes EQUAL, build и serving/proc974 ELF15c3aece…339f6 EQUAL.
+
+Live graph20015:53:10: PLANNED-with-children0/root children[], actual INTAKE
+приписан только своему coordinator. Parent required launch graph20015:55:33
+сохраняет origin+proxy→exact child root; новое continuation execution не
+наследует прежний child. Правило одинаково для graph/full snapshot/event delta.
+GUIDE-DOC-006 закрепляет node-bound invariant и data-only published DAG.
+
+Компактная owner публикация включает exact revision/version/coordinator и
+все назначения/зависимости/parallel/Human Gate без тел чужих instructions и
+capabilities. Envelope v2 и opaque WORKFLOW content consumer не менялись;
+доказано изменение variable/materialization digests, privacy SafePreview и
+fail-closed размер. Native actual нового prompt NOT RUN. Первоначальный root
+FAILED не переписан; доказана source omission, не единственная live причина STOP.
+Console0/API200/realtime live/overflowfalse; screenshot NOT RUN. Далее publish/
+normal merge/fresh main → corrected ordinary Manager launch → native full39
+и business PR/reviews/final human gate. Пункты11/13/14/15 остаются открытыми.
+
+## Checkpoint 08.10.2026 15:33 UTC — fresh main и настоящий workflow Issue1796
+
+Bootstrap PR1800 MERGED штатным squash, без обхода защиты. GitHub/origin/main/
+local main `709ca821a8dd19f9f80a8339eae6fe7faa5b7aea` EQUAL; source/Pod CP/GW/FE
+EQUAL,21deployments Ready. GitHub checks отсутствуют, CI PASS не заявляется.
+Host QA продолжается от main в ветке `kodex-agent/issue-1797-live-software-change-qa`
+по Issue1797; финальный business PR внутренней команды по Issue1796 не merge/approve.
+
+Ordinary Manager первый ход semantic BLOCKED из-за недоступного schema read;
+продолжение той же session получило actual owner GET200 published schema как
+данные задания, без расширения authority. launch_workflow SUCCEEDED ровно один
+раз: root run_5S7fqirFW-0J_DSWm9yW7L0H, target18/published revision6
+wfv_4Jd_v_nm5K9-XQ07SC5UlHit. Coordinator штатно delegate_agent step-001;
+INTAKE run_5feK0U4sfIcN-_nhm05PpXTA выполняется. Native GitHub Issue/repository
+READ подтвердил main709ca821 и AGENTS.md EOF. Directory docs/governance READ
+вернул INTEGRATION_RESPONSE_INVALID; диагностика выполняется, не PASS.
+
+INTAKE provider ACK и same-Pod rejoin CAPTURED: NONE/G9/ENV9/binding10/tools38,
+Pod UIDc0a940a2-1910-40b1-a414-d953af226723, task/provider/inbox
+fbbfc3c696aea893be36c63cc47b91e397e10c9c1a636e21078065f57d8b59b0 EQUAL,
+instructions/file EQUAL; expected task comparison NOT RUN. Runner image-file
+47a8fc35…66b3d EQUAL, не serving-process proof. Первый observer с ошибочным
+root-session pin NOT_CAPTURED; это ошибка observer, не provider failure.
+Full65/business результат ещё OPEN, screenshot NOT RUN. Owner demo не изменялся.
+
+15:35UTC: root FAILED/RUNTIME_WORKFLOW_INCOMPLETE sequence153 после INTAKE
+semantic STOP и callback BLOCKED; технический child SUCCEEDED не является
+business PASS. Coordinator native READ трёх artifact до EOF подтвердил
+plan art_L8SKsRz-9oQ10wnIIGyMEnjV/revision22/digest ee79e921…dac2.
+FILE READ directory отклоняется намеренно, отдельный content.list уже есть;
+grants не расширяются. Исправляется компактная owner-проекция published DAG
+в prompt и node-bound атрибуция childRunRefs в графе. Живой retry ещё NOT RUN.
+15:39UTC owner GET child200 дал input2730B/SHAfbbfc3c6…b59b0 EQUAL provider ACK;
+это дополнительная независимая проверка Task, не переименование прежнего
+observer task_expected NOT RUN. 15:40UTC штатный reload: own cached FAILED/v3,
+realtime live/attempt0/Console0; постоянный realtime failure не доказан.
+
 ## Checkpoint 08.10.2026 15:16 UTC — живой storage wake подтверждён, пакет опубликован
 
 Source/remote/Draft1800 `d7fa89d04137cb5c97ae9fe654189184de29f13b` EQUAL,
