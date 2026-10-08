@@ -11991,3 +11991,41 @@ Screenshot NOT RUN/capture hang UNKNOWN. Демо не изменено. Native 
 EOF, Developer/reviews/final Gate033 всё ещё проверяются; checklist11/13/14/15
 не закрыты историческими smoke или адресными тестами. Финальный business PR
 не merge/auto-merge/owner approve.
+
+### 08.10.2026 18:30 UTC — native EOF выполнен, GitHub LIST закрыто остановил процесс
+
+На source51decc34/mainc9b899eb INTAKE завершён, Coordinator прочитал восемь
+артефактов до EOF. Architect run_DezlVquvBux12QRp9BOsTDxs самостоятельно
+прочитал пять handoff artifacts53813B и восемь обязательных документов159879B.
+ACK/rejoin CAPTURED; task4040B/SHA0d11d1ec8fc013f3a7ebdcdb4e7f3a909611a0dc82a88078560db681e45b512b
+EQUAL actual prompt/inbox, instructions45600B/c50db550…1e28 EQUAL.
+
+Invocation inv_LflDyiFVFgisQvPcZ8lTc97t github.repository.content.list на
+services/internal/control-plane/internal/repository/postgres/platform,
+ref c9b899eb4fe176573f1360e2ea44cbb19332cd5f: INTEGRATION_RESPONSE_INVALID.
+Точная локальная Git tree projection507 items, items94887B, summary102009B
+при64KiB cap. Remote raw response не захвачен; механизм текущего unpaged
+adapter доказан исходным кодом и проекцией, RED/GREEN fix ещё выполняется.
+Contents API upstream1000-directory cap подтверждён официальной документацией
+GitHub через Context7; будущая выдача должна закрыто отклонять потенциально
+усечённый каталог, закреплять commit/digest и расходовать byte-bounded pages.
+
+Architecture artifact art_vqIOdh7_pTjRg9WMALWMl4qT/rev10/17722B,
+SHA6de9f508298140e3bd0d7c746287493ebc0c7fc75b1067aaca815e3d284e3c13,
+owner DOWNLOAD200/hash EQUAL. Coordinator EOF17722/17722, semantic STOP
+соблюдён. Full39 run_hlDPZ_fbxbIeGsUhFh7OE7-R и ordinary Manager FAILED.
+Developer, четыре reviews и Gate033 NOT RUN; old root не Retry.
+
+Owner параллельные downloads18:16 дали412/503, последовательные повторные
+чтения200/hash EQUAL. Cause UNKNOWN; native чтения PASS не заменяют факт
+первичного owner-path отказа. Ошибка read_file134/file_input_invalid была
+исправлена самим агентом корректировкой arguments; это не повтор40001.
+
+Server WebSocket trace: READY26221 → RESYNC_REQUIRED26272/
+AUTHORITATIVE_READ_REQUIRED → close4000/wasClean=true → READY26272.
+Payload/credentials не записывались; observer не охватывал DELTA, поэтому
+пропуск событий не доказан. Readonly source сверка19 event pairs/schema/
+subject/UTF8/frame cap mismatch[]; live причина lag/queue UNKNOWN.
+Никакого ослабления cursor/authority. Screenshot NOT RUN/capture hang UNKNOWN.
+Демо не изменено. Далее LIST fix в PR1805, native definition rebind и свежий
+полный Workflow; checklist11/13/14/15 OPEN, цель ACTIVE.

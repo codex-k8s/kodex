@@ -10,6 +10,41 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 18:30 UTC — полный процесс остановлен на GitHub LIST
+
+Ветка kodex-agent/issue-1797-full39-qa, Draft PR1805, исходный SHA51decc34
+на main c9b899eb. INTAKE run_fHAjpRgte0HpgQHgGr0MYg34 завершён;
+Coordinator самостоятельно прочитал его восемь артефактов до EOF.
+Architect run_DezlVquvBux12QRp9BOsTDxs: ранний ACK/rejoin CAPTURED,
+own input4040B SHA0d11d1ec8fc013f3a7ebdcdb4e7f3a909611a0dc82a88078560db681e45b512b
+EQUAL actual task/inbox; инструкции45600B/c50db550…1e28 EQUAL. Собственный
+handoff53813B и обязательные документы159879B прочитаны до EOF.
+
+Architecture review семантически BLOCKED: github.repository.content.list
+для services/internal/control-plane/internal/repository/postgres/platform
+на exact c9b899eb вернул INTEGRATION_RESPONSE_INVALID. Точная локальная Git
+проекция содержит507 элементов; двойная JSON-сериализация102009B превышает
+64KiB. Это доказательство механизма, не захваченный remote response.
+Owner DOWNLOAD architecture-review.md200/17722B/rev10,
+SHA6de9f508298140e3bd0d7c746287493ebc0c7fc75b1067aaca815e3d284e3c13 EQUAL;
+Coordinator прочитал весь review до EOF и не продолжил запрещённые стадии.
+Manager run_TAs8_e4U5myrunCXDlmcJWWt и full39 run_hlDPZ_fbxbIeGsUhFh7OE7-R
+FAILED; старые root не Retry. Developer/reviews/Gate033 NOT RUN.
+
+Следующее: GitHub5.0.0 с commit-pinned offset/limit и проверяемым digest
+полного каталога; byte-bounded страницы без повышения64KiB. Contents API
+при1000 элементах закрыто отклоняется как потенциально усечённый. После
+адресных проверок — compiled source/Pod readback и штатная новая revision
+definition/rebind/test/grants, затем один новый ordinary Manager/full39.
+
+Chrome записал настоящий server PLATFORM_RESYNC_REQUIRED26272 после
+READY26221, close4000/wasClean=true, затем READY26272 на новой connection.
+Wire/schema mismatch не найден; live причина outbox lag/queue race UNKNOWN.
+Наблюдатель не записывал DELTA, поэтому отсутствие событий не доказано.
+Первое параллельное owner download артефактов дало412/503, последовательный
+повтор200/hash EQUAL; причина начального отказа UNKNOWN, native EOF PASS.
+Screenshot NOT RUN/capture hang UNKNOWN. Демо не менялось, Full65 OPEN.
+
 ## Checkpoint 08.10.2026 18:07 UTC — PR1804 слит, один свежий полный процесс
 
 PR1804 слит обычным squash: author188426c9ef738509784b797d4a36b454e3365d06,
