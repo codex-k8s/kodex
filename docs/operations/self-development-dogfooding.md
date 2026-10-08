@@ -10,6 +10,37 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 07:06 UTC — native full33 запущен, мобильная карточка исправлена
+
+- Source/remote/Draft1800 `104f8fa16c7a1f8a7bf5db99df3f41e43bf160ca`
+  EQUAL; fresh main b5f6fcde, Issues1797/1796 OPEN. Следующий UI-only пакет
+  сохраняет прежний fix выбора инструментов и не меняет опубликованные ENV.
+- Actual ordinary Manager самостоятельно выполнил один launch_workflow:
+  `run_OK71xRY6HCjPhETbezFzuCdB`, RUNNING,35nodes/33stages, published
+  `wfv_EqR96za6ufj4wMoieQv_TIvI`. Coordinator SUCCEEDED; его early ACK
+  NOT_CAPTURED до cleanup, отдельный PASS по материализации не заявляется.
+  Owner graph200 подтвердил дочерний INTAKE `run_pQO-EQfMEowYV0PFsKUFSxiC`
+  и точное parentNodeRef. INTAKE early ACK/sameUID rejoin CAPTURED/EQUAL:
+  task/provider/inbox SHA2dff7e31…9619, instructions8d87b84d…,
+  G8/binaryf3f14de8 FILE_ONLY. Exact observer продолжается; отсутствие capture
+  по бюджету первого наблюдения не трактуется как provider failure.
+  Stage deadline07:11:34UTC, workflow clock86400s закреплён сервером.
+- Исправлена мобильная карточка выбранного образа: title и status badge
+  переносятся, полные reference/ref доступны под закрытым «Подробнее».
+  ROOT73unit/4suites (57+16), scoped eslint/prettier/forced typecheck/build9.90s
+  PASS. Изолированный regression RED1FAIL/5PASS→GREEN51PASS сохранён отдельно.
+  ROOT Chrome500×844/390×844/2179×994 screenshots, геометрия overlapfalse/
+  overflowfalse, раскрытие reference внутри карточки390px PASS; tools38из42
+  сохранены. Console0/relevant GET200. Host/Pod editor SHA
+  `caad71f5098139f5ae719532e0ca0d5b911125ed7d6250645463aa93f5217c8a`
+  и layout unit SHAa4d8b816…64b23d EQUAL на прежнем frontend UID.
+  Прежние chunk и limited-locale fixture warnings не скрыты.
+- Дальше actual INTAKE/Architect/Developer/Documentation/Security/Lexical,
+  их prompts/pins, Developer PR и внутренний review/fix цикл.
+  Full65/11/13/14/15 и fresh-main acceptance остаются OPEN/NOT RUN;
+  один launch или UI smoke не доказывают завершение dogfooding.
+  Draft1800 сохраняется; итоговый business PR не merge/approve.
+
 ## Checkpoint 08.10.2026 06:48 UTC — четыре окружения и восемь привязок обновлены
 
 - База `b78d874f8614226c9f2324ad0fee13fcd86c54bc`, remote/Draft1800 EQUAL.

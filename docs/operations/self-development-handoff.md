@@ -10,6 +10,38 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 07:06 UTC
+
+База/remote/Draft1800 `104f8fa16c7a1f8a7bf5db99df3f41e43bf160ca` EQUAL;
+fresh main `b5f6fcde885c4e6369255a86559b3ed2c785043f`, Issues1797/1796 OPEN.
+Текущий пакет: только template/CSS карточки PROJECT image, layout unit и журнал.
+ROOT73unit (57+16), scoped lint/format/forced typecheck/build9.90s PASS.
+Chrome actual500×844/390×844/2179×994 screenshots PASS: title/badge не пересекаются,
+overflowfalse, полная ссылка/ref под «Подробнее»; раскрытие на390px остаётся
+внутри карточки. Выбор38из42 сохранён; Console0 и relevant GET200.
+Host/Pod editor SHA caad71f5…217c8a и layout test a4d8b816…64b23d EQUAL,
+same frontend UID2b84f539-b893-41af-a0d2-aa61311d1579. Предыдущий selectImage
+fix сохранён, API/authority/published ENV не менялись. Прежний chunk warning
+и limited-locale test warning сохранены.
+
+Ordinary Manager `run_smv87THy-ht62Ul3PLL_cCv7` сам выполнил один launch_workflow.
+Workflow `run_OK71xRY6HCjPhETbezFzuCdB` RUNNING,35nodes/33planned stages;
+version `wfv_EqR96za6ufj4wMoieQv_TIvI`. Coordinator node
+`nod_s81Yp3UviZK-Qm5Kf8ttKQBJ` SUCCEEDED; early ACK не успел до cleanup,
+NOT_CAPTURED, не выдавать за PASS. Actual owner graph GET200 подтвердил
+INTAKE `run_pQO-EQfMEowYV0PFsKUFSxiC`, node
+`nod_HeESbWwnVOztQC-ZIiUMnXeX`, parent Coordinator, RUNNING.
+Session `ses_hpt1_aibiEtBnWc3g08Rss-W`, turn
+`trn_C5bV9We8xj7OiCUTXKEZG3o3`/attempt1, Pod
+runtime-turn-f74878c32abf4901 UID6215732a-fea0-48d8-97f9-c69ad1e9e5d2.
+INTAKE early ACK/task/provider/inbox/instructions EQUAL; G8 и binary f3f14de8
+FILE_ONLY EQUAL. Exact failure observer и bounded lineage watcher активны
+до07:29:43UTC; первый короткий observer NOT_CAPTURED по бюджету, не provider FAIL.
+Immutable stage clock started06:51:34/deadline07:11:34; ожидания clock не сбрасывают.
+Нового Manager/retry/Workflow не запускать. Далее дождаться INTAKE→Architect→
+Developer PR→internalreviews/fixes до5→READY_FOR_HUMAN_REVIEW. Full65 ещё OPEN.
+Собственная Chrome page1, reload≤5мин; Draft1800, business PR NOmerge/approve.
+
 ## Checkpoint 08.10.2026 06:48 UTC
 
 База/remote/Draft1800 `b78d874f8614226c9f2324ad0fee13fcd86c54bc` EQUAL.

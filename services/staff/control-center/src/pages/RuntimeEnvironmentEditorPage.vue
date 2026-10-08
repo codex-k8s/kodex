@@ -1581,23 +1581,29 @@ onBeforeUnmount(() => {
                   :aria-busy="imageLoading"
                 >
                   <Boxes :size="22" aria-hidden="true" />
-                  <div>
-                    <strong>{{ selectedImage.title }}</strong>
-                    <p>{{ selectedImage.description }}</p>
-                    <code>{{ input.imageArtifactRef }}</code>
+                  <div class="selected-image__content">
+                    <div class="selected-image__header">
+                      <strong>{{ selectedImage.title }}</strong>
+                      <StatusBadge
+                        class="selected-image__badge"
+                        :state="
+                          imageArtifact
+                            ? 'ACCEPTED'
+                            : imageProblem
+                              ? 'CONFLICT'
+                              : imageLoading
+                                ? 'PENDING'
+                                : 'UNAVAILABLE'
+                        "
+                        :label="imageBadgeLabel"
+                      />
+                    </div>
+                    <details class="selected-image__details">
+                      <summary>{{ $t("common.details") }}</summary>
+                      <p>{{ selectedImage.description }}</p>
+                      <code>{{ input.imageArtifactRef }}</code>
+                    </details>
                   </div>
-                  <StatusBadge
-                    :state="
-                      imageArtifact
-                        ? 'ACCEPTED'
-                        : imageProblem
-                          ? 'CONFLICT'
-                          : imageLoading
-                            ? 'PENDING'
-                            : 'UNAVAILABLE'
-                    "
-                    :label="imageBadgeLabel"
-                  />
                 </article>
 
                 <RuntimeEnvironmentToolsEditor
@@ -2385,7 +2391,7 @@ onBeforeUnmount(() => {
 }
 .selected-image {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: 22px minmax(0, 1fr);
   align-items: start;
   gap: 12px;
   padding: 14px;
@@ -2393,17 +2399,46 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   background: var(--surface);
 }
+.selected-image__content {
+  min-width: 0;
+}
+.selected-image__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
+}
+.selected-image__header > strong {
+  flex: 1 1 180px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.selected-image__badge {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.selected-image__details {
+  min-width: 0;
+  margin-top: 6px;
+  font-size: 12px;
+}
+.selected-image__details > summary {
+  cursor: pointer;
+}
 .selected-image p {
   margin: 3px 0 0;
   color: var(--text-secondary);
+  overflow-wrap: anywhere;
 }
 .selected-image code {
   display: block;
-  overflow: hidden;
+  overflow-wrap: anywhere;
   margin-top: 6px;
   color: var(--text-secondary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 .capability-row > svg,
 .readiness-icon {
