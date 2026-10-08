@@ -10,6 +10,39 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 06:12 UTC
+
+HEAD/remote/Draft1800 `954e7329074a8ba8c7f95c417c5026cf5cb4bba5` EQUAL.
+ABI9/revision3 runner/provenance/import2nodes/seed/fresh render/migration/
+supply-chain apply+readback PASS; все пять deployments1/1 Ready.
+Runner manifest a577e54e…e4da7a, binary f3f14de8…33d7,
+policy d2ed2dcd…b1247, render SHA09695a7a…d44659. Default Go1.27.1 render
+FAIL без apply; pinned Go1.26.6 repeat PASS. Не применять старый render.
+
+Owner UI обе own recipes обновлены ровно один раз: SYSTEMG14/version23,
+PROJECTG8/version15, builds COMPLETED. SYSTEM artifact
+`imgart_UhpyoGADewVB_yWtW_TZEZVv` отвергнут из-за прежних двух HIGH undici/tar.
+Штатное exact local risk decision `imgrisk_oRKpDC5xF_Ci9w0kVgMBDDcx`
+создано один раз; admission2 PENDING, promotion NOT RUN. PROJECT scan/sign
+Jobs прошли, admission выполняется. Не повторять rebuild/risk decision.
+Следом exact report/readback, admit/promote, image-only own ENV, затем native
+PREPARE_RUNTIME_ENVIRONMENT_REVISION двух WRITE/REVIEW ENV с параметрами только
+environmentRef и новый PROJECTG8 imageArtifactRef. Owner Validate/Apply,
+validate draft/impact/select WRITE1 или REVIEW5/publish. Tools38/public values/
+secret descriptors/policy/grants не менять; fresh8bindings и120grants сверить.
+
+Source-first editor desktop screenshot/Console0/overflowfalse PASS;
+новый mobile NOT RUN. AuthGate только loading presentation исправлен:
+checking без ложного «Вход в Kodex», ROOT41unit/lint/format/typecheck/build9.88s
+PASS; прежний chunk warning сохранён, store/SSO/renewal неизменны. Exact8
+host/Pod source hashes и sameUID rejoin PASS; Chrome AuthGate transformed
+module200/new guard и Console0 PASS. Пакет2 UIfiles плюс эти2 docs фиксируется.
+Пойманный live loading state/Go compiled ELF NOT RUN. Full65/11/13/14/15 OPEN.
+Chrome собственная вкладка1, чужие не трогать; reload≤5мин. SSO фактическое
+absolute expiry06:27UTC, продление12ч не доказано. Новый ordinary Manager
+revision5/full33 подготовлен, не запускать до fresh own/team ABI9 ACK.
+Итоговый business PR NOmerge/approve; Draft1800 сохраняется.
+
 ## Checkpoint 08.10.2026 05:44 UTC
 
 ROOT старый согласованный supply-chain-quiesce apply/readback EXIT0/PASS;

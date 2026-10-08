@@ -10,6 +10,46 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 06:12 UTC — ABI9 активирован, новые образы проверяются
+
+- Source/remote/Draft1800 `954e7329074a8ba8c7f95c417c5026cf5cb4bba5`
+  EQUAL. Новый immutable runner build/provenance/import на обе ноды PASS;
+  component seed PASS. Fresh render с pinned Go1.26.6 и согласованный
+  repo-owned supply-chain apply/readback EXIT0/PASS. Новая forward-only
+  migration выполнена до запуска CP; все пять deployments1/1 Ready.
+  Первый render FAIL/GO_TOOLCHAIN_MISMATCH при default Go1.27.1 не применялся;
+  повтор с правильным toolchain PASS. Старый render не использовался.
+- Runner manifest `a577e54e045b8629ae2956e7b8647abd41b9226ba53f4bf2cc5bcec3f7e4da7a`,
+  binary `f3f14de81e5db6429a3a4c848dfe95ad629a70a536fb3399cec875b9ccb333d7`,
+  RunnerInputv9/role contract3; policy SHA
+  `d2ed2dcd9879704b827f99c5eab45121c92f5576ffed4f7af87d7b10cd5b1247`.
+  Новый render SHA
+  `09695a7af9fe9e6c90b644e5e83ed6acd4388227f844b988728a0aeb53d44659`.
+  Это точный локальный rollout, не full QA или release acceptance.
+- Existing owner UI UPDATE создал ровно SYSTEMG14 и PROJECTG8; обе сборки
+  COMPLETED. SYSTEM artifact `imgart_UhpyoGADewVB_yWtW_TZEZVv` первоначально
+  REJECTED: ровно2 блокирующих HIGH, undici6.27.0/GHSA-rfgv-xxqx-mfg5 и
+  tar7.5.19/GHSA-r292-9mhp-454m. Полный report4640matches/2938advisories
+  сохранён. Exact локальное риск-решение `imgrisk_oRKpDC5xF_Ci9w0kVgMBDDcx`
+  принято один раз штатно, повторный admission PENDING; это ещё не ACCEPTED.
+  PROJECT штатные claim/scan/sign Jobs SUCCEEDED, admission ещё выполняется.
+  Promotion и переключение ENV/bindings пока NOT RUN, повторных rebuild нет.
+- Source-first редактор образа: actual desktop2179×994 screenshot PASS,
+  Dockerfile/создание ревизии перед закрытым отчётом, код440px, overflowfalse,
+  Console0 и relevant GET200. Mobile нового пакета NOT RUN.
+- Обнаружен отдельный UX defect: checking session показывал заголовок входа
+  до ответа API, хотя последующий session200 подтверждал действующую сессию.
+  Минимальный AuthGate fix скрывает только ложный заголовок при checking;
+  401/error/forbidden и SSO authority/TTL не изменены. ROOT41unit1.54s,
+  scoped lint/format/forced typecheck/build9.88s PASS; прежний chunk warning
+  сохранён. Context7 Vue conditional rendering и SSR checked. Exact8 host/Pod
+  source hashes и sameUID rejoin CP/RC/frontend PASS. Chrome transformed
+  AuthGate module200 содержит новый checking guard; Console0, обычный editor
+  открывается. Compiled Go ELF и пойманный live loading state пока NOT RUN.
+- Full65/11/13/14/15 OPEN. Следом: admit/promote оба own artifacts, image-only
+  собственные ENV, native WRITE/REVIEW plans, preservation четырёх ENV/восьми
+  bindings/120grants, fresh ACK и обычный Manager revision5/full33.
+
 ## Checkpoint 08.10.2026 05:44 UTC — согласованная остановка и перенос ABI9
 
 - Цель ACTIVE до14:00 Саратов; Full65/11/13/14/15 OPEN. Работа продолжается
