@@ -241,6 +241,10 @@ class CaptureTests(unittest.TestCase):
         parser = (source / 'parser.go').read_text()
         reasons = set(re.findall(r'tokenUsage\w+\s+tokenUsageFailureReason = "([A-Z_]+)"', parser))
         self.assertEqual(CAPTURE.TOKEN_USAGE_ERRORS, reasons)
+        usage_guard = process.split('var usageFailure *tokenUsageFailure', 1)[1].split(
+            'return &appServerCallFailure', 1)[0]
+        self.assertEqual(CAPTURE.TOKEN_USAGE_METHODS,
+                         set(re.findall(r'method == "([A-Za-z/._]+)"', usage_guard)))
         methods = parser.split('var serverNotificationMethods = stringSet(', 1)[1].split(')', 1)[0]
         broker = (source / 'broker.go').read_text()
         additional = broker.split('func safeNotificationMethod(', 1)[1].split('default:', 1)[0]
@@ -255,21 +259,47 @@ class CaptureTests(unittest.TestCase):
 
     def test_closed_token_usage_reasons_bind_exact_method_and_preserve_privacy(self):
         for reason in CAPTURE.TOKEN_USAGE_ERRORS | {'TOKEN_USAGE'}:
-            with self.subTest(reason=reason):
-                parsed = CAPTURE.parse_line(request(detail='NOTIFICATION_INVALID',
-                    notification='thread/tokenUsage/updated', notification_error=reason))
-                self.assertEqual(parsed['notification_error'], reason)
-                self.assertNotIn(SENTINEL, json.dumps(parsed))
-                self.assertEqual(set(parsed), {'kind', 'stage', 'class', 'detail', 'rpc_code',
-                                              'notification', 'account_read', 'notification_error'})
-                if reason != 'TOKEN_USAGE':
+            for method in CAPTURE.TOKEN_USAGE_METHODS:
+                with self.subTest(reason=reason, method=method):
+                    parsed = CAPTURE.parse_line(request(detail='NOTIFICATION_INVALID',
+                        notification=method, notification_error=reason))
+                    self.assertEqual(parsed['notification_error'], reason)
+                    self.assertEqual(parsed['notification'], method)
+                    self.assertNotIn(SENTINEL, json.dumps(parsed))
+                    self.assertEqual(set(parsed), {'kind', 'stage', 'class', 'detail', 'rpc_code',
+                                                  'notification', 'account_read', 'notification_error'})
+            if reason != 'TOKEN_USAGE':
+                for method in CAPTURE.NOTIFICATIONS - CAPTURE.TOKEN_USAGE_METHODS:
+                    with self.subTest(reason=reason, foreign_method=method), self.assertRaisesRegex(
+                            CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$'):
+                        CAPTURE.parse_line(request(detail='NOTIFICATION_INVALID',
+                            notification=method, notification_error=reason))
+        for method in CAPTURE.TOKEN_USAGE_METHODS:
+            with self.subTest(method=method), self.assertRaisesRegex(
+                    CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$') as caught:
+                CAPTURE.parse_line(request(detail='NOTIFICATION_INVALID',
+                    notification=method, notification_error='TOKEN_USAGE_'+SENTINEL))
+            self.assertNotIn(SENTINEL, str(caught.exception))
+
+    def test_new_usage_receipt_diagnostics_pass_exact_capture_and_remain_private(self):
+        for reason in ('TOKEN_USAGE_RECEIPT_CONFLICT', 'TOKEN_USAGE_RECEIPT_LIMIT', 'TOKEN_USAGE_OVERFLOW'):
+            for method in ('thread/tokenUsage/updated', 'rawResponse/completed'):
+                with self.subTest(reason=reason, method=method):
+                    diagnostic = request(detail='NOTIFICATION_INVALID', notification=method,
+                                         notification_error=reason)
+                    result, _, followed, closed = self.exercise(diagnostic=diagnostic)
+                    self.assertEqual(result['diagnostic']['notification_error'], reason)
+                    self.assertEqual(result['diagnostic']['notification'], method)
+                    self.assertEqual(result['rejoin'], 'VERIFIED')
+                    self.assertEqual(len(followed), 1)
+                    self.assertEqual(closed, [True])
+                    self.assertNotIn(SENTINEL, json.dumps(result))
+                    self.assertEqual(CAPTURE.diagnostic_from_chunks(iter([diagnostic])), result['diagnostic'])
+            for method in ('rawResponse/other', SENTINEL):
+                with self.subTest(reason=reason, method=method):
                     with self.assertRaisesRegex(CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$'):
                         CAPTURE.parse_line(request(detail='NOTIFICATION_INVALID',
-                            notification='item/started', notification_error=reason))
-        with self.assertRaisesRegex(CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$') as caught:
-            CAPTURE.parse_line(request(detail='NOTIFICATION_INVALID',
-                notification='thread/tokenUsage/updated', notification_error='TOKEN_USAGE_'+SENTINEL))
-        self.assertNotIn(SENTINEL, str(caught.exception))
+                            notification=method, notification_error=reason))
 
     def test_unknown_or_malformed_diagnostic_never_reflects_sentinel(self):
         for field in ('stage', 'category', 'detail', 'notification', 'account', 'notification_error', 'code'):

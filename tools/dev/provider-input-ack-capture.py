@@ -65,7 +65,7 @@ NUMBER_FIELDS = ('attempt', 'lease_generation', 'runtime_revision_version',
                  'image_recipe_generation', 'provider_prompt_bytes', 'instructions_bytes')
 
 
-def project_ack(record, run_ref, assistant_scope='NONE'):
+def project_ack(record, run_ref, assistant_scope='NONE', expected_project_ref=None):
     """Никогда не возвращает log envelope, raw body, tool commands или grants."""
     if not isinstance(record, dict) or record.get('event') != EVENT:
         return None
@@ -75,13 +75,17 @@ def project_ack(record, run_ref, assistant_scope='NONE'):
         return None
     require(assistant_scope in ('NONE', 'PROJECT', 'SYSTEM') and
             source.get('assistant_scope') == assistant_scope, 'ACK_SCOPE_INVALID')
-    # Только явно выбранный организационный SYSTEM без project. Обычный NONE
-    # и PROJECT сохраняют строгий project pin; неизвестный scope не fallback.
-    if assistant_scope == 'SYSTEM':
+    require(expected_project_ref is None or matches(REF, expected_project_ref),
+            'EXPECTED_PROJECT_REFERENCE_INVALID')
+    # Project — контекст экрана, не источник SYSTEM authority. Непустой контекст
+    # принимается лишь с явным exact pin; без него SYSTEM остаётся глобальным.
+    if expected_project_ref is not None:
+        require(source.get('project_ref') == expected_project_ref, 'EXPECTED_PROJECT_PIN_MISMATCH')
+    elif assistant_scope == 'SYSTEM':
         require(source.get('project_ref', '') == '', 'ACK_PROJECT_SCOPE_INVALID')
     result = {'assistant_scope': assistant_scope}
     for field in REF_FIELDS:
-        if field == 'project_ref' and assistant_scope == 'SYSTEM':
+        if field == 'project_ref' and assistant_scope == 'SYSTEM' and expected_project_ref is None:
             continue
         require(matches(REF, source.get(field)), 'ACK_REFERENCE_INVALID')
         result[field] = source[field]
@@ -122,7 +126,7 @@ def project_ack(record, run_ref, assistant_scope='NONE'):
     return result
 
 
-def ack_from_logs(raw, run_ref, assistant_scope='NONE'):
+def ack_from_logs(raw, run_ref, assistant_scope='NONE', expected_project_ref=None):
     require(len(raw) <= 512 << 10, 'LOG_SIZE_LIMIT')
     found = []
     for line in raw.splitlines():
@@ -133,7 +137,7 @@ def ack_from_logs(raw, run_ref, assistant_scope='NONE'):
             record = json.loads(line, object_pairs_hook=unique)
         except (ValueError, UnicodeError):
             raise Failure('ACK_JSON_INVALID') from None
-        proof = project_ack(record, run_ref, assistant_scope)
+        proof = project_ack(record, run_ref, assistant_scope, expected_project_ref)
         if proof is not None and proof not in found:
             found.append(proof)
     require(len(found) <= 1, 'MULTIPLE_ACK_TUPLES')
@@ -217,6 +221,9 @@ def list_pods(read):
 
 def capture(options, read=kube, now=time.monotonic, sleep=time.sleep, on_ack=None):
     require(options.assistant_scope in ('NONE', 'PROJECT', 'SYSTEM'), 'ASSISTANT_SCOPE_INVALID')
+    expected_project_ref = getattr(options, 'expected_project_ref', None)
+    require(expected_project_ref is None or matches(REF, expected_project_ref),
+            'EXPECTED_PROJECT_REFERENCE_INVALID')
     deadline = now() + options.timeout_seconds
     while now() < deadline:
         selected = []
@@ -235,7 +242,7 @@ def capture(options, read=kube, now=time.monotonic, sleep=time.sleep, on_ack=Non
                             '--tail=256', '--limit-bytes=524288', '--timestamps=false'])
             except Failure:
                 continue
-            proof = ack_from_logs(raw, options.run_ref, options.assistant_scope)
+            proof = ack_from_logs(raw, options.run_ref, options.assistant_scope, expected_project_ref)
             if proof is not None:
                 selected.append((pod, proof))
         require(len(selected) <= 1, 'MULTIPLE_ACK_PODS')
@@ -290,6 +297,8 @@ def main():
     parser = PrivateArgumentParser(description=__doc__)
     parser.add_argument('--run-ref', required=True)
     parser.add_argument('--assistant-scope', choices=('NONE', 'PROJECT', 'SYSTEM'), default='NONE')
+    parser.add_argument('--expected-project-ref',
+                        help='Exact project context pin; SYSTEM without this flag requires no project')
     parser.add_argument('--pod-name')
     parser.add_argument('--session-ref')
     parser.add_argument('--turn-ref')
@@ -300,6 +309,8 @@ def main():
     parser.add_argument('--timeout-seconds', type=int, default=30)
     options = parser.parse_args()
     require(matches(REF, options.run_ref), 'RUN_REFERENCE_INVALID')
+    require(options.expected_project_ref is None or matches(REF, options.expected_project_ref),
+            'EXPECTED_PROJECT_REFERENCE_INVALID')
     for field in ('session_ref', 'turn_ref'):
         require(getattr(options, field) is None or matches(REF, getattr(options, field)), 'REFERENCE_INVALID')
     require(options.pod_name is None or matches(r'[a-z0-9-]{1,253}', options.pod_name), 'POD_NAME_INVALID')

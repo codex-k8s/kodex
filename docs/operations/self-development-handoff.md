@@ -10,6 +10,25 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 02:11 UTC
+
+HEAD27c5f985/remote/Draft1800 EQUAL до новых observer5files и этого journal.
+ROOT общий observer74 PASS1.523s, исходный66/FAIL1 enum drift сохранён.
+ACK --expected-project-ref точный opt-in SYSTEMcontext, defaultempty unchanged;
+usage reasons/methods синхронизированы с producer, numeric runtime не менялся.
+PROJECT smoke run_6MNW1hzhCQnksm2e2m4Psni4 SUCCEEDED: Context7/READMEEOF4375B,
+earlyACK/rejoin/task/inbox/instructions/pins EQUAL, ENVset9/runtime10/binding9/G7,
+PodUIDd6b1cae3-1d91-4aa9-af47-cc3972364148, binaryfile-onlyEQUAL, screenshotPASS.
+SYSTEM run_CDwIJdg-LeCOzNBi7Sl8wNt7 SUCCEEDED2 web/context; nativeGitHubREAD
+непредоставлен, publicwebrepositorysmoke ещёOPEN. Старый SYSTEMcollectorFAIL
+оснастки/полныйACKNOTRUN; следующий SYSTEMsmoke capture с exactprojectopt-in.
+Delayed-create livePASS: held controlsdisabled/markerA сохранён, onePOST201B,
+returnA draftEQUAL, noPOSTturns, fetchrestored/markercleared. Две пустые fixtures
+cnv_wna6uFjGc6egdOR0Qa-6eBPB/cnv_lN1zsaIb-K1C7ZQ8qM8q1ilA ACTIVE/turns0.
+Manager run_PS6YI_JYpT4abCl059kfeRjS RUNNING2/179pages/offset366550/noerrors,
+observer41860 active; не дублировать. Full65/11/13/14/15 OPEN; послеEOFartifact
+ONE full33 managerRevision3Task. Следующий publisherprevious27c5f985.
+
 ## Checkpoint 08.10.2026 01:58 UTC
 
 HEAD07808a24, runner compiled58324826/G7. ONE Manager EOF остаётся

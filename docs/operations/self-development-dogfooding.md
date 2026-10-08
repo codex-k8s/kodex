@@ -10,6 +10,55 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 02:11 UTC — PROJECT smoke и диагностическая оснастка
+
+- [x] Новый PROJECT G7 smoke `run_6MNW1hzhCQnksm2e2m4Psni4` SUCCEEDED,
+  conversation`cnv_eXR0sFZFIMT2bvwAM9ez3AMc`,
+  session`ses_a4YHUbL99DogHZhyTjKP7QdB`,
+  turn`trn_v0im4VD2_dX_RdNHrevvgYVK`/attempt1. Реальные Context7 resolve/query,
+  github.branch.read и три github.repository.content.read завершились.
+  README4375Б прочитан до eof=true на mainb5f6fcde/blobd93bb23e,
+  sourceSHAb270c5a8; PROJECT identity/контекст экрана подтверждены.
+  Early ACK captured/rejoin EQUAL: task1192Б/SHA12a591a1,
+  instructionsc1159feb/template5cc52a4f/materializationca23f864,
+  ENVrenv_zycHL70M8UYGvTAU_W6fgvaB/runtime version10/binding9/G7/tools38.
+  Owner GET200 подтвердил ENV set version9 и currentVersion.version10:
+  это разные счётчики, не drift. Podruntime-turn-24e995c83aca01ff,
+  UIDd6b1cae3-1d91-4aa9-af47-cc3972364148; оба imageID exact/restarts0,
+  binary9b560789 EQUAL только FILE_ONLY. Actual screenshot02:04 получен;
+  transient reconnect после reload восстановился в Connected, Console0.
+- SYSTEM G13 `run_CDwIJdg-LeCOzNBi7Sl8wNt7` SUCCEEDED2: реальный
+  CODEX_WEB_SEARCH/open официальной Vue documentation и SYSTEM configuration
+  в контексте Kodex | Dev подтверждены. Native GitHub READ не предоставлен
+  SYSTEM: такой read не заявлен PASS и grants не расширялись. Следующий
+  короткий запрос проверит публичное repository research штатным web tool.
+  Первый ACK collector остановился ACK_PROJECT_SCOPE_INVALID; это дефект
+  оснастки, а не provider failure. Полный ACK этого хода NOT RUN.
+- [x] Delayed-create browser: точный one-shot перехват задержал только native
+  POST assistant-conversations до dispatch, без изменения body/headers/signal.
+  При held matched1/dispatched0 composer/Send/обе New buttons disabled,
+  собственный marker A сохранён. После manual release matched1/dispatched1,
+  HTTP201/B`cnv_lN1zsaIb-K1C7ZQ8qM8q1ilA`/turns0; B composer пустой.
+  Возврат в A`cnv_wna6uFjGc6egdOR0Qa-6eBPB` восстановил тот же marker.
+  Собственный marker очищен, native fetch/descriptor restored=true,
+  диагностический объект удалён, POSTturns0 и Console0. Предварительный
+  controls-only проход создал A одним POST201; устаревший UID поля после
+  reload не доказал сохранение draft и не объявлен полным PASS. Оба пустых
+  QA-диалога ACTIVE/turns0; чужие диалоги не изменялись.
+- Observer fix: явный expected-project-ref принимает SYSTEM на проектном
+  экране только при exact pin; default SYSTEM-empty и все остальные guards
+  сохранены. Canonical runtimecontract/OpenAPI/CP component sources уже
+  разрешают такой context без передачи ему организационной authority.
+  Failure observer закрытый enum/method набор синхронизирован с producer:
+  RECEIPT_CONFLICT/LIMIT/OVERFLOW и только thread/tokenUsage/updated или
+  rawResponse/completed. Изначальный обязательный66tests/1FAIL сохранён;
+  исправленный общий74 PASS1.577s, ROOT независимо74 PASS1.523s.
+  Syntax/diffcheck PASS; никаких новых runtime/API/grants изменений.
+- ONE длинный Manager пока RUNNING2: последний checkpoint179pages/
+  offset366550 из536156Б, ошибок tools0. EOF/artifact/full33 ещё OPEN.
+  Full65/11/13/14/15 не закрываются адресными smoke. Автономно до14:00
+  Саратов, OWNChrome1/reload5мин; финальный внутренний PR не merge/approve.
+
 ## Checkpoint 08.10.2026 01:58 UTC — новые события при чтении истории
 
 - Full65 остаётся ACTIVE; автономное окно — до08.10 14:00 Саратов

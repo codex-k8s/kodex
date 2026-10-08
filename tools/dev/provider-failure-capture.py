@@ -42,7 +42,9 @@ ACCOUNT_READ = frozenset('NONE UNKNOWN REQUIREMENTS_LOAD MISSING_ACCOUNT_ID DISC
 TOKEN_USAGE_ERRORS = frozenset('TOKEN_USAGE_STRUCTURE TOKEN_USAGE_REQUIRED_MISSING TOKEN_USAGE_REQUIRED_NULL '
                               'TOKEN_USAGE_REQUIRED_TYPE TOKEN_USAGE_OPTIONAL_NULL TOKEN_USAGE_OPTIONAL_TYPE '
                               'TOKEN_USAGE_NEGATIVE TOKEN_USAGE_TOTAL_ARITHMETIC TOKEN_USAGE_CACHE_INPUT_BOUND '
-                              'TOKEN_USAGE_REASONING_OUTPUT_BOUND TOKEN_USAGE_LAST_EXCEEDS_TOTAL'.split())
+                              'TOKEN_USAGE_REASONING_OUTPUT_BOUND TOKEN_USAGE_LAST_EXCEEDS_TOTAL '
+                              'TOKEN_USAGE_RECEIPT_CONFLICT TOKEN_USAGE_RECEIPT_LIMIT TOKEN_USAGE_OVERFLOW'.split())
+TOKEN_USAGE_METHODS = frozenset(('thread/tokenUsage/updated', 'rawResponse/completed'))
 NOTIFICATION_ERRORS = frozenset('NONE UNKNOWN METHOD ENVELOPE TUPLE ITEM TIMESTAMP MESSAGE '
                                 'TOKEN_USAGE TERMINAL LIFECYCLE MCP PROVIDER_ERROR'.split()) | TOKEN_USAGE_ERRORS
 NOTIFICATIONS = frozenset('''NONE UNKNOWN error thread/started thread/status/changed thread/archived
@@ -106,7 +108,7 @@ def parse_line(raw):
             (notification == 'NONE' and notification_error == 'NONE'), 'PROVIDER_DIAGNOSTIC_INVALID')
     require(detail != 'NOTIFICATION_INVALID' or
             (notification != 'NONE' and notification_error != 'NONE'), 'PROVIDER_DIAGNOSTIC_INVALID')
-    require(notification_error not in TOKEN_USAGE_ERRORS or notification == 'thread/tokenUsage/updated',
+    require(notification_error not in TOKEN_USAGE_ERRORS or notification in TOKEN_USAGE_METHODS,
             'PROVIDER_DIAGNOSTIC_INVALID')
     require((stage == 'ACCOUNT_READ' and detail == 'RPC_ERROR' and code == -32603) or account == 'NONE',
             'PROVIDER_DIAGNOSTIC_INVALID')
