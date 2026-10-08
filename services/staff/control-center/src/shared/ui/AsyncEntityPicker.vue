@@ -73,7 +73,7 @@ const props = withDefaults(
     virtualOverscan?: number;
     popoverMaxHeight?: number;
   }>(),
-  { clearable: true },
+  { clearable: true, popoverMaxHeight: 348 },
 );
 const emit = defineEmits<{
   "update:modelValue": [value: PickerValue];

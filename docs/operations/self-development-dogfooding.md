@@ -10,6 +10,49 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 02:51 UTC — компактный селектор и блокер INTAKE
+
+- [x] Общий AsyncEntityPicker ограничен по умолчанию 348px: поиск, пять
+  полных строк и footer; остальные строки прокручиваются. Явная высота,
+  inline, viewport clamp и cursor pagination сохранены. ROOT34/3 suites
+  PASS1.69s; scoped ESLint/Prettier, forced typecheck PASS, Vite build
+  PASS9.18s с прежним предупреждением крупных chunks. Два source hashes:
+  vue431e022b0a05e1d8ef799c074a8f9b74369c4ffde5afc51d2f2f86915cff56ab,
+  test0166d7cf2f6867cb705236de7e5e62fcf9baf9d1bb0419f80ff7323171a5529c.
+  Host/Pod vue EQUAL. Chrome desktop: panel348/list270/rows54/5visible,
+  controls32px/overflowfalse. Mobile390x844: panel374x348 полностью в экране,
+  list270/scrollHeight379/5visible; actual screenshot PASS, Console0,
+  connection «Подключено». Screenshot ожидался несколько минут: скорость
+  оснастки не является успешностью UI. Keyboard tail повторно не доказан;
+  прежние unit guards сохранены, новый live PASS не заявлен.
+- [x] Ordinary Manager сам выполнил native launch_workflow02:37:10:
+  published SOFTWARE_CHANGE wfl_1G05mcW4c7pweOjzfIzFYr6c/version15/
+  revision5 wfv_EqR96za6ufj4wMoieQv_TIvI. Единственный child
+  run_EF1o9OVCcHd7VV9fMn1CBpou, session ses_auIc-Zia9RuDQTiyIWcLbLVc.
+  Safe actual prompt preview template2ae45fb6/materialization67caab9f
+  совпал с ordinary root ACK; full prompt не раскрывался.
+- Full33 FAIL: INTAKE run_fbJ-HqYYPYIv8AfgZAkWXP4H завершён SUCCEEDED2
+  как ход, но semantic BLOCKED — github.pull_request.file.list PR1800
+  вернул INTEGRATION_RESPONSE_INVALID / inv_kzPA0xO27KU4--LAvOOXAWyd.
+  Source main b5f6fcde и AGENTS EOF подтверждены native READ. Architect,
+  Developer и reviews NOT RUN. Workflow FAILED в02:47:48 с
+  RUNTIME_WORKFLOW_INCOMPLETE; planned descendants CANCELLED. Нового
+  запуска, Retry или host-подмены реализации нет. Разбирается первичная
+  причина адаптера; HTTP200 коллекции сам по себе не доказывает корректный diff.
+- Coordinator initial ACK NOT_CAPTURED / EXPECTED_ACK_PIN_MISMATCH:
+  конкретный pin UNKNOWN, Pod уже отсутствует. Continuation attempt2
+  trn_8UaI1ZGghuJ9XLG6oyZK66yy захвачен02:48:06: exact tuple/project/G7
+  и same-UID rejoin PASS; actual taskbb3ebed8, provider/inboxe10889ad,
+  instructions2437011a EQUAL. Expected Task UNKNOWN/NOT RUN, не заменяется
+  public USER hash. PodUID7c72878e-2cb5-4129-af6d-64f0c2d42155,
+  ENV7/binding8/tools38/coordinatorcap1/grants0/restarts0; binary NOT RUN.
+  Ordinary root failure observer8627 завершён NOT_CAPTURED/FOLLOW_STREAM_ENDED.
+- Chrome Workflow36nodes/48edges actual screenshot PASS, Console0,
+  graph/history/artifact GET200, overflowfalse. Full65/11/13/14/15 OPEN.
+  Автономно до14:00 Саратов; ownChrome1, owner4 не трогать, reload5мин.
+  Следующий этап: исправление первопричины native PR diff, затем новый
+  подтверждённый сквозной проход. Финальный внутренний PR не merge/approve.
+
 ## Checkpoint 08.10.2026 02:28 UTC — EOF подтверждён, полный процесс принят
 
 - [x] Новый Manager native READ на G7 завершён SUCCEEDED3 в02:23:38UTC:

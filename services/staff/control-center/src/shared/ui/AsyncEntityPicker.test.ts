@@ -1,5 +1,11 @@
 import { readFileSync } from "node:fs";
-import { createSSRApp, effectScope, h, nextTick } from "vue";
+import {
+  createSSRApp,
+  effectScope,
+  h,
+  nextTick,
+  type ComponentPublicInstance,
+} from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { createI18n } from "vue-i18n";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -451,6 +457,50 @@ describe("virtual window", () => {
 });
 
 describe("AsyncEntityPicker", () => {
+  it("ограничивает dropdown пятью строками и сохраняет явную высоту и inline", async () => {
+    for (const [inline, requestedHeight, expectedHeight] of [
+      [false, undefined, 348],
+      [false, 480, 480],
+      [true, undefined, undefined],
+    ] as const) {
+      const heights: (number | undefined)[] = [];
+      const app = createSSRApp(AsyncEntityPicker, {
+        ...(inline
+          ? { loadItems: () => Promise.resolve({ items: [] }) }
+          : { loadPage: vi.fn() }),
+        popoverMaxHeight: requestedHeight,
+        labels: {
+          label: "Выбор сущности",
+          searchPlaceholder: "Найти",
+          loading: "Загрузка",
+          loadingMore: "Загружаем ещё",
+          empty: "Пусто",
+          error: "Ошибка",
+          retry: "Повторить",
+        },
+      });
+      app.mixin({
+        created(this: ComponentPublicInstance) {
+          if (this.$options.__name === "DismissiblePopover")
+            heights.push((this.$props as { maxHeight?: number }).maxHeight);
+        },
+      });
+
+      const html = await renderToString(app);
+
+      expect(heights).toEqual(inline ? [] : [expectedHeight]);
+      if (inline) expect(html).toContain("async-picker--inline");
+      const source = readFileSync(
+        new URL("./AsyncEntityPicker.vue", import.meta.url),
+        "utf8",
+      );
+      expect(source).toContain(':max-height="popoverMaxHeight"');
+      expect(source).toMatch(
+        /\.async-picker__options \{[^}]*min-height: 0;[^}]*overflow-y: auto;/,
+      );
+    }
+  });
+
   it("передаёт стабильный id элементов loadItems в dropdown-режиме", () => {
     const componentSource = readFileSync(
       new URL("./AsyncEntityPicker.vue", import.meta.url),

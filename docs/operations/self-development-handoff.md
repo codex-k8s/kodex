@@ -10,6 +10,30 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 02:51 UTC
+
+HEAD5c741742 до компактного picker и этого checkpoint. Picker348: ROOT34
+tests/scopedlint/format/typecheck/build PASS, mobile actual screenshot PASS,
+desktop5visible/32px/overflowfalse, source/Pod EQUAL. Keyboard tail не доказан.
+Native Manager сам запустил published Workflow v15/rev5, ONE child
+run_EF1o9OVCcHd7VV9fMn1CBpou. Full33 FAILED02:47:48:
+INTAKE run_fbJ-HqYYPYIv8AfgZAkWXP4H SUCCEEDED2 как ход, semantic BLOCKED
+на github.pull_request.file.list PR1800 INTEGRATION_RESPONSE_INVALID
+inv_kzPA0xO27KU4--LAvOOXAWyd. Architect/Developer/reviews NOT RUN,
+planned descendants CANCELLED; не Retry с прежними pins. Root run_WTw70…
+последний read RUNNING2, требуется fresh terminal readback.
+Initial coordinator ACK pin mismatch UNKNOWN, не PASS. Continuation
+ses_auIc-Zia9RuDQTiyIWcLbLVc/trn_8UaI1ZGghuJ9XLG6oyZK66yy/attempt2
+ACK/rejoin02:48:06 PASS/exact G7, expected Task UNKNOWN/NOT RUN,
+actual taskbb3ebed8/provider-inboxe10889ad/instructions2437011a EQUAL;
+binary NOT RUN. Observer8627 joined NOT_CAPTURED/FOLLOW_STREAM_ENDED.
+Child assistant_terminal_busy исследует адаптер PR diff read-only, MAIN
+не правит. Full65/11/13/14/15 OPEN. OwnChrome1 Workflow screen,
+viewport2179x994/Connected/Console0, owner4 не трогать; reload≤5мин.
+Следующий publisherprevious5c741742, exact whitelist picker2+docs2.
+Продолжить root-cause fix и новый native full33 после проверки. До14:00
+Саратов автономно, finalinternalPR NOmerge/approve.
+
 ## Checkpoint 08.10.2026 02:28 UTC
 
 HEAD/remote/Draft1800 e9c606cbedff66e2b54e53edc9a9ac26765c899f EQUAL,
