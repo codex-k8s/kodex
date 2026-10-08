@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { createSSRApp, h, type ComputedRef, type Ref } from "vue";
+import {
+  createSSRApp,
+  h,
+  type ComputedRef,
+  type Ref,
+  type SetupContext,
+} from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { createI18n } from "vue-i18n";
 import { captureSetupState } from "@/test-utils/setup-harness";
@@ -61,6 +67,7 @@ function deferred<T>() {
 interface State {
   loading: Ref<boolean>;
   pickerPlaceholder: ComputedRef<string>;
+  pickerTriggerLabel: ComputedRef<string>;
   artifact: Ref<RoleImageArtifact | undefined>;
   problem: Ref<AppProblem | undefined>;
   selected: Ref<RuntimeImageOption | undefined>;
@@ -115,6 +122,65 @@ function catalog() {
 }
 
 describe("Состояния выбора собственного подтверждённого образа", () => {
+  it("после exact ORG read доступное имя кнопки совпадает с видимым выбранным образом", async () => {
+    const reader = catalog();
+    const source = Component as unknown as {
+      setup(props: object, context: SetupContext): State;
+    };
+    const hydrated = {
+      ...Component,
+      async setup(props: object, context: SetupContext) {
+        const state = source.setup(props, context);
+        await vi.waitFor(() => expect(state.loading.value).toBe(false));
+        return state;
+      },
+    };
+    const app = createSSRApp(hydrated, {
+      resourceScope: { kind: "ORGANIZATION", organizationRef: "org_fixture" },
+      imageArtifactRef: option.ref,
+      currentImage: {
+        artifactRef: option.ref,
+        recipeRef: option.recipeRef,
+        recipeGeneration: option.generation,
+        reference: artifact().promotedReference,
+      },
+      tools: [],
+      disabled: false,
+      catalog: reader,
+    });
+    app.use(
+      createI18n({
+        legacy: false,
+        locale: "ru",
+        messages: {
+          ru: { runtime: { choosePromotedImage: "Выберите образ" } },
+        },
+        missingWarn: false,
+        fallbackWarn: false,
+      }),
+    );
+    const html = await renderToString(app);
+    expect(html).toContain(`aria-label="${option.title}"`);
+    expect(html).toMatch(/<strong\b[^>]*>Собственный образ<\/strong>/u);
+    expect(html).not.toContain('class="async-picker__placeholder"');
+    expect(reader.loadArtifact).toHaveBeenCalledExactlyOnceWith(
+      { kind: "ORGANIZATION", organizationRef: "org_fixture" },
+      option.recipeRef,
+      option.ref,
+      expect.any(AbortSignal),
+    );
+    expect(reader.loadPage).not.toHaveBeenCalled();
+  });
+
+  it("доступная подпись не использует имя другого artifact", async () => {
+    const state = await setup(catalog(), "imgart_other");
+    await vi.waitFor(() => expect(state.loading.value).toBe(false));
+    state.selected.value = option;
+    expect(state.pickerTriggerLabel.value).toBe(
+      "Выберите собранный и promoted образ",
+    );
+  });
+
   it("ожидание текущего выбранного образа показывает загрузку, затем точное название", async () => {
     const reader = catalog();
     const pending =
@@ -124,9 +190,11 @@ describe("Состояния выбора собственного подтве�
     expect(state.loading.value).toBe(true);
     expect(state.selected.value).toBeUndefined();
     expect(state.pickerPlaceholder.value).toBe("Загрузка выбранного образа…");
+    expect(state.pickerTriggerLabel.value).toBe("Загрузка выбранного образа…");
     pending.resolve({ items: [option] });
     await vi.waitFor(() => expect(state.loading.value).toBe(false));
     expect(state.selected.value?.title).toBe(option.title);
+    expect(state.pickerTriggerLabel.value).toBe(option.title);
     expect(state.pickerPlaceholder.value).toBe(
       "Выберите собранный и promoted образ",
     );
@@ -143,6 +211,9 @@ describe("Состояния выбора собственного подтве�
     expect(state.problem.value).toBeDefined();
     expect(state.artifact.value).toBeUndefined();
     expect(state.selected.value).toBeUndefined();
+    expect(state.pickerTriggerLabel.value).toBe(
+      "Выберите собранный и promoted образ",
+    );
     expect(state.pickerPlaceholder.value).toBe(
       "Выберите собранный и promoted образ",
     );

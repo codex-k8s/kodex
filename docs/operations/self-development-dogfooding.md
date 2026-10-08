@@ -10,6 +10,45 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 01:02 UTC — активация исправленного runner
+
+- HEAD/remote/Draft1800 `5832482644ea29f4e4a2b634b76ad68a30b9eef0`.
+  Canonical full runner build/import PASS; manifest
+  `084bba38acc642f334bdb6f35863b3f89becdbc712f05bb56f48b6b52dbe49c2`,
+  binary `9b5607890cf8fb56ab20a26860d3fd5196975374b63d8dfd6abcd72891a126e9`,
+  provenance `e4e8aa57ea57436f78d5ade4d425307a661c3b94fb2627e714ab19451ee01e3e`.
+  Runner-only seed00:41:52, fresh render00:43:39, idle quiesce/readback,
+  supply-chain apply00:51:05 и полный readback00:51:58 — exit0.
+  Live policy SHA `b58df7c2d6bf745f6a3f474310ae11d4ca11c8202c9b5019f8954528e65683ad`,
+  source58324826; пять управляющих Deployment Ready, admission pause=false.
+- SYSTEM native conversation `cnv_dDYgB9NwZMLcFGhHpc18Ofeo`,
+  plan `pln_W754Z6AnvoxrjIHXhUaWflO8` DRAFT1/VALID2/APPLIED3.
+  Recipe21/G13; build `imgbld_A3sOJ4K-QsBKzlGZh0IKnTol` COMPLETED13.
+  Candidate `imgart_rVAqw6JWrHMt8fa7bdihIAA4`, manifest
+  `sha256:6e73a0c5970f3bd7bbf1814d834dd8d4ea63ca6d939cc197978b769f9e354fc1`.
+  Exact fresh report READY/complete, evidence
+  `8103e57db877f58d2a48ccc369d9f3617e8afaa40ee6b6d71a819575999c5727`:
+  две blocking HIGH undici6.27.0/GHSA-rfgv-xxqx-mfg5 и
+  tar7.5.19/GHSA-r292-9mhp-454m. Native отдельное локальное QA-only
+  ACCEPT_RISK отправлено один раз; новое подписанное admission и promotion
+  ещё OPEN, прежний риск не переносился на новую сборку.
+- PROJECT conversation `cnv_6bU1SxWHdqfffKMhYKneFDdE`,
+  run `run_-Ag2vyKx9tYt2cJ1caOmU_6q`;
+  plan `pln_O-XWKmCPm8aFog0PhNs0xkio` DRAFT1/VALID2/APPLIED3,
+  ровно UPDATE_ROLE_IMAGE_RECIPE стандартного каталога без новых grants/ENV.
+  Recipe13/G7, build `imgbld_pRwKBb7FkvnR2z0zpo6OufAn` наблюдался в
+  TRUSTED_RUNTIME_FINALIZATION. Новые четыре ENV и actual ACK ещё NOT RUN.
+- Frozen a11y fix двух frontend файлов: selected image title передаётся
+  в trigger-label вместо generic placeholder. Visible hydration до исправления
+  была корректна; это не потеря scope/data. ROOT67/67 unit3.91s, lint,
+  format и forced typecheck PASS. Live selected label пока NOT RUN.
+- Два stale UID Apply были неинтерактивны; каждый раз authoritative VALID2/
+  applied=false подтверждал отсутствие эффекта до свежего клика. Итог
+  APPLIED3 подтверждён GET, не выполнялся blind retry. Диагностический ROOT
+  GET /assistant-conversations/{ref}/turns дал405: endpoint толькоPOST,
+  чтение через inline turns списка. Эта console ошибка не дефект приложения.
+  Full65/11/13/14/15 остаются OPEN, final internalPR не merge/approve.
+
 ## Checkpoint 08.10.2026 00:38 UTC — frozen runner usage fix
 
 - База849823b13d1a7a9a472e65136f23041af0ba28a1;8 runner файлов frozen.

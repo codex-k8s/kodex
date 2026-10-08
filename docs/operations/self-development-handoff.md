@@ -10,6 +10,26 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 01:02 UTC
+
+HEAD/remote/Draft1800 5832482644ea29f4e4a2b634b76ad68a30b9eef0.
+Новый platform runner штатно build/import/seed/render/quiesce/apply/readback
+PASS00:51:58: manifest084bba38, binary9b560789, compiled source58324826,
+policyb58df7c2, все пять workloads Ready и admission pause=false.
+SYSTEM planpln_W754Z6AnvoxrjIHXhUaWflO8 APPLIED3, recipe21/G13,
+buildimgbld_A3sOJ4K-QsBKzlGZh0IKnTol COMPLETED13,
+candidateimgart_rVAqw6JWrHMt8fa7bdihIAA4/manifest6e73a0c5.
+Fresh complete report8103e57d: две blocking HIGH undici/tar;
+native локальное QA-only решение о риске отправлено один раз, новое
+подписанное admission/promotion ещё OPEN. PROJECT plan
+pln_O-XWKmCPm8aFog0PhNs0xkio APPLIED3, recipe13/G7,
+buildimgbld_pRwKBb7FkvnR2z0zpo6OufAn, finalization наблюдался.
+Четыре ENV пока прежние G12/G6; новый actual ACK/EOF/full33 NOT RUN.
+Frozen frontend a11y fix только2 файла; ROOT67/67 unit3.91s,
+lint/format/forced typecheck PASS; live selected label ещё проверяется.
+Не Retry/Resume старыйFAILED root. Full65/11/13/14/15 OPEN;
+автономно до14:00 Саратов, ownChrome1/reload01:01, owner4 untouched.
+
 ## Checkpoint 08.10.2026 00:38 UTC
 
 На849823b1 frozen8 runner files: exactCLI0.160 display metadata отдельно от
