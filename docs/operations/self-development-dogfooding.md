@@ -10,6 +10,36 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 07:17 UTC — INTAKE и callback завершены, Architect выполняется
+
+- `95d375c6a1438778a4d796f8c77f6fa515b73cf2` опубликован в Draft1800,
+  remote/readback EQUAL. Мобильная карточка исправлена и проверена; source
+  не менялся после предыдущих73unit/lint/typecheck/build/browser proof.
+  Повтор ROOT73unit/4suites3.82s на точном95d375c6 PASS.
+- Native INTAKE `run_pQO-EQfMEowYV0PFsKUFSxiC` SUCCEEDED до stage deadline.
+  Новый manager-plan.md опубликован штатно, callback продолжил Coordinator
+  attempt2 в этом же Workflow. Coordinator самостоятельно прочитал результат
+  и delegate_agent step-002 SUCCEEDED; host не заменял план или запуск сотрудника.
+- Coordinator attempt2 ранний ACK/sameUID rejoin CAPTURED/EQUAL, G8/env8/
+  binding9 и provider/inbox1fc70dff…cdd3; independent expectedTask NOT RUN.
+  Первый Coordinator attempt1 ACK остаётся NOT_CAPTURED; proofs не объединяются.
+- Architect `run_hQwZMN430H-lH7rbKDVjwOeL`, session
+  ses_CP4jVWi5l4cvvU_P37OX2q6y, turn trn_MtX-BobId0jdhtwAlEF6ib1Z/attempt1,
+  node nod_EAp7LnqaI7cCGvgu8CMLD23S RUNNING. Early ACK и sameUID rejoin
+  CAPTURED/EQUAL: task/provider/inbox21b6c73c…5c8dd, instructionsfbf9ea3d…66146,
+  G8manifest33296118…1385/env8/binding9; binaryf3f14 строго FILE_ONLY,
+  не ELF обслуживающего процесса. Independent expectedTask NOT RUN.
+  Immutable stage deadline07:32:34.606749UTC; ожидается самостоятельный upstream
+  contract/source анализ перед Developer, поддержка API ещё не доказана.
+- Chrome actual граф35/36nodes и native чата: компактные группы инструментов,
+  промежуточные ответы и раскрываемые подробности без пересечения; Console0,
+  relevant authenticated GET200. CP/RC stdout за20мин EMPTY, это только
+  выполненное чтение, не полный PASS отсутствия ошибок. Exact failure follow
+  после успешных ходов FOLLOW_STREAM_ENDED/NOT_CAPTURED, не provider FAIL.
+- Full65/11/13/14/15 OPEN; Developer PR/внутренние reviews и итоговая готовность
+  ещё NOT RUN. Итоговый business PR не merge/approve; один успешный callback
+  не заменяет полный эксперимент.
+
 ## Checkpoint 08.10.2026 07:06 UTC — native full33 запущен, мобильная карточка исправлена
 
 - Source/remote/Draft1800 `104f8fa16c7a1f8a7bf5db99df3f41e43bf160ca`

@@ -10,6 +10,44 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 07:17 UTC
+
+HEAD/remote/Draft1800 `95d375c6a1438778a4d796f8c77f6fa515b73cf2` EQUAL,
+clean до этого journal-only пакета; UI карточка проверена на500/390/desktop.
+Повтор ROOT73unit/4suites3.82s на этом SHA PASS; source/hash предыдущего пакета
+не менялись. Full65 ещё не завершён.
+
+INTAKE `run_pQO-EQfMEowYV0PFsKUFSxiC` SUCCEEDED до immutable deadline;
+manager-plan.md сохранён в outbox, штатный archive/publication и exact callback
+доставлены. Не подменять отсутствие server artifact_ref ДО публикации старым
+ref: координатор получил новый результат через обычный callback и прочитал его.
+Coordinator attempt2 `trn_qp50HlALlqSIoFdAiByi0Lq0` SUCCEEDED, node
+`nod_ez05jVEEFEqazIT0m5KP5wim`, session ses_Mk1ir94kdO_WwZR7FWVP_iZh,
+Pod UIDb1ffcb19-e592-4491-9b75-5900d1577947. Его early ACK CAPTURED/EQUAL:
+instructions3b141e57…73104, provider/inbox1fc70dff…cdd3;
+independent expectedTask NOT RUN, binary FILE_ONLY. Не путать с первым
+Coordinator attempt1, чей ACK NOT_CAPTURED.
+
+Native delegate_agent step-002 SUCCEEDED: Architect
+`run_hQwZMN430H-lH7rbKDVjwOeL` RUNNING, node
+`nod_EAp7LnqaI7cCGvgu8CMLD23S`, session ses_CP4jVWi5l4cvvU_P37OX2q6y,
+turn `trn_MtX-BobId0jdhtwAlEF6ib1Z`/attempt1, Pod
+runtime-turn-be9c53040ed64bfa UIDdfa2c8fd-e0eb-4d9a-ad41-dfaf41131dc5.
+Early ACK/sameUID rejoin CAPTURED/EQUAL: task/provider/inbox
+21b6c73c…5c8dd, instructionsfbf9ea3d…66146, G8/env8/binding9,
+binary FILE_ONLY. Independent expectedTask NOT RUN.
+Architect clock deadline07:32:34.606749UTC. Workflow и обычный root RUNNING;
+Developer/его PR/reviews ещё NOT RUN. Новых Workflow/retry не запускать.
+
+Bounded child watcher92075/follows до07:29:43; следующий metadata-only
+watcher44594 запланирован после подтверждённого join до08:15UTC, exact known
+workflow/version/digest/node. ROOT observer68310 joined FOLLOW_STREAM_ENDED/
+NOT_CAPTURED; это не provider failure. CP/RC stdout за20мин EMPTY, не
+доказательство отсутствия всех ошибок. Chrome own page1/Console0/relevant
+GET200/реальные screenshots графа и чата; свежий reload07:15UTC, следующий≤07:20.
+Native история содержит компактные tool groups и комментарии без пересечений.
+Draft1800 сохраняется, business PR NOmerge/approve, Full65/11/13/14/15 OPEN.
+
 ## Checkpoint 08.10.2026 07:06 UTC
 
 База/remote/Draft1800 `104f8fa16c7a1f8a7bf5db99df3f41e43bf160ca` EQUAL;
