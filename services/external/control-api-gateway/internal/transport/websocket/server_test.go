@@ -200,6 +200,68 @@ func TestDecodePlatformSignalAcceptsRunInvalidationWithoutForwardingRefs(t *test
 	}
 }
 
+func platformSignalBoundFixture(t *testing.T, summary string) []byte {
+	t.Helper()
+	payload := platformBusEnvelope{
+		EventID: "d561fbb0-02c0-4be7-af7c-5998925632bd", EventName: "RUN_CHANGED", EventVersion: 1,
+		OccurredAt: time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC), OrganizationRef: "org_example0001",
+		ProjectRef: "prj_example0001", AggregateRef: "run_example0001", AggregateVersion: 3,
+		Sequence: 9, CorrelationRef: "corr_example001",
+	}
+	payload.Data.Kind, payload.Data.SafeSummary = "RUN", summary
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal platform fixture: %v", err)
+	}
+	return encoded
+}
+
+func TestDecodePlatformSignalUnicodeSummaryBound(t *testing.T) {
+	for name, character := range map[string]string{"ASCII": "a", "Cyrillic": "я", "emoji": "😀"} {
+		for _, count := range []int{1000, 1001} {
+			t.Run(fmt.Sprintf("%s/%d", name, count), func(t *testing.T) {
+				payload := platformSignalBoundFixture(t, strings.Repeat(character, count))
+				signal, ok := decodePlatformSignal(payload, "org_example0001")
+				if ok != (count == 1000) || (ok && (signal.Sequence != 9 || signal.EventName != "RUN_CHANGED" || signal.Kind != "RUN" || signal.ProjectRef != "prj_example0001")) {
+					t.Fatal("platform Unicode bound or safe wake projection changed")
+				}
+			})
+		}
+	}
+}
+
+func TestDecodePlatformSignalExactByteBoundAndMalformed(t *testing.T) {
+	base := platformSignalBoundFixture(t, "safe-summary")
+	for _, size := range []int{65536, 65537} {
+		t.Run(fmt.Sprintf("bytes/%d", size), func(t *testing.T) {
+			payload := append(append([]byte(nil), base...), []byte(strings.Repeat(" ", size-len(base)))...)
+			if _, ok := decodePlatformSignal(payload, "org_example0001"); ok != (size == 65536) {
+				t.Fatal("platform frame did not enforce its independent byte bound")
+			}
+		})
+	}
+	for name, payload := range map[string][]byte{
+		"invalid-UTF8":   []byte(strings.Replace(string(base), "safe-summary", string([]byte{0xff}), 1)),
+		"unknown-field":  []byte(strings.Replace(string(base), `"data":`, `"unknown":true,"data":`, 1)),
+		"extra-document": append(append([]byte(nil), base...), []byte(`{}`)...),
+		"unknown-event":  []byte(strings.Replace(string(base), "RUN_CHANGED", "UNKNOWN_CHANGED", 1)),
+		"wrong-kind":     []byte(strings.Replace(string(base), `"kind":"RUN"`, `"kind":"AGENT"`, 1)),
+		"zero-sequence":  []byte(strings.Replace(string(base), `"sequence":9`, `"sequence":0`, 1)),
+		"wrong-version":  []byte(strings.Replace(string(base), `"eventVersion":1`, `"eventVersion":2`, 1)),
+		"foreign-owner":  []byte(strings.Replace(string(base), "org_example0001", "org_foreign0001", 1)),
+		"malformed-JSON": []byte(`{`),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, ok := decodePlatformSignal(payload, "org_example0001"); ok {
+				t.Fatal("malformed or mismatched platform signal was accepted")
+			}
+		})
+	}
+	if maximumFrameBytes != 1<<20 {
+		t.Fatal("shared WS/RUN frame bound changed")
+	}
+}
+
 func TestDecodePlatformSignalAcceptsRoleImageLifecycleEvents(t *testing.T) {
 	for index, eventName := range []string{"ROLE_IMAGE_PROMOTION_REQUESTED", "ROLE_IMAGE_PROMOTED"} {
 		payload := []byte(fmt.Sprintf(`{"eventId":"d561fbb0-02c0-4be7-af7c-5998925632bd","eventName":"%s","eventVersion":1,"occurredAt":"2026-08-22T12:00:00Z","organizationRef":"org_example0001","projectRef":"prj_example0001","aggregateRef":"rimg_example001","aggregateVersion":2,"sequence":%d,"correlationRef":"d1713d76-566d-43c3-a0b2-0ca2307869d0","data":{"kind":"ROLE_IMAGE_RECIPE","safeSummary":"i18n:ROLE_IMAGE_RECIPE_CHANGED"}}`, eventName, index+10))

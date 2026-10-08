@@ -10,6 +10,162 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 17:27 UTC — узкий realtime bootstrap, native INTAKE продолжается
+
+Ветка native-business-qa/Draft1803 поверхb1b8353a: четыре Unicode/frame-cap
+файла и CONTRACT-DOC-003 invariant. ROOT address tests/vet/build/format PASS,
+frozen hashes EQUAL. Source/Pod CP02c3a9f7…4048/gateway24befdf2…c26 EQUAL;
+actual serving ELF EQUAL exact host rebuild: CPee298a76…d5fb,
+gateway1084f2f7…671. Producer/decoder1000codepoints/platform65536bytes,
+UTF-8 fail-closed; RUN2000/общийWS1MiB/authority/sequence/relay unchanged.
+Повторить быстрые tests на committed SHA, push и обычный bootstrap merge;
+затем fresh main/source/Pod/browser readback. Финальный business PR не merge.
+
+Один текущий full39 root run_VbhKXNWsog_CwsLJhKbpANXR, INTAKE
+run_lyrOZTS3VnVuxJWcAuqFg92T. Native205: обязательные EOF/Context7,
+план сохраняется. Во время hot reload same node/attempt был запущен снова;
+source renew-error→delete/requeue/fresh lease path, original Renew cause UNKNOWN.
+Fresh Podruntime-turn-fc0ea056bbbdf076/UIDaa582e67-0009-414a-90e0-2d29d68e6e98
+создан17:21:31, все containers restart0; samegrant duplicate не доказан.
+Никакого ручного Retry или lifecycle обхода. Дождаться actual artifacts/
+Coordinator callback; устранить proven recovery cause, если обнаружится.
+Chrome reload17:27/platform LIVE/Console0/API200; screenshot NOT RUN.
+Постоянные natural resync не объявлены исправленными этим bounds fix.
+
+## Checkpoint 08.10.2026 17:19 UTC — новая native попытка после upstream diagnostic PASS
+
+Source main76e3bb0d, branch native-business-qa; pushed checkpointb1b8353a
+и Draft PR1803. Diagnostic run_JyT5K8D75WEm2HG-4o9wUhxB SUCCEEDED/seq65;
+evidence art_G2gVknCMUs4E0tdVKn_O-fZ7/revision1/20502B/SHA
+e6e56ba0b54f56fc6e286ece10ba243010f23f80b90530426f041659dd819ae2 owner EQUAL.
+Native git tag→a956835d020762cb2b570053af06f643a11c0ecc; exact processor/schema/
+README получены целиком, один старый v2.rs404 сохранён. Scope PASS только READ,
+не live account API, не полный architecture review, не Issue acceptance.
+
+Новый ordinary Manager run_mFPCuViZUbA0QdXN3eyx2Bqc/session
+ses_aAu1LtgckCXGrdZMs4nj5qNx запустил ровно один
+run_VbhKXNWsog_CwsLJhKbpANXR/session ses_r7S6W8Fc6ZKJ1xliAYR0Xwpl.
+INTAKE run_lyrOZTS3VnVuxJWcAuqFg92T/session ses_A10DN0SMSCO8rxfV_D3CeF2Y/
+turn trn_0oeepLImZRLPlVL-RWNwXgwu RUNNING. Manager/INTAKE ACK/rejoin CAPTURED,
+ENV9/binding10/G9/tools38/image-file47a8fc35…66b3d EQUAL.
+Owner Manager input11685B SHA df44932d…806f EQUAL actual task/inbox.
+Actual INTAKE publication6/39steps, четыре INPUT fields8591B/SHA
+880d91e77214dc0bd95f532a634d3c2400440689c9e2ab6343c95ab6b58261ce EQUAL
+owner V4 map. Уточнения не меняют authority; source facts не заменяют reviews.
+
+Следующее: дождаться полного INTAKE и actual artifacts; Architect проверяет
+свой exact upstream/Kodex read path, затем Developer и четыре native reviews,
+Manager product/fixes≤5/Gate033. Старый failed root не Retry. Параллельно
+Unicode/frame-cap bootstrap пакет проверяется изолированно; MAIN code не менялся.
+Chrome own page1 обновлена17:18/Console0, screenshot NOT RUN. Full65 OPEN.
+
+## Checkpoint 08.10.2026 17:10 UTC — native Architect STOP и разрешённый upstream diagnostic
+
+Main76e3bb0d, ветка kodex-agent/issue-1797-native-business-qa, Issue1797.
+Root run_jxAWzS0WFu99MhGv2Js6cu0O FAILED/RUNTIME_WORKFLOW_INCOMPLETE/seq356,
+16:59:27UTC. Architect architecture-review art_0qxrAohedw3VYpKRps1TWqJ3
+revision8/SHA dddb292edca7bf6a6efc54665878212c2ef16954e0479a206270565381e1f8ef
+семантически BLOCKED. Coordinator native EOF четырёх artifacts/FINAL317
+соблюдает STOP; Developer/reviews/READY NOT RUN.
+
+Точный отказ: native запрос api.github.com/repos/openai/codex/git/ref/tags/
+rust-v0.160.0 exit56/Proxy CONNECT aborted; api.github.com отсутствует в
+WebAccess. Current ENV9 digest3c05b132…5689 и binding10 c140caef…6f8 EQUAL
+actual ACK, разрешены github.com HTTPS443 GET/HEAD/POST и
+raw.githubusercontent.com HTTPS443 GET/HEAD. Source policy-deny закрывает
+CONNECT до DNS/TLS; original causal counter NOT RUN/Pod gone. Нельзя считать
+это поломкой разрешённого маршрута или молча расширять allowlist.
+
+Следующий scoped ordinary Architect READ-only diagnostic:
+run_JyT5K8D75WEm2HG-4o9wUhxB/session ses_ujKv72gqnmhXZPTFqTUV54HD/
+turn trn_Msx6MhdHXMCzwXuDm7fr0pIN. Задача — git ls-remote уже разрешённого
+github.com и exact immutable raw source EOF без новых прав, auth/env/headers,
+TLSskip или обходов. ACK/rejoin CAPTURED/ENV9/binding10/G9/tools38; instructions
+232d44cd…8abc/task1e64f661…285d EQUAL, image-file47a8fc35…66b3d EQUAL.
+Диагностика не заменяет полные native reviews; результат ещё OPEN.
+
+Параллельно готовится минимальный Unicode platform summary bound fix:
+producer/decoder оба1000characters, RUN2000 unchanged. Decoder фактически
+принимает общий1MiB budget, тогда как platform contract cap65536байт;
+platform-only cap приводится к контракту, общий WS/RUN1MiB не меняется.
+Точная live resync причина UNKNOWN, queue-drain не входит в эту правку.
+После диагностического PASS — один fresh ordinary Manager/Workflow,
+не повтор старого terminal root. Полный Developer→reviews→fix→Gate033,
+business PR без merge и итоговый Full65 отчёт остаются обязательными.
+Chrome own page1 обновлена17:07; screenshot NOT RUN. Демо владельца не тронуто.
+
+## Checkpoint 08.10.2026 16:54 UTC — INTAKE завершён, Architect выполняется
+
+Тот же root run_jxAWzS0WFu99MhGv2Js6cu0O/source main76e3bb0d.
+Native INTAKE FINAL109 сообщает EOF восьми нормативных источников;
+TURN_COMPLETED116/SUCCEEDED. Owner artifacts GET200/CLEAN/ACTIVE:
+manager-plan.md art_2R74tV7h6o7h3bNZK57ZueFa/revision23/17840B/
+digest98e7877e8a58f4563c47f1c32108ace83442bc9600b945dc2843673f8d621bdd;
+intake-read-evidence.md art_3Sc4xn3hE_BWRKsJa-DRpu_y/revision1/3450B/
+digest0090e6e4890adbd143458709a9aec65b6106ccea0bf21d7577f2428bbc2d4abc.
+Проверка EOF нормативных документов остаётся native evidence, не host заменой.
+Первая host download попытка400 INVALID_REQUEST: пропущен обязательный
+purpose; это ошибка диагностического запроса, не порча artifact и не UI defect.
+Исправленный owner DOWNLOAD evidence200/3450B/digest0090e6e4…abc EQUAL;
+plan первый503 NOT RUN, повтор200/17840B/digest98e7877e…1bdd EQUAL.
+Причина единичного503 UNKNOWN; он не объявляется integrity mismatch.
+
+Coordinator native прочитал четыре callback artifacts EOF135, не повторял
+INTAKE и delegate_agent step-002 SUCCEEDED. Architect
+run_p5qzvwcqxkmoojsrTWr4USmc/session ses_9Zfc4WTKge_t0U7uivzbTevH/
+turn trn_vFB_pF0wsSThJ1KibF5bSWVz выполняется; commentary180 подтверждает
+actual plan/evidence EOF и base76e3bb0d,233 — freshness/credential revision
+ограничения, upstream/installed source ещё исследуются. Ранний ACK/rejoin
+CAPTURED, Pod UIDbe1a5bf1-518c-4133-94ba-d6e5df287ce1, instructions
+4d2fc14d7e61200dc61f7e1f2802beba591616d535a376c384076bac5b8c5966 EQUAL,
+G9/ENV9/binding10/tools38, image-file47a8fc35…66b3d EQUAL. Developer/reviews OPEN.
+
+Browser exact main76e3bb0d: внутри одной module instance смешанные реальные
+transport interruption и natural resync дали10 SESSION_READY/10 RUN_READY,
+затем platform/run live/attempt0 в16:51:49. Не вызывались refreshSession,
+cache mutation или injected envelopes. Четыре первых controlled closures
+восстановились; следующий14.5s window закончился recovering и НЕ PASS,
+позднейшие actual READY/последний controlled closure подтвердили успешные
+resume за пределом прежнего бюджета шести. Console0. Reload16:52 сохраняет
+живой процесс. Screenshot NOT RUN. Full65/checklist11/13/14/15 OPEN.
+
+## Checkpoint 08.10.2026 16:46 UTC — PR1802 слит, scoped native INTAKE выполняется
+
+PR1802 MERGED штатным squash; GitHub/origin/local main
+76e3bb0d89a127ec07a789bfe9acffc47c7fcec7 EQUAL. Checks отсутствуют, не CI PASS.
+Commit5845e406c84edb1f6cb42f5434470cbe0a6f74e3: ROOT повтор67/67 PASS1.84s.
+Source/Pod frontend SHA041e88d0…fe138 EQUAL, CP prompt12b9e13c…76fa EQUAL;
+21 deployments Ready. Продолжение — kodex-agent/issue-1797-native-business-qa.
+
+Новый ordinary Manager run_8dm4h-xtwODDfRlyfJVwn97_/session
+ses_UNAPsw7CR2HJmppyF5yYwCLg/turn trn_2v0JDaHJlmxB_rsQcnvCY9Zy прочитал
+Issue и запустил ровно один root run_jxAWzS0WFu99MhGv2Js6cu0O/session
+ses_hgH_PSz8A3v1TorEB-zwuxBQ. INTAKE run_66pfHWG-qMxkaRAjFjhla2XY/session
+ses_vKfm5UIn1fpdUXs6MXIrRyhD/turn trn_R4UKevVv3zkyonILmxv7PiIy RUNNING.
+Native commentary57: AGENTS/GOV001/GUIDE004/GOV003 прочитаны EOF, base76e3bb0d
+проверена; далее provider accounts/Control Center. Полный business результат OPEN.
+
+Ранние provider ACK/rejoin CAPTURED для ordinary Manager и INTAKE:
+NONE/G9/ENV9/binding10/tools38, image-file47a8fc35…66b3d EQUAL.
+Manager Pod UID2800f060-588f-48d2-981d-984ce039bdb7, owner input9559B/
+SHAac546205…663ee EQUAL provider task/inbox; instructions2dbc0f4c…52c2f.
+INTAKE Pod UIDaae05039-5ca9-44e2-ace0-62690c1daef3, instructions
+a742e222f5f274253db3d21ea5dc2b483880238c24d5c2165ac50a5110145c67 EQUAL.
+Закрытый actual AGENTS read: publication revision6/39steps/DAG21ce2a89…7846c;
+четыре исходных inputs SHA8c20344f0f5ceac9ff07a6624882a2fd2a63b66786745e55ead8e55b834b2b99
+EQUAL owner map, уточнение источников действительно передано. Server extras
+не подменяют исходные поля. Expected observer task NOT RUN, отдельный owner
+readback не переименовывается. Один native CODEX_SHELL FAILED59, следующая
+работа продолжается; точная безопасная причина ещё UNKNOWN.
+
+Browser post-fix natural PLATFORM_RESYNC_REQUIRED4000 → valid full snapshot/
+RUN_READY/SESSION_READY → platform/run live PASS, seq53→93. Повторный natural
+resync также восстановился, без manual cache writes/polling. Valid atomic
+snapshots сохраняют live. Console0/HTTP200/overflowfalse. Это не восьмикратный
+native retry proof; соответствующая regression67/67 отдельно. Повтор capture
+снова завис, ожидание прекращено; MCP list/evaluate восстановились. Screenshot
+NOT RUN, visual не объявляется PASS. Демо владельца не изменено.
+
 ## Checkpoint 08.10.2026 16:34 UTC — исправлены повторные подключения, INTAKE достиг deadline
 
 Base main94252cc6cf5909484979b1e000a38bc7b24e6c4f, продолжение в той же

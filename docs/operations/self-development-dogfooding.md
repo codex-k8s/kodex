@@ -10,6 +10,157 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 17:27 UTC — Unicode/frame-cap bootstrap на стенде
+
+В той же ветке/PR1803 интегрированы четыре проверенных frozen файла
+(packSHA2c983a419e9152102e4e0226845e25e3c0d0066243d895b1ae4ae29642c89e11).
+Producer ограничивает platform safeSummary до1000Unicode code points;
+decoder использует тот же предел, отдельный65536byte cap и проверку UTF-8.
+RUN2000/общий WS1MiB, owner/kind/version/sequence/ref guards, contracts/schema,
+relay и queue scheduling unchanged. Инвариант закреплён в CONTRACT-DOC-003.
+Исторические payload не переписываются. Natural resync cause UNKNOWN.
+
+ROOT повтор на exact dirty bytes поверхb1b8353a: CP адресные tests PASS0.061s,
+весь gateway websocket PASS1.357s, оба vet/build/gofmt/diffcheck PASS.
+Все четыре production/test file hashes EQUAL frozen pack. Source/Pod EQUAL:
+commands.go02c3a9f7…4048, platform.go24befdf2…c26. Actual serving ELF через
+/proc/<pid>/exe EQUAL host rebuild теми же CGO0/trimpath/buildvcsfalse flags:
+CPee298a76b7839968a8b1c23bb4f53f72553d7bea4fe97dddf8f454457a33d5fb,
+gateway1084f2f7a03aee391bc117e2d4aca6062222edf69cfbab837f6a28f896b90671.
+Это trusted-local hot reload proof, не immutable release acceptance.
+
+Chrome own page1 reload17:27, Console error/warn0; bootstrap/session/graph/
+events/gates/ticket200. Platform вновь LIVE/attempt0 после временного offline
+при build. Run recovering после rejoin не выдаётся за завершённый resume;
+screenshot NOT RUN. INTAKE native events54/95→TURN_STARTED98→101/142 показывают
+повторное начало того же узла/attempt во время обновления бэкенда. Новый Pod
+создан17:21:31 с fresh lease/revision; точный прежний Renew failure UNKNOWN,
+duplicate samegrant не доказан. Диагностика recovery продолжается отдельно.
+Native205 сообщает нормативный EOF/Context7 и сохранение business плана;
+Coordinator callback/artifacts/Architect ещё OPEN. Full65 не завершён.
+
+## Checkpoint 08.10.2026 17:19 UTC — разрешённый upstream READ PASS, новый полный Workflow
+
+Native diagnostic run_JyT5K8D75WEm2HG-4o9wUhxB SUCCEEDED/FINAL60/seq65.
+Штатный git HTTPS tag→peeled commit a956835d020762cb2b570053af06f643a11c0ecc;
+processor58916B/a28e9125…1831, account schema31165B/f52c03c9…b2ad и README
+31193B/d7fae889…4d44 получены целиком. Один ошибочный старый v2.rs404 сохранён
+как FAIL, действующий v2/account.rs200 подтверждён отдельно. Скачать до EOF
+не означает полный review всех upstream модулей; account API/live race NOT RUN.
+Evidence art_G2gVknCMUs4E0tdVKn_O-fZ7/revision1/20502B:
+owner metadata/download200, SHAe6e56ba0b54f56fc6e286ece10ba243010f23f80b90530426f041659dd819ae2
+EQUAL. Никаких новых прав или proxy/TLS обходов.
+
+Новый ordinary Manager run_mFPCuViZUbA0QdXN3eyx2Bqc/session
+ses_aAu1LtgckCXGrdZMs4nj5qNx/turn trn_aHdB8Zg3C3Pi6hPFgvxVcqvH запустил
+ровно один full39 root run_VbhKXNWsog_CwsLJhKbpANXR/session
+ses_r7S6W8Fc6ZKJ1xliAYR0Xwpl. INTAKE run_lyrOZTS3VnVuxJWcAuqFg92T/
+session ses_A10DN0SMSCO8rxfV_D3CeF2Y/turn trn_0oeepLImZRLPlVL-RWNwXgwu
+выполняется; Coordinator delegate/callback штатный. Старый terminal не Retry.
+
+Manager ACK/rejoin CAPTURED: instructions e5fe89f7…cce6, owner input11685B/
+SHAdf44932d…806f EQUAL task/inbox. INTAKE ACK/rejoin CAPTURED: actual
+instructions6741230f…65de EQUAL, Pod UID3024b8ff-117a-4120-a318-e64a84394fcc,
+G9/ENV9/binding10/tools38/image-file47a8fc35…66b3d EQUAL. Закрытый actual
+WORKFLOW.content.publication revision6/39steps; именно этот путь, не
+workflow.publication. Четыре INPUT поля8591B/SHA
+880d91e77214dc0bd95f532a634d3c2400440689c9e2ab6343c95ab6b58261ce EQUAL
+owner map; разрешённый upstream путь и разграничение исторических источников
+действительно присутствуют. Новых полномочий из input не назначено.
+
+Журнал запушен b1b8353a4d27c5f9092c13cd758205166bc88241/Draft PR1803,
+GitHub head/remote EQUAL; main по-прежнему76e3bb0d. Chrome own page1
+обновлена17:18, Console error/warn0, overflowfalse, platform LIVE/attempt0;
+screenshot NOT RUN. Full Workflow/Developer/reviews/Gate033 и Full65 OPEN.
+QA-doc сохраняет65разделов исходного задания, но не byte-identical локальному
+original: добавлены approved metadata/актуальные refs и удалены частные
+host-инструкции. Это предусмотренная публикация, не изменение acceptance.
+
+## Checkpoint 08.10.2026 17:10 UTC — upstream отказ классифицирован, проверяется разрешённый путь
+
+Source main76e3bb0d89a127ec07a789bfe9acffc47c7fcec7. Workflow
+run_jxAWzS0WFu99MhGv2Js6cu0O завершён FAILED/RUNTIME_WORKFLOW_INCOMPLETE
+в16:59:27 UTC/sequence356. Architect technical SUCCEEDED, semantic BLOCKED:
+точный upstream READ не завершён; Coordinator прочитал четыре его artifacts
+до EOF и не запустил Developer. Исторический отказ сохранён, не Retry и не PASS.
+
+Owner runtime-configuration GET200 подтверждает ENV9 digest
+3c05b1321f74ced72e0926766b5b9c0d85870b8545b8ed8f4c52f60848b55689 и binding10
+c140caef489f903054ef564f3c343cdf56c7f3763ddb6873d6c2bb1001fb16f8 EQUAL
+раннему Architect ACK. WebAccess ALLOWLIST_FULL: github.com HTTPS443 GET/HEAD/POST,
+raw.githubusercontent.com HTTPS443 GET/HEAD. Native architecture-review
+art_0qxrAohedw3VYpKRps1TWqJ3/revision8/15224B указывает точный неразрешённый
+запрос api.github.com/repos/openai/codex/git/ref/tags/rust-v0.160.0,
+exit56/Proxy CONNECT aborted. Source policy отклоняет этот host до DNS/TLS;
+это соответствующий политике отказ, не доказательство неисправного разрешённого
+маршрута. Direct exact causal counter прежнего Pod NOT RUN: Pod уже удалён.
+
+Запущен самостоятельный read-only Architect diagnostic
+run_JyT5K8D75WEm2HG-4o9wUhxB/session ses_ujKv72gqnmhXZPTFqTUV54HD,
+turn trn_Msx6MhdHXMCzwXuDm7fr0pIN. Только существующий разрешённый Git HTTPS/
+raw source путь; новых grants, wildcard, обхода прокси и TLS нет. ACK/rejoin
+CAPTURED: Pod UID6839fb99-a31f-4f79-8d0f-d39b6840d11e, ENV9/binding10/G9/tools38,
+instructions232d44cd…8abc и task1e64f661…285d EQUAL фактическим файлам.
+Image-file47a8fc35…66b3d EQUAL; это не serving binary acceptance.
+Upstream native EOF результата ещё NOT RUN; этот diagnostic не заменяет
+полный SOFTWARE_CHANGE/внутренние reviews/HumanGate033.
+
+Отдельно найден source Unicode mismatch platform wake: producer использует
+RUN summary до2000символов, platform contract допускает1000, decoder проверяет
+2000байт. Готовится минимальный producer/decoder fix и отрицательные тесты;
+точная причина регулярного live resync пока UNKNOWN. Queue/owner/sequence
+guards не ослабляются. Full65/checklist11/13/14/15 остаются открытыми.
+
+## Checkpoint 08.10.2026 16:54 UTC — native INTAKE и переход Architect
+
+Source main76e3bb0d89a127ec07a789bfe9acffc47c7fcec7. Тот же root
+run_jxAWzS0WFu99MhGv2Js6cu0O. INTAKE native FINAL109/COMPLETED116;
+manager-plan art_2R74tV7h6o7h3bNZK57ZueFa/revision23/digest98e7877e…1bdd,
+evidence art_3Sc4xn3hE_BWRKsJa-DRpu_y/revision1/digest0090e6e4…abc,
+owner metadata200/CLEAN/ACTIVE. Coordinator actual callback READ четырёх
+artifacts EOF135 → delegation step002 SUCCEEDED; повторного INTAKE нет.
+Architect run_p5qzvwcqxkmoojsrTWr4USmc выполняется, native input EOF/baseSHA
+подтверждены commentary180; API/source/freshness design ещё не завершён.
+Actual ACK/rejoin CAPTURED, instructions4d2fc14d…5966 EQUAL,
+G9/ENV9/binding10/tools38/image-file47a8fc35…66b3d EQUAL.
+
+Browser live recovery на main76e3bb0d проверен beyond6: смешанные настоящие
+controlled transport closures/natural resync,10 SESSION_READY/RUN_READY
+одной module instance и затем live/attempt0; без fake envelopes/cache writes.
+Один14.5s controlled window recovering не отмечен PASS; дальнейшие READY
+и последний closure доказали восстановление. Console0, reload16:52.
+Host artifact download400 из-за отсутствующего purpose — диагностический
+запрос, не integrity mismatch/UI defect. Screenshot NOT RUN; business
+Developer/reviews/HumanGate033 и checklist11/13/14/15 OPEN.
+Owner DOWNLOAD actual evidence200/3450B/digest0090e6e4…abc EQUAL; plan
+первый503 NOT RUN, повтор200/17840B/digest98e7877e…1bdd EQUAL.
+Единичный503 UNKNOWN, не доказанная порча данных.
+
+## Checkpoint 08.10.2026 16:46 UTC — native бизнес-вход и realtime подтверждены
+
+Bootstrap PR1802 MERGED без bypass, main76e3bb0d89a127ec07a789bfe9acffc47c7fcec7
+GitHub/origin/local EQUAL. ROOT unit67/67 на5845e406 PASS1.84s; checks отсутствуют,
+не CI PASS. Source/Pod frontend041e88d0…fe138/CP12b9e13c…76fa EQUAL,
+21deployments Ready. Host QA продолжение kodex-agent/issue-1797-native-business-qa.
+Ordinary Manager run_8dm4h-xtwODDfRlyfJVwn97_ native запустил ровно один
+Workflow run_jxAWzS0WFu99MhGv2Js6cu0O. INTAKE run_66pfHWG-qMxkaRAjFjhla2XY
+выполняется: commentary57 подтверждает EOF первых четырёх нормативных файлов,
+base76e3bb0d, затем чтение provider accounts/Control Center.
+
+Manager/INTAKE provider ACK и same-Pod rejoin CAPTURED; G9/ENV9/binding10/tools38,
+runner image-file47a8fc35…66b3d EQUAL. Manager owner input9559B SHAac546205…663ee
+EQUAL actual task/inbox. INTAKE actual instructions SHAa742e222…145c67 EQUAL;
+full39 publication revision6/DAG21ce2a89…7846c. Четыре inputs SHA
+8c20344f0f5ceac9ff07a6624882a2fd2a63b66786745e55ead8e55b834b2b99 EQUAL
+owner map; source clarification actual PASS, новые права не выдаются.
+Один native shell FAILED59 не скрыт, работа продолжается; причина UNKNOWN.
+
+Browser natural resync4000 → valid snapshot/RUN_READY/SESSION_READY → live PASS,
+seq53→93 и повторное восстановление. Atomic snapshots не меняют live;
+Console0/API200/overflowfalse. Восемь подряд native recovery ещё не доказаны.
+Screenshot вновь завис; MCP после прекращения ожидания отвечает, screenshot
+NOT RUN. Checklist11/13/14/15 OPEN; business PR/reviews/HumanGate033 OPEN.
+
 ## Checkpoint 08.10.2026 16:34 UTC — realtime recovery и граница INTAKE
 
 Base94252cc6cf5909484979b1e000a38bc7b24e6c4f/host followup1797.

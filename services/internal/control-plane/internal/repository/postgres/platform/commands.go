@@ -1940,7 +1940,7 @@ func (repository *Repository) emitPlatformEventSnapshot(ctx context.Context, tx 
 		return serializableTransactionError(err, errs.ErrUnavailable)
 	}
 	eventID := uuid.New()
-	data := map[string]any{"kind": kind, "safeSummary": summary}
+	data := map[string]any{"kind": kind, "safeSummary": truncate(summary, 1000)}
 	if state != "" {
 		data["state"] = state
 	}
