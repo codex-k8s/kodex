@@ -10,6 +10,30 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 01:58 UTC — новые события при чтении истории
+
+- Full65 остаётся ACTIVE; автономное окно — до08.10 14:00 Саратов
+  (10:00UTC). Текущий source `07808a24b9ebe534d647319a1d4d560d7703e0b0`,
+  runner compiled58324826/G7. ONE Manager
+  `run_PS6YI_JYpT4abCl059kfeRjS` продолжает RUNNING2; EOF и файл ещё OPEN.
+- [x] Live unread: в штатном session dialog обычного Manager журнал639px
+  прокручен до0. Пока пришли новые реальные события, число строк117→121,
+  scrollHeight1916→2128, scrollTop остался0. Появилась «Новые сообщения ↓».
+  Actual screenshot dialog1080x954 получен01:58, кнопка видима внизу,
+  сообщения пользователя справа, агента/инструменты слева; overflow=false.
+  Native click вернул к последнему сообщению: bottomDistance0,
+  индикатор unread исчез. Console error/warn0, run/history/graphHTTP200.
+  Прежний NOT RUN этого отдельного сценария закрыт текущим live evidence;
+  unit или terminal-история за него не выдаются.
+- Оставшиеся проверки нового runtime: SYSTEM public repository/web/project
+  context; PROJECT Context7/repository smoke; точные prompts/tools шести ролей
+  в полном33-step Workflow; actual EOF/durable artifact, Developer PR и
+  обязательные три review/fix/re-review. Delayed-create browser и повторная
+  ENV publication после editor fix пока NOT RUN; reload/inventory PASS
+  отдельно. Исторический bootstrap не обнуляется и не заменяет новый QA.
+- После actual EOF/native-read-proof.md — ONE полный33-step Workflow.
+  Обязательные11/13/14/15 OPEN; итоговый внутренний PR не merge/approve.
+
 ## Checkpoint 08.10.2026 01:47 UTC — новый длинный ход G7
 
 - Commit/remote/Draft1800 `46748f8362d777ac55380e3caef74b3dbeb3b139`

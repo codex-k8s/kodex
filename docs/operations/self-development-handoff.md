@@ -10,6 +10,18 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 01:58 UTC
+
+HEAD07808a24, runner compiled58324826/G7. ONE Manager EOF остаётся
+RUNNING2/run_PS6YI_JYpT4abCl059kfeRjS, observer41860 активен, не дублировать.
+Live unread закрытPASS на новых событиях: scrollTop0 сохранился,
+появилась «Новые сообщения ↓», actual dialog screenshotPASS, native click
+вернул bottomDistance0/скрыл unread. Console0/run/history/graph200.
+Full65/11/13/14/15 OPEN. Остались текущие SYSTEM/PROJECT smoke, prompts/tools
+ролей в full33, EOF/artifact/Developer PR/reviews; delayed-create browser и
+повторная ENV publication после editor fix NOT RUN. До14:00 Саратов автономно,
+Chrome OWN1/reload5мин, owner4 не трогать. Следующий publisherprevious07808a24.
+
 ## Checkpoint 08.10.2026 01:47 UTC
 
 HEAD/remote/Draft1800 46748f8362d777ac55380e3caef74b3dbeb3b139 EQUAL.
