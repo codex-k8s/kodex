@@ -4086,7 +4086,9 @@ Workflow опубликован: version 22 / revision 7, 21 шаг, publishedRe
 Штатный план удалил только ошибочный
 `github.repository.content.metadata.read` из DEVELOPER_FIX_5 / step-054;
 VALIDATE VALID и PUBLISH PUBLISHED подтверждены. Это PASS конфигурации и
-публикации; полный Workflow и его сквозная проверка ещё NOT RUN.
+публикации. В 20:12:50 UTC обычный Manager запустил один новый Workflow по
+Issue #1796; в 20:14 UTC root RUNNING, callback ожидается, READY_NOTCONFIRMED.
+Полное выполнение и финальная готовность не подтверждены.
 
 - [x] 1. Создать связанное Issue, ветку от свежего main и один Draft bootstrap
       PR; фиксировать результаты PASS/FAIL/NOT RUN/BLOCKED на точном SHA.
@@ -4138,14 +4140,18 @@ VALIDATE VALID и PUBLISH PUBLISHED подтверждены. Это PASS кон
       нового SHA, не более пяти циклов после первоначального ревью → единственный
       финальный Human Gate.
       Живой Workflow опубликован: 21 шаг, version 22 / revision 7.
-      Публикация/конфигурация PASS; полный процесс и сквозная проверка NOT RUN.
+      Публикация/конфигурация PASS; один полный процесс запущен, завершение
+      и сквозная приёмка ещё не подтверждены.
       Проверить небольшой disposable delegated run до настоящей Issue.
 - [x] 12. При bootstrap acceptance зафиксировать и автономно слить bootstrap
       PR, обновить стенд на свежий main и повторно сверить созданные ресурсы,
       migrations/source/Pod/image/runtime/realtime и prompt pins.
-- [ ] 13. Manager выбирает #1796, если актуальна и имеет поддерживаемый
+- [x] 13. Manager выбирает #1796, если актуальна и имеет поддерживаемый
       upstream API; иначе следующую подходящую реальную Issue. Не scraping,
       не private undocumented endpoint и не выдуманные usage/credits.
+      Выбор #1796 подтверждён свежим GitHub OPEN и собственным native чтением
+      Manager с запуском одного Workflow в 20:12:50 UTC. Это выполненный выбор
+      задачи, не PASS реализации или полного процесса.
 - [ ] 14. Выполнить полный реальный Workflow силами команды Kodex; host
       проверяет каждый значимый transition и исправляет дефекты платформы,
       но не пишет финальную задачу вместо Developer и не подменяет reviewers.
@@ -4156,7 +4162,7 @@ VALIDATE VALID и PUBLISH PUBLISHED подтверждены. Это PASS кон
       final-readiness.md, финальный PR READY_FOR_HUMAN_REVIEW и отчёт по
       разделу 64 исходного задания. Единственный финальный Human Gate — владелец.
       Живой Workflow опубликован: 21 шаг, version 22 / revision 7;
-      полный процесс по новому порядку ещё NOT RUN.
+      полный процесс по новому порядку RUNNING, завершение READY_NOTCONFIRMED.
       Этот PR не merge, не auto-merge, не approve от имени владельца.
 
 ## Карта новых пользовательских сценариев
@@ -12281,3 +12287,99 @@ Network содержит 46 запросов, все 25 просмотренны
 main `e422cdc7b67feea8a1354e9efd98171e59704808`.
 Full65 OPEN; финальный PR по бизнес-задаче не сливать, не включать auto-merge
 и не approve от имени владельца.
+
+### 08.10.2026 20:12:50–20:14 UTC — PR1806 слит, обычный Manager запустил один Workflow revision 7
+
+PR1806 слит обычным squash; SHA ветки автора
+`e5a19a653c2e3070cb87a96e61d2cf8fcb546832`. Точный main
+`ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69`: BOT remote и local tracking EQUAL,
+после синхронизации до этой записи дерево чистое. Новая рабочая ветка —
+`kodex-agent/issue-1797-full21-v7`. Волна только документационная; runtime
+бинарники не менялись.
+
+Readback слитого checkpoint до этой записи: CP mounted handoff SHA256
+`aa99608ce5c3628ba38b9fe438e2ab4b88859d6dfb7d420f4e0a7698365ff710`
+EQUAL host; current frontend Ready Pod mounted store.ts SHA256
+`c64410e93d291a30bff9f78dd5e0bdec64921111bd46788eab8678e263dc493a`
+EQUAL host. Этот hash handoff относится к принятому документу до добавления
+текущего checkpoint, не к новым ещё не опубликованным строкам.
+
+Опубликованный Workflow revision 7 / version 22,
+`wfv_vERJPIFmeE24bKG_hpDKyTAm`: owner launchReadiness READY, allowed true.
+Обычный Manager run `run_XwbYaFrAxdg8L6_QV_84Y31K`, session
+`ses_I80bmTL0xwXDTOzLWE59ONu6`, создан в 20:12:50 UTC. Issue #1796 OPEN
+подтверждён свежим авторитетным GitHub read; Manager сам прочитал Issue своими
+native tools. В 20:14 UTC graph: agent execution SUCCEEDED, root RUNNING,
+ожидание external action / child `run_WGyaC4fntZgliH487NkcG4pu`.
+Итоговое сообщение Manager явно фиксирует: запущен один Workflow, callback
+ожидается, READY_NOTCONFIRMED, слияние запрещено. SUCCEEDED собственного
+исполнения Manager не является завершением корневого процесса.
+
+Сохранены 21 шаг, четыре исходных input без раскрытия частных данных и все
+прежние acceptance criteria бизнес-задачи. Решение владельца — одно комплексное
+ревью, затем приёмка Manager; единственный финальный Human Gate step-057.
+Штатный GitHub5 path сохраняет ограниченную cursor pagination и доказуемый EOF.
+Скриншот graph в 20:13 UTC PASS; activity pane в 20:14 UTC PASS: сообщение
+владельца справа, агента слева, инструменты компактны. Console errors/warnings 0,
+все 20 просмотренных относящихся к сценарию Network-запросов HTTP 200.
+Чужие вкладки не затронуты.
+
+Checklist 13 закрыт только как фактический выбор реальной Issue #1796 и
+штатный запуск; реализация не объявлена PASS. Полный Workflow и финальный PR
+ещё не готовы, checklist 11/14/15 остаются [ ], Full65 OPEN. Дальше ожидать
+штатный callback и проверять продолжение процесса; финальный PR по бизнес-задаче
+не сливать, не включать auto-merge и не approve от имени владельца.
+
+### 08.10.2026 20:17:29 UTC — INTAKE материализован, ранний provider ACK подтверждён
+
+Native full21 root `run_WGyaC4fntZgliH487NkcG4pu` RUNNING, target Workflow
+version 22. Coordinator собственной штатной командой launch/delegate запустил
+INTAKE child `run_fi-loHr9hVHb3zYomf1KCTOI`, session
+`ses_ONBkspLi1BqWiRT5YfytVh2D`. Ранний provider ACK CAPTURED; проверка
+того же Pod UID подтверждена. Scope NONE, ENV 9 / binding 10 / G9, tools 38 /
+grants 21; model `gpt-6.1-sol`, reasoning `medium`.
+
+RuntimeRevision `rrev_anD-wj1qMdrPNSICr85Xis_-`, digest
+`a56d1d9edb32a7951b39a64ecd59a75ccf1530cdd52e910ce56daf4e11e4f062`.
+Task/provider/inbox SHA256
+`af57d28d4c143a2f25c98b371def68ef59ec2852036781c423a30d089b26bff5`
+EQUAL авторитетному owner child input, taskInPrompt true. Instructions 49653 B,
+SHA256 `78fc9f5eb3eb61dbac84689ba1432f8d35ed4fd20926b5ab1bfe2b15f7d0fec2`
+EQUAL mounted AGENTS. ROOT проверил только metadata: instructions содержат
+обязательные input `field-002` / `field-004`, точные критерии бизнес-задачи,
+решение владельца об одном ревью и текущую публикацию Workflow. Это доказательство
+фактической материализации; собственного native EOF всех источников оно не
+доказывает. Сырые prompts и частные данные не публикуются.
+
+Image digest
+`615bab9cc7a7faf1688b552fb5744cca8796f8f43b0a3aba7c4604d109a6e4cc`;
+image-file SHA256 того же Pod
+`47a8fc359e2cd186c3d87a6710ba38f64986415e40a0a156c508094b8fc66b3d`
+EQUAL expected. Это hash файла образа, не hash фактически обслуживающего процесса.
+
+Native INTAKE sequence 62, failed tools нет. В COMMENTARY сотрудник сообщает:
+Issue OPEN, текущий main `ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69`,
+AGENTS прочитан до EOF; продолжает чтение источников и решения об исключении
+для одного ревью. Семантическая приёмка INTAKE ещё NOT RUN;
+Architect / Developer / комплексное ревью / финальный gate NOT RUN.
+Полный процесс RUNNING, финальная готовность не подтверждена. Checklist 13
+остаётся [x] только за выбор Issue; 11/14/15 остаются [ ], Full65 OPEN.
+Исторические результаты сохранены; финальный PR по бизнес-задаче не сливать,
+не включать auto-merge и не approve от имени владельца.
+
+20:19 UTC: Chrome MCP mobile emulate 390×844 на своей page 1. Скриншоты graph
+и activity panel получены и просмотрены ROOT: горизонтального переполнения нет,
+элементы управления видимы, сообщения владельца справа / агента слева,
+инструменты компактны. Mobile visual evidence PASS; Console errors/warnings 0.
+После проверки возвращён обычный desktop 2179×994; чужие вкладки не затронуты.
+В 20:22:10 UTC авторитетное состояние Pinia: platform/run LIVE, attempt 0,
+горизонтального переполнения нет.
+
+Native INTAKE sequence 129: в COMMENTARY сотрудник сообщает, что 10 выбранных
+документов самостоятельно прочитаны до native EOF на одном main
+`ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69`. Сам INTAKE выполнил Context7
+чтение документации по `account/rateLimits/read`, SUCCEEDED.
+Upstream main не доказывает точную установленную source revision: сначала
+Architect должен установить и проверить её. Это промежуточный прогресс,
+сообщённый сотрудником, не финальная приёмка manager plan. Итоговый semantic
+PASS INTAKE ещё NOT RUN; 11/14/15 остаются [ ], финальная готовность не подтверждена.

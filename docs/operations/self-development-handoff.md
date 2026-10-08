@@ -10,6 +10,96 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 20:17:29 UTC — INTAKE RUNNING, provider ACK и materialization подтверждены
+
+Native full21 root `run_WGyaC4fntZgliH487NkcG4pu` RUNNING, target Workflow
+version 22. Coordinator своей штатной командой launch/delegate запустил INTAKE
+child `run_fi-loHr9hVHb3zYomf1KCTOI`, session
+`ses_ONBkspLi1BqWiRT5YfytVh2D`. Ранний provider ACK CAPTURED, подтверждён тот же
+Pod UID. Scope NONE, ENV 9 / binding 10 / G9, tools 38 / grants 21,
+model `gpt-6.1-sol`, reasoning `medium`.
+
+RuntimeRevision `rrev_anD-wj1qMdrPNSICr85Xis_-`, digest
+`a56d1d9edb32a7951b39a64ecd59a75ccf1530cdd52e910ce56daf4e11e4f062`.
+Task/provider/inbox SHA256
+`af57d28d4c143a2f25c98b371def68ef59ec2852036781c423a30d089b26bff5`
+EQUAL авторитетному owner child input, taskInPrompt true. Instructions 49653 B,
+SHA256 `78fc9f5eb3eb61dbac84689ba1432f8d35ed4fd20926b5ab1bfe2b15f7d0fec2`
+EQUAL mounted AGENTS. Metadata-сверка ROOT подтверждает обязательные input
+`field-002` / `field-004`, точные критерии бизнес-задачи, решение владельца
+об одном ревью и текущую публикацию Workflow. Это фактическая материализация,
+не доказательство собственного native EOF всех источников.
+
+Image digest
+`615bab9cc7a7faf1688b552fb5744cca8796f8f43b0a3aba7c4604d109a6e4cc`;
+same Pod image-file SHA256
+`47a8fc359e2cd186c3d87a6710ba38f64986415e40a0a156c508094b8fc66b3d`
+EQUAL expected; это hash файла образа, не обслуживающего процесса.
+Native INTAKE sequence 62, failed tools нет. COMMENTARY сообщает Issue OPEN,
+main `ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69`, AGENTS EOF;
+сотрудник продолжает источники и решение об одном ревью.
+
+Семантическая приёмка INTAKE NOT RUN; Architect / Developer / комплексное
+ревью / финальный gate NOT RUN. Дальше дождаться штатного результата INTAKE,
+проверить собственные EOF источников и продолжение Coordinator. Полный процесс
+RUNNING, финальная готовность не подтверждена. Checklist 13 [x] только за выбор
+Issue; 11/14/15 [ ], Full65 OPEN. История сохранена; финальный PR по
+бизнес-задаче не сливать, не включать auto-merge и не approve от имени владельца.
+
+Дополнение 20:19–20:22:10 UTC: Chrome MCP emulate mobile 390×844, own page 1;
+скриншоты graph и activity panel получены и просмотрены ROOT. Горизонтального
+переполнения нет, элементы управления видимы, владелец справа / агент слева,
+инструменты компактны; mobile visual evidence PASS, Console errors/warnings 0.
+Возвращён обычный desktop 2179×994; чужие вкладки не затронуты. Авторитетная
+Pinia в 20:22:10 UTC: platform/run LIVE, attempt 0, overflow false.
+Native INTAKE sequence 129, COMMENTARY: 10 выбранных документов прочитаны
+сотрудником до native EOF на одном main
+`ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69`; собственное Context7 чтение
+документации по `account/rateLimits/read` SUCCEEDED. Upstream main не является точной
+установленной source revision; сначала Architect должен установить и проверить
+её. Это сообщённый сотрудником промежуточный прогресс, не финальная приёмка
+manager plan. Итоговый semantic PASS INTAKE ещё NOT RUN; 11/14/15 остаются [ ].
+
+## Checkpoint 08.10.2026 20:12:50–20:14 UTC — один Workflow revision 7 запущен после merge PR1806
+
+PR1806 слит обычным squash, author SHA
+`e5a19a653c2e3070cb87a96e61d2cf8fcb546832`, точный main
+`ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69`: BOT remote/local tracking EQUAL.
+После синхронизации до этой записи дерево чистое; новая рабочая ветка
+`kodex-agent/issue-1797-full21-v7`. Runtime бинарники не менялись: волна
+только документационная.
+
+Readback принятого checkpoint до текущей записи: CP mounted handoff SHA256
+`aa99608ce5c3628ba38b9fe438e2ab4b88859d6dfb7d420f4e0a7698365ff710`
+EQUAL host; current frontend Ready Pod mounted store.ts SHA256
+`c64410e93d291a30bff9f78dd5e0bdec64921111bd46788eab8678e263dc493a`
+EQUAL host. Hash handoff не выдаётся за доставку новых строк этого checkpoint.
+
+Workflow revision 7 / version 22, publishedRevisionRef
+`wfv_vERJPIFmeE24bKG_hpDKyTAm`, owner launchReadiness READY / allowed true.
+Обычный Manager run `run_XwbYaFrAxdg8L6_QV_84Y31K`, session
+`ses_I80bmTL0xwXDTOzLWE59ONu6`, создан в 20:12:50 UTC. Issue #1796 OPEN
+подтверждён свежим авторитетным GitHub read; Manager самостоятельно прочитал
+Issue native tools и запустил один Workflow. В 20:14 UTC graph: agent execution
+SUCCEEDED, root RUNNING, ожидается external action / child
+`run_WGyaC4fntZgliH487NkcG4pu`. Итоговый ответ Manager: один Workflow запущен,
+callback ожидается, READY_NOTCONFIRMED, слияние запрещено. Завершение исполнения
+самого Manager не доказывает завершение корневого процесса.
+
+Все 21 шаг, четыре исходных input без раскрытия частных данных и прежние
+business acceptance criteria сохранены. Одно комплексное ревью и приёмка
+Manager, единственный финальный Human Gate step-057; штатный GitHub5 path
+сохраняет ограниченную cursor pagination и EOF. Screenshot graph 20:13 UTC
+PASS; activity pane 20:14 UTC PASS: владелец справа, агент слева, компактные
+инструменты. Console errors/warnings 0, все 20 просмотренных относящихся к
+сценарию Network-запросов HTTP 200. Чужие вкладки не затронуты.
+
+Checklist 13 [x] только за выбор реальной Issue #1796, native чтение Manager и
+штатный запуск. Реализация не объявлена PASS; полный Workflow и финальный PR
+ещё не готовы. Checklist 11/14/15 остаются [ ], Full65 OPEN. Следующее —
+штатный callback и продолжение процесса. Финальный PR по бизнес-задаче
+не сливать, не включать auto-merge и не approve от имени владельца.
+
 ## Checkpoint 08.10.2026 20:07:52 UTC — Workflow revision 7 опубликован, полный процесс NOT RUN
 
 Штатный plan `pln_2xLSLiTD-aP4RqeeM9qcjogl` APPLIED, receipt
