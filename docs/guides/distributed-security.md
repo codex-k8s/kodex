@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.13
-updated: 2026-10-07
+version: 1.7.14
+updated: 2026-10-08
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -1503,6 +1503,13 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   purge с exact server-owned protected purge context и полным terminal graph;
   оно очищает только project history, никогда organization history. Caller-set
   GUC, disable triggers и произвольный history cleanup не являются authority.
+- Курсор страницы связывает проверенные actor/tenant, immutable projection,
+  admission revision, фактические фильтры и размер страницы. Optional expected
+  digest, узнанный из первой страницы и переданный в следующей, отдельно
+  проверяется против авторитетного report до выдачи результата; он не меняет
+  filter fingerprint самого курсора. Переход от отсутствующего expected pin
+  к точному pin не инвалидирует курсор, а неверный pin, изменённые filters,
+  tenant, actor, revision либо projection закрыто отклоняются.
 - Размер транспортного layer не ограничивает полноту логического SBOM:
   evidence v5 хранит SBOM и исходный vulnerability report четырьмя фиксированными
   последовательными частями. Каждая часть не больше 16MiB, сумма всех layers

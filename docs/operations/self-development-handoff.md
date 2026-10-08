@@ -10,6 +10,57 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 14:11 UTC — отчёты прочитаны, promotion в процессе
+
+Поверх6e581 исправлена пагинация risk report: optional expected digest
+отделён от HMAC filter fingerprint, но отдельно проверяется. Disposable
+ImageAdmissionRiskComponent PASS5.257s обеобласти/2pages/negativeguards,
+readback/cleanup PASS; image unit0.057s. Host/Pod risk reader EQUAL,
+новый serving ELF0492dccf…fe6e2 EQUAL. Изменения готовятся в тот же Draft1800.
+
+Оба новых owner отчёта прочитаны полностью:47pages/4634unique findings/
+4640occurrences каждый, EOF без повторов. Два HIGH те жеundici/tar; новые
+exact local decisions SYSTEMimgrisk_Ndl8zsr4JbntBPXvy_hS-k2o и
+PROJECTimgrisk_GRIMA9JmjL3DJ-_6ZClG-Dkz создают новуюattempt2, не переносят
+старуюreceipt и не снимают technical guards. SYSTEMartifact
+imgart_Yz-SNOEgQ1PCphnai2_71jnC ACCEPTED; UIpromotion202, CLAIMED.
+PROJECTimgart_5Ncrgh8Xntev661AhuehLGG0 attempt2 CLAIMED, пока не ACCEPTED.
+Следующее: дождаться authoritativepromotion, image-only ENV draft/validate/
+impact/publish/rebind с полным сохранением38tools/policy/values/secretpins.
+FreshSSO5min required при webAccess!=NONE; не обходить freshness guard.
+
+Screenshot по-прежнему NOT RUN; быстрые DOM/list_pages снова PASS, причина
+зависания capture UNKNOWN. Общие MCP/process configs и чужие вкладки
+не трогать. Snapshot/storage wake child packet и полноценный business
+Workflow/internalreviews/full65 OPEN, bootstrap merge ещё NOT RUN.
+
+## Checkpoint 08.10.2026 13:59 UTC — runtime активирован, admission новых образов ещё впереди
+
+Опубликованный source `6e581e05b04cc7ffd1fa582646f48784e2bbb002`, та же
+ветка/Draft1800. Full OCI build/import и canonical seed/render/quiesce/apply/
+отдельный readback PASS. Новая runner base `edfbf4f3…fa7f5`, binary
+`47a8fc35…66b3d`; фактическая CP policy revision1/SHA75381ec4…b9e2,
+11/11 deployments Ready, обе ноды без DiskPressure, прежние38promoted pins
+сохранены. Native UID10002→10001/group29000 capture success/failure PASS;
+40resume regressions под UID10002 PASS. Это не полная application acceptance.
+
+Штатный owner PATCH200 изменил только FROM в SYSTEM recipe G15/version25 и
+PROJECT G9/version17. Builds `imgbld_qCp5DojDhXkAZWtlCSGtg5-7` и
+`imgbld_1IT-gTJpEnGvb-cs1Zic1ery` запущены автоматически; admission/promotion/
+image-only ENV rebind NOT RUN. Before ENV: SYSTEM29/current
+`renvv_F6diwLX3-HD4raK8ScDp6xYD`, PROJECT10/current
+`renvv_YirnodGTM0bYdT-GLogEe_m2`, по38tools и прежниеpolicy/value/secret pins.
+Не переносить старое решение о риске на новые артефакты и не запускать лишний
+REQUEST_BUILD. Не переписывать старую повреждённую session/архивные tuple.
+
+Chrome owner SSO восстановился штатно без ввода пароля; API200/Console0/
+realtime подключён/overflowfalse. Screenshot NOT RUN: MCP capture hangs,
+даже без CSS motion; отдельная read-only диагностика. Single-RR graph run
+snapshot/storage owner wake реализуется в отдельном worktree; после проверки
+интегрировать в тот же PR. Затем допуск/promotion/rebind помощников, native
+настройка командных ENV, bootstrap merge/readback и один ordinary Manager→
+published39 SOFTWARE_CHANGE. Full65 и бизнесовый final human gate OPEN.
+
 ## Checkpoint 08.10.2026 13:35 UTC — storage UX и подтверждённый resume source
 
 Пакет поверх f562f519: CP terminal storage warning, общий readiness read для

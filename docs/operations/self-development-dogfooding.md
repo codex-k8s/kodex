@@ -10,6 +10,67 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 14:11 UTC — исправлена пагинация отчёта допуска
+
+- Live FAIL воспроизведён: вторая страница vulnerability report возвращала
+  412, поскольку optional expected report digest ошибочно участвовал в
+  HMAC filter fingerprint и менялся после первой страницы. Предусловие
+  проверки exact digest отделено от фильтров; actor/tenant/projection/
+  admission revision/filters/page size остаются связанными с курсором.
+- Disposable PostgreSQL `TestImageAdmissionRiskComponent` PASS5.257s:
+  обе области, последовательные страницы, wrong report pin, смена filter/
+  page size, чужая область, revoked admin/member и lifecycle cases.
+  Worker grant/runner policy readback и cleanup PASS. Адресные image unit
+  PASS0.057s. Source/Pod risk reader hash `b9c7acf9…976a3` EQUAL;
+  новый serving ELF `/proc/492/exe` и build/main `0492dccf…fe6e2` EQUAL.
+- Повтор живого owner чтения обоих новых отчётов PASS: каждый прочитан до
+  EOF за47страниц,4634unique findings/4640occurrences, повторов cursor/ref нет.
+  По два блокирующих HIGH: undici6.27.0 GHSA-rfgv-xxqx-mfg5 и tar7.5.19
+  GHSA-r292-9mhp-454m. Новые exact local decisions не переносились автоматически:
+  SYSTEM `imgrisk_Ndl8zsr4JbntBPXvy_hS-k2o`, PROJECT
+  `imgrisk_GRIMA9JmjL3DJ-_6ZClG-Dkz`; reason ограничивает их trusted dev
+  tuple без staging/production и без override technical guards.
+- SYSTEM attempt2 ACCEPTED/verified inventory, UI «Публикация образа»
+  отправила202; exact artifact `imgart_Yz-SNOEgQ1PCphnai2_71jnC`
+  manifest1897062b…4133d, provenancea019446a…91b9a, promotion CLAIMED.
+  PROJECT artifact `imgart_5Ncrgh8Xntev661AhuehLGG0`, manifest615bab9c…a6e4cc,
+  attempt2 CLAIMED: acceptance/promotion ещё OPEN. ENV rebind NOT RUN.
+- Console0 и overflowfalse; одна отменённая report загрузка при смене
+  revision не объявлена HTTP200. Screenshot NOT RUN. MCP DOM/list_pages
+  вновь работают: screenshot mutex причинность UNKNOWN, global MCP/browser
+  процессы не перезапускались. Full65/realtime/business Workflow OPEN.
+
+## Checkpoint 08.10.2026 13:59 UTC — новый runtime активирован, образы помощников собираются
+
+- Source `6e581e05b04cc7ffd1fa582646f48784e2bbb002` опубликован в той же
+  ветке и Draft1800. Полный runner OCI build/import, штатные seed, fresh render,
+  quiesce, apply и отдельный supply-chain readback PASS/exit0. Проверены
+  фактическая policy работающего процесса control-plane, 11/11 Ready
+  deployments и обе ноды без DiskPressure. Девять image pins и 38 ранее
+  опубликованных артефактов сохранены; обслуживание не удаляло историю.
+- Новый base image digest `edfbf4f3…fa7f5`, runner binary
+  `47a8fc35…66b3d`. Kernel UID boundary PASS: producer10002/group29000,
+  consumer10001/group29000, success и failure capture. Те же 40 resume
+  regressions PASS под UID10002 без сети; отдельный wrong-GID сценарий
+  этим запуском не проверялся.
+- После обслуживания локальная сессия интерфейса потребовала штатный SSO-вход;
+  он восстановился без повторного ввода пароля. Owner API200, Console0,
+  realtime «Подключено», горизонтальный overflow отсутствует. Screenshot
+  NOT RUN: inline capture завис даже без CSS-анимаций; причина диагностируется.
+- Только owner PATCH200 изменил FROM в двух существующих рецептах:
+  SYSTEM G15/version25 и PROJECT G9/version17. Остальные поля сохранены.
+  SYSTEM build `imgbld_qCp5DojDhXkAZWtlCSGtg5-7` начал финализацию;
+  PROJECT build `imgbld_1IT-gTJpEnGvb-cs1Zic1ery` поставлен в очередь.
+  Новые admission, risk decision, promotion и ENV rebind ещё NOT RUN.
+- Owner readback перед rebind: SYSTEM ENV version29/current
+  `renvv_F6diwLX3-HD4raK8ScDp6xYD`; PROJECT ENV version10/current
+  `renvv_YirnodGTM0bYdT-GLogEe_m2`. В каждом сохранены 38 tools; hashes
+  tools/policy/values/secretDescriptors совпадают с прежними значениями.
+  Наличие нового base image не объявляет готовность этих окружений.
+- Single-owner MVCC snapshot и storage-change WebSocket wake выполняются
+  отдельно. Полная realtime приемка, bootstrap merge и настоящий
+  SOFTWARE_CHANGE с внутренними review/fix циклами остаются OPEN.
+
 ## Checkpoint 08.10.2026 13:35 UTC — storage read path, UI и resume capture
 
 - Общий owner predicate добавлен в GetRunGraph: свежий workspace.run теперь
