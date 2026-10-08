@@ -10,6 +10,90 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 20:32–20:35 UTC — realtime LIVE после восстановления, Architect RUNNING
+
+ROOT Chrome MCP page 1 reload выполнен; desktop screenshot без горизонтального
+переполнения, Console errors/warnings 0. Все 35 просмотренных fetch/xhr первого
+page после reload HTTP 200. Сразу после reload realtime RECOVERING, затем
+собственный readback platform и root run подтвердил LIVE / attempt 0;
+мгновенное восстановление не заявлено. Gateway logs `--since=5m --tail=200`
+с закрытым фильтром 0 строк: ограниченное отсутствие записей, не PASS backend.
+
+Native Architect `run_5gkWwuEcKB-F0Mdz8FIaCK1n` RUNNING, sequence 346.
+COMMENTARY sequence 327: сам подтвердил установленный Codex 0.160.0,
+tag `rust-v0.160.0`, peeled commit `a956835d020762cb2b570053af06f643a11c0ecc`,
+схему usage / optional credits / reset / buckets. Producer всех аккаунтов
+ещё проверяется; semantic PASS NOT RUN. Дальше штатный результат Architect;
+исторические UNKNOWN и checklist не менялись, финальная готовность не подтверждена.
+
+## Checkpoint 08.10.2026 20:27 UTC — три artifact receipts сверены с owner GET
+
+Owner artifact GET и завершённые native Coordinator read_file receipts сверены;
+сырые prompts не читались и не публикуются. Точные результаты:
+
+- manager-plan.md: `art_oqBt0zKlG3gZRwxIzb0lNsQC`, revision 26,
+  size 29935 B, CLEAN, SHA256
+  `b61e54c3be8813fba32a15b3c8a1f788e84031437f17db2fda592f3acb78ebad`.
+  Sequence 148: offset 0 → 16383 / eof false; sequence 150:
+  offset 16383 → 29935 / eof true, same exact ref / revision / digest.
+  Локальный hash manager-plan.md совпал.
+- result.md: `art_yDscEuiSp_4A0_DiNTAC7DdX`, revision 129,
+  size 877 B, CLEAN, SHA256
+  `1ff55dfbf87217beab2eae9c41f5704b1942a9051219353bef56719540b2bde0`.
+  Sequence 154: offset 0 → 877 / eof true.
+- workspace-write-result.json: `art_C7Cwdh7nAaqMzZltD-Kb6nyf`, revision 129,
+  size 328 B, CLEAN, SHA256
+  `2a04147465e43a758d371e9e260abaa754ad56ec0c04ceacffe71c8d47b4f0cd`.
+  Sequence 156: offset 0 → 328 / eof true.
+
+Все три exact native READ Coordinator доказаны receipt и owner GET; прежний
+статус несверенных refs остаётся исторической записью своего времени.
+Architect sequence 223, native COMMENTARY: сам прочитал manager-plan.md до EOF,
+продолжает источники, failed tools 0. Семантический PASS архитектурного анализа
+ещё NOT RUN; полный процесс не завершён.
+
+## Checkpoint 08.10.2026 20:24–20:25 UTC — INTAKE semantic PASS, Architect RUNNING
+
+Опубликован точный checkpoint `49f9ebe05ca11dbe1271c0ed608efad769cf6706`,
+[Draft PR1807](https://github.com/codex-k8s/kodex/pull/1807), ветка
+`kodex-agent/issue-1797-full21-v7`. Main не менялся:
+`ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69`.
+
+Native INTAKE child `run_fi-loHr9hVHb3zYomf1KCTOI` FINAL semantic PASS:
+10 нормативных файлов, 18 страниц собственного native EOF на том же main,
+один callback. Локальный SHA256 manager-plan.md
+`b61e54c3be8813fba32a15b3c8a1f788e84031437f17db2fda592f3acb78ebad`.
+Captured artifact refs: `art_yDscEuiSp_4A0_DiNTAC7DdX`,
+`art_C7Cwdh7nAaqMzZltD-Kb6nyf`, `art_oqBt0zKlG3gZRwxIzb0lNsQC`.
+Owner-сверка соответствия refs именам/дайджестам ещё не выполнена; local SHA
+не является подменой artifact receipt. Coordinator своим read_file прочитал
+все три artifacts до EOF и в FINAL подтвердил делегирование step-002 Architect.
+
+Architect child `run_5gkWwuEcKB-F0Mdz8FIaCK1n`, session
+`ses_-LMobDAmVagIa1MggKRvaMB3`, RUNNING. Early provider ACK CAPTURED,
+same Pod UID подтверждён; task/inbox/instructions/image-file EQUAL expected.
+RuntimeRevision `rrev_BSS2OH3NdW_fVztY1dUBZEX3`, digest
+`8036f64a69b11d363bdd820b39352583623d95156cac34acb689707277e62cfc`.
+Input SHA256
+`e7d1e633cc7081e32b9d23fb42bdd25ecd22942ec72a14e146e0e3c00f17fae2`;
+instructions 43261 B, SHA256
+`e12e7057d690cd883d3696b484f1fea40697aadab08a1ea9cf1751e31f3e1eea`.
+NONE / ENV 9 / binding 10 / G9, tools 38 / grants 18,
+model `gpt-6.1-sol`, reasoning `medium`. Image digest
+`615bab9cc7a7faf1688b552fb5744cca8796f8f43b0a3aba7c4604d109a6e4cc`;
+same Pod image-file SHA256
+`47a8fc359e2cd186c3d87a6710ba38f64986415e40a0a156c508094b8fc66b3d`
+EQUAL expected, не hash обслуживающего process binary.
+
+Console errors/warnings 0 в 20:25 UTC; RT store platform/run LIVE по снимку
+20:22:10 UTC. MCP WebSocket network index 0 не доказывает отсутствия
+соединений/кадров или доставку; WebSocket frame PASS не заявлен.
+Далее native Architect и его собственные sources/EOF, owner-сверка artifact
+receipts. Developer / комплексное ревью / финальный gate NOT RUN, полный
+процесс ещё не принят. Checklist 11/14/15 [ ], 13 [x] только за выбор Issue,
+Full65 OPEN. Финальный PR по бизнес-задаче не сливать, не включать auto-merge
+и не approve от имени владельца.
+
 ## Checkpoint 08.10.2026 20:17:29 UTC — INTAKE RUNNING, provider ACK и materialization подтверждены
 
 Native full21 root `run_WGyaC4fntZgliH487NkcG4pu` RUNNING, target Workflow
