@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"io"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
+
+const maximumPlatformFrameBytes = 65536
 
 var platformEventNames = map[string]string{
 	"PROJECT_CHANGED":                "PROJECT",
@@ -58,7 +61,7 @@ type platformSignal struct {
 }
 
 func decodePlatformSignal(payload []byte, organizationRef string) (platformSignal, bool) {
-	if len(payload) == 0 || len(payload) > maximumFrameBytes {
+	if len(payload) == 0 || len(payload) > maximumPlatformFrameBytes || !utf8.Valid(payload) {
 		return platformSignal{}, false
 	}
 	decoder := json.NewDecoder(bytes.NewReader(payload))
@@ -72,7 +75,7 @@ func decodePlatformSignal(payload []byte, organizationRef string) (platformSigna
 		envelope.EventVersion != 1 || envelope.AggregateVersion < 1 || envelope.Sequence < 1 ||
 		envelope.OccurredAt.IsZero() || uuid.Validate(envelope.EventID) != nil ||
 		!safeRef.MatchString(envelope.AggregateRef) || !safeRef.MatchString(envelope.CorrelationRef) ||
-		len(envelope.Data.SafeSummary) > 2000 {
+		utf8.RuneCountInString(envelope.Data.SafeSummary) > 1000 {
 		return platformSignal{}, false
 	}
 	if envelope.ProjectRef != "" && !safeRef.MatchString(envelope.ProjectRef) {

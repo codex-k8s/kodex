@@ -4,8 +4,8 @@ title: AsyncAPI, доменные события и NATS
 type: contract-guide
 status: approved
 owner: architect
-version: 1.1.0
-updated: 2026-07-28
+version: 1.2.0
+updated: 2026-10-08
 ---
 
 # AsyncAPI, доменные события и NATS
@@ -64,6 +64,14 @@ data
 - `eventSequence` монотонна в точном ordering key.
 - `data` является immutable безопасным snapshot либо явно описанной delta.
 - Payload не содержит secrets и несанкционированные PII.
+
+`maxLength` текстового поля ограничивает число Unicode code points, а не
+байтов UTF-8. Producer ограничивает snapshot до сохранения immutable outbox;
+consumer проверяет тот же предел отдельно от byte budget всего envelope.
+В browser platform wake невалидный UTF-8 отклоняется до JSON decode:
+замена повреждённых символов декодером не считается допустимым
+восстановлением. Общий transport budget не расширяет более узкий лимит
+конкретного события.
 
 Optional metadata разрешено только утвержденными extensions. Произвольные
 additional properties запрещены.
