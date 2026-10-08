@@ -65,6 +65,9 @@ func testRuntimeFileQueries(t *testing.T, ctx context.Context, repository *Repos
 		diagnoseRuntimeFiles(t, ctx, repository, execution.CatalogRef)
 		t.Fatalf("search exact input catalog: count=%d total=%d err=%v", len(first.Items), first.Total, err)
 	}
+	t.Run("catalog locked read survives concurrent lease renew", func(t *testing.T) {
+		testRuntimeFilesConcurrentLeaseRenew(t, ctx, repository, lease, first)
+	})
 	second, err := service.SearchExecutionFiles(ctx, searcher, execution, "", query.Page{Size: 1, Token: first.Next})
 	if err != nil || second.Total != 2 || len(second.Items) != 1 || second.Next != "" || second.Items[0].EntryRef == first.Items[0].EntryRef {
 		t.Fatalf("search second input page: count=%d total=%d err=%v", len(second.Items), second.Total, err)

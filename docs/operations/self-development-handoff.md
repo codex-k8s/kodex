@@ -10,6 +10,34 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 17:56 UTC — catalog renewal fix интегрирован и обслуживается
+
+Ветка kodex-agent/issue-1797-catalog-continuation, Draft PR1804. Frozen patch
+73c39d4e…2964 полностью прочитан и применён через apply_patch; три source/test
+hashes EQUAL: runtime_files8a5eb209…4bbd9, component067a663b…68e8,
+locked-read3e951a59…3f610. Только общий owner catalog read wrapper; RR/FOR SHARE,
+catalog/cursor/actor/lease/fence/generation guards и tool semantics сохранены.
+Existing bounded whole-transaction retry: только typed40001, максимум3 попытки
+с единым5s budget и проверенным rollback; fresh denied/expiry/stale не retry.
+ReadExecutionArtifact/body path без lease FOR SHARE не менялся.
+
+ROOT на интегрированном pre-commit дереве: адресный disposable PostgreSQL
+TestRuntimeFilesLockedReadComponent PASS10.403s (test10.34s), пять реальных
+concurrent-update cases, continuation/manifest/metadata/preview/expiry.
+Fresh migrations/status/second up, worker grant/runner policy readback PASS.
+ROOT helper/privacy/preview unit PASS0.079s; vet/build/gofmt/diffcheck PASS.
+Исторический actual ERROR/SELECT доказывает conflict readCatalog; writer identity
+UNKNOWN. Детерминированный fixture использует production renew SQL.
+
+Source/Pod runtime_files hash8a5eb209…4bbd9 EQUAL. Actual serving CP PID1583
+ELF SHA101c7da0b9424776b4b1ad2357791518f6e4120a888bc2140dc7ac2b376b6355
+EQUAL точному ROOT rebuild с Air flags; не immutable release acceptance.
+Chrome platform LIVE/attempt0, Console0/session+graph200/overflowfalse.
+Screenshot NOT RUN: одна разрешённая capture попытка зависла, file отсутствует.
+Далее committed SHA/readback, обычный bootstrap merge1804 и fresh main;
+один новый ordinary Manager/full39 должен доказать native EOF/Developer/
+четыре reviews/Manager/Gate033. Full65 не закрыт, финальный PR1796 не merge.
+
 ## Checkpoint 08.10.2026 17:39 UTC — PR1803 слит, catalog continuation BLOCKED
 
 PR1803 слит обычным squash без обхода protection. Author SHA
@@ -37,6 +65,41 @@ SHA b354268332a4072dc6cde3182c95eb68cb97e44a4c286b1c0c1b8d44d9484bdd EQUAL.
 сотрудников. Developer/reviews/Gate033/финальный business PR ещё NOT RUN.
 Own Chrome reload17:37, platform LIVE/attempt0, Console0, overflow=false;
 screenshot NOT RUN. Демо владельца не изменено; Full65 OPEN, цель ACTIVE.
+
+17:42 UTC: exact причина подтверждена PostgreSQL evidence: ERROR40001 и
+следующий statement одного backend PID/одного timestamp17:31:07.389 относятся
+к runtime_files_read_catalog, включая lease/catalog join и FOR SHARE OF lease.
+RR snapshot пересёкся с конкурентным UPDATE lease. Identity actual writer
+пока UNKNOWN; production renew SQL воспроизводит этот механизм в disposable
+фикстуре. Сырой SQL/error payload не
+публикуется. Исправление готовится с существующим ограниченным read retry,
+без ослабления RR/lock и без client-side повторов remote TOOL_UNAVAILABLE.
+Ветка checkpointafc29151 запушена, Draft PR1804 создан; live fix ещё NOT RUN.
+
+| Путь | Сохранённая граница | Проверка изменения |
+| --- | --- | --- |
+| search/manifest | verified runtime principal → CP RPC → owner readRuntimeFiles → frozen own catalog/purpose/query/cursor | весь snapshot и fresh lease eligibility после rollback40001 |
+| metadata/preview | exact own entry/artifact/revision/digest, current tenant/lifecycle | общий wrapper, никаких partial results при ошибке |
+| cancel/expiry/revoke/stale fence/generation | owner authoritative read не находит активный grant | закрытый отказ, не retry denial |
+| audit | только committed read transaction, без обязательного domain event для read | rollback конфликтной попытки, один committed receipt |
+| read_file body download | отдельный exact owner ReadExecutionArtifact, без FOR SHARE lease в source | данный renew row-lock defect не доказан; body path не меняется |
+
+Локальная регрессия должна воспроизвести конфликт двумя disposable PostgreSQL
+connections; успешная проверка не заменит последующий native EOF и full65.
+
+17:49 UTC: ROOT существующий read retry unit PASS0.094s на checkpointafc29151
+(production fix пока только в изолированном worktree). Actual serving ELF
+CPee298a76…d5fb/gateway1084f2f7…671 остались прежними и совпадают с rebuild.
+Одна новая штатная screenshot-попытка PNG/viewport/own page1 в разрешённый
+owned0700 временный каталог не завершилась за бюджет больше120s; файл не создан,
+ожидание прекращено. MCP list_pages/reload после этого работает, Console0/
+platform LIVE. Capture hang UNKNOWN, visual acceptance NOT RUN; обходов нет.
+
+Следующие live обязательства: один свежий full39, actual ACK шести ролей,
+native Developer branch/tests/commit/push/PR1796, четыре reviews одного SHA,
+Manager product и fix/re-review до5 волн, final-readiness.md/Gate033 и отчёт§64.
+Режимы HUMAN_EACH_EFFECT/HUMAN_SCOPED уже имеют отдельное bootstrap evidence
+в журнале; их не повторять без изменения boundary. Финальный PR не сливать.
 
 ## Checkpoint 08.10.2026 17:27 UTC — узкий realtime bootstrap, native INTAKE продолжается
 

@@ -10,7 +10,6 @@ import (
 	"io"
 	"mime"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -45,22 +44,26 @@ type runtimeFilesRead struct {
 func readRuntimeFiles[T any](ctx context.Context, repository *Repository, principal value.Principal, execution query.ExecutionFileContext, operation string,
 	fetch func(context.Context, pgx.Tx, runtimeFilesRead) (T, int, error),
 ) (T, error) {
+	return retryAssistantLockedRead(ctx, func(attemptCtx context.Context) (T, error) {
+		return readRuntimeFilesOnce(attemptCtx, repository, principal, execution, operation, fetch)
+	})
+}
+
+// Renew может изменить lease после RR snapshot до FOR SHARE. Повторяется
+// только вся owner read-транзакция после rollback с прежними immutable pins.
+func readRuntimeFilesOnce[T any](ctx context.Context, repository *Repository, principal value.Principal, execution query.ExecutionFileContext, operation string,
+	fetch func(context.Context, pgx.Tx, runtimeFilesRead) (T, int, error),
+) (_ T, resultError error) {
 	var zero T
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
 	current, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return zero, err
 	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
 	if err != nil {
-		return zero, errs.ErrUnavailable
+		return zero, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
-	defer func() {
-		cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
-		defer stop()
-		_ = tx.Rollback(cleanup)
-	}()
+	defer rollbackAssistantLockedRead(ctx, tx, &resultError)
 	fence := sha256.Sum256([]byte(execution.Fence))
 	read := runtimeFilesRead{current: current}
 	err = tx.QueryRow(ctx, queryRuntimeFilesReadCatalog, pgx.StrictNamedArgs{
@@ -71,7 +74,10 @@ func readRuntimeFiles[T any](ctx context.Context, repository *Repository, princi
 	if errors.Is(err, pgx.ErrNoRows) {
 		return zero, errs.ErrNotFound
 	}
-	if err != nil || read.catalog.Validate() != nil {
+	if err != nil {
+		return zero, assistantLockedReadError(err, errs.ErrUnavailable)
+	}
+	if read.catalog.Validate() != nil {
 		return zero, errs.ErrUnavailable
 	}
 	result, count, err := fetch(ctx, tx, read)
@@ -87,13 +93,13 @@ func readRuntimeFiles[T any](ctx context.Context, repository *Repository, princi
 		"summary": fmt.Sprintf("purpose=%s count=%d", execution.Purpose, count), "correlation": current.correlationRef,
 	})
 	if err != nil {
-		return zero, errs.ErrUnavailable
+		return zero, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
 	if tag.RowsAffected() != 1 {
 		return zero, errs.ErrNotFound
 	}
-	if tx.Commit(ctx) != nil {
-		return zero, errs.ErrUnavailable
+	if err := tx.Commit(ctx); err != nil {
+		return zero, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
 	return result, nil
 }
@@ -123,27 +129,27 @@ func (repository *Repository) listExecutionFiles(ctx context.Context, principal 
 			return result, 0, err
 		}
 		args := pgx.StrictNamedArgs{"catalog_id": read.id, "purpose": execution.Purpose, "query": search}
-		if tx.QueryRow(ctx, queryRuntimeFilesCount, args).Scan(&result.Total) != nil {
-			return result, 0, errs.ErrUnavailable
+		if err := tx.QueryRow(ctx, queryRuntimeFilesCount, args).Scan(&result.Total); err != nil {
+			return result, 0, assistantLockedReadError(err, errs.ErrUnavailable)
 		}
 		limit := boundedPage(page)
 		args["after_ref"], args["page_limit"] = after, limit+1
 		rows, err := tx.Query(ctx, queryRuntimeFilesSearch, args)
 		if err != nil {
-			return result, 0, errs.ErrUnavailable
+			return result, 0, assistantLockedReadError(err, errs.ErrUnavailable)
 		}
 		for rows.Next() {
 			var file entity.ExecutionFileDescriptor
-			if rows.Scan(executionFileDestinations(&file)...) != nil {
+			if err := rows.Scan(executionFileDestinations(&file)...); err != nil {
 				rows.Close()
-				return result, 0, errs.ErrUnavailable
+				return result, 0, assistantLockedReadError(err, errs.ErrUnavailable)
 			}
 			result.Items = append(result.Items, file)
 		}
 		err = rows.Err()
 		rows.Close()
 		if err != nil {
-			return result, 0, errs.ErrUnavailable
+			return result, 0, assistantLockedReadError(err, errs.ErrUnavailable)
 		}
 		if len(result.Items) > int(limit) {
 			result.Items = result.Items[:limit]
@@ -170,7 +176,7 @@ func readExecutionFileMetadata(ctx context.Context, tx pgx.Tx, read runtimeFiles
 		return result, errs.ErrNotFound
 	}
 	if err != nil {
-		return result, errs.ErrUnavailable
+		return result, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
 	if result.key == "" || result.digest != result.file.Digest || result.size != result.file.SizeBytes {
 		return result, errs.ErrConflict
