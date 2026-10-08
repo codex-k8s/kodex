@@ -10,6 +10,79 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 16:34 UTC — исправлены повторные подключения, INTAKE достиг deadline
+
+Base main94252cc6cf5909484979b1e000a38bc7b24e6c4f, продолжение в той же
+ветке followup/Issue1797. Исправлены только realtime consumer и регрессии:
+после validated SESSION_READY и полного platform resume сбрасывается бюджет
+последовательных отказов; один socket open/частичный resume его не сбрасывает.
+Валидный atomic RUN snapshot уже подтверждённой LIVE сессии больше не создаёт
+ложный recovering до heartbeat. Schema/owner/root/session/version/digest
+guards, предел шести последовательных retries, producer и права неизменны.
+
+ROOT PASS67/67, scoped ESLint/Prettier, forced vue-tsc и production build.
+Build warning chunk>500kB сохранён. Source/Pod realtime store SHA
+041e88d01c8d48248610a02b0fd6cc04848599fa2b6db05aa8cdafd977dfe138 EQUAL;
+test SHAf1680632…27b8e. Browser reload: platform/run live/attempt0,
+HTTP200/Console0/overflowfalse. Восемь штатных refreshSession дали platform
+live, RUN recovering до heartbeat, затем live; это не proof восьми успешных
+автоматических resync. Natural resync post-fix пока NOT RUN. Screenshot
+NOT RUN: MCP отклоняет сохранение даже внутри cwd по workspace roots;
+DOM geometry не заменяет визуальную проверку, обход не выполнялся.
+
+Новый SOFTWARE_CHANGE run_J83QAKRun6DSy-sLvKGgCsoc и INTAKE
+run_yLyPc_rWt-9y9JiRKskmFtFY FAILED/RUNTIME_TIMEOUT в16:27:36UTC,
+root sequence418. Owner GET200: published workflow timeout86400,
+step-001 timeout1200. Native Manager почти завершил чтение двух исторических
+журналов (~389KiB и~1MiB), но manager-plan не выпущен; зависимые этапы NOT RUN.
+Фактическая limiting clock RuntimeRevision пока NOT RUN; совпадение времени
+и error не заменяет exact deadline proof. Старый root не исправляется/retry
+вручную. Причина выбора обоих журналов как обязательных ещё UNKNOWN.
+
+Actual Manager instructions revision3 требуют EOF обязательных применимых
+источников, не называют журналы обязательными. AGENTS требует релевантные
+документы. Следующий native input явно отделит business Issue1796 и её
+нормативные источники от host QA history1797, сохраняя самостоятельный EOF
+обязательных документов, текущие grants/DAG/gates/deadlines и исходные AC.
+Full65 OPEN; business PR/reviews/HumanGate033 не выполнены. Тестовый проект
+владельца не изменён. Следующее: natural resync proof, publish/bootstrap merge
+этой правки, fresh source readback и один scoped native бизнес-процесс.
+
+## Checkpoint 08.10.2026 16:09 UTC — PR1801 слит, новый SOFTWARE_CHANGE принят
+
+PR1801 MERGED штатным squash: main94252cc6cf5909484979b1e000a38bc7b24e6c4f
+совпадает с GitHub/origin/local main. GitHub checks отсутствуют, не CI PASS;
+host review waived владельцем, protection не обходилась. Продолжение host QA —
+ветка kodex-agent/issue-1797-live-software-change-followup по тому же Issue1797.
+Source/Pod prompt и graph SQL EQUAL, serving ELF15c3aece…339f6 EQUAL/proc1068.
+Прежний proc974 исчез после штатного reload; первый read NOT RUN, не mismatch.
+
+Новый ordinary Manager run_nsuoRDHfysSpRx1hS-XiHGMI/session
+ses_Y8wQmcper9OTJen_8rlttyVP прочитал Issue1796 и native launch_workflow
+SUCCEEDED ровно один раз: root run_J83QAKRun6DSy-sLvKGgCsoc/session
+ses_bo8UVMo9VQF52sCoyqNJjbwi, та же published revision6/target18/39steps.
+Owner GET200 передал фактическую input schema и точные docs locators как
+данные; grants/authority не расширены. INTAKE child run_yLyPc_rWt-9y9JiRKskmFtFY,
+own session ses_I3ewdzBPUe5qerQmFzyWJi0s/turn trn_VD5iKmV1Qqswqlv4s9AOOb5m
+RUNNING. Historical FAILED root не переписан и не retry.
+
+Ранний ACK и same-Pod rejoin CAPTURED для Coordinator и INTAKE:
+NONE/G9/ENV9/binding10/tools38, runner image-file47a8fc35…66b3d EQUAL.
+INTAKE Pod UID30b45b7a-34a2-4e6b-ba87-e111ec0556d8; закрытая проекция
+AGENTS.md16:08:55 доказала полный39-step publication/revision6 и exact
+instructions SHAa9587e99…2ac9a27 EQUAL ACK, DAG SHA21ce2a89…577846c.
+Ни raw instructions/input, ни env/credentials не выводились. Task expected
+observer NOT RUN; отдельный owner GET ordinary Manager input7672B/
+SHA4b74849b…606248 EQUAL provider task/inbox — дополнительное доказательство.
+Первая попытка projection Coordinator NOT RUN: его container уже завершился.
+
+Browser overflowfalse/fontloaded/own page1. Один Console404 — неверный host
+diagnostic URL workflow с project prefix, исправленный GET200; не frontend
+defect. Screenshot NOT RUN, MCP transport ранее зависал. Native полный процесс,
+Developer business PR и exact-SHA reviews ещё OPEN; final PR не merge/approve.
+Owner demo не затрагивался. Следующее: INTAKE→Architecture→Developer→reviews,
+fixes≤5waves→HumanGate033 и полный Full65 report без частичной отметки PASS.
+
 ## Checkpoint 08.10.2026 15:56 UTC — оба исправления на стенде, combined PASS
 
 Source base709ca821, ветка kodex-agent/issue-1797-live-software-change-qa,

@@ -10,6 +10,52 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 16:34 UTC — realtime recovery и граница INTAKE
+
+Base94252cc6cf5909484979b1e000a38bc7b24e6c4f/host followup1797.
+Consumer reset consecutive retry budget только после полного validated
+resume; atomic valid LIVE RUN snapshot не создаёт промежуточный recovering.
+ROOT PASS67/67/scoped lint/format/forced typecheck/build/diffcheck; исходные
+security guards и retry cap сохранены. Source/Pod SHA041e88d0…fe138 EQUAL.
+Browser live/attempt0/Console0/API200/overflowfalse после reload.
+Восемь manual refreshSession не доказали автоматические resync: RUN временно
+recovering до heartbeat, затем live. Natural resync post-fix NOT RUN.
+Screenshot NOT RUN: MCP workspace-root отказ, обход не выполнялся.
+
+Workflow run_J83QAKRun6DSy-sLvKGgCsoc и INTAKE run_yLyPc_rWt-9y9JiRKskmFtFY
+FAILED/RUNTIME_TIMEOUT16:27:36UTC/root seq418. Owner GET published process:
+timeout86400, step-001 timeout1200; exact RuntimeRevision clock NOT RUN.
+Native чтение почти дошло до EOF исторических OPS журналов, но plan/business
+результат не получен. Actual Manager revision3 требует EOF применимых
+обязательных источников, не требует оба журнала целиком; AGENTS требует
+релевантные источники. Следующий input уточняет business1796 source scope,
+не заменяет собственное чтение host квитанциями и не меняет grants/DAG/AC.
+Исторический FAILED root не переписан. Checklist11/13/14/15 остаётся OPEN;
+финальный внутренний PR не merge/approve. Owner demo не изменён.
+
+## Checkpoint 08.10.2026 16:09 UTC — fresh main и native published DAG
+
+Bootstrap PR1801 MERGED без bypass; main94252cc6cf5909484979b1e000a38bc7b24e6c4f
+GitHub/origin/local EQUAL, serving CP ELF15c3aece…339f6 EQUAL/proc1068.
+Продолжение host QA — kodex-agent/issue-1797-live-software-change-followup,
+Issue1797. GitHub checks отсутствуют, CI PASS не заявляется.
+Ordinary Manager run_nsuoRDHfysSpRx1hS-XiHGMI прочитал Issue1796 и запустил
+ровно один native SOFTWARE_CHANGE root run_J83QAKRun6DSy-sLvKGgCsoc.
+INTAKE run_yLyPc_rWt-9y9JiRKskmFtFY выполняется. Четыре inputs проверены
+owner schema GET200; field-004 дополнен точными docs locators как данными,
+без изменения grants или authority. Прежний FAILED root сохраняется.
+
+Coordinator/INTAKE provider ACK и same-Pod rejoin CAPTURED: G9/ENV9/binding10/
+tools38, runner image-file47a8fc35…66b3d EQUAL. INTAKE закрытый AGENTS.md
+read доказывает39-step publication/published revision6, instructions SHA
+a9587e99…2ac9a27 EQUAL provider ACK, DAG SHA21ce2a89…577846c.
+Task expected observer NOT RUN; отдельный ordinary Manager owner input digest
+4b74849b…606248 EQUAL task/provider/inbox. Source-only projection теперь имеет
+native actual доказательство, но business результат ещё не достигнут.
+Browser overflowfalse/fontsloaded, screenshot NOT RUN; diagnostic404 host URL
+исправлен GET200, не баг UI. Checklist11/13/14/15 остаётся OPEN до полного
+процесса и final human gate, не отмечать по одному успешному запуску.
+
 ## Checkpoint 08.10.2026 15:56 UTC — контекст процесса и связи узлов проверены
 
 Ветка kodex-agent/issue-1797-live-software-change-qa от main709ca821.

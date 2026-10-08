@@ -459,6 +459,207 @@ describe("browser-session realtime multiplexer", () => {
     store.closeAll();
   });
 
+  it.each(["platform-first", "session-first"])(
+    "успешный полный resume сбрасывает бюджет для восьми resync подряд: %s",
+    async (order) => {
+      const store = useRealtimeStore();
+      store.openPlatform();
+      store.openRun("run_realtime01");
+      await flushProcessing();
+
+      for (let index = 0; index < 8; index += 1) {
+        const socket = socketAt(index);
+        socket.open();
+        socket.message(runSnapshot(socket, "run_realtime01"));
+        socket.message(
+          runEnvelope(socket, "run_realtime01", {
+            type: "RUN_READY",
+            cursor: 1,
+          }),
+        );
+        const platformReady = {
+          type: "PLATFORM_READY",
+          requestRef: requestRef(socket),
+          streamKind: "PLATFORM",
+          streamRef: "PLATFORM",
+          cursor: 0,
+          availableKinds: ["RUN"],
+        };
+        const sessionReady = {
+          type: "SESSION_READY",
+          requestRef: requestRef(socket),
+          streams: [
+            { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+            { streamKind: "RUN", streamRef: "run_realtime01", cursor: 1 },
+          ],
+        };
+        socket.message(
+          order === "platform-first" ? platformReady : sessionReady,
+        );
+        socket.message(
+          order === "platform-first" ? sessionReady : platformReady,
+        );
+        await flushProcessing();
+        expect(store.platformState.state).toBe("live");
+        expect(store.state.run_realtime01?.state).toBe("live");
+
+        socket.message({
+          type: "PLATFORM_RESYNC_REQUIRED",
+          requestRef: requestRef(socket),
+          streamKind: "PLATFORM",
+          streamRef: "PLATFORM",
+          cursor: 0,
+          reason: "AUTHORITATIVE_READ_REQUIRED",
+        });
+        await flushProcessing();
+        expect(socket.closeReason).toBe("PLATFORM_RESYNC_REQUIRED");
+        expect(store.platformState.attempt).toBe(1);
+        runScheduled(1_000);
+        await flushProcessing();
+        expect(FakeWebSocket.instances).toHaveLength(index + 2);
+      }
+      store.closeAll();
+    },
+  );
+
+  it.each(["initial", "unconfirmed", "live-valid", "live-invalid"])(
+    "сохраняет LIVE лишь для проверенного snapshot подтверждённой сессии: %s",
+    async (mode) => {
+      const store = useRealtimeStore();
+      const platform = usePlatformStore();
+      store.openPlatform();
+      store.openRun("run_realtime01");
+      await flushProcessing();
+      const socket = socketAt(0);
+      socket.open();
+      socket.message({
+        type: "PLATFORM_READY",
+        requestRef: requestRef(socket),
+        streamKind: "PLATFORM",
+        streamRef: "PLATFORM",
+        cursor: 0,
+        availableKinds: ["RUN"],
+      });
+      socket.message(runSnapshot(socket, "run_realtime01"));
+      if (mode !== "initial") {
+        socket.message(
+          runEnvelope(socket, "run_realtime01", {
+            type: "RUN_READY",
+            cursor: 1,
+          }),
+        );
+      }
+      if (mode.startsWith("live-")) {
+        socket.message({
+          type: "SESSION_READY",
+          requestRef: requestRef(socket),
+          streams: [
+            { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+            { streamKind: "RUN", streamRef: "run_realtime01", cursor: 1 },
+          ],
+        });
+        socket.message(
+          runEnvelope(socket, "run_realtime01", {
+            type: "STREAM_HEARTBEAT",
+            cursor: 1,
+            serverTime: "2026-08-23T00:00:04Z",
+          }),
+        );
+      }
+      await flushProcessing();
+      const next = runSnapshot(socket, "run_realtime01", 2);
+      socket.message(mode === "live-invalid" ? { ...next, runs: [] } : next);
+      await flushProcessing();
+
+      if (mode === "live-invalid") {
+        expect(socket.closeCode).toBe(1002);
+        expect(socket.closeReason).toBe("INVALID_SESSION_ENVELOPE");
+        expect(store.state.run_realtime01?.state).not.toBe("live");
+        expect(platform.graphs.run_realtime01?.sequence).toBe(1);
+        expect(platform.runs.run_realtime01?.version).toBe(1);
+      } else {
+        expect(socket.readyState).toBe(FakeWebSocket.OPEN);
+        expect(platform.graphs.run_realtime01?.sequence).toBe(2);
+        expect(platform.runs.run_realtime01?.version).toBe(2);
+        expect(store.state.run_realtime01?.state).toBe(
+          mode === "live-valid" ? "live" : "recovering",
+        );
+        if (mode === "live-valid")
+          expect(store.state.run_realtime01?.lastHeartbeat).toBe(
+            "2026-08-23T00:00:04Z",
+          );
+      }
+      expect(platform.loadRun).not.toHaveBeenCalled();
+      store.closeAll();
+    },
+  );
+
+  it.each(["socket-open", "platform-only", "session-only", "invalid-session"])(
+    "не сбрасывает шесть последовательных retry при неполном resume: %s",
+    async (partial) => {
+      const store = useRealtimeStore();
+      store.openPlatform();
+      store.openRun("run_realtime01");
+      await flushProcessing();
+
+      // Прежний предел: начальное соединение и шесть повторных попыток.
+      for (let index = 0; index <= 6; index += 1) {
+        const socket = socketAt(index);
+        socket.open();
+        if (partial === "platform-only" || partial === "invalid-session") {
+          socket.message({
+            type: "PLATFORM_READY",
+            requestRef: requestRef(socket),
+            streamKind: "PLATFORM",
+            streamRef: "PLATFORM",
+            cursor: 0,
+            availableKinds: [],
+          });
+        }
+        if (partial === "session-only") {
+          socket.message(runSnapshot(socket, "run_realtime01"));
+          socket.message({
+            type: "SESSION_READY",
+            requestRef: requestRef(socket),
+            streams: [
+              { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+              { streamKind: "RUN", streamRef: "run_realtime01", cursor: 1 },
+            ],
+          });
+        }
+        if (partial === "invalid-session") {
+          socket.message({
+            type: "SESSION_READY",
+            requestRef: requestRef(socket),
+            streams: [
+              { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+              { streamKind: "RUN", streamRef: "run_foreign01", cursor: 1 },
+            ],
+          });
+        }
+        await flushProcessing();
+        if (partial === "invalid-session") {
+          expect(socket.closeReason).toBe("INVALID_SESSION_READY");
+          expect(socket.closeCode).toBe(1002);
+        } else {
+          runScheduled(sessionResumeTimeoutMs);
+          expect(socket.closeReason).toBe("SESSION_RESUME_TIMEOUT");
+        }
+        if (index < 6) {
+          expect(store.platformState.attempt).toBe(index + 1);
+          runScheduled(Math.min(10_000, 500 * 2 ** Math.min(index + 1, 5)));
+          await flushProcessing();
+          expect(FakeWebSocket.instances).toHaveLength(index + 2);
+        } else {
+          expect(store.state.run_realtime01?.attempt).toBe(6);
+          expect(scheduled.size).toBe(0);
+          expect(FakeWebSocket.instances).toHaveLength(7);
+        }
+      }
+      store.closeAll();
+    },
+  );
+
   it("при reconnect на том же cursor сохраняет полный кэш без повторного snapshot", async () => {
     const store = useRealtimeStore();
     const providers = useProvidersStore();

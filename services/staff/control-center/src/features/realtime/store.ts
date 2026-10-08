@@ -267,6 +267,21 @@ export const useRealtimeStore = defineStore("realtime", () => {
     session.resumeTimer = undefined;
   }
 
+  function sessionResumeConfirmed(): boolean {
+    return (
+      session.resumeReady === true &&
+      (!platformWanted ||
+        (platformSnapshotReady && platformState.state === "live"))
+    );
+  }
+
+  function completeSessionResume(): void {
+    if (!sessionResumeConfirmed()) return;
+    // Бюджет ограничивает последовательные отказы, а не успешные восстановления.
+    session.attempt = 0;
+    clearResumeTimer();
+  }
+
   function markOffline(): void {
     session.attempt += 1;
     if (platformWanted) {
@@ -569,7 +584,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
           problemTitle: undefined,
         });
       }
-      if (session.resumeReady) clearResumeTimer();
+      completeSessionResume();
       return true;
     }
     return false;
@@ -600,15 +615,19 @@ export const useRealtimeStore = defineStore("realtime", () => {
         !Array.isArray(snapshot.edges)
       )
         return false;
-      state[runRef] = {
+      const previous = state[runRef];
+      const keepLive = previous?.state === "live" && sessionResumeConfirmed();
+      const recovering: ConnectionState = {
         state: "recovering",
-        attempt: state[runRef]?.attempt ?? 0,
+        attempt: previous?.attempt ?? 0,
       };
       try {
         platform.applyRunReadinessSnapshot(snapshot, envelope.runs);
       } catch {
+        state[runRef] = recovering;
         return false;
       }
+      if (!keepLive) state[runRef] = recovering;
       return true;
     }
     if (envelope.type === "RUN_EVENT") {
@@ -831,8 +850,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       else {
         session.resumeReady = true;
         session.resumeRunRefs = undefined;
-        if (!platformWanted || platformState.state === "live")
-          clearResumeTimer();
+        completeSessionResume();
       }
       return;
     }
