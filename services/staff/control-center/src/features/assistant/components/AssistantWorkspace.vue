@@ -535,6 +535,7 @@ const canSend = computed(
     !store.busy &&
     !startingConversation.value &&
     assistantRuntimeState.value === "READY" &&
+    !store.sessionStorageBlocker &&
     (store.assistantScope === "PROJECT"
       ? projectAssistantCanRun.value
       : Boolean(store.assistant?.nextActions.includes("ADD_TURN"))) &&
@@ -2522,6 +2523,13 @@ onBeforeUnmount(() => {
             </section>
 
             <footer class="assistant-composer">
+              <p
+                v-if="store.sessionStorageBlocker"
+                class="assistant-composer__storage-notice"
+                role="alert"
+              >
+                {{ $t("common.sessionStorageUnavailable") }}
+              </p>
               <button
                 v-if="chatUnread"
                 class="button"
@@ -3752,6 +3760,11 @@ onBeforeUnmount(() => {
 }
 .assistant-composer__field {
   position: relative;
+}
+.assistant-composer__storage-notice {
+  margin: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 .assistant-composer :deep(textarea) {
   width: 100%;

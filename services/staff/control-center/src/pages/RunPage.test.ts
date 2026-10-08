@@ -1,4 +1,6 @@
 import { createPinia } from "pinia";
+import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 import { createSSRApp } from "vue";
 import { createI18n } from "vue-i18n";
 import { createMemoryHistory, createRouter } from "vue-router";
@@ -44,6 +46,8 @@ function messages() {
       unknownStatus: "Неизвестное состояние",
       yes: "Да",
       no: "Нет",
+      sessionStorageUnavailable:
+        "Хранилище этого диалога недоступно. Продолжение сейчас невозможно.",
     },
     runs: {
       title: "Запуски",
@@ -124,6 +128,63 @@ function messages() {
 }
 
 describe("RunPage runtime presentation", () => {
+  it.each(["ERROR", "PURGED", "late ERROR"] as const)(
+    "не продолжает сессию при %s и сохраняет ввод после async подготовки",
+    async (state) => {
+      const source = readFileSync(
+        new URL("./RunPage.vue", import.meta.url),
+        "utf8",
+      );
+      const body = source.slice(
+        source.indexOf("async function continueRun()"),
+        source.indexOf("async function decide("),
+      );
+      const sessionStorageBlocker = {
+        value: state === "late ERROR" ? undefined : state,
+      };
+      const turn = { value: "Сохранённый ввод" };
+      const busy = { value: false };
+      const continueSession = vi.fn();
+      const finalize = vi.fn(() => {
+        sessionStorageBlocker.value = "ERROR";
+        return Promise.resolve("attach_fixture");
+      });
+      const clear = vi.fn();
+      const context = {
+        run: {
+          value: {
+            ref: "run_fixture",
+            sessionRef: "ses_fixture",
+            projectRef: "prj_fixture",
+            nextActions: ["ADD_TURN"],
+          },
+        },
+        sessionStorageBlocker,
+        runSessionStorageBlocker: () => sessionStorageBlocker.value,
+        turn,
+        busy,
+        turnAttachmentState: { value: { ready: true } },
+        mutationGeneration: 1,
+        routeProjectRef: { value: "prj_fixture" },
+        turnAttachmentComposer: { value: { finalize, clear } },
+        selectedNode: { value: undefined },
+        problem: { value: undefined },
+        mutationCurrent: () => true,
+        platform: { continueSession },
+        asProblem,
+      };
+      await runInNewContext(`${body}; continueRun()`, context);
+      expect(continueSession).not.toHaveBeenCalled();
+      expect(clear).not.toHaveBeenCalled();
+      expect(turn.value).toBe("Сохранённый ввод");
+      expect(busy.value).toBe(false);
+      expect(finalize).toHaveBeenCalledTimes(state === "late ERROR" ? 1 : 0);
+      expect(source).toContain(
+        "runSessionStorageBlocker(run.value, platform.bootstrap?.organizationRef)",
+      );
+      expect(source).toContain("Boolean(sessionStorageBlocker)");
+    },
+  );
   it("разделяет lifecycle и outcome и не показывает сырые runtime данные", async () => {
     const pinia = createPinia();
     const router = createRouter({
@@ -337,5 +398,26 @@ describe("RunPage runtime presentation", () => {
     );
     expect(failedHtml).not.toContain("REQUIRED_WORKFLOW_FAILED <code>");
     expect(failedHtml).not.toContain("i18n:REQUIRED_WORKFLOW_FAILED");
+    currentRun.sessionReadiness = {
+      sessionRef: currentRun.sessionRef,
+      storageState: "ERROR",
+      reason: "STORAGE_NOT_LIVE",
+    };
+    const storageApp = createSSRApp(RunPage);
+    storageApp
+      .use(pinia)
+      .use(router)
+      .use(
+        createI18n({
+          legacy: false,
+          locale: "ru",
+          messages: { ru: messages() },
+        }),
+      );
+    const storageHtml = await renderToString(storageApp);
+    expect(storageHtml).toContain(
+      "Хранилище этого диалога недоступно. Продолжение сейчас невозможно.",
+    );
+    expect(storageHtml).not.toContain("Восстановить хранилище");
   });
 });

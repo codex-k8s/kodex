@@ -953,6 +953,8 @@ const ru = {
     launch: "Запустить",
     continue: "Продолжить сессию",
     send: "Отправить",
+    sessionStorageUnavailable:
+      "Хранилище этого диалога недоступно. Продолжение сейчас невозможно.",
     test: "Проверить",
     enable: "Включить",
     disable: "Отключить",
@@ -5568,6 +5570,8 @@ const en = {
     launch: "Launch",
     continue: "Continue session",
     send: "Send",
+    sessionStorageUnavailable:
+      "This conversation’s storage is unavailable. It cannot be continued right now.",
     test: "Test",
     enable: "Enable",
     disable: "Disable",

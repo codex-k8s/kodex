@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	_ "embed"
+	"log/slog"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
@@ -43,6 +44,7 @@ func (repository *Repository) reconcileTerminalSessionStorage(ctx context.Contex
 		if seen[candidate.rootRunID] {
 			continue
 		}
+		logTerminalSessionStorageFailure(ctx, candidate)
 		if err := repository.failRuntimeCandidateGraph(ctx, tx, current, input, candidate); err != nil {
 			return nil, err
 		}
@@ -50,4 +52,11 @@ func (repository *Repository) reconcileTerminalSessionStorage(ctx context.Contex
 		failed = append(failed, candidate)
 	}
 	return failed, nil
+}
+
+// Диагностика не выдаёт archive descriptor, содержимое источника или credentials.
+func logTerminalSessionStorageFailure(ctx context.Context, candidate claimableExecution) {
+	slog.WarnContext(ctx, runtimeCandidateEligibilityDiagnosticMessage,
+		"safe_stage", "session_storage", "error_class", "TERMINAL_STORAGE",
+		"run_ref", candidate.runRef, "node_ref", candidate.nodeRef, "session_ref", candidate.sessionRef)
 }

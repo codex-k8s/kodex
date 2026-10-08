@@ -4,6 +4,7 @@ import { computed, reactive } from "vue";
 import {
   assistantAgentEnvironmentBindingTarget,
   assistantActiveUserTurn,
+  assistantConversationStorageBlocker,
   assistantAwaitingReply,
   assistantCreatedScheduleTarget,
   assistantCreatedEntityTarget,
@@ -346,6 +347,101 @@ describe("assistant авторитетный lifecycle без финальной
     nextActions: [],
     createdAt: userTurn.createdAt,
   });
+
+  it.each(["SYSTEM", "PROJECT"] as const)(
+    "привязывает blocker только к последнему USER и exact %s owner/profile",
+    (scope) => {
+      const currentConversation: AssistantConversation = {
+        ...conversation,
+        assistantScope: scope,
+        ...(scope === "PROJECT"
+          ? {
+              projectRef: "prj_storage_fixture",
+              assistantProfileRef: "asstp_storage_fixture",
+            }
+          : {}),
+      };
+      const current = run("FAILED");
+      current.projectRef = currentConversation.projectRef;
+      current.assistantPin = {
+        scope,
+        organizationRef,
+        conversationRef: currentConversation.ref,
+        assistantRef: currentConversation.assistantRef,
+        projectRef: currentConversation.projectRef,
+        profileRef: currentConversation.assistantProfileRef,
+      };
+      current.sessionReadiness = {
+        sessionRef: current.sessionRef,
+        storageState: "ERROR",
+        reason: "STORAGE_NOT_LIVE",
+      };
+      const runs = { [current.ref]: current };
+      const blocker = (value = currentConversation) =>
+        assistantConversationStorageBlocker(value, runs, organizationRef);
+      expect(blocker()).toBe("ERROR");
+      expect(
+        assistantConversationStorageBlocker(
+          currentConversation,
+          runs,
+          "org_foreign_fixture",
+        ),
+      ).toBeUndefined();
+      for (const key of [
+        "conversationRef",
+        "assistantRef",
+        "projectRef",
+        "profileRef",
+        "scope",
+      ] as const) {
+        const pin = current.assistantPin;
+        expect(
+          assistantConversationStorageBlocker(
+            currentConversation,
+            {
+              [current.ref]: {
+                ...current,
+                assistantPin: { ...pin, [key]: "foreign_fixture" },
+              } as Run,
+            },
+            organizationRef,
+          ),
+        ).toBeUndefined();
+      }
+      expect(
+        blocker({ ...currentConversation, state: "CLOSED" }),
+      ).toBeUndefined();
+      expect(
+        blocker({
+          ...currentConversation,
+          turns: [{ ...userTurn, runVersion: 3 }],
+        }),
+      ).toBeUndefined();
+      const latest = {
+        ...userTurn,
+        ref: "trn_latest_fixture",
+        sequence: 3,
+        runRef: "run_missing_fixture",
+      };
+      for (const turns of [
+        [latest, userTurn],
+        [userTurn, latest],
+      ]) {
+        expect(blocker({ ...currentConversation, turns })).toBeUndefined();
+      }
+      expect(
+        blocker({
+          ...currentConversation,
+          turns: [{ ...userTurn, role: "ASSISTANT" }],
+        }),
+      ).toBeUndefined();
+      current.sessionReadiness.storageState = "LIVE";
+      current.sessionReadiness.reason = "NO_SESSION_BLOCKER";
+      expect(blocker()).toBeUndefined();
+      current.sessionReadiness = undefined;
+      expect(blocker()).toBeUndefined();
+    },
+  );
 
   it.each(["SUCCEEDED", "FAILED", "CANCELLED"] as const)(
     "terminal run %s закрывает каждый stale USER без ASSISTANT",

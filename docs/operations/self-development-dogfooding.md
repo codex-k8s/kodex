@@ -10,6 +10,89 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 13:35 UTC — storage read path, UI и resume capture
+
+- Общий owner predicate добавлен в GetRunGraph: свежий workspace.run теперь
+  несёт ту же readiness, что GetRun. Foreign owner и повреждённая metadata
+  закрыто отклоняются; readonly transaction и effects сохранены.
+- ROOT CP unit PASS0.873s; canonical disposable PostgreSQL terminal storage,
+  session readiness и root cursor PASS12.963s, readback/cleanup PASS.
+  Closed warning unit PASS; warning не объявляет commit транзакции.
+- FE228/228tests PASS7.83s; forced typecheck и production build PASS10.23s
+  (chunk warning сохранён). Frozen source/Pod hashes EQUAL. Chrome notice
+  storage ERROR появился, Send disabled/input доступен/draft сохранён,
+  overflowfalse/Console0/API200. Screenshot NOT RUN из-за denied/hung MCP.
+  Realtime позднего storage failure ещё проверяется отдельно, не заявлен PASS.
+- Runner подтверждает read-only locator до resume отдельно от thread binding,
+  а failed capture после abort/join использует тот же inode и свежий sealed
+  tuple. ROOT40 race regressions PASS1.776s, vet/diff-check PASS; public
+  agent-runner-test.sh PASS (runner/runtime contract/catalog/render).
+  Native UID fixture и новый immutable OCI/live activation NOT RUN.
+- Второй native read run_pXogYAVE8sSfXVCvinAlso2- SUCCEEDED13:18:47UTC,
+  seq40 после успешного RESTORE: current18,11pages/179853B,EOF179853,
+  SHA256cbc7e62f…b839557,39steps и согласованные ограничения PASS.
+  Published pins отдельно owner readback PASS18/revision6/refwfv_4Jd_v_nm5K9-XQ07SC5UlHit;
+  native catalog этих полей не содержит, independent pin proof NOT RUN.
+  ACK второго READ NOT_CAPTURED; Before historical comparison не подменён.
+- Source пакет поверх f562f519 готовится к clean checkpoint/публикации в том же
+  Draft1800. Далее full OCI/admission/promotion/ENV image-only rebind, bootstrap
+  merge/readback и настоящий SOFTWARE_CHANGE с внутренними reviews/fixes.
+  Full65 OPEN; старую ERROR session/архивные tuple вручную не переписывали.
+  OpenAI Docs thread/read и Context7 /openai/codex проверены; resume не скрывается
+  под чтением metadata.
+
+
+## Checkpoint 08.10.2026 13:15 UTC — контрольный EOF39 и Publish
+
+- Новый PROJECT READ run_Uf787UL9PKCom5nUUecGQdrm технически SUCCEEDED:
+  12:57:25–13:01:23UTC, sequence67. Native full-read current17:11pages/179853B,
+  EOF179853, SHA256cbc7e62f…b839557. Подтверждены39этапов и ограничения.
+  Semantic BLOCKED касается только отсутствующего у него исторического Before;
+  отдельный ROOT Before/After/current-draft comparison PASS без подмены этого
+  native результата. Старые33roles/caps/edges/inputs/limits сохранены.
+- Штатная owner кнопка Publish200: PUBLISHED18/revision6,
+  wfv_4Jd_v_nm5K9-XQ07SC5UlHit,39steps/validationMessages[]. Full-read именно
+  published revision ещё NOT RUN; запуск реальной Issue1796 ещё не выполнялся.
+- Exact runtime ACK нового READ: task/instructions/provider inbox EQUAL,
+  G8image33296118…f1385. Captured CONTEXT_CANCELLED не был terminal verdict:
+  фактический owner Run позднее SUCCEEDED; причинность промежуточного отказа
+  неизвестна. Не превращать технический SUCCEEDED в исторический native PASS.
+- CP closed terminal storage warning unit PASS; disposable component4scopes
+  PASS10.192s/readback/cleanup. FE11-file integration frozen hashes EQUAL;
+  ROOT228tests PASS7.83s/forced typecheck/build PASS10.23s (chunk warning).
+- Chrome обнаружил FAIL owner graph projection: workspace.run без
+  sessionReadiness, хотя GET Run сообщает ERROR. UI blocker ещё не visualPASS;
+  новый backend read-path fix выполняется отдельно. Runner pre-bind capture
+  gap также исправляется; исторический SOURCE_IDENTITY predicate UNKNOWN.
+  Screenshot NOT RUN, Console0, горизонтального overflow нет. Full65 OPEN.
+
+## Checkpoint 08.10.2026 12:51 UTC — сохранение сессии блокирует контрольное чтение
+
+- Пакет Unicode/закрытых plan diagnostics опубликован на exact
+  f562f519c2240e6f2fdf297bb395d1b452b6248c; remote/Draft1800 EQUAL.
+  Проверки и serving source/ELF относятся к этому неизменённому source tree.
+- Единственный свежий READ run_XRrD-OKCTBYsbj_eVqztVj4E завершился FAILED
+  RUNTIME_INPUT_INVALID12:36:34UTC до claim/Pod. Owner Run readback:
+  session ses_8wVRFiG3vd1QSxrkJV_vywrC ERROR/STORAGE_NOT_LIVE,
+  SNAPSHOT sat_3a8034d5-0bc1-4d93-a942-bad222c22296 generation2,
+  DEAD_LETTER attempt5/maximum5, SESSION_ARCHIVE_WORKER_FAILED.
+- Exact archive controller observations attempts1..5 доказали SOURCE_IDENTITY,
+  WORKER_REPORTED_FAILURE, Error/exit1; последняя12:35:25.921732276Z.
+  Проверяется exists/type/pinned size без чтения contents. Причину нельзя
+  объявлять object storage, digest mismatch или Air: этих доказательств нет.
+  Reconcile terminal storage имеет отдельный path без eligibility warning.
+- Аккаунт/модель/catalog current readback READY/EQUAL не подменяет session
+  readiness. Diagnostic SESSION_CONTINUATION preview400 неприменим к
+  SYSTEM_ASSISTANT kind; ошибки оснастки не приписаны штатному интерфейсу.
+  ACK первого и второго READ NOT_CAPTURED, второй failure capture
+  EXACT_ACK_NOT_OBSERVED; отсутствие runtime Pod не названо provider failure.
+- Workflow VALID17/draft39 ещё не опубликован. Новых blind retries,
+  восстановления неподтверждённого archive tuple или business effects нет.
+  Full65 и внутренние implementation/reviews/final acceptance остаются OPEN.
+  Own Chrome1 доступен, reload12:48UTC; Screenshot NOT RUN. Демопроект и чужие
+  вкладки не тронуты. Исходная full-document formatting проверка остаётся FAIL;
+  несвязанные исторические таблицы не переписывались ради format-only diff.
+
 ## Checkpoint 08.10.2026 12:33 UTC — native план39, Unicode и закрытая диагностика
 
 - HEAD/remote/Draft1800 f9f3ae106a5fdf70ccc0ed5f19a54eea52e3f60e EQUAL,

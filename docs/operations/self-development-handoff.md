@@ -10,6 +10,105 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 13:35 UTC — storage UX и подтверждённый resume source
+
+Пакет поверх f562f519: CP terminal storage warning, общий readiness read для
+GetRunGraph,11frontend files и4runner files. Frozen manifests EQUAL. ROOT
+FE228tests/6suites PASS7.83s, forced typecheck/build PASS10.23s; CP unit
+PASS0.873s и disposable PG terminal storage/readiness/root cursor PASS12.963s,
+readbacks/cleanup PASS. Runner public agent-runner-test.sh PASS: полный runner,
+runtime contract, MCP catalog и render boundary; codex package5.754s.
+Новые40 resume regressions race PASS1.776s, vet/diff-check PASS. Native UID
+fixture отдельно NOT RUN; source patch не является активацией OCI.
+
+Chrome exact старый dialog/run после hot reload: storage ERROR notice появился,
+Send disabled, input доступен, draft сохранён, overflowfalse. Console0/relevant
+API200. Screenshot NOT RUN: workspace save denied, inline image завис.
+Позднее изменение storage в уже открытом cache проверяется отдельно; initial
+GetRunGraph PASS не является полной realtime приемкой.
+
+После Publish второй native READ run_pXogYAVE8sSfXVCvinAlso2- /
+trn_M8mS6cyUqRsXxeBxnqKWc5pK технически SUCCEEDED13:18:47UTC,sequence40.
+RESTORE succeeded; current18 прочитан11pages/179853B до EOF179853, тот же
+cbc7e62f…b839557,39steps/4inputs/concurrency3/timeout86400/finalgate033 PASS.
+Каталог не выдаёт published ref/revision/state: их native independent proof
+NOT RUN. Owner readback PUBLISHED18/revision6/wfv_4Jd_v_nm5K9-XQ07SC5UlHit
+PASS. ACK второго READ NOT_CAPTURED. Исторический SOURCE_IDENTITY cause UNKNOWN,
+старая ERROR session не восстановлена обходом.
+
+Следующее: clean commit/push в Draft1800 → новый full runner OCI/provenance/import,
+canonical seed/render/supply-chain readback → новые recipes admission/promotion
+и image-only ENV/bindings с сохранением tools/grants → fresh bootstrap main →
+один ordinary Manager и один published39 SOFTWARE_CHANGE. Full65/business PR и
+внутренние reviews/final human gate OPEN, merge bootstrap пока NOT RUN.
+OpenAI Docs и Context7 /openai/codex проверены: thread/read не возобновляет thread
+([контракт](https://learn.chatgpt.com/docs/app-server#read-a-stored-thread-without-resuming)).
+
+
+## Checkpoint 08.10.2026 13:15 UTC — native EOF39 и публикация процесса
+
+На source f562f519 новый диагностический PROJECT диалог
+cnv_YoqcIDhk4LfeLJGPIqiLDk9j / session ses_xiVtCgZJL1yJvqoEb2SAP069,
+run_Uf787UL9PKCom5nUUecGQdrm / trn_6YFUCuAAR55lMcWhZafIZKpr / attempt1:
+SUCCEEDED12:57:25–13:01:23UTC, sequence67. Native прочитал current17 полностью:
+11 страниц,179853B,EOF179853, digest
+cbc7e62f27cd3bac06d9008582aa8e5c6c8b6b0ad664a35e35933c996b839557.
+Подтверждены39keys,4inputs/defaults,ResultSchema{},concurrency3/timeout86400,
+solehumanGate033 и Architect peers034–039. Semantic BLOCKED только сравнение
+с недоступным ему историческим Before; ROOT independently проверил Before/
+After applied plan: прежние33roles/caps/limits и edges сохранены, actual draft
+равен After, aggregation ждёт4peers. Не называть native historical comparison PASS.
+
+Штатная кнопка Publish в Chrome: Workflow PUBLISHED18/revision6,
+wfv_4Jd_v_nm5K9-XQ07SC5UlHit,39steps/validationMessages[]. Свежий native read
+именно опубликованной версии ещё NOT RUN. Business Workflow не запускался.
+ACK точного Pod UID3ef87464-7c26-41cf-806f-2935672a27ac: task/instructions
+provider inbox EQUAL, G8image33296118…f1385; binary FILE_ONLY. Наблюдение
+TERMINAL_WAIT/CONTEXT_CANCELLED не являлось terminal outcome: позднее owner
+run authoritative SUCCEEDED и появились последующие успешные tool events.
+
+MAIN теперь имеет CP closed terminal-storage warning,11FE frozen files и docs.
+ROOT warning unit PASS; disposable PG TestRuntimeTerminalStorageComponent4scopes
+PASS10.192s с readback/cleanup. FE228/228 PASS7.83s; forced typecheck/build PASS
+(build10.23s, штатное предупреждение chunk>500kB). FE source/Pod hashes EQUAL.
+Live UI FAIL: graph workspace.run не содержит sessionReadiness, тогда как
+адресный GET Run содержит ERROR; notice не появляется. Изолированный CP fix
+этого shared owner-read path выполняется, без дополнительного frontend polling.
+Runner pre-bind failure capture gap также исправляется отдельно; причинность
+исторического SOURCE_IDENTITY всё ещё UNKNOWN. Screenshot NOT RUN.
+Полный65/businessPR/merge bootstrap ещё не завершены; цель active.
+
+## Checkpoint 08.10.2026 12:51 UTC — source опубликован, отказ хранения сессии
+
+HEAD/remote/Draft1800 f562f519c2240e6f2fdf297bb395d1b452b6248c EQUAL;
+Unicode и закрытая диагностика плана зафиксированы и запушены. MAIN после
+commit был clean. Workflow VALID17/draft39, Publish и business запуск NOT RUN.
+
+Один свежий READ после первого provider failure:
+run_XRrD-OKCTBYsbj_eVqztVj4E / trn_oDAXQCH-6Kj2WS3eSthgpEFz / attempt1,
+12:36:30–12:36:34UTC, FAILED RUNTIME_INPUT_INVALID до runtime claim/Pod.
+Последующий owner readback доказал sessionStorage ERROR/STORAGE_NOT_LIVE:
+SNAPSHOT sat_3a8034d5-0bc1-4d93-a942-bad222c22296, generation2,
+DEAD_LETTER/attempt5/maximum5/SESSION_ARCHIVE_WORKER_FAILED.
+Exact controller observations всех пяти attempts: SOURCE_IDENTITY,
+WORKER_REPORTED_FAILURE, Error/exit1; последняя12:35:25.921732276Z.
+Это guard exists/regular/size/symlink, не object storage или digest failure.
+Конкретный нарушенный предикат пока UNKNOWN; metadata-only диагностика идёт.
+Ни guards, ни archive tuple не ослаблены/переписаны; blind retry не делать.
+
+Terminal storage reconciliation не пишет candidate eligibility warning:
+поэтому отсутствие warning не доказывает отсутствие отказа. Air main прямо
+наследует container stdout/stderr; потеря forwarding не подтверждена.
+Аккаунт AUTHORIZED/READY/catalog REMOTE_CODEX, exact model/catalog digest
+EQUAL; это не доказательство session claim readiness. SESSION_CONTINUATION
+preview для SYSTEM_ASSISTANT отклонён400: оснастка неприменима к этому kind,
+не объявлять эти диагностические400 дефектом штатного UI.
+
+ACK обоих контрольных READ: NOT_CAPTURED; второго failure observer также
+NOT_CAPTURED/EXACT_ACK_NOT_OBSERVED, поскольку Pod не запускался. Browser
+own1 доступен/reload12:48; Screenshot NOT RUN, чужие вкладки не тронуты.
+Демопроект не изменён. Полный QA/внутренний business Workflow не завершены.
+
 ## Checkpoint 08.10.2026 12:33 UTC
 
 HEAD/remote/Draft1800 f9f3ae106a5fdf70ccc0ed5f19a54eea52e3f60e EQUAL,

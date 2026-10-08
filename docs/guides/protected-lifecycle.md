@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.12
+version: 1.1.14
 updated: 2026-10-08
 ---
 
@@ -54,6 +54,29 @@ terminal path и сохраняет audit, receipt и ordered run/node/gate even
 Storage не переводится обратно в `LIVE`, свежий grant/RuntimeRevision не выдаётся.
 `SNAPSHOT_READY|SNAPSHOTTING|DELETE_PVC_READY|ARCHIVED|RESTORE_READY|RESTORING`
 остаются ожиданием, а не terminal failure.
+
+Terminal storage reconciliation сохраняет различимую закрытую диагностику
+до terminal command: stage/class и exact run/node/session refs, без archive
+descriptor, исходного содержимого и credentials. Наличие такого наблюдения
+не доказывает commit транзакции; replay или rollback не объявляются новым
+terminal effect. Отсутствие общего eligibility warning не является
+доказательством пригодности сессии.
+
+Адресный Run и workspace RunGraph вычисляют session readiness одним owner
+predicate в той же защищённой read-транзакции. Отсутствующая или повреждённая
+storage metadata не превращается в готовность. UI блокирует продолжение только
+по точной текущей conversation/session/run привязке; историческая ошибка другого
+хода не переносится на новую сессию. Read-проекция не выдаёт grant и не заменяет
+повторную серверную проверку перед claim.
+
+Перед возобновлением provider thread подтверждённый read-only locator rollout
+хранится отдельно от execution binding. Он проверяется по trusted session,
+canonical workspace, regular single-link inode, owner/mode и размеру. Отказ
+resume/bind не назначает thread/turn или usage. Только после bounded abort/join
+writer тот же подтверждённый inode может дать свежий sealed archive descriptor;
+старые size/digest не переиспользуются. Замена inode, неизвестный writer либо
+невалидный locator закрывают capture. Исторический storage ERROR не чинится
+переписыванием tuple или ослаблением admission.
 
 | Переход storage-blocked execution | Результат владельца |
 | --- | --- |

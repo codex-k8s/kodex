@@ -1449,6 +1449,9 @@ func (repository *Repository) GetRunGraph(ctx context.Context, principal value.P
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, err
 	}
+	if err := attachRunSessionReadiness(ctx, tx, scope, &run); err != nil {
+		return entity.Run{}, entity.RunGraph{}, err
+	}
 	permissions, err := repository.projectActionPermissions(ctx, tx, scope, run.ProjectRef)
 	if err != nil {
 		return entity.Run{}, entity.RunGraph{}, err

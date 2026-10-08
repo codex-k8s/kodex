@@ -40,7 +40,10 @@ import {
   runArtifactReferences,
 } from "@/features/runs/run-artifacts";
 import type { PresentedRunEvent } from "@/features/runs/run-activity";
-import { runNodeExecutionLabels } from "@/features/runs/run-owner";
+import {
+  runNodeExecutionLabels,
+  runSessionStorageBlocker,
+} from "@/features/runs/run-owner";
 import {
   presentRuntimeText,
   runtimeProgressKey,
@@ -87,6 +90,9 @@ const routeProjectRef = computed(() =>
     : undefined,
 );
 const run = computed(() => platform.runs[runRef.value]);
+const sessionStorageBlocker = computed(() =>
+  runSessionStorageBlocker(run.value, platform.bootstrap?.organizationRef),
+);
 const graph = computed(
   () =>
     platform.graphs[run.value?.rootRunRef ?? runRef.value] ??
@@ -463,6 +469,7 @@ async function continueRun() {
   if (
     busy.value ||
     !current?.nextActions.includes("ADD_TURN") ||
+    sessionStorageBlocker.value ||
     !turn.value.trim() ||
     !turnAttachmentState.value.ready
   )
@@ -481,6 +488,10 @@ async function continueRun() {
   try {
     const attachmentSetRef = await composer?.finalize();
     if (!mutationCurrent(generation, current.ref)) return;
+    if (
+      runSessionStorageBlocker(run.value, platform.bootstrap?.organizationRef)
+    )
+      return;
     const next = await platform.continueSession(sessionRef, {
       ...input,
       ...(attachmentSetRef ? { attachmentSetRef } : {}),
@@ -840,6 +851,9 @@ onBeforeUnmount(() => {
             compact
           />
           <ProblemNotice v-if="problem" :problem="problem" compact />
+          <p v-if="sessionStorageBlocker" class="offline-banner" role="alert">
+            {{ $t("common.sessionStorageUnavailable") }}
+          </p>
         </div>
         <div
           class="run-workspace"
@@ -1160,7 +1174,12 @@ onBeforeUnmount(() => {
                 <button
                   class="button button--primary"
                   type="submit"
-                  :disabled="busy || !turn.trim() || !turnAttachmentState.ready"
+                  :disabled="
+                    busy ||
+                    Boolean(sessionStorageBlocker) ||
+                    !turn.trim() ||
+                    !turnAttachmentState.ready
+                  "
                 >
                   {{ $t("common.send") }}
                 </button>

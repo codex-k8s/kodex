@@ -209,6 +209,7 @@ func decodeRPCError(raw json.RawMessage) (int64, error) {
 }
 
 type protocolState struct {
+	resumeSource         *confirmedResumeSource
 	expectedSessionID    string
 	threadID             string
 	threadPath           string
@@ -296,7 +297,8 @@ func (state *protocolState) bindThread(raw json.RawMessage, expectedModel, expec
 	threadID, path, threadErr := parseThread(fields["thread"])
 	if threadErr != nil || (state.expectedSessionID != "" && threadID != state.expectedSessionID) ||
 		(state.requiredMCPThread != "" && state.requiredMCPThread != threadID) ||
-		(state.threadID != "" && state.threadID != threadID) {
+		(state.threadID != "" && state.threadID != threadID) ||
+		(state.resumeSource != nil && (threadID != state.resumeSource.sessionID || (path != "" && path != state.resumeSource.path))) {
 		return errors.New("Codex app-server thread identity is invalid")
 	}
 	state.threadID = threadID
@@ -342,16 +344,21 @@ func validThreadCollaborationMetadata(raw json.RawMessage) bool {
 }
 
 func (state *protocolState) bindThreadRead(raw json.RawMessage) error {
-	fields, err := decodeObject(raw, schema([]string{"thread"}, "thread"))
-	if err != nil {
-		return errors.New("Codex app-server thread read response is invalid")
-	}
-	threadID, path, err := parseThread(fields["thread"])
-	if err != nil || threadID != state.threadID || path == "" {
+	threadID, path, err := parseThreadRead(raw)
+	if err != nil || threadID != state.threadID || path == "" ||
+		(state.resumeSource != nil && path != state.resumeSource.path) {
 		return errors.New("Codex app-server rollout path is invalid")
 	}
 	state.threadPath = path
 	return nil
+}
+
+func parseThreadRead(raw json.RawMessage) (string, string, error) {
+	fields, err := decodeObject(raw, schema([]string{"thread"}, "thread"))
+	if err != nil {
+		return "", "", errors.New("Codex app-server thread read response is invalid")
+	}
+	return parseThread(fields["thread"])
 }
 
 func parseThread(raw json.RawMessage) (string, string, error) {

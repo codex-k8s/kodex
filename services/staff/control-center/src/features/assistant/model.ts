@@ -8,7 +8,10 @@ import type {
   Run,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
-import { assertRunOwner } from "@/features/runs/run-owner";
+import {
+  assertRunOwner,
+  runSessionStorageBlocker,
+} from "@/features/runs/run-owner";
 import { projectAssistantConnectionPlanOwner } from "./project-connection-plan";
 
 function assistantAppliedResourceRef(
@@ -594,6 +597,39 @@ export function assistantAwaitingReply(
   organizationRef?: string,
 ): boolean {
   return Boolean(assistantActiveUserTurn(conversation, runs, organizationRef));
+}
+
+export function assistantConversationStorageBlocker(
+  conversation: AssistantConversation | undefined,
+  runs: Readonly<Record<string, Run>>,
+  organizationRef: string | undefined,
+): "ERROR" | "PURGED" | undefined {
+  if (conversation?.state !== "ACTIVE") return undefined;
+  const latest = conversation.turns.reduce<AssistantTurn | undefined>(
+    (current, turn) =>
+      turn.role === "USER" && (!current || turn.sequence > current.sequence)
+        ? turn
+        : current,
+    undefined,
+  );
+  // Более старый ход не доказывает состояние текущей сессии диалога.
+  const run = latest?.runRef ? runs[latest.runRef] : undefined;
+  const pin = run?.assistantPin;
+  if (
+    !run ||
+    !latest ||
+    run.ref !== latest.runRef ||
+    run.target.type !== "SYSTEM_ASSISTANT" ||
+    !pin ||
+    pin.conversationRef !== conversation.ref ||
+    pin.scope !== conversation.assistantScope ||
+    pin.assistantRef !== conversation.assistantRef ||
+    pin.projectRef !== conversation.projectRef ||
+    pin.profileRef !== conversation.assistantProfileRef ||
+    (latest.runVersion !== undefined && run.version < latest.runVersion)
+  )
+    return undefined;
+  return runSessionStorageBlocker(run, organizationRef);
 }
 
 export interface EditablePlanOperation {

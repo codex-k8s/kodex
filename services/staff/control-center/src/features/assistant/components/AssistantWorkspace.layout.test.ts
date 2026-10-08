@@ -49,6 +49,33 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it("блокирует Send/Queue при session blocker, сохраняя черновик, Stop и штатный новый диалог", () => {
+    const eligibility = source.slice(
+      source.indexOf("const canSend = computed"),
+      source.indexOf("const canStartConversation"),
+    );
+    expect(eligibility).toContain("!store.sessionStorageBlocker");
+    expect(template).toMatch(
+      /v-if="store\.sessionStorageBlocker"\s+class="assistant-composer__storage-notice"\s+role="alert"/,
+    );
+    expect(template).toContain("common.sessionStorageUnavailable");
+    const composerState = source.slice(
+      source.indexOf("const composerDisabled"),
+      source.indexOf("const isRunContext"),
+    );
+    expect(composerState).not.toContain("sessionStorageBlocker");
+    expect(template).toContain(':model-value="message"');
+    const stop = template.match(
+      /<button\s+v-if="awaitingReply"[^]*?<\/button>/,
+    )?.[0];
+    expect(stop).toContain(':disabled="store.busy"');
+    expect(stop).not.toContain("sessionStorageBlocker");
+    const newDialog = source.slice(
+      source.indexOf("const canStartConversation"),
+      source.indexOf("const composerDisabled"),
+    );
+    expect(newDialog).not.toContain("sessionStorageBlocker");
+  });
   it("блокирует composer во время создания и связывает ввод с точным черновиком диалога", () => {
     const composer = template.match(
       /<VoiceTextarea[^]*?name="assistant-message"[^]*?\/>/,

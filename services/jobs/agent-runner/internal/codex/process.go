@@ -221,6 +221,9 @@ func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt [
 	state.onActivity = onActivity
 	captureAttempted := false
 	defer func() {
+		if state.resumeSource != nil {
+			defer state.resumeSource.file.Close()
+		}
 		if resultErr != nil {
 			// Учитываем только ранее проверенные измерения, даже если terminal,
 			// thread/read, остановка процесса или захват архива завершились ошибкой.
@@ -251,22 +254,8 @@ func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt [
 	if err := classifyAccountReadResponse(raw, err); err != nil {
 		return Result{}, atProviderStage(providerStageAccountRead, server.abort(ctx, state, err))
 	}
-	threadParams := map[string]any{"approvalPolicy": input.CodexApprovalPolicy, "cwd": input.WorkspaceRoot,
-		"model": input.Model}
-	method := "thread/start"
-	if input.CodexSessionID == "" {
-		threadParams["ephemeral"] = false
-		threadParams["sessionStartSource"] = "startup"
-	} else {
-		method = "thread/resume"
-		threadParams["threadId"] = input.CodexSessionID
-	}
-	raw, err = server.call(ctx, state, method, threadParams)
-	if err != nil {
-		return Result{}, atProviderStage(providerStageThreadCall, server.abort(ctx, state, err))
-	}
-	if err := state.bindThread(raw, input.Model, input.WorkspaceRoot, input.CodexApprovalPolicy); err != nil {
-		return Result{}, atProviderStage(providerStageThreadBind, server.abort(ctx, state, err))
+	if err := server.bindExecutionThread(ctx, state, input); err != nil {
+		return Result{}, server.abort(ctx, state, err)
 	}
 	if err := server.waitRequiredMCP(ctx, state, RequiredMCPToolNames(input)); err != nil {
 		return Result{}, atProviderStage(providerStageMCPReadiness, server.abort(ctx, state, err))
@@ -298,6 +287,15 @@ func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt [
 		return Result{}, atProviderStage(providerStageArchiveCapture, errors.New("Codex rollout writer is not stopped"))
 	}
 	captureAttempted = true
+	if state.resumeSource != nil {
+		captured, err := state.resumeSource.capture(input, server)
+		if err != nil {
+			return Result{}, atProviderStage(providerStageArchiveCapture, err)
+		}
+		result = withRolloutCapture(result, captured.rolloutCapture)
+		result.ArchivePath = captured.ArchivePath
+		return result, nil
+	}
 	_, _, _, _, err = captureRollout(input, state.threadPath)
 	if err != nil {
 		return Result{}, atProviderStage(providerStageArchiveCapture, err)
@@ -313,6 +311,15 @@ func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt [
 
 func captureFailedRollout(input model.Input, server *appServer, state *protocolState, result Result) Result {
 	if !server.captureReady() {
+		return result
+	}
+	if state.resumeSource != nil {
+		captured, err := state.resumeSource.capture(input, server)
+		if err != nil {
+			return result
+		}
+		result = withRolloutCapture(result, captured.rolloutCapture)
+		result.ArchivePath = captured.ArchivePath
 		return result
 	}
 	if _, _, _, _, err := captureRollout(input, state.threadPath); err != nil {

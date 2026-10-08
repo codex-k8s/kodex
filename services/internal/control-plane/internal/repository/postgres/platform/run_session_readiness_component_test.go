@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -61,6 +62,10 @@ func TestRunSessionReadinessComponent(t *testing.T) {
 	if err != nil || read.SessionReadiness == nil || read.SessionReadiness.StorageState != "UNTRACKED" || read.SessionReadiness.Reason != "NO_SESSION_BLOCKER" {
 		t.Fatalf("untracked session read: %v", err)
 	}
+	graphRun, graph, err := service.GetRunGraph(ctx, owner, run.Ref)
+	if err != nil || graphRun.Ref != run.Ref || graph.RunRef != run.RootRunRef || !reflect.DeepEqual(graphRun.SessionReadiness, read.SessionReadiness) {
+		t.Fatalf("graph lost untracked session readiness: %v", err)
+	}
 	leases := execute(command.ClaimExecution, worker, "claim", command.LeaseInput{WorkloadInstance: "session-readiness-runtime", Limit: 1}).RuntimeItems
 	if len(leases) != 1 {
 		t.Fatal("synthetic claim missing")
@@ -101,6 +106,10 @@ func TestRunSessionReadinessComponent(t *testing.T) {
 	if proof.SessionRef != run.SessionRef || proof.StorageState != "ERROR" || proof.Reason != "STORAGE_NOT_LIVE" || proof.LatestArchiveTask == nil || proof.LatestArchiveTask.Ref != taskRef || proof.LatestArchiveTask.State != "DEAD_LETTER" || proof.LatestArchiveTask.Attempt != 5 || proof.LatestArchiveTask.SafeErrorCode != "SESSION_ARCHIVE_SOURCE_INVALID" {
 		t.Fatal("exact exhausted snapshot/session binding missing")
 	}
+	graphRun, graph, err = service.GetRunGraph(ctx, owner, run.Ref)
+	if err != nil || graphRun.Ref != run.Ref || graph.RunRef != run.RootRunRef || !reflect.DeepEqual(graphRun.SessionReadiness, proof) {
+		t.Fatalf("graph lost exact exhausted snapshot/session readiness: %v", err)
+	}
 	if before != effects() {
 		t.Fatal("diagnostic read changed durable state")
 	}
@@ -110,6 +119,9 @@ func TestRunSessionReadinessComponent(t *testing.T) {
 	if _, err := service.GetRun(ctx, signed, run.Ref); !errors.Is(err, errs.ErrNotFound) && !errors.Is(err, errs.ErrForbidden) {
 		t.Fatalf("foreign scope obtained session diagnostic: %v", err)
 	}
+	if foreignRun, foreignGraph, err := service.GetRunGraph(ctx, signed, run.Ref); (!errors.Is(err, errs.ErrNotFound) && !errors.Is(err, errs.ErrForbidden)) || foreignRun.Ref != "" || foreignRun.SessionReadiness != nil || foreignGraph.RunRef != "" {
+		t.Fatal("foreign scope obtained graph session diagnostic")
+	}
 	// Считаем только protected reads; создание тестового project имеет штатные effects.
 	before = effects()
 	if _, err := service.GetRun(ctx, owner, run.Ref); err != nil {
@@ -117,5 +129,27 @@ func TestRunSessionReadinessComponent(t *testing.T) {
 	}
 	if before != effects() {
 		t.Fatal("diagnostic read changed durable state")
+	}
+	// Schema допускает 6, но закрытый readiness predicate разрешает только 5.
+	// Ошибочный snapshot не выдаёт частичный graph и освобождает read transaction.
+	if _, err := pool.Exec(ctx, "UPDATE control_plane.session_archive_tasks SET maximum_attempts=6 WHERE ref=$1", taskRef); err != nil {
+		t.Fatal(err)
+	}
+	before = effects()
+	if invalidRun, invalidGraph, err := service.GetRunGraph(ctx, owner, run.Ref); !errors.Is(err, errs.ErrUnavailable) || invalidRun.Ref != "" || invalidRun.SessionReadiness != nil || invalidGraph.RunRef != "" || len(invalidGraph.Nodes) != 0 {
+		t.Fatal("invalid readiness yielded a partial graph")
+	}
+	if invalidRun, err := service.GetRun(ctx, owner, run.Ref); !errors.Is(err, errs.ErrUnavailable) || invalidRun.Ref != "" || invalidRun.SessionReadiness != nil {
+		t.Fatal("single Run and graph readiness predicates diverged")
+	}
+	if before != effects() || pool.Stat().AcquiredConns() != 0 {
+		t.Fatal("failed readiness read changed state or retained a transaction")
+	}
+	if _, err := pool.Exec(ctx, "UPDATE control_plane.session_archive_tasks SET maximum_attempts=5 WHERE ref=$1", taskRef); err != nil {
+		t.Fatal(err)
+	}
+	graphRun, _, err = service.GetRunGraph(ctx, owner, run.Ref)
+	if err != nil || !reflect.DeepEqual(graphRun.SessionReadiness, proof) {
+		t.Fatalf("graph readiness did not recover after fixture restoration: %v", err)
 	}
 }

@@ -6,6 +6,7 @@ import {
   sameAssistantRunPin,
   runNodeExecutionLabels,
   runNodePresentationKey,
+  runSessionStorageBlocker,
 } from "./run-owner";
 function assistantRun(scope: "SYSTEM" | "PROJECT" = "SYSTEM"): Run {
   return {
@@ -36,6 +37,58 @@ function assistantPin(run: Run) {
   return run.assistantPin;
 }
 describe("closed owner pin запуска помощника", () => {
+  it.each(["ERROR", "PURGED"] as const)(
+    "возвращает только exact session blocker %s без вывода о готовности",
+    (storageState) => {
+      const value = assistantRun();
+      value.sessionReadiness = {
+        sessionRef: value.sessionRef,
+        storageState,
+        reason: "STORAGE_NOT_LIVE",
+      };
+      expect(runSessionStorageBlocker(value, "org_fixture")).toBe(storageState);
+      expect(runSessionStorageBlocker(value, "org_foreign")).toBeUndefined();
+      expect(
+        runSessionStorageBlocker(undefined, "org_fixture"),
+      ).toBeUndefined();
+      expect(
+        runSessionStorageBlocker(
+          { ...value, sessionReadiness: undefined },
+          "org_fixture",
+        ),
+      ).toBeUndefined();
+      expect(
+        runSessionStorageBlocker(
+          {
+            ...value,
+            sessionReadiness: {
+              ...value.sessionReadiness,
+              sessionRef: "ses_other",
+            },
+          },
+          "org_fixture",
+        ),
+      ).toBeUndefined();
+      for (const state of [
+        "LIVE",
+        "UNTRACKED",
+        "RESTORING",
+        "ARCHIVED",
+      ] as const)
+        expect(
+          runSessionStorageBlocker(
+            {
+              ...value,
+              sessionReadiness: {
+                ...value.sessionReadiness,
+                storageState: state,
+              },
+            },
+            "org_fixture",
+          ),
+        ).toBeUndefined();
+    },
+  );
   it.each(["SYSTEM", "PROJECT"] as const)(
     "подписывает доказанные %s ходы, но не delegated employee",
     (scope) => {

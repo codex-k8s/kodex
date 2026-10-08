@@ -52,6 +52,29 @@ export function assertRunOwner(
   } else throw new Error("Assistant run scope is invalid");
 }
 
+export function runSessionStorageBlocker(
+  run: Run | undefined,
+  organizationRef: string | undefined,
+): "ERROR" | "PURGED" | undefined {
+  if (!run) return undefined;
+  try {
+    assertRunOwner(run, organizationRef);
+  } catch {
+    return undefined;
+  }
+  const readiness = run.sessionReadiness;
+  if (
+    !validRef(run.sessionRef) ||
+    readiness?.sessionRef !== run.sessionRef ||
+    readiness.reason !== "STORAGE_NOT_LIVE"
+  )
+    return undefined;
+  return readiness.storageState === "ERROR" ||
+    readiness.storageState === "PURGED"
+    ? readiness.storageState
+    : undefined;
+}
+
 export function sameAssistantRunPin(previous: Run, next: Run): boolean {
   const pin = previous.assistantPin,
     returned = next.assistantPin;
