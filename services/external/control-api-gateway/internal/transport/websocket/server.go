@@ -39,6 +39,8 @@ const (
 	writeTimeout             = 5 * time.Second
 	readTimeout              = 10 * time.Second
 	heartbeatInterval        = 15 * time.Second
+	maximumHeartbeatWakes    = 4
+	heartbeatWakeTimeout     = 2 * time.Second
 	pingInterval             = 30 * time.Second
 	sessionSubprotocol       = "kodex.session.v2"
 	legacySessionSubprotocol = "kodex.session.v1"
@@ -551,11 +553,15 @@ func (multiplexer *sessionMultiplexer) sendRunSnapshot(subscription *runSubscrip
 }
 
 func (multiplexer *sessionMultiplexer) applyPlatformSignal(signal platformSignal) bool {
+	return multiplexer.applyPlatformSignalWithin(multiplexer.ctx, signal)
+}
+
+func (multiplexer *sessionMultiplexer) applyPlatformSignalWithin(ctx context.Context, signal platformSignal) bool {
 	if signal.Sequence <= multiplexer.platformCursor {
 		return true
 	}
 	if signal.Sequence != multiplexer.platformCursor+1 {
-		return multiplexer.synchronizePlatform()
+		return multiplexer.synchronizePlatformWithin(ctx)
 	}
 	if platformSignalOutsideScope(signal, multiplexer.projectRef) {
 		return multiplexer.advancePlatformCursor(signal)
@@ -570,10 +576,10 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignal(signal platformSignal
 	if multiplexer.projectRef != "" {
 		envelope.ProjectRef = &multiplexer.projectRef
 	}
-	envelope, err := multiplexer.boundedPlatformSnapshot(envelope)
+	envelope, err := multiplexer.boundedPlatformSnapshotWithin(ctx, envelope)
 	if err != nil {
 		if status.Code(err) == codes.PermissionDenied {
-			if signal.EventName == "RUN_CHANGED" && !multiplexer.refreshSubscribedRuns() {
+			if signal.EventName == "RUN_CHANGED" && !multiplexer.refreshSubscribedRunsWithin(ctx) {
 				return false
 			}
 			return multiplexer.advancePlatformCursor(signal)
@@ -589,7 +595,7 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignal(signal platformSignal
 		return false
 	}
 	if signal.EventName == "RUN_CHANGED" {
-		if !multiplexer.refreshSubscribedRuns() {
+		if !multiplexer.refreshSubscribedRunsWithin(ctx) {
 			return false
 		}
 	}
@@ -622,7 +628,11 @@ func (multiplexer *sessionMultiplexer) advancePlatformCursor(signal platformSign
 }
 
 func (multiplexer *sessionMultiplexer) synchronizePlatform() bool {
-	cursor, err := multiplexer.server.query.GetPlatformEventCursor(multiplexer.ctx, &controlplanev1.GetPlatformEventCursorRequest{})
+	return multiplexer.synchronizePlatformWithin(multiplexer.ctx)
+}
+
+func (multiplexer *sessionMultiplexer) synchronizePlatformWithin(ctx context.Context) bool {
+	cursor, err := multiplexer.server.query.GetPlatformEventCursor(ctx, &controlplanev1.GetPlatformEventCursorRequest{})
 	if err != nil || cursor.GetOrganizationRef() != multiplexer.organizationRef || cursor.GetCurrentSequence() < multiplexer.platformCursor {
 		multiplexer.platformAvailable = false
 		return multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, "PLATFORM_UNAVAILABLE")
@@ -641,10 +651,54 @@ func (multiplexer *sessionMultiplexer) synchronizePlatform() bool {
 	}
 	multiplexer.platformCursor = current
 	// Пропущенный org wake не меняет обязательно Run.version или run cursor.
-	return multiplexer.refreshSubscribedRuns()
+	return multiplexer.refreshSubscribedRunsWithin(ctx)
+}
+
+// Обрабатываем только уже доставленный префикс: новые wake не продлевают
+// бюджет и не задерживают RUN/session signals неограниченным drain.
+func (multiplexer *sessionMultiplexer) drainHeartbeatWakes() (available, ok bool) {
+	count := min(len(multiplexer.platformSignals), maximumHeartbeatWakes)
+	ctx, cancel := context.WithTimeout(multiplexer.ctx, heartbeatWakeTimeout)
+	defer cancel()
+	for index := 0; ; index++ {
+		if multiplexer.ctx.Err() != nil {
+			return false, false
+		}
+		if len(multiplexer.overflow) > 0 {
+			multiplexer.terminate("BACKPRESSURE_EXCEEDED", websocket.StatusTryAgainLater)
+			return false, false
+		}
+		if index == count {
+			return true, true
+		}
+		if ctx.Err() != nil {
+			multiplexer.platformAvailable = false
+			return false, multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, "PLATFORM_UNAVAILABLE")
+		}
+		select {
+		case signal := <-multiplexer.platformSignals:
+			if !multiplexer.applyPlatformSignalWithin(ctx, signal) {
+				if len(multiplexer.overflow) > 0 {
+					multiplexer.terminate("BACKPRESSURE_EXCEEDED", websocket.StatusTryAgainLater)
+				}
+				return false, false
+			}
+			if multiplexer.ctx.Err() != nil {
+				return false, false
+			}
+			if !multiplexer.platformAvailable {
+				return false, true
+			}
+		default:
+			return true, true
+		}
+	}
 }
 
 func (multiplexer *sessionMultiplexer) heartbeat(now time.Time) bool {
+	if available, ok := multiplexer.drainHeartbeatWakes(); !ok || !available {
+		return ok
+	}
 	if !multiplexer.synchronizePlatform() {
 		return false
 	}

@@ -10,6 +10,46 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 19:01 UTC — GitHub5 опубликован, queued-wake fix обслуживается
+
+ROOT в kodex-agent/issue-1797-full39-qa, Draft PR1805, HEADce1190e5 плюс
+точный P0/P1 diff. GitHub LIST теперь commit-pinned, cursor-offset/limit20
+(max50), digest полного каталога, явный EOF и byte budget64KiB. Каталог
+>=1000 закрыто отклоняется; конец индекса не означает чтение source файлов.
+Codegen штатный; все16 P0 frozen hashes EQUAL. Unit-all integrationpackage
+PASS3.445s, IG integration PASS28.584s, vet/build обоих модулей PASS.
+
+P1 обрабатывает перед heartbeat только уже queued prefix, максимум4 wake
+и общий2s context для добавленной фазы. Decode/owner/cursor/permission/
+backpressure guards сохранены. Unit56+128 PASS1.397s, race PASS15.186s,
+vet/build PASS; четыре frozen hashes EQUAL. Полный unpublished outbox lag
+НЕ исправлен, причина прежнего live resync UNKNOWN; весь heartbeat не
+объявляется ограниченным2s. Source/Pod server.go4d84b72d…32b4d EQUAL;
+actual GW PID1084 ELF0c3de0d4…34454 EQUAL независимой ROOT сборке.
+
+SYSTEM run_hR6GBuXdichA8TKZ6LJvQoY8 предложил единственный typed publication
+plan pln_RMlTFUfCIxrOyjOeO05AdNtz. Native Validate/Apply APPLIED, config17;
+UI GitHub revision6 mrev_Tz0YW0jAeFgHqa88rokynjDE PUBLISHED,
+digestb64de75ef0a31832e578540b63f5667b9ff2043401eaf42e40cacff6fc999d83.
+Owner impact/rebind существующего int_Pn1ALY1e8kAn67vrr1-okIKe: config18,
+binding4/MATCH, connection500/NOT_CONNECTED,120 прежних grants отключены.
+Защищённый repo-owned credential input PASS/connection501. Никакой смены
+publicConfiguration, получателей или расширения прав. Baseline120 grants
+SHA7ae920b1edd6fbfaab76c568db49f8e61d337fac5b1c3637ca95b450ff2ec971.
+
+PROJECT run_wahXhZgMNd2HqUY4ulAVxUMA восстанавливает21 собственный grant
+штатным планом, пока RUNNING. Ранний ACK/rejoin CAPTURED: G9/ENV12/binding11,
+38tools, task6898B/fa8e246a…a95ed EQUAL; image-file47a8fc35…66b3d EQUAL.
+Далее native восстановление99 grants шести ролей и Test, exact baseline
+сверка, commit/push/обычный bootstrap merge1805/fresh main, один новый
+ordinary Manager/full39. Developer/reviews/Gate033 ещё NOT RUN.
+
+Chrome owner SSO штатно восстановлен18:33; Console0, API200, overflowfalse.
+Поддерживаемый capture завершился Page.captureScreenshot protocol timeout:
+pixel screenshot не получен, нижележащая причина UNKNOWN. Не заменяем
+пиксельную проверку DOM. Все Running системные Pods Ready; старые terminal
+Pods не трактуются как отказ текущих workload. Демо не менялось; Full65 OPEN.
+
 ## Checkpoint 08.10.2026 18:30 UTC — полный процесс остановлен на GitHub LIST
 
 Ветка kodex-agent/issue-1797-full39-qa, Draft PR1805, исходный SHA51decc34

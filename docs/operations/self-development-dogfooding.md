@@ -12029,3 +12029,53 @@ subject/UTF8/frame cap mismatch[]; live причина lag/queue UNKNOWN.
 Никакого ослабления cursor/authority. Screenshot NOT RUN/capture hang UNKNOWN.
 Демо не изменено. Далее LIST fix в PR1805, native definition rebind и свежий
 полный Workflow; checklist11/13/14/15 OPEN, цель ACTIVE.
+
+### 08.10.2026 19:01 UTC — LIST5 и bounded queued-wake fix, native активация продолжается
+
+На HEADce1190e5 + frozen P0/P1 интегрированы20 source/test файлов.
+GitHub5.0.0 SHIPPED digest8af4b06d8b6c480ddcaefa28372f35a58079596dd219d5f43a19df6f32089aa0;
+LIST имеет exact40hex commit, cursor-offset, limit20/max50, digest полного
+каталога и явный EOF; каждая страница укладывается в native64KiB с двойной
+сериализацией. Полный каталог>=1000 отклоняется без усечения. ROOT codegen
+PASS; все16 frozen P0 hashes EQUAL. Интегрированное дерево: package unit-all
+PASS3.445s, IG integration28.584s/app0.040s/fixture0.055s; оба vet/build PASS.
+Это pre-commit проверки, не PASS чистого прежнего ce1190 и не live acceptance.
+
+Queued wake race: прежний deterministic RED20/20 на ce1190, после изменения
+unit56+128 PASS1.397s, race56+128 PASS15.186s, vet/build PASS. Только исходный
+queued prefix<=4 и отдельный общий2s context для добавленной фазы, без
+новых goroutines, weakening guards или ожидания новых событий. Прежний
+heartbeat после drain сохраняет исходный budget. Source closure675 файлов
+до/после EQUAL4767c455c19acb34c4dfc5dc7aa4b56061c8638a19ae4dde937b0d8a7882d74b.
+Unpublished outbox lag NOT FIXED, прежняя live причина resync UNKNOWN.
+ROOT serving readback: source/Pod server.go4d84b72d…32b4d и GW actual
+PID1084 ELF0c3de0d492eff778aa85a58144dd7f0370be0fcf3039bdb8a1f359f485334454
+EQUAL независимой сборке с Air flags. CP/IG P0 serving proof18:45 сохранён.
+
+Native SYSTEM publication: cnv_QaueO-0CVIPXo3H5_CZXavJN,
+run_hR6GBuXdichA8TKZ6LJvQoY8, planpln_RMlTFUfCIxrOyjOeO05AdNtz/revision1,
+ровно PUBLISH_INTEGRATION_DEFINITION. Validate VALID → Apply APPLIED;
+config17/revision6mrev_Tz0YW0jAeFgHqa88rokynjDE PUBLISHED,
+digestb64de75ef0a31832e578540b63f5667b9ff2043401eaf42e40cacff6fc999d83.
+Owner impact/rebind только существующего consumer: config18, binding4/MATCH,
+connection500/NOT_CONNECTED,120 grants disabled. Repo-owned protected
+credential helper PASS/501, без изменения publicConfiguration/получателей.
+Перед rebind exact semantic projection120 grants сохранена:
+SHA7ae920b1edd6fbfaab76c568db49f8e61d337fac5b1c3637ca95b450ff2ec971,
+NONE/approvalScopePaths[], recipient counts21/24/19/16/14/13/13.
+
+PROJECT run_wahXhZgMNd2HqUY4ulAVxUMA, cnv_NDk2ZGXPq3coADUOEd9chv9w,
+session ses_gWNfXXk9i3mR0Lk_Lv3lVdfp/turntrn_RlIu5s313x13z_Om1sruokgl/attempt1:
+сам готовит восстановление21 собственных grants, пока RUNNING. Actual task
+6898B SHAfa8e246aa0270c63438af7f3684eaf6dc0bd60f199964ea31db1cc17894a95ed
+EQUAL expected/provider/inbox; instructions18450B/ead25e6c…fffccf EQUAL.
+Same Pod runtime-turn-58a8680f38571993/UID30339092-4739-4411-a6e1-4100965e3052,
+G9/ENV12/binding11/tools38/grants2/capabilities2; image-file47a8fc35…66b3d EQUAL.
+Полные120 ещё не восстановлены, native Test/full39 NOT RUN.
+
+Chrome SSO восстановлен18:33 штатной формой. Console0/currentAPI200/
+horizontal overflowfalse. Один capture завершился Page.captureScreenshot
+protocol timeout — screenshot не получен, причина нижележащего отказа UNKNOWN;
+DOM evidence не является pixel PASS. Демо владельца не менялось. Далее native
+grants/Test, exact committed проверки/merge1805/fresh main, новый full39;
+Full65/checklist11/13/14/15 OPEN. Финальный business PR не сливать.

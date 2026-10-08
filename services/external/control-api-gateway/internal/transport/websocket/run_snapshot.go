@@ -27,7 +27,11 @@ func (multiplexer *sessionMultiplexer) readRunSnapshotWithin(parent context.Cont
 }
 
 func (multiplexer *sessionMultiplexer) refreshSubscribedRuns() bool {
-	ctx, cancel := context.WithTimeout(multiplexer.ctx, 10*time.Second)
+	return multiplexer.refreshSubscribedRunsWithin(multiplexer.ctx)
+}
+
+func (multiplexer *sessionMultiplexer) refreshSubscribedRunsWithin(parent context.Context) bool {
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
 	for _, ref := range multiplexer.sortedRunRefs() {
 		subscription := multiplexer.runs[ref]

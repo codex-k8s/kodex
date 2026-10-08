@@ -124,7 +124,7 @@ func githubContentPageWithText(page githubContentPage, text string) githubConten
 	return page
 }
 
-func githubContentPageFitsEnvelope(page githubContentPage) bool {
+func githubContentPageFitsEnvelope(page any) bool {
 	summary, err := json.Marshal(page)
 	if err != nil {
 		return false

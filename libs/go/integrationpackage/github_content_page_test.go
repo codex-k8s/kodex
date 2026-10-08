@@ -13,10 +13,10 @@ func TestGitHubContentReadSeparatesSourceAndPageBudgets(t *testing.T) {
 		t.Fatal(err)
 	}
 	definition := definitions["github"]
-	if definition.Metadata.Version != "4.0.0" {
+	if definition.Metadata.Version != "5.0.0" {
 		t.Fatal("unexpected GitHub source budget revision")
 	}
-	for _, version := range []string{"3.0.0", "3.1.0"} {
+	for _, version := range []string{"3.0.0", "3.1.0", "4.0.0"} {
 		if _, ok := ResolveShippedRevision(definition, version, definition.Digest); ok {
 			t.Fatal("old shipped revision was silently reinterpreted")
 		}

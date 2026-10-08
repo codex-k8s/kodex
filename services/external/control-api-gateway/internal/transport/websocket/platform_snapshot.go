@@ -553,8 +553,12 @@ func (server *Server) projectPlatformSnapshotPage(ctx context.Context, kind, pro
 // boundedPlatformSnapshot уменьшает только целую авторитетную страницу.
 // Содержимое разговоров и cursor не переписываются; размер включает envelope.
 func (multiplexer *sessionMultiplexer) boundedPlatformSnapshot(envelope generated.PlatformSnapshotEnvelope) (generated.PlatformSnapshotEnvelope, error) {
+	return multiplexer.boundedPlatformSnapshotWithin(multiplexer.ctx, envelope)
+}
+
+func (multiplexer *sessionMultiplexer) boundedPlatformSnapshotWithin(ctx context.Context, envelope generated.PlatformSnapshotEnvelope) (generated.PlatformSnapshotEnvelope, error) {
 	for pageSize := int32(platformSnapshotPageSize); ; pageSize = max(1, pageSize/2) {
-		rawSnapshot, err := multiplexer.server.projectPlatformSnapshotPage(multiplexer.ctx, string(envelope.Kind), multiplexer.projectRef, multiplexer.localize, pageSize)
+		rawSnapshot, err := multiplexer.server.projectPlatformSnapshotPage(ctx, string(envelope.Kind), multiplexer.projectRef, multiplexer.localize, pageSize)
 		if err != nil {
 			if status.Code(err) != codes.PermissionDenied {
 				slog.Error(platformSnapshotReadFailure, "kind", envelope.Kind, "error_class", "dependency")

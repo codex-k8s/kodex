@@ -51,7 +51,7 @@ func githubExtendedResponse(t *testing.T, operation string, r *http.Request) (st
 		if path != "/contents/src" || r.Method != "GET" {
 			t.Error("content list route changed")
 		}
-		return `[{"path":"src/a.txt","type":"file","sha":"abc","size":4}]`, true
+		return `[{"path":"src/a.txt","type":"file","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size":4}]`, true
 	case "github.repository.content.read":
 		if path != "/contents/src/a.txt" || r.Method != "GET" {
 			t.Error("content read route changed")
