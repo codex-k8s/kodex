@@ -10,6 +10,40 @@ updated: 2026-10-08
 
 # Текущее состояние
 
+## Checkpoint 08.10.2026 06:48 UTC
+
+База/remote/Draft1800 `b78d874f8614226c9f2324ad0fee13fcd86c54bc` EQUAL.
+SYSTEMG14/PROJECTG8 admitted/promoted, все четыре ENV опубликованы штатно:
+SYSTEM29/binding9, PROJECT11/binding10, WRITE8/binding9, REVIEW8/fivebindings9.
+Fresh8 runtime configurations GET200, exact versionRef EQUAL; canonical
+preservation четырёх ENV EQUAL, tools38/fullmetadata/resources/network/values/
+secret descriptors сохранены. GitHub4 definition4.0.0/binding3/CONNECTED499,
+все120enabled grants semantic EQUAL, права не расширялись.
+
+WRITE plan `pln_1XnBHKxvgR8sZflh_-hH1q_G`, REVIEW
+`pln_TuiQVkxpFSjUWZLFL1j6ApnZ` APPLIED3, native helper→owner Validate/Apply→
+draft Validate→impact/select1or5→Publish. Не повторять эти mutations.
+ROOT исправил PROJECT image selection, которая очищала38tools: MAIN2UI files
+плюс этот checkpoint. ROOT67unit/scoped lint/format/typecheck/build PASS;
+native38из42/fullpreservation/desktop screenshot/Console0 PASS. Mobile500px
+длинный image reference пересекает badge; изолированный frontend fix выполняется.
+390px NOT RUN. Ошибочный первый draft DISCARDED2 до публикации, published
+state не менялся; повторно восстанавливать его нельзя.
+
+SYSTEM Context7 run_ngocqRJQGia7wu2y1WLBYYXF SUCCEEDED, early ACK/pins PASS.
+PROJECT оба image-only planning runs SUCCEEDED/ACK PASS. Binary scope FILE_ONLY,
+WRITE finalbinary NOT RUN; FOLLOW_STREAM_ENDED observer после успеха — NOT_CAPTURED.
+Новый ordinary Manager run_smv87THy-ht62Ul3PLL_cCv7 RUNNING2; session
+ses_WyUlW-4NVL-zvsCS2m3LLS4Y / turn trn_Nf6F_m8i86184qQvNdLvfA2l attempt1,
+Pod runtime-turn-4aa8b6a304db16cb UID5fcaa616-3386-4ec7-9875-fdc1709613ea.
+Task SHA63513221…ee04 EQUAL; early ACK/source/image/binary file proof CAPTURED.
+ROOT failure observer session68310; дочерний watcher проверяет только exact
+lineage. Не запускать ещё один Manager/retry прежних terminal roots. Далее
+native full33→DeveloperPR→internalreviews/fixes до5→READY_FOR_HUMAN_REVIEW.
+Full65/11/13/14/15 OPEN, fresh-main acceptance ещё NOT RUN.
+Chrome page1 ONLY, reload≤5мин. Actual SSO absoluteExpiresAt18:27:49UTC.
+Draft1800 сохраняется; финальный business PR NOmerge/approve.
+
 ## Checkpoint 08.10.2026 06:12 UTC
 
 HEAD/remote/Draft1800 `954e7329074a8ba8c7f95c417c5026cf5cb4bba5` EQUAL.

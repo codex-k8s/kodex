@@ -11,6 +11,7 @@ import {
 } from "vue";
 import { createI18n } from "vue-i18n";
 import { captureSetupState } from "@/test-utils/setup-harness";
+import { verifiedImageTools } from "@/shared/lib/verified-image-tools";
 import {
   verifiedInventoryFixture,
   unavailableInventoryFixture,
@@ -111,6 +112,7 @@ async function editor(localized = false) {
     applyRestoredInput(input: RuntimeEnvironmentInput): void;
     applyServerDraft(draft: RuntimeEnvironmentDraft): void;
     loadImageArtifact(recipe: string, artifact: string): Promise<void>;
+    selectImage(option: typeof ownImageOption): Promise<void>;
     load(): Promise<void>;
     validateDraft(): Promise<void>;
     publish(selected: string[]): Promise<void>;
@@ -565,6 +567,92 @@ const ownImageOption = {
   generation: 3,
   title: "Свой образ",
 };
+
+describe("смена образа сохраняет выбранные инструменты", () => {
+  function selectedTools() {
+    return verifiedImageTools(promotedArtifact("image_own"))
+      .slice(0, 38)
+      .map((tool) => ({
+        name: `Мой ${tool.name}`,
+        command: tool.name,
+        description: `Описание ${tool.name}`,
+        usageHint: `Подсказка ${tool.name}`,
+      }));
+  }
+
+  it("не стирает 38 metadata без OLD inventory и пересекает только после exact verified NEW read", async () => {
+    const state = mountedEditor();
+    const tools = selectedTools();
+    state.input.imageArtifactRef = "image_old";
+    state.input.tools = tools;
+    const request = pending<{
+      artifact: RoleImageArtifact;
+      recipeName: string;
+    }>();
+    runtime.loadPromotedRoleImageArtifact.mockReturnValueOnce(request.promise);
+    const selecting = state.selectImage(ownImageOption);
+    expect(state.input.tools).toEqual(tools);
+    expect(state.imageInventoryReady.value).toBe(false);
+    request.resolve({
+      artifact: promotedArtifact("image_own"),
+      recipeName: "Новый",
+    });
+    await selecting;
+    expect(state.input.tools).toEqual(tools);
+    expect(state.input.tools).toHaveLength(38);
+    expect(state.imageInventoryReady.value).toBe(true);
+  });
+
+  it("не выбирает дополнительные команды и удаляет только отсутствующую verified command", async () => {
+    const state = mountedEditor();
+    const tools = selectedTools();
+    state.input.tools = [
+      ...tools,
+      {
+        name: "Недоступный",
+        command: "not-verified",
+        description: "Своё",
+        usageHint: "Не терять",
+      },
+    ];
+    runtime.loadPromotedRoleImageArtifact.mockResolvedValueOnce({
+      artifact: promotedArtifact("image_own"),
+      recipeName: "Новый",
+    });
+    await state.selectImage(ownImageOption);
+    expect(state.input.tools).toEqual(tools);
+  });
+
+  it.each(["failure", "unavailable", "scope", "generation"] as const)(
+    "не стирает selection при %s нового inventory",
+    async (caseName) => {
+      const state = mountedEditor();
+      const tools = selectedTools();
+      state.input.tools = tools;
+      const request = pending<{
+        artifact: RoleImageArtifact;
+        recipeName: string;
+      }>();
+      runtime.loadPromotedRoleImageArtifact.mockReturnValueOnce(
+        request.promise,
+      );
+      const selecting = state.selectImage(ownImageOption);
+      if (caseName === "scope") route.params.projectRef = "project_other";
+      if (caseName === "failure")
+        request.reject(new Error("Synthetic image failure"));
+      else {
+        const artifact = promotedArtifact("image_own");
+        if (caseName === "unavailable")
+          artifact.verifiedToolInventory = unavailableInventoryFixture();
+        if (caseName === "generation") artifact.recipeGeneration += 1;
+        request.resolve({ artifact, recipeName: "Новый" });
+      }
+      await selecting;
+      expect(state.input.tools).toEqual(tools);
+      expect(state.imageInventoryReady.value).toBe(false);
+    },
+  );
+});
 
 describe("восстановление точного образа серверного draft", () => {
   it("после публикации читает точный образ даже без повторной инициализации маршрута", async () => {

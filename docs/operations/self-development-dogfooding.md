@@ -10,6 +10,64 @@ updated: 2026-10-08
 
 # Цель и источники
 
+## Checkpoint 08.10.2026 06:48 UTC — четыре окружения и восемь привязок обновлены
+
+- База `b78d874f8614226c9f2324ad0fee13fcd86c54bc`, remote/Draft1800 EQUAL.
+  SYSTEM G14 `imgart_UhpyoGADewVB_yWtW_TZEZVv` и PROJECT G8
+  `imgart_BvTGz1xNKNSGAtH-hKgomujl` ACCEPTED/PROMOTED/version10.
+  Manifest SYSTEM `sha256:16da32ec541bfaba0553570c059f494f5000f28c7afa8e5fb6ad858fb6447fff`,
+  PROJECT `sha256:33296118140a9f698c3e007e700fada7854f297f15ec9b673a2c2e5e0bbf1385`.
+  Полные отчёты4640matches/2938advisories и прежние два HIGH undici/tar
+  сохранены. Для каждого образа принято одно штатное локальное risk decision;
+  provenance, ABI9/contract3, signed inventory и технические guards не обходились.
+- SYSTEM own ENV revision29/binding9 и PROJECT own ENV revision11/binding10
+  опубликованы штатно. Новые WRITE/REVIEW планы созданы реальным PROJECT
+  помощником: `pln_1XnBHKxvgR8sZflh_-hH1q_G` и
+  `pln_TuiQVkxpFSjUWZLFL1j6ApnZ`, APPLIED/version3, по одной операции.
+  Owner UI Validate/Apply создали отдельные drafts; отдельные Validate/Impact/
+  Publish обновили ровно Developer1 и reviewers5, без повторных mutations.
+  WRITE и REVIEW ENV теперь revision8, все шесть bindings version9.
+- Fresh GET200 всех восьми runtime configurations: exact published versionRef
+  каждого binding совпадает с currentVersion. Canonical SHA без image EQUAL
+  для всех четырёх окружений; сохранены38tools с полными metadata, public
+  values, secret descriptors, ресурсы, тома и политика. Один secret descriptor
+  остаётся только у Developer. GitHub4 connection CONNECTED/version499,
+  definition4.0.0/binding3 exact; все120 enabled grants semantic EQUAL по
+  ref/recipient/capability/risk/approval/scopes/enabled. OCC version и display
+  targetName не являются изменением разрешений.
+- PASS: SYSTEM Context7 smoke `run_ngocqRJQGia7wu2y1WLBYYXF` SUCCEEDED,
+  actual resolve/query Vue. Ранний ACK/task/provider/inbox comparisons EQUAL,
+  SYSTEM G14/ENV29/binding9/tools38. PROJECT WRITE/REVIEW planning runs
+  SUCCEEDED; ACK подтверждает PROJECT G8/ENV11/binding10/tools38. Binary
+  REVIEW и SYSTEM — SAME_POD_IMAGE_FILE_NOT_SERVING_PROCESS, не ELF процесса;
+  WRITE final binary readback не сохранён, NOT RUN. Failure observers после
+  успешных terminal завершились FOLLOW_STREAM_ENDED/NOT_CAPTURED, не FAIL
+  провайдера и не дополнительное доказательство отсутствия всех ошибок.
+- FAIL до публикации: PROJECT selector очищал38tools при выборе нового image.
+  Адресный fix сохраняет полные metadata только прежних VERIFIED-compatible
+  commands, не добавляет новые tools; stale/scope/disposed readback закрыт.
+  Изолированный RED6FAIL/GREEN67; ROOT67unit, scoped lint/format/forcedtypecheck/
+  build10.87s PASS. Exact editor host/Pod SHA
+  `46758fb2828bd21db6ededd170edbe3d5b4d241d4af2c43efde5c99b364c32de`
+  EQUAL. Первый draft с0tools DISCARDED/version2 до validation/publication;
+  опубликованное окружение не изменялось. После fix native selection38из42,
+  новый draft и full preservation PASS. Desktop screenshot/Console0/overflow0
+  PASS; mobile500×844 выявил пересечение длинного promoted reference с badge,
+  адресный UX fix ещё OPEN. 390px NOT RUN, прежний chunk warning сохранён.
+- Новый ordinary Manager `run_smv87THy-ht62Ul3PLL_cCv7` RUNNING/version2,
+  session `ses_WyUlW-4NVL-zvsCS2m3LLS4Y`, turn
+  `trn_Nf6F_m8i86184qQvNdLvfA2l`/attempt1. Ранний ACK и sameUID rejoin
+  CAPTURED: G8/ENV8/binding9/tools38/grants21; task/provider/inbox SHA
+  `6351322165389f7271f3f08851f4826878dac1067889df7e4573e8ec5920ee04`
+  EQUAL, instructions comparison EQUAL. Binary file f3f14de8…33d7 EQUAL,
+  строго FILE_ONLY. Exact failure observer запущен до terminal cleanup.
+  Native launch Workflow, остальные роли/Developer PR/reviews ещё OPEN.
+  Это локальный live debug на ветке, не итоговая проверка на свежем main.
+- Новая SSO session family фактически имеет absoluteExpiresAt18:27:49UTC;
+  обычная свежая авторизация и сохранённые drafts проверены. TTL guards не
+  ослаблены. Chrome только собственная вкладка1, reload≤5мин, чужие не трогать.
+  Full65/11/13/14/15 остаются OPEN; итоговый внутренний PR не merge/approve.
+
 ## Checkpoint 08.10.2026 06:12 UTC — ABI9 активирован, новые образы проверяются
 
 - Source/remote/Draft1800 `954e7329074a8ba8c7f95c417c5026cf5cb4bba5`

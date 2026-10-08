@@ -7,6 +7,8 @@ import { environmentDisplayField } from "@/features/runtime/environment-display-
 import {
   assertPromotedRuntimeImage,
   restoreRuntimeImageOption,
+  runtimeImageOption,
+  toolsForRuntimeImage,
 } from "@/features/runtime/image-tools-selection";
 import {
   verifiedImageInventoryAvailable,
@@ -462,7 +464,7 @@ function applyRestoredInput(value: RuntimeEnvironmentInput): void {
 async function loadImageArtifact(
   recipeRef: string | undefined,
   artifactRef: string,
-): Promise<void> {
+): Promise<RoleImageArtifact | undefined> {
   cancelImageRequest();
   const generation = imageGeneration;
   const project = projectRef.value;
@@ -527,6 +529,7 @@ async function loadImageArtifact(
         title: localizeServerMessage(result.recipeName),
         description: result.artifact.promotedReference,
       };
+      return result.artifact;
     }
   } catch (error) {
     if (applicable()) imageProblem.value = asProblem(error);
@@ -559,10 +562,38 @@ async function loadImagePage(
 
 async function selectImage(option: AsyncEntityOption): Promise<void> {
   if (!("recipeRef" in option) || !("artifactRef" in option)) return;
+  const tools = input.tools.map((tool) => ({ ...tool }));
+  const project = projectRef.value;
+  const environment = environmentRef.value;
   selectedImage.value = option;
   input.imageArtifactRef = String(option.artifactRef);
-  input.tools = [];
-  await loadImageArtifact(String(option.recipeRef), String(option.artifactRef));
+  const request = loadImageArtifact(
+    String(option.recipeRef),
+    String(option.artifactRef),
+  );
+  const generation = imageGeneration;
+  const artifact = await request;
+  if (
+    !artifact ||
+    disposed ||
+    generation !== imageGeneration ||
+    project !== projectRef.value ||
+    environment !== environmentRef.value ||
+    artifact.ref !== input.imageArtifactRef
+  )
+    return;
+  try {
+    const selected = runtimeImageOption(option);
+    assertPromotedRuntimeImage(artifact, {
+      artifactRef: selected.ref,
+      recipeRef: selected.recipeRef,
+      recipeGeneration: selected.generation,
+    });
+    input.tools = toolsForRuntimeImage(tools, artifact);
+  } catch (error) {
+    imageArtifact.value = undefined;
+    imageProblem.value = asProblem(error);
+  }
 }
 
 async function load(): Promise<void> {
