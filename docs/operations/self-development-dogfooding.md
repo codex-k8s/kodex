@@ -11917,3 +11917,50 @@ AGENTS.md/inbox hashes совпал с ACK, текст файлов не рас�
 typed network plan, без ручного обхода policy/DNS/TLS, wildcard или credential.
 Header UX root35/35 unit PASS, native mobile screenshot после patch ещё
 проверяется. Console error/warn0; Full65 и checklist8 остаются OPEN.
+
+### 08.10.2026 17:39 UTC — PR1803 merged, native catalog continuation STOP
+
+Author4731d3c29fbe417462e2d94fd71349de46fbbf0f: ROOT CP3/9 PASS0.049s,
+gateway50/108 PASS1.339s; узкие Unicode/frame-cap проверки, не full acceptance.
+PR1803 обычный squash, main d413a7cbd34765bf26909b8a299cd7bd02676a4f
+GitHub/origin/local EQUAL. Checks отсутствуют, CI PASS не заявлен.
+Новая bootstrap ветка kodex-agent/issue-1797-catalog-continuation от fresh main.
+
+Full39 root run_VbhKXNWsog_CwsLJhKbpANXR FAILED/333. INTAKE и собственный
+Coordinator EOF трёх handoff artifacts выполнены; Architect
+run_EWQkAOIcEe0-HgSDT_vFKITL остановился на search_files continuation.
+Его manager-plan.md EOF18451 PASS; обязательный workspace-write-result.json
+ещё не прочитан. Failed262 duration389ms; RC17:31:07.597 операция вернула
+grpc Unavailable/control_unavailable, не локальную ошибку arguments.
+Exact cause UNKNOWN; нельзя объявлять доказанными timeout/InvalidArgument/
+network/serialization без дальнейшей диагностики. Architecture result
+art_sySrPaJeb9jQEneQYyWUsZJm/revision9/8154B owner200, SHA
+b354268332a4072dc6cde3182c95eb68cb97e44a4c286b1c0c1b8d44d9484bdd EQUAL.
+STOP соблюдён: Developer и последующие native reviews NOT RUN; старый root
+не Retry. После устранения причины нужен новый штатный полный проход.
+Chrome reload17:37/Console0/platform LIVE/overflowfalse, screenshot NOT RUN.
+Демо не изменено. Full65/checklist11/13/14/15 OPEN, цель ACTIVE.
+
+### 08.10.2026 17:56 UTC — исправленный authoritative catalog read и serving proof
+
+Exact PG ERROR/SELECT17:31:07.389 привязан к readCatalog/FOR SHARE lease.
+Механизм concurrent row UPDATE доказан; actual writer identity UNKNOWN,
+production renew воспроизводит40001 двумя disposable connections.
+Frozen3files применены ROOT через apply_patch, SHA EQUAL: runtime_files
+8a5eb2096267cfbe93ae876aea5c0da9d8b5eb8f90acbf30a623912a5144bbd9,
+component067a663b745ae8f1aa5c6ca0214b74a32ee80fc84a4262c3d34d4ce595e068e8,
+locked-read3e951a59c946eeabf04e0bcc1cb14ac4d957c5cc45d6d0aad5c4208b10c3f610.
+Existing bounded40001-only read retry, целый fresh snapshot после rollback;
+RR/locks/current eligibility/immutable catalog/cursor/fence/grants неизменны.
+Четыре catalog operations covered; отдельный body path без FOR SHARE не менялся.
+
+ROOT интегрированное pre-commit дерево: disposable PG PASS10.403s, unit
+PASS0.079s, vet/build/format/diffcheck PASS. Positive audit1/expiry audit0,
+бизнес effects не дублируются. Agent RED9.423s→GREEN10.087s; промежуточные
+harness/compile FAIL сохранены в закрытом handoff, не названы product PASS.
+Source/Pod runtime_files EQUAL; actual serving PID1583 CP ELF
+101c7da0b9424776b4b1ad2357791518f6e4120a888bc2140dc7ac2b376b6355 EQUAL
+ROOT rebuild. Chrome LIVE/Console0/session+graph200/overflowfalse.
+Pixel screenshot NOT RUN (новая штатная попытка >120s не создала файл).
+PR1804 ещё Draft; native verification продолжения поиска в новом полном
+Workflow, Developer/reviews/Gate033/final business PR пока NOT RUN.
