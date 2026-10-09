@@ -37,6 +37,8 @@ KUBECTL = ['/usr/local/bin/kubectl', '--kubeconfig=/home/s/.kube/config',
 CORE = ('control-plane', 'control-api-gateway', 'runtime-controller',
         'role-image-builder', 'image-admission-controller')
 BUFFER = 20 * 1024**3
+DATA_UUID = '16aefb34-33f8-413d-a1d8-03da33008b0f'
+ORIGINAL_GUARD_SHA = '6fa41d91c94e1f0a62cc5b130efdb9cf9ddf2ede923afd9354527041bdfebce5'
 
 
 class Failure(Exception):
@@ -100,9 +102,9 @@ def file_content(path):
 
 def data_mount():
     metadata = json.loads(run(['/usr/bin/findmnt', '--json', '--mountpoint', '/data',
-                               '--output', 'SOURCE,FSTYPE,MAJ:MIN,TARGET']))
+                               '--output', 'SOURCE,FSTYPE,UUID,TARGET']))
     require(metadata == {'filesystems': [{'source': '/dev/nvme1n1p3', 'fstype': 'ext4',
-                                         'maj:min': '259:4', 'target': '/data'}]}, 'DATA_MOUNT_CHANGED')
+                                         'uuid': DATA_UUID, 'target': '/data'}]}, 'DATA_MOUNT_CHANGED')
     return directory(Path('/data'))
 
 
@@ -286,16 +288,19 @@ def write_exclusive(path, content, mode):
 
 
 def guard(value):
-    data_mount()
+    data = data_mount()
+    require(value.get('dataUuid') == DATA_UUID and not value.get('bootRepairPending'),
+            'DATA_IDENTITY_NOT_UPGRADED')
     require(value['phase'] in ('COPY_VERIFIED', 'SWITCHING', 'SWITCHED', 'NODE_STARTING', 'VERIFIED', 'RETIRED'),
             'COPY_NOT_VERIFIED')
-    require(directory(TARGET) == value['targetIdentity'], 'TARGET_CHANGED')
+    require(directory(TARGET) == {'device': data['device'], 'inode': value['targetIdentity']['inode']},
+            'TARGET_CHANGED')
     require(hashlib.sha256(file_content(INSTALLED)).hexdigest() == value['scriptSha256'], 'GUARD_CHANGED')
 
 
 def mounted(value):
     guard(value)
-    require(directory(SOURCE) == value['targetIdentity'] and str(SOURCE) in mounts_under(SOURCE),
+    require(directory(SOURCE) == directory(TARGET) and str(SOURCE) in mounts_under(SOURCE),
             'BIND_MOUNT_MISMATCH')
 
 
@@ -304,7 +309,7 @@ def readback(value):
     node = inspect()
     require(node['running'] and node['policy'] == 'no', 'NODE_NOT_MANAGED')
     identity = run(['/usr/bin/docker', 'exec', CONTAINER, 'stat', '-c', '%d:%i', '/var/lib/rancher/k3s']).strip()
-    expected = value['targetIdentity']
+    expected = directory(TARGET)
     require(identity == f"{expected['device']}:{expected['inode']}", 'NODE_STORAGE_NOT_TARGET')
     require(set(value['pinnedImages']).issubset(pinned()), 'PINNED_IMAGE_LOST')
     for name, content in units().items():
@@ -335,7 +340,7 @@ def audit(expected):
     available = shutil.disk_usage('/data').free
     require(available >= size + BUFFER, 'TARGET_CAPACITY_INSUFFICIENT')
     binding = {'container': CONTAINER, 'volume': VOLUME, 'sourceIdentity': original,
-               'dataIdentity': data, 'sourceSha': head,
+               'dataIdentity': data, 'dataUuid': DATA_UUID, 'sourceSha': head,
                'scriptSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
     return {**binding, 'fingerprint': digest(binding), 'sourceBytes': size, 'availableTargetBytes': available,
             'pinnedImages': pinned(), 'status': 'PASS', 'phase': 'AUDITED'}
@@ -437,6 +442,74 @@ def retire(value, fingerprint):
             'rootAvailableBeforeBytes': before, 'rootAvailableAfterBytes': shutil.disk_usage('/').free}
 
 
+def repair_boot(value, expected, fingerprint):
+    # Forward-only обновление конкретного installed guard; данные не копируются.
+    head = git_head(expected)
+    require(value['phase'] in ('VERIFIED', 'RETIRED') and value['fingerprint'] == fingerprint,
+            'BOOT_REPAIR_NOT_VERIFIED')
+    node = inspect()
+    require(not node['running'] and node['pid'] == 0 and node['policy'] == 'no', 'NODE_NOT_STOPPED')
+    data = data_mount()
+    require(directory(TARGET) == {'device': data['device'], 'inode': value['targetIdentity']['inode']},
+            'TARGET_CHANGED')
+    exclusive_volume()
+    no_references(TARGET)
+    no_references(SOURCE, allow_exact_mount=True)
+    if not mounts_under(SOURCE):
+        directory(SOURCE)
+        require(not list(SOURCE.iterdir()), 'SOURCE_NOT_EMPTY')
+    else:
+        require(directory(SOURCE) == directory(TARGET), 'BIND_MOUNT_MISMATCH')
+    for name, content in units().items():
+        require(file_content(UNITS / name) == content.encode(), 'UNIT_CHANGED')
+    script = Path(__file__).read_bytes()
+    new_hash = hashlib.sha256(script).hexdigest()
+    installed_hash = hashlib.sha256(file_content(INSTALLED)).hexdigest()
+    pending = value.get('bootRepairPending')
+    require(pending in (None, new_hash), 'BOOT_REPAIR_SOURCE_CHANGED')
+    require(installed_hash == value['scriptSha256'] or (pending == new_hash and installed_hash == new_hash),
+            'GUARD_CHANGED')
+    require(value.get('dataUuid') == DATA_UUID or value['scriptSha256'] == ORIGINAL_GUARD_SHA,
+            'BOOT_REPAIR_ORIGIN_CHANGED')
+    value['bootRepairPending'] = new_hash
+    save(value, value['phase'])
+    # При crash между replace и journal update guard откажет; replay принимает
+    # только записанный pending hash того же clean source, без blind overwrite.
+    directory(INSTALLED.parent)
+    fd, temporary = tempfile.mkstemp(prefix='kodex-node-guard-', dir=INSTALLED.parent)
+    try:
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(script)
+            os.fchmod(stream.fileno(), 0o555)
+            os.fsync(stream.fileno())
+        os.replace(temporary, INSTALLED)
+        run(['/usr/bin/sync', '-f', str(INSTALLED.parent)])
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+    value['previousGuardSha256'] = value['scriptSha256']
+    value['scriptSha256'] = new_hash
+    value['dataUuid'] = DATA_UUID
+    value['bootRepairSourceSha'] = head
+    value.pop('bootRepairPending')
+    save(value, value['phase'])
+    guard(value)
+    run(['/usr/bin/systemd-analyze', 'verify', '--generators=yes',
+         *[str(UNITS / name) for name in units()]])
+    run(['/usr/bin/systemctl', 'reset-failed', GUARD, MOUNT, SERVICE])
+    run(['/usr/bin/systemctl', 'start', MOUNT], timeout=90)
+    mounted(value)
+    run(['/usr/bin/systemctl', 'start', SERVICE], timeout=100)
+    deadline = time.monotonic() + 240
+    while True:
+        try:
+            return readback(value)
+        except Failure:
+            require(time.monotonic() < deadline, 'POST_BOOT_READBACK_FAILED')
+            print(json.dumps({'status': 'RUNNING', 'phase': 'BOOT_READBACK'}), flush=True)
+            time.sleep(5)
+
+
 def rollback(value, fingerprint):
     require(value['fingerprint'] == fingerprint, 'FINGERPRINT_CHANGED')
     phase = value['phase']
@@ -495,7 +568,7 @@ def rollback(value, fingerprint):
 def main():
     try:
         parser = argparse.ArgumentParser(allow_abbrev=False)
-        parser.add_argument('mode', choices=('audit', 'apply', 'resume', 'readback', 'retire', 'rollback', 'guard'))
+        parser.add_argument('mode', choices=('audit', 'apply', 'resume', 'repair-boot', 'readback', 'retire', 'rollback', 'guard'))
         parser.add_argument('--expected-sha')
         parser.add_argument('--expected-fingerprint')
         options = parser.parse_args()
@@ -521,7 +594,8 @@ def main():
                 result = apply(options.expected_sha, options.expected_fingerprint)
             else:
                 value = journal()
-                result = resume(value, options.expected_sha, options.expected_fingerprint) \
+                result = repair_boot(value, options.expected_sha, options.expected_fingerprint) \
+                    if options.mode == 'repair-boot' else resume(value, options.expected_sha, options.expected_fingerprint) \
                     if options.mode == 'resume' else readback(value) if options.mode == 'readback' else \
                     (retire(value, options.expected_fingerprint) if options.mode == 'retire'
                      else rollback(value, options.expected_fingerprint))

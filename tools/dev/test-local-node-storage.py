@@ -30,6 +30,7 @@ def value(phase='VERIFIED'):
     return {'phase': phase, 'fingerprint': 'fixture-fingerprint',
             'container': STORAGE.CONTAINER, 'volume': STORAGE.VOLUME,
             'sourceIdentity': dict(ORIGINAL), 'targetIdentity': dict(DESTINATION),
+            'dataUuid': STORAGE.DATA_UUID,
             'scriptSha256': hashlib.sha256(SCRIPT).hexdigest(),
             'sourceSha': SHA, 'pinnedImages': [IMAGE]}
 
@@ -75,6 +76,7 @@ class MockTests(unittest.TestCase):
 
     def readback_fixture(self):
         self.mock('mounted')
+        self.mock('directory', return_value=DESTINATION)
         self.mock('inspect', return_value={'running': True, 'pid': 123, 'policy': 'no'})
         self.mock('pinned', return_value=[IMAGE, OTHER_IMAGE])
         contents = {STORAGE.UNITS / name: text.encode() for name, text in STORAGE.units().items()}
@@ -97,7 +99,7 @@ class MockTests(unittest.TestCase):
         self.assertEqual(result['phase'], 'AUDITED')
         self.assertEqual(result['pinnedImages'], [IMAGE])
         binding = {key: result[key] for key in ('container', 'volume', 'sourceIdentity',
-                                               'dataIdentity', 'sourceSha', 'scriptSha256')}
+                                               'dataIdentity', 'dataUuid', 'sourceSha', 'scriptSha256')}
         self.assertEqual(result['fingerprint'], STORAGE.digest(binding))
         self.assertEqual(self.run.call_count, 1)
 
@@ -140,7 +142,7 @@ class MockTests(unittest.TestCase):
         for mounts in ([], [str(STORAGE.SOURCE / 'nested')]):
             with self.subTest(mounts=mounts), patch.object(STORAGE, 'mounts_under', return_value=mounts):
                 self.failure('BIND_MOUNT_MISMATCH', lambda: STORAGE.mounted(value()))
-        with patch.object(STORAGE, 'directory', return_value=ORIGINAL):
+        with patch.object(STORAGE, 'directory', side_effect=[ORIGINAL, DESTINATION]):
             self.failure('BIND_MOUNT_MISMATCH', lambda: STORAGE.mounted(value()))
 
     def test_readback_preserves_all_pinned_images(self):
@@ -336,17 +338,73 @@ class MockTests(unittest.TestCase):
     def test_data_mount_requires_exact_device_filesystem_and_target(self):
         self.mock('directory', return_value=DESTINATION)
         exact = {'filesystems': [{'source': '/dev/nvme1n1p3', 'fstype': 'ext4',
-                                  'maj:min': '259:4', 'target': '/data'}]}
+                                  'uuid': STORAGE.DATA_UUID, 'target': '/data'}]}
         self.run.side_effect = None
         self.run.return_value = json.dumps(exact)
         self.assertEqual(STORAGE.data_mount(), DESTINATION)
         for key, replacement in (('source', '/dev/foreign'), ('fstype', 'tmpfs'),
-                                 ('maj:min', '9:3'), ('target', '/')):
+                                 ('uuid', 'foreign-uuid'), ('target', '/')):
             wrong = json.loads(json.dumps(exact))
             wrong['filesystems'][0][key] = replacement
             self.run.return_value = json.dumps(wrong)
             with self.subTest(key=key):
                 self.failure('DATA_MOUNT_CHANGED', STORAGE.data_mount)
+
+    def test_guard_accepts_renumbered_device_only_on_pinned_filesystem_and_inode(self):
+        self.guard_fixture()
+        current = {**DESTINATION, 'device': DESTINATION['device'] + 4}
+        with patch.object(STORAGE, 'data_mount', return_value=current), \
+                patch.object(STORAGE, 'directory', return_value=current):
+            STORAGE.guard(value())
+            wrong_inode = {**current, 'inode': current['inode'] + 1}
+            with patch.object(STORAGE, 'directory', return_value=wrong_inode):
+                self.failure('TARGET_CHANGED', lambda: STORAGE.guard(value()))
+        for invalid in ({'dataUuid': 'foreign'}, {'bootRepairPending': 'pending'}):
+            self.failure('DATA_IDENTITY_NOT_UPGRADED', lambda: STORAGE.guard({**value(), **invalid}))
+
+    def test_repair_boot_rejects_wrong_phase_fingerprint_and_running_node_before_effects(self):
+        self.mock('git_head', return_value=SHA)
+        self.mock('inspect', return_value={'running': True, 'pid': 12, 'policy': 'no'})
+        for phase in ('SWITCHING', 'NODE_STARTING', 'ROLLED_BACK'):
+            self.failure('BOOT_REPAIR_NOT_VERIFIED',
+                         lambda: STORAGE.repair_boot(value(phase), SHA, 'fixture-fingerprint'))
+        self.failure('BOOT_REPAIR_NOT_VERIFIED', lambda: STORAGE.repair_boot(value(), SHA, 'wrong'))
+        self.failure('NODE_NOT_STOPPED', lambda: STORAGE.repair_boot(value(), SHA, 'fixture-fingerprint'))
+        self.run.assert_not_called()
+
+    def test_repair_boot_atomic_install_and_interrupted_pending_replay(self):
+        self.mock('git_head', return_value=SHA)
+        self.mock('inspect', return_value={'running': False, 'pid': 0, 'policy': 'no'})
+        self.mock('data_mount', return_value=DESTINATION)
+        self.mock('directory', return_value=DESTINATION)
+        self.mock('exclusive_volume')
+        self.mock('no_references')
+        self.mock('mounts_under', return_value=[str(STORAGE.SOURCE)])
+        self.mock('guard')
+        self.mock('mounted')
+        self.mock('readback', return_value={'status': 'PASS'})
+        saved = self.mock('save')
+        self.run.side_effect = None
+        self.run.return_value = ''
+        with tempfile.TemporaryDirectory(prefix='kodex-guard-upgrade-test-') as root:
+            installed = Path(root) / 'guard.py'
+            self.mock('INSTALLED', new=installed)
+            script = Path(STORAGE.__file__).read_bytes()
+            new_hash = hashlib.sha256(script).hexdigest()
+            contents = {STORAGE.UNITS / n: t.encode() for n, t in STORAGE.units().items()}
+            self.mock('file_content', side_effect=lambda p: SCRIPT if p == installed else contents[p])
+            self.assertEqual(STORAGE.repair_boot(value(), SHA, 'fixture-fingerprint')['status'], 'PASS')
+            self.assertEqual(installed.read_bytes(), script)
+            self.assertEqual(stat.S_IMODE(installed.stat().st_mode), 0o555)
+            saved.assert_called()
+            with patch.object(STORAGE, 'file_content', side_effect=lambda p: script if p == installed else contents[p]):
+                self.assertEqual(STORAGE.repair_boot({**value(), 'bootRepairPending': new_hash},
+                                                    SHA, 'fixture-fingerprint')['status'], 'PASS')
+                self.failure('BOOT_REPAIR_SOURCE_CHANGED',
+                             lambda: STORAGE.repair_boot({**value(), 'bootRepairPending': 'wrong'},
+                                                         SHA, 'fixture-fingerprint'))
+            with patch.object(STORAGE, 'file_content', side_effect=lambda p: b'foreign' if p == installed else contents[p]):
+                self.failure('GUARD_CHANGED', lambda: STORAGE.repair_boot(value(), SHA, 'fixture-fingerprint'))
 
     def test_inspect_rejects_changed_node_volume_or_missing_fields(self):
         mount = {'Destination': '/var/lib/rancher/k3s', 'Type': 'volume', 'Driver': 'local',

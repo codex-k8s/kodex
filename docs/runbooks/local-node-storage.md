@@ -93,6 +93,22 @@ restart policy становится `no`, автозапуском этой но
 Зависимости общего `docker.service` не меняются. При отсутствии DATA guard
 закрыто отклоняет старт, а не создаёт пустое runtime storage.
 
+После реальной перезагрузки обнаружен дефект первоначального guard: Linux
+изменил `MAJ:MIN` и `st_dev` DATA, хотя UUID и inode не изменились. Постоянная
+проверка теперь закрепляет UUID filesystem, тип ext4, источник/mountpoint и
+inode. Current device сравнивается между DATA, target, bind и контейнером,
+а исторический номер устройства сохраняется в журнале как evidence.
+
+Для единственного уже установленного guard предусмотрен `repair-boot
+--expected-sha <PUBLISHED_CLEAN_SHA> --expected-fingerprint <ORIGINAL_FINGERPRINT>`.
+Он допускает только VERIFIED/RETIRED, остановленную exact ноду, неизменные
+unit-файлы, исходный guard hash либо записанный pending hash того же нового
+кода, exact filesystem/inode и пустой unmounted source либо правильный bind.
+Данные не копируются и не удаляются. Pending запись → atomic guard replace →
+final journal update закрыто переживают crash; повторять можно только тот же
+published source до запуска ноды. После старта проверяется readback, а не
+слепой повтор repair. Общий Docker daemon не перезапускается.
+
 Без перезагрузки хоста проверяются unit contents, enable/active, systemd verify
 и actual mount/node readback. Проверка реальной перезагрузкой — отдельный
 owner gate; её отсутствие не выдаётся за reboot PASS.

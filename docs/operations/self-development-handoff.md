@@ -10,6 +10,19 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 — продолжение после перезагрузки, boot guard FAIL
+
+Исходный clean/published SHA419867d8. Kubernetes API недоступен: exact server
+container stopped; guard FAIL DATA_MOUNT_CHANGED. `/data` ext4/UUID совпадает
+с fstab, inode target23724034 прежний, device изменился66308→66312 после reboot.
+Данные не копировались и не удалялись. Chrome MCP подключился; рабочая own
+вкладка3 пока chrome-error из-за недоступного backend.
+
+Forward-only исправление в том же Draft1807: durable UUID guard, current
+device/inode readback и interrupted-safe repair-boot установленного guard.
+ROOT31 storage unit/disposable tests PASS0.423s на рабочем diff; live repair
+ещё NOT RUN до публикации clean SHA. Full65 и native QA остаются OPEN.
+
 ## Checkpoint 09.10.2026 14:31 UTC — перенос и собственная очистка завершены; точка паузы
 
 Apply source `5ba620093164b789f887e2968f623315a5102827`; explicit resume
