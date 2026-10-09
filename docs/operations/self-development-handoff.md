@@ -10,6 +10,18 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 04:53 UTC — 38 cache IDs удалены, bounded batch готов
+
+На опубликованном `be671f5857376d71f3ca9f5fd16943689d6c8070` exact
+readback подтвердил 33 default и 5 named cache IDs ABSENT_AFTER, обе последние
+группы PASS. Root available около 47,28 GB, recovery пока не достигнут.
+Новый bounded batch выбирает максимум 128 заранее проверенных ID одной
+anchored regex-группой: initial DU → fresh whole-batch guards → один prune
+→ independent DU/readback каждого ID. Это не общий prune и не автоматический
+retry; active/shared/recent/parent/current/restore защиты сохранены.
+ROOT повторил 54 герметичных cache tests PASS и diff-check PASS.
+Публикация перед применением; Full65 OPEN, Workflow state UNKNOWN.
+
 ## Checkpoint 09.10.2026 04:49 UTC — actual cache cleanup PASS, предки исключены
 
 Опубликованный `648011aee82971dcd7f212aeb8e3b45a36cdc9a8`: первая старая

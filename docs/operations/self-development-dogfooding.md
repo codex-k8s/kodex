@@ -12735,3 +12735,15 @@ PRESENT_AFTER, дальнейшие цели не выполнялись. Теп
 internal/frontend/unknown types исключены. Только exact old unused private
 листья, не данные/образы/PVC. Дальше свежий audit и cleanup после публикации.
 Recovery и авторитетный статус Workflow пока UNKNOWN; Full65 OPEN.
+
+### 09.10.2026 04:53 UTC — exact cleanup 38 IDs, ускорение без общего prune
+
+На опубликованном `be671f5857376d71f3ca9f5fd16943689d6c8070` прочитано
+точное отсутствие 33 default и 5 named cache IDs. Последние группы 32 и 4
+завершились PASS. Root available около 47,28 GB; обе ноды всё ещё под давлением,
+это не завершённое восстановление. Подготовлен bounded batch для ≤128 выбранных
+ID: полная initial и fresh проверка eligibility/fingerprint, один anchored
+regex prune, independent DU/readback всех целей, без автоматического retry.
+Active/shared/recent/parent guards и защита образов/данных не меняются.
+ROOT повторил 54 герметичных cache unit PASS; diff-check PASS. Дальше публикация
+и свежий audit; авторитетный Workflow state UNKNOWN, Full65 OPEN.

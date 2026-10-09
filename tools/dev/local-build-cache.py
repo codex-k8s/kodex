@@ -53,10 +53,14 @@ def docker(builder, operation, target=None, deadline=None):
         # DU boolean filters проверяют presence, а until не гарантирует отбор.
         command += ["--format", "{{json .}}"]
     else:
-        require(isinstance(target, str) and ID_PATTERN.fullmatch(target), "TARGET_REJECTED")
+        selected = (target,) if isinstance(target, str) else target
+        require(isinstance(selected, (tuple, list)) and 0 < len(selected) <= MAX_TARGETS
+                and all(isinstance(item, str) and ID_PATTERN.fullmatch(item) for item in selected),
+                "TARGET_REJECTED")
+        require(len(selected) == len(set(selected)), "TARGET_REJECTED")
         # Buildx переводит id в regex, поэтому закрепляем обе границы.
         # BuildKit private — presence field с пустым значением, не boolean.
-        command += ["--force", "--filter", "id=^" + target + "$",
+        command += ["--force", "--filter", "id=^(" + "|".join(selected) + ")$",
                     "--filter", "until=24h", "--filter", 'private=""']
     end = min(time.monotonic() + COMMAND_SECONDS, deadline or float("inf"))
     require(time.monotonic() < end, "BUDGET_EXHAUSTED")
@@ -199,34 +203,35 @@ def execute(mode, builder, targets=(), fingerprints=()):
         require(target in initial and initial[target]["eligible"], "TARGET_NOT_ELIGIBLE")
         require(initial[target]["fingerprint"] == fingerprint, "TARGET_CHANGED")
     before = free_bytes()
-    outcomes = []
-    for target, fingerprint in zip(targets, fingerprints):
-        error = None
-        try:
-            fresh = inspect(builder, deadline)
+    error = None
+    try:
+        fresh = inspect(builder, deadline)
+        for target, fingerprint in zip(targets, fingerprints):
             require(target in fresh and fresh[target]["eligible"], "TARGET_NOT_ELIGIBLE")
             require(fresh[target]["fingerprint"] == fingerprint, "TARGET_CHANGED")
-        except Failure as failure:
-            outcomes.append({"id": target, "effect": "NOT_ATTEMPTED", "error": str(failure)})
-            break
+    except Failure as failure:
+        outcomes = [{"id": target, "effect": "NOT_ATTEMPTED", "error": str(failure)}
+                    for target in targets]
+    else:
+        # Одна anchored альтернативная группа выбирает только подтверждённые ID.
+        # Prune дополнительно проверяет actual age/private/in-use в BuildKit.
         try:
-            docker(builder, "prune", target, deadline)
+            docker(builder, "prune", tuple(targets), deadline)
         except Failure as failure:
             error = str(failure)
         # Независимый bounded readback даже после исчерпания общего бюджета.
         try:
             surviving = inspect(builder, time.monotonic() + COMMAND_SECONDS)
-            effect = "ABSENT_AFTER" if target not in surviving else "PRESENT_AFTER"
         except Failure:
-            effect = "UNKNOWN"
-        item = {"id": target, "effect": effect, "sizeBefore": initial[target]["size"]}
-        if error:
-            item["error"] = error
-        outcomes.append(item)
-        if error or effect != "ABSENT_AFTER":
-            break
-    done = len(outcomes)
-    outcomes.extend({"id": target, "effect": "NOT_ATTEMPTED"} for target in targets[done:])
+            surviving = None
+        outcomes = []
+        for target in targets:
+            effect = ("UNKNOWN" if surviving is None else
+                      "ABSENT_AFTER" if target not in surviving else "PRESENT_AFTER")
+            item = {"id": target, "effect": effect, "sizeBefore": initial[target]["size"]}
+            if error:
+                item["error"] = error
+            outcomes.append(item)
     complete = all(item["effect"] == "ABSENT_AFTER" and "error" not in item for item in outcomes)
     try:
         after = free_bytes()
