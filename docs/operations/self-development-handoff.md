@@ -10,6 +10,86 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 17:48 UTC — все custom images и привязки обновлены через UI
+
+Исходный SHA `6978096f0aae624be0f20ac869750ecd2c2f8678`, runtime source
+`f2541df3bed59d2f40cb4207e7c83f2b64045553`; в рабочем diff только UI имён
+потребителей и журнал. Все три новых artifact ACCEPTED/PROMOTED: SYSTEM
+`imgart_9-CMs-DcNfIZoAn8vQNUyDTi`, сотрудники
+`imgart_28C7zCTzd2O4zcqfjGkFqG8a`, проектный помощник
+`imgart_zWYdcyX0YYvXACbsZWv0nOA9`. Ledger17:44:49: promoted43,
+open builds/runtime/admissions/promotions/claims0; promoted pins SHA256
+`a63910b97b8310890f8f275147f452de34dfc507faec3abf86d11ecc8c2bf016`.
+
+Staff impact `riip_BAYR2b8EjmCbj3ugPMS1jD7G` APPLIED: ровно8 APPLIED,
+2 NOT_SELECTED. Два окружения selfdev-write/review version9→10, шесть
+bindings10→11, image digest99f5bc78…; ROOT независимое чтение подтверждает
+сохранение hashes полного набора variables/secret descriptors/policy/38tools
+и каждой configuration/overlay/memory/skill bindings. Проектный помощник
+и его окружение сознательно не вошли в staff batch.
+
+Затем отдельный native draft `renvd_RyrTmfe11H77cCMU5Z4BqNLf` опубликован
+через impact `rvip_LRt2N3yNaZNNRwc2MlCS1d0L`: один проектный помощник,
+ENV11→12/binding11→12, собственный generation2/digest8748b973….
+Его fields SHA256500f81f3… и configuration SHA256e3f7d41a… сохранены;
+tools38. SYSTEM ранее31/binding11/c1dae9da… также проверен независимо.
+Итого4 ENV/8 bindings обновлены без расширения доступа.
+
+Chrome MCP работает; проверены actual fallback screenshots модалки выбора
+и опубликованного окружения. Имена сотрудников/окружений вместо IDs,
+ref в закрытом «Подробнее», выбор и cursor scroll работают. Новые Console
+errors/warnings/pageerrors0; два initial pre-login401 сохранены в evidence.
+Native validation200/impact201/publication200; fresh-entry gate соблюдён,
+устаревшие prepared plans не применены. Оба nodes Ready/DiskPressureFalse,
+application21 deployments/22 replicas ready. Это image-upgrade и UX smoke,
+ROOT frontend production build/typecheck PASS7.84s; chunks>500kB warning
+сохранён. Backend bounded structured error/warn0; исторический ClamAV
+updater12:07 DeadlineExceeded и registry Basic14 остаются отдельной диагностикой,
+не скрыты за Ready статусом.
+не Full65 PASS. П11/14/15/16 OPEN: далее native no-ID practical follow-up,
+нагрузочный reconnect и полный обычный Workflow до итогового human gate.
+
+## Checkpoint 09.10.2026 17:29 UTC — SYSTEM image-only upgrade PASS, PROJECT ещё в процессе
+
+Current clean/published source6978096f, runtime sourcef2541df3, Draft1807.
+Три native CreateRevision изменили только FROM на runner manifestf6e06e43…;
+остальные поля и Dockerfile suffix сохранены. Builds COMPLETED: SYSTEM
+imgbld_tYeK4yvucuhbGbkbNmCGH4Tz/generation16, PROJECT staff
+imgbld_S0wCpBftOYTrPpg-zO5qgUPB/generation10, PROJECT assistant
+imgbld_BXBuQyTFqhDUhtIQBS7T-Dnn/generation2.
+
+Каждый новый owner report полностью прочитан:47pages/4634unique findings/
+4640occurrences, без повторов и со стабильным report digest. Два HIGH —
+undici GHSA-rfgv-xxqx-mfg5 и tar GHSA-r292-9mhp-454m; отдельные решения
+для точных локальных images не переносят старые receipts и не снимают
+technical guards. SYSTEM imgart_9-CMs-DcNfIZoAn8vQNUyDTi ACCEPTED/PROMOTED,
+manifestc1dae9da6b349483a6ec2996d58454ce78d7710f9f53ec623dc0fe297bc0084a.
+
+Штатный SYSTEM draft renvd_bb-nm1po8GhYZu4MA2ZuZRxz PUBLISHED3, impact
+rvip_VDoAQZ8rp26UJV1j57CL-X0h APPLIED/ровно один SYSTEM consumer. ENV
+renv_aSMtfZ2vp9GgOHqTOZnGhWE4 version30→31/revision31/current
+renvv_YBYt_iTNo-7e17MsD0ohX9t8; binding10→11. ROOT independent owner GET200
+подтверждает image, сохранение fields/config hashes и всех38tools.
+Native validation200/impact201/publication200; fresh-entry guard не обходился.
+
+Chrome MCP own3 работает, screenshot capture снова зависал: эти попытки
+NOT RUN. Разрешённый отдельный browser fallback дал actual recipe/ENV
+screenshots; layout без горизонтального overflow. Console новых ошибок0,
+warnings/pageerrors0; initial pre-login401 не скрыты. После PLATFORM_UNAVAILABLE/
+RESYNC_REQUIRED собственное соединение восстановилось: PLATFORM_READY1,
+SESSION_READY1, current opened1/closed0/problems0, header «Подключено».
+Это один native recovery, не нагрузочный reconnect или Full65 PASS.
+
+PROJECT staff artifact imgart_28C7zCTzd2O4zcqfjGkFqG8a ACCEPTED/AUTHORIZED,
+promotion ещё не PROMOTED; PROJECT assistant imgart_zWYdcyX0YYvXACbsZWv0nOA9
+PENDING admission attempt после exact risk decision. Первый staff submit
+не дал owner state change до ухода со страницы; повтор после readback
+подтверждён version4/PENDING. Новые PROJECT image-only ENV/binding updates
+ещё NOT RUN. Следующее — дождаться promotion обоих, apply image-only через
+Историю/impact с полным сохранением настроек → no-ID practical follow-up,
+active focus/reconnect под нагрузкой и обычный полный Workflow. П11/14/15/16
+и Full65 OPEN; actual next reboot guard NOT RUN. Чужие вкладки не закрывались.
+
 ## Checkpoint 09.10.2026 16:59 UTC — reboot recovery и canonical activation PASS
 
 Published/source `f2541df3bed59d2f40cb4207e7c83f2b64045553`, тот же Draft1807.

@@ -4274,6 +4274,61 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 09.10.2026 17:48 UTC — native upgrade четырёх окружений и восьми привязок PASS
+
+На исходном6978096f/runtimef2541df3 все три custom images ACCEPTED/PROMOTED.
+Staff plan riip_BAYR2b8EjmCbj3ugPMS1jD7G APPLIED:8 APPLIED/2 NOT_SELECTED,
+ровно2 staff ENV9→10 и6 bindings10→11; проектный помощник исключён.
+Отдельный draft renvd_RyrTmfe11H77cCMU5Z4BqNLf/impact
+rvip_LRt2N3yNaZNNRwc2MlCS1d0L обновил его ENV11→12/binding11→12 на
+собственный generation2/digest8748b973…; staff digest99f5bc78…,
+SYSTEM digestc1dae9da…/ENV31/binding11. ROOT owner GET подтверждает точные
+artifact pins и неизменность полных fields/config hashes, всех38tools,
+policy, secret descriptors, variables, overlays/memory/skill bindings.
+Никакие grants, model/provider или инструкции не расширялись.
+
+Ledger17:44:49 promoted43/open builds/runtime/admissions/promotions/claims0.
+Две ноды Ready/DiskPressureFalse, application21 deployments/22 replicas ready.
+RoleImageImpactSelection теперь показывает проверенные scope/ref имена из
+существующих кэшей, нейтральный fallback и ref только в закрытом «Подробнее».
+13 новых+5 существующих targeted unit PASS18; lint/typecheck/format PASS.
+ROOT production build/typecheck PASS, Vite7.84s; warnings о chunks>500kB
+и plugin timings сохранены, не выданы за ошибку сборки.
+ROOT native screenshot desktop: имена,8 selected, scroll10 items, excluded
+assistant понятны; ENV publication screenshot PASS. Новых Console errors0,
+warnings/pageerrors0; initial pre-login401 не скрыты. Native validation200/
+impact201/publication200. Fresh authentication проверена штатным SSO,
+устаревшие prepared планы не применялись. Full65 и П11/14/15/16 остаются OPEN;
+native новых tools/no-ID practical follow-up, active focus/reconnect и полный
+Workflow ещё не заменены этим локальным image/UX этапом.
+
+### 09.10.2026 17:29 UTC — SYSTEM обновлён нативно, PROJECT admission/promotion продолжаются
+
+На runtime sourcef254/current published6978096f три native builds COMPLETED;
+изменён только FROM, recipe fields/suffix сохранены. Полностью прочитаны три
+exact risk reports: каждый47pages/4634unique findings/4640occurrences, без
+повторов и смены digest. Отдельные локальные decisions для двух HIGH
+undici/tar не отменяют technical guards и не относятся к production.
+SYSTEM artifact imgart_9-CMs-DcNfIZoAn8vQNUyDTi ACCEPTED/PROMOTED;
+manifestc1dae9da6b349483a6ec2996d58454ce78d7710f9f53ec623dc0fe297bc0084a.
+Native draft renvd_bb-nm1po8GhYZu4MA2ZuZRxz PUBLISHED3, impact
+rvip_VDoAQZ8rp26UJV1j57CL-X0h APPLIED/one SYSTEM consumer, ENV31/revision31
+currentrenvv_YBYt_iTNo-7e17MsD0ohX9t8 и binding11. ROOT independent GET200:
+fields/config preservation true, все38tools сохранены. Native validation200,
+impact201/publication200, fresh-entry guard соблюдён.
+
+MCP own3 подключён; capture зависал/NOT RUN. Actual recipe/ENV screenshots
+получены через разрешённый отдельный browser fallback и просмотрены;
+новых Console errors0/warnings0/pageerrors0. Initial login401 не считаются
+успешными запросами. Native PLATFORM_UNAVAILABLE→RESYNC_REQUIRED→new
+PLATFORM_READY/SESSION_READY восстановился, current stream opened1/closed0/
+problems0, header connected. Это не полный нагрузочный reconnect PASS.
+
+PROJECT staff ACCEPTED/AUTHORIZED, PROJECT assistant admission PENDING;
+PROJECT promotion и ENV image-only apply пока OPEN. Кластер обе ноды Ready,
+все22 desired application replicas Ready, serving source не изменён.
+П11/14/15/16 и Full65 остаются OPEN; next reboot после guard fix NOT RUN.
+
 ### 09.10.2026 16:59 UTC — восстановление после reboot и штатная активация
 
 На exact f2541df3bed59d2f40cb4207e7c83f2b64045553 исправлен boot guard:
