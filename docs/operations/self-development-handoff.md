@@ -10,6 +10,21 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 04:46 UTC — фактическая семантика Buildx selector
+
+Уточнение предыдущей записи: `private=true` синтаксически допустим, но не
+выбирает private cache; оба реальных применения дали PARTIAL / PRESENT_AFTER,
+удаление cache не доказано. Проверены исходники Buildx v0.37.1 и BuildKit
+v0.33.1: private возвращает пустое значение, а id преобразуется в regex.
+Исправлено на `private=""` и regex с обеими границами exact ID. Read-only DU
+с таким private selector вернул 81 запись named builder / 1224 default,
+Shared 0. Пробный prune гарантированно отсутствующего exact ID: exit 0,
+reclaim 0 B, действительные записи не удалены. Герметичные cache unit 46 PASS.
+Повторный audit обязателен перед реальным применением.
+Обе ноды всё ещё DiskPressure True; root available около 42,8 GB,
+целевой reclaim около 75,18 GB. Данные, PVC, current/restore images не трогаются.
+Workflow state UNKNOWN, Full65 OPEN; корректность selector не равна recovery PASS.
+
 ## Checkpoint 09.10.2026 04:39 UTC — actual CLI отказ закрыт, selector исправлен
 
 Checkpoint `5dad8329cebe1520e0567817cc2e3ee24b2e349f` опубликован в Draft1807.

@@ -54,8 +54,10 @@ def docker(builder, operation, target=None, deadline=None):
         command += ["--format", "{{json .}}"]
     else:
         require(isinstance(target, str) and ID_PATTERN.fullmatch(target), "TARGET_REJECTED")
-        command += ["--force", "--filter", "id=" + target,
-                    "--filter", "until=24h", "--filter", "private=true"]
+        # Buildx переводит id в regex, поэтому закрепляем обе границы.
+        # BuildKit private — presence field с пустым значением, не boolean.
+        command += ["--force", "--filter", "id=^" + target + "$",
+                    "--filter", "until=24h", "--filter", 'private=""']
     end = min(time.monotonic() + COMMAND_SECONDS, deadline or float("inf"))
     require(time.monotonic() < end, "BUDGET_EXHAUSTED")
     try:

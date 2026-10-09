@@ -12709,3 +12709,16 @@ Audit PASS: 764 кандидата `default`, выбраны 128 крупней�
 логически; 30 кандидатов `kodex-local-dev`, примерно 5,82 GB. Фактический
 reclaim и восстановление пока NOT RUN; применение после фиксации в Draft1807.
 Full65 OPEN, итоговый business PR не сливать.
+
+### 09.10.2026 04:46 UTC — реальная семантика selector, recovery ещё не доказан
+
+`private=true` допустим синтаксически, но оба реальных запуска оставили первый
+cache ID PRESENT_AFTER; удаления не доказано. По исходникам Buildx v0.37.1 и
+BuildKit v0.33.1 private — пустое presence field, id становится regex.
+Helper теперь использует `private=""` и `id=^<exact ID>$`; read-only DU
+возвращает только Shared false (81 запись named builder / 1224 default).
+Actual CLI с гарантированно отсутствующим exact ID: exit 0 / reclaim 0 B,
+не удаление действительных записей. Перед эффектом нужен свежий audit.
+Root available около 42,8 GB, обе ноды DiskPressure True, целевой объём
+reclaim около 75,18 GB; runtime/data/PVC/current и restore images сохранены.
+Авторитетный статус Workflow UNKNOWN при HTTP 500; Full65 OPEN.
