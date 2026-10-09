@@ -10,6 +10,56 @@ updated: 2026-10-09
 
 # Цель и источники
 
+## Checkpoint 09.10.2026 22:47 UTC — настоящий Workflow запущен; новый PROJECT-чат без ID
+
+Manager прочитал выбранные входы до EOF, ещё раз сверил main/Issue и отсутствие
+видимых дубликатов, сохранил manager-plan.md и штатно запустил один SOFTWARE_CHANGE
+`run_SA8DChw4DJ_xirErFKi80Qev`. Owner read RUNNING/version2; в графе реальный
+INTAKE Manager `run_Ql7l97Z4ZZqW_0QS6JBmUeCp`, node `nod_1LXDY4r8Zp1UN5ykjtRAWK6S`.
+Это запуск и выполняемый первый шаг, не PASS полного Workflow. Backend frozen
+сохраняется, ожидаемые исправления gateway/RC ещё не применены.
+Успешный repo-owned ACK capture INTAKE: session `ses_yTItDDX7JVvRWYS8J5alRfGj`,
+turn `trn_gWZWfUeNtx7nBYBpEZV3C1Yc`, Pod UID `7b5dadcf-5839-4e42-add2-83ad974ef270`,
+RuntimeRevision `rrev_Yr0gmZ4FzdclM5NfEmgPts15`, environment11/binding12,38tools,
+staff image1bcccdac, provider inbox/instructions EQUAL, task-in-prompt true.
+Binary file expected SHA EQUAL на same Pod; serving process scope не доказан.
+Expected task comparison NOT RUN: родительский USER event не является заданием
+дочернего INTAKE, его hash не подставлялся вместо точного child task.
+
+После штатного переключения на PROJECT и создания нового диалога отправлен
+другой естественный запрос о прежней сводке лимитов, без refs/ID.
+Conversation `cnv_rDvs2Qpxsk029lqVzcMeI-4N`, PROJECT agent `agt_Zcmv_7hgFoTKSWRoIsGR8LHk`,
+run `run_9XZGiiExTUbhfBehoWLpTjYi`, session `ses_mwdQT0kSKGG3GvsjdubzMv24`:
+SUCCEEDED/sequence26; все девять tool calls успешны. Найдены точные Issue1796
+и текущий Manager; корректно отличены RUNNING и неподтверждённая приёмка.
+Нет конфигурационной mutation либо запуска нового процесса по этому запросу.
+Actual PROJECT provider ACK CAPTURED до cleanup: exact custom2a1da9ec,
+environment14/binding13,38tools, instructions/inbox EQUAL, task-in-prompt true.
+Начальный capture expected-task flag NOT RUN; независимый owner conversation
+USER read дал282characters/SHA256
+`4c619fb7034b5c8e786460dee3c43d09978e330e45f0fdee2205b7d8777ac21a`,
+равный actual ACK task SHA. Поздний повтор capture с ожидаемым hash NOT CAPTURED;
+последующий Pod read подтвердил, что этот turn Pod уже удалён. Не выполнялся
+новый AI ход ради capture. Generic USER event summary не использован как task.
+
+Own reload без несохранённого ввода восстановил ту же PROJECT-конфигурацию,
+выбранный диалог и итоговый ответ; скриншоты initial/final/rejoin просмотрены.
+Во время rejoin виден временный recovering; затем SESSION_READY/RUN_READY,
+новая WS без STREAM_PROBLEM, title/result сохраняются. Realtime целиком OPEN:
+на других соединениях по-прежнему наблюдался PLATFORM_RESYNC_REQUIRED.
+Relevant Network graph/events/conversations/ticket200; cumulative Console21,
+warnings/pageerrors0. Одна Console error добавилась в интервале собственного
+диагностического GET неподдерживаемого single-conversation endpoint; UI его
+не вызывает. Точная корреляция и HTTP-статус в bounded buffer не сохранены;
+не утверждать Console delta0 либо PASS этого диагностического запроса.
+
+Второй isolated пакет сохраняет closed stage/code/authenticated execution
+для read_task_session вместо потери upstream status; TOOL_UNAVAILABLE и
+authority/pagination guards прежние, retry не добавлен. Baseline RED, targeted
+unit/race/vet/build PASS; adoption/full callback/PG/live NOT RUN. Историческая
+причина первого SYSTEM read failure UNKNOWN. Подготовленные patches не заменяют
+ещё требуемую live проверку. Chrome MCP повторно timeout300s, новый запрос pending.
+
 ## Checkpoint 09.10.2026 22:38 UTC — живой Manager и поиск задачи без ID
 
 На source `8116b8ff727b8edd81ad8a8d7e4789b7b7e118ff` после перезагрузки
@@ -4639,8 +4689,12 @@ DiskPressure; актуальный owner run state UNKNOWN при API 500, recov
         Не ограничиваться пересказом: выполнить безопасную практическую
         доработку найденной задачи по обычному описанию, проверить фактический
         результат, затем дослать уточнение в тот же диалог без технических ID.
-  - [ ] В новом чате найти ранее выполненную работу по содержанию/названию
+  - [x] В новом чате найти ранее выполненную работу по содержанию/названию
         в доступном проекте; не требовать от пользователя внутренних ID.
+        09.10.2026 22:47 UTC: новый PROJECT-диалог с нейтрального обзора нашёл
+        точную Issue1796 и последние попытки через search/session/GitHub read,
+        без IDs в запросе. Статусы отличены от неподтверждённой готовности;
+        authoritative scope/run/turn, ACK и own reload/rejoin проверены.
   - [ ] Выбрать процесс, сотрудника либо окружение по понятному названию
         и контексту текущего экрана, сохранив серверную owner/project boundary.
   - [ ] При совпадающих названиях, недостаточном контексте и ссылке на
