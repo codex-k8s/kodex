@@ -4274,6 +4274,30 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 09.10.2026 14:31 UTC — migration PASS, собственный cache очищен, остановка по owner
+
+Apply5ba62009 / resumec3a567a9 опубликованы в Draft1807. Первый standalone
+verify FAIL до node start исправлен explicit generators=yes; повторная offline
+checksum-only сверка и activate/readback PASS. Actual destination66308:23724034,
+per-node service enabled/active, original guard SHA2566fa41d91… сохранён.
+Root-journal RETIRED: удалена только verified redundant original copy;
+63 исходных pinned images целы. Обе ноды Ready=True/DiskPressure=False,
+PostgreSQL Running/Ready. Owner ledger14:26 UTC runs/builds/admissions/
+promotions/claims0, promoted40; root около205.28GB/DATA87.82GB available
+(concurrent measurement, не доказательство attribution всей дельты).
+
+Собственный builder `kodex-local-dev`:20 exact unused old private records
+ABSENT_AFTER, final eligible0/excluded31. Default/shared builder не изменён.
+Host images11 KEEP; OCI25, включая13 old archives с actual runtime pins,
+сохранены. ROOT c3a567a9: storage28/cache27/host18/OCI15 =88 tests PASS;
+syntax/diff-check PASS. Reboot NOT RUN.
+
+Последний owner request — завершить copy/cleanup и pause: свежая activation,
+AI/native image upgrades и QA НЕ запускались. Core5 сохраняют прежний
+quiesce/replicas0, приложение ещё не готово. Дальнейшая точка продолжения —
+актуальный checkpoint `OPS-DOC-SELFDEV-002`. П11/14/15/16 и Full65 OPEN;
+bootstrap PR остаётся Draft, финальный business PR не подменён host-кодом.
+
 ### 09.10.2026 13:58 UTC — owner YES на перенос одной development-ноды
 
 Current published source `e866f9b2b4e04b28f2fcb9b927a96cce337be1c0`,

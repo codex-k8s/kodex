@@ -10,6 +10,45 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 14:31 UTC — перенос и собственная очистка завершены; точка паузы
+
+Apply source `5ba620093164b789f887e2968f623315a5102827`; explicit resume
+source `c3a567a9060900a592592146e5193564c45df468`, тот же Draft1807.
+Offline copy/checksum/syncfs PASS, resume повторная checksum-only сверка PASS.
+Actual bind source и container `/var/lib/rancher/k3s` используют destination
+device66308/inode23724034; node service enabled/active, Docker restart policy no.
+Original guard script остаётся exact SHA2566fa41d91…; новый published script
+SHA256 `271fb1e15a45ffc16196133f5b2101ea52d2e606495361c6e42696f6cfc12d37`.
+ROOT на c3a567a9: storage28 PASS0.383s, build-cache27 PASS0.165s,
+host-image18 PASS0.006s, OCI15 PASS0.240s; всего88 tests PASS.
+
+Retire PASS: удалена только проверенная избыточная original copy, актуальные
+данные сохраняются на DATA. Root-journal RETIRED, все63 исходных CRI pinned
+image IDs сохранены. Обе ноды Ready=True/DiskPressure=False; PostgreSQL
+Running/Ready. Fresh owner ledger14:26:06 UTC: runs/builds/admissions/promotions/
+claimed leases0, promoted artifacts40, pins SHA256
+`fcec179382ef7f86a345d5ab470437b172fdaf399d8d9eacb6a40e9c9a923c12`.
+Unrequested accepted artifact1 сохранён; это не pending promotion task.
+
+Очищено20 exact старых unused private cache records только builder
+`kodex-local-dev`; каждый ABSENT_AFTER, финальный eligible0/excluded31.
+Shared default builder не трогался. Host tool images11 KEEP/obsolete0.
+OCI25: все13 формально old архивов защищены actual runtime pins; не удалены.
+Образы/volumes/данные/dirty worktrees/current cache и откатные pins сохранены.
+Capacity14:30: root available205.28GB, DATA87.82GB; concurrent measurement,
+общий delta не приписывается собственной очистке. Reboot NOT RUN.
+
+По последнему указанию владельца НЕ начинать свежий render/activation,
+native image upgrades, реальные AI/no-ID кейсы или полный QA до «продолжай».
+Core5 остаются в прежнем штатном quiesce (replicas0): control-plane,
+control-api-gateway, runtime-controller, role-image-builder,
+image-admission-controller. Это восстановленное storage/БД, не готовое приложение.
+Runtime warm Pod terminal Error сохранён; активных runtime claims нет.
+Resume: fresh clean-source runner provenance/render → canonical supply-chain
+apply/readback (owner idle уже доступен, повторить свежим) → три custom images
+через admission/promotion/UI rebinding → live no-ID cases, reconnect/active
+focus и полный Workflow. П11/14/15/16 и Full65 OPEN. PR не merge/ready.
+
 ## Checkpoint 09.10.2026 14:15 UTC — copy PASS, activate прерван до первого старта
 
 Published source `5ba620093164b789f887e2968f623315a5102827`, Draft1807,
