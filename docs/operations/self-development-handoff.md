@@ -10,7 +10,19 @@ updated: 2026-10-09
 
 # Текущее состояние
 
-## Checkpoint 09.10.2026 05:16 UTC — owner YES для резерва и старых образов
+## Checkpoint 09.10.2026 05:16 UTC — резерв применён, unused cache очищен
+
+На опубликованном `24d603829d09a582b707207ccee3bb75e47f139c` один
+owner-authorized apply завершился PASS: exact reserved count 1 246 000,
+on-disk readback PASS, online reservation delta 20 414 476 288 bytes PASS.
+После дополнительных exact cache groups root available около 82,17 GB;
+свежий recovery audit обоих builders не нашёл eligible листьев.
+Все выполненные группы PASS / ABSENT_AFTER; эффект concurrent writers/GC
+не приписывается целиком cache cleanup. На момент readback обе ноды ещё
+DiskPressure True; ждём штатный переход, не меняя thresholds/taints/pins.
+HTTP/API recovery пока не подтверждён, native Workflow UNKNOWN, Full65 OPEN.
+
+## Checkpoint 09.10.2026 05:14 UTC — owner YES для резерва и старых образов
 
 Владелец явно разрешил уменьшить ext4 резерв основного диска с 5% до 1%
 и удалить доказанно ненужные старые образы. Подготовлен адресный

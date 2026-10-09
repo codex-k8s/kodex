@@ -12769,3 +12769,21 @@ ext4 reserve 5% занимает около 25,52 GB; вариант 1% доба
 available без удаления файлов, но меняет весь сервер. Owner gate запрошен,
 настройка не изменена; одного изменения резерва может быть недостаточно.
 Full65 OPEN, финальный business PR не сливать.
+
+### 09.10.2026 05:16 UTC — exact reserve apply PASS; восстановление ожидается
+
+Owner явно разрешил уменьшить root ext4 резерв 5%→1% и удалить ненужные
+старые образы. Новый repo-owned helper опубликован в Draft1807 на
+`24d603829d09a582b707207ccee3bb75e47f139c`. ROOT 16 reserve и 58 cache
+герметичных unit PASS; diff-check PASS. Проверен Context7 `/tytso/e2fsprogs`.
+Свежий audit/fingerprint → fresh exact identity guard → один tune2fs effect:
+reserved blocks 6 230 003 → 1 246 000, оставлено 5 103 616 000 reserved bytes.
+On-disk readback PASS, реальная online reservation delta 20 414 476 288 bytes
+PASS; remount/reboot/retry отсутствуют. После bounded recovery cache cleanup
+available около 82,17 GB, оба builders больше не имеют eligible leaf records.
+Текущие/откатные образы, данные/PVC и Kubernetes thresholds сохранены.
+Все фактически выполненные batches PASS с exact ABSENT_AFTER, но observed
+free-space delta не атрибутируется только им из-за concurrent writers/GC.
+Обе ноды пока DiskPressure True; application recovery NOT RUN до штатного
+перехода. Исторические pinned node images проверяются, active domain refs
+пока UNKNOWN и не удаляются вслепую. Native Workflow UNKNOWN, Full65 OPEN.
