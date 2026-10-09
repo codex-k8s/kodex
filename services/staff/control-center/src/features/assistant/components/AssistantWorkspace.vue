@@ -82,6 +82,7 @@ import {
 import { useAssistantStore } from "@/features/assistant/store";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
+import { createAssistantTranscriptSubscriptions } from "@/features/assistant/transcript-subscriptions";
 import { organizationRuntimeResourceScope } from "@/features/runtime/resource-scope";
 import {
   persistAssistantConversationRef,
@@ -268,8 +269,23 @@ const chatActiveItemId = computed(() =>
     closedTranscriptExecutionKeys.value,
   ),
 );
-const transcriptLeases = new Map<string, () => void>();
-let transcriptReadGeneration = 0;
+const transcriptSubscriptions = createAssistantTranscriptSubscriptions({
+  loadRun: (runRef, signal) => platform.loadRun(runRef, signal),
+  loadHistory: (runRef, signal) => platform.loadRunTranscript(runRef, signal),
+  ready: (runRef) =>
+    Boolean(platform.graphs[runRef]) && !platform.runProblems[runRef],
+  sequence: (runRef) => platform.graphs[runRef]?.sequence ?? -1,
+  historySequence: (runRef) => platform.runTranscriptSequence(runRef),
+  acquire: (runRef) => realtime.acquireRun(runRef),
+});
+const transcriptProblem = computed(() => {
+  for (const runRef of [...conversationRunRefs.value].reverse()) {
+    const problem =
+      platform.runTranscriptProblems[runRef] ?? platform.runProblems[runRef];
+    if (problem) return { runRef, problem };
+  }
+  return undefined;
+});
 const systemResourceScope = computed(() =>
   organizationRuntimeResourceScope(platform.bootstrap),
 );
@@ -1637,27 +1653,21 @@ watch(
     open,
     () => props.live,
     () => store.selectedConversation?.ref,
-    conversationRunRefs,
+    () => store.assistantScope,
+    () => platform.bootstrap?.organizationRef,
+    () =>
+      conversationRunRefs.value.map((runRef) => [
+        runRef,
+        platform.graphs[runRef]?.sequence,
+      ]),
   ],
-  async () => {
-    const generation = ++transcriptReadGeneration;
-    const wanted =
-      open.value && props.live
-        ? new Set(conversationRunRefs.value)
-        : new Set<string>();
-    for (const [runRef, release] of transcriptLeases) {
-      if (wanted.has(runRef)) continue;
-      release();
-      transcriptLeases.delete(runRef);
-    }
-    // Общий owner-checked history path; чтения пока последовательны.
-    for (const runRef of wanted) {
-      if (transcriptLeases.has(runRef)) continue;
-      await platform.loadRun(runRef);
-      if (generation !== transcriptReadGeneration) return;
-      if (!platform.runProblems[runRef] && platform.graphs[runRef])
-        transcriptLeases.set(runRef, realtime.acquireRun(runRef));
-    }
+  () => {
+    const conversation = store.selectedConversation;
+    const scope =
+      open.value && props.live && conversation
+        ? `${store.assistantScope}:${platform.bootstrap?.organizationRef ?? ""}:${conversation.ref}`
+        : undefined;
+    transcriptSubscriptions.sync(scope, conversationRunRefs.value);
   },
   { immediate: true },
 );
@@ -1674,9 +1684,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   ++prefillGeneration.value;
-  ++transcriptReadGeneration;
-  for (const release of transcriptLeases.values()) release();
-  transcriptLeases.clear();
+  transcriptSubscriptions.close();
   workspaceMounted = false;
   cancelLatestRestore();
   chatResizeObserver?.disconnect();
@@ -2238,6 +2246,13 @@ onBeforeUnmount(() => {
                 </template>
               </div>
               <template v-else>
+                <ProblemNotice
+                  v-if="transcriptProblem"
+                  :problem="transcriptProblem.problem"
+                  @retry="
+                    transcriptSubscriptions.retry(transcriptProblem.runRef)
+                  "
+                />
                 <template v-for="entry in chatTimeline" :key="entry.id">
                   <RunActivityView
                     v-if="entry.kind === 'ACTIVITY'"

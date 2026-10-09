@@ -10,6 +10,36 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 23:57 UTC — PROJECT self-plan и история чата
+
+Поверх918e73cd интегрированы12 exact frozen source/test files: PROJECT
+CHANGE_CAPABILITY self-target в RC/CP и independent history catch-up с max2,
+newest-first, cancel/generation/pins и закрытым отказом partial/foreign history.
+Права не выданы, native self-plan/apply ещё NOT RUN; codegen/contracts не менялись.
+ROOT493unit, FE scoped lint/format/forced typecheck/build, RC callback race34.370s,
+CP scoped unit0.059s, scoped vet и disposable PROJECT component25.928s PASS.
+CP/RC hot reload serving ELF совпали с independent trimpath offline build,
+source host/Pod hashes EQUAL. Обе ноды и desired replicas Ready.
+
+Журнал механически сокращён без потери исходных1159280bytes: пять exact parts,
+manifest и coverage; canonical plan/checklist/нормативные фрагменты сохранены.
+ROOT verifier и20regressions PASS. История не доказывает live QA; предыдущие
+checkbox не изменены. Активная запись ограничена128KiB, append-only требует
+точный previous compact Git snapshot. Не запускать --write в основном checkout.
+
+Native PROJECT cold история прежнего чата видна: commentary/tools/final,
+screenshot просмотрен, overflow=false, graph/events200. Console cumulative6,
+warnings0/pageerror0; delta3 после hot reload ещё UNKNOWN, не заявлять console0.
+Следующее: native подтверждаемый собственный file capability с объяснением
+read/write scope, явное owner Validate/Apply и fresh named-file body до EOF;
+затем cold/rejoin/switch и scoped console/network readback. Во время живого
+turn backend freeze; менять runtime только после terminal.
+
+Chrome MCP613 pending. Own Playwright38659 на PROJECT Kodex | Dev, старый
+natural-language chat выбран; draft пуст. Чужие вкладки не закрывались.
+Architect official-source/effective-version BLOCKED сохраняется; Developer
+не допущен, business PR не создан. Full65QA OPEN, bootstrap PR остаётся Draft.
+
 ## Checkpoint 09.10.2026 23:41 UTC — восстановление доступа и web-статус
 
 Base и remote Draft1807 — `07e034e5e13ed59193df04bad4b3558553bad002`;

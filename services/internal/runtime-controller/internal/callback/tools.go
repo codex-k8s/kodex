@@ -358,6 +358,10 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		}
 		agentRef = enumSchema(refs...)
 	}
+	capabilityAgentRef := agentRef
+	if input.AssistantScope == runtimecontract.AssistantScopeProject && input.AgentRef != "" {
+		capabilityAgentRef = projectSelfTargetSchema(input, "CHANGE_CAPABILITY", "AGENT", input.AgentRef)
+	}
 	result := []map[string]any{
 		assistantOperationSchema("CREATE_PROJECT", objectSchema([]string{"name", "purpose", "language"}, map[string]any{
 			"name": stringSchema(1, 120), "purpose": stringSchema(1, 1000), "language": enumSchema("ru", "en"),
@@ -396,7 +400,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		assistantOperationSchema("CREATE_WORKFLOW", workflowInputSchema(projectRef, agentRef)),
 		assistantOperationSchema("ARCHIVE_WORKFLOW", objectSchema(nil, map[string]any{})),
 		assistantOperationSchema("CHANGE_CAPABILITY", objectSchema([]string{"agentRef", "capabilityKey", "enabled"}, map[string]any{
-			"agentRef": agentRef, "capabilityKey": assistantAgentCapabilitySchema(), "enabled": map[string]any{"type": "boolean"},
+			"agentRef": capabilityAgentRef, "capabilityKey": assistantAgentCapabilitySchema(), "enabled": map[string]any{"type": "boolean"},
 		})),
 		assistantOperationSchema("CHANGE_INTEGRATION_GRANT", integrationGrantInputSchema(input.AssistantContext)),
 		assistantOperationSchema("CREATE_INTEGRATION_CONNECTION", objectSchema([]string{"definitionKey", "name", "publicConfiguration"}, map[string]any{
@@ -545,7 +549,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 			selfInstructionsOperation && kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" ||
 			selfInstructionsOperation && (kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE") ||
 			selfConfigurationOperation && kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" ||
-			projectSelfOperation && (kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT") ||
+			projectSelfOperation && (kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "CHANGE_CAPABILITY") ||
 			projectSelfEnvironmentOperation && kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
 			filtered = append(filtered, operation)
 		}

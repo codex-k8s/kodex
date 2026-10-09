@@ -399,6 +399,22 @@ func TestAssistantSelfConfigurationOperationRequiresPinnedAssistant(t *testing.T
 	}
 }
 
+func TestProjectAssistantSelfCapabilityGuard(t *testing.T) {
+	t.Parallel()
+	operation := entity.AssistantPlanOperation{Type: "CHANGE_CAPABILITY", Parameters: map[string]any{"agentRef": "agt_project123", "capabilityKey": "platform.artifact.manage", "enabled": true}}
+	if !projectAssistantOperation(operation.Type) || !assistantSelfConfigurationOperation("agt_project123", "PROJECT", operation) {
+		t.Fatal("owner-confirmed self capability cannot reach the project helper plan")
+	}
+	for _, scope := range []string{"SYSTEM", "NONE", "STAFF", "UNKNOWN"} {
+		if assistantSelfConfigurationOperation("agt_project123", scope, operation) {
+			t.Fatal("self capability escaped the PROJECT profile")
+		}
+	}
+	if assistantSelfConfigurationOperation("agt_other123", "PROJECT", operation) {
+		t.Fatal("foreign helper received a self-configuration exception")
+	}
+}
+
 func TestProjectAssistantOperationScopeIsClosed(t *testing.T) {
 	t.Parallel()
 	for _, operationType := range []string{"CREATE_PROJECT", "CREATE_PROJECT_ASSISTANT", "CREATE_INTEGRATION_CONNECTION", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "UNKNOWN"} {

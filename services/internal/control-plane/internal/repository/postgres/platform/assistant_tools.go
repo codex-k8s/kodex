@@ -211,7 +211,7 @@ func assistantSelfConfigurationOperation(assistantRef, assistantScope string, op
 	}
 	if assistantScope == "PROJECT" {
 		return assistantRef != "" && assistantString(operation.Parameters, "agentRef") == assistantRef &&
-			(operation.Type == "CREATE_INSTRUCTION_DRAFT" || operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT" || operation.Type == "UPDATE_AGENT")
+			(operation.Type == "CREATE_INSTRUCTION_DRAFT" || operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT" || operation.Type == "UPDATE_AGENT" || operation.Type == "CHANGE_CAPABILITY")
 	}
 	requestedRef := assistantString(operation.Parameters, "systemAssistantRef")
 	if assistantScope != "SYSTEM" || assistantRef == "" || requestedRef != assistantRef {

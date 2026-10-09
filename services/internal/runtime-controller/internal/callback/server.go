@@ -1372,6 +1372,22 @@ func assistantConfigurationParametersAllowed(input runtimecontract.RunnerInput, 
 		return projectAssistantLocatorParametersAllowed(input, kind, parameters)
 	}
 	switch kind {
+	case "CHANGE_CAPABILITY":
+		if !input.IsAssistant() || !onlyKeys(parameters, "agentRef", "capabilityKey", "enabled") || !assistantRequiredStrings(parameters, "agentRef", "capabilityKey") {
+			return false
+		}
+		if _, ok := parameters["enabled"].(bool); !ok {
+			return false
+		}
+		key := parameters["capabilityKey"].(string)
+		if key != "platform.artifact.manage" && key != "platform.run.delegate" && key != "platform.run.launch" {
+			return false
+		}
+		if input.AssistantScope == runtimecontract.AssistantScopeProject && input.AgentRef != "" && parameters["agentRef"] == input.AgentRef {
+			return true
+		}
+		context := input.AssistantContext
+		return context != nil && context.EntityKind == "AGENT" && context.EntityRef == parameters["agentRef"] && slices.Contains(context.AllowedOperations, kind)
 	case "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT":
 		if input.AssistantScope != runtimecontract.AssistantScopeProject || input.AgentRef == "" || parameters["projectAssistantRef"] != input.AgentRef ||
 			!onlyKeys(parameters, "projectAssistantRef", "connectionRef", "capabilityKey", "enabled", "approvalPolicy", "approvalScopePaths") {
@@ -1586,7 +1602,7 @@ func assistantOperationTargetContext(input runtimecontract.RunnerInput, kind str
 	if input.AssistantScope != runtimecontract.AssistantScopeProject {
 		return input.AssistantContext
 	}
-	if kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" {
+	if kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "CHANGE_CAPABILITY" {
 		requested, _ := parameters["agentRef"].(string)
 		if requested != "" && requested == input.AgentRef {
 			return &runtimecontract.RunnerAssistantContext{EntityKind: "AGENT", EntityRef: input.AgentRef, EntityName: input.AgentRef}

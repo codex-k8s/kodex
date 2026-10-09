@@ -275,10 +275,14 @@ describe("AssistantWorkspace layout", () => {
   });
   it("объединяет owner-checked историю run в чат без отдельного cache и отпускает scoped subscriptions", () => {
     expect(source).toContain("Object.values(platform.events[runRef] ?? {})");
-    expect(source).toContain("await platform.loadRun(runRef)");
+    expect(source).toContain("platform.loadRun(runRef, signal)");
+    expect(source).toContain("platform.loadRunTranscript(runRef, signal)");
     expect(source).toContain("realtime.acquireRun(runRef)");
-    expect(source).toContain(
-      "for (const release of transcriptLeases.values()) release()",
+    expect(source).toContain("transcriptSubscriptions.close()");
+    expect(source).toContain("platform.graphs[runRef]?.sequence");
+    expect(template).toContain(':problem="transcriptProblem.problem"');
+    expect(template).toContain(
+      "transcriptSubscriptions.retry(transcriptProblem.runRef)",
     );
     expect(template).toContain('v-for="entry in chatTimeline"');
     expect(template).toContain(':events="entry.events"');

@@ -120,4 +120,44 @@ func testAssistantArtifactSearch(t *testing.T, ctx context.Context, r *Repositor
 	if _, _, err := service.SearchAssistantResources(ctx, reader, stringMap(readerLease, "leaseRef"), "wrong-fence", runtimeRevisionMapInt64(readerLease, "generation"), name); !errors.Is(err, errs.ErrNotFound) {
 		t.Fatal("stale artifact search lease accepted")
 	}
+	t.Run("owner-confirmed helper file capability", func(t *testing.T) {
+		// Метаданные обнаруживаются без capability; выдача требует отдельного плана.
+		foreign, err := service.GetProjectAssistant(ctx, owner, foreignProject)
+		if err != nil {
+			t.Fatal("foreign helper fixture unavailable")
+		}
+		employee := execute(command.CreateAgent, owner, "self-capability-staff", nil, command.AgentInput{ProjectRef: project, Name: "Employee", Purpose: "Синтетическая проверка сотрудника", RoleDescription: "Обычный сотрудник", Instructions: "Используй только назначенные возможности."}).Agent
+		operation := entity.AssistantPlanOperation{Key: "own-files", Type: "CHANGE_CAPABILITY", Title: "Разрешить работу с файлами", Summary: "Предложить возможность после подтверждения владельца", Parameters: map[string]any{"agentRef": agent, "capabilityKey": runtimecontract.ArtifactCapability, "enabled": true}}
+		for _, invalid := range []struct{ name, field, value string }{
+			{"other helper/project", "agentRef", foreign.AgentRef},
+			{"ordinary staff", "agentRef", employee.Ref},
+			{"unknown capability", "capabilityKey", "platform.future.manage"},
+			{"caller actor", "actorRef", "usr_foreign123"},
+		} {
+			bad := operation
+			bad.Parameters = cloneAssistantFields(operation.Parameters)
+			bad.Parameters[invalid.field] = invalid.value
+			_, err := service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "self-capability-deny-" + invalid.name}, Payload: command.ProposeAssistantPlanInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Summary: "Закрытая отрицательная проверка", Operations: []entity.AssistantPlanOperation{bad}}})
+			if err == nil {
+				t.Fatal("foreign or unknown capability proposal crossed its source boundary")
+			}
+		}
+		plan := executeWorkerAssistantPlan(t, ctx, service, worker, lease, "self-capability-plan", operation).Plan
+		before, err := service.GetAgent(ctx, owner, agent)
+		if err != nil || contains(before.Capabilities, runtimecontract.ArtifactCapability) {
+			t.Fatal("proposal granted capability without owner approval")
+		}
+		validated := execute(command.ValidateAssistantPlan, owner, "self-capability-validate", &plan.Version, command.AssistantPlanInput{PlanRef: plan.Ref, Revision: plan.Revision}).Plan
+		if validated == nil || validated.State != "VALID" {
+			t.Fatal("exact helper capability plan did not validate")
+		}
+		if _, err := service.Execute(ctx, command.Command{Kind: command.ApplyAssistantPlan, Principal: actor, Mutation: value.Mutation{IdempotencyKey: "self-capability-foreign-actor", ExpectedVersion: &validated.Version}, Payload: command.AssistantPlanInput{PlanRef: validated.Ref, Revision: validated.Revision}}); err == nil {
+			t.Fatal("foreign actor applied the owner plan")
+		}
+		applied := execute(command.ApplyAssistantPlan, owner, "self-capability-apply", &validated.Version, command.AssistantPlanInput{PlanRef: validated.Ref, Revision: validated.Revision})
+		after, err := service.GetAgent(ctx, owner, agent)
+		if err != nil || applied.PlanReceipt == nil || applied.PlanReceipt.Outcome != "APPLIED" || !contains(after.Capabilities, runtimecontract.ArtifactCapability) || after.Version != before.Version+1 {
+			t.Fatal("owner-confirmed capability did not produce an exact versioned receipt")
+		}
+	})
 }
