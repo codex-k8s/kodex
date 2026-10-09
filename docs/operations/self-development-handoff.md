@@ -10,6 +10,44 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 23:41 UTC — восстановление доступа и web-статус
+
+Base и remote Draft1807 — `07e034e5e13ed59193df04bad4b3558553bad002`;
+Issue1797 OPEN, main `ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69` неизменён.
+После перезапуска оба узла Ready, все desired Deployment/StatefulSet готовы;
+старые Error/ContainerStatusUnknown Pod не являются действующими репликами.
+Gateway, CP, RC и frontend используют исходники этого клона через hostPath.
+
+Native PROJECT повтор поиска сохранённой заметки после ARTIFACT исправления
+завершён: metadata и точная ссылка найдены без ID в пользовательском запросе.
+Чтение тела не выдано автоматически, помощник честно сообщил отсутствие
+разрешённого файлового каталога. Следующая просьба подготовить подтверждаемый
+план собственной файловой возможности завершилась semantic BLOCKED:
+серверная команда есть, но PROJECT self-configuration catalog её не раскрывает.
+Исправляется только этот exact self path, без самовыдачи права или обхода плана.
+Текущие реальные ходы terminal; backend freeze этого запроса снят.
+
+В рабочем дереве presentation-only web fix: только `CODEX_WEB_SEARCH` с
+`SUCCEEDED/COMPLETED` показывает нейтральное «Завершён». Канонические state,
+audit, action и safe details не меняются; успешное чтение страницы этим не
+доказывается. ROOT: RunTranscript151 и run-activity133 unit, scoped ESLint,
+Prettier, forced typecheck и production build PASS; chunk warnings сохранены.
+Host/Pod RunTranscript SHA256 совпадает:
+`00bb7e92955f66c495e427244a661e68136eeea874b0204ab433c5754374cd50`.
+Native screenshot `native-qa-web-completed-neutral-07e034e5.png` просмотрен:
+web badge нейтральный, компактная хронология читаема, horizontal overflow нет.
+После штатного входа Console delta0, warnings0/pageerrors0; прежние три401
+при начальном входе сохранены как baseline, не объявлены Console0.
+Защищённые graph/events/artifact чтения200; это не полный realtime acceptance.
+
+Chrome MCP list_pages завершился таймаутом300s; новый конкретный запрос585
+pending. Own Playwright38659 восстановлен, OWNER bootstrap200; чужие вкладки
+не закрывались. Готовится scoped history catch-up: readiness graph не содержит
+transcript, pending history нельзя терять из-за graph snapshot. Lossless журнал
+ещё не интегрирован: ROOT нашёл непереносимый test и ограничение mutable
+checkbox в оснастке, исправляются до adoption. Full65 и бизнес-Workflow OPEN;
+Architect source/version BLOCKED не устранён, Developer ещё не допущен.
+
 ## Checkpoint 09.10.2026 23:22 UTC — кластер после reboot и адресные Go-исправления
 
 Base `cb611a2ed08def5071c2fc7c108c30ed3e63e03e`; изменения этого checkpoint

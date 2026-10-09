@@ -695,6 +695,51 @@ describe("RunTranscript: названия native инструментов", () =
   );
 
   it.each(["ru", "en"] as const)(
+    "показывает завершённый web-вызов нейтрально, сохраняя machine state и details (%s)",
+    async (locale) => {
+      const html = await render(
+        "CODEX_WEB_SEARCH",
+        { action: "OPEN_PAGE", query_count: 1 },
+        locale,
+        "COMPLETED",
+      );
+      expect(html).toMatch(
+        /class="status-badge status-badge--neutral" data-state="SUCCEEDED"/,
+      );
+      expect(html).toContain(locale === "ru" ? "Завершён" : "Completed");
+      expect(html).not.toContain("status-badge--success");
+      expect(html).not.toContain("Succeeded");
+      expect(html).toContain("lucide-globe");
+      expect(html).toContain("OPEN_PAGE");
+      expect(html).toMatch(/<details[^>]*>[^]*?COMPLETED[^]*?<\/details>/);
+      expect(html).not.toContain("run-transcript__preview");
+      expect(html).not.toMatch(
+        /RAW_COMMAND_SENTINEL|RAW_OUTPUT_SENTINEL|HIDDEN_REASONING_SENTINEL/,
+      );
+    },
+  );
+
+  it.each([
+    ["CODEX_WEB_SEARCH", "FAILED", "FAILED", "danger"],
+    ["CODEX_WEB_SEARCH", "RUNNING", "RUNNING", undefined],
+    ["CODEX_SHELL", "COMPLETED", "SUCCEEDED", "success"],
+    ["CODEX_WEB_SEARCH", "Содержательный результат", "SUCCEEDED", "success"],
+  ] as const)(
+    "не меняет другие статусы и результаты %s/%s/%s",
+    async (tool, result, state, tone) => {
+      const html = await render(tool, {}, "en", result, state);
+      if (tone) expect(html).toContain(`status-badge--${tone}`);
+      else expect(html).not.toContain('data-state="RUNNING"');
+      expect(html).not.toMatch(
+        /class="status-badge status-badge--neutral" data-state="SUCCEEDED"/,
+      );
+      expect(html).toContain(result);
+      if (state === "RUNNING")
+        expect(html).toContain("run-transcript__preview");
+    },
+  );
+
+  it.each(["ru", "en"] as const)(
     "не повторяет native RUNNING только при видимом индикаторе работы (%s)",
     async (locale) => {
       const active = await render(

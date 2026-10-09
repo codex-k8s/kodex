@@ -183,6 +183,16 @@ function visibleState(state: string | undefined, working: boolean): boolean {
 function toolState(tool: NonNullable<RunActivityItem["toolCall"]>): string {
   return integrationToolPresentationState(tool) ?? tool.state;
 }
+// Завершение web-обёртки не подтверждает успешное получение содержимого страницы.
+function completedWebTool(
+  tool: NonNullable<RunActivityItem["toolCall"]>,
+): boolean {
+  return (
+    tool.tool === "CODEX_WEB_SEARCH" &&
+    tool.state === "SUCCEEDED" &&
+    tool.safeResult === "COMPLETED"
+  );
+}
 function groupToolState(items: readonly RunActivityItem[]): string {
   const states = items.map((item) =>
     item.toolCall ? toolState(item.toolCall) : "",
@@ -310,6 +320,7 @@ function nativeResultLabel(
   toolCall: NonNullable<RunActivityItem["toolCall"]>,
 ): string | undefined {
   if (!nativeTools.has(toolCall.tool)) return undefined;
+  if (completedWebTool(toolCall)) return t("runs.nativeToolResults.COMPLETED");
   if (toolCall.safeResult === "COMPLETED" && toolCall.state === "SUCCEEDED")
     return t("states.SUCCEEDED");
   if (toolCall.safeResult === "RUNNING" && toolCall.state === "RUNNING")
@@ -672,6 +683,14 @@ function bytes(value: number): string {
                         visibleState(toolState(item.toolCall), false)
                       "
                       :state="toolState(item.toolCall)"
+                      :tone="
+                        completedWebTool(item.toolCall) ? 'neutral' : undefined
+                      "
+                      :label="
+                        completedWebTool(item.toolCall)
+                          ? $t('runs.nativeToolResults.COMPLETED')
+                          : undefined
+                      "
                     />
                     <time :datetime="item.occurredAt">{{
                       time(item.occurredAt)

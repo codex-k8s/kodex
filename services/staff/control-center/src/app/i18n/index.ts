@@ -2246,6 +2246,7 @@ const ru = {
       UNAVAILABLE: "Неизвестен",
     },
     nativeToolResults: {
+      COMPLETED: "Завершён",
       FAILED: "Не удалось выполнить действие",
       DECLINED: "Действие отклонено",
     },
@@ -6875,6 +6876,7 @@ const en = {
       UNAVAILABLE: "Unavailable",
     },
     nativeToolResults: {
+      COMPLETED: "Completed",
       FAILED: "Action failed",
       DECLINED: "Action declined",
     },
