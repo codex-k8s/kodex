@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
@@ -558,10 +559,12 @@ func (multiplexer *sessionMultiplexer) boundedPlatformSnapshot(envelope generate
 
 func (multiplexer *sessionMultiplexer) boundedPlatformSnapshotWithin(ctx context.Context, envelope generated.PlatformSnapshotEnvelope) (generated.PlatformSnapshotEnvelope, error) {
 	for pageSize := int32(platformSnapshotPageSize); ; pageSize = max(1, pageSize/2) {
+		started := time.Now()
+		parentBudget := runSnapshotParentBudget(ctx, started)
 		rawSnapshot, err := multiplexer.server.projectPlatformSnapshotPage(ctx, string(envelope.Kind), multiplexer.projectRef, multiplexer.localize, pageSize)
 		if err != nil {
 			if status.Code(err) != codes.PermissionDenied {
-				slog.Error(platformSnapshotReadFailure, "kind", envelope.Kind, "error_class", "dependency")
+				observePlatformSnapshotReadFailure(ctx, started, parentBudget, string(envelope.Kind), err)
 			}
 			return generated.PlatformSnapshotEnvelope{}, err
 		}

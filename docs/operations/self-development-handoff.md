@@ -10,6 +10,56 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 07:27 UTC — catalog batch и реальный запрос без ID
+
+На базе `8e4a1fa32374464ad2fecccc41e0493896740b42` устранено повторное
+чтение RUN catalog внутри непрерывного пакета до четырёх событий одного scope.
+Бюджет catalog2s не повышен, каждый cursor/delta сохранён; смена kind/scope,
+authority event, gap, deny/error, cancel/overflow и полный byte cap проверены.
+ROOT pinned Go1.26.6: весь websocket race PASS18.434s, vet PASS, hermetic
+build PASS. Actual serving `/proc/1119/exe` EQUAL hermetic build SHA256
+`e72ad30a06826b69df7019b9f414eb36e14ba2bb510090dba29de6c34f3c606e`.
+Server/diagnostic source host/Pod EQUAL. Живой reconnect под нагрузкой ещё OPEN.
+
+Новый обычный Manager `run_oDotaViWqeIYhJkl7gdyb4bq` accepted ровно один
+Workflow `run_ZtJ7ZVz09MhQxPVcsCY1Nsxa` версии25/revision8. INTAKE завершил
+semantic BLOCKED: операция `github.repository.content.read` направлена на
+каталог `docs/governance`; FILE guard корректно отклонил directory response.
+Owner Workflow read подтвердил отсутствие `github.repository.content.list`
+в required capabilities первого этапа. Coordinator самостоятельно прочитал
+все три callback artifact до EOF и остановил дальнейшие этапы; root FAILED
+105. Architect/Developer в этом запуске не приняты. Технический SUCCEEDED
+дочернего хода не является semantic PASS. Гипотеза provider/network failure
+этим случаем не подтверждается. FILE guard не ослаблять.
+
+Первый реальный запрос без ID в PROJECT-чате
+`cnv_CjyjmB-6E3ZGIhafdJpUcQHo`, run `run_cXKQZ3bS3FVwUiKjHI2D5RKJ`,
+завершён: по фразе о прежней сводке лимитов помощник нашёл Issue1796 и
+последний FAILED run, но честно сообщил отсутствие инструмента чтения результата.
+Доступная проекция только metadata; PASS полного сценария не заявлен.
+Контекст экрана был RUN найденной попытки: этот пример также не заменяет
+независимый поиск из нового чата на нейтральном обзоре проекта.
+Открыты две адресные доработки: защищённое чтение опубликованной истории
+найденной задачи и каталог опубликованных процессов для обычного Manager
+с input schema/проверяемыми publication pins; без расширения actor/scope.
+
+Через PROJECT-помощника на экране SOFTWARE_CHANGE отправлен новый запрос
+без refs: подготовить минимальный подтверждаемый LIST/grant UPDATE-план,
+сохранив21 этап, DAG, тайм-ауты, единственное review и финальный Gate057.
+План ещё не подтверждён и не применён; новый бизнес-запуск не отправлен.
+Обе ноды Ready/DiskPressure False; root56GiB/data132GiB available.
+Full65/checklist11/14/15/16 OPEN, финальный business PR не merge.
+
+## Уточнение приёмки 09.10.2026 — естественные ссылки без ID
+
+В основной checklist добавлен пункт16: реальные задания пользователя по
+названию, смыслу прежней работы, истории диалога и текущему экрану.
+Проверить существующий/новый чат, выбор процесса/сотрудника/окружения и
+неоднозначность/недоступный scope. Пользователь не обязан передавать refs;
+внутреннее разрешение объектов и authority по-прежнему выполняет сервер.
+Результаты этих сценариев пока NOT RUN, технический dogfooding с pins их
+не заменяет. Перед финальной готовностью пункт16 обязателен.
+
 ## Checkpoint 09.10.2026 06:41 UTC — bounded realtime исправлен; живой повтор ожидает SSO
 
 На базе `35bd33f72d3ee59501c517f34b2c34fb9052c460` интегрирован bounded

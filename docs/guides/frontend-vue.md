@@ -4,7 +4,7 @@ title: PWA на Vue и TypeScript
 type: guide
 status: approved
 owner: developer
-version: 1.2.5
+version: 1.2.6
 updated: 2026-10-09
 ---
 
@@ -128,6 +128,14 @@ cursor, но может объединять повторное чтение п�
 один ограниченный бюджет на пакет, не остаток бюджета каталогов и не новый
 полный бюджет для каждого соседнего root. Cancel/revoke/overflow остаются
 закрытыми отказами; coalescing не пропускает проверки доступа и порядка.
+
+Последовательный RUN_CHANGED-префикс одного server-resolved project scope
+может использовать один свежий успешный catalog payload в пределах одного
+bounded drain. Иной kind, authority event, смена scope или gap уничтожают
+этот payload; PermissionDenied и ошибки не кешируются. Между heartbeat,
+сессиями и запросами reuse отсутствует. Каждый отдельный envelope заново
+проверяется по полной сериализованной длине, включая новый cursor; cancel
+или overflow закрывают пакет до следующего frame и owner read.
 
 Размер realtime снимка проверяется по сериализованному полному envelope,
 а не только по числу элементов. При превышении лимита producer может

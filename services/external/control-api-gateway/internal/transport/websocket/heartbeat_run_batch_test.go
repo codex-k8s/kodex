@@ -105,7 +105,7 @@ func TestHeartbeatCoalescesRunRefreshAndSeparatesBudgets(t *testing.T) {
 		return nil
 	}
 	queueHeartbeatRunWakes(t, m, 4)
-	if !m.heartbeat(time.Unix(1, 0)) || c.runReads != 1 || c.catalogReads != 4 || m.platformCursor != 11 || len(m.platformSignals) != 0 {
+	if !m.heartbeat(time.Unix(1, 0)) || c.runReads != 1 || c.catalogReads != 1 || m.platformCursor != 11 || len(m.platformSignals) != 0 {
 		t.Fatal("heartbeat repeated full graph reads or lost bounded platform prefix")
 	}
 	frames := platformWakeRaceFrames(&c.platformWakeRaceRecorder)
@@ -147,7 +147,18 @@ func TestHeartbeatBatchClosedFailures(t *testing.T) {
 				}
 				return nil
 			}
-			queueHeartbeatRunWakes(t, m, 4)
+			if condition == "catalog-failed-after-prefix" {
+				for sequence := int64(8); sequence <= 11; sequence++ {
+					signal := platformWakeRaceSignal(t, sequence)
+					signal.Kind, signal.EventName = "RUN", "RUN_CHANGED"
+					if sequence == 9 {
+						signal.ProjectRef = ""
+					}
+					m.platformSignals <- signal
+				}
+			} else {
+				queueHeartbeatRunWakes(t, m, 4)
+			}
 			if !m.heartbeat(time.Unix(1, 0)) || c.runReads != 1 {
 				t.Fatal("failed batch reset owner budget or lost accepted prefix refresh")
 			}
@@ -244,7 +255,7 @@ func TestHeartbeatBatchDuplicateBudgetAndForeignScope(t *testing.T) {
 			if foreign && (c.runReads != 0 || c.catalogReads != 0) {
 				t.Fatal("foreign-project wake caused scoped owner body reads")
 			}
-			if !foreign && (c.runReads != 1 || c.catalogReads != 3) {
+			if !foreign && (c.runReads != 1 || c.catalogReads != 1) {
 				t.Fatal("duplicate repeated full owner effects or lost accepted deltas")
 			}
 		})

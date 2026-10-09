@@ -568,6 +568,10 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignalWithin(ctx context.Con
 }
 
 func (multiplexer *sessionMultiplexer) applyPlatformSignalWithRefresh(ctx context.Context, signal platformSignal, refresh func(context.Context) bool) bool {
+	return multiplexer.applyPlatformSignalWithReaders(ctx, signal, refresh, multiplexer.boundedPlatformSnapshotWithin)
+}
+
+func (multiplexer *sessionMultiplexer) applyPlatformSignalWithReaders(ctx context.Context, signal platformSignal, refresh func(context.Context) bool, readSnapshot func(context.Context, generated.PlatformSnapshotEnvelope) (generated.PlatformSnapshotEnvelope, error)) bool {
 	if signal.Sequence <= multiplexer.platformCursor {
 		return true
 	}
@@ -587,7 +591,10 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignalWithRefresh(ctx contex
 	if multiplexer.projectRef != "" {
 		envelope.ProjectRef = &multiplexer.projectRef
 	}
-	envelope, err := multiplexer.boundedPlatformSnapshotWithin(ctx, envelope)
+	envelope, err := readSnapshot(ctx, envelope)
+	if multiplexer.ctx.Err() != nil || len(multiplexer.overflow) > 0 {
+		return false
+	}
 	if err != nil {
 		if status.Code(err) == codes.PermissionDenied {
 			if signal.EventName == "RUN_CHANGED" && !refresh(ctx) {
@@ -699,6 +706,30 @@ func (multiplexer *sessionMultiplexer) drainHeartbeatWakes() (available, ok bool
 		}
 		return true
 	}
+	var runCatalog *generated.PlatformSnapshotPayload
+	catalogProject := ""
+	readCatalog := func(ctx context.Context, envelope generated.PlatformSnapshotEnvelope) (generated.PlatformSnapshotEnvelope, error) {
+		if err := ctx.Err(); err != nil {
+			return generated.PlatformSnapshotEnvelope{}, status.FromContextError(err).Err()
+		}
+		runChanged := envelope.Kind == generated.PlatformResourceKindRun && envelope.EventName != nil && *envelope.EventName == "RUN_CHANGED"
+		if !runChanged || runCatalog == nil {
+			value, err := multiplexer.boundedPlatformSnapshotWithin(ctx, envelope)
+			if err == nil && runChanged {
+				runCatalog = &value.Snapshot
+			}
+			return value, err
+		}
+		envelope.Snapshot = *runCatalog
+		encoded, err := json.Marshal(envelope)
+		if err != nil {
+			return generated.PlatformSnapshotEnvelope{}, errPlatformSnapshotInvalid
+		}
+		if len(encoded) > maximumFrameBytes {
+			return generated.PlatformSnapshotEnvelope{}, errPlatformSnapshotSize
+		}
+		return envelope, nil
+	}
 	for index := 0; ; index++ {
 		if multiplexer.ctx.Err() != nil {
 			return false, false
@@ -716,7 +747,13 @@ func (multiplexer *sessionMultiplexer) drainHeartbeatWakes() (available, ok bool
 		}
 		select {
 		case signal := <-multiplexer.platformSignals:
-			if !multiplexer.applyPlatformSignalWithRefresh(ctx, signal, deferRunRefresh) {
+			// Bundle принадлежит только непрерывному RUN-префиксу точного scope.
+			if signal.Kind != "RUN" || signal.EventName != "RUN_CHANGED" || signal.ProjectRef != catalogProject ||
+				(signal.Sequence > multiplexer.platformCursor && signal.Sequence != multiplexer.platformCursor+1) {
+				runCatalog = nil
+			}
+			catalogProject = signal.ProjectRef
+			if !multiplexer.applyPlatformSignalWithReaders(ctx, signal, deferRunRefresh, readCatalog) {
 				if len(multiplexer.overflow) > 0 {
 					multiplexer.terminate("BACKPRESSURE_EXCEEDED", websocket.StatusTryAgainLater)
 				}
