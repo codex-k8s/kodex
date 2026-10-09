@@ -24,7 +24,7 @@ MAX_RECORDS = 10000
 MAX_TARGETS = 128
 COMMAND_SECONDS = 25
 TOTAL_SECONDS = 120
-AGE_PROFILES = {4: (5, 1), 24: (25, 2)}
+AGE_PROFILES = {1: (2, 1), 4: (5, 1), 24: (25, 2)}
 ID_PATTERN = re.compile(r"[a-z0-9]{20,40}\Z")
 HASH_PATTERN = re.compile(r"[0-9a-f]{64}\Z")
 SIZE_PATTERN = re.compile(r"[0-9]+(?:\.[0-9]+)?(?:B|kB|KB|MB|GB|TB|KiB|MiB|GiB|TiB)\Z")
@@ -265,7 +265,7 @@ def main(arguments=None):
     parser.add_argument("--builder", choices=BUILDERS, required=True)
     parser.add_argument("--targetid", action="append", default=[])
     parser.add_argument("--expected-fingerprint", action="append", default=[])
-    parser.add_argument("--minimum-age-hours", type=int, choices=(4, 24), default=24)
+    parser.add_argument("--minimum-age-hours", type=int, choices=(1, 4, 24), default=24)
     options = parser.parse_args(arguments)
     try:
         result = execute(options.mode, options.builder, options.targetid, options.expected_fingerprint,

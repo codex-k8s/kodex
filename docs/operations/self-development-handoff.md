@@ -10,6 +10,48 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 09:18 UTC — recovery gate уточнён; реальные кейсы обязательны
+
+Published source `5bd0a98798fe7ef40c334dea474b83c26c401e86`, Draft1807.
+Clean-source runner cache/provenance/import PASS на обеих нодах:
+manifest `sha256:f6e06e4389e1d8b6145a66bea7ed97876565689c19ceb79d0350250b7f497aa8`,
+binary SHA256 `7c8517c1e8d5d2b8082116e6631d942d4500be29bf517046a22a67692748a104`,
+provenance SHA256 `05904ff944eff89e6aeb1db278db49a7eba433a29415ec744a20b1f7a1e5eecf`.
+Fresh render PASS, source fingerprint
+`40f86764bc31e07104d53f3ed33777a4df3eb340c833b5a888d68cfac7c1d2cb`.
+Это доставка runner и render, не activation или живой пользовательский PASS.
+
+Actual configz: hard imagefs/nodefs5%, minimumReclaim10%, transition5min;
+recovery target15% около75.18GB, не ранее выбранные50GiB. Root available
+около28GB, server DiskPressure True, registry push/staging-read и PostgreSQL
+Pending. Авторитетный live owner ledger сейчас UNKNOWN: Pod базы не назначен
+узлу. Последний подтверждённый idle snapshot не выдаётся за свежий.
+Пороги/taints/pins не менялись; после первого failed apply новых apply нет.
+
+Default4h cleanup: два ROOT прохода31+31 и три delegated14+6+1;
+все83 exact IDs PASS/ABSENT_AFTER. Fresh final audit eligible0. Только
+восстановимый private performance cache; shared/in-use/parent guards сохранены.
+Наблюдаемый root delta concurrent, не доказанный reclaim всей группы.
+Host image audit PASS: все11 own tool images KEEP; старые node runners
+KEEP при UNKNOWN domain dependency closure. DATA OCI и tmpfs не освобождают
+root. Подготавливается explicit recovery1h profile с консервативным возрастом
+не менее2hours/1day, штатный default24h неизменен. Первый READ-ONLY слой205
+leaf records около3.10GB логически; дальнейший reclaim UNKNOWN.
+ROOT27 unit PASS0.151s, все6 ordered cross-profile mismatch пары закрыты
+до эффекта; CLI/default24, leaf/type/private/in-use/recheck и timeout readback
+сохранены. Применение recovery1h пока NOT RUN, до публикации запрещено.
+Context7 `/docker/docs` и `/kubernetes/website` проверены.
+
+Chrome page21: snapshot показывает штатный экран временной недоступности,
+bootstrap/session503, Console resource503; document/runtime config200.
+Screenshot request не завершился за ограниченное ожидание, снят с ожидания;
+визуальный screenshot proof сейчас NOT RUN, snapshot не выдаётся за него.
+
+Уточнение владельца: п16 включает реальные обычные сообщения без entity ID,
+поиск прошлой работы, практическую безопасную доработку и follow-up,
+уточнение неоднозначности и недоступного проекта. Одного пересказа FINAL
+или synthetic теста недостаточно. П16/11/14/15 и Full65 OPEN.
+
 ## Checkpoint 09.10.2026 09:03 UTC — runner доставлен; activation остановлена DiskPressure
 
 Published source `f63e8f8fe2b09b672f04a6f99f721dfe9e3771b8`, Draft1807;

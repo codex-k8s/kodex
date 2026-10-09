@@ -45,29 +45,36 @@ class BuildCacheTests(unittest.TestCase):
         return result, mocked
 
     def test_explicit_profiles_and_conservative_boundaries(self):
-        for profile, value, expected in ((4, "5 hours ago", True), (4, "4 hours ago", False),
+        for profile, value, expected in ((1, "2 hours ago", True), (1, "1 day ago", True),
+                                         (1, "1 hour ago", False), (1, "59 minutes ago", False),
+                                         (1, "UNKNOWN", False), (1, "0 days ago", False),
+                                         (4, "5 hours ago", True), (4, "4 hours ago", False),
                                          (4, "1 day ago", True), (4, "8 hours ago", True),
                                          (4, "UNKNOWN", False), (24, "8 hours ago", False),
                                          (24, "25 hours ago", True), (24, "24 hours ago", False),
                                          (24, "2 days ago", True), (24, "1 day ago", False)):
             with self.subTest(profile=profile, value=value):
                 self.assertEqual(CACHE.old_enough(value, profile), expected)
-        for profile, count in ((4, 1), (24, 0)):
+        for profile, count in ((1, 1), (4, 1), (24, 0)):
             with patch.object(CACHE, "docker", return_value=wire(record(LastUsedAt="8 hours ago"))):
                 result = CACHE.execute("audit", "default", minimum_age_hours=profile)
             self.assertEqual(result["minimumAgeHours"], profile)
             self.assertEqual(len(result["records"]), count)
 
     def test_cross_profile_fingerprint_rejected_before_effect(self):
-        for before, after in ((4, 24), (24, 4)):
-            with patch.object(CACHE, "docker", return_value=wire(record())) as mocked:
-                with self.assertRaisesRegex(CACHE.Failure, "TARGET_CHANGED"):
-                    CACHE.execute("prune", "default", [TARGET], [self.fingerprint(minimum_age_hours=before)],
-                                  minimum_age_hours=after)
-                self.assertEqual(mocked.call_count, 1)
+        for before in (1, 4, 24):
+            for after in (1, 4, 24):
+                if before == after:
+                    continue
+                with self.subTest(before=before, after=after), \
+                        patch.object(CACHE, "docker", return_value=wire(record())) as mocked:
+                    with self.assertRaisesRegex(CACHE.Failure, "TARGET_CHANGED"):
+                        CACHE.execute("prune", "default", [TARGET], [self.fingerprint(minimum_age_hours=before)],
+                                      minimum_age_hours=after)
+                    self.assertEqual(mocked.call_count, 1)
 
     def test_profile_prune_uses_exact_until_and_reports_profile(self):
-        for profile in (4, 24):
+        for profile in (1, 4, 24):
             source = wire(record())
             result, mocked = self.run_prune([source, source, b"", b""], minimum_age_hours=profile)
             self.assertEqual(result["status"], "PASS")
@@ -80,23 +87,66 @@ class BuildCacheTests(unittest.TestCase):
                              ["--filter", f"until={profile}h", "--filter", 'private=""'])
 
     def test_invalid_profile_no_docker_and_cli_default(self):
-        for value in (0, 3, 5, 48, "4", True, None):
+        for value in (0, 2, 3, 5, 48, "1", "4", True, None):
             with self.subTest(value=value), patch.object(CACHE, "docker") as mocked:
                 with self.assertRaisesRegex(CACHE.Failure, "AGE_PROFILE_REJECTED"):
                     CACHE.execute("audit", "default", minimum_age_hours=value)
                 mocked.assert_not_called()
-        for arguments, expected in (([], 24), (["--minimum-age-hours", "4"], 4)):
+        for arguments, expected in (([], 24), (["--minimum-age-hours", "1"], 1),
+                                    (["--minimum-age-hours", "4"], 4),
+                                    (["--minimum-age-hours", "24"], 24)):
             with patch.object(CACHE, "execute", return_value={"status": "PASS"}) as mocked, \
                     contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(CACHE.main(["audit", "--builder", "default", *arguments]), 0)
             self.assertEqual(mocked.call_args.kwargs["minimum_age_hours"], expected)
-        for value in ("5", "0", CANARY):
+        for value in ("5", "0", "2", "-1", "1.5", "60", CANARY):
             output = io.StringIO()
             with patch.object(CACHE, "docker") as mocked, contextlib.redirect_stdout(output):
                 with self.assertRaises(SystemExit):
                     CACHE.main(["audit", "--builder", "default", "--minimum-age-hours", value])
             self.assertNotIn(CANARY, output.getvalue())
+            self.assertEqual(json.loads(output.getvalue()), {"status": "FAIL", "error": "ARGUMENTS_INVALID"})
             mocked.assert_not_called()
+
+    def test_recovery_profile_retains_eligibility_leaf_and_description_guards(self):
+        for changes in ({"Shared": True}, {"Reclaimable": False}, {"LastUsedAt": "1 hour ago"},
+                        {"LastUsedAt": "90 minutes ago"}, {"LastUsedAt": "UNKNOWN"},
+                        {"Type": "internal"}, {"Type": "frontend"}, {"Type": "unknown"}):
+            value = record(**changes)
+            with self.subTest(changes=changes), patch.object(CACHE, "docker", return_value=wire(value)) as mocked:
+                with self.assertRaisesRegex(CACHE.Failure, "TARGET_NOT_ELIGIBLE"):
+                    CACHE.execute("prune", "default", [TARGET], [self.fingerprint(value, 1)],
+                                  minimum_age_hours=1)
+                self.assertEqual(mocked.call_count, 1)
+        parent = wire(record(), record(OTHER, Parents=[TARGET]))
+        with patch.object(CACHE, "docker", return_value=parent) as mocked:
+            with self.assertRaisesRegex(CACHE.Failure, "TARGET_NOT_ELIGIBLE"):
+                CACHE.execute("prune", "default", [TARGET], [self.fingerprint(minimum_age_hours=1)],
+                              minimum_age_hours=1)
+            self.assertEqual(mocked.call_count, 1)
+        with patch.object(CACHE, "docker", return_value=wire(record(LastUsedAt="2 hours ago"))):
+            result = CACHE.execute("audit", "default", minimum_age_hours=1)
+        self.assertEqual(len(result["records"]), 1)
+        self.assertNotIn(CANARY, json.dumps(result))
+        source = wire(record())
+        result, mocked = self.run_prune([source, source, CANARY.encode(), b""], minimum_age_hours=1)
+        self.assertEqual(result["status"], "PASS")
+        self.assertNotIn(CANARY, json.dumps(result))
+        self.assertEqual(mocked.call_count, 4)
+
+    def test_recovery_profile_rechecks_age_and_retains_independent_readback(self):
+        source = wire(record())
+        result, mocked = self.run_prune([source, wire(record(LastUsedAt="1 hour ago"))],
+                                       minimum_age_hours=1)
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["outcomes"][0]["effect"], "NOT_ATTEMPTED")
+        self.assertEqual(mocked.call_count, 2)
+        result, mocked = self.run_prune([source, source, CACHE.Failure("DOCKER_COMMAND_TIMEOUT"),
+                                        CACHE.Failure("DOCKER_COMMAND_FAILED")], minimum_age_hours=1)
+        self.assertEqual(result["status"], "PARTIAL")
+        self.assertEqual(result["outcomes"][0]["effect"], "UNKNOWN")
+        self.assertEqual(sum(call.args[1] == "prune" for call in mocked.call_args_list), 1)
+        self.assertEqual(mocked.call_count, 4)
 
     def test_audit_is_readonly_and_redacts_description(self):
         with patch.object(CACHE, "docker", return_value=wire(record(), record(OTHER, Shared=True))) as mocked:
