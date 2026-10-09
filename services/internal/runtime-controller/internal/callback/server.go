@@ -1795,6 +1795,12 @@ func (server *Server) recordToolCallPhase(ctx context.Context, input runtimecont
 			return err
 		}
 	}
+	if tool == "get_workflow_catalog" && revision == 2 && toolErr == nil {
+		safeResult, err = safeWorkflowCatalogReceipt(input, arguments, result)
+		if err != nil {
+			return err
+		}
+	}
 	if revision == 1 {
 		state, safeResult = controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_RUNNING, ""
 	}
@@ -1889,7 +1895,7 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 		workflow, _ := arguments["workflow_ref"].(string)
 		return map[string]any{"workflow_ref": workflow}, "platform.run.launch", "", workflowLaunchAvailable(input)
 	case "get_workflow_catalog":
-		return map[string]any{}, "platform.run.launch", "", workflowLaunchAvailable(input)
+		return workflowCatalogSafeParameters(arguments), "platform.run.launch", "", workflowLaunchAvailable(input)
 	case "invoke_integration":
 		if grant, ok := integrationGrantForCall(input, arguments); ok {
 			return map[string]any{"connection_ref": grant.ConnectionRef, "capability_key": grant.CapabilityKey}, grant.CapabilityKey, grant.Ref, true
@@ -1952,7 +1958,7 @@ func safeToolCallResult(tool string, result any, toolErr error) string {
 	}
 	// У read_file нет нового successful legacy fallback: terminal проекция
 	// требует private evidence и authenticated input в recordToolCallPhase.
-	if tool == runtimecontract.FileToolRead {
+	if tool == runtimecontract.FileToolRead || tool == "get_workflow_catalog" {
 		return "TOOL_UNAVAILABLE"
 	}
 	if tool == "read_task_session" {

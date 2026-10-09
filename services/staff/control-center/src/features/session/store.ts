@@ -47,6 +47,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import {
   authorizationCallback,
+  AuthorizationCallbackError,
   authorizationRedirect,
   browserSessionIdentity,
   browserSessionTiming,
@@ -56,7 +57,7 @@ import { csrfToken, etag, idempotencyKey } from "@/shared/api/mutation";
 import {
   asProblem,
   resetUnauthorizedNotification,
-  type AppProblem,
+  AppProblem,
   unwrap,
 } from "@/shared/api/problem";
 import { runtimeConfig } from "@/shared/config/runtime";
@@ -666,9 +667,7 @@ export const useSessionStore = defineStore("session", () => {
       );
       const input = authorizationCallback(callbackURL);
       if (input.state !== window.sessionStorage.getItem(authorizationStateKey))
-        throw new Error(
-          "Owner authorization state does not match this browser flow",
-        );
+        throw new AuthorizationCallbackError("mismatch");
       const intent: OidcIntent = consumePendingBrowserIntent(
         window.sessionStorage,
       );
@@ -737,11 +736,20 @@ export const useSessionStore = defineStore("session", () => {
       }
       return { kind: "login" };
     } catch (error) {
+      const normalized =
+        error instanceof AuthorizationCallbackError
+          ? new AppProblem({
+              status: 401,
+              code: "UNAUTHENTICATED",
+              kind: "unauthorized",
+              retryable: false,
+            })
+          : asProblem(error);
       if (current === generation) {
-        problem.value = asProblem(error);
+        problem.value = normalized;
         phase.value = "error";
       }
-      throw error;
+      throw error instanceof AuthorizationCallbackError ? normalized : error;
     }
   }
 

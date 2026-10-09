@@ -37,7 +37,7 @@ func TestExecutionWorkflowPublicationUTF8MultiEOF(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		result := value.(map[string]any)
+		result := value.(workflowCatalogToolResult).wire
 		page := result["configuration_page"].(map[string]any)
 		part := []byte(page["text"].(string))
 		if len(part) > maximumAssistantConfigurationPageBytes || page["offset_bytes"].(int64) != int64(len(assembled)) {
@@ -62,7 +62,7 @@ func TestExecutionWorkflowPublicationUTF8MultiEOF(t *testing.T) {
 	selector["offset_bytes"] = int64(len(source))
 	selector["configuration_sha256"] = digest
 	value, err := server.workflowCatalog(t.Context(), input, map[string]any{"publication_read": selector})
-	if err != nil || !value.(map[string]any)["configuration_page"].(map[string]any)["eof"].(bool) {
+	if err != nil || !value.(workflowCatalogToolResult).wire["configuration_page"].(map[string]any)["eof"].(bool) {
 		t.Fatal("empty exact EOF")
 	}
 	if _, err := server.workflowCatalog(t.Context(), input, map[string]any{"query": "x"}); err == nil {
@@ -131,7 +131,7 @@ func TestExecutionWorkflowActiveRunsClosedProjection(t *testing.T) {
 	server, input, client, _, _ := publicationReadFixture(t)
 	client.response = activeRunResponse()
 	result, err := server.workflowCatalog(t.Context(), input, map[string]any{"active_runs_read": publicationPins()})
-	if err != nil || result.(map[string]any)["duplicate_check"] != "ADVISORY" || client.request.GetActiveRunsRead() == nil {
+	if err != nil || result.(workflowCatalogToolResult).wire["duplicate_check"] != "ADVISORY" || client.request.GetActiveRunsRead() == nil {
 		t.Fatal("active roots or actual historical publication lost")
 	}
 	for name, mutate := range map[string]func(*cp.ExecutionWorkflowActiveRuns){

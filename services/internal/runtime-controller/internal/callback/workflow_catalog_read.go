@@ -142,7 +142,7 @@ func (server *Server) workflowCatalogRead(ctx context.Context, input runtimecont
 		if err != nil || len(encoded) > 32768 {
 			return nil, errWorkflowCatalogRead
 		}
-		return result, nil
+		return newWorkflowCatalogResult(ctx, input, args, result, workflowCatalogReceipt{Version: 1, Kind: workflowReceiptKind, Mode: workflowModePublication, Publication: &workflowPageReceipt{OffsetBytes: offset, NextOffsetBytes: end, SizeBytes: int64(len(raw)), EOF: end == int64(len(raw)), ConfigurationSHA256: digest, PageSHA256: hex.EncodeToString(hash[:]), SpecDigest: pins.SpecDigest}})
 	}
 	page := response.GetActiveRuns()
 	if page == nil || len(page.ProtoReflect().GetUnknown()) != 0 || page.Pins == nil || len(page.Pins.ProtoReflect().GetUnknown()) != 0 || page.Pins.WorkflowRef != pins.WorkflowRef || page.Pins.PublishedRef != pins.PublishedRef || page.Pins.SpecDigest != pins.SpecDigest || page.Pins.WorkflowVersion != pins.WorkflowVersion || len(page.Items) > 10 || len(page.NextPageToken) > 512 || !utf8.ValidString(page.NextPageToken) || strings.ContainsRune(page.NextPageToken, 0) || page.NextPageToken != "" && (len(page.Items) != 10 || page.NextPageToken == request.PageToken) {
@@ -167,5 +167,5 @@ func (server *Server) workflowCatalogRead(ctx context.Context, input runtimecont
 	if err != nil || len(raw) > 32768 {
 		return nil, errWorkflowCatalogRead
 	}
-	return result, nil
+	return newWorkflowCatalogResult(ctx, input, args, result, workflowCatalogReceipt{Version: 1, Kind: workflowReceiptKind, Mode: workflowModeActiveRuns, List: &workflowListReceipt{ItemsCount: len(items), HasNext: page.NextPageToken != "", Advisory: true}})
 }

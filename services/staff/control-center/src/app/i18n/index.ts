@@ -1018,6 +1018,7 @@ const ru = {
     logout: "Выйти",
     callback: "Завершаем вход…",
     failed: "Не удалось завершить вход",
+    callbackSignInRequired: "Чтобы продолжить, войдите заново.",
   },
   onboarding: {
     title: "Настроим Kodex",
@@ -5762,6 +5763,7 @@ const en = {
     logout: "Sign out",
     callback: "Completing sign-in…",
     failed: "Could not complete sign-in",
+    callbackSignInRequired: "Sign in again to continue.",
   },
   onboarding: {
     ...ru.onboarding,

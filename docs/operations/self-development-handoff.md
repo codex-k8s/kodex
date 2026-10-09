@@ -10,6 +10,44 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 19:40 UTC — callback восстановлен; Manager FAILED, CPU maintenance подготовлен
+
+Опубликованная основа `5a4849eacee738488da53984ac9a4eba299dc61f`, Draft1807.
+Новый Manager завершился FAILED19:25:25.858Z, до launch_workflow и дочернего
+бизнес-процесса. Код RUNTIME_PROVIDER_UNAVAILABLE не доказывает внешнюю аварию:
+достижимый maintenance path RC SIGINT→StopTurn→runner cancellation→generic
+provider failure установлен по исходникам. Air BUILD19:25:19/RUN19:25:26
+совпадает по времени, но exact provider stage/class/detail NOT_CAPTURED:
+runtime Pod уже отсутствует. Причина именно этой попытки UNKNOWN.
+Следующий реальный прогон выполняется после применения пакетов; горячие
+изменения runtime/control-plane во время активного хода не выполняются.
+
+Приняты7files private workflow catalog receipts: точные lease/input/request/
+wire bindings, закрытые DISCOVERY/PUBLICATION/ACTIVE_RUNS квитанции после
+проверенного owner ответа; никакого сырого содержимого публикации в истории.
+Agent wire и RPC/grants неизменны. ROOT callback unit5.495s/vet/race4.311s/build
+PASS, actual RC ELF и hermetic build EQUAL3db4f23635336b1a63d84657072b8c4dbb7b6e5212aa289d743f90f4d800954a.
+Source/Pod receipt EQUALb57f17ce. Native receipts пока NOT RUN, прошлые вызовы
+не получают доказательств задним числом.
+
+Callback7files: invalid/mismatched pending state закрыто переводится в401;
+неуспешный вход показывает явную кнопку «Войти», без auto replay старого code.
+ROOT45unit1.95s/lint/format/forced typecheck/build8.31s PASS; предупреждения о
+крупных chunks сохранены. Native invalid callback screenshot просмотрен:
+ошибка и кнопка доступны, overflowfalse, Console error/warn0. Штатная кнопка
+восстановила OWNER bootstrap200. Host/Pod AuthCallbackView EQUALdae67c5f.
+Первичный historical live callback401 остаётся UNKNOWN, не объяснён UX правкой.
+
+PG CPU-only2→4 подготовлен repo-owned helper с exact context/endpoint,
+UID/spec/storage CAS и normal rolling restart. ROOT18tests PASS0.017s;
+первый livepreflight FAIL ENDPOINT_INVALID: исправлен ошибочный127.0.0.1
+на canonical exact127.0.0.2:6443, не на весь loopback range. Новый preflight
+PASS: прежние resources2CPU/4Gi, requests250m/512Mi, PVC Bound/Ready.
+Owner readback19:39:42Z: builds/admissions/promotions/activeRuns/claimedLeases0.
+Применение CPU/restart/readback и повтор realtime после него ещё NOT RUN.
+Оба узла Ready, все Deployment/StatefulSet готовы; полный Workflow и
+п11/14/15/16/human gate остаются OPEN, без нового бизнес PR/merge.
+
 ## Checkpoint 09.10.2026 19:12 UTC — fresh SSO и новый Manager; cold SYSTEM25 доставлен
 
 Published source `f3ef0efeef7ddb4ddb9abd4fecd60d46d38caed9`, тот же Draft1807.

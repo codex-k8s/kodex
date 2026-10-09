@@ -77,7 +77,7 @@ func (server *Server) workflowCatalog(ctx context.Context, input runtimecontract
 	if err != nil || len(raw) > 32768 {
 		return nil, errors.New("workflow catalog response exceeds boundary")
 	}
-	return projection, nil
+	return newWorkflowCatalogResult(ctx, input, args, projection, workflowCatalogReceipt{Version: 1, Kind: workflowReceiptKind, Mode: workflowModeDiscovery, List: &workflowListReceipt{ItemsCount: len(items), HasNext: result.NextPageToken != ""}})
 }
 
 func workflowCatalogInputType(value string) bool {

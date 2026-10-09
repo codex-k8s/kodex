@@ -10,6 +10,28 @@ updated: 2026-10-09
 
 # Цель и источники
 
+## Checkpoint 09.10.2026 19:40 UTC — browser callback PASS, очередной Manager FAILED
+
+Основа5a4849eacee738488da53984ac9a4eba299dc61f, Draft1807. Manager
+run_f9CVBO5DGo91J5WXrsEmoBW1 FAILED19:25:25.858Z, до launch_workflow.
+Maintenance cancellation может записываться как provider unavailable;
+source path доказан, exact live cause UNKNOWN/NOT_CAPTURED. Следующий прогон
+после применения пакетов, без горячего изменения backend во время работы.
+
+Private catalog receipt7files: ROOT callback unit5.495s/vet/race4.311s/build
+PASS; servingELF EQUAL3db4f236, source/Pod EQUALb57f17ce. Проверенные owner
+ответы имеют закрытые mode/EOF/pins квитанции, agent wire/grants сохранены;
+native receipt пока NOT RUN. Callback7files:45unit/lint/format/typecheck/
+build8.31s PASS, warnings сохранены. Native invalid callback screenshot и
+Console0 проверены; явная «Войти» восстановила OWNER bootstrap200,
+overflowfalse/hostPod EQUALdae67c5f. Это UX fix, не доказанная причина старого401.
+
+PG2→4CPU helper18tests PASS, livepreflight сначала FAIL ошибочного endpoint,
+после exact canonical127.0.0.2:6443 PASS. Source render сохраняет requests/
+memory; никакого полного stale apply. Owner idle19:39:42Z доказан по пяти
+нулевым счётчикам. CPU apply/Readyreadback/realtime повтор пока NOT RUN.
+Полные QA/Workflow/п11/14/15/16/human gate не отмечены выполненными.
+
 ## Checkpoint 09.10.2026 19:12 UTC — повтор practical no-ID принят; full Workflow ещё открыт
 
 На published f3ef0efe тот же PROJECT чат подготовил ровно один Manager plan;

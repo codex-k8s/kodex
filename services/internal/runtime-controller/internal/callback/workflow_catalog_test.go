@@ -73,13 +73,13 @@ func TestExecutionWorkflowCatalogClosedProjection(t *testing.T) {
 		t.Fatal("assistant scope catalog accepted")
 	}
 	projection, capability, grant, ok := safeToolCallParameters(input, "get_workflow_catalog", nil)
-	if !ok || capability != "platform.run.launch" || grant != "" || len(projection) != 0 {
+	if !ok || capability != "platform.run.launch" || grant != "" || len(projection) != 1 || projection["mode"] != workflowModeDiscovery {
 		t.Fatal("catalog safe activity boundary changed")
 	}
 	client.response = workflowCatalogFixture()
 	client.response.Items[0].Readiness.OperationalState = "UNKNOWN"
 	unknown, err := server.workflowCatalog(t.Context(), input, nil)
-	if err != nil || unknown.(map[string]any)["items"].([]map[string]any)[0]["readiness"].(map[string]any)["operational_state"] != "UNKNOWN" {
+	if err != nil || unknown.(workflowCatalogToolResult).wire["items"].([]map[string]any)[0]["readiness"].(map[string]any)["operational_state"] != "UNKNOWN" {
 		t.Fatal("owner readiness UNKNOWN was lost or fabricated")
 	}
 	for name, mutate := range map[string]func(*cp.GetExecutionWorkflowCatalogResponse){
