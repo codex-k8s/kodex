@@ -10,6 +10,39 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 05:37 UTC — стенд Ready, новый ход Manager
+
+На опубликованном `4be7c5459ffe1c8a69d970ce73c943b7fbf20ab5` свежий
+readback подтвердил обе ноды Ready / DiskPressure False и 21/21 Deployment
+Ready. Control-plane восстановился после штатного startupProbe restart;
+session-archive также Ready. Историческая причина первого PostgreSQL ping
+остаётся UNKNOWN: восстановление не доказывает её устранение в коде.
+
+Прежний Workflow `run_4VTZQ0AOC-Hi11cHIT-7EmC-` и Architect окончательно
+FAILED / RUNTIME_TIMEOUT в 05:27:53 UTC. Все будущие этапы CANCELLED;
+активных дочерних работ не осталось. Старый callback Manager завершился
+FAILED / RUNTIME_UNAVAILABLE. Штатный Retry Manager восстановил архивную
+сессию и создал `run_TAg73IXEiPg2UW1sd_AuMHS-`, attempt 2, технически
+SUCCEEDED в 05:31:24, но семантически только историческая квитанция:
+новый Workflow он не запустил. Это НЕ PASS бизнес-задачи.
+
+Через обычное «Дополнительное задание» на том же экране передано точное
+terminal состояние и поручение одного нового запуска уже опубликованной
+revision 8 / version 25 с прежними четырьмя входами, одним Reviewer и
+единственным Gate step-057, без повторения старого Workflow. Создан новый
+ход `run_4OXnGpQB5gLgYAbDfcPzx7JX` в той же сессии
+`ses_s8THsdiuAa9YYtbaxvodI8HK`. HTTP 200 подтвердил RUNNING;
+native COMMENTARY 6 признал terminal старого процесса, events 7–10
+подтверждают работу штатного инструмента и регистрацию дочерней работы.
+Accepted ref нового Workflow ещё не сверён. История сохранена.
+
+Chrome page 1 reload выполнен; Console errors/warnings 0, просмотренные
+20 fetch/xhr HTTP 200. После reload глобальный статус перешёл в
+«Подключено», но run view ещё RECOVERING: WebSocket rejoin PASS не заявлен.
+Body horizontal overflow отсутствует. Старые helper node images пока не
+удалялись: готовится отдельный адресный audit с защитой всех aliases,
+контейнеров, workload/current/restore/policy refs. Full65 OPEN.
+
 ## Checkpoint 09.10.2026 05:27 UTC — обе ноды восстановлены, старые OCI очищены
 
 DiskPressure False: agent 05:19:47, server 05:19:50 UTC. Базы, NATS, S3,

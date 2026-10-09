@@ -12787,3 +12787,32 @@ free-space delta не атрибутируется только им из-за c
 Обе ноды пока DiskPressure True; application recovery NOT RUN до штатного
 перехода. Исторические pinned node images проверяются, active domain refs
 пока UNKNOWN и не удаляются вслепую. Native Workflow UNKNOWN, Full65 OPEN.
+
+### 09.10.2026 05:37 UTC — recovery PASS, terminal старого Workflow и продолжение
+
+Source `4be7c5459ffe1c8a69d970ce73c943b7fbf20ab5`: обе ноды Ready /
+DiskPressure False, все 21 Deployment Ready. Root available около 64 GB,
+другой диск около 146 GB; это текущий замер, не целиком эффект cleanup.
+41 exact obsolete helper OCI archive / 19 832 737 280 logical bytes удалён
+опубликованным `local-oci-cache.py`: выбранные файлы отсутствуют, все 23
+оставленные сохранены. Runner/current/restore/workload/admission refs защищены.
+Копии удалены необратимо, при необходимости пересобираются из исходников.
+Node image metadata/content этим удалением не затрагивались.
+
+Авторитетные API доказали FAILED / RUNTIME_TIMEOUT старого Workflow
+`run_4VTZQ0AOC-Hi11cHIT-7EmC-` и Architect в 05:27:53 UTC, атомарное
+закрытие будущих шагов CANCELLED и отсутствие активных дочерних работ.
+Callback Manager FAILED / RUNTIME_UNAVAILABLE. Штатный Retry Manager
+восстановил архивную сессию и завершился технически SUCCEEDED
+(`run_TAg73IXEiPg2UW1sd_AuMHS-`, attempt 2), но только повторил историческую
+квитанцию. Это семантический NOOP, не PASS бизнес-задачи и не новый процесс.
+
+Обычным UI дополнительным заданием передан terminal контекст и поручение
+одного нового запуска прежней published revision 8 / version 25 с прежними
+AC, одним комплексным Reviewer и единственным final Gate. Новый ход Manager
+`run_4OXnGpQB5gLgYAbDfcPzx7JX` RUNNING в прежней сессии
+`ses_s8THsdiuAa9YYtbaxvodI8HK`; COMMENTARY 6 подтвердил смысл продолжения,
+events 7–10 — штатный tool/delegation. Accepted ref ещё не сверён.
+Chrome reload, Console errors/warnings 0, 20 просмотренных fetch/xhr HTTP 200,
+body overflow false; run realtime всё ещё RECOVERING, rejoin PASS не заявлен.
+Full65 OPEN; checklist 11/14/15 не закрыт. Итоговый business PR не сливать.
