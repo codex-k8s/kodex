@@ -10,6 +10,50 @@ updated: 2026-10-09
 
 # Цель и источники
 
+## Checkpoint 09.10.2026 22:38 UTC — живой Manager и поиск задачи без ID
+
+На source `8116b8ff727b8edd81ad8a8d7e4789b7b7e118ff` после перезагрузки
+обе ноды Ready, все 21 Deployment и пять StatefulSet готовы. Это проверка
+восстановления стенда, не подтверждение полного QA. Основной backend frozen.
+
+Один штатный retry Manager создал `run_sdR6NeIOvwljJD_A3_IQK7jy`, attempt5,
+session `ses_tWfMK1ztNuKPNJPSsR23Qyqz`, turn `trn_aBTUesLSqWaudseQ983sqop1`.
+Свежий owner read RUNNING; sequence237, реальные tool calls SUCCEEDED.
+Manager читает обязательные документы и журнал на main `ab4992e0`; новый
+SOFTWARE_CHANGE пока не доказан. Новый повтор/прерывание не выполнялись.
+Repo-owned input ACK capture подтвердил actual task SHA256
+`9981ef63b60ced489e26d1d8cb590a493bc3b1cc383dbf1cf23b1cb076747d60`:
+task in prompt true, expected task/provider inbox/instructions comparisons EQUAL.
+RuntimeRevision `rrev_h4VdnpFox8j60ZSIp6iQW_MZ`, version1; actual staff image
+`1bcccdac`, environment11/binding12. Readback binary SHA EQUAL в том же Pod;
+scope SAME_POD_IMAGE_FILE_NOT_SERVING_PROCESS, не доказательство serving ELF.
+
+С нейтрального обзора проекта отправлен новый естественный запрос про прежнюю
+задачу о лимитах подписочных аккаунтов, без IDs и требования нового Workflow.
+Выбран общесистемный помощник в контексте проекта, не проектный помощник.
+Conversation `cnv_qFXklJb5swclqsehufFs01xM`, run `run_IzuJPT-GD5gv4lKUGQz5bku_`,
+session `ses_WZNFdlo_gVzBcAG3-Rk9Iw04`: SUCCEEDED/sequence30. Поиск нашёл
+Issue1796 и текущий Manager; финал корректно отличил прежний BLOCKED и
+действительный RUNNING от неподтверждённой ручной готовности, ничего не менял.
+Последнее дополнительное `read_task_session` завершилось TOOL_UNAVAILABLE:
+tool `tcl_199c333ab9df4164ae891db7affe3e45`, audit `aud_5TaxJARcEBqHV33ymg9ArOiB`.
+Предыдущая страница имела messages10/truncated=true. Финал честно ограничил
+сводку прочитанным. Причина последнего read UNKNOWN, диагностика OPEN;
+пункт16 целиком не отмечается PASS. Скриншоты running/final просмотрены:
+пользователь справа, агент слева, commentary/final читаются, tools свёрнуты
+компактно, действие ошибки различимо. Relevant Network create201/turn202/graph200/events200,
+Console cumulative20 от прежних проверок, warnings0/pageerrors0.
+
+Изолированный gateway patch исправляет доказанный ложный heartbeat resync
+при непрерывной очереди более четырёх wake: owner cursor/eligibility guards
+сохраняются, cursor не продвигается по metadata. Исходный regression FAIL;
+изолированные targeted unit/race/build PASS. Patch SHA256
+`9b441a6852af46380b2335f444ecc03125c3c2c1f3795fa065621a6d61b238de`.
+Основной checkout не изменён, live acceptance NOT RUN. Не доказано, что каждый
+наблюдаемый disconnect вызван этим backlog; окно commit→publish не устраняется.
+Применение отложено до terminal живого Manager. Chrome MCP list_pages pending;
+использован разрешённый own Playwright, чужие вкладки не закрывались.
+
 ## Checkpoint 09.10.2026 22:25 UTC — все четыре ENV и восемь bindings обновлены
 
 Native managed image impact `riip_JZDWJvPiUX5oFbyz4CY37JT3` создан для
