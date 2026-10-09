@@ -10,6 +10,34 @@ updated: 2026-10-09
 
 # Цель и источники
 
+## Checkpoint 09.10.2026 22:17 UTC — UI опубликован; системное окружение обновлено
+
+Source/remote/Draft1807 EQUAL `9d24f8300d8d95a1ea07976e322c314113b66067`;
+после фиксации повторные 148 unit PASS без fixture warnings. Main `ab4992e0`
+не менялся, рабочее дерево до этой записи чистое. Backend source не изменён.
+Свежая проверка после перезагрузки: обе ноды Ready, 21 Deployment и пять
+StatefulSet имеют все желаемые готовые реплики; это не доказательство полного QA.
+
+Штатный UI опубликовал SYSTEM draft `renvd_lyww83dGwD4hfeqirp6HnIHU`:
+authoritative GET200, PUBLISHED/version3; environment revision31→32,
+binding11→12, новый custom image `22218338`, generation17. Все38tools,
+values, secret descriptors и policy идентичны прежней immutable revision.
+Первоначальный общий preservation hash включал вычисляемый TOML с версиями
+environment/binding и потому изменился. Проверена причина по renderer;
+реконструкция только четырёх назначаемых сервером Version/Digest полей
+вернула точный исходный SHA256 `933bec80ee5d17a64bbf07f759e10ce242ed88385d654163ea4ef4a9252d37af`.
+Следовательно configuration/overlay/skills/memory и остальные поля сохранены.
+Отдельные hashes всех четырёх non-image environment компонентов совпадают.
+
+PROJECT helper image-only draft `renvd_bdgDoGGwqUn5LjIAV3VARBin` сохранён,
+выбран exact artifact `2a1da9ec`, generation3; публикация ещё не подтверждена.
+Два staff ENV и шесть bindings ещё требуют штатного managed image impact.
+Новый Manager retry NOT RUN до завершения всех четырёх ENV/восьми bindings.
+Один диагностический GET истории с pageSize50 вернул503; pageSize20 —200.
+Причина503 UNKNOWN, не объявлять исправленным либо успешным запросом.
+Chrome MCP повторный list_pages ожидает ответа; подключение не подтверждено.
+Own Playwright fallback работает, чужие вкладки не закрывались.
+
 ## Checkpoint 09.10.2026 22:02 UTC — три новых admission ACCEPTED; frontend проверен нативно
 
 Runner активация ниже завершена на0984a869. Все три новые custom artifacts

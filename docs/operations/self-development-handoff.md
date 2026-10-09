@@ -10,6 +10,26 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 22:17 UTC — SYSTEM image-only публикация подтверждена
+
+Source/remote/Draft1807 `9d24f8300d8d95a1ea07976e322c314113b66067`, main
+`ab4992e0` неизменён; повтор148unit PASS. Backend frozen, обе ноды Ready,
+21 Deployment и пять StatefulSet имеют все желаемые готовые реплики.
+SYSTEM ENV revision32/binding12/new custom22218338 generation17;
+draft `renvd_lyww83dGwD4hfeqirp6HnIHU` PUBLISHED/version3 GET200.
+Non-image preservation PASS: четыре компонента immutable revision31/32
+имеют одинаковые hashes; общий исходный hash точно реконструирован с прежними
+назначаемыми сервером TOML environment/binding Version/Digest. Это была
+ошибка состава диагностического hash, а не изменение пользовательских настроек.
+
+PROJECT helper draft `renvd_bdgDoGGwqUn5LjIAV3VARBin` сохранён с artifact
+2a1da9ec generation3, публикация OPEN. Own secondary browser10191, первый41676;
+старый own24879 штатно закрыт, чужие не трогались. Chrome MCP list_pages pending.
+Далее закончить helper и staff image impact2ENV/6bindings, preservation readback,
+затем один native Manager с closed diagnostic. Не повторять сборки/risk/promotion.
+Один history pageSize50 GET503 (причина UNKNOWN), pageSize20 GET200.
+Полный65QA/Workflow/п11/14/15/16 OPEN, финальный business PR не merge.
+
 ## Checkpoint 09.10.2026 22:02 UTC — новые образы допущены, UI fix готов к фиксации
 
 На0984a869 canonical runner activation PASS. Три new artifacts22218338/
