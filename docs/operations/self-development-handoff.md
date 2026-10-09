@@ -10,6 +10,45 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 09:32 UTC — safe cleanup исчерпан, recovery требует storage решения
+
+Published source `37c8d5fd7876b36aa1e28090f68a8751130b7963`, Draft1807.
+ROOT cache unit27 PASS0.151s, host image18 PASS0.006s, OCI15 PASS0.226s;
+всего60 герметичных tests PASS. New explicit1h/default24 guards опубликованы.
+Runner clean37 cache/provenance/import PASS, manifest f6e06e4389e1d8b6…,
+binary7c8517c1e8d5d2b8…; provenance SHA256
+`03734c48b6ea227fccbff275941a1d85c879b758dea34d284eff2fff32e86a1d`.
+Fresh render37 PASS, fingerprint
+`e3613ec335769a0febdd370ec8e845e9200db643d932f927fb694ab46295234b`.
+Новый apply НЕ запускался: PostgreSQL всё ещё Pending, свежий owner ledger UNKNOWN.
+
+Default1h cleanup восемь раундов128/128/128/105/36/7/2/1:
+все535 выбранных records PASS/ABSENT_AFTER с независимым DU. Final audit
+eligible0/excluded237, timeout/unknown/retry отсутствуют, elapsed507s.
+Root available33.84GB, target75.18GB НЕ достигнут. Остаточная pressure server True,
+agent False, оба Ready; readiness ноды не означает готовность приложения.
+Удалён только performance cache, восстановимый пересборкой. Данные, volumes,
+images/pins, own builder и source не удалены. Цепочка остановлена на eligible0.
+
+Дополнительный read-only preflight: root WT вне MAIN суммарно2.24GiB,
+завершение/retention UNKNOWN; MAIN node_modules и shared caches KEEP. DATA
+OCI/cache и tmpfs root relief не дают. Safe removable target set EMPTY.
+Возможный storage вариант — согласованный offline перенос containerd cache
+одной exact Kodex node на DATA через опубликованный проверяемый скрипт,
+с сохранением образов/metadata, проверкой копии, mount persistence и rollback.
+Текущий server cache около61GiB, DATA available128.48GB; это preflight размер,
+не готовый migration plan и не обещание reclaim. Перенос НЕ выполнялся;
+изменение storage layout требует отдельного решения владельца. Альтернатива —
+добавить ёмкость; protective thresholds/taints не обходятся.
+
+Браузер MCP page21 доступен, последнее reload09:28:51 UTC;
+Console подтверждает resource503. Live native p16 и Full65 BLOCKED стендом,
+а не завершены. Сохраняется новый практический no-ID кейс и same-chat follow-up.
+Возобновление: storage recovery → both DiskPressure False/DB Ready → exact
+owner idle readback → fresh clean-source render/canonical supply-chain
+apply/readback → три custom images через штатный admission/promotion/UI rebinding
+→ реальные no-ID кейсы и полный Workflow. П11/14/15/16 остаются [ ].
+
 ## Checkpoint 09.10.2026 09:18 UTC — recovery gate уточнён; реальные кейсы обязательны
 
 Published source `5bd0a98798fe7ef40c334dea474b83c26c401e86`, Draft1807.
