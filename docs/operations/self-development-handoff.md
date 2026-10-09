@@ -10,6 +10,37 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 23:03 UTC — reboot readback и практическое продолжение без ID
+
+Исходный SHA `892c029241548a887c8ff2459de8c461f69c367e` совпадает с remote
+и Draft1807; Issue1797 OPEN, main `ab4992e0` неизменён. Обе ноды Ready,
+21 Deployment и пять StatefulSet имеют все желаемые готовые реплики.
+Host source остаётся примонтирован в runtime-controller, gateway и frontend;
+serving process hash в этом checkpoint отдельно не проверялся. Root149GiB/
+data57GiB свободно. Backend frozen: настоящий SOFTWARE_CHANGE и INTAKE
+RUNNING, до terminal не применять изолированные Go-патчи и не перезапускать.
+
+PROJECT диалог `cnv_rDvs2Qpxsk029lqVzcMeI-4N`: по свободному описанию без ID
+помощник предложил единственную CREATE_PROJECT_FILE. Native plan
+`pln_tqHn4855BuC6jVzbSehMkjPd` проверен и атомарно применён через UI, обе
+команды HTTP200. Создан artifact `art_i2rouMdoEPydz_Izt-NMuQDs`, revision1/
+version1, ACTIVE/CLEAN; owner metadata/content GET200,4234байта и SHA256
+`dc0e4965c96780bedea572a9c427dc3f6e95caa258c0ca790094dd5b753dc24e`
+совпадают с authoritative digest. Оба требуемых раздела существуют. Screenshot
+проверенной модалки просмотрен; own reload восстановил диалог и APPLIED card.
+Console errors21 не выросли от проверки/применения, warnings/pageerrors0.
+Следующее естественное уточнение о сохранённом файле отправлено без ID;
+финальный ответ ещё не подтверждён, полный пункт16 не закрывать.
+
+Chrome MCP list_pages запрошен повторно, ответ pending; подключение НЕ доказано.
+Own Playwright41676/69259 работают, чужие вкладки не трогались. Realtime всё ещё
+периодически закрывается4000/PLATFORM_RESYNC_REQUIRED и восстанавливается;
+снимок follow-up показывает recovering, поэтому стабильность не PASS.
+Новый journal превышает native GitHub read cap1MiB: требуется lossless split
+с сохранением исторических требований/authority; предложение child готовится,
+текущий Workflow читает прежний pinnedmain и не прерывается.
+Полный65QA, остальные п16 и реальный Workflow OPEN; business PR не merge.
+
 ## Checkpoint 09.10.2026 22:25 UTC — 4ENV/8bindings завершены, готов диагностический запуск
 
 Native staff image impact `riip_JZDWJvPiUX5oFbyz4CY37JT3` APPLIED/version2,
