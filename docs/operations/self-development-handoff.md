@@ -10,6 +10,30 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 05:27 UTC — обе ноды восстановлены, старые OCI очищены
+
+DiskPressure False: agent 05:19:47, server 05:19:50 UTC. Базы, NATS, S3,
+большинство Deployment, OAuth 2/2, BuildKit и role-image-builder Ready.
+ROOT существующим `local-oci-cache.py` удалил 41 exact obsolete helper archive,
+19 832 737 280 logical bytes на `/data`; independent audit подтвердил
+отсутствие выбранных файлов и сохранность всех 23 оставленных архивов.
+Все runner archives, current/restore и fresh workload/admission refs сохранены.
+Перед эффектом exact privileged handle-read не нашёл открытых выбранных файлов;
+предупреждения относились только к другим FUSE mountpoints. `.next` отсутствуют.
+Это восстановимый build-cache, не данные/PVC/registry/node images. Удаление
+необратимо для этих копий; нужные версии пересобираются из исходников.
+Root relief этому удалению не приписывается: архивы на другой filesystem.
+
+После массового запуска/pull root available около 64,7 GB, `/data` около
+146 GB. Обе ноды остаются без давления. Browser document 200, обычный SSO
+callback POST 200, однако bootstrap 503: control-plane ещё не Ready.
+Его первый startup закончился verify PostgreSQL connection, причина UNKNOWN;
+Kubernetes самостоятельно перезапустил контейнер в 05:27:03 после startupProbe.
+Session-archive ожидает CP. Ручной restart/Retry/graph mutation не выполнялись.
+Проверены screenshot/Console/Network экрана ошибки; Full65 OPEN, native
+Workflow state UNKNOWN до авторитетного API. Node images не сняты с pins:
+отсутствие Pod refs не заменяет полный dependency closure.
+
 ## Checkpoint 09.10.2026 05:16 UTC — резерв применён, unused cache очищен
 
 На опубликованном `24d603829d09a582b707207ccee3bb75e47f139c` один
