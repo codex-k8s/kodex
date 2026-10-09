@@ -10,6 +10,27 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 20:57 UTC — пакет диагностики принят и проверен
+
+Основа6cbdaec794ffbfcac2cef1795d44cf5c68ffa1e1;14source files добавляют
+closed bound diagnostic classifier→private terminal→completion→RC log до
+cleanup. ROOT unit/race/vet/format и runner/RC build PASS на текущем дереве;
+точный опубликованный SHA и повторные unit ещё требуется зафиксировать.
+Нет новых RPC/grants/RunnerInput/schema, CP outcome/usage/archive неизменны.
+RC log не durable receipt; owner error/replay не подтверждают новый commit.
+
+Далее canonical full runner build/import/seed/fresh render/forward activation,
+три custom recipe→admission/promotion→четыре ENV и восемь bindings через UI.
+Сохранить38tools/nonimage settings, fresh OCC и owner risk gates. Новый native
+Manager только после exact custom pins и backend freeze; старыеBAU/WRD
+FAILED и их причины UNKNOWN, очередного blind retry не было.
+
+Cluster fresh: две Ready nodes,21Deployment/5StatefulSet desired Ready.
+Chrome MCP повторный запрос list_pages ожидает ответа; не считать подключённым.
+Own Playwright session41676 активна, текущая WRD Run page, reload без drafts;
+MCP approval пользователь готов подтвердить. Чужие вкладки не трогать.
+Полный Workflow, п11/14/15/16 и human gate OPEN, business PR не merge.
+
 ## Checkpoint 09.10.2026 20:22 UTC — cc430343 published; private diagnostic fix в работе
 
 Source/remote/Draft1807 EQUALcc430343045fa3a61107a037d85f4fe2f6c8803f.

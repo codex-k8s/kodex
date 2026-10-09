@@ -488,7 +488,8 @@ func (server *Server) complete(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	var payload runtimecontract.RunnerCompletionRequest
-	if decode(request, &payload, maximumRequestBytes) != nil || payload.Validate() != nil || payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest || payload.Attempt != input.Attempt {
+	if decode(request, &payload, maximumRequestBytes) != nil || payload.Validate() != nil || payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest || payload.Attempt != input.Attempt ||
+		(payload.ProviderDiagnostic != nil && !payload.ProviderDiagnostic.Matches(input)) {
 		http.Error(writer, "invalid runtime completion", http.StatusBadRequest)
 		return
 	}
@@ -504,6 +505,7 @@ func (server *Server) complete(writer http.ResponseWriter, request *http.Request
 		writeControlError(writer, err)
 		return
 	}
+	server.logCommittedProviderDiagnostic(ctx, input, payload, err)
 	server.coordinator.Complete(input.LeaseRef)
 	writer.WriteHeader(http.StatusNoContent)
 	// Ответ о durable commit отправляется до удаления вызывающего Pod;

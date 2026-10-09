@@ -13,6 +13,14 @@ updated: 2026-10-05
 tenant eligibility, PostgreSQL lifecycle и issuer credentials ему не принадлежат.
 Он не выполняет RPC, сетевые запросы, сканирование, подпись или изменение данных.
 
+`ProviderFailureDiagnostic` задаёт закрытый versioned формат наблюдения причины
+provider failure. Broker и существующий completion callback сверяют exact
+session/turn/attempt и input/revision/execution digests. Полученная диагностика
+не подтверждает provider ACK, итог или authority; отсутствующий terminal
+остаётся неизвестным. RC записывает наблюдение только после успешного owner
+completion и перед cleanup. Это не durable CP receipt. Публикация требует
+обновлённого runner и callback consumer; Proto/RPC и grants не меняются.
+
 ## Отчёт об уязвимостях и решение о риске
 
 - `ProjectImageVulnerabilityReport` потребляет полный исходный Grype JSON и

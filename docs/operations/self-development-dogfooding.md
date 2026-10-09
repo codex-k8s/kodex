@@ -10,6 +10,36 @@ updated: 2026-10-09
 
 # Цель и источники
 
+## Checkpoint 09.10.2026 20:57 UTC — диагностический пакет проверен; активация следующая
+
+На основе6cbdaec794ffbfcac2cef1795d44cf5c68ffa1e1 принят14file пакет:
+закрытые enum причины проходят от classifier через private broker terminal
+и существующий completion callback в RC log после успешного owner completion,
+до DeleteTurn. Проверяются exact revision/input/execution-binding/session/turn/
+attempt и peer; произвольные сообщения и сырой provider payload не переносятся.
+Диагностика не является authority, provider ACK или durable CP receipt.
+Success, usage, archive proof и прежние terminal/cleanup transitions сохранены;
+AlreadyExists и owner error не создают ложное подтверждение новой диагностики.
+RunnerInput/schema9, Proto/AsyncAPI и grants не менялись.
+
+ROOT local на текущем дереве: runtimecontract unit/race1.954s, runner codex/
+app unit и race20.506s/37.400s, callback unit/race33.794s — PASS. Адресные
+go vet, gofmt и diff-check, CGO0 trimpath/buildvcs=false runner/RC build PASS.
+В expected MCP test добавлен уже существующий read_task_session, без изменения
+реестра или полномочий. Результаты ещё привязать к опубликованному SHA.
+
+Live activation нового base/custom runner и capture точной причины NOT RUN;
+старые BAU/WRD остаются FAILED/причинаUNKNOWN. Новый blind retry не запускался.
+Следующий шаг: exact clean published source → full runner build/import/seed →
+fresh render и штатная forward activation → три custom image и четыре ENV/
+восемь bindings через owner UI, сохранив nonimage настройки. Лишь затем новый
+native Manager с замороженным backend и closed RC diagnostic readback.
+
+Fresh readback: обе ноды Ready, все21Deployment и5StatefulSet desired Ready;
+это не full QA PASS. MCP list_pages запрошен, ответ пока UNKNOWN. Собственная
+Playwright вкладка работает, после проверки отсутствия drafts обновлена;
+чужие вкладки не изменены. Полный Workflow/п11/14/15/16 остаётся OPEN.
+
 ## Checkpoint 09.10.2026 20:22 UTC — пакет опубликован, ранний отказ ещё требует сквозной диагностики
 
 Source/remote/Draft1807 EQUALcc430343045fa3a61107a037d85f4fe2f6c8803f,

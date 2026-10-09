@@ -719,20 +719,25 @@ func (usage TokenUsage) Validate() error {
 }
 
 type RunnerCompletionRequest struct {
-	RuntimeRevisionDigest string           `json:"runtime_revision_digest"`
-	Attempt               int32            `json:"attempt"`
-	Success               bool             `json:"success"`
-	ResultSummary         string           `json:"result_summary"`
-	SafeErrorCode         string           `json:"safe_error_code,omitempty"`
-	Usage                 TokenUsage       `json:"usage"`
-	Artifacts             []RunnerArtifact `json:"artifacts,omitempty"`
-	CodexSessionID        string           `json:"codex_session_id,omitempty"`
-	ArchiveRelativePath   string           `json:"archive_relative_path,omitempty"`
-	ArchiveSHA256         string           `json:"archive_sha256,omitempty"`
-	ArchiveSizeBytes      int64            `json:"archive_size_bytes,omitempty"`
+	RuntimeRevisionDigest string                     `json:"runtime_revision_digest"`
+	Attempt               int32                      `json:"attempt"`
+	Success               bool                       `json:"success"`
+	ResultSummary         string                     `json:"result_summary"`
+	SafeErrorCode         string                     `json:"safe_error_code,omitempty"`
+	Usage                 TokenUsage                 `json:"usage"`
+	Artifacts             []RunnerArtifact           `json:"artifacts,omitempty"`
+	CodexSessionID        string                     `json:"codex_session_id,omitempty"`
+	ArchiveRelativePath   string                     `json:"archive_relative_path,omitempty"`
+	ArchiveSHA256         string                     `json:"archive_sha256,omitempty"`
+	ArchiveSizeBytes      int64                      `json:"archive_size_bytes,omitempty"`
+	ProviderDiagnostic    *ProviderFailureDiagnostic `json:"provider_diagnostic,omitempty"`
 }
 
 func (request RunnerCompletionRequest) Validate() error {
+	if request.ProviderDiagnostic != nil && (request.Success || request.ProviderDiagnostic.Validate() != nil ||
+		request.ProviderDiagnostic.RuntimeRevisionDigest != request.RuntimeRevisionDigest || request.ProviderDiagnostic.Attempt != request.Attempt) {
+		return errProviderDiagnostic
+	}
 	if !sha256Pattern.MatchString(request.RuntimeRevisionDigest) || request.Attempt < 1 || len(request.ResultSummary) > 64<<10 ||
 		len(request.SafeErrorCode) > 128 || len(request.Artifacts) > MaximumCompletionFiles ||
 		(request.Success && strings.TrimSpace(request.ResultSummary) == "") || (!request.Success && request.SafeErrorCode == "") ||
