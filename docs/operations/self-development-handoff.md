@@ -10,6 +10,25 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 05:16 UTC — owner YES для резерва и старых образов
+
+Владелец явно разрешил уменьшить ext4 резерв основного диска с 5% до 1%
+и удалить доказанно ненужные старые образы. Подготовлен адресный
+`tools/dev/local-root-reserve.py`: exact устройство/размер/владение,
+read-only audit, fingerprint, свежая проверка до одного эффекта и readback.
+Остаётся 1 246 000 блоков, около 5,10 GB резерва; расчётная прибавка available
+20,41 GB. On-disk count и реальное online освобождение проверяются отдельно;
+никаких remount/reboot, повторных изменений или ослабления Kubernetes.
+ROOT: 16 герметичных reserve tests и 58 cache tests PASS, diff-check PASS.
+Context7 `/tytso/e2fsprogs` проверен. Применение только после публикации.
+
+На опубликованном `eb8bb4cc8fcfd9b89526bf203b3efcaaf9214a0e` recovery
+cache cleanup проходит bounded exact ID batches; уже подтверждены PASS,
+root available достигал 54,84 GB, но concurrent writers меняют объём.
+Данные/PVC/current/restore images сохранены. Исторические node images ещё
+проверяются: отсутствие Pod refs само по себе не доказывает отсутствие
+queued/published recipe или RuntimeRevision. Workflow UNKNOWN, Full65 OPEN.
+
 ## Checkpoint 09.10.2026 05:07 UTC — old cache cleanup, recovery profile и capacity gate
 
 На опубликованном `0308bcfefedeb18327038c989fd7f09b853b0abb` exact readback
