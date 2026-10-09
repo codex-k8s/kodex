@@ -15,10 +15,16 @@ import (
 var workflowCatalogDigestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 func workflowCatalogTool() map[string]any {
-	return map[string]any{"name": "get_workflow_catalog", "description": "Discover published project Workflows allowed to this exact execution. Read every page using next_page_token until empty. The server resolves project and authority. Each entry contains exact published pins, readiness and WorkflowInputField.Key/type/options; obtain required values before launch_workflow. Do not guess references or schemas. Discovery does not grant launch authority.", "inputSchema": objectSchema(nil, map[string]any{"query": map[string]any{"type": "string", "maxLength": 200}, "page_token": map[string]any{"type": "string", "maxLength": 512}})}
+	return workflowCatalogReadTool()
 }
 
 func (server *Server) workflowCatalog(ctx context.Context, input runtimecontract.RunnerInput, args map[string]any) (any, error) {
+	if _, ok := args["publication_read"]; ok {
+		return server.workflowCatalogRead(ctx, input, args)
+	}
+	if _, ok := args["active_runs_read"]; ok {
+		return server.workflowCatalogRead(ctx, input, args)
+	}
 	if !workflowLaunchAvailable(input) || !onlyKeys(args, "query", "page_token") {
 		return nil, errors.New("workflow catalog input is invalid")
 	}
@@ -41,7 +47,7 @@ func (server *Server) workflowCatalog(ctx context.Context, input runtimecontract
 	if err != nil {
 		return nil, err
 	}
-	if result == nil || len(result.Items) > 10 || len(result.NextPageToken) > 512 {
+	if result == nil || len(result.ProtoReflect().GetUnknown()) != 0 || result.Read != nil || len(result.Items) > 10 || len(result.NextPageToken) > 512 {
 		return nil, errors.New("workflow catalog response is invalid")
 	}
 	items := make([]map[string]any, 0, len(result.Items))

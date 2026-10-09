@@ -10,6 +10,24 @@ updated: 2026-10-09
 
 # Цель и источники
 
+## Checkpoint 09.10.2026 18:57 UTC — обычному Manager доступны publication/active roots
+
+На базе `71d057692e283cf5687d6caa75e769c48aacbb7c` доставлены новые typed modes
+прежнего get_workflow_catalog: full safe publication с EOF/hash/pins и
+advisory actor-visible active roots с run.view-before-LIMIT. Authority из
+lease/server state; новые grants/toolnames/RPC/runner image не требуются.
+ROOT Proto/codegen20hash/shared/CP/RC unit/vet и RC race PASS; disposable
+owner+launch combined36.225s PASS. Initial CP transport FAIL из-за node PATH
+устранён canonical повтором0.536s, не скрыт. Serving CP a674be4d/RC f36932c4
+и host hermetic builds EQUAL; mounted source hashes совпали.
+Общий Markdown renderer:157tests/lint/format/typecheck/build8.14s PASS,
+actual desktop/mobile500 screenshots и table geometry без body overflow.
+Из того же чата без refs отправлен запрос подготовить один Manager plan;
+run_-1djaWMlBdY46j8qpBbVI9jP RUNNING, native EOF/active/launch ещё NOT RUN.
+MCP ownpage3 подключена, SSO expired401/fresh login form; отдельный разрешённый
+Chrome OWNER200 продолжает QA. Cold snapshot/rejoin FAIL ещё OPEN.
+П11/14/15/16 и полный Workflow/human gate не отмечены как выполненные.
+
 ## Checkpoint 09.10.2026 18:48 UTC — bounded hint и ещё один реальный no-ID read
 
 На базе `2f792f04921ebd6b753a82475eafc4ef0c374a3e` принят socket-local hint

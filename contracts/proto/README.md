@@ -128,6 +128,46 @@ expiry или смена поколения закрывают повторно�
 Чтение не создаёт business receipt, audit или domain event; consumer проверяет
 typed pins/cardinality/readiness и использует прежний readiness MCP path.
 
+Тот же tool и RPC имеют три взаимоисключающих typed режима. Без selector
+сохраняется discovery `query/page_token`. `publication_read` содержит точные
+`workflow_ref/published_ref/spec_digest/workflow_version`; owner в одном
+RepeatableRead snapshot разрешает текущую публикацию тем же decoder и
+предикатом `workflow.view` + `workflow.launch`. CP выдаёт version1 whitelist:
+полные steps/instructions/DAG/capabilities, input defaults, coordinator,
+completion criteria, concurrency, deadlines и human gates. ResultSchema
+сохраняется только как ограниченная локальная JSON Schema с известными
+keywords; `{}` допустим, неизвестная непустая schema закрыто отклоняется,
+не отбрасывается. Произвольный spec/config, credentials, headers и secret
+values не выдаются; `$ref` и resolver отсутствуют.
+
+Immutable owner `spec_digest` не подменяется digest безопасной проекции.
+CP и RC используют единый typed canonical JSON codec: unknown/duplicate keys,
+повреждённый UTF-8, pins/hash mismatch и source больше 1MiB дают закрытый
+отказ без частичной конфигурации. RC возвращает UTF-8 страницы не более
+16KiB с `offset_bytes/next_offset_bytes/eof/page_sha256/configuration_sha256`;
+продолжение требует тот же configuration digest и immutable publication pins.
+Каждая страница заново проверяет lease, actor и текущую eligibility. Cardinality
+полной конфигурации — ровно одна выбранная публикация, business effects — ноль.
+
+`active_runs_read` использует те же выбранные pins и отдельный bounded cursor.
+Owner разрешает только Workflow roots выбранного текущего project в состояниях
+`QUEUED/RUNNING/WAITING_HUMAN/CANCELLING`. Canonical `run.view` применяется
+до LIMIT10+1: скрытые rows, их количество и locator не раскрываются. Каждый
+элемент содержит собственную immutable publication запуска, а не текущую
+версию Workflow. Cursor связан с mode, actor/org/project/RuntimeRevision и
+выбранными pins; query/mode/pins нельзя сменить между страницами. Результат
+только advisory в пределах actor-visible nonterminal roots, не обещание
+глобального отсутствия дубликата. Atomic launch/required-child guards и
+idempotency receipt остаются единственным authority для запуска.
+
+Terminal/cancel, lease expiry, stale fence/generation, текущий revoke и
+publication drift закрывают повторные чтения; нет fallback latest, новой
+lease, grant, audit или события от read. Новый wire selector не является
+источником authority. Для активации требуются согласованные CP/RC и штатный
+Proto codegen; имена MCP/RPC, machine policy и compiled runner inventory не
+меняются, отдельная пересборка runner для этих режимов не требуется. Native
+доставка и фактическое многопейджевое чтение проверяются отдельно от unit.
+
 `launch_workflow` требует `expected_published_ref`, `expected_spec_digest` и
 `expected_workflow_version`, полученные из каталога. Это preconditions, не
 authority. Existing LaunchWorkflowExecution проверяет текущий root/lease/cap

@@ -45,6 +45,8 @@ func TestExecutionWorkflowCatalogDomainBoundary(t *testing.T) {
 		func(i *query.ExecutionWorkflowCatalog) { i.Query = "invalid\x00" },
 		func(i *query.ExecutionWorkflowCatalog) { i.Query = string([]byte{0xff}) },
 		func(i *query.ExecutionWorkflowCatalog) { i.PageToken = strings.Repeat("x", 513) },
+		func(i *query.ExecutionWorkflowCatalog) { i.Publication = &query.ExecutionWorkflowPublicationRead{} },
+		func(i *query.ExecutionWorkflowCatalog) { i.ActiveRuns = &query.ExecutionWorkflowActiveRunsRead{} },
 	} {
 		invalid := input
 		mutate(&invalid)
@@ -55,5 +57,37 @@ func TestExecutionWorkflowCatalogDomainBoundary(t *testing.T) {
 	p.CallerWorkload = "control-api-gateway"
 	if _, err := service.GetExecutionWorkflowCatalog(t.Context(), p, input); !errors.Is(err, errs.ErrForbidden) || r.calls != 1 {
 		t.Fatal("foreign workload query reached repository")
+	}
+}
+
+func TestExecutionWorkflowCatalogTypedModes(t *testing.T) {
+	r := &workflowCatalogRepository{}
+	service, _ := New(r)
+	p := testInstructionPrincipal()
+	p.CallerWorkload = "runtime-controller"
+	p.Permission = "platform.runtime.execution.workflow.catalog"
+	base := query.ExecutionWorkflowCatalog{LeaseRef: "lse_exact001", Fence: "fixture-fence", Generation: 1}
+	pins := query.ExecutionWorkflowReadPins{WorkflowRef: "wfl_workflow01", PublishedRef: "wfv_workflow01", SpecDigest: strings.Repeat("a", 64), WorkflowVersion: 7}
+	full := base
+	full.Publication = &query.ExecutionWorkflowPublicationRead{Pins: pins}
+	active := base
+	active.ActiveRuns = &query.ExecutionWorkflowActiveRunsRead{Pins: pins}
+	active.PageToken = "next"
+	for _, input := range []query.ExecutionWorkflowCatalog{full, active} {
+		if _, err := service.GetExecutionWorkflowCatalog(t.Context(), p, input); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, input := range []query.ExecutionWorkflowCatalog{
+		{LeaseRef: base.LeaseRef, Fence: base.Fence, Generation: 1, Publication: full.Publication, ActiveRuns: active.ActiveRuns},
+		{LeaseRef: base.LeaseRef, Fence: base.Fence, Generation: 1, Publication: full.Publication, PageToken: "mixed"},
+		{LeaseRef: base.LeaseRef, Fence: base.Fence, Generation: 1, ActiveRuns: active.ActiveRuns, Query: "mixed"},
+	} {
+		if _, err := service.GetExecutionWorkflowCatalog(t.Context(), p, input); !errors.Is(err, errs.ErrInvalid) {
+			t.Fatal("mixed mode accepted")
+		}
+	}
+	if r.calls != 2 {
+		t.Fatal("invalid mode reached repository")
 	}
 }

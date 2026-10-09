@@ -4177,6 +4177,39 @@ message GetExecutionWorkflowCatalogRequest {
   int64 generation = 3;
   string query = 4;
   string page_token = 5;
+  // Взаимоисключающие read selectors; отсутствие сохраняет discovery.
+  oneof read {
+    ExecutionWorkflowPublicationRead publication_read = 6;
+    ExecutionWorkflowActiveRunsRead active_runs_read = 7;
+  }
+}
+message ExecutionWorkflowReadPins {
+  string workflow_ref = 1;
+  string published_ref = 2;
+  string spec_digest = 3;
+  int64 workflow_version = 4;
+}
+message ExecutionWorkflowPublicationRead { ExecutionWorkflowReadPins pins = 1; }
+message ExecutionWorkflowActiveRunsRead { ExecutionWorkflowReadPins pins = 1; }
+message ExecutionWorkflowPublication {
+  bytes configuration_json = 1;
+  string configuration_sha256 = 2;
+}
+message ExecutionWorkflowActiveRun {
+  string run_ref = 1;
+  string workflow_ref = 2;
+  string published_ref = 3;
+  string spec_digest = 4;
+  int32 published_version = 5;
+  int64 run_version = 6;
+  string title = 7;
+  string state = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+message ExecutionWorkflowActiveRuns {
+  ExecutionWorkflowReadPins pins = 1;
+  repeated ExecutionWorkflowActiveRun items = 2;
+  string next_page_token = 3;
 }
 message ExecutionWorkflowCatalogEntry {
   string workflow_ref = 1;
@@ -4191,6 +4224,10 @@ message ExecutionWorkflowCatalogEntry {
 message GetExecutionWorkflowCatalogResponse {
   repeated ExecutionWorkflowCatalogEntry items = 1;
   string next_page_token = 2;
+  oneof read {
+    ExecutionWorkflowPublication publication = 3;
+    ExecutionWorkflowActiveRuns active_runs = 4;
+  }
 }
 // Workflow сохраняет собственный root и canonical claim/step область.
 message LaunchWorkflowExecutionResponse {

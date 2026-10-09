@@ -10,6 +10,43 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 18:57 UTC — protected Workflow reads доставлены; native повтор идёт
+
+Основа `71d057692e283cf5687d6caa75e769c48aacbb7c`, remote/Draft1807 EQUAL.
+В существующий get_workflow_catalog/GetExecutionWorkflowCatalog добавлены
+exclusive publication_read и active_runs_read. Owner выводит actor/project
+из exact lease и проверяет current/immutable eligibility на каждой странице.
+Полная safe version1 публикация <=1MiB читается UTF8 страницами <=16KiB;
+immutable spec_digest и safe projection SHA разделены. Active roots только
+actor-visible, run.view до LIMIT10+1, собственные pins каждого запуска;
+это advisory, не глобальная at-most-one. Grants/RPC/toolnames/migrations и
+runner pins не менялись; unknown/corrupt/schema/drift закрыто отклоняются.
+
+ROOT canonical gen/lint/build/check-proto-codegen PASS; все20 frozen SHA EQUAL.
+Shared unit0.054s/vet, CP domain0.297s/repository0.969s/transport0.536s/vet,
+RC callback5.394s/vet/targeted race1.979s PASS. Первый CP transport запуск FAIL:
+в урезанном PATH отсутствовал node для существующего email fixture; повтор
+с Node24 прошёл, первоначальный FAIL сохранён. Disposable PG combined PASS
+36.225s: новые owner reads5.75s и прежний launch30.40s/17subcases, readbacks PASS.
+Actual CP `/proc/1067/exe` EQUAL hermetic build a674be4d0f08b760f58d1d6ff2b3d9eecd3df154b6616cc8d0a1512d660cf42f;
+RC `/proc/468/exe` EQUAL f36932c4760b39d58036a0a5fe65af99e9d0ff7c42a22ab529639d3cce037e40.
+Host/Pod source EQUAL8ae41b03/e41df6c2; gateway после Proto serving EQUAL81fe8a3c.
+
+Markdown-таблицы исправлены общим SafeMarkdown: колонки min160px, inner
+horizontal scroll и keyboard focus, полный текст сохранён. ROOT157 unit PASS
+2.67s/lint/format/forced typecheck/build8.14s PASS; большие chunks warning
+сохранён. Actual desktop/mobile500 screenshots просмотрены: desktop first
+column164px; mobile first160px/table481px/wrapper374px, body overflowfalse.
+
+Из того же PROJECT чата нативно отправлен natural continuation без refs:
+подготовить один подтверждаемый Manager plan и после проверок полный Workflow
+до human gate с одним комплексным review, без merge/approve/auto-merge.
+Run_-1djaWMlBdY46j8qpBbVI9jP USER9 RUNNING; новый plan/apply/Manager EOF
+ещё NOT RUN. Cold snapshot/rejoin failures отдельно исправляются, стабильность
+OPEN. MCP подключение доступно, но 12h SSO в ownpage3 истекло: bootstrap/
+session401, штатная форма fresh login открыта; не объявлено Console0. Разрешённый
+отдельный Chrome helper OWNER200 работает, QA продолжен. П11/14/15/16 OPEN.
+
 ## Checkpoint 09.10.2026 18:48 UTC — fresh page hint доставлен, сравнение истории без ID PASS
 
 Основа `2f792f04921ebd6b753a82475eafc4ef0c374a3e`, remote и Draft1807 readback EQUAL.

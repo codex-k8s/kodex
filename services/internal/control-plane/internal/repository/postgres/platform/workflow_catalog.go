@@ -33,9 +33,15 @@ func (row workflowCatalogRow) Scan(dest ...any) error {
 }
 
 func (repository *Repository) GetExecutionWorkflowCatalog(ctx context.Context, p value.Principal, input query.ExecutionWorkflowCatalog) (entity.ExecutionWorkflowCatalog, error) {
-	empty := entity.ExecutionWorkflowCatalog{}
 	ctx, cancel := context.WithTimeout(ctx, catalogQueryTimeout)
 	defer cancel()
+	return retryAssistantLockedRead(ctx, func(attempt context.Context) (entity.ExecutionWorkflowCatalog, error) {
+		return repository.executionWorkflowCatalogOnce(attempt, p, input)
+	})
+}
+
+func (repository *Repository) executionWorkflowCatalogOnce(ctx context.Context, p value.Principal, input query.ExecutionWorkflowCatalog) (_ entity.ExecutionWorkflowCatalog, resultError error) {
+	empty := entity.ExecutionWorkflowCatalog{}
 	machine, err := repository.resolveScope(ctx, p)
 	if err != nil {
 		return empty, err
@@ -45,7 +51,7 @@ func (repository *Repository) GetExecutionWorkflowCatalog(ctx context.Context, p
 	if err != nil {
 		return empty, errs.ErrUnavailable
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	defer rollbackAssistantLockedRead(ctx, tx, &resultError)
 	fence := sha256.Sum256([]byte(input.Fence))
 	actor := machine
 	var rootID, runID, nodeID, sessionID, turnID, revisionID, projectID, projectRef, agentRef, inputDigest, revisionDigest string
@@ -56,7 +62,7 @@ func (repository *Repository) GetExecutionWorkflowCatalog(ctx context.Context, p
 		return empty, errs.ErrNotFound
 	}
 	if err != nil {
-		return empty, errs.ErrUnavailable
+		return empty, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
 	err = tx.QueryRow(ctx, queryRepositoryResolvescopeSelectMembershipsOrganizationIdSubjectIdActive, actor.actorRef, actor.organizationRef).Scan(&actor.organizationID, &actor.organizationRef, &actor.actorID, &actor.actorRef, &actor.actorName, &actor.role)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -72,6 +78,16 @@ func (repository *Repository) GetExecutionWorkflowCatalog(ctx context.Context, p
 	}
 	if !capabilityEnabled(effective, "platform.run.launch") {
 		return empty, errs.ErrForbidden
+	}
+	if input.Publication != nil || input.ActiveRuns != nil {
+		result, err := repository.readExecutionWorkflowCatalogTx(ctx, tx, actor, projectID, projectRef, revisionID, revisionDigest, input)
+		if err != nil {
+			return empty, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return empty, assistantLockedReadError(err, errs.ErrUnavailable)
+		}
+		return result, nil
 	}
 	filter := query.Filter{ProjectRef: projectRef, ResourceRef: revisionID, ExpectedCatalogDigest: revisionDigest, Query: strings.TrimSpace(input.Query), State: "PUBLISHED", Page: query.Page{Size: 10, Token: input.PageToken}}
 	cursor, err := decodeCatalogCursor(actor, "EXECUTION_WORKFLOW", filter)
@@ -120,7 +136,7 @@ func (repository *Repository) GetExecutionWorkflowCatalog(ctx context.Context, p
 		result.Items = append(result.Items, entity.ExecutionWorkflowCatalogEntry{WorkflowRef: item.Ref, Name: item.Published.Name, Purpose: item.Published.Purpose, WorkflowVersion: item.Version, PublishedRef: item.Published.Ref, SpecDigest: digests[i], Inputs: item.Published.Inputs, Readiness: *item.LaunchReadiness})
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return empty, errs.ErrUnavailable
+		return empty, assistantLockedReadError(err, errs.ErrUnavailable)
 	}
 	return result, nil
 }
