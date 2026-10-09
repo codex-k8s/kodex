@@ -5,7 +5,7 @@ type: operations
 status: approved
 owner: manager
 version: 1.1.0
-updated: 2026-10-08
+updated: 2026-10-09
 ---
 
 # Цель и источники
@@ -4088,7 +4088,11 @@ Workflow опубликован: version 22 / revision 7, 21 шаг, publishedRe
 VALIDATE VALID и PUBLISH PUBLISHED подтверждены. Это PASS конфигурации и
 публикации. В 20:12:50 UTC обычный Manager запустил один новый Workflow по
 Issue #1796; в 20:14 UTC root RUNNING, callback ожидается, READY_NOTCONFIRMED.
-Полное выполнение и финальная готовность не подтверждены.
+Свежая owner-сверка 09.10.2026 04:03–04:06 UTC подтверждает terminal
+FAILED / RUNTIME_TIMEOUT прежнего запуска; запрошен только новый typed план
+бюджетов. В 04:09–04:13 UTC он APPLIED: изменены только timeout-поля,
+Workflow version 25 / revision 8 опубликован, обычный Manager запустил один
+новый процесс. Полное выполнение и финальная готовность не подтверждены.
 
 - [x] 1. Создать связанное Issue, ветку от свежего main и один Draft bootstrap
       PR; фиксировать результаты PASS/FAIL/NOT RUN/BLOCKED на точном SHA.
@@ -4139,9 +4143,11 @@ Issue #1796; в 20:14 UTC root RUNNING, callback ожидается, READY_NOTCO
       лексика) → продуктовая приёмка Manager → исправления и повторное ревью
       нового SHA, не более пяти циклов после первоначального ревью → единственный
       финальный Human Gate.
-      Живой Workflow опубликован: 21 шаг, version 22 / revision 7.
+      Живой Workflow опубликован: 21 шаг, version 25 / revision 8.
       Публикация/конфигурация PASS; один полный процесс запущен, завершение
       и сквозная приёмка ещё не подтверждены.
+      Прежний запуск FAILED / RUNTIME_TIMEOUT; новые бюджеты APPLIED/PUBLISHED,
+      один свежий процесс запущен, результат ещё не принят.
       Проверить небольшой disposable delegated run до настоящей Issue.
 - [x] 12. При bootstrap acceptance зафиксировать и автономно слить bootstrap
       PR, обновить стенд на свежий main и повторно сверить созданные ресурсы,
@@ -4161,8 +4167,8 @@ Issue #1796; в 20:14 UTC root RUNNING, callback ожидается, READY_NOTCO
       после первоначального ревью,
       final-readiness.md, финальный PR READY_FOR_HUMAN_REVIEW и отчёт по
       разделу 64 исходного задания. Единственный финальный Human Gate — владелец.
-      Живой Workflow опубликован: 21 шаг, version 22 / revision 7;
-      полный процесс по новому порядку RUNNING, завершение READY_NOTCONFIRMED.
+      Живой Workflow опубликован: 21 шаг, version 25 / revision 8;
+      прежний процесс FAILED / RUNTIME_TIMEOUT, новый READY_NOTCONFIRMED.
       Этот PR не merge, не auto-merge, не approve от имени владельца.
 
 ## Карта новых пользовательских сценариев
@@ -12473,3 +12479,118 @@ git tag `rust-v0.160.0`, peeled commit
 необязательных credits, reset и buckets. Producer для всех аккаунтов ещё
 проверяется, semantic PASS NOT RUN. Исторические UNKNOWN и checklist сохранены;
 полный процесс и финальная готовность не подтверждены.
+
+### 09.10.2026 04:03–04:06 UTC — прежний Workflow FAILED по timeout, новый запрос только бюджетов QUEUED
+
+После «продолжай» выполнена свежая сверка: checkpoint
+`833fb6382a981c900122f0b4ac4ce2411dd841eb` PUSHED,
+[Draft PR1807](https://github.com/codex-k8s/kodex/pull/1807) подтверждён exact
+readback; main прежний `ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69`.
+
+Workflow `run_WGyaC4fntZgliH487NkcG4pu` и Architect
+`run_5gkWwuEcKB-F0Mdz8FIaCK1n` FAILED. Owner event read доказал:
+08.10.2026 event 501 в 20:44:29.014556 UTC — RUNTIME_TIMEOUT. Tool 499
+invoke_integration RUNNING с 20:44:06 UTC отменён event 500 в 20:44:29 UTC;
+остальные step nodes атомарно CANCELLED, run event 522 FAILED в 20:44:30 UTC.
+Root Manager callback FINAL 45 в 20:46:15 UTC указал UNKNOWN cause и не
+перезапускал процесс. Это историческое сообщение сохраняется; новая owner-сверка
+подтвердила timeout. В закреплённом Workflow revision 7 / version 22 у
+step-002 бюджет 1200 секунд, общий бюджет 86400 секунд.
+
+До timeout Architect работал; последнее COMMENTARY 377: subscription usage
+отсутствует в текущей CP-модели, нужен ограниченный путь provider observation →
+owner storage → read model. Это промежуточный вывод, не завершённый semantic PASS.
+
+Создан свежий штатный PROJECT assistant: conversation
+`cnv_Lcba2N4XW14ES7dNfjC1_dFj`, run `run_8tuUEOvKgiaLgc0RzKl3JJqO`,
+QUEUED. Запрошен только typed UPDATE_WORKFLOW для бюджетов в секундах:
+INTAKE 1800; analysis 3600; implementation 7200; все review 3600; все fix 7200;
+все aggregation и final 1800. Общий Workflow 86400 сохраняется.
+Сохранить 21-шаговый DAG, порядок, pins, capabilities и единственный Human Gate;
+самостоятельный launch/retry не запрошен. Plan/apply/publish ещё NOT RUN,
+новые бюджеты не объявлены действующими.
+
+Chrome page 1 reload успешен, Console errors/warnings 0. Из 38 Network-запросов
+просмотрены 25, все HTTP 200; остальные не подтверждены. Checklist 11/14/15
+остаётся [ ], 13 [x] только за выбор Issue; Full65 OPEN. Финальный PR по
+бизнес-задаче не сливать, не включать auto-merge и не approve от имени владельца.
+
+### 09.10.2026 04:09–04:13 UTC — timeout-only plan APPLIED, Workflow revision 8 и один новый запуск
+
+PROJECT assistant самостоятельно прочитал Workflow version 22, 112793 B,
+до native EOF и предложил plan `pln_GMOJUCTwPeQNYOWGVun6T7UO`.
+ROOT сверил 42 изменения сериализованных листовых полей, 21 × 2 представления:
+все только `*.timeoutSeconds` / `*.TimeoutSeconds`, другого diff нет.
+Typed план VALID / version 2 / revision 1 → APPLIED, receipt
+`rct_se28AT7JdR46NAkiq198yG11`. Workflow version 23 DRAFT → 24 VALID →
+25 PUBLISHED, revision 8, published ref `wfv_nglITlTu3UObK_9lOE5AoixE`.
+Readiness READY / allowed true; context digest
+`0f074147599e21ffd990ddfd7721d508e01fef6d7cd14aad647bc8f4db0820d9`.
+Общий timeout 86400, maxConcurrency 3, 21-шаговый DAG, grants и единственный
+Human Gate step-057 не менялись. Это публикация бюджетов, не PASS полного процесса.
+
+Обычный Manager `run_c0tszz0_fleP19zv47xsbsTs`, session
+`ses_s8THsdiuAa9YYtbaxvodI8HK`, запущен в 04:11:25 UTC.
+Собственный GitHub Issue READ SUCCEEDED; FINAL 17 подтверждает один новый
+Workflow `run_4VTZQ0AOC-Hi11cHIT-7EmC-`, session
+`ses_oMysKPKSkH1cWZiLlRDszSjV`, финальная готовность не подтверждена.
+Ранний ACK Manager CAPTURED и тот же Pod UID
+`0181d838-22e2-4693-a078-67455e4e647c` подтверждён. RuntimeRevision
+`rrev_uf9tuuBSuaqfU3nYgzWCZfMZ`, digest
+`40710211560c6f2309cabff3a98d7cb60eb783e37d3ba116ddb165ad03233e39`.
+Task SHA256 `dafcaf5b722df081c5cc073406a421c0c68e932ecd6a91edd76f073b39487cb0`:
+expected/task/inbox EQUAL, taskInPrompt true. Instructions
+`ins_M6EHFesL4dkYfzzKhEMfkKPE`, 48335 B, SHA256
+`a0e90567ae566f6d35ba21e4645ba578b1883cffa2c2fd0829fc66b50a979772`, EQUAL.
+G9 / tools 38 / grants 21; binary-file SHA256
+`47a8fc359e2cd186c3d87a6710ba38f64986415e40a0a156c508094b8fc66b3d`
+EQUAL expected, не hash обслуживающего процесса.
+
+Actual Chrome WebSocket диагностика 04:07 UTC на своей странице: OPEN,
+session stream 26 кадров — PLATFORM_SNAPSHOT 19, PLATFORM_READY 1,
+SESSION_READY 1, RUN_GRAPH_SNAPSHOT 4, RUN_READY 1; позднее наблюдались
+heartbeat и native platform updates. Headers, tickets и содержимое не
+записывались. Console errors/warnings 0; desktop root run activity в 04:13 UTC:
+владелец справа, агент слева, четыре компактных tools, горизонтального
+переполнения нет. Все 20 просмотренных HTTP-запросов из 34 — 200;
+остальные не подтверждены.
+
+Ограниченный backend вывод: gateway один ERROR
+`platform bootstrap snapshot read failed` в 04:06:09 UTC, cause UNKNOWN; CP 0 строк. Последующие LIVE и
+actual frames не доказывают отсутствия этой ошибки. Coordinator нового Workflow
+sequence 5 готовит делегирование INTAKE; полный процесс не принят.
+История сохранена, Full65 OPEN, checklist 11/14/15 [ ]. Финальный PR по
+бизнес-задаче не сливать, не включать auto-merge и не approve от имени владельца.
+
+### 09.10.2026 04:14–04:17 UTC — новый INTAKE RUNNING, фактические deadline pins сверены
+
+INTAKE child `run_4h20meqomiZ27hr4D7Wvc8lT`, session
+`ses_c4LVJMnLPbe22ZyJRozN7gOM`, RUNNING, sequence 111.
+COMMENTARY 96 сообщает собственный EOF выбранных нормативных документов;
+актуальный Context7 не подтверждает поддержку credits/reset точной установленной
+версией. Итоговый semantic PASS INTAKE ещё NOT RUN.
+Early ACK и same Pod CAPTURED, UID `967eba49-e75b-4482-9f8b-f19c291941c5`.
+RuntimeRevision `rrev_OfAdThB04OaWHGDFOf0U_Kjn`, digest
+`c029821826d4d6bf9843c686a347863c27f2277af56cb1fb9e48968d750d2e5e`.
+Task SHA256 `ceba6ee8aaccfb3e7e6fca595bb11442b29d8e0f6cdb366ea0a135cb0960cff2`,
+expected/task/inbox EQUAL, taskInPrompt true; instructions
+`ins_M6EHFesL4dkYfzzKhEMfkKPE`, 53345 B, SHA256
+`6ae29c18a149ecc12186b9f1e614cb7e35456be3d53bb82282ff9de57953b86e`, EQUAL.
+G9 / tools 38 / grants 21; binary-file SHA256
+`47a8fc359e2cd186c3d87a6710ba38f64986415e40a0a156c508094b8fc66b3d`
+EQUAL expected; не hash обслуживающего процесса.
+
+ROOT read-only metadata exec того же Pod прочитал только разрешённые deadline
+поля runtime input, без Secret/env/raw prompts. Фактический profile
+`workflow-wall-clock-v1`, published ref `wfv_nglITlTu3UObK_9lOE5AoixE`, digest
+`bb8b5d5c6cffbd5a72e9287017738a1a7a6c23296d3b11275d90f319c6b30e28`.
+Root Workflow 86400 секунд: start 09.10.2026 04:12:55.178675 UTC → deadline
+10.10.2026 04:12:55.178675 UTC. INTAKE step-001 1800 секунд: start
+09.10.2026 04:13:34.480302 UTC → effective deadline
+09.10.2026 04:43:34.480302 UTC. Для обеих связок arithmeticSecondsMatch true;
+это проверка материализованных deadline, не итогового исполнения процесса.
+
+Gateway ERROR 04:06:09: исходный код относит ошибку к закрытому классу `dependency`, сообщение
+`platform bootstrap snapshot read failed`; actual cause UNKNOWN.
+Последующий transient LIVE не доказывает устранения причины. История и
+checklist не менялись; полный процесс и финальная готовность не подтверждены.

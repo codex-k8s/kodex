@@ -5,10 +5,117 @@ type: operations
 status: approved
 owner: manager
 version: 1.1.0
-updated: 2026-10-08
+updated: 2026-10-09
 ---
 
 # Текущее состояние
+
+## Checkpoint 09.10.2026 04:14–04:17 UTC — INTAKE RUNNING, wall-clock pins проверены
+
+INTAKE child `run_4h20meqomiZ27hr4D7Wvc8lT`, session
+`ses_c4LVJMnLPbe22ZyJRozN7gOM`, RUNNING, sequence 111; COMMENTARY 96 сообщает
+собственный EOF выбранных нормативных документов. Текущий Context7 не доказывает
+credits/reset для точной установленной версии; semantic PASS INTAKE NOT RUN.
+Early ACK / same Pod CAPTURED, UID `967eba49-e75b-4482-9f8b-f19c291941c5`.
+RuntimeRevision `rrev_OfAdThB04OaWHGDFOf0U_Kjn`, digest
+`c029821826d4d6bf9843c686a347863c27f2277af56cb1fb9e48968d750d2e5e`.
+Task SHA256 `ceba6ee8aaccfb3e7e6fca595bb11442b29d8e0f6cdb366ea0a135cb0960cff2`,
+expected/task/inbox EQUAL, taskInPrompt true; instructions
+`ins_M6EHFesL4dkYfzzKhEMfkKPE`, 53345 B, SHA256
+`6ae29c18a149ecc12186b9f1e614cb7e35456be3d53bb82282ff9de57953b86e`, EQUAL.
+G9 / tools 38 / grants 21; binary-file SHA256
+`47a8fc359e2cd186c3d87a6710ba38f64986415e40a0a156c508094b8fc66b3d`
+EQUAL expected, не hash обслуживающего процесса.
+
+ROOT read-only metadata exec того же Pod: только разрешённые deadline поля,
+без Secret/env/raw prompts. Profile `workflow-wall-clock-v1`, published ref
+`wfv_nglITlTu3UObK_9lOE5AoixE`, digest
+`bb8b5d5c6cffbd5a72e9287017738a1a7a6c23296d3b11275d90f319c6b30e28`.
+Root Workflow 86400 секунд: 09.10.2026 04:12:55.178675 UTC →
+10.10.2026 04:12:55.178675 UTC. INTAKE step-001 1800 секунд:
+09.10.2026 04:13:34.480302 UTC → effective 09.10.2026 04:43:34.480302 UTC.
+Обе arithmeticSecondsMatch true; доказана материализация deadline, не приёмка
+полного процесса.
+
+Gateway ERROR 04:06:09: исходный код относит ошибку к закрытому классу `dependency`, сообщение
+`platform bootstrap snapshot read failed`, actual cause UNKNOWN. Transient LIVE
+не доказывает исправления причины. Дальше штатный результат INTAKE и собственные
+источники точной установленной версии. История и checklist не менялись;
+полный процесс и финальная готовность не подтверждены.
+
+## Checkpoint 09.10.2026 04:09–04:13 UTC — Workflow revision 8 опубликован, один новый процесс запущен
+
+PROJECT assistant прочитал точный Workflow version 22, 112793 B, до native EOF;
+plan `pln_GMOJUCTwPeQNYOWGVun6T7UO`. ROOT сверил 42 изменения сериализованных листовых полей
+(21 × 2 представления): только `*.timeoutSeconds` / `*.TimeoutSeconds`, другого
+diff нет. Typed план VALID / version 2 / revision 1 → APPLIED, receipt
+`rct_se28AT7JdR46NAkiq198yG11`. Workflow 23 DRAFT → 24 VALID → 25 PUBLISHED,
+revision 8, ref `wfv_nglITlTu3UObK_9lOE5AoixE`, readiness READY / allowed true,
+context digest `0f074147599e21ffd990ddfd7721d508e01fef6d7cd14aad647bc8f4db0820d9`.
+Timeout 86400 / maxConcurrency 3 / 21 DAG / grants / sole Human Gate step-057
+сохранены; результат полного процесса ещё не принят.
+
+Обычный Manager `run_c0tszz0_fleP19zv47xsbsTs`, session
+`ses_s8THsdiuAa9YYtbaxvodI8HK`, запущен 04:11:25 UTC. Собственное GitHub
+Issue READ SUCCEEDED; FINAL 17: один новый Workflow
+`run_4VTZQ0AOC-Hi11cHIT-7EmC-`, session `ses_oMysKPKSkH1cWZiLlRDszSjV`,
+финальная готовность не подтверждена. Early ACK CAPTURED, same UID
+`0181d838-22e2-4693-a078-67455e4e647c`. RuntimeRevision
+`rrev_uf9tuuBSuaqfU3nYgzWCZfMZ`, digest
+`40710211560c6f2309cabff3a98d7cb60eb783e37d3ba116ddb165ad03233e39`.
+Task SHA256 `dafcaf5b722df081c5cc073406a421c0c68e932ecd6a91edd76f073b39487cb0`,
+expected/task/inbox EQUAL, taskInPrompt true; instructions
+`ins_M6EHFesL4dkYfzzKhEMfkKPE`, 48335 B, SHA256
+`a0e90567ae566f6d35ba21e4645ba578b1883cffa2c2fd0829fc66b50a979772`, EQUAL.
+G9 / tools 38 / grants 21; binary-file SHA256
+`47a8fc359e2cd186c3d87a6710ba38f64986415e40a0a156c508094b8fc66b3d`
+EQUAL expected, не serving-process hash.
+
+Chrome actual WebSocket 04:07 UTC: OPEN / session stream 26 кадров —
+PLATFORM_SNAPSHOT 19, PLATFORM_READY 1, SESSION_READY 1, RUN_GRAPH_SNAPSHOT 4,
+RUN_READY 1; позднее heartbeat и native platform updates. Headers/tickets/content
+не записывались. Console errors/warnings 0; desktop activity 04:13 UTC:
+владелец справа / агент слева, четыре компактных tools, overflow false;
+20 просмотренных HTTP-запросов из 34 — 200, остальные не подтверждены.
+Gateway ограниченный вывод: один ERROR `platform bootstrap snapshot read failed`
+в 04:06:09 UTC, cause UNKNOWN; CP 0 строк. Последующие LIVE и actual frames
+не отменяют ошибку. Coordinator нового Workflow sequence 5 готовит INTAKE
+делегирование; дальше штатный child и его ACK/EOF. Full65 OPEN, 11/14/15 [ ];
+финальный PR по бизнес-задаче не сливать, не включать auto-merge и не approve
+от имени владельца.
+
+## Checkpoint 09.10.2026 04:03–04:06 UTC — старый Workflow FAILED, запрос новых бюджетов QUEUED
+
+Свежая сверка после «продолжай»: checkpoint
+`833fb6382a981c900122f0b4ac4ce2411dd841eb` PUSHED, exact readback
+[Draft PR1807](https://github.com/codex-k8s/kodex/pull/1807); main не менялся:
+`ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69`.
+Workflow `run_WGyaC4fntZgliH487NkcG4pu` и Architect
+`run_5gkWwuEcKB-F0Mdz8FIaCK1n` FAILED. Owner event read подтвердил:
+08.10.2026 event 501, 20:44:29.014556 UTC, RUNTIME_TIMEOUT; tool 499
+invoke_integration RUNNING с 20:44:06 UTC отменён event 500 в 20:44:29 UTC.
+Остальные step nodes атомарно CANCELLED; run event 522 FAILED в 20:44:30 UTC.
+Root Manager callback FINAL 45 в 20:46:15 UTC сообщал UNKNOWN cause и не
+перезапускал. Прежний UNKNOWN сохраняется исторически; новый read доказал timeout.
+Закреплённый Workflow revision 7 / version 22: step-002 1200 секунд,
+общий бюджет 86400 секунд.
+
+Последнее Architect COMMENTARY 377 до timeout: subscription usage нет в
+текущей CP-модели, требуется ограниченный provider observation → owner storage →
+read model. Семантический PASS анализа этим не подтверждён.
+Свежий PROJECT assistant `cnv_Lcba2N4XW14ES7dNfjC1_dFj` /
+`run_8tuUEOvKgiaLgc0RzKl3JJqO` QUEUED. Запрошен только typed UPDATE_WORKFLOW:
+INTAKE 1800; analysis 3600; implementation 7200; все review 3600; все fix 7200;
+все aggregation/final 1800 секунд; общий Workflow 86400 неизменен.
+21 DAG, pins, capabilities, порядок и единственный Human Gate сохраняются.
+Plan/apply/publish NOT RUN; новые бюджеты ещё не действуют.
+Следующий шаг — результат штатного typed плана и его проверка; launch/retry
+самостоятельно не выполнять.
+
+Chrome page 1 reload выполнен, Console errors/warnings 0; из 38 Network-запросов
+просмотрены 25, все HTTP 200, остальные не подтверждены. Checklist 11/14/15 [ ],
+13 [x] только за выбор Issue, Full65 OPEN. Финальный PR по бизнес-задаче не
+сливать, не включать auto-merge и не approve от имени владельца.
 
 ## Checkpoint 08.10.2026 20:32–20:35 UTC — realtime LIVE после восстановления, Architect RUNNING
 
