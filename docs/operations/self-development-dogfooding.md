@@ -10,6 +10,30 @@ updated: 2026-10-09
 
 # Цель и источники
 
+## Checkpoint 09.10.2026 19:47 UTC — новая попытка FAILED, точная причина не выдумана
+
+Нативный retry run_XpfkvbvP0TzwWtrsfI5ZI8Ux FAILED до tools/Workflowlaunch.
+Backend source не менялся во время хода. Failurecapture сначала отверг
+неверный baseimage pin вместо promoted custom99f5bc78; повтор exactUID/image
+не подтвердил ACK до удаления Pod. Stage/class/detail UNKNOWN/NOT_CAPTURED,
+не использовался сырый обход. Готовится workload-bound bounded диагностика,
+которая не выдаёт отсутствие ACK за подтверждённый provider input.
+PG4CPU readback PASS, sample3.224s (~1.62CPU) throttling0; CP/gateway/archive
+Ready/ELF EQUAL. Archive restore exit0/ownerCompleteOK; fullrealtime OPEN:
+ещё два GetRunGraph deadline на остатке refresh-budget. П11/14/15/16 OPEN.
+
+## Checkpoint 09.10.2026 19:44 UTC — CPU-only обслуживание завершено, retry принят
+
+Source647e7a7605fc83828ac18e64772dfe2a2db5198d remote/Draft1807 EQUAL.
+Owner idle19:41:45Z доказан перед write. Repo-owned CPU2→4apply/readback
+PASS: same image/storage/STS, Ready новый PGPod537a6c25; CP/session-archive
+временно0/1 во время maintenance, затем восстановились1/1. Native OWNER200,
+WS snapshots без errors в коротком окне; full realtime stability ещё OPEN.
+Native «Повторить попытку» один раз19:43:32Z создала
+run_XpfkvbvP0TzwWtrsfI5ZI8Ux RUNNING, run attempt2/новыйturn execution attempt1,
+sameSession/retryOf проверены. Exact providerfailure capture включён заранее.
+Ни Workflowlaunch, ни полная бизнес-задача ещё не доказаны; п11/14/15/16 OPEN.
+
 ## Checkpoint 09.10.2026 19:40 UTC — browser callback PASS, очередной Manager FAILED
 
 Основа5a4849eacee738488da53984ac9a4eba299dc61f, Draft1807. Manager

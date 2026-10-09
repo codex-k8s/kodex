@@ -10,6 +10,44 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 19:47 UTC — retry FAILED до tools; точная диагностика ещё UNKNOWN
+
+run_XpfkvbvP0TzwWtrsfI5ZI8Ux уже FAILED/RUNTIME_PROVIDER_UNAVAILABLE,
+events7: новая попытка прошла schedule/modelrequest, опубликованных tools
+и launch_workflow нет. Backend source во время неё не менялся; это новый
+отказ, не доказан maintenance-path предыдущей попытки.
+Первый failurecapture NOT_CAPTURED/POD_IMAGE_MISMATCH: ожидался base runner,
+но actual runtime использует ранее promoted custom role image99f5bc78.
+Повтор exact customimage/PodUID начат, но provider ACK не подтверждён, Pod
+удалён после terminal. Старый capture закрыт; stage/class/detail UNKNOWN,
+никакой сырой post-mortem обход не выполнялся. Готовится отдельный bounded
+workload-bound read-only capture ранних отказов, не подмена provider ACK.
+
+После PG4CPU свежий3.224s sample: около1.62CPU, throttling0, тот же ReadyUID.
+CP/gateway/archive Ready; servingELF всех трёх EQUALbuild. Archive RESTORE
+exit0/COMPLETE_RESTORE_OK этой попытки подтверждён закрытым producer enum.
+Во время maintenance были Unavailable; затем ещё два GetRunGraph deadline
+на остатке общего refresh бюджета. Full realtime stability остаётся OPEN.
+
+## Checkpoint 09.10.2026 19:44 UTC — PG4 Ready и штатный retry Manager
+
+Source `647e7a7605fc83828ac18e64772dfe2a2db5198d` published, remote/Draft1807 EQUAL.
+Fresh owner idle19:41:45Z перед эффектом: все пять счётчиков0.
+Repo-owned CPU-only apply/readback PASS: limit4, image и storageSHA прежние,
+STSUIDeb0f8f6d прежний; новый ReadyPGPod537a6c25. Во время штатного restart
+CP и session-archive временно0/1; оба восстановились до1/1. Это ожидаемая
+maintenance недоступность, не скрытый PASS всей непрерывности.
+Fresh native OWNER bootstrap200 и WS snapshots без ошибок в коротком окне;
+полная стабильность и повтор нагрузки ещё OPEN.
+
+На native Run UI один раз нажата «Повторить попытку»19:43:32Z. Сервер создал
+run_XpfkvbvP0TzwWtrsfI5ZI8Ux, retryOf прежний Manager, run attempt2,
+та же session ses_tWfMK1ztNuKPNJPSsR23Qyqz; новый turn
+trn_lLcVL_B0n3I6A2_ZY5GNAQFJ, execution attempt1. RUNNING, ещё не полный Workflow.
+Закрытый exact ACK/providerfailure capture начат до завершения Pod;
+ничего не повторялось через прямой API или подменённый caller context.
+Backend source во время активного retry не изменяется; п11/14/15/16 OPEN.
+
 ## Checkpoint 09.10.2026 19:40 UTC — callback восстановлен; Manager FAILED, CPU maintenance подготовлен
 
 Опубликованная основа `5a4849eacee738488da53984ac9a4eba299dc61f`, Draft1807.
