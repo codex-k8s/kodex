@@ -10,6 +10,7 @@ import { MiniMap } from "@vue-flow/minimap";
 import {
   Bot,
   ChevronDown,
+  Focus,
   ListTree,
   Maximize2,
   Minus,
@@ -55,6 +56,7 @@ const props = withDefaults(
   defineProps<{
     nodes: RunNode[];
     edges: RunEdge[];
+    rootRef?: string;
     selectedRef?: string;
     futureNodeRefs?: string[];
     activeNodeRefs?: string[];
@@ -62,6 +64,7 @@ const props = withDefaults(
     compact?: boolean;
   }>(),
   {
+    rootRef: undefined,
     selectedRef: undefined,
     futureNodeRefs: () => [],
     activeNodeRefs: () => [],
@@ -129,8 +132,28 @@ const flowElements = computed(() =>
     edgeAccessibleLabel,
   }),
 );
-const runSignature = computed(() =>
-  [...new Set(props.nodes.map((node) => node.runRef))].sort().join("\u0000"),
+const rootIdentity = computed(
+  () =>
+    props.rootRef ??
+    [...props.nodes]
+      .filter((node) => node.type === "ROOT_PROCESS")
+      .sort(
+        (left, right) =>
+          left.createdAt.localeCompare(right.createdAt) ||
+          left.ref.localeCompare(right.ref),
+      )[0]?.ref,
+);
+const activeSignature = computed(() =>
+  props.nodes
+    .filter(
+      (node) =>
+        node.type === "AGENT_EXECUTION" &&
+        node.state === "RUNNING" &&
+        activeRefs.value.has(node.ref),
+    )
+    .map((node) => node.ref)
+    .sort()
+    .join("\u0000"),
 );
 const graphSignature = computed(() => {
   const nodeSignature = props.nodes
@@ -216,12 +239,16 @@ const outlineItems = computed(() => {
 onInit(() => {
   void fit(false);
 });
-watch(runSignature, (current, previous) => {
-  if (current !== previous) userAdjustedView.value = false;
-});
-watch(graphSignature, () => {
-  if (!userAdjustedView.value) void nextTick(() => fit(false));
-});
+watch(
+  [rootIdentity, graphSignature, activeSignature],
+  ([root], [previousRoot]) => {
+    // Новый дочерний запуск не отменяет ручной выбор viewport.
+    if (root !== previousRoot) userAdjustedView.value = false;
+    if (!userAdjustedView.value && viewMode.value === "graph") {
+      void nextTick(() => fit(false));
+    }
+  },
+);
 watch(
   [() => dimensions.value.width, () => dimensions.value.height],
   async ([width, height], [previousWidth, previousHeight]) => {
@@ -250,7 +277,8 @@ watch(
   { flush: "post" },
 );
 
-async function fit(userInitiated = true): Promise<void> {
+async function fit(userInitiated = true, currentWork = false): Promise<void> {
+  if (!userInitiated && userAdjustedView.value) return;
   if (userInitiated) userAdjustedView.value = true;
   programmaticViewportChange.value = true;
   try {
@@ -260,16 +288,18 @@ async function fit(userInitiated = true): Promise<void> {
       !props.nodes.length
     )
       return;
-    const options = userInitiated
-      ? runGraphFitViewOptions(dimensions.value.width, props.compact)
-      : runGraphInitialFitOptions(
-          dimensions.value.width,
-          props.nodes,
-          props.edges,
-          props.selectedRef,
-          props.compact,
-          dimensions.value.height,
-        );
+    const options =
+      userInitiated && !currentWork
+        ? runGraphFitViewOptions(dimensions.value.width, props.compact)
+        : runGraphInitialFitOptions(
+            dimensions.value.width,
+            props.nodes,
+            props.edges,
+            props.selectedRef,
+            props.compact,
+            dimensions.value.height,
+            props.activeNodeRefs,
+          );
     const bounds = runGraphContentBounds(layout.value, options.nodes);
     const viewport = runGraphFitTransform(
       bounds,
@@ -528,6 +558,16 @@ function compareNodes(left: RunNode, right: RunNode): number {
         {{ $t("runs.graphEdges", { count: edges.length }) }}
       </span>
       <span class="graph-toolbar__separator" aria-hidden="true" />
+      <button
+        class="icon-button"
+        type="button"
+        :aria-label="$t('runs.focusCurrentWork')"
+        :title="$t('runs.focusCurrentWork')"
+        :disabled="viewMode !== 'graph'"
+        @click="fit(true, true)"
+      >
+        <Focus :size="17" aria-hidden="true" />
+      </button>
       <button
         class="icon-button"
         type="button"

@@ -12847,3 +12847,116 @@ cleanup, не новый дефект business задачи. Поэтому ст
 KEEP_UNKNOWN до exact loaded dependency proof; unpin/rmi не выполнялись.
 Context7 `/containerd/containerd` проверен. Диагностический helper остался
 в отдельном worktree, destructive путь в PR не включён. Full65 OPEN.
+
+### 09.10.2026 06:03 UTC — INTAKE PASS; Architect и realtime исправление OPEN
+
+Published source `35bd33f72d3ee59501c517f34b2c34fb9052c460`. Новый Workflow
+`run_2MphY3OaOcHE0IH1PdMiKXsW` RUNNING. INTAKE semantic PASS_INTAKE,
+FINAL114/124 и callback122; Coordinator сам прочитал результаты EOF133–151.
+Owner metadata200/CLEAN подтвердили manager-plan revision28/16657B/digest
+`763b80c00a5c9ca8b3817b771784f55e1b50698689ce681f804427005b44c4d9`
+и intake-eof-evidence revision1/10903B/digest
+`371602890cd0e1e09367a4ba672275412823961b8e7d3ff6d0a8931fcaf871e0`.
+
+Architect `run_Qbv4x6dhFvgMSa6QxhTv-dN0` RUNNING; early ACK/same-Pod
+readback CAPTURED, UID9c3f780f-f7f3-461e-96c3-3bbc2857603f.
+Task3230B/digest `dbc05b4e7706620a90ca6e685b432a38bd9f612937eb7e8f10bd77913cc2710e`
+EQUAL independent expected; instructions45127B/digest
+`5e7ced2ae293e572973aef571da37d18ed1d8eb26e85bec9137d1d4bf8fc6e5b`.
+RuntimeRevision `rrev_ddSMckoGyFBiOxKIHinQQe71`, digest
+`1c544ee2ba047f21c285d673e9d1418c9ad5566ca7f43f4b2cec6e8a33465dfa`;
+G9/ENV9/binding10/tools38/grants18, manifest615bab9/image-file47a8fc35
+EQUAL expected. Commentary330/373 проверяют upstream/schema/source после
+самостоятельного EOF; Architecture/Developer ещё не приняты.
+
+Chrome own page1 reload06:00, screenshot проверен, Console0 errors/warnings,
+15 просмотренных fetch/xhr200. WS metadata-only observation доказало повтор
+RUN_UNAVAILABLE→PLATFORM_UNAVAILABLE через26–28ms и clean close4000/rejoin;
+периоды нормальной работы не закрывают воспроизведённый realtime FAIL.
+До4 RUN_CHANGED wakes могут повторно читать catalog/полный граф внутри одного
+2s budget. Source path подходит наблюдению, но live cause ещё UNKNOWN;
+готовится закрытая диагностика без payload и изменения guards/timeouts.
+Root60GiB и другой диск135GiB available; неподтверждённо ненужные node images
+сохранены. Full65/checklist11/14/15 OPEN; финальный business PR не merge.
+
+### 09.10.2026 06:26 UTC — bounded realtime диагностика и продолжение после неверного path
+
+Current source35bd33f7 + диагностический и graph-focus patch.
+Живой gateway full snapshot READ дал DeadlineExceeded при parent remaining0:
+elapsed/start1199/1198,1175/1174,1151/1151ms; parent/read DEADLINE_EXCEEDED.
+Соседний WS metadata readback: RUN_UNAVAILABLE, PLATFORM_UNAVAILABLE,
+clean4000 REALTIME_REDUCER_FAILED. Shared2s parent действительно обрывает
+полное чтение; coalescing/отдельный bounded refresh и запрет восстановления
+available через delta-only catchUp ещё реализуются, realtime PASS не заявлен.
+Diagnostics не содержит refs, raw errors, metadata, payload или credentials.
+ROOT pinned Go1.26.6: websocket unit PASS1.345s/vet PASS. Hermetic build
+и serving `/proc/356/exe` EQUAL SHA256
+`9635c1689dc0ba3afa1455e8ed4c4419dbeb125f288632ca35f49939c9e3b2f5`.
+Source diagnostics host/Pod EQUAL ed3dac12.
+
+Graph-focus patch интегрирован: кнопки текущей работы/обзора и сохранение
+ручного viewport при новых child. ROOT40 targeted unit PASS; typecheck,
+targeted lint/format и diff-check PASS; source host/Pod EQUAL51c56f6d.
+Desktop2048 и narrow фактически500: screenshot/Console/relevant Network
+проверены; controls44×44, body overflow false, Console0 errors/warnings,
+20 просмотренных fetch/xhr200. Active-agent live focus и production build
+NOT RUN, терминальный граф не заменяет проверку активного запуска.
+
+Прежний Workflow FAILED/complete556, Architect FINAL506 BLOCKED и
+Coordinator FINAL535 semantic STOP после собственных EOF. Artifact
+architecture-review revision11/33833B/digest544e7219 проверен owner GET200,
+CLEAN, полный byte length/hash EQUAL. Ошибочный managed LIST path=proto;
+exact ab499 source содержит contracts/proto tree25f2af83, не root proto.
+Provider HTTP status UNKNOWN; error mapping/authority не ослаблены.
+Новый обычный Manager через New Run UI:
+`run_JutWEYVY2P1frcixLkOBpTY2`/`ses_Gn6XAfQ9nq-bBfjKfpIUsKq5`, RUNNING.
+COMMENTARY5 подтверждает свежую проверку pins и правильного source path.
+ACK CAPTURED, UID971afaa8-11a0-46d1-baf5-db6433bf4a7e; image615bab9 и
+image-file47a8fc35 EQUAL, instructions/inbox EQUAL, taskInPrompt true;
+independent expected task comparison NOT RUN. Новый accepted Workflow
+ещё NOT RUN. Старые результаты не переписаны, host не заменяет Developer.
+
+Свежий repo-owned host image audit11 KEEP/0 OBSOLETE, eligible0.
+Root60GiB/data134GiB available. Бесконтрольный node unpin/prune не выполнялся;
+PVC/current/restore сохранены. Full65/checklist11/14/15 OPEN.
+
+06:32 UTC уточнение: новый Manager JutWEYVY не запустил Workflow, FINAL30
+просит input schema; FAILED36/RUNTIME_PROVIDER_UNAVAILABLE и usage0 отдельно
+диагностируются. Отсутствие schema не превращается в доказанную сеть.
+Публичные owner GET200 Workflow25/revision8 и четыре role READY versions
+22/13/13/19 подтверждены. Схема содержит field-001 TEXT, field-002 LONG_TEXT,
+field-003 TEXT, field-004 LONG_TEXT, все required, options пусты. Новый native
+запуск получит полный информационный schema snapshot; backend самостоятельно
+выводит актуальные authority/runtime/grants, новые полномочия не выдаются.
+Отправка пока не выполнена: переход на SSO, ввод сохранён до восстановления.
+Final diagnostic attribute keys вынесены в константы, wire не менялся.
+ROOT pinned unit PASS1.421s/vet PASS; host/Pod source3b634dd8 EQUAL,
+serving ELF `/proc/561/exe` и hermetic build EQUAL82cbaf0e.
+
+### 09.10.2026 06:41 UTC — bounded refresh материализован, живая проверка ещё OPEN
+
+Принятые RUN_CHANGED сохраняют cursor/order, полный refresh объединён на
+один проход после пакета. Owner read получает отдельный shared10s budget
+и max5s на RPC, без наследования остатка catalog2s и сброса на каждом
+соседе. Cancel/overflow/revoke закрыты; недоступный run нельзя восстановить
+через delta-only catchUp без свежего полного защищённого snapshot.
+Общий инвариант добавлен в FE-DOC-001.
+
+ROOT Go1.26.6 websocket package race PASS17.006s, vet PASS;
+hermetic build и serving `/proc/737/exe` EQUAL SHA256
+`acd23cac3e281677d73316b07e15b04927ec7ea09ba2f146e36cab29344ae4c5`.
+Server host/Pod EQUAL57dc6e1e, run_snapshot EQUAL440a0f77;
+изолированный пакет208 tests/subtests unit/race/vet/build PASS.
+ROOT graph40 unit/typecheck/lint/format PASS; desktop2048/narrow500 проверены.
+Production frontend build PASS/Vite9.97s, warning о chunks более500kB.
+Active-agent фокус и живой reconnect пока NOT RUN.
+
+Manager JutWEYVY FAILED36, accepted Workflow отсутствует. Technical cause
+UNKNOWN: exact Pod удалён; FINAL30 отдельно просил schema. Следующий обычный
+Manager получит подтверждённую owner GET схему Workflow25/revision8.
+Ввод сохранён, отправка пока NOT RUN из-за SSO. Следующая диагностика должна
+захватить точный Pod сразу после ACK, не восстанавливать причину по догадке.
+
+Обе ноды Ready/DiskPressure False; root59GiB/data134GiB available.
+Свежий image audit11 KEEP/0 OBSOLETE/eligible0, больше безопасных кандидатов
+нет. Full65/checklist11/14/15 OPEN; финальный business PR не merge.

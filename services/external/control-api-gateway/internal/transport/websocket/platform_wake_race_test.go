@@ -389,7 +389,7 @@ func TestPlatformHeartbeatWakeDrainFailureAndContext(t *testing.T) {
 
 func TestPlatformHeartbeatWakeDrainRunRefreshDeadline(t *testing.T) {
 	for _, denied := range []bool{false, true} {
-		t.Run(map[bool]string{false: "gap-refresh-inherits-drain-budget", true: "run-deadline-remains-closed"}[denied], func(t *testing.T) {
+		t.Run(map[bool]string{false: "gap-refresh-has-separate-owner-budget", true: "run-deadline-remains-closed"}[denied], func(t *testing.T) {
 			m, c := platformWakeRaceFixture(t, 9)
 			c.runSnapshot = completeRunSnapshotFixture()
 			root := c.runSnapshot.Run.Ref
@@ -398,14 +398,16 @@ func TestPlatformHeartbeatWakeDrainRunRefreshDeadline(t *testing.T) {
 			reads := 0
 			c.beforeInvoke = func(ctx context.Context, response any) error {
 				deadline, bounded := ctx.Deadline()
-				if !bounded || time.Until(deadline) > heartbeatWakeTimeout {
-					t.Fatal("gap cursor/run refresh escaped the shared two-second drain budget")
-				}
 				if _, ok := response.(*cp.GetRunGraphResponse); ok {
+					if !bounded || time.Until(deadline) <= heartbeatWakeTimeout || time.Until(deadline) > runSnapshotReadTimeout {
+						t.Fatal("run refresh lost its separate bounded owner-read budget")
+					}
 					reads++
 					if denied {
 						return status.Error(codes.DeadlineExceeded, "synthetic run deadline")
 					}
+				} else if !bounded || time.Until(deadline) > heartbeatWakeTimeout {
+					t.Fatal("gap cursor read escaped the catalog drain budget")
 				}
 				return nil
 			}

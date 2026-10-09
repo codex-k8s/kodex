@@ -5,6 +5,7 @@ import {
   defineComponent,
   h,
   nextTick,
+  reactive,
   ssrContextKey,
   type App,
   type Ref,
@@ -144,8 +145,21 @@ beforeEach(() => {
 interface CanvasState {
   userAdjustedView: Ref<boolean>;
   markUserAdjusted(): void;
+  fit(userInitiated?: boolean, currentWork?: boolean): Promise<void>;
 }
-function mountCanvas(): CanvasState {
+function canvasProps() {
+  return reactive({
+    nodes: [...nodes],
+    edges: [...edges],
+    rootRef: "run_example",
+    selectedRef: "node_root",
+    futureNodeRefs: [] as string[],
+    activeNodeRefs: [] as string[],
+    executionLabels: {},
+    compact: true,
+  });
+}
+function mountCanvas(props = canvasProps()): CanvasState {
   let state: CanvasState | undefined;
   const renderer = createRenderer<object, object>({
     patchProp() {},
@@ -167,18 +181,7 @@ function mountCanvas(): CanvasState {
   const app = renderer.createApp(
     defineComponent({
       setup(_, context) {
-        state = original(
-          {
-            nodes,
-            edges,
-            selectedRef: "node_root",
-            futureNodeRefs: [],
-            activeNodeRefs: [],
-            executionLabels: {},
-            compact: true,
-          },
-          context,
-        );
+        state = original(props, context);
         return () => null;
       },
     }),
@@ -231,7 +234,8 @@ async function render(
             zoom: "Масштаб графа",
             zoomIn: "Увеличить масштаб",
             zoomOut: "Уменьшить масштаб",
-            fitGraph: "Вместить",
+            fitGraph: "Весь граф",
+            focusCurrentWork: "Текущая работа",
             minimap: "Мини-карта графа",
             waitingForActivity: "Ожидает начала работы",
             sessionNode: "Сессия",
@@ -266,6 +270,79 @@ async function render(
 }
 
 describe("RunGraphCanvas", () => {
+  it("отложенный автофокус не перезаписывает ручной viewport", async () => {
+    const state = mountCanvas();
+    flow.viewport = { x: -420, y: 90, zoom: 0.72 };
+    state.markUserAdjusted();
+    await state.fit(false);
+    expect(flow.setViewport).not.toHaveBeenCalled();
+    expect(flow.viewport).toEqual({ x: -420, y: 90, zoom: 0.72 });
+  });
+
+  it("смена активного исполнения фокусирует untouched viewport, не меняя выбранный root", async () => {
+    const props = canvasProps();
+    const state = mountCanvas(props);
+    props.nodes = [
+      required(props.nodes[0]),
+      { ...required(props.nodes[1]), state: "RUNNING" },
+    ];
+    props.activeNodeRefs = ["node_root", "node_agent"];
+    await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
+    expect(props.selectedRef).toBe("node_root");
+    expect(state.userAdjustedView.value).toBe(false);
+    const focused = flow.viewport;
+    await state.fit(true, true);
+    expect(flow.viewport).toEqual(focused);
+    expect(state.userAdjustedView.value).toBe(true);
+  });
+
+  it("ручной viewport переживает новый child run, активное состояние и переключение selection", async () => {
+    const props = canvasProps();
+    const state = mountCanvas(props);
+    flow.viewport = { x: -420, y: 90, zoom: 0.72 };
+    state.markUserAdjusted();
+    props.nodes = [
+      required(props.nodes[0]),
+      { ...required(props.nodes[1]), runRef: "run_child", state: "RUNNING" },
+    ];
+    props.activeNodeRefs = ["node_root", "node_agent"];
+    props.edges = [
+      ...props.edges,
+      { ...required(edges[0]), ref: "new_edge", type: "CONTINUES" },
+    ];
+    props.selectedRef = "node_agent";
+    await nextTick();
+    await nextTick();
+    expect(flow.setViewport).not.toHaveBeenCalled();
+    expect(flow.viewport).toEqual({ x: -420, y: 90, zoom: 0.72 });
+    expect(state.userAdjustedView.value).toBe(true);
+  });
+
+  it("только новый корневой граф снимает защиту ручного viewport", async () => {
+    const props = canvasProps();
+    const state = mountCanvas(props);
+    state.markUserAdjusted();
+    props.rootRef = "another_root_run";
+    await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
+    expect(state.userAdjustedView.value).toBe(false);
+  });
+
+  it("явный обзор всего графа не включает последующее автослежение", async () => {
+    const props = canvasProps();
+    const state = mountCanvas(props);
+    await state.fit(true);
+    expect(state.userAdjustedView.value).toBe(true);
+    flow.setViewport.mockClear();
+    props.nodes = [
+      required(props.nodes[0]),
+      { ...required(props.nodes[1]), state: "RUNNING" },
+    ];
+    props.activeNodeRefs = ["node_agent"];
+    await nextTick();
+    await nextTick();
+    expect(flow.setViewport).not.toHaveBeenCalled();
+  });
+
   it("поздний resize после открытия drawer пересчитывает untouched viewport по ширине1201", async () => {
     const state = mountCanvas();
     const dimensions = required(flow.dimensions);
@@ -397,7 +474,10 @@ describe("RunGraphCanvas", () => {
     expect(html).toContain('class="graph-toolbar"');
     expect(html).toContain('aria-label="Уменьшить масштаб"');
     expect(html).toContain('aria-label="Увеличить масштаб"');
-    expect(html).toContain('aria-label="Вместить"');
+    expect(html).toContain('aria-label="Весь граф"');
+    expect(html).toContain('title="Весь граф"');
+    expect(html).toContain('aria-label="Текущая работа"');
+    expect(html).toContain('title="Текущая работа"');
     expect(html).not.toContain("vue-flow__controls");
     expect(html).toContain("vue-flow__minimap");
     expect(html).toContain("Мини-карта графа");

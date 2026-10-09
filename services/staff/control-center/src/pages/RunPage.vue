@@ -964,6 +964,7 @@ onBeforeUnmount(() => {
             <div class="graph-panel__canvas">
               <RunGraphCanvas
                 :compact="activityOpen"
+                :root-ref="sessionGraph.runRef"
                 :nodes="sessionGraph.nodes"
                 :edges="sessionGraph.edges"
                 :selected-ref="selectedNode?.ref"

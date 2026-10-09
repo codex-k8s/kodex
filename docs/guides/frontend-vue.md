@@ -4,8 +4,8 @@ title: PWA на Vue и TypeScript
 type: guide
 status: approved
 owner: developer
-version: 1.2.4
-updated: 2026-10-04
+version: 1.2.5
+updated: 2026-10-09
 ---
 
 # PWA на Vue и TypeScript
@@ -120,6 +120,14 @@ Realtime snapshot различает отсутствующий каталог �
 decode/encode; тест проверяет все optional collections, а не только непустой
 fixture. Frontend не восстанавливает отсутствующее обязательное поле
 неявным fallback, иначе потеря формы wire скрывает ошибку rejoin или scope.
+
+После отказа полного Run snapshot producer не восстанавливает readiness
+одними delta или heartbeat: сначала требуется новый полный защищённый снимок
+того же root. Пакет последовательных platform wake сохраняет каждый delta и
+cursor, но может объединять повторное чтение полного графа. Owner read имеет
+один ограниченный бюджет на пакет, не остаток бюджета каталогов и не новый
+полный бюджет для каждого соседнего root. Cancel/revoke/overflow остаются
+закрытыми отказами; coalescing не пропускает проверки доступа и порядка.
 
 Размер realtime снимка проверяется по сериализованному полному envelope,
 а не только по числу элементов. При превышении лимита producer может

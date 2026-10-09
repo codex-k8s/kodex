@@ -55,12 +55,30 @@ export function runGraphInitialFitOptions(
   selectedRef?: string,
   compact = false,
   viewportHeight = 480,
+  activeNodeRefs: readonly string[] = [],
 ): FitViewParams {
   const options = runGraphFitViewOptions(viewportWidth, compact);
-  if (nodes.length <= 16) return options;
+  const activeRefs = new Set(activeNodeRefs);
+  const activeExecutions = nodes
+    .filter(
+      (node) =>
+        node.type === "AGENT_EXECUTION" &&
+        node.state === "RUNNING" &&
+        activeRefs.has(node.ref),
+    )
+    .sort(
+      (left, right) =>
+        left.createdAt.localeCompare(right.createdAt) ||
+        left.ref.localeCompare(right.ref),
+    );
+  const activeExecution =
+    activeExecutions.find((node) => node.ref === selectedRef) ??
+    activeExecutions[0];
+  if (!activeExecution && nodes.length <= 16) return options;
 
   const nodeRefs = new Set(nodes.map((node) => node.ref));
   const root =
+    activeExecution?.ref ??
     (selectedRef && nodeRefs.has(selectedRef) ? selectedRef : undefined) ??
     [...nodes].sort(
       (left, right) =>
@@ -86,8 +104,37 @@ export function runGraphInitialFitOptions(
     )
     .slice(0, 3)
     .map((edge) => edge.targetNodeRef);
+  // Активное исполнение важнее обёртки запуска. Ближайший завершённый
+  // предшественник и корень добавляются только без потери читаемости.
+  const contextRefs = activeExecution
+    ? [
+        activeExecution.parentNodeRef,
+        ...edges
+          .filter(
+            (edge) =>
+              edge.targetNodeRef === root &&
+              edge.type !== "CALLBACK_TO" &&
+              edge.type !== "RETRY_OF",
+          )
+          .sort((left, right) => left.ref.localeCompare(right.ref))
+          .map((edge) => edge.sourceNodeRef),
+        ...nodes
+          .filter((node) => node.type === "ROOT_PROCESS")
+          .sort(
+            (left, right) =>
+              left.createdAt.localeCompare(right.createdAt) ||
+              left.ref.localeCompare(right.ref),
+          )
+          .slice(0, 1)
+          .map((node) => node.ref),
+      ].filter(
+        (ref): ref is string =>
+          ref !== undefined && ref !== root && nodeRefs.has(ref),
+      )
+    : firstChildren;
   const visibleRefs = [root];
-  for (const ref of firstChildren) {
+  for (const ref of new Set(contextRefs)) {
+    if (visibleRefs.length >= 4) break;
     const candidateRefs = [...visibleRefs, ref];
     const viewport = getTransformForBounds(
       runGraphContentBounds(layout, candidateRefs),

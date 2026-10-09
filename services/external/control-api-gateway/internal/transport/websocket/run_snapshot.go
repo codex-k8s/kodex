@@ -12,7 +12,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const maximumRunSnapshotItems = 128
+const (
+	maximumRunSnapshotItems   = 128
+	runSnapshotReadTimeout    = 5 * time.Second
+	runSnapshotRefreshTimeout = 10 * time.Second
+)
 
 var errRunSnapshotInvalid = errors.New("run snapshot projection is invalid")
 
@@ -21,9 +25,13 @@ func (multiplexer *sessionMultiplexer) readRunSnapshot(ref string) (*controlplan
 }
 
 func (multiplexer *sessionMultiplexer) readRunSnapshotWithin(parent context.Context, ref string) (*controlplanev1.GetRunGraphResponse, error) {
-	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+	started := time.Now()
+	parentBudget := runSnapshotParentBudget(parent, started)
+	ctx, cancel := context.WithTimeout(parent, runSnapshotReadTimeout)
 	defer cancel()
-	return multiplexer.server.query.GetRunGraph(ctx, &controlplanev1.GetRunGraphRequest{RunRef: ref, IncludeRunSnapshots: true})
+	snapshot, err := multiplexer.server.query.GetRunGraph(ctx, &controlplanev1.GetRunGraphRequest{RunRef: ref, IncludeRunSnapshots: true})
+	observeRunSnapshotReadFailure(parent, ctx, started, parentBudget, err)
+	return snapshot, err
 }
 
 func (multiplexer *sessionMultiplexer) refreshSubscribedRuns() bool {
@@ -31,11 +39,17 @@ func (multiplexer *sessionMultiplexer) refreshSubscribedRuns() bool {
 }
 
 func (multiplexer *sessionMultiplexer) refreshSubscribedRunsWithin(parent context.Context) bool {
-	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
+	ctx, cancel := context.WithTimeout(parent, runSnapshotRefreshTimeout)
 	defer cancel()
 	for _, ref := range multiplexer.sortedRunRefs() {
+		if multiplexer.ctx.Err() != nil || errors.Is(ctx.Err(), context.Canceled) {
+			return false
+		}
 		subscription := multiplexer.runs[ref]
 		snapshot, err := multiplexer.readRunSnapshotWithin(ctx, ref)
+		if multiplexer.ctx.Err() != nil || errors.Is(ctx.Err(), context.Canceled) {
+			return false
+		}
 		if err != nil {
 			subscription.available = false
 			if !multiplexer.sendStreamProblem(subscription.requestRef, "RUN", ref, subscription.cursor, "RUN_UNAVAILABLE") {
@@ -50,7 +64,9 @@ func (multiplexer *sessionMultiplexer) refreshSubscribedRunsWithin(parent contex
 	return true
 }
 
-func projectCompleteRunSnapshot(value *controlplanev1.GetRunGraphResponse, subscription *runSubscription, localize func(string) string) (generated.RunSnapshotEnvelope, error) {
+func projectCompleteRunSnapshot(value *controlplanev1.GetRunGraphResponse, subscription *runSubscription, localize func(string) string) (result generated.RunSnapshotEnvelope, projectionErr error) {
+	started := time.Now()
+	defer func() { observeRunSnapshotProjectionFailure(started, projectionErr) }()
 	ref := subscription.rootRef
 	graph := value.GetGraph()
 	root := value.GetRun()

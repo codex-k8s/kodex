@@ -508,6 +508,13 @@ func (multiplexer *sessionMultiplexer) recoverRun(subscription *runSubscription,
 }
 
 func (multiplexer *sessionMultiplexer) synchronizeRun(subscription *runSubscription) bool {
+	if !subscription.available {
+		snapshot, err := multiplexer.readRunSnapshot(subscription.rootRef)
+		if err != nil {
+			return multiplexer.sendStreamProblem(subscription.requestRef, "RUN", subscription.rootRef, subscription.cursor, "RUN_UNAVAILABLE")
+		}
+		return multiplexer.recoverRun(subscription, snapshot, subscription.cursor)
+	}
 	latest, err := multiplexer.catchUp(subscription, subscription.cursor)
 	if err == nil {
 		subscription.cursor = latest
@@ -557,11 +564,15 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignal(signal platformSignal
 }
 
 func (multiplexer *sessionMultiplexer) applyPlatformSignalWithin(ctx context.Context, signal platformSignal) bool {
+	return multiplexer.applyPlatformSignalWithRefresh(ctx, signal, multiplexer.refreshSubscribedRunsWithin)
+}
+
+func (multiplexer *sessionMultiplexer) applyPlatformSignalWithRefresh(ctx context.Context, signal platformSignal, refresh func(context.Context) bool) bool {
 	if signal.Sequence <= multiplexer.platformCursor {
 		return true
 	}
 	if signal.Sequence != multiplexer.platformCursor+1 {
-		return multiplexer.synchronizePlatformWithin(ctx)
+		return multiplexer.synchronizePlatformWithRefresh(ctx, refresh)
 	}
 	if platformSignalOutsideScope(signal, multiplexer.projectRef) {
 		return multiplexer.advancePlatformCursor(signal)
@@ -579,7 +590,7 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignalWithin(ctx context.Con
 	envelope, err := multiplexer.boundedPlatformSnapshotWithin(ctx, envelope)
 	if err != nil {
 		if status.Code(err) == codes.PermissionDenied {
-			if signal.EventName == "RUN_CHANGED" && !multiplexer.refreshSubscribedRunsWithin(ctx) {
+			if signal.EventName == "RUN_CHANGED" && !refresh(ctx) {
 				return false
 			}
 			return multiplexer.advancePlatformCursor(signal)
@@ -595,7 +606,7 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignalWithin(ctx context.Con
 		return false
 	}
 	if signal.EventName == "RUN_CHANGED" {
-		if !multiplexer.refreshSubscribedRunsWithin(ctx) {
+		if !refresh(ctx) {
 			return false
 		}
 	}
@@ -632,6 +643,10 @@ func (multiplexer *sessionMultiplexer) synchronizePlatform() bool {
 }
 
 func (multiplexer *sessionMultiplexer) synchronizePlatformWithin(ctx context.Context) bool {
+	return multiplexer.synchronizePlatformWithRefresh(ctx, multiplexer.refreshSubscribedRunsWithin)
+}
+
+func (multiplexer *sessionMultiplexer) synchronizePlatformWithRefresh(ctx context.Context, refresh func(context.Context) bool) bool {
 	cursor, err := multiplexer.server.query.GetPlatformEventCursor(ctx, &controlplanev1.GetPlatformEventCursorRequest{})
 	if err != nil || cursor.GetOrganizationRef() != multiplexer.organizationRef || cursor.GetCurrentSequence() < multiplexer.platformCursor {
 		multiplexer.platformAvailable = false
@@ -651,7 +666,7 @@ func (multiplexer *sessionMultiplexer) synchronizePlatformWithin(ctx context.Con
 	}
 	multiplexer.platformCursor = current
 	// Пропущенный org wake не меняет обязательно Run.version или run cursor.
-	return multiplexer.refreshSubscribedRunsWithin(ctx)
+	return refresh(ctx)
 }
 
 // Обрабатываем только уже доставленный префикс: новые wake не продлевают
@@ -660,6 +675,30 @@ func (multiplexer *sessionMultiplexer) drainHeartbeatWakes() (available, ok bool
 	count := min(len(multiplexer.platformSignals), maximumHeartbeatWakes)
 	ctx, cancel := context.WithTimeout(multiplexer.ctx, heartbeatWakeTimeout)
 	defer cancel()
+	refreshRequired := false
+	defer func() {
+		if !refreshRequired || !ok {
+			return
+		}
+		if multiplexer.ctx.Err() != nil {
+			ok = false
+			return
+		}
+		if len(multiplexer.overflow) > 0 {
+			multiplexer.terminate("BACKPRESSURE_EXCEEDED", websocket.StatusTryAgainLater)
+			ok = false
+			return
+		}
+		// Один owner-read проход имеет свой общий бюджет, не остаток catalog drain.
+		ok = multiplexer.refreshSubscribedRunsWithin(multiplexer.ctx)
+	}()
+	deferRunRefresh := func(context.Context) bool {
+		refreshRequired = true
+		for _, subscription := range multiplexer.runs {
+			subscription.available = false
+		}
+		return true
+	}
 	for index := 0; ; index++ {
 		if multiplexer.ctx.Err() != nil {
 			return false, false
@@ -677,7 +716,7 @@ func (multiplexer *sessionMultiplexer) drainHeartbeatWakes() (available, ok bool
 		}
 		select {
 		case signal := <-multiplexer.platformSignals:
-			if !multiplexer.applyPlatformSignalWithin(ctx, signal) {
+			if !multiplexer.applyPlatformSignalWithRefresh(ctx, signal, deferRunRefresh) {
 				if len(multiplexer.overflow) > 0 {
 					multiplexer.terminate("BACKPRESSURE_EXCEEDED", websocket.StatusTryAgainLater)
 				}
@@ -713,6 +752,10 @@ func (multiplexer *sessionMultiplexer) heartbeat(now time.Time) bool {
 	}
 	for _, runRef := range multiplexer.sortedRunRefs() {
 		run := multiplexer.runs[runRef]
+		// Не восстанавливаем failed full snapshot delta-only чтением в том же tick.
+		if !run.available {
+			continue
+		}
 		if !multiplexer.synchronizeRun(run) {
 			return false
 		}
