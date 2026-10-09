@@ -41,6 +41,14 @@ Own Playwright41676/69259 работают, чужие вкладки не тр�
 текущий Workflow читает прежний pinnedmain и не прерывается.
 Полный65QA, остальные п16 и реальный Workflow OPEN; business PR не merge.
 
+23:05 UTC: уточнение завершилось в `run_fzNq3UynJAFLtRWcV4FO2EBx`:
+пять tools завершены, но FINAL не нашёл сохранённый файл, только запуск
+подготовки заметки. Это реальный FAIL следующего native read/search сценария,
+несмотря на доказанные ACTIVE/CLEAN metadata/content owner GET200. Дубликат не
+создан. Причина пока UNKNOWN, read-only child ищет exact projection/search/
+resource-binding gap; owner/eligibility и подтверждение плана не ослаблять.
+Предыдущий checkpoint опубликован `cb1cea3086986f6dc8b0ebb8c873c0fd66351b5e`.
+
 ## Checkpoint 09.10.2026 22:25 UTC — 4ENV/8bindings завершены, готов диагностический запуск
 
 Native staff image impact `riip_JZDWJvPiUX5oFbyz4CY37JT3` APPLIED/version2,
