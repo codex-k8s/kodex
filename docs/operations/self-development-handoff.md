@@ -10,6 +10,42 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 05:44 UTC — новый Workflow принят, INTAKE читает свои источники
+
+Checkpoint `78a6c2301a31bd9db3b6feb63b820cfa90d6827a` PUSHED, Draft1807
+head/body readback PASS; main прежний ab499. Manager continuation FINAL 11
+подтвердил ровно один новый accepted Workflow
+`run_2MphY3OaOcHE0IH1PdMiKXsW`, session
+`ses_oWQidInUQYjrp67U8VK5xNZn`. Owner GET HTTP 200 подтвердил
+AGENT_DELEGATION / WORKFLOW `wfl_1G05mcW4c7pweOjzfIzFYr6c`, version 25,
+RUNNING. INTAKE child `run_oflwY5-UYbv95BvRfvGwppLU`, session
+`ses_p3pw892N5Je1XXUUmirePCh3`, RUNNING; seq 107 сообщает собственное чтение
+восьми документов до EOF и подготовку плана, но semantic PASS ещё не получен.
+
+Ранний ACK CAPTURED, same Pod UID
+`14fd44b7-9cfb-45ce-b120-dad8b92864df`; image manifest
+`615bab9cc7a7faf1688b552fb5744cca8796f8f43b0a3aba7c4604d109a6e4cc`
+и image-file SHA256 `47a8fc359e2cd186c3d87a6710ba38f64986415e40a0a156c508094b8fc66b3d`
+EQUAL expected. RuntimeRevision `rrev_B2oGHmbxXajnlLQ2l9Sl-eNR`, digest
+`74a5da90d9e01a63ec4e8cfb3e13fa4b6f770c68bed8766927acfb5ce922807e`.
+Instructions 51084 B, digest
+`2b71aafbd304dbfb0875fd887cf7d9065d214bc5df7fa7f3d65123c9f65db44c`;
+inbox/task 2567 B, SHA256
+`a94e0854a9cdac1fb629913c861a361d32aa1afab926b2fa27ae894f7e9c7237`.
+File/inbox EQUAL, taskInPrompt true; independent expected task comparison
+NOT RUN. G9 / ENV9 / binding10 / tools38 / grants21, gpt-6.1-sol medium.
+Desktop screenshot проверен, глобальный и run realtime LIVE / seq49–51;
+это новое UI readback, не доказательство всех WS кадров. Console 0 errors/warnings.
+
+Node helper retirement НЕ выполнен. Worker loadBaseAllowlist читает каталог
+один раз при запуске; текущий изменяемый ConfigMap/file не доказывает реально
+загруженный прежний список. Свежий `kodex-role-environments` immutable=false.
+Исторический helper мог быть допустимым base input; без startup provenance
+он KEEP_UNKNOWN, не снимаем pins и не запускаем глобальную очистку.
+Оба диска имеют запас, данные/PVC/current/restore/runner images сохранены.
+Диагностический helper в отдельном worktree не включён в PR как заведомо
+недоказанный destructive путь. Full65 OPEN, финальный business PR не merge.
+
 ## Checkpoint 09.10.2026 05:37 UTC — стенд Ready, новый ход Manager
 
 На опубликованном `4be7c5459ffe1c8a69d970ce73c943b7fbf20ab5` свежий

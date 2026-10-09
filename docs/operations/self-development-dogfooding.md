@@ -12816,3 +12816,34 @@ events 7–10 — штатный tool/delegation. Accepted ref ещё не св�
 Chrome reload, Console errors/warnings 0, 20 просмотренных fetch/xhr HTTP 200,
 body overflow false; run realtime всё ещё RECOVERING, rejoin PASS не заявлен.
 Full65 OPEN; checklist 11/14/15 не закрыт. Итоговый business PR не сливать.
+
+### 09.10.2026 05:44 UTC — новый accepted Workflow и ACK его INTAKE
+
+На опубликованном `78a6c2301a31bd9db3b6feb63b820cfa90d6827a` Manager
+continuation FINAL 11 подтверждает один новый Workflow
+`run_2MphY3OaOcHE0IH1PdMiKXsW`; owner HTTP 200 подтверждает RUNNING,
+AGENT_DELEGATION / WORKFLOW `wfl_1G05mcW4c7pweOjzfIzFYr6c`, version 25.
+INTAKE `run_oflwY5-UYbv95BvRfvGwppLU` самостоятельно читает нормативные
+источники; seq107 сообщает восемь EOF и подготовку плана. Semantic PASS
+и artifact readback ещё NOT RUN; host не подменяет внутреннюю команду.
+
+Ранний ACK и повторный same-Pod readback CAPTURED, UID
+`14fd44b7-9cfb-45ce-b120-dad8b92864df`; manifest615bab9 и image-file
+SHA25647a8fc35 EQUAL expected, не hash обслуживающего процесса.
+RuntimeRevision `rrev_B2oGHmbxXajnlLQ2l9Sl-eNR`, digest
+`74a5da90d9e01a63ec4e8cfb3e13fa4b6f770c68bed8766927acfb5ce922807e`.
+Instructions51084 B / SHA256
+`2b71aafbd304dbfb0875fd887cf7d9065d214bc5df7fa7f3d65123c9f65db44c`,
+task/inbox2567 B / SHA256
+`a94e0854a9cdac1fb629913c861a361d32aa1afab926b2fa27ae894f7e9c7237`.
+File/inbox EQUAL; taskInPrompt true, expected task comparison NOT RUN.
+G9 / ENV9 / binding10 / tools38 / grants21, gpt-6.1-sol medium.
+Desktop screenshot, Console0 errors/warnings, глобальный и run realtime
+LIVE seq49–51 проверены. Полный WS frame/rejoin proof не заявлен.
+
+Current mutable ConfigMap не доказывает in-memory worker allowed base map:
+worker читает каталог один раз в NewExecutor; это source-proven ограничение
+cleanup, не новый дефект business задачи. Поэтому старые node images
+KEEP_UNKNOWN до exact loaded dependency proof; unpin/rmi не выполнялись.
+Context7 `/containerd/containerd` проверен. Диагностический helper остался
+в отдельном worktree, destructive путь в PR не включён. Full65 OPEN.
