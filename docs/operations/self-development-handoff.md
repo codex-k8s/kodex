@@ -10,6 +10,23 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 20:22 UTC — cc430343 published; private diagnostic fix в работе
+
+Source/remote/Draft1807 EQUALcc430343045fa3a61107a037d85f4fe2f6c8803f.
+Новые native retries BAU(attempt3) и WRD(attempt4) FAILED до tools,
+session прежняя, новые turns/execution attempt1. Последняя рабочая вкладка
+own3 на run_WRDceM81OiX8nA8cNHBrs7TB; Chrome MCP подключён/OWNER200.
+Оба exact WORKLOAD observers NOT_CAPTURED/KUBECTL_READ_FAILED при cleanup;
+причина UNKNOWN, не выдавать за provider/network proof и не повторять blind.
+
+Diagnostic child в isolated tree реализует минимальный closed enum payload
+classifier→private broker terminal→existingcompletion callback→RC log перед
+DeleteTurn. No new RPC/grants/CP changes; completion outcome/usage/archive
+сохранить. До принятия ROOT обязан прочитать frozen packet, выполнить адресные
+tests, publish и активировать exact новый runner/custom images forward path.
+Frontend child read-only готовит repo-owned build/activation маршрут.
+Полный реальный Workflow/п11/14/15/16 остаётся OPEN, business PR не merge.
+
 ## Checkpoint 09.10.2026 20:13 UTC — готов следующий диагностируемый retry
 
 Основа648d1cb7 + три адресных пакета в Draft1807: отдельный WORKLOAD failure

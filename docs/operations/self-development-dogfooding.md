@@ -10,6 +10,38 @@ updated: 2026-10-09
 
 # Цель и источники
 
+## Checkpoint 09.10.2026 20:22 UTC — пакет опубликован, ранний отказ ещё требует сквозной диагностики
+
+Source/remote/Draft1807 EQUALcc430343045fa3a61107a037d85f4fe2f6c8803f,
+mainab4992e0 неизменён. На exactcc430343 ROOT76diagnostic6.196s +19ACK0.703s
+и278FE2.43s PASS; остальные адресные проверки относятся к EQUALsource tree
+перед commit, результаты подробно сохранены ниже.
+
+Native «Повторить попытку» создаёт новые runs, ту же session и свежие turns:
+run_BAUAcXWRTnY3m63RYr-OQiCf attempt3/turnNumber3,
+run_WRDceM81OiX8nA8cNHBrs7TB attempt4/turnNumber4;
+execution attempt1 у каждого. Оба FAILED/RUNTIME_PROVIDER_UNAVAILABLE до tools.
+Первый observer запущен поздно; второй составлен с native click/owner read
+в одной последовательности. Exact custom99f5bc78/UID перед чтением найдены,
+оба capture закрыто NOT_CAPTURED/KUBECTL_READ_FAILED во время cleanup.
+Это НЕ подтверждение сети, provider ACK или точной причины. Новые blind retries
+не выполняются до устранения diagnostic blind spot; backend не менялся в ходах.
+
+Source объясняет потерю: provider log имеет закрытые stage/class/detail,
+но private broker terminal передаёт лишь broad class; completion callback
+сохраняет generic failure и затем удаляет агентский Pod. Готовится минимальная
+typed diagnostic цепочка через существующие terminal/callback и безопасный
+RC log до cleanup, без новых RPC/grants и без изменения completion outcome.
+RC log не будет объявлен durable CP receipt. Нужна новая сборка runner/custom
+images и точный forward activation/readback; реализация/активация пока NOT RUN.
+
+Chrome own3 OWNER200/Console0, UI200 и compact failed transcript screenshot
+проверены. В active/retry окне были автоматический PLATFORM_RESYNC_REQUIRED
+и штатный rejoin; полноценная стабильность остаётся UNKNOWN. Read-only
+20:17:45–20:20:32: CP/GW/archive1/1, PG4CPU без throttling в малонагруженном
+3.428s sample; gateway diagnostics0 при loglines0 не выдаётся за proof.
+Full Workflow, business PR и п11/14/15/16 OPEN.
+
 ## Checkpoint 09.10.2026 20:13 UTC — ранняя диагностика готова, параллельный refresh и компактный итог проверены
 
 Основа648d1cb74c3dd04cb006fe53ebdbe1ef46e9a2d0, изменения в том же Draft1807.
