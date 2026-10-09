@@ -10,6 +10,40 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 09:03 UTC — runner доставлен; activation остановлена DiskPressure
+
+Published source `f63e8f8fe2b09b672f04a6f99f721dfe9e3771b8`, Draft1807;
+ROOT actual service authorizer PASS0.040s, official service policy SHA256
+`99c1c5a77376cd54dd3798c4b2631217122f82d5d4e3548a16b0a20ff7ab124c`.
+Full runner build/provenance и durable CRI pins обеих нод PASS:
+manifest `sha256:f6e06e4389e1d8b6145a66bea7ed97876565689c19ceb79d0350250b7f497aa8`,
+binary SHA256 `7c8517c1e8d5d2b8082116e6631d942d4500be29bf517046a22a67692748a104`,
+provenance SHA256 `5cc537798d236eb7b044feb38af130d8003ccd9176f973f79af47444f52d5294`.
+OLD6e581 quiesce apply/readback PASS; owner ledger active runs/builds/admission/
+promotions/claims0, прежние40 promoted pins сохранены. Первый render command
+FAIL GO_TOOLCHAIN_MISMATCH из-за PATH; pinned Go1.26.6 повтор PASS, fingerprint
+`4cc8afb76d2ce54c07ba98e932893959c08e23ff4e88fcd24c250ecabee1a7a9`.
+Canonical registry seed PASS, но supply-chain apply FAIL: BuildKit progress
+deadline. Push/staging-read Pending из-за server DiskPressure и PVC affinity;
+probe реально получил connection refused. Все пять core workloads остаются0;
+это остановленный development-стенд, не успешное развёртывание.
+
+Actual kubelet hard limits imagefs/nodefs5%, hysteresis5min; настройки не менялись.
+Root available около27.25GB, текущие образы и данные не удаляются. Existing
+repo-owned default4h cache protocol: два свежих audit/fingerprint/prune/readback
+прохода, по31 exact leaf records, оба PASS/ABSENT_AFTER. Root space measurement
+конкурентный, не приписывается целиком удалённому кэшу. Дальнейшая цепочка
+ограничена12 проходами/15min, только unused private performance cache;
+FAIL/PARTIAL/UNKNOWN закрыто останавливают её. OCI runner архивы на другом диске
+не являются способом освободить основной; их runtime/rollback closure сохранён.
+
+Далее восстановить запас места/обе ноды, fresh render/canonical apply/readback,
+owner UI image-only upgrade трёх custom recipes с admission/promotion и точным
+сравнением ENV tools/values/secret pins/policy. Это maintenance, не подмена
+проверки typed самонастройки. Затем native plain-language cases без ID,
+ordinary Manager workflow discovery/launch и полный dogfooding. Checklist11/14/
+15/16 и Full65 OPEN; свежие UI Console/Network/screenshot ещё NOT RUN.
+
 ## Checkpoint 09.10.2026 08:29 UTC — runner собран; exact service registry дополняется
 
 Published source `b8564a33980665e71bace2d0539819cac3d88618`:
@@ -23,10 +57,10 @@ canonical policy93 и существующие408 bindings неизменны, �
 Official generator/check и Node4/4 ROOT PASS250.405ms. Дополнительный Go
 consumer выявил прежнее stale expectation375; обновлён strict count409 и
 добавлен полный exact binding assert без ослабления authority guards.
-Изолированный consumer2/2 PASS0.044s; ROOT повтор выполнен отдельно.
+Изолированный consumer2/2 PASS0.044s; ROOT повтор PASS0.040s.
 
-Перед activation нужен новый clean source provenance (runner inputs не
-в production не изменились; test file меняет общий input closure), fresh render
+Перед activation нужен новый clean source provenance (production inputs
+не изменились; test file меняет общий input closure), fresh render
 и штатный quiesce/readback.
 Затем image-only maintenance уже bound custom recipes через admission/promotion;
 это не считается PASS самонастройки помощником и не заменяет её проверку.
