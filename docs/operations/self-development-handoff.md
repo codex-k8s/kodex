@@ -10,6 +10,22 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 14:15 UTC — copy PASS, activate прерван до первого старта
+
+Published source `5ba620093164b789f887e2968f623315a5102827`, Draft1807,
+audit fingerprint `826c9711b32d5c58daf8087a00fb04b3257e95d51b664cfe83a768c6eacc0a0b`.
+ROOT25 tests на exact SHA PASS0.665s. Offline copy/checksum/syncfs PASS;
+root-journal SWITCHING, original сохраняется в exact backup, destination inode
+23724034/device66308. Нода остановлена, до первого start не дошли.
+
+Activate FAIL на standalone `systemd-analyze verify`: без generator не виден
+fstab-owned data.mount. Actual manager видит его loaded/active; повторный
+read-only verify с `--generators=yes` PASS (внешние deprecated CPUAccounting
+warnings сохранены). Готовится опубликованный resume path с повторной checksum
+сверкой, без слепого retry apply/rename. Guard остаётся pinned original script.
+Владелец уточнил завершить перенос, безопасную очистку собственного проекта
+и встать на паузу. Живые AI/QA после восстановления сейчас НЕ запускать.
+
 ## Checkpoint 09.10.2026 13:58 UTC — перенос одной ноды разрешён, применение ещё NOT RUN
 
 Владелец отдельно разрешил перенос полного k3s storage exact server-ноды

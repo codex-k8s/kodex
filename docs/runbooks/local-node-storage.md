@@ -41,7 +41,14 @@ agent-нода, Docker daemon и его общесистемные настро�
 | ROLLED_BACK | Нода снова использует root storage; destination copy сохраняется |
 
 `FAIL_OR_UNKNOWN` после эффекта требует изучить фазу root-журнала; apply
-никогда не повторяется автоматически. При неполной reverse-copy скрипт
+никогда не повторяется автоматически. Для прерывания на SWITCHING до первого
+старта есть отдельный `resume --expected-sha <CURRENT_SHA>
+--expected-fingerprint <ORIGINAL_FINGERPRINT>`: он проверяет остановленную ноду,
+точный original inode, installed units/guard и повторяет checksum-only сверку
+готовой копии, не повторяя copy/rename. Исходный script SHA остаётся guard pin,
+а новый published SHA сохраняется как resumeSourceSha. `systemd-analyze verify`
+явно запускается с `--generators=yes`, чтобы видеть fstab-owned `data.mount`.
+При неполной reverse-copy скрипт
 закрыто останавливается; `/data` не удаляется. Перед первым стартом rollback
 возвращает исходный inode. После любого возможного старта возврат к старой
 копии запрещён: требуется свободное место на root для полного текущего

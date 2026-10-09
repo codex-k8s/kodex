@@ -171,6 +171,50 @@ class MockTests(unittest.TestCase):
         self.assertIn('AssertPathIsMountPoint=/data', generated[STORAGE.GUARD])
         self.assertIn('Options=bind', generated[STORAGE.MOUNT])
 
+    def test_activation_verifies_generated_fstab_units_before_effects(self):
+        self.run.side_effect = None
+        self.run.return_value = ''
+        self.mock('mounted')
+        self.mock('save')
+        self.mock('readback', return_value={'status': 'PASS'})
+        self.assertEqual(STORAGE.activate(value('SWITCHING'))['status'], 'PASS')
+        arguments = self.run.call_args_list[0].args[0]
+        self.assertEqual(arguments[:3], ['/usr/bin/systemd-analyze', 'verify', '--generators=yes'])
+
+    def test_resume_rejects_started_phase_or_wrong_fingerprint_before_effects(self):
+        self.mock('git_head', return_value=SHA)
+        for phase in ('NODE_STARTING', 'VERIFIED', 'RETIRED', 'AUDITED'):
+            self.failure('RESUME_PHASE_UNSUPPORTED',
+                         lambda: STORAGE.resume(value(phase), SHA, 'fixture-fingerprint'))
+        self.failure('RESUME_PHASE_UNSUPPORTED',
+                     lambda: STORAGE.resume(value('SWITCHING'), SHA, 'wrong'))
+        self.run.assert_not_called()
+
+    def test_resume_verifies_copy_again_and_never_repeats_rename_or_copy(self):
+        self.mock('git_head', return_value=SHA)
+        self.mock('inspect', return_value={'running': False, 'pid': 0})
+        self.mock('guard')
+        self.mock('directory', return_value=ORIGINAL)
+        self.mock('no_references')
+        self.mock('save')
+        contents = {STORAGE.UNITS / name: text.encode() for name, text in STORAGE.units().items()}
+        self.mock('file_content', side_effect=lambda path: contents[path])
+        activation = self.mock('activate', return_value={'status': 'PASS'})
+        self.run.side_effect = None
+        self.run.return_value = ''
+        self.assertEqual(STORAGE.resume(value('SWITCHING'), SHA, 'fixture-fingerprint')['status'], 'PASS')
+        args = self.run.call_args.args[0]
+        self.assertIn('--checksum', args)
+        self.assertIn('--dry-run', args)
+        self.assertIn('--delete', args)
+        self.assertTrue(self.run.call_args.kwargs['empty'])
+        activation.assert_called_once()
+        activation.reset_mock()
+        self.run.side_effect = STORAGE.Failure('OUTPUT_MISMATCH')
+        self.failure('OUTPUT_MISMATCH',
+                     lambda: STORAGE.resume(value('SWITCHING'), SHA, 'fixture-fingerprint'))
+        activation.assert_not_called()
+
     def test_copy_delete_is_dry_run_and_requires_empty_output(self):
         self.run.side_effect = None
         self.run.return_value = ''

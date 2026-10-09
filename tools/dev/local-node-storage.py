@@ -369,7 +369,13 @@ def apply(expected, fingerprint):
     write_exclusive(INSTALLED, script, 0o555)
     for name, content in units().items():
         write_exclusive(UNITS / name, content.encode(), 0o644)
-    run(['/usr/bin/systemd-analyze', 'verify', *[str(UNITS / name) for name in units()]])
+    return activate(value)
+
+
+def activate(value):
+    # verify по умолчанию не запускает fstab-generator, поэтому не видит data.mount.
+    run(['/usr/bin/systemd-analyze', 'verify', '--generators=yes',
+         *[str(UNITS / name) for name in units()]])
     run(['/usr/bin/systemctl', 'daemon-reload'])
     run(['/usr/bin/systemctl', 'enable', MOUNT, SERVICE])
     run(['/usr/bin/systemctl', 'start', MOUNT], timeout=90)
@@ -389,6 +395,29 @@ def apply(expected, fingerprint):
             time.sleep(5)
     save(value, 'VERIFIED')
     return readback(value)
+
+
+def resume(value, expected, fingerprint):
+    # Единственный поддерживаемый interrupted path: verified copy + installed
+    # exact units до первого старта. Не повторяем apply или rename вслепую.
+    head = git_head(expected)
+    require(value['phase'] == 'SWITCHING' and value['fingerprint'] == fingerprint,
+            'RESUME_PHASE_UNSUPPORTED')
+    require(not inspect()['running'] and inspect()['pid'] == 0, 'NODE_NOT_STOPPED')
+    guard(value)
+    require(directory(BACKUP) == value['sourceIdentity'], 'BACKUP_CHANGED')
+    no_references(BACKUP)
+    no_references(TARGET)
+    no_references(SOURCE, allow_exact_mount=True)
+    for name, content in units().items():
+        require(file_content(UNITS / name) == content.encode(), 'UNIT_CHANGED')
+    # Повторная независимая checksum-only проверка, без записи в готовую копию.
+    run(['/usr/bin/rsync', '-aHAXSx', '--numeric-ids', '--checksum', '--dry-run', '--delete',
+         '--itemize-changes', '--out-format=%i', str(BACKUP) + '/', str(TARGET) + '/'],
+        timeout=2400, empty=True)
+    value['resumeSourceSha'] = head
+    save(value, 'SWITCHING')
+    return activate(value)
 
 
 def retire(value, fingerprint):
@@ -466,7 +495,7 @@ def rollback(value, fingerprint):
 def main():
     try:
         parser = argparse.ArgumentParser(allow_abbrev=False)
-        parser.add_argument('mode', choices=('audit', 'apply', 'readback', 'retire', 'rollback', 'guard'))
+        parser.add_argument('mode', choices=('audit', 'apply', 'resume', 'readback', 'retire', 'rollback', 'guard'))
         parser.add_argument('--expected-sha')
         parser.add_argument('--expected-fingerprint')
         options = parser.parse_args()
@@ -492,7 +521,8 @@ def main():
                 result = apply(options.expected_sha, options.expected_fingerprint)
             else:
                 value = journal()
-                result = readback(value) if options.mode == 'readback' else \
+                result = resume(value, options.expected_sha, options.expected_fingerprint) \
+                    if options.mode == 'resume' else readback(value) if options.mode == 'readback' else \
                     (retire(value, options.expected_fingerprint) if options.mode == 'retire'
                      else rollback(value, options.expected_fingerprint))
         print(json.dumps(result, sort_keys=True), flush=True)
