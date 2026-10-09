@@ -28,13 +28,13 @@ func RuntimeMCPToolNames(input RunnerInput) []string {
 		result = append(result, FileToolSearch, FileToolMetadata, FileToolPreview, FileToolManifest, FileToolRead)
 	}
 	if input.IsAssistant() {
-		result = append(result, "get_configuration_catalog", "find_platform_resources", "propose_configuration_plan", "propose_assistant_metadata")
+		result = append(result, "get_configuration_catalog", "find_platform_resources", "read_task_session", "propose_configuration_plan", "propose_assistant_metadata")
 	}
 	if len(input.DelegationTargets) != 0 {
 		result = append(result, "delegate_agent")
 	}
 	if RuntimeWorkflowLaunchAvailable(input) {
-		result = append(result, "launch_workflow")
+		result = append(result, "get_workflow_catalog", "launch_workflow")
 	}
 	if len(input.IntegrationGrants) != 0 {
 		result = append(result, "get_integration_catalog", "invoke_integration")

@@ -4,8 +4,8 @@ title: Внутренние Proto/gRPC-контракты
 type: contract-guide
 status: approved
 owner: architect
-version: 1.0.2
-updated: 2026-10-04
+version: 1.0.3
+updated: 2026-10-09
 ---
 
 # Внутренние Proto/gRPC-контракты
@@ -107,6 +107,37 @@ Controller проверяет структуру immutable profile, а CP — т
 не исчезает молча из required startup при DEGRADED connection: callable authority
 не расширяется, а запуск без обязательного профиля отклоняется.
 Query/refresh не получают новую authority на shell, arbitrary MCP или credential.
+
+## Поиск опубликованного процесса и запуск из обычного execution
+
+Пользователь не обязан передавать Workflow refs или ключи полей. Обычный
+сотрудник с immutable и текущим `platform.run.launch` использует MCP
+`get_workflow_catalog(query, page_token)` → generated
+`RuntimeWorkService.GetExecutionWorkflowCatalog` → domain service → CP owner
+repository. Exact caller — runtime-controller, permission
+`platform.runtime.execution.workflow.catalog`, policy93. Server разрешает root
+USER/project из действующей lease/fence/generation/RuntimeRevision; query и
+cursor не назначают actor или область. SYSTEM/PROJECT этот tool не получают.
+
+Canonical `workflow.view` и `workflow.launch` проверяются до LIMIT10+1.
+Каталог содержит published name/purpose, точные ref/version/spec digest,
+полную input schema и readiness. UNKNOWN не становится READY. Cursor связан
+с root/project/RuntimeRevision/query; отзыв текущего права, terminal/cancel,
+expiry или смена поколения закрывают повторное чтение. Query ограничен пятью
+секундами, MCP projection32KiB; schema не усекается при превышении бюджета.
+Чтение не создаёт business receipt, audit или domain event; consumer проверяет
+typed pins/cardinality/readiness и использует прежний readiness MCP path.
+
+`launch_workflow` требует `expected_published_ref`, `expected_spec_digest` и
+`expected_workflow_version`, полученные из каталога. Это preconditions, не
+authority. Existing LaunchWorkflowExecution проверяет текущий root/lease/cap
+до idempotency replay. Новый intent удерживает owner Workflow row и сравнивает
+все pins до atomic child/required-edge/audit/events. Stale pins дают conflict,
+без fallback latest. Exact уже принятый semantic intent после новой публикации
+возвращает прежний child/receipt с cardinality1. Required-child completion,
+cancel/fail/deadline/owner gate и canonical callback lifecycle неизменны.
+Client registration, policygen и final render обязаны содержать новую RPC;
+compiled runner catalog и bound custom images доставляются до native приёмки.
 
 ## Package и версии
 
@@ -299,15 +330,46 @@ domain service напрямую. Полный профиль задают `GO-DO
 
 ## Ограниченный каталог для подтверждаемой настройки
 
-`RuntimeWorkService.SearchAssistantResources` обслуживает три взаимоисключающих
+`RuntimeWorkService.SearchAssistantResources` обслуживает четыре взаимоисключающих
 режима: обычный поиск, каталог определений интеграций и типизированный
-`assistant_configuration_catalog`. Новый режим использует тот же зарегистрированный
+`assistant_configuration_catalog` и чтение `assistant_task_session_read`.
+Каждый режим использует тот же зарегистрированный
 метод, mTLS, signed context и проверку точных lease/fence/generation. Ссылка
 `assistant_ref` выбирает ресурс, но не выдаёт полномочий: сервер разрешает
 инициатора, исходный диалог и сохранённую область целевого помощника до чтения.
 PROJECT может настраивать только свой профиль, SYSTEM — себя либо доступный
 проектный профиль. Обычный сотрудник не становится помощником из-за пустого
 project ref.
+
+### Опубликованный результат прежней задачи
+
+MCP `read_task_session(run_ref, cursor?)` передаёт исключительно typed selector
+`assistant_task_session_read`; query, configuration и definition-поля с ним
+закрыто отклоняются. Ответ содержит только `assistant_task_session`.
+Авторитетный root USER берётся из точной действующей assistant lease, а не из
+selector или cursor. PROJECT ограничен исходным проектом; SYSTEM всё равно
+проверяет canonical `run.view` и активный проект для выбранного Run и каждого
+source Run его выбранной Session. FAILED читается; чтение не выдаёт resume.
+
+Ответ версии 1 содержит публичный результат Run и USER/COMMENTARY/FINAL из
+выбранной Session, без дочерних Session, reasoning, tool payload или архивных
+файлов. USER сверяется с canonical turn; callback USER заменяется публичным
+маркером. Execution lineage сверяется с Run/node/turn/immutable revision.
+ARCHIVED/PURGED относятся к хранению, а не заменяют eligibility.
+
+Повторяемая ограниченная read-транзакция удерживает exact lease FOR SHARE.
+Страница возвращает не более десяти целых сообщений, JSON projection не более
+512KiB, newest-first. Cursor привязан к серверному actor/scope/Run/Session и
+source commitment (версии Session/Run и доступных source Run плюс последние
+опубликованные message sequence). Он не несёт authority: scope и eligibility
+перечитываются на каждой странице. Изменённый source даёт version mismatch;
+продолжение требует нового чтения с пустым cursor. Общая выдача ограничена
+offset 10000 и 128 source Run, query/retry budget — существующие пять секунд.
+Typed projection имеет SHA256 по точным versioned JSON bytes с decimal strings
+для int64; неизвестные enum/поля, mismatch digest и превышение бюджета закрыто
+отклоняются producer и consumer. В durable tool activity сохраняются только
+digest/count/truncated, не тексты и locators. Используются прежние generated
+RPC, permission и readiness path; новые mutation/grant/migration не требуются.
 
 Страничные виды каталога возвращают максимум десять записей закрытого вида с ограниченным
 поиском и стабильным порядком; offset ограничен, нулевой next offset означает

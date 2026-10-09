@@ -12441,6 +12441,7 @@ const (
 	RuntimeWorkService_CompleteExecution_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/CompleteExecution"
 	RuntimeWorkService_DelegateExecution_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/DelegateExecution"
 	RuntimeWorkService_LaunchWorkflowExecution_FullMethodName                         = "/controlplane.v1.RuntimeWorkService/LaunchWorkflowExecution"
+	RuntimeWorkService_GetExecutionWorkflowCatalog_FullMethodName                     = "/controlplane.v1.RuntimeWorkService/GetExecutionWorkflowCatalog"
 	RuntimeWorkService_ProposeAssistantPlan_FullMethodName                            = "/controlplane.v1.RuntimeWorkService/ProposeAssistantPlan"
 	RuntimeWorkService_ProposeAssistantMetadata_FullMethodName                        = "/controlplane.v1.RuntimeWorkService/ProposeAssistantMetadata"
 	RuntimeWorkService_ProposeRunMetadata_FullMethodName                              = "/controlplane.v1.RuntimeWorkService/ProposeRunMetadata"
@@ -12491,6 +12492,9 @@ type RuntimeWorkServiceClient interface {
 	// Запускает опубликованный Workflow из exact active execution; actor/project
 	// и обязательную связь родителя назначает владелец, не caller payload.
 	LaunchWorkflowExecution(ctx context.Context, in *LaunchWorkflowExecutionRequest, opts ...grpc.CallOption) (*LaunchWorkflowExecutionResponse, error)
+	// Каталог опубликованных Workflow exact ordinary execution; owner/project
+	// разрешаются из действующей lease, не из аргументов инструмента.
+	GetExecutionWorkflowCatalog(ctx context.Context, in *GetExecutionWorkflowCatalogRequest, opts ...grpc.CallOption) (*GetExecutionWorkflowCatalogResponse, error)
 	ProposeAssistantPlan(ctx context.Context, in *ProposeAssistantPlanRequest, opts ...grpc.CallOption) (*ProposeAssistantPlanResponse, error)
 	ProposeAssistantMetadata(ctx context.Context, in *ProposeAssistantMetadataRequest, opts ...grpc.CallOption) (*ProposeAssistantMetadataResponse, error)
 	ProposeRunMetadata(ctx context.Context, in *ProposeRunMetadataRequest, opts ...grpc.CallOption) (*ProposeRunMetadataResponse, error)
@@ -12719,6 +12723,16 @@ func (c *runtimeWorkServiceClient) LaunchWorkflowExecution(ctx context.Context, 
 	return out, nil
 }
 
+func (c *runtimeWorkServiceClient) GetExecutionWorkflowCatalog(ctx context.Context, in *GetExecutionWorkflowCatalogRequest, opts ...grpc.CallOption) (*GetExecutionWorkflowCatalogResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetExecutionWorkflowCatalogResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_GetExecutionWorkflowCatalog_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *runtimeWorkServiceClient) ProposeAssistantPlan(ctx context.Context, in *ProposeAssistantPlanRequest, opts ...grpc.CallOption) (*ProposeAssistantPlanResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ProposeAssistantPlanResponse)
@@ -12920,6 +12934,9 @@ type RuntimeWorkServiceServer interface {
 	// Запускает опубликованный Workflow из exact active execution; actor/project
 	// и обязательную связь родителя назначает владелец, не caller payload.
 	LaunchWorkflowExecution(context.Context, *LaunchWorkflowExecutionRequest) (*LaunchWorkflowExecutionResponse, error)
+	// Каталог опубликованных Workflow exact ordinary execution; owner/project
+	// разрешаются из действующей lease, не из аргументов инструмента.
+	GetExecutionWorkflowCatalog(context.Context, *GetExecutionWorkflowCatalogRequest) (*GetExecutionWorkflowCatalogResponse, error)
 	ProposeAssistantPlan(context.Context, *ProposeAssistantPlanRequest) (*ProposeAssistantPlanResponse, error)
 	ProposeAssistantMetadata(context.Context, *ProposeAssistantMetadataRequest) (*ProposeAssistantMetadataResponse, error)
 	ProposeRunMetadata(context.Context, *ProposeRunMetadataRequest) (*ProposeRunMetadataResponse, error)
@@ -13005,6 +13022,9 @@ func (UnimplementedRuntimeWorkServiceServer) DelegateExecution(context.Context, 
 }
 func (UnimplementedRuntimeWorkServiceServer) LaunchWorkflowExecution(context.Context, *LaunchWorkflowExecutionRequest) (*LaunchWorkflowExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method LaunchWorkflowExecution not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) GetExecutionWorkflowCatalog(context.Context, *GetExecutionWorkflowCatalogRequest) (*GetExecutionWorkflowCatalogResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetExecutionWorkflowCatalog not implemented")
 }
 func (UnimplementedRuntimeWorkServiceServer) ProposeAssistantPlan(context.Context, *ProposeAssistantPlanRequest) (*ProposeAssistantPlanResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ProposeAssistantPlan not implemented")
@@ -13413,6 +13433,24 @@ func _RuntimeWorkService_LaunchWorkflowExecution_Handler(srv interface{}, ctx co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RuntimeWorkService_GetExecutionWorkflowCatalog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetExecutionWorkflowCatalogRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).GetExecutionWorkflowCatalog(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_GetExecutionWorkflowCatalog_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).GetExecutionWorkflowCatalog(ctx, req.(*GetExecutionWorkflowCatalogRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _RuntimeWorkService_ProposeAssistantPlan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ProposeAssistantPlanRequest)
 	if err := dec(in); err != nil {
@@ -13797,6 +13835,10 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LaunchWorkflowExecution",
 			Handler:    _RuntimeWorkService_LaunchWorkflowExecution_Handler,
+		},
+		{
+			MethodName: "GetExecutionWorkflowCatalog",
+			Handler:    _RuntimeWorkService_GetExecutionWorkflowCatalog_Handler,
 		},
 		{
 			MethodName: "ProposeAssistantPlan",

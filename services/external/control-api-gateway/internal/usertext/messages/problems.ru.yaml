@@ -158,6 +158,8 @@ RUNTIME_UNAVAILABLE:
   other: Среда выполнения агента временно недоступна
 RUNTIME_LIMIT_EXCEEDED:
   other: Агент превысил ограничение выполнения
+RUNTIME_TIMEOUT:
+  other: Истекло время выполнения запуска
 SYSTEM_ASSISTANT_NAME:
   other: Системный помощник
 SYSTEM_ASSISTANT_PURPOSE:

@@ -63,7 +63,7 @@ func (server *Server) configurationCatalog(ctx context.Context, input runtimecon
 	if err != nil {
 		return nil, err
 	}
-	if response == nil || response.GetAssistantConfigurationCatalog() != nil || len(response.GetResults()) != 0 || response.GetTruncated() || len(response.GetDefinitions()) > maximumAssistantIntegrationDefinitions ||
+	if response == nil || response.GetAssistantTaskSession() != nil || response.GetAssistantConfigurationCatalog() != nil || len(response.GetResults()) != 0 || response.GetTruncated() || len(response.GetDefinitions()) > maximumAssistantIntegrationDefinitions ||
 		response.GetNextDefinitionOffset() < 0 || response.GetNextDefinitionOffset() > 10000 ||
 		(response.GetNextDefinitionOffset() != 0 && response.GetNextDefinitionOffset() <= int32(offset)) {
 		return nil, errors.New("integration definition catalog response is invalid")
@@ -316,7 +316,7 @@ func (server *Server) assistantConfigurationCatalog(ctx context.Context, input r
 	if err != nil {
 		return nil, err
 	}
-	if response == nil || len(response.ProtoReflect().GetUnknown()) != 0 || len(response.GetResults()) != 0 || response.GetTruncated() || len(response.GetDefinitions()) != 0 || response.GetNextDefinitionOffset() != 0 {
+	if response == nil || response.GetAssistantTaskSession() != nil || len(response.ProtoReflect().GetUnknown()) != 0 || len(response.GetResults()) != 0 || response.GetTruncated() || len(response.GetDefinitions()) != 0 || response.GetNextDefinitionOffset() != 0 {
 		return nil, errors.New("assistant configuration catalog response is invalid")
 	}
 	configuration, err := castAssistantConfigurationCatalog(input, request, response.GetAssistantConfigurationCatalog())

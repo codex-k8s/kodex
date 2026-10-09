@@ -367,6 +367,9 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 	if err != nil {
 		return nil, err
 	}
+	if request.GetAssistantTaskSessionRead() != nil {
+		return server.readAssistantTaskSession(ctx, p, request)
+	}
 	if catalog := request.GetAssistantConfigurationCatalog(); catalog != nil {
 		if len(request.ProtoReflect().GetUnknown()) != 0 || len(catalog.ProtoReflect().GetUnknown()) != 0 || request.GetQuery() != "" || request.GetIntegrationDefinitionCatalog() || request.GetDefinitionQuery() != "" || request.GetDefinitionOffset() != 0 {
 			return nil, transportError(errs.ErrInvalid)

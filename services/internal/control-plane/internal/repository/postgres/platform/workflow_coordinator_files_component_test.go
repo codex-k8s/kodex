@@ -318,9 +318,7 @@ func TestWorkflowCoordinatorFilesComponent(t *testing.T) {
 	secondRun := delegate("second-delegate", callback, "second")
 	complete("first-callback-complete", callback, "")
 	secondLease := claim("second-claim", secondRun.Ref)
-	nestedRun := execute(command.LaunchWorkflowExecution, "nested-launch", command.LaunchWorkflowInput{
-		LeaseRef: stringMap(secondLease, "leaseRef"), Fence: stringMap(secondLease, "fence"),
-		Generation: runtimeRevisionMapInt64(secondLease, "generation"), WorkflowRef: nested.Ref, Task: "Produce nested result"}, nil).Run
+	nestedRun := execute(command.LaunchWorkflowExecution, "nested-launch", workflowCatalogLaunchInput(t, service, worker, secondLease, nested.Ref, "Produce nested result"), nil).Run
 	complete("second-wait", secondLease, "")
 	nestedInitial := claim("nested-initial", nestedRun.Ref)
 	nestedChild := delegate("nested-delegate", nestedInitial, "first")

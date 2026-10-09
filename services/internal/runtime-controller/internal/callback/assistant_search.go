@@ -96,7 +96,7 @@ func (server *Server) findPlatformResources(ctx context.Context, input runtimeco
 	if err != nil {
 		return nil, &assistantSearchError{class: assistantSearchOwnerFailed, cause: err}
 	}
-	if response == nil || response.GetAssistantConfigurationCatalog() != nil || len(response.GetDefinitions()) != 0 || response.GetNextDefinitionOffset() != 0 || len(response.GetResults()) > maximumAssistantSearchResults {
+	if response == nil || response.GetAssistantTaskSession() != nil || response.GetAssistantConfigurationCatalog() != nil || len(response.GetDefinitions()) != 0 || response.GetNextDefinitionOffset() != 0 || len(response.GetResults()) > maximumAssistantSearchResults {
 		return nil, &assistantSearchError{class: assistantSearchResponseShapeInvalid}
 	}
 	items := make([]map[string]any, 0, len(response.GetResults()))

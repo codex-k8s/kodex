@@ -158,6 +158,8 @@ RUNTIME_UNAVAILABLE:
   other: The agent runtime is temporarily unavailable
 RUNTIME_LIMIT_EXCEEDED:
   other: The agent exceeded an execution limit
+RUNTIME_TIMEOUT:
+  other: The run execution timed out
 SYSTEM_ASSISTANT_NAME:
   other: System assistant
 SYSTEM_ASSISTANT_PURPOSE:

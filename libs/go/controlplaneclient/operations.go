@@ -425,6 +425,7 @@ func RuntimeOperations() map[string]string {
 		"platform.runtime.execution.complete":                 controlplanev1.RuntimeWorkService_CompleteExecution_FullMethodName,
 		"platform.runtime.execution.delegate":                 controlplanev1.RuntimeWorkService_DelegateExecution_FullMethodName,
 		"platform.runtime.execution.workflow.launch":          controlplanev1.RuntimeWorkService_LaunchWorkflowExecution_FullMethodName,
+		"platform.runtime.execution.workflow.catalog":         controlplanev1.RuntimeWorkService_GetExecutionWorkflowCatalog_FullMethodName,
 		"platform.runtime.assistant.metadata.propose":         controlplanev1.RuntimeWorkService_ProposeAssistantMetadata_FullMethodName,
 		"platform.runtime.assistant.plan.propose":             controlplanev1.RuntimeWorkService_ProposeAssistantPlan_FullMethodName,
 		"platform.runtime.run.metadata.propose":               controlplanev1.RuntimeWorkService_ProposeRunMetadata_FullMethodName,

@@ -583,13 +583,13 @@ func tools(input runtimecontract.RunnerInput) []map[string]any {
 	result := []map[string]any{runMetadataTool()}
 	result = append(result, runtimeFileTools(input)...)
 	if input.IsAssistant() {
-		result = append(result, configurationCatalogTool(input), assistantResourceSearchTool(), assistantPlanTool(input), assistantMetadataTool())
+		result = append(result, configurationCatalogTool(input), assistantResourceSearchTool(), assistantTaskSessionTool(), assistantPlanTool(input), assistantMetadataTool())
 	}
 	if len(input.DelegationTargets) != 0 {
 		result = append(result, delegationTool(input.DelegationTargets))
 	}
 	if workflowLaunchAvailable(input) {
-		result = append(result, workflowLaunchTool())
+		result = append(result, workflowCatalogTool(), workflowLaunchTool())
 	}
 	if len(input.IntegrationGrants) != 0 {
 		result = append(result, integrationCatalogTool(), integrationTool())
@@ -718,6 +718,8 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		result, err = integrationCatalog(input, params.Arguments)
 	case "find_platform_resources":
 		result, err = server.findPlatformResources(request.Context(), input, params.Arguments)
+	case "read_task_session":
+		result, err = server.readTaskSession(request.Context(), input, params.Arguments)
 	case "propose_configuration_plan":
 		result, err = server.proposeAssistantPlan(request.Context(), input, params.Arguments, rpc.ID)
 	case "propose_assistant_metadata":
@@ -728,6 +730,8 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		result, err = server.delegate(request.Context(), input, params.Arguments, rpc.ID)
 	case "launch_workflow":
 		result, err = server.launchWorkflow(request.Context(), input, params.Arguments, rpc.ID)
+	case "get_workflow_catalog":
+		result, err = server.workflowCatalog(request.Context(), input, params.Arguments)
 	case "invoke_integration":
 		result, err = server.invoke(request.Context(), input, params.Arguments, rpc.ID)
 	case runtimecontract.Context7ResolveTool, runtimecontract.Context7QueryTool:
@@ -1848,6 +1852,8 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 		return map[string]any{}, "platform.integration.catalog", "", len(input.IntegrationGrants) != 0
 	case "find_platform_resources":
 		return map[string]any{}, "platform.resources.search", "", input.IsAssistant()
+	case "read_task_session":
+		return map[string]any{}, "platform.resources.search", "", input.IsAssistant()
 	case "propose_configuration_plan":
 		operations, _ := arguments["operations"].([]any)
 		parameters := map[string]any{"operation_count": len(operations)}
@@ -1882,6 +1888,8 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 	case "launch_workflow":
 		workflow, _ := arguments["workflow_ref"].(string)
 		return map[string]any{"workflow_ref": workflow}, "platform.run.launch", "", workflowLaunchAvailable(input)
+	case "get_workflow_catalog":
+		return map[string]any{}, "platform.run.launch", "", workflowLaunchAvailable(input)
 	case "invoke_integration":
 		if grant, ok := integrationGrantForCall(input, arguments); ok {
 			return map[string]any{"connection_ref": grant.ConnectionRef, "capability_key": grant.CapabilityKey}, grant.CapabilityKey, grant.Ref, true
@@ -1946,6 +1954,21 @@ func safeToolCallResult(tool string, result any, toolErr error) string {
 	// требует private evidence и authenticated input в recordToolCallPhase.
 	if tool == runtimecontract.FileToolRead {
 		return "TOOL_UNAVAILABLE"
+	}
+	if tool == "read_task_session" {
+		value, ok := result.(taskSessionToolResult)
+		if !ok {
+			return "TOOL_UNAVAILABLE"
+		}
+		// Durable activity хранит только commitment, не текст и не raw response.
+		raw, _ := json.Marshal(struct {
+			Version          int    `json:"version"`
+			SourceSHA256     string `json:"source_sha256"`
+			ProjectionSHA256 string `json:"projection_sha256"`
+			Messages         int    `json:"messages"`
+			Truncated        bool   `json:"truncated"`
+		}{1, value.SourceSHA256, value.ProjectionSHA256, len(value.Messages), value.Truncated})
+		return string(raw)
 	}
 	if tool == "invoke_integration" || tool == runtimecontract.Context7ResolveTool || tool == runtimecontract.Context7QueryTool {
 		value, ok := result.(integrationToolResult)

@@ -329,13 +329,15 @@ func toolCapabilityMatches(tool, capability string, integration, configurationAs
 		"get_configuration_catalog":  "platform.configuration.read",
 		"get_integration_catalog":    "platform.integration.catalog",
 		"find_platform_resources":    "platform.resources.search",
+		"read_task_session":          "platform.resources.search",
 		"propose_configuration_plan": "platform.configuration.plan",
 		"propose_assistant_metadata": "platform.presentation.propose",
 		"propose_run_metadata":       "platform.presentation.propose",
 		"delegate_agent":             "platform.run.delegate",
 		"launch_workflow":            "platform.run.launch",
+		"get_workflow_catalog":       "platform.run.launch",
 	}
-	if (tool == "get_configuration_catalog" || tool == "find_platform_resources" || tool == "propose_configuration_plan" || tool == "propose_assistant_metadata") && !configurationAssistant {
+	if (tool == "get_configuration_catalog" || tool == "find_platform_resources" || tool == "read_task_session" || tool == "propose_configuration_plan" || tool == "propose_assistant_metadata") && !configurationAssistant {
 		return false
 	}
 	return expected[tool] != "" && expected[tool] == capability

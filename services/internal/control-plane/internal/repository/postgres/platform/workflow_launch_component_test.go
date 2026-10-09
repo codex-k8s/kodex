@@ -185,7 +185,7 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		if pool.QueryRow(ctx, queryWorkflowLaunchOriginDiagnostics, pgx.StrictNamedArgs{"lease_ref": stringMap(lease, "leaseRef")}).Scan(&diagnostics) == nil {
 			t.Logf("launch %s origin states: %v", key, diagnostics)
 		}
-		result := execute(command.LaunchWorkflowExecution, launcher, key, command.LaunchWorkflowInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), WorkflowRef: selectedWorkflow, Task: "Complete the exact published workflow."}, nil)
+		result := execute(command.LaunchWorkflowExecution, launcher, key, workflowCatalogLaunchInput(t, service, launcher, lease, selectedWorkflow, "Complete the exact published workflow."), nil)
 		parent, err := service.GetRun(ctx, owner, result.Run.ParentRunRef)
 		if err != nil {
 			t.Fatal("workflow parent owner read denied", err)
@@ -231,6 +231,79 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		}
 		return state, origin, root, exact, leases, turns
 	}
+	t.Run("catalog-pagination-pins-replay", func(t *testing.T) {
+		for i := 0; i < 12; i++ {
+			key := string(rune('a' + i))
+			itemDraft := draft
+			itemDraft.Name = "Catalog exact " + key
+			item := execute(command.CreateWorkflow, owner, "catalog-create-"+key, command.WorkflowInput{ProjectRef: project.Ref, Name: itemDraft.Name, Purpose: itemDraft.Purpose, CoordinatorAgentRef: coordinator.Ref, Draft: &itemDraft}, nil).Workflow
+			item = execute(command.ValidateWorkflow, owner, "catalog-validate-"+key, command.WorkflowInput{Ref: item.Ref}, &item.Version).Workflow
+			execute(command.PublishWorkflow, owner, "catalog-publish-"+key, command.WorkflowInput{Ref: item.Ref}, &item.Version)
+		}
+		parent := execute(command.LaunchRun, owner, "catalog-parent", command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "AGENT", Ref: manager.Ref}, Task: "Discover exact published workflow."}, nil).Run
+		lease := claim("catalog-claim", parent.Ref)
+		reader := launcher
+		reader.Permission = "platform.runtime.execution.workflow.catalog"
+		request := query.ExecutionWorkflowCatalog{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), Query: "Catalog exact"}
+		first, err := service.GetExecutionWorkflowCatalog(ctx, reader, request)
+		if err != nil || len(first.Items) != 10 || first.NextPageToken == "" {
+			t.Fatalf("first eligible page: count=%d error=%v", len(first.Items), err)
+		}
+		request.PageToken = first.NextPageToken
+		second, err := service.GetExecutionWorkflowCatalog(ctx, reader, request)
+		if err != nil || len(second.Items) != 2 || second.NextPageToken != "" {
+			t.Fatalf("canonical EOF: count=%d error=%v", len(second.Items), err)
+		}
+		seen := map[string]bool{}
+		for _, item := range append(first.Items, second.Items...) {
+			if seen[item.WorkflowRef] {
+				t.Fatal("duplicate page item")
+			}
+			seen[item.WorkflowRef] = true
+		}
+		changed := request
+		changed.Query = "other"
+		if _, err := service.GetExecutionWorkflowCatalog(ctx, reader, changed); !errors.Is(err, errs.ErrInvalid) {
+			t.Fatalf("foreign cursor query accepted: %v", err)
+		}
+		changed = request
+		changed.Fence = "wrong-fence"
+		if _, err := service.GetExecutionWorkflowCatalog(ctx, reader, changed); !errors.Is(err, errs.ErrNotFound) {
+			t.Fatalf("stale fence catalog: %v", err)
+		}
+		if _, err := service.GetExecutionWorkflowCatalog(ctx, owner, request); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatalf("owner impersonation accepted: %v", err)
+		}
+		launchInput := workflowCatalogLaunchInput(t, service, launcher, lease, first.Items[0].WorkflowRef, "Exact schema launch")
+		staleVersion := launchInput
+		staleVersion.ExpectedWorkflowVersion++
+		if _, err := service.Execute(ctx, command.Command{Kind: command.LaunchWorkflowExecution, Principal: launcher, Mutation: value.Mutation{IdempotencyKey: "catalog-stale-version"}, Payload: staleVersion}); !errors.Is(err, errs.ErrConflict) {
+			t.Fatalf("changed workflow version launch: %v", err)
+		}
+		wrong := launchInput
+		wrong.ExpectedSpecDigest = strings.Repeat("0", 64)
+		if _, err := service.Execute(ctx, command.Command{Kind: command.LaunchWorkflowExecution, Principal: launcher, Mutation: value.Mutation{IdempotencyKey: "catalog-stale-pins"}, Payload: wrong}); !errors.Is(err, errs.ErrConflict) {
+			t.Fatalf("changed pins launch: %v", err)
+		}
+		accepted := execute(command.LaunchWorkflowExecution, launcher, "catalog-launch", launchInput, nil)
+		target, err := service.GetWorkflow(ctx, owner, launchInput.WorkflowRef)
+		if err != nil {
+			t.Fatal(err)
+		}
+		updated := *target.Published
+		updated.Name = "Updated catalog pins"
+		target = *execute(command.UpdateWorkflow, owner, "catalog-update", command.WorkflowInput{Ref: target.Ref, Name: updated.Name, Purpose: updated.Purpose, CoordinatorAgentRef: updated.CoordinatorAgentRef, Draft: &updated}, &target.Version).Workflow
+		target = *execute(command.ValidateWorkflow, owner, "catalog-revalidate", command.WorkflowInput{Ref: target.Ref}, &target.Version).Workflow
+		execute(command.PublishWorkflow, owner, "catalog-republish", command.WorkflowInput{Ref: target.Ref}, &target.Version)
+		replay := execute(command.LaunchWorkflowExecution, launcher, "catalog-new-key-replay", launchInput, nil)
+		if accepted.Run.Ref != replay.Run.Ref || accepted.Runtime["launchRef"] != replay.Runtime["launchRef"] {
+			t.Fatal("accepted intent was relaunch rather than receipt replay")
+		}
+		cancelRun("catalog-cleanup", parent.Ref)
+		if _, err := service.GetExecutionWorkflowCatalog(ctx, reader, query.ExecutionWorkflowCatalog{LeaseRef: request.LeaseRef, Fence: request.Fence, Generation: request.Generation}); !errors.Is(err, errs.ErrNotFound) {
+			t.Fatalf("terminal catalog remained available: %v", err)
+		}
+	})
 	t.Run("node-bound-child-attribution", func(t *testing.T) {
 		assertChildren := func(root string, expected map[string][]string) {
 			t.Helper()
@@ -321,7 +394,7 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		assertChildren(root.Ref, expected)
 		complete("node-bound-coord-complete", coord, true)
 		step := claim("node-bound-step", first.Ref)
-		nested := execute(command.LaunchWorkflowExecution, launcher, "node-bound-nested", command.LaunchWorkflowInput{LeaseRef: stringMap(step, "leaseRef"), Fence: stringMap(step, "fence"), Generation: runtimeRevisionMapInt64(step, "generation"), WorkflowRef: workflow.Ref, Task: "Exact required workflow."}, nil).Run
+		nested := execute(command.LaunchWorkflowExecution, launcher, "node-bound-nested", workflowCatalogLaunchInput(t, service, launcher, step, workflow.Ref, "Exact required workflow."), nil).Run
 		expected[stringMap(step, "nodeRef")] = []string{nested.Ref}
 		_, graph, err := service.GetRunGraph(ctx, owner, root.Ref)
 		if err != nil {
@@ -456,7 +529,9 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		innerDraft.Steps = append([]entity.WorkflowStep{}, draft.Steps...)
 		inner := publish("input-inner", innerDraft)
 		innerInput := map[string]any{"field-001": "Inner Issue", "field-002": "Inner business", "field-003": "Inner repository", "field-004": "Inner constraints"}
-		nested := execute(command.LaunchWorkflowExecution, launcher, "input-inner-launch", command.LaunchWorkflowInput{LeaseRef: stringMap(childLease, "leaseRef"), Fence: stringMap(childLease, "fence"), Generation: runtimeRevisionMapInt64(childLease, "generation"), WorkflowRef: inner.Ref, Task: "Nested workflow", Input: innerInput}, nil)
+		nestedInput := workflowCatalogLaunchInput(t, service, launcher, childLease, inner.Ref, "Nested workflow")
+		nestedInput.Input = innerInput
+		nested := execute(command.LaunchWorkflowExecution, launcher, "input-inner-launch", nestedInput, nil)
 		complete("input-second-child-waits", childLease, true)
 		current = claim("input-inner-coordinator", nested.Run.Ref)
 		assertInput(current, innerInput)
@@ -948,6 +1023,13 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 	t.Run("current-capability-and-lease", func(t *testing.T) {
 		parent := execute(command.LaunchRun, owner, "denied-parent", command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "AGENT", Ref: manager.Ref}, Task: "Revalidate exact current launch authority."}, nil).Run
 		origin := claim("denied-claim", parent.Ref)
+		deniedInput := workflowCatalogLaunchInput(t, service, launcher, origin, workflow.Ref, "Denied launch.")
+		catalogReader := launcher
+		catalogReader.Permission = "platform.runtime.execution.workflow.catalog"
+		catalogRequest := query.ExecutionWorkflowCatalog{LeaseRef: stringMap(origin, "leaseRef"), Fence: stringMap(origin, "fence"), Generation: runtimeRevisionMapInt64(origin, "generation")}
+		if _, err := service.GetExecutionWorkflowCatalog(ctx, catalogReader, catalogRequest); err != nil {
+			t.Fatal("initial launch catalog", err)
+		}
 		toolInput := command.RunToolCallInput{LeaseRef: stringMap(origin, "leaseRef"), Fence: stringMap(origin, "fence"), Generation: runtimeRevisionMapInt64(origin, "generation"), CallRef: "tcl_launchproof01", Tool: "launch_workflow", CapabilityRef: "platform.run.launch", State: "RUNNING", Revision: 1, SafeParameters: map[string]any{"workflow_ref": workflow.Ref}}
 		toolWorker := worker
 		toolWorker.Permission = "platform.runtime.tool-call.record"
@@ -960,12 +1042,15 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 			t.Fatal(err)
 		}
 		execute(command.ChangeAgentCapability, owner, "revoke-launch", command.AgentBindingInput{AgentRef: manager.Ref, BindingRef: "platform.run.launch", Enabled: false}, &managerView.Version)
+		if _, err := service.GetExecutionWorkflowCatalog(ctx, catalogReader, catalogRequest); !errors.Is(err, errs.ErrNotFound) && !errors.Is(err, errs.ErrForbidden) {
+			t.Fatalf("revoked catalog authority: %v", err)
+		}
 		toolInput.State = "SUCCEEDED"
 		toolInput.Revision = 2
 		if _, err := service.Execute(ctx, command.Command{Kind: command.RecordRunToolCall, Principal: toolWorker, Mutation: value.Mutation{IdempotencyKey: "workflow-launch-revoked-tool"}, Payload: toolInput}); !errors.Is(err, errs.ErrForbidden) {
 			t.Fatalf("current native capability guard: %v", err)
 		}
-		input := command.Command{Kind: command.LaunchWorkflowExecution, Principal: launcher, Mutation: value.Mutation{IdempotencyKey: "workflow-launch-denied"}, Payload: command.LaunchWorkflowInput{LeaseRef: stringMap(origin, "leaseRef"), Fence: stringMap(origin, "fence"), Generation: runtimeRevisionMapInt64(origin, "generation"), WorkflowRef: workflow.Ref, Task: "Denied launch."}}
+		input := command.Command{Kind: command.LaunchWorkflowExecution, Principal: launcher, Mutation: value.Mutation{IdempotencyKey: "workflow-launch-denied"}, Payload: deniedInput}
 		if _, err := service.Execute(ctx, input); !errors.Is(err, errs.ErrNotFound) && !errors.Is(err, errs.ErrForbidden) {
 			t.Fatalf("revoked capability accepted: %v", err)
 		}

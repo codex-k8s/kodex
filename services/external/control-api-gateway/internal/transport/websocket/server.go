@@ -32,19 +32,20 @@ import (
 )
 
 const (
-	maximumFrameBytes        = 1 << 20
-	maximumRunSubscriptions  = 32
-	maximumOutboundFrames    = 256
-	maximumInboundCommands   = 64
-	writeTimeout             = 5 * time.Second
-	readTimeout              = 10 * time.Second
-	heartbeatInterval        = 15 * time.Second
-	maximumHeartbeatWakes    = 4
-	heartbeatWakeTimeout     = 2 * time.Second
-	pingInterval             = 30 * time.Second
-	sessionSubprotocol       = "kodex.session.v2"
-	legacySessionSubprotocol = "kodex.session.v1"
-	platformStreamRef        = "PLATFORM"
+	maximumFrameBytes         = 1 << 20
+	maximumRunSubscriptions   = 32
+	maximumOutboundFrames     = 256
+	maximumInboundCommands    = 64
+	writeTimeout              = 5 * time.Second
+	readTimeout               = 10 * time.Second
+	heartbeatInterval         = 15 * time.Second
+	maximumHeartbeatWakes     = 4
+	heartbeatWakeTimeout      = 2 * time.Second
+	heartbeatWakeDrainTimeout = maximumHeartbeatWakes * heartbeatWakeTimeout
+	pingInterval              = 30 * time.Second
+	sessionSubprotocol        = "kodex.session.v2"
+	legacySessionSubprotocol  = "kodex.session.v1"
+	platformStreamRef         = "PLATFORM"
 )
 
 var (
@@ -680,7 +681,7 @@ func (multiplexer *sessionMultiplexer) synchronizePlatformWithRefresh(ctx contex
 // бюджет и не задерживают RUN/session signals неограниченным drain.
 func (multiplexer *sessionMultiplexer) drainHeartbeatWakes() (available, ok bool) {
 	count := min(len(multiplexer.platformSignals), maximumHeartbeatWakes)
-	ctx, cancel := context.WithTimeout(multiplexer.ctx, heartbeatWakeTimeout)
+	ctx, cancel := context.WithTimeout(multiplexer.ctx, heartbeatWakeDrainTimeout)
 	defer cancel()
 	refreshRequired := false
 	defer func() {
@@ -753,7 +754,11 @@ func (multiplexer *sessionMultiplexer) drainHeartbeatWakes() (available, ok bool
 				runCatalog = nil
 			}
 			catalogProject = signal.ProjectRef
-			if !multiplexer.applyPlatformSignalWithReaders(ctx, signal, deferRunRefresh, readCatalog) {
+			// Каждый owner-read сохраняет полный бюджет; весь фиксированный префикс ограничен отдельно.
+			wakeCtx, cancelWake := context.WithTimeout(ctx, heartbeatWakeTimeout)
+			applied := multiplexer.applyPlatformSignalWithReaders(wakeCtx, signal, deferRunRefresh, readCatalog)
+			cancelWake()
+			if !applied {
 				if len(multiplexer.overflow) > 0 {
 					multiplexer.terminate("BACKPRESSURE_EXCEEDED", websocket.StatusTryAgainLater)
 				}

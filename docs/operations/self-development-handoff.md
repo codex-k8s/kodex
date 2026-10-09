@@ -10,6 +10,87 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 08:14 UTC — история задачи и каталог процессов интегрированы
+
+На базе published `e0976b3cfec30d56d597caee98aacea6cc2f4503` объединены
+`read_task_session` для SYSTEM/PROJECT и ordinary `get_workflow_catalog`.
+Первый читает только разрешённый публичный результат и опубликованные сообщения
+выбранной Session; второй возвращает published schema/version/digest, которые
+обязательны при новом launch. Actor/project/lease по-прежнему разрешает сервер.
+Existing SearchAssistantResources расширен typed selector, новая catalog RPC
+зарегистрирована exact policy93. Legacy fallback на latest не добавлен.
+
+ROOT проверки объединённого dirty tree: CP unit0.253/0.916/0.559s PASS;
+RC весь callback race30.566s PASS; shared typed API0.034s PASS;
+Proto lint/build/codegen, authority-policy codegen, actual RC→runner MCP
+producer0.061s/consumer0.053s и SQL boundary PASS. Устаревший pin92 в
+contract-registry test обновлён до93 с negative cases92/94; все5 tests PASS.
+Combined disposable PostgreSQL PASS47.146s: TaskSession8.15s,
+CoordinatorFiles6.56s, WorkflowLaunch32.38s/17 cases; 2744 source hashes
+before/after EQUAL, closure SHA256
+`8f961c9b88ff0eaf4e7af0f7030a3e51f649a0c1f26c9cc010558917ed538da4`.
+Это component proof, не живой пользовательский PASS.
+
+Через PROJECT-чаты без ID helper подготовил Workflow plan1 с лишней заменой
+capability этапа20; он НЕ применён. Helper сам подготовил исправленный plan2
+`pln_54FJzv-M3Vg7cUG9aR9WT4Pk`. UI validation/APPLIED и owner typed comparison:
+единственная дельта — LIST на INTAKE; остальные21 steps/DAG и все10 stable
+полей, включая полные instructions12358 chars, EQUAL. После штатной проверки
+и UI publication Workflow version28/revision9 PUBLISHED,
+`wfv_xPG1V1vhmttYEA-Y2xOmGAAc`; 21 steps, один final Human Gate.
+Первый publish во время hot reload вернул temporary unavailable; после
+готовности CP/gateway/RC повтор успешен, без ручной записи бизнес-состояния.
+
+Mixed catalog prefix теперь имеет общий8s budget и отдельный2s child на каждое
+чтение, максимум4; run refresh10s неизменен. ROOT весь websocket race17.476s,
+gateway all-unit и vet PASS, runtime timeout переведён в обеих локалях.
+Actual serving gateway `/proc/1480/exe` EQUAL hermetic SHA256
+`35e65d7c20acf7eaedc27e165de07ed7c5a3a0ae1992b5df95c50e008d8006c7`.
+Chrome page21 screenshot просмотрен: overflowfalse, Console0, publish/read200,
+после готовности backend STREAM_PROBLEM нет. Это ещё не load/reconnect PASS.
+
+Далее: clean source checkpoint/push в том же Draft1807; новый compiled runner,
+fresh render/exact policy93 и canonical supply-chain activation; admitted/promoted
+custom images и image-only ENV upgrade. Затем нейтральный project overview,
+новый чат без refs, чтение прежней задачи, неоднозначность/изоляция, ordinary
+Manager discovery/launch и реальный dogfooding. Full65/11/14/15/16 OPEN.
+
+## Checkpoint 09.10.2026 07:50 UTC — план по имени применён; история и realtime OPEN
+
+Published source `e0976b3cfec30d56d597caee98aacea6cc2f4503`, Draft PR1807.
+Chrome MCP восстановлен в собственной page21, OWNER bootstrap200; чужие
+вкладки не закрывались. После reload screenshot проверен, Console0 до
+диагностического обращения к неподдерживаемому endpoint. Этот GET вернул405
+и не является дефектом приложения. Подтверждение и чтение выполнены штатно.
+
+PROJECT-запрос без refs на экране Project Manager самостоятельно подготовил
+ровно один CHANGE_INTEGRATION_GRANT, run `run_817z3eriMr0IDbeDR5fYEX3D`,
+conversation `cnv_v-fw4DpqSy_iBE2U1AYvLPT3`, plan
+`pln_abcKa-41yj01LaaCgOOOVW5e` revision1. После VALID без ошибок применён
+через UI. Owner GET200: connection623→624; новый grant
+`grt_kiSL8ntinpQkn9CJWd9GNhRI`, github.repository.content.list / NONE / enabled.
+Agent integrations21→22, все прежние refs сохранены, остальные поля
+конфигурации EQUAL. Version22 и runtimeRevision не менялись; новый runtime
+snapshot должен проверяться отдельно при следующем запуске.
+
+На экране SOFTWARE_CHANGE в новом PROJECT-чате отправлен следующий запрос
+без refs: добавить LIST только INTAKE, сохранить21 этап/DAG/настройки,
+одно комплексное ревью и финальный Human Gate. Новый план пока NOT RUN.
+Baseline owner Workflow25/revision8/PUBLISHED прочитан; LIST отсутствовал.
+
+Realtime LIVE FAIL сохраняется: при native assistant launch наблюдались
+PLATFORM_UNAVAILABLE и clean4000/resync; gateway diagnostic kindRUN,
+DeadlineExceeded/elapsed140ms. Mixed catalog prefix всё ещё наследует общий
+2s остаток. Готовится отдельный bound на каждое чтение2s и fixed prefix≤4
+с общим8s; subscribed-runs refresh10s не меняется. Частые cursor-gap resync
+без STREAM_PROBLEM отдельно OPEN, причиной network/provider их не объявлять.
+
+Две изолированные доработки ещё OPEN: защищённое чтение опубликованных
+сообщений найденной задачи и ordinary workflow catalog с publication/OCC pins.
+После доставки новых инструментов нужен новый compiled runner и штатный
+admission/promotion для использующих его custom images, затем повтор native
+проверки без ID с нейтрального project overview. Full65/checklist11/14/15/16 OPEN.
+
 ## Checkpoint 09.10.2026 07:27 UTC — catalog batch и реальный запрос без ID
 
 На базе `8e4a1fa32374464ad2fecccc41e0493896740b42` устранено повторное

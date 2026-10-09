@@ -29,6 +29,10 @@ func TestWorkflowLaunchSchemaExplainsExactInputKeys(t *testing.T) {
 	tool := workflowLaunchTool()
 	schema := tool["inputSchema"].(map[string]any)
 	properties := schema["properties"].(map[string]any)
+	version := properties["expected_workflow_version"].(map[string]any)
+	if version["type"] != "integer" || version["minimum"] != 1 {
+		t.Fatal("workflow version OCC schema is absent")
+	}
 	input := properties["input"].(map[string]any)
 	if input["type"] != "object" {
 		t.Fatal("workflow launch input must remain an object map")
@@ -92,7 +96,7 @@ func TestWorkflowLaunchNativeCatalogAndClosedAuthority(t *testing.T) {
 	}
 	client := &workflowLaunchClient{}
 	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
-	args := map[string]any{"workflow_ref": "wf_workflow001", "task": strings.Repeat("🙂", runtimecontract.MaximumAssistantTurnCodepoints), "input": map[string]any{"record": "bounded"}}
+	args := map[string]any{"workflow_ref": "wf_workflow001", "expected_published_ref": "wfv_workflow001", "expected_spec_digest": strings.Repeat("a", 64), "expected_workflow_version": float64(7), "task": strings.Repeat("🙂", runtimecontract.MaximumAssistantTurnCodepoints), "input": map[string]any{"record": "bounded"}}
 	response, err := server.launchWorkflow(t.Context(), input, args, json.RawMessage(`"call-one"`))
 	if err != nil || response == nil || client.calls != 1 {
 		t.Fatalf("launch: %v", err)
@@ -100,14 +104,46 @@ func TestWorkflowLaunchNativeCatalogAndClosedAuthority(t *testing.T) {
 	if client.request.LeaseRef != input.LeaseRef || client.request.Fence != input.LeaseFence || client.request.Generation != 7 || client.request.WorkflowRef != args["workflow_ref"] || client.request.Task != args["task"] {
 		t.Fatal("owner-bound launch request changed")
 	}
+	if client.request.ExpectedPublishedRef != args["expected_published_ref"] || client.request.ExpectedSpecDigest != args["expected_spec_digest"] || client.request.ExpectedWorkflowVersion != 7 {
+		t.Fatal("published launch pins lost")
+	}
+	for _, key := range []string{"expected_published_ref", "expected_spec_digest", "expected_workflow_version"} {
+		copy := map[string]any{}
+		for name, value := range args {
+			copy[name] = value
+		}
+		delete(copy, key)
+		if _, err := server.launchWorkflow(t.Context(), input, copy, nil); err == nil {
+			t.Fatal("missing launch pin accepted")
+		}
+	}
 	for _, key := range []string{"actor_ref", "project_ref", "organization_ref", "root_run_ref", "source", "runtime_revision_ref"} {
-		copy := map[string]any{"workflow_ref": "wf_workflow001", "task": "bounded", key: "forged"}
+		copy := map[string]any{}
+		for name, value := range args {
+			copy[name] = value
+		}
+		copy[key] = "forged"
 		if _, err := server.launchWorkflow(t.Context(), input, copy, nil); err == nil {
 			t.Fatal("client authority accepted")
 		}
 	}
+	for _, value := range []any{nil, "7", float64(0), float64(-1), 7.5, float64(9007199254740992)} {
+		copy := map[string]any{}
+		for key, original := range args {
+			copy[key] = original
+		}
+		copy["expected_workflow_version"] = value
+		if _, err := server.launchWorkflow(t.Context(), input, copy, nil); err == nil {
+			t.Fatal("invalid workflow OCC accepted")
+		}
+	}
 	for _, task := range []string{"", strings.Repeat("🙂", runtimecontract.MaximumAssistantTurnCodepoints+1), "bad\x00task", string([]byte{0xff})} {
-		if _, err := server.launchWorkflow(t.Context(), input, map[string]any{"workflow_ref": "wf_workflow001", "task": task}, nil); err == nil {
+		invalid := map[string]any{}
+		for key, value := range args {
+			invalid[key] = value
+		}
+		invalid["task"] = task
+		if _, err := server.launchWorkflow(t.Context(), input, invalid, nil); err == nil {
 			t.Fatal("invalid task accepted")
 		}
 	}
