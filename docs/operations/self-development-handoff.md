@@ -30,6 +30,13 @@ PROJECT helper draft `renvd_bdgDoGGwqUn5LjIAV3VARBin` сохранён с artifa
 Один history pageSize50 GET503 (причина UNKNOWN), pageSize20 GET200.
 Полный65QA/Workflow/п11/14/15/16 OPEN, финальный business PR не merge.
 
+22:21 UTC: helper publication подтверждена, version13/revision14/binding13,
+custom2a1da9ec generation3; исходный preservation hash точно восстановлен.
+Own10191 штатно закрыт после сохранения draft, новый69259 OWNER200;
+native validation/publish выполнены со свежим SSO. Остаются staff2ENV/6bindings.
+SYSTEM/helper больше не публиковать повторно. Chrome MCP новый cell319 pending,
+cell288 завершился timeout300s. Журнал checkpoint22:17 опубликован db31901c.
+
 ## Checkpoint 09.10.2026 22:02 UTC — новые образы допущены, UI fix готов к фиксации
 
 На0984a869 canonical runner activation PASS. Три new artifacts22218338/

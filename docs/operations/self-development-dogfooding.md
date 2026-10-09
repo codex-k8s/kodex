@@ -38,6 +38,15 @@ PROJECT helper image-only draft `renvd_bdgDoGGwqUn5LjIAV3VARBin` сохранё�
 Chrome MCP повторный list_pages ожидает ответа; подключение не подтверждено.
 Own Playwright fallback работает, чужие вкладки не закрывались.
 
+22:21 UTC: PROJECT helper image-only публикация подтверждена штатным UI:
+environment version13/revision14, binding13, custom2a1da9ec generation3,
+38tools и прежние настройки сохранены. Реконструкция общего исходного hash
+вернула `4b13b1e444c41331fe0000c9461b238c34db95807d696b19ff969ef52988aba2`.
+Native publication modal просмотрен на скриншоте; один выбранный именованный
+потребитель, без overflow. Перед проверкой истёк freshness gate403; штатная
+авторизация свежего собственного браузера восстановила проверку/публикацию.
+Не было прямых API writes либо обхода gate. Остаются два staff ENV/шесть bindings.
+
 ## Checkpoint 09.10.2026 22:02 UTC — три новых admission ACCEPTED; frontend проверен нативно
 
 Runner активация ниже завершена на0984a869. Все три новые custom artifacts
