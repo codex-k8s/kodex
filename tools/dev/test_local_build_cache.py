@@ -142,7 +142,7 @@ class BuildCacheTests(unittest.TestCase):
             self.assertNotIn("parents", " ".join(command))
             if mode == "prune":
                 self.assertEqual(command[7:], ["--force", "--filter", "id=" + TARGET,
-                                              "--filter", "until=24h", "--filter", "private"])
+                                              "--filter", "until=24h", "--filter", "private=true"])
             else:
                 self.assertEqual(command[7:], ["--format", "{{json .}}"])
             self.assertEqual(set(mocked.call_args.kwargs["env"]), {"PATH", "HOME", "LC_ALL", "LANG"})

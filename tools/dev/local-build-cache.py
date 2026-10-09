@@ -55,7 +55,7 @@ def docker(builder, operation, target=None, deadline=None):
     else:
         require(isinstance(target, str) and ID_PATTERN.fullmatch(target), "TARGET_REJECTED")
         command += ["--force", "--filter", "id=" + target,
-                    "--filter", "until=24h", "--filter", "private"]
+                    "--filter", "until=24h", "--filter", "private=true"]
     end = min(time.monotonic() + COMMAND_SECONDS, deadline or float("inf"))
     require(time.monotonic() < end, "BUDGET_EXHAUSTED")
     try:
