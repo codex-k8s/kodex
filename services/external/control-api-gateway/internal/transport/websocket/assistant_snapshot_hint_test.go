@@ -59,7 +59,7 @@ func warmAssistantPageHint(t *testing.T, m *sessionMultiplexer, c *assistantPage
 	if _, err := m.sendPlatformBootstrap(); err != nil || m.assistantPageHint.pageSize != 25 {
 		t.Fatal("initial full bootstrap did not learn the last whole fitting page size")
 	}
-	if len(c.requests) != 2 || c.requests[0].Page.PageSize != 50 || c.requests[1].Page.PageSize != 25 || len(c.frames) != 1 {
+	if len(c.requests) != 1 || c.requests[0].Page.PageSize != 25 || len(c.frames) != 1 {
 		t.Fatal("initial hint changed owner page adaptation or emitted a partial snapshot")
 	}
 	<-c.frames
@@ -77,16 +77,16 @@ func TestAssistantPageHintBootstrapAndWakesStillReadFreshOwnerData(t *testing.T)
 		t.Fatal("fresh owner wake failed")
 	}
 	frame := (<-c.frames).value.(generated.PlatformSnapshotEnvelope)
-	if len(c.requests) != 3 || c.requests[2].Page.PageSize != 25 || c.requests[2].Page.PageToken != "" ||
-		c.assistantReads != 3 || c.conversationReads != 3 || c.bootstrapReads != 3 ||
+	if len(c.requests) != 2 || c.requests[1].Page.PageSize != 25 || c.requests[1].Page.PageToken != "" ||
+		c.assistantReads != 2 || c.conversationReads != 2 || c.bootstrapReads != 2 ||
 		frame.Cursor != 124 || *frame.Snapshot.Conversations.Page.NextPageToken != c.ownerCursor ||
 		frame.Snapshot.Conversations.Conversations[0].Version != 9 || frame.Snapshot.Conversations.Conversations[0].Turns[0].Content != "fresh owner content" {
 		t.Fatal("hint reused owner payload, skipped RPCs or changed authoritative cursor/pins")
 	}
-	if !m.applyPlatformSignal(signal) || len(c.frames) != 0 || len(c.requests) != 3 {
+	if !m.applyPlatformSignal(signal) || len(c.frames) != 0 || len(c.requests) != 2 {
 		t.Fatal("hint changed duplicate event handling")
 	}
-	if !m.applyPlatformSignal(platformSignal{Sequence: 125, Kind: signal.Kind, EventName: signal.EventName, ProjectRef: m.projectRef}) || len(c.requests) != 4 || c.assistantReads != 4 || c.bootstrapReads != 4 {
+	if !m.applyPlatformSignal(platformSignal{Sequence: 125, Kind: signal.Kind, EventName: signal.EventName, ProjectRef: m.projectRef}) || len(c.requests) != 3 || c.assistantReads != 3 || c.bootstrapReads != 3 {
 		t.Fatal("repeated wake did not freshly read every owner dependency")
 	}
 }
@@ -101,7 +101,7 @@ func TestAssistantPageHintGrowthStillAdaptsAndFailureKeepsClosedStream(t *testin
 			}
 			if fail {
 				c.before = func(ctx context.Context) error {
-					if c.conversationReads == 4 {
+					if c.conversationReads == 3 {
 						return status.Error(codes.DeadlineExceeded, "PRIVATE_SENTINEL")
 					}
 					return nil
@@ -112,11 +112,11 @@ func TestAssistantPageHintGrowthStillAdaptsAndFailureKeepsClosedStream(t *testin
 					t.Fatal("hint lost the existing successful or closed stream result")
 				}
 			})
-			wantRequests := 4
+			wantRequests := 3
 			if fail {
-				wantRequests = 3
+				wantRequests = 2
 			}
-			if len(c.requests) != wantRequests || c.requests[2].Page.PageSize != 25 || c.conversationReads != 4 {
+			if len(c.requests) != wantRequests || c.requests[1].Page.PageSize != 25 || c.conversationReads != 3 {
 				t.Fatal("growing hinted page did not start from the last fitting owner page")
 			}
 			frame := (<-c.frames).value
@@ -127,7 +127,7 @@ func TestAssistantPageHintGrowthStillAdaptsAndFailureKeepsClosedStream(t *testin
 				}
 			} else {
 				delta, ok := frame.(generated.PlatformSnapshotEnvelope)
-				if !ok || len(c.requests) != 4 || c.requests[3].Page.PageSize != 12 || m.assistantPageHint.pageSize != 12 || m.platformCursor != 124 || len(rows) != 0 || *delta.Snapshot.Conversations.Page.NextPageToken != "owner-cursor-12" {
+				if !ok || len(c.requests) != 3 || c.requests[2].Page.PageSize != 12 || m.assistantPageHint.pageSize != 12 || m.platformCursor != 124 || len(rows) != 0 || *delta.Snapshot.Conversations.Page.NextPageToken != "owner-cursor-12" {
 					t.Fatal("growing page was truncated or lost its fresh owner cursor")
 				}
 			}
@@ -140,6 +140,7 @@ func TestAssistantPageHintScopeSocketAndCloseReset(t *testing.T) {
 		t.Run(change, func(t *testing.T) {
 			m, c := assistantPageHintFixture(t)
 			warmAssistantPageHint(t, m, c)
+			m.assistantPageHint.pageSize = 12
 			switch change {
 			case "project":
 				m.projectRef = "prj_otherfixture"
@@ -156,7 +157,7 @@ func TestAssistantPageHintScopeSocketAndCloseReset(t *testing.T) {
 				other, _ := assistantPageHintFixture(t)
 				m = other
 			}
-			if m.assistantSnapshotInitialPageSize() != 50 || m.assistantPageHint != (assistantSnapshotPageHint{}) {
+			if m.assistantSnapshotInitialPageSize() != 25 || m.assistantPageHint != (assistantSnapshotPageHint{}) {
 				t.Fatal("page hint crossed scope/socket or accepted an unknown size")
 			}
 		})
@@ -191,13 +192,13 @@ func TestAssistantPageHintDenialCancelAndOtherKindsDoNotReuseData(t *testing.T) 
 			if len(c.frames) != 0 || m.platformCursor != 123 || (condition != "cancel" && len(rows) != 0) {
 				t.Fatal("hint fabricated access, published partial data or advanced a failed read cursor")
 			}
-			if condition == "permission" && (len(c.requests) != 3 || c.requests[2].Page.PageSize != 25 || c.assistantReads != 3 || c.bootstrapReads != 2) {
+			if condition == "permission" && (len(c.requests) != 2 || c.requests[1].Page.PageSize != 25 || c.assistantReads != 2 || c.bootstrapReads != 1) {
 				t.Fatal("hint bypassed a newly denied owner RPC")
 			}
 			if condition == "cancel" && (m.assistantPageHint != (assistantSnapshotPageHint{}) || len(rows) != 1) {
 				t.Fatal("closed socket context retained a page hint or lost its closed failure")
 			}
-			if condition == "other-kind" && (len(c.requests) != 2 || m.assistantPageHint.pageSize != 25) {
+			if condition == "other-kind" && (len(c.requests) != 1 || m.assistantPageHint.pageSize != 25) {
 				t.Fatal("assistant hint changed another kind's page or reused its owner data")
 			}
 		})

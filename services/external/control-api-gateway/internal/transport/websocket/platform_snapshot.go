@@ -17,7 +17,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const platformSnapshotPageSize = 50
+const (
+	platformSnapshotPageSize         = 50
+	assistantSnapshotInitialPageSize = 25
+)
 
 // Размер принадлежит одному socket; payload и полномочия в подсказке отсутствуют.
 type assistantSnapshotPageHint struct {
@@ -165,10 +168,16 @@ func (server *Server) projectPlatformSnapshotPage(ctx context.Context, kind, pro
 	withOverview := func(snapshot map[string]any) (map[string]any, error) {
 		overview, readErr := server.query.GetOverview(scoped, &controlplanev1.GetOverviewRequest{ProjectRef: projectRef})
 		if readErr != nil {
+			if kind == "RUN" {
+				return nil, withPlatformSnapshotReadStage(platformSnapshotOverviewGetStage, readErr)
+			}
 			return nil, readErr
 		}
 		projected, projectErr := projectSnapshotPart(overview, localize)
 		if projectErr != nil {
+			if kind == "RUN" {
+				return nil, withPlatformSnapshotReadStage(platformSnapshotRunProjectStage, projectErr)
+			}
 			return nil, projectErr
 		}
 		snapshot["overview"] = projected
@@ -240,19 +249,19 @@ func (server *Server) projectPlatformSnapshotPage(ctx context.Context, kind, pro
 	case "RUN":
 		response, readErr := server.query.ListRuns(scoped, &controlplanev1.ListRunsRequest{ProjectRef: projectRef, Page: platformPage()})
 		if readErr != nil {
-			return nil, readErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotRunsListStage, readErr)
 		}
 		catalog, projectErr := projectSnapshotPart(response, localize)
 		if projectErr != nil {
-			return nil, projectErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotRunProjectStage, projectErr)
 		}
 		gates, readErr := server.query.ListOwnerGates(scoped, &controlplanev1.ListOwnerGatesRequest{ProjectRef: projectRef, Page: platformPage()})
 		if readErr != nil {
-			return nil, readErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotOwnerGatesListStage, readErr)
 		}
 		gateCatalog, projectErr := projectSnapshotPart(gates, localize)
 		if projectErr != nil {
-			return nil, projectErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotRunProjectStage, projectErr)
 		}
 		catalog["gates"] = gateCatalog["gates"]
 		catalog["gatesPage"] = gateCatalog["page"]
@@ -581,7 +590,11 @@ func (multiplexer *sessionMultiplexer) boundedPlatformSnapshotWithin(ctx context
 		}
 		snapshot, err := typedPlatformSnapshot(string(envelope.Kind), rawSnapshot)
 		if err != nil {
-			slog.Error(platformSnapshotValidationFailure, "kind", envelope.Kind, "error_class", "contract")
+			if envelope.Kind == generated.PlatformResourceKindRun {
+				observePlatformSnapshotReadFailure(ctx, started, parentBudget, string(envelope.Kind), withPlatformSnapshotReadStage(platformSnapshotRunProjectStage, errPlatformSnapshotInvalid), attempt, pageSize)
+			} else {
+				slog.Error(platformSnapshotValidationFailure, "kind", envelope.Kind, "error_class", "contract")
+			}
 			return generated.PlatformSnapshotEnvelope{}, errPlatformSnapshotInvalid
 		}
 		envelope.Snapshot = snapshot
@@ -609,7 +622,7 @@ func (multiplexer *sessionMultiplexer) assistantSnapshotInitialPageSize() int32 
 	_, size := platformSnapshotDiagnosticPage("SYSTEM_ASSISTANT", 1, hint.pageSize)
 	if size == 0 || hint.organizationRef != multiplexer.organizationRef || hint.projectRef != multiplexer.projectRef || multiplexer.ctx.Err() != nil {
 		multiplexer.assistantPageHint = assistantSnapshotPageHint{}
-		return platformSnapshotPageSize
+		return assistantSnapshotInitialPageSize
 	}
 	return size
 }

@@ -48,9 +48,11 @@ func TestPlatformSnapshotDiagnosticStagePreservesClosedMapping(t *testing.T) {
 	for _, stage := range []platformSnapshotReadStage{
 		platformSnapshotAssistantGetStage, platformSnapshotConversationListStage,
 		platformSnapshotBootstrapGetStage, platformSnapshotAssistantProjectStage,
+		platformSnapshotRunsListStage, platformSnapshotOwnerGatesListStage,
+		platformSnapshotOverviewGetStage, platformSnapshotRunProjectStage,
 		"PRIVATE_SENTINEL",
 	} {
-		for _, kind := range []string{"SYSTEM_ASSISTANT", "RUN"} {
+		for _, kind := range []string{"SYSTEM_ASSISTANT", "RUN", "ARTIFACT"} {
 			t.Run(kind+"/"+string(stage), func(t *testing.T) {
 				cause := status.Error(codes.DeadlineExceeded, "PRIVATE_SENTINEL")
 				wrapped := fmt.Errorf("PRIVATE_SENTINEL: %w", withPlatformSnapshotReadStage(stage, cause))
@@ -61,7 +63,9 @@ func TestPlatformSnapshotDiagnosticStagePreservesClosedMapping(t *testing.T) {
 					observePlatformSnapshotReadFailure(t.Context(), time.Now(), -1, kind, wrapped, 1, platformSnapshotPageSize)
 				})
 				want := string(stage)
-				if stage == "PRIVATE_SENTINEL" || kind != "SYSTEM_ASSISTANT" {
+				assistantStage := stage == platformSnapshotAssistantGetStage || stage == platformSnapshotConversationListStage || stage == platformSnapshotBootstrapGetStage || stage == platformSnapshotAssistantProjectStage
+				runStage := stage == platformSnapshotRunsListStage || stage == platformSnapshotOwnerGatesListStage || stage == platformSnapshotOverviewGetStage || stage == platformSnapshotRunProjectStage
+				if !(kind == "SYSTEM_ASSISTANT" && assistantStage || kind == "RUN" && runStage) {
 					want = platformSnapshotDiagnosticUnknown
 				}
 				if len(rows) != 1 || len(rows[0]) != 14 || rows[0][platformSnapshotReadStageKey] != want || rows[0][runSnapshotDiagnosticGRPCCodeKey] != "DeadlineExceeded" {
@@ -138,7 +142,7 @@ func TestPlatformSnapshotSystemAssistantReadStageAttribution(t *testing.T) {
 					t.Fatal("actual snapshot path changed its owner RPC error")
 				}
 			})
-			if c.calls != tc.calls || len(rows) != 1 || rows[0][platformSnapshotReadStageKey] != string(tc.stage) || rows[0][platformSnapshotAttemptKey] != float64(1) || rows[0][platformSnapshotAssistantPageKey] != float64(platformSnapshotPageSize) || len(c.frames) != 0 || m.platformCursor != 123 || ctx.Err() != nil {
+			if c.calls != tc.calls || len(rows) != 1 || rows[0][platformSnapshotReadStageKey] != string(tc.stage) || rows[0][platformSnapshotAttemptKey] != float64(1) || rows[0][platformSnapshotAssistantPageKey] != float64(assistantSnapshotInitialPageSize) || len(c.frames) != 0 || m.platformCursor != 123 || ctx.Err() != nil {
 				t.Fatal("stage diagnostics changed RPC sequence, cursor, cancellation or emitted a partial snapshot")
 			}
 		})
@@ -197,6 +201,9 @@ func TestPlatformSnapshotDiagnosticIdentifiesOversizedRetry(t *testing.T) {
 	cause := status.Error(codes.Unavailable, "PRIVATE_SENTINEL")
 	c := &platformSnapshotStageRecorder{deadline: deadline, failStage: platformSnapshotAssistantGetStage, failure: cause, failOnCall: 4}
 	c.conversations = assistantSizeConversations(42, strings.Repeat("Я", 16000))
+	for _, conversation := range c.conversations {
+		conversation.Turns = append(conversation.Turns, conversation.Turns[0])
+	}
 	m := assistantSizeMultiplexer(t, &c.assistantSnapshotSizeRecorder, "prj_fixture01")
 	m.server.query = cp.NewPlatformQueryServiceClient(c)
 	m.server.assistant = cp.NewSystemAssistantServiceClient(c)
@@ -206,7 +213,7 @@ func TestPlatformSnapshotDiagnosticIdentifiesOversizedRetry(t *testing.T) {
 			t.Fatal("page retry diagnostic changed the owner error")
 		}
 	})
-	if c.calls != 4 || len(rows) != 1 || rows[0][platformSnapshotAttemptKey] != float64(2) || rows[0][platformSnapshotAssistantPageKey] != float64(25) || rows[0][platformSnapshotReadStageKey] != string(platformSnapshotAssistantGetStage) || len(c.frames) != 0 {
+	if c.calls != 4 || len(rows) != 1 || rows[0][platformSnapshotAttemptKey] != float64(2) || rows[0][platformSnapshotAssistantPageKey] != float64(12) || rows[0][platformSnapshotReadStageKey] != string(platformSnapshotAssistantGetStage) || len(c.frames) != 0 {
 		t.Fatal("diagnostic confused the reduced page attempt with a new wake or emitted partial data")
 	}
 }

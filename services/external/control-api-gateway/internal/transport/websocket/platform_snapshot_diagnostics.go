@@ -27,6 +27,10 @@ const (
 	platformSnapshotConversationListStage platformSnapshotReadStage = "ASSISTANT_CONVERSATIONS_LIST"
 	platformSnapshotBootstrapGetStage     platformSnapshotReadStage = "BOOTSTRAP_STATE_GET"
 	platformSnapshotAssistantProjectStage platformSnapshotReadStage = "SYSTEM_ASSISTANT_PROJECTION"
+	platformSnapshotRunsListStage         platformSnapshotReadStage = "RUNS_LIST"
+	platformSnapshotOwnerGatesListStage   platformSnapshotReadStage = "OWNER_GATES_LIST"
+	platformSnapshotOverviewGetStage      platformSnapshotReadStage = "OVERVIEW_GET"
+	platformSnapshotRunProjectStage       platformSnapshotReadStage = "RUN_PROJECTION"
 	platformSnapshotStageFailureMessage                             = "platform snapshot stage failed"
 )
 
@@ -48,16 +52,24 @@ func withPlatformSnapshotReadStage(stage platformSnapshotReadStage, err error) e
 
 func platformSnapshotErrorStage(kind string, err error) string {
 	var staged *platformSnapshotStageError
-	if kind != "SYSTEM_ASSISTANT" || !errors.As(err, &staged) {
+	if !errors.As(err, &staged) {
 		return platformSnapshotDiagnosticUnknown
 	}
-	switch staged.stage {
-	case platformSnapshotAssistantGetStage, platformSnapshotConversationListStage,
-		platformSnapshotBootstrapGetStage, platformSnapshotAssistantProjectStage:
-		return string(staged.stage)
-	default:
-		return platformSnapshotDiagnosticUnknown
+	switch kind {
+	case "SYSTEM_ASSISTANT":
+		switch staged.stage {
+		case platformSnapshotAssistantGetStage, platformSnapshotConversationListStage,
+			platformSnapshotBootstrapGetStage, platformSnapshotAssistantProjectStage:
+			return string(staged.stage)
+		}
+	case "RUN":
+		switch staged.stage {
+		case platformSnapshotRunsListStage, platformSnapshotOwnerGatesListStage,
+			platformSnapshotOverviewGetStage, platformSnapshotRunProjectStage:
+			return string(staged.stage)
+		}
 	}
+	return platformSnapshotDiagnosticUnknown
 }
 
 // Единая запись отказа содержит только закрытые диагностические значения.

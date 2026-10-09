@@ -10,6 +10,37 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 19:12 UTC — fresh SSO и новый Manager; cold SYSTEM25 доставлен
+
+Published source `f3ef0efeef7ddb4ddb9abd4fecd60d46d38caed9`, тот же Draft1807.
+Нативный запрос без refs подготовил plan pln_TMSahKZJP-fsUandbS7zhzsg,
+revision2 с одной LAUNCH_RUN операцией. ROOT прочитал задачу плана, нативно
+проверил ревизию и один раз применил её19:01UTC; новый Manager
+run_f9CVBO5DGo91J5WXrsEmoBW1 RUNNING, attempt1/version2. Других настроек,
+grants или допусков этим планом не меняли. В owner events шесть уникальных
+get_workflow_catalog SUCCEEDED; комментарий Manager сообщает о полном EOF
+и чтении active roots. Старые safe receipts не различают эти modes, поэтому
+независимое доказательство EOF/active всё ещё UNKNOWN, не PASS. Workflow
+launch пока отсутствует: Manager продолжает обязательное чтение документов.
+
+Chrome MCP ownpage3 fresh SSO восстановлен штатной формой: OWNER bootstrap200.
+Callback сначала получил401; после штатной кнопки входа proxy/session path
+восстановлен. После перехода на текущий Run Console error/warn0, relevant
+API200; actual screenshot переписки просмотрен, body overflowfalse. В нём
+видно «Восстанавливаем обновления» — это не принято за полную стабильность.
+
+Применён exact frozen пакет7files: SYSTEM cold initial25 вместо50, свежие
+owner RPC и cursor сохранены; page hint остаётся только socket-local размером.
+RUN failures теперь имеют закрытые RUNS_LIST/OWNER_GATES_LIST/OVERVIEW_GET/
+RUN_PROJECTION stages. Bundle2s/drain8s и1MiB, guards и другие page50 не менялись.
+ROOT whole WS unit2.943s/vet/build PASS; frozen7source hashes EQUAL.
+Mounted source8ead2941 EQUAL; actual gateway `/proc/1085/exe` и hermetic build
+EQUAL125f760609db05705d85b4f7152e24228b9a153fb4c01ddb720814f5c2380771.
+ROOT targeted race22.031s PASS; child301unit/138race PASS отдельно от ROOT/live.
+Cold25 не гарантирует вместимость будущих данных. Fresh RUN failure отдельно
+разбирается; full realtime, п11/14/15/16 и human gate OPEN.
+Оба узла Ready, все Deployment и StatefulSet на текущем readback Ready.
+
 ## Checkpoint 09.10.2026 18:57 UTC — protected Workflow reads доставлены; native повтор идёт
 
 Основа `71d057692e283cf5687d6caa75e769c48aacbb7c`, remote/Draft1807 EQUAL.

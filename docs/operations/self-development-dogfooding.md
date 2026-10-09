@@ -10,6 +10,24 @@ updated: 2026-10-09
 
 # Цель и источники
 
+## Checkpoint 09.10.2026 19:12 UTC — повтор practical no-ID принят; full Workflow ещё открыт
+
+На published f3ef0efe тот же PROJECT чат подготовил ровно один Manager plan;
+revision2 нативно проверена и применена один раз19:01UTC. Новый ordinary
+Manager run_f9CVBO5DGo91J5WXrsEmoBW1 RUNNING/attempt1. Он успешно вызвал
+get_workflow_catalog шесть раз и сообщает о полном EOF/active roots, но
+старый safeResult не различает modes: независимая owner квитанция пока
+UNKNOWN. Запуск SOFTWARE_CHANGE ещё не состоялся; документы читаются.
+
+MCP own3 OWNER bootstrap200 после fresh штатного SSO; initial callback401
+сохранён отдельно. Actual Run screenshot/Console0/relevantAPI200 проверены,
+body overflowfalse; «Восстанавливаем обновления» не принято за стабильность.
+На source применён7file cold SYSTEM25/closed RUN stage пакет: frozen hashes
+EQUAL, ROOTWS2.943s/vet/build PASS, mountedsource8ead2941 и servingELF
+125f760609db05705d85b4f7152e24228b9a153fb4c01ddb720814f5c2380771 EQUAL.
+Бюджеты2s/8s/1MiB и guards не менялись; ROOT race22.031s PASS, live full stability
+OPEN. Кластер после reboot Ready. П11/14/15/16/full Workflow/human gate OPEN.
+
 ## Checkpoint 09.10.2026 18:57 UTC — обычному Manager доступны publication/active roots
 
 На базе `71d057692e283cf5687d6caa75e769c48aacbb7c` доставлены новые typed modes
