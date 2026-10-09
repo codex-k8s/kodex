@@ -12,10 +12,13 @@ updated: 2026-10-09
 
 ## Checkpoint 09.10.2026 20:57 UTC — пакет диагностики принят и проверен
 
+Пакет source/remote/Draft1807 EQUALcdd0af3d488b020aa05496a9166823a75d1a84d5,
+mainab4992e0 неизменён; повторные ROOT unit на exactcdd0af3d PASS.
+
 Основа6cbdaec794ffbfcac2cef1795d44cf5c68ffa1e1;14source files добавляют
 closed bound diagnostic classifier→private terminal→completion→RC log до
 cleanup. ROOT unit/race/vet/format и runner/RC build PASS на текущем дереве;
-точный опубликованный SHA и повторные unit ещё требуется зафиксировать.
+точный опубликованный SHA и повторные unit зафиксированы выше.
 Нет новых RPC/grants/RunnerInput/schema, CP outcome/usage/archive неизменны.
 RC log не durable receipt; owner error/replay не подтверждают новый commit.
 

@@ -12,6 +12,10 @@ updated: 2026-10-09
 
 ## Checkpoint 09.10.2026 20:57 UTC — диагностический пакет проверен; активация следующая
 
+Пакет опубликован наcdd0af3d488b020aa05496a9166823a75d1a84d5:
+source/remote/Draft1807 EQUAL, mainab4992e0 неизменён. ROOT повторные unit
+на exactcdd0af3d runtimecontract/codex/callback cached PASS, app17.134s PASS.
+
 На основе6cbdaec794ffbfcac2cef1795d44cf5c68ffa1e1 принят14file пакет:
 закрытые enum причины проходят от classifier через private broker terminal
 и существующий completion callback в RC log после успешного owner completion,
@@ -26,7 +30,7 @@ ROOT local на текущем дереве: runtimecontract unit/race1.954s, ru
 app unit и race20.506s/37.400s, callback unit/race33.794s — PASS. Адресные
 go vet, gofmt и diff-check, CGO0 trimpath/buildvcs=false runner/RC build PASS.
 В expected MCP test добавлен уже существующий read_task_session, без изменения
-реестра или полномочий. Результаты ещё привязать к опубликованному SHA.
+реестра или полномочий. Привязка к опубликованному SHA указана выше.
 
 Live activation нового base/custom runner и capture точной причины NOT RUN;
 старые BAU/WRD остаются FAILED/причинаUNKNOWN. Новый blind retry не запускался.
