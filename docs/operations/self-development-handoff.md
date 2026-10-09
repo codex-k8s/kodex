@@ -10,6 +10,36 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 16:59 UTC — reboot recovery и canonical activation PASS
+
+Published/source `f2541df3bed59d2f40cb4207e7c83f2b64045553`, тот же Draft1807.
+Owner reboot выявил старый guard FAIL по динамическому MAJ:MIN; forward-only
+repair-boot PASS, root journal RETIRED. UUID filesystem и inode23724034
+сохранены, current device66312 совпадает DATA/bind/container, все63 pins PASS.
+Новый installed script SHA2560a3c5db9cc9f95ac… закреплён durable journal;
+bootRepairSourceSha=f2541df3. Повторный reboot после исправления NOT RUN.
+
+ROOT exact f254: storage31/cache27/host18/OCI15 —91 tests PASS. Full runner
+provenance SHA25699b20227dd06671f… / binary7c8517c1e8d5d2b8… PASS;
+manifestf6e06e4389e1d8b6… imported/pinned обе ноды. Fresh render первая попытка
+FAIL inherited GOROOT (1.27) при binary1.26; повтор с env -u GOROOT PASS,
+fingerprint1e99d3564f60b0dd… / authority source revision1. Canonical
+supply-chain apply и отдельный readback PASS; BuildKit actual mTLS build probe
+PASS без рестарта. Core5 ready1/1; session-archive сам переподключился16:56:33,
+не требовал отдельного restart. kodex-system desired22/ready22/unhealthy0;
+cert-manager4/4, identity2/2, observability9/9, kube-system6/6.
+
+Fresh owner ledger16:58:08: runs/builds/admissions/promotions/claims0,
+promoted40 и прежний pins hashfcec1793… сохранены. Host/Pod source hashes
+CP84812b49…/gateway4c3477f2…/frontend CSS359b90b1… EQUAL. Serving ELF hashes
+gatewaycf041d26…/CP340980fa… сняты, hermetic compare этих ELF ещё NOT RUN.
+Chrome MCP own page3: owner вход через штатный SSO восстановлен; главная
+Screenshot PASS, Console0 errors/warnings, проверенные20 fetch/xhr200.
+Attention height420/scrollableTrue/body overflowFalse. Это browser smoke,
+не Full65 или live-no-ID PASS. Отдельный fallback browser закрыт, чужие вкладки
+не закрывались. Следующий шаг — три custom images admission/promotion/UI
+rebinding, live no-ID practical case и полный Workflow; П11/14/15/16 OPEN.
+
 ## Checkpoint 09.10.2026 — продолжение после перезагрузки, boot guard FAIL
 
 Исходный clean/published SHA419867d8. Kubernetes API недоступен: exact server

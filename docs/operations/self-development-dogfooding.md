@@ -4274,6 +4274,23 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 09.10.2026 16:59 UTC — восстановление после reboot и штатная активация
+
+На exact f2541df3bed59d2f40cb4207e7c83f2b64045553 исправлен boot guard:
+динамический device66308→66312 больше не заменяет UUID/inode идентичность.
+Forward-only repair-boot/readback PASS, данные и63CRI pins сохранены.
+ROOT31 storage +27 cache +18 host-image +15 OCI =91 tests PASS. Повторный
+reboot нового guard NOT RUN. Runner manifestf6e06e43…/binary7c8517c1…,
+provenance99b20227…/обе-node import PASS. Fresh render env -u GOROOT PASS
+после честно сохранённого FAIL несовместимого inherited GOROOT.
+Canonical supply-chain apply/readback PASS, core5 и весь kodex-system22/22
+Ready; session-archive восстановился без ручного restart. Fresh owner ledger
+zero active effects, promoted40 и pins hashfcec1793… прежние. CP/gateway/
+frontend host/Pod hashes EQUAL. Chrome own page3: owner SSO вход, главная
+Screenshot/Console0/проверенные20fetch-xhr200 PASS; attention420px scrollable,
+overflowFalse. Новая native проверка custom image upgrades/no-ID/Workflow
+ещё OPEN; green infrastructure не считается завершением Full65.
+
 ### 09.10.2026 14:31 UTC — migration PASS, собственный cache очищен, остановка по owner
 
 Apply5ba62009 / resumec3a567a9 опубликованы в Draft1807. Первый standalone
