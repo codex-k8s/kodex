@@ -12,6 +12,7 @@ updated: 2026-10-05
 
 - `OPS-DOC-1470` — [Независимость служебной идентичности и восстановление readers](../operations/mvp-1470-service-identity.md).
 - `OPS-DOC-1763` — [Совместная отладка прототипа системного помощника](../operations/assistant-prototype-debug-1763.md).
+- `RUN-DOC-1797-STORAGE` — [Перенос хранилища локальной ноды](../runbooks/local-node-storage.md).
 
 Документ задает устойчивые идентификаторы и реестр документации.
 

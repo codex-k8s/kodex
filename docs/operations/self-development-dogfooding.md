@@ -4274,6 +4274,26 @@ grants и migrations не требуются. Реализация и адрес
 
 ## Журнал
 
+### 09.10.2026 13:58 UTC — owner YES на перенос одной development-ноды
+
+Current published source `e866f9b2b4e04b28f2fcb9b927a96cce337be1c0`,
+Draft1807. Владелец отдельно разрешил перенести полное server k3s storage на
+`/data`, сохранив данные и образы. Source allocated76.39GB, DATA available
+около127GB; core5 replicas0, runtime Pods terminal, server DiskPressure True.
+Read-only exact volume/container/device preflight выполнен, migration ещё NOT RUN.
+
+Repo-owned offline copy/checksum/mount/readback/retire/rollback протокол
+закрепляется в `tools/dev/local-node-storage.py` и `RUN-DOC-1797-STORAGE`.
+Общий Docker daemon и его зависимости не меняются; отдельный node service
+не запускается до guard/mount. Original сохраняется до VERIFIED.
+После любого возможного старта original нельзя использовать как актуальный
+rollback: требуется проверенная offline reverse-copy и capacity floor.
+ROOT адресные25 tests PASS0.377s на mocks/disposable файлах, не live storage;
+script SHA256 `6fa41d91c94e1f0a62cc5b130efdb9cf9ddf2ede923afd9354527041bdfebce5`.
+Syntax/diff-check PASS; live audit/apply ещё NOT RUN до публикации.
+Context7 `/systemd/systemd` и `/rsyncproject/rsync` проверены. Реальный reboot
+NOT RUN. П11/14/15/16 и Full65 остаются OPEN до живых сценариев.
+
 ### 07.10.2026 10:41 UTC — Developer восстановлен, Architect принят, Chrome ожидает
 
 - HEAD/remote/Draft1800 `ee84718118ae0e2a2522936006b2b1452931bf1f`;

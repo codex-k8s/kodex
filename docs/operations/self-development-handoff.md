@@ -10,6 +10,26 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 13:58 UTC — перенос одной ноды разрешён, применение ещё NOT RUN
+
+Владелец отдельно разрешил перенос полного k3s storage exact server-ноды
+на `/data`, сохранив данные/образы. Root source около76.39GB, DATA available
+около127GB; места для offline copy и буфера20GiB достаточно. Current clean
+source до нового скрипта `e866f9b2b4e04b28f2fcb9b927a96cce337be1c0`, Draft1807.
+Core5 replicas0, runtime Pods terminal; server DiskPressure True.
+
+Готовится repo-owned `tools/dev/local-node-storage.py` и герметичные tests:
+offline copy/checksum, root-private journal, per-node guard/mount/service,
+точный readback CRI pins и удаление только проверенной избыточной original copy.
+Общий Docker daemon не перезапускается, его зависимости не меняются.
+Rollback после старта требует актуальную offline reverse-copy, не старый backup.
+Runbook `RUN-DOC-1797-STORAGE` содержит точную границу и failure paths.
+ROOT адресные25 unit/disposable-copy PASS0.377s; script SHA256
+`6fa41d91c94e1f0a62cc5b130efdb9cf9ddf2ede923afd9354527041bdfebce5`,
+test SHA256 `7f609d94d4f7fee89b6b8006e769ff9b5d6a5028d338ff456aab5df6471fce2f`.
+Syntax/diff-check PASS. Live apply/restore/full QA пока NOT RUN;
+чекбоксы не закрыты. Следующий шаг — публикация и fresh audit/apply.
+
 ## Checkpoint 09.10.2026 09:32 UTC — safe cleanup исчерпан, recovery требует storage решения
 
 Published source `37c8d5fd7876b36aa1e28090f68a8751130b7963`, Draft1807.
