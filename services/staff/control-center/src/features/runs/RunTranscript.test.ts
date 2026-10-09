@@ -1791,6 +1791,27 @@ describe("RunTranscript: компактная работа", () => {
     },
   );
 
+  it("навигация к последнему сообщению не утверждает наличие новых сообщений", () => {
+    const source = readFileSync(
+      new URL("./RunTranscript.vue", import.meta.url),
+      "utf8",
+    );
+    const button = source.match(
+      /<button\s+v-if="unread && !embedded"[^]*?<\/button>/,
+    )?.[0];
+    expect(button).toContain('$t("runs.jumpToLatestMessage")');
+    expect(button).not.toContain("runs.newMessages");
+    expect(button).toContain('@click="latest"');
+    expect(button).toContain('v-if="unread && !embedded"');
+    const messages = i18n.global.messages.value;
+    expect(messages.ru.runs.jumpToLatestMessage).toBe(
+      "К последнему сообщению ↓",
+    );
+    expect(messages.en.runs.jumpToLatestMessage).toBe(
+      "Jump to latest message ↓",
+    );
+  });
+
   it("сохраняет анимацию и отключает её при reduced motion, tool preview ограничен", () => {
     const source = readFileSync(
       new URL("./RunTranscript.vue", import.meta.url),

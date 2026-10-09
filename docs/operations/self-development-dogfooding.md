@@ -10,6 +10,34 @@ updated: 2026-10-09
 
 # Цель и источники
 
+## Checkpoint 09.10.2026 18:36 UTC — естественная досылка и exact oversized retry cause
+
+Published source `c03f451d03120d8ea03bd092fb7ef5ea268b6219` / Draft1807.
+Тот же PROJECT чат получил read-only досылку без ID о последней попытке Manager.
+Помощник сам нашёл run_9wOPLdRvW1JWzqkj-aE0OcEq, прочитал историю и объяснил
+отсутствие полного published configuration и active Workflow read. Новый run
+run_WRDdLv5dEoU3JX6RQOKGuzDS USER5/ASSISTANT6 COMPLETED; новый plan/effect не
+создан. Screenshot просмотрен, user right/agent left, компактный read history
+и tools; overflowfalse. Это чтение PASS, practical выполнение задачи ещё OPEN.
+До принятого хода были tool click failures/очистка тестового ввода при HMR;
+они не выданы за успешную отправку, фактически принят один новый ход.
+
+Fresh WS FAIL теперь имеет доказанный stage: gateway18:26:18.320153897Z совпал
+с PLATFORM_UNAVAILABLE29775, ASSISTANT_CONVERSATIONS_LIST, attempt2/page25,
+DeadlineExceeded после212ms остатка общего2s bundle. Oversized page50 перед ним
+вызвала новое авторитетное уменьшенное чтение, а не provider failure. Штатный
+rejoin доставил final; отсутствие потери final не делает стабильность PASS.
+Готовится ограниченный per-socket hint размера страницы без кеша данных или
+полномочий. Root144 targeted UI tests/lint/format/typecheck/build PASS7.90s:
+нейтральная кнопка «К последнему сообщению». Floating-label native NOT RUN.
+Stable mobile500px и read_file details actual screenshots просмотрены PASS;
+Chrome MCP capture без host filePath и Console0 PASS, relevant reads200.
+Historical helper console counter9 отдельно требует разбора: пять ошибок UNKNOWN,
+две initial401 и две root-diagnostic405 учтены ранее.
+
+Protected ordinary published/active-run read в isolated реализации, не доставлен.
+Full65/п11/14/15/16 остаются OPEN; бизнес-задача и итоговое review NOT RUN.
+
 ## Checkpoint 09.10.2026 18:13 UTC — practical no-ID продолжение BLOCKED, без обхода
 
 На базе `0b0dfaf84c31b3545b9467d366405cb37fd7488d` нативный PROJECT-диалог

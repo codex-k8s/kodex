@@ -977,7 +977,7 @@ function bytes(value: number): string {
       type="button"
       @click="latest"
     >
-      {{ $t("runs.newMessages") }}
+      {{ $t("runs.jumpToLatestMessage") }}
     </button>
   </section>
 </template>

@@ -10,6 +10,49 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 18:36 UTC — досылка без ID PASS, конкретный realtime stage доказан
+
+Published `c03f451d03120d8ea03bd092fb7ef5ea268b6219`, тот же Draft1807.
+В собственной PROJECT conversation cnv__tLqjv5jZbdzSzOmWWzQKQkM нативно дослан
+read-only запрос «мы только что просили менеджера продолжить задачу о сводке
+лимитов». Без refs во вводе помощник выполнил два поиска и read_task_session,
+сам выбрал последнюю Manager попытку run_9wOPLdRvW1JWzqkj-aE0OcEq и корректно
+назвал два отсутствующих чтения. Run_WRDdLv5dEoU3JX6RQOKGuzDS:
+USER seq5 и ASSISTANT seq6 COMPLETED, final22:25:52 по locale; никаких планов,
+запусков или изменений этим запросом не сделано. Actual screenshot просмотрен,
+overflowfalse. Это PASS чтения/сохранения смысла досылки, не полного practical
+действия или бизнес-задачи. Первые clicks не отправили запрос: один ошибочный
+selector и HMR очистка несохранённого тестового ввода. После проверки exact
+selected conversation, повторного fill и enabled кнопки принят ровно один ход.
+
+Во время него произошёл PLATFORM_UNAVAILABLE cursor29775 и штатный rejoin.
+Новый closed gateway log совпадает с ним до миллисекунды:18:26:18.320153897Z,
+SYSTEM_ASSISTANT / ASSISTANT_CONVERSATIONS_LIST, read_attempt2, page25,
+DeadlineExceeded, elapsed212ms/start212ms/remaining0. Первая page50 не поместилась;
+повтор whole-page read25 использовал остаток прежнего bundle2s. Это доказанная
+причина данного fresh отказа, не provider/AI и не полный2s первой RPC.
+Исторические иные отказы не объявлены этим автоматически объяснёнными.
+Готовится connection-local hint только размера последней успешно помещавшейся
+страницы; данные/authority/cursor не кешируются, budgets2s/8s не увеличиваются.
+При дальнейшем росте страницы закрытый overflow/timeout сохраняется.
+
+Новая малая UI дельта: «К последнему сообщению ↓» вместо заявления о новых
+сообщениях при просмотре истории. ROOT144 tests PASS2.72s, lint/format и forced
+typecheck/build PASS7.90s; native самого floating label пока NOT RUN.
+Native read_file раскрыт: полный safe result сохранён, большой повторный preview
+отсутствует; stable mobile500px screenshot просмотрен, overflowfalse.
+Chrome MCP ownpage3: screenshot без filePath PASS, Console error/warn0;
+bootstrap/session/project/revisions/ticket200. Capture с host filePath вернул
+ошибку инструмента, не засчитан как успешный capture. Счётчик отдельного helper
+накопил9 historical console errors (2 pre-login401, 2 diagnostic405 ранее;
+оставшиеся5 пока UNKNOWN), поэтому не переносить MCP Console0 на весь helper.
+
+Ledger18:18:57: activeRuntimeRuns/builds/admissions/promotions/claims0,
+43 promoted pins SHA256a63910b9…b016 неизменны. Deployment22/22 и STS5/5 Ready;
+оба узла Ready, /tmp inode use1%, root178GiB/data74GiB available.
+П11/14/15/16 и Full65 OPEN. В isolated worktree готовятся protected publication/
+active-run reads CP+RC+Proto/shared safe codec, без нового tool/runner rebuild.
+
 ## Checkpoint 09.10.2026 18:13 UTC — Manager остановился без дубликата; компактные tools и диагностика на стенде
 
 Основа `0b0dfaf84c31b3545b9467d366405cb37fd7488d`, тот же Draft1807.
