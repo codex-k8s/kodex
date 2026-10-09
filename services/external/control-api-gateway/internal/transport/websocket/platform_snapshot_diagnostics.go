@@ -91,8 +91,8 @@ func observePlatformSnapshotReadFailure(ctx context.Context, started time.Time, 
 func platformSnapshotDiagnosticPage(kind string, attempt int, pageSize int32) (int, int32) {
 	if kind == "SYSTEM_ASSISTANT" {
 		for number, size := 1, int32(platformSnapshotPageSize); ; number, size = number+1, max(1, size/2) {
-			if number == attempt && size == pageSize {
-				return number, size
+			if attempt >= 1 && attempt <= number && size == pageSize {
+				return attempt, size
 			}
 			if size == 1 {
 				break

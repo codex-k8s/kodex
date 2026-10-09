@@ -166,9 +166,11 @@ func TestPlatformSnapshotSystemAssistantSuccessDoesNotLogStage(t *testing.T) {
 
 func TestPlatformSnapshotDiagnosticPageLadderIsClosed(t *testing.T) {
 	for index, size := range []int32{50, 25, 12, 6, 3, 1} {
-		attempt, page := platformSnapshotDiagnosticPage("SYSTEM_ASSISTANT", index+1, size)
-		if attempt != index+1 || page != size {
-			t.Fatal("diagnostic rejected the existing whole-page ladder")
+		for number := 1; number <= index+1; number++ {
+			attempt, page := platformSnapshotDiagnosticPage("SYSTEM_ASSISTANT", number, size)
+			if attempt != number || page != size {
+				t.Fatal("diagnostic rejected the existing whole-page ladder with a bounded initial hint")
+			}
 		}
 	}
 	for _, tc := range []struct {
@@ -179,7 +181,7 @@ func TestPlatformSnapshotDiagnosticPageLadderIsClosed(t *testing.T) {
 		{"RUN", 1, 50}, {"PRIVATE_SENTINEL", 1, 50},
 		{"SYSTEM_ASSISTANT", 0, 50}, {"SYSTEM_ASSISTANT", -1, 50},
 		{"SYSTEM_ASSISTANT", 7, 1}, {"SYSTEM_ASSISTANT", 1000000, 1},
-		{"SYSTEM_ASSISTANT", 1, 25}, {"SYSTEM_ASSISTANT", 2, 50},
+		{"SYSTEM_ASSISTANT", 1, 24}, {"SYSTEM_ASSISTANT", 2, 50},
 		{"SYSTEM_ASSISTANT", 1, -1}, {"SYSTEM_ASSISTANT", 1, 1000000},
 	} {
 		if attempt, page := platformSnapshotDiagnosticPage(tc.kind, tc.attempt, tc.page); attempt != 0 || page != 0 {

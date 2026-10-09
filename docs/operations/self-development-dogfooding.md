@@ -10,6 +10,26 @@ updated: 2026-10-09
 
 # Цель и источники
 
+## Checkpoint 09.10.2026 18:48 UTC — bounded hint и ещё один реальный no-ID read
+
+На базе `2f792f04921ebd6b753a82475eafc4ef0c374a3e` принят socket-local hint
+только размера fitting SYSTEM_ASSISTANT страницы. Полные owner reads/cursor
+свежие, authority и бюджеты не изменены. ROOT websocket unit3.592s/vet/
+targeted race26.855s PASS. Source/Pod EQUAL52abbfed, serving ELF/hermetic build
+EQUALcf8336e79fcbd9fabba2961d7a93ec7f1c9e25caccd45961c55cfda7d690e506.
+Нативный run_NogC51gAD_drLJDmsxiO7syw USER7/ASSISTANT8 COMPLETED: без IDs сам
+найдены две попытки Manager и корректно сопоставлены блокеры, без эффектов.
+Fresh WS problems0, но clean4000 resync дважды; полная стабильность OPEN.
+ROOT parser не распознал log prefix; нулевой счётчик не является доказательством.
+Fresh gateway FAIL18:45:19 SYSTEM_ASSISTANT_GET attempt2/page25/budget0 и
+18:46:18 RUN stageUNKNOWN/bundle2000ms подтверждены отдельно. Холодное чтение
+после rejoin ещё OPEN. MCP reload/Console0/relevant200 PASS.
+Screenshot actual просмотрен: узкая первая колонка таблицы требует UX fix.
+Новые protected publication/active reads заморожены, но ROOT/live NOT RUN;
+п11/14/15/16 и полный реальный Workflow остаются OPEN. Оба узла Ready,
+Deployment22/22 и STS5/5; первые команды health с неверным PATH отдельно FAIL,
+успешный canonical повтор их не скрывает.
+
 ## Checkpoint 09.10.2026 18:36 UTC — естественная досылка и exact oversized retry cause
 
 Published source `c03f451d03120d8ea03bd092fb7ef5ea268b6219` / Draft1807.

@@ -186,6 +186,7 @@ type sessionMultiplexer struct {
 	platformCursor     int64
 	platformAvailable  bool
 	platformSub        *nats.Subscription
+	assistantPageHint  assistantSnapshotPageHint
 	runs               map[string]*runSubscription
 }
 
@@ -867,6 +868,7 @@ func (multiplexer *sessionMultiplexer) sortedRunRefs() []string {
 }
 
 func (multiplexer *sessionMultiplexer) closeSubscriptions() {
+	multiplexer.assistantPageHint = assistantSnapshotPageHint{}
 	if multiplexer.platformSub != nil {
 		_ = multiplexer.platformSub.Unsubscribe()
 	}

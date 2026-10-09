@@ -19,6 +19,13 @@ import (
 
 const platformSnapshotPageSize = 50
 
+// Размер принадлежит одному socket; payload и полномочия в подсказке отсутствуют.
+type assistantSnapshotPageHint struct {
+	organizationRef string
+	projectRef      string
+	pageSize        int32
+}
+
 const (
 	platformSnapshotReadFailure       = "platform bootstrap snapshot read failed"
 	platformSnapshotValidationFailure = "platform bootstrap snapshot validation failed"
@@ -558,7 +565,11 @@ func (multiplexer *sessionMultiplexer) boundedPlatformSnapshot(envelope generate
 }
 
 func (multiplexer *sessionMultiplexer) boundedPlatformSnapshotWithin(ctx context.Context, envelope generated.PlatformSnapshotEnvelope) (generated.PlatformSnapshotEnvelope, error) {
-	for attempt, pageSize := 1, int32(platformSnapshotPageSize); ; attempt, pageSize = attempt+1, max(1, pageSize/2) {
+	initialPageSize := int32(platformSnapshotPageSize)
+	if envelope.Kind == generated.PlatformResourceKindSystemAssistant {
+		initialPageSize = multiplexer.assistantSnapshotInitialPageSize()
+	}
+	for attempt, pageSize := 1, initialPageSize; ; attempt, pageSize = attempt+1, max(1, pageSize/2) {
 		started := time.Now()
 		parentBudget := runSnapshotParentBudget(ctx, started)
 		rawSnapshot, err := multiplexer.server.projectPlatformSnapshotPage(ctx, string(envelope.Kind), multiplexer.projectRef, multiplexer.localize, pageSize)
@@ -579,6 +590,11 @@ func (multiplexer *sessionMultiplexer) boundedPlatformSnapshotWithin(ctx context
 			return generated.PlatformSnapshotEnvelope{}, errPlatformSnapshotInvalid
 		}
 		if len(encoded) <= maximumFrameBytes {
+			if envelope.Kind == generated.PlatformResourceKindSystemAssistant && ctx.Err() == nil && multiplexer.ctx.Err() == nil {
+				multiplexer.assistantPageHint = assistantSnapshotPageHint{
+					organizationRef: multiplexer.organizationRef, projectRef: multiplexer.projectRef, pageSize: pageSize,
+				}
+			}
 			return envelope, nil
 		}
 		if envelope.Kind != generated.PlatformResourceKindSystemAssistant || pageSize == 1 {
@@ -586,6 +602,16 @@ func (multiplexer *sessionMultiplexer) boundedPlatformSnapshotWithin(ctx context
 			return generated.PlatformSnapshotEnvelope{}, errPlatformSnapshotSize
 		}
 	}
+}
+
+func (multiplexer *sessionMultiplexer) assistantSnapshotInitialPageSize() int32 {
+	hint := multiplexer.assistantPageHint
+	_, size := platformSnapshotDiagnosticPage("SYSTEM_ASSISTANT", 1, hint.pageSize)
+	if size == 0 || hint.organizationRef != multiplexer.organizationRef || hint.projectRef != multiplexer.projectRef || multiplexer.ctx.Err() != nil {
+		multiplexer.assistantPageHint = assistantSnapshotPageHint{}
+		return platformSnapshotPageSize
+	}
+	return size
 }
 
 func (multiplexer *sessionMultiplexer) sendPlatformBootstrap() ([]generated.PlatformResourceKind, error) {

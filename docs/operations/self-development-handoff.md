@@ -10,6 +10,38 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 18:48 UTC — fresh page hint доставлен, сравнение истории без ID PASS
+
+Основа `2f792f04921ebd6b753a82475eafc4ef0c374a3e`, remote и Draft1807 readback EQUAL.
+Gateway сохраняет только размер последней целой fitting SYSTEM_ASSISTANT страницы
+в одном socket:50/25/12/6/3/1. Все три owner RPC и cursor читаются заново;
+scope/close сбрасывают hint. Payload/authority не кешируются, бюджеты2s/8s
+не увеличены. ROOT весь websocket unit PASS3.592s, vet PASS, targeted race
+PASS26.855s. Host/Pod platform_snapshot.go EQUAL52abbfed; serving `/proc/575/exe`
+и hermetic build EQUAL
+`cf8336e79fcbd9fabba2961d7a93ec7f1c9e25caccd45961c55cfda7d690e506`.
+
+Нативная досылка «сравни две последние попытки менеджера» без ID в том же чате:
+run_NogC51gAD_drLJDmsxiO7syw, USER7/ASSISTANT8 COMPLETED. Помощник сам выбрал
+предыдущую INTAKE и последнюю diagnostic попытку, правильно различил прежний
+LIST failure и два недоступных чтения. Новых plan/effect нет. Screenshot
+просмотрен; обнаружена слишком узкая первая колонка Markdown-таблицы,
+адресное UX исправление готовится отдельно. В fresh WS problems0, но два
+clean4000 PLATFORM_RESYNC_REQUIRED; отсутствие потери ответа не является
+полной стабильностью. ROOT parser целой JSON строки не распознал diagnostic
+prefix; его нулевой счётчик не доказывает отсутствие ошибок. Исполнитель
+получил два fresh FAIL:18:45:19 SYSTEM_ASSISTANT_GET attempt2/page25 уже при
+нулевом parent budget и18:46:18 RUN read_stageUNKNOWN/bundle2000ms.
+Hint не устранил холодное чтение после rejoin; этот путь ещё исправляется.
+MCP ownpage3 reload PASS, Console error/warn0, relevant API reads200.
+
+Оба узла Ready; Deployment22/22 и StatefulSet5/5. Первые health команды
+не нашли kubectl в урезанном PATH; повтор с каноническим `/usr/local/bin`
+выполнен успешно, первоначальный запуск не выдан за PASS.
+Protected publication/active-run packet заморожен в isolated worktree:
+unit/vet/race/Proto и disposable PG PASS у исполнителя; ROOT adoption,
+serving proof и ordinary Manager native ещё NOT RUN. П11/14/15/16 OPEN.
+
 ## Checkpoint 09.10.2026 18:36 UTC — досылка без ID PASS, конкретный realtime stage доказан
 
 Published `c03f451d03120d8ea03bd092fb7ef5ea268b6219`, тот же Draft1807.
