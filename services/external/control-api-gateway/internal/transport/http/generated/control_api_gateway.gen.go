@@ -5947,6 +5947,7 @@ func (e RunEventActorKind) Valid() bool {
 // Defines values for RunEventServiceCode.
 const (
 	ASSISTANTTURNCANCELLED RunEventServiceCode = "ASSISTANT_TURN_CANCELLED"
+	ROOTPROCESSCOMPLETED   RunEventServiceCode = "ROOT_PROCESS_COMPLETED"
 	RUNCANCELLED           RunEventServiceCode = "RUN_CANCELLED"
 	RUNNODECANCELLED       RunEventServiceCode = "RUN_NODE_CANCELLED"
 )
@@ -5955,6 +5956,8 @@ const (
 func (e RunEventServiceCode) Valid() bool {
 	switch e {
 	case ASSISTANTTURNCANCELLED:
+		return true
+	case ROOTPROCESSCOMPLETED:
 		return true
 	case RUNCANCELLED:
 		return true
@@ -13555,7 +13558,7 @@ type RunEvent struct {
 	RunState                 *RunEventRunState    `json:"runState,omitempty"`
 	Sequence                 int64                `json:"sequence"`
 
-	// ServiceCode Необязательный закрытый код служебной отмены из авторитетного события до локализации; не полномочие и не привязка выполнения.
+	// ServiceCode Необязательный закрытый код служебного события до локализации; не полномочие и не привязка выполнения.
 	ServiceCode *RunEventServiceCode `json:"serviceCode,omitempty"`
 	Summary     string               `json:"summary"`
 	ToolCall    *RunToolCall         `json:"toolCall,omitempty"`
@@ -13601,7 +13604,7 @@ type RunEventPage struct {
 	Items           []RunEvent `json:"items"`
 }
 
-// RunEventServiceCode Необязательный закрытый код служебной отмены из авторитетного события до локализации; не полномочие и не привязка выполнения.
+// RunEventServiceCode Необязательный закрытый код служебного события до локализации; не полномочие и не привязка выполнения.
 type RunEventServiceCode string
 
 // RunGraph defines model for RunGraph.

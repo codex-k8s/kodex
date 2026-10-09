@@ -73,6 +73,51 @@ function title(html: string): string {
   );
 }
 
+it("generic root completion остаётся в закрытых details exact failed этапа, не отдельной карточкой", async () => {
+  const execution = {
+    runRef: "run_fixture",
+    nodeRef: "nod_agent",
+    sessionRef: "ses_fixture",
+    turnRef: "trn_fixture",
+    turnNumber: 1,
+    attempt: 1,
+  };
+  const failure: RunActivityItem = {
+    id: "failure",
+    kind: "system",
+    historical: false,
+    actor: "ProjectManager",
+    occurredAt: "2026-10-04T10:00:00Z",
+    execution,
+    executionNodeType: "AGENT_EXECUTION",
+    eventType: "TURN_COMPLETED",
+    messageKind: "FINAL_MESSAGE",
+    state: "FAILED",
+    summary: "Провайдер временно недоступен",
+  };
+  const root: RunActivityItem = {
+    ...failure,
+    id: "root",
+    actor: "Kodex",
+    execution: { ...execution, nodeRef: "nod_root" },
+    executionNodeType: "ROOT_PROCESS",
+    serviceCompletionCode: "ROOT_PROCESS_COMPLETED",
+    eventType: "NODE_STATE_CHANGED",
+    messageKind: "STATE",
+    summary: "Корневой процесс завершён",
+  };
+  const app = createSSRApp({
+    render: () => h(RunTranscript, { items: [failure, root], embedded: true }),
+  }).use(i18n);
+  const html = await renderToString(app);
+  expect(html.match(/class="run-activity-item__content"/g)).toHaveLength(1);
+  expect(html).toContain("Провайдер временно недоступен");
+  expect(html).toMatch(
+    /<details[^]*?Корневой процесс завершён[^]*?<\/details>/,
+  );
+  expect(html).not.toMatch(/<details[^>]*\sopen/);
+});
+
 describe("RunTranscript: результат интеграции, а не успех обёртки", () => {
   it("оставляет malformed результат видимым, не переопределяя статус обёртки", async () => {
     const malformed = JSON.stringify({

@@ -15405,9 +15405,15 @@ components:
             items: { $ref: "#/components/schemas/NextAction" },
           }
     RunEventServiceCode:
-      description: Необязательный закрытый код служебной отмены из авторитетного события до локализации; не полномочие и не привязка выполнения.
+      description: Необязательный закрытый код служебного события до локализации; не полномочие и не привязка выполнения.
       type: string
-      enum: [RUN_CANCELLED, RUN_NODE_CANCELLED, ASSISTANT_TURN_CANCELLED]
+      enum:
+        [
+          RUN_CANCELLED,
+          RUN_NODE_CANCELLED,
+          ASSISTANT_TURN_CANCELLED,
+          ROOT_PROCESS_COMPLETED,
+        ]
     RunEvent:
       type: object
       additionalProperties: false

@@ -188,6 +188,7 @@ type sessionMultiplexer struct {
 	platformSub        *nats.Subscription
 	assistantPageHint  assistantSnapshotPageHint
 	runs               map[string]*runSubscription
+	runRefreshOffset   int
 }
 
 func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {

@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Ограниченный local read-only capture закрытой диагностики provider-runtime.
 
-Run связывается существующим exact provider ACK, а не locator из payload.
+Run связывается exact provider ACK либо отдельным trusted workload receipt.
 Сырые строки, stderr и provider input никогда не становятся результатом.
 Источники enum: agent-runner/internal/codex/{broker,process,parser}.go.
 """
 import argparse
+import copy
+from datetime import datetime, timezone
 import importlib.util
 import json
 import os
@@ -157,6 +159,247 @@ def selected_pod(read, options, pending_identity=False):
                 container['image_id'].endswith('@' + options.image_manifest) and
                 container['restarts'] == '0', 'POD_IMAGE_MISMATCH')
     return None if pending and not pending_identity else pod
+
+
+def validate_workload_options(options):
+    validate_options(options)
+    require(options.pod_name is not None and options.pod_uid is not None,
+            'WORKLOAD_EXACT_POD_REQUIRED')
+    require(ACK.matches(ACK.REF, options.node_ref), 'WORKLOAD_NODE_INVALID')
+    require(options.assistant_scope == 'NONE' and
+            ACK.matches(ACK.REF, options.expected_project_ref), 'WORKLOAD_SCOPE_INVALID')
+    require(options.expected_input_digest is None or
+            ACK.matches(ACK.HASH, options.expected_input_digest), 'WORKLOAD_INPUT_PIN_INVALID')
+
+
+def workload_timestamp(value):
+    require(isinstance(value, str) and
+            ACK.matches(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z', value),
+            'WORKLOAD_TIMESTAMP_INVALID')
+    try:
+        return datetime.fromisoformat(value.removesuffix('Z')).replace(tzinfo=timezone.utc)
+    except ValueError:
+        raise Failure('WORKLOAD_TIMESTAMP_INVALID') from None
+
+
+def workload_projection(read, options):
+    """Только server-created fresh turn; отсутствие ACK не становится ACK."""
+    pod = selected_pod(read, options)
+    if pod is None:
+        return None
+    extra_paths = ['.metadata.resourceVersion', '.metadata.creationTimestamp',
+                   '.spec.restartPolicy',
+                   '.spec.volumes[?(@.name=="runtime-input")].configMap.name']
+    extra_keys = ('controller-pod-uid', 'organization-hash', 'project-hash')
+    extra_paths += ['.metadata.annotations.runtime\\.kodex\\.dev/' + key for key in extra_keys]
+    extra_paths += ['.metadata.labels.runtime\\.kodex\\.dev/execution-hash']
+    path = '{"|"}'.join('{' + item + '}' for item in extra_paths)
+    raw = read(['get', 'pod', pod['name'], '-n', ACK.NAMESPACE, '-o', 'jsonpath=' + path])
+    require(len(raw) <= 2048, 'WORKLOAD_POD_METADATA_INVALID')
+    parts = raw.decode('utf-8').split('|')
+    require(len(parts) == 8 and ACK.matches(r'[1-9][0-9]{0,19}', parts[0]) and
+            parts[2] == 'Never' and ACK.matches(ACK.UUID, parts[4]) and
+            all(ACK.matches(r'[a-f0-9]{16}', value) for value in parts[5:]),
+            'WORKLOAD_POD_METADATA_INVALID')
+    lease = pod['annotations']['lease-ref']
+    workload_timestamp(parts[1])
+    short = ACK.sha(lease)[:16]
+    require(pod['name'] == 'runtime-turn-' + short and parts[3] == 'runtime-projection-' + short and
+            parts[7] == short and parts[6] == ACK.sha(options.expected_project_ref)[:16],
+            'WORKLOAD_LEASE_BINDING_INVALID')
+    fields = ['.metadata.namespace', '.metadata.name', '.metadata.uid',
+              '.metadata.resourceVersion', '.immutable',
+              '.metadata.labels.runtime\\.kodex\\.dev/managed',
+              '.metadata.labels.runtime\\.kodex\\.dev/mode', '.metadata.creationTimestamp']
+    keys = ACK.ANNOTATIONS[:-1] + extra_keys + ('pod-name',)
+    fields += ['.metadata.annotations.runtime\\.kodex\\.dev/' + key for key in keys]
+    path = '{"|"}'.join('{' + field + '}' for field in fields) + '{"\\n"}{.data.results\\.json}'
+    raw = read(['get', 'configmap', parts[3], '-n', ACK.NAMESPACE, '-o', 'jsonpath=' + path])
+    require(len(raw) <= 16384, 'WORKLOAD_PROJECTION_LIMIT')
+    metadata, separator, data = raw.decode('utf-8').partition('\n')
+    values = metadata.split('|')
+    require(separator and len(values) == len(fields) and values[0] == ACK.NAMESPACE and
+            values[1] == parts[3] and ACK.matches(ACK.UUID, values[2]) and
+            ACK.matches(r'[1-9][0-9]{0,19}', values[3]) and values[4:7] == ['true', 'true', 'turn'],
+            'WORKLOAD_PROJECTION_METADATA_INVALID')
+    workload_timestamp(values[7])
+    require(workload_timestamp(values[7]) <= workload_timestamp(parts[1]),
+            'WORKLOAD_PROJECTION_CREATED_AFTER_POD')
+    annotations = dict(zip(keys, values[8:]))
+    require(all(annotations[key] == pod['annotations'][key] for key in ACK.ANNOTATIONS[:-1]) and
+            annotations['controller-pod-uid'] == parts[4] and
+            annotations['organization-hash'] == parts[5] and
+            annotations['project-hash'] == parts[6] and annotations['pod-name'] == pod['name'],
+            'WORKLOAD_PROJECTION_BINDING_INVALID')
+    try:
+        result = json.loads(data, object_pairs_hook=ACK.unique)
+    except (ValueError, UnicodeError):
+        raise Failure('WORKLOAD_PROJECTION_JSON_INVALID') from None
+    require(isinstance(result, dict) and set(result) ==
+            {'identity', 'root', 'maximum_writable_bytes', 'maximum_file_count'} and
+            isinstance(result['root'], str) and 0 < len(result['root']) <= 4096 and
+            '\x00' not in result['root'] and
+            all(type(result[key]) is int and 0 < result[key] <= (1 << 53) - 1
+                for key in ('maximum_writable_bytes', 'maximum_file_count')),
+            'WORKLOAD_PROJECTION_SHAPE_INVALID')
+    identity = result['identity']
+    refs = ('organization_ref', 'project_ref', 'run_ref', 'node_ref', 'session_ref',
+            'turn_ref', 'runtime_revision_ref')
+    numbers = ('attempt', 'runtime_revision_version')
+    hashes = ('runtime_revision_digest', 'input_digest')
+    require(isinstance(identity, dict) and set(identity) == set(refs + numbers + hashes) and
+            all(ACK.matches(ACK.REF, identity[key]) for key in refs) and
+            all(type(identity[key]) is int and 0 < identity[key] <= (1 << 53) - 1 for key in numbers) and
+            all(ACK.matches(ACK.HASH, identity[key]) for key in hashes),
+            'WORKLOAD_IDENTITY_INVALID')
+    require(all(identity[key] == getattr(options, key) for key in
+                ('run_ref', 'node_ref', 'session_ref', 'turn_ref', 'attempt')) and
+            identity['project_ref'] == options.expected_project_ref and
+            identity['runtime_revision_digest'] == annotations['revision-digest'] and
+            ACK.sha(identity['organization_ref'])[:16] == parts[5] and
+            ACK.sha(identity['project_ref'])[:16] == parts[6] and
+            (options.expected_input_digest is None or
+             identity['input_digest'] == options.expected_input_digest),
+            'WORKLOAD_IDENTITY_BINDING_INVALID')
+    # Raw results root/limits не сохраняются даже в приватном receipt.
+    return {'pod': {key: value for key, value in pod.items() if key != 'phase'},
+            'pod_created_at': parts[1], 'controller_uid': parts[4],
+            'projection': {'name': values[1], 'uid': values[2], 'resource_version': values[3],
+                           'created_at': values[7]},
+            'identity': identity}
+
+
+def admission_expression(value):
+    """Render whitespace не меняет CEL tokens или байты строковых литералов."""
+    require(isinstance(value, str), 'WORKLOAD_ADMISSION_SHAPE_INVALID')
+    segments = re.split(r'''('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*")''', value)
+    normalized = []
+    for index, segment in enumerate(segments):
+        if index % 2:
+            normalized.append(segment)
+        else:
+            require(not any(marker in segment for marker in ("'", '"', '//', '/*', '*/')),
+                    'WORKLOAD_ADMISSION_EXPRESSION_INVALID')
+            normalized.append(re.sub(r'[ \t\r\n]+', ' ', segment))
+    return ''.join(normalized).strip(' \t\r\n')
+
+
+def admission_spec(spec, kind):
+    """Только документированные API defaults; неизвестные поля остаются при сравнении."""
+    require(isinstance(spec, dict), 'WORKLOAD_ADMISSION_SHAPE_INVALID')
+    normalized = copy.deepcopy(spec)
+    key = 'matchConstraints' if kind == 'ValidatingAdmissionPolicy' else 'matchResources'
+    match = normalized.get(key)
+    require(isinstance(match, dict), 'WORKLOAD_ADMISSION_SHAPE_INVALID')
+    for field, default in (('matchPolicy', 'Equivalent'), ('namespaceSelector', {}),
+                           ('objectSelector', {})):
+        match.setdefault(field, default)
+    for field in ('resourceRules', 'excludeResourceRules'):
+        require(isinstance(match.get(field, []), list), 'WORKLOAD_ADMISSION_SHAPE_INVALID')
+        for rule in match.get(field, []):
+            require(isinstance(rule, dict), 'WORKLOAD_ADMISSION_SHAPE_INVALID')
+            rule.setdefault('scope', '*')
+    for field in ('validations', 'matchConditions', 'variables'):
+        require(isinstance(normalized.get(field, []), list), 'WORKLOAD_ADMISSION_SHAPE_INVALID')
+        for item in normalized.get(field, []):
+            require(isinstance(item, dict) and 'expression' in item,
+                    'WORKLOAD_ADMISSION_SHAPE_INVALID')
+            item['expression'] = admission_expression(item['expression'])
+    return normalized
+
+
+def require_workload_admission(read, projection_created_at):
+    """Доверенный API сверяет фактические Fail/Deny guards с repo-owned source."""
+    try:
+        import yaml
+        source = Path(__file__).resolve().parents[2] / 'deploy/k8s/base/runtime-controller/runtime-materialization-admission.yaml'
+        try:
+            objects = list(yaml.safe_load_all(source.read_text()))
+        except yaml.YAMLError:
+            raise Failure('WORKLOAD_ADMISSION_SOURCE_INVALID') from None
+    except (ImportError, OSError, ValueError):
+        raise Failure('WORKLOAD_ADMISSION_SOURCE_UNAVAILABLE') from None
+    names = (('ValidatingAdmissionPolicy', 'runtime-revision-exact-configmap-projection'),
+             ('ValidatingAdmissionPolicyBinding', 'runtime-revision-exact-configmap-projection'))
+    pins = []
+    for kind, name in names:
+        expected = [item for item in objects if item and item.get('kind') == kind and
+                    item.get('metadata', {}).get('name') == name]
+        require(len(expected) == 1, 'WORKLOAD_ADMISSION_SOURCE_INVALID')
+        raw = read(['get', kind, name, '-o', 'json'])
+        require(len(raw) <= MAX_BYTES, 'WORKLOAD_ADMISSION_LIMIT')
+        try:
+            actual = json.loads(raw, object_pairs_hook=ACK.unique)
+        except (ValueError, UnicodeError):
+            raise Failure('WORKLOAD_ADMISSION_JSON_INVALID') from None
+        require(isinstance(actual, dict) and isinstance(actual.get('metadata'), dict),
+                'WORKLOAD_ADMISSION_SHAPE_INVALID')
+        metadata = actual['metadata']
+        require(actual.get('kind') == kind and actual.get('apiVersion') == expected[0]['apiVersion'] and
+                metadata.get('name') == name and
+                ACK.matches(ACK.UUID, metadata.get('uid')) and
+                ACK.matches(r'[1-9][0-9]{0,19}', metadata.get('resourceVersion')) and
+                not metadata.get('deletionTimestamp') and
+                admission_spec(actual.get('spec'), kind) == admission_spec(expected[0]['spec'], kind),
+                'WORKLOAD_ADMISSION_BINDING_INVALID')
+        require(type(metadata.get('generation')) is int and metadata['generation'] == 1 and
+                workload_timestamp(metadata.get('creationTimestamp')) <=
+                workload_timestamp(projection_created_at), 'WORKLOAD_ADMISSION_ORIGIN_UNPROVEN')
+        if kind == 'ValidatingAdmissionPolicy':
+            status = actual.get('status', {})
+            require(isinstance(status, dict) and
+                    isinstance(status.get('typeChecking', {}), dict) and
+                    type(metadata.get('generation')) is int and metadata['generation'] > 0 and
+                    status.get('observedGeneration') == metadata['generation'] and
+                    type(status.get('observedGeneration')) is int and
+                    not status.get('typeChecking', {}).get('expressionWarnings'),
+                    'WORKLOAD_ADMISSION_NOT_READY')
+        pins.append({'kind': kind, 'name': name, 'uid': metadata['uid'],
+                     'resource_version': metadata['resourceVersion']})
+    return pins
+
+
+def capture_workload(options, read, follow, now=time.monotonic, sleep=time.sleep):
+    validate_workload_options(options)
+    deadline = now() + options.timeout_seconds
+    bound = None
+    while now() < deadline:
+        bound = workload_projection(read, options)
+        if bound is not None:
+            break
+        sleep(min(0.5, max(0, deadline - now())))
+    require(bound is not None, 'WORKLOAD_POD_NOT_OBSERVED')
+    admission = require_workload_admission(read, bound['projection']['created_at'])
+    require(workload_projection(read, options) == bound, 'WORKLOAD_CHANGED_BEFORE_LOG_READ')
+    raw = read(['logs', bound['pod']['name'], '-n', ACK.NAMESPACE, '-c', 'provider-runtime',
+                '--tail=256', '--limit-bytes=524288', '--timestamps=false'])
+    try:
+        diagnostic = diagnostic_from_chunks(iter([raw]), deadline=deadline, now=now)
+    except Failure as error:
+        if str(error) != 'FOLLOW_STREAM_ENDED':
+            raise
+        require(workload_projection(read, options) == bound, 'WORKLOAD_CHANGED_BEFORE_FOLLOW')
+        stream = follow(bound['pod'])
+        try:
+            diagnostic = diagnostic_from_chunks(stream, deadline=deadline, now=now)
+        finally:
+            stream.close()
+    # Нет повторов effects и нет присоединения к новому Pod/attempt.
+    current = workload_projection(read, options)
+    require(current is not None, 'WORKLOAD_REJOIN_UNAVAILABLE')
+    require(current == bound, 'WORKLOAD_CHANGED_AFTER_CAPTURE')
+    require(require_workload_admission(read, bound['projection']['created_at']) == admission,
+            'WORKLOAD_ADMISSION_CHANGED')
+    return {'version': 1, 'status': 'WORKLOAD_DIAGNOSTIC_CAPTURED',
+            'proof_kind': 'TRUSTED_KUBERNETES_WORKLOAD', 'provider_ack': 'NOT_OBSERVED',
+            'provider_input_acceptance': 'UNKNOWN', 'execution_binding_recomputed': 'NOT_RUN',
+            'identity': bound['identity'], 'pod': {key: bound['pod'][key] for key in
+                                                ('name', 'uid', 'namespace')},
+            'projection': bound['projection'], 'image_manifest_digest': options.image_manifest,
+            'lease_ref': bound['pod']['annotations']['lease-ref'],
+            'execution_binding_digest': bound['pod']['annotations']['execution-binding-digest'],
+            'mcp_binding_digest': bound['pod']['annotations']['mcp-binding-digest'],
+            'rejoin': 'VERIFIED', 'diagnostic': diagnostic}
 
 
 def stop_process(process):
@@ -380,13 +623,19 @@ def main(argv=None):
     parser.add_argument('--timeout-seconds', type=int, default=120)
     parser.add_argument('--pod-name')
     parser.add_argument('--pod-uid')
+    parser.add_argument('--capture-mode', choices=('ACK', 'WORKLOAD'), default='ACK')
+    parser.add_argument('--node-ref')
+    parser.add_argument('--expected-input-digest')
     try:
         options = parser.parse_args(argv)
         validate_options(options)
+        if options.capture_mode == 'WORKLOAD':
+            validate_workload_options(options)
         with tempfile.TemporaryDirectory(prefix='provider-failure-', dir='/home/s/.cache') as private:
             os.chmod(private, 0o700)
             client = Kubectl(private, time.monotonic() + options.timeout_seconds)
-            result = capture(options, client.read, client.follow)
+            operation = capture_workload if options.capture_mode == 'WORKLOAD' else capture
+            result = operation(options, client.read, client.follow)
         print(json.dumps(result, sort_keys=True))
         return 0
     except Failure as error:

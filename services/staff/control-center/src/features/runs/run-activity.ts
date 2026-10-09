@@ -36,6 +36,9 @@ export interface RunActivityItem {
   eventType?: RunEvent["type"];
   serviceProgressCode?: "WORKLOAD_SCHEDULED" | "MODEL_REQUEST_RUNNING";
   serviceCancellationCode?: RunEvent["serviceCode"];
+  serviceCompletionCode?: "ROOT_PROCESS_COMPLETED";
+  executionNodeType?: RunNode["type"];
+  executionSafeErrorCode?: RunNode["safeErrorCode"];
   integrationInvocationRef?: string;
 }
 
@@ -280,6 +283,20 @@ export function buildRunTranscriptItems(
       Number.isSafeInteger(event.run.version) &&
       event.run.version >= 1,
     );
+    const executionNode = event.node ?? graphExecutionNode;
+    const executionNodeBound = Boolean(
+      scope &&
+      event.execution &&
+      (event.runRef === event.execution.runRef || graphChildBound) &&
+      event.nodeRef === event.execution.nodeRef &&
+      event.run.ref === event.runRef &&
+      Number.isSafeInteger(event.run.version) &&
+      event.run.version >= 1 &&
+      executionNode?.ref === event.execution.nodeRef &&
+      executionNode.runRef === event.execution.runRef &&
+      executionNode.turnRef === event.execution.turnRef &&
+      executionNode.attempt === event.execution.attempt,
+    );
     const item: RunActivityItem = {
       id: previous?.id ?? key ?? event.ref,
       kind,
@@ -326,6 +343,30 @@ export function buildRunTranscriptItems(
       serviceCancellationCode: transcriptServiceCancellationCode(
         event.serviceCode,
       ),
+      executionNodeType: executionNodeBound ? executionNode?.type : undefined,
+      executionSafeErrorCode: executionNodeBound
+        ? executionNode?.safeErrorCode
+        : undefined,
+      serviceCompletionCode:
+        executionNodeBound &&
+        executionNode?.type === "ROOT_PROCESS" &&
+        event.type === "NODE_STATE_CHANGED" &&
+        event.messageKind === "STATE" &&
+        event.serviceCode === "ROOT_PROCESS_COMPLETED" &&
+        event.nodeState === executionNode.state &&
+        ["SUCCEEDED", "FAILED", "CANCELLED"].includes(event.nodeState ?? "") &&
+        !event.message &&
+        !event.toolCall &&
+        !event.artifact &&
+        !event.artifactRef &&
+        !event.gate &&
+        !event.gateRef &&
+        !event.edge &&
+        !event.edgeRef &&
+        !event.incident &&
+        !event.progress?.trim()
+          ? "ROOT_PROCESS_COMPLETED"
+          : undefined,
       integrationInvocationRef: integrationBound
         ? tool
           ? successfulIntegrationInvocationRef(tool)
@@ -821,6 +862,62 @@ export function presentRunTranscriptItems(
     ];
   });
   const finals = new Map<string, PresentedTranscriptItem[]>();
+  // Типизированный итог агрегата не становится вторым ответом того же хода.
+  // Разные nodeRef сохраняются внутри истории, а остальные pins совпадают точно.
+  const foldedRoots = new Set<string>();
+  for (const root of presented) {
+    const history = root.serviceHistory;
+    if (
+      root.working ||
+      root.progress?.trim() ||
+      root.executionNodeType !== "ROOT_PROCESS" ||
+      root.serviceCompletionCode !== "ROOT_PROCESS_COMPLETED" ||
+      !history ||
+      history.some(
+        (step) =>
+          terminalTranscriptStates.has(step.state ?? "") &&
+          step.serviceCompletionCode !== "ROOT_PROCESS_COMPLETED",
+      ) ||
+      !root.execution
+    )
+      continue;
+    const targets = presented.filter(
+      (entry) =>
+        entry.executionNodeType === "AGENT_EXECUTION" &&
+        !entry.historical &&
+        !entry.working &&
+        entry.state === root.state &&
+        (root.executionSafeErrorCode === undefined ||
+          entry.executionSafeErrorCode === root.executionSafeErrorCode) &&
+        terminalTranscriptStates.has(entry.state ?? "") &&
+        entry.execution &&
+        entry.execution.runRef === root.execution?.runRef &&
+        entry.execution.sessionRef === root.execution.sessionRef &&
+        entry.execution.turnRef === root.execution.turnRef &&
+        entry.execution.turnNumber === root.execution.turnNumber &&
+        entry.execution.attempt === root.execution.attempt &&
+        (entry.phase === "FINAL" ||
+          entry.serviceHistory?.some(
+            (step) =>
+              step.eventType === "TURN_COMPLETED" &&
+              step.messageKind === "FINAL_MESSAGE",
+          )),
+    );
+    const target = targets.length === 1 ? targets[0] : undefined;
+    if (!target) continue;
+    const combined = [
+      ...(target.serviceHistory ?? target.completedServiceHistory ?? []),
+      ...history,
+    ].sort(
+      (left, right) =>
+        Date.parse(left.occurredAt) - Date.parse(right.occurredAt) ||
+        (left.sequence ?? 0) - (right.sequence ?? 0) ||
+        left.id.localeCompare(right.id),
+    );
+    if (target.serviceHistory) target.serviceHistory = combined;
+    else target.completedServiceHistory = combined;
+    foldedRoots.add(root.id);
+  }
   for (const item of presented) {
     const key = executionKey(item.execution);
     if (!key || item.historical || item.phase !== "FINAL") continue;
@@ -846,6 +943,7 @@ export function presentRunTranscriptItems(
   }
   return presented
     .filter((item) => {
+      if (foldedRoots.has(item.id)) return false;
       if (hidden.has(item.id)) return false;
       const scope = executionKey(item.execution);
       // Квитанция инструмента уже показывает этот exact успешный результат.

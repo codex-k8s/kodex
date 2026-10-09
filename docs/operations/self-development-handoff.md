@@ -10,6 +10,25 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 20:13 UTC — готов следующий диагностируемый retry
+
+Основа648d1cb7 + три адресных пакета в Draft1807: отдельный WORKLOAD failure
+capture, RUN refresh concurrency2/fairness при прежних10s/5s, typed generic root
+completion в details exact terminal child. ROOT unit/race/vet/codegen/FE
+typecheck/build PASS; native root duplicate исправлен и screenshot проверен.
+Подробные hashes/исходные FAIL/точные команды в актуальном журнале.
+Gateway servingELF EQUALb57d5ef4, FE source/Pod EQUAL6963202b. Все платформенные
+реплики и обе ноды Ready, Chrome MCP own3 OWNER200.
+
+Последний Manager run_XpfkvbvP0TzwWtrsfI5ZI8Ux FAILED до tools;
+stage/class/detail UNKNOWN, прошлый ACK observer ничего не доказал.
+Следующий обычный native retry — только после commit/push и freeze backend.
+Сразу прочитать свежий owner event execution tuple, точный custom image/PodUID
+и включить tools/dev/provider-failure-capture.py --capture-mode WORKLOAD
+с exact run/node/project/session/turn/attempt. Не подменять ACK этим receipt;
+если Pod исчезнет, оставить NOT_CAPTURED, не выполнять raw fallback.
+Полный Workflow/п11/14/15/16 остаются OPEN, финальный business PR не merge.
+
 ## Checkpoint 09.10.2026 19:47 UTC — retry FAILED до tools; точная диагностика ещё UNKNOWN
 
 run_XpfkvbvP0TzwWtrsfI5ZI8Ux уже FAILED/RUNTIME_PROVIDER_UNAVAILABLE,

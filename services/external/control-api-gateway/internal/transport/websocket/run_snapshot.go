@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
@@ -16,6 +17,7 @@ const (
 	maximumRunSnapshotItems   = 128
 	runSnapshotReadTimeout    = 5 * time.Second
 	runSnapshotRefreshTimeout = 10 * time.Second
+	runSnapshotReadWorkers    = 2
 )
 
 var errRunSnapshotInvalid = errors.New("run snapshot projection is invalid")
@@ -39,29 +41,100 @@ func (multiplexer *sessionMultiplexer) refreshSubscribedRuns() bool {
 }
 
 func (multiplexer *sessionMultiplexer) refreshSubscribedRunsWithin(parent context.Context) bool {
+	if multiplexer.ctx.Err() != nil || errors.Is(parent.Err(), context.Canceled) {
+		return false
+	}
+	refs := multiplexer.sortedRunRefs()
+	if len(refs) == 0 {
+		multiplexer.runRefreshOffset = 0
+		return true
+	}
+	if len(refs) > maximumRunSubscriptions {
+		return false
+	}
+	// Сдвиг хранит только порядок чтений текущего socket, не payload или authority.
+	start := multiplexer.runRefreshOffset % len(refs)
+	refs = append(refs[start:], refs[:start]...)
+	multiplexer.runRefreshOffset = (start + 1) % len(refs)
 	ctx, cancel := context.WithTimeout(parent, runSnapshotRefreshTimeout)
-	defer cancel()
-	for _, ref := range multiplexer.sortedRunRefs() {
+	stop := context.AfterFunc(multiplexer.ctx, cancel)
+	jobs := make(chan int, len(refs))
+	results := make(chan runSnapshotReadResult, runSnapshotReadWorkers)
+	for index := range refs {
+		jobs <- index
+	}
+	close(jobs)
+	var workers sync.WaitGroup
+	defer func() {
+		stop()
+		cancel()
+		workers.Wait()
+	}()
+	for range min(runSnapshotReadWorkers, len(refs)) {
+		workers.Go(func() {
+			for index := range jobs {
+				if ctx.Err() != nil {
+					return
+				}
+				snapshot, err := multiplexer.readRunSnapshotWithin(ctx, refs[index])
+				select {
+				case results <- runSnapshotReadResult{index: index, snapshot: snapshot, err: err}:
+				case <-ctx.Done():
+					return
+				}
+			}
+		})
+	}
+	completed := make([]bool, len(refs))
+	for range refs {
 		if multiplexer.ctx.Err() != nil || errors.Is(ctx.Err(), context.Canceled) {
 			return false
 		}
-		subscription := multiplexer.runs[ref]
-		snapshot, err := multiplexer.readRunSnapshotWithin(ctx, ref)
+		var result runSnapshotReadResult
+		select {
+		case <-ctx.Done():
+			cancel()
+			workers.Wait()
+			if multiplexer.ctx.Err() != nil || errors.Is(parent.Err(), context.Canceled) {
+				return false
+			}
+			// Истёк общий бюджет: непрочитанные подписки не получают готовность.
+			for index, ref := range refs {
+				if !completed[index] && !multiplexer.failRunSnapshot(multiplexer.runs[ref]) {
+					return false
+				}
+			}
+			return true
+		case result = <-results:
+		}
 		if multiplexer.ctx.Err() != nil || errors.Is(ctx.Err(), context.Canceled) {
 			return false
 		}
-		if err != nil {
-			subscription.available = false
-			if !multiplexer.sendStreamProblem(subscription.requestRef, "RUN", ref, subscription.cursor, "RUN_UNAVAILABLE") {
+		completed[result.index] = true
+		subscription := multiplexer.runs[refs[result.index]]
+		if result.err != nil || ctx.Err() != nil {
+			if !multiplexer.failRunSnapshot(subscription) {
 				return false
 			}
 			continue
 		}
-		if !multiplexer.sendRunSnapshot(subscription, snapshot) {
+		if !multiplexer.sendRunSnapshot(subscription, result.snapshot) {
 			return false
 		}
 	}
 	return true
+}
+
+// Работники возвращают только результаты RPC; socket и подписки меняет владелец.
+type runSnapshotReadResult struct {
+	index    int
+	snapshot *controlplanev1.GetRunGraphResponse
+	err      error
+}
+
+func (multiplexer *sessionMultiplexer) failRunSnapshot(subscription *runSubscription) bool {
+	subscription.available = false
+	return multiplexer.sendStreamProblem(subscription.requestRef, "RUN", subscription.rootRef, subscription.cursor, "RUN_UNAVAILABLE")
 }
 
 func projectCompleteRunSnapshot(value *controlplanev1.GetRunGraphResponse, subscription *runSubscription, localize func(string) string) (result generated.RunSnapshotEnvelope, projectionErr error) {

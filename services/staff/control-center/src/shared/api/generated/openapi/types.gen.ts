@@ -3192,9 +3192,9 @@ export type RunDelta = {
 };
 
 /**
- * Необязательный закрытый код служебной отмены из авторитетного события до локализации; не полномочие и не привязка выполнения.
+ * Необязательный закрытый код служебного события до локализации; не полномочие и не привязка выполнения.
  */
-export type RunEventServiceCode = 'RUN_CANCELLED' | 'RUN_NODE_CANCELLED' | 'ASSISTANT_TURN_CANCELLED';
+export type RunEventServiceCode = 'RUN_CANCELLED' | 'RUN_NODE_CANCELLED' | 'ASSISTANT_TURN_CANCELLED' | 'ROOT_PROCESS_COMPLETED';
 
 export type RunEvent = {
     ref: OpaqueRef;

@@ -2,6 +2,7 @@ package websockettransport
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,12 +16,18 @@ import (
 
 type heartbeatRunBatchRecorder struct {
 	platformWakeRaceRecorder
+	mu                                 sync.Mutex
 	runReads, eventReads, catalogReads int
 	denyCatalog                        bool
 	invalidSnapshot                    bool
 }
 
 func (c *heartbeatRunBatchRecorder) Invoke(ctx context.Context, method string, request, response any, options ...grpc.CallOption) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return status.FromContextError(err).Err()
+	}
 	switch out := response.(type) {
 	case *cp.ListRunsResponse:
 		c.catalogReads++

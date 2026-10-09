@@ -10,6 +10,43 @@ updated: 2026-10-09
 
 # Цель и источники
 
+## Checkpoint 09.10.2026 20:13 UTC — ранняя диагностика готова, параллельный refresh и компактный итог проверены
+
+Основа648d1cb74c3dd04cb006fe53ebdbe1ef46e9a2d0, изменения в том же Draft1807.
+WORKLOAD capture отделён от provider ACK: immutable server projection,
+точный UID/image/attempt и admission origin до/после чтения; исчезновение Pod
+закрывается NOT_CAPTURED. Сырые input/log payload не публикуются. ROOT76
+diagnostic tests5.954s и19ACK0.693s PASS. Live public admission check PASS;
+первоначальный FAIL доказан как whitespace drift двух CEL expressions,
+нормализуются только внешние пробелы, литералы/операторы/origin guards прежние.
+Actual provider failure capture пока NOT RUN; причина последнего Manager UNKNOWN.
+
+RUN refresh: два fresh owner RPC одновременно, прежние shared10s/perRPC5s,
+round-robin без payload cache, cancel/join и owner-only публикация. ROOT whole
+WS race23.512s PASS; combined HTTP9.203s/WS3.142s unit, mapper race1.179s/1.158s
+и vet PASS. Source/Pod hashes EQUAL; serving ELF и trimpath/buildvcs=false build
+EQUALb57d5ef4b0622a66bed60ba6e9bd95441f32a1c46dc4d7c09505ccff7c2ee8a0.
+Это не гарантия32 худших чтений за10s и не full realtime acceptance.
+
+Root completion получает типизированный marker до локализации. Только один
+exact terminal child той же run/session/turn/attempt принимает generic root
+в свои закрытые details; distinct root error/meaningful content/ambiguity
+сохраняют отдельную карточку. Native выявил root без errorCode и child
+PROVIDER_UNAVAILABLE: unconditional equality исправлена без phrase guessing.
+ROOT278 frontend tests2.70s, lint/format/forced typecheck/build7.92s PASS;
+official OpenAPI/AsyncAPI codegen PASS, generated12file manifest EQUAL до
+последней двухфайловой FE-дельты. Build chunk warnings сохранены.
+Final FE source/Pod EQUAL6963202b. Actual screenshot до/после проверен:
+один Project Manager failure, пять этапов под details, user справа/agent слева,
+overflowfalse. MCP Console0 и просмотренные relevant API200; dev revision
+poll не является entity polling. Полный active/reconnect/load ещё OPEN.
+
+После reboot обе ноды Ready, все Kodex Deployment/StatefulSet desired Ready.
+Chrome MCP own3 OWNER session200, рабочая вкладка обновляется без потери drafts;
+чужие вкладки не изменены. Перед следующим retry публикуется этот пакет;
+backend во время реального хода заморожен. П11/14/15/16/full Workflow OPEN,
+business PR остаётся для human gate.
+
 ## Checkpoint 09.10.2026 19:47 UTC — новая попытка FAILED, точная причина не выдумана
 
 Нативный retry run_XpfkvbvP0TzwWtrsfI5ZI8Ux FAILED до tools/Workflowlaunch.
