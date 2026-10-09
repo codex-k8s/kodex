@@ -24,6 +24,7 @@ MAX_RECORDS = 10000
 MAX_TARGETS = 128
 COMMAND_SECONDS = 25
 TOTAL_SECONDS = 120
+AGE_PROFILES = {4: (5, 1), 24: (25, 2)}
 ID_PATTERN = re.compile(r"[a-z0-9]{20,40}\Z")
 HASH_PATTERN = re.compile(r"[0-9a-f]{64}\Z")
 SIZE_PATTERN = re.compile(r"[0-9]+(?:\.[0-9]+)?(?:B|kB|KB|MB|GB|TB|KiB|MiB|GiB|TiB)\Z")
@@ -43,8 +44,9 @@ def docker_environment():
             "LC_ALL": "C", "LANG": "C"}
 
 
-def docker(builder, operation, target=None, deadline=None):
+def docker(builder, operation, target=None, deadline=None, minimum_age_hours=24):
     require(builder in BUILDERS, "BUILDER_REJECTED")
+    require(type(minimum_age_hours) is int and minimum_age_hours in AGE_PROFILES, "AGE_PROFILE_REJECTED")
     require(operation in ("du", "prune"), "OPERATION_REJECTED")
     command = ["/usr/bin/docker", "--host", "unix:///var/run/docker.sock",
                "buildx", operation, "--builder", builder]
@@ -61,7 +63,7 @@ def docker(builder, operation, target=None, deadline=None):
         # Buildx переводит id в regex, поэтому закрепляем обе границы.
         # BuildKit private — presence field с пустым значением, не boolean.
         command += ["--force", "--filter", "id=^(" + "|".join(selected) + ")$",
-                    "--filter", "until=24h", "--filter", 'private=""']
+                    "--filter", f"until={minimum_age_hours}h", "--filter", 'private=""']
     end = min(time.monotonic() + COMMAND_SECONDS, deadline or float("inf"))
     require(time.monotonic() < end, "BUDGET_EXHAUSTED")
     try:
@@ -111,18 +113,21 @@ def unique_object(pairs):
     return result
 
 
-def old_enough(value):
+def old_enough(value, minimum_age_hours=24):
+    require(type(minimum_age_hours) is int and minimum_age_hours in AGE_PROFILES, "AGE_PROFILE_REJECTED")
     if not isinstance(value, str):
         return False
     match = re.fullmatch(r"([0-9]+) (hours?|days?) ago", value)
     if not match:
         return False
     count = int(match[1])
-    return count >= (2 if match[2].startswith("day") else 25)
+    hours, days = AGE_PROFILES[minimum_age_hours]
+    return count >= (days if match[2].startswith("day") else hours)
 
 
-def records(builder, raw):
+def records(builder, raw, minimum_age_hours=24):
     require(builder in BUILDERS, "BUILDER_REJECTED")
+    require(type(minimum_age_hours) is int and minimum_age_hours in AGE_PROFILES, "AGE_PROFILE_REJECTED")
     require(isinstance(raw, bytes) and len(raw) <= MAX_OUTPUT, "DOCKER_OUTPUT_LIMIT")
     result = {}
     try:
@@ -152,6 +157,7 @@ def records(builder, raw):
             binding = {field: record[field] for field in
                        ("ID", "Size", "Mutable", "Shared", "Reclaimable", "CreatedAt")}
             binding["builder"] = builder
+            binding["minimumAgeHours"] = minimum_age_hours
             binding["parents"] = sorted(parents)
             cache_type = record.get("Type", "regular")
             require(isinstance(cache_type, str) and len(cache_type) <= 128, "DU_RESPONSE_INVALID")
@@ -164,7 +170,7 @@ def records(builder, raw):
                                   "parents": parents, "cacheType": cache_type,
                                   "eligible": record["Reclaimable"] and not record["Shared"]
                                   and cache_type in ("regular", "source.local", "source.git.checkout", "exec.cachemount")
-                                  and old_enough(record["LastUsedAt"])}
+                                  and old_enough(record["LastUsedAt"], minimum_age_hours)}
     except (UnicodeError, ValueError, TypeError, RecursionError):
         raise Failure("DU_RESPONSE_INVALID") from None
     # DU помечает предков unused descendants как reclaimable, но точный prune
@@ -175,8 +181,9 @@ def records(builder, raw):
     return result
 
 
-def inspect(builder, deadline):
-    return records(builder, docker(builder, "du", deadline=deadline))
+def inspect(builder, deadline, minimum_age_hours=24):
+    return records(builder, docker(builder, "du", deadline=deadline,
+                                   minimum_age_hours=minimum_age_hours), minimum_age_hours)
 
 
 def free_bytes():
@@ -184,8 +191,9 @@ def free_bytes():
     return data.f_bavail * data.f_frsize
 
 
-def execute(mode, builder, targets=(), fingerprints=()):
+def execute(mode, builder, targets=(), fingerprints=(), *, minimum_age_hours=24):
     require(builder in BUILDERS, "BUILDER_REJECTED")
+    require(type(minimum_age_hours) is int and minimum_age_hours in AGE_PROFILES, "AGE_PROFILE_REJECTED")
     require(mode in ("audit", "prune"), "OPERATION_REJECTED")
     require(len(targets) <= MAX_TARGETS and len(targets) == len(set(targets)), "TARGET_REJECTED")
     require(all(isinstance(item, str) and ID_PATTERN.fullmatch(item) for item in targets), "TARGET_REJECTED")
@@ -193,9 +201,9 @@ def execute(mode, builder, targets=(), fingerprints=()):
             "FINGERPRINT_REQUIRED")
     require(bool(targets) if mode == "prune" else not targets, "TARGET_REJECTED")
     deadline = time.monotonic() + TOTAL_SECONDS
-    initial = inspect(builder, deadline)
+    initial = inspect(builder, deadline, minimum_age_hours)
     if mode == "audit":
-        return {"status": "PASS", "mode": mode, "builder": builder, "minimumAgeHours": 24,
+        return {"status": "PASS", "mode": mode, "builder": builder, "minimumAgeHours": minimum_age_hours,
                 "records": [item for _, item in sorted(initial.items()) if item["eligible"]],
                 "excludedCount": sum(not item["eligible"] for item in initial.values())}
     # Весь выбранный список проверяется до первого эффекта.
@@ -205,7 +213,7 @@ def execute(mode, builder, targets=(), fingerprints=()):
     before = free_bytes()
     error = None
     try:
-        fresh = inspect(builder, deadline)
+        fresh = inspect(builder, deadline, minimum_age_hours)
         for target, fingerprint in zip(targets, fingerprints):
             require(target in fresh and fresh[target]["eligible"], "TARGET_NOT_ELIGIBLE")
             require(fresh[target]["fingerprint"] == fingerprint, "TARGET_CHANGED")
@@ -216,12 +224,12 @@ def execute(mode, builder, targets=(), fingerprints=()):
         # Одна anchored альтернативная группа выбирает только подтверждённые ID.
         # Prune дополнительно проверяет actual age/private/in-use в BuildKit.
         try:
-            docker(builder, "prune", tuple(targets), deadline)
+            docker(builder, "prune", tuple(targets), deadline, minimum_age_hours=minimum_age_hours)
         except Failure as failure:
             error = str(failure)
         # Независимый bounded readback даже после исчерпания общего бюджета.
         try:
-            surviving = inspect(builder, time.monotonic() + COMMAND_SECONDS)
+            surviving = inspect(builder, time.monotonic() + COMMAND_SECONDS, minimum_age_hours)
         except Failure:
             surviving = None
         outcomes = []
@@ -239,6 +247,7 @@ def execute(mode, builder, targets=(), fingerprints=()):
         after = None
         complete = False
     return {"status": "PASS" if complete else "PARTIAL", "mode": mode, "builder": builder,
+            "minimumAgeHours": minimum_age_hours,
             "outcomes": outcomes, "freeBytesBefore": before, "freeBytesAfter": after,
             "freeBytesDelta": after - before if after is not None else None,
             "spaceMeasurement": "HOST_ROOT_CONCURRENT_NOT_ATTRIBUTED"}
@@ -256,9 +265,11 @@ def main(arguments=None):
     parser.add_argument("--builder", choices=BUILDERS, required=True)
     parser.add_argument("--targetid", action="append", default=[])
     parser.add_argument("--expected-fingerprint", action="append", default=[])
+    parser.add_argument("--minimum-age-hours", type=int, choices=(4, 24), default=24)
     options = parser.parse_args(arguments)
     try:
-        result = execute(options.mode, options.builder, options.targetid, options.expected_fingerprint)
+        result = execute(options.mode, options.builder, options.targetid, options.expected_fingerprint,
+                         minimum_age_hours=options.minimum_age_hours)
     except Failure as failure:
         result = {"status": "FAIL", "error": str(failure)}
     except (OSError, ValueError, TypeError):

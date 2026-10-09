@@ -10,6 +10,32 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 05:07 UTC — old cache cleanup, recovery profile и capacity gate
+
+На опубликованном `0308bcfefedeb18327038c989fd7f09b853b0abb` exact readback
+подтвердил 747 default + 8 named cache IDs ABSENT_AFTER. Все восемь последних
+bounded групп PASS. Root available около 51,06 GB; целевой reclaim 75,18 GB,
+обе ноды DiskPressure True, 21 Deployment не Ready. Chrome MCP доступен;
+свежие screenshot/Console/Network показывают HTTP 500 документа, не исправление.
+Workflow state UNKNOWN при недоступном авторитетном API; blind Retry не делался.
+
+Для disposable performance cache добавлен явный recovery профиль 4 часа,
+обычный default 24 часа сохранён. Профиль связан с fingerprint и exact until;
+активные, shared, referenced parents, данные, images и PVC не удаляются.
+ROOT 58 герметичных cache tests PASS, diff-check PASS. Recovery prune ещё не
+применялся: сначала публикация и свежий audit. Это сокращение хранения
+восстановимого кэша сборки, не изменение security/admission/grants/leases.
+
+Дополнительные read-only проверки не нашли допустимых старых host images:
+52 obsolete archive config IDs отсутствуют в текущем Docker inventory;
+другие untagged images не объявлены своими. Три stopped containers не own
+fixtures, суммарные writable layers около 36 KB, KEEP. На каждой ноде 50
+исторических pinned images вне current/restore/workload refs; active domain
+closure UNKNOWN, снятие pins/удаление не выполнялось. Их логический размер
+не выдаётся за reclaim. ext4 резерв около 25,52 GB; уменьшение 5%→1% добавит
+около 20,41 GB available, но меняет настройку всего сервера: запрошен отдельный
+owner gate, изменения не выполнялись. Full65 OPEN.
+
 ## Checkpoint 09.10.2026 04:53 UTC — 38 cache IDs удалены, bounded batch готов
 
 На опубликованном `be671f5857376d71f3ca9f5fd16943689d6c8070` exact

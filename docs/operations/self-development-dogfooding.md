@@ -12747,3 +12747,25 @@ regex prune, independent DU/readback всех целей, без автомат�
 Active/shared/recent/parent guards и защита образов/данных не меняются.
 ROOT повторил 54 герметичных cache unit PASS; diff-check PASS. Дальше публикация
 и свежий audit; авторитетный Workflow state UNKNOWN, Full65 OPEN.
+
+### 09.10.2026 05:07 UTC — 755 cache IDs удалены; capacity gate
+
+На опубликованном `0308bcfefedeb18327038c989fd7f09b853b0abb` exact отсутствие
+747 default и 8 named cache IDs подтверждено; восемь последних bounded групп
+PASS. Root available около 51,06 GB при target 75,18 GB; обе ноды DiskPressure,
+21 Deployment не Ready. Свежие Chrome MCP screenshot/Console/Network: документ
+HTTP 500. Авторитетный Workflow state UNKNOWN, новых Retry нет.
+
+Подготовлен явный профиль disposable build-cache 4 часа, default 24 сохранён;
+age и builder связаны с fingerprint, exact until обязателен. Active/shared/
+parent guards, current/restore images, данные/PVC и Kubernetes thresholds
+не меняются. ROOT 58 герметичных cache unit PASS, diff-check PASS. Реальный
+recovery prune NOT RUN до публикации и нового audit. Старые host images не
+удалялись по недоказанному владению; 52 obsolete OCI config IDs отсутствуют
+в Docker inventory, остальные untagged KEEP_UNKNOWN. На node исторические
+pinned refs также KEEP при отсутствующей active domain closure.
+
+ext4 reserve 5% занимает около 25,52 GB; вариант 1% добавляет около 20,41 GB
+available без удаления файлов, но меняет весь сервер. Owner gate запрошен,
+настройка не изменена; одного изменения резерва может быть недостаточно.
+Full65 OPEN, финальный business PR не сливать.
