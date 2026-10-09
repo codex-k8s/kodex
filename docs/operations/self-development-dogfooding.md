@@ -4093,6 +4093,9 @@ FAILED / RUNTIME_TIMEOUT прежнего запуска; запрошен то�
 бюджетов. В 04:09–04:13 UTC он APPLIED: изменены только timeout-поля,
 Workflow version 25 / revision 8 опубликован, обычный Manager запустил один
 новый процесс. Полное выполнение и финальная готовность не подтверждены.
+В 04:24–04:27 UTC работа над приложением приостановлена стендовым инцидентом
+DiskPressure; актуальный owner run state UNKNOWN при API 500, recovery
+диагностика продолжается. Новых timeout/retry/attempt не создавалось.
 
 - [x] 1. Создать связанное Issue, ветку от свежего main и один Draft bootstrap
       PR; фиксировать результаты PASS/FAIL/NOT RUN/BLOCKED на точном SHA.
@@ -12594,3 +12597,104 @@ Gateway ERROR 04:06:09: исходный код относит ошибку к �
 `platform bootstrap snapshot read failed`; actual cause UNKNOWN.
 Последующий transient LIVE не доказывает устранения причины. История и
 checklist не менялись; полный процесс и финальная готовность не подтверждены.
+
+### 09.10.2026 04:23–04:25 UTC — новый INTAKE SUCCEEDED, Architect RUNNING и собственные EOF подтверждены
+
+До этой записи HEAD `b387ecf5f07c0bd26e938fb7e845bf8f503ddb95` clean,
+Draft PR1807; main прежний `ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69`.
+INTAKE `run_4h20meqomiZ27hr4D7Wvc8lT` SUCCEEDED. FINAL сохраняет
+manager-plan.md; Issue, owner input и восемь нормативных документов прочитаны
+до EOF на исходном main ab499. Реализация и тесты NOT RUN.
+
+Три artifacts:
+
+- `art_B3pDqlnLHIqc6S-JVo97-Lqy`, 17344 B, SHA256
+  `4e0b544945eec50adb3a67c625c9937c934e37d3ad5f1cfc143305c52e72d878`.
+- `art_qd2TCT0EaT7Dcy3m-pBEThZi`, 506 B, SHA256
+  `d3eec0d6596f57c50f33dd7ce44fef7ee164b192b5b770b89be9d5822863a7b2`.
+- `art_ikc-ZegNaJVWp20oUbM5zvvT`, 328 B, SHA256
+  `fcfbd648e2cc2f6ab50fe45668345a91d8ea9e12aa15ad7b62ca39381de3ccc7`.
+
+Coordinator своим native read_file достиг EOF: sequence 132 / 134 / 136;
+Architect самостоятельно достиг EOF: sequence 154 / 171 / 175.
+Workflow `run_4VTZQ0AOC-Hi11cHIT-7EmC-` RUNNING. Architect
+`run_eUqqdxp8LUKa-wYvqpL-1PQH`, session `ses_luWHQXSv38Sj5I-6q88ZrepJ`,
+RUNNING. ACK CAPTURED в том же Pod `runtime-turn-33f74a3bb45d1944`,
+UID `502921e9-688f-4f43-abe5-f387b36f7667`: scope NONE, ENV 9 / binding 10 /
+G9, tools 38 / grants 18, model `gpt-6.1-sol`, reasoning `medium`.
+RuntimeRevision `rrev_IXmT1JLEY9qEuLj8JjTDAtWx`, digest
+`01afb98cc6b41026718e767b4f4b85ce9f093a48703204f46fa1df458e67491a`.
+Task/inbox 3361 B, SHA256
+`297462b5295a0c244e7e79f26de6ba8ee3eaaa4cdc554f99b46e6b8597b05a59`;
+instructions 44436 B, SHA256
+`6c05b6493e3c81df15027a90317ce9137d3ad486c90af1b61ef4a3b96c691028`.
+Comparisons EQUAL, taskInPrompt true; image digest
+`615bab9cc7a7faf1688b552fb5744cca8796f8f43b0a3aba7c4604d109a6e4cc`,
+binary-file SHA256
+`47a8fc359e2cd186c3d87a6710ba38f64986415e40a0a156c508094b8fc66b3d`
+EQUAL expected, не hash обслуживающего процесса.
+
+ROOT восстановил доступ к браузеру и выполнил page 1 reload в 04:24 UTC;
+свежие screenshot / Console / Network pending. Одно комплексное ревью,
+пять циклов исправлений и единственный Human Gate step-057 не менялись.
+Остальные этапы не объявлены PASS; checklist 11/14/15 [ ], Full65 OPEN.
+Финальная готовность не подтверждена; финальный PR по бизнес-задаче не сливать,
+не включать auto-merge и не approve от имени владельца.
+
+### 09.10.2026 04:24–04:27 UTC — DiskPressure и evictions остановили стенд, run state UNKNOWN
+
+До outage свежий Chrome screenshot 2179×994: горизонтального переполнения нет,
+Console errors/warnings 0; все 59 из 59 просмотренных HTTP-запросов — 200.
+Затем actual WebSocket: первое соединение 37 кадров, включая
+PLATFORM_SNAPSHOT 22 / RUN_EVENT 5 / RUN_GRAPH_SNAPSHOT 5 / STREAM_PROBLEM 2,
+закрыто 4000. Второе соединение OPEN, 41 кадр, включая STREAM_PROBLEM 9 и
+RUN_UNSUBSCRIBED 1; realtime PLATFORM_UNAVAILABLE / recovering.
+Последующий API graph HTTP 500. Предшествующие HTTP 200 не объявлены текущей
+доступностью стенда.
+
+Cluster readback: оба nodes DiskPressure True и Ready True одновременно.
+Evictions 04:23–04:24 UTC затронули frontend, PostgreSQL, OAuth, secret broker
+и registry. Все 21 Deployment не Ready; стенд не GREEN. Текущий nodefs/imagefs:
+available 54 529 392 640 B / capacity 501 201 502 208 B, 10,88%.
+Configz: hard 5%, minimumReclaim 10%, transition 5 минут; целевой объём 15%
+около 75,18 GB. Host tmp inode 98% относится к отдельной filesystem, не nodefs.
+Первичный trigger — DiskPressure / ephemeral-storage, не дефект Console.
+
+Native Architect Pod уже отсутствует. Авторитетный run state UNKNOWN, пока API
+возвращает 500; новый FAILED/SUCCEEDED не заявлен. Работа над приложением
+приостановлена стендовым инцидентом, диагностика восстановления продолжается.
+Новых timeout, retry и попыток не создавалось. Историческая gateway ERROR
+04:06:09 сохраняет cause UNKNOWN; её причина не выводится из нового инцидента.
+
+ROOT проверил repo-owned cleanup local-host-image-cache.py: 18 unit PASS.
+После read-only audit отобраны только 8 OBSOLETE image IDs; выполнение PENDING,
+фактически освобождённое место UNKNOWN. Отбор не включает данные, PVC,
+current и restore pins. Это проверка кода и отбора, не завершённое восстановление
+или GREEN runtime. История сохранена, checklist 11/14/15 [ ], Full65 OPEN;
+финальный PR по бизнес-задаче не сливать, не включать auto-merge и не approve
+от имени владельца.
+
+### 09.10.2026 04:35 UTC — безопасный helper очистки старого build-cache
+
+`local-host-image-cache.py` завершил удаление ровно восьми выбранных OBSOLETE
+host images. Current/restore pins, данные, PVC и чужие образы сохранены.
+Свободное место меняется одновременно с image GC и другими процессами;
+логический размер удалённых образов не выдаётся за reclaim. Обе ноды остаются
+DiskPressure; фронт после reload отвечает HTTP 500, Console фиксирует ошибку
+загрузки документа. Авторитетный Workflow state UNKNOWN.
+
+Новый `tools/dev/local-build-cache.py`: read-only audit → explicit ID/fingerprint
+→ повторная проверка eligibility → exact prune → readback. Только старый
+неиспользуемый private build-cache, `until=24h`, без images/volumes/global prune.
+Активные, свежие, shared либо изменившиеся записи закрыто исключаются;
+timeout/partial не разрешает слепой повтор. `default` — общий performance cache,
+не исключительно Kodex; допустимо замедление будущих пересборок других задач,
+но их данные и исходники не меняются. Защиты Kubernetes не ослабляются.
+Context7 `/docker/docs` проверен; actual DU не фильтрует age через `until`,
+а boolean presence не равнозначно значению false. Поэтому eligibility
+проверяется отдельно и ограничение age повторно применяется самим BuildKit
+на exact prune. ROOT: 13 новых + 18 прежних unit = 31 PASS, diff-check PASS.
+Audit PASS: 764 кандидата `default`, выбраны 128 крупнейших, примерно 13,03 GB
+логически; 30 кандидатов `kodex-local-dev`, примерно 5,82 GB. Фактический
+reclaim и восстановление пока NOT RUN; применение после фиксации в Draft1807.
+Full65 OPEN, итоговый business PR не сливать.

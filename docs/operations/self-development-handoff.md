@@ -10,6 +10,101 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 04:35 UTC — адресные образы удалены, build-cache helper готов
+
+Штатный `local-host-image-cache.py` завершил удаление ровно восьми ранее
+проверенных OBSOLETE host images. Данные, PVC, current/restore pins и чужие
+образы не удалялись. Изменения свободного места не атрибутируются целиком этой
+операции: одновременно работают image GC и другие процессы.
+Обе ноды всё ещё DiskPressure; фронт после reload возвращает HTTP 500.
+Свежая Console содержит ошибку загрузки этого документа, не новый доказанный
+дефект UI. Авторитетный статус Workflow пока UNKNOWN.
+
+Подготовлен `tools/dev/local-build-cache.py`: read-only audit, явно выбранные
+cache ID + fingerprint, повторная проверка перед каждым эффектом и точный
+readback. Только неиспользуемый private build-cache старше 24 часов;
+не images/volumes, не общий Docker prune, не активные либо свежие записи.
+У общего builder `default` не утверждается исключительное владение Kodex;
+очистка такого performance cache может замедлить будущие пересборки других задач.
+Runtime/data и защитные пороги не меняются. Context7 `/docker/docs` проверен;
+фактическая CLI-проверка исключила неверное использование boolean-фильтров DU.
+ROOT: 13 новых + 18 прежних герметичных unit, всего 31 PASS; diff-check PASS.
+Audit PASS: `default` 764 кандидата, выбраны 128 крупнейших, логический размер
+около 13,03 GB; `kodex-local-dev` 30 кандидатов, около 5,82 GB.
+Это не обещание фактически освобождённых bytes. Build-cache prune NOT RUN до
+фиксации кода и публикации в текущем Draft PR1807. Дальше exact cleanup/readback,
+ожидание штатного восстановления подов и продолжение native процесса, без
+слепого Retry и без подмены команды платформы. Full65 OPEN.
+
+## Checkpoint 09.10.2026 04:24–04:27 UTC — стенд остановлен DiskPressure, run state UNKNOWN
+
+До outage Chrome screenshot 2179×994 без горизонтального переполнения,
+Console errors/warnings 0; все 59/59 просмотренных HTTP-запросов 200.
+Затем actual WS: первое соединение 37 кадров, включая PLATFORM_SNAPSHOT 22,
+RUN_EVENT 5, RUN_GRAPH_SNAPSHOT 5, STREAM_PROBLEM 2; closed 4000.
+Второе OPEN, 41 кадр, STREAM_PROBLEM 9 / RUN_UNSUBSCRIBED 1;
+realtime PLATFORM_UNAVAILABLE / recovering, последующий API graph 500.
+Предыдущие HTTP 200 не доказывают текущую доступность.
+
+Оба nodes DiskPressure True / Ready True; evictions 04:23–04:24 UTC, включая
+frontend/PostgreSQL/OAuth/secret broker/registry. Все 21 Deployment не Ready,
+не GREEN. Nodefs/imagefs available 54 529 392 640 B / capacity 501 201 502 208 B,
+10,88%; configz hard 5% / minimumReclaim 10% / transition 5 минут,
+целевой объём 15% около 75,18 GB. Host tmp inode 98% — отдельная filesystem,
+не nodefs. Первичный trigger DiskPressure / ephemeral-storage, не Console bug.
+Native Architect Pod отсутствует; авторитетный run state UNKNOWN при API 500,
+FAILED/SUCCEEDED не заявлены. Работа над приложением приостановлена стендовым
+инцидентом, recovery диагностика продолжается; новых timeout/retry/attempt нет.
+Gateway ERROR 04:06:09 cause UNKNOWN не переопределяется новым инцидентом.
+
+Repo-owned cleanup local-host-image-cache.py: 18 unit PASS; read-only audit
+отобрал только 8 OBSOLETE image IDs. Выполнение PENDING / actual freed UNKNOWN;
+данные/PVC/current/restore pins не включены в отбор. Это не завершённое
+восстановление. Дальше штатное восстановление стенда и авторитетный run readback;
+история сохранена, checklist 11/14/15 [ ], Full65 OPEN. Финальный PR по
+бизнес-задаче не сливать, не включать auto-merge и не approve от имени владельца.
+
+## Checkpoint 09.10.2026 04:23–04:25 UTC — INTAKE SUCCEEDED, новый Architect RUNNING
+
+До текущей записи HEAD `b387ecf5f07c0bd26e938fb7e845bf8f503ddb95` clean,
+Draft PR1807, main `ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69` неизменен.
+INTAKE `run_4h20meqomiZ27hr4D7Wvc8lT` SUCCEEDED, FINAL сохраняет
+manager-plan.md. Issue, owner input и восемь нормативных документов до EOF
+на исходном main ab499; реализация и тесты NOT RUN.
+Artifact refs / size / SHA256:
+
+- `art_B3pDqlnLHIqc6S-JVo97-Lqy`, 17344 B,
+  `4e0b544945eec50adb3a67c625c9937c934e37d3ad5f1cfc143305c52e72d878`.
+- `art_qd2TCT0EaT7Dcy3m-pBEThZi`, 506 B,
+  `d3eec0d6596f57c50f33dd7ce44fef7ee164b192b5b770b89be9d5822863a7b2`.
+- `art_ikc-ZegNaJVWp20oUbM5zvvT`, 328 B,
+  `fcfbd648e2cc2f6ab50fe45668345a91d8ea9e12aa15ad7b62ca39381de3ccc7`.
+
+Coordinator собственный native read_file EOF sequence 132 / 134 / 136;
+Architect собственный EOF sequence 154 / 171 / 175. Workflow
+`run_4VTZQ0AOC-Hi11cHIT-7EmC-` RUNNING; Architect
+`run_eUqqdxp8LUKa-wYvqpL-1PQH`, session `ses_luWHQXSv38Sj5I-6q88ZrepJ`, RUNNING.
+ACK CAPTURED, same Pod `runtime-turn-33f74a3bb45d1944`, UID
+`502921e9-688f-4f43-abe5-f387b36f7667`, NONE / ENV 9 / binding 10 / G9,
+tools 38 / grants 18, `gpt-6.1-sol` / `medium`.
+RuntimeRevision `rrev_IXmT1JLEY9qEuLj8JjTDAtWx`, digest
+`01afb98cc6b41026718e767b4f4b85ce9f093a48703204f46fa1df458e67491a`.
+Task/inbox 3361 B, SHA256
+`297462b5295a0c244e7e79f26de6ba8ee3eaaa4cdc554f99b46e6b8597b05a59`;
+instructions 44436 B, SHA256
+`6c05b6493e3c81df15027a90317ce9137d3ad486c90af1b61ef4a3b96c691028`.
+Comparisons EQUAL, taskInPrompt true, image digest
+`615bab9cc7a7faf1688b552fb5744cca8796f8f43b0a3aba7c4604d109a6e4cc`;
+binary-file `47a8fc359e2cd186c3d87a6710ba38f64986415e40a0a156c508094b8fc66b3d`
+EQUAL expected, не hash обслуживающего процесса.
+
+ROOT восстановил доступ к браузеру и page 1 reload в 04:24 UTC; свежие screenshot /
+Console / Network pending. Одно комплексное ревью + пять циклов исправлений +
+единственный Human Gate step-057 сохранены. Дальше штатный результат Architect;
+остальные этапы не объявлены PASS, checklist 11/14/15 [ ], Full65 OPEN.
+Финальный PR по бизнес-задаче не сливать, не включать auto-merge и не approve
+от имени владельца.
+
 ## Checkpoint 09.10.2026 04:14–04:17 UTC — INTAKE RUNNING, wall-clock pins проверены
 
 INTAKE child `run_4h20meqomiZ27hr4D7Wvc8lT`, session
