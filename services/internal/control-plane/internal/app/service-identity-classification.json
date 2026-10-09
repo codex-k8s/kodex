@@ -1888,6 +1888,11 @@
       "actor_mode": "SERVICE_OWNER_RESOLVED"
     },
     {
+      "operation_id": "platform.runtime.execution.workflow.catalog",
+      "source_binding_sha256": "b7f4d6cbf4e9a44a6c0dfe10b402d3d2188468ae607a65c35ae6cc4d61ce0ca4",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
       "operation_id": "platform.runtime.execution.workflow.launch",
       "source_binding_sha256": "d6e92aaa3530c2ee1aea505d63c0e4b28172c3bfa564c24e24c54185d227412a",
       "actor_mode": "SERVICE_OWNER_RESOLVED"

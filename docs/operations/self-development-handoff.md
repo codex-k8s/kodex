@@ -10,6 +10,30 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 08:29 UTC — runner собран; exact service registry дополняется
+
+Published source `b8564a33980665e71bace2d0539819cac3d88618`:
+full runner build и OCI provenance PASS; manifest
+`sha256:159a2a92c8401d9436e4497e4bd4aa4493528b5a835840472aba99bd3181c012`,
+binary SHA256 `7c8517c1e8d5d2b8082116e6631d942d4500be29bf517046a22a67692748a104`.
+Activation ещё NOT RUN: перед render найден missing exact record для
+`platform.runtime.execution.workflow.catalog` в local service classification.
+Добавляется только SERVICE_OWNER_RESOLVED record полного source binding;
+canonical policy93 и существующие408 bindings неизменны, итог409.
+Official generator/check и Node4/4 ROOT PASS250.405ms. Дополнительный Go
+consumer выявил прежнее stale expectation375; обновлён strict count409 и
+добавлен полный exact binding assert без ослабления authority guards.
+Изолированный consumer2/2 PASS0.044s; ROOT повтор выполнен отдельно.
+
+Перед activation нужен новый clean source provenance (runner inputs не
+в production не изменились; test file меняет общий input closure), fresh render
+и штатный quiesce/readback.
+Затем image-only maintenance уже bound custom recipes через admission/promotion;
+это не считается PASS самонастройки помощником и не заменяет её проверку.
+Реальные plain-language кейсы без ID в промптах обязательны: поиск прежней
+задачи по смыслу/названию, чтение её сообщений, follow-up, неоднозначность,
+foreign scope, ordinary discovery и launch. Full65/checklist11/14/15/16 OPEN.
+
 ## Checkpoint 09.10.2026 08:14 UTC — история задачи и каталог процессов интегрированы
 
 На базе published `e0976b3cfec30d56d597caee98aacea6cc2f4503` объединены
