@@ -10,6 +10,20 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 22:25 UTC — 4ENV/8bindings завершены, готов диагностический запуск
+
+Native staff image impact `riip_JZDWJvPiUX5oFbyz4CY37JT3` APPLIED/version2,
+все8items APPLIED: два ENV version/revision11 и шесть bindings12, artifact
+1bcccdac generation11. SYSTEM32/binding12 custom22218338 и PROJECT14/binding13
+custom2a1da9ec не изменились. Все8 preservation checks PASS; отдельные четыре
+non-image компонента обеих staff ENV равны прежним immutable versions.
+38tools и Developer secret descriptor сохранены. Screenshot просмотрен,
+Console delta0, prepare201/read200; Apply доказан authoritative APPLIED GET200,
+его HTTP-статус не сохранился в ограниченном Network buffer. Backend frozen.
+Теперь допустим один native Manager retry и exact closed RC diagnostic.
+Chrome MCP cell319 timeout300s, fallback69259 OWNER работает.
+Полный65QA/Workflow/п11/14/15/16 OPEN, business PR не merge.
+
 ## Checkpoint 09.10.2026 22:17 UTC — SYSTEM image-only публикация подтверждена
 
 Source/remote/Draft1807 `9d24f8300d8d95a1ea07976e322c314113b66067`, main

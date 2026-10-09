@@ -10,6 +10,28 @@ updated: 2026-10-09
 
 # Цель и источники
 
+## Checkpoint 09.10.2026 22:25 UTC — все четыре ENV и восемь bindings обновлены
+
+Native managed image impact `riip_JZDWJvPiUX5oFbyz4CY37JT3` создан для
+staff image revision11, generation11, artifact1bcccdac. Свежий план содержал
+ровно два staff ENV и шесть bindings; уже обновлённые помощники отсутствовали
+среди потребителей старого образа. Выбраны только эти восемь items.
+Один UI Apply подтвердился GET200: plan APPLIED/version2, все8items APPLIED.
+Два ENV version/revision10→11, шесть bindings11→12. SYS и PROJECT версии
+32/14 и bindings12/13 остались прежними после staff операции.
+
+Каждый из восьми агентов теперь привязан к своему точному promoted custom
+artifact на новом диагностическом runner. По всем6staff общий исходный
+preservation hash восстановлен в точности; отдельно values/secretDescriptors/
+tools/policy обеих staff ENV равны immutable прежним revisions. У всех38tools;
+единственный secret descriptor Developer сохранён. Native modal screenshot
+просмотрен: компактный scroll списка, именованные потребители, действие8.
+Console delta0/warnings0/pageerrors0; relevant Network prepare201/read200,
+Apply подтверждён authoritative APPLIED GET200. Точный HTTP-статус Apply не
+сохранён в ограниченном Network buffer; legacy/API write bypass не использовался.
+Следующее — один реальный native Manager retry при frozen backend, затем
+closed RC diagnostic readback до cleanup. Полный Workflow/65QA остаётся OPEN.
+
 ## Checkpoint 09.10.2026 22:17 UTC — UI опубликован; системное окружение обновлено
 
 Source/remote/Draft1807 EQUAL `9d24f8300d8d95a1ea07976e322c314113b66067`;
