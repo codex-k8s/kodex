@@ -12722,3 +12722,16 @@ Actual CLI с гарантированно отсутствующим exact ID: 
 Root available около 42,8 GB, обе ноды DiskPressure True, целевой объём
 reclaim около 75,18 GB; runtime/data/PVC/current и restore images сохранены.
 Авторитетный статус Workflow UNKNOWN при HTTP 500; Full65 OPEN.
+
+### 09.10.2026 04:49 UTC — первые реальные cache removals и leaf guard
+
+На `648011aee82971dcd7f212aeb8e3b45a36cdc9a8` default old exec.cachemount
+`p0dprb7c6vkwo7uxhyg897k1v` и named source.local
+`2nij6uvcivehwciiyx0dl1uxt` получили exact ABSENT_AFTER / PASS.
+Root available около 44,79 GB; наблюдаемая дельта около 1,63 GB не считается
+исключительно эффектом этой операции. Большие cache parents остались
+PRESENT_AFTER, дальнейшие цели не выполнялись. Теперь eligibility исключает
+предков любых существующих cache refs; parent links закреплены fingerprint,
+internal/frontend/unknown types исключены. Только exact old unused private
+листья, не данные/образы/PVC. Дальше свежий audit и cleanup после публикации.
+Recovery и авторитетный статус Workflow пока UNKNOWN; Full65 OPEN.

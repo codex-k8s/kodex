@@ -138,20 +138,36 @@ def records(builder, raw):
             for field in ("CreatedAt", "LastUsedAt", "Description"):
                 require(isinstance(record.get(field), str) and len(record[field]) <= 65536,
                         "DU_RESPONSE_INVALID")
+            parents = record.get("Parents")
+            parents = [] if parents is None else parents
+            require(isinstance(parents, list) and len(parents) <= MAX_RECORDS and
+                    all(isinstance(parent, str) and ID_PATTERN.fullmatch(parent) for parent in parents),
+                    "DU_RESPONSE_INVALID")
             # age повторно проверяется; относительный LastUsedAt не включён в
             # fingerprint: его текст меняется без изменения самой cache record.
             binding = {field: record[field] for field in
                        ("ID", "Size", "Mutable", "Shared", "Reclaimable", "CreatedAt")}
             binding["builder"] = builder
+            binding["parents"] = sorted(parents)
+            cache_type = record.get("Type", "regular")
+            require(isinstance(cache_type, str) and len(cache_type) <= 128, "DU_RESPONSE_INVALID")
+            binding["type"] = cache_type
             binding["descriptionDigest"] = hashlib.sha256(record["Description"].encode()).hexdigest()
             fingerprint = hashlib.sha256(json.dumps(binding, sort_keys=True,
                                                     separators=(",", ":")).encode()).hexdigest()
             result[identifier] = {"id": identifier, "size": size,
                                   "mutable": record["Mutable"], "fingerprint": fingerprint,
+                                  "parents": parents, "cacheType": cache_type,
                                   "eligible": record["Reclaimable"] and not record["Shared"]
+                                  and cache_type in ("regular", "source.local", "source.git.checkout", "exec.cachemount")
                                   and old_enough(record["LastUsedAt"])}
     except (UnicodeError, ValueError, TypeError, RecursionError):
         raise Failure("DU_RESPONSE_INVALID") from None
+    # DU помечает предков unused descendants как reclaimable, но точный prune
+    # не удалит их, пока остаются дочерние cache refs. Отбираем только листья.
+    referenced = {parent for item in result.values() for parent in item["parents"]}
+    for identifier, item in result.items():
+        item["eligible"] = item["eligible"] and identifier not in referenced
     return result
 
 

@@ -65,6 +65,26 @@ class BuildCacheTests(unittest.TestCase):
                 self.assertEqual(CACHE.main(["audit", "--builder", "default"]), 1)
             self.assertNotIn(CANARY, output.getvalue())
 
+    def test_referenced_parent_is_not_pruned_before_leaf(self):
+        source = wire(record(), record(OTHER, Parents=[TARGET]))
+        parsed = CACHE.records("default", source)
+        self.assertFalse(parsed[TARGET]["eligible"])
+        self.assertTrue(parsed[OTHER]["eligible"])
+        self.assertTrue(CACHE.records("default", wire(record()))[TARGET]["eligible"])
+        with patch.object(CACHE, "docker", return_value=source) as mocked:
+            with self.assertRaisesRegex(CACHE.Failure, "TARGET_NOT_ELIGIBLE"):
+                CACHE.execute("prune", "default", [TARGET], [self.fingerprint()])
+            self.assertEqual(mocked.call_count, 1)
+
+    def test_invalid_parent_reference_is_closed(self):
+        for parents in ("wrong", False, ["--all"], [42]):
+            with self.subTest(parents=parents), self.assertRaises(CACHE.Failure):
+                CACHE.records("default", wire(record(Parents=parents)))
+
+    def test_internal_frontend_unknown_types_excluded(self):
+        for cache_type in ("internal", "frontend", "unrecognized"):
+            self.assertFalse(CACHE.records("default", wire(record(Type=cache_type)))[TARGET]["eligible"])
+
     def test_exact_target_positive_and_other_record_preserved(self):
         source = wire(record(), record(OTHER))
         result, mocked = self.run_prune([source, source, b"ignored provider output", wire(record(OTHER))])

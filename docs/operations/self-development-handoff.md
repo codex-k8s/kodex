@@ -10,6 +10,21 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 04:49 UTC — actual cache cleanup PASS, предки исключены
+
+Опубликованный `648011aee82971dcd7f212aeb8e3b45a36cdc9a8`: первая старая
+exec.cachemount default `p0dprb7c6vkwo7uxhyg897k1v` удалена, exact readback
+ABSENT_AFTER / PASS. Root available вырос примерно с 43,16 до 44,79 GB,
+дельта измерения 1,63 GB не полностью атрибутируется одной операции.
+Named source.local `2nij6uvcivehwciiyx0dl1uxt` также ABSENT_AFTER / PASS.
+Другие выбранные большие regular записи остались PRESENT_AFTER: DU считает
+предков unused descendants reclaimable, но точный prune не удаляет их при
+сохранившихся дочерних cache refs. Helper теперь отбирает только листья и
+закрепляет parent links в fingerprint; internal/frontend/unknown types
+исключены. Активные, shared, свежие и protected образы не затрагиваются.
+Дальше публикация leaf guard, свежий audit и адресная очистка старых листьев;
+runtime recovery пока не доказан, Full65 OPEN.
+
 ## Checkpoint 09.10.2026 04:46 UTC — фактическая семантика Buildx selector
 
 Уточнение предыдущей записи: `private=true` синтаксически допустим, но не
