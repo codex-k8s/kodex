@@ -306,6 +306,9 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 	if err != nil || len(items) != 1 || items[0].Ref != firstConversation.Ref {
 		t.Fatalf("scoped conversation list: %v", err)
 	}
+	t.Run("artifact metadata discovery", func(t *testing.T) {
+		testAssistantArtifactSearch(t, ctx, repository, service, owner, worker, searchReader, lease, secondProject.Ref)
+	})
 	if _, err := service.Execute(ctx, command.Command{Kind: command.CreateAssistantConversation, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "project-assistant-missing-scope"}, Payload: command.AssistantConversationInput{},
 	}); !errors.Is(err, errs.ErrInvalid) {

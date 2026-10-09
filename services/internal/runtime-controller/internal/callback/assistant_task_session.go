@@ -9,7 +9,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
-var errAssistantTaskSessionRead = errors.New("assistant task session read unavailable")
+var errAssistantTaskSessionRead = errors.New(taskSessionReadFailureMessage)
 
 type taskSessionToolResult struct {
 	controlplaneapi.TaskSessionProjection
@@ -34,42 +34,51 @@ func assistantTaskSessionTool() map[string]any {
 }
 
 func (server *Server) readTaskSession(ctx context.Context, input runtimecontract.RunnerInput, arguments map[string]any) (any, error) {
-	if !input.IsAssistant() || input.LeaseRef == "" || input.LeaseFence == "" || input.LeaseGeneration < 1 || !onlyKeys(arguments, "run_ref", "cursor") {
-		return nil, errAssistantTaskSessionRead
+	if !input.IsAssistant() || input.LeaseRef == "" || input.LeaseFence == "" || input.LeaseGeneration < 1 {
+		return nil, taskSessionReadFailure(taskSessionContext)
+	}
+	if !onlyKeys(arguments, "run_ref", "cursor") {
+		return nil, taskSessionReadFailure(taskSessionInput)
 	}
 	runRef, ok := arguments["run_ref"].(string)
 	if !ok || !validAssistantResourceRef(runRef) {
-		return nil, errAssistantTaskSessionRead
+		return nil, taskSessionReadFailure(taskSessionInput)
 	}
 	cursor := ""
 	if value, present := arguments["cursor"]; present {
 		var valid bool
 		cursor, valid = value.(string)
 		if !valid || cursor == "" || len(cursor) > 1024 {
-			return nil, errAssistantTaskSessionRead
+			return nil, taskSessionReadFailure(taskSessionInputCursor)
 		}
 	}
 	bounded, cancel := context.WithTimeout(ctx, server.config.RequestTimeout)
 	defer cancel()
 	response, err := server.control.Runtime.SearchAssistantResources(bounded, &controlplanev1.SearchAssistantResourcesRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, AssistantTaskSessionRead: &controlplanev1.AssistantTaskSessionReadRequest{RunRef: runRef, Cursor: cursor}})
 	if err != nil {
-		return nil, errAssistantTaskSessionRead
+		return nil, taskSessionOwnerFailure(err)
 	}
 	if response == nil || len(response.ProtoReflect().GetUnknown()) != 0 || len(response.Results) != 0 || response.Truncated || len(response.Definitions) != 0 || response.NextDefinitionOffset != 0 || response.AssistantConfigurationCatalog != nil {
-		return nil, errAssistantTaskSessionRead
+		return nil, taskSessionReadFailure(taskSessionReply)
 	}
 	projection, err := controlplaneapi.ProjectTaskSessionPage(response.AssistantTaskSession)
-	if err != nil || projection.RunRef != runRef || (input.AssistantScope == runtimecontract.AssistantScopeProject && projection.ProjectRef != input.ProjectRef) {
-		return nil, errAssistantTaskSessionRead
+	if err != nil {
+		return nil, taskSessionReadFailure(taskSessionProjection)
+	}
+	if projection.RunRef != runRef || (input.AssistantScope == runtimecontract.AssistantScopeProject && projection.ProjectRef != input.ProjectRef) {
+		return nil, taskSessionReadFailure(taskSessionBinding)
 	}
 	previous, cursorErr := controlplaneapi.ReadTaskSessionCursor(cursor)
-	if cursorErr != nil || (cursor != "" && previous.Source != projection.SourceSHA256) {
-		return nil, errAssistantTaskSessionRead
+	if cursorErr != nil {
+		return nil, taskSessionReadFailure(taskSessionCursorShape)
+	}
+	if cursor != "" && previous.Source != projection.SourceSHA256 {
+		return nil, taskSessionReadFailure(taskSessionCursorSource)
 	}
 	if projection.Truncated {
 		next, nextErr := controlplaneapi.ReadTaskSessionCursor(projection.NextCursor)
 		if nextErr != nil || next.Offset != previous.Offset+len(projection.Messages) || (cursor != "" && next.Binding != previous.Binding) {
-			return nil, errAssistantTaskSessionRead
+			return nil, taskSessionReadFailure(taskSessionCursorProgress)
 		}
 	}
 	return taskSessionToolResult{projection}, nil

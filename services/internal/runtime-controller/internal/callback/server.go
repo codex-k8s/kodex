@@ -766,6 +766,12 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 			failureClass = "integration_call_" + invocationInputErr.reason
 		}
 		attributes := []any{"tool", params.Name, "stage", "operation", "grpc_code", status.Code(err).String(), "failure_class", failureClass}
+		if params.Name == "read_task_session" {
+			if stage, _, ok := taskSessionFailureDetails(err); ok {
+				attributes[len(attributes)-1] = taskSessionFailureClass(stage)
+				attributes = append(attributes, taskSessionFailureAttributes(input, rpc.ID, stage)...)
+			}
+		}
 		if _, index := assistantPlanFailureDiagnostic(err); index > 0 {
 			attributes = append(attributes, "operation_index", index)
 		}

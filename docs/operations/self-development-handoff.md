@@ -10,6 +10,47 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 23:22 UTC — кластер после reboot и адресные Go-исправления
+
+Base `cb611a2ed08def5071c2fc7c108c30ed3e63e03e`; изменения этого checkpoint
+пока в рабочем дереве, не выдавать их за опубликованный SHA. Обе ноды Ready,
+21 Deployment и пять StatefulSet имеют все желаемые готовые реплики.
+Gateway/runtime-controller/frontend по-прежнему используют host source этого
+клона; root148GiB/data55GiB свободно, дефицита inode нет. Исторические
+Succeeded Pod не являются отказом текущих Deployment.
+
+Настоящий Workflow `run_SA8DChw4DJ_xirErFKi80Qev` завершён FAILED/version3,
+INTAKE SUCCEEDED; Architect технически SUCCEEDED, но содержательный результат
+BLOCKED на exact source/version proof. Developer не допущен, business PR не
+создан. Backend freeze снят только после этого terminal. Native CODEX_WEB
+COMPLETED не доказывает успешно прочитанную страницу: закреплённый upstream
+WebSearchItem не содержит typed outcome; network cause UNKNOWN. Не назначать
+FAILED по свободному тексту InternalError и не повторять Workflow вслепую.
+
+Применены три узких исправления: WS не требует resync при уже полученном
+непрерывном FIFO backlog; callback чтения сессии даёт закрытый диагностический
+stage без сырых причин; поиск помощника выдаёт metadata ARTIFACT через прежний
+resourceVisible и штатную ссылку. Поиск не выдаёт body/capability/grant и не
+ослабляет собственный immutable файловый каталог. Отдельный native follow-up
+для файла ещё NOT RUN после исправления, весь пункт16 остаётся открытым.
+
+ROOT local на точном изменённом дереве: full WS race PASS25.216s; callback
+race до ARTIFACT PASS37.132s и после интеграции PASS38.181s; CP targeted unit
+PASS0.064s; весь disposable ProjectAssistantProfilesComponent PASS27.063s,
+включая metadata discovery/revoke/foreign scope. Три offline build PASS;
+serving ELF в точных текущих Pod совпадают с независимой сборкой:
+gateway `3d5958ffba0e5c62e1ac7bf4318568de04843a15e7f726f536c165f34e9331a9`,
+runtime-controller `54551453e22682e331912ef9683ed2deaca8a10774fdf21223a630e5acec3c61`,
+control-plane `71f7760adce79a17e3bf39d01c8295e201a08b7971f01652b9ceaf6589f7ce8b`.
+Это адресные debug-доказательства, не полный65QA/release acceptance.
+
+Chrome MCP list_pages повторно запрошен, ответ pending, подключение не
+подтверждено. Own Playwright41676/69259 доступны; screenshots помощника и
+terminal Workflow просмотрены, рабочие страницы перезагружены без draft.
+Чужие вкладки не закрывались. У WS в новом idle окне пока нет4000, но проверка
+активного потока после нового кода ещё NOT RUN. Lossless split большого журнала
+готовится отдельно, исходные требования/история не удаляются.
+
 ## Checkpoint 09.10.2026 23:03 UTC — reboot readback и практическое продолжение без ID
 
 Исходный SHA `892c029241548a887c8ff2459de8c461f69c367e` совпадает с remote

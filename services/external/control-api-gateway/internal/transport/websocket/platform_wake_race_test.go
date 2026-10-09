@@ -3,6 +3,8 @@ package websockettransport
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -194,7 +196,7 @@ func TestPlatformHeartbeatWakeRaceControls(t *testing.T) {
 }
 
 func TestPlatformHeartbeatWakeDrainBudget(t *testing.T) {
-	t.Run("four-wakes-only-then-existing-gap-recovery", func(t *testing.T) {
+	t.Run("four-wakes-only-then-contiguous-backlog-catchup", func(t *testing.T) {
 		m, c := platformWakeRaceFixture(t, 12)
 		for sequence := int64(8); sequence <= 12; sequence++ {
 			m.platformSignals <- platformWakeRaceSignal(t, sequence)
@@ -203,18 +205,19 @@ func TestPlatformHeartbeatWakeDrainBudget(t *testing.T) {
 			t.Fatal("bounded heartbeat failed")
 		}
 		frames := platformWakeRaceFrames(c)
-		if len(frames) != 6 || len(m.platformSignals) != 1 || len(c.requests) != 4 || c.cursorReads != 1 {
+		if len(frames) != 5 || len(m.platformSignals) != 1 || len(c.requests) != 4 || c.cursorReads != 1 || m.platformCursor != 11 {
 			t.Fatal("drain exceeded four wakes or waited for the remaining queue")
 		}
 		for index := 0; index < 4; index++ {
 			assertPlatformWakeRaceDelta(t, frames[index], int64(8+index))
 		}
-		if resync, ok := frames[4].(generated.PlatformResyncEnvelope); !ok || resync.Cursor != 12 || resync.Reason != "AUTHORITATIVE_READ_REQUIRED" {
-			t.Fatal("remaining authoritative gap was hidden by drain budget exhaustion")
+		if heartbeat, ok := frames[4].(generated.StreamHeartbeatEnvelope); !ok || heartbeat.Cursor != 11 {
+			t.Fatal("contiguous queued backlog caused resync or advanced the applied cursor")
 		}
-		if !m.applyPlatformSignal(<-m.platformSignals) || len(c.frames) != 0 || len(c.requests) != 4 {
-			t.Fatal("remaining wake repeated a snapshot after authoritative gap recovery")
+		if !m.applyPlatformSignal(<-m.platformSignals) || len(c.frames) != 1 || len(c.requests) != 5 || m.platformCursor != 12 {
+			t.Fatal("remaining queued wake lost its protected snapshot and cursor")
 		}
+		assertPlatformWakeRaceDelta(t, (<-c.frames).value, 12)
 	})
 	t.Run("new-arrival-does-not-extend-initial-prefix", func(t *testing.T) {
 		m, c := platformWakeRaceFixture(t, 10)
@@ -238,6 +241,142 @@ func TestPlatformHeartbeatWakeDrainBudget(t *testing.T) {
 		}
 		assertPlatformWakeRaceDelta(t, frames[0], 8)
 	})
+}
+
+func TestPlatformHeartbeatContiguousBacklog(t *testing.T) {
+	for _, count := range []int{5, 9, 128} {
+		t.Run(fmt.Sprintf("queued-%d", count), func(t *testing.T) {
+			current := int64(7 + count)
+			m, c := platformWakeRaceFixture(t, current)
+			for sequence := int64(8); sequence <= current; sequence++ {
+				m.enqueuePlatformSignal(platformWakeRaceSignal(t, sequence))
+			}
+			if !m.heartbeat(time.Unix(1, 0)) || m.platformCursor != 11 || c.cursorReads != 1 || len(c.requests) != 4 || len(m.platformSignals) != count-4 {
+				t.Fatal("bounded heartbeat changed cursor, queue or owner reads")
+			}
+			frames := platformWakeRaceFrames(c)
+			if len(frames) != 5 {
+				t.Fatal("contiguous backlog produced an extra resync frame")
+			}
+			for index := 0; index < 4; index++ {
+				assertPlatformWakeRaceDelta(t, frames[index], int64(8+index))
+			}
+			if heartbeat, ok := frames[4].(generated.StreamHeartbeatEnvelope); !ok || heartbeat.Cursor != 11 {
+				t.Fatal("heartbeat advertised an unapplied cursor")
+			}
+			for sequence := int64(12); sequence <= current; sequence++ {
+				signal := <-m.platformSignals
+				if signal.Sequence != sequence || !m.applyPlatformSignal(signal) {
+					t.Fatal("backlog lost its FIFO order or owner projection")
+				}
+				assertPlatformWakeRaceDelta(t, (<-c.frames).value, sequence)
+			}
+			if m.platformCursor != current || len(c.requests) != count || !m.heartbeat(time.Unix(2, 0)) {
+				t.Fatal("catchup did not complete through protected reads")
+			}
+		})
+	}
+}
+
+func TestPlatformHeartbeatBacklogRecoveryControls(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		current int64
+		tail    []int64
+		resync  bool
+	}{
+		{"duplicate-and-contiguous", 12, []int64{11, 12}, false},
+		{"valid-future-wake-after-current", 12, []int64{12, 13}, false},
+		{"missing-authoritative-tail", 13, []int64{12}, true},
+		{"gap-in-backlog", 13, []int64{13}, true},
+		{"reordered-backlog", 13, []int64{13, 12}, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			m, c := platformWakeRaceFixture(t, test.current)
+			for _, sequence := range append([]int64{8, 9, 10, 11}, test.tail...) {
+				m.enqueuePlatformSignal(platformWakeRaceSignal(t, sequence))
+			}
+			if !m.heartbeat(time.Unix(1, 0)) || c.cursorReads != 1 || len(c.requests) != 4 || len(m.platformSignals) != len(test.tail) {
+				t.Fatal("backlog recovery bypassed bounded owner reads or consumed queued metadata")
+			}
+			frames := platformWakeRaceFrames(c)
+			_, resync := frames[4].(generated.PlatformResyncEnvelope)
+			if resync != test.resync {
+				t.Fatal("backlog coverage did not distinguish a real missing wake")
+			}
+			for _, sequence := range test.tail {
+				if signal := <-m.platformSignals; signal.Sequence != sequence {
+					t.Fatal("backlog inspection changed FIFO order")
+				}
+			}
+		})
+	}
+	for _, condition := range []string{"foreign-owner", "cursor-rollback", "owner-read-denied"} {
+		t.Run(condition, func(t *testing.T) {
+			m, c := platformWakeRaceFixture(t, 12)
+			m.platformCursor = 11
+			m.enqueuePlatformSignal(platformWakeRaceSignal(t, 12))
+			switch condition {
+			case "foreign-owner":
+				c.organization = "org_foreign01"
+			case "cursor-rollback":
+				c.current = 10
+			case "owner-read-denied":
+				c.cursorError = status.Error(codes.PermissionDenied, "synthetic owner denial")
+			}
+			if !m.synchronizePlatform() || m.platformAvailable || m.platformCursor != 11 || len(m.platformSignals) != 1 || c.cursorReads != 1 {
+				t.Fatal("queued wake overrode the authoritative owner cursor rejection")
+			}
+			if problem, ok := (<-c.frames).value.(generated.StreamProblemEnvelope); !ok || problem.Code != "PLATFORM_UNAVAILABLE" {
+				t.Fatal("queued wake hid the closed owner rejection")
+			}
+		})
+	}
+	t.Run("queued-projection-still-rechecks-eligibility", func(t *testing.T) {
+		m, c := platformWakeRaceFixture(t, 12)
+		for sequence := int64(8); sequence <= 12; sequence++ {
+			m.enqueuePlatformSignal(platformWakeRaceSignal(t, sequence))
+		}
+		if !m.heartbeat(time.Unix(1, 0)) {
+			t.Fatal("heartbeat failed")
+		}
+		platformWakeRaceFrames(c)
+		c.failure = status.Error(codes.PermissionDenied, "synthetic projection denial")
+		if !m.applyPlatformSignal(<-m.platformSignals) || len(c.requests) != 5 {
+			t.Fatal("queued projection bypassed fresh eligibility")
+		}
+		if cursor, ok := (<-c.frames).value.(generated.PlatformCursorEnvelope); !ok || cursor.Cursor != 12 {
+			t.Fatal("denied queued projection leaked a snapshot")
+		}
+	})
+}
+
+func TestPlatformBacklogInspectionConcurrentEnqueue(t *testing.T) {
+	m, _ := platformWakeRaceFixture(t, 31)
+	signals := make([]platformSignal, 24)
+	for index := range signals {
+		signals[index] = platformWakeRaceSignal(t, int64(8+index))
+	}
+	var joined sync.WaitGroup
+	joined.Add(1)
+	go func() {
+		defer joined.Done()
+		for _, signal := range signals {
+			m.enqueuePlatformSignal(signal)
+		}
+	}()
+	for index := 0; index < 100; index++ {
+		m.queuedPlatformWakesCoverCursor(31)
+	}
+	joined.Wait()
+	if !m.queuedPlatformWakesCoverCursor(31) || len(m.platformSignals) != len(signals) {
+		t.Fatal("concurrent enqueue lost bounded coverage")
+	}
+	for _, expected := range signals {
+		if actual := <-m.platformSignals; actual != expected {
+			t.Fatal("concurrent enqueue changed FIFO order")
+		}
+	}
 }
 
 func TestPlatformHeartbeatWakeDrainScopedControls(t *testing.T) {

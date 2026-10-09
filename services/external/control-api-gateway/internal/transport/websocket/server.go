@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -178,6 +179,7 @@ type sessionMultiplexer struct {
 	commands           <-chan sessionCommand
 	readErrors         <-chan error
 	platformSignals    chan platformSignal
+	platformQueueMu    sync.Mutex
 	runSignals         chan string
 	overflow           chan struct{}
 	platformRequestRef string
@@ -353,11 +355,7 @@ func (multiplexer *sessionMultiplexer) initializePlatform(after int64, snapshotR
 		if !valid {
 			return
 		}
-		select {
-		case multiplexer.platformSignals <- signal:
-		default:
-			multiplexer.signalOverflow()
-		}
+		multiplexer.enqueuePlatformSignal(signal)
 	})
 	if err != nil || multiplexer.server.nats.FlushTimeout(2*time.Second) != nil {
 		return errors.New("platform wake subscription is unavailable")
@@ -667,6 +665,11 @@ func (multiplexer *sessionMultiplexer) synchronizePlatformWithRefresh(ctx contex
 	if current == multiplexer.platformCursor {
 		return true
 	}
+	// Неприменённый последовательный FIFO не является потерей wake. Каждая
+	// проекция и cursor по-прежнему применяются только через штатный owner read.
+	if multiplexer.queuedPlatformWakesCoverCursor(current) {
+		return true
+	}
 	if !multiplexer.send(generated.PlatformResyncEnvelope{
 		Type: "PLATFORM_RESYNC_REQUIRED", RequestRef: multiplexer.platformRequestRef,
 		StreamKind: "PLATFORM", StreamRef: platformStreamRef, Cursor: current,
@@ -677,6 +680,42 @@ func (multiplexer *sessionMultiplexer) synchronizePlatformWithRefresh(ctx contex
 	multiplexer.platformCursor = current
 	// Пропущенный org wake не меняет обязательно Run.version или run cursor.
 	return refresh(ctx)
+}
+
+func (multiplexer *sessionMultiplexer) enqueuePlatformSignal(signal platformSignal) {
+	multiplexer.platformQueueMu.Lock()
+	defer multiplexer.platformQueueMu.Unlock()
+	select {
+	case multiplexer.platformSignals <- signal:
+	default:
+		multiplexer.signalOverflow()
+	}
+}
+
+// Снимок не превышает ёмкость FIFO; только multiplexer читает эту очередь.
+// Сериализация с enqueue сохраняет исходный порядок перед следующей delivery,
+// не добавляет owner reads и не продвигает cursor по одним метаданным wake.
+func (multiplexer *sessionMultiplexer) queuedPlatformWakesCoverCursor(current int64) bool {
+	multiplexer.platformQueueMu.Lock()
+	defer multiplexer.platformQueueMu.Unlock()
+	signals := make([]platformSignal, len(multiplexer.platformSignals))
+	for index := range signals {
+		signals[index] = <-multiplexer.platformSignals
+	}
+	expected := multiplexer.platformCursor
+	valid := true
+	for _, signal := range signals {
+		multiplexer.platformSignals <- signal
+		if !valid || expected == current || signal.Sequence <= expected {
+			continue
+		}
+		if signal.Sequence != expected+1 {
+			valid = false
+			continue
+		}
+		expected = signal.Sequence
+	}
+	return valid && expected == current
 }
 
 // Обрабатываем только уже доставленный префикс: новые wake не продлевают
