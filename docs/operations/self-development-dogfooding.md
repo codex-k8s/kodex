@@ -10,6 +10,33 @@ updated: 2026-10-09
 
 # Цель и источники
 
+## Checkpoint 09.10.2026 18:13 UTC — practical no-ID продолжение BLOCKED, без обхода
+
+На базе `0b0dfaf84c31b3545b9467d366405cb37fd7488d` нативный PROJECT-диалог
+сам нашёл предыдущую попытку задачи по лимитам и прочитал её историю. Один
+подтверждённый план создал один Manager run_9wOPLdRvW1JWzqkj-aE0OcEq.
+Manager нашёл актуальную SOFTWARE_CHANGE v28/READY, выполнил GitHub LIST,
+но остановился BLOCKED: штатный каталог не содержит полной конфигурации
+публикации, отсутствует доступный ordinary read активных Workflow/дубликата.
+Workflow не запущен; нельзя отметить весь no-ID кейс или бизнес-задачу PASS.
+Не передавались заранее готовые host workflow refs/config, новые grants
+не выдавались. Следующий этап — закрыть недостающий защищённый read path.
+
+Компактные read_file/history/catalog tools: ROOT274 tests PASS2.45s, scoped
+lint и forced typecheck/build PASS8.04s; meaningful text/error/details сохранены.
+Gateway closed stage/attempt/page diagnostics: весь websocket unit PASS2.177s,
+vet PASS; child57 targeted race PASS. Timeout2s/8s и authority неизменны.
+Actual gateway serving ELF совпал с hermetic build SHA256
+`3bab4eaa69ec52d8b77a583622cc8c2827f821f7a9b2a263f9584fc8f108ecbe`;
+source/Pod SHA256 `8ff0c6595cb0fc892a5e785ae4784aa1a5abdc7354a50df8afddae7b2f4070a6`
+EQUAL. Desktop screenshot просмотрен, overflowfalse; новый WS problems0/closes0
+на коротком idle smoke. Конкретный исторический slow RPC всё ещё UNKNOWN,
+active focus/reconnect/load ещё NOT RUN. Ошибочная initial cmd/app команда
+исправлена штатным cmd/control-api-gateway и не засчитана как PASS.
+
+Оба узла Ready; плановый ClamAV updater29859487 SUCCEEDED, прежний FAIL сохранён.
+Chrome MCP page3 доступна/обновлена. Full65 и п11/14/15/16 остаются OPEN.
+
 ## Checkpoint 08.10.2026 17:27 UTC — Unicode/frame-cap bootstrap на стенде
 
 В той же ветке/PR1803 интегрированы четыре проверенных frozen файла
@@ -4273,6 +4300,38 @@ grants и migrations не требуются. Реализация и адрес
 | Capture невозможен                      | Нет join/source/integrity proof                                                                                | Tuple отсутствует, ошибка сохраняется; такой residual path не объявляется исправленным без owner invalidation evidence |
 
 ## Журнал
+
+### 09.10.2026 17:54 UTC — новый PROJECT чат сам нашёл прежнюю задачу без ID
+
+Source/remote/Draft1807 `0b0dfaf84c31b3545b9467d366405cb37fd7488d`.
+ROOT повтор18 targeted unit PASS1.65s; полный frontend typecheck/build PASS,
+Vue host/Pod SHA2569de17664… EQUAL. Native новый PROJECT conversation
+cnv__tLqjv5jZbdzSzOmWWzQKQkM/run_-g2jGubI1JYblgZryWn29Dur: обычный
+запрос «мы уже делали сводку лимитов аккаунтов модели…» без IDs нашёл задачу
+и последнюю FAILED попытку. Assistant turn COMPLETED, четыре read_task_session
+COMPLETED; final точно отличает INTAKE SUCCEEDED как сохранение BLOCKED отчёта
+от выполнения задачи. История и результаты прочитаны самим помощником,
+host не вложил refs/schema в prompt. Первый bounded history snapshot truncated,
+последующие связанные результаты не truncated; full-history EOF не заявляется.
+
+Actual desktop screenshot: user справа, commentary/answer слева, девять tool
+calls в компактной раскрываемой группе с именами/статусами. OverflowFalse.
+Console2 initial401 и2 диагностических405 (ROOT ошибочно запросил отсутствующий
+GET /assistant-conversations/:ref/turns) учтены; pageerror/warnings0.
+Это неверная диагностическая точка входа, не дефект рабочего POST-turn path.
+Чтение канонического conversation list200 подтверждает оба COMPLETED turns.
+
+Active-run realtime FAIL воспроизведён: PLATFORM_UNAVAILABLE29605/29630,
+RESYNC_REQUIRED/close4000, затем rejoin/READY и финальный ответ доставлен.
+Отдельная причинная диагностика gateway/RPC начата; reconnect не отмечен PASS.
+Из того же диалога дослано практическое продолжение без ID: подготовить один
+план запуска Project Manager по найденной задаче; он должен сам найти актуальный
+SOFTWARE_CHANGE/schema и пройти полный Workflow до human gate. Результат
+этого продолжения ещё NOT RUN/в процессе; П16 остаётся OPEN.
+
+Исторический ClamAV updater12:07 DeadlineExceeded не текущий blocker: scanner
+Ready/healthcheck exit0, daily DB28146 возраст≈59.5h<7days. Причина старого
+timeout UNKNOWN (Pod/log уже удалены); следующий scheduled18:07UTC ещё NOT RUN.
 
 ### 09.10.2026 17:48 UTC — native upgrade четырёх окружений и восьми привязок PASS
 

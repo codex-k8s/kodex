@@ -2259,6 +2259,8 @@ const ru = {
     },
     managedToolNames: {
       get_configuration_catalog: "Каталог настроек",
+      read_task_session: "Чтение истории сессии",
+      get_workflow_catalog: "Каталог процессов",
       propose_configuration_plan: "Настройки помощника",
       get_integration_catalog: "Каталог интеграций",
       find_platform_resources: "Поиск ресурсов",
@@ -2267,6 +2269,7 @@ const ru = {
       delegate_agent: "Передача задания",
       invoke_integration: "Вызов интеграции",
       search_files: "Поиск файлов",
+      read_file: "Чтение файла",
       get_file_metadata: "Сведения о файле",
       preview_file: "Просмотр файла",
       get_file_manifest: "Список файлов",
@@ -6883,6 +6886,8 @@ const en = {
     },
     managedToolNames: {
       get_configuration_catalog: "Configuration catalog",
+      read_task_session: "Session history",
+      get_workflow_catalog: "Workflow catalog",
       propose_configuration_plan: "Assistant settings",
       get_integration_catalog: "Integration catalog",
       find_platform_resources: "Resource search",
@@ -6891,6 +6896,7 @@ const en = {
       delegate_agent: "Task delegation",
       invoke_integration: "Integration call",
       search_files: "File search",
+      read_file: "File reading",
       get_file_metadata: "File information",
       preview_file: "File preview",
       get_file_manifest: "File list",

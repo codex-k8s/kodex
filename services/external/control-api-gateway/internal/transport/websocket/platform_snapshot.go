@@ -359,31 +359,31 @@ func (server *Server) projectPlatformSnapshotPage(ctx context.Context, kind, pro
 	case "SYSTEM_ASSISTANT":
 		assistant, readErr := server.assistant.GetSystemAssistant(ctx, &controlplanev1.GetSystemAssistantRequest{})
 		if readErr != nil {
-			return nil, readErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotAssistantGetStage, readErr)
 		}
 		conversations, readErr := server.assistant.ListAssistantConversations(scoped, &controlplanev1.ListAssistantConversationsRequest{ProjectRef: projectRef, Page: &controlplanev1.PageRequest{PageSize: assistantPageSize}})
 		if readErr != nil {
-			return nil, readErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotConversationListStage, readErr)
 		}
 		bootstrap, readErr := server.query.GetBootstrapState(ctx, &controlplanev1.GetBootstrapStateRequest{})
 		if readErr != nil {
-			return nil, readErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotBootstrapGetStage, readErr)
 		}
 		assistantProjection, projectErr := projectSnapshotPart(assistant, localize)
 		if projectErr != nil {
-			return nil, projectErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotAssistantProjectStage, projectErr)
 		}
 		conversationProjection, projectErr := projectSnapshotPart(conversations, localize)
 		if projectErr != nil {
-			return nil, projectErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotAssistantProjectStage, projectErr)
 		}
 		bootstrapProjection, projectErr := projectSnapshotPart(bootstrap, localize)
 		if projectErr != nil {
-			return nil, projectErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotAssistantProjectStage, projectErr)
 		}
 		state, ok := bootstrapProjection["state"].(map[string]any)
 		if !ok {
-			return nil, errors.New("bootstrap state projection is invalid")
+			return nil, withPlatformSnapshotReadStage(platformSnapshotAssistantProjectStage, errors.New("bootstrap state projection is invalid"))
 		}
 		state["speechTranscription"] = speechAvailabilityMap(server.projectSpeechAvailability(ctx, bootstrap.GetState().GetSpeechTranscription()))
 		return map[string]any{"assistant": assistantProjection, "conversations": conversationProjection, "bootstrap": bootstrapProjection}, nil
@@ -558,13 +558,13 @@ func (multiplexer *sessionMultiplexer) boundedPlatformSnapshot(envelope generate
 }
 
 func (multiplexer *sessionMultiplexer) boundedPlatformSnapshotWithin(ctx context.Context, envelope generated.PlatformSnapshotEnvelope) (generated.PlatformSnapshotEnvelope, error) {
-	for pageSize := int32(platformSnapshotPageSize); ; pageSize = max(1, pageSize/2) {
+	for attempt, pageSize := 1, int32(platformSnapshotPageSize); ; attempt, pageSize = attempt+1, max(1, pageSize/2) {
 		started := time.Now()
 		parentBudget := runSnapshotParentBudget(ctx, started)
 		rawSnapshot, err := multiplexer.server.projectPlatformSnapshotPage(ctx, string(envelope.Kind), multiplexer.projectRef, multiplexer.localize, pageSize)
 		if err != nil {
 			if status.Code(err) != codes.PermissionDenied {
-				observePlatformSnapshotReadFailure(ctx, started, parentBudget, string(envelope.Kind), err)
+				observePlatformSnapshotReadFailure(ctx, started, parentBudget, string(envelope.Kind), err, attempt, pageSize)
 			}
 			return generated.PlatformSnapshotEnvelope{}, err
 		}

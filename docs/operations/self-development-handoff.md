@@ -10,6 +10,75 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 18:13 UTC — Manager остановился без дубликата; компактные tools и диагностика на стенде
+
+Основа `0b0dfaf84c31b3545b9467d366405cb37fd7488d`, тот же Draft1807.
+Обычный Manager `run_9wOPLdRvW1JWzqkj-aE0OcEq` завершил проверку как BLOCKED:
+каталог даёт pins/schema/READY, но не полную опубликованную конфигурацию INTAKE;
+штатное чтение активных Workflow для проверки дубликата недоступно. Новый Workflow
+не запускался, host не подставлял refs/config и не обходил требуемые проверки.
+Чтение каталога и GitHub LIST docs/governance выполнены; дальнейшая реализация,
+комплексный review и приёмка NOT RUN. Технический SUCCEEDED этого diagnostic run
+не является успешным выполнением бизнес-задачи. Изучается минимальный защищённый
+owner read path для недостающих данных.
+
+Интегрирован компактный RunTranscript: read_task_session/get_workflow_catalog/
+read_file имеют понятные названия. Завершённый структурированный safe result
+остаётся целиком в закрытых details, а не дублируется большой metadata preview.
+Содержательные тексты, неизвестные tools и RUNNING/FAILED сохранены; строгая
+integration receipt классификация не ослаблена. ROOT274 unit PASS2.45s,
+scoped eslint PASS, typecheck/build PASS8.04s. Build сохраняет предупреждения
+PLUGIN_TIMINGS/chunks>500kB. Native desktop screenshot просмотрен: overflowfalse,
+три группы tools закрыты; точный раскрытый read_file и stable mobile ещё NOT RUN.
+
+Gateway сохраняет bundle2s/drain8s и добавляет закрытые stage/attempt/page-size
+в существующую единственную запись отказа. ROOT весь websocket unit PASS2.177s,
+vet PASS; subagent246 unit/57 targeted race PASS. Host source/Pod SHA256 EQUAL
+`8ff0c6595cb0fc892a5e785ae4784aa1a5abdc7354a50df8afddae7b2f4070a6`.
+Hermetic build с штатными CGO0/trimpath/buildvcsfalse и serving `/proc/369/exe`
+EQUAL `3bab4eaa69ec52d8b77a583622cc8c2827f821f7a9b2a263f9584fc8f108ecbe`.
+Одна ошибочная host build-команда с отсутствующим cmd/app была исправлена на
+канонический cmd/control-api-gateway; не выдана за PASS. Новый closed slow-stage
+ещё UNKNOWN: после reload native WS READY, problems0, closes0, один full graph;
+это короткий read smoke, не load/reconnect acceptance.
+
+Chrome MCP собственная page3 доступна и обновлена; чужие вкладки не закрывались.
+Оба узла Ready. Плановый ClamAV updater29859487 SUCCEEDED, прежний неудачный
+updater сохранён как FAIL. П11/14/15/16 и Full65 OPEN. Следующий шаг — защищённые
+чтения ordinary Manager, затем повтор реального сценария без технических ID.
+
+## Checkpoint 09.10.2026 18:03 UTC — no-ID история и практическое продолжение, Manager работает
+
+Published source `0b0dfaf84c31b3545b9467d366405cb37fd7488d`, Draft1807.
+Native PROJECT chat cnv__tLqjv5jZbdzSzOmWWzQKQkM: запрос без ID сам нашёл
+последнюю попытку задачи о лимитах и правильно объяснил FAILED/BLOCKED.
+Новый read_task_session четыре раза COMPLETED; assistant final COMPLETED.
+Затем тот же диалог подготовил ровно один LAUNCH_RUN plan
+pln_SbudSxGzqUByDhrdOlNiZ0xT. Native validation/APPLY подтвердили receipt
+rct_4OEwvpQP3JAgbmmhepuy_cPt APPLIED/одна operation/один новый ресурс
+run_9wOPLdRvW1JWzqkj-aE0OcEq. Ни настройки, ни grants не менялись.
+
+Обычный Project Manager сам вызвал новый get_workflow_catalog COMPLETED,
+нашёл SOFTWARE_CHANGE version28/READY, свежее main ab4992e0… и OPEN Issue1796,
+проверяет фактический LIST и документы. Не передавались готовые workflow
+refs/version/schema от host; дальнейший запуск Workflow/result ещё в процессе.
+Owner-selected final Human Gate и запрет merge/approve итогового PR сохранены.
+
+Actual screenshots no-ID ответа, плана и active Manager PASS; desktop overflowFalse.
+ROOT error в диагностике GET nonexistent turns дал два405, не дефект рабочего
+POST-turn. WS PLATFORM_UNAVAILABLE дважды/rejoin/доставка final — FAIL текущей
+стабильности, не списывать на provider. Gateway boundary доказал SYSTEM_ASSISTANT
+DeadlineExceeded/полный bundle2s; конкретный RPC и oversized retry-vs-drain
+пока UNKNOWN. Agent готовит закрытые stage/attempt/page diagnostics, budgets
+2s/8s не увеличиваются. Core Ready; ClamAV historical updater FAIL не blocker.
+
+Непубликованный working diff: локализованы read_task_session/get_workflow_catalog
+в RunTranscript; ROOT270tests/lint/format/typecheck/build PASS7.86s, native Manager
+показывает «Каталог процессов». У read_file заметили большую metadata preview
+завершённого вызова; идёт узкий UI follow-up с сохранением details. П11/14/15/16
+и Full65 OPEN. Следующее — дождаться own Manager, чинить реальные блокеры;
+не запускать второй Manager или дубликат Workflow пока этот жив.
+
 ## Checkpoint 09.10.2026 17:48 UTC — все custom images и привязки обновлены через UI
 
 Исходный SHA `6978096f0aae624be0f20ac869750ecd2c2f8678`, runtime source

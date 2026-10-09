@@ -948,6 +948,8 @@ describe("RunTranscript: managed инструменты", () => {
   );
   it.each([
     ["get_configuration_catalog", "Каталог настроек", "Configuration catalog"],
+    ["read_task_session", "Чтение истории сессии", "Session history"],
+    ["get_workflow_catalog", "Каталог процессов", "Workflow catalog"],
     ["propose_configuration_plan", "Настройки помощника", "Assistant settings"],
     ["get_integration_catalog", "Каталог интеграций", "Integration catalog"],
     ["find_platform_resources", "Поиск ресурсов", "Resource search"],
@@ -956,6 +958,7 @@ describe("RunTranscript: managed инструменты", () => {
     ["delegate_agent", "Передача задания", "Task delegation"],
     ["invoke_integration", "Вызов интеграции", "Integration call"],
     ["search_files", "Поиск файлов", "File search"],
+    ["read_file", "Чтение файла", "File reading"],
     ["get_file_metadata", "Сведения о файле", "File information"],
     ["preview_file", "Просмотр файла", "File preview"],
     ["get_file_manifest", "Список файлов", "File list"],
@@ -978,6 +981,45 @@ describe("RunTranscript: managed инструменты", () => {
       }
     },
   );
+  it.each(["read_file", "read_task_session", "get_workflow_catalog"])(
+    "%s оставляет завершённую metadata-квитанцию только в закрытых деталях",
+    async (tool) => {
+      const receipt = JSON.stringify({
+        version: 1,
+        kind: "read_file_page",
+        catalog_ref: "vfc_fixture123",
+        catalog_digest: "a".repeat(64),
+        source_digest: "sha256:" + "b".repeat(64),
+        projection_sha256: "c".repeat(64),
+        size_bytes: 149159,
+        offset_bytes: 0,
+        next_offset_bytes: 16384,
+        eof: false,
+      });
+      for (const locale of ["ru", "en"] as const) {
+        const html = await render(tool, {}, locale, receipt);
+        expect(html).not.toContain("run-transcript__preview");
+        expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+        const details = html.match(/<details[^>]*>[^]*?<\/details>/)?.[0];
+        expect(details).toContain("vfc_fixture123");
+        expect(details).toContain("a".repeat(64));
+        expect(details).toContain("b".repeat(64));
+        expect(details).toContain("c".repeat(64));
+        expect(details).toContain("149159");
+        expect(details).toContain("16384");
+        expect(details).toContain(locale === "ru" ? "Нет" : "No");
+        expect(details).toMatch(new RegExp(`<code[^>]*>${tool}</code>`));
+      }
+      for (const state of ["RUNNING", "FAILED"] as const) {
+        const html = await render(tool, {}, "ru", receipt, state, true);
+        expect(html).toContain("run-transcript__preview");
+        expect(html).toContain("vfc_fixture123");
+      }
+      expect(await render(tool, {}, "ru", "COMPLETED")).not.toContain(
+        "run-transcript__preview",
+      );
+    },
+  );
   it("сохраняет содержательный результат и unknown completed", async () => {
     const meaningful = await render(
       "get_configuration_catalog",
@@ -990,6 +1032,12 @@ describe("RunTranscript: managed инструменты", () => {
     expect(
       await render("custom_lookup", {}, "ru", "custom_lookup:completed"),
     ).toContain("run-transcript__preview");
+    expect(await render("custom_lookup", {}, "ru", '{"version":1}')).toContain(
+      "run-transcript__preview",
+    );
+    expect(await render("read_file", {}, "ru", '{"broken":')).toContain(
+      "run-transcript__preview",
+    );
     expect(title(await render("tool\nunsafe"))).toBe("Вызов инструмента");
   });
   it.each([
