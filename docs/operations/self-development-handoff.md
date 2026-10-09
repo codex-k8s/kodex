@@ -10,6 +10,61 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 09.10.2026 22:02 UTC — новые образы допущены, UI fix готов к фиксации
+
+На0984a869 canonical runner activation PASS. Три new artifacts22218338/
+1bcccdac/2a1da9ec admission attempt2 ACCEPTED со свежими exact local-QA-only
+risk decisions. SYSTEM/staff PROMOTED; helper promotion202/CLAIMED,
+promotionRequested=true. Не повторять POST из-за observation timeout:
+текущая helper job ещё живая. Следующее — terminal helper readback, затем
+image-only4ENV/8bindings публикация и сравнение приватных preservation hashes.
+
+ROOT integrated graph+editor V2:148unit PASS, forced typecheck/build PASS,
+lint/format/diff-check PASS; после SSR RouterLink fixture fix36unit PASS.
+Native readable graph desktop/mobile, overview/plus PASS; editor unsaved FROM
+и комментарий сохранились после настоящих PLATFORM wakes, новых revision/build
+не создавали. Source/ReadyFEPod EQUALgraph779f7426/editor37b25443.
+Backend не менялся. Unit и browser не объявлены полным65QA.
+
+Own browsers41676/24879, оба OWNER; первый helper recipe без dirty draft,
+второй staff recipe. MCP новый list_pages pending, прежний timeout300s;
+подключение не доказано, чужие вкладки не трогать. Commit/push этих UI изменений
+следующие, mainab4992e0 fresh неизменён, Issue1797OPEN/Draft1807 source0984a869.
+После4ENV/8bindings новый exact native Manager и closed diagnostic readback;
+Workflow/п11/14/15/16 OPEN, business PR не merge.
+
+22:04 UTC: helper promotion завершился PROMOTED. Все три exact custom artifacts
+ACCEPTED/PROMOTED, recipe versions30/22/7, generations17/11/3. Новых задач сборки
+или risk decisions не создавать; следующий шаг —4ENV/8bindings image-only publish.
+
+## Checkpoint 09.10.2026 21:53 UTC — runner активирован; custom admission продолжается
+
+Current source0984a86970c4887354a41a5dfacb917b97057ec3, Draft1807,
+mainab4992e0 неизменён. Canonical quiesce/readback и supply-chain apply/readback
+PASS/exit0. Новый full base5a99670af8dc061f809c9fc7cd3cc610a29cf251e6ba3ca7fab687787a153ea3
+импортирован обеим нодам; RC serving ELF и independent build EQUALe4e1ae57.
+Повторять apply без нового preflight нельзя; активация уже закончена.
+
+Native SYSTEMgeneration17 / staffgeneration11 / PROJECThelpergeneration3 builds
+COMPLETED100. Новые custom manifests22218338 /1bcccdac /2a1da9ec; это не base.
+SYSTEM полный report4640occurrences/2938advisories,2blocking HIGH;
+новое local-QA-only risk decision PENDING. Остальные exact reports читаются;
+admission/promotion,4ENV/8bindings publication и preservation readback OPEN.
+Сохранять38tools, конфигурацию, переменные, secret descriptors и network/grants.
+
+В основной tree только graph readability patch/test и журналы; isolated
+RoleImageEditor realtime fix пока не принят. ROOT52graph tests/targeted lint,
+format/typecheck/build PASS; native graph desktop/mobile ещё NOT RUN.
+Child готовит дополнение own command ACK, чтобы source/OCC baseline не менялся
+неявно. Первый helper400 имеет UNKNOWNcause, успешная generation3 доказана.
+
+MCP list_pages pending, не считать подключённым. Own Playwright41676 работает,
+чужие вкладки не трогать. Сначала закончить свежие admission/promotion и4ENV/
+8binding pins, принять/editor test и browser graph/readback, commit/push.
+Лишь после exact custom pins и freeze backend один native Manager retry с
+closed RC diagnostic до cleanup. Старые failures UNKNOWN, blind retries запрещены.
+Полный Workflow/п11/14/15/16 OPEN; финальный business PR не merge.
+
 ## Checkpoint 09.10.2026 20:57 UTC — пакет диагностики принят и проверен
 
 Пакет source/remote/Draft1807 EQUALcdd0af3d488b020aa05496a9166823a75d1a84d5,

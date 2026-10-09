@@ -4,8 +4,8 @@ title: PWA на Vue и TypeScript
 type: guide
 status: approved
 owner: developer
-version: 1.2.7
-updated: 2026-10-09
+version: 1.2.8
+updated: 2026-10-10
 ---
 
 # PWA на Vue и TypeScript
@@ -164,6 +164,15 @@ cursor; усечение текстов и выдуманный cursor запр�
   состояние.
 - Pagination, sorting и filters имеют типизированную model.
 - Cache invalidation задается явно после mutation.
+
+Realtime и ответы служебных команд обновляют metadata, но не заменяют
+несохранённый ввод и исходную OCC-версию формы. Принятие новой source revision
+происходит только при явном reload либо по receipt собственного сохранения;
+ввод после отправки сохраняется. Начальная загрузка и явный reload закрывают
+редактирование на всё ожидание данных и каталогов. Отзыв доступа к source,
+смена owner/scope и unmount очищают локальные source/baseline буферы; потеря
+UPDATE оставляет только разрешённое readonly чтение. Stale OCC не приводит
+к автоматическому повтору mutation или тихому принятию чужой версии.
 
 Исторический immutable отчёт не сравнивается с текущей версией родительского
 ресурса как с обязательным условием чтения. Readonly boundary сохраняет exact

@@ -10,6 +10,98 @@ updated: 2026-10-09
 
 # Цель и источники
 
+## Checkpoint 09.10.2026 22:02 UTC — три новых admission ACCEPTED; frontend проверен нативно
+
+Runner активация ниже завершена на0984a869. Все три новые custom artifacts
+получили самостоятельный exact risk decision и admission attempt2 ACCEPTED.
+Решения: SYSTEMimgrisk_2JiyQPhUULHNwvR-TPqjxWzv,
+staffimgrisk_DdD3EWhb50A0_Ua7Y8wqAzZR,
+PROJECTassistantimgrisk_1pQq0oWUcsOb0dMCZiaJ7Siu. Каждый свежий полный report
+47pages/4634groups/4640occurrences/2938advisories; SOURCE evidence pins различны,
+предыдущие REJECTED receipts сохранены. SYSTEM и staff PROMOTED; helper native
+promotion202, promotionRequested=true/CLAIMED, ещё не terminal.
+Четыре ENV и восемь bindings всё ещё на прежних custom pins; publication OPEN.
+
+ROOT принял isolated editor V2 через apply_patch. Realtime и own build/cancel/
+promote ACK не принимают чужую source/OCC и не стирают ввод. Initial/reload controls
+закрыты на весь await; revoke/UPDATE/scope/unmount guards сохранены. Unit исходно
+8FAIL/4PASS; ROOT integrated148/148 tests8files PASS3.84s, targeted lint/format,
+forced typecheck/production build PASS7.53s. В SSR test зарегистрирован RouterLink;
+повтор36/36 PASS3.12s без прежних четырёх fixture warnings. Existing build chunk
+и plugin-timing warnings остаются. Context7 Vue watchers проверен;
+общий draft/OCC invariant закреплён в FE-DOC-001.
+
+Native PROJECT Dockerfile191characters сохранён через настоящие admission/
+promotion PLATFORM_SNAPSHOT wakes16→18 и повторные recipe GET200. Несохранённый
+комментарий не отправлялся на сервер; перед собственной публикацией удалён
+штатным вводом, исходный153character source восстановлен. Сохранения/новой
+build generation ради проверки не было. Скриншот редактора просмотрен;
+controls статусов и readonly/baseline остаются серверно ограниченными.
+
+Graph desktop1440×1000 initialzoom1.0068 и mobile412×915 initialzoom1.1;
+карточки читаются, horizontal overflow нет. Explicit весь граф на mobilezoom
+0.388412, ручной плюс0.466094; управление не заменено initial-fit эвристикой.
+Оба скриншота просмотрены. Fresh owner WS has RUN_READY/GRAPH snapshot,
+без STREAM_PROBLEM/close. Console delta0, warnings/pageerrors0; cumulative
+20errors от прошлых maintenance/login/diagnostic шагов не скрыты. Recent Network
+без failed response. Host/ReadyFEPod source EQUAL: graph779f7426, editor37b25443.
+
+MCP прежний list_pages завершился timeout300s, новый запрос pending. Проверка
+выполнена разрешённым собственным Playwright fallback; вторая собственная
+вкладка используется для реальной cross-page публикации, чужие не закрывались.
+Новый Manager retry NOT RUN до4ENV/8bindings и backend freeze. Полный65 QA и
+Workflow/п11/14/15/16 остаются OPEN; финальный business PR не merge.
+
+22:04 UTC fresh owner GET200: все три artifacts ACCEPTED/PROMOTED,
+recipe versions30/22/7, generations17/11/3. Helper publication terminal доказан;
+повторных risk/promotion запросов не было. Следующее —4ENV/8bindings публикация.
+
+## Checkpoint 09.10.2026 21:53 UTC — диагностический runner активирован; новые custom образы собраны
+
+На опубликованном source0984a86970c4887354a41a5dfacb917b97057ec3 штатные
+quiesce/readback и supply-chain apply/readback завершились exit0. Новый full
+runner manifest5a99670af8dc061f809c9fc7cd3cc610a29cf251e6ba3ca7fab687787a153ea3
+импортирован на обе ноды. Provenance sourceRevision0984a869,
+runner binary SHA2560a4c82697362ee2631cf22e0f8f737c2ce2c41ea25234e35cfbffe5b3f8f5426.
+Fresh render SHA2561166a9b29eccde194df31c2718ed810a5c27b90cd86f9faa64141e67962b90b2.
+Это адресная trusted-local активация, не полный QA PASS.
+
+RC source host/Pod EQUALb2f1991c28e2fc098ffa8ab2cfca74dc03325e74cf45dbe05fa13a176d59aaec;
+serving ELF, build-cache binary и ROOT independent build EQUAL
+e4e1ae575ef285fbbd882f3e44350395d788a6b41b88dc47cf3e6129ceb6d339.
+Повторный readback этого checkpoint: обе ноды Ready, все21Deployment desired Ready.
+Исторический Evicted BuildKit Pod не является новым OOM; новый BuildKit Ready.
+
+Три native Create revision изменили только FROM нового base: SYSTEMgeneration17,
+сотрудникиgeneration11, PROJECTassistantgeneration3. Все три builds COMPLETED100;
+nonDockerfile environment SHA2562734294a4097a26868f5b4fd254b0fc2672d4f0f3e80bf06b8c2ca2fc6d3ecb0
+не изменился. Новые manifests соответственно22218338167f1c7eb28c1b097929d5c3ced9e16b88d3c51b024419c54c1e4df9,
+1bcccdacfe73f2303d3646b1649ea5762fae64e3453d56790694504ad261046f,
+2a1da9ec22910fe4032ee6331b7fddb2c4b0b913dfd938f67f265dca122a720a.
+
+SYSTEM report прочитан целиком:47pages,4634finding groups,4640occurrences,
+2938advisories. Два blocking HIGH — undici6.27.0 и tar7.5.19; остальные
+severity/suppressed findings не скрыты. Native новое local-QA-only risk decision
+перевело этот artifact в PENDING; подпись/provenance/SBOM/ABI guards сохранены.
+Новый admission/promotion и publication четырёх ENV/восьми bindings ещё OPEN.
+Предварительные preservation hashes восьми bindings сохранены приватно;
+38tools, variables, secret descriptors, policy и agent configuration менять нельзя.
+
+ROOT текущий frontend tree:52/52 graph tests, targeted lint/format и forced
+typecheck/build PASS. Существующие chunk/plugin-timing warnings не скрыты.
+Native desktop/mobile graph ещё NOT RUN. Найдено стирание локального Dockerfile
+при realtime reload; адресный isolated пакет воспроизвёл8FAIL, исправление
+проходит unit и дополняется guards own command ACK. В основной tree ещё не принят.
+Первый native helper save400 не объявлен следствием этого дефекта: точная причина
+UNKNOWN; повтор с проверенным содержимым сохранил generation3 успешно.
+
+Chrome MCP текущий list_pages ещё ожидает ответа; подключение не подтверждено.
+Собственная Playwright вкладка авторизована OWNER, экран отчёта проверен
+скриншотом, модалка — DOM без horizontal overflow; cumulative errors не равны нулю
+(maintenance/initial login и диагностический stale-report412 учтены).
+Backend заморожен, новый Manager retry не запускался. Полный65-section QA,
+Workflow/п11/14/15/16 и business human gate остаются OPEN.
+
 ## Checkpoint 09.10.2026 20:57 UTC — диагностический пакет проверен; активация следующая
 
 Пакет опубликован наcdd0af3d488b020aa05496a9166823a75d1a84d5:
