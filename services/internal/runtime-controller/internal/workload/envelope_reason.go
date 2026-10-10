@@ -121,14 +121,13 @@ func runtimeEnvelopeReason(input runtimecontract.RunnerInput) string {
 		return "ENVELOPE_COLLECTION_LIMITS"
 	}
 
-	for _, message := range input.SessionContext {
-		if message.Role == "USER" {
-			if !runtimecontract.ValidAssistantTurnContent(message.Content) {
+	if _, err := runtimecontract.ValidateRuntimeSessionContext(input); err != nil {
+		for _, message := range input.SessionContext {
+			if message.Role == "USER" && !runtimecontract.ValidAssistantTurnContent(message.Content) {
 				return "ENVELOPE_SESSION_USER_CONTENT"
 			}
-		} else if !diagnosticContains([]string{"ASSISTANT", "SYSTEM"}, message.Role) || len(message.Content) > 64<<10 {
-			return "ENVELOPE_SESSION_CONTEXT"
 		}
+		return "ENVELOPE_SESSION_CONTEXT"
 	}
 	if reason := diagnosticIntegrationGrants(input.IntegrationGrants); reason != "" {
 		return reason

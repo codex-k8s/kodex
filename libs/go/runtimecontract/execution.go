@@ -304,7 +304,7 @@ func (input RunnerInput) Validate() error {
 		input.OutboxRoot != "/workspace/.kodex/outbox" || input.CodexHome != "/workspace/.kodex/state/codex-home" ||
 		len(input.SessionContext) > 128 || len(input.DelegationTargets) > 128 || len(input.IntegrationGrants) > 256 || len(input.AttachmentSets) > 128 ||
 		len(input.BoundedInput) > 256 || len(input.CodexSessionID) > 255 ||
-		!validSessionContext(input.SessionContext) || !validIntegrationGrants(input.IntegrationGrants) ||
+		!validSessionContext(input) || !validIntegrationGrants(input.IntegrationGrants) ||
 		!validCapabilities(input.Capabilities) || ValidateRuntimeEnvironment(input.EnvironmentValues, input.SecretProjections) != nil ||
 		input.EnvironmentImage.Reference != input.ImageReference || input.EnvironmentImage.Digest != input.ImageManifestDigest ||
 		(input.EnvironmentImage.ArtifactRef == "" || input.EnvironmentImage.RecipeRef == "" || input.EnvironmentImage.RecipeGeneration < 1) {
@@ -443,19 +443,9 @@ func containsString(values []string, expected string) bool {
 	return false
 }
 
-func validSessionContext(messages []RunnerSessionMessage) bool {
-	for _, message := range messages {
-		if message.Role == "USER" {
-			if !ValidAssistantTurnContent(message.Content) {
-				return false
-			}
-			continue
-		}
-		if !containsString([]string{"ASSISTANT", "SYSTEM"}, message.Role) || len(message.Content) > 64<<10 {
-			return false
-		}
-	}
-	return true
+func validSessionContext(input RunnerInput) bool {
+	_, err := ValidateRuntimeSessionContext(input)
+	return err == nil
 }
 
 func validIntegrationGrants(grants []RunnerIntegrationGrant) bool {

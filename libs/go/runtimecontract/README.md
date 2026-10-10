@@ -2,8 +2,8 @@
 title: Runtime-контракты Kodex
 status: approved
 owner: developer
-version: 1.0.0
-updated: 2026-10-05
+version: 1.1.0
+updated: 2026-10-10
 ---
 
 # Runtime-контракты Kodex
@@ -12,6 +12,21 @@ updated: 2026-10-05
 инвентаризации образов и безопасных доказательств допуска. Доменные permissions,
 tenant eligibility, PostgreSQL lifecycle и issuer credentials ему не принадлежат.
 Он не выполняет RPC, сетевые запросы, сканирование, подпись или изменение данных.
+
+`ValidateRuntimeSessionContext` одинаково используется owner producer CP,
+полным RC input validator и доставкой provider context в runner. Обычный USER
+сохраняет `ValidAssistantTurnContent`: 32768 Unicode codepoints, непустой UTF-8
+без NUL. Только последнее USER-сообщение полного `SESSION_CONTINUATION` envelope
+может иметь до 64KiB: проверяются закрытая service revision, все semantic slots,
+effective capabilities, exact текущие RuntimeRevision/Session/Turn/Attempt и
+digest полного runtime diff. Marker, роль или provider thread ID исключения
+не дают. Историческая notice такого исключения не получает. RuntimeRevision и
+execution binding по-прежнему отдельно проверяются владельцем/consumer;
+notice не выдаёт полномочий. Cold continuation сохраняет всю допустимую историю,
+provider resume доставляет только новую полную notice, без усечения содержимого.
+Неизвестные pins, повреждение и превышение бюджета закрыто отклоняются до
+нового provider effect. Замена бинаря требует нового immutable runner image;
+исторические terminal revisions не переписываются и ABI/USER role не меняются.
 
 `ProviderFailureDiagnostic` задаёт закрытый versioned формат наблюдения причины
 provider failure. Broker и существующий completion callback сверяют exact

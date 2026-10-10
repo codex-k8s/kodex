@@ -1201,3 +1201,23 @@ tests PASS116ms, actual PostgreSQL read до публикации NOT RUN. RC pu
 safe classifications и immutable lifecycle pins сохраняются. Go1.26.6 app
 PASS0.210s. Live label и устранение причины NOT RUN, Business1796/Full65 OPEN.
 Текст исходной задачи не меняется; корректирующие USER_MESSAGE0.
+
+## Checkpoint 10.10.2026 18:49 UTC — общий producer/consumer fix
+
+Published ef7edd2f exact-pinned metadata18:41:22Z: USER56782bytes/41931codepoints,
+validUTF8/nonempty/noNUL, own notice cardinality1 и оба content/digest matches.
+SQLf53d8fb8… / raw538B/fullEOF/SHA6111e84e… доказали конкретный budget mismatch.
+Никакое содержимое истории не выводилось. Fresh idle/HOTFFef7edd18:41:55Z PASS;
+RC source/mount2ea5413f… и PID1337/ELFe3dda291…=Air build, Ready/restart0.
+Новый public safe label live NOT RUN; historical FAILED остаются прежними.
+
+Интегрированы11 frozen semantic files SHA732e371e…; hashes11/11 MATCH.
+Общий CP preseal→RC input→runner delivery strict predicate допускает только
+последний current-bound semantic notice64KiB, ordinary USER32768 неизменён.
+Полная history/cold/resume notice не сокращается, USER nudges0. ROOT canonical
+Go1.26.6 shared0.724s, RC workload1.055s/app0.220s, runner0.061s,
+CP actual Materialize producer0.113s PASS. Worker race/vet PASS всех четырёх;
+24 negatives/exact byte boundary/metadata-size oracle и closed delivery binding.
+DisposablePG и новый native attempt NOT RUN. Новая immutable runner delivery,
+policy/defaults и3customrecipes/4ENV8bindings с сохранением nonimage settings
+ещё OPEN, нельзя подменять её старым888/acbb или одним HOTFF. Business1796/Full65 OPEN.

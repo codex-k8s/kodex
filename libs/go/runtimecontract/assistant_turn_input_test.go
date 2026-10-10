@@ -51,7 +51,7 @@ func TestSessionContextPreservesBoundedUnicodeUSER(t *testing.T) {
 		{"SYSTEM", strings.Repeat("a", (64<<10)+1), false},
 		{"UNKNOWN", "text", false},
 	} {
-		if validSessionContext([]RunnerSessionMessage{{Role: test.role, Content: test.content}}) != test.valid {
+		if validSessionContext(RunnerInput{SessionContext: []RunnerSessionMessage{{Role: test.role, Content: test.content}}}) != test.valid {
 			t.Fatal("unexpected session context boundary")
 		}
 	}

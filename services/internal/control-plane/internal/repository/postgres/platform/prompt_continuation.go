@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -101,19 +103,39 @@ func (repository *Repository) prepareRuntimeContinuationNotice(ctx context.Conte
 	noticeSnapshot.SemanticValues = nil
 	noticeSnapshot.UnavailableVariables = nil
 	materialized, err := promptservice.Materialize(content, promptservice.FromSnapshot(noticeSnapshot))
-	if err != nil || !materialized.Complete || len(materialized.Prompt) > 64<<10 {
+	if err != nil || !materialized.Complete || len(materialized.Prompt) > runtimecontract.MaximumContinuationNoticeBytes {
 		return nil, fmt.Errorf("materialize continuation template: %w", errs.ErrConflict)
 	}
-	messages, ok := snapshot["sessionContext"].([]map[string]string)
-	if !ok && snapshot["sessionContext"] != nil {
-		return nil, errs.ErrConflict
+	if err := appendRuntimeContinuationContext(snapshot, materialized); err != nil {
+		return nil, err
 	}
-	if len(messages) >= 128 {
-		return nil, errs.ErrConflict
-	}
-	snapshot["sessionContext"] = append(append([]map[string]string{}, messages...), map[string]string{"role": "USER", "content": materialized.Prompt})
 	snapshot["continuationPromptSnapshot"], snapshot["continuationRuntimeDiff"], snapshot["continuationNoticeDigest"] = noticeSnapshot, diff, materialized.Digest
 	return &preparedContinuationNotice{PreviousID: previousID, Diff: diff, Snapshot: noticeSnapshot, Materialization: materialized}, nil
+}
+
+// Полный server notice проверяется тем же consumer predicate до seal. История
+// и исходный USER ввод не усекаются и не переписываются для прохождения бюджета.
+func appendRuntimeContinuationContext(snapshot map[string]any, materialized promptservice.Materialization) error {
+	messages, ok := snapshot["sessionContext"].([]map[string]string)
+	if !ok && snapshot["sessionContext"] != nil {
+		return errs.ErrConflict
+	}
+	if len(messages) >= 128 {
+		return errs.ErrConflict
+	}
+	candidate := append(append([]map[string]string{}, messages...), map[string]string{"role": "USER", "content": materialized.Prompt})
+	input := runtimecontract.RunnerInput{Mode: runtimecontract.RunnerModeTurn,
+		RuntimeRevisionRef: stringMap(snapshot, "runtimeRevisionRef"), SessionRef: stringMap(snapshot, "sessionRef"),
+		TurnRef: stringMap(snapshot, "turnRef"), Attempt: int32(runtimeRevisionMapInt64(snapshot, "attempt")),
+		Capabilities:                  runtimeRevisionStringSlice(snapshot["capabilities"]),
+		PromptServiceTemplateRevision: stringMap(snapshot, "promptServiceTemplateRevision"),
+		SessionContext:                runtimeRevisionSessionContext(candidate),
+	}
+	if notice, err := runtimecontract.ValidateRuntimeSessionContext(input); err != nil || !notice {
+		return errs.ErrConflict
+	}
+	snapshot["sessionContext"] = candidate
+	return nil
 }
 
 func (repository *Repository) persistRuntimeContinuationNotice(ctx context.Context, tx pgx.Tx, current scope, currentID string, notice *preparedContinuationNotice) error {

@@ -4,12 +4,49 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 )
+
+const MaximumContinuationNoticeBytes = 64 << 10
+
+var ErrRuntimeSessionContext = errors.New("runtime session context is invalid")
+
+// ValidateRuntimeSessionContext отделяет owner-sealed последний notice от
+// обычного USER ввода. Role/JSON marker сами по себе исключение не дают:
+// CurrentContinuationNotice проверяет полный semantic envelope и exact текущие
+// revision/session/turn/attempt/diff/capabilities. Execution consumer отдельно
+// проверяет owner RuntimeRevision и execution binding. История не изменяется.
+func ValidateRuntimeSessionContext(input RunnerInput) (bool, error) {
+	if len(input.SessionContext) > 128 {
+		return false, ErrRuntimeSessionContext
+	}
+	notice, err := CurrentContinuationNotice(input)
+	if err != nil {
+		return false, err
+	}
+	if notice && input.Mode != RunnerModeTurn {
+		return false, ErrRuntimeSessionContext
+	}
+	for index, message := range input.SessionContext {
+		if message.Role == "USER" {
+			if notice && index == len(input.SessionContext)-1 {
+				if len(message.Content) > MaximumContinuationNoticeBytes || !utf8.ValidString(message.Content) || strings.ContainsRune(message.Content, 0) {
+					return false, ErrRuntimeSessionContext
+				}
+			} else if !ValidAssistantTurnContent(message.Content) {
+				return false, ErrRuntimeSessionContext
+			}
+		} else if !containsString([]string{"ASSISTANT", "SYSTEM"}, message.Role) || len(message.Content) > 64<<10 || !utf8.ValidString(message.Content) {
+			return false, ErrRuntimeSessionContext
+		}
+	}
+	return notice, nil
+}
 
 type continuationDescriptor struct {
 	Ref     string `json:"ref,omitempty"`
@@ -68,7 +105,7 @@ func CurrentContinuationNotice(input RunnerInput) (bool, error) {
 	if !supportedPromptServiceRevision(envelope.Revision) || envelope.Revision != input.PromptServiceTemplateRevision {
 		return false, errPromptService
 	}
-	if len(message.Content) > 64<<10 {
+	if len(message.Content) > MaximumContinuationNoticeBytes {
 		return false, errPromptService
 	}
 	// Notice имеет собственный semantic kind, в отличие от базового Agent,

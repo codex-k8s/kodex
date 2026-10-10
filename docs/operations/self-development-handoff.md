@@ -10,6 +10,28 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 18:49 UTC — причина доказана, общий fix проверен
+
+Published ef7edd2f metadata read18:41:22Z OBSERVED: final USER56782bytes /
+41931codepoints, validUTF8, nonempty, noNUL; единственная собственная persisted
+notice, content/digest exact matches. SQLf53d8fb8…/raw538B/fullEOF/SHA6111e84e….
+Следовательно, producer64KiB и ordinary USER32768 расходились на этом input.
+Fresh owner idle и HOTFFef7edd18:41:55Z PASS, promoted58/pins неизменны.
+RC source/mount exact2ea5413f…, PID1337/ELFe3dda291…=Air build; Ready/restart0.
+Actual нового public safe label NOT RUN; прошлые FAILED не переписываются.
+
+11 semantic файлов: единый strict ValidateRuntimeSessionContext для CP до
+append/seal, RC полного input и runner provider delivery. Только последний
+current-bound full semantic notice до64KiB; ordinary USER32768 неизменён,
+никаких truncation/history edits/USER_MESSAGE. ROOT hashes11/11 совпали с freeze.
+ROOT Go1.26.6: shared полный unit0.724s, RC workload1.055s/app0.220s,
+runner context0.061s, CP producer0.113s PASS. Worker race/vet PASS четырёх областей;
+actual metadata dimensions, cold/resume/full wire, 24 negatives и64KiB boundary.
+Новый OCI/new3recipes/4ENV8bindings и native original-task Retry ещё NOT RUN.
+Не выполнять Retry со старым runner888/acbb: нужен новый опубликованный clean
+source, immutable base+policy/defaults+custom images и serving proof.
+Workflow40/revision13 и один comprehensive review сохраняются; Business1796/Full65 OPEN.
+
 ## Checkpoint 10.10.2026 18:42 UTC — безопасная диагностика и классификация
 
 Добавлена точная READ ONLY metadata-диагностика continuation по восьми pins:

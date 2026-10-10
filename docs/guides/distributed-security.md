@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.17
+version: 1.7.18
 updated: 2026-10-10
 ---
 
@@ -1925,6 +1925,14 @@ rejoin или retry не переводят диалог на другой пр�
 grants. Подмена enum/profile ref меняет digest и закрыто отклоняется.
 Неизвестная область и старый runtime input не имеют decoder fallback:
 переход на новый ABI требует новой server-owned revision и exact admission.
+
+Owner-generated continuation notice и обычный `USER` имеют разные закрытые
+бюджеты. Исключение до 64KiB допустимо только для последнего полного
+current-bound semantic notice: CP до seal, RC и runner используют один строгий
+predicate, обычный `USER` сохраняет предел 32768 Unicode codepoints. Notice
+не выдаёт authority и не переписывает историю; malformed, stale и oversize
+закрываются до provider effect. Доставка нового predicate требует нового
+неизменяемого runner, а не только hot reload производителя или контроллера.
 
 ## Доказательство результата
 
