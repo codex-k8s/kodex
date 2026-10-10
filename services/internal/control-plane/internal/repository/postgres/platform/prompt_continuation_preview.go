@@ -191,6 +191,9 @@ func (repository *Repository) promptContinuationPreviewForActorTx(ctx context.Co
 	}
 	snapshot.TargetKind, snapshot.TargetRef, snapshot.SessionRef = promptservice.TargetSessionContinuation, sessionRef, sessionRef
 	snapshot.StagePurposeTemplate, snapshot.StageExpectedResultTemplate = "", ""
+	if err := bindProspectiveContinuationTaskProjection(&snapshot); err != nil {
+		return entity.PromptMaterializationSnapshot{}, err
+	}
 	snapshot.ExtraTemplates = nil
 	snapshot.ContextPin.PreviousRuntimeRevisionRef = previousRef
 	snapshot.ContextPin.Digest = ""

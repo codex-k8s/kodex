@@ -21,7 +21,7 @@ type continuationTransitionTx struct {
 }
 
 func TestRuntimeEligibilityReasonClosedAndRedacted(t *testing.T) {
-	for _, reason := range []string{"RUNTIME_CONTEXT", "SESSION_RESUME", "CONTINUATION_PREVIOUS_READ", "CONTINUATION_PREVIOUS_JSON", "CONTINUATION_PREVIOUS_DEPENDENCIES", "CONTINUATION_CURRENT_DEPENDENCIES", "CONTINUATION_DIFF", "CONTINUATION_SNAPSHOT", "CONTINUATION_TEMPLATE_READ", "CONTINUATION_TEMPLATE_BYTES", "CONTINUATION_TEMPLATE_DIGEST", "CONTINUATION_DIFF_JSON", "CONTINUATION_BINDING", "CONTINUATION_WORKFLOW_CONTEXT", "CONTINUATION_MATERIALIZATION", "CONTINUATION_INCOMPLETE", "CONTINUATION_NOTICE_BYTES", "CONTINUATION_SESSION_CONTEXT", "private-data"} {
+	for _, reason := range []string{"RUNTIME_CONTEXT", "SESSION_RESUME", "CONTINUATION_PREVIOUS_READ", "CONTINUATION_PREVIOUS_JSON", "CONTINUATION_PREVIOUS_DEPENDENCIES", "CONTINUATION_CURRENT_DEPENDENCIES", "CONTINUATION_DIFF", "CONTINUATION_SNAPSHOT", "CONTINUATION_TEMPLATE_READ", "CONTINUATION_TEMPLATE_BYTES", "CONTINUATION_TEMPLATE_DIGEST", "CONTINUATION_DIFF_JSON", "CONTINUATION_BINDING", "CONTINUATION_WORKFLOW_CONTEXT", "CONTINUATION_TASK_PROJECTION", "CONTINUATION_MATERIALIZATION", "CONTINUATION_INCOMPLETE", "CONTINUATION_NOTICE_BYTES", "CONTINUATION_SESSION_CONTEXT", "private-data"} {
 		cause := fmt.Errorf("private-source: %w", errs.ErrConflict)
 		diagnostic := runtimeEligibilityDiagnostic(reason, cause)
 		wrapped := fmt.Errorf("producer: %w", diagnostic)
@@ -54,11 +54,13 @@ func TestContinuationDiagnosticRejectsBeforePartialAppend(t *testing.T) {
 		t.Run(test.mutation, func(t *testing.T) {
 			prompt := workflowPromptFixture()
 			prompt.TargetKind, prompt.TargetRef = promptservice.TargetAgent, "agt_current"
+			prompt.RunRef, prompt.SessionRef = "run_current", "ses_current"
+			prompt.Variables["node.ref"], prompt.Variables["turn.ref"], prompt.Variables["task"] = "nod_current", "trn_current", "Exact original task"
 			previous, _ := json.Marshal(map[string]any{"promptSnapshot": prompt, "capabilities": []string{"platform.run.delegate"}})
 			if bindPlatformInstructions(&prompt) != nil {
 				t.Fatal("bind")
 			}
-			current := map[string]any{"promptSnapshot": prompt, "runtimeRevisionRef": "rrev_current", "sessionRef": "ses_current", "turnRef": "trn_current", "attempt": int32(7), "agentRef": "agt_current",
+			current := map[string]any{"promptSnapshot": prompt, "runRef": "run_current", "nodeRef": "nod_current", "task": prompt.Variables["task"], "runtimeRevisionRef": "rrev_current", "sessionRef": "ses_current", "turnRef": "trn_current", "attempt": int32(7), "agentRef": "agt_current",
 				"promptServiceTemplateRevision": promptservice.ServiceTemplateRevision, "capabilities": []string{"platform.run.delegate"}, "sessionContext": []map[string]string{{"role": "USER", "content": "Original"}}}
 			switch test.mutation {
 			case "previous-json":
@@ -76,7 +78,7 @@ func TestContinuationDiagnosticRejectsBeforePartialAppend(t *testing.T) {
 				// Binding guard отклонит этот locale раньше materializer.
 				test.want = "CONTINUATION_BINDING"
 			case "notice-bytes":
-				prompt.Variables["task"] = strings.Repeat("x", runtimecontract.MaximumContinuationNoticeBytes)
+				prompt.StructuredVariables["input"].(map[string]any)["values"] = map[string]any{"exact": strings.Repeat("x", runtimecontract.MaximumContinuationNoticeBytes)}
 			case "session-context":
 				current["sessionContext"] = []map[string]string{{"role": "USER", "content": strings.Repeat("x", runtimecontract.MaximumAssistantTurnCodepoints+1)}}
 			}
@@ -115,13 +117,15 @@ func TestContinuationHistoricalToFreshPlatformBinding(t *testing.T) {
 		t.Run(locale, func(t *testing.T) {
 			prompt := workflowPromptFixture()
 			prompt.Locale, prompt.TargetKind, prompt.TargetRef = locale, promptservice.TargetAgent, "agt_current"
+			prompt.RunRef, prompt.SessionRef = "run_current", "ses_current"
+			prompt.Variables["node.ref"], prompt.Variables["turn.ref"] = "nod_current", "trn_current"
 			prompt.Variables["task"] = "Exact original task"
 			previous := map[string]any{"promptSnapshot": prompt, "capabilities": []string{"platform.run.delegate"}}
 			raw, _ := json.Marshal(previous)
 			if bindPlatformInstructions(&prompt) != nil {
 				t.Fatal("fresh bind")
 			}
-			current := map[string]any{"promptSnapshot": prompt, "runtimeRevisionRef": "rrev_current", "sessionRef": "ses_current", "turnRef": "trn_current", "attempt": int32(7), "agentRef": "agt_current",
+			current := map[string]any{"promptSnapshot": prompt, "runRef": "run_current", "nodeRef": "nod_current", "task": prompt.Variables["task"], "runtimeRevisionRef": "rrev_current", "sessionRef": "ses_current", "turnRef": "trn_current", "attempt": int32(7), "agentRef": "agt_current",
 				"promptServiceTemplateRevision": promptservice.ServiceTemplateRevision, "capabilities": []string{"platform.run.delegate"},
 				"sessionContext": []map[string]string{{"role": "USER", "content": "Exact original task"}, {"role": "ASSISTANT", "content": "Exact historical result"}}}
 			history, _ := json.Marshal(current["sessionContext"])

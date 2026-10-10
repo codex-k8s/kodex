@@ -34,6 +34,7 @@ const (
 	runtimeReasonContinuationIncomplete           = "CONTINUATION_INCOMPLETE"
 	runtimeReasonContinuationNoticeBytes          = "CONTINUATION_NOTICE_BYTES"
 	runtimeReasonContinuationSessionContext       = "CONTINUATION_SESSION_CONTEXT"
+	runtimeReasonContinuationTaskProjection       = "CONTINUATION_TASK_PROJECTION"
 )
 
 // Причина принадлежит закрытой диагностике producer; она не меняет error class
@@ -60,7 +61,7 @@ func runtimeEligibilityReason(err error) string {
 	switch diagnostic.reason {
 	case runtimeReasonRuntimeContext, runtimeReasonSessionResume, runtimeReasonContinuationPreviousRead, runtimeReasonContinuationPreviousJson, runtimeReasonContinuationPreviousDependencies, runtimeReasonContinuationCurrentDependencies,
 		runtimeReasonContinuationDiff, runtimeReasonContinuationSnapshot, runtimeReasonContinuationTemplateRead, runtimeReasonContinuationTemplateBytes, runtimeReasonContinuationTemplateDigest, runtimeReasonContinuationDiffJson,
-		runtimeReasonContinuationBinding, runtimeReasonContinuationWorkflowContext, runtimeReasonContinuationMaterialization, runtimeReasonContinuationIncomplete, runtimeReasonContinuationNoticeBytes, runtimeReasonContinuationSessionContext:
+		runtimeReasonContinuationBinding, runtimeReasonContinuationWorkflowContext, runtimeReasonContinuationMaterialization, runtimeReasonContinuationIncomplete, runtimeReasonContinuationNoticeBytes, runtimeReasonContinuationSessionContext, runtimeReasonContinuationTaskProjection:
 		return diagnostic.reason
 	default:
 		return "UNKNOWN"

@@ -108,6 +108,9 @@ func (repository *Repository) prepareRuntimeContinuationNotice(ctx context.Conte
 	if err := repository.hydrateWorkflowExecutionPromptTx(ctx, tx, current, stringMap(snapshot, "nodeRef"), &noticeSnapshot); err != nil {
 		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationWorkflowContext, err)
 	}
+	if err := bindRuntimeContinuationTaskProjection(&noticeSnapshot, snapshot); err != nil {
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationTaskProjection, err)
+	}
 	materialized, err := promptservice.Materialize(content, promptservice.FromSnapshot(noticeSnapshot))
 	if err != nil {
 		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationMaterialization, errs.ErrConflict)

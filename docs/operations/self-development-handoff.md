@@ -10,6 +10,68 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 22:10 UTC — PURPOSE projection готова к доставке
+
+Поверх9742826b интегрированы9 frozen файлов, все posthash EQUAL:
+continuation-task-projection-v1 вместо повторного полного Task в PURPOSE;
+preview PROSPECTIVE без выдуманных turn/revision. Task/INPUT/constraints/
+persisted history, custom .task, v3/v1/ABI/consumer64KiB/runner production
+не меняются. Общий инвариант закреплён в GUIDE-DOC-006.
+
+ROOT exact integrated targeted race PASS2.129s/vet PASS; shared actual
+CP producer→runner cold/resume oracle PASS1.172s. Worker frozen disposable
+PG PASS16.661s: SYSTEM/PROJECT inheritance, обычный и large RU native Retry;
+generated task>64KiB/notice≤64KiB, completed-turn history EQUAL. Два ранних
+fixture FAIL (незаконная длина step, затем неверное min3 для bounded suffix)
+сохранены; исправлены только test inputs/assertions. ROOT domain prompt race
+PASS2.350s на том же production tree. Frozen apply/hash/diff check PASS.
+
+Следующий путь: publish/readback→guarded idleFF→20CP source hashes/actual
+new serving ELF→native Retry9 прежней Session/Workflow40. Live успех пока
+NOT RUN; USER corrections0/business implementation0/review0.
+Full65/11/14/15/Manager/owner gate OPEN.
+
+## Checkpoint 10.10.2026 21:57 UTC — live вклад generated PURPOSE подтверждён
+
+Metadata-only initial sealed notice Retry6:61695B,
+rrev_fL8PcRuiKb62mnB4MYgdwWVj/attempt1. PLATFORM PURPOSE37723B,
+INPUT6162B/CONSTRAINTS7458B/FILES4214B/TOOLS4185B/RUNTIME_CHANGES294B;
+следующий callback notice25197B/PURPOSE1231B. Новый обязательный RU
+platform text5349B выводит initial notice за65536B. Raw content не
+выводился, historical rows не менялись. Source producer очищает stage
+purpose template, поэтому notice повторяет generated coordinator task;
+runner отдельно передаёт полный exact task после SessionContext.
+
+Рекомендуемый CP-only fix: bounded server-owned PURPOSE projection с exact
+task digest/size/current lineage, при сохранении полного task/input/history/
+constraints и unchanged consumer bound. Owner custom template не усекается;
+при oversized custom content сохраняется закрытый отказ. Regression должен
+доказать large RU Workflow retry и неизменную полную доставку задания.
+Fix/next native success пока NOT RUN; USER corrections0/business0/review0.
+
+## Checkpoint 10.10.2026 21:56 UTC — exact live причина: continuation notice >64KiB
+
+Source/remote Draft1807/clean HOT9742826b5bfd7bdabee3a9687cda762c061f1892.
+Fresh remote readback PASS после initial immediate UNKNOWN; повторного push
+не было. IdleFF21:53:51/5zero/61promoted/pins unchanged PASS. Actual CP16/16
+host→Pod hashes EQUAL; PID2587/start11012284, Go1.26.6, ELF=Airbuild
+fb5ffe1c52b7751d93d692db4fef2d0204cb9726d765cb06f32e4b7db0077624,
+new diagnostic symbol/Ready/rejoin/restarts0 PASS. Первый observation
+KUBECTL_READ_FAILED не был принят как proof, повторный exact readback PASS.
+Счёт manifest16 (прежние13 плюс3 новых paths), не15 из прежнего плана.
+
+FE2/2host→serving Pod hashes EQUAL. Actual ENV editor17/problemnull/
+localChangesfalse/overflow0, screenshot MAIN просмотрен; Console0 и все
+relevant ENV/version/readiness/agents APIs200. Это проверка загрузки, не
+воспроизведение первоначального UNKNOWN. Unit scoped recovery PASS отдельно.
+
+Штатный Retry8 создал run_XfRLdRsp9mvBroGLDnYHNgMu в прежней Session:
+FAILED10/RUNTIME_INPUT_INVALID до provider, exact safe_reason
+CONTINUATION_NOTICE_BYTES при runtime_context/CONFLICT. Значит materialized
+notice превышает неизменный64KiB bound. Исправляется producer/source с
+large RU Workflow regression; история и лимит consumer не обходятся.
+Native business/Developer/Git/ONE review ещё не выполнены. USER corrections0.
+
 ## Checkpoint 10.10.2026 21:56 UTC — диагностический пакет готов к hot reload
 
 Поверх2a76 интегрированы ровно4 CP и2 FE файла. CP добавляет18 закрытых

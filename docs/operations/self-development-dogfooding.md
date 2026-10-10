@@ -997,3 +997,56 @@ dirty-tree guard отказал до эффекта, обновление пов
 Дальше publish/readback/idleFF/15CPsource+ELFproof/FEbrowser/nativeRetry8.
 Live delivery/effects пока NOT RUN, USER corrections0/business0;
 business/Full65/11/14/15/ONE review/Manager/owner gate OPEN.
+
+## Checkpoint 10.10.2026 21:56 UTC — actual delivery и Retry8 exact bound failure
+
+Remote/clean HOT9742826b, initial immediate readbackUNKNOWN→freshPASS,
+без второго push. Guard idleFF21:53:51/5zero/61pinsunchanged PASS.
+Actual CP16hashes EQUAL (не15), PID2587/start11012284/Go1.26.6/ELFfb5ffe1c…77624
+равен Airbuild/new diagnostic symbol/health/rejoin/restarts0 PASS.
+Первый observerKUBECTL_READ_FAILED сохранён, повторная exact проверка PASS.
+FE2hasheshost/Pod EQUAL; ENV17/problemnull/localChangesfalse/overflow0,
+screenshot MAIN просмотрен/Console0/relevant APIs200. Первоначальный UNKNOWN
+не объявляется live-воспроизведённым и устранённым только по этому чтению.
+
+Native Retry8 run_XfRLdRsp9mvBroGLDnYHNgMu→FAILED10 до provider.
+Exact CP runtime_context/CONFLICT/CONTINUATION_NOTICE_BYTES подтвердил
+превышение64KiB materialized notice. Producer semanticfix в работе; bounds/
+immutable history/ABI не обходятся. USER corrections0/business0/review0;
+business/Full65/11/14/15/Manager/owner gate OPEN.
+
+## Checkpoint 10.10.2026 21:57 UTC — generated PURPOSE duplication подтверждён
+
+Initial sealedRetry6 notice61695B/rrev_fL8PcRuiKb62mnB4MYgdwWVj/attempt1:
+PURPOSE37723B/INPUT6162B/CONSTRAINTS7458B/FILES4214B/TOOLS4185B/diff294B.
+Callback notice25197B/PURPOSE1231B. Metadata-only exact owner read, raw content
+не выводился. MandatoryRU platform text5349B превышает запасinitial64KiB.
+Source coordinator generated task дублируется PURPOSEnotice и full runner
+task той жеsubmission. Рекомендованный fix: bounded versioned server PURPOSE
+projection с exacttaskdigest/size/lineage, без изменения full task/input/
+history/constraints/custom template/consumer bounds. Large RU regression и
+следующий native success pending; USER corrections0/business0/review0.
+
+## Checkpoint 10.10.2026 22:10 UTC — bounded PURPOSE без потери полного задания
+
+На базе9742826b frozen9files/9posthash EQUAL. Новый server-owned
+continuation-task-projection-v1 в PURPOSE содержит exact task digest/size/
+run/node/session/turn/runtime/attempt; preview PROSPECTIVE. Full Task,
+INPUT/constraints/persisted history/custom .task сохранены. v3/core48/v1text,
+ABI/runner production/64KiB bound не меняются. GUIDE-DOC-006 закрепляет
+producer→actual consumer инвариант; история не источник authority.
+
+ROOT integrated race2.129s/vet PASS, shared actual CP producer→runner
+cold/resume oracle1.172s PASS; domain prompt race2.350s на том же production
+tree PASS. Worker frozen canonical disposable PG16.661s PASS: SYSTEM/PROJECT
+inheritance6.84s, ordinary Retry4.69s, large RU Retry5.04s, readonly policy.
+Generated task>64KiB/notice≤64KiB, completed turns до/после claim EQUAL.
+RED→GREEN прежнего CONTINUATION_NOTICE_BYTES доказан. Два прежних fixture
+FAIL сохранены: незаконный step input, затем min3 вместо unchanged bounded
+suffix2; production history/filter не менялись. Ранние ROOT чтения HANDOFF
+до его создания и относительных docs из module cwd FAIL, исправленные чтения
+PASS; это не FAIL production suites.
+
+Frozen apply/hash/diff check PASS. Доставка/actual ELF/Retry9 пока NOT RUN;
+далее publish/readback/guarded idleFF/20CP source+process proof/native Retry.
+USER corrections0/business0/review0; Full65/11/14/15/owner gate OPEN.

@@ -61,6 +61,10 @@ func TestWorkflowRetryCurrentRootComponent(t *testing.T) {
 	testWorkflowCoordinatorFilesComponent(t, true)
 }
 
+func TestWorkflowRetryLargeRussianNoticeComponent(t *testing.T) {
+	testWorkflowCoordinatorFilesComponent(t, true)
+}
+
 func testWorkflowCoordinatorFilesComponent(t *testing.T, freshRetry bool) {
 	ctx, stop := context.WithTimeout(t.Context(), 90*time.Second)
 	defer stop()
@@ -157,7 +161,12 @@ func testWorkflowCoordinatorFilesComponent(t *testing.T, freshRetry bool) {
 	complete := func(key string, lease map[string]any, text string) command.Result {
 		return execute(command.CompleteExecution, key, completion(lease, text), nil)
 	}
-	project := execute(command.CreateProject, "project", command.ProjectInput{Name: "Coordinator files", Language: "en"}, nil).Project
+	language := "en"
+	largeNotice := t.Name() == "TestWorkflowRetryLargeRussianNoticeComponent"
+	if largeNotice {
+		language = "ru"
+	}
+	project := execute(command.CreateProject, "project", command.ProjectInput{Name: "Coordinator files", Language: language}, nil).Project
 	coordinator := createLifecycleAgent(t, ctx, service, owner, project.Ref, "files-coordinator", "Coordinator")
 	coordinator = *execute(command.ChangeAgentCapability, "delegate", command.AgentBindingInput{
 		AgentRef: coordinator.Ref, BindingRef: "platform.run.delegate", Enabled: true}, &coordinator.Version).Agent
@@ -169,6 +178,9 @@ func testWorkflowCoordinatorFilesComponent(t *testing.T, freshRetry bool) {
 	publish := func(key string, steps []entity.WorkflowStep) *entity.Workflow {
 		draft := entity.WorkflowVersion{Name: key, Purpose: "Verified received results", CoordinatorAgentRef: coordinator.Ref,
 			Concurrency: 1, TimeoutSeconds: 3600, CompletionCriteria: "Complete published steps", ResultSchema: map[string]any{}, Steps: steps}
+		if largeNotice {
+			draft.Instructions = strings.Repeat("я", 30000)
+		}
 		result := execute(command.CreateWorkflow, key+"-create", command.WorkflowInput{ProjectRef: project.Ref, Name: key,
 			Purpose: draft.Purpose, CoordinatorAgentRef: coordinator.Ref, Draft: &draft}, nil).Workflow
 		result = execute(command.ValidateWorkflow, key+"-validate", command.WorkflowInput{Ref: result.Ref}, &result.Version).Workflow
@@ -177,6 +189,9 @@ func testWorkflowCoordinatorFilesComponent(t *testing.T, freshRetry bool) {
 	step := entity.WorkflowStep{Key: "first", Position: 1, Name: "First", AgentRef: specialist.Ref,
 		Instructions: "Produce an exact result", ExpectedResult: "Result artifact", TimeoutSeconds: 900,
 		RequiredCapabilityKeys: []string{runtimecontract.ArtifactCapability, "platform.run.launch"}}
+	if largeNotice {
+		step.Instructions = strings.Repeat("я", 900)
+	}
 	nested := publish("nested", []entity.WorkflowStep{step})
 	second := step
 	second.Key, second.Name, second.Position = "second", "Second", 2
@@ -305,7 +320,31 @@ func testWorkflowCoordinatorFilesComponent(t *testing.T, freshRetry bool) {
 		}
 		currentRun = *execute(command.CancelRun, "retry-source-cancel", command.RunCommandInput{RunRef: outer.Ref}, &currentRun.Version).Run
 		retried := execute(command.RetryRun, "retry", command.RunCommandInput{RunRef: outer.Ref}, &currentRun.Version).Run
+		completedHistory := func() string {
+			var contents string
+			if err := fixtureAdmin.QueryRow(ctx, `SELECT COALESCE(jsonb_agg(jsonb_build_object('ref',ref,'content',content) ORDER BY turn_number),'[]'::jsonb)::text FROM control_plane.session_turns WHERE session_id=(SELECT id FROM control_plane.sessions WHERE ref=$1) AND state='COMPLETED'`, stringMap(initial, "sessionRef")).Scan(&contents); err != nil {
+				t.Fatal("read exact disposable completed history", err)
+			}
+			return contents
+		}
+		var previousHistory string
+		if largeNotice {
+			previousHistory = completedHistory()
+		}
 		retryLease := claim("retry-claim", retried.Ref)
+		if largeNotice {
+			if completedHistory() != previousHistory {
+				t.Fatal("large task projection rewrote persisted completed history")
+			}
+			if len(stringMap(retryLease, "task")) <= runtimecontract.MaximumContinuationNoticeBytes {
+				t.Fatal("fixture lacks the actual large generated coordinator task")
+			}
+			continuation := retryLease["continuationPromptSnapshot"].(entity.PromptMaterializationSnapshot)
+			if len(retryLease["sessionContext"].([]map[string]string)[len(retryLease["sessionContext"].([]map[string]string))-1]["content"]) > runtimecontract.MaximumContinuationNoticeBytes ||
+				continuation.Variables["task"] != stringMap(retryLease, "task") {
+				t.Fatal("large native retry changed full task or notice bound")
+			}
+		}
 		manifest(retryLease, 0)
 		if stringMap(retryLease, "sessionRef") != stringMap(initial, "sessionRef") {
 			t.Fatal("native retry changed the original Session")
@@ -320,7 +359,13 @@ func testWorkflowCoordinatorFilesComponent(t *testing.T, freshRetry bool) {
 			}
 		}
 		history, ok := retryLease["sessionContext"].([]map[string]string)
-		if !ok || len(history) < 3 || !strings.Contains(history[len(history)-1]["content"], retried.Ref) {
+		minimumHistory := 3
+		if largeNotice {
+			// Неизменный boundedRuntimeSessionHistory исключает целое старое
+			// USER-сообщение вне обычного лимита; persisted history выше неизменна.
+			minimumHistory = 2
+		}
+		if !ok || len(history) < minimumHistory || !strings.Contains(history[len(history)-1]["content"], retried.Ref) {
 			t.Fatalf("fresh continuation lost history or lacks current-root guidance: typed=%t count=%d lastPins=%t", ok, len(history), ok && len(history) > 0 && strings.Contains(history[len(history)-1]["content"], retried.Ref))
 		}
 		retriedFirst := delegate("retry-first-delegate", retryLease, "first")
