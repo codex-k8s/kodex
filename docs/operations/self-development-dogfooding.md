@@ -1050,3 +1050,88 @@ PASS; это не FAIL production suites.
 Frozen apply/hash/diff check PASS. Доставка/actual ELF/Retry9 пока NOT RUN;
 далее publish/readback/guarded idleFF/20CP source+process proof/native Retry.
 USER corrections0/business0/review0; Full65/11/14/15/owner gate OPEN.
+
+## Checkpoint 10.10.2026 22:33 UTC — actual6bd delivery и INTAKE Retry9 PASS
+
+Source/remote Draft1807/clean HOT6bd700cb4e87b2a2222049fa9ac0ae0e083c06c4.
+Fresh BOT readback PASS; mainab4992e0 unchanged. Guarded idleFF22:10:47
+подтвердил пять idle-счётчиков0/61promoted/unchanged pins/full EOF312B.
+CP20host→Pod hashes EQUAL; Pod UIDc82aa63b-b16b-42e4-bc5c-cc3bf3d63e9f,
+PID3183/start11113914/Go1.26.6, actual serving ELF=Airbuild
+b6a71f760e0e80b303dc7d720455ea13f044fd384c6251fec0e12890736f4216;
+new projection symbol/Ready/restarts0/same process rejoin PASS.
+ROOT check-sql-boundary PASS после исправления exact SDK PATH; прежний
+FAIL неправильного PATH сохранён. Это local/debug, не release acceptance.
+
+Retry9 run_xYjI0BOJV6M4zQyeQaDbc3QB/current Session: INTAKE
+run_XdgQlBnmwiGEcP7_vO-s4Vb9 SUCCEEDED. CLEAN manager-plan.md revision
+arv_1956962aa323485fbf2a313fad96cfc3 прочитан через owner revision content
+до EOF22228B; size/digest EQUAL:
+0ac5628cabbde706977b1fcaaa2c2f51ea8427eeef0a70c060ab78f4ba1b00da.
+result.md full EOF522B, INTAKE/plan markers present, BLOCKED absent.
+Coordinator continuation attempt2 завершён; fresh Architect
+run_Y4BmuiwQL_jeRbUp5IyDv0MZ/RUNNING. Прежний NOTICE_BYTES на этих
+живых переходах не повторился, весь Workflow ещё не PASS.
+
+Fresh Manager и Architect ACK exact scopeNONE/org/project/node/session/
+turn/attempt/input/task_in_prompt/instructions_file/provider_inbox и
+sameUID/image/restarts0 rejoin PASS. Architect RuntimeRevision
+rrev_cDwCA1BWN3ciUoh1IrbB1gPk, ENV16/binding17/tools38/grants18/cap19.
+Actual binary0608…1295 EQUAL только IMAGE_FILE_NOT_SERVING_PROCESS;
+expected task pin NOT RUN. Дополнительный source-v1/PURPOSE metadata probe
+закрыто отказал OPEN/PROTECTED_METADATA_INVALID; exact Pod rejoin VERIFIED,
+presence/digest UNKNOWN. Не заменять это source proof или inferred mount.
+Architect commentary подтверждает собственный snapshot Codex0.160.0.
+
+Own Chrome5 list/reload без несохранённого ввода; desktop graph и activity
+screenshot MAIN просмотрены. Компактные commentary/collapsed tools,
+working dots на последнем активном сообщении, sequence381/cache replay,
+Console0, relevant bootstrap/session/graph/events/owner-gates/artifact/
+revision/content APIs200; horizontal page overflow0. Foreign tabs untouched.
+
+Актуальный scoped план по решению владельца10.10.2026 и GOV-OD-003:
+Workflow version40/published revision13, пять последовательных этапов,
+ОДНО комплексное ревью точного SHA всего, приёмка Manager, owner gate.
+Автоматические fix/re-review циклы не запускаются; unresolved findings и
+непроверенный новый SHA передаются владельцу без ложного READY/merge.
+Архивные version25/пять циклов в baseline checklist сохранены дословно
+и не переопределяют этот текущий порядок. Пункты11/14/15 пока OPEN.
+
+FE frozen4files на базе6bd: graph/dialog canonical node type не зависит
+от owner hydration; ASSISTANT требует прежнего exact owner proof.
+Posthash4/4 EQUAL. Worker RED10FAIL/9PASS→60PASS/1obsolete expectationFAIL
+→61PASS/4suites3.88s; scoped lint/format/forced types PASS. ROOT integrated
+61PASS/4suites4.06s. Первый ROOT вызов без node_modules FAIL до тестов;
+private dependency links/cache восстановлены, зависимости/lock unchanged.
+ROOT scoped ESLint/Prettier PASS; forced typecheck и production build PASS,
+Vite9.64s, existing chunk-size warning сохранён. Context7 проверены Vue SSR
+createSSRApp/renderToString. Native FE проверка ещё pending,
+HOT остаётся6bd во время native run.
+Никаких USER corrections/host business implementation; review0. Далее
+Developer fresh ENV17/binding18/actual Git, один Reviewer/Manager/owner gate,
+Full65 proof и bootstrap merge без обхода protections.
+
+## Checkpoint 10.10.2026 22:36 UTC — Architect source binding actual PASS
+
+Первый дополнительный probe отказал из-за двух ошибок private collector,
+не из-за отсутствия runtime binding: штатный exact alias /var/run→/run
+отклонялся доopen; extractor ошибочно хешировал весь tail после binding,
+включая canonical core/constraints. Исправлены только observer guards:
+exact mounted root, exact UTF8 byte segment/length/hash и end/newline
+boundary.16positive/negative fixtures/syntax PASS; raw данные не выводились,
+producer/runtime/ABI/authority не менялись, старые NOT CAPTURED сохранены.
+
+Actual Architect sameUIDc06cd030-3260-4772-8060-07731b64d40c/rejoin VERIFIED:
+pinst_source_conformity_v1_ru/platform-source-conformity-v1/canonical digest
+6d0134419a5a5c2543cf1a10244faa93c25e0d4cb3aece94084ed0906481e9ea EQUAL;
+instructionsSHA95cfec…c410 и taskSHAf1d08eef…49ad4b/5868B EQUAL ACK.
+Base PURPOSE1331B; notice NOT_PRESENT у fresh child, не continuation proof.
+Это actual source conformity presence, не semantic Architect acceptance.
+Повторные source/code readbacks не подменяют этот exact Pod input proof.
+
+Own Chrome5 actual Architect context dialog desktop screenshot просмотрен:
+изолированные input/model/runtime/start/attempt, scroll/controls доступны;
+Console0. Старое слово «Сессия» в header уже воспроизведено и исправлено
+в ожидающем FE frozen пакете; native доставку не объявлять выполненной.
+Оба узлаReady/22deployments desired=ready; exact root CP diagnostics0
+в bounded last500/10min, не blanket backend acceptance. Native root RUNNING.

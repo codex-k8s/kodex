@@ -1,4 +1,8 @@
+import { renderToString } from "@vue/server-renderer";
+import { createSSRApp, h } from "vue";
+import { createI18n } from "vue-i18n";
 import { describe, expect, it } from "vitest";
+import RunSessionDetailsDialog from "./RunSessionDetailsDialog.vue";
 import type { Run, RunNode } from "@/shared/api/generated/openapi/types.gen";
 import {
   assertAssistantRetryIdentity,
@@ -139,7 +143,7 @@ describe("closed owner pin запуска помощника", () => {
         "runs.assistantNode",
       );
       expect(runNodePresentationKey("SESSION", "AGENT_EXECUTION")).toBe(
-        "runs.sessionNode",
+        "runs.nodeTypes.AGENT_EXECUTION",
       );
       expect(runNodePresentationKey("EMPLOYEE", "AGENT_EXECUTION")).toBe(
         "runs.nodeTypes.AGENT_EXECUTION",
@@ -239,3 +243,126 @@ describe("closed owner pin запуска помощника", () => {
     ).toBe(true);
   });
 });
+
+describe("устойчивые подписи канонических типов узлов", () => {
+  it.each([undefined, "SESSION", "EMPLOYEE"] as const)(
+    "не меняет тип сотрудника при загрузке owner данных: %s",
+    (label) => {
+      expect(runNodePresentationKey(label, "AGENT_EXECUTION")).toBe(
+        "runs.nodeTypes.AGENT_EXECUTION",
+      );
+    },
+  );
+
+  it.each(["ROOT_PROCESS", "HUMAN_GATE", "EXTERNAL_ACTION"] as const)(
+    "не подменяет канонический тип %s классификацией исполнения",
+    (type) => {
+      for (const label of [
+        undefined,
+        "SESSION",
+        "EMPLOYEE",
+        "ASSISTANT",
+      ] as const)
+        expect(runNodePresentationKey(label, type)).toBe(
+          `runs.nodeTypes.${type}`,
+        );
+    },
+  );
+
+  it.each(["PLANNED", "RUNNING", "SUCCEEDED"] as const)(
+    "показывает один тип %s сотрудника в диалоге до и после загрузки",
+    async (state) => {
+      for (const executionLabel of [
+        undefined,
+        "SESSION",
+        "EMPLOYEE",
+      ] as const) {
+        const html = await renderNodeHeader(
+          "AGENT_EXECUTION",
+          state,
+          executionLabel,
+        );
+        expect(html).toMatch(/<small[^>]*>ИИ-сотрудник<\/small>/);
+        expect(html).not.toMatch(/<small[^>]*>Сессия<\/small>/);
+        expect(html).toContain("Имя узла сохраняется");
+      }
+    },
+  );
+
+  it("различает подтверждённого помощника и корневой запуск в диалоге", async () => {
+    expect(
+      await renderNodeHeader("AGENT_EXECUTION", "RUNNING", "ASSISTANT"),
+    ).toMatch(/<small[^>]*>Помощник Kodex<\/small>/);
+    expect(await renderNodeHeader("ROOT_PROCESS", "RUNNING")).toMatch(
+      /<small[^>]*>Запуск<\/small>/,
+    );
+  });
+});
+
+async function renderNodeHeader(
+  type: RunNode["type"],
+  state: RunNode["state"],
+  executionLabel?: "ASSISTANT" | "EMPLOYEE" | "SESSION",
+): Promise<string> {
+  const run: Run = {
+    ...assistantRun("PROJECT"),
+    version: 1,
+    graphRevision: 1,
+    title: "Название запуска сохраняется",
+    initiator: { ref: "usr_fixture", displayName: "Владелец" },
+    usage: {
+      totalTokens: 0,
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheWriteInputTokens: 0,
+      outputTokens: 0,
+      reasoningOutputTokens: 0,
+      modelContextWindow: 0,
+    },
+  };
+  const node: RunNode = {
+    ref: "nod_fixture",
+    runRef: run.ref,
+    type,
+    state,
+    displayName: "Имя узла сохраняется",
+    role: "Проверенная роль",
+    attempt: 1,
+    artifactRefs: [],
+    childRunRefs: [],
+    createdAt: "2026-10-11T00:00:00Z",
+    nextActions: [],
+  };
+  const app = createSSRApp({
+    render: () =>
+      h(RunSessionDetailsDialog, {
+        run,
+        node,
+        nodes: [node],
+        events: [],
+        artifacts: [],
+        executionLabel,
+      }),
+  });
+  app.use(
+    createI18n({
+      legacy: false,
+      locale: "ru",
+      missingWarn: false,
+      fallbackWarn: false,
+      messages: {
+        ru: {
+          runs: {
+            sessionNode: "Сессия",
+            assistantNode: "Помощник Kodex",
+            nodeTypes: {
+              ROOT_PROCESS: "Запуск",
+              AGENT_EXECUTION: "ИИ-сотрудник",
+            },
+          },
+        },
+      },
+    }),
+  );
+  return renderToString(app);
+}

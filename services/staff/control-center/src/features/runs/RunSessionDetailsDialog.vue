@@ -170,7 +170,11 @@ function formatTokenCount(value: number): string {
         </span>
         <div>
           <small>{{
-            $t(sessionNode ? "runs.sessionNode" : "runs.controlNode")
+            $t(
+              sessionNode
+                ? runNodePresentationKey(executionLabel, node.type)
+                : "runs.controlNode",
+            )
           }}</small>
           <strong>{{ roleLabel }}</strong>
           <p>

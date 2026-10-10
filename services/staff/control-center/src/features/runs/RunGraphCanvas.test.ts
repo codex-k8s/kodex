@@ -538,7 +538,7 @@ describe("RunGraphCanvas", () => {
     expect(assistant).toContain("Помощник Kodex");
     expect(assistant).not.toContain("ИИ-сотрудник</span>");
     const unknown = await render({ node_agent: "SESSION" });
-    expect(unknown).toContain("Сессия");
+    expect(unknown).toContain("ИИ-сотрудник");
     const employee = await render({ node_agent: "EMPLOYEE" });
     expect(employee).toContain("ИИ-сотрудник");
     expect(employee).not.toContain("Помощник Kodex");

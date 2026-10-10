@@ -10,6 +10,53 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 22:33 UTC — Retry9 прошёл INTAKE, Architect выполняется
+
+Actual source/remote Draft1807/clean HOT6bd700cb. Guarded idleFF22:10:47:
+пять idle-счётчиков0, 61promoted/pins unchanged. CP20/20host→Pod hashes
+EQUAL, новый serving ELF=Airbuild b6a71f760e0e80b303dc7d720455ea13f044fd384c6251fec0e12890736f4216,
+PID3183/start11113914/Go1.26.6/new projection symbol/Ready/restarts0/rejoin PASS.
+ROOT SQL boundary после исправления PATH PASS; первый запуск с неверным
+toolchain PATH не является успешной проверкой.
+
+Native Retry9 run_xYjI0BOJV6M4zQyeQaDbc3QB в прежней Session:
+INTAKE run_XdgQlBnmwiGEcP7_vO-s4Vb9 SUCCEEDED; manager-plan.md CLEAN,
+revision arv_1956962aa323485fbf2a313fad96cfc3, full EOF22228B,
+SHA2560ac5628cabbde706977b1fcaaa2c2f51ea8427eeef0a70c060ab78f4ba1b00da EQUAL.
+Координатор continuation attempt2 завершён, Architect
+run_Y4BmuiwQL_jeRbUp5IyDv0MZ RUNNING. Прежний NOTICE_BYTES не повторился
+на этих переходах; успех всего Workflow ещё не подтверждён.
+
+Fresh Manager/Architect ACK exact tuple/NONE/input/instructions/inbox и
+sameUID/image/rejoin PASS. Architect ENV16/binding17/tools38/grants18/cap19;
+binary0608…1295 подтверждён только как файл в exact Pod, не serving process.
+Первый source-v1 protected probe NOT CAPTURED/closed OPEN сохранён;
+после исправления private collector exact path alias и bounded binding
+segment actual presence/canonical digest/instructionsSHA/taskSHA EQUAL,
+sameUID fullpins rejoin VERIFIED. Fresh child notice NOT_PRESENT,
+continuation notice proof NOT RUN. Runtime/producer не менялись.
+Собственный Architect execution snapshot сообщил Codex0.160.0.
+Own Chrome5: desktop graph/activity screenshot просмотрены, compact
+commentary/tools/working dots и reload/rejoin доступны; Console0/API200,
+горизонтальный overflow0. Результат ещё RUNNING, Developer/Git/Review pending.
+
+Текущий порядок по уточнению владельца от10.10.2026: Workflow40/revision13,
+пять этапов, ОДНО комплексное ревью всего, Manager acceptance и финальный
+owner gate; автоматических fix/re-review циклов нет. Старые version25/
+пять циклов в неизменном архивном checklist — история, не текущий план.
+USER corrections0/host business implementation0/review0; Full65/11/14/15 OPEN.
+
+Адресный FE packet4files интегрирован в отдельный ROOT worktree поверх6bd:
+canonical node type в graph/dialog не меняется после hydration, owner checks
+сохранены. Posthash4/4 EQUAL; ROOT61tests/4suites PASS4.06s, worker scoped
+lint/format/forced typecheck PASS. Первый ROOT unit запуск без зависимостей
+FAIL до выполнения; private dependency links/cache восстановлены.
+ROOT scoped lint/format PASS, forced typecheck и production build PASS,
+Vite9.64s; existing chunk-size warning сохранён. Context7 проверены Vue SSR
+createSSRApp/renderToString. Delivery/native verification FE ещё не завершены. HOT не переключать
+до idle; далее actual Developer ACK/ENV17/binding18 и Git publication,
+один Reviewer/Manager/owner gate, затем full evidence/bootstrap merge.
+
 ## Checkpoint 10.10.2026 22:10 UTC — PURPOSE projection готова к доставке
 
 Поверх9742826b интегрированы9 frozen файлов, все posthash EQUAL:
