@@ -501,6 +501,23 @@ SELECT n.id::text,
                                AND delegated.workflow_step_key = step.value ->> 'Key'
                                AND delegated.materialization_state = 'MATERIALIZED'
                          )
+                         AND EXISTS (
+                             SELECT 1
+                             FROM control_plane.run_nodes planned
+                             WHERE planned.root_run_id = root.id
+                               AND planned.workflow_step_key = step.value ->> 'Key'
+                               AND planned.materialization_state = 'PLANNED'
+                               AND planned.state = 'PLANNED'
+                               AND NOT EXISTS (
+                                   SELECT 1
+                                   FROM control_plane.run_edges edge
+                                   LEFT JOIN control_plane.run_nodes dependency ON dependency.id = edge.source_node_id
+                                   WHERE edge.target_node_id = planned.id
+                                     AND edge.type = 'WAITING_FOR'
+                                     AND (dependency.root_run_id IS DISTINCT FROM root.id
+                                          OR dependency.state IS DISTINCT FROM 'SUCCEEDED')
+                               )
+                         )
                    ) target
                ), '[]'::jsonb)
            END,

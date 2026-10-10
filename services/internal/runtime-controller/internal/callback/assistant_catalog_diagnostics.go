@@ -11,7 +11,7 @@ const (
 	assistantCatalogShapeInvalid            = "assistant_catalog_shape_invalid"
 	assistantCatalogSelectorInvalid         = "assistant_catalog_selector_invalid"
 	assistantCatalogPageInvalid             = "assistant_catalog_page_invalid"
-	assistantCatalogReadInputGuidance       = "Read the current get_configuration_catalog input schema and correct the rejected input at most once. Use only exact schema fields and one selector: assistant_configuration_catalog cannot be mixed with agent_query, agent_offset, definition_query, definition_offset or nonempty operation_types. For WORKFLOW_CONFIGURATION or AGENT_CONFIGURATION, use configuration_offset_bytes, maximum_bytes (4..16384) and configuration_sha256; continuation requires the exact digest from the first page. Keep the current server-owned context and exact resource refs. Do not guess fields, switch context, request broader authority or retry an unchanged input."
+	assistantCatalogReadInputGuidance       = "Read the current get_configuration_catalog input schema and correct the rejected input at most once. Use only exact schema fields and one selector: assistant_configuration_catalog cannot be mixed with agent_query, agent_offset, definition_query, definition_offset or nonempty operation_types. For WORKFLOW_CONFIGURATION, AGENT_CONFIGURATION or AGENT_RUNTIME_CONFIGURATION, when present in the current schema, use configuration_offset_bytes, maximum_bytes (4..16384) and configuration_sha256; continuation requires the exact digest from the first page. Keep the current server-owned context and exact resource refs. Do not guess fields, switch context, request broader authority or retry an unchanged input."
 )
 
 var errAssistantCatalogSelection = errors.New(assistantCatalogSelectionFailureMessage)

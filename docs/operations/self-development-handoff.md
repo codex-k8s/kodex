@@ -10,6 +10,28 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 10:44 UTC — frontier исправлен, следующий новый запуск
+
+Parent3e486535 + exact frozen frontier7/catalog3. ROOT unit/race/vet/build/
+SQL PASS, disposable Workflow component34.454s PASS (frontier/nested/ordinary/
+callback/terminal). CP/RC hot reload actual ELF dc2ef816…00afb/a9bfc31e…ae572
+равны независимым ROOT canonical builds, UID прежние/Ready/restarts0.
+Новое owner preflight запрещает делегирование заблокированного шага до effects,
+каталог показывает текущий dependency frontier. Scheduler не ослаблен.
+Старый root run_jubCanGbxCXIbi_0U0ZJG94O native CANCELLED/v3, active nodes0,
+завершённые результаты сохранены. Старый BLOCKED не объявлен исправленным.
+
+Helper план pln_crAyT2PE0rsqPCXQZVK61_kY/rev1 native APPLIED, receipt
+rct_659jydI31VubeJVzoHiQRs8J. Before/After отличается только instructions.
+Workflow теперь v37/rev12/wfv_cQvOtbvn-yzIkoCmoSER-36t: offline schema
+exact установленного Codex допустима вместо недоступного upstream source;
+ранний STOP отчёт координатора не делегирует finalManager без Review.
+Только один comprehensive Review и финальный Human Gate сохраняются.
+Новый native helper EOF read текущей публикации ещё работает. Затем один
+новый native запуск1796 с четырьмя полями и paid-credit criterion; host
+не реализует бизнес-задачу. Grants/ENV/runner/custom images не менялись.
+Публикация этого пакета в Draft1807 и Full65/business acceptance впереди.
+
 ## Checkpoint 10.10.2026 10:27 UTC — Architect BLOCKED, независимые UI-проверки PASS
 
 Чистый опубликованный source/remote/Draft1807 —

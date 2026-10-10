@@ -4,8 +4,8 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.15
-updated: 2026-10-08
+version: 1.1.16
+updated: 2026-10-10
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
@@ -400,6 +400,17 @@ Callback обычного сотрудника сохраняет каталог
 получает новое server-owned ребро от текущего узла и свежую revision.
 Отзыв capability закрывает каталог и команду; опубликованный Workflow
 по-прежнему предлагает только ещё не материализованные шаги своей версии.
+
+Опубликованный Workflow предлагает только текущий серверный фронт: у каждого
+`WAITING_FOR` predecessor exact root состояние должно быть `SUCCEEDED`.
+`PLANNED`, `QUEUED`, `RUNNING`, ожидание Gate и любой terminal failure не
+разрешают queue-ahead. Owner command после проверки lease/capability/relationship
+повторно проверяет этот predicate до materialization, receipt, audit и child
+effects; отказ использует прежний typed conflict без автоматического retry.
+Каталог остаётся advisory, ordinary delegation не получает Workflow-ограничение,
+а nested Workflow использует собственный root. Готовые parallel peers допустимы;
+scheduler не обходит зависимости. Ранее материализованный заблокированный граф
+этим preflight не исправляется и остаётся под штатным cancel/deadline lifecycle.
 
 Исправление локально неверного входа делегирования не является повтором
 исполняемой команды. Различимый typed отказ shape/recipient-step/task/input

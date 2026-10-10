@@ -45,6 +45,9 @@ var queryRuntimeDeadlineResetDenied string
 //go:embed testdata/sql/runtime_delegate_input_missing.sql
 var queryRuntimeDelegateInputMissing string
 
+//go:embed testdata/sql/runtime_delegate_frontier_proof.sql
+var queryRuntimeDelegateFrontierProof string
+
 func TestWorkflowLaunchComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
@@ -415,6 +418,88 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		cancelRun("node-bound-wf-cancel", root.Ref)
 		assertChildren(root.Ref, expected)
 	})
+	t.Run("workflow-delegation-frontier", func(t *testing.T) {
+		frontier := draft
+		frontier.Name, frontier.Concurrency = "Exact delegation frontier", 2
+		frontier.Steps = append([]entity.WorkflowStep{}, draft.Steps...)
+		for index, key := range []string{"peer", "later", "later-peer"} {
+			step := draft.Steps[0]
+			step.Key, step.Position, step.Name = key, int32(index+2), key
+			if index > 0 {
+				step.DependsOn = []string{"step", "peer"}
+			}
+			frontier.Steps = append(frontier.Steps, step)
+		}
+		wf := execute(command.CreateWorkflow, owner, "frontier-create", command.WorkflowInput{ProjectRef: project.Ref, Name: frontier.Name, Purpose: frontier.Purpose, CoordinatorAgentRef: coordinator.Ref, Draft: &frontier}, nil).Workflow
+		wf = execute(command.ValidateWorkflow, owner, "frontier-validate", command.WorkflowInput{Ref: wf.Ref}, &wf.Version).Workflow
+		wf = execute(command.PublishWorkflow, owner, "frontier-publish", command.WorkflowInput{Ref: wf.Ref}, &wf.Version).Workflow
+		root := execute(command.LaunchRun, owner, "frontier-root", command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "WORKFLOW", Ref: wf.Ref}, Task: "Delegate only ready peers."}, nil).Run
+		defer cancelRun("frontier-cleanup", root.Ref)
+		current := claim("frontier-coordinator", root.Ref)
+		targets := runtimeRevisionDelegationTargets(current["delegationTargets"])
+		if len(targets) != 2 {
+			t.Fatal("catalog did not retain exactly the ready parallel frontier")
+		}
+		for _, target := range targets {
+			if target.WorkflowStepKey != "step" && target.WorkflowStepKey != "peer" {
+				t.Fatal("catalog exposed a blocked successor")
+			}
+		}
+		delegate := func(key, step string) (command.Result, error) {
+			return service.Execute(ctx, command.Command{Kind: command.DelegateExecution, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "workflow-frontier-" + key}, Payload: command.DelegateInput{LeaseRef: stringMap(current, "leaseRef"), Fence: stringMap(current, "fence"), Generation: runtimeRevisionMapInt64(current, "generation"), TargetAgentRef: specialist.Ref, WorkflowStepKey: step, Task: "Exact published step"}})
+		}
+		proof := func() string {
+			t.Helper()
+			var state map[string]any
+			if err := pool.QueryRow(ctx, queryRuntimeDelegateFrontierProof, pgx.StrictNamedArgs{"root_ref": root.Ref}).Scan(&state); err != nil {
+				t.Fatal("frontier effect proof unavailable", err)
+			}
+			_, graph, err := service.GetRunGraph(ctx, owner, root.Ref)
+			if err != nil {
+				t.Fatal(err)
+			}
+			encoded, err := json.Marshal([]any{state, graph})
+			if err != nil {
+				t.Fatal(err)
+			}
+			return string(encoded)
+		}
+		reject := func(stage string) {
+			t.Helper()
+			before := proof()
+			if _, err := delegate("blocked-"+stage, "later"); !errors.Is(err, errs.ErrConflict) {
+				t.Fatalf("%s dependency did not close preflight: %v", stage, err)
+			}
+			if proof() != before {
+				t.Fatalf("%s rejection persisted a graph/session/turn/revision/receipt/audit/event effect", stage)
+			}
+		}
+		reject("planned")
+		first, err := delegate("first", "step")
+		if err != nil {
+			t.Fatal("ready step rejected", err)
+		}
+		peer, err := delegate("peer", "peer")
+		if err != nil {
+			t.Fatal("ready parallel peer rejected", err)
+		}
+		reject("queued")
+		firstLease := claim("frontier-first-child", first.Run.Ref)
+		reject("running")
+		complete("frontier-first-complete", firstLease, true)
+		reject("unfinished-parallel-peer")
+		peerLease := claim("frontier-peer-child", peer.Run.Ref)
+		complete("frontier-peer-complete", peerLease, true)
+		// Тот же key не имеет отказного receipt; owner перечитывает текущий
+		// граф, а не принимает старый catalog за authority.
+		if _, err := delegate("blocked-planned", "later"); err != nil {
+			t.Fatal("successful predecessors did not admit successor", err)
+		}
+		if _, err := delegate("later-peer", "later-peer"); err != nil {
+			t.Fatal("ready successor parallel peer rejected", err)
+		}
+		complete("frontier-coordinator-complete", current, true)
+	})
 	t.Run("workflow-input-inheritance", func(t *testing.T) {
 		inputDraft := draft
 		inputDraft.Name = "Immutable input workflow"
@@ -526,7 +611,7 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		// Вложенный Workflow выбирает собственный root/version, не внешний input.
 		innerDraft := inputDraft
 		innerDraft.Name = "Nested immutable input"
-		innerDraft.Steps = append([]entity.WorkflowStep{}, draft.Steps...)
+		innerDraft.Steps = append([]entity.WorkflowStep{}, inputDraft.Steps...)
 		inner := publish("input-inner", innerDraft)
 		innerInput := map[string]any{"field-001": "Inner Issue", "field-002": "Inner business", "field-003": "Inner repository", "field-004": "Inner constraints"}
 		nestedInput := workflowCatalogLaunchInput(t, service, launcher, childLease, inner.Ref, "Nested workflow")
@@ -535,6 +620,9 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		complete("input-second-child-waits", childLease, true)
 		current = claim("input-inner-coordinator", nested.Run.Ref)
 		assertInput(current, innerInput)
+		if _, err := delegate("inner-blocked", "second", nil); !errors.Is(err, errs.ErrConflict) {
+			t.Fatal("nested Workflow admitted a future step before its own predecessor", err)
+		}
 		child, err = delegate("inner", "step", nil)
 		if err != nil {
 			t.Fatal(err)

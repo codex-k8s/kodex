@@ -13,10 +13,32 @@ import (
 const maximumAssistantDiscoveredSchemas = 4
 const maximumAssistantCatalogAgents = 20
 
+const configurationCatalogBaseDescription = "Discover refs/schemas; omit operation_types for index. No mixed selectors; MODELS needs account_ref. Fresh catalog; execution_snapshot turn-pinned."
+const configurationCatalogContextGuidance = "Resource configuration reads require the current server-owned context. If the needed read is absent from inputSchema, ask the owner to open its matching native resource route and submit a new turn; never change context or guess selectors."
+const configurationCatalogPageGuidance = "Use assistant_configuration_catalog with its required kind, assistant_ref, entity_kind and entity_ref. Read configuration_page.text from configuration_offset_bytes=0 via next_offset_bytes to eof=true; pin configuration_sha256 on continuation, maximum_bytes 4..16384."
+
+func configurationCatalogDescription(input runtimecontract.RunnerInput) string {
+	description := configurationCatalogBaseDescription
+	reads := []string{}
+	if assistantWorkflowConfigurationAvailable(input) {
+		reads = append(reads, "WORKFLOW_CONFIGURATION")
+	}
+	if assistantAgentConfigurationAvailable(input) {
+		reads = append(reads, "AGENT_CONFIGURATION", "AGENT_RUNTIME_CONFIGURATION")
+	}
+	if len(reads) > 0 {
+		description += " Available resource reads: " + strings.Join(reads, ", ") + ". " + configurationCatalogPageGuidance
+	}
+	if assistantAgentConfigurationAvailable(input) {
+		description += " AGENT_RUNTIME_CONFIGURATION reads only current AGENT context: bound ENV/image, configured tool names, separate verified image inventory; no environment values or secrets."
+	}
+	return description + " " + configurationCatalogContextGuidance
+}
+
 func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "get_configuration_catalog",
-		"description": "Discover refs/schemas; omit operation_types for index. No mixed selectors; MODELS needs account_ref. WORKFLOW/AGENT_CONFIGURATION/AGENT_RUNTIME_CONFIGURATION: read configuration_page.text from configuration_offset_bytes=0 via next_offset_bytes to eof=true; pin configuration_sha256 on continuation, maximum_bytes 4..16384. AGENT_RUNTIME_CONFIGURATION reads only current AGENT context: bound ENV/image, configured tool names, separate verified image inventory; no environment values or secrets. Fresh catalog; execution_snapshot turn-pinned.",
+		"description": configurationCatalogDescription(input),
 		"inputSchema": objectSchema(nil, map[string]any{
 			"operation_types": map[string]any{"type": "array", "maxItems": maximumAssistantDiscoveredSchemas,
 				"uniqueItems": true, "items": map[string]any{"type": "string", "enum": assistantOperationTypes(input)}},

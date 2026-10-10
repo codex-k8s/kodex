@@ -1290,3 +1290,36 @@ OpenAI Docs app-server fetched: generate-json-schema даёт exact-version
 разрешённая альтернатива ещё не доказана. Paid-credit acceptance сохранён;
 balance/units/spending UNKNOWN, реальный usageLimitExceeded не игнорируется.
 Full65, один comprehensive Review, Manager acceptance и final owner gate OPEN.
+
+### Checkpoint 10.10.2026 10:44 UTC — delegation frontier и штатный STOP
+
+Source3e486535 + frozen frontier7/7 и catalog guidance3/3 exact postimages.
+Причина ожидания доказана owner graph: WAITING_FOR edg_xqUCSGF1P41nyuW_GtyBZlzG
+связывал PLANNED Reviewer с QUEUED finalManager. Новый owner preflight
+отказывает до child effects; каталог предлагает только готовый exact frontier.
+Ordinary/nested/parallel и scheduler сохраняют прежние authority/dependencies.
+GUIDE006 закрепляет общий invariant; schema/ABI/migrations не изменены.
+
+ROOT PASS: frontier unit0.049s, transport0.043s, RC refusal0.041s,
+catalog targeted race1.254s; CP vet, SQL boundary, canonical CP/RC builds.
+Disposable PostgreSQL TestWorkflowLaunchComponent34.454s: frontier1.27s,
+nested/ordinary/callback/cancel/deadline PASS; fixture завершена штатно.
+Первый setup FAIL: PATH исключал node; повтор с inherited PATH успешен.
+Actual Pod mounted source hashes совпали; serving ELF равны ROOT builds:
+CP dc2ef81624b596c8945cbdb7963a3adf8a07b41600babfec5d08106497e00afb,
+RC a9bfc31e038ee75abfcca73f99e0c131fe12f121c1e2212d28c58319240ae572.
+PID494/390 стабильны в двух readback, прежние UID/Ready/restarts0;
+Air build/run завершены, bounded backend error/panic counts0.
+
+Старый root run_jubCanGbxCXIbi_0U0ZJG94O отменён native owner кнопкой:
+GET graph200, CANCELLED/v3, active nodes0, прежние SUCCEEDED сохранены.
+Скриншот просмотрен, Console0; это cancel regression, не business PASS.
+Helper plan pln_crAyT2PE0rsqPCXQZVK61_kY/rev1: normalized diff меняет только
+instructions и draft.Instructions; Before/After полностью сравнены.
+Native VALID→APPLIED, receipt rct_659jydI31VubeJVzoHiQRs8J;
+workflow Validate/Publish →v37/rev12/wfv_cQvOtbvn-yzIkoCmoSER-36t.
+Пять steps/four required inputs/oneReview/finalGate сохранены. Разрешена
+offline schema установленного бинаря; ранний STOP не делегирует downstream.
+Новый helper native EOF read этой публикации работает; новый launch NOT RUN.
+Исторические результаты не переписаны; credits-case и UNKNOWN balance сохранены.
+Full65, business Developer/Review/acceptance и итоговый owner gate OPEN.
