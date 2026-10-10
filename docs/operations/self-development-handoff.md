@@ -10,6 +10,67 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 07:30 UTC — реальная команда запущена с credit-кейсом
+
+Один natural-language LAUNCH_RUN plan pln_gv0dhZOjQhZWi5vBWrsSorNb штатно
+Validate/Apply: revision1/version3 APPLIED, application200. Exact root
+run_dnIpb8RAPnlR2TBwNRNU3cbj создан07:26:37 UTC, SOFTWARE_CHANGE version31,
+RUNNING/incidents[], первый INTAKE SUCCEEDED, отдельный Manager child
+run_CCg9GU57RiEldKt6ztrzY5xl RUNNING. Все4inputs включают weekly exhausted
+при доступных paid credits; unknown не ноль, upstream controls сохраняются.
+Не повторять запуск/Apply. Business Developer/review/Manager/gate ещё OPEN.
+Host не пишет бизнес-реализацию вместо Developer. Полный QA65 не завершён.
+
+UX двух source файлов PublicationImpactSelection принят, включая исправление
+long-label status flex. ROOT36unit/4suites, scopedlint/format, forcedtypecheck/
+build PASS. Synthetic Chromium8/8geometry+8/8mixed outcomes, Console/Network0,
+mutations0; desktop/mobile PNG просмотрены. Native publication нового layout
+NOT RUN; не выдавать fixture за фактическую публикацию.5normal rows,
+1verylong mobile row; длинный текст не усекался.
+
+Журнал после repair append-only от96fc; перед commit canonical verifier.
+Далее: фиксация пакета в1807, actual team execution/кредитный сценарий,
+remaining natural ambiguity/foreign/rejoin и Full65. Chrome только page5,
+каждые5мин reload без потери ввода и list_pages. ROOT diagnostic404 project
+runs list ошибочный; SDK canonical /api/v1/runs, не app defect.
+
+## Checkpoint 10.10.2026 07:17 UTC — один ревью-цикл опубликован, обычный Architect OBSERVED
+
+Native UPDATE_WORKFLOW plan pln_saEpsgV-Zlp3QGJGzuh7O8-F применён одним
+owner Apply, затем Workflow Validate/Publish: version29→30→31,
+revision10 wfv_vScbhwkQDZRqJrmWlsOuu7tQ, PUBLISHED/validation[]/READY.
+Пять этапов, ровно один Reviewer, единственный Human Gate у final Manager;
+исторические публикации и runs не изменены. Plan revision1/version3 APPLIED.
+
+Новый обычный Architect run_cBOwBzljAZCShq9cU3B3DveK SUCCEEDED: собственный
+get_execution_snapshot {}, native tool completed и ответ OBSERVED/0.160.0/
+INITIALIZE_USER_AGENT. GET events200 event12 и live transcript подтвердили
+результат. Это не host CLI и не проверка помощника вместо сотрудника.
+Screenshot просмотрен, Console0, overflowfalse. При первом открытии timeline
+виден только служебный prefix; позднее появились commentary/tool/answer без
+повторного запуска. Потеря истории не доказана; задержку realtime ещё проверить.
+
+Canonical journal verifier обнаружил FAIL ACTIVE_BASELINE_MISMATCH в dce2:
+изменён исторический prefix. ROOT восстановил exact prefix96fc без изменения
+archive/verifier и сохранил весь прежний checkpoint tail; актуальные решения
+и checklist вынесены в append-only checkpoint07:12. Verifier against96fc
+PASS PREVIOUS_SNAPSHOT_PREFIX_CHECKED. Не считать повреждённый dce2 healthy
+previous baseline и не ослаблять guard ради PASS.
+
+Уточнение владельца о кредитах передано native Project Assistant для одного
+LAUNCH_WORKFLOW плана по найденной обычным текстом задаче сводки лимитов.
+Он ещё готовится; полный новый бизнес-процесс не запущен. Локальный запрет
+по недельной квоте не найден: текущий code не использует upstream rateLimits/
+credits для admission. Поэтому available credits + exhausted included quota
+обязательный новый case задачи1796, а не доказанный текущий launch defect.
+Upstream balance/spending текущего аккаунта не проверены и не выдуманы.
+
+UX publication selection: основной двухфайловый пакет применён, ROOT28unit,
+scopedlint/format/forcedtypecheck/build PASS; native layout ещё NOT RUN.
+Synthetic mobile выявил clip status badge, готовится узкий follow-up.
+Далее: закрыть этот UX, commit/push1807; native LAUNCH_WORKFLOW Validate/Apply,
+реальная команда1796 с одним review и final owner gate, остальные Full65.
+
 ## Checkpoint 10.10.2026 06:53 UTC — три ENV обновлены без потери настроек
 
 Staffartifact imgart_v4_6LF2lnmxuk2-F5iUMmpak штатно PROMOTED; signed receipt

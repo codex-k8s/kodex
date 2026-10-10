@@ -4,8 +4,8 @@ title: Самонастройка и разработка Kodex средства
 type: operations
 status: approved
 owner: manager
-version: 1.1.1
-updated: 2026-10-10
+version: 1.1.0
+updated: 2026-10-09
 ---
 
 # Цель и источники
@@ -56,15 +56,6 @@ Bootstrap-изменения вошли в один сквозной PR как �
 
 ## Решения владельца и режим
 
-- Уточнение владельца 10.10.2026: продолжить по варианту 1 — основной агент
-  ведёт доставку и живой QA, параллельные субагенты занимаются UX и адресными
-  проверками в пределах доступных слотов. В текущем dogfooding допускается
-  всего один цикл комплексного ревью, без автоматических повторных прогонов.
-  Перед новым запуском штатным подтверждаемым планом обновить Workflow:
-  прежняя публикация с пятью циклами не доказывает применение этого решения.
-  Оставшиеся замечания и непроверенные изменения фиксировать в отчёте;
-  final readiness не объявлять без доказательств. Исторические записи и
-  опубликованные ревизии прошлых запусков не переписывать.
 - До 07.10.2026 08:30 по Саратову выполнять текущую цель автономно;
   в согласованных границах выбирать рекомендуемое решение без ожидания
   владельца. Проверить действующие SSO limits и установить 12 часов для
@@ -111,10 +102,9 @@ Bootstrap-изменения вошли в один сквозной PR как �
 `SOFTWARE_CHANGE` действует явное исключение из порядка нескольких внутренних
 рецензентов — одно независимое комплексное ревью фактического diff на точном
 SHA (архитектура, безопасность, документация и лексика), затем продуктовая
-приёмка Manager. Уточнение владельца от10.10.2026 ограничивает этот
-эксперимент одним циклом комплексного ревью без автоматического повторного
-review. Оставшиеся замечания передаются владельцу и не становятся PASS.
-Единственный финальный
+приёмка Manager. После первоначального ревью исправления и повторное комплексное
+ревью нового SHA допустимы не более пяти циклов; шестой требует решения
+владельца. Единственный финальный
 Human Gate остаётся у владельца после приёмки Manager и устранения замечаний.
 Исключение относится к новому текущему процессу; исторические результаты и
 закреплённые версии прежних запусков не переписываются. В 20:07:52 UTC
@@ -185,10 +175,9 @@ DiskPressure; актуальный owner run state UNKNOWN при API 500, recov
 - [ ] 11. SOFTWARE_CHANGE по явному исключению владельца от 08.10.2026:
       Manager → Architect → Developer → один независимый комплексный рецензент
       фактического diff на точном SHA (архитектура, безопасность, документация,
-      лексика) → продуктовая приёмка Manager → единственный финальный Human Gate.
-      По уточнению10.10.2026 — всего один цикл ревью, без автоматических
-      повторных циклов. Штатное обновление и публикация нового Workflow
-      с этим лимитом пока NOT RUN; оставшиеся замечания сохраняются в отчёте.
+      лексика) → продуктовая приёмка Manager → исправления и повторное ревью
+      нового SHA, не более пяти циклов после первоначального ревью → единственный
+      финальный Human Gate.
       Живой Workflow опубликован: 21 шаг, version 25 / revision 8.
       Публикация/конфигурация PASS; один полный процесс запущен, завершение
       и сквозная приёмка ещё не подтверждены.
@@ -209,9 +198,8 @@ DiskPressure; актуальный owner run state UNKNOWN при API 500, recov
       но не пишет финальную задачу вместо Developer и не подменяет reviewers.
 - [ ] 15. По явному исключению владельца от 08.10.2026: одно независимое
       комплексное ревью фактического diff на точном SHA, продуктовая приёмка
-      Manager; по уточнению10.10.2026 всего один цикл ревью без повторных
-      автоматических прогонов. Оставшиеся замечания и непроверенный новый SHA
-      не выдавать за принятые;
+      Manager, исправления/ответы и повторное ревью нового SHA до пяти циклов
+      после первоначального ревью,
       final-readiness.md, финальный PR READY_FOR_HUMAN_REVIEW и отчёт по
       разделу 64 исходного задания. Единственный финальный Human Gate — владелец.
       Живой Workflow опубликован: 21 шаг, version 25 / revision 8;
@@ -723,3 +711,126 @@ Future placeholder и staged promise отсутствуют; screenshot прос
 fresh Console0, document overflowfalse. Нет повторного Apply/нового AI хода.
 Кластер повторно:2nodesReady, проверенные kodex-system workload replicas ready,
 ROOT128GiB/DATA81GiB свободно. Runtime delivery/real Workflow/Full65 OPEN.
+
+## Checkpoint 10.10.2026 07:12 UTC — актуальный owner-план: один общий цикл ревью и credit-кейс
+
+Исторический prefix документа от `96fc426ab0629df67136246b4514093ea5ea4ed6`
+сохранён побайтно; прежние archive, manifest и checkpoint prefix не изменены.
+Заголовочные version/updated baseline остаются историческими. Уточнение
+владельца от10.10.2026 ниже задаёт текущий план вместо исторических формулировок
+пунктов11/15 про пять повторов; это не переписывает опубликованные ревизии,
+RuntimeRevision, прежние результаты или полномочия.
+
+Основной агент ведёт доставку и живой QA; параллельные субагенты занимаются UX
+и адресными проверками в пределах доступных слотов. Текущий dogfooding
+ограничен одним TOTAL циклом комплексного ревью: всего один цикл, а не
+первоначальное ревью плюс один повтор. Автоматических повторных reviews нет.
+Оставшиеся замечания и непроверенный новый SHA сохраняются в отчёте, не
+становятся PASS; final readiness без доказательств не объявляется.
+Единственный финальный Human Gate остаётся у владельца.
+
+### Текущий checklist пунктов11/15
+
+- [x] Штатным подтверждаемым планом обновить и опубликовать Workflow с одним
+      общим циклом комплексного ревью. По свежему native readback основного
+      агента: Apply29 → Validate30 → Publish31; GET200, state PUBLISHED,
+      version31/revision10, `revisionRef=publishedRevisionRef`:
+      `wfv_vScbhwkQDZRqJrmWlsOuu7tQ`. Steps: step001 INTAKE →
+      step002 ARCHITECT → step003 DEVELOPER →
+      step040 SINGLE_COMPREHENSIVE_REVIEW → new004 FINAL_MANAGER;
+      только финальный Human Gate, validation=[], launchReadiness READY,
+      allowedToSubmit=true. План `pln_saEpsgV-Zlp3QGJGzuh7O8-F`:
+      revision1/version3 APPLIED, content digest
+      `0a68daa44468174aae089bc5fcb6199b5851a1b90554abcfda07b24f8949b11f`.
+      Это PASS публикации/конфигурации, не завершения нового живого процесса.
+- [ ] Подтвердить actual immutable execution snapshot нового обычного
+      Architect и прохождение полного процесса. Новый запуск отправлен;
+      результата ещё нет, actual проверка NOT RUN.
+- [ ] Один независимый комплексный рецензент проверяет фактический diff на
+      точном SHA: архитектуру, безопасность, документацию и лексику;
+      затем продуктовая приёмка Manager. Замечания/непроверенные изменения
+      отражаются в final-readiness.md и отчёте раздела64, не объявляются
+      принятыми. READY_FOR_HUMAN_REVIEW и финальный owner gate не подтверждены.
+
+### Дополнение к пункту14: поддерживаемые кредиты провайдера
+
+- [ ] Проверить исчерпанное недельное включённое использование при доступных
+      кредитах: оно само по себе не блокирует запуск, если провайдер разрешает
+      продолжение за кредиты. Поддерживаемые сведения провайдера о кредитах
+      учитывать отдельно от окон лимитов; неизвестный баланс не считать
+      нулевым. Не подменять кредиты локальным лимитом параллельных исполнений.
+      Реальные отказы провайдера, ограничения workspace и отсутствие
+      авторизации сохраняются. Баланс из сообщения владельца не является
+      проверенным upstream snapshot. Реальный credit-кейс NOT RUN;
+      отсутствие найденного production gate не доказывает upstream допуск.
+
+Новые результаты дописываются отдельным checkpoint; этот checkpoint и его
+checkbox после фиксации не переписываются. PASS journal verifier означает
+только сохранность текста/структуры, не review, approval или живой QA.
+
+## Checkpoint 10.10.2026 07:17 UTC — собственный snapshot обычного Architect PASS
+
+- [x] Подтвердить actual provider-version обычного Architect: native run
+      run_cBOwBzljAZCShq9cU3B3DveK, SUCCEEDED; один собственный
+      get_execution_snapshot {}, completed tool и ответ OBSERVED/0.160.0/
+      INITIALIZE_USER_AGENT. GET events200/event12 и live transcript совпали.
+      Screenshot просмотрен, Console0/overflowfalse. Helper/host проверка
+      не подменяла этот run. Полный процесс и его ревью остаются открытыми.
+- [ ] Проверить задержку показа transcript после terminal: при первом
+      открытии был только служебный prefix, далее commentary/tool/answer
+      появились без повторного запуска. Потеря истории не подтверждена.
+- [ ] Завершить новый один LAUNCH_WORKFLOW plan, подготовленный по обычному
+      описанию прежней задачи сводки лимитов, затем Validate/Apply и реальную
+      командную реализацию. Уточнение о weekly exhaustion + available credits
+      передано помощнику в inputs; upstream credits/spending текущего аккаунта
+      остаются UNKNOWN, не inferred из сообщения владельца.
+
+Read-only source dce2: локальная weekly/credits admission блокировка не найдена.
+Текущий provider admission проверяет lifecycle/credential/model/actor и local
+concurrency, account/rateLimits/read не вызывается. Реальный upstream
+usageLimitExceeded остаётся PROVIDER_RATE_LIMITED, не reauthorization.
+Supported credits и included окна разделяются; units/лимиты не выдумываются.
+OpenAI Docs pricing и app-server auth/rateLimits проверены; latest main schema
+не выдаётся за доказательство exact pinned0.160.0. Поддерживаемые earned
+rate-limit reset credits не являются purchased balance и не consume автоматически.
+
+FAIL immutable journal baseline dce2 устранён восстановлением exact prefix96fc
+и append-only07:12; все original archive/rolling pins и прежний tail сохранены.
+ROOT canonical verifier against96fc PASS PREVIOUS_SNAPSHOT_PREFIX_CHECKED.
+
+## Checkpoint 10.10.2026 07:30 UTC — credit-кейс передан реальной команде, компактная публикация
+
+- [x] Native поиск прежней задачи обычным текстом дал открытую Issue1796 без
+      требования внутренних ID от пользователя. Один LAUNCH_RUN plan
+      pln_gv0dhZOjQhZWi5vBWrsSorNb revision1: Validate version2 VALID,
+      application200/version3 APPLIED. Четыре inputs сохранены, mandatory
+      weekly exhausted + available paid credits явно передан всем этапам.
+      Создан один root run_dnIpb8RAPnlR2TBwNRNU3cbj в07:26:37 UTC,
+      target SOFTWARE_CHANGE version31. Native card Open/Stop, GET run/graph200,
+      RUNNING/incidents[], первый INTAKE завершён и отдельный Manager child
+      run_CCg9GU57RiEldKt6ztrzY5xl RUNNING. Это запуск, не бизнес-приёмка.
+- [x] Компактный PublicationImpactSelection: два source файла на dce2+
+      exact Vue5a9e74d2d0978258b3cf4bca85a724006032ba9732a2841b0b853ea1d38f9aa4
+      и testf22beccf653cb5fb9602284c043c8ce59e78848326aedf0e5d20c57df501da48.
+      Bounded280px list, desktop32/mobile44 action, sticky footer, отдельный
+      identity flex и no-shrink status badge. Selection/paging/OCC/authority
+      не менялись. ROOT36unit/4suites1.87s, scopedlint/format, forcedtypecheck
+      и Vite2791modules8.62s PASS; build warnings сохранены.
+      Изолированный Chromium8/8 geometry и8/8 mixed outcomes PASS: desktop
+      и mobile390,5/25items, short/long names, Console/Network failures0,
+      mutations0. ROOT просмотрел normal desktop и long mobile PNG;
+      коротких строк5, исключительно длинных mobile1 полная с прокруткой.
+      Native публикация после layout ещё NOT RUN, не Full QA.
+- [ ] Полный новый процесс1796, Developer business PR, одно независимое
+      комплексное review и продуктовая приёмка Manager с final owner gate.
+- [ ] Проверка платёжного допуска текущего аккаунта и сводки credits: пока
+      UNKNOWN/NOT RUN, баланс из сообщения владельца не является snapshot.
+
+Chrome5: Validate/application200 и Console0 в plan modal; actual Run graph
+screenshot просмотрен, document overflowfalse, события продвигаются.
+Поздняя Console404 относится к ошибочному диагностическому ROOT GET
+несуществующего project-scoped списка runs, не запросу приложения;
+корректный GET /api/v1/runs/{ref} и graph вернул200. Limited backend logs
+CP/RC/gateway за10мин вернули0строк; подыReady. Отсутствие ошибок не является
+доказательством успешного процесса. Исторический prefix/archive неизменны;
+previous96fc verifier повторяется перед фиксацией. PR не слиты.

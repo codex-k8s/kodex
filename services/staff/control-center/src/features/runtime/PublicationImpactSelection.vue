@@ -190,9 +190,24 @@ useCursorInfiniteScroll({
     :aria-label="$t('publicationImpact.title')"
     :aria-busy="loading || busy"
   >
-    <p>{{ $t("publicationImpact.explanation") }}</p>
-    <p>{{ $t("publicationImpact.snapshotTotal", { count: plan.total }) }}</p>
-    <label>
+    <p class="publication-impact__explanation">
+      {{ $t("publicationImpact.explanation") }}
+    </p>
+    <div class="publication-impact__summary">
+      <span>{{
+        $t("publicationImpact.snapshotTotal", { count: plan.total })
+      }}</span>
+      <span v-if="page">
+        {{
+          $t("publicationImpact.visibleTotal", {
+            loaded: page.items.length,
+            total: page.total,
+          })
+        }}
+      </span>
+      <StatusBadge v-if="page" :state="page.plan.state" />
+    </div>
+    <label class="publication-impact__search">
       {{ $t("common.search") }}
       <input
         v-model="query"
@@ -205,16 +220,12 @@ useCursorInfiniteScroll({
     <ProblemNotice v-if="problem" :problem="problem" @retry="load()" />
     <p v-if="loading" role="status">{{ $t("common.loading") }}</p>
     <template v-if="page">
-      <p>
-        {{
-          $t("publicationImpact.visibleTotal", {
-            loaded: page.items.length,
-            total: page.total,
-          })
-        }}
-      </p>
-      <StatusBadge :state="page.plan.state" />
-      <div ref="itemList" class="publication-impact__items">
+      <div
+        ref="itemList"
+        class="publication-impact__items"
+        tabindex="0"
+        :aria-label="$t('publicationImpact.title')"
+      >
         <label
           v-for="(item, index) in page.items"
           :key="item.ref"
@@ -229,7 +240,7 @@ useCursorInfiniteScroll({
             :aria-label="consumerNames?.[item.consumerRef] || item.consumerRef"
             @change="toggle(item.ref)"
           />
-          <span
+          <span class="publication-impact__identity"
             ><span :class="{ mono: !consumerNames?.[item.consumerRef] }">{{
               consumerNames?.[item.consumerRef] || item.consumerRef
             }}</span
@@ -257,44 +268,103 @@ useCursorInfiniteScroll({
       >
         {{ $t("publicationImpact.expired") }}
       </p>
-      <button
+      <footer
         v-if="page.plan.state === 'PREPARED'"
-        type="button"
-        class="button button--primary"
-        :disabled="!editable"
-        @click="publish"
+        class="publication-impact__actions"
       >
-        {{ $t("publicationImpact.publish", { count: selected.size }) }}
-      </button>
+        <button
+          type="button"
+          class="button button--primary"
+          :disabled="!editable"
+          @click="publish"
+        >
+          {{ $t("publicationImpact.publish", { count: selected.size }) }}
+        </button>
+      </footer>
     </template>
   </section>
 </template>
 <style scoped>
 .publication-impact {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
+.publication-impact p {
+  margin: 0;
+}
+.publication-impact__explanation,
+.publication-impact__summary {
+  font-size: 13px;
+  line-height: 1.4;
+}
+.publication-impact__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.publication-impact__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.publication-impact__search input {
+  flex: 1 1 auto;
+  width: 0;
+  min-width: 0;
+  height: 32px;
+  min-height: 32px;
+}
 .publication-impact__items {
-  max-height: min(420px, 50dvh);
+  max-height: min(280px, 40dvh);
   overflow: auto;
+  overscroll-behavior: contain;
 }
 .publication-impact__item {
   display: flex;
+  box-sizing: border-box;
   align-items: center;
-  gap: 12px;
-  min-height: 64px;
-  padding: 8px;
+  gap: 8px;
+  min-height: 56px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  line-height: 20px;
 }
-.publication-impact__item > span {
+.publication-impact__identity {
+  flex: 1 1 auto;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 .publication-impact__item input {
   flex: 0 0 auto;
 }
+.publication-impact__item > .status-badge {
+  flex: 0 0 auto;
+}
 .publication-impact__sentinel {
   min-height: 1px;
+}
+.publication-impact__actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.publication-impact__actions .button {
+  height: 32px;
+  min-height: 32px;
+}
+@media (max-width: 600px) {
+  .publication-impact__actions .button {
+    width: 100%;
+    height: 44px;
+    min-height: 44px;
+  }
 }
 </style>
