@@ -1954,6 +1954,43 @@ onBeforeUnmount(() => {
   .role-image-editor {
     padding-bottom: calc(144px + env(safe-area-inset-bottom));
   }
+  .image-summary {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+  }
+  .image-summary__identity {
+    width: 100%;
+    align-items: flex-start;
+  }
+  .image-summary__identity > div {
+    flex: 1;
+    min-width: 0;
+  }
+  .image-summary > .status-badge {
+    grid-column: 1 / -1;
+    box-sizing: border-box;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .image-summary__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
+    min-width: 0;
+  }
+  .image-summary__actions > .button {
+    min-width: 0;
+    max-width: 100%;
+    min-height: 44px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+  .image-summary__actions > .button > svg {
+    flex: 0 0 auto;
+  }
   .lifecycle-step {
     grid-template-columns: 28px minmax(0, 1fr);
     padding-inline-end: 76px;

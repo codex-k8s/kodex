@@ -890,3 +890,34 @@ requestfailed0. Screenshot редактора1440/390 и transcript просмо
 в новом browser screenshot FAILED continuation сохранён и просмотрен.
 Reload draft0 выполнен00:45UTC. Chrome766 timeout300s, новый Chrome787 pending,
 доступ через MCP не доказан. Checkbox не изменены; полный65QA остаётся OPEN.
+
+## Checkpoint 10.10.2026 01:12 UTC — runner delivery и мобильная шапка
+
+База1e25680b: canonical full runner/import двух узлов/fresh render и
+quiesce/apply/readback supply-chain PASS. Base16ae7710…bf0a и
+policy89b6d7d7…e98c согласованы с catalog/CP/RC/builder/BuildKit; contract
+прежний3/b48e9234…586ab1. RC после rollout ELF EQUAL independent build
+9e4b9922…350130. Обе ноды Ready,21 desired Deployment kodex-system готовы;
+исторические failed Pod/Job не объявлены исправленными этим readback.
+
+Одна native helper recipe revision v8/gen4, build imgbld_mnz2eIqcpt0wUFpN4VXeUgrb
+COMPLETED100; artifact imgart_Uct6pAxzkkJSbthS4FuN1bzC/digest6e82f825…175d00.
+Admission REJECTED: READY report4640matches, blocking2 HIGH/fixable,
+undici6.27.0 GHSA-rfgv-xxqx-mfg5→6.28.1,
+tar7.5.19 GHSA-r292-9mhp-454m→7.5.21. Native owner ACCEPT_RISK сохранён
+с обязательным exact dev-обоснованием; decision imgrisk_f3OxPU__AkKBiylD6FTgXji-,
+repeat admission2 CLAIMED. Подпись, provenance/runtime и network guards прежние.
+Это временное решение для конкретного digest/report, не исправление пакетов.
+ACCEPTED/PROMOTED/new helper ENV/writer proof/native continuation ещё NOT RUN.
+Прежний THREAD_READ/NONE UNKNOWN; не запускать AI до точной доставки writer.
+
+ROOT принял frozen mobile header packet двух файлов на той же базе.
+Отделены имя/роль и длинный статус; две колонки action buttons44px.
+ROOT72unit/3suites, scoped lint/format, forced typecheck/build/diff-check PASS.
+Существующие chunk/plugin warnings сохранены. Native screenshots1440/390
+просмотрены: mobile viewport/scrollWidth390, identity336/name280;
+host/ReadyPod source EQUALacdfc0fa…002d5. Console новых errors0 после
+initial3 bootstrap/session401; warnings/pageerrors0. Aborted HMR/reload reads
+сохранены; последующий vulnerability report GET200. Browser68037 OWNER,
+прежний own65906 закрыт; чужие окна не затронуты. Chrome859 timeout,
+Chrome870 pending; MCP связь не подтверждена. Checkbox не изменены.

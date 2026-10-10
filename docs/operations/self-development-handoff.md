@@ -10,6 +10,41 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 01:12 UTC — доставка диагностики и мобильная шапка
+
+Опубликованная база1e25680b, Draft1807/Issue1797. Canonical full runner build,
+обе node imports, fresh render, supply-chain quiesce/apply/readback PASS.
+Новый base16ae7710…bf0a, policy89b6d7d7…e98c; contract прежний3/b48e9234…586ab1.
+RC serving ELF после rollout EQUAL independent build9e4b9922…350130.
+Обе ноды Ready; все21 desired Deployment в kodex-system готовы. Старые failed
+Pod/Job не скрывать: readiness текущих реплик не равна отсутствию исторических ошибок.
+
+Native helper recipe v8/gen4, один build imgbld_mnz2eIqcpt0wUFpN4VXeUgrb
+COMPLETED100; новый artifact imgart_Uct6pAxzkkJSbthS4FuN1bzC,
+digest6e82f825…175d00. Admission REJECTED связан с двумя HIGH/fixable:
+undici6.27.0→6.28.1 и tar7.5.19→7.5.21. Полный report READY;
+в native owner UI сохранено exact временное dev-обоснование ACCEPT_RISK,
+decision imgrisk_f3OxPU__AkKBiylD6FTgXji-, repeat admission2 CLAIMED.
+Не считать ACCEPTED/PROMOTED до фактического readback. ENV и binding ещё старые,
+их preservation baseline сохранён перед изменением. Следом штатная публикация
+только helper образа/ENV, сравнение38tools/configuration/policy/secret bindings,
+exact writer proof, затем один practical continuation. Не повторять сборку.
+Исправленные две зависимости остаются задачей новой ревизии; risk exception
+не означает устранение уязвимостей или production acceptance.
+
+Мобильная шапка RoleImageEditor: identity/status отдельными строками,
+кнопки две колонки44px. ROOT72unit/3suites, scoped lint/format, forced
+typecheck/build и diff-check PASS; существующие chunk/plugin warnings сохранены.
+Native1440/390 screenshots просмотрены, mobile scrollWidth390/viewport390,
+identity336/name280; host/ReadyPod source EQUALacdfc0fa…002d5.
+Это рабочее дерево1e25680b+двухфайловый frontend patch, не новая runner ревизия.
+
+Own browser68037 OWNER активен; own65906 закрыт, чужие вкладки не трогались.
+Console initial3 — bootstrap/session401 до SSO, новых errors/warnings/pageerrors0.
+Три aborted reads связаны с reload/HMR; vulnerability report последующий GET200.
+Chrome859/870 timeout300s; новый Chrome895 pending, MCP доступ не подтверждён.
+Полный65QA/п11/14/15/16 и business Workflow остаются OPEN.
+
 ## Checkpoint 10.10.2026 00:49 UTC — закрытые причины отказа resume
 
 ROOT basefe023882, Draft1807/Issue1797; принят frozen пакет7source/test файлов.
