@@ -1163,3 +1163,41 @@ Addressed pure prompt tests44 top-level/194withsubtests PASS на48;
 initial mixed toolchain FAIL до tests, pinned1.26.6 repeat PASS. PG/live
 inheritance в этом repeat NOT RUN, modelbehavior этим не доказано.
 Business1796/provider/Full65 OPEN; новых управляющих USER_MESSAGE0.
+
+## Checkpoint 10.10.2026 18:31 UTC — input отказ локализован, mobile проверен
+
+Remote/Draft1807 exactcb494a3c PASS; initial push readback UNKNOWN,
+readback-only подтвердил новый head. Owner idle18:27:43.490529Z all5counters0,
+artifacts58/pins прежние, rawSHA07dc2f3ffe09cbc347b37bad235fd2f9b79ce9c6f16daaadf4fd423a3bac04c3.
+HOTFF18:27:43.712Z PASS. RC newPID1075/start9775094/ELF4b5809794d064daf2a4c68d800992a04f91b84285e5116d852a22b1e17a66e25,
+source3hashes equal и runtimeEnvelopeReason actual ELF symbol PRESENT.
+health/ready204 и AIRBUILD/RUN PASS; полный SourceDAG UNKNOWN.
+
+Loaded Chrome390/320 geometry: graph toolbar74px, summary6px gap,
+все8 context/graph touch buttons44px, no horizontaloverflow; screenshots
+просмотрены, Console0/API200. Narrow panel overlap PASS. Это не full graph UX
+acceptance: сохранённый manual viewport и HUD ещё могут заслонять узлы.
+Desktop текущий toolbar неизменен. Original user task не менялась.
+
+Native Retry4 создал run_arg-4blKSDgVUZUhIRc82WzA и FAILEDseq10/childrenCANCELLED
+до provider. ActualRC18:28:56.098Z closed reasonENVELOPE_SESSION_USER_CONTENT.
+Native currentrrev_WkXCpDIykh-85KsWuzwpw-b1/v1/digestaddcdff…/changes[] GET200.
+Source raw USER history проверяется штатным ValidAssistantTurnContent до
+append. Continuation producer единственным следующим append создаёт materialized
+USER notice с64KiB bytesbudget, raw USER guard имеет32768codepoint limit.
+Actual notice bytes/codepoints/digest association ещё UNKNOWN до bounded
+metadata proof; содержимое не выводится, history/inputs не переписываются.
+Blanket skip cold continuation/ослабление USER guard не выполняется.
+UI unsupported-profile safe label misleading для этого input отказа;
+проверяется существующий error registry, новый arbitrary code не вводится.
+Business1796/реальный provider/Full65 OPEN, управляющих USER_MESSAGE0.
+
+## Checkpoint 10.10.2026 18:42 UTC — read-only proof подготовлен
+
+Восемь exact pins ограничивают исторический metadata-read RuntimeRevision;
+полные content/history/snapshot/secret descriptors не выводятся. Пять Node
+tests PASS116ms, actual PostgreSQL read до публикации NOT RUN. RC public code
+и summary теперь RUNTIME_INPUT_INVALID для RUNTIME_REVISION_INVALID; остальные
+safe classifications и immutable lifecycle pins сохраняются. Go1.26.6 app
+PASS0.210s. Live label и устранение причины NOT RUN, Business1796/Full65 OPEN.
+Текст исходной задачи не меняется; корректирующие USER_MESSAGE0.

@@ -483,7 +483,11 @@ func (runtime *runtime) completeFailure(base context.Context, input runtimecontr
 	if input.ExecutionDeadline != nil && code == "RUNTIME_TIMEOUT" {
 		safeCode = code
 	}
-	request := &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableIdempotency(input.LeaseRef, "failure:"+code)}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: false, ResultSummary: "i18n:" + code, SafeErrorCode: safeCode}
+	summary := "i18n:" + code
+	if code == "RUNTIME_REVISION_INVALID" {
+		summary = "i18n:" + safeCode
+	}
+	request := &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableIdempotency(input.LeaseRef, "failure:"+code)}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: false, ResultSummary: summary, SafeErrorCode: safeCode}
 	var err error
 	for attempt := 0; attempt < failureCompletionMaximumTries; attempt++ {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(base), runtime.config.RequestTimeout)
@@ -551,7 +555,10 @@ func stableIdempotency(left, right string) string {
 }
 
 func safeRuntimeErrorCode(code string) string {
-	if code == "RUNTIME_REVISION_INVALID" || code == "RUNTIME_CONFIGURATION_STALE" {
+	if code == "RUNTIME_REVISION_INVALID" {
+		return "RUNTIME_INPUT_INVALID"
+	}
+	if code == "RUNTIME_CONFIGURATION_STALE" {
 		return "RUNTIME_PROFILE_UNSUPPORTED"
 	}
 	return "RUNTIME_UNAVAILABLE"

@@ -10,6 +10,40 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 18:42 UTC — безопасная диагностика и классификация
+
+Добавлена точная READ ONLY metadata-диагностика continuation по восьми pins:
+без текста сообщения, истории, snapshot и секретных descriptors. Пять Node
+tests PASS116ms; PostgreSQL/native proof до публикации NOT RUN.
+RC теперь отличает RUNTIME_INPUT_INVALID от unsupported profile; внутренние
+lease/fence/generation/idempotency, cleanup и durable terminal не изменены.
+Go1.26.6 runtime-controller app PASS0.210s; live label пока NOT RUN.
+Это диагностика и корректная классификация, не устранение input root cause.
+Исходная задача и Workflow40/revision13 с одним ревью не меняются.
+Новых USER_MESSAGE0; реальный provider и Business1796/Full65 OPEN.
+
+## Checkpoint 10.10.2026 18:31 UTC — USER continuation guard подтверждён
+
+Exactcb494a3c remote/Draft1807 и hot FF18:27:43.712Z PASS после fresh idle.
+Новый RC PID1075/ELF4b580979… и exact runtimeEnvelopeReason symbol доказаны,
+source3 hashes совпали, health/ready204. SourceDAG остаётся UNKNOWN.
+Mobile390/320 screenshots просмотрены: graph toolbar74px, summary отступ6px,
+touch buttons44px, nooverflow, Console0; desktop сохраняется. Это PASS узкого
+panel-overlap scope, не полного удобства графа при всех сохранённых viewport.
+
+Штатный original-task Retry attempt4 run_arg-4blKSDgVUZUhIRc82WzA FAILED/seq10;
+actual18:28:56Z stage=validation, reason=ENVELOPE_SESSION_USER_CONTENT до provider.
+Current rrev_WkXCpDIykh-85KsWuzwpw-b1/v1/digestaddcdff…/changes[] подтверждена
+ownerGET200. Raw session USER история до producer append проверяется тем же
+validator; continuation producer добавляет materialized notice как USER
+с bytes64KiB guard, а raw USER validator ограничивает32768codepoints.
+Размер и происхождение actual final message пока UNKNOWN: готовится только
+bounded metadata readback, содержимое/credentials не выдаются. Blanket skip
+cold continuation и ослабление USER guard не выполняются. Никаких новых
+управляющих USER_MESSAGE; исправление предназначено для общего механизма.
+Business1796/provider/Full65 OPEN. UI unsupported-profile label не соответствует
+этой причине и подлежит адресной проверке по существующему safe error registry.
+
 ## Checkpoint 10.10.2026 18:26 UTC — точная диагностика и touch layout
 
 Exact48ffc82 remote/Draft1807 PASS; fresh owner idle18:21:37Z и clean

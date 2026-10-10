@@ -207,6 +207,45 @@ func TestTrackRetriesFailureCompletionBeforeCleanup(t *testing.T) {
 	}
 }
 
+func TestCompleteFailureDistinguishesInvalidInputFromUnsupportedProfile(t *testing.T) {
+	tests := []struct {
+		code, safeCode, summary string
+	}{
+		{"RUNTIME_REVISION_INVALID", "RUNTIME_INPUT_INVALID", "i18n:RUNTIME_INPUT_INVALID"},
+		{"RUNTIME_CONFIGURATION_STALE", "RUNTIME_PROFILE_UNSUPPORTED", "i18n:RUNTIME_CONFIGURATION_STALE"},
+		{"UNKNOWN_PRIVATE_DIAGNOSTIC", "RUNTIME_UNAVAILABLE", "i18n:UNKNOWN_PRIVATE_DIAGNOSTIC"},
+	}
+	for _, test := range tests {
+		t.Run(test.code, func(t *testing.T) {
+			input := runtimeTrackingInput()
+			coordinator := callback.NewCoordinator()
+			done := coordinator.Register(input)
+			client := &runtimeWorkClientStub{}
+			turns := &turnLifecycleStub{}
+			runtime := trackingRuntime(client, turns, coordinator)
+			runtime.completeFailure(t.Context(), input, test.code, "")
+			if len(client.requests) != 1 {
+				t.Fatal("failure completion cardinality changed")
+			}
+			request := client.requests[0]
+			if request.SafeErrorCode != test.safeCode || request.ResultSummary != test.summary || request.Success {
+				t.Fatal("failure completion has an incorrect public classification")
+			}
+			if request.GetLeaseRef() != input.LeaseRef || request.GetFence() != input.LeaseFence || request.GetGeneration() != input.LeaseGeneration || request.GetMutation().GetIdempotencyKey() != stableIdempotency(input.LeaseRef, "failure:"+test.code) {
+				t.Fatal("failure completion changed its immutable binding")
+			}
+			if turns.deletions.Load() != 1 {
+				t.Fatal("failure cleanup cardinality changed")
+			}
+			select {
+			case <-done:
+			default:
+				t.Fatal("coordinator remains active after durable failure completion")
+			}
+		})
+	}
+}
+
 func TestCompleteFailureKeepsRuntimeUntilDurableCommit(t *testing.T) {
 	input := runtimeTrackingInput()
 	coordinator := callback.NewCoordinator()
