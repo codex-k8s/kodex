@@ -1252,3 +1252,41 @@ Read-only10:07:08–10:07:28: CP/RC Ready, прежние UID/restart0;
 Manager Pod943656f13c4dd12a Ready, desired и actual imageID staffba773/runner4af37
 совпадают. Ограниченные CP/RC logs после10:04 пусты; это не доказательство
 отсутствия любых ошибок. Full65 OPEN; goal не завершён по промежуточному PASS.
+
+## Checkpoint 10.10.2026 10:27 UTC — semantic STOP и независимый native QA
+
+Source/remote/Draft1807 ee7e5aea9573c97e6f247f1d4774e23ffebfe6e7, clean.
+Architect run_WRQeDOE_Yov8LusVxPPF42Af завершён10:15:48: technical SUCCEEDED,
+semantic BLOCKED. Hosted Web official source0.160.0 Raw READ вернул
+Failed to fetch restricted URL. Точный rejecting слой UNKNOWN; parser
+webSearch COMPLETED не доказывает успешный fetch. Architecture artifact
+art_Fh7Sj4RHFEng4z5Dxcu-pQqD/rev_arv_6b6ab416b1f74ade8f2b7b41b2412891,
+28351B/SHA256d861b5bfd8497c62f3b4c3666d2d8f596d32d59e92c8c22ca64a8df8b3ca1a74:
+owner DOWNLOAD200/hash совпал. ROOT не подменял бизнес-анализ и полный native
+EOF Architect/Coordinator. Developer/Reviewer не допущены, business PR NOT RUN.
+Финальный Manager run_VdCIYikjgoKfXJrd3UoxJPTz QUEUED10:24, rootseq311;
+ожидание диагностируется, prerequisites/authority не ослабляются.
+
+SYSTEM image dropdown desktop/mobile390x844 проверен native без изменения
+настроек: trigger32px, generation17/shortref, точный digest в tooltip,
+screenshot просмотрен, overflowfalse, Console без errors, API200.
+Файл art_i2rouMdoEPydz_Izt-NMuQDs: обе версии скачаны owner DOWNLOAD200;
+v2/arv_6d5a8ae1358d429aa4382d897dc9c7b7 —4920B/79ac3b56…8fe85,
+v1/arv_d688b6cf98e444a69709ea5b5417657b —4234B/dc0e4965…24e.
+Preview/версии native screenshot PASS, Console0/overflowfalse. Первый mobile
+кадр во время reload был transient blank, проверен только загруженный экран.
+
+Natural no-ID запрос нашёл current root1796: cnv_C-gG_HYdbL89sGuDVtL-kYpN,
+run_iNkh7DOTCGHozed8snT9PeLy SUCCEEDED10:13:59,5tools/seq18, корректный
+STOP/remaining ответ, без mutations/повторного запуска. Reload/open10:25
+сохранил переписку. Helper исполнялся параллельно Architect; не stress10.
+Повторная modal demand проверка: cursor223/prefix220→228/228 без reload.
+Native неоднозначность/чужой scope и полный Workflow остаются NOT RUN/OPEN.
+
+OpenAI Docs app-server fetched: generate-json-schema даёт exact-version
+контракт установленного бинаря; Context7 /openai/codex main не pin0.160.0.
+Новый helper native read-only исследует доступные source/schema и tools,
+без команд/изменения grants/allowlist/Workflow. Текущий STOP не обходится;
+разрешённая альтернатива ещё не доказана. Paid-credit acceptance сохранён;
+balance/units/spending UNKNOWN, реальный usageLimitExceeded не игнорируется.
+Full65, один comprehensive Review, Manager acceptance и final owner gate OPEN.

@@ -10,6 +10,35 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 10:27 UTC — Architect BLOCKED, независимые UI-проверки PASS
+
+Чистый опубликованный source/remote/Draft1807 —
+ee7e5aea9573c97e6f247f1d4774e23ffebfe6e7. Run_jubCanGbxCXIbi_0U0ZJG94O
+по-прежнему RUNNING, но Architect childrun_WRQeDOE_Yov8LusVxPPF42Af завершён
+10:15:48 technical SUCCEEDED/semantic BLOCKED: hosted Web получил
+Failed to fetch restricted URL при чтении official source0.160.0.
+Точный слой отказа UNKNOWN; это не доказанный quota/credits/network отказ.
+Architecture artifact28351B/d861b5bf…ca1a74 проверен owner DOWNLOAD200/hash.
+Developer/Reviewer NOT RUN. Coordinator native прочитал результаты до EOF и
+делегировал финальный BLOCKED-отчёт Manager run_VdCIYikjgoKfXJrd3UoxJPTz;
+10:24 граф показывает QUEUED, rootseq311. Причина ожидания исследуется,
+не обходить prerequisites и не выдавать технический успех за приёмку.
+
+Native SYSTEM image dropdown desktop/mobile390: trigger32px, читаемые
+generation/ref, screenshot/overflowfalse/Console без errors/API200 PASS.
+Версии файла art_i2rouMdoEPydz_Izt-NMuQDs: v2/4920B/hash79ac3b56…8fe85,
+v1/4234B/hashdc0e4965…24e, обе DOWNLOAD200; preview и версии видны.
+Natural helper запрос без ID нашёл именно текущую работу и сообщил о STOP:
+cnv_C-gG_HYdbL89sGuDVtL-kYpN/run_iNkh7DOTCGHozed8snT9PeLy SUCCEEDED,
+пять tools, без mutations. После reload/open история/ответ сохранились.
+Два реальных исполнения helper/Architect пересекались; это не стресс10чатов.
+
+Новый native read-only helper выясняет разрешённые exact-version source/schema
+варианты и inventory, ничего не запускает/не меняет. OpenAI Docs подтверждает
+offline version-specific generate-json-schema; latest Context7 main не pin0.160.
+Отказ Raw не обходить shell/Host и не расширять grants. Paid-credit критерий
+сохранён, balance/units/spending UNKNOWN. Full65/бизнес PR/Review/Human Gate OPEN.
+
 ## Checkpoint 10.10.2026 10:08 UTC — новый business работает, история догружается
 
 Опубликованный source/remote/Draft1807 —432a7367. Новый native root
