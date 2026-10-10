@@ -722,3 +722,27 @@ Chrome MCP613 pending, разрешённый own Playwright активен; ч�
 
 Architect source/effective-version semantic BLOCKED сохраняется. Developer не
 допущен, final business PR отсутствует, весь65QA не отмечен завершённым.
+
+## Checkpoint 10.10.2026 00:03 UTC — реальное подтверждение собственной файловой возможности
+
+ROOT SHA/remote/Draft1807 `b639c5efa8f757ac731fa11fc1a816854c122487`, main
+ab4992e0 неизменён. Native PROJECT conversation cnv_rDvs2Qpxsk029lqVzcMeI-4N,
+fresh self-plan run_3Fmpd3YeQrUiyw_8W6lzf6BL SUCCEEDED/sequence17; пять tools
+успешны. Запрос по смыслу, без entity ID. Помощник явно объяснил read/write/delete
+scope; plan pln_ybZYvv7erHvcs6bmtqnK6M7Z/revision1 содержит ровно одну
+CHANGE_CAPABILITY только собственного agt_Zcmv_7hgFoTKSWRoIsGR8LHk/version17,
+platform.artifact.manage false→true. Другие параметры/сотрудники не затронуты.
+
+Native owner Validate200 и Apply с receipt APPLIED/1операция, exact agent GET200
+version18 с единственной этой capability. До Apply capability=[]; предложение
+само права не выдало. Screenshots до/после просмотрены: readable compact form,
+следствия объяснены, details под катом. Длинное technical название операции
+остаётся UX улучшением, а прежняя read/create подпись capability неполна.
+
+Safe own reload00:02 UTC восстановила PROJECT и прежний chat/history; draft0.
+Console cumulative6 без новых ошибок в native plan/validation/apply/reload
+окне, warning/pageerror0. Исходная delta3 hot reload остаётся UNKNOWN.
+Backend CP/RC since5m: новых log lines0 — это не подтверждение всех backend paths.
+Следующий fresh native запрос чтения заметки целиком запущен; EOF/body/ambiguity
+и чужой scope ещё не выданы за PASS. Во время turn backend freeze.
+Chrome MCP613 timeout300s, повтор640 pending. Полный65QA OPEN.
