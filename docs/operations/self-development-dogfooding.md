@@ -1006,3 +1006,34 @@ Backend immutable revisions/stagingledger/readers и frontend history/receipt
 frontmatter: ACTIVE_BASELINE_MISMATCH. Baseline восстановлен без изменения
 архива; повтор с previous21340 PASS, 103670B, предыдущий checkpoint tail
 сохранён точным prefix. Это проверка целостности журнала, не live QA.
+
+## Checkpoint 10.10.2026 02:31 UTC — штатная активация и helper generation5
+
+ROOT9a7ab5fb, Draft1807/Issue1797, exact remote9a7 подтверждён. Fresh canonical
+provenance/render PASS; quiesce apply/readback и supply-chain apply/readback
+PASS. Старый completed promote Job удалён обычным TTL02:14:34; inventory/pins/
+idle/CAS guards не обходились. Serving RC ELF EQUAL9e4b9922…350130.
+Оба узла Ready, все33 Deployment/9 StatefulSet готовы, paused replicas0 нет.
+Archive claim RPC временно Unavailable во время maintenance; восстановился,
+за последние3мин новых claim failure нет. Это готовность стенда, не full QA.
+
+Из native UI сохранён helper FROM a39ef63e…4bcf4, recipe generation5/version10.
+Один build imgbld_CyqhKWMHMlkFZLFJimDNaOEI, attempt1/STAGING_PUSH80%.
+Новый report/admission/promotion ещё NOT RUN; старый risk exception не
+переносится. ENV resource14/current revision15/binding14 пока прежние.
+Fresh baseline configuration/policy/38tools/values/secrets/memory/skills
+hashes EQUAL; только будущий image pin предполагается менять после допуска.
+
+Own browser91439 OWNER, reload02:29; desktop1440 screenshots нового source и
+active build просмотрены. Relevant API200; после02:24 HTTP failures нет,
+warnings/pageerrors0. Cumulative Console29 — initial401, ROOTdiagnostic405 и
+maintenance503; не Console0. Chrome1100 timeout300s,1113 pending, MCP доступа
+не доказано. Чужие вкладки не закрывались.
+
+ROOT precheck остановил случайную isolated backend правку до остановки
+сервисов. Parent-owned diff сохранён отдельно, точные before/after hashes
+проверены, ROOT восстановлен без удаления пользовательских изменений.
+Backend compile PASS, full immutable revisions/staging packet NOT READY;
+frontend39file packet ещё не принят. История scanState сохраняет все5 canonical
+значений, выдача bytes/materialization остаётся CLEAN-only. Полный65QA,
+practical file update и business Workflow OPEN; checkbox не изменены.

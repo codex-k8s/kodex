@@ -10,6 +10,39 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 02:31 UTC — контроллеры восстановлены, новый helper образ строится
+
+ROOT9a7ab5fb, ветка kodex-agent/issue-1797-full21-v7, Draft1807/Issue1797;
+remote exact9a7 подтверждён. Fresh9a7 provenance и render PASS, canonical
+quiesce apply/readback и supply-chain apply/readback PASS. Завершённый старый
+promote Job удалён штатным TTL02:14:34; ручного удаления либо обхода guards нет.
+RC serving ELF EQUAL9e4b9922…350130. Оба узла Ready; все33 Deployment и9
+StatefulSet готовы, replicas0 отсутствуют. Session archive временно терял
+рабочий owner RPC с Unavailable при maintenance; готовность восстановилась,
+за последние3мин новых claim failures нет.
+
+Own native UI создал helper recipe generation5, version10 с новым exact
+FROM a39ef63e…4bcf4. Один build imgbld_CyqhKWMHMlkFZLFJimDNaOEI,
+attempt1, STAGING_PUSH80%. Новый admission/report/promotion ещё NOT RUN;
+не запрашивать повторную сборку. Исторический risk exception не переносится.
+ENV resource14/current revision15 и binding14 пока прежние. Fresh runtime
+configuration, policy,38tools, values, secret descriptors, memory и skills
+EQUAL сохранённым baseline hashes; image binding ещё не менялся.
+
+Own browser91439 OWNER, reload02:29; desktop1440 new source/build screenshots
+просмотрены, layout без видимого overlap. Relevant API200, после02:24 новых
+HTTP failures нет, warnings/pageerrors0. Cumulative Console29 включает
+предшествующие401/diagnostic405 и maintenance503, не объявляется Console0.
+Chrome1100 timeout300s,1113 pending; доступ MCP ещё не подтверждён.
+
+Случайная правка ROOT из isolated backend остановила precheck до quiesce.
+Точный parent-owned diff сохранён, ROOT восстановлен по проверенным before/
+after hashes; пользовательские изменения не удалялись. Backend продолжает
+immutable revisions/staging в отдельном worktree; compile PASS не full QA.
+Frontend39file packet ещё не принят; scanState metadata должен поддерживать
+все5 canonical состояний, download/materialization только CLEAN. Полный65QA,
+practical file update и business Workflow OPEN, checkbox не изменены.
+
 ## Checkpoint 10.10.2026 01:57 UTC — образ проверен, preflight остановки исправлен
 
 База21340ccc, Draft1807/Issue1797. Canonical full runner build/import обеих
