@@ -344,6 +344,13 @@ func providerFailureDetails(stage providerExecutionStage, err error) (runtimecon
 	notification := "NONE"
 	notificationError := "NONE"
 	accountRead := "NONE"
+	var resumeFailure *resumeSourceFailure
+	if stage == providerStageThreadRead && providerSafeFailureClass(err) == "PROVIDER" && errors.As(err, &resumeFailure) {
+		switch resumeFailure.detail {
+		case "RESUME_SOURCE_SCHEMA", "RESUME_SOURCE_ID", "RESUME_SOURCE_LOCATOR", "RESUME_SOURCE_OPEN", "RESUME_SOURCE_METADATA", "RESUME_SOURCE_IDENTITY":
+			detail = resumeFailure.detail
+		}
+	}
 	var failure *appServerCallFailure
 	if errors.As(err, &failure) {
 		switch failure.detail {

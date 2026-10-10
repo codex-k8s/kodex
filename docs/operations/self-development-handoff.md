@@ -10,6 +10,32 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 00:49 UTC — закрытые причины отказа resume
+
+ROOT basefe023882, Draft1807/Issue1797; принят frozen пакет7source/test файлов.
+Локальные причины RESUME_SOURCE_SCHEMA/ID/LOCATOR/OPEN/METADATA/IDENTITY
+передаются только для REQUEST_FAILURE/THREAD_READ/PROVIDER с прежним exact
+execution binding. Прежние rejecting guards, mode/UID/GID/path/inode, grants,
+owner completion и cleanup не ослаблены. Причина исходного live failure
+run_aaeb2eVPABFe8dVsML6UXZj0 остаётся UNKNOWN: instrumentation не functional fix.
+
+ROOT runtimecontract unit/race, весь agent-runner unit, codex race20.954s,
+RC callback unit, scoped vet и77Python tests PASS; diff-check PASS.
+Serving RC ELF и независимая trimpath/buildvcs=false сборка EQUAL
+9e4b99227239120130177f790d5a752ff470f1ac2b2873d5c77746cf3d350130;
+host/Pod consumer source EQUAL8c0fad1e…948e7. Reader уже обновлён.
+Новый runner/custom producer ещё NOT RUN. Сначала подтвердить обновлённый
+RC consumer, затем canonical full runner/build/import/seed/fresh render/
+activation и только необходимые custom image revisions. Не запускать native
+повтор до exact reader/writer proof; старые readers отклоняют новый enum.
+
+Own Playwright65906 авторизован, чужие вкладки не трогались; прежний own38659
+закрыт. Fresh Console3 соответствуют initial bootstrap/session401 до SSO;
+после входа появился ещё один artifact resource error, исходный HTTP status
+не захвачен, последующие exact artifact GET200. Не объявлять Console0.
+Reload draft0 выполнен00:45UTC. Chrome766 timeout300s, Chrome787 pending;
+MCP подключение не подтверждено. Полный65QA/п11/14/15/16 и Workflow OPEN.
+
 ## Checkpoint 10.10.2026 00:36 UTC — Editor UX и сбой возобновления
 
 ROOT base521c8a4a, branch kodex-agent/issue-1797-full21-v7, Draft1807/Issue1797;

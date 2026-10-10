@@ -89,3 +89,32 @@ func TestProviderDiagnosticTerminalAndCrossFieldGuards(t *testing.T) {
 		}
 	}
 }
+
+func TestProviderDiagnosticResumeSourceClosedReasons(t *testing.T) {
+	input, base := diagnosticFixture()
+	base.Stage, base.Detail, base.Notification, base.NotificationError = "THREAD_READ", "NONE", "NONE", "NONE"
+	for _, detail := range strings.Fields("RESUME_SOURCE_SCHEMA RESUME_SOURCE_ID RESUME_SOURCE_LOCATOR RESUME_SOURCE_OPEN RESUME_SOURCE_METADATA RESUME_SOURCE_IDENTITY") {
+		value := base
+		value.Detail = detail
+		raw, err := json.Marshal(value)
+		var decoded ProviderFailureDiagnostic
+		if err != nil || json.Unmarshal(raw, &decoded) != nil || !decoded.Matches(input) || decoded != value {
+			t.Fatal("valid resume source reason was lost at consumer")
+		}
+		for _, mutate := range []func(*ProviderFailureDiagnostic){
+			func(v *ProviderFailureDiagnostic) { v.Stage = "ARCHIVE_CAPTURE" },
+			func(v *ProviderFailureDiagnostic) { v.Class = "AUTHENTICATION" },
+			func(v *ProviderFailureDiagnostic) { v.Kind = "TERMINAL_FAILURE" },
+			func(v *ProviderFailureDiagnostic) { v.Detail = "RESUME_SOURCE_PRIVATE_SENTINEL" },
+			func(v *ProviderFailureDiagnostic) { v.Notification = "UNKNOWN" },
+			func(v *ProviderFailureDiagnostic) { v.AccountRead = "SHUTDOWN" },
+			func(v *ProviderFailureDiagnostic) { v.TerminalCode = "provider_interrupted" },
+		} {
+			other := value
+			mutate(&other)
+			if other.Validate() == nil {
+				t.Fatal("resume diagnostic cross-field guard accepted foreign context")
+			}
+		}
+	}
+}

@@ -856,3 +856,37 @@ THREAD_READ/REQUEST_FAILURE/PROVIDER/NONE указывает на resume/source 
 terminal само по себе штатно. Заметка не объявлена обновлённой; пункт16 OPEN.
 Продолжить точную диагностику source preflight, затем штатный native повтор.
 Полный65QA, semantic Architect PASS, Developer и конечный business PR OPEN.
+
+## Checkpoint 10.10.2026 00:49 UTC — диагностические причины resume
+
+ROOT базаfe023882; frozen patch7files принят после manifest/base/hash проверки.
+Закрытые RESUME_SOURCE_SCHEMA/ID/LOCATOR/OPEN/METADATA/IDENTITY назначаются
+самим rejecting guard и допустимы только в REQUEST_FAILURE/THREAD_READ/PROVIDER.
+Другой stage/class/unknown reason и plain malformed RPC сохраняют NONE/closed
+отказ. Никаких path/provider payload в diagnostic; execution binding прежний.
+Mode0640/UID/GID/nofollow/single-link/size/held inode и owner lifecycle
+не изменены. Consumer codec и Python reader согласованы. Новые права,
+API/RPC/schema input, retry/new thread и бизнесовые error codes не добавлены.
+
+ROOT runtimecontract unit/race, agent-runner все unit, codex race20.954s,
+runtime-controller callback unit, scoped vet,77Python tests и diff-check PASS
+на этом combined source tree. Producer full runner build/activation/custom
+publication и новый native повтор NOT RUN. Исторический failure
+run_aaeb2eVPABFe8dVsML6UXZj0 THREAD_READ/NONE остаётся UNKNOWN; новая
+наблюдаемость не объявляется исправлением. Доставка — readers до writers,
+exact source/binary/image readback, затем один штатный practical continuation.
+Serving RC ELF и независимая CGO_ENABLED=0/trimpath/buildvcs=false сборка
+EQUAL9e4b99227239120130177f790d5a752ff470f1ac2b2873d5c77746cf3d350130.
+Host/Pod runtimecontract consumer source EQUAL8c0fad1e…948e7; работающий
+consumer обновлён до writer. Изменение теста после первого прогона только
+восстановило frozen порядок функций; все7postimage hashes теперь exact.
+
+Playwright fresh owner browser65906 используется вместо завершённого own38659;
+чужие окна не закрывались. Initial Console3 RESOURCE_LOAD сопоставлены с
+bootstrap/session401 до genuine SSO; после authorization200/bootstrap200
+новый artifact RESOURCE_LOAD добавил1, исходный HTTP status не захвачен.
+Последующие exact artifact GET200; console errors не скрыты. Pageerror/warning0,
+requestfailed0. Screenshot редактора1440/390 и transcript просмотрены ранее;
+в новом browser screenshot FAILED continuation сохранён и просмотрен.
+Reload draft0 выполнен00:45UTC. Chrome766 timeout300s, новый Chrome787 pending,
+доступ через MCP не доказан. Checkbox не изменены; полный65QA остаётся OPEN.

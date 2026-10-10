@@ -51,6 +51,24 @@ class FakeClock:
 
 
 class CaptureTests(unittest.TestCase):
+    def test_resume_source_closed_reasons_and_exact_capture(self):
+        for detail in ('RESUME_SOURCE_SCHEMA', 'RESUME_SOURCE_ID', 'RESUME_SOURCE_LOCATOR',
+                       'RESUME_SOURCE_OPEN', 'RESUME_SOURCE_METADATA', 'RESUME_SOURCE_IDENTITY'):
+            with self.subTest(detail=detail):
+                diagnostic = request(stage='THREAD_READ', detail=detail)
+                parsed = CAPTURE.parse_line(diagnostic)
+                self.assertEqual(parsed['kind'], 'REQUEST_FAILURE')
+                self.assertEqual(parsed['detail'], detail)
+                result, _, _, _ = self.exercise(diagnostic=diagnostic)
+                self.assertEqual(result['diagnostic']['detail'], detail)
+                self.assertEqual(result['rejoin'], 'VERIFIED')
+                self.assertNotIn(SENTINEL, json.dumps(result))
+                for invalid in ({'stage': 'ARCHIVE_CAPTURE'}, {'category': 'AUTHENTICATION'},
+                                {'code': -32603}, {'notification': 'UNKNOWN'},
+                                {'account': 'SHUTDOWN'}, {'detail': 'RESUME_SOURCE_'+SENTINEL}):
+                    with self.assertRaisesRegex(CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$'):
+                        CAPTURE.parse_line(request(**dict({'stage': 'THREAD_READ', 'detail': detail}, **invalid)))
+
     def exercise(self, proof=None, columns=None, options=None, after=None, log=None, diagnostic=None):
         baseline, baseline_columns, baseline_options = fixture()
         proof = baseline if proof is None else proof
