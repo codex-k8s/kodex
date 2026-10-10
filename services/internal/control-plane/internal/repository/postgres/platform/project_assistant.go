@@ -42,6 +42,9 @@ var queryProjectAssistantContextCreationAllowed string
 //go:embed sql/system_assistant_integration_grants__operations.sql
 var querySystemAssistantIntegrationGrantOperations string
 
+//go:embed sql/assistant_file_revision_operations.sql
+var queryAssistantFileRevisionOperations string
+
 func (repository *Repository) rejectAssistantAgentArchive(ctx context.Context, tx pgx.Tx, current scope, agentRef string) error {
 	var protected bool
 	if err := tx.QueryRow(ctx, queryProjectAssistantProtectedAgent, current.organizationID, agentRef).Scan(&protected); errors.Is(err, pgx.ErrNoRows) {
@@ -156,6 +159,16 @@ func (repository *Repository) expandAssistantContext(ctx context.Context, tx pgx
 			descriptor.AllowedOperations = append(descriptor.AllowedOperations, operation)
 		}
 	}
+	var fileOperations []string
+	if err := tx.QueryRow(ctx, queryAssistantFileRevisionOperations, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "actor_id": current.actorID, "authority_project": current.authorityProjectID,
+		"context_kind": descriptor.EntityKind, "context_ref": descriptor.EntityRef, "project_ref": projectRef, "helper_scope": assistant.Scope,
+	}).Scan(&fileOperations); err != nil {
+		return errs.ErrUnavailable
+	}
+	if contains(fileOperations, createProjectFileRevision) && !contains(descriptor.AllowedOperations, createProjectFileRevision) {
+		descriptor.AllowedOperations = append(descriptor.AllowedOperations, createProjectFileRevision)
+	}
 	return nil
 }
 
@@ -163,6 +176,25 @@ func (repository *Repository) constrainAssistantPlanScope(ctx context.Context, t
 	assistant, err := repository.conversationAssistantTx(ctx, tx, *current, conversationRef)
 	if err != nil {
 		return err
+	}
+	for _, operation := range operations {
+		if operation.Type != createProjectFileRevision {
+			continue
+		}
+		context, projectRef, err := repository.assistantConversationContext(ctx, tx, *current, conversationRef, "")
+		if err != nil {
+			return err
+		}
+		if projectRef == "" || assistant.ProjectRef != projectRef || assistant.Scope == "SYSTEM" && context.EntityKind != "PROJECT" && context.EntityKind != "FILE" {
+			return errs.ErrForbidden
+		}
+		item, err := repository.artifactRevisionReadHead(ctx, tx, *current, operation.Target.Ref)
+		if err != nil {
+			return err
+		}
+		if item.ProjectRef != projectRef {
+			return errs.ErrNotFound
+		}
 	}
 	if assistant.Scope != "PROJECT" {
 		return nil

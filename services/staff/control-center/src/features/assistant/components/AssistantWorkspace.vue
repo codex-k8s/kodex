@@ -43,6 +43,7 @@ import AssistantProjectProfileSetup from "./AssistantProjectProfileSetup.vue";
 import AssistantCreatedScheduleCard from "@/features/assistant/components/AssistantCreatedScheduleCard.vue";
 import AssistantCreatedEntityCard from "@/features/assistant/components/AssistantCreatedEntityCard.vue";
 import AssistantCreatedProjectFileCard from "@/features/assistant/components/AssistantCreatedProjectFileCard.vue";
+import AssistantProjectFileRevisionCard from "./AssistantProjectFileRevisionCard.vue";
 import AssistantInstructionDraftCard from "@/features/assistant/components/AssistantInstructionDraftCard.vue";
 import AssistantAgentEnvironmentBindingCard from "@/features/assistant/components/AssistantAgentEnvironmentBindingCard.vue";
 import AssistantCreatedWorkflowCard from "@/features/assistant/components/AssistantCreatedWorkflowCard.vue";
@@ -1426,6 +1427,7 @@ async function applyPlan(): Promise<void> {
         kinds.add("PROJECT");
         break;
       case "CREATE_PROJECT_FILE":
+      case "CREATE_PROJECT_FILE_REVISION":
         kinds.add("ARTIFACT");
         break;
       case "CREATE_AGENT":
@@ -2432,6 +2434,15 @@ onBeforeUnmount(() => {
                             (item) => item.type === 'CREATE_PROJECT_FILE',
                           )"
                           :key="`file-${operation.ref}`"
+                          :plan="turn.plan"
+                          :operation-ref="operation.ref"
+                        />
+                        <AssistantProjectFileRevisionCard
+                          v-for="operation in turn.plan.operations.filter(
+                            (item) =>
+                              item.type === 'CREATE_PROJECT_FILE_REVISION',
+                          )"
+                          :key="`file-revision-${operation.ref}`"
                           :plan="turn.plan"
                           :operation-ref="operation.ref"
                         />

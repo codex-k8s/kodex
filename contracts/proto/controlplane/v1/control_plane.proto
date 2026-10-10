@@ -65,6 +65,8 @@ service PlatformQueryService {
   rpc GetOwnerGate(GetOwnerGateRequest) returns (GetOwnerGateResponse);
   rpc ListArtifacts(ListArtifactsRequest) returns (ListArtifactsResponse);
   rpc GetArtifact(GetArtifactRequest) returns (GetArtifactResponse);
+  rpc ListArtifactRevisions(ListArtifactRevisionsRequest) returns (ListArtifactRevisionsResponse);
+  rpc GetArtifactRevision(GetArtifactRevisionRequest) returns (GetArtifactRevisionResponse);
   rpc GetArtifactImpact(GetArtifactImpactRequest) returns (GetArtifactImpactResponse);
   rpc GetAttachmentSet(GetAttachmentSetRequest) returns (GetAttachmentSetResponse);
   rpc ListSchedules(ListSchedulesRequest) returns (ListSchedulesResponse);
@@ -217,6 +219,7 @@ service PlatformCommandService {
   rpc UploadArtifact(stream UploadArtifactRequest) returns (UploadArtifactResponse);
   rpc UploadOrganizationArtifact(stream UploadOrganizationArtifactRequest) returns (UploadOrganizationArtifactResponse);
   rpc DownloadArtifact(DownloadArtifactRequest) returns (stream DownloadArtifactResponse);
+  rpc DownloadArtifactRevision(DownloadArtifactRevisionRequest) returns (stream DownloadArtifactRevisionResponse);
   rpc ChangeArtifactBinding(ChangeArtifactBindingRequest) returns (ChangeArtifactBindingResponse);
   rpc DeleteArtifact(DeleteArtifactRequest) returns (DeleteArtifactResponse);
   rpc RestoreArtifact(RestoreArtifactRequest) returns (RestoreArtifactResponse);
@@ -1336,6 +1339,52 @@ message Artifact {
   ArtifactLifecycleState lifecycle_state = 17;
   google.protobuf.Timestamp deleted_at = 18;
   google.protobuf.Timestamp purge_after = 19;
+  string current_revision_ref = 20;
+}
+
+// Неизменяемая версия тела стабильного логического Artifact.
+// Locator object storage не пересекает публичную границу.
+message ArtifactRevision {
+  string ref = 1;
+  string artifact_ref = 2;
+  int64 revision = 3;
+  string file_name = 4;
+  string media_type = 5;
+  int64 size_bytes = 6;
+  string digest = 7;
+  string scan_state = 8;
+  string source = 9;
+  bool preview_available = 10;
+  google.protobuf.Timestamp created_at = 11;
+}
+
+message ListArtifactRevisionsRequest {
+  string artifact_ref = 1;
+  PageRequest page = 2;
+}
+message ListArtifactRevisionsResponse {
+  repeated ArtifactRevision items = 1;
+  PageInfo page = 2;
+  int64 total = 3;
+}
+message GetArtifactRevisionRequest {
+  string artifact_ref = 1;
+  string revision_ref = 2;
+}
+message GetArtifactRevisionResponse {
+  ArtifactRevision revision = 1;
+}
+message DownloadArtifactRevisionRequest {
+  string artifact_ref = 1;
+  string revision_ref = 2;
+  ArtifactDownloadPurpose purpose = 3;
+}
+
+message DownloadArtifactRevisionResponse {
+  bytes data = 1;
+  string file_name = 2;
+  string media_type = 3;
+  int64 size_bytes = 4;
 }
 
 message AttachmentSetItem {
@@ -1634,6 +1683,8 @@ message AssistantPlanOperation {
     TYPE_PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION = 31;
     // Подготовить grant собственного PROJECT помощника для human confirmation.
     TYPE_CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT = 32;
+    // Создать новую immutable ревизию существующего Artifact после owner Apply.
+    TYPE_CREATE_PROJECT_FILE_REVISION = 33;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;
@@ -1705,6 +1756,7 @@ message AssistantPlanOperationReceipt {
   string resource_ref = 2;
   string outcome = 3;
   string audit_ref = 4;
+  ArtifactRevision artifact_revision = 5;
 }
 
 message AssistantPlanConflict {

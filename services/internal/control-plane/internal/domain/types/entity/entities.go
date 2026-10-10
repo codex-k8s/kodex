@@ -625,11 +625,20 @@ type IntegrationIntent struct {
 
 type Artifact struct {
 	Ref, ProjectRef, RunRef, SessionRef, NodeRef, FileName, MediaType, Digest string
+	CurrentRevisionRef                                                        string
 	ScanState, PreviewState, Source, LifecycleState                           string
 	SizeBytes, Revision, Version                                              int64
 	Bindings, NextActions                                                     []string
 	CreatedAt                                                                 time.Time
 	DeletedAt, PurgeAfter                                                     *time.Time
+}
+
+// ArtifactRevision содержит неизменяемые метаданные, но не storage locator.
+type ArtifactRevision struct {
+	Ref, ArtifactRef, FileName, MediaType, Digest, ScanState, Source string
+	Revision, SizeBytes                                              int64
+	PreviewAvailable                                                 bool
+	CreatedAt                                                        time.Time
 }
 
 type ArtifactImpact struct {
@@ -845,6 +854,7 @@ type AssistantPlan struct {
 
 type AssistantPlanOperationReceipt struct {
 	OperationRef, ResourceRef, Outcome, AuditRef string
+	ArtifactRevision                             *ArtifactRevision
 }
 
 type AssistantPlanConflict struct {

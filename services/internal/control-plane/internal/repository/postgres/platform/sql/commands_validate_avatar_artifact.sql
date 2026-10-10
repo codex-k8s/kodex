@@ -1,6 +1,7 @@
 -- name: commands_validate_avatar_artifact :one
 SELECT artifact.ref
 FROM control_plane.artifacts artifact
+JOIN control_plane.artifact_heads head ON head.id=artifact.id
 WHERE artifact.organization_id = @organization_id::uuid
   AND artifact.project_id = @project_id::uuid
   AND artifact.ref = @artifact_ref
@@ -9,4 +10,4 @@ WHERE artifact.organization_id = @organization_id::uuid
   AND artifact.preview_state = 'AVAILABLE'
   AND artifact.media_type IN ('image/jpeg', 'image/png', 'image/webp')
   AND artifact.size_bytes BETWEEN 1 AND 5242880
-FOR SHARE;
+FOR SHARE OF head;

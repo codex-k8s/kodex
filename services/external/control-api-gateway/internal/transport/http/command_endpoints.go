@@ -902,12 +902,37 @@ func forwardArtifactBody(reader io.Reader, declaredSize int64, send func([]byte)
 func (server *Server) DownloadArtifact(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.DownloadArtifactParams) {
 	purpose := controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_UNSPECIFIED
 	switch p.Purpose {
-	case generated.DOWNLOAD:
+	case generated.DownloadArtifactParamsPurposeDOWNLOAD:
 		purpose = controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_DOWNLOAD
-	case generated.PREVIEW:
+	case generated.DownloadArtifactParamsPurposePREVIEW:
 		purpose = controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_PREVIEW
 	}
 	stream, err := server.control.Command.DownloadArtifact(r.Context(), &controlplanev1.DownloadArtifactRequest{ArtifactRef: ref, Purpose: purpose})
+	writeArtifactDownloadStream(w, stream, err)
+}
+
+func (server *Server) DownloadArtifactRevision(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, revisionRef string, p generated.DownloadArtifactRevisionParams) {
+	purpose := controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_UNSPECIFIED
+	switch p.Purpose {
+	case generated.DownloadArtifactRevisionParamsPurposeDOWNLOAD:
+		purpose = controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_DOWNLOAD
+	case generated.DownloadArtifactRevisionParamsPurposePREVIEW:
+		purpose = controlplanev1.ArtifactDownloadPurpose_ARTIFACT_DOWNLOAD_PURPOSE_PREVIEW
+	}
+	stream, err := server.control.Command.DownloadArtifactRevision(r.Context(), &controlplanev1.DownloadArtifactRevisionRequest{ArtifactRef: ref, RevisionRef: revisionRef, Purpose: purpose})
+	writeArtifactDownloadStream(w, stream, err)
+}
+
+type artifactDownloadFrame interface {
+	GetData() []byte
+	GetFileName() string
+	GetMediaType() string
+	GetSizeBytes() int64
+}
+
+func writeArtifactDownloadStream[T artifactDownloadFrame](w http.ResponseWriter, stream interface {
+	Recv() (T, error)
+}, err error) {
 	if err != nil {
 		writeRPCProblem(w, err)
 		return

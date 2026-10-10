@@ -15,10 +15,28 @@ WITH candidates AS (
       AND artifact.organization_id=catalog.organization_id AND artifact.project_id=catalog.project_id
     WHERE artifact.source IN ('AGENT_RESULT','INTEGRATION_RESULT') AND 'RUN_RESULT'=ANY(catalog.purposes)
     UNION ALL
+    SELECT artifact.id,artifact.ref,artifact.revision,(pin->>'version')::bigint,artifact.digest,artifact.file_name,
+        artifact.media_type,artifact.size_bytes,'RUN_RESULT',artifact.source,artifact.ref,''
+    FROM control_plane.runtime_file_catalogs catalog
+    CROSS JOIN LATERAL control_plane.runtime_received_result_artifacts(catalog.organization_id,catalog.node_id) pin
+    JOIN control_plane.artifact_history artifact ON artifact.ref=pin->>'ref'
+      AND artifact.organization_id=catalog.organization_id AND artifact.project_id=catalog.project_id
+      AND to_jsonb(artifact.revision)=pin->'revision' AND artifact.digest=pin->>'digest'
+      AND to_jsonb(artifact.size_bytes)=pin->'sizeBytes' AND artifact.file_name=pin->>'fileName'
+      AND artifact.media_type=pin->>'mediaType' AND artifact.source=pin->>'source'
+    WHERE catalog.id=@catalog_id::uuid AND 'RUN_RESULT'=ANY(catalog.purposes)
+      AND control_plane.runtime_file_coordinator(catalog.organization_id,catalog.actor_id,catalog.project_id,catalog.agent_id,catalog.node_id)
+    UNION ALL
     SELECT artifact.id,artifact.ref,artifact.revision,(item->>'version')::bigint,artifact.digest,artifact.file_name,
         artifact.media_type,artifact.size_bytes,'WORKSPACE_INPUT',artifact.source,artifact.ref,''
-    FROM jsonb_array_elements(@inputs::jsonb) item
-    JOIN control_plane.artifacts artifact ON artifact.ref=item->>'ref' AND artifact.digest=item->>'digest'
+    FROM (
+        -- Один exact body может быть одновременно input и knowledge pin.
+        -- Выбирается существующий frozen pin, а не новый head OCC.
+        SELECT DISTINCT ON (item->>'ref',item->'revision',item->>'digest') item
+        FROM jsonb_array_elements(@inputs::jsonb) item
+        ORDER BY item->>'ref',item->'revision',item->>'digest',(item->>'version')::bigint
+    ) inputs
+    JOIN control_plane.artifact_history artifact ON artifact.ref=item->>'ref' AND artifact.digest=item->>'digest'
       AND to_jsonb(artifact.revision)=item->'revision' AND to_jsonb(artifact.size_bytes)=item->'sizeBytes'
       AND artifact.file_name=item->>'fileName' AND artifact.media_type=item->>'mediaType' AND artifact.source=item->>'source'
     UNION ALL
@@ -26,7 +44,7 @@ WITH candidates AS (
         artifact.media_type,artifact.size_bytes,'SKILL',artifact.source,skill->>'bundle_ref',skill->>'revision_ref'
     FROM jsonb_array_elements(@skills::jsonb) skill
     CROSS JOIN LATERAL jsonb_array_elements(skill->'files') file
-    JOIN control_plane.artifacts artifact ON artifact.ref=file->>'artifact_ref' AND artifact.digest=file->>'digest'
+    JOIN control_plane.artifact_history artifact ON artifact.ref=file->>'artifact_ref' AND artifact.digest=file->>'digest'
       AND to_jsonb(artifact.revision)=file->'artifact_revision' AND to_jsonb(artifact.size_bytes)=file->'size_bytes'
 ), eligible AS (
     SELECT DISTINCT candidates.id,candidates.ref,candidates.revision,candidates.version,candidates.digest,
@@ -34,7 +52,13 @@ WITH candidates AS (
         candidates.source_ref,candidates.source_revision_ref,
         catalog.id AS catalog_id,project.ref AS project_ref,COALESCE(run.ref,'') AS run_ref
     FROM candidates JOIN control_plane.runtime_file_catalogs catalog ON catalog.id=@catalog_id::uuid
-    JOIN control_plane.artifacts artifact ON artifact.id=candidates.id
+    JOIN control_plane.artifact_history artifact ON artifact.id=candidates.id
+      AND artifact.ref=candidates.ref AND artifact.revision=candidates.revision AND artifact.digest=candidates.digest
+      AND artifact.media_type=candidates.media_type AND artifact.size_bytes=candidates.size_bytes
+      AND artifact.source=candidates.source AND (candidates.purpose='SKILL' OR artifact.file_name=candidates.file_name)
+      AND artifact.scan_state='CLEAN'
+    JOIN control_plane.artifact_revision_content content ON content.revision_id=artifact.revision_id
+      AND content.digest=candidates.digest AND content.size_bytes=candidates.size_bytes
     JOIN control_plane.projects project ON project.id=catalog.project_id
     LEFT JOIN control_plane.runs run ON run.id=artifact.run_id
     WHERE candidates.purpose=ANY(catalog.purposes)

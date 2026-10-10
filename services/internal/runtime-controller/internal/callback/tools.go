@@ -443,6 +443,12 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 				"publicConfiguration": map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": map[string]any{"type": "string", "maxLength": 4096}},
 			})))
 	}
+	if assistantFileRevisionContextAllowed(input) {
+		result = append(result, assistantOperationSchema("CREATE_PROJECT_FILE_REVISION", objectSchema([]string{"artifactRef", "mediaType", "content"}, map[string]any{
+			"artifactRef": opaqueRefSchema(), "mediaType": enumSchema("text/plain", "text/markdown", "text/csv", "application/json"),
+			"contentEncoding": enumSchema("UTF8"), "content": stringSchema(0, 1<<20),
+		})))
+	}
 	selfInstructionsOperation := input.IsSystemAssistant() && input.AgentRef != ""
 	selfConfigurationOperation := input.IsAssistant() && input.AgentRef != ""
 	if selfConfigurationOperation {

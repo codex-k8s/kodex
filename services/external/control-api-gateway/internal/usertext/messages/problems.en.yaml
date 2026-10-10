@@ -927,3 +927,13 @@ EMAIL_HEALTH_UNAVAILABLE:
   other: "protocol unavailable; reason unspecified"
 EMAIL_HEALTH_NOT_READY:
   other: "mail protocol not ready"
+ARTIFACT_REVISION_CREATED:
+  other: New file revision created
+ASSISTANT_PLAN_CONTENT_STAGING_REQUIRED:
+  other: File content must be prepared in a new plan
+PERMISSION_ARTIFACT_REVISION_CREATE_NAME:
+  other: Create file revisions
+PERMISSION_ARTIFACT_REVISION_CREATE_DESCRIPTION:
+  other: Create a new immutable revision of an existing file
+SYSTEM_ROLE_ARTIFACT_REVISION_AUTHORITY:
+  other: File revision creation permissions added

@@ -334,6 +334,7 @@ describe("RunTranscript: результат интеграции, а не усп
 describe("RunTranscript: компактные файлы результата", () => {
   const artifact: Artifact = {
     ref: "art_fixture_result",
+    currentRevisionRef: "arv_fixture_result",
     version: 2,
     revision: 3,
     projectRef: "prj_fixture",

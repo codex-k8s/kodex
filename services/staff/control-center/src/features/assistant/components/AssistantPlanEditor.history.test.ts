@@ -31,9 +31,28 @@ vi.mock("@/features/role-images/RoleImageDockerfileEditor.vue", () => ({
 import { i18n } from "@/app/i18n";
 import type { AssistantPlan } from "@/shared/api/generated/openapi/types.gen";
 import Editor from "./AssistantPlanEditor.vue";
+import { appliedFilePlanFixture } from "../project-file-plan.fixtures";
 
 afterEach(() => {
   i18n.global.locale.value = "ru";
+});
+
+describe("file revision native editor", () => {
+  it("показывает stable before/new, не выводит contentRef и не принимает staged body за пустое поле", async () => {
+    const input = appliedFilePlanFixture();
+    input.state = "DRAFT";
+    input.applied = false;
+    delete input.receipt;
+    const html = await renderPlan(input);
+    expect(html).toContain("document.md");
+    expect(html).toContain("v1");
+    expect(html).toContain("Будет назначена при применении");
+    expect(html).toContain("Содержимое подготовлено");
+    expect(html).not.toContain("staging-not-a-grant");
+    expect(html).not.toContain("assistant-project-file-content-0");
+    expect(html).not.toContain("assistant-project-file-name-0");
+    expect(html).not.toContain("assistant-operation-parameters-0");
+  });
 });
 
 function plan(state: AssistantPlan["state"]): AssistantPlan {

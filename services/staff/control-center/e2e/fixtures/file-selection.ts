@@ -32,6 +32,7 @@ export async function checkFileSelection(
   };
   const artifact: Artifact = {
     ref: "artifact_selection",
+    currentRevisionRef: "arv_fixture_selection",
     projectRef,
     version: 4,
     revision: 2,

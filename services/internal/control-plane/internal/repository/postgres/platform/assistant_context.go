@@ -109,7 +109,7 @@ func (repository *Repository) authorizeAssistantContextCommand(ctx context.Conte
 					return err
 				}
 			}
-			if !assistantProjectConfigurationOperation(operation) && operation.Type != "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" && operation.Type != "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" && operation.Type != "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
+			if !assistantFileOperation(operation.Type) && !assistantProjectConfigurationOperation(operation) && operation.Type != "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" && operation.Type != "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" && operation.Type != "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" {
 				continue
 			}
 			operation, err := normalizeAssistantOperation(operation)

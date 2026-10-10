@@ -59,6 +59,8 @@ var (
 	queryArtifactsPurgeDeleteDownloadGrants string
 	//go:embed sql/artifacts_purge_delete_content.sql
 	queryArtifactsPurgeDeleteContent string
+	//go:embed sql/artifacts_purge_delete_revisions.sql
+	queryArtifactsPurgeDeleteRevisions string
 	//go:embed sql/artifacts_purge_update_idempotency_receipt.sql
 	queryArtifactsPurgeUpdateIdempotencyReceipt string
 )

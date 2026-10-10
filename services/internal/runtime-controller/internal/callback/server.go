@@ -1302,6 +1302,7 @@ func assistantOperationTitle(kind string, parameters map[string]any, entityName 
 	labels := map[string]string{
 		"CREATE_PROJECT":                             "Создать Проект",
 		"CREATE_PROJECT_FILE":                        "Создать файл",
+		"CREATE_PROJECT_FILE_REVISION":               "Создать новую версию файла",
 		"UPDATE_PROJECT":                             "Изменить Проект",
 		"CREATE_AGENT":                               "Создать ИИ-сотрудника",
 		"CREATE_PROJECT_ASSISTANT":                   "Настроить помощника Проекта",
@@ -1358,7 +1359,7 @@ func assistantServerHydratedOperation(kind string) bool {
 	switch kind {
 	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT", "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION":
 		return true
-	case "CREATE_PROJECT", "CREATE_PROJECT_FILE", "CREATE_AGENT", "CREATE_PROJECT_ASSISTANT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "PUBLISH_INTEGRATION_DEFINITION", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
+	case "CREATE_PROJECT", "CREATE_PROJECT_FILE", "CREATE_PROJECT_FILE_REVISION", "CREATE_AGENT", "CREATE_PROJECT_ASSISTANT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "PUBLISH_INTEGRATION_DEFINITION", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
 		return true
 	default:
 		return false
@@ -1372,6 +1373,19 @@ func assistantConfigurationParametersAllowed(input runtimecontract.RunnerInput, 
 		return projectAssistantLocatorParametersAllowed(input, kind, parameters)
 	}
 	switch kind {
+	case "CREATE_PROJECT_FILE_REVISION":
+		if !assistantFileRevisionContextAllowed(input) || !onlyKeys(parameters, "artifactRef", "mediaType", "contentEncoding", "content") ||
+			!assistantRequiredStrings(parameters, "artifactRef", "mediaType") {
+			return false
+		}
+		content, ok := parameters["content"].(string)
+		encoding, _ := parameters["contentEncoding"].(string)
+		mediaType, _ := parameters["mediaType"].(string)
+		if !ok || len(content) > 1<<20 || !utf8.ValidString(content) || strings.ContainsRune(content, 0) ||
+			(encoding != "" && encoding != "UTF8") || !slices.Contains([]string{"text/plain", "text/markdown", "text/csv", "application/json"}, mediaType) {
+			return false
+		}
+		return true
 	case "CHANGE_CAPABILITY":
 		if !input.IsAssistant() || !onlyKeys(parameters, "agentRef", "capabilityKey", "enabled") || !assistantRequiredStrings(parameters, "agentRef", "capabilityKey") {
 			return false
@@ -1474,6 +1488,15 @@ func assistantConfigurationParametersAllowed(input runtimecontract.RunnerInput, 
 	default:
 		return true
 	}
+}
+
+// Это фильтр подписанного source snapshot, не выдача artifact authority.
+// Текущие права и exact target повторно проверяет владелец control-plane.
+func assistantFileRevisionContextAllowed(input runtimecontract.RunnerInput) bool {
+	context := input.AssistantContext
+	return input.IsAssistant() && slices.Contains(input.Capabilities, runtimecontract.ArtifactCapability) &&
+		input.ProjectRef != "" && context != nil && slices.Contains(context.AllowedOperations, "CREATE_PROJECT_FILE_REVISION") &&
+		(input.AssistantScope == runtimecontract.AssistantScopeProject || input.IsSystemAssistant() && (context.EntityKind == "PROJECT" || context.EntityKind == "FILE"))
 }
 
 func assistantIntegrationGrantPolicyShape(parameters map[string]any) bool {
@@ -1587,6 +1610,9 @@ func assistantOptionalStrings(parameters map[string]any, fields ...string) bool 
 }
 
 func assistantServerAction(kind string) string {
+	if kind == "CREATE_PROJECT_FILE_REVISION" {
+		return "UPDATE"
+	}
 	if kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" || kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" || kind == "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT" {
 		return "UPDATE"
 	}
@@ -1618,6 +1644,13 @@ func assistantOperationTargetContext(input runtimecontract.RunnerInput, kind str
 }
 
 func assistantServerTarget(kind string, parameters map[string]any, context *runtimecontract.RunnerAssistantContext) map[string]any {
+	if kind == "CREATE_PROJECT_FILE_REVISION" {
+		ref, _ := parameters["artifactRef"].(string)
+		if strings.TrimSpace(ref) == "" {
+			return nil
+		}
+		return map[string]any{"kind": "ARTIFACT", "name": strings.TrimSpace(ref)}
+	}
 	if parameters == nil {
 		return nil
 	}

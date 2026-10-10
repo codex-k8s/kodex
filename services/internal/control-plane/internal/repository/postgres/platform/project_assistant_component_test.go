@@ -56,10 +56,10 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 		t.Fatal("read project purge graph")
 	}
 	t.Logf("project purge graph: nodes=%d digest=%s edges=%d digest=%s", graphNodes, graphNodeDigest, graphEdges, graphEdgeDigest)
-	// Точный FK-граф после 20261006000300_required_workflow_launch.sql:
-	// required_workflow_launches добавляет один узел и 11 рёбер внутри project closure.
-	// FK к organizations/subjects не входят в closure; 00400 не добавляет таблиц/FK.
-	if graphNodes != 101 || graphNodeDigest != "fd84f327b771b83de59d0839d477432c" || graphEdges != 264 || graphEdgeDigest != "149c59d0b352b832823e09f10a28f55b" {
+	// Точный FK-граф после immutable revisions и prepared content ledger:
+	// owner closure включает revision, ledger и его immutable plan bindings.
+	// Подмена состава графа по-прежнему закрыто отклоняется.
+	if graphNodes != 104 || graphNodeDigest != "5cbc6bd6bb4a8508ffd75ed4b1dd6189" || graphEdges != 276 || graphEdgeDigest != "75343e68e299c44be699718099c79527" {
 		t.Fatal("project assistant purge graph changed")
 	}
 	repository, err := New(pool, "openai-codex", "gpt-5", objectstoragetest.New())
@@ -438,7 +438,8 @@ func executeWorkerAssistantPlan(t *testing.T, ctx context.Context, service *plat
 			Summary: operation.Summary, Operations: []entity.AssistantPlanOperation{operation},
 		}})
 	if err != nil {
-		t.Fatalf("prepare synthetic assistant plan %s: %v", key, err)
+		stage, category, index, _ := errs.AssistantPlanDiagnostic(err)
+		t.Fatalf("prepare synthetic assistant plan %s: %v stage=%s category=%s index=%d", key, err, stage, category, index)
 	}
 	return result
 }

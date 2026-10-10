@@ -159,5 +159,8 @@ func testAssistantArtifactSearch(t *testing.T, ctx context.Context, r *Repositor
 		if err != nil || applied.PlanReceipt == nil || applied.PlanReceipt.Outcome != "APPLIED" || !contains(after.Capabilities, runtimecontract.ArtifactCapability) || after.Version != before.Version+1 {
 			t.Fatal("owner-confirmed capability did not produce an exact versioned receipt")
 		}
+		t.Run("immutable file revision from project-global source screen", func(t *testing.T) {
+			testAssistantFileRevisionLifecycle(t, ctx, r, service, owner, worker, lease, project, agent, ref, foreignProject)
+		})
 	})
 }

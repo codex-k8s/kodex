@@ -294,6 +294,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.createProject(ctx, tx, scope, input.Payload)
 	case command.CreateProjectFile:
 		return repository.createProjectFile(ctx, tx, scope, input.Payload)
+	case command.CreateProjectFileRevision:
+		return repository.createProjectFileRevision(ctx, tx, scope, input)
 	case command.UpdateProject:
 		return repository.updateProject(ctx, tx, scope, input.Mutation, input.Payload)
 	case command.TrashProject, command.RestoreProject, command.PurgeProject:
@@ -1927,10 +1929,23 @@ func (repository *Repository) emitCommandOutcomePlatformEvent(ctx context.Contex
 	if version < 1 {
 		version = 1
 	}
+	if outcome.summary == "i18n:ARTIFACT_REVISION_CREATED" && outcome.result.Artifact != nil {
+		item := outcome.result.Artifact
+		revision, err := artifactRevisionRow(tx.QueryRow(ctx, queryArtifactRevisionGet, pgx.StrictNamedArgs{
+			"organization_id": scope.organizationID, "artifact_ref": item.Ref, "revision_ref": item.CurrentRevisionRef}))
+		if err != nil {
+			return err
+		}
+		return repository.emitPlatformEventSnapshotWithRevision(ctx, tx, scope, outcome.platformEvent, outcome.projectRef, outcome.resourceRef, outcome.summary, item.Version, outcome.platformState, &revision)
+	}
 	return repository.emitPlatformEventSnapshot(ctx, tx, scope, outcome.platformEvent, outcome.projectRef, outcome.resourceRef, outcome.summary, version, outcome.platformState)
 }
 
 func (repository *Repository) emitPlatformEventSnapshot(ctx context.Context, tx pgx.Tx, scope scope, eventName, projectRef, aggregateRef, summary string, aggregateVersion int64, state string) error {
+	return repository.emitPlatformEventSnapshotWithRevision(ctx, tx, scope, eventName, projectRef, aggregateRef, summary, aggregateVersion, state, nil)
+}
+
+func (repository *Repository) emitPlatformEventSnapshotWithRevision(ctx context.Context, tx pgx.Tx, scope scope, eventName, projectRef, aggregateRef, summary string, aggregateVersion int64, state string, revision *entity.ArtifactRevision) error {
 	kind := platformEventKind(eventName)
 	if kind == "" {
 		return fmt.Errorf("emit platform event: unsupported event name %q", eventName)
@@ -1941,6 +1956,12 @@ func (repository *Repository) emitPlatformEventSnapshot(ctx context.Context, tx 
 	}
 	eventID := uuid.New()
 	data := map[string]any{"kind": kind, "safeSummary": truncate(summary, 1000)}
+	if revision != nil {
+		if eventName != "ARTIFACT_CHANGED" || revision.ArtifactRef != aggregateRef || revision.Ref == "" || revision.Revision < 1 || !objectDigestValid(revision.Digest) {
+			return errs.ErrInvalid
+		}
+		data["artifactRevision"] = map[string]any{"ref": revision.Ref, "revision": revision.Revision, "digest": revision.Digest}
+	}
 	if state != "" {
 		data["state"] = state
 	}

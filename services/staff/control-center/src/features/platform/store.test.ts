@@ -350,6 +350,7 @@ function integrationDefinition(): IntegrationDefinition {
 function artifact(ref: string, projectRef?: string): Artifact {
   return {
     ref,
+    currentRevisionRef: `arv_fixture_${ref}`,
     version: 1,
     ...(projectRef ? { projectRef } : {}),
     fileName: `${ref}.txt`,

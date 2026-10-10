@@ -18,6 +18,8 @@ import { computed, onScopeDispose, ref, shallowRef, useId, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 import AssistantCodeEditorModal from "@/features/assistant/components/AssistantCodeEditorModal.vue";
+import AssistantProjectFileRevisionSummary from "./AssistantProjectFileRevisionSummary.vue";
+import { isProjectFileOperation } from "../project-file-plan";
 import AssistantCapabilityPlanForm from "@/features/assistant/components/AssistantCapabilityPlanForm.vue";
 import AssistantIntegrationGrantPlanForm from "@/features/assistant/components/AssistantIntegrationGrantPlanForm.vue";
 import { createIntegrationGrantReadBundle } from "../integration-grant-read-bundle";
@@ -82,6 +84,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { listAgents } from "@/shared/api/generated/openapi/sdk.gen";
 import { unwrap } from "@/shared/api/problem";
+import { ownerRequestSignal } from "@/shared/api/owner-lifetime";
 import type { AppProblem } from "@/shared/api/problem";
 import AsyncEntityPicker from "@/shared/ui/AsyncEntityPicker.vue";
 import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
@@ -143,6 +146,7 @@ function projectConnectionReady(operation: EditablePlanOperation): boolean {
 }
 function allowRawOperationEdit(operation: EditablePlanOperation): boolean {
   return (
+    !isProjectFileOperation(operation.value.type) &&
     operation.value.type !==
       "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION" &&
     !friendlyPlanOperationType(operation)
@@ -246,10 +250,25 @@ function roleImageReady(operation: EditablePlanOperation): boolean {
   );
 }
 function projectFileReady(operation: EditablePlanOperation): boolean {
-  const fileName = fieldValue(operation, "fileName").trim();
+  const fileName = (
+    operation.value.type === "CREATE_PROJECT_FILE_REVISION"
+      ? operation.value.target.name
+      : fieldValue(operation, "fileName")
+  ).trim();
   const mediaType = fieldValue(operation, "mediaType");
   const content = fieldValue(operation, "content");
   const encoding = projectFileEncoding(operation);
+  if (!projectFileReplacing(operation)) {
+    return Boolean(
+      fieldValue(operation, "contentRef") &&
+      /^sha256:[a-f0-9]{64}$/u.test(fieldValue(operation, "digest")) &&
+      operationParameter(operation, "sizeBytes") ===
+        operation.value.parameters.sizeBytes &&
+      mediaType === operation.value.parameters.mediaType &&
+      (operation.value.type === "CREATE_PROJECT_FILE_REVISION" ||
+        fileName === operation.value.parameters.fileName),
+    );
+  }
   if (
     !fileName ||
     fileName === "." ||
@@ -274,7 +293,8 @@ function projectFileReady(operation: EditablePlanOperation): boolean {
     !projectTextMediaTypes.includes(
       mediaType as (typeof projectTextMediaTypes)[number],
     ) ||
-    new TextEncoder().encode(content).length > maximumProjectFileBytes
+    new TextEncoder().encode(content).length > maximumProjectFileBytes ||
+    content.includes("\0")
   )
     return false;
   if (mediaType === "application/json") {
@@ -317,6 +337,17 @@ function projectFileEncoding(operation: EditablePlanOperation): string {
   )
     ? "BASE64"
     : "UTF8";
+}
+function projectFileReplacing(operation: EditablePlanOperation): boolean {
+  const parameters: unknown = JSON.parse(operation.parametersText);
+  return (
+    typeof parameters === "object" &&
+    parameters !== null &&
+    Object.hasOwn(parameters, "content")
+  );
+}
+function replaceProjectFileContent(operation: EditablePlanOperation): void {
+  updateOperationParameter(operation, "content", "");
 }
 const connectionDefinitions = ref<Record<string, IntegrationDefinition>>({});
 const connectionCatalogProblem = ref(false);
@@ -534,6 +565,35 @@ function resetDraft(): void {
 }
 
 watch(() => props.plan, resetDraft, { immediate: true });
+function clearFileReplacementBuffers(): void {
+  for (const operation of operations.value) {
+    if (!isProjectFileOperation(operation.value.type)) continue;
+    const parameters = { ...operation.value.parameters };
+    delete parameters.content;
+    operation.parametersText = JSON.stringify(parameters, null, 2);
+  }
+}
+watch(
+  () => props.plan,
+  (_plan, _previous, onCleanup) => {
+    const signal = ownerRequestSignal();
+    signal.addEventListener("abort", clearFileReplacementBuffers, {
+      once: true,
+    });
+    onCleanup(() =>
+      signal.removeEventListener("abort", clearFileReplacementBuffers),
+    );
+  },
+  { immediate: true },
+);
+watch(
+  () => props.readonly,
+  (readonly) => {
+    if (readonly) clearFileReplacementBuffers();
+  },
+  { flush: "sync" },
+);
+onScopeDispose(clearFileReplacementBuffers);
 
 watch(
   () =>
@@ -870,8 +930,9 @@ const friendlyInputsReady = computed(() =>
             "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT") ||
           integrationGrantValidity.value[operation.value.ref] === true) &&
         (!imageOperation(operation) || roleImageReady(operation)) &&
-        (operation.value.type !== "CREATE_PROJECT_FILE" ||
-          projectFileReady(operation))),
+        (!isProjectFileOperation(operation.value.type) ||
+          (Boolean(friendlyPlanOperationType(operation)) &&
+            projectFileReady(operation)))),
   ),
 );
 const canSave = computed(
@@ -2029,7 +2090,31 @@ function validationProblemLabel(problem: string): string {
               </label>
               <template v-if="operation.value.target.kind === 'ARTIFACT'">
                 <div class="assistant-project-file-form">
-                  <label class="field">
+                  <AssistantProjectFileRevisionSummary
+                    v-if="
+                      operation.value.type === 'CREATE_PROJECT_FILE_REVISION'
+                    "
+                    :operation="operation.value"
+                    :edited="projectFileReplacing(operation)"
+                  />
+                  <div
+                    v-if="!projectFileReplacing(operation)"
+                    class="assistant-project-file-form__content"
+                  >
+                    <p class="muted">{{ $t("fileRevision.staged") }}</p>
+                    <button
+                      v-if="editable"
+                      class="button"
+                      type="button"
+                      @click="replaceProjectFileContent(operation)"
+                    >
+                      {{ $t("fileRevision.replace") }}
+                    </button>
+                  </div>
+                  <label
+                    v-if="operation.value.type === 'CREATE_PROJECT_FILE'"
+                    class="field"
+                  >
                     <span>{{
                       $t("assistant.planEditor.projectFileName")
                     }}</span>
@@ -2037,7 +2122,7 @@ function validationProblemLabel(problem: string): string {
                       :value="fieldValue(operation, 'fileName')"
                       :name="`assistant-project-file-name-${index}`"
                       maxlength="255"
-                      :disabled="!editable"
+                      :disabled="!editable || !projectFileReplacing(operation)"
                       @input="setProjectFileName(operation, $event)"
                     />
                   </label>
@@ -2048,21 +2133,28 @@ function validationProblemLabel(problem: string): string {
                     <select
                       :value="fieldValue(operation, 'mediaType')"
                       :name="`assistant-project-file-type-${index}`"
-                      :disabled="!editable"
+                      :disabled="!editable || !projectFileReplacing(operation)"
                       @change="setProjectFileType(operation, $event)"
                     >
                       <option value="text/markdown">Markdown</option>
                       <option value="text/plain">Text</option>
                       <option value="text/csv">CSV</option>
                       <option value="application/json">JSON</option>
-                      <option value="image/png">PNG</option>
-                      <option value="image/jpeg">JPEG</option>
-                      <option value="image/webp">WebP</option>
-                      <option value="application/pdf">PDF</option>
+                      <template
+                        v-if="operation.value.type === 'CREATE_PROJECT_FILE'"
+                      >
+                        <option value="image/png">PNG</option>
+                        <option value="image/jpeg">JPEG</option>
+                        <option value="image/webp">WebP</option>
+                        <option value="application/pdf">PDF</option>
+                      </template>
                     </select>
                   </label>
                   <label
-                    v-if="projectFileEncoding(operation) === 'UTF8'"
+                    v-if="
+                      projectFileReplacing(operation) &&
+                      projectFileEncoding(operation) === 'UTF8'
+                    "
                     class="field assistant-project-file-form__content"
                   >
                     <span>{{
@@ -2071,7 +2163,8 @@ function validationProblemLabel(problem: string): string {
                     <textarea
                       :value="fieldValue(operation, 'content')"
                       :name="`assistant-project-file-content-${index}`"
-                      rows="14"
+                      rows="7"
+                      :maxlength="maximumProjectFileBytes"
                       :disabled="!editable"
                       spellcheck="false"
                       @input="setField(operation, 'content', $event)"
@@ -2085,7 +2178,7 @@ function validationProblemLabel(problem: string): string {
                     </small>
                   </label>
                   <label
-                    v-else
+                    v-else-if="projectFileReplacing(operation)"
                     class="field assistant-project-file-form__content assistant-project-file-form__upload"
                   >
                     <span>{{
@@ -2643,6 +2736,7 @@ function validationProblemLabel(problem: string): string {
               </template>
             </template>
             <details
+              v-if="!isProjectFileOperation(operation.value.type)"
               v-show="grantOperationDetailsVisible(operation)"
               class="assistant-plan-friendly__snapshot"
             >
@@ -3230,11 +3324,12 @@ function validationProblemLabel(problem: string): string {
   gap: 12px;
 }
 .assistant-project-file-form__content,
+.assistant-project-file-form > .project-file-comparison,
 .assistant-project-file-form > p {
   grid-column: 1 / -1;
 }
 .assistant-project-file-form__content textarea {
-  min-height: 18rem;
+  min-height: 10rem;
   resize: vertical;
   font-family: var(--font-mono);
   line-height: 1.5;
@@ -3243,6 +3338,18 @@ function validationProblemLabel(problem: string): string {
 .assistant-project-file-form__content small {
   color: var(--muted);
   text-align: right;
+}
+.assistant-project-file-form input,
+.assistant-project-file-form select,
+.assistant-project-file-form .button {
+  min-height: 32px;
+}
+@media (max-width: 720px), (pointer: coarse) {
+  .assistant-project-file-form input,
+  .assistant-project-file-form select,
+  .assistant-project-file-form .button {
+    min-height: 44px;
+  }
 }
 .assistant-project-file-form__upload {
   padding: 14px;

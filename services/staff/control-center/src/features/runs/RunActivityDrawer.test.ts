@@ -662,6 +662,7 @@ describe("RunActivityDrawer", () => {
   it("показывает безопасное описание файла из события", async () => {
     const artifact: Artifact = {
       ref: "art_report",
+      currentRevisionRef: "arv_fixture_report",
       version: 2,
       projectRef: run.projectRef,
       runRef: run.ref,

@@ -9,12 +9,14 @@ import { workflowLaunchMessages } from "@/features/platform/workflow-launch";
 import { entityCardMessages } from "@/features/workflows/catalog/messages";
 import { automationPreviewMessages } from "@/features/automations/prompt-preview-messages";
 import { vulnerabilityMessages } from "@/features/role-images/vulnerability-messages";
+import { fileRevisionMessages } from "@/features/files/revision-messages";
 
 import { currentLocale } from "@/shared/locale";
 import { serverMessagesFor } from "@/shared/ui/server-message-catalog";
 import { additionalPermissionMessages } from "@/shared/ui/permission-message-catalog";
 
 const ru = {
+  fileRevision: fileRevisionMessages.ru,
   imageVulnerabilities: vulnerabilityMessages.ru,
   ...sttActivationMessages.ru,
   configurationRestore: restoreRevisionMessages.ru,
@@ -4636,6 +4638,7 @@ const ru = {
 
 const en = {
   ...ru,
+  fileRevision: fileRevisionMessages.en,
   imageVulnerabilities: vulnerabilityMessages.en,
   ...sttActivationMessages.en,
   configurationRestore: restoreRevisionMessages.en,

@@ -10,6 +10,32 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 03:23 UTC — source принят, activation ещё впереди
+
+Base3352cd9e, та же ветка/Draft1807/Issue1797. Backend171 posthash exact
+ownedTree37713e46…4488d2, frontend39 + scan3/layout2 приняты через apply_patch.
+Final WIREb8dd10c6…1f3, generated SDK5enum. ROOT дополнительно исправил2
+message catalog файла: новое право и сообщение создания версии ru/en.
+Full frontend396/3729 PASS54.68s после начального FAIL2missing labels;
+target31PASS, scoped lint/format, typecheck/build2791, CPunit/SQL/authority
+PASS. ROOT combined disposable PG4suites PASS37.680s; live ещё NOT RUN.
+
+Не отправлять AI turn до миграций12→13→14 и serving/readback. Delivery gap:
+deploy-local.sh trusted quiesce/core не включает artifact-retention; parent
+platform_resync_diagnostics готовит ОТДЕЛЬНЫЙ узкий delivery packet, frozen171
+не меняет. Принять exact base/post, добавить stop/join и selected core delivery
+до schema rollout. Затем fresh canonical full runner/provenance (libs/go INPUTS
+изменились), render, quiesce/migrate/supply/core/readback. В trusted profile
+authority publisher НЕ запускается: exact registry94 встроен в CP; service
+identity generator canonical проверен. Не выдавать old OCI за new source proof.
+
+Live2nodes/42ready до source integration, source mount и host/Pod SHA EQUAL.
+Chrome1230 timeout300s,1257 pending; MCPнеподключён. Own91439 OWNER,
+reload03:22 emptydraft, Filesdesktop1440. Full65QA/business Workflow OPEN.
+Native baseline Artifact art_i2rouMdoEPydz_Izt-NMuQDs v1/rev1/4234bytes
+digestdc0e4965…dc24e сохранять. Следующий обычный запрос безIDs должен
+создать новую immutable revision ЭТОГО Artifact, не новый одноимённый файл.
+
 ## Checkpoint 10.10.2026 03:03 UTC — frozen frontend и native baseline
 
 ROOT c830ff2038cbacf43376e6c237438de3442cb3a2/remote/Draft1807 EQUAL;

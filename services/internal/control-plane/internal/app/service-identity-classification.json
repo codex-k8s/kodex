@@ -1253,8 +1253,23 @@
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {
+      "operation_id": "platform.command.artifact-revisions.download",
+      "source_binding_sha256": "ea03b1bfed9e5c324dfed4ea9b9d58429477478cad859a2656043893584fc30b",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
       "operation_id": "platform.query.artifact-binding-targets.list",
       "source_binding_sha256": "7e4cac6d80224e12eee9c81b7bae275b1f6cc45dc9f76fc896ee9d8a88e9f071",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.artifact-revisions.get",
+      "source_binding_sha256": "1cfdd4125cc32722a79f1d4116658bba3f6ba31ac8455a8a408793c108f9b817",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.artifact-revisions.list",
+      "source_binding_sha256": "019c34d1266be1d2d0069b519848285e07bfe3892385ef8dc6475f04ce58be21",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {

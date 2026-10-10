@@ -130,6 +130,7 @@ const toolNode: RunNode = {
 
 const artifact: Artifact = {
   ref: "art_report",
+  currentRevisionRef: "arv_fixture_report",
   version: 1,
   projectRef: run.projectRef,
   runRef: run.ref,

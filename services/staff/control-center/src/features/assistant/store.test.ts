@@ -46,6 +46,11 @@ vi.mock("@/features/assistant/api", () => ({
 import { useAssistantStore } from "@/features/assistant/store";
 import { usePlatformStore } from "@/features/platform/store";
 import { assistantRoleImageBuildTarget } from "@/features/assistant/model";
+import {
+  appliedFilePlanFixture,
+  fileOperationFixture,
+  requireFixture,
+} from "./project-file-plan.fixtures";
 
 const context: AssistantContextDescriptor = {
   route: "/projects/prj_sales",
@@ -2234,4 +2239,42 @@ describe("assistant workspace store", () => {
     expect(store.selectedConversation?.turns[0]?.plan?.receipt).toBeUndefined();
     expect(readConversationsMock).not.toHaveBeenCalled();
   });
+
+  it.each([false, true])(
+    "new file revision native receipt missing=%s закрыто проверяется до APPLIED",
+    async (missing) => {
+      const source = { ...plan(), operations: [fileOperationFixture()] };
+      const receipt = {
+        ...requireFixture(appliedFilePlanFixture().receipt),
+        planRef: source.ref,
+        planRevision: source.revision,
+      };
+      if (missing)
+        delete requireFixture(receipt.operationReceipts[0]).artifactRevision;
+      applyPlanDraftMock.mockResolvedValue({
+        conversation: { ref: source.conversationRef },
+        plan: {
+          ...source,
+          state: "APPLIED",
+          applied: true,
+          version: source.version + 1,
+        },
+        receipt,
+        createdResourceRefs: [],
+      });
+      const store = useAssistantStore();
+      store.conversations = [conversation(source)];
+      store.selectedRef = source.conversationRef;
+      if (missing) {
+        await expect(store.apply(source)).rejects.toBeInstanceOf(AppProblem);
+        expect(store.receipt).toBeUndefined();
+        expect(store.selectedConversation?.turns[0]?.plan?.state).toBe("VALID");
+      } else {
+        expect(await store.apply(source)).toEqual(receipt);
+        expect(store.selectedConversation?.turns[0]?.plan?.receipt).toEqual(
+          receipt,
+        );
+      }
+    },
+  );
 });

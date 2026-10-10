@@ -1840,7 +1840,7 @@ func decodeArtifactCursor(token string) (*time.Time, string, error) {
 func scanArtifact(row rowScanner) (entity.Artifact, error) {
 	var item entity.Artifact
 	var canManage bool
-	if err := row.Scan(&item.Ref, &item.ProjectRef, &item.RunRef, &item.SessionRef, &item.NodeRef, &item.FileName, &item.MediaType, &item.Digest, &item.ScanState, &item.PreviewState, &item.Source, &item.SizeBytes, &item.Revision, &item.Version, &item.LifecycleState, &item.CreatedAt, &item.DeletedAt, &item.PurgeAfter, &item.Bindings, &canManage); err != nil {
+	if err := row.Scan(&item.Ref, &item.ProjectRef, &item.RunRef, &item.SessionRef, &item.NodeRef, &item.FileName, &item.MediaType, &item.Digest, &item.ScanState, &item.PreviewState, &item.Source, &item.CurrentRevisionRef, &item.SizeBytes, &item.Revision, &item.Version, &item.LifecycleState, &item.CreatedAt, &item.DeletedAt, &item.PurgeAfter, &item.Bindings, &canManage); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.Artifact{}, errs.ErrNotFound
 		}
@@ -2439,6 +2439,7 @@ func (repository *Repository) attachConversation(ctx context.Context, tx pgx.Tx,
 		if json.Unmarshal(raw, &plan.Operations) != nil {
 			return errs.ErrUnavailable
 		}
+		redactAssistantFilePlanOperations(plan.Operations)
 		if receiptRef != "" && receiptRevision == plan.Revision && assistantPlanStateHasReceipt(plan.State) {
 			if !assistantPlanReceiptMatchesState(plan.State, receiptOutcome) || receiptCreatedAt == nil {
 				return errs.ErrUnavailable

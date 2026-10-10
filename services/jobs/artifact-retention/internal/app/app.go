@@ -16,6 +16,7 @@ import (
 	sharedobservability "github.com/codex-k8s/kodex/libs/go/observability"
 	"github.com/codex-k8s/kodex/libs/go/securefile"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
+	"github.com/codex-k8s/kodex/services/jobs/artifact-retention/internal/prepared"
 	retentionpostgres "github.com/codex-k8s/kodex/services/jobs/artifact-retention/internal/repository/postgres"
 	"github.com/codex-k8s/kodex/services/jobs/artifact-retention/internal/retention"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -57,6 +58,11 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		pool.Close()
 		return errors.New("artifact-retention object storage startup barrier failed")
 	}
+	preparedRepository := retentionpostgres.New(pool)
+	if err := preparedRepository.CheckPrepared(startup); err != nil {
+		pool.Close()
+		return err
+	}
 	readiness := serviceruntime.NewReadiness()
 	readiness.Set(true, "ready")
 	metrics.SetReady(true)
@@ -78,6 +84,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		serveTechnical(technical),
 		monitorReadiness(pool, objects, readiness, metrics, logger, config),
 		runRetentionLoop(processor, retentionMetrics, logger, config),
+		runPreparedLoop(prepared.NewProcessor(preparedRepository, objects), logger, config),
 	)
 	err = workers.Wait(context.WithoutCancel(lifecycle))
 	readiness.Set(false, "stopping")
@@ -170,6 +177,9 @@ func monitorReadiness(pool *pgxpool.Pool, objects dependencyChecker, readiness *
 			err := pool.Ping(check)
 			if err == nil {
 				err = objects.Check(check)
+			}
+			if err == nil {
+				err = retentionpostgres.New(pool).CheckPrepared(check)
 			}
 			cancel()
 			if err == nil {

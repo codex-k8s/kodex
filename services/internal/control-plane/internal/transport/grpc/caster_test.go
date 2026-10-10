@@ -337,6 +337,28 @@ func TestCastPlanIncludesPersistedReceipt(t *testing.T) {
 	}
 }
 
+func TestCastPlanRedactsHistoricalFileBodyWithoutChangingReceipt(t *testing.T) {
+	t.Parallel()
+	fields := map[string]any{"fileName": "note.md", "content": "historical body"}
+	for _, useInput := range []bool{false, true} {
+		op := entity.AssistantPlanOperation{Type: "CREATE_PROJECT_FILE", Parameters: fields, After: fields}
+		if useInput {
+			op.Parameters, op.Input = nil, fields
+		}
+		plan := castPlan(&entity.AssistantPlan{State: "APPLIED", Operations: []entity.AssistantPlanOperation{op},
+			Receipt: &entity.AssistantPlanReceipt{Ref: "rct_exact", Outcome: "APPLIED"}})
+		if _, exists := plan.Operations[0].Parameters.AsMap()["content"]; exists {
+			t.Fatal("historical file body leaked through parameters/input replay")
+		}
+		if _, exists := plan.Operations[0].After.AsMap()["content"]; exists {
+			t.Fatal("historical file body leaked through after")
+		}
+		if plan.Receipt.Ref != "rct_exact" || fields["content"] != "historical body" {
+			t.Fatal("immutable receipt or stored historical fields changed")
+		}
+	}
+}
+
 func TestCastConversationUsesPublicAssistantTurnShape(t *testing.T) {
 	t.Parallel()
 

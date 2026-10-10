@@ -64,4 +64,17 @@ describe("FilesWorkspace contract", () => {
     expect(source).toContain("flex-basis: 100%");
     expect(source).toContain("width: 148px");
   });
+
+  it("оставляет действиям отдельное место и сжимает текстовые колонки", () => {
+    expect(source).toMatch(
+      /grid-template-columns:\s*minmax\(0, 1\.5fr\) minmax\(0, 1fr\)\s*48px 100px 110px;/,
+    );
+    expect(source).toContain("padding: 8px 152px 8px 14px");
+    expect(source).toContain("padding-left: 48px");
+    expect(source).not.toContain("minmax(260px, 1.5fr)");
+    expect(source).toContain(':title="formatDate(artifact.createdAt)"');
+    expect(source).toMatch(
+      /\.file-list-row__date\s*\{[^}]*overflow: hidden;[^}]*text-overflow: ellipsis;[^}]*white-space: nowrap;/,
+    );
+  });
 });

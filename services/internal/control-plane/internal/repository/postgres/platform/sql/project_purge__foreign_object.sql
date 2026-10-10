@@ -1,7 +1,7 @@
 -- name: project_purge__foreign_object :one
 SELECT EXISTS (
-    SELECT 1 FROM control_plane.artifact_content content
-    JOIN control_plane.artifacts artifact ON artifact.id=content.artifact_id
+    SELECT 1 FROM control_plane.artifact_revision_content content
+    JOIN control_plane.artifact_history artifact ON artifact.revision_id=content.revision_id
     WHERE content.object_key=@object_key
       AND (artifact.organization_id<>@organization_id::uuid OR artifact.project_id IS DISTINCT FROM @project_id::uuid)
     UNION ALL

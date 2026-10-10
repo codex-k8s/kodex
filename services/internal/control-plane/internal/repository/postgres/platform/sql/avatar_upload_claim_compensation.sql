@@ -16,8 +16,8 @@ WHERE reservation.ref = @reservation_ref
        (reservation.object_version = @object_version AND reservation.object_etag = @object_etag))
   AND NOT EXISTS (
       SELECT 1
-      FROM control_plane.artifacts artifact
-      JOIN control_plane.artifact_content content ON content.artifact_id = artifact.id
+      FROM control_plane.artifact_history artifact
+      JOIN control_plane.artifact_revision_content content ON content.revision_id = artifact.revision_id
       WHERE artifact.ref = reservation.artifact_ref
         AND content.object_key = @object_key
         AND content.digest = @digest

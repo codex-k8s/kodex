@@ -38,7 +38,7 @@ func (repository *Repository) Claim(
 	claims := make([]retention.Claim, 0, batchSize)
 	for rows.Next() {
 		var claim retention.Claim
-		if err := rows.Scan(&claim.ArtifactID, &claim.ArtifactRef, &claim.ObjectKey, &claim.ObjectVersion, &claim.Generation); err != nil {
+		if err := rows.Scan(&claim.ArtifactID, &claim.ArtifactRef, &claim.RevisionID, &claim.ObjectKey, &claim.ObjectVersion, &claim.Generation); err != nil {
 			return nil, fmt.Errorf("scan artifact retention claim: %w", err)
 		}
 		claims = append(claims, claim)
@@ -71,11 +71,30 @@ func (repository *Repository) Finalize(
 	if err != nil {
 		return fmt.Errorf("lock artifact retention claim: %w", err)
 	}
-	arguments := pgx.StrictNamedArgs{"artifact_id": claim.ArtifactID}
-	for _, query := range []string{queryDeleteBindings, queryDeleteDownloadGrants, queryDeleteContent} {
-		if _, err := tx.Exec(ctx, query, arguments); err != nil {
-			return fmt.Errorf("delete artifact retention dependency: %w", err)
+	deleted, err := tx.Exec(ctx, queryDeleteContent, pgx.StrictNamedArgs{
+		"artifact_id": claim.ArtifactID, "revision_id": claim.RevisionID,
+		"object_key": claim.ObjectKey, "object_version": claim.ObjectVersion,
+	})
+	if err != nil {
+		return fmt.Errorf("delete artifact retention receipt: %w", err)
+	}
+	if deleted.RowsAffected() != 1 {
+		return retention.ErrLostClaim
+	}
+	var remaining bool
+	if err := tx.QueryRow(ctx, queryHasContent, pgx.StrictNamedArgs{"artifact_id": claim.ArtifactID}).Scan(&remaining); err != nil {
+		return fmt.Errorf("read remaining artifact revisions: %w", err)
+	}
+	if remaining {
+		if _, err := tx.Exec(ctx, queryReleaseClaim, pgx.StrictNamedArgs{
+			"artifact_id": claim.ArtifactID, "claim_owner": owner, "claim_generation": claim.Generation,
+		}); err != nil {
+			return fmt.Errorf("release artifact revision retention claim: %w", err)
 		}
+		if err := tx.Commit(ctx); err != nil {
+			return fmt.Errorf("commit artifact revision retention receipt: %w", err)
+		}
+		return nil
 	}
 	var actorID string
 	if err := tx.QueryRow(ctx, queryUpsertServiceSubject, pgx.StrictNamedArgs{"organization_id": organizationID}).Scan(&actorID); err != nil {
@@ -91,6 +110,9 @@ func (repository *Repository) Finalize(
 	}
 	if result.RowsAffected() != 1 {
 		return retention.ErrLostClaim
+	}
+	if _, err := tx.Exec(ctx, queryDeleteRevisions, pgx.StrictNamedArgs{"artifact_id": claim.ArtifactID}); err != nil {
+		return fmt.Errorf("delete purged artifact revision metadata: %w", err)
 	}
 	auditRef := "aud_" + uuid.NewString()
 	correlationRef := fmt.Sprintf("retention_%s_%d", claim.ArtifactRef, claim.Generation)

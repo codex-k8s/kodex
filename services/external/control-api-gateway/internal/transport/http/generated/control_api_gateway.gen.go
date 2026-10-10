@@ -607,6 +607,60 @@ func (e ArtifactPurgeReceiptLifecycleState) Valid() bool {
 	}
 }
 
+// Defines values for ArtifactRevisionScanState.
+const (
+	ArtifactRevisionScanStateCLEAN       ArtifactRevisionScanState = "CLEAN"
+	ArtifactRevisionScanStateFAILED      ArtifactRevisionScanState = "FAILED"
+	ArtifactRevisionScanStatePENDING     ArtifactRevisionScanState = "PENDING"
+	ArtifactRevisionScanStateQUARANTINED ArtifactRevisionScanState = "QUARANTINED"
+	ArtifactRevisionScanStateSCANNING    ArtifactRevisionScanState = "SCANNING"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactRevisionScanState enum.
+func (e ArtifactRevisionScanState) Valid() bool {
+	switch e {
+	case ArtifactRevisionScanStateCLEAN:
+		return true
+	case ArtifactRevisionScanStateFAILED:
+		return true
+	case ArtifactRevisionScanStatePENDING:
+		return true
+	case ArtifactRevisionScanStateQUARANTINED:
+		return true
+	case ArtifactRevisionScanStateSCANNING:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArtifactRevisionSource.
+const (
+	ArtifactRevisionSourceAGENTRESULT           ArtifactRevisionSource = "AGENT_RESULT"
+	ArtifactRevisionSourceCONTROLCENTER         ArtifactRevisionSource = "CONTROL_CENTER"
+	ArtifactRevisionSourceINTEGRATIONRESULT     ArtifactRevisionSource = "INTEGRATION_RESULT"
+	ArtifactRevisionSourceINTERACTIONATTACHMENT ArtifactRevisionSource = "INTERACTION_ATTACHMENT"
+	ArtifactRevisionSourceKNOWLEDGESOURCE       ArtifactRevisionSource = "KNOWLEDGE_SOURCE"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactRevisionSource enum.
+func (e ArtifactRevisionSource) Valid() bool {
+	switch e {
+	case ArtifactRevisionSourceAGENTRESULT:
+		return true
+	case ArtifactRevisionSourceCONTROLCENTER:
+		return true
+	case ArtifactRevisionSourceINTEGRATIONRESULT:
+		return true
+	case ArtifactRevisionSourceINTERACTIONATTACHMENT:
+		return true
+	case ArtifactRevisionSourceKNOWLEDGESOURCE:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AssistantContextDescriptorAllowedOperations.
 const (
 	AssistantContextDescriptorAllowedOperationsARCHIVEAGENT                                 AssistantContextDescriptorAllowedOperations = "ARCHIVE_AGENT"
@@ -622,6 +676,7 @@ const (
 	AssistantContextDescriptorAllowedOperationsCREATEPROJECT                                AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT"
 	AssistantContextDescriptorAllowedOperationsCREATEPROJECTASSISTANT                       AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_ASSISTANT"
 	AssistantContextDescriptorAllowedOperationsCREATEPROJECTFILE                            AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_FILE"
+	AssistantContextDescriptorAllowedOperationsCREATEPROJECTFILEREVISION                    AssistantContextDescriptorAllowedOperations = "CREATE_PROJECT_FILE_REVISION"
 	AssistantContextDescriptorAllowedOperationsCREATEROLEIMAGERECIPE                        AssistantContextDescriptorAllowedOperations = "CREATE_ROLE_IMAGE_RECIPE"
 	AssistantContextDescriptorAllowedOperationsCREATERUNTIMEENVIRONMENTDRAFT                AssistantContextDescriptorAllowedOperations = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
 	AssistantContextDescriptorAllowedOperationsCREATESCHEDULE                               AssistantContextDescriptorAllowedOperations = "CREATE_SCHEDULE"
@@ -671,6 +726,8 @@ func (e AssistantContextDescriptorAllowedOperations) Valid() bool {
 	case AssistantContextDescriptorAllowedOperationsCREATEPROJECTASSISTANT:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATEPROJECTFILE:
+		return true
+	case AssistantContextDescriptorAllowedOperationsCREATEPROJECTFILEREVISION:
 		return true
 	case AssistantContextDescriptorAllowedOperationsCREATEROLEIMAGERECIPE:
 		return true
@@ -826,6 +883,7 @@ const (
 	AssistantPlanOperationTypeCREATEPROJECT                                AssistantPlanOperationType = "CREATE_PROJECT"
 	AssistantPlanOperationTypeCREATEPROJECTASSISTANT                       AssistantPlanOperationType = "CREATE_PROJECT_ASSISTANT"
 	AssistantPlanOperationTypeCREATEPROJECTFILE                            AssistantPlanOperationType = "CREATE_PROJECT_FILE"
+	AssistantPlanOperationTypeCREATEPROJECTFILEREVISION                    AssistantPlanOperationType = "CREATE_PROJECT_FILE_REVISION"
 	AssistantPlanOperationTypeCREATEROLEIMAGERECIPE                        AssistantPlanOperationType = "CREATE_ROLE_IMAGE_RECIPE"
 	AssistantPlanOperationTypeCREATERUNTIMEENVIRONMENTDRAFT                AssistantPlanOperationType = "CREATE_RUNTIME_ENVIRONMENT_DRAFT"
 	AssistantPlanOperationTypeCREATESCHEDULE                               AssistantPlanOperationType = "CREATE_SCHEDULE"
@@ -875,6 +933,8 @@ func (e AssistantPlanOperationType) Valid() bool {
 	case AssistantPlanOperationTypeCREATEPROJECTASSISTANT:
 		return true
 	case AssistantPlanOperationTypeCREATEPROJECTFILE:
+		return true
+	case AssistantPlanOperationTypeCREATEPROJECTFILEREVISION:
 		return true
 	case AssistantPlanOperationTypeCREATEROLEIMAGERECIPE:
 		return true
@@ -1821,16 +1881,16 @@ func (e EmailMailboxTLSMode) Valid() bool {
 
 // Defines values for EmailReconciliationOutcome.
 const (
-	EmailReconciliationOutcomeEFFECTCONFIRMED   EmailReconciliationOutcome = "EFFECT_CONFIRMED"
-	EmailReconciliationOutcomeNOEFFECTCONFIRMED EmailReconciliationOutcome = "NO_EFFECT_CONFIRMED"
+	EFFECTCONFIRMED   EmailReconciliationOutcome = "EFFECT_CONFIRMED"
+	NOEFFECTCONFIRMED EmailReconciliationOutcome = "NO_EFFECT_CONFIRMED"
 )
 
 // Valid indicates whether the value is a known member of the EmailReconciliationOutcome enum.
 func (e EmailReconciliationOutcome) Valid() bool {
 	switch e {
-	case EmailReconciliationOutcomeEFFECTCONFIRMED:
+	case EFFECTCONFIRMED:
 		return true
-	case EmailReconciliationOutcomeNOEFFECTCONFIRMED:
+	case NOEFFECTCONFIRMED:
 		return true
 	default:
 		return false
@@ -8895,16 +8955,16 @@ func (e ListOrganizationArtifactsParamsSourceKinds) Valid() bool {
 
 // Defines values for DownloadArtifactParamsPurpose.
 const (
-	DOWNLOAD DownloadArtifactParamsPurpose = "DOWNLOAD"
-	PREVIEW  DownloadArtifactParamsPurpose = "PREVIEW"
+	DownloadArtifactParamsPurposeDOWNLOAD DownloadArtifactParamsPurpose = "DOWNLOAD"
+	DownloadArtifactParamsPurposePREVIEW  DownloadArtifactParamsPurpose = "PREVIEW"
 )
 
 // Valid indicates whether the value is a known member of the DownloadArtifactParamsPurpose enum.
 func (e DownloadArtifactParamsPurpose) Valid() bool {
 	switch e {
-	case DOWNLOAD:
+	case DownloadArtifactParamsPurposeDOWNLOAD:
 		return true
-	case PREVIEW:
+	case DownloadArtifactParamsPurposePREVIEW:
 		return true
 	default:
 		return false
@@ -8923,6 +8983,24 @@ func (e GetArtifactImpactParamsAction) Valid() bool {
 	case GetArtifactImpactParamsActionDELETE:
 		return true
 	case GetArtifactImpactParamsActionPURGE:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DownloadArtifactRevisionParamsPurpose.
+const (
+	DownloadArtifactRevisionParamsPurposeDOWNLOAD DownloadArtifactRevisionParamsPurpose = "DOWNLOAD"
+	DownloadArtifactRevisionParamsPurposePREVIEW  DownloadArtifactRevisionParamsPurpose = "PREVIEW"
+)
+
+// Valid indicates whether the value is a known member of the DownloadArtifactRevisionParamsPurpose enum.
+func (e DownloadArtifactRevisionParamsPurpose) Valid() bool {
+	switch e {
+	case DownloadArtifactRevisionParamsPurposeDOWNLOAD:
+		return true
+	case DownloadArtifactRevisionParamsPurposePREVIEW:
 		return true
 	default:
 		return false
@@ -9513,16 +9591,16 @@ func (e GetProviderAccountParamsUsagePurpose) Valid() bool {
 
 // Defines values for ListRunsParamsTargetType.
 const (
-	ListRunsParamsTargetTypeAGENT    ListRunsParamsTargetType = "AGENT"
-	ListRunsParamsTargetTypeWORKFLOW ListRunsParamsTargetType = "WORKFLOW"
+	AGENT    ListRunsParamsTargetType = "AGENT"
+	WORKFLOW ListRunsParamsTargetType = "WORKFLOW"
 )
 
 // Valid indicates whether the value is a known member of the ListRunsParamsTargetType enum.
 func (e ListRunsParamsTargetType) Valid() bool {
 	switch e {
-	case ListRunsParamsTargetTypeAGENT:
+	case AGENT:
 		return true
-	case ListRunsParamsTargetTypeWORKFLOW:
+	case WORKFLOW:
 		return true
 	default:
 		return false
@@ -10023,25 +10101,26 @@ type AgentRuntimeEnvironmentBinding struct {
 
 // Artifact defines model for Artifact.
 type Artifact struct {
-	AgentBindings    []OpaqueRef            `json:"agentBindings"`
-	CreatedAt        Timestamp              `json:"createdAt"`
-	DeletedAt        *Timestamp             `json:"deletedAt,omitempty"`
-	Digest           string                 `json:"digest"`
-	FileName         string                 `json:"fileName"`
-	LifecycleState   ArtifactLifecycleState `json:"lifecycleState"`
-	MediaType        string                 `json:"mediaType"`
-	NextActions      []NextAction           `json:"nextActions"`
-	PreviewAvailable bool                   `json:"previewAvailable"`
-	ProjectRef       *OpaqueRef             `json:"projectRef,omitempty"`
-	PurgeAfter       *Timestamp             `json:"purgeAfter,omitempty"`
-	Ref              OpaqueRef              `json:"ref"`
-	Revision         int                    `json:"revision"`
-	RunRef           *OpaqueRef             `json:"runRef,omitempty"`
-	ScanState        ArtifactScanState      `json:"scanState"`
-	SessionRef       *OpaqueRef             `json:"sessionRef,omitempty"`
-	SizeBytes        int64                  `json:"sizeBytes"`
-	Source           ArtifactSource         `json:"source"`
-	Version          int64                  `json:"version"`
+	AgentBindings      []OpaqueRef            `json:"agentBindings"`
+	CreatedAt          Timestamp              `json:"createdAt"`
+	CurrentRevisionRef OpaqueRef              `json:"currentRevisionRef"`
+	DeletedAt          *Timestamp             `json:"deletedAt,omitempty"`
+	Digest             string                 `json:"digest"`
+	FileName           string                 `json:"fileName"`
+	LifecycleState     ArtifactLifecycleState `json:"lifecycleState"`
+	MediaType          string                 `json:"mediaType"`
+	NextActions        []NextAction           `json:"nextActions"`
+	PreviewAvailable   bool                   `json:"previewAvailable"`
+	ProjectRef         *OpaqueRef             `json:"projectRef,omitempty"`
+	PurgeAfter         *Timestamp             `json:"purgeAfter,omitempty"`
+	Ref                OpaqueRef              `json:"ref"`
+	Revision           int                    `json:"revision"`
+	RunRef             *OpaqueRef             `json:"runRef,omitempty"`
+	ScanState          ArtifactScanState      `json:"scanState"`
+	SessionRef         *OpaqueRef             `json:"sessionRef,omitempty"`
+	SizeBytes          int64                  `json:"sizeBytes"`
+	Source             ArtifactSource         `json:"source"`
+	Version            int64                  `json:"version"`
 }
 
 // ArtifactLifecycleState defines model for Artifact.LifecycleState.
@@ -10136,6 +10215,34 @@ type ArtifactPurgeReceipt struct {
 
 // ArtifactPurgeReceiptLifecycleState defines model for ArtifactPurgeReceipt.LifecycleState.
 type ArtifactPurgeReceiptLifecycleState string
+
+// ArtifactRevision defines model for ArtifactRevision.
+type ArtifactRevision struct {
+	ArtifactRef      OpaqueRef                 `json:"artifactRef"`
+	CreatedAt        Timestamp                 `json:"createdAt"`
+	Digest           string                    `json:"digest"`
+	FileName         string                    `json:"fileName"`
+	MediaType        string                    `json:"mediaType"`
+	PreviewAvailable bool                      `json:"previewAvailable"`
+	Ref              OpaqueRef                 `json:"ref"`
+	Revision         int64                     `json:"revision"`
+	ScanState        ArtifactRevisionScanState `json:"scanState"`
+	SizeBytes        int64                     `json:"sizeBytes"`
+	Source           ArtifactRevisionSource    `json:"source"`
+}
+
+// ArtifactRevisionScanState defines model for ArtifactRevision.ScanState.
+type ArtifactRevisionScanState string
+
+// ArtifactRevisionSource defines model for ArtifactRevision.Source.
+type ArtifactRevisionSource string
+
+// ArtifactRevisionPage defines model for ArtifactRevisionPage.
+type ArtifactRevisionPage struct {
+	Items         []ArtifactRevision `json:"items"`
+	NextPageToken *string            `json:"nextPageToken,omitempty"`
+	Total         int64              `json:"total"`
+}
 
 // AssistantContextDescriptor defines model for AssistantContextDescriptor.
 type AssistantContextDescriptor struct {
@@ -10250,10 +10357,11 @@ type AssistantPlanReceipt struct {
 	CreatedAt           Timestamp   `json:"createdAt"`
 	CreatedResourceRefs []OpaqueRef `json:"createdResourceRefs"`
 	OperationReceipts   []struct {
-		AuditRef     OpaqueRef                                    `json:"auditRef"`
-		OperationRef OpaqueRef                                    `json:"operationRef"`
-		Outcome      AssistantPlanReceiptOperationReceiptsOutcome `json:"outcome"`
-		ResourceRef  OpaqueRef                                    `json:"resourceRef"`
+		ArtifactRevision *ArtifactRevision                            `json:"artifactRevision,omitempty"`
+		AuditRef         OpaqueRef                                    `json:"auditRef"`
+		OperationRef     OpaqueRef                                    `json:"operationRef"`
+		Outcome          AssistantPlanReceiptOperationReceiptsOutcome `json:"outcome"`
+		ResourceRef      OpaqueRef                                    `json:"resourceRef"`
 	} `json:"operationReceipts"`
 	Outcome      AssistantPlanReceiptOutcome `json:"outcome"`
 	PlanRef      OpaqueRef                   `json:"planRef"`
@@ -15865,6 +15973,20 @@ type RestoreArtifactParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// ListArtifactRevisionsParams defines parameters for ListArtifactRevisions.
+type ListArtifactRevisionsParams struct {
+	PageSize  *int       `form:"pageSize,omitempty" json:"pageSize,omitempty"`
+	PageToken *PageToken `form:"pageToken,omitempty" json:"pageToken,omitempty"`
+}
+
+// DownloadArtifactRevisionParams defines parameters for DownloadArtifactRevision.
+type DownloadArtifactRevisionParams struct {
+	Purpose DownloadArtifactRevisionParamsPurpose `form:"purpose" json:"purpose"`
+}
+
+// DownloadArtifactRevisionParamsPurpose defines parameters for DownloadArtifactRevision.
+type DownloadArtifactRevisionParamsPurpose string
+
 // ListAssistantConversationsParams defines parameters for ListAssistantConversations.
 type ListAssistantConversationsParams struct {
 	AssistantScope *AssistantScope             `form:"assistantScope,omitempty" json:"assistantScope,omitempty"`
@@ -19454,6 +19576,15 @@ type ServerInterface interface {
 
 	// (POST /api/v1/artifacts/{artifactRef}/restore)
 	RestoreArtifact(w http.ResponseWriter, r *http.Request, artifactRef ArtifactRef, params RestoreArtifactParams)
+
+	// (GET /api/v1/artifacts/{artifactRef}/revisions)
+	ListArtifactRevisions(w http.ResponseWriter, r *http.Request, artifactRef ArtifactRef, params ListArtifactRevisionsParams)
+
+	// (GET /api/v1/artifacts/{artifactRef}/revisions/{revisionRef})
+	GetArtifactRevision(w http.ResponseWriter, r *http.Request, artifactRef ArtifactRef, revisionRef OpaqueRef)
+
+	// (GET /api/v1/artifacts/{artifactRef}/revisions/{revisionRef}/content)
+	DownloadArtifactRevision(w http.ResponseWriter, r *http.Request, artifactRef ArtifactRef, revisionRef OpaqueRef, params DownloadArtifactRevisionParams)
 
 	// (GET /api/v1/assistant-conversations)
 	ListAssistantConversations(w http.ResponseWriter, r *http.Request, params ListAssistantConversationsParams)
@@ -25029,6 +25160,165 @@ func (siw *ServerInterfaceWrapper) RestoreArtifact(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RestoreArtifact(w, r, artifactRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListArtifactRevisions operation middleware
+func (siw *ServerInterfaceWrapper) ListArtifactRevisions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "artifactRef" -------------
+	var artifactRef ArtifactRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactRef", r.PathValue("artifactRef"), &artifactRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListArtifactRevisionsParams
+
+	// ------------- Optional query parameter "pageSize" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageSize", r.URL.Query(), &params.PageSize, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageSize"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageSize", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "pageToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "pageToken", r.URL.Query(), &params.PageToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "pageToken"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "pageToken", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListArtifactRevisions(w, r, artifactRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifactRevision operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifactRevision(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "artifactRef" -------------
+	var artifactRef ArtifactRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactRef", r.PathValue("artifactRef"), &artifactRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "revisionRef" -------------
+	var revisionRef OpaqueRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "revisionRef", r.PathValue("revisionRef"), &revisionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "revisionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifactRevision(w, r, artifactRef, revisionRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DownloadArtifactRevision operation middleware
+func (siw *ServerInterfaceWrapper) DownloadArtifactRevision(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "artifactRef" -------------
+	var artifactRef ArtifactRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifactRef", r.PathValue("artifactRef"), &artifactRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifactRef", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "revisionRef" -------------
+	var revisionRef OpaqueRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "revisionRef", r.PathValue("revisionRef"), &revisionRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "revisionRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DownloadArtifactRevisionParams
+
+	// ------------- Required query parameter "purpose" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "purpose", r.URL.Query(), &params.Purpose, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "purpose"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "purpose", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DownloadArtifactRevision(w, r, artifactRef, revisionRef, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -49751,6 +50041,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/impact", wrapper.GetArtifactImpact)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/purge", wrapper.PurgeArtifact)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/restore", wrapper.RestoreArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/revisions", wrapper.ListArtifactRevisions)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/revisions/{revisionRef}", wrapper.GetArtifactRevision)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/artifacts/{artifactRef}/revisions/{revisionRef}/content", wrapper.DownloadArtifactRevision)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/assistant-conversations", wrapper.ListAssistantConversations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/assistant-conversations", wrapper.CreateAssistantConversation)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/v1/assistant-conversations/{conversationRef}", wrapper.PurgeAssistantConversation)

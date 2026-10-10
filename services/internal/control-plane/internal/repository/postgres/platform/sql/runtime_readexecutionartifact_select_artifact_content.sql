@@ -31,13 +31,13 @@ LEFT JOIN control_plane.session_turns AS turn
   ON turn.id = node.turn_id
 JOIN control_plane.agents AS agent
   ON agent.id = node.agent_id
-JOIN control_plane.artifacts AS artifact
+JOIN control_plane.artifact_history AS artifact
   ON artifact.organization_id = lease.organization_id
  AND artifact.project_id IS NOT DISTINCT FROM run.project_id
 LEFT JOIN control_plane.projects AS project
   ON project.id = artifact.project_id
-JOIN control_plane.artifact_content AS content
-  ON content.artifact_id = artifact.id
+JOIN control_plane.artifact_revision_content AS content
+  ON content.revision_id = artifact.revision_id
 JOIN LATERAL (
     SELECT candidates.item FROM (
     SELECT exact.item,0 AS priority,exact.ordinal
@@ -59,7 +59,7 @@ JOIN LATERAL (
       AND control_plane.catalog_resource_visible(lease.organization_id,input_actor.id,'artifact.view','ARTIFACT',input_target.id,input_target.project_id,input_target.owner_id,input_target.related_ids,statement_timestamp(),false)
       AND control_plane.catalog_resource_visible(lease.organization_id,input_actor.id,'artifact.download','ARTIFACT',input_target.id,input_target.project_id,input_target.owner_id,input_target.related_ids,statement_timestamp(),false)
     UNION ALL
-    SELECT jsonb_build_object('version',artifact.version),1,0::bigint
+    SELECT jsonb_build_object('version',skill_entry.artifact_version),1,0::bigint
     FROM jsonb_array_elements(COALESCE(revision.safe_snapshot #> '{contextSnapshot,skills}','[]'::jsonb)) AS skill(item)
     JOIN control_plane.agent_context_bindings binding
       ON binding.organization_id=lease.organization_id AND binding.agent_id=agent.id
@@ -70,6 +70,12 @@ JOIN LATERAL (
       ON skill_revision.id=binding.skill_revision_id AND skill_revision.bundle_id=bundle.id
      AND skill_revision.ref=skill.item->>'revision_ref' AND skill_revision.digest=skill.item->>'digest'
      AND skill_revision.state='PUBLISHED' AND skill_revision.scan_state='CLEAN'
+    JOIN control_plane.runtime_file_catalogs skill_catalog ON skill_catalog.runtime_revision_ref=revision.ref
+      AND skill_catalog.organization_id=lease.organization_id AND skill_catalog.generation=lease.generation AND skill_catalog.frozen
+    JOIN control_plane.runtime_file_visible_entries skill_entry ON skill_entry.catalog_id=skill_catalog.id
+      AND skill_entry.purpose='SKILL' AND skill_entry.artifact_id=artifact.id
+      AND skill_entry.artifact_revision=artifact.revision AND skill_entry.artifact_digest=artifact.digest
+      AND skill_entry.source_revision_ref=skill_revision.ref
     JOIN control_plane.subjects actor ON actor.id=root_run.initiated_by AND actor.organization_id=lease.organization_id AND actor.active
     JOIN control_plane.catalog_access_targets project_target ON project_target.organization_id=lease.organization_id AND project_target.kind='PROJECT' AND project_target.id=run.project_id
     JOIN control_plane.catalog_access_targets agent_target ON agent_target.organization_id=lease.organization_id AND agent_target.kind='AGENT' AND agent_target.id=agent.id
@@ -88,6 +94,10 @@ JOIN LATERAL (
     FROM control_plane.runtime_file_catalogs catalog
     JOIN control_plane.runtime_file_visible_entries entry ON entry.catalog_id=catalog.id
     WHERE catalog.runtime_revision_ref=revision.ref AND entry.artifact_id=artifact.id
+      AND entry.artifact_ref=artifact.ref AND entry.artifact_revision=artifact.revision
+      AND entry.artifact_digest=artifact.digest AND entry.size_bytes=artifact.size_bytes
+      AND entry.media_type=artifact.media_type AND entry.source=artifact.source
+      AND (entry.purpose='SKILL' OR entry.file_name=artifact.file_name)
       AND catalog.organization_id=lease.organization_id AND catalog.generation=lease.generation
     ) candidates
     ORDER BY candidates.priority,candidates.ordinal

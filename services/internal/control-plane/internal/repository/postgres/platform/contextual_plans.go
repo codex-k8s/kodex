@@ -55,11 +55,20 @@ func projectRefByID(ctx context.Context, tx pgx.Tx, projectID string) string {
 	return ref
 }
 
-func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+type assistantPlanDraftPrepared struct {
+	payload                                    command.AssistantPlanDraftInput
+	planID, conversationRef, projectRef, state string
+	version, revision                          int64
+	scope                                      scope
+	operations                                 []entity.AssistantPlanOperation
+	originals                                  map[string]entity.AssistantPlanOperation
+}
+
+func (repository *Repository) prepareAssistantPlanDraftTx(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (assistantPlanDraftPrepared, error) {
 	payload, ok := input.Payload.(command.AssistantPlanDraftInput)
 	if !ok || payload.PlanRef == "" || strings.TrimSpace(payload.Summary) == "" || utf8.RuneCountInString(payload.Summary) > 2000 ||
 		input.Mutation.ExpectedVersion == nil {
-		return commandOutcome{}, errs.ErrInvalid
+		return assistantPlanDraftPrepared{}, errs.ErrInvalid
 	}
 	var planID, conversationRef, state, projectRef string
 	var version, revision int64
@@ -67,23 +76,23 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 	if err := tx.QueryRow(ctx, queryConfigurationUpdateassistantplandraftSelectPlan, scope.organizationID, payload.PlanRef).Scan(
 		&planID, &conversationRef, &state, &version, &revision, &projectRef, &rawCurrent,
 	); err != nil {
-		return commandOutcome{}, errs.ErrNotFound
+		return assistantPlanDraftPrepared{}, errs.ErrNotFound
 	}
 	if version != *input.Mutation.ExpectedVersion {
-		return commandOutcome{}, errs.ErrVersionMismatch
+		return assistantPlanDraftPrepared{}, errs.ErrVersionMismatch
 	}
 	if state == "APPLIED" || state == "REJECTED" {
-		return commandOutcome{}, errs.ErrAlreadyResolved
+		return assistantPlanDraftPrepared{}, errs.ErrAlreadyResolved
 	}
 	var current []entity.AssistantPlanOperation
 	if json.Unmarshal(rawCurrent, &current) != nil {
-		return commandOutcome{}, errs.ErrConflict
+		return assistantPlanDraftPrepared{}, errs.ErrConflict
 	}
 	if len(payload.Operations) != len(current) {
-		return commandOutcome{}, errs.ErrForbidden
+		return assistantPlanDraftPrepared{}, errs.ErrForbidden
 	}
 	if err := repository.constrainAssistantPlanScope(ctx, tx, &scope, conversationRef, payload.Operations); err != nil {
-		return commandOutcome{}, err
+		return assistantPlanDraftPrepared{}, err
 	}
 	currentByKey := make(map[string]entity.AssistantPlanOperation, len(current))
 	for _, operation := range current {
@@ -92,12 +101,23 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 	for index, operation := range payload.Operations {
 		original, exists := currentByKey[operation.Key]
 		if !exists || original.Type != operation.Type {
-			return commandOutcome{}, errs.ErrForbidden
+			return assistantPlanDraftPrepared{}, errs.ErrForbidden
+		}
+		if assistantFileOperation(operation.Type) {
+			if state == "STALE" || assistantString(original.Parameters, "contentRef") == "" {
+				return assistantPlanDraftPrepared{}, errs.ErrConflict
+			}
+			updated, err := rehydrateEditedAssistantFile(original, operation, payload.PreparedContent[operation.Key] != "")
+			if err != nil {
+				return assistantPlanDraftPrepared{}, err
+			}
+			payload.Operations[index] = updated
+			continue
 		}
 		if assistantProjectConfigurationOperation(original) {
 			updated, err := repository.refreshProjectAssistantConfiguration(ctx, tx, scope, original, operation, state == "STALE")
 			if err != nil {
-				return commandOutcome{}, err
+				return assistantPlanDraftPrepared{}, err
 			}
 			payload.Operations[index] = updated
 			continue
@@ -106,85 +126,85 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 		case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", changeProjectAssistantIntegrationGrant, prepareProjectAssistantConnection:
 			updated, err := repository.rehydrateEditedAssistantConfiguration(ctx, tx, scope, original, operation, state == "STALE")
 			if err != nil {
-				return commandOutcome{}, err
+				return assistantPlanDraftPrepared{}, err
 			}
 			payload.Operations[index] = updated
 		case "BIND_AGENT_RUNTIME_ENVIRONMENT":
 			updated, err := repository.rehydrateEditedAssistantBinding(ctx, tx, scope, projectRef, original, operation)
 			if err != nil {
-				return commandOutcome{}, err
+				return assistantPlanDraftPrepared{}, err
 			}
 			payload.Operations[index] = updated
 		case "UPDATE_AGENT":
 			updated, err := rehydrateEditedAssistantAgent(original, operation)
 			if err != nil {
-				return commandOutcome{}, err
+				return assistantPlanDraftPrepared{}, err
 			}
 			payload.Operations[index] = updated
 		case "CREATE_INSTRUCTION_DRAFT":
 			updated, err := rehydrateEditedAssistantInstructionDraft(original, operation)
 			if err != nil {
-				return commandOutcome{}, err
+				return assistantPlanDraftPrepared{}, err
 			}
 			payload.Operations[index] = updated
 		case "CHANGE_CAPABILITY":
 			updated, err := rehydrateEditedAssistantAgentCapability(original, operation)
 			if err != nil {
-				return commandOutcome{}, err
+				return assistantPlanDraftPrepared{}, err
 			}
 			payload.Operations[index] = updated
 		case "CHANGE_INTEGRATION_GRANT":
 			updated, err := repository.rehydrateEditedAssistantIntegrationGrant(ctx, tx, scope, projectRef, original, operation, state == "STALE")
 			if err != nil {
-				return commandOutcome{}, err
+				return assistantPlanDraftPrepared{}, err
 			}
 			payload.Operations[index] = updated
 		case "UPDATE_WORKFLOW":
 			updated, err := rehydrateEditedAssistantWorkflow(original, operation)
 			if err != nil {
-				return commandOutcome{}, err
+				return assistantPlanDraftPrepared{}, err
 			}
 			payload.Operations[index] = updated
 		case "PREPARE_RUNTIME_ENVIRONMENT_REVISION":
 			updated, err := rehydrateEditedAssistantEnvironment(original, operation)
 			if err != nil {
-				return commandOutcome{}, err
+				return assistantPlanDraftPrepared{}, err
 			}
 			payload.Operations[index] = updated
 		case "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
 			updated, err := rehydrateEditedAssistantSystemInstructions(original, operation)
 			if err != nil {
-				return commandOutcome{}, err
+				return assistantPlanDraftPrepared{}, err
 			}
 			payload.Operations[index] = updated
 		case "UPDATE_INTEGRATION_CONNECTION":
 			updated, err := rehydrateEditedAssistantConnection(original, operation)
 			if err != nil {
-				return commandOutcome{}, err
+				return assistantPlanDraftPrepared{}, err
 			}
 			payload.Operations[index] = updated
 		case "UPDATE_SCHEDULE":
 			updated, err := rehydrateEditedAssistantSchedule(original, operation)
 			if err != nil {
-				return commandOutcome{}, err
+				return assistantPlanDraftPrepared{}, err
 			}
 			payload.Operations[index] = updated
 		case "CREATE_ROLE_IMAGE_RECIPE":
 			updated, err := rehydrateEditedAssistantRoleImage(original, operation)
 			if err != nil {
-				return commandOutcome{}, err
+				return assistantPlanDraftPrepared{}, err
 			}
 			payload.Operations[index] = updated
 		case "UPDATE_ROLE_IMAGE_RECIPE":
 			updated, err := repository.refreshEditedAssistantRoleImageUpdate(ctx, tx, scope, projectRef, original, operation, state == "STALE")
 			if err != nil {
-				return commandOutcome{}, err
+				return assistantPlanDraftPrepared{}, err
 			}
 			payload.Operations[index] = updated
 		case "PUBLISH_INTEGRATION_DEFINITION":
 			updated, err := rehydrateEditedAssistantIntegrationDefinitionPublication(original, operation)
 			if err != nil {
-				return commandOutcome{}, err
+				return assistantPlanDraftPrepared{}, err
 			}
 			payload.Operations[index] = updated
 		}
@@ -197,7 +217,7 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 			selected := payload.Operations[index].Selected
 			refreshed, refreshErr := repository.hydrateAssistantOperation(ctx, tx, scope, projectRef, payload.Operations[index])
 			if refreshErr != nil {
-				return commandOutcome{}, refreshErr
+				return assistantPlanDraftPrepared{}, refreshErr
 			}
 			refreshed.Selected = selected
 			payload.Operations[index] = refreshed
@@ -205,6 +225,38 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 	}
 	operations, err := normalizeAssistantOperations(payload.Operations, projectRef)
 	if err != nil {
+		return assistantPlanDraftPrepared{}, err
+	}
+	for _, operation := range operations {
+		planned, err := assistantOperationCommand(operation)
+		if err != nil {
+			return assistantPlanDraftPrepared{}, err
+		}
+		if err := repository.authorizeAssistantPreparedOperation(ctx, tx, scope, operation, planned); err != nil {
+			return assistantPlanDraftPrepared{}, err
+		}
+		if operation.Type == createProjectFileRevision {
+			matches, err := repository.assistantFileRevisionSnapshotMatches(ctx, tx, scope, operation)
+			if err != nil {
+				return assistantPlanDraftPrepared{}, err
+			}
+			if !matches {
+				return assistantPlanDraftPrepared{}, errs.ErrVersionMismatch
+			}
+		}
+	}
+	return assistantPlanDraftPrepared{payload: payload, planID: planID, conversationRef: conversationRef, projectRef: projectRef, state: state, version: version, revision: revision, scope: scope, operations: operations, originals: currentByKey}, nil
+}
+
+func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx pgx.Tx, scope scope, input command.Command) (commandOutcome, error) {
+	prepared, err := repository.prepareAssistantPlanDraftTx(ctx, tx, scope, input)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	payload, planID, conversationRef, projectRef := prepared.payload, prepared.planID, prepared.conversationRef, prepared.projectRef
+	version, revision, operations := prepared.version, prepared.revision, prepared.operations
+	scope = prepared.scope
+	if err := assistantFilePersistenceReady(operations, payload.PreparedContent); err != nil {
 		return commandOutcome{}, err
 	}
 	raw := asJSON(operations)
@@ -223,6 +275,18 @@ func (repository *Repository) updateAssistantPlanDraft(ctx context.Context, tx p
 	if _, err := tx.Exec(ctx, queryConfigurationUpdateassistantplandraftUpdatePlan, planID,
 		strings.TrimSpace(payload.Summary), raw, nextRevision, digest); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	for _, operation := range operations {
+		if !assistantFileOperation(operation.Type) {
+			continue
+		}
+		ledgerID := payload.PreparedContent[operation.Key]
+		if ledgerID == "" {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		if err := repository.linkPreparedContentTx(ctx, tx, scope, ledgerID, planID, nextRevision, operation.Key); err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	plan := entity.AssistantPlan{Ref: payload.PlanRef, ConversationRef: conversationRef, ProjectRef: projectRef,
 		Summary: strings.TrimSpace(payload.Summary), State: "DRAFT", Version: version + 1, Revision: nextRevision,
@@ -367,6 +431,19 @@ func (repository *Repository) validateAssistantPlan(ctx context.Context, tx pgx.
 		if commandErr = repository.authorizeAssistantPreparedOperation(ctx, tx, scope, operation, planned); commandErr != nil {
 			problems = append(problems, assistantPlanAuthorizationProblem(index, commandErr))
 			continue
+		}
+		if assistantFileOperation(operation.Type) {
+			if _, preparedErr := repository.resolveAssistantFileOperationTx(ctx, tx, scope, planID, revision, operation, planned); preparedErr != nil {
+				problems = append(problems, fmt.Sprintf("operation-%d-content-unavailable", index+1))
+				continue
+			}
+		}
+		if operation.Type == createProjectFileRevision {
+			matching, snapshotErr := repository.assistantFileRevisionSnapshotMatches(ctx, tx, scope, operation)
+			if snapshotErr != nil || !matching {
+				problems = append(problems, fmt.Sprintf("operation-%d-snapshot-conflict", index+1))
+				continue
+			}
 		}
 		if operation.Type == prepareProjectAssistantConnection {
 			matching, snapshotErr := repository.projectAssistantConnectionSnapshotMatches(ctx, tx, scope, operation)

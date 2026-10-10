@@ -34,7 +34,7 @@ test("workflow catalog preserves leased source binding in local service registry
 });
 test("control-plane policy preserves exact bindings and excludes STT continuation",() => {
   const policy=buildServicePolicy(source,classification);
-  assert.equal(policy.bindings.length,409);
+  assert.equal(policy.bindings.length,412);
   for (const operation of ["platform.role-images.admission.recovery-terminal.get", "platform.role-images.supply-work.get"]) {
     const bindings=policy.bindings.filter(value=>value.operation_id===operation);
     assert.equal(bindings.length,1);assert.equal(bindings[0].caller_spiffe_id,"spiffe://kodex.local/ns/kodex-system/sa/image-admission-controller");
@@ -47,7 +47,7 @@ test("control-plane policy preserves exact bindings and excludes STT continuatio
     assert.equal(bindings[0].actor_mode,"SERVICE_OWNER_RESOLVED");
     assert.equal(bindings[0].project_required,false);
   }
-  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,316);
+  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,319);
   for (const operation of [
     "platform.organization.role-images.recipes.list",
     "platform.organization.role-images.recipes.get",

@@ -386,6 +386,10 @@ export const serverTokenTranslations = {
   ARTIFACT_PREVIEWED: ["Открыт просмотр файла", "File preview opened"],
   ARTIFACT_PURGED: ["Файл удалён безвозвратно", "File permanently deleted"],
   ARTIFACT_RESTORED: ["Файл восстановлен", "File restored"],
+  ARTIFACT_REVISION_CREATED: [
+    "Создана новая версия файла",
+    "File revision created",
+  ],
   ARTIFACT_UPLOADED: ["Файл загружен", "File uploaded"],
   ASSISTANT_CONVERSATION_ARCHIVED: [
     "Диалог архивирован",

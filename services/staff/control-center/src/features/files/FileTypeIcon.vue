@@ -13,7 +13,10 @@ import { fileVisual } from "@/features/files/model";
 import type { Artifact } from "@/shared/api/generated/openapi/types.gen";
 
 const props = withDefaults(
-  defineProps<{ artifact: Artifact; large?: boolean }>(),
+  defineProps<{
+    artifact: Pick<Artifact, "fileName" | "mediaType">;
+    large?: boolean;
+  }>(),
   { large: false },
 );
 const visual = computed(() => fileVisual(props.artifact));

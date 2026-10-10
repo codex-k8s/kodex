@@ -1124,3 +1124,51 @@ MCP доступ не подтверждён, чужие вкладки не т�
 объединённый ledger/purge/final manifest ещё готовится. ROOT packet adoption,
 forward migration/deploy, новый actual writer и natural-user Apply/history
 NOT RUN. Full65QA, practical file update и business Workflow OPEN.
+
+## Checkpoint 10.10.2026 03:23 UTC — immutable revisions объединены, проверки ROOT
+
+База3352cd9ec4caad98e92783df02cbac581bb5194e, та же ветка и Draft1807,
+Issue1797/1796. После reboot live readback: обе ноды Ready, все42 workloads
+готовы. CP/GW/PWA имеют точный source mount текущего ROOT; SHA выбранных
+host/Pod файлов совпали. Chrome1223 и1230 timeout300s,1257 pending;
+подключение MCP не доказано. Own Playwright91439 OWNER, reload03:22,
+чужие вкладки не менялись. Это не доказательство нового deployed функционала.
+
+Frozen backend171 принят через apply_patch после всех exact preimage guards;
+canonical service-identity generator восстановил JCS без finalLF. Все171
+posthash совпали с ownedTree37713e46…4488d2. Forward-only миграции
+20261010120000 → 20261010130000 → 20261010140000; прежние applied files
+не изменены. Final WIREb8dd10c6…1f3, OpenAPI default Problem и gateway test
+закрепляют412 VERSION_OR_STATE_CONFLICT. Source/default roles, staged
+body/ledger, immutable readers, receipt и terminal scrub идут одним контрактом.
+
+Frontend original39 принят exact posthash, затем scan3/layout2 exact guards.
+Metadata все5 scan states, body CLEAN-only до SDK/retry, history5/page,
+explicit download exact revision и exact Apply receipt/readback. Final SDK
+совпадает с backend5enum; прежние WIRE pins пакетов исторические, они не
+подменяют finalb8dd. Layout исправление встроено, native-after ещё NOT RUN.
+
+ROOT полный frontend396suites/3729tests PASS54.68s. Первый combined прогон
+FAIL2tests: отсутствовали новый permission label и ARTIFACT_REVISION_CREATED
+в пользовательском реестре. Оба ru/en добавлены, targeted31tests PASS1.66s,
+полный повтор PASS. Scoped40file lint/format PASS, ещё2message files ESLint
+и окончательный Prettier PASS; первый Prettier обнаружил перенос строки,
+исправление проверено. Forced typecheck и production build2791modules PASS,
+chunk-size warning сохранён. SQL boundary/authority policy codegen PASSGo1.26.6.
+CP grpc/access full unit и targeted revision/prepared unit PASS.
+
+ROOT actual disposable PostgreSQL18 combined4suites PASS37.680s: immutable
+old/new bodies/history/pins, project helper proposal/draft edit/Validate/Apply/
+replay и terminal ledger/purge. Worker/runner read-only query checks PASS.
+Авторский frozen old-schema backfill/replay, retention component, unit/vet/race,
+Proto/OpenAPI/AsyncAPI/codegen PASS относятся к exact совпавшему packet source,
+не заменяют live migration/serving proof.
+
+Перед activation найден delivery gap: trusted canonical quiesce/core не
+включают artifact-retention, хотя render уже монтирует новый source. Требуется
+узкая repo-owned stop/join, selected apply/CM/rollout/readback коррекция до
+schema activation; она готовится отдельно, обход raw kubectl не применяется.
+Fresh runner full builder/provenance обязателен из-за изменённых libs/go INPUTS.
+Old helper image не меняется только ради opcode: новые runtime/admission pins
+должны подтвердить его действующую eligibility. Новый runner OCI, live migration,
+activation, fresh AI natural update и full65QA NOT RUN; checkbox не менялись.
