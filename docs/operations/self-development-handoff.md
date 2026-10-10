@@ -10,6 +10,43 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 23:57 UTC — runner доставлен, три образа проходят admission
+
+Source/remote Draft1807/clean HOT: eba5f0542f0103ed8a60522ecf4ebff08a273d58.
+Полная OCI база sha256:a33fe631de492cac4f4ddf00e5d2ddc05df8b6e41222e2eadf9a246de77b431d;
+protected runner ELF672c393fab51dc8680125ff7485412a68f8db191bdc99bb5301a1fb1b8dba2bd.
+Build/import, durable seed, девять фаз canonical policy transition,
+exact runtime-role binding, defaults CP/RC, HTTPS OCI graph и настоящий CRI pull
+на обоих узлах PASS. Новый policy digest
+17bb27b8b7472671e2a0a44cdcf0e101dbf0ef6ad16a17cc3d337a82f1fcf59e.
+
+Fresh serving proof PASS: 11 critical source hashes, exact readonly mount,
+Deployment→ReplicaSet→Pod UID, обслуживающий ELF=Air build, Go1.26.6,
+compiled symbols, readiness и повторный readback. CP ELF31cb910beb6ca0db7a93622d41bc5d7655a7cde3c60e8f4a086104a4239210e2;
+RC ELF2803458b68ecc44759cf8b90f5ec7017c2554da8ee29b6e03799fa00dfd83f3c.
+Предыдущие оснастки честно NOT_PROVEN: migration Job Pods попадали в serving
+selector, затем Air PID1 исключался до проверки. Exact lineage и PID1 исправлены
+в новой приватной оснастке; настоящий shell oracle RED→GREEN,14unit PASS.
+Результат относится к debug serving, не immutable release acceptance.
+
+Три native owner image revisions опубликованы без повторного REQUEST_BUILD:
+SYSTEM generation21, STAFF17, PROJECT helper11. Все три builds COMPLETED;
+scan/admission/promotion пока pending. Новые4ENV/8bindings и non-image
+preservation ещё NOT RUN; Developer ENV17/GitHub API patch сохранить.
+Synthetic frontend: production org-anchor fix наeba5; новый полный Chromium
+пока FAIL на устаревших fixtures. Typed profiles/authoritative readback,
+device-flow completion и native disclosure/labels обновляются только в fixture;
+guards не ослабляются.118targeted unit PASS, окончательный browser PASS ещё нет.
+
+Own Chrome5: SYSTEM image editor screenshot/overflow0/Console0/API200,
+realtime reconnect затем Connected. Ошибочный диагностический URL bootstrap
+вернул404; правильный canonical bootstrap200. Чужие вкладки не затронуты.
+Retry10 ещё не запущен, USER corrections0, host business implementation0.
+Current checklist11/15 синхронизирован с решением владельца: Workflow40/
+revision13, одно комплексное ревью всего без автоматических повторных циклов.
+Full65/checklist11/14/15 OPEN. Далее admission→promotion→4ENV/8bindings→
+native Retry10 с ранним Pod exit capture→Developer PR→одно review→Manager/owner.
+
 ## Checkpoint 10.10.2026 23:25 UTC — Retry9 FAILED, адресные исправления готовы
 
 Remote Draft1807 и clean HOT c4496efc6e7866895e8e6781136ed2a2e6e59bdd.
