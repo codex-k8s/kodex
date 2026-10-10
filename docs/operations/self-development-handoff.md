@@ -10,6 +10,50 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 14:19 UTC — новый root работает
+
+Новый native owner root run_4yS3kF8Vn8s-jSgxUiXi5wD-, session
+ses_zRPR2EL6KVjROhCJ08rhGbte, Workflowv40/rev13, RUNNING/v2/seq14.
+Точный FINALIZED WORKFLOW_INPUT aset_Mgq68Z6CtHwf8DQYLF1SU4IK/v4,
+manifest701d2c6017d83b82db857f5df20bcc0d394b8d16a39975043d60a8b89494c29c,
+содержит packet и manifest с проверенными size/digest. Chrome форма/граф
+screenshots просмотрены, overflowfalse/Console0, owner metadata GET200.
+Старый root FAILED/v4 неизменен. Четыре input, scope и paid-credit AC сохранены.
+Сейчас coordinator RUNNING, пять steps PLANNED; child EOF/Developer/один Review/
+Manager acceptance/owner gate ещё NOT RUN. Не создавать второй root/Retry.
+Продолжать сопровождение этого root; host не реализует бизнес-код1796.
+Source dcbe1e4b + два новых docs checkpoint требуют commit/push1807.
+
+## Checkpoint 10.10.2026 14:17 UTC — pinned source и уточнённый STOP
+
+Owner поручил исправить причину и довести1796. Отказ одного hosted directory
+lookup не доказал запрет всех публичных файлов; общий Failed/unavailable→STOP
+оказался чрезмерным. Внутренний rejecting слой fetch UNKNOWN, сеть/grants не
+расширяли, denied tree URL не повторяли. 27 public raw файлов exactcommit
+a956835d020762cb2b570053af06f643a11c0ecc/rust-v0.160.0 получены GitHub MCP,
+Git blob/SHA256 и 9 явных выписок проверены. packet467840B/hash
+a382233ba184727cce10e7b10ff0a7030b4e65722f4c5a586d61b7d0ba60270b;
+manifest24164B/hash402125958b8ce68f26bb605d3664acd0c27dbe6edf77d0651ba73fd9e8228067.
+Пакет не является host бизнес-анализом или proof полноты dependencies.
+
+Native PROJECT helper plan pln_VhO2DQ21axLuPyQlpyF95a7H/revision2 APPLIED;
+сравнение Before/After подтвердило только CompletionCriteria и Architect
+Instructions/ExpectedResult. Пять steps/keys, step-040, DAG, grants и finalGate
+сохранены. Обычный Workflow Save НЕ использовать — пересобирает refs/DAG.
+Native Validate/Publish: v40/rev13/wfv_AbTG0jWIG7tWZn_oLYqVOB98.
+Screenshot/Console0/overflowfalse PASS. Публичный lookup failure допускает
+прочие штатные READ, но deny/missing mandatory source/EOF/proof остаётся STOP.
+
+Playwright штатно загрузил packet.md и manifest.json CLEAN/ACTIVE, Chrome MCP
+upload ограничен workspace. packet art_k1AYEZpvhLYgc8DzWiLsDMwZ,
+arv_2c2b1b0b97ec43898bf89438dfa91a83: exact467840B/hash GET200 совпал.
+Chrome page5 NEW RUN заполнен исходными четырьмя критериями и новыми source
+инструкциями; исходные AC восстановлены exact prompt.full.view после freshSSO.
+Далее выбрать эти два файла, FINALIZED WORKFLOW_INPUT, один новый root
+по текущему owner разрешению, не Retry старогоFAILED. Затем Architect →
+Developer → ровно один Review → Manager → owner gate; host не реализует1796.
+Full65/business acceptance OPEN. HEADdcbe1e4b + два docs требуют commit/push.
+
 ## Checkpoint 10.10.2026 13:23 UTC — опубликованный пакет и граница продолжения
 
 HEAD/remote/Draft1807: 754a0499bba5ec13385439f01b3f153202313b9e; пакет

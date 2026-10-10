@@ -1184,3 +1184,59 @@ proxy или другим credential. Для продолжения нужны �
 материалы во входном Artifact/AttachmentSet либо отдельное owner scope решение
 по upstream connection. Developer → один Reviewer → Manager → owner gate
 по-прежнему NOT RUN. Full65 остаётся BLOCKED/OPEN, не READY и не merge.
+
+## Checkpoint 10.10.2026 14:17 UTC — причина STOP и pinned публичные источники
+
+Owner явно поручил установить причину, исправить и сопровождать завершение1796.
+Прежнее обобщение отказа одной hosted discovery-страницы на все публичные
+исходники было чрезмерным: в том же Web batch доставлен другой source file.
+Непосредственная причина semantic STOP — неудачный directory lookup плюс
+слишком широкий текст задания Failed/unavailable→STOP. Внутренний rejecting
+слой hosted fetch UNKNOWN; глобальный network/credits/authority отказ не доказан.
+NetworkPolicy, credentials и grants не расширялись; denied tree URL не повторяли.
+
+Публичный tag rust-v0.160.0 штатный git ls-remote без credential сопоставил с
+peeled commit a956835d020762cb2b570053af06f643a11c0ecc. GitHub MCP доставил
+точные отдельные файлы openai/codex; 27 полных raw оригиналов имеют совпавшие
+Git blob/SHA256, 9 выписок явно ограничены точными диапазонами. Пакет467840B,
+SHA256 a382233ba184727cce10e7b10ff0a7030b4e65722f4c5a586d61b7d0ba60270b;
+manifest24164B/hash402125958b8ce68f26bb605d3664acd0c27dbe6edf77d0651ba73fd9e8228067.
+Это первичные байты, не бизнес-анализ и не proof транзитивной полноты.
+
+PROJECT helper native прочитал полную WORKFLOW_CONFIGURATION доEOF и создал
+одну UPDATE_WORKFLOW pln_VhO2DQ21axLuPyQlpyF95a7H. Owner revision2 уточнил
+Architect expectedResult, убрав противоречивый общий STOP; VALID→APPLIED.
+Полный Before/After diff: только CompletionCriteria, Architect Instructions/
+ExpectedResult и соответствующие публичные поля. Остальные поля/DAG/grants/
+пять keys, включая step-040, и один finalGate сохранены. Обычный Workflow Save
+не использовался: он пересобирает refs/DAG и требует отдельного исправления.
+Native Validate→Publish: Workflowv40/revision13,
+wfv_AbTG0jWIG7tWZn_oLYqVOB98. Screenshot/overflowfalse/Console0 подтверждены.
+Сбой необязательного discovery не запрещает разрешённые независимые READ;
+реальный deny, missing mandatory source/EOF/digest/proof по-прежнему STOP.
+
+Исходные четыре owner input восстановлены штатным exact prompt.full.view
+после свежего SSO, без вывода полной materialization. Бизнес-AC и paid-credit
+кейс сохранены; обновлены current source/Workflow указатели и source-инструкции.
+Playwright native upload доставил два файла CLEAN/ACTIVE; Chrome MCP upload
+не читает файлы вне workspace. packet Artifact art_k1AYEZpvhLYgc8DzWiLsDMwZ,
+revision arv_2c2b1b0b97ec43898bf89438dfa91a83: exact467840B/hash совпал GET200.
+Это не proof доставки child: FINALIZED WORKFLOW_INPUT/newroot/native EOF,
+Developer/один Review/Manager/owner gate ещё NOT RUN. Старый FAILED неизменен.
+Source HEADdcbe1e4b; текущий checkpoint ещё требует commit/push1807.
+
+## Checkpoint 10.10.2026 14:19 UTC — новый root получил штатные вложения
+
+Один native owner launch по Workflowv40/rev13 принят: root
+run_4yS3kF8Vn8s-jSgxUiXi5wD-, session ses_zRPR2EL6KVjROhCJ08rhGbte,
+RUNNING/version2/seq14. Старый root FAILED/version4 неизменен. Все четыре
+required input заполнены; исходный scope1538chars и paid-credit AC сохранены.
+AttachmentSet aset_Mgq68Z6CtHwf8DQYLF1SU4IK FINALIZED/WORKFLOW_INPUT/version4,
+manifest701d2c6017d83b82db857f5df20bcc0d394b8d16a39975043d60a8b89494c29c;
+два exact CLEAN artifact digest/size совпадают публичным packet/manifest.
+Manifest art_Miz7AKe4QyhH7s7eRQBc2x8e; packet art_k1AYEZpvhLYgc8DzWiLsDMwZ.
+Chrome screenshots формы и рабочего графа просмотрены, overflowfalse,
+Console0, owner Run/Graph/AttachmentSet GET200. Это delivery/root launch PASS,
+не native child EOF либо business acceptance. Пять этапов PLANNED;
+coordinator работает. Далее собственный Architect proof → Developer actual
+branch/PR → один комплексный Review → Manager → final owner gate.
