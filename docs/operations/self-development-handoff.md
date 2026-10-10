@@ -10,6 +10,31 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 00:05 UTC — собственная возможность и чтение заметки
+
+Опубликованный ROOT/remote/Draft1807 SHA4faf377e. Native PROJECT self-plan
+pln_ybZYvv7erHvcs6bmtqnK6M7Z/revision1 содержит одну CHANGE_CAPABILITY только
+собственного helper/version17, artifact.manage false→true. Read/write/delete
+объяснены. Owner Validate200, Apply APPLIED/1операция; agent GET version18,
+единственная capability. Plan сам право не выдавал. Native screenshots просмотрены.
+
+Fresh named-file запрос без ID: run_OFWqlq8BmUJZTHl6NqVNc3Dj SUCCEEDED/seq11.
+Actual search_files/read_file receipt PROJECT/rev1/v1,0→4234/4234/eof=true,
+source/chunk digest dc0e4965…24e совпал со stored artifact. Final корректно
+пересказал проверки и исторические ограничения, дал file link. Compact/full
+screenshots просмотрены, overflow=false, turn202/graph/events/artifact200.
+Console cumulative6/delta0 в native двух turn/apply/reload окне, warning/pageerror0;
+исходная hot reload delta3 не атрибутирована. WS opened1/closed0/RUN_EVENT10,
+без problems/closes; full reconnect/restart/load acceptance не выполнен.
+
+Следующее: scoped isolation/ambiguity и natural practical continuation,
+исправить неполную capability подпись/read-write пояснение и long technical
+plan title без ненужных ID. Backend freeze закончится после удаления exact
+terminal runtime Pod. Architect official-source/effective-version BLOCKED
+сохраняется; Developer не допущен. Bootstrap не сливать по частичным PASS.
+Own Playwright38659, PROJECT старый natural chat, draft0, reload00:02 UTC.
+Chrome MCP640 timeout300s; запрос подключения продолжать. Full65QA OPEN.
+
 ## Checkpoint 09.10.2026 23:57 UTC — PROJECT self-plan и история чата
 
 Поверх918e73cd интегрированы12 exact frozen source/test files: PROJECT

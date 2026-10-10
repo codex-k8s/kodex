@@ -746,3 +746,29 @@ Backend CP/RC since5m: новых log lines0 — это не подтвержд�
 Следующий fresh native запрос чтения заметки целиком запущен; EOF/body/ambiguity
 и чужой scope ещё не выданы за PASS. Во время turn backend freeze.
 Chrome MCP613 timeout300s, повтор640 pending. Полный65QA OPEN.
+
+## Checkpoint 10.10.2026 00:05 UTC — чтение заметки по имени до EOF
+
+ROOT/remote/Draft1807 SHA `4faf377eee96196c06f0b82e765b6acefc8caac3`.
+Fresh PROJECT run_OFWqlq8BmUJZTHl6NqVNc3Dj SUCCEEDED/sequence11,
+USER trn_dQbwP_l-vTkAOzjVt-adKVrf, FINAL trn_tqweQw-9C3DIKeCAQ6BzpAuP.
+Промпт указал только название сохранённой заметки, без ID. Actual search_files
+и read_file SUCCEEDED; readonly страница purpose PROJECT, file rev1/v1,
+offset0→4234/size4234/eof=true. source/chunk digests совпадают с сохранённым
+artifact art_i2rouMdoEPydz_Izt-NMuQDs:
+`dc0e4965c96780bedea572a9c427dc3f6e95caa258c0ca790094dd5b753dc24e`.
+Это actual безопасная tool receipt, не только утверждение model final.
+
+Final верно отдельно пересказал проверки и ограничения/NOT RUN из документа,
+показал штатную file link и не объявил исторический Workflow завершённым.
+Native screenshots compact/full final просмотрены: commentary, два compact
+tool rows и ответ слева, USER справа, scope PROJECT, overflow=false.
+Relevant Network turn202, graph/events/artifact200; Console остаётся6,
+delta0 в двух новых native turn/apply/reload окне, warning/pageerror0.
+WS own connection opened1/closed0, RUN_EVENT10, без problems/closes: это окно
+данных двух ходов, не полный reconnect/restart либо нагрузочный PASS.
+
+Не отмечать весь пункт16: ambiguity, чужой scope и практическое продолжение
+бизнес-задачи ещё OPEN. Architect source/effective-version BLOCKED, Developer
+не допущен. Chrome MCP640 также timeout300s; нужны дальнейшие попытки.
+Полный65QA и итоговый business PR ещё не завершены.
