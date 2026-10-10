@@ -10,6 +10,22 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 17:03 UTC — адресный переход выполнен
+
+Exact36dd4e6d опубликован/Draft1807 readback PASS. Forward SAME-acbb policy
+66765ab623e5acc5d6f32294f1a07215: canonical девять фаз PASS16:55:17,
+public repository выведен из текущей установки, catalog/base/TLS/grants сохранены.
+Runtime-role binding нового exact Deny PASS16:55:59. Defaults CP/RC ещё прежние;
+свежий node HTTPS/CRI proof готовится к публикации, live ещё NOT RUN.
+ROOT Python archive/runner regression20/20 PASS3.134s. Отдельный opt-in CRI
+добавляет только exact image cache и не является runtime ELF/agent proof.
+
+Actual3recipe full-EOF private snapshot получен. Offline native planner закрыто
+остановился SOURCE_RECIPE_MISMATCH до эффекта: source содержит пустые optional
+поля, native API их опускает. Исправляется только эквивалентность canonical
+empty projection; source/nonempty settings не теряются. Новых drafts/builds
+business turns/Retry/USER_MESSAGE пока нет. Четыре ENV и serving v3 ещё OPEN.
+
 ## Checkpoint 10.10.2026 16:51 UTC — миграция подтверждена, найден адресный guard
 
 Canonical INSPECT по опубликованному a3038237 PASS16:39:37: единственный Job

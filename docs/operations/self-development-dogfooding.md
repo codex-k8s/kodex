@@ -917,3 +917,31 @@ SYSTEM core48 сохраняются; fresh-install disposable tests не зам
 Новых USER_MESSAGE, Retry, Launch нет, hot source29845/v2 сохраняется до полной
 compatible delivery. Nodes2 Ready, основных deployments5 Ready, Chrome own5
 Console0/relevant bootstrap/session200; это ограниченный readback, не Full65 PASS.
+
+## Checkpoint 10.10.2026 17:03 UTC — forward policy PASS, отдельный node proof
+
+36dd4e6ddb4fde68cf0c4adce38860c5d240ab9f опубликован, exact remote/PR1807
+readback PASS16:53:19; initial readback UNKNOWN повторён только чтением.
+Canonical SAME-acbb correction девяти фаз завершена PASS16:55:17:
+новая immutable policy66765ab623e5acc5d6f32294f1a07215, catalog/base/security
+pins сохранены. Exact runtime-role binding с Deny PASS16:55:59; id
+475afba5-4dc6-4eed-9f24-9a25e6aff651. Defaults CP/RC и source hot29845/v2 прежние.
+
+Новый закрытый runner профиль существующего node verifier выводит public target
+из live selected immutable policy/hash/UID/RV и exact build state digest.
+Независимый HTTPS graph проверяет bytes всех manifests/config/layers из сети
+каждого node через штатные exact DNS route/CA/SNI/mTLS/application identity.
+CRI pull — отдельный explicit opt-in после всех HTTPS/fresh state guards:
+только exact cacheaddition, без Pod/start/delete/config изменений. INTENT и
+sanitized PASS/UNKNOWN сохраняются; configID/RepoDigest должны совпасть.
+Cached blobs не удаляются; running ELF/tools/provider result не заявляются.
+ROOT hermetic archive+runner Python20/20 PASS3.134s; live HTTPS/CRI NOT RUN.
+
+Полный native3recipe snapshot до EOF получен приватно, inputSHA
+47a05449d3a13f857c2fd0eea8be104fd507b6154d72ae155d80cdbea169b4c9.
+Offline planner FAIL SOURCE_RECIPE_MISMATCH до effect: native omitempty опускает
+installationBlock пустой строкой и nullable package/tool keys. Требуется exact
+canonical empty equivalence с negative nonempty/malformed guards; исходный full
+source сохранить. Нет новых drafts/builds, бизнес-запусков, Retry, USER_MESSAGE.
+Chrome own5 reload после maintenance/APIopen, screenshot, Console0/relevant200;
+failed run/history по-прежнему честные, Full65 и новая business приёмка OPEN.
