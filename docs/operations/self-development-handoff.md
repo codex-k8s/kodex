@@ -10,6 +10,23 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 16:51 UTC — миграция подтверждена, найден адресный guard
+
+Canonical INSPECT по опубликованному a3038237 PASS16:39:37: единственный Job
+control-plane-migrate-20261010150000 succeeded1 и exact immutable source ce4796.
+Повторного CREATE/apply нет. Remote/PR1807 exact a303 readback PASS16:48;
+hot source29845/v2 и defaults CP/RC прежние.
+
+Default plan остановился до эффекта CURRENT_DEFAULT_RUNNER_INVALID: три
+release guards требовали адрес прежнего контура вместо фактического public
+repository установки. Новая policy ce439 сохранила этот ошибочный node alias;
+не добавлять DNS/CA обход. Готовится forward-only SAME-acbb policy correction
+из policy.pullRegistryHost при неизменных catalog/base/security pins, затем
+runtime binding/defaults и отдельные свежие node HTTPS/CRI proof.
+Publication/import acbb не считать таким proof. Recipe/4ENV/serving v3 и
+business1796/Full65 ещё OPEN. Новых USER_MESSAGE/Retry/Launch нет: уточнение
+владельца закреплено shipped instructions/code, а не подсказками в чате.
+
 ## Checkpoint 10.10.2026 16:38 UTC — consumer policy готова, прочие этапы открыты
 
 Policy9phases PASS, API открыт; отдельная runtime-role binding PASS. Defaults

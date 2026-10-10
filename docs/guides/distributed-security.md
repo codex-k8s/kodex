@@ -1740,6 +1740,15 @@ admission `PENDING|CLAIMED` учитывается отдельным счётч
 effect. Любой активный effect, неизвестное состояние или незавершённый request
 продолжает блокировать переход policy. Readback не меняет eligibility или историю.
 
+Публичный адрес runner выводится только из выбранной immutable policy:
+`pullRegistryHost`, согласованного `promotedPullRepository`, поколения pull
+identity и exact base digest. Значение host конкретной установки не зашивается
+в guard и не берётся из произвольного caller alias. Исправление ошибочного
+nodeReadbackImage выполняется новой ревизией policy даже при прежнем digest;
+catalog, TLS, identities, инструменты и остальные security pins сохраняются.
+Registry publication, cache import, свежий node HTTPS graph и CRI pull являются
+разными доказательствами; одно нельзя объявлять другим или running ELF proof.
+
 Переход default runner сохраняет фактическую strategy в exact full-spec CAS.
 Обычный staging требует прежний `RollingUpdate/maxUnavailable=0`; только exact
 trusted hot-reload со staging labels на Deployment, hot/trusted template labels,

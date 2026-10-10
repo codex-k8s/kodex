@@ -9,7 +9,7 @@ function values() {
   return {
     controller: deployment("image-admission-controller", "IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP", active),
     runtime: deployment("runtime-controller", "RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE", runner),
-    policy: { apiVersion: "v1", kind: "ConfigMap", metadata: { name: active, namespace: "kodex-system" }, immutable: true, data: { nodeReadbackImage: runner } },
+    policy: { apiVersion: "v1", kind: "ConfigMap", metadata: { name: active, namespace: "kodex-system" }, immutable: true, data: { nodeReadbackImage: runner,pullRegistryHost:"pull.kodex.works",promotedPullRepository:"pull.kodex.works/kodex/roles",pullCredentialGeneration:"1",trustedRoleBaseDigest:`sha256:${"a".repeat(64)}` } },
     binding: { apiVersion: "admissionregistration.k8s.io/v1", kind: "ValidatingAdmissionPolicyBinding", metadata: { name: "runtime-role-pod-exact-secret-projection", uid: "11111111-1111-4111-8111-111111111111", resourceVersion: "7" }, spec: { policyName: "runtime-role-pod-exact-secret-projection", validationActions: ["Deny"], paramRef: { name: old, namespace: "kodex-system", parameterNotFoundAction: "Deny" } } },
   };
 }
@@ -17,5 +17,14 @@ function values() {
 test("план меняет только exact runtime binding и сохраняет Deny", () => { const v = values(), plan = planRuntimeRoleBinding(v.controller, v.runtime, v.policy, v.binding, "22222222-2222-4222-8222-222222222222"); assert.equal(plan.changed, true); assert.equal(plan.patch.at(-1).value.paramRef.name, active); assert.deepEqual(plan.patch.at(-1).value.validationActions, ["Deny"]); assert.equal(v.binding.spec.paramRef.name, old); });
 test("несовпадающий runner и открытый binding отклоняются", () => { const v = values(); v.policy.data.nodeReadbackImage = runner.replace("a", "b"); assert.throws(() => planRuntimeRoleBinding(v.controller, v.runtime, v.policy, v.binding)); const x = values(); x.binding.spec.validationActions = ["Warn"]; assert.throws(() => planRuntimeRoleBinding(x.controller, x.runtime, x.policy, x.binding)); });
 test("apply принимает неизменный plan с context и отвергает CAS drift", () => { const v = values(), current = planRuntimeRoleBinding(v.controller, v.runtime, v.policy, v.binding), saved = { ...current, context: "default" }; assert.doesNotThrow(() => sameRuntimeRoleBindingPlan(saved, current, "default")); current.resourceVersion = "8"; assert.throws(() => sameRuntimeRoleBindingPlan(saved, current, "default"), /PRECONDITION/); });
-test("план может заранее связать policy с exact следующим runner", () => { const v = values(), next = runner.replace("a".repeat(64), "b".repeat(64)); v.policy.data.nodeReadbackImage = next; const plan = planRuntimeRoleBindingForRunner(v.controller, next, v.policy, v.binding); assert.equal(plan.runner, next); assert.equal(plan.patch.at(-1).value.paramRef.name, active); });
+test("план может заранее связать policy с exact следующим runner", () => { const v = values(), next = runner.replace("a".repeat(64), "b".repeat(64)); v.policy.data.nodeReadbackImage = next;v.policy.data.trustedRoleBaseDigest=`sha256:${"b".repeat(64)}`; const plan = planRuntimeRoleBindingForRunner(v.controller, next, v.policy, v.binding); assert.equal(plan.runner, next); assert.equal(plan.patch.at(-1).value.paramRef.name, active); });
 test("apply использует runner из сохранённого плана без повторного аргумента", () => { const v = values(), next = runner.replace("a".repeat(64), "b".repeat(64)); assert.equal(runtimeRoleRunner("apply", {}, v.runtime, { runner: next }), next); assert.throws(() => runtimeRoleRunner("apply", { "--runner-reference": next }, v.runtime, { runner: next }), /APPLY_ARGUMENTS_INVALID/); });
+test("runtime binding принимает exact actual-policy public host, но не caller alias/internal repository",()=>{
+ const v=values(),host="pull.kodex.127.0.0.2.nip.io",target=`${host}/kodex/agent-runner@${v.policy.data.trustedRoleBaseDigest}`;
+ Object.assign(v.policy.data,{pullRegistryHost:host,promotedPullRepository:`${host}/kodex/roles`,nodeReadbackImage:target});
+ assert.equal(planRuntimeRoleBindingForRunner(v.controller,target,v.policy,v.binding).runner,target);
+ for(const invalid of [runner,`kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner@${v.policy.data.trustedRoleBaseDigest}`]){
+  assert.throws(()=>planRuntimeRoleBindingForRunner(v.controller,invalid,v.policy,v.binding),/EXACT_RUNNER_REFERENCE_REQUIRED/);
+ }
+ delete v.policy.data.pullRegistryHost;assert.throws(()=>planRuntimeRoleBindingForRunner(v.controller,target,v.policy,v.binding),/POLICY_RUNNER_PULL_REPOSITORY_INVALID/);
+});

@@ -888,3 +888,32 @@ revision descriptors/инструкции и только intended existing bind
 Chrome own5 screenshot/Console0/relevant bootstrap/session200 просмотрены;
 проверочный GET неверного single revision path404 исправлен на native paged
 revisions до EOF, без мутаций. Business task/Full65 по-прежнему OPEN.
+
+## Checkpoint 10.10.2026 16:51 UTC — exact migration PASS, переносимые guards
+
+Повторный canonical INSPECT по опубликованному a30382377d64277355c828ba65c950705d8c8731
+PASS16:39:37: Job control-plane-migrate-20261010150000 UID
+4d6b819c-488c-495b-b6b7-8be456164d37 succeeded1, source ce4796cd, goose exact.
+Новой миграции/повторного CREATE нет; первоначальный readback FAIL сохранён.
+Exact BOT remote/PR1807/main readback PASS16:48; Draft и main неизменны.
+
+Default PLAN закрыто остановился CURRENT_DEFAULT_RUNNER_INVALID до эффекта:
+release helpers зашивали public registry host другого контура. Ошибочный
+nodeReadbackImage предыдущей immutable policy ce439 нельзя чинить in-place
+или добавлением DNS/CA alias. Общий helper теперь выводит exact public runner
+repository из selected policy.pullRegistryHost, promotedPullRepository,
+credential generation и base digest. SAME-D forward correction сохраняет
+catalog/security pins; arbitrary target, internal build repository и чужой old
+default отвергаются. ROOT exact target regression33/33 PASS97.968s; синтаксис,
+diff check и lossless journal verification PASS. Новый live policy/default rollout
+ещё NOT RUN.
+acbb build/import/publication не являются свежим node HTTPS/CRI pull proof.
+
+Уточнение владельца: unexpected outcomes исправляются durable system
+instructions агентов/помощников и кодом из репозитория; ожидаемое поведение
+должно воспроизводиться после fresh install. Не подталкивать агентский workflow
+сообщениями от имени пользователя. Уже опубликованный common PLATFORM v3 и
+SYSTEM core48 сохраняются; fresh-install disposable tests не заменяют живой QA.
+Новых USER_MESSAGE, Retry, Launch нет, hot source29845/v2 сохраняется до полной
+compatible delivery. Nodes2 Ready, основных deployments5 Ready, Chrome own5
+Console0/relevant bootstrap/session200; это ограниченный readback, не Full65 PASS.

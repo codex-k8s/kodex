@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fingerprint } from "./scoped-release.mjs";
+import { runnerPullReference } from "./runner-policy-model.mjs";
 
 const namespace = "kodex-system";
 const requireValue = (condition, code) => { if (!condition) throw new Error(code); };
@@ -25,7 +26,7 @@ export function planRuntimeRoleBinding(controller, runtimeController, policy, bi
 
 export function planRuntimeRoleBindingForRunner(controller, runner, policy, binding, operationID = randomUUID()) {
   const policyName = literal(controller, "image-admission-controller", "IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP");
-  requireValue(/^pull\.kodex\.works\/kodex\/agent-runner@sha256:[a-f0-9]{64}$/.test(runner), "EXACT_RUNNER_REFERENCE_REQUIRED");
+  requireValue(runner === runnerPullReference(policy?.data, policy?.data?.trustedRoleBaseDigest), "EXACT_RUNNER_REFERENCE_REQUIRED");
   requireValue(policy?.apiVersion === "v1" && policy.kind === "ConfigMap" && policy.metadata?.name === policyName &&
     policy.metadata.namespace === namespace && policy.immutable === true && policy.data?.nodeReadbackImage === runner,
   "ACTIVE_POLICY_AND_RUNNER_MISMATCH");

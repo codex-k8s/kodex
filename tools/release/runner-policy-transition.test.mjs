@@ -16,14 +16,14 @@ function metadata(name) { return { name, namespace: "kodex-system", uid: "111111
   labels: { "app.kubernetes.io/part-of": "kodex", "kodex.dev/local-profile": "hot-reload", "kodex.dev/owner-intent": "true" } }; }
 function fixtures() {
   const data = { toolsImage: `registry.example.test/kodex/tools@sha256:${"e".repeat(64)}`, policyRevision: "4", trustedRoleBaseDigest: oldDigest, trustedRoleBaseRepository: "registry/kodex/agent-runner",
-    orchestrationRevision: "a".repeat(40), nodeReadbackImage: `pull/kodex/agent-runner@${oldDigest}`, roleRuntimeContractRevision: "2", roleRuntimeContractSHA256: "e".repeat(64) };
+    orchestrationRevision: "a".repeat(40), nodeReadbackImage: `pull.kodex.works/kodex/agent-runner@${oldDigest}`,pullRegistryHost:"pull.kodex.works",pullCredentialGeneration:"1", roleRuntimeContractRevision: "2", roleRuntimeContractSHA256: "e".repeat(64) };
   Object.assign(data, {
     admissionImage: `registry.example.test/kodex/admission@sha256:${"a".repeat(64)}`,
     authorityImage: `registry.example.test/kodex/authority@sha256:${"b".repeat(64)}`,
     promotionRepository: "kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/roles",
     promotionEvidenceRepository: "kodex-image-registry-promotion.kodex-system.svc.cluster.local:5003/kodex/evidence",
     evidenceRepository: "kodex-image-registry-evidence.kodex-system.svc.cluster.local:5007/evidence/role-image-admission",
-    promotedPullRepository: "pull.kodex.test/kodex/roles",
+    promotedPullRepository: "pull.kodex.works/kodex/roles",
     requiredTools: "base64,cmp,cosign,grype,image-admission-bridge,image-tool-inventory-validator,image-vulnerability-report-validator,jq,regctl,sha256sum,syft,tr,wc",
     builderIdentity: "spiffe://kodex.local/ns/kodex-system/sa/role-image-builder",
     buildType: "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md",
@@ -81,6 +81,38 @@ test("published runner can become the exact node readback image in a new policy 
   assert.throws(() => preparePolicy(f.policy, f.parameters, f.catalog, newDigest), /NODE_READBACK/);
   assert.throws(() => preparePolicy(f.policy, f.parameters, f.catalog, newDigest, undefined,
     `registry.local.kodex/kodex/agent-runner@${newDigest}`), /NODE_READBACK/);
+});
+test("same-digest forward policy corrects only node public repository from actual pull host and preserves catalog/security pins",()=>{
+ const f=fixtures(),host="pull.kodex.127.0.0.2.nip.io";
+ Object.assign(f.policy.data,{pullRegistryHost:host,promotedPullRepository:`${host}/kodex/roles`});
+ f.policy.data.policySHA256=policyDigest(f.policy.data);f.parameters.spec=structuredClone(f.policy.data);
+ const before=structuredClone(f),target=`${host}/kodex/agent-runner@${oldDigest}`;
+ const bundle=preparePolicy(f.policy,f.parameters,f.catalog,oldDigest,undefined,target);
+ assert.deepEqual(f,before);assert.deepEqual(bundle.resources[2].data,f.catalog.data);
+ assert.equal(bundle.resources[2].metadata.name,f.catalog.metadata.name);
+ assert.equal(bundle.resources[0].data.trustedRoleBaseDigest,oldDigest);
+ assert.equal(bundle.resources[0].data.policyRevision,"5");assert.equal(bundle.resources[0].data.nodeReadbackImage,target);
+ const changed=Object.keys(f.policy.data).filter(key=>bundle.resources[0].data[key]!==f.policy.data[key]).sort();
+ assert.deepEqual(changed,["nodeReadbackImage","policyRevision","policySHA256"]);
+ for(const invalid of [`pull.kodex.works/kodex/agent-runner@${oldDigest}`,`foreign.example.invalid/kodex/agent-runner@${oldDigest}`,
+  `kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/agent-runner@${oldDigest}`,
+  `${host}/kodex/roles@${oldDigest}`,`${host}/kodex/agent-runner@${newDigest}`]){
+  assert.throws(()=>preparePolicy(f.policy,f.parameters,f.catalog,oldDigest,undefined,invalid),/NEW_EXACT_NODE_READBACK_IMAGE_REQUIRED/);
+ }
+});
+test("policy-derived pull repository rejects missing, malformed, credentials-bearing host and inconsistent published repository",()=>{
+ for(const change of [
+  data=>delete data.pullRegistryHost,
+  data=>data.pullRegistryHost="https://pull.kodex.works",
+  data=>data.pullRegistryHost="user:password@pull.kodex.works",
+  data=>data.pullRegistryHost="*.kodex.works",
+  data=>data.pullRegistryHost="pull.kodex.works:5000",
+  data=>data.promotedPullRepository="foreign.invalid/kodex/roles",
+  data=>data.pullCredentialGeneration="0",
+ ]){
+  const f=fixtures();change(f.policy.data);f.policy.data.policySHA256=policyDigest(f.policy.data);f.parameters.spec=structuredClone(f.policy.data);
+  assert.throws(()=>preparePolicy(f.policy,f.parameters,f.catalog,newDigest,undefined,`pull.kodex.works/kodex/agent-runner@${newDigest}`),/POLICY_RUNNER_PULL_REPOSITORY_INVALID/);
+ }
 });
 
 test("policy corruption, unexpected owner, same base and parameter drift fail closed", () => {

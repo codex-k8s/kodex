@@ -31,6 +31,18 @@ export function policyDigest(data) {
   return createHash("sha256").update(`${JSON.stringify(Object.fromEntries(entries))}\n`).digest("hex");
 }
 
+// Repository выводится только из выбранной immutable policy; caller alias не принимается.
+export function runnerPullReference(data, digest) {
+  const host = data?.pullRegistryHost;
+  requireValue(typeof host === "string" && host.length <= 253 &&
+    /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(host) &&
+    data.promotedPullRepository === `${host}/kodex/roles` &&
+    /^[1-9][0-9]*$/.test(data.pullCredentialGeneration ?? "") &&
+    Number.isSafeInteger(Number(data.pullCredentialGeneration)) && digestPattern.test(digest),
+  "POLICY_RUNNER_PULL_REPOSITORY_INVALID");
+  return `${host}/kodex/agent-runner@${digest}`;
+}
+
 export function requireStaging(resource) {
   const m = resource?.metadata;
   requireValue(m?.namespace === namespace && /^[a-f0-9-]{36}$/.test(m.uid ?? "") && /^\d+$/.test(m.resourceVersion ?? "") &&
@@ -59,8 +71,8 @@ export function preparePolicy(policy, parameters, catalog, runnerDigest, authori
   const issuerChange = authorityIssuerImage !== undefined;
   requireValue(!issuerChange || /^[a-z0-9][a-z0-9./:_-]*@sha256:[a-f0-9]{64}$/.test(authorityIssuerImage) && authorityIssuerImage !== (policy.data.authorityIssuerImage ?? policy.data.authorityImage), "NEW_EXACT_AUTHORITY_ISSUER_REQUIRED");
   const nodeReadbackChange = nodeReadbackImage !== undefined;
-  requireValue(!nodeReadbackChange || /^pull\.kodex\.works\/kodex\/agent-runner@sha256:[a-f0-9]{64}$/.test(nodeReadbackImage) &&
-    nodeReadbackImage.endsWith(`@${runnerDigest}`) && nodeReadbackImage !== policy.data.nodeReadbackImage,
+  requireValue(!nodeReadbackChange || nodeReadbackImage === runnerPullReference(policy.data, runnerDigest) &&
+    nodeReadbackImage !== policy.data.nodeReadbackImage,
   "NEW_EXACT_NODE_READBACK_IMAGE_REQUIRED");
   const revision = Number(policy.data.policyRevision);
   requireValue(Number.isSafeInteger(revision) && revision > 0 && revision < Number.MAX_SAFE_INTEGER, "POLICY_REVISION_INVALID");
