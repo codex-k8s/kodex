@@ -807,3 +807,52 @@ Native readonly просмотр уже применённого плана по
 новые hot-reload ошибки ещё не атрибутированы и не скрыты. CP since5m log lines0,
 это не доказательство всех backend paths. Chrome MCP679 pending; доступ не
 объявлен подтверждённым. Полный65QA и итоговый business PR остаются OPEN.
+
+## Checkpoint 10.10.2026 00:36 UTC — компактный редактор и реальный отказ continuation
+
+ROOT base/remote/Draft1807 `521c8a4accc393af2b69d32908955ff1c644b1ce`,
+fresh main `ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69`. После reboot обе ноды
+Ready, все33 Deployment/9 StatefulSet готовы; основной диск147GiB/data51GiB
+свободно. Runtime и данные не очищались, backend не перезапускался.
+
+Интегрирован frozen Editor UX patch: только AssistantPlanEditor.vue и его
+history tests. Известная capability показывает имя сотрудника, понятное право,
+направление и полный scope; исходные title/summary/parameters и owner envelope
+не переписываются. Неизвестные параметры не угадываются. ROOT75 tests/5 suites,
+ESLint, Prettier, forced typecheck/production build и diff-check PASS на этом
+combined tree. Build chunk/plugin warnings сохранены. Editor source SHA256
+`7f4fcce52ddcb72b0295e78b2cd5f0422faec0b9c5f5aa08378ebb36414788de`,
+test SHA256 `71b890a149eefdcca78982fd6a2fc19cc08261c44caa47286b3d84e657c4f216`;
+host/ReadyPod Editor hash EQUAL. Native readonly Applied plan screenshots
+desktop1440/mobile390 просмотрены, overflow=false, повторного Apply не было.
+Console cumulative12/warning0/pageerror0, delta0 в новом окне; первоначальные
+hot-reload ошибки ещё UNKNOWN. Relevant capabilities/agent GET200. Own reload
+с draft0 выполнен; Chrome MCP742 pending, успешный доступ не заявлен.
+
+ROOT повторил integration package и authority policy codegen на project
+Go1.26.6, exit0; ранний host Go1.27/GOROOT mismatch не маскируется как дефект
+контракта. Journal byte-exact verifier и20 regressions PASS. Ранее выполненные
+Proto/AsyncAPI codegen и web-only/optional-Mattermost render остаются отдельными
+локальными доказательствами, не полной live приёмкой.
+
+Owner read исторической Architect RuntimeRevision
+rrev_OFrqJIoFOntes7cz2ELkAQAE явным currentRevisionRef подтвердил IMAGE digest
+`sha256:1bcccdacfe73f2303d3646b1649ea5762fae64e3453d56790694504ad261046f`.
+Matching promoted/accepted artifact imgart_Ly_8ysuMHebbDXueRyInOx04 имеет
+VERIFIED inventory и Codex0.160.0; exact binary SHA256
+`61b0194f3bb6534439c8d26a3ed57d0805f84b884588b761795323eeb92fcf70`.
+Current warm provider readonly --version/SHA совпали, но это не readback старого
+удалённого процесса. Historical initialize handshake остаётся NOT CAPTURED;
+immutable image proof не подменяет этот иной вид доказательства.
+
+Новый реальный запрос по названию существующей заметки (без ID) предложил
+практическое продолжение без новых процессов или иных изменений. Run
+run_aaeb2eVPABFe8dVsML6UXZj0 завершился FAILED/sequence5 до любых tools:
+session ses_mwdQT0kSKGG3GvsjdubzMv24, USER trn_qk7j2WlsoQyratQLiOQZlB-o,
+FINAL trn_yQJ-QsPkQ0Y6glPy-ZvZU9Qf, finish00:27:52.649583Z. Закрытый diagnostic
+THREAD_READ/REQUEST_FAILURE/PROVIDER/NONE указывает на resume/source boundary,
+а не доказанный отказ сети OpenAI. Usage0, очередной provider turn не подтверждён.
+Сессия ARCHIVED, latest DELETE_PVC SUCCEEDED/attempt4: отсутствие PVC после
+terminal само по себе штатно. Заметка не объявлена обновлённой; пункт16 OPEN.
+Продолжить точную диагностику source preflight, затем штатный native повтор.
+Полный65QA, semantic Architect PASS, Developer и конечный business PR OPEN.

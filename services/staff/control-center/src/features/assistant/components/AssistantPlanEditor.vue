@@ -90,6 +90,7 @@ import SafeStructuredData from "@/shared/ui/SafeStructuredData.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import DismissiblePopover from "@/shared/ui/DismissiblePopover.vue";
 import { requestConfirmation } from "@/shared/ui/confirmation";
+import { platformCapabilityMessages } from "@/shared/ui/server-message-catalog";
 
 const props = defineProps<{
   plan: AssistantPlan;
@@ -376,6 +377,29 @@ function grantOperationDetailsVisible(
     showPlanDetails.value ||
     grantExpanded.value[operation.value.ref] === true
   );
+}
+function capabilityPresentation(operation: EditablePlanOperation) {
+  if (operation.value.type !== "CHANGE_CAPABILITY") return;
+  const name = operation.value.target.name.trim();
+  if (!name) return;
+  try {
+    const key = operationParameter(operation, "capabilityKey");
+    const enabled = operationParameter(operation, "enabled");
+    const messages =
+      typeof key === "string" ? platformCapabilityMessages(key) : undefined;
+    if (!messages || typeof enabled !== "boolean") return;
+    return {
+      heading: [name, t(messages.name)].join(" · "),
+      effect: t(
+        enabled
+          ? "assistant.planEditor.grantEnableShort"
+          : "assistant.planEditor.grantDisableShort",
+      ),
+      description: t(messages.description),
+    };
+  } catch {
+    return;
+  }
 }
 const grantReadBundle = shallowRef(createIntegrationGrantReadBundle());
 onScopeDispose(() => grantReadBundle.value.close());
@@ -1476,10 +1500,11 @@ function validationProblemLabel(problem: string): string {
                 type="checkbox"
                 :disabled="!editable || !operation.value.permitted"
                 :aria-label="
-                  compactGrantOperation(operation)
+                  capabilityPresentation(operation)?.heading ||
+                  (compactGrantOperation(operation)
                     ? operation.value.title ||
                       operationTargetLabel(operation.value.target)
-                    : undefined
+                    : undefined)
                 "
               />
               <span
@@ -1498,6 +1523,7 @@ function validationProblemLabel(problem: string): string {
               class="assistant-plan-operation__title"
             >
               {{
+                capabilityPresentation(operation)?.heading ||
                 operation.value.title ||
                 operationTargetLabel(operation.value.target)
               }}
@@ -1506,6 +1532,19 @@ function validationProblemLabel(problem: string): string {
               >#{{ index + 1 }}</span
             >
           </header>
+
+          <div
+            v-if="capabilityPresentation(operation)"
+            class="assistant-capability-presentation"
+          >
+            <p>
+              <strong>{{ capabilityPresentation(operation)?.effect }}</strong>
+            </p>
+            <p>{{ capabilityPresentation(operation)?.description }}</p>
+            <p class="assistant-capability-presentation__summary">
+              {{ operation.value.summary }}
+            </p>
+          </div>
 
           <dl
             v-show="!friendlyPlanOperationType(operation) || showPlanDetails"
@@ -2610,6 +2649,15 @@ function validationProblemLabel(problem: string): string {
               <summary>
                 {{ $t("assistant.planEditor.transitionDetails") }}
               </summary>
+              <template v-if="capabilityPresentation(operation)">
+                <h4>{{ $t("assistant.planEditor.operationTitle") }}</h4>
+                <p>{{ operation.value.title }}</p>
+                <h4>{{ $t("assistant.planEditor.parametersTitle") }}</h4>
+                <SafeStructuredData
+                  :value="snapshot(operation.parametersText)"
+                  literal
+                />
+              </template>
               <h4>{{ $t("assistant.planEditor.before") }}</h4>
               <SafeStructuredData
                 :value="snapshot(operation.beforeText)"
@@ -3073,6 +3121,18 @@ function validationProblemLabel(problem: string): string {
   overflow-wrap: anywhere;
   font-weight: 600;
   line-height: 1.35;
+}
+.assistant-capability-presentation {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.assistant-capability-presentation p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.assistant-capability-presentation__summary {
+  white-space: pre-wrap;
 }
 .assistant-operation-kind {
   display: inline-flex;

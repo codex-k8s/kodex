@@ -10,6 +10,35 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 00:36 UTC — Editor UX и сбой возобновления
+
+ROOT base521c8a4a, branch kodex-agent/issue-1797-full21-v7, Draft1807/Issue1797;
+fresh mainab4992e. Интегрированы2 frozen Editor файла; ROOT75unit,
+lint/format/forced typecheck/build PASS. Native readonly Applied plan на1440/390
+просмотрен, overflow=false, host/Pod source hash EQUAL. Owner Apply не повторять.
+Все33 Deployment/9 StatefulSet и оба узла Ready после reboot. Codegen
+integration package/authority policy на Go1.26.6 PASS, journal20 tests PASS.
+
+Historical Architect IMAGE digest1bcccdac…046f связан с exact RuntimeRevision
+и matching promoted VERIFIED Codex0.160.0 inventory; это не handshake старого
+удалённого процесса. Warm --version/binary digest совпали. Полную архитектуру
+и готовность Developer не объявлять по этим частичным доказательствам.
+
+Реальный native update-existing-file запрос без ID завершился FAILED до tools:
+run_aaeb2eVPABFe8dVsML6UXZj0, finish00:27:52.649583Z, sequence5, usage0,
+session ses_mwdQT0kSKGG3GvsjdubzMv24. Закрытый diagnostic THREAD_READ/NONE,
+не доказанный сбой сети OpenAI. Последний DELETE_PVC SUCCEEDED/attempt4,
+ARCHIVED штатен; исчезнувший terminal PVC не является причиной сам по себе.
+Исследовать точную parse/source-boundary причину до повторного хода.
+Backend freeze снят после terminal; ничего не перезапускалось.
+
+Own Playwright38659 продолжает работать; Chrome742 pending. Console12,
+warning/pageerror0, delta0 в этом окне, исходные hot-reload ошибки UNKNOWN.
+Продолжать попытки Chrome, reload собственного окна с draft0 раз в5мин;
+чужие вкладки не закрывать. Пункт16 и полный65QA OPEN. Далее устранить
+continuation FAIL, завершить bootstrap проверки/merge по разрешённым условиям
+и реальный Workflow внутренней команды. Конечный business PR не сливать.
+
 ## Checkpoint 10.10.2026 00:20 UTC — reboot и продолжение
 
 ROOT база5b6a134a, branch kodex-agent/issue-1797-full21-v7, Draft1807/Issue1797.
