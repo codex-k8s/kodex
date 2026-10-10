@@ -61,6 +61,20 @@ function reader() {
 const signal = () => new AbortController().signal;
 
 describe("Каталог допущенных образов в точной области", () => {
+  it.each([recipe.ref, artifact.promotedReference])(
+    "сохраняет поиск по полному ref рецепта и image reference",
+    async (query) => {
+      if (!query) throw new Error("Missing synthetic catalog query");
+      const api = reader();
+      const page = await createScopedRuntimeImageCatalog(
+        scope.organizationRef,
+        api,
+      ).loadPage(scope, query, undefined, signal());
+      expect(page.items.map((item) => item.ref)).toEqual([artifact.ref]);
+      expect(api.list).toHaveBeenCalledTimes(1);
+      expect(api.read).toHaveBeenCalledTimes(1);
+    },
+  );
   it("исторический UNAVAILABLE не скрывает соседний точный образ", async () => {
     const api = reader();
     const historical = {

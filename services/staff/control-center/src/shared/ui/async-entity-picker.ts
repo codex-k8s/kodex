@@ -457,6 +457,7 @@ export interface AsyncEntityOption {
   title: string;
   description?: string;
   meta?: string;
+  tooltip?: string;
   disabled?: boolean;
   disabledReason?: string;
 }

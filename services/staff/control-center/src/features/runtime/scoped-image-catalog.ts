@@ -133,6 +133,7 @@ export function createScopedRuntimeImageCatalog(
             recipe.activeImageArtifactRef &&
             (!needle ||
               recipe.name.toLocaleLowerCase().includes(needle) ||
+              recipe.ref.toLocaleLowerCase().includes(needle) ||
               recipe.promotedImageReference
                 ?.toLocaleLowerCase()
                 .includes(needle)),

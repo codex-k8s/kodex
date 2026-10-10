@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
+import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
 import {
   createRenderer,
   defineComponent,
@@ -113,6 +114,7 @@ async function editor(localized = false) {
     applyServerDraft(draft: RuntimeEnvironmentDraft): void;
     loadImageArtifact(recipe: string, artifact: string): Promise<void>;
     selectImage(option: typeof ownImageOption): Promise<void>;
+    loadImagePage(query: string): Promise<AsyncEntityOptionPage>;
     load(): Promise<void>;
     validateDraft(): Promise<void>;
     publish(selected: string[]): Promise<void>;
@@ -219,6 +221,26 @@ const freshAuthenticationProblem = new AppProblem({
 });
 
 describe("проверка черновика после свежего SSO", () => {
+  it("PROJECT список использует такую же компактную подпись без нового чтения", async () => {
+    const image = {
+      ref: "artifact_fixture",
+      title: "Базовый системный образ",
+      recipeRef: "imgrecipe_exact",
+      generation: 3,
+      description: "example.invalid/image@sha256:" + "a".repeat(64),
+    };
+    runtime.searchPromotedRoleImagePage.mockResolvedValue({ items: [image] });
+    const state = await editor(true);
+    const page = await state.loadImagePage(image.recipeRef);
+    expect(page.items[0]).toMatchObject({
+      ref: image.ref,
+      title: image.title,
+      description: "Поколение 3 · …pe_exact",
+    });
+    expect(page.items[0]?.tooltip).toContain(image.description);
+    expect(runtime.searchPromotedRoleImagePage).toHaveBeenCalledTimes(1);
+    expect(runtime.loadPromotedRoleImageArtifact).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     runtime.environments = {
       environment_1: { ref: "environment_1", version: 1 },

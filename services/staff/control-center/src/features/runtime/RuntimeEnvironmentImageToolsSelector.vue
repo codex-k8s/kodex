@@ -19,6 +19,7 @@ import {
 import {
   assertPromotedRuntimeImage,
   runtimeImageOption,
+  runtimeImagePagePresentation,
   restoreRuntimeImageOption,
   toolsForRuntimeImage,
   type RuntimeImageCatalog,
@@ -190,10 +191,13 @@ async function loadPage(
   );
   return {
     ...page,
-    items: page.items.map((option) => ({
-      ...option,
-      title: localizeServerMessage(option.title),
-    })),
+    items: runtimeImagePagePresentation(
+      page.items.map((option) => ({
+        ...option,
+        title: localizeServerMessage(option.title),
+      })),
+      (generation) => t("roleImages.generationLabel", { generation }),
+    ),
   };
 }
 </script>

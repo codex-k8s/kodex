@@ -1172,3 +1172,41 @@ c0f1847a…0b35,4e2c1b36…df57. Image-only draft/publication и intended
 consumer impact впереди; прежние published revisions не переписывались.
 Новый business launch ещё NOT RUN. Weekly100% + paid credits остаётся
 обязательным сценарием1796; balance/spending UNKNOWN. Full65 OPEN.
+
+## Checkpoint 10.10.2026 09:57 UTC — три окружения опубликованы; история требует догрузки
+
+Source7feccf13 + exact13-file frontend packet e9b6e7dd…0435, ROOT pre/post
+13/13 совпали. Helper generation7 ACCEPTED→PROMOTED, artifact
+imgart_KAfkbLdbxnevVn2O5_kNHCcV, digestd29c3578…55eff. Staff generation13
+ACCEPTED→PROMOTED, artifactimgart_7bd7vDZ9Mi7O65rMswnwiUzA,
+digestba77324a…5eb82. Обе публикации выполнены native owner UI, без risk waiver
+или изменения admission. Helper ENV v17/rev18/renvv_AXDuWi1Xd2TOo3R4tE7qUoC3;
+review v13/rev13/renvv_QiQM1BGL-WGY7Yb28Gww6coS; writer
+v13/rev13/renvv_1yarr-QPvV18PcsZb5SAyDwb. Все38tools сохранены;
+non-image hashes513a6540…edea/c0f1847a…0b35/4e2c1b36…df57 совпали с baseline.
+Native Save→Validate→Publish обновил intended consumers1/5/1, старые версии
+не переписаны. Fresh owner SSO выполнен штатным защищённым вводом; первый
+слишком ранний переход прервал callback, повторный штатный вход восстановил
+сессию. Это не выдаётся за непрерывную доступность.
+
+Обычный Architect native runrun_3pq61WBnc2smSL8jsnHl8kJH SUCCEEDED на новом
+staff digest. Owner events200/complete/currentSequence13: собственный
+get_execution_snapshot RUNNING→SUCCEEDED, final OBSERVED/0.160.0/
+INITIALIZE_USER_AGENT. Backend/provider proof PASS, но live drawer/modal
+показывает только owner task при наличии commentary/tool/final в защищённом
+history: отображение FAIL, адресный frontend consumer fix готовится.
+
+PROJECT dropdown теперь различает одноимённые recipes поколением/shortref;
+exact ref/digest сохранены в tooltip и поиске. Никаких новых запросов/polling
+или изменений выбора/authority. Native screenshot просмотрен: trigger32px,
+overflowfalse, Console0, relevant owner API200. ROOT141unit/6suites4.25s,
+scoped lint/format13, forced types и production build8.17s PASS на точном
+пакете; fixture locale warnings и chunk-size warning не скрываются. SYSTEM
+native dropdown NOT RUN. Исходный apply_patch format был отклонён без edits;
+после нормализации только hunk markers все13post hashes совпали.
+
+Issue1796 повторно прочитана: OPEN; её функциональный scope не заменён
+bootstrap-изменениями. Weekly100% само по себе не запрещает supported paid
+credits; reported почти60К не является доказательством balance/units/spending.
+Новый business launch и Developer output/review/owner gate ещё NOT RUN.
+Full65 остаётся OPEN; публикация окружений не заменяет полный QA.

@@ -556,6 +556,38 @@ describe("virtual window", () => {
 });
 
 describe("AsyncEntityPicker", () => {
+  it("tooltip остаётся на dropdown option и не расширяет выбранное название", async () => {
+    vi.useFakeTimers();
+    const loader = vi.fn().mockResolvedValue({
+      items: [
+        {
+          ref: "artifact",
+          title: "Образ",
+          description: "Поколение 7 · …12345678",
+          tooltip: "exact recipe and digest",
+        },
+      ],
+    });
+    const picker = mountKeyboardPicker(loader);
+    try {
+      picker.state.handlePopoverOpen(true);
+      await vi.runAllTimersAsync();
+      expect(picker.state.items.value[0]).toMatchObject({
+        id: "artifact",
+        label: "Образ",
+        description: "Поколение 7 · …12345678",
+        tooltip: "exact recipe and digest",
+      });
+      const source = readFileSync(
+        new URL("./AsyncEntityPicker.vue", import.meta.url),
+        "utf8",
+      );
+      expect(source).toContain(':title="item.disabledReason || item.tooltip"');
+      expect(source).toContain(':title="selectedOption.title"');
+    } finally {
+      picker.unmount();
+    }
+  });
   function mountKeyboardPicker(loader: ReturnType<typeof vi.fn>) {
     const props = reactive({ loadPage: loader, disabled: false });
     interface State {

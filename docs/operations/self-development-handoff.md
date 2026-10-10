@@ -10,6 +10,23 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 09:57 UTC — 2 images/3 ENV готово, следующий один запуск
+
+Source7feccf13 + exact frontend packet13/13 принят,141unit/lint/format/forced
+types/build8.17 PASS. Helper gen7 digestd29c3578…55eff и staff gen13
+digestba77324a…5eb82 штатно ACCEPTED→PROMOTED. Три ENV helperv17/rev18,
+review/writev13/rev13 опубликованы native Save/Validate/Publish; intended
+impact1/5/1,38tools и non-image hashes unchanged. Новый Architect
+run_3pq61WBnc2smSL8jsnHl8kJH SUCCEEDED, собственный get_execution_snapshot
+OBSERVED/0.160.0/INITIALIZE_USER_AGENT подтверждён owner events200/13.
+Live transcript FAIL: drawer/modal пока показывает только owner task,
+хотя commentary/tool/final сохранены. Consumer fix готовится isolated.
+Dropdown nativePROJECTPASS: distinct shortrefs, trigger32px/overflowfalse/
+Console0/API200. SYSTEM native NOT RUN. Далее публикация пакета в1807 и
+единственный новый SOFTWARE_CHANGE1796 с четырьмя полями, weekly+credits,
+одним TOTALreview и final owner gate. Не Retry старого failed root; workflow
+v34/revision11 по native read готов. Full65 OPEN, баланс/spending UNKNOWN.
+
 ## Checkpoint 10.10.2026 09:33 UTC — runner activated, custom admission pending
 
 Clean source/remote e6cedb7b03106c9993721dc7ae432ac675a8905e. Новый fullrunner

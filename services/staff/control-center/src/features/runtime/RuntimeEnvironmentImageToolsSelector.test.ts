@@ -21,6 +21,7 @@ import type {
   RuntimeImageCatalog,
   RuntimeImageOption,
 } from "./image-tools-selection";
+import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
 import Component from "./RuntimeEnvironmentImageToolsSelector.vue";
 import ToolsEditor from "./RuntimeEnvironmentToolsEditor.vue";
 
@@ -65,6 +66,11 @@ function deferred<T>() {
 }
 
 interface State {
+  loadPage(
+    query: string,
+    cursor: string | undefined,
+    signal: AbortSignal,
+  ): Promise<AsyncEntityOptionPage>;
   loading: Ref<boolean>;
   pickerPlaceholder: ComputedRef<string>;
   pickerTriggerLabel: ComputedRef<string>;
@@ -89,6 +95,7 @@ async function setup(
           locale: "ru",
           messages: {
             ru: {
+              roleImages: { generationLabel: "Поколение {generation}" },
               runtime: {
                 choosePromotedImage: "Выберите собранный и promoted образ",
                 loadingSelectedImage: "Загрузка выбранного образа…",
@@ -122,6 +129,30 @@ function catalog() {
 }
 
 describe("Состояния выбора собственного подтверждённого образа", () => {
+  it("SYSTEM список показывает поколение/ref, сохраняя название выбранного образа и exact metadata", async () => {
+    const reader = catalog();
+    const image = { ...option, description: artifact().promotedReference };
+    reader.loadPage.mockResolvedValue({ items: [image] });
+    const state = await setup(reader);
+    const page = await state.loadPage(
+      "",
+      undefined,
+      new AbortController().signal,
+    );
+    expect(page.items[0]).toMatchObject({
+      ref: option.ref,
+      title: option.title,
+      description: "Поколение 3 · …pe_exact",
+    });
+    expect(page.items[0]?.tooltip).toContain(artifact().promotedReference);
+    expect(reader.loadPage).toHaveBeenCalledTimes(1);
+    expect(reader.loadArtifact).not.toHaveBeenCalled();
+    await state.select(page.items[0] ?? option);
+    expect(state.selected.value?.title).toBe(option.title);
+    expect(state.artifact.value?.promotedReference).toBe(
+      artifact().promotedReference,
+    );
+  });
   it("после exact ORG read доступное имя кнопки совпадает с видимым выбранным образом", async () => {
     const reader = catalog();
     const source = Component as unknown as {
