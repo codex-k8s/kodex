@@ -10,6 +10,32 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 18:07 UTC — native Retry обнаружил RC validation FAIL
+
+Exact63d8b81f remote/Draft1807 и тело PR readback PASS. Canonical existing OCI
+reuse SOURCE888/full/acbb: provenance check/db50… и binarye091… PASS,
+обычный importer завершён, global runner pin exactacbb/0600 readback PASS.
+Новая сборка и ручная запись pin не выполнялись.
+
+Штатный Retry исходной задачи создал run_bt-j6gEyfGxB3OeynHeFsZxK/attempt2,
+исходный input и Workflow40/revision13 сохранены, один комплексный review.
+До provider: RC BuildTurnInput stagevalidation отказал RUNTIME_REVISION_INVALID;
+safe codeRUNTIME_PROFILE_UNSUPPORTED не доказывает неподдерживаемость образа.
+История terminal seq10/childrenCANCELLED сохранена. Native current revision
+rrev_AwZivdwP2yizvlVTxf3NLez9/v1 уже привязана к новым ENV15/binding16/staff3f56.
+Concrete predicate UNKNOWN, не догадка. Готов RC-only closed reason allowlist;
+guards/shared runtimecontract/runner/API не меняются. Worker pinned1.26.6
+race workload/app и vet PASS. ROOT интеграция/serving/новая диагностическая
+попытка пока NOT RUN. Никаких управляющих USER_MESSAGE не добавлялось.
+
+Read-only serving proof: hashes7×3, child ELF=current buildfile3/3,
+health/ready6×204; CP ELF содержит весь core48 exact96cc…/50719B.
+Полный source compile DAG UNKNOWN/vcsABSENT, это не business PASS.
+Mobile390 screenshot после полной загрузки: overflowfalse, но context/activity
+кнопки перекрывают graph toolbar. Узкий responsive CSS fix открыт;
+initialfit/manual viewport/wheel не считаются доказанным дефектом и не меняются.
+Business1796, реальный provider proof и оставшийся Full65 остаются OPEN.
+
 ## Checkpoint 10.10.2026 18:02 UTC — окружения опубликованы, serving core48
 
 Native четыре ENV опубликованы с full impact EOF и всеми восемью intended

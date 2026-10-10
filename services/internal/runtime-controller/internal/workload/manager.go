@@ -459,6 +459,96 @@ type TurnInputBuildError struct {
 func (failure *TurnInputBuildError) Error() string { return "runtime turn input build failed" }
 func (failure *TurnInputBuildError) Unwrap() error { return failure.Cause }
 
+// ValidationReason — только закрытая диагностика; причина не меняет отказ,
+// authority, immutable input или terminal lifecycle и не разрешает retry.
+func (failure *TurnInputBuildError) ValidationReason() string {
+	if failure == nil || failure.Stage != "validation" {
+		return "UNKNOWN"
+	}
+	var validation *runnerInputValidationFailure
+	if errors.As(failure.Cause, &validation) {
+		switch validation.reason {
+		case "REQUIRED_CONTEXT", "ATTACHMENT_LINEAGE", "ATTACHMENT_MANIFEST", "WORKSPACE_MANIFEST":
+			return validation.reason
+		case "RUNNER_INPUT":
+			return runnerInputValidationReason(validation.cause)
+		}
+	}
+	return "UNKNOWN"
+}
+
+type runnerInputValidationFailure struct {
+	reason string
+	cause  error
+}
+
+func (failure *runnerInputValidationFailure) Error() string { return failure.cause.Error() }
+func (failure *runnerInputValidationFailure) Unwrap() error { return failure.cause }
+
+func validationFailure(reason string, cause error) error {
+	return &runnerInputValidationFailure{reason: reason, cause: cause}
+}
+
+// Непубличные sentinel shared validator недоступны errors.Is. Этот точный
+// allowlist фиксированных текущих ошибок — только диагностическая проекция:
+// новый/обёрнутый/произвольный текст становится UNKNOWN, не новым разрешением.
+func runnerInputValidationReason(err error) string {
+	if errors.Is(err, runtimecontract.ErrRuntimeContext) {
+		return "CONTEXT_SNAPSHOT"
+	}
+	if err == nil {
+		return "UNKNOWN"
+	}
+	switch err.Error() {
+	case "runtime prompt service materialization is invalid":
+		return "PROMPT_SERVICE"
+	case "runner assistant scope binding is invalid":
+		return "ASSISTANT_SCOPE"
+	case "runner input is invalid":
+		return "ENVELOPE"
+	case "managed MCP profile binding is invalid":
+		return "MANAGED_MCP_PROFILE"
+	case "required managed MCP health proof is unavailable":
+		return "MANAGED_MCP_HEALTH"
+	case "runtime execution deadline is invalid", "runtime execution clock is invalid", "runtime effective execution deadline is invalid", "workflow execution deadline scope is invalid":
+		return "EXECUTION_DEADLINE"
+	case "runner STT configuration binding is invalid":
+		return "STT_BINDING"
+	case "runner effective reasoning effort is invalid":
+		return "REASONING_EFFORT"
+	case "runner config overlay binding is invalid":
+		return "CONFIG_OVERLAY"
+	case "runner environment policy binding is invalid":
+		return "ENVIRONMENT_POLICY"
+	case "runner workspace policy binding is invalid":
+		return "WORKSPACE_POLICY"
+	case "runner file catalog binding is invalid":
+		return "FILE_CATALOG"
+	case "runner environment binding is invalid":
+		return "ENVIRONMENT_BINDING"
+	case "runner integration grant is outside effective capabilities":
+		return "INTEGRATION_CAPABILITIES"
+	case "runner project binding is invalid":
+		return "PROJECT_BINDING"
+	case "runner turn binding is invalid":
+		return "TURN_BINDING"
+	case "runner bounded input digest is invalid":
+		return "BOUNDED_INPUT"
+	case "runner execution binding digest is invalid":
+		return "EXECUTION_BINDING"
+	case "warm runner binding is invalid":
+		return "WARM_BINDING"
+	case "runner delegation catalog is invalid":
+		return "DELEGATION_CATALOG"
+	case "runner assistant context is invalid":
+		return "ASSISTANT_CONTEXT"
+	case "runner artifact catalog is invalid", "runner artifact provenance is invalid", "runner attachment set catalog is invalid", "runner attachment set binding is invalid", "runner attachment context is invalid":
+		return "ATTACHMENT_CATALOG"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 func turnInputBuildError(stage string, cause error) error {
 	return &TurnInputBuildError{Stage: stage, Cause: cause}
 }
@@ -548,15 +638,15 @@ func validateRuntimeRevisionDigest(input runtimecontract.RunnerInput, binding Pr
 
 func validateRunnerInput(input runtimecontract.RunnerInput) error {
 	if _, err := input.RequiredContextSnapshot(time.Now()); err != nil {
-		return err
+		return validationFailure("REQUIRED_CONTEXT", err)
 	}
 	if err := input.Validate(); err != nil {
-		return err
+		return validationFailure("RUNNER_INPUT", err)
 	}
 	for _, set := range input.AttachmentSets {
 		if set.TurnRef == "" || set.Provenance == "CURRENT_TURN" && set.TurnRef != input.TurnRef ||
 			set.Provenance == "SESSION_HISTORY" && set.TurnRef == input.TurnRef {
-			return errors.New("runtime attachment turn lineage is invalid")
+			return validationFailure("ATTACHMENT_LINEAGE", errors.New("runtime attachment turn lineage is invalid"))
 		}
 		artifacts := make([]runtimecontract.RunnerInputArtifact, 0)
 		for _, artifact := range input.InputArtifacts {
@@ -572,11 +662,11 @@ func validateRunnerInput(input runtimecontract.RunnerInput) error {
 		}
 		manifest, err := runtimecontract.BuildAttachmentManifest(set.Ref, set.Purpose, artifacts)
 		if err != nil || manifest.Digest != set.ManifestDigest {
-			return errors.New("runtime attachment manifest digest is invalid")
+			return validationFailure("ATTACHMENT_MANIFEST", errors.New("runtime attachment manifest digest is invalid"))
 		}
 	}
 	if _, err := runtimecontract.BuildWorkspaceAttachmentManifest(input.AttachmentSets, input.InputArtifacts); err != nil {
-		return errors.New("runtime workspace attachment manifest is invalid")
+		return validationFailure("WORKSPACE_MANIFEST", errors.New("runtime workspace attachment manifest is invalid"))
 	}
 	return nil
 }

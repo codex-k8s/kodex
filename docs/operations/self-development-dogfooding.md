@@ -1082,3 +1082,32 @@ Worker public90 tests PASS, ROOT integrated profile27 PASS; actual import/global
 pin пока NOT RUN. Business history не менялась, USER_MESSAGE/Launch/Retry
 после failed root ещё не создавались. Дальше native Retry исходной задачи,
 не user nudges; actual v3 runtime/Architect provider proof/business1796/Full65 OPEN.
+
+## Checkpoint 10.10.2026 18:07 UTC — повтор исходной задачи, безопасная диагностика
+
+Exact63d8b81f remote/Draft1807/body PASS. Published canonical runner reuse
+выполнен SOURCE888/full без build: existing provenanceSHA
+db50ba3b2518ea25de9ec3b7d4cb9c397be80c55899eb913b67644ba7d2a40c5
+и protectedELFe091… PASS; ordinary importer и global acbb/0600 readback PASS.
+Source888→63d shared runner inputs неизменны. Полный source-DAG compile proof
+для hot сервисов остаётся UNKNOWN; core48 embed50719B exact96cc… доказан
+в CP /proc/exe. Source7×3/ELF3/health6×204 и startupCP/GW PASS.
+
+Native RETRY исходного failed root создал run_bt-j6gEyfGxB3OeynHeFsZxK/
+attempt2, Workflow40/revision13/wfv_AbTG0jWIG7tWZn_oLYqVOB98:
+INTAKE → ANALYSIS_AND_ARCHITECTURE → IMPLEMENTATION →
+SINGLE_COMPREHENSIVE_REVIEW → FINAL_MANAGER_REVIEW. Input/history не переписаны.
+Runtime rrev_AwZivdwP2yizvlVTxf3NLez9/v1 exact REVIEWENV15/binding16/staff3f56.
+FAIL18:00:19.574Z: RC BuildTurnInput validation до provider, terminalseq10,
+дети CANCELLED атомарно. RUNTIME_PROFILE_UNSUPPORTED — обобщённый safe code;
+конкретный predicate UNKNOWN. Не приписывать отказ сети/провайдеру/образу.
+Private safe metadata SHA7d2492348ab95467e4c3c0cdf31e14bb7d6e4bd0e105b63e7bb8a023f83bcc58.
+
+Prepared RC-only диагностика выдаёт только fixed reason enum/UNKNOWN;
+сырые ошибки/input/значения не логируются, eligibility/terminal guards те же.
+Worker canonicalGo1.26.6 race workload/app PASS5.742s/1.374s и vet PASS;
+ROOT integration/actual serving новой reason ещё NOT RUN.
+Mobile390 screenshot после загрузки просмотрен, overflowfalse; обнаружен
+CSS overlap context/activity buttons поверх graph toolbar. Новый narrow fix
+готовится, desktop/manualfit/zoom менять без доказанной причины не требуется.
+Business1796/actual provider/Full65 OPEN, корректирующих USER_MESSAGE0.

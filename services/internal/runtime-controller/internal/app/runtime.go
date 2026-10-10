@@ -29,6 +29,9 @@ const (
 	warmReportRPCFailure          = "report system assistant warm runtime"
 	warmDesiredRevisionMissing    = "system assistant warm runtime desired revision is missing"
 	turnMaterializationFailure    = "runtime turn materialization"
+	turnInputRejectionMessage     = "runtime turn input rejected"
+	turnInputStageAttribute       = "stage"
+	turnInputReasonAttribute      = "reason"
 )
 
 var defaultFailureCompletionRetryDelays = [...]time.Duration{
@@ -239,11 +242,13 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 		input, providerBinding, buildErr := runtime.manager.BuildTurnInput(execution)
 		if buildErr != nil {
 			stage := "unknown"
+			reason := "UNKNOWN"
 			var inputFailure *workload.TurnInputBuildError
 			if errors.As(buildErr, &inputFailure) {
 				stage = inputFailure.Stage
+				reason = inputFailure.ValidationReason()
 			}
-			runtime.logger.WarnContext(ctx, "runtime turn input rejected", "stage", stage)
+			runtime.logger.WarnContext(ctx, turnInputRejectionMessage, turnInputStageAttribute, stage, turnInputReasonAttribute, reason)
 			runtime.failClaim(ctx, input, execution, "RUNTIME_REVISION_INVALID")
 			continue
 		}
