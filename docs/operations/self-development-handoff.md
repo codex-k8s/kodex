@@ -10,6 +10,22 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 09:33 UTC — runner activated, custom admission pending
+
+Clean source/remote e6cedb7b03106c9993721dc7ae432ac675a8905e. Новый fullrunner
+manifest4af37fcec9cb8c1db47fdca7f042d4e08257a4553319ed3c0c2678b749a10f48;
+build/import/provenance/seed/render/quiesce/supply-chain apply/readback PASS.
+Retention восстановлен canonical core apply/readback. CP/RC actual serving
+ELF/source/mount двумя stable tuples PASS, новый sourcee6ced. Chrome owner
+SSO восстановлен после ожидаемого503, свежие API200/Console0.
+Два native custom recipes helper gen7/staff gen13 buildCOMPLETED, admission
+scanRUNNING; normalized non-base recipe hashes сохранены. НЕ пересобирать
+повторно и НЕ запускать business до ACCEPTED→PROMOTED и 3ENV image-only
+публикации с exact intended impact. Все3ENV baseline38tools/non-image hashes
+сохранены в journal; old revisions не менять. Затем новый единственный
+launch1796 с четырьмя inputs, weekly credits case и одним review/owner gate.
+Full65 OPEN; immutable runner delivery не заменяет native business PASS.
+
 ## Checkpoint 10.10.2026 09:14 UTC — native APPLIED UX PASS, готовится clean delivery
 
 ROOT supplement3/3 exact adopted: первый transcript fallback скрывает только

@@ -1140,3 +1140,35 @@ runs read200 total0/nextnone; эти read не заменяют свежий can
 build7.85s PASS на том же exact dirty tree. Chunk-size/plugin timing warnings
 зафиксированы, не являются ошибками компиляции. До clean commit8 явно выбранных
 файлов и runner delivery source mutation не планируется; полный QA не завершён.
+
+## Checkpoint 10.10.2026 09:33 UTC — immutable runner доставлен, custom admission выполняется
+
+Source/remote/Draft1807 exact e6cedb7b03106c9993721dc7ae432ac675a8905e,
+clean build. Full runner build/import PASS: manifest
+4af37fcec9cb8c1db47fdca7f042d4e08257a4553319ed3c0c2678b749a10f48,
+provenance87c2ae5c532194ee58fb31c798db328e71b20953d70bbcade7461eb6ca3ec31d,
+binary789237c795d3ddfa8790e2cc2aea7a79cc131eecc8d1791b0c97321d93484295.
+Canonical runner seed, fresh render, owner idle/quiesce, supply-chain apply
+и отдельный readback PASS. Artifact-retention core apply/readback PASS.
+Forward migration и реальная BuildKit readiness прошли; admission не ослаблялся.
+На время остановки gateway Chrome получил503; после восстановления штатный
+SSO-переход восстановил owner session. Последующие bootstrap/session/API200,
+Console0 и screenshot без горизонтального переполнения; временный503 не
+выдаётся за непрерывную доступность.
+
+Serving proof09:31:26→09:32:08 stable: новые CP PodUID3b607564…ad157,
+PID146/ticks6542320 и RC PodUIDbe42502a…ad2e8, PID140/ticks6546554,
+restart0. ELF129c6c38…55037/b77e6829…fd6b8 равны независимым canonical
+Go1.26.6 builds; source annotations e6ced/content28f9cdad…a3470 exact render.
+Actual source mount read-only, выбранные host/workspace hashes совпали.
+
+Native owner UI создал helper recipe generation7/version14 и staff
+generation13/version25, только FROM нового runner. Оба build COMPLETED;
+admission claim выполнен, scan RUNNING. Normalized recipe hashes до/после
+равны930f1bfe…c4de/a29ce1de…2d21. Publish/promote ещё NOT RUN.
+Три current ENV остаются прежними: helper v16/rev17, review/write v12/rev12,
+в каждом38tools. Non-image hashes baseline513a6540…edea,
+c0f1847a…0b35,4e2c1b36…df57. Image-only draft/publication и intended
+consumer impact впереди; прежние published revisions не переписывались.
+Новый business launch ещё NOT RUN. Weekly100% + paid credits остаётся
+обязательным сценарием1796; balance/spending UNKNOWN. Full65 OPEN.
