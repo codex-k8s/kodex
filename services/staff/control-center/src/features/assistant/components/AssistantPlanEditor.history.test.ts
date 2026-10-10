@@ -38,6 +38,34 @@ afterEach(() => {
 });
 
 describe("file revision native editor", () => {
+  it("APPLIED receipt в штатном Editor показывает полученную v2 и убирает будущее применение", async () => {
+    const input = appliedFilePlanFixture();
+    const html = await renderPlan(input);
+    expect(html).toContain("v2");
+    expect(html).not.toContain("Будет назначена при применении");
+    expect(html).not.toContain(i18n.global.t("fileRevision.staged"));
+    expect(html).not.toContain(
+      i18n.global.t("assistant.planEditor.projectFileBoundary"),
+    );
+    expect(html).not.toContain("staging-not-a-grant");
+  });
+  it("отдельный receipt prop используется без изменения исходного APPLIED plan", async () => {
+    const input = appliedFilePlanFixture();
+    const receipt = input.receipt;
+    delete input.receipt;
+    const html = await renderPlan(input, false, receipt);
+    expect(html).toContain("v2");
+    expect(html).not.toContain("Будет назначена при применении");
+    expect(input.receipt).toBeUndefined();
+  });
+  it("APPLIED без receipt остаётся неподтверждённым, не показывает будущее применение", async () => {
+    const input = appliedFilePlanFixture();
+    delete input.receipt;
+    const html = await renderPlan(input);
+    expect(html).toContain(i18n.global.t("fileRevision.inspectFailed"));
+    expect(html).not.toContain("v2");
+    expect(html).not.toContain("Будет назначена при применении");
+  });
   it("показывает stable before/new, не выводит contentRef и не принимает staged body за пустое поле", async () => {
     const input = appliedFilePlanFixture();
     input.state = "DRAFT";
@@ -97,13 +125,18 @@ async function render(state: AssistantPlan["state"], readonly = false) {
   return renderPlan(plan(state), readonly);
 }
 
-async function renderPlan(input: AssistantPlan, readonly = false) {
+async function renderPlan(
+  input: AssistantPlan,
+  readonly = false,
+  receipt?: AssistantPlan["receipt"],
+) {
   const before = JSON.stringify(input);
   const events: unknown[] = [];
   const app = createSSRApp({
     render: () =>
       h(Editor, {
         plan: input,
+        receipt,
         readonly,
         onSave: (...args) => events.push(args),
         onValidate: () => events.push("validate"),

@@ -2096,9 +2096,13 @@ function validationProblemLabel(problem: string): string {
                     "
                     :operation="operation.value"
                     :edited="projectFileReplacing(operation)"
+                    :plan="draftContinuationPlan ?? plan"
                   />
                   <div
-                    v-if="!projectFileReplacing(operation)"
+                    v-if="
+                      plan.state !== 'APPLIED' &&
+                      !projectFileReplacing(operation)
+                    "
                     class="assistant-project-file-form__content"
                   >
                     <p class="muted">{{ $t("fileRevision.staged") }}</p>
@@ -2209,7 +2213,10 @@ function validationProblemLabel(problem: string): string {
                   >
                     {{ $t("assistant.planEditor.projectFileInvalid") }}
                   </p>
-                  <p class="assistant-plan-friendly__hint">
+                  <p
+                    v-if="plan.state !== 'APPLIED'"
+                    class="assistant-plan-friendly__hint"
+                  >
                     {{ $t("assistant.planEditor.projectFileBoundary") }}
                   </p>
                 </div>

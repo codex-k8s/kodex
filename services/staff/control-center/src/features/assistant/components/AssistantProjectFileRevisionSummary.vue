@@ -1,13 +1,27 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { AssistantPlanOperation } from "@/shared/api/generated/openapi/types.gen";
-import { projectFileRevisionSource } from "../project-file-plan";
+import type {
+  AssistantPlan,
+  AssistantPlanOperation,
+} from "@/shared/api/generated/openapi/types.gen";
+import {
+  appliedProjectFileRevision,
+  projectFileRevisionSource,
+} from "../project-file-plan";
 
 const props = defineProps<{
   operation: AssistantPlanOperation;
   edited: boolean;
+  plan?: AssistantPlan;
 }>();
 const source = computed(() => projectFileRevisionSource(props.operation));
+const applied = computed(() => props.plan?.state === "APPLIED");
+const revision = computed(() => {
+  if (!props.plan || !source.value) return;
+  const result = appliedProjectFileRevision(props.plan, props.operation.ref);
+  if (result?.revision.artifactRef !== source.value.artifactRef) return;
+  return result.revision;
+});
 </script>
 <template>
   <section
@@ -21,7 +35,9 @@ const source = computed(() => projectFileRevisionSource(props.operation));
       <strong>{{ operation.target.name }}</strong>
       <dl>
         <div>
-          <dt>{{ $t("fileRevision.before") }}</dt>
+          <dt>
+            {{ $t(applied ? "fileRevision.previous" : "fileRevision.before") }}
+          </dt>
           <dd>
             {{ $t("fileRevision.number", { revision: source.revision }) }} ·
             {{ operation.before.mediaType }} ·
@@ -32,10 +48,26 @@ const source = computed(() => projectFileRevisionSource(props.operation));
         </div>
         <div>
           <dt>{{ $t("fileRevision.after") }}</dt>
-          <dd>{{ $t("fileRevision.assignedOnApply") }}</dd>
+          <dd v-if="revision">
+            {{ $t("fileRevision.number", { revision: revision.revision }) }} ·
+            {{ revision.mediaType }} ·
+            {{ $t("fileRevision.bytes", { count: revision.sizeBytes }) }}
+          </dd>
+          <dd v-else>
+            {{
+              $t(
+                applied ? "common.unavailable" : "fileRevision.assignedOnApply",
+              )
+            }}
+          </dd>
         </div>
       </dl>
-      <p v-if="edited" class="muted">{{ $t("fileRevision.digestPending") }}</p>
+      <p v-if="applied && !revision" class="field-error" role="alert">
+        {{ $t("fileRevision.inspectFailed") }}
+      </p>
+      <p v-else-if="edited && !applied" class="muted">
+        {{ $t("fileRevision.digestPending") }}
+      </p>
       <details v-else>
         <summary>{{ $t("common.details") }}</summary>
         <p>
@@ -44,7 +76,11 @@ const source = computed(() => projectFileRevisionSource(props.operation));
         </p>
         <dl>
           <div>
-            <dt>{{ $t("fileRevision.before") }}</dt>
+            <dt>
+              {{
+                $t(applied ? "fileRevision.previous" : "fileRevision.before")
+              }}
+            </dt>
             <dd>
               <code>{{ operation.before.digest }}</code>
             </dd>
@@ -52,7 +88,7 @@ const source = computed(() => projectFileRevisionSource(props.operation));
           <div>
             <dt>{{ $t("fileRevision.after") }}</dt>
             <dd>
-              <code>{{ operation.after.digest }}</code>
+              <code>{{ revision?.digest ?? operation.after.digest }}</code>
             </dd>
           </div>
         </dl>

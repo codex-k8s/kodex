@@ -2,6 +2,15 @@ package runtimecontract
 
 import "slices"
 
+const ExecutionSnapshotTool = "get_execution_snapshot"
+
+// Собственное диагностическое чтение не назначает grant: fresh lease authority
+// проверяется существующим CP RecordRunToolCall перед выдачей результата.
+func RuntimeExecutionSnapshotAvailable(input RunnerInput) bool {
+	return input.Mode == RunnerModeTurn && input.LeaseRef != "" && input.LeaseFence != "" &&
+		input.LeaseGeneration > 0 && BindProviderProcessObservation(input, "0.0.0").Validate() == nil
+}
+
 // RuntimeWorkflowLaunchAvailable связывает producer и consumer с одним exact
 // ordinary-профилем immutable input. Текущую authority перед эффектом проверяет CP.
 func RuntimeWorkflowLaunchAvailable(input RunnerInput) bool {
@@ -24,6 +33,9 @@ func RuntimeMCPToolNames(input RunnerInput) []string {
 		return nil
 	}
 	result := []string{"propose_run_metadata"}
+	if RuntimeExecutionSnapshotAvailable(input) {
+		result = append(result, ExecutionSnapshotTool)
+	}
 	if RuntimeFileToolsAvailable(input) {
 		result = append(result, FileToolSearch, FileToolMetadata, FileToolPreview, FileToolManifest, FileToolRead)
 	}

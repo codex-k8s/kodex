@@ -4,7 +4,37 @@ import (
 	"testing"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 )
+
+func TestExecutionSnapshotProjectionHasNoCapabilityOrForeignSelector(t *testing.T) {
+	for _, assistant := range []bool{false, true} {
+		if !toolCapabilityMatches(runtimecontract.ExecutionSnapshotTool, "", false, assistant) ||
+			toolCapabilityMatches(runtimecontract.ExecutionSnapshotTool, "platform.configuration.read", false, assistant) ||
+			toolCapabilityMatches(runtimecontract.ExecutionSnapshotTool, "", true, assistant) {
+			t.Fatal("own execution read crossed capability/grant boundary")
+		}
+	}
+	input := command.RunToolCallInput{CallRef: "tcl_fixture123", Tool: runtimecontract.ExecutionSnapshotTool,
+		State: "RUNNING", Revision: 1, SafeParameters: map[string]any{}}
+	if !validToolCallProjection(input) {
+		t.Fatal("closed own read projection rejected")
+	}
+	for _, change := range []func(*command.RunToolCallInput){
+		func(v *command.RunToolCallInput) { v.SafeParameters = map[string]any{"session_ref": "ses_foreign123"} },
+		func(v *command.RunToolCallInput) { v.CapabilityRef = "platform.configuration.read" },
+		func(v *command.RunToolCallInput) { v.GrantRef = "grant_foreign123" },
+	} {
+		value := input
+		change(&value)
+		if validToolCallProjection(value) {
+			t.Fatal("caller selector or new authority accepted")
+		}
+	}
+	if toolCapabilityMatches("get_run_metadata", "", false, false) || toolCapabilityMatches("get_execution_snapshot_unknown", "", false, false) {
+		t.Fatal("unknown aliases accepted")
+	}
+}
 
 func TestNativeToolProjectionDoesNotRequireMCPGrant(t *testing.T) {
 	for _, kind := range []string{

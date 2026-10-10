@@ -247,6 +247,9 @@ func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt [
 	if err := server.notifyInitialized(); err != nil {
 		return Result{}, atProviderStage(providerStageInitialize, server.abort(ctx, state, err))
 	}
+	if err := state.publishProviderProcess(input); err != nil {
+		return Result{}, atProviderStage(providerStageInitialize, server.abort(ctx, state, err))
+	}
 	if err := server.configureContextSkills(ctx, state, input, snapshot); err != nil {
 		return Result{}, atProviderStage(providerStageSkills, server.abort(ctx, state, err))
 	}

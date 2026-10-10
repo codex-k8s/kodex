@@ -54,10 +54,11 @@ type Config struct {
 // Coordinator связывает leader claim loop с callbacks, не становясь owner store.
 // После restart leases истекают в control-plane и материализуются заново.
 type Coordinator struct {
-	mu   sync.Mutex
-	warm []warmExecution
-	wake chan struct{}
-	done map[string]chan struct{}
+	mu                 sync.Mutex
+	warm               []warmExecution
+	wake               chan struct{}
+	done               map[string]chan struct{}
+	providerExecutions map[string]providerProcessExecution
 }
 
 type warmExecution struct {
@@ -66,12 +67,13 @@ type warmExecution struct {
 }
 
 func NewCoordinator() *Coordinator {
-	return &Coordinator{wake: make(chan struct{}, 1), done: make(map[string]chan struct{})}
+	return &Coordinator{wake: make(chan struct{}, 1), done: make(map[string]chan struct{}), providerExecutions: make(map[string]providerProcessExecution)}
 }
 
 func (coordinator *Coordinator) Register(input runtimecontract.RunnerInput) <-chan struct{} {
 	coordinator.mu.Lock()
 	defer coordinator.mu.Unlock()
+	coordinator.registerProviderExecution(input)
 	if existing := coordinator.done[input.LeaseRef]; existing != nil {
 		return existing
 	}
@@ -125,6 +127,7 @@ func (coordinator *Coordinator) NextWarm(ctx context.Context, revisionDigest str
 func (coordinator *Coordinator) Complete(leaseRef string) {
 	coordinator.mu.Lock()
 	defer coordinator.mu.Unlock()
+	delete(coordinator.providerExecutions, leaseRef)
 	if done := coordinator.done[leaseRef]; done != nil {
 		close(done)
 		delete(coordinator.done, leaseRef)
@@ -459,7 +462,8 @@ func (server *Server) progress(writer http.ResponseWriter, request *http.Request
 	if decode(request, &payload, runtimecontract.MaximumRuntimeMessageBytes*6+2048) != nil ||
 		payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest ||
 		payload.Message == nil && !progressCodePattern.MatchString(payload.Progress) ||
-		payload.Message != nil && (payload.Progress != "" || payload.Message.Validate() != nil) {
+		payload.Message != nil && (payload.Progress != "" || payload.Message.Validate() != nil) ||
+		payload.ProviderProcess != nil && (payload.Message != nil || payload.Progress != runtimecontract.ProviderProcessInitializedProgress || !payload.ProviderProcess.Matches(input)) {
 		http.Error(writer, "invalid runtime progress", http.StatusBadRequest)
 		return
 	}
@@ -476,6 +480,10 @@ func (server *Server) progress(writer http.ResponseWriter, request *http.Request
 	_, err := server.control.Runtime.ReportExecutionProgress(ctx, projection)
 	if err != nil {
 		writeControlError(writer, err)
+		return
+	}
+	if payload.ProviderProcess != nil && server.coordinator.recordProviderProcess(input, *payload.ProviderProcess) != nil {
+		http.Error(writer, "provider process observation conflict", http.StatusConflict)
 		return
 	}
 	writer.WriteHeader(http.StatusNoContent)
@@ -583,6 +591,9 @@ func emptyMCPParams(raw json.RawMessage) bool {
 
 func tools(input runtimecontract.RunnerInput) []map[string]any {
 	result := []map[string]any{runMetadataTool()}
+	if runtimecontract.RuntimeExecutionSnapshotAvailable(input) {
+		result = append(result, executionSnapshotTool())
+	}
 	result = append(result, runtimeFileTools(input)...)
 	if input.IsAssistant() {
 		result = append(result, configurationCatalogTool(input), assistantResourceSearchTool(), assistantTaskSessionTool(), assistantPlanTool(input), assistantMetadataTool())
@@ -714,6 +725,8 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	switch params.Name {
+	case runtimecontract.ExecutionSnapshotTool:
+		result, err = server.executionSnapshot(input, params.Arguments)
 	case "get_configuration_catalog":
 		result, err = server.configurationCatalog(request.Context(), input, params.Arguments)
 	case "get_integration_catalog":
@@ -1892,6 +1905,8 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 		return map[string]any{"purpose": purpose}, "", input.FileCatalog.Ref, true
 	}
 	switch tool {
+	case runtimecontract.ExecutionSnapshotTool:
+		return map[string]any{}, "", "", len(arguments) == 0 && runtimecontract.RuntimeExecutionSnapshotAvailable(input)
 	case "get_configuration_catalog":
 		parameters := map[string]any{}
 		if catalog, ok := arguments["assistant_configuration_catalog"].(map[string]any); ok {
@@ -2012,6 +2027,10 @@ func safeToolCallResult(tool string, result any, toolErr error) string {
 			return "PLAN_INPUT_INVALID"
 		}
 		return "TOOL_UNAVAILABLE"
+	}
+	if tool == runtimecontract.ExecutionSnapshotTool {
+		// Process observation доступно только current leased read, не из истории.
+		return runtimecontract.ExecutionSnapshotTool + ":completed"
 	}
 	// У read_file нет нового successful legacy fallback: terminal проекция
 	// требует private evidence и authenticated input в recordToolCallPhase.

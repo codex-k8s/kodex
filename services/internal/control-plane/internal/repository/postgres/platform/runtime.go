@@ -274,6 +274,10 @@ func (repository *Repository) recordRunToolCall(ctx context.Context, tx pgx.Tx, 
 }
 
 func validToolCallProjection(input command.RunToolCallInput) bool {
+	if input.Tool == runtimecontract.ExecutionSnapshotTool &&
+		(len(input.SafeParameters) != 0 || input.CapabilityRef != "" || input.GrantRef != "") {
+		return false
+	}
 	if len(input.CallRef) < 8 || len(input.CallRef) > 96 || len(input.Tool) < 1 || len(input.Tool) > 120 ||
 		!validToolActivityLifecycle(input.State, input.Revision, input.SafeResult, input.DurationMS) || input.DurationMS < 0 || input.DurationMS > 86_400_000 ||
 		len([]rune(input.SafeResult)) > 2000 || input.SafeParameters == nil || len(input.SafeParameters) > 32 ||
@@ -319,6 +323,8 @@ func toolCapabilityMatches(tool, capability string, integration, configurationAs
 		}
 	}
 	switch tool {
+	case runtimecontract.ExecutionSnapshotTool:
+		return capability == ""
 	case runtimecontract.NativeToolKindShell, runtimecontract.NativeToolKindFileChange,
 		runtimecontract.NativeToolKindWebSearch, runtimecontract.NativeToolKindDynamicTool,
 		runtimecontract.NativeToolKindImageView, runtimecontract.NativeToolKindImageGeneration,

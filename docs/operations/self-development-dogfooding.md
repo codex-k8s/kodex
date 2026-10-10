@@ -681,3 +681,33 @@ Helper20/binding15/image3181591e сохранены. Applied plan summary пок
 старый placeholder новой версии: narrow UX packet готовится isolated.
 ROOT rolling25unit после фактического переноса PASS7.962s; old prefix PASS.
 Full65/Workflow11/14/15/16 OPEN; admission/own-runtime observation следующий.
+
+## Checkpoint 10.10.2026 05:50 UTC — собственный runtime read и applied UX
+
+Предыдущие seven rolling/handoff files опубликованы как e6cd3828 в том же
+Draft1807; tree до нового пакета CLEAN. Приняты exact provider18+own9 (26
+уникальных файлов) и отдельный applied UX5: все31 postimage SHA EQUAL
+замороженным manifests, preimages сверены до каждого применения.
+
+Новый get_execution_snapshot принимает только {} и current TURN, не новые
+права: existing ticket/immutable pins и обе fresh owner tool-call phases.
+Provider observation принимается после owner progress, связана с exact tuple,
+выдаёт только безопасные status/version/source. ABI3 без legacy decoder;
+старый custom image нельзя выдавать за новый runner. Native Architect
+OBSERVED пока NOT RUN: требуется rebuild/admission/rebind обоих exact peers.
+
+ROOT combined local PASS: runtimecontract0.182s, runner codex5.013s/
+callback0.177s/app17.256s, RC callback7.730s/app0.221s, CP projection0.076s.
+Canonical disposable PostgreSQL tool-phase component6.046s/harness exit0,
+worker-grant и runner-policy read-only queries PASS; свой контейнер снят trap.
+Frontend88unit/5suites5.03s, scoped ESLint, forced typecheck и production
+build2791modules/8.35s PASS. Existing SSR RouterLink fixture warning и Vite
+chunk>500KB warning сохранены, не скрыты. Все результаты относятся к e6c+31
+exact working bytes, не служат доказательством native runtime или Full65.
+
+Own Chrome5 OWNER/reload PASS; раскрытый applied Variant3 теперь показывает
+«Предыдущая версия v1 /4234байт → Новая версия v2 /4920байт» из exact receipt.
+Future placeholder и staged promise отсутствуют; screenshot просмотрен,
+fresh Console0, document overflowfalse. Нет повторного Apply/нового AI хода.
+Кластер повторно:2nodesReady, проверенные kodex-system workload replicas ready,
+ROOT128GiB/DATA81GiB свободно. Runtime delivery/real Workflow/Full65 OPEN.

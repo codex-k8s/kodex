@@ -221,6 +221,7 @@ func decodeRPCError(raw json.RawMessage) (int64, error) {
 }
 
 type protocolState struct {
+	processVersion       string
 	resumeSource         *confirmedResumeSource
 	expectedSessionID    string
 	threadID             string
@@ -283,6 +284,11 @@ func (state *protocolState) initialize(raw json.RawMessage, expectedHome string)
 		family != "unix" || operatingSystem != "linux" || userAgent == "" {
 		return errors.New("Codex app-server initialize binding is invalid")
 	}
+	version, err := parseProviderProcessVersion(userAgent)
+	if err != nil || state.processVersion != "" {
+		return errProviderProcessInitialize
+	}
+	state.processVersion = version
 	return nil
 }
 

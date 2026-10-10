@@ -10,6 +10,23 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 05:50 UTC — combined runtime packet принят
+
+e6cd3828 уже опубликован в Draft1807; предыдущая запись про seven dirty files
+историческая. ROOT принял26runtime+5frontend exact postimages. Targeted Go unit,
+canonical disposable PG tool-phase6.046s/harness0, frontend88unit/lint/typecheck/
+build PASS. Native applied Variant3 показывает receipt v1→v2 вместо будущего
+placeholder, screenshot/Console0/overflowfalse проверены в Chrome5.
+
+Следующий этап: clean commit/push этого пакета, full runner ABI3 build/import,
+fresh render, canonical CP/RC delivery/readback и actual serving/source hash.
+Потом custom admitted/promoted role image с обоими ABI3 peers, штатные exact
+binding revisions; старый custom3181591e нельзя считать новым бинарём.
+Обычный Workflow Architect должен сам вызвать get_execution_snapshot и
+получить OBSERVED actual provider version. Сейчас native runtime NOT RUN.
+Реальный Workflow #1796 и Full65 OPEN, goal ACTIVE. Без нового финального gate
+business PR не merge/approve. Private delivery inputs устанавливаются read-only.
+
 ## Checkpoint 10.10.2026 05:40 UTC — обновление заметки принято
 
 Serving16e: natural run_CN_GzhWi1fDmTQJ9syH9j7m- → single UPDATE plan

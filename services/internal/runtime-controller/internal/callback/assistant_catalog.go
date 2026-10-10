@@ -323,6 +323,9 @@ func (server *Server) assistantConfigurationCatalog(ctx context.Context, input r
 	if err != nil {
 		return nil, err
 	}
+	if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_CURRENT_CONFIGURATION {
+		configuration["execution_snapshot"].(map[string]any)["provider_process"] = server.coordinator.providerProcessSnapshot(input)
+	}
 	if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_WORKFLOW_CONFIGURATION || request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_AGENT_CONFIGURATION {
 		page, pageErr := parseAssistantConfigurationPage(raw.(map[string]any), configuration["kind"].(string))
 		if pageErr != nil {

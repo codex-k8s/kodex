@@ -286,7 +286,9 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 			return errors.New("runtime activity is invalid")
 		}
 		var err error
-		if activity.Message != nil {
+		if activity.ProviderProcess != nil {
+			err = client.ProviderProcess(ctx, input, *activity.ProviderProcess)
+		} else if activity.Message != nil {
 			err = client.PublishedMessage(ctx, input, *activity.Message)
 		} else {
 			err = client.RecordNativeToolCall(ctx, input, *activity.ToolCall)
