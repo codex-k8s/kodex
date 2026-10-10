@@ -684,3 +684,67 @@ Canonical journal roll сохранён: active73272B, archive checkpoints004 и
 exact prior Git blob сохранены; verifier PREVIOUS_SNAPSHOT_PREFIX_CHECKED PASS.
 Ни один historical checkpoint/checkbox не потерян. Business1796, ONE review,
 Manager acceptance/owner gate и Full65 OPEN; частичный PASS не готовность.
+
+## Checkpoint 10.10.2026 20:12 UTC — intrinsic layout и contract baseline
+
+Новый узкий FE пакет поверх bfb1460b задаёт max-content строки списка и
+раскрытого контекста, перенос длинных metadata; toggle подписан «Список узлов».
+Все6 frozen postimage SHA EQUAL. ROOT unit4suites56tests PASS6.26s,
+scoped ESLint6/Prettier6 exit0, forced typecheck/build exit0/8.42s.
+Прежние chunk/plugin warnings сохранены. Native нового FE пока NOT RUN.
+
+Изолированный чистый exact bfb1460b/c2795374 baseline PASS: registry5,
+Proto lint/build/actual codegen diff, SQL boundary, authority-policy codegen,
+оба static render профиля, AsyncAPI validation/structural generated check.
+Initial AsyncAPI FAIL missing dependencies сохранён; повтор с exact lockfile
+и существующими dependencies PASS. Рекомендуемая schema3.1 diagnostic сохранена;
+отдельная полная AsyncAPI regeneration NOT RUN. Эти проверки не live acceptance.
+
+Native Retry6 продолжает INTAKE:20:11 RUNNING/208events contiguous после reload,
+packet467840B прочитан до EOF/digest EQUAL, manager-plan готовится; реальных
+корректирующих USER_MESSAGE0. Разреженный cache при закрытом drawer сам по себе
+не дефект: независимый history backfill предусмотрен при открытии activity.
+Permanent open-drawer gap NOT PROVEN; pure reducer mechanism reproducer PASS.
+Full65/Developer/ONE review/Manager acceptance/owner gate остаются OPEN.
+
+## Checkpoint 10.10.2026 20:03 UTC — новый CP serving и native Retry6
+
+Source bfb1460b9be7f13ae2b501935d6c3e48a4c2e96b опубликован ботом,
+Draft1807 remote/head readback PASS; main ab4992e0 неизменён. Initial push
+readback был FAIL_OR_UNKNOWN из-за задержки remote; отдельный readback PASS,
+повторный push не выполнялся. Canonical fresh idle all5zero и HOT FF PASS
+19:57:21.540Z, promoted61/pinsbbf5… неизменны. PR body сокращён и актуализирован.
+
+Serving/rejoin PASS19:58:25: CP7 plus related published paths и RC mapping,
+21unique/63host-Pod hashes EQUAL. CP UIDc82aa63b…/PID1060/start10313360,
+ELF1e74b9c3579d341cbccdfda80f44823da2c2cd455dec3c854bc3421e45d40145
+равен Airbuild; Go1.26.6/shared validator1/new WorkflowExecution symbols4.
+RC UID345080f5…/PID422/start10114109/ELF587b91e3… неизменён/равенbuild,
+Go1.26.6/shared1. Оба Ready1/restarts0, exactRS→Deployment/readonlymount;
+повторUID/PID/start/hash EQUAL. Это serving proof, не business acceptance.
+
+Native Retry19:59 command200 создал attempt6
+run_hqK7ZTd24cfAJNe2Bi0RtBHi, прежний session ses_zRPR2EL6KVjROhCJ08rhGbte,
+turn trn_911Ma7t2eP0HwkylgSM0DsEz/attempt1. InputSummary exact EQUAL,
+Workflow40/revision13 сохранён; корректирующих USER_MESSAGE0.
+Новый INTAKE действительно accepted11 и RUNNING13, отдельный child
+run_0pH9ArjMo9qVae7KA3oyeY-d/session ses_QRCahjW2seaymtFmfw8jty6a/
+turn trn_c98hRWH1JzLtB9ABTQcWLyVh. Initial Manager turn17 SUCCEEDED:
+ожидание callback, не подмена child и не historical PASS нового root.
+
+Ранний ACK exactrun/session/turn/node/attempt/NONE/project captured и rejoin
+PASS: customstaff05f88…ce218/ENV16/binding17/tools38/cap1/grants0,
+RRev rrev_fL8PcRuiKb62mnB4MYgdwWVj/v1/digest49ba7739…33d774,
+inputa711c2db…9457a. Instructions62502B/fileSHAcd2a4201…faa4d8 EQUAL;
+inbox101649B/promptSHAcb7ddc64…606a13 EQUAL. Binaryfile0608aee8…21295 EQUAL,
+scope SAME_POD_IMAGE_FILE_NOT_SERVING_PROCESS. Expected task comparison NOT RUN;
+ACK не заменяет provider/MCP/role EOF/semantic acceptance.
+
+20:03:35 native reload/rejoin RUNNING/sequence104:104events contiguous,
+overflowfalse/Console0/bootstrap/session/graph/events/gates200, realtime connected.
+INTAKE выполняет реальные native/integration/file reads SUCCEEDED. Backend
+bounded5m logs CP0lines/RC1structured, WARN0/ERROR0; raw logs не экспортировались.
+Full65/ONE review/Developer/Manager acceptance/owner gate OPEN. Credits balances/
+units/spending UNKNOWN. Остаточный FE FAIL: intrinsic grid tracks сжимают
+row72 при body77 и expanded details; CSS max-content готовится отдельным пакетом,
+ещё NOT RUN native. HOT/source во время текущего запуска не меняются.

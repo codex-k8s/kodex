@@ -232,6 +232,7 @@ async function render(
             graph: "Граф выполнения",
             graphControls: "Управление графом",
             connections: "Связи графа",
+            nodeList: "Список узлов",
             zoom: "Масштаб графа",
             zoomIn: "Увеличить масштаб",
             zoomOut: "Уменьшить масштаб",
@@ -489,6 +490,8 @@ describe("RunGraphCanvas", () => {
       html.indexOf("graph-viewport"),
     );
     expect(html).toContain('role="toolbar"');
+    expect(html).toContain('aria-label="Список узлов"');
+    expect(html).toContain('title="Список узлов"');
     expect(html).toContain('role="tree"');
     expect(html).toContain('aria-level="1"');
     expect(html).toContain('aria-level="2"');

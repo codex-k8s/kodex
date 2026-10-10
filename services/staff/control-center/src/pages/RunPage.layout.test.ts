@@ -102,6 +102,27 @@ describe("RunPage layout при открытом ходе работы", () => {
     }
   });
 
+  it("не сжимает intrinsic строки дерева и раскрытых metadata до высоты scrollport", () => {
+    const outline = canvas.match(/\.graph-outline \{([^}]+)\}/)?.[1];
+    expect(outline).toContain("grid-auto-rows: max-content");
+    const details = source.match(
+      /\.run-canvas-summary__details \{(\s*grid-auto-rows:[^}]+)\}/,
+    )?.[1];
+    expect(details).toContain("grid-auto-rows: max-content");
+    expect(details).toContain("align-content: start");
+    const metadata = source.match(
+      /\.run-canvas-summary__details > span,\s*\.run-canvas-summary a \{([^}]+)\}/,
+    )?.[1];
+    expect(metadata).toContain("overflow-wrap: anywhere");
+    const node = canvas.match(/\.graph-outline-node \{([^}]+)\}/)?.[1];
+    expect(node).toContain("padding: 10px 12px");
+    expect(node).toContain("border: 1px solid");
+    // Native fixture: body77px требует99px, а72px допустимо только как minimum.
+    const intrinsicRow = Math.max(72, 77 + 2 * 10 + 2);
+    expect(intrinsicRow).toBe(99);
+    expect(132 - intrinsicRow).toBeGreaterThanOrEqual(28);
+  });
+
   it("не обрезает статус узла общей фиксированной высотой кнопки", () => {
     const node = canvas.match(/\.graph-outline-node \{([^}]+)\}/)?.[1];
     expect(node).toContain("height: auto");

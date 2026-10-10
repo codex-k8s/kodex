@@ -545,8 +545,8 @@ function compareNodes(left: RunNode, right: RunNode): number {
         <button
           class="icon-button"
           type="button"
-          :aria-label="$t('runs.connections')"
-          :title="$t('runs.connections')"
+          :aria-label="$t('runs.nodeList')"
+          :title="$t('runs.nodeList')"
           :aria-pressed="viewMode === 'outline'"
           @click="setViewMode('outline')"
         >
@@ -905,6 +905,7 @@ function compareNodes(left: RunNode, right: RunNode): number {
   top: max(144px, calc(var(--run-outline-summary-bottom, 0px) + 12px));
   display: grid;
   align-content: start;
+  grid-auto-rows: max-content;
   min-width: 0;
   min-height: 0;
   gap: 8px;

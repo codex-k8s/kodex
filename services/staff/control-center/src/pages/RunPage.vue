@@ -1579,6 +1579,10 @@ onBeforeUnmount(() => {
 .run-canvas-summary__toggle {
   display: none;
 }
+.run-canvas-summary__details {
+  grid-auto-rows: max-content;
+  align-content: start;
+}
 .run-canvas-summary strong,
 .run-canvas-summary span,
 .run-canvas-summary a {
@@ -1590,6 +1594,7 @@ onBeforeUnmount(() => {
 .run-canvas-summary a {
   color: var(--muted);
   font-size: 0.75rem;
+  overflow-wrap: anywhere;
 }
 .run-canvas-summary .live-indicator {
   grid-column: 1 / -1;
