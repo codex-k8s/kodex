@@ -189,6 +189,29 @@ export function executionKey(
   ]);
 }
 
+// Root stream связывает child execution только через авторитетный owner graph.
+export function isGraphChildExecutionBound(
+  event: RunEvent,
+  context: ActivityContext,
+): boolean {
+  const candidates = context.nodes?.filter(
+    (node) => node.ref === event.execution?.nodeRef,
+  );
+  const node = candidates?.[0];
+  return Boolean(
+    executionKey(event.execution) &&
+    context.graphRootRunRef &&
+    event.runRef === context.graphRootRunRef &&
+    event.execution?.runRef !== context.graphRootRunRef &&
+    candidates?.length === 1 &&
+    node?.type === "AGENT_EXECUTION" &&
+    node.runRef === event.execution?.runRef &&
+    node.turnRef === event.execution.turnRef &&
+    node.attempt === event.execution.attempt &&
+    context.nodes?.some((parent) => parent.childRunRefs.includes(node.runRef)),
+  );
+}
+
 export function buildRunTranscriptItems(
   events: readonly RunEvent[],
   context: ActivityContext = {},
@@ -260,20 +283,7 @@ export function buildRunTranscriptItems(
     );
     const graphExecutionNode = graphExecutionNodes?.[0];
     // Root stream хранит события дочернего run: lineage берётся из owner graph.
-    const graphChildBound = Boolean(
-      scope &&
-      context.graphRootRunRef &&
-      event.runRef === context.graphRootRunRef &&
-      event.execution?.runRef !== context.graphRootRunRef &&
-      graphExecutionNodes?.length === 1 &&
-      graphExecutionNode?.type === "AGENT_EXECUTION" &&
-      graphExecutionNode.runRef === event.execution?.runRef &&
-      graphExecutionNode.turnRef === event.execution.turnRef &&
-      graphExecutionNode.attempt === event.execution.attempt &&
-      context.nodes?.some((node) =>
-        node.childRunRefs.includes(graphExecutionNode.runRef),
-      ),
-    );
+    const graphChildBound = isGraphChildExecutionBound(event, context);
     const integrationBound = Boolean(
       scope &&
       event.execution &&

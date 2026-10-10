@@ -29,6 +29,7 @@ func testAssistantRecipientIntegrationCatalog(t *testing.T, ctx context.Context,
 		t.Fatal(err)
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, project.Ref, "recipient-catalog-agent", "Catalog Developer")
+	seedAssistantAgentRuntimeInventoryFixture(t, ctx, repository, service, owner, agent.Ref)
 	unassigned := createLifecycleAgent(t, ctx, service, owner, project.Ref, "recipient-catalog-unassigned", "Unassigned Developer")
 	unbound, err := service.Execute(ctx, command.Command{Kind: command.CreateConnection, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "recipient-catalog-unbound-registry"}, Payload: command.ConnectionInput{DefinitionKey: "github", Name: "Recipient registry github.repository fixture", PublicConfiguration: map[string]any{"owner": "fixture", "repository": "registry"}}})
 	if err != nil || unbound.Connection == nil {
@@ -88,6 +89,10 @@ func testAssistantRecipientIntegrationCatalog(t *testing.T, ctx context.Context,
 					_, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), entity.AssistantConfigurationCatalogRequest{Kind: "AGENT_CONFIGURATION", AssistantRef: stringMap(lease, "agentRef"), EntityKind: "AGENT", EntityRef: agent.Ref})
 					if !errors.Is(err, errs.ErrNotFound) {
 						t.Fatal("Workflow context read agent instructions")
+					}
+					_, err = service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), entity.AssistantConfigurationCatalogRequest{Kind: "AGENT_RUNTIME_CONFIGURATION", AssistantRef: stringMap(lease, "agentRef"), EntityKind: "AGENT", EntityRef: agent.Ref})
+					if !errors.Is(err, errs.ErrNotFound) {
+						t.Fatal("Workflow context read agent runtime configuration")
 					}
 				}
 				runRef := turn.Turns[0].RunRef

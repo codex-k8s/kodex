@@ -42,11 +42,13 @@ async function renderActivity(
   currentRun: Run = run,
   currentNode: RunNode = node,
   additionalNodes: RunNode[] = [],
+  rootRun?: Run,
 ): Promise<string> {
   const app = createSSRApp({
     render: () =>
       h(RunSessionDetailsDialog, {
         run: currentRun,
+        rootRun,
         node: currentNode,
         nodes: [currentNode, toolNode, ...additionalNodes],
         events,
@@ -206,6 +208,102 @@ const toolEvent: PresentedRunEvent = {
 };
 
 describe("RunSessionDetailsDialog", () => {
+  it("читает child transcript из root envelope только по точной owner graph привязке", async () => {
+    const childRun: Run = { ...run, ref: "run_child", rootRunRef: run.ref };
+    const childNode: RunNode = {
+      ...node,
+      ref: "nod_child",
+      runRef: childRun.ref,
+      turnRef: execution.turnRef,
+    };
+    const parentNode = { ...node, childRunRefs: [childRun.ref] };
+    const childEvent: PresentedRunEvent = {
+      ...event,
+      nodeRef: childNode.ref,
+      execution: { ...execution, runRef: childRun.ref, nodeRef: childNode.ref },
+      messageKind: "INTERMEDIATE_MESSAGE",
+      message: {
+        ref: "msg_child",
+        revision: 1,
+        source: { origin: "ORDINARY" },
+        phase: "COMMENTARY",
+        text: "CHILD_COMMENTARY_SENTINEL",
+      },
+    };
+    const render = (value: PresentedRunEvent, nodes = [parentNode]) =>
+      renderActivity([value], childRun, childNode, nodes, run);
+    expect(await render(childEvent)).toContain("CHILD_COMMENTARY_SENTINEL");
+    const childHistory = await renderActivity(
+      [
+        childEvent,
+        {
+          ...childEvent,
+          ref: "evt_child_tool",
+          sequence: 2,
+          message: undefined,
+          messageKind: "TOOL_CALL",
+          toolCall: { ...toolCall, revision: 1 },
+        },
+        {
+          ...childEvent,
+          ref: "evt_child_final",
+          sequence: 3,
+          messageKind: "FINAL_MESSAGE",
+          message: {
+            ref: "msg_child_final",
+            revision: 1,
+            source: { origin: "ORDINARY" },
+            phase: "FINAL",
+            text: "CHILD_FINAL_SENTINEL",
+          },
+        },
+      ],
+      childRun,
+      childNode,
+      [parentNode],
+      run,
+    );
+    expect(childHistory).toContain("CHILD_FINAL_SENTINEL");
+    expect(childHistory).toContain("project_files.search");
+    for (const value of [
+      { ...childEvent, runRef: "run_foreign" },
+      { ...childEvent, nodeRef: "nod_foreign" },
+      { ...childEvent, run: { ...childEvent.run, ref: "run_foreign" } },
+      { ...childEvent, execution: undefined },
+      ...(
+        ["runRef", "nodeRef", "sessionRef", "turnRef", "attempt"] as const
+      ).map((field) => ({
+        ...childEvent,
+        execution: {
+          ...childEvent.execution,
+          ...execution,
+          runRef: childRun.ref,
+          nodeRef: childNode.ref,
+          [field]: field === "attempt" ? 2 : "foreign_pin",
+        },
+      })),
+    ])
+      expect(await render(value)).not.toContain("CHILD_COMMENTARY_SENTINEL");
+    expect(await render(childEvent, [])).not.toContain(
+      "CHILD_COMMENTARY_SENTINEL",
+    );
+    expect(await render(childEvent, [parentNode, childNode])).not.toContain(
+      "CHILD_COMMENTARY_SENTINEL",
+    );
+    for (const value of [
+      { ...childRun, rootRunRef: "run_foreign" },
+      { ...childRun, projectRef: "prj_foreign" },
+      { ...childRun, sessionRef: "ses_foreign" },
+    ])
+      expect(
+        await renderActivity([childEvent], value, childNode, [parentNode], run),
+      ).not.toContain("CHILD_COMMENTARY_SENTINEL");
+    expect(dialogSource).toContain(':run="run"');
+    expect(dialogSource).toContain(
+      'v-if="sessionNode && node.runRef === run.ref"',
+    );
+  });
+
   it("показывает только размер контекстного окна без нулевых строк расхода", async () => {
     const html = await renderActivity([], {
       ...run,

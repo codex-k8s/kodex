@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 
 import {
   buildRunTranscriptItems,
+  isGraphChildExecutionBound,
   type PresentedRunEvent,
 } from "@/features/runs/run-activity";
 import { indexRunSessionOwnership } from "@/features/runs/run-session-graph";
@@ -59,18 +60,42 @@ const ownedNodeRefs = computed(
 );
 const nodeEvents = computed(() =>
   props.events
-    .filter(
-      (event) =>
+    .filter((event) => {
+      if (props.rootRun && props.run.ref !== props.rootRun.ref) {
+        const execution = event.execution;
+        return Boolean(
+          props.run.rootRunRef === props.rootRun.ref &&
+          props.run.projectRef === props.rootRun.projectRef &&
+          props.node.runRef === props.run.ref &&
+          execution &&
+          execution.runRef === props.run.ref &&
+          execution.sessionRef === props.run.sessionRef &&
+          execution.nodeRef === props.node.ref &&
+          execution.turnRef === props.node.turnRef &&
+          execution.attempt === props.node.attempt &&
+          event.nodeRef === execution.nodeRef &&
+          event.run.ref === event.runRef &&
+          Number.isSafeInteger(event.run.version) &&
+          event.run.version >= 1 &&
+          isGraphChildExecutionBound(event, {
+            nodes: props.nodes,
+            graphRootRunRef: props.rootRun.ref,
+          }),
+        );
+      }
+      return (
         event.runRef === props.run.ref &&
         (!event.nodeRef ||
           ownedNodeRefs.value.has(event.nodeRef) ||
-          !sessionOwnership.value.has(event.nodeRef)),
-    )
+          !sessionOwnership.value.has(event.nodeRef))
+      );
+    })
     .sort((left, right) => left.sequence - right.sequence),
 );
 const transcriptItems = computed(() =>
   buildRunTranscriptItems(nodeEvents.value, {
-    nodes: props.nodes.filter((node) => node.runRef === props.run.ref),
+    nodes: props.nodes,
+    graphRootRunRef: props.rootRun?.ref ?? props.run.rootRunRef,
     initiator: props.run.initiator.displayName,
     target: props.node.displayName,
     platform: t("runs.platformActor"),

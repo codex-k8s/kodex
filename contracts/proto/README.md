@@ -183,6 +183,56 @@ compiled runner catalog и bound custom images доставляются до nat
 
 ### Адресное чтение Workflow и назначенных сотрудников
 
+`AGENT_RUNTIME_CONFIGURATION` читает только runtime-конфигурацию текущего
+`AGENT` context SYSTEM/PROJECT помощника через прежний
+`get_configuration_catalog` → `RuntimeWorkService.SearchAssistantResources`.
+Собственный `assistant_ref` и exact `entity_kind=AGENT`/`entity_ref` являются
+locators. CP в одной `REPEATABLE READ` транзакции выводит root USER из активной
+lease/fence/generation, проверяет source helper, organization и inherited project
+authority. Immutable и свежий context должны совпасть по agent version и одному
+из разрешённых `CREATE_INSTRUCTION_DRAFT|UPDATE_AGENT`. Затем тот же resolver,
+`agent.view` и owner read, что у `GetAgentRuntimeConfiguration`, читают snapshot.
+`CURRENT_CONFIGURATION` остаётся строго собственным.
+
+Typed `agent_runtime_configuration` содержит agent/project/version, canonical
+JSON и SHA256. Закрытая проекция включает binding ref/version/digest,
+ENV name/ref/version и exact published version ref/revision/digest, image
+artifact/recipe/generation/reference/digest, `configured_tools` только с именами
+настроенных tools и отдельный `verified_tool_inventory` с SHA256. Inventory
+сверяется с exact ACCEPTED/PROMOTED artifact, immutable provenance и image
+digest; configured tools не выдаются за подтверждённые бинарники образа.
+SHA `verified_tool_inventory_sha256` связывает exact canonical whitelist
+JSON inventory в этом snapshot, не исходные bytes admission receipt.
+Admission bridge сохраняет SHA exact прочитанного файла; owner scanner до
+проекции независимо проверяет этот source SHA, typed manifest SHA и
+artifact/provenance binding. Проекция сохраняет image/provenance/manifest pins,
+но не требует совпадения source JSON field order с typed reserialization.
+В частности, admission script `jq -sc` добавляет конечный LF к inventory-файлу:
+его source SHA остаётся допустимым, хотя typed `json.Marshal` LF не добавляет.
+Commands, ENV values, Secret descriptors/values, prompt и runtime grants
+отсутствуют. Query, list offset, account/profile override, произвольный helper
+или target и caller authority запрещены. RC проверяет закрытую модель, exact
+context/version, canonical bytes, image/inventory pins и ограничение 1MiB;
+выдаёт UTF-8 страницы до16KiB с общим digest, byte offsets, page SHA256 и EOF.
+Продолжение требует прежний configuration SHA256; каждую страницу CP заново
+разрешает по действующей lease. Повреждение и drift закрыто отклоняются.
+
+| Lifecycle runtime read текущего AGENT | Авторитетный результат |
+| --- | --- |
+| Действующая exact lease и SYSTEM/PROJECT AGENT context | Один согласованный owner snapshot, без изменения состояния |
+| Ordinary agent, foreign helper/entity/project/tenant, Workflow context | Закрытый отказ без ENV/image payload |
+| Отзыв view/manage, context version drift, image/inventory mismatch | Закрытый отказ; прежний snapshot не превращается в новое разрешение |
+| Cancel/terminal/expiry/stale fence/generation | Прежний owner lease resolver отклоняет read |
+| Retry/continuation | Новые server-owned attempt/revision/lease; старый selector не выдаёт authority |
+| Repeat/rejoin | Нет idempotency receipt, business audit/event, grant или mutation |
+| Изменение ENV/tool configuration | Только существующая отдельная специализированная owner/OCC операция |
+
+Новый kind/message генерируется штатным Proto codegen. Имена MCP/RPC,
+transport permission, client operation, readiness и deploy ownership CP/RC
+сохраняются; динамический descriptor доставляет kind без нового runner image.
+Context7: `/golang/go` — strict JSON decoding, `/jackc/pgx` — bounded transaction
+и QueryRow/Scan. Native приёмка нового пути фиксируется отдельно от unit.
+
 `AGENT_CONFIGURATION` использует тот же leased catalog только для текущего
 `AGENT` context SYSTEM/PROJECT помощника. Запрос содержит собственный
 `assistant_ref` и точную пару `entity_kind=AGENT`, `entity_ref` сохранённого

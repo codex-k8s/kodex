@@ -834,3 +834,217 @@ screenshot просмотрен, document overflowfalse, события прод
 CP/RC/gateway за10мин вернули0строк; подыReady. Отсутствие ошибок не является
 доказательством успешного процесса. Исторический prefix/archive неизменны;
 previous96fc verifier повторяется перед фиксацией. PR не слиты.
+
+## Checkpoint 10.10.2026 07:53 UTC — обычные названия и обнаруженные пробелы чтения
+
+Source21218b0a, тот же root run_dnIpb8RAPnlR2TBwNRNU3cbj: RUNNING;
+actual Manager child run_CCg9GU57RiEldKt6ztrzY5xl читает обязательные
+источники, events200/currentSequence392. Предыдущий SUCCEEDED INTAKE —
+технический родительский узел делегирования, не завершённая продуктовая
+приёмка Manager. Новый запуск и повторный Apply не выполнялись.
+
+- [x] Applied receipt пережил reload: native раскрытый план показывает ту же
+      квитанцию rct_gYr2vigaN05SXYcNx_-xJeVq и exact созданный root run;
+      Open/Stop доступны. Квитанция не потеряна, по умолчанию блок свёрнут.
+- [x] В новом диалоге обычный запрос про недавно опубликованные окружения
+      нашёл selfdev-write для Developer и selfdev-review для остальных ролей.
+      Помощник спросил уточнение, не выбирал за владельца, не создавал план
+      или business effects. run_q30rVzW-aeKtIh8RlWF29SWc SUCCEEDED;
+      native история и уточнение сохранены после reload.
+- [ ] Исправить подтверждённый пробел managed чтения привязки ENV выбранного
+      сотрудника. Даже на карточке Developer AGENT_CONFIGURATION/version16
+      прочитан до EOF, но намеренно не содержит ENV/binding/image/tools;
+      CURRENT_CONFIGURATION принадлежит помощнику и не подходит. Два
+      уточняющих чтения завершились корректным объяснением ограничения,
+      не ложным подтверждением похожего имени. Готовится отдельный закрытый
+      AGENT_RUNTIME_CONFIGURATION с текущим AGENT контекстом/версией,
+      canonical agent.view и свежей lease; собственный selector не расширяется.
+- [ ] Исправить пустую переписку дочерней сессии в деталях root-графа:
+      root timeline содержит события child execution, но detail filter
+      сравнивает envelope.runRef с childRun.ref. Native child events содержат
+      реальные commentary/tools; UI показывает сообщение об отсутствии
+      работы. Исправление должно использовать exact graph/session/attempt
+      binding, не разрешать чужие события и не менять target prompt-preview.
+
+Chrome5 screenshot безопасного prompt preview просмотрен: компактные две
+колонки, внутренняя прокрутка, document overflowfalse, Console0 и preview200.
+Показаны placeholders/версии безопасного состава, не полный фактический prompt;
+это не доказательство materialization всех четырёх inputs. Realtime после
+navigation восстановился в CONNECTED и последовательность продолжила расти;
+длительность восстановления пока не измерена. Указанный ранее pageSize для
+events не является параметром API: проверка хвоста использует afterSequence/
+limit. Неверное чтение первых200 событий не означает остановку выполнения.
+
+Weekly exhaustion + available paid credits включён в реальную задачу1796.
+Успешные ходы показывают работу провайдера, но баланс/paid spending конкретного
+аккаунта всё ещё UNKNOWN; отсутствие локального quota gate не заменяет
+поддерживаемый upstream snapshot. Полный Workflow/QA65 и конечный PR открыты.
+
+## Checkpoint 10.10.2026 08:11 UTC — timeout первого этапа и доставленные read/чат исправления
+
+Source21218b0a плюс exact frontend3 и runtime18 postimages. Root
+run_dnIpb8RAPnlR2TBwNRNU3cbj и actual Manager
+run_CCg9GU57RiEldKt6ztrzY5xl завершились FAILED/RUNTIME_TIMEOUT.
+Native детали показывают Manager11:27:47–11:57:46 по locale; первый step
+timeout1800 при root86400. Source minimum lineage deadline объясняет этот
+исход; exact persisted first-claim/deadline не извлекались. Это не доказанный
+отказ провайдера по кредитам. Последующие planned nodes CANCELLED, actual
+закрытие каждой lease/grant/workload отдельно UNKNOWN. Повторный launch/Retry
+пока не выполнялся. Новый owner UPDATE_WORKFLOW plan готовится: INTAKE7200,
+применимые источники business задачи полностью; чужой bootstrap diff и
+исторический журнал не назначаются обязательным чтением. Остальные этапы,
+один TOTALreview и final owner gate неизменны; Apply/Publish NOT RUN.
+
+- [x] Native переписка actual Manager в root-графе после frontend исправления:
+      commentary, компактные groups/tools и terminal timeout видны; пустого
+      placeholder нет. Exact graph/session/node/turn/attempt predicate,
+      отрицательные foreign/duplicate lineage cases сохранены. ROOT164unit/
+      4suites, scopedlint и forcedtypecheck/Vite2791modules8.67s PASS;
+      предупреждение chunk size остаётся. Chrome5 screenshot просмотрен,
+      внутренние scroll, document/dialog overflowfalse, свежая Console0.
+      Отдельный повтор reload/rejoin этой открытой модалки ещё NOT RUN.
+- [x] Runtime read source delivery: 17 handwritten + generated Proto,
+      exact18postsha host и обоих /workspace PASS. ROOT canonicalGo1.26.6
+      CPunit1.210s/0.644s, RCcallback7.650s, scopedvet/build и
+      lint/build/codegen PASS. Initial неоднозначный apply_patch поставил
+      Proto message выше expected положения; ROOT исправил placement,
+      повторил codegen и достиг18/18, не редактировал generated вручную.
+      Remote Buf rate limit использовал штатные exact local plugins.
+- [x] Actual serving ELF совпали с независимыми ROOT CGO_ENABLED0/GOWORKoff/
+      Go1.26.6/trimpath/buildvcsfalse сборками: CP
+      a326bc3e39b96d5dca18a571be72861fed2a387147175841e2d467cc73af25b0,
+      RC31d9b2ee0ace99e09fc3226d1e0e221ba638f5935b723f49d747a4b82d2d6d63.
+      Fresh PodUID/containerID/startTicks стабильны; оба Ready/restart1.
+      Во время промежуточного codegen hot reload закрыл сервисы, native
+      временно получил503; после готовности reload CONNECTED/Console0.
+      Прежние serving hashes не выдаются за текущий delivery proof.
+- [ ] Disposable component первоначально FAIL: bootstrap fixture не имеет
+      verified inventory, новый reader правильно отклоняет его. Готовится
+      только synthetic fixture exact artifact/all MISSING; production guard
+      не ослабляется. Исходный контейнер удалён; повтор после фикса NOT RUN.
+- [ ] Native AGENT_RUNTIME_CONFIGURATION текущего Developer до EOF и
+      фактические ENV/binding/image/configured vs verified tools после доставки.
+- [ ] Новый бизнес Workflow: Developer PR/handoff, четыре actual inputs каждой
+      роли, одно comprehensive review, Manager и финальный owner gate; Full65.
+
+Credit acceptance остаётся обязательным: weekly100% при разрешённых provider
+paid credits не является самостоятельным запретом. Текущие balance/spending
+UNKNOWN; успешное чтение или runtime delivery этого не доказывают.
+Context7 ROOT: /golang/go stream Decode/trailing EOF; Vue computed/props
+проверены ранее. Журнал append-only от21218, verifier перед commit; PR Draft.
+
+## Checkpoint 10.10.2026 08:26 UTC — новая публикация процесса и реальный отказ runtime-read
+
+Source21218b0a + принятые runtime/frontend postimages и fixture supplement.
+После первоначального FAIL synthetic inventory fixture исправлена без изменения
+production admission: exact bootstrap artifact, configured0, все наблюдения
+MISSING, raw SHA и повторное чтение scanner проверены. ROOT повторил
+`KODEX_CONTROL_PLANE_TEST_FILTER=^TestProjectAssistantIntegrationGrantsComponent$`
+с canonicalGo1.26.6: component51.61s PASS, protocol5.274s PASS, migrations и
+negative scope/lease cases PASS; disposable контейнер после harness отсутствует.
+Эта проверка не доказывает real cross-service payload.
+
+Native owner plan pln_B6pB1M25B02tvgPy1CpKmQx7 APPLIED: изменены только
+purpose и timeout первого этапа1800→7200. Обязательные business sources сохранены,
+полный посторонний bootstrap diff/исторический журнал не требуются. Workflow
+штатно Validate/Publish: version34 PUBLISHED, revision11,
+wfv__VrANDn_nMWSl2HKnfhaXYd-, readinessREADY, validation пустая. Root86400,
+maxConcurrency3, остальные четыре этапа, один TOTALreview и единственный final
+Human Gate сохранены. Новый launch ещё NOT RUN, Retry старого root не выполнялся.
+
+Native новый защищённый AGENT_RUNTIME_CONFIGURATION на текущей карточке
+Developer16 всё ещё FAIL: run_ILtmiViGFYRsY27Qm2aroIXQ, exact tool call804ms,
+TOOL_UNAVAILABLE. Owner runtime-configuration200 возвращает selfdev-write,
+published12, exact image b9f58274…f0658, configured38. Эти два пути не равнозначны;
+agent read до EOF и verified count пока не подтверждены. Диагностируется
+расхождение SHA исходного admission JSON и повторного typed marshal; source
+scanner проверяет исходные bytes, его guard не ослабляется.
+
+Уточнение владельца о почти60К кредитов включено в field-002 и field-004
+реальной задачи1796: weekly included100% отдельно от оплаченных credits и
+upstream spending permission. Сам баланс, его единицы и фактический расход
+UNKNOWN; неизвестные данные не превращаются в ноль/запрет. Реальный отказ
+провайдера нельзя обходить или объявлять локальным квотным gate без доказательства.
+
+Chrome5 SSO/MCP подключены, рабочая вкладка обновлена; чужие вкладки не тронуты.
+Причина наблюдаемого rejoin ожидания UNKNOWN. Read-only диагностика доказала
+только пробел метрики: actual session/stream нормализуется в route unknown;
+суммарная длительность WebSocket не является временем handshake/bootstrap.
+Полный65 QA и бизнес-приёмка по-прежнему открыты.
+
+## Checkpoint 10.10.2026 08:43 UTC — runtime-read исправлен и подтверждён в Chrome
+
+Source21218b0a + exact inventory supplement6/6, frontend3, runtime исходный
+пакет и metrics2. ROOT применил supplement через apply_patch с pre/post hashes.
+Первый механический compact patch имел лишнюю пустую строку в insertion hunk,
+verification закрыто отклонил весь пакет без изменений; повтор дал6/6.
+Source scanner/raw admission SHA, manifest/provenance/eligibility и lease не
+менялись. Projected inventory SHA теперь связывает exact canonical snapshot
+bytes отдельно от исходного receipt. Shared CP→RC golden и LF/order/hash-drift
+regressions сохранены; старые producer/consumer FAIL воспроизведены в private
+fixtures и не выдаются за текущий PASS.
+
+- [x] ROOT Go1.26.6: CP targeted unit0.077s/vet, полный RC callback7.827s/vet,
+      gateway route race1.031s/vet PASS. Повторный disposable PostgreSQL
+      component51.25s/package51.322s, protocol5.324s, migrations/negative
+      scope/lease cases PASS; после harness контейнер отсутствует.
+- [x] Fresh host→оба /workspace source hashes совпали. Exact CP/RC
+      UID/containerID/PID/startTicks стабильны08:38:24→08:39:16; actual
+      /proc/PID/exe равны независимым ROOT canonical builds: CP
+      0c9241058aeb80984af90e1772d3995254b9e59bc36933764e60a7456bdd7aa2,
+      RC41f2f181129580cef434823a57dcde341e620e111f201597ff9810b88fe77a46.
+      Gateway unique PID990 serving ELF также равен ROOT build
+      a9f10230a4372a88bb4fa9187faabfd15b5afc37d5c702498add15003aa0e683;
+      его отдельная before/after stability пока не измерена.
+- [x] Native тот же Developer/context/диалог: run_MNhThL4nDQ_D56ZDeXgYUd_-
+      get_configuration_catalog AGENT_RUNTIME_CONFIGURATION SUCCEEDED785ms.
+      Ответ до EOF10417B с SHA
+      2bd3afd68efb119ae461e471bfffe7461683bcff7d163f06e0347386f38a324e;
+      selfdev-write/published12/renvv_Py7J95JyejehyqnnPChsW6kz,
+      image sha256:b9f5827429f4c61ad5f47f8ee90470f03b831b172c29f88fb6a33819f74f0658.
+      Configured38 отдельно от VERIFIED42. Owner artifact read200 независимо
+      подтвердил ACCEPTED/PROMOTED, linux/amd64: VERIFIED42/MISSING8/total50.
+      Screenshot просмотрен, overflowfalse, ничего в ENV/bindings не менялось.
+- [x] Browser read-only timing capture: первый socket закрыт1000 clean при
+      штатной смене контекста, следующий open3065ms→SESSION_READY10502ms,
+      то есть7437ms; PLATFORM_READY10488ms. Самая большая
+      межsnapshot пауза4133ms перед SYSTEM_ASSISTANT. Это наблюдение доставки,
+      не доказательство конкретного медленного CP query или network failure.
+      Fresh Console сначала0; при следующей навигации зафиксирован один
+      ERR_NETWORK_CHANGED только у __kodex_dev_revision, relevant API200.
+      Этот transient не скрыт, повтор после reload ещё нужен.
+
+Новый launch plan пока BLOCKED, бизнес-root не создавался. Native helper на
+текущей WORKFLOW34 снова получил TOOL_UNAVAILABLE810ms. Доказан другой дефект:
+первый purpose903Unicode characters/1352UTF8 bytes проходит authoritative
+CP1000characters, но RC reader ошибочно сравнивает len(bytes) с1000.
+Готовится узкий Unicode-bound correction; publication34 не изменять ради
+обхода этого read. Owner listRuns08:38:56 со всеми четырьмя active states,
+полной первой страницей и next отсутствует подтвердил total0. Это owner read,
+не доказательство пока недоступной полноты helper search.
+
+Paid-credit сценарий остаётся обязательным для1796 и всех четырёх inputs.
+Успешные native helper ходы не доказывают баланс/единицы/paid spending; UNKNOWN.
+Full65, actual inputs каждой бизнес-роли, Developer PR, одно review/Manager/
+final owner gate ещё открыты. PR1807 остаётся Draft, новых Issue нет.
+
+## Checkpoint 10.10.2026 08:51 UTC — Unicode reader доставлен
+
+HEAD21218b0a + точный dirty пакет перед фиксацией. Узкий Unicode correction
+принят2/2: human-text Name/Purpose/ExpectedResult считает Unicode-символы,
+а raw JSON1MiB, UTF-8/NUL, shape/SHA, lease/authority guards сохранены.
+ROOT combined `go test -count=1 ./internal/callback` PASS7.998s, vet и
+canonical Go1.26.6 binary build PASS. Source host/Pod SHA
+`c624036959b028cb1049212a7d6d235cf64bfbaf5e91ac8c8728a3f5ad72e33d` EQUAL.
+Actual serving RC PID1124/startTicks6300185, same Pod UID/containerID,
+08:49:23→08:49:46 стабильный ELF SHA
+`6481e62a60dcbcc209a89b805696924424b3327b0e8e78bdbc8a36a81870a1ef`
+EQUAL независимому ROOT build. Нового runner/ABI или publication не требуется.
+
+Chrome5 reload и Workflow navigation: fresh Console0, relevant API200,
+draft composer пуст до reload, чужие вкладки не затронуты. Owner active list
+08:49 total0/nextnone повторён. Native continuation прежнего launch диалога
+run_9nBbL7K2SKWKdkV7UYfUFmv0 пока RUNNING: readEOF/LAUNCH plan NOT RUN.
+Кейс weekly exhaustion + доступные оплаченные credits передан явно;
+баланс/единицы/реальное списание UNKNOWN, upstream restrictions не обходятся.
+Full65/бизнес-команда/review/owner gate не объявлены завершёнными.

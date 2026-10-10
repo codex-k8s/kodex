@@ -10,6 +10,117 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 08:51 UTC — Unicode correction PASS, native launch готовится
+
+ROOT Unicode packet2/2 принят, combined callback7.998s/vet/canonical build PASS.
+Source host/Pod c6240369…2e33d; actual RC1124/startTicks6300185 ELF
+6481e62a…0a1ef стабилен08:49:23→08:49:46 и равен независимому ROOT build.
+CP/inventory/metrics/child transcript доказательства предыдущего checkpoint
+сохраняются. Fresh Chrome reload/navigation Console0, relevant API200.
+Текущий PROJECT helper диалог cnv_Sjh04R2k9pB1okNb_9Bq7Gmt на WORKFLOW34;
+run_9nBbL7K2SKWKdkV7UYfUFmv0 продолжает подготовку одного LAUNCH_RUN с прежними
+четырьмя inputs/paid-credit кейсом. Owner active read total0/nextnone повторён.
+План ещё не Apply; не повторять launch и не Retry исторический root.
+Далее native readEOF/Validate/Apply, actual role inputs/артефакты/Developer PR,
+один TOTALreview/Manager/final Human Gate. Баланс/spending UNKNOWN; full65 открыт.
+
+## Checkpoint 10.10.2026 08:43 UTC — native ENV read PASS; следующий blocker Unicode Workflow
+
+HEAD21218b0a + dirty packet, пока не push. Inventory supplement6/6 принят;
+ROOT CP0.077/RC7.827/vet и повторный PostgreSQL51.25s PASS. Actual CP/RC
+serving ELF равны независимым canonical builds0c924105…d7aa2/41f2f181…77a46,
+exact UID/containerID/PID/startTicks/source mounts стабильны. Native Developer
+AGENT_RUNTIME_CONFIGURATION PASS785ms, EOF10417B, selfdev-write published12,
+38configured отдельно от42VERIFIED; owner artifact read200 подтвердил42+8MISSING.
+Screenshot просмотрен, overflowfalse. Последняя Console имеет один transient
+ERR_NETWORK_CHANGED у dev-revision poll; relevant API200, перепроверить reload.
+
+Metrics actual session/stream→realtime принят, ROOT race1.031/vet PASS;
+GW /proc/990/exe равен independent builda9f10230…0e683, before/after ещё не снят.
+Browser timings: WSopen→SESSION_READY7437ms, максимальный межsnapshot gap4133ms
+перед SYSTEM_ASSISTANT; причина конкретного backend ожидания UNKNOWN.
+
+Workflow34/revision11 уже PUBLISHED; новый helper launch plan пока не создан.
+Native WORKFLOW_CONFIGURATION всё ещё FAIL810ms: authoritative purpose
+903runes/1352bytes проходит CP1000characters, но RC guard считает len bytes.
+Отдельный private Unicode packet готовится; не сокращать валидный текст ради
+обхода. Owner active list08:38:56 total0/nextnone, helper truncated search не
+выдавать за полноту. После фикса: read current публикации/inputs до EOF, один
+plan/Validate/Apply с четырьмя inputs/credit-кейсом, freshactual team artifacts,
+ровно одно комплексное review и final Manager/Human Gate. Старый root не Retry.
+Далее journal verifier/commit/push1807, full65. Баланс/units/spending UNKNOWN.
+
+## Checkpoint 10.10.2026 08:26 UTC — публикация34, runtime-read требует исправления
+
+HEAD21218b0a + dirty runtime/frontend/fixture/docs, пока без нового commit.
+Disposable component после исправления только synthetic fixture PASS51.61s;
+первоначальный FAIL сохранён ниже. Workflow owner plan APPLIED, Validate/Publish
+PASS: version34/revision11 PUBLISHED, INTAKE7200 вместо1800, без обязательного
+чтения полного постороннего bootstrap-журнала. Один TOTALreview/final owner gate
+и остальные этапы сохранены. Следующий запуск — новый root на этой публикации,
+не Retry исторической1800-revision; четыре inputs с paid-credit acceptance.
+
+Реальное AGENT_RUNTIME_CONFIGURATION FAIL/TOOL_UNAVAILABLE804ms после delivery,
+run_ILtmiViGFYRsY27Qm2aroIXQ. Обычный owner API200 даёт Developer16/selfdev-write
+published12/configured38; агентский EOF/image/inventory proof ещё нет.
+Проверяется SHA raw admission JSON против typed reserialization; scanner guard
+не ослаблять. Runtime-agent готовит отдельный узкий packet, ROOT интегрирует.
+Потом canonical проверки, fresh serving ELF/source, native тот же read до EOF,
+journal/commit/push1807, новый бизнес launch и actual inputs/артефакты команды.
+Баланс почти60К указан владельцем; supported balance/единицы/spending UNKNOWN,
+weekly100% сам по себе не блокирует разрешённые provider credits.
+
+Chrome5 обновлён/CONNECTED. Rejoin cause UNKNOWN; доказан только route unknown
+для нового session/stream, отдельный узкий normalizer packet готовится.
+Ни source/HTTP200, ни component не заменяют native acceptance; full65 открыт.
+
+## Checkpoint 10.10.2026 08:11 UTC — первая команда timeout, два read исправления доставлены
+
+HEAD21218b0a + dirty frontend3/runtime18/docs. Root run_dnIpb8RAPnlR2TBwNRNU3cbj
+и Manager run_CCg9GU57RiEldKt6ztrzY5xl FAILED/RUNTIME_TIMEOUT, planned children
+CANCELLED. INTAKE1800 wall-clock против root86400; exact persisted clocks не
+читались. Native child transcript теперь виден: commentary/tools/terminal,
+Console0/overflowfalse. Reload/rejoin открытой модалки пока NOT RUN.
+
+AGENT_RUNTIME_CONFIGURATION доставлен: exact18source hashes host/Pods,
+canonicalGo1.26.6 unit/vet/build/codegen PASS, independent ROOT build равен
+actual serving CP a326bc3e…3af25b0 / RC31d9b2ee…2d6d63, Ready/restart1.
+Disposable component FAIL из-за отсутствующего inventory bootstrap fixture;
+synthetic correction готовится, production guard не менять. Native Developer
+runtime-read после доставки ещё NOT RUN. Баланс paid credits UNKNOWN.
+
+Сейчас native PROJECT helper на Workflow готовит один UPDATE_WORKFLOW:
+INTAKE7200 и narrow обязательное чтение бизнес-источников без полного чужого
+bootstrap diff/исторического журнала. Apply/Publish ещё NOT RUN. Старый failed
+run не Retry на1800-version; после публикации только один новый explicit launch
+со всеми четырьмя inputs/credit-кейсом. Сохранить один TOTAL comprehensive review
+и final owner gate. Host не заменяет Developer. Дальше component/native reads,
+journal/commit/push1807, actual team/full65; цель ACTIVE, не завершать частично.
+
+## Checkpoint 10.10.2026 07:53 UTC — реальный Manager работает; два адресных исправления
+
+Опубликованный source21218b0a, root run_dnIpb8RAPnlR2TBwNRNU3cbj RUNNING;
+actual Manager child run_CCg9GU57RiEldKt6ztrzY5xl RUNNING/events392 и читает
+источники. Первый SUCCEEDED INTAKE относится к техническому делегированию,
+не семантическому завершению работы Manager. Не повторять launch/Apply.
+Реальный credit-кейс передан, баланс/spending текущего аккаунта UNKNOWN.
+
+Native PASS: Applied receipt + exact created run после reload; обычный запрос
+про окружения уточнил Developer/selfdev-review вместо случайного выбора,
+история сохранилась. Native FAIL: managed AGENT_CONFIGURATION не содержит
+ENV/binding/image/tools выбранного Developer; CURRENT_CONFIGURATION own-only.
+В приватном worktree готовится отдельный bounded AGENT_RUNTIME_CONFIGURATION
+без секретных значений/произвольного scope. Второй FAIL: в деталях дочернего
+узла пустой transcript из-за root-envelope/child-run filter; отдельный
+frontend пакет использует прежний строгий graph-child binding.
+
+ROOT пока не принял эти source пакеты. Адресные unit/codegen/build, native
+hot-reload и exact readback обязательны перед PASS. Full65/one total review/
+Developer business PR/Manager/final owner gate открыты. Chrome5 подключён,
+Console0, screenshot safe preview/overflowfalse; placeholder preview не
+доказывает full materialization. При диагностике events использовать
+afterSequence/limit, не pageSize; graph находится под response.graph.
+
 ## Checkpoint 10.10.2026 07:30 UTC — реальная команда запущена с credit-кейсом
 
 Один natural-language LAUNCH_RUN plan pln_gv0dhZOjQhZWi5vBWrsSorNb штатно

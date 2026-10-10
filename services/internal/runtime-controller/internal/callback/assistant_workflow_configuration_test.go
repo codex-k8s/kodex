@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
@@ -250,6 +251,124 @@ func TestAssistantWorkflowConfigurationClosedRead(t *testing.T) {
 	input.AssistantContext.AllowedOperations = []string{"CHANGE_INTEGRATION_GRANT"}
 	if _, err := parseAssistantConfigurationCatalog(input, arguments, selector); err == nil {
 		t.Fatal("selected agent bypassed UPDATE_WORKFLOW authority")
+	}
+}
+
+func rewriteAssistantWorkflowConfigurationFixture(t *testing.T, response *controlplanev1.AssistantConfigurationCatalogResponse, mutate func(map[string]any)) {
+	t.Helper()
+	var snapshot map[string]any
+	if json.Unmarshal(response.WorkflowConfiguration.ConfigurationJson, &snapshot) != nil {
+		t.Fatal("invalid configuration fixture")
+	}
+	mutate(snapshot)
+	raw, err := json.Marshal(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash := sha256.Sum256(raw)
+	response.WorkflowConfiguration.ConfigurationJson = raw
+	response.WorkflowConfiguration.ConfigurationSha256 = hex.EncodeToString(hash[:])
+}
+
+func TestAssistantWorkflowConfigurationUnicodeTextBounds(t *testing.T) {
+	t.Parallel()
+	fields := []struct {
+		name, key, draftKey string
+		limit               int
+		step                bool
+	}{
+		{"name", "name", "Name", 160, false},
+		{"purpose", "purpose", "Purpose", 2000, false},
+		{"steps[0].name", "name", "Name", 160, true},
+		{"steps[0].purpose", "purpose", "Instructions", 1000, true},
+		{"steps[0].expectedResult", "expectedResult", "ExpectedResult", 1000, true},
+	}
+	for _, field := range fields {
+		t.Run(field.name, func(t *testing.T) {
+			for _, sample := range []struct {
+				name, text string
+				valid      bool
+			}{
+				{"ascii_boundary", strings.Repeat("a", field.limit), true},
+				{"cyrillic_boundary", strings.Repeat("я", field.limit), true},
+				{"emoji_boundary", strings.Repeat("😀", field.limit), true},
+				{"ascii_overflow", strings.Repeat("a", field.limit+1), false},
+				{"unicode_overflow", strings.Repeat("я", field.limit+1), false},
+			} {
+				t.Run(sample.name, func(t *testing.T) {
+					input, arguments, response := assistantWorkflowConfigurationFixture(t)
+					rewriteAssistantWorkflowConfigurationFixture(t, response, func(snapshot map[string]any) {
+						target, draft := snapshot, snapshot["draft"].(map[string]any)
+						if field.step {
+							target = snapshot["steps"].([]any)[0].(map[string]any)
+							draft = draft["Steps"].([]any)[0].(map[string]any)
+						}
+						target[field.key], draft[field.draftKey] = sample.text, sample.text
+					})
+					request, err := parseAssistantConfigurationCatalog(input, arguments, arguments["assistant_configuration_catalog"])
+					if err != nil {
+						t.Fatal(err)
+					}
+					_, err = castAssistantConfigurationCatalog(input, request, response)
+					if (err == nil) != sample.valid {
+						t.Fatalf("configuration accepted = %v, expected %v", err == nil, sample.valid)
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestAssistantWorkflowConfigurationUnicodeNativeMCP(t *testing.T) {
+	input, arguments, response := assistantWorkflowConfigurationFixture(t)
+	text := strings.Repeat("a", 454) + strings.Repeat("я", 449)
+	if utf8.RuneCountInString(text) != 903 || len(text) != 1352 {
+		t.Fatal("native-shaped fixture dimensions changed")
+	}
+	rewriteAssistantWorkflowConfigurationFixture(t, response, func(snapshot map[string]any) {
+		snapshot["steps"].([]any)[0].(map[string]any)["purpose"] = text
+		snapshot["draft"].(map[string]any)["Steps"].([]any)[0].(map[string]any)["Instructions"] = text
+	})
+	client := &assistantFreshCatalogMCPClient{assistantDefinitionCatalogClient: &assistantDefinitionCatalogClient{response: &controlplanev1.SearchAssistantResourcesResponse{AssistantConfigurationCatalog: response}}}
+	server := &Server{config: Config{RequestTimeout: time.Second}, control: &controlplaneclient.Client{Runtime: client}}
+	readAssistantConfigurationMCP(t, input, arguments, server, "workflow_configuration", response.WorkflowConfiguration.ConfigurationJson)
+}
+
+func TestAssistantWorkflowConfigurationUnicodeKeepsClosedGuards(t *testing.T) {
+	t.Parallel()
+	for name, mutate := range map[string]func(map[string]any){
+		"step NUL": func(snapshot map[string]any) {
+			snapshot["steps"].([]any)[0].(map[string]any)["purpose"] = "text\x00"
+			snapshot["draft"].(map[string]any)["Steps"].([]any)[0].(map[string]any)["Instructions"] = "text\x00"
+		},
+		"byte budget": func(snapshot map[string]any) {
+			text := strings.Repeat("я", maximumAssistantCurrentConfigurationBytes/2)
+			snapshot["instructions"] = text
+			snapshot["draft"].(map[string]any)["Instructions"] = text
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			input, arguments, response := assistantWorkflowConfigurationFixture(t)
+			rewriteAssistantWorkflowConfigurationFixture(t, response, mutate)
+			request, err := parseAssistantConfigurationCatalog(input, arguments, arguments["assistant_configuration_catalog"])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := castAssistantConfigurationCatalog(input, request, response); err == nil {
+				t.Fatal("accepted invalid Unicode configuration")
+			}
+		})
+	}
+	input, arguments, response := assistantWorkflowConfigurationFixture(t)
+	request, err := parseAssistantConfigurationCatalog(input, arguments, arguments["assistant_configuration_catalog"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := bytes.ReplaceAll(response.WorkflowConfiguration.ConfigurationJson, []byte("Full workflow"), []byte("text\xff"))
+	hash := sha256.Sum256(raw)
+	response.WorkflowConfiguration.ConfigurationJson, response.WorkflowConfiguration.ConfigurationSha256 = raw, hex.EncodeToString(hash[:])
+	if _, err := castAssistantConfigurationCatalog(input, request, response); err == nil {
+		t.Fatal("accepted invalid UTF-8 JSON")
 	}
 }
 

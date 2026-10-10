@@ -66,10 +66,10 @@ func (repository *Repository) listAssistantConfigurationCatalogOnce(ctx context.
 	if err := tx.QueryRow(ctx, queryAssistantConfigurationCatalogSource, pgx.StrictNamedArgs{"organization_id": current.organizationID, "lease_ref": leaseRef}).Scan(&sourceScope, &sourceRef); err != nil {
 		return entity.AssistantConfigurationCatalogResponse{}, assistantLockedReadError(err, errs.ErrNotFound)
 	}
-	if sourceScope != "SYSTEM" && sourceScope != "PROJECT" || (sourceScope == "PROJECT" || input.Kind == "CURRENT_CONFIGURATION" || input.Kind == "RECIPIENT_INTEGRATION_GRANTS" || input.Kind == "WORKFLOW_CONFIGURATION" || input.Kind == "AGENT_CONFIGURATION") && input.AssistantRef != sourceRef {
+	if sourceScope != "SYSTEM" && sourceScope != "PROJECT" || (sourceScope == "PROJECT" || input.Kind == "CURRENT_CONFIGURATION" || input.Kind == "RECIPIENT_INTEGRATION_GRANTS" || input.Kind == "WORKFLOW_CONFIGURATION" || input.Kind == "AGENT_CONFIGURATION" || input.Kind == "AGENT_RUNTIME_CONFIGURATION") && input.AssistantRef != sourceRef {
 		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrForbidden
 	}
-	if input.Kind == "AGENT_CONFIGURATION" {
+	if input.Kind == "AGENT_CONFIGURATION" || input.Kind == "AGENT_RUNTIME_CONFIGURATION" {
 		result, readErr := repository.assistantAgentConfigurationCatalogTx(ctx, tx, current, leaseRef, input)
 		if readErr != nil {
 			return result, readErr

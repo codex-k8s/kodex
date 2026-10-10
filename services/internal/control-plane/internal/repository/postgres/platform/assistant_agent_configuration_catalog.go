@@ -41,6 +41,14 @@ func (repository *Repository) assistantAgentConfigurationCatalogTx(ctx context.C
 	if agent.System || agent.ProjectRef != result.ProjectRef || agent.Version != contextVersion {
 		return result, errs.ErrNotFound
 	}
+	if input.Kind == "AGENT_RUNTIME_CONFIGURATION" {
+		configuration, readErr := repository.assistantAgentRuntimeConfigurationTx(ctx, tx, current, agent)
+		if readErr != nil {
+			return result, readErr
+		}
+		result.AgentRuntimeConfiguration = &configuration
+		return result, nil
+	}
 	// Та же canonical publication selection, что у GetEffectivePromptTemplate:
 	// managed PROMPT_TEMPLATE имеет приоритет над native instruction binding.
 	var effective entity.InstructionVersion

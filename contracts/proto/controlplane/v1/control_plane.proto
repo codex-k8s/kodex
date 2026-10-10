@@ -2074,6 +2074,7 @@ enum AssistantConfigurationCatalogKind {
   ASSISTANT_CONFIGURATION_CATALOG_KIND_RECIPIENT_INTEGRATION_GRANTS = 10;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_WORKFLOW_CONFIGURATION = 11;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_AGENT_CONFIGURATION = 12;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_AGENT_RUNTIME_CONFIGURATION = 13;
 }
 
 message AssistantConfigurationCatalogRequest {
@@ -2134,6 +2135,7 @@ message AssistantConfigurationCatalogResponse {
   AssistantRecipientIntegrationGrantCatalog recipient_integration_grants = 11;
   AssistantWorkflowConfiguration workflow_configuration = 12;
   AssistantAgentConfiguration agent_configuration = 13;
+  AssistantAgentRuntimeConfiguration agent_runtime_configuration = 14;
 }
 
 message AssistantWorkflowConfiguration {
@@ -8822,6 +8824,15 @@ message AssistantAgentConfiguration {
   string project_ref = 2;
   int64 version = 3;
   // Полная безопасная конфигурация только текущего AGENT context, не runtime materialization.
+  bytes configuration_json = 4;
+  string configuration_sha256 = 5;
+}
+
+message AssistantAgentRuntimeConfiguration {
+  string agent_ref = 1;
+  string project_ref = 2;
+  int64 version = 3;
+  // Безопасные ENV/binding/image pins, configured tools и отдельный verified inventory.
   bytes configuration_json = 4;
   string configuration_sha256 = 5;
 }

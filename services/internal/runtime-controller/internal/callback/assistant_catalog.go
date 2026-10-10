@@ -137,7 +137,7 @@ func assistantConfigurationCatalogInputSchema(input runtimecontract.RunnerInput)
 		kinds = append(kinds, "WORKFLOW_CONFIGURATION")
 	}
 	if assistantAgentConfigurationAvailable(input) {
-		kinds = append(kinds, "AGENT_CONFIGURATION")
+		kinds = append(kinds, "AGENT_CONFIGURATION", "AGENT_RUNTIME_CONFIGURATION")
 	}
 	properties := map[string]any{
 		"kind": enumSchema(kinds...), "assistant_ref": assistantRef,
@@ -184,7 +184,7 @@ func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, argum
 	if kind == "PROJECT_INTEGRATION_GRANTS" && input.AssistantScope != runtimecontract.AssistantScopeProject ||
 		kind == "RECIPIENT_INTEGRATION_GRANTS" && !assistantRecipientIntegrationCatalogAvailable(input) ||
 		kind == "WORKFLOW_CONFIGURATION" && !assistantWorkflowConfigurationAvailable(input) ||
-		kind == "AGENT_CONFIGURATION" && !assistantAgentConfigurationAvailable(input) {
+		(kind == "AGENT_CONFIGURATION" || kind == "AGENT_RUNTIME_CONFIGURATION") && !assistantAgentConfigurationAvailable(input) {
 		return nil, invalid
 	}
 	if _, err := parseAssistantConfigurationPage(selector, kind); err != nil {
@@ -207,7 +207,7 @@ func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, argum
 		selectedKind, kindOK := entityKind.(string)
 		selectedRef, refOK := entityRef.(string)
 		if !kindOK || !refOK || selectedKind != "AGENT" && selectedKind != "WORKFLOW" || !validAssistantResourceRef(selectedRef) ||
-			kind != "RECIPIENT_INTEGRATION_GRANTS" && kind != "WORKFLOW_CONFIGURATION" && kind != "AGENT_CONFIGURATION" {
+			kind != "RECIPIENT_INTEGRATION_GRANTS" && kind != "WORKFLOW_CONFIGURATION" && kind != "AGENT_CONFIGURATION" && kind != "AGENT_RUNTIME_CONFIGURATION" {
 			return nil, invalidInput
 		}
 		request.EntityKind, request.EntityRef = selectedKind, selectedRef
@@ -269,7 +269,7 @@ func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, argum
 			return nil, invalidInput
 		}
 	}
-	if kind == "AGENT_CONFIGURATION" {
+	if kind == "AGENT_CONFIGURATION" || kind == "AGENT_RUNTIME_CONFIGURATION" {
 		if assistantRef != input.AgentRef || hasRef && request.EntityRef != input.AssistantContext.EntityRef {
 			return nil, invalid
 		}
@@ -292,7 +292,7 @@ func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, argum
 }
 
 func assistantConfigurationCatalogKindKnown(kind string) bool {
-	if kind == "PROJECT_INTEGRATION_GRANTS" || kind == "RECIPIENT_INTEGRATION_GRANTS" || kind == "WORKFLOW_CONFIGURATION" || kind == "AGENT_CONFIGURATION" {
+	if kind == "PROJECT_INTEGRATION_GRANTS" || kind == "RECIPIENT_INTEGRATION_GRANTS" || kind == "WORKFLOW_CONFIGURATION" || kind == "AGENT_CONFIGURATION" || kind == "AGENT_RUNTIME_CONFIGURATION" {
 		return true
 	}
 	for _, candidate := range assistantConfigurationCatalogKinds {
@@ -326,7 +326,7 @@ func (server *Server) assistantConfigurationCatalog(ctx context.Context, input r
 	if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_CURRENT_CONFIGURATION {
 		configuration["execution_snapshot"].(map[string]any)["provider_process"] = server.coordinator.providerProcessSnapshot(input)
 	}
-	if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_WORKFLOW_CONFIGURATION || request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_AGENT_CONFIGURATION {
+	if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_WORKFLOW_CONFIGURATION || request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_AGENT_CONFIGURATION || request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_AGENT_RUNTIME_CONFIGURATION {
 		page, pageErr := parseAssistantConfigurationPage(raw.(map[string]any), configuration["kind"].(string))
 		if pageErr != nil {
 			return nil, pageErr
@@ -360,6 +360,12 @@ func boundedAssistantConfigurationPageCatalog(configuration map[string]any, page
 
 func castAssistantConfigurationCatalog(input runtimecontract.RunnerInput, request *controlplanev1.AssistantConfigurationCatalogRequest, response *controlplanev1.AssistantConfigurationCatalogResponse) (map[string]any, error) {
 	invalid := errors.New("assistant configuration catalog response is invalid")
+	if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_AGENT_RUNTIME_CONFIGURATION {
+		return castAssistantAgentRuntimeConfiguration(input, request, response)
+	}
+	if response != nil && response.GetAgentRuntimeConfiguration() != nil {
+		return nil, invalid
+	}
 	if request.GetKind() == controlplanev1.AssistantConfigurationCatalogKind_ASSISTANT_CONFIGURATION_CATALOG_KIND_AGENT_CONFIGURATION {
 		return castAssistantAgentConfiguration(input, request, response)
 	}

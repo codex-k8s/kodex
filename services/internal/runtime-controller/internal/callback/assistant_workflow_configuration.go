@@ -146,7 +146,7 @@ func closedAssistantWorkflowSnapshot(snapshot map[string]any) bool {
 
 func validAssistantWorkflowReadSnapshot(value assistantWorkflowReadSnapshot) bool {
 	draft := value.Draft
-	if strings.TrimSpace(value.Name) == "" || len(value.Name) > 160 || len(value.Purpose) > 2000 || value.Name != draft.Name || value.Purpose != draft.Purpose || value.CoordinatorAgentRef != draft.CoordinatorAgentRef || !validAssistantResourceRef(value.CoordinatorAgentRef) || value.Instructions != draft.Instructions || value.CompletionCriteria != draft.CompletionCriteria ||
+	if strings.TrimSpace(value.Name) == "" || utf8.RuneCountInString(value.Name) > 160 || utf8.RuneCountInString(value.Purpose) > 2000 || value.Name != draft.Name || value.Purpose != draft.Purpose || value.CoordinatorAgentRef != draft.CoordinatorAgentRef || !validAssistantResourceRef(value.CoordinatorAgentRef) || value.Instructions != draft.Instructions || value.CompletionCriteria != draft.CompletionCriteria ||
 		value.MaxConcurrency != draft.Concurrency || value.MaxConcurrency < 1 || value.MaxConcurrency > 100 || value.TimeoutSeconds != draft.TimeoutSeconds || value.TimeoutSeconds < 1 || value.TimeoutSeconds > 604800 || len(value.Steps) == 0 || len(value.Steps) > 200 || len(value.Steps) != len(draft.Steps) || len(value.InputFields) > 100 || len(value.InputFields) != len(draft.Inputs) {
 		return false
 	}
@@ -159,7 +159,7 @@ func validAssistantWorkflowReadSnapshot(value assistantWorkflowReadSnapshot) boo
 	seen := map[string]bool{}
 	for index, step := range value.Steps {
 		original := draft.Steps[index]
-		if step.Key == "" || len(step.Key) > 96 || seen[step.Key] || strings.TrimSpace(step.Name) == "" || len(step.Name) > 160 || strings.TrimSpace(step.Purpose) == "" || len(step.Purpose) > 1000 || len(step.ExpectedResult) > 1000 || step.TimeoutSeconds < 1 || step.TimeoutSeconds > 86400 || step.ParallelGroup < 0 || step.ParallelGroup > 50 || original.Position != int32(index+1) || step.Key != original.Key || step.Name != original.Name || step.Purpose != original.Instructions || step.AgentRef != original.AgentRef || !validAssistantResourceRef(step.AgentRef) || step.Parallel != original.Parallel || step.ParallelGroup != original.ParallelGroup || step.TimeoutSeconds != original.TimeoutSeconds || step.ExpectedResult != original.ExpectedResult || step.HumanGate != original.HumanGateAfter ||
+		if step.Key == "" || len(step.Key) > 96 || seen[step.Key] || strings.TrimSpace(step.Name) == "" || utf8.RuneCountInString(step.Name) > 160 || strings.TrimSpace(step.Purpose) == "" || utf8.RuneCountInString(step.Purpose) > 1000 || utf8.RuneCountInString(step.ExpectedResult) > 1000 || step.TimeoutSeconds < 1 || step.TimeoutSeconds > 86400 || step.ParallelGroup < 0 || step.ParallelGroup > 50 || original.Position != int32(index+1) || step.Key != original.Key || step.Name != original.Name || step.Purpose != original.Instructions || step.AgentRef != original.AgentRef || !validAssistantResourceRef(step.AgentRef) || step.Parallel != original.Parallel || step.ParallelGroup != original.ParallelGroup || step.TimeoutSeconds != original.TimeoutSeconds || step.ExpectedResult != original.ExpectedResult || step.HumanGate != original.HumanGateAfter ||
 			!reflect.DeepEqual(step.GateDecisions, append([]string{}, original.GateDecisions...)) || !reflect.DeepEqual(step.RequiredCapabilityKeys, append([]string{}, original.RequiredCapabilityKeys...)) || len(step.RequiredCapabilityKeys) > 50 {
 			return false
 		}

@@ -1913,7 +1913,7 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 			if kind, ok := catalog["kind"].(string); ok && assistantConfigurationCatalogKindKnown(kind) {
 				// Вид и проверенные координаты запроса страницы не раскрывают ресурс или содержимое.
 				parameters["catalogKind"] = kind
-				if kind == "WORKFLOW_CONFIGURATION" || kind == "AGENT_CONFIGURATION" {
+				if kind == "WORKFLOW_CONFIGURATION" || kind == "AGENT_CONFIGURATION" || kind == "AGENT_RUNTIME_CONFIGURATION" {
 					if _, err := configurationCatalog(input, arguments); err == nil {
 						if _, err := parseAssistantConfigurationCatalog(input, arguments, catalog); err == nil {
 							if page, err := parseAssistantConfigurationPage(catalog, kind); err == nil {
