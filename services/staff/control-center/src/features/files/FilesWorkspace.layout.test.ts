@@ -8,6 +8,12 @@ const source = readFileSync(
 );
 
 describe("FilesWorkspace contract", () => {
+  it("учитывает внешние отступы ошибки внутри grid-карточки", () => {
+    expect(source).toMatch(
+      /\.files-workspace > \.problem-notice\s*\{\s*width: auto;\s*\}/,
+    );
+  });
+
   it("выводит корзину из route mode и разделяет файлы, знания и результаты", () => {
     expect(source).toContain("mode: FileCollectionMode");
     expect(source).toContain(':to="trashMode ? filesPath : trashPath"');

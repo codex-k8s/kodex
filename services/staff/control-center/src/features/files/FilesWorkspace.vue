@@ -1922,6 +1922,9 @@ onBeforeUnmount(() => {
 .files-workspace > .field-error {
   margin: 10px 14px 0;
 }
+.files-workspace > .problem-notice {
+  width: auto;
+}
 .files-workspace__layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

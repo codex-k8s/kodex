@@ -10,6 +10,18 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 03:46 UTC — последний CSS до activation
+
+f80b3276 опубликован exact remote/Draft1807. Fresh full runner cacheproof
+71ade226…6600ed/import PASS, sourcef80/OCIa39/ELF376. Дополнительный2file
+Files CSS/layouttest: mobile error box width100%+margins clipping14px заменён
+на локальное widthauto. Native390 alert[24,366] внутри card[10,380], retry
+виден, screenshot просмотрен.15unit/scopedlintformat/Vitebuild PASS.
+Journal/handoff ещё2files; clean commit/push и fresh proof/render следующегоSHA.
+Own91439 OWNER/reload03:45/viewport1440, Chrome1334 pending.
+Canonical activation всё ещё NOT RUN; следующий шаг и baseline Artifact
+не изменены. Не выдавать ready cluster или error UI за успех новой ревизии.
+
 ## Checkpoint 10.10.2026 03:42 UTC — оба узких пакета приняты
 
 Текущее дерево: c273 +9owned files (delivery3, Files4, journal/handoff2).

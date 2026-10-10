@@ -1224,3 +1224,18 @@ backend list остаётся UNAVAILABLE до activation. Console cumulative49e
 строк и stale ACK пока доказаны unit, native successful list ещё NOT RUN.
 Следующий шаг: clean commit/push этих9файлов, fresh runner proof/render,
 canonical quiesce/supply-chain/migration и selected retention. Full QA OPEN.
+
+## Checkpoint 10.10.2026 03:46 UTC — мобильный alert удерживается в карточке
+
+ROOT f80b327655779d51df4cf3fa232dcb21b8c4d7b8 запушен, remote/Draft1807
+EQUAL, mainab4992e0. Fresh runner proof71ade226…6600ed/import PASS; OCIa39 и
+ELF376 прежние. Native mobile390 показал clipping: alertRight394 при
+parentRight380, хотя document overflowfalse. Причина width100% плюс внешние
+отступы grid child; локальное widthauto не меняет общий ProblemNotice.
+После hot reload alert[24,366] внутри parent[10,380], retry виден,
+overflowfalse; settled screenshot просмотрен. ROOT15unit/2suites PASS2.51s,
+scoped lint/format и Vite build2791modules PASS8.05s, warnings сохранены.
+Это проверка alert на реальном503, не успешный file list/новый backend writer.
+Own91439 reload03:45, затем viewport1440; Chrome1334 pending.
+После этого узкого CSS commit повторить fresh sourceRevision proof/render и
+canonical activation, не применять render прежнего дерева. Full65QA OPEN.
