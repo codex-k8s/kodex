@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.18
+version: 1.7.19
 updated: 2026-10-10
 ---
 
@@ -2112,3 +2112,20 @@ backup не должен воскрешать отозванные сессии.
 Background fetch не следует auth redirect на чужой origin: redirect hint
 приводит к обычному authoritative session read и bounded re-auth lifecycle,
 а не становится самостоятельно выданным 401 либо основанием для refresh loop.
+
+## GitHub CLI и Git credentials в runtime
+
+Токен, назначенный существующим разрешённым binding, не становится
+автоматически credential обычного Git. HTTPS credential helper ограничивается
+точным host и конкретной уже разрешённой операцией; секрет остаётся в среде
+и credential pipe, а не в argv, URL, Git-конфигурации, логе или артефакте.
+Прямой вывод helper, persistent store, host/global configuration и неявные
+login/refresh/rotation запрещены. Такой helper не выдаёт repository permission
+или сетевой доступ и не разрешает повтор denied/unknown эффекта.
+
+Git endpoint и GitHub API являются разными точными destinations. `gh auth
+status` делает дополнительные API-чтения и не заменяет результат разрешённой
+Git-операции с независимым readback. Его отказ не доказывает невалидность токена.
+Недостающий API destination добавляется только штатной owner-публикацией новой
+ENV revision с validation, полным impact, exact intended bindings и preservation
+proof остальных параметров; агент сам не расширяет policy ради обхода отказа.

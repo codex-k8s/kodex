@@ -12,6 +12,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -60,6 +61,11 @@ func TestAssistantWarmRuntimeWireComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	image, ok := snapshot["environmentImage"].(runtimecontract.RuntimeEnvironmentImage)
+	promptSnapshot, promptOK := snapshot["promptSnapshot"].(entity.PromptMaterializationSnapshot)
+	if !promptOK {
+		t.Fatal("owner warm snapshot lost immutable instruction input")
+	}
+	assertPlatformInstructions(t, promptSnapshot)
 	generation, validGeneration := snapshot["roleImageRecipeGeneration"].(int64)
 	if !ok || image.ArtifactRef == "" || image.RecipeRef == "" || image.RecipeGeneration < 1 ||
 		stringMap(snapshot, "roleImageArtifactRef") != image.ArtifactRef || stringMap(snapshot, "roleImageRecipeRef") != image.RecipeRef ||

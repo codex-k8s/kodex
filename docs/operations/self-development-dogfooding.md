@@ -843,3 +843,61 @@ RC0/gateway0/panicfalse, не full logs acceptance. Exact1d frontend399suites/
 own dependency symlink cleanup PASS. Locale fixture warnings сохранены;
 browser E2E/STT/device-code NOT RUN. Full65/11/14/15, business diff,
 ONE review, Manager и финальный gate OPEN.
+
+## Checkpoint 10.10.2026 21:19 UTC — terminal Git blocker и чистый HOT
+
+Draft1807 exact d3b07f65/head/body readback PASS. Owner idle21:09:46:
+openBuilds/activeRuntimeRuns/pendingAdmissions/pendingPromotions/claimedLeases0,
+promotedArtifactCount61/published pins прежние. Только собственные пять FE
+накладок сняты через apply_patch с exact postimage guards, затем clean FFd3
+PASS21:09:47; исходные guard/query не менялись и пользовательский diff не терялся.
+
+Retry6 Developer FINAL1092 BLOCKED на Git publication; Manager FINAL1115,
+root FAILED1119. Native clone/worktree/ветка отmainab4992 выполнены, но
+бизнес-diff/PR отсутствуют. Полный developer-handoff4119B/revision
+arv_b5201fccb151415191d4354fb08e7620/SHA256
+9574fe53d89a90bf0a3a4e0b4f8b8fda6b03b6890befafcd5622d12929bad54e
+authoritative EOF/hash EQUAL. Review cycles0, owner gate не открыт;
+необходимые implementation/test/live обязанности остаются OPEN.
+
+Source диагностика доказала отсутствие обычного Git credential helper и
+GitHub API destination в заданном staff-write окружении. Конкретный response
+прежнего gh auth status UNKNOWN; это не доказательство невалидной учётной
+записи. Готовятся versioned server-owned EN/RU instructions и отдельный точный
+owner ENV draft/validation/impact/publication plan с сохранением остальных
+параметров. Ни runner OCI, ни compiled v3/core48, ни история не переписываются;
+доставка исправлений и новый Retry NOT RUN. ROOT corrective USER_MESSAGE0,
+ROOT business implementation0. Проверены официальные OpenAI config и GitHub
+CLI environment/setup-git документы через Context7 и exact pinned source.
+
+Terminal desktop screenshot MAIN просмотрен, Console0, bootstrap/session/
+graph/events/artifacts200, realtime connected. Полный frontend1d399/3888 PASS,
+FE tree d3 побайтно тот же; не новый suite run наd3. Full65/11/14/15,
+business→ONE review→Manager acceptance→owner gate остаются OPEN.
+
+## Checkpoint 10.10.2026 21:25 UTC — source инструкции и ENV offline plan
+
+13 CP-only posthashes EQUAL frozen packet, ROOT race prompt2.296s/platform9.168s/
+core1.146s и vet PASS. Новый platform-source-conformity-v1 version-pinned input
+фиксирует приоритет approved sources, WebSocket для UI Kodex и условный scoped
+Git helper. Overlay и effective capabilities сохраняются; неизвестный binding
+закрыто отклоняется. Fresh preview/claim/continuation/warm согласованы, новые
+instruction dependencies меняют штатный cold/history выбор. Historical inputs,
+compiled v3/core48/shared ABI/runner и applied migrations не переписываются.
+
+Worker final disposable PG WarmWire2.93s/Helper2turn4.85s/WorkflowRetry4.88s,
+общий12.738s PASS на том же final frozen source. Полный Bootstrap109.206s
+сохраняется как intermediate candidate PASS до Git-абзаца, не финальный rerun.
+Ранний missing-node PATH и неверный assertion scope исправлены и не скрыты.
+
+Отдельный offline typed helper2files/dependency hashes EQUAL; ROOT179/179tests
+PASS0.999s, syntax/diffcheck PASS, actual private draft input PREPARED1.
+Только named PROJECT staff-write ENV/один intended binding/exact API443
+GET/HEAD/POST/PATCH; существующие github/raw rules и остальные параметры прежние.
+Полные source/draft/plan/version/OCC/EOF/unknown guards и preservation readback;
+helper не делает live effects. Общие install defaults не расширены.
+Общий Git credential/network invariant закреплён в GUIDE-DOC-003v1.7.19.
+
+Commit/push/idleFF/actual CP delivery/owner ENV publication/Retry7 пока NOT RUN.
+ROOT USER nudges0/business implementation0; прежний Retry6 FAILED сохранён.
+Business/Full65/11/14/15, ONE review/Manager/final owner gate OPEN.

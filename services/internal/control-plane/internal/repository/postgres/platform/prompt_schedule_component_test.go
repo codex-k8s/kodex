@@ -58,6 +58,7 @@ func checkCapturedScheduleRuntime(t *testing.T, ctx context.Context, repository 
 	if !ok || len(snapshot.ExtraTemplates) != 1 || snapshot.ExtraTemplates[0].Ref != templateRef || snapshot.ExtraTemplates[0].Rendered == nil || snapshot.ExtraTemplates[0].Rendered.Content != stringMap(lease, "task") {
 		t.Fatal("captured automation provenance lost")
 	}
+	assertPlatformInstructions(t, snapshot)
 	var task string
 	if err := repository.pool.QueryRow(ctx, `SELECT turn.content FROM control_plane.session_turns turn JOIN control_plane.runs run ON run.id=turn.run_id WHERE run.ref=$1`, runRef).Scan(&task); err != nil || task != stringMap(lease, "task") {
 		t.Fatalf("root turn task was not committed with revision: %v", err)

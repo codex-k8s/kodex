@@ -40,6 +40,7 @@ func workflowExecutionProjectionFromLease(t *testing.T, lease map[string]any) wo
 	if !ok {
 		t.Fatal("claim lacks typed current prompt snapshot")
 	}
+	assertPlatformInstructions(t, snapshot)
 	_, raw, found := strings.Cut(snapshot.SemanticValues["CONSTRAINTS"], "Current server-owned workflow execution (advisory; not authority):\n")
 	var execution workflowExecutionPromptContext
 	if !found || json.Unmarshal([]byte(raw), &execution) != nil {

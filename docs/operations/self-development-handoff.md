@@ -10,6 +10,56 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 21:25 UTC — source исправления готовы к доставке
+
+Поверх d3b07f65 интегрированы13 CP файлов с новым server-owned
+platform-source-conformity-v1: утверждённые источники, WebSocket/no REST timer
+для UI Kodex и условный per-command Git helper. Fresh preview/claim/continuation/
+warm получают exact ref/revision/digest/content; прежние inputs не меняются,
+v3/core48/shared ABI/runner/migrations побайтно прежние. ROOT13posthashes EQUAL,
+race prompt2.296s/platform9.168s/core1.146s и vet PASS. Worker final disposable
+WarmWire/Helper2turn/WorkflowRetry12.738s PASS на том же frozen source; полный
+Bootstrap109.206s относится к предшествующему candidate до Git-абзаца.
+
+Новый offline helper готовит draft/validation/full impact/publication/readback
+ровно одного staff-write ENV и intended binding; добавляет только exact
+HTTPS443 GitHub API destination без изменения остальных настроек. ROOT2hashes+
+dependency EQUAL,179/179tests PASS0.999s, actual private draft input PREPARED1.
+Общие bootstrap webAccess NONE не расширены. GUIDE-DOC-003 закрепляет общий
+credential/network invariant. Journal append-only/hash verifier PASS.
+
+Следующий шаг: commit/push в Draft1807→owner idle FF→actual CP source/serving
+proof→штатная owner ENV publication и exact preservation readback→Retry7.
+Live доставка/ENV mutation/новый Retry пока NOT RUN; business/Full65/ONE review
+и финальная приёмка остаются OPEN. ROOT USER corrections0.
+
+## Checkpoint 10.10.2026 21:19 UTC — terminal Git blocker и чистый HOT
+
+Source/remote Draft1807/чистый HOT d3b07f65d7aadb5355dee0055d69b53a6eff1171.
+После Retry6 FAILED1119 owner idle READ21:09:46 подтвердил ноль build,
+admission, promotion, runtime run и lease; обычный FF завершён21:09:47.
+Сняты только пять собственных временных frontend изменений через apply_patch;
+чужие изменения не затронуты, protected guard не ослаблялся.
+
+Native Developer FINAL1092 BLOCKED: clone/worktree/ветка выполнены, но обычный
+git push --dry-run не нашёл credential helper. Manager FINAL1115 сохранил
+BLOCKED; бизнес-diff/PR отсутствуют, review циклов0, owner gate не открыт.
+Authoritative developer-handoff4119B/revision
+arv_b5201fccb151415191d4354fb08e7620/SHA256
+9574fe53d89a90bf0a3a4e0b4f8b8fda6b03b6890befafcd5622d12929bad54e
+прочитан MAIN до EOF и совпал. ROOT не пишет бизнес-код и USER corrections0.
+
+Причины исправляются в source: versioned server-owned инструкция соответствия
+утверждённым контрактам и безопасного Git credential helper; отдельный typed
+план для exact GitHub API destination в staff-write ENV. Остальные параметры,
+исторические inputs, compiled v3/core48 и runner OCI не меняются. Доставка и
+следующий native Retry пока NOT RUN; прежний FAILED не объявляется успехом.
+
+Chrome terminal screenshot просмотрен: toolbar/status доступны, Console0,
+bootstrap/session/graph/events/artifacts200 и realtime connected. Ранее exact
+frontend1d399suites/3888tests PASS; frontend tree d3 равен1d, это не новый запуск
+suite наd3. Полный65/11/14/15 и business→ONE review→Manager→owner gate OPEN.
+
 ## Checkpoint 10.10.2026 21:02 UTC — Architect FINAL и реальный Developer
 
 Source1d555df7 опубликован в Draft1807, remote/head/body readback PASS20:46;

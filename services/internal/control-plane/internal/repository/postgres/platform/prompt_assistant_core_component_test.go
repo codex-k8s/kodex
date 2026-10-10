@@ -123,6 +123,7 @@ func TestAssistantCoreInheritanceComponent(t *testing.T) {
 			}
 			prospective := preview(agentRef)
 			assertBase(prospective, scopeKind)
+			assertPlatformInstructions(t, prospective)
 			if prospective.ProjectRef != projectRef || !strings.Contains(prospective.TemplateContent, strings.Split(overlay, " ")[0]) ||
 				(scopeKind == "PROJECT" && (strings.Contains(prospective.TemplateContent, "get_configuration_catalog") || strings.Contains(prospective.TemplateContent, systemOverlay))) {
 				t.Fatal("base was copied into owner template or foreign overlay leaked")
@@ -149,8 +150,12 @@ func TestAssistantCoreInheritanceComponent(t *testing.T) {
 				t.Fatal(err)
 			}
 			assertBase(stored, scopeKind)
+			assertPlatformInstructions(t, stored)
 			if !reflect.DeepEqual(stored.AssistantCore, prospective.AssistantCore) || stored.TemplateRef != prospective.TemplateRef || stored.TemplateDigest != prospective.TemplateDigest {
 				t.Fatal("preview and run diverged on immutable instructions")
+			}
+			if !reflect.DeepEqual(stored.PlatformInstructions, prospective.PlatformInstructions) {
+				t.Fatal("preview and run diverged on platform instruction binding")
 			}
 			rendered, err := promptservice.Materialize(stored.TemplateContent, promptservice.FromSnapshot(stored))
 			if err != nil || rendered.Prompt != stringMap(first, "instructions") || rendered.Digest != stringMap(first, "promptMaterializationDigest") {
@@ -169,6 +174,7 @@ func TestAssistantCoreInheritanceComponent(t *testing.T) {
 			if err != nil || !reflect.DeepEqual(next.AssistantCore, stored.AssistantCore) || stringMap(second, "runtimeRevisionRef") == stringMap(first, "runtimeRevisionRef") {
 				t.Fatal("next turn lost fresh immutable base revision")
 			}
+			assertPlatformInstructions(t, next)
 			old, err := r.GetPromptMaterializationSnapshot(ctx, resolved, "RUN", stringMap(first, "runRef"))
 			if err != nil || !reflect.DeepEqual(old, stored) {
 				t.Fatal("next turn rewrote historical snapshot")
@@ -179,6 +185,10 @@ func TestAssistantCoreInheritanceComponent(t *testing.T) {
 				t.Fatal("native assistant continuation snapshot missing")
 			}
 			assertBase(continuation, scopeKind)
+			assertPlatformInstructions(t, continuation)
+			if !reflect.DeepEqual(continuation.PlatformInstructions, stored.PlatformInstructions) {
+				t.Fatal("continuation lost current platform instruction binding")
+			}
 			if !reflect.DeepEqual(continuation.AssistantCore, stored.AssistantCore) || continuation.ContextPin.PreviousRuntimeRevisionRef != stringMap(first, "runtimeRevisionRef") {
 				t.Fatal("native continuation lost exact predecessor and core")
 			}
@@ -191,6 +201,15 @@ func TestAssistantCoreInheritanceComponent(t *testing.T) {
 			var changed map[string]any
 			if json.Unmarshal(copiedJSON, &changed) != nil || !runtimeSessionResumeCompatible(changed, changed) {
 				t.Fatal("saved fresh assistant context is not self-compatible")
+			}
+			var historical map[string]any
+			if json.Unmarshal(copiedJSON, &historical) != nil {
+				t.Fatal("historical instruction fixture decode")
+			}
+			delete(historical["promptSnapshot"].(map[string]any), "platformInstructions")
+			delete(historical["promptSnapshot"].(map[string]any)["semanticValues"].(map[string]any), "CONSTRAINTS")
+			if !runtimeSessionResumeCompatible(historical, historical) || runtimeSessionResumeCompatible(second, historical) || runtimeSessionResumeCompatible(historical, second) {
+				t.Fatal("changed platform instruction dependency bypassed native cold/history selection")
 			}
 			changed["promptSnapshot"].(map[string]any)["assistantCore"].(map[string]any)["Ref"] = "ins_core_changed"
 			if runtimeSessionResumeCompatible(second, changed) {

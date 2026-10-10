@@ -101,7 +101,11 @@ func (repository *Repository) prepareRuntimeContinuationNotice(ctx context.Conte
 	noticeSnapshot.ContextPin.PreviousRuntimeRevisionRef = previousRef
 	noticeSnapshot.SessionContinuation = string(rawDiff)
 	noticeSnapshot.SemanticValues = nil
+	noticeSnapshot.PlatformInstructions = nil
 	noticeSnapshot.UnavailableVariables = nil
+	if err := bindPlatformInstructions(&noticeSnapshot); err != nil {
+		return nil, err
+	}
 	if err := repository.hydrateWorkflowExecutionPromptTx(ctx, tx, current, stringMap(snapshot, "nodeRef"), &noticeSnapshot); err != nil {
 		return nil, err
 	}
@@ -182,6 +186,19 @@ func continuationComponents(snapshot map[string]any) (map[string][]promptservice
 		result["INSTRUCTIONS"] = append(result["INSTRUCTIONS"], tuple("promptServiceTemplateRevision", "", "promptServiceTemplateDigest"))
 	}
 	promptSnapshot, _ := data["promptSnapshot"].(map[string]any)
+	if raw, present := data["promptSnapshot"]; present {
+		encoded, err := json.Marshal(raw)
+		if err != nil {
+			return nil, errs.ErrConflict
+		}
+		instruction, err := platformInstructionDependency(encoded)
+		if err != nil {
+			return nil, err
+		}
+		if instruction != nil {
+			result["INSTRUCTIONS"] = append(result["INSTRUCTIONS"], *instruction)
+		}
+	}
 	if core, present := promptSnapshot["assistantCore"]; present {
 		binding, ok := core.(map[string]any)
 		if !ok || continuationString(binding, "Ref") == "" || continuationString(binding, "Revision") == "" || continuationString(binding, "Digest") == "" {

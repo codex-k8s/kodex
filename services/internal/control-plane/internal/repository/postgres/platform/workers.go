@@ -192,7 +192,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		assistant.RuntimeState = "RECOVERING"
 		assistant.Version++
 	}
-	materializedPrompt, err := promptservice.MaterializeWarm(promptContent, ownerInstructions, promptRef, promptDigest, assistant.Ref, systemSessionRef)
+	materializedPrompt, promptSnapshot, err := materializeWarmPlatformPrompt(promptContent, ownerInstructions, promptRef, promptDigest, assistant.Ref, systemSessionRef)
 	if err != nil || !materializedPrompt.Complete {
 		return entity.SystemAssistant{}, nil, false, fmt.Errorf("materialize warm prompt: %w", errs.ErrConflict)
 	}
@@ -225,6 +225,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		"promptTemplateRef":             promptRef,
 		"promptTemplateDigest":          promptDigest,
 		"promptMaterializationDigest":   materializedPrompt.Digest,
+		"promptSnapshot":                promptSnapshot,
 		"promptRuntimeContractVersion":  1,
 		"promptServiceTemplateRevision": materializedPrompt.ServiceTemplateRevision,
 		"promptServiceTemplateDigest":   materializedPrompt.ServiceTemplateDigest,

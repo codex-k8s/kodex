@@ -200,8 +200,9 @@ func (repository *Repository) promptContinuationPreviewForActorTx(ctx context.Co
 		Actor, Session, Task, AttachmentSet, TemplateRef, TemplateDigest string
 		Components                                                       map[string][]promptservice.RuntimeDescriptor
 		ContextPin                                                       entity.PromptContextPin
-		AssistantCore                                                    *entity.PromptAssistantCore `json:",omitempty"`
-	}{current.actorRef, sessionRef, input.Task, input.AttachmentSetRef, snapshot.TemplateRef, snapshot.TemplateDigest, currentComponents, dependencyPin, snapshot.AssistantCore})
+		AssistantCore                                                    *entity.PromptAssistantCore        `json:",omitempty"`
+		PlatformInstructions                                             *entity.PromptPlatformInstructions `json:",omitempty"`
+	}{current.actorRef, sessionRef, input.Task, input.AttachmentSetRef, snapshot.TemplateRef, snapshot.TemplateDigest, currentComponents, dependencyPin, snapshot.AssistantCore, snapshot.PlatformInstructions})
 	if err != nil {
 		return entity.PromptMaterializationSnapshot{}, errs.ErrUnavailable
 	}
