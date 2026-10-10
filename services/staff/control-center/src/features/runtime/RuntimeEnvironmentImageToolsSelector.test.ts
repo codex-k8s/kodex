@@ -13,8 +13,11 @@ import {
   unavailableInventoryFixture,
   verifiedInventoryFixture,
 } from "@/test-utils/image-inventory-fixture";
-import type { RoleImageArtifact } from "@/shared/api/generated/openapi/types.gen";
-import type { AppProblem } from "@/shared/api/problem";
+import type {
+  RoleImageArtifact,
+  RuntimeEnvironmentImage,
+} from "@/shared/api/generated/openapi/types.gen";
+import { AppProblem } from "@/shared/api/problem";
 import type { AsyncEntityOption } from "@/shared/ui/async-entity-picker";
 import { verifiedImageTools } from "@/shared/lib/verified-image-tools";
 import type {
@@ -77,6 +80,7 @@ interface State {
   artifact: Ref<RoleImageArtifact | undefined>;
   problem: Ref<AppProblem | undefined>;
   selected: Ref<RuntimeImageOption | undefined>;
+  pinnedImage: ComputedRef<RuntimeEnvironmentImage | undefined>;
   select(option: AsyncEntityOption): Promise<void>;
   clear(value: unknown): void;
 }
@@ -129,6 +133,135 @@ function catalog() {
 }
 
 describe("Состояния выбора собственного подтверждённого образа", () => {
+  it.each([true, false])(
+    "readonly reference/digest видны только для точного pinned выбора: %s",
+    async (exact) => {
+      const reader = catalog();
+      reader.loadArtifact.mockRejectedValue(
+        new AppProblem({
+          status: 409,
+          code: "IMAGE_ARTIFACT_NOT_CURRENT",
+          retryable: false,
+          kind: "conflict",
+        }),
+      );
+      const source = Component as unknown as {
+        setup(props: object, context: SetupContext): State;
+      };
+      const hydrated = {
+        ...Component,
+        async setup(props: object, context: SetupContext) {
+          const state = source.setup(props, context);
+          await vi.waitFor(() => expect(state.loading.value).toBe(false));
+          return state;
+        },
+      };
+      const image = artifact();
+      const app = createSSRApp(hydrated, {
+        resourceScope: { kind: "ORGANIZATION", organizationRef: "org_fixture" },
+        imageArtifactRef: exact ? option.ref : "imgart_other",
+        currentImage: {
+          artifactRef: option.ref,
+          recipeRef: option.recipeRef,
+          recipeGeneration: option.generation,
+          reference: image.promotedReference,
+          digest: image.manifestDigest,
+        },
+        tools: [],
+        disabled: false,
+        catalog: reader,
+      });
+      app.use(
+        createI18n({
+          legacy: false,
+          locale: "ru",
+          missingWarn: false,
+          fallbackWarn: false,
+          messages: {
+            ru: {
+              runtime: { exactImage: "Точный образ" },
+              roleImages: { generationLabel: "Поколение {generation}" },
+            },
+          },
+        }),
+      );
+      const html = await renderToString(app);
+      if (exact) {
+        expect(html).toContain('class="image-tools-selector__pinned"');
+        expect(html).toContain(image.promotedReference);
+        expect(html).toContain(image.manifestDigest);
+        expect(html).toContain('aria-label="Точный образ · Поколение 3"');
+      } else {
+        expect(html).not.toContain('class="image-tools-selector__pinned"');
+        expect(html).not.toContain(image.promotedReference);
+      }
+      expect(html).not.toContain('type="checkbox"');
+    },
+  );
+  it("сохраняет точную опубликованную подпись при смене recipe candidate, не открывая inventory", async () => {
+    const reader = catalog();
+    reader.loadArtifact.mockRejectedValue(
+      new AppProblem({
+        status: 409,
+        code: "IMAGE_ARTIFACT_NOT_CURRENT",
+        retryable: false,
+        kind: "conflict",
+      }),
+    );
+    const currentImage = {
+      artifactRef: option.ref,
+      recipeRef: option.recipeRef,
+      recipeGeneration: option.generation,
+      reference: artifact().promotedReference ?? "",
+      digest: artifact().manifestDigest,
+    };
+    const state = (await captureSetupState(
+      Component,
+      (app) =>
+        app.use(
+          createI18n({
+            legacy: false,
+            locale: "ru",
+            missingWarn: false,
+            fallbackWarn: false,
+            messages: {
+              ru: {
+                runtime: { exactImage: "Точный образ" },
+                roleImages: { generationLabel: "Поколение {generation}" },
+              },
+            },
+          }),
+        ),
+      {
+        resourceScope: { kind: "ORGANIZATION", organizationRef: "org_fixture" },
+        imageArtifactRef: option.ref,
+        currentImage,
+        tools: [
+          {
+            name: "Git",
+            command: "git",
+            description: "Без изменений",
+            usageHint: "",
+          },
+        ],
+        disabled: false,
+        catalog: reader,
+      },
+    )) as unknown as State;
+    await vi.waitFor(() => expect(state.loading.value).toBe(false));
+    expect(state.problem.value?.code).toBe("IMAGE_ARTIFACT_NOT_CURRENT");
+    expect(state.selected.value).toMatchObject({
+      ref: option.ref,
+      generation: option.generation,
+      description: currentImage.reference,
+    });
+    expect(state.pickerTriggerLabel.value).toBe("Точный образ · Поколение 3");
+    expect(state.pinnedImage.value).toEqual(currentImage);
+    expect(state.artifact.value).toBeUndefined();
+    expect(verifiedImageTools(state.artifact.value)).toEqual([]);
+    expect(reader.loadArtifact).toHaveBeenCalledTimes(1);
+    expect(reader.loadPage).not.toHaveBeenCalled();
+  });
   it("SYSTEM список показывает поколение/ref, сохраняя название выбранного образа и exact metadata", async () => {
     const reader = catalog();
     const image = { ...option, description: artifact().promotedReference };

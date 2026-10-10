@@ -10,6 +10,40 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 13:15 UTC — SYSTEM доставка и inventory закрыты
+
+Исходный опубликованный HEAD/remote/Draft1807 f72214defe01b15b581051b30b39e3485bf0d593;
+main ab4992e0 unchanged. Поверх адресный4-file selector/catalog UX fix и журнал.
+ROOT48unit/2.11s, lint/format, forced types, production Vite7.85s PASS;
+сохранены прежние fixture i18n/chunk/plugin warnings. В текущем UI desktop/
+mobile390 selector32px/overflowfalse/alerts0; screenshots просмотрены.
+Error-state pinned label/read-only digest/typed conflict доказаны units;
+живой прежний image conflict после публикации уже не воспроизводился.
+
+SYSTEM собственный recipe generation18/version32 обновлён только FROMc6ec;
+build COMPLETED, artifact imgart_KPX-_ScTrJtWjil9_H14zDxH ACCEPTED/PROMOTED,
+digest fd5ae21444cb74db4190fedd8d73588e482bd950b9c615c20ccca95c28bcea15.
+Native ENV Validate/Impact/Publish ровно1 consumer: revision33,
+renvv_-1RNoLMZlQuzs69jPlvKZPLM, binding13. Все8 non-image hashes сохранились,
+tools38/config9. Actual SYSTEM Pod оба runtime fd5ae, relayc6ec/Ready/restart0.
+
+Старый SYSTEM conversation cnv_78Aefmx7rfc2KPYWQv9Ff56R успешно продолжен:
+run_I1PkqWilr0sEWh-GlYbb8E3y SUCCEEDED13:07:36UTC. Catalogue/snapshot
+подтвердилиENV33/gen18; git2.39.5/exit0. После ownreload version7/6turns,
+transcript13288B/hash4e8b7550…de49 сохранился. Safe RUN preview200 complete,
+diagnostics[]; full материализацию этим запросом не проверяли.
+Chrome MCP page5 OWNER/Console0 послеreload; ошибочный ROOT read405 отдельно
+сохранён. Fresh-auth403 validation guard штатно пройден через собственный OIDC
+Playwright. Чужие вкладки не менять; list/reload не гарантируют approval.
+
+§31 current signed staff inventory подтверждён: required38/38VERIFIED,
+8MISSING только optional, пересечение с обязательными пустое.
+Business1796 остаётся semantic BLOCKED на exact upstream transport/credential
+evidence; Developer/ОДИН Reviewer/Manager/owner gate NOT RUN. Не обходить
+denied source другим transport, не реализовывать бизнес-код на host и не
+повторять terminal root вслепую. Далее commit/push1807 этого пакета и
+допустимое снятие evidence blocker; Full65 не завершён, не READY/merge.
+
 ## Checkpoint 10.10.2026 12:44 UTC — child rejoin и mobile disclosure проверены
 
 База HEAD/remote/Draft1807 9d25e938ba2433e3020c61ea5d3da1607f39be5c,

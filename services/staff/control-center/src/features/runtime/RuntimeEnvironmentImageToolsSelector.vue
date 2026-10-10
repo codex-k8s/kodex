@@ -47,6 +47,11 @@ const { t } = useI18n();
 const localizeServerMessage = useServerMessage();
 const artifact = ref<RoleImageArtifact>();
 const selected = ref<RuntimeImageOption>();
+const pinnedImage = computed(() =>
+  props.currentImage?.artifactRef === props.imageArtifactRef
+    ? props.currentImage
+    : undefined,
+);
 const localizedSelected = computed(() =>
   selected.value
     ? { ...selected.value, title: localizeServerMessage(selected.value.title) }
@@ -166,7 +171,7 @@ watch(
       ref: image.artifactRef,
       recipeRef: image.recipeRef,
       generation: image.recipeGeneration,
-      title: t("runtime.exactImage"),
+      title: `${t("runtime.exactImage")} · ${t("roleImages.generationLabel", { generation: image.recipeGeneration })}`,
       description: image.reference,
     };
     selected.value = option;
@@ -219,6 +224,14 @@ async function loadPage(
         @select="select"
       />
     </div>
+    <div
+      v-if="pinnedImage && !artifact && !loading"
+      class="image-tools-selector__pinned"
+    >
+      <span>{{ $t("runtime.exactImage") }}</span>
+      <code>{{ pinnedImage.reference }}</code>
+      <small>{{ pinnedImage.digest }}</small>
+    </div>
     <ProblemNotice v-if="problem" :problem="problem" compact />
     <RuntimeEnvironmentToolsEditor
       :tools="tools"
@@ -242,5 +255,12 @@ async function loadPage(
   display: grid;
   gap: 6px;
   min-width: 0;
+}
+.image-tools-selector__pinned {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
 }
 </style>

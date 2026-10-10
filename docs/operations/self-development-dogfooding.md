@@ -993,3 +993,130 @@ evidence; Developer/ОДИН Reviewer/Manager/owner gate NOT RUN. Full65 OPEN.
 Финансовая регрессия9d25 и успешное продолжение прежнего чата сохранены;
 реальный баланс/списание UNKNOWN, отказ провайдера нельзя игнорировать.
 Далее commit/push/update того же Draft1807; не merge и не READY.
+
+## Checkpoint 10.10.2026 13:10 UTC — SYSTEM image-only доставка и текущий inventory
+
+База HEAD/remote/Draft1807 f72214defe01b15b581051b30b39e3485bf0d593,
+main ab4992e0 unchanged. Предыдущий mobile/rejoin пакет опубликован;
+этот checkpoint не заменяет его доказательства или Full65 бизнес-приёмку.
+
+- PASS: Chrome MCP page5 действительно подключён, OWNER bootstrap200;
+  чужие вкладки не менялись. Обычный SSO выполнен владельцем. Для штатной
+  validation SYSTEM ENV потребовался свежий вход: FRESH_AUTHENTICATION_REQUIRED403
+  сохранён как ожидаемый guard; собственный Playwright прошёл штатный OIDC
+  reauth и продолжил сохранённый draft, без обхода guard.
+- Найден независимый delivery gap: SYSTEM recipe generation17/образ22218338
+  ещё использовал старый runner5a99670a, хотя PROJECT и команда уже обновлены.
+  Native UI изменил только FROM на c6ec9a50…efdc3b, создал generation18,
+  build imgbld_R5KFuN87WHY62jBIqpyvTHvW COMPLETED12:52:53 UTC
+  (16:52:53 по local screen); admission ACCEPTED и promotion PROMOTED.
+  Никакой повторной сборки или ручного изменения admission не выполнялось.
+  Recipe imgrec_8fwVelZAPPnm993yRFYLuoc5 version32;
+  artifact imgart_KPX-_ScTrJtWjil9_H14zDxH;
+  digest sha256:fd5ae21444cb74db4190fedd8d73588e482bd950b9c615c20ccca95c28bcea15.
+- PASS: draft renvd_N9Dm3_b9K418X_7rybDDPsJI VALID; impact ровно1 intended
+  consumer. Native Validate/Impact/Publish создали SYSTEM ENV revision33,
+  renvv_-1RNoLMZlQuzs69jPlvKZPLM, binding aenv_ooM08gNXkIDvyuBqJfnv87DD
+  version13. Owner runtime-configuration200 подтвердил exact новый artifact,
+  generation18, digest и binding versionRef. Все8 non-image SHA256 равны
+  исходным: tools/values/secretDescriptors/policy/configuration/memoryBindings/
+  skillBindings/publishedOverlay. Tools38, config version9 не менялись.
+  Draft policy fingerprint отличается от published shape из-за серверной
+  нормализации; фактический опубликованный policy SHA совпал с исходным.
+- PASS: реальный SYSTEM Pod system-assistant-warm использовал новый roles
+  digest fd5ae…ea15 в role-runtime/provider-runtime и relay c6ec…dc3b;
+  все3 Ready, restart0. Это подтверждение доставки, не само по себе QA PASS.
+- PASS: старый SYSTEM диалог cnv_78Aefmx7rfc2KPYWQv9Ff56R продолжен
+  естественным READ-only запросом без refs. Run run_I1PkqWilr0sEWh-GlYbb8E3y
+  SUCCEEDED/v2, 13:06:55.216985–13:07:36.270323 UTC. Собственные catalogue и
+  execution_snapshot подтвердили ENV33/образgeneration18/digestfd5ae;
+  git --version →2.39.5/exit0. Нет планов, мутаций, делегирования или
+  запуска сотрудников/процессов. Commentary/4tools/FINAL пришли без reload.
+- PASS: после own reload SYSTEM conversation version7/6turns, последние2
+  COMPLETED; transcript13288 UTF-8 B/SHA256
+  4e8b755045439cd425e0ebcd94d2cdffb8a3e001d8b416b7160e477010dbde49
+  совпал. Screenshot просмотрен, overflowfalse, fresh Console0, alerts0.
+  RUN safe prompt preview200/complete=true/diagnostics[], sections8,
+  template ins_0vbus7gCexmnDt6kQV8w6zU1/digest
+  f4926f1b566084b89033593f9804e9ec04d04e706c659c769ccc30f070a1d962,
+  materialization e501606b0e495965183927771b40bd3a2423713c3863b3576620d0939d7f0fa5.
+  Полную materialization этим запросом не запрашивали и не выводили.
+  Graph/events200, POSTturn202; периодического refresh списка не наблюдали,
+  отдельный dev-revision poll относится к hot reload. ROOT ошибочный GET
+  conversation405 и неверное scopeKind исправлены в read probes, не приложении.
+  Bounded CP/gateway logs после13:05 пусты — не доказательство всех ошибок0.
+- PASS §31: current staff generation14/artifact imgart_6ryiQzBEL7n9ev_QKI-ReJzv
+  ACCEPTED/PROMOTED, image47d4ca68…aa25, signed inventory VERIFIED/SHA256
+  6113e712be97276749ba4184613f65c706a184c97a764316a8e4fa538a89f9d8,
+  provenance30dda421…c136. Owner GET подтвердил50 observations: все38 required
+  VERIFIED,4 optional VERIFIED;8 optional MISSING — pip, kustomize, buildctl,
+  docker, shellcheck, hadolint, govulncheck, gitleaks. Пересечение MISSING с
+  обязательным списком пусто; последние4 в §31 только «желательно дополнительно».
+  Никакой новой установки/сборки/ИИ-smoke для этого mapping не выполнялось.
+
+Найден отдельный UX дефект выбранного прежнего exact образа: при новой
+recipe generation временно пропадала подпись, а несовпадение current artifact
+показывалось как generic failure. Выбор новой promoted generation восстановил
+inventory; fail-closed guard не ослаблен. Адресный frontend fix ещё OPEN.
+Business1796 по-прежнему BLOCKED на exact upstream transport/credential evidence;
+Developer/ОДИН Reviewer/Manager/owner gate NOT RUN. Full65 не завершён.
+
+## Checkpoint 10.10.2026 13:15 UTC — UX выбранного pinned образа
+
+Поверх f722 принят exact frozen4-file patch; новые API/authority/inventory
+eligibility и dependencies не добавлялись. Exact protected ENV image остаётся
+readonly «Точный образ · Поколение N» с исходными reference/digest, если новый
+recipe candidate уже не равен ему. После scoped identity check отсутствие
+или смена active artifact возвращает IMAGE_ARTIFACT_NOT_CURRENT с действием
+выбрать опубликованную версию, а не generic failure. Candidate не подставлен
+вместо pinned; foreign/ref/inactive/malformed guards сохранены; inventory и
+публикация остаются закрытыми до фактически проверенного нового выбора.
+
+ROOT48unit/2suites2.11s, scoped ESLint/Prettier, forced vue-tsc и production
+Vite7.85s PASS. Прежние fixture common.selectedCount и chunk/plugin warnings
+не скрыты. Post Vue5dd6907b…d8ce/catalogc44a59c8…0e6f7; точные hashes проверены.
+Native актуальнаяSYSTEM форма desktop1828×741/mobile390×844: selector32px,
+38из42, alerts0/overflowfalse; screenshots просмотрены, freshChromeConsole0.
+Живой old-generation error уже снят штатной публикацией до fix: readonly
+error-state доказан адресными units, не новым native mutation/rebuild.
+
+### Сводный отчёт §64 на10.10.2026 — BLOCKED, не итог успешного Full65
+
+Отчёт связывает существующие доказательства с текущим readback; прежние PASS
+не переименованы в полный PASS текущего source или во все новые ИИ-запуски.
+
+| Область | Фактическое состояние | Остаток/граница |
+|---|---|---|
+| Platform | Bootstrap1798 слит в main b5f6fcde; текущий main ab4992e0, Draft1807 исходный headf722. Canonical runner c6ec, CP/RC serving/source proof — checkpoint12:24 | Нынешний frontend пакет ещё подлежит commit/push. Это local dev, не staging/release acceptance |
+| SYSTEM Assistant | ENV33/binding13/config9, собственный recipe18/fd5ae; network/tools38/nonimage8 сохранены. Native catalogue/snapshot/git и oldchat/rejoin PASS, safe prompt complete | Прежние Context7/web/self-configuration proofs сохранены в журнале; не новые повторы всех функциональных ходов. Full materialization нового turn NOT RUN |
+| Project | Kodex \| Dev, prj_XM2a_cP83D3Fl3gM2xIcbjZh, ownerGET200/version1 | Project scope не подменяется организационным |
+| PROJECT Assistant | Собственный imagegen8/9a105 и ENV19/binding18; Context7/GitHub READ/network/prompt pins сохранены. Реальная natural continuation/rejoin PASS12:24 | Подтверждение текущего финансового баланса/списания UNKNOWN |
+| Team | Manager/Architect/Documentation/Security/Lexical reviewENV14/binding15, Developer writeENV14/binding15; общий imagegen14/47d4,38tools. Developer-only write boundary сохранена; ранее шесть role ACK/files/prompt proofs | Current per-role повтор всех Context7 calls не делался. Business Developer/Reviewer ещё NOT RUN; исторические bootstrap proofs не заменяют их |
+| Workflow | SOFTWARE_CHANGE37/rev12,5stages: intake/architecture/implementation/single review/final Manager; published inputs и human gate. Literal delegation/callback и child rejoin доказаны | Один комплексный review TOTAL по GOV-OD-003; опубликованный definition не равен полностью исполненному процессу |
+| Dogfooding1796 | root run_7M7M1dCVTpTg2BcSy1tMcHMo FAILED; Architect semantic BLOCKED на exact upstream source evidence; все9 nodes terminal | Developer branch/commits/businessPR/reviewedSHA/Manager/owner gate NOT RUN. Review cycles фактически0; не инициировать новый root вслепую |
+
+Открытые canonical пункты11/14/15, Full65§38–40/44 detail/51–59 и главный
+критерий§65 не закрыты. Для§4 индивидуальные calls каждой роли и§44 полный
+tuple Developer review-fix-response не восстановлены из кратких checkpoints:
+UNKNOWN detail, не свежий PASS по прежним checklist[x]. §31 current38 tools
+уточнён фактическим signed inventory выше, независимый SYSTEM delivery gap закрыт.
+
+Defects discovered и проверки находятся в датированных checkpoints этого
+журнала и lossless архиве: UTF-8 materialization/read, bounded thread resume,
+partial-history rejoin, workflow frontier, readable child transcript/mobile
+profile и pinned-image selection. У каждого сохранены исходный отказ/причина,
+точная область исправления и границы проверки; никакого скрытого bypass.
+
+Для дальнейшего business1796 нужен доступный native Architect полный
+version-pinned public transport/credential evidence через штатный разрешённый
+input/catalog либо отдельное authority/scope решение владельца. Denied URL
+не получать другим transport/credential; бизнес-код не писать вместо команды.
+После этого Developer → один Reviewer → Manager → единственный owner gate.
+Итог текущего полного эксперимента: **BLOCKED**, не READY_FOR_HUMAN_REVIEW;
+Draft1807 и будущий businessPR не слиты, реальные кредиты не объявлены проверенными.
+
+Четыре post source/Pod SHA256 совпали; local diff-check PASS. Lossless verifier
+с previous f722 подтвердил prefix/13files/source1159280B/active113231B.
+Первый вызов отклонил новый недатированный H2 отчёта как CHECKPOINT_APPEND_INVALID;
+он исправлен на H3 внутри текущего checkpoint, verifier PASS. Исторический
+хвост/архив и applied evidence не менялись. Далее clean commit/push1807.

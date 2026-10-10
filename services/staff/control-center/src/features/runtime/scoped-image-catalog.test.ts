@@ -61,6 +61,62 @@ function reader() {
 const signal = () => new AbortController().signal;
 
 describe("Каталог допущенных образов в точной области", () => {
+  it.each(["missing", "replaced", "unpublished"])(
+    "смена опубликованного образа %s возвращает typed conflict, не candidate",
+    async (state) => {
+      const api = reader();
+      const next = { ...artifact, ref: "artifact_next", recipeGeneration: 3 };
+      api.read.mockResolvedValue({
+        recipe: {
+          ...recipe,
+          activeImageArtifactRef:
+            state === "missing"
+              ? undefined
+              : state === "unpublished"
+                ? artifact.ref
+                : next.ref,
+          promotedImageReady: state !== "unpublished",
+        },
+        builds: [],
+        activeArtifact:
+          state === "missing"
+            ? undefined
+            : state === "unpublished"
+              ? artifact
+              : next,
+        promotionCandidate: next,
+      });
+      await expect(
+        createScopedRuntimeImageCatalog(
+          scope.organizationRef,
+          api,
+        ).loadArtifact(scope, recipe.ref, artifact.ref, signal()),
+      ).rejects.toMatchObject({
+        code: "IMAGE_ARTIFACT_NOT_CURRENT",
+        kind: "conflict",
+        retryable: false,
+      });
+    },
+  );
+  it("чужой или подменённый рецепт без activeArtifact не получает объяснение обычной смены image", async () => {
+    for (const invalid of [
+      { ...recipe, organizationRef: "org_foreign" },
+      { ...recipe, ref: "recipe_other" },
+    ]) {
+      const api = reader();
+      api.read.mockResolvedValue({
+        recipe: invalid,
+        builds: [],
+        activeArtifact: undefined,
+      });
+      await expect(
+        createScopedRuntimeImageCatalog(
+          scope.organizationRef,
+          api,
+        ).loadArtifact(scope, recipe.ref, artifact.ref, signal()),
+      ).rejects.not.toMatchObject({ code: "IMAGE_ARTIFACT_NOT_CURRENT" });
+    }
+  });
   it.each([recipe.ref, artifact.promotedReference])(
     "сохраняет поиск по полному ref рецепта и image reference",
     async (query) => {
