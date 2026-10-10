@@ -535,9 +535,9 @@ kubectl() {
         terminal_job = {'items': [{'kind': 'Job', 'status': {
             'succeeded': 1, 'conditions': [{'type': 'Complete', 'status': 'True'}]}}]}
         workloads = ('control-api-gateway', 'image-admission-controller', 'role-image-builder',
-                     'runtime-controller', 'control-plane')
+                     'runtime-controller', 'control-plane', 'artifact-retention')
         before_stop = ['idle-1', 'inventory-0']
-        after_stop = before_stop + ['apply-' + name for name in workloads] + ['inventory-5']
+        after_stop = before_stop + ['apply-' + name for name in workloads] + ['inventory-6']
         complete = after_stop + ['idle-2'] + ['readback-' + name for name in workloads]
         cases = [('empty', empty, '0', empty, '0', None, complete)]
         for name, inventory in (
@@ -821,7 +821,7 @@ image_admission_policy_owner_coherent=true
 trap cleanup_on_exit EXIT
 ''' + block
         workloads = ('control-api-gateway', 'image-admission-controller', 'role-image-builder',
-                     'runtime-controller', 'control-plane')
+                     'runtime-controller', 'control-plane', 'artifact-retention')
         phases = ['idle-1', 'empty-1'] + ['apply-' + name for name in workloads] + \
             ['empty-2', 'idle-2'] + ['readback-' + name for name in workloads]
         for failed in phases + ['']:

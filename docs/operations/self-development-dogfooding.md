@@ -1172,3 +1172,55 @@ Fresh runner full builder/provenance обязателен из-за изменё
 Old helper image не меняется только ради opcode: новые runtime/admission pins
 должны подтвердить его действующую eligibility. Новый runner OCI, live migration,
 activation, fresh AI natural update и full65QA NOT RUN; checkbox не менялись.
+
+## Checkpoint 10.10.2026 03:38 UTC — доставка retention и свежий runner
+
+ROOT c273ea988828e2039a76b6062f12398aea2a0c14 опубликован в Draft1807,
+remote exact EQUAL, mainab4992e0 прежний. Fresh canonical full runner build/
+provenance/import обеих нод PASS: sourcec273, provenance5bef0db7…de42de,
+ELF37608805…a2ea3 и manifest a39ef63e…4bcf4 реально не изменились. Это
+новая проверка текущего source, не перенос старого proof. После следующего
+commit нужен свежий sourceRevision proof даже при OCI cache hit.
+
+Узкий frozen delivery3file packet принят через apply_patch: pre/post3/3 EQUAL,
+ownedTree0eff1844…7223. Quiesce охватывает6 consumers; первое отсутствие
+retention требует exact Deployment/Pod/RS inventory и повторного snapshot,
+API errors/race закрыто отклоняются. Selected core доставляет только worker
+foundation/runtime CM/Deployment; Completed exact migration того же render
+обязательна до apply/readback. ROOT8targeted tests PASS1.633s, cutover22PASS
+и1optionalPG SKIP15.361s,6selectors/65resources, Bash/ShellCheck PASS.
+Applied migrations не менялись, замороженный backend171 не изменён.
+
+Fresh reboot readback:2nodesReady,42workloadsReady; /133GiB,/data31GiB
+свободно, volumes/fresh caches не удалялись. Completed promote Job02:38:17
+со штатным TTL3600 исчез03:38:25, managed Job/PVC inventory0. Удаления
+вручную и обхода inventory guards не было. Новый schema/worker serving NOT RUN.
+
+Own91439 OWNER, Files1440, safe reload03:37. Native Artifact GET503/UNAVAILABLE
+до activation, Project/bootstrap200; экран неверно показывает пустой список
+вместо ошибки. Это FAIL UX, не потеря доказанного baseline файла. Отдельно
+готовится bounded typed initial load/error/retry с сохранением уже показанных
+строк; entity polling не добавляется. Screenshot просмотрен, overflowfalse;
+Console cumulative31error/0warning/0pageerror, новый503 не объявлен PASS.
+Chrome1283/1292 timeout300s,1311 pending; MCP подключение не доказано.
+Чужие вкладки не закрывались. Natural file update/full65QA остаются OPEN.
+
+## Checkpoint 10.10.2026 03:42 UTC — Files error/retry проверены на hot reload
+
+От базыc273 принят exact4file frontend packet: pre/post4/4 EQUAL,
+patch5a05e450…cc6fa. ACTIVE без авторитетного snapshot делает одно typed list
+чтение; успешный пустой snapshot не вызывает GET. Explicit refresh/retry
+сохраняет строки при503, denial закрыто очищает данные; filter/query reset и
+append412 прежние. Generation/abort/dispose отклоняют late ACK, polling нет.
+ROOT4suites/50tests PASS2.35s, scoped ESLint/Prettier PASS; forced typecheck и
+production build2791modules PASS7.70s, chunk/plugin warnings сохранены.
+Context7 /websites/vuejs lifecycle/cleanup проверен основным агентом.
+
+Native own91439: reload03:40, Files1440 screenshot просмотрен. List503 теперь
+отображает alert «Функция временно недоступна» и активную кнопку «Повторить»,
+ложного empty нет, overflowfalse. Кнопка действительно нажата, отказ не скрыт;
+backend list остаётся UNAVAILABLE до activation. Console cumulative49error,
+0warning/0pageerror включает bounded повторные503, не Console0. Сохранение
+строк и stale ACK пока доказаны unit, native successful list ещё NOT RUN.
+Следующий шаг: clean commit/push этих9файлов, fresh runner proof/render,
+canonical quiesce/supply-chain/migration и selected retention. Full QA OPEN.

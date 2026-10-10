@@ -10,6 +10,44 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 03:42 UTC — оба узких пакета приняты
+
+Текущее дерево: c273 +9owned files (delivery3, Files4, journal/handoff2).
+Все exact pre/post guards PASS. ROOT delivery8/22, frontend50unit/typecheck/
+build2791/lintformat PASS; optionalPG SKIP, buildwarnings сохранены.
+Native Files1440 alert/retry вместо ложного empty подтверждён screenshot/
+DOM/кликом; успешное чтение после migration пока NOT RUN. Own91439 OWNER,
+reload03:40. Chrome1311 pending, предыдущие timeout не считать MCP доступом.
+
+После clean commit/push: свежий cached canonical runner/provenance/import,
+render-current-local на точном новом SHA (Go1.26.6 scoped PATH/GOROOT),
+quiesce apply/readback→supply-chain apply/readback→selected retention core
+apply/readback. Admission Job/PVC0 после естественного TTL. После exact schema/
+serving/pins proof проверить baseline file и обычный natural update в том же
+чате безIDs; native Validate/Apply exact receipt/new immutable revision того же
+Artifact и сохранение old content/hash/pins. Full65QA/Workflow11/14/15/16 OPEN.
+
+## Checkpoint 10.10.2026 03:38 UTC — delivery принят, activation следующий
+
+ROOT c273ea98 опубликован; дополнительно приняты3 delivery files с exact
+pre/post/ownedTree0eff1844…7223. ROOT8new/22cutover PASS, optionalPG SKIP,
+selectors/Bash/ShellCheck PASS. Quiesce6consumers, retention bootstrap absence
+доказуемый; selected worker core требует exact Completed migration того же render.
+Frozen171 не изменён. Fresh c273 full runner/provenance/import PASS, реально
+manifest a39…/ELF376… прежние; после clean final commit reverify sourceRevision.
+Managed admission Job/PVC inventory0 после штатного TTL03:38, не ручного удаления.
+
+До fresh render/deploy ждёт narrow frontend loading error packet от
+file_revision_scan_followup: Files ACTIVE no snapshot не делает list, bootstrap
+problem скрыт, поэтому native503 показывает «Файлов пока нет». Исправляется
+bounded typed initial load/retry preserving rows без polling. Это native FAIL;
+после adoption повторить50targeted unit/typecheck/lint и настоящий экран.
+Затем clean commit/push, cached fresh runner, render, canonical quiesce apply/
+readback→supply-chain apply/readback→selected retention core apply/readback.
+Не запускать AI до exact serving/migration/image eligibility proof.
+Own91439 OWNER, reload03:37, Files1440. Chrome1311 pending после двух timeout.
+Full65QA/immutable natural file update/Workflow11/14/15/16 ещё OPEN.
+
 ## Checkpoint 10.10.2026 03:23 UTC — source принят, activation ещё впереди
 
 Base3352cd9e, та же ветка/Draft1807/Issue1797. Backend171 posthash exact

@@ -47,6 +47,99 @@ afterEach(() => {
 });
 
 describe("useAsyncEntityCollection", () => {
+  it("явный refresh сохраняет snapshot при UNAVAILABLE и заменяет его после retry", async () => {
+    vi.useFakeTimers();
+    const unavailable = new AppProblem({
+      status: 503,
+      code: "UNAVAILABLE",
+      kind: "unavailable",
+      retryable: true,
+    });
+    const loader = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: [{ id: "old", label: "Прежний" }],
+        total: 1,
+        nextCursor: "old-cursor",
+      })
+      .mockRejectedValueOnce(unavailable)
+      .mockResolvedValueOnce({
+        items: [{ id: "new", label: "Новый" }],
+        total: 1,
+      });
+    const scope = effectScope();
+    const collection = scope.run(() => useAsyncEntityCollection(loader));
+    if (!collection) throw new Error("Missing collection");
+    await vi.runAllTimersAsync();
+    collection.refreshPreservingItems();
+    expect(collection.items.value.map((item) => item.id)).toEqual(["old"]);
+    expect(collection.total.value).toBe(1);
+    expect(collection.hasMore.value).toBe(false);
+    await vi.runAllTimersAsync();
+    expect(collection.items.value.map((item) => item.id)).toEqual(["old"]);
+    expect(collection.error.value).toBe(unavailable);
+    collection.refreshPreservingItems();
+    await vi.runAllTimersAsync();
+    expect(collection.items.value.map((item) => item.id)).toEqual(["new"]);
+    expect(collection.error.value).toBeUndefined();
+    collection.query.value = "другой";
+    expect(collection.items.value).toEqual([]);
+    scope.stop();
+  });
+
+  it.each(["unauthorized", "forbidden", "not-found"] as const)(
+    "явный refresh очищает snapshot после %s",
+    async (kind) => {
+      vi.useFakeTimers();
+      const loader = vi
+        .fn()
+        .mockResolvedValueOnce({
+          items: [{ id: "old", label: "Прежний" }],
+          total: 1,
+        })
+        .mockRejectedValueOnce(
+          new AppProblem({
+            status: 403,
+            code: "FORBIDDEN",
+            kind,
+            retryable: false,
+          }),
+        );
+      const scope = effectScope();
+      const collection = scope.run(() => useAsyncEntityCollection(loader));
+      if (!collection) throw new Error("Missing collection");
+      await vi.runAllTimersAsync();
+      collection.refreshPreservingItems();
+      await vi.runAllTimersAsync();
+      expect(collection.items.value).toEqual([]);
+      expect(collection.total.value).toBeUndefined();
+      expect(collection.phase.value).toBe("error");
+      scope.stop();
+    },
+  );
+
+  it("свежий snapshot отменяет сохраняющий refresh и не принимает его поздний ответ", async () => {
+    vi.useFakeTimers();
+    const old = deferred<AsyncEntityPage<TestItem>>();
+    const loader = vi.fn().mockReturnValue(old.promise);
+    const scope = effectScope();
+    const collection = scope.run(() =>
+      useAsyncEntityCollection<TestItem>(loader, { immediate: false }),
+    );
+    if (!collection) throw new Error("Missing collection");
+    collection.refreshPreservingItems();
+    await vi.advanceTimersByTimeAsync(0);
+    collection.applySnapshot({
+      items: [{ id: "fresh", label: "Свежий", revision: 2 }],
+    });
+    const request = loader.mock.calls[0]?.[0] as AsyncEntityLoadRequest;
+    expect(request.signal.aborted).toBe(true);
+    old.resolve({ items: [{ id: "late", label: "Поздний", revision: 1 }] });
+    await vi.runAllTimersAsync();
+    expect(collection.items.value.map((item) => item.id)).toEqual(["fresh"]);
+    scope.stop();
+  });
+
   it("сохраняет серверный total и сбрасывает его вместе с query snapshot", async () => {
     vi.useFakeTimers();
     const loader = vi

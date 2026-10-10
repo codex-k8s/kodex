@@ -191,7 +191,8 @@ const {
   loadingMore,
   query,
   total,
-  refresh,
+  refresh: resetCollection,
+  refreshPreservingItems: refresh,
   applySnapshot,
 } = collection;
 
@@ -550,7 +551,7 @@ watch(activeTab, () => {
 watch([activeTab, kind, scanState, source], () => {
   selectedRef.value = "";
   selectedRefs.value = [];
-  if (!applyRealtimeSnapshot()) refresh();
+  if (!applyRealtimeSnapshot()) resetCollection();
 });
 watch(query, (value) => {
   if (!value.trim()) applyRealtimeSnapshot();
@@ -561,7 +562,7 @@ watch(
   () => {
     selectedRef.value = "";
     selectedRefs.value = [];
-    if (!applyRealtimeSnapshot()) refresh();
+    if (!applyRealtimeSnapshot()) resetCollection();
   },
 );
 
@@ -1091,7 +1092,7 @@ function closePreview(): void {
 }
 
 onMounted(() => {
-  if (!applyRealtimeSnapshot() && trashMode.value) refresh();
+  if (!applyRealtimeSnapshot()) refresh();
 });
 onBeforeUnmount(() => {
   disposed = true;
@@ -1436,7 +1437,7 @@ onBeforeUnmount(() => {
     />
 
     <AsyncState
-      :loading="initialLoading"
+      :loading="initialLoading && items.length === 0"
       :problem="items.length === 0 ? listProblem : undefined"
       :empty="items.length === 0 && !hasMore && !query.trim()"
       :empty-title="$t('files.emptyTitle')"

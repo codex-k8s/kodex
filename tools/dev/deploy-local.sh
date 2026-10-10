@@ -49,7 +49,7 @@ if [[ -n "$selected_workload" ]]; then
     [[ "$selected_workload" == control-plane-migrate || "$selected_workload" == control-plane-broker-bootstrap ]] ||
       fail 'migration workload selection requires control-plane-migrate or control-plane-broker-bootstrap'
   else
-    [[ "$stage" == core && "$selected_workload" =~ ^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|integration-synthetic|email-bridge|stt-tts-service|clamav-db-updater|session-archive)$ ]] ||
+    [[ "$stage" == core && "$selected_workload" =~ ^(control-plane|control-api-gateway|staff-control-center|egress-gateway|secret-broker|automation-scheduler|integration-gateway|integration-synthetic|email-bridge|stt-tts-service|clamav-db-updater|session-archive|artifact-retention)$ ]] ||
       fail 'workload selection requires an exact core deployment'
   fi
 fi
@@ -468,10 +468,43 @@ readback_local_quiesced_pods() {
 }
 
 quiesce_local_supply_chain_workload() {
-  local workload=$1 deployment uid resource_version replicas selector attempt stopped_spec pods final_pods
+  local workload=$1 deployment uid resource_version replicas selector attempt stopped_spec pods final_pods inventory
   declare -gA supply_chain_quiesce_uids supply_chain_quiesce_specs
-  case "$workload" in control-api-gateway|image-admission-controller|role-image-builder|runtime-controller|control-plane) ;;
+  case "$workload" in control-api-gateway|image-admission-controller|role-image-builder|runtime-controller|control-plane|artifact-retention) ;;
     *) fail 'supply-chain quiesce workload is invalid' ;; esac
+  if [[ "$workload" == artifact-retention ]]; then
+    # Первый запуск допускает только доказанное отсутствие exact Deployment и
+    # его Pod/ReplicaSet consumers. Ошибка API и неизвестный inventory не absence.
+    inventory=$(kubectl -n "$namespace" get deployments --field-selector metadata.name=artifact-retention -o json) ||
+      fail 'artifact retention bootstrap Deployment inventory is unavailable'
+    jq -e --arg namespace "$namespace" '
+      (.kind == "List" or .kind == "DeploymentList") and
+      (.metadata.continue // "") == "" and (.metadata.remainingItemCount // 0) == 0 and
+      (.items | type == "array" and length <= 1) and
+      all(.items[]; .kind == "Deployment" and .metadata.namespace == $namespace and
+        .metadata.name == "artifact-retention")
+    ' <<<"$inventory" >/dev/null || fail 'artifact retention bootstrap Deployment inventory is invalid'
+    if jq -e '.items | length == 0' <<<"$inventory" >/dev/null; then
+      [[ -z "${supply_chain_quiesce_retention_inventory:-}" ||
+        "$supply_chain_quiesce_retention_inventory" == ABSENT ]] ||
+        fail 'artifact retention bootstrap Deployment inventory changed'
+      inventory=$(kubectl -n "$namespace" get replicasets,pods -l app.kubernetes.io/name=artifact-retention -o json) ||
+        fail 'artifact retention bootstrap consumer inventory is unavailable'
+      jq -e '(.kind == "List") and (.metadata.continue // "") == "" and
+        (.metadata.remainingItemCount // 0) == 0 and (.items | type == "array" and length == 0)' \
+        <<<"$inventory" >/dev/null || fail 'artifact retention bootstrap consumers are not absent'
+      inventory=$(kubectl -n "$namespace" get deployments --field-selector metadata.name=artifact-retention -o json) ||
+        fail 'artifact retention bootstrap final Deployment inventory is unavailable'
+      jq -e '(.kind == "List" or .kind == "DeploymentList") and (.metadata.continue // "") == "" and
+        (.metadata.remainingItemCount // 0) == 0 and (.items | type == "array" and length == 0)' \
+        <<<"$inventory" >/dev/null || fail 'artifact retention bootstrap final Deployment inventory changed'
+      supply_chain_quiesce_retention_inventory=ABSENT
+      return
+    fi
+    [[ "${supply_chain_quiesce_retention_inventory:-EXISTS}" == EXISTS ]] ||
+      fail 'artifact retention bootstrap Deployment inventory changed'
+    supply_chain_quiesce_retention_inventory=EXISTS
+  fi
   deployment=$(kubectl -n "$namespace" get "deployment/$workload" -o json) ||
     fail 'supply-chain quiesce Deployment is unavailable'
   jq -e --arg namespace "$namespace" --arg workload "$workload" '
@@ -759,6 +792,67 @@ readback_local_supply_chain_deployment_inputs() {
      images: [.spec.containers[], .spec.initContainers[]? | {name,image}] | sort_by(.name)}
   ') || fail 'supply-chain Deployment input readback failed'
   [[ "$actual" == "$expected" ]] || fail 'supply-chain Deployment input readback mismatch'
+}
+
+require_local_artifact_retention_migration() {
+  local output digest name
+  # Не применяем миграцию из worker rollout: требуется завершённый exact Job
+  # того же render, а прежний Completed Job с другим source не подходит.
+  output=$(filter_render artifact-retention-migration '
+    select(.kind == "Job" and .metadata.namespace == "kodex-system" and
+      .metadata.name == "control-plane-migrate")
+  ')
+  yq -o=json -I=0 '.' "$output" | jq -se 'length == 1' >/dev/null ||
+    fail 'artifact retention migration render is ambiguous'
+  digest=$(sha256sum "$output" | awk '{print $1}')
+  name="control-plane-migrate-${digest:0:12}"
+  kubectl -n "$namespace" get "job/$name" -o json | jq -e --arg name "$name" --arg digest "$digest" '
+    .kind == "Job" and .metadata.namespace == "kodex-system" and .metadata.name == $name and
+    .metadata.deletionTimestamp == null and
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+    .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster" and
+    .metadata.annotations["kodex.dev/job-input-sha256"] == $digest and
+    (.status.succeeded // 0) == 1 and (.status.active // 0) == 0 and
+    any(.status.conditions[]?; .type == "Complete" and .status == "True") and
+    all(.status.conditions[]?; .type != "Failed" or .status != "True")
+  ' >/dev/null || fail 'artifact retention requires the completed exact control plane migration'
+}
+
+readback_local_artifact_retention() {
+  local expected actual
+  # Worker возобновляется только явно после forward migrations. Нулевой rollout
+  # не считается Ready, а проверка source inputs не является доказательством ELF.
+  expected=$(yq -o=json -I=0 '
+    select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+      .metadata.name == "artifact-retention-runtime")
+  ' "$render" | jq -scS 'if length == 1 then .[0] | {data,immutable} else error("retention configuration is ambiguous") end') ||
+    fail 'artifact retention runtime configuration is invalid'
+  actual=$(kubectl -n "$namespace" get configmap/artifact-retention-runtime -o json |
+    jq -cS 'if .kind != "ConfigMap" or .metadata.namespace != "kodex-system" or
+      .metadata.name != "artifact-retention-runtime" or .metadata.deletionTimestamp != null or
+      .metadata.labels["app.kubernetes.io/part-of"] != "kodex" or
+      .metadata.labels["kodex.dev/local-profile"] != "hot-reload" or
+      .metadata.labels["kodex.dev/security-profile"] != "trusted-cluster"
+      then error("retention configuration owner mismatch") else {data,immutable} end') ||
+    fail 'artifact retention runtime configuration readback failed'
+  [[ "$actual" == "$expected" ]] || fail 'artifact retention runtime configuration readback mismatch'
+  WORKLOAD=artifact-retention yq -o=json -I=0 '
+    select(.kind == "Deployment" and .metadata.namespace == "kodex-system" and
+      .metadata.name == strenv(WORKLOAD)) | .spec.replicas
+  ' "$render" | jq -se 'length == 1 and .[0] == 1' >/dev/null ||
+    fail 'artifact retention rendered replica count is invalid'
+  kubectl -n "$namespace" get deployment/artifact-retention -o json | jq -e '
+    .metadata.namespace == "kodex-system" and .metadata.name == "artifact-retention" and
+    .metadata.deletionTimestamp == null and
+    .metadata.labels["app.kubernetes.io/part-of"] == "kodex" and
+    .metadata.labels["kodex.dev/local-profile"] == "hot-reload" and
+    .metadata.labels["kodex.dev/security-profile"] == "trusted-cluster" and
+    .spec.replicas == 1 and .status.observedGeneration == .metadata.generation and
+    .status.replicas == 1 and .status.updatedReplicas == 1 and
+    .status.readyReplicas == 1 and .status.availableReplicas == 1
+  ' >/dev/null || fail 'artifact retention worker is not exactly ready'
+  readback_local_supply_chain_deployment_inputs artifact-retention
 }
 
 reconcile_local_immutable_image_admission_policy() {
@@ -2010,13 +2104,13 @@ PY
     # Проверяем inventory до первого stop; повтор ниже закрывает гонку с writers.
     require_empty_local_image_admission_runs
     for workload in control-api-gateway image-admission-controller role-image-builder \
-      runtime-controller control-plane; do
+      runtime-controller control-plane artifact-retention; do
       quiesce_local_supply_chain_workload "$workload"
     done
     require_empty_local_image_admission_runs
     require_idle_local_supply_chain_owner
     for workload in control-api-gateway image-admission-controller role-image-builder \
-      runtime-controller control-plane; do
+      runtime-controller control-plane artifact-retention; do
       mode=readback quiesce_local_supply_chain_workload "$workload"
     done
     exit 0
@@ -2349,6 +2443,9 @@ PY
       fail 'role image builder Pod toolchain does not match the admission policy'
   fi
   if [[ "$stage" == core ]]; then
+    if [[ "$selected_workload" == artifact-retention ]]; then
+      require_local_artifact_retention_migration
+    fi
     if [[ "$mode" == apply ]]; then
       if [[ "$selected_workload" == session-archive ]]; then
         # Worker находится в runtime namespace: Secret не наследуется из system.
@@ -2404,6 +2501,20 @@ PY
           '
           ;;
       esac
+      if [[ "$selected_workload" == artifact-retention ]]; then
+        apply_render artifact-retention-foundation '
+          select(.metadata.namespace == "kodex-system" and
+            (((.kind == "ServiceAccount" or .kind == "Service" or .kind == "PodDisruptionBudget") and
+              .metadata.name == "artifact-retention") or
+             (.kind == "NetworkPolicy" and
+              (.metadata.name == "artifact-retention-deny-all" or
+               .metadata.name == "artifact-retention-exact-runtime-paths"))))
+        '
+        apply_render artifact-retention-runtime-configuration '
+          select(.kind == "ConfigMap" and .metadata.namespace == "kodex-system" and
+            .metadata.name == "artifact-retention-runtime")
+        '
+      fi
       if [[ -z "$selected_workload" || "$selected_workload" == clamav-db-updater ]]; then
         apply_render clamav-db-updater-foundation '
           select((.kind == "ServiceAccount" and .metadata.name == "clamav-db-updater") or
@@ -2456,7 +2567,12 @@ PY
           select(.kind == "ConfigMap" and .metadata.name == "integration-gateway-runtime")
         '
       fi
-      if [[ "$selected_workload" == clamav-db-updater ]]; then
+      if [[ "$selected_workload" == artifact-retention ]]; then
+        apply_render artifact-retention-deployment '
+          select(.kind == "Deployment" and .metadata.namespace == "kodex-system" and
+            .metadata.name == "artifact-retention")
+        '
+      elif [[ "$selected_workload" == clamav-db-updater ]]; then
         :
       elif [[ -n "$selected_workload" ]]; then
         apply_render core-application "select(.kind == \"Deployment\" and .metadata.name == \"$selected_workload\")"
@@ -2476,12 +2592,16 @@ PY
         fail 'ClamAV egress gateway is unavailable'
     fi
     for workload in egress-gateway control-plane secret-broker control-api-gateway \
-      staff-control-center automation-scheduler integration-gateway integration-synthetic email-bridge stt-tts-service session-archive; do
+      staff-control-center automation-scheduler integration-gateway integration-synthetic email-bridge stt-tts-service session-archive artifact-retention; do
       [[ "$workload" != stt-tts-service || "$selected_workload" == stt-tts-service ]] || continue
       [[ "$workload" != session-archive || "$selected_workload" == session-archive ]] || continue
+      [[ "$workload" != artifact-retention || "$selected_workload" == artifact-retention ]] || continue
       [[ -z "$selected_workload" || "$selected_workload" == "$workload" ]] || continue
       kubectl -n "$namespace" rollout status "deployment/$workload" --timeout=5m >/dev/null ||
         fail "local core Deployment is unavailable: $workload"
+      if [[ "$workload" == artifact-retention ]]; then
+        readback_local_artifact_retention
+      fi
     done
   fi
   printf 'Kodex trusted-cluster stage completed: %s; application acceptance is not verified\n' "$stage"

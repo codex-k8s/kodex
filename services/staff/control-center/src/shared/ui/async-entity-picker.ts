@@ -154,7 +154,11 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
     controller = undefined;
   }
 
-  async function loadPage(append: boolean, expectedGeneration: number) {
+  async function loadPage(
+    append: boolean,
+    expectedGeneration: number,
+    preserveItems = false,
+  ) {
     if (disposed || expectedGeneration !== generation) return;
     if (append) loadingMore.value = true;
     else initialLoading.value = true;
@@ -220,6 +224,15 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
         return;
       }
       error.value = loadError;
+      if (
+        preserveItems &&
+        loadError instanceof AppProblem &&
+        ["unauthorized", "forbidden", "not-found"].includes(loadError.kind)
+      ) {
+        items.value = [];
+        total.value = undefined;
+        nextCursor.value = null;
+      }
       hasLoaded.value = true;
     } finally {
       if (expectedGeneration === generation) {
@@ -230,25 +243,31 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
     }
   }
 
-  function schedule(delay = debounceMs): void {
+  function schedule(delay = debounceMs, preserveItems = false): void {
     cancelPending();
     generation += 1;
     cursors.clear();
     const expectedGeneration = generation;
-    items.value = [];
-    total.value = undefined;
+    if (!preserveItems) {
+      items.value = [];
+      total.value = undefined;
+    }
     nextCursor.value = null;
     error.value = undefined;
     hasLoaded.value = false;
     initialLoading.value = true;
     timer = setTimeout(() => {
       timer = undefined;
-      void loadPage(false, expectedGeneration);
+      void loadPage(false, expectedGeneration, preserveItems);
     }, delay);
   }
 
   function refresh(): void {
     schedule(0);
+  }
+
+  function refreshPreservingItems(): void {
+    schedule(0, true);
   }
 
   function applySnapshot(page: AsyncEntityPage<T>): void {
@@ -344,6 +363,7 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
     phase,
     query,
     refresh,
+    refreshPreservingItems,
     applySnapshot,
     upsert,
     remove,
