@@ -841,3 +841,21 @@ credentials и не разрешение secret-bearing checkout. До её ре
 Source hot29845e1e/v2, failed business run и Full65 остаются OPEN.
 ROOT focused runtime/MCP race PASS1.322s; platform vet, SQL boundary,
 diff-check и lossless append-only previous b620 verifier PASS.
+
+## Checkpoint 10.10.2026 16:29 UTC — чистый источник миграции и начало rollout
+
+8589a086c4c30e83b9b9c7b7006aee47e3146b78 опубликован, exact remote/PR1807
+readback PASS; initial push readback UNKNOWN из-за задержки GitHub обновления,
+повторное чтение подтвердило SHA без повторного push. Main не менялся, Draft.
+Policy maintenance PLAN/APPLY PASS, gateway временно штатно закрыт; reader
+pause применяется следующим этапом. Новые запуск/Retry/USER_MESSAGE не созданы.
+Policy CLI synthetic17/17 PASS97.542s; это не весь live rollout.
+
+Render/source совместимость исправлена без допуска secret-bearing checkout:
+только пустой ignored/untracked single-link regular `.env` текущего владельца
+с exact0600 допускается как mountpoint обязательной ConfigMap mask. Missing
+placeholder создаётся exclusive anchored/O_NOFOLLOW, existing owner file
+не читается и не меняется. Other private env/symlink/hardlink/foreign owner/mode
+закрыто отклоняются. ROOT Node14/14 PASS3.662s и Python10/10 PASS0.040s,
+включая real clean Git fixture→mask→inspector→frontend prepare.
+Ни migration apply, ни serving producer/core48 здесь ещё не доказаны.

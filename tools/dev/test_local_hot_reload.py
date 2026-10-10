@@ -1,6 +1,7 @@
 """Герметичные проверки identity/source/cache без доступа к Kubernetes."""
 
 import copy
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -111,6 +112,44 @@ class HotReloadContractTest(unittest.TestCase):
         prepare_mask_targets(self.source)
         self.assertEqual(directory.stat().st_mode & 0o777, 0o750)
         self.assertEqual((Path(self.source) / ".kodex-dev").stat().st_mode & 0o777, 0o700)
+
+    def test_prepare_creates_empty_private_env_mountpoint_and_masks_it(self):
+        target = Path(self.source) / ".env"
+        target.unlink()
+        prepare_mask_targets(self.source)
+        self.assertEqual(target.stat().st_size, 0)
+        self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(target.stat().st_uid, os.getuid())
+        before = target.stat()
+        prepare_mask_targets(self.source)
+        self.assertEqual(target.stat().st_ino, before.st_ino)
+        result = materialize(self.resources, *self.arguments)
+        mounts = result[0]["spec"]["template"]["spec"]["containers"][0]["volumeMounts"]
+        self.assertIn({"name": "kodex-local-private-source-mask", "mountPath": "/workspace/.env",
+                       "subPath": "empty", "readOnly": True}, mounts)
+
+    def test_prepare_preserves_existing_owner_env_metadata_and_content(self):
+        target = Path(self.source) / ".env"
+        target.write_bytes(b"synthetic private fixture")
+        target.chmod(0o600)
+        before = target.stat()
+        prepare_mask_targets(self.source)
+        self.assertEqual(target.stat().st_ino, before.st_ino)
+        self.assertEqual(target.stat().st_mode, before.st_mode)
+        self.assertEqual(target.stat().st_mtime_ns, before.st_mtime_ns)
+        self.assertEqual(target.read_bytes(), b"synthetic private fixture")
+
+    def test_prepare_rejects_env_directory_and_symlink_without_overwrite(self):
+        target = Path(self.source) / ".env"
+        target.unlink()
+        target.mkdir()
+        with self.assertRaises(ValueError):
+            prepare_mask_targets(self.source)
+        target.rmdir()
+        target.symlink_to(Path(self.source) / "missing")
+        with self.assertRaises(ValueError):
+            prepare_mask_targets(self.source)
+        self.assertTrue(target.is_symlink())
 
     def test_rejects_missing_or_symlinked_mountpoints(self):
         target = Path(self.source) / ".kodex-dev"

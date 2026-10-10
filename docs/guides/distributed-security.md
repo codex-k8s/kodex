@@ -1602,8 +1602,14 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   credential-free GitHub origin (с `.git` либо без), runtime file access и
   существующие readonly mounts CP/gateway/PWA. Ignored owner-private `.env`
   допускается только по metadata, без чтения, загрузки, переноса или нового
-  mount. Общий protected source inspector не ослабляется. Dockerfile-specific
-  context задаётся deny-all allowlist фактических COPY-входов с последними
+  mount. Общий protected source inspector не допускает secret-bearing env.
+  Единственный структурный env mountpoint нового clean clone — пустой ignored
+  untracked `.env`: regular single-link файл текущего владельца с exact `0600`.
+  Его отсутствие устраняет exclusive anchored create без чтения либо перезаписи
+  existing owner file. Непустой файл, symlink, hardlink, другой владелец/режим или
+  private env другого имени закрыто отклоняется protected inspector; публичные
+  tracked examples не являются runtime input. ConfigMap mask остаётся обязательной.
+  Dockerfile-specific context задаётся deny-all allowlist фактических COPY-входов с последними
   private exclusions; ignore-файл входит в input digest/cache key. Closed COPY
   сам по себе не доказывает исключение private files из передаваемого context.
 - Read-only availability включает не только claimable admission, но и

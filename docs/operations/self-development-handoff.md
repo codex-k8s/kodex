@@ -10,6 +10,15 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 16:29 UTC — штатный rollout начат
+
+Опубликован8589a086; exact Draft1807 readback PASS. Maintenance PLAN/APPLY PASS,
+gateway штатно временно закрыт; reader pause следующий. Clean migration source
+совместимость empty ignored0600 env mountpoint исправлена отдельно, Node14/14
+и Python10/10 PASS. Owner file не читается/не переносится/не меняется, protected
+inspector по-прежнему отвергает secret-bearing env. Fresh render/apply впереди.
+Policy CLI17/17 PASS97.542s, live полный rollout ещё NOT RUN.
+
 ## Checkpoint 10.10.2026 16:24 UTC — startup и idle source fixes готовы
 
 После b620 подготовлены stale-only native CP managed MCP startup recovery и

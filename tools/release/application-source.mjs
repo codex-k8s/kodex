@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { closeSync, constants, existsSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync } from "node:fs";
+import { closeSync, constants, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { dirname } from "node:path";
 
 const frontendDirectory = "services/staff/control-center";
@@ -66,6 +66,27 @@ function requireValue(condition, code) {
   if (!condition) throw new Error(code);
 }
 
+// Пустой ignored mountpoint нужен existing ConfigMap mask, но не является env input.
+// Только metadata: owner-private содержимое никогда не открывается и не читается.
+function requirePrivateInputsAbsent(root, git) {
+  const names = new Set([".env", ".kodex-env", ".kodex-dev-env", ".kodex-remote-env",
+    ...readdirSync(root).filter((name) => name.startsWith(".env"))]);
+  for (const name of names) {
+    if (name !== ".env" && ![".kodex-env", ".kodex-dev-env", ".kodex-remote-env"].includes(name) &&
+        git("ls-files", "--", name) === name) continue; // Только tracked публичные examples.
+    sourceDirectory(root, "", (descriptor) => {
+      let stat;
+      try { stat = lstatSync(`/proc/self/fd/${descriptor}/${name}`); }
+      catch (error) { if (error.code === "ENOENT") return; throw error; }
+      requireValue(name === ".env" && stat.isFile() && stat.nlink === 1 &&
+        stat.size === 0 && stat.uid === process.getuid() && (stat.mode & 0o7777) === 0o600 &&
+        git("ls-files", "--", ".env") === "", "SOURCE_CHECKOUT_NOT_EXACT");
+      try { git("check-ignore", "--quiet", "--", ".env"); }
+      catch { throw new Error("SOURCE_CHECKOUT_NOT_EXACT"); }
+    });
+  }
+}
+
 export function validSource(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) &&
     Object.keys(value).length === 2 && typeof value.path === "string" &&
@@ -92,9 +113,9 @@ export function inspectSource(path, frontend = false) {
   }).trim();
   requireValue(git("rev-parse", "--show-toplevel") === path &&
     ["https://github.com/codex-k8s/kodex.git", "git@github.com:codex-k8s/kodex.git"].includes(git("remote", "get-url", "origin")) &&
-    git("status", "--porcelain", "--untracked-files=all") === "" &&
-    [".env", ".kodex-env", ".kodex-remote-env"].every((name) => !existsSync(`${path}/${name}`)),
+    git("status", "--porcelain", "--untracked-files=all") === "",
   "SOURCE_CHECKOUT_NOT_EXACT");
+  requirePrivateInputsAbsent(path, git);
   const revision = git("rev-parse", "HEAD");
   requireValue(/^[a-f0-9]{40}$/.test(revision), "SOURCE_REVISION_INVALID");
   requireRuntimeAccess(path, git("ls-files", "--stage", "-z"), frontend);
