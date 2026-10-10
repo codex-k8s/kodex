@@ -1239,3 +1239,63 @@ scoped lint/format и Vite build2791modules PASS8.05s, warnings сохранен
 Own91439 reload03:45, затем viewport1440; Chrome1334 pending.
 После этого узкого CSS commit повторить fresh sourceRevision proof/render и
 canonical activation, не применять render прежнего дерева. Full65QA OPEN.
+
+## Checkpoint 10.10.2026 04:08 UTC — activation PASS, revision download FAIL
+
+ROOT0ff2e093af8f635327579e86653be9a0df2ca54c опубликован exact remote/Draft1807;
+Issue1797 OPEN, mainab4992e0 прежний. Fresh full runner/provenance/import
+PASS: source0ff, provenance23060d4a…093d7, OCIa39ef63e…4bcf4, ELF37608805…a2ea3.
+Fresh render V4Y8sQ/sourceFingerprintcca91951…23b, authority revision1.
+Canonical quiesce apply/readback, supply-chain apply/readback и selected
+retention core apply/readback PASS. Exact migration Job control-plane-migrate-
+b04ed81d9c6e succeeded1/failed0: forward12→13→14 реально применены.
+Все43 workloads и2nodes Ready; /133GiB и/data30GiB свободно. Volumes,
+сессии и свежий cache не удалялись; applied migrations не редактировались.
+
+Независимая host Go1.26.6 сборка4бинарей и sha256 фактически работающих
+/proc/PID/exe в Pod EQUAL: CP ea34a9fa…08600, gateway e26e3bdf…8d861,
+RC52cd24ec…61829, retention26499e11…784f. Exact selected host/Pod source
+hashes CP/GW/RC/retention/PWA EQUAL; mount ROOT read-only. Ready и hash
+не подменяют acceptance рабочего API. Frozen backend171 не изменён.
+
+Native Files после reload восстановил baseline art_i2rouMdoEPydz_Izt-NMuQDs:
+metadata/history200, ACTIVE/CLEAN/current arv_d688b6cf98e444a69709ea5b5417657b,
+v1/rev1/4234B/dc0e4965…dc24e. Desktop screenshot просмотрен, overflowfalse,
+кнопки/дата не перекрываются. Но exact revision DOWNLOAD и реальный UI-клик
+получают403 PERMISSION_DENIED. Это FAIL, не успешная immutable выдача.
+Причина: server stream allowlist допускает DownloadArtifact, но пропускает
+DownloadArtifactRevision; клиент и authority registry уже материализованы.
+Нужен exact-method fix с положительным/отрицательным interceptor regression,
+без ослабления user/service actor, fresh admission, digest и resource eligibility.
+
+Own91439 OWNER/reload04:04; cumulativeConsole67error/0warning/0pageerror
+содержит прежние maintenance503 и новый403. После reload fresh list200,
+новых read-window ошибок нет; это не Console0 за всю сессию. Chrome1381
+запрос pending, предыдущие timeout не считать MCP access. Чужие вкладки
+не закрывались. Natural helper update/Apply/old-byte proof и Full65QA OPEN.
+
+## Checkpoint 10.10.2026 04:14 UTC — revision DOWNLOAD/PREVIEW на hot reload PASS
+
+Принят frozen narrow3file packet от0ff: exact pre/post3/3 EQUAL,
+patch8f653ffe…6294/ownedTree66689c69…9e0f. Новый RPC добавлен только в
+точный user server-stream allowlist; actor/credential/admission/digest/grant/
+RLS не расширены. GUIDE0031.7.16 закрепляет полный streaming path invariant.
+Авторский baseline FAIL_EXPECTED, затем unit/race/client/vet PASS; ROOT
+authorization/rpcprincipal/grpc unit PASS0.057/0.043/0.636s. Actual patched
+CP ELF89ff2721…19e69 EQUAL независимой host Go1.26.6 сборке; source hash
+5360427d…3ee76f0 EQUAL Pod. Это dirty-tree hot reload proof, не новый commit.
+
+Native exact revision DOWNLOAD200 и PREVIEW200:4234B и полный
+SHA256dc0e4965c96780bedea572a9c427dc3f6e95caa258c0ca790094dd5b753dc24e
+EQUAL baseline. Реальная кнопка «Скачать версию1» вызвала ту же route200;
+settled screenshot просмотрен, нет alert/overflow. Fresh read window после
+04:12 без HTTP failures; cumulativeConsole68error/0warning/0pageerror содержит
+исторические maintenance/403 и diagnostic405, не Console0. Exact running
+CP/GW logs за2m проверены: structured entries0, не утверждение полноты логов.
+ENV readytrue/blockers0, currentversion16/binding15/image3181591e…cd6815,
+policyc022544f…6236b/38tools/0values/secrets/skills/memory сохранены.
+
+Следующий шаг: clean commit/push этих5files, fresh canonical runner/source
+proof/render и доставка текущего SHA. Потом natural helper update и exact
+owner Apply sameArtifact/newrevision с сохранением oldbytes/history/pins.
+Checklist16/Full65QA остаются OPEN. Chrome1402 pending; own91439 OWNER.

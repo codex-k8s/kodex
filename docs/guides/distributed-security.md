@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.15
-updated: 2026-10-08
+version: 1.7.16
+updated: 2026-10-10
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -313,6 +313,14 @@ context и обращения к owner. Перечень таких методо
 policy. Общий session proof без привязки содержимого не подменяет этот режим.
 Повторный initial request, неверный дайджест, отсутствие mTLS или replay
 закрыто отклоняются. Срок stream ограничен deadline и не продлевает grant.
+
+При добавлении streaming RPC его exact full method и stream shape согласованно
+включаются в реестр authority, client adapter, server allowlist и применимый
+рабочий readiness path. Проверка проходит через фактические stream interceptors
+и generated request/response, а не только handler stub; она сохраняет actor,
+credential, привязку запроса и отзыв до следующего chunk. Неизвестный метод или
+неверная форма stream закрыто отклоняются до обращения к owner. Unary metadata
+readiness либо успешный старый content path не доказывают новый stream path.
 
 Передача большого файла ограничивает размер отдельного chunk и общий размер,
 проверяет размер и checksum полного источника, затем повторяет текущую owner

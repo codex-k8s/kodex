@@ -10,6 +10,42 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 04:14 UTC — узкий streaming fix принят
+
+ROOT0ff+5dirty files: narrowauth3 и journal/handoff2. Exact pre/post3/3 PASS,
+новый method толькоUserActor server-stream; registry/SQL/grants/migrations
+не изменены. ROOT targetedunit3packages PASS, авторскийrace/client/vet PASS.
+ActualpatchedCP ELF89ff2721…19e69 EQUAL independent Go1.26.6, sourcehash
+5360427d…3ee76f0 EQUAL. Native revision DOWNLOAD/PREVIEW200/4234B/full
+digestdc0e4965…dc24e; реальная кнопка route200, screenshot просмотрен.
+Это dirty-tree hot reload acceptance, не новая immutable publication.
+ENVreadytrue/blockers0/current16/binding15/image3181591e/policyc022/38tools
+сохранены; нет нового AI turn. Следующий cleancommit/push samePR1807,
+fresh runnerproof/render и canonical exact-source apply/readback; затем
+natural helper update→owner Validate/Apply→newrevision sameArtifact и oldpins.
+Chrome1402 pending/own91439 OWNER. Full65QA/Workflow11/14/15/16 OPEN.
+
+## Checkpoint 10.10.2026 04:08 UTC — serving активирован, скачать версию нельзя
+
+Последний published ROOT0ff2e093af8f635327579e86653be9a0df2ca54c/Draft1807,
+Issue1797 OPEN/mainab4992e0. Fresh runner proof23060d4a…093d7/import и
+render V4Y8sQ PASS. Canonical quiesce→supply-chain/migration→selected retention
+apply/readback PASS; Job control-plane-migrate-b04ed81d9c6e применил12→13→14.
+2nodes/43workloadsReady, host/Pod selected source и4actual serving ELF EQUAL
+независимой Go1.26.6 сборке. Frozen171 exact, данные baseline сохранены.
+
+Native baseline metadata/history200, но revision DOWNLOAD403 PERMISSION_DENIED
+также через реальную кнопку: server stream allowlist не включает новый RPC.
+platform_resync_diagnostics готовит narrow exact-method + auth-negative packet
+в isolated /home/s/.cache/kodex-artifact-download.zkIOcc/source от0ff.
+ROOT source не изменяет. Принять только после exact pre/post/targeted tests;
+коммит/push samePR, fresh canonical proof/render/apply/readback. Не расширять
+permissions/actor/grant/RLS и не обходить eligibility. Затем actual bytes SHA
+старой версии и natural helper update→native owner Validate/Apply→new revision
+sameArtifact + old bytes/history/pins. До этого нового AI turn не запускать.
+Own91439 OWNER/Files1440/reload04:04; Chrome1381 pending, MCPнеподключён.
+Full65QA/Workflow11/14/15/16 остаются OPEN, не объявлять цель завершённой.
+
 ## Checkpoint 10.10.2026 03:46 UTC — последний CSS до activation
 
 f80b3276 опубликован exact remote/Draft1807. Fresh full runner cacheproof

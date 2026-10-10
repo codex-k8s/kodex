@@ -20,7 +20,8 @@ func ServiceIdentityStream(authorizer AdmissionAuthorizer, resolver *rpcprincipa
 			return status.Error(codes.Unavailable, "service stream authorization unavailable")
 		}
 		runtimeServerStream := info.FullMethod == cp.RuntimeWorkService_StreamExecutionArtifact_FullMethodName && !info.IsClientStream && info.IsServerStream
-		userServerStream := info.FullMethod == cp.PlatformCommandService_DownloadArtifact_FullMethodName && !info.IsClientStream && info.IsServerStream
+		userServerStream := (info.FullMethod == cp.PlatformCommandService_DownloadArtifact_FullMethodName ||
+			info.FullMethod == cp.PlatformCommandService_DownloadArtifactRevision_FullMethodName) && !info.IsClientStream && info.IsServerStream
 		serverStream := runtimeServerStream || userServerStream
 		clientStream := (info.FullMethod == cp.PlatformCommandService_UploadArtifact_FullMethodName ||
 			info.FullMethod == cp.PlatformCommandService_UploadOrganizationArtifact_FullMethodName ||
