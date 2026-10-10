@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -382,9 +383,9 @@ func (input RunnerInput) Validate() error {
 		return errors.New("warm runner binding is invalid")
 	}
 	for _, target := range input.DelegationTargets {
-		if !opaqueReferencePattern.MatchString(target.Ref) || strings.TrimSpace(target.Name) == "" || len(target.Name) > 160 ||
-			len(target.Purpose) > 2000 || len(target.RoleDescription) > 2000 || len(target.WorkflowStepName) > 160 ||
-			len(target.Instructions) > 1000 || len(target.ExpectedResult) > 1000 ||
+		if !opaqueReferencePattern.MatchString(target.Ref) || strings.TrimSpace(target.Name) == "" || !validRunnerHumanText(target.Name, 160) ||
+			!validRunnerHumanText(target.Purpose, 2000) || !validRunnerHumanText(target.RoleDescription, 2000) || !validRunnerHumanText(target.WorkflowStepName, 160) ||
+			!validRunnerHumanText(target.Instructions, 1000) || !validRunnerHumanText(target.ExpectedResult, 1000) ||
 			(target.WorkflowStepKey != "" && !workflowStepKeyPattern.MatchString(target.WorkflowStepKey)) {
 			return errors.New("runner delegation catalog is invalid")
 		}
@@ -392,7 +393,7 @@ func (input RunnerInput) Validate() error {
 	if input.AssistantContext != nil {
 		context := input.AssistantContext
 		if !input.IsAssistant() || len(context.Route) > 500 || len(context.EntityKind) > 80 ||
-			len(context.EntityRef) > 96 || len(context.EntityName) > 300 || len(context.AllowedOperations) > 32 ||
+			len(context.EntityRef) > 96 || !validRunnerHumanText(context.EntityName, 300) || len(context.AllowedOperations) > 32 ||
 			(context.EntityKind == "") != (context.EntityRef == "") || context.EntityVersion != nil && *context.EntityVersion < 1 {
 			return errors.New("runner assistant context is invalid")
 		}
@@ -425,6 +426,12 @@ func (input RunnerInput) Validate() error {
 		return errors.New("runner attachment context is invalid")
 	}
 	return nil
+}
+
+// Human-text maxLength считает Unicode-символы; optional пустые поля и отдельные
+// byte budgets сохраняются. Некорректный UTF-8 и NUL не нормализуются.
+func validRunnerHumanText(text string, maximumCharacters int) bool {
+	return utf8.ValidString(text) && !strings.ContainsRune(text, 0) && utf8.RuneCountInString(text) <= maximumCharacters
 }
 
 func containsString(values []string, expected string) bool {
@@ -682,9 +689,10 @@ func validPinnedImage(reference, digest string) bool {
 }
 
 type RunnerProgressRequest struct {
-	RuntimeRevisionDigest string               `json:"runtime_revision_digest"`
-	Progress              string               `json:"progress"`
-	Message               *RuntimeAgentMessage `json:"message,omitempty"`
+	RuntimeRevisionDigest string                      `json:"runtime_revision_digest"`
+	Progress              string                      `json:"progress"`
+	Message               *RuntimeAgentMessage        `json:"message,omitempty"`
+	ProviderProcess       *ProviderProcessObservation `json:"provider_process,omitempty"`
 }
 
 type RunnerArtifact struct {
@@ -719,20 +727,25 @@ func (usage TokenUsage) Validate() error {
 }
 
 type RunnerCompletionRequest struct {
-	RuntimeRevisionDigest string           `json:"runtime_revision_digest"`
-	Attempt               int32            `json:"attempt"`
-	Success               bool             `json:"success"`
-	ResultSummary         string           `json:"result_summary"`
-	SafeErrorCode         string           `json:"safe_error_code,omitempty"`
-	Usage                 TokenUsage       `json:"usage"`
-	Artifacts             []RunnerArtifact `json:"artifacts,omitempty"`
-	CodexSessionID        string           `json:"codex_session_id,omitempty"`
-	ArchiveRelativePath   string           `json:"archive_relative_path,omitempty"`
-	ArchiveSHA256         string           `json:"archive_sha256,omitempty"`
-	ArchiveSizeBytes      int64            `json:"archive_size_bytes,omitempty"`
+	RuntimeRevisionDigest string                     `json:"runtime_revision_digest"`
+	Attempt               int32                      `json:"attempt"`
+	Success               bool                       `json:"success"`
+	ResultSummary         string                     `json:"result_summary"`
+	SafeErrorCode         string                     `json:"safe_error_code,omitempty"`
+	Usage                 TokenUsage                 `json:"usage"`
+	Artifacts             []RunnerArtifact           `json:"artifacts,omitempty"`
+	CodexSessionID        string                     `json:"codex_session_id,omitempty"`
+	ArchiveRelativePath   string                     `json:"archive_relative_path,omitempty"`
+	ArchiveSHA256         string                     `json:"archive_sha256,omitempty"`
+	ArchiveSizeBytes      int64                      `json:"archive_size_bytes,omitempty"`
+	ProviderDiagnostic    *ProviderFailureDiagnostic `json:"provider_diagnostic,omitempty"`
 }
 
 func (request RunnerCompletionRequest) Validate() error {
+	if request.ProviderDiagnostic != nil && (request.Success || request.ProviderDiagnostic.Validate() != nil ||
+		request.ProviderDiagnostic.RuntimeRevisionDigest != request.RuntimeRevisionDigest || request.ProviderDiagnostic.Attempt != request.Attempt) {
+		return errProviderDiagnostic
+	}
 	if !sha256Pattern.MatchString(request.RuntimeRevisionDigest) || request.Attempt < 1 || len(request.ResultSummary) > 64<<10 ||
 		len(request.SafeErrorCode) > 128 || len(request.Artifacts) > MaximumCompletionFiles ||
 		(request.Success && strings.TrimSpace(request.ResultSummary) == "") || (!request.Success && request.SafeErrorCode == "") ||

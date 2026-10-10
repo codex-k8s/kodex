@@ -418,6 +418,78 @@ describe("компактное представление exact хода", () =>
     });
   });
 
+  it("складывает только закрытый root completion в details одного exact terminal этапа", () => {
+    const failure = item("failure", {
+      executionNodeType: "AGENT_EXECUTION",
+      executionSafeErrorCode: "PROVIDER_UNAVAILABLE",
+      eventType: "TURN_COMPLETED",
+      messageKind: "FINAL_MESSAGE",
+      state: "FAILED",
+      summary: "Провайдер временно недоступен",
+    });
+    const rootExecution = { ...execution, nodeRef: "nod_root" };
+    const root = item("root", {
+      execution: rootExecution,
+      executionNodeType: "ROOT_PROCESS",
+      serviceCompletionCode: "ROOT_PROCESS_COMPLETED",
+      eventType: "NODE_STATE_CHANGED",
+      messageKind: "STATE",
+      state: "FAILED",
+      summary: "Корневой процесс завершён",
+    });
+    const original = JSON.stringify([failure, root]);
+    const folded = presentRunTranscriptItems([failure, root], null);
+    expect(folded).toHaveLength(1);
+    expect(folded[0]).toMatchObject({
+      id: "failure",
+      summary: failure.summary,
+      serviceHistory: [failure, root],
+    });
+    expect(JSON.stringify([failure, root])).toBe(original);
+    expect(
+      presentRunTranscriptItems(
+        [failure, { ...root, executionSafeErrorCode: "PROVIDER_UNAVAILABLE" }],
+        null,
+      ),
+    ).toHaveLength(1);
+    for (const changes of [
+      { serviceCompletionCode: undefined },
+      { executionNodeType: undefined },
+      { state: "CANCELLED" as const },
+      { executionSafeErrorCode: "RUNTIME_WORKFLOW_INCOMPLETE" },
+      { execution: { ...rootExecution, runRef: "run_foreign" } },
+      { execution: { ...rootExecution, sessionRef: "ses_other" } },
+      { execution: { ...rootExecution, turnRef: "trn_other" } },
+      { execution: { ...rootExecution, turnNumber: 2 } },
+      { execution: { ...rootExecution, attempt: 2 } },
+      { execution: undefined, historical: true },
+      { phase: "FINAL" as const, kind: "agent" as const },
+      { progress: "Самостоятельная причина" },
+    ]) {
+      expect(
+        presentRunTranscriptItems([failure, { ...root, ...changes }], null),
+      ).toHaveLength(2);
+    }
+    const second = {
+      ...failure,
+      id: "second",
+      execution: { ...execution, nodeRef: "nod_second" },
+    };
+    expect(
+      presentRunTranscriptItems([failure, second, root], null),
+    ).toHaveLength(3);
+    const otherReason = {
+      ...root,
+      id: "root-other-reason",
+      serviceCompletionCode: undefined,
+      summary: "Отдельная причина",
+      eventType: "TURN_COMPLETED" as const,
+    };
+    expect(
+      presentRunTranscriptItems([failure, otherReason, root], null),
+    ).toHaveLength(2);
+  });
+
   it("сводит локализованные HTTP/WS события exact отмены по typed serviceCode", () => {
     const base = required(events[0]);
     const entries = buildRunTranscriptItems([
@@ -2521,6 +2593,63 @@ describe("buildRunActivityItems", () => {
     expect(result[0]?.summary).toBe("Полный ответ");
   });
 
+  it("принимает root discriminator только вместе с exact опубликованным node binding", () => {
+    const base = required(events[0]);
+    const execution = required(base.execution);
+    const rootNode: RunNode = {
+      ...node,
+      ref: "nod_rootfixture",
+      type: "ROOT_PROCESS",
+      runRef: execution.runRef,
+      turnRef: execution.turnRef,
+      attempt: execution.attempt,
+      state: "FAILED",
+    };
+    const root: RunEvent = {
+      ...base,
+      ref: "evt_rootfixture",
+      type: "NODE_STATE_CHANGED",
+      messageKind: "STATE",
+      message: undefined,
+      nodeRef: rootNode.ref,
+      node: rootNode,
+      nodeState: "FAILED",
+      serviceCode: "ROOT_PROCESS_COMPLETED",
+      execution: { ...execution, nodeRef: rootNode.ref },
+      runRef: execution.runRef,
+      run: { ...base.run, ref: execution.runRef },
+      summary: "Корневой процесс завершён",
+    };
+    expect(buildRunTranscriptItems([root])[0]).toMatchObject({
+      serviceCompletionCode: "ROOT_PROCESS_COMPLETED",
+      executionNodeType: "ROOT_PROCESS",
+    });
+    for (const variant of [
+      { ...root, serviceCode: undefined },
+      { ...root, runRef: "run_other" },
+      { ...root, run: { ...root.run, ref: "run_other" } },
+      { ...root, run: { ...root.run, version: 0 } },
+      { ...root, nodeRef: "nod_other" },
+      { ...root, node: { ...rootNode, turnRef: "trn_other" } },
+      { ...root, node: { ...rootNode, runRef: "run_other" } },
+      { ...root, node: { ...rootNode, attempt: 2 } },
+      { ...root, node: undefined },
+      { ...root, execution: undefined },
+      { ...root, gateRef: "gat_fixture" },
+      {
+        ...root,
+        nodeState: "RUNNING" as const,
+        node: { ...rootNode, state: "RUNNING" as const },
+      },
+      { ...root, edgeRef: "edg_fixture" },
+      { ...root, progress: "Different outcome" },
+    ]) {
+      expect(
+        buildRunTranscriptItems([variant])[0]?.serviceCompletionCode,
+      ).toBeUndefined();
+    }
+  });
+
   it("разделяет сообщение инициатора и сообщения ИИ-сотрудника", () => {
     const items = buildRunActivityItems(
       run,
@@ -2596,6 +2725,7 @@ describe("buildRunActivityItems", () => {
       artifactRef: "art_report",
       artifact: {
         ref: "art_report",
+        currentRevisionRef: "arv_fixture_report",
         version: 1,
         projectRef: run.projectRef,
         runRef: run.ref,

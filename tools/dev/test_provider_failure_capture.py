@@ -51,6 +51,24 @@ class FakeClock:
 
 
 class CaptureTests(unittest.TestCase):
+    def test_resume_source_closed_reasons_and_exact_capture(self):
+        for detail in ('RESUME_SOURCE_SCHEMA', 'RESUME_SOURCE_ID', 'RESUME_SOURCE_LOCATOR',
+                       'RESUME_SOURCE_OPEN', 'RESUME_SOURCE_METADATA', 'RESUME_SOURCE_IDENTITY'):
+            with self.subTest(detail=detail):
+                diagnostic = request(stage='THREAD_READ', detail=detail)
+                parsed = CAPTURE.parse_line(diagnostic)
+                self.assertEqual(parsed['kind'], 'REQUEST_FAILURE')
+                self.assertEqual(parsed['detail'], detail)
+                result, _, _, _ = self.exercise(diagnostic=diagnostic)
+                self.assertEqual(result['diagnostic']['detail'], detail)
+                self.assertEqual(result['rejoin'], 'VERIFIED')
+                self.assertNotIn(SENTINEL, json.dumps(result))
+                for invalid in ({'stage': 'ARCHIVE_CAPTURE'}, {'category': 'AUTHENTICATION'},
+                                {'code': -32603}, {'notification': 'UNKNOWN'},
+                                {'account': 'SHUTDOWN'}, {'detail': 'RESUME_SOURCE_'+SENTINEL}):
+                    with self.assertRaisesRegex(CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$'):
+                        CAPTURE.parse_line(request(**dict({'stage': 'THREAD_READ', 'detail': detail}, **invalid)))
+
     def exercise(self, proof=None, columns=None, options=None, after=None, log=None, diagnostic=None):
         baseline, baseline_columns, baseline_options = fixture()
         proof = baseline if proof is None else proof
@@ -826,6 +844,269 @@ class CaptureTests(unittest.TestCase):
         with self.assertRaises(subprocess.TimeoutExpired):
             CAPTURE.stop_process(process)
         self.assertTrue(process.stdout.closed)
+
+
+class WorkloadCaptureTests(unittest.TestCase):
+    def fixture(self):
+        import yaml
+        proof, columns, options = fixture()
+        fields = columns.decode().strip().split('|')
+        short = CAPTURE.ACK.sha(proof['lease_ref'])[:16]
+        fields[1] = options.pod_name = 'runtime-turn-' + short
+        options.pod_uid, options.node_ref = fields[2], proof['node_ref']
+        options.expected_project_ref = proof['project_ref']
+        options.expected_input_digest = proof['input_digest']
+        controller = '22345678-1234-1234-1234-123456789abc'
+        extra = ['10', '2026-10-09T19:43:32Z', 'Never', 'runtime-projection-' + short,
+                 controller, CAPTURE.ACK.sha(proof['organization_ref'])[:16],
+                 CAPTURE.ACK.sha(proof['project_ref'])[:16], short]
+        keys = ('organization_ref', 'project_ref', 'run_ref', 'node_ref', 'session_ref',
+                'turn_ref', 'runtime_revision_ref', 'attempt', 'runtime_revision_version',
+                'runtime_revision_digest', 'input_digest')
+        result = dict(identity={key: proof[key] for key in keys}, root='/workspace/' + SENTINEL,
+                      maximum_writable_bytes=1024, maximum_file_count=1)
+        metadata = ['kodex-runtime', extra[3], '32345678-1234-1234-1234-123456789abc',
+                    '11', 'true', 'true', 'turn', '2026-10-09T19:43:31Z']
+        # Настоящий producer не пишет lease-ref в CM: lease связывается через имя volume.
+        metadata += fields[6:14] + extra[4:7] + [fields[1]]
+        source = Path(CAPTURE.__file__).resolve().parents[2] / (
+            'deploy/k8s/base/runtime-controller/runtime-materialization-admission.yaml')
+        policies = {}
+        for item in yaml.safe_load_all(source.read_text()):
+            if item['metadata']['name'] != 'runtime-revision-exact-configmap-projection':
+                continue
+            item['metadata'].update(uid='42345678-1234-1234-1234-123456789abc',
+                                    resourceVersion='12', generation=1,
+                                    creationTimestamp='2026-10-09T18:00:00Z')
+            if item['kind'] == 'ValidatingAdmissionPolicy':
+                item['status'] = {'observedGeneration': 1, 'typeChecking': {}}
+            policies[item['kind']] = item
+        return dict(options=options, fields=fields, extra=extra, metadata=metadata,
+                    result=result, policies=policies)
+
+    def exercise(self, data=None, change=None, log=None, after_cleanup=False):
+        data = self.fixture() if data is None else data
+        calls, closed, gets = [], [], 0
+        self.last_calls = calls
+
+        def read(args):
+            nonlocal gets
+            calls.append(args)
+            if args[:2] == ['get', 'pods']:
+                gets += 1
+                if change is not None:
+                    change(data, gets)
+                if after_cleanup and gets >= 3:
+                    return b''
+                return ('|'.join(data['fields']) + '\n').encode()
+            if args[:2] == ['get', 'pod']:
+                return '|'.join(data['extra']).encode()
+            if args[:2] == ['get', 'configmap']:
+                path = args[-1]
+                self.assertIn('.data.results\\.json', path)
+                self.assertNotIn('runtime\\.json', path)
+                self.assertNotIn('{.data}', path)
+                payload = data.get('raw_result', json.dumps(data['result']))
+                return ('|'.join(data['metadata']) + '\n' + payload).encode()
+            if args[:2] in (['get', 'ValidatingAdmissionPolicy'],
+                            ['get', 'ValidatingAdmissionPolicyBinding']):
+                return json.dumps(data['policies'][args[1]]).encode()
+            self.assertEqual(args[0], 'logs')
+            return request() if log is None else log
+
+        def follow(pod):
+            try:
+                yield (SENTINEL + '\n').encode()
+                yield request()
+                self.fail('follow continued after closed diagnostic')
+            finally:
+                closed.append(True)
+
+        clock = FakeClock()
+        result = CAPTURE.capture_workload(data['options'], read, follow, clock.now, clock.sleep)
+        return result, calls, closed
+
+    def test_closed_failure_without_ack_has_separate_workload_receipt(self):
+        result, calls, closed = self.exercise()
+        self.assertEqual(result['status'], 'WORKLOAD_DIAGNOSTIC_CAPTURED')
+        self.assertEqual(result['provider_ack'], 'NOT_OBSERVED')
+        self.assertEqual(result['provider_input_acceptance'], 'UNKNOWN')
+        self.assertEqual(result['execution_binding_recomputed'], 'NOT_RUN')
+        self.assertEqual(result['rejoin'], 'VERIFIED')
+        self.assertEqual(result['diagnostic']['detail'], 'STREAM_CLOSED')
+        self.assertNotIn(SENTINEL, json.dumps(result))
+        self.assertNotIn('task_sha256', result)
+        self.assertNotIn('assistant_scope', result)
+        self.assertFalse(closed)
+        self.assertFalse(any(call[0] == 'exec' or 'secret' in call for call in calls))
+
+    def test_no_ack_follow_is_bounded_joined_and_payload_free(self):
+        result, _, closed = self.exercise(log=(SENTINEL + '\n').encode())
+        self.assertEqual(closed, [True])
+        self.assertNotIn(SENTINEL, json.dumps(result))
+
+    def test_foreign_projection_lease_and_safe_input_guards(self):
+        mutations = [lambda d: d['extra'].__setitem__(3, 'runtime-projection-' + 'f'*16),
+                     lambda d: d['metadata'].__setitem__(1, 'runtime-projection-' + 'f'*16),
+                     lambda d: d['metadata'].__setitem__(4, 'false'),
+                     lambda d: d['metadata'].__setitem__(6, 'warm'),
+                     lambda d: d['metadata'].__setitem__(8, 'f'*64),
+                     lambda d: d['metadata'].__setitem__(-1, 'runtime-turn-foreign'),
+                     lambda d: d['result']['identity'].__setitem__('run_ref', 'run_foreign'),
+                     lambda d: d['result']['identity'].__setitem__('node_ref', 'node_foreign'),
+                     lambda d: d['result']['identity'].__setitem__('session_ref', 'session_foreign'),
+                     lambda d: d['result']['identity'].__setitem__('turn_ref', 'turn_foreign'),
+                     lambda d: d['result']['identity'].__setitem__('attempt', 2),
+                     lambda d: d['result']['identity'].__setitem__('input_digest', 'f'*64),
+                     lambda d: d['result']['identity'].__setitem__('organization_ref', 'organization_foreign'),
+                     lambda d: d['result']['identity'].__setitem__('project_ref', 'project_foreign'),
+                     lambda d: d['result']['identity'].__setitem__('runtime_revision_digest', 'f'*64),
+                     lambda d: d['result']['identity'].__setitem__('unknown', SENTINEL),
+                     lambda d: d['result']['identity'].__setitem__('runtime_revision_version', True),
+                     lambda d: d.__setitem__('raw_result', '{"identity":{},"identity":{}}')]
+        for index, mutation in enumerate(mutations):
+            data = self.fixture()
+            mutation(data)
+            with self.subTest(index=index), self.assertRaises(CAPTURE.Failure) as failure:
+                self.exercise(data)
+            self.assertNotIn(SENTINEL, str(failure.exception))
+            self.assertFalse(any(call[0] == 'logs' for call in self.last_calls))
+
+    def test_before_effect_replacement_and_immutable_input_drift_fail_closed(self):
+        for target, value in (('uid', '52345678-1234-1234-1234-123456789abc'),
+                              ('cm_uid', '62345678-1234-1234-1234-123456789abc'),
+                              ('input', 'f'*64), ('binding', 'f'*64)):
+            def change(data, count):
+                if count == 2:
+                    if target == 'uid':
+                        data['fields'][2] = value
+                    elif target == 'cm_uid':
+                        data['metadata'][2] = value
+                    elif target == 'input':
+                        data['result']['identity']['input_digest'] = value
+                    else:
+                        data['metadata'][11] = value
+            with self.subTest(target=target), self.assertRaises(CAPTURE.Failure):
+                self.exercise(change=change)
+
+    def test_post_capture_replacement_rejects_but_phase_and_cleanup_do_not_fabricate_ack(self):
+        def terminal(data, count):
+            if count == 3:
+                data['fields'][3] = 'Failed'
+        result, _, _ = self.exercise(change=terminal)
+        self.assertEqual(result['rejoin'], 'VERIFIED')
+        def replaced(data, count):
+            if count == 3:
+                data['fields'][2] = '52345678-1234-1234-1234-123456789abc'
+        with self.assertRaisesRegex(CAPTURE.Failure, '^POD_UID_MISMATCH$'):
+            self.exercise(change=replaced)
+        with self.assertRaisesRegex(CAPTURE.Failure, '^WORKLOAD_REJOIN_UNAVAILABLE$'):
+            self.exercise(after_cleanup=True)
+
+    def test_admission_source_origin_and_ready_guards(self):
+        for mutate in (lambda p: p['spec'].__setitem__('failurePolicy', 'Ignore'),
+                       lambda p: p['metadata'].__setitem__('generation', 2),
+                       lambda p: p['metadata'].__setitem__('creationTimestamp', '2026-10-09T20:00:00Z'),
+                       lambda p: p['status'].__setitem__('observedGeneration', 0),
+                       lambda p: p['status']['typeChecking'].__setitem__('expressionWarnings', [SENTINEL])):
+            data = self.fixture()
+            mutate(data['policies']['ValidatingAdmissionPolicy'])
+            with self.assertRaises(CAPTURE.Failure) as failure:
+                self.exercise(data)
+            self.assertNotIn(SENTINEL, str(failure.exception))
+        data = self.fixture()
+        data['policies']['ValidatingAdmissionPolicyBinding']['spec']['validationActions'] = ['Warn']
+        with self.assertRaises(CAPTURE.Failure):
+            self.exercise(data)
+
+    def test_only_documented_admission_defaults_are_equivalent(self):
+        data = self.fixture()
+        for kind, policy in data['policies'].items():
+            policy['spec'] = CAPTURE.admission_spec(policy['spec'], kind)
+        self.assertEqual(self.exercise(data)[0]['status'], 'WORKLOAD_DIAGNOSTIC_CAPTURED')
+        for key, value in (('matchPolicy', 'Exact'), ('objectSelector', {'matchLabels': {'a': 'b'}}),
+                           ('unknown', SENTINEL)):
+            data = self.fixture()
+            data['policies']['ValidatingAdmissionPolicy']['spec']['matchConstraints'][key] = value
+            with self.subTest(key=key), self.assertRaises(CAPTURE.Failure):
+                self.exercise(data)
+            self.assertFalse(any(call[0] == 'logs' for call in self.last_calls))
+
+    def test_closed_parser_and_exhausted_follow_do_not_create_success(self):
+        for log in (request(detail=SENTINEL), request(stage=SENTINEL),
+                    (CAPTURE.TERMINAL_PREFIX + SENTINEL + '\n').encode()):
+            with self.assertRaisesRegex(CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$'):
+                self.exercise(log=log)
+        with patch.object(CAPTURE, 'diagnostic_from_chunks', side_effect=CAPTURE.Failure('FOLLOW_STREAM_ENDED')):
+            with self.assertRaisesRegex(CAPTURE.Failure, '^FOLLOW_STREAM_ENDED$'):
+                self.exercise()
+
+    def test_render_cel_whitespace_is_equivalent_not_literal_or_operator_changes(self):
+        data = self.fixture()
+        for item in data['policies']['ValidatingAdmissionPolicy']['spec']['validations']:
+            item['expression'] = item['expression'].replace(' &&', '\n  &&').replace(' &&', '  &&')
+        self.assertEqual(self.exercise(data)[0]['status'], 'WORKLOAD_DIAGNOSTIC_CAPTURED')
+        for old, new in (('runtime.json', 'runtime.  json'), (' && ', ' || ')):
+            data = self.fixture()
+            expression = data['policies']['ValidatingAdmissionPolicy']['spec']['validations'][2]
+            expression['expression'] = expression['expression'].replace(old, new, 1)
+            with self.subTest(change=old), self.assertRaises(CAPTURE.Failure):
+                self.exercise(data)
+            self.assertFalse(any(call[0] == 'logs' for call in self.last_calls))
+
+    def test_cel_literals_preserve_spaces_escapes_and_comment_bytes(self):
+        canonical = CAPTURE.admission_expression
+        self.assertEqual(canonical("  a  ==\n'one  two'  "), "a == 'one  two'")
+        self.assertNotEqual(canonical("a == 'one  two'"), canonical("a == 'one two'"))
+        for literal in ("'a\\'  b'", '"a\\"  b"', "'a\\n  b'", "'// /* */'"):
+            self.assertEqual(canonical('a == ' + literal), 'a == ' + literal)
+        for expression in ("a == 'unterminated", 'a == "unterminated',
+                           'a // comment\n == b', 'a /* comment */ == b'):
+            with self.subTest(expression=expression), self.assertRaisesRegex(
+                    CAPTURE.Failure, '^WORKLOAD_ADMISSION_EXPRESSION_INVALID$'):
+                canonical(expression)
+
+    def test_timestamp_and_before_follow_identity_guards(self):
+        for timestamp in ('', SENTINEL, '2026-99-09T19:43:31Z', '2026-10-09T20:43:31Z'):
+            data = self.fixture()
+            data['metadata'][7] = timestamp
+            with self.subTest(timestamp=timestamp), self.assertRaises(CAPTURE.Failure):
+                self.exercise(data)
+            self.assertFalse(any(call[0] == 'logs' for call in self.last_calls))
+        def changed(data, count):
+            if count == 3:
+                data['metadata'][3] = '99'
+        with self.assertRaisesRegex(CAPTURE.Failure, '^WORKLOAD_CHANGED_BEFORE_FOLLOW$'):
+            self.exercise(change=changed, log=b'no diagnostic\n')
+
+    def test_admission_replacement_after_capture_is_not_valid_proof(self):
+        def change(data, count):
+            if count == 3:
+                data['policies']['ValidatingAdmissionPolicyBinding']['metadata']['uid'] = (
+                    '52345678-1234-1234-1234-123456789abc')
+        with self.assertRaisesRegex(CAPTURE.Failure, '^WORKLOAD_ADMISSION_CHANGED$'):
+            self.exercise(change=change)
+
+    def test_exact_options_required_before_any_reads(self):
+        for field, value in (('pod_uid', None), ('pod_name', None), ('node_ref', SENTINEL + '/'),
+                             ('assistant_scope', 'SYSTEM'), ('expected_project_ref', None),
+                             ('expected_input_digest', SENTINEL)):
+            data = self.fixture()
+            setattr(data['options'], field, value)
+            with self.subTest(field=field), self.assertRaises(CAPTURE.Failure):
+                CAPTURE.capture_workload(data['options'], lambda args: self.fail('read before validation'),
+                                         lambda pod: self.fail('follow before validation'))
+
+    def test_cli_workload_invalid_mode_or_incomplete_binding_is_closed(self):
+        for extras in (['--capture-mode', SENTINEL], ['--capture-mode', 'WORKLOAD']):
+            with patch.object(CAPTURE, 'Kubectl', side_effect=AssertionError('unexpected IO')), \
+                    patch('sys.stdout', new_callable=io.StringIO) as output:
+                status = CAPTURE.main(['--run-ref', 'run_fixture', '--session-ref', 'session_fixture',
+                    '--turn-ref', 'turn_fixture', '--attempt', '1',
+                    '--image-manifest', 'sha256:' + 'b'*64] + extras)
+            self.assertEqual(status, 1)
+            self.assertNotIn(SENTINEL, output.getvalue())
+            self.assertEqual(json.loads(output.getvalue())['status'], 'NOT_CAPTURED')
 
 
 if __name__ == '__main__':

@@ -43,6 +43,7 @@ type PickerValue = string | null | readonly string[];
 interface PickerEntry extends AsyncEntityPickerItem {
   source: AsyncEntityPickerItem | AsyncEntityOption;
   meta?: string;
+  tooltip?: string;
   disabledReason?: string;
 }
 
@@ -135,6 +136,7 @@ const loader: AsyncEntityLoader<PickerEntry> = async (request) => {
       disabled: item.disabled,
       disabledReason: item.disabledReason,
       meta: item.meta,
+      tooltip: item.tooltip,
       source: item,
     })),
     nextCursor: page.nextPageToken,
@@ -768,7 +770,7 @@ watch(
               tabindex="-1"
               :aria-selected="isSelected(item)"
               :disabled="disabled || item.disabled"
-              :title="item.disabledReason"
+              :title="item.disabledReason || item.tooltip"
               @mouseenter="activeIndex = index"
               @focus="activeIndex = index"
               @click="chooseDropdown(item)"

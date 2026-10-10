@@ -3192,9 +3192,9 @@ export type RunDelta = {
 };
 
 /**
- * Необязательный закрытый код служебной отмены из авторитетного события до локализации; не полномочие и не привязка выполнения.
+ * Необязательный закрытый код служебного события до локализации; не полномочие и не привязка выполнения.
  */
-export type RunEventServiceCode = 'RUN_CANCELLED' | 'RUN_NODE_CANCELLED' | 'ASSISTANT_TURN_CANCELLED';
+export type RunEventServiceCode = 'RUN_CANCELLED' | 'RUN_NODE_CANCELLED' | 'ASSISTANT_TURN_CANCELLED' | 'ROOT_PROCESS_COMPLETED';
 
 export type RunEvent = {
     ref: OpaqueRef;
@@ -3498,6 +3498,7 @@ export type Artifact = {
     scanState: 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
     source: 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
     revision: number;
+    currentRevisionRef: OpaqueRef;
     lifecycleState: 'ACTIVE' | 'DELETED' | 'PURGE_PENDING' | 'PURGED';
     deletedAt?: Timestamp;
     purgeAfter?: Timestamp;
@@ -3505,6 +3506,26 @@ export type Artifact = {
     previewAvailable: boolean;
     createdAt: Timestamp;
     nextActions: Array<NextAction>;
+};
+
+export type ArtifactRevision = {
+    ref: OpaqueRef;
+    artifactRef: OpaqueRef;
+    revision: number;
+    fileName: string;
+    mediaType: string;
+    sizeBytes: number;
+    digest: string;
+    scanState: 'PENDING' | 'SCANNING' | 'CLEAN' | 'QUARANTINED' | 'FAILED';
+    source: 'CONTROL_CENTER' | 'AGENT_RESULT' | 'INTEGRATION_RESULT' | 'KNOWLEDGE_SOURCE' | 'INTERACTION_ATTACHMENT';
+    previewAvailable: boolean;
+    createdAt: Timestamp;
+};
+
+export type ArtifactRevisionPage = {
+    items: Array<ArtifactRevision>;
+    total: number;
+    nextPageToken?: string;
 };
 
 export type ArtifactBindingInput = {
@@ -4394,7 +4415,7 @@ export type IntegrationGrantInput = {
 
 export type AssistantPlanOperation = {
     ref: OpaqueRef;
-    type: 'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT' | 'CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT' | 'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION';
+    type: 'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_PROJECT_FILE_REVISION' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT' | 'CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT' | 'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION';
     action: 'CREATE' | 'UPDATE' | 'ARCHIVE' | 'EXECUTE';
     title: string;
     summary: string;
@@ -4494,7 +4515,7 @@ export type AssistantContextDescriptor = {
     entityRef: string;
     entityName: string;
     entityVersion?: number;
-    allowedOperations: Array<'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT' | 'CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT' | 'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION'>;
+    allowedOperations: Array<'CREATE_PROJECT' | 'CREATE_PROJECT_FILE' | 'CREATE_PROJECT_FILE_REVISION' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'UPDATE_WORKFLOW' | 'CHANGE_CAPABILITY' | 'CHANGE_INTEGRATION_GRANT' | 'CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT' | 'CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT' | 'PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION' | 'CREATE_SCHEDULE' | 'UPDATE_SCHEDULE' | 'LAUNCH_RUN' | 'CREATE_INTEGRATION_CONNECTION' | 'UPDATE_INTEGRATION_CONNECTION' | 'TEST_INTEGRATION_CONNECTION' | 'PUBLISH_INTEGRATION_DEFINITION' | 'ARCHIVE_AGENT' | 'ARCHIVE_WORKFLOW' | 'UPDATE_PROJECT' | 'UPDATE_AGENT' | 'CREATE_INSTRUCTION_DRAFT' | 'CREATE_RUNTIME_ENVIRONMENT_DRAFT' | 'PREPARE_RUNTIME_ENVIRONMENT_REVISION' | 'UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS' | 'BIND_AGENT_RUNTIME_ENVIRONMENT' | 'CREATE_ROLE_IMAGE_RECIPE' | 'UPDATE_ROLE_IMAGE_RECIPE' | 'CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE' | 'PREPARE_ASSISTANT_RUNTIME_CONFIGURATION'>;
 };
 
 export type AssistantPlanReceipt = {
@@ -4507,6 +4528,7 @@ export type AssistantPlanReceipt = {
         resourceRef: OpaqueRef;
         outcome: 'APPLIED';
         auditRef: OpaqueRef;
+        artifactRevision?: ArtifactRevision;
     }>;
     conflicts: Array<{
         operationRef: OpaqueRef;
@@ -10685,6 +10707,94 @@ export type GetRunAttachmentEligibilityResponses = {
 };
 
 export type GetRunAttachmentEligibilityResponse = GetRunAttachmentEligibilityResponses[keyof GetRunAttachmentEligibilityResponses];
+
+export type ListArtifactRevisionsData = {
+    body?: never;
+    path: {
+        artifactRef: OpaqueRef;
+    };
+    query?: {
+        pageSize?: number;
+        pageToken?: string;
+    };
+    url: '/api/v1/artifacts/{artifactRef}/revisions';
+};
+
+export type ListArtifactRevisionsErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ListArtifactRevisionsError = ListArtifactRevisionsErrors[keyof ListArtifactRevisionsErrors];
+
+export type ListArtifactRevisionsResponses = {
+    /**
+     * История immutable revisions, отсортированная по номеру по убыванию; cursor закрепляет actor, artifact и aggregate version
+     */
+    200: ArtifactRevisionPage;
+};
+
+export type ListArtifactRevisionsResponse = ListArtifactRevisionsResponses[keyof ListArtifactRevisionsResponses];
+
+export type GetArtifactRevisionData = {
+    body?: never;
+    path: {
+        artifactRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/artifacts/{artifactRef}/revisions/{revisionRef}';
+};
+
+export type GetArtifactRevisionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetArtifactRevisionError = GetArtifactRevisionErrors[keyof GetArtifactRevisionErrors];
+
+export type GetArtifactRevisionResponses = {
+    /**
+     * Exact immutable revision внутри текущей owner eligibility, без fallback latest
+     */
+    200: ArtifactRevision;
+};
+
+export type GetArtifactRevisionResponse = GetArtifactRevisionResponses[keyof GetArtifactRevisionResponses];
+
+export type DownloadArtifactRevisionData = {
+    body?: never;
+    path: {
+        artifactRef: OpaqueRef;
+        revisionRef: OpaqueRef;
+    };
+    query: {
+        purpose: 'DOWNLOAD' | 'PREVIEW';
+    };
+    url: '/api/v1/artifacts/{artifactRef}/revisions/{revisionRef}/content';
+};
+
+export type DownloadArtifactRevisionErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type DownloadArtifactRevisionError = DownloadArtifactRevisionErrors[keyof DownloadArtifactRevisionErrors];
+
+export type DownloadArtifactRevisionResponses = {
+    /**
+     * Защищённый bounded stream точной eligible CLEAN revision
+     */
+    200: Blob | File;
+};
+
+export type DownloadArtifactRevisionResponse = DownloadArtifactRevisionResponses[keyof DownloadArtifactRevisionResponses];
 
 export type DeleteArtifactData = {
     body?: never;

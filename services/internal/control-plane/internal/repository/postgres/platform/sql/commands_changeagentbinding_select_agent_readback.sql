@@ -7,7 +7,7 @@ SELECT a.ref, p.ref, role.ref, role.name, a.name, a.purpose,
        COALESCE((
            SELECT array_agg(artifact.ref ORDER BY binding.created_at)
            FROM control_plane.artifact_bindings binding
-           JOIN control_plane.artifacts artifact ON artifact.id = binding.artifact_id
+           JOIN control_plane.artifact_history artifact ON artifact.id = binding.artifact_id AND artifact.revision_id=binding.revision_id
            WHERE binding.target_kind = 'KNOWLEDGE'
              AND binding.target_ref = a.ref
              AND artifact.scan_state = 'CLEAN'
@@ -19,6 +19,6 @@ JOIN control_plane.projects p ON p.id = a.project_id
 JOIN control_plane.role_definitions role ON role.id = a.role_definition_id
 JOIN control_plane.runtime_profiles runtime ON runtime.stable_key = a.runtime_key
 JOIN control_plane.agent_runtime_config_versions config ON config.id = a.current_runtime_config_id
-LEFT JOIN control_plane.artifacts avatar ON avatar.id = a.avatar_artifact_id
+LEFT JOIN control_plane.artifact_history avatar ON avatar.id = a.avatar_artifact_id AND avatar.revision=a.avatar_artifact_revision
 WHERE a.organization_id = $1::uuid
   AND a.ref = $2

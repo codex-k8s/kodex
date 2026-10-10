@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"time"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
@@ -16,7 +17,17 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const platformSnapshotPageSize = 50
+const (
+	platformSnapshotPageSize         = 50
+	assistantSnapshotInitialPageSize = 25
+)
+
+// Размер принадлежит одному socket; payload и полномочия в подсказке отсутствуют.
+type assistantSnapshotPageHint struct {
+	organizationRef string
+	projectRef      string
+	pageSize        int32
+}
 
 const (
 	platformSnapshotReadFailure       = "platform bootstrap snapshot read failed"
@@ -157,10 +168,16 @@ func (server *Server) projectPlatformSnapshotPage(ctx context.Context, kind, pro
 	withOverview := func(snapshot map[string]any) (map[string]any, error) {
 		overview, readErr := server.query.GetOverview(scoped, &controlplanev1.GetOverviewRequest{ProjectRef: projectRef})
 		if readErr != nil {
+			if kind == "RUN" {
+				return nil, withPlatformSnapshotReadStage(platformSnapshotOverviewGetStage, readErr)
+			}
 			return nil, readErr
 		}
 		projected, projectErr := projectSnapshotPart(overview, localize)
 		if projectErr != nil {
+			if kind == "RUN" {
+				return nil, withPlatformSnapshotReadStage(platformSnapshotRunProjectStage, projectErr)
+			}
 			return nil, projectErr
 		}
 		snapshot["overview"] = projected
@@ -232,19 +249,19 @@ func (server *Server) projectPlatformSnapshotPage(ctx context.Context, kind, pro
 	case "RUN":
 		response, readErr := server.query.ListRuns(scoped, &controlplanev1.ListRunsRequest{ProjectRef: projectRef, Page: platformPage()})
 		if readErr != nil {
-			return nil, readErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotRunsListStage, readErr)
 		}
 		catalog, projectErr := projectSnapshotPart(response, localize)
 		if projectErr != nil {
-			return nil, projectErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotRunProjectStage, projectErr)
 		}
 		gates, readErr := server.query.ListOwnerGates(scoped, &controlplanev1.ListOwnerGatesRequest{ProjectRef: projectRef, Page: platformPage()})
 		if readErr != nil {
-			return nil, readErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotOwnerGatesListStage, readErr)
 		}
 		gateCatalog, projectErr := projectSnapshotPart(gates, localize)
 		if projectErr != nil {
-			return nil, projectErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotRunProjectStage, projectErr)
 		}
 		catalog["gates"] = gateCatalog["gates"]
 		catalog["gatesPage"] = gateCatalog["page"]
@@ -358,31 +375,31 @@ func (server *Server) projectPlatformSnapshotPage(ctx context.Context, kind, pro
 	case "SYSTEM_ASSISTANT":
 		assistant, readErr := server.assistant.GetSystemAssistant(ctx, &controlplanev1.GetSystemAssistantRequest{})
 		if readErr != nil {
-			return nil, readErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotAssistantGetStage, readErr)
 		}
 		conversations, readErr := server.assistant.ListAssistantConversations(scoped, &controlplanev1.ListAssistantConversationsRequest{ProjectRef: projectRef, Page: &controlplanev1.PageRequest{PageSize: assistantPageSize}})
 		if readErr != nil {
-			return nil, readErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotConversationListStage, readErr)
 		}
 		bootstrap, readErr := server.query.GetBootstrapState(ctx, &controlplanev1.GetBootstrapStateRequest{})
 		if readErr != nil {
-			return nil, readErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotBootstrapGetStage, readErr)
 		}
 		assistantProjection, projectErr := projectSnapshotPart(assistant, localize)
 		if projectErr != nil {
-			return nil, projectErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotAssistantProjectStage, projectErr)
 		}
 		conversationProjection, projectErr := projectSnapshotPart(conversations, localize)
 		if projectErr != nil {
-			return nil, projectErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotAssistantProjectStage, projectErr)
 		}
 		bootstrapProjection, projectErr := projectSnapshotPart(bootstrap, localize)
 		if projectErr != nil {
-			return nil, projectErr
+			return nil, withPlatformSnapshotReadStage(platformSnapshotAssistantProjectStage, projectErr)
 		}
 		state, ok := bootstrapProjection["state"].(map[string]any)
 		if !ok {
-			return nil, errors.New("bootstrap state projection is invalid")
+			return nil, withPlatformSnapshotReadStage(platformSnapshotAssistantProjectStage, errors.New("bootstrap state projection is invalid"))
 		}
 		state["speechTranscription"] = speechAvailabilityMap(server.projectSpeechAvailability(ctx, bootstrap.GetState().GetSpeechTranscription()))
 		return map[string]any{"assistant": assistantProjection, "conversations": conversationProjection, "bootstrap": bootstrapProjection}, nil
@@ -557,17 +574,27 @@ func (multiplexer *sessionMultiplexer) boundedPlatformSnapshot(envelope generate
 }
 
 func (multiplexer *sessionMultiplexer) boundedPlatformSnapshotWithin(ctx context.Context, envelope generated.PlatformSnapshotEnvelope) (generated.PlatformSnapshotEnvelope, error) {
-	for pageSize := int32(platformSnapshotPageSize); ; pageSize = max(1, pageSize/2) {
+	initialPageSize := int32(platformSnapshotPageSize)
+	if envelope.Kind == generated.PlatformResourceKindSystemAssistant {
+		initialPageSize = multiplexer.assistantSnapshotInitialPageSize()
+	}
+	for attempt, pageSize := 1, initialPageSize; ; attempt, pageSize = attempt+1, max(1, pageSize/2) {
+		started := time.Now()
+		parentBudget := runSnapshotParentBudget(ctx, started)
 		rawSnapshot, err := multiplexer.server.projectPlatformSnapshotPage(ctx, string(envelope.Kind), multiplexer.projectRef, multiplexer.localize, pageSize)
 		if err != nil {
 			if status.Code(err) != codes.PermissionDenied {
-				slog.Error(platformSnapshotReadFailure, "kind", envelope.Kind, "error_class", "dependency")
+				observePlatformSnapshotReadFailure(ctx, started, parentBudget, string(envelope.Kind), err, attempt, pageSize)
 			}
 			return generated.PlatformSnapshotEnvelope{}, err
 		}
 		snapshot, err := typedPlatformSnapshot(string(envelope.Kind), rawSnapshot)
 		if err != nil {
-			slog.Error(platformSnapshotValidationFailure, "kind", envelope.Kind, "error_class", "contract")
+			if envelope.Kind == generated.PlatformResourceKindRun {
+				observePlatformSnapshotReadFailure(ctx, started, parentBudget, string(envelope.Kind), withPlatformSnapshotReadStage(platformSnapshotRunProjectStage, errPlatformSnapshotInvalid), attempt, pageSize)
+			} else {
+				slog.Error(platformSnapshotValidationFailure, "kind", envelope.Kind, "error_class", "contract")
+			}
 			return generated.PlatformSnapshotEnvelope{}, errPlatformSnapshotInvalid
 		}
 		envelope.Snapshot = snapshot
@@ -576,6 +603,11 @@ func (multiplexer *sessionMultiplexer) boundedPlatformSnapshotWithin(ctx context
 			return generated.PlatformSnapshotEnvelope{}, errPlatformSnapshotInvalid
 		}
 		if len(encoded) <= maximumFrameBytes {
+			if envelope.Kind == generated.PlatformResourceKindSystemAssistant && ctx.Err() == nil && multiplexer.ctx.Err() == nil {
+				multiplexer.assistantPageHint = assistantSnapshotPageHint{
+					organizationRef: multiplexer.organizationRef, projectRef: multiplexer.projectRef, pageSize: pageSize,
+				}
+			}
 			return envelope, nil
 		}
 		if envelope.Kind != generated.PlatformResourceKindSystemAssistant || pageSize == 1 {
@@ -583,6 +615,16 @@ func (multiplexer *sessionMultiplexer) boundedPlatformSnapshotWithin(ctx context
 			return generated.PlatformSnapshotEnvelope{}, errPlatformSnapshotSize
 		}
 	}
+}
+
+func (multiplexer *sessionMultiplexer) assistantSnapshotInitialPageSize() int32 {
+	hint := multiplexer.assistantPageHint
+	_, size := platformSnapshotDiagnosticPage("SYSTEM_ASSISTANT", 1, hint.pageSize)
+	if size == 0 || hint.organizationRef != multiplexer.organizationRef || hint.projectRef != multiplexer.projectRef || multiplexer.ctx.Err() != nil {
+		multiplexer.assistantPageHint = assistantSnapshotPageHint{}
+		return assistantSnapshotInitialPageSize
+	}
+	return size
 }
 
 func (multiplexer *sessionMultiplexer) sendPlatformBootstrap() ([]generated.PlatformResourceKind, error) {

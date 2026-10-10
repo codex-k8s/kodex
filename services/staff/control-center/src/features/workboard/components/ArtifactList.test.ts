@@ -16,6 +16,7 @@ const source = readFileSync(
 function artifact(index: number): Artifact {
   return {
     ref: `art_result_${String(index)}`,
+    currentRevisionRef: `arv_fixture_${String(index)}`,
     version: 1,
     projectRef: "prj_results",
     fileName:

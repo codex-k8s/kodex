@@ -57,10 +57,11 @@ type brokerRequest struct {
 }
 
 type brokerResponse struct {
-	Result         Result                `json:"result"`
-	Failure        providerBrokerFailure `json:"failure,omitempty"`
-	OK             bool                  `json:"ok"`
-	RolloutCapture *rolloutCaptureProof  `json:"rollout_capture,omitempty"`
+	Result         Result                                     `json:"result"`
+	Failure        providerBrokerFailure                      `json:"failure,omitempty"`
+	OK             bool                                       `json:"ok"`
+	RolloutCapture *rolloutCaptureProof                       `json:"rollout_capture,omitempty"`
+	Diagnostic     *runtimecontract.ProviderFailureDiagnostic `json:"diagnostic,omitempty"`
 }
 
 // Подтверждение создаётся только чтением настоящего источника. Exported поля
@@ -334,10 +335,22 @@ func providerSafeFailureClass(err error) string {
 }
 
 func logProviderSafeFailure(stage providerExecutionStage, err error) {
+	diagnostic, code := providerFailureDetails(stage, err)
+	log.Printf(providerSafeFailureLog, stage, diagnostic.Class, diagnostic.Detail, code, diagnostic.Notification, diagnostic.AccountRead, diagnostic.NotificationError)
+}
+
+func providerFailureDetails(stage providerExecutionStage, err error) (runtimecontract.ProviderFailureDiagnostic, int64) {
 	detail, code := "NONE", int64(0)
 	notification := "NONE"
 	notificationError := "NONE"
 	accountRead := "NONE"
+	var resumeFailure *resumeSourceFailure
+	if stage == providerStageThreadRead && providerSafeFailureClass(err) == "PROVIDER" && errors.As(err, &resumeFailure) {
+		switch resumeFailure.detail {
+		case "RESUME_SOURCE_SCHEMA", "RESUME_SOURCE_ID", "RESUME_SOURCE_LOCATOR", "RESUME_SOURCE_OPEN", "RESUME_SOURCE_METADATA", "RESUME_SOURCE_IDENTITY":
+			detail = resumeFailure.detail
+		}
+	}
 	var failure *appServerCallFailure
 	if errors.As(err, &failure) {
 		switch failure.detail {
@@ -365,7 +378,23 @@ func logProviderSafeFailure(stage providerExecutionStage, err error) {
 			}
 		}
 	}
-	log.Printf(providerSafeFailureLog, stage, providerSafeFailureClass(err), detail, code, notification, accountRead, notificationError)
+	return runtimecontract.ProviderFailureDiagnostic{Kind: "REQUEST_FAILURE", Stage: string(stage),
+		Class: providerSafeFailureClass(err), Detail: detail, Notification: notification,
+		AccountRead: accountRead, NotificationError: notificationError}, code
+}
+
+func bindProviderDiagnostic(input model.Input, value runtimecontract.ProviderFailureDiagnostic) *runtimecontract.ProviderFailureDiagnostic {
+	value.Schema, value.RuntimeRevisionDigest, value.InputDigest = runtimecontract.ProviderFailureDiagnosticSchema, input.RuntimeRevisionDigest, input.InputDigest
+	value.ExecutionBindingDigest, value.SessionRef, value.TurnRef, value.Attempt = input.ExecutionBindingDigest, input.SessionRef, input.TurnRef, input.Attempt
+	switch value.Notification {
+	case "NONE", "UNKNOWN", "thread/tokenUsage/updated", "rawResponse/completed":
+	default:
+		value.Notification = "UNKNOWN"
+	}
+	if value.Validate() != nil {
+		return nil
+	}
+	return &value
 }
 
 // Дополнительные методы Codex 0.160.0 разрешены только для закрытой диагностики,
@@ -472,12 +501,13 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver 
 		len(request.Prompt) == 0 || len(request.Prompt) > 1<<20 {
 		return atProviderStage(providerStageBrokerRequest, errors.New("provider broker request is invalid"))
 	}
+	frames := &brokerFrameWriter{writer: connection, input: &request.Input}
 	if err := ValidateRuntimeProfile(request.Input); err != nil {
-		return writeProviderBrokerFailureAtStage(connection, providerStageSelection, err)
+		return writeProviderBrokerFailureAtStage(frames, providerStageSelection, err)
 	}
 	snapshot, err := request.Input.RequiredContextSnapshot(time.Now())
 	if err != nil || verifyProviderContext(request.Input, snapshot) != nil {
-		return writeProviderBrokerFailureAtStage(connection, providerStageContext, ErrRuntimeProfile)
+		return writeProviderBrokerFailureAtStage(frames, providerStageContext, ErrRuntimeProfile)
 	}
 	ctx, cancelContext := snapshot.BoundExecutionContext(ctx)
 	defer cancelContext()
@@ -490,32 +520,31 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver 
 	defer cancelDeadline()
 	auth, err := readProviderAuthentication(request.Input)
 	if err != nil {
-		return writeProviderBrokerFailureAtStage(connection, providerStageAuthRead, err)
+		return writeProviderBrokerFailureAtStage(frames, providerStageAuthRead, err)
 	}
 	defer clear(auth)
 	expectedDigest, err := pinnedProviderDigest(request.Input)
 	if err != nil {
-		return writeProviderBrokerFailureAtStage(connection, providerStageAccountPin, err)
+		return writeProviderBrokerFailureAtStage(frames, providerStageAccountPin, err)
 	}
 	digest := sha256.Sum256(auth)
 	if hex.EncodeToString(digest[:]) != expectedDigest {
-		return writeProviderBrokerFailureAtStage(connection, providerStageAccountPin, errors.New("provider broker account pin mismatch"))
+		return writeProviderBrokerFailureAtStage(frames, providerStageAccountPin, errors.New("provider broker account pin mismatch"))
 	}
 	if request.MCPSocket != "/run/kodex/provider/mcp-authority.sock" || len(request.MCPProxyToken) != 64 {
-		return writeProviderBrokerFailureAtStage(connection, providerStageMCPBinding, errors.New("provider broker MCP binding is invalid"))
+		return writeProviderBrokerFailureAtStage(frames, providerStageMCPBinding, errors.New("provider broker MCP binding is invalid"))
 	}
 	if _, err := hex.DecodeString(request.MCPProxyToken); err != nil {
-		return writeProviderBrokerFailureAtStage(connection, providerStageMCPBinding, errors.New("provider broker MCP capability is invalid"))
+		return writeProviderBrokerFailureAtStage(frames, providerStageMCPBinding, errors.New("provider broker MCP capability is invalid"))
 	}
 	bridge, err := startProviderMCPBridge(ctx, request.MCPSocket, request.MCPProxyToken, request.Input)
 	if err != nil {
-		return writeProviderBrokerFailureAtStage(connection, providerStageMCPBridge, err)
+		return writeProviderBrokerFailureAtStage(frames, providerStageMCPBridge, err)
 	}
 	defer bridge.Close()
 	if err := PrepareHomeWithAuth(request.Input, bridge.URL(), auth); err != nil {
-		return writeProviderBrokerFailureAtStage(connection, providerStageHomePrepare, err)
+		return writeProviderBrokerFailureAtStage(frames, providerStageHomePrepare, err)
 	}
-	frames := &brokerFrameWriter{writer: connection}
 	execute := func(ctx context.Context, input model.Input, prompt []byte, token string) (Result, error) {
 		return executeLocalWithInputProof(ctx, input, prompt, token, frames.activity, proofObserver)
 	}
@@ -527,7 +556,13 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver 
 	if result.Outcome != "SUCCEEDED" {
 		log.Printf("Codex provider turn completed with safe failure code: %s", result.FailureCode)
 	}
-	return frames.finish(brokerResponse{Result: result, OK: true})
+	var diagnostic *runtimecontract.ProviderFailureDiagnostic
+	if result.Outcome != "SUCCEEDED" {
+		diagnostic = bindProviderDiagnostic(request.Input, runtimecontract.ProviderFailureDiagnostic{
+			Kind: "TERMINAL_FAILURE", Stage: "TERMINAL_RESULT", Class: "PROVIDER", Detail: "NONE",
+			Notification: "NONE", NotificationError: "NONE", AccountRead: "NONE", TerminalCode: result.FailureCode})
+	}
+	return frames.finish(brokerResponse{Result: result, OK: true, Diagnostic: diagnostic})
 }
 
 func writeProviderBrokerFailure(connection io.Writer, err error) error {
@@ -536,13 +571,13 @@ func writeProviderBrokerFailure(connection io.Writer, err error) error {
 
 func writeProviderBrokerFailureAtStage(connection io.Writer, stage providerExecutionStage, err error) error {
 	logProviderSafeFailure(stage, err)
-	return writeProviderBrokerFailure(connection, err)
+	return writeProviderBrokerFailure(connection, atProviderStage(stage, err))
 }
 
 // Ошибка не подтверждает итог или credential effect. Измеренный расход и
 // безопасная native timeline сохраняются независимо от этого исхода.
 func failedProviderResult(result Result) Result {
-	failed := Result{Usage: result.Usage, UsageCompleteness: result.UsageCompleteness, ToolCalls: result.ToolCalls}
+	failed := Result{Usage: result.Usage, UsageCompleteness: result.UsageCompleteness, ToolCalls: result.ToolCalls, providerDiagnostic: result.providerDiagnostic}
 	if result.rolloutCapture != nil && result.rolloutCapture.sealed && result.matchesCapture(result.rolloutCapture) {
 		failed = withRolloutCapture(failed, result.rolloutCapture)
 		failed.ArchivePath = result.ArchivePath
@@ -551,10 +586,16 @@ func failedProviderResult(result Result) Result {
 }
 
 func writeProviderBrokerResultFailure(connection io.Writer, result Result, err error) error {
+	var diagnostic *runtimecontract.ProviderFailureDiagnostic
+	if frames, ok := connection.(*brokerFrameWriter); ok && frames.input != nil {
+		value, _ := providerFailureDetails(providerStageOf(err), err)
+		diagnostic = bindProviderDiagnostic(*frames.input, value)
+	}
 	return writeBrokerTerminal(connection, brokerResponse{
-		Result:  failedProviderResult(result),
-		Failure: classifyProviderBrokerFailure(err),
-		OK:      false,
+		Result:     failedProviderResult(result),
+		Failure:    classifyProviderBrokerFailure(err),
+		OK:         false,
+		Diagnostic: diagnostic,
 	})
 }
 

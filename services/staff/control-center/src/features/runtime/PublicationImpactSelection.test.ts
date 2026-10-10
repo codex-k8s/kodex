@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { createI18n } from "vue-i18n";
 import { createPinia, setActivePinia } from "pinia";
+import { readFileSync } from "node:fs";
 import type { Ref } from "vue";
 import { captureSetupState } from "@/test-utils/setup-harness";
 import type {
@@ -113,4 +114,57 @@ it("поиск создаёт новый bounded default selection без ста
   state.query.value = "filtered";
   await state.load();
   expect([...state.selected.value]).toEqual(["filtered"]);
+});
+
+it("держит подтверждение видимым и компактные сведения над доступным scroll списком", () => {
+  const source = readFileSync(
+    new URL("./PublicationImpactSelection.vue", import.meta.url),
+    "utf8",
+  );
+  expect(source).toContain('class="publication-impact__summary"');
+  expect(source).toContain('class="publication-impact__actions"');
+  expect(source).toContain('tabindex="0"');
+  expect(source).toContain("max-height: min(280px, 40dvh)");
+  expect(source).toContain("min-height: 56px");
+  expect(source).toContain("overscroll-behavior: contain");
+  expect(source).toContain("background: var(--surface)");
+  expect(source).toContain("z-index: 1");
+  expect(source).toContain('class="publication-impact__identity"');
+  expect(source).not.toContain(".publication-impact__item > span");
+  expect(source).toMatch(
+    /\.publication-impact__item > \.status-badge\s*\{\s*flex: 0 0 auto;/,
+  );
+  expect(source).toMatch(
+    /\.publication-impact__actions\s*\{[^}]*position: sticky;[^}]*bottom: 0;/,
+  );
+  expect(source).toContain('$t("publicationImpact.explanation")');
+  expect(source).toContain('v-for="(item, index) in page.items"');
+  expect(source).toContain(':disabled="!editable"');
+  expect(source).toContain('@click="publish"');
+  const listEnd = source.indexOf("</div>\n      <p\n        v-if=");
+  expect(listEnd).toBeGreaterThan(
+    source.indexOf('class="publication-impact__items"'),
+  );
+  expect(source.indexOf('class="publication-impact__actions"')).toBeGreaterThan(
+    listEnd,
+  );
+});
+
+it("bounded layout сохраняет все загруженные строки и выбранные refs без усечения до пяти", async () => {
+  const items = Array.from({ length: 25 }, (_, index) =>
+    item(`row_${String(index)}`, "PENDING"),
+  );
+  const largePlan = { ...plan, total: items.length };
+  impact.read.mockResolvedValue({
+    plan: largePlan,
+    total: items.length,
+    items,
+    nextPageToken: "",
+  });
+  const state = await selection();
+  expect(state.page.value?.items).toHaveLength(25);
+  expect(state.selected.value.size).toBe(25);
+  state.toggle("row_24");
+  expect(state.selected.value.has("row_24")).toBe(false);
+  expect(state.page.value?.items.at(-1)?.ref).toBe("row_24");
 });

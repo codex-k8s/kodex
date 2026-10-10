@@ -1,9 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 import { computed, reactive } from "vue";
+
+vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
 
 import {
   assistantAgentEnvironmentBindingTarget,
   assistantActiveUserTurn,
+  assistantPlanCardPresentation,
   assistantConversationStorageBlocker,
   assistantAwaitingReply,
   assistantCreatedScheduleTarget,
@@ -34,6 +39,113 @@ import type {
   Run,
   SystemAssistant,
 } from "@/shared/api/generated/openapi/types.gen";
+import { i18n } from "@/app/i18n";
+import { appliedFilePlanFixture } from "./project-file-plan.fixtures";
+
+describe("assistant terminal card edit hints", () => {
+  it("fallback первой APPLIED markdown-карточки использует ту же проекцию, не raw turn.content", () => {
+    const workspace = readFileSync(
+      new URL("./components/AssistantWorkspace.vue", import.meta.url),
+      "utf8",
+    );
+    const fallback = workspace.match(
+      /<SafeMarkdown\s+v-if="\s*turn\.plan\.state === 'APPLIED'[^]*?\/>/,
+    )?.[0];
+    expect(fallback).toBeDefined();
+    expect(fallback).toContain("!turnHasPublishedMessage(turn)");
+    expect(fallback).toContain("planCardFallbackContent(turn)");
+    expect(fallback).not.toContain(':content="transcriptTurnContent(turn)"');
+    expect(workspace).toMatch(
+      /planCardPresentation\(\{ \.\.\.turn\.plan, auditSummary: content \}\)\s*\.auditSummary/,
+    );
+    const definition = workspace.match(
+      /function planCardFallbackContent\(turn: AssistantTurn\): string \{[^]*?\n\}/,
+    )?.[0];
+    if (!definition) throw new Error("Fallback presentation is missing");
+    const hints = {
+      plan: i18n.global.t("assistant.planEditor.editedPlanSummary"),
+      operation: i18n.global.t("assistant.planEditor.editedOperationSummary"),
+    };
+    const resolve = runInNewContext(
+      definition.replace("(turn: AssistantTurn): string", "(turn)") +
+        "\nplanCardFallbackContent",
+      {
+        transcriptTurnContent: (turn: Pick<AssistantTurn, "content">) =>
+          turn.content,
+        planCardPresentation: (plan: AssistantPlan) =>
+          assistantPlanCardPresentation(plan, hints),
+      },
+    ) as (turn: Pick<AssistantTurn, "content" | "plan">) => string;
+    const plan = appliedFilePlanFixture();
+    const original = JSON.stringify(plan);
+    expect(resolve({ plan, content: hints.plan })).toBe("");
+    expect(JSON.stringify(plan)).toBe(original);
+    for (const content of ["**Процесс создан**", `${hints.plan}\nПодробности`])
+      expect(resolve({ plan, content })).toBe(content);
+    expect(resolve({ content: hints.plan })).toBe(hints.plan);
+    expect(
+      resolve({ plan: { ...plan, state: "VALID" }, content: hints.plan }),
+    ).toBe(hints.plan);
+  });
+  it.each(["ru", "en"] as const)(
+    "%s: скрывает только точные edit-hints APPLIED/REJECTED без изменения audit и операций",
+    (locale) => {
+      const originalLocale = i18n.global.locale.value;
+      i18n.global.locale.value = locale;
+      try {
+        const hints = {
+          plan: i18n.global.t("assistant.planEditor.editedPlanSummary"),
+          operation: i18n.global.t(
+            "assistant.planEditor.editedOperationSummary",
+          ),
+        };
+        for (const state of ["APPLIED", "REJECTED"] as const) {
+          const input = appliedFilePlanFixture();
+          input.state = state;
+          input.auditSummary = hints.plan;
+          const first = input.operations[0];
+          if (!first) throw new Error("Synthetic operation is missing");
+          first.summary = hints.operation;
+          const original = JSON.stringify(input);
+          const result = assistantPlanCardPresentation(input, hints);
+          expect(result.auditSummary).toBe("");
+          expect(result.operations[0]?.summary).toBe("");
+          expect(result.operations[0]).toEqual({ ...first, summary: "" });
+          expect(JSON.stringify(input)).toBe(original);
+          for (const text of [
+            "**Изменён файл**: сохранена новая ревизия.",
+            `${hints.plan}\nСодержательное последствие`,
+            `${hints.operation} Дополнительное последствие`,
+            ` ${hints.plan}`,
+          ]) {
+            input.auditSummary = text;
+            first.summary = text;
+            const visible = assistantPlanCardPresentation(input, hints);
+            expect(visible.auditSummary).toBe(text);
+            expect(visible.operations[0]).toBe(first);
+          }
+        }
+        for (const state of ["DRAFT", "VALID", "INVALID", "STALE"] as const) {
+          const input = appliedFilePlanFixture();
+          input.state = state;
+          if (state === "STALE" && input.receipt)
+            input.receipt.outcome = "CONFLICT";
+          input.auditSummary = hints.plan;
+          const first = input.operations[0];
+          if (!first) throw new Error("Synthetic operation is missing");
+          first.summary = hints.operation;
+          expect(assistantPlanCardPresentation(input, hints)).toEqual({
+            auditSummary: hints.plan,
+            operations: input.operations,
+          });
+          expect(input.receipt).toBeDefined();
+        }
+      } finally {
+        i18n.global.locale.value = originalLocale;
+      }
+    },
+  );
+});
 
 describe("assistant reply indicator", () => {
   it("распознаёт создание проектного помощника отдельно от обычного сотрудника", () => {

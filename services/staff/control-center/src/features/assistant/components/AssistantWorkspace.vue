@@ -43,6 +43,7 @@ import AssistantProjectProfileSetup from "./AssistantProjectProfileSetup.vue";
 import AssistantCreatedScheduleCard from "@/features/assistant/components/AssistantCreatedScheduleCard.vue";
 import AssistantCreatedEntityCard from "@/features/assistant/components/AssistantCreatedEntityCard.vue";
 import AssistantCreatedProjectFileCard from "@/features/assistant/components/AssistantCreatedProjectFileCard.vue";
+import AssistantProjectFileRevisionCard from "./AssistantProjectFileRevisionCard.vue";
 import AssistantInstructionDraftCard from "@/features/assistant/components/AssistantInstructionDraftCard.vue";
 import AssistantAgentEnvironmentBindingCard from "@/features/assistant/components/AssistantAgentEnvironmentBindingCard.vue";
 import AssistantCreatedWorkflowCard from "@/features/assistant/components/AssistantCreatedWorkflowCard.vue";
@@ -73,6 +74,7 @@ import {
 } from "@/features/assistant/events";
 import {
   assistantActiveUserTurn,
+  assistantPlanCardPresentation,
   assistantEffectiveRuntimeState,
   assistantRequiresProviderAccount,
   operationActionLabel,
@@ -82,6 +84,7 @@ import {
 import { useAssistantStore } from "@/features/assistant/store";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
+import { createAssistantTranscriptSubscriptions } from "@/features/assistant/transcript-subscriptions";
 import { organizationRuntimeResourceScope } from "@/features/runtime/resource-scope";
 import {
   persistAssistantConversationRef,
@@ -167,6 +170,13 @@ function operationTargetKindLabel(kind: string): string {
 }
 
 const { t } = useI18n();
+
+function planCardPresentation(plan: AssistantPlan) {
+  return assistantPlanCardPresentation(plan, {
+    plan: t("assistant.planEditor.editedPlanSummary"),
+    operation: t("assistant.planEditor.editedOperationSummary"),
+  });
+}
 const serverMessage = useServerMessage();
 const route = useRoute();
 const router = useRouter();
@@ -227,6 +237,12 @@ function transcriptTurnContent(turn: AssistantTurn): string {
     turn.role !== "USER" ? runtimeProgressKey(turn.content) : undefined;
   return key ? t(key) : turn.content;
 }
+function planCardFallbackContent(turn: AssistantTurn): string {
+  const content = transcriptTurnContent(turn);
+  if (!turn.plan) return content;
+  return planCardPresentation({ ...turn.plan, auditSummary: content })
+    .auditSummary;
+}
 function turnIsEmptyTerminalReceipt(turn: AssistantTurn): boolean {
   const run = turn.runRef ? platform.runs[turn.runRef] : undefined;
   const graph = run
@@ -268,8 +284,23 @@ const chatActiveItemId = computed(() =>
     closedTranscriptExecutionKeys.value,
   ),
 );
-const transcriptLeases = new Map<string, () => void>();
-let transcriptReadGeneration = 0;
+const transcriptSubscriptions = createAssistantTranscriptSubscriptions({
+  loadRun: (runRef, signal) => platform.loadRun(runRef, signal),
+  loadHistory: (runRef, signal) => platform.loadRunTranscript(runRef, signal),
+  ready: (runRef) =>
+    Boolean(platform.graphs[runRef]) && !platform.runProblems[runRef],
+  sequence: (runRef) => platform.graphs[runRef]?.sequence ?? -1,
+  historySequence: (runRef) => platform.runTranscriptSequence(runRef),
+  acquire: (runRef) => realtime.acquireRun(runRef),
+});
+const transcriptProblem = computed(() => {
+  for (const runRef of [...conversationRunRefs.value].reverse()) {
+    const problem =
+      platform.runTranscriptProblems[runRef] ?? platform.runProblems[runRef];
+    if (problem) return { runRef, problem };
+  }
+  return undefined;
+});
 const systemResourceScope = computed(() =>
   organizationRuntimeResourceScope(platform.bootstrap),
 );
@@ -1410,6 +1441,7 @@ async function applyPlan(): Promise<void> {
         kinds.add("PROJECT");
         break;
       case "CREATE_PROJECT_FILE":
+      case "CREATE_PROJECT_FILE_REVISION":
         kinds.add("ARTIFACT");
         break;
       case "CREATE_AGENT":
@@ -1637,27 +1669,21 @@ watch(
     open,
     () => props.live,
     () => store.selectedConversation?.ref,
-    conversationRunRefs,
+    () => store.assistantScope,
+    () => platform.bootstrap?.organizationRef,
+    () =>
+      conversationRunRefs.value.map((runRef) => [
+        runRef,
+        platform.graphs[runRef]?.sequence,
+      ]),
   ],
-  async () => {
-    const generation = ++transcriptReadGeneration;
-    const wanted =
-      open.value && props.live
-        ? new Set(conversationRunRefs.value)
-        : new Set<string>();
-    for (const [runRef, release] of transcriptLeases) {
-      if (wanted.has(runRef)) continue;
-      release();
-      transcriptLeases.delete(runRef);
-    }
-    // Общий owner-checked history path; чтения пока последовательны.
-    for (const runRef of wanted) {
-      if (transcriptLeases.has(runRef)) continue;
-      await platform.loadRun(runRef);
-      if (generation !== transcriptReadGeneration) return;
-      if (!platform.runProblems[runRef] && platform.graphs[runRef])
-        transcriptLeases.set(runRef, realtime.acquireRun(runRef));
-    }
+  () => {
+    const conversation = store.selectedConversation;
+    const scope =
+      open.value && props.live && conversation
+        ? `${store.assistantScope}:${platform.bootstrap?.organizationRef ?? ""}:${conversation.ref}`
+        : undefined;
+    transcriptSubscriptions.sync(scope, conversationRunRefs.value);
   },
   { immediate: true },
 );
@@ -1674,9 +1700,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   ++prefillGeneration.value;
-  ++transcriptReadGeneration;
-  for (const release of transcriptLeases.values()) release();
-  transcriptLeases.clear();
+  transcriptSubscriptions.close();
   workspaceMounted = false;
   cancelLatestRestore();
   chatResizeObserver?.disconnect();
@@ -1759,6 +1783,8 @@ onBeforeUnmount(() => {
             $t("assistant.projectProfile.scopeLabel")
           }}</span>
           <select
+            name="assistant-scope"
+            :aria-label="$t('assistant.projectProfile.scopeLabel')"
             :value="store.assistantScope"
             :disabled="store.busy || store.loading"
             @change="selectAssistantScope"
@@ -2238,6 +2264,13 @@ onBeforeUnmount(() => {
                 </template>
               </div>
               <template v-else>
+                <ProblemNotice
+                  v-if="transcriptProblem"
+                  :problem="transcriptProblem.problem"
+                  @retry="
+                    transcriptSubscriptions.retry(transcriptProblem.runRef)
+                  "
+                />
                 <template v-for="entry in chatTimeline" :key="entry.id">
                   <RunActivityView
                     v-if="entry.kind === 'ACTIVITY'"
@@ -2333,9 +2366,10 @@ onBeforeUnmount(() => {
                         <SafeMarkdown
                           v-if="
                             turn.plan.state === 'APPLIED' &&
-                            !turnHasPublishedMessage(turn)
+                            !turnHasPublishedMessage(turn) &&
+                            planCardFallbackContent(turn)
                           "
-                          :content="transcriptTurnContent(turn)"
+                          :content="planCardFallbackContent(turn)"
                         />
                         <header>
                           <ListChecks :size="19" aria-hidden="true" />
@@ -2356,12 +2390,19 @@ onBeforeUnmount(() => {
                         </header>
                         <SafeMarkdown
                           v-if="
+                            planCardPresentation(turn.plan).auditSummary &&
                             turn.plan.auditSummary.trim() !==
-                            turn.content.trim()
+                              turn.content.trim()
                           "
-                          :content="turn.plan.auditSummary"
+                          :content="
+                            planCardPresentation(turn.plan).auditSummary
+                          "
                         />
-                        <AssistantPlanCard :operations="turn.plan.operations">
+                        <AssistantPlanCard
+                          :operations="
+                            planCardPresentation(turn.plan).operations
+                          "
+                        >
                           <template #operation="{ operation }">
                             <header>
                               <span class="assistant-plan-card__action">
@@ -2381,7 +2422,9 @@ onBeforeUnmount(() => {
                             <span v-if="operationSupportingTitle(operation)">{{
                               operationSupportingTitle(operation)
                             }}</span>
-                            <p>{{ operation.summary }}</p>
+                            <p v-if="operation.summary">
+                              {{ operation.summary }}
+                            </p>
                           </template>
                         </AssistantPlanCard>
                         <AssistantRoleImageBuildCard
@@ -2417,6 +2460,15 @@ onBeforeUnmount(() => {
                             (item) => item.type === 'CREATE_PROJECT_FILE',
                           )"
                           :key="`file-${operation.ref}`"
+                          :plan="turn.plan"
+                          :operation-ref="operation.ref"
+                        />
+                        <AssistantProjectFileRevisionCard
+                          v-for="operation in turn.plan.operations.filter(
+                            (item) =>
+                              item.type === 'CREATE_PROJECT_FILE_REVISION',
+                          )"
+                          :key="`file-revision-${operation.ref}`"
                           :plan="turn.plan"
                           :operation-ref="operation.ref"
                         />

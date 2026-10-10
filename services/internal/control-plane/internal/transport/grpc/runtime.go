@@ -367,6 +367,9 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 	if err != nil {
 		return nil, err
 	}
+	if request.GetAssistantTaskSessionRead() != nil {
+		return server.readAssistantTaskSession(ctx, p, request)
+	}
 	if catalog := request.GetAssistantConfigurationCatalog(); catalog != nil {
 		if len(request.ProtoReflect().GetUnknown()) != 0 || len(catalog.ProtoReflect().GetUnknown()) != 0 || request.GetQuery() != "" || request.GetIntegrationDefinitionCatalog() || request.GetDefinitionQuery() != "" || request.GetDefinitionOffset() != 0 {
 			return nil, transportError(errs.ErrInvalid)
@@ -377,6 +380,9 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 			return nil, assistantCatalogTransportError(catalog.GetKind(), err)
 		}
 		response := &controlplanev1.AssistantConfigurationCatalogResponse{Kind: catalog.GetKind(), AssistantRef: result.AssistantRef, ScopeKind: result.ScopeKind, OrganizationRef: result.OrganizationRef, ProjectRef: result.ProjectRef, AssistantProfileRef: result.AssistantProfileRef, NextOffset: result.NextOffset}
+		if agent := result.AgentRuntimeConfiguration; agent != nil {
+			response.AgentRuntimeConfiguration = &controlplanev1.AssistantAgentRuntimeConfiguration{AgentRef: agent.AgentRef, ProjectRef: agent.ProjectRef, Version: agent.Version, ConfigurationJson: agent.ConfigurationJSON, ConfigurationSha256: agent.ConfigurationSHA256}
+		}
 		if agent := result.AgentConfiguration; agent != nil {
 			response.AgentConfiguration = &controlplanev1.AssistantAgentConfiguration{AgentRef: agent.AgentRef, ProjectRef: agent.ProjectRef, Version: agent.Version, ConfigurationJson: agent.ConfigurationJSON, ConfigurationSha256: agent.ConfigurationSHA256}
 		}

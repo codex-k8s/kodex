@@ -11,7 +11,15 @@ import (
 	"unicode/utf8"
 )
 
-const PromptServiceRevision = "prompt-service-v2"
+const PromptServiceRevision = "prompt-service-v3"
+
+const pinnedPromptServiceRevisionV2 = "prompt-service-v2"
+
+// Существующие owner-sealed снимки v2 сохраняют прежнюю интерпретацию.
+// Неизвестные версии закрыто отклоняются без поиска совместимого decoder.
+func supportedPromptServiceRevision(revision string) bool {
+	return revision == PromptServiceRevision || revision == pinnedPromptServiceRevisionV2
+}
 
 // PromptRuntimeContractVersion допускает ровно числовую owner version 1
 // до и после JSON persistence, без округления дроби или разбора строки.
@@ -38,10 +46,10 @@ type PromptServiceEnvelope struct {
 }
 
 // DecodePromptService принимает только provenance из связанного owner snapshot,
-// а не marker внутри пользовательского текста. Пустая revision означает legacy.
+// а не marker внутри пользовательского текста. Неизвестная revision закрыто отклоняется.
 func DecodePromptService(input RunnerInput) (PromptServiceEnvelope, error) {
 	var value PromptServiceEnvelope
-	if input.PromptServiceTemplateRevision != PromptServiceRevision ||
+	if !supportedPromptServiceRevision(input.PromptServiceTemplateRevision) ||
 		!sha256Pattern.MatchString(input.PromptServiceTemplateDigest) ||
 		len(input.Instructions) > 256<<10 || !utf8.ValidString(input.Instructions) {
 		return value, errPromptService

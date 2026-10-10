@@ -1,0 +1,60 @@
+{
+  "format": "selfdev-checkpoints-v1",
+  "baselineSha256": "0c84dc5f993230e1855c7295cbb1580c64c17948d0b95f96aebab12286452ec2",
+  "parts": [
+    {
+      "file": "checkpoints-001.txt",
+      "bytes": [
+        0,
+        57810
+      ],
+      "size": 57810,
+      "sha256": "5b37be49d271b7528f9006c619ab6c78ebc18258f8d145df933d68ca5706f772",
+      "source": {
+        "revision": "16e1b814751d4369ce1f1ccf58551bca78d42f58",
+        "file": "checkpoint-source-47495cfd74be9cd2d921e6a30b35c2546d3af5c2.txt",
+        "gitBlob": "47495cfd74be9cd2d921e6a30b35c2546d3af5c2",
+        "sha256": "e15dc3c1d77f4eba7149c0fc61c41cf68151b659b86327bed560f8f16df3eb2f",
+        "size": 130619,
+        "historyStart": 0,
+        "historyEnd": 58263
+      }
+    },
+    {
+      "file": "checkpoints-002.txt",
+      "bytes": [
+        57810,
+        109248
+      ],
+      "size": 51438,
+      "sha256": "963460f63bbe6bb651c9d0aa0d1fb5ceea1bfe62d8bc856949dfa3ea4778c698",
+      "source": {
+        "revision": "eb504c4685977d0fdd0f384b36dd8e7215289aa5",
+        "file": "checkpoint-source-836473dd15f2c522fa323bdc52779649d7df1758.txt",
+        "gitBlob": "836473dd15f2c522fa323bdc52779649d7df1758",
+        "sha256": "685baa6d2e69101ed159132a8a880c30bd5c66d817e7aa0a0d19a2c23f19ce5d",
+        "size": 130262,
+        "historyStart": 57810,
+        "historyEnd": 115716
+      }
+    },
+    {
+      "file": "checkpoints-003.txt",
+      "bytes": [
+        109248,
+        161087
+      ],
+      "size": 51839,
+      "sha256": "5b6e48ec991e032c1857cd49ffe4dbc9b84512018ee58a5b2420294f38fb88ef",
+      "source": {
+        "revision": "fe527466a1f62455fe7c9ba6ac3b47eb6853254e",
+        "file": "checkpoint-source-e006a676249491dde75217a11b506e29f9db3ea2.txt",
+        "gitBlob": "e006a676249491dde75217a11b506e29f9db3ea2",
+        "sha256": "c1e0dcb40918224eaa3a0e71c6ee33542e7cade1d35dc626e823b0cdb385976a",
+        "size": 126272,
+        "historyStart": 109248,
+        "historyEnd": 163164
+      }
+    }
+  ]
+}

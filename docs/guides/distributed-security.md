@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.15
-updated: 2026-10-08
+version: 1.7.17
+updated: 2026-10-10
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -314,6 +314,14 @@ policy. Общий session proof без привязки содержимого 
 Повторный initial request, неверный дайджест, отсутствие mTLS или replay
 закрыто отклоняются. Срок stream ограничен deadline и не продлевает grant.
 
+При добавлении streaming RPC его exact full method и stream shape согласованно
+включаются в реестр authority, client adapter, server allowlist и применимый
+рабочий readiness path. Проверка проходит через фактические stream interceptors
+и generated request/response, а не только handler stub; она сохраняет actor,
+credential, привязку запроса и отзыв до следующего chunk. Неизвестный метод или
+неверная форма stream закрыто отклоняются до обращения к owner. Unary metadata
+readiness либо успешный старый content path не доказывают новый stream path.
+
 Передача большого файла ограничивает размер отдельного chunk и общий размер,
 проверяет размер и checksum полного источника, затем повторяет текущую owner
 eligibility перед terminal receipt. Consumer держит partial bytes в ограниченном
@@ -321,6 +329,17 @@ eligibility перед terminal receipt. Consumer держит partial bytes в 
 Ошибка, отмена, отзыв или повреждение удаляют этот файл; содержимое, временные
 пути и удостоверения не попадают в диагностику. Разрешённый размер файла не
 обеспечивается увеличением общего unary buffer до размера всего файла.
+
+В object-storage adapter один immutable `Put` не повторяется скрыто внутри
+SDK при HTTP-ошибке или обрыве после передачи тела: неизвестный исход принадлежит
+owner intent/receipt lifecycle, а не автоматическому повтору записи. Retry
+`Head`/`Get`/`Delete` имеет отдельный контракт и не меняется вместе с `Put`.
+Bounded body для подписанного S3 payload сохраняет требуемый SDK `io.Seeker`:
+ограничивающая reader-обёртка не должна терять `Seek`. Для небольшого уже
+inspected body допустим ограниченный in-memory snapshot с повторной проверкой
+size/digest; он не попадает в PostgreSQL, audit, outbox или prompt. Проверка
+охватывает реальный SDK HTTP path, exact receipt и неизвестный исход, а не
+только in-memory adapter, который не выполняет payload signing.
 
 Постраничное native-чтение текста сохраняет тот же полный verified source:
 каждая страница выдаётся только после проверки всего размера, SHA256,
@@ -1583,8 +1602,14 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   credential-free GitHub origin (с `.git` либо без), runtime file access и
   существующие readonly mounts CP/gateway/PWA. Ignored owner-private `.env`
   допускается только по metadata, без чтения, загрузки, переноса или нового
-  mount. Общий protected source inspector не ослабляется. Dockerfile-specific
-  context задаётся deny-all allowlist фактических COPY-входов с последними
+  mount. Общий protected source inspector не допускает secret-bearing env.
+  Единственный структурный env mountpoint нового clean clone — пустой ignored
+  untracked `.env`: regular single-link файл текущего владельца с exact `0600`.
+  Его отсутствие устраняет exclusive anchored create без чтения либо перезаписи
+  existing owner file. Непустой файл, symlink, hardlink, другой владелец/режим или
+  private env другого имени закрыто отклоняется protected inspector; публичные
+  tracked examples не являются runtime input. ConfigMap mask остаётся обязательной.
+  Dockerfile-specific context задаётся deny-all allowlist фактических COPY-входов с последними
   private exclusions; ignore-файл входит в input digest/cache key. Closed COPY
   сам по себе не доказывает исключение private files из передаваемого context.
 - Read-only availability включает не только claimable admission, но и
@@ -1695,6 +1720,36 @@ UID/spec/resourceVersion/OCC, immutable опубликованные image/polic
 grants и внешних effects. Неизвестное состояние, неполное чтение или изменение
 pins закрыто останавливают обслуживание; history/receipts не удаляются для
 получения искусственного idle.
+
+Счётчик ожидающих публикаций образов отличает исторический snapshot от
+достижимой работы только по строгому read-only доказательству владельца.
+Исключается лишь `PENDING` без запроса публикации (включая обратную ссылку),
+promoted reference и любых следов claim/fence/authorization, с полным допустимым
+заключением и точным завершённым build того же organization/project/scope.
+Текущий активный рецепт должен иметь строго большие **обе** монотонные величины:
+version и generation. Штатные request/claim требуют их точного равенства
+artifact; назад они не переводятся. Число таких superseded snapshots выводится
+отдельно; сами artifacts, receipts и promoted pins не меняются. Неизвестные,
+неполные, текущие, requested, `CLAIMED` и `AUTHORIZED` состояния по-прежнему
+блокируют обслуживание. Несовпадение одного pin или отсутствие Pod этого
+исключения не доказывает и не выдаёт права повторить либо отменить публикацию.
+
+Начальное `promotion_state=PENDING` само по себе не является живой публикацией:
+admission `PENDING|CLAIMED` учитывается отдельным счётчиком, а известные terminal
+`REJECTED|FAILED` без запроса и активных claim/authorization не имеют promotion
+effect. Любой активный effect, неизвестное состояние или незавершённый request
+продолжает блокировать переход policy. Readback не меняет eligibility или историю.
+
+Системная постановка проверки готовности managed MCP не выдаёт полномочия
+исполнения: RuntimeRevision, lease и Pod grant требуют настоящего exact fresh
+gateway receipt. Startup может поставить прежнюю maintenance `DUE` лишь для
+stale latest `SUCCEEDED` с неизменившимися semantic pins, текущей actual effective
+парой READ/NONE и без любого active probe. Materialization кандидата полностью
+откатывается, а единственный queue effect фиксируется owner-транзакцией вместе
+с audit и receipt. Restart/retry не сбрасывает createdAt и бюджет существующего
+цикла; cold, failed, changed и revoked состояния закрыто отклоняются. Probe
+исполняет только зарегистрированный integration-gateway; root cancel не
+воскрешает Run, connection disable/delete/revoke сохраняют прежние guards.
 
 Terminal проверяется по полному закрытому набору каждого вида: для Run это
 `SUCCEEDED|FAILED|CANCELLED`, для RunNode также `SKIPPED`; `QUEUED`, `PLANNED`,

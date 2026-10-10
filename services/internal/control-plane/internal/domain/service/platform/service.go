@@ -767,6 +767,36 @@ func (service *Service) GetArtifact(ctx context.Context, p value.Principal, ref 
 	}
 	return service.repository.GetArtifact(ctx, p, ref)
 }
+
+func (service *Service) ListArtifactRevisions(ctx context.Context, p value.Principal, ref string, page query.Page) ([]entity.ArtifactRevision, int64, string, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	return service.repository.ListArtifactRevisions(ctx, p, ref, page)
+}
+
+func (service *Service) GetArtifactRevision(ctx context.Context, p value.Principal, ref, revisionRef string) (entity.ArtifactRevision, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.ArtifactRevision{}, err
+	}
+	if revisionRef == "" {
+		return entity.ArtifactRevision{}, errs.ErrInvalid
+	}
+	return service.repository.GetArtifactRevision(ctx, p, ref, revisionRef)
+}
+
+func (service *Service) DownloadArtifactRevision(ctx context.Context, p value.Principal, ref, revisionRef, purpose string) (repository.ArtifactDownload, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return repository.ArtifactDownload{}, err
+	}
+	if revisionRef == "" || purpose != "DOWNLOAD" && purpose != "PREVIEW" {
+		return repository.ArtifactDownload{}, errs.ErrInvalid
+	}
+	return service.repository.DownloadArtifactRevision(ctx, p, ref, revisionRef, purpose)
+}
 func (service *Service) GetArtifactImpact(ctx context.Context, p value.Principal, ref, action string) (entity.ArtifactImpact, error) {
 	p, err := service.principal(ctx, p)
 	if err != nil {
@@ -943,7 +973,7 @@ func (service *Service) ListAssistantConfigurationCatalog(ctx context.Context, p
 	}
 	validKind := false
 	switch input.Kind {
-	case "ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS", "CURRENT_CONFIGURATION", "PROJECT_INTEGRATION_GRANTS", "RECIPIENT_INTEGRATION_GRANTS", "WORKFLOW_CONFIGURATION", "AGENT_CONFIGURATION":
+	case "ASSISTANTS", "RUNTIME_PROFILES", "PROVIDER_ACCOUNTS", "MODELS", "ROLE_IMAGE_RECIPES", "IMAGE_ARTIFACTS", "ROLE_ENVIRONMENTS", "CURRENT_CONFIGURATION", "PROJECT_INTEGRATION_GRANTS", "RECIPIENT_INTEGRATION_GRANTS", "WORKFLOW_CONFIGURATION", "AGENT_CONFIGURATION", "AGENT_RUNTIME_CONFIGURATION":
 		validKind = true
 	}
 	if !validKind || len(input.AssistantRef) < 8 || len(input.AssistantRef) > 128 || len([]rune(input.Query)) > 80 || input.Offset < 0 || input.Offset > 10000 ||
@@ -953,14 +983,14 @@ func (service *Service) ListAssistantConfigurationCatalog(ctx context.Context, p
 	}
 	input.Query = strings.TrimSpace(input.Query)
 	if (input.EntityKind == "") != (input.EntityRef == "") || input.EntityKind != "" &&
-		(input.Kind != "RECIPIENT_INTEGRATION_GRANTS" && input.Kind != "WORKFLOW_CONFIGURATION" && input.Kind != "AGENT_CONFIGURATION" ||
+		(input.Kind != "RECIPIENT_INTEGRATION_GRANTS" && input.Kind != "WORKFLOW_CONFIGURATION" && input.Kind != "AGENT_CONFIGURATION" && input.Kind != "AGENT_RUNTIME_CONFIGURATION" ||
 			input.EntityKind != "AGENT" && input.EntityKind != "WORKFLOW" || !validAssistantCatalogEntityRef(input.EntityRef)) {
 		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrInvalid
 	}
 	if input.Kind == "WORKFLOW_CONFIGURATION" && (input.EntityKind != "WORKFLOW" || input.Query != "" || input.Offset != 0) {
 		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrInvalid
 	}
-	if input.Kind == "AGENT_CONFIGURATION" && (input.EntityKind != "AGENT" || input.Query != "" || input.Offset != 0) {
+	if (input.Kind == "AGENT_CONFIGURATION" || input.Kind == "AGENT_RUNTIME_CONFIGURATION") && (input.EntityKind != "AGENT" || input.Query != "" || input.Offset != 0) {
 		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrInvalid
 	}
 	if input.Kind == "CURRENT_CONFIGURATION" && (input.Query != "" || input.Offset != 0) {
@@ -1387,7 +1417,7 @@ func knownCommand(kind command.Kind) bool {
 	case command.CreateRuntimeEnvironmentDraft, command.CreateOrganizationRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,
 		command.PrepareEnvironmentDraftImpact, command.PublishRuntimeEnvironmentDraft, command.DiscardRuntimeEnvironmentDraft, command.RebindRuntimeEnvironment, command.RebindRuntimeSecret, command.BindInteractionIdentity, command.RevokeInteractionIdentity:
 		return true
-	case command.CompleteOnboarding, command.CreateProject, command.CreateProjectFile, command.UpdateProject, command.TrashProject, command.RestoreProject, command.PurgeProject,
+	case command.CompleteOnboarding, command.CreateProject, command.CreateProjectFile, command.CreateProjectFileRevision, command.UpdateProject, command.TrashProject, command.RestoreProject, command.PurgeProject,
 		command.AddPlatformMembership, command.ChangePlatformMembership, command.RemovePlatformMembership,
 		command.AddMembership, command.ChangeMembership, command.RemoveMembership,
 		command.CreateAgent, command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent,

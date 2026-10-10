@@ -265,6 +265,17 @@ func (repository *Repository) commandAccessTarget(ctx context.Context, tx pgx.Tx
 		return repository.resolveCommandTarget(ctx, tx, current, "project.manage", "PROJECT", payload.Ref, payload.Ref)
 	case command.ProjectFileInput:
 		return repository.resolveCommandTarget(ctx, tx, current, "artifact.upload", "PROJECT", payload.ProjectRef, payload.ProjectRef)
+	case command.ProjectFileRevisionInput:
+		for _, permission := range []string{"artifact.view", "artifact.download"} {
+			_, target, err := repository.resolveCommandTarget(ctx, tx, current, permission, "ARTIFACT", payload.ArtifactRef, "")
+			if err != nil {
+				return "", resolvedAccessTarget{}, err
+			}
+			if err := repository.requireAccess(ctx, tx, current, permission, target); err != nil {
+				return "", resolvedAccessTarget{}, errs.ErrNotFound
+			}
+		}
+		return repository.resolveCommandTarget(ctx, tx, current, "artifact.revision.create", "ARTIFACT", payload.ArtifactRef, "")
 	case command.PlatformMembershipInput:
 		return "access.manage", organization, nil
 	case command.MembershipInput:

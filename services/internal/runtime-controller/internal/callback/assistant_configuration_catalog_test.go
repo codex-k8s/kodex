@@ -58,14 +58,19 @@ func TestAssistantFreshFutureReasoningTraversesMCPAndSafeProjection(t *testing.T
 	}
 }
 
+// Однократный tools/list содержит полные typed схемы семи assistant tools.
+// Это budget компактности теста; production MCP frame/readiness не меняются.
+const maximumAssistantCompactCatalogBytes = 16 << 10
+
 func TestAssistantFreshCatalogToolListStaysCompactForRealSystemInput(t *testing.T) {
 	input := assistantConfigurationFixture(runtimecontract.AssistantScopeSystem)
 	input.AssistantContext = nil
 	input.RuntimeEnvironmentRef = "renv_current123"
 	encoded, err := json.Marshal(tools(input))
-	if err != nil || len(encoded) > 8000 {
+	if err != nil || len(encoded) > maximumAssistantCompactCatalogBytes {
 		t.Fatalf("full system assistant catalog exceeds compact budget: bytes=%d err=%v", len(encoded), err)
 	}
+	t.Logf("assistant tools/list bytes=%d budget=%d", len(encoded), maximumAssistantCompactCatalogBytes)
 }
 
 func assistantFreshCatalogFixture(scope runtimecontract.AssistantScope, kind string) (runtimecontract.RunnerInput, map[string]any, *controlplanev1.SearchAssistantResourcesResponse) {

@@ -20,7 +20,7 @@ export const securityFloors = {
   "brace-expansion": "5.0.11",
   "ip-address": "10.3.1",
   "js-yaml": "4.3.2",
-  pnpm: "11.11.0",
+  pnpm: "11.28.2",
   tar: "7.5.21",
   undici: "6.28.1",
 };
@@ -256,6 +256,8 @@ export function verifyInstalled(root, sourceNpm = false) {
     versions = {};
   let visited = 0;
   function walk(directory) {
+    if (!lstatSync(directory).isDirectory())
+      fail("NPM_INSTALLED_LINK_REJECTED");
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       if (entry.name.startsWith(".")) continue;
       const path = join(directory, entry.name);
@@ -272,6 +274,11 @@ export function verifyInstalled(root, sourceNpm = false) {
         (versions[pkg.name] ??= new Set()).add(pkg.version);
       if (readdirSync(path).includes("node_modules"))
         walk(join(path, "node_modules"));
+      if (pkg.name === "pnpm") {
+        const dist = join(path, "dist");
+        if (!lstatSync(dist).isDirectory()) fail("NPM_INSTALLED_LINK_REJECTED");
+        walk(join(dist, "node_modules"));
+      }
     }
   }
   walk(join(root, "node_modules"));

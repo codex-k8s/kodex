@@ -583,7 +583,13 @@ func castGate(value entity.OwnerGate) *controlplanev1.OwnerGate {
 	return gate
 }
 func castArtifact(value entity.Artifact) *controlplanev1.Artifact {
-	return &controlplanev1.Artifact{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, SessionRef: value.SessionRef, FileName: value.FileName, MediaType: value.MediaType, SizeBytes: value.SizeBytes, ScanState: scanState(value.ScanState), Source: artifactSource(value.Source), Revision: int32(value.Revision), AgentBindings: value.Bindings, PreviewAvailable: value.PreviewState == "AVAILABLE", CreatedAt: timestamp(value.CreatedAt), NextActions: nextActions(value.NextActions), Digest: value.Digest, LifecycleState: artifactLifecycleState(value.LifecycleState), DeletedAt: optionalTimestamp(value.DeletedAt), PurgeAfter: optionalTimestamp(value.PurgeAfter)}
+	return &controlplanev1.Artifact{Ref: value.Ref, Version: value.Version, ProjectRef: value.ProjectRef, RunRef: value.RunRef, SessionRef: value.SessionRef, FileName: value.FileName, MediaType: value.MediaType, SizeBytes: value.SizeBytes, ScanState: scanState(value.ScanState), Source: artifactSource(value.Source), Revision: int32(value.Revision), AgentBindings: value.Bindings, PreviewAvailable: value.PreviewState == "AVAILABLE", CreatedAt: timestamp(value.CreatedAt), NextActions: nextActions(value.NextActions), Digest: value.Digest, LifecycleState: artifactLifecycleState(value.LifecycleState), DeletedAt: optionalTimestamp(value.DeletedAt), PurgeAfter: optionalTimestamp(value.PurgeAfter), CurrentRevisionRef: value.CurrentRevisionRef}
+}
+
+func castArtifactRevision(value entity.ArtifactRevision) *controlplanev1.ArtifactRevision {
+	return &controlplanev1.ArtifactRevision{Ref: value.Ref, ArtifactRef: value.ArtifactRef, Revision: value.Revision,
+		FileName: value.FileName, MediaType: value.MediaType, SizeBytes: value.SizeBytes, Digest: value.Digest,
+		ScanState: value.ScanState, Source: value.Source, PreviewAvailable: value.PreviewAvailable, CreatedAt: timestamp(value.CreatedAt)}
 }
 func castAttachmentSet(value entity.AttachmentSet) *controlplanev1.AttachmentSet {
 	result := &controlplanev1.AttachmentSet{Ref: value.Ref, FamilyRef: value.FamilyRef, Revision: value.Revision,
@@ -702,17 +708,34 @@ func castPlan(value *entity.AssistantPlan) *controlplanev1.AssistantPlan {
 		if parameters == nil {
 			parameters = operation.Input
 		}
+		after := operation.After
+		if operation.Type == "CREATE_PROJECT_FILE" || operation.Type == "CREATE_PROJECT_FILE_REVISION" {
+			parameters = assistantFilePublicFields(parameters)
+			after = assistantFilePublicFields(after)
+		}
 		result.Operations = append(result.Operations, &controlplanev1.AssistantPlanOperation{
 			Ref: operation.Key, Type: controlplanev1.AssistantPlanOperation_Type(raw), Action: controlplanev1.AssistantPlanOperation_Action(rawAction),
 			Title: assistantPlanOperationTitle(operation), Summary: operation.Summary, TargetKind: operation.Target.Kind,
 			TargetRef: operation.Target.Ref, TargetName: operation.Target.Name, TargetVersion: operation.Target.Version, ExpectedVersion: operation.ExpectedVersion,
-			Parameters: structure(parameters), Before: structure(operation.Before), After: structure(operation.After), Selected: operation.Selected,
+			Parameters: structure(parameters), Before: structure(operation.Before), After: structure(after), Selected: operation.Selected,
 			Permitted: operation.Permitted, UnavailableReason: operation.UnavailableReason,
 			ValidationProblems: append([]string(nil), operation.ValidationProblems...),
 		})
 	}
 	if value.State == "VALID" {
 		result.NextActions = []controlplanev1.NextAction{controlplanev1.NextAction_NEXT_ACTION_APPLY_PLAN}
+	}
+	return result
+}
+
+// Очистка публичного ответа также охватывает неизменяемые старые receipts
+// и idempotency replay; исходная сохранённая карта остаётся неизменной.
+func assistantFilePublicFields(fields map[string]any) map[string]any {
+	result := make(map[string]any, len(fields))
+	for key, value := range fields {
+		if key != "content" {
+			result[key] = value
+		}
 	}
 	return result
 }
@@ -816,8 +839,12 @@ func castPlanReceipt(value *entity.AssistantPlanReceipt) *controlplanev1.Assista
 	result := &controlplanev1.AssistantPlanReceipt{Ref: value.Ref, PlanRef: value.PlanRef, PlanRevision: value.PlanRevision,
 		Outcome: value.Outcome, AuditRefs: append([]string(nil), value.AuditRefs...), CreatedResourceRefs: append([]string(nil), value.CreatedResourceRefs...), CreatedAt: timestamp(value.CreatedAt)}
 	for _, operation := range value.Operations {
-		result.Operations = append(result.Operations, &controlplanev1.AssistantPlanOperationReceipt{OperationRef: operation.OperationRef,
-			ResourceRef: operation.ResourceRef, Outcome: operation.Outcome, AuditRef: operation.AuditRef})
+		receipt := &controlplanev1.AssistantPlanOperationReceipt{OperationRef: operation.OperationRef,
+			ResourceRef: operation.ResourceRef, Outcome: operation.Outcome, AuditRef: operation.AuditRef}
+		if operation.ArtifactRevision != nil {
+			receipt.ArtifactRevision = castArtifactRevision(*operation.ArtifactRevision)
+		}
+		result.Operations = append(result.Operations, receipt)
 	}
 	for _, conflict := range value.Conflicts {
 		expected, _ := structpb.NewValue(conflict.Expected)

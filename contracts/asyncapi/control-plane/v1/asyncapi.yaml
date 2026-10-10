@@ -310,3 +310,12 @@ components:
               enum: [PROJECT, AGENT, ARTIFACT, INSTRUCTIONS, WORKFLOW, SCHEDULE, INTEGRATION_CONNECTION, INTEGRATION_GRANT, MEMBERSHIP, PLATFORM_MEMBERSHIP, SYSTEM_ASSISTANT, ROLE_IMAGE_RECIPE, RUNTIME_ENVIRONMENT, PROVIDER_ACCOUNT, RUNTIME_SECRET, MANAGED_CONFIGURATION, RUN]
             state: { type: string, maxLength: 64 }
             safeSummary: { type: string, maxLength: 1000 }
+            artifactRevision:
+              description: Неизменяемая связка только для ARTIFACT_CHANGED; точное чтение метаданных через GetArtifactRevision со свежей проверкой владельца, без подмены текущей ревизией.
+              type: object
+              additionalProperties: false
+              required: [ref, revision, digest]
+              properties:
+                ref: { $ref: '#/components/schemas/OpaqueRef' }
+                revision: { type: integer, format: int64, minimum: 1 }
+                digest: { type: string, pattern: '^sha256:[a-f0-9]{64}$' }

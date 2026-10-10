@@ -286,7 +286,9 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 			return errors.New("runtime activity is invalid")
 		}
 		var err error
-		if activity.Message != nil {
+		if activity.ProviderProcess != nil {
+			err = client.ProviderProcess(ctx, input, *activity.ProviderProcess)
+		} else if activity.Message != nil {
 			err = client.PublishedMessage(ctx, input, *activity.Message)
 		} else {
 			err = client.RecordNativeToolCall(ctx, input, *activity.ToolCall)
@@ -315,6 +317,7 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 func completeMeasuredFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, code string) error {
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt,
 		Success: false, SafeErrorCode: safeFailureCode(code), ResultSummary: "i18n:" + code, Usage: result.Usage}
+	payload.ProviderDiagnostic = result.ProviderDiagnostic(input)
 	if result.HasVerifiedRollout(input) {
 		payload.CodexSessionID, payload.ArchiveRelativePath, payload.ArchiveSHA256, payload.ArchiveSizeBytes = result.SessionID, result.ArchiveRelativePath, result.ArchiveSHA256, result.ArchiveSizeBytes
 	}
@@ -364,6 +367,7 @@ func completeExecutedFailure(ctx context.Context, input model.Input, client *cal
 		Success: false, ResultSummary: summary, SafeErrorCode: safeFailureCode(code), Usage: result.Usage,
 		CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath,
 		ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
+	payload.ProviderDiagnostic = result.ProviderDiagnostic(input)
 	if (result.Outcome != "SUCCEEDED" && result.Outcome != "FAILED") || payload.Validate() != nil {
 		return completeFailureWithSummaryAndUsage(ctx, input, client, code, summary, result.Usage)
 	}
@@ -374,6 +378,7 @@ func completeResultFailure(ctx context.Context, input model.Input, client *callb
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: false, ResultSummary: summary,
 		SafeErrorCode: safeFailureCode(result.FailureCode), Usage: result.Usage, CodexSessionID: result.SessionID,
 		ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
+	payload.ProviderDiagnostic = result.ProviderDiagnostic(input)
 	return client.Complete(context.WithoutCancel(ctx), input, payload)
 }
 

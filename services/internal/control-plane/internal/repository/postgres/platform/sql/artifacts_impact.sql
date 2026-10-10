@@ -10,22 +10,19 @@ WITH target_artifact AS (
     FROM target_artifact artifact
     JOIN control_plane.attachment_set_items item ON item.artifact_id = artifact.id
     JOIN control_plane.runs run ON run.input_attachment_set_id = item.attachment_set_id
-    WHERE item.artifact_revision = artifact.revision
-      AND run.state IN ('QUEUED', 'RUNNING', 'WAITING_HUMAN', 'CANCELLING')
+    WHERE run.state IN ('QUEUED', 'RUNNING', 'WAITING_HUMAN', 'CANCELLING')
     UNION
     SELECT run.id AS run_id
     FROM target_artifact artifact
     JOIN control_plane.attachment_set_items item ON item.artifact_id = artifact.id
     JOIN control_plane.session_turns turn ON turn.attachment_set_id = item.attachment_set_id
     JOIN control_plane.runs run ON run.id = turn.run_id
-    WHERE item.artifact_revision = artifact.revision
-      AND run.state IN ('QUEUED', 'RUNNING', 'WAITING_HUMAN', 'CANCELLING')
+    WHERE run.state IN ('QUEUED', 'RUNNING', 'WAITING_HUMAN', 'CANCELLING')
     UNION
     SELECT run.id AS run_id
     FROM target_artifact artifact
     JOIN control_plane.attachment_set_items item
       ON item.artifact_id = artifact.id
-     AND item.artifact_revision = artifact.revision
     JOIN control_plane.session_turns source_turn
       ON source_turn.attachment_set_id = item.attachment_set_id
     JOIN control_plane.runs run
@@ -44,11 +41,26 @@ WITH target_artifact AS (
           SELECT 1
           FROM jsonb_array_elements(COALESCE(runtime_revision.safe_snapshot -> 'artifacts', '[]'::jsonb)) AS exact(item)
           WHERE exact.item ->> 'ref' = artifact.ref
-            AND exact.item -> 'revision' = to_jsonb(artifact.revision)
-            AND exact.item ->> 'digest' = artifact.digest
       )
     JOIN control_plane.runs run ON run.id = runtime_revision.root_run_id
     WHERE run.state IN ('QUEUED', 'RUNNING', 'WAITING_HUMAN', 'CANCELLING')
+    UNION
+    SELECT run.id
+    FROM target_artifact artifact
+    JOIN control_plane.runtime_file_catalog_entries entry ON entry.artifact_id=artifact.id
+    JOIN control_plane.runtime_file_catalogs catalog ON catalog.id=entry.catalog_id
+    JOIN control_plane.runtime_revisions revision ON revision.ref=catalog.runtime_revision_ref
+    JOIN control_plane.runs run ON run.id=revision.root_run_id
+    WHERE run.state IN ('QUEUED','RUNNING','WAITING_HUMAN','CANCELLING')
+    UNION
+    SELECT run.id
+    FROM target_artifact artifact
+    JOIN control_plane.callback_receipts receipt ON EXISTS (
+        SELECT 1 FROM jsonb_array_elements(COALESCE(receipt.result_snapshot->'artifacts','[]'::jsonb)) pin
+        WHERE pin->>'ref'=artifact.ref)
+    JOIN control_plane.run_edges edge ON edge.id=receipt.callback_edge_id
+    JOIN control_plane.runs run ON run.id=edge.root_run_id
+    WHERE run.state IN ('QUEUED','RUNNING','WAITING_HUMAN','CANCELLING')
 ), active_runs AS (
     SELECT run.ref, run.title, run.state, COALESCE(project.ref, '') AS project_ref,
            run.created_at
@@ -63,7 +75,7 @@ SELECT artifact.id::text,
         WHERE binding.artifact_id = artifact.id),
        (SELECT count(*) FROM control_plane.attachment_set_items item
         WHERE item.artifact_id = artifact.id
-          AND item.artifact_revision = artifact.revision),
+),
        (SELECT count(*) FROM active_runs),
        COALESCE((
            SELECT jsonb_agg(jsonb_build_object(
@@ -79,5 +91,7 @@ SELECT artifact.id::text,
                LIMIT 21
            ) bounded
        ), '[]'::jsonb),
-       control_plane.skill_artifact_reference_count(@organization_id::uuid,artifact.ref,artifact.revision,artifact.digest)
+       (SELECT COALESCE(sum(control_plane.skill_artifact_reference_count(@organization_id::uuid,artifact.ref,revision.revision,revision.digest)),0)::bigint
+        FROM control_plane.artifact_revisions revision WHERE revision.artifact_id=artifact.id),
+       control_plane.artifact_active_binding_count(artifact.id)
 FROM target_artifact artifact;

@@ -73,6 +73,51 @@ function title(html: string): string {
   );
 }
 
+it("generic root completion остаётся в закрытых details exact failed этапа, не отдельной карточкой", async () => {
+  const execution = {
+    runRef: "run_fixture",
+    nodeRef: "nod_agent",
+    sessionRef: "ses_fixture",
+    turnRef: "trn_fixture",
+    turnNumber: 1,
+    attempt: 1,
+  };
+  const failure: RunActivityItem = {
+    id: "failure",
+    kind: "system",
+    historical: false,
+    actor: "ProjectManager",
+    occurredAt: "2026-10-04T10:00:00Z",
+    execution,
+    executionNodeType: "AGENT_EXECUTION",
+    eventType: "TURN_COMPLETED",
+    messageKind: "FINAL_MESSAGE",
+    state: "FAILED",
+    summary: "Провайдер временно недоступен",
+  };
+  const root: RunActivityItem = {
+    ...failure,
+    id: "root",
+    actor: "Kodex",
+    execution: { ...execution, nodeRef: "nod_root" },
+    executionNodeType: "ROOT_PROCESS",
+    serviceCompletionCode: "ROOT_PROCESS_COMPLETED",
+    eventType: "NODE_STATE_CHANGED",
+    messageKind: "STATE",
+    summary: "Корневой процесс завершён",
+  };
+  const app = createSSRApp({
+    render: () => h(RunTranscript, { items: [failure, root], embedded: true }),
+  }).use(i18n);
+  const html = await renderToString(app);
+  expect(html.match(/class="run-activity-item__content"/g)).toHaveLength(1);
+  expect(html).toContain("Провайдер временно недоступен");
+  expect(html).toMatch(
+    /<details[^]*?Корневой процесс завершён[^]*?<\/details>/,
+  );
+  expect(html).not.toMatch(/<details[^>]*\sopen/);
+});
+
 describe("RunTranscript: результат интеграции, а не успех обёртки", () => {
   it("оставляет malformed результат видимым, не переопределяя статус обёртки", async () => {
     const malformed = JSON.stringify({
@@ -289,6 +334,7 @@ describe("RunTranscript: результат интеграции, а не усп
 describe("RunTranscript: компактные файлы результата", () => {
   const artifact: Artifact = {
     ref: "art_fixture_result",
+    currentRevisionRef: "arv_fixture_result",
     version: 2,
     revision: 3,
     projectRef: "prj_fixture",
@@ -650,6 +696,51 @@ describe("RunTranscript: названия native инструментов", () =
   );
 
   it.each(["ru", "en"] as const)(
+    "показывает завершённый web-вызов нейтрально, сохраняя machine state и details (%s)",
+    async (locale) => {
+      const html = await render(
+        "CODEX_WEB_SEARCH",
+        { action: "OPEN_PAGE", query_count: 1 },
+        locale,
+        "COMPLETED",
+      );
+      expect(html).toMatch(
+        /class="status-badge status-badge--neutral" data-state="SUCCEEDED"/,
+      );
+      expect(html).toContain(locale === "ru" ? "Завершён" : "Completed");
+      expect(html).not.toContain("status-badge--success");
+      expect(html).not.toContain("Succeeded");
+      expect(html).toContain("lucide-globe");
+      expect(html).toContain("OPEN_PAGE");
+      expect(html).toMatch(/<details[^>]*>[^]*?COMPLETED[^]*?<\/details>/);
+      expect(html).not.toContain("run-transcript__preview");
+      expect(html).not.toMatch(
+        /RAW_COMMAND_SENTINEL|RAW_OUTPUT_SENTINEL|HIDDEN_REASONING_SENTINEL/,
+      );
+    },
+  );
+
+  it.each([
+    ["CODEX_WEB_SEARCH", "FAILED", "FAILED", "danger"],
+    ["CODEX_WEB_SEARCH", "RUNNING", "RUNNING", undefined],
+    ["CODEX_SHELL", "COMPLETED", "SUCCEEDED", "success"],
+    ["CODEX_WEB_SEARCH", "Содержательный результат", "SUCCEEDED", "success"],
+  ] as const)(
+    "не меняет другие статусы и результаты %s/%s/%s",
+    async (tool, result, state, tone) => {
+      const html = await render(tool, {}, "en", result, state);
+      if (tone) expect(html).toContain(`status-badge--${tone}`);
+      else expect(html).not.toContain('data-state="RUNNING"');
+      expect(html).not.toMatch(
+        /class="status-badge status-badge--neutral" data-state="SUCCEEDED"/,
+      );
+      expect(html).toContain(result);
+      if (state === "RUNNING")
+        expect(html).toContain("run-transcript__preview");
+    },
+  );
+
+  it.each(["ru", "en"] as const)(
     "не повторяет native RUNNING только при видимом индикаторе работы (%s)",
     async (locale) => {
       const active = await render(
@@ -948,6 +1039,8 @@ describe("RunTranscript: managed инструменты", () => {
   );
   it.each([
     ["get_configuration_catalog", "Каталог настроек", "Configuration catalog"],
+    ["read_task_session", "Чтение истории сессии", "Session history"],
+    ["get_workflow_catalog", "Каталог процессов", "Workflow catalog"],
     ["propose_configuration_plan", "Настройки помощника", "Assistant settings"],
     ["get_integration_catalog", "Каталог интеграций", "Integration catalog"],
     ["find_platform_resources", "Поиск ресурсов", "Resource search"],
@@ -956,6 +1049,7 @@ describe("RunTranscript: managed инструменты", () => {
     ["delegate_agent", "Передача задания", "Task delegation"],
     ["invoke_integration", "Вызов интеграции", "Integration call"],
     ["search_files", "Поиск файлов", "File search"],
+    ["read_file", "Чтение файла", "File reading"],
     ["get_file_metadata", "Сведения о файле", "File information"],
     ["preview_file", "Просмотр файла", "File preview"],
     ["get_file_manifest", "Список файлов", "File list"],
@@ -978,6 +1072,45 @@ describe("RunTranscript: managed инструменты", () => {
       }
     },
   );
+  it.each(["read_file", "read_task_session", "get_workflow_catalog"])(
+    "%s оставляет завершённую metadata-квитанцию только в закрытых деталях",
+    async (tool) => {
+      const receipt = JSON.stringify({
+        version: 1,
+        kind: "read_file_page",
+        catalog_ref: "vfc_fixture123",
+        catalog_digest: "a".repeat(64),
+        source_digest: "sha256:" + "b".repeat(64),
+        projection_sha256: "c".repeat(64),
+        size_bytes: 149159,
+        offset_bytes: 0,
+        next_offset_bytes: 16384,
+        eof: false,
+      });
+      for (const locale of ["ru", "en"] as const) {
+        const html = await render(tool, {}, locale, receipt);
+        expect(html).not.toContain("run-transcript__preview");
+        expect(html).not.toMatch(/<details[^>]*\bopen\b/);
+        const details = html.match(/<details[^>]*>[^]*?<\/details>/)?.[0];
+        expect(details).toContain("vfc_fixture123");
+        expect(details).toContain("a".repeat(64));
+        expect(details).toContain("b".repeat(64));
+        expect(details).toContain("c".repeat(64));
+        expect(details).toContain("149159");
+        expect(details).toContain("16384");
+        expect(details).toContain(locale === "ru" ? "Нет" : "No");
+        expect(details).toMatch(new RegExp(`<code[^>]*>${tool}</code>`));
+      }
+      for (const state of ["RUNNING", "FAILED"] as const) {
+        const html = await render(tool, {}, "ru", receipt, state, true);
+        expect(html).toContain("run-transcript__preview");
+        expect(html).toContain("vfc_fixture123");
+      }
+      expect(await render(tool, {}, "ru", "COMPLETED")).not.toContain(
+        "run-transcript__preview",
+      );
+    },
+  );
   it("сохраняет содержательный результат и unknown completed", async () => {
     const meaningful = await render(
       "get_configuration_catalog",
@@ -990,6 +1123,12 @@ describe("RunTranscript: managed инструменты", () => {
     expect(
       await render("custom_lookup", {}, "ru", "custom_lookup:completed"),
     ).toContain("run-transcript__preview");
+    expect(await render("custom_lookup", {}, "ru", '{"version":1}')).toContain(
+      "run-transcript__preview",
+    );
+    expect(await render("read_file", {}, "ru", '{"broken":')).toContain(
+      "run-transcript__preview",
+    );
     expect(title(await render("tool\nunsafe"))).toBe("Вызов инструмента");
   });
   it.each([
@@ -1742,6 +1881,27 @@ describe("RunTranscript: компактная работа", () => {
       }
     },
   );
+
+  it("навигация к последнему сообщению не утверждает наличие новых сообщений", () => {
+    const source = readFileSync(
+      new URL("./RunTranscript.vue", import.meta.url),
+      "utf8",
+    );
+    const button = source.match(
+      /<button\s+v-if="unread && !embedded"[^]*?<\/button>/,
+    )?.[0];
+    expect(button).toContain('$t("runs.jumpToLatestMessage")');
+    expect(button).not.toContain("runs.newMessages");
+    expect(button).toContain('@click="latest"');
+    expect(button).toContain('v-if="unread && !embedded"');
+    const messages = i18n.global.messages.value;
+    expect(messages.ru.runs.jumpToLatestMessage).toBe(
+      "К последнему сообщению ↓",
+    );
+    expect(messages.en.runs.jumpToLatestMessage).toBe(
+      "Jump to latest message ↓",
+    );
+  });
 
   it("сохраняет анимацию и отключает её при reduced motion, tool preview ограничен", () => {
     const source = readFileSync(

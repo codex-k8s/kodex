@@ -8,6 +8,7 @@ import {
   assertPromotedRuntimeImage,
   restoreRuntimeImageOption,
   runtimeImageOption,
+  runtimeImagePagePresentation,
   toolsForRuntimeImage,
 } from "@/features/runtime/image-tools-selection";
 import {
@@ -553,10 +554,13 @@ async function loadImagePage(
   );
   return {
     ...page,
-    items: page.items.map((item) => ({
-      ...item,
-      title: localizeServerMessage(item.title),
-    })),
+    items: runtimeImagePagePresentation(
+      page.items.map((item) => ({
+        ...item,
+        title: localizeServerMessage(item.title),
+      })),
+      (generation) => t("roleImages.generationLabel", { generation }),
+    ),
   };
 }
 

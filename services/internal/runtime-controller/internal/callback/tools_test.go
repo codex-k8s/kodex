@@ -141,10 +141,10 @@ func TestAssistantPlanToolIsSystemOnlyAndBounded(t *testing.T) {
 	}
 	input := runtimecontract.RunnerInput{AssistantScope: runtimecontract.AssistantScopeSystem, ProjectRef: "prj_12345678", DelegationTargets: []runtimecontract.RunnerDelegationTarget{{Ref: "agt_12345678", Name: "Analyst"}}}
 	available := tools(input)
-	if len(available) != 6 {
+	if len(available) != 7 {
 		t.Fatalf("unexpected assistant tool catalog: %#v", available)
 	}
-	if encoded, err := json.Marshal(available); err != nil || len(encoded) > 8000 {
+	if encoded, err := json.Marshal(available); err != nil || len(encoded) > maximumAssistantCompactCatalogBytes {
 		t.Fatalf("assistant tools/list is not compact: bytes=%d err=%v", len(encoded), err)
 	}
 	var planTool map[string]any

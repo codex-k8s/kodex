@@ -13,6 +13,34 @@ updated: 2026-10-05
 tenant eligibility, PostgreSQL lifecycle и issuer credentials ему не принадлежат.
 Он не выполняет RPC, сетевые запросы, сканирование, подпись или изменение данных.
 
+`ProviderFailureDiagnostic` задаёт закрытый versioned формат наблюдения причины
+provider failure. Broker и существующий completion callback сверяют exact
+session/turn/attempt и input/revision/execution digests. Полученная диагностика
+не подтверждает provider ACK, итог или authority; отсутствующий terminal
+остаётся неизвестным. RC записывает наблюдение только после успешного owner
+completion и перед cleanup. Это не durable CP receipt. Публикация требует
+обновлённого runner и callback consumer; Proto/RPC и grants не меняются.
+
+`ProviderProcessObservation` содержит только bounded canonical server package
+version из handshake текущего `codex app-server`, а не `clientInfo.version`,
+`thread.cliVersion` или image inventory. Exact organization/project/run/node/
+session/turn/attempt, RuntimeRevision/version/digest, image и input/execution
+binding сверяются повторно на UID10002-checked broker и leased callback.
+Сырой userAgent, OS, terminal и private paths не сохраняются. RuntimeRevision
+не меняется; наблюдение диагностическое и не выдаёт полномочий.
+
+Private provider broker v3 требует согласованных peers в одном immutable image
+и закрыто отклоняет смешанный protocol version. Existing `/progress` доставляет
+наблюдение до model tools; RC принимает его только после exact owner progress
+acceptance. `CURRENT_CONFIGURATION.execution_snapshot.provider_process` читается
+через прежний fresh leased owner RPC и содержит `UNKNOWN` либо `OBSERVED` с
+version/source. Inventory не является fallback. Duplicate exact observation
+идемпотентен; конфликт версии/pins/generation отвергается. Complete удаляет
+эфемерную запись; cancel/expiry/terminal закрывают authoritative read, restart
+возвращает `UNKNOWN` без восстановления из history. Reader RC доставляется
+до нового runner image; исторический immutable turn без handshake observation
+остаётся `UNKNOWN`. Это не отдельный compatibility mode или legacy decoder.
+
 ## Отчёт об уязвимостях и решение о риске
 
 - `ProjectImageVulnerabilityReport` потребляет полный исходный Grype JSON и

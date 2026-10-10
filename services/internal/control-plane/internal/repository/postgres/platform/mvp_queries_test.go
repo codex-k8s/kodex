@@ -380,8 +380,11 @@ func executeProviderEnabledTransition(
 }
 
 func TestSynchronousPurgeKeepsTombstoneNameUnique(t *testing.T) {
-	if !strings.Contains(queryArtifactsPurgeFinalize, "file_name = 'purged-' || ref") {
-		t.Fatal("synchronous artifact purge reuses a shared tombstone file name")
+	if !strings.Contains(queryArtifactsPurgeFinalize, "current_revision_id = NULL") ||
+		!strings.Contains(queryArtifactsPurgeFinalize, "lifecycle_state = 'PURGED'") ||
+		!strings.Contains(queryArtifactsPurgeFinalize, "NOT control_plane.artifact_has_retained_revisions(id)") ||
+		strings.Contains(queryArtifactsPurgeFinalize, "file_name") {
+		t.Fatal("synchronous artifact purge retained file metadata or lost minimal tombstone fence")
 	}
 }
 
@@ -391,7 +394,8 @@ func TestAttachmentSnapshotQueriesKeepImmutableRuntimeBoundary(t *testing.T) {
 		"artifact.revision = item.artifact_revision",
 		"content.digest = item.digest",
 		"content.size_bytes = item.size_bytes",
-		"FOR SHARE OF artifact",
+		"JOIN control_plane.artifact_heads head ON head.id=artifact.id",
+		"FOR SHARE OF head",
 	} {
 		if !strings.Contains(queryAttachmentSetsLockMaterializableItems, fragment) {
 			t.Fatalf("attachment set materialization lock lacks %q", fragment)
@@ -441,7 +445,8 @@ func TestAttachmentSnapshotQueriesKeepImmutableRuntimeBoundary(t *testing.T) {
 		t.Fatal("ordinary artifact download no longer rejects soft-deleted artifacts")
 	}
 	for _, fragment := range []string{
-		"item.artifact_revision = artifact.revision",
+		"FROM control_plane.artifact_revisions revision WHERE revision.artifact_id=artifact.id",
+		"control_plane.artifact_active_binding_count(artifact.id)",
 		"runtime_revision.safe_snapshot -> 'artifacts'",
 		"run.id = runtime_revision.root_run_id",
 	} {

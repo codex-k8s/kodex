@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 )
 
@@ -120,13 +121,63 @@ func TestConfirmResumeSourceRejectsUntrustedLocators(t *testing.T) {
 			if mode == "malformed envelope" {
 				raw = []byte(`{"thread":`)
 			}
-			if source, err := confirmResumeSource(input, raw); !errors.Is(err, errResumeSourceInvalid) || source != nil {
+			source, err := confirmResumeSource(input, raw)
+			if !errors.Is(err, errResumeSourceInvalid) || source != nil {
 				if source != nil {
 					source.file.Close()
 				}
 				t.Fatal("untrusted pre-read locator was accepted")
 			}
+			wantDetail := "RESUME_SOURCE_LOCATOR"
+			switch mode {
+			case "empty expected", "foreign id":
+				wantDetail = "RESUME_SOURCE_ID"
+			case "malformed id", "foreign session metadata", "ephemeral", "unknown field", "duplicate field", "malformed envelope":
+				wantDetail = "RESUME_SOURCE_SCHEMA"
+			case "symlink", "directory symlink", "hardlink", "missing file", "directory":
+				wantDetail = "RESUME_SOURCE_OPEN"
+			case "wrong mode", "empty file", "oversized file":
+				wantDetail = "RESUME_SOURCE_METADATA"
+			}
+			assertResumeDiagnostic(t, input, err, wantDetail)
 		})
+	}
+}
+
+func assertResumeDiagnostic(t *testing.T, input model.Input, err error, wantDetail string) {
+	t.Helper()
+	if err.Error() != errResumeSourceInvalid.Error() {
+		t.Fatal("resume failure reflected private input")
+	}
+	diagnostic, code := providerFailureDetails(providerStageThreadRead, err)
+	// Rollout fixture использует короткие refs; wire fixture имеет канонические refs.
+	input.SessionRef, input.TurnRef = "ses_fixture1", "trn_fixture1"
+	bound := bindProviderDiagnostic(input, diagnostic)
+	if code != 0 || diagnostic.Detail != wantDetail || bound == nil || !bound.Matches(input) {
+		t.Fatal("resume failure lost closed reason or exact execution binding")
+	}
+	raw, marshalErr := json.Marshal(bound)
+	var decoded runtimecontract.ProviderFailureDiagnostic
+	if marshalErr != nil || json.Unmarshal(raw, &decoded) != nil || !decoded.Matches(input) || decoded.Detail != wantDetail || strings.Contains(string(raw), input.WorkspaceRoot) {
+		t.Fatal("resume diagnostic failed safe consumer round trip")
+	}
+}
+
+func TestResumeSourceDiagnosticDoesNotClassifyForeignStagesOrErrors(t *testing.T) {
+	for _, scenario := range []struct {
+		stage providerExecutionStage
+		err   error
+	}{
+		{providerStageArchiveCapture, rejectResumeSource("RESUME_SOURCE_METADATA")},
+		{providerStageThreadRead, errors.New("PRIVATE_SENTINEL")},
+		{providerStageThreadRead, protocolError("thread/read", json.RawMessage(`{"private":"PRIVATE_SENTINEL"}`))},
+		{providerStageThreadRead, rejectResumeSource("PRIVATE_SENTINEL")},
+		{providerStageThreadRead, errors.Join(ErrProviderAuthentication, rejectResumeSource("RESUME_SOURCE_METADATA"))},
+	} {
+		diagnostic, code := providerFailureDetails(scenario.stage, scenario.err)
+		if diagnostic.Detail != "NONE" || code != 0 {
+			t.Fatal("untrusted error acquired local resume source reason")
+		}
 	}
 }
 
@@ -165,9 +216,11 @@ func TestConfirmedResumeSourceRejectsChangedInodeAndPermissions(t *testing.T) {
 			case "foreign input":
 				input.CodexSessionID = "00000000-0000-4000-8000-000000000002"
 			}
-			if !errors.Is(source.verifyIdentity(input), errResumeSourceInvalid) {
+			err = source.verifyIdentity(input)
+			if !errors.Is(err, errResumeSourceInvalid) {
 				t.Fatal("changed source identity was accepted")
 			}
+			assertResumeDiagnostic(t, input, err, "RESUME_SOURCE_IDENTITY")
 		})
 	}
 }

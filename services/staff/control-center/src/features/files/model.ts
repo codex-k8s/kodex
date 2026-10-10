@@ -125,7 +125,9 @@ export function fileExtension(fileName: string): string {
     : "file";
 }
 
-export function fileVisual(artifact: Artifact): FileVisual {
+export function fileVisual(
+  artifact: Pick<Artifact, "fileName" | "mediaType">,
+): FileVisual {
   const extension = fileExtension(artifact.fileName);
   if (artifact.mediaType === "application/pdf" || extension === "pdf")
     return { extension, icon: "pdf" };

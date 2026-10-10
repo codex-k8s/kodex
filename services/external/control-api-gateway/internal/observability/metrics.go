@@ -53,7 +53,7 @@ func Route(path string) string {
 		return "providers"
 	case strings.HasPrefix(path, "/api/v1/integration-"):
 		return "integrations"
-	case path == "/api/v1/realtime":
+	case path == "/api/v1/session/stream":
 		return "realtime"
 	case path == "/api/v1/resources" || strings.HasPrefix(path, "/api/v1/resources/"):
 		return "resources"

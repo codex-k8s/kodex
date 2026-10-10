@@ -122,7 +122,7 @@ SELECT n.id::text,
        CASE WHEN 'platform.artifact.manage'=ANY(a.capabilities) THEN
        COALESCE((SELECT array_agg(knowledge_artifact.ref ORDER BY knowledge_binding.created_at)
                  FROM control_plane.artifact_bindings knowledge_binding
-                 JOIN control_plane.artifacts knowledge_artifact ON knowledge_artifact.id=knowledge_binding.artifact_id
+                 JOIN control_plane.artifact_history knowledge_artifact ON knowledge_artifact.id=knowledge_binding.artifact_id AND knowledge_artifact.revision_id=knowledge_binding.revision_id
                  WHERE knowledge_binding.target_kind='KNOWLEDGE'
                    AND knowledge_binding.target_ref=a.ref
                    AND knowledge_artifact.organization_id=r.organization_id
@@ -199,10 +199,10 @@ SELECT n.id::text,
                  AND previous_set.item_count = (
                      SELECT count(*)
                      FROM control_plane.attachment_set_items AS eligible_item
-                     JOIN control_plane.artifacts AS eligible_artifact
+                     JOIN control_plane.artifact_history AS eligible_artifact
                        ON eligible_artifact.id = eligible_item.artifact_id
-                     JOIN control_plane.artifact_content AS eligible_content
-                       ON eligible_content.artifact_id = eligible_artifact.id
+                     JOIN control_plane.artifact_revision_content AS eligible_content
+                       ON eligible_content.revision_id = eligible_artifact.revision_id
                      WHERE eligible_item.attachment_set_id = previous_set.id
                        AND eligible_artifact.scan_state = 'CLEAN'
                        AND (
@@ -261,8 +261,8 @@ SELECT n.id::text,
                           input_attachment_set.purpose AS attachment_purpose,
                           'CURRENT_TURN'::text AS provenance
                    FROM control_plane.attachment_set_items AS item
-                   JOIN control_plane.artifacts AS artifact ON artifact.id = item.artifact_id
-                   JOIN control_plane.artifact_content AS content ON content.artifact_id = artifact.id
+                   JOIN control_plane.artifact_history AS artifact ON artifact.id = item.artifact_id
+                   JOIN control_plane.artifact_revision_content AS content ON content.revision_id = artifact.revision_id
                    WHERE item.attachment_set_id = input_attachment_set.id
                      AND artifact.scan_state = 'CLEAN'
                      AND artifact.lifecycle_state IN ('ACTIVE', 'DELETED')
@@ -311,10 +311,10 @@ SELECT n.id::text,
                     AND previous_set.state = 'FINALIZED'
                    JOIN control_plane.attachment_set_items AS previous_item
                      ON previous_item.attachment_set_id = previous_set.id
-                   JOIN control_plane.artifacts AS previous_artifact
+                   JOIN control_plane.artifact_history AS previous_artifact
                      ON previous_artifact.id = previous_item.artifact_id
-                   JOIN control_plane.artifact_content AS previous_content
-                     ON previous_content.artifact_id = previous_artifact.id
+                   JOIN control_plane.artifact_revision_content AS previous_content
+                     ON previous_content.revision_id = previous_artifact.revision_id
                    WHERE (input_attachment_set.id IS NULL OR previous_set.id <> input_attachment_set.id)
                      AND previous_artifact.scan_state = 'CLEAN'
                      AND (
@@ -336,10 +336,10 @@ SELECT n.id::text,
                      AND previous_set.item_count = (
                          SELECT count(*)
                          FROM control_plane.attachment_set_items AS eligible_item
-                         JOIN control_plane.artifacts AS eligible_artifact
+                         JOIN control_plane.artifact_history AS eligible_artifact
                            ON eligible_artifact.id = eligible_item.artifact_id
-                         JOIN control_plane.artifact_content AS eligible_content
-                           ON eligible_content.artifact_id = eligible_artifact.id
+                         JOIN control_plane.artifact_revision_content AS eligible_content
+                           ON eligible_content.revision_id = eligible_artifact.revision_id
                          WHERE eligible_item.attachment_set_id = previous_set.id
                            AND eligible_artifact.scan_state = 'CLEAN'
                            AND (
@@ -378,8 +378,8 @@ SELECT n.id::text,
                           'PROJECT_KNOWLEDGE'::text AS attachment_purpose,
                           'PROJECT_BINDING'::text AS provenance
                    FROM control_plane.artifact_bindings AS knowledge_binding
-                   JOIN control_plane.artifacts AS knowledge_artifact ON knowledge_artifact.id = knowledge_binding.artifact_id
-                   JOIN control_plane.artifact_content AS knowledge_content ON knowledge_content.artifact_id = knowledge_artifact.id
+                   JOIN control_plane.artifact_history AS knowledge_artifact ON knowledge_artifact.id = knowledge_binding.artifact_id AND knowledge_artifact.revision_id=knowledge_binding.revision_id
+                   JOIN control_plane.artifact_revision_content AS knowledge_content ON knowledge_content.revision_id = knowledge_artifact.revision_id
                    WHERE knowledge_binding.target_kind = 'KNOWLEDGE'
                      AND knowledge_binding.target_ref = a.ref
                      AND knowledge_artifact.organization_id = r.organization_id
@@ -500,6 +500,23 @@ SELECT n.id::text,
                              WHERE delegated.root_run_id = root.id
                                AND delegated.workflow_step_key = step.value ->> 'Key'
                                AND delegated.materialization_state = 'MATERIALIZED'
+                         )
+                         AND EXISTS (
+                             SELECT 1
+                             FROM control_plane.run_nodes planned
+                             WHERE planned.root_run_id = root.id
+                               AND planned.workflow_step_key = step.value ->> 'Key'
+                               AND planned.materialization_state = 'PLANNED'
+                               AND planned.state = 'PLANNED'
+                               AND NOT EXISTS (
+                                   SELECT 1
+                                   FROM control_plane.run_edges edge
+                                   LEFT JOIN control_plane.run_nodes dependency ON dependency.id = edge.source_node_id
+                                   WHERE edge.target_node_id = planned.id
+                                     AND edge.type = 'WAITING_FOR'
+                                     AND (dependency.root_run_id IS DISTINCT FROM root.id
+                                          OR dependency.state IS DISTINCT FROM 'SUCCEEDED')
+                               )
                          )
                    ) target
                ), '[]'::jsonb)
@@ -735,8 +752,8 @@ WHERE n.organization_id = $1::uuid
       OR input_attachment_set.item_count = (
           SELECT count(*)
           FROM control_plane.attachment_set_items AS input_item
-          JOIN control_plane.artifacts AS input_artifact ON input_artifact.id = input_item.artifact_id
-          JOIN control_plane.artifact_content AS input_content ON input_content.artifact_id = input_artifact.id
+          JOIN control_plane.artifact_history AS input_artifact ON input_artifact.id = input_item.artifact_id
+          JOIN control_plane.artifact_revision_content AS input_content ON input_content.revision_id = input_artifact.revision_id
           WHERE input_item.attachment_set_id = input_attachment_set.id
             AND input_artifact.scan_state = 'CLEAN'
             AND input_artifact.lifecycle_state IN ('ACTIVE', 'DELETED')

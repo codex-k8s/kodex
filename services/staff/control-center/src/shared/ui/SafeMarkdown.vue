@@ -342,7 +342,11 @@ const serverMessage = useServerMessage();
             <span v-else>{{ token.text }}</span>
           </template>
         </blockquote>
-        <div v-else-if="block.type === 'table'" class="markdown-table-wrap">
+        <div
+          v-else-if="block.type === 'table'"
+          class="markdown-table-wrap"
+          tabindex="0"
+        >
           <table>
             <thead>
               <tr>
@@ -463,6 +467,7 @@ const serverMessage = useServerMessage();
   background: transparent;
 }
 .markdown-table-wrap {
+  min-width: 0;
   max-width: 100%;
   overflow-x: auto;
 }
@@ -471,6 +476,7 @@ const serverMessage = useServerMessage();
   border-collapse: collapse;
 }
 .safe-markdown :where(th, td) {
+  min-width: 10rem;
   padding: 7px 9px;
   border: 1px solid var(--border);
   text-align: left;

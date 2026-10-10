@@ -158,6 +158,8 @@ RUNTIME_UNAVAILABLE:
   other: Среда выполнения агента временно недоступна
 RUNTIME_LIMIT_EXCEEDED:
   other: Агент превысил ограничение выполнения
+RUNTIME_TIMEOUT:
+  other: Истекло время выполнения запуска
 SYSTEM_ASSISTANT_NAME:
   other: Системный помощник
 SYSTEM_ASSISTANT_PURPOSE:
@@ -467,7 +469,7 @@ CAPABILITY_GATE_RESOLVE_DESCRIPTION:
 CAPABILITY_ARTIFACT_MANAGE_NAME:
   other: Файлы
 CAPABILITY_ARTIFACT_MANAGE_DESCRIPTION:
-  other: Чтение и создание файлов результата
+  other: Чтение, создание, изменение и удаление файлов, а также управление связями знаний в разрешённой области
 CAPABILITY_SCHEDULE_MANAGE_NAME:
   other: Автоматизации
 CAPABILITY_SCHEDULE_MANAGE_DESCRIPTION:
@@ -925,3 +927,13 @@ EMAIL_HEALTH_UNAVAILABLE:
   other: "протокол недоступен; причина не уточнена"
 EMAIL_HEALTH_NOT_READY:
   other: "почтовый протокол не готов"
+ARTIFACT_REVISION_CREATED:
+  other: Создана новая ревизия файла
+ASSISTANT_PLAN_CONTENT_STAGING_REQUIRED:
+  other: Содержимое файла необходимо подготовить в новом плане
+PERMISSION_ARTIFACT_REVISION_CREATE_NAME:
+  other: Создание ревизий файлов
+PERMISSION_ARTIFACT_REVISION_CREATE_DESCRIPTION:
+  other: Создание новой неизменяемой ревизии существующего файла
+SYSTEM_ROLE_ARTIFACT_REVISION_AUTHORITY:
+  other: Добавлены полномочия на создание ревизий файлов

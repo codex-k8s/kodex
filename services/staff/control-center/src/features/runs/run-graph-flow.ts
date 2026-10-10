@@ -21,6 +21,7 @@ import type {
 
 export const runGraphMinimumZoom = 0.15;
 export const runGraphMaximumZoom = 1.8;
+const runGraphMinimumReadableZoom = 0.85;
 export function runGraphFitViewOptions(
   viewportWidth: number,
   compact = false,
@@ -55,12 +56,40 @@ export function runGraphInitialFitOptions(
   selectedRef?: string,
   compact = false,
   viewportHeight = 480,
+  activeNodeRefs: readonly string[] = [],
 ): FitViewParams {
   const options = runGraphFitViewOptions(viewportWidth, compact);
-  if (nodes.length <= 16) return options;
+  const activeRefs = new Set(activeNodeRefs);
+  const activeExecutions = nodes
+    .filter(
+      (node) =>
+        node.type === "AGENT_EXECUTION" &&
+        node.state === "RUNNING" &&
+        activeRefs.has(node.ref),
+    )
+    .sort(
+      (left, right) =>
+        left.createdAt.localeCompare(right.createdAt) ||
+        left.ref.localeCompare(right.ref),
+    );
+  const activeExecution =
+    activeExecutions.find((node) => node.ref === selectedRef) ??
+    activeExecutions[0];
+  const layout = layoutRunGraph(nodes, edges);
+  if (!activeExecution && nodes.length <= 16) {
+    const overview = runGraphFitTransform(
+      layout.bounds,
+      viewportWidth,
+      viewportHeight,
+      options,
+    );
+    // Даже короткая цепочка может не помещаться в читаемом масштабе.
+    if (overview.zoom >= runGraphMinimumReadableZoom) return options;
+  }
 
   const nodeRefs = new Set(nodes.map((node) => node.ref));
   const root =
+    activeExecution?.ref ??
     (selectedRef && nodeRefs.has(selectedRef) ? selectedRef : undefined) ??
     [...nodes].sort(
       (left, right) =>
@@ -69,7 +98,6 @@ export function runGraphInitialFitOptions(
     )[0]?.ref;
   if (!root) return options;
 
-  const layout = layoutRunGraph(nodes, edges);
   const positions = new Map(layout.nodes.map((item) => [item.node.ref, item]));
   const rootY = positions.get(root)?.y ?? 0;
   const firstChildren = edges
@@ -86,8 +114,49 @@ export function runGraphInitialFitOptions(
     )
     .slice(0, 3)
     .map((edge) => edge.targetNodeRef);
+  // Активное исполнение важнее обёртки запуска. Ближайший завершённый
+  // предшественник и корень добавляются только без потери читаемости.
+  const contextRefs = activeExecution
+    ? [
+        activeExecution.parentNodeRef,
+        ...edges
+          .filter(
+            (edge) =>
+              edge.targetNodeRef === root &&
+              edge.type !== "CALLBACK_TO" &&
+              edge.type !== "RETRY_OF",
+          )
+          .sort((left, right) => left.ref.localeCompare(right.ref))
+          .map((edge) => edge.sourceNodeRef),
+        ...nodes
+          .filter((node) => node.type === "ROOT_PROCESS")
+          .sort(
+            (left, right) =>
+              left.createdAt.localeCompare(right.createdAt) ||
+              left.ref.localeCompare(right.ref),
+          )
+          .slice(0, 1)
+          .map((node) => node.ref),
+      ].filter(
+        (ref): ref is string =>
+          ref !== undefined && ref !== root && nodeRefs.has(ref),
+      )
+    : [
+        ...firstChildren,
+        ...edges
+          .filter(
+            (edge) =>
+              edge.targetNodeRef === root &&
+              edge.type !== "CALLBACK_TO" &&
+              edge.type !== "RETRY_OF" &&
+              nodeRefs.has(edge.sourceNodeRef),
+          )
+          .sort((left, right) => left.ref.localeCompare(right.ref))
+          .map((edge) => edge.sourceNodeRef),
+      ];
   const visibleRefs = [root];
-  for (const ref of firstChildren) {
+  for (const ref of new Set(contextRefs)) {
+    if (visibleRefs.length >= 4) break;
     const candidateRefs = [...visibleRefs, ref];
     const viewport = getTransformForBounds(
       runGraphContentBounds(layout, candidateRefs),
@@ -99,7 +168,7 @@ export function runGraphInitialFitOptions(
     );
     // Начальная окрестность остаётся читаемой. Далёкая карточка или внешняя
     // обратная дуга не должны сдвигать выбранный узел за границу экрана.
-    if (viewport.zoom >= 0.85) visibleRefs.push(ref);
+    if (viewport.zoom >= runGraphMinimumReadableZoom) visibleRefs.push(ref);
   }
   const viewport = getTransformForBounds(
     runGraphContentBounds(layout, visibleRefs),
@@ -112,7 +181,7 @@ export function runGraphInitialFitOptions(
   return {
     ...options,
     nodes: visibleRefs,
-    minZoom: Math.min(0.85, viewport.zoom),
+    minZoom: Math.min(runGraphMinimumReadableZoom, viewport.zoom),
   };
 }
 

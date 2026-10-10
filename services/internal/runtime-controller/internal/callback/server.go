@@ -54,10 +54,11 @@ type Config struct {
 // Coordinator связывает leader claim loop с callbacks, не становясь owner store.
 // После restart leases истекают в control-plane и материализуются заново.
 type Coordinator struct {
-	mu   sync.Mutex
-	warm []warmExecution
-	wake chan struct{}
-	done map[string]chan struct{}
+	mu                 sync.Mutex
+	warm               []warmExecution
+	wake               chan struct{}
+	done               map[string]chan struct{}
+	providerExecutions map[string]providerProcessExecution
 }
 
 type warmExecution struct {
@@ -66,12 +67,13 @@ type warmExecution struct {
 }
 
 func NewCoordinator() *Coordinator {
-	return &Coordinator{wake: make(chan struct{}, 1), done: make(map[string]chan struct{})}
+	return &Coordinator{wake: make(chan struct{}, 1), done: make(map[string]chan struct{}), providerExecutions: make(map[string]providerProcessExecution)}
 }
 
 func (coordinator *Coordinator) Register(input runtimecontract.RunnerInput) <-chan struct{} {
 	coordinator.mu.Lock()
 	defer coordinator.mu.Unlock()
+	coordinator.registerProviderExecution(input)
 	if existing := coordinator.done[input.LeaseRef]; existing != nil {
 		return existing
 	}
@@ -125,6 +127,7 @@ func (coordinator *Coordinator) NextWarm(ctx context.Context, revisionDigest str
 func (coordinator *Coordinator) Complete(leaseRef string) {
 	coordinator.mu.Lock()
 	defer coordinator.mu.Unlock()
+	delete(coordinator.providerExecutions, leaseRef)
 	if done := coordinator.done[leaseRef]; done != nil {
 		close(done)
 		delete(coordinator.done, leaseRef)
@@ -459,7 +462,8 @@ func (server *Server) progress(writer http.ResponseWriter, request *http.Request
 	if decode(request, &payload, runtimecontract.MaximumRuntimeMessageBytes*6+2048) != nil ||
 		payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest ||
 		payload.Message == nil && !progressCodePattern.MatchString(payload.Progress) ||
-		payload.Message != nil && (payload.Progress != "" || payload.Message.Validate() != nil) {
+		payload.Message != nil && (payload.Progress != "" || payload.Message.Validate() != nil) ||
+		payload.ProviderProcess != nil && (payload.Message != nil || payload.Progress != runtimecontract.ProviderProcessInitializedProgress || !payload.ProviderProcess.Matches(input)) {
 		http.Error(writer, "invalid runtime progress", http.StatusBadRequest)
 		return
 	}
@@ -478,6 +482,10 @@ func (server *Server) progress(writer http.ResponseWriter, request *http.Request
 		writeControlError(writer, err)
 		return
 	}
+	if payload.ProviderProcess != nil && server.coordinator.recordProviderProcess(input, *payload.ProviderProcess) != nil {
+		http.Error(writer, "provider process observation conflict", http.StatusConflict)
+		return
+	}
 	writer.WriteHeader(http.StatusNoContent)
 }
 
@@ -488,7 +496,8 @@ func (server *Server) complete(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	var payload runtimecontract.RunnerCompletionRequest
-	if decode(request, &payload, maximumRequestBytes) != nil || payload.Validate() != nil || payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest || payload.Attempt != input.Attempt {
+	if decode(request, &payload, maximumRequestBytes) != nil || payload.Validate() != nil || payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest || payload.Attempt != input.Attempt ||
+		(payload.ProviderDiagnostic != nil && !payload.ProviderDiagnostic.Matches(input)) {
 		http.Error(writer, "invalid runtime completion", http.StatusBadRequest)
 		return
 	}
@@ -504,6 +513,7 @@ func (server *Server) complete(writer http.ResponseWriter, request *http.Request
 		writeControlError(writer, err)
 		return
 	}
+	server.logCommittedProviderDiagnostic(ctx, input, payload, err)
 	server.coordinator.Complete(input.LeaseRef)
 	writer.WriteHeader(http.StatusNoContent)
 	// Ответ о durable commit отправляется до удаления вызывающего Pod;
@@ -581,15 +591,18 @@ func emptyMCPParams(raw json.RawMessage) bool {
 
 func tools(input runtimecontract.RunnerInput) []map[string]any {
 	result := []map[string]any{runMetadataTool()}
+	if runtimecontract.RuntimeExecutionSnapshotAvailable(input) {
+		result = append(result, executionSnapshotTool())
+	}
 	result = append(result, runtimeFileTools(input)...)
 	if input.IsAssistant() {
-		result = append(result, configurationCatalogTool(input), assistantResourceSearchTool(), assistantPlanTool(input), assistantMetadataTool())
+		result = append(result, configurationCatalogTool(input), assistantResourceSearchTool(), assistantTaskSessionTool(), assistantPlanTool(input), assistantMetadataTool())
 	}
 	if len(input.DelegationTargets) != 0 {
 		result = append(result, delegationTool(input.DelegationTargets))
 	}
 	if workflowLaunchAvailable(input) {
-		result = append(result, workflowLaunchTool())
+		result = append(result, workflowCatalogTool(), workflowLaunchTool())
 	}
 	if len(input.IntegrationGrants) != 0 {
 		result = append(result, integrationCatalogTool(), integrationTool())
@@ -712,12 +725,16 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	switch params.Name {
+	case runtimecontract.ExecutionSnapshotTool:
+		result, err = server.executionSnapshot(input, params.Arguments)
 	case "get_configuration_catalog":
 		result, err = server.configurationCatalog(request.Context(), input, params.Arguments)
 	case "get_integration_catalog":
 		result, err = integrationCatalog(input, params.Arguments)
 	case "find_platform_resources":
 		result, err = server.findPlatformResources(request.Context(), input, params.Arguments)
+	case "read_task_session":
+		result, err = server.readTaskSession(request.Context(), input, params.Arguments)
 	case "propose_configuration_plan":
 		result, err = server.proposeAssistantPlan(request.Context(), input, params.Arguments, rpc.ID)
 	case "propose_assistant_metadata":
@@ -728,6 +745,8 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		result, err = server.delegate(request.Context(), input, params.Arguments, rpc.ID)
 	case "launch_workflow":
 		result, err = server.launchWorkflow(request.Context(), input, params.Arguments, rpc.ID)
+	case "get_workflow_catalog":
+		result, err = server.workflowCatalog(request.Context(), input, params.Arguments)
 	case "invoke_integration":
 		result, err = server.invoke(request.Context(), input, params.Arguments, rpc.ID)
 	case runtimecontract.Context7ResolveTool, runtimecontract.Context7QueryTool:
@@ -760,6 +779,12 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 			failureClass = "integration_call_" + invocationInputErr.reason
 		}
 		attributes := []any{"tool", params.Name, "stage", "operation", "grpc_code", status.Code(err).String(), "failure_class", failureClass}
+		if params.Name == "read_task_session" {
+			if stage, _, ok := taskSessionFailureDetails(err); ok {
+				attributes[len(attributes)-1] = taskSessionFailureClass(stage)
+				attributes = append(attributes, taskSessionFailureAttributes(input, rpc.ID, stage)...)
+			}
+		}
 		if _, index := assistantPlanFailureDiagnostic(err); index > 0 {
 			attributes = append(attributes, "operation_index", index)
 		}
@@ -1290,6 +1315,7 @@ func assistantOperationTitle(kind string, parameters map[string]any, entityName 
 	labels := map[string]string{
 		"CREATE_PROJECT":                             "Создать Проект",
 		"CREATE_PROJECT_FILE":                        "Создать файл",
+		"CREATE_PROJECT_FILE_REVISION":               "Создать новую версию файла",
 		"UPDATE_PROJECT":                             "Изменить Проект",
 		"CREATE_AGENT":                               "Создать ИИ-сотрудника",
 		"CREATE_PROJECT_ASSISTANT":                   "Настроить помощника Проекта",
@@ -1346,7 +1372,7 @@ func assistantServerHydratedOperation(kind string) bool {
 	switch kind {
 	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT", "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION":
 		return true
-	case "CREATE_PROJECT", "CREATE_PROJECT_FILE", "CREATE_AGENT", "CREATE_PROJECT_ASSISTANT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "PUBLISH_INTEGRATION_DEFINITION", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
+	case "CREATE_PROJECT", "CREATE_PROJECT_FILE", "CREATE_PROJECT_FILE_REVISION", "CREATE_AGENT", "CREATE_PROJECT_ASSISTANT", "CREATE_WORKFLOW", "CREATE_INTEGRATION_CONNECTION", "CREATE_SCHEDULE", "CREATE_RUNTIME_ENVIRONMENT_DRAFT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "PUBLISH_INTEGRATION_DEFINITION", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS":
 		return true
 	default:
 		return false
@@ -1360,6 +1386,35 @@ func assistantConfigurationParametersAllowed(input runtimecontract.RunnerInput, 
 		return projectAssistantLocatorParametersAllowed(input, kind, parameters)
 	}
 	switch kind {
+	case "CREATE_PROJECT_FILE_REVISION":
+		if !assistantFileRevisionContextAllowed(input) || !onlyKeys(parameters, "artifactRef", "mediaType", "contentEncoding", "content") ||
+			!assistantRequiredStrings(parameters, "artifactRef", "mediaType") {
+			return false
+		}
+		content, ok := parameters["content"].(string)
+		encoding, _ := parameters["contentEncoding"].(string)
+		mediaType, _ := parameters["mediaType"].(string)
+		if !ok || len(content) > 1<<20 || !utf8.ValidString(content) || strings.ContainsRune(content, 0) ||
+			(encoding != "" && encoding != "UTF8") || !slices.Contains([]string{"text/plain", "text/markdown", "text/csv", "application/json"}, mediaType) {
+			return false
+		}
+		return true
+	case "CHANGE_CAPABILITY":
+		if !input.IsAssistant() || !onlyKeys(parameters, "agentRef", "capabilityKey", "enabled") || !assistantRequiredStrings(parameters, "agentRef", "capabilityKey") {
+			return false
+		}
+		if _, ok := parameters["enabled"].(bool); !ok {
+			return false
+		}
+		key := parameters["capabilityKey"].(string)
+		if key != "platform.artifact.manage" && key != "platform.run.delegate" && key != "platform.run.launch" {
+			return false
+		}
+		if input.AssistantScope == runtimecontract.AssistantScopeProject && input.AgentRef != "" && parameters["agentRef"] == input.AgentRef {
+			return true
+		}
+		context := input.AssistantContext
+		return context != nil && context.EntityKind == "AGENT" && context.EntityRef == parameters["agentRef"] && slices.Contains(context.AllowedOperations, kind)
 	case "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT":
 		if input.AssistantScope != runtimecontract.AssistantScopeProject || input.AgentRef == "" || parameters["projectAssistantRef"] != input.AgentRef ||
 			!onlyKeys(parameters, "projectAssistantRef", "connectionRef", "capabilityKey", "enabled", "approvalPolicy", "approvalScopePaths") {
@@ -1446,6 +1501,15 @@ func assistantConfigurationParametersAllowed(input runtimecontract.RunnerInput, 
 	default:
 		return true
 	}
+}
+
+// Это фильтр подписанного source snapshot, не выдача artifact authority.
+// Текущие права и exact target повторно проверяет владелец control-plane.
+func assistantFileRevisionContextAllowed(input runtimecontract.RunnerInput) bool {
+	context := input.AssistantContext
+	return input.IsAssistant() && slices.Contains(input.Capabilities, runtimecontract.ArtifactCapability) &&
+		input.ProjectRef != "" && context != nil && slices.Contains(context.AllowedOperations, "CREATE_PROJECT_FILE_REVISION") &&
+		(input.AssistantScope == runtimecontract.AssistantScopeProject || input.IsSystemAssistant() && (context.EntityKind == "PROJECT" || context.EntityKind == "FILE"))
 }
 
 func assistantIntegrationGrantPolicyShape(parameters map[string]any) bool {
@@ -1559,6 +1623,9 @@ func assistantOptionalStrings(parameters map[string]any, fields ...string) bool 
 }
 
 func assistantServerAction(kind string) string {
+	if kind == "CREATE_PROJECT_FILE_REVISION" {
+		return "UPDATE"
+	}
 	if kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" || kind == "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT" || kind == "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT" {
 		return "UPDATE"
 	}
@@ -1574,7 +1641,7 @@ func assistantOperationTargetContext(input runtimecontract.RunnerInput, kind str
 	if input.AssistantScope != runtimecontract.AssistantScopeProject {
 		return input.AssistantContext
 	}
-	if kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" {
+	if kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "CHANGE_CAPABILITY" {
 		requested, _ := parameters["agentRef"].(string)
 		if requested != "" && requested == input.AgentRef {
 			return &runtimecontract.RunnerAssistantContext{EntityKind: "AGENT", EntityRef: input.AgentRef, EntityName: input.AgentRef}
@@ -1590,6 +1657,13 @@ func assistantOperationTargetContext(input runtimecontract.RunnerInput, kind str
 }
 
 func assistantServerTarget(kind string, parameters map[string]any, context *runtimecontract.RunnerAssistantContext) map[string]any {
+	if kind == "CREATE_PROJECT_FILE_REVISION" {
+		ref, _ := parameters["artifactRef"].(string)
+		if strings.TrimSpace(ref) == "" {
+			return nil
+		}
+		return map[string]any{"kind": "ARTIFACT", "name": strings.TrimSpace(ref)}
+	}
 	if parameters == nil {
 		return nil
 	}
@@ -1791,6 +1865,12 @@ func (server *Server) recordToolCallPhase(ctx context.Context, input runtimecont
 			return err
 		}
 	}
+	if tool == "get_workflow_catalog" && revision == 2 && toolErr == nil {
+		safeResult, err = safeWorkflowCatalogReceipt(input, arguments, result)
+		if err != nil {
+			return err
+		}
+	}
 	if revision == 1 {
 		state, safeResult = controlplanev1.RunToolCallState_RUN_TOOL_CALL_STATE_RUNNING, ""
 	}
@@ -1825,13 +1905,15 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 		return map[string]any{"purpose": purpose}, "", input.FileCatalog.Ref, true
 	}
 	switch tool {
+	case runtimecontract.ExecutionSnapshotTool:
+		return map[string]any{}, "", "", len(arguments) == 0 && runtimecontract.RuntimeExecutionSnapshotAvailable(input)
 	case "get_configuration_catalog":
 		parameters := map[string]any{}
 		if catalog, ok := arguments["assistant_configuration_catalog"].(map[string]any); ok {
 			if kind, ok := catalog["kind"].(string); ok && assistantConfigurationCatalogKindKnown(kind) {
 				// Вид и проверенные координаты запроса страницы не раскрывают ресурс или содержимое.
 				parameters["catalogKind"] = kind
-				if kind == "WORKFLOW_CONFIGURATION" || kind == "AGENT_CONFIGURATION" {
+				if kind == "WORKFLOW_CONFIGURATION" || kind == "AGENT_CONFIGURATION" || kind == "AGENT_RUNTIME_CONFIGURATION" {
 					if _, err := configurationCatalog(input, arguments); err == nil {
 						if _, err := parseAssistantConfigurationCatalog(input, arguments, catalog); err == nil {
 							if page, err := parseAssistantConfigurationPage(catalog, kind); err == nil {
@@ -1847,6 +1929,8 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 	case "get_integration_catalog":
 		return map[string]any{}, "platform.integration.catalog", "", len(input.IntegrationGrants) != 0
 	case "find_platform_resources":
+		return map[string]any{}, "platform.resources.search", "", input.IsAssistant()
+	case "read_task_session":
 		return map[string]any{}, "platform.resources.search", "", input.IsAssistant()
 	case "propose_configuration_plan":
 		operations, _ := arguments["operations"].([]any)
@@ -1882,6 +1966,8 @@ func safeToolCallParameters(input runtimecontract.RunnerInput, tool string, argu
 	case "launch_workflow":
 		workflow, _ := arguments["workflow_ref"].(string)
 		return map[string]any{"workflow_ref": workflow}, "platform.run.launch", "", workflowLaunchAvailable(input)
+	case "get_workflow_catalog":
+		return workflowCatalogSafeParameters(arguments), "platform.run.launch", "", workflowLaunchAvailable(input)
 	case "invoke_integration":
 		if grant, ok := integrationGrantForCall(input, arguments); ok {
 			return map[string]any{"connection_ref": grant.ConnectionRef, "capability_key": grant.CapabilityKey}, grant.CapabilityKey, grant.Ref, true
@@ -1942,10 +2028,29 @@ func safeToolCallResult(tool string, result any, toolErr error) string {
 		}
 		return "TOOL_UNAVAILABLE"
 	}
+	if tool == runtimecontract.ExecutionSnapshotTool {
+		// Process observation доступно только current leased read, не из истории.
+		return runtimecontract.ExecutionSnapshotTool + ":completed"
+	}
 	// У read_file нет нового successful legacy fallback: terminal проекция
 	// требует private evidence и authenticated input в recordToolCallPhase.
-	if tool == runtimecontract.FileToolRead {
+	if tool == runtimecontract.FileToolRead || tool == "get_workflow_catalog" {
 		return "TOOL_UNAVAILABLE"
+	}
+	if tool == "read_task_session" {
+		value, ok := result.(taskSessionToolResult)
+		if !ok {
+			return "TOOL_UNAVAILABLE"
+		}
+		// Durable activity хранит только commitment, не текст и не raw response.
+		raw, _ := json.Marshal(struct {
+			Version          int    `json:"version"`
+			SourceSHA256     string `json:"source_sha256"`
+			ProjectionSHA256 string `json:"projection_sha256"`
+			Messages         int    `json:"messages"`
+			Truncated        bool   `json:"truncated"`
+		}{1, value.SourceSHA256, value.ProjectionSHA256, len(value.Messages), value.Truncated})
+		return string(raw)
 	}
 	if tool == "invoke_integration" || tool == runtimecontract.Context7ResolveTool || tool == runtimecontract.Context7QueryTool {
 		value, ok := result.(integrationToolResult)

@@ -4,8 +4,8 @@ title: Файлы, результаты и знания
 type: domain
 status: approved
 owner: architect
-version: 1.2.0
-updated: 2026-08-29
+version: 1.3.0
+updated: 2026-10-10
 ---
 
 # Файлы, результаты и знания
@@ -19,6 +19,26 @@ updated: 2026-08-29
 provenance, media type, size, digest, scan status и retention. Filename является
 недоверенным display metadata, не используется как storage key и не влияет на
 authority.
+
+Логический Artifact сохраняет стабильный ref. Его `ArtifactVersion`
+материализуется как append-only `ArtifactRevision`; замена содержимого создаёт
+следующую server-assigned revision и не переписывает старую. Native команда
+`CREATE_PROJECT_FILE_REVISION` требует самостоятельную exact
+`artifact.revision.create` authority, подтверждённую возможность помощника и
+owner plan confirmation. Capability и filename не являются authority.
+
+Тело подготавливается до durable plan в частном server-owned content ledger;
+план хранит только bounded metadata/digest и exact prepared ref без body или
+storage locator. Apply связывает receipt с новой immutable revision. Старые
+FileBindings, AttachmentSets, skills, RuntimeRevision и download grants читают
+свою точную revision/digest при свежей текущей eligibility, независимо от head
+OCC. History metadata не расширяет выдачу: bytes разрешены только `CLEAN`.
+
+При confirmed terminal purge удаляются content receipts и revision metadata,
+а technical ledger очищается до terminal flag, opaque origin refs и safe
+idempotency/deletion commitments. Они не позволяют восстановить тело или
+повторить Put; immutable application receipt и lineage остаются неизменными.
+Полная authority/context/storage lifecycle матрица задана в `ARCH-MC-008`.
 
 Источники: Control Center upload, Agent result, Integration result, Knowledge
 source и interaction attachment. Ни один источник не требует Mattermost

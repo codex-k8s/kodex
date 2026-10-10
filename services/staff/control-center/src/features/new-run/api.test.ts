@@ -26,6 +26,7 @@ function response<T>(data: T) {
 function artifact(overrides: Partial<Artifact> = {}): Artifact {
   return {
     ref: "artifact_1",
+    currentRevisionRef: "arv_fixture_one",
     version: 1,
     projectRef: "project_1",
     fileName: "brief.pdf",

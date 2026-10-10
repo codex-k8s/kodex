@@ -49,6 +49,22 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it("именует выбор помощника и сохраняет локализованную подпись и scope semantics", () => {
+    const selector = template.match(
+      /<label[^>]*class="assistant-scope-selector"[^]*?<\/label>/,
+    )?.[0];
+    expect(selector).toBeDefined();
+    expect(selector).toContain('name="assistant-scope"');
+    expect(selector).toContain(
+      ":aria-label=\"$t('assistant.projectProfile.scopeLabel')\"",
+    );
+    expect(selector).toContain(':value="store.assistantScope"');
+    expect(selector).toContain(':disabled="store.busy || store.loading"');
+    expect(selector).toContain('@change="selectAssistantScope"');
+    expect(selector).toContain('<option value="SYSTEM">');
+    expect(selector).toContain('<option value="PROJECT">');
+  });
+
   it("блокирует Send/Queue при session blocker, сохраняя черновик, Stop и штатный новый диалог", () => {
     const eligibility = source.slice(
       source.indexOf("const canSend = computed"),
@@ -256,7 +272,9 @@ describe("AssistantWorkspace layout", () => {
       template.indexOf("</AssistantPlanRecord>"),
     );
     expect(record).toContain("turn.plan.state === 'APPLIED'");
-    expect(record).toContain(':content="transcriptTurnContent(turn)"');
+    expect(record).toContain("!turnHasPublishedMessage(turn)");
+    expect(record).toContain(':content="planCardFallbackContent(turn)"');
+    expect(record).not.toContain(':content="transcriptTurnContent(turn)"');
   });
   it("не дублирует exact активный transcript нижним working fallback", () => {
     expect(template).toContain(
@@ -275,10 +293,14 @@ describe("AssistantWorkspace layout", () => {
   });
   it("объединяет owner-checked историю run в чат без отдельного cache и отпускает scoped subscriptions", () => {
     expect(source).toContain("Object.values(platform.events[runRef] ?? {})");
-    expect(source).toContain("await platform.loadRun(runRef)");
+    expect(source).toContain("platform.loadRun(runRef, signal)");
+    expect(source).toContain("platform.loadRunTranscript(runRef, signal)");
     expect(source).toContain("realtime.acquireRun(runRef)");
-    expect(source).toContain(
-      "for (const release of transcriptLeases.values()) release()",
+    expect(source).toContain("transcriptSubscriptions.close()");
+    expect(source).toContain("platform.graphs[runRef]?.sequence");
+    expect(template).toContain(':problem="transcriptProblem.problem"');
+    expect(template).toContain(
+      "transcriptSubscriptions.retry(transcriptProblem.runRef)",
     );
     expect(template).toContain('v-for="entry in chatTimeline"');
     expect(template).toContain(':events="entry.events"');

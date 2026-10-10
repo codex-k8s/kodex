@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"github.com/google/uuid"
 )
 
@@ -84,6 +85,17 @@ type Result struct {
 	UsageCompleteness   UsageCompleteness                `json:"UsageCompleteness,omitempty"`
 	ToolCalls           []runtimecontract.NativeToolCall `json:"ToolCalls,omitempty"`
 	rolloutCapture      *rolloutCaptureProof
+	providerDiagnostic  *runtimecontract.ProviderFailureDiagnostic
+}
+
+// Только проверенный private IPC terminal назначает diagnostic; JSON Result
+// или произвольные caller fields не могут создать этот внутренний маркер.
+func (result Result) ProviderDiagnostic(input model.Input) *runtimecontract.ProviderFailureDiagnostic {
+	if result.providerDiagnostic == nil || !result.providerDiagnostic.Matches(input) {
+		return nil
+	}
+	value := *result.providerDiagnostic
+	return &value
 }
 
 type messageKind uint8
@@ -209,6 +221,7 @@ func decodeRPCError(raw json.RawMessage) (int64, error) {
 }
 
 type protocolState struct {
+	processVersion       string
 	resumeSource         *confirmedResumeSource
 	expectedSessionID    string
 	threadID             string
@@ -271,6 +284,11 @@ func (state *protocolState) initialize(raw json.RawMessage, expectedHome string)
 		family != "unix" || operatingSystem != "linux" || userAgent == "" {
 		return errors.New("Codex app-server initialize binding is invalid")
 	}
+	version, err := parseProviderProcessVersion(userAgent)
+	if err != nil || state.processVersion != "" {
+		return errProviderProcessInitialize
+	}
+	state.processVersion = version
 	return nil
 }
 

@@ -183,6 +183,16 @@ function visibleState(state: string | undefined, working: boolean): boolean {
 function toolState(tool: NonNullable<RunActivityItem["toolCall"]>): string {
   return integrationToolPresentationState(tool) ?? tool.state;
 }
+// Завершение web-обёртки не подтверждает успешное получение содержимого страницы.
+function completedWebTool(
+  tool: NonNullable<RunActivityItem["toolCall"]>,
+): boolean {
+  return (
+    tool.tool === "CODEX_WEB_SEARCH" &&
+    tool.state === "SUCCEEDED" &&
+    tool.safeResult === "COMPLETED"
+  );
+}
 function groupToolState(items: readonly RunActivityItem[]): string {
   const states = items.map((item) =>
     item.toolCall ? toolState(item.toolCall) : "",
@@ -235,6 +245,8 @@ const nativeTools = new Set([
 ]);
 const managedTools = new Set([
   "get_configuration_catalog",
+  "read_task_session",
+  "get_workflow_catalog",
   "propose_configuration_plan",
   "get_integration_catalog",
   "find_platform_resources",
@@ -243,6 +255,7 @@ const managedTools = new Set([
   "delegate_agent",
   "invoke_integration",
   "search_files",
+  "read_file",
   "get_file_metadata",
   "preview_file",
   "get_file_manifest",
@@ -307,6 +320,7 @@ function nativeResultLabel(
   toolCall: NonNullable<RunActivityItem["toolCall"]>,
 ): string | undefined {
   if (!nativeTools.has(toolCall.tool)) return undefined;
+  if (completedWebTool(toolCall)) return t("runs.nativeToolResults.COMPLETED");
   if (toolCall.safeResult === "COMPLETED" && toolCall.state === "SUCCEEDED")
     return t("states.SUCCEEDED");
   if (toolCall.safeResult === "RUNNING" && toolCall.state === "RUNNING")
@@ -330,6 +344,16 @@ const configurationCatalogKinds = new Set([
   "ROLE_ENVIRONMENTS",
   "CURRENT_CONFIGURATION",
 ]);
+function structuredToolResult(result: string): boolean {
+  const candidate = result.trim();
+  if (!candidate.startsWith("{") && !candidate.startsWith("[")) return false;
+  try {
+    const value: unknown = JSON.parse(candidate);
+    return typeof value === "object" && value !== null;
+  } catch {
+    return false;
+  }
+}
 function toolPreview(
   toolCall: NonNullable<RunActivityItem["toolCall"]>,
   working: boolean,
@@ -351,7 +375,14 @@ function toolPreview(
     return undefined;
   return (toolCall.state === "SUCCEEDED" &&
     managedTools.has(toolCall.tool) &&
-    toolCall.safeResult === `${toolCall.tool}:completed`) ||
+    (toolCall.safeResult === `${toolCall.tool}:completed` ||
+      toolCall.safeResult === "COMPLETED" ||
+      (![
+        "invoke_integration",
+        "context7_resolve_library_id",
+        "context7_query_docs",
+      ].includes(toolCall.tool) &&
+        structuredToolResult(toolCall.safeResult)))) ||
     isAssistantPlanToolReceipt(toolCall) ||
     Boolean(integrationToolPresentationState(toolCall))
     ? undefined
@@ -652,6 +683,14 @@ function bytes(value: number): string {
                         visibleState(toolState(item.toolCall), false)
                       "
                       :state="toolState(item.toolCall)"
+                      :tone="
+                        completedWebTool(item.toolCall) ? 'neutral' : undefined
+                      "
+                      :label="
+                        completedWebTool(item.toolCall)
+                          ? $t('runs.nativeToolResults.COMPLETED')
+                          : undefined
+                      "
                     />
                     <time :datetime="item.occurredAt">{{
                       time(item.occurredAt)
@@ -957,7 +996,7 @@ function bytes(value: number): string {
       type="button"
       @click="latest"
     >
-      {{ $t("runs.newMessages") }}
+      {{ $t("runs.jumpToLatestMessage") }}
     </button>
   </section>
 </template>

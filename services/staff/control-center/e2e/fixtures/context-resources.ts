@@ -36,6 +36,7 @@ export async function checkContextResources(
   const events: string[] = [];
   const artifact: Artifact = {
     ref: "artifact_skill_synthetic",
+    currentRevisionRef: "arv_fixture_skill_synthetic",
     version: 9,
     projectRef,
     fileName: "SKILL.md",

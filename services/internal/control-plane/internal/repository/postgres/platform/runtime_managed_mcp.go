@@ -24,6 +24,9 @@ var queryRuntimeManagedMCPPending string
 //go:embed sql/runtime_managed_mcp__startup_dependencies.sql
 var queryRuntimeManagedMCPStartupDependencies string
 
+//go:embed sql/runtime_managed_mcp__stale.sql
+var queryRuntimeManagedMCPStale string
+
 var errManagedMCPHealthPending = errors.New("managed MCP health probe is pending")
 
 // Недоступный enabled dependency не исчезает из required startup только потому,
@@ -92,7 +95,17 @@ func runtimeManagedMCPProfilesForStartup(ctx context.Context, tx pgx.Tx, organiz
 	if pending {
 		return nil, errManagedMCPHealthPending
 	}
-	return nil, err
+	profiles, staleErr := runtimeManagedMCPProfilesWithHealthQuery(ctx, tx, organizationID, scopeKind, scopeRef, agentRef, projectRef, grants, queryRuntimeManagedMCPStale, false)
+	if staleErr != nil {
+		if !errors.Is(staleErr, errs.ErrConflict) {
+			return nil, staleErr
+		}
+		return nil, err
+	}
+	if len(profiles) != 1 {
+		return nil, err
+	}
+	return nil, &managedMCPStartupRecovery{scopeKind: scopeKind, scopeRef: scopeRef, agentRef: agentRef, projectRef: projectRef, grants: grants}
 }
 
 func managedMCPPendingGrantPair(grants []runtimecontract.RunnerIntegrationGrant) (runtimecontract.RunnerIntegrationGrant, runtimecontract.RunnerIntegrationGrant, bool) {
@@ -125,6 +138,10 @@ func managedMCPPendingGrantPair(grants []runtimecontract.RunnerIntegrationGrant)
 // Изменение grant не изменяет config/credential; current connection version
 // привязывается владельцем после проверки тех же semantic pins под SHARE lock.
 func runtimeManagedMCPProfiles(ctx context.Context, tx pgx.Tx, organizationID, scopeKind, scopeRef, agentRef, projectRef string, grants []runtimecontract.RunnerIntegrationGrant) ([]runtimecontract.ManagedMCPProfile, error) {
+	return runtimeManagedMCPProfilesWithHealthQuery(ctx, tx, organizationID, scopeKind, scopeRef, agentRef, projectRef, grants, queryRuntimeManagedMCPHealth, true)
+}
+
+func runtimeManagedMCPProfilesWithHealthQuery(ctx context.Context, tx pgx.Tx, organizationID, scopeKind, scopeRef, agentRef, projectRef string, grants []runtimecontract.RunnerIntegrationGrant, healthQuery string, requireFresh bool) ([]runtimecontract.ManagedMCPProfile, error) {
 	var selected *runtimecontract.RunnerIntegrationGrant
 	for i := range grants {
 		grant := &grants[i]
@@ -141,7 +158,7 @@ func runtimeManagedMCPProfiles(ctx context.Context, tx pgx.Tx, organizationID, s
 	}
 	var health runtimecontract.ManagedMCPHealthProof
 	var configuration []byte
-	err := tx.QueryRow(ctx, queryRuntimeManagedMCPHealth, pgx.StrictNamedArgs{
+	err := tx.QueryRow(ctx, healthQuery, pgx.StrictNamedArgs{
 		"organization_id": organizationID, "connection_ref": selected.ConnectionRef,
 		"connection_version": selected.ConnectionVersion, "definition_version": selected.DefinitionVersion,
 		"definition_digest": selected.DefinitionDigest,
@@ -177,7 +194,7 @@ func runtimeManagedMCPProfiles(ctx context.Context, tx pgx.Tx, organizationID, s
 	} else if scopeKind == "PROJECT" {
 		input.AssistantScope, input.AssistantProfileRef = runtimecontract.AssistantScopeProject, scopeRef
 	}
-	if runtimecontract.ValidateManagedMCPReadiness(input, time.Now().UTC()) != nil {
+	if runtimecontract.ValidateManagedMCPProfiles(input) != nil || (requireFresh && runtimecontract.ValidateManagedMCPReadiness(input, time.Now().UTC()) != nil) {
 		return nil, errs.ErrConflict
 	}
 	return input.ManagedMCPProfiles, nil

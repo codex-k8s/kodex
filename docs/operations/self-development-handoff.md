@@ -5,10 +5,3197 @@ type: operations
 status: approved
 owner: manager
 version: 1.1.0
-updated: 2026-10-08
+updated: 2026-10-10
 ---
 
 # Текущее состояние
+
+## Checkpoint 10.10.2026 16:29 UTC — штатный rollout начат
+
+Опубликован8589a086; exact Draft1807 readback PASS. Maintenance PLAN/APPLY PASS,
+gateway штатно временно закрыт; reader pause следующий. Clean migration source
+совместимость empty ignored0600 env mountpoint исправлена отдельно, Node14/14
+и Python10/10 PASS. Owner file не читается/не переносится/не меняется, protected
+inspector по-прежнему отвергает secret-bearing env. Fresh render/apply впереди.
+Policy CLI17/17 PASS97.542s, live полный rollout ещё NOT RUN.
+
+## Checkpoint 10.10.2026 16:24 UTC — startup и idle source fixes готовы
+
+После b620 подготовлены stale-only native CP managed MCP startup recovery и
+точный effect-bearing idle counter. ROOT combined fresh PostgreSQL4 suites
+PASS18.026s, runner idle/diagnostic actualPG50 scenarios PASS8/8,41.947s.
+Gateway sole executor, no runtime authority до настоящего fresh receipt;
+queue/audit/receipt атомарны, история failed runs и snapshots неизменна.
+Readonly live16:24:26: pendingPromotions0, supersededUnrequestedPromotions1,
+остальные work/lease/admission0; promoted count55/hash9bf859426a27…0763ec прежние.
+
+Canonical migration render clean independent source FAIL: mandatory empty env
+mask mountpoint конфликтует с inspector, запрещающим даже пустой ignored файл.
+Безопасное source-only исправление готовится; owner env не менять/не копировать.
+Policy/default/custom images/три ENV/additive schema20261010150000/hot FF NOT RUN.
+Hot clean29845e1e/v2 сохраняется, новый runner acbb опубликован из clean888.
+Business1796/Full65 OPEN, новых пользовательских сообщений/Retry/Launch нет.
+
+## Checkpoint 10.10.2026 15:55 UTC — общий пакет опубликован, переключение ещё не выполнено
+
+Combined commit888a2efb92ebf4cd932b0b0a7f371298d1fc9649 опубликован в Draft1807.
+Common PLATFORM instructions v3 обязательны для сотрудников и помощников;
+PROJECT наследует server-pinned SYSTEM core48, сохраняя собственные инструкции.
+Свежие SYSTEM+два PROJECT по два turns в disposable PostgreSQL PASS6.63s.
+Исправление не добавляет сообщений от имени пользователя; fresh install получает
+правила из source. Исторические core46/47 и v2 snapshots не переписываются.
+
+Из clean888 собран full runner acbb5f198cadc00df831771794ecaf04e7d126a55a8746887fafef69b6da177d:
+import на оба узла и canonical durable publication PASS15:46:53Z.
+Source revision888, protected ELF e091a0e7bfb4731fe5e453b11b4c399f927d833b5078fa428d812df797b05f41.
+Это build/publication, не доказательство фактически обслуживаемого consumer.
+Hot source всё ещё clean29845e1e/v2; compatible delivery не завершена.
+Policy maintenance plan закрыто остановлен перед эффектом: pendingPromotions1,
+прочие work/lease/admission counters0. API не закрывалось; guard не ослаблять.
+Нужен bounded owner readback exact candidate и штатное решение состояния.
+
+Новый bounded readonly managed MCP diagnostic: ROOT unit9/9 PASS.
+Live15:55:10 CURRENT_HEALTH_FRESH: connection26, exact READ/NONE grants1/1,
+два matched grants, gateway receipts SUCCEEDED/current pins. История показывает
+completed15:04:07.888896, затем следующий created15:18:37.149976, уже после
+managed_mcp rejection15:18:23.97. Это подтверждённый перерыв health receipts,
+но точный исторический rejecting predicate остаётся UNKNOWN. Проверить durable
+startup recovery после паузы CP, не owner USER_MESSAGE и не blind retry.
+Business1796 и Full65 OPEN; no new run/Retry. Следом завершить consumer/policy,
+custom images/три ENV, forward migration20261010150000 и только затем hot FF.
+
+## Checkpoint 10.10.2026 15:39 UTC — доставить переносимые инструкции
+
+Изолированный combined tree от29845e1e содержит common v3 producer/consumer,
+PROJECT core pin/mandatory references/dependencies и новую forward migration
+20261010150000 с exact release profile. Core47 + combined prompt/core/runtime
+race, runner targeted race, CP vet, migration18/18 и fresh disposable SYSTEM+
+2PROJECT по2 native turns PASS. Live hot clone всё ещё clean29845e1e/v2;
+его не переключать до compatible runner/admission/custom images/три ENV и DB.
+Это обязательные shipped PLATFORM instructions, не сообщения владельца.
+Core48 готовится отдельно; base files46/47 не переиздавать.
+
+Root run_4yS3kF8Vn8s-jSgxUiXi5wD- FAILED/v3/seq696, exact rejecting stage
+managed_mcp/error_class CONFLICT; grant либо health причина пока UNKNOWN.
+Нужен bounded repo-owned owner readonly ledger probe, не manual lastTestedAt,
+не blind retry и не ослабление freshness. Business1796/Full65 OPEN.
+Chrome own5 reload/screenshot/Console0/overflowfalse/Run200 подтверждены.
+Доставку и успешную реальную задачу ещё доказать; host не реализует1796.
+
+Final combined source включает core48/hash96cc5233…fe9036b;
+46/47 неизменны. Prompt/core race2.401/1.172s, vet и повторная fresh PG
+SYSTEM+2PROJECT по2 turns6.63s PASS; YAML fixture53/53 PASS.
+Сначала clean combined commit/push1807 и canonical full runner build из него,
+затем compatible consumer/schema rollout, только потом hot clone FF.
+
+## Checkpoint 10.10.2026 15:22 UTC — durable инструкции и восстановление bootstrap
+
+Требование владельца: неожиданные результаты исправлять в поставляемых
+системных инструкциях/коде сотрудников и SYSTEM/PROJECT помощников, не новыми
+сообщениями от его имени. Свежая установка из репозитория должна получать
+те же правила; локальная подстройка Workflow не считается общим исправлением.
+
+Поверх fe527466 применён core47: producer/embed и tests, immutable46/47.
+При подготовке worker временно поднял hot core45→46; bootstrap сохранил46.
+Возврат hot45 нарушил forward-only guard и CP перезапускался/API503.
+Восстановление только новым core47, без SQL/ослабления защиты. CP Ready2/2,
+owner Run/Graph/events200; host/Pod prompt.go/hash348cc076…b39b9c и
+core47/hashaa01c3ce…fa9e7f7a совпали. Go1.26.6 offline core race1.158s/vet PASS.
+Это локальный hot-reload readback, не immutable release acceptance.
+
+Текущий root run_4yS3kF8Vn8s-jSgxUiXi5wD- теперь FAILED/version3/seq696;
+Architect run_PSH4TwAR_XIy_49Z2QD5-EXH FAILED/version2. В15:18:23Z owner
+закрыл граф RUNTIME_INPUT_INVALID, summary об изменении dependencies.
+Точная rejecting dependency ещё UNKNOWN; не подменять её semantic BLOCKED.
+Результат Architect не captured; прежний INTAKE и его immutable artifacts целы.
+Не retry/launch до RCA и доставки новых правил. Full65/business acceptance OPEN.
+
+Три workers работают только в isolated trees: common prompt-service v3
+producer/consumer/continuation; typed PROJECT core pin из server-owned profile;
+следующий core48 с правилом продолжения доступного обязательного чтения.
+Перед fresh v3 producer обязательно доставить совместимый runner/admission и
+пользовательские образы/три ENV штатными командами. Не hot-activate v3 раньше.
+Исторические v2 snapshots/digests сохраняются exact; новые claims только v3.
+Не имитировать бизнес-разработку1796 на host и не обходить owner gates.
+Chrome own page5 reload/screenshot/Console0/Run+Graph+events200 проверены;
+чужие вкладки не менялись. Журнал структурно перенесён без потери старых bytes,
+verifier previous fe527466 PASS. Этот пакет требует commit/push1807.
+
+## Checkpoint 10.10.2026 14:39 UTC — сопровождать Architect текущего root
+
+HEAD/remote/Draft1807 до этой записи b8934fe6ce99a3c4d91391c790bd9a9adee07472.
+INTAKE run_02sbUsGQ6GtqPEPuyBVXIt7x SUCCEEDED/semantic PASS только к анализу.
+Собственные input packet/manifest и применимые документы прочитаны до EOF.
+manager-plan.md art_K-T9AsAUhpWu-Wdl4ODNZIGZ,
+arv_92cfddc9a97d4df88a0fef649d1efcae: exact24008B/hash
+51f59558927308941eda4162dc854e9abe20a811b0aea9b76139fb1ea402043b,
+owner DOWNLOAD200 совпал. Coordinator native прочитал три результата до EOF.
+Architect run_PSH4TwAR_XIy_49Z2QD5-EXH RUNNING;
+root run_4yS3kF8Vn8s-jSgxUiXi5wD- RUNNING/seq332.
+Не повторять root/INTAKE/старый Retry. Следом собственный Architect bounded
+source/runtime/binary/schema proof → Developer → один Review → Manager →
+final owner gate. Баланс/единицы/списание/paid continuation UNKNOWN/NOT RUN.
+Bootstrap1807 остаётся Draft; бизнес-код1796 host не реализует. Full65 OPEN.
+Chrome MCP собственная page5 подключена/rejoin200/Console0/overflowfalse,
+desired system28Ready/runtimeReady,restarts0. Reload только page5 каждые5мин.
+Текущие два docs checkpoint требуют commit/push тем же проверенным publisher.
+
+## Checkpoint 10.10.2026 14:19 UTC — новый root работает
+
+Новый native owner root run_4yS3kF8Vn8s-jSgxUiXi5wD-, session
+ses_zRPR2EL6KVjROhCJ08rhGbte, Workflowv40/rev13, RUNNING/v2/seq14.
+Точный FINALIZED WORKFLOW_INPUT aset_Mgq68Z6CtHwf8DQYLF1SU4IK/v4,
+manifest701d2c6017d83b82db857f5df20bcc0d394b8d16a39975043d60a8b89494c29c,
+содержит packet и manifest с проверенными size/digest. Chrome форма/граф
+screenshots просмотрены, overflowfalse/Console0, owner metadata GET200.
+Старый root FAILED/v4 неизменен. Четыре input, scope и paid-credit AC сохранены.
+Сейчас coordinator RUNNING, пять steps PLANNED; child EOF/Developer/один Review/
+Manager acceptance/owner gate ещё NOT RUN. Не создавать второй root/Retry.
+Продолжать сопровождение этого root; host не реализует бизнес-код1796.
+Source dcbe1e4b + два новых docs checkpoint требуют commit/push1807.
+
+## Checkpoint 10.10.2026 14:17 UTC — pinned source и уточнённый STOP
+
+Owner поручил исправить причину и довести1796. Отказ одного hosted directory
+lookup не доказал запрет всех публичных файлов; общий Failed/unavailable→STOP
+оказался чрезмерным. Внутренний rejecting слой fetch UNKNOWN, сеть/grants не
+расширяли, denied tree URL не повторяли. 27 public raw файлов exactcommit
+a956835d020762cb2b570053af06f643a11c0ecc/rust-v0.160.0 получены GitHub MCP,
+Git blob/SHA256 и 9 явных выписок проверены. packet467840B/hash
+a382233ba184727cce10e7b10ff0a7030b4e65722f4c5a586d61b7d0ba60270b;
+manifest24164B/hash402125958b8ce68f26bb605d3664acd0c27dbe6edf77d0651ba73fd9e8228067.
+Пакет не является host бизнес-анализом или proof полноты dependencies.
+
+Native PROJECT helper plan pln_VhO2DQ21axLuPyQlpyF95a7H/revision2 APPLIED;
+сравнение Before/After подтвердило только CompletionCriteria и Architect
+Instructions/ExpectedResult. Пять steps/keys, step-040, DAG, grants и finalGate
+сохранены. Обычный Workflow Save НЕ использовать — пересобирает refs/DAG.
+Native Validate/Publish: v40/rev13/wfv_AbTG0jWIG7tWZn_oLYqVOB98.
+Screenshot/Console0/overflowfalse PASS. Публичный lookup failure допускает
+прочие штатные READ, но deny/missing mandatory source/EOF/proof остаётся STOP.
+
+Playwright штатно загрузил packet.md и manifest.json CLEAN/ACTIVE, Chrome MCP
+upload ограничен workspace. packet art_k1AYEZpvhLYgc8DzWiLsDMwZ,
+arv_2c2b1b0b97ec43898bf89438dfa91a83: exact467840B/hash GET200 совпал.
+Chrome page5 NEW RUN заполнен исходными четырьмя критериями и новыми source
+инструкциями; исходные AC восстановлены exact prompt.full.view после freshSSO.
+Далее выбрать эти два файла, FINALIZED WORKFLOW_INPUT, один новый root
+по текущему owner разрешению, не Retry старогоFAILED. Затем Architect →
+Developer → ровно один Review → Manager → owner gate; host не реализует1796.
+Full65/business acceptance OPEN. HEADdcbe1e4b + два docs требуют commit/push.
+
+## Checkpoint 10.10.2026 13:23 UTC — опубликованный пакет и граница продолжения
+
+HEAD/remote/Draft1807: 754a0499bba5ec13385439f01b3f153202313b9e; пакет
+предыдущего checkpoint уже закоммичен и запушен, main ab4992e0 не менялся.
+Нынешняя сверка — owner READ, не новый бизнес-запуск и не полный QA PASS.
+Chrome MCP page5 после собственного reload авторизован, Console0;
+bootstrap/session/runtime/image/draft GET200, layout overflowfalse.
+Чужие вкладки не изменялись. Fresh role readback: шесть сотрудников READY,
+gpt-6.1-sol/configuration1, ENV14/binding15 и38tools. Context7 CONNECTED,
+resolve/query grants NONE у каждой роли. GitHub CONNECTED; текущие grants
+и границы записи подробно добавлены в журнал, без раскрытия credential.
+
+Root run_7M7M1dCVTpTg2BcSy1tMcHMo по текущему GET200 остаётся FAILED/version4;
+graph9nodes:5SUCCEEDED,3CANCELLED,1FAILED. Это прежний semantic BLOCKED
+Architect, а не новая ошибка после доставки. CONTROL_CENTER catalog ACTIVE
+проверен целиком: total2/no next page, отсутствует новый pinned upstream source
+package. Существующие summary не доказывают полную credential/transport цепочку.
+
+Продолжение #1796 требует нового разрешённого exact-source input либо отдельного
+решения владельца о доступе к upstream-репозиторию через штатную интеграцию.
+Не скачивать denied URL альтернативным transport и не выполнять бизнес-задачу
+на host. Developer/единственный Reviewer/Manager/owner gate NOT RUN, Full65 OPEN.
+Нельзя считать готовность сотрудников доказательством выполненных ими сценариев.
+
+## Checkpoint 10.10.2026 13:15 UTC — SYSTEM доставка и inventory закрыты
+
+Исходный опубликованный HEAD/remote/Draft1807 f72214defe01b15b581051b30b39e3485bf0d593;
+main ab4992e0 unchanged. Поверх адресный4-file selector/catalog UX fix и журнал.
+ROOT48unit/2.11s, lint/format, forced types, production Vite7.85s PASS;
+сохранены прежние fixture i18n/chunk/plugin warnings. В текущем UI desktop/
+mobile390 selector32px/overflowfalse/alerts0; screenshots просмотрены.
+Error-state pinned label/read-only digest/typed conflict доказаны units;
+живой прежний image conflict после публикации уже не воспроизводился.
+
+SYSTEM собственный recipe generation18/version32 обновлён только FROMc6ec;
+build COMPLETED, artifact imgart_KPX-_ScTrJtWjil9_H14zDxH ACCEPTED/PROMOTED,
+digest fd5ae21444cb74db4190fedd8d73588e482bd950b9c615c20ccca95c28bcea15.
+Native ENV Validate/Impact/Publish ровно1 consumer: revision33,
+renvv_-1RNoLMZlQuzs69jPlvKZPLM, binding13. Все8 non-image hashes сохранились,
+tools38/config9. Actual SYSTEM Pod оба runtime fd5ae, relayc6ec/Ready/restart0.
+
+Старый SYSTEM conversation cnv_78Aefmx7rfc2KPYWQv9Ff56R успешно продолжен:
+run_I1PkqWilr0sEWh-GlYbb8E3y SUCCEEDED13:07:36UTC. Catalogue/snapshot
+подтвердилиENV33/gen18; git2.39.5/exit0. После ownreload version7/6turns,
+transcript13288B/hash4e8b7550…de49 сохранился. Safe RUN preview200 complete,
+diagnostics[]; full материализацию этим запросом не проверяли.
+Chrome MCP page5 OWNER/Console0 послеreload; ошибочный ROOT read405 отдельно
+сохранён. Fresh-auth403 validation guard штатно пройден через собственный OIDC
+Playwright. Чужие вкладки не менять; list/reload не гарантируют approval.
+
+§31 current signed staff inventory подтверждён: required38/38VERIFIED,
+8MISSING только optional, пересечение с обязательными пустое.
+Business1796 остаётся semantic BLOCKED на exact upstream transport/credential
+evidence; Developer/ОДИН Reviewer/Manager/owner gate NOT RUN. Не обходить
+denied source другим transport, не реализовывать бизнес-код на host и не
+повторять terminal root вслепую. Далее commit/push1807 этого пакета и
+допустимое снятие evidence blocker; Full65 не завершён, не READY/merge.
+
+## Checkpoint 10.10.2026 12:44 UTC — child rejoin и mobile disclosure проверены
+
+База HEAD/remote/Draft1807 9d25e938ba2433e3020c61ea5d3da1607f39be5c,
+main ab4992e0 unchanged. Поверх только двухфайловый mobile профиль сессии
+и журнал/этот handoff. ROOT169unit/3.03s, lint/format/forced types,
+production build7.84s/diff PASS. Source/Pod Vue/test hashes совпали.
+На mobile профиль свёрнут, native раскрыть/свернуть PASS; desktop прежний
+grid/sidebar, screenshots просмотрены, overflowfalse.
+
+Architect child run_2rX2qbypF9I9_s4D0DyPjlHL от root run_7M7M1dCVTpTg2BcSy1tMcHMo
+native UI после reload восстановил exact node/session/turn/attempt1.
+Transcript9143B/hash ec5ac7f9…1bad9 совпал: USER+7COMMENTARY+FINAL,
+7tool groups, terminal dots0. Свежие Console0/HTTP>=4000/rejoin problems0,
+graph/events200. Это завершение child rejoin проверки, не всего Full65.
+
+Далее зафиксировать/push1807 и обновить его checklist; business1796 semantic
+BLOCKED, Developer/ОДИН Reviewer/Manager/owner gate NOT RUN. Нужен exact
+доступный native upstream transport/credential evidence, нельзя bypass
+denied URL или host-реализацию бизнес-задачи. Не повторять terminal root.
+Старый чат уже успешно продолжен; credits balance/charging UNKNOWN.
+Own Playwright desktop, empty draft; Chrome MCP page5 SSO, чужие вкладки
+не трогать. Периодический own reload/list_pages не гарантирует approval.
+
+## Checkpoint 10.10.2026 12:24 UTC — immutable доставка и старый чат проверены
+
+Исходный HEAD/remote/Draft1807 a0d302c60b1f87dcc32a154eae9039e46cc52d96;
+main ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69 не менялся.
+Поверх него только test rate_limit_snapshot_test.go и журнал/этот handoff.
+ROOT targeted Go1.26.6 race1.073s/vet/diff PASS; полный codex package
+race21.411s PASS. UsedPercent100 не назначает локальный финансовый admission;
+typed отказ провайдера по квоте сохраняется. Реальный баланс/списание UNKNOWN.
+
+Полный immutable runner c6ec9a50…efdc3b активирован repo-owned canonical
+seed/render/apply/readback; actual CP/RC serving ELF/source/mount совпали.
+Оба custom recipes ACCEPTED/PROMOTED: helper generation8/digest9a105…68e4,
+staff generation14/digest47d4…aa25. Три ENV image-only опубликованы:
+helper revision19, review14, write14; 38tools и non-image hashes сохранены.
+Owner readback подтвердил exact intended bindings 1/5/1, versions18/15/15,
+каждый указывает на новую опубликованную ревизию своего ENV.
+
+Прежний длинный чат cnv_j6j0WR7iU-n283_FRJQwXfGI продолжен естественным
+READ-only запросом без IDs: run_j0oBIenYucpmU0qKo6SC2zdB SUCCEEDED.
+Commentary/tool/FINAL пришли без reload; чужой scope не подменён.
+После reload version29/28turns/последние COMPLETED, история сохранена.
+Desktop/mobile screenshots просмотрены, overflowfalse; свежие Console0,
+graph/events200, realtime rejoin без STREAM_PROBLEM. Пункт16 закрыт по
+совокупности записанных natural-language сценариев, Full65 остаётся OPEN.
+
+Business1796 semantic BLOCKED: полный pinned transport/credential evidence
+не доступен native Architect. Не bypass denied URL и не писать бизнес-код
+на host; Developer/ОДИН Reviewer/Manager acceptance/owner gate NOT RUN.
+Допустимое продолжение требует exact публичных материалов в штатном input
+либо явно разрешённого scope решения. Не повторять завершённый root вслепую.
+
+Chrome MCP только page5 на SSO, list_pages продолжать; чужие вкладки не трогать.
+Разрешённый собственный Playwright fallback session87204 авторизован штатно;
+после mobile вернуть desktop и own reload с пустым вводом перед следующим QA.
+Не считать list/refresh гарантией Chrome approval или продления SSO.
+Далее проверить/зафиксировать этот пакет, push/update того же Draft1807,
+затем только допустимые оставшиеся QA/закрытие evidence blocker #1796.
+
+## Checkpoint 10.10.2026 11:38 UTC — три исправления проверены, доставка впереди
+
+Поверх59efca648dac8d8d77329afdf14a3bd48bfcc2c8 ROOT принял exact frozen
+ENV label4/4, partial-history starvation2/2 и runner resume2/2. Изменения
+не расширяют authority, API, parser budgets или источники состояния.
+Frontend184unit/4suites3.15s, scoped lint/format/diff, forced types и
+Vite8.56s PASS; runner Go1.26.6 targeted race1.903s/vet/canonical build PASS.
+Новый resume excludeTurns:true подтверждён installed Codex0.160.0 schema;
+synthetic metadata reply831B сохраняет1224000B protected history и usage
+baseline. Фактический frame прежних live FAIL остаётся UNKNOWN.
+
+Новый helper чат cnv_pYtlYONh9LY9T6jS_AlsBaPq завершил native READ-only
+foreign-scope run_vMy-YsTe7taAKCWpMeTlckc8 SUCCEEDED: не подменил проект,
+не выдал отсутствие карточки в PROJECT scope за отсутствие чужого проекта,
+не создал план/мутацию. Reload восстановил обе COMPLETED записи/версию3;
+desktop screenshot/overflowfalse/Console0/events200 проверены.
+Четвёртый подпункт16 и длинный existing chat пока OPEN.
+
+Далее clean commit/push1807, immutable fullrunner build/provenance/import,
+canonical seed/render/apply/readback, два custom recipes и три ENV image-only
+publication/intended bindings. Только после этого одна проверка прежнего
+длинного диалога; frontend hot reload не заменяет runner activation.
+Business1796 по-прежнему semantic BLOCKED на exact transport/credential
+evidence; Developer/Review/owner gate NOT RUN. Full65 OPEN.
+Chrome только page5, own reload11:35 UTC; чужие вкладки не трогать.
+
+## Checkpoint 10.10.2026 11:29 UTC — business STOP, два адресных исправления
+
+HEAD/remote/Draft1807 59efca648dac8d8d77329afdf14a3bd48bfcc2c8;
+main ab4992e0 unchanged. Dirty ROOT owned только ENV context label4/4,
+exact frozen pre/post, ROOT97unit/lint/format/forced types/build PASS,
+native desktop/mobile390/Console0/overflowfalse/reload/Pod hashes PASS.
+Named Developer native10417B/EOF и owner readback PASS; третий подпункт16
+отмечен, ambiguous/foreign scope и весь16 OPEN.
+
+Root run_7M7M1dCVTpTg2BcSy1tMcHMo FAILED, active nodes0: Architect
+semantic BLOCKED на mandatory upstream tree READ restricted URL.
+Coordinator полностью прочитал5 artifacts, downstream CANCELLED;
+Developer/Review/final Manager не запускались. Artifact architecture-review
+art_1Pmmp34cv3ScFAMRih1L7op9/revision14/36111B/hash a6d6b5e8…2aabc
+ROOT DOWNLOAD/EOF проверен. Не bypass denial, не повторный review/Architect
+в этом root, не писать1796 host-работой. Требуется разрешённый exact
+transport/credential evidence либо отдельное допустимое scope решение.
+
+Длинный helper cnv_j6j0WR7iU-n283_FRJQwXfGI: два native FAILED на
+THREAD_CALL/STREAM_INVALID до модели, а не доказанный weekly quota отказ.
+CP terminal timestamps ранние, browser queue задержалась после commit.
+Субагент platform_resync_diagnostics готовит isolated store.ts/test.ts
+partial-history starvation RED/GREEN; live involvement UNKNOWN.
+Субагент agent_environment_read_path готовит isolated bounded resume fix:
+exact Codex0.160.0 schema подтверждает excludeTurns:true; synthetic frame
+>1MiB воспроизводит отказ. JSONL budget/authority/history не ослаблять.
+После adoption требуется clean commit, новый fullrunner/provenance и
+canonical delivery, затем два custom recipes/три ENV image-only native
+publication/intended bindings перед повторной проверкой старого диалога.
+Не выдавать host hot reload за immutable runner activation.
+
+Chrome только page5 ENVreview, viewportdesktop1828×741, empty draft;
+own reload11:25UTC. Новый native READ-only foreign-project probe в отдельном
+cnv_pYtlYONh9LY9T6jS_AlsBaPq работает с11:28:36, результат ещё NOT RUN.
+SSO/list/reload каждые5мин, чужие вкладки не трогать. Full65/business OPEN.
+
+## Checkpoint 10.10.2026 11:00 UTC — Architect работает, frontend проверен
+
+Root run_7M7M1dCVTpTg2BcSy1tMcHMo RUNNING/seq277: INTAKE PASS и3 captured
+artifacts полностью прочитаны coordinator; Architect делегирован, выполняется.
+Не запускать второй root/Retry, не писать1796 вместо Developer. Далее
+offline exact-version schema→Developer→ОДИН Review→Manager→owner gate.
+Reported почти60К credits не подтверждает balance/units/charging; weekly
+exhaustion сам по себе не отменяет supported paid continuation.
+
+Поверх eb504c46 принят frozen Drawer.vue/test2/2. ROOT332unit/lint/format/
+forced typecheck+build PASS; native общая лента показывает один правильный
+Architect busy, screenshot/overflowfalse/Console0/events200. API не менялись.
+Natural existing chat нашёл QA Markdown по имени и штатно создалv3/6246B;
+exact DOWNLOAD/hash/prefix old4920B PASS. READ-only уточнение в том же
+диалоге завершено: run_HQaMhI4QE9KK-8jMB7tKPOYW, native6246B/EOF;
+первый подпункт16 отмечен, остальные natural cases и весь16 OPEN.
+Lossless journal rolling verifier PASS; новый пакет ещё требует commit/push.
+Chrome только page5, reload около11:00 UTC после сохранения ввода.
+Full65/Developer/Review/итоговая приёмка OPEN.
+
+## Checkpoint 10.10.2026 10:46 UTC — новый бизнес root работает
+
+Code/remote/Draft1807 exact7db3ee17ccbd406438af5b0a2b42da7fd6754c68,
+main ab4992e0 unchanged. Новый root run_7M7M1dCVTpTg2BcSy1tMcHMo создан
+одним native POST201 по workflowv37/rev12, поля46/1538/15/1766chars.
+Helper независимо native прочитал эту конфигурацию76205B доEOF, digest
+0d251f2157c8c9875f88370dc4ab94bde93ea7309cc6cdf1985c6023703902ab.
+10:46 RUNNING/seq6, coordinator активен; дальше intake→Architect offline
+schema→Developer→единственный Review→Manager→owner gate. Старый root CANCELLED.
+НЕ запускать второй/Retry, не реализовать1796 host-работой, не merge бизнес PR.
+Впереди весь реальный business verdict и остаток Full65. Chrome page5 на новом
+root; foreign tabs не трогать, list/reload каждые5мин, сохранить ввод.
+
+## Checkpoint 10.10.2026 10:44 UTC — frontier исправлен, следующий новый запуск
+
+Parent3e486535 + exact frozen frontier7/catalog3. ROOT unit/race/vet/build/
+SQL PASS, disposable Workflow component34.454s PASS (frontier/nested/ordinary/
+callback/terminal). CP/RC hot reload actual ELF dc2ef816…00afb/a9bfc31e…ae572
+равны независимым ROOT canonical builds, UID прежние/Ready/restarts0.
+Новое owner preflight запрещает делегирование заблокированного шага до effects,
+каталог показывает текущий dependency frontier. Scheduler не ослаблен.
+Старый root run_jubCanGbxCXIbi_0U0ZJG94O native CANCELLED/v3, active nodes0,
+завершённые результаты сохранены. Старый BLOCKED не объявлен исправленным.
+
+Helper план pln_crAyT2PE0rsqPCXQZVK61_kY/rev1 native APPLIED, receipt
+rct_659jydI31VubeJVzoHiQRs8J. Before/After отличается только instructions.
+Workflow теперь v37/rev12/wfv_cQvOtbvn-yzIkoCmoSER-36t: offline schema
+exact установленного Codex допустима вместо недоступного upstream source;
+ранний STOP отчёт координатора не делегирует finalManager без Review.
+Только один comprehensive Review и финальный Human Gate сохраняются.
+Новый native helper EOF read текущей публикации ещё работает. Затем один
+новый native запуск1796 с четырьмя полями и paid-credit criterion; host
+не реализует бизнес-задачу. Grants/ENV/runner/custom images не менялись.
+Публикация этого пакета в Draft1807 и Full65/business acceptance впереди.
+
+## Checkpoint 10.10.2026 10:27 UTC — Architect BLOCKED, независимые UI-проверки PASS
+
+Чистый опубликованный source/remote/Draft1807 —
+ee7e5aea9573c97e6f247f1d4774e23ffebfe6e7. Run_jubCanGbxCXIbi_0U0ZJG94O
+по-прежнему RUNNING, но Architect childrun_WRQeDOE_Yov8LusVxPPF42Af завершён
+10:15:48 technical SUCCEEDED/semantic BLOCKED: hosted Web получил
+Failed to fetch restricted URL при чтении official source0.160.0.
+Точный слой отказа UNKNOWN; это не доказанный quota/credits/network отказ.
+Architecture artifact28351B/d861b5bf…ca1a74 проверен owner DOWNLOAD200/hash.
+Developer/Reviewer NOT RUN. Coordinator native прочитал результаты до EOF и
+делегировал финальный BLOCKED-отчёт Manager run_VdCIYikjgoKfXJrd3UoxJPTz;
+10:24 граф показывает QUEUED, rootseq311. Причина ожидания исследуется,
+не обходить prerequisites и не выдавать технический успех за приёмку.
+
+Native SYSTEM image dropdown desktop/mobile390: trigger32px, читаемые
+generation/ref, screenshot/overflowfalse/Console без errors/API200 PASS.
+Версии файла art_i2rouMdoEPydz_Izt-NMuQDs: v2/4920B/hash79ac3b56…8fe85,
+v1/4234B/hashdc0e4965…24e, обе DOWNLOAD200; preview и версии видны.
+Natural helper запрос без ID нашёл именно текущую работу и сообщил о STOP:
+cnv_C-gG_HYdbL89sGuDVtL-kYpN/run_iNkh7DOTCGHozed8snT9PeLy SUCCEEDED,
+пять tools, без mutations. После reload/open история/ответ сохранились.
+Два реальных исполнения helper/Architect пересекались; это не стресс10чатов.
+
+Новый native read-only helper выясняет разрешённые exact-version source/schema
+варианты и inventory, ничего не запускает/не меняет. OpenAI Docs подтверждает
+offline version-specific generate-json-schema; latest Context7 main не pin0.160.
+Отказ Raw не обходить shell/Host и не расширять grants. Paid-credit критерий
+сохранён, balance/units/spending UNKNOWN. Full65/бизнес PR/Review/Human Gate OPEN.
+
+## Checkpoint 10.10.2026 10:08 UTC — новый business работает, история догружается
+
+Опубликованный source/remote/Draft1807 —432a7367. Новый native root
+run_jubCanGbxCXIbi_0U0ZJG94O создан09:57:47 одним POST201 по workflowv34/rev11,
+четыре поля46/1622/15/1820chars переданы в форме полностью. Weekly exhaustion
+не блокирует supported paid continuation; reported почти60К не подтверждает
+balance/units/spending. Manager INTAKE childrun_BkJKbGxSn0ixrIN9baF_fHVJ
+завершён10:07:11: artifact manager-plan.md, technical COMPLETED/semantic PASS
+для передачи Architect. Это не принятие всей1796 и не Developer implementation.
+Ровно одно comprehensive review и final owner gate остаются обязательными.
+
+Frontend supplement4/4 exact pre/post принят: demand read существующего
+protected transcript только для открытого exact root с missing prefix,
+coalesced inflight/abort/closed error, без таймера или новых API. ROOT109unit,
+scopedlint/format4, forcedtypes/build7.99s PASS; fixture warnings/chunks остаются.
+Native открытая Manager modal догрузила prefix135→148 без reload,
+events after135/137/138/139/141 HTTP200, Console0/overflowfalse,
+скриншот просмотрен. Это исправление live history, не полный business PASS.
+CP/RC прежниеUID/restart0; Manager actual staffba773/runner4af37 READY.
+Далее Architect→Developer→один Reviewer→Manager→owner gate, SYSTEM dropdown,
+natural cases и остаток Full65. Full65 OPEN, business PR ещё NOT RUN.
+
+## Checkpoint 10.10.2026 09:57 UTC — 2 images/3 ENV готово, следующий один запуск
+
+Source7feccf13 + exact frontend packet13/13 принят,141unit/lint/format/forced
+types/build8.17 PASS. Helper gen7 digestd29c3578…55eff и staff gen13
+digestba77324a…5eb82 штатно ACCEPTED→PROMOTED. Три ENV helperv17/rev18,
+review/writev13/rev13 опубликованы native Save/Validate/Publish; intended
+impact1/5/1,38tools и non-image hashes unchanged. Новый Architect
+run_3pq61WBnc2smSL8jsnHl8kJH SUCCEEDED, собственный get_execution_snapshot
+OBSERVED/0.160.0/INITIALIZE_USER_AGENT подтверждён owner events200/13.
+Live transcript FAIL: drawer/modal пока показывает только owner task,
+хотя commentary/tool/final сохранены. Consumer fix готовится isolated.
+Dropdown nativePROJECTPASS: distinct shortrefs, trigger32px/overflowfalse/
+Console0/API200. SYSTEM native NOT RUN. Далее публикация пакета в1807 и
+единственный новый SOFTWARE_CHANGE1796 с четырьмя полями, weekly+credits,
+одним TOTALreview и final owner gate. Не Retry старого failed root; workflow
+v34/revision11 по native read готов. Full65 OPEN, баланс/spending UNKNOWN.
+
+## Checkpoint 10.10.2026 09:33 UTC — runner activated, custom admission pending
+
+Clean source/remote e6cedb7b03106c9993721dc7ae432ac675a8905e. Новый fullrunner
+manifest4af37fcec9cb8c1db47fdca7f042d4e08257a4553319ed3c0c2678b749a10f48;
+build/import/provenance/seed/render/quiesce/supply-chain apply/readback PASS.
+Retention восстановлен canonical core apply/readback. CP/RC actual serving
+ELF/source/mount двумя stable tuples PASS, новый sourcee6ced. Chrome owner
+SSO восстановлен после ожидаемого503, свежие API200/Console0.
+Два native custom recipes helper gen7/staff gen13 buildCOMPLETED, admission
+scanRUNNING; normalized non-base recipe hashes сохранены. НЕ пересобирать
+повторно и НЕ запускать business до ACCEPTED→PROMOTED и 3ENV image-only
+публикации с exact intended impact. Все3ENV baseline38tools/non-image hashes
+сохранены в journal; old revisions не менять. Затем новый единственный
+launch1796 с четырьмя inputs, weekly credits case и одним review/owner gate.
+Full65 OPEN; immutable runner delivery не заменяет native business PASS.
+
+## Checkpoint 10.10.2026 09:14 UTC — native APPLIED UX PASS, готовится clean delivery
+
+ROOT supplement3/3 exact adopted: первый transcript fallback скрывает только
+exact terminal edit-hint. Combined166/166,5suites5.27s PASS. Native
+reload/expand: обе obsolete строки отсутствуют, APPLIED/exact root link
+сохранены, overflowfalse/Console0/relevant API200; screenshot просмотрен.
+CP PID1725/ticks6400207 ELF129c6c38…55037 и RC PID1444/ticks6399538
+ELFb77e6829…fd6b8 exact canonical builds;09:12:36→09:13:36 stable
+UID/containerID/sourcehash. Это hotreload proof, не новая runner delivery.
+Далее finishFEchecks→commit/push clean SHA→canonical fullrunner/import/seed/
+fresh render/quiesce/supply-chain/readback→2recipes/3ENV→новый launch.
+Credits-case1796 сохранён, upstream отказ не обходится. Full65 OPEN.
+
+Окончательные ROOT scopedlint/format/forced types/Vite7.85s PASS. Далее commit/
+push8 явно выбранных файлов; build требует clean HEAD и не допускает добавленных
+source артефактов. Native/source доказательства не заменяют OCI delivery.
+
+## Checkpoint 10.10.2026 09:11 UTC — shared Unicode исправлен, immutable delivery впереди
+
+Source81f23a45 + exact dirty packet. Shared runtimecontract fix2/2 принят:
+шесть delegation human-text полей и AssistantContext.EntityName считают Unicode,
+invalid UTF-8/NUL закрыто отклоняются; identifiers/digests/authority/raw byte
+budgets неизменны. Synthetic903runes/1352bytes воспроизводит прежний отказ.
+ROOT race2.658s/vet/build, RCworkload1.014s/vet/build, CPdelegate0.066s/build,
+runnercredentialrelay0.272s/build PASS. Native run ещё не повторён;
+обязательно новый full runner/provenance/node pin, canonical seed/render/apply,
+затем два custom recipes и три ENV image-only/intended bindings.
+
+FE пакет exact3/3 принят, ROOT157unit5.19s, lint/typecheck/build8.15s PASS.
+Native APPLIED record сохраняет правильную root ссылку и operation hint уже
+скрыт, но first transcript fallback всё ещё выводит прежнюю edit-hint строку.
+Это FAIL живой проверки, отдельный минимальный supplement готовится.
+Console0/relevant API200/overflowfalse; неизменённые реальные ответы сохранять.
+
+Уточнение владельца про почти60К оплаченных кредитов включено во все четыре
+inputs1796. Баланс/единицы/списание UNKNOWN. Source lookup не нашёл prelaunch
+weekly gate: selector/claim ограничивают credential/lifecycle/concurrency.
+UsageLimitExceeded остаётся фактическим upstream отказом, не локальным
+weekly запретом; обходить его нельзя. Typed rate windows/credits ещё не
+материализованы — это scope бизнес-задачи1796, а не доказанное отсутствие баланса.
+Full65/бизнес outputs/review/финальный Human Gate остаются OPEN.
+
+## Checkpoint 10.10.2026 09:03 UTC — опубликован81f23a45; native root FAILED validation
+
+Source/remote/Draft1807 exact81f23a450f178b0cce3441c8078538c9e87bf08c.
+WORKFLOW_CONFIGURATION native readEOF68717B PASS, planpln_HudbSuUsenOLuuw1NVQ8MS1z
+revision2 VALID→APPLIED один раз. Четыре input поля46/1763/15/2115chars,
+Issue URL исправлен в форме, scope/credits/constraints сохранены.
+Rootrun_jGe8KwFu-N6TXUqdP3hnGXQv FAILED через7s до модели:
+RUNTIME_REVISION_INVALID / presentation RUNTIME_PROFILE_UNSUPPORTED,
+children CANCELLED. Owner/record/link/reload сохранились; Console0/overflowfalse.
+RC safe bounded log stage=validation; exact cause не выдавать за доказанную
+только временной корреляцией. Shared runtimecontract byte guards проверяются
+Unicode агентом, isolated packet pending; после fix необходимы CP/RC и новый
+runner/custom recipes/ENV immutable delivery. Не Retry/launch до исправления.
+Frontend агент готовит tiny warning hide для APPLIED record. ROOT владеет
+журналом/браузером/доставкой; без secrets/raw inputs/manual SQL bypass.
+Баланс/spending UNKNOWN, failure не относится к провайдеру. Full65 OPEN.
+
+## Checkpoint 10.10.2026 08:51 UTC — Unicode correction PASS, native launch готовится
+
+ROOT Unicode packet2/2 принят, combined callback7.998s/vet/canonical build PASS.
+Source host/Pod c6240369…2e33d; actual RC1124/startTicks6300185 ELF
+6481e62a…0a1ef стабилен08:49:23→08:49:46 и равен независимому ROOT build.
+CP/inventory/metrics/child transcript доказательства предыдущего checkpoint
+сохраняются. Fresh Chrome reload/navigation Console0, relevant API200.
+Текущий PROJECT helper диалог cnv_Sjh04R2k9pB1okNb_9Bq7Gmt на WORKFLOW34;
+run_9nBbL7K2SKWKdkV7UYfUFmv0 продолжает подготовку одного LAUNCH_RUN с прежними
+четырьмя inputs/paid-credit кейсом. Owner active read total0/nextnone повторён.
+План ещё не Apply; не повторять launch и не Retry исторический root.
+Далее native readEOF/Validate/Apply, actual role inputs/артефакты/Developer PR,
+один TOTALreview/Manager/final Human Gate. Баланс/spending UNKNOWN; full65 открыт.
+
+## Checkpoint 10.10.2026 08:43 UTC — native ENV read PASS; следующий blocker Unicode Workflow
+
+HEAD21218b0a + dirty packet, пока не push. Inventory supplement6/6 принят;
+ROOT CP0.077/RC7.827/vet и повторный PostgreSQL51.25s PASS. Actual CP/RC
+serving ELF равны независимым canonical builds0c924105…d7aa2/41f2f181…77a46,
+exact UID/containerID/PID/startTicks/source mounts стабильны. Native Developer
+AGENT_RUNTIME_CONFIGURATION PASS785ms, EOF10417B, selfdev-write published12,
+38configured отдельно от42VERIFIED; owner artifact read200 подтвердил42+8MISSING.
+Screenshot просмотрен, overflowfalse. Последняя Console имеет один transient
+ERR_NETWORK_CHANGED у dev-revision poll; relevant API200, перепроверить reload.
+
+Metrics actual session/stream→realtime принят, ROOT race1.031/vet PASS;
+GW /proc/990/exe равен independent builda9f10230…0e683, before/after ещё не снят.
+Browser timings: WSopen→SESSION_READY7437ms, максимальный межsnapshot gap4133ms
+перед SYSTEM_ASSISTANT; причина конкретного backend ожидания UNKNOWN.
+
+Workflow34/revision11 уже PUBLISHED; новый helper launch plan пока не создан.
+Native WORKFLOW_CONFIGURATION всё ещё FAIL810ms: authoritative purpose
+903runes/1352bytes проходит CP1000characters, но RC guard считает len bytes.
+Отдельный private Unicode packet готовится; не сокращать валидный текст ради
+обхода. Owner active list08:38:56 total0/nextnone, helper truncated search не
+выдавать за полноту. После фикса: read current публикации/inputs до EOF, один
+plan/Validate/Apply с четырьмя inputs/credit-кейсом, freshactual team artifacts,
+ровно одно комплексное review и final Manager/Human Gate. Старый root не Retry.
+Далее journal verifier/commit/push1807, full65. Баланс/units/spending UNKNOWN.
+
+## Checkpoint 10.10.2026 08:26 UTC — публикация34, runtime-read требует исправления
+
+HEAD21218b0a + dirty runtime/frontend/fixture/docs, пока без нового commit.
+Disposable component после исправления только synthetic fixture PASS51.61s;
+первоначальный FAIL сохранён ниже. Workflow owner plan APPLIED, Validate/Publish
+PASS: version34/revision11 PUBLISHED, INTAKE7200 вместо1800, без обязательного
+чтения полного постороннего bootstrap-журнала. Один TOTALreview/final owner gate
+и остальные этапы сохранены. Следующий запуск — новый root на этой публикации,
+не Retry исторической1800-revision; четыре inputs с paid-credit acceptance.
+
+Реальное AGENT_RUNTIME_CONFIGURATION FAIL/TOOL_UNAVAILABLE804ms после delivery,
+run_ILtmiViGFYRsY27Qm2aroIXQ. Обычный owner API200 даёт Developer16/selfdev-write
+published12/configured38; агентский EOF/image/inventory proof ещё нет.
+Проверяется SHA raw admission JSON против typed reserialization; scanner guard
+не ослаблять. Runtime-agent готовит отдельный узкий packet, ROOT интегрирует.
+Потом canonical проверки, fresh serving ELF/source, native тот же read до EOF,
+journal/commit/push1807, новый бизнес launch и actual inputs/артефакты команды.
+Баланс почти60К указан владельцем; supported balance/единицы/spending UNKNOWN,
+weekly100% сам по себе не блокирует разрешённые provider credits.
+
+Chrome5 обновлён/CONNECTED. Rejoin cause UNKNOWN; доказан только route unknown
+для нового session/stream, отдельный узкий normalizer packet готовится.
+Ни source/HTTP200, ни component не заменяют native acceptance; full65 открыт.
+
+## Checkpoint 10.10.2026 08:11 UTC — первая команда timeout, два read исправления доставлены
+
+HEAD21218b0a + dirty frontend3/runtime18/docs. Root run_dnIpb8RAPnlR2TBwNRNU3cbj
+и Manager run_CCg9GU57RiEldKt6ztrzY5xl FAILED/RUNTIME_TIMEOUT, planned children
+CANCELLED. INTAKE1800 wall-clock против root86400; exact persisted clocks не
+читались. Native child transcript теперь виден: commentary/tools/terminal,
+Console0/overflowfalse. Reload/rejoin открытой модалки пока NOT RUN.
+
+AGENT_RUNTIME_CONFIGURATION доставлен: exact18source hashes host/Pods,
+canonicalGo1.26.6 unit/vet/build/codegen PASS, independent ROOT build равен
+actual serving CP a326bc3e…3af25b0 / RC31d9b2ee…2d6d63, Ready/restart1.
+Disposable component FAIL из-за отсутствующего inventory bootstrap fixture;
+synthetic correction готовится, production guard не менять. Native Developer
+runtime-read после доставки ещё NOT RUN. Баланс paid credits UNKNOWN.
+
+Сейчас native PROJECT helper на Workflow готовит один UPDATE_WORKFLOW:
+INTAKE7200 и narrow обязательное чтение бизнес-источников без полного чужого
+bootstrap diff/исторического журнала. Apply/Publish ещё NOT RUN. Старый failed
+run не Retry на1800-version; после публикации только один новый explicit launch
+со всеми четырьмя inputs/credit-кейсом. Сохранить один TOTAL comprehensive review
+и final owner gate. Host не заменяет Developer. Дальше component/native reads,
+journal/commit/push1807, actual team/full65; цель ACTIVE, не завершать частично.
+
+## Checkpoint 10.10.2026 07:53 UTC — реальный Manager работает; два адресных исправления
+
+Опубликованный source21218b0a, root run_dnIpb8RAPnlR2TBwNRNU3cbj RUNNING;
+actual Manager child run_CCg9GU57RiEldKt6ztrzY5xl RUNNING/events392 и читает
+источники. Первый SUCCEEDED INTAKE относится к техническому делегированию,
+не семантическому завершению работы Manager. Не повторять launch/Apply.
+Реальный credit-кейс передан, баланс/spending текущего аккаунта UNKNOWN.
+
+Native PASS: Applied receipt + exact created run после reload; обычный запрос
+про окружения уточнил Developer/selfdev-review вместо случайного выбора,
+история сохранилась. Native FAIL: managed AGENT_CONFIGURATION не содержит
+ENV/binding/image/tools выбранного Developer; CURRENT_CONFIGURATION own-only.
+В приватном worktree готовится отдельный bounded AGENT_RUNTIME_CONFIGURATION
+без секретных значений/произвольного scope. Второй FAIL: в деталях дочернего
+узла пустой transcript из-за root-envelope/child-run filter; отдельный
+frontend пакет использует прежний строгий graph-child binding.
+
+ROOT пока не принял эти source пакеты. Адресные unit/codegen/build, native
+hot-reload и exact readback обязательны перед PASS. Full65/one total review/
+Developer business PR/Manager/final owner gate открыты. Chrome5 подключён,
+Console0, screenshot safe preview/overflowfalse; placeholder preview не
+доказывает full materialization. При диагностике events использовать
+afterSequence/limit, не pageSize; graph находится под response.graph.
+
+## Checkpoint 10.10.2026 07:30 UTC — реальная команда запущена с credit-кейсом
+
+Один natural-language LAUNCH_RUN plan pln_gv0dhZOjQhZWi5vBWrsSorNb штатно
+Validate/Apply: revision1/version3 APPLIED, application200. Exact root
+run_dnIpb8RAPnlR2TBwNRNU3cbj создан07:26:37 UTC, SOFTWARE_CHANGE version31,
+RUNNING/incidents[], первый INTAKE SUCCEEDED, отдельный Manager child
+run_CCg9GU57RiEldKt6ztrzY5xl RUNNING. Все4inputs включают weekly exhausted
+при доступных paid credits; unknown не ноль, upstream controls сохраняются.
+Не повторять запуск/Apply. Business Developer/review/Manager/gate ещё OPEN.
+Host не пишет бизнес-реализацию вместо Developer. Полный QA65 не завершён.
+
+UX двух source файлов PublicationImpactSelection принят, включая исправление
+long-label status flex. ROOT36unit/4suites, scopedlint/format, forcedtypecheck/
+build PASS. Synthetic Chromium8/8geometry+8/8mixed outcomes, Console/Network0,
+mutations0; desktop/mobile PNG просмотрены. Native publication нового layout
+NOT RUN; не выдавать fixture за фактическую публикацию.5normal rows,
+1verylong mobile row; длинный текст не усекался.
+
+Журнал после repair append-only от96fc; перед commit canonical verifier.
+Далее: фиксация пакета в1807, actual team execution/кредитный сценарий,
+remaining natural ambiguity/foreign/rejoin и Full65. Chrome только page5,
+каждые5мин reload без потери ввода и list_pages. ROOT diagnostic404 project
+runs list ошибочный; SDK canonical /api/v1/runs, не app defect.
+
+## Checkpoint 10.10.2026 07:17 UTC — один ревью-цикл опубликован, обычный Architect OBSERVED
+
+Native UPDATE_WORKFLOW plan pln_saEpsgV-Zlp3QGJGzuh7O8-F применён одним
+owner Apply, затем Workflow Validate/Publish: version29→30→31,
+revision10 wfv_vScbhwkQDZRqJrmWlsOuu7tQ, PUBLISHED/validation[]/READY.
+Пять этапов, ровно один Reviewer, единственный Human Gate у final Manager;
+исторические публикации и runs не изменены. Plan revision1/version3 APPLIED.
+
+Новый обычный Architect run_cBOwBzljAZCShq9cU3B3DveK SUCCEEDED: собственный
+get_execution_snapshot {}, native tool completed и ответ OBSERVED/0.160.0/
+INITIALIZE_USER_AGENT. GET events200 event12 и live transcript подтвердили
+результат. Это не host CLI и не проверка помощника вместо сотрудника.
+Screenshot просмотрен, Console0, overflowfalse. При первом открытии timeline
+виден только служебный prefix; позднее появились commentary/tool/answer без
+повторного запуска. Потеря истории не доказана; задержку realtime ещё проверить.
+
+Canonical journal verifier обнаружил FAIL ACTIVE_BASELINE_MISMATCH в dce2:
+изменён исторический prefix. ROOT восстановил exact prefix96fc без изменения
+archive/verifier и сохранил весь прежний checkpoint tail; актуальные решения
+и checklist вынесены в append-only checkpoint07:12. Verifier against96fc
+PASS PREVIOUS_SNAPSHOT_PREFIX_CHECKED. Не считать повреждённый dce2 healthy
+previous baseline и не ослаблять guard ради PASS.
+
+Уточнение владельца о кредитах передано native Project Assistant для одного
+LAUNCH_WORKFLOW плана по найденной обычным текстом задаче сводки лимитов.
+Он ещё готовится; полный новый бизнес-процесс не запущен. Локальный запрет
+по недельной квоте не найден: текущий code не использует upstream rateLimits/
+credits для admission. Поэтому available credits + exhausted included quota
+обязательный новый case задачи1796, а не доказанный текущий launch defect.
+Upstream balance/spending текущего аккаунта не проверены и не выдуманы.
+
+UX publication selection: основной двухфайловый пакет применён, ROOT28unit,
+scopedlint/format/forcedtypecheck/build PASS; native layout ещё NOT RUN.
+Synthetic mobile выявил clip status badge, готовится узкий follow-up.
+Далее: закрыть этот UX, commit/push1807; native LAUNCH_WORKFLOW Validate/Apply,
+реальная команда1796 с одним review и final owner gate, остальные Full65.
+
+## Checkpoint 10.10.2026 06:53 UTC — три ENV обновлены без потери настроек
+
+Staffartifact imgart_v4_6LF2lnmxuk2-F5iUMmpak штатно PROMOTED; signed receipt
+7e7e5694…484eb4. Native publication двух staffENV выполнена с exact intended
+consumers: selfdev-review — пять review/coordinator ролей; selfdev-write —
+только Developer. Никаких дополнительных rebind после publication не было.
+
+Fresh owner read всех трёх ENV после commit публикации:
+
+| ENV | Version / currentVersionRef | Image digest | 38tools / non-image hash |
+| --- | --- | --- | --- |
+| helper | 16 / renvv_VhcR-Kavl4-uJ1KiDLx84fHB | 70ab08b3…adc02 | PASS / 5fe5ce34…25b23 |
+| selfdev-review | 12 / renvv_I7ZmHuiTB4Cotxf2nopRcRzK | b9f58274…f0658 | PASS / 5fe5ce34…25b23 |
+| selfdev-write | 12 / renvv_Py7J95JyejehyqnnPChsW6kz | b9f58274…f0658 | PASS / 83dc0093…49b97 |
+
+Все3ready=true. Полные SHA non-image совпали с before для policy, tools,
+values и secretDescriptors; у Developer exact name/ref/revision единственного
+Secret binding сохранились. Окружение review обновило только5 consumers с
+beforebindingversion12; write только1 с beforebindingversion12. Скриншот
+publication selection просмотрен, свежая Console0. Это exact native
+publication/readback, не доказательство actual provider OBSERVED в новом ходе.
+
+UX найден: пять строк impact-модалки занимают слишком много вертикального
+места, кнопка публикации частично ниже viewport. Готовится узкий layout-пакет;
+на момент checkpoint он NOT RUN. Следующие этапы прежние: new one-cycle
+Workflow, ordinary Architect snapshot, dogfooding #1796 и остальные п16/Full65.
+
+## Checkpoint 10.10.2026 06:48 UTC — actual runtime и новый образ помощника
+
+Цель ACTIVE по варианту1; GOV-OD-003 синхронизирован с AGENTS, delivery guide
+и testing strategy: один TOTAL цикл комплексного ревью только для #1796/#1797,
+без автоматических fix/re-review, с отчётом Manager и final owner gate.
+Исполняемый Workflow ещё не обновлён; его публикация NOT RUN.
+
+На опубликованном96fc actual CP/RC serving /proc/PID/exe совпали с независимой
+сборкой Go1.26.6: CP3f69c427…f33873, RC65203a74…36667. Exact Pod UID/Ready,
+readonly host mount и host/Pod source hashes подтверждены06:24–06:25 UTC.
+Это доставка, не native Architect observation и не Full QA. Proper Go1.26.6
+replay адресных unit/runtime и disposable PG tool-phase завершён PASS;
+предыдущие первоначальные host Go1.27 результаты не подменяют этот replay.
+
+ROOT принял4файла navigation UX: PROJECT header/sidebar сохраняются в истории
+ROLE_IMAGE/PROMPT_TEMPLATE с projectRef. ROOT64unit/4suites2.98s, scopedlint,
+forcedtypecheck и Vite2791modules8.94s PASS; chunkwarning остаётся. Sourcebase
+96fc + exact4postimages; commit этой дельты пока не выполнен. Native Chrome5
+после hot reload/reload: PROJECT label/sidebar,32px controls, overflowfalse,
+скриншот просмотрен. Диагностический неверный ROOT GET дал404, не app failure;
+последующие native recipe/ENV экраны имеют fresh Console0.
+
+Штатно опубликованы helperconfigrev6 и staffconfigrev12: только Dockerfile
+FROM заменён на новый базовый runner5ac60540…cd624; non-image config hashes
+сохранены. Оба build COMPLETED; staffcandidate появился примерно через5мин,
+не наблюдался сразу после сборки. Helperartifact imgart_PqQltimn9vpKBIIXlcrAFYAq
+ACCEPTED/PROMOTED, digest70ab08b3…adc02; новая signed promotion receipt
+6a180208…e6d09. Staffartifact imgart_v4_6LF2lnmxuk2-F5iUMmpak ACCEPTED,
+digestb9f58274…f0658; promotion запрошена, последний статус CLAIMED, не PASS.
+
+HelperENV renv_zycHL70M8UYGvTAU_W6fgvaB опубликован штатным draft Validate /
+impact / publication с единственным intended consumer «Помощник Kodex | Dev».
+Новая ENVversion16/versionRef renvv_VhcR-Kavl4-uJ1KiDLx84fHB, digest6857b6d9…3227;
+agentversion21. Fresh owner read после публикации доказал новый image70ab,
+38tools и exact non-image hash5fe5ce34…25b23 прежний. Первый read пересёк
+commit публикации и увидел прежнюю ENV; повторная проверка это разрешила,
+мутация не повторялась. SSO fresh-auth сохранил draft, OWNER восстановлен
+штатно; значения учётных данных не выводились и не сохранялись в журнале.
+
+Далее: дождаться signed staff promotion, две staffENV и intended6bindings с
+сохранением38tools/non-image; новый Workflow одного ревью; обычный Architect
+get_execution_snapshot с actual OBSERVED; реальный процесс #1796 и п16/Full65.
+Business PR не merge/approve; STT/device-code/staging/production NOT RUN.
+
+## Checkpoint 10.10.2026 — возобновление с одним циклом ревью
+
+Владелец выбрал вариант1: ROOT ведёт доставку и живой QA, субагенты — UX и
+адресные проверки. Новый лимит текущего dogfooding: один цикл комплексного
+ревью без автоматических повторов; активный план и GOV-OD-003 обновлены.
+Перед следующим процессом штатно изменить и опубликовать Workflow с этим
+лимитом; сейчас это NOT RUN. Непроверенные исправления и оставшиеся findings
+сохранить в отчёте, не объявлять READY_FOR_HUMAN_REVIEW без доказательств.
+
+Принятый runtime/UX пакет опубликован96fc426 в Draft1807. Canonical full runner
+build/import, fresh render, supply-chain quiesce apply/readback, supply-chain
+apply/readback и selected artifact-retention apply/readback PASS. Проверка
+06:10 UTC: обе ноды Ready/DiskPressureFalse, все27kodex-system Deployment/
+StatefulSet готовы, paused0. Это доставка, не завершение live QA.
+Actual CP/RC ELF comparison не завершён. Пользовательские custom images ещё
+прежние: обновить helper/staff recipes, три ENV и exact consumers, сохранив
+non-image settings. После этого actual Architect get_execution_snapshot,
+реальный Workflow #1796 и оставшиеся natural-language сценарии.
+Chrome5 доступен с OWNER; скриншоты recipe/history, Console и Network проверены.
+UX: переход в историю PROJECT image сбрасывает навигацию на «Все Проекты»;
+узкий фикс пока не принят. STT/device-code не запускались. Business PR не
+merge/approve; цель до паузы была очищена, теперь запускается заново по плану.
+
+## Checkpoint 10.10.2026 05:50 UTC — combined runtime packet принят
+
+e6cd3828 уже опубликован в Draft1807; предыдущая запись про seven dirty files
+историческая. ROOT принял26runtime+5frontend exact postimages. Targeted Go unit,
+canonical disposable PG tool-phase6.046s/harness0, frontend88unit/lint/typecheck/
+build PASS. Native applied Variant3 показывает receipt v1→v2 вместо будущего
+placeholder, screenshot/Console0/overflowfalse проверены в Chrome5.
+
+Следующий этап: clean commit/push этого пакета, full runner ABI3 build/import,
+fresh render, canonical CP/RC delivery/readback и actual serving/source hash.
+Потом custom admitted/promoted role image с обоими ABI3 peers, штатные exact
+binding revisions; старый custom3181591e нельзя считать новым бинарём.
+Обычный Workflow Architect должен сам вызвать get_execution_snapshot и
+получить OBSERVED actual provider version. Сейчас native runtime NOT RUN.
+Реальный Workflow #1796 и Full65 OPEN, goal ACTIVE. Без нового финального gate
+business PR не merge/approve. Private delivery inputs устанавливаются read-only.
+
+## Checkpoint 10.10.2026 05:40 UTC — обновление заметки принято
+
+Serving16e: natural run_CN_GzhWi1fDmTQJ9syH9j7m- → single UPDATE plan
+variant3 → native Validate/Apply PASS; receipt1. Stable artifact
+art_i2rouMdoEPydz_Izt-NMuQDs, новая CLEAN revision2
+arv_6d5a8ae1358d429aa4382d897dc9c7b7,4920B/fullSHA79ac3b56…f8fe85.
+Old revision1/full4234B/SHAdc0e4965…dc24e сохранена, новый prefix дословно
+равен old bytes. Tail содержит только requested4checks. Reload сохранил
+OWNER, APPLIED plan, v2 и native историю2+1; fresh Console0.
+Диагностический ROOT GET к POST-only binding дал405; не application failure.
+
+Все43workloads/42PVC и nodes2Ready/PressureFalse подтверждены. Helper20/
+binding15/image3181591e прежние. ROOT rolling25unit PASS7.962s после actual
+переноса и exact previous16e journal prefix PASS. MAIN dirty только seven
+rolling/handoff files; надо clean commit/push sameDraft1807. Сервисные source
+не изменены, serving16e остаётся отдельным доказательством.
+
+assistant_frontend готовит isolated narrow applied summary UX: после APPLIED
+не показывать «будет назначена» при уже полученной новой версии; без новых API.
+Provider18+own9 packet main ещё не принят: следующая реализация/runnerABI3,
+точный admission/custom image и actual Architect get_execution_snapshot.
+Full65/Workflow OPEN, goal ACTIVE, финального результата команды ещё нет.
+
+## Checkpoint 10.10.2026 05:38 UTC — кластер восстановлен
+
+Published16e1b814: canonical supply-chain apply/readback и selected core
+artifact-retention/session-archive apply/readback PASS. Оба узла Ready,
+DiskPressure False; все43deployments/statefulsets ready с replicas>0,
+все42PVC Bound. DATA около80GiB свободно. Repo-owned cold cache prune
+удалил123032старых файлов/29.81GB logical, skip0; свежие кэши, runtime
+images/pins, volumes и данные сохранены. Это восстанавливаемый build cache.
+
+Actual CP ELF456706e1…618d1 и retention9208b532…f846c EQUAL независимой
+сборке acdff; Go inputs acdff→16e неизменны. Host/Pod prepared source
+71a2ea21…05d5 EQUAL, source annotations16e и mount текущего checkout
+подтверждены. Archive worker exact ca8eacdc…60b49. Исходный storage guard
+readback PASS: RETIRED, 63 pins сохранены; ручного обхода disk taint нет.
+
+Chrome MCP ownpage5 подключён. OWNER восстановлен штатным SSO входом,
+bootstrap/session200, fresh Files Console0/overflowfalse; screenshots главной,
+чата и плана просмотрены. Новый natural запрос без IDs нашёл прежний файл,
+прочитал4234B до EOF и создал новый single UPDATE plan (Вариант3). Новый
+Validate запущен; Apply/newrevision пока NOT RUN. Старый failed intent не
+переиспользован; helper version20/binding15 сохранены.
+
+ROOT принял lossless rolling helper2: exact pre/post2/2 и25unit PASS;
+fresh plan от16e сохранил предыдущий journal Git blob130619B, перенёс полные
+checkpoint без потери bytes; verifier PREVIOUS_SNAPSHOT_PREFIX_CHECKED PASS.
+Original5parts/baseline/checkbox неизменны. Provider18+ownsnapshot9 пока не
+приняты, Architect actual observation NOT RUN. Full65/Workflow OPEN, goal ACTIVE.
+
+## Checkpoint 10.10.2026 05:17 UTC — дисковое ограничение ноды
+
+Published acdff193: runner/archive builds, import и fresh render PASS.
+Canonical supply-chain activation FAIL: server imagefs DiskPressure;
+повтор apply остановился на недоступном PostgreSQL, не стал PASS.
+Оба узла Ready, все42PVC Bound; 8Pod Pending из-за disk taint/PV affinity.
+Chrome MCP page5 подключён, reload работает; native503 относится к этой
+maintenance, не доказательство успешной работы или утраты SSO.
+
+Existing OCI cleanup удалил16 exact obsolete export tar, 24.60GiB,
+без live Pod/Job refs; runtime images/pins/volumes сохранены. Осталось около
+49GiB на DATA. Kubelet recovery требует15% (hard5%+minimum reclaim10%),
+поэтому этого недостаточно. Принят узкий repo-owned cold Go cache script:
+только own hash files, все три timestamp строго старше72h, private explicit
+plan/fingerprint, inode/nofollow/owner recheck и skip changed. ROOT13unit
+и exact postimages2/2 PASS. Реальный cold prune пока NOT RUN; сначала
+commit/push sameDraft1807, затем exact audit/prune и condition readback.
+
+После восстановления выполнить fresh exact-source canonical proof/render,
+supply-chain и selected retention+archive apply/readback, actual serving ELF
+и source proof; затем natural same-file proposal/Validate/Apply/history.
+Provider observation18+own get_execution_snapshot9 готовы отдельными пакетами,
+main ещё не принял их; helper-only не закрывает Architect. Lossless rolling
+journal packet также готов, original5parts/checkbox/history неизменны.
+Full65/Workflow11/14/15/16 OPEN; цель ACTIVE, bootstrap не слит.
+
+## Checkpoint 10.10.2026 04:48 UTC — два узких пакета приняты
+
+ROOT2a66+10files: S3frozen6, a11y2 и journals2. Exact pre/post6/6+2/2 PASS.
+ROOT objectstore/CP targetedrace PASS; disposable binding/ledger PASS6.867s
+и read-only grants queries PASS. ROOT47frontendunit/lintformat/forcedapp
+typecheck/fullbuild2791 PASS, chunkwarning сохранено. Chrome5 после reload
+Console0/unnamedcontrols0/overflowfalse, screenshot просмотрен. Signed-body
+fix не изменяет authority/ledger/schema и не переисполняет WAITING_OWNER.
+Общий SDK immutablePut attempts1; reads unchanged, GUIDE-DOC-003 обновлён.
+
+Далее clean commit/pushsameDraft1807. Canonical fullrunner и отдельный
+build-local-session-archive обязательны, затем fresh exactrender, canonical
+supply-chain apply/readback и selected core retention+session-archive
+apply/readback. ExistingJobs/pins не переписывать. ServingCP новый ELF и
+source hashes доказать; только затем fresh natural update→nativeValidate/
+Apply→sameArtifact/newrevision/oldbytes+pins. Provider-version diagnostic
+isolated packet ещё готовится. Full65/Workflow остаются OPEN, цель ACTIVE.
+
+## Checkpoint 10.10.2026 04:40 UTC — writer причина воспроизведена
+
+Chrome MCP ownpage5 доступен, OWNER сохранён; оба узла/все43workloads Ready,
+диск root132GiB/data27GiB свободно. Reload безопасный, draft0, overflowfalse;
+native Console: один accessibility issue scope SELECT без name/id, fix готовится.
+Natural update из04:28 завершился SUCCEEDED, но plan FAILED TOOL_UNAVAILABLE:
+старый файл сохранён, новая ревизия/Apply NOT RUN. Real AWS SDK regression
+доказал: io.LimitReader теряет seekability, до HTTP Put не доходит. Узкий
+bounded inspected buffer fix и disposable ledger тесты готовятся; UNKNOWN
+intent уже WAITING_OWNER, вручную не менять. SDK Put retries также отключить
+для immutable one-write boundary, Head/Get/Delete не менять. Отдельный
+provider handshake version observation готовится без нового permission и без
+изменения immutable RuntimeRevision. Current production source2a66, новые
+пакеты ещё не приняты/не опубликованы. Full65/Workflow остаются OPEN.
+
+## Checkpoint 10.10.2026 04:28 UTC — Chrome и serving восстановлены
+
+ROOT2a66b34698d85b60d769d158d69de45011a3dffa опубликован в Draft1807.
+Fresh runner/provenance/render tx7dYA и canonical supply-chain readback,
+selected artifact-retention core apply/readback PASS. Exact migration
+924303244fcc succeeded1/failed0; оба узла и все43workloads Ready.
+CP/GW/RC/retention source annotations2a; actual CP ELF89ff2721…19e69,
+host/Pod stream source5360427d…3ee76f0 EQUAL. Chrome MCP реально подключён,
+ownpage5 OWNER, Files screenshot просмотрен; fresh Console без ошибок.
+Revision DOWNLOAD/PREVIEW200/4234B/full baseline digestdc0e4965…dc24e.
+Отправлен обычный запрос в прежний PROJECT-чат: дополнить существующую
+заметку разделом проверки параллельных диалогов, безIDs и копии, только
+подтверждаемый план. Ход ещё выполняется; Apply/newrevision NOT RUN.
+Full65QA/Workflow11/14/15/16 OPEN; bootstrap не слит, цель ACTIVE.
+
+## Checkpoint 10.10.2026 04:14 UTC — узкий streaming fix принят
+
+ROOT0ff+5dirty files: narrowauth3 и journal/handoff2. Exact pre/post3/3 PASS,
+новый method толькоUserActor server-stream; registry/SQL/grants/migrations
+не изменены. ROOT targetedunit3packages PASS, авторскийrace/client/vet PASS.
+ActualpatchedCP ELF89ff2721…19e69 EQUAL independent Go1.26.6, sourcehash
+5360427d…3ee76f0 EQUAL. Native revision DOWNLOAD/PREVIEW200/4234B/full
+digestdc0e4965…dc24e; реальная кнопка route200, screenshot просмотрен.
+Это dirty-tree hot reload acceptance, не новая immutable publication.
+ENVreadytrue/blockers0/current16/binding15/image3181591e/policyc022/38tools
+сохранены; нет нового AI turn. Следующий cleancommit/push samePR1807,
+fresh runnerproof/render и canonical exact-source apply/readback; затем
+natural helper update→owner Validate/Apply→newrevision sameArtifact и oldpins.
+Chrome1402 pending/own91439 OWNER. Full65QA/Workflow11/14/15/16 OPEN.
+
+## Checkpoint 10.10.2026 04:08 UTC — serving активирован, скачать версию нельзя
+
+Последний published ROOT0ff2e093af8f635327579e86653be9a0df2ca54c/Draft1807,
+Issue1797 OPEN/mainab4992e0. Fresh runner proof23060d4a…093d7/import и
+render V4Y8sQ PASS. Canonical quiesce→supply-chain/migration→selected retention
+apply/readback PASS; Job control-plane-migrate-b04ed81d9c6e применил12→13→14.
+2nodes/43workloadsReady, host/Pod selected source и4actual serving ELF EQUAL
+независимой Go1.26.6 сборке. Frozen171 exact, данные baseline сохранены.
+
+Native baseline metadata/history200, но revision DOWNLOAD403 PERMISSION_DENIED
+также через реальную кнопку: server stream allowlist не включает новый RPC.
+platform_resync_diagnostics готовит narrow exact-method + auth-negative packet
+в isolated /home/s/.cache/kodex-artifact-download.zkIOcc/source от0ff.
+ROOT source не изменяет. Принять только после exact pre/post/targeted tests;
+коммит/push samePR, fresh canonical proof/render/apply/readback. Не расширять
+permissions/actor/grant/RLS и не обходить eligibility. Затем actual bytes SHA
+старой версии и natural helper update→native owner Validate/Apply→new revision
+sameArtifact + old bytes/history/pins. До этого нового AI turn не запускать.
+Own91439 OWNER/Files1440/reload04:04; Chrome1381 pending, MCPнеподключён.
+Full65QA/Workflow11/14/15/16 остаются OPEN, не объявлять цель завершённой.
+
+## Checkpoint 10.10.2026 03:46 UTC — последний CSS до activation
+
+f80b3276 опубликован exact remote/Draft1807. Fresh full runner cacheproof
+71ade226…6600ed/import PASS, sourcef80/OCIa39/ELF376. Дополнительный2file
+Files CSS/layouttest: mobile error box width100%+margins clipping14px заменён
+на локальное widthauto. Native390 alert[24,366] внутри card[10,380], retry
+виден, screenshot просмотрен.15unit/scopedlintformat/Vitebuild PASS.
+Journal/handoff ещё2files; clean commit/push и fresh proof/render следующегоSHA.
+Own91439 OWNER/reload03:45/viewport1440, Chrome1334 pending.
+Canonical activation всё ещё NOT RUN; следующий шаг и baseline Artifact
+не изменены. Не выдавать ready cluster или error UI за успех новой ревизии.
+
+## Checkpoint 10.10.2026 03:42 UTC — оба узких пакета приняты
+
+Текущее дерево: c273 +9owned files (delivery3, Files4, journal/handoff2).
+Все exact pre/post guards PASS. ROOT delivery8/22, frontend50unit/typecheck/
+build2791/lintformat PASS; optionalPG SKIP, buildwarnings сохранены.
+Native Files1440 alert/retry вместо ложного empty подтверждён screenshot/
+DOM/кликом; успешное чтение после migration пока NOT RUN. Own91439 OWNER,
+reload03:40. Chrome1311 pending, предыдущие timeout не считать MCP доступом.
+
+После clean commit/push: свежий cached canonical runner/provenance/import,
+render-current-local на точном новом SHA (Go1.26.6 scoped PATH/GOROOT),
+quiesce apply/readback→supply-chain apply/readback→selected retention core
+apply/readback. Admission Job/PVC0 после естественного TTL. После exact schema/
+serving/pins proof проверить baseline file и обычный natural update в том же
+чате безIDs; native Validate/Apply exact receipt/new immutable revision того же
+Artifact и сохранение old content/hash/pins. Full65QA/Workflow11/14/15/16 OPEN.
+
+## Checkpoint 10.10.2026 03:38 UTC — delivery принят, activation следующий
+
+ROOT c273ea98 опубликован; дополнительно приняты3 delivery files с exact
+pre/post/ownedTree0eff1844…7223. ROOT8new/22cutover PASS, optionalPG SKIP,
+selectors/Bash/ShellCheck PASS. Quiesce6consumers, retention bootstrap absence
+доказуемый; selected worker core требует exact Completed migration того же render.
+Frozen171 не изменён. Fresh c273 full runner/provenance/import PASS, реально
+manifest a39…/ELF376… прежние; после clean final commit reverify sourceRevision.
+Managed admission Job/PVC inventory0 после штатного TTL03:38, не ручного удаления.
+
+До fresh render/deploy ждёт narrow frontend loading error packet от
+file_revision_scan_followup: Files ACTIVE no snapshot не делает list, bootstrap
+problem скрыт, поэтому native503 показывает «Файлов пока нет». Исправляется
+bounded typed initial load/retry preserving rows без polling. Это native FAIL;
+после adoption повторить50targeted unit/typecheck/lint и настоящий экран.
+Затем clean commit/push, cached fresh runner, render, canonical quiesce apply/
+readback→supply-chain apply/readback→selected retention core apply/readback.
+Не запускать AI до exact serving/migration/image eligibility proof.
+Own91439 OWNER, reload03:37, Files1440. Chrome1311 pending после двух timeout.
+Full65QA/immutable natural file update/Workflow11/14/15/16 ещё OPEN.
+
+## Checkpoint 10.10.2026 03:23 UTC — source принят, activation ещё впереди
+
+Base3352cd9e, та же ветка/Draft1807/Issue1797. Backend171 posthash exact
+ownedTree37713e46…4488d2, frontend39 + scan3/layout2 приняты через apply_patch.
+Final WIREb8dd10c6…1f3, generated SDK5enum. ROOT дополнительно исправил2
+message catalog файла: новое право и сообщение создания версии ru/en.
+Full frontend396/3729 PASS54.68s после начального FAIL2missing labels;
+target31PASS, scoped lint/format, typecheck/build2791, CPunit/SQL/authority
+PASS. ROOT combined disposable PG4suites PASS37.680s; live ещё NOT RUN.
+
+Не отправлять AI turn до миграций12→13→14 и serving/readback. Delivery gap:
+deploy-local.sh trusted quiesce/core не включает artifact-retention; parent
+platform_resync_diagnostics готовит ОТДЕЛЬНЫЙ узкий delivery packet, frozen171
+не меняет. Принять exact base/post, добавить stop/join и selected core delivery
+до schema rollout. Затем fresh canonical full runner/provenance (libs/go INPUTS
+изменились), render, quiesce/migrate/supply/core/readback. В trusted profile
+authority publisher НЕ запускается: exact registry94 встроен в CP; service
+identity generator canonical проверен. Не выдавать old OCI за new source proof.
+
+Live2nodes/42ready до source integration, source mount и host/Pod SHA EQUAL.
+Chrome1230 timeout300s,1257 pending; MCPнеподключён. Own91439 OWNER,
+reload03:22 emptydraft, Filesdesktop1440. Full65QA/business Workflow OPEN.
+Native baseline Artifact art_i2rouMdoEPydz_Izt-NMuQDs v1/rev1/4234bytes
+digestdc0e4965…dc24e сохранять. Следующий обычный запрос безIDs должен
+создать новую immutable revision ЭТОГО Artifact, не новый одноимённый файл.
+
+## Checkpoint 10.10.2026 03:03 UTC — frozen frontend и native baseline
+
+ROOT c830ff2038cbacf43376e6c237438de3442cb3a2/remote/Draft1807 EQUAL;
+Issue1797/1796 OPEN, mainab4992e0. Обе ноды и все42 workloads Ready. Новых
+ошибок в native read window нет; Chrome1180 timeout300s,1205 pending. Own
+Playwright91439 OWNER, desktop1440, safe reload03:01. Не считать MCP подключённым.
+
+Frontend original39 bases совпали с ROOT39/39, packet ещё НЕ ПРИНЯТ.
+Отдельный scan3file packet:
+`/home/s/.local/state/kodex-dev/file-revision-scan-1797.i407Bq/apply.patch`,
+SHA41317788…57a5; manifest/HANDOFF рядом. Base каждого файла — original39 POST,
+wire2bf01cb9…d6ddb/generated5enum. Metadata все5states, body CLEAN-only до SDK.
+45unit/fulltypecheck/lint/format/reproduction3/3 PASS изолированно.
+ROOT полный frontend unit396suites/3727tests PASS57.49s после добавления
+недостающих tracked backend/contract/header fixtures в harness. Первоначальный
+FAIL9tests/1suite ENOENT сохранён; tests/контуры не ослаблялись. Это не live QA.
+
+ROOT layout2file follow-up поверх original39 POST: в той же директории
+`layout.apply.patch` SHA9bbde197…a145, `layout.manifest.json`. Native before
+date/action overlap100.6px. Гибкие text tracks/date ellipsis/title; действие и
+152px reservation неизменны.9unit/scopedlintformat/reproduction2/2 PASS.
+Main не изменён этими packet; применить только после original39 и сверки bases.
+
+Baseline заметки «Лимиты аккаунтов — проверки перед приёмкой.md»:
+art_i2rouMdoEPydz_Izt-NMuQDs, v1/rev1/4234bytes,
+sha256:dc0e4965c96780bedea572a9c427dc3f6e95caa258c0ca790094dd5b753dc24e,
+ACTIVE/CLEAN; fresh GET/current DOWNLOAD200 и actual byte SHA совпали.
+Desktop/mobile settled screenshots просмотрены. Не отправлять новый AI turn
+до final backend integration/deploy и exact writer proof. После него запрос
+обновления по названию без IDs → native owner Validate/Apply → typed receipt,
+new immutable revision same Artifact, old content/hash/pins и history/download.
+
+Backend parent platform_resync_diagnostics RUNNING, prepared_content_ledger
+RUNNING; readers packet уже принят родителем. FreshPG PROJECTsuite PASS
+по отчёту parent; combined purge/ledger/codegen/final frozen manifest пока
+готовятся. Уточнить runner OCI/ABI/deploy impact до live rollout. Не принимать
+частичный пакет, не редактировать applied migrations, не обходить admission.
+Full65QA/practical update/Workflow11/14/15/16 OPEN; checkbox неизменны.
+
+## Checkpoint 10.10.2026 02:46 UTC — helper generation5 опубликован и привязан
+
+ROOT2b25ef52+двухфайловый ToolsEditor patch; предыдущий checkpoint exact2b25
+запушен в Draft1807. Helper build imgbld_CyqhKWMHMlkFZLFJimDNaOEI generation5
+COMPLETED100; artifact imgart_OdHtIhUAXcWDokhvCLsnL9VS ACCEPTED/PROMOTED,
+digest3181591e…cd6815, receipt716bc323…5d874. Complete report READY,
+blockingMatchCount0: это не отсутствие CVE, всего4633 matches с inherited/
+suppressed/no-fix findings по текущей policy. Новый risk exception не создавался
+и старый не переносился. Публикация выполнена native UI, не direct storage write.
+
+Draft renvd_DuVzEj5_A1BXfKhwE3BoSJvy PUBLISHED3. Одна отмеченная привязка
+помощника обновлена в owner publication plan. ENV resource15/current revision16,
+binding aenv_PFnDbPM0TBK_1-9-8aTWE4mu version15. Exact GET подтвердил EQUAL
+configuration2d86152f…c5d71, policyc022544f…236b,38toolscb17a930…dff,
+values/secret descriptors/memory/skills4f53cda1…b945. Image только3181591e.
+Draft policy имеет input shape, published policy compiled shape: сравнение
+их сырых JSON hashes невалидно; actual before/after compiled hashes EQUAL.
+Первый Validate403 FRESH_AUTHENTICATION_REQUIRED; штатный password SSO
+вернул сохранённый draft, Validate/plan/publish/readback успешны. Gate не обходился.
+
+ToolsEditor при loading/unavailable inventory показывает «Выбрано:38» без
+выдуманного «из0», count не переносится. Выбранные commands/metadata не меняются.
+ROOT26unit/2suites, lint/format, forced typecheck и full build2777modules PASS;
+существующие chunk/plugin warnings сохранены. Source host/Pod EQUAL
+ce127538…ddb64. Native1440/390 screenshots просмотрены, mobile overflowfalse.
+Console cumulative30 включает прежние ошибки и ожидаемый fresh-auth403;
+после SSO relevant mutation/read200, warnings/pageerrors0. Два aborted dev
+revision reads связаны с reload/HMR. Own browser91439 OWNER, reload02:46.
+Chrome1137 timeout300s,1163 pending; MCP доступ не подтверждён. Все42
+Deployment/StatefulSet готовы, paused0. Запуск нового runtime writer NOT RUN.
+
+Backend пакет immutable revisions/staging/pinned readers ещё NOT READY;
+изолированная compile/unit проверка не заменяет disposable lifecycle checks.
+Wire hash2bf01cb9…d6ddb: history metadata сохраняет все5 scan states;
+download/materialization только CLEAN. При интеграции frontend39file packet
+нужно обновить metadata guard и CLEAN-only negative tests по final SDK.
+Terminal purge очищает technical ledger metadata/locators, оставляет terminal
+flag и минимальные opaque lineage/idempotency commitments; active pins
+блокируют purge, historical bindings не удаляются. Полный65QA/practical file
+update/business Workflow OPEN; канонические checkbox не менялись.
+
+## Checkpoint 10.10.2026 02:31 UTC — контроллеры восстановлены, новый helper образ строится
+
+ROOT9a7ab5fb, ветка kodex-agent/issue-1797-full21-v7, Draft1807/Issue1797;
+remote exact9a7 подтверждён. Fresh9a7 provenance и render PASS, canonical
+quiesce apply/readback и supply-chain apply/readback PASS. Завершённый старый
+promote Job удалён штатным TTL02:14:34; ручного удаления либо обхода guards нет.
+RC serving ELF EQUAL9e4b9922…350130. Оба узла Ready; все33 Deployment и9
+StatefulSet готовы, replicas0 отсутствуют. Session archive временно терял
+рабочий owner RPC с Unavailable при maintenance; готовность восстановилась,
+за последние3мин новых claim failures нет.
+
+Own native UI создал helper recipe generation5, version10 с новым exact
+FROM a39ef63e…4bcf4. Один build imgbld_CyqhKWMHMlkFZLFJimDNaOEI,
+attempt1, STAGING_PUSH80%. Новый admission/report/promotion ещё NOT RUN;
+не запрашивать повторную сборку. Исторический risk exception не переносится.
+ENV resource14/current revision15 и binding14 пока прежние. Fresh runtime
+configuration, policy,38tools, values, secret descriptors, memory и skills
+EQUAL сохранённым baseline hashes; image binding ещё не менялся.
+
+Own browser91439 OWNER, reload02:29; desktop1440 new source/build screenshots
+просмотрены, layout без видимого overlap. Relevant API200, после02:24 новых
+HTTP failures нет, warnings/pageerrors0. Cumulative Console29 включает
+предшествующие401/diagnostic405 и maintenance503, не объявляется Console0.
+Chrome1100 timeout300s,1113 pending; доступ MCP ещё не подтверждён.
+
+Случайная правка ROOT из isolated backend остановила precheck до quiesce.
+Точный parent-owned diff сохранён, ROOT восстановлен по проверенным before/
+after hashes; пользовательские изменения не удалялись. Backend продолжает
+immutable revisions/staging в отдельном worktree; compile PASS не full QA.
+Frontend39file packet ещё не принят; scanState metadata должен поддерживать
+все5 canonical состояний, download/materialization только CLEAN. Полный65QA,
+practical file update и business Workflow OPEN, checkbox не изменены.
+
+## Checkpoint 10.10.2026 01:57 UTC — образ проверен, preflight остановки исправлен
+
+База21340ccc, Draft1807/Issue1797. Canonical full runner build/import обеих
+нод PASS. Exact OCI a39ef63e…4bcf4 содержит pnpm11.28.2, bundled tar7.5.22
+и undici6.28.1: actual package hashes EQUAL проверенной установке;
+manifest/lock EQUAL committed source, canonical provenance PASS.
+Новый security scan/admission/promotion/native custom ещё NOT RUN;
+прежний risk exception другого digest не переносится.
+
+Fresh render21340 PASS с operation-scoped Go1.26.6 PATH/GOROOT, GOENV=off,
+GOTOOLCHAIN=local. Два предыдущих render FAIL из-за default Go1.27.1 и
+унаследованного GOROOT; системная конфигурация не менялась. Первый quiesce
+FAIL после stops: завершённый promote Job сохраняется до штатного TTL3600,
+SUCCEEDED01:14:34 UTC, очистка ожидается не раньше02:14:34 UTC. PVC отсутствует.
+Job не удалялся вручную, TTL и inventory guard не изменены. CP/GW штатно
+восстановлены прежним exact core render, обе реплики Ready1/1. RC, builder
+и admission controller пока остановлены; это maintenance, не полная готовность.
+
+Принят отдельный frozen preflight patch: тот же closed inventory-check теперь
+выполняется ДО первого stop, сохраняя AFTER-check, idle/pins/CAS и fail-closed
+pause. Terminal Job не исключение. ROOT post hashes совпали с manifest;
+ROOT51test PASS, один optional PostgreSQL SKIP/NOT RUN; Bash syntax,
+ShellCheck и diff-check PASS. Следующий SHA требует fresh render и canonical
+provenance даже при OCI cache hit; прежний prepared render21340 не применяется
+после изменения source.
+
+Own Playwright91439 OWNER; reload01:55 draft0. Настоящий ENV screen1440
+просмотрен: current rev15, history, controls читаемы, overflowfalse.
+Console cumulative15: initial401/ROOTdiagnostic405 и maintenance503; после
+восстановления session/bootstrap/ticket/env/versions/recipe/agents/readiness200,
+новых ошибок в последнем окне нет, warnings/pageerrors0. Chrome1020 timeout,
+1036 pending; MCP доступ не подтверждён. Чужие вкладки не закрывались.
+
+Backend immutable file revisions/staging cleanup и frontend history/receipt
+разрабатываются в отдельных worktrees; пакеты ещё не приняты. Новые AI turns
+не запускать до восстановления контроллеров и exact writer proof.
+Полный65QA, practical file write и business Workflow остаются OPEN.
+
+## Checkpoint 10.10.2026 01:28 UTC — успешное продолжение и отсутствующая запись ревизии
+
+База f0fa100968f9d1c6fb0ea95d2ae1c1e1c8bff852, Draft1807/Issue1797;
+fresh main ab4992e. Native helper artifact imgart_Uct6pAxzkkJSbthS4FuN1bzC
+ACCEPTED/PROMOTED, digest6e82f825…175d00. Штатно опубликованы ENV
+renv_zycHL70M8UYGvTAU_W6fgvaB currentVersion15 и binding
+aenv_PFnDbPM0TBK_1-9-8aTWE4mu version14. Сравнение before/after
+configuration, policy, values, secret descriptors,38tools, memory и skills
+даёт exact EQUAL hashes; изменён только назначенный image pin.
+
+Один native continuation обычным текстом без IDs, run_68SNMBo9u3d2mKng7gWmzEB9,
+session ses_mwdQT0kSKGG3GvsjdubzMv24, turn trn_Ln06-aasmXtLhKIyxk-eT-60:
+SUCCEEDED, десять tools, публичные commentary и final. Реальный Pod получил
+custom6e82f825; runner binary37608805…a2ea3 совпадает с clean1e build.
+Перед очисткой captured ACK связан с exact run/node/session/turn/attempt и
+immutable input/runtime/binding digests. Failure capture NOT_CAPTURED:
+повтор не завершился ошибкой; причина прежнего THREAD_READ/NONE UNKNOWN.
+
+Обновление заметки BLOCKED, не PASS. Помощник нашёл и полностью прочитал
+существующий файл, но текущий каталог предлагает CREATE_PROJECT_FILE без
+операции обновления. Artifact art_i2rouMdoEPydz_Izt-NMuQDs остаётся revision1,
+version1,4234bytes,digestdc0e4965…dc24e. ARCH-MC-008 требует новой immutable
+ArtifactRevision со стабильным Artifact; одноимённый upload сейчас создаёт
+другой Artifact и не является нужным update. Следующий этап — специализированный
+versioned content command/assistant plan с authority/OCC/receipt/events и
+сохранением всех прежних runtime snapshots, не перезапись и не дубликат.
+
+Принят frozen pnpm packet четырёх файлов:11.11.0→11.28.2, verifier читает
+dist/node_modules и отклоняет symlink. ROOT25unit, syntax, scoped lint,
+Prettier и diff-check PASS на base+patch. Первый lint пропустил файлы вне base
+path; исправленный запуск реально проверил оба mjs, errors/warnings0.
+Новый image/admission/deploy этого исправления NOT RUN; прежний exact risk
+exception не переносится на будущий digest. Context7 /npm/cli проверен.
+
+Own Playwright91439 OWNER; прежний own68037 закрыт, чужие вкладки не трогались.
+Screenshot успешного transcript просмотрен: USER справа, ответы/tools слева.
+Console initial3 bootstrap/session401 и один405 от неверного ROOT diagnostic
+GET зафиксированы; это не новые app defects. Pageerrors/warnings/requestfailed0.
+Draft-safe reload01:25 выполнен. Chrome928 timeout300s, Chrome952 pending;
+MCP подключение пока не доказано. Оба узла и21 desired Deployment kodex-system
+Ready. Checkbox не изменены; полный65QA/п11/14/15/16 и Workflow OPEN.
+
+## Checkpoint 10.10.2026 01:12 UTC — доставка диагностики и мобильная шапка
+
+Опубликованная база1e25680b, Draft1807/Issue1797. Canonical full runner build,
+обе node imports, fresh render, supply-chain quiesce/apply/readback PASS.
+Новый base16ae7710…bf0a, policy89b6d7d7…e98c; contract прежний3/b48e9234…586ab1.
+RC serving ELF после rollout EQUAL independent build9e4b9922…350130.
+Обе ноды Ready; все21 desired Deployment в kodex-system готовы. Старые failed
+Pod/Job не скрывать: readiness текущих реплик не равна отсутствию исторических ошибок.
+
+Native helper recipe v8/gen4, один build imgbld_mnz2eIqcpt0wUFpN4VXeUgrb
+COMPLETED100; новый artifact imgart_Uct6pAxzkkJSbthS4FuN1bzC,
+digest6e82f825…175d00. Admission REJECTED связан с двумя HIGH/fixable:
+undici6.27.0→6.28.1 и tar7.5.19→7.5.21. Полный report READY;
+в native owner UI сохранено exact временное dev-обоснование ACCEPT_RISK,
+decision imgrisk_f3OxPU__AkKBiylD6FTgXji-, repeat admission2 CLAIMED.
+Не считать ACCEPTED/PROMOTED до фактического readback. ENV и binding ещё старые,
+их preservation baseline сохранён перед изменением. Следом штатная публикация
+только helper образа/ENV, сравнение38tools/configuration/policy/secret bindings,
+exact writer proof, затем один practical continuation. Не повторять сборку.
+Исправленные две зависимости остаются задачей новой ревизии; risk exception
+не означает устранение уязвимостей или production acceptance.
+
+Мобильная шапка RoleImageEditor: identity/status отдельными строками,
+кнопки две колонки44px. ROOT72unit/3suites, scoped lint/format, forced
+typecheck/build и diff-check PASS; существующие chunk/plugin warnings сохранены.
+Native1440/390 screenshots просмотрены, mobile scrollWidth390/viewport390,
+identity336/name280; host/ReadyPod source EQUALacdfc0fa…002d5.
+Это рабочее дерево1e25680b+двухфайловый frontend patch, не новая runner ревизия.
+
+Own browser68037 OWNER активен; own65906 закрыт, чужие вкладки не трогались.
+Console initial3 — bootstrap/session401 до SSO, новых errors/warnings/pageerrors0.
+Три aborted reads связаны с reload/HMR; vulnerability report последующий GET200.
+Chrome859/870 timeout300s; новый Chrome895 pending, MCP доступ не подтверждён.
+Полный65QA/п11/14/15/16 и business Workflow остаются OPEN.
+
+## Checkpoint 10.10.2026 00:49 UTC — закрытые причины отказа resume
+
+ROOT basefe023882, Draft1807/Issue1797; принят frozen пакет7source/test файлов.
+Локальные причины RESUME_SOURCE_SCHEMA/ID/LOCATOR/OPEN/METADATA/IDENTITY
+передаются только для REQUEST_FAILURE/THREAD_READ/PROVIDER с прежним exact
+execution binding. Прежние rejecting guards, mode/UID/GID/path/inode, grants,
+owner completion и cleanup не ослаблены. Причина исходного live failure
+run_aaeb2eVPABFe8dVsML6UXZj0 остаётся UNKNOWN: instrumentation не functional fix.
+
+ROOT runtimecontract unit/race, весь agent-runner unit, codex race20.954s,
+RC callback unit, scoped vet и77Python tests PASS; diff-check PASS.
+Serving RC ELF и независимая trimpath/buildvcs=false сборка EQUAL
+9e4b99227239120130177f790d5a752ff470f1ac2b2873d5c77746cf3d350130;
+host/Pod consumer source EQUAL8c0fad1e…948e7. Reader уже обновлён.
+Новый runner/custom producer ещё NOT RUN. Сначала подтвердить обновлённый
+RC consumer, затем canonical full runner/build/import/seed/fresh render/
+activation и только необходимые custom image revisions. Не запускать native
+повтор до exact reader/writer proof; старые readers отклоняют новый enum.
+
+Own Playwright65906 авторизован, чужие вкладки не трогались; прежний own38659
+закрыт. Fresh Console3 соответствуют initial bootstrap/session401 до SSO;
+после входа появился ещё один artifact resource error, исходный HTTP status
+не захвачен, последующие exact artifact GET200. Не объявлять Console0.
+Reload draft0 выполнен00:45UTC. Chrome766 timeout300s, Chrome787 pending;
+MCP подключение не подтверждено. Полный65QA/п11/14/15/16 и Workflow OPEN.
+
+## Checkpoint 10.10.2026 00:36 UTC — Editor UX и сбой возобновления
+
+ROOT base521c8a4a, branch kodex-agent/issue-1797-full21-v7, Draft1807/Issue1797;
+fresh mainab4992e. Интегрированы2 frozen Editor файла; ROOT75unit,
+lint/format/forced typecheck/build PASS. Native readonly Applied plan на1440/390
+просмотрен, overflow=false, host/Pod source hash EQUAL. Owner Apply не повторять.
+Все33 Deployment/9 StatefulSet и оба узла Ready после reboot. Codegen
+integration package/authority policy на Go1.26.6 PASS, journal20 tests PASS.
+
+Historical Architect IMAGE digest1bcccdac…046f связан с exact RuntimeRevision
+и matching promoted VERIFIED Codex0.160.0 inventory; это не handshake старого
+удалённого процесса. Warm --version/binary digest совпали. Полную архитектуру
+и готовность Developer не объявлять по этим частичным доказательствам.
+
+Реальный native update-existing-file запрос без ID завершился FAILED до tools:
+run_aaeb2eVPABFe8dVsML6UXZj0, finish00:27:52.649583Z, sequence5, usage0,
+session ses_mwdQT0kSKGG3GvsjdubzMv24. Закрытый diagnostic THREAD_READ/NONE,
+не доказанный сбой сети OpenAI. Последний DELETE_PVC SUCCEEDED/attempt4,
+ARCHIVED штатен; исчезнувший terminal PVC не является причиной сам по себе.
+Исследовать точную parse/source-boundary причину до повторного хода.
+Backend freeze снят после terminal; ничего не перезапускалось.
+
+Own Playwright38659 продолжает работать; Chrome742 pending. Console12,
+warning/pageerror0, delta0 в этом окне, исходные hot-reload ошибки UNKNOWN.
+Продолжать попытки Chrome, reload собственного окна с draft0 раз в5мин;
+чужие вкладки не закрывать. Пункт16 и полный65QA OPEN. Далее устранить
+continuation FAIL, завершить bootstrap проверки/merge по разрешённым условиям
+и реальный Workflow внутренней команды. Конечный business PR не сливать.
+
+## Checkpoint 10.10.2026 00:20 UTC — reboot и продолжение
+
+ROOT база5b6a134a, branch kodex-agent/issue-1797-full21-v7, Draft1807/Issue1797.
+Обе ноды Ready,33 Deployment/9 StatefulSet готовы; source mounts текущего клона
+сохранены. Native diagnostic run_I1EnGRaX_jkshXeGxS_saegh SUCCEEDED/seq60:
+задача найдена по смыслу, architecture artifact rev12 дочитан19205bytes/EOFtrue
+с exact digest134b5775…39281. Альтернативное публичное чтение исходников
+проверено самим помощником; обслуживающая provider версия пока NOT CAPTURED.
+Developer не запущен, business semantic BLOCKED не замаскирован.
+
+Интегрированы4FE UX frozen postimages плюс ru/en gateway DESCRIPTION;26unit,
+lint/format/typecheck/build/usertext unit PASS. Native readonly Applied plan
+показал полный CRUD scope и понятную подпись capability. Editor heading ещё
+technical/длинный; этот системный UX аналог требуется доделать. Не применять
+Applied план повторно. Console cumulative12, delta после hot reload UNKNOWN,
+warning/pageerror0. Chrome MCP679 pending; own Playwright38659 активен,
+PROJECT прежний chat, readonly план открыт. Не закрывать чужие вкладки.
+
+Далее: проверить ответ Chrome; атрибутировать console errors и закончить
+heading editor, доказать provider-version штатным exact runtime источником
+либо согласованной внутренней архитектурной границей, завершить bootstrap
+проверки/merge по разрешённым условиям, затем продолжить Workflow внутренней
+командой. Полный65QA не завершён; пункт16 целиком не отмечать.
+
+## Checkpoint 10.10.2026 00:05 UTC — собственная возможность и чтение заметки
+
+Опубликованный ROOT/remote/Draft1807 SHA4faf377e. Native PROJECT self-plan
+pln_ybZYvv7erHvcs6bmtqnK6M7Z/revision1 содержит одну CHANGE_CAPABILITY только
+собственного helper/version17, artifact.manage false→true. Read/write/delete
+объяснены. Owner Validate200, Apply APPLIED/1операция; agent GET version18,
+единственная capability. Plan сам право не выдавал. Native screenshots просмотрены.
+
+Fresh named-file запрос без ID: run_OFWqlq8BmUJZTHl6NqVNc3Dj SUCCEEDED/seq11.
+Actual search_files/read_file receipt PROJECT/rev1/v1,0→4234/4234/eof=true,
+source/chunk digest dc0e4965…24e совпал со stored artifact. Final корректно
+пересказал проверки и исторические ограничения, дал file link. Compact/full
+screenshots просмотрены, overflow=false, turn202/graph/events/artifact200.
+Console cumulative6/delta0 в native двух turn/apply/reload окне, warning/pageerror0;
+исходная hot reload delta3 не атрибутирована. WS opened1/closed0/RUN_EVENT10,
+без problems/closes; full reconnect/restart/load acceptance не выполнен.
+
+Следующее: scoped isolation/ambiguity и natural practical continuation,
+исправить неполную capability подпись/read-write пояснение и long technical
+plan title без ненужных ID. Backend freeze закончится после удаления exact
+terminal runtime Pod. Architect official-source/effective-version BLOCKED
+сохраняется; Developer не допущен. Bootstrap не сливать по частичным PASS.
+Own Playwright38659, PROJECT старый natural chat, draft0, reload00:02 UTC.
+Chrome MCP640 timeout300s; запрос подключения продолжать. Full65QA OPEN.
+
+## Checkpoint 09.10.2026 23:57 UTC — PROJECT self-plan и история чата
+
+Поверх918e73cd интегрированы12 exact frozen source/test files: PROJECT
+CHANGE_CAPABILITY self-target в RC/CP и independent history catch-up с max2,
+newest-first, cancel/generation/pins и закрытым отказом partial/foreign history.
+Права не выданы, native self-plan/apply ещё NOT RUN; codegen/contracts не менялись.
+ROOT493unit, FE scoped lint/format/forced typecheck/build, RC callback race34.370s,
+CP scoped unit0.059s, scoped vet и disposable PROJECT component25.928s PASS.
+CP/RC hot reload serving ELF совпали с independent trimpath offline build,
+source host/Pod hashes EQUAL. Обе ноды и desired replicas Ready.
+
+Журнал механически сокращён без потери исходных1159280bytes: пять exact parts,
+manifest и coverage; canonical plan/checklist/нормативные фрагменты сохранены.
+ROOT verifier и20regressions PASS. История не доказывает live QA; предыдущие
+checkbox не изменены. Активная запись ограничена128KiB, append-only требует
+точный previous compact Git snapshot. Не запускать --write в основном checkout.
+
+Native PROJECT cold история прежнего чата видна: commentary/tools/final,
+screenshot просмотрен, overflow=false, graph/events200. Console cumulative6,
+warnings0/pageerror0; delta3 после hot reload ещё UNKNOWN, не заявлять console0.
+Следующее: native подтверждаемый собственный file capability с объяснением
+read/write scope, явное owner Validate/Apply и fresh named-file body до EOF;
+затем cold/rejoin/switch и scoped console/network readback. Во время живого
+turn backend freeze; менять runtime только после terminal.
+
+Chrome MCP613 pending. Own Playwright38659 на PROJECT Kodex | Dev, старый
+natural-language chat выбран; draft пуст. Чужие вкладки не закрывались.
+Architect official-source/effective-version BLOCKED сохраняется; Developer
+не допущен, business PR не создан. Full65QA OPEN, bootstrap PR остаётся Draft.
+
+## Checkpoint 09.10.2026 23:41 UTC — восстановление доступа и web-статус
+
+Base и remote Draft1807 — `07e034e5e13ed59193df04bad4b3558553bad002`;
+Issue1797 OPEN, main `ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69` неизменён.
+После перезапуска оба узла Ready, все desired Deployment/StatefulSet готовы;
+старые Error/ContainerStatusUnknown Pod не являются действующими репликами.
+Gateway, CP, RC и frontend используют исходники этого клона через hostPath.
+
+Native PROJECT повтор поиска сохранённой заметки после ARTIFACT исправления
+завершён: metadata и точная ссылка найдены без ID в пользовательском запросе.
+Чтение тела не выдано автоматически, помощник честно сообщил отсутствие
+разрешённого файлового каталога. Следующая просьба подготовить подтверждаемый
+план собственной файловой возможности завершилась semantic BLOCKED:
+серверная команда есть, но PROJECT self-configuration catalog её не раскрывает.
+Исправляется только этот exact self path, без самовыдачи права или обхода плана.
+Текущие реальные ходы terminal; backend freeze этого запроса снят.
+
+В рабочем дереве presentation-only web fix: только `CODEX_WEB_SEARCH` с
+`SUCCEEDED/COMPLETED` показывает нейтральное «Завершён». Канонические state,
+audit, action и safe details не меняются; успешное чтение страницы этим не
+доказывается. ROOT: RunTranscript151 и run-activity133 unit, scoped ESLint,
+Prettier, forced typecheck и production build PASS; chunk warnings сохранены.
+Host/Pod RunTranscript SHA256 совпадает:
+`00bb7e92955f66c495e427244a661e68136eeea874b0204ab433c5754374cd50`.
+Native screenshot `native-qa-web-completed-neutral-07e034e5.png` просмотрен:
+web badge нейтральный, компактная хронология читаема, horizontal overflow нет.
+После штатного входа Console delta0, warnings0/pageerrors0; прежние три401
+при начальном входе сохранены как baseline, не объявлены Console0.
+Защищённые graph/events/artifact чтения200; это не полный realtime acceptance.
+
+Chrome MCP list_pages завершился таймаутом300s; новый конкретный запрос585
+pending. Own Playwright38659 восстановлен, OWNER bootstrap200; чужие вкладки
+не закрывались. Готовится scoped history catch-up: readiness graph не содержит
+transcript, pending history нельзя терять из-за graph snapshot. Lossless журнал
+ещё не интегрирован: ROOT нашёл непереносимый test и ограничение mutable
+checkbox в оснастке, исправляются до adoption. Full65 и бизнес-Workflow OPEN;
+Architect source/version BLOCKED не устранён, Developer ещё не допущен.
+
+## Checkpoint 09.10.2026 23:22 UTC — кластер после reboot и адресные Go-исправления
+
+Base `cb611a2ed08def5071c2fc7c108c30ed3e63e03e`; изменения этого checkpoint
+пока в рабочем дереве, не выдавать их за опубликованный SHA. Обе ноды Ready,
+21 Deployment и пять StatefulSet имеют все желаемые готовые реплики.
+Gateway/runtime-controller/frontend по-прежнему используют host source этого
+клона; root148GiB/data55GiB свободно, дефицита inode нет. Исторические
+Succeeded Pod не являются отказом текущих Deployment.
+
+Настоящий Workflow `run_SA8DChw4DJ_xirErFKi80Qev` завершён FAILED/version3,
+INTAKE SUCCEEDED; Architect технически SUCCEEDED, но содержательный результат
+BLOCKED на exact source/version proof. Developer не допущен, business PR не
+создан. Backend freeze снят только после этого terminal. Native CODEX_WEB
+COMPLETED не доказывает успешно прочитанную страницу: закреплённый upstream
+WebSearchItem не содержит typed outcome; network cause UNKNOWN. Не назначать
+FAILED по свободному тексту InternalError и не повторять Workflow вслепую.
+
+Применены три узких исправления: WS не требует resync при уже полученном
+непрерывном FIFO backlog; callback чтения сессии даёт закрытый диагностический
+stage без сырых причин; поиск помощника выдаёт metadata ARTIFACT через прежний
+resourceVisible и штатную ссылку. Поиск не выдаёт body/capability/grant и не
+ослабляет собственный immutable файловый каталог. Отдельный native follow-up
+для файла ещё NOT RUN после исправления, весь пункт16 остаётся открытым.
+
+ROOT local на точном изменённом дереве: full WS race PASS25.216s; callback
+race до ARTIFACT PASS37.132s и после интеграции PASS38.181s; CP targeted unit
+PASS0.064s; весь disposable ProjectAssistantProfilesComponent PASS27.063s,
+включая metadata discovery/revoke/foreign scope. Три offline build PASS;
+serving ELF в точных текущих Pod совпадают с независимой сборкой:
+gateway `3d5958ffba0e5c62e1ac7bf4318568de04843a15e7f726f536c165f34e9331a9`,
+runtime-controller `54551453e22682e331912ef9683ed2deaca8a10774fdf21223a630e5acec3c61`,
+control-plane `71f7760adce79a17e3bf39d01c8295e201a08b7971f01652b9ceaf6589f7ce8b`.
+Это адресные debug-доказательства, не полный65QA/release acceptance.
+
+Chrome MCP list_pages повторно запрошен, ответ pending, подключение не
+подтверждено. Own Playwright41676/69259 доступны; screenshots помощника и
+terminal Workflow просмотрены, рабочие страницы перезагружены без draft.
+Чужие вкладки не закрывались. У WS в новом idle окне пока нет4000, но проверка
+активного потока после нового кода ещё NOT RUN. Lossless split большого журнала
+готовится отдельно, исходные требования/история не удаляются.
+
+## Checkpoint 09.10.2026 23:03 UTC — reboot readback и практическое продолжение без ID
+
+Исходный SHA `892c029241548a887c8ff2459de8c461f69c367e` совпадает с remote
+и Draft1807; Issue1797 OPEN, main `ab4992e0` неизменён. Обе ноды Ready,
+21 Deployment и пять StatefulSet имеют все желаемые готовые реплики.
+Host source остаётся примонтирован в runtime-controller, gateway и frontend;
+serving process hash в этом checkpoint отдельно не проверялся. Root149GiB/
+data57GiB свободно. Backend frozen: настоящий SOFTWARE_CHANGE и INTAKE
+RUNNING, до terminal не применять изолированные Go-патчи и не перезапускать.
+
+PROJECT диалог `cnv_rDvs2Qpxsk029lqVzcMeI-4N`: по свободному описанию без ID
+помощник предложил единственную CREATE_PROJECT_FILE. Native plan
+`pln_tqHn4855BuC6jVzbSehMkjPd` проверен и атомарно применён через UI, обе
+команды HTTP200. Создан artifact `art_i2rouMdoEPydz_Izt-NMuQDs`, revision1/
+version1, ACTIVE/CLEAN; owner metadata/content GET200,4234байта и SHA256
+`dc0e4965c96780bedea572a9c427dc3f6e95caa258c0ca790094dd5b753dc24e`
+совпадают с authoritative digest. Оба требуемых раздела существуют. Screenshot
+проверенной модалки просмотрен; own reload восстановил диалог и APPLIED card.
+Console errors21 не выросли от проверки/применения, warnings/pageerrors0.
+Следующее естественное уточнение о сохранённом файле отправлено без ID;
+финальный ответ ещё не подтверждён, полный пункт16 не закрывать.
+
+Chrome MCP list_pages запрошен повторно, ответ pending; подключение НЕ доказано.
+Own Playwright41676/69259 работают, чужие вкладки не трогались. Realtime всё ещё
+периодически закрывается4000/PLATFORM_RESYNC_REQUIRED и восстанавливается;
+снимок follow-up показывает recovering, поэтому стабильность не PASS.
+Новый journal превышает native GitHub read cap1MiB: требуется lossless split
+с сохранением исторических требований/authority; предложение child готовится,
+текущий Workflow читает прежний pinnedmain и не прерывается.
+Полный65QA, остальные п16 и реальный Workflow OPEN; business PR не merge.
+
+23:05 UTC: уточнение завершилось в `run_fzNq3UynJAFLtRWcV4FO2EBx`:
+пять tools завершены, но FINAL не нашёл сохранённый файл, только запуск
+подготовки заметки. Это реальный FAIL следующего native read/search сценария,
+несмотря на доказанные ACTIVE/CLEAN metadata/content owner GET200. Дубликат не
+создан. Причина пока UNKNOWN, read-only child ищет exact projection/search/
+resource-binding gap; owner/eligibility и подтверждение плана не ослаблять.
+Предыдущий checkpoint опубликован `cb1cea3086986f6dc8b0ebb8c873c0fd66351b5e`.
+
+## Checkpoint 09.10.2026 22:25 UTC — 4ENV/8bindings завершены, готов диагностический запуск
+
+Native staff image impact `riip_JZDWJvPiUX5oFbyz4CY37JT3` APPLIED/version2,
+все8items APPLIED: два ENV version/revision11 и шесть bindings12, artifact
+1bcccdac generation11. SYSTEM32/binding12 custom22218338 и PROJECT14/binding13
+custom2a1da9ec не изменились. Все8 preservation checks PASS; отдельные четыре
+non-image компонента обеих staff ENV равны прежним immutable versions.
+38tools и Developer secret descriptor сохранены. Screenshot просмотрен,
+Console delta0, prepare201/read200; Apply доказан authoritative APPLIED GET200,
+его HTTP-статус не сохранился в ограниченном Network buffer. Backend frozen.
+Теперь допустим один native Manager retry и exact closed RC diagnostic.
+Chrome MCP cell319 timeout300s, fallback69259 OWNER работает.
+Полный65QA/Workflow/п11/14/15/16 OPEN, business PR не merge.
+
+## Checkpoint 09.10.2026 22:17 UTC — SYSTEM image-only публикация подтверждена
+
+Source/remote/Draft1807 `9d24f8300d8d95a1ea07976e322c314113b66067`, main
+`ab4992e0` неизменён; повтор148unit PASS. Backend frozen, обе ноды Ready,
+21 Deployment и пять StatefulSet имеют все желаемые готовые реплики.
+SYSTEM ENV revision32/binding12/new custom22218338 generation17;
+draft `renvd_lyww83dGwD4hfeqirp6HnIHU` PUBLISHED/version3 GET200.
+Non-image preservation PASS: четыре компонента immutable revision31/32
+имеют одинаковые hashes; общий исходный hash точно реконструирован с прежними
+назначаемыми сервером TOML environment/binding Version/Digest. Это была
+ошибка состава диагностического hash, а не изменение пользовательских настроек.
+
+PROJECT helper draft `renvd_bdgDoGGwqUn5LjIAV3VARBin` сохранён с artifact
+2a1da9ec generation3, публикация OPEN. Own secondary browser10191, первый41676;
+старый own24879 штатно закрыт, чужие не трогались. Chrome MCP list_pages pending.
+Далее закончить helper и staff image impact2ENV/6bindings, preservation readback,
+затем один native Manager с closed diagnostic. Не повторять сборки/risk/promotion.
+Один history pageSize50 GET503 (причина UNKNOWN), pageSize20 GET200.
+Полный65QA/Workflow/п11/14/15/16 OPEN, финальный business PR не merge.
+
+22:21 UTC: helper publication подтверждена, version13/revision14/binding13,
+custom2a1da9ec generation3; исходный preservation hash точно восстановлен.
+Own10191 штатно закрыт после сохранения draft, новый69259 OWNER200;
+native validation/publish выполнены со свежим SSO. Остаются staff2ENV/6bindings.
+SYSTEM/helper больше не публиковать повторно. Chrome MCP новый cell319 pending,
+cell288 завершился timeout300s. Журнал checkpoint22:17 опубликован db31901c.
+
+## Checkpoint 09.10.2026 22:02 UTC — новые образы допущены, UI fix готов к фиксации
+
+На0984a869 canonical runner activation PASS. Три new artifacts22218338/
+1bcccdac/2a1da9ec admission attempt2 ACCEPTED со свежими exact local-QA-only
+risk decisions. SYSTEM/staff PROMOTED; helper promotion202/CLAIMED,
+promotionRequested=true. Не повторять POST из-за observation timeout:
+текущая helper job ещё живая. Следующее — terminal helper readback, затем
+image-only4ENV/8bindings публикация и сравнение приватных preservation hashes.
+
+ROOT integrated graph+editor V2:148unit PASS, forced typecheck/build PASS,
+lint/format/diff-check PASS; после SSR RouterLink fixture fix36unit PASS.
+Native readable graph desktop/mobile, overview/plus PASS; editor unsaved FROM
+и комментарий сохранились после настоящих PLATFORM wakes, новых revision/build
+не создавали. Source/ReadyFEPod EQUALgraph779f7426/editor37b25443.
+Backend не менялся. Unit и browser не объявлены полным65QA.
+
+Own browsers41676/24879, оба OWNER; первый helper recipe без dirty draft,
+второй staff recipe. MCP новый list_pages pending, прежний timeout300s;
+подключение не доказано, чужие вкладки не трогать. Commit/push этих UI изменений
+следующие, mainab4992e0 fresh неизменён, Issue1797OPEN/Draft1807 source0984a869.
+После4ENV/8bindings новый exact native Manager и closed diagnostic readback;
+Workflow/п11/14/15/16 OPEN, business PR не merge.
+
+22:04 UTC: helper promotion завершился PROMOTED. Все три exact custom artifacts
+ACCEPTED/PROMOTED, recipe versions30/22/7, generations17/11/3. Новых задач сборки
+или risk decisions не создавать; следующий шаг —4ENV/8bindings image-only publish.
+
+## Checkpoint 09.10.2026 21:53 UTC — runner активирован; custom admission продолжается
+
+Current source0984a86970c4887354a41a5dfacb917b97057ec3, Draft1807,
+mainab4992e0 неизменён. Canonical quiesce/readback и supply-chain apply/readback
+PASS/exit0. Новый full base5a99670af8dc061f809c9fc7cd3cc610a29cf251e6ba3ca7fab687787a153ea3
+импортирован обеим нодам; RC serving ELF и independent build EQUALe4e1ae57.
+Повторять apply без нового preflight нельзя; активация уже закончена.
+
+Native SYSTEMgeneration17 / staffgeneration11 / PROJECThelpergeneration3 builds
+COMPLETED100. Новые custom manifests22218338 /1bcccdac /2a1da9ec; это не base.
+SYSTEM полный report4640occurrences/2938advisories,2blocking HIGH;
+новое local-QA-only risk decision PENDING. Остальные exact reports читаются;
+admission/promotion,4ENV/8bindings publication и preservation readback OPEN.
+Сохранять38tools, конфигурацию, переменные, secret descriptors и network/grants.
+
+В основной tree только graph readability patch/test и журналы; isolated
+RoleImageEditor realtime fix пока не принят. ROOT52graph tests/targeted lint,
+format/typecheck/build PASS; native graph desktop/mobile ещё NOT RUN.
+Child готовит дополнение own command ACK, чтобы source/OCC baseline не менялся
+неявно. Первый helper400 имеет UNKNOWNcause, успешная generation3 доказана.
+
+MCP list_pages pending, не считать подключённым. Own Playwright41676 работает,
+чужие вкладки не трогать. Сначала закончить свежие admission/promotion и4ENV/
+8binding pins, принять/editor test и browser graph/readback, commit/push.
+Лишь после exact custom pins и freeze backend один native Manager retry с
+closed RC diagnostic до cleanup. Старые failures UNKNOWN, blind retries запрещены.
+Полный Workflow/п11/14/15/16 OPEN; финальный business PR не merge.
+
+## Checkpoint 09.10.2026 20:57 UTC — пакет диагностики принят и проверен
+
+Пакет source/remote/Draft1807 EQUALcdd0af3d488b020aa05496a9166823a75d1a84d5,
+mainab4992e0 неизменён; повторные ROOT unit на exactcdd0af3d PASS.
+
+Основа6cbdaec794ffbfcac2cef1795d44cf5c68ffa1e1;14source files добавляют
+closed bound diagnostic classifier→private terminal→completion→RC log до
+cleanup. ROOT unit/race/vet/format и runner/RC build PASS на текущем дереве;
+точный опубликованный SHA и повторные unit зафиксированы выше.
+Нет новых RPC/grants/RunnerInput/schema, CP outcome/usage/archive неизменны.
+RC log не durable receipt; owner error/replay не подтверждают новый commit.
+
+Далее canonical full runner build/import/seed/fresh render/forward activation,
+три custom recipe→admission/promotion→четыре ENV и восемь bindings через UI.
+Сохранить38tools/nonimage settings, fresh OCC и owner risk gates. Новый native
+Manager только после exact custom pins и backend freeze; старыеBAU/WRD
+FAILED и их причины UNKNOWN, очередного blind retry не было.
+
+Cluster fresh: две Ready nodes,21Deployment/5StatefulSet desired Ready.
+Chrome MCP повторный запрос list_pages ожидает ответа; не считать подключённым.
+Own Playwright session41676 активна, текущая WRD Run page, reload без drafts;
+MCP approval пользователь готов подтвердить. Чужие вкладки не трогать.
+Полный Workflow, п11/14/15/16 и human gate OPEN, business PR не merge.
+
+## Checkpoint 09.10.2026 20:22 UTC — cc430343 published; private diagnostic fix в работе
+
+Source/remote/Draft1807 EQUALcc430343045fa3a61107a037d85f4fe2f6c8803f.
+Новые native retries BAU(attempt3) и WRD(attempt4) FAILED до tools,
+session прежняя, новые turns/execution attempt1. Последняя рабочая вкладка
+own3 на run_WRDceM81OiX8nA8cNHBrs7TB; Chrome MCP подключён/OWNER200.
+Оба exact WORKLOAD observers NOT_CAPTURED/KUBECTL_READ_FAILED при cleanup;
+причина UNKNOWN, не выдавать за provider/network proof и не повторять blind.
+
+Diagnostic child в isolated tree реализует минимальный closed enum payload
+classifier→private broker terminal→existingcompletion callback→RC log перед
+DeleteTurn. No new RPC/grants/CP changes; completion outcome/usage/archive
+сохранить. До принятия ROOT обязан прочитать frozen packet, выполнить адресные
+tests, publish и активировать exact новый runner/custom images forward path.
+Frontend child read-only готовит repo-owned build/activation маршрут.
+Полный реальный Workflow/п11/14/15/16 остаётся OPEN, business PR не merge.
+
+## Checkpoint 09.10.2026 20:13 UTC — готов следующий диагностируемый retry
+
+Основа648d1cb7 + три адресных пакета в Draft1807: отдельный WORKLOAD failure
+capture, RUN refresh concurrency2/fairness при прежних10s/5s, typed generic root
+completion в details exact terminal child. ROOT unit/race/vet/codegen/FE
+typecheck/build PASS; native root duplicate исправлен и screenshot проверен.
+Подробные hashes/исходные FAIL/точные команды в актуальном журнале.
+Gateway servingELF EQUALb57d5ef4, FE source/Pod EQUAL6963202b. Все платформенные
+реплики и обе ноды Ready, Chrome MCP own3 OWNER200.
+
+Последний Manager run_XpfkvbvP0TzwWtrsfI5ZI8Ux FAILED до tools;
+stage/class/detail UNKNOWN, прошлый ACK observer ничего не доказал.
+Следующий обычный native retry — только после commit/push и freeze backend.
+Сразу прочитать свежий owner event execution tuple, точный custom image/PodUID
+и включить tools/dev/provider-failure-capture.py --capture-mode WORKLOAD
+с exact run/node/project/session/turn/attempt. Не подменять ACK этим receipt;
+если Pod исчезнет, оставить NOT_CAPTURED, не выполнять raw fallback.
+Полный Workflow/п11/14/15/16 остаются OPEN, финальный business PR не merge.
+
+## Checkpoint 09.10.2026 19:47 UTC — retry FAILED до tools; точная диагностика ещё UNKNOWN
+
+run_XpfkvbvP0TzwWtrsfI5ZI8Ux уже FAILED/RUNTIME_PROVIDER_UNAVAILABLE,
+events7: новая попытка прошла schedule/modelrequest, опубликованных tools
+и launch_workflow нет. Backend source во время неё не менялся; это новый
+отказ, не доказан maintenance-path предыдущей попытки.
+Первый failurecapture NOT_CAPTURED/POD_IMAGE_MISMATCH: ожидался base runner,
+но actual runtime использует ранее promoted custom role image99f5bc78.
+Повтор exact customimage/PodUID начат, но provider ACK не подтверждён, Pod
+удалён после terminal. Старый capture закрыт; stage/class/detail UNKNOWN,
+никакой сырой post-mortem обход не выполнялся. Готовится отдельный bounded
+workload-bound read-only capture ранних отказов, не подмена provider ACK.
+
+После PG4CPU свежий3.224s sample: около1.62CPU, throttling0, тот же ReadyUID.
+CP/gateway/archive Ready; servingELF всех трёх EQUALbuild. Archive RESTORE
+exit0/COMPLETE_RESTORE_OK этой попытки подтверждён закрытым producer enum.
+Во время maintenance были Unavailable; затем ещё два GetRunGraph deadline
+на остатке общего refresh бюджета. Full realtime stability остаётся OPEN.
+
+## Checkpoint 09.10.2026 19:44 UTC — PG4 Ready и штатный retry Manager
+
+Source `647e7a7605fc83828ac18e64772dfe2a2db5198d` published, remote/Draft1807 EQUAL.
+Fresh owner idle19:41:45Z перед эффектом: все пять счётчиков0.
+Repo-owned CPU-only apply/readback PASS: limit4, image и storageSHA прежние,
+STSUIDeb0f8f6d прежний; новый ReadyPGPod537a6c25. Во время штатного restart
+CP и session-archive временно0/1; оба восстановились до1/1. Это ожидаемая
+maintenance недоступность, не скрытый PASS всей непрерывности.
+Fresh native OWNER bootstrap200 и WS snapshots без ошибок в коротком окне;
+полная стабильность и повтор нагрузки ещё OPEN.
+
+На native Run UI один раз нажата «Повторить попытку»19:43:32Z. Сервер создал
+run_XpfkvbvP0TzwWtrsfI5ZI8Ux, retryOf прежний Manager, run attempt2,
+та же session ses_tWfMK1ztNuKPNJPSsR23Qyqz; новый turn
+trn_lLcVL_B0n3I6A2_ZY5GNAQFJ, execution attempt1. RUNNING, ещё не полный Workflow.
+Закрытый exact ACK/providerfailure capture начат до завершения Pod;
+ничего не повторялось через прямой API или подменённый caller context.
+Backend source во время активного retry не изменяется; п11/14/15/16 OPEN.
+
+## Checkpoint 09.10.2026 19:40 UTC — callback восстановлен; Manager FAILED, CPU maintenance подготовлен
+
+Опубликованная основа `5a4849eacee738488da53984ac9a4eba299dc61f`, Draft1807.
+Новый Manager завершился FAILED19:25:25.858Z, до launch_workflow и дочернего
+бизнес-процесса. Код RUNTIME_PROVIDER_UNAVAILABLE не доказывает внешнюю аварию:
+достижимый maintenance path RC SIGINT→StopTurn→runner cancellation→generic
+provider failure установлен по исходникам. Air BUILD19:25:19/RUN19:25:26
+совпадает по времени, но exact provider stage/class/detail NOT_CAPTURED:
+runtime Pod уже отсутствует. Причина именно этой попытки UNKNOWN.
+Следующий реальный прогон выполняется после применения пакетов; горячие
+изменения runtime/control-plane во время активного хода не выполняются.
+
+Приняты7files private workflow catalog receipts: точные lease/input/request/
+wire bindings, закрытые DISCOVERY/PUBLICATION/ACTIVE_RUNS квитанции после
+проверенного owner ответа; никакого сырого содержимого публикации в истории.
+Agent wire и RPC/grants неизменны. ROOT callback unit5.495s/vet/race4.311s/build
+PASS, actual RC ELF и hermetic build EQUAL3db4f23635336b1a63d84657072b8c4dbb7b6e5212aa289d743f90f4d800954a.
+Source/Pod receipt EQUALb57f17ce. Native receipts пока NOT RUN, прошлые вызовы
+не получают доказательств задним числом.
+
+Callback7files: invalid/mismatched pending state закрыто переводится в401;
+неуспешный вход показывает явную кнопку «Войти», без auto replay старого code.
+ROOT45unit1.95s/lint/format/forced typecheck/build8.31s PASS; предупреждения о
+крупных chunks сохранены. Native invalid callback screenshot просмотрен:
+ошибка и кнопка доступны, overflowfalse, Console error/warn0. Штатная кнопка
+восстановила OWNER bootstrap200. Host/Pod AuthCallbackView EQUALdae67c5f.
+Первичный historical live callback401 остаётся UNKNOWN, не объяснён UX правкой.
+
+PG CPU-only2→4 подготовлен repo-owned helper с exact context/endpoint,
+UID/spec/storage CAS и normal rolling restart. ROOT18tests PASS0.017s;
+первый livepreflight FAIL ENDPOINT_INVALID: исправлен ошибочный127.0.0.1
+на canonical exact127.0.0.2:6443, не на весь loopback range. Новый preflight
+PASS: прежние resources2CPU/4Gi, requests250m/512Mi, PVC Bound/Ready.
+Owner readback19:39:42Z: builds/admissions/promotions/activeRuns/claimedLeases0.
+Применение CPU/restart/readback и повтор realtime после него ещё NOT RUN.
+Оба узла Ready, все Deployment/StatefulSet готовы; полный Workflow и
+п11/14/15/16/human gate остаются OPEN, без нового бизнес PR/merge.
+
+## Checkpoint 09.10.2026 19:12 UTC — fresh SSO и новый Manager; cold SYSTEM25 доставлен
+
+Published source `f3ef0efeef7ddb4ddb9abd4fecd60d46d38caed9`, тот же Draft1807.
+Нативный запрос без refs подготовил plan pln_TMSahKZJP-fsUandbS7zhzsg,
+revision2 с одной LAUNCH_RUN операцией. ROOT прочитал задачу плана, нативно
+проверил ревизию и один раз применил её19:01UTC; новый Manager
+run_f9CVBO5DGo91J5WXrsEmoBW1 RUNNING, attempt1/version2. Других настроек,
+grants или допусков этим планом не меняли. В owner events шесть уникальных
+get_workflow_catalog SUCCEEDED; комментарий Manager сообщает о полном EOF
+и чтении active roots. Старые safe receipts не различают эти modes, поэтому
+независимое доказательство EOF/active всё ещё UNKNOWN, не PASS. Workflow
+launch пока отсутствует: Manager продолжает обязательное чтение документов.
+
+Chrome MCP ownpage3 fresh SSO восстановлен штатной формой: OWNER bootstrap200.
+Callback сначала получил401; после штатной кнопки входа proxy/session path
+восстановлен. После перехода на текущий Run Console error/warn0, relevant
+API200; actual screenshot переписки просмотрен, body overflowfalse. В нём
+видно «Восстанавливаем обновления» — это не принято за полную стабильность.
+
+Применён exact frozen пакет7files: SYSTEM cold initial25 вместо50, свежие
+owner RPC и cursor сохранены; page hint остаётся только socket-local размером.
+RUN failures теперь имеют закрытые RUNS_LIST/OWNER_GATES_LIST/OVERVIEW_GET/
+RUN_PROJECTION stages. Bundle2s/drain8s и1MiB, guards и другие page50 не менялись.
+ROOT whole WS unit2.943s/vet/build PASS; frozen7source hashes EQUAL.
+Mounted source8ead2941 EQUAL; actual gateway `/proc/1085/exe` и hermetic build
+EQUAL125f760609db05705d85b4f7152e24228b9a153fb4c01ddb720814f5c2380771.
+ROOT targeted race22.031s PASS; child301unit/138race PASS отдельно от ROOT/live.
+Cold25 не гарантирует вместимость будущих данных. Fresh RUN failure отдельно
+разбирается; full realtime, п11/14/15/16 и human gate OPEN.
+Оба узла Ready, все Deployment и StatefulSet на текущем readback Ready.
+
+## Checkpoint 09.10.2026 18:57 UTC — protected Workflow reads доставлены; native повтор идёт
+
+Основа `71d057692e283cf5687d6caa75e769c48aacbb7c`, remote/Draft1807 EQUAL.
+В существующий get_workflow_catalog/GetExecutionWorkflowCatalog добавлены
+exclusive publication_read и active_runs_read. Owner выводит actor/project
+из exact lease и проверяет current/immutable eligibility на каждой странице.
+Полная safe version1 публикация <=1MiB читается UTF8 страницами <=16KiB;
+immutable spec_digest и safe projection SHA разделены. Active roots только
+actor-visible, run.view до LIMIT10+1, собственные pins каждого запуска;
+это advisory, не глобальная at-most-one. Grants/RPC/toolnames/migrations и
+runner pins не менялись; unknown/corrupt/schema/drift закрыто отклоняются.
+
+ROOT canonical gen/lint/build/check-proto-codegen PASS; все20 frozen SHA EQUAL.
+Shared unit0.054s/vet, CP domain0.297s/repository0.969s/transport0.536s/vet,
+RC callback5.394s/vet/targeted race1.979s PASS. Первый CP transport запуск FAIL:
+в урезанном PATH отсутствовал node для существующего email fixture; повтор
+с Node24 прошёл, первоначальный FAIL сохранён. Disposable PG combined PASS
+36.225s: новые owner reads5.75s и прежний launch30.40s/17subcases, readbacks PASS.
+Actual CP `/proc/1067/exe` EQUAL hermetic build a674be4d0f08b760f58d1d6ff2b3d9eecd3df154b6616cc8d0a1512d660cf42f;
+RC `/proc/468/exe` EQUAL f36932c4760b39d58036a0a5fe65af99e9d0ff7c42a22ab529639d3cce037e40.
+Host/Pod source EQUAL8ae41b03/e41df6c2; gateway после Proto serving EQUAL81fe8a3c.
+
+Markdown-таблицы исправлены общим SafeMarkdown: колонки min160px, inner
+horizontal scroll и keyboard focus, полный текст сохранён. ROOT157 unit PASS
+2.67s/lint/format/forced typecheck/build8.14s PASS; большие chunks warning
+сохранён. Actual desktop/mobile500 screenshots просмотрены: desktop first
+column164px; mobile first160px/table481px/wrapper374px, body overflowfalse.
+
+Из того же PROJECT чата нативно отправлен natural continuation без refs:
+подготовить один подтверждаемый Manager plan и после проверок полный Workflow
+до human gate с одним комплексным review, без merge/approve/auto-merge.
+Run_-1djaWMlBdY46j8qpBbVI9jP USER9 RUNNING; новый plan/apply/Manager EOF
+ещё NOT RUN. Cold snapshot/rejoin failures отдельно исправляются, стабильность
+OPEN. MCP подключение доступно, но 12h SSO в ownpage3 истекло: bootstrap/
+session401, штатная форма fresh login открыта; не объявлено Console0. Разрешённый
+отдельный Chrome helper OWNER200 работает, QA продолжен. П11/14/15/16 OPEN.
+
+## Checkpoint 09.10.2026 18:48 UTC — fresh page hint доставлен, сравнение истории без ID PASS
+
+Основа `2f792f04921ebd6b753a82475eafc4ef0c374a3e`, remote и Draft1807 readback EQUAL.
+Gateway сохраняет только размер последней целой fitting SYSTEM_ASSISTANT страницы
+в одном socket:50/25/12/6/3/1. Все три owner RPC и cursor читаются заново;
+scope/close сбрасывают hint. Payload/authority не кешируются, бюджеты2s/8s
+не увеличены. ROOT весь websocket unit PASS3.592s, vet PASS, targeted race
+PASS26.855s. Host/Pod platform_snapshot.go EQUAL52abbfed; serving `/proc/575/exe`
+и hermetic build EQUAL
+`cf8336e79fcbd9fabba2961d7a93ec7f1c9e25caccd45961c55cfda7d690e506`.
+
+Нативная досылка «сравни две последние попытки менеджера» без ID в том же чате:
+run_NogC51gAD_drLJDmsxiO7syw, USER7/ASSISTANT8 COMPLETED. Помощник сам выбрал
+предыдущую INTAKE и последнюю diagnostic попытку, правильно различил прежний
+LIST failure и два недоступных чтения. Новых plan/effect нет. Screenshot
+просмотрен; обнаружена слишком узкая первая колонка Markdown-таблицы,
+адресное UX исправление готовится отдельно. В fresh WS problems0, но два
+clean4000 PLATFORM_RESYNC_REQUIRED; отсутствие потери ответа не является
+полной стабильностью. ROOT parser целой JSON строки не распознал diagnostic
+prefix; его нулевой счётчик не доказывает отсутствие ошибок. Исполнитель
+получил два fresh FAIL:18:45:19 SYSTEM_ASSISTANT_GET attempt2/page25 уже при
+нулевом parent budget и18:46:18 RUN read_stageUNKNOWN/bundle2000ms.
+Hint не устранил холодное чтение после rejoin; этот путь ещё исправляется.
+MCP ownpage3 reload PASS, Console error/warn0, relevant API reads200.
+
+Оба узла Ready; Deployment22/22 и StatefulSet5/5. Первые health команды
+не нашли kubectl в урезанном PATH; повтор с каноническим `/usr/local/bin`
+выполнен успешно, первоначальный запуск не выдан за PASS.
+Protected publication/active-run packet заморожен в isolated worktree:
+unit/vet/race/Proto и disposable PG PASS у исполнителя; ROOT adoption,
+serving proof и ordinary Manager native ещё NOT RUN. П11/14/15/16 OPEN.
+
+## Checkpoint 09.10.2026 18:36 UTC — досылка без ID PASS, конкретный realtime stage доказан
+
+Published `c03f451d03120d8ea03bd092fb7ef5ea268b6219`, тот же Draft1807.
+В собственной PROJECT conversation cnv__tLqjv5jZbdzSzOmWWzQKQkM нативно дослан
+read-only запрос «мы только что просили менеджера продолжить задачу о сводке
+лимитов». Без refs во вводе помощник выполнил два поиска и read_task_session,
+сам выбрал последнюю Manager попытку run_9wOPLdRvW1JWzqkj-aE0OcEq и корректно
+назвал два отсутствующих чтения. Run_WRDdLv5dEoU3JX6RQOKGuzDS:
+USER seq5 и ASSISTANT seq6 COMPLETED, final22:25:52 по locale; никаких планов,
+запусков или изменений этим запросом не сделано. Actual screenshot просмотрен,
+overflowfalse. Это PASS чтения/сохранения смысла досылки, не полного practical
+действия или бизнес-задачи. Первые clicks не отправили запрос: один ошибочный
+selector и HMR очистка несохранённого тестового ввода. После проверки exact
+selected conversation, повторного fill и enabled кнопки принят ровно один ход.
+
+Во время него произошёл PLATFORM_UNAVAILABLE cursor29775 и штатный rejoin.
+Новый closed gateway log совпадает с ним до миллисекунды:18:26:18.320153897Z,
+SYSTEM_ASSISTANT / ASSISTANT_CONVERSATIONS_LIST, read_attempt2, page25,
+DeadlineExceeded, elapsed212ms/start212ms/remaining0. Первая page50 не поместилась;
+повтор whole-page read25 использовал остаток прежнего bundle2s. Это доказанная
+причина данного fresh отказа, не provider/AI и не полный2s первой RPC.
+Исторические иные отказы не объявлены этим автоматически объяснёнными.
+Готовится connection-local hint только размера последней успешно помещавшейся
+страницы; данные/authority/cursor не кешируются, budgets2s/8s не увеличиваются.
+При дальнейшем росте страницы закрытый overflow/timeout сохраняется.
+
+Новая малая UI дельта: «К последнему сообщению ↓» вместо заявления о новых
+сообщениях при просмотре истории. ROOT144 tests PASS2.72s, lint/format и forced
+typecheck/build PASS7.90s; native самого floating label пока NOT RUN.
+Native read_file раскрыт: полный safe result сохранён, большой повторный preview
+отсутствует; stable mobile500px screenshot просмотрен, overflowfalse.
+Chrome MCP ownpage3: screenshot без filePath PASS, Console error/warn0;
+bootstrap/session/project/revisions/ticket200. Capture с host filePath вернул
+ошибку инструмента, не засчитан как успешный capture. Счётчик отдельного helper
+накопил9 historical console errors (2 pre-login401, 2 diagnostic405 ранее;
+оставшиеся5 пока UNKNOWN), поэтому не переносить MCP Console0 на весь helper.
+
+Ledger18:18:57: activeRuntimeRuns/builds/admissions/promotions/claims0,
+43 promoted pins SHA256a63910b9…b016 неизменны. Deployment22/22 и STS5/5 Ready;
+оба узла Ready, /tmp inode use1%, root178GiB/data74GiB available.
+П11/14/15/16 и Full65 OPEN. В isolated worktree готовятся protected publication/
+active-run reads CP+RC+Proto/shared safe codec, без нового tool/runner rebuild.
+
+## Checkpoint 09.10.2026 18:13 UTC — Manager остановился без дубликата; компактные tools и диагностика на стенде
+
+Основа `0b0dfaf84c31b3545b9467d366405cb37fd7488d`, тот же Draft1807.
+Обычный Manager `run_9wOPLdRvW1JWzqkj-aE0OcEq` завершил проверку как BLOCKED:
+каталог даёт pins/schema/READY, но не полную опубликованную конфигурацию INTAKE;
+штатное чтение активных Workflow для проверки дубликата недоступно. Новый Workflow
+не запускался, host не подставлял refs/config и не обходил требуемые проверки.
+Чтение каталога и GitHub LIST docs/governance выполнены; дальнейшая реализация,
+комплексный review и приёмка NOT RUN. Технический SUCCEEDED этого diagnostic run
+не является успешным выполнением бизнес-задачи. Изучается минимальный защищённый
+owner read path для недостающих данных.
+
+Интегрирован компактный RunTranscript: read_task_session/get_workflow_catalog/
+read_file имеют понятные названия. Завершённый структурированный safe result
+остаётся целиком в закрытых details, а не дублируется большой metadata preview.
+Содержательные тексты, неизвестные tools и RUNNING/FAILED сохранены; строгая
+integration receipt классификация не ослаблена. ROOT274 unit PASS2.45s,
+scoped eslint PASS, typecheck/build PASS8.04s. Build сохраняет предупреждения
+PLUGIN_TIMINGS/chunks>500kB. Native desktop screenshot просмотрен: overflowfalse,
+три группы tools закрыты; точный раскрытый read_file и stable mobile ещё NOT RUN.
+
+Gateway сохраняет bundle2s/drain8s и добавляет закрытые stage/attempt/page-size
+в существующую единственную запись отказа. ROOT весь websocket unit PASS2.177s,
+vet PASS; subagent246 unit/57 targeted race PASS. Host source/Pod SHA256 EQUAL
+`8ff0c6595cb0fc892a5e785ae4784aa1a5abdc7354a50df8afddae7b2f4070a6`.
+Hermetic build с штатными CGO0/trimpath/buildvcsfalse и serving `/proc/369/exe`
+EQUAL `3bab4eaa69ec52d8b77a583622cc8c2827f821f7a9b2a263f9584fc8f108ecbe`.
+Одна ошибочная host build-команда с отсутствующим cmd/app была исправлена на
+канонический cmd/control-api-gateway; не выдана за PASS. Новый closed slow-stage
+ещё UNKNOWN: после reload native WS READY, problems0, closes0, один full graph;
+это короткий read smoke, не load/reconnect acceptance.
+
+Chrome MCP собственная page3 доступна и обновлена; чужие вкладки не закрывались.
+Оба узла Ready. Плановый ClamAV updater29859487 SUCCEEDED, прежний неудачный
+updater сохранён как FAIL. П11/14/15/16 и Full65 OPEN. Следующий шаг — защищённые
+чтения ordinary Manager, затем повтор реального сценария без технических ID.
+
+## Checkpoint 09.10.2026 18:03 UTC — no-ID история и практическое продолжение, Manager работает
+
+Published source `0b0dfaf84c31b3545b9467d366405cb37fd7488d`, Draft1807.
+Native PROJECT chat cnv__tLqjv5jZbdzSzOmWWzQKQkM: запрос без ID сам нашёл
+последнюю попытку задачи о лимитах и правильно объяснил FAILED/BLOCKED.
+Новый read_task_session четыре раза COMPLETED; assistant final COMPLETED.
+Затем тот же диалог подготовил ровно один LAUNCH_RUN plan
+pln_SbudSxGzqUByDhrdOlNiZ0xT. Native validation/APPLY подтвердили receipt
+rct_4OEwvpQP3JAgbmmhepuy_cPt APPLIED/одна operation/один новый ресурс
+run_9wOPLdRvW1JWzqkj-aE0OcEq. Ни настройки, ни grants не менялись.
+
+Обычный Project Manager сам вызвал новый get_workflow_catalog COMPLETED,
+нашёл SOFTWARE_CHANGE version28/READY, свежее main ab4992e0… и OPEN Issue1796,
+проверяет фактический LIST и документы. Не передавались готовые workflow
+refs/version/schema от host; дальнейший запуск Workflow/result ещё в процессе.
+Owner-selected final Human Gate и запрет merge/approve итогового PR сохранены.
+
+Actual screenshots no-ID ответа, плана и active Manager PASS; desktop overflowFalse.
+ROOT error в диагностике GET nonexistent turns дал два405, не дефект рабочего
+POST-turn. WS PLATFORM_UNAVAILABLE дважды/rejoin/доставка final — FAIL текущей
+стабильности, не списывать на provider. Gateway boundary доказал SYSTEM_ASSISTANT
+DeadlineExceeded/полный bundle2s; конкретный RPC и oversized retry-vs-drain
+пока UNKNOWN. Agent готовит закрытые stage/attempt/page diagnostics, budgets
+2s/8s не увеличиваются. Core Ready; ClamAV historical updater FAIL не blocker.
+
+Непубликованный working diff: локализованы read_task_session/get_workflow_catalog
+в RunTranscript; ROOT270tests/lint/format/typecheck/build PASS7.86s, native Manager
+показывает «Каталог процессов». У read_file заметили большую metadata preview
+завершённого вызова; идёт узкий UI follow-up с сохранением details. П11/14/15/16
+и Full65 OPEN. Следующее — дождаться own Manager, чинить реальные блокеры;
+не запускать второй Manager или дубликат Workflow пока этот жив.
+
+## Checkpoint 09.10.2026 17:48 UTC — все custom images и привязки обновлены через UI
+
+Исходный SHA `6978096f0aae624be0f20ac869750ecd2c2f8678`, runtime source
+`f2541df3bed59d2f40cb4207e7c83f2b64045553`; в рабочем diff только UI имён
+потребителей и журнал. Все три новых artifact ACCEPTED/PROMOTED: SYSTEM
+`imgart_9-CMs-DcNfIZoAn8vQNUyDTi`, сотрудники
+`imgart_28C7zCTzd2O4zcqfjGkFqG8a`, проектный помощник
+`imgart_zWYdcyX0YYvXACbsZWv0nOA9`. Ledger17:44:49: promoted43,
+open builds/runtime/admissions/promotions/claims0; promoted pins SHA256
+`a63910b97b8310890f8f275147f452de34dfc507faec3abf86d11ecc8c2bf016`.
+
+Staff impact `riip_BAYR2b8EjmCbj3ugPMS1jD7G` APPLIED: ровно8 APPLIED,
+2 NOT_SELECTED. Два окружения selfdev-write/review version9→10, шесть
+bindings10→11, image digest99f5bc78…; ROOT независимое чтение подтверждает
+сохранение hashes полного набора variables/secret descriptors/policy/38tools
+и каждой configuration/overlay/memory/skill bindings. Проектный помощник
+и его окружение сознательно не вошли в staff batch.
+
+Затем отдельный native draft `renvd_RyrTmfe11H77cCMU5Z4BqNLf` опубликован
+через impact `rvip_LRt2N3yNaZNNRwc2MlCS1d0L`: один проектный помощник,
+ENV11→12/binding11→12, собственный generation2/digest8748b973….
+Его fields SHA256500f81f3… и configuration SHA256e3f7d41a… сохранены;
+tools38. SYSTEM ранее31/binding11/c1dae9da… также проверен независимо.
+Итого4 ENV/8 bindings обновлены без расширения доступа.
+
+Chrome MCP работает; проверены actual fallback screenshots модалки выбора
+и опубликованного окружения. Имена сотрудников/окружений вместо IDs,
+ref в закрытом «Подробнее», выбор и cursor scroll работают. Новые Console
+errors/warnings/pageerrors0; два initial pre-login401 сохранены в evidence.
+Native validation200/impact201/publication200; fresh-entry gate соблюдён,
+устаревшие prepared plans не применены. Оба nodes Ready/DiskPressureFalse,
+application21 deployments/22 replicas ready. Это image-upgrade и UX smoke,
+ROOT frontend production build/typecheck PASS7.84s; chunks>500kB warning
+сохранён. Backend bounded structured error/warn0; исторический ClamAV
+updater12:07 DeadlineExceeded и registry Basic14 остаются отдельной диагностикой,
+не скрыты за Ready статусом.
+не Full65 PASS. П11/14/15/16 OPEN: далее native no-ID practical follow-up,
+нагрузочный reconnect и полный обычный Workflow до итогового human gate.
+
+## Checkpoint 09.10.2026 17:29 UTC — SYSTEM image-only upgrade PASS, PROJECT ещё в процессе
+
+Current clean/published source6978096f, runtime sourcef2541df3, Draft1807.
+Три native CreateRevision изменили только FROM на runner manifestf6e06e43…;
+остальные поля и Dockerfile suffix сохранены. Builds COMPLETED: SYSTEM
+imgbld_tYeK4yvucuhbGbkbNmCGH4Tz/generation16, PROJECT staff
+imgbld_S0wCpBftOYTrPpg-zO5qgUPB/generation10, PROJECT assistant
+imgbld_BXBuQyTFqhDUhtIQBS7T-Dnn/generation2.
+
+Каждый новый owner report полностью прочитан:47pages/4634unique findings/
+4640occurrences, без повторов и со стабильным report digest. Два HIGH —
+undici GHSA-rfgv-xxqx-mfg5 и tar GHSA-r292-9mhp-454m; отдельные решения
+для точных локальных images не переносят старые receipts и не снимают
+technical guards. SYSTEM imgart_9-CMs-DcNfIZoAn8vQNUyDTi ACCEPTED/PROMOTED,
+manifestc1dae9da6b349483a6ec2996d58454ce78d7710f9f53ec623dc0fe297bc0084a.
+
+Штатный SYSTEM draft renvd_bb-nm1po8GhYZu4MA2ZuZRxz PUBLISHED3, impact
+rvip_VDoAQZ8rp26UJV1j57CL-X0h APPLIED/ровно один SYSTEM consumer. ENV
+renv_aSMtfZ2vp9GgOHqTOZnGhWE4 version30→31/revision31/current
+renvv_YBYt_iTNo-7e17MsD0ohX9t8; binding10→11. ROOT independent owner GET200
+подтверждает image, сохранение fields/config hashes и всех38tools.
+Native validation200/impact201/publication200; fresh-entry guard не обходился.
+
+Chrome MCP own3 работает, screenshot capture снова зависал: эти попытки
+NOT RUN. Разрешённый отдельный browser fallback дал actual recipe/ENV
+screenshots; layout без горизонтального overflow. Console новых ошибок0,
+warnings/pageerrors0; initial pre-login401 не скрыты. После PLATFORM_UNAVAILABLE/
+RESYNC_REQUIRED собственное соединение восстановилось: PLATFORM_READY1,
+SESSION_READY1, current opened1/closed0/problems0, header «Подключено».
+Это один native recovery, не нагрузочный reconnect или Full65 PASS.
+
+PROJECT staff artifact imgart_28C7zCTzd2O4zcqfjGkFqG8a ACCEPTED/AUTHORIZED,
+promotion ещё не PROMOTED; PROJECT assistant imgart_zWYdcyX0YYvXACbsZWv0nOA9
+PENDING admission attempt после exact risk decision. Первый staff submit
+не дал owner state change до ухода со страницы; повтор после readback
+подтверждён version4/PENDING. Новые PROJECT image-only ENV/binding updates
+ещё NOT RUN. Следующее — дождаться promotion обоих, apply image-only через
+Историю/impact с полным сохранением настроек → no-ID practical follow-up,
+active focus/reconnect под нагрузкой и обычный полный Workflow. П11/14/15/16
+и Full65 OPEN; actual next reboot guard NOT RUN. Чужие вкладки не закрывались.
+
+## Checkpoint 09.10.2026 16:59 UTC — reboot recovery и canonical activation PASS
+
+Published/source `f2541df3bed59d2f40cb4207e7c83f2b64045553`, тот же Draft1807.
+Owner reboot выявил старый guard FAIL по динамическому MAJ:MIN; forward-only
+repair-boot PASS, root journal RETIRED. UUID filesystem и inode23724034
+сохранены, current device66312 совпадает DATA/bind/container, все63 pins PASS.
+Новый installed script SHA2560a3c5db9cc9f95ac… закреплён durable journal;
+bootRepairSourceSha=f2541df3. Повторный reboot после исправления NOT RUN.
+
+ROOT exact f254: storage31/cache27/host18/OCI15 —91 tests PASS. Full runner
+provenance SHA25699b20227dd06671f… / binary7c8517c1e8d5d2b8… PASS;
+manifestf6e06e4389e1d8b6… imported/pinned обе ноды. Fresh render первая попытка
+FAIL inherited GOROOT (1.27) при binary1.26; повтор с env -u GOROOT PASS,
+fingerprint1e99d3564f60b0dd… / authority source revision1. Canonical
+supply-chain apply и отдельный readback PASS; BuildKit actual mTLS build probe
+PASS без рестарта. Core5 ready1/1; session-archive сам переподключился16:56:33,
+не требовал отдельного restart. kodex-system desired22/ready22/unhealthy0;
+cert-manager4/4, identity2/2, observability9/9, kube-system6/6.
+
+Fresh owner ledger16:58:08: runs/builds/admissions/promotions/claims0,
+promoted40 и прежний pins hashfcec1793… сохранены. Host/Pod source hashes
+CP84812b49…/gateway4c3477f2…/frontend CSS359b90b1… EQUAL. Serving ELF hashes
+gatewaycf041d26…/CP340980fa… сняты, hermetic compare этих ELF ещё NOT RUN.
+Chrome MCP own page3: owner вход через штатный SSO восстановлен; главная
+Screenshot PASS, Console0 errors/warnings, проверенные20 fetch/xhr200.
+Attention height420/scrollableTrue/body overflowFalse. Это browser smoke,
+не Full65 или live-no-ID PASS. Отдельный fallback browser закрыт, чужие вкладки
+не закрывались. Следующий шаг — три custom images admission/promotion/UI
+rebinding, live no-ID practical case и полный Workflow; П11/14/15/16 OPEN.
+
+## Checkpoint 09.10.2026 — продолжение после перезагрузки, boot guard FAIL
+
+Исходный clean/published SHA419867d8. Kubernetes API недоступен: exact server
+container stopped; guard FAIL DATA_MOUNT_CHANGED. `/data` ext4/UUID совпадает
+с fstab, inode target23724034 прежний, device изменился66308→66312 после reboot.
+Данные не копировались и не удалялись. Chrome MCP подключился; рабочая own
+вкладка3 пока chrome-error из-за недоступного backend.
+
+Forward-only исправление в том же Draft1807: durable UUID guard, current
+device/inode readback и interrupted-safe repair-boot установленного guard.
+ROOT31 storage unit/disposable tests PASS0.423s на рабочем diff; live repair
+ещё NOT RUN до публикации clean SHA. Full65 и native QA остаются OPEN.
+
+## Checkpoint 09.10.2026 14:31 UTC — перенос и собственная очистка завершены; точка паузы
+
+Apply source `5ba620093164b789f887e2968f623315a5102827`; explicit resume
+source `c3a567a9060900a592592146e5193564c45df468`, тот же Draft1807.
+Offline copy/checksum/syncfs PASS, resume повторная checksum-only сверка PASS.
+Actual bind source и container `/var/lib/rancher/k3s` используют destination
+device66308/inode23724034; node service enabled/active, Docker restart policy no.
+Original guard script остаётся exact SHA2566fa41d91…; новый published script
+SHA256 `271fb1e15a45ffc16196133f5b2101ea52d2e606495361c6e42696f6cfc12d37`.
+ROOT на c3a567a9: storage28 PASS0.383s, build-cache27 PASS0.165s,
+host-image18 PASS0.006s, OCI15 PASS0.240s; всего88 tests PASS.
+
+Retire PASS: удалена только проверенная избыточная original copy, актуальные
+данные сохраняются на DATA. Root-journal RETIRED, все63 исходных CRI pinned
+image IDs сохранены. Обе ноды Ready=True/DiskPressure=False; PostgreSQL
+Running/Ready. Fresh owner ledger14:26:06 UTC: runs/builds/admissions/promotions/
+claimed leases0, promoted artifacts40, pins SHA256
+`fcec179382ef7f86a345d5ab470437b172fdaf399d8d9eacb6a40e9c9a923c12`.
+Unrequested accepted artifact1 сохранён; это не pending promotion task.
+
+Очищено20 exact старых unused private cache records только builder
+`kodex-local-dev`; каждый ABSENT_AFTER, финальный eligible0/excluded31.
+Shared default builder не трогался. Host tool images11 KEEP/obsolete0.
+OCI25: все13 формально old архивов защищены actual runtime pins; не удалены.
+Образы/volumes/данные/dirty worktrees/current cache и откатные pins сохранены.
+Capacity14:30: root available205.28GB, DATA87.82GB; concurrent measurement,
+общий delta не приписывается собственной очистке. Reboot NOT RUN.
+
+По последнему указанию владельца НЕ начинать свежий render/activation,
+native image upgrades, реальные AI/no-ID кейсы или полный QA до «продолжай».
+Core5 остаются в прежнем штатном quiesce (replicas0): control-plane,
+control-api-gateway, runtime-controller, role-image-builder,
+image-admission-controller. Это восстановленное storage/БД, не готовое приложение.
+Runtime warm Pod terminal Error сохранён; активных runtime claims нет.
+Resume: fresh clean-source runner provenance/render → canonical supply-chain
+apply/readback (owner idle уже доступен, повторить свежим) → три custom images
+через admission/promotion/UI rebinding → live no-ID cases, reconnect/active
+focus и полный Workflow. П11/14/15/16 и Full65 OPEN. PR не merge/ready.
+
+## Checkpoint 09.10.2026 14:15 UTC — copy PASS, activate прерван до первого старта
+
+Published source `5ba620093164b789f887e2968f623315a5102827`, Draft1807,
+audit fingerprint `826c9711b32d5c58daf8087a00fb04b3257e95d51b664cfe83a768c6eacc0a0b`.
+ROOT25 tests на exact SHA PASS0.665s. Offline copy/checksum/syncfs PASS;
+root-journal SWITCHING, original сохраняется в exact backup, destination inode
+23724034/device66308. Нода остановлена, до первого start не дошли.
+
+Activate FAIL на standalone `systemd-analyze verify`: без generator не виден
+fstab-owned data.mount. Actual manager видит его loaded/active; повторный
+read-only verify с `--generators=yes` PASS (внешние deprecated CPUAccounting
+warnings сохранены). Готовится опубликованный resume path с повторной checksum
+сверкой, без слепого retry apply/rename. Guard остаётся pinned original script.
+Владелец уточнил завершить перенос, безопасную очистку собственного проекта
+и встать на паузу. Живые AI/QA после восстановления сейчас НЕ запускать.
+
+## Checkpoint 09.10.2026 13:58 UTC — перенос одной ноды разрешён, применение ещё NOT RUN
+
+Владелец отдельно разрешил перенос полного k3s storage exact server-ноды
+на `/data`, сохранив данные/образы. Root source около76.39GB, DATA available
+около127GB; места для offline copy и буфера20GiB достаточно. Current clean
+source до нового скрипта `e866f9b2b4e04b28f2fcb9b927a96cce337be1c0`, Draft1807.
+Core5 replicas0, runtime Pods terminal; server DiskPressure True.
+
+Готовится repo-owned `tools/dev/local-node-storage.py` и герметичные tests:
+offline copy/checksum, root-private journal, per-node guard/mount/service,
+точный readback CRI pins и удаление только проверенной избыточной original copy.
+Общий Docker daemon не перезапускается, его зависимости не меняются.
+Rollback после старта требует актуальную offline reverse-copy, не старый backup.
+Runbook `RUN-DOC-1797-STORAGE` содержит точную границу и failure paths.
+ROOT адресные25 unit/disposable-copy PASS0.377s; script SHA256
+`6fa41d91c94e1f0a62cc5b130efdb9cf9ddf2ede923afd9354527041bdfebce5`,
+test SHA256 `7f609d94d4f7fee89b6b8006e769ff9b5d6a5028d338ff456aab5df6471fce2f`.
+Syntax/diff-check PASS. Live apply/restore/full QA пока NOT RUN;
+чекбоксы не закрыты. Следующий шаг — публикация и fresh audit/apply.
+
+## Checkpoint 09.10.2026 09:32 UTC — safe cleanup исчерпан, recovery требует storage решения
+
+Published source `37c8d5fd7876b36aa1e28090f68a8751130b7963`, Draft1807.
+ROOT cache unit27 PASS0.151s, host image18 PASS0.006s, OCI15 PASS0.226s;
+всего60 герметичных tests PASS. New explicit1h/default24 guards опубликованы.
+Runner clean37 cache/provenance/import PASS, manifest f6e06e4389e1d8b6…,
+binary7c8517c1e8d5d2b8…; provenance SHA256
+`03734c48b6ea227fccbff275941a1d85c879b758dea34d284eff2fff32e86a1d`.
+Fresh render37 PASS, fingerprint
+`e3613ec335769a0febdd370ec8e845e9200db643d932f927fb694ab46295234b`.
+Новый apply НЕ запускался: PostgreSQL всё ещё Pending, свежий owner ledger UNKNOWN.
+
+Default1h cleanup восемь раундов128/128/128/105/36/7/2/1:
+все535 выбранных records PASS/ABSENT_AFTER с независимым DU. Final audit
+eligible0/excluded237, timeout/unknown/retry отсутствуют, elapsed507s.
+Root available33.84GB, target75.18GB НЕ достигнут. Остаточная pressure server True,
+agent False, оба Ready; readiness ноды не означает готовность приложения.
+Удалён только performance cache, восстановимый пересборкой. Данные, volumes,
+images/pins, own builder и source не удалены. Цепочка остановлена на eligible0.
+
+Дополнительный read-only preflight: root WT вне MAIN суммарно2.24GiB,
+завершение/retention UNKNOWN; MAIN node_modules и shared caches KEEP. DATA
+OCI/cache и tmpfs root relief не дают. Safe removable target set EMPTY.
+Возможный storage вариант — согласованный offline перенос containerd cache
+одной exact Kodex node на DATA через опубликованный проверяемый скрипт,
+с сохранением образов/metadata, проверкой копии, mount persistence и rollback.
+Текущий server cache около61GiB, DATA available128.48GB; это preflight размер,
+не готовый migration plan и не обещание reclaim. Перенос НЕ выполнялся;
+изменение storage layout требует отдельного решения владельца. Альтернатива —
+добавить ёмкость; protective thresholds/taints не обходятся.
+
+Браузер MCP page21 доступен, последнее reload09:28:51 UTC;
+Console подтверждает resource503. Live native p16 и Full65 BLOCKED стендом,
+а не завершены. Сохраняется новый практический no-ID кейс и same-chat follow-up.
+Возобновление: storage recovery → both DiskPressure False/DB Ready → exact
+owner idle readback → fresh clean-source render/canonical supply-chain
+apply/readback → три custom images через штатный admission/promotion/UI rebinding
+→ реальные no-ID кейсы и полный Workflow. П11/14/15/16 остаются [ ].
+
+## Checkpoint 09.10.2026 09:18 UTC — recovery gate уточнён; реальные кейсы обязательны
+
+Published source `5bd0a98798fe7ef40c334dea474b83c26c401e86`, Draft1807.
+Clean-source runner cache/provenance/import PASS на обеих нодах:
+manifest `sha256:f6e06e4389e1d8b6145a66bea7ed97876565689c19ceb79d0350250b7f497aa8`,
+binary SHA256 `7c8517c1e8d5d2b8082116e6631d942d4500be29bf517046a22a67692748a104`,
+provenance SHA256 `05904ff944eff89e6aeb1db278db49a7eba433a29415ec744a20b1f7a1e5eecf`.
+Fresh render PASS, source fingerprint
+`40f86764bc31e07104d53f3ed33777a4df3eb340c833b5a888d68cfac7c1d2cb`.
+Это доставка runner и render, не activation или живой пользовательский PASS.
+
+Actual configz: hard imagefs/nodefs5%, minimumReclaim10%, transition5min;
+recovery target15% около75.18GB, не ранее выбранные50GiB. Root available
+около28GB, server DiskPressure True, registry push/staging-read и PostgreSQL
+Pending. Авторитетный live owner ledger сейчас UNKNOWN: Pod базы не назначен
+узлу. Последний подтверждённый idle snapshot не выдаётся за свежий.
+Пороги/taints/pins не менялись; после первого failed apply новых apply нет.
+
+Default4h cleanup: два ROOT прохода31+31 и три delegated14+6+1;
+все83 exact IDs PASS/ABSENT_AFTER. Fresh final audit eligible0. Только
+восстановимый private performance cache; shared/in-use/parent guards сохранены.
+Наблюдаемый root delta concurrent, не доказанный reclaim всей группы.
+Host image audit PASS: все11 own tool images KEEP; старые node runners
+KEEP при UNKNOWN domain dependency closure. DATA OCI и tmpfs не освобождают
+root. Подготавливается explicit recovery1h profile с консервативным возрастом
+не менее2hours/1day, штатный default24h неизменен. Первый READ-ONLY слой205
+leaf records около3.10GB логически; дальнейший reclaim UNKNOWN.
+ROOT27 unit PASS0.151s, все6 ordered cross-profile mismatch пары закрыты
+до эффекта; CLI/default24, leaf/type/private/in-use/recheck и timeout readback
+сохранены. Применение recovery1h пока NOT RUN, до публикации запрещено.
+Context7 `/docker/docs` и `/kubernetes/website` проверены.
+
+Chrome page21: snapshot показывает штатный экран временной недоступности,
+bootstrap/session503, Console resource503; document/runtime config200.
+Screenshot request не завершился за ограниченное ожидание, снят с ожидания;
+визуальный screenshot proof сейчас NOT RUN, snapshot не выдаётся за него.
+
+Уточнение владельца: п16 включает реальные обычные сообщения без entity ID,
+поиск прошлой работы, практическую безопасную доработку и follow-up,
+уточнение неоднозначности и недоступного проекта. Одного пересказа FINAL
+или synthetic теста недостаточно. П16/11/14/15 и Full65 OPEN.
+
+## Checkpoint 09.10.2026 09:03 UTC — runner доставлен; activation остановлена DiskPressure
+
+Published source `f63e8f8fe2b09b672f04a6f99f721dfe9e3771b8`, Draft1807;
+ROOT actual service authorizer PASS0.040s, official service policy SHA256
+`99c1c5a77376cd54dd3798c4b2631217122f82d5d4e3548a16b0a20ff7ab124c`.
+Full runner build/provenance и durable CRI pins обеих нод PASS:
+manifest `sha256:f6e06e4389e1d8b6145a66bea7ed97876565689c19ceb79d0350250b7f497aa8`,
+binary SHA256 `7c8517c1e8d5d2b8082116e6631d942d4500be29bf517046a22a67692748a104`,
+provenance SHA256 `5cc537798d236eb7b044feb38af130d8003ccd9176f973f79af47444f52d5294`.
+OLD6e581 quiesce apply/readback PASS; owner ledger active runs/builds/admission/
+promotions/claims0, прежние40 promoted pins сохранены. Первый render command
+FAIL GO_TOOLCHAIN_MISMATCH из-за PATH; pinned Go1.26.6 повтор PASS, fingerprint
+`4cc8afb76d2ce54c07ba98e932893959c08e23ff4e88fcd24c250ecabee1a7a9`.
+Canonical registry seed PASS, но supply-chain apply FAIL: BuildKit progress
+deadline. Push/staging-read Pending из-за server DiskPressure и PVC affinity;
+probe реально получил connection refused. Все пять core workloads остаются0;
+это остановленный development-стенд, не успешное развёртывание.
+
+Actual kubelet hard limits imagefs/nodefs5%, hysteresis5min; настройки не менялись.
+Root available около27.25GB, текущие образы и данные не удаляются. Existing
+repo-owned default4h cache protocol: два свежих audit/fingerprint/prune/readback
+прохода, по31 exact leaf records, оба PASS/ABSENT_AFTER. Root space measurement
+конкурентный, не приписывается целиком удалённому кэшу. Дальнейшая цепочка
+ограничена12 проходами/15min, только unused private performance cache;
+FAIL/PARTIAL/UNKNOWN закрыто останавливают её. OCI runner архивы на другом диске
+не являются способом освободить основной; их runtime/rollback closure сохранён.
+
+Далее восстановить запас места/обе ноды, fresh render/canonical apply/readback,
+owner UI image-only upgrade трёх custom recipes с admission/promotion и точным
+сравнением ENV tools/values/secret pins/policy. Это maintenance, не подмена
+проверки typed самонастройки. Затем native plain-language cases без ID,
+ordinary Manager workflow discovery/launch и полный dogfooding. Checklist11/14/
+15/16 и Full65 OPEN; свежие UI Console/Network/screenshot ещё NOT RUN.
+
+## Checkpoint 09.10.2026 08:29 UTC — runner собран; exact service registry дополняется
+
+Published source `b8564a33980665e71bace2d0539819cac3d88618`:
+full runner build и OCI provenance PASS; manifest
+`sha256:159a2a92c8401d9436e4497e4bd4aa4493528b5a835840472aba99bd3181c012`,
+binary SHA256 `7c8517c1e8d5d2b8082116e6631d942d4500be29bf517046a22a67692748a104`.
+Activation ещё NOT RUN: перед render найден missing exact record для
+`platform.runtime.execution.workflow.catalog` в local service classification.
+Добавляется только SERVICE_OWNER_RESOLVED record полного source binding;
+canonical policy93 и существующие408 bindings неизменны, итог409.
+Official generator/check и Node4/4 ROOT PASS250.405ms. Дополнительный Go
+consumer выявил прежнее stale expectation375; обновлён strict count409 и
+добавлен полный exact binding assert без ослабления authority guards.
+Изолированный consumer2/2 PASS0.044s; ROOT повтор PASS0.040s.
+
+Перед activation нужен новый clean source provenance (production inputs
+не изменились; test file меняет общий input closure), fresh render
+и штатный quiesce/readback.
+Затем image-only maintenance уже bound custom recipes через admission/promotion;
+это не считается PASS самонастройки помощником и не заменяет её проверку.
+Реальные plain-language кейсы без ID в промптах обязательны: поиск прежней
+задачи по смыслу/названию, чтение её сообщений, follow-up, неоднозначность,
+foreign scope, ordinary discovery и launch. Full65/checklist11/14/15/16 OPEN.
+
+## Checkpoint 09.10.2026 08:14 UTC — история задачи и каталог процессов интегрированы
+
+На базе published `e0976b3cfec30d56d597caee98aacea6cc2f4503` объединены
+`read_task_session` для SYSTEM/PROJECT и ordinary `get_workflow_catalog`.
+Первый читает только разрешённый публичный результат и опубликованные сообщения
+выбранной Session; второй возвращает published schema/version/digest, которые
+обязательны при новом launch. Actor/project/lease по-прежнему разрешает сервер.
+Existing SearchAssistantResources расширен typed selector, новая catalog RPC
+зарегистрирована exact policy93. Legacy fallback на latest не добавлен.
+
+ROOT проверки объединённого dirty tree: CP unit0.253/0.916/0.559s PASS;
+RC весь callback race30.566s PASS; shared typed API0.034s PASS;
+Proto lint/build/codegen, authority-policy codegen, actual RC→runner MCP
+producer0.061s/consumer0.053s и SQL boundary PASS. Устаревший pin92 в
+contract-registry test обновлён до93 с negative cases92/94; все5 tests PASS.
+Combined disposable PostgreSQL PASS47.146s: TaskSession8.15s,
+CoordinatorFiles6.56s, WorkflowLaunch32.38s/17 cases; 2744 source hashes
+before/after EQUAL, closure SHA256
+`8f961c9b88ff0eaf4e7af0f7030a3e51f649a0c1f26c9cc010558917ed538da4`.
+Это component proof, не живой пользовательский PASS.
+
+Через PROJECT-чаты без ID helper подготовил Workflow plan1 с лишней заменой
+capability этапа20; он НЕ применён. Helper сам подготовил исправленный plan2
+`pln_54FJzv-M3Vg7cUG9aR9WT4Pk`. UI validation/APPLIED и owner typed comparison:
+единственная дельта — LIST на INTAKE; остальные21 steps/DAG и все10 stable
+полей, включая полные instructions12358 chars, EQUAL. После штатной проверки
+и UI publication Workflow version28/revision9 PUBLISHED,
+`wfv_xPG1V1vhmttYEA-Y2xOmGAAc`; 21 steps, один final Human Gate.
+Первый publish во время hot reload вернул temporary unavailable; после
+готовности CP/gateway/RC повтор успешен, без ручной записи бизнес-состояния.
+
+Mixed catalog prefix теперь имеет общий8s budget и отдельный2s child на каждое
+чтение, максимум4; run refresh10s неизменен. ROOT весь websocket race17.476s,
+gateway all-unit и vet PASS, runtime timeout переведён в обеих локалях.
+Actual serving gateway `/proc/1480/exe` EQUAL hermetic SHA256
+`35e65d7c20acf7eaedc27e165de07ed7c5a3a0ae1992b5df95c50e008d8006c7`.
+Chrome page21 screenshot просмотрен: overflowfalse, Console0, publish/read200,
+после готовности backend STREAM_PROBLEM нет. Это ещё не load/reconnect PASS.
+
+Далее: clean source checkpoint/push в том же Draft1807; новый compiled runner,
+fresh render/exact policy93 и canonical supply-chain activation; admitted/promoted
+custom images и image-only ENV upgrade. Затем нейтральный project overview,
+новый чат без refs, чтение прежней задачи, неоднозначность/изоляция, ordinary
+Manager discovery/launch и реальный dogfooding. Full65/11/14/15/16 OPEN.
+
+## Checkpoint 09.10.2026 07:50 UTC — план по имени применён; история и realtime OPEN
+
+Published source `e0976b3cfec30d56d597caee98aacea6cc2f4503`, Draft PR1807.
+Chrome MCP восстановлен в собственной page21, OWNER bootstrap200; чужие
+вкладки не закрывались. После reload screenshot проверен, Console0 до
+диагностического обращения к неподдерживаемому endpoint. Этот GET вернул405
+и не является дефектом приложения. Подтверждение и чтение выполнены штатно.
+
+PROJECT-запрос без refs на экране Project Manager самостоятельно подготовил
+ровно один CHANGE_INTEGRATION_GRANT, run `run_817z3eriMr0IDbeDR5fYEX3D`,
+conversation `cnv_v-fw4DpqSy_iBE2U1AYvLPT3`, plan
+`pln_abcKa-41yj01LaaCgOOOVW5e` revision1. После VALID без ошибок применён
+через UI. Owner GET200: connection623→624; новый grant
+`grt_kiSL8ntinpQkn9CJWd9GNhRI`, github.repository.content.list / NONE / enabled.
+Agent integrations21→22, все прежние refs сохранены, остальные поля
+конфигурации EQUAL. Version22 и runtimeRevision не менялись; новый runtime
+snapshot должен проверяться отдельно при следующем запуске.
+
+На экране SOFTWARE_CHANGE в новом PROJECT-чате отправлен следующий запрос
+без refs: добавить LIST только INTAKE, сохранить21 этап/DAG/настройки,
+одно комплексное ревью и финальный Human Gate. Новый план пока NOT RUN.
+Baseline owner Workflow25/revision8/PUBLISHED прочитан; LIST отсутствовал.
+
+Realtime LIVE FAIL сохраняется: при native assistant launch наблюдались
+PLATFORM_UNAVAILABLE и clean4000/resync; gateway diagnostic kindRUN,
+DeadlineExceeded/elapsed140ms. Mixed catalog prefix всё ещё наследует общий
+2s остаток. Готовится отдельный bound на каждое чтение2s и fixed prefix≤4
+с общим8s; subscribed-runs refresh10s не меняется. Частые cursor-gap resync
+без STREAM_PROBLEM отдельно OPEN, причиной network/provider их не объявлять.
+
+Две изолированные доработки ещё OPEN: защищённое чтение опубликованных
+сообщений найденной задачи и ordinary workflow catalog с publication/OCC pins.
+После доставки новых инструментов нужен новый compiled runner и штатный
+admission/promotion для использующих его custom images, затем повтор native
+проверки без ID с нейтрального project overview. Full65/checklist11/14/15/16 OPEN.
+
+## Checkpoint 09.10.2026 07:27 UTC — catalog batch и реальный запрос без ID
+
+На базе `8e4a1fa32374464ad2fecccc41e0493896740b42` устранено повторное
+чтение RUN catalog внутри непрерывного пакета до четырёх событий одного scope.
+Бюджет catalog2s не повышен, каждый cursor/delta сохранён; смена kind/scope,
+authority event, gap, deny/error, cancel/overflow и полный byte cap проверены.
+ROOT pinned Go1.26.6: весь websocket race PASS18.434s, vet PASS, hermetic
+build PASS. Actual serving `/proc/1119/exe` EQUAL hermetic build SHA256
+`e72ad30a06826b69df7019b9f414eb36e14ba2bb510090dba29de6c34f3c606e`.
+Server/diagnostic source host/Pod EQUAL. Живой reconnect под нагрузкой ещё OPEN.
+
+Новый обычный Manager `run_oDotaViWqeIYhJkl7gdyb4bq` accepted ровно один
+Workflow `run_ZtJ7ZVz09MhQxPVcsCY1Nsxa` версии25/revision8. INTAKE завершил
+semantic BLOCKED: операция `github.repository.content.read` направлена на
+каталог `docs/governance`; FILE guard корректно отклонил directory response.
+Owner Workflow read подтвердил отсутствие `github.repository.content.list`
+в required capabilities первого этапа. Coordinator самостоятельно прочитал
+все три callback artifact до EOF и остановил дальнейшие этапы; root FAILED
+105. Architect/Developer в этом запуске не приняты. Технический SUCCEEDED
+дочернего хода не является semantic PASS. Гипотеза provider/network failure
+этим случаем не подтверждается. FILE guard не ослаблять.
+
+Первый реальный запрос без ID в PROJECT-чате
+`cnv_CjyjmB-6E3ZGIhafdJpUcQHo`, run `run_cXKQZ3bS3FVwUiKjHI2D5RKJ`,
+завершён: по фразе о прежней сводке лимитов помощник нашёл Issue1796 и
+последний FAILED run, но честно сообщил отсутствие инструмента чтения результата.
+Доступная проекция только metadata; PASS полного сценария не заявлен.
+Контекст экрана был RUN найденной попытки: этот пример также не заменяет
+независимый поиск из нового чата на нейтральном обзоре проекта.
+Открыты две адресные доработки: защищённое чтение опубликованной истории
+найденной задачи и каталог опубликованных процессов для обычного Manager
+с input schema/проверяемыми publication pins; без расширения actor/scope.
+
+Через PROJECT-помощника на экране SOFTWARE_CHANGE отправлен новый запрос
+без refs: подготовить минимальный подтверждаемый LIST/grant UPDATE-план,
+сохранив21 этап, DAG, тайм-ауты, единственное review и финальный Gate057.
+План ещё не подтверждён и не применён; новый бизнес-запуск не отправлен.
+Обе ноды Ready/DiskPressure False; root56GiB/data132GiB available.
+Full65/checklist11/14/15/16 OPEN, финальный business PR не merge.
+
+## Уточнение приёмки 09.10.2026 — естественные ссылки без ID
+
+В основной checklist добавлен пункт16: реальные задания пользователя по
+названию, смыслу прежней работы, истории диалога и текущему экрану.
+Проверить существующий/новый чат, выбор процесса/сотрудника/окружения и
+неоднозначность/недоступный scope. Пользователь не обязан передавать refs;
+внутреннее разрешение объектов и authority по-прежнему выполняет сервер.
+Результаты этих сценариев пока NOT RUN, технический dogfooding с pins их
+не заменяет. Перед финальной готовностью пункт16 обязателен.
+
+## Checkpoint 09.10.2026 06:41 UTC — bounded realtime исправлен; живой повтор ожидает SSO
+
+На базе `35bd33f72d3ee59501c517f34b2c34fb9052c460` интегрирован bounded
+refresh: принятые RUN_CHANGED сохраняют порядок и cursor, но полный owner
+snapshot читается один раз после пакета. Общий бюджет полного refresh10s
+не наследует остаток catalog2s и не возобновляется отдельно для каждого
+соседа; отдельное чтение ограничено5s. Cancel/overflow/revoke остаются
+закрытыми отказами. После unavailable доступность восстанавливается только
+свежим полным защищённым snapshot, не одним delta catchUp.
+Общий инвариант закреплён в FE-DOC-001; API/authority не изменены.
+
+ROOT pinned Go1.26.6 websocket package `test -race` PASS17.006s, vet PASS.
+Server source host/Pod EQUAL
+`57dc6e1e2f705e31317bb410fe2664e7241d533eea0f5f280ab6f5cad68ada6d`;
+run_snapshot EQUAL
+`440a0f77d54d8d49b5d7a3677d1faa16f73de86c6414e92ab17357bcd707108a`.
+Hermetic build и фактически обслуживающий `/proc/737/exe` EQUAL SHA256
+`acd23cac3e281677d73316b07e15b04927ec7ea09ba2f146e36cab29344ae4c5`.
+Пакет также независимо проверен в изолированной копии:208 tests/subtests,
+race/unit/vet/build PASS, три failure paths воспроизведены на старом source.
+Живой reconnect под нагрузкой пока NOT RUN: рабочая вкладка на SSO.
+
+Graph-focus ROOT40 unit/typecheck/targeted lint/format PASS; desktop2048 и
+фактическая narrow500 screenshot/Console/Network проверены. Active-agent
+фокус NOT RUN: предыдущий граф terminal. Production frontend build PASS,
+Vite9.97s; предупреждение о chunks более500kB сохранено, не скрыто.
+
+Manager `run_JutWEYVY2P1frcixLkOBpTY2` FAILED36 после FINAL30 с запросом
+input schema, без accepted Workflow. Техническая причина provider failure
+UNKNOWN: точный runtime Pod уже очищен. Следующая попытка должна захватить
+закрытую диагностику сразу после раннего ACK, до удаления Pod.
+Опубликованная схема Workflow25/revision8 и информационные role pins
+подготовлены для нового UI задания; оно не отправлено до восстановления SSO.
+
+Обе ноды Ready / DiskPressure False; root59GiB/data134GiB available.
+Свежий host image audit11 KEEP/0 OBSOLETE/eligible0: дополнительно удалять
+нечего без риска текущим/откатным зависимостям. Full65/checklist11/14/15 OPEN;
+Developer, одно комплексное review, Manager acceptance и Gate057 впереди.
+
+## Checkpoint 09.10.2026 06:26 UTC — причина realtime доказана; новый Manager после BLOCKED
+
+06:32 UTC уточнение: Manager JutWEYVY не accepted Workflow; FINAL30
+запросил отсутствующую опубликованную input schema. Терминальный run FAILED
+36/RUNTIME_PROVIDER_UNAVAILABLE, usage0; причина технического отказа отдельно
+диагностируется, запрос схемы сам по себе не доказывает сетевой отказ.
+Owner GET Workflow200 подтвердил четыре required поля field-001 TEXT,
+field-002 LONG_TEXT, field-003 TEXT, field-004 LONG_TEXT; options пусты,
+version25/revision8/публикация wfv_nglITlTu3UObK_9lOE5AoixE.
+Свежий GET четырёх Agent200/READY/runtimeReady true: versions22/13/13/19.
+Эти информационные pins подготовлены для нового обычного New Run UI задания;
+authority/runtime при launch/claim по-прежнему назначает сервер. Отправка
+не выполнена: рабочая вкладка перешла на SSO; ввод сохранён до восстановления.
+После выделения log attribute keys в константы ROOT unit PASS1.421s/vet PASS.
+Final diagnostics host/Pod source EQUAL
+`3b634dd8eec249145b3b2f21631a77445f2b0677bf64160b0d67cfc95a0e73c5`;
+serving `/proc/561/exe` и hermetic build EQUAL
+`82cbaf0eef3fbfdb1306a08fc46b9d0f599e47111407c96ccccc23678978cf0c`.
+
+На базе `35bd33f72d3ee59501c517f34b2c34fb9052c460` добавлена закрытая
+диагностика full run snapshot без raw errors, refs, metadata и payload.
+Живые WARN подтвердили DeadlineExceeded именно родительского бюджета:
+elapsed/start 1199/1198, 1175/1174 и 1151/1151 ms, remaining 0,
+parent/read DEADLINE_EXCEEDED. Это доказанная причина повторного
+RUN_UNAVAILABLE → PLATFORM_UNAVAILABLE → close4000 REALTIME_REDUCER_FAILED;
+само исправление обработки пакета событий ещё OPEN.
+ROOT pinned Go1.26.6: весь websocket package unit PASS1.345s, vet PASS;
+hermetic build и фактически обслуживающий `/proc/356/exe` имеют одинаковый
+SHA256 `9635c1689dc0ba3afa1455e8ed4c4419dbeb125f288632ca35f49939c9e3b2f5`.
+Диагностический source host/Pod EQUAL, SHA256
+`ed3dac12cd12bdeafaff4490132dc5e2dc240b6ff4be7bb91801c06cab1695d7`.
+
+Граф: отдельные «Текущая работа» / «Весь граф», stable root identity,
+ручной viewport не сбрасывается новым child. ROOT40 targeted unit PASS,
+полный typecheck, targeted ESLint/Prettier и diff-check PASS. Host/Pod source
+run-graph-flow EQUAL, SHA256
+`51c56f6dd6e77fb2b72ebc72b29d49b6633cbe598db1531139fab80e4fcf5934`.
+Desktop2048 и фактическая узкая ширина500: screenshot проверен,
+toolbar controls44×44, body overflow false, Console0 errors/warnings,
+20 просмотренных fetch/xhr HTTP200. Active-agent live focus ещё NOT RUN:
+проверенный прежний граф уже terminal. Production frontend build NOT RUN.
+
+Workflow `run_2MphY3OaOcHE0IH1PdMiKXsW` FAILED, complete cursor556.
+Architect FINAL506 semantic BLOCKED, Coordinator FINAL535 самостоятельно
+прочитал architecture-review до EOF и остановил зависимые действия.
+Managed LIST `path=proto` отказал; exact source ab499 содержит только
+`contracts/proto`, tree `25f2af83855c3ecc491ec401d1bdd0d9df0b38a9`.
+Provider HTTP status UNKNOWN: не объявлять предположительный404 доказанным.
+Architecture artifact revision11/33833B, SHA256
+`544e7219fe2e0a2e1b012f1cad7ed89c42d5d9acdc3a0af28e212f34aeb5f347`.
+Обычным New Run UI запущен новый Manager
+`run_JutWEYVY2P1frcixLkOBpTY2`, session `ses_Gn6XAfQ9nq-bBfjKfpIUsKq5`.
+Передан source path fact и требование одного нового published Workflow с
+прежними AC, одним review и Gate057; accepted Workflow ещё NOT RUN.
+Manager ACK CAPTURED, same Pod UID971afaa8-11a0-46d1-baf5-db6433bf4a7e,
+image manifest615bab9 / image-file47a8fc35 EQUAL expected; instructions/inbox
+EQUAL, taskInPrompt true, independent expected task comparison NOT RUN.
+
+Свежий host image audit:11 KEEP,0 OBSOLETE,0 eligible logical bytes.
+Root60GiB/data134GiB available; текущие/откатные/неподтверждённые образы и
+PVC сохранены. Full65/checklist11/14/15 OPEN, финальный business PR не merge.
+
+## Checkpoint 09.10.2026 06:03 UTC — INTAKE принят, Architect работает; realtime FAIL
+
+Source `35bd33f72d3ee59501c517f34b2c34fb9052c460` опубликован в Draft1807.
+Новый root `run_2MphY3OaOcHE0IH1PdMiKXsW` продолжает revision8/version25.
+INTAKE `run_oflwY5-UYbv95BvRfvGwppLU` завершил semantic PASS_INTAKE:
+FINAL114/124 и callback122, собственное чтение Coordinator до EOF133–151.
+Owner metadata HTTP200 / CLEAN / exact digest подтверждены отдельно:
+`manager-plan.md`, `art_B3of0JVWRn_bhvkrfsTHpcT7`, revision28, 16657B,
+SHA256 `763b80c00a5c9ca8b3817b771784f55e1b50698689ce681f804427005b44c4d9`;
+`intake-eof-evidence.json`, `art_xP0bdG072F4z2qQ_vPySfMvI`, revision1,
+10903B, SHA256 `371602890cd0e1e09367a4ba672275412823961b8e7d3ff6d0a8931fcaf871e0`.
+
+Architect `run_Qbv4x6dhFvgMSa6QxhTv-dN0`, session
+`ses__4-IlDn7cegCCBY12Vc5RufM`, RUNNING. Ранний ACK и same-Pod readback
+CAPTURED; UID `9c3f780f-f7f3-461e-96c3-3bbc2857603f`, image manifest615bab9
+и image-file SHA25647a8fc35 EQUAL expected. Independent task comparison EQUAL:
+3230B, SHA256 `dbc05b4e7706620a90ca6e685b432a38bd9f612937eb7e8f10bd77913cc2710e`.
+Instructions45127B, SHA256
+`5e7ced2ae293e572973aef571da37d18ed1d8eb26e85bec9137d1d4bf8fc6e5b`.
+RuntimeRevision `rrev_ddSMckoGyFBiOxKIHinQQe71`, digest
+`1c544ee2ba047f21c285d673e9d1418c9ad5566ca7f43f4b2cec6e8a33465dfa`.
+G9/ENV9/binding10/tools38/grants18, gpt-6.1-sol medium. Native commentary330
+сверяет upstream account/rateLimits/read, 373 подтверждает нормативный EOF
+и переходит к исполняемому source/freshness. Это ещё не Architecture PASS.
+
+Chrome screenshot/Console/relevant Network проверены: ошибки/предупреждения0,
+просмотренные15 fetch/xhr HTTP200. На графе24 узла/26 связей; часть графа за
+viewport, полная читаемость всех узлов не подтверждена. Живая безопасная
+WS-диагностика воспроизводит RUN_UNAVAILABLE, затем PLATFORM_UNAVAILABLE
+через26–28ms и clean close4000/rejoin. После reload часть времени стабильна,
+под нагрузкой сбой повторяется; это realtime FAIL, не PASS reconnect.
+Source candidate: до4 wakes делят2s, каждый RUN_CHANGED повторяет защищённый
+catalog read и полный graph read; локальный5s не расширяет parent deadline.
+Точная причина живого отказа пока UNKNOWN; guards/таймауты не менялись.
+
+После очистки root available около60GiB, другой диск135GiB. Удалены только
+доказанно ненужные копии и кэш; node images KEEP_UNKNOWN при отсутствии
+exact loaded dependency proof. Данные/PVC/current/restore сохранены.
+Далее: закрытая диагностика realtime, её адресный fix/readback; native
+Architect→Developer→одно review→Manager→единственный Gate057. Full65 OPEN,
+финальный business PR не сливать.
+
+## Checkpoint 09.10.2026 05:44 UTC — новый Workflow принят, INTAKE читает свои источники
+
+Checkpoint `78a6c2301a31bd9db3b6feb63b820cfa90d6827a` PUSHED, Draft1807
+head/body readback PASS; main прежний ab499. Manager continuation FINAL 11
+подтвердил ровно один новый accepted Workflow
+`run_2MphY3OaOcHE0IH1PdMiKXsW`, session
+`ses_oWQidInUQYjrp67U8VK5xNZn`. Owner GET HTTP 200 подтвердил
+AGENT_DELEGATION / WORKFLOW `wfl_1G05mcW4c7pweOjzfIzFYr6c`, version 25,
+RUNNING. INTAKE child `run_oflwY5-UYbv95BvRfvGwppLU`, session
+`ses_p3pw892N5Je1XXUUmirePCh3`, RUNNING; seq 107 сообщает собственное чтение
+восьми документов до EOF и подготовку плана, но semantic PASS ещё не получен.
+
+Ранний ACK CAPTURED, same Pod UID
+`14fd44b7-9cfb-45ce-b120-dad8b92864df`; image manifest
+`615bab9cc7a7faf1688b552fb5744cca8796f8f43b0a3aba7c4604d109a6e4cc`
+и image-file SHA256 `47a8fc359e2cd186c3d87a6710ba38f64986415e40a0a156c508094b8fc66b3d`
+EQUAL expected. RuntimeRevision `rrev_B2oGHmbxXajnlLQ2l9Sl-eNR`, digest
+`74a5da90d9e01a63ec4e8cfb3e13fa4b6f770c68bed8766927acfb5ce922807e`.
+Instructions 51084 B, digest
+`2b71aafbd304dbfb0875fd887cf7d9065d214bc5df7fa7f3d65123c9f65db44c`;
+inbox/task 2567 B, SHA256
+`a94e0854a9cdac1fb629913c861a361d32aa1afab926b2fa27ae894f7e9c7237`.
+File/inbox EQUAL, taskInPrompt true; independent expected task comparison
+NOT RUN. G9 / ENV9 / binding10 / tools38 / grants21, gpt-6.1-sol medium.
+Desktop screenshot проверен, глобальный и run realtime LIVE / seq49–51;
+это новое UI readback, не доказательство всех WS кадров. Console 0 errors/warnings.
+
+Node helper retirement НЕ выполнен. Worker loadBaseAllowlist читает каталог
+один раз при запуске; текущий изменяемый ConfigMap/file не доказывает реально
+загруженный прежний список. Свежий `kodex-role-environments` immutable=false.
+Исторический helper мог быть допустимым base input; без startup provenance
+он KEEP_UNKNOWN, не снимаем pins и не запускаем глобальную очистку.
+Оба диска имеют запас, данные/PVC/current/restore/runner images сохранены.
+Диагностический helper в отдельном worktree не включён в PR как заведомо
+недоказанный destructive путь. Full65 OPEN, финальный business PR не merge.
+
+## Checkpoint 09.10.2026 05:37 UTC — стенд Ready, новый ход Manager
+
+На опубликованном `4be7c5459ffe1c8a69d970ce73c943b7fbf20ab5` свежий
+readback подтвердил обе ноды Ready / DiskPressure False и 21/21 Deployment
+Ready. Control-plane восстановился после штатного startupProbe restart;
+session-archive также Ready. Историческая причина первого PostgreSQL ping
+остаётся UNKNOWN: восстановление не доказывает её устранение в коде.
+
+Прежний Workflow `run_4VTZQ0AOC-Hi11cHIT-7EmC-` и Architect окончательно
+FAILED / RUNTIME_TIMEOUT в 05:27:53 UTC. Все будущие этапы CANCELLED;
+активных дочерних работ не осталось. Старый callback Manager завершился
+FAILED / RUNTIME_UNAVAILABLE. Штатный Retry Manager восстановил архивную
+сессию и создал `run_TAg73IXEiPg2UW1sd_AuMHS-`, attempt 2, технически
+SUCCEEDED в 05:31:24, но семантически только историческая квитанция:
+новый Workflow он не запустил. Это НЕ PASS бизнес-задачи.
+
+Через обычное «Дополнительное задание» на том же экране передано точное
+terminal состояние и поручение одного нового запуска уже опубликованной
+revision 8 / version 25 с прежними четырьмя входами, одним Reviewer и
+единственным Gate step-057, без повторения старого Workflow. Создан новый
+ход `run_4OXnGpQB5gLgYAbDfcPzx7JX` в той же сессии
+`ses_s8THsdiuAa9YYtbaxvodI8HK`. HTTP 200 подтвердил RUNNING;
+native COMMENTARY 6 признал terminal старого процесса, events 7–10
+подтверждают работу штатного инструмента и регистрацию дочерней работы.
+Accepted ref нового Workflow ещё не сверён. История сохранена.
+
+Chrome page 1 reload выполнен; Console errors/warnings 0, просмотренные
+20 fetch/xhr HTTP 200. После reload глобальный статус перешёл в
+«Подключено», но run view ещё RECOVERING: WebSocket rejoin PASS не заявлен.
+Body horizontal overflow отсутствует. Старые helper node images пока не
+удалялись: готовится отдельный адресный audit с защитой всех aliases,
+контейнеров, workload/current/restore/policy refs. Full65 OPEN.
+
+## Checkpoint 09.10.2026 05:27 UTC — обе ноды восстановлены, старые OCI очищены
+
+DiskPressure False: agent 05:19:47, server 05:19:50 UTC. Базы, NATS, S3,
+большинство Deployment, OAuth 2/2, BuildKit и role-image-builder Ready.
+ROOT существующим `local-oci-cache.py` удалил 41 exact obsolete helper archive,
+19 832 737 280 logical bytes на `/data`; independent audit подтвердил
+отсутствие выбранных файлов и сохранность всех 23 оставленных архивов.
+Все runner archives, current/restore и fresh workload/admission refs сохранены.
+Перед эффектом exact privileged handle-read не нашёл открытых выбранных файлов;
+предупреждения относились только к другим FUSE mountpoints. `.next` отсутствуют.
+Это восстановимый build-cache, не данные/PVC/registry/node images. Удаление
+необратимо для этих копий; нужные версии пересобираются из исходников.
+Root relief этому удалению не приписывается: архивы на другой filesystem.
+
+После массового запуска/pull root available около 64,7 GB, `/data` около
+146 GB. Обе ноды остаются без давления. Browser document 200, обычный SSO
+callback POST 200, однако bootstrap 503: control-plane ещё не Ready.
+Его первый startup закончился verify PostgreSQL connection, причина UNKNOWN;
+Kubernetes самостоятельно перезапустил контейнер в 05:27:03 после startupProbe.
+Session-archive ожидает CP. Ручной restart/Retry/graph mutation не выполнялись.
+Проверены screenshot/Console/Network экрана ошибки; Full65 OPEN, native
+Workflow state UNKNOWN до авторитетного API. Node images не сняты с pins:
+отсутствие Pod refs не заменяет полный dependency closure.
+
+## Checkpoint 09.10.2026 05:16 UTC — резерв применён, unused cache очищен
+
+На опубликованном `24d603829d09a582b707207ccee3bb75e47f139c` один
+owner-authorized apply завершился PASS: exact reserved count 1 246 000,
+on-disk readback PASS, online reservation delta 20 414 476 288 bytes PASS.
+После дополнительных exact cache groups root available около 82,17 GB;
+свежий recovery audit обоих builders не нашёл eligible листьев.
+Все выполненные группы PASS / ABSENT_AFTER; эффект concurrent writers/GC
+не приписывается целиком cache cleanup. На момент readback обе ноды ещё
+DiskPressure True; ждём штатный переход, не меняя thresholds/taints/pins.
+HTTP/API recovery пока не подтверждён, native Workflow UNKNOWN, Full65 OPEN.
+
+## Checkpoint 09.10.2026 05:14 UTC — owner YES для резерва и старых образов
+
+Владелец явно разрешил уменьшить ext4 резерв основного диска с 5% до 1%
+и удалить доказанно ненужные старые образы. Подготовлен адресный
+`tools/dev/local-root-reserve.py`: exact устройство/размер/владение,
+read-only audit, fingerprint, свежая проверка до одного эффекта и readback.
+Остаётся 1 246 000 блоков, около 5,10 GB резерва; расчётная прибавка available
+20,41 GB. On-disk count и реальное online освобождение проверяются отдельно;
+никаких remount/reboot, повторных изменений или ослабления Kubernetes.
+ROOT: 16 герметичных reserve tests и 58 cache tests PASS, diff-check PASS.
+Context7 `/tytso/e2fsprogs` проверен. Применение только после публикации.
+
+На опубликованном `eb8bb4cc8fcfd9b89526bf203b3efcaaf9214a0e` recovery
+cache cleanup проходит bounded exact ID batches; уже подтверждены PASS,
+root available достигал 54,84 GB, но concurrent writers меняют объём.
+Данные/PVC/current/restore images сохранены. Исторические node images ещё
+проверяются: отсутствие Pod refs само по себе не доказывает отсутствие
+queued/published recipe или RuntimeRevision. Workflow UNKNOWN, Full65 OPEN.
+
+## Checkpoint 09.10.2026 05:07 UTC — old cache cleanup, recovery profile и capacity gate
+
+На опубликованном `0308bcfefedeb18327038c989fd7f09b853b0abb` exact readback
+подтвердил 747 default + 8 named cache IDs ABSENT_AFTER. Все восемь последних
+bounded групп PASS. Root available около 51,06 GB; целевой reclaim 75,18 GB,
+обе ноды DiskPressure True, 21 Deployment не Ready. Chrome MCP доступен;
+свежие screenshot/Console/Network показывают HTTP 500 документа, не исправление.
+Workflow state UNKNOWN при недоступном авторитетном API; blind Retry не делался.
+
+Для disposable performance cache добавлен явный recovery профиль 4 часа,
+обычный default 24 часа сохранён. Профиль связан с fingerprint и exact until;
+активные, shared, referenced parents, данные, images и PVC не удаляются.
+ROOT 58 герметичных cache tests PASS, diff-check PASS. Recovery prune ещё не
+применялся: сначала публикация и свежий audit. Это сокращение хранения
+восстановимого кэша сборки, не изменение security/admission/grants/leases.
+
+Дополнительные read-only проверки не нашли допустимых старых host images:
+52 obsolete archive config IDs отсутствуют в текущем Docker inventory;
+другие untagged images не объявлены своими. Три stopped containers не own
+fixtures, суммарные writable layers около 36 KB, KEEP. На каждой ноде 50
+исторических pinned images вне current/restore/workload refs; active domain
+closure UNKNOWN, снятие pins/удаление не выполнялось. Их логический размер
+не выдаётся за reclaim. ext4 резерв около 25,52 GB; уменьшение 5%→1% добавит
+около 20,41 GB available, но меняет настройку всего сервера: запрошен отдельный
+owner gate, изменения не выполнялись. Full65 OPEN.
+
+## Checkpoint 09.10.2026 04:53 UTC — 38 cache IDs удалены, bounded batch готов
+
+На опубликованном `be671f5857376d71f3ca9f5fd16943689d6c8070` exact
+readback подтвердил 33 default и 5 named cache IDs ABSENT_AFTER, обе последние
+группы PASS. Root available около 47,28 GB, recovery пока не достигнут.
+Новый bounded batch выбирает максимум 128 заранее проверенных ID одной
+anchored regex-группой: initial DU → fresh whole-batch guards → один prune
+→ independent DU/readback каждого ID. Это не общий prune и не автоматический
+retry; active/shared/recent/parent/current/restore защиты сохранены.
+ROOT повторил 54 герметичных cache tests PASS и diff-check PASS.
+Публикация перед применением; Full65 OPEN, Workflow state UNKNOWN.
+
+## Checkpoint 09.10.2026 04:49 UTC — actual cache cleanup PASS, предки исключены
+
+Опубликованный `648011aee82971dcd7f212aeb8e3b45a36cdc9a8`: первая старая
+exec.cachemount default `p0dprb7c6vkwo7uxhyg897k1v` удалена, exact readback
+ABSENT_AFTER / PASS. Root available вырос примерно с 43,16 до 44,79 GB,
+дельта измерения 1,63 GB не полностью атрибутируется одной операции.
+Named source.local `2nij6uvcivehwciiyx0dl1uxt` также ABSENT_AFTER / PASS.
+Другие выбранные большие regular записи остались PRESENT_AFTER: DU считает
+предков unused descendants reclaimable, но точный prune не удаляет их при
+сохранившихся дочерних cache refs. Helper теперь отбирает только листья и
+закрепляет parent links в fingerprint; internal/frontend/unknown types
+исключены. Активные, shared, свежие и protected образы не затрагиваются.
+Дальше публикация leaf guard, свежий audit и адресная очистка старых листьев;
+runtime recovery пока не доказан, Full65 OPEN.
+
+## Checkpoint 09.10.2026 04:46 UTC — фактическая семантика Buildx selector
+
+Уточнение предыдущей записи: `private=true` синтаксически допустим, но не
+выбирает private cache; оба реальных применения дали PARTIAL / PRESENT_AFTER,
+удаление cache не доказано. Проверены исходники Buildx v0.37.1 и BuildKit
+v0.33.1: private возвращает пустое значение, а id преобразуется в regex.
+Исправлено на `private=""` и regex с обеими границами exact ID. Read-only DU
+с таким private selector вернул 81 запись named builder / 1224 default,
+Shared 0. Пробный prune гарантированно отсутствующего exact ID: exit 0,
+reclaim 0 B, действительные записи не удалены. Герметичные cache unit 46 PASS.
+Повторный audit обязателен перед реальным применением.
+Обе ноды всё ещё DiskPressure True; root available около 42,8 GB,
+целевой reclaim около 75,18 GB. Данные, PVC, current/restore images не трогаются.
+Workflow state UNKNOWN, Full65 OPEN; корректность selector не равна recovery PASS.
+
+## Checkpoint 09.10.2026 04:39 UTC — actual CLI отказ закрыт, selector исправлен
+
+Checkpoint `5dad8329cebe1520e0567817cc2e3ee24b2e349f` опубликован в Draft1807.
+Первое применение cache helper закрыто остановилось: первый выбранный ID
+остался PRESENT_AFTER, остальные не выполнялись. Actual Docker buildx v0.37.1
+требует `private=true`; bare `private` не является допустимым selector.
+Проверка с гарантированно отсутствующим ID подтвердила отказ до исправления и
+exit 0 / reclaim 0 B после исправления. Действительные объекты этой проверкой
+не удалялись. Повторные 31 unit PASS; реальное восстановление ещё не доказано.
+Дальше публикация исправленного selector и новый точный audit перед применением.
+
+## Checkpoint 09.10.2026 04:35 UTC — адресные образы удалены, build-cache helper готов
+
+Штатный `local-host-image-cache.py` завершил удаление ровно восьми ранее
+проверенных OBSOLETE host images. Данные, PVC, current/restore pins и чужие
+образы не удалялись. Изменения свободного места не атрибутируются целиком этой
+операции: одновременно работают image GC и другие процессы.
+Обе ноды всё ещё DiskPressure; фронт после reload возвращает HTTP 500.
+Свежая Console содержит ошибку загрузки этого документа, не новый доказанный
+дефект UI. Авторитетный статус Workflow пока UNKNOWN.
+
+Подготовлен `tools/dev/local-build-cache.py`: read-only audit, явно выбранные
+cache ID + fingerprint, повторная проверка перед каждым эффектом и точный
+readback. Только неиспользуемый private build-cache старше 24 часов;
+не images/volumes, не общий Docker prune, не активные либо свежие записи.
+У общего builder `default` не утверждается исключительное владение Kodex;
+очистка такого performance cache может замедлить будущие пересборки других задач.
+Runtime/data и защитные пороги не меняются. Context7 `/docker/docs` проверен;
+фактическая CLI-проверка исключила неверное использование boolean-фильтров DU.
+ROOT: 13 новых + 18 прежних герметичных unit, всего 31 PASS; diff-check PASS.
+Audit PASS: `default` 764 кандидата, выбраны 128 крупнейших, логический размер
+около 13,03 GB; `kodex-local-dev` 30 кандидатов, около 5,82 GB.
+Это не обещание фактически освобождённых bytes. Build-cache prune NOT RUN до
+фиксации кода и публикации в текущем Draft PR1807. Дальше exact cleanup/readback,
+ожидание штатного восстановления подов и продолжение native процесса, без
+слепого Retry и без подмены команды платформы. Full65 OPEN.
+
+## Checkpoint 09.10.2026 04:24–04:27 UTC — стенд остановлен DiskPressure, run state UNKNOWN
+
+До outage Chrome screenshot 2179×994 без горизонтального переполнения,
+Console errors/warnings 0; все 59/59 просмотренных HTTP-запросов 200.
+Затем actual WS: первое соединение 37 кадров, включая PLATFORM_SNAPSHOT 22,
+RUN_EVENT 5, RUN_GRAPH_SNAPSHOT 5, STREAM_PROBLEM 2; closed 4000.
+Второе OPEN, 41 кадр, STREAM_PROBLEM 9 / RUN_UNSUBSCRIBED 1;
+realtime PLATFORM_UNAVAILABLE / recovering, последующий API graph 500.
+Предыдущие HTTP 200 не доказывают текущую доступность.
+
+Оба nodes DiskPressure True / Ready True; evictions 04:23–04:24 UTC, включая
+frontend/PostgreSQL/OAuth/secret broker/registry. Все 21 Deployment не Ready,
+не GREEN. Nodefs/imagefs available 54 529 392 640 B / capacity 501 201 502 208 B,
+10,88%; configz hard 5% / minimumReclaim 10% / transition 5 минут,
+целевой объём 15% около 75,18 GB. Host tmp inode 98% — отдельная filesystem,
+не nodefs. Первичный trigger DiskPressure / ephemeral-storage, не Console bug.
+Native Architect Pod отсутствует; авторитетный run state UNKNOWN при API 500,
+FAILED/SUCCEEDED не заявлены. Работа над приложением приостановлена стендовым
+инцидентом, recovery диагностика продолжается; новых timeout/retry/attempt нет.
+Gateway ERROR 04:06:09 cause UNKNOWN не переопределяется новым инцидентом.
+
+Repo-owned cleanup local-host-image-cache.py: 18 unit PASS; read-only audit
+отобрал только 8 OBSOLETE image IDs. Выполнение PENDING / actual freed UNKNOWN;
+данные/PVC/current/restore pins не включены в отбор. Это не завершённое
+восстановление. Дальше штатное восстановление стенда и авторитетный run readback;
+история сохранена, checklist 11/14/15 [ ], Full65 OPEN. Финальный PR по
+бизнес-задаче не сливать, не включать auto-merge и не approve от имени владельца.
+
+## Checkpoint 09.10.2026 04:23–04:25 UTC — INTAKE SUCCEEDED, новый Architect RUNNING
+
+До текущей записи HEAD `b387ecf5f07c0bd26e938fb7e845bf8f503ddb95` clean,
+Draft PR1807, main `ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69` неизменен.
+INTAKE `run_4h20meqomiZ27hr4D7Wvc8lT` SUCCEEDED, FINAL сохраняет
+manager-plan.md. Issue, owner input и восемь нормативных документов до EOF
+на исходном main ab499; реализация и тесты NOT RUN.
+Artifact refs / size / SHA256:
+
+- `art_B3pDqlnLHIqc6S-JVo97-Lqy`, 17344 B,
+  `4e0b544945eec50adb3a67c625c9937c934e37d3ad5f1cfc143305c52e72d878`.
+- `art_qd2TCT0EaT7Dcy3m-pBEThZi`, 506 B,
+  `d3eec0d6596f57c50f33dd7ce44fef7ee164b192b5b770b89be9d5822863a7b2`.
+- `art_ikc-ZegNaJVWp20oUbM5zvvT`, 328 B,
+  `fcfbd648e2cc2f6ab50fe45668345a91d8ea9e12aa15ad7b62ca39381de3ccc7`.
+
+Coordinator собственный native read_file EOF sequence 132 / 134 / 136;
+Architect собственный EOF sequence 154 / 171 / 175. Workflow
+`run_4VTZQ0AOC-Hi11cHIT-7EmC-` RUNNING; Architect
+`run_eUqqdxp8LUKa-wYvqpL-1PQH`, session `ses_luWHQXSv38Sj5I-6q88ZrepJ`, RUNNING.
+ACK CAPTURED, same Pod `runtime-turn-33f74a3bb45d1944`, UID
+`502921e9-688f-4f43-abe5-f387b36f7667`, NONE / ENV 9 / binding 10 / G9,
+tools 38 / grants 18, `gpt-6.1-sol` / `medium`.
+RuntimeRevision `rrev_IXmT1JLEY9qEuLj8JjTDAtWx`, digest
+`01afb98cc6b41026718e767b4f4b85ce9f093a48703204f46fa1df458e67491a`.
+Task/inbox 3361 B, SHA256
+`297462b5295a0c244e7e79f26de6ba8ee3eaaa4cdc554f99b46e6b8597b05a59`;
+instructions 44436 B, SHA256
+`6c05b6493e3c81df15027a90317ce9137d3ad486c90af1b61ef4a3b96c691028`.
+Comparisons EQUAL, taskInPrompt true, image digest
+`615bab9cc7a7faf1688b552fb5744cca8796f8f43b0a3aba7c4604d109a6e4cc`;
+binary-file `47a8fc359e2cd186c3d87a6710ba38f64986415e40a0a156c508094b8fc66b3d`
+EQUAL expected, не hash обслуживающего процесса.
+
+ROOT восстановил доступ к браузеру и page 1 reload в 04:24 UTC; свежие screenshot /
+Console / Network pending. Одно комплексное ревью + пять циклов исправлений +
+единственный Human Gate step-057 сохранены. Дальше штатный результат Architect;
+остальные этапы не объявлены PASS, checklist 11/14/15 [ ], Full65 OPEN.
+Финальный PR по бизнес-задаче не сливать, не включать auto-merge и не approve
+от имени владельца.
+
+## Checkpoint 09.10.2026 04:14–04:17 UTC — INTAKE RUNNING, wall-clock pins проверены
+
+INTAKE child `run_4h20meqomiZ27hr4D7Wvc8lT`, session
+`ses_c4LVJMnLPbe22ZyJRozN7gOM`, RUNNING, sequence 111; COMMENTARY 96 сообщает
+собственный EOF выбранных нормативных документов. Текущий Context7 не доказывает
+credits/reset для точной установленной версии; semantic PASS INTAKE NOT RUN.
+Early ACK / same Pod CAPTURED, UID `967eba49-e75b-4482-9f8b-f19c291941c5`.
+RuntimeRevision `rrev_OfAdThB04OaWHGDFOf0U_Kjn`, digest
+`c029821826d4d6bf9843c686a347863c27f2277af56cb1fb9e48968d750d2e5e`.
+Task SHA256 `ceba6ee8aaccfb3e7e6fca595bb11442b29d8e0f6cdb366ea0a135cb0960cff2`,
+expected/task/inbox EQUAL, taskInPrompt true; instructions
+`ins_M6EHFesL4dkYfzzKhEMfkKPE`, 53345 B, SHA256
+`6ae29c18a149ecc12186b9f1e614cb7e35456be3d53bb82282ff9de57953b86e`, EQUAL.
+G9 / tools 38 / grants 21; binary-file SHA256
+`47a8fc359e2cd186c3d87a6710ba38f64986415e40a0a156c508094b8fc66b3d`
+EQUAL expected, не hash обслуживающего процесса.
+
+ROOT read-only metadata exec того же Pod: только разрешённые deadline поля,
+без Secret/env/raw prompts. Profile `workflow-wall-clock-v1`, published ref
+`wfv_nglITlTu3UObK_9lOE5AoixE`, digest
+`bb8b5d5c6cffbd5a72e9287017738a1a7a6c23296d3b11275d90f319c6b30e28`.
+Root Workflow 86400 секунд: 09.10.2026 04:12:55.178675 UTC →
+10.10.2026 04:12:55.178675 UTC. INTAKE step-001 1800 секунд:
+09.10.2026 04:13:34.480302 UTC → effective 09.10.2026 04:43:34.480302 UTC.
+Обе arithmeticSecondsMatch true; доказана материализация deadline, не приёмка
+полного процесса.
+
+Gateway ERROR 04:06:09: исходный код относит ошибку к закрытому классу `dependency`, сообщение
+`platform bootstrap snapshot read failed`, actual cause UNKNOWN. Transient LIVE
+не доказывает исправления причины. Дальше штатный результат INTAKE и собственные
+источники точной установленной версии. История и checklist не менялись;
+полный процесс и финальная готовность не подтверждены.
+
+## Checkpoint 09.10.2026 04:09–04:13 UTC — Workflow revision 8 опубликован, один новый процесс запущен
+
+PROJECT assistant прочитал точный Workflow version 22, 112793 B, до native EOF;
+plan `pln_GMOJUCTwPeQNYOWGVun6T7UO`. ROOT сверил 42 изменения сериализованных листовых полей
+(21 × 2 представления): только `*.timeoutSeconds` / `*.TimeoutSeconds`, другого
+diff нет. Typed план VALID / version 2 / revision 1 → APPLIED, receipt
+`rct_se28AT7JdR46NAkiq198yG11`. Workflow 23 DRAFT → 24 VALID → 25 PUBLISHED,
+revision 8, ref `wfv_nglITlTu3UObK_9lOE5AoixE`, readiness READY / allowed true,
+context digest `0f074147599e21ffd990ddfd7721d508e01fef6d7cd14aad647bc8f4db0820d9`.
+Timeout 86400 / maxConcurrency 3 / 21 DAG / grants / sole Human Gate step-057
+сохранены; результат полного процесса ещё не принят.
+
+Обычный Manager `run_c0tszz0_fleP19zv47xsbsTs`, session
+`ses_s8THsdiuAa9YYtbaxvodI8HK`, запущен 04:11:25 UTC. Собственное GitHub
+Issue READ SUCCEEDED; FINAL 17: один новый Workflow
+`run_4VTZQ0AOC-Hi11cHIT-7EmC-`, session `ses_oMysKPKSkH1cWZiLlRDszSjV`,
+финальная готовность не подтверждена. Early ACK CAPTURED, same UID
+`0181d838-22e2-4693-a078-67455e4e647c`. RuntimeRevision
+`rrev_uf9tuuBSuaqfU3nYgzWCZfMZ`, digest
+`40710211560c6f2309cabff3a98d7cb60eb783e37d3ba116ddb165ad03233e39`.
+Task SHA256 `dafcaf5b722df081c5cc073406a421c0c68e932ecd6a91edd76f073b39487cb0`,
+expected/task/inbox EQUAL, taskInPrompt true; instructions
+`ins_M6EHFesL4dkYfzzKhEMfkKPE`, 48335 B, SHA256
+`a0e90567ae566f6d35ba21e4645ba578b1883cffa2c2fd0829fc66b50a979772`, EQUAL.
+G9 / tools 38 / grants 21; binary-file SHA256
+`47a8fc359e2cd186c3d87a6710ba38f64986415e40a0a156c508094b8fc66b3d`
+EQUAL expected, не serving-process hash.
+
+Chrome actual WebSocket 04:07 UTC: OPEN / session stream 26 кадров —
+PLATFORM_SNAPSHOT 19, PLATFORM_READY 1, SESSION_READY 1, RUN_GRAPH_SNAPSHOT 4,
+RUN_READY 1; позднее heartbeat и native platform updates. Headers/tickets/content
+не записывались. Console errors/warnings 0; desktop activity 04:13 UTC:
+владелец справа / агент слева, четыре компактных tools, overflow false;
+20 просмотренных HTTP-запросов из 34 — 200, остальные не подтверждены.
+Gateway ограниченный вывод: один ERROR `platform bootstrap snapshot read failed`
+в 04:06:09 UTC, cause UNKNOWN; CP 0 строк. Последующие LIVE и actual frames
+не отменяют ошибку. Coordinator нового Workflow sequence 5 готовит INTAKE
+делегирование; дальше штатный child и его ACK/EOF. Full65 OPEN, 11/14/15 [ ];
+финальный PR по бизнес-задаче не сливать, не включать auto-merge и не approve
+от имени владельца.
+
+## Checkpoint 09.10.2026 04:03–04:06 UTC — старый Workflow FAILED, запрос новых бюджетов QUEUED
+
+Свежая сверка после «продолжай»: checkpoint
+`833fb6382a981c900122f0b4ac4ce2411dd841eb` PUSHED, exact readback
+[Draft PR1807](https://github.com/codex-k8s/kodex/pull/1807); main не менялся:
+`ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69`.
+Workflow `run_WGyaC4fntZgliH487NkcG4pu` и Architect
+`run_5gkWwuEcKB-F0Mdz8FIaCK1n` FAILED. Owner event read подтвердил:
+08.10.2026 event 501, 20:44:29.014556 UTC, RUNTIME_TIMEOUT; tool 499
+invoke_integration RUNNING с 20:44:06 UTC отменён event 500 в 20:44:29 UTC.
+Остальные step nodes атомарно CANCELLED; run event 522 FAILED в 20:44:30 UTC.
+Root Manager callback FINAL 45 в 20:46:15 UTC сообщал UNKNOWN cause и не
+перезапускал. Прежний UNKNOWN сохраняется исторически; новый read доказал timeout.
+Закреплённый Workflow revision 7 / version 22: step-002 1200 секунд,
+общий бюджет 86400 секунд.
+
+Последнее Architect COMMENTARY 377 до timeout: subscription usage нет в
+текущей CP-модели, требуется ограниченный provider observation → owner storage →
+read model. Семантический PASS анализа этим не подтверждён.
+Свежий PROJECT assistant `cnv_Lcba2N4XW14ES7dNfjC1_dFj` /
+`run_8tuUEOvKgiaLgc0RzKl3JJqO` QUEUED. Запрошен только typed UPDATE_WORKFLOW:
+INTAKE 1800; analysis 3600; implementation 7200; все review 3600; все fix 7200;
+все aggregation/final 1800 секунд; общий Workflow 86400 неизменен.
+21 DAG, pins, capabilities, порядок и единственный Human Gate сохраняются.
+Plan/apply/publish NOT RUN; новые бюджеты ещё не действуют.
+Следующий шаг — результат штатного typed плана и его проверка; launch/retry
+самостоятельно не выполнять.
+
+Chrome page 1 reload выполнен, Console errors/warnings 0; из 38 Network-запросов
+просмотрены 25, все HTTP 200, остальные не подтверждены. Checklist 11/14/15 [ ],
+13 [x] только за выбор Issue, Full65 OPEN. Финальный PR по бизнес-задаче не
+сливать, не включать auto-merge и не approve от имени владельца.
+
+## Checkpoint 08.10.2026 20:32–20:35 UTC — realtime LIVE после восстановления, Architect RUNNING
+
+ROOT Chrome MCP page 1 reload выполнен; desktop screenshot без горизонтального
+переполнения, Console errors/warnings 0. Все 35 просмотренных fetch/xhr первого
+page после reload HTTP 200. Сразу после reload realtime RECOVERING, затем
+собственный readback platform и root run подтвердил LIVE / attempt 0;
+мгновенное восстановление не заявлено. Gateway logs `--since=5m --tail=200`
+с закрытым фильтром 0 строк: ограниченное отсутствие записей, не PASS backend.
+
+Native Architect `run_5gkWwuEcKB-F0Mdz8FIaCK1n` RUNNING, sequence 346.
+COMMENTARY sequence 327: сам подтвердил установленный Codex 0.160.0,
+tag `rust-v0.160.0`, peeled commit `a956835d020762cb2b570053af06f643a11c0ecc`,
+схему usage / optional credits / reset / buckets. Producer всех аккаунтов
+ещё проверяется; semantic PASS NOT RUN. Дальше штатный результат Architect;
+исторические UNKNOWN и checklist не менялись, финальная готовность не подтверждена.
+
+## Checkpoint 08.10.2026 20:27 UTC — три artifact receipts сверены с owner GET
+
+Owner artifact GET и завершённые native Coordinator read_file receipts сверены;
+сырые prompts не читались и не публикуются. Точные результаты:
+
+- manager-plan.md: `art_oqBt0zKlG3gZRwxIzb0lNsQC`, revision 26,
+  size 29935 B, CLEAN, SHA256
+  `b61e54c3be8813fba32a15b3c8a1f788e84031437f17db2fda592f3acb78ebad`.
+  Sequence 148: offset 0 → 16383 / eof false; sequence 150:
+  offset 16383 → 29935 / eof true, same exact ref / revision / digest.
+  Локальный hash manager-plan.md совпал.
+- result.md: `art_yDscEuiSp_4A0_DiNTAC7DdX`, revision 129,
+  size 877 B, CLEAN, SHA256
+  `1ff55dfbf87217beab2eae9c41f5704b1942a9051219353bef56719540b2bde0`.
+  Sequence 154: offset 0 → 877 / eof true.
+- workspace-write-result.json: `art_C7Cwdh7nAaqMzZltD-Kb6nyf`, revision 129,
+  size 328 B, CLEAN, SHA256
+  `2a04147465e43a758d371e9e260abaa754ad56ec0c04ceacffe71c8d47b4f0cd`.
+  Sequence 156: offset 0 → 328 / eof true.
+
+Все три exact native READ Coordinator доказаны receipt и owner GET; прежний
+статус несверенных refs остаётся исторической записью своего времени.
+Architect sequence 223, native COMMENTARY: сам прочитал manager-plan.md до EOF,
+продолжает источники, failed tools 0. Семантический PASS архитектурного анализа
+ещё NOT RUN; полный процесс не завершён.
+
+## Checkpoint 08.10.2026 20:24–20:25 UTC — INTAKE semantic PASS, Architect RUNNING
+
+Опубликован точный checkpoint `49f9ebe05ca11dbe1271c0ed608efad769cf6706`,
+[Draft PR1807](https://github.com/codex-k8s/kodex/pull/1807), ветка
+`kodex-agent/issue-1797-full21-v7`. Main не менялся:
+`ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69`.
+
+Native INTAKE child `run_fi-loHr9hVHb3zYomf1KCTOI` FINAL semantic PASS:
+10 нормативных файлов, 18 страниц собственного native EOF на том же main,
+один callback. Локальный SHA256 manager-plan.md
+`b61e54c3be8813fba32a15b3c8a1f788e84031437f17db2fda592f3acb78ebad`.
+Captured artifact refs: `art_yDscEuiSp_4A0_DiNTAC7DdX`,
+`art_C7Cwdh7nAaqMzZltD-Kb6nyf`, `art_oqBt0zKlG3gZRwxIzb0lNsQC`.
+Owner-сверка соответствия refs именам/дайджестам ещё не выполнена; local SHA
+не является подменой artifact receipt. Coordinator своим read_file прочитал
+все три artifacts до EOF и в FINAL подтвердил делегирование step-002 Architect.
+
+Architect child `run_5gkWwuEcKB-F0Mdz8FIaCK1n`, session
+`ses_-LMobDAmVagIa1MggKRvaMB3`, RUNNING. Early provider ACK CAPTURED,
+same Pod UID подтверждён; task/inbox/instructions/image-file EQUAL expected.
+RuntimeRevision `rrev_BSS2OH3NdW_fVztY1dUBZEX3`, digest
+`8036f64a69b11d363bdd820b39352583623d95156cac34acb689707277e62cfc`.
+Input SHA256
+`e7d1e633cc7081e32b9d23fb42bdd25ecd22942ec72a14e146e0e3c00f17fae2`;
+instructions 43261 B, SHA256
+`e12e7057d690cd883d3696b484f1fea40697aadab08a1ea9cf1751e31f3e1eea`.
+NONE / ENV 9 / binding 10 / G9, tools 38 / grants 18,
+model `gpt-6.1-sol`, reasoning `medium`. Image digest
+`615bab9cc7a7faf1688b552fb5744cca8796f8f43b0a3aba7c4604d109a6e4cc`;
+same Pod image-file SHA256
+`47a8fc359e2cd186c3d87a6710ba38f64986415e40a0a156c508094b8fc66b3d`
+EQUAL expected, не hash обслуживающего process binary.
+
+Console errors/warnings 0 в 20:25 UTC; RT store platform/run LIVE по снимку
+20:22:10 UTC. MCP WebSocket network index 0 не доказывает отсутствия
+соединений/кадров или доставку; WebSocket frame PASS не заявлен.
+Далее native Architect и его собственные sources/EOF, owner-сверка artifact
+receipts. Developer / комплексное ревью / финальный gate NOT RUN, полный
+процесс ещё не принят. Checklist 11/14/15 [ ], 13 [x] только за выбор Issue,
+Full65 OPEN. Финальный PR по бизнес-задаче не сливать, не включать auto-merge
+и не approve от имени владельца.
+
+## Checkpoint 08.10.2026 20:17:29 UTC — INTAKE RUNNING, provider ACK и materialization подтверждены
+
+Native full21 root `run_WGyaC4fntZgliH487NkcG4pu` RUNNING, target Workflow
+version 22. Coordinator своей штатной командой launch/delegate запустил INTAKE
+child `run_fi-loHr9hVHb3zYomf1KCTOI`, session
+`ses_ONBkspLi1BqWiRT5YfytVh2D`. Ранний provider ACK CAPTURED, подтверждён тот же
+Pod UID. Scope NONE, ENV 9 / binding 10 / G9, tools 38 / grants 21,
+model `gpt-6.1-sol`, reasoning `medium`.
+
+RuntimeRevision `rrev_anD-wj1qMdrPNSICr85Xis_-`, digest
+`a56d1d9edb32a7951b39a64ecd59a75ccf1530cdd52e910ce56daf4e11e4f062`.
+Task/provider/inbox SHA256
+`af57d28d4c143a2f25c98b371def68ef59ec2852036781c423a30d089b26bff5`
+EQUAL авторитетному owner child input, taskInPrompt true. Instructions 49653 B,
+SHA256 `78fc9f5eb3eb61dbac84689ba1432f8d35ed4fd20926b5ab1bfe2b15f7d0fec2`
+EQUAL mounted AGENTS. Metadata-сверка ROOT подтверждает обязательные input
+`field-002` / `field-004`, точные критерии бизнес-задачи, решение владельца
+об одном ревью и текущую публикацию Workflow. Это фактическая материализация,
+не доказательство собственного native EOF всех источников.
+
+Image digest
+`615bab9cc7a7faf1688b552fb5744cca8796f8f43b0a3aba7c4604d109a6e4cc`;
+same Pod image-file SHA256
+`47a8fc359e2cd186c3d87a6710ba38f64986415e40a0a156c508094b8fc66b3d`
+EQUAL expected; это hash файла образа, не обслуживающего процесса.
+Native INTAKE sequence 62, failed tools нет. COMMENTARY сообщает Issue OPEN,
+main `ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69`, AGENTS EOF;
+сотрудник продолжает источники и решение об одном ревью.
+
+Семантическая приёмка INTAKE NOT RUN; Architect / Developer / комплексное
+ревью / финальный gate NOT RUN. Дальше дождаться штатного результата INTAKE,
+проверить собственные EOF источников и продолжение Coordinator. Полный процесс
+RUNNING, финальная готовность не подтверждена. Checklist 13 [x] только за выбор
+Issue; 11/14/15 [ ], Full65 OPEN. История сохранена; финальный PR по
+бизнес-задаче не сливать, не включать auto-merge и не approve от имени владельца.
+
+Дополнение 20:19–20:22:10 UTC: Chrome MCP emulate mobile 390×844, own page 1;
+скриншоты graph и activity panel получены и просмотрены ROOT. Горизонтального
+переполнения нет, элементы управления видимы, владелец справа / агент слева,
+инструменты компактны; mobile visual evidence PASS, Console errors/warnings 0.
+Возвращён обычный desktop 2179×994; чужие вкладки не затронуты. Авторитетная
+Pinia в 20:22:10 UTC: platform/run LIVE, attempt 0, overflow false.
+Native INTAKE sequence 129, COMMENTARY: 10 выбранных документов прочитаны
+сотрудником до native EOF на одном main
+`ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69`; собственное Context7 чтение
+документации по `account/rateLimits/read` SUCCEEDED. Upstream main не является точной
+установленной source revision; сначала Architect должен установить и проверить
+её. Это сообщённый сотрудником промежуточный прогресс, не финальная приёмка
+manager plan. Итоговый semantic PASS INTAKE ещё NOT RUN; 11/14/15 остаются [ ].
+
+## Checkpoint 08.10.2026 20:12:50–20:14 UTC — один Workflow revision 7 запущен после merge PR1806
+
+PR1806 слит обычным squash, author SHA
+`e5a19a653c2e3070cb87a96e61d2cf8fcb546832`, точный main
+`ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69`: BOT remote/local tracking EQUAL.
+После синхронизации до этой записи дерево чистое; новая рабочая ветка
+`kodex-agent/issue-1797-full21-v7`. Runtime бинарники не менялись: волна
+только документационная.
+
+Readback принятого checkpoint до текущей записи: CP mounted handoff SHA256
+`aa99608ce5c3628ba38b9fe438e2ab4b88859d6dfb7d420f4e0a7698365ff710`
+EQUAL host; current frontend Ready Pod mounted store.ts SHA256
+`c64410e93d291a30bff9f78dd5e0bdec64921111bd46788eab8678e263dc493a`
+EQUAL host. Hash handoff не выдаётся за доставку новых строк этого checkpoint.
+
+Workflow revision 7 / version 22, publishedRevisionRef
+`wfv_vERJPIFmeE24bKG_hpDKyTAm`, owner launchReadiness READY / allowed true.
+Обычный Manager run `run_XwbYaFrAxdg8L6_QV_84Y31K`, session
+`ses_I80bmTL0xwXDTOzLWE59ONu6`, создан в 20:12:50 UTC. Issue #1796 OPEN
+подтверждён свежим авторитетным GitHub read; Manager самостоятельно прочитал
+Issue native tools и запустил один Workflow. В 20:14 UTC graph: agent execution
+SUCCEEDED, root RUNNING, ожидается external action / child
+`run_WGyaC4fntZgliH487NkcG4pu`. Итоговый ответ Manager: один Workflow запущен,
+callback ожидается, READY_NOTCONFIRMED, слияние запрещено. Завершение исполнения
+самого Manager не доказывает завершение корневого процесса.
+
+Все 21 шаг, четыре исходных input без раскрытия частных данных и прежние
+business acceptance criteria сохранены. Одно комплексное ревью и приёмка
+Manager, единственный финальный Human Gate step-057; штатный GitHub5 path
+сохраняет ограниченную cursor pagination и EOF. Screenshot graph 20:13 UTC
+PASS; activity pane 20:14 UTC PASS: владелец справа, агент слева, компактные
+инструменты. Console errors/warnings 0, все 20 просмотренных относящихся к
+сценарию Network-запросов HTTP 200. Чужие вкладки не затронуты.
+
+Checklist 13 [x] только за выбор реальной Issue #1796, native чтение Manager и
+штатный запуск. Реализация не объявлена PASS; полный Workflow и финальный PR
+ещё не готовы. Checklist 11/14/15 остаются [ ], Full65 OPEN. Следующее —
+штатный callback и продолжение процесса. Финальный PR по бизнес-задаче
+не сливать, не включать auto-merge и не approve от имени владельца.
 
 ## Checkpoint 08.10.2026 20:07:52 UTC — Workflow revision 7 опубликован, полный процесс NOT RUN
 

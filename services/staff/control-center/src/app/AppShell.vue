@@ -35,6 +35,7 @@ import { useRoute, useRouter } from "vue-router";
 import { buildBreadcrumbs, type BreadcrumbLabels } from "@/app/breadcrumbs";
 import {
   activeNavigationSection,
+  configurationRouteProjectRef,
   routeProjectRef,
 } from "@/app/navigation-context";
 import { resolveShellRealtimeState } from "@/app/realtime-presentation";
@@ -129,7 +130,7 @@ const projectRef = computed(
     routeProjectRef(route.params) ??
     (route.name === "configuration-catalog" || route.name === "onboarding"
       ? routeProjectRef(route.query)
-      : undefined),
+      : configurationRouteProjectRef(route.name, route.params, route.query)),
 );
 const activeSection = computed(() => activeNavigationSection(route.name));
 const fullBleedRunWorkspace = computed(
@@ -249,6 +250,14 @@ const assistantContext = computed(() => {
     workflows: platform.workflows,
     runs: platform.runs,
     roleImages: roleImages.recipes,
+    environments: runtime.environments,
+    organizationRef: platform.bootstrap?.organizationRef,
+    environmentReadBlocked:
+      typeof route.params.environmentRef === "string" &&
+      Boolean(
+        runtime.loading[`environment:${route.params.environmentRef}`] ||
+        runtime.problems[`environment:${route.params.environmentRef}`],
+      ),
   });
   if (
     route.query.assistantForm === "1" &&

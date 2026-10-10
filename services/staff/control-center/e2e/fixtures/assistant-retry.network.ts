@@ -551,6 +551,7 @@ export class AssistantRetryNetwork {
       if (url.pathname === "/api/v1/artifacts/art_retry_child") {
         const artifact: Artifact = {
           ref: "art_retry_child",
+          currentRevisionRef: "arv_fixture_retry_child",
           version: 1,
           ...(this.scope === "PROJECT" ? { projectRef } : {}),
           runRef: "run_retry_child",

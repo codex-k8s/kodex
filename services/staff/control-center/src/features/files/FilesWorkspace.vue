@@ -28,6 +28,7 @@ import FileLifecycleDialog from "@/features/files/FileLifecycleDialog.vue";
 import FilePreviewDialog from "@/features/files/FilePreviewDialog.vue";
 import FileTypeIcon from "@/features/files/FileTypeIcon.vue";
 import ArtifactBindingTargets from "@/features/files/ArtifactBindingTargets.vue";
+import ArtifactRevisionHistory from "@/features/files/ArtifactRevisionHistory.vue";
 import { bindingTargetEditable } from "@/features/files/binding-targets";
 import TrashBulkDialog from "@/features/files/TrashBulkDialog.vue";
 import {
@@ -190,7 +191,8 @@ const {
   loadingMore,
   query,
   total,
-  refresh,
+  refresh: resetCollection,
+  refreshPreservingItems: refresh,
   applySnapshot,
 } = collection;
 
@@ -549,7 +551,7 @@ watch(activeTab, () => {
 watch([activeTab, kind, scanState, source], () => {
   selectedRef.value = "";
   selectedRefs.value = [];
-  if (!applyRealtimeSnapshot()) refresh();
+  if (!applyRealtimeSnapshot()) resetCollection();
 });
 watch(query, (value) => {
   if (!value.trim()) applyRealtimeSnapshot();
@@ -560,7 +562,7 @@ watch(
   () => {
     selectedRef.value = "";
     selectedRefs.value = [];
-    if (!applyRealtimeSnapshot()) refresh();
+    if (!applyRealtimeSnapshot()) resetCollection();
   },
 );
 
@@ -596,23 +598,12 @@ function sourceLabel(value: Artifact["source"]): string {
   return t(`files.source.${value}`);
 }
 
-function uploadPreviewArtifact(item: UploadQueueItem): Artifact {
+function uploadPreviewArtifact(
+  item: UploadQueueItem,
+): Pick<Artifact, "fileName" | "mediaType"> {
   return {
-    ref: item.id,
-    version: 1,
-    projectRef: props.projectRef,
     fileName: item.file.name,
     mediaType: item.file.type || "application/octet-stream",
-    sizeBytes: item.file.size,
-    digest: "",
-    scanState: "PENDING",
-    source: "CONTROL_CENTER",
-    revision: 1,
-    lifecycleState: "ACTIVE",
-    agentBindings: [],
-    previewAvailable: false,
-    createdAt: "1970-01-01T00:00:00.000Z",
-    nextActions: [],
   };
 }
 
@@ -1101,7 +1092,7 @@ function closePreview(): void {
 }
 
 onMounted(() => {
-  if (!applyRealtimeSnapshot() && trashMode.value) refresh();
+  if (!applyRealtimeSnapshot()) refresh();
 });
 onBeforeUnmount(() => {
   disposed = true;
@@ -1446,7 +1437,7 @@ onBeforeUnmount(() => {
     />
 
     <AsyncState
-      :loading="initialLoading"
+      :loading="initialLoading && items.length === 0"
       :problem="items.length === 0 ? listProblem : undefined"
       :empty="items.length === 0 && !hasMore && !query.trim()"
       :empty-title="$t('files.emptyTitle')"
@@ -1546,9 +1537,11 @@ onBeforeUnmount(() => {
                 </span>
                 <span class="mono">v{{ artifact.revision }}</span>
                 <StatusBadge :state="artifact.scanState" />
-                <span class="file-list-row__date">{{
-                  formatDate(artifact.createdAt)
-                }}</span>
+                <span
+                  class="file-list-row__date"
+                  :title="formatDate(artifact.createdAt)"
+                  >{{ formatDate(artifact.createdAt) }}</span
+                >
               </button>
               <div class="file-collection-item__actions">
                 <button
@@ -1697,6 +1690,7 @@ onBeforeUnmount(() => {
               {{ $t("files.openPreview") }}
             </button>
           </section>
+          <ArtifactRevisionHistory :artifact="selectedArtifact" />
           <section class="file-details__bindings">
             <ArtifactBindingTargets
               :artifact="selectedArtifact"
@@ -1928,6 +1922,9 @@ onBeforeUnmount(() => {
 .files-workspace > .field-error {
   margin: 10px 14px 0;
 }
+.files-workspace > .problem-notice {
+  width: auto;
+}
 .files-workspace__layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -2122,8 +2119,8 @@ onBeforeUnmount(() => {
 .file-list-row {
   display: grid;
   grid-template-columns:
-    minmax(260px, 1.5fr) minmax(150px, 1fr)
-    64px 128px 132px;
+    minmax(0, 1.5fr) minmax(0, 1fr)
+    48px 100px 110px;
   gap: 12px;
   align-items: center;
 }
@@ -2169,6 +2166,12 @@ onBeforeUnmount(() => {
 .file-list-row__identity strong,
 .file-list-row__identity small,
 .file-list-row__binding {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-list-row__date {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

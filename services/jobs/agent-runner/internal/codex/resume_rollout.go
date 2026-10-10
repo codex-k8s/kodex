@@ -14,6 +14,16 @@ import (
 
 var errResumeSourceInvalid = errors.New("Codex resumed rollout source is invalid")
 
+// Причина назначается только локальной проверкой, без текста ответа или пути.
+type resumeSourceFailure struct {
+	detail string
+}
+
+func (failure *resumeSourceFailure) Error() string { return errResumeSourceInvalid.Error() }
+func (failure *resumeSourceFailure) Unwrap() error { return errResumeSourceInvalid }
+
+func rejectResumeSource(detail string) error { return &resumeSourceFailure{detail: detail} }
+
 // Locator подтверждается до resume, но не связывает исполняемый thread и usage.
 // Открытый FD удерживает inode до join; новые байты проверяются отдельно.
 type confirmedResumeSource struct {
@@ -41,6 +51,9 @@ func (server *appServer) bindExecutionThread(ctx context.Context, state *protoco
 		state.resumeSource = source
 		method = "thread/resume"
 		params["threadId"] = input.CodexSessionID
+		// Codex 0.160.0 сохраняет model history, но не повторяет её целиком
+		// в JSONL-ответе: для binding нужны только metadata и live-resume state.
+		params["excludeTurns"] = true
 	}
 	raw, err := server.call(ctx, state, method, params)
 	if err != nil {
@@ -54,28 +67,33 @@ func (server *appServer) bindExecutionThread(ctx context.Context, state *protoco
 
 func confirmResumeSource(input model.Input, raw json.RawMessage) (*confirmedResumeSource, error) {
 	sessionID, path, err := parseThreadRead(raw)
-	if err != nil || input.CodexSessionID == "" || sessionID != input.CodexSessionID ||
-		!filepath.IsAbs(input.WorkspaceRoot) || filepath.Clean(input.WorkspaceRoot) != input.WorkspaceRoot ||
+	if err != nil {
+		return nil, rejectResumeSource("RESUME_SOURCE_SCHEMA")
+	}
+	if input.CodexSessionID == "" || sessionID != input.CodexSessionID {
+		return nil, rejectResumeSource("RESUME_SOURCE_ID")
+	}
+	if !filepath.IsAbs(input.WorkspaceRoot) || filepath.Clean(input.WorkspaceRoot) != input.WorkspaceRoot ||
 		input.CodexHome != filepath.Join(input.WorkspaceRoot, ".kodex/state/codex-home") ||
 		!filepath.IsAbs(path) || filepath.Clean(path) != path {
-		return nil, errResumeSourceInvalid
+		return nil, rejectResumeSource("RESUME_SOURCE_LOCATOR")
 	}
 	relative, err := filepath.Rel(input.WorkspaceRoot, path)
 	if err != nil || runtimecontract.ValidateCodexArchiveIdentity(sessionID, filepath.ToSlash(relative)) != nil {
-		return nil, errResumeSourceInvalid
+		return nil, rejectResumeSource("RESUME_SOURCE_LOCATOR")
 	}
 	file, info, err := openProtectedFile(input.WorkspaceRoot, path)
 	if err != nil {
-		return nil, errResumeSourceInvalid
+		return nil, rejectResumeSource("RESUME_SOURCE_OPEN")
 	}
 	if !validResumeSourceInfo(info) {
 		file.Close()
-		return nil, errResumeSourceInvalid
+		return nil, rejectResumeSource("RESUME_SOURCE_METADATA")
 	}
 	source := &confirmedResumeSource{sessionID: sessionID, path: path, file: file, identity: info}
 	if source.verifyIdentity(input) != nil {
 		file.Close()
-		return nil, errResumeSourceInvalid
+		return nil, rejectResumeSource("RESUME_SOURCE_IDENTITY")
 	}
 	return source, nil
 }
@@ -91,19 +109,19 @@ func validResumeSourceInfo(info os.FileInfo) bool {
 
 func (source *confirmedResumeSource) verifyIdentity(input model.Input) error {
 	if source == nil || source.file == nil || source.sessionID != input.CodexSessionID {
-		return errResumeSourceInvalid
+		return rejectResumeSource("RESUME_SOURCE_IDENTITY")
 	}
 	held, err := source.file.Stat()
 	if err != nil || !validResumeSourceInfo(held) || !os.SameFile(source.identity, held) {
-		return errResumeSourceInvalid
+		return rejectResumeSource("RESUME_SOURCE_IDENTITY")
 	}
 	current, info, err := openProtectedFile(input.WorkspaceRoot, source.path)
 	if err != nil {
-		return errResumeSourceInvalid
+		return rejectResumeSource("RESUME_SOURCE_IDENTITY")
 	}
 	defer current.Close()
 	if !validResumeSourceInfo(info) || !os.SameFile(held, info) {
-		return errResumeSourceInvalid
+		return rejectResumeSource("RESUME_SOURCE_IDENTITY")
 	}
 	return nil
 }

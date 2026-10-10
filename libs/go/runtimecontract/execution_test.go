@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestRunnerV7RejectsOldABIAndEffortTampering(t *testing.T) {
@@ -400,6 +401,96 @@ func validRunnerInputFixture() RunnerInput {
 
 func refreshRunnerInputBindings(input *RunnerInput) {
 	input.ExecutionBindingDigest, input.MCPBindingDigest, _ = RuntimeExecutionBindingDigests(*input)
+}
+
+func TestRunnerDelegationUnicodeNativeInput(t *testing.T) {
+	input := validRunnerInputFixture()
+	text := strings.Repeat("a", 454) + strings.Repeat("я", 449)
+	if utf8.RuneCountInString(text) != 903 || len(text) != 1352 {
+		t.Fatal("native-shaped fixture dimensions changed")
+	}
+	input.DelegationTargets = []RunnerDelegationTarget{{Ref: "agent_ijklmnop", Name: "Manager", WorkflowStepKey: "step001", WorkflowStepName: "Intake", Instructions: text}}
+	source := RuntimeRevisionCredentialSource{SecretName: "fixture", SecretUID: "fixture-uid", SecretResourceVersion: "1"}
+	digest, err := RuntimeRevisionDigest(input, source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.RuntimeRevisionDigest = digest
+	refreshRunnerInputBindings(&input)
+	raw, err := EncodeRunnerInput(input)
+	if err != nil {
+		t.Fatalf("valid Unicode workflow rejected: %v", err)
+	}
+	decoded, err := DecodeRunnerInput(raw)
+	if err != nil || len(decoded.DelegationTargets) != 1 || decoded.DelegationTargets[0].Instructions != text {
+		t.Fatal("Unicode workflow input did not round trip exactly")
+	}
+	after, err := RuntimeRevisionDigest(decoded, source)
+	if err != nil || after != digest || decoded.RuntimeRevisionDigest != digest {
+		t.Fatal("Unicode text changed immutable revision digest")
+	}
+	oversized := append(raw, []byte(strings.Repeat(" ", MaximumRunnerInputBytes-len(raw)+1))...)
+	if _, err := DecodeRunnerInput(oversized); err == nil {
+		t.Fatal("accepted input exceeding hard byte budget")
+	}
+	decoded.DelegationTargets[0].Instructions += "я"
+	if decoded.Validate() == nil {
+		t.Fatal("accepted changed text without fresh exact binding")
+	}
+}
+
+func TestRunnerHumanTextUnicodeBounds(t *testing.T) {
+	for _, field := range []struct {
+		name  string
+		limit int
+		set   func(*RunnerInput, string)
+	}{
+		{"delegation.name", 160, func(i *RunnerInput, s string) { i.DelegationTargets[0].Name = s }},
+		{"delegation.purpose", 2000, func(i *RunnerInput, s string) { i.DelegationTargets[0].Purpose = s }},
+		{"delegation.role_description", 2000, func(i *RunnerInput, s string) { i.DelegationTargets[0].RoleDescription = s }},
+		{"delegation.workflow_step_name", 160, func(i *RunnerInput, s string) { i.DelegationTargets[0].WorkflowStepName = s }},
+		{"delegation.instructions", 1000, func(i *RunnerInput, s string) { i.DelegationTargets[0].Instructions = s }},
+		{"delegation.expected_result", 1000, func(i *RunnerInput, s string) { i.DelegationTargets[0].ExpectedResult = s }},
+		{"assistant_context.entity_name", 300, func(i *RunnerInput, s string) { i.AssistantContext.EntityName = s }},
+	} {
+		t.Run(field.name, func(t *testing.T) {
+			for _, sample := range []struct {
+				name, text string
+				valid      bool
+			}{
+				{"ascii_boundary", strings.Repeat("a", field.limit), true},
+				{"cyrillic_boundary", strings.Repeat("я", field.limit), true},
+				{"emoji_boundary", strings.Repeat("😀", field.limit), true},
+				{"ascii_overflow", strings.Repeat("a", field.limit+1), false},
+				{"unicode_overflow", strings.Repeat("я", field.limit+1), false},
+				{"invalid_utf8", "text\xff", false},
+				{"nul", "text\x00", false},
+			} {
+				t.Run(sample.name, func(t *testing.T) {
+					input := validRunnerInputFixture()
+					input.AssistantScope, input.AssistantProfileRef = AssistantScopeProject, "asstprof_abcdefgh"
+					input.AssistantContext = &RunnerAssistantContext{EntityKind: "WORKFLOW", EntityRef: "wfl_abcdefgh", EntityName: "Workflow"}
+					input.DelegationTargets = []RunnerDelegationTarget{{Ref: "agent_ijklmnop", Name: "Manager", WorkflowStepKey: "step001"}}
+					field.set(&input, sample.text)
+					refreshRunnerInputBindings(&input)
+					raw, err := EncodeRunnerInput(input)
+					if (err == nil) != sample.valid {
+						t.Fatalf("human-text accepted = %v, expected %v", err == nil, sample.valid)
+					}
+					if sample.valid {
+						if _, err := DecodeRunnerInput(raw); err != nil {
+							t.Fatal("valid Unicode input rejected by decoder")
+						}
+						input.DelegationTargets[0].WorkflowStepKey = strings.Repeat("я", 96)
+						refreshRunnerInputBindings(&input)
+						if input.Validate() == nil {
+							t.Fatal("human-text rules widened protocol identifier grammar")
+						}
+					}
+				})
+			}
+		})
+	}
 }
 
 func TestRunnerWorkspaceQuotaMatchesImmutableEnvironmentBudget(t *testing.T) {

@@ -11,8 +11,18 @@ func TestGeneratedControlPlanePolicyLoadsInActualAuthorizer(t *testing.T) {
 		t.Fatal(err)
 	}
 	authorizer, digest, err := FromPolicy(raw, target, &revocationCheck{})
-	if err != nil || len(digest) != 64 || len(authorizer.bindings) != 375 {
+	if err != nil || len(digest) != 64 || len(authorizer.bindings) != 412 {
 		t.Fatal("generated policy rejected")
+	}
+	const caller = "spiffe://kodex.local/ns/kodex-system/sa/runtime-controller"
+	const method = "/controlplane.v1.RuntimeWorkService/GetExecutionWorkflowCatalog"
+	const operation = "platform.runtime.execution.workflow.catalog"
+	binding, found := authorizer.bindings[caller+"\x00"+method]
+	if !found || binding != (Binding{
+		CallerSPIFFEID: caller, FullMethod: method, OperationID: operation,
+		Permission: operation, ActorMode: ServiceActor, ProjectRequired: false,
+	}) {
+		t.Fatal("workflow catalog service binding rejected")
 	}
 	for _, binding := range authorizer.bindings {
 		if binding.OperationID == "platform.stt.policy.resolve" {

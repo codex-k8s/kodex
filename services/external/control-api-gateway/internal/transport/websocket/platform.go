@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -47,9 +48,14 @@ type platformBusEnvelope struct {
 	CorrelationRef   string    `json:"correlationRef"`
 	CausationRef     string    `json:"causationRef,omitempty"`
 	Data             struct {
-		Kind        string `json:"kind"`
-		State       string `json:"state,omitempty"`
-		SafeSummary string `json:"safeSummary"`
+		Kind             string `json:"kind"`
+		State            string `json:"state,omitempty"`
+		SafeSummary      string `json:"safeSummary"`
+		ArtifactRevision *struct {
+			Ref      string `json:"ref"`
+			Revision int64  `json:"revision"`
+			Digest   string `json:"digest"`
+		} `json:"artifactRevision,omitempty"`
 	} `json:"data"`
 }
 
@@ -80,6 +86,12 @@ func decodePlatformSignal(payload []byte, organizationRef string) (platformSigna
 	}
 	if envelope.ProjectRef != "" && !safeRef.MatchString(envelope.ProjectRef) {
 		return platformSignal{}, false
+	}
+	if revision := envelope.Data.ArtifactRevision; revision != nil {
+		if envelope.EventName != "ARTIFACT_CHANGED" || !safeRef.MatchString(revision.Ref) || revision.Revision < 1 ||
+			len(revision.Digest) != 71 || !strings.HasPrefix(revision.Digest, "sha256:") || strings.Trim(revision.Digest[7:], "0123456789abcdef") != "" {
+			return platformSignal{}, false
+		}
 	}
 	return platformSignal{Sequence: envelope.Sequence, EventName: envelope.EventName, Kind: kind, ProjectRef: envelope.ProjectRef}, true
 }

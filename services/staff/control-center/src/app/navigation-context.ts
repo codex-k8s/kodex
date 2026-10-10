@@ -70,3 +70,16 @@ export function routeProjectRef(
   const value = params.projectRef;
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
+
+export function configurationRouteProjectRef(
+  routeName: unknown,
+  params: Record<string, unknown>,
+  query: Record<string, unknown>,
+): string | undefined {
+  if (
+    routeName !== "configuration" ||
+    (params.kind !== "ROLE_IMAGE" && params.kind !== "PROMPT_TEMPLATE")
+  )
+    return;
+  return routeProjectRef(query);
+}

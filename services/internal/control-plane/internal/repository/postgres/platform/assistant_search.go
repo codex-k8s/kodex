@@ -200,7 +200,7 @@ func (repository *Repository) searchAssistantResourcesOnce(ctx context.Context, 
 	for _, item := range candidates {
 		if item.Kind != "PROJECT" && item.Kind != "AGENT" && item.Kind != "WORKFLOW" && item.Kind != "RUN" &&
 			item.Kind != "ROLE_IMAGE" && item.Kind != "RUNTIME_ENVIRONMENT" && item.Kind != "SCHEDULE" &&
-			item.Kind != "INTEGRATION" && item.Kind != "SECRET" {
+			item.Kind != "INTEGRATION" && item.Kind != "SECRET" && item.Kind != "ARTIFACT" {
 			continue
 		}
 		visible, err := repository.resourceVisible(ctx, tx, current, subject.AccessSubject, bindings,

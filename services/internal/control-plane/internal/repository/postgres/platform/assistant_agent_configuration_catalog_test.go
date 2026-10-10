@@ -80,6 +80,19 @@ func testAssistantAgentConfigurationUnderLease(t *testing.T, ctx context.Context
 	if err := repository.pool.QueryRow(ctx, queryAssistantConfigurationComponentEffects, actor.organizationID).Scan(&afterEffects); err != nil || beforeEffects != afterEffects {
 		t.Fatal("agent configuration read mutated receipt/audit/outbox state")
 	}
+	runtimeInput := input
+	runtimeInput.Kind = "AGENT_RUNTIME_CONFIGURATION"
+	runtimeResult, runtimeErr := read(runtimeInput, stringMap(lease, "fence"), lease["generation"].(int64))
+	if runtimeErr != nil || runtimeResult.AgentRuntimeConfiguration == nil || runtimeResult.AgentConfiguration != nil {
+		t.Fatal("exact agent runtime configuration read failed", runtimeErr)
+	}
+	var runtimeSnapshot map[string]any
+	if json.Unmarshal(runtimeResult.AgentRuntimeConfiguration.ConfigurationJSON, &runtimeSnapshot) != nil || len(runtimeSnapshot) != 16 || runtimeSnapshot["agent_ref"] != agentRef || runtimeSnapshot["project_ref"] != result.ProjectRef || runtimeSnapshot["configured_tools"] == nil || runtimeSnapshot["verified_tool_inventory"] == nil {
+		t.Fatal("runtime configuration lost exact bound environment or tools")
+	}
+	if err := repository.pool.QueryRow(ctx, queryAssistantConfigurationComponentEffects, actor.organizationID).Scan(&afterEffects); err != nil || beforeEffects != afterEffects {
+		t.Fatal("runtime configuration read mutated receipt/audit/outbox state")
+	}
 	current, err := service.GetAgent(ctx, owner, agentRef)
 	if err != nil {
 		t.Fatal(err)
@@ -107,15 +120,21 @@ func testAssistantAgentConfigurationUnderLease(t *testing.T, ctx context.Context
 		"account":             func(i *entity.AssistantConfigurationCatalogRequest) { i.AccountRef = "acc_foreign123" },
 	} {
 		t.Run("agent configuration "+name, func(t *testing.T) {
-			bad := input
-			mutate(&bad)
-			if _, err := read(bad, stringMap(lease, "fence"), lease["generation"].(int64)); err == nil {
-				t.Fatal("closed agent selector accepted")
+			for _, kind := range []string{"AGENT_CONFIGURATION", "AGENT_RUNTIME_CONFIGURATION"} {
+				bad := input
+				bad.Kind = kind
+				mutate(&bad)
+				if _, err := read(bad, stringMap(lease, "fence"), lease["generation"].(int64)); err == nil {
+					t.Fatal("closed agent selector accepted")
+				}
 			}
 		})
 	}
 	if _, err := service.ListAssistantConfigurationCatalog(ctx, owner, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), input); !errors.Is(err, errs.ErrForbidden) {
 		t.Fatal("ordinary caller read instructions")
+	}
+	if _, err := service.ListAssistantConfigurationCatalog(ctx, owner, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), runtimeInput); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatal("ordinary caller read runtime configuration")
 	}
 	for _, pins := range []struct {
 		fence      string
@@ -124,27 +143,38 @@ func testAssistantAgentConfigurationUnderLease(t *testing.T, ctx context.Context
 		if _, err := read(input, pins.fence, pins.generation); !errors.Is(err, errs.ErrNotFound) {
 			t.Fatal("stale lease pins read instructions")
 		}
+		if _, err := read(runtimeInput, pins.fence, pins.generation); !errors.Is(err, errs.ErrNotFound) {
+			t.Fatal("stale lease pins read runtime configuration")
+		}
 	}
 	var expiry time.Time
 	if err := repository.pool.QueryRow(ctx, queryAssistantCurrentConfigurationExpire, stringMap(lease, "leaseRef")).Scan(&expiry); err != nil {
 		t.Fatal(err)
 	}
 	_, expiredErr := read(input, stringMap(lease, "fence"), lease["generation"].(int64))
+	_, runtimeExpiredErr := read(runtimeInput, stringMap(lease, "fence"), lease["generation"].(int64))
 	if _, err := repository.pool.Exec(ctx, queryAssistantCurrentConfigurationRestoreExpiry, stringMap(lease, "leaseRef"), expiry); err != nil {
 		t.Fatal(err)
 	}
 	if !errors.Is(expiredErr, errs.ErrNotFound) {
 		t.Fatal("expired lease read instructions")
 	}
+	if !errors.Is(runtimeExpiredErr, errs.ErrNotFound) {
+		t.Fatal("expired lease read runtime configuration")
+	}
 	var revokedBindings []string
 	if err := repository.pool.QueryRow(ctx, queryAssistantConfigurationComponentMembership, pgx.StrictNamedArgs{"organization_id": actor.organizationID, "actor_id": actor.actorID}).Scan(&revokedBindings); err != nil {
 		t.Fatal(err)
 	}
 	_, revokedErr := read(input, stringMap(lease, "fence"), lease["generation"].(int64))
+	_, runtimeRevokedErr := read(runtimeInput, stringMap(lease, "fence"), lease["generation"].(int64))
 	if _, err := repository.pool.Exec(ctx, queryAssistantConfigurationComponentMembershipRestore, pgx.StrictNamedArgs{"organization_id": actor.organizationID, "actor_id": actor.actorID, "refs": revokedBindings}); err != nil {
 		t.Fatal(err)
 	}
 	if !errors.Is(revokedErr, errs.ErrForbidden) && !errors.Is(revokedErr, errs.ErrNotFound) {
 		t.Fatal("revoked view/manage authority read instructions")
+	}
+	if !errors.Is(runtimeRevokedErr, errs.ErrForbidden) && !errors.Is(runtimeRevokedErr, errs.ErrNotFound) {
+		t.Fatal("revoked view/manage authority read runtime configuration")
 	}
 }

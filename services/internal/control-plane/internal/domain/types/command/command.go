@@ -63,6 +63,7 @@ const (
 	CompleteOnboarding                        Kind = "COMPLETE_ONBOARDING"
 	CreateProject                             Kind = "CREATE_PROJECT"
 	CreateProjectFile                         Kind = "CREATE_PROJECT_FILE"
+	CreateProjectFileRevision                 Kind = "CREATE_PROJECT_FILE_REVISION"
 	UpdateProject                             Kind = "UPDATE_PROJECT"
 	TrashProject                              Kind = "TRASH_PROJECT"
 	RestoreProject                            Kind = "RESTORE_PROJECT"
@@ -447,20 +448,28 @@ type AssistantTurnInput struct {
 }
 type AssistantTurnCancellationInput struct{ ConversationRef string }
 type AssistantPlanInput struct {
-	PlanRef       string
-	Revision      int64
-	PreparedFiles map[string]CompletedArtifact
+	PlanRef  string
+	Revision int64
 }
 
 type ProjectFileInput struct {
-	ProjectRef, FileName, MediaType, SHA256 string
-	SizeBytes                               int64
-	Content                                 []byte
-	Prepared                                *PreparedArtifact
+	ProjectRef, FileName, MediaType, SHA256, ContentRef string
+	PreparedLedgerID                                    string
+	SizeBytes                                           int64
+	Content                                             []byte
+	Prepared                                            *PreparedArtifact
+}
+type ProjectFileRevisionInput struct {
+	ArtifactRef, MediaType, Digest, ContentRef, SourceRevisionRef string
+	SizeBytes                                                     int64
+	Content                                                       []byte
+	Prepared                                                      *PreparedArtifact
+	PreparedLedgerID, PreparedRevisionRef                         string
 }
 type AssistantPlanDraftInput struct {
 	PlanRef, Summary string
 	Operations       []entity.AssistantPlanOperation
+	PreparedContent  map[string]string
 }
 type AssistantInstructionsInput struct{ Instructions string }
 type LeaseInput struct {
@@ -504,6 +513,7 @@ type ProposeAssistantPlanInput struct {
 	LeaseRef, Fence, Summary string
 	Generation               int64
 	Operations               []entity.AssistantPlanOperation
+	PreparedContent          map[string]string
 }
 type ProposeAssistantMetadataInput struct {
 	LeaseRef, Fence, Title string

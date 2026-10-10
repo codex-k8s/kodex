@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	port "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	serviceplatform "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -131,6 +132,27 @@ func TestRuntimeAssistantRecordToolCallPhaseComponent(t *testing.T) {
 	ordinary := createLifecycleAgent(t, ctx, service, owner, project.Ref, "tool-phase-ordinary", "Ordinary operator")
 	execute(command.LaunchRun, owner, "ordinary-run", nil, command.LaunchRunInput{ProjectRef: project.Ref, Task: "Ordinary fixture", Target: entity.RunTarget{Type: "AGENT", Ref: ordinary.Ref}})
 	ordinaryLease := claim("ordinary-claim")
+	// Собственный read использует прежний fresh lease, не assistant permission.
+	own := callFor(ordinaryLease, "tcl_ordinary_own_snapshot", runtimecontract.ExecutionSnapshotTool, "")
+	startedOwn := execute(command.RecordRunToolCall, toolActor, "own-read-start", nil, own).Event
+	if startedOwn.ToolCall == nil || startedOwn.ToolCall.CapabilityRef != "" || startedOwn.ToolCall.GrantRef != "" || startedOwn.Actor.Ref != ordinary.Ref {
+		t.Fatal("own read invented a capability or changed actor")
+	}
+	own.State, own.Revision, own.SafeResult = "SUCCEEDED", 2, runtimecontract.ExecutionSnapshotTool+":completed"
+	execute(command.RecordRunToolCall, toolActor, "own-read-finish", nil, own)
+	for name, change := range map[string]func(*command.RunToolCallInput){
+		"stale-fence":      func(v *command.RunToolCallInput) { v.Fence = "stale-fixture" },
+		"stale-generation": func(v *command.RunToolCallInput) { v.Generation++ },
+	} {
+		t.Run("own-read-"+name, func(t *testing.T) {
+			call := callFor(ordinaryLease, "tcl_own_"+name, runtimecontract.ExecutionSnapshotTool, "")
+			change(&call)
+			if _, err := service.Execute(ctx, command.Command{Kind: command.RecordRunToolCall, Principal: toolActor,
+				Mutation: value.Mutation{IdempotencyKey: "own-read-" + name}, Payload: call}); !errors.Is(err, errs.ErrForbidden) {
+				t.Fatalf("stale own read lease accepted: %v", err)
+			}
+		})
+	}
 	for index, item := range tools {
 		call := callFor(ordinaryLease, fmt.Sprintf("tcl_ordinary_phase_%d", index), item.name, item.capability)
 		if _, err := service.Execute(ctx, command.Command{Kind: command.RecordRunToolCall, Principal: toolActor, Mutation: value.Mutation{IdempotencyKey: "tool-phase-ordinary-" + item.name}, Payload: call}); !errors.Is(err, errs.ErrInvalid) {
@@ -240,5 +262,10 @@ func TestRuntimeAssistantRecordToolCallPhaseComponent(t *testing.T) {
 	afterTerminal := callFor(lease, "tcl_after_terminal", "get_configuration_catalog", "platform.configuration.read")
 	if _, err := service.Execute(ctx, command.Command{Kind: command.RecordRunToolCall, Principal: toolActor, Mutation: value.Mutation{IdempotencyKey: "tool-phase-after-terminal"}, Payload: afterTerminal}); !errors.Is(err, errs.ErrForbidden) {
 		t.Fatalf("terminal project lease accepted a tool: %v", err)
+	}
+	afterTerminal.Tool, afterTerminal.CapabilityRef, afterTerminal.CallRef = runtimecontract.ExecutionSnapshotTool, "", "tcl_own_after_terminal"
+	if _, err := service.Execute(ctx, command.Command{Kind: command.RecordRunToolCall, Principal: toolActor,
+		Mutation: value.Mutation{IdempotencyKey: "own-read-after-terminal"}, Payload: afterTerminal}); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("terminal own read lease accepted: %v", err)
 	}
 }

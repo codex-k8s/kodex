@@ -226,6 +226,7 @@ type TranscriptionCredentialProjection struct {
 }
 
 type Repository interface {
+	GetExecutionWorkflowCatalog(context.Context, value.Principal, query.ExecutionWorkflowCatalog) (entity.ExecutionWorkflowCatalog, error)
 	GetEmailMailboxConfiguration(context.Context, value.Principal, string, string, string) (entity.EmailMailboxConfigurationView, error)
 	ListEmailMailboxConfigurations(context.Context, value.Principal, string, string, query.Page) (entity.EmailMailboxPage, error)
 	ListEmailMailboxCredentials(context.Context, value.Principal, string, string, query.Page) ([]entity.EmailMailboxCredential, int64, string, error)
@@ -331,15 +332,19 @@ type Repository interface {
 	GetOwnerGate(context.Context, value.Principal, string) (entity.OwnerGate, error)
 	ListArtifacts(context.Context, value.Principal, query.Filter) ([]entity.Artifact, int64, string, error)
 	GetArtifact(context.Context, value.Principal, string) (entity.Artifact, error)
+	ListArtifactRevisions(context.Context, value.Principal, string, query.Page) ([]entity.ArtifactRevision, int64, string, error)
+	GetArtifactRevision(context.Context, value.Principal, string, string) (entity.ArtifactRevision, error)
 	GetArtifactImpact(context.Context, value.Principal, string, string) (entity.ArtifactImpact, error)
 	GetAttachmentSet(context.Context, value.Principal, string, query.Page) (entity.AttachmentSet, string, error)
 	UploadArtifact(context.Context, value.Principal, value.Mutation, ArtifactUpload) (entity.Artifact, error)
 	UploadAgentAvatar(context.Context, value.Principal, value.Mutation, AgentAvatarUpload) (entity.Agent, error)
 	CleanupExpiredAgentAvatarUploads(context.Context, int32) error
 	DownloadArtifact(context.Context, value.Principal, string, string) (ArtifactDownload, error)
+	DownloadArtifactRevision(context.Context, value.Principal, string, string, string) (ArtifactDownload, error)
 	PurgeArtifact(context.Context, value.Principal, value.Mutation, string, string) (string, error)
 	ReadExecutionArtifact(context.Context, value.Principal, string, string, int64, string) (ArtifactDownload, error)
 	SearchAssistantResources(context.Context, value.Principal, string, string, int64, string) ([]entity.SearchResult, bool, error)
+	ReadAssistantTaskSession(context.Context, value.Principal, string, string, int64, query.AssistantTaskSessionRead) (query.AssistantTaskSessionPage, error)
 	ListAssistantIntegrationDefinitions(context.Context, value.Principal, string, string, int64, string, int32) ([]entity.AssistantIntegrationDefinition, int32, error)
 	ListAssistantConfigurationCatalog(context.Context, value.Principal, string, string, int64, entity.AssistantConfigurationCatalogRequest) (entity.AssistantConfigurationCatalogResponse, error)
 	SearchExecutionFiles(context.Context, value.Principal, query.ExecutionFileContext, string, query.Page) (entity.ExecutionFilePage, error)

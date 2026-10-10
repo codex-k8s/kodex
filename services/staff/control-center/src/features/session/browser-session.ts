@@ -74,6 +74,17 @@ export function authorizationRedirect(
   return url.toString();
 }
 
+export class AuthorizationCallbackError extends Error {
+  constructor(reason: "invalid" | "mismatch") {
+    super(
+      reason === "invalid"
+        ? "Owner authorization callback is invalid"
+        : "Owner authorization state does not match this browser flow",
+    );
+    this.name = "AuthorizationCallbackError";
+  }
+}
+
 export function authorizationCallback(url: URL): {
   code: string;
   state: string;
@@ -90,6 +101,6 @@ export function authorizationCallback(url: URL): {
     !states[0] ||
     !/^[A-Za-z0-9_-]{43}$/.test(states[0])
   )
-    throw new Error("Owner authorization callback is invalid");
+    throw new AuthorizationCallbackError("invalid");
   return { code: codes[0], state: states[0] };
 }

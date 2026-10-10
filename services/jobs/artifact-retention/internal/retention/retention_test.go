@@ -54,7 +54,7 @@ func (objects *fakeObjects) Head(_ context.Context, key, version string) (object
 func TestProcessDeletesExactVersionBeforeTombstone(t *testing.T) {
 	events := make([]string, 0, 3)
 	repository := &fakeRepository{
-		claims: []Claim{{ArtifactID: "id", ArtifactRef: "artifact_ref", ObjectKey: "org/file", ObjectVersion: "v7", Generation: 3}},
+		claims: []Claim{{ArtifactID: "id", ArtifactRef: "artifact_ref", RevisionID: "revision_id", ObjectKey: "org/file", ObjectVersion: "v7", Generation: 3}},
 		events: &events,
 	}
 	objects := &fakeObjects{headErr: objectstorage.ErrNotFound, events: &events}
@@ -75,7 +75,7 @@ func TestProcessDeletesExactVersionBeforeTombstone(t *testing.T) {
 }
 
 func TestProcessDoesNotTombstoneFailedDeletion(t *testing.T) {
-	repository := &fakeRepository{claims: []Claim{{ArtifactID: "id", ArtifactRef: "artifact_ref", ObjectKey: "org/file", ObjectVersion: "v7", Generation: 3}}}
+	repository := &fakeRepository{claims: []Claim{{ArtifactID: "id", ArtifactRef: "artifact_ref", RevisionID: "revision_id", ObjectKey: "org/file", ObjectVersion: "v7", Generation: 3}}}
 	objects := &fakeObjects{deleteErr: errors.New("object storage unavailable")}
 
 	processed, err := NewProcessor(repository, objects).Process(context.Background(), "worker-1", 10, 60)
@@ -85,7 +85,7 @@ func TestProcessDoesNotTombstoneFailedDeletion(t *testing.T) {
 }
 
 func TestProcessFinalizesAlreadyMissingExactVersion(t *testing.T) {
-	repository := &fakeRepository{claims: []Claim{{ArtifactID: "id", ArtifactRef: "artifact_ref", ObjectKey: "org/file", ObjectVersion: "v7", Generation: 3}}}
+	repository := &fakeRepository{claims: []Claim{{ArtifactID: "id", ArtifactRef: "artifact_ref", RevisionID: "revision_id", ObjectKey: "org/file", ObjectVersion: "v7", Generation: 3}}}
 	objects := &fakeObjects{deleteErr: objectstorage.ErrNotFound, headErr: objectstorage.ErrNotFound}
 
 	processed, err := NewProcessor(repository, objects).Process(context.Background(), "worker-1", 10, 60)
@@ -95,7 +95,7 @@ func TestProcessFinalizesAlreadyMissingExactVersion(t *testing.T) {
 }
 
 func TestProcessDoesNotTombstoneObjectStillPresentAfterDelete(t *testing.T) {
-	repository := &fakeRepository{claims: []Claim{{ArtifactID: "id", ArtifactRef: "artifact_ref", ObjectKey: "org/file", ObjectVersion: "v7", Generation: 3}}}
+	repository := &fakeRepository{claims: []Claim{{ArtifactID: "id", ArtifactRef: "artifact_ref", RevisionID: "revision_id", ObjectKey: "org/file", ObjectVersion: "v7", Generation: 3}}}
 	objects := &fakeObjects{}
 
 	processed, err := NewProcessor(repository, objects).Process(context.Background(), "worker-1", 10, 60)
@@ -105,7 +105,7 @@ func TestProcessDoesNotTombstoneObjectStillPresentAfterDelete(t *testing.T) {
 }
 
 func TestProcessDoesNotTombstoneUncertainHeadFailure(t *testing.T) {
-	repository := &fakeRepository{claims: []Claim{{ArtifactID: "id", ArtifactRef: "artifact_ref", ObjectKey: "org/file", ObjectVersion: "v7", Generation: 3}}}
+	repository := &fakeRepository{claims: []Claim{{ArtifactID: "id", ArtifactRef: "artifact_ref", RevisionID: "revision_id", ObjectKey: "org/file", ObjectVersion: "v7", Generation: 3}}}
 	objects := &fakeObjects{headErr: objectstorage.ErrUnavailable}
 
 	processed, err := NewProcessor(repository, objects).Process(context.Background(), "worker-1", 10, 60)

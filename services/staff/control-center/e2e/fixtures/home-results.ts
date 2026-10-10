@@ -13,6 +13,7 @@ export async function checkHomeResults(
   let catalogReads = 0;
   const artifact = (index: number): Artifact => ({
     ref: `artifact_home_${String(index)}`,
+    currentRevisionRef: `arv_fixture_home_${String(index)}`,
     version: 1,
     revision: 1,
     fileName: `Личный результат ${String(index)}`,

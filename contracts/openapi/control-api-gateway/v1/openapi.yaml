@@ -4350,6 +4350,63 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/RunAttachmentEligibility" }
         default: { $ref: "#/components/responses/Problem" }
+  /api/v1/artifacts/{artifactRef}/revisions:
+    get:
+      tags: [Artifacts]
+      operationId: listArtifactRevisions
+      parameters:
+        - { $ref: "#/components/parameters/ArtifactRef" }
+        - name: pageSize
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+        - { $ref: "#/components/parameters/PageToken" }
+      responses:
+        "200":
+          description: История immutable revisions, отсортированная по номеру по убыванию; cursor закрепляет actor, artifact и aggregate version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ArtifactRevisionPage" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/artifacts/{artifactRef}/revisions/{revisionRef}:
+    get:
+      tags: [Artifacts]
+      operationId: getArtifactRevision
+      parameters:
+        - { $ref: "#/components/parameters/ArtifactRef" }
+        - name: revisionRef
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/OpaqueRef" }
+      responses:
+        "200":
+          description: Exact immutable revision внутри текущей owner eligibility, без fallback latest
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ArtifactRevision" }
+        default: { $ref: "#/components/responses/Problem" }
+  /api/v1/artifacts/{artifactRef}/revisions/{revisionRef}/content:
+    get:
+      tags: [Artifacts]
+      operationId: downloadArtifactRevision
+      parameters:
+        - { $ref: "#/components/parameters/ArtifactRef" }
+        - name: revisionRef
+          in: path
+          required: true
+          schema: { $ref: "#/components/schemas/OpaqueRef" }
+        - name: purpose
+          in: query
+          required: true
+          schema: { type: string, enum: [DOWNLOAD, PREVIEW] }
+      responses:
+        "200":
+          description: Защищённый bounded stream точной eligible CLEAN revision
+          headers:
+            Content-Disposition: { schema: { type: string } }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Problem" }
   /api/v1/artifacts/{artifactRef}:
     get:
       tags: [Artifacts]
@@ -15405,9 +15462,15 @@ components:
             items: { $ref: "#/components/schemas/NextAction" },
           }
     RunEventServiceCode:
-      description: Необязательный закрытый код служебной отмены из авторитетного события до локализации; не полномочие и не привязка выполнения.
+      description: Необязательный закрытый код служебного события до локализации; не полномочие и не привязка выполнения.
       type: string
-      enum: [RUN_CANCELLED, RUN_NODE_CANCELLED, ASSISTANT_TURN_CANCELLED]
+      enum:
+        [
+          RUN_CANCELLED,
+          RUN_NODE_CANCELLED,
+          ASSISTANT_TURN_CANCELLED,
+          ROOT_PROCESS_COMPLETED,
+        ]
     RunEvent:
       type: object
       additionalProperties: false
@@ -15985,6 +16048,7 @@ components:
           scanState,
           source,
           revision,
+          currentRevisionRef,
           lifecycleState,
           agentBindings,
           previewAvailable,
@@ -16020,6 +16084,7 @@ components:
               ],
           }
         revision: { type: integer, minimum: 1 }
+        currentRevisionRef: { $ref: "#/components/schemas/OpaqueRef" }
         lifecycleState:
           { type: string, enum: [ACTIVE, DELETED, PURGE_PENDING, PURGED] }
         deletedAt: { $ref: "#/components/schemas/Timestamp" }
@@ -16030,6 +16095,32 @@ components:
         createdAt: { $ref: "#/components/schemas/Timestamp" }
         nextActions:
           { type: array, items: { $ref: "#/components/schemas/NextAction" } }
+    ArtifactRevision:
+      type: object
+      additionalProperties: false
+      required: [ref, artifactRef, revision, fileName, mediaType, sizeBytes, digest, scanState, source, previewAvailable, createdAt]
+      properties:
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        artifactRef: { $ref: "#/components/schemas/OpaqueRef" }
+        revision: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        fileName: { type: string, minLength: 1, maxLength: 255 }
+        mediaType: { type: string, minLength: 1, maxLength: 160 }
+        sizeBytes: { type: integer, format: int64, minimum: 0, maximum: 536870912 }
+        digest: { type: string, pattern: "^sha256:[a-f0-9]{64}$" }
+        scanState: { type: string, enum: [PENDING, SCANNING, CLEAN, QUARANTINED, FAILED] }
+        source:
+          type: string
+          enum: [CONTROL_CENTER, AGENT_RESULT, INTEGRATION_RESULT, KNOWLEDGE_SOURCE, INTERACTION_ATTACHMENT]
+        previewAvailable: { type: boolean }
+        createdAt: { $ref: "#/components/schemas/Timestamp" }
+    ArtifactRevisionPage:
+      type: object
+      additionalProperties: false
+      required: [items, total]
+      properties:
+        items: { type: array, maxItems: 50, items: { $ref: "#/components/schemas/ArtifactRevision" } }
+        total: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991 }
+        nextPageToken: { type: string }
     ArtifactBindingInput:
       type: object
       additionalProperties: false
@@ -18124,6 +18215,7 @@ components:
               [
                 CREATE_PROJECT,
                 CREATE_PROJECT_FILE,
+                CREATE_PROJECT_FILE_REVISION,
                 CREATE_AGENT,
                 CREATE_PROJECT_ASSISTANT,
                 CREATE_WORKFLOW,
@@ -18327,6 +18419,7 @@ components:
                 [
                   CREATE_PROJECT,
                   CREATE_PROJECT_FILE,
+                  CREATE_PROJECT_FILE_REVISION,
                   CREATE_AGENT,
                   CREATE_PROJECT_ASSISTANT,
                   CREATE_WORKFLOW,
@@ -18391,6 +18484,7 @@ components:
               resourceRef: { $ref: "#/components/schemas/OpaqueRef" }
               outcome: { type: string, enum: [APPLIED] }
               auditRef: { $ref: "#/components/schemas/OpaqueRef" }
+              artifactRevision: { $ref: "#/components/schemas/ArtifactRevision" }
         conflicts:
           type: array
           maxItems: 32

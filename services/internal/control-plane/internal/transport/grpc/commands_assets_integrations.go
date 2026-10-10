@@ -307,7 +307,22 @@ func validSHA256(value string) bool {
 }
 
 func (server *Server) DownloadArtifact(request *controlplanev1.DownloadArtifactRequest, stream controlplanev1.PlatformCommandService_DownloadArtifactServer) error {
-	p, err := principal(stream.Context(), controlplanev1.PlatformCommandService_DownloadArtifact_FullMethodName)
+	return server.downloadArtifact(request, stream.Context(), controlplanev1.PlatformCommandService_DownloadArtifact_FullMethodName, "", stream.Send)
+}
+
+func (server *Server) DownloadArtifactRevision(request *controlplanev1.DownloadArtifactRevisionRequest, stream controlplanev1.PlatformCommandService_DownloadArtifactRevisionServer) error {
+	if request.GetRevisionRef() == "" {
+		return status.Error(codes.InvalidArgument, "artifact revision is required")
+	}
+	return server.downloadArtifact(&controlplanev1.DownloadArtifactRequest{ArtifactRef: request.GetArtifactRef(), Purpose: request.GetPurpose()},
+		stream.Context(), controlplanev1.PlatformCommandService_DownloadArtifactRevision_FullMethodName, request.GetRevisionRef(),
+		func(frame *controlplanev1.DownloadArtifactResponse) error {
+			return stream.Send(&controlplanev1.DownloadArtifactRevisionResponse{Data: frame.GetData(), FileName: frame.GetFileName(), MediaType: frame.GetMediaType(), SizeBytes: frame.GetSizeBytes()})
+		})
+}
+
+func (server *Server) downloadArtifact(request *controlplanev1.DownloadArtifactRequest, ctx context.Context, method, revisionRef string, send func(*controlplanev1.DownloadArtifactResponse) error) error {
+	p, err := principal(ctx, method)
 	if err != nil {
 		return err
 	}
@@ -320,12 +335,17 @@ func (server *Server) DownloadArtifact(request *controlplanev1.DownloadArtifactR
 	default:
 		return status.Error(codes.InvalidArgument, "artifact download purpose is required")
 	}
-	download, err := server.service.DownloadArtifact(stream.Context(), p, request.GetArtifactRef(), purpose)
+	var download repository.ArtifactDownload
+	if revisionRef == "" {
+		download, err = server.service.DownloadArtifact(ctx, p, request.GetArtifactRef(), purpose)
+	} else {
+		download, err = server.service.DownloadArtifactRevision(ctx, p, request.GetArtifactRef(), revisionRef, purpose)
+	}
 	if err != nil {
 		return transportError(err)
 	}
 	defer download.Reader.Close()
-	if err := stream.Send(&controlplanev1.DownloadArtifactResponse{
+	if err := send(&controlplanev1.DownloadArtifactResponse{
 		FileName:  download.Artifact.FileName,
 		MediaType: download.Artifact.MediaType,
 		SizeBytes: download.Artifact.SizeBytes,
@@ -337,7 +357,7 @@ func (server *Server) DownloadArtifact(request *controlplanev1.DownloadArtifactR
 		count, readErr := download.Reader.Read(chunk)
 		if count > 0 {
 			response := &controlplanev1.DownloadArtifactResponse{Data: append([]byte(nil), chunk[:count]...)}
-			if err := stream.Send(response); err != nil {
+			if err := send(response); err != nil {
 				return err
 			}
 		}

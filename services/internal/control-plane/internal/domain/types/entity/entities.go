@@ -252,6 +252,7 @@ type RuntimeWorkspacePolicy struct {
 }
 
 type PromptMaterializationSnapshot struct {
+	AssistantCore               *PromptAssistantCore                  `json:"assistantCore,omitempty"`
 	ExtraTemplates              []PromptUserTemplate                  `json:"extraTemplates,omitempty"`
 	Artifacts                   []runtimecontract.RunnerInputArtifact `json:"artifacts,omitempty"`
 	UnavailableVariables        map[string]string                     `json:"unavailableVariables,omitempty"`
@@ -279,6 +280,12 @@ type PromptMaterializationSnapshot struct {
 	WorkflowStage               string                                `json:"workflowStage"`
 	Automation                  string                                `json:"automation"`
 	SessionContinuation         string                                `json:"sessionContinuation"`
+}
+
+// PromptAssistantCore закрепляет базу платформы отдельно от owner overlay.
+// Identity и Scope назначает сервер по собственному профилю помощника.
+type PromptAssistantCore struct {
+	Scope, Ref, Revision, Digest, Content string
 }
 
 type PromptContextPin struct {
@@ -625,11 +632,20 @@ type IntegrationIntent struct {
 
 type Artifact struct {
 	Ref, ProjectRef, RunRef, SessionRef, NodeRef, FileName, MediaType, Digest string
+	CurrentRevisionRef                                                        string
 	ScanState, PreviewState, Source, LifecycleState                           string
 	SizeBytes, Revision, Version                                              int64
 	Bindings, NextActions                                                     []string
 	CreatedAt                                                                 time.Time
 	DeletedAt, PurgeAfter                                                     *time.Time
+}
+
+// ArtifactRevision содержит неизменяемые метаданные, но не storage locator.
+type ArtifactRevision struct {
+	Ref, ArtifactRef, FileName, MediaType, Digest, ScanState, Source string
+	Revision, SizeBytes                                              int64
+	PreviewAvailable                                                 bool
+	CreatedAt                                                        time.Time
 }
 
 type ArtifactImpact struct {
@@ -845,6 +861,7 @@ type AssistantPlan struct {
 
 type AssistantPlanOperationReceipt struct {
 	OperationRef, ResourceRef, Outcome, AuditRef string
+	ArtifactRevision                             *ArtifactRevision
 }
 
 type AssistantPlanConflict struct {

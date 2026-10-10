@@ -22,6 +22,7 @@ import {
 } from "@/features/assistant/api";
 import { conversationMatchesContext } from "@/features/assistant/context";
 import { assistantConversationStorageBlocker } from "@/features/assistant/model";
+import { appliedProjectFileRevision } from "./project-file-plan";
 import { usePlatformStore } from "@/features/platform/store";
 import {
   persistAssistantScope,
@@ -778,13 +779,15 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   }
 
   function refreshPartialHistory(): void {
-    realtimeReadRevision += 1;
     if (realtimeReadController) {
       realtimeReadAgain = true;
       return;
     }
     const currentContext = context.value;
     if (!currentContext) return;
+    // Повторный partial wake требует следующей сверки, но не делает текущий
+    // owner read устаревшим: иначе непрерывный поток не даёт принять результат.
+    realtimeReadRevision += 1;
     const current = generation;
     const revision = realtimeReadRevision;
     const ownerSignal = ownerRequestSignal();
@@ -1077,6 +1080,20 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
         )
       )
         throw new Error("Assistant plan application response mismatch");
+      if (value.receipt.outcome === "APPLIED") {
+        const appliedPlan = { ...value.plan, receipt: value.receipt };
+        if (
+          appliedPlan.operations.some(
+            (operation) =>
+              operation.selected &&
+              operation.type === "CREATE_PROJECT_FILE_REVISION" &&
+              !appliedProjectFileRevision(appliedPlan, operation.ref),
+          )
+        )
+          throw new Error(
+            "Assistant file revision application receipt mismatch",
+          );
+      }
       receipt.value = value.receipt;
       // Ответ применения содержит отдельную авторитетную квитанцию и только
       // ref диалога. Привязываем её к точной ревизии, не подменяя весь диалог.

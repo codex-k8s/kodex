@@ -87,7 +87,7 @@ func TestAssistantSnapshotFitsWholeOwnerPage(t *testing.T) {
 				t.Fatal("assistant bootstrap frame exceeded the unchanged byte bound")
 			}
 			page := envelope.Snapshot.Conversations
-			if len(c.requests) != 2 || c.requests[0].Page.PageSize != 50 || c.requests[1].Page.PageSize != 25 ||
+			if len(c.requests) != 1 || c.requests[0].Page.PageSize != 25 ||
 				len(page.Conversations) != 25 || *page.Page.NextPageToken != "owner-cursor-25" || envelope.Cursor != 123 {
 				t.Fatal("adaptive page lost owner cardinality, cursor or platform sequence")
 			}
@@ -122,7 +122,7 @@ func TestAssistantSnapshotRejectsOversizedWholeConversation(t *testing.T) {
 	if _, err := m.sendPlatformBootstrap(); err == nil || len(m.outbound) != 0 {
 		t.Fatal("oversized singleton was silently queued or truncated")
 	}
-	if len(c.requests) != 6 || c.requests[5].Page.PageSize != 1 {
+	if len(c.requests) != 5 || c.requests[4].Page.PageSize != 1 {
 		t.Fatal("oversized singleton did not exhaust only the bounded page-size ladder")
 	}
 }
@@ -150,7 +150,7 @@ func TestAssistantSnapshotDeltaPreservesSequenceAndWholeOwnerPage(t *testing.T) 
 		len(envelope.Snapshot.Conversations.Conversations) != 25 || *envelope.Snapshot.Conversations.Page.NextPageToken != "owner-cursor-25" {
 		t.Fatal("delta altered envelope pins, owner page or byte bound")
 	}
-	if !m.applyPlatformSignal(signal) || len(c.frames) != 0 || len(c.requests) != 2 {
+	if !m.applyPlatformSignal(signal) || len(c.frames) != 0 || len(c.requests) != 1 {
 		t.Fatal("duplicate delta replay repeated owner reads or advanced state")
 	}
 }

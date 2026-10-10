@@ -65,6 +65,8 @@ service PlatformQueryService {
   rpc GetOwnerGate(GetOwnerGateRequest) returns (GetOwnerGateResponse);
   rpc ListArtifacts(ListArtifactsRequest) returns (ListArtifactsResponse);
   rpc GetArtifact(GetArtifactRequest) returns (GetArtifactResponse);
+  rpc ListArtifactRevisions(ListArtifactRevisionsRequest) returns (ListArtifactRevisionsResponse);
+  rpc GetArtifactRevision(GetArtifactRevisionRequest) returns (GetArtifactRevisionResponse);
   rpc GetArtifactImpact(GetArtifactImpactRequest) returns (GetArtifactImpactResponse);
   rpc GetAttachmentSet(GetAttachmentSetRequest) returns (GetAttachmentSetResponse);
   rpc ListSchedules(ListSchedulesRequest) returns (ListSchedulesResponse);
@@ -217,6 +219,7 @@ service PlatformCommandService {
   rpc UploadArtifact(stream UploadArtifactRequest) returns (UploadArtifactResponse);
   rpc UploadOrganizationArtifact(stream UploadOrganizationArtifactRequest) returns (UploadOrganizationArtifactResponse);
   rpc DownloadArtifact(DownloadArtifactRequest) returns (stream DownloadArtifactResponse);
+  rpc DownloadArtifactRevision(DownloadArtifactRevisionRequest) returns (stream DownloadArtifactRevisionResponse);
   rpc ChangeArtifactBinding(ChangeArtifactBindingRequest) returns (ChangeArtifactBindingResponse);
   rpc DeleteArtifact(DeleteArtifactRequest) returns (DeleteArtifactResponse);
   rpc RestoreArtifact(RestoreArtifactRequest) returns (RestoreArtifactResponse);
@@ -396,6 +399,9 @@ service RuntimeWorkService {
   // Запускает опубликованный Workflow из exact active execution; actor/project
   // и обязательную связь родителя назначает владелец, не caller payload.
   rpc LaunchWorkflowExecution(LaunchWorkflowExecutionRequest) returns (LaunchWorkflowExecutionResponse);
+  // Каталог опубликованных Workflow exact ordinary execution; owner/project
+  // разрешаются из действующей lease, не из аргументов инструмента.
+  rpc GetExecutionWorkflowCatalog(GetExecutionWorkflowCatalogRequest) returns (GetExecutionWorkflowCatalogResponse);
   rpc ProposeAssistantPlan(ProposeAssistantPlanRequest) returns (ProposeAssistantPlanResponse);
   rpc ProposeAssistantMetadata(ProposeAssistantMetadataRequest) returns (ProposeAssistantMetadataResponse);
   rpc ProposeRunMetadata(ProposeRunMetadataRequest) returns (ProposeRunMetadataResponse);
@@ -1333,6 +1339,52 @@ message Artifact {
   ArtifactLifecycleState lifecycle_state = 17;
   google.protobuf.Timestamp deleted_at = 18;
   google.protobuf.Timestamp purge_after = 19;
+  string current_revision_ref = 20;
+}
+
+// Неизменяемая версия тела стабильного логического Artifact.
+// Locator object storage не пересекает публичную границу.
+message ArtifactRevision {
+  string ref = 1;
+  string artifact_ref = 2;
+  int64 revision = 3;
+  string file_name = 4;
+  string media_type = 5;
+  int64 size_bytes = 6;
+  string digest = 7;
+  string scan_state = 8;
+  string source = 9;
+  bool preview_available = 10;
+  google.protobuf.Timestamp created_at = 11;
+}
+
+message ListArtifactRevisionsRequest {
+  string artifact_ref = 1;
+  PageRequest page = 2;
+}
+message ListArtifactRevisionsResponse {
+  repeated ArtifactRevision items = 1;
+  PageInfo page = 2;
+  int64 total = 3;
+}
+message GetArtifactRevisionRequest {
+  string artifact_ref = 1;
+  string revision_ref = 2;
+}
+message GetArtifactRevisionResponse {
+  ArtifactRevision revision = 1;
+}
+message DownloadArtifactRevisionRequest {
+  string artifact_ref = 1;
+  string revision_ref = 2;
+  ArtifactDownloadPurpose purpose = 3;
+}
+
+message DownloadArtifactRevisionResponse {
+  bytes data = 1;
+  string file_name = 2;
+  string media_type = 3;
+  int64 size_bytes = 4;
 }
 
 message AttachmentSetItem {
@@ -1631,6 +1683,8 @@ message AssistantPlanOperation {
     TYPE_PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION = 31;
     // Подготовить grant собственного PROJECT помощника для human confirmation.
     TYPE_CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT = 32;
+    // Создать новую immutable ревизию существующего Artifact после owner Apply.
+    TYPE_CREATE_PROJECT_FILE_REVISION = 33;
   }
   enum Action {
     ACTION_UNSPECIFIED = 0;
@@ -1702,6 +1756,7 @@ message AssistantPlanOperationReceipt {
   string resource_ref = 2;
   string outcome = 3;
   string audit_ref = 4;
+  ArtifactRevision artifact_revision = 5;
 }
 
 message AssistantPlanConflict {
@@ -1942,6 +1997,8 @@ message SearchAssistantResourcesRequest {
   int32 definition_offset = 7;
   // Отдельный read-only каталог конфигурации помощника; несовместим с другими режимами.
   AssistantConfigurationCatalogRequest assistant_configuration_catalog = 8;
+  // Run — locator; Session и actor разрешаются по действующей assistant lease.
+  AssistantTaskSessionReadRequest assistant_task_session_read = 9;
 }
 message SearchAssistantResourcesResponse {
   repeated SearchResult results = 1;
@@ -1949,6 +2006,58 @@ message SearchAssistantResourcesResponse {
   repeated AssistantIntegrationDefinition definitions = 3;
   int32 next_definition_offset = 4;
   AssistantConfigurationCatalogResponse assistant_configuration_catalog = 5;
+  AssistantTaskSessionPage assistant_task_session = 6;
+}
+
+message AssistantTaskSessionReadRequest {
+  string run_ref = 1;
+  string cursor = 2;
+}
+enum AssistantTaskMessagePhase {
+  ASSISTANT_TASK_MESSAGE_PHASE_UNSPECIFIED = 0;
+  ASSISTANT_TASK_MESSAGE_PHASE_USER = 1;
+  ASSISTANT_TASK_MESSAGE_PHASE_COMMENTARY = 2;
+  ASSISTANT_TASK_MESSAGE_PHASE_FINAL = 3;
+}
+enum AssistantTaskMessageOrigin {
+  ASSISTANT_TASK_MESSAGE_ORIGIN_UNSPECIFIED = 0;
+  ASSISTANT_TASK_MESSAGE_ORIGIN_ORDINARY = 1;
+  ASSISTANT_TASK_MESSAGE_ORIGIN_CALLBACK_CONTINUATION = 2;
+}
+message AssistantTaskPublishedMessage {
+  string event_ref = 1;
+  string message_ref = 2;
+  AssistantTaskMessagePhase phase = 3;
+  string text = 4;
+  AssistantTaskMessageOrigin origin = 5;
+  string source_run_ref = 6;
+  int64 source_run_version = 7;
+  string session_ref = 8;
+  string node_ref = 9;
+  string turn_ref = 10;
+  int64 turn_number = 11;
+  int32 attempt = 12;
+  int64 event_sequence = 13;
+  int64 message_revision = 14;
+}
+message AssistantTaskSessionPage {
+  string run_ref = 1;
+  string project_ref = 2;
+  string session_ref = 3;
+  string title = 4;
+  RunState state = 5;
+  int64 run_version = 6;
+  string result_summary = 7;
+  string safe_error_code = 8;
+  string safe_error_message = 9;
+  string session_storage_state = 10;
+  // Только опубликованные сообщения выбранной Session, не archive/reasoning/tools.
+  repeated AssistantTaskPublishedMessage messages = 11;
+  string source_sha256 = 12;
+  string next_cursor = 13;
+  bool truncated = 14;
+  // SHA256 канонической typed JSON projection v1 без этого поля.
+  string projection_sha256 = 15;
 }
 
 enum AssistantConfigurationCatalogKind {
@@ -1965,6 +2074,7 @@ enum AssistantConfigurationCatalogKind {
   ASSISTANT_CONFIGURATION_CATALOG_KIND_RECIPIENT_INTEGRATION_GRANTS = 10;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_WORKFLOW_CONFIGURATION = 11;
   ASSISTANT_CONFIGURATION_CATALOG_KIND_AGENT_CONFIGURATION = 12;
+  ASSISTANT_CONFIGURATION_CATALOG_KIND_AGENT_RUNTIME_CONFIGURATION = 13;
 }
 
 message AssistantConfigurationCatalogRequest {
@@ -2025,6 +2135,7 @@ message AssistantConfigurationCatalogResponse {
   AssistantRecipientIntegrationGrantCatalog recipient_integration_grants = 11;
   AssistantWorkflowConfiguration workflow_configuration = 12;
   AssistantAgentConfiguration agent_configuration = 13;
+  AssistantAgentRuntimeConfiguration agent_runtime_configuration = 14;
 }
 
 message AssistantWorkflowConfiguration {
@@ -4110,6 +4221,67 @@ message LaunchWorkflowExecutionRequest {
   string task = 6;
   google.protobuf.Struct input = 7;
   string title = 8;
+  string expected_published_ref = 9;
+  string expected_spec_digest = 10;
+  int64 expected_workflow_version = 11;
+}
+message GetExecutionWorkflowCatalogRequest {
+  string lease_ref = 1;
+  string fence = 2;
+  int64 generation = 3;
+  string query = 4;
+  string page_token = 5;
+  // Взаимоисключающие read selectors; отсутствие сохраняет discovery.
+  oneof read {
+    ExecutionWorkflowPublicationRead publication_read = 6;
+    ExecutionWorkflowActiveRunsRead active_runs_read = 7;
+  }
+}
+message ExecutionWorkflowReadPins {
+  string workflow_ref = 1;
+  string published_ref = 2;
+  string spec_digest = 3;
+  int64 workflow_version = 4;
+}
+message ExecutionWorkflowPublicationRead { ExecutionWorkflowReadPins pins = 1; }
+message ExecutionWorkflowActiveRunsRead { ExecutionWorkflowReadPins pins = 1; }
+message ExecutionWorkflowPublication {
+  bytes configuration_json = 1;
+  string configuration_sha256 = 2;
+}
+message ExecutionWorkflowActiveRun {
+  string run_ref = 1;
+  string workflow_ref = 2;
+  string published_ref = 3;
+  string spec_digest = 4;
+  int32 published_version = 5;
+  int64 run_version = 6;
+  string title = 7;
+  string state = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+message ExecutionWorkflowActiveRuns {
+  ExecutionWorkflowReadPins pins = 1;
+  repeated ExecutionWorkflowActiveRun items = 2;
+  string next_page_token = 3;
+}
+message ExecutionWorkflowCatalogEntry {
+  string workflow_ref = 1;
+  string name = 2;
+  string purpose = 3;
+  int64 workflow_version = 4;
+  string published_ref = 5;
+  string spec_digest = 6;
+  repeated WorkflowInputField input_fields = 7;
+  WorkflowLaunchReadiness readiness = 8;
+}
+message GetExecutionWorkflowCatalogResponse {
+  repeated ExecutionWorkflowCatalogEntry items = 1;
+  string next_page_token = 2;
+  oneof read {
+    ExecutionWorkflowPublication publication = 3;
+    ExecutionWorkflowActiveRuns active_runs = 4;
+  }
 }
 // Workflow сохраняет собственный root и canonical claim/step область.
 message LaunchWorkflowExecutionResponse {
@@ -8652,6 +8824,15 @@ message AssistantAgentConfiguration {
   string project_ref = 2;
   int64 version = 3;
   // Полная безопасная конфигурация только текущего AGENT context, не runtime materialization.
+  bytes configuration_json = 4;
+  string configuration_sha256 = 5;
+}
+
+message AssistantAgentRuntimeConfiguration {
+  string agent_ref = 1;
+  string project_ref = 2;
+  int64 version = 3;
+  // Безопасные ENV/binding/image pins, configured tools и отдельный verified inventory.
   bytes configuration_json = 4;
   string configuration_sha256 = 5;
 }

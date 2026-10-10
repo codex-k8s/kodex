@@ -613,6 +613,7 @@ func TestRequiredMCPToolNamesMatchRuntimeAuthority(t *testing.T) {
 		"propose_run_metadata",
 		"get_configuration_catalog",
 		"find_platform_resources",
+		"read_task_session",
 		"propose_configuration_plan",
 		"propose_assistant_metadata",
 		"delegate_agent",

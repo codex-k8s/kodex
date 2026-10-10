@@ -33,6 +33,10 @@ func TestExecutedTurnFailurePreservesUsageInRetriedCallback(t *testing.T) {
 				SessionID:           "00000000-0000-4000-8000-000000000001",
 				ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/10/07/rollout-2026-10-07T00-00-00-00000000-0000-4000-8000-000000000001.jsonl",
 				ArchiveSHA256:       strings.Repeat("d", 64), ArchiveSizeBytes: 26276}
+			// JSON не может присвоить private proof даже при правильных input pins.
+			if json.Unmarshal([]byte(`{"providerDiagnostic":{"stage":"PRIVATE_SENTINEL"},"provider_diagnostic":{"stage":"PRIVATE_SENTINEL"}}`), &result) != nil {
+				t.Fatal("synthetic result decode failed")
+			}
 			check := func(context.Context) error { return nil }
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
@@ -91,6 +95,9 @@ func TestExecutedTurnFailurePreservesUsageInRetriedCallback(t *testing.T) {
 				var payload runtimecontract.RunnerCompletionRequest
 				if json.Unmarshal(raw, &payload) != nil || payload.Validate() != nil || payload.Usage != wantUsage || payload.SafeErrorCode != wantCode || payload.Success != (mode == "success") || payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest || payload.Attempt != input.Attempt || len(payload.Artifacts) != 0 {
 					t.Error("completion lost measured usage or terminal provenance")
+				}
+				if payload.ProviderDiagnostic != nil || bytes.Contains(raw, []byte("PRIVATE_SENTINEL")) {
+					t.Error("completion accepted forged diagnostic")
 				}
 				if wantArchive {
 					if payload.CodexSessionID != result.SessionID || payload.ArchiveRelativePath != result.ArchiveRelativePath || payload.ArchiveSHA256 != result.ArchiveSHA256 || payload.ArchiveSizeBytes != result.ArchiveSizeBytes {

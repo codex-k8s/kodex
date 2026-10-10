@@ -23,17 +23,26 @@ import (
 
 const maximumAssistantPlanOperations = 32
 
-func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.Tx, machineScope scope, input command.Command) (commandOutcome, error) {
+type assistantPlanProposal struct {
+	payload                                                                                       command.ProposeAssistantPlanInput
+	conversationID, conversationRef, projectID, projectRef, assistantRef, contextKind, contextRef string
+	conversationVersion                                                                           int64
+	actorScope                                                                                    scope
+	operations                                                                                    []entity.AssistantPlanOperation
+	lease                                                                                         map[string]any
+}
+
+func (repository *Repository) prepareAssistantPlanProposalTx(ctx context.Context, tx pgx.Tx, machineScope scope, input command.Command) (assistantPlanProposal, error) {
 	payload, ok := input.Payload.(command.ProposeAssistantPlanInput)
 	if !ok || strings.TrimSpace(payload.Summary) == "" || utf8.RuneCountInString(payload.Summary) > 2000 ||
 		len(payload.Operations) == 0 || len(payload.Operations) > maximumAssistantPlanOperations {
-		return commandOutcome{}, errs.ErrInvalid
+		return assistantPlanProposal{}, errs.ErrInvalid
 	}
 	lease, err := repository.lease(ctx, tx, machineScope, command.LeaseInput{
 		LeaseRef: payload.LeaseRef, Fence: payload.Fence, Generation: payload.Generation,
 	}, true)
 	if err != nil {
-		return commandOutcome{}, err
+		return assistantPlanProposal{}, err
 	}
 	var conversationID, conversationRef, projectID, projectRef string
 	var assistantRef string
@@ -46,12 +55,12 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 	).Scan(&conversationID, &conversationRef, &conversationVersion, &projectID, &projectRef, &allowedOperations, &contextKind, &contextRef, &assistantRef,
 		&actorScope.actorID, &actorScope.actorRef, &actorScope.actorName, &actorScope.role,
 		&actorScope.organizationRef); err != nil {
-		return commandOutcome{}, errs.ErrForbidden
+		return assistantPlanProposal{}, errs.ErrForbidden
 	}
 	actorScope.organizationID = machineScope.organizationID
 	assistant, err := repository.conversationAssistantTx(ctx, tx, actorScope, conversationRef)
 	if err != nil || assistantRef != assistant.Ref {
-		return commandOutcome{}, errs.ErrForbidden
+		return assistantPlanProposal{}, errs.ErrForbidden
 	}
 	if assistant.Scope == "PROJECT" {
 		actorScope.authorityProjectID = projectID
@@ -60,25 +69,25 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 	normalizedOperations := make([]entity.AssistantPlanOperation, 0, len(payload.Operations))
 	for index, operation := range payload.Operations {
 		if operation.Type == changeProjectAssistantIntegrationGrant && (assistant.Scope != "PROJECT" || assistantString(operation.Parameters, "projectAssistantRef") != assistant.Ref) {
-			return commandOutcome{}, errs.ErrForbidden
+			return assistantPlanProposal{}, errs.ErrForbidden
 		}
 		if operation.Type == prepareProjectAssistantConnection && (len(payload.Operations) != 1 || assistant.Scope != "PROJECT" || assistantString(operation.Parameters, "projectAssistantRef") != assistant.Ref) {
-			return commandOutcome{}, errs.ErrForbidden
+			return assistantPlanProposal{}, errs.ErrForbidden
 		}
 		if assistant.Scope == "PROJECT" && !projectAssistantOperation(operation.Type) {
-			return commandOutcome{}, errs.ErrForbidden
+			return assistantPlanProposal{}, errs.ErrForbidden
 		}
 		if assistant.Scope == "PROJECT" && operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" && assistantString(operation.Parameters, "agentRef") != assistant.Ref {
-			return commandOutcome{}, errs.ErrForbidden
+			return assistantPlanProposal{}, errs.ErrForbidden
 		}
 		if assistantProjectConfigurationOperation(operation) && assistant.Scope == "PROJECT" && assistantString(operation.Parameters, "projectAssistantRef") != assistant.Ref {
-			return commandOutcome{}, errs.ErrForbidden
+			return assistantPlanProposal{}, errs.ErrForbidden
 		}
 		if operation.Key == "" || len(operation.Key) > 96 {
-			return commandOutcome{}, errs.ErrInvalid
+			return assistantPlanProposal{}, errs.ErrInvalid
 		}
 		if _, duplicate := seen[operation.Key]; duplicate {
-			return commandOutcome{}, errs.ErrInvalid
+			return assistantPlanProposal{}, errs.ErrInvalid
 		}
 		seen[operation.Key] = struct{}{}
 		selfConfiguration := assistantSelfConfigurationOperation(assistant.Ref, assistant.Scope, operation)
@@ -89,56 +98,83 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 			assistantString(operation.Parameters, "systemAssistantRef") == "" {
 			configuration, readErr := repository.getRuntimeConfigurationViewTx(ctx, tx, actorScope, assistant.Ref)
 			if readErr != nil {
-				return commandOutcome{}, readErr
+				return assistantPlanProposal{}, readErr
 			}
 			selfConfiguration = configuration.Environment.ProjectRef == projectRef &&
 				configuration.Environment.Ref == assistantString(operation.Parameters, "environmentRef")
 		}
 		if !contains(allowedOperations, operation.Type) && !selfConfiguration {
-			return commandOutcome{}, errs.ErrForbidden
+			return assistantPlanProposal{}, errs.ErrForbidden
 		}
-		if !selfConfiguration && !assistantOperationMatchesContext(contextKind, contextRef, operation) {
-			return commandOutcome{}, errs.ErrForbidden
+		if operation.Type == createProjectFileRevision && (projectRef == "" || assistant.Scope == "SYSTEM" && contextKind != "PROJECT" && contextKind != "FILE") {
+			return assistantPlanProposal{}, errs.ErrForbidden
 		}
-		operation, err = repository.hydrateAssistantOperation(ctx, tx, actorScope, projectRef, operation)
+		projectGlobalRevision := operation.Type == createProjectFileRevision && assistant.Scope == "PROJECT"
+		if !selfConfiguration && !projectGlobalRevision && !assistantOperationMatchesContext(contextKind, contextRef, operation) {
+			return assistantPlanProposal{}, errs.ErrForbidden
+		}
+		if operation.Type == createProjectFileRevision && assistantString(operation.Parameters, "contentRef") != "" {
+			var matches bool
+			matches, err = repository.assistantFileRevisionSnapshotMatches(ctx, tx, actorScope, operation)
+			if err == nil && !matches {
+				err = errs.ErrVersionMismatch
+			}
+		} else {
+			operation, err = repository.hydrateAssistantOperation(ctx, tx, actorScope, projectRef, operation)
+		}
 		noRuntimeChange := operation.Type == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" && errors.Is(err, errAssistantRuntimeConfigurationNoChange)
 		if err != nil && !noRuntimeChange {
 			if (operation.Type == "CHANGE_CAPABILITY" || operation.Type == "CHANGE_INTEGRATION_GRANT") && errors.Is(err, errs.ErrConflict) {
 				continue
 			}
-			return commandOutcome{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanHydrate, index+1)
+			return assistantPlanProposal{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanHydrate, index+1)
 		}
 		operation, err = normalizeAssistantOperation(operation)
 		if err != nil {
-			return commandOutcome{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanNormalize, index+1)
+			return assistantPlanProposal{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanNormalize, index+1)
 		}
 		operation, err = bindAssistantOperationProject(operation, projectRef)
 		if err != nil {
-			return commandOutcome{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanBind, index+1)
+			return assistantPlanProposal{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanBind, index+1)
 		}
 		planned, err := assistantOperationCommand(operation)
 		if err != nil {
-			return commandOutcome{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanCommand, index+1)
+			return assistantPlanProposal{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanCommand, index+1)
 		}
 		if err := repository.authorizeAssistantPreparedOperation(ctx, tx, actorScope, operation, planned); err != nil {
-			return commandOutcome{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanAuthorize, index+1)
+			return assistantPlanProposal{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanAuthorize, index+1)
 		}
 		if noRuntimeChange {
 			// Пропускается только точный no-op, после обычных authority/binding
 			// проверок и повторной сверки server-owned версии и свежих pins.
 			matches, err := repository.assistantRuntimeConfigurationSnapshotMatches(ctx, tx, actorScope, operation)
 			if err != nil {
-				return commandOutcome{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanAuthorize, index+1)
+				return assistantPlanProposal{}, errs.WithAssistantPlanStage(err, errs.AssistantPlanAuthorize, index+1)
 			}
 			if !matches {
-				return commandOutcome{}, errs.WithAssistantPlanStage(errs.ErrVersionMismatch, errs.AssistantPlanAuthorize, index+1)
+				return assistantPlanProposal{}, errs.WithAssistantPlanStage(errs.ErrVersionMismatch, errs.AssistantPlanAuthorize, index+1)
 			}
 			continue
 		}
 		normalizedOperations = append(normalizedOperations, operation)
 	}
 	if len(normalizedOperations) == 0 {
-		return commandOutcome{}, errs.WithAssistantPlanStage(errs.ErrConflict, errs.AssistantPlanEmpty, 0)
+		return assistantPlanProposal{}, errs.WithAssistantPlanStage(errs.ErrConflict, errs.AssistantPlanEmpty, 0)
+	}
+	return assistantPlanProposal{payload: payload, conversationID: conversationID, conversationRef: conversationRef, conversationVersion: conversationVersion, projectID: projectID, projectRef: projectRef, assistantRef: assistantRef, contextKind: contextKind, contextRef: contextRef, actorScope: actorScope, operations: normalizedOperations, lease: lease}, nil
+}
+
+func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.Tx, machineScope scope, input command.Command) (commandOutcome, error) {
+	prepared, err := repository.prepareAssistantPlanProposalTx(ctx, tx, machineScope, input)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	payload, actorScope := prepared.payload, prepared.actorScope
+	conversationID, conversationRef, conversationVersion := prepared.conversationID, prepared.conversationRef, prepared.conversationVersion
+	projectID, projectRef, assistantRef := prepared.projectID, prepared.projectRef, prepared.assistantRef
+	normalizedOperations := prepared.operations
+	if err := assistantFilePersistenceReady(normalizedOperations, payload.PreparedContent); err != nil {
+		return commandOutcome{}, err
 	}
 	planRef, err := newRef("pln")
 	if err != nil {
@@ -162,6 +198,18 @@ func (repository *Repository) proposeAssistantPlan(ctx context.Context, tx pgx.T
 		rawOperations, digest, "SYSTEM_ASSISTANT", assistantRef,
 	).Scan(&createdAt); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	for _, operation := range normalizedOperations {
+		if !assistantFileOperation(operation.Type) {
+			continue
+		}
+		ledgerID := payload.PreparedContent[operation.Key]
+		if ledgerID == "" || assistantString(operation.Parameters, "contentRef") == "" {
+			return commandOutcome{}, errs.ErrConflict
+		}
+		if err := repository.linkPreparedContentTx(ctx, tx, actorScope, ledgerID, planID, 1, operation.Key); err != nil {
+			return commandOutcome{}, err
+		}
 	}
 	if _, err := tx.Exec(ctx, queryConfigurationAddassistantturncommandUpdateAssistantConversationsLatestPlanIdVersionUpdatedAt,
 		conversationID, planID); err != nil {
@@ -189,7 +237,7 @@ func projectAssistantOperation(operationType string) bool {
 	switch operationType {
 	case prepareProjectAssistantConnection, changeProjectAssistantIntegrationGrant:
 		return true
-	case "CREATE_PROJECT_FILE", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT",
+	case "CREATE_PROJECT_FILE", createProjectFileRevision, "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT",
 		"CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "CREATE_SCHEDULE",
 		"UPDATE_SCHEDULE", "LAUNCH_RUN", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW", "CREATE_RUNTIME_ENVIRONMENT_DRAFT",
 		"PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
@@ -211,7 +259,7 @@ func assistantSelfConfigurationOperation(assistantRef, assistantScope string, op
 	}
 	if assistantScope == "PROJECT" {
 		return assistantRef != "" && assistantString(operation.Parameters, "agentRef") == assistantRef &&
-			(operation.Type == "CREATE_INSTRUCTION_DRAFT" || operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT" || operation.Type == "UPDATE_AGENT")
+			(operation.Type == "CREATE_INSTRUCTION_DRAFT" || operation.Type == "BIND_AGENT_RUNTIME_ENVIRONMENT" || operation.Type == "UPDATE_AGENT" || operation.Type == "CHANGE_CAPABILITY")
 	}
 	requestedRef := assistantString(operation.Parameters, "systemAssistantRef")
 	if assistantScope != "SYSTEM" || assistantRef == "" || requestedRef != assistantRef {
@@ -230,7 +278,7 @@ func assistantOperationType(value string) bool {
 	switch value {
 	case prepareProjectAssistantConnection, changeProjectAssistantIntegrationGrant:
 		return true
-	case "CREATE_PROJECT", "CREATE_PROJECT_ASSISTANT", "CREATE_PROJECT_FILE", "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY",
+	case "CREATE_PROJECT", "CREATE_PROJECT_ASSISTANT", "CREATE_PROJECT_FILE", createProjectFileRevision, "UPDATE_PROJECT", "CREATE_AGENT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "CREATE_WORKFLOW", "UPDATE_WORKFLOW", "CHANGE_CAPABILITY",
 		"CHANGE_INTEGRATION_GRANT", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", "CREATE_SCHEDULE", "UPDATE_SCHEDULE", "LAUNCH_RUN",
 		"CREATE_INTEGRATION_CONNECTION", "UPDATE_INTEGRATION_CONNECTION", "TEST_INTEGRATION_CONNECTION", "PUBLISH_INTEGRATION_DEFINITION", "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW",
 		"CREATE_RUNTIME_ENVIRONMENT_DRAFT", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "CREATE_ROLE_IMAGE_RECIPE", "UPDATE_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
@@ -242,6 +290,8 @@ func assistantOperationType(value string) bool {
 
 func assistantOperationMatchesContext(contextKind, contextRef string, operation entity.AssistantPlanOperation) bool {
 	switch operation.Type {
+	case createProjectFileRevision:
+		return contextRef != "" && (contextKind == "PROJECT" || contextKind == "FILE")
 	case prepareProjectAssistantConnection, changeProjectAssistantIntegrationGrant:
 		return true
 	case "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT":
@@ -289,6 +339,9 @@ func (repository *Repository) hydrateAssistantOperation(
 	}
 	if operation.Parameters == nil || len(operation.Parameters) > 100 {
 		return entity.AssistantPlanOperation{}, errs.ErrInvalid
+	}
+	if operation.Type == createProjectFileRevision {
+		return repository.hydrateAssistantFileRevision(ctx, tx, actorScope, projectRef, operation)
 	}
 	if operation.Type == prepareProjectAssistantConnection {
 		return repository.hydrateProjectAssistantConnection(ctx, tx, actorScope, operation)
@@ -960,6 +1013,8 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	}
 	expectedAction := "CREATE"
 	switch operation.Type {
+	case createProjectFileRevision:
+		expectedAction = "UPDATE"
 	case "UPDATE_PROJECT", "UPDATE_AGENT", "CREATE_INSTRUCTION_DRAFT", "UPDATE_WORKFLOW", "PREPARE_RUNTIME_ENVIRONMENT_REVISION", "BIND_AGENT_RUNTIME_ENVIRONMENT", "UPDATE_INTEGRATION_CONNECTION", "UPDATE_SCHEDULE", "UPDATE_ROLE_IMAGE_RECIPE", "PUBLISH_INTEGRATION_DEFINITION", "CHANGE_CAPABILITY", "CHANGE_INTEGRATION_GRANT", "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT", changeProjectAssistantIntegrationGrant, "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS", "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE", "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION":
 		expectedAction = "UPDATE"
 	case "ARCHIVE_AGENT", "ARCHIVE_WORKFLOW":
@@ -1000,6 +1055,13 @@ func normalizeAssistantOperation(operation entity.AssistantPlanOperation) (entit
 	}
 	expectedTargetKind, expectedTargetRef := "", ""
 	switch operation.Type {
+	case createProjectFileRevision:
+		expectedTargetKind, expectedTargetRef = "ARTIFACT", assistantString(operation.Parameters, "artifactRef")
+		if operation.Target.Version == nil || operation.ExpectedVersion == nil || *operation.Target.Version != *operation.ExpectedVersion ||
+			!assistantJSONEqual(operation.After, assistantRevisionAfter(operation)) || assistantString(operation.Before, "artifactRef") != expectedTargetRef ||
+			assistantString(operation.Before, "currentRevisionRef") == "" || mustAssistantInt64(operation.Before, "version") != *operation.ExpectedVersion {
+			return entity.AssistantPlanOperation{}, errs.ErrInvalid
+		}
 	case prepareProjectAssistantConnection:
 		expectedTargetKind, expectedTargetRef = "PROJECT_ASSISTANT", assistantString(operation.Parameters, "projectAssistantRef")
 		if operation.ExpectedVersion == nil || operation.Target.Version == nil || *operation.ExpectedVersion != *operation.Target.Version ||
@@ -1113,6 +1175,9 @@ func bindAssistantOperationProject(operation entity.AssistantPlanOperation, proj
 }
 
 func assistantOperationCommand(operation entity.AssistantPlanOperation) (command.Command, error) {
+	if operation.Type == createProjectFileRevision {
+		return assistantFileRevisionCommand(operation)
+	}
 	if operation.Type == prepareProjectAssistantConnection {
 		return projectAssistantConnectionCommand(operation)
 	}
@@ -1159,6 +1224,21 @@ func assistantOperationCommand(operation entity.AssistantPlanOperation) (command
 		}
 		result.Kind, result.Payload = command.CreateProject, command.ProjectInput{Name: name, Purpose: purpose, Language: language}
 	case "CREATE_PROJECT_FILE":
+		if assistantString(operation.Input, "contentRef") != "" {
+			if !onlyAssistantFields(operation.Input, "projectRef", "fileName", "mediaType", "contentEncoding", "contentRef", "digest", "sizeBytes") ||
+				!hasAssistantFields(operation.Input, "projectRef", "fileName", "mediaType", "contentEncoding", "contentRef", "digest", "sizeBytes") {
+				return command.Command{}, errs.ErrInvalid
+			}
+			size, ok := assistantInt64(operation.Input, "sizeBytes")
+			digest := assistantString(operation.Input, "digest")
+			if !ok || size < 0 || size > 1<<20 || !objectDigestValid(digest) || !strings.HasPrefix(assistantString(operation.Input, "contentRef"), "pfcnt_") ||
+				safeFileName(assistantString(operation.Input, "fileName")) != assistantString(operation.Input, "fileName") || assistantString(operation.Input, "projectRef") == "" {
+				return command.Command{}, errs.ErrInvalid
+			}
+			return command.Command{Kind: command.CreateProjectFile, Payload: command.ProjectFileInput{
+				ProjectRef: assistantString(operation.Input, "projectRef"), FileName: assistantString(operation.Input, "fileName"), MediaType: assistantString(operation.Input, "mediaType"),
+				SHA256: strings.TrimPrefix(digest, "sha256:"), ContentRef: assistantString(operation.Input, "contentRef"), SizeBytes: size}}, nil
+		}
 		if !onlyAssistantFields(operation.Input, "projectRef", "fileName", "mediaType", "contentEncoding", "content") ||
 			!hasAssistantFields(operation.Input, "projectRef", "fileName", "mediaType", "content") {
 			return command.Command{}, errs.ErrInvalid
@@ -1596,11 +1676,10 @@ func assistantRun(input map[string]any) (command.LaunchRunInput, error) {
 }
 
 func assistantProjectFileContentReady(operation entity.AssistantPlanOperation) bool {
-	if operation.Type != "CREATE_PROJECT_FILE" {
+	if !assistantFileOperation(operation.Type) {
 		return true
 	}
-	return assistantString(operation.Input, "contentEncoding") != "BASE64" ||
-		assistantString(operation.Input, "content") != ""
+	return assistantString(operation.Parameters, "contentRef") != "" && objectDigestValid(assistantString(operation.Parameters, "digest")) && operation.Parameters["content"] == nil
 }
 
 func onlyAssistantFields(input map[string]any, allowed ...string) bool {

@@ -76,16 +76,33 @@ def verify_mask_targets(source):
 
 def prepare_mask_targets(source):
     source = canonical_root(source)
-    # Git и env уже принадлежат существующему клону; не создаём их и не читаем.
+    # Git уже принадлежит клону. Existing env не читаем, не копируем и не меняем.
     require((source / ".git").is_dir() and not (source / ".git").is_symlink(),
             "EXISTING_CHECKOUT_REQUIRED")
     for name in private_files(source):
         target = source / name
+        if name == ".env" and not target.exists() and not target.is_symlink():
+            continue
         require(not target.is_symlink() and target.is_file(), "PRIVATE_FILE_MOUNTPOINT_REQUIRED")
     for name in PRIVATE_DIRECTORIES:
         target = source / name
         require(not target.is_symlink(), "PRIVATE_DIRECTORY_SYMLINK_FORBIDDEN")
         target.mkdir(mode=0o700, exist_ok=True)
+    # Новый exact clone может не иметь env: создаём только пустой mountpoint для mask.
+    # Exclusive create не перезаписывает существующий owner file при гонке.
+    directory = os.open(source, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        require(Path(f"/proc/self/fd/{directory}").resolve() == source, "SOURCE_DIRECTORY_IDENTITY_CHANGED")
+        try:
+            descriptor = os.open(".env", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600,
+                                 dir_fd=directory)
+        except FileExistsError:
+            pass
+        else:
+            os.close(descriptor)
+        require(Path(f"/proc/self/fd/{directory}").resolve() == source, "SOURCE_DIRECTORY_IDENTITY_CHANGED")
+    finally:
+        os.close(directory)
     verify_mask_targets(source)
 
 

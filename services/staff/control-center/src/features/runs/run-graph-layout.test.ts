@@ -14,6 +14,7 @@ import {
   smoothRunEdgePath,
 } from "@/features/runs/run-graph-layout";
 import {
+  createRunGraphFlowElements,
   runGraphFitViewOptions,
   runGraphFitTransform,
   runGraphInitialFitOptions,
@@ -92,6 +93,119 @@ function sampleCurve(path: string): Array<{ x: number; y: number }> {
 }
 
 describe("layoutRunGraph", () => {
+  it.each([1920, 1201, 700, 412])(
+    "активный Architect читаем при ширине %i; 24 узла и 26 связей остаются доступны",
+    (width) => {
+      const height = 780;
+      const nodes = Array.from({ length: 24 }, (_, index) => ({
+        ...node(
+          `step_${String(index).padStart(2, "0")}`,
+          `2026-01-01T00:00:${String(index).padStart(2, "0")}Z`,
+        ),
+        type:
+          index === 0
+            ? ("ROOT_PROCESS" as const)
+            : ("AGENT_EXECUTION" as const),
+        state:
+          index === 0 || index === 2
+            ? ("RUNNING" as const)
+            : index === 1
+              ? ("SUCCEEDED" as const)
+              : ("PLANNED" as const),
+        displayName: index === 2 ? "Архитектор" : `Шаг ${String(index)}`,
+      }));
+      const edges = nodes
+        .slice(1)
+        .map((item, index) =>
+          edge(
+            `edge_${String(index)}`,
+            required(nodes[index]).ref,
+            item.ref,
+            "CONTINUES",
+          ),
+        );
+      edges.push(
+        edge("callback", "step_02", "step_00", "CALLBACK_TO"),
+        edge("optional_retry", "step_23", "step_19", "RETRY_OF"),
+        edge("optional_callback", "step_23", "step_00", "CALLBACK_TO"),
+      );
+      const options = runGraphInitialFitOptions(
+        width,
+        nodes,
+        edges,
+        "step_00",
+        true,
+        height,
+        ["step_00", "step_02"],
+      );
+      expect(options.nodes?.[0]).toBe("step_02");
+      expect(options.nodes).not.toContain("step_23");
+      const layout = layoutRunGraph(nodes, edges);
+      const viewport = runGraphFitTransform(
+        runGraphContentBounds(layout, options.nodes),
+        width,
+        height,
+        options,
+      );
+      expect(viewport.zoom).toBeGreaterThanOrEqual(0.85);
+      for (const ref of options.nodes ?? []) {
+        const item = required(
+          layout.nodes.find((item) => item.node.ref === ref),
+        );
+        expect(item.x * viewport.zoom + viewport.x).toBeGreaterThan(0);
+        expect(item.y * viewport.zoom + viewport.y).toBeGreaterThan(0);
+        expect(
+          (item.x + runGraphNodeWidth) * viewport.zoom + viewport.x,
+        ).toBeLessThan(width);
+        expect(
+          (item.y + runGraphNodeHeight) * viewport.zoom + viewport.y,
+        ).toBeLessThan(height);
+      }
+      expect(layout.nodes).toHaveLength(24);
+      expect(layout.edges).toHaveLength(26);
+      const elements = createRunGraphFlowElements(nodes, edges, {
+        selectedRef: "step_00",
+        futureRefs: new Set(nodes.slice(3).map((node) => node.ref)),
+        activeRefs: new Set(["step_00", "step_02"]),
+        nodeAccessibleLabel: (node) => node.displayName,
+        edgeAccessibleLabel: (edge) => edge.ref,
+      });
+      expect(elements.nodes).toHaveLength(24);
+      expect(elements.edges).toHaveLength(26);
+      expect(runGraphFitViewOptions(width, true).nodes).toBeUndefined();
+    },
+  );
+
+  it("малый граф тоже фокусирует execution, а не root; параллельный выбор стабилен", () => {
+    const root = {
+      ...node("root", "2026-01-01T00:00:00Z"),
+      type: "ROOT_PROCESS" as const,
+    };
+    const first = node("first", "2026-01-01T00:00:01Z");
+    const second = node("second", "2026-01-01T00:00:02Z");
+    const nodes = [root, second, first];
+    const active = ["root", "first", "second", "missing"];
+    expect(
+      runGraphInitialFitOptions(1201, nodes, [], "root", true, 780, active)
+        .nodes?.[0],
+    ).toBe("first");
+    expect(
+      runGraphInitialFitOptions(1201, nodes, [], "second", true, 780, active)
+        .nodes?.[0],
+    ).toBe("second");
+    expect(
+      runGraphInitialFitOptions(
+        1201,
+        [root, { ...first, state: "QUEUED" }],
+        [],
+        "root",
+        true,
+        780,
+        active,
+      ).nodes,
+    ).toBeUndefined();
+  });
+
   it.each([700, 412])(
     "сохраняет читаемый начальный узел и полный обзор 48 узлов с callback при ширине %i",
     (width) => {

@@ -282,6 +282,25 @@ function runEvent(sequence: number): RunEvent {
   };
 }
 
+function transcriptWorkspace(sequence: number): RunWorkspace {
+  const value = run(sequence);
+  value.sessionReadiness = {
+    sessionRef: value.sessionRef,
+    storageState: "LIVE",
+    reason: "NO_SESSION_BLOCKER",
+  };
+  return {
+    run: value,
+    graph: {
+      runRef: value.ref,
+      revision: sequence,
+      sequence,
+      nodes: [],
+      edges: [],
+    },
+  };
+}
+
 function integrationConnection(
   version: number,
   credentialsConfigured = false,
@@ -331,6 +350,7 @@ function integrationDefinition(): IntegrationDefinition {
 function artifact(ref: string, projectRef?: string): Artifact {
   return {
     ref,
+    currentRevisionRef: `arv_fixture_${ref}`,
     version: 1,
     ...(projectRef ? { projectRef } : {}),
     fileName: `${ref}.txt`,
@@ -1086,6 +1106,96 @@ describe("platform store", () => {
     expect(store.runProblems).toEqual({});
   });
 
+  it("сохраняет existing child read с историей canonical root", async () => {
+    const value = transcriptWorkspace(2);
+    value.run.ref = "run_child0001";
+    getRunGraphMock.mockResolvedValue({
+      data: value,
+      response: new Response(null, { status: 200 }),
+    });
+    listRunEventsMock.mockResolvedValue({
+      data: {
+        items: [runEvent(1), runEvent(2)],
+        currentSequence: 2,
+        complete: true,
+      },
+      response: new Response(null, { status: 200 }),
+    });
+    const store = usePlatformStore();
+    await store.loadRun(value.run.ref);
+    expect(store.events.run_consistent01?.[2]?.runRef).toBe("run_consistent01");
+    expect(store.runs.run_child0001?.rootRunRef).toBe("run_consistent01");
+    expect(store.runProblems.run_child0001).toBeUndefined();
+  });
+
+  it("не теряет опубликованную историю, когда readiness snapshot приходит во время её чтения", async () => {
+    const workspace: RunWorkspace = {
+      run: run(2),
+      graph: {
+        runRef: "run_consistent01",
+        revision: 2,
+        sequence: 2,
+        nodes: [],
+        edges: [],
+      },
+    };
+    getRunGraphMock.mockResolvedValue({
+      data: workspace,
+      response: new Response(null, { status: 200 }),
+    });
+    const history = deferred<{
+      data: { items: RunEvent[]; currentSequence: number; complete: boolean };
+      response: Response;
+    }>();
+    listRunEventsMock.mockReturnValueOnce(history.promise);
+    const store = usePlatformStore();
+    const reading = store.loadRun(workspace.run.ref);
+    await vi.waitFor(() => expect(listRunEventsMock).toHaveBeenCalledTimes(1));
+    const readyRun: Run = {
+      ...workspace.run,
+      sessionReadiness: {
+        sessionRef: workspace.run.sessionRef,
+        storageState: "LIVE",
+        reason: "NO_SESSION_BLOCKER",
+      },
+    };
+    store.applyRunReadinessSnapshot(workspace.graph, [readyRun]);
+    history.resolve({
+      data: {
+        items: [
+          {
+            ...runEvent(1),
+            type: "TURN_PROGRESS",
+            message: {
+              ref: "msg_commentary01",
+              phase: "COMMENTARY",
+              revision: 1,
+              text: "Проверяю доступные файлы",
+              source: { origin: "ORDINARY" },
+            },
+          },
+          runEvent(2),
+        ],
+        currentSequence: 2,
+        complete: true,
+      },
+      response: new Response(null, { status: 200 }),
+    });
+    await reading;
+    expect(store.hasRunReadinessSnapshot(workspace.run.ref, 2)).toBe(true);
+    expect(store.runProblems[workspace.run.ref]).toBeUndefined();
+    expect(store.events[workspace.run.ref]).toBeUndefined();
+    // Graph readiness не заменяет историю: открытый transcript догружает её отдельно.
+    listRunEventsMock.mockReturnValueOnce(history.promise);
+    await store.loadRunTranscript(workspace.run.ref);
+    expect(store.events[workspace.run.ref]?.[1]?.message?.phase).toBe(
+      "COMMENTARY",
+    );
+    expect(store.runs[workspace.run.ref]?.sessionReadiness).toEqual(
+      readyRun.sessionReadiness,
+    );
+  });
+
   it("применяет только последнее чтение одного root и не завершает его loading старым ответом", async () => {
     const old = deferred<{ data: RunWorkspace; response: Response }>();
     const fresh = deferred<{ data: RunWorkspace; response: Response }>();
@@ -1136,6 +1246,221 @@ describe("platform store", () => {
     await freshRead;
     expect(store.runs.run_consistent01?.version).toBe(2);
     expect(store.runLoading.run_consistent01).toBe(false);
+  });
+
+  it("дозагрузка transcript переживает более новый readiness без отката run, graph и actions", async () => {
+    const value = transcriptWorkspace(9),
+      store = usePlatformStore();
+    value.run.state = "SUCCEEDED";
+    store.applyRunReadinessSnapshot(value.graph, [value.run]);
+    const history = deferred<{
+      data: { items: RunEvent[]; currentSequence: number; complete: boolean };
+      response: Response;
+    }>();
+    listRunEventsMock.mockReturnValueOnce(history.promise);
+    const reading = store.loadRunTranscript(value.run.ref);
+    const newer = transcriptWorkspace(10);
+    newer.run.state = "SUCCEEDED";
+    newer.run.nextActions = ["CANCEL"];
+    store.applyRunReadinessSnapshot(newer.graph, [newer.run]);
+    const items = Array.from({ length: 9 }, (_, index) => runEvent(index + 1));
+    items[4] = {
+      ...runEvent(5),
+      type: "TURN_PROGRESS",
+      message: {
+        ref: "msg_commentary01",
+        phase: "COMMENTARY",
+        revision: 1,
+        text: "Ищу созданный файл",
+        source: { origin: "ORDINARY" },
+      },
+    };
+    for (const sequence of [6, 7])
+      items[sequence - 1] = {
+        ...runEvent(sequence),
+        type: "TOOL_CALL_RECORDED",
+        toolCall: {
+          ref: "tool_search0001",
+          tool: "find_platform_resources",
+          safeParameters: {},
+          state: sequence === 6 ? "RUNNING" : "SUCCEEDED",
+          durationMs: 1,
+          safeResult: "Ресурс найден",
+          auditRef: "audit_search0001",
+        },
+      };
+    items[7] = {
+      ...runEvent(8),
+      type: "TURN_PROGRESS",
+      message: {
+        ref: "msg_final0001",
+        phase: "FINAL",
+        revision: 1,
+        text: "Файл найден",
+        source: { origin: "ORDINARY" },
+      },
+    };
+    history.resolve({
+      data: { items, currentSequence: 10, complete: false },
+      response: new Response(null, { status: 200 }),
+    });
+    await reading;
+    expect(store.runTranscriptSequence(value.run.ref)).toBe(9);
+    expect(store.events[value.run.ref]?.[5]?.message?.phase).toBe("COMMENTARY");
+    expect(store.events[value.run.ref]?.[6]?.toolCall?.state).toBe("RUNNING");
+    expect(store.events[value.run.ref]?.[7]?.toolCall?.state).toBe("SUCCEEDED");
+    expect(store.events[value.run.ref]?.[8]?.message?.phase).toBe("FINAL");
+    expect(store.runs[value.run.ref]).toEqual(newer.run);
+    expect(store.graphs[value.run.ref]?.sequence).toBe(10);
+    expect(store.runTranscriptProblems[value.run.ref]).toBeUndefined();
+  });
+
+  it("дозагружает только отсутствующий хвост после непрерывной истории, не metadata", async () => {
+    const value = transcriptWorkspace(3),
+      store = usePlatformStore();
+    store.applyRunReadinessSnapshot(value.graph, [value.run]);
+    store.events[value.run.ref] = { 1: runEvent(1), 3: runEvent(3) };
+    listRunEventsMock.mockResolvedValue({
+      data: {
+        items: [runEvent(2), runEvent(3)],
+        currentSequence: 3,
+        complete: true,
+      },
+      response: new Response(null, { status: 200 }),
+    });
+    await store.loadRunTranscript(value.run.ref);
+    expect(listRunEventsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ query: { afterSequence: 1, limit: 500 } }),
+    );
+    expect(store.runTranscriptSequence(value.run.ref)).toBe(3);
+    await store.loadRunTranscript(value.run.ref);
+    expect(listRunEventsMock).toHaveBeenCalledTimes(1);
+    expect(getRunGraphMock).not.toHaveBeenCalled();
+  });
+
+  it("не начинает history read без проверенного root snapshot", async () => {
+    const store = usePlatformStore();
+    await store.loadRunTranscript("run_unknown01");
+    expect(listRunEventsMock).not.toHaveBeenCalled();
+    expect(store.runTranscriptProblems.run_unknown01).toBeDefined();
+    expect(store.events.run_unknown01).toBeUndefined();
+  });
+
+  it("отмена закрытого transcript не оставляет loading и не публикует поздний initial snapshot", async () => {
+    const value = transcriptWorkspace(2),
+      store = usePlatformStore();
+    const pending = deferred<{ data: RunWorkspace; response: Response }>();
+    getRunGraphMock.mockReturnValueOnce(pending.promise);
+    const controller = new AbortController();
+    const reading = store.loadRun(value.run.ref, controller.signal);
+    controller.abort();
+    pending.resolve({
+      data: value,
+      response: new Response(null, { status: 200 }),
+    });
+    await reading;
+    expect(store.runLoading[value.run.ref]).toBe(false);
+    expect(store.runs[value.run.ref]).toBeUndefined();
+    expect(store.runProblems[value.run.ref]).toBeUndefined();
+    expect(listRunEventsMock).not.toHaveBeenCalled();
+  });
+
+  it.each([403, 503])(
+    "сохраняет ошибку transcript HTTP%s отдельно от успешной readiness",
+    async (status) => {
+      const value = transcriptWorkspace(2),
+        store = usePlatformStore();
+      store.applyRunReadinessSnapshot(value.graph, [value.run]);
+      listRunEventsMock.mockResolvedValue({
+        error: {
+          status,
+          code: "RUN_EVENTS_UNAVAILABLE",
+          retryable: status === 503,
+        },
+        response: new Response(null, { status }),
+      });
+      await store.loadRunTranscript(value.run.ref);
+      store.applyRunReadinessSnapshot(value.graph, [value.run]);
+      expect(store.runTranscriptProblems[value.run.ref]?.status).toBe(status);
+      expect(store.events[value.run.ref]).toBeUndefined();
+      expect(store.hasRunReadinessSnapshot(value.run.ref, 2)).toBe(true);
+    },
+  );
+
+  it.each(["gap", "foreign-event", "foreign-delta", "early-complete"])(
+    "не публикует частичную/чужую историю: %s",
+    async (mode) => {
+      const value = transcriptWorkspace(2),
+        store = usePlatformStore();
+      store.applyRunReadinessSnapshot(value.graph, [value.run]);
+      const first = runEvent(1);
+      if (mode === "foreign-event") first.runRef = "run_foreign01";
+      if (mode === "foreign-delta") first.run.ref = "run_foreign01";
+      const items =
+        mode === "gap"
+          ? [runEvent(2)]
+          : mode === "early-complete"
+            ? [first]
+            : [first, runEvent(2)];
+      listRunEventsMock.mockResolvedValue({
+        data: { items, currentSequence: 2, complete: true },
+        response: new Response(null, { status: 200 }),
+      });
+      await store.loadRunTranscript(value.run.ref);
+      expect(store.runTranscriptProblems[value.run.ref]).toBeDefined();
+      expect(store.events[value.run.ref]).toBeUndefined();
+    },
+  );
+
+  it.each([
+    "owner-reset",
+    "close",
+    "revoke",
+    "session-change",
+    "organization-change",
+    "attempt-change",
+    "target-change",
+  ])("не применяет запоздавшую history при %s", async (mode) => {
+    const value = transcriptWorkspace(2),
+      store = usePlatformStore(),
+      controller = new AbortController();
+    store.applyRunReadinessSnapshot(value.graph, [value.run]);
+    const pending = deferred<{
+      data: { items: RunEvent[]; currentSequence: number; complete: boolean };
+      response: Response;
+    }>();
+    listRunEventsMock.mockReturnValueOnce(pending.promise);
+    const reading = store.loadRunTranscript(value.run.ref, controller.signal);
+    if (mode === "owner-reset") store.clearOwnerState();
+    if (mode === "close") controller.abort();
+    if (mode === "revoke") store.clearRunReadinessSnapshot(value.run.ref);
+    if (mode === "session-change")
+      store.runs[value.run.ref] = {
+        ...value.run,
+        sessionRef: "session_changed01",
+      };
+    if (mode === "organization-change")
+      store.bootstrap = { organizationRef: "org_foreign01" } as BootstrapState;
+    if (mode === "attempt-change")
+      store.runs[value.run.ref] = { ...value.run, attempt: 2 };
+    if (mode === "target-change") {
+      const changed = structuredClone(value.run);
+      changed.target.ref = "agent_changed01";
+      store.runs[value.run.ref] = changed;
+    }
+    pending.resolve({
+      data: {
+        items: [runEvent(1), runEvent(2)],
+        currentSequence: 2,
+        complete: true,
+      },
+      response: new Response(null, { status: 200 }),
+    });
+    await reading;
+    expect(store.events[value.run.ref]).toBeUndefined();
+    if (["owner-reset", "close", "revoke"].includes(mode))
+      expect(store.runTranscriptProblems[value.run.ref]).toBeUndefined();
+    else expect(store.runTranscriptProblems[value.run.ref]).toBeDefined();
   });
 
   it("сброс owner очищает per-run индексы и запоздалая ошибка не загрязняет новый scope", async () => {

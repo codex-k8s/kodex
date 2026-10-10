@@ -13,10 +13,32 @@ import (
 const maximumAssistantDiscoveredSchemas = 4
 const maximumAssistantCatalogAgents = 20
 
+const configurationCatalogBaseDescription = "Discover refs/schemas; omit operation_types for index. No mixed selectors; MODELS needs account_ref. Fresh catalog; execution_snapshot turn-pinned."
+const configurationCatalogContextGuidance = "Resource configuration reads require the current server-owned context. If the needed read is absent from inputSchema, ask the owner to open its matching native resource route and submit a new turn; never change context or guess selectors."
+const configurationCatalogPageGuidance = "Use assistant_configuration_catalog with its required kind, assistant_ref, entity_kind and entity_ref. Read configuration_page.text from configuration_offset_bytes=0 via next_offset_bytes to eof=true; pin configuration_sha256 on continuation, maximum_bytes 4..16384."
+
+func configurationCatalogDescription(input runtimecontract.RunnerInput) string {
+	description := configurationCatalogBaseDescription
+	reads := []string{}
+	if assistantWorkflowConfigurationAvailable(input) {
+		reads = append(reads, "WORKFLOW_CONFIGURATION")
+	}
+	if assistantAgentConfigurationAvailable(input) {
+		reads = append(reads, "AGENT_CONFIGURATION", "AGENT_RUNTIME_CONFIGURATION")
+	}
+	if len(reads) > 0 {
+		description += " Available resource reads: " + strings.Join(reads, ", ") + ". " + configurationCatalogPageGuidance
+	}
+	if assistantAgentConfigurationAvailable(input) {
+		description += " AGENT_RUNTIME_CONFIGURATION reads only current AGENT context: bound ENV/image, configured tool names, separate verified image inventory; no environment values or secrets."
+	}
+	return description + " " + configurationCatalogContextGuidance
+}
+
 func configurationCatalogTool(input runtimecontract.RunnerInput) map[string]any {
 	return map[string]any{
 		"name":        "get_configuration_catalog",
-		"description": "Discover refs/schemas; omit operation_types for index. No mixed selectors; MODELS needs account_ref. WORKFLOW/AGENT_CONFIGURATION: read configuration_page.text from configuration_offset_bytes=0 via next_offset_bytes to eof=true; pin configuration_sha256 on continuation, maximum_bytes 4..16384. Fresh catalog; execution_snapshot turn-pinned.",
+		"description": configurationCatalogDescription(input),
 		"inputSchema": objectSchema(nil, map[string]any{
 			"operation_types": map[string]any{"type": "array", "maxItems": maximumAssistantDiscoveredSchemas,
 				"uniqueItems": true, "items": map[string]any{"type": "string", "enum": assistantOperationTypes(input)}},
@@ -358,6 +380,10 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		}
 		agentRef = enumSchema(refs...)
 	}
+	capabilityAgentRef := agentRef
+	if input.AssistantScope == runtimecontract.AssistantScopeProject && input.AgentRef != "" {
+		capabilityAgentRef = projectSelfTargetSchema(input, "CHANGE_CAPABILITY", "AGENT", input.AgentRef)
+	}
 	result := []map[string]any{
 		assistantOperationSchema("CREATE_PROJECT", objectSchema([]string{"name", "purpose", "language"}, map[string]any{
 			"name": stringSchema(1, 120), "purpose": stringSchema(1, 1000), "language": enumSchema("ru", "en"),
@@ -396,7 +422,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 		assistantOperationSchema("CREATE_WORKFLOW", workflowInputSchema(projectRef, agentRef)),
 		assistantOperationSchema("ARCHIVE_WORKFLOW", objectSchema(nil, map[string]any{})),
 		assistantOperationSchema("CHANGE_CAPABILITY", objectSchema([]string{"agentRef", "capabilityKey", "enabled"}, map[string]any{
-			"agentRef": agentRef, "capabilityKey": assistantAgentCapabilitySchema(), "enabled": map[string]any{"type": "boolean"},
+			"agentRef": capabilityAgentRef, "capabilityKey": assistantAgentCapabilitySchema(), "enabled": map[string]any{"type": "boolean"},
 		})),
 		assistantOperationSchema("CHANGE_INTEGRATION_GRANT", integrationGrantInputSchema(input.AssistantContext)),
 		assistantOperationSchema("CREATE_INTEGRATION_CONNECTION", objectSchema([]string{"definitionKey", "name", "publicConfiguration"}, map[string]any{
@@ -438,6 +464,12 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 				"projectAssistantRef": enumSchema(input.AgentRef), "definitionKey": capabilityKeySchema(), "name": stringSchema(1, 160),
 				"publicConfiguration": map[string]any{"type": "object", "maxProperties": 100, "additionalProperties": map[string]any{"type": "string", "maxLength": 4096}},
 			})))
+	}
+	if assistantFileRevisionContextAllowed(input) {
+		result = append(result, assistantOperationSchema("CREATE_PROJECT_FILE_REVISION", objectSchema([]string{"artifactRef", "mediaType", "content"}, map[string]any{
+			"artifactRef": opaqueRefSchema(), "mediaType": enumSchema("text/plain", "text/markdown", "text/csv", "application/json"),
+			"contentEncoding": enumSchema("UTF8"), "content": stringSchema(0, 1<<20),
+		})))
 	}
 	selfInstructionsOperation := input.IsSystemAssistant() && input.AgentRef != ""
 	selfConfigurationOperation := input.IsAssistant() && input.AgentRef != ""
@@ -545,7 +577,7 @@ func assistantPlanOperationSchemas(input runtimecontract.RunnerInput) []map[stri
 			selfInstructionsOperation && kind == "UPDATE_SYSTEM_ASSISTANT_INSTRUCTIONS" ||
 			selfInstructionsOperation && (kind == "CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE" || kind == "UPDATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE") ||
 			selfConfigurationOperation && kind == "PREPARE_ASSISTANT_RUNTIME_CONFIGURATION" ||
-			projectSelfOperation && (kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT") ||
+			projectSelfOperation && (kind == "UPDATE_AGENT" || kind == "CREATE_INSTRUCTION_DRAFT" || kind == "BIND_AGENT_RUNTIME_ENVIRONMENT" || kind == "CHANGE_CAPABILITY") ||
 			projectSelfEnvironmentOperation && kind == "PREPARE_RUNTIME_ENVIRONMENT_REVISION" {
 			filtered = append(filtered, operation)
 		}

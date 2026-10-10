@@ -16,6 +16,37 @@ const editor = readFileSync(
 );
 
 describe("каталог образов ИИ-сотрудников", () => {
+  it("на 390px выделяет имени и роли всю строку, отделяет длинный статус и сохраняет desktop", () => {
+    const desktop = editor.slice(
+      editor.indexOf(".image-summary {"),
+      editor.indexOf("@media (max-width: 1000px)"),
+    );
+    expect(desktop).toMatch(
+      /\.image-summary\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) auto auto;/s,
+    );
+    expect(desktop).toMatch(
+      /\.image-summary__actions\s*\{[^}]*display: flex;[^}]*flex-wrap: wrap;/s,
+    );
+    const mobile = editor.slice(editor.indexOf("@media (max-width: 640px)"));
+    expect(mobile).toMatch(
+      /\.image-summary\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*align-items: start;/s,
+    );
+    expect(mobile).toMatch(
+      /\.image-summary__identity\s*\{[^}]*width: 100%;[^}]*align-items: flex-start;/s,
+    );
+    expect(mobile).toMatch(
+      /\.image-summary__identity > div\s*\{[^}]*flex: 1;[^}]*min-width: 0;/s,
+    );
+    expect(mobile).toMatch(
+      /\.image-summary > \.status-badge\s*\{[^}]*grid-column: 1 \/ -1;[^}]*box-sizing: border-box;[^}]*max-width: 100%;[^}]*white-space: normal;[^}]*overflow-wrap: anywhere;/s,
+    );
+    expect(mobile).toMatch(
+      /\.image-summary__actions\s*\{[^}]*display: grid;[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/s,
+    );
+    expect(mobile).toMatch(
+      /\.image-summary__actions > \.button\s*\{[^}]*min-width: 0;[^}]*max-width: 100%;[^}]*min-height: 44px;[^}]*white-space: normal;[^}]*overflow-wrap: anywhere;/s,
+    );
+  });
   it("на любом экране отделяет lifecycle заголовок от статуса и не обрезает дату сборки", () => {
     const desktop = editor.slice(
       editor.indexOf(".image-lifecycle {"),
@@ -133,7 +164,9 @@ describe("каталог образов ИИ-сотрудников", () => {
 
   it("повторяет FAILED/EXPIRED и обновляет детали по realtime-событию", () => {
     expect(editor).toContain("platform.roleImageRealtimeRevision");
-    expect(editor).toContain("store.loadDetail(projectRef, recipeRef, false)");
+    expect(editor).toContain(
+      "store.loadDetail(resourceScope.value, props.recipeRef, false)",
+    );
     expect(editor).not.toContain("scheduleBuildPolling");
     expect(editor).toContain("!buildIsActive(current) ||");
     expect(editor).toContain("buildIsActive(currentBuild)");

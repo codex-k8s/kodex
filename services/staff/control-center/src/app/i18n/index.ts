@@ -9,12 +9,14 @@ import { workflowLaunchMessages } from "@/features/platform/workflow-launch";
 import { entityCardMessages } from "@/features/workflows/catalog/messages";
 import { automationPreviewMessages } from "@/features/automations/prompt-preview-messages";
 import { vulnerabilityMessages } from "@/features/role-images/vulnerability-messages";
+import { fileRevisionMessages } from "@/features/files/revision-messages";
 
 import { currentLocale } from "@/shared/locale";
 import { serverMessagesFor } from "@/shared/ui/server-message-catalog";
 import { additionalPermissionMessages } from "@/shared/ui/permission-message-catalog";
 
 const ru = {
+  fileRevision: fileRevisionMessages.ru,
   imageVulnerabilities: vulnerabilityMessages.ru,
   ...sttActivationMessages.ru,
   configurationRestore: restoreRevisionMessages.ru,
@@ -1018,6 +1020,7 @@ const ru = {
     logout: "Выйти",
     callback: "Завершаем вход…",
     failed: "Не удалось завершить вход",
+    callbackSignInRequired: "Чтобы продолжить, войдите заново.",
   },
   onboarding: {
     title: "Настроим Kodex",
@@ -2204,7 +2207,8 @@ const ru = {
     zoom: "Масштаб графа",
     zoomIn: "Увеличить масштаб",
     zoomOut: "Уменьшить масштаб",
-    fitGraph: "Вместить",
+    fitGraph: "Весь граф",
+    focusCurrentWork: "Текущая работа",
     minimap: "Мини-карта графа",
     waitingForActivity: "Ожидает начала работы",
     callback: "Ответ дочернего запуска",
@@ -2244,6 +2248,7 @@ const ru = {
       UNAVAILABLE: "Неизвестен",
     },
     nativeToolResults: {
+      COMPLETED: "Завершён",
       FAILED: "Не удалось выполнить действие",
       DECLINED: "Действие отклонено",
     },
@@ -2258,6 +2263,8 @@ const ru = {
     },
     managedToolNames: {
       get_configuration_catalog: "Каталог настроек",
+      read_task_session: "Чтение истории сессии",
+      get_workflow_catalog: "Каталог процессов",
       propose_configuration_plan: "Настройки помощника",
       get_integration_catalog: "Каталог интеграций",
       find_platform_resources: "Поиск ресурсов",
@@ -2266,6 +2273,7 @@ const ru = {
       delegate_agent: "Передача задания",
       invoke_integration: "Вызов интеграции",
       search_files: "Поиск файлов",
+      read_file: "Чтение файла",
       get_file_metadata: "Сведения о файле",
       preview_file: "Просмотр файла",
       get_file_manifest: "Список файлов",
@@ -2293,6 +2301,7 @@ const ru = {
     expandMessage: "Показать полностью",
     collapseMessage: "Свернуть",
     newMessages: "Новые сообщения ↓",
+    jumpToLatestMessage: "К последнему сообщению ↓",
     earlierServiceHistory: "Показать предыдущие служебные записи",
     toolGroup: "Вызовы инструментов: {count}",
     toolGroupCompleted: "Завершены",
@@ -4629,6 +4638,7 @@ const ru = {
 
 const en = {
   ...ru,
+  fileRevision: fileRevisionMessages.en,
   imageVulnerabilities: vulnerabilityMessages.en,
   ...sttActivationMessages.en,
   configurationRestore: restoreRevisionMessages.en,
@@ -5757,6 +5767,7 @@ const en = {
     logout: "Sign out",
     callback: "Completing sign-in…",
     failed: "Could not complete sign-in",
+    callbackSignInRequired: "Sign in again to continue.",
   },
   onboarding: {
     ...ru.onboarding,
@@ -6827,7 +6838,8 @@ const en = {
     zoom: "Graph zoom",
     zoomIn: "Zoom in",
     zoomOut: "Zoom out",
-    fitGraph: "Fit",
+    fitGraph: "Whole graph",
+    focusCurrentWork: "Current work",
     minimap: "Graph minimap",
     waitingForActivity: "Waiting to start",
     callback: "Child run response",
@@ -6867,6 +6879,7 @@ const en = {
       UNAVAILABLE: "Unavailable",
     },
     nativeToolResults: {
+      COMPLETED: "Completed",
       FAILED: "Action failed",
       DECLINED: "Action declined",
     },
@@ -6881,6 +6894,8 @@ const en = {
     },
     managedToolNames: {
       get_configuration_catalog: "Configuration catalog",
+      read_task_session: "Session history",
+      get_workflow_catalog: "Workflow catalog",
       propose_configuration_plan: "Assistant settings",
       get_integration_catalog: "Integration catalog",
       find_platform_resources: "Resource search",
@@ -6889,6 +6904,7 @@ const en = {
       delegate_agent: "Task delegation",
       invoke_integration: "Integration call",
       search_files: "File search",
+      read_file: "File reading",
       get_file_metadata: "File information",
       preview_file: "File preview",
       get_file_manifest: "File list",
@@ -6916,6 +6932,7 @@ const en = {
     expandMessage: "Show full message",
     collapseMessage: "Collapse",
     newMessages: "New messages ↓",
+    jumpToLatestMessage: "Jump to latest message ↓",
     earlierServiceHistory: "Show earlier service records",
     toolGroup: "Tool calls: {count}",
     toolGroupCompleted: "Completed",
