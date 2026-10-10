@@ -1,7 +1,7 @@
 // Чистые преобразования и offline CLI. План не выполняет HTTP или owner command.
 import { createHash } from 'node:crypto';
 import { closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const fail = code => { throw new Error(code); };
 const check = (ok, code) => { if (!ok) fail(code); };
@@ -95,6 +95,33 @@ const ref = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,160}$/.test(
 const digest = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 const version = value => Number.isSafeInteger(value) && value > 0;
 const shape = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).sort().join() === [...keys].sort().join();
+// Public ImageToolObservation и ImageToolProbes: закрытый профиль v1, не capability.
+const inventoryProbeNames = Object.freeze(['bash', 'curl', 'git', 'gh', 'jq', 'yq', 'ripgrep', 'make', 'just', 'go', 'goimports', 'gofumpt', 'golangci-lint', 'staticcheck', 'goose', 'sqlc', 'buf', 'protoc', 'protoc-gen-go', 'protoc-gen-go-grpc', 'grpcurl', 'mockgen', 'oapi-codegen', 'node', 'npm', 'pnpm', 'yarn', 'typescript', 'eslint', 'prettier', 'vite', 'vue-tsc', 'vitest', 'playwright', 'chromium', 'playwright-mcp', 'wscat', 'codex', 'corepack', 'python3', 'pip', 'kubectl', 'kustomize', 'helm', 'buildctl', 'docker', 'shellcheck', 'hadolint', 'govulncheck', 'gitleaks']);
+function inventoryProbePaths(name) {
+  if (name === 'chromium') return ['/usr/lib/chromium/chromium', '/usr/local/bin/chromium', '/usr/local/bin/chromium-browser', '/usr/local/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome'];
+  if (name === 'playwright-mcp') return ['/usr/local/bin/playwright-mcp', '/usr/local/bin/mcp-server-playwright', '/usr/bin/playwright-mcp', '/usr/bin/mcp-server-playwright'];
+  const command = name === 'ripgrep' ? 'rg' : name === 'typescript' ? 'tsc' : name;
+  return [...(name === 'bash' ? ['/bin/bash'] : name === 'go' ? ['/usr/local/go/bin/go'] : []), '/usr/local/bin/' + command, '/usr/bin/' + command];
+}
+export function verifiedArtifactCommands(artifact) {
+  const inventory = artifact.verifiedToolInventory;
+  check(shape(inventory, ['status', 'sha256', 'imageDigest', 'provenanceSha256', 'platforms']) && inventory.status === 'VERIFIED' && digest(inventory.sha256) && inventory.imageDigest === artifact.manifestDigest && inventory.provenanceSha256 === artifact.provenanceSha256 && Array.isArray(inventory.platforms) && inventory.platforms.length >= 1 && inventory.platforms.length <= 2, 'INVENTORY_BINDING_INVALID');
+  const platforms = new Set(); let common;
+  for (const platform of inventory.platforms) {
+    check(shape(platform, ['platform', 'platformDigest', 'manifestSha256', 'tools']) && ['linux/amd64', 'linux/arm64'].includes(platform.platform) && !platforms.has(platform.platform) && /^sha256:[a-f0-9]{64}$/.test(platform.platformDigest ?? '') && digest(platform.manifestSha256) && Array.isArray(platform.tools) && platform.tools.length === inventoryProbeNames.length, 'INVENTORY_PLATFORM_INVALID');
+    platforms.add(platform.platform); const commands = new Set();
+    for (const [index, tool] of platform.tools.entries()) {
+      check(shape(tool, ['name', 'status', 'path', 'version', 'sha256', 'required']) && tool.name === inventoryProbeNames[index] && tool.required === (index < 38) && ['VERIFIED', 'MISSING', 'PROBE_FAILED'].includes(tool.status), 'INVENTORY_OBSERVATION_INVALID');
+      if (tool.status === 'MISSING') { check(tool.path === '' && tool.version === '' && tool.sha256 === '', 'INVENTORY_OBSERVATION_INVALID'); continue; }
+      check(inventoryProbePaths(tool.name).includes(tool.path) && digest(tool.sha256), 'INVENTORY_OBSERVATION_INVALID');
+      if (tool.status === 'PROBE_FAILED') { check(tool.version === '', 'INVENTORY_OBSERVATION_INVALID'); continue; }
+      check(typeof tool.version === 'string' && tool.version.length <= 80 && /^v?[0-9]+(\.[0-9]+){0,3}([-+][A-Za-z0-9.-]{1,48})?$/.test(tool.version), 'INVENTORY_OBSERVATION_INVALID');
+      commands.add(posix.basename(tool.path));
+    }
+    common = common === undefined ? commands : new Set([...common].filter(command => commands.has(command)));
+  }
+  return common;
+}
 const enc = encodeURIComponent;
 const scopeKeys = ['organizationRef', 'scopeKind', 'projectRef'];
 function cohort(scopes, organizationCount) {
@@ -173,14 +200,14 @@ export function prepareEnvironments(input) {
     check(shape(e, [...scopeKeys, 'environmentRef', 'environmentVersion', 'baseVersionRef', 'recipeRef', 'publishedRevisionRef']), 'PIN_INVALID');
     sameScope(env, e); sameScope(detail.recipe, e); sameScope(artifact, e);
     check(env.ref === e.environmentRef && env.version === e.environmentVersion && env.currentVersion?.ref === e.baseVersionRef && !refs.has(env.ref), 'ENVIRONMENT_PIN_CHANGED'); refs.add(env.ref);
-    check(detail.recipe.ref === e.recipeRef && detail.recipe.managedLineage?.revisionRef === e.publishedRevisionRef && detail.recipe.promotedImageReady === true && artifact.recipeRef === e.recipeRef && artifact.recipeGeneration === detail.recipe.generation && artifact.admissionVerdict === 'ACCEPTED' && artifact.promotionState === 'PROMOTED' && base(artifact.promotedReference) && artifact.promotedReference.endsWith('@' + artifact.manifestDigest) && digest(artifact.provenanceSha256) && digest(artifact.promotionReceiptSha256) && artifact.verifiedToolInventory?.status === 'VERIFIED', 'ARTIFACT_NOT_READY');
+    check(detail.recipe.ref === e.recipeRef && detail.recipe.state === 'ACTIVE' && version(detail.recipe.generation) && detail.recipe.managedLineage?.revisionRef === e.publishedRevisionRef && detail.recipe.promotedImageReady === true && detail.recipe.activeImageArtifactRef === artifact.ref && detail.recipe.promotedImageReference === artifact.promotedReference && ref(artifact.ref) && version(artifact.version) && ref(artifact.buildRef) && artifact.recipeRef === e.recipeRef && artifact.recipeGeneration === detail.recipe.generation && artifact.admissionVerdict === 'ACCEPTED' && artifact.promotionState === 'PROMOTED' && typeof artifact.promotionRequested === 'boolean' && base(artifact.promotedReference) && artifact.promotedReference.endsWith('@' + artifact.manifestDigest) && digest(artifact.provenanceSha256) && digest(artifact.promotionReceiptSha256) && Number.isFinite(Date.parse(artifact.promotedAt)) && Array.isArray(artifact.declaredTools) && artifact.declaredTools.length <= 128, 'ARTIFACT_NOT_READY');
     check(artifact.ref !== env.currentVersion.image.artifactRef && Array.isArray(entry.bindings) && entry.bindings.length > 0 && entry.bindings.length <= 1000, 'UNCHANGED_OR_MISSING_BINDINGS');
-    const names = new Set(artifact.declaredTools?.map(tool => tool.name));
-    check(env.currentVersion.tools.every(tool => names.has(tool.command)), 'DECLARED_TOOLS_MISSING');
+    const commands = verifiedArtifactCommands(artifact);
+    check(Array.isArray(env.currentVersion.tools) && new Set(env.currentVersion.tools.map(tool => tool.command)).size === env.currentVersion.tools.length && env.currentVersion.tools.every(tool => commands.has(tool.command)), 'VERIFIED_TOOLS_MISSING');
     const body = environmentDraft(env, artifact.ref);
     for (const b of entry.bindings) { sameScope(b, e); check(ref(b.consumerRef) && version(b.consumerVersion) && ref(b.bindingRef) && version(b.bindingVersion) && b.sourceRevisionRef === e.baseVersionRef, 'BINDING_PIN_CHANGED'); }
     const path = e.scopeKind === 'ORGANIZATION' ? '/api/v1/organization/runtime-environment-drafts' : '/api/v1/projects/' + enc(e.projectRef) + '/runtime-environment-drafts';
-    return request(path, body, 201, undefined, { ...e, artifactRef: artifact.ref, artifactDigest: artifact.manifestDigest, unchangedEnvironmentSHA256: environmentPreservationSHA256(env), intendedBindings: clone(entry.bindings), continuation: 'VALIDATE_PREPUBLICATION_IMPACT_EOF_SELECT_PUBLISH_READBACK' });
+    return request(path, body, 201, undefined, { ...e, artifactRef: artifact.ref, artifactVersion: artifact.version, artifactDigest: artifact.manifestDigest, artifactBuildRef: artifact.buildRef, artifactProvenanceSHA256: artifact.provenanceSha256, artifactPromotionReceiptSHA256: artifact.promotionReceiptSha256, inventorySHA256: artifact.verifiedToolInventory.sha256, inventoryProjectionSHA256: sha(artifact.verifiedToolInventory), inventoryPlatformPins: artifact.verifiedToolInventory.platforms.map(({ platform, platformDigest, manifestSha256 }) => ({ platform, platformDigest, manifestSha256 })), unchangedEnvironmentSHA256: environmentPreservationSHA256(env), intendedBindings: clone(entry.bindings), continuation: 'VALIDATE_PREPUBLICATION_IMPACT_EOF_SELECT_PUBLISH_READBACK' });
   });
 }
 export function prepareSelections(input, now = Date.now()) {

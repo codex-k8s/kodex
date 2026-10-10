@@ -1025,3 +1025,24 @@ core47 пока unchanged, public base defaults не означают activation
 Уточнение владельца закреплено: durable system instructions/code для fresh
 install, никаких корректирующих USER_MESSAGE/переписывания business history.
 SOURCE common PLATFORM v3/core48 готов, live activation/business1796/Full65 OPEN.
+
+## Checkpoint 10.10.2026 17:43 UTC — verified inherited tools и три PROMOTED
+
+Fresh native owner readback: SYSTEMR19/staffR15/PROJECTassistantR9 все
+ACCEPTED/PROMOTED/VERIFIED; recipe34/30/19. Promotion receipts сохранены;
+queue/scan продвинулись штатно, без повторного build/claim/retry. В bounded
+backend окне outage восстановлен CP17:28:31/builder17:28:42, новых degraded нет.
+
+ENV helper повторяет authoritative verifiedImageToolCommands: executable
+basename VERIFIED path в пересечении всех платформ, не declared/display name.
+FROM-only declaredTools=[] остаётся неизменным. Full registered50 observations,
+image/provenance/inventory/platform/promotion pins проверяются; missing/failed,
+union/foreign/partial evidence закрыты. Public projection не позволяет rawSHA
+криптопроверку: её по-прежнему выполняет owner hydration/publication. ROOT109/109
+PASS, source610056af3dfe599f9e5caefde49692d400ae2983d06bb95cae76d7b2a35eabb6.
+Actual full native fourENV input SHAf4daad8422ea21fa4835d3ca6b1a61561370f0b0d577826814fbc9c1b4fa2ccd
+дал четыре offline intents SHA1269eee7cbcf3f829d717ccf45b79d7f6ca91fd99d9f71eca5210933ef5220ba.
+Full38 tools,values/policy/resources/exact Secret revisions и intended bindings
+1/1/5/1 сохранены. HTTP effects ещё NOT RUN; HOT298/v2/core47 остаётся прежним
+до совместимой доставки. Global runner pointer требует canonical writer;
+ручной pin не создаётся. Business1796/Full65 OPEN, USER_MESSAGE не создавались.

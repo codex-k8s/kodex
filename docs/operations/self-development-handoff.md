@@ -10,6 +10,24 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 17:43 UTC — все три custom образа PROMOTED
+
+SYSTEM R19, staff R15, PROJECT assistant R9: current native owner GET200,
+ACCEPTED/PROMOTED/VERIFIED, recipe versions34/30/19. Никакого risk-decision
+обхода: technical admission сам подтвердил evidence. Transient CP outage
+восстановлен; admission scan/queue завершили работу штатно без retry/build.
+
+ENV helper использует VERIFIED executable basename intersection всех
+inventory platforms, как authoritative owner. declaredTools=[] не заполняется.
+Public immutable image/provenance/inventory/promotion pins закрыто проверяются,
+raw SHA не якобы recomputed из неполного public DTO. ROOT109/109 PASS;
+actual full native input SHA f4daad8422ea21fa4835d3ca6b1a61561370f0b0d577826814fbc9c1b4fa2ccd
+дал четыре offline intents SHA1269eee7cbcf3f829d717ccf45b79d7f6ca91fd99d9f71eca5210933ef5220ba.
+All38 tools/non-image parameters/exact Secret revisions и intended8 bindings
+сохранены, HTTP draft/validate/impact/publication ещё NOT RUN. Hot298/v2/core47
+остаётся до совместимых ENV; global runner pin ещё прежний и требует
+канонического writer, не ручной записи. Business1796/Full65 остаются OPEN.
+
 ## Checkpoint 10.10.2026 17:35 UTC — node/defaults и native publications доказаны
 
 Exact bcd9ccfe remote/Draft1807 PASS. Новый source9fd2b222 доказал свежие HTTPS

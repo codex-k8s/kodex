@@ -100,7 +100,7 @@ HUMAN OWNER/ADMIN risk-decision остаётся отдельным явным �
 
 - expected: `{organizationRef,scopeKind,projectRef,environmentRef,environmentVersion,baseVersionRef,recipeRef,publishedRevisionRef}`. environmentVersion — wrapper `environment.version`, не currentVersion.version/revision.
 - environment: GET `/api/v1/runtime-environments/{environmentRef}`; ACTIVE и ready=true, пустые readinessBlockers. enabled в этом projection отсутствует. ORG projectRef может быть опущен; это только canonical empty scope, PROJECT ref обязателен.
-- artifactDetail: новый GET exact recipe после promotion; activeArtifact новой managed revision, ACCEPTED/PROMOTED/VERIFIED, immutable provenance/promotion pins. Каждый прежний command всех38 tools обязан быть declared в новом artifact.
+- artifactDetail: новый GET exact recipe после promotion; activeArtifact новой managed revision, ACTIVE recipe и exact activeArtifact/ref/promotedReference, ACCEPTED/PROMOTED/VERIFIED, immutable version/build/provenance/promotion pins. Каждый прежний command всех38 tools обязан быть VERIFIED executable basename на каждой платформе нового image; declaredTools — не источник допуска.
 - bindings: только intended exact pins `{organizationRef,scopeKind,projectRef,consumerRef,consumerVersion,bindingRef,bindingVersion,sourceRevisionRef}`. Native `/agents/{agentRef}/runtime-configuration` имеет top-level agentVersion и environmentBinding `{agentRef,digest,environmentRef,ref,version,versionRef}`: consumerRef=environmentBinding.agentRef, consumerVersion=agentVersion, bindingRef=environmentBinding.ref, bindingVersion=environmentBinding.version, sourceRevisionRef=environmentBinding.versionRef. Нет выдуманного agent object. Scope берётся из authoritative owner resource, не payload. SYSTEM floating binding сверять по materialized current version, не назначать пустой ref.
 
 Result — четыре POST organization/project `runtime-environment-drafts`.
@@ -112,6 +112,33 @@ hash private descriptors остаются baseline pin в comparison digest; и�
 и POST `/runtime-environment-drafts/{draftRef}/impact-plans` с fresh draft OCC.
 Не применять перед этим RoleImage consumer-bindings: это альтернативный clone
 путь, который создаст лишнюю ENV revision и сделает draft base stale.
+
+### Унаследованные инструменты и verified inventory
+
+FROM-only recipe может иметь declaredTools=[] и полноценные инструменты базы.
+Authoritative `resolveScopedRuntimeEnvironmentImage` выбирает их через
+`verifiedImageToolCommands` (`platform/role_images_inventory.go`): только
+basename VERIFIED path и пересечение всех платформ. Нельзя подставлять
+declarations, использовать display name (ripgrep/typescript вместо rg/tsc),
+объединять платформы или считать MISSING/PROBE_FAILED доступным executable.
+
+Planner повторяет этот закрытый public profile: полный фиксированный набор50
+observations в canonical порядке, registered probe paths/required flags,
+известные statuses, версии/хэши и одна либо две различные linux/amd64|arm64
+платформы. Inventory status/hash, imageDigest и provenanceSha256 должны быть
+точно связаны с новым artifact; platformDigest/manifestSha256 обязательны.
+Исторический UNAVAILABLE и неверные/неполные/чужие evidence закрываются.
+Пустой declaredTools сохраняется пустым: он не заполняется fixtures или
+invented recipe tools. Artifact ref/version/build, promotion receipt и
+inventory SHA/projection SHA/platform pins включены в immutable request pins
+и стабильный idempotency key;38 полных прежних tool objects остаются в body.
+
+Safe public projection не содержит spec/build/runtime manifest fields,
+поэтому planner не заявляет повторную криптографическую проверку inventory
+SHA по этому DTO. Владелец уже проверяет raw inventory/hash/image/provenance/
+spec/build/runtime/platform bindings при authoritative hydration и повторяет
+current artifact eligibility при ENV validation/publication. Private native
+input digest и offline pins не заменяют этот owner predicate или authority.
 
 `selections` имеет ровно `{version:1,selections:[4 entries]}`.
 Каждая entry ровно `{draft,pages,intendedBindings}`:
@@ -136,6 +163,7 @@ APPLIED/CONFLICT/FORBIDDEN/NOT_SELECTED и exact ENV/runtime binding preservatio
 | Publication/autobuild | Owner atomic revision/generation/build/audit/event | Fresh VALID/version/catalog; exact recipe/build lineage |
 | Admission/risk/promotion | Existing worker lifecycle; human risk отдельно | Technical evidence/fence/current policy; rejected/failed не обходятся |
 | ENV draft/impact | Publication ещё не меняется | Wrapper/base pins,38 tools, exact Secret; immutable prepublication fullEOF plan |
+| Inherited tool eligibility | Planner только проверяет pinned public evidence; state/event отсутствуют | VERIFIED basename intersection всех платформ, exact inventory/image/provenance и promotion pins; declarations не fallback; owner повторяет raw evidence/current eligibility до effect |
 | Selected publication | Owner создаёт ENV revision и только выбранные binding effects | Fresh plan/draft/artifact/source/consumer pins; per-item readback |
 | Cancel/archive/delete/discard | Planner не создаёт такие intents | Только существующий owner lifecycle; terminal history не переписывается |
 | Retry/lease expiry | Planner не повторяет executor work | Existing bounded attempt/fence cleanup; no invented grant/claim |
