@@ -1,6 +1,7 @@
 // Реестр активных контрактов не может ссылаться на отсутствующие исходники или generated code.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
@@ -57,7 +58,7 @@ const riskOperations = [
 
 function checkRiskContract(api, policy) {
   // Canonical policygen revision сохраняет risk authority и добавляет exact revision reads.
-  assert.equal(policy.policy_revision, 94, 'RISK_POLICY_REVISION');
+  assert.equal(policy.policy_revision, 95, 'RISK_POLICY_REVISION');
   for (const [permission, operation, method] of riskOperations) {
     const bindings = policy.policy.operation_bindings.filter(item => item.operation_id === permission);
     assert.equal(bindings.length, 1, 'RISK_METHOD_EXACT_CALLER');
@@ -113,8 +114,8 @@ test('image risk contract has exact human-only methods and full safe report page
 
 test('image risk contract rejects delegated caller, project authority, missing pins and hidden severity', () => {
   for (const mutate of [
-    (api, policy) => { policy.policy_revision = 93; },
-    (api, policy) => { policy.policy_revision = 95; },
+    (api, policy) => { policy.policy_revision = 94; },
+    (api, policy) => { policy.policy_revision = 96; },
     (api, policy) => { policy.policy.operation_bindings.find(value => value.operation_id === riskOperations[0][0]).caller_workload_id = 'agent-runner'; },
     (api, policy) => { policy.policy.operation_bindings.find(value => value.operation_id === riskOperations[2][0]).project_required = true; },
     (api) => { api.components.schemas.ImageVulnerabilitySeverity.enum.pop(); },
@@ -123,5 +124,54 @@ test('image risk contract rejects delegated caller, project authority, missing p
     const api = structuredClone(riskAPI), policy = structuredClone(riskPolicy);
     mutate(api, policy);
     assert.throws(() => checkRiskContract(api, policy), /RISK_/);
+  }
+});
+
+const controllerSPIFFE = 'spiffe://kodex.local/ns/kodex-system/sa/image-admission-controller';
+const trustedPolicy = JSON.parse(readFileSync(`${root}services/internal/control-plane/internal/app/service-identity-policy.json`, 'utf8'));
+const protectedWorkloads = ['automation-scheduler', 'control-plane', 'email-bridge', 'image-admission',
+  'image-promotion', 'integration-gateway', 'interaction-gateway', 'role-image-builder',
+  'runtime-controller', 'secret-broker', 'session-archive'];
+
+function checkControllerProfiles(policy, trusted) {
+  assert.equal(policy.policy.default_decision, 'DENY', 'CONTROLLER_DEFAULT_DENY');
+  assert.deepEqual([...new Set(policy.policy.authority_proof_producers
+    .filter(value => value.application_credential === 'PLATFORM_WORKER_GRANT')
+    .map(value => value.caller_workload_id))].sort(), protectedWorkloads, 'CONTROLLER_CLOSED_PROTECTED_WORKLOADS');
+  assert.equal(policy.policy.authority_proof_producers.some(value => value.caller_workload_id === 'image-admission-controller'), false, 'CONTROLLER_NO_PROTECTED_PRODUCER');
+  assert.equal(policy.policy.operation_bindings.some(value => value.caller_workload_id === 'image-admission-controller'), false, 'CONTROLLER_NO_PROTECTED_BINDING');
+  assert.equal(trusted.target_spiffe_id, 'spiffe://kodex.local/ns/kodex-system/sa/control-plane', 'CONTROLLER_TRUSTED_TARGET');
+  const bindings = trusted.bindings.filter(value => value.caller_spiffe_id === controllerSPIFFE);
+  assert.deepEqual(bindings.map(value => value.operation_id).sort(),
+    ['platform.role-images.admission.recovery-terminal.get', 'platform.role-images.supply-work.get'], 'CONTROLLER_TRUSTED_READ_PAIR');
+  for (const value of bindings) {
+    assert.equal(value.actor_mode, 'SERVICE_OWNER_RESOLVED', 'CONTROLLER_OWNER_AUTHORITY');
+    assert.equal(value.permission, value.operation_id, 'CONTROLLER_EXACT_PERMISSION');
+    assert.equal(value.project_required, false, 'CONTROLLER_NO_PROJECT_OVERRIDE');
+    assert.equal(value.full_method, value.operation_id.endsWith('supply-work.get')
+      ? '/controlplane.v1.RoleImageService/GetImageSupplyWorkAvailability'
+      : '/controlplane.v1.RoleImageService/GetImageAdmissionRecoveryTerminal', 'CONTROLLER_EXACT_READ_METHOD');
+  }
+}
+
+test('controller retains exact trusted owner reads without orphan protected authority', () => {
+  checkControllerProfiles(riskPolicy, trustedPolicy);
+});
+
+test('controller profiles reject unknown grants, reintroduced producer/binding and trusted mutation', () => {
+  for (const mutate of [
+    (policy) => { policy.policy.default_decision = 'ALLOW'; },
+    (policy) => { policy.policy.authority_proof_producers.find(value => value.application_credential === 'PLATFORM_WORKER_GRANT').caller_workload_id = 'unknown-worker'; },
+    (policy) => { policy.policy.authority_proof_producers.push({ caller_workload_id: 'image-admission-controller' }); },
+    (policy) => { policy.policy.operation_bindings.push({ caller_workload_id: 'image-admission-controller' }); },
+    (policy, trusted) => { trusted.bindings = trusted.bindings.filter(value => value.caller_spiffe_id !== controllerSPIFFE); },
+    (policy, trusted) => { trusted.bindings.find(value => value.caller_spiffe_id === controllerSPIFFE).actor_mode = 'USER_CREDENTIAL_REQUIRED'; },
+    (policy, trusted) => { trusted.bindings.find(value => value.caller_spiffe_id === controllerSPIFFE).project_required = true; },
+    (policy, trusted) => { trusted.bindings.find(value => value.caller_spiffe_id === controllerSPIFFE).full_method = '/controlplane.v1.RoleImageService/ClaimImageAdmission'; },
+    (policy, trusted) => { trusted.bindings.push({ caller_spiffe_id: controllerSPIFFE, operation_id: 'platform.role-images.admission.claim' }); },
+  ]) {
+    const policy = structuredClone(riskPolicy), trusted = structuredClone(trustedPolicy);
+    mutate(policy, trusted);
+    assert.throws(() => checkControllerProfiles(policy, trusted), /CONTROLLER_/);
   }
 });

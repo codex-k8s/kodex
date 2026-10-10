@@ -154,7 +154,8 @@ func main() {
 		worker("email-bridge", "control-plane.email-bridge", controlplaneclient.EmailBridgeOperations()),
 		worker("role-image-builder", "control-plane.role-image-builder", controlplaneclient.RoleImageBuilderOperations()),
 		worker("image-admission", "control-plane.image-admission", controlplaneclient.ImageAdmissionOperations()),
-		worker("image-admission-controller", "control-plane.image-admission-controller", controlplaneclient.ImageAdmissionControllerOperations()),
+		// Controller owner reads реализованы только в trusted-cluster. Запись
+		// signed producer без protected identity/key delivery не выдаёт права.
 		worker("image-promotion", "control-plane.image-promotion", controlplaneclient.ImagePromotionOperations()),
 		worker("secret-broker", "control-plane.secret-broker", controlplaneclient.SecretBrokerOperations()),
 		targetedWorker(
@@ -184,7 +185,7 @@ func main() {
 		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
 		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
 	})
-	value := document{Version: 1, PolicyRevision: 94, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 95, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,

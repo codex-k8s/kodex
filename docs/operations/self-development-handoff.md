@@ -10,6 +10,38 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 20:35 UTC — mobile native PASS, orphan policy source
+
+84ed0bf3 опубликован в Draft1807/remote exact readback PASS, frontend-only HOT
+FF20:32 PASS; все runtime деревья прежние. Initial publisher precheck отказал
+на изменившемся HOT pin до push; после exact pin update штатный push PASS.
+Native320/390/721/760: ровно одна44px toolbar кнопка, FAB скрыта; desktop1828
+сохраняет только FAB. Escape возвращает фокус в toolbar; после ухода на обзор
+проекта FAB снова видна. Screenshots проверены MAIN, horizontal overflow0,
+Console0, relevant API200. Rejoin сначала recovering, затем live heartbeat;
+постоянный realtime gap NOT PROVEN. Никакие бизнес-сообщения не досылались.
+На обзоре проекта найден UX: сырое task kind и текст «не передан API»;
+отдельный адресный presentation fix готовится, пока OPEN.
+
+Protected orphan registration исправлена source-only frozen5files exact hashes:
+policy generator удаляет1producer/2bindings, generated revision94→95/ABI2.
+Trusted operation/compiled policy, CHECK11, runner/sharedv3/inventory и
+runtime prompt byte-identical; существующий GUIDE-DOC-003 уже требует полную
+materialization профиля. Unknown grant trust закрыто отклоняется.
+ROOT closed worker contract/registry7tests/actual policy codegen PASS.
+ROOT integrated authorityproof race повтор PASS/exit0/1.131s.
+Isolated source targeted Go race/vet/controller и оба ABI renders PASS;
+canonical disposable PostgreSQL108.227s PASS (bootstrap/controller supply-work,
+terminal/trusted/organization reads и negatives). Live activation NOT RUN:
+текущий Workflow RUNNING, HOT/runtime policy95 не доставлять до idle.
+
+Exact382 artifact-retention fresh unit/vet PASS:23PASS/3fixtureSKIP/0FAIL;
+canonical disposable immutable upgrade5.25s и retention component0.21s PASS,
+собственный container cleanup подтверждён. Это не live SeaweedFS acceptance.
+Checkpoint archive initial verifier FAIL из-за неверного места добавления записи;
+поправлена только позиция нового блока, повтор prefix/history verifier PASS.
+Full65/11/14/15 и native Developer/ONE review/Manager/owner gate ещё OPEN.
+
 ## Checkpoint 10.10.2026 20:32 UTC — native INTAKE и мобильный доступ
 
 Source382e62ff опубликован в Draft1807, remote/head и узкий frontend-only

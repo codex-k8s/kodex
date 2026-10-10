@@ -772,3 +772,23 @@ acceptance, Full65/11/14/15 OPEN. ROOT corrective USER_MESSAGE0. Observer
 ACK/hash/rejoin не заменяет semantic acceptance; paid units остаются UNKNOWN.
 Orphan protected worker declaration исправляется source-only вариантом A;
 forward policy delivery отложена до безопасного idle текущего Workflow.
+
+## Checkpoint 10.10.2026 20:35 UTC — mobile native PASS, orphan policy source
+
+84ed0bf3 remote/Draft1807 readback и frontend-only HOT FF PASS. Initial push
+precheck остановился до effects на сменившемся HOT pin; exact update→push PASS.
+Native320/390/721/760 один44px toolbar доступ к помощнику; desktop только FAB.
+Escape→toolbar focus, route unmount→FAB restored, screenshots MAIN проверены,
+overflow0/Console0/relevant API200. Временный recovering сменился live heartbeat.
+Новый Overview UX fallback дефект передан адресному FE исполнителю, пока OPEN.
+
+Frozen5files orphan policy fix: только удаление protected1producer/2bindings,
+generated94→95, ABI2. Trusted paths/CHECK11/runner/inventory неизменны; ROOT
+closed contract/registry7/codegen PASS. Source controller/authority race/vet,
+ROOT integrated authorityproof race повтор PASS1.131s;
+оба renders и disposable PG108.227s PASS. Live activation NOT RUN до idle,
+активный Workflow/RuntimeRevision/ENV не менялись. Свежий exact382 retention
+unit23PASS/3SKIP/vet и disposable immutable upgrade+component PASS/cleanup proof.
+Archive verifier initial FAIL incorrect new-block placement; после переноса
+только новой записи append-only/history PASS. Full65/11/14/15 и native
+Developer/ONE review/Manager/owner gate OPEN; кредиты/денежные units UNKNOWN.
