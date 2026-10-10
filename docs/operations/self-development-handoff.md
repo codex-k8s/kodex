@@ -10,6 +10,30 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 13:23 UTC — опубликованный пакет и граница продолжения
+
+HEAD/remote/Draft1807: 754a0499bba5ec13385439f01b3f153202313b9e; пакет
+предыдущего checkpoint уже закоммичен и запушен, main ab4992e0 не менялся.
+Нынешняя сверка — owner READ, не новый бизнес-запуск и не полный QA PASS.
+Chrome MCP page5 после собственного reload авторизован, Console0;
+bootstrap/session/runtime/image/draft GET200, layout overflowfalse.
+Чужие вкладки не изменялись. Fresh role readback: шесть сотрудников READY,
+gpt-6.1-sol/configuration1, ENV14/binding15 и38tools. Context7 CONNECTED,
+resolve/query grants NONE у каждой роли. GitHub CONNECTED; текущие grants
+и границы записи подробно добавлены в журнал, без раскрытия credential.
+
+Root run_7M7M1dCVTpTg2BcSy1tMcHMo по текущему GET200 остаётся FAILED/version4;
+graph9nodes:5SUCCEEDED,3CANCELLED,1FAILED. Это прежний semantic BLOCKED
+Architect, а не новая ошибка после доставки. CONTROL_CENTER catalog ACTIVE
+проверен целиком: total2/no next page, отсутствует новый pinned upstream source
+package. Существующие summary не доказывают полную credential/transport цепочку.
+
+Продолжение #1796 требует нового разрешённого exact-source input либо отдельного
+решения владельца о доступе к upstream-репозиторию через штатную интеграцию.
+Не скачивать denied URL альтернативным transport и не выполнять бизнес-задачу
+на host. Developer/единственный Reviewer/Manager/owner gate NOT RUN, Full65 OPEN.
+Нельзя считать готовность сотрудников доказательством выполненных ими сценариев.
+
 ## Checkpoint 10.10.2026 13:15 UTC — SYSTEM доставка и inventory закрыты
 
 Исходный опубликованный HEAD/remote/Draft1807 f72214defe01b15b581051b30b39e3485bf0d593;

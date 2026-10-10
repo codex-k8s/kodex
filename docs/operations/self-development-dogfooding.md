@@ -1120,3 +1120,67 @@ Draft1807 и будущий businessPR не слиты, реальные кре�
 Первый вызов отклонил новый недатированный H2 отчёта как CHECKPOINT_APPEND_INVALID;
 он исправлен на H3 внутри текущего checkpoint, verifier PASS. Исторический
 хвост/архив и applied evidence не менялись. Далее clean commit/push1807.
+
+## Checkpoint 10.10.2026 13:23 UTC — индивидуальная сверка команды и evidence blocker
+
+Исходный HEAD/remote/Draft1807:754a0499bba5ec13385439f01b3f153202313b9e,
+main ab4992e0. Предыдущий пакет опубликован; его формулировка «далее push»
+сохранена как историческая точка, не текущая незавершённая операция.
+В этом ходе выполнены только авторизованные owner READ и обновление отчёта.
+
+### Индивидуальные данные для отчёта §64
+
+GET project agents и все6 runtime-configuration вернули200; все сотрудники
+READY, модель gpt-6.1-sol/provider openai-codex/configuration version1,
+environment revision14/binding version15, tools38. Общий командный digest
+sha256:47d4ca68fbce7866a7c1f2e80b64c18967045ba49322caf373c13f1db999aa25.
+У всех environment.ready=true; memory/skill bindings0. Состояние конфигурации
+не объявляется новым выполнением Context7, prompt rendering или бизнес-задачи.
+
+| Сотрудник/ref | Capabilities | ENV / published revision | Instructions revisionRef / binding version | Integration grants |
+|---|---|---|---|---|
+| Project Manager / agt_MPH0YpY7PXej_VLOZcYW3T74 | artifact.manage, run.delegate, run.launch (prefix platform.) | renv_am09ABl3ulJb9PRi4QQ_E_I4 / renvv_gNgj37XUjDN9UOlFRo4Jdeqp | ins_M6EHFesL4dkYfzzKhEMfkKPE /4 |22|
+| System Analyst & Architect / agt_KmYyn3hhyr6GQ8an4KbZgO3R | platform.artifact.manage | тот же review ENV / published revision | ins_MjzHD2VzNroCz0-3SVw5iQSZ /1 |18|
+| Developer / agt_pWHh9efzn_Ug0qYiMdVlqjeb | platform.artifact.manage | renv_NjHA7WWnyjCtNggYCTdLeV5W / renvv_rwUCNw8Zvr2d0q_P9dBGGOMo | ins_oJ7p-BPvH21_0lQaZ02vmfJN /1 |26|
+| Security Reviewer / agt_4uL98uA20yVhOcAIBeQfI8IP | platform.artifact.manage | review ENV / published revision | ins_xjgAopwp1AeMODc_cIOXHZBR /3 |15|
+| Documentation Reviewer / agt_L2Dz5H6p7P9NIzkOaRwJ4t0O | platform.artifact.manage | review ENV / published revision | ins_8zeDYa4EHjp5YRr9U-2AR07X /1 |16|
+| Lexical Guardian / agt__KzHZ3YqxmxOp0yR4eve33NK | platform.artifact.manage | review ENV / published revision | ins_PeD-hVLV-7OsXYxhaMgIJGuo /1 |15|
+
+Все указанные instruction bindings effective=true. ENV review имеет0 secret
+descriptors, write1; только количество, содержимое/имена credential не читались.
+Published policy SHA256 у всех6:
+c022544fe51cd015007d18f9958eefafa3186d800c2fd82344216d3d5666236b.
+
+GET integration-connections200/no next page: Context7 и GitHub CONNECTED.
+Каждая роль имеет enabled Context7 library.resolve/docs.query READ/NONE.
+Enabled GitHub grants в текущей проекции также NONE: Architect только READ;
+Manager READ плюс issue.comment.create WRITE; Developer READ плюс
+pull_request.create/update и issue.comment.create WRITE; три reviewer READ
+плюс pull_request.review.create и issue.comment.create WRITE. «Developer-only
+write boundary» прежнего отчёта относится к repository push credential, а не
+к отсутствию любых WRITE API у остальных. API grant не доказывает наличие
+прав на git push и не даёт право owner approve/merge. Проверенные текущие
+ApprovalPolicies NONE не заменяют прежние отдельные Human Gate сценарии.
+По каждой роли новый Context7 вызов и полный новый prompt rendering NOT RUN;
+исторические proofs сохраняются отдельно, текущий readback их не обновляет.
+
+### Граница блокировки и браузер
+
+Owner GET graph200: root run_7M7M1dCVTpTg2BcSy1tMcHMo FAILED/version4,
+9nodes:5SUCCEEDED,3CANCELLED,1FAILED. Новых AI turns, retry, grants или
+integration connections не создавали. CONTROL_CENTER ACTIVE artifact catalog
+GET200 total2/no next page: manager-plan.md и документ проверок лимитов;
+новый полный version-pinned upstream source package не появился. Это проверка
+данной группы источников, не утверждение об отсутствии всех AGENT_RESULT.
+
+Chrome MCP page5: собственный reload, OWNER, Console0; relevant bootstrap,
+session/ticket, SYSTEM runtime/image/draft и диагностические READ200.
+Layout overflowfalse, чужие вкладки не затронуты. __kodex_dev_revision polling
+остаётся служебным hot-reload, не polling каталога диалогов. Нового экрана
+или изменения UI здесь не было; новые screenshots не заменяют прежний живой QA.
+
+Exact rejecting слой upstream Web UNKNOWN; запрет не обходился curl/git/raw
+proxy или другим credential. Для продолжения нужны разрешённые полные pinned
+материалы во входном Artifact/AttachmentSet либо отдельное owner scope решение
+по upstream connection. Developer → один Reviewer → Manager → owner gate
+по-прежнему NOT RUN. Full65 остаётся BLOCKED/OPEN, не READY и не merge.
