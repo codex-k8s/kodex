@@ -1076,3 +1076,51 @@ states и negative CLEAN-only download tests при combined integration.
 Terminal ledger scrub/active-pins purge guards проверяются отдельно в
 disposable PostgreSQL; compile/unit не full lifecycle PASS. Full65QA,
 practical file update и business Workflow OPEN; канонические checkbox прежние.
+
+## Checkpoint 10.10.2026 03:03 UTC — frontend готов к объединению, native baseline сохранён
+
+ROOT c830ff2038cbacf43376e6c237438de3442cb3a2 запушен; remote и Draft1807
+exact EQUAL, Issue1797 и1796 OPEN, mainab4992e0 не изменён. После reboot
+обе ноды Ready,33 Deployment и9 StatefulSet готовы. Свободно root134GiB,
+data37GiB; активные build/test caches, volumes и workspaces не удалялись.
+CP/session-archive за проверенное окно5мин не выдали новых log lines; это не
+доказательство всех рабочих путей. Первый logs probe указал неверное имя
+container, не был засчитан; повтор использовал actual container names.
+
+Frontend original39 frozen packet не применён к ROOT, текущие base hashes
+совпали39/39. Подготовлен отдельный3file follow-up: пять canonical scan
+metadata states, DOWNLOAD/PREVIEW только CLEAN до retry/SDK. ROOT прочитал
+handoff/diff; авторские45unit/2suites, полный typecheck, lint/format и
+воспроизведение3post hashes PASS в изолированной копии. ROOT дополнительно
+выполнил полный unfiltered frontend unit:396suites/3727tests PASS57.49s.
+Первый запуск FAIL:9tests и1suite не нашли canonical backend/contract/header
+fixtures в урезанном harness;3702tests прошли. Добавлены только exact tracked
+source из Git c830ff20 без изменения tests и frontend, повтор полностью PASS.
+Это local combined frontend harness с final5enum SDK, не deployed backend QA.
+
+Native Files screen выявил дату под action icons: row842.4px, dateRight1117.8,
+actionsLeft1017.2. Подготовлен ROOT2file CSS patch поверх original39: гибкие
+text tracks, сохранённое место действий, ellipsis/полная дата в title.
+ROOT9layout unit, scoped lint/format и actual apply_patch reproduction2/2
+post hashes PASS. Context7 /mdn/content minmax/text-overflow проверен.
+Исправление ещё не подключено к hot reload; native-after NOT RUN. Desktop1440
+baseline screenshot просмотрен. Mobile390 после завершения transition
+скриншот просмотрен, menu closed/overflowfalse; первый resize shot захватил
+анимацию закрытия drawer и не был засчитан как steady-state proof.
+
+Fresh native Artifact GET и current content DOWNLOAD200 сохранили baseline:
+art_i2rouMdoEPydz_Izt-NMuQDs, «Лимиты аккаунтов — проверки перед приёмкой.md»,
+version1/revision1/4234bytes,
+sha256:dc0e4965c96780bedea572a9c427dc3f6e95caa258c0ca790094dd5b753dc24e,
+ACTIVE/CLEAN. Содержимое и credentials не выведены. Следующая живая проверка
+должна создать новую immutable revision этого же Artifact через помощника
+и owner Apply, сохранив old content/pins, не новый одноимённый Artifact.
+
+Own91439 OWNER, draft-safe reload03:01; Console cumulative30 относится к
+прежним401/diagnostic405/maintenance503/fresh-auth403, warnings/pageerrors0,
+новых relevant HTTP failures не найдено. Chrome1180 timeout300s,1205 pending;
+MCP доступ не подтверждён, чужие вкладки не трогались. Backend parent сообщил
+изолированный freshPG18 PROJECTsuite PASS29.616s с новым revision lifecycle;
+объединённый ledger/purge/final manifest ещё готовится. ROOT packet adoption,
+forward migration/deploy, новый actual writer и natural-user Apply/history
+NOT RUN. Full65QA, practical file update и business Workflow OPEN.

@@ -10,6 +10,45 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 03:03 UTC — frozen frontend и native baseline
+
+ROOT c830ff2038cbacf43376e6c237438de3442cb3a2/remote/Draft1807 EQUAL;
+Issue1797/1796 OPEN, mainab4992e0. Обе ноды и все42 workloads Ready. Новых
+ошибок в native read window нет; Chrome1180 timeout300s,1205 pending. Own
+Playwright91439 OWNER, desktop1440, safe reload03:01. Не считать MCP подключённым.
+
+Frontend original39 bases совпали с ROOT39/39, packet ещё НЕ ПРИНЯТ.
+Отдельный scan3file packet:
+`/home/s/.local/state/kodex-dev/file-revision-scan-1797.i407Bq/apply.patch`,
+SHA41317788…57a5; manifest/HANDOFF рядом. Base каждого файла — original39 POST,
+wire2bf01cb9…d6ddb/generated5enum. Metadata все5states, body CLEAN-only до SDK.
+45unit/fulltypecheck/lint/format/reproduction3/3 PASS изолированно.
+ROOT полный frontend unit396suites/3727tests PASS57.49s после добавления
+недостающих tracked backend/contract/header fixtures в harness. Первоначальный
+FAIL9tests/1suite ENOENT сохранён; tests/контуры не ослаблялись. Это не live QA.
+
+ROOT layout2file follow-up поверх original39 POST: в той же директории
+`layout.apply.patch` SHA9bbde197…a145, `layout.manifest.json`. Native before
+date/action overlap100.6px. Гибкие text tracks/date ellipsis/title; действие и
+152px reservation неизменны.9unit/scopedlintformat/reproduction2/2 PASS.
+Main не изменён этими packet; применить только после original39 и сверки bases.
+
+Baseline заметки «Лимиты аккаунтов — проверки перед приёмкой.md»:
+art_i2rouMdoEPydz_Izt-NMuQDs, v1/rev1/4234bytes,
+sha256:dc0e4965c96780bedea572a9c427dc3f6e95caa258c0ca790094dd5b753dc24e,
+ACTIVE/CLEAN; fresh GET/current DOWNLOAD200 и actual byte SHA совпали.
+Desktop/mobile settled screenshots просмотрены. Не отправлять новый AI turn
+до final backend integration/deploy и exact writer proof. После него запрос
+обновления по названию без IDs → native owner Validate/Apply → typed receipt,
+new immutable revision same Artifact, old content/hash/pins и history/download.
+
+Backend parent platform_resync_diagnostics RUNNING, prepared_content_ledger
+RUNNING; readers packet уже принят родителем. FreshPG PROJECTsuite PASS
+по отчёту parent; combined purge/ledger/codegen/final frozen manifest пока
+готовятся. Уточнить runner OCI/ABI/deploy impact до live rollout. Не принимать
+частичный пакет, не редактировать applied migrations, не обходить admission.
+Full65QA/practical update/Workflow11/14/15/16 OPEN; checkbox неизменны.
+
 ## Checkpoint 10.10.2026 02:46 UTC — helper generation5 опубликован и привязан
 
 ROOT2b25ef52+двухфайловый ToolsEditor patch; предыдущий checkpoint exact2b25
