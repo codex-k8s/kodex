@@ -19,6 +19,33 @@ test('terminal proof needs exact Job, source and actual goose version', () => {
  const pod=job.spec.template.spec;pod.dnsPolicy='ClusterFirst';pod.schedulerName='default-scheduler';pod.terminationGracePeriodSeconds=30;pod.serviceAccount=pod.serviceAccountName;for(const container of pod.containers){container.imagePullPolicy='IfNotPresent';container.terminationMessagePath='/dev/termination-log';container.terminationMessagePolicy='File';}
  assert.equal(migrationReadback(job,plan,'goose: successfully migrated database to version: 20260908000300\n').status,'PASS');assert.equal(migrationReadback(job,plan,'goose: current version: 20260908000299').status,'READBACK_UNCONFIRMED');job.spec.template.spec.containers[0].image='foreign';assert.throws(()=>migrationReadback(job,plan,''),/SPEC_CHANGED/);
 });
+test('migration readback normalizes only empty container mounts omitted by native API; nonempty drift still rejects',()=>{
+ for(const field of ['initContainers','containers']){
+  const before=fixture();if(field==='initContainers')before.spec.template.spec.initContainers=[{name:'fixture-init',image:`fixture@sha256:${'c'.repeat(64)}`,volumeMounts:[]}];
+  else before.spec.template.spec.containers[0].volumeMounts.push({name:'kept',mountPath:'/var/kept',readOnly:true});
+  const plan=planControlPlaneMigration(before,source,inspect,'fixture','prompt-service-v3');
+  const job=structuredClone(plan.job);job.metadata.uid='created';job.metadata.annotations={'kodex.dev/cp-prompt-service-v3-migration-plan':fingerprint(plan)};job.status={succeeded:1,conditions:[{type:'Complete',status:'True'}]};
+  if(field==='containers'){
+   // Main migrator имеет обязательный source mount; отдельный container доказывает omitempty.
+   plan.job.spec.template.spec.containers.push({name:'fixture-empty',volumeMounts:[]});
+   job.spec.template.spec.containers.push({name:'fixture-empty'});
+   job.metadata.annotations={'kodex.dev/cp-prompt-service-v3-migration-plan':fingerprint(plan)};
+  }else delete job.spec.template.spec.initContainers[0].volumeMounts;
+  const index=field==='containers'?1:0, original=structuredClone(job);
+  assert.equal(migrationReadback(job,plan,'goose: current version: 20261010150000\n').status,'PASS');
+  assert.deepEqual(job,original);
+  for(const mounts of [[{name:'foreign',mountPath:'/foreign',readOnly:true}],null,{},'']){
+   const changed=structuredClone(job);changed.spec.template.spec[field][index].volumeMounts=mounts;
+   assert.throws(()=>migrationReadback(changed,plan,''),/MIGRATION_JOB_SPEC_CHANGED/);
+  }
+  const reverse=structuredClone(plan);delete reverse.job.spec.template.spec[field][index].volumeMounts;
+  const explicit=structuredClone(job);explicit.spec.template.spec[field][index].volumeMounts=[];
+  explicit.metadata.annotations={'kodex.dev/cp-prompt-service-v3-migration-plan':fingerprint(reverse)};
+  assert.equal(migrationReadback(explicit,reverse,'goose: current version: 20261010150000\n').status,'PASS');
+  const removedSource=structuredClone(job);removedSource.spec.template.spec.containers[0].volumeMounts=[];
+  assert.throws(()=>migrationReadback(removedSource,plan,''),/MIGRATION_JOB_SPEC_CHANGED/);
+ }
+});
 function cliFixture(t, profile = 'legacy', missingBase = false) {
  const dir=mkdtempSync('/tmp/cpm-');t.after(()=>rmSync(dir,{recursive:true,force:true}));const repo=join(dir,'source');mkdirSync(repo,{mode:0o755});const migration='services/internal/control-plane/cmd/cli/migrations/20260908000300_email_legacy_package_admission.sql';mkdirSync(join(repo,'services/internal/control-plane/cmd/cli/migrations'),{recursive:true});writeFileSync(join(repo,migration),'-- Синтетическая миграция CLI fixture\n');writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20260908000500_email_mailbox_observation_receipts.sql'),'-- Синтетическая additive миграция\n');
  writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20260913000100_runtime_materialization_global_identity.sql'),'-- Синтетическая materialization миграция\n');

@@ -22,7 +22,15 @@ function application(deployment) {
     metadata.labels?.["app.kubernetes.io/part-of"] === "kodex" &&
     (metadata.labels?.["kodex.dev/local-profile"] === "hot-reload" || metadata.labels?.["kodex.dev/environment"] === "staging"),
   "STAGING_DEPLOYMENT_REQUIRED");
-  requireValue(spec.strategy?.type === "RollingUpdate" && spec.strategy.rollingUpdate?.maxUnavailable === 0 &&
+  const trustedHotRecreate = metadata.labels?.["kodex.dev/local-profile"] === "hot-reload" &&
+    metadata.labels?.["kodex.dev/environment"] === "staging" &&
+    spec.template?.metadata?.labels?.["kodex.dev/local-profile"] === "hot-reload" &&
+    spec.template?.metadata?.labels?.["kodex.dev/security-profile"] === "trusted-cluster" &&
+    spec.replicas === 1 && spec.strategy?.type === "Recreate" &&
+    fingerprint(spec.strategy) === fingerprint({type:"Recreate"});
+  // Существующая canonical trusted strategy сохраняется; production/staging не мигрируем.
+  const rollingUpdate = spec.strategy?.type === "RollingUpdate" && spec.strategy.rollingUpdate?.maxUnavailable === 0;
+  requireValue((trustedHotRecreate || rollingUpdate) &&
     Number.isSafeInteger(spec.replicas) && spec.replicas > 0 && deployment.status?.observedGeneration >= metadata.generation &&
     deployment.status.availableReplicas === spec.replicas && deployment.status.updatedReplicas === spec.replicas &&
     deployment.status.replicas === spec.replicas, "HEALTHY_ROLLOUT_REQUIRED");

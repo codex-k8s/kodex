@@ -10,6 +10,18 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 16:38 UTC — consumer policy готова, прочие этапы открыты
+
+Policy9phases PASS, API открыт; отдельная runtime-role binding PASS. Defaults
+CP/RC и hot29845/v2 ещё прежние. Canonical clean ce4796 render PASS; migrator
+единственный created/succeeded1, goose20261010150000. Initial exact verifier
+FAIL только empty volumeMounts omitempty, требуется повтор INSPECT новым кодом,
+не повторная миграция. Default plan FAIL exactRecreate trustedhot incompatibility;
+closed branch и empty-array normalizer regression26/26 PASS18.875s.
+Фактически нужно обновить4ENV для3distinctcustomimages: SYSTEM, staffwrite/review,
+PROJECThelper. Preserve38tools/allnonimage/secret exact revisions/intendedbindings.
+Serving startup recovery/core48/producer FF/newbusiness1796/Full65 ещё OPEN.
+
 ## Checkpoint 10.10.2026 16:29 UTC — штатный rollout начат
 
 Опубликован8589a086; exact Draft1807 readback PASS. Maintenance PLAN/APPLY PASS,

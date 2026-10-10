@@ -859,3 +859,32 @@ placeholder создаётся exclusive anchored/O_NOFOLLOW, existing owner fil
 закрыто отклоняются. ROOT Node14/14 PASS3.662s и Python10/10 PASS0.040s,
 включая real clean Git fixture→mask→inspector→frontend prepare.
 Ни migration apply, ни serving producer/core48 здесь ещё не доказаны.
+
+## Checkpoint 10.10.2026 16:38 UTC — policy доставлена, exact readback исправлен
+
+Полный canonical runner-policy maintenance→reader→resources→binding→CP→builder
+→controller→resume→open PASS по опубликованному8589. Gateway снова Ready/API200;
+promoted count55 и pins не менялись. Отдельная runtime-role policy binding
+PLAN/APPLY PASS: новая policy ce4399463572900b18952b661434b565 exact Deny.
+Default CP/RC ещё прежний, source hot29845e1e/v2; это не serving acbb proof.
+
+Из clean ce4796cd39ac1bbca63b3d206fa7375214f75484 canonical migration render
+PASS, inspector/frontend mountpoint prepare PASS. Штатный migrator создан один
+раз и завершился: goose exact20261010150000, succeeded1. Initial verifier FAIL
+MIGRATION_JOB_SPEC_CHANGED: Kubernetes опустил empty init volumeMounts array;
+все прочие различия относятся к уже нормализуемым native defaults. Нужен repeat
+INSPECT с узким empty-array normalization, не CREATE/replay миграции.
+Default runner PLAN FAIL до эффекта: helper требовал RollingUpdate, тогда как
+canonical trusted hot CP/RC exactRecreate/replicas1/allReady1. Исправлен exact
+closed trusted branch без смены strategy и ослабления ordinary staging guards.
+ROOT migration/default regression26/26 PASS18.875s; nonempty/null/malformed
+mount drift, missing trusted labels, extra strategy keys и unhealthy state deny.
+
+Авторитетные browser readbacks уточнили scope: три distinct custom images и
+ЧЕТЫРЕ ENV: SYSTEM отдельно, staff write/review, PROJECT helper отдельно.
+Все38tools/NONE. Обновление должно сохранить exact non-image hashes/secret
+revision descriptors/инструкции и только intended existing bindings; omission
+секретных revisions или повторное применение image-impact до ENV draft запрещено.
+Chrome own5 screenshot/Console0/relevant bootstrap/session200 просмотрены;
+проверочный GET неверного single revision path404 исправлен на native paged
+revisions до EOF, без мутаций. Business task/Full65 по-прежнему OPEN.

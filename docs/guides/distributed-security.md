@@ -1740,6 +1740,15 @@ admission `PENDING|CLAIMED` учитывается отдельным счётч
 effect. Любой активный effect, неизвестное состояние или незавершённый request
 продолжает блокировать переход policy. Readback не меняет eligibility или историю.
 
+Переход default runner сохраняет фактическую strategy в exact full-spec CAS.
+Обычный staging требует прежний `RollingUpdate/maxUnavailable=0`; только exact
+trusted hot-reload со staging labels на Deployment, hot/trusted template labels,
+одной полностью здоровой репликой и strategy ровно `{type:Recreate}` допускает
+штатный `Recreate`. Unknown keys, другой security profile и нездоровый rollout
+не получают исключения. Native omitempty в миграции нормализует лишь отсутствующий
+и пустой массив volumeMounts; непустые mounts и остальные security fields
+должны совпасть. Успешный goose log без полного exact readback не является PASS.
+
 Системная постановка проверки готовности managed MCP не выдаёт полномочия
 исполнения: RuntimeRevision, lease и Pod grant требуют настоящего exact fresh
 gateway receipt. Startup может поставить прежнюю maintenance `DUE` лишь для

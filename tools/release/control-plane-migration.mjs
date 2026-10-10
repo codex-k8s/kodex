@@ -73,6 +73,8 @@ function renderedPlanBase(job, anchor) {
 function normalizedMigrationPodSpec(value) {
   const pod = structuredClone(value);
   for (const container of [...(pod?.initContainers ?? []), ...(pod?.containers ?? [])]) {
+    // Kubernetes omitempty: только empty array эквивалентен отсутствию mounts.
+    if (Array.isArray(container.volumeMounts) && container.volumeMounts.length === 0) delete container.volumeMounts;
     if (container.terminationMessagePath === '/dev/termination-log') delete container.terminationMessagePath;
     if (container.terminationMessagePolicy === 'File') delete container.terminationMessagePolicy;
     if (container.imagePullPolicy === 'IfNotPresent') delete container.imagePullPolicy;
