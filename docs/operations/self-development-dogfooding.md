@@ -206,7 +206,7 @@ DiskPressure; актуальный owner run state UNKNOWN при API 500, recov
       прежний процесс FAILED / RUNTIME_TIMEOUT, новый READY_NOTCONFIRMED.
       Этот PR не merge, не auto-merge, не approve от имени владельца.
 
-- [ ] 16. До итоговой приёмки выполнить реальные пользовательские сценарии
+- [x] 16. До итоговой приёмки выполнить реальные пользовательские сценарии
       без технических refs/ID в сообщениях. Уточнение владельца от09.10.2026:
       пользователь ссылается на работу естественным языком, например
       «мы там отрабатывали задачу такую-то, сделай то-то».
@@ -224,7 +224,7 @@ DiskPressure; актуальный owner run state UNKNOWN при API 500, recov
         authoritative scope/run/turn, ACK и own reload/rejoin проверены.
   - [x] Выбрать процесс, сотрудника либо окружение по понятному названию
         и контексту текущего экрана, сохранив серверную owner/project boundary.
-  - [ ] При совпадающих названиях, недостаточном контексте и ссылке на
+  - [x] При совпадающих названиях, недостаточном контексте и ссылке на
         недоступный проект уточнить выбор или сообщить ограничение;
         не угадывать refs, не расширять полномочия и не выполнять действие
         с похожей, но другой сущностью. Проверить обычное продолжение после
@@ -876,3 +876,73 @@ RUNNING7→SUCCEEDED8, FINAL честно ограничил доступ тек
 desktop screenshot просмотрен/overflowfalse/Console0/events200.
 Full16 остаётся OPEN до продолжения/rejoin и проверки длинного диалога.
 Business1796 BLOCKED/Developer/Review/owner gate NOT RUN; Full65 OPEN.
+
+## Checkpoint 10.10.2026 12:24 UTC — доставка resume, длинный диалог и кредиты
+
+Исходный опубликованный SHA: a0d302c60b1f87dcc32a154eae9039e46cc52d96.
+Новый пакет содержит только синтетическую регрессию финансовых уведомлений
+и этот журнал/точку продолжения; production-код и контракты не менялись.
+Владелец уточнил: исчерпанный недельный пакет не должен запрещать работу,
+если у провайдера доступны оплаченные кредиты. Сообщённые почти60К не
+считаются подтверждённым балансом, единицами или фактическим списанием.
+
+- PASS: текущий runner не назначает локальный финансовый admission по
+  usedPercent/credits. Три новые синтетические проверки подтверждают,
+  что usedPercent=100 не блокирует успешный turn, финансовые данные не
+  попадают в результат, реальный typed usageLimitExceeded остаётся
+  BLOCKED/CHECK_PROVIDER_QUOTA, foreign terminal и malformed envelope закрыты.
+  ROOT Go1.26.6 targeted race1.073s, vet и diff-check PASS.
+  Полный существующий codex package race21.411s PASS ранее в этом checkpoint.
+  Это не реализация финансовой проекции #1796 и не доказательство списания.
+- PASS: полный immutable runner c6ec9a505caa9a5fdfc3c405fa235421523553729c3a4ccdc791319f14efdc3b
+  собран/import/provenance; canonical supply-chain/core apply и readback
+  выполнены. Actual CP/RC serving ELF совпали с canonical build; выбранные
+  host/Pod source hashes совпали. Оба узла Ready; quiesced deployments
+  восстановлены. Зелёный Pod не заменяет проверку сценария.
+- PASS: оба custom recipes штатно собраны, ACCEPTED/PROMOTED.
+  Helper generation8/artifact imgart_DruwvzHldXDrBjvPETkuoBf0,
+  image sha256:9a1053cce4ddc407762e5f79077ae3a5fe5b2c1331c110543c69f40c256768e4;
+  staff generation14/artifact imgart_6ryiQzBEL7n9ev_QKI-ReJzv,
+  image sha256:47d4ca68fbce7866a7c1f2e80b64c18967045ba49322caf373c13f1db999aa25.
+  Все Dockerfile-параметры, кроме FROM, сохранены: normalized SHA256
+  e99560b588b8a6ab434e58cb5ddc10543d23b0bbf3792d43a75685aa808d94bf, 2/2.
+- PASS: три ENV опубликованы image-only, ready=true, 38 configured tools.
+  Helper revision19/renvv_5RY50DZHR4V9gTXUFiwIq-7l,
+  review revision14/renvv_gNgj37XUjDN9UOlFRo4Jdeqp,
+  write revision14/renvv_rwUCNw8Zvr2d0q_P9dBGGOMo.
+  Hash tools/values/secretDescriptors/policy сохранён, 3/3.
+  Owner GET каждого runtime-configuration подтвердил intended bindings:
+  один helper binding18, пять review binding15 и один Developer binding15;
+  каждый versionRef равен новой опубликованной ревизии соответствующего ENV.
+- PASS: одна read-only continuation прежнего длинного PROJECT-диалога
+  cnv_j6j0WR7iU-n283_FRJQwXfGI без refs в пользовательском запросе.
+  run_j0oBIenYucpmU0qKo6SC2zdB SUCCEEDED, 12:20:20–12:20:55 UTC.
+  Реальный Pod использовал новый helper digest9a105…68e4 и relay c6ec…dc3b.
+  Commentary, find_platform_resources и FINAL появились без reload;
+  помощник не выдал отсутствие чужого ресурса в текущем scope за его
+  несуществование и не выполнил мутаций/планов/запусков процессов.
+  После own reload сохранены версия29, 28 turn-записей, обе последние
+  COMPLETED и прежняя история; realtime rejoin без STREAM_PROBLEM.
+- PASS: пункт16 закрыт по совокупности ранее записанных natural-language
+  практической правки/уточнения, named selection, поиска новой задачей,
+  selfdev ambiguity с вопросом выбора, foreign-scope ограничения и этого
+  настоящего продолжения после reload. Это не завершение полного QA65.
+- PASS: просмотрены desktop1440×1000 и mobile390×844 screenshots чата,
+  компактный tool и читаемый FINAL; горизонтального overflow нет.
+  После own reload свежих Console error/warning/pageerror и HTTP>=400 нет;
+  relevant graph/events GET200. За всю headless-сессию сохранены три
+  ожидаемых cold-login401 и два ошибочных ROOT read probes404/405 — они
+  не скрыты и не объявлены дефектами приложения. Ошибка r.status() в
+  диагностическом JavaScript исправлена в самом read probe, не в приложении.
+  Bounded backend logs после12:20 не содержали строк: это не доказательство
+  отсутствия всех возможных ошибок. Отдельная Chrome MCP page5 остаётся
+  на SSO; разрешённый Playwright fallback вошёл штатно, чужие вкладки не трогал.
+
+Business #1796 по-прежнему semantic BLOCKED на полном exact-version
+transport/credential evidence. Последний root terminal, активных узлов0;
+Developer, единственный Reviewer, финальная приёмка Manager и owner gate
+NOT RUN. Не обходить denied upstream URL другим transport/credential,
+не повторять этот root автоматически и не писать задачу вместо Developer.
+Пункты11/14/15 и Full65 остаются OPEN; прежний текст checklist о пяти
+review-циклах исторический: действует уточнение10.10 и GOV-OD-003 — всего
+ОДИН цикл комплексного review. Bootstrap1807 не слит и остаётся Draft.

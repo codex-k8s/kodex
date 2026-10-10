@@ -10,6 +10,44 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 12:24 UTC — immutable доставка и старый чат проверены
+
+Исходный HEAD/remote/Draft1807 a0d302c60b1f87dcc32a154eae9039e46cc52d96;
+main ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69 не менялся.
+Поверх него только test rate_limit_snapshot_test.go и журнал/этот handoff.
+ROOT targeted Go1.26.6 race1.073s/vet/diff PASS; полный codex package
+race21.411s PASS. UsedPercent100 не назначает локальный финансовый admission;
+typed отказ провайдера по квоте сохраняется. Реальный баланс/списание UNKNOWN.
+
+Полный immutable runner c6ec9a50…efdc3b активирован repo-owned canonical
+seed/render/apply/readback; actual CP/RC serving ELF/source/mount совпали.
+Оба custom recipes ACCEPTED/PROMOTED: helper generation8/digest9a105…68e4,
+staff generation14/digest47d4…aa25. Три ENV image-only опубликованы:
+helper revision19, review14, write14; 38tools и non-image hashes сохранены.
+Owner readback подтвердил exact intended bindings 1/5/1, versions18/15/15,
+каждый указывает на новую опубликованную ревизию своего ENV.
+
+Прежний длинный чат cnv_j6j0WR7iU-n283_FRJQwXfGI продолжен естественным
+READ-only запросом без IDs: run_j0oBIenYucpmU0qKo6SC2zdB SUCCEEDED.
+Commentary/tool/FINAL пришли без reload; чужой scope не подменён.
+После reload version29/28turns/последние COMPLETED, история сохранена.
+Desktop/mobile screenshots просмотрены, overflowfalse; свежие Console0,
+graph/events200, realtime rejoin без STREAM_PROBLEM. Пункт16 закрыт по
+совокупности записанных natural-language сценариев, Full65 остаётся OPEN.
+
+Business1796 semantic BLOCKED: полный pinned transport/credential evidence
+не доступен native Architect. Не bypass denied URL и не писать бизнес-код
+на host; Developer/ОДИН Reviewer/Manager acceptance/owner gate NOT RUN.
+Допустимое продолжение требует exact публичных материалов в штатном input
+либо явно разрешённого scope решения. Не повторять завершённый root вслепую.
+
+Chrome MCP только page5 на SSO, list_pages продолжать; чужие вкладки не трогать.
+Разрешённый собственный Playwright fallback session87204 авторизован штатно;
+после mobile вернуть desktop и own reload с пустым вводом перед следующим QA.
+Не считать list/refresh гарантией Chrome approval или продления SSO.
+Далее проверить/зафиксировать этот пакет, push/update того же Draft1807,
+затем только допустимые оставшиеся QA/закрытие evidence blocker #1796.
+
 ## Checkpoint 10.10.2026 11:38 UTC — три исправления проверены, доставка впереди
 
 Поверх59efca648dac8d8d77329afdf14a3bd48bfcc2c8 ROOT принял exact frozen
