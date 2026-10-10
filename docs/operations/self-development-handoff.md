@@ -10,6 +10,48 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 01:28 UTC — успешное продолжение и отсутствующая запись ревизии
+
+База f0fa100968f9d1c6fb0ea95d2ae1c1e1c8bff852, Draft1807/Issue1797;
+fresh main ab4992e. Native helper artifact imgart_Uct6pAxzkkJSbthS4FuN1bzC
+ACCEPTED/PROMOTED, digest6e82f825…175d00. Штатно опубликованы ENV
+renv_zycHL70M8UYGvTAU_W6fgvaB currentVersion15 и binding
+aenv_PFnDbPM0TBK_1-9-8aTWE4mu version14. Сравнение before/after
+configuration, policy, values, secret descriptors,38tools, memory и skills
+даёт exact EQUAL hashes; изменён только назначенный image pin.
+
+Один native continuation обычным текстом без IDs, run_68SNMBo9u3d2mKng7gWmzEB9,
+session ses_mwdQT0kSKGG3GvsjdubzMv24, turn trn_Ln06-aasmXtLhKIyxk-eT-60:
+SUCCEEDED, десять tools, публичные commentary и final. Реальный Pod получил
+custom6e82f825; runner binary37608805…a2ea3 совпадает с clean1e build.
+Перед очисткой captured ACK связан с exact run/node/session/turn/attempt и
+immutable input/runtime/binding digests. Failure capture NOT_CAPTURED:
+повтор не завершился ошибкой; причина прежнего THREAD_READ/NONE UNKNOWN.
+
+Обновление заметки BLOCKED, не PASS. Помощник нашёл и полностью прочитал
+существующий файл, но текущий каталог предлагает CREATE_PROJECT_FILE без
+операции обновления. Artifact art_i2rouMdoEPydz_Izt-NMuQDs остаётся revision1,
+version1,4234bytes,digestdc0e4965…dc24e. ARCH-MC-008 требует новой immutable
+ArtifactRevision со стабильным Artifact; одноимённый upload сейчас создаёт
+другой Artifact и не является нужным update. Следующий этап — специализированный
+versioned content command/assistant plan с authority/OCC/receipt/events и
+сохранением всех прежних runtime snapshots, не перезапись и не дубликат.
+
+Принят frozen pnpm packet четырёх файлов:11.11.0→11.28.2, verifier читает
+dist/node_modules и отклоняет symlink. ROOT25unit, syntax, scoped lint,
+Prettier и diff-check PASS на base+patch. Первый lint пропустил файлы вне base
+path; исправленный запуск реально проверил оба mjs, errors/warnings0.
+Новый image/admission/deploy этого исправления NOT RUN; прежний exact risk
+exception не переносится на будущий digest. Context7 /npm/cli проверен.
+
+Own Playwright91439 OWNER; прежний own68037 закрыт, чужие вкладки не трогались.
+Screenshot успешного transcript просмотрен: USER справа, ответы/tools слева.
+Console initial3 bootstrap/session401 и один405 от неверного ROOT diagnostic
+GET зафиксированы; это не новые app defects. Pageerrors/warnings/requestfailed0.
+Draft-safe reload01:25 выполнен. Chrome928 timeout300s, Chrome952 pending;
+MCP подключение пока не доказано. Оба узла и21 desired Deployment kodex-system
+Ready. Checkbox не изменены; полный65QA/п11/14/15/16 и Workflow OPEN.
+
 ## Checkpoint 10.10.2026 01:12 UTC — доставка диагностики и мобильная шапка
 
 Опубликованная база1e25680b, Draft1807/Issue1797. Canonical full runner build,

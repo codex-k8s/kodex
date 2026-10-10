@@ -921,3 +921,43 @@ initial3 bootstrap/session401; warnings/pageerrors0. Aborted HMR/reload reads
 сохранены; последующий vulnerability report GET200. Browser68037 OWNER,
 прежний own65906 закрыт; чужие окна не затронуты. Chrome859 timeout,
 Chrome870 pending; MCP связь не подтверждена. Checkbox не изменены.
+
+## Checkpoint 10.10.2026 01:28 UTC — продолжение SUCCEEDED, обновление файла BLOCKED
+
+База f0fa100968f9d1c6fb0ea95d2ae1c1e1c8bff852, Draft1807/Issue1797;
+fresh main ab4992e. Helper artifact imgart_Uct6pAxzkkJSbthS4FuN1bzC
+ACCEPTED/PROMOTED, custom6e82f825…175d00. Native ENV publication:
+currentVersion15/binding14. Exact before/after hashes configuration, policy,
+values, secret descriptors,38tools, memory и skills EQUAL: только image pin новый.
+
+Один user-text continuation без IDs run_68SNMBo9u3d2mKng7gWmzEB9,
+session ses_mwdQT0kSKGG3GvsjdubzMv24, turn trn_Ln06-aasmXtLhKIyxk-eT-60
+SUCCEEDED;10tools, commentary и final. Pod image6e82f825 exact,
+runner37608805…a2ea3 EQUAL clean1e build. Captured ACK exact execution binding
+и immutable input/runtime/binding digests. Failure capture NOT_CAPTURED:
+ошибки в повторе не было; прежний THREAD_READ/NONE остаётся UNKNOWN.
+Это PASS продолжения сессии, но не функциональной записи заметки.
+
+Файл найден и прочитан, но UPDATE content отсутствует в штатном assistant
+tool/typed plan registry. Artifact art_i2rouMdoEPydz_Izt-NMuQDs после хода
+revision1/version1/4234bytes/digestdc0e4965…dc24e, без дубликата. По ARCH-MC-008
+нужна новая immutable revision стабильного Artifact. Одноимённый upload
+создаёт другой art_ref и не заменяет update. Этот сценарий BLOCKED;
+доработать specialized command, authority/version/idempotency/audit/events,
+old revision/binding/runtime preservation и штатное owner Apply.
+
+Forward pnpm patch4files принят:11.28.2 и проверка dist/node_modules,
+пять новых negative/bundled unit. ROOT25tests, syntax, scoped lint/format,
+diff-check PASS; Context7 /npm/cli проверен. Первичный lint с outside-base-path
+не считался проверкой; исправленный реальный запуск errors/warnings0.
+Image build/admission/deploy исправленного pnpm NOT RUN. Risk exception
+предыдущего конкретного digest не переносится. Новый образ не объявлен безопасным.
+
+Browser91439 OWNER, свой68037 закрыт. Transcript screenshot просмотрен:
+USER справа, compact tools/commentary/final слева. Initial Console3 относятся
+к bootstrap/session401; ещё405 вызван ошибочным ROOT diagnostic GET и отмечен,
+не product defect. Warnings/pageerrors/requestfailed0. Draft-safe reload01:25.
+Chrome928 timeout300s, Chrome952 pending; MCP доступ не доказан.
+Оба узла Ready,21desired Deployment kodex-system готовы. Полный65QA и
+п11/14/15/16, semantic Architect, Developer и конечный Workflow OPEN.
+Checkbox не изменены, partial native PASS не является полной приёмкой.
