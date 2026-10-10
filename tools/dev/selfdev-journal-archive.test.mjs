@@ -7,7 +7,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
   ROOT, JOURNAL, ARCHIVE, SOURCE_COMMIT, BASE_COMMIT, SOURCE_SHA, SOURCE_BLOB,
-  PART_LIMIT, ACTIVE_LIMIT, ACTIVE_DELIMITER, EXTRACTS, sha256, blobSha, validateSource, buildArtifacts, verifyActive, verifyArtifacts, assertWriteTarget,
+  PART_LIMIT, ACTIVE_LIMIT, ACTIVE_DELIMITER, EXTRACTS, ROLLING_MANIFEST, readRolling, buildRollingArtifacts, verifySourceGitPins, sha256, blobSha, validateSource, buildArtifacts, verifyActive, verifyArtifacts, assertWriteTarget,
 } from './selfdev-journal-archive.mjs';
 
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, ARCHIVE, 'manifest.json')));
@@ -21,10 +21,21 @@ const artifacts = buildArtifacts(source);
 const baseline = artifacts.get(JOURNAL);
 const baselineText = baseline.toString('utf8');
 
+test('Git provenance проверяется независимо от самосогласованного manifest', () => {
+  const revision = 'a'.repeat(40), gitBlob = blobSha(Buffer.from(active));
+  const parts = [{ source: { revision, gitBlob } }];
+  assert.doesNotThrow(() => verifySourceGitPins(parts, ref => {
+    assert.equal(ref, revision);
+    return gitBlob;
+  }));
+  assert.throws(() => verifySourceGitPins(parts, () => 'b'.repeat(40)), /ROLLING_GIT_PREIMAGE_MISMATCH/u);
+  assert.throws(() => verifySourceGitPins(parts, () => { throw new Error('Git revision unavailable'); }), /Git revision unavailable/u);
+});
+
 test('Публичная проверка завершает полный bounded перенос', () => {
   assert.deepEqual(verifyArtifacts(), {
     sourceBytes: 1159280, activeBytes: Buffer.byteLength(active), parts: 5,
-    sourceSha256: SOURCE_SHA, files: 8, checkpointHistory: 'BASELINE_AND_APPEND_FORMAT_ONLY',
+    sourceSha256: SOURCE_SHA, files: 8 + readRolling(ROOT, baseline, Buffer.from(active)).files.length, checkpointHistory: 'BASELINE_AND_APPEND_FORMAT_ONLY',
   });
 });
 test('Механическая запись запрещена в основном checkout и на другом base SHA', () => {
@@ -201,6 +212,83 @@ test('Подмена manifest/coverage/недопустимого checkbox и sy
   ]) withFixture(root => { mutate(root); assert.throws(() => verifyArtifacts(root)); });
 });
 const checkpoint = '\n## Checkpoint 10.10.2026 00:00 UTC — синтетическая запись\n\nТолько fixture: NOT RUN, без внешних effects.\n';
+const revision = 'a'.repeat(40);
+function applyRollFixture(root, previous, archived = Buffer.alloc(0)) {
+  const planned = buildRollingArtifacts(root, previous, revision, archived);
+  for (const [file, bytes] of planned) fs.writeFileSync(path.join(root, file), bytes);
+  return planned;
+}
+test('Rolling сохраняет точные checkpoint bytes, checkbox preimage и frozen original5 parts', () => {
+  withFixture(root => {
+    const text = baselineText.replace('- [ ] 11.', '- [x] 11.');
+    const previous = Buffer.from(text + ACTIVE_DELIMITER + checkpoint + checkpoint.replace('00:00', '00:01'));
+    fs.writeFileSync(path.join(root, JOURNAL), previous);
+    const planned = applyRollFixture(root, previous);
+    assert.equal(planned.size, 4);
+    const next = fs.readFileSync(path.join(root, JOURNAL));
+    assert.equal(next.toString('utf8').split(ACTIVE_DELIMITER)[0], text);
+    const rolling = readRolling(root, baseline, next);
+    assert.deepEqual(rolling.history, Buffer.from(checkpoint + checkpoint.replace('00:00', '00:01')));
+    assert.equal(rolling.parts[0].source.gitBlob, blobSha(previous));
+    assert.deepEqual(fs.readFileSync(path.join(root, ARCHIVE, rolling.parts[0].source.file)), previous);
+    for (const [file, bytes] of artifacts) if (file !== JOURNAL) assert.deepEqual(fs.readFileSync(path.join(root, file)), bytes);
+    assert.doesNotThrow(() => verifyArtifacts(root, previous));
+    fs.appendFileSync(path.join(root, JOURNAL), checkpoint.replace('00:00', '00:02'));
+    assert.doesNotThrow(() => verifyArtifacts(root, previous));
+  });
+});
+test('Повторный rolling восстанавливает полный предыдущий prefix и не переносит headings внутри fenced текста', () => {
+  withFixture(root => {
+    const first = Buffer.from(baselineText + ACTIVE_DELIMITER + checkpoint + checkpoint.replace('00:00', '00:01'));
+    fs.writeFileSync(path.join(root, JOURNAL), first);
+    applyRollFixture(root, first);
+    const oldArchived = readRolling(root, baseline, fs.readFileSync(path.join(root, JOURNAL))).archived;
+    const third = checkpoint.replace('00:00', '00:02') + '```text\n## Checkpoint внутри code block\n```\n';
+    fs.appendFileSync(path.join(root, JOURNAL), third);
+    const second = fs.readFileSync(path.join(root, JOURNAL));
+    const planned = applyRollFixture(root, second, oldArchived);
+    assert.ok(planned.get(JOURNAL).toString('utf8').endsWith(third));
+    assert.doesNotThrow(() => verifyArtifacts(root, second, oldArchived));
+    assert.doesNotThrow(() => verifyArtifacts(root, first));
+    assert.equal(readRolling(root, baseline, planned.get(JOURNAL)).parts.length, 2);
+    assert.throws(() => verifyArtifacts(root, second, Buffer.from('corrupt previous')), /CHECKPOINT_HISTORY_REWRITTEN/u);
+  });
+});
+test('Rolling закрыто отвергает dropped/reordered/corrupt tail, previous source и pins', () => {
+  for (const mutate of [
+    (root, value) => fs.unlinkSync(path.join(root, ARCHIVE, value.parts[0].file)),
+    (root, value) => fs.appendFileSync(path.join(root, ARCHIVE, value.parts[0].file), '\n'),
+    (root, value) => { value.parts.reverse(); fs.writeFileSync(path.join(root, ROLLING_MANIFEST), JSON.stringify(value, null, 2) + '\n'); },
+    (root, value) => { value.parts[0].bytes[0] = 1; fs.writeFileSync(path.join(root, ROLLING_MANIFEST), JSON.stringify(value, null, 2) + '\n'); },
+    (root, value) => fs.appendFileSync(path.join(root, ARCHIVE, value.parts[0].source.file), '\n'),
+    (root, value) => { value.parts[0].source.gitBlob = 'b'.repeat(40); fs.writeFileSync(path.join(root, ROLLING_MANIFEST), JSON.stringify(value, null, 2) + '\n'); },
+    (root, value) => { value.baselineSha256 = 'b'.repeat(64); fs.writeFileSync(path.join(root, ROLLING_MANIFEST), JSON.stringify(value, null, 2) + '\n'); },
+    (root, value) => { value.parts[0].file = '../other.txt'; fs.writeFileSync(path.join(root, ROLLING_MANIFEST), JSON.stringify(value, null, 2) + '\n'); },
+  ]) withFixture(root => {
+    let previous = Buffer.from(baselineText + ACTIVE_DELIMITER + checkpoint + checkpoint.replace('00:00', '00:01'));
+    fs.writeFileSync(path.join(root, JOURNAL), previous);
+    applyRollFixture(root, previous);
+    const old = readRolling(root, baseline, fs.readFileSync(path.join(root, JOURNAL))).archived;
+    fs.appendFileSync(path.join(root, JOURNAL), checkpoint.replace('00:00', '00:02'));
+    previous = fs.readFileSync(path.join(root, JOURNAL));
+    applyRollFixture(root, previous, old);
+    mutate(root, JSON.parse(fs.readFileSync(path.join(root, ROLLING_MANIFEST))));
+    assert.throws(() => verifyArtifacts(root, previous, old));
+  });
+});
+test('Rolling не принимает изменённый preimage, malformed checkpoint и неподтверждённую revision', () => {
+  withFixture(root => {
+    const previous = Buffer.from(baselineText + ACTIVE_DELIMITER + checkpoint + checkpoint.replace('00:00', '00:01'));
+    fs.writeFileSync(path.join(root, JOURNAL), previous);
+    assert.throws(() => buildRollingArtifacts(root, previous, 'HEAD'), /ROLLING_REVISION_INVALID/u);
+    fs.appendFileSync(path.join(root, JOURNAL), checkpoint.replace('00:00', '00:02'));
+    assert.throws(() => buildRollingArtifacts(root, previous, revision), /ROLLING_PREIMAGE_MISMATCH/u);
+    fs.writeFileSync(path.join(root, JOURNAL), baselineText + ACTIVE_DELIMITER + checkpoint);
+    assert.throws(() => buildRollingArtifacts(root, fs.readFileSync(path.join(root, JOURNAL)), revision), /ROLLING_NOTHING_TO_ARCHIVE/u);
+    fs.appendFileSync(path.join(root, JOURNAL), '\n## Checkpoint invalid\n');
+    assert.throws(() => buildRollingArtifacts(root, fs.readFileSync(path.join(root, JOURNAL)), revision));
+  });
+});
 test('Только текущие canonical checklist1–16 и подпункты допускают [ ]↔[x]', () => {
   withFixture(root => {
     const text = baseline.toString('utf8');

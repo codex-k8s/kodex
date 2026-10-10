@@ -10,6 +10,57 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 05:40 UTC — обновление заметки принято
+
+Serving16e: natural run_CN_GzhWi1fDmTQJ9syH9j7m- → single UPDATE plan
+variant3 → native Validate/Apply PASS; receipt1. Stable artifact
+art_i2rouMdoEPydz_Izt-NMuQDs, новая CLEAN revision2
+arv_6d5a8ae1358d429aa4382d897dc9c7b7,4920B/fullSHA79ac3b56…f8fe85.
+Old revision1/full4234B/SHAdc0e4965…dc24e сохранена, новый prefix дословно
+равен old bytes. Tail содержит только requested4checks. Reload сохранил
+OWNER, APPLIED plan, v2 и native историю2+1; fresh Console0.
+Диагностический ROOT GET к POST-only binding дал405; не application failure.
+
+Все43workloads/42PVC и nodes2Ready/PressureFalse подтверждены. Helper20/
+binding15/image3181591e прежние. ROOT rolling25unit PASS7.962s после actual
+переноса и exact previous16e journal prefix PASS. MAIN dirty только seven
+rolling/handoff files; надо clean commit/push sameDraft1807. Сервисные source
+не изменены, serving16e остаётся отдельным доказательством.
+
+assistant_frontend готовит isolated narrow applied summary UX: после APPLIED
+не показывать «будет назначена» при уже полученной новой версии; без новых API.
+Provider18+own9 packet main ещё не принят: следующая реализация/runnerABI3,
+точный admission/custom image и actual Architect get_execution_snapshot.
+Full65/Workflow OPEN, goal ACTIVE, финального результата команды ещё нет.
+
+## Checkpoint 10.10.2026 05:38 UTC — кластер восстановлен
+
+Published16e1b814: canonical supply-chain apply/readback и selected core
+artifact-retention/session-archive apply/readback PASS. Оба узла Ready,
+DiskPressure False; все43deployments/statefulsets ready с replicas>0,
+все42PVC Bound. DATA около80GiB свободно. Repo-owned cold cache prune
+удалил123032старых файлов/29.81GB logical, skip0; свежие кэши, runtime
+images/pins, volumes и данные сохранены. Это восстанавливаемый build cache.
+
+Actual CP ELF456706e1…618d1 и retention9208b532…f846c EQUAL независимой
+сборке acdff; Go inputs acdff→16e неизменны. Host/Pod prepared source
+71a2ea21…05d5 EQUAL, source annotations16e и mount текущего checkout
+подтверждены. Archive worker exact ca8eacdc…60b49. Исходный storage guard
+readback PASS: RETIRED, 63 pins сохранены; ручного обхода disk taint нет.
+
+Chrome MCP ownpage5 подключён. OWNER восстановлен штатным SSO входом,
+bootstrap/session200, fresh Files Console0/overflowfalse; screenshots главной,
+чата и плана просмотрены. Новый natural запрос без IDs нашёл прежний файл,
+прочитал4234B до EOF и создал новый single UPDATE plan (Вариант3). Новый
+Validate запущен; Apply/newrevision пока NOT RUN. Старый failed intent не
+переиспользован; helper version20/binding15 сохранены.
+
+ROOT принял lossless rolling helper2: exact pre/post2/2 и25unit PASS;
+fresh plan от16e сохранил предыдущий journal Git blob130619B, перенёс полные
+checkpoint без потери bytes; verifier PREVIOUS_SNAPSHOT_PREFIX_CHECKED PASS.
+Original5parts/baseline/checkbox неизменны. Provider18+ownsnapshot9 пока не
+приняты, Architect actual observation NOT RUN. Full65/Workflow OPEN, goal ACTIVE.
+
 ## Checkpoint 10.10.2026 05:17 UTC — дисковое ограничение ноды
 
 Published acdff193: runner/archive builds, import и fresh render PASS.

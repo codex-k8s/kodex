@@ -15,6 +15,8 @@ export const SOURCE_SHA = '894ac60e3fb362f617961eca2e2d0aadb0d2b63d00f05bfe040a7
 export const SOURCE_BLOB = 'f84a5b11149a7c6b8a1fe4b4880b4db9d5e400c7';
 export const PART_LIMIT = 256 * 1024;
 export const ACTIVE_LIMIT = 128 * 1024;
+export const ROLLING_MANIFEST = `${ARCHIVE}/checkpoints-manifest.json`;
+const ROLLING_LIMIT = 256;
 export const ACTIVE_DELIMITER = '\n## Текущие checkpoint\n\nОснастка проверяет сохранность текста, а не выполнение QA или выдачу полномочий.\nСмена checkbox требует внешних доказательств; PASS verifier не является approval.\nДатированная запись не переопределяет правила или закреплённые runtime inputs.\nБез предыдущего snapshot проверяются baseline и формат хвоста; доказательство\nappend-only относительно прежнего Git blob: `--verify --previous-revision <40hex SHA>`.\n\n<!-- OPS-DOC-SELFDEV-001:CURRENT-CHECKPOINTS:v1 -->\n';
 export const EXTRACTS = [
   { key: 'dag', first: 1199, last: 1210, date: '08.10.2026 11:30 UTC', scope: 'Матрица DAG; exact39-stage относится к прежней публикации, не к текущему порядку review.' },
@@ -243,7 +245,41 @@ export function verifyActive(active, baselineBytes, root = ROOT, previousActive)
     if (!sections[1].startsWith(previousTail)) throw new Error('CHECKPOINT_HISTORY_REWRITTEN');
   }
 }
-export function verifyArtifacts(root = ROOT, previousActive) {
+// Отдельная цепочка checkpoint не меняет исходные пять частей и их manifest.
+export function readRolling(root, baseline, active, read = relative => readRegular(root, relative), present = fs.existsSync(path.join(root, ROLLING_MANIFEST))) {
+  const tail = Buffer.from(active.toString('utf8').split(ACTIVE_DELIMITER)[1]);
+  if (!present) return { parts: [], files: [], history: tail, archived: Buffer.alloc(0) };
+  const raw = read(ROLLING_MANIFEST);
+  if (raw.length > 1024 * 1024) throw new Error('ROLLING_MANIFEST_SIZE_INVALID');
+  const manifest = JSON.parse(raw);
+  if (manifest.format !== 'selfdev-checkpoints-v1' || manifest.baselineSha256 !== sha256(baseline) || !Array.isArray(manifest.parts) || !manifest.parts.length || manifest.parts.length > ROLLING_LIMIT || !raw.equals(Buffer.from(JSON.stringify(manifest, null, 2) + '\n')) || Object.keys(manifest).sort().join(',') !== 'baselineSha256,format,parts') throw new Error('ROLLING_MANIFEST_INVALID');
+  const files = [path.basename(ROLLING_MANIFEST)], chunks = [];
+  let offset = 0;
+  for (const [index, part] of manifest.parts.entries()) {
+    if (part.file !== `checkpoints-${String(index + 1).padStart(3, '0')}.txt` || Object.keys(part).sort().join(',') !== 'bytes,file,sha256,size,source' || !Array.isArray(part.bytes) || part.bytes.length !== 2 || part.bytes[0] !== offset || !Number.isSafeInteger(part.size) || part.size <= 0 || part.size > PART_LIMIT || part.bytes[1] !== offset + part.size) throw new Error('ROLLING_PART_INVALID');
+    const bytes = read(`${ARCHIVE}/${part.file}`);
+    if (bytes.length !== part.size || sha256(bytes) !== part.sha256) throw new Error('ROLLING_PART_IDENTITY_MISMATCH');
+    new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    validateCheckpointTail(bytes.toString('utf8'));
+    files.push(part.file);
+    chunks.push(bytes);
+    offset += bytes.length;
+  }
+  const archived = Buffer.concat(chunks), history = Buffer.concat([archived, tail]);
+  validateCheckpointTail(history.toString('utf8'));
+  for (const part of manifest.parts) {
+    const pin = part.source;
+    if (!pin || Object.keys(pin).sort().join(',') !== 'file,gitBlob,historyEnd,historyStart,revision,sha256,size' || !/^[a-f0-9]{40}$/u.test(pin.revision) || !/^[a-f0-9]{40}$/u.test(pin.gitBlob) || pin.file !== `checkpoint-source-${pin.gitBlob}.txt` || pin.historyStart !== part.bytes[0] || !Number.isSafeInteger(pin.historyEnd) || pin.historyEnd < part.bytes[1] || pin.historyEnd > history.length || !Number.isSafeInteger(pin.size) || pin.size <= 0 || pin.size > ACTIVE_LIMIT) throw new Error('ROLLING_SOURCE_PIN_INVALID');
+    const snapshot = read(`${ARCHIVE}/${pin.file}`);
+    if (snapshot.length !== pin.size || sha256(snapshot) !== pin.sha256 || blobSha(snapshot) !== pin.gitBlob) throw new Error('ROLLING_SOURCE_IDENTITY_MISMATCH');
+    verifyActive(snapshot, baseline, root);
+    const previousTail = Buffer.from(snapshot.toString('utf8').split(ACTIVE_DELIMITER)[1]);
+    if (!previousTail.equals(history.subarray(pin.historyStart, pin.historyEnd))) throw new Error('CHECKPOINT_HISTORY_REWRITTEN');
+    files.push(pin.file);
+  }
+  return { parts: manifest.parts, files: [...new Set(files)], history, archived };
+}
+export function verifyArtifacts(root = ROOT, previousActive, previousArchived = Buffer.alloc(0)) {
   const manifest = JSON.parse(readRegular(root, `${ARCHIVE}/manifest.json`));
   if (manifest.format !== 'selfdev-journal-archive-v1' || manifest.parts.length !== 5) throw new Error('MANIFEST_INVALID');
   const chunks = manifest.parts.map((p, index) => {
@@ -257,12 +293,67 @@ export function verifyArtifacts(root = ROOT, previousActive) {
   validateSource(source);
   const expected = buildArtifacts(source);
   const names = [...expected.keys()].filter(p => p.startsWith(ARCHIVE + '/')).map(p => path.basename(p)).sort();
-  if (JSON.stringify(fs.readdirSync(path.join(root, ARCHIVE)).sort()) !== JSON.stringify(names)) throw new Error('ARCHIVE_INVENTORY_INVALID');
   for (const [relative, bytes] of expected) if (relative !== JOURNAL && !readRegular(root, relative).equals(bytes)) throw new Error(`ARTIFACT_MISMATCH:${relative}`);
   const active = readRegular(root, JOURNAL);
-  verifyActive(active, expected.get(JOURNAL), root, previousActive);
+  verifyActive(active, expected.get(JOURNAL), root);
+  const rolling = readRolling(root, expected.get(JOURNAL), active);
+  const inventory = [...names, ...rolling.files].sort();
+  if (JSON.stringify(fs.readdirSync(path.join(root, ARCHIVE)).sort()) !== JSON.stringify(inventory)) throw new Error('ARCHIVE_INVENTORY_INVALID');
+  if (previousActive !== undefined) {
+    verifyActive(previousActive, expected.get(JOURNAL), root);
+    const previousTail = Buffer.from(previousActive.toString('utf8').split(ACTIVE_DELIMITER)[1]);
+    const prefix = Buffer.concat([previousArchived, previousTail]);
+    if (!rolling.history.subarray(0, prefix.length).equals(prefix)) throw new Error('CHECKPOINT_HISTORY_REWRITTEN');
+  }
   for (const relative of names) if (readRegular(root, `${ARCHIVE}/${relative}`).length > 1024 * 1024) throw new Error('ARCHIVE_METADATA_SIZE_INVALID');
-  return { sourceBytes: source.length, activeBytes: active.length, parts: chunks.length, sourceSha256: SOURCE_SHA, files: expected.size, checkpointHistory: previousActive === undefined ? 'BASELINE_AND_APPEND_FORMAT_ONLY' : 'PREVIOUS_SNAPSHOT_PREFIX_CHECKED' };
+  return { sourceBytes: source.length, activeBytes: active.length, parts: chunks.length, sourceSha256: SOURCE_SHA, files: expected.size + rolling.files.length, checkpointHistory: previousActive === undefined ? 'BASELINE_AND_APPEND_FORMAT_ONLY' : 'PREVIOUS_SNAPSHOT_PREFIX_CHECKED' };
+}
+export function buildRollingArtifacts(root, previousActive, revision, previousArchived = Buffer.alloc(0)) {
+  if (!/^[a-f0-9]{40}$/u.test(revision)) throw new Error('ROLLING_REVISION_INVALID');
+  verifyArtifacts(root, previousActive, previousArchived);
+  const active = readRegular(root, JOURNAL);
+  if (!active.equals(previousActive)) throw new Error('ROLLING_PREIMAGE_MISMATCH');
+  const original = JSON.parse(readRegular(root, `${ARCHIVE}/manifest.json`));
+  const baseline = buildArtifacts(Buffer.concat(original.parts.map(p => readRegular(root, `${ARCHIVE}/${p.file}`)))).get(JOURNAL);
+  const rolling = readRolling(root, baseline, active);
+  const [prefix, tail] = active.toString('utf8').split(ACTIVE_DELIMITER);
+  let fence = null, last = 0, at = 0;
+  for (const line of tail.split(/(?<=\n)/u)) {
+    if (fence) {
+      if (new RegExp(`^${fence}{3,}\\s*$`, 'u').test(line.trimEnd())) fence = null;
+    } else if (/^(?:```|~~~)/u.test(line)) fence = line[0];
+    else if (line.startsWith('## Checkpoint ')) last = at - 1;
+    at += line.length;
+  }
+  if (last <= 0 || rolling.parts.length >= ROLLING_LIMIT) throw new Error('ROLLING_NOTHING_TO_ARCHIVE');
+  const bytes = Buffer.from(tail.slice(0, last)), nextActive = Buffer.from(prefix + ACTIVE_DELIMITER + tail.slice(last));
+  verifyActive(nextActive, baseline, root);
+  validateCheckpointTail(bytes.toString('utf8'));
+  const file = `checkpoints-${String(rolling.parts.length + 1).padStart(3, '0')}.txt`;
+  const sourceFile = `checkpoint-source-${blobSha(active)}.txt`;
+  const part = { file, bytes: [rolling.archived.length, rolling.archived.length + bytes.length], size: bytes.length, sha256: sha256(bytes), source: { revision, file: sourceFile, gitBlob: blobSha(active), sha256: sha256(active), size: active.length, historyStart: rolling.archived.length, historyEnd: rolling.history.length } };
+  const manifest = { format: 'selfdev-checkpoints-v1', baselineSha256: sha256(baseline), parts: [...rolling.parts, part] };
+  const files = new Map([[JOURNAL, nextActive], [`${ARCHIVE}/${file}`, bytes], [`${ARCHIVE}/${sourceFile}`, active], [ROLLING_MANIFEST, Buffer.from(JSON.stringify(manifest, null, 2) + '\n')]]);
+  return files;
+}
+// CLI сверяет provenance с Git, а не только с самим manifest.
+export function verifySourceGitPins(parts, resolveBlob) {
+  for (const part of parts) {
+    if (resolveBlob(part.source.revision) !== part.source.gitBlob) throw new Error('ROLLING_GIT_PREIMAGE_MISMATCH');
+  }
+}
+function verifyCurrentGitPins(root) {
+  if (!fs.existsSync(path.join(root, ROLLING_MANIFEST))) return;
+  const manifest = JSON.parse(readRegular(root, ROLLING_MANIFEST));
+  verifySourceGitPins(manifest.parts, revision => execFileSync('git', ['rev-parse', `${revision}:${JOURNAL}`], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim());
+}
+function previousSnapshot(root, revision) {
+  const read = relative => execFileSync('git', ['show', `${revision}:${relative}`], { cwd: root, maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+  const active = read(JOURNAL);
+  const baseline = buildArtifacts(Buffer.concat(JSON.parse(read(`${ARCHIVE}/manifest.json`)).parts.map(p => read(`${ARCHIVE}/${p.file}`)))).get(JOURNAL);
+  verifyActive(active, baseline, root);
+  const present = execFileSync('git', ['ls-tree', '--name-only', revision, '--', ROLLING_MANIFEST], { cwd: root, encoding: 'utf8' }).trim() === ROLLING_MANIFEST;
+  return { active, archived: readRolling(root, baseline, active, read, present).archived };
 }
 export function assertWriteTarget(root, head) {
   const real = fs.realpathSync(root);
@@ -300,9 +391,11 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     const command = process.argv[2] ?? '--verify';
     const previousRevision = process.argv[4];
-    if (!['--verify', '--write'].includes(command) || (process.argv.length > 3 && (command !== '--verify' || process.argv.length !== 5 || process.argv[3] !== '--previous-revision' || !/^[0-9a-f]{40}$/u.test(previousRevision)))) throw new Error('COMMAND_INVALID');
-    const previous = previousRevision ? execFileSync('git', ['show', `${previousRevision}:${JOURNAL}`], { cwd: ROOT, maxBuffer: ACTIVE_LIMIT, stdio: ['ignore', 'pipe', 'ignore'] }) : undefined;
-    process.stdout.write(JSON.stringify(command === '--write' ? writeArtifacts() : verifyArtifacts(ROOT, previous)) + '\n');
+    if (!['--verify', '--write', '--roll-plan'].includes(command) || (command === '--roll-plan' && !previousRevision) || (process.argv.length > 3 && (command === '--write' || process.argv.length !== 5 || process.argv[3] !== '--previous-revision' || !/^[0-9a-f]{40}$/u.test(previousRevision)))) throw new Error('COMMAND_INVALID');
+    const previous = previousRevision ? previousSnapshot(ROOT, previousRevision) : undefined;
+    const result = command === '--write' ? writeArtifacts() : command === '--roll-plan' ? { mode: 'WRITE_FREE_ROLL_PLAN', files: [...buildRollingArtifacts(ROOT, previous.active, previousRevision, previous.archived)].map(([file, bytes]) => ({ file, sha256: sha256(bytes), size: bytes.length, text: bytes.toString('utf8') })) } : verifyArtifacts(ROOT, previous?.active, previous?.archived);
+    if (command !== '--write') verifyCurrentGitPins(ROOT);
+    process.stdout.write(JSON.stringify(result) + '\n');
   } catch (error) {
     process.stderr.write(`Journal archive verification failed: ${error.message}\n`);
     process.exitCode = 1;
