@@ -87,6 +87,21 @@ describe("RunPage layout при открытом ходе работы", () => {
     expect(canvas).toContain("v-show=\"viewMode === 'graph'\"");
   });
 
+  it("сохраняет одну полную строку списка под раскрытой мобильной сводкой", () => {
+    expect(mobile).toContain("max-height: max(46px, calc(100% - 248px))");
+    expect(mobile).toContain("grid-template-rows: auto minmax(0, 1fr)");
+    const details = mobile.match(
+      /\.run-canvas-summary__details--expanded \{([^}]+)\}/,
+    )?.[1];
+    expect(details).toContain("min-height: 0");
+    expect(details).toContain("overflow: auto");
+    for (const workspaceHeight of [371, 420, 600]) {
+      const summaryHeight = Math.max(46, workspaceHeight - 248);
+      const outlineHeight = workspaceHeight - 136 - summaryHeight - 12;
+      expect(outlineHeight).toBeGreaterThanOrEqual(72 + 28);
+    }
+  });
+
   it("использует одну фактическую ширину drawer для границы canvas на desktop", () => {
     expect(source).toMatch(
       /\.run-workspace--activity \.graph-panel\s*\{\s*right: var\(--run-activity-width\);/,

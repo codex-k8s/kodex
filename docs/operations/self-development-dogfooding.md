@@ -1284,3 +1284,14 @@ PASS3.25s; scoped lint/Prettier PASS. ROOT forced typecheck и сборка PASS
 с прежними chunk/plugin warnings; native дополнительного fix пока NOT RUN.
 Retry5 FAILED/RUNTIME_WORKFLOW_INCOMPLETE сохраняется;
 общий current-root guidance готовится отдельно. Business1796 и Full65 OPEN.
+
+## Checkpoint 10.10.2026 19:43 UTC — мобильный контекст и конец списка
+
+Published/HOT f1b84808, fresh idle/FF19:38:54 PASS. Native320/390 collapsed:
+последняя строка полностью видима, отступ14px; заголовок контекста246px,
+отдельная строка, screenshot просмотрен, overflowfalse/Console0/API200.
+Expanded summary320 выявила остаточный FAIL: список71px меньше одной строки.
+Новый узкий reserve ограничивает summary по высоте workspace и прокручивает
+details, оставляя100px на строку72px и padding28px. ROOT77tests7suites PASS4.57s,
+scoped lint/Prettier/forced typecheck/build8.36s PASS. Native reserve NOT RUN.
+Business1796/Full65 OPEN; CP fresh-root guidance и его disposable проверки идут.
