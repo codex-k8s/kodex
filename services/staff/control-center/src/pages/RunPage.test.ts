@@ -28,6 +28,7 @@ afterAll(() => vi.unstubAllGlobals());
 
 function messages() {
   return {
+    assistant: { open: "Открыть Kodex" },
     serverMessages: {
       RUN_COORDINATION_ROLE: "Координатор запуска",
       REQUIRED_WORKFLOW_FAILED:
@@ -63,6 +64,8 @@ function messages() {
       context: "Контекст узла",
       workspaceTools: "Инструменты запуска",
       connections: "Связи графа",
+      nodeList: "Список узлов",
+      focusCurrentWork: "Текущая работа",
       artifacts: "Результаты и файлы",
       incidents: "Диагностика",
       noIncidents: "Активных инцидентов нет",

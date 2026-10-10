@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
+import { compileStyle, parse } from "vue/compiler-sfc";
 
 const source = readFileSync(new URL("./RunPage.vue", import.meta.url), "utf8");
 const desktop = source.slice(
@@ -14,6 +15,55 @@ const canvas = readFileSync(
 );
 
 describe("RunPage layout при открытом ходе работы", () => {
+  it("переносит мобильный доступ к помощнику в toolbar без нижнего резерва списка", () => {
+    const action = source.match(
+      /<button\s+class="icon-button run-workspace-assistant"([^>]+)>/,
+    )?.[1];
+    expect(action).toBeDefined();
+    expect(action).toContain('@click="openAssistantWorkspace"');
+    expect(action).toContain(":aria-label=\"$t('assistant.open')\"");
+    expect(action).toContain(":title=\"$t('assistant.open')\"");
+    expect(action).not.toContain("disabled");
+    expect(source).toContain("openAssistantWorkspace,");
+    const rule = mobile.match(
+      /\.run-workspace-toolbar \.run-workspace-assistant \{([^}]+)\}/,
+    )?.[1];
+    expect(rule).toContain("display: inline-flex");
+    expect(rule).toContain("width: 44px");
+    expect(rule).toContain("height: 44px");
+    const marker =
+      "body:has(.run-workspace-assistant:not(:disabled):not([hidden])) .assistant-fab";
+    const style = parse(source).descriptor.styles[0];
+    if (!style) throw new Error("RunPage style missing");
+    const compiled = compileStyle({
+      filename: "RunPage.vue",
+      source: style.content,
+      id: "data-v-run-page",
+      scoped: true,
+    });
+    expect(compiled.errors).toEqual([]);
+    const compiledMobile = compiled.code.slice(
+      compiled.code.indexOf("@media (max-width: 760px)"),
+    );
+    expect(compiledMobile.replace(/\s+/g, " ")).toContain(marker);
+    expect(desktop).not.toContain(marker);
+    const hidden = mobile.match(
+      /:global\([\s\S]*?assistant-fab\s*\)\s*\{([^}]+)\}/,
+    )?.[1];
+    expect(hidden).toContain("visibility: hidden");
+    expect(hidden).toContain("pointer-events: none");
+    for (const width of [320, 390, 720, 721, 760, 761]) {
+      const mobileAction = width <= 760;
+      const floatingAction = !mobileAction;
+      expect(Number(mobileAction) + Number(floatingAction)).toBe(1);
+      if (mobileAction) {
+        // Четыре действия с owner gate также помещаются в первую строку.
+        expect(4 * 44 + 2).toBeLessThanOrEqual(width - 16);
+      }
+    }
+    expect(mobile).toContain("max-height: max(46px, calc(100% - 280px))");
+    expect(canvas).toContain("scroll-padding-top: 14px");
+  });
   it("ограничивает сводку доступной половиной графа с запасом для трёх действий", () => {
     const width = desktop.match(
       /width: min\(\s*(\d+)px,\s*calc\(\(100% - var\(--run-activity-width\)\) \/ 2 - (\d+)px\)\s*\)/,

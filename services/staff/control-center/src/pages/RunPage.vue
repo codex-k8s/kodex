@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ListChecks,
   PanelRightOpen,
+  Sparkles,
 } from "@lucide/vue";
 import {
   type ComponentPublicInstance,
@@ -27,7 +28,10 @@ import {
 } from "@/features/platform/run-refresh";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
-import { requestAssistantRunDebug } from "@/features/assistant/events";
+import {
+  openAssistantWorkspace,
+  requestAssistantRunDebug,
+} from "@/features/assistant/events";
 import { isTerminalRun } from "@/features/workboard/model";
 import { hasValidGateScope } from "@/features/workboard/gate-scope";
 import RunActivityDrawer from "@/features/runs/RunActivityDrawer.vue";
@@ -995,6 +999,16 @@ onBeforeUnmount(() => {
               <Activity :size="18" aria-hidden="true" />
             </button>
             <button
+              class="icon-button run-workspace-assistant"
+              type="button"
+              :aria-label="$t('assistant.open')"
+              :title="$t('assistant.open')"
+              aria-controls="assistant-workspace"
+              @click="openAssistantWorkspace"
+            >
+              <Sparkles :size="18" aria-hidden="true" />
+            </button>
+            <button
               v-if="openGateList.length"
               class="icon-button run-toolbar-action--attention"
               type="button"
@@ -1522,6 +1536,9 @@ onBeforeUnmount(() => {
   border-right: 0;
   border-radius: 0 7px 7px 0;
 }
+.run-workspace-toolbar .run-workspace-assistant {
+  display: none;
+}
 .run-toolbar-count {
   position: absolute;
   top: 2px;
@@ -1671,6 +1688,10 @@ onBeforeUnmount(() => {
   }
 }
 @media (min-width: 761px) {
+  .run-workspace-toolbar .icon-button:nth-last-child(2) {
+    border-right: 0;
+    border-radius: 0 7px 7px 0;
+  }
   .run-workspace--activity .run-canvas-summary {
     top: 70px;
     width: min(360px, calc((100% - var(--run-activity-width)) / 2 - 86px));
@@ -1680,6 +1701,19 @@ onBeforeUnmount(() => {
   }
 }
 @media (max-width: 760px) {
+  .run-workspace-toolbar .run-workspace-assistant {
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+  :global(
+    body:has(.run-workspace-assistant:not(:disabled):not([hidden]))
+      .assistant-fab
+  ) {
+    visibility: hidden;
+    pointer-events: none;
+  }
   .run-workspace {
     --run-graph-toolbar-top: 56px;
   }

@@ -748,3 +748,27 @@ Full65/ONE review/Developer/Manager acceptance/owner gate OPEN. Credits balances
 units/spending UNKNOWN. Остаточный FE FAIL: intrinsic grid tracks сжимают
 row72 при body77 и expanded details; CSS max-content готовится отдельным пакетом,
 ещё NOT RUN native. HOT/source во время текущего запуска не меняются.
+
+## Checkpoint 10.10.2026 20:32 UTC — native INTAKE и мобильный доступ
+
+Опубликованный382e62ff и frontend-only HOT FF PASS; native320/390/desktop
+подтвердили несжатые строки/контекст и Console0. Остаточное перекрытие статуса
+кнопкой помощника исправляется переносом мобильного действия в toolbar с
+возвратом фокуса; ROOT97tests/4suites и ESLint5/Prettier5 PASS, forced typecheck
+и build PASS/exit0/8.84s, прежнее chunk warning сохранено; native NOT RUN.
+Exact382 frontend399suites/3852tests PASS;
+E2E discovery/typecheck PASS, не browser execution и не STT/device-code.
+
+Actual AsyncAPI/OpenAPI regeneration без diff, RPC ABI render/28negative,
+MCP16 wire fixtures, artifact callback/spool/static render PASS в изолированной
+source оснастке. Container-only startup SKIP. Local material initial FAIL
+сохранён; исправлен только obsolete fixture, ROOT synthetic повтор PASS.
+Production material и активные runner/workload не изменены.
+
+Retry6 INTAKE native FINAL/callback приняты; текущий Architect действительно
+работает в новой child с собственным execution snapshot.20:30 root RUNNING,
+558events contiguous. Финальное заключение роли, Developer/ONE review/Manager
+acceptance, Full65/11/14/15 OPEN. ROOT corrective USER_MESSAGE0. Observer
+ACK/hash/rejoin не заменяет semantic acceptance; paid units остаются UNKNOWN.
+Orphan protected worker declaration исправляется source-only вариантом A;
+forward policy delivery отложена до безопасного idle текущего Workflow.

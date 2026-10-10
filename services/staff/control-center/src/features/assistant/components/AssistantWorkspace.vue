@@ -845,7 +845,28 @@ async function close(): Promise<void> {
   contextOpen.value = false;
   openPlanRef.value = undefined;
   store.clearReceipt();
-  void nextTick(() => fab.value?.focus());
+  void nextTick(restoreAssistantCloseFocus);
+}
+
+function restoreAssistantCloseFocus(): void {
+  function available(button: HTMLButtonElement | null | undefined): boolean {
+    return Boolean(
+      button?.isConnected &&
+      !button.disabled &&
+      !button.hidden &&
+      !button.closest('[inert], [hidden], [aria-hidden="true"]') &&
+      button.getClientRects().length &&
+      getComputedStyle(button).visibility === "visible",
+    );
+  }
+  if (available(fab.value)) {
+    fab.value?.focus();
+    return;
+  }
+  const runAction = document.querySelector<HTMLButtonElement>(
+    ".run-page-body .run-workspace-toolbar > .run-workspace-assistant",
+  );
+  if (available(runAction)) runAction?.focus({ preventScroll: true });
 }
 
 async function closeAssistantForm(): Promise<void> {

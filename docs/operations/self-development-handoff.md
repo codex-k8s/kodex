@@ -10,6 +10,42 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 20:32 UTC — native INTAKE и мобильный доступ
+
+Source382e62ff опубликован в Draft1807, remote/head и узкий frontend-only
+HOT FF20:13 PASS; runtime деревья не менялись. Native320/390/desktop:
+intrinsic строки и раскрытый контекст не сжимаются, последний статус виден,
+Console0. Найден остаточный UX-дефект: плавающая кнопка помощника перекрывает
+статус. Новый пакет переносит мобильный доступ в toolbar и возвращает туда
+фокус после закрытия; desktop сохраняет FAB. ROOT97tests/4suites PASS,
+ESLint5/Prettier5 PASS. Forced typecheck и build PASS/exit0/8.84s;
+прежнее chunk warning сохранено, native нового пакета NOT RUN.
+RunPage fixture дополнен существующими переводами без runtime изменений.
+
+На exact382 полные frontend399suites/3852tests PASS102.62s. E2E typecheck и
+discovery PASS, это не исполнение browser suites; STT/device-code NOT RUN.
+На byte-identical bfb contract области actual AsyncAPI70Go/70TS и OpenAPI
+Go/TS regeneration PASS/generated diff0, internal RPC ABI render оба профиля
+и28negative PASS. MCP16 actual wire fixtures PASS; artifact callback race,
+spool/render проверки PASS. Container-only spool startup SKIP, не live PASS.
+Local material fixture первоначально FAIL: ожидал удаление сохранённых ключей.
+Приведён только тест к fail-closed production контракту; ROOT synthetic suite,
+bash-n/ShellCheck/diff PASS. Production material lifecycle не изменён.
+
+Native Retry6 INTAKE завершён: manager-plan и callback приняты, архитектор
+действительно запущен в новом child и вызвал собственный execution snapshot.
+На20:30 root RUNNING/558events contiguous; комментарий роли подтверждает
+version0.160.0 и ограничения schema/auth/usage. Финальное заключение Architect,
+Developer, ONE review, Manager acceptance и Full65/11/14/15 ещё OPEN.
+Корректирующих USER_MESSAGE от ROOT0. Architect observer ACK exact lineage,
+instructions/inbox hashes и same-Pod rejoin EQUAL; это не semantic acceptance.
+
+Отдельный baseline FAIL выявил orphan worker registration защищённого профиля.
+Рекомендуемое исправление A готовится source-only: убрать недостижимую
+декларацию, сохранить trusted путь и закрытый отказ. Forward signed policy
+не публикуется в runtime, пока текущий Workflow активен. Кредиты/денежные units
+и итоговый бизнес-результат остаются UNKNOWN до авторитетного результата.
+
 ## Checkpoint 10.10.2026 20:12 UTC — intrinsic layout и contract baseline
 
 Новый узкий FE пакет поверх bfb1460b задаёт max-content строки списка и
