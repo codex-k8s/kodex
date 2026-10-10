@@ -1843,6 +1843,9 @@ func workflowCoordinatorTask(task, versionRef, versionDigest string, version ent
 	builder.WriteString(" (sha256:")
 	builder.WriteString(versionDigest)
 	builder.WriteString("). Use delegate_agent exactly once for every step, including steps assigned to the coordinator itself, with its exact workflow_step_key. Do not claim a step is complete until its delegated execution returns a successful callback. End this turn after all eligible delegations are accepted; child results arrive in a later callback turn.\n")
+	builder.WriteString("\n")
+	builder.WriteString(workflowExecutionGuidance)
+	builder.WriteString("\n")
 	if instructions := strings.TrimSpace(version.Instructions); instructions != "" {
 		builder.WriteString("\nWorkflow instructions: ")
 		builder.WriteString(instructions)

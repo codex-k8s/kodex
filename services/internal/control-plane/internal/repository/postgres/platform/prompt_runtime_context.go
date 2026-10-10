@@ -44,7 +44,10 @@ func (repository *Repository) hydrateRuntimePromptContext(ctx context.Context, t
 		return errs.ErrConflict
 	}
 	applyWorkflowPromptContext(snapshot, workflowRef, revision, version, step)
-	return repository.hydrateWorkflowPromptTemplateTx(ctx, tx, current, snapshot)
+	if err := repository.hydrateWorkflowPromptTemplateTx(ctx, tx, current, snapshot); err != nil {
+		return err
+	}
+	return repository.hydrateWorkflowExecutionPromptTx(ctx, tx, current, nodeRef, snapshot)
 }
 
 func promptWorkflowStep(version entity.WorkflowVersion, key string) (entity.WorkflowStep, bool) {

@@ -916,6 +916,7 @@ function compareNodes(left: RunNode, right: RunNode): number {
 .graph-outline-node {
   display: grid;
   width: calc(100% - min(calc(var(--tree-depth) * 18px), 72px));
+  height: auto;
   min-width: 0;
   min-height: 72px;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -955,7 +956,9 @@ function compareNodes(left: RunNode, right: RunNode): number {
 .graph-outline-node small,
 .graph-outline-node__connection {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .graph-outline-node small,
 .graph-outline-node__connection {

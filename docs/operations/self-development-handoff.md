@@ -10,6 +10,38 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 19:55 UTC — свежий root и компактные строки графа
+
+В isolated integration поверх ba3fc9ad интегрированы семь CP файлов frozen
+c85624fd…; все семь postimage SHA EQUAL. Owner current-root projection
+входит в обязательные PLATFORM CONSTRAINTS initial/continuation; old history
+сохранена и не доказывает completion/grants/results нового Retry. Published
+Workflow40/revision13 и исходная задача неизменны; USER_MESSAGE0.
+GUIDE006v1.1.17 закрепляет инвариант и lifecycle matrix. API, applied migrations,
+compiled v3/shared ABI/runner не менялись; новый OCI rebuild не нужен.
+
+Worker canonical disposable PostgreSQL whole script PASS23.363s/exit0:
+SYSTEM/дваPROJECT10.61s, coordinator files7.44s, fresh-root Retry5.24s,
+оба read-only release readbacks PASS. Targeted platform/prompt race1.943/1.148s,
+полный prompt race2.629s, vet/gofmt/diff/hash PASS. Ранние FAIL: typed JSON
+порядок/digest, устаревшая fixture UPDATE view, Restore oracle и отсутствующий
+Node в script PATH устранены; не выдаются за исходный PASS. ROOT race
+на интегрированном source PASS1.979/1.145s, vet и CP build PASS;
+native Retry6 и serving нового CP NOT RUN.
+
+Ba3 native expanded summary320/390 разделена со списком: конец полностью
+виден, Console0/own API200/realtime connected. Однако desktop обнаружил
+FIXED HEIGHT FAIL: статус выходил за границу строки. Дополнительный FE fix
+снимает фиксированную высоту, сокращает preview и сохраняет полный текст
+в контексте; mobile reserve увеличен132px. Targeted7suites78tests PASS4.64s,
+scoped lint/format, forced typecheck/build9.66s PASS. Полный frontend:
+399suites3849tests PASS30.14s. Native этого дополнительного fix NOT RUN.
+
+Canonical journal roll сохранён: active73272B, archive checkpoints004 и
+exact prior Git blob сохранены; verifier PREVIOUS_SNAPSHOT_PREFIX_CHECKED PASS.
+Ни один historical checkpoint/checkbox не потерян. Business1796, ONE review,
+Manager acceptance/owner gate и Full65 OPEN; частичный PASS не готовность.
+
 ## Checkpoint 10.10.2026 19:43 UTC — мобильный контекст и конец списка
 
 Published/HOT f1b84808, fresh idle/FF19:38:54 PASS. Native320/390 collapsed:

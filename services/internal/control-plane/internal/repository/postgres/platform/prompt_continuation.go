@@ -102,6 +102,9 @@ func (repository *Repository) prepareRuntimeContinuationNotice(ctx context.Conte
 	noticeSnapshot.SessionContinuation = string(rawDiff)
 	noticeSnapshot.SemanticValues = nil
 	noticeSnapshot.UnavailableVariables = nil
+	if err := repository.hydrateWorkflowExecutionPromptTx(ctx, tx, current, stringMap(snapshot, "nodeRef"), &noticeSnapshot); err != nil {
+		return nil, err
+	}
 	materialized, err := promptservice.Materialize(content, promptservice.FromSnapshot(noticeSnapshot))
 	if err != nil || !materialized.Complete || len(materialized.Prompt) > runtimecontract.MaximumContinuationNoticeBytes {
 		return nil, fmt.Errorf("materialize continuation template: %w", errs.ErrConflict)

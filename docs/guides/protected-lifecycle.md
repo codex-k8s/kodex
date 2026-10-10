@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.16
+version: 1.1.17
 updated: 2026-10-10
 ---
 
@@ -368,6 +368,27 @@ consumer вплоть до фактического provider input, а не то
 Это сообщение доставляется один раз без дополнительного дублирующего delta;
 повтор terminal callback не запускает provider turn заново. Роль сообщения
 в истории не становится источником новых полномочий.
+
+Свежая root-попытка Workflow, включая Retry в прежней Session, не наследует
+выполненность шагов из истории provider, старых callback или `RETRY_OF`.
+CP до seal закрепляет свежую owner-проекцию current root/node/session/turn/
+attempt, exact опубликованной версии и состояний её шагов в обязательном
+PLATFORM `CONSTRAINTS` существующего snapshot. При continuation проекция
+перечитывается из текущего owner состояния, а не копируется из прошлого ввода.
+Same-root continuation определяется проверенным `CONTINUES`, а не наличием
+истории; завершённые шаги этого root не повторяются. Каталог до первого child
+result может быть пустым: это само по себе не blocker первого допустимого шага.
+Все данные и guidance остаются advisory, не переносят artifacts/grants и не
+заменяют свежий owner frontier при effect. История и прежние immutable pins
+сохраняются; ошибочное поведение исправляется поставляемым системным контекстом,
+не управляющим сообщением от имени пользователя.
+
+| Проекция Workflow prompt | Сохраняемый инвариант |
+| --- | --- |
+| Initial claim / новый Retry root | Только шаги нового root; прежний INTAKE не считается выполненным |
+| Same-root callback / continuation | Только текущие callback receipts и permitted result pins; прежние SemanticValues не переиспользуются |
+| Durable snapshot / rejoin | JSON-представление до seal сохраняет все поля и точные числа; Prompt и оба digest совпадают после roundtrip |
+| Неизвестная lineage / несовпадающие pins | Закрытый отказ до materialization; grants, историю и старый snapshot не исправляют |
 Continuation после дочерней работы несёт в самом новом вводе результаты
 из точных server-owned callback receipts: run/node, terminal state, безопасное
 резюме и ссылки на artifacts. Для Workflow туда же входят ещё не

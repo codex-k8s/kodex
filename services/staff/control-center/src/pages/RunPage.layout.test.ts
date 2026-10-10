@@ -88,7 +88,7 @@ describe("RunPage layout при открытом ходе работы", () => {
   });
 
   it("сохраняет одну полную строку списка под раскрытой мобильной сводкой", () => {
-    expect(mobile).toContain("max-height: max(46px, calc(100% - 248px))");
+    expect(mobile).toContain("max-height: max(46px, calc(100% - 280px))");
     expect(mobile).toContain("grid-template-rows: auto minmax(0, 1fr)");
     const details = mobile.match(
       /\.run-canvas-summary__details--expanded \{([^}]+)\}/,
@@ -96,10 +96,20 @@ describe("RunPage layout при открытом ходе работы", () => {
     expect(details).toContain("min-height: 0");
     expect(details).toContain("overflow: auto");
     for (const workspaceHeight of [371, 420, 600]) {
-      const summaryHeight = Math.max(46, workspaceHeight - 248);
+      const summaryHeight = Math.max(46, workspaceHeight - 280);
       const outlineHeight = workspaceHeight - 136 - summaryHeight - 12;
-      expect(outlineHeight).toBeGreaterThanOrEqual(72 + 28);
+      expect(outlineHeight).toBeGreaterThanOrEqual(104 + 28);
     }
+  });
+
+  it("не обрезает статус узла общей фиксированной высотой кнопки", () => {
+    const node = canvas.match(/\.graph-outline-node \{([^}]+)\}/)?.[1];
+    expect(node).toContain("height: auto");
+    const preview = canvas.match(
+      /\.graph-outline-node__connection \{([^}]+)\}/,
+    )?.[1];
+    expect(preview).toContain("text-overflow: ellipsis");
+    expect(preview).toContain("white-space: nowrap");
   });
 
   it("использует одну фактическую ширину drawer для границы canvas на desktop", () => {

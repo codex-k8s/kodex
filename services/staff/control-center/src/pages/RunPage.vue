@@ -1719,7 +1719,7 @@ onBeforeUnmount(() => {
     top: 136px;
     left: 8px;
     width: min(320px, calc(100% - 16px));
-    max-height: max(46px, calc(100% - 248px));
+    max-height: max(46px, calc(100% - 280px));
     grid-template-rows: auto minmax(0, 1fr);
     padding: 6px 8px;
   }

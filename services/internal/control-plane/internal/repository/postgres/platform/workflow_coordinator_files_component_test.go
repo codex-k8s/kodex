@@ -54,6 +54,14 @@ func TestRuntimeFileCatalogDatabaseFailureIsNotEligibility(t *testing.T) {
 // Контур выполняет обычные owner-команды и реальные VFS queries одной новой
 // disposable-базы. Provider, сеть и staging в этом сценарии не используются.
 func TestWorkflowCoordinatorFilesComponent(t *testing.T) {
+	testWorkflowCoordinatorFilesComponent(t, false)
+}
+
+func TestWorkflowRetryCurrentRootComponent(t *testing.T) {
+	testWorkflowCoordinatorFilesComponent(t, true)
+}
+
+func testWorkflowCoordinatorFilesComponent(t *testing.T, freshRetry bool) {
 	ctx, stop := context.WithTimeout(t.Context(), 90*time.Second)
 	defer stop()
 	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
@@ -264,6 +272,10 @@ func TestWorkflowCoordinatorFilesComponent(t *testing.T) {
 	}
 	initial := claim("initial", outer.Ref)
 	manifest(initial, 0)
+	initialProjection := workflowExecutionProjectionFromLease(t, initial)
+	if initialProjection.Mode != "INITIAL_ROOT" || initialProjection.RootRunRef != outer.Ref || initialProjection.RetryOfRunRef != "" {
+		t.Fatal("initial claim lacks its own root projection")
+	}
 	// READ не даёт права опубликовать даже маленький собственный результат.
 	_, err = service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: worker,
 		Mutation: value.Mutation{IdempotencyKey: "coordinator-files-denied-write"}, Payload: completion(initial, "unauthorized")})
@@ -282,6 +294,50 @@ func TestWorkflowCoordinatorFilesComponent(t *testing.T) {
 		t.Fatal("wrong received result")
 	}
 	readFile(callback, files[0], firstText)
+	callbackProjection := workflowExecutionProjectionFromLease(t, callback)
+	if callbackProjection.Mode != "SAME_ROOT_CONTINUATION" || callbackProjection.RootRunRef != outer.Ref || callbackProjection.Steps[0].State != "SUCCEEDED" {
+		t.Fatal("same-root callback lost its successful first step")
+	}
+	if freshRetry {
+		currentRun, err := service.GetRun(ctx, owner, outer.Ref)
+		if err != nil {
+			t.Fatal(err)
+		}
+		currentRun = *execute(command.CancelRun, "retry-source-cancel", command.RunCommandInput{RunRef: outer.Ref}, &currentRun.Version).Run
+		retried := execute(command.RetryRun, "retry", command.RunCommandInput{RunRef: outer.Ref}, &currentRun.Version).Run
+		retryLease := claim("retry-claim", retried.Ref)
+		manifest(retryLease, 0)
+		if stringMap(retryLease, "sessionRef") != stringMap(initial, "sessionRef") {
+			t.Fatal("native retry changed the original Session")
+		}
+		projection := workflowExecutionProjectionFromLease(t, retryLease)
+		if projection.Mode != "INITIAL_ROOT" || projection.RootRunRef != retried.Ref || projection.RetryOfRunRef != outer.Ref || projection.RootAttempt != 2 || len(projection.Steps) != 2 {
+			t.Fatal("native retry did not receive its own fresh root pins")
+		}
+		for _, step := range projection.Steps {
+			if step.State != "PLANNED" || step.MaterializationState != "PLANNED" || !step.Ready {
+				t.Fatal("native retry inherited historical completed steps")
+			}
+		}
+		history, ok := retryLease["sessionContext"].([]map[string]string)
+		if !ok || len(history) < 3 || !strings.Contains(history[len(history)-1]["content"], retried.Ref) {
+			t.Fatalf("fresh continuation lost history or lacks current-root guidance: typed=%t count=%d lastPins=%t", ok, len(history), ok && len(history) > 0 && strings.Contains(history[len(history)-1]["content"], retried.Ref))
+		}
+		retriedFirst := delegate("retry-first-delegate", retryLease, "first")
+		if retriedFirst.Ref == first.Ref {
+			t.Fatal("retry reused the historical child")
+		}
+		unchanged, err := service.GetRun(ctx, owner, outer.Ref)
+		if err != nil || unchanged.State != currentRun.State || unchanged.Version != currentRun.Version {
+			t.Fatal("retry changed the archived terminal root")
+		}
+		latest, err := service.GetRun(ctx, owner, retried.Ref)
+		if err != nil {
+			t.Fatal(err)
+		}
+		execute(command.CancelRun, "retry-cancel", command.RunCommandInput{RunRef: retried.Ref}, &latest.Version)
+		return
+	}
 	// Только fixture имитирует legacy receipt до новой миграции; транзакция
 	// откатывает отключение trigger и NULL, production backfill отсутствует.
 	legacy, err := fixtureAdmin.Begin(ctx)
@@ -339,7 +395,9 @@ func TestWorkflowCoordinatorFilesComponent(t *testing.T) {
 		}
 		readFile(final, file, text)
 	}
-	// Текущее состояние файла проверяется до каждой страницы и body query.
+	// Текущее lifecycle aggregate проверяется до каждой страницы и body query.
+	// Fault ограничен mutable owner head в disposable базе; immutable revision
+	// и current view не изменяются и защитные triggers не отключаются.
 	finalContext := runtimeFilesTestContext(t, final, runtimecontract.FilePurposeRunResult)
 	firstExact := query.ExecutionFileRef{EntryRef: files[0].EntryRef, ArtifactRef: files[0].ArtifactRef, Revision: files[0].Revision, Digest: files[0].Digest}
 	for _, file := range all {
@@ -347,17 +405,17 @@ func TestWorkflowCoordinatorFilesComponent(t *testing.T) {
 			firstExact.EntryRef = file.EntryRef
 		}
 	}
-	if _, err = pool.Exec(ctx, `UPDATE control_plane.artifacts SET scan_state='QUARANTINED' WHERE ref=$1`, firstExact.ArtifactRef); err != nil {
+	if _, err = fixtureAdmin.Exec(ctx, `UPDATE control_plane.artifact_heads SET lifecycle_state='DELETED',deleted_at=clock_timestamp(),purge_after=clock_timestamp()+interval '30 days' WHERE ref=$1`, firstExact.ArtifactRef); err != nil {
 		t.Fatal(err)
 	}
 	manifest(final, 1)
 	if _, err = service.GetExecutionFileMetadata(ctx, metadataReader, finalContext, firstExact); !errors.Is(err, errs.ErrNotFound) {
-		t.Fatal("quarantined pinned artifact retained metadata", err)
+		t.Fatal("deleted pinned artifact retained metadata", err)
 	}
 	if _, err = service.ReadExecutionArtifact(ctx, bodyReader, finalContext.LeaseRef, finalContext.Fence, finalContext.Generation, firstExact.ArtifactRef); !errors.Is(err, errs.ErrNotFound) {
-		t.Fatal("quarantined pinned artifact retained body", err)
+		t.Fatal("deleted pinned artifact retained body", err)
 	}
-	if _, err = pool.Exec(ctx, `UPDATE control_plane.artifacts SET scan_state='CLEAN' WHERE ref=$1`, firstExact.ArtifactRef); err != nil {
+	if _, err = fixtureAdmin.Exec(ctx, `UPDATE control_plane.artifact_heads SET lifecycle_state='ACTIVE',deleted_at=NULL,purge_after=NULL WHERE ref=$1`, firstExact.ArtifactRef); err != nil {
 		t.Fatal(err)
 	}
 	manifest(final, 2)
@@ -375,10 +433,16 @@ func TestWorkflowCoordinatorFilesComponent(t *testing.T) {
 		t.Fatal("deleted artifact receipt missing")
 	}
 	execute(command.RestoreArtifact, "restore-result", command.ArtifactLifecycleInput{ArtifactRef: deleted.Ref}, &deleted.Version)
-	// Restore увеличил version: прежний immutable pin не обновляется от summary.
-	manifest(final, 1)
-	if _, err = service.GetExecutionFileMetadata(ctx, metadataReader, finalContext, firstExact); !errors.Is(err, errs.ErrNotFound) {
-		t.Fatal("restored version rejoined stale result pin", err)
+	// Restore меняет lifecycle version, но не immutable revision/digest receipt.
+	// Каноническое чтение возвращает только прежний exact body после ACTIVE.
+	manifest(final, 2)
+	if _, err = service.GetExecutionFileMetadata(ctx, metadataReader, finalContext, firstExact); err != nil {
+		t.Fatal("restored immutable revision did not rejoin its exact result pin", err)
+	}
+	for _, file := range all {
+		if file.ArtifactRef == firstExact.ArtifactRef {
+			readFile(final, file, firstText)
+		}
 	}
 	var replaySnapshot string
 	if err = pool.QueryRow(ctx, `SELECT result_snapshot::text FROM control_plane.callback_receipts WHERE child_run_id=(SELECT id FROM control_plane.runs WHERE ref=$1)`, first.Ref).Scan(&replaySnapshot); err != nil || replaySnapshot != snapshot {
