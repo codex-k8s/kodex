@@ -8,6 +8,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { assertRunOwner } from "@/features/runs/run-owner";
 import { serverMessageKey } from "@/shared/ui/server-message";
+import { serverTokenTranslations } from "@/shared/ui/server-message-catalog";
 
 export type PresentedRunEvent = RunEvent & {
   displaySummary: string;
@@ -40,6 +41,7 @@ export interface RunActivityItem {
   executionNodeType?: RunNode["type"];
   executionSafeErrorCode?: RunNode["safeErrorCode"];
   integrationInvocationRef?: string;
+  genericIntegrationFailure?: boolean;
 }
 
 // Только exact машинная квитанция успешной подготовки плана, не его описание.
@@ -67,6 +69,22 @@ function successfulIntegrationInvocationRef(
 ): string | undefined {
   const receipt = integrationToolReceipt(tool);
   return receipt?.state === "SUCCEEDED" ? receipt.invocationRef : undefined;
+}
+
+function failedIntegrationInvocationRef(
+  tool: NonNullable<RunActivityItem["toolCall"]>,
+): string | undefined {
+  const receipt = integrationToolReceipt(tool);
+  return receipt?.state === "FAILED" ? receipt.invocationRef : undefined;
+}
+
+function genericIntegrationFailureSummary(value: string | undefined): boolean {
+  return (
+    value === "i18n:INTEGRATION_ACTION_FAILED" ||
+    serverTokenTranslations.INTEGRATION_ACTION_FAILED.some(
+      (translation) => translation === value,
+    )
+  );
 }
 
 type IntegrationReceiptState =
@@ -379,11 +397,29 @@ export function buildRunTranscriptItems(
           : undefined,
       integrationInvocationRef: integrationBound
         ? tool
-          ? successfulIntegrationInvocationRef(tool)
+          ? (successfulIntegrationInvocationRef(tool) ??
+            failedIntegrationInvocationRef(tool))
           : !event.message && !event.progress?.trim()
             ? event.integrationInvocationRef
             : undefined
         : undefined,
+      genericIntegrationFailure:
+        integrationBound &&
+        event.type === "TURN_PROGRESS" &&
+        event.messageKind === "INTERMEDIATE_MESSAGE" &&
+        event.runState === "RUNNING" &&
+        event.nodeState === "RUNNING" &&
+        genericIntegrationFailureSummary(event.summary) &&
+        !event.message &&
+        !event.progress?.trim() &&
+        !event.toolCall &&
+        !event.artifact &&
+        !event.artifactRef &&
+        !event.gate &&
+        !event.gateRef &&
+        !event.edge &&
+        !event.edgeRef &&
+        !event.incident,
     };
     if (previousPosition !== undefined) items[previousPosition] = item;
     else {
@@ -805,6 +841,7 @@ export function presentRunTranscriptItems(
   closedExecutionKeys: readonly string[] = [],
 ): PresentedTranscriptItem[] {
   const successfulInvocations = new Set<string>();
+  const failedInvocations = new Map<string, Set<string>>();
   for (const item of items) {
     const scope = executionKey(item.execution);
     if (
@@ -823,6 +860,26 @@ export function presentRunTranscriptItems(
       successfulInvocations.add(
         JSON.stringify([scope, item.integrationInvocationRef]),
       );
+    if (
+      scope &&
+      !item.historical &&
+      item.kind === "tool" &&
+      !item.phase &&
+      item.eventType === "TOOL_CALL_RECORDED" &&
+      item.messageKind === "TOOL_CALL" &&
+      item.integrationInvocationRef &&
+      item.toolCall &&
+      /^tcl_[A-Za-z0-9_-]{8,124}$/.test(item.toolCall.ref) &&
+      Number.isSafeInteger(item.toolCall.revision) &&
+      (item.toolCall.revision ?? 0) >= 2 &&
+      failedIntegrationInvocationRef(item.toolCall) ===
+        item.integrationInvocationRef
+    ) {
+      const key = JSON.stringify([scope, item.integrationInvocationRef]);
+      const calls = failedInvocations.get(key) ?? new Set<string>();
+      calls.add(item.toolCall.ref);
+      failedInvocations.set(key, calls);
+    }
   }
   const services = new Map<
     string,
@@ -974,6 +1031,20 @@ export function presentRunTranscriptItems(
         successfulInvocations.has(
           JSON.stringify([scope, item.integrationInvocationRef]),
         )
+      )
+        return false;
+      // Только generic повтор owner outcome того же exact вызова. Квитанция
+      // FAILED остаётся видимой; иная причина, terminal и ambiguity сохраняются.
+      if (
+        scope &&
+        !item.historical &&
+        item.kind === "system" &&
+        item.genericIntegrationFailure === true &&
+        genericIntegrationFailureSummary(item.summary) &&
+        item.integrationInvocationRef &&
+        failedInvocations.get(
+          JSON.stringify([scope, item.integrationInvocationRef]),
+        )?.size === 1
       )
         return false;
       // До FINAL пустая successful квитанция не образует отдельный пузырь.

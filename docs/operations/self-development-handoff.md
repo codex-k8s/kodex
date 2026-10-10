@@ -10,6 +10,27 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 22:48 UTC — FE опубликован, native Architect выполняется
+
+Remote Draft1807/source712288e21e1d5636f27afc722a6c9fffc2dc06f5
+подтверждены свежим BOT readback; initial immediate UNKNOWN сохранён,
+повторного push не было. Краткое тело PR обновлено и прочитано обратно.
+HOT clean6bd700cb не переключён при активном Retry9. Chrome5 reload/rejoin,
+история более500 событий, Console0/relevant API200 и desktop activity
+screenshot проверены. Architect RUNNING/graph711; USER corrections0.
+
+Адресные пакеты в работе: synthetic fixture переводится на полный typed
+bootstrap/DELTA без ослабления production decoder; obsolete Home assertions
+обновляются на compact4 и полный settled8 picker. История нескольких FAIL
+сохранена, финальный browser PASS пока отсутствует. Generic integration error
+рядом с FAILED tool устраняется только при exact same invocation/lineage.
+Пакет run-activity.ts/test.ts интегрирован: две pre/post пары EQUAL,
+ROOT294unit/2suites2.61s/lint/format/forcedtypes PASS, Vite build PASS8.28s;
+native отображение ещё NOT RUN, HOT при активной работе не изменяется.
+Developer actual ENV17/binding18/Git, один Reviewer, Manager/owner gate и
+Full65/checklist11/14/15 ещё не завершены. HOT доставить лишь после idle,
+потом проверить новые подписи и устранение дублирования на actual экране.
+
 ## Checkpoint 10.10.2026 22:33 UTC — Retry9 прошёл INTAKE, Architect выполняется
 
 Actual source/remote Draft1807/clean HOT6bd700cb. Guarded idleFF22:10:47:

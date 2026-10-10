@@ -1135,3 +1135,56 @@ Console0. Старое слово «Сессия» в header уже воспро
 в ожидающем FE frozen пакете; native доставку не объявлять выполненной.
 Оба узлаReady/22deployments desired=ready; exact root CP diagnostics0
 в bounded last500/10min, не blanket backend acceptance. Native root RUNNING.
+
+## Checkpoint 10.10.2026 22:48 UTC — опубликованный FE пакет и продолжение Retry9
+
+Source/remote Draft1807 подтверждены на
+712288e21e1d5636f27afc722a6c9fffc2dc06f5; mainab4992e0 неизменён.
+Первый push завершился UNKNOWN на немедленном readback; отдельный свежий
+readback подтвердил remote/PR HEAD, повторного push не было. Краткое тело PR
+обновлено и прочитано обратно. HOT остаётся clean6bd700cb: native Retry9
+активен, поэтому guarded idleFF нового FE пакета не выполнялся.
+
+Own Chrome5: graph sequence711/RUNNING, Architect прежнего exact run/turn
+выполняется. Reload восстановил историю более500 событий через bounded
+pagination; Console без ошибок, relevant API200. Desktop activity screenshot
+просмотрен: commentary/tools компактны, но generic integration error рядом
+с FAILED tool дублирует сообщение. Адресное устранение допускается только
+при доказанной exact invocation/lineage связи; terminal и самостоятельные
+содержательные ошибки должны сохраняться. USER corrections0/business0/review0.
+
+Однократный synthetic Chromium1920 на новом FE production tree выявил FAIL
+устаревшей оснастки: PLATFORM_READY без полного typed bootstrap. Production
+decoder правильно отказал, его граница не ослабляется. В отдельном пакете
+обновляется только synthetic producer: полный generated bootstrap и DELTA
+вместо удалённого PLATFORM_INVALIDATED, проверка свежих items/version без
+лишнего REST refetch. Следующая попытка прошла LIVE, но остановилась на
+obsolete Home count6 вместо canonical compact4. Дальнейшие попытки выявили
+удалённую expansion-кнопку и transient6 вместо settled8 в picker с дозагрузкой.
+Каждый FAIL сохранён. Финальная browser-проверка новых postbytes ещё pending;
+ранние screenshots или unit PASS не заменяют её.
+
+GitHub BOT preflight22:42: Draft/OPEN/head712288e2/baseab4992e0,
+MERGEABLE/CLEAN; checks0/statuses0 и reviews/threads0 — не CI или review PASS.
+Classic branch protection read403/UNKNOWN; доступные правила main защищены.
+Ready/merge/approve не выполнялись. Native Developer/Git publication,
+единственный Reviewer, Manager и финальный owner gate остаются впереди;
+Full65/checklist11/14/15 OPEN.
+
+## Checkpoint 10.10.2026 22:52 UTC — exact FAILED дубликат исправлен в source
+
+Поверх712288e2 интегрированы только run-activity.ts/test.ts из frozen
+005e483d2d592b7128daf6c8ca82cde466002c90d9f3f456b8ea0d1cb6962ff4;
+две pre/post пары EQUAL. Canonical FAILED receipt сохраняет invocation pin.
+Generic owner summary скрывается лишь при exact six-tuple/invocation,
+единственной terminal tool receipt и отсутствии самостоятельного содержимого.
+Failed tool, unknown/ambiguous/unbound, published messages, terminal outcome,
+содержательные причины, progress/artifact/gate/edge/incident сохраняются.
+События, history, API, contracts и authority не меняются.
+
+Worker294unit/2suites2.54s/lint/forcedtypes/format PASS; ранний lint FAIL
+исправлен до freeze. ROOT integrated294unit/2suites2.61s, ESLint/Prettier,
+forced typecheck PASS; production Vite build PASS8.28s. Существующее chunk-size
+предупреждение сохранено. Delivery/native UX NOT RUN: HOT остаётся6bd700cb
+при активном Retry9. Полный frontend baseline399suites относится к прежнему
+SHA, а не к этому новому diff. Native/Full65/11/14/15 остаются OPEN.

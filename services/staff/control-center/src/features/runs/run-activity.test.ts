@@ -2233,6 +2233,142 @@ describe("buildRunActivityItems", () => {
       expect(show([failed, { ...completion, summary }])).toHaveLength(2);
     });
 
+    function failedCompletionFixture(
+      summary = "i18n:INTEGRATION_ACTION_FAILED",
+    ): [RunEvent, RunEvent] {
+      const [tool, completion] = completionFixture();
+      const rawCompletion = { ...completion };
+      delete (rawCompletion as Partial<PresentedRunEvent>).displaySummary;
+      return [
+        {
+          ...tool,
+          toolCall: {
+            ...required(tool.toolCall),
+            tool: "invoke_integration",
+            safeResult: JSON.stringify({
+              version: 1,
+              invocationRef: "inv_fixture123",
+              state: "FAILED",
+              inputSHA256: "a".repeat(64),
+            }),
+          },
+        },
+        {
+          ...rawCompletion,
+          summary,
+          runState: "RUNNING",
+          nodeState: "RUNNING",
+        },
+      ];
+    }
+
+    it.each([
+      "i18n:INTEGRATION_ACTION_FAILED",
+      "Действие интеграции отклонено или завершилось ошибкой",
+      "Integration action was rejected or failed",
+    ])("убирает только exact generic FAILED дубликат %s", (summary) => {
+      const input = failedCompletionFixture(summary);
+      const original = JSON.stringify(input);
+      const result = show(input);
+      expect(result).toHaveLength(1);
+      expect(
+        integrationToolPresentationState(required(result[0]?.toolCall)),
+      ).toBe("FAILED");
+      expect(JSON.stringify(input)).toBe(original);
+      expect(show([...input].reverse())).toEqual(result);
+      expect(show([required(input[1])])).toHaveLength(1);
+    });
+
+    it.each([
+      "runRef",
+      "nodeRef",
+      "sessionRef",
+      "turnRef",
+      "turnNumber",
+      "attempt",
+    ] as const)("сохраняет generic FAILED другого %s", (field) => {
+      const [tool, completion] = failedCompletionFixture();
+      const execution = required(completion.execution);
+      expect(
+        show([
+          tool,
+          {
+            ...completion,
+            execution: {
+              ...execution,
+              [field]:
+                typeof execution[field] === "number"
+                  ? 2
+                  : `${execution[field]}_foreign`,
+            },
+          },
+        ]),
+      ).toHaveLength(2);
+    });
+
+    it("сохраняет unbound, terminal, самостоятельные причины и ambiguous FAILED", () => {
+      const [tool, completion] = failedCompletionFixture();
+      const variants: RunEvent[] = [
+        { ...completion, integrationInvocationRef: undefined },
+        { ...completion, integrationInvocationRef: "inv_otherfixture" },
+        { ...completion, execution: undefined },
+        { ...completion, runRef: "run_foreignfixture" },
+        { ...completion, nodeRef: "nod_foreignfixture" },
+        { ...completion, type: "TURN_COMPLETED" },
+        { ...completion, messageKind: "FINAL_MESSAGE" },
+        { ...completion, runState: "FAILED" },
+        { ...completion, nodeState: "FAILED" },
+        { ...completion, nodeState: "CANCELLED" },
+        { ...completion, summary: "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN" },
+        { ...completion, summary: "i18n:INTEGRATION_AUTH_REJECTED" },
+        {
+          ...completion,
+          summary:
+            "Действие интеграции отклонено или завершилось ошибкой: нет доступа",
+        },
+        { ...completion, progress: "Нет доступа к репозиторию" },
+        { ...completion, artifactRef: "art_fixture123" },
+        { ...completion, gateRef: "gat_fixture123" },
+        { ...completion, edgeRef: "edg_fixture123" },
+        {
+          ...completion,
+          message: {
+            source: { origin: "ORDINARY" },
+            ref: "msg_fixture123",
+            phase: "COMMENTARY",
+            revision: 1,
+            text: "i18n:INTEGRATION_ACTION_FAILED",
+          },
+        },
+      ];
+      for (const variant of variants)
+        expect(show([tool, variant])).toHaveLength(2);
+      const translated = {
+        ...completion,
+        displaySummary: "Нет доступа к репозиторию",
+      } as PresentedRunEvent;
+      expect(show([tool, translated])).toHaveLength(2);
+      const second = {
+        ...tool,
+        ref: "evt_other_tool",
+        toolCall: { ...required(tool.toolCall), ref: "tcl_otherfixture" },
+      };
+      expect(show([tool, second, completion])).toHaveLength(3);
+      for (const changes of [
+        { ref: "tcl_bad" },
+        { revision: 1 },
+        { state: "FAILED" as const },
+        { safeResult: "INTEGRATION_ACTION_FAILED" },
+        { safeResult: required(tool.toolCall).safeResult + " " },
+      ])
+        expect(
+          show([
+            { ...tool, toolCall: { ...required(tool.toolCall), ...changes } },
+            completion,
+          ]),
+        ).toHaveLength(2);
+    });
+
     it("не использует unknown, stale или противоречивую tool receipt", () => {
       const [tool, completion] = completionFixture();
       const call = required(tool.toolCall);
