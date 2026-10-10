@@ -1111,3 +1111,24 @@ Mobile390 screenshot после загрузки просмотрен, overflowf
 CSS overlap context/activity buttons поверх graph toolbar. Новый narrow fix
 готовится, desktop/manualfit/zoom менять без доказанной причины не требуется.
 Business1796/actual provider/Full65 OPEN, корректирующих USER_MESSAGE0.
+
+## Checkpoint 10.10.2026 18:18 UTC — RC ENVELOPE, без подсказок пользователя
+
+Remote/Draft1807 и HOT exact dfbda086 PASS. RC child PID785/ELF cdee8…
+serving нового closed reason доказан actual log18:12:58Z:
+stage=validation, reason=ENVELOPE. Native original-task Retry attempt3
+run_uiz32_4LzdgPKkcmT6oYmt1u FAILED/seq10; provider не запускался,
+дочерние узлы CANCELLED. Точное поле envelope UNKNOWN, guard не ослаблен.
+Исходные task/Workflow40/revision13 сохранены, один комплексный review;
+новых управляющих USER_MESSAGE от имени владельца нет. Неожиданные
+результаты исправляются в поставляемых коде/системных инструкциях агентов
+и обоих помощников, а не индивидуальными пользовательскими подсказками.
+
+Четыре FE файла mobile toolbar интегрированы в delivery worktree:
+context/graph controls/summary разведены по top8/56/104, count переносится.
+Standalone fallback, desktop, fit/manual viewport/wheel неизменны.
+ROOT targeted30/30 PASS4.58s; первый запуск без dependency link не состоялся
+(exit127), повтор использовал уже установленные deps без install.
+Worker scoped lint/format/typecheck PASS; Context7 Vue scoped layout проверен.
+Actual publication/hot/native mobile geometry этого FE diff NOT RUN.
+Business1796/provider/Full65 остаются OPEN; false QA PASS не объявляется.

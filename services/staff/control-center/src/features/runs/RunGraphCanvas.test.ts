@@ -1,4 +1,5 @@
 import { renderToString } from "@vue/server-renderer";
+import { readFileSync } from "node:fs";
 import {
   createSSRApp,
   createRenderer,
@@ -458,6 +459,27 @@ describe("RunGraphCanvas", () => {
     expect(attempts.get("old")).toBe(1);
     expect(attempts.get("retry")).toBe(2);
     expect(attempts.has("other")).toBe(false);
+  });
+
+  it("резервирует отдельную мобильную полосу, не обрезая счётчики и кнопки", () => {
+    const source = readFileSync(
+      new URL("./RunGraphCanvas.vue", import.meta.url),
+      "utf8",
+    );
+    const mobile = source.slice(source.indexOf("@media (max-width: 760px)"));
+    expect(mobile).toMatch(
+      /\.graph-toolbar\s*\{[^}]*top: var\(--run-graph-toolbar-top, 8px\)/,
+    );
+    expect(mobile).toMatch(
+      /\.graph-toolbar\s*\{[^}]*left: 8px;[^}]*right: 8px/,
+    );
+    expect(mobile).toMatch(
+      /\.graph-toolbar__count\s*\{[^}]*min-width: 0;[^}]*white-space: normal/,
+    );
+    expect(mobile).toMatch(
+      /\.graph-toolbar__count\s*\{[^}]*overflow-wrap: anywhere/,
+    );
+    expect(mobile).toMatch(/\.graph-view-switch\s*\{[^}]*flex: 0 0 auto/);
   });
 
   it("держит контролы вне полотна и предоставляет доступное дерево", async () => {

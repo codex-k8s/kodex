@@ -1047,11 +1047,22 @@ function compareNodes(left: RunNode, right: RunNode): number {
 }
 @media (max-width: 760px) {
   .graph-toolbar {
-    top: 8px;
+    top: var(--run-graph-toolbar-top, 8px);
     bottom: auto;
+    left: 8px;
     right: 8px;
     min-height: 40px;
     padding: 4px;
+  }
+  .graph-view-switch {
+    flex: 0 0 auto;
+  }
+  .graph-toolbar__count {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
   }
   .run-flow :deep(.vue-flow__minimap) {
     right: 8px;

@@ -129,6 +129,24 @@ function messages() {
 }
 
 describe("RunPage runtime presentation", () => {
+  it("разводит мобильные context, graph controls и summary по отдельным полосам", () => {
+    const source = readFileSync(
+      new URL("./RunPage.vue", import.meta.url),
+      "utf8",
+    );
+    const mobile = source.slice(source.indexOf("@media (max-width: 760px)"));
+    expect(mobile).toMatch(
+      /\.run-workspace\s*\{[^}]*--run-graph-toolbar-top: 56px/,
+    );
+    expect(mobile).toMatch(/\.run-canvas-summary\s*\{[^}]*top: 104px/);
+    expect(mobile).toMatch(
+      /\.run-workspace-toolbar,[\s\S]*?\.run-workspace--activity \.run-workspace-toolbar\s*\{[^}]*top: 8px;[^}]*left: 8px;[^}]*transform: none/,
+    );
+    expect(source).toMatch(
+      /@media \(min-width: 761px\)[\s\S]*?\.run-workspace--activity \.run-workspace-toolbar\s*\{\s*top: 70px/,
+    );
+  });
+
   function transcriptReader() {
     const source = readFileSync(
       new URL("./RunPage.vue", import.meta.url),

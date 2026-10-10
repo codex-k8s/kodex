@@ -10,6 +10,28 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 18:18 UTC — точный RC guard и мобильные панели
+
+Exact dfbda086 опубликован в Draft1807 и подключён hot reload. Новый RC
+child PID785/ELF cdee8… фактически вывел closed diagnostic:
+18:12:58Z stage=validation, reason=ENVELOPE. Штатная attempt3 исходной
+задачи run_uiz32_4LzdgPKkcmT6oYmt1u завершилась FAILED/seq10 до provider;
+дочерние узлы атомарно CANCELLED. Конкретное поле большого envelope guard
+ещё UNKNOWN, расследование продолжается без ослабления проверки.
+Никаких USER_MESSAGE от имени владельца и исправления бизнес-задачи host
+не было. Требование владельца сохраняется: ожидаемое поведение исправлять
+в поставляемых системных инструкциях/коде агентов и помощников, проверять
+исходный сценарий без корректирующих пользовательских подсказок.
+
+Узкий mobile CSS пакет четырёх FE файлов интегрирован в delivery worktree:
+context top8, graph toolbar top56, summary top104, счётчик переносится.
+Desktop, fit/wheel и standalone fallback не меняются. ROOT targeted unit
+30/30 PASS/4.58s; initial missing local dependency link NOT RUN/exit127,
+после использования уже установленных deps проверка выполнена, install не было.
+Worker scoped lint/format/typecheck PASS; Context7 Vue scoped layout проверен.
+Публикация этого FE пакета и native mobile geometry пока NOT RUN.
+Business1796, реальный provider proof и оставшийся Full65 остаются OPEN.
+
 ## Checkpoint 10.10.2026 18:07 UTC — native Retry обнаружил RC validation FAIL
 
 Exact63d8b81f remote/Draft1807 и тело PR readback PASS. Canonical existing OCI

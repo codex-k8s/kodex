@@ -1654,6 +1654,9 @@ onBeforeUnmount(() => {
   }
 }
 @media (max-width: 760px) {
+  .run-workspace {
+    --run-graph-toolbar-top: 56px;
+  }
   .run-page-body {
     min-height: 0;
   }
@@ -1668,7 +1671,7 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
   .run-canvas-summary {
-    top: 62px;
+    top: 104px;
     left: 8px;
     width: min(320px, calc(100% - 16px));
     padding: 6px 8px;
@@ -1703,7 +1706,8 @@ onBeforeUnmount(() => {
     max-height: min(260px, 40dvh);
     overflow: auto;
   }
-  .run-workspace-toolbar {
+  .run-workspace-toolbar,
+  .run-workspace--activity .run-workspace-toolbar {
     top: 8px;
     left: 8px;
     transform: none;
