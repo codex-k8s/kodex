@@ -1269,3 +1269,18 @@ Architectstep002 ещё не разрешён. Пять pending children ато�
 Это новый подтверждённый semantic failure, не ENVELOPE и не успех business.
 Нужен общий shipped fix контекста свежего workflow retry/current frontier;
 никаких owner USER nudges или переноса чужих artifacts/permissions вручную.
+
+## Checkpoint 10.10.2026 19:38 UTC — адресная мобильная проверка
+
+fdab7458 опубликован и подключён к HOT. Native desktop: список начинается
+ниже фактического края summary; Home/End не создают пересечения. Console0,
+собственные graph/events GET200 и WebSocket connected. Mobile390/320:
+summary и список также разделены; terminal контекст показывает «Ошибка»,
+а не ожидание запуска. Однако обнаружены два layout FAIL: пустой нижний
+отступ почти скрывает последнюю строку; заголовок контекста сжат между
+иконкой, статусом и закрытием. Узкий дополнительный fix убирает отступ и
+отводит заголовку отдельную мобильную строку. Targeted7suites76tests
+PASS3.25s; scoped lint/Prettier PASS. ROOT forced typecheck и сборка PASS8.50s
+с прежними chunk/plugin warnings; native дополнительного fix пока NOT RUN.
+Retry5 FAILED/RUNTIME_WORKFLOW_INCOMPLETE сохраняется;
+общий current-root guidance готовится отдельно. Business1796 и Full65 OPEN.

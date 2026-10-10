@@ -77,7 +77,9 @@ describe("RunPage layout при открытом ходе работы", () => {
     expect(outline).toContain(
       "top: max(144px, calc(var(--run-outline-summary-bottom, 0px) + 12px))",
     );
-    expect(outline).toContain("padding: 14px 14px 100px");
+    expect(outline).toContain("padding: 14px;");
+    // Легенда есть только в graph mode: outline не резервирует её пустые100px.
+    expect(canvas).toContain("v-if=\"nodes.length && viewMode === 'graph'\"");
     expect(outline).toContain("scroll-padding-top: 14px");
     const viewport = canvas.match(/\.graph-viewport \{([^}]+)\}/)?.[1];
     expect(viewport).toContain("inset: 0");

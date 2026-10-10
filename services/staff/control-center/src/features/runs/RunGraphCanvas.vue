@@ -908,7 +908,7 @@ function compareNodes(left: RunNode, right: RunNode): number {
   min-width: 0;
   min-height: 0;
   gap: 8px;
-  padding: 14px 14px 100px;
+  padding: 14px;
   scroll-padding-top: 14px;
   overflow: auto;
   background: var(--canvas);

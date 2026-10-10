@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { renderToString } from "@vue/server-renderer";
 import { createSSRApp, defineComponent, h } from "vue";
 import { describe, expect, it, vi } from "vitest";
@@ -42,6 +43,16 @@ async function renderNode(value: RunNode): Promise<string> {
 }
 
 describe("контекст исторического узла без сводки", () => {
+  it("на mobile отдаёт названию полную строку отдельно от статуса и кнопок", () => {
+    const source = readFileSync(
+      new URL("./RunNodeInspector.vue", import.meta.url),
+      "utf8",
+    );
+    const mobile = source.slice(source.indexOf("@media (max-width: 760px)"));
+    expect(mobile).toContain('"identity identity identity"');
+    expect(mobile).toContain("grid-area: identity");
+    expect(source).toContain('class="run-node-inspector__identity"');
+  });
   it.each([
     ["FAILED", "Ошибка"],
     ["CANCELLED", "Отменён"],
