@@ -10,6 +10,47 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 02:46 UTC — helper generation5 опубликован и привязан
+
+ROOT2b25ef52+двухфайловый ToolsEditor patch; предыдущий checkpoint exact2b25
+запушен в Draft1807. Helper build imgbld_CyqhKWMHMlkFZLFJimDNaOEI generation5
+COMPLETED100; artifact imgart_OdHtIhUAXcWDokhvCLsnL9VS ACCEPTED/PROMOTED,
+digest3181591e…cd6815, receipt716bc323…5d874. Complete report READY,
+blockingMatchCount0: это не отсутствие CVE, всего4633 matches с inherited/
+suppressed/no-fix findings по текущей policy. Новый risk exception не создавался
+и старый не переносился. Публикация выполнена native UI, не direct storage write.
+
+Draft renvd_DuVzEj5_A1BXfKhwE3BoSJvy PUBLISHED3. Одна отмеченная привязка
+помощника обновлена в owner publication plan. ENV resource15/current revision16,
+binding aenv_PFnDbPM0TBK_1-9-8aTWE4mu version15. Exact GET подтвердил EQUAL
+configuration2d86152f…c5d71, policyc022544f…236b,38toolscb17a930…dff,
+values/secret descriptors/memory/skills4f53cda1…b945. Image только3181591e.
+Draft policy имеет input shape, published policy compiled shape: сравнение
+их сырых JSON hashes невалидно; actual before/after compiled hashes EQUAL.
+Первый Validate403 FRESH_AUTHENTICATION_REQUIRED; штатный password SSO
+вернул сохранённый draft, Validate/plan/publish/readback успешны. Gate не обходился.
+
+ToolsEditor при loading/unavailable inventory показывает «Выбрано:38» без
+выдуманного «из0», count не переносится. Выбранные commands/metadata не меняются.
+ROOT26unit/2suites, lint/format, forced typecheck и full build2777modules PASS;
+существующие chunk/plugin warnings сохранены. Source host/Pod EQUAL
+ce127538…ddb64. Native1440/390 screenshots просмотрены, mobile overflowfalse.
+Console cumulative30 включает прежние ошибки и ожидаемый fresh-auth403;
+после SSO relevant mutation/read200, warnings/pageerrors0. Два aborted dev
+revision reads связаны с reload/HMR. Own browser91439 OWNER, reload02:46.
+Chrome1137 timeout300s,1163 pending; MCP доступ не подтверждён. Все42
+Deployment/StatefulSet готовы, paused0. Запуск нового runtime writer NOT RUN.
+
+Backend пакет immutable revisions/staging/pinned readers ещё NOT READY;
+изолированная compile/unit проверка не заменяет disposable lifecycle checks.
+Wire hash2bf01cb9…d6ddb: history metadata сохраняет все5 scan states;
+download/materialization только CLEAN. При интеграции frontend39file packet
+нужно обновить metadata guard и CLEAN-only negative tests по final SDK.
+Terminal purge очищает technical ledger metadata/locators, оставляет terminal
+flag и минимальные opaque lineage/idempotency commitments; active pins
+блокируют purge, historical bindings не удаляются. Полный65QA/practical file
+update/business Workflow OPEN; канонические checkbox не менялись.
+
 ## Checkpoint 10.10.2026 02:31 UTC — контроллеры восстановлены, новый helper образ строится
 
 ROOT9a7ab5fb, ветка kodex-agent/issue-1797-full21-v7, Draft1807/Issue1797;

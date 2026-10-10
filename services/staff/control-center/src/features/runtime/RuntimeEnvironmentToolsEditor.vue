@@ -90,12 +90,14 @@ function update(
         <h3>{{ $t("runtime.verifiedTools") }}</h3>
         <p>{{ $t("runtime.verifiedToolsHelp") }}</p>
       </div>
-      <span>
+      <span class="tool-count">
         {{
-          $t("runtime.selectedToolsCount", {
-            selected: tools.length,
-            total: catalog.length,
-          })
+          inventoryAvailable && !loading && catalog.length > 0
+            ? $t("runtime.selectedToolsCount", {
+                selected: tools.length,
+                total: catalog.length,
+              })
+            : $t("common.selectedCount", { count: tools.length })
         }}
       </span>
     </div>
@@ -226,6 +228,10 @@ function update(
 .tool-heading p {
   margin: 3px 0 0;
   color: var(--text-secondary);
+}
+.tool-count {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .tool-heading > span,
 .tool-option small {
