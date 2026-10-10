@@ -19,6 +19,13 @@ function fixture() {
 function withDraft(state = 'VALID') {
   const input = fixture();
   input.draft = { ...scope, ref: 'renvd_fixture', version: 3, state, environmentRef: input.expected.environmentRef, expectedEnvironmentVersion: 16, baseVersionRef: input.expected.baseVersionRef, baseRevision: 12, specification: prepare('draft', input)[0].body.specification, diagnostics: [] };
+  // Фактический CP draft readback: policy проходит canonical normalizer до ответа.
+  input.draft.specification.policy.networkDestinations = ['DNS', 'PROVIDER_PROXY', 'RUNTIME_CALLBACK'];
+  input.draft.specification.policy.webAccess.rules = [
+    { domainPattern: 'api.github.com', protocol: 'HTTPS', port: 443, httpMethods: ['GET', 'HEAD', 'PATCH', 'POST'] },
+    { domainPattern: 'github.com', protocol: 'HTTPS', port: 443, httpMethods: ['GET', 'HEAD', 'POST'] },
+    { domainPattern: 'raw.githubusercontent.com', protocol: 'HTTPS', port: 443, httpMethods: ['GET', 'HEAD'] },
+  ];
   if (state === 'VALID') input.draft.validationDigest = 'e'.repeat(64);
   return input;
 }
@@ -58,6 +65,16 @@ for (const [name, mutate] of Object.entries({ wildcard: x => x.environment.curre
 test('Validate/impact используют точный draft OCC и пустой HTTP body', () => {
   for (const [phase, state, suffix, status] of [['validate', 'DRAFT', '/validation', 200], ['impact', 'VALID', '/impact-plans', 201]]) { const input = withDraft(state), result = prepare(phase, input)[0]; assert.equal(result.path, '/api/v1/runtime-environment-drafts/renvd_fixture' + suffix); assert.equal(result.headers['If-Match'], '"3"'); assert.equal(result.expectedStatus, status); assert.equal(Object.hasOwn(result, 'body'), false); }
 });
+test('Canonical actual-order draft: destinations и api rule/methods отсортированы; исходный intent/input неизменны', () => {
+  const input = withDraft('DRAFT'), frozen = structuredClone(input);
+  assert.equal(prepare('validate', input)[0].expectedStatus, 200);
+  assert.deepEqual(input, frozen);
+  const source = fixture(), intent = prepare('draft', source)[0];
+  assert.deepEqual(intent.body.specification.policy.networkDestinations, ['DNS', 'RUNTIME_CALLBACK', 'PROVIDER_PROXY']);
+  assert.equal(intent.body.specification.policy.webAccess.rules[2].domainPattern, 'api.github.com');
+  assert.deepEqual(intent.body.specification.policy.webAccess.rules[2].httpMethods, ['GET', 'HEAD', 'POST', 'PATCH']);
+});
+for (const [name, mutate] of Object.entries({ extra_field: x => x.draft.specification.policy.extra = true, unknown_destination: x => x.draft.specification.policy.networkDestinations[1] = 'UNKNOWN', duplicate_destination: x => x.draft.specification.policy.networkDestinations[1] = 'DNS', extra_destination: x => x.draft.specification.policy.networkDestinations.push('UNKNOWN'), delete_method: x => x.draft.specification.policy.webAccess.rules[0].httpMethods.push('DELETE'), duplicate_method: x => x.draft.specification.policy.webAccess.rules[0].httpMethods.push('GET'), missing_method: x => x.draft.specification.policy.webAccess.rules[0].httpMethods.pop(), lower_method: x => x.draft.specification.policy.webAccess.rules[0].httpMethods[0] = 'get', wildcard: x => x.draft.specification.policy.webAccess.rules[0].domainPattern = '*.github.com', rule_unknown: x => x.draft.specification.policy.webAccess.rules[0].extra = true, changed_scope: x => x.draft.projectRef = 'prj_other', unordered_projection: x => x.draft.specification.policy.networkDestinations.reverse() })) test('Canonical comparison сохраняет закрытый отказ: ' + name, () => { const input = withDraft('DRAFT'); mutate(input); assert.throws(() => prepare('validate', input), /DRAFT_PIN_CHANGED|SCOPE_CHANGED/); });
 for (const mutate of [x => x.draft.specification.tools.pop(), x => x.draft.specification.policy.webAccess.rules[2].httpMethods.push('DELETE'), x => x.draft.specification.imageArtifactRef = 'imgart_other', x => x.draft.baseRevision++, x => x.draft.baseVersionRef = 'renvv_other', x => x.draft.expectedEnvironmentVersion++, x => x.draft.diagnostics.push('FAIL'), x => x.draft.state = 'DRAFT', x => x.draft.extra = true]) test('Изменённый draft закрыт', () => { const input = withDraft(); mutate(input); assert.throws(() => prepare('impact', input)); });
 test('Publication выбирает только единственный intended binding из exact EOF и сохраняет draft OCC', () => { const input = withImpact(), result = prepare('publication', input)[0]; assert.deepEqual(result.body, { planRef: 'rvip_fixture', selectedItemRefs: ['rvit_fixture'] }); assert.equal(result.headers['If-Match'], '"3"'); });
 for (const [name, mutate] of Object.entries({ non_eof: x => x.impactPages[0].nextPageToken = 'next', partial: x => x.impactPages[0].items = [], duplicate: x => x.impactPages[0].items.push(structuredClone(x.impactPages[0].items[0])), total: x => x.impactPages[0].plan.total++, page_total: x => x.impactPages[0].total++, unknown: x => x.impactPages[0].plan.unknown = true, stale: x => x.impactPages[0].plan.draftVersion++, expired: x => x.impactPages[0].plan.expiresAt = '2020-01-01T00:00:00Z', foreign: x => x.impactPages[0].plan.sourceRef = 'renv_other', source_version: x => x.impactPages[0].plan.sourceVersion++, source_revision: x => x.impactPages[0].plan.sourceRevisionRef = 'renvv_other', consumer: x => x.impactPages[0].items[0].consumerRef = 'agt_other', binding_version: x => x.impactPages[0].items[0].bindingVersion++, binding_scope: x => x.impactPages[0].items[0].organizationRef = 'org_other', item_unknown: x => x.impactPages[0].items[0].unknown = true, changed_page: x => { const page = structuredClone(x.impactPages[0]); page.plan.digest = 'b'.repeat(64); x.impactPages[0].nextPageToken = 'next'; x.impactPages.push(page); } })) test('Закрытый отказ publication: ' + name, () => { const input = withImpact(); mutate(input); assert.throws(() => prepare('publication', input)); });

@@ -12,7 +12,17 @@ const canonical = value => Array.isArray(value) ? value.map(canonical) : value &
 export const snapshotSHA256 = value => createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 const bytesSHA256 = value => createHash('sha256').update(value).digest('hex');
 const same = (a, b) => snapshotSHA256(a) === snapshotSHA256(b);
-const normalizedRules = rules => clone(rules).map(rule => ({ ...rule, httpMethods: rule.httpMethods.sort() })).sort((a, b) => a.domainPattern.localeCompare(b.domainPattern));
+const lexical = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+const normalizedRules = rules => clone(rules).map(rule => ({ ...rule, httpMethods: rule.httpMethods.sort() })).sort((a, b) => lexical(a.domainPattern, b.domainPattern));
+function canonicalDraftSpecification(specification) {
+  // CP domainRuntimeEnvironmentPolicy -> NormalizeRuntimeEnvironmentPolicy ->
+  // castEnvironmentDraft: сортируется policy, прочие arrays/fields не меняются.
+  const result = clone(specification), policy = result.policy;
+  policy.volumes.sort((a, b) => lexical(a.name, b.name));
+  policy.networkDestinations.sort();
+  policy.webAccess.rules = normalizedRules(policy.webAccess.rules);
+  return result;
+}
 function bindingDigest(agentRef, environmentRef, bindingVersion) {
   const hash = createHash('sha256');
   for (const part of [agentRef, environmentRef, String(bindingVersion)]) hash.update(part).update('\0');
@@ -82,7 +92,7 @@ function baseline(input) {
 function pinnedDraft(draft, input, body, states) {
   shape(draft, ['scopeKind', 'organizationRef', 'ref', 'version', 'projectRef', 'expectedEnvironmentVersion', 'state', 'specification', 'diagnostics'], ['environmentRef', 'baseVersionRef', 'baseRevision', 'savedAt', 'validationDigest', 'publishedEnvironmentRef']);
   scope(draft, input.expected);
-  check(ref(draft.ref) && version(draft.version) && states.includes(draft.state) && draft.environmentRef === input.expected.environmentRef && draft.expectedEnvironmentVersion === input.expected.environmentVersion && draft.baseVersionRef === input.expected.baseVersionRef && draft.baseRevision === input.expected.baseRevision && same(draft.specification, body.specification) && Array.isArray(draft.diagnostics) && draft.diagnostics.length === 0, 'DRAFT_PIN_CHANGED');
+  check(ref(draft.ref) && version(draft.version) && states.includes(draft.state) && draft.environmentRef === input.expected.environmentRef && draft.expectedEnvironmentVersion === input.expected.environmentVersion && draft.baseVersionRef === input.expected.baseVersionRef && draft.baseRevision === input.expected.baseRevision && same(draft.specification, canonicalDraftSpecification(body.specification)) && Array.isArray(draft.diagnostics) && draft.diagnostics.length === 0, 'DRAFT_PIN_CHANGED');
   if (draft.state === 'VALID' || draft.state === 'PUBLISHED') check(digest(draft.validationDigest), 'DRAFT_NOT_VALID');
 }
 function completeImpact(pages, input, draft, state, now) {

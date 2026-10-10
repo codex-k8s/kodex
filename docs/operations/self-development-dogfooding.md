@@ -901,3 +901,34 @@ helper не делает live effects. Общие install defaults не расш
 Commit/push/idleFF/actual CP delivery/owner ENV publication/Retry7 пока NOT RUN.
 ROOT USER nudges0/business implementation0; прежний Retry6 FAILED сохранён.
 Business/Full65/11/14/15, ONE review/Manager/final owner gate OPEN.
+
+## Checkpoint 10.10.2026 21:31 UTC — actual CP delivery и owner draft
+
+Published Draft1807/clean HOT894f0e1fe007ad4a021292369d409cb650a91f12.
+Owner idle21:27:13/5zero/61promoted/pinsbbf5eb07…fb0bfb и fixed query/guard
+PASS; FF readback exact. Actual CP13/13host/Pod/frozen hashes EQUAL, same Pod
+UIDc82aa63b…3e9f/Ready1/restarts0. Новый PID2061/start10852511/UID1001,
+serving=Airbuild SHA8c298db57d1e238ee2c9d96c24fe79e2a71afd2da6cfe6edbb8cc58ba87019cd,
+Go1.26.6/platformInstructionBinding symbol/health_ready/final rejoin PASS.
+Closed3reject-message counts0 за5m/500lines, не полный logs acceptance.
+
+Owner API fresh full ENV16/agent20/binding17 baseline pins EQUAL. POST201
+draft renvd_mFGt3jCwd5KZklwVcywCwDa7/DRAFT1 и GET200 выполнены. Offline validate
+FAIL DRAFT_PIN_CHANGED до HTTP: canonical server ordering networkDestinations,
+webAccess rules/methods не учтён helper. Source исправляется через exact
+normalization + regression; unknown/pin guards сохраняются. Draft creation
+не повторяется, live validation/impact/publication/readback/Retry7 NOT RUN.
+
+Terminal desktop screenshot MAIN просмотрен, Console0; bootstrap/session/
+graph/events/artifact/owner reads200, draft201. ROOT USER corrections0/business
+implementation0. Business/Full65/11/14/15/ONE review/Manager/owner gate OPEN.
+
+## Checkpoint 10.10.2026 21:34 UTC — canonical draft comparison исправлен
+
+Только2 helper/test файла изменены поверх894f0e1f; expected specification
+сортируется по точному существующему server normalizer. Actual response не
+переписывается; unknown/duplicate/missing/method/scope/pin mismatch закрыт.
+ROOT exact frozen pre/post hashes EQUAL,192/192tests PASS0.975s/0FAIL/0SKIP,
+syntax/diffcheck и journal append-only verifier PASS. Тот же actual private
+DRAFT1 input выдаёт PREPARED_OFFLINE validate intent1; CREATE не повторялся.
+Live validate/impact/publication/readback/Retry7 ещё NOT RUN.

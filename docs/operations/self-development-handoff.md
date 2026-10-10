@@ -10,6 +10,38 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 21:34 UTC — canonical helper исправлен
+
+ROOT интегрировал только2 helper/test файла поверх894f0e1f; actual draft
+сравнивается с canonical expected specification, без нормализации actual
+ответа и ослабления закрытых pins. Exact hashes EQUAL,192/192tests PASS0.975s,
+syntax/diffcheck/journal verifier PASS. Existing DRAFT1 input выдаёт один
+validate intent. Дальше: publish/clean owner idleFF→validate/impact/publication
+того же draft→preservation readback→native Retry7. Новых USER messages0.
+
+## Checkpoint 10.10.2026 21:31 UTC — инструкции доставлены, owner draft создан
+
+Source/remote Draft1807/чистый HOT894f0e1fe007ad4a021292369d409cb650a91f12.
+Owner idle21:27:13 подтвердил ноль build/admission/promotion/runtime/lease;
+обычный FF PASS без изменения guard. Actual CP13/13host→Pod frozen hashes
+EQUAL, Ready1/restarts0, новый PID2061/start10852511/UID1001. Serving ELF
+равен Airbuild8c298db57d1e238ee2c9d96c24fe79e2a71afd2da6cfe6edbb8cc58ba87019cd;
+Go1.26.6/new platformInstructionBinding symbol/health/same-PID rejoin PASS.
+Это доказательство доставки, не бизнес-приёмка. Bounded5m/500lines три
+closed reject-message counts0, не полная проверка всех логов.
+
+Fresh owner READ подтвердил прежние ENV16/agent20/binding17 и полный baseline
+hash. Штатный POST draft201 и fresh GET200 создали DRAFT1. Offline validation
+intent FAIL DRAFT_PIN_CHANGED до HTTP: сервер нормализует порядок exact
+networkDestinations/rules/methods, а helper сравнил ненормализованный request.
+Причина исправляется адресно с regression; никакого ослабления pins, HTTP
+повтора создания или публикации не сделано. Live validate/impact/publication,
+preservation readback и Retry7 NOT RUN. ROOT corrective USER_MESSAGE0.
+
+Desktop terminal screenshot просмотрен: статусы/toolbar/legend/helper доступны,
+Console0, relevant bootstrap/session/graph/events/owner ENV APIs200/201.
+Business/Full65/11/14/15, ONE review/Manager/final owner gate OPEN.
+
 ## Checkpoint 10.10.2026 21:25 UTC — source исправления готовы к доставке
 
 Поверх d3b07f65 интегрированы13 CP файлов с новым server-owned
