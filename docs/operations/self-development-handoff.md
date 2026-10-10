@@ -10,6 +10,51 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 21:02 UTC — Architect FINAL и реальный Developer
+
+Source1d555df7 опубликован в Draft1807, remote/head/body readback PASS20:46;
+HOT84ed0bf3+ровно5own FE overlay сохраняется. На20:47 actual frontend Pod
+model/component/i18n hashes совпали с frozen и ROOT; whole-tree1d не объявляется
+смонтированным. Обычный clean FF остаётся отложенным до native idle.
+
+Native Retry6 Architect FINAL790: bounded supported active-runtime design PASS,
+девять CLEAN server artifacts с собственными run/session pins. MAIN прочитал
+architecture-review36359B до EOF: revision arv_370c3377ec874036bb715b9fbc4c6717,
+SHA25613849ccb3eb3a978da6b9130a49734771b3a7b9877b5580386dc8b9b8abec48d EQUAL.
+Own execution snapshot роли наблюдает Codex0.160.0; схема не является измерением
+баланса, units или spending. Финансовые/live obligations UNKNOWN/NOT RUN.
+Manager принял этап и делегировал настоящий Developer, не ROOT-реализацию.
+
+Developer seq855: run_EBTXhWg-J1L_ifCEWb7EZBM0,
+session ses_srchURYPcrodNSRwJhNVHIW5, turn trn_kTcb1Mtp7BR9Uj_lqzTDokCt,
+attempt1/node nod_oPfrjgQ2PZ7AFQQkOL6m_GSw. Observer exact tuple/NONE/org/project,
+staff05f88…ce218/ENV16/binding17/tools38/grants26/capabilities27 PASS20:59:24;
+instructions/inbox hashes EQUAL и same-Pod rejoin PASS/restarts0.
+Binary0608…21295 совпал только как image-file; serving ELF и expected task
+NOT RUN. RRev rrev_lsBwSHErHswCydCtX96znCcT/v1. Это не semantic business PASS.
+Native git clone/worktree/ветка от mainab4992 SUCCEEDED1037; ранний gh auth
+warning не объявляется полным write blocker. ROOT corrective USER_MESSAGE0.
+
+Предложенный архитектурой frontend REST timer требует проверки соответствия
+canonical WebSocket пути CONTRACT-DOC-003: обычный loaded-catalog refresh не
+делает HTTP readback. Новый event может не понадобиться при полном покрытии
+существующим PROVIDER_ACCOUNT_CHANGED, но timer не становится разрешённым.
+Рекомендация роли не переопределяет утверждённый контракт; implementation ещё
+не прочитан и не объявлен FAIL/PASS. Проверяется системная инструкция, без
+подсказок или scope change от имени пользователя.
+
+Native reload/rejoin RUNNING:971events contiguous/live/overflow0, Console0,
+relevant bootstrap/session/graph/events/gates/artifact reads200. Exact CP/RC/
+gateway owner chains проверены: по1Pod, Ready, restarts0. Bounded5m logs read
+PASS: CP5non-JSONlines/RC0/gateway0/panicfalse; это не полный log acceptance.
+Exact1d isolated frontend399suites/3888tests PASS102.61s/0FAIL/0SKIP,
+E2E typecheck/discovery PASS21.52s (10invocations/85entries, не browser bodies).
+Tracked1224files до/после byte-identical Git, lock34bd6dc0… unchanged;
+собственная dependency symlink снята. Locale fixture warnings сохранены,
+не выдаются за browser Console0. Browser E2E/STT/device-code NOT RUN.
+Full65/11/14/15, substantive business diff, ONE review/Manager acceptance/
+owner gate остаются OPEN.
+
 ## Checkpoint 10.10.2026 20:43 UTC — обзор проекта и trusted profile readback
 
 Новый frozen FE5 поверх c153b494: только SERVER_DEFAULT известные task titles

@@ -810,3 +810,36 @@ live capture NOT RUN до actual tuple. CP actual trusted-cluster/authority-poli
 not mounted/compiledd0a4620d unchanged: protected95 activation NOT APPLICABLE.
 Trusted render14 и historical policy7720 tests PASS; fresh protected95 install/
 upgrade NOT RUN. Full65/11/14/15 и native оставшиеся роли/owner gate OPEN.
+
+## Checkpoint 10.10.2026 21:02 UTC — Architect FINAL и реальный Developer
+
+Draft1807 exactsource1d555df7/head/body readback PASS; HOT84ed0bf3+5own FE
+working overlay, frontend Pod3hashes EQUAL20:47. Whole-tree1d mount не доказан,
+clean FF только после native idle. История и активный RuntimeRevision сохранены.
+
+Native Architect FINAL790 передал9CLEAN server artifacts; полный authoritative
+architecture-review36359B/revisionarv_370c3377ec874036bb715b9fbc4c6717/
+SHA25613849ccb3eb3a978da6b9130a49734771b3a7b9877b5580386dc8b9b8abec48d EOF/EQUAL.
+Own role snapshot Codex0.160.0 OBSERVED; supported active-runtime design PASS,
+real balances/units/spending UNKNOWN, implementation/live continuation NOT RUN.
+Manager принял архитектуру и delegated Developer855 с отдельными exact
+run/session/turn/attempt/node. Observer ACK PASS20:59:24: NONE/org/project,
+staff05f88…ce218/ENV16/binding17/tools38/grants26/capabilities27, instructions/
+inbox EQUAL, same-Pod rejoin/restarts0. Image-file0608…21295 не serving ELF;
+expected task NOT RUN, ACK не semantic PASS. Native clone/worktree SUCCEEDED1037,
+ранний gh auth warning не доказывает полный write blocker. ROOT USER nudges0.
+
+Архитектурная рекомендация frontend REST timer сверяется с CONTRACT-DOC-003:
+canonical ordinary loaded-catalog updates идут по WebSocket; отсутствие нового
+event допустимо лишь при полном покрытии существующим event. Никаких override
+business scope/инструкций активной попытки отUSER не сделано; implementation
+ещё не проверен. Системная причина и рекомендуемое source исправление изучаются.
+
+Reload/rejoin971events contiguous/live/overflow0/Console0/API200; CP/RC/gateway
+exact owner chains по1ReadyPod/restarts0. Bounded5m logs read PASS CP5non-JSON/
+RC0/gateway0/panicfalse, не full logs acceptance. Exact1d frontend399suites/
+3888tests PASS102.61s/0FAIL0SKIP; E2E check PASS21.52s/10discovery85entries,
+не browser execution. Tracked1224files exact до/после, lock34bd6dc0… unchanged,
+own dependency symlink cleanup PASS. Locale fixture warnings сохранены;
+browser E2E/STT/device-code NOT RUN. Full65/11/14/15, business diff,
+ONE review, Manager и финальный gate OPEN.
