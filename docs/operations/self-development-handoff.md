@@ -10,6 +10,34 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 15:55 UTC — общий пакет опубликован, переключение ещё не выполнено
+
+Combined commit888a2efb92ebf4cd932b0b0a7f371298d1fc9649 опубликован в Draft1807.
+Common PLATFORM instructions v3 обязательны для сотрудников и помощников;
+PROJECT наследует server-pinned SYSTEM core48, сохраняя собственные инструкции.
+Свежие SYSTEM+два PROJECT по два turns в disposable PostgreSQL PASS6.63s.
+Исправление не добавляет сообщений от имени пользователя; fresh install получает
+правила из source. Исторические core46/47 и v2 snapshots не переписываются.
+
+Из clean888 собран full runner acbb5f198cadc00df831771794ecaf04e7d126a55a8746887fafef69b6da177d:
+import на оба узла и canonical durable publication PASS15:46:53Z.
+Source revision888, protected ELF e091a0e7bfb4731fe5e453b11b4c399f927d833b5078fa428d812df797b05f41.
+Это build/publication, не доказательство фактически обслуживаемого consumer.
+Hot source всё ещё clean29845e1e/v2; compatible delivery не завершена.
+Policy maintenance plan закрыто остановлен перед эффектом: pendingPromotions1,
+прочие work/lease/admission counters0. API не закрывалось; guard не ослаблять.
+Нужен bounded owner readback exact candidate и штатное решение состояния.
+
+Новый bounded readonly managed MCP diagnostic: ROOT unit9/9 PASS.
+Live15:55:10 CURRENT_HEALTH_FRESH: connection26, exact READ/NONE grants1/1,
+два matched grants, gateway receipts SUCCEEDED/current pins. История показывает
+completed15:04:07.888896, затем следующий created15:18:37.149976, уже после
+managed_mcp rejection15:18:23.97. Это подтверждённый перерыв health receipts,
+но точный исторический rejecting predicate остаётся UNKNOWN. Проверить durable
+startup recovery после паузы CP, не owner USER_MESSAGE и не blind retry.
+Business1796 и Full65 OPEN; no new run/Retry. Следом завершить consumer/policy,
+custom images/три ENV, forward migration20261010150000 и только затем hot FF.
+
 ## Checkpoint 10.10.2026 15:39 UTC — доставить переносимые инструкции
 
 Изолированный combined tree от29845e1e содержит common v3 producer/consumer,

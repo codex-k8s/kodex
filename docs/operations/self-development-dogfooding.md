@@ -758,3 +758,48 @@ unknown-v4 CHECK/foreignscope/spoof/history/cold checks PASS.
 YAML fixture parser tests53/53 PASS3.725s, production guards не менялись.
 Live producer и consumer delivery по-прежнему NOT RUN; source HEAD будущего
 runner будет clean combined commit, не dirty worktree и не локальный patch.
+
+## Checkpoint 10.10.2026 15:55 UTC — переносимость инструкций и состояние доставки
+
+- Требование владельца закреплено в опубликованном888a2efb92ebf4cd932b0b0a7f371298d1fc9649:
+  общие обязательные PLATFORM constraints v3, SYSTEM core48 и typed PROJECT
+  inheritance. Неожиданные результаты исправляются source instructions/code,
+  не сообщениями от имени пользователя. Свежая установка проверена disposable
+  SYSTEM+двух PROJECT по два native turns — PASS6.63s; production/live NOT RUN.
+- Clean888 full runner acbb5f198cadc00df831771794ecaf04e7d126a55a8746887fafef69b6da177d:
+  canonical build/import обоих dev nodes и durable publication15:46:53Z PASS.
+  Protected ELF e091a0e7bfb4731fe5e453b11b4c399f927d833b5078fa428d812df797b05f41;
+  эти доказательства не подменяют serving ELF/readiness.
+- Policy maintenance planning FAIL до эффекта: pendingPromotions1 при остальных
+  work/admission/lease counters0. Guard сохранён, API не ставилось на паузу.
+  Hot source29845e1e/v2 не переключался; runtime binding/defaults, native custom
+  images/три ENV и schema20261010150000 ещё NOT RUN для этого нового runner.
+- Новый bounded readonly health diagnostic: ROOT units9/9 PASS, live15:55:10
+  CURRENT_HEALTH_FRESH для connection26/exact двух grants1/1; конфигурация и
+  секретные значения в проекцию не выдаются. Immutable gateway ledger показывает
+  completed15:04:07.888896 → следующий created15:18:37.149976. Managed MCP
+  Conflict15:18:23.97 лежит внутри этого перерыва, но exact historical cause
+  всё ещё UNKNOWN. Проверяется восстановление startup после паузы сервисов.
+- Root run_4yS3kF8Vn8s-jSgxUiXi5wD- FAILED/v3 остаётся неизменным. Новые
+  USER_MESSAGE, Retry и LaunchRun не выполнялись. Developer/одно Review/Manager
+  acceptance/owner gate, business1796 и Full65 остаются OPEN.
+
+### Точный readback кандидата и проверка диагностической оснастки
+
+ROOT bounded readonly15:57:55: total1/complete=true; imgart_E2qguhSPxna7vE0iyVq3nvMP,
+ORGANIZATION recipe imgrec_sgS8z5qavQr2WIgotEw0FeMM ACTIVEv5/generation4,
+artifact recipev3/generation3, buildCOMPLETEDv11, promotionPENDING без запроса
+и promoted reference. Exact owner scope consistent; recipe pins/latest native
+build/native candidate/worker selectable false. Это старый superseded snapshot,
+не доказательство активной публикации. requireIdle пока не менялся; исправление
+должно отличать только доказанно superseded unrequested PENDING, сохранив все
+requested/claimed/authorized/current/unknown blockers и immutable history.
+ROOT diagnostic unit9+4 PASS; migrated disposable PostgreSQL
+TestManagedMCPHealthReadbackComponent PASS4.32s на combined888 плюс новом пакете.
+Первый live probe использовал неверный namespace и FAIL без эффекта; повтор
+в exact kodex-system успешно проверил данные. Никаких записей в live DB.
+Lossless previous888 verifier PASS; первоначальная вставка перед baseline была
+закрыто отвергнута и перенесена в append-only checkpoint, без изменения истории.
+Chrome own5 reload/screenshot просмотрен, Console0, bootstrap/session/graph200;
+это выборка relevant Network, не подтверждение всех97 запросов. CP Ready2/2,
+RC/gateway/frontend Ready; business runtime FAILED остаётся историей.
