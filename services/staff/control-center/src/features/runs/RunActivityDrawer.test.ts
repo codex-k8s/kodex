@@ -203,6 +203,213 @@ describe("RunActivityDrawer", () => {
     },
   };
 
+  function childActivity(ref: string, sequence: number) {
+    const child: Run = {
+      ...run,
+      ref: `run_${ref}`,
+      sessionRef: `ses_${ref}`,
+      parentRunRef: run.ref,
+      source: "AGENT_DELEGATION",
+      target: { ...run.target, type: "AGENT" },
+    };
+    const childNode: RunNode = {
+      ...pinnedNode,
+      ref: `nod_${ref}`,
+      runRef: child.ref,
+      turnRef: `trn_${ref}`,
+    };
+    const events = [event, completedTool].map((entry, index) => ({
+      ...entry,
+      ref: `evt_${ref}_${String(index)}`,
+      sequence: sequence + index,
+      nodeRef: childNode.ref,
+      execution: {
+        ...required(entry.execution),
+        runRef: child.ref,
+        sessionRef: child.sessionRef,
+        nodeRef: childNode.ref,
+        turnRef: required(childNode.turnRef),
+      },
+      message: entry.message
+        ? { ...entry.message, ref: `msg_${ref}`, text: `Комментарий ${ref}` }
+        : undefined,
+      toolCall: entry.toolCall
+        ? { ...entry.toolCall, ref: `call_${ref}` }
+        : undefined,
+    }));
+    return { child, childNode, events };
+  }
+
+  it("в общей ленте показывает последний активный child после terminal coordinator", async () => {
+    const child = childActivity("manager", 3);
+    const html = await render(
+      [{ ...pinnedNode, state: "SUCCEEDED" }, child.childNode],
+      [event, completedTool, ...child.events],
+      [],
+      undefined,
+      "",
+      run,
+      [child.child],
+    );
+    expect(html.match(/class="run-transcript__work"/g)).toHaveLength(1);
+    expect(html.indexOf('class="run-transcript__work"')).toBeGreaterThan(
+      html.indexOf("Собираю данные"),
+    );
+    expect(html.indexOf('class="run-transcript__work"')).toBeLessThan(
+      html.indexOf("Комментарий manager"),
+    );
+    expect(html).toContain('data-state="SUCCEEDED"');
+  });
+
+  it("из parallel children выбирает последний exact candidate, а выбранная сессия остаётся строгой", async () => {
+    const first = childActivity("first", 3);
+    const last = childActivity("last", 5);
+    const nodes = [
+      { ...pinnedNode, state: "SUCCEEDED" as const },
+      first.childNode,
+      last.childNode,
+    ];
+    const events = [...last.events, ...first.events];
+    const snapshots = [last.child, first.child];
+    const html = await render(nodes, events, [], undefined, "", run, snapshots);
+    expect(html.match(/class="run-transcript__work"/g)).toHaveLength(1);
+    expect(html.indexOf('class="run-transcript__work"')).toBeGreaterThan(
+      html.indexOf("Комментарий first"),
+    );
+    expect(html.indexOf('class="run-transcript__work"')).toBeLessThan(
+      html.indexOf("Комментарий last"),
+    );
+    const selected = await render(
+      nodes,
+      events,
+      [],
+      first.childNode.ref,
+      "",
+      run,
+      snapshots,
+    );
+    expect(selected.match(/class="run-transcript__work"/g)).toHaveLength(1);
+    expect(selected).toContain("Комментарий first");
+    expect(selected).not.toContain("Комментарий last");
+  });
+
+  it("переносит индикатор на RUNNING tool последнего child, но не на COMPLETED tool", async () => {
+    const child = childActivity("tool", 3);
+    const nextTool: PresentedRunEvent = {
+      ...required(child.events[1]),
+      ref: "evt_next_child_tool",
+      sequence: 5,
+      toolCall: {
+        ...required(completedTool.toolCall),
+        ref: "call_next_child",
+        state: "RUNNING",
+        revision: 1,
+      },
+    };
+    const html = await render(
+      [child.childNode],
+      [...child.events, nextTool],
+      [],
+      undefined,
+      "",
+      run,
+      [child.child],
+    );
+    expect(html.match(/class="run-transcript__work"/g)).toHaveLength(1);
+    expect(html.indexOf('class="run-transcript__work"')).toBeGreaterThan(
+      html.indexOf("Комментарий tool"),
+    );
+    expect(html).toContain('data-state="SUCCEEDED"');
+  });
+
+  it("сравнивает активный root и child в одной хронологии, не по порядку snapshots", async () => {
+    const child = childActivity("earlier", 1);
+    const rootEvent = { ...event, sequence: 5 };
+    const html = await render(
+      [pinnedNode, child.childNode],
+      [...child.events, rootEvent],
+      [],
+      undefined,
+      "",
+      run,
+      [child.child],
+    );
+    expect(html.match(/class="run-transcript__work"/g)).toHaveLength(1);
+    expect(html.indexOf('class="run-transcript__work"')).toBeGreaterThan(
+      html.indexOf("Комментарий earlier"),
+    );
+    expect(html.indexOf('class="run-transcript__work"')).toBeLessThan(
+      html.indexOf("Собираю данные"),
+    );
+  });
+
+  it.each([
+    "missing",
+    "terminal-child",
+    "terminal-root",
+    "foreign-root",
+    "foreign-project",
+    "foreign-session",
+    "foreign-node",
+    "old-attempt",
+    "old-turn",
+    "historical",
+    "final",
+  ])(
+    "общая лента закрывает неизвестный/terminal/чужой scope: %s",
+    async (change) => {
+      const child = childActivity("closed", 3);
+      let snapshots: Run[] = [child.child];
+      let currentRun = run;
+      if (change === "missing") snapshots = [];
+      if (change === "terminal-child")
+        snapshots = [{ ...child.child, state: "SUCCEEDED" }];
+      if (change === "terminal-root") currentRun = { ...run, state: "FAILED" };
+      if (change === "foreign-root")
+        snapshots = [{ ...child.child, rootRunRef: "run_foreign" }];
+      if (change === "foreign-project")
+        snapshots = [{ ...child.child, projectRef: "prj_foreign" }];
+      const events = child.events.map((entry) => ({
+        ...entry,
+        execution:
+          change === "historical"
+            ? undefined
+            : {
+                ...required(entry.execution),
+                ...(change === "foreign-session"
+                  ? { sessionRef: "ses_foreign" }
+                  : {}),
+                ...(change === "foreign-node"
+                  ? { nodeRef: "nod_foreign" }
+                  : {}),
+                ...(change === "old-attempt" ? { attempt: 2 } : {}),
+                ...(change === "old-turn" ? { turnRef: "trn_old" } : {}),
+              },
+      }));
+      if (change === "final")
+        events.push({
+          ...required(events[0]),
+          ref: "evt_child_final",
+          sequence: 5,
+          message: {
+            ...required(event.message),
+            ref: "msg_child_final",
+            phase: "FINAL",
+          },
+        });
+      const html = await render(
+        [{ ...pinnedNode, state: "SUCCEEDED" }, child.childNode],
+        events,
+        [],
+        undefined,
+        "",
+        currentRun,
+        snapshots,
+      );
+      expect(html).not.toContain('class="run-transcript__work"');
+    },
+  );
+
   it("между инструментами показывает один индикатор на ответе, сохраняя завершённый tool", async () => {
     const html = await render([pinnedNode], [event, completedTool]);
     expect(html.match(/class="run-transcript__work"/g)).toHaveLength(1);
