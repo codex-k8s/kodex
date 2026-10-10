@@ -10,6 +10,21 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 17:10 UTC — полный source upgrade без пользовательских подсказок
+
+Exact89c2428f опубликован/Draft1807 readback PASS. Свежая node HTTPS/CRI
+проверка начата опубликованным кодом, результат ещё UNKNOWN. SYSTEM core48 и
+common PLATFORM v3 остаются repository-owned исправлением поведения; их serving
+ещё OPEN, бизнес-history не переписывается и USER_MESSAGE не создаются.
+
+Native planner сохраняет сложный Dockerfile и меняет только trusted catalog
+FROM. Closed canonical empty source/projection comparison исправлен;
+ROOT66/66 tests PASS920.579ms. Actual private full-EOF snapshot дал3 offline
+intents, outputSHA1a0217fc171704d916534227ab24326acd452d70e17c0d9f53c9adb230382494;
+HTTP effects NOT RUN, human risk decision не автоматизируется. После exact
+публикации: native draft/validate/publish/autobuild/promote, затем4ENV и только
+intended bindings. Defaults CP/RC и source hot29845/v2 ещё прежние.
+
 ## Checkpoint 10.10.2026 17:03 UTC — адресный переход выполнен
 
 Exact36dd4e6d опубликован/Draft1807 readback PASS. Forward SAME-acbb policy

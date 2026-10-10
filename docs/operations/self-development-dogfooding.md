@@ -945,3 +945,18 @@ canonical empty equivalence с negative nonempty/malformed guards; исходн�
 source сохранить. Нет новых drafts/builds, бизнес-запусков, Retry, USER_MESSAGE.
 Chrome own5 reload после maintenance/APIopen, screenshot, Console0/relevant200;
 failed run/history по-прежнему честные, Full65 и новая business приёмка OPEN.
+
+## Checkpoint 10.10.2026 17:10 UTC — native complex source сохранён
+
+Exact89c2428f remote/Draft1807 readback PASS. Node HTTPS/CRI proof начат кодом
+этого SHA, результат ещё UNKNOWN; publication/cache не заменяют network proof.
+Исправление optional comparison ограничено canonical Go empty source/projection:
+null/[]/missing arrays и опущенная пустая строка, malformed/nonempty закрыты.
+Полный исходный JSON не меняется, кроме exact catalog FROM; сложные RUN/USER,
+installation/settings сохраняются. ROOT native regression66/66 PASS920.579ms.
+Actual full-EOF private snapshot SHA47a05449d3a13f857c2fd0eea8be104fd507b6154d72ae155d80cdbea169b4c9
+подготовил3 offline intents SHA1a0217fc171704d916534227ab24326acd452d70e17c0d9f53c9adb230382494.
+Это НЕ command receipt; draft/publication/build/promotion/4ENV пока NOT RUN.
+Human risk decision не автоматизируется; старые sources/38tools/policy/grants
+сохраняются. Нет USER_MESSAGE/Retry/Launch: fresh-install поведение исправляется
+common instructions и платформой, не управляющими сообщениями от пользователя.
