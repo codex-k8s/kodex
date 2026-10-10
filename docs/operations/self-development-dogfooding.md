@@ -1046,3 +1046,39 @@ Full38 tools,values/policy/resources/exact Secret revisions и intended bindings
 1/1/5/1 сохранены. HTTP effects ещё NOT RUN; HOT298/v2/core47 остаётся прежним
 до совместимой доставки. Global runner pointer требует canonical writer;
 ручной pin не создаётся. Business1796/Full65 OPEN, USER_MESSAGE не создавались.
+
+## Checkpoint 10.10.2026 18:02 UTC — native ENV delivery и serving core48
+
+SOURCE7598 clean fast-forward в существующий hot clone выполнен после свежего
+owner idle17:52:08.258Z (openBuilds/pendingAdmissions/pendingPromotions/
+activeRuntimeRuns/claimedRuntimeLeases=0; artifacts58). Snapshot rawSHA
+92db89929e972386d55fe864c3913be2a9b37253300c8b9ebc927af3daf99d71 сохранён;
+он не переиспользуется как свежий guard дальнейших изменений.
+
+Native4ENV → validate → full impact EOF1/1/5/1 → publish завершены APPLIED,
+все8 bindings имеют свежие agent/binding versions и новые точные sourceVersionRef.
+ENV revisions SYSTEM34/WRITE15/REVIEW15/PROJECT20; artifact pins SYSTEMad46,
+staff3f56/PROJECT3b29 (префиксы, не substitute exact references).
+Private owner readback SHA427e5282057cf074fd87648dd119c5fb0f51c250593f55a99c4f4d1f9911e350:
+unchanged non-image4/4, verified tools38 каждого, exact Secret descriptors
+сохранены, bindings8, fullEOFtrue. Initial validation403 требовал fresh SSO;
+FAIL receipt сохранён. Штатный typed draft reauth/password17:48 восстановил
+защищённый путь; protection не обходилась, секреты не публиковались.
+
+Native SYSTEM200: corePromptRevision=system-assistant-core-v48, READY.
+Host/Pod core48SHA96cc5233566344192f77b333cd28c03035d7b4abd8acf9dc7ebd226e9fe9036b.
+Serving CP PID748 ELFaa20e96adecc68e7ccaa7ac446367428c28829ddaa51050f2fe5b7db481a1384;
+RC PID436 ELF160e306359c64aeca7e884806e5882cdb9191f12611df62b20cac4f3d689243a;
+gateway PID384 ELFaf582de5eb738295f3b9f7de1e014c0e850886dbf7f1e182f26457717e331a99.
+Каждый /proc/exe совпал с соответствующим текущим build/main. Без vcs.revision
+это не exact compile provenance; адресный mounted source proof продолжается.
+Chrome reload/SSO/rejoin200, Console0; screenshot run graph просмотрен:
+сохранённый viewport обрезает крайние nodes, UX исправление OPEN.
+
+Canonical build-local-runner получает узкий explicit existing-cache mode:
+owned700 source cache, immutable exact input/profile/source/provenance и
+expected manifest до importer; cache miss не build, import FAIL не пишет pin.
+Worker public90 tests PASS, ROOT integrated profile27 PASS; actual import/global
+pin пока NOT RUN. Business history не менялась, USER_MESSAGE/Launch/Retry
+после failed root ещё не создавались. Дальше native Retry исходной задачи,
+не user nudges; actual v3 runtime/Architect provider proof/business1796/Full65 OPEN.

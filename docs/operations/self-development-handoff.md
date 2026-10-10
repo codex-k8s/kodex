@@ -10,6 +10,31 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 18:02 UTC — окружения опубликованы, serving core48
+
+Native четыре ENV опубликованы с full impact EOF и всеми восемью intended
+bindings APPLIED. Fresh owner readback SHA256
+427e5282057cf074fd87648dd119c5fb0f51c250593f55a99c4f4d1f9911e350:
+all38 tools и каждый non-image параметр/exact Secret descriptor сохранены4/4.
+Начальный validation403 FRESH_AUTHENTICATION_REQUIRED сохранён как FAIL;
+после штатного свежего SSO входа17:48 весь путь validation/impact/publication
+завершён без ослабления защиты и без повторной image сборки.
+
+Owner idle17:52:08: пять counters0, artifacts58. HOT clean fast-forward7598
+подтверждён; native SYSTEM corePromptRevision=system-assistant-core-v48/READY.
+Host/Pod core48 digest96cc5233566344192f77b333cd28c03035d7b4abd8acf9dc7ebd226e9fe9036b
+совпал. CP/RC/gateway child ELF равен текущему build file каждого Pod;
+exact compile provenance из отсутствующего vcs.revision не выведен.
+Console0, bootstrap/session/owner ENV200. Graph viewport местами обрезан,
+удобство чтения графа остаётся OPEN, не объявлено UX PASS.
+
+Canonical runner writer получил explicit reuse-cache + expected manifest
+без нового build и без изменения immutable OCI/provenance. ROOT profile27
+и worker public90 tests PASS; actual global pointer/import пока NOT RUN.
+Только после опубликованного кода выполнить canonical reuse exact SOURCE888/acbb,
+затем штатный Retry исходной business задачи без пользовательских подсказок.
+Actual runtime v3/provider/Architect proof, business1796 и Full65 остаются OPEN.
+
 ## Checkpoint 10.10.2026 17:43 UTC — все три custom образа PROMOTED
 
 SYSTEM R19, staff R15, PROJECT assistant R9: current native owner GET200,
