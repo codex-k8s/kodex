@@ -120,6 +120,29 @@ export function runExecutor(run: Run): string | undefined {
   return run.target.type === "AGENT" ? run.target.displayName : undefined;
 }
 
+const defaultTaskTitles = new Set([
+  "SOFTWARE_CHANGE",
+  "INTAKE",
+  "ANALYSIS_AND_ARCHITECTURE",
+  "IMPLEMENTATION",
+  "DOCUMENTATION_REVIEW",
+  "SECURITY_REVIEW",
+  "LEXICAL_REVIEW",
+  "REVIEW_AGGREGATION",
+  "DEVELOPER_FIX",
+  "FINAL_MANAGER_REVIEW",
+  "READY_FOR_HUMAN_REVIEW",
+]);
+
+export function runDefaultTaskTitleKey(
+  run: Pick<Run, "title" | "titleSource">,
+): string | undefined {
+  return run.titleSource === "SERVER_DEFAULT" &&
+    defaultTaskTitles.has(run.title)
+    ? `workboard.taskTitle.${run.title}`
+    : undefined;
+}
+
 export function collectAttention(
   runs: Run[],
   gates: OwnerGate[],

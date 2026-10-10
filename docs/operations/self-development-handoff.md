@@ -10,6 +10,38 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 20:43 UTC — обзор проекта и trusted profile readback
+
+Новый frozen FE5 поверх c153b494: только SERVER_DEFAULT известные task titles
+локализуются RU/EN, USER_EDITED/AGENT_PROPOSED/unknown сохраняются; неизвестный
+executor скрыт, actor/source/project routes и счётчики прежние. ROOT55tests/
+4suites PASS6.63s, ESLint5/Prettier5 PASS, forced typecheck/build PASS8.40s;
+прежние chunk/plugin warnings сохранены. Initial test command FAIL ENOENT
+из-за cwd без package.json; повтор в canonical frontend cwd PASS.
+Native390/desktop1828 screenshots MAIN PASS: «Анализ и архитектура», лишней
+строки про API нет, actor/source на месте, overflow0/Console0.
+
+HOT остаётся на84ed0bf3 с ровно5 собственными tracked FE working changes:
+pre/post5hashes EQUAL ROOT/frozen, runtime деревья не менялись. Это временная
+узкая frontend поставка без Go/policy rollout, не exact whole-tree checkout
+нового source SHA. После native idle проверить exact5postimages, снять только
+эту собственную накладку через apply_patch и выполнить обычный clean FF;
+нельзя терять иные/пользовательские изменения или ослаблять idle guard.
+
+Полный isolated exactc153 frontend399suites/3864tests PASS100.79s/2workers,
+E2E typecheck+discovery10invocations/85entries PASS (не исполнение85E2E),
+scoped ESLint5 PASS; dependency symlink снят/clean source доказан.
+Developer observer READY/5synthetic negatives PASS, actual capture NOT RUN
+до actual delegated tuple; observer не заменяет semantic/финансовые proofs.
+
+Actual CP Deployment UID814bf6b6… profile trusted-cluster, protected policy
+не mounted; compiled source digestd0a4620d… unchanged. Protected policy95
+live activation здесь NOT APPLICABLE. Source render14tests и historical
+rotation/projection20tests PASS; policy77 wrappers намеренно command-pinned,
+fresh protected installer не использует их. Protected95 fresh install/upgrade
+NOT RUN, они не объявлены принятыми и их guards не ослаблялись.
+Full65/11/14/15 и Developer/ONE review/Manager/owner gate пока OPEN.
+
 ## Checkpoint 10.10.2026 20:35 UTC — mobile native PASS, orphan policy source
 
 84ed0bf3 опубликован в Draft1807/remote exact readback PASS, frontend-only HOT

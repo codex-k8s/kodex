@@ -13,6 +13,7 @@ import {
   projectRuntimeEnvironments,
   projectSchedules,
   runExecutor,
+  runDefaultTaskTitleKey,
   runListSummary,
 } from "@/features/workboard/model";
 import type {
@@ -78,6 +79,47 @@ function run(
     ...options,
   };
 }
+
+describe("runDefaultTaskTitleKey", () => {
+  it.each([
+    "SOFTWARE_CHANGE",
+    "INTAKE",
+    "ANALYSIS_AND_ARCHITECTURE",
+    "IMPLEMENTATION",
+    "DOCUMENTATION_REVIEW",
+    "SECURITY_REVIEW",
+    "LEXICAL_REVIEW",
+    "REVIEW_AGGREGATION",
+    "DEVELOPER_FIX",
+    "FINAL_MANAGER_REVIEW",
+    "READY_FOR_HUMAN_REVIEW",
+  ])("локализует известное серверное название %s", (title) => {
+    expect(
+      runDefaultTaskTitleKey({ title, titleSource: "SERVER_DEFAULT" }),
+    ).toBe(`workboard.taskTitle.${title}`);
+  });
+  it.each(["USER_EDITED", "AGENT_PROPOSED"] as const)(
+    "сохраняет точный заголовок %s",
+    (titleSource) => {
+      expect(
+        runDefaultTaskTitleKey({
+          title: "ANALYSIS_AND_ARCHITECTURE",
+          titleSource,
+        }),
+      ).toBeUndefined();
+    },
+  );
+  it.each([
+    "UNKNOWN_TASK",
+    "Анализ проекта",
+    "ANALYSIS_AND_ARCHITECTURE: задача",
+    "__proto__",
+  ])("не угадывает неизвестное название %s", (title) => {
+    expect(
+      runDefaultTaskTitleKey({ title, titleSource: "SERVER_DEFAULT" }),
+    ).toBeUndefined();
+  });
+});
 
 describe("runListSummary", () => {
   it("показывает переведённый код отказа вместо сырого результата", () => {

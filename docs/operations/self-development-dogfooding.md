@@ -792,3 +792,21 @@ unit23PASS/3SKIP/vet и disposable immutable upgrade+component PASS/cleanup proo
 Archive verifier initial FAIL incorrect new-block placement; после переноса
 только новой записи append-only/history PASS. Full65/11/14/15 и native
 Developer/ONE review/Manager/owner gate OPEN; кредиты/денежные units UNKNOWN.
+
+## Checkpoint 10.10.2026 20:43 UTC — обзор проекта и trusted profile readback
+
+FE5: известные SERVER_DEFAULT titles локализованы, пользовательские/предложенные
+и неизвестные сохраняются; неизвестный executor не печатается. ROOT55tests
+PASS6.63s, lint/format5/forced typecheck/build8.40s PASS. Initial bad-cwd ENOENT
+сохранён, canonical cwd repeat PASS. Native390/1828 screenshots MAIN PASS:
+«Анализ и архитектура», actor/source сохранены, API deficiency text убран,
+overflow0/Console0. HOT84ed0bf3+ровно5own FE working changes/posthashes EQUAL;
+runtime unchanged, whole-tree нового source не объявляется равным. После idle
+снять только exact own overlay через apply_patch и clean FF, не bypass guard.
+
+Exactc153 full399suites/3864tests PASS100.79s/2workers, E2E typecheck/discovery
+PASS, не actual85browser tests. Developer observer READY/5negative PASS,
+live capture NOT RUN до actual tuple. CP actual trusted-cluster/authority-policy
+not mounted/compiledd0a4620d unchanged: protected95 activation NOT APPLICABLE.
+Trusted render14 и historical policy7720 tests PASS; fresh protected95 install/
+upgrade NOT RUN. Full65/11/14/15 и native оставшиеся роли/owner gate OPEN.
