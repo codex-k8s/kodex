@@ -10,6 +10,39 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 15:22 UTC — durable инструкции и восстановление bootstrap
+
+Требование владельца: неожиданные результаты исправлять в поставляемых
+системных инструкциях/коде сотрудников и SYSTEM/PROJECT помощников, не новыми
+сообщениями от его имени. Свежая установка из репозитория должна получать
+те же правила; локальная подстройка Workflow не считается общим исправлением.
+
+Поверх fe527466 применён core47: producer/embed и tests, immutable46/47.
+При подготовке worker временно поднял hot core45→46; bootstrap сохранил46.
+Возврат hot45 нарушил forward-only guard и CP перезапускался/API503.
+Восстановление только новым core47, без SQL/ослабления защиты. CP Ready2/2,
+owner Run/Graph/events200; host/Pod prompt.go/hash348cc076…b39b9c и
+core47/hashaa01c3ce…fa9e7f7a совпали. Go1.26.6 offline core race1.158s/vet PASS.
+Это локальный hot-reload readback, не immutable release acceptance.
+
+Текущий root run_4yS3kF8Vn8s-jSgxUiXi5wD- теперь FAILED/version3/seq696;
+Architect run_PSH4TwAR_XIy_49Z2QD5-EXH FAILED/version2. В15:18:23Z owner
+закрыл граф RUNTIME_INPUT_INVALID, summary об изменении dependencies.
+Точная rejecting dependency ещё UNKNOWN; не подменять её semantic BLOCKED.
+Результат Architect не captured; прежний INTAKE и его immutable artifacts целы.
+Не retry/launch до RCA и доставки новых правил. Full65/business acceptance OPEN.
+
+Три workers работают только в isolated trees: common prompt-service v3
+producer/consumer/continuation; typed PROJECT core pin из server-owned profile;
+следующий core48 с правилом продолжения доступного обязательного чтения.
+Перед fresh v3 producer обязательно доставить совместимый runner/admission и
+пользовательские образы/три ENV штатными командами. Не hot-activate v3 раньше.
+Исторические v2 snapshots/digests сохраняются exact; новые claims только v3.
+Не имитировать бизнес-разработку1796 на host и не обходить owner gates.
+Chrome own page5 reload/screenshot/Console0/Run+Graph+events200 проверены;
+чужие вкладки не менялись. Журнал структурно перенесён без потери старых bytes,
+verifier previous fe527466 PASS. Этот пакет требует commit/push1807.
+
 ## Checkpoint 10.10.2026 14:39 UTC — сопровождать Architect текущего root
 
 HEAD/remote/Draft1807 до этой записи b8934fe6ce99a3c4d91391c790bd9a9adee07472.
