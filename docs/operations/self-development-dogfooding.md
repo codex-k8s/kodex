@@ -960,3 +960,24 @@ Actual full-EOF private snapshot SHA47a05449d3a13f857c2fd0eea8be104fd507b6154d72
 Human risk decision не автоматизируется; старые sources/38tools/policy/grants
 сохраняются. Нет USER_MESSAGE/Retry/Launch: fresh-install поведение исправляется
 common instructions и платформой, не управляющими сообщениями от пользователя.
+
+## Checkpoint 10.10.2026 17:19 UTC — реальные отказы не скрыты
+
+Published d2677d05 remote/PR1807/body PASS. Exactacbb свежий HTTPS graph всех
+manifest/config/layer bytes обоих nodes PASS. CRI INTENT agent получил UNKNOWN
+COMMAND_FAILED: /bin/crictl установлен отдельно, k3s crictl отсутствует.
+Исправление repo-owned fixed command добавляет bounded readonly version/help
+preflight всех nodes до любого cache INTENT и повтор перед каждым effect.
+Caller/PATH/fallback/install запрещены; socket/containerID/publicpin прежние.
+ROOT22/22 archive/runner PASS, повторное live исполнение ещё NOT RUN.
+
+Actual ORG draft POST400 INVALID_REQUEST; последующий owner readback сохранил
+configuration19/total18/noDrafts. Общий drafts endpoint PROJECT-only; нужен
+existing ORG PATCH с recipe.version и atomic managed source/publication/build.
+Не подставлять artificial projectRef и не терять complex source/settings.
+Private full baseline4ENV/8bindings SHA67bdd17e8460034a5ff5c74f8440535073a1c3c4e11b49f998335d79b49abcfc:
+SYSTEM agentVersion27/binding13, ENV33/14/14/18,38tools каждый. Values/policy/
+secret revisions должны остаться прежними; они не выводились в журнал.
+Все deployments готовы, оба nodes Ready. Chrome Console0, relevant bootstrap/
+session/graph/events200; Fit all просмотрен, отдельная удобочитаемость большого
+графа не объявляется PASS. USER_MESSAGE/Retry/Launch не создавались.

@@ -82,9 +82,18 @@ class RunnerTests(unittest.TestCase):
         if args[:3] == ["docker", "inspect", "--format"]:
             return b"172.18.0.2"
         if args[:2] == ["docker", "inspect"]:
-            return encode([{"Id": "a"*64, "State": {"Running": True}, "Config": {"Labels": {
+            return encode([{"Id": ("b" if "-server-" in args[2] else "a")*64, "State": {"Running": True}, "Config": {"Labels": {
                 "k3d.cluster": "kodex", "k3d.role": "server" if "-server-" in args[2] else "agent"}}}])
         if args[:2] == ["docker", "exec"]:
+            if args[3] == "/bin/crictl" and args[-1] == "--version":
+                return b"crictl github.com/k3s-io/containerd/v2 v1.35.0-k3s2\n"
+            if args[3] == "/bin/crictl" and args[-1] == "--help":
+                if args[4:] == ["--help"]:
+                    return b"NAME:\n   crictl - client for CRI\nOPTIONS:\n   --runtime-endpoint value\n   --image-endpoint value\n"
+                if args[4] == "pull":
+                    return b"NAME:\n   crictl pull - Pull an image\nOPTIONS:\n   --pull-timeout value\n"
+                if args[4] == "inspecti":
+                    return b"NAME:\n   crictl inspecti - Inspect image\nOPTIONS:\n   --output value\n"
             if args[3] == "stat":
                 return b"regular file" if args[-1] == "/etc/hosts" else b"regular file:0:600"
             if args[-1] == "/etc/hosts":
@@ -95,7 +104,9 @@ class RunnerTests(unittest.TestCase):
                 return b"PRIVATE_TLS_SENTINEL"
             if "pull" in args:
                 self.assertEqual(args[-1], self.pin)
-                self.assertEqual(args[2], "a"*64)
+                self.assertIn(args[2], {"a"*64, "b"*64})
+                self.assertEqual(args[3], "/bin/crictl")
+                self.assertNotIn("k3s", args)
                 self.assertIn("--image-endpoint=unix:///run/k3s/containerd/containerd.sock", args)
                 self.assertIn("--runtime-endpoint=unix:///run/k3s/containerd/containerd.sock", args)
                 self.assertTrue(any(a.startswith("--pull-timeout=") for a in args))
@@ -154,7 +165,7 @@ class RunnerTests(unittest.TestCase):
         proof = self.run_main()
         self.assertEqual(len(proof), 2)
         self.assertTrue(all(p["evidence"] == "NODE_HTTPS_GRAPH" and p["criPull"] == "NOT_CHECKED" for p in proof))
-        self.assertFalse(any("pull" in e or "inspecti" in e or "apply" in e or "patch" in e for e in self.events))
+        self.assertFalse(any("pull" in e or "inspecti" in e or "apply" in e or "patch" in e or "/bin/crictl" in e for e in self.events))
         self.assertFalse(MODULE.cri_attempted)
 
     def test_runner_url_and_tls_sni_remain_exact_without_secrets_in_argv(self):
@@ -182,7 +193,7 @@ class RunnerTests(unittest.TestCase):
         proof = self.run_main(cri=True)
         self.assertEqual([p["evidence"] for p in proof], ["NODE_HTTPS_GRAPH"]*2+["NODE_CRI_PULL"]*4)
         self.assertEqual(sum(p["status"] == "INTENT" for p in proof), 2)
-        pulls = [i for i, e in enumerate(self.events) if "pull" in e]
+        pulls = [i for i, e in enumerate(self.events) if "pull" in e and "--help" not in e]
         https = [i for i, e in enumerate(self.events) if e[0] == "HTTPS"]
         self.assertLess(max(https), min(pulls))
         self.assertTrue(all(p.get("runtimeELF") == "NOT_CHECKED" and p["cacheWrites"] is True for p in proof if p["evidence"] == "NODE_CRI_PULL" and p["status"] == "PASS"))
@@ -244,10 +255,10 @@ class RunnerTests(unittest.TestCase):
             self.events = []
             MODULE.cri_attempted = False
             def intercept(original, args, *rest, **kwargs):
-                if "pull" in args and invalid == "pull":
+                if "pull" in args and "--help" not in args and invalid == "pull":
                     raise MODULE.Failure("COMMAND_TIMEOUT")
                 raw = original(args, *rest, **kwargs)
-                if "inspecti" in args:
+                if "inspecti" in args and "--help" not in args:
                     value = json.loads(raw)
                     if invalid == "id": value["status"]["id"] = "sha256:"+"0"*64
                     if invalid == "repo": value["status"]["repoDigests"] = ["pull.foreign.invalid/kodex/agent-runner@"+self.manifest]
@@ -257,6 +268,49 @@ class RunnerTests(unittest.TestCase):
             with self.assertRaises(MODULE.Failure):
                 self.run_main(cri=True, interceptor=intercept)
             self.assertTrue(MODULE.cri_attempted)
+
+    def test_missing_or_unsupported_second_node_client_stops_before_any_intent(self):
+        for invalid in ("missing", "version", "global", "pull", "inspecti"):
+            self.events = []
+            output = io.StringIO()
+            def intercept(original, args, *rest, **kwargs):
+                if args[:4] == ["docker", "exec", "b"*64, "/bin/crictl"]:
+                    if invalid == "missing":
+                        raise MODULE.Failure("COMMAND_FAILED")
+                    if args[-1] == "--version" and invalid == "version":
+                        return b"k3s PRIVATE_SENTINEL v2.0.0\n"
+                    if args[-1] == "--help" and ((invalid == "global" and args[4:] == ["--help"]) or
+                            invalid in args[4:-1]):
+                        return b"NAME:\n   unsupported PRIVATE_SENTINEL\n"
+                return original(args, *rest, **kwargs)
+            with self.assertRaises(MODULE.Failure) as error, patch("sys.stdout", output):
+                self.run_main(cri=True, interceptor=intercept)
+            self.assertEqual(error.exception.stage, "CRI_CLIENT")
+            self.assertNotIn("SENTINEL", str(error.exception))
+            self.assertNotIn("INTENT", output.getvalue())
+            self.assertFalse(MODULE.cri_attempted)
+            self.assertFalse(any("pull" in e and "--help" not in e for e in self.events))
+
+    def test_client_readonly_probe_all_nodes_before_pull_and_version_drift_denies(self):
+        self.run_main(cri=True)
+        first_pull = next(i for i, e in enumerate(self.events) if "pull" in e and "--help" not in e)
+        for container in ("a"*64, "b"*64):
+            for suffix in (("--version",), ("--help",), ("pull", "--help"), ("inspecti", "--help")):
+                self.assertIn(("docker", "exec", container, "/bin/crictl", *suffix), self.events[:first_pull])
+        self.events = []
+        MODULE.cri_attempted = False
+        version_probes = 0
+        def intercept(original, args, *rest, **kwargs):
+            nonlocal version_probes
+            if args == ["docker", "exec", "a"*64, "/bin/crictl", "--version"]:
+                version_probes += 1
+                if version_probes == 2:
+                    return b"crictl github.com/k3s-io/containerd/v2 v1.36.0-k3s2\n"
+            return original(args, *rest, **kwargs)
+        with self.assertRaises(MODULE.Failure) as error:
+            self.run_main(cri=True, interceptor=intercept)
+        self.assertEqual(str(error.exception), "CRI_CLIENT_CHANGED")
+        self.assertFalse(MODULE.cri_attempted)
 
     def test_confirmation_closed_before_external_commands(self):
         for args in (["--component", "runner", "--cri-pull"], ["--component", "runner", "--confirm", "PULL-EXACT-LOCAL-RUNNER"],

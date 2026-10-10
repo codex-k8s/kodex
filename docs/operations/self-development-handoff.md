@@ -10,6 +10,23 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 17:19 UTC — HTTPS доказан, CLI mismatch исправляется
+
+Actual node HTTPS graph обоих узлов PASS exact acbb. Первый CRI INTENT получил
+UNKNOWN COMMAND_FAILED: установлен отдельный /bin/crictl, а k3s crictl не
+поддерживается. UNKNOWN сохранён, cache effect не предполагается отсутствующим.
+Новый closed fixed-client path проверяет version/help всех узлов до любого
+INTENT и перед каждым effect; endpoint/containerID/pin/timebudget неизменны.
+ROOT archive/runner22/22 PASS; новый live pull ещё NOT RUN.
+
+Native ORG draft получил400 INVALID_REQUEST, readback подтверждает прежнюю
+configuration19/revisions18/openDrafts0. Причина: общий drafts path только
+PROJECT. Штатный ORG path — PATCH recipe с recipe OCC; он атомарно создаёт
+managed revision и build. Подготовка exact полного source этого пути открыта,
+никакой подстановки projectRef/нового USER_MESSAGE/SQL bypass нет.
+Исходные четыре ENV и восемь bindings сохранены полным private readback;
+38tools каждый. Defaults/hot29845/v2, business1796/Full65 ещё OPEN.
+
 ## Checkpoint 10.10.2026 17:10 UTC — полный source upgrade без пользовательских подсказок
 
 Exact89c2428f опубликован/Draft1807 readback PASS. Свежая node HTTPS/CRI

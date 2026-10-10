@@ -18,6 +18,7 @@ DIGEST = re.compile(r"sha256:[a-f0-9]{64}\Z")
 PIN = re.compile(r"([a-z0-9][a-z0-9.-]*\.[a-z0-9.-]+)/kodex/session-archive@(sha256:[a-f0-9]{64})\Z")
 HOST = re.compile(r"(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\Z")
 RUNNER_ENTRYPOINT = ["/usr/local/bin/kodex-init", "entrypoint", "/usr/local/bin/kodex-agent-runner"]
+CRI_CLIENT = "/bin/crictl"
 MAX_JSON = 4 << 20
 MAX_BLOB = 8 << 30
 MAX_TOTAL = 32 << 30
@@ -30,7 +31,7 @@ TLS_PATHS = {"ca_file": "/etc/rancher/k3s/kodex-registry/ca.crt",
              "key_file": "/etc/rancher/k3s/kodex-registry/client.key"}
 STAGES = frozenset({"UNKNOWN", "STATE", "RENDER", "LIVE_DEPLOYMENT", "TOOLS_IMAGE",
                     "NODE_INVENTORY", "NODE_CONTAINER", "FILE_METADATA", "NODE_CONFIG",
-                    "DNS", "NODE_ROUTE", "TLS_READ", "HTTPS_GRAPH", "POLICY", "CRI_PULL", "CRI_READBACK"})
+                    "DNS", "NODE_ROUTE", "TLS_READ", "HTTPS_GRAPH", "POLICY", "CRI_CLIENT", "CRI_PULL", "CRI_READBACK"})
 active_stage = "UNKNOWN"
 cri_attempted = False
 
@@ -345,6 +346,22 @@ def node_snapshot(node, host, load_balancer_address, deadline, strict=False):
     return auth, address, tls, fingerprint, info[0].get("Id")
 
 
+def cri_client(container_id, deadline):
+    # В k3d установлен отдельный cri-tools applet, не подкоманда k3s. Ни PATH, ни caller argv не используются.
+    enter_stage("CRI_CLIENT")
+    require(re.fullmatch(r"[a-f0-9]{64}", container_id), "CRI_TARGET_INVALID")
+    argv = ["docker", "exec", container_id, CRI_CLIENT]
+    version = capture([*argv, "--version"], deadline).decode("ascii").strip()
+    require(re.fullmatch(r"crictl (?:version|github\.com/k3s-io/containerd/v2) v1\.[0-9]+\.[0-9]+(?:-k3s[1-9][0-9]*)?", version), "CRI_CLIENT_INVALID")
+    for command, flags in (([], ("--runtime-endpoint", "--image-endpoint")),
+                           (["pull"], ("--pull-timeout",)), (["inspecti"], ("--output",))):
+        help_text = capture([*argv, *command, "--help"], deadline).decode("ascii")
+        require(0 < len(help_text) <= 64 << 10 and all(c in "\n\r\t" or 32 <= ord(c) <= 126 for c in help_text) and
+                ("crictl "+command[0] if command else "crictl - client for CRI") in help_text and
+                all(re.search(r"^\s+"+re.escape(flag)+r"(?:[ ,=]|$)", help_text, re.MULTILINE) for flag in flags), "CRI_CLIENT_INVALID")
+    return version
+
+
 def cri_pull(node, container_id, pin, config_digest, deadline):
     global cri_attempted
     require(re.fullmatch(r"k3d-kodex-(server|agent)-[0-9]+", node) and
@@ -358,7 +375,7 @@ def cri_pull(node, container_id, pin, config_digest, deadline):
     print(json.dumps({"status": "INTENT", "evidence": "NODE_CRI_PULL", "node": node,
         "digest": pin.split("@")[1], "cacheWrites": True}), flush=True)
     # Контейнер закреплён ID, CRI endpoint — штатным k3s socket; caller/окружение их не выбирают.
-    argv = ["docker", "exec", container_id, "k3s", "crictl",
+    argv = ["docker", "exec", container_id, CRI_CLIENT,
         "--runtime-endpoint=unix:///run/k3s/containerd/containerd.sock",
         "--image-endpoint=unix:///run/k3s/containerd/containerd.sock"]
     capture([*argv, "pull", "--pull-timeout="+str(remaining)+"s", pin], deadline, maximum_seconds=remaining)
@@ -455,10 +472,13 @@ def main():
             '{{(index .NetworkSettings.Networks "k3d-kodex").IPAddress}}', "k3d-kodex-serverlb"], deadline).decode().strip() == load_balancer_address, "NODE_ROUTE_CHANGED")
         for node in nodes:
             require(node_snapshot(node, host, load_balancer_address, deadline, True)[3] == verified[node][0], "NODE_CONFIG_CHANGED")
+        # Наличие и совместимость всех node клиентов проверяются до первого cache INTENT.
+        clients = {node: cri_client(verified[node][2], deadline) for node in nodes}
         for node in nodes:
             enter_stage("POLICY")
             require(active_runner_policy(args.context, deadline) == policy, "POLICY_CHANGED")
             require(node_snapshot(node, host, load_balancer_address, deadline, True)[3] == verified[node][0], "NODE_CONFIG_CHANGED")
+            require(cri_client(verified[node][2], deadline) == clients[node], "CRI_CLIENT_CHANGED")
             cri_pull(node, verified[node][2], pin, verified[node][1], deadline)
 
 
