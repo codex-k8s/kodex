@@ -1210,3 +1210,45 @@ bootstrap-изменениями. Weekly100% само по себе не зап�
 credits; reported почти60К не является доказательством balance/units/spending.
 Новый business launch и Developer output/review/owner gate ещё NOT RUN.
 Full65 остаётся OPEN; публикация окружений не заменяет полный QA.
+
+## Checkpoint 10.10.2026 10:08 UTC — native Manager завершил INTAKE, live history исправлена
+
+Source/remote/Draft1807 exact432a7367. Новый root
+run_jubCanGbxCXIbi_0U0ZJG94O запущен native UI09:57:47, POST201,
+workflowwfl_1G05mcW4c7pweOjzfIzFYr6c v34/revision11. Actual input fields
+46/1622/15/1820chars: Issue1796, acceptance, repository, constraints; все четыре
+полных поля включают supported paid credits при exhausted weekly window и
+ровно один comprehensive review. Reported почти60К — owner context, не API
+proof баланса, единиц или spending. Host не пишет реализацию1796 за Developer.
+
+Manager INTAKE childrun_BkJKbGxSn0ixrIN9baF_fHVJ/node
+nod_UIYiSCU22B4uf54ezbyuqJpL выполнял реальные managed READ и integration
+calls.10:07:11 owner events200/sequence148: artifacts доступны, callback
+доставлен, continuation queued; final technical COMPLETED/semantic INTAKE PASS,
+manager-plan.md с четырьмя полями и EOF evidence. Содержимое handoff ещё
+проверяется следующей ролью; наличие артефакта не доказывает полноту и весь
+Workflow. Architect/Developer/business PR/review/final owner gate остаются OPEN.
+
+Frontend supplementcd82ec9a…fecc5 только4файла: RunPage/его test и
+RunSessionDetailsDialog/его test. ROOT pre/post4/4 совпали с manifest; backend,
+store/reducer, endpoints, authority и bindings не менялись. Missing contiguous
+history читается существующим protected loadRunTranscript только для открытого
+exact root; один inflight, cursor coalescing, cancellation при owner/route/close,
+нет timer/polling/error retry loop. Отказ history показан compact notice в
+drawer/modal, не ложной пустой перепиской. ROOT109tests/5suites4.78s,
+scopedESLint/Prettier4, forcedtypecheck и production build7.99s PASS на exact
+supplement поверх432a. Existing fixture warnings и chunk-size warning не скрыты.
+
+Native full reload10:05:45 загрузил prefix135. Открытая ordinary Manager modal
+после этого без reload догрузила prefix148; owner-protected events requests
+afterSequence135/137/138/139/141 вернули200. Commentary, compact tool groups,
+работает с точками на последнем сообщении видны; screenshot просмотрен,
+Console0/overflowfalse. Повторный graph/history read при terminal transition
+остаётся штатным canonical refresh. Это live отображение PASS данного пути,
+не synthetic E2E или acceptance всего прототипа. Native SYSTEM dropdown и
+остальные natural-selection/rejoin cases ещё NOT RUN.
+
+Read-only10:07:08–10:07:28: CP/RC Ready, прежние UID/restart0;
+Manager Pod943656f13c4dd12a Ready, desired и actual imageID staffba773/runner4af37
+совпадают. Ограниченные CP/RC logs после10:04 пусты; это не доказательство
+отсутствия любых ошибок. Full65 OPEN; goal не завершён по промежуточному PASS.

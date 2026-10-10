@@ -1,6 +1,7 @@
 import { createPinia } from "pinia";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
+import { transpileModule } from "typescript";
 import { createSSRApp } from "vue";
 import { createI18n } from "vue-i18n";
 import { createMemoryHistory, createRouter } from "vue-router";
@@ -128,6 +129,166 @@ function messages() {
 }
 
 describe("RunPage runtime presentation", () => {
+  function transcriptReader() {
+    const source = readFileSync(
+      new URL("./RunPage.vue", import.meta.url),
+      "utf8",
+    );
+    const body = source.slice(
+      source.indexOf("let transcriptScope:"),
+      source.indexOf("const gateDialogOpen"),
+    );
+    const owner = new AbortController();
+    const pending: Array<{
+      resolve: () => void;
+      signal: AbortSignal;
+      ref: string;
+    }> = [];
+    const history: Record<string, number> = {};
+    const run = {
+      value: {
+        ref: "run_fixture",
+        rootRunRef: "run_fixture",
+        projectRef: "project_fixture",
+      },
+    };
+    const routeProjectRef = { value: undefined as string | undefined };
+    const graph = { value: { runRef: "run_fixture", sequence: 13 } };
+    const activityOpen = { value: false };
+    const nodeDetailsOpen = { value: false };
+    const transcriptReadProblem = { value: undefined as unknown };
+    const loadRunTranscript = vi.fn(
+      (ref: string, signal: AbortSignal) =>
+        new Promise<void>((resolve) => pending.push({ ref, signal, resolve })),
+    );
+    const platform = {
+      bootstrap: { organizationRef: "org_fixture" },
+      runTranscriptSequence: (ref: string) => history[ref] ?? 0,
+      loadRunTranscript,
+    };
+    const output = transpileModule(
+      body + "\n({refreshTranscriptHistory, closeTranscriptRead});",
+      {},
+    ).outputText;
+    const api = runInNewContext(output, {
+      run,
+      routeProjectRef,
+      graph,
+      platform,
+      activityOpen,
+      nodeDetailsOpen,
+      transcriptReadProblem,
+      ownerRequestSignal: () => owner.signal,
+      AbortController,
+      AbortSignal,
+      asProblem,
+    }) as { refreshTranscriptHistory(): void; closeTranscriptRead(): void };
+    return {
+      api,
+      run,
+      routeProjectRef,
+      graph,
+      platform,
+      history,
+      activityOpen,
+      nodeDetailsOpen,
+      owner,
+      pending,
+      loadRunTranscript,
+      transcriptReadProblem,
+      source,
+    };
+  }
+
+  it("открытый modal догружает пропущенную историю после readiness snapshot, без повторного graph read", async () => {
+    const state = transcriptReader();
+    state.api.refreshTranscriptHistory();
+    expect(state.loadRunTranscript).not.toHaveBeenCalled();
+    state.history.run_fixture = 2;
+    state.nodeDetailsOpen.value = true;
+    state.api.refreshTranscriptHistory();
+    expect(state.loadRunTranscript).toHaveBeenCalledTimes(1);
+    expect(state.pending[0]?.ref).toBe("run_fixture");
+    state.history.run_fixture = 13;
+    state.pending[0]?.resolve();
+    await vi.waitFor(() => state.api.refreshTranscriptHistory());
+    expect(state.loadRunTranscript).toHaveBeenCalledTimes(1);
+    expect(state.source).toContain(':history-problem="transcriptProblem"');
+    expect(state.source).toContain("closeTranscriptRead();");
+  });
+
+  it("объединяет graph cursor изменения в один inflight и дочитывает последний cursor", async () => {
+    const state = transcriptReader();
+    state.activityOpen.value = true;
+    state.api.refreshTranscriptHistory();
+    state.graph.value.sequence = 14;
+    state.api.refreshTranscriptHistory();
+    state.graph.value.sequence = 15;
+    state.api.refreshTranscriptHistory();
+    expect(state.loadRunTranscript).toHaveBeenCalledTimes(1);
+    state.history.run_fixture = 13;
+    state.pending[0]?.resolve();
+    await vi.waitFor(() =>
+      expect(state.loadRunTranscript).toHaveBeenCalledTimes(2),
+    );
+    state.history.run_fixture = 15;
+    state.pending[1]?.resolve();
+    await vi.waitFor(() => state.api.refreshTranscriptHistory());
+    expect(state.loadRunTranscript).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["close", "route", "project", "owner"] as const)(
+    "отменяет собственный read при %s и не применяет old completion",
+    async (change) => {
+      const state = transcriptReader();
+      state.activityOpen.value = true;
+      state.api.refreshTranscriptHistory();
+      if (change === "close") state.activityOpen.value = false;
+      else if (change === "route") {
+        state.run.value = {
+          ref: "run_newfixture",
+          rootRunRef: "run_newfixture",
+          projectRef: "project_fixture",
+        };
+        state.graph.value = { runRef: "run_newfixture", sequence: 0 };
+      } else if (change === "project")
+        state.routeProjectRef.value = "project_foreign";
+      else state.owner.abort();
+      state.api.refreshTranscriptHistory();
+      expect(state.pending[0]?.signal.aborted).toBe(true);
+      state.pending[0]?.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      state.api.refreshTranscriptHistory();
+      expect(state.loadRunTranscript).toHaveBeenCalledTimes(1);
+      state.api.closeTranscriptRead();
+    },
+  );
+
+  it("ошибка history не создаёт repeat loop; covered/foreign/malformed snapshots не читаются", async () => {
+    const state = transcriptReader();
+    state.activityOpen.value = true;
+    state.loadRunTranscript.mockRejectedValueOnce(
+      new Error("Synthetic history unavailable"),
+    );
+    state.api.refreshTranscriptHistory();
+    await vi.waitFor(() =>
+      expect(state.transcriptReadProblem.value).toBeDefined(),
+    );
+    for (let i = 0; i < 3; i++) state.api.refreshTranscriptHistory();
+    expect(state.loadRunTranscript).toHaveBeenCalledTimes(1);
+    state.api.closeTranscriptRead();
+    state.history.run_fixture = 13;
+    state.api.refreshTranscriptHistory();
+    expect(state.loadRunTranscript).toHaveBeenCalledTimes(1);
+    state.history.run_fixture = 0;
+    state.graph.value.runRef = "run_foreignfixture";
+    state.api.refreshTranscriptHistory();
+    state.graph.value = { runRef: "run_fixture", sequence: -1 };
+    state.api.refreshTranscriptHistory();
+    expect(state.loadRunTranscript).toHaveBeenCalledTimes(1);
+  });
+
   it.each(["ERROR", "PURGED", "late ERROR"] as const)(
     "не продолжает сессию при %s и сохраняет ввод после async подготовки",
     async (state) => {

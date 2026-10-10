@@ -10,6 +10,28 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 10:08 UTC — новый business работает, история догружается
+
+Опубликованный source/remote/Draft1807 —432a7367. Новый native root
+run_jubCanGbxCXIbi_0U0ZJG94O создан09:57:47 одним POST201 по workflowv34/rev11,
+четыре поля46/1622/15/1820chars переданы в форме полностью. Weekly exhaustion
+не блокирует supported paid continuation; reported почти60К не подтверждает
+balance/units/spending. Manager INTAKE childrun_BkJKbGxSn0ixrIN9baF_fHVJ
+завершён10:07:11: artifact manager-plan.md, technical COMPLETED/semantic PASS
+для передачи Architect. Это не принятие всей1796 и не Developer implementation.
+Ровно одно comprehensive review и final owner gate остаются обязательными.
+
+Frontend supplement4/4 exact pre/post принят: demand read существующего
+protected transcript только для открытого exact root с missing prefix,
+coalesced inflight/abort/closed error, без таймера или новых API. ROOT109unit,
+scopedlint/format4, forcedtypes/build7.99s PASS; fixture warnings/chunks остаются.
+Native открытая Manager modal догрузила prefix135→148 без reload,
+events after135/137/138/139/141 HTTP200, Console0/overflowfalse,
+скриншот просмотрен. Это исправление live history, не полный business PASS.
+CP/RC прежниеUID/restart0; Manager actual staffba773/runner4af37 READY.
+Далее Architect→Developer→один Reviewer→Manager→owner gate, SYSTEM dropdown,
+natural cases и остаток Full65. Full65 OPEN, business PR ещё NOT RUN.
+
 ## Checkpoint 10.10.2026 09:57 UTC — 2 images/3 ENV готово, следующий один запуск
 
 Source7feccf13 + exact frontend packet13/13 принят,141unit/lint/format/forced

@@ -18,6 +18,7 @@ import { describe, expect, it, vi } from "vitest";
 import RunSessionDetailsDialog from "@/features/runs/RunSessionDetailsDialog.vue";
 import dialogSource from "@/features/runs/RunSessionDetailsDialog.vue?raw";
 import RunTranscript from "@/features/runs/RunTranscript.vue";
+import { AppProblem } from "@/shared/api/problem";
 import type {
   PresentedRunEvent,
   RunActivityItem,
@@ -43,12 +44,14 @@ async function renderActivity(
   currentNode: RunNode = node,
   additionalNodes: RunNode[] = [],
   rootRun?: Run,
+  historyProblem?: AppProblem,
 ): Promise<string> {
   const app = createSSRApp({
     render: () =>
       h(RunSessionDetailsDialog, {
         run: currentRun,
         rootRun,
+        historyProblem,
         node: currentNode,
         nodes: [currentNode, toolNode, ...additionalNodes],
         events,
@@ -208,6 +211,19 @@ const toolEvent: PresentedRunEvent = {
 };
 
 describe("RunSessionDetailsDialog", () => {
+  it("отказ protected history виден внутри modal, не выдаётся за пустую историю", async () => {
+    const problem = new AppProblem({
+      status: 503,
+      code: "UPSTREAM_UNAVAILABLE",
+      retryable: true,
+      kind: "unavailable",
+      title: "История временно недоступна",
+    });
+    const html = await renderActivity([], run, node, [], undefined, problem);
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("История временно недоступна");
+    expect(html).not.toContain("runs.noNodeActivity");
+  });
   it("читает child transcript из root envelope только по точной owner graph привязке", async () => {
     const childRun: Run = { ...run, ref: "run_child", rootRunRef: run.ref };
     const childNode: RunNode = {

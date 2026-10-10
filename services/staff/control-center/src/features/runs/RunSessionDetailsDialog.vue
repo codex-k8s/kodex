@@ -18,6 +18,8 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import ModalDialog from "@/shared/ui/ModalDialog.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
+import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
+import type { AppProblem } from "@/shared/api/problem";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
 import RuntimeRevisionDiffPanel from "./RuntimeRevisionDiffPanel.vue";
 import RunPromptPreview from "./RunPromptPreview.vue";
@@ -30,11 +32,12 @@ const props = withDefaults(
     node: RunNode;
     nodes: RunNode[];
     events: PresentedRunEvent[];
+    historyProblem?: AppProblem;
     artifacts: Artifact[];
     agent?: Agent;
     executionLabel?: "ASSISTANT" | "EMPLOYEE" | "SESSION";
   }>(),
-  { rootRun: undefined, agent: undefined },
+  { rootRun: undefined, agent: undefined, historyProblem: undefined },
 );
 const emit = defineEmits<{ close: []; download: [artifact: Artifact] }>();
 const { locale, t } = useI18n();
@@ -422,7 +425,15 @@ function formatTokenCount(value: number): string {
             :items="transcriptItems"
             @download="emit('download', $event)"
           />
-          <p v-else class="session-details__unavailable">
+          <ProblemNotice
+            v-if="historyProblem"
+            :problem="historyProblem"
+            compact
+          />
+          <p
+            v-else-if="!transcriptItems.length"
+            class="session-details__unavailable"
+          >
             {{ $t("runs.noNodeActivity") }}
           </p>
         </section>

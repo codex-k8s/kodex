@@ -335,6 +335,81 @@ const activityNodeRef = ref<string>();
 const activityDrawer = ref<HTMLElement>();
 const nodeInspectorOpen = ref(false);
 const nodeDetailsOpen = ref(false);
+const transcriptReadProblem = ref<AppProblem>();
+const transcriptProblem = computed(() =>
+  activityOpen.value || nodeDetailsOpen.value
+    ? (transcriptReadProblem.value ??
+      platform.runTranscriptProblems[graph.value?.runRef ?? runRef.value])
+    : undefined,
+);
+let transcriptScope: string | undefined;
+let transcriptController: AbortController | undefined;
+let transcriptAttemptedSequence = -1;
+let transcriptReading = false;
+
+function closeTranscriptRead(): void {
+  transcriptController?.abort();
+  transcriptController = undefined;
+  transcriptScope = undefined;
+  transcriptAttemptedSequence = -1;
+  transcriptReading = false;
+  transcriptReadProblem.value = undefined;
+}
+
+// Readiness graph не содержит историю. Читаем только открытый exact root,
+// один inflight; новый cursor объединяется, ошибка не запускает цикл повторов.
+function refreshTranscriptHistory(): void {
+  const snapshot = graph.value;
+  const current = run.value;
+  const organizationRef = platform.bootstrap?.organizationRef;
+  const nextScope =
+    (activityOpen.value || nodeDetailsOpen.value) &&
+    organizationRef &&
+    current &&
+    snapshot &&
+    (!routeProjectRef.value || current.projectRef === routeProjectRef.value) &&
+    current.rootRunRef === snapshot.runRef
+      ? JSON.stringify([
+          organizationRef,
+          routeProjectRef.value,
+          current.ref,
+          snapshot.runRef,
+        ])
+      : undefined;
+  if (nextScope !== transcriptScope) {
+    closeTranscriptRead();
+    transcriptScope = nextScope;
+  }
+  if (!nextScope || !snapshot) return;
+  const sequence = snapshot.sequence;
+  if (
+    !Number.isSafeInteger(sequence) ||
+    sequence < 0 ||
+    platform.runTranscriptSequence(snapshot.runRef) >= sequence ||
+    transcriptReading ||
+    transcriptAttemptedSequence === sequence
+  )
+    return;
+  const ownerSignal = ownerRequestSignal();
+  if (ownerSignal.aborted) return;
+  const controller = new AbortController();
+  transcriptController = controller;
+  const signal = AbortSignal.any([ownerSignal, controller.signal]);
+  transcriptReading = true;
+  transcriptAttemptedSequence = sequence;
+  transcriptReadProblem.value = undefined;
+  void platform
+    .loadRunTranscript(snapshot.runRef, signal)
+    .catch((error: unknown) => {
+      if (!signal.aborted && transcriptController === controller)
+        transcriptReadProblem.value = asProblem(error);
+    })
+    .finally(() => {
+      if (signal.aborted || transcriptController !== controller) return;
+      transcriptReading = false;
+      refreshTranscriptHistory();
+    });
+}
 const gateDialogOpen = ref(false);
 const activityTrigger = ref<HTMLButtonElement>();
 const hasAuthoritativeSnapshot = computed(() =>
@@ -730,6 +805,19 @@ watch(refreshKey, (next) => {
   void refreshScheduler.request(runRef.value);
 });
 watch(
+  [
+    activityOpen,
+    nodeDetailsOpen,
+    runRef,
+    routeProjectRef,
+    () => platform.bootstrap?.organizationRef,
+    () => graph.value?.runRef,
+    () => graph.value?.sequence,
+    () => run.value?.rootRunRef,
+  ],
+  refreshTranscriptHistory,
+);
+watch(
   () =>
     `${run.value?.ref ?? ""}:${[...artifactRefs.value].join(",")}:${
       [...artifactRefs.value].some((ref) => !platform.artifacts[ref])
@@ -779,6 +867,7 @@ onMounted(async () => {
   if (runRef.value === initialRef) openCurrentStream();
 });
 onBeforeUnmount(() => {
+  closeTranscriptRead();
   artifactController?.abort();
   mutationGeneration++;
   refreshScheduler.dispose();
@@ -1154,8 +1243,20 @@ onBeforeUnmount(() => {
             @close="closeActivity"
             @download="downloadArtifact"
           >
-            <template v-if="run.nextActions.includes('ADD_TURN')" #composer>
-              <form class="run-continuation" @submit.prevent="continueRun">
+            <template
+              v-if="transcriptProblem || run.nextActions.includes('ADD_TURN')"
+              #composer
+            >
+              <ProblemNotice
+                v-if="transcriptProblem"
+                :problem="transcriptProblem"
+                compact
+              />
+              <form
+                v-if="run.nextActions.includes('ADD_TURN')"
+                class="run-continuation"
+                @submit.prevent="continueRun"
+              >
                 <label class="field">
                   <span>{{ $t("runs.continueTask") }}</span>
                   <VoiceTextarea
@@ -1195,6 +1296,7 @@ onBeforeUnmount(() => {
           :node="selectedNode"
           :nodes="allRunNodes"
           :events="eventList"
+          :history-problem="transcriptProblem"
           :artifacts="artifactList"
           :agent="selectedAgent"
           :execution-label="nodeExecutionLabels[selectedNode.ref]"
