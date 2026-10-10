@@ -9,6 +9,24 @@ const bootstrapSource = readFileSync(
 );
 
 describe("AppShell navigation", () => {
+  it("передаёт подпись окружения из уже загруженного exact owner state без новых запросов", () => {
+    const context = source.slice(
+      source.indexOf("const assistantContext = computed"),
+      source.indexOf("const assistantRunEvents = computed"),
+    );
+    expect(context).toContain("environments: runtime.environments");
+    expect(context).toContain(
+      "organizationRef: platform.bootstrap?.organizationRef",
+    );
+    expect(context).toContain(
+      "runtime.loading[`environment:${route.params.environmentRef}`]",
+    );
+    expect(context).toContain(
+      "runtime.problems[`environment:${route.params.environmentRef}`]",
+    );
+    expect(context).not.toContain("loadEnvironment");
+    expect(context).not.toContain("allowedOperations:");
+  });
   it("PROJECT configuration detail сохраняет project picker и sidebar в том же query scope", () => {
     expect(source).toContain(
       "configurationRouteProjectRef(route.name, route.params, route.query)",

@@ -10,6 +10,68 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 11:38 UTC — три исправления проверены, доставка впереди
+
+Поверх59efca648dac8d8d77329afdf14a3bd48bfcc2c8 ROOT принял exact frozen
+ENV label4/4, partial-history starvation2/2 и runner resume2/2. Изменения
+не расширяют authority, API, parser budgets или источники состояния.
+Frontend184unit/4suites3.15s, scoped lint/format/diff, forced types и
+Vite8.56s PASS; runner Go1.26.6 targeted race1.903s/vet/canonical build PASS.
+Новый resume excludeTurns:true подтверждён installed Codex0.160.0 schema;
+synthetic metadata reply831B сохраняет1224000B protected history и usage
+baseline. Фактический frame прежних live FAIL остаётся UNKNOWN.
+
+Новый helper чат cnv_pYtlYONh9LY9T6jS_AlsBaPq завершил native READ-only
+foreign-scope run_vMy-YsTe7taAKCWpMeTlckc8 SUCCEEDED: не подменил проект,
+не выдал отсутствие карточки в PROJECT scope за отсутствие чужого проекта,
+не создал план/мутацию. Reload восстановил обе COMPLETED записи/версию3;
+desktop screenshot/overflowfalse/Console0/events200 проверены.
+Четвёртый подпункт16 и длинный existing chat пока OPEN.
+
+Далее clean commit/push1807, immutable fullrunner build/provenance/import,
+canonical seed/render/apply/readback, два custom recipes и три ENV image-only
+publication/intended bindings. Только после этого одна проверка прежнего
+длинного диалога; frontend hot reload не заменяет runner activation.
+Business1796 по-прежнему semantic BLOCKED на exact transport/credential
+evidence; Developer/Review/owner gate NOT RUN. Full65 OPEN.
+Chrome только page5, own reload11:35 UTC; чужие вкладки не трогать.
+
+## Checkpoint 10.10.2026 11:29 UTC — business STOP, два адресных исправления
+
+HEAD/remote/Draft1807 59efca648dac8d8d77329afdf14a3bd48bfcc2c8;
+main ab4992e0 unchanged. Dirty ROOT owned только ENV context label4/4,
+exact frozen pre/post, ROOT97unit/lint/format/forced types/build PASS,
+native desktop/mobile390/Console0/overflowfalse/reload/Pod hashes PASS.
+Named Developer native10417B/EOF и owner readback PASS; третий подпункт16
+отмечен, ambiguous/foreign scope и весь16 OPEN.
+
+Root run_7M7M1dCVTpTg2BcSy1tMcHMo FAILED, active nodes0: Architect
+semantic BLOCKED на mandatory upstream tree READ restricted URL.
+Coordinator полностью прочитал5 artifacts, downstream CANCELLED;
+Developer/Review/final Manager не запускались. Artifact architecture-review
+art_1Pmmp34cv3ScFAMRih1L7op9/revision14/36111B/hash a6d6b5e8…2aabc
+ROOT DOWNLOAD/EOF проверен. Не bypass denial, не повторный review/Architect
+в этом root, не писать1796 host-работой. Требуется разрешённый exact
+transport/credential evidence либо отдельное допустимое scope решение.
+
+Длинный helper cnv_j6j0WR7iU-n283_FRJQwXfGI: два native FAILED на
+THREAD_CALL/STREAM_INVALID до модели, а не доказанный weekly quota отказ.
+CP terminal timestamps ранние, browser queue задержалась после commit.
+Субагент platform_resync_diagnostics готовит isolated store.ts/test.ts
+partial-history starvation RED/GREEN; live involvement UNKNOWN.
+Субагент agent_environment_read_path готовит isolated bounded resume fix:
+exact Codex0.160.0 schema подтверждает excludeTurns:true; synthetic frame
+>1MiB воспроизводит отказ. JSONL budget/authority/history не ослаблять.
+После adoption требуется clean commit, новый fullrunner/provenance и
+canonical delivery, затем два custom recipes/три ENV image-only native
+publication/intended bindings перед повторной проверкой старого диалога.
+Не выдавать host hot reload за immutable runner activation.
+
+Chrome только page5 ENVreview, viewportdesktop1828×741, empty draft;
+own reload11:25UTC. Новый native READ-only foreign-project probe в отдельном
+cnv_pYtlYONh9LY9T6jS_AlsBaPq работает с11:28:36, результат ещё NOT RUN.
+SSO/list/reload каждые5мин, чужие вкладки не трогать. Full65/business OPEN.
+
 ## Checkpoint 10.10.2026 11:00 UTC — Architect работает, frontend проверен
 
 Root run_7M7M1dCVTpTg2BcSy1tMcHMo RUNNING/seq277: INTAKE PASS и3 captured

@@ -51,6 +51,9 @@ func (server *appServer) bindExecutionThread(ctx context.Context, state *protoco
 		state.resumeSource = source
 		method = "thread/resume"
 		params["threadId"] = input.CodexSessionID
+		// Codex 0.160.0 сохраняет model history, но не повторяет её целиком
+		// в JSONL-ответе: для binding нужны только metadata и live-resume state.
+		params["excludeTurns"] = true
 	}
 	raw, err := server.call(ctx, state, method, params)
 	if err != nil {

@@ -222,7 +222,7 @@ DiskPressure; актуальный owner run state UNKNOWN при API 500, recov
         точную Issue1796 и последние попытки через search/session/GitHub read,
         без IDs в запросе. Статусы отличены от неподтверждённой готовности;
         authoritative scope/run/turn, ACK и own reload/rejoin проверены.
-  - [ ] Выбрать процесс, сотрудника либо окружение по понятному названию
+  - [x] Выбрать процесс, сотрудника либо окружение по понятному названию
         и контексту текущего экрана, сохранив серверную owner/project boundary.
   - [ ] При совпадающих названиях, недостаточном контексте и ссылке на
         недоступный проект уточнить выбор или сообщить ограничение;
@@ -779,3 +779,100 @@ same-chat уточнение + immutable actual bytes, а не только пе
 Остальные natural ambiguity/недоступный scope и весь16 OPEN.
 Actual frontend Pod mounted Vue SHA27052c87…8e7fa совпал с host;
 deployment1/1 Ready, CP/RC прежние UID/restarts0, последних backend errors0.
+
+### Checkpoint 10.10.2026 11:29 UTC — natural context и честный semantic STOP
+
+Source59efca648dac8d8d77329afdf14a3bd48bfcc2c8 + frozen ENV label4/4:
+ROOT exact pre/post hashes совпали. Только presentation из уже owner-loaded
+ENV exact ref/project/organization/scope; deleted/blocked/missing fallback
+локализован, API/authority/context identity/operations не менялись.
+ROOT97unit/3suites1.17s, scoped ESLint4/Prettier4/diff-check и canonical
+forced vue-tsc/Vite8.88s PASS. Host/Pod context.ts ea61c329…02979 и AppShell
+600a9a19…f0e1a совпадают. Native own reload, desktop/mobile390 screenshots
+просмотрены: selfdev-review читается, overflowfalse/Console0/API200.
+Context7 Vue computed readonly/side-effect-free проверен.
+
+Named natural запрос без refs нашёл SOFTWARE_CHANGE и Developer;
+run_EFK6C82Ax_AZlx8xalxJCkZ- SUCCEEDED, server context switch не обходился.
+После native открытия Developer run_GMjSnOXuMMODjb5jHHw33lju полностью
+прочитал AGENT_RUNTIME_CONFIGURATION10417B/EOF,
+SHA25653f3a8c7e0773ce4d854eaeba7c4fa288f31a248914b480726450e9af02225b2.
+Owner GET200 подтвердил agentv17, selfdev-write/publishedrev13,
+38configured tools и imageba77324a…5eb82; inventory42VERIFIED/8MISSING
+отдельно от permission. Третий подпункт16 отмечен по native+owner proof.
+Ambiguous selfdev запрос run_oR1zE8cHK67MpYmOG9FS3VK2 нашёл2 вариантов
+и спросил выбор без плана/мутаций. После открытия selfdev-review/reload
+run_WyEkVNNeWkcbzwRFR7Ne8o4a подтвердил только текущие metadata;
+не выдал отсутствующий managed ENV full-read за EOF. Четвёртый подпункт OPEN.
+
+Business root run_7M7M1dCVTpTg2BcSy1tMcHMo штатно FAILED после
+Architect technical SUCCEEDED/semantic BLOCKED: Web чтение exact upstream
+tree получило restricted URL; transport/OAuth semantics не подтверждены.
+Coordinator native прочитал5 captured artifacts доEOF, не делегировал
+Developer/Review/final Manager; PLANNED downstream CANCELLED, active nodes0.
+ROOT owner DOWNLOAD architecture-review.md36111B/EOF/hash
+a6d6b5e81c749987f9ac0c2c33fd467ffabf483771f6028041c23c83ae72aabc PASS.
+Artifact art_1Pmmp34cv3ScFAMRih1L7op9/revision14,
+arv_376fedd409ba4557b8e7f170f6ad5094. BLOCKED не принят за product PASS;
+нет повторного Architect/review в этом root, business PR/owner gate NOT RUN.
+
+Native foreign-project probe run_sGJHtDMC7v59Rr3vqAuCKHyW и повтор
+run_qnHwYPLanA4k8vzea6-JQqo2 FAILED до модельного turn. RC trusted closed
+diagnostic OBSERVED/REQUEST_FAILURE/THREAD_CALL/PROVIDER/STREAM_INVALID;
+это не подтверждение quota/credits/network причины. CP первый terminal
+11:11:48.28, seq6 TURN_COMPLETED11:11:48.319; Pinia ещё QUEUED11:13,
+FAILED/v25 появилась11:17 без reload. Постcommit задержка доказана,
+участие partial-history starvation path пока UNKNOWN; isolated RED готовится.
+Повтор failed не принят за удачный forbidden-scope сценарий.
+
+ROOT offline exact actual provider0.160.0 binary hash
+61b0194f3bb6534439c8d26a3ed57d0805f84b884588b761795323eeb92fcf70:
+generate-json-schema и generate-ts PASS, без inference. ThreadResumeParams
+JSON40510B/hashc818e26d830ac4430791eab7d4a872d2384fa6006b14c505d8caf46e7e093527
+подтверждает excludeTurns:boolean (не latest includeTurns/omitHistory).
+Exact описание исключает thread.turns из ответа, не disk-resume history.
+Synthetic20×60KiB resume response1232070B воспроизводит THREAD_CALL/
+STREAM_INVALID при прежнем JSONL1MiB; это source fixture, actual frame UNKNOWN.
+Runner fix/delivery/новая native проверка пока NOT RUN. Weekly exhaustion
+не самостоятельный prelaunch запрет, paid balance/units/charging UNKNOWN.
+Full65 и business11/14/15 остаются OPEN, bootstrap merge NOT RUN.
+
+### Checkpoint 10.10.2026 11:38 UTC — bounded resume и coalesced history
+
+Source59efca648dac8d8d77329afdf14a3bd48bfcc2c8 + exact frozen runner2/2,
+frontend context4/4 и store2/2 приняты ROOT; все pre/post hashes совпали.
+При partial-history wake новый read revision создаётся только вместе с новым
+reader; busy wake объединяется в следующий read и не обесценивает текущий.
+Owner/context/full-snapshot/version/forbidden/cancel guards сохранены.
+Synthetic burst3reads/8wake, terminal до завершения follow-up и отрицательные
+сценарии PASS. ROOT184unit/4suites3.15s, scoped ESLint6/Prettier/diff,
+forced vue-tsc и Vite8.56s PASS. Участие этого source defect в прежней
+измеренной live задержке пока UNKNOWN; synthetic proof не live acceptance.
+
+Runner thread/resume запрашивает excludeTurns:true по exact установленной
+Codex0.160.0 schema: model history остаётся на диске, в ответе только
+metadata/live-resume state. Parser1MiB и source64MiB не ослаблены.
+Synthetic20×60KiB response1232070B воспроизвёл исходный
+THREAD_CALL/STREAM_INVALID; исправленный reply831B сохраняет protected
+rollout1224000B с прежним SHA и не начисляет исторический usage.
+ROOT Go1.26.6 targeted race1.903s/vet/CGO0 canonical runner build PASS.
+Malformed/oversized/foreign-source отказы остаются closed. Это локальная
+проверка, новая OCI/custom images/ENV delivery и native existing-chat
+continuation пока NOT RUN. OpenAI Docs/Context7 помогают сверить documented
+history projection; версия поля взята из pinned generated schema, не latest.
+
+Дополнительно ROOT disposable PostgreSQL:
+TestAssistantTaskSessionReadComponent12.39s PASS;
+TestProjectAssistantProfilesComponent27.34s/package39.807s PASS;
+TestBootstrapComponent/assistant_context_uses_fresh_exact_read_authority2.50s
+PASS. Это локальный disposable contour, не live SSO limited-role acceptance.
+
+Native новый chat cnv_pYtlYONh9LY9T6jS_AlsBaPq:
+run_vMy-YsTe7taAKCWpMeTlckc8 SUCCEEDED/seq10, find_platform_resources
+RUNNING7→SUCCEEDED8, FINAL честно ограничил доступ текущим PROJECT scope.
+Не подменил foreign ENV selfdev, не объявил чужой проект несуществующим,
+не создал план/мутацию/запуск процесса. Owner-loaded foreign project exists
+отдельно от authority помощника. После own reload обе записи COMPLETED/v3;
+desktop screenshot просмотрен/overflowfalse/Console0/events200.
+Full16 остаётся OPEN до продолжения/rejoin и проверки длинного диалога.
+Business1796 BLOCKED/Developer/Review/owner gate NOT RUN; Full65 OPEN.

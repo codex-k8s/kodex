@@ -250,6 +250,14 @@ const assistantContext = computed(() => {
     workflows: platform.workflows,
     runs: platform.runs,
     roleImages: roleImages.recipes,
+    environments: runtime.environments,
+    organizationRef: platform.bootstrap?.organizationRef,
+    environmentReadBlocked:
+      typeof route.params.environmentRef === "string" &&
+      Boolean(
+        runtime.loading[`environment:${route.params.environmentRef}`] ||
+        runtime.problems[`environment:${route.params.environmentRef}`],
+      ),
   });
   if (
     route.query.assistantForm === "1" &&

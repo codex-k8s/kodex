@@ -1802,7 +1802,7 @@ describe("assistant workspace store", () => {
       "ws-2",
     );
     expect(readConversationsMock).toHaveBeenCalledTimes(1);
-    first.resolve({ items: [conversation()] });
+    first.resolve({ items: [conversation(), older] });
     await vi.waitFor(() =>
       expect(readConversationsMock).toHaveBeenCalledTimes(2),
     );
@@ -1814,6 +1814,130 @@ describe("assistant workspace store", () => {
     expect(
       store.conversations.find((item) => item.ref === "cnv_sales")?.version,
     ).toBe(9);
+  });
+
+  it("burst partial snapshots не откладывает terminal owner read до затишья", async () => {
+    const queued = {
+      ...conversation(),
+      ref: "cnv_older",
+      turns: [userTurn("QUEUED")],
+    };
+    const failed = {
+      ...queued,
+      version: 25,
+      turns: [userTurn("FAILED")],
+    };
+    const reads = Array.from({ length: 4 }, () =>
+      deferred<{ items: AssistantConversation[] }>(),
+    );
+    for (const read of reads)
+      readConversationsMock.mockReturnValueOnce(read.promise);
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    store.conversations = [conversation(), queued];
+    store.selectedRef = queued.ref;
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+      "ws-start",
+    );
+
+    for (let index = 0; index < 3; index += 1) {
+      for (let wake = 0; wake < 8; wake += 1)
+        store.applyRealtimeSnapshot(
+          systemAssistant(),
+          [conversation()],
+          "prj_sales",
+          `ws-${String(index)}-${String(wake)}`,
+        );
+      expect(readConversationsMock).toHaveBeenCalledTimes(index + 1);
+      reads[index]?.resolve({ items: [conversation(), failed] });
+      await vi.waitFor(() =>
+        expect(readConversationsMock).toHaveBeenCalledTimes(index + 2),
+      );
+      expect(store.selectedConversation?.version).toBe(25);
+      expect(store.selectedConversation?.turns[0]?.state).toBe("FAILED");
+      expect(store.loading).toBe(true);
+    }
+    reads[3]?.resolve({ items: [conversation(), failed] });
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+    expect(readConversationsMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("owner EOF удаляет selected detail даже при coalesced follow-up", async () => {
+    const first = deferred<{ items: AssistantConversation[] }>();
+    const second = deferred<{ items: AssistantConversation[] }>();
+    readConversationsMock
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    store.conversations = [
+      conversation(),
+      { ...conversation(), ref: "cnv_gone" },
+    ];
+    store.selectedRef = "cnv_gone";
+    for (let wake = 0; wake < 8; wake += 1)
+      store.applyRealtimeSnapshot(
+        systemAssistant(),
+        [conversation()],
+        "prj_sales",
+        "ws-next",
+      );
+    first.resolve({ items: [conversation()] });
+    await vi.waitFor(() =>
+      expect(readConversationsMock).toHaveBeenCalledTimes(2),
+    );
+    expect(store.selectedConversation?.ref).not.toBe("cnv_gone");
+    expect(store.conversations.some((item) => item.ref === "cnv_gone")).toBe(
+      false,
+    );
+    second.resolve({ items: [conversation()] });
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+  });
+
+  it("coalesced owner read не заменяет более новую conversation version", async () => {
+    const first = deferred<{ items: AssistantConversation[] }>();
+    const second = deferred<{ items: AssistantConversation[] }>();
+    readConversationsMock
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.assistant = systemAssistant();
+    const latest = {
+      ...conversation(),
+      version: 30,
+      turns: [userTurn("FAILED")],
+    };
+    const older = { ...conversation(), ref: "cnv_older" };
+    store.conversations = [conversation(), older];
+    store.selectedRef = latest.ref;
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [conversation()],
+      "prj_sales",
+      "ws-1",
+    );
+    store.applyRealtimeSnapshot(
+      systemAssistant(),
+      [latest],
+      "prj_sales",
+      "ws-2",
+    );
+    first.resolve({ items: [conversation(), older] });
+    await vi.waitFor(() =>
+      expect(readConversationsMock).toHaveBeenCalledTimes(2),
+    );
+    expect(store.selectedConversation?.version).toBe(30);
+    expect(store.selectedConversation?.turns[0]?.state).toBe("FAILED");
+    second.resolve({ items: [conversation(), older] });
+    await vi.waitFor(() => expect(store.loading).toBe(false));
+    expect(store.selectedConversation?.version).toBe(30);
+    expect(store.selectedConversation?.turns[0]?.state).toBe("FAILED");
   });
 
   it.each(["gone", "forbidden"])(
@@ -1870,6 +1994,12 @@ describe("assistant workspace store", () => {
         "prj_sales",
         "ws-next",
       );
+      store.applyRealtimeSnapshot(
+        systemAssistant(),
+        [conversation()],
+        "prj_sales",
+        "ws-coalesced",
+      );
       if (boundary === "scope")
         store.setContext({ ...context, entityRef: "prj_other" }, "prj_other");
       else if (boundary === "owner") resetOwnerRequests();
@@ -1878,6 +2008,7 @@ describe("assistant workspace store", () => {
       else store.clearRealtimeState();
       response.resolve({ items: [conversation(), older] });
       await vi.waitFor(() => expect(store.loading).toBe(false));
+      expect(readConversationsMock).toHaveBeenCalledTimes(1);
       expect(store.conversations).toEqual([]);
       expect(store.selectedConversation).toBeUndefined();
     },

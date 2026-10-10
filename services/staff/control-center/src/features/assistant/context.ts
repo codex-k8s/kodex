@@ -7,6 +7,7 @@ import type {
   Project,
   RoleImageRecipe,
   Run,
+  RuntimeEnvironmentSet,
   Workflow,
 } from "@/shared/api/generated/openapi/types.gen";
 
@@ -16,6 +17,9 @@ export interface AssistantContextSources {
   workflows: Readonly<Record<string, Workflow>>;
   runs: Readonly<Record<string, Run>>;
   roleImages: Readonly<Record<string, RoleImageRecipe>>;
+  environments?: Readonly<Record<string, RuntimeEnvironmentSet>>;
+  organizationRef?: string;
+  environmentReadBlocked?: boolean;
 }
 
 export interface ResolvedAssistantContext {
@@ -118,6 +122,8 @@ export function assistantContextRouteLabelKey(
   routeName: RouteLocationNormalizedLoaded["name"],
 ): string | undefined {
   switch (routeName) {
+    case "runtime-environment":
+      return "nav.environment";
     case "system-assistant-environment":
       return "assistant.resources.environment";
     case "system-role-images":
@@ -150,6 +156,24 @@ export function resolveAssistantContext(
   const workflowRef = routeParameter(route, "workflowRef");
   const runRef = routeParameter(route, "runRef");
   const recipeRef = routeParameter(route, "recipeRef");
+  const environmentRef = routeParameter(route, "environmentRef");
+  const environment = environmentRef
+    ? sources.environments?.[environmentRef]
+    : undefined;
+  // Имя берётся только из уже загруженного окружения exact owner/project scope.
+  // Подпись не назначает version, операции или полномочия контекста.
+  const environmentName =
+    !sources.environmentReadBlocked &&
+    projectRef &&
+    sources.organizationRef &&
+    environment &&
+    environment.ref === environmentRef &&
+    environment.projectRef === projectRef &&
+    environment.organizationRef === sources.organizationRef &&
+    environment.scopeKind === "PROJECT" &&
+    environment.state !== "DELETED"
+      ? environment.name
+      : undefined;
   const routePath = route.fullPath.slice(0, 500);
   const selectedResource =
     route.name === "role-image"
@@ -162,7 +186,7 @@ export function resolveAssistantContext(
             : undefined,
         }
       : route.name === "runtime-environment"
-        ? { kind: "ENVIRONMENT", ref: routeParameter(route, "environmentRef") }
+        ? { kind: "ENVIRONMENT", ref: environmentRef, name: environmentName }
         : route.name === "integrations"
           ? { kind: "INTEGRATION_CONNECTION", ref: route.query.connectionRef }
           : route.name === "automations"

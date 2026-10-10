@@ -779,13 +779,15 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
   }
 
   function refreshPartialHistory(): void {
-    realtimeReadRevision += 1;
     if (realtimeReadController) {
       realtimeReadAgain = true;
       return;
     }
     const currentContext = context.value;
     if (!currentContext) return;
+    // Повторный partial wake требует следующей сверки, но не делает текущий
+    // owner read устаревшим: иначе непрерывный поток не даёт принять результат.
+    realtimeReadRevision += 1;
     const current = generation;
     const revision = realtimeReadRevision;
     const ownerSignal = ownerRequestSignal();
