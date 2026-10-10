@@ -20,6 +20,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem } from "@/shared/api/problem";
 import { runNodePresentationKey } from "@/features/runs/run-owner";
+import { runNodeProgressFallbackKey } from "@/features/runs/runtime-text";
 import { runPath } from "@/shared/routes";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
@@ -128,7 +129,9 @@ function formatDate(value: string): string {
 
       <div class="run-node-inspector__status">
         <SafeMarkdown
-          :content="node.progressSummary || $t('runs.waitingForActivity')"
+          :content="
+            node.progressSummary || $t(runNodeProgressFallbackKey(node.state))
+          "
         />
       </div>
 

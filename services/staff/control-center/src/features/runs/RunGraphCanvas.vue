@@ -902,13 +902,14 @@ function compareNodes(left: RunNode, right: RunNode): number {
 .graph-outline {
   position: absolute;
   inset: 0;
+  top: max(144px, calc(var(--run-outline-summary-bottom, 0px) + 12px));
   display: grid;
   align-content: start;
   min-width: 0;
   min-height: 0;
   gap: 8px;
-  padding: 144px 14px 100px;
-  scroll-padding-top: 144px;
+  padding: 14px 14px 100px;
+  scroll-padding-top: 14px;
   overflow: auto;
   background: var(--canvas);
 }

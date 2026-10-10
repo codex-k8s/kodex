@@ -3,9 +3,30 @@ import { describe, expect, it } from "vitest";
 import {
   presentRuntimeText,
   runtimeProgressKey,
+  runNodeProgressFallbackKey,
 } from "@/features/runs/runtime-text";
 
 const identity = (value: string): string => value;
+
+describe("сводка узла без progressSummary", () => {
+  it("не отражает неизвестное состояние как внутренний identifier", () => {
+    expect(runNodeProgressFallbackKey("UNKNOWN_INTERNAL_STATE" as never)).toBe(
+      "common.unknownStatus",
+    );
+  });
+  it.each([
+    ["PLANNED", "runs.waitingForActivity"],
+    ["QUEUED", "runs.waitingForActivity"],
+    ["RUNNING", "states.RUNNING"],
+    ["WAITING", "states.WAITING"],
+    ["SUCCEEDED", "states.SUCCEEDED"],
+    ["FAILED", "states.FAILED"],
+    ["CANCELLED", "states.CANCELLED"],
+    ["SKIPPED", "states.SKIPPED"],
+  ] as const)("не подменяет состояние %s ожиданием старта", (state, key) => {
+    expect(runNodeProgressFallbackKey(state)).toBe(key);
+  });
+});
 
 describe("presentRuntimeText", () => {
   it("распознаёт только известные статусы выполнения для локализации", () => {

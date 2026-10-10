@@ -32,6 +32,7 @@ import { isTerminalRun } from "@/features/workboard/model";
 import { hasValidGateScope } from "@/features/workboard/gate-scope";
 import RunActivityDrawer from "@/features/runs/RunActivityDrawer.vue";
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
+import { observeRunOutlineClearance } from "@/features/runs/run-outline-clearance";
 import RunNodeInspector from "@/features/runs/RunNodeInspector.vue";
 import RunSessionDetailsDialog from "@/features/runs/RunSessionDetailsDialog.vue";
 import RunTokenUsage from "@/features/runs/RunTokenUsage.vue";
@@ -331,6 +332,23 @@ const problem = ref<AppProblem>();
 const artifactProblem = ref<AppProblem>();
 const activityOpen = ref(false);
 const summaryExpanded = ref(false);
+const canvasSummary = ref<HTMLElement>();
+const outlineSummaryBottom = ref(0);
+watch(
+  [canvasSummary, activityOpen, summaryExpanded],
+  ([summary], _previous, onCleanup) => {
+    if (!summary) {
+      outlineSummaryBottom.value = 0;
+      return;
+    }
+    onCleanup(
+      observeRunOutlineClearance(summary, (bottom) => {
+        outlineSummaryBottom.value = bottom;
+      }),
+    );
+  },
+  { flush: "post" },
+);
 const activityNodeRef = ref<string>();
 const activityDrawer = ref<HTMLElement>();
 const nodeInspectorOpen = ref(false);
@@ -947,6 +965,9 @@ onBeforeUnmount(() => {
         <div
           class="run-workspace"
           :class="{ 'run-workspace--activity': activityOpen }"
+          :style="{
+            '--run-outline-summary-bottom': `${outlineSummaryBottom}px`,
+          }"
         >
           <nav
             class="run-workspace-toolbar"
@@ -986,7 +1007,7 @@ onBeforeUnmount(() => {
             </button>
           </nav>
 
-          <aside class="run-canvas-summary">
+          <aside ref="canvasSummary" class="run-canvas-summary">
             <div class="run-canvas-summary__heading">
               <strong :title="run.target.displayName">{{
                 run.target.displayName

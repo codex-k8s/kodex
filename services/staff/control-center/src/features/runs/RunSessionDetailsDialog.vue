@@ -10,6 +10,7 @@ import {
 } from "@/features/runs/run-activity";
 import { indexRunSessionOwnership } from "@/features/runs/run-session-graph";
 import { runNodePresentationKey } from "@/features/runs/run-owner";
+import { runNodeProgressFallbackKey } from "@/features/runs/runtime-text";
 import type {
   Agent,
   Artifact,
@@ -176,7 +177,7 @@ function formatTokenCount(value: number): string {
             {{
               node.progressSummary ||
               node.inputSummary ||
-              $t("runs.waitingForActivity")
+              $t(runNodeProgressFallbackKey(node.state))
             }}
           </p>
         </div>

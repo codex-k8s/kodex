@@ -10,6 +10,54 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 19:26 UTC — immutable доставка и исходный Retry5
+
+Source bd480f85ad53ddedaa79be18f638302ef99f33a2 опубликован в Draft1807.
+Полный runner38tools/Codex0.160.0 собран из clean secret-free source:
+manifest d6b5a7923f5afb994ef6b7d6909e4776405f7823f55a305a57a1a74dc0557f50,
+input8af55a22…/provenance6cf0c6e4…/binary0608aee8…/archiveca2f5047….
+Canonical seed runner-only PASS18:56; девять policy-фаз PASS18:59,
+policy3f5c4020…/revision4. Global canonical reuse exact pin PASS19:01,
+HTTPS exact SNI/CA и установленный CRI pull обоих nodes PASS19:04.
+Runtime binding Deny и defaults RC→CP→stabilization→inspect PASS19:06;
+временные503 при CP restart сохранены, native recovery20019:07.
+
+SYSTEM20/staff16/PROJECT helper10 штатно опубликованы, три exact artifacts
+COMPLETED/ACCEPTED/PROMOTED/VERIFIED. ENV wrappers35/16/16/20 и intended
+bindings1/1/5/1: fullEOF plan outcomes8/8 APPLIED, fresh19:24:05 ownerGET200.
+Сохранены все38tools, values, policy и exact Secret descriptors; четыре
+non-image preservation hashes EQUAL. PROJECT assistant profile не изменялся.
+Fresh idle19:24:11 all5counters0/promoted61, clean HOTFFbd19:24:12 PASS.
+Serving/rejoin19:25:14: host/CP/RC14hashes42/42 EQUAL; оба Ready1/restarts0,
+Go1.26.6 и shared validator symbol count1. CP PID748/ELFe4d5804c…,
+RC PID422/ELF587b91e3… равны Air build; повторные UID/start/hash неизменны.
+Kubelet readiness PASS; прямой HTTP read в worker NOT RUN(curl отсутствует).
+
+Штатная UI кнопка Retry создала attempt5 run_dTjihUwmnARC0YjUBQXbEvUF,
+command200; native19:26:19 RUNNING/seq4,19:26:43 RUNNING/seq13.
+Исходный inputSummary exact EQUAL, Workflow40/revision13 неизменён,
+новых USER_MESSAGE0. Прежние attempts1–4 и terminal history не переписаны.
+Это не успешное завершение бизнес-задачи: actual обычный Architect snapshot,
+Developer/одно комплексное review/Manager/owner gate и Full65 остаются OPEN.
+Вебсокет connected, Console0; актуальный root graph/events GET200.
+
+Отдельно выявлены два UX дефекта readonly графа: desktop outline прокручивался
+под summary; FAILED контекст без progressSummary показывал ожидание старта.
+Узкий FE fix измеряет фактический summary край только для scroll области,
+не меняет canvas fit/manual/follow; terminal fallback локализует actual state.
+ROOT frozen10hashes EQUAL, targeted7suites75tests PASS2.99s. Worker lint/format/
+forced typecheck PASS; ROOT scoped lint и build PASS8.30s с прежними chunk/plugin
+warnings. Native исправленного UI пока NOT RUN.
+
+Native Retry5 прошёл provider boundary: реальные commentary/tool events8–15,
+TURN_COMPLETED17/nodeSUCCEEDED, но rootFAILED/RUNTIME_WORKFLOW_INCOMPLETE/seq23.
+Manager обнаружил противоречие historical continuation и current root:
+прежний INTAKE PASS, RUN_RESULT сейчас пуст, разрешён только step001Manager,
+Architectstep002 ещё не разрешён. Пять pending children атомарно CANCELLED.
+Это новый подтверждённый semantic failure, не ENVELOPE и не успех business.
+Нужен общий shipped fix контекста свежего workflow retry/current frontier;
+никаких owner USER nudges или переноса чужих artifacts/permissions вручную.
+
 ## Checkpoint 10.10.2026 18:49 UTC — причина доказана, общий fix проверен
 
 Published ef7edd2f metadata read18:41:22Z OBSERVED: final USER56782bytes /

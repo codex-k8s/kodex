@@ -8,6 +8,10 @@ const desktop = source.slice(
   source.indexOf("@media (max-width: 760px)"),
 );
 const mobile = source.slice(source.indexOf("@media (max-width: 760px)"));
+const canvas = readFileSync(
+  new URL("../features/runs/RunGraphCanvas.vue", import.meta.url),
+  "utf8",
+);
 
 describe("RunPage layout при открытом ходе работы", () => {
   it("ограничивает сводку доступной половиной графа с запасом для трёх действий", () => {
@@ -54,13 +58,31 @@ describe("RunPage layout при открытом ходе работы", () => {
   });
 
   it("сохраняет отдельные мобильные строки и существующий режим fit графа", () => {
-    expect(mobile).toMatch(/\.run-canvas-summary\s*\{\s*top: 62px;/);
-    expect(mobile).toMatch(/\.run-workspace-toolbar\s*\{\s*top: 8px;/);
+    expect(mobile).toMatch(/\.run-canvas-summary\s*\{\s*top: 136px;/);
+    expect(mobile).toMatch(
+      /\.run-workspace-toolbar,\s*\.run-workspace--activity \.run-workspace-toolbar\s*\{\s*top: 8px;/,
+    );
     expect(source).toContain(':compact="activityOpen"');
     expect(source).not.toContain(':key="activityOpen ?');
     expect(mobile).toMatch(
       /\.run-workspace--activity \.graph-panel\s*\{\s*right: 0;/,
     );
+  });
+
+  it("резервирует фактическую сводку только для scroll области списка", () => {
+    expect(source).toContain('ref="canvasSummary"');
+    expect(source).toContain("observeRunOutlineClearance(summary,");
+    expect(source).toContain("'--run-outline-summary-bottom'");
+    const outline = canvas.match(/\.graph-outline \{([^}]+)\}/)?.[1];
+    expect(outline).toContain(
+      "top: max(144px, calc(var(--run-outline-summary-bottom, 0px) + 12px))",
+    );
+    expect(outline).toContain("padding: 14px 14px 100px");
+    expect(outline).toContain("scroll-padding-top: 14px");
+    const viewport = canvas.match(/\.graph-viewport \{([^}]+)\}/)?.[1];
+    expect(viewport).toContain("inset: 0");
+    expect(viewport).not.toContain("--run-outline-summary-bottom");
+    expect(canvas).toContain("v-show=\"viewMode === 'graph'\"");
   });
 
   it("использует одну фактическую ширину drawer для границы canvas на desktop", () => {
