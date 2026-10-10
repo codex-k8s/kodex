@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import type { SyntheticSnapshotInstaller } from "./runs-catalog";
 import type {
   IntegrationConnection,
   IntegrationGrantCandidateContext,
@@ -12,6 +13,7 @@ import type {
 export async function checkGrantCandidates(
   page: Page,
   projectRef: string,
+  installSnapshot?: SyntheticSnapshotInstaller,
 ): Promise<void> {
   let connection: IntegrationConnection = {
     ref: "connection_candidates",
@@ -52,7 +54,9 @@ export async function checkGrantCandidates(
   await page.route("**/api/v1/integration-connections*", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path !== "/api/v1/integration-connections") return route.fallback();
-    await route.fulfill({ json: { items: [connection], total: 1 } });
+    await route.fulfill({
+      json: { items: [connection], total: 1, nextPageToken: "" },
+    });
   });
   await page.route(
     `**/api/v1/integration-connections/${connection.ref}`,
@@ -221,6 +225,13 @@ export async function checkGrantCandidates(
       await route.fulfill({ json: connection });
     },
   );
+  installSnapshot?.("INTEGRATION_CONNECTION", () => ({
+    connections: {
+      connections: [structuredClone(connection)],
+      nextActions: [],
+      page: {},
+    },
+  }));
   await page.goto("/integrations");
   await page.getByRole("tab", { name: /^Разрешения\s*0$/ }).click();
   const panel = page.locator(".grant-panel");

@@ -1,4 +1,8 @@
 import { expect, type Page } from "@playwright/test";
+import {
+  scopedSyntheticSnapshot,
+  type SyntheticSnapshotInstaller,
+} from "./runs-catalog";
 import type {
   RuntimeSecret,
   RuntimeSecretImpact,
@@ -11,6 +15,7 @@ export async function checkSecretEditor(
   page: Page,
   projectRef: string,
   screenshotPath?: string,
+  installSnapshot?: SyntheticSnapshotInstaller,
 ) {
   const failures: string[] = [];
   let created: RuntimeSecret | undefined;
@@ -156,6 +161,18 @@ export async function checkSecretEditor(
       }
       await route.fulfill({ json: created });
     },
+  );
+  installSnapshot?.(
+    "RUNTIME_SECRET",
+    scopedSyntheticSnapshot(projectRef, () => ({
+      // Тот же намеренно отстающий пустой список, что обслуживает GET выше.
+      catalog: {
+        secrets: [],
+        page: {},
+        organizationSecrets: [],
+        organizationSecretsPage: {},
+      },
+    })),
   );
   await page.goto(`/projects/${projectRef}/secrets`);
   await page

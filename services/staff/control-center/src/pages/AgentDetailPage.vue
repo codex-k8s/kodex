@@ -603,6 +603,7 @@ async function retryInstructionPublication(): Promise<void> {
     const report = await restorePublicationImpact(
       attempt.planRef,
       requestSignal(),
+      platform.bootstrap?.organizationRef,
     );
     if (!active()) return;
     if (publicationPlanIdentity(report.plan) !== publicationPlanIdentity(plan))
@@ -643,7 +644,11 @@ async function recoverInstructionPublication(): Promise<void> {
   busy.value = true;
   problem.value = undefined;
   try {
-    const report = await restorePublicationImpact(plan.ref, requestSignal());
+    const report = await restorePublicationImpact(
+      plan.ref,
+      requestSignal(),
+      platform.bootstrap?.organizationRef,
+    );
     if (!active()) return;
     if (
       publicationPlanIdentity(report.plan) === publicationPlanIdentity(plan) &&
@@ -696,7 +701,13 @@ async function instructionAction(
         window.sessionStorage,
       );
       const plan = stored
-        ? (await restorePublicationImpact(stored.planRef, requestSignal())).plan
+        ? (
+            await restorePublicationImpact(
+              stored.planRef,
+              requestSignal(),
+              platform.bootstrap?.organizationRef,
+            )
+          ).plan
         : await prepareInstructionPublication(agent.value);
       if (!active()) return;
       if (

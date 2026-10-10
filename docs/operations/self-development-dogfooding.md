@@ -1188,3 +1188,56 @@ forced typecheck PASS; production Vite build PASS8.28s. Существующее
 предупреждение сохранено. Delivery/native UX NOT RUN: HOT остаётся6bd700cb
 при активном Retry9. Полный frontend baseline399suites относится к прежнему
 SHA, а не к этому новому diff. Native/Full65/11/14/15 остаются OPEN.
+
+## Checkpoint 10.10.2026 23:25 UTC — Retry9 FAILED и адресные source fixes
+
+C449 remote и guarded idleFF23:10:04 PASS: пять counters0, promoted61/pins
+unchanged. FE3host→Pod hashes EQUAL; native canonical node labels/terminal
+activity screenshot/overflow0/Console0/API200/rejoin PASS. Generic FAILED
+дубликат в исходной строке NOT RUN, отсутствие в конце истории не доказательство.
+
+Retry9 Architect FINAL22:59:54, но FAILED23:01:55/root seq844,
+RUNTIME_UNAVAILABLE/RUNTIME_WORKLOAD_EXITED; downstream CANCELLED,
+новых Architect artifacts нет. Старый exact Pod/logs отсутствуют,
+live completion причина UNKNOWN. Metadata-only sealed rollout EOF9019852B,
+SHA43c3e2f4493ae304dd0ce62fdbc28ffe239df11037d51be60af8ca76343ea6a8,
+показал6 outbox-related calls и успешную GZIP compression write. Owner policy
+gzip не допускает, но actual bytes и rejecting branch NOT CAPTURED.
+
+Hermetic actual writer→bound broker consumer воспроизвёл source FAIL:
+UNKNOWN проходит, PARTIAL/COMPLETE существующего UsageCompleteness отвергаются
+strict allowlist. One-field fix сохраняет version3/closed enum/duplicate/
+unknown-key/archive proof guards; frozen2posthash EQUAL. ROOT полный codex
+race21.580s/vet PASS; OCI rebuild/activation ещё NOT RUN.
+
+CP FILES runtime-result-guidance-v1: intermediate archives/repository/build
+evidence вне outbox, contract evidence отдельными UTF-8/JSON; unsupported
+requested format сообщает без подмены, FINAL не подтверждает publication.
+Pinned historical FILES сохраняется; ROOT prompt race2.491s/vet PASS.
+RC callback после authorization пишет closed stage/reason/code/trusted pins,
+без payload/credentials/error strings; response/fence/RPC неизменны. ROOT
+targeted race1.363s/vet PASS; worker1252PASS/2SKIP, skipped container fixtures
+NOT RUN. GUIDE-DOC-006 закрепляет общий инвариант. Ранние wrong GOROOT и
+obsolete global assertion FAIL сохранены. Не успешный live callback.
+
+RU empty-copy упрощён без readiness/CTA/EN изменений, ROOT69unit PASS.
+12synthetic fixtures integrated/posthash EQUAL, ROOT48unit/3suites1.68s/e2e
+types/scoped lint/format PASS. Final worker Chromium1920 FAIL29.5s: намеренный
+publication504→recovery теряет production org anchor. Console2errors/final
+assertions NOT REACHED/7screenshots сохранены. ENV/Agent аналоги исправляются
+trusted bootstrap organizationRef без guard fallback. Source/unit ≠ browser PASS.
+
+Далее новый source/delivery/serving proof и native Retry10 без USER corrections.
+Host business implementation0/review0; Full65/checklist11/14/15 OPEN.
+
+ROOT integrated org plumbing: frozen4posthash EQUAL, ENV/Agent шесть
+read/recovery/stored calls берут only trusted bootstrap organizationRef.
+Foreign/missing organization и unmount/late response закрыто отклоняются;
+APPLIED recovery без повторной mutation, PREPARED retry сохраняет intent/OCC/key.
+ROOT63unit/3suites PASS4.57s; worker types/lint/format PASS. Первые worker
+fixture/type/lint FAIL сохранены; production guards/controller lifetime прежние.
+Fresh synthetic browser после объединения пакетов ещё NOT RUN.
+Context7 проверены Go encoding/json omitempty/custom unmarshal и Docker buildx
+explicit OCI exporter/manifest digest; библиотечные версии не менялись.
+ROOT объединённые forced typecheck/scoped lint/format PASS, synthetic
+application production build PASS7.56s. Native и итоговый Chromium ещё NOT RUN.

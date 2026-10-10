@@ -3919,7 +3919,7 @@ const ru = {
     working: "Kodex работает",
     providerAccountRequired: "Подключите аккаунт модели",
     providerAccountRequiredHelp:
-      "Создайте provider account и завершите авторизацию. До этого Kodex не запускает модели и не создаёт диалоги.",
+      "Подключите аккаунт модели, чтобы начать диалог.",
     openProviderAccounts: "Перейти к аккаунтам моделей",
     system: "Системный · неудаляемый",
     newConversation: "Новый диалог",

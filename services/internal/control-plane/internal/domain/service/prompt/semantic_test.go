@@ -298,8 +298,17 @@ func TestWorkflowPublicationContentSurvivesWithoutChangingEnvelope(t *testing.T)
 	snapshot.TargetKind = TargetWorkflowStage
 	snapshot.StructuredVariables = nil
 	result, err = Materialize("Agent", snapshot)
-	if err != nil || strings.Contains(result.Prompt, "publication") {
-		t.Fatal("absent owner publication was invented")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, section := range result.FullSections {
+		if section.Slot != SlotWorkflow {
+			continue
+		}
+		var content map[string]json.RawMessage
+		if json.Unmarshal([]byte(section.Content), &content) != nil || content["publication"] != nil {
+			t.Fatal("absent owner publication was invented")
+		}
 	}
 	snapshot.StructuredVariables = map[string]any{"workflow": map[string]any{"publication": strings.Repeat("X", 256<<10)}}
 	if result, err := Materialize("Agent", snapshot); err == nil || result.Complete {

@@ -28,7 +28,11 @@ import { checkContextResources } from "./fixtures/context-resources";
 import { checkIntegrationPackage } from "./fixtures/integration-package";
 import { checkEmailEffects } from "./fixtures/email-effects";
 import { checkGrantCandidates } from "./fixtures/grant-candidates";
-import { checkRunsCatalog } from "./fixtures/runs-catalog";
+import {
+  checkRunsCatalog,
+  type SyntheticSnapshotInstaller,
+  type SyntheticSnapshotReader,
+} from "./fixtures/runs-catalog";
 import { checkOrganizationCatalog } from "./fixtures/organization-catalog";
 import { checkFileSelection } from "./fixtures/file-selection";
 import { checkAssistantHistory } from "./fixtures/assistant-history";
@@ -36,6 +40,7 @@ import { expectAssistantConversationActions } from "./assistant-readiness";
 import { checkHomeResults } from "./fixtures/home-results";
 import { checkResumableSessions } from "./fixtures/resumable-sessions";
 import { syntheticBrowserSession } from "./fixtures/browser-session";
+import type { PlatformSnapshotEnvelope } from "../src/shared/api/generated/asyncapi/PlatformSnapshotEnvelope";
 import {
   checkRoleImageCatalog,
   checkRoleImageHistory,
@@ -55,6 +60,9 @@ import type {
   RuntimeEnvironmentSet,
   RevisionImpactPlan,
   RevisionImpactPage,
+  Agent,
+  Run,
+  Workflow,
 } from "../src/shared/api/generated/openapi/types.gen";
 
 const assistant: SystemAssistant = {
@@ -527,50 +535,182 @@ for (const { width, height } of [
         failures.push(`Asset: ${url.pathname} ${String(response.status())}`);
       await route.fulfill({ response });
     });
-    let invalidateAgents: (() => void) | undefined;
-    let invalidateRuns: (() => void) | undefined;
+    let invalidateAgents:
+      | ((agents: Agent[], projectRef?: string, workflows?: Workflow[]) => void)
+      | undefined;
+    let invalidateRuns: ((runs: Run[], projectRef: string) => void) | undefined;
+    let managedCatalog: ManagedConfigurationSummary[] = [];
+    let integrationCatalogReady = false;
+    const integrationDefinitions = {
+      items: [integration],
+      coreReady: true,
+      nextActions: ["CREATE_CONNECTION" as const],
+    };
+    const integrationConnections = {
+      items: [],
+      nextActions: [],
+      nextPageToken: "",
+    };
+    const catalogReaders = new Map<
+      PlatformSnapshotEnvelope["kind"],
+      SyntheticSnapshotReader[]
+    >();
+    const installSnapshot: SyntheticSnapshotInstaller = (kind, read) => {
+      // Части integration snapshot принадлежат разным HTTP fixtures.
+      catalogReaders.set(
+        kind,
+        kind === "INTEGRATION_CONNECTION"
+          ? [...(catalogReaders.get(kind) ?? []), read]
+          : [read],
+      );
+    };
+    const providers = await installProviderFixture(page, installSnapshot);
     await page.routeWebSocket("**/*", (socket) => {
       socket.onMessage((message) => {
         const input = JSON.parse(String(message)) as {
           type: string;
           requestRef: string;
+          projectRef?: string;
         };
         if (input.type === "SESSION_RESUME") {
           sessionResumes++;
           let invalidationCursor = 0;
-          invalidateAgents = () =>
-            socket.send(
-              JSON.stringify({
-                type: "PLATFORM_INVALIDATED",
-                requestRef: input.requestRef,
-                streamKind: "PLATFORM",
-                streamRef: "PLATFORM",
-                cursor: ++invalidationCursor,
-                eventName: "AGENT_CHANGED",
-                kind: "AGENT",
-              }),
-            );
-          invalidateRuns = () =>
-            socket.send(
-              JSON.stringify({
-                type: "PLATFORM_INVALIDATED",
-                requestRef: input.requestRef,
-                streamKind: "PLATFORM",
-                streamRef: "PLATFORM",
-                cursor: ++invalidationCursor,
-                eventName: "RUN_CHANGED",
-                kind: "RUN",
-              }),
-            );
-          socket.send(
-            JSON.stringify({
-              type: "SESSION_READY",
+          const sendSnapshot = (envelope: PlatformSnapshotEnvelope) =>
+            socket.send(JSON.stringify(envelope));
+          invalidateAgents = (agents, projectRef, workflows) => {
+            sendSnapshot({
+              type: "PLATFORM_SNAPSHOT",
               requestRef: input.requestRef,
-              streams: [
-                { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
-              ],
-            }),
-          );
+              streamKind: "PLATFORM",
+              streamRef: "PLATFORM",
+              cursor: ++invalidationCursor,
+              eventName: "AGENT_CHANGED",
+              kind: "AGENT",
+              projectRef,
+              mode: "DELTA",
+              snapshot: {
+                catalog: {
+                  agents,
+                  page: { nextPageToken: projectRef ? "" : "catalog_next" },
+                },
+              },
+            });
+            if (workflows)
+              sendSnapshot({
+                type: "PLATFORM_SNAPSHOT",
+                requestRef: input.requestRef,
+                streamKind: "PLATFORM",
+                streamRef: "PLATFORM",
+                cursor: ++invalidationCursor,
+                eventName: "WORKFLOW_CHANGED",
+                kind: "WORKFLOW",
+                projectRef,
+                mode: "DELTA",
+                snapshot: { catalog: { workflows, page: {} } },
+              });
+          };
+          invalidateRuns = (runs, projectRef) =>
+            sendSnapshot({
+              type: "PLATFORM_SNAPSHOT",
+              requestRef: input.requestRef,
+              streamKind: "PLATFORM",
+              streamRef: "PLATFORM",
+              cursor: ++invalidationCursor,
+              eventName: "RUN_CHANGED",
+              kind: "RUN",
+              projectRef,
+              mode: "DELTA",
+              snapshot: { catalog: { runs, gates: [], gatesPage: {} } },
+            });
+          const snapshots: Array<
+            [
+              PlatformSnapshotEnvelope["kind"],
+              PlatformSnapshotEnvelope["snapshot"],
+            ]
+          > = [
+            [
+              "PROJECT",
+              {
+                catalog: {
+                  projects: projects.slice(0, 6),
+                  nextActions: ["CREATE_PROJECT"],
+                  page: { nextPageToken: "projects_next" },
+                },
+                overview: { overview },
+              },
+            ],
+            [
+              "SYSTEM_ASSISTANT",
+              {
+                assistant: { assistant },
+                conversations: { conversations: [], page: {} },
+              },
+            ],
+            ["RUN", { catalog: { runs: [], gates: [], gatesPage: {} } }],
+            [
+              "MANAGED_CONFIGURATION",
+              {
+                catalog: {
+                  managedConfigurations: managedCatalog.filter(
+                    (item) => item.projectRef === input.projectRef,
+                  ),
+                  managedConfigurationPages: [
+                    {
+                      kind: "PROMPT_TEMPLATE",
+                      total: managedCatalog.filter(
+                        (item) => item.projectRef === input.projectRef,
+                      ).length,
+                    },
+                  ],
+                },
+              },
+            ],
+          ];
+          if (integrationCatalogReady)
+            snapshots.push([
+              "INTEGRATION_CONNECTION",
+              {
+                definitions: {
+                  definitions: integrationDefinitions.items,
+                  coreReady: integrationDefinitions.coreReady,
+                  nextActions: integrationDefinitions.nextActions,
+                  page: {},
+                },
+                connections: {
+                  connections: integrationConnections.items,
+                  nextActions: integrationConnections.nextActions,
+                  page: {
+                    nextPageToken: integrationConnections.nextPageToken,
+                  },
+                },
+              },
+            ]);
+          for (const [kind, readers] of catalogReaders) {
+            const values = readers
+              .map((read) => read(input.projectRef))
+              .filter((value) => value !== undefined);
+            if (!values.length) continue;
+            const existing = snapshots.find(([current]) => current === kind);
+            const snapshot = Object.assign(
+              {},
+              existing?.[1],
+              ...values,
+            ) as PlatformSnapshotEnvelope["snapshot"];
+            if (existing) existing[1] = snapshot;
+            else snapshots.push([kind, snapshot]);
+          }
+          for (const [kind, snapshot] of snapshots)
+            sendSnapshot({
+              type: "PLATFORM_SNAPSHOT",
+              requestRef: input.requestRef,
+              streamKind: "PLATFORM",
+              streamRef: "PLATFORM",
+              cursor: 0,
+              mode: "BOOTSTRAP",
+              kind,
+              projectRef: input.projectRef,
+              snapshot,
+            });
           socket.send(
             JSON.stringify({
               type: "PLATFORM_READY",
@@ -578,6 +718,16 @@ for (const { width, height } of [
               streamKind: "PLATFORM",
               streamRef: "PLATFORM",
               cursor: 0,
+              availableKinds: snapshots.map(([kind]) => kind),
+            }),
+          );
+          socket.send(
+            JSON.stringify({
+              type: "SESSION_READY",
+              requestRef: input.requestRef,
+              streams: [
+                { streamKind: "PLATFORM", streamRef: "PLATFORM", cursor: 0 },
+              ],
             }),
           );
           socket.send(
@@ -631,13 +781,23 @@ for (const { width, height } of [
     // может появиться раньше готовности самой интерактивной секции.
     await expect(
       page.locator(".home-project-section .home-project"),
-    ).toHaveCount(6);
-    const expandProjects = page
+    ).toHaveCount(4);
+    await expect(
+      page.locator(".home-project-section .home-project h3"),
+    ).toHaveText(
+      [projects[0], projects[1], projects[2], projects[3]].map(
+        (project) => project?.name ?? "",
+      ),
+    );
+    const allProjects = page
       .locator(".home-project-section")
-      .getByRole("button", { name: "Развернуть список проекта", exact: true });
-    await expect(expandProjects).toBeDisabled();
+      .getByRole("link", { name: "Все проекты", exact: true });
+    await expect(allProjects).toHaveAttribute("href", "/projects");
     releaseInitialHomeCatalogs();
-    await expect(expandProjects).toBeEnabled();
+    await expect(allProjects).toBeVisible();
+    await expect(
+      page.locator(".home-attention-section .home-attention__skeleton"),
+    ).toHaveCount(0);
     await expect
       .poll(() =>
         page.evaluate(
@@ -650,18 +810,29 @@ for (const { width, height } of [
       fullPage: true,
     });
     await page
-      .locator(".home-project-section")
-      .getByRole("button", { name: "Развернуть список проекта", exact: true })
+      .getByRole("button", { name: "Новый запуск", exact: true })
       .click();
     const homeProjects = page.getByRole("dialog", {
-      name: "Проекты",
+      name: "Выберите Проект",
       exact: true,
     });
-    await expect(homeProjects.locator(".home-project")).toHaveCount(6);
-    await homeProjects.getByRole("searchbox").fill("Проект 2");
-    await expect(homeProjects.locator(".home-project")).toHaveCount(1);
-    await homeProjects.getByRole("searchbox").fill("");
-    await expect(homeProjects.locator(".home-project")).toHaveCount(6);
+    await homeProjects
+      .getByRole("button", { name: "Выберите Проект", exact: true })
+      .click();
+    const projectOptions = page.getByRole("option");
+    await expect(projectOptions).toHaveCount(8);
+    await expect(projectOptions.locator("strong")).toHaveText(
+      projects.map((project) => project.name),
+    );
+    await page.getByRole("combobox").fill("Проект 2");
+    await expect(projectOptions).toHaveCount(1);
+    await expect(projectOptions).toContainText("Проект 2");
+    await page.getByRole("combobox").fill("");
+    await expect(projectOptions).toHaveCount(8);
+    await expect(projectOptions.locator("strong")).toHaveText(
+      projects.map((project) => project.name),
+    );
+    await page.getByRole("combobox").press("Escape");
     await homeProjects
       .getByRole("button", { name: "Закрыть", exact: true })
       .click();
@@ -1036,6 +1207,7 @@ for (const { width, height } of [
         ref: `configuration_${String(index)}`,
         version: 1,
         kind: "PROMPT_TEMPLATE",
+        projectRef: projects[0]?.ref,
         name: `Шаблон ${String(index + 1)}`,
         managedBy: index === 0 ? "GIT" : "UI",
         archived: false,
@@ -1051,6 +1223,7 @@ for (const { width, height } of [
         },
       }),
     );
+    managedCatalog = summaries;
     const rootNodes: VfsNode[] = projects.map((project) => ({
       ref: `node_${project.ref}`,
       path: `/projects/${project.ref}`,
@@ -1079,6 +1252,7 @@ for (const { width, height } of [
       const url = new URL(route.request().url());
       if (url.pathname === "/api/v1/managed-configurations") {
         expect(url.searchParams.get("kind")).toBe("PROMPT_TEMPLATE");
+        expect(url.searchParams.get("projectRef")).toBe(projects[0]?.ref);
         const query = url.searchParams.get("query") ?? "";
         const items = summaries.filter((item) => item.name.includes(query));
         await route.fulfill({ json: { items, total: items.length } });
@@ -1118,22 +1292,19 @@ for (const { width, height } of [
       }
       await route.fallback();
     });
-    await page.goto("/configurations/PROMPT_TEMPLATE");
+    await page.goto(
+      `/configurations/PROMPT_TEMPLATE?projectRef=${String(projects[0]?.ref)}`,
+    );
     await expect(page.locator(".configuration-catalog__row")).toHaveCount(8);
-    await page
-      .getByRole("button", { name: "Развернуть список проекта", exact: true })
-      .click();
-    const catalogDialog = page.getByRole("dialog");
+    const catalog = page.locator(".configuration-catalog");
     await expect(
-      catalogDialog.locator(".configuration-catalog__row"),
-    ).toHaveCount(8);
-    await catalogDialog.getByRole("searchbox").fill("Шаблон 8");
-    await expect(
-      catalogDialog.locator(".configuration-catalog__row"),
-    ).toHaveCount(1);
-    await catalogDialog
-      .getByRole("button", { name: "Закрыть", exact: true })
-      .click();
+      catalog.locator(".configuration-catalog__identity strong"),
+    ).toHaveText(summaries.map((item) => item.name));
+    await catalog.getByRole("searchbox").fill("Шаблон 8");
+    await expect(catalog.locator(".configuration-catalog__row")).toHaveCount(1);
+    await expect(catalog.locator(".configuration-catalog__row")).toContainText(
+      "Шаблон 8",
+    );
     await page.screenshot({
       path: testInfo.outputPath(`catalog-${String(width)}.png`),
       fullPage: true,
@@ -1142,10 +1313,7 @@ for (const { width, height } of [
     await expect(page.locator(".vfs-row")).toHaveCount(8);
     await expect(page.locator(".vfs-inspector")).toHaveCount(0);
     await page.locator(".vfs-row").first().click();
-    await page
-      .locator(".vfs-inspector")
-      .getByRole("button", { name: "Открыть", exact: true })
-      .click();
+    await expect(page.locator(".vfs-inspector")).toHaveCount(0);
     await expect(page.locator(".vfs-row")).toHaveCount(1);
     await expect(page.locator(".vfs-row")).toContainText("Запуски");
     expect(vfsRequests).toContain(rootNodes[0]?.path);
@@ -1168,21 +1336,14 @@ for (const { width, height } of [
       fullPage: true,
     });
     await page.goto("/projects");
-    await expect(page.locator(".project-list__item")).toHaveCount(6);
-    await page
-      .getByRole("button", { name: "Загрузить ещё", exact: true })
-      .click();
     await expect(page.locator(".project-list__item")).toHaveCount(8);
-    await page
-      .getByRole("button", { name: "Развернуть список проекта", exact: true })
-      .click();
-    await expect(
-      page.getByRole("dialog").locator(".project-list__item"),
-    ).toHaveCount(8);
-    await page.getByRole("dialog").getByRole("searchbox").fill("Проект 2");
-    await expect(
-      page.getByRole("dialog").locator(".project-list__item"),
-    ).toHaveCount(1);
+    await expect(page.locator(".project-list__identity > div > a")).toHaveText(
+      projects.map((project) => project.name),
+    );
+    // Каталог использует штатный query route; отдельной expansion-модалки больше нет.
+    await page.goto(`/projects?q=${encodeURIComponent("Проект 2")}`);
+    await expect(page.locator(".project-list__item")).toHaveCount(1);
+    await expect(page.locator(".project-list__item")).toContainText("Проект 2");
     expect(projectQueries).toContain("Проект 2");
     expect(
       await page.evaluate(
@@ -1195,21 +1356,18 @@ for (const { width, height } of [
     });
     await page.route("**/api/v1/integration-definitions**", (route) =>
       route.fulfill({
-        json: {
-          items: [integration],
-          coreReady: true,
-          nextActions: ["CREATE_CONNECTION"],
-        },
+        json: integrationDefinitions,
       }),
     );
     await page.route("**/api/v1/integration-connections**", (route) =>
       route.fulfill({
-        json: { items: [], nextActions: [], nextPageToken: "" },
+        json: integrationConnections,
       }),
     );
+    integrationCatalogReady = true;
     await page.goto("/integrations");
     await page.getByRole("tab", { name: /Каталог/ }).click();
-    const card = page.locator(".package-card");
+    const card = page.locator(".package-row");
     await expect(card).toHaveCount(1);
     const beforeDetails = await card.boundingBox();
     await card.getByRole("button", { name: "Подробнее", exact: true }).click();
@@ -1272,7 +1430,18 @@ for (const { width, height } of [
     let contextEnvironment: RuntimeEnvironmentSet | undefined;
     {
       const projectRef = projects[0]?.ref ?? "project_synthetic_0";
-      const fixture = await installEnvironmentFixture(page, projectRef);
+      const fixture = await installEnvironmentFixture(
+        page,
+        projectRef,
+        installSnapshot,
+      );
+      const openEnvironmentActions = async () => {
+        const actions = page.locator(".environment-secondary-actions");
+        if (
+          !(await actions.evaluate((element) => element.hasAttribute("open")))
+        )
+          await actions.locator("summary").click();
+      };
       contextEnvironment = fixture.environment;
       await page.goto(`/projects/${projectRef}/environments/new`);
       const saveDraft = page.getByRole("button", {
@@ -1315,6 +1484,7 @@ for (const { width, height } of [
       await page
         .getByLabel("Название", { exact: true })
         .fill("Изменения перед выходом");
+      await openEnvironmentActions();
       await page.getByRole("link", { name: "Отмена", exact: true }).click();
       await page
         .getByRole("dialog")
@@ -1324,6 +1494,7 @@ for (const { width, height } of [
         "Изменения перед выходом",
       );
       const savedDraftUrl = page.url();
+      await openEnvironmentActions();
       await page.getByRole("link", { name: "Отмена", exact: true }).click();
       await page
         .getByRole("dialog")
@@ -1341,21 +1512,16 @@ for (const { width, height } of [
       cancelInspectorRequests();
       await page.locator(".environment-name").click();
       await expect(page.locator(".environment-inspector")).toHaveCount(0);
-      await page
-        .getByRole("button", { name: "Развернуть список проекта", exact: true })
-        .click();
-      await expect(
-        page.getByRole("dialog").locator(".environment-name"),
-      ).toHaveCount(1);
-      await page
-        .getByRole("dialog")
-        .getByRole("button", { name: "Закрыть", exact: true })
-        .click();
+      await expect(page.locator(".environment-name")).toHaveCount(1);
+      await expect(page.locator(".environment-name")).toContainText(
+        fixture.environment.name,
+      );
       await page.goto(savedDraftUrl);
       await expect(page.getByLabel("Название", { exact: true })).toHaveValue(
         "Изменения перед выходом",
       );
       await page.getByLabel("Название", { exact: true }).fill("Не сохранять");
+      await openEnvironmentActions();
       await page.getByRole("link", { name: "Отмена", exact: true }).click();
       await page
         .getByRole("dialog")
@@ -1368,6 +1534,7 @@ for (const { width, height } of [
       await expect(page.getByLabel("Название", { exact: true })).toHaveValue(
         "Изменения перед выходом",
       );
+      await openEnvironmentActions();
       await page
         .getByRole("button", { name: "Удалить черновик", exact: true })
         .click();
@@ -1606,7 +1773,6 @@ for (const { width, height } of [
       ).toHaveText("");
     }
     if (width !== 900) {
-      const providers = await installProviderFixture(page);
       await page.goto("/administration/providers");
       await page
         .getByRole("button", { name: "Добавить учётную запись", exact: true })
@@ -1734,19 +1900,24 @@ for (const { width, height } of [
         page,
         project.ref,
         testInfo.outputPath(`secret-draft-${String(width)}.png`),
+        installSnapshot,
       );
       await page.screenshot({
         path: testInfo.outputPath(`secrets-${String(width)}.png`),
         fullPage: true,
       });
-      await checkInteractionIdentities(page);
+      await checkInteractionIdentities(page, installSnapshot);
       await page.screenshot({
         path: testInfo.outputPath(
           `interaction-identities-${String(width)}.png`,
         ),
         fullPage: true,
       });
-      const recipe = await checkRoleImageCatalog(page, project.ref);
+      const recipe = await checkRoleImageCatalog(
+        page,
+        project.ref,
+        installSnapshot,
+      );
       await page.screenshot({
         path: testInfo.outputPath(`role-images-${String(width)}.png`),
         fullPage: true,
@@ -1798,19 +1969,23 @@ for (const { width, height } of [
         path: testInfo.outputPath(`context-${String(width)}.png`),
         fullPage: true,
       });
-      await checkIntegrationPackage(page, integration);
+      await checkIntegrationPackage(page, integration, installSnapshot);
       await page.evaluate(() => window.scrollTo(0, 0));
       await page.screenshot({
         path: testInfo.outputPath(`integration-package-${String(width)}.png`),
         fullPage: true,
       });
-      await checkEmailEffects(page, async () => {
-        await page.screenshot({
-          path: testInfo.outputPath(`email-effect-${String(width)}.png`),
-          fullPage: false,
-        });
-      });
-      await checkGrantCandidates(page, project.ref);
+      await checkEmailEffects(
+        page,
+        async () => {
+          await page.screenshot({
+            path: testInfo.outputPath(`email-effect-${String(width)}.png`),
+            fullPage: false,
+          });
+        },
+        installSnapshot,
+      );
+      await checkGrantCandidates(page, project.ref, installSnapshot);
     }
     const catalogProject = projects[0];
     if (!catalogProject) throw new Error("Missing synthetic project");
@@ -1823,19 +1998,20 @@ for (const { width, height } of [
           fullPage: false,
         });
       },
-      () => {
+      (runs) => {
         if (!invalidateRuns)
           throw new Error("Missing synthetic platform stream");
-        invalidateRuns();
+        invalidateRuns(runs, catalogProject.ref);
       },
+      installSnapshot,
     );
     await checkOrganizationCatalog(
       page,
       projects,
-      () => {
+      (agents, projectRef, workflows) => {
         if (!invalidateAgents)
           throw new Error("Missing synthetic platform stream");
-        invalidateAgents();
+        invalidateAgents(agents, projectRef, workflows);
       },
       async () => {
         await page.screenshot({
@@ -1845,6 +2021,7 @@ for (const { width, height } of [
           fullPage: false,
         });
       },
+      installSnapshot,
     );
     await expect(page.locator("header .realtime-status")).toHaveAttribute(
       "data-presentation-state",

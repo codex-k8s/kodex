@@ -1,10 +1,14 @@
 import type { Page } from "@playwright/test";
+import type { SyntheticSnapshotInstaller } from "./runs-catalog";
 import type {
   ProviderAccount,
   ProviderDefinition,
 } from "../../src/shared/api/generated/openapi/types.gen";
 
-export async function installProviderFixture(page: Page) {
+export async function installProviderFixture(
+  page: Page,
+  installSnapshot?: SyntheticSnapshotInstaller,
+) {
   const events: string[] = [];
   const failures: string[] = [];
   const definition: ProviderDefinition = {
@@ -20,6 +24,18 @@ export async function installProviderFixture(page: Page) {
   };
   const now = new Date().toISOString();
   const accounts: ProviderAccount[] = [];
+  installSnapshot?.("PROVIDER_ACCOUNT", () => ({
+    catalog: {
+      accounts: structuredClone(
+        accounts.filter((item) => item.state !== "DELETED"),
+      ),
+      page: {},
+      nextActions: ["CREATE_CONNECTION"],
+      providerDefinitions: [structuredClone(definition)],
+      providerDefinitionsPage: {},
+      runtimes: [],
+    },
+  }));
   await page.route("**/api/v1/provider-**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());

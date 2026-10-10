@@ -477,10 +477,18 @@ func semanticValues(snapshot Snapshot, data map[string]any, effective []string, 
 	if snapshot.Locale == "ru" {
 		resultInstruction = "Помещай каждый запрошенный пользователем файл результата прямо в этот каталог. Используй запрошенное имя файла. Черновые файлы храни вне этого каталога."
 	}
-	files["result"] = map[string]any{
-		"directory":   "/workspace/.kodex/outbox",
-		"instruction": resultInstruction,
+	if snapshot.ServiceTemplateRevision == ServiceTemplateRevision {
+		if snapshot.Locale == "ru" {
+			resultInstruction += " Промежуточные архивы GZIP, TAR и ZIP, копии репозитория и материалы сборки храни вне этого каталога. Доказательства контрактов публикуй отдельными текстовыми файлами UTF-8 или валидным JSON, не сжатыми архивами. Публикуются только допущенные форматы результата; если запрошенный формат не поддерживается, сообщи об ограничении, не подменяя формат и не объявляя файл опубликованным. Один финальный ответ не подтверждает публикацию артефактов."
+		} else {
+			resultInstruction += " Keep intermediate GZIP, TAR and ZIP archives, repository copies and generated build evidence outside this directory. Publish contract evidence as individual UTF-8 text files or valid JSON, not compressed archives. Only admitted result formats can be published; if a requested format is unsupported, report that restriction without changing the requested format or claiming publication. A final message alone does not confirm artifact publication."
+		}
 	}
+	resultFiles := map[string]any{"directory": "/workspace/.kodex/outbox", "instruction": resultInstruction}
+	if snapshot.ServiceTemplateRevision == ServiceTemplateRevision {
+		resultFiles["instruction_revision"] = "runtime-result-guidance-v1"
+	}
+	files["result"] = resultFiles
 	workflowContext := map[string]any{"ref": workflow["ref"], "name": workflow["name"], "purpose": workflow["purpose"]}
 	if publication, ok := workflow["publication"]; ok {
 		workflowContext["publication"] = publication

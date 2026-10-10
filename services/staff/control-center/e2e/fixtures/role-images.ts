@@ -1,11 +1,19 @@
 import { expect, type Page } from "@playwright/test";
+import {
+  scopedSyntheticSnapshot,
+  type SyntheticSnapshotInstaller,
+} from "./runs-catalog";
 import type {
   RoleImageRecipe,
   RoleImageBuild,
   RoleImageRecipeRevision,
 } from "../../src/shared/api/generated/openapi/types.gen";
 
-export async function checkRoleImageCatalog(page: Page, projectRef: string) {
+export async function checkRoleImageCatalog(
+  page: Page,
+  projectRef: string,
+  installSnapshot?: SyntheticSnapshotInstaller,
+) {
   await page.route(
     "**/api/v1/administration/access/effective-access/query",
     async (route) => {
@@ -88,22 +96,36 @@ export async function checkRoleImageCatalog(page: Page, projectRef: string) {
   await page.route(`**/api/v1/projects/${projectRef}/agents*`, (route) =>
     route.fulfill({ json: { items: [], nextPageToken: "" } }),
   );
+  installSnapshot?.(
+    "ROLE_IMAGE_RECIPE",
+    scopedSyntheticSnapshot(projectRef, () => ({
+      catalog: {
+        recipes: structuredClone(recipes),
+        page: {},
+        total: 43,
+        organizationRecipes: [],
+        organizationRecipesPage: {},
+        roleEnvironments: [],
+      },
+    })),
+  );
   await page.goto(`/projects/${projectRef}/role-images`);
-  await expect(page.locator(".image-card")).toHaveCount(8);
+  const rows = page.locator(".role-image-catalog__row");
+  await expect(rows).toHaveCount(8);
   await expect(
     page.getByRole("link", { name: "Новый образ", exact: true }),
   ).toHaveCount(0);
   await expect(page.locator(".catalog-count")).toHaveText("Всего: 43");
   await expect(
     page
-      .locator(".image-card")
+      .locator(".role-image-catalog__row")
       .first()
-      .getByText("Источник: GIT", { exact: true }),
+      .getByText("Источник: Управляется из Git", { exact: true }),
   ).toBeVisible();
   await page
     .getByRole("searchbox", { name: "Найти образ по имени", exact: true })
     .fill("Образ 1");
-  await expect(page.locator(".image-card")).toHaveCount(1);
+  await expect(rows).toHaveCount(1);
   await expect(page.locator(".catalog-count")).toHaveText("Всего: 1");
   await page
     .getByRole("searchbox", { name: "Найти образ по имени", exact: true })
@@ -111,11 +133,11 @@ export async function checkRoleImageCatalog(page: Page, projectRef: string) {
   await page.getByRole("combobox").selectOption("ARCHIVED");
   await expect(page.locator(".catalog-count")).toHaveText("Всего: 0");
   await page.getByRole("combobox").selectOption("ALL");
-  await expect(page.locator(".image-card")).toHaveCount(8);
-  const cards = await page.locator(".image-card").evaluateAll((elements) =>
+  await expect(rows).toHaveCount(8);
+  const cards = await rows.evaluateAll((elements) =>
     elements.map((element) => {
       const card = element.getBoundingClientRect();
-      const footer = element.querySelector("footer")?.getBoundingClientRect();
+      const footer = element.lastElementChild?.getBoundingClientRect();
       return {
         within:
           !!footer &&
@@ -126,14 +148,10 @@ export async function checkRoleImageCatalog(page: Page, projectRef: string) {
     }),
   );
   expect(cards.every((card) => card.within && !card.overflow)).toBe(true);
-  await page
-    .getByRole("button", { name: "Развернуть список проекта", exact: true })
-    .click();
-  await expect(page.getByRole("dialog").locator(".image-card")).toHaveCount(8);
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Закрыть", exact: true })
-    .click();
+  await expect(rows).toHaveCount(8);
+  await expect(rows.locator(".role-image-catalog__identity a")).toHaveText(
+    recipes.map((item) => item.name),
+  );
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,

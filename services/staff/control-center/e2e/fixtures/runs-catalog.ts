@@ -1,11 +1,29 @@
 import { expect, type Page } from "@playwright/test";
 import type { Run } from "../../src/shared/api/generated/openapi/types.gen";
 import { syntheticCatalogRun } from "./catalog-run";
+import type { PlatformSnapshotEnvelope } from "../../src/shared/api/generated/asyncapi/PlatformSnapshotEnvelope";
+
+export type SyntheticSnapshotReader = (
+  projectRef?: string,
+) => PlatformSnapshotEnvelope["snapshot"] | undefined;
+export type SyntheticSnapshotInstaller = (
+  kind: PlatformSnapshotEnvelope["kind"],
+  read: SyntheticSnapshotReader,
+) => void;
+
+export function scopedSyntheticSnapshot(
+  projectRef: string,
+  read: () => PlatformSnapshotEnvelope["snapshot"],
+): SyntheticSnapshotReader {
+  return (scope) =>
+    scope === projectRef ? structuredClone(read()) : undefined;
+}
 export async function checkRunsCatalog(
   page: Page,
   projectRef: string,
   capture: () => Promise<void>,
-  invalidate: () => void,
+  invalidate: (runs: Run[]) => void,
+  installSnapshot?: SyntheticSnapshotInstaller,
 ): Promise<void> {
   let newRun = false;
   function run(index: number): Run {
@@ -52,6 +70,20 @@ export async function checkRunsCatalog(
       },
     });
   });
+  installSnapshot?.(
+    "RUN",
+    scopedSyntheticSnapshot(projectRef, () => ({
+      catalog: {
+        runs: [
+          ...Array.from({ length: 8 }, (_, index) => run(index)),
+          ...(newRun ? [run(99)] : []),
+        ],
+        page: { nextPageToken: "runs_next" },
+        gates: [],
+        gatesPage: {},
+      },
+    })),
+  );
   await page.goto(`/projects/${projectRef}/runs`);
   const board = page.locator(".runs-board");
   const lane = board.locator(".runs-lane__body").first();
@@ -107,14 +139,11 @@ export async function checkRunsCatalog(
     entry.states.includes("CANCELLING"),
   ).length;
   newRun = true;
-  invalidate();
-  await expect
-    .poll(
-      () =>
-        queries.filter((entry) => entry.states.includes("CANCELLING")).length,
-    )
-    .toBeGreaterThan(filteredReads);
+  invalidate([...Array.from({ length: 8 }, (_, index) => run(index)), run(99)]);
   await expect(lane.locator(".run-work-item")).toHaveCount(9);
+  expect(
+    queries.filter((entry) => entry.states.includes("CANCELLING")).length,
+  ).toBe(filteredReads);
   await page
     .getByRole("textbox", { name: "Поиск запусков", exact: true })
     .fill("No synthetic match");

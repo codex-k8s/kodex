@@ -4,8 +4,8 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.18
-updated: 2026-10-10
+version: 1.1.19
+updated: 2026-10-11
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
@@ -401,6 +401,19 @@ result может быть пустым: это само по себе не bloc
 | Same-root callback / continuation | Только текущие callback receipts и permitted result pins; прежние SemanticValues не переиспользуются |
 | Durable snapshot / rejoin | JSON-представление до seal сохраняет все поля и точные числа; Prompt и оба digest совпадают после roundtrip |
 | Неизвестная lineage / несовпадающие pins | Закрытый отказ до materialization; grants, историю и старый snapshot не исправляют |
+
+Инструкции публикации результата поставляются всем новым execution через
+версионированный PLATFORM `FILES`, а не исправляющим сообщением пользователя.
+В outbox помещаются только запрошенные допущенные файлы; промежуточные архивы,
+копии репозитория и материалы сборки остаются вне каталога результата.
+Доказательства контрактов публикуются отдельными UTF-8 файлами или валидным
+JSON. Неподдерживаемый запрошенный формат не подменяется молча: агент сообщает
+ограничение. Финальный текст не доказывает публикацию: owner сохраняет прежний
+artifact inspection и атомарный terminal commit. Исторический sealed `FILES`
+не переписывается новой инструкцией. Отказ completion callback фиксируется
+закрытыми stage/reason/code и доверенными execution pins без сырых payload,
+credentials и remote error details; запись отказа не подтверждает commit.
+
 Continuation после дочерней работы несёт в самом новом вводе результаты
 из точных server-owned callback receipts: run/node, terminal state, безопасное
 резюме и ссылки на artifacts. Для Workflow туда же входят ещё не

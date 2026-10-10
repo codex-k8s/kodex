@@ -1,5 +1,9 @@
 import { expect, type Page } from "@playwright/test";
 import { verifiedInventoryFixture } from "../../src/test-utils/image-inventory-fixture";
+import {
+  scopedSyntheticSnapshot,
+  type SyntheticSnapshotInstaller,
+} from "./runs-catalog";
 import type {
   RuntimeEnvironmentDraft,
   RuntimeEnvironmentDraftSpecification,
@@ -14,6 +18,7 @@ import type {
 export async function installEnvironmentFixture(
   page: Page,
   projectRef: string,
+  installSnapshot?: SyntheticSnapshotInstaller,
 ) {
   const events: string[] = [];
   const failures: string[] = [];
@@ -130,6 +135,7 @@ export async function installEnvironmentFixture(
       state: "ACTIVE",
       generation: 1,
       promotedImageReady: true,
+      activeImageArtifactRef: environment.currentVersion.image.artifactRef,
       environment: {
         environmentKey: "synthetic",
         dockerfile: "FROM scratch\n",
@@ -153,6 +159,7 @@ export async function installEnvironmentFixture(
       admissionVerdict: "ACCEPTED",
       promotionState: "PROMOTED",
       promotionRequested: true,
+      promotedReference: environment.currentVersion.image.reference,
       declaredTools: [],
       verifiedToolInventory: verifiedInventoryFixture(digest, digest),
     },
@@ -392,6 +399,12 @@ export async function installEnvironmentFixture(
       });
       return;
     }
+    if (path === `/api/v1/projects/${projectRef}/role-image-recipes`) {
+      await route.fulfill({
+        json: { items: [recipe.recipe], total: 1, nextPageToken: "" },
+      });
+      return;
+    }
     if (
       path ===
       `/api/v1/projects/${projectRef}/role-image-recipes/recipe_synthetic_image`
@@ -401,6 +414,17 @@ export async function installEnvironmentFixture(
     }
     await route.fallback();
   });
+  installSnapshot?.(
+    "RUNTIME_ENVIRONMENT",
+    scopedSyntheticSnapshot(projectRef, () => ({
+      catalog: {
+        environments: inspectorFailure?.status === 404 ? [] : [environment],
+        roleEnvironments: [],
+        runtimes: [],
+        page: {},
+      },
+    })),
+  );
   return {
     events,
     failures,

@@ -1,4 +1,5 @@
 import { expect, type Page } from "@playwright/test";
+import type { SyntheticSnapshotInstaller } from "./runs-catalog";
 import type {
   Agent,
   Project,
@@ -9,8 +10,13 @@ import type {
 export async function checkOrganizationCatalog(
   page: Page,
   projects: Project[],
-  invalidate: () => void,
+  invalidate: (
+    agents: Agent[],
+    projectRef?: string,
+    workflows?: Workflow[],
+  ) => void,
   capture: () => Promise<void>,
+  installSnapshot?: SyntheticSnapshotInstaller,
 ): Promise<void> {
   const first = projects[0];
   const second = projects[1];
@@ -73,6 +79,26 @@ export async function checkOrganizationCatalog(
       },
     });
   });
+  installSnapshot?.("AGENT", (scope) =>
+    scope && scope !== first.ref
+      ? undefined
+      : {
+          catalog: {
+            agents:
+              scope === first.ref
+                ? [agent(0, first.ref)]
+                : scope
+                  ? []
+                  : [
+                      ...Array.from({ length: 7 }, (_, index) =>
+                        agent(index, first.ref),
+                      ),
+                      agent(7, second.ref),
+                    ],
+            page: scope ? {} : { nextPageToken: "catalog_next" },
+          },
+        },
+  );
   await page.goto("/agents");
   const catalog = page.locator(".organization-catalog").first();
   const rows = catalog.locator(".agent-card");
@@ -101,10 +127,14 @@ export async function checkOrganizationCatalog(
   });
   await expect(rows).toHaveCount(9);
   version = 2;
-  invalidate();
+  const readsBeforeDelta = requests.length;
+  invalidate([
+    ...Array.from({ length: 7 }, (_, i) => agent(i, first.ref)),
+    agent(7, second.ref),
+  ]);
   await expect(rows).toHaveCount(8);
   await expect(rows.first()).toContainText("revision-2");
-  expect(requests.at(-1)?.cursor).toBeNull();
+  expect(requests).toHaveLength(readsBeforeDelta);
   await group
     .getByRole("button", { name: "Развернуть список проекта", exact: true })
     .click();
@@ -288,6 +318,26 @@ export async function checkOrganizationCatalog(
     projectAgentVersions.push(version);
     return route.fulfill({ json: { items: [agent(0, first.ref)] } });
   });
+  installSnapshot?.("WORKFLOW", (scope) =>
+    scope && scope !== first.ref
+      ? undefined
+      : {
+          catalog: {
+            workflows:
+              scope === first.ref
+                ? [workflow(0, first.ref)]
+                : scope
+                  ? []
+                  : [
+                      ...Array.from({ length: 7 }, (_, index) =>
+                        workflow(index, first.ref),
+                      ),
+                      workflow(7, second.ref),
+                    ],
+            page: scope ? {} : { nextPageToken: "workflow_catalog_next" },
+          },
+        },
+  );
   await page.goto("/workflows");
   const workflowCards = catalog.locator(".workflow-card");
   const projectWorkflowCards = group.locator(".workflow-card");
@@ -342,11 +392,12 @@ export async function checkOrganizationCatalog(
     workflowCards.first().getByRole("link", { name: "Запуски", exact: true }),
   ).toHaveAttribute("href", `/projects/${first.ref}/runs`);
   version = 3;
-  invalidate();
+  const projectAgentReadsBeforeDelta = projectAgentVersions.length;
+  invalidate([agent(0, first.ref)], first.ref, [workflow(0, first.ref)]);
   await expect(
     workflowCards.first().locator('[data-metric="activeRunCount"] dd'),
   ).toHaveText("3");
-  expect(projectAgentVersions).toContain(3);
+  expect(projectAgentVersions).toHaveLength(projectAgentReadsBeforeDelta);
   expect(workflowRequests.at(-1)?.cursor).toBeNull();
   expect(
     await page.evaluate(

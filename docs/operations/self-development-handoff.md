@@ -10,6 +10,38 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 23:25 UTC — Retry9 FAILED, адресные исправления готовы
+
+Remote Draft1807 и clean HOT c4496efc6e7866895e8e6781136ed2a2e6e59bdd.
+Guarded idleFF23:10:04 PASS: пять счётчиков0, promoted61/pins unchanged.
+FE host→Pod три hashes EQUAL; native canonical node labels/terminal activity
+screenshot/overflow0/Console0/relevant API200/rejoin PASS. Прежний generic FAILED
+дубликат на исходной строке ещё NOT RUN, не доказан отсутствием в конце истории.
+
+Retry9 Architect FINAL22:59:54, затем FAILED23:01:55/root seq844,
+RUNTIME_UNAVAILABLE/RUNTIME_WORKLOAD_EXITED; downstream CANCELLED, новых
+Architect artifacts не подтверждено. Exact старый Pod/logs отсутствуют;
+live причина completion UNKNOWN. Metadata-only sealed rollout подтвердил GZIP
+write в outbox; owner policy его не допускает, но actual rejecting branch
+NOT CAPTURED. Не объявлять гипотезу доказанной причиной.
+
+ROOT поверхc449: versioned FILES runtime-result-guidance-v1, закрытая callback
+диагностика и strict consumer existing UsageCompleteness. ROOT prompt race
+2.491s/vet, callback targeted race1.363s/vet, полный codex race21.580s/vet PASS.
+Pinned historical FILES/archive/authority/ABI/version3 guards сохранены.
+Нужна новая полная OCI сборка и canonical admission/defaults.12synthetic files
+posthash EQUAL, ROOT48unit/3suites1.68s/types/lint/format PASS; final Chromium
+предыдущего пакета FAIL29.5s из-за production recovery missing org anchor.
+ENV/Agent аналоги интегрированы: frozen4posthash EQUAL, ROOT63unit/3suites
+PASS4.57s; все6 read/recovery/stored calls используют trusted bootstrap org.
+Foreign/missing org, late response/unmount и original idempotency проверены.
+Guards не ослаблены; fresh build/Chromium/native пока NOT RUN.
+
+Далее: org fix/tests → commit/push/readback → clean fullrunner/canonical policy/
+recipes/ENV delivery → serving ELF/hash → Retry10 той же Session/Workflow40 без
+USER corrections → Developer PR/одно review/Manager/owner gate. Full65 и
+checklist11/14/15 OPEN; business PR не merge/approve.
+
 ## Checkpoint 10.10.2026 22:48 UTC — FE опубликован, native Architect выполняется
 
 Remote Draft1807/source712288e21e1d5636f27afc722a6c9fffc2dc06f5

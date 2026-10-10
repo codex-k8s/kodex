@@ -496,8 +496,19 @@ func (server *Server) complete(writer http.ResponseWriter, request *http.Request
 		return
 	}
 	var payload runtimecontract.RunnerCompletionRequest
-	if decode(request, &payload, maximumRequestBytes) != nil || payload.Validate() != nil || payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest || payload.Attempt != input.Attempt ||
-		(payload.ProviderDiagnostic != nil && !payload.ProviderDiagnostic.Matches(input)) {
+	// Порядок и predicates прежнего short-circuit guard сохраняются.
+	rejectionReason := ""
+	if decode(request, &payload, maximumRequestBytes) != nil {
+		rejectionReason = completionDecodeReason
+	} else if payload.Validate() != nil {
+		rejectionReason = completionValidateReason
+	} else if payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest || payload.Attempt != input.Attempt {
+		rejectionReason = completionProvenanceReason
+	} else if payload.ProviderDiagnostic != nil && !payload.ProviderDiagnostic.Matches(input) {
+		rejectionReason = completionProviderDiagnosticReason
+	}
+	if rejectionReason != "" {
+		server.logCompletionRejection(request.Context(), input, completionPayloadStage, rejectionReason, codes.InvalidArgument)
 		http.Error(writer, "invalid runtime completion", http.StatusBadRequest)
 		return
 	}
@@ -510,6 +521,7 @@ func (server *Server) complete(writer http.ResponseWriter, request *http.Request
 	usage := &controlplanev1.TokenUsage{TotalTokens: payload.Usage.TotalTokens, InputTokens: payload.Usage.InputTokens, CachedInputTokens: payload.Usage.CachedInputTokens, CacheWriteInputTokens: payload.Usage.CacheWriteInputTokens, OutputTokens: payload.Usage.OutputTokens, ReasoningOutputTokens: payload.Usage.ReasoningOutputTokens, ModelContextWindow: payload.Usage.ModelContextWindow}
 	_, err := server.control.Runtime.CompleteExecution(ctx, &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableKey(input.LeaseRef, "complete")}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: payload.Success, ResultSummary: payload.ResultSummary, SafeErrorCode: payload.SafeErrorCode, Artifacts: artifacts, Usage: usage, CodexSessionId: payload.CodexSessionID, CodexArchiveRelativePath: payload.ArchiveRelativePath, CodexArchiveSha256: payload.ArchiveSHA256, CodexArchiveSizeBytes: payload.ArchiveSizeBytes})
 	if err != nil && status.Code(err) != codes.AlreadyExists {
+		server.logCompletionRejection(ctx, input, completionOwnerRPCStage, completionRPCRejectedReason, status.Code(err))
 		writeControlError(writer, err)
 		return
 	}

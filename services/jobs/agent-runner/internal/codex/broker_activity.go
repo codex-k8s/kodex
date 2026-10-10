@@ -192,7 +192,7 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 			if err != nil {
 				return Result{}, errProviderBrokerResponseInvalid
 			}
-			if _, err := decodeObject(terminalFields["result"], schema(nil, "SessionID", "FinalMessage", "Outcome", "FailureCode", "ArchivePath", "ArchiveRelativePath", "ArchiveSHA256", "ArchiveSizeBytes", "Usage")); err != nil {
+			if _, err := decodeObject(terminalFields["result"], schema(nil, "SessionID", "FinalMessage", "Outcome", "FailureCode", "ArchivePath", "ArchiveRelativePath", "ArchiveSHA256", "ArchiveSizeBytes", "Usage", "UsageCompleteness")); err != nil {
 				return Result{}, errProviderBrokerResponseInvalid
 			}
 			terminal = frame.Terminal

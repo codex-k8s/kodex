@@ -1,6 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 import { installEmailOidc } from "./email-oidc";
 import { sampleBrowserDiagnostics } from "./browser-diagnostics";
+import type { SyntheticSnapshotInstaller } from "./runs-catalog";
 import type {
   EmailEffectReceiptView,
   EmailReconciliationInput,
@@ -9,6 +10,7 @@ import type {
 export async function checkEmailEffects(
   page: Page,
   capture: () => Promise<void>,
+  installSnapshot?: SyntheticSnapshotInstaller,
 ): Promise<void> {
   if (process.env.KODEX_SYNTHETIC_DIAGNOSTICS === "1")
     await sampleBrowserDiagnostics(page, "BEFORE_EMAIL");
@@ -116,6 +118,13 @@ export async function checkEmailEffects(
       });
     },
   );
+  installSnapshot?.("INTEGRATION_CONNECTION", () => ({
+    connections: {
+      connections: [structuredClone(connection)],
+      nextActions: [],
+      page: {},
+    },
+  }));
   await page.goto("/integrations");
   await page
     .getByRole("button", { name: "Сведения о подключении", exact: true })
