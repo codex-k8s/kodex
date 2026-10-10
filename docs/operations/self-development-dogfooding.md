@@ -772,3 +772,38 @@ WS own connection opened1/closed0, RUN_EVENT10, без problems/closes: это �
 бизнес-задачи ещё OPEN. Architect source/effective-version BLOCKED, Developer
 не допущен. Chrome MCP640 также timeout300s; нужны дальнейшие попытки.
 Полный65QA и итоговый business PR ещё не завершены.
+
+## Checkpoint 10.10.2026 00:20 UTC — восстановление после reboot и диагностика по смыслу
+
+Проверен ROOT SHA5b6a134a, чистое дерево до интеграции UX. Обе ноды Ready;
+все33 Deployment и9 StatefulSet имеют desired ready replicas. На основном
+диске147GiB, на data52GiB свободно. CP/RC/gateway source mounts направлены в
+текущий клон, frontend mount — в его control-center; очистка и restart не нужны.
+
+Native PROJECT диагностический run_I1EnGRaX_jkshXeGxS_saegh завершён
+SUCCEEDED/sequence60. По естественному описанию задачи найдены прежний Workflow
+и архитектурный шаг. Actual read_file прочитал RUN_RESULT artifact
+art_8_wMd8Qj18NbhwvBBYHXgJwF/revision12 двумя страницами0→16384→19205,
+EOF=true; source digest134b5775…39281 совпадает с прежним архитектурным
+результатом. Final trn_uSrtxKSwkkYIiffzJaGcFgqz не выдал semantic BLOCKED
+за готовность: Developer не запущен. Штатный CODEX_SHELL проверил альтернативное
+публичное чтение исходников; effective version обслуживающего provider процесса
+остаётся NOT CAPTURED. Версия VERIFIED image текущего помощника не подменяет
+это доказательство. Полный пункт16 и бизнес-Workflow по-прежнему OPEN.
+
+Интегрирован frozen UX пакет4FE файлов с проверкой base/post hashes; исправлен
+тот же неполный CAPABILITY_ARTIFACT_MANAGE_DESCRIPTION в ru/en gateway source.
+Подпись права понятная, описание явно включает read/create/update/delete и
+связи знаний в разрешённой области. Plan summary не мутируется, authority и
+owner gate не меняются. ROOT26 unit, ESLint, Prettier, forced typecheck,
+production build и gateway usertext unit PASS на combined tree; прежние chunk
+warnings сохранены. Изменённые frontend host/Pod hashes совпадают.
+
+Native readonly просмотр уже применённого плана подтвердил полное описание
+права; screenshot просмотрен. Технический заголовок editor ещё длинный — это
+отдельный незавершённый UX аналог, не PASS всей карточки. Transcript screenshot
+проверен: compact tools/commentary/final, overflow=false. Own reload с draft0
+выполнен, relevant graph/events GET200. Console cumulative12/warning0/pageerror0:
+новые hot-reload ошибки ещё не атрибутированы и не скрыты. CP since5m log lines0,
+это не доказательство всех backend paths. Chrome MCP679 pending; доступ не
+объявлен подтверждённым. Полный65QA и итоговый business PR остаются OPEN.

@@ -469,7 +469,7 @@ CAPABILITY_GATE_RESOLVE_DESCRIPTION:
 CAPABILITY_ARTIFACT_MANAGE_NAME:
   other: Files
 CAPABILITY_ARTIFACT_MANAGE_DESCRIPTION:
-  other: Read and create result files
+  other: Read, create, update and delete files, and manage knowledge bindings within the allowed scope
 CAPABILITY_SCHEDULE_MANAGE_NAME:
   other: Automations
 CAPABILITY_SCHEDULE_MANAGE_DESCRIPTION:

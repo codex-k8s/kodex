@@ -469,7 +469,7 @@ CAPABILITY_GATE_RESOLVE_DESCRIPTION:
 CAPABILITY_ARTIFACT_MANAGE_NAME:
   other: Файлы
 CAPABILITY_ARTIFACT_MANAGE_DESCRIPTION:
-  other: Чтение и создание файлов результата
+  other: Чтение, создание, изменение и удаление файлов, а также управление связями знаний в разрешённой области
 CAPABILITY_SCHEDULE_MANAGE_NAME:
   other: Автоматизации
 CAPABILITY_SCHEDULE_MANAGE_DESCRIPTION:

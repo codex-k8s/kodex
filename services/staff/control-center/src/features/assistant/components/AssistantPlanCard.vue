@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import type { AssistantPlanOperation } from "@/shared/api/generated/openapi/types.gen";
+import { platformCapabilityMessages } from "@/shared/ui/server-message-catalog";
 
 const props = defineProps<{ operations: AssistantPlanOperation[] }>();
 const { t } = useI18n();
@@ -62,6 +63,24 @@ function grant(operation: AssistantPlanOperation) {
         : "",
   };
 }
+function platformCapability(operation: AssistantPlanOperation) {
+  if (operation.type !== "CHANGE_CAPABILITY") return;
+  const key = operation.parameters.capabilityKey;
+  const messages =
+    typeof key === "string" ? platformCapabilityMessages(key) : undefined;
+  if (!messages || !operation.target.name.trim()) return;
+  const enabled = operation.parameters.enabled;
+  if (typeof enabled !== "boolean") return;
+  return {
+    name: t(messages.name),
+    description: t(messages.description),
+    effect: t(
+      enabled
+        ? "assistant.planEditor.grantEnableShort"
+        : "assistant.planEditor.grantDisableShort",
+    ),
+  };
+}
 </script>
 
 <template>
@@ -104,6 +123,35 @@ function grant(operation: AssistantPlanOperation) {
                 .filter(Boolean)
                 .join(" · ")
             }}</small>
+          </template>
+          <template v-else-if="platformCapability(operation)">
+            <strong class="plan-summary-list__capability">{{
+              [operation.target.name, platformCapability(operation)?.name].join(
+                " · ",
+              )
+            }}</strong>
+            <span>{{ platformCapability(operation)?.effect }}</span>
+            <p>{{ platformCapability(operation)?.description }}</p>
+            <p>{{ operation.summary }}</p>
+            <details>
+              <summary>
+                {{ $t("assistant.planEditor.transitionDetails") }}
+              </summary>
+              <dl>
+                <dt>{{ $t("assistant.planEditor.commandType") }}</dt>
+                <dd>{{ operation.type }}</dd>
+                <dt>{{ $t("assistant.planEditor.expectedVersion") }}</dt>
+                <dd>{{ operation.expectedVersion }}</dd>
+                <dt>{{ $t("assistant.planEditor.target") }}</dt>
+                <dd>{{ JSON.stringify(operation.target, null, 2) }}</dd>
+                <dt>{{ $t("assistant.planEditor.parametersTitle") }}</dt>
+                <dd>{{ JSON.stringify(operation.parameters, null, 2) }}</dd>
+                <dt>{{ $t("assistant.planEditor.before") }}</dt>
+                <dd>{{ JSON.stringify(operation.before, null, 2) }}</dd>
+                <dt>{{ $t("assistant.planEditor.afterDetails") }}</dt>
+                <dd>{{ JSON.stringify(operation.after, null, 2) }}</dd>
+              </dl>
+            </details>
           </template>
           <slot v-else name="operation" :operation="operation" />
           <small v-if="!operation.selected">{{

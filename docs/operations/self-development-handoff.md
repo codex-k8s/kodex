@@ -10,6 +10,30 @@ updated: 2026-10-09
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 00:20 UTC — reboot и продолжение
+
+ROOT база5b6a134a, branch kodex-agent/issue-1797-full21-v7, Draft1807/Issue1797.
+Обе ноды Ready,33 Deployment/9 StatefulSet готовы; source mounts текущего клона
+сохранены. Native diagnostic run_I1EnGRaX_jkshXeGxS_saegh SUCCEEDED/seq60:
+задача найдена по смыслу, architecture artifact rev12 дочитан19205bytes/EOFtrue
+с exact digest134b5775…39281. Альтернативное публичное чтение исходников
+проверено самим помощником; обслуживающая provider версия пока NOT CAPTURED.
+Developer не запущен, business semantic BLOCKED не замаскирован.
+
+Интегрированы4FE UX frozen postimages плюс ru/en gateway DESCRIPTION;26unit,
+lint/format/typecheck/build/usertext unit PASS. Native readonly Applied plan
+показал полный CRUD scope и понятную подпись capability. Editor heading ещё
+technical/длинный; этот системный UX аналог требуется доделать. Не применять
+Applied план повторно. Console cumulative12, delta после hot reload UNKNOWN,
+warning/pageerror0. Chrome MCP679 pending; own Playwright38659 активен,
+PROJECT прежний chat, readonly план открыт. Не закрывать чужие вкладки.
+
+Далее: проверить ответ Chrome; атрибутировать console errors и закончить
+heading editor, доказать provider-version штатным exact runtime источником
+либо согласованной внутренней архитектурной границей, завершить bootstrap
+проверки/merge по разрешённым условиям, затем продолжить Workflow внутренней
+командой. Полный65QA не завершён; пункт16 целиком не отмечать.
+
 ## Checkpoint 10.10.2026 00:05 UTC — собственная возможность и чтение заметки
 
 Опубликованный ROOT/remote/Draft1807 SHA4faf377e. Native PROJECT self-plan

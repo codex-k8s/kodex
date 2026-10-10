@@ -134,8 +134,8 @@ export const serverTokenTranslations = {
   ],
   CAPABILITY_ARTIFACT_MANAGE_NAME: ["Файлы и знания", "Files and knowledge"],
   CAPABILITY_ARTIFACT_MANAGE_DESCRIPTION: [
-    "Работа с файлами и связями знаний в разрешённой области",
-    "Work with files and knowledge bindings within the allowed scope",
+    "Чтение, создание, изменение и удаление файлов, а также управление связями знаний в разрешённой области",
+    "Read, create, update and delete files, and manage knowledge bindings within the allowed scope",
   ],
   CAPABILITY_GATE_RESOLVE_NAME: ["Принятие решений", "Approval decisions"],
   CAPABILITY_GATE_RESOLVE_DESCRIPTION: [
@@ -946,6 +946,29 @@ export const serverTokenTranslations = {
   WORKFLOW_CREATED: ["Процесс создан", "Workflow created"],
   WORKFLOW_UPDATED: ["Процесс обновлён", "Workflow updated"],
 } as const satisfies Record<string, readonly [string, string]>;
+
+// Подписи известных платформенных прав не зависят от технического имени в API.
+const platformCapabilityMessageKeys = {
+  "platform.artifact.manage": {
+    name: "assistant.planEditor.capabilities.platform_artifact_manage",
+    description: "serverMessages.CAPABILITY_ARTIFACT_MANAGE_DESCRIPTION",
+  },
+  "platform.run.delegate": {
+    name: "assistant.planEditor.capabilities.platform_run_delegate",
+    description: "serverMessages.CAPABILITY_RUN_DELEGATE_DESCRIPTION",
+  },
+  "platform.run.launch": {
+    name: "assistant.planEditor.capabilities.platform_run_launch",
+    description: "serverMessages.CAPABILITY_RUN_LAUNCH_DESCRIPTION",
+  },
+} as const;
+
+export function platformCapabilityMessages(key: string) {
+  if (!Object.hasOwn(platformCapabilityMessageKeys, key)) return undefined;
+  return platformCapabilityMessageKeys[
+    key as keyof typeof platformCapabilityMessageKeys
+  ];
+}
 
 export const serverMessageTokens = new Set([
   ...Object.keys(serverTokenTranslations),

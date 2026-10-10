@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, useId, watch } from "vue";
+import { useI18n } from "vue-i18n";
 
 import {
   operationParameter,
@@ -15,6 +16,8 @@ import type {
   PlatformCapability,
 } from "@/shared/api/generated/openapi/types.gen";
 import { unwrap } from "@/shared/api/problem";
+import { platformCapabilityMessages } from "@/shared/ui/server-message-catalog";
+import { useServerMessage } from "@/shared/ui/server-message";
 
 const props = defineProps<{
   operation: EditablePlanOperation;
@@ -22,6 +25,8 @@ const props = defineProps<{
   disabled: boolean;
 }>();
 const fieldPrefix = `assistant-capability-${useId()}`;
+const { t } = useI18n();
+const serverMessage = useServerMessage();
 const emit = defineEmits<{
   valid: [value: boolean];
   dirty: [];
@@ -119,6 +124,14 @@ function changed(key: string, value: string | boolean): void {
   emit("parameter", key, value);
   emit("dirty");
 }
+
+function capabilityText(
+  item: PlatformCapability,
+  field: "name" | "description",
+) {
+  const messages = platformCapabilityMessages(item.key);
+  return messages ? t(messages[field]) : serverMessage(item[field]);
+}
 </script>
 
 <template>
@@ -154,11 +167,13 @@ function changed(key: string, value: string | boolean): void {
             :key="item.key"
             :value="item.key"
           >
-            {{ item.name }}
+            {{ capabilityText(item, "name") }}
           </option>
         </select>
       </label>
-      <p v-if="selectedCapability">{{ selectedCapability.description }}</p>
+      <p v-if="selectedCapability">
+        {{ capabilityText(selectedCapability, "description") }}
+      </p>
       <p v-else-if="capabilityKey" class="field-error" role="alert">
         {{ $t("assistant.planEditor.capabilityUnknown") }}
       </p>
