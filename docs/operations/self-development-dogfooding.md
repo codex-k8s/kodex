@@ -1323,3 +1323,16 @@ offline schema установленного бинаря; ранний STOP не
 Новый helper native EOF read этой публикации работает; новый launch NOT RUN.
 Исторические результаты не переписаны; credits-case и UNKNOWN balance сохранены.
 Full65, business Developer/Review/acceptance и итоговый owner gate OPEN.
+
+### Checkpoint 10.10.2026 10:46 UTC — опубликован7db3ee17, новый native root
+
+Source/remote/Draft1807 exact7db3ee17ccbd406438af5b0a2b42da7fd6754c68;
+main ab4992e0 unchanged. Helper read новой WORKFLOW_CONFIGURATION:
+76205B/EOF, offsets0→16383→32767→49150→65534→76205,
+SHA2560d251f2157c8c9875f88370dc4ab94bde93ea7309cc6cdf1985c6023703902ab.
+Оба новых instructions подтверждены; published revision12 отдельно owner GET.
+Native один POST201/req80730 создал run_7M7M1dCVTpTg2BcSy1tMcHMo по v37/rev12.
+Четыре required поля46/1538/15/1766chars, weekly+paid criterion сохранён.
+10:46 RUNNING/seq6, только coordinator активен, пять steps PLANNED.
+Form screenshot/overflowfalse, Run screenshot/Console0/graph+events200 PASS.
+Это не business PASS; Architect/Developer/Review/acceptance ещё NOT RUN.

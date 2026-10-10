@@ -10,6 +10,19 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 10:46 UTC — новый бизнес root работает
+
+Code/remote/Draft1807 exact7db3ee17ccbd406438af5b0a2b42da7fd6754c68,
+main ab4992e0 unchanged. Новый root run_7M7M1dCVTpTg2BcSy1tMcHMo создан
+одним native POST201 по workflowv37/rev12, поля46/1538/15/1766chars.
+Helper независимо native прочитал эту конфигурацию76205B доEOF, digest
+0d251f2157c8c9875f88370dc4ab94bde93ea7309cc6cdf1985c6023703902ab.
+10:46 RUNNING/seq6, coordinator активен; дальше intake→Architect offline
+schema→Developer→единственный Review→Manager→owner gate. Старый root CANCELLED.
+НЕ запускать второй/Retry, не реализовать1796 host-работой, не merge бизнес PR.
+Впереди весь реальный business verdict и остаток Full65. Chrome page5 на новом
+root; foreign tabs не трогать, list/reload каждые5мин, сохранить ввод.
+
 ## Checkpoint 10.10.2026 10:44 UTC — frontier исправлен, следующий новый запуск
 
 Parent3e486535 + exact frozen frontier7/catalog3. ROOT unit/race/vet/build/
