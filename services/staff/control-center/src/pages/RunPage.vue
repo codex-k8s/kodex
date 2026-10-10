@@ -1657,6 +1657,30 @@ onBeforeUnmount(() => {
   .run-workspace {
     --run-graph-toolbar-top: 56px;
   }
+  .graph-panel__canvas :deep(.graph-toolbar) {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-rows: 44px 16px;
+    gap: 4px 2px;
+  }
+  .graph-panel__canvas :deep(.graph-view-switch) {
+    grid-column: 1 / span 2;
+    grid-row: 1;
+    justify-content: center;
+  }
+  .graph-panel__canvas :deep(.graph-toolbar > .icon-button) {
+    grid-row: 1;
+    justify-self: center;
+  }
+  .graph-panel__canvas :deep(.graph-toolbar__count) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding: 0;
+    text-align: center;
+  }
+  .graph-panel__canvas :deep(.graph-toolbar__separator) {
+    display: none;
+  }
   .run-page-body {
     min-height: 0;
   }
@@ -1671,7 +1695,7 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
   .run-canvas-summary {
-    top: 104px;
+    top: 136px;
     left: 8px;
     width: min(320px, calc(100% - 16px));
     padding: 6px 8px;

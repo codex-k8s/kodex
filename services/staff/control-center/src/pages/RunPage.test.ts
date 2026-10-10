@@ -138,7 +138,44 @@ describe("RunPage runtime presentation", () => {
     expect(mobile).toMatch(
       /\.run-workspace\s*\{[^}]*--run-graph-toolbar-top: 56px/,
     );
-    expect(mobile).toMatch(/\.run-canvas-summary\s*\{[^}]*top: 104px/);
+    expect(mobile).toMatch(/\.run-canvas-summary\s*\{[^}]*top: 136px/);
+    expect(mobile).toMatch(
+      /:deep\(\.graph-toolbar\)\s*\{[^}]*display: grid;[^}]*grid-template-columns: repeat\(6, minmax\(0, 1fr\)\);[^}]*grid-template-rows: 44px 16px;[^}]*gap: 4px 2px/,
+    );
+    expect(mobile).toMatch(
+      /:deep\(\.graph-view-switch\)\s*\{[^}]*grid-column: 1 \/ span 2;[^}]*grid-row: 1/,
+    );
+    expect(mobile).toMatch(
+      /:deep\(\.graph-toolbar > \.icon-button\)\s*\{[^}]*grid-row: 1/,
+    );
+    expect(mobile).toMatch(
+      /:deep\(\.graph-toolbar__count\)\s*\{[^}]*grid-column: 1 \/ -1;[^}]*grid-row: 2/,
+    );
+    expect(mobile).toMatch(
+      /:deep\(\.graph-toolbar__separator\)\s*\{[^}]*display: none/,
+    );
+    const globalStyle = readFileSync(
+      new URL("../app/styles/base.css", import.meta.url),
+      "utf8",
+    );
+    expect(globalStyle).toMatch(
+      /@media \(max-width: 900px\)[\s\S]*?\.icon-button,[^}]*width: 44px;[^}]*min-width: 44px;[^}]*height: 44px;[^}]*min-height: 44px/,
+    );
+    const canvas = readFileSync(
+      new URL("../features/runs/RunGraphCanvas.vue", import.meta.url),
+      "utf8",
+    );
+    expect(canvas).toMatch(/\.graph-toolbar\s*\{[^}]*border: 1px solid/);
+    expect(canvas).toMatch(
+      /@media \(max-width: 760px\)[\s\S]*?\.graph-toolbar\s*\{[^}]*padding: 4px/,
+    );
+    const toolbarHeight = 44 + 16 + 4 + 2 * 4 + 2;
+    expect(56 + toolbarHeight + 6).toBe(136);
+    for (const viewport of [320, 390]) {
+      const cellWidth = (viewport - 16 - 2 - 8 - 5 * 2) / 6;
+      expect(cellWidth).toBeGreaterThanOrEqual(44);
+      expect(cellWidth * 2 + 2).toBeGreaterThanOrEqual(2 * 44 + 5);
+    }
     expect(mobile).toMatch(
       /\.run-workspace-toolbar,[\s\S]*?\.run-workspace--activity \.run-workspace-toolbar\s*\{[^}]*top: 8px;[^}]*left: 8px;[^}]*transform: none/,
     );

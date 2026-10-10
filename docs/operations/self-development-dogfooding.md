@@ -1132,3 +1132,34 @@ ROOT targeted30/30 PASS4.58s; первый запуск без dependency link �
 Worker scoped lint/format/typecheck PASS; Context7 Vue scoped layout проверен.
 Actual publication/hot/native mobile geometry этого FE diff NOT RUN.
 Business1796/provider/Full65 остаются OPEN; false QA PASS не объявляется.
+
+## Checkpoint 10.10.2026 18:26 UTC — точный diagnostic и реальная touch geometry
+
+Remote/Draft1807 exact48ffc82 PASS. Approved owner readback18:21:37.953Z:
+openBuilds/pendingAdmissions/pendingPromotions/activeRuntimeRuns/claimedLeases0,
+artifacts58/pinsff868e…, rawSHAdebaa87d67f3dd55ff301b9bc0e8ad4892f107f45d3459ef3173b44a4d695b26.
+Clean hot FF18:21:38.175Z PASS; .env owned regular0600 сохранён.
+Desktop screenshot и Console0/API200 PASS. Mobile390 nooverflow/Console0,
+но actual graph toolbar54px/global touch44px перекрыла summary6px — FAIL.
+Исторический unit PASS не выдаётся за native geometry. Narrow supplement
+RunPage/test переводит mobile controls в6columns/44px + count row16px,
+toolbar74px, summary136/6px gap,320cell48px. Standalone Canvas/desktop/fit/
+wheel неизменны. Worker30/30 scoped unit/lint/format/typecheck/build PASS;
+ROOT integrated frontend30/30 PASS5.25s, existing fixture warning сохранён;
+новая browser geometry после доставки пока NOT RUN.
+
+RC-only finer diagnostic трёх файлов интегрирован: fixed ENVELOPE_<field/group>
+после настоящего отказа input.Validate; guard/error/input/shared ABI прежние,
+raw input/error/credential path/value не выводятся. FrozenSHA77e063ddb3e8a915960891459d4eb2bee59b52bd3c4edd35cdece35ee1dad13a.
+Worker canonical1.26.6 race workload/app5.893s/cached и vet PASS;
+ROOT targeted44 mutations/unknown/nooverride/old guard PASS0.057s,
+app pattern tests отсутствуют. Actual finer serving/semanticcause NOT RUN/UNKNOWN.
+
+Latest owner invariant проверен в shipped common PLATFORM v3/core48:
+fresh AGENT/Workflow/coordinator/automation/continuation/warm и SYSTEM/PROJECT,
+без owner seed, independent authorized READ, EOF/digest/semantic gate,
+UNKNOWN mutation→exact authoritative readback, запрет имитации owner messages.
+Addressed pure prompt tests44 top-level/194withsubtests PASS на48;
+initial mixed toolchain FAIL до tests, pinned1.26.6 repeat PASS. PG/live
+inheritance в этом repeat NOT RUN, modelbehavior этим не доказано.
+Business1796/provider/Full65 OPEN; новых управляющих USER_MESSAGE0.

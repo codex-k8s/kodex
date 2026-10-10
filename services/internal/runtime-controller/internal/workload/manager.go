@@ -471,6 +471,9 @@ func (failure *TurnInputBuildError) ValidationReason() string {
 		case "REQUIRED_CONTEXT", "ATTACHMENT_LINEAGE", "ATTACHMENT_MANIFEST", "WORKSPACE_MANIFEST":
 			return validation.reason
 		case "RUNNER_INPUT":
+			if runnerInputValidationReason(validation.cause) == "ENVELOPE" && knownEnvelopeReason(validation.envelopeReason) {
+				return validation.envelopeReason
+			}
 			return runnerInputValidationReason(validation.cause)
 		}
 	}
@@ -478,8 +481,9 @@ func (failure *TurnInputBuildError) ValidationReason() string {
 }
 
 type runnerInputValidationFailure struct {
-	reason string
-	cause  error
+	reason         string
+	cause          error
+	envelopeReason string
 }
 
 func (failure *runnerInputValidationFailure) Error() string { return failure.cause.Error() }
@@ -641,7 +645,11 @@ func validateRunnerInput(input runtimecontract.RunnerInput) error {
 		return validationFailure("REQUIRED_CONTEXT", err)
 	}
 	if err := input.Validate(); err != nil {
-		return validationFailure("RUNNER_INPUT", err)
+		failure := &runnerInputValidationFailure{reason: "RUNNER_INPUT", cause: err}
+		if runnerInputValidationReason(err) == "ENVELOPE" {
+			failure.envelopeReason = runtimeEnvelopeReason(input)
+		}
+		return failure
 	}
 	for _, set := range input.AttachmentSets {
 		if set.TurnRef == "" || set.Provenance == "CURRENT_TURN" && set.TurnRef != input.TurnRef ||

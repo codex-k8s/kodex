@@ -10,6 +10,31 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 18:26 UTC — точная диагностика и touch layout
+
+Exact48ffc82 remote/Draft1807 PASS; fresh owner idle18:21:37Z и clean
+hot fast-forward18:21:38Z PASS, protected promoted pins58 неизменны.
+Desktop screenshot/Console0/API200 PASS. Mobile390 actual geometry выявила
+оставшееся перекрытие6px: global touch button44px делает toolbar54px,
+а не предполагаемые42px. FAIL сохранён. Новое mobile-only дополнение:
+6 touch controls по44px и отдельная строка счётчика; toolbar74px,
+summary top136/6px gap, ширина320 предусмотрена. Worker30 unit,
+scoped lint/format/forced typecheck/production build PASS; новая native
+ROOT integrated frontend30/30 PASS5.25s, existing fixture warning сохранён;
+geometry до доставки NOT RUN, standalone/desktop/fit/wheel неизменны.
+
+Три RC файла детализируют только closed ENVELOPE_<field/group> после отказа
+настоящего shared validator. Exact guard/input/error/lifecycle и ABI прежние,
+raw input/error/credentials не выводятся. Worker canonical1.26.6 race/vet
+PASS; ROOT44 mutation/unknown/guard targeted PASS0.057s, app pattern
+не содержит tests. Actual serving новой диагностики и точная semantic
+причина ещё NOT RUN/UNKNOWN, новая image сборка не требуется.
+
+Поставляемые common PLATFORM v3/core48 уже содержат expected-outcome правила
+для fresh AGENT/Workflow/SYSTEM/PROJECT без owner seed или имитации USER_MESSAGE.
+Адресные герметичные prompt tests44/194 PASS на48; PG/live inheritance в этом
+повторе NOT RUN, послушание модели тестами не доказано. Business1796 и Full65 OPEN.
+
 ## Checkpoint 10.10.2026 18:18 UTC — точный RC guard и мобильные панели
 
 Exact dfbda086 опубликован в Draft1807 и подключён hot reload. Новый RC
