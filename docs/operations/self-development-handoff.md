@@ -5,10 +5,48 @@ type: operations
 status: approved
 owner: manager
 version: 1.1.0
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
 # Текущее состояние
+
+## Checkpoint 10.10.2026 01:57 UTC — образ проверен, preflight остановки исправлен
+
+База21340ccc, Draft1807/Issue1797. Canonical full runner build/import обеих
+нод PASS. Exact OCI a39ef63e…4bcf4 содержит pnpm11.28.2, bundled tar7.5.22
+и undici6.28.1: actual package hashes EQUAL проверенной установке;
+manifest/lock EQUAL committed source, canonical provenance PASS.
+Новый security scan/admission/promotion/native custom ещё NOT RUN;
+прежний risk exception другого digest не переносится.
+
+Fresh render21340 PASS с operation-scoped Go1.26.6 PATH/GOROOT, GOENV=off,
+GOTOOLCHAIN=local. Два предыдущих render FAIL из-за default Go1.27.1 и
+унаследованного GOROOT; системная конфигурация не менялась. Первый quiesce
+FAIL после stops: завершённый promote Job сохраняется до штатного TTL3600,
+SUCCEEDED01:14:34 UTC, очистка ожидается не раньше02:14:34 UTC. PVC отсутствует.
+Job не удалялся вручную, TTL и inventory guard не изменены. CP/GW штатно
+восстановлены прежним exact core render, обе реплики Ready1/1. RC, builder
+и admission controller пока остановлены; это maintenance, не полная готовность.
+
+Принят отдельный frozen preflight patch: тот же closed inventory-check теперь
+выполняется ДО первого stop, сохраняя AFTER-check, idle/pins/CAS и fail-closed
+pause. Terminal Job не исключение. ROOT post hashes совпали с manifest;
+ROOT51test PASS, один optional PostgreSQL SKIP/NOT RUN; Bash syntax,
+ShellCheck и diff-check PASS. Следующий SHA требует fresh render и canonical
+provenance даже при OCI cache hit; прежний prepared render21340 не применяется
+после изменения source.
+
+Own Playwright91439 OWNER; reload01:55 draft0. Настоящий ENV screen1440
+просмотрен: current rev15, history, controls читаемы, overflowfalse.
+Console cumulative15: initial401/ROOTdiagnostic405 и maintenance503; после
+восстановления session/bootstrap/ticket/env/versions/recipe/agents/readiness200,
+новых ошибок в последнем окне нет, warnings/pageerrors0. Chrome1020 timeout,
+1036 pending; MCP доступ не подтверждён. Чужие вкладки не закрывались.
+
+Backend immutable file revisions/staging cleanup и frontend history/receipt
+разрабатываются в отдельных worktrees; пакеты ещё не приняты. Новые AI turns
+не запускать до восстановления контроллеров и exact writer proof.
+Полный65QA, practical file write и business Workflow остаются OPEN.
 
 ## Checkpoint 10.10.2026 01:28 UTC — успешное продолжение и отсутствующая запись ревизии
 

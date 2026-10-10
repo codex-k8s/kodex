@@ -501,7 +501,9 @@ readback_local_quiesced_pods "$DEPLOYMENT_UID" control-plane app=control-plane "
         self.assertLess(guard, quiesce)
         self.assertIn('image_admission_policy_owner_coherent=false', block)
         self.assertEqual(block.count('require_idle_local_supply_chain_owner'), 2)
-        self.assertIn('require_empty_local_image_admission_runs', block)
+        self.assertEqual(block.count('require_empty_local_image_admission_runs'), 2)
+        self.assertLess(block.index('require_empty_local_image_admission_runs'),
+                        block.index('for workload in'))
         self.assertIn('mode=readback quiesce_local_supply_chain_workload', block)
         self.assertIn('exit 0', block)
         self.assertNotIn('apply_render', block)
@@ -510,6 +512,51 @@ readback_local_quiesced_pods "$DEPLOYMENT_UID" control-plane app=control-plane "
                 '--security-profile', 'trusted-cluster', '--stage', 'supply-chain-quiesce',
                 '--render', '/nonexistent-render'], capture_output=True, text=True, timeout=5)
             self.assertIn('local render is invalid', result.stderr)
+
+    def test_quiesce_inventory_preflight_precedes_stop_and_keeps_after_guard(self):
+        block = SOURCE[SOURCE.index('if [[ "$stage" == supply-chain-quiesce ]]; then'):]
+        block = block[:block.index('if [[ "$mode" == apply && "$stage" == data ]]; then')]
+        command = functions('require_empty_local_image_admission_runs') + PREFIX + '''
+exec 3>&1
+idle=0; stopped=0; mode=apply; stage=supply-chain-quiesce
+require_idle_local_supply_chain_owner() { idle=$((idle + 1)); printf 'idle-%s\\n' "$idle"; }
+quiesce_local_supply_chain_workload() {
+ printf '%s-%s\\n' "$mode" "$1"
+ if [[ "$mode" == apply ]]; then stopped=$((stopped + 1)); fi
+}
+kubectl() {
+ [[ "$*" == '-n kodex-system get jobs,persistentvolumeclaims -l app.kubernetes.io/name=kodex-image-admission,kodex.dev/image-admission-orchestrated=true -o json' ]] || return 99
+ printf 'inventory-%s\\n' "$stopped" >&3
+ if ((stopped == 0)); then printf '%s\\n' "$BEFORE"; return "$BEFORE_EXIT";
+ else printf '%s\\n' "$AFTER"; return "$AFTER_EXIT"; fi
+}
+''' + block
+        empty = {'items': []}
+        terminal_job = {'items': [{'kind': 'Job', 'status': {
+            'succeeded': 1, 'conditions': [{'type': 'Complete', 'status': 'True'}]}}]}
+        workloads = ('control-api-gateway', 'image-admission-controller', 'role-image-builder',
+                     'runtime-controller', 'control-plane')
+        before_stop = ['idle-1', 'inventory-0']
+        after_stop = before_stop + ['apply-' + name for name in workloads] + ['inventory-5']
+        complete = after_stop + ['idle-2'] + ['readback-' + name for name in workloads]
+        cases = [('empty', empty, '0', empty, '0', None, complete)]
+        for name, inventory in (
+                ('terminal-job', terminal_job), ('active-job', {'items': [{'kind': 'Job'}]}),
+                ('workspace', {'items': [{'kind': 'PersistentVolumeClaim'}]}),
+                ('missing-items', {}), ('invalid-items', {'items': None}), ('invalid-json', '{')):
+            cases.append((name, inventory, '0', empty, '0', 'requires an empty', before_stop))
+        cases.extend([
+            ('inaccessible', empty, '1', empty, '0', 'unavailable', before_stop),
+            ('after-race', empty, '0', terminal_job, '0', 'requires an empty', after_stop),
+            ('after-inaccessible', empty, '0', empty, '1', 'unavailable', after_stop),
+        ])
+        for name, before, before_exit, after, after_exit, error, calls in cases:
+            with self.subTest(case=name):
+                result = run(command, BEFORE=before, BEFORE_EXIT=before_exit,
+                             AFTER=after, AFTER_EXIT=after_exit)
+                self.assertEqual(result.returncode == 0, error is None, result.stderr)
+                self.assertEqual(result.stdout.strip().splitlines(), calls)
+                if error: self.assertIn(error, result.stderr)
 
     def test_quiesce_identity_cas_and_readback(self):
         original = {'metadata': {'namespace': 'kodex-system', 'name': 'control-plane',
@@ -761,20 +808,22 @@ exec 3>&1
 phase() { printf '%s\\n' "$1"; [[ "$FAIL_PHASE" != "$1" ]]; }
 require_idle_local_supply_chain_owner() { idle=$((idle + 1)); phase "idle-$idle"; }
 quiesce_local_supply_chain_workload() { phase "$mode-$1"; }
-require_empty_local_image_admission_runs() { phase empty; }
+require_empty_local_image_admission_runs() { empty=$((empty + 1)); phase "empty-$empty"; }
 kubectl() { printf 'unexpected-resume\\n' >&3; }
 rm() { :; }
 mode=apply
 stage=supply-chain-quiesce
 idle=0
+empty=0
 temporary_directory=/synthetic
 image_admission_controller_restore_replicas=1
 image_admission_policy_owner_coherent=true
 trap cleanup_on_exit EXIT
 ''' + block
-        phases = ['idle-1', 'empty', 'idle-2'] + [mode + '-' + name for mode in ('apply', 'readback')
-            for name in ('control-api-gateway', 'image-admission-controller', 'role-image-builder',
-                         'runtime-controller', 'control-plane')]
+        workloads = ('control-api-gateway', 'image-admission-controller', 'role-image-builder',
+                     'runtime-controller', 'control-plane')
+        phases = ['idle-1', 'empty-1'] + ['apply-' + name for name in workloads] + \
+            ['empty-2', 'idle-2'] + ['readback-' + name for name in workloads]
         for failed in phases + ['']:
             result = run(command, FAIL_PHASE=failed)
             self.assertEqual(result.returncode == 0, failed == '', result.stderr)

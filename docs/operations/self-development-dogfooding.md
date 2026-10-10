@@ -961,3 +961,48 @@ Chrome928 timeout300s, Chrome952 pending; MCP доступ не доказан.
 Оба узла Ready,21desired Deployment kodex-system готовы. Полный65QA и
 п11/14/15/16, semantic Architect, Developer и конечный Workflow OPEN.
 Checkbox не изменены, partial native PASS не является полной приёмкой.
+
+## Checkpoint 10.10.2026 01:57 UTC — exact pnpm image и отказ до остановки
+
+На source21340ccc full runner build/import обеих нод PASS. Actual exact OCI
+a39ef63e…4bcf4 содержит pnpm11.28.2, bundled tar7.5.22/undici6.28.1;
+package hashes EQUAL проверенной установке, manifest/lock EQUAL committed
+source, canonical binary provenance PASS. Новый admission/security scan,
+promotion/custom image и native acceptance этого digest ещё NOT RUN;
+старый временный risk decision другого digest не переносится.
+
+Fresh render21340 PASS с operation-scoped Go1.26.6 PATH/GOROOT, GOENV=off,
+GOTOOLCHAIN=local. Предыдущие два render FAIL от разных host toolchain
+settings сохранены как FAIL, системная конфигурация не менялась. Первый
+quiesce FAIL: completed promote Job ещё сохраняется до обычного TTL3600;
+SUCCEEDED01:14:34 UTC, очистка ожидается не раньше02:14:34 UTC. Job/PVC
+не удалялись и inventory guard не обходился. CP/GW восстановлены прежним
+canonical core render, Ready1/1. RC/builder/admission controller временно0;
+maintenance не выдаётся за готовность всего приложения. AI не запускался.
+
+Устранена общая причина лишнего простоя: тот же closed managed inventory
+проверяется перед первым stop; AFTER-check, idle/published-pins/CAS и
+fail-closed pause остаются. ROOT post hashes frozen2file packet EQUAL;
+51test PASS, один optional PostgreSQL SKIP/NOT RUN, Bash syntax/ShellCheck/
+diff-check PASS. Tests исполняют реальный stage block/inventory function и
+доказывают отсутствие stop для terminal/active Job, PVC, unknown/malformed
+inventory; after-race остаётся закрытым отказом. Новый commit требует fresh
+render и canonical source provenance cached OCI, прежний render21340 отложен.
+Context7 /websites/kubernetes_io: TTL-after-finished и kubectl wait проверены.
+
+Own browser91439 OWNER, draft-safe reload01:55. ENV screen1440 просмотрен,
+rev15/history/controls читаемы, overflowfalse. Console cumulative15
+от initial401/ROOTdiagnostic405 и maintenance503; после восстановления
+session/bootstrap/ticket/environment/readiness200, новых ошибок в последнем
+окне нет; warnings/pageerrors0. Chrome1020 timeout,1036 pending. Семь
+ожидаемых проектных помощник/сотрудников повторно прочитаны через native API200,
+это readback сохранения ресурсов, не повторная проверка их AI ходов.
+
+Backend immutable revisions/stagingledger/readers и frontend history/receipt
+пока не интегрированы. Full QA, practical file update, Architect/Developer и
+финальный Workflow OPEN. Checkbox не изменены.
+
+Первый journal verifier отклонил изменение даты immutable baseline во
+frontmatter: ACTIVE_BASELINE_MISMATCH. Baseline восстановлен без изменения
+архива; повтор с previous21340 PASS, 103670B, предыдущий checkpoint tail
+сохранён точным prefix. Это проверка целостности журнала, не live QA.

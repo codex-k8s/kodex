@@ -2007,6 +2007,8 @@ PY
     # hot-reload readers/writers; только новый supply-chain apply снимает паузу.
     image_admission_policy_owner_coherent=false
     require_idle_local_supply_chain_owner
+    # Проверяем inventory до первого stop; повтор ниже закрывает гонку с writers.
+    require_empty_local_image_admission_runs
     for workload in control-api-gateway image-admission-controller role-image-builder \
       runtime-controller control-plane; do
       quiesce_local_supply_chain_workload "$workload"
