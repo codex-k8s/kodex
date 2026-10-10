@@ -981,3 +981,21 @@ secret revisions должны остаться прежними; они не в�
 Все deployments готовы, оба nodes Ready. Chrome Console0, relevant bootstrap/
 session/graph/events200; Fit all просмотрен, отдельная удобочитаемость большого
 графа не объявляется PASS. USER_MESSAGE/Retry/Launch не создавались.
+
+## Checkpoint 10.10.2026 17:22 UTC — типизированные native пути
+
+Exact9fd2b222 remote/Draft1807 readback PASS; его новый node proof выполняется,
+prior UNKNOWN не переписан. ORG recipe update теперь готовится для existing
+PATCH /organization/role-image-recipes/{ref}, If-Match recipe.version, body
+name/environment. CP atomically записывает managed DRAFT→VALID→PUBLISHED/build;
+не создавать дополнительный draft/validate/publication/build. PROJECTtwo
+сохраняют full source drafts с configuration.version. Extra/missing ORG source
+fields и скрытая null/[] normalization закрыты. Expected source учитывает exact
+Go map JSON/HTML escaping; весь Dockerfile кроме trusted FROM сохраняется.
+ROOT native80/80 PASS; actual3recipe input47a05449… дал offlineplan
+b192850b0d691ebecc280bbb9316243e483690ba58069ad4dc04371392df7580.
+ORG current canonical source digest совпал прежнему immutable source.
+Actual4ENV pure conversion ROOT PASS: ACTIVE/ready/no blockers, native no
+enabled, omitted ORG projectRef только empty scope; all38tools/values/resources/
+web policy/exact Secret revisions preserved,8bindings. Postpromotion new intents
+и HTTP effects этого пакета NOT RUN, defaults/hot source/business1796 OPEN.

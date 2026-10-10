@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { recipeContent, environmentDraft, environmentPreservationSHA256, selectBindings, prepareRecipes, prepareEnvironments, prepareSelections } from './role-image-native-plan.mjs';
+import { recipeContent, organizationSourceJSON, environmentDraft, environmentPreservationSHA256, selectBindings, prepareRecipes, prepareEnvironments, prepareSelections } from './role-image-native-plan.mjs';
 import { createHash } from 'node:crypto';
 import { chmodSync, lstatSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -18,7 +18,7 @@ for (const dockerfile of ['FROM ' + prior + '\nFROM ' + prior + '\n', 'ARG BASE=
   const changed = structuredClone(document); changed.roleImage.environment.dockerfile = dockerfile;
   assert.throws(() => recipeContent(JSON.stringify(changed), prior, next));
 });
-const env = () => ({ ref: 'renv_fixture', state: 'ACTIVE', enabled: true, version: 7, name: 'Environment', description: 'Synthetic', currentVersion: { ref: 'renvv_fixture', revision: 4, tools: Array.from({ length: 38 }, (_, i) => ({ name: `tool${i}`, command: `tool${i}`, description: 'Synthetic', usageHint: 'Synthetic' })), values: [{ name: 'MODE', value: 'synthetic' }], secretDescriptors: [{ name: 'TOKEN', secretRef: 'rsec_fixture', revision: 6, secretName: 'synthetic', secretUid: 'synthetic' }], policy: { resources: { cpuLimitMilli: 1234 }, volumes: [{ name: 'work', kind: 'EPHEMERAL_DISK', sizeMib: 444, mountPath: '/synthetic' }], network: { denyByDefault: true, egress: ['DNS', 'DNS', 'RUNTIME_CALLBACK', 'PROVIDER_PROXY'].map(destination => ({ destination })), webAccess: { mode: 'ALLOWLIST_READ_ONLY', rules: [{ domainPattern: 'fixture.invalid', protocol: 'HTTPS', port: 443, httpMethods: ['GET'] }] } }, kubernetesAccess: { kind: 'NONE', namespace: 'kodex-runtime' } } } });
+const env = () => ({ ref: 'renv_fixture', state: 'ACTIVE', ready: true, readinessBlockers: [], version: 7, name: 'Environment', description: 'Synthetic', currentVersion: { ref: 'renvv_fixture', revision: 4, tools: Array.from({ length: 38 }, (_, i) => ({ name: `tool${i}`, command: `tool${i}`, description: 'Synthetic', usageHint: 'Synthetic' })), values: [{ name: 'MODE', value: 'synthetic' }], secretDescriptors: [{ name: 'TOKEN', secretRef: 'rsec_fixture', revision: 6, secretName: 'synthetic', secretUid: 'synthetic' }], policy: { resources: { cpuLimitMilli: 1234 }, volumes: [{ name: 'work', kind: 'EPHEMERAL_DISK', sizeMib: 444, mountPath: '/synthetic' }], network: { denyByDefault: true, egress: ['DNS', 'DNS', 'RUNTIME_CALLBACK', 'PROVIDER_PROXY'].map(destination => ({ destination })), webAccess: { mode: 'ALLOWLIST_READ_ONLY', rules: [{ domainPattern: 'fixture.invalid', protocol: 'HTTPS', port: 443, httpMethods: ['GET'] }] } }, kubernetesAccess: { kind: 'NONE', namespace: 'kodex-runtime' } } } });
 test('ENV сохраняет38 tools, values, policy и exact Secret revision; source не меняется', () => {
   const e = env(); e.currentVersion.version = 19; const old = structuredClone(e), body = environmentDraft(e, 'imgart_next');
   assert.deepEqual(e, old); assert.deepEqual(body.specification.tools, e.currentVersion.tools); assert.deepEqual(body.specification.values, e.currentVersion.values);
@@ -44,17 +44,17 @@ function recipesInput() {
   return { version: 1, runnerDigest: 'sha256:' + 'b'.repeat(64), catalog: { items: [{ key: 'standard', available: true, dockerfileTemplate: 'FROM ' + internal + '\n' }] }, recipes: [0, 1, 2].map(i => {
     const s = scope(i), content = JSON.stringify(document), published = { ref: 'mrev_' + i, revision: 10, state: 'PUBLISHED', contentFormat: 'JSON', sourceAvailable: true, content, digest: sha(content) };
     const expected = { ...s, recipeRef: 'imgrec_' + i, configurationRef: 'mcfg_' + i, publishedRevisionRef: published.ref };
-    const recipe = { ...s, ref: expected.recipeRef, state: 'ACTIVE', sourceAvailable: true, version: 9, generation: 8, roleDefinitionRef: document.roleImage.roleDefinitionRef, environment: structuredClone(document.roleImage.environment), managedLineage: { managedBy: 'UI', configurationRef: expected.configurationRef, revisionRef: published.ref } };
+    const recipe = { ...s, ref: expected.recipeRef, name: document.name, state: 'ACTIVE', sourceAvailable: true, version: 9, generation: 8, roleDefinitionRef: document.roleImage.roleDefinitionRef, environment: structuredClone(document.roleImage.environment), managedLineage: { managedBy: 'UI', configurationRef: expected.configurationRef, revisionRef: published.ref } };
     const configuration = { ref: expected.configurationRef, version: 12, name: 'Synthetic', kind: 'ROLE_IMAGE', managedBy: 'UI', projectRef: s.projectRef, archived: false, sourceEditable: true, currentRevision: published };
     return { expected, detail: { recipe }, historyPages: [{ configuration, items: [published], total: 1, nextPageToken: '' }] };
   }) };
 }
 function nativeEmptyProjectionInput(sourceKeys = null) {
   const input = recipesInput();
-  for (const entry of input.recipes) {
+  for (const [i, entry] of input.recipes.entries()) {
     const revision = entry.historyPages[0].items[0], source = JSON.parse(revision.content);
-    Object.assign(source.roleImage.environment, { installationBlock: '', packageKeys: sourceKeys, toolKeys: sourceKeys });
-    if (sourceKeys === undefined) { delete source.roleImage.environment.packageKeys; delete source.roleImage.environment.toolKeys; }
+    Object.assign(source.roleImage.environment, { installationBlock: '', packageKeys: i === 0 ? null : sourceKeys, toolKeys: i === 0 ? null : sourceKeys });
+    if (i !== 0 && sourceKeys === undefined) { delete source.roleImage.environment.packageKeys; delete source.roleImage.environment.toolKeys; }
     revision.content = JSON.stringify(source); revision.digest = sha(revision.content);
     for (const key of ['installationBlock', 'packageKeys', 'toolKeys']) delete entry.detail.recipe.environment[key];
   }
@@ -63,7 +63,7 @@ function nativeEmptyProjectionInput(sourceKeys = null) {
 for (const sourceKeys of [null, [], undefined]) test('Native пустой optional projection равен source null/[]/missing; полный source сохраняется', () => {
   const input = nativeEmptyProjectionInput(sourceKeys), frozen = structuredClone(input), intents = prepareRecipes(input);
   assert.deepEqual(input, frozen);
-  for (const [i, r] of intents.entries()) { const before = JSON.parse(input.recipes[i].historyPages[0].items[0].content), after = JSON.parse(r.body.content); after.roleImage.environment.dockerfile = before.roleImage.environment.dockerfile; assert.deepEqual(after, before); assert.equal(after.roleImage.environment.installationBlock, ''); }
+  for (const [i, r] of intents.entries()) { const before = JSON.parse(input.recipes[i].historyPages[0].items[0].content), after = i === 0 ? structuredClone(r.pins.expectedPublishedSource) : JSON.parse(r.body.content); after.roleImage.environment.dockerfile = before.roleImage.environment.dockerfile; assert.deepEqual(after, before); assert.equal(after.roleImage.environment.installationBlock, ''); if (i === 0) { assert.equal(r.body.environment.installationBlock, ''); assert.notEqual(r.body.environment.packageKeys, null); assert.notEqual(r.body.environment.toolKeys, null); } }
 });
 for (const [field, value, projection] of [['installationBlock', 'RUN nonempty', false], ['packageKeys', ['git'], false], ['toolKeys', ['git'], false], ['installationBlock', 0, false], ['installationBlock', null, false], ['packageKeys', '', false], ['packageKeys', {}, false], ['packageKeys', [0], false], ['packageKeys', ['bad_key'], false], ['toolKeys', ['git', 'git'], false], ['toolKeys', false, false], ['packageKeys', null, true], ['installationBlock', 'RUN nonempty', true]]) test('Optional nonempty/absent/malformed source и projection не маскируются', () => {
   const input = nativeEmptyProjectionInput();
@@ -74,12 +74,29 @@ for (const [field, value, projection] of [['installationBlock', 'RUN nonempty', 
 test('Три complex recipes используют actual internal catalog FROM и стабильные exact draft intents', () => {
   const input = recipesInput(), frozen = structuredClone(input), intents = prepareRecipes(input);
   assert.deepEqual(input, frozen); assert.equal(intents.length, 3); assert.deepEqual(intents, prepareRecipes(input));
-  for (const [i, r] of intents.entries()) { assert.equal(r.headers['If-Match'], '"12"'); assert.equal(r.expectedStatus, 201); assert.equal(r.effect, 'NOT_RUN'); assert.match(JSON.parse(r.body.content).roleImage.environment.dockerfile, /kodex-image-registry\.kodex-system/); assert.equal(Object.hasOwn(r.body, 'projectRef'), i !== 0); assert.equal(r.path, '/api/v1/role-image-configurations/drafts'); }
+  for (const [i, r] of intents.entries()) { assert.equal(r.headers['If-Match'], i === 0 ? '"9"' : '"12"'); assert.equal(r.expectedStatus, i === 0 ? 200 : 201); assert.equal(r.effect, 'NOT_RUN'); assert.match(i === 0 ? r.body.environment.dockerfile : JSON.parse(r.body.content).roleImage.environment.dockerfile, /kodex-image-registry\.kodex-system/); assert.equal(Object.hasOwn(r.body, 'projectRef'), i !== 0); assert.equal(r.method, i === 0 ? 'PATCH' : 'POST'); assert.equal(r.path, i === 0 ? '/api/v1/organization/role-image-recipes/imgrec_0' : '/api/v1/role-image-configurations/drafts'); }
 });
+test('ORG typed UPDATE сохраняет весь complex environment и source pin без payload project/role authority', () => {
+  const input = recipesInput(), r = prepareRecipes(input)[0], old = JSON.parse(input.recipes[0].historyPages[0].items[0].content);
+  assert.deepEqual(Object.keys(r.body).sort(), ['environment', 'name']);
+  const selection = structuredClone(r.body.environment); selection.dockerfile = old.roleImage.environment.dockerfile;
+  assert.deepEqual(selection, old.roleImage.environment); assert.equal(r.body.name, old.name);
+  assert.equal(Object.hasOwn(r.body, 'roleDefinitionRef'), false); assert.equal(Object.hasOwn(r.body, 'projectRef'), false);
+  assert.equal(r.pins.continuation, 'ATOMIC_MANAGED_PUBLICATION_AUTOBUILD_SOURCE_READBACK_HUMAN_RISK_IF_REQUIRED_PROMOTE');
+});
+for (const mutate of [s => s.description = 'must-not-drop', s => s.roleImage.extra = 'must-not-drop', s => s.roleImage.environment.extra = 'must-not-drop', s => s.name = 'changed']) test('ORG source не представимый typed UPDATE закрыт без молчаливой потери JSON', () => { const input = recipesInput(), revision = input.recipes[0].historyPages[0].items[0], source = JSON.parse(revision.content); mutate(source); revision.content = JSON.stringify(source); revision.digest = sha(revision.content); assert.throws(() => prepareRecipes(input), /ORGANIZATION_SOURCE_UNREPRESENTABLE/); });
+test('ORG ожидаемый source hash использует exact server Go map JSON и HTML escaping', () => {
+  const source = structuredClone(document); source.roleImage.environment.packageKeys = null; source.roleImage.environment.toolKeys = null;
+  const dockerfile = 'FROM synthetic\nRUN a && b < c > d\n#\u2028\u2029';
+  const encoded = organizationSourceJSON(source, dockerfile);
+  assert.match(encoded, /\\u0026\\u0026/); assert.match(encoded, /\\u003c/); assert.match(encoded, /\\u003e/); assert.match(encoded, /\\u2028\\u2029/);
+  assert.equal(encoded, '{"name":"Synthetic","roleImage":{"environment":{"dockerfile":"FROM synthetic\\nRUN a \\u0026\\u0026 b \\u003c c \\u003e d\\n#\\u2028\\u2029","environmentKey":"standard","installationBlock":"RUN setup-synthetic","packageKeys":null,"toolKeys":null},"roleDefinitionRef":"role_fixture"}}');
+});
+for (const mutate of [s => s.roleImage.environment.packageKeys = [], s => delete s.roleImage.environment.toolKeys, s => delete s.roleImage.environment.installationBlock]) test('ORG скрытая null/empty/missing source normalization закрыта', () => { const source = structuredClone(document); mutate(source); assert.throws(() => organizationSourceJSON(source, 'FROM synthetic'), /ORGANIZATION_SOURCE_UNREPRESENTABLE/); });
 for (const change of [x => x.runnerDigest = 'sha256:' + 'c'.repeat(64), x => x.catalog.items.push(x.catalog.items[0]), x => x.recipes[0].historyPages[0].nextPageToken = 'more', x => x.recipes[0].detail.recipe.managedLineage.managedBy = 'GIT', x => x.recipes[0].historyPages[0].configuration.sourceEditable = false, x => x.recipes[0].historyPages[0].items[0].digest = 'a'.repeat(64), x => x.recipes[1].detail.recipe.organizationRef = 'org_other', x => x.recipes[0].historyPages[0].items[0].state = 'DRAFT']) test('Recipe catalog/source/owner/draft/EOF drift закрыто отвергается', () => { const x = recipesInput(); change(x); assert.throws(() => prepareRecipes(x)); });
 function environmentsInput() {
   return { version: 1, environments: [0, 1, 2, 3].map(i => {
-    const s = scope(i), environment = { ...env(), ...s, ref: 'renv_' + i }; environment.currentVersion.ref = 'renvv_' + i; environment.currentVersion.image = { artifactRef: 'imgart_old' }; environment.currentVersion.version = 19;
+    const s = scope(i), environment = { ...env(), ...s, ref: 'renv_' + i }; if (i === 0) delete environment.projectRef; environment.currentVersion.ref = 'renvv_' + i; environment.currentVersion.image = { artifactRef: 'imgart_old' }; environment.currentVersion.version = 19;
     const recipeIndex = [0, 1, 1, 2][i], recipeRef = 'imgrec_' + recipeIndex, revision = 'mrev_new_' + recipeIndex;
     const recipe = { ...s, ref: recipeRef, generation: 10, promotedImageReady: true, managedLineage: { revisionRef: revision } };
     const activeArtifact = { ...s, ref: 'imgart_new_' + recipeIndex, recipeRef, recipeGeneration: 10, admissionVerdict: 'ACCEPTED', promotionState: 'PROMOTED', promotedReference: 'pull.fixture.invalid/roles@sha256:' + 'c'.repeat(64), manifestDigest: 'sha256:' + 'c'.repeat(64), provenanceSha256: 'd'.repeat(64), promotionReceiptSha256: 'e'.repeat(64), verifiedToolInventory: { status: 'VERIFIED' }, declaredTools: environment.currentVersion.tools.map(t => ({ name: t.command, version: 'synthetic' })) };
@@ -92,6 +109,7 @@ test('Четыре ENV сохраняют38 tools/полные values/policy/exa
   assert.equal(intents[0].path, '/api/v1/organization/runtime-environment-drafts'); assert.equal(intents[1].path, '/api/v1/projects/prj_fixture/runtime-environment-drafts');
 });
 for (const change of [x => x.environments.pop(), x => x.environments[0].artifactDetail.activeArtifact.admissionVerdict = 'PENDING', x => x.environments[0].artifactDetail.activeArtifact.promotionState = 'AUTHORIZED', x => x.environments[0].artifactDetail.activeArtifact.verifiedToolInventory.status = 'UNAVAILABLE', x => x.environments[0].artifactDetail.activeArtifact.declaredTools.pop(), x => x.environments[0].bindings[0].sourceRevisionRef = 'renvv_foreign', x => x.environments[0].environment.version++, x => x.environments[1].artifactDetail.activeArtifact.organizationRef = 'org_foreign']) test('ENV partial/admission/inventory/pins/scope drift закрыт', () => { const x = environmentsInput(); change(x); assert.throws(() => prepareEnvironments(x)); });
+for (const change of [x => x.environments[0].environment.ready = false, x => x.environments[0].environment.readinessBlockers.push('UNKNOWN'), x => delete x.environments[0].environment.ready, x => x.environments[0].environment.projectRef = 'prj_wrong', x => delete x.environments[1].environment.projectRef]) test('Native ENV без enabled: readiness и ORG/PROJECT scope закрыты', () => { const x = environmentsInput(); change(x); assert.throws(() => prepareEnvironments(x)); });
 function selectionsInput() {
   return { version: 1, selections: [0, 1, 2, 3].map(i => {
     const s = scope(i), intendedBindings = [{ ...binding, ...s, consumerRef: 'agt_' + i, bindingRef: 'renvb_' + i }], draft = { ...s, ref: 'renvd_' + i, version: 3, state: 'VALID', environmentRef: 'renv_' + i, expectedEnvironmentVersion: 7, baseVersionRef: binding.sourceRevisionRef, validationDigest: 'a'.repeat(64) };

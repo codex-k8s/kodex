@@ -10,6 +10,19 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 17:22 UTC — native ORG/PROJECT upgrade готов
+
+Exact9fd2b222 remote/Draft1807 readback PASS. Новый node HTTPS/CRI proof этим
+опубликованным source выполняется; старый UNKNOWN сохранён. До его результата
+defaults CP/RC прежние. Native planner ORG использует existing PATCH recipe с
+recipe.version и атомарной managed publication/build, PROJECT — drafts с
+configuration.version; никакого искусственного projectRef или новых API.
+ROOT80/80 tests PASS. Actual3recipe offline plan SHAb192850b0d691ebecc280bbb9316243e483690ba58069ad4dc04371392df7580,
+full source ORG представим exact Go JSON без потери null/settings; SOURCE-only
+patch не выполнял HTTP. ROOT pure conversion actual4ENV PASS,38tools/values/
+policy/Secret revisions сохранены,8bindings. Postpromotion intents NOT RUN.
+Serving v3/core48/4ENV/business1796/Full65 остаются OPEN.
+
 ## Checkpoint 10.10.2026 17:19 UTC — HTTPS доказан, CLI mismatch исправляется
 
 Actual node HTTPS graph обоих узлов PASS exact acbb. Первый CRI INTENT получил

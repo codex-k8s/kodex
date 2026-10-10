@@ -11,7 +11,7 @@ updated: 2026-10-10
 # Назначение
 
 `role-image-native-plan.mjs` — узкий первый этап штатного upgrade: из exact
-приватного owner readback готовит POST intents, но никогда не делает HTTP,
+приватного owner readback готовит native POST/PATCH intents, но никогда не делает HTTP,
 runtime launch/retry, USER_MESSAGE, risk decision или запись owner state.
 Он не заменяет авторизацию CP и не объявляет offline snapshot текущей authority.
 Existing `role-image-forward-upgrade.mjs` остаётся намеренно FROM-only fixture;
@@ -28,8 +28,9 @@ catalog entry по environmentKey и expected runner digest: internal registry
 При сверке optional полей учтена native projection: пустой installationBlock
 опускается, а source packageKeys/toolKeys null,[] или отсутствие равны пустому
 Go slice. Непустые значения сравниваются точно; неправильные типы/keys и null
-в public projection отвергаются. Это только сравнение: source поля null/'' не
-удаляются и не заменяются defaults в draft body.
+в public projection отвергаются. Это только сравнение: PROJECT raw draft body
+сохраняет source null/''. ORG использует описанный ниже exact typed UPDATE и
+server-owned canonical source reconstruction без потери settings.
 
 ## CLI
 
@@ -68,10 +69,26 @@ authority. Контракты — `contracts/openapi/control-api-gateway/v1/open
 - detail: GET `/api/v1/organization/role-image-recipes/{recipeRef}` либо `/api/v1/projects/{projectRef}/role-image-recipes/{recipeRef}`.
 - historyPages: все страницы GET `/api/v1/managed-configurations/{configurationRef}/revisions?pageSize=50`, в cursor порядке до EOF. Configuration pin одинаков на всех страницах; published source digest проверяется; existing незакрытый draft останавливает подготовку.
 
-Result — три exact POST `/api/v1/role-image-configurations/drafts` с If-Match
-configuration.version и полным source. Владелец отдельно выполняет штатную
-validation→publication (fresh configuration OCC из receipts). Publication
-уже создаёт build: второй REQUEST_BUILD не нужен. Дождаться exact новой
+Result для двух PROJECT — POST `/api/v1/role-image-configurations/drafts` с
+If-Match configuration.version и полным source, затем штатная validation→
+publication с fresh configuration OCC. Общий drafts endpoint требует PROJECT;
+он не используется для ORG и искусственный projectRef не назначается.
+Для ORG — PATCH `/api/v1/organization/role-image-recipes/{recipeRef}` с body
+`{name,environment}` и If-Match recipe.version. Это existing frontend
+`RoleImageEditor.save → updateRoleImage → updateSystemRoleImageRecipe` и
+owner RPC `ManageOrganizationRoleImageRecipe` action UPDATE. Owner transaction
+атомарно создаёт DRAFT→VALID→PUBLISHED managed source и build; отдельных
+validation/publication/build commands нет. Source JSON должен точно содержать
+name/roleImage, roleDefinitionRef/environment и все пять environment fields.
+Любые extra/missing fields, изменение имени и [] вместо canonical null arrays
+закрываются: typed ORG path не вправе молча терять/нормализовать исходник.
+Полный complex Dockerfile и package/tool/install сохранены; null arrays не
+отправляются в non-nullable public selection, но сервер сохраняет nil как null
+в новой managed revision. Private expectedPublishedSource и nextContentSHA256
+задают exact Go map JSON (sorted keys и HTML/U+2028/U+2029 escaping) для
+обязательного authoritative published-source readback.
+Publication/ORG UPDATE уже создаёт build: второй REQUEST_BUILD не нужен.
+Дождаться exact новой
 managed revision/build generation, admission ACCEPTED и реальной promotion.
 HUMAN OWNER/ADMIN risk-decision остаётся отдельным явным шлюзом; машина не
 выбирает action/reason и не переписывает REJECTED. ORG promotion path singular
@@ -82,9 +99,9 @@ HUMAN OWNER/ADMIN risk-decision остаётся отдельным явным �
 Каждая entry ровно `{expected,environment,artifactDetail,bindings}`:
 
 - expected: `{organizationRef,scopeKind,projectRef,environmentRef,environmentVersion,baseVersionRef,recipeRef,publishedRevisionRef}`. environmentVersion — wrapper `environment.version`, не currentVersion.version/revision.
-- environment: GET `/api/v1/runtime-environments/{environmentRef}`.
+- environment: GET `/api/v1/runtime-environments/{environmentRef}`; ACTIVE и ready=true, пустые readinessBlockers. enabled в этом projection отсутствует. ORG projectRef может быть опущен; это только canonical empty scope, PROJECT ref обязателен.
 - artifactDetail: новый GET exact recipe после promotion; activeArtifact новой managed revision, ACCEPTED/PROMOTED/VERIFIED, immutable provenance/promotion pins. Каждый прежний command всех38 tools обязан быть declared в новом artifact.
-- bindings: только intended exact pins `{organizationRef,scopeKind,projectRef,consumerRef,consumerVersion,bindingRef,bindingVersion,sourceRevisionRef}`. Agent/binding versions брать из current `/agents/{agentRef}/runtime-configuration`, sourceRevisionRef из effective binding versionRef. SYSTEM floating binding сверять по materialized current version, не назначать пустой ref.
+- bindings: только intended exact pins `{organizationRef,scopeKind,projectRef,consumerRef,consumerVersion,bindingRef,bindingVersion,sourceRevisionRef}`. Native `/agents/{agentRef}/runtime-configuration` имеет top-level agentVersion и environmentBinding `{agentRef,digest,environmentRef,ref,version,versionRef}`: consumerRef=environmentBinding.agentRef, consumerVersion=agentVersion, bindingRef=environmentBinding.ref, bindingVersion=environmentBinding.version, sourceRevisionRef=environmentBinding.versionRef. Нет выдуманного agent object. Scope берётся из authoritative owner resource, не payload. SYSTEM floating binding сверять по materialized current version, не назначать пустой ref.
 
 Result — четыре POST organization/project `runtime-environment-drafts`.
 ENV name/description,38 полных tool objects, values, ресурсы/volumes/web policy
@@ -114,7 +131,8 @@ APPLIED/CONFLICT/FORBIDDEN/NOT_SELECTED и exact ENV/runtime binding preservatio
 | Этап | Planner / owner эффект | Guards и authoritative read |
 | --- | --- | --- |
 | Offline prepare | Только новый private intent файл; events/grants отсутствуют | Exact hashed input; owner native state проверяется до отдельно разрешённого POST |
-| Native draft/validate | Старые publication/ENV/turn неизменны | Owner до OCC, sourceEditable/UI, VALID и digest; exact receipt/GET |
+| PROJECT native draft/validate | Старые publication/ENV/turn неизменны | Owner до configuration OCC, sourceEditable/UI, VALID и digest; exact receipt/GET |
+| ORG typed UPDATE | Owner atomic new generation + managed DRAFT→VALID→PUBLISHED + build/audit/event/receipt | OWNER/ADMIN organization.manage и image source/build eligibility, recipe OCC; UI/not archived/no existing draft; exact source shape и после эффекта source digest/lineage readback |
 | Publication/autobuild | Owner atomic revision/generation/build/audit/event | Fresh VALID/version/catalog; exact recipe/build lineage |
 | Admission/risk/promotion | Existing worker lifecycle; human risk отдельно | Technical evidence/fence/current policy; rejected/failed не обходятся |
 | ENV draft/impact | Publication ещё не меняется | Wrapper/base pins,38 tools, exact Secret; immutable prepublication fullEOF plan |

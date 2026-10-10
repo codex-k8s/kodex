@@ -20,6 +20,17 @@ function optionalEnvironmentSettings(environment, source) {
   };
   return { installationBlock, packageKeys: keys('packageKeys', 256), toolKeys: keys('toolKeys', 128) };
 }
+export function organizationSourceJSON(source, dockerfile) {
+  const environment = source.roleImage?.environment;
+  check(shape(source, ['name', 'roleImage']) && shape(source.roleImage, ['roleDefinitionRef', 'environment']) && shape(environment, ['environmentKey', 'dockerfile', 'installationBlock', 'packageKeys', 'toolKeys']), 'ORGANIZATION_SOURCE_UNREPRESENTABLE');
+  optionalEnvironmentSettings(environment, true);
+  // Server-owned reconstruction json.Marshal(map) сохраняет null Go slices,
+  // но превратит []/отсутствие в null: такой исходник здесь закрыто отвергается.
+  check(['packageKeys', 'toolKeys'].every(key => environment[key] === null || environment[key].length > 0), 'ORGANIZATION_SOURCE_UNREPRESENTABLE');
+  const canonical = { name: source.name, roleImage: { environment: { dockerfile, environmentKey: environment.environmentKey, installationBlock: environment.installationBlock, packageKeys: environment.packageKeys, toolKeys: environment.toolKeys }, roleDefinitionRef: source.roleImage.roleDefinitionRef } };
+  // Go encoding/json сортирует map keys и экранирует HTML/U+2028/U+2029.
+  return JSON.stringify(canonical).replace(/[<>&\u2028\u2029]/g, value => '\\u' + value.charCodeAt(0).toString(16).padStart(4, '0'));
+}
 export function recipeContent(content, previousBase, trustedBase) {
   check(typeof content === 'string' && Buffer.byteLength(content) <= 262144 && base(previousBase) && base(trustedBase) && previousBase !== trustedBase, 'INPUT_INVALID');
   const old = JSON.parse(content), next = clone(old), e = next.roleImage?.environment;
@@ -46,7 +57,7 @@ export function recipeContent(content, previousBase, trustedBase) {
 }
 export function environmentDraft(environment, artifactRef, expectedToolCount = 38) {
   const current = environment.currentVersion, policy = current?.policy;
-  check(environment.state === 'ACTIVE' && environment.enabled === true && Number.isSafeInteger(environment.version) && environment.version > 0 && current?.ref && current.revision > 0 && typeof artifactRef === 'string' && artifactRef.length > 0, 'ENVIRONMENT_INVALID');
+  check(environment.state === 'ACTIVE' && environment.ready === true && Array.isArray(environment.readinessBlockers) && environment.readinessBlockers.length === 0 && Number.isSafeInteger(environment.version) && environment.version > 0 && current?.ref && current.revision > 0 && typeof artifactRef === 'string' && artifactRef.length > 0, 'ENVIRONMENT_INVALID');
   check(current.tools?.length === expectedToolCount && Array.isArray(current.values) && Array.isArray(current.secretDescriptors), 'ENVIRONMENT_FIELDS_MISSING');
   check(policy?.kubernetesAccess?.kind === 'NONE' && policy.network?.denyByDefault === true && Array.isArray(policy.volumes) && policy.network.webAccess, 'POLICY_UNSUPPORTED');
   const destinations = [...new Set(policy.network.egress.map(item => item.destination))].sort();
@@ -91,7 +102,7 @@ function cohort(scopes, organizationCount) {
 }
 function sameScope(actual, expected) {
   check(ref(expected.organizationRef) && ['PROJECT', 'ORGANIZATION'].includes(expected.scopeKind) && (expected.scopeKind === 'PROJECT' ? ref(expected.projectRef) : expected.projectRef === ''), 'SCOPE_INVALID');
-  check(scopeKeys.every(key => actual[key] === expected[key]), 'SCOPE_CHANGED');
+  check(actual.organizationRef === expected.organizationRef && actual.scopeKind === expected.scopeKind && (expected.scopeKind === 'ORGANIZATION' ? actual.projectRef === undefined || actual.projectRef === '' : actual.projectRef === expected.projectRef), 'SCOPE_CHANGED');
 }
 function completePages(pages, key) {
   check(Array.isArray(pages) && pages.length > 0 && pages.length <= 100, 'PAGES_INVALID');
@@ -107,10 +118,10 @@ function completePages(pages, key) {
   check(Number.isSafeInteger(total) && total >= 0 && items.length === total && new Set(items.map(item => item.ref)).size === items.length, 'INCOMPLETE_OR_DUPLICATE_PLAN');
   return items;
 }
-function request(path, body, expectedStatus, expectedVersion, pins) {
-  const headers = { 'Content-Type': 'application/json', 'Idempotency-Key': 'complex-' + sha({ path, body, expectedVersion, pins }).slice(0, 48) };
+function request(path, body, expectedStatus, expectedVersion, pins, method = 'POST') {
+  const headers = { 'Content-Type': 'application/json', 'Idempotency-Key': 'complex-' + sha({ method, path, body, expectedVersion, pins }).slice(0, 48) };
   if (expectedVersion !== undefined) headers['If-Match'] = '"' + expectedVersion + '"';
-  return { method: 'POST', path, headers, body, bodySHA256: sha(body), expectedStatus, pins, effect: 'NOT_RUN' };
+  return { method, path, headers, body, bodySHA256: sha(body), expectedStatus, pins, effect: 'NOT_RUN' };
 }
 export function prepareRecipes(input) {
   check(shape(input, ['version', 'catalog', 'runnerDigest', 'recipes']) && input.version === 1 && /^sha256:[a-f0-9]{64}$/.test(input.runnerDigest ?? '') && input.recipes?.length === 3, 'INPUT_INVALID');
@@ -138,6 +149,16 @@ export function prepareRecipes(input) {
     const previous = /^\s*FROM\s+(\S+)/im.exec(environment.dockerfile);
     check(previous, 'SOURCE_INVALID');
     const changed = recipeContent(r.content, previous[1], match[1]);
+    if (e.scopeKind === 'ORGANIZATION') {
+      // ORG typed UPDATE атомарно записывает canonical source и запускает build.
+      // Его native API не принимает raw JSON: неизвестные поля нельзя молча потерять.
+      check(source.name === recipe.name && typeof recipe.name === 'string' && Buffer.byteLength(recipe.name) <= 160, 'ORGANIZATION_SOURCE_UNREPRESENTABLE');
+      const selection = { ...clone(environment), dockerfile: JSON.parse(changed.content).roleImage.environment.dockerfile };
+      const expectedSource = organizationSourceJSON(source, selection.dockerfile);
+      for (const key of ['packageKeys', 'toolKeys']) if (selection[key] === null) delete selection[key];
+      const body = { name: recipe.name, environment: selection };
+      return request('/api/v1/organization/role-image-recipes/' + enc(recipe.ref), body, 200, recipe.version, { ...e, recipeVersion: recipe.version, recipeGeneration: recipe.generation, previousContentSHA256: r.digest, nextContentSHA256: sha(expectedSource), expectedPublishedSource: JSON.parse(expectedSource), trustedBaseImage: match[1], catalogSHA256: sha(catalog[0]), continuation: 'ATOMIC_MANAGED_PUBLICATION_AUTOBUILD_SOURCE_READBACK_HUMAN_RISK_IF_REQUIRED_PROMOTE' }, 'PATCH');
+    }
     const body = { configurationRef: c.ref, name: c.name, contentFormat: 'JSON', content: changed.content, ...(e.scopeKind === 'PROJECT' ? { projectRef: e.projectRef } : {}) };
     return request('/api/v1/role-image-configurations/drafts', body, 201, c.version, { ...e, recipeVersion: recipe.version, recipeGeneration: recipe.generation, previousContentSHA256: r.digest, nextContentSHA256: changed.nextContentSHA256, trustedBaseImage: match[1], catalogSHA256: sha(catalog[0]), continuation: 'VALIDATE_PUBLISH_AUTOBUILD_HUMAN_RISK_IF_REQUIRED_PROMOTE' });
   });
