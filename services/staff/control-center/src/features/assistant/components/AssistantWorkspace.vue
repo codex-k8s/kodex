@@ -74,6 +74,7 @@ import {
 } from "@/features/assistant/events";
 import {
   assistantActiveUserTurn,
+  assistantPlanCardPresentation,
   assistantEffectiveRuntimeState,
   assistantRequiresProviderAccount,
   operationActionLabel,
@@ -169,6 +170,13 @@ function operationTargetKindLabel(kind: string): string {
 }
 
 const { t } = useI18n();
+
+function planCardPresentation(plan: AssistantPlan) {
+  return assistantPlanCardPresentation(plan, {
+    plan: t("assistant.planEditor.editedPlanSummary"),
+    operation: t("assistant.planEditor.editedOperationSummary"),
+  });
+}
 const serverMessage = useServerMessage();
 const route = useRoute();
 const router = useRouter();
@@ -228,6 +236,12 @@ function transcriptTurnContent(turn: AssistantTurn): string {
   const key =
     turn.role !== "USER" ? runtimeProgressKey(turn.content) : undefined;
   return key ? t(key) : turn.content;
+}
+function planCardFallbackContent(turn: AssistantTurn): string {
+  const content = transcriptTurnContent(turn);
+  if (!turn.plan) return content;
+  return planCardPresentation({ ...turn.plan, auditSummary: content })
+    .auditSummary;
 }
 function turnIsEmptyTerminalReceipt(turn: AssistantTurn): boolean {
   const run = turn.runRef ? platform.runs[turn.runRef] : undefined;
@@ -2352,9 +2366,10 @@ onBeforeUnmount(() => {
                         <SafeMarkdown
                           v-if="
                             turn.plan.state === 'APPLIED' &&
-                            !turnHasPublishedMessage(turn)
+                            !turnHasPublishedMessage(turn) &&
+                            planCardFallbackContent(turn)
                           "
-                          :content="transcriptTurnContent(turn)"
+                          :content="planCardFallbackContent(turn)"
                         />
                         <header>
                           <ListChecks :size="19" aria-hidden="true" />
@@ -2375,12 +2390,19 @@ onBeforeUnmount(() => {
                         </header>
                         <SafeMarkdown
                           v-if="
+                            planCardPresentation(turn.plan).auditSummary &&
                             turn.plan.auditSummary.trim() !==
-                            turn.content.trim()
+                              turn.content.trim()
                           "
-                          :content="turn.plan.auditSummary"
+                          :content="
+                            planCardPresentation(turn.plan).auditSummary
+                          "
                         />
-                        <AssistantPlanCard :operations="turn.plan.operations">
+                        <AssistantPlanCard
+                          :operations="
+                            planCardPresentation(turn.plan).operations
+                          "
+                        >
                           <template #operation="{ operation }">
                             <header>
                               <span class="assistant-plan-card__action">
@@ -2400,7 +2422,9 @@ onBeforeUnmount(() => {
                             <span v-if="operationSupportingTitle(operation)">{{
                               operationSupportingTitle(operation)
                             }}</span>
-                            <p>{{ operation.summary }}</p>
+                            <p v-if="operation.summary">
+                              {{ operation.summary }}
+                            </p>
                           </template>
                         </AssistantPlanCard>
                         <AssistantRoleImageBuildCard

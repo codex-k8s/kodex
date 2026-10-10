@@ -10,6 +10,65 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 09:14 UTC — native APPLIED UX PASS, готовится clean delivery
+
+ROOT supplement3/3 exact adopted: первый transcript fallback скрывает только
+exact terminal edit-hint. Combined166/166,5suites5.27s PASS. Native
+reload/expand: обе obsolete строки отсутствуют, APPLIED/exact root link
+сохранены, overflowfalse/Console0/relevant API200; screenshot просмотрен.
+CP PID1725/ticks6400207 ELF129c6c38…55037 и RC PID1444/ticks6399538
+ELFb77e6829…fd6b8 exact canonical builds;09:12:36→09:13:36 stable
+UID/containerID/sourcehash. Это hotreload proof, не новая runner delivery.
+Далее finishFEchecks→commit/push clean SHA→canonical fullrunner/import/seed/
+fresh render/quiesce/supply-chain/readback→2recipes/3ENV→новый launch.
+Credits-case1796 сохранён, upstream отказ не обходится. Full65 OPEN.
+
+Окончательные ROOT scopedlint/format/forced types/Vite7.85s PASS. Далее commit/
+push8 явно выбранных файлов; build требует clean HEAD и не допускает добавленных
+source артефактов. Native/source доказательства не заменяют OCI delivery.
+
+## Checkpoint 10.10.2026 09:11 UTC — shared Unicode исправлен, immutable delivery впереди
+
+Source81f23a45 + exact dirty packet. Shared runtimecontract fix2/2 принят:
+шесть delegation human-text полей и AssistantContext.EntityName считают Unicode,
+invalid UTF-8/NUL закрыто отклоняются; identifiers/digests/authority/raw byte
+budgets неизменны. Synthetic903runes/1352bytes воспроизводит прежний отказ.
+ROOT race2.658s/vet/build, RCworkload1.014s/vet/build, CPdelegate0.066s/build,
+runnercredentialrelay0.272s/build PASS. Native run ещё не повторён;
+обязательно новый full runner/provenance/node pin, canonical seed/render/apply,
+затем два custom recipes и три ENV image-only/intended bindings.
+
+FE пакет exact3/3 принят, ROOT157unit5.19s, lint/typecheck/build8.15s PASS.
+Native APPLIED record сохраняет правильную root ссылку и operation hint уже
+скрыт, но first transcript fallback всё ещё выводит прежнюю edit-hint строку.
+Это FAIL живой проверки, отдельный минимальный supplement готовится.
+Console0/relevant API200/overflowfalse; неизменённые реальные ответы сохранять.
+
+Уточнение владельца про почти60К оплаченных кредитов включено во все четыре
+inputs1796. Баланс/единицы/списание UNKNOWN. Source lookup не нашёл prelaunch
+weekly gate: selector/claim ограничивают credential/lifecycle/concurrency.
+UsageLimitExceeded остаётся фактическим upstream отказом, не локальным
+weekly запретом; обходить его нельзя. Typed rate windows/credits ещё не
+материализованы — это scope бизнес-задачи1796, а не доказанное отсутствие баланса.
+Full65/бизнес outputs/review/финальный Human Gate остаются OPEN.
+
+## Checkpoint 10.10.2026 09:03 UTC — опубликован81f23a45; native root FAILED validation
+
+Source/remote/Draft1807 exact81f23a450f178b0cce3441c8078538c9e87bf08c.
+WORKFLOW_CONFIGURATION native readEOF68717B PASS, planpln_HudbSuUsenOLuuw1NVQ8MS1z
+revision2 VALID→APPLIED один раз. Четыре input поля46/1763/15/2115chars,
+Issue URL исправлен в форме, scope/credits/constraints сохранены.
+Rootrun_jGe8KwFu-N6TXUqdP3hnGXQv FAILED через7s до модели:
+RUNTIME_REVISION_INVALID / presentation RUNTIME_PROFILE_UNSUPPORTED,
+children CANCELLED. Owner/record/link/reload сохранились; Console0/overflowfalse.
+RC safe bounded log stage=validation; exact cause не выдавать за доказанную
+только временной корреляцией. Shared runtimecontract byte guards проверяются
+Unicode агентом, isolated packet pending; после fix необходимы CP/RC и новый
+runner/custom recipes/ENV immutable delivery. Не Retry/launch до исправления.
+Frontend агент готовит tiny warning hide для APPLIED record. ROOT владеет
+журналом/браузером/доставкой; без secrets/raw inputs/manual SQL bypass.
+Баланс/spending UNKNOWN, failure не относится к провайдеру. Full65 OPEN.
+
 ## Checkpoint 10.10.2026 08:51 UTC — Unicode correction PASS, native launch готовится
 
 ROOT Unicode packet2/2 принят, combined callback7.998s/vet/canonical build PASS.

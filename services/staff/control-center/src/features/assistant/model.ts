@@ -906,6 +906,22 @@ export function operationInputs(
   });
 }
 
+export function assistantPlanCardPresentation(
+  plan: Pick<AssistantPlan, "state" | "auditSummary" | "operations">,
+  editHints: { plan: string; operation: string },
+): Pick<AssistantPlan, "auditSummary" | "operations"> {
+  if (plan.state !== "APPLIED" && plan.state !== "REJECTED")
+    return { auditSummary: plan.auditSummary, operations: plan.operations };
+  return {
+    auditSummary: plan.auditSummary === editHints.plan ? "" : plan.auditSummary,
+    operations: plan.operations.map((operation) =>
+      operation.summary === editHints.operation
+        ? { ...operation, summary: "" }
+        : operation,
+    ),
+  };
+}
+
 export function honestEditedPlanSummaries(
   plan: AssistantPlan,
   auditSummary: string,

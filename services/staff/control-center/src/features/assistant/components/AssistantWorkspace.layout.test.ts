@@ -272,7 +272,9 @@ describe("AssistantWorkspace layout", () => {
       template.indexOf("</AssistantPlanRecord>"),
     );
     expect(record).toContain("turn.plan.state === 'APPLIED'");
-    expect(record).toContain(':content="transcriptTurnContent(turn)"');
+    expect(record).toContain("!turnHasPublishedMessage(turn)");
+    expect(record).toContain(':content="planCardFallbackContent(turn)"');
+    expect(record).not.toContain(':content="transcriptTurnContent(turn)"');
   });
   it("не дублирует exact активный transcript нижним working fallback", () => {
     expect(template).toContain(

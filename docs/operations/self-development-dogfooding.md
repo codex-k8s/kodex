@@ -1048,3 +1048,95 @@ run_9nBbL7K2SKWKdkV7UYfUFmv0 пока RUNNING: readEOF/LAUNCH plan NOT RUN.
 Кейс weekly exhaustion + доступные оплаченные credits передан явно;
 баланс/единицы/реальное списание UNKNOWN, upstream restrictions не обходятся.
 Full65/бизнес-команда/review/owner gate не объявлены завершёнными.
+
+## Checkpoint 10.10.2026 09:03 UTC — native Workflow read PASS; первый новый root отвергнут до модели
+
+Проверенный пакет опубликован в Draft1807: source/remote
+`81f23a450f178b0cce3441c8078538c9e87bf08c`, main по readback неизменён.
+Перед commit повтор Proto lint/build/codegen и journal previous-prefix verifier
+PASS;29 явно выбранных файлов, clean checkout после push. Private PR body
+сокращён до списка экранов/сценариев с честными незавершёнными пунктами.
+
+Native helper run_9nBbL7K2SKWKdkV7UYfUFmv0 прочёл WORKFLOW_CONFIGURATION
+до EOF:68717B, SHA c2a50a69bf4cba2029dbd2616044cd22bd547a24d96adc0e25608194fbcb793d,
+offsets0→16384→32768→49152→65536→68717. Все пять страниц SUCCEEDED767–835ms.
+Создан один LAUNCH_RUN plan pln_HudbSuUsenOLuuw1NVQ8MS1z. В форме исправлен
+только field-001 на точный Issue URL; scope/credits/constraints сохранены.
+Новая revision2 VALID/version3, validation[], четыре input keys, размеры
+46/1763/15/2115 Unicode-символов. После reload VALID сохранился.
+Повторный owner active read200 total0/nextnone, один Apply→APPLIED.
+
+Создан ровно один новый root run_jGe8KwFu-N6TXUqdP3hnGXQv на текущем
+опубликованном процессе.08:54:28.774→08:54:35.728 FAILED: event
+RUNTIME_REVISION_INVALID, owner presentation RUNTIME_PROFILE_UNSUPPORTED.
+Все planned children CANCELLED атомарно; моделей/реального Manager ещё нет.
+RC закрытый log `runtime turn input rejected` stage=validation временно
+коррелирует с отказом; raw input/причина не логировались. Это не provider
+quota/credit отказ. Новый retry/дубликат не создавался.
+
+APPLIED record и ссылка на exact созданный root сохранились после перехода
+и reload; native screenshot/Console0/API200/overflowfalse. Найден UX debt:
+у APPLIED record остаётся предупреждение «перед применением»; tiny correction
+готовится отдельно. Shared runtimecontract delegation human-text byte guards
+проверяются на тот же Unicode дефект; требуется полноценная доставка consumers,
+а не объявление hot reload достаточным. Full65 и actual business outputs OPEN.
+
+## Checkpoint 10.10.2026 09:11 UTC — Unicode runtime contract и кредитный сценарий
+
+Source81f23a45 + frozen shared2/FE3 dirty packet. Исходный full RunnerInput
+synthetic903Unicode characters/1352UTF8bytes воспроизвёл отказ delegation
+validator до модели. Шесть human-text delegation полей и EntityName300
+теперь используют Unicode limits, UTF-8/NUL закрыто отклоняются; byte caps,
+opaque identifiers, authority/lease и immutable digests не расширены.
+ROOT combined race2.658s/vet/build, RCworkload1.014s/vet/build,
+CPdelegate0.066s/build, runnercredentialrelay0.272s/build PASS.
+Consumer внутри custom runner тоже использует этот validator: hot reload
+CP/RC не доказывает доставку. Новый full OCI/provenance/seed/render/policy,
+custom recipes и три ENV bindings пока NOT RUN; новый launch не выполнен.
+
+ROOT FE157/157,4suites5.19s; lint/typecheck и Vite build8.15s PASS.
+Точная terminal edit-hint проекция сохраняет substantive/mixed сообщения,
+неприменённые планы и исходные audit/editor/receipt. Native APPLIED record
+показал правильную созданную root ссылку/overflowfalse/Console0/API200,
+operation hint уже скрыт. Но первый transcript fallback всё ещё выводит
+плановую edit-hint строку: live FAIL, готовится минимальный supplement.
+Изолированные initial test setup/assert FAIL не считаются production PASS.
+
+Уточнение владельца: исчерпанный weekly included limit при поддерживаемых
+кредитах и разрешении провайдера не запрещает работу. Почти60К — сообщение
+владельца, не свежий API balance; units/unlimited/spending UNKNOWN.
+Все четыре native inputs1796 сохраняют этот кейс. Read-only source audit:
+CP account selector AUTHORIZED/enabled/credential и claim concurrency, не
+weekly.usedPercent; отдельный prelaunch gate100% не найден. Upstream
+usageLimitExceeded→BLOCKED/CHECK_PROVIDER_QUOTA остаётся реальным отказом
+провайдера. Typed rate windows/credits ещё не materialized; это не нулевой
+баланс и не основание локального запрета. Бизнес Architect1796 должен
+подтвердить supported schema, затем Developer и tests по точному SHA.
+Full65/business outputs/один review/Manager/final owner gate OPEN.
+
+## Checkpoint 10.10.2026 09:14 UTC — APPLIED fallback исправлен и перепроверен
+
+Тот же81f23a45 + dirty packet; supplement3/3 exact pre/post принят.
+Первый SafeMarkdown теперь использует ту же exact terminal hint проекцию,
+а не raw fallback turn.content. ROOT combined166/166,5suites5.27s PASS;
+isolated native-shaped regression сначала RED, затем PASS. Реальные ответы,
+смешанный markdown, controls, audit/editor/receipt не удаляются.
+Chrome reload/expand APPLIED: оба obsolete hints отсутствуют, состояние
+APPLIED и exact created root link сохранены, body371chars, overflowfalse.
+Скриншот просмотрен, fresh Console0, relevant API200. Исторический ответ
+«ожидает Apply» остаётся историческим сообщением, не переписывается.
+
+Shared source host→CP/RC /workspace exact f782da67…e99169. Свежие serving
+09:12:36→09:13:36 stable same UID/container: CP PID1725/startTicks6400207,
+ELF129c6c388b1286f41e4b97826b05e15c8c5444fa2c49dadd73ef8040ba755037;
+RC PID1444/startTicks6399538,
+ELFb77e68296f553863920e300f536a44b0c40664a815360b8b01013bc7e12fd6b8.
+Оба равны независимым canonical CGO0 Go1.26.6/-trimpath/-buildvcs=false
+build. Dirty hot reload не выдаётся за новый runner OCI/admission/nativePASS.
+Два nodes Ready/noDiskPressure, managed admission objects0, owner active
+runs read200 total0/nextnone; эти read не заменяют свежий canonical idle barrier.
+
+Повтор ROOT scoped ESLint/Prettier четырёх FE файлов, forced vue-tsc и Vite
+build7.85s PASS на том же exact dirty tree. Chunk-size/plugin timing warnings
+зафиксированы, не являются ошибками компиляции. До clean commit8 явно выбранных
+файлов и runner delivery source mutation не планируется; полный QA не завершён.

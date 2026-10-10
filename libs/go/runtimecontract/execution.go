@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -382,9 +383,9 @@ func (input RunnerInput) Validate() error {
 		return errors.New("warm runner binding is invalid")
 	}
 	for _, target := range input.DelegationTargets {
-		if !opaqueReferencePattern.MatchString(target.Ref) || strings.TrimSpace(target.Name) == "" || len(target.Name) > 160 ||
-			len(target.Purpose) > 2000 || len(target.RoleDescription) > 2000 || len(target.WorkflowStepName) > 160 ||
-			len(target.Instructions) > 1000 || len(target.ExpectedResult) > 1000 ||
+		if !opaqueReferencePattern.MatchString(target.Ref) || strings.TrimSpace(target.Name) == "" || !validRunnerHumanText(target.Name, 160) ||
+			!validRunnerHumanText(target.Purpose, 2000) || !validRunnerHumanText(target.RoleDescription, 2000) || !validRunnerHumanText(target.WorkflowStepName, 160) ||
+			!validRunnerHumanText(target.Instructions, 1000) || !validRunnerHumanText(target.ExpectedResult, 1000) ||
 			(target.WorkflowStepKey != "" && !workflowStepKeyPattern.MatchString(target.WorkflowStepKey)) {
 			return errors.New("runner delegation catalog is invalid")
 		}
@@ -392,7 +393,7 @@ func (input RunnerInput) Validate() error {
 	if input.AssistantContext != nil {
 		context := input.AssistantContext
 		if !input.IsAssistant() || len(context.Route) > 500 || len(context.EntityKind) > 80 ||
-			len(context.EntityRef) > 96 || len(context.EntityName) > 300 || len(context.AllowedOperations) > 32 ||
+			len(context.EntityRef) > 96 || !validRunnerHumanText(context.EntityName, 300) || len(context.AllowedOperations) > 32 ||
 			(context.EntityKind == "") != (context.EntityRef == "") || context.EntityVersion != nil && *context.EntityVersion < 1 {
 			return errors.New("runner assistant context is invalid")
 		}
@@ -425,6 +426,12 @@ func (input RunnerInput) Validate() error {
 		return errors.New("runner attachment context is invalid")
 	}
 	return nil
+}
+
+// Human-text maxLength считает Unicode-символы; optional пустые поля и отдельные
+// byte budgets сохраняются. Некорректный UTF-8 и NUL не нормализуются.
+func validRunnerHumanText(text string, maximumCharacters int) bool {
+	return utf8.ValidString(text) && !strings.ContainsRune(text, 0) && utf8.RuneCountInString(text) <= maximumCharacters
 }
 
 func containsString(values []string, expected string) bool {
