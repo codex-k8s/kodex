@@ -10,6 +10,32 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 17:35 UTC — node/defaults и native publications доказаны
+
+Exact bcd9ccfe remote/Draft1807 PASS. Новый source9fd2b222 доказал свежие HTTPS
+manifest/config/layers и CRI pulls exact acbb на обоих nodes: PASS. Prior UNKNOWN
+сохранён. Defaults runtime-controller/control-plane переведены canonical script
+на public acbb; apply/stabilization и отдельный inspect PASS, Ready gen82/89.
+Во время Recreate CP временно503; после Ready/reload Console0. Это не бизнес-QA.
+
+Native ORG recipe UPDATE создал published19, PROJECT drafts/validate/publication
+создали published15/9, все source digests соответствуют private intents.
+Три builds COMPLETED. SYSTEM artifact admission ACCEPTED/VERIFIED; promotion
+получила202/QUEUED17:35, окончательный PROMOTED ещё не доказан. PROJECT artifacts
+пока не появились в candidate. Проверяется реальный admission path.
+ENV planner обнаружил важный actual-schema аналог: FROM-only image может иметь
+declaredTools=[] при verified inherited base inventory. Нельзя подставлять
+синтетическую декларацию; нужен тот же closed eligibility, что у native owner.
+Четыре ENV/восемь bindings не менялись, all38 tools и exact Secret revisions
+сохраняются. Serving hot29845/v2/core47 остаётся до совместимой доставки.
+
+Уточнение владельца: неожиданные результаты исправлять в repository-owned
+системных инструкциях и коде всех применимых агентов/помощников, а не USER_MESSAGE
+от имени владельца. Common PLATFORM v3 и SYSTEM core48 уже SOURCE-ready;
+fresh-install/inheritance tests есть, live activation ещё OPEN. Исходный failed
+run не переписывался, Retry/Launch и дополнительные пользовательские подсказки
+не создавались. Business1796/Full65 не объявляются завершёнными.
+
 ## Checkpoint 10.10.2026 17:22 UTC — native ORG/PROJECT upgrade готов
 
 Exact9fd2b222 remote/Draft1807 readback PASS. Новый node HTTPS/CRI proof этим

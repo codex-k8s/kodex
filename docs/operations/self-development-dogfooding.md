@@ -999,3 +999,29 @@ Actual4ENV pure conversion ROOT PASS: ACTIVE/ready/no blockers, native no
 enabled, omitted ORG projectRef только empty scope; all38tools/values/resources/
 web policy/exact Secret revisions preserved,8bindings. Postpromotion new intents
 и HTTP effects этого пакета NOT RUN, defaults/hot source/business1796 OPEN.
+
+## Checkpoint 10.10.2026 17:35 UTC — реальные node/defaults/publication результаты
+
+Source9fd2b222: оба node fresh exact HTTPS OCI graph и installed /bin/crictl
+pull/inspect acbb PASS. Private proof SHA8085fe1e30319fd3c65dfea22e065c45b3202d794ef73d20685263770f22788c,
+initial UNKNOWN metadata SHAb66c06ea88bbf2e0c5fd85b50738bf7e0f27418d2c7aac2a0ecdbe1f9ab630ca сохранён.
+Canonical default transition operation98dd8c49-eba7-456f-8118-112a8a2f307d:
+RC→CP→stabilization PASS17:28:29 и inspect PASS17:28:56; target public acbb,
+RC gen82/CP gen89 Ready. Temporary CP Recreate503 отмечен, после Ready/reload
+Console0 и relevant bootstrap/session200; full QA это не заменяет.
+
+Native published source: SYSTEM revision19 digest0d4087e1…, staff15 digest6679d148…,
+project assistant9 digest44f1d006…. Intents, draft/validation/publication ACKs и
+exact source readback сохранены; publication сама запустила три builds, все
+COMPLETED. SYSTEM artifact ACCEPTED/VERIFIED, native promotion202/QUEUED17:35:10,
+receipt imgprom_iFPDINQJBnRd_P1GHXZ7HVoT. PROMOTED ещё OPEN. PROJECT admission
+candidate ещё отсутствует; backend проверяется, machine risk approval запрещён.
+
+Actual artifact FROM-only declaredTools=[] с verified inherited base inventory:
+offline ENV planner требует closed native-owner eligibility, не invented tools
+и не скрытый fallback. Четыре ENV/восемь bindings пока unchanged; all38 tools,
+policy/values/resources/exact Secret revisions сохраняются. HOT29845/producer2/
+core47 пока unchanged, public base defaults не означают activation v3.
+Уточнение владельца закреплено: durable system instructions/code для fresh
+install, никаких корректирующих USER_MESSAGE/переписывания business history.
+SOURCE common PLATFORM v3/core48 готов, live activation/business1796/Full65 OPEN.
