@@ -932,3 +932,31 @@ ROOT exact frozen pre/post hashes EQUAL,192/192tests PASS0.975s/0FAIL/0SKIP,
 syntax/diffcheck и journal append-only verifier PASS. Тот же actual private
 DRAFT1 input выдаёт PREPARED_OFFLINE validate intent1; CREATE не повторялся.
 Live validate/impact/publication/readback/Retry7 ещё NOT RUN.
+
+## Checkpoint 10.10.2026 21:40 UTC — exact owner ENV publication/readback
+
+Source7613ae33 published Draft1807/clean idleFF21:34:13 PASS с unchanged
+query/guard и5idlezero. Validate403/FRESH_AUTHENTICATION_REQUIRED сохранён:
+штатная свежая OIDC password auth, без weakening2min gate. Далее same draft
+validate200/VALID2→impact201/rvip_zb90f0FxVxzt_cybyGcfSZGA/PREPARED1/total1
+unfilteredEOF→publication200/PUBLISHED3/APPLIED2. ROOT wrapper неверно
+прочитал direct RevisionImpactPlan как page после201; existing response
+прочитан без нового POST/effect. Все authoritative readbacks200/fullEOF.
+
+ENV17/revision17/renvv_hrRMoSxLCd2USUHcebFWVy2K, один Developer binding18 и
+agent21/outcomeAPPLIED. Exact preservation image/38tools/values/fullsecret
+descriptors/resources/volumes/egress/NONE/oldgithub+raw rules PASS; лишь
+api.github.com HTTPS443 GET/HEAD/PATCH/POST добавлен. Общие defaults не расширены.
+
+Первоначальный offline readback FAIL BINDING_READBACK_CHANGED был вызван
+только permission hints nextActions: directENV owner GET их вычисляет,
+embeddedruntime GET не вычисляет. Узкая helper projectioncomparison после
+проверки knownunique hints сохраняет strict остальные fields/currentVersion/
+scope/identity/readiness. ROOT2posthashes EQUAL,210/210tests PASS1.003s,
+actual full input READBACK_VERIFIED_OFFLINE/bindings1. Live publication
+не повторялась; offline helper effectNOT_RUN не выдаётся за HTTP receipt.
+
+ENV desktop screenshot MAIN просмотрен, Console0/overflow0/API200; afterreauth
+genericUNKNOWN/status0/current16/localChangesfalse исследуется source-only,
+own5reload выполнен без потери ввода. NativeRetry7 пока NOT RUN; USER
+corrections0/business implementation0; ONE review/Full65/11/14/15 OPEN.

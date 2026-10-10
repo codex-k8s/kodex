@@ -36,6 +36,7 @@ function shape(value, required, optional = []) {
 }
 const scopeKeys = ['organizationRef', 'scopeKind', 'projectRef'];
 const bindingKeys = [...scopeKeys, 'consumerRef', 'consumerVersion', 'bindingRef', 'bindingVersion', 'sourceRevisionRef'];
+const activeEnvironmentActions = Object.freeze(['OPEN', 'UPDATE', 'ROLLBACK', 'DISABLE']);
 function scope(actual, expected) {
   check(expected.scopeKind === 'PROJECT' && ref(expected.organizationRef) && ref(expected.projectRef) && scopeKeys.every(key => actual[key] === expected[key]), 'SCOPE_CHANGED');
 }
@@ -43,6 +44,7 @@ function publicEnvironment(env, expected) {
   shape(env, ['scopeKind', 'organizationRef', 'ref', 'version', 'projectRef', 'name', 'description', 'state', 'currentVersion', 'updatedAt', 'ready', 'readinessBlockers', 'nextActions']);
   scope(env, expected);
   check(env.ref === expected.environmentRef && version(env.version) && env.state === 'ACTIVE' && env.ready === true && Array.isArray(env.readinessBlockers) && env.readinessBlockers.length === 0 && typeof env.name === 'string' && typeof env.description === 'string' && Array.isArray(env.nextActions), 'ENVIRONMENT_INVALID');
+  check(env.nextActions.every(action => activeEnvironmentActions.includes(action)) && new Set(env.nextActions).size === env.nextActions.length, 'ENVIRONMENT_ACTIONS_INVALID');
   const current = env.currentVersion, policy = current?.policy;
   shape(current, ['ref', 'version', 'revision', 'image', 'tools', 'values', 'secretDescriptors', 'policy', 'digest', 'createdAt']);
   check(ref(current.ref) && version(current.version) && version(current.revision) && digest(current.digest), 'REVISION_INVALID');
@@ -94,6 +96,12 @@ function pinnedDraft(draft, input, body, states) {
   scope(draft, input.expected);
   check(ref(draft.ref) && version(draft.version) && states.includes(draft.state) && draft.environmentRef === input.expected.environmentRef && draft.expectedEnvironmentVersion === input.expected.environmentVersion && draft.baseVersionRef === input.expected.baseVersionRef && draft.baseRevision === input.expected.baseRevision && same(draft.specification, canonicalDraftSpecification(body.specification)) && Array.isArray(draft.diagnostics) && draft.diagnostics.length === 0, 'DRAFT_PIN_CHANGED');
   if (draft.state === 'VALID' || draft.state === 'PUBLISHED') check(digest(draft.validationDigest), 'DRAFT_NOT_VALID');
+}
+function sameEnvironmentProjection(actual, expected, pins) {
+  publicEnvironment(actual, pins);
+  // Direct GET назначает permission hints; вложенный runtime-configuration GET
+  // возвращает ту же ENV без этих hints. Они не являются source authority.
+  return same({ ...actual, nextActions: null }, { ...expected, nextActions: null });
 }
 function completeImpact(pages, input, draft, state, now) {
   check(Array.isArray(pages) && pages.length > 0 && pages.length <= 100, 'EOF_REQUIRED');
@@ -153,7 +161,7 @@ export function prepare(phase, input, now = Date.now()) {
     const view = views[0], binding = view.environmentBinding;
     shape(view, ['configuration', 'publishedOverlay', 'environmentBinding', 'environment', 'safeEffectiveConfig', 'agentVersion', 'skillBindings', 'memoryBindings', 'overlaySchema'], ['draftOverlay']);
     shape(binding, ['ref', 'version', 'agentRef', 'environmentRef', 'digest'], ['versionRef']);
-    check(item.resultRevisionRef === published.currentVersion.ref && binding.environmentRef === input.expected.environmentRef && binding.versionRef === item.resultRevisionRef && binding.ref === item.resultBindingRef && binding.ref === intended.bindingRef && binding.version === item.resultBindingVersion && binding.version === intended.bindingVersion + 1 && view.agentVersion === item.resultConsumerVersion && view.agentVersion === intended.consumerVersion + 1 && binding.digest === bindingDigest(intended.consumerRef, input.expected.environmentRef, binding.version) && same(view.environment, published), 'BINDING_READBACK_CHANGED');
+    check(item.resultRevisionRef === published.currentVersion.ref && binding.environmentRef === input.expected.environmentRef && binding.versionRef === item.resultRevisionRef && binding.ref === item.resultBindingRef && binding.ref === intended.bindingRef && binding.version === item.resultBindingVersion && binding.version === intended.bindingVersion + 1 && view.agentVersion === item.resultConsumerVersion && view.agentVersion === intended.consumerVersion + 1 && binding.digest === bindingDigest(intended.consumerRef, input.expected.environmentRef, binding.version) && sameEnvironmentProjection(view.environment, published, input.expected), 'BINDING_READBACK_CHANGED');
   }
   check(items.filter(item => !selected.has(item.bindingRef)).every(item => item.outcome === 'NOT_SELECTED' && !Object.hasOwn(item, 'resultRevisionRef') && !Object.hasOwn(item, 'resultBindingRef') && !Object.hasOwn(item, 'resultBindingVersion') && !Object.hasOwn(item, 'resultConsumerVersion')), 'UNSELECTED_BINDING_CHANGED');
   return { status: 'READBACK_VERIFIED_OFFLINE', environmentRef: input.expected.environmentRef, environmentVersion: published.version, publishedVersionRef: published.currentVersion.ref, bindings: seen.size, effect: 'NOT_RUN' };

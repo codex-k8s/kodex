@@ -10,6 +10,36 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 21:40 UTC — exact GitHub API ENV опубликован
+
+Canonical helper source7613ae33 опубликован и clean idleFF21:34:13 PASS.
+Первый validate403/FRESH_AUTHENTICATION_REQUIRED не имел эффекта; штатная
+OIDC password reauthentication без изменения2min gate завершена, затем тот
+же idempotent validate200/VALID2, impact201/total1/fullEOF и publication200.
+Impact response — RevisionImpactPlan, не page; после ошибки ROOT wrapper
+existing201 receipt прочитан, POST не повторён и новый plan не создавался.
+
+Draft renvd_mFGt3jCwd5KZklwVcywCwDa7/PUBLISHED3, plan
+rvip_zb90f0FxVxzt_cybyGcfSZGA/APPLIED2, named ENV17/revision17
+renvv_hrRMoSxLCd2USUHcebFWVy2K. Только intended Developer binding18/agent21
+APPLIED. Actual full preservation проверил image/38tools/values/exact Secret
+descriptors/resources/volumes/egress/NONE и старые github/raw rules; добавлен
+только api.github.com HTTPS443 GET/HEAD/PATCH/POST. Общие defaults не менялись.
+
+Сначала offline readback FAIL BINDING_READBACK_CHANGED: direct ENV GET и
+embedded runtime GET имели разные nextActions hints. Source helper теперь
+проверяет известные уникальные hints отдельно, сравнивает остальные поля
+strict full; unknown/identity/readiness/scalar/currentVersion mismatch закрыт.
+ROOT2posthashes EQUAL,210/210tests PASS1.003s/0FAIL/0SKIP, actual full readback
+READBACK_VERIFIED_OFFLINE/bindings1; это проверка выполненного owner эффекта,
+не новый эффект offline helper. Publication не повторялась.
+
+После reauth новый ENV экран проверен: Console0/overflow0/API200, первоначально
+UNKNOWN/status0 и current16 при localChangesfalse; generic error source
+исследуется параллельно. Ввод не менялся, own5 штатно обновлена. Дальше
+publish/clean idleFF helper proof и native Retry7. USER corrections0,
+business implementation0; business/Full65/ONE review/owner gate OPEN.
+
 ## Checkpoint 10.10.2026 21:34 UTC — canonical helper исправлен
 
 ROOT интегрировал только2 helper/test файла поверх894f0e1f; actual draft
