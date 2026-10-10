@@ -10,6 +10,100 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 06:53 UTC — три ENV обновлены без потери настроек
+
+Staffartifact imgart_v4_6LF2lnmxuk2-F5iUMmpak штатно PROMOTED; signed receipt
+7e7e5694…484eb4. Native publication двух staffENV выполнена с exact intended
+consumers: selfdev-review — пять review/coordinator ролей; selfdev-write —
+только Developer. Никаких дополнительных rebind после publication не было.
+
+Fresh owner read всех трёх ENV после commit публикации:
+
+| ENV | Version / currentVersionRef | Image digest | 38tools / non-image hash |
+| --- | --- | --- | --- |
+| helper | 16 / renvv_VhcR-Kavl4-uJ1KiDLx84fHB | 70ab08b3…adc02 | PASS / 5fe5ce34…25b23 |
+| selfdev-review | 12 / renvv_I7ZmHuiTB4Cotxf2nopRcRzK | b9f58274…f0658 | PASS / 5fe5ce34…25b23 |
+| selfdev-write | 12 / renvv_Py7J95JyejehyqnnPChsW6kz | b9f58274…f0658 | PASS / 83dc0093…49b97 |
+
+Все3ready=true. Полные SHA non-image совпали с before для policy, tools,
+values и secretDescriptors; у Developer exact name/ref/revision единственного
+Secret binding сохранились. Окружение review обновило только5 consumers с
+beforebindingversion12; write только1 с beforebindingversion12. Скриншот
+publication selection просмотрен, свежая Console0. Это exact native
+publication/readback, не доказательство actual provider OBSERVED в новом ходе.
+
+UX найден: пять строк impact-модалки занимают слишком много вертикального
+места, кнопка публикации частично ниже viewport. Готовится узкий layout-пакет;
+на момент checkpoint он NOT RUN. Следующие этапы прежние: new one-cycle
+Workflow, ordinary Architect snapshot, dogfooding #1796 и остальные п16/Full65.
+
+## Checkpoint 10.10.2026 06:48 UTC — actual runtime и новый образ помощника
+
+Цель ACTIVE по варианту1; GOV-OD-003 синхронизирован с AGENTS, delivery guide
+и testing strategy: один TOTAL цикл комплексного ревью только для #1796/#1797,
+без автоматических fix/re-review, с отчётом Manager и final owner gate.
+Исполняемый Workflow ещё не обновлён; его публикация NOT RUN.
+
+На опубликованном96fc actual CP/RC serving /proc/PID/exe совпали с независимой
+сборкой Go1.26.6: CP3f69c427…f33873, RC65203a74…36667. Exact Pod UID/Ready,
+readonly host mount и host/Pod source hashes подтверждены06:24–06:25 UTC.
+Это доставка, не native Architect observation и не Full QA. Proper Go1.26.6
+replay адресных unit/runtime и disposable PG tool-phase завершён PASS;
+предыдущие первоначальные host Go1.27 результаты не подменяют этот replay.
+
+ROOT принял4файла navigation UX: PROJECT header/sidebar сохраняются в истории
+ROLE_IMAGE/PROMPT_TEMPLATE с projectRef. ROOT64unit/4suites2.98s, scopedlint,
+forcedtypecheck и Vite2791modules8.94s PASS; chunkwarning остаётся. Sourcebase
+96fc + exact4postimages; commit этой дельты пока не выполнен. Native Chrome5
+после hot reload/reload: PROJECT label/sidebar,32px controls, overflowfalse,
+скриншот просмотрен. Диагностический неверный ROOT GET дал404, не app failure;
+последующие native recipe/ENV экраны имеют fresh Console0.
+
+Штатно опубликованы helperconfigrev6 и staffconfigrev12: только Dockerfile
+FROM заменён на новый базовый runner5ac60540…cd624; non-image config hashes
+сохранены. Оба build COMPLETED; staffcandidate появился примерно через5мин,
+не наблюдался сразу после сборки. Helperartifact imgart_PqQltimn9vpKBIIXlcrAFYAq
+ACCEPTED/PROMOTED, digest70ab08b3…adc02; новая signed promotion receipt
+6a180208…e6d09. Staffartifact imgart_v4_6LF2lnmxuk2-F5iUMmpak ACCEPTED,
+digestb9f58274…f0658; promotion запрошена, последний статус CLAIMED, не PASS.
+
+HelperENV renv_zycHL70M8UYGvTAU_W6fgvaB опубликован штатным draft Validate /
+impact / publication с единственным intended consumer «Помощник Kodex | Dev».
+Новая ENVversion16/versionRef renvv_VhcR-Kavl4-uJ1KiDLx84fHB, digest6857b6d9…3227;
+agentversion21. Fresh owner read после публикации доказал новый image70ab,
+38tools и exact non-image hash5fe5ce34…25b23 прежний. Первый read пересёк
+commit публикации и увидел прежнюю ENV; повторная проверка это разрешила,
+мутация не повторялась. SSO fresh-auth сохранил draft, OWNER восстановлен
+штатно; значения учётных данных не выводились и не сохранялись в журнале.
+
+Далее: дождаться signed staff promotion, две staffENV и intended6bindings с
+сохранением38tools/non-image; новый Workflow одного ревью; обычный Architect
+get_execution_snapshot с actual OBSERVED; реальный процесс #1796 и п16/Full65.
+Business PR не merge/approve; STT/device-code/staging/production NOT RUN.
+
+## Checkpoint 10.10.2026 — возобновление с одним циклом ревью
+
+Владелец выбрал вариант1: ROOT ведёт доставку и живой QA, субагенты — UX и
+адресные проверки. Новый лимит текущего dogfooding: один цикл комплексного
+ревью без автоматических повторов; активный план и GOV-OD-003 обновлены.
+Перед следующим процессом штатно изменить и опубликовать Workflow с этим
+лимитом; сейчас это NOT RUN. Непроверенные исправления и оставшиеся findings
+сохранить в отчёте, не объявлять READY_FOR_HUMAN_REVIEW без доказательств.
+
+Принятый runtime/UX пакет опубликован96fc426 в Draft1807. Canonical full runner
+build/import, fresh render, supply-chain quiesce apply/readback, supply-chain
+apply/readback и selected artifact-retention apply/readback PASS. Проверка
+06:10 UTC: обе ноды Ready/DiskPressureFalse, все27kodex-system Deployment/
+StatefulSet готовы, paused0. Это доставка, не завершение live QA.
+Actual CP/RC ELF comparison не завершён. Пользовательские custom images ещё
+прежние: обновить helper/staff recipes, три ENV и exact consumers, сохранив
+non-image settings. После этого actual Architect get_execution_snapshot,
+реальный Workflow #1796 и оставшиеся natural-language сценарии.
+Chrome5 доступен с OWNER; скриншоты recipe/history, Console и Network проверены.
+UX: переход в историю PROJECT image сбрасывает навигацию на «Все Проекты»;
+узкий фикс пока не принят. STT/device-code не запускались. Business PR не
+merge/approve; цель до паузы была очищена, теперь запускается заново по плану.
+
 ## Checkpoint 10.10.2026 05:50 UTC — combined runtime packet принят
 
 e6cd3828 уже опубликован в Draft1807; предыдущая запись про seven dirty files

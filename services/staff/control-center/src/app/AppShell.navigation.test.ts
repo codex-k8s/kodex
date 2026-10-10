@@ -9,6 +9,16 @@ const bootstrapSource = readFileSync(
 );
 
 describe("AppShell navigation", () => {
+  it("PROJECT configuration detail сохраняет project picker и sidebar в том же query scope", () => {
+    expect(source).toContain(
+      "configurationRouteProjectRef(route.name, route.params, route.query)",
+    );
+    expect(source.indexOf("routeProjectRef(route.params) ??")).toBeLessThan(
+      source.indexOf(
+        "configurationRouteProjectRef(route.name, route.params, route.query)",
+      ),
+    );
+  });
   it("даёт глобальному поиску стабильное имя поля", () => {
     expect(source).toContain('name="global-search"');
     expect(source).toContain("useAdaptiveCursorPageSize");
