@@ -1769,6 +1769,8 @@ onBeforeUnmount(() => {
             $t("assistant.projectProfile.scopeLabel")
           }}</span>
           <select
+            name="assistant-scope"
+            :aria-label="$t('assistant.projectProfile.scopeLabel')"
             :value="store.assistantScope"
             :disabled="store.busy || store.loading"
             @change="selectAssistantScope"

@@ -1299,3 +1299,38 @@ policyc022544f…6236b/38tools/0values/secrets/skills/memory сохранены.
 proof/render и доставка текущего SHA. Потом natural helper update и exact
 owner Apply sameArtifact/newrevision с сохранением oldbytes/history/pins.
 Checklist16/Full65QA остаются OPEN. Chrome1402 pending; own91439 OWNER.
+
+## Checkpoint 10.10.2026 04:28 UTC — подключение и canonical readback PASS
+
+Published ROOT2a66b34698d85b60d769d158d69de45011a3dffa/Draft1807.
+Fresh runner proof21c3ef57…3974b, OCIa39ef63e…4bcf4/ELF37608805…a2ea3;
+render tx7dYA/fingerprintec27e773…0fbd. Canonical supply-chain readback и
+selected retention core apply/readback PASS. Exact migration924303244fcc
+succeeded1/failed0;2nodes/43workloads Ready, source annotations CP/GW/RC/
+retention2a. Actual CP ELF89ff2721…19e69 и host/Pod source5360427d…3ee76f0
+EQUAL. Свободно /133GiB,/data28GiB; volumes и свежие caches не удалялись.
+Chrome MCP page5 реально доступна, OWNER; Files screenshot просмотрен,
+fresh Console без ошибок/overflowfalse. Exact revision DOWNLOAD/PREVIEW
+200/4234B/full baselinedigestdc0e4965…dc24e сохранён после доставки2a.
+Обычный запрос в прежний PROJECT-чат безIDs: дополнить существующий файл
+разделом проверки параллельных диалогов, не создавать копию; только один
+подтверждаемый план. Ход выполняется, Apply/newrevision пока NOT RUN.
+Full65QA/Workflow11/14/15/16 OPEN; не выдавать восстановление за конец QA.
+
+## Checkpoint 10.10.2026 04:48 UTC — signed writer и имя поля исправлены
+
+Base2a66 + exact frozenS3treef22b5892 и a11y2files приняты, pre/post6/6+2/2
+PASS. Natural update04:28 SUCCEEDED, но план TOOL_UNAVAILABLE, Apply NOT RUN.
+Причина воспроизведена actualSDK: LimitReader теряет Seek, HTTPPut0. Fix:
+bounded inspected memory snapshot<=1MiB+sentinel, exact size/digest, bytes.Reader;
+Put SDK attempts1, unknown outcome не повторяется, read retries сохранены.
+Нет изменений authority/SQL/migrations/wire и ручного исправления старого
+WAITING_OWNER. ROOT signed-body/no-retry race PASS; disposable binding/ledger
+PASS6.867s, canonical read-only queries PASS. Авторский module race/vet,
+archive units и PG повтор PASS. Source6 exact; общий инвариант GUIDE-DOC-003.
+ROOT47frontendunit/lintformat/appforcedtypecheck/fullbuild2791 PASS;
+существующее chunkwarning сохранено. Scope SELECT получил name и localized
+aria-label. Chrome5 native после hotreload/reload: Console0, unnamedcontrols0,
+overflowfalse, screenshot просмотрен, OWNER сохранён. Это dirty-tree evidence;
+fresh canonical runner+archive builds/render/activation и новый proposal/Apply
+ещё NOT RUN. Full65/Workflow11/14/15/16 остаются OPEN.

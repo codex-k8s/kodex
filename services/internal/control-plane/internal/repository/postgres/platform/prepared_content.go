@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	_ "embed"
@@ -131,11 +132,33 @@ func scanPreparedContent(row pgx.Row) (preparedContent, string, string, error) {
 	return content, state, requestDigest, nil
 }
 
+// SDK подписывает payload и требует io.Seeker. Проверенный bounded снимок
+// остаётся только в памяти; LimitReader не передаётся в S3, поскольку он теряет
+// Seek и ломает signed Put до отправки HTTP даже поверх bytes.Reader.
+func preparedContentSeekableBody(request preparedContentRequest) (*bytes.Reader, error) {
+	if request.Body == nil || request.SizeBytes < 0 || request.SizeBytes > 1<<20 {
+		return nil, errs.ErrInvalid
+	}
+	body, err := io.ReadAll(io.LimitReader(request.Body, request.SizeBytes+1))
+	if err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	digest := sha256.Sum256(body)
+	if int64(len(body)) != request.SizeBytes || "sha256:"+hex.EncodeToString(digest[:]) != request.Digest {
+		return nil, errs.ErrInvalid
+	}
+	return bytes.NewReader(body), nil
+}
+
 // Durable unique intent фиксируется до одного Put. Повтор RPC читает ledger;
 // никакой исход, включая rollback/timeout/HEAD404, не разрешает второй Put.
 func (repository *Repository) stagePreparedContent(ctx context.Context, request preparedContentRequest) (preparedContent, error) {
 	if !validPreparedContentRequest(request) {
 		return preparedContent{}, errs.ErrInvalid
+	}
+	body, err := preparedContentSeekableBody(request)
+	if err != nil {
+		return preparedContent{}, err
 	}
 	b := request.Binding
 	requestDigest := preparedContentRequestDigest(request)
@@ -151,7 +174,7 @@ func (repository *Repository) stagePreparedContent(ctx context.Context, request 
 		targetID = b.TargetArtifactID
 	}
 	var id string
-	err := repository.pool.QueryRow(ctx, queryPreparedContentInsert, pgx.StrictNamedArgs{
+	err = repository.pool.QueryRow(ctx, queryPreparedContentInsert, pgx.StrictNamedArgs{
 		"ref": contentRef, "organization_id": b.OrganizationID, "project_id": b.ProjectID, "origin_project_ref": b.ProjectRef, "actor_id": b.ActorID,
 		"intent_operation": b.IntentOperation, "idempotency_key": b.IdempotencyKey, "intent_digest": b.IntentDigest, "request_digest": requestDigest,
 		"operation_key": b.OperationKey, "source_profile": b.SourceProfile, "source_profile_ref": b.SourceProfileRef,
@@ -197,7 +220,7 @@ func (repository *Repository) stagePreparedContent(ctx context.Context, request 
 	}
 	putContext, stopPut := context.WithTimeout(writer, 30*time.Second)
 	receipt, putErr := repository.objects.Put(putContext, objectstorage.PutInput{Key: key, MediaType: request.MediaType,
-		Digest: request.Digest, SizeBytes: request.SizeBytes, Body: io.LimitReader(request.Body, request.SizeBytes+1)})
+		Digest: request.Digest, SizeBytes: request.SizeBytes, Body: body})
 	stopPut()
 	state := "UNKNOWN"
 	if putErr == nil && exactPreparedReceipt(receipt, key, request.Digest, request.SizeBytes) {

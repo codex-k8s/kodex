@@ -86,7 +86,7 @@ func TestPreparedContentBindingComponent(t *testing.T) {
 	}
 	binding := preparedContentBinding{ActorID: actorID, OrganizationID: orgID, OrganizationRef: orgRef, ProjectID: projectID, ProjectRef: projectResult.Project.Ref, SourceProfile: "SYSTEM", SourceProfileRef: "agent_binding_component", SourceProfileVersion: 1,
 		SourceContextDigest: strings.Repeat("a", 64), SourceLeaseRef: "lease_binding_component", SourceLeaseGeneration: 1, SourceFenceDigest: strings.Repeat("b", 64), SourceRunRef: "run_binding_component", OperationKey: "operation-binding", IntentOperation: "propose-assistant-plan", IdempotencyKey: "binding-intent", IntentDigest: strings.Repeat("c", 64)}
-	request := preparedContentRequest{Binding: binding, FileName: "file.txt", MediaType: "text/plain", Digest: "sha256:" + strings.Repeat("d", 64), ScanState: "CLEAN", PreviewState: "AVAILABLE", SizeBytes: 3, Body: strings.NewReader("abc")}
+	request := preparedContentRequest{Binding: binding, FileName: "file.txt", MediaType: "text/plain", Digest: "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", ScanState: "CLEAN", PreviewState: "AVAILABLE", SizeBytes: 3, Body: strings.NewReader("abc")}
 	staged, err := repository.stagePreparedContent(ctx, request)
 	if err != nil {
 		t.Fatal(err)
@@ -489,7 +489,7 @@ func TestPreparedContentLedgerComponent(t *testing.T) {
 		SourceProfile: "PROJECT", SourceProfileRef: "agent_ledger_component", SourceProfileVersion: 1, SourceContextDigest: strings.Repeat("a", 64),
 		SourceLeaseRef: "lease_ledger_component", SourceLeaseGeneration: 1, SourceFenceDigest: strings.Repeat("b", 64), SourceRunRef: "run_ledger_component",
 		OperationKey: "operation-ledger", IntentOperation: "propose-assistant-plan", IdempotencyKey: "ledger-intent", IntentDigest: strings.Repeat("c", 64)}
-	request := preparedContentRequest{Binding: binding, FileName: "file.txt", MediaType: "text/plain", Digest: "sha256:" + strings.Repeat("d", 64), ScanState: "CLEAN", PreviewState: "AVAILABLE", SizeBytes: 3, Body: strings.NewReader("abc")}
+	request := preparedContentRequest{Binding: binding, FileName: "file.txt", MediaType: "text/plain", Digest: "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", ScanState: "CLEAN", PreviewState: "AVAILABLE", SizeBytes: 3, Body: strings.NewReader("abc")}
 	staged, err := repository.stagePreparedContent(ctx, request)
 	if err != nil {
 		t.Fatal(err)
@@ -500,6 +500,7 @@ func TestPreparedContentLedgerComponent(t *testing.T) {
 		t.Fatal("exact replay sent another Put", err)
 	}
 	request.Binding.SourceLeaseGeneration++
+	request.Body = strings.NewReader("abc")
 	if _, err := repository.stagePreparedContent(ctx, request); !errors.Is(err, errs.ErrIdempotencyReuse) {
 		t.Fatal("altered replay accepted", err)
 	}
@@ -523,6 +524,7 @@ func TestPreparedContentLedgerComponent(t *testing.T) {
 			t.Fatal(err)
 		}
 		store.fail = false
+		request.Body = strings.NewReader("abc")
 		if _, err := repository.stagePreparedContent(ctx, request); !errors.Is(err, errs.ErrConflict) {
 			t.Fatal(err)
 		}

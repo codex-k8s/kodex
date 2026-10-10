@@ -10,6 +10,54 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 04:48 UTC — два узких пакета приняты
+
+ROOT2a66+10files: S3frozen6, a11y2 и journals2. Exact pre/post6/6+2/2 PASS.
+ROOT objectstore/CP targetedrace PASS; disposable binding/ledger PASS6.867s
+и read-only grants queries PASS. ROOT47frontendunit/lintformat/forcedapp
+typecheck/fullbuild2791 PASS, chunkwarning сохранено. Chrome5 после reload
+Console0/unnamedcontrols0/overflowfalse, screenshot просмотрен. Signed-body
+fix не изменяет authority/ledger/schema и не переисполняет WAITING_OWNER.
+Общий SDK immutablePut attempts1; reads unchanged, GUIDE-DOC-003 обновлён.
+
+Далее clean commit/pushsameDraft1807. Canonical fullrunner и отдельный
+build-local-session-archive обязательны, затем fresh exactrender, canonical
+supply-chain apply/readback и selected core retention+session-archive
+apply/readback. ExistingJobs/pins не переписывать. ServingCP новый ELF и
+source hashes доказать; только затем fresh natural update→nativeValidate/
+Apply→sameArtifact/newrevision/oldbytes+pins. Provider-version diagnostic
+isolated packet ещё готовится. Full65/Workflow остаются OPEN, цель ACTIVE.
+
+## Checkpoint 10.10.2026 04:40 UTC — writer причина воспроизведена
+
+Chrome MCP ownpage5 доступен, OWNER сохранён; оба узла/все43workloads Ready,
+диск root132GiB/data27GiB свободно. Reload безопасный, draft0, overflowfalse;
+native Console: один accessibility issue scope SELECT без name/id, fix готовится.
+Natural update из04:28 завершился SUCCEEDED, но plan FAILED TOOL_UNAVAILABLE:
+старый файл сохранён, новая ревизия/Apply NOT RUN. Real AWS SDK regression
+доказал: io.LimitReader теряет seekability, до HTTP Put не доходит. Узкий
+bounded inspected buffer fix и disposable ledger тесты готовятся; UNKNOWN
+intent уже WAITING_OWNER, вручную не менять. SDK Put retries также отключить
+для immutable one-write boundary, Head/Get/Delete не менять. Отдельный
+provider handshake version observation готовится без нового permission и без
+изменения immutable RuntimeRevision. Current production source2a66, новые
+пакеты ещё не приняты/не опубликованы. Full65/Workflow остаются OPEN.
+
+## Checkpoint 10.10.2026 04:28 UTC — Chrome и serving восстановлены
+
+ROOT2a66b34698d85b60d769d158d69de45011a3dffa опубликован в Draft1807.
+Fresh runner/provenance/render tx7dYA и canonical supply-chain readback,
+selected artifact-retention core apply/readback PASS. Exact migration
+924303244fcc succeeded1/failed0; оба узла и все43workloads Ready.
+CP/GW/RC/retention source annotations2a; actual CP ELF89ff2721…19e69,
+host/Pod stream source5360427d…3ee76f0 EQUAL. Chrome MCP реально подключён,
+ownpage5 OWNER, Files screenshot просмотрен; fresh Console без ошибок.
+Revision DOWNLOAD/PREVIEW200/4234B/full baseline digestdc0e4965…dc24e.
+Отправлен обычный запрос в прежний PROJECT-чат: дополнить существующую
+заметку разделом проверки параллельных диалогов, безIDs и копии, только
+подтверждаемый план. Ход ещё выполняется; Apply/newrevision NOT RUN.
+Full65QA/Workflow11/14/15/16 OPEN; bootstrap не слит, цель ACTIVE.
+
 ## Checkpoint 10.10.2026 04:14 UTC — узкий streaming fix принят
 
 ROOT0ff+5dirty files: narrowauth3 и journal/handoff2. Exact pre/post3/3 PASS,

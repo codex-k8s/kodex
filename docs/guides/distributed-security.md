@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.16
+version: 1.7.17
 updated: 2026-10-10
 ---
 
@@ -329,6 +329,17 @@ eligibility перед terminal receipt. Consumer держит partial bytes в 
 Ошибка, отмена, отзыв или повреждение удаляют этот файл; содержимое, временные
 пути и удостоверения не попадают в диагностику. Разрешённый размер файла не
 обеспечивается увеличением общего unary buffer до размера всего файла.
+
+В object-storage adapter один immutable `Put` не повторяется скрыто внутри
+SDK при HTTP-ошибке или обрыве после передачи тела: неизвестный исход принадлежит
+owner intent/receipt lifecycle, а не автоматическому повтору записи. Retry
+`Head`/`Get`/`Delete` имеет отдельный контракт и не меняется вместе с `Put`.
+Bounded body для подписанного S3 payload сохраняет требуемый SDK `io.Seeker`:
+ограничивающая reader-обёртка не должна терять `Seek`. Для небольшого уже
+inspected body допустим ограниченный in-memory snapshot с повторной проверкой
+size/digest; он не попадает в PostgreSQL, audit, outbox или prompt. Проверка
+охватывает реальный SDK HTTP path, exact receipt и неизвестный исход, а не
+только in-memory adapter, который не выполняет payload signing.
 
 Постраничное native-чтение текста сохраняет тот же полный verified source:
 каждая страница выдаётся только после проверки всего размера, SHA256,

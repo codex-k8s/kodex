@@ -49,6 +49,22 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it("именует выбор помощника и сохраняет локализованную подпись и scope semantics", () => {
+    const selector = template.match(
+      /<label[^>]*class="assistant-scope-selector"[^]*?<\/label>/,
+    )?.[0];
+    expect(selector).toBeDefined();
+    expect(selector).toContain('name="assistant-scope"');
+    expect(selector).toContain(
+      ":aria-label=\"$t('assistant.projectProfile.scopeLabel')\"",
+    );
+    expect(selector).toContain(':value="store.assistantScope"');
+    expect(selector).toContain(':disabled="store.busy || store.loading"');
+    expect(selector).toContain('@change="selectAssistantScope"');
+    expect(selector).toContain('<option value="SYSTEM">');
+    expect(selector).toContain('<option value="PROJECT">');
+  });
+
   it("блокирует Send/Queue при session blocker, сохраняя черновик, Stop и штатный новый диалог", () => {
     const eligibility = source.slice(
       source.indexOf("const canSend = computed"),
