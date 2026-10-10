@@ -10,6 +10,30 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 15:39 UTC — доставить переносимые инструкции
+
+Изолированный combined tree от29845e1e содержит common v3 producer/consumer,
+PROJECT core pin/mandatory references/dependencies и новую forward migration
+20261010150000 с exact release profile. Core47 + combined prompt/core/runtime
+race, runner targeted race, CP vet, migration18/18 и fresh disposable SYSTEM+
+2PROJECT по2 native turns PASS. Live hot clone всё ещё clean29845e1e/v2;
+его не переключать до compatible runner/admission/custom images/три ENV и DB.
+Это обязательные shipped PLATFORM instructions, не сообщения владельца.
+Core48 готовится отдельно; base files46/47 не переиздавать.
+
+Root run_4yS3kF8Vn8s-jSgxUiXi5wD- FAILED/v3/seq696, exact rejecting stage
+managed_mcp/error_class CONFLICT; grant либо health причина пока UNKNOWN.
+Нужен bounded repo-owned owner readonly ledger probe, не manual lastTestedAt,
+не blind retry и не ослабление freshness. Business1796/Full65 OPEN.
+Chrome own5 reload/screenshot/Console0/overflowfalse/Run200 подтверждены.
+Доставку и успешную реальную задачу ещё доказать; host не реализует1796.
+
+Final combined source включает core48/hash96cc5233…fe9036b;
+46/47 неизменны. Prompt/core race2.401/1.172s, vet и повторная fresh PG
+SYSTEM+2PROJECT по2 turns6.63s PASS; YAML fixture53/53 PASS.
+Сначала clean combined commit/push1807 и canonical full runner build из него,
+затем compatible consumer/schema rollout, только потом hot clone FF.
+
 ## Checkpoint 10.10.2026 15:22 UTC — durable инструкции и восстановление bootstrap
 
 Требование владельца: неожиданные результаты исправлять в поставляемых

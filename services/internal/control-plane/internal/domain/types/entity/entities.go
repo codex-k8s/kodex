@@ -252,6 +252,7 @@ type RuntimeWorkspacePolicy struct {
 }
 
 type PromptMaterializationSnapshot struct {
+	AssistantCore               *PromptAssistantCore                  `json:"assistantCore,omitempty"`
 	ExtraTemplates              []PromptUserTemplate                  `json:"extraTemplates,omitempty"`
 	Artifacts                   []runtimecontract.RunnerInputArtifact `json:"artifacts,omitempty"`
 	UnavailableVariables        map[string]string                     `json:"unavailableVariables,omitempty"`
@@ -279,6 +280,12 @@ type PromptMaterializationSnapshot struct {
 	WorkflowStage               string                                `json:"workflowStage"`
 	Automation                  string                                `json:"automation"`
 	SessionContinuation         string                                `json:"sessionContinuation"`
+}
+
+// PromptAssistantCore закрепляет базу платформы отдельно от owner overlay.
+// Identity и Scope назначает сервер по собственному профилю помощника.
+type PromptAssistantCore struct {
+	Scope, Ref, Revision, Digest, Content string
 }
 
 type PromptContextPin struct {

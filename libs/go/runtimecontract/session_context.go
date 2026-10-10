@@ -47,7 +47,7 @@ func CurrentContinuationNotice(input RunnerInput) (bool, error) {
 	}
 	message := input.SessionContext[len(input.SessionContext)-1]
 	var envelope PromptServiceEnvelope
-	if message.Role != "USER" || json.Unmarshal([]byte(message.Content), &envelope) != nil || envelope.Revision != PromptServiceRevision {
+	if message.Role != "USER" || json.Unmarshal([]byte(message.Content), &envelope) != nil {
 		return false, nil
 	}
 	var diffContent string
@@ -63,6 +63,11 @@ func CurrentContinuationNotice(input RunnerInput) (bool, error) {
 	if !found {
 		return false, nil
 	}
+	// Notice и базовые инструкции принадлежат одной текущей materialization.
+	// Историческая v2 запись не продолжает v3 attempt и не допускает downgrade.
+	if !supportedPromptServiceRevision(envelope.Revision) || envelope.Revision != input.PromptServiceTemplateRevision {
+		return false, errPromptService
+	}
 	if len(message.Content) > 64<<10 {
 		return false, errPromptService
 	}
@@ -71,13 +76,13 @@ func CurrentContinuationNotice(input RunnerInput) (bool, error) {
 	consumer := input
 	consumer.CodexSessionID = ""
 	consumer.Instructions = message.Content
-	consumer.PromptServiceTemplateRevision = PromptServiceRevision
+	consumer.PromptServiceTemplateRevision = envelope.Revision
 	consumer.PromptTargetKind = "SESSION_CONTINUATION"
 	raw, err := json.Marshal(struct {
 		Revision, Locale, Kind string
 		Slots                  []string
 	}{
-		PromptServiceRevision, envelope.Locale, consumer.PromptTargetKind,
+		envelope.Revision, envelope.Locale, consumer.PromptTargetKind,
 		[]string{"PURPOSE", "INPUT", "CONSTRAINTS", "EFFECTIVE_CAPABILITIES", "FILES", "TOOLS", "INTEGRATIONS", "RUNTIME_CHANGES"},
 	})
 	if err != nil {

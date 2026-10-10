@@ -157,6 +157,15 @@ func continuationComponents(snapshot map[string]any) (map[string][]promptservice
 		result["INSTRUCTIONS"] = append(result["INSTRUCTIONS"], tuple("promptServiceTemplateRevision", "", "promptServiceTemplateDigest"))
 	}
 	promptSnapshot, _ := data["promptSnapshot"].(map[string]any)
+	if core, present := promptSnapshot["assistantCore"]; present {
+		binding, ok := core.(map[string]any)
+		if !ok || continuationString(binding, "Ref") == "" || continuationString(binding, "Revision") == "" || continuationString(binding, "Digest") == "" {
+			return nil, errs.ErrConflict
+		}
+		result["INSTRUCTIONS"] = append(result["INSTRUCTIONS"], promptservice.RuntimeDescriptor{
+			Ref: continuationString(binding, "Ref"), Digest: continuationString(binding, "Digest"), Value: continuationString(binding, "Revision"),
+		})
+	}
 	for _, extra := range continuationObjects(promptSnapshot["extraTemplates"]) {
 		result["INSTRUCTIONS"] = append(result["INSTRUCTIONS"], promptservice.RuntimeDescriptor{Ref: continuationString(extra, "Ref"), Digest: continuationString(extra, "Digest"), Value: continuationString(extra, "Kind")})
 	}

@@ -215,11 +215,21 @@ for (const patch of [{ enabled: false }, { enabled: undefined }, { ref: 'foreign
   await assert.rejects(upgradePlan(f.inputs, get), /AGENT_SCOPE_CHANGED/);
   assert.equal(f.transport.state.calls.length, 0); assert.equal(existsSync(f.state), false);
 });
+function publicAgentStates(contract) {
+  return JSON.parse(execFileSync('yq', ['-o=json', '.components.schemas.Agent.properties.state.enum', '-'], { input: contract, encoding: 'utf8', timeout: 10000, maxBuffer: 1 << 20 }));
+}
+test('Agent DTO enum читается из YAML независимо от flow/block форматирования', () => {
+  const expected = ['DRAFT', 'READY', 'RUNNING', 'DISABLED', 'ARCHIVED'];
+  for (const state of [
+    '        state: { type: string, enum: [DRAFT, READY, RUNNING, DISABLED, ARCHIVED] }',
+    '        state:\n          { type: string, enum: [DRAFT, READY, RUNNING, DISABLED, ARCHIVED] }',
+    '        state:\n          type: string\n          enum:\n            - "DRAFT"\n            - "READY"\n            - "RUNNING"\n            - "DISABLED"\n            - "ARCHIVED"',
+  ]) assert.deepEqual(publicAgentStates(`components:\n  schemas:\n    Agent:\n      properties:\n${state}\n`), expected);
+});
 test('Agent READY fixture belongs to exact public Agent DTO enum', async t => {
   const f = local(t), agent = await f.transport.get('/api/v1/agents/agent');
   const contract = readFileSync(new URL('../../contracts/openapi/control-api-gateway/v1/openapi.yaml', import.meta.url), 'utf8');
-  const dto = contract.slice(contract.indexOf('\n    Agent:\n'), contract.indexOf('\n    AgentPage:\n'));
-  const states = /state: \{ type: string, enum: \[([^\]]+)\]/.exec(dto)?.[1].split(',').map(s => s.trim());
+  const states = publicAgentStates(contract);
   assert.deepEqual(states, ['DRAFT', 'READY', 'RUNNING', 'DISABLED', 'ARCHIVED']);
   assert.equal(agent.state, 'READY'); assert.ok(states.includes(agent.state));
   assert.equal((await upgradePlan(f.inputs, f.transport.get)).fixture.agentRef, agent.ref);

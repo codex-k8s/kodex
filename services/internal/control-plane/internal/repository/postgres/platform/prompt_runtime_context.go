@@ -26,6 +26,9 @@ func (repository *Repository) hydrateRuntimePromptContext(ctx context.Context, t
 	}
 	snapshot.ServiceTemplateRevision = promptservice.ServiceTemplateRevision
 	snapshot.ContextPin.AgentRef = snapshot.Variables["agent.ref"]
+	if err := repository.hydrateAssistantCoreTx(ctx, tx, current, snapshot); err != nil {
+		return err
+	}
 	if workflowRef == "" {
 		return nil
 	}

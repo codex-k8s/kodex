@@ -150,6 +150,7 @@ func (repository *Repository) promptContinuationPreviewForActorTx(ctx context.Co
 		"configOverlayRef": view.PublishedOverlay.Ref, "configOverlayVersion": view.PublishedOverlay.Revision, "configOverlayDigest": view.PublishedOverlay.Digest,
 		"contextSnapshot": contextSnapshot, "environmentTools": view.Environment.CurrentVersion.Tools, "integrationGrants": grants, "capabilities": materialized.EffectiveCapabilities,
 		"artifacts": []any{}}
+	next["promptSnapshot"] = snapshot
 	// Файлы берутся из того же проверенного typed descriptor, без locator.
 	for _, item := range snapshot.Artifacts {
 		next["artifacts"] = append(next["artifacts"].([]any), map[string]any{"ref": item.Ref, "revision": item.Revision, "digest": item.Digest})
@@ -199,7 +200,8 @@ func (repository *Repository) promptContinuationPreviewForActorTx(ctx context.Co
 		Actor, Session, Task, AttachmentSet, TemplateRef, TemplateDigest string
 		Components                                                       map[string][]promptservice.RuntimeDescriptor
 		ContextPin                                                       entity.PromptContextPin
-	}{current.actorRef, sessionRef, input.Task, input.AttachmentSetRef, snapshot.TemplateRef, snapshot.TemplateDigest, currentComponents, dependencyPin})
+		AssistantCore                                                    *entity.PromptAssistantCore `json:",omitempty"`
+	}{current.actorRef, sessionRef, input.Task, input.AttachmentSetRef, snapshot.TemplateRef, snapshot.TemplateDigest, currentComponents, dependencyPin, snapshot.AssistantCore})
 	if err != nil {
 		return entity.PromptMaterializationSnapshot{}, errs.ErrUnavailable
 	}

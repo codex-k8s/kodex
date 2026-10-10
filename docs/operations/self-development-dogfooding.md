@@ -709,3 +709,52 @@ custom recipes/три ENV и source/digest readback, затем fresh producer/c
 `--verify --previous-revision fe527466a1f62455fe7c9ba6ac3b47eb6853254e`
 PASS/PREVIOUS_SNAPSHOT_PREFIX_CHECKED, active74433B до этой записи.
 Точный SHA после фиксации и remote/PR readback — последующий checkpoint.
+
+## Checkpoint 10.10.2026 15:39 UTC — общий пакет инструкций и чистая установка
+
+На основе опубликованного29845e1e создан изолированный combined tree;
+hot source29845e1e остаётся clean/v2. USER_MESSAGE от владельца не добавлялись.
+Требование переносимого исправления реализовано обязательным PLATFORM
+CONSTRAINTS v3 для всех kinds/locales, а не новым task text либо локальными
+подсказками. Внутри существующих прав разрешены независимые штатные READ;
+неполная собственная работа не внешний blocker. Реальные authority denial,
+mandatory EOF/digest/proof и owner gates не отменены, UNKNOWN mutation
+сначала требует exact authoritative readback без повторного effect.
+
+PROJECT наследует typed immutable core из same-org server-owned profile;
+owner instructions сохраняют собственную опубликованную identity/content.
+Core pin входит snapshot/materialization/context/dependencies/continuation;
+нет копии базового текста в owner overlay и расширения SYSTEM полномочий.
+Forward migration20261010150000 расширяет closed notice CHECK до v2/v3,
+не меняет applied migrations или history. Exact migration release profile
+и parser-based YAML fixture включены в этот пакет.
+
+PASS combined tree с core47: prompt/core unit-race2.288s/1.145s,
+runtimecontract unit-race2.438s, runner targeted-race1.200s, CP vet.
+Disposable PostgreSQL canonical up/status/up: fresh SYSTEM + два независимых
+PROJECT, по два native turns, cold/rejoin/immutable history и negative pins:
+PASS7.97s. Unknown notice v4 CHECK закрыто отклонён. Новая миграция exact
+20261010150000 применена только в disposable DB. Release migration18/18 PASS.
+Первый запуск PG command не начался из-за отсутствия Node в очищенном PATH;
+исправлен PATH и повторён полный disposable контур, без live state edits.
+
+Live Chrome own page5: Run200/FAILEDv3/seq696, Console0/overflowfalse,
+первые15из33 fetch/xhr200; screenshot просмотрен, чужие вкладки не менялись.
+Exact owner warning прошлого root: managed_mcp/CONFLICT; причины grant/health
+пока UNKNOWN. Не смешивать это с отдельным воспроизведённым v2-only SQL CHECK.
+Retry/new launch не выполнялись. Core48 в отдельной подготовке; live v3,
+runner/admission/custom image/ENV delivery и business1796/Full65 NOT RUN/OPEN.
+Перед hot producer требуется совместимый consumer и schema. Integrated commit
+и remote readback фиксируются после проверки; это не immutable release PASS.
+
+### Объединённая база core48
+
+В тот же isolated package добавлен forward-only core48/hash
+96cc5233566344192f77b333cd28c03035d7b4abd8acf9dc7ebd226e9fe9036b;
+опубликованные46/47 побайтно неизменны. Final combined prompt/core race
+2.401s/1.172s и vet PASS. Повторная fresh disposable SYSTEM+2PROJECT по2
+native turns с фактическим48: PASS6.63s; up/status/up exact20261010150000,
+unknown-v4 CHECK/foreignscope/spoof/history/cold checks PASS.
+YAML fixture parser tests53/53 PASS3.725s, production guards не менялись.
+Live producer и consumer delivery по-прежнему NOT RUN; source HEAD будущего
+runner будет clean combined commit, не dirty worktree и не локальный patch.
