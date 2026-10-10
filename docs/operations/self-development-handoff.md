@@ -10,6 +10,32 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 05:17 UTC — дисковое ограничение ноды
+
+Published acdff193: runner/archive builds, import и fresh render PASS.
+Canonical supply-chain activation FAIL: server imagefs DiskPressure;
+повтор apply остановился на недоступном PostgreSQL, не стал PASS.
+Оба узла Ready, все42PVC Bound; 8Pod Pending из-за disk taint/PV affinity.
+Chrome MCP page5 подключён, reload работает; native503 относится к этой
+maintenance, не доказательство успешной работы или утраты SSO.
+
+Existing OCI cleanup удалил16 exact obsolete export tar, 24.60GiB,
+без live Pod/Job refs; runtime images/pins/volumes сохранены. Осталось около
+49GiB на DATA. Kubelet recovery требует15% (hard5%+minimum reclaim10%),
+поэтому этого недостаточно. Принят узкий repo-owned cold Go cache script:
+только own hash files, все три timestamp строго старше72h, private explicit
+plan/fingerprint, inode/nofollow/owner recheck и skip changed. ROOT13unit
+и exact postimages2/2 PASS. Реальный cold prune пока NOT RUN; сначала
+commit/push sameDraft1807, затем exact audit/prune и condition readback.
+
+После восстановления выполнить fresh exact-source canonical proof/render,
+supply-chain и selected retention+archive apply/readback, actual serving ELF
+и source proof; затем natural same-file proposal/Validate/Apply/history.
+Provider observation18+own get_execution_snapshot9 готовы отдельными пакетами,
+main ещё не принял их; helper-only не закрывает Architect. Lossless rolling
+journal packet также готов, original5parts/checkbox/history неизменны.
+Full65/Workflow11/14/15/16 OPEN; цель ACTIVE, bootstrap не слит.
+
 ## Checkpoint 10.10.2026 04:48 UTC — два узких пакета приняты
 
 ROOT2a66+10files: S3frozen6, a11y2 и journals2. Exact pre/post6/6+2/2 PASS.

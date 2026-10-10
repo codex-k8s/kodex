@@ -1334,3 +1334,11 @@ aria-label. Chrome5 native после hotreload/reload: Console0, unnamedcontrol
 overflowfalse, screenshot просмотрен, OWNER сохранён. Это dirty-tree evidence;
 fresh canonical runner+archive builds/render/activation и новый proposal/Apply
 ещё NOT RUN. Full65/Workflow11/14/15/16 остаются OPEN.
+
+## Checkpoint 10.10.2026 05:17 UTC — DiskPressure
+
+Published acdff193: runner/archive build/import/render PASS; activation FAIL
+imagefs pressure. Nodes2Ready/PVC42Bound, native503 maintenance. Exact16old
+OCI exports removed24.60GiB, images/pins/volumes kept. Recovery target15%;
+cold72h cache script ROOT13unit/postimages2PASS, prune NOT RUN. SameDraft1807.
+Full65/Workflow OPEN; детали в handoff, не выдавать Ready за acceptance.
