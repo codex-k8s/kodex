@@ -946,3 +946,50 @@ NOT RUN. Не обходить denied upstream URL другим transport/creden
 Пункты11/14/15 и Full65 остаются OPEN; прежний текст checklist о пяти
 review-циклах исторический: действует уточнение10.10 и GOV-OD-003 — всего
 ОДИН цикл комплексного review. Bootstrap1807 не слит и остаётся Draft.
+
+## Checkpoint 10.10.2026 12:44 UTC — дочерняя переписка/rejoin и mobile профиль
+
+База9d25e938ba2433e3020c61ea5d3da1607f39be5c; production diff только
+RunSessionDetailsDialog.vue и его test. ROOT принял двухфайловый пакет по
+точным pre/post hashes; новые API, зависимости, authority, nodeEvents,
+props, RuntimeRevision и группировка переписки не менялись.
+
+- PASS: настоящий root run_7M7M1dCVTpTg2BcSy1tMcHMo/v4/seq551 и child
+  run_2rX2qbypF9I9_s4D0DyPjlHL/v2 восстановились после own reload.
+  Native UI выбрал Architect, открыл Контекст узла → Подробнее.
+  Child node nod_ZOeewm6CzpqNlpKCAEUExz7Q, session
+  ses_0TaMUDbU-74ol63-F45KXFp0, turn trn_Qac6WpzUeaIladKxagugphLm,
+  attempt1 совпали до/после reload. Не подменены историей корня.
+  Transcript9143 UTF-8 B с неизменным SHA256
+  ec5ac7f95cdac7d0767b7a2684e18568e777b8392bb328050023d4d2a741bad9:
+  USER,7COMMENTARY,1FINAL и7 компактных tool groups; terminal dots0.
+- Найден и устранён mobile UX дефект: постоянный профиль занимал узкую
+  область около80px с scrollHeight1857, а метаданные не помещались.
+  На390×844 профиль теперь скрыт по умолчанию за32px disclosure с
+  aria-expanded/unique aria-controls. Native click открывает его до187px
+  с собственной прокруткой; повторный click возвращает место переписке.
+  Transcript получил369px, activity429px; при раскрытии activity233px.
+  Desktop1440×1000 сохранил sidebar280px и прежний grid, toggle скрыт.
+  Все три screenshots просмотрены, горизонтальный overflow отсутствует.
+  Это native click/CSS geometry proof, не отдельный browser keyboard test.
+- PASS: ROOT169unit/2suites3.03s, scoped ESLint/Prettier, forced vue-tsc,
+  production Vite build7.84s и diff-check. Сохранены warnings прежней
+  unit-оснастки expose/i18n fixture и прежние chunk/plugin build warnings;
+  они не скрыты. Context7 Vue useId/accessibility/ref/CSS проверен.
+  Post source SHA256 Vue277c8eb0ef149172c583f78c7ba28fe2f3786791b35aabe7d3138503ae50d20f,
+  testff191535e6c49bf2c9fb3e9d781463f54f44a0877cc354c6d96cbdfee0d5ced8;
+  actual staff Pod оба hashes совпали. Hot mount указывает на этот клон.
+- PASS: свежие Console error/warning/pageerror0 и HTTP>=4000 после12:39;
+  bootstrap/session/graph/events/artifact/owner-gates reads200. Rejoin:
+  SESSION_READY/PLATFORM_READY/RUN_READY, полный graph snapshot и16 platform
+  snapshots; WS opened1/closed0/problems0. Прежние cold-login/read-probe
+  ошибки сохранены отдельно. Bounded CP/RC/gateway logs после12:39 пусты,
+  что не доказывает отсутствие всех ошибок. Ошибочные ROOT selectors
+  с неоднозначными именами уточнены; это не application failure.
+
+Новые ИИ turn, business retry, review и owner effects не запускались.
+Business #1796 сохраняет semantic BLOCKED на exact pinned transport/credential
+evidence; Developer/ОДИН Reviewer/Manager/owner gate NOT RUN. Full65 OPEN.
+Финансовая регрессия9d25 и успешное продолжение прежнего чата сохранены;
+реальный баланс/списание UNKNOWN, отказ провайдера нельзя игнорировать.
+Далее commit/push/update того же Draft1807; не merge и не READY.

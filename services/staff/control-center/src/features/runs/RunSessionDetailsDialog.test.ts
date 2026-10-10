@@ -588,10 +588,108 @@ describe("RunSessionDetailsDialog", () => {
     expect(dialogSource).toMatch(
       /\.session-details__activity \{[^}]*grid-template-rows: auto minmax\(0, 1fr\);[^}]*overflow: hidden;/,
     );
-    expect(dialogSource).toContain(
-      "grid-template-rows: minmax(0, 0.18fr) minmax(0, 0.82fr)",
+    const mobile = dialogSource.split("@media (max-width: 760px)")[1];
+    expect(mobile).toMatch(
+      /\.session-details__workspace \{[^}]*display: flex;[^}]*flex-direction: column;/,
     );
     expect(dialogSource).not.toContain("overflow: visible");
+  });
+
+  it("сворачивает mobile профиль по умолчанию, сохраняя метаданные и переписку", async () => {
+    const html = await renderActivity([event]);
+    expect(html).toMatch(
+      /class="button button--ghost session-details__profile-toggle"[^>]*aria-expanded="false"[^>]*aria-controls="([^"]+)"/,
+    );
+    const id = html.match(/aria-controls="([^"]+)"/)?.[1];
+    expect(id).toBeDefined();
+    expect(html).toContain(`id="${id ?? ""}"`);
+    expect(html).toContain("agents.profile");
+    expect(html).toContain("Проверь квартальный отчёт");
+    expect(html).toContain(event.displaySummary);
+    expect(html).not.toContain("session-details__sidebar--expanded");
+    const desktop = dialogSource.split("@media (max-width: 760px)")[0];
+    expect(desktop).toMatch(
+      /\.session-details__profile-toggle \{[^}]*display: none;/,
+    );
+    expect(desktop).toContain(
+      "grid-template-columns: minmax(280px, 0.34fr) minmax(0, 1fr)",
+    );
+    expect(desktop).toMatch(/\.session-details__sidebar \{[^}]*display: grid;/);
+    const mobile = dialogSource.split("@media (max-width: 760px)")[1];
+    expect(mobile).toMatch(/\.session-details__sidebar \{[^}]*display: none;/);
+    expect(mobile).toMatch(
+      /\.session-details__sidebar--expanded \{[^}]*display: grid;[^}]*max-height: min\(40%, 280px\);/,
+    );
+    expect(mobile).toMatch(/\.session-details__activity \{[^}]*flex: 1;/);
+  });
+
+  it("раскрытие профиля меняет только локальное отображение, не transcript или props", () => {
+    const renderer = createRenderer<object, object>({
+      createElement: () => ({}),
+      createText: () => ({}),
+      createComment: () => ({}),
+      setText() {},
+      setElementText() {},
+      patchProp() {},
+      insert() {},
+      remove() {},
+      parentNode: () => null,
+      nextSibling: () => null,
+    });
+    const props = {
+      run,
+      node,
+      nodes: [node, toolNode],
+      events: [event],
+      artifacts: [],
+    };
+    const before = structuredClone(props);
+    const dialog = RunSessionDetailsDialog as unknown as {
+      setup(
+        props: object,
+        context: SetupContext,
+      ): {
+        profileExpanded: Ref<boolean>;
+        transcriptItems: ComputedRef<RunActivityItem[]>;
+      };
+    };
+    let state: ReturnType<typeof dialog.setup> | undefined;
+    const app = renderer.createApp(
+      defineComponent({
+        setup(_props, context) {
+          state = dialog.setup(props, context);
+          return () => null;
+        },
+      }),
+    );
+    app.use(
+      createI18n({
+        legacy: false,
+        locale: "ru",
+        missingWarn: false,
+        fallbackWarn: false,
+        messages: { ru: {} },
+      }),
+    );
+    app.provide(ssrContextKey, {});
+    try {
+      app.mount({});
+      if (!state) throw new Error("Dialog setup is missing");
+      const items = state.transcriptItems.value;
+      expect(state.profileExpanded.value).toBe(false);
+      state.profileExpanded.value = true;
+      expect(state.profileExpanded.value).toBe(true);
+      expect(state.transcriptItems.value).toBe(items);
+      state.profileExpanded.value = false;
+      expect(state.profileExpanded.value).toBe(false);
+      expect(state.transcriptItems.value).toBe(items);
+      expect(props).toEqual(before);
+    } finally {
+      app.unmount();
+    }
+    expect(dialogSource).toContain(
+      '@click="profileExpanded = !profileExpanded"',
+    );
   });
 
   it("не передаёт высоту и горизонтальный flex внешнего dialog во вложенный preview", () => {

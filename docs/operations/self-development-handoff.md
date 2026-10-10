@@ -10,6 +10,29 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 12:44 UTC — child rejoin и mobile disclosure проверены
+
+База HEAD/remote/Draft1807 9d25e938ba2433e3020c61ea5d3da1607f39be5c,
+main ab4992e0 unchanged. Поверх только двухфайловый mobile профиль сессии
+и журнал/этот handoff. ROOT169unit/3.03s, lint/format/forced types,
+production build7.84s/diff PASS. Source/Pod Vue/test hashes совпали.
+На mobile профиль свёрнут, native раскрыть/свернуть PASS; desktop прежний
+grid/sidebar, screenshots просмотрены, overflowfalse.
+
+Architect child run_2rX2qbypF9I9_s4D0DyPjlHL от root run_7M7M1dCVTpTg2BcSy1tMcHMo
+native UI после reload восстановил exact node/session/turn/attempt1.
+Transcript9143B/hash ec5ac7f9…1bad9 совпал: USER+7COMMENTARY+FINAL,
+7tool groups, terminal dots0. Свежие Console0/HTTP>=4000/rejoin problems0,
+graph/events200. Это завершение child rejoin проверки, не всего Full65.
+
+Далее зафиксировать/push1807 и обновить его checklist; business1796 semantic
+BLOCKED, Developer/ОДИН Reviewer/Manager/owner gate NOT RUN. Нужен exact
+доступный native upstream transport/credential evidence, нельзя bypass
+denied URL или host-реализацию бизнес-задачи. Не повторять terminal root.
+Старый чат уже успешно продолжен; credits balance/charging UNKNOWN.
+Own Playwright desktop, empty draft; Chrome MCP page5 SSO, чужие вкладки
+не трогать. Периодический own reload/list_pages не гарантирует approval.
+
 ## Checkpoint 10.10.2026 12:24 UTC — immutable доставка и старый чат проверены
 
 Исходный HEAD/remote/Draft1807 a0d302c60b1f87dcc32a154eae9039e46cc52d96;

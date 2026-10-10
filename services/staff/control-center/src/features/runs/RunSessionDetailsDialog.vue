@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Bot } from "@lucide/vue";
-import { computed, ref } from "vue";
+import { Bot, ChevronDown } from "@lucide/vue";
+import { computed, ref, useId } from "vue";
 import { useI18n } from "vue-i18n";
 
 import {
@@ -48,6 +48,8 @@ const roleLabel = computed(() =>
 );
 const revisionDiffOpen = ref(false);
 const inputExpanded = ref(false);
+const profileExpanded = ref(false);
+const profileId = `run-session-profile-${useId()}`;
 
 const parentNode = computed(() =>
   props.nodes.find((candidate) => candidate.ref === props.node.parentNodeRef),
@@ -190,7 +192,23 @@ function formatTokenCount(value: number): string {
       </details>
 
       <div class="session-details__workspace">
-        <aside class="session-details__sidebar">
+        <button
+          type="button"
+          class="button button--ghost session-details__profile-toggle"
+          :aria-expanded="profileExpanded"
+          :aria-controls="profileId"
+          @click="profileExpanded = !profileExpanded"
+        >
+          {{ $t("agents.profile") }}
+          <ChevronDown :size="16" aria-hidden="true" />
+        </button>
+        <aside
+          :id="profileId"
+          class="session-details__sidebar"
+          :class="{ 'session-details__sidebar--expanded': profileExpanded }"
+          tabindex="0"
+          :aria-label="$t('agents.profile')"
+        >
           <section class="session-details__section">
             <h3>{{ $t("agents.profile") }}</h3>
             <dl>
@@ -539,6 +557,12 @@ function formatTokenCount(value: number): string {
   border-right: 1px solid var(--border);
   background: var(--panel);
 }
+.session-details__profile-toggle {
+  display: none;
+}
+.session-details__profile-toggle[aria-expanded="true"] :deep(svg) {
+  transform: rotate(180deg);
+}
 .session-details__section,
 .session-details__activity {
   min-width: 0;
@@ -720,17 +744,32 @@ function formatTokenCount(value: number): string {
     -webkit-line-clamp: 2;
   }
   .session-details__workspace {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(0, 0.18fr) minmax(0, 0.82fr);
-    gap: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     border: 0;
   }
+  .session-details__profile-toggle {
+    display: flex;
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: 32px;
+    align-items: center;
+    justify-content: space-between;
+  }
   .session-details__sidebar {
+    display: none;
     border-right: 0;
     border: 1px solid var(--border);
     border-radius: 8px;
   }
+  .session-details__sidebar--expanded {
+    display: grid;
+    flex: 0 1 auto;
+    max-height: min(40%, 280px);
+  }
   .session-details__activity {
+    flex: 1;
     border: 1px solid var(--border);
     border-radius: 8px;
   }
