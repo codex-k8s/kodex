@@ -1240,3 +1240,28 @@ Console0, owner Run/Graph/AttachmentSet GET200. Это delivery/root launch PASS
 не native child EOF либо business acceptance. Пять этапов PLANNED;
 coordinator работает. Далее собственный Architect proof → Developer actual
 branch/PR → один комплексный Review → Manager → final owner gate.
+
+## Checkpoint 10.10.2026 14:39 UTC — INTAKE принят, Architect выполняется
+
+Source/remote/Draft1807 b8934fe6ce99a3c4d91391c790bd9a9adee07472;
+main ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69 без изменений.
+Native INTAKE run_02sbUsGQ6GtqPEPuyBVXIt7x завершён SUCCEEDED;
+собственный packet READ29pages/467840B/EOF и manifest2pages/24164B/EOF,
+применимые нормативные источники до EOF зафиксированы в manager-plan.md.
+Semantic INTAKE PASS допускает только анализ, не реализацию/приёмку.
+План art_K-T9AsAUhpWu-Wdl4ODNZIGZ,
+revision arv_92cfddc9a97d4df88a0fef649d1efcae: owner DOWNLOAD200,
+24008B/SHA25651f59558927308941eda4162dc854e9abe20a811b0aea9b76139fb1ea402043b.
+Coordinator прочитал три captured результата до EOF; seq318 PASS допуска.
+Принята делегация Architect run_PSH4TwAR_XIy_49Z2QD5-EXH;
+root run_4yS3kF8Vn8s-jSgxUiXi5wD- RUNNING/seq332, Developer PLANNED.
+Текущий bootstrap head самостоятельно отличён от исходного owner pointer;
+base business ab4992e0 не подменён bootstrap веткой. Source discovery больше
+не блокирует INTAKE; внутренний rejecting слой старого tree fetch UNKNOWN.
+Версия/binary/schema/семантика upstream требуют собственного Architect proof.
+Баланс/единицы/списание/paid continuation ещё NOT RUN/UNKNOWN; owner оценка
+credits не measurement. Один Review и финальный owner gate сохранены.
+Chrome page5 reload/rejoin/компактные tool groups/overflowfalse/Console0,
+Run/Graph/events GET200, подключение восстановлено. Все28 desired system Pods
+Ready; рабочий runtime Ready/restarts0. Это эксплуатационные readback,
+не бизнес-acceptance. Продолжать тот же root, без повторного launch/Retry.

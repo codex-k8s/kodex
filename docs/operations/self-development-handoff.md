@@ -10,6 +10,25 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 14:39 UTC — сопровождать Architect текущего root
+
+HEAD/remote/Draft1807 до этой записи b8934fe6ce99a3c4d91391c790bd9a9adee07472.
+INTAKE run_02sbUsGQ6GtqPEPuyBVXIt7x SUCCEEDED/semantic PASS только к анализу.
+Собственные input packet/manifest и применимые документы прочитаны до EOF.
+manager-plan.md art_K-T9AsAUhpWu-Wdl4ODNZIGZ,
+arv_92cfddc9a97d4df88a0fef649d1efcae: exact24008B/hash
+51f59558927308941eda4162dc854e9abe20a811b0aea9b76139fb1ea402043b,
+owner DOWNLOAD200 совпал. Coordinator native прочитал три результата до EOF.
+Architect run_PSH4TwAR_XIy_49Z2QD5-EXH RUNNING;
+root run_4yS3kF8Vn8s-jSgxUiXi5wD- RUNNING/seq332.
+Не повторять root/INTAKE/старый Retry. Следом собственный Architect bounded
+source/runtime/binary/schema proof → Developer → один Review → Manager →
+final owner gate. Баланс/единицы/списание/paid continuation UNKNOWN/NOT RUN.
+Bootstrap1807 остаётся Draft; бизнес-код1796 host не реализует. Full65 OPEN.
+Chrome MCP собственная page5 подключена/rejoin200/Console0/overflowfalse,
+desired system28Ready/runtimeReady,restarts0. Reload только page5 каждые5мин.
+Текущие два docs checkpoint требуют commit/push тем же проверенным publisher.
+
 ## Checkpoint 10.10.2026 14:19 UTC — новый root работает
 
 Новый native owner root run_4yS3kF8Vn8s-jSgxUiXi5wD-, session
