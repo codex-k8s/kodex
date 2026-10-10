@@ -13,6 +13,7 @@ import {
 import { createI18n } from "vue-i18n";
 import { captureSetupState } from "@/test-utils/setup-harness";
 import { verifiedImageTools } from "@/shared/lib/verified-image-tools";
+import { defaultRuntimeEnvironmentPolicy } from "@/features/runtime/environment-form";
 import {
   verifiedInventoryFixture,
   unavailableInventoryFixture,
@@ -33,9 +34,12 @@ const runtime = vi.hoisted(() => ({
   environmentAgents: {},
   environmentAgentCursors: {},
   loading: {},
+  problems: {} as Record<string, AppProblem | undefined>,
   loadPromotedRoleImageArtifact: vi.fn(),
   loadEnvironment: vi.fn(),
   loadEnvironmentVersions: vi.fn(),
+  loadEnvironmentReadiness: vi.fn(),
+  loadEnvironmentAgents: vi.fn(),
   searchPromotedRoleImagePage: vi.fn(),
 }));
 const cleanup = vi.hoisted(() => [] as Array<() => void>);
@@ -116,6 +120,7 @@ async function editor(localized = false) {
     selectImage(option: typeof ownImageOption): Promise<void>;
     loadImagePage(query: string): Promise<AsyncEntityOptionPage>;
     load(): Promise<void>;
+    initialize(): Promise<void>;
     validateDraft(): Promise<void>;
     publish(selected: string[]): Promise<void>;
     preparePublication(): Promise<void>;
@@ -213,6 +218,130 @@ function savedDraft(): RuntimeEnvironmentDraft {
     },
   };
 }
+
+describe("ошибка страницы после повторного чтения", () => {
+  const oldProblem = () =>
+    new AppProblem({
+      status: 0,
+      code: "UNKNOWN",
+      retryable: true,
+      kind: "unavailable",
+    });
+  const apiProblem = () =>
+    new AppProblem({
+      status: 503,
+      code: "SERVICE_UNAVAILABLE",
+      retryable: true,
+      kind: "unavailable",
+    });
+  beforeEach(() => {
+    route.params = { projectRef: "project_1", environmentRef: "environment_1" };
+    route.query = {};
+    vi.stubGlobal("window", {
+      sessionStorage: browserStorage(),
+      removeEventListener: vi.fn(),
+    });
+    runtime.problems = {};
+    const policy = defaultRuntimeEnvironmentPolicy();
+    runtime.environments = {
+      environment_1: {
+        ref: "environment_1",
+        projectRef: "project_1",
+        version: 1,
+        name: "Окружение",
+        description: "",
+        currentVersion: {
+          image: {
+            artifactRef: "image_own",
+            recipeRef: "recipe_own",
+            recipeGeneration: 3,
+            reference: "Образ",
+          },
+          tools: [],
+          values: [],
+          secretDescriptors: [],
+          policy: {
+            resources: policy.resources,
+            volumes: [],
+            network: { webAccess: policy.webAccess },
+          },
+        },
+      },
+    };
+    runtime.loadEnvironment.mockResolvedValue(undefined);
+    runtime.loadEnvironmentVersions.mockResolvedValue(undefined);
+    runtime.loadEnvironmentReadiness.mockResolvedValue(undefined);
+    runtime.loadEnvironmentAgents.mockResolvedValue(undefined);
+    runtime.loadPromotedRoleImageArtifact.mockResolvedValue({
+      artifact: promotedArtifact("image_own"),
+      recipeName: "Образ",
+    });
+  });
+  it.each(["load", "initialize"] as const)(
+    "успешный текущий %s очищает прежний UNKNOWN",
+    async (action) => {
+      const state = await editor(true);
+      state.problem.value = oldProblem();
+      await state[action]();
+      expect(state.problem.value).toBeUndefined();
+    },
+  );
+  it("текущая API ошибка не очищается после отказа чтения", async () => {
+    const state = await editor(true);
+    const failure = apiProblem();
+    state.problem.value = failure;
+    runtime.loadEnvironment.mockImplementationOnce(() => {
+      runtime.problems["environment:environment_1"] = failure;
+      return Promise.resolve();
+    });
+    await state.load();
+    expect(state.problem.value).toBe(failure);
+    expect(runtime.problems["environment:environment_1"]).toBe(failure);
+  });
+  it("поздний load старого поколения не очищает новую ошибку", async () => {
+    const state = await editor(true);
+    const failure = apiProblem();
+    state.problem.value = failure;
+    const request = pending<undefined>();
+    runtime.loadEnvironmentAgents.mockReturnValueOnce(request.promise);
+    const loading = state.load();
+    await Promise.resolve();
+    await Promise.resolve();
+    await state.initialize();
+    state.problem.value = failure;
+    request.resolve(undefined);
+    await loading;
+    expect(state.problem.value).toBe(failure);
+  });
+  it("закрытый редактор не очищает ошибку после позднего readback", async () => {
+    const state = await editor(true);
+    const failure = apiProblem();
+    state.problem.value = failure;
+    const request = pending<undefined>();
+    runtime.loadEnvironmentAgents.mockReturnValueOnce(request.promise);
+    const loading = state.load();
+    await Promise.resolve();
+    await Promise.resolve();
+    for (const callback of cleanup) callback();
+    request.resolve(undefined);
+    await loading;
+    expect(state.problem.value).toBe(failure);
+  });
+  it("новая ошибка во время текущего чтения не подменяется успехом", async () => {
+    const state = await editor(true);
+    state.problem.value = oldProblem();
+    const request = pending<undefined>();
+    runtime.loadEnvironmentAgents.mockReturnValueOnce(request.promise);
+    const loading = state.load();
+    await Promise.resolve();
+    await Promise.resolve();
+    const failure = apiProblem();
+    state.problem.value = failure;
+    request.resolve(undefined);
+    await loading;
+    expect(state.problem.value).toBe(failure);
+  });
+});
 const freshAuthenticationProblem = new AppProblem({
   status: 403,
   code: "FRESH_AUTHENTICATION_REQUIRED",

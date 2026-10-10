@@ -604,18 +604,18 @@ async function load(): Promise<void> {
   const environment = environmentRef.value;
   const project = projectRef.value;
   const generation = initializationGeneration;
+  const previousProblem = problem.value;
+  const applicable = () =>
+    !disposed &&
+    generation === initializationGeneration &&
+    environment === environmentRef.value &&
+    project === projectRef.value;
   if (!environment) return;
   await Promise.all([
     runtime.loadEnvironment(environment),
     runtime.loadEnvironmentVersions(environment, true, versionPageSize.value),
   ]);
-  if (
-    disposed ||
-    generation !== initializationGeneration ||
-    environment !== environmentRef.value ||
-    project !== projectRef.value
-  )
-    return;
+  if (!applicable()) return;
   sync();
   if (current.value)
     await Promise.all([
@@ -631,6 +631,21 @@ async function load(): Promise<void> {
         boundAgentPageSize.value,
       ),
     ]);
+  const readKeys = [
+    `environment:${environment}`,
+    `environment-versions:${environment}`,
+    `environment-readiness:${environment}`,
+    `environment-agents:${environment}`,
+  ] as const;
+  if (
+    applicable() &&
+    current.value?.ref === environment &&
+    current.value.projectRef === project &&
+    !imageProblem.value &&
+    !readKeys.some((key) => runtime.problems[key] || runtime.loading[key]) &&
+    problem.value === previousProblem
+  )
+    problem.value = undefined;
 }
 
 function currentOperation(): RuntimeEnvironmentPolicyDraftOperation {

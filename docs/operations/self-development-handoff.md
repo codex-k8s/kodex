@@ -10,6 +10,52 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 21:56 UTC — диагностический пакет готов к hot reload
+
+Поверх2a76 интегрированы ровно4 CP и2 FE файла. CP добавляет18 закрытых
+safe_reason к прежнему warning; stage/error class/Unwrap/rollback/terminal
+сохраняются. Это диагностика, НЕ устранение пока UNKNOWN live-причины.
+Полный historical→fresh EN/RU producer/consumer проходит; v1text/v3/core48,
+ABI/runner/SQL/migrations и owner ENV не изменены. ROOT4posthashes EQUAL,
+targeted race PASS1.408s/vet PASS; worker exact frozen disposable PG
+helper/workflowretry PASS11.804s. Первый ROOT запуск с неверной Go flag form
+и hash cwd FAIL до тестов, исправленный запуск PASS; failure не скрыт.
+
+Frontend ROOT63unit/lint/format/forced typecheck и production build PASS,
+Vite8.35s; существующий chunk-size warning сохранён. Пакет2FE posthashes
+совпадает с frozen. Ошибка тела PR при dirty integration закрыто отказала
+до эффекта; публикация body будет повторена после clean commit. Журнал
+append-only verifier PASS. Далее publish/readback→guarded idleFF→15CP hashes,
+serving ELF/new symbol→FE browser readback→native Retry8. Live результата
+ещё нет; USER corrections0, business/Full65/ONE review/owner gate OPEN.
+
+## Checkpoint 10.10.2026 21:50 UTC — Retry7 отказал до provider, ENV retry исправлен
+
+Published source/clean HOT2a76ba2e. Native Retry7 command200 создал
+run_qVaKaQ1gbLkBpme0hRehrV-p в прежней Session с Workflow40/revision13;
+попытка завершилась FAILED/RUNTIME_INPUT_INVALID/sequence10 до provider.
+Actual exact CP log: runtime candidate eligibility rejected,
+safe_stage=runtime_context/error_class=CONFLICT. Дочерний граф закрыт;
+новых Architect/Developer/review не было. Не заявляется проблема сети OpenAI.
+
+Own Chrome5 reload восстановил все10 событий/sequence1..10, Console0,
+bootstrap/session/graph/events200 и connected. Desktop screenshot просмотрен:
+статусы, действия и легенда доступны, horizontal overflow0. Старые sealed
+continuation notices той же Session: latest25433B/20430codepoints, два
+предыдущих25739B и25197B; raw content не выводился. Сам переход historical
+snapshot→fresh platform binding проходит synthetic regression; причина
+живого отказа пока не доказана, готовится закрытый safe_reason discriminator.
+
+ROOT интегрировал2 FE файла поверх2a76: успешное чтение текущего поколения
+очищает только прежний page.problem. Current API error/new error/stale/disposed
+результаты сохраняются; UNKNOWN после reauth не объявлен устранённым.
+Exact frozen pre/post hashes EQUAL; ROOT63/63unit PASS3.85s, scoped lint и
+format PASS. Первый lint вызов из неверного cwd FAIL до анализа файлов,
+исправленный вызов из frontend cwd PASS. Build/delivery/browser этой правки
+ещё не завершены. Далее: diagnostic source/tests→publish/idleFF→actual
+CP/FE proof→native retry. USER corrections0/business implementation0;
+business/Full65/11/14/15/ONE review/Manager/final owner gate OPEN.
+
 ## Checkpoint 10.10.2026 21:40 UTC — exact GitHub API ENV опубликован
 
 Canonical helper source7613ae33 опубликован и clean idleFF21:34:13 PASS.

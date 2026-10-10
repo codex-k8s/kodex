@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -50,29 +49,29 @@ func (repository *Repository) prepareRuntimeContinuationNotice(ctx context.Conte
 			// Retry до первого успешного claim не имеет предыдущего runtime snapshot.
 			return nil, nil
 		}
-		return nil, errs.ErrUnavailable
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationPreviousRead, errs.ErrUnavailable)
 	}
 	var previous map[string]any
 	if json.Unmarshal(rawPrevious, &previous) != nil {
-		return nil, errs.ErrConflict
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationPreviousJson, errs.ErrConflict)
 	}
 	prior, err := continuationComponents(previous)
 	if err != nil {
-		return nil, err
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationPreviousDependencies, err)
 	}
 	next, err := continuationComponents(snapshot)
 	if err != nil {
-		return nil, err
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationCurrentDependencies, err)
 	}
 	diff, err := promptservice.CompareRuntimeContexts(prior, next, promptservice.RuntimeDiff{PreviousRevisionRef: previousRef,
 		CurrentRevisionRef: stringMap(snapshot, "runtimeRevisionRef"), SessionRef: stringMap(snapshot, "sessionRef"), TurnRef: stringMap(snapshot, "turnRef"), Attempt: int32(runtimeRevisionMapInt64(snapshot, "attempt"))})
 	if err != nil {
-		return nil, fmt.Errorf("compare continuation runtime (%v): %w", err, errs.ErrConflict)
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationDiff, errs.ErrConflict)
 	}
 	var noticeSnapshot entity.PromptMaterializationSnapshot
 	raw, err := json.Marshal(promptSnapshot)
 	if err != nil || json.Unmarshal(raw, &noticeSnapshot) != nil {
-		return nil, errs.ErrConflict
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationSnapshot, errs.ErrConflict)
 	}
 	content := defaultContinuationTemplate
 	noticeSnapshot.TemplateRef = defaultContinuationTemplateRef
@@ -80,18 +79,18 @@ func (repository *Repository) prepareRuntimeContinuationNotice(ctx context.Conte
 	noticeSnapshot.TemplateDigest = hex.EncodeToString(digest[:])
 	err = tx.QueryRow(ctx, queryPromptContinuationTemplate, pgx.StrictNamedArgs{"organization_id": current.organizationID, "agent_ref": stringMap(snapshot, "agentRef")}).Scan(&noticeSnapshot.TemplateRef, &noticeSnapshot.TemplateDigest, &content)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return nil, errs.ErrUnavailable
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationTemplateRead, errs.ErrUnavailable)
 	}
 	if len(content) > 16<<10 {
-		return nil, errs.ErrConflict
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationTemplateBytes, errs.ErrConflict)
 	}
 	digest = sha256.Sum256([]byte(content))
 	if noticeSnapshot.TemplateDigest != hex.EncodeToString(digest[:]) {
-		return nil, errs.ErrConflict
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationTemplateDigest, errs.ErrConflict)
 	}
 	rawDiff, err := json.Marshal(diff)
 	if err != nil {
-		return nil, errs.ErrConflict
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationDiffJson, errs.ErrConflict)
 	}
 	noticeSnapshot.TemplateContent = content
 	noticeSnapshot.ServiceTemplateRevision = promptservice.ServiceTemplateRevision
@@ -104,17 +103,23 @@ func (repository *Repository) prepareRuntimeContinuationNotice(ctx context.Conte
 	noticeSnapshot.PlatformInstructions = nil
 	noticeSnapshot.UnavailableVariables = nil
 	if err := bindPlatformInstructions(&noticeSnapshot); err != nil {
-		return nil, err
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationBinding, err)
 	}
 	if err := repository.hydrateWorkflowExecutionPromptTx(ctx, tx, current, stringMap(snapshot, "nodeRef"), &noticeSnapshot); err != nil {
-		return nil, err
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationWorkflowContext, err)
 	}
 	materialized, err := promptservice.Materialize(content, promptservice.FromSnapshot(noticeSnapshot))
-	if err != nil || !materialized.Complete || len(materialized.Prompt) > runtimecontract.MaximumContinuationNoticeBytes {
-		return nil, fmt.Errorf("materialize continuation template: %w", errs.ErrConflict)
+	if err != nil {
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationMaterialization, errs.ErrConflict)
+	}
+	if !materialized.Complete {
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationIncomplete, errs.ErrConflict)
+	}
+	if len(materialized.Prompt) > runtimecontract.MaximumContinuationNoticeBytes {
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationNoticeBytes, errs.ErrConflict)
 	}
 	if err := appendRuntimeContinuationContext(snapshot, materialized); err != nil {
-		return nil, err
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationSessionContext, err)
 	}
 	snapshot["continuationPromptSnapshot"], snapshot["continuationRuntimeDiff"], snapshot["continuationNoticeDigest"] = noticeSnapshot, diff, materialized.Digest
 	return &preparedContinuationNotice{PreviousID: previousID, Diff: diff, Snapshot: noticeSnapshot, Materialization: materialized}, nil

@@ -13,6 +13,60 @@ import (
 
 const runtimeCandidateEligibilityDiagnosticMessage = "runtime candidate eligibility rejected"
 
+const runtimeEligibilityReasonAttribute = "safe_reason"
+
+const (
+	runtimeReasonRuntimeContext                   = "RUNTIME_CONTEXT"
+	runtimeReasonSessionResume                    = "SESSION_RESUME"
+	runtimeReasonContinuationPreviousRead         = "CONTINUATION_PREVIOUS_READ"
+	runtimeReasonContinuationPreviousJson         = "CONTINUATION_PREVIOUS_JSON"
+	runtimeReasonContinuationPreviousDependencies = "CONTINUATION_PREVIOUS_DEPENDENCIES"
+	runtimeReasonContinuationCurrentDependencies  = "CONTINUATION_CURRENT_DEPENDENCIES"
+	runtimeReasonContinuationDiff                 = "CONTINUATION_DIFF"
+	runtimeReasonContinuationSnapshot             = "CONTINUATION_SNAPSHOT"
+	runtimeReasonContinuationTemplateRead         = "CONTINUATION_TEMPLATE_READ"
+	runtimeReasonContinuationTemplateBytes        = "CONTINUATION_TEMPLATE_BYTES"
+	runtimeReasonContinuationTemplateDigest       = "CONTINUATION_TEMPLATE_DIGEST"
+	runtimeReasonContinuationDiffJson             = "CONTINUATION_DIFF_JSON"
+	runtimeReasonContinuationBinding              = "CONTINUATION_BINDING"
+	runtimeReasonContinuationWorkflowContext      = "CONTINUATION_WORKFLOW_CONTEXT"
+	runtimeReasonContinuationMaterialization      = "CONTINUATION_MATERIALIZATION"
+	runtimeReasonContinuationIncomplete           = "CONTINUATION_INCOMPLETE"
+	runtimeReasonContinuationNoticeBytes          = "CONTINUATION_NOTICE_BYTES"
+	runtimeReasonContinuationSessionContext       = "CONTINUATION_SESSION_CONTEXT"
+)
+
+// Причина принадлежит закрытой диагностике producer; она не меняет error class
+// или lifecycle и не переносит исходные данные в Error()/log.
+type runtimeEligibilityDiagnosticError struct {
+	reason string
+	err    error
+}
+
+func (err runtimeEligibilityDiagnosticError) Error() string {
+	return "runtime eligibility validation failed"
+}
+func (err runtimeEligibilityDiagnosticError) Unwrap() error { return err.err }
+
+func runtimeEligibilityDiagnostic(reason string, err error) error {
+	return runtimeEligibilityDiagnosticError{reason: reason, err: err}
+}
+
+func runtimeEligibilityReason(err error) string {
+	var diagnostic runtimeEligibilityDiagnosticError
+	if !errors.As(err, &diagnostic) {
+		return "UNKNOWN"
+	}
+	switch diagnostic.reason {
+	case runtimeReasonRuntimeContext, runtimeReasonSessionResume, runtimeReasonContinuationPreviousRead, runtimeReasonContinuationPreviousJson, runtimeReasonContinuationPreviousDependencies, runtimeReasonContinuationCurrentDependencies,
+		runtimeReasonContinuationDiff, runtimeReasonContinuationSnapshot, runtimeReasonContinuationTemplateRead, runtimeReasonContinuationTemplateBytes, runtimeReasonContinuationTemplateDigest, runtimeReasonContinuationDiffJson,
+		runtimeReasonContinuationBinding, runtimeReasonContinuationWorkflowContext, runtimeReasonContinuationMaterialization, runtimeReasonContinuationIncomplete, runtimeReasonContinuationNoticeBytes, runtimeReasonContinuationSessionContext:
+		return diagnostic.reason
+	default:
+		return "UNKNOWN"
+	}
+}
+
 //go:embed sql/runtime_claim__fail_graph.sql
 var queryRuntimeClaimFailGraph string
 

@@ -935,12 +935,12 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			eligibilityStage = "runtime_context"
 			contextSnapshot, err := repository.runtimeContextSnapshot(ctx, tx, scope, runRef, projectRef, agentRef)
 			if err != nil {
-				return commandOutcome{}, err
+				return commandOutcome{}, runtimeEligibilityDiagnostic(runtimeReasonRuntimeContext, err)
 			}
 			snapshot["contextSnapshot"] = contextSnapshot
 			snapshot["codexSessionID"], err = runtimeSessionResumeID(ctx, tx, scope, snapshot, codexSessionID)
 			if err != nil {
-				return commandOutcome{}, err
+				return commandOutcome{}, runtimeEligibilityDiagnostic(runtimeReasonSessionResume, err)
 			}
 			var continuationNotice *preparedContinuationNotice
 			if candidate.turnNumber > 1 {
@@ -1047,7 +1047,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			return commandOutcome{}, candidateErr
 		}
 		slog.WarnContext(ctx, runtimeCandidateEligibilityDiagnosticMessage, "safe_stage", eligibilityStage,
-			"error_class", runtimeEligibilityErrorClass(candidateErr), "run_ref", candidate.runRef, "node_ref", candidate.nodeRef)
+			"error_class", runtimeEligibilityErrorClass(candidateErr), runtimeEligibilityReasonAttribute, runtimeEligibilityReason(candidateErr), "run_ref", candidate.runRef, "node_ref", candidate.nodeRef)
 		if err := repository.failRuntimeCandidateGraph(ctx, tx, scope, input, candidate); err != nil {
 			return commandOutcome{}, err
 		}
