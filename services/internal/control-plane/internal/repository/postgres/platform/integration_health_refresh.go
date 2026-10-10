@@ -20,7 +20,9 @@ var queryIntegrationHealthRefreshCandidates string
 //go:embed sql/integration_health_refresh__create.sql
 var queryIntegrationHealthRefreshCreate string
 
-// Опрос прежнего owner RPC является единственным producer новых refresh tasks.
+// Опрос прежнего gateway owner RPC создаёт periodic/retry refresh tasks.
+// Exact stale-only startup origin CP находится в enqueueManagedMCPStartupRecovery;
+// оба используют одну typed task, а claimant/executor остаётся integration-gateway.
 // Успешный probe меняет только ledger, не immutable configuration/grant pins.
 func enqueueManagedMCPHealthRefresh(ctx context.Context, tx pgx.Tx, current scope, limit int32) error {
 	if limit < 1 || limit > 32 {

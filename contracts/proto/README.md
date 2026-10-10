@@ -74,12 +74,22 @@ code размещается рядом с потребителем и вручн
 
 ## Текущая readiness управляемого Context7
 
-Инициатор фоновой проверки — CP в прежнем
+Инициатор periodic/retry фоновой проверки — CP в прежнем
 `RuntimeWorkService.ClaimIntegrationConnectionTests`. Actor/org и workload
 разрешаются сервером. Только exact `integration-gateway` и закрытый Context7
 с активной парой READ/NONE grants получают `MANAGED_MCP_REFRESH`; ключ остаётся
 в прежней защищённой credential projection gateway. Task фиксирует immutable
 package/config/credential/connection pins, purpose, predecessor и attempt.
+
+Второй server-owned origin — stale-only startup в прежнем `ClaimExecution`:
+последний completed SUCCEEDED gateway receipt имеет неизменившиеся semantic
+pins, exact actual effective READ/NONE pair подтверждена, active probe отсутствует.
+После полного rollback materialization кандидата CP в owner-транзакции повторяет
+guards и ставит одну существующую maintenance DUE attempt1 с predecessor success,
+audit и command receipt. Это не пользовательская команда и не дочерний Run;
+gateway остаётся единственным probe claimant/executor. Cold/failed/changed pins
+не получают этот путь, существующий pending cycle и его createdAt не сбрасываются.
+
 Прежние startup barrier, adapter.Test initialize/tools/list, lease/fence и
 CompleteIntegrationConnectionTest используются без нового RPC или listener.
 Refresh начинается после четырёх минут; допустимость proof остаётся пять минут.
@@ -92,6 +102,7 @@ Refresh начинается после четырёх минут; допуст�
 | Recovery → SUCCEEDED | Только собственный последний probe failure с теми же config/credential/package и активной парой grants; CONNECTED, audit/outbox прежнего события |
 | Lease expiry | Прежняя task terminal FAILED, lease очищена; поздний complete отклонён. После 30 секунд новая task/predecessor, максимум три attempts; ledger read, события нет |
 | Retry exhaustion | Новых tasks нет; свежесть не продлевается, startup/call закрыто отклоняются; явный owner Test остаётся поддерживаемым recovery path |
+| Stale latest SUCCEEDED, same pins, no active probe | CP-owned startup ставит ровно одну native maintenance DUE и сохраняет audit/receipt; кандидат остаётся в очереди без RuntimeRevision/lease/Pod grant; события нет, authoritative read — CP health ledger |
 | Disable/revoke/delete/config drift | Незавершённый refresh CANCELLED; новое proof не публикуется и ресурс не воскресает; ledger read, прежние события соответствующей owner command |
 | Первый/expired proof и exact собственный DUE/CLAIMED probe | Private pending оставляет только этот candidate в очереди, не создаёт RuntimeRevision/lease/Pod grant или событие; другие candidates продолжают. Общий wait не более 30 секунд от immutable created_at первой attempt этого цикла; retry/restart его не сбрасывают |
 | Expired receipt / worker outage | Fresh RuntimeRevision не выдаётся; closed eligibility stage managed_mcp. Readiness worker не заменяет upstream receipt |

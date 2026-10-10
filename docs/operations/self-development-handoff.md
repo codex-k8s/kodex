@@ -10,6 +10,23 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 10.10.2026 16:24 UTC — startup и idle source fixes готовы
+
+После b620 подготовлены stale-only native CP managed MCP startup recovery и
+точный effect-bearing idle counter. ROOT combined fresh PostgreSQL4 suites
+PASS18.026s, runner idle/diagnostic actualPG50 scenarios PASS8/8,41.947s.
+Gateway sole executor, no runtime authority до настоящего fresh receipt;
+queue/audit/receipt атомарны, история failed runs и snapshots неизменна.
+Readonly live16:24:26: pendingPromotions0, supersededUnrequestedPromotions1,
+остальные work/lease/admission0; promoted count55/hash9bf859426a27…0763ec прежние.
+
+Canonical migration render clean independent source FAIL: mandatory empty env
+mask mountpoint конфликтует с inspector, запрещающим даже пустой ignored файл.
+Безопасное source-only исправление готовится; owner env не менять/не копировать.
+Policy/default/custom images/три ENV/additive schema20261010150000/hot FF NOT RUN.
+Hot clean29845e1e/v2 сохраняется, новый runner acbb опубликован из clean888.
+Business1796/Full65 OPEN, новых пользовательских сообщений/Retry/Launch нет.
+
 ## Checkpoint 10.10.2026 15:55 UTC — общий пакет опубликован, переключение ещё не выполнено
 
 Combined commit888a2efb92ebf4cd932b0b0a7f371298d1fc9649 опубликован в Draft1807.

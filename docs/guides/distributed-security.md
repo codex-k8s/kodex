@@ -1715,6 +1715,36 @@ grants и внешних effects. Неизвестное состояние, н�
 pins закрыто останавливают обслуживание; history/receipts не удаляются для
 получения искусственного idle.
 
+Счётчик ожидающих публикаций образов отличает исторический snapshot от
+достижимой работы только по строгому read-only доказательству владельца.
+Исключается лишь `PENDING` без запроса публикации (включая обратную ссылку),
+promoted reference и любых следов claim/fence/authorization, с полным допустимым
+заключением и точным завершённым build того же organization/project/scope.
+Текущий активный рецепт должен иметь строго большие **обе** монотонные величины:
+version и generation. Штатные request/claim требуют их точного равенства
+artifact; назад они не переводятся. Число таких superseded snapshots выводится
+отдельно; сами artifacts, receipts и promoted pins не меняются. Неизвестные,
+неполные, текущие, requested, `CLAIMED` и `AUTHORIZED` состояния по-прежнему
+блокируют обслуживание. Несовпадение одного pin или отсутствие Pod этого
+исключения не доказывает и не выдаёт права повторить либо отменить публикацию.
+
+Начальное `promotion_state=PENDING` само по себе не является живой публикацией:
+admission `PENDING|CLAIMED` учитывается отдельным счётчиком, а известные terminal
+`REJECTED|FAILED` без запроса и активных claim/authorization не имеют promotion
+effect. Любой активный effect, неизвестное состояние или незавершённый request
+продолжает блокировать переход policy. Readback не меняет eligibility или историю.
+
+Системная постановка проверки готовности managed MCP не выдаёт полномочия
+исполнения: RuntimeRevision, lease и Pod grant требуют настоящего exact fresh
+gateway receipt. Startup может поставить прежнюю maintenance `DUE` лишь для
+stale latest `SUCCEEDED` с неизменившимися semantic pins, текущей actual effective
+парой READ/NONE и без любого active probe. Materialization кандидата полностью
+откатывается, а единственный queue effect фиксируется owner-транзакцией вместе
+с audit и receipt. Restart/retry не сбрасывает createdAt и бюджет существующего
+цикла; cold, failed, changed и revoked состояния закрыто отклоняются. Probe
+исполняет только зарегистрированный integration-gateway; root cancel не
+воскрешает Run, connection disable/delete/revoke сохраняют прежние guards.
+
 Terminal проверяется по полному закрытому набору каждого вида: для Run это
 `SUCCEEDED|FAILED|CANCELLED`, для RunNode также `SKIPPED`; `QUEUED`, `PLANNED`,
 `RUNNING`, состояния ожидания и `CANCELLING` не являются terminal. У Job отдельно

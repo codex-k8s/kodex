@@ -803,3 +803,41 @@ Lossless previous888 verifier PASS; первоначальная вставка 
 Chrome own5 reload/screenshot просмотрен, Console0, bootstrap/session/graph200;
 это выборка relevant Network, не подтверждение всех97 запросов. CP Ready2/2,
 RC/gateway/frontend Ready; business runtime FAILED остаётся историей.
+
+## Checkpoint 10.10.2026 16:24 UTC — штатное startup recovery и точный idle
+
+После опубликованного b620510b6e564c136a723d80fe97db1684a90758 добавлен
+stale-only CP origin прежней managed MCP maintenance DUE. Последний настоящий
+SUCCEEDED receipt должен иметь прежние semantic pins и actual effective пару
+READ/NONE; candidate materialization полностью rollback. Только DUE, audit и
+command receipt коммитятся атомарно. Gateway остаётся sole probe executor;
+RuntimeRevision/lease/Pod grant ждут настоящего fresh proof. Cold/failed/drift,
+active expired cycle, revoke/disable/delete и cancel не получают bypass/reset.
+Новые USER_MESSAGE, Retry и business LaunchRun не выполнялись.
+
+ROOT объединённый disposable PostgreSQL: existing health15 subtests7.49s,
+bounded health readback1.65s, fresh SYSTEM+две PROJECT core48 inheritance4.34s,
+native startup recovery4.48s — PASS, total18.026s. Первоначальный fixture запуск
+FAIL до БД из-за отсутствия node в явном PATH; повтор с точным PATH PASS.
+Это source/local proof, не live восстановление конкретного failed Run.
+
+Idle query различает достижимую promotion работу и initial PENDING после
+известного admission FAILED/REJECTED без request/claim. Strict superseded
+unrequested exception требует complete pins и строго больших обеих recipe
+version/generation. UNKNOWN, active claim/authorization и request блокируют.
+ROOT actual disposable PostgreSQL50 scenarios обоих query PASS8/8,41.947s;
+history/promoted pins неизменны. Новый safe bounded diagnostic version2.
+Live readonly16:24:26: pendingPromotions0, supersededUnrequestedPromotions1,
+прочие work/admission/lease counters0; promoted count55 и digest
+9bf859426a27a0be537ef9e44fad44aba02d2cda0a05917ddc8db1a4cd0763ec неизменны.
+Diagnostic total1/complete=true подтверждает прежний superseded snapshot.
+Никакой repair, fake terminal/promotion или удаления history нет.
+
+Fresh canonical migration render clean checkout FAIL до применения: пустой
+env mountpoint обязателен mask helper, но source inspector запрещает даже его.
+Нужна безопасная совместимость empty ignored placeholder, не перенос owner
+credentials и не разрешение secret-bearing checkout. До её решения не применять
+неуспешный render. Policy/default/custom images/три ENV/schema/hot FF ещё NOT RUN.
+Source hot29845e1e/v2, failed business run и Full65 остаются OPEN.
+ROOT focused runtime/MCP race PASS1.322s; platform vet, SQL boundary,
+diff-check и lossless append-only previous b620 verifier PASS.

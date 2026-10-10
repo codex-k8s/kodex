@@ -29,6 +29,7 @@ type commandOutcome struct {
 	platformAggregateVersion                                                 int64
 	platformState                                                            string
 	runtimeGraphChanged                                                      bool
+	runtimeReadinessChanged                                                  bool
 }
 
 const defaultAgentRunConcurrency = 8
@@ -131,7 +132,7 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	}
 	// Пустой опрос runtime является наблюдением, а не устойчивым доменным действием.
 	// Receipt и аудит для него превращали бы исправный простой в постоянную запись.
-	if input.Kind == command.ClaimExecution && len(outcome.result.RuntimeItems) == 0 && !outcome.runtimeGraphChanged {
+	if input.Kind == command.ClaimExecution && len(outcome.result.RuntimeItems) == 0 && !outcome.runtimeGraphChanged && !outcome.runtimeReadinessChanged {
 		if err := tx.Commit(ctx); err != nil {
 			return command.Result{}, fmt.Errorf("commit empty runtime claim: %w", errs.ErrConflict)
 		}

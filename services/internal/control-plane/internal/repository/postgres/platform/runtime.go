@@ -412,6 +412,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		return commandOutcome{}, err
 	}
 	terminalStorage = append(terminalStorage, deadlineFailures...)
+	readinessChanged := false
 	rows, err := tx.Query(ctx, queryRuntimeClaimExecutionSelectClaimableAgentExecutions,
 		scope.organizationID, payload.Limit, repository.roleImages.RoleRuntimeContractRevision,
 		repository.roleImages.RoleRuntimeContractSHA256)
@@ -1030,6 +1031,18 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if errors.Is(candidateErr, errManagedMCPHealthPending) {
 			continue
 		}
+		var recovery *managedMCPStartupRecovery
+		if errors.As(candidateErr, &recovery) {
+			created, err := enqueueManagedMCPStartupRecovery(ctx, tx, scope, recovery)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			readinessChanged = readinessChanged || created
+			if created && firstRunRef == "" {
+				firstProjectID, firstProjectRef, firstRunRef = candidate.projectID, candidate.projectRef, candidate.runRef
+			}
+			continue
+		}
 		if !runtimeCandidateEligibilityFailure(candidateErr) {
 			return commandOutcome{}, candidateErr
 		}
@@ -1053,7 +1066,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	if firstRunRef == "" && expired {
 		firstRunRef = scope.organizationRef
 	}
-	return commandOutcome{result: command.Result{RuntimeItems: items}, projectID: firstProjectID, projectRef: firstProjectRef, resourceKind: "RUNTIME_CLAIM", resourceRef: firstRunRef, summary: "i18n:RUNTIME_WORK_CLAIMS_MATERIALIZED", runtimeGraphChanged: expired || len(failedRoots) > 0}, nil
+	return commandOutcome{result: command.Result{RuntimeItems: items}, projectID: firstProjectID, projectRef: firstProjectRef, resourceKind: "RUNTIME_CLAIM", resourceRef: firstRunRef, summary: "i18n:RUNTIME_WORK_CLAIMS_MATERIALIZED", runtimeGraphChanged: expired || len(failedRoots) > 0, runtimeReadinessChanged: readinessChanged}, nil
 }
 
 func (repository *Repository) commitProviderCredentialRefresh(ctx context.Context, tx pgx.Tx, machineScope scope, input command.Command) (commandOutcome, error) {

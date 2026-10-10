@@ -5,8 +5,17 @@ SET LOCAL statement_timeout = '10s';
 WITH pending AS MATERIALIZED (
     SELECT artifact.id, artifact.ref
     FROM control_plane.image_artifacts artifact
-    WHERE artifact.admission_state = 'ACCEPTED'
-      AND artifact.promotion_state IN ('PENDING', 'CLAIMED', 'AUTHORIZED')
+    WHERE (artifact.admission_state = 'ACCEPTED' AND artifact.promotion_state = 'PENDING')
+       OR artifact.promotion_state IN ('CLAIMED', 'AUTHORIZED')
+       OR artifact.admission_state IS NULL OR artifact.admission_state NOT IN ('PENDING', 'CLAIMED', 'ACCEPTED', 'REJECTED', 'FAILED')
+       OR artifact.promotion_state IS NULL OR artifact.promotion_state NOT IN ('PENDING', 'CLAIMED', 'AUTHORIZED', 'PROMOTED', 'REJECTED')
+       OR artifact.promotion_claimant_workload IS NOT NULL OR artifact.promotion_authority_generation > 0
+       OR artifact.promotion_claim_token_sha256 IS NOT NULL OR artifact.promotion_claim_expires_at IS NOT NULL
+       OR artifact.promotion_authorization_token_sha256 IS NOT NULL OR artifact.promotion_authorization_expires_at IS NOT NULL
+       OR (artifact.promotion_state = 'PENDING' AND artifact.promotion_request_id IS NOT NULL)
+       OR EXISTS (SELECT 1 FROM control_plane.role_image_promotion_requests request
+           WHERE request.image_artifact_id = artifact.id
+             AND (request.state IS NULL OR request.state NOT IN ('PROMOTED', 'FAILED')))
 ), page AS (
     SELECT id, ref FROM pending ORDER BY ref LIMIT 64
 ), facts AS (
@@ -36,7 +45,7 @@ WITH pending AS MATERIALIZED (
                AND recipe.role_runtime_contract_revision = artifact.role_runtime_contract_revision
                AND recipe.role_runtime_contract_sha256 = artifact.role_runtime_contract_sha256, false) AS recipe_pins_match,
            COALESCE(latest.id = artifact.build_id, false) AS latest_native_build,
-           artifact.admission_verdict = 'ACCEPTED'
+           artifact.admission_state = 'ACCEPTED' AND artifact.admission_verdict = 'ACCEPTED'
                AND artifact.manifest_digest ~ '^sha256:[a-f0-9]{64}$'
                AND artifact.provenance_sha256 ~ '^[a-f0-9]{64}$'
                AND artifact.immutable_build_sha256 ~ '^[a-f0-9]{64}$'
@@ -93,7 +102,7 @@ WITH pending AS MATERIALIZED (
     ) AS item FROM facts
 ), document AS (
     SELECT jsonb_build_object(
-        'version', 1, 'kind', 'RUNNER_PENDING_PROMOTIONS_READBACK', 'status', 'OBSERVED',
+        'version', 2, 'kind', 'RUNNER_PENDING_PROMOTIONS_READBACK', 'status', 'OBSERVED',
         'at', statement_timestamp(), 'total', (SELECT count(*) FROM pending), 'limit', 64,
         'complete', (SELECT count(*) FROM pending) <= 64,
         'items', COALESCE((SELECT jsonb_agg(item ORDER BY artifact_ref) FROM items), '[]'::jsonb)
@@ -101,7 +110,7 @@ WITH pending AS MATERIALIZED (
 )
 -- Даже при ошибочной будущей schema рост body закрыто отменяет выдачу items.
 SELECT CASE WHEN octet_length(body::text) <= 131072 THEN body
-    ELSE jsonb_build_object('version', 1, 'kind', 'RUNNER_PENDING_PROMOTIONS_READBACK',
+    ELSE jsonb_build_object('version', 2, 'kind', 'RUNNER_PENDING_PROMOTIONS_READBACK',
         'status', 'BODY_LIMIT_EXCEEDED', 'complete', false, 'items', '[]'::jsonb)
     END::text FROM document;
 COMMIT;
