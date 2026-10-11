@@ -10,6 +10,35 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 17:40 UTC — после паузы выполнение сохранено
+
+Source/HOT57f6010f clean, remote Draft1807 exact SHA/main readback PASS.
+Root attempt5 и тот же Architect run_1pm34PkphFeQXb-AUjkTsQOL RUNNING,
+fresh graph621; Developer ещё PLANNED. Перезапуск оператора не перезапустил
+задачу или Pod. Прежний локальный collector handle/PID отсутствует;
+dual-source read-only collector заново подключён к прежнему exact UID
+4e2ceb63-a645-4551-a878-f88ba69f189f17:24:25 UTC. Initial revision/input/
+execution binding digests полностью совпали с ранним ACK17:06.
+
+Actual immutable runtime.json прочитан только closed metadata projection:
+run/session/turn и три initial digests MATCH. Effective owner deadline
+18:05:11.453326 UTC, step-002 timeout3600s/started17:05:11.453326;
+root clock86400s/deadline12.10 16:48:25.215630. Published Workflow revision
+wfv_AbTG0jWIG7tWZn_oLYqVOB98/digest28a3677d совпала с выданными clocks.
+ContextSnapshot memories0, retention clamp отсутствует. Это current scope,
+не доказательство clocks/причины удалённой attempt4; менять timeout оснований нет.
+У Pod все containers started=true/restarts0, но role-runtime ready=false;
+не объявлять весь Pod Ready. Предикат этого отдельного состояния проверяется.
+
+Own Chrome теперь11: reload/rejoin, screenshot после загрузки, Console0,
+bootstrap/session/ticket/graph/events/artifact reads200. Краткий recovering
+после reload сменился live, visible523/fresh524, horizontal overflow=false.
+SSO/MCP подтверждены фактически; чужие вкладки не изменялись. Actual Architect
+сам выполнил get_execution_snapshot и сообщил OBSERVED CODEX0.160.0;
+окончательные результаты и current downstream handoff ещё не опубликованы.
+Далее сохранить successful output либо закрытые failure observations,
+fresh Developer revision2, substantive PR, ONE Review, Manager и final gates.
+
 ## Checkpoint 11.10.2026 17:06 UTC — INTAKE завершён, fresh Architect наблюдается
 
 Source/HOT6cd6103d clean; отдельный remote readback подтвердил exact branch

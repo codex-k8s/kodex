@@ -10,6 +10,24 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 17:40 UTC — resume без нового execution
+
+- [x] Source/HOT57f6010f clean/remote Draft1807/main readback MATCH.
+- [x] Same Architect/run/turn/UID сохранились после паузы; отсутствующий
+      локальный collector восстановлен17:24:25, exact initial3 pins MATCH.
+- [x] Actual owner clocks/current published Workflow MATCH: step3600s до
+      18:05:11 UTC, root86400s; memories0, retention clamp отсутствует.
+      Это не причина прежнего отказа и не successful business acceptance.
+- [x] Chrome11 reload/rejoin/loaded screenshot/Console0/relevant calls200;
+      transient recovering сменился live, horizontal overflow=false.
+- [ ] Успешный Architect/actual artifacts, fresh Developer revision2 и
+      substantive PR, ONE Review, Manager, итоговый QA/merge/main readback.
+
+Root RUNNING/graph621, Developer PLANNED. Role-runtime ready=false сохраняется
+отдельно от started=true/restarts0; весь Pod Ready не заявляется. Причина
+attempt4 UNKNOWN. Initial3 pins сохранены полностью в checkpoint17:06;
+ничего не изменено в business INPUT, моделях, grants, образах или протоколе.
+
 ## Checkpoint 11.10.2026 17:06 UTC — новая подготовка и fresh Architect
 
 - [x] Source/HOT6cd6103d clean и exact remote Draft1807/main readback PASS.
