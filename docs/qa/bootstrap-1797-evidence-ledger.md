@@ -10,6 +10,26 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 11.10.2026 23:25 UTC
+
+Exact SOURCE b92c4ebd: ROOT diff-check main→b92 и pinnedGo1.26.6 offline
+`make check-sql-boundary` exit0/PASS. Runner current Proto dependency
+compile exit0/ELF94bacc47; это не новый OCI/serving binary. Sourcecode74b9
+byte-identical, только3docs добавлены. Fresh bot GH b92/main readback PASS;
+mergeable clean/checks0/statuses0/combined pending/reviews0 не CI acceptance.
+
+Chrome own-tab refresh/rejoin, activity screenshots просмотрены: compact
+tool groups/agent messages, Console0/relevant200/realtime/overflow=false.
+Все22Deployment ready/desired MATCH. Backend bounded10m logs пусты:
+полное observability доказательство не заявлено.
+
+Native attempt8 INTAKE RUNNING/seq252: own intermediate messages о packet
+467840B/29pages/nativeEOF/digest и PR file index52/EOF сохранены. Private
+checkpoint packetEOF=true, main/workflow pins MATCH; большой Proto3590649B
+partial/next16384/eof=false. Published artifacts0/full native large EOF/
+later handoffs/ONE Review/Manager/QA65/merge ещё NOT RUN. ROOT не исправлял
+business input/код; PR1808 не менялся. Full acceptance OPEN.
+
 ## Новое scoped evidence 11.10.2026 23:04 UTC
 
 74b9 actual CP/RC process ELF4e0d119c/a405c256 и mounted Proto/producer/

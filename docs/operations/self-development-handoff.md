@@ -10,6 +10,41 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 23:25 UTC — возобновление без повторного business effect
+
+SOURCE/remote b92c4ebd/HOT code74b9 подтверждены свежим bot readback.
+Diff74b9→b92 — только3журнала, дерево кода одинаково; активные runtime не
+перезапущены. Native attempt8 run_UYRRRagBAbTl2nolP_0mv8aB и INTAKE
+run_7hPFoT7Nx980caA9KUvhGQ2B продолжаются. Seq252 содержит successful
+GitHub content READ/CODEX_SHELL. Outbox artifacts пока0, новых этапов ещё нет.
+
+Chrome own page11 rejoin/reload, просмотренные screenshots панели «Ход
+работы», компактные agent messages/tool groups, Console0/GET200/realtime/
+overflow=false PASS. Все22Deployment ready/desired MATCH. Read-only backend
+logs за10мин не содержали строк: это ограниченный readback, не полный
+observability PASS. Чужие вкладки не изменялись.
+
+Собственное сообщение INTAKE03:15:11 сообщает packet467840B/29pages/
+nativeEOF/digest MATCH;03:19:31 сообщает PR file index52/EOF без base/head
+drift. Read-only private checkpoint подтверждает packet EOF, source main
+ab4992e0 и Workflow40/revision13. Большие OpenAPI/Proto чтения в этом
+checkpoint ещё partial (Proto3590649B next16384/eof=false); ни shell Git
+objects, ни эти промежуточные сообщения не подменяют full native source
+proof или опубликованный содержательный handoff.
+
+ROOT на exact clean b92 выполнил main→HEAD diff-check и публичный
+`make check-sql-boundary` с pinnedGo1.26.6/GOTOOLCHAINlocal/GOPROXYoff/
+GOSUMDBoff: exit0/PASS. Current runner dependency compile
+`go build -trimpath -buildvcs=false ./cmd/agent-runner` exit0, ELF
+94bacc471e7c60ebfcc3b5ebf9cd17d0f8294aa5f6f50a6acc4f3ac8ecb637ae.
+Новый runner OCI/deploy NOT RUN; прежние image/source pins не переписаны.
+Fresh GH b92 mergeable clean/checks0/statuses0/combined pending/reviews0,
+main unchanged; это не CI/merge readiness PASS.
+
+Следующий шаг — actual INTAKE artifacts/semantic verdict, затем Architect/
+Developer/ONE Review/Manager/owner. ROOT business code0/USER correction0,
+business PR1808 неизменён. Full QA/merge/fresh main acceptance OPEN.
+
 ## Checkpoint 11.10.2026 23:04 UTC — native helper21/full121 PASS, business attempt8 RUNNING
 
 Code SOURCE/HOT/remote74b9c6db реально обслуживается: CP /proc/1763/exe

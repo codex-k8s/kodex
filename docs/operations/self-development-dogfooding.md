@@ -10,6 +10,24 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 23:25 UTC — Chrome rejoin и актуальные static gates
+
+- [x] Chrome MCP/reload/rejoin собственной вкладки: screenshot панели хода
+      работы просмотрен, компактные сообщения/группы инструментов, Console0,
+      relevant GET200, подключённый realtime, overflow=false. Все22Deployment
+      ready/desired MATCH. Чужие вкладки не изменялись.
+- [x] Exact SOURCE b92c4ebd: main→HEAD diff-check и pinnedGo1.26.6 offline
+      `make check-sql-boundary` exit0. Runner с обновлённым Proto собран,
+      compile ELF94bacc47; это не новый OCI или deployed runner.
+- [x] Fresh GH b92 readback/main MATCH, PR1807 Draft/mergeable clean;
+      checks0/statuses0/combined pending не CI PASS и не merge acceptance.
+- [ ] Attempt8 INTAKE RUNNING: собственное сообщение подтверждает packet
+      467840B/29native pages/EOF/digest и PR index52/EOF. Публикация handoff
+      и полный large-source EOF3590649B ещё не доказаны; новые этапы не PASS.
+
+Serving code74b9 и active workloads не перезапускаются ради doc-only записи.
+Business PR1808/исходный task не менялись, review cycles0, полный QA OPEN.
+
 ## Checkpoint 11.10.2026 23:04 UTC — native plan21 и полный121 подтверждены
 
 - [x] 74b9 actual CP/RC ELF/source/Proto pins MATCH после fresh idle/HOT ff.
