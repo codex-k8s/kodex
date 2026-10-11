@@ -17,7 +17,10 @@ const (
 
 // На границе завершения пишутся только закрытые признаки. Исходная ошибка,
 // provider/frame/input payload и context cause в logger не передаются.
-func logRuntimeExecutionFailure(ctx context.Context, err error, activityFailed bool) {
+func logRuntimeExecutionFailure(ctx context.Context, logger *slog.Logger, err error, activityFailed bool) {
+	if logger == nil {
+		return
+	}
 	contextState := "ACTIVE"
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
@@ -27,7 +30,7 @@ func logRuntimeExecutionFailure(ctx context.Context, err error, activityFailed b
 	case ctx.Err() != nil:
 		contextState = "UNKNOWN"
 	}
-	slog.WarnContext(ctx, runtimeExecutionFailureMessage,
+	logger.WarnContext(ctx, runtimeExecutionFailureMessage,
 		runtimeExecutionCategoryKey, codex.BrokerResponseFailureCategory(err),
 		runtimeExecutionContextStateKey, contextState,
 		runtimeExecutionActivityFailedKey, activityFailed)

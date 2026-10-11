@@ -10,6 +10,33 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 08:47 UTC — INTAKE принят, Architect запущен
+
+Native attempt5 run_ptBfmAM107l_qzCiqaUZoiRP остаётся RUNNING.
+Manager child run_OTIRPkDX3eTAXSqAwabrzLIw завершился SUCCEEDED08:44:04;
+его FINAL содержит PASS_INTAKE_FOR_ARCHITECT_HANDOFF и штатный outbox plan.
+Coordinator получил callback и передал ANALYSIS_AND_ARCHITECTURE обычному
+Architect run_zARDQy9RiINWUn9rhD9oNzPU. Последний owner cursor353,
+get_execution_snapshot SUCCEEDED, один CODEX_SHELL FAILED среди успешных
+чтений; первичная ошибка исполнения не наблюдалась. Успешный tool envelope
+сам по себе не доказывает provider OBSERVED или успешный бизнес-результат.
+
+Actual Architect Pod runtime-turn-c0bde3f37a673810/UIDc3671e70-40f1-402c-b9d0-d34efe6fe941:
+imageaa8994e1,3 Ready/restarts0. HOTc4bd2028 намеренно не меняется во время
+native работы. ROOT сохраняет отдельный узкий patch явно переданного shared
+JSON/trace logger для обоих runner-путей; no global logger, no decoder/
+authority/lifecycle changes. Три post hashes совпали с worker patch542e8650.
+ROOT Go1.26.6 targeted unit PASS5.273s, vet/build/format/diff-check PASS;
+worker targeted/race/vet/build PASS. Доставка нового logger NOT RUN и не
+приписывается текущему actual image. Context7 проверен для std log/slog.
+
+Chrome35 reload/session/bootstrap/graph/events/ticket200, Console0,
+overflow=false. Separate Playwright settled screenshot проверен; дуги
+дочерних ответов читаемы, «Весь граф» доступен. Его accumulated diagnostics
+со startup401/Console1 и aborted requests не объявляются чистым browser PASS.
+USER corrections0, host business implementation0. Architect/Developer/
+ONE Review/Manager/owner, QA65 и bootstrap readiness остаются OPEN.
+
 ## Checkpoint 11.10.2026 08:27 UTC — native attempt5 и actual workspace PASS
 
 HOT/sourcec4bd2028d79cad2b4311c0a5dac0ed6a0a561f49 clean, remote

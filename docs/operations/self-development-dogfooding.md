@@ -804,3 +804,27 @@ Chrome35 API200/Console0/overflow=false после reload, separate Playwright
 settled screenshot/realtime/child arc визуально проверены. MCP screenshot
 не сохранён: timeout inline / filePath denied клиентом, не application FAIL.
 Terminal/первичная причина и следующие business шаги/QA65 OPEN.
+
+## Checkpoint 11.10.2026 08:47 UTC — INTAKE завершён, Architect работает
+
+Attempt5 root run_ptBfmAM107l_qzCiqaUZoiRP RUNNING. Manager child
+run_OTIRPkDX3eTAXSqAwabrzLIw SUCCEEDED08:44:04 с semantic
+PASS_INTAKE_FOR_ARCHITECT_HANDOFF; штатный outbox plan доставлен callback.
+Обычный Architect run_zARDQy9RiINWUn9rhD9oNzPU RUNNING, owner seq353:
+get_execution_snapshot SUCCEEDED и чтения продолжаются; CODEX_SHELL FAILED1
+не скрывается. Provider OBSERVED по собственному результату Architect пока
+не подтверждён. Actual Pod imageaa8994e1/UIDc3671e70,3 Ready/restarts0.
+HOTc4bd2028 не меняется; USER corrections0, host business implementation0.
+
+Минимальный patch542e8650 явно передаёт shared telemetry JSON/trace logger
+обоим runtime-путям, без global logger и изменения decoder/authority/limits/
+lifecycle. ROOT exact Go1.26.6 targeted unit PASS5.273s, vet/build/format/
+diff-check PASS, worker targeted/race/vet/build PASS; post hashes совпали.
+Context7 std log/slog проверен. Доставка нового logger NOT RUN; текущий
+native image не объявляется содержащим этот patch. Общий инвариант закреплён
+в GO-DOC-003. Первичная category capture активна, отказ не наблюдался.
+Chrome35 reload/API200/Console0/overflow=false, separate settled screenshot
+проверен. Startup401/Console1 и aborted requests отдельного browser не
+превращаются в чистый PASS. ONE Review уже закреплён в published Workflow
+version40/revision13 с ровно5steps; это не выполненное review.
+Architect/Developer/ONE Review/Manager/owner, QA65 и readiness остаются OPEN.

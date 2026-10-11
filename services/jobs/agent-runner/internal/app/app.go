@@ -140,6 +140,7 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		resultErr = errors.Join(resultErr, telemetry.FlushSentry(sentry))
 		cancelSentry()
 	}()
+	logger := telemetry.Logger(os.Stderr)
 	state := &health{input: input}
 	state.live.Store(true)
 	stopWorkspaceMonitor := startWorkspaceMonitor(lifecycleContext, state, checkWorkspaceProcess)
@@ -159,10 +160,10 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 	runtime := turnRuntime{prepare: func(ctx context.Context, input model.Input, client *callback.Client) (preparedTurn, string, error) {
 		prepared, code, err := prepareRuntimeTurn(ctx, input, client)
 		if code == "RUNTIME_MCP_UNAVAILABLE" && err != nil {
-			logMCPStartupFailure(ctx, telemetry.Logger(os.Stderr), err)
+			logMCPStartupFailure(ctx, logger, err)
 		}
 		return prepared, code, err
-	}, execute: codex.ExecuteViaBroker, checkWorkspace: checkWorkspaceProcess}
+	}, execute: codex.ExecuteViaBroker, checkWorkspace: checkWorkspaceProcess, logger: logger}
 	if mode == "runtime-session" {
 		resultErr = runTurn(lifecycleContext, input, client, func() { state.ready.Store(true) }, runtime)
 		return resultErr
@@ -212,6 +213,7 @@ type turnRuntime struct {
 	prepare        func(context.Context, model.Input, *callback.Client) (preparedTurn, string, error)
 	execute        func(context.Context, model.Input, []byte, string, string, func(runtimecontract.RuntimeActivity) error) (codex.Result, error)
 	checkWorkspace func(context.Context) error
+	logger         *slog.Logger
 }
 
 func prepareRuntimeTurn(ctx context.Context, input model.Input, client *callback.Client) (prepared preparedTurn, code string, resultErr error) {
@@ -297,7 +299,7 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 		return err
 	})
 	if executionErr != nil {
-		logRuntimeExecutionFailure(ctx, executionErr, activityFailed)
+		logRuntimeExecutionFailure(ctx, runtime.logger, executionErr, activityFailed)
 	}
 	if input.ExecutionDeadline != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_TIMEOUT")

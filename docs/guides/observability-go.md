@@ -195,6 +195,12 @@ dependency объявлена обязательной конкретным эк
 8. при shutdown остановить servers, отменить и дождаться workers, затем
    выполнить flush traces и Sentry с независимыми bounded contexts.
 
+Созданный `Runtime.Logger` передаётся явно всем runtime-путям этого
+deployable. Наличие telemetry runtime не устанавливает глобальный `slog`
+logger: вызов package-level logger не доказывает JSON/trace контракт.
+Адресный тест использует настоящий shared logger, проверяет безопасные
+поля и trace identifiers без подмены глобального logger.
+
 Composition root принимает два явно различимых контекста по `GO-DOC-001`:
 
 - `lifecycleCtx` отменяется сигналом процесса и управляет startup, серверами и
