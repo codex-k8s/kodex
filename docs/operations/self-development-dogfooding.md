@@ -1290,3 +1290,36 @@ Chrome35 owner session/bootstrap200 после штатного открытия
 ошибочных read URLs сохранены, не объявлены безошибочным пользовательским QA.
 Чужие вкладки не закрывались. Provider cause997 остаётся UNKNOWN;
 самостоятельный parser regression не подменяет этот диагноз.
+
+### 11.10.2026 07:15 UTC — общий workspace доставлен, claim timeout локализован
+
+- [x] Три role artifacts ACCEPTED/PROMOTED/ready, ENV38/20/19/23 PUBLISHED;
+      восемь intended bindings1/1/5/1 APPLIED,38tools и non-image hashes сохранены.
+- [x] Exact source/serving CP ELF ed5920eb подтверждён; RC94a7cb74 новый ELF
+      11817316 совпал с host build и mounted runtime.go hash6a4e6748.
+- [x] Safe Claim diagnostic unit PASS0.056s на94a7cb74; raw RPC messages/details
+      не выводятся. Первый inherited GOROOT запуск FAIL, hermetic env-i PASS.
+- [ ] Actual новый WORKSPACE.md в execution Pod NOT RUN; свежая native attempt3
+      run_y-BVZWSYZeLesPbflp7GZLrR RUNNING/Manager QUEUED. Attempt2 CANCELLED
+      штатным API перед guarded owner-idle FF, весь дочерний граф закрыт.
+- [ ] Устранить capture query timeout: runtime_files_capture_entries занят
+      ACTIVE_NO_WAIT/blockers0 несколько секунд до DeadlineExceeded5s.
+      Canonical NamedArgs SQL fingerprint1023B MATCH; pure admin empty-input
+      PLAN ONLY cost858.26/JIT0 не доказывает actual execution/nested JIT.
+
+Native ENV fresh-auth403/no effect и первый observer FAIL из-за неверного
+binding-vs-ENV digest сравнения сохранены; повторные native validation,
+publication и exacttuple readback PASS. Первый Cancel400 unquoted If-Match
+не изменил состояние; quoted ETag200. Root task/input/source не изменены,
+USER corrections0, host business implementation0. Browser screenshot/Console0,
+session/bootstrap/graph/ticket200 относятся к текущему reload, не QA65 PASS.
+Основной dogfooding, ONE Review/Manager/owner и bootstrap readiness OPEN.
+
+Ускорение подготовлено поверх94a7cb74: один exact catalog MATERIALIZED и одна
+проверка coordinator; coordinator branch берёт только frozen callback-history,
+не перебирает все project results. INPUT/SKILL/PROJECT и final source_visible
+сохранены. Патч62872dcb интегрирован с совпадающими posthash.
+Адресные unit PASS; disposable PostgreSQL up/status/up PASS, Coordinator
+component9.37s и RetryCurrentRoot4.89s PASS. Новая регрессия проверяет trash/
+restore перед callback: один entry и исходные version/revision/digest.
+Actual latency после доставки ещё NOT RUN; timeout не увеличен, JIT не менялся.

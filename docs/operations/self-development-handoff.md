@@ -10,6 +10,38 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 07:15 UTC — workspace доставлен, устранение задержки claim
+
+- [x] Общий workspace всех ролей доставлен: writable work/INPUT copies,
+      readonly originals/context/knowledge и WORKSPACE.md; source d053e6bc.
+- [x] Три новых role artifacts ACCEPTED/PROMOTED/ready; четыре ENV
+      PUBLISHED/ready, ровно восемь intended bindings APPLIED. Все38tools
+      и non-image параметры сохранены по hash readback/fullEOF.
+- [x] Source/serving CP ELF ed5920eb и RC ELF11817316 подтверждены;
+      последний соответствует опубликованной диагностике94a7cb74.
+- [ ] Actual новый WORKSPACE.md в execution Pod: NOT RUN — до claim Pod
+      не создаётся. Native retry attempt2 штатно CANCELLED; attempt3
+      run_y-BVZWSYZeLesPbflp7GZLrR RUNNING, первый Manager QUEUED.
+- [ ] Ускорить runtime_files_capture_entries: actual Claim DeadlineExceeded,
+      PostgreSQL ACTIVE_NO_WAIT, blockers0, запрос занят до RPC timeout5s.
+      Fingerprint1023B совпал с canonical SQL после NamedArgs rewrite.
+      Pure PLAN ONLY с пустым admin catalog имеет cost858.26/JIT0;
+      это не actual latency или доказательство отсутствия nested JIT.
+
+Новый runner b3c8fd6b; role digests system5b60c732/staff24b443cf/
+project-helper717af901. ENV versions38/20/19/23, bindings1/1/5/1.
+Первые ENV validation403 fresh-auth и observer FAIL из-за неверного сравнения
+binding digest с ENV digest сохранены; fresh native validation/publication
+и исправленный exact tuple observer PASS. Код диагностики94a7cb74 опубликован
+в Draft1807; source/HOT clean. Адресная diagnostic unit PASS0.056s;
+первый запуск с унаследованным чужим GOROOT FAIL, env-i Go1.26.6 PASS.
+Actual RC serving/build/host binary11817316 совпадают, mounted runtime.go
+hash6a4e6748 совпадает с host. Первый Cancel400 с unquoted If-Match не имел
+эффекта; повтор с штатным quoted ETag200 закрыл весь граф. Исходное задание
+не изменено, USER corrections0 и host business implementation0.
+Продолжить после SQL performance fix: actual workspace, Architect/Developer,
+ONE Review/Manager/owner. QA65 и бизнес-результат не объявлены завершёнными.
+
 ## Checkpoint 11.10.2026 06:37 UTC — runner доставлен, role admission идёт
 
 ROOT/HOT source d053e6bc, Draft1807 содержит общий WORKSPACE.md и parser fix.

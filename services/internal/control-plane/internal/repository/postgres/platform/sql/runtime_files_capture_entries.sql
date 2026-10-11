@@ -1,31 +1,34 @@
 -- name: runtime_files_capture_entries :exec
-WITH candidates AS (
+WITH catalog AS MATERIALIZED (
+    SELECT id,organization_id,project_id,actor_id,agent_id,node_id,purposes,
+        control_plane.runtime_file_coordinator(organization_id,actor_id,project_id,agent_id,node_id) AS is_coordinator
+    FROM control_plane.runtime_file_catalogs
+    WHERE id=@catalog_id::uuid
+), candidates AS (
     SELECT artifact.id,artifact.ref,artifact.revision,artifact.version,artifact.digest,artifact.file_name,
         artifact.media_type,artifact.size_bytes,'PROJECT'::text AS purpose,artifact.source,
         artifact.ref AS source_ref,''::text AS source_revision_ref
     FROM control_plane.artifacts artifact
-    JOIN control_plane.runtime_file_catalogs catalog ON catalog.id=@catalog_id::uuid
-      AND artifact.organization_id=catalog.organization_id AND artifact.project_id=catalog.project_id
+    JOIN catalog ON artifact.organization_id=catalog.organization_id AND artifact.project_id=catalog.project_id
     WHERE artifact.run_id IS NULL AND 'PROJECT'=ANY(catalog.purposes)
     UNION ALL
     SELECT artifact.id,artifact.ref,artifact.revision,artifact.version,artifact.digest,artifact.file_name,
         artifact.media_type,artifact.size_bytes,'RUN_RESULT',artifact.source,artifact.ref,''
     FROM control_plane.artifacts artifact
-    JOIN control_plane.runtime_file_catalogs catalog ON catalog.id=@catalog_id::uuid
-      AND artifact.organization_id=catalog.organization_id AND artifact.project_id=catalog.project_id
+    JOIN catalog ON artifact.organization_id=catalog.organization_id AND artifact.project_id=catalog.project_id
     WHERE artifact.source IN ('AGENT_RESULT','INTEGRATION_RESULT') AND 'RUN_RESULT'=ANY(catalog.purposes)
+      AND NOT catalog.is_coordinator
     UNION ALL
     SELECT artifact.id,artifact.ref,artifact.revision,(pin->>'version')::bigint,artifact.digest,artifact.file_name,
         artifact.media_type,artifact.size_bytes,'RUN_RESULT',artifact.source,artifact.ref,''
-    FROM control_plane.runtime_file_catalogs catalog
+    FROM catalog
     CROSS JOIN LATERAL control_plane.runtime_received_result_artifacts(catalog.organization_id,catalog.node_id) pin
     JOIN control_plane.artifact_history artifact ON artifact.ref=pin->>'ref'
       AND artifact.organization_id=catalog.organization_id AND artifact.project_id=catalog.project_id
       AND to_jsonb(artifact.revision)=pin->'revision' AND artifact.digest=pin->>'digest'
       AND to_jsonb(artifact.size_bytes)=pin->'sizeBytes' AND artifact.file_name=pin->>'fileName'
       AND artifact.media_type=pin->>'mediaType' AND artifact.source=pin->>'source'
-    WHERE catalog.id=@catalog_id::uuid AND 'RUN_RESULT'=ANY(catalog.purposes)
-      AND control_plane.runtime_file_coordinator(catalog.organization_id,catalog.actor_id,catalog.project_id,catalog.agent_id,catalog.node_id)
+    WHERE 'RUN_RESULT'=ANY(catalog.purposes) AND catalog.is_coordinator
     UNION ALL
     SELECT artifact.id,artifact.ref,artifact.revision,(item->>'version')::bigint,artifact.digest,artifact.file_name,
         artifact.media_type,artifact.size_bytes,'WORKSPACE_INPUT',artifact.source,artifact.ref,''
@@ -51,7 +54,7 @@ WITH candidates AS (
         candidates.file_name,candidates.media_type,candidates.size_bytes,candidates.purpose,candidates.source,
         candidates.source_ref,candidates.source_revision_ref,
         catalog.id AS catalog_id,project.ref AS project_ref,COALESCE(run.ref,'') AS run_ref
-    FROM candidates JOIN control_plane.runtime_file_catalogs catalog ON catalog.id=@catalog_id::uuid
+    FROM candidates CROSS JOIN catalog
     JOIN control_plane.artifact_history artifact ON artifact.id=candidates.id
       AND artifact.ref=candidates.ref AND artifact.revision=candidates.revision AND artifact.digest=candidates.digest
       AND artifact.media_type=candidates.media_type AND artifact.size_bytes=candidates.size_bytes

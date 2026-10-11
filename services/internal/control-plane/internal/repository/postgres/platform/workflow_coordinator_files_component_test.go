@@ -303,10 +303,28 @@ func testWorkflowCoordinatorFilesComponent(t *testing.T, freshRetry bool) {
 	firstLease := claim("first-claim", first.Ref)
 	firstCompleted := complete("first-complete", firstLease, firstText)
 	complete("first-complete", firstLease, firstText)
+	// Изменение lifecycle после callback receipt не подменяет frozen version
+	// текущим head и не создаёт второй entry через широкий RUN_RESULT branch.
+	firstArtifact, err := service.GetArtifact(ctx, owner, firstCompleted.Run.ArtifactRefs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstVersion := firstArtifact.Version
+	firstImpact, err := service.GetArtifactImpact(ctx, owner, firstArtifact.Ref, "DELETE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstDeleted := execute(command.DeleteArtifact, "delete-before-callback", command.ArtifactLifecycleInput{
+		ArtifactRef: firstArtifact.Ref, ImpactDigest: firstImpact.Digest}, &firstArtifact.Version).Artifact
+	firstRestored := execute(command.RestoreArtifact, "restore-before-callback", command.ArtifactLifecycleInput{
+		ArtifactRef: firstDeleted.Ref}, &firstDeleted.Version).Artifact
+	if firstRestored == nil || firstRestored.Version <= firstVersion || firstRestored.Revision != firstArtifact.Revision || firstRestored.Digest != firstArtifact.Digest {
+		t.Fatal("fixture did not preserve immutable revision with changed lifecycle version")
+	}
 	callback := claim("first-callback", outer.Ref)
 	files := manifest(callback, 1)
-	if files[0].ArtifactRef != firstCompleted.Run.ArtifactRefs[0] {
-		t.Fatal("wrong received result")
+	if files[0].ArtifactRef != firstCompleted.Run.ArtifactRefs[0] || files[0].Version != firstVersion || files[0].Revision != firstArtifact.Revision || files[0].Digest != firstArtifact.Digest {
+		t.Fatal("received result lost its frozen callback pins")
 	}
 	readFile(callback, files[0], firstText)
 	callbackProjection := workflowExecutionProjectionFromLease(t, callback)
