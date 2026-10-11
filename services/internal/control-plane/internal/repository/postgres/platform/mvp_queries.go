@@ -433,15 +433,26 @@ func (repository *Repository) GetProviderAccountWithUsage(ctx context.Context, p
 func scanProviderAccount(row rowScanner) (entity.ProviderAccount, error) {
 	var item entity.ProviderAccount
 	var authorization entity.ProviderAuthorization
+	var financial []byte
+	var receivedAt *time.Time
 	var expiresAt *time.Time
 	if err := row.Scan(&item.Ref, &item.DefinitionKey, &item.Name, &item.ExternalAccountMasked,
 		&item.State, &item.Enabled, &item.Version, &item.CreatedAt, &item.UpdatedAt,
 		&authorization.Ref, &authorization.Method, &authorization.State, &authorization.VerificationURI,
-		&authorization.UserCode, &expiresAt, &authorization.SafeFailureCode, &authorization.MaterializerAttemptRef, &item.MaximumConcurrentExecutions); err != nil {
+		&authorization.UserCode, &expiresAt, &authorization.SafeFailureCode, &authorization.MaterializerAttemptRef, &item.MaximumConcurrentExecutions, &financial, &receivedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return entity.ProviderAccount{}, errs.ErrNotFound
 		}
 		return entity.ProviderAccount{}, errs.ErrUnavailable
+	}
+	if len(financial) > 0 && receivedAt != nil {
+		var summary entity.ProviderFinancialSummary
+		if json.Unmarshal(financial, &summary.Observation) != nil || summary.Observation.Validate() != nil {
+			return entity.ProviderAccount{}, errs.ErrUnavailable
+		}
+		summary.ReceivedAt = *receivedAt
+		summary.Version = item.Version
+		item.FinancialSummary = &summary
 	}
 	if authorization.Ref != "" {
 		authorization.ExpiresAt = expiresAt
@@ -585,6 +596,10 @@ func (repository *Repository) authorizeProviderAccountActions(
 	if err != nil {
 		return nil, nil, err
 	}
+	financialRefs, allFinancial, err := repository.financialEligibility(ctx, tx, current)
+	if err != nil {
+		return nil, nil, err
+	}
 	at := time.Now().UTC()
 	collectionTarget := providerAccountCollectionTarget()
 	collectionActions := []string{}
@@ -594,6 +609,10 @@ func (repository *Repository) authorizeProviderAccountActions(
 	for index := range items {
 		target := entity.AccessScope{
 			Kind: "RESOURCE_INSTANCE", ResourceKind: "PROVIDER_ACCOUNT", ResourceRef: items[index].Ref,
+		}
+		items[index].FinancialEligible = (allFinancial || financialRefs[items[index].Ref]) && accessservice.Evaluate(subject.AccessSubject, "provider.account.view", target, "", bindings, at).Allowed
+		if !items[index].FinancialEligible {
+			items[index].FinancialSummary = nil
 		}
 		canManage := accessservice.Evaluate(subject.AccessSubject, "provider.account.manage", target, "", bindings, at).Allowed
 		canAuthorize := accessservice.Evaluate(subject.AccessSubject, "provider.account.authorize", target, "", bindings, at).Allowed

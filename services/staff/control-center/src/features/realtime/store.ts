@@ -373,6 +373,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     const cursor = Number(envelope.cursor);
     if (envelope.type === "PLATFORM_RESYNC_REQUIRED") {
       if (envelope.reason !== "AUTHORITATIVE_READ_REQUIRED") return false;
+      providers.clearFinancial();
       Object.assign(platformState, {
         state: "recovering",
         attempt: session.attempt,
@@ -761,6 +762,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       envelope.streamRef === platformStreamRef &&
       envelope.requestRef === session.requestRef
     ) {
+      providers.clearFinancial();
       platformSnapshotReady = false;
       platformBootstrapCursor = undefined;
       Object.assign(platformState, {
@@ -1107,6 +1109,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
   }
 
   function closeAll(): void {
+    providers.clearFinancial();
     session.stopped = true;
     for (const active of activeRuns.values())
       if (active.timer !== undefined) window.clearTimeout(active.timer);
@@ -1129,12 +1132,14 @@ export const useRealtimeStore = defineStore("realtime", () => {
   }
 
   function refreshSession(): void {
+    providers.clearFinancial();
     disconnect("SESSION_RENEWED");
     session.stopped = false;
     void connect();
   }
 
   function changeProjectScope(): void {
+    providers.clearFinancial();
     platformSequence.value = 0;
     platformSnapshotReady = false;
     platformBootstrapCursor = undefined;

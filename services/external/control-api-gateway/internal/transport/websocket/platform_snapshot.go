@@ -441,9 +441,27 @@ func (server *Server) projectPlatformSnapshotPage(ctx context.Context, kind, pro
 		catalog["runtimes"] = runtimeCatalog["runtimes"]
 		return map[string]any{"catalog": catalog}, nil
 	case "PROVIDER_ACCOUNT":
-		response, readErr := server.query.ListProviderAccounts(ctx, &controlplanev1.ListProviderAccountsRequest{Page: platformPage()})
+		response, readErr := server.query.ListProviderAccounts(scoped, &controlplanev1.ListProviderAccountsRequest{Page: platformPage()})
 		if readErr != nil {
 			return nil, readErr
+		}
+		// Cursor CP закрепляет полный защищённый набор для финансового rank.
+		seen := map[string]bool{}
+		for response.GetPage().GetNextPageToken() != "" {
+			token := response.GetPage().GetNextPageToken()
+			if seen[token] || len(response.Accounts) > 4096 {
+				return nil, errPlatformSnapshotSize
+			}
+			seen[token] = true
+			page, err := server.query.ListProviderAccounts(scoped, &controlplanev1.ListProviderAccountsRequest{Page: &controlplanev1.PageRequest{PageSize: platformSnapshotPageSize, PageToken: token}})
+			if err != nil {
+				return nil, err
+			}
+			response.Accounts = append(response.Accounts, page.Accounts...)
+			response.Page = page.Page
+		}
+		if len(response.Accounts) > 4096 {
+			return nil, errPlatformSnapshotSize
 		}
 		definitions, readErr := server.query.ListProviderDefinitions(ctx, &controlplanev1.ListProviderDefinitionsRequest{Page: platformPage()})
 		if readErr != nil {

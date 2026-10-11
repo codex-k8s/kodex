@@ -209,6 +209,9 @@ func decodeRPCError(raw json.RawMessage) (int64, error) {
 }
 
 type protocolState struct {
+	financialEnabled     bool
+	financialWake        bool
+	financialSequence    int64
 	resumeSource         *confirmedResumeSource
 	expectedSessionID    string
 	threadID             string
@@ -471,6 +474,9 @@ func (state *protocolState) notification(method string, raw json.RawMessage) err
 		return errors.New("Codex app-server notification is invalid")
 	}
 	switch method {
+	case "account/rateLimits/updated":
+		state.financialWake = true
+		return nil
 	case "thread/started":
 		fields, _ := decodeObject(raw, notificationSchema(method))
 		threadID, path, err := parseThread(fields["thread"])
