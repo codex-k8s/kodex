@@ -44,7 +44,7 @@ func TestExecutedTurnFailurePreservesUsageInRetriedCallback(t *testing.T) {
 			switch mode {
 			case "workspace", "cancelled workspace":
 				check = func(context.Context) error { return errors.New("synthetic quota denial") }
-				wantCode = "RUNTIME_INPUT_INVALID"
+				wantCode = "RUNTIME_ARTIFACT_INVALID"
 				if mode == "cancelled workspace" {
 					cancel()
 				}
@@ -57,7 +57,7 @@ func TestExecutedTurnFailurePreservesUsageInRetriedCallback(t *testing.T) {
 			case "publish result":
 				input.CodexSandbox = "workspace-write"
 				input.Capabilities = []string{runtimecontract.ArtifactCapability}
-				wantCode = "RUNTIME_INPUT_INVALID"
+				wantCode = "RUNTIME_ARTIFACT_INVALID"
 			case "collect artifacts":
 				input.Capabilities = []string{runtimecontract.ArtifactCapability}
 				wantCode = "RUNTIME_ARTIFACT_INVALID"
@@ -106,7 +106,7 @@ func TestExecutedTurnFailurePreservesUsageInRetriedCallback(t *testing.T) {
 				} else if payload.CodexSessionID != "" || payload.ArchiveRelativePath != "" || payload.ArchiveSHA256 != "" || payload.ArchiveSizeBytes != 0 {
 					t.Error("completion published an unconfirmed archive binding")
 				}
-				if (mode == "provider outbox failure" || mode == "collect artifacts") && payload.ResultSummary != "i18n:RUNTIME_ARTIFACT_INVALID" {
+				if wantCode == "RUNTIME_ARTIFACT_INVALID" && payload.ResultSummary != "i18n:RUNTIME_ARTIFACT_INVALID" {
 					t.Error("artifact completion lost its closed failure summary")
 				}
 				mu.Lock()
@@ -370,7 +370,7 @@ func TestExecutedTurnRejectsInvalidArchiveBindings(t *testing.T) {
 				ArchiveRelativePath: ".kodex/state/codex-home/sessions/2026/10/07/rollout-2026-10-07T00-00-00-00000000-0000-4000-8000-000000000001.jsonl",
 				ArchiveSHA256:       strings.Repeat("d", 64), ArchiveSizeBytes: 26276}
 			check := func(context.Context) error { return errors.New("synthetic workspace rejection") }
-			wantCode := "RUNTIME_INPUT_INVALID"
+			wantCode := "RUNTIME_ARTIFACT_INVALID"
 			switch mode {
 			case "partial":
 				result.ArchiveSHA256 = ""

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	workspacepolicy "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
 	"golang.org/x/sys/unix"
 )
@@ -122,6 +123,13 @@ func TestProviderWorkspaceAccessRejectsUnsafeTree(t *testing.T) {
 			if !errors.Is(err, errProviderWorkspaceAccess) || strings.Contains(err.Error(), "sentinel") || strings.Contains(err.Error(), path) {
 				t.Fatal("unsafe tree did not fail closed without disclosure")
 			}
+			want := map[string]providerFilesystemReason{
+				"symlink": filesystemFileType, "hardlink": filesystemLinkCount, "fifo": filesystemFileType,
+				"foreign owner": filesystemDirectoryIdentity, "runner private directory": filesystemDirectoryIdentity,
+				"root mode": filesystemDirectoryIdentity, "root group": filesystemDirectoryIdentity,
+				"count": filesystemEntryCount, "bytes": filesystemByteQuota, "cancelled": filesystemContext, "invalid policy": filesystemPolicy,
+			}[kind]
+			assertProviderFilesystemReason(t, err, errProviderWorkspaceAccess, want)
 		})
 	}
 }
@@ -141,9 +149,7 @@ func TestProviderWorkspaceAccessRejectsReplacedDirectory(t *testing.T) {
 		t.Fatal("replace child")
 	}
 	usage := workspaceAccessUsage{entries: 2}
-	if !errors.Is(normalizeWorkspaceAccessChild(t.Context(), directory, child, "child", before, runtimecontract.RuntimeWorkspacePolicyV1(), uid, uid, group, &usage), errProviderWorkspaceAccess) {
-		t.Fatal("replaced pathname accepted")
-	}
+	assertProviderFilesystemReason(t, normalizeWorkspaceAccessChild(t.Context(), directory, child, "child", before, runtimecontract.RuntimeWorkspacePolicyV1(), uid, uid, group, &usage), errProviderWorkspaceAccess, filesystemMetadataChanged)
 	info, _ := os.Stat(filepath.Join(path, "child"))
 	if info.Mode().Perm() != 0o700 {
 		t.Fatal("replacement inode modified")
@@ -232,10 +238,11 @@ func TestProviderWorkspaceAccessKernel(t *testing.T) {
 	for _, stage := range []struct {
 		mode string
 		uid  uint32
-	}{{"BEFORE", 10001}, {"NORMALIZE", 10002}, {"AFTER", 10001}, {"PRIVATE_FILE", 10001}} {
+	}{{"BEFORE", 10001}, {"NORMALIZE", 10002}, {"AFTER", 10001}, {"RESET_PRIVATE", 10002}, {"BEFORE", 10001}, {"NORMALIZE_SUCCEEDED", 10002}, {"AFTER", 10001}, {"PRIVATE_FILE", 10001}} {
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		command := exec.CommandContext(ctx, "/proc/self/fd/4", "-test.run=^TestProviderWorkspaceAccessKernel$", "-test.timeout=4s")
 		command.Env = []string{"LANG=C", "KODEX_WORKSPACE_ACCESS_KERNEL_CHILD=" + stage.mode}
+		command.Stdout, command.Stderr = os.Stdout, os.Stderr
 		command.ExtraFiles = []*os.File{parentFD, executable}
 		command.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: stage.uid, Gid: stage.uid, Groups: []uint32{29000}}}
 		err := command.Run()
@@ -260,7 +267,13 @@ func TestProviderWorkspaceAccessKernel(t *testing.T) {
 
 func workspaceAccessKernelChild(t *testing.T, mode string) {
 	root := "/proc/self/fd/3/root"
-	if mode == "NORMALIZE" {
+	if mode == "RESET_PRIVATE" {
+		if os.Geteuid() != 10002 || os.Chmod(filepath.Join(root, "work/private"), 0o700) != nil {
+			t.Fatal("reset exact synthetic provider directory")
+		}
+		return
+	}
+	if mode == "NORMALIZE" || mode == "NORMALIZE_SUCCEEDED" {
 		if os.Geteuid() != 10002 {
 			t.Fatal("wrong provider identity")
 		}
@@ -269,8 +282,27 @@ func workspaceAccessKernelChild(t *testing.T, mode string) {
 			t.Fatal("open exact fixture work")
 		}
 		defer directory.Close()
-		if normalizeWorkspaceAccess(t.Context(), directory, runtimecontract.RuntimeWorkspacePolicyV1(), 10001, 10002, 29000) != nil {
-			t.Fatal("provider directory normalization failed")
+		want := Result{Outcome: "SUCCEEDED", FinalMessage: "synthetic completed result"}
+		if mode == "NORMALIZE" {
+			outbox, err := os.Open(filepath.Join(root, ".kodex/outbox"))
+			if err != nil {
+				t.Fatal("open exact fixture outbox")
+			}
+			defer outbox.Close()
+			if os.WriteFile(filepath.Join(root, ".kodex/outbox/empty.md"), nil, 0o600) != nil {
+				t.Fatal("prepare rejected provider artifact")
+			}
+			assertProviderFilesystemReason(t, publishOutboxDirectory(t.Context(), outbox, 10, 10001, 10002, 29000), errProviderOutboxPublication, filesystemFileSize)
+			if os.Remove(filepath.Join(root, ".kodex/outbox/empty.md")) != nil {
+				t.Fatal("remove exact synthetic rejected entry")
+			}
+			want.Outcome, want.FailureCode, want.FinalMessage = "FAILED", "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID"
+		}
+		got := normalizeCompletedProviderWorkspace(t.Context(), model.Input{}, want, func(ctx context.Context, _ model.Input) error {
+			return normalizeWorkspaceAccess(ctx, directory, runtimecontract.RuntimeWorkspacePolicyV1(), 10001, 10002, 29000)
+		})
+		if got.Outcome != want.Outcome || got.FailureCode != want.FailureCode || got.FinalMessage != want.FinalMessage {
+			t.Fatal("failed outbox cleanup changed the terminal failure")
 		}
 		return
 	}

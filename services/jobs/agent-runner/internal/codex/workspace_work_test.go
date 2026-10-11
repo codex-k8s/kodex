@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"syscall"
 	"testing"
@@ -136,7 +137,7 @@ func TestWorkingDirectoryCopiesAndResetsOnlyTaskInputs(t *testing.T) {
 		t.Fatal(err)
 	}
 	guidePath := filepath.Join(input.WorkspaceRoot, "work", workspaceGuideName)
-	if guide, err := os.ReadFile(guidePath); err != nil || string(guide) != workspaceGuide {
+	if guide, err := os.ReadFile(guidePath); err != nil || string(guide) != materializedWorkspaceGuide(input) {
 		t.Fatal("workspace navigation guide missing")
 	}
 	if err := os.WriteFile(guidePath, []byte("untrusted edited guide"), 0o640); err != nil {
@@ -171,7 +172,7 @@ func TestWorkingDirectoryCopiesAndResetsOnlyTaskInputs(t *testing.T) {
 	if err := prepareWorkingDirectoryOwned(t.Context(), input, uint32(os.Geteuid())); err != nil {
 		t.Fatal(err)
 	}
-	if guide, err := os.ReadFile(guidePath); err != nil || string(guide) != workspaceGuide {
+	if guide, err := os.ReadFile(guidePath); err != nil || string(guide) != materializedWorkspaceGuide(input) {
 		t.Fatal("edited guide survived isolated workspace reset")
 	}
 	raw, err = os.ReadFile(target)
@@ -198,7 +199,7 @@ func TestWorkingDirectoryGuideExistsWithoutAttachmentsAndUsesQuota(t *testing.T)
 		t.Fatal(err)
 	}
 	guidePath := filepath.Join(input.WorkspaceRoot, "work", workspaceGuideName)
-	if guide, err := os.ReadFile(guidePath); err != nil || string(guide) != workspaceGuide {
+	if guide, err := os.ReadFile(guidePath); err != nil || string(guide) != materializedWorkspaceGuide(input) {
 		t.Fatal("empty workspace lost navigation guide")
 	}
 	for _, guard := range []string{"/workspace/work/input/", "/workspace/input/", "/workspace/context/", "/workspace/knowledge/", "working_copy_path", "не требуй от пользователя", "текущими capabilities", "сбрасываются", "## Карта каталогов", "## Как начать", "при совпадении", "отсутствие файла не разрешает", "во внутреннем state", "дерево или индекс", "Не выгружай весь репозиторий", "checksum/EOF scan не заменяет обязательное чтение", "не требует повторного remote read_file"} {
@@ -221,6 +222,31 @@ func TestWorkingDirectoryGuideExistsWithoutAttachmentsAndUsesQuota(t *testing.T)
 	}
 	if err := prepareWorkingDirectoryOwned(t.Context(), input, uint32(os.Geteuid())); err == nil {
 		t.Fatal("guide and input bypassed file count quota")
+	}
+}
+
+func TestWorkspaceGuideDescribesIssuedLimitsWithoutChangingPolicy(t *testing.T) {
+	input, _, _ := workingInputFixture(t)
+	policy, err := runtimecontract.RuntimeWorkspacePolicyWithLimits(&runtimecontract.RuntimeWorkspaceLimits{MaxBytes: 1048576, MaxFiles: 256})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.WorkspacePolicy = policy
+	guide := materializedWorkspaceGuide(input)
+	for _, guard := range []string{"1048576 байт и 256 записей", "файлы и каталоги", "symlink, hardlink, socket и FIFO", "только собственные временные результаты", "от 1 до 1048576 байт", "result.md и workspace-write-result.json", "не меняй policy"} {
+		if !strings.Contains(guide, guard) {
+			t.Fatalf("issued workspace guide lost boundary %q", guard)
+		}
+	}
+	if !reflect.DeepEqual(input.WorkspacePolicy, policy) {
+		t.Fatal("workspace guide changed issued policy")
+	}
+	if err := prepareWorkingDirectoryOwned(t.Context(), input, uint32(os.Geteuid())); err != nil {
+		t.Fatal(err)
+	}
+	actual, err := os.ReadFile(filepath.Join(input.WorkspaceRoot, "work", workspaceGuideName))
+	if err != nil || string(actual) != guide {
+		t.Fatal("issued guide was not materialized")
 	}
 }
 

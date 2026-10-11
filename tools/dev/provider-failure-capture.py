@@ -81,6 +81,13 @@ provider_transport_failure provider_interrupted RUNTIME_ARTIFACT_INVALID'''.spli
 REQUEST_PREFIX = 'Codex provider request failed at safe stage: '
 TERMINAL_PREFIX = 'Codex provider turn completed with safe failure code: '
 CLIENT_MESSAGE = 'runtime execution failed before completion'
+FILESYSTEM_MESSAGE = 'Provider post-join filesystem denied'
+FILESYSTEM_STAGES = frozenset(('OUTBOX_PUBLICATION', 'WORKSPACE_NORMALIZATION', 'UNKNOWN'))
+FILESYSTEM_REASONS = frozenset('UNKNOWN CONTEXT_DONE POLICY_INVALID LOCK_UNAVAILABLE '
+                              'DIRECTORY_UNAVAILABLE DIRECTORY_IDENTITY_INVALID ENTRY_COUNT_EXCEEDED '
+                              'ENTRY_NAME_INVALID ENTRY_OPEN_DENIED FILE_TYPE_INVALID OWNER_INVALID '
+                              'LINK_COUNT_INVALID FILE_SIZE_INVALID BYTE_QUOTA_EXCEEDED MOUNT_INVALID '
+                              'PERMISSION_UPDATE_FAILED METADATA_CHANGED FILESYSTEM_IO_FAILED'.split())
 CLIENT_CATEGORIES = frozenset('UNKNOWN CALLBACKS POST_TERMINAL FRAME_LIMIT FRAME_SCHEMA FRAME_VERSION '
                              'FRAME_SEQUENCE FRAME_KIND ACTIVITY_SCHEMA PROVIDER_PROCESS_TUPLE '
                              'MESSAGE_REPLAY MESSAGE_LIMIT TOOL_LIFECYCLE TOOL_LIMIT TERMINAL_SCHEMA '
@@ -94,12 +101,26 @@ REQUEST = re.compile(r'^' + re.escape(REQUEST_PREFIX) +
 
 
 def parse_line(raw):
-    """Только две точные producer-строки; недоверенный текст не отражается."""
+    """Точные закрытые producer records; недоверенный текст не отражается."""
     try:
         line = raw.decode('utf-8')
     except UnicodeDecodeError:
         return None
     line = STAMP.sub('', line.rstrip('\n'), count=1)
+    if line.startswith('{') and FILESYSTEM_MESSAGE in line:
+        require(len(raw) <= MAX_LINE, 'PROVIDER_DIAGNOSTIC_INVALID')
+        try:
+            record = json.loads(line, object_pairs_hook=ACK.unique)
+        except (Failure, ValueError, UnicodeError):
+            raise Failure('PROVIDER_DIAGNOSTIC_INVALID') from None
+        if not isinstance(record, dict) or record.get('msg') != FILESYSTEM_MESSAGE:
+            return None
+        require(set(record) == {'time', 'level', 'msg', 'stage', 'reason'} and
+                record['level'] == 'WARN' and isinstance(record['stage'], str) and
+                record['stage'] in FILESYSTEM_STAGES and isinstance(record['reason'], str) and
+                record['reason'] in FILESYSTEM_REASONS, 'PROVIDER_DIAGNOSTIC_INVALID')
+        # Только отказ guard: не выдумываем terminal code или причину provider.
+        return {'kind': 'FILESYSTEM_DENIAL', 'stage': record['stage'], 'reason': record['reason']}
     if line.startswith(TERMINAL_PREFIX):
         code = line[len(TERMINAL_PREFIX):]
         require(code in TERMINAL_CODES, 'PROVIDER_DIAGNOSTIC_INVALID')

@@ -370,6 +370,11 @@ func completeExecutedTurn(ctx context.Context, input model.Input, client *callba
 // Только результат завершённого execute может сохранить проверенный rollout
 // при последующем отказе публикации. Generic execution failures сюда не входят.
 func completeExecutedFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, code, summary string) error {
+	// Отказ сохранения после execute не означает ошибку пользовательского ввода.
+	// Canary остаётся обязательным; наружу выдаётся существующий закрытый код.
+	if code == "RUNTIME_WORKSPACE_INVALID" {
+		code, summary = "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID"
+	}
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt,
 		Success: false, ResultSummary: summary, SafeErrorCode: safeFailureCode(code), Usage: result.Usage,
 		CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath,

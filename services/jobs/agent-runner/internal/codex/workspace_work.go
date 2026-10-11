@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -90,6 +91,28 @@ Workspace изолирован и временный: перед следующ�
 локальный файл и финальное сообщение сами по себе не подтверждают публикацию.
 `
 
+// Это описание выданной immutable policy, не настройка роли или новые права.
+func materializedWorkspaceGuide(input model.Input) string {
+	return workspaceGuide + fmt.Sprintf(`
+## Выданные ограничения файловой системы
+
+Текущий общий бюджет writable workspace: %d байт и %d записей
+(файлы и каталоги, включая checkout, .git, рабочие копии и кэши).
+Обычные файлы и каталоги разрешены; symlink, hardlink, socket и FIFO
+не принимаются при завершении. Не обходи эти ограничения и не меняй policy.
+Установка зависимостей может создать ссылки или исчерпать бюджет; учитывай
+это до установки и сборки. Перед финальным ответом проверь metadata своих
+рабочих файлов, не следуя ссылкам и не читая внутренний state. Удалять можно
+только собственные временные результаты; входы, историю и чужие файлы сохраняй.
+
+В outbox публикуй только готовые regular files размером от 1 до %d байт.
+Не оставляй там пустые логи, checkout, кэши или ссылки. Не создавай служебные
+result.md и workspace-write-result.json: их назначает платформа.
+Сохрани substantive результат разрешённым способом до очистки своих scratch
+файлов; Git commit/push и фактическая публикация — разные подтверждения.
+`, input.WorkspacePolicy.MaximumWritableBytes, input.WorkspacePolicy.MaximumFileCount, maximumPublishedArtifactBytes)
+}
+
 func workingDirectory(input model.Input) string {
 	return filepath.Join(input.WorkspaceRoot, filepath.Base(runtimecontract.RuntimeWorkspaceWorkingRoot))
 }
@@ -107,7 +130,7 @@ func prepareWorkingDirectoryOwned(ctx context.Context, input model.Input, source
 	if input.WorkspacePolicy.Validate() != nil {
 		return errWorkingDirectory
 	}
-	copyBytes, copyFiles := int64(len(workspaceGuide)), int64(1)
+	copyBytes, copyFiles := int64(len(materializedWorkspaceGuide(input))), int64(1)
 	if copyBytes > input.WorkspacePolicy.MaximumWritableBytes || copyFiles > input.WorkspacePolicy.MaximumFileCount {
 		return errWorkingDirectory
 	}
@@ -171,10 +194,11 @@ func prepareWorkingTree(ctx context.Context, input model.Input, directory *os.Fi
 	if err != nil {
 		return errWorkingDirectory
 	}
-	written, writeErr := io.WriteString(guide, workspaceGuide)
+	guideText := materializedWorkspaceGuide(input)
+	written, writeErr := io.WriteString(guide, guideText)
 	syncErr := guide.Sync()
 	closeErr := guide.Close()
-	if writeErr != nil || written != len(workspaceGuide) || syncErr != nil || closeErr != nil {
+	if writeErr != nil || written != len(guideText) || syncErr != nil || closeErr != nil {
 		return errWorkingDirectory
 	}
 	for _, artifact := range input.InputArtifacts {

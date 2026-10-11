@@ -556,9 +556,7 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver 
 		logProviderSafeFailure(providerStageOf(err), err)
 		return writeProviderBrokerResultFailure(frames, result, err)
 	}
-	if result.Outcome == "SUCCEEDED" && normalizeProviderWorkspaceAccess(ctx, request.Input) != nil {
-		result.Outcome, result.FailureCode, result.FinalMessage = "FAILED", "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID"
-	}
+	result = normalizeCompletedProviderWorkspace(ctx, request.Input, result, normalizeProviderWorkspaceAccess)
 	if result.Outcome != "SUCCEEDED" {
 		log.Printf("Codex provider turn completed with safe failure code: %s", result.FailureCode)
 	}
@@ -636,6 +634,7 @@ func executeProviderTurn(ctx context.Context, input model.Input, prompt []byte, 
 	}
 	if executionErr == nil && result.Outcome == "SUCCEEDED" && !input.IsAssistant() && slices.Contains(input.Capabilities, runtimecontract.ArtifactCapability) {
 		if err := publishProviderOutbox(ctx, input); err != nil {
+			logProviderFilesystemDenial(providerOutboxStage, err)
 			result.Outcome = "FAILED"
 			result.FailureCode = "RUNTIME_ARTIFACT_INVALID"
 			result.FinalMessage = "i18n:RUNTIME_ARTIFACT_INVALID"

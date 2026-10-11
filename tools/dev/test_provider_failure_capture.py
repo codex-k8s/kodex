@@ -51,6 +51,32 @@ class FakeClock:
 
 
 class CaptureTests(unittest.TestCase):
+    def test_post_join_filesystem_closed_projection(self):
+        for stage in CAPTURE.FILESYSTEM_STAGES:
+            for reason in CAPTURE.FILESYSTEM_REASONS:
+                row = dict(time=SENTINEL, level='WARN', msg=CAPTURE.FILESYSTEM_MESSAGE,
+                           stage=stage, reason=reason)
+                result = CAPTURE.parse_line(json.dumps(row).encode())
+                self.assertEqual(result, dict(kind='FILESYSTEM_DENIAL', stage=stage, reason=reason))
+                self.assertNotIn(SENTINEL, json.dumps(result))
+                self.assertNotIn('failure_code', result)
+
+    def test_post_join_filesystem_rejects_open_or_corrupt_metadata(self):
+        base = dict(time='2026-10-11T00:00:00Z', level='WARN', msg=CAPTURE.FILESYSTEM_MESSAGE,
+                    stage='OUTBOX_PUBLICATION', reason='FILE_SIZE_INVALID')
+        for key, value in [('stage', SENTINEL), ('reason', SENTINEL), ('level', 'INFO'),
+                           ('stage', []), ('reason', None), ('raw_error', SENTINEL)]:
+            row = dict(base)
+            row[key] = value
+            with self.subTest(key=key, value=value):
+                with self.assertRaises(CAPTURE.Failure) as raised:
+                    CAPTURE.parse_line(json.dumps(row).encode())
+                self.assertEqual(str(raised.exception), 'PROVIDER_DIAGNOSTIC_INVALID')
+        duplicate = json.dumps(base)[:-1] + ', "reason": "FILE_SIZE_INVALID"}'
+        with self.assertRaises(CAPTURE.Failure):
+            CAPTURE.parse_line(duplicate.encode())
+        self.assertIsNone(CAPTURE.parse_line(json.dumps(dict(base, msg=SENTINEL)).encode()))
+
     def test_resume_source_closed_reasons_and_exact_capture(self):
         for detail in ('RESUME_SOURCE_SCHEMA', 'RESUME_SOURCE_ID', 'RESUME_SOURCE_LOCATOR',
                        'RESUME_SOURCE_OPEN', 'RESUME_SOURCE_METADATA', 'RESUME_SOURCE_IDENTITY'):

@@ -10,6 +10,61 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 19:23 UTC — post-join исправление проверено, доставка открыта
+
+Поверх 8e2138b0 подготовлен единый пакет runner: после остановки и join
+provider обязательная нормализация выполняется и для FAILED, с независимым
+бюджетом 2 секунды. Первичная ошибка сохраняется; canary, UID, права,
+quota, no-follow и single-link проверки не ослаблены. Закрытая диагностика
+stage/reason не включает paths, содержимое или raw errors. Collector понимает
+эту запись как FILESYSTEM_DENIAL, не выдумывая terminal failure или actual cause.
+
+WORKSPACE.md сообщает фактически выданные bytes/entries и существующие
+ограничения outbox. Post-execution workspace denial теперь отдаёт существующий
+RUNTIME_ARTIFACT_INVALID вместо ошибочного обвинения пользовательского ввода;
+проверки перед исполнением неизменны. Исторические состояния не переписываются.
+
+ROOT: весь agent-runner module unit PASS (app17.154s, codex5.204s), весь module
+vet PASS; адресный integrated race PASS1.131s. Offline trimpath/buildvcs=false
+runner build PASS. Collector93 tests PASS6.356s; diff-check PASS.
+Это проверка integration tree поверх8e2138b0, не ещё опубликованный SHA.
+Worker: kernel fixture с actual UID10002/10001 PASS для FAILED и SUCCEEDED;
+private body остаётся EACCES. Предыдущие RED и исправление supplementary group
+только в fixture сохранены; default unit не выдаётся за kernel fixture PASS.
+
+Chrome11 reload/скриншот/Console0: authenticated, connected, overflow=false.
+Оба узла Ready, основные active Deployments Ready; stale terminal Pods
+не удалялись. Actual filesystem guard отказа Developer по-прежнему UNKNOWN;
+work/outbox удалённого Pod восстановить нельзя. PR1808 сохранён Draft.
+Следующий этап: clean commit/push в1807, canonical OCI/build/provenance,
+exact policy/defaults, два recipes и три ENV с сохранением38tools/non-image
+параметров. Новый live runner и возобновление native workflow NOT RUN;
+ONE Reviewer/Manager/owner и завершение полного QA остаются открыты.
+
+## Checkpoint 11.10.2026 19:09 UTC — egress обслуживает исправленную сборку
+
+Журнал отказа Developer опубликован: source/remote Draft1807
+8e2138b02376730368b55f4b3932ec48b8070b6e/mainab4992e0 readback PASS;
+тело того же PR сокращено и актуализировано, readback PASS. HOT выполнен
+ff-only с68c66645 до8e2138b0 в окне без ordinary runtime Pods; чужие
+процессы/вкладки и system-assistant-warm не останавливались.
+
+Egress Deployment сохраняет readonly source mount /home/s/projects/kodex
+на /workspace. Actual Pod egress-gateway-55df66b6d5-9w9fn: source
+proxy_stream.go SHA0614b1b53c189ed5ccd2cf522d26b9267e431d6eb71c4d3866814f0ef5b0b0a0
+MATCH; serving /proc/2260/exe SHA
+4488f6a5449e4ad4b82575ffa3d27cb3b14db5cb0686f72da992847c8fb6261b
+MATCH независимой проверенной сборке. Running/Ready=True, restarts2;
+observed generation13, desired/updated/available/ready replicas1.
+Это source+serving/readiness proof, не новый paid download или весь QA PASS.
+
+ROOT дополняет WORKSPACE.md фактически выданными bytes/entries и описанием
+существующих file/link/outbox guards; policy/права не расширяются. Первый
+локальный запуск FAIL из-за унаследованного GOROOT1.27 при Go1.26.6;
+исправленный env -u GOROOT, GOWORK=off/GOPROXY=off/GOSUMDB=off:
+TestWorkspaceGuide|TestWorkingDirectory PASS0.032s, scoped vet PASS.
+Новый guide пока SOURCE dirty, не доставлен; post-join fix готовится отдельно.
+
 ## Checkpoint 11.10.2026 19:03 UTC — бизнес-PR сохранён, финализация Developer отказала
 
 Source b41a6e1062432d5cb29eb73518d4dd8aea1ced97, HOT68c66645 clean.

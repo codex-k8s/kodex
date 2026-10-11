@@ -43,12 +43,23 @@ scope, контракт, policy, fixture либо deployment boundary, прим�
 
 ## Свежая цепочка выполнения
 
+Новый runner scope поверх8e2138b0: FAILED post-join normalization,
+закрытые filesystem stage/reason, фактические workspace budgets в guide,
+post-execution artifact error mapping и collector этой закрытой диагностики.
+ROOT whole runner unit/vet, scoped race1.131s, offline binary build,
+collector93 tests6.356s и diff-check PASS на integration tree.
+Kernel двух UID worker fixture PASS отдельно; ordinary unit его не запускал.
+Canonical OCI delivery и native recovery пока NOT RUN; actual rejecting
+guard прежнего Developer UNKNOWN. Canary/quota/authority не обходились.
+
 Новый scope11.10 18:36 UTC поверх68c66645: egress `proxy_stream.go`, его тест
 и единственный call-site в `http_proxy.go`. Три exact SHA256 и команды — в
 checkpoint18:36. RED chunked/Content-Length подтверждён; scoped unit/race/vet
 и ROOT integrated unit/build PASS, общий invariant GO-DOC-001 обновлён.
-HOT остаётся68c66645 для сохранения активного исполнения; serving fixed ELF,
-native download и полная suite NOT RUN. Это не исправление текущего host deny.
+После завершения Workflow HOT ff-only до8e2138b0: actual mounted source
+0614b1b5 и serving ELF4488f6a5 MATCH проверенной сборке, Pod Ready19:06 UTC.
+Whole gateway package unit на b41a6e10 PASS2.549s; native download и полная
+suite NOT RUN. Это не исправление текущего host deny или workspace refusal.
 
 - [x] INTAKE SUCCEEDED17:03:27 UTC; пять actual результатов прочитаны owner
   до bounded EOF, size/SHA/revision/version rejoin MATCH.
