@@ -10,6 +10,33 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 08:27 UTC — native attempt5 и actual workspace PASS
+
+HOT/sourcec4bd2028d79cad2b4311c0a5dac0ed6a0a561f49 clean, remote
+Draft1807 exact readback PASS, main не менялся. Это doc-only продолжение
+исполняемого runner/source39d4653e; во время native run HOT не менять.
+Штатный RETRY исходного FAILED run создал attempt5
+run_ptBfmAM107l_qzCiqaUZoiRP RUNNING: Coordinator SUCCEEDED, Manager child
+run_OTIRPkDX3eTAXSqAwabrzLIw RUNNING, остальные шаги PLANNED. Последний
+bounded event read seq98; TOOL_CALL и промежуточные ответы поступают.
+Это не принятый INTAKE или успешный бизнес-результат.
+
+Actual Pod runtime-turn-108df1fa36b1fa1f/UIDcfe12a63-85d7-48af-9e8a-89c86346bd5c:
+role imageaa8994e1, runner ELFca035f6c и WORKSPACE.md SHAdd753bb6 MATCH;
+provider test-w work и test-!w input/context/knowledge PASS. Три контейнера
+Ready/restarts0. ROOT не пишет actual workspace. Capture ROLE logs активен
+и повторно присоединяется к ещё Running Pod; первичная category пока не
+наблюдалась. Наличие пустого capture не доказывает устранённый отказ.
+
+Chrome35 открыта на attempt5: session/bootstrap/graph/events/ticket200,
+Console0/overflow=false. MCP screenshot filePath отклонён политикой клиента,
+inline попытка ранее зависла; отдельный Playwright settled screenshot
+визуально проверен, realtime подключён, дуга child return не скрыта узлами.
+Startup401/Console1 отдельного browser не объявляется новым чистым PASS.
+Следующее действие — сопровождать Manager до terminal, при отказе читать
+закрытую первичную category; затем platform fix без USER corrections и
+Architect/Developer/ONE Review/Manager/owner. QA65 OPEN, goal active.
+
 ## Checkpoint 11.10.2026 08:21 UTC — диагностика доставлена, повтор задания готов
 
 Source/HOT39d4653ea8a569dabbe0b1d76df88d9d0fc19646 clean, Draft1807 exact

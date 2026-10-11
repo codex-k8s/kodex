@@ -783,3 +783,18 @@ Chrome35 API200/Console0/overflow=false; MCP screenshot завис и остан
 не обозначаются чистым browser PASS. MCP list/reload восстановились.
 Native retry/первичная причина/Architect/Developer/ONE Review/Manager/owner
 и QA65 OPEN; USER corrections0, host business implementation0.
+
+## Checkpoint 11.10.2026 08:27 UTC — native attempt5 сопровождается
+
+Штатный RETRY с прежним input создал run_ptBfmAM107l_qzCiqaUZoiRP attempt5
+RUNNING; Coordinator SUCCEEDED, Manager child run_OTIRPkDX3eTAXSqAwabrzLIw
+RUNNING, event seq98. HOT/sourcec4bd2028 clean и опубликован в Draft1807;
+исполняемый runner/source39d4653e не меняется во время выполнения.
+Actual Pod UIDcfe12a63: imageaa8994e1, runnerca035f6c и guide SHAdd753bb6
+MATCH; provider writable work / readonly input/context/knowledge PASS.
+ROOT не пишет workspace, USER corrections0, business implementation0.
+Read-only ROLE primary capture active; category ещё не наблюдалась.
+Chrome35 API200/Console0/overflow=false после reload, separate Playwright
+settled screenshot/realtime/child arc визуально проверены. MCP screenshot
+не сохранён: timeout inline / filePath denied клиентом, не application FAIL.
+Terminal/первичная причина и следующие business шаги/QA65 OPEN.
