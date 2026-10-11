@@ -1313,3 +1313,35 @@ e2e types/scoped lint/format PASS. Chromium пока FAIL120s на Email initial
 query-sync/unsaved modal. Новый source-backed regression воспроизводит RED;
 production fix проверяется отдельно, shared dirty guard не ослабляется.
 USER corrections0/host business implementation0; Full65/business gate OPEN.
+
+## Checkpoint 11.10.2026 00:31 UTC — Email query race исправлен, Architect работает
+
+ROOT predecessor80010e67, production base/HOT eba5f054. Узкий Email fix
+убирает преждевременный mount редактора до router.replace: защищённый route
+read и generation guard сохранены, реальные busy/dirty leave/cancel по-прежнему
+требуют подтверждения. ROOT exact post2 совпал с frozen supplemental:
+IntegrationsPage92f98c2e, lifecyclec0ea197b. ROOT40unit/7suites PASS5.09s;
+scoped lint/format/diff-check PASS; forced typecheck + synthetic build PASS
+7.71s, document lifecycle1.06s; chunk-size advisory сохранён.
+Предварительная команда с неточными test paths проверила лишь24tests;
+повтор с полным точным перечнем проверил40. Это не полный browser acceptance.
+При интеграции два frontend файла кратко попали в HOT по относительному пути;
+точный inverse восстановил чистый eba5, затем пакет перенесён в isolated ROOT.
+Go/runtime/image pins не менялись; live delivery нового frontend пока NOT RUN.
+
+Native INTAKE/дочерний Manager SUCCEEDED; callback root continuation attempt2
+проверил manager artifacts до EOF и делегировал Architect run_HIqXH-81X52fSzX_xeUmXxXu.
+Exact child session/turn/node и новый STAFF manifest подтверждены; Architect
+ACK и canonical platform binding CAPTURED/sameUID VERIFIED. Early Pod status
+observers активны для root continuation и Architect; business результат UNKNOWN.
+Прежний Manager metadata FAIL сохранён: base canonical digest/header/suffix
+подтверждены, общий stage мог остаться после успешного slot из-за notice guard.
+Новый hermetic oracle различает stale diagnostic stage; actual final predicate
+UNKNOWN после удаления прежнего Pod, production defect не объявляется.
+Own Chrome5 desktop activity screenshot: compact intermediate replies/tools,
+active dots, overflow0; relevant API200, Console только Vite debug. Слишком
+ранний mobile screenshot пустой, не PASS; требуется повтор после загрузки.
+Worker Chromium прошёл Email effect, затем выявил устаревшие fixture assertions
+approvalPolicy/adaptive page size; эти FAIL сохранены, точные fixtures дорабатываются.
+Workflow40/revision13/одно комплексное review, USER corrections0/host business
+implementation0. Full65, Developer PR/review/final owner completion остаются OPEN.

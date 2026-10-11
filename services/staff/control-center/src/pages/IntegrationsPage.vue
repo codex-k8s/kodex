@@ -368,7 +368,6 @@ async function closeConnectionDetails(): Promise<void> {
 }
 function openConnectionDetails(connection: IntegrationConnection): void {
   detailsProblem.value = undefined;
-  detailsConnection.value = connection;
   void router.replace({
     query: {
       ...route.query,
