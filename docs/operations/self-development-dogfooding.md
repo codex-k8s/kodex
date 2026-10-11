@@ -10,6 +10,33 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 10:18 UTC — INTAKE PASS, собственный handoff Architect
+
+- [x] Текущий Manager SUCCEEDED10:14:18.808513 с semantic
+      PASS_INTAKE_FOR_ARCHITECT_HANDOFF. Exact result504B/SHAea908dd5,
+      manager-plan46600B/SHAfd031046 и workspace receipt328B/SHA4d343e7d
+      CLEAN, owner PREVIEW200/full EOF/hash MATCH; не business acceptance.
+- [x] Штатный callback и own RUN_RESULT discovery Coordinator: текущий
+      manager-plan прочитан до EOF, не заменён старым PROJECT result.
+- [x] Actual Architect run_tjUTE9V6H3Fmh-8bcWcz32ei RUNNING с точным
+      root/parent/target; его собственное чтение manager-plan до EOF подтверждено.
+- [x] Prompt materialization обеих обычных ролей: Task в inbox, Instructions
+      EQUAL actual AGENTS.md, четыре owner fields exact в PLATFORM INPUT.
+      Manager instructions2f31aec5/prompt56658cbc/runtime3da459f9;
+      Architect instructionsd8f003f4/prompt15a8229b/runtimeedba9945.
+      Provider OBSERVED/баланс не выводятся из runtime selection.
+- [ ] Semantic Architect PASS, substantive Developer PR, ONE Review,
+      Final Manager/owner, полный QA65 и bootstrap merge.
+
+HOT6f66b14e/source6994d3fd не менялись; USER corrections0, ROOT business
+implementation0. Actual Architect UIDf89ca9d5/3Ready/restarts0,
+sessionHash9c5b2f5288352603 совпал с owner run; общий WORKSPACE.md SHAdd753bb6
+и own discovery guidance в его materialized instructions присутствуют.
+Manager packet/native mandatory docs EOF указан в его проверенном результате;
+это не полный source proof следующих ролей. Chrome35 reload/read200/Console0.
+Текущее выполнение сопровождать без restart, prepared logger не активировать
+только ради необязательной доставки во время активного workflow.
+
 ## Checkpoint 11.10.2026 10:02 UTC — workspace обычной роли подтверждён
 
 - [x] Actual Manager child run_88EWIUzOnPsCIv1_FwYBqAhw: owner sessionHash
