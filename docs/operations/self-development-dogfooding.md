@@ -10,6 +10,36 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 13:54 UTC — доставка общего workspace завершена
+
+- [x] Source44a0c7bb: новый runner e4fc62f4/provenance2a01d3ce/ELF b31da159
+      опубликован; HTTPS OCI graph и exact CRI обеих нод PASS. Fresh policy
+      cc62e2f9/runtime binding/defaults/readback PASS, история образов сохранена.
+- [x] Оба PROJECT recipes built/admitted/promoted. Три ENV/семь intended
+      bindings опубликованы через typed draft/validation/impact/publication.
+      Authoritative final proof SHAbdb99c8f: fullEOF,38tools и non-image
+      preservation, exact version+1, APPLIED/NOT_SELECTED outcomes PASS.
+- [x] Actual обычный Manager/Pod UID21bcb454: новый ELF, current ACK,
+      guide/source hash, cwd/work,7 независимых writable INPUT копий,
+      readonly input/context/knowledge и exact Pod rejoin PASS.
+      Metadata receipt SHA062f56bf; повторное checksum106MB NOT RUN.
+- [x] Typed retry исходного INPUT200/attempt3; USER corrections0,
+      host business implementation0. Root coordinator native turn SUCCEEDED
+      с делегированием обычному Manager. Это не terminal всего workflow.
+- [x] Chrome35: ready screenshot просмотрен, overflow=false, realtime
+      connected, fresh Console0/relevant Network200. Graph pannable/clipped,
+      не full-fit acceptance. Initial blank screenshot/SSO startup diagnostics
+      сохранены отдельно; backend sampled logs0bytes не означают business PASS.
+- [ ] Обычный Manager RUNNING; его результат/артефакты, Architect→Developer→
+      ONE Review→Manager/owner и полная продуктовая приёмка ещё не завершены.
+
+Initial draft503 возникли во время CP rollout; authoritative histories
+побайтно неизменны, retry использовал прежние idempotency keys. Ранний
+PROMOTION_NOT_READY и final proof FAIL из-за GET agent-detail вместо
+runtime-configuration сохранены; свежий правильный readback проверен отдельно.
+Причина прежнего удалённого live completion FAIL остаётся UNKNOWN;
+отдельный kernel reproducer не выдаётся за диагностику того Pod.
+
 ## Checkpoint 11.10.2026 12:43 UTC — actual файловая схема обычного агента
 
 - [x] Committed08042e69 canonical planner110unit PASS1.017s; Draft1807

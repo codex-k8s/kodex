@@ -10,6 +10,44 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 13:54 UTC — общий workspace доставлен всем выбранным ролям
+
+Source/HOT44a0c7bb clean; тот же Draft1807/Issue1797. Canonical runner
+e4fc62f4, provenance2a01d3ce, ELF b31da159 опубликованы и проверены через
+HTTPS OCI graph и exact CRI pull обеих нод. Fresh policy cc62e2f9, runtime
+binding и CP/RC defaults/readback PASS; исторические promoted pins сохранены.
+Это delivery proof, не полная продуктовая приёмка.
+
+Два PROJECT recipes staff/helper прошли revision draft201/validation200/
+publication200, build COMPLETED, admission ACCEPTED и promotion PROMOTED.
+Staff manifestd6e5bae2. Три ENV/семь intended bindings штатно опубликованы:
+fresh validation200, impact201, owner pages200 до EOF, publication200 и
+последующий authoritative ENV3/runtime-configuration7 readback200.
+Final receipt SHAbdb99c8f PASS:38tools каждого ENV и non-image параметры
+сохранены, версии выросли на1, выбранные outcomes APPLIED, прочие NOT_SELECTED.
+SYSTEM custom image не входит в этот PROJECT cohort; общий код действует
+для SYSTEM/PROJECT/ordinary ролей. Начальные503 во время CP rollout сохранены:
+истории после них побайтно равны, повтор имел прежние idempotency keys.
+Ранний NOT_READY и ошибочный final GET agent-detail вместо runtime-configuration
+не объявлены PASS; исправленный authoritative read проверен отдельно.
+
+Typed retry исходного INPUT200: run_EkUINHgWmQoJhllZquLzIgNt, attempt3;
+USER corrections0/host business implementation0. Обычный Manager
+run_CuBuLaxng4Thcy6kEp_o9IN8 работает. Actual Pod
+runtime-turn-05bc17ff97769a27/UID21bcb454-a103-4232-9b43-4e1f3113699e:
+ранний текущий ACK, exact ELF b31da159, guide/source hash, cwd/work,
+providerUID10002,7 независимых INPUT копий, readonly input/context/knowledge
+и same UID rejoin PASS; metadata receipt SHA062f56bf.
+Это не semantic model read: повторный full checksum106MB не выполнялся.
+
+Chrome35: готовый screenshot просмотрен, document overflow=false,
+realtime подключён, свежая Console0 и relevant graph/events/session200.
+Graph pannable/clipped, не full-fit PASS. Первый screenshot до загрузки
+пустой и не является доказательством UX. Startup SSO diagnostics сохранены
+отдельно. Следующий шаг — сопровождать эту же попытку до опубликованного
+Manager→Architect handoff, затем Developer→ONE Review→Manager/owner;
+не повторять completed turn, не отправлять USER corrections. Полный goal открыт.
+
 ## Checkpoint 11.10.2026 13:23 UTC — общий directory-access fix проверен
 
 Поверх sourcecc584caa добавлена нормализация только каталогов writer после
