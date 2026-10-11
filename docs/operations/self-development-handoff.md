@@ -10,6 +10,46 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 17:06 UTC — INTAKE завершён, fresh Architect наблюдается
+
+Source/HOT6cd6103d clean; отдельный remote readback подтвердил exact branch
+SHA, Draft1807 и неизменный mainab4992e0. Attempt5 root
+run_wOIiZv9ZtpMsqQO4H_tCGGR2 RUNNING. INTAKE
+run_C_z8mfqG7BLz2sEfLWGMKJJY завершён SUCCEEDED17:03:27 UTC,
+semantic PASS INTAKE_FOR_ARCHITECT; live business acceptance NOT RUN.
+Пять actual artifacts прочитаны через owner content DOWNLOAD200 до bounded
+EOF; size/SHA/currentRevisionRef/version rejoin MATCH:
+result.md674B/ac816695, workspace-write-result.json328B/bd1667cb,
+intake-input-fields.json6180B/282d31a5,
+intake-source-evidence.json44709B/c38cf50c,
+manager-plan.md21588B/0b8cb7fb. Coordinator прочитал их и сам делегировал
+следующий этап. Root business corrections0/host implementation0.
+Ошибочный diagnostic probe numeric revision вместо revision ref получил404;
+исправленный canonical read200, это не application defect.
+
+Fresh Architect run_1pm34PkphFeQXb-AUjkTsQOL/session
+ses_9JcyhuOFCdHynIAH2oF4gB2a, turn trn_q2VfMfe7nVvw1ImpEAmnngos,
+attempt1, Pod runtime-turn-386a547d76298b5c/
+UID4e2ceb63-a645-4551-a878-f88ba69f189f. Early ACK73552B/
+instructions SHA56170c8b, provider prompt5290B/c2ca504b:
+input/file equality, same UID rejoin и image ELF file b31da159 MATCH.
+Model gpt-6.1-sol medium, scope NONE, tools38, grants18; не serving PID proof.
+Exact initial runtime revision digest
+210c995e82ad94ec6e428cdeaf230c1d2850ca7d3e96f1dd360728ee1961719f,
+input digest86cebf95692d62bfb17364da667d189457771ffe6a17a2f0772f6b91664c9976,
+execution binding55d24ff25468e9bca0d5fe8d95e83e15a2f2cc9db29e5a6bd74d0a12dbf73458.
+Dual-source collector same UID сохранил ACK checkpoint17:06:01 UTC
+и продолжает bounded follow. Это capture attachment, не причина/fix.
+Предыдущий INTAKE listener завершился FOLLOW_STREAM_ENDED при успешном
+terminal; failure observations не обнаружены, не application FAIL.
+
+Chrome35 reload/rejoin, screenshot, realtime207/fresh graph255,
+horizontal overflow=false и Console0 проверены. Штатные bootstrap/session/
+ticket/graph/events calls200. Далее actual Architect outcome, fresh Developer
+revision2 в рабочем ходе, substantive PR, ONE Review, Manager/final owner,
+оставшийся applicability ledger и bootstrap merge/main readback.
+Cause attempt4 по-прежнему UNKNOWN; не повторять paid работу ради её доказательства.
+
 ## Checkpoint 11.10.2026 16:50 UTC — attempt5 и ранний capture подключены
 
 Source/HOT3780c1b6 clean/remote Draft1807/body readback PASS, mainab4992e0

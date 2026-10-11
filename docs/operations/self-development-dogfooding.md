@@ -10,6 +10,28 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 17:06 UTC — новая подготовка и fresh Architect
+
+- [x] Source/HOT6cd6103d clean и exact remote Draft1807/main readback PASS.
+- [x] INTAKE attempt5 SUCCEEDED17:03:27; пять actual artifacts full owner
+      DOWNLOAD200 до EOF, size/SHA/revision/version rejoin MATCH. Semantic
+      допуск к Architect; live business acceptance ещё NOT RUN.
+- [x] Coordinator сам прочитал результаты и делегировал fresh Architect
+      run_1pm34PkphFeQXb-AUjkTsQOL; ранний ACK73552B/SHA56170c8b,
+      exact initial pins, same UID rejoin и image ELF file MATCH.
+      Dual-source collector same UID подключён17:06:01 и работает.
+- [x] Chrome35 reload/rejoin, screenshot/realtime/overflow=false,
+      Console0 и relevant штатные calls200 проверены.
+- [ ] Успешный Architect outcome, эффективный Developer revision2,
+      substantive business PR, ONE Review, итог Manager и owner evidence.
+- [ ] Итоговый QA applicability ledger/report и bootstrap merge/main readback.
+
+INTAKE без failure observation завершил capture FOLLOW_STREAM_ENDED;
+это не дефект приложения. Cause attempt4 UNKNOWN, attachment не fix.
+Ошибочный diagnostic numeric-revision probe404 отмечен отдельно;
+canonical exact revision content200. USER business corrections0,
+ROOT business implementation0, реальных review cycles0.
+
 ## Checkpoint 11.10.2026 16:50 UTC — exact publication и новый original retry
 
 - [x] Source3780c1b6 remote Draft1807/body/HOT clean; ROOT committed91
