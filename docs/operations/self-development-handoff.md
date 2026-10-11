@@ -10,6 +10,37 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 15:21 UTC — рекомендация core-v50, без общей Git-политики
+
+Интегрированы ровно3 frozen source files, pre/post hashes MATCH. Core-v49
+53072B/SHA0ccb29ed побайтно сохранён; новый core-v50 54048B/SHA98d23946
+содержит976B условной рекомендации только SYSTEM/PROJECT. Обычные агенты не
+получают её автоматически. API, PLATFORMv4, grants и retry engine не менялись.
+
+Worker10unit/race/vet/build/gofmt PASS. ROOT integrated CorePrompt tests
+PASS0.057s, continuation producer/negative source guards PASS0.231s;
+diff-check PASS. Реальная MaterializeWarm на synthetic composite64303 дала
+65281/65536B, unchanged decoder и zero warm capabilities PASS. Это не actual
+live composite: его новые pins и native draft/readback ещё OPEN.
+Следом публикация/hot reload, native предложение для Developer, отдельные
+Validate/Publish и original INPUT retry. Business gate остаётся закрыт.
+
+## Решение владельца 11.10.2026 — рекомендации по инструкциям, не общая Git-политика
+
+Оптимизации работы с репозиториями не добавляются автоматически всем агентам.
+Помощник должен предлагать подходящий задаче полный вариант инструкций
+конкретного сотрудника: объём checkout, порядок чтения, адресные проверки и
+ограниченные безопасные READ-повторы. Пользователь может отредактировать и
+подтвердить вариант; для существующего сотрудника сохраняется отдельная
+проверка и публикация черновика. Рекомендация не расширяет права и не меняет
+исторические запуски. Общие workspace/security правила остаются общими.
+
+Неприменённое предложение глобальной instruction v5 остановлено. Следующее
+исправление — новая immutable ревизия базовых инструкций только помощника,
+затем отдельная конфигурация repo-oriented Developer и штатный retry исходной
+задачи. Транспортная причина Git EOF остаётся UNKNOWN; бизнес-реализация,
+единственное Review и итоговая приёмка ещё не выполнены.
+
 ## Checkpoint 11.10.2026 14:59 UTC — negative/browser graph proof, semantic STOP сохранён
 
 Source/HOT2bdee3dd clean/remote Draft1807/body readback PASS.
@@ -29,11 +60,12 @@ Root штатно FAILED/RUNTIME_WORKFLOW_INCOMPLETE, seq746, после semanti
 Developer. Owner terminal receipt SHAa0ef15ac. Единственное Review и
 финальная приёмка не запускались; нет бизнес-реализации/PR. Артефакты
 Developer показывают transport clone EOF, не доказанный authority отказ.
-В private готовится новая immutable PLATFORM instruction revision для
-bounded READ recovery и handoff EOF до Git-подготовки; текущие sealed snapshots
-не переписываются. Без USER corrections и ROOT business implementation.
-Следующее действие — проверить/доставить общий fix, штатно повторить исходный
-INPUT и сопровождать substantive Developer→ONE Review→Manager/owner.
+Предложение общей PLATFORM revision после уточнения владельца отменено;
+repo-оптимизации будут редактируемой настройкой конкретного сотрудника.
+Текущие sealed snapshots не переписываются. Без USER corrections и ROOT
+business implementation. После доставки рекомендации помощника и отдельной
+настройки Developer штатно повторить исходный INPUT и сопровождать
+substantive Developer→ONE Review→Manager/owner.
 
 ## Checkpoint 11.10.2026 14:53 UTC — адресный graph fix и Developer semantic STOP
 

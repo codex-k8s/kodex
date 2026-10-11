@@ -10,6 +10,35 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 15:21 UTC — core-v50 source/unit PASS, native OPEN
+
+- [x] Три exact pre/post source images MATCH; immutable v49 сохранён,
+      core-v50 addendum976B только помощнику. API/PLATFORMv4/grants/retry
+      engine не меняются, всем агентам Git-правила не внедряются.
+- [x] Worker10unit/race/vet/build/gofmt; ROOT integrated CorePrompt0.057s и
+      continuation producer/negative source guards0.231s PASS. Synthetic
+      actual MaterializeWarm65281/65536B и unchanged decoder PASS.
+- [ ] Доставка core-v50, actual fresh composite/pins, native предложение
+      конкретному Developer, отдельная проверка/публикация и original retry.
+
+Unit/materialization proof не является успешным бизнес-результатом;
+Developer/ONE Review/Manager/owner и полный QA остаются открытыми.
+
+## Решение владельца 11.10.2026 — настройка repo-oriented агента
+
+- [x] Глобальный Git/retry вариант остановлен: не применён и не опубликован.
+      Workspace/security baseline и исторические инструкции не меняются.
+- [ ] Помощник предлагает оптимизации только для конкретного агента и задачи:
+      редактируемый полный текст CREATE_AGENT/CREATE_INSTRUCTION_DRAFT,
+      подтверждение, затем штатные проверка и публикация. Без скрытого
+      расширения прав, повторов denied URL или неопределённых WRITE.
+- [ ] Отдельная настройка текущего Developer, исходный INPUT typed retry,
+      substantive бизнес-PR, ONE Review и Manager/owner acceptance.
+
+Новый API профилей не требуется: существующие versioned инструкции уже
+обеспечивают редактирование и отдельный жизненный цикл публикации.
+Рекомендация помощника сама по себе не доказывает устранение Git transport EOF.
+
 ## Checkpoint 11.10.2026 14:59 UTC — short graph browser PASS, native goal OPEN
 
 - [x] Baseline35ff negative1201x480/canvas943x266: fit scale0/SVG71 errors.
@@ -19,8 +48,9 @@ updated: 2026-10-11
 - [x] Remote Draft1807 exact2bdee3dd/body verified; journal и код опубликованы.
 - [ ] Root746 FAILED/RUNTIME_WORKFLOW_INCOMPLETE после Developer semantic
       STOP, substantive business PR/review/acceptance отсутствуют.
-- [ ] Новая immutable instruction READ recovery и handoff-order; original
-      INPUT typed retry, не исправляющий USER prompt, затем ONE Review.
+- [ ] Вместо общей Git-политики — условная рекомендация помощника и отдельная
+      конфигурация repo-oriented Developer; original INPUT typed retry,
+      не исправляющий USER prompt, затем ONE Review.
 
 Полный QA/goal открыт. USER corrections0/host business implementation0.
 
