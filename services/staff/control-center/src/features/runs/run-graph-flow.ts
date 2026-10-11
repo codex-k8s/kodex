@@ -158,25 +158,21 @@ export function runGraphInitialFitOptions(
   for (const ref of new Set(contextRefs)) {
     if (visibleRefs.length >= 4) break;
     const candidateRefs = [...visibleRefs, ref];
-    const viewport = getTransformForBounds(
+    const viewport = runGraphFitTransform(
       runGraphContentBounds(layout, candidateRefs),
       viewportWidth,
       viewportHeight,
-      0,
-      options.maxZoom ?? 1.1,
-      options.padding,
+      { ...options, nodes: candidateRefs, minZoom: 0 },
     );
     // Начальная окрестность остаётся читаемой. Далёкая карточка или внешняя
     // обратная дуга не должны сдвигать выбранный узел за границу экрана.
     if (viewport.zoom >= runGraphMinimumReadableZoom) visibleRefs.push(ref);
   }
-  const viewport = getTransformForBounds(
+  const viewport = runGraphFitTransform(
     runGraphContentBounds(layout, visibleRefs),
     viewportWidth,
     viewportHeight,
-    0,
-    options.maxZoom ?? 1.1,
-    options.padding,
+    { ...options, nodes: visibleRefs, minZoom: 0 },
   );
   return {
     ...options,
@@ -191,13 +187,36 @@ export function runGraphFitTransform(
   viewportHeight: number,
   options: FitViewParams,
 ) {
+  let padding = options.padding;
+  if (
+    padding &&
+    typeof padding === "object" &&
+    [padding.top, padding.bottom, padding.left, padding.right].every(
+      (side) => typeof side === "string" && side.endsWith("px"),
+    )
+  ) {
+    const top = Number.parseFloat(String(padding.top ?? 0));
+    const bottom = Number.parseFloat(String(padding.bottom ?? 0));
+    const left = Number.parseFloat(String(padding.left ?? 0));
+    const right = Number.parseFloat(String(padding.right ?? 0));
+    // Фиксированные панели не могут занять весь короткий canvas при resize.
+    // Сохраняем асимметрию и обычные отступы, оставляя четверть для графа.
+    const horizontal = Math.min(1, (viewportWidth * 0.75) / (left + right));
+    const vertical = Math.min(1, (viewportHeight * 0.75) / (top + bottom));
+    padding = {
+      top: `${String(top * vertical)}px` as `${number}px`,
+      bottom: `${String(bottom * vertical)}px` as `${number}px`,
+      left: `${String(left * horizontal)}px` as `${number}px`,
+      right: `${String(right * horizontal)}px` as `${number}px`,
+    };
+  }
   return getTransformForBounds(
     bounds,
     viewportWidth,
     viewportHeight,
     options.nodes ? (options.minZoom ?? runGraphMinimumZoom) : 0,
     options.maxZoom ?? runGraphMaximumZoom,
-    options.padding,
+    padding,
   );
 }
 

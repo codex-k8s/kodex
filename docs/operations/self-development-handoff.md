@@ -10,6 +10,76 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 14:53 UTC — адресный graph fix и Developer semantic STOP
+
+На base35ff1b88 интегрирован frozen FE packet:4 exact pre/post images MATCH.
+Фиксированные pixel отступы fit ограничены доступным viewport с сохранением
+асимметрии; short canvas не получает zoom0. Расчёт после nextTick и latest-fit
+generation исключают устаревший auto-fit, realtime/resize не запускают
+конкурирующие анимации. Явное действие сохраняет animation180ms.
+Worker35unit/2suites2.02s, lint4/format4/forcedtypes PASS;
+ROOT integrated35unit/2suites2.07s PASS, diff-check PASS.
+ROOT production Vite build PASS8.73s на тех же frozen bytes;
+chunk-size advisory сохранён, не скрывается и не является runtime FAIL.
+Источник zoom0 воспроизведён; связь именно с прежними36 live errors пока
+NOT PROVEN. Browser после доставки ещё OPEN.
+Context7 VueFlow docs и exact core1.48.2 implementation проверены.
+
+Обычный Developer run_3dZp2WdhPyilVu-Q2VJDrVW7 технически SUCCEEDED,
+но semantic BLOCKED: Git clone transport GnuTLS(-110)/early EOF, exit128;
+сам не повторил из-за прочитанной STOP policy. Реализации/branch/headSHA/PR
+нет; обязательный handoff EOF не завершён. Четыре actual результата
+опубликованы: owner metadata/content200, full bounded bytes, size/SHA,
+currentRevision/version/digest rejoin PASS. implementation-handoff4541B/
+SHA0e3c9c31, full-read-evidence3104B/SHAfadf7b34. Это доказательства отказа,
+не successful business acceptance. Manager штатно закрыл допуск к review.
+Root RUNNING/seq739; USER corrections0/host business code0.
+
+Workspace metadata Developer NOT_CAPTURED: Pod удалился между ранним ACK
+и exec; stage workspace-metadata failed, повтор подтвердил Pod NotFound.
+Не переносить proof Manager/Architect на этот Pod. Бounded READ transport
+recovery и порядок handoff исследуются в общих инструкциях; authority denial
+или ambiguous write не допускают автоматического повтора. Goal открыт.
+
+## Checkpoint 11.10.2026 14:43 UTC — Architect опубликовал дизайн и own snapshot
+
+Source/HOT35ff1b88 clean до начала адресной FE-доработки; runner44a0c7bb
+не меняется. Architect run_0EkwoYmq5CIfddssVEEQ7oNJ SUCCEEDED14:37;
+восемь новых actual artifacts опубликованы, callback доставлен. Owner
+metadata/content GET200 до EOF (каждый body bounded256KiB), size/SHA и
+currentRevision/version/digest rejoin восьми результатов PASS. Source producer
+run/project/session совпали; это actual publication, не кандидат из outbox.
+Terminal receipt SHAff76ce18, root coordinator turn11 продолжает штатный handoff.
+
+architecture-review.md39412B/SHA3fdf5d21/art_h_jzn-i5Xwe4TUfW4S0sNnWD:
+нативный вердикт PASS для передачи Developer bounded CODE_ONLY дизайна.
+Это предварительный дизайн, не единственный comprehensive review будущего PR.
+Real paid balance/units/spending/auth deployment acceptance UNKNOWN/NOT RUN;
+их нельзя считать закрытыми словом PASS в дизайне. Старое BLOCKED упомянуто
+как история, не текущий semantic отказ. ROOT прочитал verdict/scope/notice;
+не объявляет все5733 source файла семантически изученными моделью.
+
+handoff-and-runtime-evidence.json6074B/SHAa46f7771/
+art_dYgCi6V7rAkTQATYpdCXJ_Bl подтверждает собственный execution_snapshot
+обычного Architect: OBSERVED CODEX0.160.0/INITIALIZE_USER_AGENT, exact own
+session/turn/attempt1/RuntimeRevision rrev_XDGRlYPPztf4yzatvWjtH8vO,
+digest81c1a5c6, image manifestd6e5bae2, gpt-6.1-sol medium.
+Это результат собственного native вызова и опубликованного evidence,
+не замена его host/helper инвентаризацией образа. Три own handoff reads
+содержат точные Manager artifacts/digests/sizes; full source classifications
+прозрачно отделены от checksum/EXTRACT, live billing не выдуман.
+
+В текущем Chrome35 graph новая Console FAIL:36 SVG NaN errors во время
+realtime/viewport transitions; settled DOM finite, screenshot графа просмотрен.
+Адресный FE fix готовится отдельно, не подавлять console и не выдавать
+последующий finite DOM за устранение transient. Context7 VueFlow transform/
+viewport docs и local core1.48.2 проверены; общий FE guide полностью прочитан.
+Readiness READ_ONLY во время active writer не отменяет turn/lease/deadline:
+source read path подтвердил renewal; normalization после stop/join предшествует
+успешному completion. Это не blanket green readiness всех execution Pods.
+USER corrections0/host business implementation0. Далее Developer/ONE Review/
+Manager/owner, FE negative repro/fix/browser и оставшиеся QA; goal открыт.
+
 ## Checkpoint 11.10.2026 14:15 UTC — INTAKE опубликован, Architect работает
 
 Source/HOT01f78c1a clean/remote Draft1807 PASS; runner source44a0c7bb,

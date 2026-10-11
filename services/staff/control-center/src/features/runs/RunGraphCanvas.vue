@@ -84,6 +84,7 @@ const legendExpanded = ref(false);
 const outline = ref<HTMLElement>();
 const userAdjustedView = ref(false);
 const programmaticViewportChange = ref(false);
+let fitGeneration = 0;
 const minimumZoom = ref(runGraphMinimumZoom);
 const futureRefs = computed(() => new Set(props.futureNodeRefs));
 const activeRefs = computed(() => new Set(props.activeNodeRefs));
@@ -280,11 +281,17 @@ watch(
 async function fit(userInitiated = true, currentWork = false): Promise<void> {
   if (!userInitiated && userAdjustedView.value) return;
   if (userInitiated) userAdjustedView.value = true;
+  const generation = ++fitGeneration;
   programmaticViewportChange.value = true;
   try {
+    await nextTick();
+    if (generation !== fitGeneration) return;
+    if (!userInitiated && userAdjustedView.value) return;
     if (
-      !dimensions.value.width ||
-      !dimensions.value.height ||
+      !Number.isFinite(dimensions.value.width) ||
+      !Number.isFinite(dimensions.value.height) ||
+      dimensions.value.width <= 0 ||
+      dimensions.value.height <= 0 ||
       !props.nodes.length
     )
       return;
@@ -309,9 +316,13 @@ async function fit(userInitiated = true, currentWork = false): Promise<void> {
     );
     minimumZoom.value = Math.min(runGraphMinimumZoom, viewport.zoom);
     await nextTick();
-    await setViewport(viewport, { duration: options.duration });
+    if (generation !== fitGeneration) return;
+    // Realtime и resize применяют актуальный fit без конкурирующих анимаций.
+    await setViewport(viewport, {
+      duration: userInitiated ? options.duration : 0,
+    });
   } finally {
-    programmaticViewportChange.value = false;
+    if (generation === fitGeneration) programmaticViewportChange.value = false;
   }
 }
 

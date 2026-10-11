@@ -50,6 +50,32 @@ const edges: RunEdge[] = [
 ];
 
 describe("runGraphInitialFitOptions", () => {
+  it.each([1, 160, 339, 340, 341, 480])(
+    "fit сохраняет положительный масштаб при высоте %s и фиксированных панелях",
+    (height) => {
+      const layout = layoutRunGraph(nodes, edges);
+      for (const compact of [false, true]) {
+        const options = runGraphFitViewOptions(1201, compact);
+        const viewport = runGraphFitTransform(
+          layout.bounds,
+          1201,
+          height,
+          options,
+        );
+        expect(viewport.zoom).toBeGreaterThan(0);
+        expect(Object.values(viewport).every(Number.isFinite)).toBe(true);
+        const initial = runGraphInitialFitOptions(
+          1201,
+          nodes,
+          edges,
+          "execution",
+          compact,
+          height,
+        );
+        expect(initial.minZoom).toBeGreaterThan(0);
+      }
+    },
+  );
   it.each([
     { width: 1184, height: 787, compact: false },
     { width: 700, height: 480, compact: true },

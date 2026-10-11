@@ -272,6 +272,43 @@ async function render(
 }
 
 describe("RunGraphCanvas", () => {
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    "не применяет fit до валидного размера canvas %s",
+    async (height) => {
+      const state = mountCanvas();
+      required(flow.dimensions).value = { width: 1201, height };
+      await state.fit(false);
+      expect(flow.setViewport).not.toHaveBeenCalled();
+    },
+  );
+
+  it("ручное изменение во время ожидающего fit отменяет этот автофокус", async () => {
+    const state = mountCanvas();
+    const pending = state.fit(false);
+    state.userAdjustedView.value = true;
+    await pending;
+    expect(flow.setViewport).not.toHaveBeenCalled();
+  });
+
+  it("конкурирующие realtime fit и короткий resize применяют только свежий положительный viewport без анимации", async () => {
+    const state = mountCanvas();
+    const dimensions = required(flow.dimensions);
+    const first = state.fit(false);
+    dimensions.value = { width: 1201, height: 160 };
+    const second = state.fit(false);
+    await Promise.all([first, second]);
+    await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
+    expect(flow.viewport.zoom).toBeGreaterThan(0);
+    expect(Object.values(flow.viewport).every(Number.isFinite)).toBe(true);
+    expect(flow.setViewport).toHaveBeenLastCalledWith(flow.viewport, {
+      duration: 0,
+    });
+    flow.setViewport.mockClear();
+    await state.fit(true);
+    expect(flow.setViewport).toHaveBeenLastCalledWith(flow.viewport, {
+      duration: 180,
+    });
+  });
   it("отложенный автофокус не перезаписывает ручной viewport", async () => {
     const state = mountCanvas();
     flow.viewport = { x: -420, y: 90, zoom: 0.72 };

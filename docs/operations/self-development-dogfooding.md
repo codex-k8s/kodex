@@ -10,6 +10,47 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 14:53 UTC — graph fit и Developer transport STOP
+
+- [x] Frozen graph-fit4 интегрирован с exact pre/post hashes; ROOT35unit2.07s,
+      worker lint/format/forcedtypes PASS; ROOT production build8.73s PASS.
+      Short canvas padding и concurrent realtime fit исправлены,
+      без подавления console. Browser после доставки OPEN.
+- [x] Developer опубликовал4 actual artifacts; owner metadata/content200,
+      full body/size/SHA и version/revision rejoin PASS. Semantic BLOCKED:
+      Git clone transport EOF/exit128, handoff EOF не завершён, PR отсутствует.
+      Technical SUCCEEDED не считается successful implementation.
+- [ ] Общая recovery policy READ transport и handoff-order fix; не USER
+      corrections и не bypass denied/ambiguous write. Причина транспорта UNKNOWN.
+- [ ] Developer substantive PR, ONE Review, Manager/owner и остальные QA.
+
+Developer workspace metadata NOT_CAPTURED из-за terminal Pod cleanup.
+USER corrections0/host business implementation0. Rootseq739 RUNNING;
+goal не завершён, исторический Console36 FAIL не скрыт.
+
+## Checkpoint 11.10.2026 14:43 UTC — Architect SUCCESS и опубликованное evidence
+
+- [x] Обычный Architect SUCCEEDED;8 actual artifacts опубликованы.
+      Owner metadata/content200 до EOF, size/SHA и revision/version rejoin PASS;
+      source run/project/session совпали, callback доставлен координатору.
+- [x] Собственный execution_snapshot обычного Architect: OBSERVED CODEX0.160.0
+      INITIALIZE_USER_AGENT, exact current session/turn/attempt/revision/model
+      и image. Published handoff-and-runtime-evidence6074B/SHAa46f7771;
+      это не host/helper process proof вместо own native результата.
+- [x] Нативный Architecture verdict PASS для bounded CODE_ONLY handoff
+      Developer; architecture-review.md39412B/SHA3fdf5d21. Это не review
+      business PR и не live paid/billing/auth acceptance. Root callback turn11
+      читает именно текущие результаты без USER corrections.
+- [ ] Chrome graph transient SVG NaN/Console36 FAIL: settled finite DOM не
+      закрывает дефект. Адресный FE fix/unit/browser proof в работе.
+- [ ] Developer substantive PR, ONE comprehensive Review, Manager/owner,
+      реальные ограничения paid acceptance, оставшиеся QA и bootstrap merge.
+
+Source35ff1b88/runtime44a0c7bb; терминальный owner receipt SHAff76ce18.
+Snapshot version/pins опубликованы с producer собственного Architect.
+Readiness READ_ONLY active workspace не отменяет lease/deadline; source-path
+сверка не заменяет live post-completion proof. Секретные значения не выводились.
+
 ## Checkpoint 11.10.2026 14:15 UTC — успешная публикация и native handoff
 
 - [x] Обычный Manager SUCCEEDED; четыре actual artifacts опубликованы.
