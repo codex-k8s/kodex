@@ -10,6 +10,44 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 21:02 UTC — новая доставка завершена, native attempt7
+
+SOURCE/HOT/remote17924c37; runner compiled8a76c0a7 и OCI3824059a
+сохранены. Оба native builds attempt1 COMPLETED; staff artifact
+imgart_FgEKJk-gdvcJX2mdyvZ77jlf/manifest66a003945909836737cd239ff0a7cb274d0835db8c33499755a4ccea188d2bc9
+и helper imgart_u21YwhHrzZMAGnyfLZLLX9hU/manifest88447fff47e51ff3d73168cfcb92cd2ea7d1235aa007b38a94188619b8879fac
+получили ACCEPTED/PROMOTED. Обновлены только intended PROJECT ENV и bindings.
+Full owner GET13rows200, plans EOF/APPLIED и offline final proof
+fb0f0f1c1aab8783f630da48e30b76d68ffcdd306d879a121e5fa5d56dc43166:
+WRITE version25/binding26, REVIEW version24/пять bindings25,
+helper version28/binding28; tools38 и non-image preservation3/3 PASS.
+Публикация после истечения fresh-auth окна закрыто403 без эффекта;
+после штатной повторной аутентификации все три200. Guards не ослаблены.
+
+Native UI Retry создал run_TK4meronkuMEdI-07g9tNBnv/attempt7,
+session ses_NP_88hYp-4d1GrV38gOkQ_-C. Public inputSummary byte-identical
+предыдущей attempt6, SHA600cb11524bca73d6acf7627a60c00978a246ea37e0e2f2b75a4fcad4fb2f192;
+это public summary, не замена original USER input digest.
+Root agent SUCCEEDED и штатно делегировал INTAKE
+run_RluiQcHgK6vK5miQss_NgE5a/session ses_ndK-Y5m83tlvfwkGPaKpBaYH,
+turn trn_mnyW1YwF-C5R5rqeLVIeI9eN/attempt1. Ранний provider ACK/rejoin
+CAPTURED на UID45a9bdab-92fc-40c8-87d2-e89f32d58d10:
+image66a00394, image-file ELFad2e2f42 EQUAL, ENV24/binding25/tools38,
+grants22/capabilities25, gpt-6.1-sol medium; instructions80806B и
+inbox4836B file comparisons EQUAL. Expected task comparison NOT RUN.
+Bounded dual-source capture77597 продолжает наблюдение INTAKE.
+Root capture67963 завершился FOLLOW_STREAM_ENDED после SUCCEEDED:
+это NOT_CAPTURED failure, не application failure/PASS. Первый ACK вызов
+с timeout900 отвергнут оснасткой (максимум60); pin original USER task также
+не соответствует materialized root task. Повтор без ложного task pin
+подтвердил delivery; binary exec после cleanup root NOT RUN.
+
+Обе ноды и все Deployment Ready; Chrome11 собственная вкладка,
+ENV screenshot/overflow=false/Console0/API200 и run screenshot проверены.
+Native terminal artifacts/handoffs, ONE Review, Manager/owner, остальные
+QA и bootstrap merge/main остаются OPEN. ROOT business implementation0,
+corrective USER prompts0; actual offending frame attempt6 UNKNOWN.
+
 ## Checkpoint 11.10.2026 20:42 UTC — runner8a76 доставлен, recipes собираются
 
 SOURCE/HOT/remote Draft1807 clean8a76c0a7; полный diff-check PASS. Новый full

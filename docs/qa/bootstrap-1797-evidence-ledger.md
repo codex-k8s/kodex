@@ -73,6 +73,19 @@ scope, контракт, policy, fixture либо deployment boundary, прим�
 
 ## Свежая цепочка выполнения
 
+11.10 21:02 UTC: compiled8a76/OCI3824059a canonical delivery завершена.
+Оба новых project artifacts ACCEPTED/PROMOTED (staff66a00394/helper88447fff).
+Full owner GET13rows200, планы EOF/APPLIED и exact offline proof
+fb0f0f1c1aab8783f630da48e30b76d68ffcdd306d879a121e5fa5d56dc43166
+подтверждают ENV3/bindings7/tools38/non-image preservation. Native Retry7
+run_TK4meronkuMEdI-07g9tNBnv: root agent SUCCEEDED, INTAKE RUNNING.
+Same-UID INTAKE ACK/rejoin CAPTURED, новый exact manifest/ELF EQUAL,
+instructions/inbox EQUAL,38tools/22grants/25capabilities. Expected task
+comparison NOT RUN; public summary предыдущей попытки byte-identical,
+но это не исходный USER digest. Dual-source capture продолжает наблюдение.
+Runner8a76 regression unit/race/vet относится к своему scope; новый native
+terminal и весь QA65 ещё не PASS. Исторический attempt6 FAILED сохранён.
+
 11.10 20:00 UTC: semantic CP fix pushed/serving3eeb8eb0, mounted source
 MATCH и actual ELF995122df равен независимой сборке. Native Retry attempt6
 с original inputb8ce9004 MATCH, fresh stages и root provider ACK/rejoin;
