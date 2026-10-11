@@ -10,6 +10,19 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 11.10.2026 22:46 UTC
+
+69545cb5 SOURCE/HOT/remote; SYSTEM actual CP ELF7c060119 и mounted header/
+SQL b0dcc765/91bcdedc MATCH. Fresh idle22:37:17Z все5 counts0, promoted81
+и pins c8b1e3da неизменны. Native SYSTEM plan under load NOT RUN.
+
+Supplemental detail4: h1/breadcrumb используют existing PROJECT resolver,
+API title и authority не менялись. ROOT44/44 unit3 suites4.98s, ESLint4/
+Prettier4/forced typecheck/production build exit0 PASS, Vite8.74s,
+chunk>500kB advisory. Frozen4 post MATCH, native delivery/detail UI NOT RUN.
+Native scope catalog/blocker, plan21/full121/business EOF/ONE Review/
+Manager/QA65/bootstrap merge OPEN; исторические PASS не расширены.
+
 ## Новое scoped evidence 11.10.2026 22:36 UTC
 
 da891240 actual CP process ELF5af10511/mounted SQL2130613e и native board

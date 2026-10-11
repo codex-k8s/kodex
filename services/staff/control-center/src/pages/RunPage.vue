@@ -32,7 +32,10 @@ import {
   openAssistantWorkspace,
   requestAssistantRunDebug,
 } from "@/features/assistant/events";
-import { isTerminalRun } from "@/features/workboard/model";
+import {
+  isTerminalRun,
+  runDefaultTaskTitleKey,
+} from "@/features/workboard/model";
 import { hasValidGateScope } from "@/features/workboard/gate-scope";
 import RunActivityDrawer from "@/features/runs/RunActivityDrawer.vue";
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
@@ -95,6 +98,12 @@ const routeProjectRef = computed(() =>
     : undefined,
 );
 const run = computed(() => platform.runs[runRef.value]);
+const runDisplayTitle = computed(() => {
+  const current = run.value;
+  if (!current) return translator.t("runs.title");
+  const key = runDefaultTaskTitleKey(current);
+  return key ? translator.t(key) : current.title;
+});
 const sessionStorageBlocker = computed(() =>
   runSessionStorageBlocker(run.value, platform.bootstrap?.organizationRef),
 );
@@ -897,10 +906,7 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-  <PageFrame
-    class="run-page"
-    :title="run?.title ?? $t('runs.title')"
-    :subtitle="runSubtitle"
+  <PageFrame class="run-page" :title="runDisplayTitle" :subtitle="runSubtitle"
     ><template #actions
       ><div v-if="run" class="run-statuses">
         <span>

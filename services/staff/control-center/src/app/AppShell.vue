@@ -55,6 +55,8 @@ import {
   SearchCoordinator,
 } from "@/features/search/model";
 import { useSessionStore } from "@/features/session/store";
+import { runDefaultTaskTitleKey } from "@/features/workboard/model";
+import type { Run } from "@/shared/api/generated/openapi/types.gen";
 import ProjectPicker from "@/features/projects/ProjectPicker.vue";
 import { useSpeechInput } from "@/features/speech/useSpeechInput";
 import { selectProjectRef } from "@/shared/project-context";
@@ -154,6 +156,10 @@ const realtimeLabels = computed<RealtimeStatusLabels>(() => ({
   reconnecting: t("app.reconnecting"),
   offline: online.value ? t("states.NOT_CONNECTED") : t("app.offline"),
 }));
+function runDisplayTitle(run: Run): string {
+  const key = runDefaultTaskTitleKey(run);
+  return key ? t(key) : run.title;
+}
 const breadcrumbs = computed(() => {
   const agentRef =
     typeof route.params.agentRef === "string"
@@ -224,7 +230,7 @@ const breadcrumbs = computed(() => {
         ? { workflowName: platform.workflows[workflowRef].name }
         : {}),
       ...(runRef && platform.runs[runRef]
-        ? { runName: platform.runs[runRef].title }
+        ? { runName: runDisplayTitle(platform.runs[runRef]) }
         : {}),
       ...(environmentRef && runtime.environments[environmentRef]
         ? { environmentName: runtime.environments[environmentRef].name }

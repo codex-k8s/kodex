@@ -10,6 +10,21 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 22:46 UTC — SYSTEM доставлен, detail4 проверен в source
+
+- [x] 69545cb5 SOURCE/HOT/remote; SYSTEM CP process ELF7c060119 и mounted
+      header/SQL b0dcc765/91bcdedc MATCH, fresh idle все5 counts0/promoted81.
+- [x] RunPage h1/AppShell breadcrumb supplemental4: post MATCH, ROOT44/44
+      unit4.98s/lint/format/forced typecheck/build exit0/Vite8.74s PASS.
+- [ ] Доставить detail4 и проверить native screenshot/Console/Network;
+      chunk>500kB advisory сохранён, API title не изменён.
+- [ ] Safe native repository scope catalog; прежний admin semantic BLOCKED
+      до propose не plan PASS. Затем native21/VALID/APPLIED/full121,
+      исходный business Retry/large EOF/ONE Review/Manager/QA65/main delivery.
+
+SYSTEM live plan under load NOT RUN; ROOT business code0/corrective USER0,
+PR1808 без изменений. Bootstrap merge/final acceptance не подтверждены.
+
 ## Checkpoint 11.10.2026 22:36 UTC — native не видит scope, новый SYSTEM source
 
 - [x] da891240 CP serving ELF5af10511/PROJECT SQL2130613e MATCH;

@@ -28,6 +28,7 @@ afterAll(() => vi.unstubAllGlobals());
 
 function messages() {
   return {
+    workboard: { projectAssistantCommand: "Команда помощнику проекта" },
     assistant: { open: "Открыть Kodex" },
     serverMessages: {
       RUN_COORDINATION_ROLE: "Координатор запуска",
@@ -132,6 +133,96 @@ function messages() {
 }
 
 describe("RunPage runtime presentation", () => {
+  it("заголовок PROJECT-команды определяется pin, без замены SYSTEM и авторских названий", async () => {
+    const value: Run = {
+      ref: "run_own",
+      version: 1,
+      projectRef: "project_own",
+      sessionRef: "session_own",
+      rootRunRef: "run_own",
+      title: "Команда системному помощнику",
+      titleSource: "SERVER_DEFAULT",
+      source: "SYSTEM_ASSISTANT",
+      target: {
+        type: "SYSTEM_ASSISTANT",
+        ref: "assistant_own",
+        displayName: "Помощник",
+        version: 1,
+      },
+      assistantPin: {
+        scope: "PROJECT",
+        projectRef: "project_own",
+        organizationRef: "organization_own",
+        assistantRef: "assistant_own",
+        profileRef: "profile_own",
+        conversationRef: "conversation_own",
+      },
+      state: "RUNNING",
+      activitySummary: "Работает",
+      initiator: { ref: "user_own", displayName: "Владелец" },
+      attempt: 1,
+      graphRevision: 1,
+      lastEventSequence: 0,
+      artifactRefs: [],
+      gateRefs: [],
+      nextActions: [],
+      createdAt: "2026-10-12T00:00:00Z",
+      usage: {
+        totalTokens: 0,
+        inputTokens: 0,
+        cachedInputTokens: 0,
+        cacheWriteInputTokens: 0,
+        outputTokens: 0,
+        reasoningOutputTokens: 0,
+        modelContextWindow: 0,
+      },
+    };
+    const pin = value.assistantPin;
+    if (!pin) throw new Error("Missing assistant fixture pin");
+    for (const candidate of [
+      value,
+      { ...value, titleSource: "USER_EDITED" as const },
+      { ...value, titleSource: "AGENT_PROPOSED" as const },
+      { ...value, assistantPin: undefined },
+      {
+        ...value,
+        assistantPin: {
+          ...pin,
+          scope: "SYSTEM" as const,
+          profileRef: undefined,
+        },
+      },
+      { ...value, assistantPin: { ...pin, projectRef: "project_other" } },
+    ]) {
+      const pinia = createPinia();
+      const platform = usePlatformStore(pinia);
+      platform.runs[value.ref] = candidate;
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: "/runs/:runRef", component: RunPage }],
+      });
+      await router.push(`/runs/${value.ref}`);
+      const app = createSSRApp(RunPage);
+      app
+        .use(pinia)
+        .use(router)
+        .use(
+          createI18n({
+            legacy: false,
+            locale: "ru",
+            messages: { ru: messages() },
+          }),
+        );
+      const before = JSON.stringify(candidate);
+      const html = await renderToString(app);
+      expect(html).toMatch(
+        candidate === value
+          ? /<h1[^>]*>Команда помощнику проекта<\/h1>/
+          : /<h1[^>]*>Команда системному помощнику<\/h1>/,
+      );
+      expect(JSON.stringify(platform.runs[value.ref])).toBe(before);
+    }
+  });
   it("разводит мобильные context, graph controls и summary по отдельным полосам", () => {
     const source = readFileSync(
       new URL("./RunPage.vue", import.meta.url),

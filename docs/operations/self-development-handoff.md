@@ -10,6 +10,30 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 22:46 UTC — SYSTEM serving PASS, detail title source PASS
+
+SOURCE/HOT/remote1807 clean69545cb5 до supplemental FE4. SYSTEM minimal
+header реально обслуживается CP: /proc/1118/exe SHA256
+7c06011938d218374d98774f0b3a0d62ddb769826b275de2ccc611fe873fcd15;
+mounted header b0dcc765/SQL91bcdedc MATCH. Fresh owner idle22:37:17Z:
+build/admission/promotion/run/lease0, promoted81/pins c8b1e3da неизменны.
+Native SYSTEM plan under load NOT RUN; этот readback доказывает доставку,
+не настройку или бизнес-приёмку.
+
+RunPage h1 и AppShell breadcrumb используют существующий exact PROJECT
+SERVER_DEFAULT resolver; USER_EDITED/AGENT_PROPOSED/SYSTEM/foreign/missing
+pins и API title не меняются. Frozen4 post hashes MATCH, ROOT44/44 unit
+в3 suites4.98s, scoped ESLint/Prettier PASS, forced typecheck и production
+build exit0/Vite8.74s. Chunk>500kB advisory сохранён. Этот overlay ещё не
+доставлен в HOT: native detail screenshot/Console/Network NOT RUN.
+
+Основной блокер остаётся прежним: последний admin run SUCCEEDED с semantic
+BLOCKED до propose, поскольку native каталог не сообщает repository scope.
+Безопасный typed scope producer/consumer/codegen дорабатывается отдельно;
+native21/VALID/APPLIED/full121/business EOF/ONE Review/Manager/QA65 OPEN.
+Chrome11 connected/reload без несохранённого ввода, overflow=false; чужие
+вкладки не тронуты. ROOT business code0/corrective USER0, PR1808 без изменений.
+
 ## Checkpoint 11.10.2026 22:36 UTC — native scope UNKNOWN, SYSTEM header source PASS
 
 SOURCE/HOT/remote da89124085bdf7851262619dd128cc3d8feaf384, actual CP
