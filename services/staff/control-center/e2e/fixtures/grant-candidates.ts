@@ -199,6 +199,7 @@ export async function checkGrantCandidates(
         capabilityKey: "github.read",
         agentRef: "agent_candidate",
         enabled: true,
+        approvalPolicy: "NONE",
       });
       grants++;
       connection = {

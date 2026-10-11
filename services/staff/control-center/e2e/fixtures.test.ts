@@ -5,6 +5,7 @@ import { observeHTTPResponse } from "./fixtures";
 import type { Page, Route } from "@playwright/test";
 import {
   scopedSyntheticSnapshot,
+  assertSyntheticAdaptivePageSize,
   type SyntheticSnapshotReader,
 } from "./fixtures/runs-catalog";
 import { installProviderFixture } from "./fixtures/providers";
@@ -12,8 +13,13 @@ import { installEnvironmentFixture } from "./fixtures/environment";
 import {
   type RoleImageRecipePage,
   type RoleImageRecipeDetail,
+  type IntegrationGrantInput,
 } from "../src/shared/api/generated/openapi/types.gen";
 import { checkGrantCandidates } from "./fixtures/grant-candidates";
+import {
+  checkOrganizationCatalog,
+  installSyntheticMembershipProfile,
+} from "./fixtures/organization-catalog";
 import { checkEmailEffects } from "./fixtures/email-effects";
 import { checkWorkflowEditor } from "./fixtures/workflow";
 import {
@@ -27,6 +33,186 @@ import type {
 } from "../src/shared/api/generated/openapi/types.gen";
 
 describe("synthetic typed catalog producers", () => {
+  it("MEMBERSHIP HTTP mirrors и bootstrap сохраняют полный профиль, текущие subjects и exact scope", async () => {
+    const handlers = new Map<string, (route: Route) => Promise<void>>();
+    const readers = new Map<string, SyntheticSnapshotReader>();
+    const page = {
+      route: (pattern: string, handler: (route: Route) => Promise<void>) => {
+        handlers.set(pattern, handler);
+      },
+    } as unknown as Page;
+    const members: import("../src/shared/api/generated/openapi/types.gen").Membership[] =
+      [
+        {
+          ref: "membership_owned",
+          projectRef: "project_owned",
+          version: 1,
+          user: { ref: "user_owned", displayName: "Участник" },
+          platformRole: "MEMBER",
+          permissions: ["VIEW"],
+          active: true,
+          nextActions: [],
+        },
+      ];
+    await installSyntheticMembershipProfile(
+      page,
+      "project_owned",
+      () => members,
+      (kind, read) => readers.set(kind, read),
+    );
+    const read = readers.get("MEMBERSHIP");
+    const handler = handlers.get("**/api/v1/administration/access/*");
+    if (!read || !handler)
+      throw new Error("Synthetic membership profile is missing");
+    expect(read("project_foreign")).toBeUndefined();
+    const catalog = read()?.catalog;
+    if (!catalog) throw new Error("Synthetic membership snapshot is missing");
+    expect(catalog.memberships).toEqual(members);
+    expect(catalog.page).toEqual({ nextPageToken: "members_next" });
+    expect(read("project_owned")?.catalog?.page).toEqual({});
+    for (const field of [
+      "accessSubjectsPage",
+      "oidcGroupsPage",
+      "accessRolesPage",
+      "accessBindingsPage",
+    ] as const)
+      expect(catalog[field]).toEqual({});
+    expect(catalog.oidcGroups).toEqual([]);
+    expect(catalog.accessRoles).toEqual([]);
+    expect(catalog.accessBindings).toEqual([]);
+    expect(catalog.permissions).toEqual([
+      {
+        key: "project.view",
+        nameKey: "i18n:PERMISSION_PROJECT_VIEW_NAME",
+        descriptionKey: "i18n:PERMISSION_PROJECT_VIEW_DESCRIPTION",
+        risk: "READ",
+        allowedScopes: [
+          "ORGANIZATION",
+          "PROJECT",
+          "RESOURCE_KIND",
+          "RESOURCE_INSTANCE",
+        ],
+        resourceKinds: ["PROJECT", "ROLE_IMAGE"],
+        ownerConditionSupported: false,
+      },
+    ]);
+    const member = members[0];
+    if (!member) throw new Error("Synthetic member is missing");
+    member.user.displayName = "Текущее имя";
+    member.active = false;
+    expect(catalog.accessSubjects?.[0]?.displayName).toBe("Участник");
+    expect(read()?.catalog?.accessSubjects?.[0]).toMatchObject({
+      displayName: "Текущее имя",
+      active: false,
+    });
+    const fields = {
+      permissions: "permissions",
+      subjects: "accessSubjects",
+      "oidc-groups": "oidcGroups",
+      roles: "accessRoles",
+      bindings: "accessBindings",
+    } as const;
+    for (const [path, field] of Object.entries(fields)) {
+      let response: unknown;
+      await handler({
+        request: () => ({
+          method: () => "GET",
+          url: () =>
+            `http://kodex.test/api/v1/administration/access/${path}?projectRef=project_owned`,
+        }),
+        fulfill: (value: { json: unknown }) => {
+          response = value.json;
+          return Promise.resolve();
+        },
+      } as unknown as Route);
+      expect(response).toEqual({
+        items: read("project_owned")?.catalog?.[field],
+      });
+    }
+    expect(() =>
+      handler({
+        request: () => ({
+          method: () => "GET",
+          url: () =>
+            "http://kodex.test/api/v1/administration/access/subjects?projectRef=project_foreign",
+        }),
+      } as unknown as Route),
+    ).toThrow();
+  });
+  it("сохраняет канонический bounded adaptive pageSize и отвергает malformed значения", () => {
+    for (const value of ["8", "13", "20", "30", "40", "100"])
+      expect(() => assertSyntheticAdaptivePageSize(value)).not.toThrow();
+    for (const value of [null, "", "0", "7", "101", "13.5", "013", "NaN"])
+      expect(() => assertSyntheticAdaptivePageSize(value)).toThrow();
+  });
+
+  it("organization HTTP и realtime AGENT читают один exact scoped источник без mutable alias", async () => {
+    const stop = new Error("Synthetic UI boundary");
+    const handlers = new Map<string, (route: Route) => Promise<void>>();
+    const readers = new Map<string, SyntheticSnapshotReader>();
+    const page = {
+      route: (pattern: string, handler: (route: Route) => Promise<void>) =>
+        handlers.set(pattern, handler),
+      goto: () => {
+        throw stop;
+      },
+    } as unknown as Page;
+    const projects = ["project_owned", "project_other"].map((ref) => ({
+      ref,
+      name: ref,
+    })) as Parameters<typeof checkOrganizationCatalog>[1];
+    await expect(
+      checkOrganizationCatalog(
+        page,
+        projects,
+        () => undefined,
+        () => Promise.resolve(),
+        (kind, read) => readers.set(kind, read),
+      ),
+    ).rejects.toBe(stop);
+    const read = readers.get("AGENT");
+    const handler = handlers.get("**/api/v1/agents?**");
+    if (!read || !handler)
+      throw new Error("Synthetic organization producer is missing");
+    expect(read("project_foreign")).toBeUndefined();
+    expect(read("project_owned")?.catalog?.agents).toHaveLength(1);
+    let response: unknown;
+    await handler({
+      request: () => ({
+        url: () => "http://kodex.test/api/v1/agents?pageSize=13",
+      }),
+      fulfill: (value: { json: unknown }) => {
+        response = value.json;
+      },
+    } as unknown as Route);
+    expect(response).toMatchObject({
+      items: read()?.catalog?.agents,
+      nextPageToken: "catalog_next",
+    });
+    const copy = read();
+    if (!copy?.catalog?.agents?.[0])
+      throw new Error("Synthetic agent snapshot is missing");
+    copy.catalog.agents[0].name = "changed outside fixture";
+    expect(read()?.catalog?.agents?.[0]?.name).not.toBe(
+      "changed outside fixture",
+    );
+    const source = (file: string) =>
+      readFileSync(new URL(file, import.meta.url), "utf8");
+    const catalog = source("./fixtures/organization-catalog.ts");
+    expect(catalog).toContain('installSnapshot?.("MEMBERSHIP"');
+    expect(catalog).toContain('".organization-catalog__row"');
+    expect(catalog).not.toContain('".organization-catalog__group"');
+    expect(catalog).not.toContain('name: "Развернуть список проекта"');
+    const runs = source("./fixtures/runs-catalog.ts");
+    expect(runs).toContain('".run-table__row"');
+    expect(runs).not.toContain('".runs-lane__body"');
+    expect(
+      source("../src/features/catalogs/OrganizationCatalog.vue"),
+    ).toContain('class="organization-catalog__row"');
+    expect(
+      source("../src/features/workboard/components/RunsBoard.vue"),
+    ).toContain('class="run-table__row"');
+  });
   it("следует текущим disclosure/confirmation/table границам без устаревших browser dialogs", () => {
     const source = (file: string) =>
       readFileSync(new URL(file, import.meta.url), "utf8");
@@ -298,11 +484,13 @@ describe("synthetic typed catalog producers", () => {
               "idempotency-key": mutationKey,
               "x-csrf-token": "synthetic",
             }),
-            postDataJSON: () => ({
-              capabilityKey: "github.read",
-              agentRef: "agent_candidate",
-              enabled: true,
-            }),
+            postDataJSON: () =>
+              ({
+                capabilityKey: "github.read",
+                agentRef: "agent_candidate",
+                enabled: true,
+                approvalPolicy: "NONE",
+              }) satisfies IntegrationGrantInput,
           }),
           fulfill: (value: { json: unknown }) => {
             response = value.json;
@@ -310,6 +498,25 @@ describe("synthetic typed catalog producers", () => {
         } as unknown as Route);
         expect(read()?.connections?.connections).toEqual([response]);
         expect(read()?.connections?.connections?.[0]?.version).toBe(8);
+        expect(
+          read()?.connections?.connections?.[0]?.grants[0]?.approvalPolicy,
+        ).toBe("NONE");
+        await expect(
+          handler({
+            request: () => ({
+              headers: () => ({
+                "if-match": '"7"',
+                "idempotency-key": mutationKey,
+                "x-csrf-token": "synthetic",
+              }),
+              postDataJSON: () => ({
+                capabilityKey: "github.read",
+                agentRef: "agent_candidate",
+                enabled: true,
+              }),
+            }),
+          } as unknown as Route),
+        ).rejects.toThrow();
       }
     }
   });

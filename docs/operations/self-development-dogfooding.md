@@ -677,3 +677,48 @@ PASS7.99s. Ранний диагностический Node parser SyntaxError �
 Это целостность журнала, не дополнительный QA/authority approval.
 Architect RUNNING; own source/schema/integration reads продолжаются, один shell
 search завершился NONZERO и не стал terminal. Business gate/Full65 OPEN.
+
+## Checkpoint 11.10.2026 01:00 UTC — Retry10 завершён, Chromium1920 PASS
+
+Source и clean HOT32178949; remote Draft1807 fresh BOT preflight PASS.
+Guarded idle FF00:52:02 PASS: пять owner-счётчиков0, promoted64 и exact pins
+не изменены; обе Email source SHA совпали ROOT→HOT→Pod. Это debug delivery,
+не подтверждение native Email: существующего Email connection нет, эффект NOT RUN.
+
+Retry10 root run_FwjgMkFjmHk9GiYF2GYC4CSi FAILED/version3/seq631.
+Architect technical SUCCEEDED, но semantic BLOCKED: отсутствующий полный
+upstream outgoing_message.rs признан обязательным source proof; hosted Raw
+вернул restricted URL. Отказ не повторялся другим транспортом. Exact source
+review37002B/SHA18e1aecbf1674c7101879a0cbedd014c6a4910e7ae2112c7377aa9aabf1071ea
+прочитан ROOT до EOF через protected artifact revision read. Роль также
+обозначила неподтверждённый Kodex producer path и открытые правила сравнения
+account limits. Эти пробелы не отменены и не названы architecture PASS.
+Manager callback attempt3 прочёл все девять artifacts до EOF, завершил root;
+Developer/единственное комплексное review/product acceptance NOT RUN.
+
+Root callback3 ACK и metadata CAPTURED/sameUID VERIFIED: task1441B,
+instructions и current tuple подтверждены, protected start mode COLD.
+Root2/Architect/root3 observers terminal CAPTURED с контейнерными exits;
+runtime crash не установлен причиной этого semantic STOP.
+
+Supplemental5 fixture-only интегрирован на exact321 preimages: пять posthash
+MATCH, production964/964 EQUAL. ROOT unit15/15 PASS1.38s. Изолированный
+Chromium1920 полностью PASS1/1, worker1/retries0, около2мин; types/discovery,
+lint5/format5 PASS. Network386requests=383finished+3 подтверждённые отмены;
+пять ожидаемых negative HTTP console errors, unexpected failures0. Это synthetic,
+не live бизнес-приёмка; прочие ширины этого пакета NOT RUN. История FAIL1–19
+сохранена, обязательные decoder/eligibility/noHTTP/Console assertions не ослаблены.
+
+Chrome5 восстановлен штатным SSO и действием «Войти», Home Connected=true.
+До входа наблюдались failed WebSocket и stale session diagnostics; конкретный
+rejecting handshake layer UNKNOWN. Повторные session/ticket200 не доказывали
+работающий WS. Новые credentials и чужие вкладки не затрагивались.
+Готовится versioned общее исправление границы source evidence:
+обязательное свойство→необходимый факт→достаточное доказательство→residual UNKNOWN.
+Нет вывода, что отсутствующий source автоматически необязателен, и нет bypass.
+Новые инструкции/live repeat ещё NOT RUN. USER corrections0,
+host business implementation0; Full65 и business owner gate OPEN.
+Первое размещение новой записи перед прежними checkpoints получило verifier
+FAIL CHECKPOINT_HISTORY_REWRITTEN; запись перенесена в конец хвоста.
+Fresh verify against321 PASS/PREVIOUS_SNAPSHOT_PREFIX_CHECKED,
+active78865B; прежние checkpoints и baseline не изменены.

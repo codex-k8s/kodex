@@ -591,7 +591,7 @@ for (const { width, height } of [
               snapshot: {
                 catalog: {
                   agents,
-                  page: { nextPageToken: projectRef ? "" : "catalog_next" },
+                  page: {},
                 },
               },
             });

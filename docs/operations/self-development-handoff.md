@@ -10,6 +10,33 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 01:00 UTC — native source gate и завершённый Chromium
+
+Source/remote/HOT32178949, guarded idle FF и Email ROOT→HOT→Pod hashes PASS.
+Supplemental5 fixture-only на этом source: ROOT15unit PASS1.38s;
+worker полный Chromium1920 PASS1/1/retries0, types/lint/format PASS.
+Другие ширины пакета и native Email NOT RUN; Email connection отсутствует.
+Это не live бизнес-приёмка. История FAIL сохранена.
+
+Retry10 root run_FwjgMkFjmHk9GiYF2GYC4CSi FAILED/version3/seq631;
+Architect SUCCEEDED технически, semantic BLOCKED из-за заявленной полноты
+upstream source. Native architecture-review37002B прочитан ROOT до EOF;
+также открыты source карты Kodex и ranking/comparability. Manager attempt3
+прочёл девять artifacts до EOF и завершил root; три exact Pod terminal captures
+сохранены. Developer/ONE review/Manager acceptance ещё NOT RUN.
+Не повторять root вслепую и не обходить denied Raw URL другим transport.
+
+Далее: новая versioned server/core инструкция evidence sufficiency с неизменными
+historical snapshots и закрытым отказом обязательных неизвестных facts;
+адресные tests→доставка fresh RuntimeRevision→native повтор исходной задачи,
+без корректирующих USER сообщений или host business implementation.
+Потом Developer PR→одно комплексное review→Manager/final-readiness/owner;
+§64–65 и bootstrap merge только по фактическим доказательствам.
+Own Chrome5 после штатного SSO/«Войти» Home Connected=true; prior WS/auth
+ошибки сохраняются как диагностика, exact handshake cause UNKNOWN.
+Business PR не merge/approve; Full65 OPEN. Исторические записи ниже не задают
+текущее состояние и не расширяют полномочия.
+
 ## Checkpoint 11.10.2026 00:37 UTC — Retry10 на Architect, адресный frontend fix опубликован
 
 ROOT/remote Draft1807 f40360953f0bc256c9877ddd922493393341c1b0;
