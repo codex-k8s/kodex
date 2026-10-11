@@ -175,11 +175,10 @@ DiskPressure; актуальный owner run state UNKNOWN при API 500, recov
 - [ ] 11. SOFTWARE_CHANGE по явному исключению владельца от 08.10.2026:
       Manager → Architect → Developer → один независимый комплексный рецензент
       фактического diff на точном SHA (архитектура, безопасность, документация,
-      лексика) → продуктовая приёмка Manager → единственный финальный Human Gate.
-      Уточнение владельца от10.10.2026: ровно одно комплексное ревью всего;
-      автоматические fix/re-review циклы не запускаются. Незакрытые замечания
-      и непроверенный после исправлений SHA передаются владельцу.
-      Живой Workflow: пять этапов, version40 / published revision13.
+      лексика) → продуктовая приёмка Manager → исправления и повторное ревью
+      нового SHA, не более пяти циклов после первоначального ревью → единственный
+      финальный Human Gate.
+      Живой Workflow опубликован: 21 шаг, version 25 / revision 8.
       Публикация/конфигурация PASS; один полный процесс запущен, завершение
       и сквозная приёмка ещё не подтверждены.
       Прежний запуск FAILED / RUNTIME_TIMEOUT; новые бюджеты APPLIED/PUBLISHED,
@@ -199,10 +198,11 @@ DiskPressure; актуальный owner run state UNKNOWN при API 500, recov
       но не пишет финальную задачу вместо Developer и не подменяет reviewers.
 - [ ] 15. По явному исключению владельца от 08.10.2026: одно независимое
       комплексное ревью фактического diff на точном SHA, продуктовая приёмка
-      Manager; по уточнению от10.10.2026 без автоматического повторного ревью,
+      Manager, исправления/ответы и повторное ревью нового SHA до пяти циклов
+      после первоначального ревью,
       final-readiness.md, финальный PR READY_FOR_HUMAN_REVIEW и отчёт по
       разделу 64 исходного задания. Единственный финальный Human Gate — владелец.
-      Живой Workflow: пять этапов, version40 / published revision13;
+      Живой Workflow опубликован: 21 шаг, version 25 / revision 8;
       прежний процесс FAILED / RUNTIME_TIMEOUT, новый READY_NOTCONFIRMED.
       Этот PR не merge, не auto-merge, не approve от имени владельца.
 
@@ -1241,3 +1241,39 @@ Context7 проверены Go encoding/json omitempty/custom unmarshal и Docke
 explicit OCI exporter/manifest digest; библиотечные версии не менялись.
 ROOT объединённые forced typecheck/scoped lint/format PASS, synthetic
 application production build PASS7.56s. Native и итоговый Chromium ещё NOT RUN.
+
+## Checkpoint 11.10.2026 00:00 UTC — полная доставка runner, native образы в admission
+
+Source/clean HOT eba5f054, remote checkpoint d3c30153. Build/import/durable seed,
+девять canonical policy phases, exact runtime-role binding/defaults CP/RC,
+HTTPS OCI graph и настоящий CRI pull на обоих Ready узлах PASS для
+sha256:a33fe631de492cac4f4ddf00e5d2ddc05df8b6e41222e2eadf9a246de77b431d.
+Fresh CP/RC servicing source11/readonly mount/current UID/ELF=Airbuild/
+Go1.26.6/compiled symbols/readiness/rejoin PASS. Оснастка сначала дала
+NOT_PROVEN POD_SET и AIR_LOOKUP: Job Pods и Air PID1; исправлены exact lineage
+и one-line PID1 probe с настоящим shell oracle RED→GREEN,14unit PASS.
+Старые отказы сохранены; это debug proof, не immutable release acceptance.
+
+Три штатных owner image revisions опубликованы: SYSTEM21/STAFF17/helper11;
+builds3/3 COMPLETED, новый admission scan/sign/admit идёт. Promotion и новая
+доставка4ENV/8bindings пока NOT RUN, Developer ENV17/GitHub API patch сохранять.
+Первый private browser publication guard ошибочно требовал organizationRef
+в ManagedConfiguration DTO, где есть только projectRef; эффектов не было.
+Исправленный guard использует fresh trusted bootstrap и canonical DTO;
+оба PROJECT validate/publication PUBLISHED, ORG атомарная публикация выполнена.
+
+Native SYSTEM image editor: screenshot/overflow0/Console0/relevant API200,
+realtime reconnect затем Connected PASS. Ошибочный probe URL bootstrap404
+не является дефектом платформы, canonical bootstrap200. Чужие вкладки нетронуты.
+Worker synthetic fixture regression118unit PASS; final Chromium1920 ещё FAIL,
+устаревшие typed profiles/labels/disclosure/custom modal fixtures исправляются
+без ослабления production authority guards. Полного browser PASS пока нет.
+
+Проверка журнала наd3c30153 дала FAIL ACTIVE_BASELINE_MISMATCH: текущие
+правила ошибочно внесены в immutable исторический baseline. В forward fix
+baseline восстановлен byte-for-byte, уточнение остаётся в checkpoint:
+Workflow40/revision13, пять этапов, ОДНО комплексное ревью всего без
+автоматических fix/re-review циклов, Manager и финальный owner gate.
+Full65/checklist11/14/15 OPEN. USER corrections0/host business implementation0;
+Retry10 ещё не запущен. Далее promotion→4ENV/8bindings→fresh Retry10 с ранним
+capture Pod exit→Developer PR→одно комплексное review→Manager/owner.

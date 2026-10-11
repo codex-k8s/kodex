@@ -42,8 +42,11 @@ Own Chrome5: SYSTEM image editor screenshot/overflow0/Console0/API200,
 realtime reconnect затем Connected. Ошибочный диагностический URL bootstrap
 вернул404; правильный canonical bootstrap200. Чужие вкладки не затронуты.
 Retry10 ещё не запущен, USER corrections0, host business implementation0.
-Current checklist11/15 синхронизирован с решением владельца: Workflow40/
-revision13, одно комплексное ревью всего без автоматических повторных циклов.
+Current порядок по решению владельца: Workflow40/revision13,
+одно комплексное ревью всего без автоматических повторных циклов.
+Дословный архивный baseline checklist не переписывается; действует текущий
+scoped checkpoint и GOV-OD-003. Попытка редактирования baseline вd3c30153
+дала FAIL ACTIVE_BASELINE_MISMATCH и исправлена отдельным forward commit.
 Full65/checklist11/14/15 OPEN. Далее admission→promotion→4ENV/8bindings→
 native Retry10 с ранним Pod exit capture→Developer PR→одно review→Manager/owner.
 
