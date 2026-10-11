@@ -10,6 +10,25 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 01:44 UTC — core49 доставлен, исходный Retry11 работает
+
+Source/remote/HOT ba5286ea, guarded owner-idle FF PASS01:39:13.
+Exact cold-Go24 prune31.45GB/119237outputs/skips0; DATA free74GiB,
+оба NodeReady/DiskPressureFalse, PostgreSQL и основные сервисы Ready.
+Данные/volumes/current/restore images сохранены, containerd не чистился.
+Новый CP-only serving proof PASS:14source/mount hashes, samePodUID,
+AirPID1/compiler1.26.6/ELF=build1ccc7d29…40e1b/readiness/rejoin.
+Native assistant HTTP200/core49/READY; Chrome Connected/overflow0.
+Initial observer AIR_LOOKUP и временные503 сохранены; guard не ослаблен.
+
+Native original-task Retry11 run_OVfEtlncuy8JYTEkVb_AGy72 /
+session ses_zRPR2EL6KVjROhCJ08rhGbte RUNNING. Root ACK CAPTURED;
+protected metadata NOT_CAPTURED, отдельная RCA. INTAKE child
+run_6H0SMpAYWdp1mkm-MqQTxaqN RUNNING. Mobile finite5 пока2/5 PASS,
+хвост pending; это synthetic, не native приёмка. Далее own RuntimeRevision
+proof→Architect→Developer business PR→ONE review→Manager/owner→§64–65.
+USER corrections0/host business implementation0; Full65 OPEN.
+
 ## Checkpoint 11.10.2026 01:30 UTC — DiskPressure блокирует доставку
 
 Source predecessor17495680, HOT32178949; guarded FF не выполнился из-за Pending

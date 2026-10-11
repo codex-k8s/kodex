@@ -796,3 +796,37 @@ Full mobile FAIL, финальные Console/Network NOT REACHED; хвост NOT
 guarded idle FF→actual CP serving/core49READY→fresh current-v2 input→Retry11.
 USER corrections0/host business implementation0; Developer/ONE review/Manager
 acceptance NOT RUN, Full65 OPEN. Исторические PASS/FAIL не переписаны.
+
+## Checkpoint 11.10.2026 01:44 UTC — кластер восстановлен, core49 доставлен
+
+Опубликованный source и clean HOT ba5286ea59b3977246668e44efda603d82e6b83f.
+ROOT после публикации выполнил exact cold-Go24 prune:119237 outputs,
+31,451,820,652 logical bytes, changed/absent0. DATA free44→74GiB;
+это воспроизводимые build outputs, не данные. После штатного5m hysteresis
+оба узла Ready/DiskPressureFalse; Pending Pods0, PostgreSQL/NATS/S3/SSO
+и основные сервисы Running/Ready. Containerd images/volumes не удалялись.
+В01:39:13 guarded owner-idle FF PASS: все пять active counters0,
+promoted64 и прежний pin digest сохранены, source/HOT exact ba.
+
+Первый CP-only serving read во время hot rebuild дал NOT_PROVEN/AIR_LOOKUP;
+его причина UNKNOWN, guard не ослаблялся. Новый read после rebuild PASS16.428s:
+14 host/mounted hashes, exact Deployment→RS→Pod UID, AirPID1, serving ELF=
+Air build1ccc7d29f8bb97989fd87ad2281eed6bc240c4e09c37ab0099ad864836a40e1b,
+compilerGo1.26.6, required symbols/readiness/rejoin. Это debug serving,
+не immutable release acceptance. Native GET помощника HTTP200/core49/READY.
+
+После восстановления штатный SSO callback200; bootstrap сначала503,
+затем200 и Connected. Ранний ROOT SDK probe до runtime-config отправился
+на placeholder origin и дал DNS error: это диагностический probe FAIL,
+не ошибка штатного приложения и не Console0. Скрин desktop1828×741,
+overflow0; чужие вкладки нетронуты. Screenshot с filePath был отклонён MCP,
+позже получен штатным attached image без обхода workspace boundary.
+
+Через штатную кнопку «Повторить попытку» запущен исходный Retry11:
+run_OVfEtlncuy8JYTEkVb_AGy72, прежняя session ses_zRPR2EL6KVjROhCJ08rhGbte.
+Root attempt1/current-v2 ACK CAPTURED, sameUID/image/binary pins совпали;
+защищённая metadata capture дала NOT_CAPTURED, причина исследуется отдельно.
+Обычный Manager делегировал INTAKE run_6H0SMpAYWdp1mkm-MqQTxaqN;
+root RUNNING, INTAKE RUNNING. Это не семантическая приёмка или финальный PR.
+USER corrections0/host business implementation0, review всего одно.
+Developer/ONE review/Manager acceptance и Full65 остаются OPEN.
