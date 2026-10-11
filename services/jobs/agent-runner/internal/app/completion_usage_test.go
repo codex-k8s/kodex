@@ -131,7 +131,7 @@ func TestExecutedTurnFailurePreservesUsageInRetriedCallback(t *testing.T) {
 			if mode == "before execution" {
 				err = completeFailure(ctx, input, client, "RUNTIME_INPUT_INVALID")
 			} else {
-				err = completeExecutedTurn(ctx, input, client, result, check)
+				err = completeExecutedTurn(ctx, input, client, result, check, nil)
 			}
 			if err != nil {
 				t.Fatal(err)
@@ -410,7 +410,7 @@ func TestExecutedTurnRejectsInvalidArchiveBindings(t *testing.T) {
 			server.StartTLS()
 			defer server.Close()
 			client := completionTestClient(t, &input, server)
-			err := completeExecutedTurn(t.Context(), input, client, result, check)
+			err := completeExecutedTurn(t.Context(), input, client, result, check, nil)
 			wantRejection := mode == "terminal failed" || mode == "invalid usage"
 			if (err != nil) != wantRejection || calls != map[bool]int{true: 0, false: 1}[wantRejection] {
 				t.Fatal("completion validation or terminal failure semantics changed")

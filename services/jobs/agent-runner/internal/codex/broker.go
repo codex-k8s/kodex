@@ -556,6 +556,9 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver 
 		logProviderSafeFailure(providerStageOf(err), err)
 		return writeProviderBrokerResultFailure(frames, result, err)
 	}
+	if result.Outcome == "SUCCEEDED" && normalizeProviderWorkspaceAccess(ctx, request.Input) != nil {
+		result.Outcome, result.FailureCode, result.FinalMessage = "FAILED", "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID"
+	}
 	if result.Outcome != "SUCCEEDED" {
 		log.Printf("Codex provider turn completed with safe failure code: %s", result.FailureCode)
 	}

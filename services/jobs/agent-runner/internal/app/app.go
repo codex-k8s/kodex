@@ -314,7 +314,7 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 		}
 		return completeMeasuredFailure(ctx, input, client, result, code)
 	}
-	return completeExecutedTurn(ctx, input, client, result, runtime.checkWorkspace)
+	return completeExecutedTurn(ctx, input, client, result, runtime.checkWorkspace, runtime.logger)
 }
 
 // Ошибка execute не подтверждает итог; только отдельное подтверждение capture
@@ -331,8 +331,9 @@ func completeMeasuredFailure(ctx context.Context, input model.Input, client *cal
 
 // Завершение учитывает расход провайдера даже при отказе последующей проверки
 // workspace или публикации результата; повтор callback сохраняет тот же Usage.
-func completeExecutedTurn(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, checkWorkspace func(context.Context) error) error {
+func completeExecutedTurn(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, checkWorkspace func(context.Context) error, logger *slog.Logger) error {
 	if err := checkWorkspace(ctx); err != nil {
+		logWorkspaceCompletionDenial(ctx, logger, workspaceCompletionCheck, err)
 		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_WORKSPACE_INVALID", "i18n:RUNTIME_WORKSPACE_INVALID")
 	}
 	if result.Outcome != "SUCCEEDED" {
@@ -351,6 +352,7 @@ func completeExecutedTurn(ctx context.Context, input model.Input, client *callba
 			RuntimeRevisionVersion: input.RuntimeRevisionVersion, RuntimeRevisionDigest: input.RuntimeRevisionDigest,
 			Attempt: input.Attempt, ExecutionBindingDigest: input.ExecutionBindingDigest,
 		}); err != nil {
+			logWorkspaceCompletionDenial(ctx, logger, workspaceCompletionPublish, err)
 			return completeExecutedFailure(ctx, input, client, result, "RUNTIME_WORKSPACE_INVALID", "i18n:RUNTIME_WORKSPACE_INVALID")
 		}
 	}

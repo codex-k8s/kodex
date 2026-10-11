@@ -10,6 +10,75 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 13:23 UTC — общий directory-access fix проверен
+
+Поверх sourcecc584caa добавлена нормализация только каталогов writer после
+stop/join для всех успешных SYSTEM/PROJECT/ordinary ходов. Runner получает
+shared traversal, но приватные файлы0600 остаются недоступными ему. Содержимое,
+владельцы файлов, readonly originals, quota, symlink/mount/owner guards не
+меняются. Ошибка закрыто завершает ход существующим RUNTIME_ARTIFACT_INVALID;
+usage/archive provenance сохраняются. Completion логирует только закрытые
+stage/reason без путей, содержимого и сырых ошибок.
+
+PASS на frozen dirty tree: codex655 cases/3SKIP6.696s; scoped race51 cases/
+1SKIP1.197s+1.203s; app17.263s; vet app/codex/workspace и runner build.
+Go1.26.6, umask022, короткий owned TMPDIR. Первые GOROOT/umask/UDS harness
+FAIL сохранены; обычный opt-in kernel SKIP не считается PASS.
+Отдельный kernel13:19:54Z PASS0.10s, receipt SHAca50405d: main10001 READ_ONLY
+до нормализации → provider10002 → main canary OK, private0600 EACCES.
+File identity/metadata/content сохранены. Первый kernel FAIL из-за SGID
+наследования в synthetic fixture сохранён; corrected explicit0700 fixture
+повторён отдельно. Это не actual Pod/mount или причина удалённого live FAIL.
+
+Production access SHA7f82c890, broker dc5e98e2, final test a7b5f14d совпали
+до/после kernel. Actual Manager/root FAILED, artifactRefs0 неизменны.
+Доставка нового runner/PROJECT images/ENV и successful business handoff
+ещё NOT RUN. Chrome35 штатно вернулся через SignIn, own Manager открыт:
+overflow=false, свежая Console0 и relevant graph/events/session API200.
+Далее commit/push этого пакета, свежая canonical доставка и один typed retry
+исходного INPUT без USER corrections. Общий goal не завершён.
+
+## Checkpoint 11.10.2026 13:04 UTC — INTAKE завершён, completion workspace FAIL
+
+HOT91a02d6d/runtime069a5081 неизменны; remote Draft1807/sourcecc584caa
+подтверждены. Owner read receipt SHA36f93700: четыре GET200, текущий root
+run_4FDzDR24Syrqi40rj1lDHYnu и обычный Manager
+run_EnzYR56qZANWcX2vUrIg-42Y FAILED12:51:59Z,
+safeErrorCode RUNTIME_INPUT_INVALID/resultSummary RUNTIME_WORKSPACE_INVALID.
+Seq271 сохраняет native FINAL: Manager заявил PASS_INTAKE_ONLY/EOF и два
+подготовленных outbox файла. Это заявление агента, не независимое semantic
+доказательство или публикация: artifactRefs0; Architect и последующие этапы
+CANCELLED, собственный business PR/review/Manager-owner acceptance NOT RUN.
+
+Сбой относится к post-execute workspace check либо provenance publication.
+Actual Pod уже удалён: post-terminal filesystem/substage NOT_CAPTURED/UNKNOWN.
+Сам завершённый native ход не перезапускался, INPUT/USER prompt не менялись.
+Отдельный kernel reproducer exactcc584caa/Go1.26.6 PASS: каталог
+providerUID10002/group29000/mode0700 доступен provider, но production canary
+runnerUID10001 отклоняет его с READ_ONLY; контроль mode2750 даёт OK.
+Receipt SHA48fe7342/13:01:55.925Z; synthetic fixture удалён, actual workspace
+не менялся. Этот общий дефект воспроизведён независимо; причиной именно live
+FAIL его пока нельзя объявлять.
+
+В integration готовится provider-writer directory-only shared traversal после
+stop/join, без CAP_CHOWN у runner, обхода quota/readonly/symlink/owner guards.
+Закрытая stage/reason диагностика completion добавлена, addressed unit
+PASS6.392s на изменённом дереве. Первый запуск FAIL из-за унаследованного
+GOROOT1.27.1 при бинаре1.26.6; корректный exact GOROOT повтор PASS, прежний
+сбой оснастки не скрывается. Live доставка нового fix ещё NOT RUN.
+
+Chrome35 reload показал реальные terminal статусы/Console0/API200;
+Playwright screenshot после ready просмотрен, document overflow=false.
+Первый snapshot до готовности страницы пустой и не считается UX PASS;
+старые cumulative Playwright errors сохранены. MCP screenshot save отклонён
+tool workspace boundary, файл не создан. Последний own MCP reload перешёл
+на штатный SSO login; permission доступен, login не является app acceptance.
+Private authenticated browser остаётся отдельным разрешённым fallback.
+
+Далее: закончить и проверить общий fix, commit/push того же Draft, scoped
+runner/role-image/ENV доставка после свежего idle; затем один штатный retry
+того же INPUT. Ни terminal failure, ни synthetic fix не закрывают общий goal.
+
 ## Checkpoint 11.10.2026 12:43 UTC — новый workspace обычного Manager
 
 Source08042e691cf5156ecd1af7175cff5ea20d1fcd89 опубликован в Draft1807,

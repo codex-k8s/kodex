@@ -1839,6 +1839,21 @@ Runner UID10001 не получает CAP_CHOWN, приватный provider hom
 границ закрывают completion с безопасным `RUNTIME_ARTIFACT_INVALID`.
 Публикация согласуется с workspace canary/cleanup через прежний directory lock.
 
+Та же writer boundary после stop/join делает только provider-owned рабочие
+каталоги `/workspace/work` доступными группе29000 для metadata/quota обхода
+runner: добавляет group read/traverse через проверенный directory descriptor,
+не открывая тела regular files и не меняя их mode. Корень остаётся
+runnerUID10001/group29000/mode2770; runner-owned INPUT каталоги принимаются
+только с уже существующим shared traversal и не изменяются. UID10002 не
+передаёт runner приватный provider home, а runner не получает CAP_CHOWN.
+Операция ограничена временем, числом записей и байтами; nofollow/beneath/
+no-mount-crossing, identity rejoin, foreign-owner/type/link и resource guards
+сохраняются. Ошибка закрывает completion с прежним безопасным кодом,
+сохраняя измеренный Usage и проверенный rollout receipt. Это не исключение
+рабочего дерева из canary или квоты: новый runnable checkout и scratch
+по-прежнему проверяются. Во время исполнения private directory может временно
+закрыть readiness; post-join нормализация не доказывает исправление этой фазы.
+
 Восстановленный native history принадлежит фактическому writer/capture UID,
 а не UID контейнера, передающего запрос. В текущем Pod ABI Codex app-server
 и захват rollout исполняются в `provider-runtime` с UID10002; RESTORE создаёт

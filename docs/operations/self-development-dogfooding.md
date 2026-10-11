@@ -470,6 +470,22 @@ DiskPressure; актуальный owner run state UNKNOWN при API 500, recov
 
 ## Обязательный checklist
 
+Уточнение11.10.2026 13:23 UTC: общий directory-only writer fix готов;
+codex/app/unit/race/vet/build PASS на frozen tree поверхcc584caa.
+Отдельный two-UID kernel PASS13:19:54Z, private0600 EACCES и точные file
+identity/content сохранены. Первый synthetic SGID fixture FAIL сохранён.
+Actual live cause UNKNOWN; новый OCI/ENV и успешный handoff NOT RUN.
+Доказательства и следующий шаг — в текущей точке продолжения.
+
+Актуальное уточнение11.10.2026 13:04 UTC: sourcecc584caa/HOT91a02d6d.
+Новый Manager заявил завершённый INTAKE и подготовку outbox, но platform
+completion FAILED/RUNTIME_WORKSPACE_INVALID12:51:59Z; artifactRefs0,
+Architect и downstream CANCELLED. Actual post-terminal filesystem UNKNOWN
+(Pod удалён). Общий two-UID/private0700 каталог воспроизведён отдельным
+production-canary kernel fixture; directory-only writer fix в работе, live
+доставка и успешный handoff NOT RUN. Подробные доказательства и следующий
+шаг — в новой [точке продолжения](self-development-handoff.md).
+
 Актуальный checkpoint11.10.2026 09:14 UTC: общая файловая модель всех ролей
 подтверждена в actual execution Pod и собственной записью Architect.
 Его own snapshot доказывает provider OBSERVED CODEX0.160.0, но semantic
