@@ -65,4 +65,3 @@ SELECT CASE WHEN octet_length(body::text)<=8192 THEN body ELSE
   jsonb_build_object('version',1,'kind','RUNTIME_CONTINUATION_CONTENT_READBACK','status','BODY_LIMIT_EXCEEDED')
 END::text FROM document;
 COMMIT;
-

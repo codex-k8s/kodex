@@ -10,6 +10,30 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 20:08 UTC — после перезапуска и адресный format fix
+
+SOURCE/HOT/remote Draft1807 clean95aa0169 подтверждены; поверх runtime3eeb8eb0
+были только три документа. Свежие readback PR/body/main PASS, mergeable clean;
+checks/status entries0 и reviews0 не являются CI или acceptance PASS.
+Chrome11 owner подключён, reload/realtime graph172+, Console0/API200,
+скриншот «Ход работы» просмотрен, horizontal overflow=false.
+
+INTAKE attempt6 всё ещё RUNNING, результаты пока не опубликованы. Отдельный
+collector завершил same-UID rejoin CAPTURED: instructions80359B/d41c9a1f,
+provider inbox4322B/31619ea5, обе file/input comparisons EQUAL,38tools,
+22grants/25capabilities, model gpt-6.1-sol medium. Exact image5cb2711f,
+image-file ELF2991a81b MATCH; это не PID proof. Expected task comparison
+NOT RUN, task_in_prompt=true. Bounded failure listener продолжает наблюдение;
+отсутствие закрытой failure-записи не объявляется успехом финализации.
+
+Адресный обязательный full bootstrap diff-check выявил четыре new blank line
+at EOF в tools/release/runtime-continuation-content-readback.{md,mjs,sql,test.mjs}.
+Удалены только четыре последние пустые строки; повтор diff-check против
+mainab4992e0 PASS/exit0, Node5/5 PASS122.585ms. Production SQL/контракты/
+служебные binary inputs не менялись. Текущую native цепочку не останавливали,
+новых corrective USER prompts и host business code0. QA§45 inventory,
+ONE Review/Manager/owner и bootstrap merge/main readback остаются OPEN.
+
 ## Checkpoint 11.10.2026 20:00 UTC — CP fix обслуживается, attempt6 запущена
 
 Source/HOT/remote Draft1807:3eeb8eb0a50850acd5e56efc93b9b71b5035eba5,

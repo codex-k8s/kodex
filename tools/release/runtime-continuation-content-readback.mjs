@@ -59,4 +59,3 @@ function main(){
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  try{main();}catch(error){process.stderr.write(JSON.stringify({status:'FAIL',code:/^READBACK_[A-Z_]+$/.test(error.message)?error.message:'READBACK_FAILED'})+'\n');process.exitCode=1;}
 }
-

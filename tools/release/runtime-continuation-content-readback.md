@@ -59,4 +59,3 @@ USER_MESSAGE, truncate/history rewrite и blanket skip continuation запрещ
 Синтетические tests не выполняют PostgreSQL или live effects. Проверены Context7
 PostgreSQL18 `functions-string` и `datatype-json`: bytes/characters, explicit btrim,
 jsonb NUL rejection. Disposable/live proof отмечается отдельно, не как unit PASS.
-

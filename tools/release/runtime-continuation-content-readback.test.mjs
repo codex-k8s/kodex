@@ -56,4 +56,3 @@ test('execution is psql exact frozen file, protected inherited transport, no raw
   assert.throws(()=>readRuntimeContinuationContent(input,source,execute),error=>/^READBACK_[A-Z_]+$/.test(error.message)&&!error.message.includes('private'));
  }
 });
-
