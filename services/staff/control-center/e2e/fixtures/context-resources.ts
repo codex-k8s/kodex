@@ -334,7 +334,18 @@ export async function checkContextResources(
   await page
     .getByRole("textbox", { name: "Содержание памяти", exact: true })
     .fill("Проверяемая заметка");
-  await page.getByLabel("Хранить до", { exact: true }).fill("2026-10-01T12:00");
+  const retentionInput = await page.evaluate(() => {
+    const future = new Date(Date.now() + 86_400_000);
+    return new Date(future.getTime() - future.getTimezoneOffset() * 60_000)
+      .toISOString()
+      .slice(0, 16);
+  });
+  await page
+    .getByRole("textbox", {
+      name: "Хранить до Обязательный срок хранения. После него содержимое памяти станет недоступным.",
+      exact: true,
+    })
+    .fill(retentionInput);
   await page.getByRole("button", { name: "Сохранить", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/context/memory/memory_synthetic$`));
   await page
@@ -407,9 +418,11 @@ export async function checkContextResources(
     .locator(".context-file")
     .getByRole("button", { name: "Удалить", exact: true })
     .click();
-  await page.getByRole("button", { name: "Импорт Skill", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Импортировать навык", exact: true })
+    .click();
   const importer = page.getByRole("dialog", {
-    name: "Импорт Skill",
+    name: "Импортировать навык",
     exact: true,
   });
   await importer.getByRole("button", { name: "SKILL.md", exact: true }).click();
@@ -426,7 +439,10 @@ export async function checkContextResources(
     .click();
   await expect(importer.locator('[data-state="PENDING"]')).toBeVisible();
   await expect(
-    importer.getByRole("button", { name: "Добавить в manifest", exact: true }),
+    importer.getByRole("button", {
+      name: "Добавить в файлы навыка",
+      exact: true,
+    }),
   ).toBeDisabled();
   await importer
     .getByRole("button", { name: "Повторить", exact: true })
@@ -434,7 +450,7 @@ export async function checkContextResources(
   await expect(importer.locator('[data-state="CLEAN"]')).toBeVisible();
   await capture("skill-import");
   await importer
-    .getByRole("button", { name: "Добавить в manifest", exact: true })
+    .getByRole("button", { name: "Добавить в файлы навыка", exact: true })
     .click();
   await expect(importer).toHaveCount(0);
   await page.getByRole("button", { name: "Сохранить", exact: true }).click();
@@ -472,17 +488,18 @@ export async function checkContextResources(
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await page.goto(`/projects/${projectRef}/files?view=skills`);
   await expect(page.locator(".context-row")).toHaveCount(8);
-  const rows = page.locator(".context-rows");
+  const catalog = page.locator(".context-catalog");
+  const rows = catalog.locator(".context-catalog__scroll");
   const bounds = await rows.boundingBox();
   const row = await page.locator(".context-row").first().boundingBox();
   expect(bounds).not.toBeNull();
   expect(row).not.toBeNull();
   if (!bounds || !row) throw new Error("Context catalog is not visible");
-  expect(bounds.height).toBeLessThanOrEqual(row.height * 6 + 1);
-  await page
-    .getByRole("button", { name: "Развернуть список", exact: true })
-    .click();
-  const catalog = page.getByRole("dialog", { name: "Навыки", exact: true });
+  expect(bounds.height).toBeLessThanOrEqual(576);
+  expect(row.height).toBeGreaterThanOrEqual(64);
+  await expect(catalog.locator(".context-catalog__identity a")).toHaveText(
+    Array.from({ length: 8 }, (_, index) => `Навык ${String(index + 1)}`),
+  );
   await catalog.getByRole("searchbox").fill("Навык 8");
   await expect(catalog.locator(".context-row")).toHaveCount(1);
   await expect(catalog.locator(".context-row")).toContainText("Навык 8");
@@ -491,8 +508,4 @@ export async function checkContextResources(
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
-  await catalog
-    .getByRole("button", { name: "Закрыть", exact: true })
-    .last()
-    .click();
 }

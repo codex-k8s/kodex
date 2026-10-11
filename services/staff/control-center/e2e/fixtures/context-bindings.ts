@@ -163,14 +163,40 @@ export async function installContextBindingFixture(
     await panel
       .getByRole("button", { name: "Привязать ревизию", exact: true })
       .click();
-    await expect(panel.locator("dd")).toContainText(revisionRef);
+    await expect(panel.locator(":scope > dl dd")).toHaveCount(2);
+    await expect(panel.locator(".context-binding__technical dd")).toHaveCount(
+      3,
+    );
+    await expect(
+      panel
+        .locator(".context-binding__technical")
+        .getByText(revisionRef, { exact: true }),
+    ).toHaveText(revisionRef);
     expect(reads).toBeGreaterThan(previousReads);
-    page.once("dialog", (dialog) => dialog.accept());
     await panel.getByRole("button", { name: "Отвязать", exact: true }).click();
+    const confirmation = page.getByRole("dialog", {
+      name: "Отвязать",
+      exact: true,
+    });
+    await expect(confirmation).toContainText(
+      "Отвязать эту ревизию от ИИ-сотрудника?",
+    );
+    await confirmation
+      .getByRole("button", { name: "Отвязать", exact: true })
+      .click();
+    await expect(confirmation).toHaveCount(0);
     await expect(
       panel.getByRole("button", { name: "Отвязать", exact: true }),
     ).toBeDisabled();
-    await expect(panel.locator("dd")).toHaveCount(0);
+    await expect(panel.locator(":scope > dl dd")).toHaveCount(0);
+    await expect(panel.locator(".context-binding__technical dd")).toHaveCount(
+      2,
+    );
+    await expect(
+      panel
+        .locator(".context-binding__technical")
+        .getByText(revisionRef, { exact: true }),
+    ).toHaveText(revisionRef);
     await expect(
       panel.getByRole("button", { name: "Привязать ревизию", exact: true }),
     ).toBeEnabled();

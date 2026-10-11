@@ -258,7 +258,7 @@ export async function checkRoleImageHistory(
   ).toHaveCount(0);
   await expect(page.locator(".build-row")).toHaveCount(8);
   await expect(
-    page.getByRole("button", { name: "Запросить сборку", exact: true }),
+    page.getByRole("button", { name: "Пересобрать", exact: true }),
   ).toBeEnabled();
   expect(
     await page.evaluate(

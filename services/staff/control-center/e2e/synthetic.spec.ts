@@ -1811,6 +1811,9 @@ for (const { width, height } of [
       ).toBeVisible();
       expect(providers.events).toContain("poll");
       expect(providers.events).not.toContain("verify");
+      const requestsBefore = providers.events.filter(
+        (event) => event === "poll",
+      ).length;
       await authorization
         .getByRole("button", { name: "Переавторизовать", exact: true })
         .click();
@@ -1821,13 +1824,23 @@ for (const { width, height } of [
         .getByRole("button", { name: "Закрыть", exact: true })
         .last()
         .click();
-      const requestsBefore = providers.events.filter(
-        (event) => event === "poll",
-      ).length;
+      await expect(authorization).toHaveCount(0);
+      // Закрытие окна не отменяет pending device flow. Он завершается одним
+      // штатным refresh, после terminal AUTHORIZED повторного polling нет.
+      await expect
+        .poll(() => providers.events.filter((event) => event === "poll").length)
+        .toBe(requestsBefore + 1);
+      await expect(
+        page
+          .getByRole("row")
+          .filter({ hasText: "Проверка устройства synthetic" })
+          .getByText("Авторизация подтверждена", { exact: true }),
+      ).toBeVisible();
       await page.waitForTimeout(4200);
       expect(providers.events.filter((event) => event === "poll")).toHaveLength(
-        requestsBefore,
+        requestsBefore + 1,
       );
+      expect(providers.events).not.toContain("verify");
       await page
         .getByRole("button", { name: "Добавить учётную запись", exact: true })
         .click();
@@ -1868,6 +1881,14 @@ for (const { width, height } of [
         .click();
       await deletion
         .getByRole("button", { name: "Подтвердить команду", exact: true })
+        .click();
+      await expect(
+        deletion.getByText("Очистка в очереди", { exact: true }),
+      ).toBeVisible();
+      // Завершение cleanup fixture материализуется exact owner-read, а не
+      // доменным polling: используем штатное явное перечитывание состояния.
+      await deletion
+        .getByRole("button", { name: "Перечитать состояние", exact: true })
         .click();
       await expect(
         deletion.getByText("Учётная запись удалена после очистки", {
@@ -1939,6 +1960,7 @@ for (const { width, height } of [
             fullPage: true,
           });
         },
+        installSnapshot,
       );
       await page.screenshot({
         path: testInfo.outputPath(`workflow-${String(width)}.png`),

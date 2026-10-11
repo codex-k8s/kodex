@@ -9,7 +9,47 @@ import type {
   RuntimeSecretRebindInput,
   RuntimeSecretDraft,
   RuntimeSecretDraftImpactPlan,
+  RuntimeSecretDraftImpactPage,
+  RuntimeSecretPage,
 } from "../../src/shared/api/generated/openapi/types.gen";
+
+export function syntheticSecretCatalog(
+  created?: RuntimeSecret,
+): RuntimeSecretPage {
+  return {
+    items: created ? [structuredClone(created)] : [],
+    nextPageToken: "",
+  };
+}
+
+export function syntheticSecretDraftImpactPage(
+  plan: RuntimeSecretDraftImpactPlan,
+  projectRef: string,
+): RuntimeSecretDraftImpactPage {
+  return {
+    plan: structuredClone(plan),
+    total: 1,
+    nextPageToken: "",
+    items: [
+      {
+        ref: "item_synthetic",
+        consumer: {
+          scopeKind: "PROJECT",
+          organizationRef: "org_synthetic",
+          environmentRef: "environment_synthetic",
+          environmentVersion: 19,
+          environmentVersionRef: "source_synthetic",
+          projectRef,
+          secretRevisions: [],
+        },
+        outcome: plan.state === "APPLIED" ? "APPLIED" : "PENDING",
+        ...(plan.state === "APPLIED"
+          ? { resultEnvironmentVersionRef: "new_environment_synthetic" }
+          : {}),
+      },
+    ],
+  };
+}
 
 export async function checkSecretEditor(
   page: Page,
@@ -54,8 +94,7 @@ export async function checkSecretEditor(
     `**/api/v1/projects/${projectRef}/runtime-secrets*`,
     async (route) => {
       if (route.request().method() === "GET") {
-        // Список намеренно отстаёт от подтверждённой мутации.
-        await route.fulfill({ json: { items: [], nextPageToken: "" } });
+        await route.fulfill({ json: syntheticSecretCatalog(created) });
         return;
       }
       failures.push("Immediate secret creation must not be called");
@@ -94,27 +133,7 @@ export async function checkSecretEditor(
     "**/api/v1/runtime-secret-draft-impact-plans/plan_synthetic*",
     (route) =>
       route.fulfill({
-        json: {
-          plan,
-          total: 1,
-          nextPageToken: "",
-          items: [
-            {
-              ref: "item_synthetic",
-              consumer: {
-                environmentRef: "environment_synthetic",
-                environmentVersion: 19,
-                environmentVersionRef: "source_synthetic",
-                projectRef,
-                secretRevisions: [],
-              },
-              outcome: plan.state === "APPLIED" ? "APPLIED" : "PENDING",
-              ...(plan.state === "APPLIED"
-                ? { resultEnvironmentVersionRef: "new_environment_synthetic" }
-                : {}),
-            },
-          ],
-        },
+        json: syntheticSecretDraftImpactPage(plan, projectRef),
       }),
   );
   await page.route(
@@ -165,9 +184,8 @@ export async function checkSecretEditor(
   installSnapshot?.(
     "RUNTIME_SECRET",
     scopedSyntheticSnapshot(projectRef, () => ({
-      // Тот же намеренно отстающий пустой список, что обслуживает GET выше.
       catalog: {
-        secrets: [],
+        secrets: syntheticSecretCatalog(created).items,
         page: {},
         organizationSecrets: [],
         organizationSecretsPage: {},
@@ -292,6 +310,9 @@ export async function checkSecretEditor(
       expect(body).toEqual({
         selections: [
           {
+            scopeKind: "PROJECT",
+            organizationRef: "org_synthetic",
+            projectRef,
             environmentRef: "environment_synthetic",
             expectedEnvironmentVersion: 19,
             sourceVersionRef: "source_synthetic",
@@ -303,6 +324,8 @@ export async function checkSecretEditor(
         json: {
           environments: [
             {
+              scopeKind: "PROJECT",
+              organizationRef: "org_synthetic",
               environmentRef: "environment_synthetic",
               environmentVersion: 20,
               projectRef,

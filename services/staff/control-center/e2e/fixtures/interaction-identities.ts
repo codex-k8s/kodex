@@ -129,6 +129,8 @@ export async function checkInteractionIdentities(
   }));
   await page.goto("/integrations");
   await page
+    .locator(".connection-row")
+    .filter({ has: page.getByText(connection.name, { exact: true }) })
     .getByRole("button", { name: "Сведения о подключении", exact: true })
     .click();
   const details = page.getByRole("dialog", {

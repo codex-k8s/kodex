@@ -1294,3 +1294,22 @@ SSO reauth без policy changes;4VALID/4EOF/4publication200. Отказ сох�
 Own Chrome5 desktop organizational ENV screenshot/Console0/API200–201.
 Retry10 пока NOT RUN, USER corrections0/host business implementation0.
 Worker fixture-only128unit/10suites PASS, Chromium pending; Full65 OPEN.
+
+## Checkpoint 11.10.2026 00:21 UTC — Retry10 работает, fixture9 интегрированы
+
+Уточнение времени: предыдущая запись с заголовком00:18 подготовлена и
+зафиксирована в00:14 UTC; заголовок был неточным. Содержимое доказательств
+и receipts сохранено без изменения; remote0d2aa177 readback/body PASS.
+Штатный Retry10 сохраняет root Session и Workflow40/revision13/одно review.
+INTAKE SUCCEEDED; Manager continuation RUNNING, реальные read_file и
+промежуточные ответы наблюдаются. Exact initial Pod exit observer CAPTURED;
+continuation observer активен, ACK/new STAFF manifest/protected ELF PASS.
+Metadata-only binding collector NOT_CAPTURED/BINDING SHAPE_OR_PIN;
+причина пока UNKNOWN, это не доказательство runtime defect. Отказ сохранён.
+Own Chrome5 history desktop: compact replies/tool groups, active dots,
+overflow0/Console0/API200. CP/RC UID rejoin/Ready/restarts0,10m WARN/ERROR0.
+Frozen fixture-only9files ROOTpre/post9/9 EQUAL, ROOT128unit/10suites PASS4.56s,
+e2e types/scoped lint/format PASS. Chromium пока FAIL120s на Email initial
+query-sync/unsaved modal. Новый source-backed regression воспроизводит RED;
+production fix проверяется отдельно, shared dirty guard не ослабляется.
+USER corrections0/host business implementation0; Full65/business gate OPEN.
