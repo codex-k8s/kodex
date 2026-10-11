@@ -1345,3 +1345,24 @@ Worker Chromium прошёл Email effect, затем выявил устаре�
 approvalPolicy/adaptive page size; эти FAIL сохранены, точные fixtures дорабатываются.
 Workflow40/revision13/одно комплексное review, USER corrections0/host business
 implementation0. Full65, Developer PR/review/final owner completion остаются OPEN.
+
+## Checkpoint 11.10.2026 00:38 UTC — исходный FAILED дубликат проверен в Chrome
+
+На serving eba5f054 открыта исходная история Retry9 run_xYjI0BOJV6M4zQyeQaDbc3QB,
+а не конец новой истории. Seq641 generic и seq642 revision2 tool имеют exact
+inv_r2ICOk1VxqSh8jy3L6v7uRgg и один six-tuple; closed source projection оставила
+FAILED tool, generic summary исключила. Actual DOM той же invocation: одна
+компактная строка с Ошибка; отдельный последующий error сохранён. Loaded
+desktop/mobile390 screenshots просмотрены, overflow0; relevant reads200,
+Console без app errors. Прямой diagnostic SDK probe до bootstrap при смене
+viewport вызвал DNS error default example URL; сохранён как instrumentation
+FAIL, не production defect и не Console0 всей сессии. Bootstrap guard добавлен
+к последующим probes; штатная повторная загрузка показывает API200/Console0.
+
+ROOT f4036095 remote/PR body readback PASS после initial immediate UNKNOWN,
+повторного push не было. Exact f40340unit/7suites PASS5.07s. Native Architect
+get_execution_snapshot SUCCEEDED, offline schema/TS и upstream packet EOF
+подтверждены его собственными сообщениями; semantic acceptance ещё UNKNOWN.
+Root continuation/Architect Pod observers активны; Manager child terminal
+CAPTURED с preserved exit evidence. UI desktop/mobile activity PASS;
+Full65 и business Developer/одно review/Manager/owner остаются OPEN.

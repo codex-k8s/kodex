@@ -10,6 +10,42 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 00:37 UTC — Retry10 на Architect, адресный frontend fix опубликован
+
+ROOT/remote Draft1807 f40360953f0bc256c9877ddd922493393341c1b0;
+fresh BOT readback/body PASS. HOT clean eba5f054 при активном native процессе,
+новый frontend FF ещё NOT RUN. Email initial query/mount race исправлен без
+ослабления busy/dirty/cancel:40unit/7suites на exact f403 PASS5.07s;
+lint/format/forcedtypes/build PASS. Chromium прошёл Email effect, затем
+устаревшие grant/adaptive-pager/table assertions; supplemental ещё pending.
+Delivery3promoted/4ENV/8bindings/preservation4/4 из прежнего checkpoint PASS;
+повторять effects не требуется. Время прежнего заголовка00:18 уточнено в журнале.
+
+Retry10 root run_FwjgMkFjmHk9GiYF2GYC4CSi / session ses_zRPR2EL6KVjROhCJ08rhGbte,
+Workflow40/revision13/пять этапов/одно комплексное review. INTAKE и Manager child
+SUCCEEDED, callback прочёл четыре артефакта до EOF и делегировал Architect
+run_HIqXH-81X52fSzX_xeUmXxXu / session ses_FsaJM6W8nLSInT5eppCVSO2k,
+turn trn_GsayeLDTcMtD_pZvJuKLiWqq / attempt1 / node nod_3Y0kDCk9QIM6moVZWrIaqo2e.
+Architect ACK/canonical binding/sameUID VERIFIED; native execution snapshot
+SUCCEEDED, собственное сообщение подтвердило Codex0.160.0/offline schema+TS.
+Early status observers: INTAKE/Manager child terminal CAPTURED, Architect работает.
+Actual старый Manager metadata failure predicate UNKNOWN, observer role-label
+notice classification имеет доказанную synthetic неточность; runtime не менялся.
+
+Own Chrome5 desktop/mobile390 history screenshot/overflow0/API200 проверены.
+Исходная FAILED строка Retry9 seq641/642: exact invocation/six-tuple,
+общая карточка скрыта, инструмент FAILED виден, независимый failure сохранён;
+desktop/mobile screenshots подтверждены. Прямой diagnostic SDK probe до
+bootstrap на viewport reload вызвал DNS error; он не app Console PASS,
+последующие штатные reads200. Чужие вкладки нетронуты.
+
+Далее: native Architect artifacts → Developer business PR → одно exact review →
+Manager/final-readiness/owner; fixture browser completion → guarded idle frontend
+FF → native Email/recovery readback → §64–65/bootstrap merge.
+USER corrections0/host business implementation0. Business PR не merge/approve.
+Полный план docs/qa/full-qa-task.md; исторические статусы ниже не переопределяют
+этот checkpoint или scoped решение об одном review. Full65 остаётся OPEN.
+
 ## Checkpoint 11.10.2026 00:18 UTC — три образа и четыре окружения опубликованы
 
 Production source/clean HOT eba5f054; remote checkpoint3581785a.
