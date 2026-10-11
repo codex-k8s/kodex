@@ -5,10 +5,58 @@ type: operations
 status: approved
 owner: manager
 version: 1.1.0
-updated: 2026-10-11
+updated: 2026-10-12
 ---
 
 # Текущее состояние
+
+## Checkpoint 11.10.2026 20:29 UTC — canonical empty activity arrays
+
+Поверх cfa1f7f5 интегрирован frozen packet SHA
+1edd59560c8966ec9f8346a568d4ee59e0f5b13cf2aab172499810481a8aa46f:
+две строки parser producer и два файла unit. Пустые kinds/paths начинаются
+как non-nil []string; receiver по-прежнему отвергает JSON null. Общий invariant
+actual serialized roundtrip закреплён в GO-DOC-001. Wire schema, authority,
+callback, budgets и terminal protocol не менялись.
+Worker RED actual parser→brokerFrameWriter→bound decoder: четыре сценария
+ACTIVITY_SCHEMA/observed0; GREEN focused/race/vet. ROOT postimage3/3 MATCH,
+полный runner unit PASS (app17.177s/codex5.307s), shared race PASS4.015s,
+адресный runner race PASS1.285s и scoped vet PASSexit0.
+Это synthetic regression, не доказательство offending field actual attempt6;
+точное поле остаётся UNKNOWN. Новая OCI/policy/recipes/ENV доставка и Retry
+пока NOT RUN. ROOT business implementation0/corrective USER prompts0.
+
+## Checkpoint 11.10.2026 20:24 UTC — attempt6 FAILED на broker activity schema
+
+SOURCE/HOT/remote Draft1807 cleancfa1f7f5 подтверждены, PR body readback PASS.
+QA§45 inventory опубликован в реестре; applicability не заменяет native final.
+INTAKE run_1-MbgCXK-MzIneQE5B-IEBj0 завершён FAILED20:16:57 UTC, root FAILED,
+дальнейшие четыре stage CANCELLED, artifacts0/Review cycles0.
+Exact owner graph/run/events200 receipt SHA
+a40cdc213c8a03a51d31612f90ecdcae7462b5fbd76e196050899a7eeb6f61cf;
+terminal events receipt ba900a66d643a98fb76f4ab0439a81d4b51789d9bf74b01281c2a26db506334d.
+
+Collector83467 сохранил same UID946e2199-0301-4968-98ea-e6426fadf82c:
+сначала CLIENT_FAILURE/ACTIVITY_SCHEMA/context ACTIVE/activity_failed=false,
+затем REQUEST_FAILURE/TERMINAL_WAIT/PROVIDER/CONTEXT_CANCELLED.
+Оба источника OBSERVED, rejoin VERIFIED; это не filesystem/transport/auth
+причина. Listener2705 раньше истёк FAILURE_NOT_OBSERVED_BEFORE_DEADLINE:
+это не application PASS и не противоречие последующему failure.
+
+Pod штатно удалён, exact session PVC/PV Bound/без deletion/потребителей0.
+ROOT read-only проекция последних1MiB собственного retained rollout с
+session id и stat before/after MATCH: последняя custom tool apply_patch,
+один ADD в OUTBOX, output string26bytes, затем turn_aborted. Commands,
+paths/diff/text/credential values не выводились и не переносились.
+Broker ACTIVITY frame не хранится: точное offending field actual UNKNOWN.
+
+Статически доказан общий дефект parser producer: nil []string проходит
+typed safe validation, JSON сериализует null, receiver закрыто отвергает его.
+Worker RED actual parser→writer→reader воспроизводит ACTIVITY_SCHEMA до
+callback для empty Shell/FileChange и скрытых paths. Готовится минимальная
+non-nil empty arrays canonicalization; consumer не ослаблять. Actual failing
+wire не подменять synthetic proof. Новый Retry до code/tests/OCI/policy/
+project images/ENV доставки NOT RUN; новых corrective USER prompts0.
 
 ## Checkpoint 11.10.2026 20:08 UTC — после перезапуска и адресный format fix
 

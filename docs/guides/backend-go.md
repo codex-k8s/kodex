@@ -4,8 +4,8 @@ title: Серверная разработка на Go
 type: guide
 status: approved
 owner: developer
-version: 1.4.5
-updated: 2026-10-11
+version: 1.4.6
+updated: 2026-10-12
 ---
 
 # Серверная разработка на Go
@@ -731,6 +731,13 @@ Ordering, retry, dead letter, retention и PITR определены в `GO-DOC-
 - Сквозная проверка связывает domain field, repository snapshot, transport
   response, event payload и consumer action. Совпадение имен без совпадения
   semantics и lifecycle недостаточно.
+- Валидация producer проверяется через фактическую сериализацию, decoder и
+  валидацию consumer. Допустимый typed DTO не доказывает допустимость wire:
+  непустой interface с nil slice сериализуется в JSON `null`. Для обязательного
+  массива producer формирует канонический пустой `[]`; consumer не начинает
+  принимать `null` ради исправления producer. Проверка охватывает пустые и
+  скрытые проекцией данные, ошибки и terminal состояния без раскрытия исходных
+  команд, путей или содержимого.
 - Ссылочное событие с ID/version имеет материализованный защищённый RPC
   чтения/повторного присоединения для точного consumer: generated client
   operation, привязку полномочий, скрывающую tenant семантику и readiness того

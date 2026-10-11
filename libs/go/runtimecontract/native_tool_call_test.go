@@ -1,6 +1,7 @@
 package runtimecontract
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -27,6 +28,50 @@ func TestRunnerNativeToolCallRequestAllowsOnlyClosedSafeProjection(t *testing.T)
 		mutate(&candidate)
 		if err := candidate.Validate(); err == nil {
 			t.Fatalf("invalid %s accepted", name)
+		}
+	}
+}
+
+func TestNativeToolCallEmptySafeArraysValidatedJSONRoundTrip(t *testing.T) {
+	for _, call := range []NativeToolCall{
+		{CallID: "shell-empty", Revision: 2, Kind: NativeToolKindShell, State: NativeToolStateSucceeded, SafeResult: NativeToolResultCompleted,
+			SafeParameters: map[string]any{"action_count": 0, "action_kinds": []string{}, "cwd_scope": "WORKSPACE", "exit_code": "ZERO", "source": "AGENT"}},
+		{CallID: "files-empty", Revision: 2, Kind: NativeToolKindFileChange, State: NativeToolStateSucceeded, SafeResult: NativeToolResultCompleted,
+			SafeParameters: map[string]any{"change_count": 0, "change_kinds": []string{}, "paths": []string{}, "paths_truncated": false}},
+		{CallID: "files-redacted", Revision: 2, Kind: NativeToolKindFileChange, State: NativeToolStateSucceeded, SafeResult: NativeToolResultCompleted,
+			SafeParameters: map[string]any{"change_count": 1, "change_kinds": []string{"UPDATE"}, "paths": []string{}, "paths_truncated": false}},
+	} {
+		for _, lifecycle := range []struct{ state, result string }{
+			{NativeToolStateRunning, ""},
+			{NativeToolStateSucceeded, NativeToolResultCompleted},
+			{NativeToolStateFailed, NativeToolResultFailed},
+			{NativeToolStateCancelled, "CANCELLED"},
+		} {
+			t.Run(call.CallID+"/"+lifecycle.state, func(t *testing.T) {
+				call.State, call.SafeResult = lifecycle.state, lifecycle.result
+				call.Revision = 2
+				if lifecycle.state == NativeToolStateRunning {
+					call.Revision = 1
+				}
+				if call.Validate() != nil {
+					t.Fatal("valid producer rejected")
+				}
+				encoded, err := json.Marshal(call)
+				var decoded NativeToolCall
+				if err != nil || json.Unmarshal(encoded, &decoded) != nil || decoded.Validate() != nil {
+					t.Fatal("valid safe arrays failed JSON roundtrip")
+				}
+				for key, value := range decoded.SafeParameters {
+					if _, isArray := value.([]any); !isArray {
+						continue
+					}
+					decoded.SafeParameters[key] = nil
+					if decoded.Validate() == nil {
+						t.Fatal("null array accepted")
+					}
+					decoded.SafeParameters[key] = value
+				}
+			})
 		}
 	}
 }

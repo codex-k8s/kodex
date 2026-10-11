@@ -1372,7 +1372,7 @@ func safeCommandActions(raw json.RawMessage) (safeActionSummary, error) {
 		return safeActionSummary{}, errors.New("Codex app-server command actions are invalid")
 	}
 	seen := make(map[string]struct{})
-	result := safeActionSummary{count: len(items)}
+	result := safeActionSummary{count: len(items), kinds: []string{}}
 	for _, item := range items {
 		fields, err := decodeObject(item, schema([]string{"command", "type"}, "command", "name", "path", "query", "type"))
 		if err != nil {
@@ -1414,7 +1414,7 @@ func (state *protocolState) safeFileChanges(raw json.RawMessage) (safeFileChange
 	if strictDecode(raw, &items) != nil || len(items) > 10_000 {
 		return safeFileChangeSummary{}, errors.New("Codex app-server file changes are invalid")
 	}
-	result := safeFileChangeSummary{count: len(items)}
+	result := safeFileChangeSummary{count: len(items), kinds: []string{}, paths: []string{}}
 	seenKinds := make(map[string]struct{})
 	for _, item := range items {
 		fields, err := decodeObject(item, schema([]string{"diff", "kind", "path"}, "diff", "kind", "path"))
