@@ -10,6 +10,24 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 09:41 UTC — actual guidance6994d3fd
+
+Exact Draft1807 HEAD6994d3fd readback/body PASS; mainab4992e0 unchanged.
+После fresh owner-idle0 HOT exact FFc4bd2028→6994d3fd. Фактические CP/RC
+mount hashes50a564a0/6eaef75b совпали; bounded serving/process/UID/rejoin
+receipt03e21dcc PASS. Serving ELF CP578be3c3/RCafae8d53 совпали с exact
+host Go1.26.6 trimpath/buildvcs=false build; /readyz оба PASS. Первые host
+команды с неверными entrypoints FAIL до build, затем actual Deployment
+entrypoints ./cmd/control-plane/runtime-controller PASS. На committed6994
+targeted vet обоих пакетов PASS. Это dev serving, не release/full acceptance.
+
+Chrome35 FILES reload/session/bootstrap/artifact pagination200, Console0,
+realtime connected/overflow=false. Screenshot MCP не получен: прежний timeout
+не превращается в visual PASS. Bounded CP logs3мин содержат5 неструктурированных
+строк; уровни UNKNOWN, не чистый backend baseline. Source-text fixtures пока
+готовятся без изменения type/scan policy; USER corrections0, host business
+implementation0. Следующий native root, business/ONEreview/Manager/owner/QA65 OPEN.
+
 
 ## Структурный перенос
 

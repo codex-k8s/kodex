@@ -10,6 +10,31 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 09:41 UTC — FILES guidance доставлен
+
+Source6994d3fd817ea975217d6b9a2db27ff8669ec073 clean опубликован в Draft1807;
+readback/body PASS, mainab4992e0 не менялся. Fresh fixed owner readback:
+activeRuntimeRuns/claimedRuntimeLeases/openBuilds/pendingAdmissions/
+pendingPromotions0; HOT переведён exact FF сc4bd2028 на6994d3fd.
+Actual host/Pod mounted prompt_variables SHA50a564a0 и callback/files
+SHA6eaef75b совпали. Read-only serving/rejoin proof03e21dcc PASS; CP ELF
+578be3c3292dd2b70bb5057eba40fca7b8b91a950f9103b3d044e010ba568f0e и
+RC ELFafae8d5366a37a83946fb0b6e99650a26642f842dcbeb318358346be010ac15b
+совпали с независимыми exact Go1.26.6 trimpath/buildvcs=false сборками.
+Оба /readyz PASS, runtime UID/process rejoin сохранён. Изначальные попытки
+host build с неверными ./cmd/server/worker завершились отказом до сборки;
+повторены точные entrypoints из live Deployment, не объявлены прежними PASS.
+Адресный vet обоих пакетов на committed6994d3fd PASS.
+
+Chrome35 FILES после reload: session/bootstrap/artifact pagination200,
+Console0, realtime connected, overflow=false. Screenshot MCP ранее завис,
+нового визуального доказательства этим reload нет. CP bounded log3мин:
+пять неструктурированных строк, причина/уровни не классифицированы; это не
+доказательство чистого backend baseline. Следующий source handoff использует
+поддерживаемые UTF-8 TEXT fixtures, а не неподдерживаемый tar.gz; политика
+scan/type и secrets boundary не меняется. Native новый запуск, business PR,
+ONE review/Manager/owner и QA65 остаются NOT RUN/OPEN.
+
 ## Checkpoint 11.10.2026 09:34 UTC — уточнено обнаружение файлов результатов
 
 Поверх e6dfb484 интегрирован guidance-only пакет пяти файлов с проверкой
