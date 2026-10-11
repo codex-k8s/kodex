@@ -10,6 +10,32 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 07:20 UTC — общий workspace работает в actual Pod
+
+Source/HOT56d25af26a7b9a6fd3e7f78325f27cb68b1f22ea, Draft1807 exact remote
+readback PASS, main неизменён. Capture SQL оптимизирован без роста timeout:
+один MATERIALIZED catalog/coordinator, broad RUN_RESULT только для обычной
+роли; coordinator получает frozen callback-history, не новые head versions.
+Disposable Coordinator9.37s/Retry4.89s PASS, restore-before-callback regression
+PASS. Actual CP ELF37822346 совпадает с canonical host build, mounted SQL
+hash7b69accf MATCH. RC diagnostic ELF11817316 сохранён.
+
+Новый native retry attempt4 run_zP5cfYGUXVKoMdQhw6STWR0- RUNNING: Coordinator
+и первый Manager RUNNING, следующие шаги PLANNED. Actual execution Pod
+runtime-turn-9bd03f6b0b517b70/UID4cf1c6c7,3 Ready/restarts0, role image24b443cf,
+runner b3c8fd6b. Provider cwd=/workspace/work, uid10002/groups29000;
+work writable, input/context/knowledge readonly по mount и access check.
+WORKSPACE.md640/SHAdd753bb6 присутствует, три INPUT copies640 в work/input.
+ROOT не менял actual workspace. Это PASS файловой модели, не business success
+и не измерение latency SLA. Chrome35 на новом root; graph envelope graph/run
+правильно прочитан, Console0/owner API200 в текущем reload.
+
+- [x] Общий workspace всех ролей доставлен и actual Manager Pod подтверждён.
+- [x] Claim queue после capture fix проходит; stale pending attempts2/3
+      CANCELLED штатным API, исходное task/input не переписывалось.
+- [ ] Продолжить native Architect/Developer/ONE Review/Manager/owner;
+      бизнес-PR не merge/approve, QA65 и bootstrap readiness OPEN.
+
 ## Checkpoint 11.10.2026 07:15 UTC — workspace доставлен, устранение задержки claim
 
 - [x] Общий workspace всех ролей доставлен: writable work/INPUT copies,

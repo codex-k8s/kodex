@@ -1323,3 +1323,24 @@ session/bootstrap/graph/ticket200 относятся к текущему reload,
 component9.37s и RetryCurrentRoot4.89s PASS. Новая регрессия проверяет trash/
 restore перед callback: один entry и исходные version/revision/digest.
 Actual latency после доставки ещё NOT RUN; timeout не увеличен, JIT не менялся.
+
+### 11.10.2026 07:20 UTC — actual общий workspace PASS
+
+Код56d25af2 опубликован в Draft1807 и guarded owner-idle FF доставлен в HOT.
+Actual CP serving/build/host ELF37822346 MATCH; mounted capture SQL7b69accf
+MATCH. Новый native retry attempt4 run_zP5cfYGUXVKoMdQhw6STWR0- штатно
+получил claim и создал runtime-turn-9bd03f6b0b517b70/UID4cf1c6c7,3 Ready.
+В provider-runtime uid10002/groups29000 cwd=/workspace/work, рабочая папка
+writable, input/context/knowledge readonly одновременно по mount и access.
+WORKSPACE.md640/SHAdd753bb6 присутствует; три текущих INPUT copies640
+лежат в work/input/files. Root не создавал и не менял файлы actual workspace.
+
+- [x] Общая файловая модель подтверждена в actual execution Pod;
+      инструкции объясняют дерево, editable copies, readonly sources и grants.
+- [x] Прежняя очередь снята: Coordinator и первый Manager RUNNING,
+      claim delivery без нового degraded в текущем окне; latency SLA не измерен.
+- [ ] Завершить Architect/Developer/ONE Review/Manager/owner; QA65 OPEN.
+
+Chrome35 актуальный graph/session/bootstrap/ticket200, Console0 в окне reload.
+Повторное чтение /graph правильно использует envelope graph/run; первый
+diagnostic flat projection дал пустой массив, не ложный zero-node факт.
