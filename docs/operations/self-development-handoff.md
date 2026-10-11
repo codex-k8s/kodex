@@ -25,6 +25,10 @@ Instructions EQUAL/SHAbafea2ff и local-first/verify-original/no-denial-replay
 Chrome35 и собственный Playwright открыты на новом root; screenshot/overflow,
 Console0 и relevant HTTP200 проверены. Scope DEBUG_SERVING, не release/QA PASS.
 
+Новый event seq12 read_file FAILED — доказанный local input correction, не
+remote отказ: max500000→FILE_INPUT_INVALID до RPC, один corrected max16384
+успешен. Own page0 прежде уже выдана, pins/offset сохранены; пропуска страницы0 нет.
+
 Продолжать сопровождение native без hot source/role image изменений до terminal.
 HOT0a116993 frozen, integration-журнал может публиковаться отдельно. ONE Review
 total, USER corrections0/host business implementation0. Semantic Architect/

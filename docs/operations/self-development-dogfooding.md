@@ -31,6 +31,11 @@ updated: 2026-10-11
 - [x] Chrome35: session/bootstrap/graph/events200, Console0; собственный
       screenshot просмотрен/overflow=false. Graph pan/zoom обрезает часть узлов;
       full fit не заявлен, прежние Playwright startup errors сохранены.
+- [x] Свежий native bounded correction доказан: после успешной страницы0
+      Coordinator запросил maximum_bytes500000, получил FILE_INPUT_INVALID до
+      metadata RPC, затем ровно один исправленный вызов16384 с теми же pins и
+      offset16384 успешно дал страницу до32768. Own JSONL и RC закрытый class
+      file_input_invalid совпали; remote-denial replay и пропуска страницы0 нет.
 - [ ] Semantic Architect PASS, substantive Developer PR, ONE Review,
       Final Manager/owner, остальные обязательные QA и bootstrap merge.
 
