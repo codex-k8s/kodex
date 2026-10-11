@@ -10,6 +10,31 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 20:42 UTC — runner8a76 доставлен, recipes собираются
+
+SOURCE/HOT/remote Draft1807 clean8a76c0a7; полный diff-check PASS. Новый full
+runner OCI3824059a60eade317a9d74856e9b45543094443e80d2b2728dc29bb11ab1f814,
+ELFad2e2f4267353a14a827ce0bbee93fbe9d2e4728ec497e4852a9f74bd3023c37,
+provenance1b380d2dd22c49b6bb837924de5e4b2570fee36342f0107a5f1174abdae42be6:
+source/binary/OCI verification и exact durable import двух CRI PASS.
+Canonical repo-owned publication→prepare→policy→binding→defaults→verify
+PASS; старые promoted79/pins63387f52 сохранены. Все Deployment Ready.
+После maintenance transient503 reload/rejoin восстановились; Console0,
+API GET200 и screenshot графа проверены, document overflow=false.
+
+Два recipe gen24/18 опубликованы штатными draft/validation/publication:
+staff mrev_2w8Fa9uUqMnaizw5KNQ9AKOm, helper mrev_V8u0PSnn7kTDOrXlFjqnP_yd.
+Fresh полный bootstrap/catalog/recipe/history EOF receipt4fe0384e,
+offline plan4a92fa94. Первые диагностические POST закрыто отвергнуты
+CSRF_REJECTED403 без эффекта; с тем же intent/idempotency и штатным browser
+CSRF header оба201/validation200/publication200. Native builds
+imgbld_gO4egtzthlzltzWvWeZbPqbK и imgbld_xj8TE_z4YaTT6pJ1RcUWu1YU
+COMPLETED attempt1. Admission2 pending; promotion/3ENV/7bindings ещё NOT RUN.
+18synthetic offline-plan tests PASS357ms, guards/38tools/non-image/EOF/OCC
+сохранены. Новый Retry ещё NOT RUN; attempt6 FAILED остаётся историческим.
+ROOT business implementation0/corrective USER prompts0. Actual failing
+broker field UNKNOWN; synthetic roundtrip fix не объявляется native PASS.
+
 ## Checkpoint 11.10.2026 20:29 UTC — canonical empty activity arrays
 
 Поверх cfa1f7f5 интегрирован frozen packet SHA
