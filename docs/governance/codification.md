@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.6
-updated: 2026-10-05
+version: 2.2.7
+updated: 2026-10-11
 ---
 
 # Кодификация документов и задач
@@ -131,6 +131,7 @@ updated: 2026-07-28
 | `OPS-DOC-SELFDEV-001` | `docs/operations/self-development-dogfooding.md` |
 | `OPS-DOC-SELFDEV-002` | `docs/operations/self-development-handoff.md` |
 | `QA-DOC-SELFDEV-001` | `docs/qa/full-qa-task.md` |
+| `QA-DOC-SELFDEV-002` | `docs/qa/bootstrap-1797-evidence-ledger.md` |
 | `ADR-MC-000`       | `docs/decisions/README.md`                                  |
 | `ADR-DOC-004`      | `docs/decisions/0014-domain-events-transactional-outbox.md` |
 | `GUIDE-MC-001`     | `docs/guides/README.md`                                     |

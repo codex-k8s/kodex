@@ -10,6 +10,9 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+Краткий реестр применимости проверок и оставшихся шлюзов разделов45/64:
+[QA-DOC-SELFDEV-002](../qa/bootstrap-1797-evidence-ledger.md).
+
 ## Checkpoint 11.10.2026 17:53 UTC — Architect завершён, Developer работает
 
 Source/HOT629c5b58 clean; remote Draft1807 exact head/main и body readback PASS.
