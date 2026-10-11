@@ -10,6 +10,39 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 22:36 UTC — native scope UNKNOWN, SYSTEM header source PASS
+
+SOURCE/HOT/remote da89124085bdf7851262619dd128cc3d8feaf384, actual CP
+/proc/889/exe SHA2565af1051115ddd772971ae1b57000ea869fe989aa2213be8bc9758d06fa3eaf5e
+и mounted PROJECT SQL2130613e MATCH. Owner idle22:30:00Z: build/admission/
+promotion/run/lease0; promoted81/pins c8b1e3da неизменны, unrequested1 не
+является active promotion. HOT ff-only после fresh idle, PRbody readback PASS.
+RunsBoard live title/aria «Команда помощнику проекта», screenshot/Console0/
+overflow=false/API200. RunPage header/breadcrumb ещё старый отдельный consumer;
+адресный supplemental fix готовится, не объявлять все UI consumers закрытыми.
+
+Новый turn trn_lSy9TumkR00yIolGtvuMJXuy/run_jIRIKb0gXNVf8hFAeFXxG-Rl
+native202 принят в прежнем admin conversation; новый сохранённый stable key,
+prompt прежний12099B/29bae477. Early provider ACK EQUAL/task_expected EQUAL/
+task_in_prompt=true, same Pod UID2690ddcc-2039-4c66-851c-e905b730dd2e,
+session ses_XXW7hFTxX0-bxtz96UWY5yuW, image88447fff/fileELFad2e2f42,
+ENV29/binding28/tools38/grants2, gpt-6.1-sol medium. Native SUCCEEDED,
+semantic BLOCKED: текущий grant catalog не сообщает owner/repository scope,
+read connection недоступен; propose НЕ вызывался, план не сохранялся.
+Owner events22 receipt SHA2566d0943a91425acefdfa222142080d5320c83043c34dde44941dd652721df671e.
+Это новый информационный пробел, не повторный timeout и не plan PASS.
+Следующее исправление даёт точный безопасный resource scope через разрешённый
+catalog, без credential metadata/расширения grants/USER corrections.
+
+SYSTEM frozen4 интегрирован в SOURCE: приватный minimal header вместо full
+UI grant projection после прежнего owner/admission path, новых locks нет.
+Manifest1ae8f8c1/patchcacb9b34/post4 MATCH; ROOT unit0.054s/vet/build PASS,
+disposable public PG16.851s/exit0, proposal21 elapsed689ms/full reads0.
+SYSTEM atomic apply/replay/owner/PROJECT-deny negatives сохранены.
+Build ELF7c06011938d218374d98774f0b3a0d62ddb769826b275de2ccc611fe873fcd15;
+actual delivery/native SYSTEM under load пока NOT RUN. PROJECT native21,
+full121/business EOF/ONE Review/Manager/owner/QA65 и bootstrap merge OPEN.
+
 ## Checkpoint 11.10.2026 22:28 UTC — PROJECT plan fan-out устранён в source
 
 SOURCE/HOT/remote1807 cb687d9e333b548eeb7e5f607b38fad6b3139efb до нового

@@ -10,6 +10,23 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 22:36 UTC — native не видит scope, новый SYSTEM source
+
+- [x] da891240 CP serving ELF5af10511/PROJECT SQL2130613e MATCH;
+      HOT ff-only после fresh idle, native owner GET200, live board title/aria
+      корректны, screenshot/Console0/overflow=false.
+- [x] Повторный admin turn штатно202, original prompt SHA29bae477 EQUAL
+      в раннем provider ACK, ENV29/binding28/tools38/model6.1-sol medium.
+- [ ] Новый semantic BLOCKED: grant catalog не показывает repository scope,
+      connection read недоступен. Propose не вызывался, persisted plan отсутствует.
+      Исправить безопасный exact catalog scope; RunPage header отдельно OPEN.
+- [x] SYSTEM minimal header source4: ROOT unit0.054s/vet/build/PG16.851s PASS,
+      proposal21 elapsed689ms/full projection0; authority/locks/budget прежние.
+- [ ] Доставить SYSTEM header; fresh native admin21/validate/apply/full121,
+      затем исходный business Retry/large EOF/ONE Review/Manager/owner/QA65.
+
+ROOT business code0/corrective USER0, plan/grant SQL bypass0. PR1808 не трогать.
+
 ## Checkpoint 11.10.2026 22:28 UTC — source header и оставшиеся UI consumers
 
 - [x] PROJECT owner header вместо full connection projection: exact5 hashes,

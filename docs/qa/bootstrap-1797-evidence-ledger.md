@@ -10,6 +10,21 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 11.10.2026 22:36 UTC
+
+da891240 actual CP process ELF5af10511/mounted SQL2130613e и native board
+title/aria/screenshot/Console0/API200/overflow=false PASS. RunPage header и
+breadcrumb ещё отдельный открытый consumer. Новый admin202/early ACK EQUAL
+для исходного task SHA29bae477, same-UID/image/ENV/tool pins PASS delivery.
+Terminal SUCCEEDED/semantic BLOCKED: catalog не содержит repository scope,
+connection read недоступен, propose НЕ вызывался. Это не plan PASS/timeout.
+
+SYSTEM frozen4 source manifest/post hashes MATCH, ROOT unit0.054s/vet/build
+PASS; canonical PG16.851s/exit0, synthetic21 proposal689ms/full projection0,
+atomic snapshots/apply/replay/owner/PROJECT-deny negatives PASS. Новых locks,
+cache/timeout/authority/schema/contracts нет. Actual SYSTEM delivery и новый
+native plan21/full121/business EOF/ONE Review/QA65/merge пока NOT RUN/OPEN.
+
 ## Новое scoped evidence 11.10.2026 22:28 UTC
 
 PROJECT header frozen5 на cb687: post hashes MATCH, ROOT targeted unit
