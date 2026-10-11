@@ -10,6 +10,24 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 17:53 UTC — fresh Architect PASS_CODE_ONLY
+
+- [x] Source/HOT629c5b58 clean, remote Draft1807 exact head/main/body MATCH.
+- [x] Architect SUCCEEDED17:50:05 UTC; шесть новых actual artifacts owner
+      DOWNLOAD200 до full bounded EOF, size/SHA/revision/version rejoin MATCH.
+      Это PASS_CODE_ONLY; balance/units/spending/live continuation UNKNOWN/NOT RUN.
+- [x] Own execution_snapshot из published source-evidence: exact run/session/
+      turn/revision pins, CODEX OBSERVED0.160.0/INITIALIZE_USER_AGENT,
+      gpt-6.1-sol medium/image d6e5bae2 MATCH. Не host probe.
+- [x] Coordinator native full-read/handoff и новый Developer RUNNING17:52:14;
+      ранний exact ACK91830B/58f6bfb6, published template03041170/revision2,
+      owner task3241B/c32b553f, same UID/inbox/file/image ELF MATCH.
+      Scope NONE/tools38/grants26; модель medium. Реализация ещё не подтверждена.
+- [x] Readiness503/READ_ONLY отделена от working execution; metadata-only
+      541 provider-owned dirs2700. Нет live chmod/skip квоты или ослабления guards.
+- [ ] Actual Developer substantive PR, ONE Review/Manager, remaining QA и
+      bootstrap merge/main readback. Checklist11/12/14/15 остаются OPEN.
+
 ## Checkpoint 11.10.2026 17:40 UTC — resume без нового execution
 
 - [x] Source/HOT57f6010f clean/remote Draft1807/main readback MATCH.
