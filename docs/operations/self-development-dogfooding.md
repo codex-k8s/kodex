@@ -1147,3 +1147,13 @@ manager-plan.md. Actual Pod/workspace не изменялись ROOT, запус
 Chrome35 свежие screenshot/Console0/owner HTTP200/Connected/overflow0 относятся
 только к текущему navigation window, не стирают прежний WebSocket transient.
 Developer/ONE Review/Manager/owner всё ещё OPEN; HOT/source6c30 неизменён.
+
+05:19 UTC: INTAKE SUCCEEDED, manager-plan31871B/CLEAN/native artifact revision
+arv_701019b9c20b47529b6d8c1c2b43cbd5/SHA14f6707d captured. Coordinator прочитал
+этот exact план до EOF и проверил semantic PASS только для Architect, затем
+штатно делегировал step-002/run_J7d5C2822GYUpgbBb6Qduch2. Root RUNNING,
+Architect RUNNING; Developer/ONE Review/Manager/owner OPEN. ROOT не писал
+бизнес-код и не отправлял corrective USER turn. Workspace-result328B/f821b62d
+прочитан ROOT exact HTTP200/hash MATCH, но содержит binding metadata, не actual
+shell-write proof. Journal0376f329 remote/readback PASS после отдельной
+проверки задержавшегося первого push ACK; повторный push не выполнялся.

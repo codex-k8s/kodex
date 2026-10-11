@@ -10,6 +10,31 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 05:19 UTC — INTAKE завершён, Architect работает
+
+Тот же root остаётся RUNNING. INTAKE `run_HTTT4d3_8CKdUVdqC5Ryo2-U`
+технически SUCCEEDED; semantic PASS для Architect проверен Coordinator,
+не означает допуска Developer или завершения бизнес-задачи. Native Manager
+создал `manager-plan.md`: artifact `art_IvQKgg_4uRuZ44Jw3ohe7DTG`, exact revision
+`arv_701019b9c20b47529b6d8c1c2b43cbd5`,31871B,
+SHA256 `14f6707d13a4c3d57fce58f353869f44870d2c35e60441d06ccbb81b49015cec`, CLEAN.
+Callback доставлен, Coordinator самостоятельно прочитал до EOF0→16384→31871
+вместе с result.md и workspace-write-result.json. Последний328B/SHAf821b62d
+прочитан ROOT через exact versioned content HTTP200/digest MATCH; содержит
+runtime revision и execution binding, но не доказательство shell write.
+
+Native делегирование step-002 создало Architect
+`run_J7d5C2822GYUpgbBb6Qduch2`, node `nod_7iiVNwDSgDK4iSb_uUSXr5_w`, RUNNING.
+Задание передал Coordinator штатно, не ROOT от USER; original input/grants
+не переписывались. Owner graph200 показывает обе SUCCEEDED INTAKE/Coordinator
+сессии и активного Architect. Developer, ONE Review, финальный Manager и owner
+ещё PLANNED/OPEN. Продолжать этот же root без нового запуска.
+
+Journal commit0376f329 запушен, remote HEAD и Draft1807 exact readback PASS;
+первый push readback задержался и сохранён FAIL_OR_UNKNOWN, отдельный readback
+подтвердил итог без повторного push. HOT6c30 неизменён. Chrome35 Console0 после
+последнего reload и Connected; эти ограниченные данные не заменяют полный QA.
+
 ## Checkpoint 11.10.2026 05:16 UTC — файловая среда проверяется штатной командой
 
 Основной root `run_otNkDk7sv9Qd_bK4xEB4QAxT` остаётся RUNNING/sequence316.
