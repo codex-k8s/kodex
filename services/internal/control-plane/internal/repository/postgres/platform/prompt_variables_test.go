@@ -60,6 +60,9 @@ func TestPromptWorkspaceSeparatesEditableInputFromReadonlyProvenance(t *testing.
 	}
 	input := variables["input"].(map[string]any)
 	workspace := input["workspace"].(map[string]any)
+	if workspace["guide_path"] != "/workspace/work/WORKSPACE.md" || workspace["readonly_context_directory"] != "/workspace/context" {
+		t.Fatal("workspace navigation map lost guide or read-only context")
+	}
 	if workspace["working_directory"] != "/workspace/work" || workspace["editable_input_directory"] != "/workspace/work/input/aset_abcdefgh/files" || workspace["original_input_directory"] != input["files_dir"] || workspace["original_input_manifest"] != input["manifest_path"] {
 		t.Fatal("workspace descriptor lost canonical isolated paths")
 	}
@@ -76,7 +79,7 @@ func TestPromptWorkspaceSeparatesEditableInputFromReadonlyProvenance(t *testing.
 			t.Fatal("context or knowledge falsely advertised as editable input")
 		}
 	}
-	for _, guard := range []string{"Only INPUT", "remain read-only", "digests describe the originals", "no artifact publication", "already authorized", "Do not invent a repository, token or network access", "exact pinned paths"} {
+	for _, guard := range []string{"Only INPUT", "remain read-only", "digests describe the originals", "no artifact publication", "already authorized", "Do not invent a repository, token or network access", "exact pinned paths", "WORKSPACE.md", "inspect the available directory tree", "not an authority source"} {
 		if !strings.Contains(workspace["guidance"].(string), guard) {
 			t.Fatalf("workspace guidance lost boundary: %q", guard)
 		}
@@ -90,7 +93,7 @@ func TestPromptWorkspaceExistsWithoutArtifactPublicationCapability(t *testing.T)
 	}
 	input := variables["input"].(map[string]any)
 	workspace := input["workspace"].(map[string]any)
-	if input["files_count"] != 0 || workspace["working_directory"] != runtimecontract.RuntimeWorkspaceWorkingRoot || workspace["editable_input_directory"] != "/workspace/work/input" {
+	if input["files_count"] != 0 || workspace["working_directory"] != runtimecontract.RuntimeWorkspaceWorkingRoot || workspace["editable_input_directory"] != "/workspace/work/input" || workspace["guide_path"] != "/workspace/work/WORKSPACE.md" {
 		t.Fatal("empty workspace depended on artifacts or invented a checkout")
 	}
 }

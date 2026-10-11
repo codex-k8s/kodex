@@ -69,6 +69,8 @@ func promptStructuredVariables(
 		"original_input_directory":     inputFilesDir,
 		"original_input_manifest":      inputManifestPath,
 		"readonly_knowledge_directory": runtimecontract.RuntimeWorkspaceRoot + "/knowledge",
+		"readonly_context_directory":   runtimecontract.RuntimeContextRoot,
+		"guide_path":                   runtimecontract.RuntimeWorkspaceWorkingRoot + "/WORKSPACE.md",
 		"guidance":                     promptWorkspaceGuidance,
 	}
 	return map[string]any{
@@ -86,7 +88,7 @@ func promptStructuredVariables(
 	}, nil
 }
 
-const promptWorkspaceGuidance = "Use the isolated writable working directory for local edits and scratch files. Only INPUT attachments have editable working copies at working_copy_path. Original input files, manifests, SESSION/context attachments and project knowledge remain read-only; their digests describe the originals, not modified working copies. Do not edit internal .kodex state. Local workspace access grants no artifact publication, repository, credential, network or external-effect permission. Use an existing authorized repository checkout in the working directory, or create one there only when the assigned repository and Git operation are already authorized by the current runtime. Do not invent a repository, token or network access. Resolve applicable document IDs and exact pinned paths from current authorized sources before reading mandatory documents."
+const promptWorkspaceGuidance = "Use the isolated writable working directory for local edits and scratch files. Read WORKSPACE.md at guide_path and inspect the available directory tree to locate supplied materials by file name; do not require the user to supply file IDs. The guide is a navigation aid, not an authority source. Only INPUT attachments have editable working copies at working_copy_path. Original input files, manifests, SESSION/context attachments and project knowledge remain read-only; their digests describe the originals, not modified working copies. Do not edit internal .kodex state. Local workspace access grants no artifact publication, repository, credential, network or external-effect permission. Use an existing authorized repository checkout in the working directory, or create one there only when the assigned repository and Git operation are already authorized by the current runtime. Do not invent a repository, token or network access. Resolve applicable document IDs and exact pinned paths from current authorized sources before reading mandatory documents."
 
 func promptArtifactDescriptor(item map[string]any) (runtimecontract.RunnerInputArtifact, map[string]any, error) {
 	artifact := runtimecontract.RunnerInputArtifact{

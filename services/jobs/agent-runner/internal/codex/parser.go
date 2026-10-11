@@ -1149,9 +1149,8 @@ func (state *protocolState) consumeItem(raw json.RawMessage, authoritative bool,
 	}
 	state.agentMessages[id] = value
 	if phase == "final_answer" {
-		if state.finalID != "" && state.finalID != id {
-			return errors.New("Codex app-server emitted duplicate final messages")
-		}
+		// Фаза сообщения не завершает ход: его результатом становится последнее
+		// final_answer только после авторитетного turn/completed.
 		state.finalID = id
 	} else if phase == "" {
 		state.fallbackID = id

@@ -135,6 +135,13 @@ func TestWorkingDirectoryCopiesAndResetsOnlyTaskInputs(t *testing.T) {
 	if err := prepareWorkingDirectoryOwned(t.Context(), input, uint32(os.Geteuid())); err != nil {
 		t.Fatal(err)
 	}
+	guidePath := filepath.Join(input.WorkspaceRoot, "work", workspaceGuideName)
+	if guide, err := os.ReadFile(guidePath); err != nil || string(guide) != workspaceGuide {
+		t.Fatal("workspace navigation guide missing")
+	}
+	if err := os.WriteFile(guidePath, []byte("untrusted edited guide"), 0o640); err != nil {
+		t.Fatal(err)
+	}
 	sourceInfo, _ := os.Stat(source)
 	targetInfo, err := os.Stat(target)
 	if err != nil || os.SameFile(sourceInfo, targetInfo) || targetInfo.Mode().Perm()&0o200 == 0 {
@@ -164,6 +171,9 @@ func TestWorkingDirectoryCopiesAndResetsOnlyTaskInputs(t *testing.T) {
 	if err := prepareWorkingDirectoryOwned(t.Context(), input, uint32(os.Geteuid())); err != nil {
 		t.Fatal(err)
 	}
+	if guide, err := os.ReadFile(guidePath); err != nil || string(guide) != workspaceGuide {
+		t.Fatal("edited guide survived isolated workspace reset")
+	}
 	raw, err = os.ReadFile(target)
 	if err != nil || string(raw) != "bounded task input\n" {
 		t.Fatal("copy was not reset")
@@ -178,6 +188,39 @@ func TestWorkingDirectoryCopiesAndResetsOnlyTaskInputs(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(input.WorkspaceRoot, "work", name)); !os.IsNotExist(err) {
 			t.Fatalf("unexpected copied tree %s", name)
 		}
+	}
+}
+
+func TestWorkingDirectoryGuideExistsWithoutAttachmentsAndUsesQuota(t *testing.T) {
+	input, _, _ := workingInputFixture(t)
+	input.InputArtifacts, input.AttachmentSets, input.AttachmentSetRef = nil, nil, ""
+	if err := prepareWorkingDirectoryOwned(t.Context(), input, uint32(os.Geteuid())); err != nil {
+		t.Fatal(err)
+	}
+	guidePath := filepath.Join(input.WorkspaceRoot, "work", workspaceGuideName)
+	if guide, err := os.ReadFile(guidePath); err != nil || string(guide) != workspaceGuide {
+		t.Fatal("empty workspace lost navigation guide")
+	}
+	for _, guard := range []string{"/workspace/work/input/", "/workspace/input/", "/workspace/context/", "/workspace/knowledge/", "working_copy_path", "не требуй от пользователя", "текущими capabilities", "сбрасываются"} {
+		if !strings.Contains(workspaceGuide, guard) {
+			t.Fatalf("workspace guide lost boundary %q", guard)
+		}
+	}
+	policy, err := runtimecontract.RuntimeWorkspacePolicyWithLimits(&runtimecontract.RuntimeWorkspaceLimits{MaxBytes: int64(len(workspaceGuide)) - 1, MaxFiles: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.WorkspacePolicy = policy
+	if err := prepareWorkingDirectoryOwned(t.Context(), input, uint32(os.Geteuid())); err == nil {
+		t.Fatal("guide bypassed byte quota")
+	}
+	input, _, _ = workingInputFixture(t)
+	input.WorkspacePolicy, err = runtimecontract.RuntimeWorkspacePolicyWithLimits(&runtimecontract.RuntimeWorkspaceLimits{MaxBytes: 1 << 20, MaxFiles: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := prepareWorkingDirectoryOwned(t.Context(), input, uint32(os.Geteuid())); err == nil {
+		t.Fatal("guide and input bypassed file count quota")
 	}
 }
 

@@ -70,6 +70,56 @@ func TestProtocolStreamsPublishedActivitiesImmediatelyAndExactlyOnce(t *testing.
 	}
 }
 
+func TestProtocolKeepsMultipleFinalItemsUntilTurnCompletion(t *testing.T) {
+	for _, status := range []string{"completed", "failed", "interrupted"} {
+		t.Run(status, func(t *testing.T) {
+			state := newProtocolState(testThreadID)
+			state.threadID, state.turnID, state.workspaceRoot = testThreadID, testTurnID, "/workspace/work"
+			state.turnStarted = 1
+			var activities []runtimecontract.RuntimeActivity
+			state.onActivity = func(activity runtimecontract.RuntimeActivity) error {
+				activities = append(activities, activity)
+				return nil
+			}
+			question := raw(`{"id":"final-question","text":"Какой профиль используется?","phase":"final_answer","type":"agentMessage"}`)
+			commentary := raw(`{"id":"commentary-after-question","text":"Сохраняю проверенный результат","phase":"commentary","type":"agentMessage"}`)
+			answer := raw(`{"id":"final-result","text":"Итоговый результат","phase":"final_answer","type":"agentMessage"}`)
+			for _, item := range []json.RawMessage{question, commentary, answer, question, answer} {
+				if err := state.consumeItem(item, true, 10); err != nil {
+					t.Fatalf("valid distinct message or exact replay rejected: %v", err)
+				}
+			}
+			if len(activities) != 3 || state.terminals != 0 || state.result.Outcome != "" || state.result.FinalMessage != "" || state.finalID != "final-result" {
+				t.Fatal("message phase completed the turn, replay replaced the result, or history was lost")
+			}
+			if activities[0].Message.Phase != runtimecontract.RuntimeMessageFinal || activities[1].Message.Phase != runtimecontract.RuntimeMessageCommentary || activities[2].Message.Phase != runtimecontract.RuntimeMessageFinal {
+				t.Fatal("native message phases changed")
+			}
+			mutated := raw(`{"id":"final-question","text":"Изменённый текст","phase":"final_answer","type":"agentMessage"}`)
+			if err := state.consumeItem(mutated, true, 20); err == nil || len(activities) != 3 || state.finalID != "final-result" {
+				t.Fatal("changed completed item accepted")
+			}
+			errorJSON := "null"
+			if status == "failed" {
+				errorJSON = `{"message":"diagnostic","codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":null}}}`
+			}
+			terminal := raw(`{"threadId":"` + testThreadID + `","turn":{"id":"` + testTurnID + `","items":[` + string(question) + `,` + string(commentary) + `,` + string(answer) + `],"status":"` + status + `","error":` + errorJSON + `}}`)
+			if err := state.notification("turn/completed", terminal); err != nil || len(activities) != 3 || state.terminals != 1 {
+				t.Fatalf("authoritative turn completion rejected or replayed: %v", err)
+			}
+			if status == "completed" && (state.result.Outcome != "SUCCEEDED" || state.result.FinalMessage != "Итоговый результат") {
+				t.Fatal("last final answer was not selected")
+			}
+			if status == "failed" && (state.result.Outcome != "FAILED" || state.result.FinalMessage != "" || state.result.FailureCode != "provider_transport_failure") {
+				t.Fatal("message converted failed provider turn to success")
+			}
+			if status == "interrupted" && (state.result.Outcome != "FAILED" || state.result.FinalMessage != "" || state.result.FailureCode != "provider_interrupted") {
+				t.Fatal("message converted interrupted provider turn to success")
+			}
+		})
+	}
+}
+
 func TestProtocolActivityBoundaryAndStickyDeliveryFailure(t *testing.T) {
 	state := newProtocolState(testThreadID)
 	calls := 0

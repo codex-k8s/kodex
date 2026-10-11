@@ -1208,3 +1208,58 @@ https://learn.chatgpt.com/docs/app-server#auth-endpoints и Context7 /openai/cod
 Chrome35 reload/Console0/Connected и owner HTTP200 — ограниченное окно проверки;
 actual WebSocket frames отдельно не проверены. Оба узла Ready, actual agent Pod
 3 Ready/restarts0; HOT6c30 и runtime/grants остаются неизменными.
+
+## Checkpoint 11.10.2026 06:16 UTC — общий workspace и несколько final сообщений
+
+Новый приоритет владельца: всем агентам предоставляется файловый workspace
+для самостоятельной навигации по именам, редактируемые материалы отделены от
+readonly данных и снабжены понятной картой каталогов. Пользователь не обязан
+передавать file IDs. Это уточнение действующего checklist цели #1797/PR1807,
+не новый API и не исключение из authority/security.
+
+- [x] Код: WORKSPACE.md создаётся runner для каждой попытки даже без INPUT,
+      карта доступна через CP FILES guide_path и readonly_context_directory.
+      Writable /workspace/work/input содержит только текущие INPUT-копии;
+      originals/history/context/knowledge readonly. Квоты bytes/count включают
+      справочник, повторная подготовка восстанавливает его после join/reset.
+- [x] Адресный regression второго final_answer сначала FAIL. Исправление
+      выбирает последнее distinct final_answer после turn/completed, не после
+      фазы сообщения. History/replay/changed-item/limits и FAILED/interrupted
+      сохраняют прежние границы. Удалена недостижимая diagnostic category case.
+- [x] Локальные codex/app unit, CP prompt unit, runner vet/build и diff check
+      PASS на изменённом дереве поверх0f4f4049; точный commit readback далее.
+- [x] Chrome35 graph/events200, screenshot проверен: текущий FAILED отображён.
+      Console0 в текущем navigation window, bootstrap/session200.
+- [ ] Exact новый runner/policy/images/ENV/bindings и actual guide readback;
+      hot source пока6c30. Новый filesystem guide actual Pod NOT RUN.
+- [ ] Успешный native бизнес-результат, ONE Review/Manager/owner и merge/main;
+      отсутствие результата не подменяется локальными unit PASS.
+
+### Карта и lifecycle затронутого пути
+
+Требование владельца → CP immutable prompt FILES → текущий подписанный runtime
+input/grants → runner join предыдущего provider → rooted reset work → bounded
+справочник и копии проверенных INPUT → provider cwd/workspace-write → штатная
+публикация через прежний authority path. Actor/tenant/version/digest назначаются
+сервером как прежде; справочник не источник полномочий. Прямое создание файла
+не создаёт domain event или опубликованный artifact: authoritative read path —
+локальный exact файл и текущий FILES, публикация остаётся отдельной командой.
+Prepare failure отклоняет запуск provider; cancel/terminal не допускают reset
+до join; retry готовит новую попытку и не переиспользует изменённый справочник.
+
+Distinct completed message → одна activity без terminal; exact replay → no-op;
+same ID с новым текстом → fail-closed; turn/completed → последний final и прежний
+typed terminal callback; failed/interrupted → FAILED без выдачи раннего final
+как успеха. Ограничения количества/размера/tuple и внешние effects не расширены.
+Проверены official app-server lifecycle и Context7 /openai/codex SDK extraction:
+https://learn.chatgpt.com/docs/app-server#lifecycle-overview .
+
+### Текущий native отказ не скрывается
+
+Root run_otNkDk7sv9Qd_bK4xEB4QAxT FAILED: Architect terminal997,
+Developer/Review/Manager CANCELLED998–1000, root FAILED1001. Generic
+RUNTIME_PROVIDER_UNAVAILABLE не доказывает транспортную причину. Pod удалён;
+четыре точных retained CRI paths отсутствуют. Transport/context/timeout/parser
+category причины997 UNKNOWN. Static final parser defect доказан независимо,
+не объявлен причиной997. Restart/retry пока не выполнялся. USER corrections0,
+host business implementation0; прежнее actual write proof81a88c04 сохранено.

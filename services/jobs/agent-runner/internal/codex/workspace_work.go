@@ -19,6 +19,44 @@ import (
 
 var errWorkingDirectory = errors.New("runtime working directory is unsafe")
 
+const workspaceGuideName = "WORKSPACE.md"
+
+const workspaceGuide = `# Рабочие файлы агента
+
+Текущий каталог: /workspace/work. Осмотри доступное дерево каталогов и найди
+нужные материалы по именам файлов; не требуй от пользователя их идентификаторы.
+Точные исходные пути, версии и хеши перечислены в FILES и manifest.
+
+## Можно редактировать
+
+- /workspace/work/input/<набор>/files/ — независимые рабочие копии входных файлов
+  текущего задания. Изменяй копию по working_copy_path, не её оригинал.
+- /workspace/work/ — собственные файлы, черновики, сборки и scratch-каталоги.
+  Уже разрешённый checkout репозитория размещай здесь. Наличие каталога не
+  разрешает само по себе clone, Git push, новый credential или сетевой доступ.
+
+## Только для чтения
+
+- /workspace/input/ — оригиналы входных файлов, история SESSION и manifest.json.
+- /workspace/context/ — закреплённые инструкции и контекст текущего исполнения.
+- /workspace/knowledge/ — предоставленные знания проекта.
+
+История и знания не становятся редактируемыми входами. Хеш исходного файла
+не описывает изменённую рабочую копию. Для обязательного чтения проверь exact
+version/digest и прочитай требуемый источник до EOF; дерево не доказывает EOF.
+
+## Результат и ограничения
+
+Готовые файлы складывай в /workspace/.kodex/outbox только если публикация
+артефактов разрешена текущими capabilities; форматы и ограничения смотри в FILES.
+Черновики и checkout не складывай в outbox. Остальное внутреннее .kodex/state
+не читай и не изменяй. Этот справочник не выдаёт полномочий или доступ к секретам.
+
+Workspace изолирован и временный: перед следующим исполнением рабочие файлы
+сбрасываются. Сохраняй результат через разрешённые артефакты или Git-операции;
+локальный файл и финальное сообщение сами по себе не подтверждают публикацию.
+`
+
 func workingDirectory(input model.Input) string {
 	return filepath.Join(input.WorkspaceRoot, filepath.Base(runtimecontract.RuntimeWorkspaceWorkingRoot))
 }
@@ -36,7 +74,10 @@ func prepareWorkingDirectoryOwned(ctx context.Context, input model.Input, source
 	if input.WorkspacePolicy.Validate() != nil {
 		return errWorkingDirectory
 	}
-	var copyBytes, copyFiles int64
+	copyBytes, copyFiles := int64(len(workspaceGuide)), int64(1)
+	if copyBytes > input.WorkspacePolicy.MaximumWritableBytes || copyFiles > input.WorkspacePolicy.MaximumFileCount {
+		return errWorkingDirectory
+	}
 	for _, artifact := range input.InputArtifacts {
 		if artifact.Scope != runtimecontract.AttachmentScopeInput {
 			continue
@@ -92,6 +133,16 @@ func prepareWorkingTree(ctx context.Context, input model.Input, directory *os.Fi
 		if ctx.Err() != nil || root.RemoveAll(entry.Name()) != nil {
 			return errWorkingDirectory
 		}
+	}
+	guide, err := root.OpenFile(workspaceGuideName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o640)
+	if err != nil {
+		return errWorkingDirectory
+	}
+	written, writeErr := io.WriteString(guide, workspaceGuide)
+	syncErr := guide.Sync()
+	closeErr := guide.Close()
+	if writeErr != nil || written != len(workspaceGuide) || syncErr != nil || closeErr != nil {
+		return errWorkingDirectory
 	}
 	for _, artifact := range input.InputArtifacts {
 		if artifact.Scope != runtimecontract.AttachmentScopeInput {

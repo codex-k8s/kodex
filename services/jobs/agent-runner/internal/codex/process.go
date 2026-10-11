@@ -137,8 +137,7 @@ func notificationFailure(method string, err error) error {
 		category = "ITEM"
 	case "Codex app-server agent message text is invalid", "Codex app-server agent message phase is invalid",
 		"Codex app-server agent message is invalid", "Codex app-server agent message changed after completion",
-		"Codex app-server published message limit exceeded", "Codex app-server published message exceeds its bound",
-		"Codex app-server emitted duplicate final messages":
+		"Codex app-server published message limit exceeded", "Codex app-server published message exceeds its bound":
 		category = "MESSAGE"
 	case "Codex app-server token usage is invalid", "Codex app-server token usage breakdown is invalid", "Codex app-server token usage delta is invalid":
 		category = "TOKEN_USAGE"

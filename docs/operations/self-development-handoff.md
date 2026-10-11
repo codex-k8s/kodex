@@ -10,6 +10,40 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 06:16 UTC — файловая навигация всех агентов и parser fix
+
+Root `run_otNkDk7sv9Qd_bK4xEB4QAxT` FAILED: terminal Architect seq997,
+Developer/Review/Manager CANCELLED seq998–1000, root FAILED seq1001.
+Новый native запуск пока не начат; исторический отказ сохранён. Generic
+RUNTIME_PROVIDER_UNAVAILABLE не устанавливает причину. Pod уже удалён,
+его четыре exact retained CRI paths отсутствуют; transport/context/timeout
+и конкретная parser category остаются UNKNOWN.
+
+Адресный regression сначала FAIL: второе distinct final_answer отклонялось.
+Исправление хранит все completed сообщения по исходным фазам, выбирает
+последнее final_answer лишь после turn/completed, сохраняет fail-closed
+для mutation/replay/limits и FAILED/interrupted. Official app-server lifecycle
+и Context7 /openai/codex проверены; это самостоятельный доказанный дефект,
+не объявленная причина конкретного отказа seq997.
+
+По новому требованию владельца единая файловая модель применяется ко всем
+агентам: writable /workspace/work и копии INPUT, readonly originals/context/
+knowledge. Runner материализует WORKSPACE.md с картой каталогов даже без
+вложений, учитывает файл в bytes/count квотах и пересоздаёт после join/reset.
+CP FILES явно указывает guide_path и readonly_context_directory; инструкции
+предлагают осмотреть дерево по именам вместо запроса file IDs. Справочник
+не authority: checkout/Git/network/publication разрешаются прежними grants.
+История не становится editable INPUT, originals и pinned provenance не меняются.
+
+- [x] Локальные codex/app unit PASS; CP prompt workspace unit PASS;
+      runner vet/build PASS на изменённом дереве поверх0f4f4049.
+- [x] Chrome35 screenshot, graph/events HTTP200, Console0 в текущем окне;
+      FAILED виден пользователю. Bootstrap/session HTTP200. Это не QA65 PASS.
+- [ ] Доставить новый runner/policy и обновить intended образы/ENV/bindings,
+      подтвердить source/ELF/digest; HOT пока6c30, новый guide в actual Pod NOT RUN.
+- [ ] Продолжить native бизнес-сценарий, затем ONE Review/Manager/owner и
+      bootstrap merge/main. USER corrections0, host business implementation0.
+
 ## Checkpoint 11.10.2026 06:00 UTC — actual запись в workspace подтверждена
 
 Тот же root RUNNING/seq986, Architect RUNNING; INTAKE завершён, Developer ещё
