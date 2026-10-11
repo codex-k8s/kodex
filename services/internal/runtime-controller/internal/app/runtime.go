@@ -27,6 +27,7 @@ const (
 	failureCompletionMaximumTries = 5
 	warmReconcileRPCFailure       = "reconcile system assistant warm runtime"
 	warmReportRPCFailure          = "report system assistant warm runtime"
+	runtimeClaimRPCFailure        = "claim runtime execution"
 	warmDesiredRevisionMissing    = "system assistant warm runtime desired revision is missing"
 	turnMaterializationFailure    = "runtime turn materialization"
 	turnInputRejectionMessage     = "runtime turn input rejected"
@@ -116,7 +117,7 @@ func (runtime *runtime) Run(ctx context.Context) error {
 			claimed, err := runtime.claim(ctx)
 			if err != nil && !errors.Is(err, context.Canceled) && !claimDegraded {
 				claimDegraded = true
-				runtime.logger.WarnContext(ctx, "runtime claim delivery degraded", "error_class", "control_plane")
+				runtime.logger.WarnContext(ctx, "runtime claim delivery degraded", "error_class", "control_plane", "error", boundedRPCFailure(runtimeClaimRPCFailure, err))
 			} else if err == nil && claimDegraded {
 				claimDegraded = false
 				runtime.logger.InfoContext(ctx, "runtime claim delivery restored")
