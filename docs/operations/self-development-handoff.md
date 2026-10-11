@@ -10,6 +10,24 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 07:33 UTC — workspace доставлен, INTAKE продолжается
+
+Исполняемый HOT/source56d25af2 не менялся: native attempt4
+run_zP5cfYGUXVKoMdQhw6STWR0- RUNNING, первый Coordinator SUCCEEDED,
+Manager child run_BngmsNLjXqMjZdF71g-dwj6j RUNNING, graph seq255.
+Manager читает repository/Issue/PR штатными инструментами; завершение INTAKE
+не объявлено. Actual Pod runtime-turn-e5e8c4d149747ade Running/3 Ready,
+restarts0. Provider log за12мин: одна JSON INFO запись, WARN/ERROR0;
+это не доказательство готовности всего backend. Chrome35 screenshot,
+graph/events200 и Console0 в текущем reload. Чужие вкладки не закрывались.
+
+Старый checkpoint tail перенесён canonical roll-plan в checkpoints-006.txt:
+51443B, прежний full preimage130399B сохранён с Git provenance c34ce328.
+Активный журнал стал78956B до новой записи; verifier previous snapshot
+prefix PASS, все старые bytes/checkbox сохранены. Это не новый QA PASS.
+Продолжить Architect/Developer/ONE Review/Manager/owner, QA65 OPEN.
+Не менять HOT во время native выполнения, не писать USER corrections.
+
 ## Checkpoint 11.10.2026 07:20 UTC — общий workspace работает в actual Pod
 
 Source/HOT56d25af26a7b9a6fd3e7f78325f27cb68b1f22ea, Draft1807 exact remote

@@ -91,6 +91,24 @@
         "historyStart": 213267,
         "historyEnd": 268478
       }
+    },
+    {
+      "file": "checkpoints-006.txt",
+      "bytes": [
+        266752,
+        318195
+      ],
+      "size": 51443,
+      "sha256": "0c27b548e0e5d6a245ef3aa43a905a12199429804606e9a54dbf12bb13314fbe",
+      "source": {
+        "revision": "c34ce328988494c6a33b5de87d661ae315776699",
+        "file": "checkpoint-source-9a698ee2beb84f257d64be7f3effdec25d531835.txt",
+        "gitBlob": "9a698ee2beb84f257d64be7f3effdec25d531835",
+        "sha256": "0f31f78026c9d4550e3a7bfccd7be67e3a544315ab7c5920cb62379a5bcebb75",
+        "size": 130399,
+        "historyStart": 266752,
+        "historyEnd": 324795
+      }
     }
   ]
 }
