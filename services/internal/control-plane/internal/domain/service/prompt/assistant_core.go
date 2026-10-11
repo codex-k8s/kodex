@@ -23,9 +23,11 @@ func renderAssistantCore(snapshot Snapshot, data map[string]any) (string, error)
 	if snapshot.ServiceTemplateRevision != "prompt-service-v3" || !assistantCoreRefPattern.MatchString(core.Ref) || !validDigest(core.Digest) ||
 		!utf8.ValidString(core.Content) || strings.ContainsRune(core.Content, 0) ||
 		(core.Scope != "PROJECT" && core.Scope != "SYSTEM") ||
-		(core.Scope == "PROJECT" && snapshot.ProjectRef == "") || (core.Scope == "SYSTEM" && snapshot.ProjectRef != "") {
+		(core.Scope == "PROJECT" && snapshot.ProjectRef == "") {
 		return "", ErrInvalid
 	}
+	// SYSTEM owner принадлежит организации; проверенный repository project
+	// context остаётся данными snapshot и не меняет scope либо права базы.
 	revision := strings.TrimPrefix(core.Revision, "system-assistant-core-v")
 	number, err := strconv.ParseInt(revision, 10, 32)
 	if err != nil || number < 1 || strconv.FormatInt(number, 10) != revision || revision == core.Revision {

@@ -47,7 +47,6 @@ func TestAssistantCoreInvalidPinsFailClosed(t *testing.T) {
 		{"content", func(s *Snapshot) { s.AssistantCore.Content += "changed" }},
 		{"scope", func(s *Snapshot) { s.AssistantCore.Scope = "NONE" }},
 		{"project", func(s *Snapshot) { s.ProjectRef = "" }},
-		{"system-project", func(s *Snapshot) { s.AssistantCore.Scope = "SYSTEM" }},
 		{"slot", func(s *Snapshot) { s.AssistantCore = assistantCoreFixture(`{{slot "CONSTRAINTS"}}`) }},
 		{"unknown-variable", func(s *Snapshot) { s.AssistantCore = assistantCoreFixture(`{{.secret.value}}`) }},
 		{"utf8", func(s *Snapshot) { s.AssistantCore = assistantCoreFixture("bad\xff") }},
@@ -113,17 +112,38 @@ func TestProjectAssistantCorePlatformMaterializationAndRejoin(t *testing.T) {
 }
 
 func TestSystemAssistantCorePinDoesNotDuplicateBase(t *testing.T) {
-	snapshot := semanticFixture()
-	snapshot.AssistantCore = assistantCoreFixture("SYSTEM_BASE_MARKER")
-	snapshot.AssistantCore.Scope = "SYSTEM"
-	snapshot.ProjectRef = ""
-	result, err := Materialize("SYSTEM_BASE_MARKER", snapshot)
-	if err != nil || !result.Complete || strings.Count(result.Prompt, "SYSTEM_BASE_MARKER") != 1 {
-		t.Fatal("system base was lost or duplicated")
-	}
-	snapshot.AssistantCore.Ref = "ins_core_changed"
-	changed, err := Materialize("SYSTEM_BASE_MARKER", snapshot)
-	if err != nil || changed.VariableSnapshotDigest == result.VariableSnapshotDigest {
-		t.Fatal("system base ref omitted from variable pin")
+	for _, projectRef := range []string{"", "prj_system_context"} {
+		t.Run("context-"+projectRef, func(t *testing.T) {
+			snapshot := semanticFixture()
+			snapshot.TargetKind, snapshot.TargetRef = TargetAgent, "agt_system_fixture"
+			snapshot.AssistantCore = assistantCoreFixture("SYSTEM_BASE_MARKER")
+			snapshot.AssistantCore.Scope = "SYSTEM"
+			snapshot.ProjectRef = projectRef
+			result, err := Materialize("SYSTEM_BASE_MARKER", snapshot)
+			if err != nil || !result.Complete || strings.Count(result.Prompt, "SYSTEM_BASE_MARKER") != 1 {
+				t.Fatal("system base was lost or duplicated by project context")
+			}
+			if result.TemplateRef != snapshot.TemplateRef || result.TemplateDigest != snapshot.TemplateDigest ||
+				!reflect.DeepEqual(result.EffectiveCapabilities, []string{"read"}) {
+				t.Fatal("system project context changed template pins or effective authority")
+			}
+			raw, err := json.Marshal(snapshot)
+			var stored Snapshot
+			if err != nil || json.Unmarshal(raw, &stored) != nil || stored.ProjectRef != projectRef ||
+				!reflect.DeepEqual(stored.AssistantCore, snapshot.AssistantCore) {
+				t.Fatal("durable system snapshot lost exact core or project context")
+			}
+			rejoined, err := Materialize("SYSTEM_BASE_MARKER", stored)
+			if err != nil || rejoined.Prompt != result.Prompt || rejoined.Digest != result.Digest ||
+				rejoined.VariableSnapshotDigest != result.VariableSnapshotDigest || rejoined.TemplateRef != result.TemplateRef ||
+				rejoined.TemplateDigest != result.TemplateDigest {
+				t.Fatal("system project context changed immutable materialization on rejoin")
+			}
+			snapshot.AssistantCore.Ref = "ins_core_changed"
+			changed, err := Materialize("SYSTEM_BASE_MARKER", snapshot)
+			if err != nil || changed.Digest == result.Digest || changed.VariableSnapshotDigest == result.VariableSnapshotDigest {
+				t.Fatal("system base ref omitted from materialization or variable pin")
+			}
+		})
 	}
 }
