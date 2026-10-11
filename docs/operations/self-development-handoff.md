@@ -10,6 +10,49 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 23:04 UTC — native helper21/full121 PASS, business attempt8 RUNNING
+
+Code SOURCE/HOT/remote74b9c6db реально обслуживается: CP /proc/1763/exe
+4e0d119c4afd147108e96e277ce900b52094436a5789dabfecbc50ca1db561cc и
+RC /proc/542/exe a405c25693cf9b095723c8995fbd28e4c9757ac8f793eb04f8c47f4868f8f83a
+MATCH; mounted Proto75494e26/producer9ad1c196/consumerfcbdfc16 MATCH.
+Fresh idle22:53:27Z все5 counts0/promoted81/pins c8b1e3da неизменны;
+HOT ff-only и PRbody exact readback PASS.
+
+Третий native admin turn trn_qCAR2ydKz2jqiveWG3NnMiBs,
+run_UrUwLwW9ZkucMM12d1JfjQei принят202 с тем же prompt12099B/29bae477
+и новым заранее сохранённым stable key. Early provider ACK task_expected/
+task_in_prompt/instructions/inbox EQUAL, Pod UIDa6fa3e88-c4ad-456e-b223-ff5e3c19f187,
+image88447fff/ENV29/binding28/tools38/grants2/model6.1-sol medium.
+Terminal seq33 SUCCEEDED: native propose SUCCEEDED, создан ровно один DRAFT
+план pln_w2lH1Nh0k0cy3MeejqaAFFaG revision1/version1 с21 операциями.
+Помощник подтвердил scope свежим каталогом, но сообщил ограничение своего
+direct plan readback; последующая owner verification не выдаётся за его read.
+
+ROOT fresh owner read проверил exact21/no extras/owner pins/before-after/
+NONE/paths[]/OCC. Validation native200→VALID/version2, fresh owner commitment
+d3e78a64 без drift; application native200→APPLIED/version3/revision1,
+21APPLIED receipts без conflicts. Full owner readback connection749 CONNECTED/
+bindingMATCH,121 enabled semantic set MATCH; SYSTEM0/100 employee и scope
+сохранены. Plan verification/applied guard PASS; никаких SQL grant writes,
+generic plan bypass или USER business corrections. Receipt SHAs: validation
+747ed0df, application491c7019, full ownerd0a83b52.
+
+Original business RETRY native200 без task/body коррекции, target Workflow
+40/published revision13/единственный comprehensive review + Manager product
+gate. Attempt8 run_UYRRRagBAbTl2nolP_0mv8aB, прежняя root session
+ses_NP_88hYp-4d1GrV38gOkQ_-C; root coordinator delegate SUCCEEDED,
+INTAKE child run_7hPFoT7Nx980caA9KUvhGQ2B/session ses_rHdDyPzI73UVj0prCqG0M_nC
+RUNNING. Root/INTAKE early same-UID ACK/rejoin PASS, input digest a711c2db
+совпадает; staff image66a00394/ENV24/binding25/tools38, INTAKE22grants,
+model6.1-sol medium. Exact expected task/image-file binary flags NOT RUN.
+Live root graph screenshot/Console0/relevant API200/overflow=false; full
+graph и current-work focus работают. Business EOF/Architect/Developer/
+ONE Review/Manager/owner/QA65/merge OPEN, review cycles0. PR1808 не трогать.
+
+Этот следующий checkpoint меняет только журналы; HOT code74b9 сохраняется
+до завершения active runs. Не перезапускать workload ради doc-only SHA.
+
 ## Checkpoint 11.10.2026 22:52 UTC — safe PROJECT scope source PASS
 
 SOURCE/HOT/remote772a4778 до нового каталога. Supplemental detail4 уже

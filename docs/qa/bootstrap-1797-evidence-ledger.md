@@ -10,6 +10,25 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 11.10.2026 23:04 UTC
+
+74b9 actual CP/RC process ELF4e0d119c/a405c256 и mounted Proto/producer/
+consumer75494e26/9ad1c196/fcbdfc16 MATCH. Native unchanged admin task ACK
+EQUAL, catalog/propose SUCCEEDED, один persisted plan21. Direct plan read
+самого помощника ограничен; ROOT fresh owner verification отдельно PASS.
+Native validation200→VALIDv2, fresh immutable commitment MATCH,
+application200→APPLIEDv3/revision1/21receipts/no conflicts. Final connection
+749/CONNECTED/bindingMATCH/121enabled exact semantic set MATCH;100employee/
+SYSTEM0/NONE/paths[]/repository scope без расширения.
+
+Original business command RETRY200, attempt8 RUNNING, Workflow40/revision13
+с ONE comprehensive review. Root delegate SUCCEEDED, INTAKE child RUNNING.
+Same-UID root/INTAKE ACK/rejoin/input digest MATCH/staff image66a00394/
+ENV24/binding25/tools38/modelmedium; expected task flag NOT RUN. Root UI
+screenshot/Console0/API200/overflow=false PASS. Business EOF/later handoffs/
+ONE Review/Manager/QA65/merge НЕ PASS. ROOT business code0/USER corrections0.
+Docs-only checkpoint не выдаётся за новую runtime image/code доставку.
+
 ## Новое scoped evidence 11.10.2026 22:52 UTC
 
 772a4778 detail4 actual source/mount/h1/breadcrumb/screenshot/Console0/
