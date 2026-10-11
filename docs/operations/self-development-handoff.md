@@ -10,6 +10,44 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 15:36 UTC — native рекомендация и публикация только Developer
+
+Source/HOT1765ec18 clean/remote Draft1807/body readback PASS. Первое push
+readback дало UNKNOWN из-за задержки GitHub; повторный read-only readback
+подтвердил тот же SHA без повторного push. Mainab4992e0 не менялся.
+Actual CP Pod mounted prompt.go/core-v50 hashes MATCH979a002c/98d23946;
+serving PID376/start17308273, ELF/build SHAfb153fe0 равны, v50 marker есть.
+Штатный SYSTEM endpoint показывает corePromptRevision=v50; это debug-serving
+доставка, не immutable release acceptance.
+
+Новый PROJECT helper run_DKmyvkisMVjyDrYIhIAz_D87 SUCCEEDED/seq25. Собственный
+ранний ACK: exact current revision rrev_yZrpqunQpikbwnniGUw_0q0k, medium,
+38tools, instructions99432B/SHA9e49b1e2, provider input/file equality и Pod
+rejoin PASS. Это полный live developerInstructions, не synthetic warm fixture;
+лимит64KiB относится к continuation notice, не всему full instructions.
+Safe RUN preview200/complete=true, template/materialization digests совпали
+с ACK; full prompt не возвращён, core revision в safe preview намеренно скрыта.
+Первый диагностический GET несуществующего detail path дал405; это ошибка
+probe, не приложение. Исправленный штатный list read200 сохранил zero effects.
+
+Помощник прочитал текущий AGENT snapshot и предложил один plan
+pln_3EteTYMKoIRc5ZUy5zci1_1J, CREATE_INSTRUCTION_DRAFT только Developer/v27.
+Full original prefix сохранён. Через штатный UI: plan VALID/APPLIED, draft
+ins_Dk1fpt6JK8W-T9IhglQP0FAG, отдельные VALIDATE и impact/PUBLISH; один
+intended consumer APPLIED. Agentv30, published revision2/17978B/
+SHA03041170, instruction bindingv2. Все non-instruction поля, grants,
+окружение и исходный текст сохранены; прежняя revision1 доступна в истории.
+Owner publication receipt SHA5b7bcac5. Скриншоты редактора/плана просмотрены,
+Console0, relevant Network200, bounded CP/RC/gateway logs без error lines.
+
+Original task RETRY UI200 создал run_c1D0mawPEHWw9HvxQbgbSUBM/attempt4,
+session ses_NP_88hYp-4d1GrV38gOkQ_-C. INPUT summary, target, initiator и
+source побайтно по JSON совпали с attempt3; receipt SHAd0de3808. Fresh graph
+содержит новый INTAKE/Architect/Developer/ONE Review/acceptance, не reuse
+completed stages. Root RUNNING/seq15 в receipt; screenshot/Console0 и
+realtime просмотрены позднееseq35. Успешный business PR/приёмка ещё OPEN.
+USER business corrections0/host business implementation0; goal активен.
+
 ## Checkpoint 11.10.2026 15:21 UTC — рекомендация core-v50, без общей Git-политики
 
 Интегрированы ровно3 frozen source files, pre/post hashes MATCH. Core-v49

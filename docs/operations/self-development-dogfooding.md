@@ -10,6 +10,30 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 15:36 UTC — рекомендации не внедряются всем
+
+- [x] Source1765ec18/remote/body/HOT clean. Actual CP mounted2 hashes MATCH,
+      serving ELF=buildfb153fe0 и v50 marker; SYSTEM core revision50 readback200.
+- [x] Native PROJECT helper SUCCEEDED/seq25: fresh ACK/instructions99432B,
+      own Pod/input/file rejoin; safe RUN preview200/complete/digests MATCH.
+      Synthetic warm65281B не объявляется размером этого live full prompt.
+- [x] Один native editable plan только Developer. Исходный полный текст
+      сохранён; plan VALID/APPLIED создаёт лишь draft. Затем отдельные
+      VALIDATE/impact/PUBLISH, intended consumer1 APPLIED, agentv30/
+      published revision2/17978B/SHA03041170/bindingv2. Non-instruction
+      поля и grants/окружение неизменны, historical revision1 сохранена.
+- [x] Original INPUT retry UI200/attempt4 run_c1D0mawPEHWw9HvxQbgbSUBM;
+      input/target/initiator/source unchanged, fresh stages/ONE Review.
+      Editor/publication/graph screenshots, Console0/relevant Network200;
+      CP/RC/gateway bounded logs без error lines. USER business corrections0.
+- [ ] Успешный новый INTAKE→Architect→Developer substantive PR→ONE Review→
+      Manager/owner, остальные обязательные QA и bootstrap merge/main readback.
+
+Root RUNNING/seq15 в owner receipt SHAd0de3808; позднее UIseq35. Нативный
+конфигурационный результат не является выполнением бизнес-задачи. Private
+probe405/ранний readback до mutation завершения сохранены как диагностика,
+не объявляются application defects или PASS мутации. Goal открыт.
+
 ## Checkpoint 11.10.2026 15:21 UTC — core-v50 source/unit PASS, native OPEN
 
 - [x] Три exact pre/post source images MATCH; immutable v49 сохранён,
