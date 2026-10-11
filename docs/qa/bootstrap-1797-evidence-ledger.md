@@ -4,8 +4,8 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.0
-updated: 2026-10-11
+version: 1.0.1
+updated: 2026-10-12
 ---
 
 # Область и границы результата
@@ -20,6 +20,36 @@ Issue #1797, Draft PR #1807; бизнес-задача #1796. Упоминани
 ошибки и receipts сохранены в
 [журнале](../operations/self-development-dogfooding.md) и
 [точке продолжения](../operations/self-development-handoff.md).
+
+## QA§45: применимость к опубликованному 60bf624d
+
+11.10.2026 20:09 UTC ROOT повторил сравнение byte scopes и full diff-check на
+clean SOURCE60bf624daa44a535c5f8d5eb23efbc4676d865f5. Remote Draft1807
+readback MATCH; первый post-push readback UNKNOWN, повторное чтение подтвердило
+тот же SHA без повторного push. HOT ff-only до того же SHA выполнен.
+
+| Обязательный контур | Фактическое доказательство и область применения |
+| --- | --- |
+| Формат/static/build | Full `git diff --check ab4992e0 HEAD` PASS/exit0 на60bf. Committed95aa имел FAIL четырёх EOF blank lines; удалены только эти строки. Node continuation-readback5/5 PASS122.585ms, production SQL/binary inputs неизменны. Scoped gofmt/vet/lint/build остальных областей сохраняют исходные SHA. |
+| Go runner/runtime/libraries | Runner whole unit/vet, scoped race/build и collector93 tests PASS на8f0fd117/его frozen integration scope. Two-UID kernel fixture отдельный PASS. Runner/collector bytes неизменны после8f; runtime-controller/libs byte-identical44a0c7bb. Default fixture SKIP не превращается в kernel PASS. |
+| Go egress | Whole package unit2.549s наb41a6e10, scoped unit/race/vet/build, mounted source/serving ELF PASS. Egress bytes послеb41 неизменны; это не новая full-suite или external paid-download проверка. |
+| Control Plane/PostgreSQL | После91a02d6d изменились только core-v50 и четыре build-intent файла. Оба scope имеют адресные unit/race/vet/build и disposable PG receipts: inheritance4cases8.450s, correlation3.253s/readbacks PASS. Ранние full/bootstrap/credential/profile receipts сохраняют свой scope; нового combined whole-module PASS не заявляется. |
+| SQL/migrations | `make check-sql-boundary` PASS на8896636a; все SQL внутри Control Plane/CLI migration bytes по current comparison неизменны. Continuation tooling SQL менялся только удалением EOF blank line, его закрытая структура подтверждена Node5/5. |
+| Contracts/Proto/OpenAPI/AsyncAPI/codegen | Byte-identicalbfb1460b: actual Proto/codegen, поздние AsyncAPI70Go/70TS и OpenAPI Go/TS regeneration/generated diff0 PASS. Старый regeneration NOT RUN superseded, первоначальные tooling FAIL сохранены исторически. Policyc153b494 registry7/actual policygen/authorityproof race PASS. |
+| Render/security/RoleImage | Deploy/scripts byte-identicalc153b494. Оба render профиля, ABI/negative assertions и адресные PG negatives сохраняют свои receipts. Canonical b90/compiled8f, provenance/import/policy/defaults, два promoted recipes и ENV3/bindings7/tools38/preservation PASS. Fresh protected95 install/upgrade NOT RUN, не acceptance текущего trusted-dev runtime. |
+| Integration/MCP/prompt | Unchangedbfb integration adapters/definitions/catalog: package/authority-policy и MCP16 wire fixture receipts PASS. Materialization/inheritance/core-v50 и same-UID native delivery PASS только для своих pins. Финальные handoff новой attempt6 ещё OPEN. |
+| Frontend | Весь frontend byte-identical2bdee3dd. Исторический full399suites/3888tests на1d555df7 не является current whole PASS: последующие packets61/80/27/35tests и соответствующие lint/types/build receipts покрывают изменённые области. |
+| Relevant Playwright/Chrome | Synthetic desktop/mobile/split scopes имеют отдельные PASS; прежние timeout/startup FAIL не удалены, единого green split5/5 run не заявляется. Current graph negative/resize/rejoin/screenshot/Console0/API200 PASS. Native attempt6 role/business semantics ещё OPEN, не QA65 PASS. |
+
+Это inventory и ROOT read-only сравнение, не дополнительный review и не новый
+запуск всех suites. Exact historical receipts находятся в журнале и handoff;
+их SHA не заменяется на60bf. Нового обязательного запуска неизменных Go/PG/
+contract/frontend областей не выявлено. Native chain, финальный ledger,
+bootstrap merge/fresh-main/resources и отчёт QA§64 остаются открытыми.
+
+Свежие GitHub gates95aa: mergeable=true/clean, checks0/status entries0,
+reviews0, действующие rules deletion/non_fast_forward/creation. Это не CI PASS;
+перед merge нужен readback окончательного опубликованного SHA.
 
 ## Проверка неизменности на 68d1b9b3
 
