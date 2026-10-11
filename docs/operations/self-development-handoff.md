@@ -49,6 +49,16 @@ Owner seq451 сохраняет один CODEX_SHELL FAILED; короткий sa
 Не выдавать отсутствие completion WARN/пустые логи CP/RC/ROLE за business PASS.
 Последний собственный Chrome35 reload14:21; remote/HOT04d87933 clean.
 
+Дополнение14:27: source/HOT8896636a clean/remote Draft1807/body readback PASS.
+Адресный canonical `make check-sql-boundary` на exact8896636a/Go1.26.6 PASS;
+изменений файлов после проверки нет. Broad suites из-за docs-only не повторялись.
+Actual Architect /readyz503/READ_ONLY, provider/relay ready, role running/restarts0;
+это наблюдение во время выполнения, не доказательство root cause или terminal
+сбоя. Во время probe workspace не менялся, права не исправлялись host-ом.
+Architect продолжил native tools и commentary доseq505/EOF текущей страницы:
+подготовка дизайна для Developer; последний собственный Chrome35 reload14:25.
+Свой OBSERVED provider-version, semantic publication и downstream пока OPEN.
+
 ## Checkpoint 11.10.2026 13:54 UTC — общий workspace доставлен всем выбранным ролям
 
 Source/HOT44a0c7bb clean; тот же Draft1807/Issue1797. Canonical runner

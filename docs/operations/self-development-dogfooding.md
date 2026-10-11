@@ -40,6 +40,13 @@ Model semantic read не доказан. CODEX_SHELL FAILED seq451 сохран�
 UNKNOWN; subsequent shell SUCCEEDED, Architect RUNNING seq475. Свежие CP/RC/ROLE
 логи пустые и не подтверждают business success. Chrome35 reload выполнен.
 
+Дополнение14:27: canonical `make check-sql-boundary` на exact8896636a,
+Go1.26.6 PASS, tree clean. Runtime code44a0c7bb не менялся. Architect всё ещё
+RUNNING seq505; actual /readyz503/READ_ONLY отмечен отдельно, без host chmod
+или перезапуска. Native tools продолжаются, completion/semantic результата
+ещё нет. Scope-сопоставление существующих receipts не означает новую полную
+QA-suite или readiness всей платформы.
+
 ## Checkpoint 11.10.2026 13:54 UTC — доставка общего workspace завершена
 
 - [x] Source44a0c7bb: новый runner e4fc62f4/provenance2a01d3ce/ELF b31da159
