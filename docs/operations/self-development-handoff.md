@@ -10,6 +10,78 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 21:36 UTC — GitHub6 реализован и проверен локально
+
+На SOURCE base18ca интегрированы canonical GitHub6.0.0 и шесть IG-файлов.
+Contract SHA256433db658 и regenerated SHA2568363ea36 совпадают с frozen
+пакетом; интегрированный IG manifest8/8 MATCH. Source8MiB/page16KiB/native
+64KiB и sealed same-repo blob raw12MiB подтверждены synthetic fixtures,
+включая observed size3590649,8MiB UTF8/EOF и hostile metadata/transport.
+ROOT combined shared module race PASS29.730s; IG addressed suite PASS15.039s;
+CP eligibility/binding unit PASS0.303s; scoped disposable PostgreSQL
+managed lifecycle/rebind/binding PASS9.271s. Worker IG whole package
+PASS30.269s, scoped race PASS97.296s, vet/format PASS на exact frozen scope.
+Codegen/check PASS Go1.26.6. IG и CP CGO0/trimpath/buildvcs=false build PASS:
+ELF95f625fbf62ebbdec48dc7ad9be045b34f5f4e8fde53b1a7339ed63006e1bd2a
+и941df1189385f3591327397e244791bd99ba9bb4f812c6f42cf130d869b0411e.
+Первый codegen был FAIL из-за host Go1.27.1, первый PG harness FAIL из-за
+PATH без node; повторены с canonical toolchain/полным точным PATH, guards
+не изменялись. Это scoped local evidence, не native full-source PASS.
+
+Current connection624/UI configuration18/immutable published GitHub5
+сохранены owner GET200. Enabled grants121: employees100 и project helper21,
+NONE и repository scopes без расширения. Rebind штатно отзывает их и очищает
+credential; после delivery нужны fresh secure credential/TEST и точное
+восстановление через employee API и project-helper typed plans. Runner и RC
+не имеют binary dependency integrationpackage; image/ENV delivery не повторять.
+Новая serving/catalog/UI6/native attempt и полный EOF пока NOT RUN.
+
+## Checkpoint 11.10.2026 21:24 UTC — native attempt7 закрыта на крупном GitHub source
+
+SOURCE/HOT/remote Draft1807: clean18ca857969cb12b8eca8f842e96693ca69e5ce8a.
+Owner events GET200/complete=true/currentSequence223, receipt SHA256
+fdef6cb0b154f0ae8bda18b9a7843d11cfdaa2f5e67d54d1179b64e9180174d3:
+root run_TK4meronkuMEdI-07g9tNBnv FAILED; INTAKE
+run_RluiQcHgK6vK5miQss_NgE5a SUCCEEDED с semantic BLOCKED.
+Продолжение Coordinator также SUCCEEDED, но это не Architect: Architect,
+Developer, ONE Reviewer и Manager product acceptance NOT RUN, их узлы
+CANCELLED. Финальный Human Gate не достигнут; Review cycles0.
+
+Причина native отказа установлена, а не выведена из размера текущего host-файла.
+Invocation inv_vime7H020GdZImpPEcC-TO6T FAILED при
+github.repository.content.read, inputSHA256
+f7412efbd0fd59929627d74312591885fd6c33f7bdef41b566594c7a07f3a32a.
+Закрытая проекция exact сохранённой сессии подтвердила path
+libs/go/controlplaneapi/gen/controlplane/v1/control_plane.pb.go,
+commit c784ee85ec2e8c9aaf481014d46401d61110ca5e, offset0/max16384,
+expected blob bfce79780c8393fd73a7f3eff56c03fa4222156c и тот же input digest.
+Отдельный ROOT diagnostic GET exact GitHub Contents вернул file/encoding none,
+size3590649, contentCharacters0, expected blob MATCH. Контракт GitHub5.0.0
+ограничивает полный source1MiB/base64, поэтому это доказанный недостижимый
+large-source path, а не повреждение файла или временная ошибка провайдера.
+Managed tool state SUCCEEDED означает завершённый wrapper, не успешный READ.
+
+Сравнение materialized task закрыто exact persisted USER_MESSAGE: root37723B/
+b77fe3404acd6a24b8585693e3d09c6828f1abcc3668bc62f5bd600f8de5938a и
+INTAKE4836B/65f53f7460e1a189af091b201082b2dc70a8d0b4ba55d9714b7e11ca00863699.
+Повторный bounded ACK/rejoin с правильным INTAKE task pin подтвердил EQUAL;
+ранний NOT RUN ниже superseded только этим exact сравнением, не final PASS.
+Failure collector77597 завершён FOLLOW_STREAM_ENDED/NOT_CAPTURED;
+отсутствие captured application failure не отменяет semantic BLOCKED.
+
+ROOT выбрал в разрешённом autonomous scope явный GitHub6.0.0 protocol:
+source≤8MiB, прежние page16KiB/native envelope64KiB; Contents immutable
+commit/path разрешает blob SHA того же репозитория, затем bounded SDK Git
+blob JSON и полная size/UTF8/NUL/Git-SHA проверка. Отдельный raw12MiB бюджет
+только exact server-bound blob GET; остальные SDK ответы остаются2MiB,
+ошибки64KiB. Download/raw URL, redirect, новая identity, host или permission
+не становятся fallback. Реализация, combined unit/codegen, доставка catalog/
+connection revisions и новый native результат пока NOT RUN.
+
+Обе ноды Ready, все22 Deployment имеют ожидаемые ready replicas. Chrome11
+reload/rejoin/Console0/overflow=false проверены. ROOT business implementation0,
+corrective USER prompts0; бизнес-PR1808 не изменён и не слит.
+
 ## Checkpoint 11.10.2026 21:02 UTC — новая доставка завершена, native attempt7
 
 SOURCE/HOT/remote17924c37; runner compiled8a76c0a7 и OCI3824059a

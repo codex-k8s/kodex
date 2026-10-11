@@ -39,7 +39,7 @@ GitHub `content.update.content_base64` имеет maximumLength 349528 для ф
 их сквозную проверку. Для YAML parser проверена документация Context7
 `/yaml/go-yaml`: Node traversal и Decoder.KnownFields.
 
-GitHub 5.0.0 задаёт единственный bounded `repository.content.list` contract:
+GitHub 6.0.0 сохраняет единственный bounded `repository.content.list` contract:
 immutable commit ref, offset cursor, count/total/next/eof и общий catalog digest.
 Схема допускает cursor 0..999 и limit 1..50; adapter проверяет 40hex commit,
 continuation digest, весь immediate-child индекс и окончательный native byte
@@ -47,3 +47,30 @@ budget. Старый 4.0.0 не получает новые semantics через
 EOF каталога не является EOF исходных файлов; upstream Contents cap >=1000
 закрыто отклоняется. Публикация новой ревизии и exact owner rebind не заменяются
 автоматическим изменением уже закреплённых connection/grant/runtime snapshots.
+
+GitHub 6.0.0 публикует отдельный source budget `repository.content.read`:
+полный UTF-8 файл без NUL до 8 МиБ (8388608 байт), offset/size/next 0..8388608.
+Страница по-прежнему до 16384 байт, окончательный native envelope до 65536
+байт. Сначала Contents разрешает exact commit/path в одном connection-owned
+репозитории и проверяет file/path/SHA/size. `encoding=none` требует пустой
+content; только сервером разрешённый Contents SHA передаётся SDK GetBlob
+того же репозитория через `api.github.com`. До пагинации adapter проверяет весь
+source, его size, Git blob SHA, UTF-8 и отсутствие NUL. Обычный raw SDK/metadata
+budget 2 МиБ сохраняется; закрытый exact blob request имеет raw budget 12 МиБ,
+ошибка — 64 КиБ. Download/raw URL, redirect, новый host или право не добавляются.
+Историческая 5.0.0 закрыто отклоняется текущим executable registry: свежие
+package/connection/grant/runtime pins назначает владелец состояния, библиотека
+не выполняет rebind и не переинтерпретирует исторический snapshot.
+
+Сценарий #1797: actor и exact grant поступают из проверенного session/turn
+context и immutable package/connection revision, а не из path/ref/expected_sha.
+Штатная managed MCP invocation `github.repository.content.read` проходит
+gateway и request-local adapter; connection владеет owner/repository, GitHub
+владеет file/blob на точном commit. `ref` закрепляет версию, `expected_sha`
+проверяет целостность продолжения и не выдаёт authority. Успех возвращает
+bounded page с source/chunk digests и receipt; ошибка метаданных, SHA, size,
+UTF-8/NUL или бюджета закрыто отклоняет весь read до выдачи текста. Операция
+READ_ONLY не меняет GitHub-состояние и не создаёт domain event; readback
+выполняется тем же exact commit/path до EOF, native consumer получает только
+проверенную страницу. Runtime/deploy proof этого пути принадлежит полному
+unit gateway и не заменяется schema/codegen PASS этой библиотеки.

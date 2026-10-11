@@ -10,6 +10,33 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 21:24 UTC — exact large-source blocker
+
+- [x] Native attempt7 terminal подтверждён полным owner event store223;
+      INTAKE semantic BLOCKED, дальнейшие stage CANCELLED, Review cycles0.
+- [x] Exact managed GitHub READ input digest, commit/path/blob pin и provider
+      metadata сопоставлены: generated file3590649B/encoding none недостижим
+      через текущий full-source limit1MiB/base64. Другая identity/transport
+      не использованы как замена native read или semantic gate.
+- [x] Expected materialized INTAKE task4836B/digest65f53f74 и ACK EQUAL;
+      source/build/ENV/tools38/preservation delivery evidence сохранены.
+- [x] Рабочая вкладка Chrome11 доступна после перезапуска: reload/rejoin,
+      Console0/overflow=false; обе ноды и22 Deployment Ready.
+- [x] GitHub6.0.0 bounded full-source8MiB, same-repo pinned blob protocol,
+      независимые raw/page/envelope budgets и отрицательные unit/codegen.
+      ROOT combined shared race29.730s/IG15.039s/CP unit0.303s/disposable
+      PG9.271s/build/codegen PASS на base18ca+exact frozen scopes;
+      source contract433db658/generated8363ea36/IG manifest8/8 MATCH.
+      Это локальные проверки, не native EOF или доставка новой версии.
+- [ ] Доставка exact source/serving/catalog и новая current connection
+      revision без изменения исторических snapshots, затем native результат.
+- [ ] Developer substantive handoff/PR → ONE Review → Manager/owner;
+      прочие QA/bootstrap merge/fresh-main/финальный отчёт.
+
+ROOT business implementation0/corrective USER prompts0. Diagnosis PASS
+не подменяет успешный READ или full QA. Подробные pins и ограничения:
+[точка продолжения](self-development-handoff.md).
+
 ## Checkpoint 11.10.2026 20:00 UTC — source/serving и native Retry
 
 - [x] Pushed3eeb8eb0/HOT ff-only и Draft1807 body readback MATCH.

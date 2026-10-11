@@ -73,6 +73,32 @@ scope, контракт, policy, fixture либо deployment boundary, прим�
 
 ## Свежая цепочка выполнения
 
+11.10 21:36 UTC: GitHub6/source8MiB implemented в SOURCE base18ca с exact
+contract433db658/generated8363ea36 и IG manifest8/8 MATCH. ROOT combined
+shared race29.730s, IG addressed15.039s, CP eligibility0.303s и disposable
+PG managed lifecycle/binding9.271s PASS; codegen/check и оба build PASS.
+IG frozen scope whole unit30.269s/race97.296s/vet PASS. Старые codegen/PG
+harness FAIL исправлены только exact toolchain/PATH; не скрыты. Native
+large-source EOF, serving/catalog/UI6, восстановление121 grants и новая
+business цепочка остаются NOT RUN. Исходная attempt7 BLOCKED сохраняется.
+
+11.10 21:24 UTC: native Retry7 root FAILED/INTAKE semantic BLOCKED;
+Coordinator continuation не является Architect. Architect/Developer/ONE
+Reviewer/Manager NOT RUN, planned nodes CANCELLED, Review cycles0.
+Полный owner event store223/complete=true/GET200 имеет receipt SHA256
+fdef6cb0b154f0ae8bda18b9a7843d11cfdaa2f5e67d54d1179b64e9180174d3.
+Exact failed READ input digestf7412efb сопоставлен с сохранённой сессией:
+generated control_plane.pb.go на business headc784ee85, expected blob
+bfce79780c8393fd73a7f3eff56c03fa4222156c. ROOT diagnostic exact Contents GET
+подтвердил size3590649/encoding none/empty content/blob MATCH: существующий
+контракт1MiB/base64 недостижим для этого файла. Это diagnosis PASS, не READ
+или бизнес-приёмка PASS. Версионированный bounded large-source fix ещё NOT RUN.
+INTAKE exact materialized task digest65f53f74/4836B сравнен с persisted
+USER_MESSAGE и provider ACK EQUAL; это supersedes ранний task NOT RUN ниже.
+Collector FOLLOW_STREAM_ENDED/NOT_CAPTURED не является application PASS.
+Chrome11 Console0/overflow=false/rejoin и cluster ready readbacks выполнены;
+ROOT implementation0/USER corrections0. Bootstrap merge и полный QA65 OPEN.
+
 11.10 21:02 UTC: compiled8a76/OCI3824059a canonical delivery завершена.
 Оба новых project artifacts ACCEPTED/PROMOTED (staff66a00394/helper88447fff).
 Full owner GET13rows200, планы EOF/APPLIED и exact offline proof

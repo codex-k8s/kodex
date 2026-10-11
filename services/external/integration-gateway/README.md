@@ -64,7 +64,8 @@ FQDN в policy egress gateway; отсутствие host в policy являет�
 fail-closed отказом подключения. Redirect запрещён.
 
 READ повторяется только на bounded network/`429`/`502`/`503`/`504` отказах.
-Для GitHub сырой успешный SDK-ответ ограничен 2 МиБ до декодирования,
+Для GitHub обычный сырой успешный SDK-ответ ограничен 2 МиБ до декодирования
+(exact Git blob read имеет отдельный бюджет, описанный ниже),
 ошибочный — 64 КиБ; безопасная итоговая проекция по-прежнему ограничена
 64 КиБ и проверяется package output schema. `github.pull_request.list`
 возвращает компактный указатель с number/title/state/head/base/SHA/draft/URL.
@@ -102,22 +103,31 @@ adapter выдаёт его проверенный индекс страница
 Страницы остальных списков используют provider cursor. Jira transitions,
 links/attachments и exact Confluence space возвращают ограниченный полный набор.
 
-`github.repository.content.read` проверяет полный UTF-8 файл до 1 МиБ,
+`github.repository.content.read` проверяет полный UTF-8 файл до 8 МиБ,
 но возвращает только страницу до 16 КиБ с отдельным receipt, Git blob SHA,
 SHA-256 источника и страницы, byte offset, next и EOF. Native MCP envelope
 сохраняет общий предел 64 КиБ, итоговая проекция — 64 КиБ, сырой SDK-ответ —
-2 МиБ. `ref` закрепляет commit, continuation требует `expected_sha`;
+2 МиБ для обычных запросов. `ref` закрепляет commit, continuation требует `expected_sha`;
 проверяются весь UTF-8, NUL и Git blob SHA до выдачи первой страницы.
-Файлы больше 1 МиБ, `encoding: none` и повреждённые источники отклоняются без
-partial-success, download URL, redirect, raw fallback или автоматического retry.
+Для Contents `encoding: none` принимается только пустое `content` файла больше
+1 МиБ после проверки exact path/type/size/blob SHA и `expected_sha`. Затем SDK
+читает Git blob в том же разрешённом repository на `api.github.com` по SHA из
+проверенного Contents. Private intent связывает exact GET endpoint, repository,
+SHA и размер; только этот запрос получает сырой JSON-бюджет 12 МиБ. Ответы ошибок
+сохраняют предел 64 КиБ. До выдачи страницы проверяются совпадение metadata,
+base64, весь UTF-8, NUL, размер и Git blob SHA. Превышение бюджета и повреждение
+источника отклоняются без partial-success, download URL, redirect, raw fallback
+или автоматического retry ошибки проверки. URL запроса сам по себе не расширяет
+сырой бюджет; intent не является источником authority.
 Лимиты `size/offset_bytes/next_offset_bytes` совпадают с generated package.
 
 Сквозной путь не меняется: actor/grant runtime revision → native MCP invocation
 → control-plane claim с exact definition/version/digest и immutable input
 → integration-gateway → SDK Contents API разрешённого repository/commit/path
+→ при необходимости exact Git blob GET по проверенному SHA
 → проверенная bounded страница и receipt → owner completion/audit/event
 → исходный runtime consumer. `READ_ONLY/NONE`, tenant/repository authority,
-idempotency, leases, grants и события остаются прежними. Новый package `5.0.0`
+idempotency, leases, grants и события остаются прежними. Новый package `6.0.0`
 подключается новой owner revision с явным rebind; уже закреплённые revisions
 не переинтерпретируются и не получают новые лимиты молча.
 
