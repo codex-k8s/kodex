@@ -1276,6 +1276,7 @@ const ru = {
     initiator: "Инициатор",
     executor: "Исполнитель",
     executorUnavailable: "не передан API",
+    projectAssistantCommand: "Команда помощнику проекта",
     taskTitle: {
       SOFTWARE_CHANGE: "Изменение ПО",
       INTAKE: "Приём задачи",
@@ -6038,6 +6039,7 @@ const en = {
     initiator: "Initiator",
     executor: "Executor",
     executorUnavailable: "not provided by API",
+    projectAssistantCommand: "Command to project assistant",
     taskTitle: {
       SOFTWARE_CHANGE: "Software change",
       INTAKE: "Task intake",

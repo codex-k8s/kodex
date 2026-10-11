@@ -30,7 +30,6 @@ function initials(name: string): string {
       <span class="project-agent-list__copy">
         <strong>{{ agent.name }}</strong>
         <small>{{ agent.purpose || agent.roleDescription }}</small>
-        <small>{{ agent.runtimeName }}</small>
       </span>
       <StatusBadge :state="agent.state" />
     </RouterLink>

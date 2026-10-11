@@ -6,8 +6,9 @@ import { createI18n } from "vue-i18n";
 import { describe, expect, it, vi } from "vitest";
 vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
 import { i18n } from "@/app/i18n";
-import type { Run } from "@/shared/api/generated/openapi/types.gen";
+import type { Agent, Run } from "@/shared/api/generated/openapi/types.gen";
 import RunWorkItem from "./RunWorkItem.vue";
+import ProjectAgentList from "./ProjectAgentList.vue";
 
 const source = readFileSync(
   new URL("./RunWorkItem.vue", import.meta.url),
@@ -84,6 +85,120 @@ async function render(run: Run, locale = "ru") {
 }
 
 describe("RunWorkItem", () => {
+  function assistant(): Run {
+    return {
+      ...fixture(),
+      title: "Команда системному помощнику",
+      source: "SYSTEM_ASSISTANT",
+      target: {
+        type: "SYSTEM_ASSISTANT",
+        ref: "assistant_own",
+        displayName: "Помощник",
+        version: 1,
+      },
+      assistantPin: {
+        scope: "PROJECT",
+        organizationRef: "organization_own",
+        projectRef: "project_own",
+        assistantRef: "assistant_own",
+        profileRef: "profile_own",
+        conversationRef: "conversation_own",
+      },
+    };
+  }
+  it.each([
+    ["ru", "Команда помощнику проекта"],
+    ["en", "Command to project assistant"],
+  ])(
+    "называет штатную команду по точному PROJECT pin в %s",
+    async (locale, title) => {
+      const value = assistant();
+      const before = JSON.stringify(value);
+      const html = await render(value, locale);
+      expect(html).toContain(title);
+      expect(html).not.toContain("Команда системному помощнику");
+      expect(html).toContain("/projects/project_own/runs/run_child");
+      expect(JSON.stringify(value)).toBe(before);
+    },
+  );
+  it.each(["USER_EDITED", "AGENT_PROPOSED"] as const)(
+    "не заменяет название команды %s",
+    async (titleSource) => {
+      expect(await render({ ...assistant(), titleSource })).toContain(
+        "Команда системному помощнику",
+      );
+    },
+  );
+  it("не приписывает PROJECT-команду SYSTEM, отсутствующему или чужому pin", async () => {
+    const value = assistant();
+    const pin = value.assistantPin;
+    if (!pin) throw new Error("Missing assistant fixture pin");
+    for (const candidate of [
+      { ...value, assistantPin: undefined },
+      {
+        ...value,
+        assistantPin: {
+          ...pin,
+          scope: "SYSTEM" as const,
+          profileRef: undefined,
+        },
+      },
+      { ...value, assistantPin: { ...pin, projectRef: "project_other" } },
+      { ...value, assistantPin: { ...pin, assistantRef: "assistant_other" } },
+      { ...value, assistantPin: { ...pin, profileRef: undefined } },
+    ]) {
+      const html = await render(candidate);
+      expect(html).not.toContain("Команда помощнику проекта");
+      expect(html).toContain("Команда системному помощнику");
+    }
+  });
+
+  it("обзор сотрудника не выдаёт имя runtime profile за назначенное ENV", async () => {
+    const agent: Agent = {
+      ref: "agent_own",
+      version: 1,
+      projectRef: "project_own",
+      name: "Архитектор",
+      purpose: "Проектирование",
+      roleDescription: "Архитектура",
+      state: "READY",
+      enabled: true,
+      system: false,
+      runtimeRef: "runtime_own",
+      runtimeName: "Базовая среда",
+      runtimeReady: true,
+      capabilities: [],
+      integrations: [],
+      knowledgeArtifactRefs: [],
+      updatedAt: "2026-10-12T00:00:00Z",
+      nextActions: [],
+    };
+    const app = createSSRApp(ProjectAgentList, { agents: [agent] });
+    app.use(
+      createI18n({
+        legacy: false,
+        locale: "ru",
+        messages: { ru: i18n.global.getLocaleMessage("ru") },
+      }),
+    );
+    app.component(
+      "RouterLink",
+      defineComponent({
+        props: ["to"],
+        setup:
+          (props, { slots }) =>
+          () =>
+            h("a", { href: props.to }, slots.default?.()),
+      }),
+    );
+    const html = await renderToString(app);
+    expect(html).toContain("Архитектор");
+    expect(html).toContain("Проектирование");
+    expect(html).toContain("Готов");
+    expect(html).toContain("/projects/project_own/agents/agent_own");
+    expect(html).not.toContain("Базовая среда");
+    expect(html).not.toContain("Среда не указана");
+  });
   it.each([
     ["ru", "Анализ и архитектура", "Исполнитель"],
     ["en", "Analysis and architecture", "Executor"],

@@ -135,8 +135,21 @@ const defaultTaskTitles = new Set([
 ]);
 
 export function runDefaultTaskTitleKey(
-  run: Pick<Run, "title" | "titleSource">,
+  run: Pick<Run, "title" | "titleSource"> &
+    Partial<Pick<Run, "source" | "target" | "assistantPin" | "projectRef">>,
 ): string | undefined {
+  const pin = run.assistantPin;
+  if (
+    run.titleSource === "SERVER_DEFAULT" &&
+    run.source === "SYSTEM_ASSISTANT" &&
+    run.target?.type === "SYSTEM_ASSISTANT" &&
+    pin?.scope === "PROJECT" &&
+    pin.projectRef &&
+    pin.projectRef === run.projectRef &&
+    pin.assistantRef === run.target.ref &&
+    pin.profileRef
+  )
+    return "workboard.projectAssistantCommand";
   return run.titleSource === "SERVER_DEFAULT" &&
     defaultTaskTitles.has(run.title)
     ? `workboard.taskTitle.${run.title}`

@@ -10,6 +10,30 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 11.10.2026 22:12 UTC
+
+Source/HOT/remote6c00 и actual CP serving ELFf89d77d3 MATCH; native owner
+RECIPIENT200/2446ms/7items/EOF. Все100 historical employee grants восстановлены
+последовательно с fresh eligibility/OCC/idempotency/полным readback каждого;
+connection728 CONNECTED, NONE/paths[]/repository scope без расширения.
+PROJECT helper21 ещё выключены, SYSTEM0; полный121 acceptance NOT RUN.
+
+Отдельный admin run native201/202/provider ACK PASS delivery, terminal
+SUCCEEDED не означает настройки: propose_configuration_plan единственный
+вызов21 операций FAILED TOOL_UNAVAILABLE5362ms. Owner events49complete=true,
+plan не сохранён/не применён; точная server cause UNKNOWN. Нет SQL bypass,
+fabricated plan, helper generic grants или business USER corrections.
+Early exact task flag NOT RUN, observed task digest MATCH; image-file ELF
+не выдаётся за serving process proof. Attempt7 business FAILED не изменена.
+
+Frozen UX4 base6c00 интегрирован: PROJECT typed server title и устранение
+runtime-profile-as-ENV в обзоре; ROOT51/51 targeted unit PASS1.76s, worker
+lint/format/forcedtypecheck PASS. ROOT scoped lint/format и production build
+с forced typecheck PASS/exit0; Vite9.08s с chunk warning>500kB.
+Live delivery/readback ещё NOT RUN.
+Chrome11 screenshot/Console0/overflow=false; Context7 Vue props/one-way flow
+проверены. QA65, ONE Review/Manager/owner и bootstrap merge остаются OPEN.
+
 ## Новое scoped evidence 11.10.2026 21:53 UTC
 
 GitHub6 source checkpoint bfbe85a6 опубликован и реально обслуживается IG/CP;

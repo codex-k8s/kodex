@@ -5,10 +5,34 @@ type: operations
 status: approved
 owner: manager
 version: 1.1.0
-updated: 2026-10-11
+updated: 2026-10-12
 ---
 
 # Цель и источники
+
+## Checkpoint 11.10.2026 22:12 UTC — grants100 PASS, native helper plan BLOCKED
+
+- [x] Source/HOT/remote6c00, actual serving CP ELFf89d77d3 и SQL mount MATCH;
+      native RECIPIENT200/2446ms/7items/EOF после исправления таймаута.
+- [x] Все100 исторических employee grants последовательно восстановлены
+      native owner API, fresh eligibility/version/idempotency/readback каждого;
+      connection728 CONNECTED, NONE/paths[]/exact repository scope сохранены.
+- [x] Отдельный PROJECT административный native201/202 и same-UID provider
+      ACK/rejoin: image88447fff, ENV29/binding28/tools38, model6.1-sol medium.
+      Это доставка, не plan effect и не business результат.
+- [ ] PROJECT helper21: run SUCCEEDED, semantic BLOCKED; единственный
+      propose_configuration_plan TOOL_UNAVAILABLE/5362ms. Owner events49
+      complete=true, plan не сохранён/не применён. Причина расследуется.
+- [ ] После исправления штатный native retry, план21/validate/apply,
+      full121 semantic match; исходный business Retry без USER correction,
+      large READ→EOF и ONE Review/Manager/owner. QA/bootstrap merge OPEN.
+
+UX4 на base6c00: точная PROJECT подпись штатной команды; overview не
+выдаёт runtime profile за ENV. ROOT51/51 unit PASS1.76s, scoped lint/format
+и production build с forced typecheck PASS/exit0, Vite9.08s с известным
+chunk warning>500kB. Live delivery/readback ещё NOT RUN.
+ROOT business code0/corrective business USER prompts0. Подробные pins и
+ограничения — в handoff; конечный PR1808 остаётся Draft без merge/approve.
 
 ## Checkpoint 11.10.2026 21:53 UTC — GitHub6 delivery и новый candidate timeout
 

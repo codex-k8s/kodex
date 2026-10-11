@@ -10,6 +10,47 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 22:12 UTC — employees100 восстановлены, native plan пока BLOCKED
+
+SOURCE/HOT/remote Draft1807 clean6c00ad723611b069c96e43d32dd13f786305b646
+до нового UX overlay. Actual CP ELFf89d77d3 и mounted SQL99b853a9 MATCH;
+RECIPIENT owner GET200/2446ms/7items/EOF после Air rebuild, receipt SHA256
+e00dc7322c346bf9a7aaa6707a3ff882d8d0bdb81a484f857c1309e57d128ca3.
+Все100 прежних employee grants штатно восстановлены последовательными
+owner POST с fresh eligibility/OCC/idempotency и full readback каждого.
+Current connection728 CONNECTED; NONE, paths[] и прежний exact repository
+scope сохранены. PROJECT helper21 ещё отключены, SYSTEM0; full121 NOT RUN.
+POST не содержит definitionConfigurationBinding; fresh GET того же version/
+digest и byte-equal grant подтверждает binding, повтор эффекта не выполнялся.
+
+Отдельный административный PROJECT conversation cnv_i8uZoDFHWz3QqGZJno96UwkV,
+run_-luIZgbyY-Es9Jnk2Uo83QwB/session ses_XXW7hFTxX0-bxtz96UWY5yuW
+созданы native201/202. Prompt12099B/SHA29bae477990b9be9a5806288923b87feda01b4968d76b4505acb1e2f4301c9b0;
+это не business correction. Early same-UID ACK/rejoin EQUAL: helper image
+88447fff, file ELFad2e2f42, ENV29/binding28, tools38, grants2,
+gpt-6.1-sol medium. Expected task flag NOT RUN; наблюдаемый task digest
+совпадает с exact административным prompt. Image-file proof не равен serving
+process proof. Native run SUCCEEDED, но semantic BLOCKED: единственный
+propose_configuration_plan с21 операциями FAILED/TOOL_UNAVAILABLE/5362ms;
+полные owner events49/complete=true/SHA256
+a7f1bd36709eeef97e11551b6efd59309a8e00308ee6075b1832f6a39af77827.
+План не сохранён/не применён. Серверная причина расследуется; прямого
+создания плана, generic helper grant и SQL bypass не было.
+
+На base6c00 интегрирован отдельный frozen UX4: PROJECT SERVER_DEFAULT
+команда отображается по exact typed pin как «Команда помощнику проекта»;
+USER_EDITED/AGENT_PROPOSED/SYSTEM/foreign pins неизменны. Обзор сотрудников
+не выдаёт runtime profile name за ENV, эта строка снята; имя/purpose/state/link
+сохранены. ROOT адресные51/51 unit PASS1.76s, scoped lint/format PASS;
+production build с forced typecheck PASS/exit0, Vite9.08s. Предупреждение
+о chunks>500kB сохранено; live UX delivery/readback ещё NOT RUN.
+Chrome11 screenshot/Console0/overflow=false, собственный reload/rejoin200.
+
+Далее: exact server failure fix → native retry административного run → plan21
+validation/application → fresh full121 semantic set → Retry исходного
+business input и native full-source EOF. ONE Review/Manager/owner,
+bootstrap merge/fresh-main и QA65 остаются OPEN; business PR1808 не трогать.
+
 ## Checkpoint 11.10.2026 21:53 UTC — GitHub6 CONNECTED, устранение таймаута каталога
 
 SOURCE/HOT/remote Draft1807 clean bfbe85a6c45510fe4e42d61fdd56fbf61d43034b.
