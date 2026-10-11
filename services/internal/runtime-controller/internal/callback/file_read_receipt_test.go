@@ -68,7 +68,7 @@ func TestReadFileReceiptRejectsBindingAndMalformedMetadata(t *testing.T) {
 			a["purpose"] = runtimecontract.FilePurposeSkill
 		}},
 		{"entry", func(_ *runtimecontract.RunnerInput, a map[string]any, _ *fileReadToolResult) {
-			a["entry_ref"] = "vfe_foreignentry"
+			a["entry_ref"] = runtimeFileForeignEntry
 		}},
 		{"artifact", func(_ *runtimecontract.RunnerInput, a map[string]any, _ *fileReadToolResult) {
 			a["artifact_ref"] = "art_foreignartifact"
@@ -177,7 +177,7 @@ func TestReadFileReceiptFailureNeverPublishesMetadata(t *testing.T) {
 
 func TestReadFileReceiptMaximumMetadataFitsExistingSafeResultBudget(t *testing.T) {
 	receipt := fileReadReceipt{Version: 1, Kind: fileReadReceiptKind, CatalogRef: "vfc_" + strings.Repeat("x", 92), CatalogDigest: strings.Repeat("a", 64),
-		Purpose: runtimecontract.FilePurposeWorkspaceInput, EntryRef: "vfe_" + strings.Repeat("x", 92), ArtifactRef: "art_" + strings.Repeat("x", 92),
+		Purpose: runtimecontract.FilePurposeWorkspaceInput, EntryRef: runtimeFileFixtureEntry, ArtifactRef: "art_" + strings.Repeat("x", 92),
 		FileRevision: maximumFileReadReceiptInteger, FileVersion: maximumFileReadReceiptInteger, SizeBytes: runtimecontract.MaximumArtifactTransferBytes,
 		OffsetBytes: runtimecontract.MaximumArtifactTransferBytes, NextOffsetBytes: runtimecontract.MaximumArtifactTransferBytes, EOF: true,
 		SourceDigest: "sha256:" + strings.Repeat("a", 64), ChunkDigest: readFixtureDigest(nil)}

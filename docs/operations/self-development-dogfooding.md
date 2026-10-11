@@ -10,6 +10,34 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 10:39 UTC — local-first и malformed entry
+
+- [x] Причина native FILES отказа доказана: Architect потерял два символа
+      собственного PROJECT entry_ref (36→34), artifact/revision/digest совпали.
+      CP metadata NotFound возник до storage; это не сеть и не permission deny.
+- [x] Общие FILES инструкции предпочитают pinned локальный оригинал, проверку
+      size/digest и EOF; правки — только рабочая копия. Remote discovery нужен
+      для не материализованных результатов, не как fallback после отказа.
+- [x] RC schema/local gate: vfe_ +32 lowercase hex, malformed → прежний
+      FILE_INPUT_INVALID до RPC с одним исправлением по own catalog. Валидные
+      missing/foreign tuples и audit failure nonretryable; никаких новых grants.
+- [x] Tree поверх90c23d6a: exact Go1.26.6 CP targeted PASS0.044s/vet PASS,
+      worker RC targeted PASS2.613s, format/diff check PASS. Metadata/preview/
+      read malformed0RPC, canonical remote failures1RPC без replay, corrected
+      once success. Первый worker build FAIL из-за GOROOT, исправленный exact
+      GOROOT PASS. Context7 /golang/go regexp проверен; matrix в GUIDE-DOC-006.
+- [ ] Live доставка нового пакета и новый native semantic PASS.
+
+Architect terminal SUCCEEDED, semantic BLOCKED_MANDATORY_INPUT_EOF: exact
+result838B/SHAe17896ff и gate2468B/SHAfb2df31d owner PREVIEW200/EOF/hash MATCH.
+Root run_LlIz48K85YNyVwYQFpb79dgK FAILED10:34:53.916292/cursor661/
+RUNTIME_WORKFLOW_INCOMPLETE, downstream CANCELLED. HOT6f66b14e frozen,
+source6994d3fd. Только после fresh idle доставить fix, проверить serving и
+повторить исходную задачу/INPUT без USER corrections. История не менялась,
+host business implementation0. Chrome35 Console0/API200, terminal screenshot
+просмотрен/overflow=false; pan/zoom обрезает большой граф, full fit не доказан.
+Business PR/ONE Review/Manager/owner и QA65 OPEN/NOT RUN.
+
 ## Checkpoint 11.10.2026 10:18 UTC — INTAKE PASS, собственный handoff Architect
 
 - [x] Текущий Manager SUCCEEDED10:14:18.808513 с semantic

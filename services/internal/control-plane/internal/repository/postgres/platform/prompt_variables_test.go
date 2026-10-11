@@ -116,6 +116,30 @@ func TestPromptWorkspaceDistinguishesMountedFilesFromOwnResultDiscovery(t *testi
 	}
 }
 
+func TestPromptWorkspaceUsesVerifiedLocalSourcesBeforeRemoteDiscovery(t *testing.T) {
+	variables, err := promptStructuredVariables([]map[string]any{
+		promptArtifactFixture("artifact_abcdefgh", "brief.txt", runtimecontract.AttachmentScopeInput, "aset_abcdefgh", 1),
+		promptArtifactFixture("artifact_ijklmnop", "history.txt", runtimecontract.AttachmentScopeSession, "aset_ijklmnop", 1),
+		promptArtifactFixture("artifact_qrstuvwx", "policy.md", runtimecontract.AttachmentScopeKnowledge, "", 1),
+	}, nil, runtimecontract.RuntimeEnvironmentImage{}, "", "aset_abcdefgh", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	guidance := variables["input"].(map[string]any)["workspace"].(map[string]any)["guidance"].(string)
+	for _, hint := range []string{
+		"prefer ordinary local file reads through an available authorized local tool",
+		"original path, revision, size and digest", "verify the original bytes",
+		"Do not perform remote file discovery or read_file solely to read the same mounted original",
+		"never treat a modified working copy as the pinned original",
+		"authorized files not already materialized locally", "missing predecessor results",
+		"not an alternate transport after a remote denial or failure", "never use it to replay or bypass a rejected read",
+	} {
+		if !strings.Contains(guidance, hint) {
+			t.Fatalf("local-first workspace guidance lost boundary: %q", hint)
+		}
+	}
+}
+
 func promptArtifactFixture(ref, name, scope, setRef string, position int64) map[string]any {
 	return map[string]any{
 		"ref": ref, "fileName": name, "mediaType": "text/plain", "sizeBytes": float64(1),

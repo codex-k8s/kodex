@@ -300,6 +300,50 @@ func TestReadFileConsumesWholeVerifiedSourceInContiguousPages(t *testing.T) {
 	}
 }
 
+func TestReadFileTruncatedEntryAllowsOneExactOwnCatalogCorrection(t *testing.T) {
+	fixture := newFileReadFixture(t, []byte("synthetic complete source"), "")
+	fixture.owner.file.EntryRef = "vfe_897a44d8dd71438d9dd97597a7b766ee"
+	arguments := fixture.arguments()
+	arguments["entry_ref"] = "vfe_897a44d8dd71438d9dd975a7b766ee"
+	result, failed := fixture.call(t, t.Context(), arguments, "truncated")
+	if !failed || result["error_code"] != runtimeFileInputInvalidCode || result["retryable"] != true || result["guidance"] != runtimeFileInputGuidance || result["text"] != nil {
+		t.Fatal("truncated entry did not preserve bounded input correction")
+	}
+	fixture.owner.mu.Lock()
+	reads, transfers := fixture.owner.reads, fixture.owner.transfers
+	fixture.owner.mu.Unlock()
+	if reads != 0 || transfers != 0 || arguments["entry_ref"] != "vfe_897a44d8dd71438d9dd975a7b766ee" {
+		t.Fatal("malformed selector was replayed, rewritten or read remotely")
+	}
+	// Исправление выбирает exact descriptor из собственного frozen каталога;
+	// handler не угадывает missing bytes и не повторяет прежний input.
+	arguments["entry_ref"] = fixture.owner.file.EntryRef
+	result, failed = fixture.call(t, t.Context(), arguments, "corrected-once")
+	if failed || result["text"] != "synthetic complete source" || result["eof"] != true || result["file"].(map[string]any)["entry_ref"] != fixture.owner.file.EntryRef {
+		t.Fatal("exact own catalog correction did not consume the protected source")
+	}
+	fixture.owner.mu.Lock()
+	defer fixture.owner.mu.Unlock()
+	if fixture.owner.reads != 2 || fixture.owner.transfers != 1 {
+		t.Fatal("corrected call replayed metadata or full source outside the normal proof path")
+	}
+}
+
+func TestReadFileMalformedEntryWithAuditFailureHasNoCorrection(t *testing.T) {
+	fixture := newFileReadFixture(t, []byte("synthetic source"), "terminal audit")
+	arguments := fixture.arguments()
+	arguments["entry_ref"] = "vfe_897a44d8dd71438d9dd975a7b766ee"
+	result, failed := fixture.call(t, t.Context(), arguments, "malformed-audit")
+	if !failed || result["error_code"] != "TOOL_UNAVAILABLE" || result["retryable"] != false || result["guidance"] != nil || result["text"] != nil {
+		t.Fatal("mandatory audit failure became an input correction")
+	}
+	fixture.owner.mu.Lock()
+	defer fixture.owner.mu.Unlock()
+	if fixture.owner.reads != 0 || fixture.owner.transfers != 0 {
+		t.Fatal("malformed selector with failed audit read a remote source")
+	}
+}
+
 func TestReadFileFailuresExposeNoTextOrPrivateAuthority(t *testing.T) {
 	for _, scenario := range []string{"invalid UTF8 tail", "NUL tail", "checksum", "missing complete", "owner denied", "stream pin", "trailing frame", "final authority", "final version", "terminal audit", "initial audit", "quota", "deadline"} {
 		t.Run(scenario, func(t *testing.T) {

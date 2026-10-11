@@ -10,6 +10,27 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 10:39 UTC — local-first и malformed entry fix
+
+Новый пакет поверх90c23d6a: общие FILES инструкции всех ролей используют
+локальный pinned оригинал прежде remote discovery, отдельную INPUT-копию для
+правок; fallback после remote failure/denial запрещён. RC локально проверяет
+entry_ref как vfe_ +32 lowercase hex и даёт FILE_INPUT_INVALID до RPC только
+при malformed input; real NotFound/permission/audit сохраняют nonretryable.
+CP targeted Go1.26.6 PASS0.044s/vet PASS, worker RC targeted PASS2.613s.
+Live доставка ещё NOT RUN; HOT frozen6f66b14e/source6994d3fd.
+
+Причина native отказа доказана: при копировании own entry_ref потеряны два
+символа, metadata CP отвергла tuple раньше storage. Architect semantic
+BLOCKED_MANDATORY_INPUT_EOF подтверждён exact result838B/SHAe17896ff,
+gate2468B/SHAfb2df31d/full EOF. Root run_LlIz48K85YNyVwYQFpb79dgK
+FAILED10:34:53.916292/cursor661; downstream CANCELLED. Продолжить с commit/
+push этого пакета, fresh owner idle, exact HOT FF и actual CP/RC serving hashes;
+потом штатная свежая root-попытка той же задачи и INPUT без USER corrections.
+Не повторять прежний read и не вмешиваться в историю. ONE Review лимит
+неизменён, host business implementation0. Browser Console/Network200,
+terminal screenshot/overflow проверены; business/QA acceptance OPEN.
+
 ## Checkpoint 11.10.2026 10:18 UTC — INTAKE принят, Architect запущен
 
 Manager run_88EWIUzOnPsCIv1_FwYBqAhw SUCCEEDED10:14:18.808513;
