@@ -1,6 +1,20 @@
 -- name: integration_grant_candidates :one
-WITH admitted AS MATERIALIZED (
-    SELECT admission.*, connection.name AS connection_name, definition.name AS provider_name
+WITH admission_source AS MATERIALIZED (
+    SELECT admission.*, connection.name AS connection_name, definition.name AS provider_name,
+           CASE @stage WHEN 'CONNECTION' THEN 'integration.view'
+                       WHEN 'PROJECT' THEN 'project.view'
+                       WHEN 'RECIPIENT' THEN CASE recipient.kind WHEN 'AGENT' THEN 'agent.view' ELSE 'workflow.view' END
+                       ELSE '' END AS visibility_permission,
+           CASE @stage WHEN 'CONNECTION' THEN 'INTEGRATION'
+                       WHEN 'PROJECT' THEN 'PROJECT' ELSE recipient.kind END AS visibility_kind,
+           CASE @stage WHEN 'CONNECTION' THEN connection.id
+                       WHEN 'PROJECT' THEN project.id ELSE recipient.id END AS visibility_id,
+           CASE @stage WHEN 'CONNECTION' THEN NULL::uuid
+                       WHEN 'PROJECT' THEN project.id ELSE recipient.project_id END AS visibility_project_id,
+           CASE @stage WHEN 'CONNECTION' THEN connection.created_by
+                       WHEN 'PROJECT' THEN project.created_by ELSE recipient.owner_id END AS visibility_owner_id,
+           CASE WHEN @stage IN ('CONNECTION','PROJECT') THEN '{}'::jsonb
+                ELSE recipient.related_ids END AS visibility_related_ids
     FROM control_plane.integration_grant_admission(
       @organization_id::uuid,@actor_id::uuid,NULLIF(@authority_project_id,'')::uuid,
       @connection_ref,@project_ref,@recipient_kind,@recipient_ref,@capability_key,
@@ -19,17 +33,34 @@ WITH admitted AS MATERIALIZED (
       AND admission.definition_version=definition.definition_version
       AND admission.definition_digest=definition.digest)
       AND (@purpose='GRANT' OR admission.reason='READY')
-      -- Уже выбранные exact ref прошли resolveAccessTarget + requireAccess в
-      -- той же repeatable-read транзакции. На каждом этапе вычисляем только
-      -- eligibility самого перечисляемого ресурса, а не повторяем проверки
-      -- всех родителей для каждой строки admission.
-      AND (@stage<>'CONNECTION' OR control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,
-          'integration.view','INTEGRATION',connection.id,NULL,connection.created_by,'{}'::jsonb,transaction_timestamp()))
-      AND (@stage<>'PROJECT' OR control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,
-          'project.view','PROJECT',project.id,project.id,project.created_by,'{}'::jsonb,transaction_timestamp()))
-      AND (@stage<>'RECIPIENT' OR control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,
-          CASE recipient.kind WHEN 'AGENT' THEN 'agent.view' ELSE 'workflow.view' END,
-          recipient.kind,recipient.id,recipient.project_id,recipient.owner_id,recipient.related_ids,transaction_timestamp()))
+), visibility_targets AS MATERIALIZED (
+    -- Одна eligibility-проверка exact resource, а не каждой capability row.
+    -- Все аргументы предиката сохраняются внутри того же owner snapshot.
+    SELECT DISTINCT visibility_permission,visibility_kind,visibility_id,
+           visibility_project_id,visibility_owner_id,visibility_related_ids
+    FROM admission_source
+), visible_targets AS MATERIALIZED (
+    SELECT visibility_permission,visibility_kind,visibility_id,
+           visibility_project_id,visibility_owner_id,visibility_related_ids
+    FROM visibility_targets
+    WHERE CASE WHEN visibility_permission='' THEN true
+          ELSE control_plane.catalog_resource_visible(@organization_id::uuid,@actor_id::uuid,
+              visibility_permission,visibility_kind,visibility_id,visibility_project_id,
+              visibility_owner_id,visibility_related_ids,transaction_timestamp()) END
+), admitted AS MATERIALIZED (
+    SELECT source.connection_ref,source.connection_version,source.definition_key,
+           source.definition_version,source.definition_digest,source.provider_name,
+           source.project_ref,source.project_name,source.project_version,
+           source.recipient_kind,source.recipient_ref,source.recipient_name,
+           source.recipient_version,source.capability_key,source.capability_name,
+           source.reason,source.connection_name
+    FROM admission_source source
+    JOIN visible_targets visible
+      ON (source.visibility_permission,source.visibility_kind,source.visibility_id,
+          source.visibility_project_id,source.visibility_owner_id,source.visibility_related_ids)
+         IS NOT DISTINCT FROM
+         (visible.visibility_permission,visible.visibility_kind,visible.visibility_id,
+          visible.visibility_project_id,visible.visibility_owner_id,visible.visibility_related_ids)
 ), projected AS (
     SELECT CASE @stage WHEN 'CONNECTION' THEN connection_ref
                       WHEN 'PROJECT' THEN project_ref

@@ -10,6 +10,26 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 21:53 UTC — GitHub6 delivery и новый candidate timeout
+
+- [x] Exact bfbe85a6 SOURCE/HOT/remote, mounted package6 и actual IG/CP ELF
+      совпали с независимыми сборками; existing UI definition6 published/bound.
+- [x] Connection628 CONNECTED после штатного protected credential/TEST;
+      rebind отключил historical121 grants, SYSTEM0 сохранён.
+- [x] RECIPIENT503/5024ms воспроизведён; unique target SQL оптимизация
+      без изменения authority/count/cursor/5s budget интегрирована manifest2/2.
+      ROOT disposable PG3.797s/build PASS; actual checks6/1/1/0 при41caps.
+      Admin read-only timing2700.531ms не объявляется browser acceptance.
+- [ ] Exact новый serving ELF и browser RECIPIENT200 с полным EOF.
+- [ ] Fresh100 employee grants и PROJECT helper21 через native typed plan,
+      full121 semantic set без расширения scope или approval policy.
+- [ ] Native Retry исходного business input; large READ→EOF, Developer
+      handoff/ONE Review/Manager/owner, QA/bootstrap merge/fresh-main.
+
+Предыдущая attempt7 FAILED остаётся исторической. ROOT business code0,
+corrective business USER prompts0; отдельная административная настройка
+grants не считается business результатом. Ограничения сохранены в handoff.
+
 ## Checkpoint 11.10.2026 21:24 UTC — exact large-source blocker
 
 - [x] Native attempt7 terminal подтверждён полным owner event store223;

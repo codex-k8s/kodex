@@ -10,6 +10,24 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 11.10.2026 21:53 UTC
+
+GitHub6 source checkpoint bfbe85a6 опубликован и реально обслуживается IG/CP;
+UI6 current binding и connection628 CONNECTED подтверждены штатными owner
+commands/readbacks. Historical121 grants отключены rebind; восстановление
+и native large-source EOF пока NOT RUN. Attempt7 semantic BLOCKED остаётся
+итогом последней business проверки, не успешным full QA.
+
+Two-file candidate visibility scope поверх bfbe85a6: ROOT manifest2/2 MATCH,
+canonical disposable PostgreSQL3.797s/public entrypoint exit0 и binary build
+PASS, unique predicate calls6/1/1/0 при41caps, count/cursor/foreign checks PASS.
+Worker scoped old grant/revoked/workflow regression PASS. Context5s и все
+authoritative checks неизменны; schema/events/contracts не менялись.
+LIVE RECIPIENT503/5024ms перед исправлением доказан; после serving ещё NOT RUN.
+Admin read-only EXPLAIN2700.531ms — диагностика, не native acceptance.
+Context7 official PostgreSQL17 queries-with/using-explain сверены.
+Bootstrap merge, business ONE Review/Manager/owner и QA§64 OPEN.
+
 Issue #1797, Draft PR #1807; бизнес-задача #1796. Упоминание bootstrap #1798
 в исходном [QA-задании](full-qa-task.md) относится к текущему bootstrap PR,
 а не разрешает создавать ещё один PR. Единственный цикл комплексного ревью

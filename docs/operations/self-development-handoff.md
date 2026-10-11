@@ -10,6 +10,40 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 21:53 UTC — GitHub6 CONNECTED, устранение таймаута каталога
+
+SOURCE/HOT/remote Draft1807 clean bfbe85a6c45510fe4e42d61fdd56fbf61d43034b.
+Actual IG ELF95f625fb и CP941df118 совпали с независимыми сборками; source
+mount и canonical package6 подтверждены. Existing UI configuration22/new
+published revision штатно привязана к connection: credential/TEST завершены,
+current connection628 CONNECTED. Rebind ожидаемо отключил все121 grants;
+восстановление100 employee +21 PROJECT helper ещё NOT RUN, SYSTEM grants0.
+UI screenshot/Console0/relevant200, текущий owner bootstrap/session200.
+
+Новый отдельный LIVE FAIL: RECIPIENT candidates503 через5024ms; context5s
+и PostgreSQL cancellation совпали. Исправлены повторные outer visibility
+checks: exact permission/kind/id/project/owner/related_ids проверяются один
+раз на ресурс в том же read-only RR snapshot. Authoritative admission,
+parent permissions, cursor/count, cancel/timeout и отсутствие событий прежние.
+Никаких schema/contract изменений. ROOT two-file manifest2/2 MATCH на bfbe
+overlay; disposable PostgreSQL public entrypoint PASS3.797s/exit0, actual
+predicate calls6/1/1/0 для RECIPIENT/PROJECT/CONNECTION/CAPABILITY,41caps;
+owner pagination/cursor/foreign negatives PASS. Worker existing grant/revoked/
+workflow regressions PASS. ROOT CGO0/trimpath/buildvcs=false build PASS:
+ELFf89d77d3bf36997c3b727b39e022a89b4c8e11d2ff69da07d17f9f3c450dd607.
+Первый build command FAIL неверного cmd/server исправлен на cmd/control-plane.
+Read-only admin EXPLAIN ANALYZE нового query на текущих данных2700.531ms;
+старый не завершился за15s. Это диагностика, не browser authority acceptance.
+Первоначальные browser read attempts получили NETWORK_CHANGED и один404
+из-за неверного diagnostic bootstrap path; повтор штатных bootstrap/session200.
+
+Далее: commit/push/scoped HOT ff-only и actual ELF, native RECIPIENT200/EOF;
+затем fresh sequential employee grants и native PROJECT typed plan для21.
+Только после full121 semantic match — Retry исходного business input,
+native large-source READ→EOF и оставшаяся цепочка с ONE Review. Attempt7
+FAILED/semantic BLOCKED остаётся историческим итогом; business PR1808 не трогать.
+Current full QA, bootstrap merge и final owner acceptance остаются OPEN.
+
 ## Checkpoint 11.10.2026 21:36 UTC — GitHub6 реализован и проверен локально
 
 На SOURCE base18ca интегрированы canonical GitHub6.0.0 и шесть IG-файлов.
