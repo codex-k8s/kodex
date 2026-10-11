@@ -10,6 +10,35 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 16:50 UTC — attempt5 и ранний capture подключены
+
+Source/HOT3780c1b6 clean/remote Draft1807/body readback PASS, mainab4992e0
+не менялся. Первый post-push readback UNKNOWN; отдельный read-only повтор
+подтвердил exact SHA, без второго push. На committed3780c1b6 ROOT91 collector
+tests6.516s и19 ACK tests0.755s PASS. Source2 hashes611bb18c/402815c2 MATCH.
+
+Штатный UI RETRY создал run_wOIiZv9ZtpMsqQO4H_tCGGR2/attempt5. Exact
+inputSummary/target/initiator/source JSON digest SHA b8ce9004 совпал с
+attempt4; не было нового business USER prompt. Root session сохранена,
+новые INTAKE/Architect/Developer/ONE Review/acceptance nodes не reuse старых
+completed этапов. Original workflow и опубликованный профиль Developer
+не менялись. Root RUNNING, browser realtime seq34; Console0/screenshot
+и fresh graph200 проверены. Business result ещё OPEN.
+
+Ранний root ACK88541B и INTAKE80359B/instructions SHA2941fe79:
+gpt-6.1-sol medium, actual provider input/file equality, full tuple/pins
+и same UID rejoin PASS. ELF b31da159 совпал, scope только image file,
+не serving process. INTAKE run_C_z8mfqG7BLz2sEfLWGMKJJY/session
+ses_bmi_wveKsjf4jZo9J_Sjc2zg, turn trn_QU0uuWBlbtTqS7nnVHgUEjlF,
+Pod runtime-turn-1f856d07547f985a/UID38c360d9-438b-4a67-9658-742add12e6f7.
+Runtime revision digest d3468745, input a711c2db, execution binding7d32b370.
+Dual-source listener уже сохранил exact ACK checkpoint16:49:58 UTC и
+продолжает bounded follow. Это live attach proof, не capture причины.
+Короткий предыдущий root turn успел штатно завершить делегирование;
+его capture получил FOLLOW_STREAM_ENDED без failure observation — не
+application FAIL и не provider cause. Далее наблюдать INTAKE и заранее
+подключиться к fresh Architect; исправлять только установленную причину.
+
 ## Checkpoint 11.10.2026 16:46 UTC — bounded diagnostic capture готов к live подключению
 
 Интегрированы только два frozen tool/test файла на base3b4b4e2c, SHA256

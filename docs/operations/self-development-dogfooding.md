@@ -10,6 +10,25 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 16:50 UTC — exact publication и новый original retry
+
+- [x] Source3780c1b6 remote Draft1807/body/HOT clean; ROOT committed91
+      collector tests6.516s +19 ACK tests0.755s PASS. Frozen2 hashes MATCH;
+      GitHub post-push readback lag UNKNOWN сохранён, read-only exact retry PASS.
+- [x] UI original INPUT retry attempt5 run_wOIiZv9ZtpMsqQO4H_tCGGR2;
+      input/target/initiator/source digest b8ce9004 равен attempt4. Свежие
+      этапы и ONE Review; без USER business corrections.
+- [x] Root/INTAKE early ACK/current instructions80359B/SHA2941fe79,
+      input/file equality и same-UID rejoin; image ELF file b31da159 MATCH.
+      Actual dual-source listener16:49:58 сохранил exact ACK/pins checkpoint.
+      Screenshot/realtime seq34/Console0/fresh graph200 проверены.
+- [ ] Завершение INTAKE, fresh Architect capture и actual причина/её fix,
+      Developer substantive PR, ONE Review, Manager/owner и bootstrap gates.
+
+Root RUNNING; attach не означает успешного provider failure capture или
+business acceptance. FOLLOW_STREAM_ENDED короткого root turn без observations
+не является application FAIL. Прежняя первопричина остаётся UNKNOWN.
+
 ## Checkpoint 11.10.2026 16:46 UTC — dual-source capture synthetic PASS
 
 - [x] Frozen2 tool/test hashes MATCH611bb18c/402815c2 на base3b4b4e2c.
