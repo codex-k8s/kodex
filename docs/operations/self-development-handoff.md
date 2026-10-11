@@ -41,6 +41,14 @@ document overflow. Первые local диагностические ошибк�
 USER corrections0/host business implementation0. Далее Architect publication,
 Developer substantive PR, ONE Review, Manager/owner и оставшиеся QA; goal открыт.
 
+Read-only Architect workspace proof14:18:35Z PASS/SHA65cbfde9:7 независимых
+INPUT copies, guide/source equal, cwd/work, providerUID10002, отдельные readonly
+input/context/knowledge mounts и same Pod UID rejoin. Source/read model NOT_PROVEN.
+Owner seq451 сохраняет один CODEX_SHELL FAILED; короткий safeResult не объясняет
+причину (UNKNOWN), subsequent shell SUCCEEDED, Architect RUNNING доseq475.
+Не выдавать отсутствие completion WARN/пустые логи CP/RC/ROLE за business PASS.
+Последний собственный Chrome35 reload14:21; remote/HOT04d87933 clean.
+
 ## Checkpoint 11.10.2026 13:54 UTC — общий workspace доставлен всем выбранным ролям
 
 Source/HOT44a0c7bb clean; тот же Draft1807/Issue1797. Canonical runner

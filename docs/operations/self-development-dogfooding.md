@@ -34,6 +34,12 @@ seq362 означает текущий EOF, не terminal Workflow. Первые
 диагностические path/parser/cookie probes сохранены отдельно; исправленный
 preview не объявляет прочтение всех source файлов агентом.
 
+Дополнение14:21: Architect workspace metadata receipt SHA65cbfde9 PASS:
+7 независимых INPUT copies, guide/source/cwd/readonly mounts и same UID rejoin.
+Model semantic read не доказан. CODEX_SHELL FAILED seq451 сохранён, причина
+UNKNOWN; subsequent shell SUCCEEDED, Architect RUNNING seq475. Свежие CP/RC/ROLE
+логи пустые и не подтверждают business success. Chrome35 reload выполнен.
+
 ## Checkpoint 11.10.2026 13:54 UTC — доставка общего workspace завершена
 
 - [x] Source44a0c7bb: новый runner e4fc62f4/provenance2a01d3ce/ELF b31da159
