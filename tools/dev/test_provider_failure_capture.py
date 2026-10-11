@@ -1109,5 +1109,280 @@ class WorkloadCaptureTests(unittest.TestCase):
             self.assertEqual(json.loads(output.getvalue())['status'], 'NOT_CAPTURED')
 
 
+def client_line(**fields):
+    record = {'msg': CAPTURE.CLIENT_MESSAGE, 'category': 'STREAM_READ',
+              'context_state': 'ACTIVE', 'activity_failed': False, 'private': SENTINEL}
+    record.update(fields)
+    return json.dumps(record).encode() + b'\n'
+
+
+class ClientObservationTests(unittest.TestCase):
+    def bound(self):
+        source, columns, options = fixture()
+        options.include_client_observation = True
+        raw = json.dumps({'event': CAPTURE.ACK.EVENT, 'proof': source}).encode() + b'\n'
+        proof = CAPTURE.ACK.ack_from_logs(raw, options.run_ref)
+        return raw, proof, columns, options
+
+    def exercise(self, events=None, after=None):
+        ack, proof, columns, options = self.bound()
+        checkpoints, closed, calls = [], [], []
+        gets = 0
+
+        def read(args):
+            nonlocal gets
+            calls.append(args)
+            if args[0] == 'logs':
+                return ack
+            gets += 1
+            if gets >= 3 and isinstance(after, Exception):
+                raise after
+            return columns if gets < 3 or after is None else after
+
+        def follow(pod):
+            self.assertEqual(pod['uid'], CAPTURE.ACK.pods_from_columns(columns)[0]['uid'])
+            try:
+                yield from (events if events is not None else
+                            [('PROVIDER', ack), ('PROVIDER', request()), ('CLIENT', client_line())])
+            finally:
+                closed.append(True)
+
+        result = CAPTURE.capture(options, read, follow, on_observation=checkpoints.append)
+        return result, checkpoints, closed, calls
+
+    def test_both_sources_separate_earliest_checkpoints_and_cleanup(self):
+        result, checkpoints, closed, _ = self.exercise(after=b'')
+        self.assertEqual(result['status'], 'OBSERVATIONS_CAPTURED')
+        self.assertEqual(result['rejoin'], 'POD_CLEANED_AFTER_CAPTURE')
+        self.assertEqual(result['diagnostic']['kind'], 'REQUEST_FAILURE')
+        self.assertEqual(result['client_observation']['category'], 'STREAM_READ')
+        self.assertEqual(result['observation_end'], 'BOTH_OBSERVED')
+        self.assertEqual([item['source'] for item in checkpoints], ['ACK', 'PROVIDER', 'CLIENT'])
+        self.assertEqual(checkpoints[0]['status'], 'ACK_BINDING_CAPTURED_POD_REJOIN_PENDING')
+        self.assertNotIn('observation', checkpoints[0])
+        self.assertEqual(closed, [True])
+        for item in checkpoints:
+            for key in ('input_digest', 'runtime_revision_digest', 'execution_binding_digest'):
+                self.assertEqual(item[key], result[key])
+            self.assertEqual(item['pod'], result['pod'])
+        self.assertNotIn(SENTINEL, json.dumps([result, checkpoints]))
+        result, _, _, _ = self.exercise(after=CAPTURE.Failure('CAPTURE_DEADLINE'))
+        self.assertEqual(result['rejoin'], 'NOT_RUN_DEADLINE_AFTER_CAPTURE')
+
+    def test_client_before_follow_ack_is_buffered_not_fabricated_ack(self):
+        ack, _, _, _ = self.bound()
+        result, checkpoints, _, _ = self.exercise(
+            [('CLIENT', client_line(category='UNKNOWN')), ('PROVIDER', ack), ('PROVIDER', request())])
+        self.assertEqual([item['source'] for item in checkpoints], ['ACK', 'CLIENT', 'PROVIDER'])
+        self.assertEqual(result['client_observation']['category'], 'UNKNOWN')
+        self.assertNotEqual(result['diagnostic']['kind'], 'CLIENT_FAILURE')
+        with self.assertRaisesRegex(CAPTURE.Failure, '^FOLLOW_ACK_NOT_OBSERVED$'):
+            self.exercise([('CLIENT', client_line())])
+
+    def test_chunking_and_each_single_observation_never_invents_other(self):
+        ack, _, _, _ = self.bound()
+        for source, line in (('CLIENT', client_line()), ('PROVIDER', request())):
+            with self.subTest(source=source):
+                events = [('PROVIDER', ack)] + [(source, line[index:index+7])
+                                               for index in range(0, len(line), 7)]
+                result, _, _, _ = self.exercise(events)
+                self.assertEqual(result['observation_end'], 'STREAM_ENDED')
+                self.assertEqual(result['provider_observation'], 'OBSERVED' if source == 'PROVIDER' else 'NOT_OBSERVED')
+                self.assertEqual(result['client_observation_status'], 'OBSERVED' if source == 'CLIENT' else 'NOT_OBSERVED')
+                self.assertEqual('diagnostic' in result, source == 'PROVIDER')
+                self.assertEqual('client_observation' in result, source == 'CLIENT')
+
+    def test_timeout_retains_earliest_checkpoint_but_no_false_missing_source(self):
+        ack, proof, _, options = self.bound()
+        clock, checkpoints = FakeClock(), []
+
+        def stream():
+            yield 'PROVIDER', ack
+            yield 'CLIENT', client_line()
+            clock.sleep(30)
+
+        result = CAPTURE.observations_from_chunks(stream(), proof, options, 30,
+            on_observation=lambda *args: checkpoints.append(args), now=clock.now)
+        self.assertEqual(set(result), {'CLIENT'})
+        self.assertEqual([item[0] for item in checkpoints], ['ACK', 'CLIENT'])
+        with self.assertRaisesRegex(CAPTURE.Failure, '^FAILURE_NOT_OBSERVED_BEFORE_DEADLINE$'):
+            CAPTURE.observations_from_chunks(iter([('PROVIDER', ack)]), proof, options, 30, now=clock.now)
+
+    def test_foreign_or_changed_ack_and_uid_rejected(self):
+        ack, _, _, _ = self.bound()
+        for key, value, code in (('run_ref', 'run_foreign01', 'FOLLOW_ACK_NOT_OBSERVED'),
+                                 ('input_digest', 'c'*64, 'FOLLOW_ACK_BINDING_MISMATCH'),
+                                 ('lease_generation', 2, 'FOLLOW_ACK_BINDING_MISMATCH')):
+            record = json.loads(ack)
+            record['proof'][key] = value
+            with self.subTest(key=key), self.assertRaisesRegex(CAPTURE.Failure, '^'+code+'$'):
+                self.exercise([('CLIENT', client_line()), ('PROVIDER', json.dumps(record).encode()+b'\n')])
+        _, _, columns, _ = self.bound()
+        changed = columns.replace(b'12345678-1234-1234-1234-123456789abc',
+                                  b'12345678-1234-1234-1234-123456789abd')
+        with self.assertRaisesRegex(CAPTURE.Failure, '^POD_CHANGED_AFTER_CAPTURE$'):
+            self.exercise(after=changed)
+
+    def test_invalid_and_private_json_never_reflected(self):
+        for fields in ({'category': SENTINEL}, {'category': {}}, {'context_state': SENTINEL},
+                       {'context_state': []}, {'activity_failed': 1}, {'activity_failed': 'false'}):
+            with self.subTest(fields=fields), self.assertRaisesRegex(CAPTURE.Failure, '^CLIENT_DIAGNOSTIC_INVALID$'):
+                CAPTURE.parse_client_line(client_line(**fields))
+        for raw in (b'{"msg":"'+CAPTURE.CLIENT_MESSAGE.encode()+b'","msg":"'+SENTINEL.encode()+b'"}',
+                    b'{'+CAPTURE.CLIENT_MESSAGE.encode(), client_line(private=SENTINEL*500)):
+            with self.assertRaisesRegex(CAPTURE.Failure, '^CLIENT_DIAGNOSTIC_INVALID$'):
+                CAPTURE.parse_client_line(raw)
+        self.assertIsNone(CAPTURE.parse_client_line(b'msg="'+CAPTURE.CLIENT_MESSAGE.encode()+b'"'))
+        self.assertIsNone(CAPTURE.parse_client_line(client_line(msg=SENTINEL)))
+        for category in CAPTURE.CLIENT_CATEGORIES:
+            for context in CAPTURE.CLIENT_CONTEXTS:
+                result = CAPTURE.parse_client_line(client_line(category=category, context_state=context))
+                self.assertEqual(result['category'], category)
+                self.assertNotIn(SENTINEL, json.dumps(result))
+
+    def test_enum_and_message_keys_equal_actual_producers(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root/'services/jobs/agent-runner/internal/codex/broker_response_diagnostic.go').read_text()
+        categories = re.findall(r'brokerResponse\w+\s+brokerResponseFailureCategory\s*=\s*"([A-Z_]+)"', source)
+        self.assertEqual(CAPTURE.CLIENT_CATEGORIES, frozenset(categories))
+        source = (root/'services/jobs/agent-runner/internal/app/execution_diagnostic.go').read_text()
+        for identifier, value in (('runtimeExecutionFailureMessage', CAPTURE.CLIENT_MESSAGE),
+                                  ('runtimeExecutionCategoryKey', 'category'),
+                                  ('runtimeExecutionContextStateKey', 'context_state'),
+                                  ('runtimeExecutionActivityFailedKey', 'activity_failed')):
+            self.assertRegex(source, identifier+r'\s*=\s*"'+re.escape(value)+'"')
+
+    def test_workload_flag_rejected_before_io_and_default_unchanged(self):
+        _, _, _, options = self.bound()
+        options.capture_mode = 'WORKLOAD'
+        with self.assertRaisesRegex(CAPTURE.Failure, '^CLIENT_OBSERVATION_REQUIRES_ACK$'):
+            CAPTURE.capture(options, lambda _: self.fail('unexpected IO'), lambda _: self.fail('unexpected IO'))
+        arguments = ['--run-ref', options.run_ref, '--session-ref', options.session_ref,
+                     '--turn-ref', options.turn_ref, '--attempt', '1', '--image-manifest', options.image_manifest,
+                     '--include-client-observation']
+        with patch('sys.stdout', new_callable=io.StringIO), patch.object(CAPTURE, 'Kubectl') as client, \
+                patch.object(CAPTURE, 'capture', return_value={'status': 'OBSERVATIONS_CAPTURED'}) as operation:
+            self.assertEqual(CAPTURE.main(arguments), 0)
+            self.assertIs(operation.call_args.args[2], client.return_value.follow_observations)
+            self.assertIn('on_observation', operation.call_args.kwargs)
+
+    def test_pair_deadline_and_early_close_join_both_actual_synthetic_children(self):
+        for deadline, early in ((time.monotonic()+0.15, False), (time.monotonic()+5, True)):
+            processes, calls = [], []
+
+            def start(args):
+                calls.append(args)
+                process = subprocess.Popen([sys.executable, '-c',
+                    'import sys,time;print("synthetic",flush=True);time.sleep(30)'],
+                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                processes.append(process)
+                return process
+
+            client = CAPTURE.Kubectl('/unused-private-fixture', deadline)
+            with patch.object(client, 'start', side_effect=start):
+                stream = client.follow_observations({'name': 'runtime-turn-fixture'})
+                try:
+                    if early:
+                        next(stream)
+                    else:
+                        list(stream)
+                finally:
+                    stream.close()
+            self.assertEqual(len(processes), 2)
+            self.assertEqual({call[call.index('-c')+1] for call in calls}, {'provider-runtime', 'role-runtime'})
+            for process in processes:
+                self.assertIsNotNone(process.poll())
+                self.assertTrue(process.stdout.closed)
+
+    def test_pair_second_start_failure_and_signal_cancel_join_all_owned_children(self):
+        process = subprocess.Popen([sys.executable, '-c', 'import time;time.sleep(30)'],
+                                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        client = CAPTURE.Kubectl('/unused-private-fixture', time.monotonic()+5)
+        with patch.object(client, 'start', side_effect=[process, CAPTURE.Failure('KUBECTL_UNAVAILABLE')]):
+            with self.assertRaisesRegex(CAPTURE.Failure, '^KUBECTL_UNAVAILABLE$'):
+                next(client.follow_observations({'name': 'runtime-turn-fixture'}))
+        self.assertIsNotNone(process.poll())
+        self.assertTrue(process.stdout.closed)
+
+        processes = []
+
+        def start(args):
+            child = subprocess.Popen([sys.executable, '-c',
+                'import time;print("synthetic",flush=True);time.sleep(30)'],
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            processes.append(child)
+            return child
+
+        with patch.object(client, 'start', side_effect=start), patch.object(
+                CAPTURE.os, 'read', side_effect=CAPTURE.Failure('CAPTURE_CANCELLED')):
+            with self.assertRaisesRegex(CAPTURE.Failure, '^CAPTURE_CANCELLED$'):
+                list(client.follow_observations({'name': 'runtime-turn-fixture'}))
+        self.assertEqual(len(processes), 2)
+        for child in processes:
+            self.assertIsNotNone(child.poll())
+            self.assertTrue(child.stdout.closed)
+
+    def test_pair_escalates_kill_and_joins_both(self):
+        from unittest.mock import Mock
+        processes = [Mock(stdout=io.BytesIO()), Mock(stdout=io.BytesIO())]
+        for process in processes:
+            process.poll.return_value = None
+            process.wait.side_effect = [subprocess.TimeoutExpired('synthetic', 1), 0]
+        client = CAPTURE.Kubectl('/unused-private-fixture', time.monotonic()+5)
+        with patch.object(client, 'start', side_effect=processes), patch.object(
+                CAPTURE.selectors, 'DefaultSelector') as selector:
+            selector.return_value.__enter__.return_value.get_map.return_value = {}
+            self.assertEqual(list(client.follow_observations({'name': 'runtime-turn-fixture'})), [])
+        for process in processes:
+            process.kill.assert_called_once_with()
+            self.assertTrue(process.stdout.closed)
+
+    def test_pair_eof_flush_and_earliest_only_and_unknown_source_closed(self):
+        ack, _, _, _ = self.bound()
+        result, checkpoints, _, _ = self.exercise([
+            ('PROVIDER', ack), ('PROVIDER', request()), ('PROVIDER', request(detail='STREAM_INVALID')),
+            ('CLIENT', client_line().rstrip(b'\n')), ('CLIENT', None)])
+        self.assertEqual(result['diagnostic']['detail'], 'STREAM_CLOSED')
+        self.assertEqual(result['client_observation']['category'], 'STREAM_READ')
+        self.assertEqual([item['source'] for item in checkpoints], ['ACK', 'PROVIDER', 'CLIENT'])
+        for events, code in (([('FOREIGN', request())], 'OBSERVATION_SOURCE_INVALID'),
+                             ([('CLIENT', SENTINEL)], 'OBSERVATION_CHUNK_INVALID'),
+                             ([('CLIENT', None), ('CLIENT', client_line())], 'OBSERVATION_STREAM_INVALID')):
+            with self.assertRaisesRegex(CAPTURE.Failure, '^'+code+'$'):
+                self.exercise([('PROVIDER', ack)]+events)
+
+    def test_cli_checkpoint_survives_error_without_raw_exception(self):
+        _, _, _, options = self.bound()
+        args = ['--run-ref', options.run_ref, '--session-ref', options.session_ref,
+                '--turn-ref', options.turn_ref, '--attempt', '1', '--image-manifest', options.image_manifest,
+                '--include-client-observation']
+
+        def operation(*args, **kwargs):
+            kwargs['on_observation']({'status': 'ACK_BINDING_CAPTURED_POD_REJOIN_PENDING'})
+            raise OSError(SENTINEL)
+
+        with patch('sys.stdout', new_callable=io.StringIO) as output, patch.object(CAPTURE, 'capture', operation):
+            self.assertEqual(CAPTURE.main(args), 1)
+        records = [json.loads(line) for line in output.getvalue().splitlines()]
+        self.assertEqual(records[0]['status'], 'ACK_BINDING_CAPTURED_POD_REJOIN_PENDING')
+        self.assertEqual(records[1], {'status': 'NOT_CAPTURED', 'code': 'CAPTURE_IO_FAILED'})
+        self.assertNotIn(SENTINEL, output.getvalue())
+
+    def test_first_checkpoint_survives_later_transport_failure(self):
+        ack, proof, _, options = self.bound()
+        checkpoints = []
+
+        def stream():
+            yield 'PROVIDER', ack
+            yield 'PROVIDER', request()
+            raise CAPTURE.Failure('KUBECTL_FOLLOW_FAILED')
+
+        with self.assertRaisesRegex(CAPTURE.Failure, '^KUBECTL_FOLLOW_FAILED$'):
+            CAPTURE.observations_from_chunks(stream(), proof, options, time.monotonic()+5,
+                                            on_observation=lambda *args: checkpoints.append(args))
+        self.assertEqual([item[0] for item in checkpoints], ['ACK', 'PROVIDER'])
+        self.assertNotIn(SENTINEL, json.dumps(checkpoints))
+
+
 if __name__ == '__main__':
     unittest.main()

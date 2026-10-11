@@ -10,6 +10,56 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 16:46 UTC — bounded diagnostic capture готов к live подключению
+
+Интегрированы только два frozen tool/test файла на base3b4b4e2c, SHA256
+collector611bb18c/test402815c2 совпали с пакетом. ROOT адресно:
+`python3 -B -m unittest discover -s tools/dev -p test_provider_failure_capture.py`
+91 PASS/6.479s; аналогичный test_provider_input_ack_capture.py19 PASS/0.699s;
+diff-check PASS. Это synthetic boundary/lifecycle proof, live ещё NOT RUN.
+
+`--include-client-observation` дополняет existing ACK capture одновременным
+follow provider-runtime и role-runtime. Повторный exact ACK сохраняет ранний
+metadata-only checkpoint; provider/client первые признаки независимы.
+Client category не становится provider cause. Оба subprocess bounded,
+cancel/terminate/kill/join проверены, raw log/error/input/grants не выдаются.
+Чужие tuple/UID и WORKLOAD+flag закрыто отклоняются. При исчерпании бюджета
+post-capture rejoin явно NOT_RUN_DEADLINE_AFTER_CAPTURE, не VERIFIED.
+Runner/API/контракты/grants/images и бизнес-инструкции не менялись.
+
+После публикации — original INPUT typed retry и раннее подключение сборщика
+к свежим ходам. Actual cause attempt4 UNKNOWN; business gates ещё OPEN.
+Chrome35 failure graph/reload/Console0/graph200/seq574/overflow=false
+проверены. Exact старый Pod event read показывает Killing после owner
+completion; readiness warnings не доказывают первопричину или OOM/network.
+
+## Checkpoint 11.10.2026 16:36 UTC — attempt4 остановлен, причина отказа ещё неизвестна
+
+Source/HOT3b4b4e2c clean/remote Draft1807. Attempt4 root
+run_c1D0mawPEHWw9HvxQbgbSUBM FAILED/RUNTIME_PROVIDER_UNAVAILABLE, seq574.
+Architect run_H-Zayw0aEL5fAamKAeYUhe4s завершился тем же кодом
+16:21:31 UTC; Developer, ONE Review и итоговая приёмка CANCELLED.
+Успешный INTAKE и его четыре артефакта сохранены; новых опубликованных
+результатов Architect, бизнес-реализации и PR в этой попытке нет.
+
+Runtime-controller после принятого owner completion сообщил
+diagnostic_status=UNAVAILABLE, остальные закрытые provider признаки UNKNOWN.
+Непустой несовпадающий diagnostic envelope отклоняется до owner RPC;
+наблюдаемый UNAVAILABLE означает отсутствие envelope в принятом completion.
+Client broker при отказах frame/schema/sequence/archive/stream может вернуть
+пустой Result; закрытая client category сейчас остаётся только в Podlog.
+Same-UID Pod удалён, его exact старые provider logs на обеих нодах недоступны.
+TOKEN_USAGE, сеть, изменение ревизии и конкретная первопричина не доказаны.
+В этом пути нет отдельного пятиминутного inactivity timeout.
+
+Далее минимально расширить существующий repo-owned read-only capture:
+одновременно exact ACK-bound provider/role logs, раздельные provider и client
+признаки, bounded cancel/join, отсутствие raw payload и секретов. Это
+диагностическая оснастка, не устранение неизвестной причины. После проверки
+и публикации повторить исходный INPUT штатно, без USER business corrections,
+поймать причину до cleanup и исправить именно её. Не ослаблять usage/archive,
+authority и correlation guards. Browser35 reload/rejoin доступен.
+
 ## Checkpoint 11.10.2026 15:52 UTC — новая подготовка завершена, Architect работает
 
 Source/HOT565c4f00 clean; remote Draft1807/head/main preflight PASS.

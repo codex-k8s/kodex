@@ -10,6 +10,38 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 16:46 UTC — dual-source capture synthetic PASS
+
+- [x] Frozen2 tool/test hashes MATCH611bb18c/402815c2 на base3b4b4e2c.
+      ROOT91 capture tests6.479s +19 ACK tests0.699s и diff-check PASS.
+      Exact tuple/UID, closed enum parity, privacy, EOF/deadline и cancel/join
+      двух subprocess покрыты. Provider/client observation разделены.
+- [ ] Публикация, original INPUT typed retry, live early ACK-bound capture.
+- [ ] Actual причина прежнего provider отказа и её fix; Developer business
+      PR, ONE Review, Manager/owner, оставшиеся QA и bootstrap gates.
+
+Оснастка не меняет runtime outcomes, usage/archive guards, полномочия или
+инструкции сотрудников. Клиентская категория не считается provider cause;
+deadline rejoin сохраняется как NOT RUN. Live capture ещё NOT RUN.
+
+## Checkpoint 11.10.2026 16:36 UTC — Architect FAILED, диагностика ещё OPEN
+
+- [x] Authoritative attempt4 terminal: root/Architect FAILED с
+      RUNTIME_PROVIDER_UNAVAILABLE, rootseq574; downstream CANCELLED.
+      Успешный INTAKE сохранён, новых Architect artifacts/implementation/PR нет.
+- [x] RC accepted owner completion с diagnostic_status=UNAVAILABLE.
+      Source подтверждает диагностический пробел: client broker может
+      отбросить Result; закрытая client category остаётся в удаляемом Podlog.
+      Exact прежний UID/log recovery на обеих нодах недоступен.
+- [ ] Exact ACK/UID-bound одновременный provider/role capture, synthetic
+      privacy/lifecycle checks и публикация; исходный typed retry.
+- [ ] Установить и устранить actual первопричину, затем substantive Developer
+      PR, ONE Review, Manager/owner, остальные QA и bootstrap gates.
+
+Provider stage/class/detail UNKNOWN; сеть, TOKEN_USAGE и revision drift не
+доказаны. Добавление capture само по себе не является fix или business PASS.
+USER business corrections0/ROOT business implementation0 сохраняются.
+
 ## Checkpoint 11.10.2026 15:52 UTC — новый INTAKE и штатный Architect handoff
 
 - [x] Source565c4f00 clean/remote preflight PASS. Attempt4 INTAKE SUCCEEDED;

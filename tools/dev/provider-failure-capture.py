@@ -7,6 +7,7 @@ Run связывается exact provider ACK либо отдельным truste
 """
 import argparse
 import copy
+from contextlib import ExitStack
 from datetime import datetime, timezone
 import importlib.util
 import json
@@ -79,6 +80,13 @@ thread_rollback_failed provider_sandbox_error provider_other_error active_turn_n
 provider_transport_failure provider_interrupted RUNTIME_ARTIFACT_INVALID'''.split())
 REQUEST_PREFIX = 'Codex provider request failed at safe stage: '
 TERMINAL_PREFIX = 'Codex provider turn completed with safe failure code: '
+CLIENT_MESSAGE = 'runtime execution failed before completion'
+CLIENT_CATEGORIES = frozenset('UNKNOWN CALLBACKS POST_TERMINAL FRAME_LIMIT FRAME_SCHEMA FRAME_VERSION '
+                             'FRAME_SEQUENCE FRAME_KIND ACTIVITY_SCHEMA PROVIDER_PROCESS_TUPLE '
+                             'MESSAGE_REPLAY MESSAGE_LIMIT TOOL_LIFECYCLE TOOL_LIMIT TERMINAL_SCHEMA '
+                             'DIAGNOSTIC_TUPLE ARCHIVE_PROOF STREAM_READ TERMINAL_ABSENT TERMINAL_RESULT '
+                             'ACTIVITY_DELIVERY'.split())
+CLIENT_CONTEXTS = frozenset(('ACTIVE', 'CANCELED', 'DEADLINE_EXCEEDED', 'UNKNOWN'))
 STAMP = re.compile(r'^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} ')
 REQUEST = re.compile(r'^' + re.escape(REQUEST_PREFIX) +
                      r'([^;]+); class: ([^;]+); detail: ([^;]+); rpc_code: (-?[0-9]{1,19}); '
@@ -136,6 +144,26 @@ def validate_options(options):
             'TIMEOUT_INVALID')
     require(options.pod_name is None or ACK.matches(r'[a-z0-9-]{1,253}', options.pod_name), 'POD_NAME_INVALID')
     require(options.pod_uid is None or ACK.matches(ACK.UUID, options.pod_uid), 'POD_UID_INVALID')
+    require(not getattr(options, 'include_client_observation', False) or
+            getattr(options, 'capture_mode', 'ACK') == 'ACK', 'CLIENT_OBSERVATION_REQUIRES_ACK')
+
+
+def parse_client_line(raw):
+    """Только закрытая app producer-проекция; JSON envelope не возвращается."""
+    if not raw.startswith(b'{') or CLIENT_MESSAGE.encode() not in raw:
+        return None
+    require(len(raw) <= MAX_LINE, 'CLIENT_DIAGNOSTIC_INVALID')
+    try:
+        record = json.loads(raw, object_pairs_hook=ACK.unique)
+    except (Failure, ValueError, UnicodeError):
+        raise Failure('CLIENT_DIAGNOSTIC_INVALID') from None
+    if not isinstance(record, dict) or record.get('msg') != CLIENT_MESSAGE:
+        return None
+    require(isinstance(record.get('category'), str) and record['category'] in CLIENT_CATEGORIES and
+            isinstance(record.get('context_state'), str) and record['context_state'] in CLIENT_CONTEXTS and
+            type(record.get('activity_failed')) is bool, 'CLIENT_DIAGNOSTIC_INVALID')
+    return {'kind': 'CLIENT_FAILURE', 'category': record['category'],
+            'context_state': record['context_state'], 'activity_failed': record['activity_failed']}
 
 
 def selected_pod(read, options, pending_identity=False):
@@ -531,8 +559,124 @@ class Kubectl:
         finally:
             stop_process(process)
 
+    def follow_observations(self, pod):
+        """Оба subprocess принадлежат одному bounded cancel/join, без reconnect."""
+        with ExitStack() as cleanup:
+            processes = {}
+            for source, container in (('PROVIDER', 'provider-runtime'), ('CLIENT', 'role-runtime')):
+                process = self.start(['logs', pod['name'], '-n', ACK.NAMESPACE, '-c', container,
+                                      '--follow', '--tail=256', '--timestamps=false'])
+                cleanup.callback(stop_process, process)
+                processes[source] = process
+            with selectors.DefaultSelector() as selector:
+                received = dict.fromkeys(processes, 0)
+                for source, process in processes.items():
+                    selector.register(process.stdout, selectors.EVENT_READ, source)
+                while selector.get_map() and time.monotonic() < self.deadline:
+                    events = selector.select(min(0.25, max(0, self.deadline - time.monotonic())))
+                    for key, _ in events:
+                        source = key.data
+                        data = os.read(key.fileobj.fileno(), 4096)
+                        if data:
+                            received[source] += len(data)
+                            require(received[source] <= MAX_BYTES, 'OBSERVATION_LOG_LIMIT')
+                            yield source, data
+                            continue
+                        selector.unregister(key.fileobj)
+                        remaining = self.deadline - time.monotonic()
+                        try:
+                            code = processes[source].wait(timeout=min(0.5, max(0, remaining)))
+                        except subprocess.TimeoutExpired:
+                            raise Failure('KUBECTL_FOLLOW_EXIT_TIMEOUT') from None
+                        require(code == 0, 'KUBECTL_FOLLOW_FAILED')
+                        yield source, None
 
-def capture(options, read, follow, now=time.monotonic, sleep=time.sleep):
+
+def observations_from_chunks(stream, proof, options, deadline, on_observation=None, now=time.monotonic):
+    """Два независимых первых наблюдения; client не доказывает provider cause."""
+    pending = {'PROVIDER': bytearray(), 'CLIENT': bytearray()}
+    dropping = dict.fromkeys(pending, False)
+    observed = {}
+    acknowledged = False
+    announced = set()
+    ended = set()
+
+    def announce():
+        if acknowledged and on_observation is not None:
+            for source in ('PROVIDER', 'CLIENT'):
+                if source in observed and source not in announced:
+                    on_observation(source, observed[source])
+                    announced.add(source)
+
+    def consume(source, line):
+        nonlocal acknowledged
+        if source == 'PROVIDER':
+            if ACK.EVENT.encode() in line:
+                repeated = ACK.ack_from_logs(line, options.run_ref, options.assistant_scope,
+                                             getattr(options, 'expected_project_ref', None))
+                if repeated is not None:
+                    require(repeated == proof, 'FOLLOW_ACK_BINDING_MISMATCH')
+                    if not acknowledged and on_observation is not None:
+                        on_observation('ACK', None)
+                    acknowledged = True
+            result = parse_line(line)
+            if result is not None:
+                require(acknowledged, 'FOLLOW_ACK_NOT_OBSERVED')
+        else:
+            result = parse_client_line(line)
+        if result is not None and source not in observed:
+            observed[source] = result
+        announce()
+
+    for source, data in stream:
+        if now() >= deadline:
+            break
+        require(source in pending, 'OBSERVATION_SOURCE_INVALID')
+        require(source not in ended, 'OBSERVATION_STREAM_INVALID')
+        if data is None:
+            ended.add(source)
+            if pending[source] and not dropping[source]:
+                consume(source, bytes(pending[source]))
+            pending[source].clear()
+            if source == 'PROVIDER':
+                require(acknowledged, 'FOLLOW_ACK_NOT_OBSERVED')
+            if acknowledged and len(observed) == 2:
+                return observed
+            continue
+        require(isinstance(data, bytes), 'OBSERVATION_CHUNK_INVALID')
+        for segment in data.splitlines(keepends=True):
+            if not dropping[source]:
+                pending[source].extend(segment)
+                if len(pending[source]) > MAX_LINE:
+                    prefix = STAMP.sub('', bytes(pending[source][:256]).decode('ascii', errors='ignore'), count=1)
+                    require(source != 'PROVIDER' or not prefix.startswith((REQUEST_PREFIX, TERMINAL_PREFIX)),
+                            'PROVIDER_DIAGNOSTIC_INVALID')
+                    require(source != 'CLIENT' or CLIENT_MESSAGE.encode() not in pending[source],
+                            'CLIENT_DIAGNOSTIC_INVALID')
+                if len(pending[source]) > 65536:
+                    dropping[source] = True
+                    pending[source].clear()
+            if segment.endswith(b'\n'):
+                if not dropping[source]:
+                    consume(source, bytes(pending[source]))
+                dropping[source] = False
+                pending[source].clear()
+        if acknowledged and len(observed) == 2:
+            return observed
+    for source in pending:
+        if pending[source] and not dropping[source]:
+            consume(source, bytes(pending[source]))
+    if not observed and now() >= deadline:
+        raise Failure('FAILURE_NOT_OBSERVED_BEFORE_DEADLINE')
+    require(acknowledged, 'FOLLOW_ACK_NOT_OBSERVED')
+    if observed:
+        return observed
+    if now() >= deadline:
+        raise Failure('FAILURE_NOT_OBSERVED_BEFORE_DEADLINE')
+    raise Failure('FOLLOW_STREAM_ENDED')
+
+
+def capture(options, read, follow, now=time.monotonic, sleep=time.sleep, on_observation=None):
     validate_options(options)
     expected_project_ref = getattr(options, 'expected_project_ref', None)
     deadline = now() + options.timeout_seconds
@@ -554,17 +698,41 @@ def capture(options, read, follow, now=time.monotonic, sleep=time.sleep):
     current = selected_pod(read, options, pending_identity=True)
     require(current is not None and current['uid'] == pod['uid'], 'POD_CHANGED_BEFORE_FOLLOW')
     ACK.bind_pod(current, proof)
+    include_client = getattr(options, 'include_client_observation', False)
+    observations = None
+
+    def checkpoint(source, observation):
+        if on_observation is not None:
+            receipt = {'version': 1, 'status': 'OBSERVATION_CAPTURED_POD_REJOIN_PENDING',
+                            'source': source, 'run_ref': options.run_ref, 'session_ref': options.session_ref,
+                            'turn_ref': options.turn_ref, 'attempt': options.attempt,
+                            'pod': {'name': pod['name'], 'uid': pod['uid'], 'namespace': ACK.NAMESPACE},
+                            'image_manifest_digest': options.image_manifest,
+                            'input_digest': proof['input_digest'],
+                            'runtime_revision_digest': proof['runtime_revision_digest'],
+                            'execution_binding_digest': proof['execution_binding_digest'],
+                            'captured_at': datetime.now(timezone.utc).isoformat(),
+                            'provider_ack': 'OBSERVED'}
+            if source == 'ACK':
+                receipt['status'] = 'ACK_BINDING_CAPTURED_POD_REJOIN_PENDING'
+            else:
+                receipt['observation'] = observation
+            on_observation(receipt)
     rejoins = 0
     while True:
         require(now() < deadline, 'FAILURE_NOT_OBSERVED_BEFORE_DEADLINE')
         stream = follow(current)
         try:
+            if include_client:
+                observations = observations_from_chunks(stream, proof, options, deadline,
+                                                        on_observation=checkpoint, now=now)
+                break
             diagnostic = diagnostic_from_chunks(stream, expected_ack=proof,
                                                 run_ref=options.run_ref, scope=options.assistant_scope,
                                                 deadline=deadline, now=now, expected_project_ref=expected_project_ref)
             break
         except Failure as error:
-            if str(error) != 'FOLLOW_STREAM_ENDED':
+            if include_client or str(error) != 'FOLLOW_STREAM_ENDED':
                 raise
         finally:
             stream.close()
@@ -588,9 +756,12 @@ def capture(options, read, follow, now=time.monotonic, sleep=time.sleep):
         current = selected_pod(read, options, pending_identity=True)
     except Failure as error:
         # Только недоступность transport не подменяет mismatch/коррупцию.
-        if str(error) not in ('KUBECTL_READ_FAILED', 'KUBECTL_READ_TIMEOUT', 'KUBECTL_UNAVAILABLE'):
+        if include_client and str(error) == 'CAPTURE_DEADLINE':
+            rejoin = 'NOT_RUN_DEADLINE_AFTER_CAPTURE'
+        elif str(error) in ('KUBECTL_READ_FAILED', 'KUBECTL_READ_TIMEOUT', 'KUBECTL_UNAVAILABLE'):
+            rejoin = 'READ_UNAVAILABLE_AFTER_CAPTURE'
+        else:
             raise
-        rejoin = 'READ_UNAVAILABLE_AFTER_CAPTURE'
     else:
         if current is None:
             rejoin = 'POD_CLEANED_AFTER_CAPTURE'
@@ -601,7 +772,22 @@ def capture(options, read, follow, now=time.monotonic, sleep=time.sleep):
     result = {'status': 'CAPTURED', 'run_ref': options.run_ref, 'session_ref': options.session_ref,
             'turn_ref': options.turn_ref, 'attempt': options.attempt, 'assistant_scope': options.assistant_scope,
             'pod': {'name': pod['name'], 'uid': pod['uid'], 'namespace': ACK.NAMESPACE},
-            'image_manifest_digest': options.image_manifest, 'rejoin': rejoin, 'diagnostic': diagnostic}
+            'image_manifest_digest': options.image_manifest, 'rejoin': rejoin}
+    if include_client:
+        result.update({'status': 'OBSERVATIONS_CAPTURED', 'provider_ack': 'OBSERVED',
+                       'observation_end': 'BOTH_OBSERVED' if len(observations) == 2 else
+                       ('DEADLINE' if now() >= deadline else 'STREAM_ENDED'),
+                       'provider_observation': 'OBSERVED' if 'PROVIDER' in observations else 'NOT_OBSERVED',
+                       'client_observation_status': 'OBSERVED' if 'CLIENT' in observations else 'NOT_OBSERVED',
+                       'input_digest': proof['input_digest'],
+                       'runtime_revision_digest': proof['runtime_revision_digest'],
+                       'execution_binding_digest': proof['execution_binding_digest']})
+        if 'PROVIDER' in observations:
+            result['diagnostic'] = observations['PROVIDER']
+        if 'CLIENT' in observations:
+            result['client_observation'] = observations['CLIENT']
+    else:
+        result['diagnostic'] = diagnostic
     if expected_project_ref is not None:
         result['project_ref'] = proof['project_ref']
     return result
@@ -630,6 +816,8 @@ def main(argv=None):
     parser.add_argument('--capture-mode', choices=('ACK', 'WORKLOAD'), default='ACK')
     parser.add_argument('--node-ref')
     parser.add_argument('--expected-input-digest')
+    parser.add_argument('--include-client-observation', action='store_true',
+                        help='Follow same-UID role-runtime closed diagnostics after exact provider ACK')
     try:
         options = parser.parse_args(argv)
         validate_options(options)
@@ -639,7 +827,11 @@ def main(argv=None):
             os.chmod(private, 0o700)
             client = Kubectl(private, time.monotonic() + options.timeout_seconds)
             operation = capture_workload if options.capture_mode == 'WORKLOAD' else capture
-            result = operation(options, client.read, client.follow)
+            if options.include_client_observation:
+                emit = lambda value: print(json.dumps(value, sort_keys=True), flush=True)
+                result = capture(options, client.read, client.follow_observations, on_observation=emit)
+            else:
+                result = operation(options, client.read, client.follow)
         print(json.dumps(result, sort_keys=True))
         return 0
     except Failure as error:
