@@ -184,7 +184,7 @@ DiskPressure; актуальный owner run state UNKNOWN при API 500, recov
       Прежний запуск FAILED / RUNTIME_TIMEOUT; новые бюджеты APPLIED/PUBLISHED,
       один свежий процесс запущен, результат ещё не принят.
       Проверить небольшой disposable delegated run до настоящей Issue.
-- [x] 12. При bootstrap acceptance зафиксировать и автономно слить bootstrap
+- [ ] 12. При bootstrap acceptance зафиксировать и автономно слить bootstrap
       PR, обновить стенд на свежий main и повторно сверить созданные ресурсы,
       migrations/source/Pod/image/runtime/realtime и prompt pins.
 - [x] 13. Manager выбирает #1796, если актуальна и имеет поддерживаемый
@@ -1157,3 +1157,26 @@ Architect RUNNING; Developer/ONE Review/Manager/owner OPEN. ROOT не писал
 прочитан ROOT exact HTTP200/hash MATCH, но содержит binding metadata, не actual
 shell-write proof. Journal0376f329 remote/readback PASS после отдельной
 проверки задержавшегося первого push ACK; повторный push не выполнялся.
+
+## Checkpoint 11.10.2026 05:24 UTC — актуальные пункты оставшейся приёмки
+
+Исторический baseline checklist сохраняет прежние формулировки и pins.
+Применимое правило для пунктов11/15 — уже утверждённый GOV-OD-003: всего
+один comprehensive Review, затем Manager и единственный owner gate; никаких
+автоматических fix/re-review циклов. Эта запись отражает утверждённое решение,
+не создаёт нового исключения или полномочий и не переписывает архив.
+
+- [x] Конфигурация пункта11: fresh native GET200 подтверждает Workflow40,
+      PUBLISHED, exact revision wfv_AbTG0jWIG7tWZn_oLYqVOB98; пять шагов
+      INTAKE/ANALYSIS_AND_ARCHITECTURE/IMPLEMENTATION/
+      SINGLE_COMPREHENSIVE_REVIEW/FINAL_MANAGER_REVIEW, один review-step.
+- [ ] Пункты11/14: полный исходный Workflow доведён до продукта; сейчас
+      root RUNNING, INTAKE SUCCEEDED, Architect RUNNING, Developer ещё PLANNED.
+- [ ] Пункт12: именно текущий bootstrap Draft1807 слит и свежий main реально
+      проверен после слияния. Ранее отмеченный checkbox снят: текущий PR OPEN,
+      main ab4992e0 не изменён, а прежние merge/readback не доказывают этот этап.
+- [ ] Пункт15: одно комплексное review точного business diff/SHA, Manager,
+      final-readiness и отчёт владельцу. Findings/NOT RUN не выдавать за PASS;
+      business PR не merge/auto-merge/approve агентами.
+
+HOT6c30 и активный граф не изменялись; новые runtime/policy/grants не вводились.

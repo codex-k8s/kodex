@@ -10,6 +10,29 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 05:24 UTC — оставшаяся критическая цепочка
+
+Root run_otNkDk7sv9Qd_bK4xEB4QAxT RUNNING/seq441, Architect
+run_J7d5C2822GYUpgbBb6Qduch2 RUNNING. Не создавать новый запуск или USER
+correction из-за паузы событий между инструментами. Текущий Workflow40/PUBLISHED,
+revision wfv_AbTG0jWIG7tWZn_oLYqVOB98 подтверждён fresh owner GET200:
+пять шагов, ровно один SINGLE_COMPREHENSIVE_REVIEW. Старые version25/21steps
+и пять циклов в историческом baseline не относятся к этому запуску;
+правило уже утверждено GOV-OD-003 и доставлено instructions.
+
+- [ ] Получить native architecture-review и exact source/schema/provider proof,
+      дождаться проверки Coordinator и штатного допуска Developer.
+- [ ] Получить business diff/PR, одно комплексное review и финальный Manager.
+- [ ] Передать final-readiness/точный SHA/remaining findings владельцу;
+      бизнес-PR агентами не merge/approve.
+- [ ] Завершить обязательную приёмку bootstrap1807 и merge/main readback
+      без обхода protections. Checkbox12 в OPS001 снят: этот текущий PR ещё OPEN,
+      а старые публикации/merge не доказывают выполнение нового этапа.
+
+Journal c00e0661 запушен/readback PASS, Draft1807/body актуализированы.
+Первый push ACK delayed/FAIL_OR_UNKNOWN сохранён; отдельный readback без
+повторного push подтвердил exact remote. HOT6c30 по-прежнему неизменён.
+
 ## Checkpoint 11.10.2026 05:19 UTC — INTAKE завершён, Architect работает
 
 Тот же root остаётся RUNNING. INTAKE `run_HTTT4d3_8CKdUVdqC5Ryo2-U`

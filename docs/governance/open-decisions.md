@@ -76,7 +76,11 @@ Owner-approved web-first reset заменил прежние Mattermost-first и
   бизнес-PR передаётся владельцу, без merge/auto-merge/owner approve агентами;
 - что синхронизировано: применимость исключения в AGENTS, delivery guide и
   стратегии проверок; экспериментальный Workflow имеет одного рецензента.
-  Новый лимит одного цикла требует отдельного штатного обновления Workflow
-  перед следующим dogfooding; его публикация пока не подтверждена.
+  Лимит одного цикла опубликован штатно до нового dogfooding. Readback
+  11.10.2026 подтверждает Workflow version40/PUBLISHED, revision
+  `wfv_AbTG0jWIG7tWZn_oLYqVOB98`: INTAKE, ANALYSIS_AND_ARCHITECTURE,
+  IMPLEMENTATION, SINGLE_COMPREHENSIVE_REVIEW, FINAL_MANAGER_REVIEW.
+  Подтверждена конфигурация пяти шагов/одного review, не завершение процесса;
+  Developer, review, Manager и финальная приёмка ещё открыты.
   Доступность новой документации через закреплённый main и повторный readback
   рабочего пути проверяются отдельно, не предполагаются из этой записи.
