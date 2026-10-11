@@ -763,3 +763,23 @@ vet/build PASS; worker exact1.26.6 targeted/race/vet/build PASS. Формати�
 Закрытый log не содержит raw error/frame/args; прежние errors.Is/Unwrap и
 функциональные исходы сохранены. Это наблюдаемость, не устранённая причина
 конкретного native отказа и не успешный business/QA результат.
+
+## Checkpoint 11.10.2026 08:21 UTC — runner diagnostics и выбранные ENV доставлены
+
+Source/HOT39d4653e clean, Draft1807 exact readback PASS, main неизменён.
+Runner23089dc8/binaryca035f6c, policyd37d4d96 и default role binding
+применены canonical code-first путём. Actual CP ELF37822346/RC ELF11817316,
+source mount/hash/UID/rejoin PASS. Три artifacts602d8577/aa8994e1/b3d1628f
+ACCEPTED/PROMOTED/VERIFIED без risk override. Четыре ENV versions39/21/20/24,
+ровно восемь intended bindings APPLIED, fullEOF и non-image preservation PASS;
+38tools каждой ENV, Secret descriptors, variables/resources/policy сохранены.
+Proof SHA256d91ce0bd4263ec960c426f77d958ffb6eebab662cd8df36a940967cdcd6223f4.
+
+До следующего native retry запущен read-only capture закрытой первичной
+category/context_state/activity_failed из ROLE log, без raw frames/inputs/errors.
+Это доставка диагностики, не platform-fix или successful business result.
+Chrome35 API200/Console0/overflow=false; MCP screenshot завис и остановлен,
+отдельный Playwright settled graph визуально проверен. Его startup401/Console1
+не обозначаются чистым browser PASS. MCP list/reload восстановились.
+Native retry/первичная причина/Architect/Developer/ONE Review/Manager/owner
+и QA65 OPEN; USER corrections0, host business implementation0.

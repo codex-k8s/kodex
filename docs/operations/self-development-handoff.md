@@ -10,6 +10,33 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 08:21 UTC — диагностика доставлена, повтор задания готов
+
+Source/HOT39d4653ea8a569dabbe0b1d76df88d9d0fc19646 clean, Draft1807 exact
+readback PASS; main не изменён. Новый runner23089dc8/binaryca035f6c собран
+Go1.26.6, опубликован и импортирован на оба узла; exact admission policy
+d37d4d96 и default binding применены canonical code-first путём. Actual
+CP ELF37822346/RC ELF11817316, UID/source mount/hash/rejoin PASS.
+
+Все три новых role artifacts ACCEPTED/PROMOTED/VERIFIED: системный602d8577,
+сотрудникиaa8994e1, проектный помощникb3d1628f. Четыре ENV PUBLISHED/ready,
+ровно восемь intended bindings APPLIED; fullEOF и сохранность всех38 tools,
+переменных, Secret descriptors, ресурсов и policy по hash PASS. Новые ENV
+версии39/21/20/24. Ручной risk override не применялся.
+
+Общий workspace всех ролей уже подтверждён actual Pod предыдущего исполнения:
+writable work/INPUT copies, readonly input/context/knowledge и WORKSPACE.md.
+До следующего retry запущен ограниченный read-only capture закрытых
+category/context_state/activity_failed ROLE logs: raw frames, inputs
+и ошибки не выводятся. Это диагностика, не доказательство устранения отказа.
+
+Chrome35 session/run/graph/events200, Console0 и overflow=false в текущем
+reload. Screenshot MCP завис: попытка остановлена, отдельный Playwright
+показал settled FAILED graph с читаемой дугой ответа; его startup401/Console1
+не объявлены чистым браузерным PASS. MCP list/reload затем восстановились.
+Следующий native retry, первичная причина, Architect/Developer/ONE Review/
+Manager/owner и QA65 остаются OPEN. USER corrections0, host business code0.
+
 ## Checkpoint 11.10.2026 07:51 UTC — INTAKE завершился отказом, причина уточняется
 
 Native attempt4 run_zP5cfYGUXVKoMdQhw6STWR0- FAILED/graph seq300:
