@@ -10,6 +10,33 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 15:52 UTC — новая подготовка завершена, Architect работает
+
+Source/HOT565c4f00 clean; remote Draft1807/head/main preflight PASS.
+Attempt4 run_c1D0mawPEHWw9HvxQbgbSUBM RUNNING/seq249. Новый INTAKE
+run_2V3xT7ONwbjiG5asLlqwVSN8 SUCCEEDED, semantic PASS_FOR_ARCHITECT_HANDOFF;
+это не implementation либо business acceptance. Четыре actual artifacts
+owner content200 до bounded EOF, size/SHA и immutable revision/version
+rejoin PASS: result.md605B/SHA9f1b7de5, workspace-write-result.json328B/
+SHA39f3f767, intake-evidence.json51665B/SHAc53c033a,
+manager-plan.md23086B/SHAf6cf06e8. Private projected receipt SHA83705d07.
+
+Coordinator прочитал свежие результаты штатно, без USER corrections.
+Architect run_H-Zayw0aEL5fAamKAeYUhe4s RUNNING с15:48:34 UTC;
+собственная session ses_j8vkUzlip_u1obnYHdcgs5cY. Original INPUT сохранён,
+Developer published revision2 не распространяется на другие роли.
+Далее substantive Developer PR, ONE Review, Manager/owner и bootstrap gates.
+Один FAILED shell в INTAKE сохранён в истории; семантическая подготовка
+завершилась успешно. Technical success не подменяет остальные acceptance.
+
+Chrome35 reload/rejoin, screenshot графа и отсутствие horizontal overflow
+проверены; realtime seq239 и fresh read249, Console0. Relevant штатные
+session/bootstrap/ticket/graph/events/artifact calls200; bounded5m CP/RC/
+gateway logs errorLines0. Ошибочные диагностические content probes без
+обязательного purpose дали400; исправленный exact revision DOWNLOAD200.
+Для events проверены правильные afterSequence/limit; прежние after/pageSize
+не доказывают pagination и не являются application defect. Goal открыт.
+
 ## Checkpoint 11.10.2026 15:36 UTC — native рекомендация и публикация только Developer
 
 Source/HOT1765ec18 clean/remote Draft1807/body readback PASS. Первое push

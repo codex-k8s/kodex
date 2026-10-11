@@ -10,6 +10,25 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 15:52 UTC — новый INTAKE и штатный Architect handoff
+
+- [x] Source565c4f00 clean/remote preflight PASS. Attempt4 INTAKE SUCCEEDED;
+      actual4 results: owner bounded full content/size/SHA и revision/version
+      rejoin PASS. Private projected receipt SHA83705d07. Semantic
+      PASS_FOR_ARCHITECT_HANDOFF, business acceptance NOT RUN.
+- [x] Coordinator прочитал новые результаты и передал задачу Architect
+      штатно, без USER business corrections. Fresh own run/session с15:48:34;
+      root RUNNING/seq249. Рекомендации Developer не стали общими инструкциями.
+- [x] Screenshot/Console0/realtime/rejoin и отсутствие horizontal overflow;
+      relevant штатные API200, bounded backend logs errorLines0. Ошибочные
+      probes400 без purpose отдельно сохранены; corrected DOWNLOAD200.
+      Events catch-up использует контрактные afterSequence/limit.
+- [ ] Architect semantic допуск, substantive Developer PR, ONE Review,
+      Manager/owner, остальные обязательные QA и bootstrap merge/main.
+
+Stage receipts не означают завершённую бизнес-реализацию. История прежнего
+semantic STOP и единственного FAILED shell нового INTAKE сохранена.
+
 ## Checkpoint 11.10.2026 15:36 UTC — рекомендации не внедряются всем
 
 - [x] Source1765ec18/remote/body/HOT clean. Actual CP mounted2 hashes MATCH,
