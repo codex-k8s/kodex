@@ -10,6 +10,31 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 14:59 UTC — negative/browser graph proof, semantic STOP сохранён
+
+Source/HOT2bdee3dd clean/remote Draft1807/body readback PASS.
+Actual baseline35ff browser viewport1201x480/canvas943x266:
+«Весь граф» scale0 и71 SVG NaN Console errors воспроизведены.
+После hot reload2bdee3dd те же размеры и действие: scale0.515152,
+Console0. Fresh reload/rejoin, resize обратно1563x784, «Текущая работа»
+scale1.1/finite и просмотренный screenshot PASS. Whole-graph обзор естественно
+мельче focus; это не обещание полной читаемости11 карточек одновременно.
+Host/actual frontend Pod exact production2 hashes MATCH2bd4f1eb/967d5ac1.
+Relevant session/bootstrap/graph/events/ticket/artifact Network200;
+fresh Vite/gateway logs пустые, это не самостоятельный business PASS.
+Ранее36 transient errors сохранены; bounded negative repro71 объяснён и
+перепроверен, console не подавляется. Chunk-size build advisory остаётся.
+
+Root штатно FAILED/RUNTIME_WORKFLOW_INCOMPLETE, seq746, после semantic STOP
+Developer. Owner terminal receipt SHAa0ef15ac. Единственное Review и
+финальная приёмка не запускались; нет бизнес-реализации/PR. Артефакты
+Developer показывают transport clone EOF, не доказанный authority отказ.
+В private готовится новая immutable PLATFORM instruction revision для
+bounded READ recovery и handoff EOF до Git-подготовки; текущие sealed snapshots
+не переписываются. Без USER corrections и ROOT business implementation.
+Следующее действие — проверить/доставить общий fix, штатно повторить исходный
+INPUT и сопровождать substantive Developer→ONE Review→Manager/owner.
+
 ## Checkpoint 11.10.2026 14:53 UTC — адресный graph fix и Developer semantic STOP
 
 На base35ff1b88 интегрирован frozen FE packet:4 exact pre/post images MATCH.

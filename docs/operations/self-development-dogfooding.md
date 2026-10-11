@@ -10,6 +10,20 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 14:59 UTC — short graph browser PASS, native goal OPEN
+
+- [x] Baseline35ff negative1201x480/canvas943x266: fit scale0/SVG71 errors.
+      Hot2bdee3dd same action/size scale0.515152, Console0; desktop restore,
+      current-work focus scale1.1/screenshot/rejoin/relevant Network200 PASS.
+      Actual frontend Pod hashes2 MATCH; no console suppression.
+- [x] Remote Draft1807 exact2bdee3dd/body verified; journal и код опубликованы.
+- [ ] Root746 FAILED/RUNTIME_WORKFLOW_INCOMPLETE после Developer semantic
+      STOP, substantive business PR/review/acceptance отсутствуют.
+- [ ] Новая immutable instruction READ recovery и handoff-order; original
+      INPUT typed retry, не исправляющий USER prompt, затем ONE Review.
+
+Полный QA/goal открыт. USER corrections0/host business implementation0.
+
 ## Checkpoint 11.10.2026 14:53 UTC — graph fit и Developer transport STOP
 
 - [x] Frozen graph-fit4 интегрирован с exact pre/post hashes; ROOT35unit2.07s,
