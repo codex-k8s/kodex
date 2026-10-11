@@ -43,6 +43,17 @@ scope, контракт, policy, fixture либо deployment boundary, прим�
 
 ## Свежая цепочка выполнения
 
+11.10 19:53 UTC: canonical runner b90c0cc2/compiled8f0fd117 доставлен
+repo-owned publish/policy/binding/defaults/verify, исходные77promoted pins
+сохранены. Два project recipes ACCEPTED/PROMOTED; три ENV и7bindings
+опубликованы typed owner commands. Fresh full EOF/APPLIED proof
+44ec0927717201b0b5fb78b2d160f9429f0e136a9a7b254cf12ea86232f35f48
+подтверждает preservation3/3 и38tools. Новый native recovery ещё NOT RUN.
+Semantic build-intent fix исключает только CorrelationRef; worker RED/GREEN
+disposablePG и unit/race/vet PASS; ROOT integrated race1.190s/vet и canonical
+disposable PostgreSQL3.253s с readbacks PASS. Live delivery пока NOT RUN.
+Исторический actual Developer guard и первая build RPC причина UNKNOWN.
+
 Новый runner scope поверх8e2138b0: FAILED post-join normalization,
 закрытые filesystem stage/reason, фактические workspace budgets в guide,
 post-execution artifact error mapping и collector этой закрытой диагностики.

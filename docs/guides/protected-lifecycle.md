@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.22
+version: 1.1.23
 updated: 2026-10-11
 ---
 
@@ -276,6 +276,15 @@ Late success не меняет terminal verdict; подтверждённые us
 Гонка claim/renew/cancel, owner click/expiry и complete/retry разрешается
 row/OCC/fence-моделью с одним победителем. Повтор с тем же idempotency scope и
 request hash возвращает сохранённый результат; новый эффект не создаётся.
+
+Для Report/Renew/Complete/Fail сборки образа semantic intent исключает только
+назначаемый заново transport CorrelationRef. Исходный Principal проходит
+свежую проверку без изменений; actor/organization/project/permission/workload,
+credential revision/authentication, lease/token/attempt/fence/OCC и payload
+остаются в commitment. Новый correlation не создаёт второй effect, а чужая
+authority и изменённый intent закрыто отклоняются. Сохранённые receipt hashes
+не переписываются и не получают fallback decoder: cutover выполняется при
+отсутствии активных сборок, последующие команды используют новые keys.
 
 Полученный batch runtime claims продлевается с момента получения ответа, а
 не только после последовательной материализации Pod. Каждый keeper немедленно

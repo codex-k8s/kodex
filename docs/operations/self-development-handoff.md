@@ -10,6 +10,78 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 19:53 UTC — образы и окружения доставлены
+
+Canonical base b90c0cc2 остаётся compiled source8f0fd117. Staff generation23
+и helper generation17 прошли ACCEPTED/PROMOTED. Staff artifact
+imgart_-HES0OshXQDiBFfq5AeTxd2j, helper imgart_YLscmcmAGGUvQJi0rwHfVgE4.
+Оба owner detail200 сохранены; final recipe receipt SHA
+ebde244f2eb925d06584cdd5a33f53fe0687acc6498ecd500a7af97143669057.
+
+Три typed ENV draft/validation/impact/publication завершены201/200/201/200.
+Первый validation403 FRESH_AUTHENTICATION_REQUIRED сохранён; штатный свежий
+OIDC-вход и тот же original intent дали200. Authority/OCC не обходились.
+Fresh complete impact EOF/APPLIED и readback трёх ENV/семи runtime
+configurations подтверждают preservation3/3,38tools и7 exact bindings.
+Proof SHA44ec0927717201b0b5fb78b2d160f9429f0e136a9a7b254cf12ea86232f35f48.
+WRITE version24/binding25, REVIEW version23/five bindings24,
+helper version27/binding27. Изменён только image, non-image parameters
+и сетевые правила сохранены. Full QA этим не подтверждён.
+
+Chrome11 после reload: опубликованная rev24, overflow=false, screenshot,
+Console0, bootstrap/session/ENV/history/recipe/readiness/agents/ticket200.
+Первоначальный screenshot loading сохранён отдельно от загруженного экрана.
+
+Отдельно интегрирован минимальный semantic build-intent fix4files:
+Report/Renew/Complete/Fail исключают только новый CorrelationRef из копии
+для digest, исходная fresh authority/lease/OCC не меняется. Worker RED/ GREEN
+disposable PostgreSQL и targeted unit/race/vet PASS; original staff attempt1
+cause UNKNOWN. ROOT integrated race PASS1.190s, scoped vet PASS, canonical
+disposable PostgreSQL PASS3.253s и worker-grant/runner-policy readbacks PASS.
+Live fix пока NOT RUN.
+Старые receipts не переписывать, adapter retry не добавлен. Доставка CP
+только в quiescent build window; новый runner rebuild не нужен.
+
+Далее clean commit/push1807, ff-only HOT и CP serving source/ELF readback,
+затем штатный Retry failed Workflow с исходным USER input. Старые root/results
+не переносят authority. PR1808 Draft сохраняется; ONE review cycles0,
+Manager/owner, QA65 и bootstrap merge/main readback OPEN.
+
+## Checkpoint 11.10.2026 19:41 UTC — новый base runner доставлен, project images в работе
+
+Source/HOT/remote Draft1807:8f0fd117ea43d0875cb2e6b046e14bacc5e55347,
+mainab4992e0 readback PASS. Первый push получил transient readback UNKNOWN;
+повторное чтение remote и PR подтвердило тот же SHA, повторного push не было.
+Тело PR сокращено/актуализировано, exact readback PASS.
+
+Повтор whole runner unit на clean8f0fd117 PASS (app17.003s/codex5.336s).
+Canonical full OCI b90c0cc24671105892f80da61dc96ef209b0eaad5b7df42d4590202711d3fcb4:
+build/import/provenance PASS, exact ELF2991a81b1ab9535dc4611f53e5804f8d5668575fbfc848d0dc45762382099fbf,
+provenance db12c2a1c5dd3d40d61dbfe8b71d795c633aa399d2476f29a3be1f49bb1d86a7.
+Repo-owned publish→prepare→policy→runtime binding→defaults→verify PASS;
+old promoted count77/pinsfedc5804 сохранены, authoritative idle доказан до эффектов.
+Изменение policy выполнялось в trusted development, не staging/production.
+Transient browser503/ERR_NETWORK_CHANGED в окне maintenance сохранены;
+после открытия gateway reload/Console0/owner GET200 восстановлены.
+
+Fresh owner6GET/full history EOF использованы для двух typed draft/validate/
+publish цепочек: обе201/200/200, source меняет только FROM. Staff recipe
+generation23, build imgbld_d-Rz343lHt9cnRSlP2VwWIUS attempt1 остановился
+на MATERIALIZATION; builder дал delivery degraded. Actual RPC причина UNKNOWN.
+Без manual cancel/patch/повторной публикации lease5m истёк, тот же build
+attempt2 COMPLETED19:38:43.325746. Helper recipe generation17/build
+imgbld_Pi2C9bYhJ-5jkyUkEhBUnenj attempt1 COMPLETED19:34:25.380076;
+scan/sign/admit ACCEPTED, promotion202→PROMOTED/readback200.
+Helper artifact imgart_YLscmcmAGGUvQJi0rwHfVgE4,
+digest2bb0536ed1c0915d8c4b784627166bd1d1e8f11828ac454ff0187726cbc686ec.
+Staff scan ещё выполняется; его promotion и три ENV/seven binding обновления
+NOT RUN. Нельзя запускать native retry до завершения intended ENV доставки.
+
+Chrome11: экран helper image после первоначального loading загрузился;
+скриншот/overflow=false/Console0/bootstrap/session/recipe/history/ticket200.
+Чужие вкладки не трогались. Original Developer actual guard UNKNOWN,
+PR1808 Draft сохранён, Reviewer cycles0, full QA/business acceptance OPEN.
+
 ## Checkpoint 11.10.2026 19:23 UTC — post-join исправление проверено, доставка открыта
 
 Поверх 8e2138b0 подготовлен единый пакет runner: после остановки и join

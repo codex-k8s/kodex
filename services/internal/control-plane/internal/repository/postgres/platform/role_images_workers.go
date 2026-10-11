@@ -315,7 +315,7 @@ func (repository *Repository) ReportBuildProgress(ctx context.Context, input rol
 	defer func() { _ = tx.Rollback(ctx) }()
 	var replay entity.ImageBuild
 	if found, receiptErr := repository.loadRoleImageReceipt(ctx, tx, current, operation,
-		input.IdempotencyKey, roleImageDigest(input), &replay); receiptErr != nil {
+		input.IdempotencyKey, roleImageBuildProgressDigest(input), &replay); receiptErr != nil {
 		return entity.ImageBuild{}, receiptErr
 	} else if found {
 		if err := committed(tx, ctx); err != nil {
@@ -323,7 +323,7 @@ func (repository *Repository) ReportBuildProgress(ctx context.Context, input rol
 		}
 		return replay, nil
 	}
-	intent = roleImageDigest(input)
+	intent = roleImageBuildProgressDigest(input)
 	if err := validateBuildClaim(input.BuildLeaseInput, locked, time.Now().UTC()); err != nil {
 		return entity.ImageBuild{}, err
 	}
@@ -351,7 +351,7 @@ func (repository *Repository) CompleteBuild(ctx context.Context, input roleimage
 		return entity.ImageBuild{}, entity.ImageArtifact{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	intent := roleImageDigest(input)
+	intent := roleImageBuildCompletionDigest(input)
 	type completionReceipt struct {
 		Build    entity.ImageBuild
 		Artifact entity.ImageArtifact
@@ -423,7 +423,7 @@ func (repository *Repository) FailBuild(ctx context.Context, input roleimagerepo
 		return entity.ImageBuild{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	intent := roleImageDigest(input)
+	intent := roleImageBuildFailureDigest(input)
 	var replay entity.ImageBuild
 	if found, receiptErr := repository.loadRoleImageReceipt(ctx, tx, current, operation,
 		input.IdempotencyKey, intent, &replay); receiptErr != nil {
@@ -478,7 +478,7 @@ func (repository *Repository) beginBuildMutation(ctx context.Context, input role
 		_ = tx.Rollback(ctx)
 		return scope{}, nil, lockedBuild{}, "", "", errs.ErrUnavailable
 	}
-	return current, tx, locked, operation, roleImageDigest(input), nil
+	return current, tx, locked, operation, roleImageBuildLeaseDigest(input), nil
 }
 
 func (repository *Repository) emitRoleImageBuildChanged(ctx context.Context, tx pgx.Tx, current scope, locked lockedBuild) error {

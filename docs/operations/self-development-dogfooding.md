@@ -10,6 +10,46 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 19:53 UTC — exact project image delivery
+
+- [x] Два current recipes ACCEPTED/PROMOTED; staff после штатного lease
+      recovery attempt2, helper attempt1; исходная transient причина UNKNOWN.
+- [x] Три ENV и7intended bindings опубликованы через typed draft/validation/
+      impact/publication; full EOF/APPLIED, non-image preservation3/3,
+      38tools и exact version increments PASS.
+- [x] Штатная свежая OIDC-authorisation после403; original intent сохранён.
+      Chrome ENV rev24: screenshot/overflow=false/Console0/relevant200.
+- [x] Frozen semantic build-intent fix4files интегрирован с exact manifest;
+      только CorrelationRef исключён из digest copy. Worker RED/GREEN PG,
+      unit/race/vet PASS; исторические receipts/authority/lease не изменены.
+- [x] ROOT integrated race1.190s/vet, canonical disposable PostgreSQL3.253s
+      и обязательные оснастке readbacks PASS; source manifest4/4 MATCH.
+- [ ] Commit/push и actual CP serving readback.
+- [ ] Новый native Retry, fresh substantive handoff, ONE Reviewer/Manager/
+      owner, остальные QA gates и bootstrap merge/main readback.
+
+Proof SHA и точка продолжения — в [handoff](self-development-handoff.md).
+Runner b90c0cc2 compiled8f0fd117; новый CP fix не требует rebuild runner.
+PR1808 не сливать, ROOT business implementation0/USER corrections0.
+
+## Checkpoint 11.10.2026 19:41 UTC — post-join пакет и base delivery
+
+- [x] Source/HOT/remote8f0fd117 MATCH; runner whole unit/vet, scoped race,
+      binary/OCI/provenance, collector93 tests PASS в указанной области.
+- [x] Canonical baseb90c0cc2/policy/defaults/runtime binding доставлены;
+      исходные77 promoted pins сохранены, idle доказан до перехода.
+- [x] Два fresh typed recipe draft/validate/publish с full EOF/lineage;
+      staff attempt2 восстановился штатно после5m lease и COMPLETED,
+      helper ACCEPTED/PROMOTED. Actual первой RPC причины UNKNOWN.
+- [x] Chrome helper image: screenshot/Console0/overflow=false/relevant200.
+- [ ] Staff admission/promotion и три ENV/seven bindings/38tools preservation.
+- [ ] Новый native recovery, substantive handoff, ONE Reviewer/Manager/owner,
+      остальные обязательные QA gates и bootstrap merge/main readback.
+
+Подробные SHA, времена, ограничения и transient ошибки:
+[точка продолжения](self-development-handoff.md). Исторический Developer
+FAILED не переписывается, ROOT business implementation0/корректирующих USER0.
+
 ## Checkpoint 11.10.2026 18:36 UTC — bounded HTTP downloads исправлены в source
 
 - [x] RED paced ordinary HTTP body; chunked/Content-Length обрывались прежним
