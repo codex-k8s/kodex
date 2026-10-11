@@ -3,7 +3,6 @@ package gateway
 import (
 	"context"
 	"io"
-	"mime"
 	"net"
 	"net/http"
 	"time"
@@ -11,26 +10,14 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
-func providerResponsesIsSSE(diagnostic providerResponsesDiagnostic, response *http.Response) bool {
-	if !diagnostic.enabled() || response.StatusCode != http.StatusOK || len(response.Header.Values("Content-Type")) != 1 {
-		return false
-	}
-	mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
-	return err == nil && mediaType == "text/event-stream"
-}
-
-func writeProxyHTTPResponse(connection net.Conn, response *http.Response, limits policy.Limits, streaming bool, ctx context.Context, cancel context.CancelCauseFunc) error {
-	if streaming {
+func writeProxyHTTPResponse(connection net.Conn, response *http.Response, limits policy.Limits, ctx context.Context, cancel context.CancelCauseFunc) error {
+	if response.Body != nil && response.Body != http.NoBody {
 		response.Body = proxyIdleResponseBody{ReadCloser: response.Body, ctx: ctx, cancel: cancel, timeout: duration(limits.IdleTimeoutMilliseconds)}
-		return response.Write(proxyDeadlineWriter{connection: connection, timeout: duration(limits.WriteTimeoutMilliseconds)})
 	}
-	if err := connection.SetWriteDeadline(time.Now().Add(duration(limits.WriteTimeoutMilliseconds))); err != nil {
-		return err
-	}
-	return response.Write(connection)
+	return response.Write(proxyDeadlineWriter{connection: connection, timeout: duration(limits.WriteTimeoutMilliseconds)})
 }
 
-// Каждый Write ограничен прежним бюджетом; весь активный SSE не имеет
+// Каждый Write ограничен прежним бюджетом; весь активный HTTP body не имеет
 // ложного общего write deadline. Idle чтение ограничено отдельно.
 type proxyDeadlineWriter struct {
 	connection net.Conn

@@ -43,6 +43,13 @@ scope, контракт, policy, fixture либо deployment boundary, прим�
 
 ## Свежая цепочка выполнения
 
+Новый scope11.10 18:36 UTC поверх68c66645: egress `proxy_stream.go`, его тест
+и единственный call-site в `http_proxy.go`. Три exact SHA256 и команды — в
+checkpoint18:36. RED chunked/Content-Length подтверждён; scoped unit/race/vet
+и ROOT integrated unit/build PASS, общий invariant GO-DOC-001 обновлён.
+HOT остаётся68c66645 для сохранения активного исполнения; serving fixed ELF,
+native download и полная suite NOT RUN. Это не исправление текущего host deny.
+
 - [x] INTAKE SUCCEEDED17:03:27 UTC; пять actual результатов прочитаны owner
   до bounded EOF, size/SHA/revision/version rejoin MATCH.
 - [x] Architect SUCCEEDED17:50:05 UTC; шесть новых actual результатов имеют

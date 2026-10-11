@@ -10,6 +10,38 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 18:36 UTC — bounded HTTP downloads исправлены в source
+
+- [x] RED paced ordinary HTTP body; chunked/Content-Length обрывались прежним
+      whole-body deadline. Новый writer применяет per-write и upstream idle.
+- [x] Final3 source hashes MATCH; worker targeted unit/race/vet, ROOT
+      integrated targeted unit2.076s/diff-check/Go1.26.6 offline build PASS.
+      Полные suites и CI этим не подтверждаются.
+- [x] GO-DOC-001 фиксирует общий invariant; obsolete parameter/classifier
+      удалены, authority и network eligibility неизменны.
+- [ ] Live delivery: HOT68c66645 сохранён до безопасного quiescent window,
+      чтобы не оборвать текущий provider stream. Source/serving разделены.
+- [ ] Actual Developer PR/ONE Review/Manager и bootstrap remaining gates.
+
+## Checkpoint 11.10.2026 18:27 UTC — actual implementation, отдельная сеть
+
+- [x] Source/HOT68c66645 clean; exact Draft1807/main readback PASS.
+- [x] Developer сохранил run/turn/Pod UID/restarts0; actual checkout HEADab4992e0
+      и собственная branch,27 tracked files изменены им самим. Это не commit/PR.
+- [x] Exact immutable network snapshot и inherited curl сверены: Go/Buf
+      destinations не разрешены, CONNECT000/HTTP000/0B/exit56 до ACK.
+      Текущие grants не расширялись; exact причина native EOF ещё UNKNOWN.
+- [x] Chrome11 reload/rejoin/screenshot/Console0/relevant calls200/live и
+      отсутствие horizontal overflow проверены.
+- [ ] Общий non-SSE whole-body deadline5000ms: reproducing regression,
+      исправление per-write/idle и точная hot-reload delivery.
+- [ ] Developer substantive commit/push/PR и его проверки, ONE Review/Manager,
+      remaining QA/ledger/bootstrap merge/main readback. Полная приёмка OPEN.
+
+Typed financial observations и UI реализует native Developer; ROOT не пишет
+бизнес-код и не посылает корректирующие business USER prompts. Long-download
+defect отделён от текущего закрытого host deny; source discovery не равен fix.
+
 ## Checkpoint 11.10.2026 17:53 UTC — fresh Architect PASS_CODE_ONLY
 
 - [x] Source/HOT629c5b58 clean, remote Draft1807 exact head/main/body MATCH.

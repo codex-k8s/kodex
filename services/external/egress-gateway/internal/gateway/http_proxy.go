@@ -285,7 +285,7 @@ func (server *Server) proxyTLS(client net.Conn, reader *bufio.Reader, target con
 			io.Closer
 		}{io.TeeReader(response.Body, capture), response.Body}
 	}
-	writeErr := writeProxyHTTPResponse(connection, response, limits, providerResponsesIsSSE(responsesDiagnostic, response), upstreamContext, cancelUpstream)
+	writeErr := writeProxyHTTPResponse(connection, response, limits, upstreamContext, cancelUpstream)
 	if writeErr != nil {
 		responsesDiagnostic.body(response.StatusCode, writeErr)
 		if capture != nil {

@@ -4,8 +4,8 @@ title: Серверная разработка на Go
 type: guide
 status: approved
 owner: developer
-version: 1.4.3
-updated: 2026-10-07
+version: 1.4.4
+updated: 2026-10-11
 ---
 
 # Серверная разработка на Go
@@ -511,6 +511,15 @@ Joined ошибка проекции/audit не превращается в ис
 Внешний HTTP/WebSocket transport находится в gateway. Если внутреннему сервису
 нужна техническая HTTP-точка, она ограничивается health/metrics/debug policy и
 не становится обходным бизнес-API.
+
+При передаче HTTP response абсолютный socket write deadline ограничивает
+отдельную запись, а не весь активный body. Большая загрузка и SSE используют
+обновляемый per-write бюджет и отдельный bounded upstream idle; timeout либо
+отмена закрывают upstream через принадлежащий запросу cancel/join-контракт.
+Это не отключает request deadline, авторизацию, проверки redirect destination
+или ограничения размеров. Регрессия читает реальные HTTP framing и body до EOF,
+покрывая активную передачу дольше write budget, idle, parent cancellation и
+заблокированный downstream.
 
 ## Clients
 

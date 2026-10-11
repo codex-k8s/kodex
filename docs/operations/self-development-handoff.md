@@ -13,6 +13,64 @@ updated: 2026-10-11
 Краткий реестр применимости проверок и оставшихся шлюзов разделов45/64:
 [QA-DOC-SELFDEV-002](../qa/bootstrap-1797-evidence-ledger.md).
 
+## Checkpoint 11.10.2026 18:36 UTC — исправление downloads проверено, HOT сохранён
+
+В source tree поверх68c66645 внесён узкий egress fix трёх файлов:
+`proxy_stream.go`0614b1b53c189ed5ccd2cf522d26b9267e431d6eb71c4d3866814f0ef5b0b0a0,
+`proxy_stream_test.go`03a4157ab07241b52e1370aad5ca2af555c45275b8c563af580468b372d6e141,
+`http_proxy.go`7c65ea590cf96b7ea1a8a874ff22057abb1dca61569a26f8a0ed55cc55d5cd97.
+Общий invariant закреплён в GO-DOC-001. Удалены неиспользуемые streaming bool/
+classifier; authorization, grants, destinations, methods и redirects неизменны.
+
+RED обычных chunked/Content-Length responses воспроизведён на прежнем writer.
+Worker final targeted unit2.091s/race3.262s/scoped vet/format PASS; ROOT после
+переноса exact3 hashes подтвердил unit2.076s, diff-check и Go1.26.6 offline
+build с trimpath/buildvcs=false/CGO_ENABLED=0. ELF4488f6a5449e4ad4b82575ffa3d27cb3b14db5cb0686f72da992847c8fb6261b.
+Проверены реальный HTTP body flush/EOF, per-write budget, idle/parent cancel,
+close/join, blocked downstream и no-body framing; это не full suite/CI PASS.
+
+HOT/serving clone остаётся68c66645: не переключать общий egress gateway,
+пока native Workflow использует живые provider connections. Published source
+не является live delivery; fixed serving ELF и native downloads NOT RUN.
+Следующий safe quiescent window: exact source/HOT preflight → обычный FF/hot
+reload → source hash/serving ELF/readiness/Console/Network readback.
+Actual Developer продолжает работу, root graph1144; current CONNECT deny
+Go/Buf отдельный и не объявляется исправленным. USER corrections0.
+
+## Checkpoint 11.10.2026 18:27 UTC — Developer реализует, сеть проверена
+
+Source/HOT68c66645 clean; exact remote Draft1807/main readback PASS.
+Прежние Developer run_aHIcy0ddWiBbQEfB6vwemybW, session/turn и Pod
+UID3f9dc393-a9a4-48f4-9435-aed1d59b6287 сохранены, restarts0.
+Native execution RUNNING; observer95426 работает, его timeout не является
+deadline самого исполнения. Actual Git worktree `/workspace/work/issue1796`,
+branch `developer/issue-1796-financial-summary`, исходный HEADab4992e0;
+ROOT metadata/diff-stat18:27 подтверждает27 изменённых tracked files.
+Developer сам реализует typed provider observations, callback/Control Plane
+projection, WebSocket и UI; commit/push/PR и успешные проверки ещё OPEN.
+
+Native сообщение1031 сообщает об EOF загрузки Go dependencies. ROOT отдельно
+проверил exact immutable network snapshot: ALLOWLIST_FULL/3rules, revision
+9b6b2a95; GET к proxy.golang.org, sum.golang.org, storage.googleapis.com и
+buf.build не разрешён, GitHub разрешён. Inherited-env curl к Go proxy:
+CONNECT000/HTTP000/0B/0.003536s, exit56. Это согласуется с закрытым отказом
+host eligibility до CONNECT ACK, не доказывает дефект provider или long-download
+timeout. Grants/policy текущего исполнения не расширялись и не подменялись;
+обрыв исходного native shell без exact transport receipt остаётся UNKNOWN.
+
+Отдельный общий source defect: non-SSE response получает один абсолютный
+write deadline5000ms на весь body. Для активных downloads нужен bounded
+per-write и upstream idle, как у SSE. Изолированная regression/fix готовится;
+исправление и его live delivery пока NOT RUN, это не устранение текущего deny.
+Context7 Go stdlib подтвердил absolute deadline/Response.Write semantics.
+
+Chrome11 reload/rejoin, screenshot/Console0, relevant bootstrap/session/graph/
+events/ticket200 и live updates PASS18:27; horizontal overflow=false.
+Role-runtime ready=false при продолжающейся работе остаётся известным
+отдельным workspace-canary ограничением, Pod Ready не заявляется.
+USER business corrections0, ROOT business implementation0, review cycles0.
+Далее actual Developer PR/ONE Review/Manager, применимые QA и bootstrap gates.
+
 ## Checkpoint 11.10.2026 17:53 UTC — Architect завершён, Developer работает
 
 Source/HOT629c5b58 clean; remote Draft1807 exact head/main и body readback PASS.
