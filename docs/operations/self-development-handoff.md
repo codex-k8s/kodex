@@ -10,6 +10,45 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 04:06 UTC — платформенный workspace всех агентов
+
+Свежий root run_IC4m0TMblr2NDqIC74eh6OOJ завершился FAILED/seq309.
+INTAKE технически SUCCEEDED, но semantic BLOCKED: запрос
+`docs/ops/self-development-handoff.md` отклонён с
+INTEGRATION_REQUEST_REJECTED без provider cause. В source38d3ab52 документ
+находится в `docs/operations/self-development-handoff.md`; HTTP404 и причина
+отказа не доказаны. Developer/ONE Review/Manager/owner ещё OPEN.
+
+Владелец уточнил решение для всей платформы: всем агентам нужен изолированный
+редактируемый workspace с рабочими файлами, отдельно read-only исходные
+материалы и явные инструкции по каталогам. Подготовка только guidance-v4
+не объявляется реализацией этого требования. Новая работа ведётся в том же
+Issue1797/Draft1807, source38d3ab52; HOT2b409353 пока не меняется.
+
+- [x] Отвязать запись локального workspace всех агентов от права публикации
+      Artifact; сохранить exact grants, readonly mounts и квоты.
+- [x] Готовить `/workspace/work`, редактируемые копии текущих вложений и
+      использовать этот рабочий каталог в native provider.
+- [x] Передавать всем агентам точную карту writable/read-only/result paths;
+      разрешённый checkout и локальное дерево вместо угадывания source paths.
+- [ ] Адресно проверить подготовку, readonly, изоляцию, непубликацию без grant;
+      зафиксировать и доставить новый runner и CP/controller в dev-кластер.
+- [ ] Проверить основной живой сценарий, Console/Network/backend и передать
+      приложение владельцу с честными оставшимися ограничениями.
+
+Два узла Ready, Chrome35 доступен; чужие вкладки не трогаются. Дополнительный
+регресс, косметика и новые reviews не запускаются. Старые FAIL сохранены.
+
+Интегрированный пакет проверен локально 11.10: shared workspace tests PASS;
+control-plane platform/prompt PASS (0.232s/0.028s); runner codex/app PASS
+(0.299s/0.021s); controller workload PASS (0.074s). Synthetic two-UID fixture
+PASS: оригинал UID10001 защищён от записи provider UID10002, копия редактируется,
+Git-like private directories безопасно очищаются. Это не проверка actual
+Kubernetes/Codex sandbox. Новый runner ещё не доставлен; живой сценарий и ONE
+Review остаются NOT RUN/OPEN. Source-discovery v4 проверяет актуальные DocID/path,
+не обходит отклонённый запрос; v1–v3 сохранены. Чекбоксы реализации выше
+подтверждают код и адресные тесты, не delivered/live acceptance.
+
 ## Checkpoint 11.10.2026 03:37 UTC — новый запуск с дополнительными исходниками
 
 Основной приоритет — рабочий сценарий и приёмка, без новых косметических

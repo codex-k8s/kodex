@@ -71,6 +71,10 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 		t.Fatal("provider local memory is not explicitly disabled")
 	}
 	if err != nil || len(metadata.Undecoded()) != 0 || profile.Extends != ":workspace" ||
+		profile.Filesystem[filepath.Join(workspace, "input")] != "read" ||
+		profile.Filesystem[filepath.Join(workspace, "knowledge")] != "read" ||
+		profile.Filesystem[runtimecontract.RuntimeContextRoot] != "read" ||
+		profile.Filesystem[filepath.Join(workspace, ".kodex/outbox")] != "read" ||
 		profile.Filesystem[filepath.Join(home, "auth.json")] != "deny" || profile.Filesystem[home] != "" ||
 		profile.Filesystem["/proc"] != "deny" ||
 		profile.Filesystem["/run/secrets"] != "deny" ||
@@ -116,6 +120,24 @@ func TestPrepareHomePreservesPinnedSandboxBoundary(t *testing.T) {
 				config.Features.CodeModeOnly || config.Features.CodeMode.Enabled ||
 				!slices.Equal(config.Features.CodeMode.DirectOnlyToolNamespaces, []string{"functions", "web", "mcp__kodex"}) {
 				t.Fatalf("sandbox %s expanded to %#v: %v", sandbox, config.Permissions, err)
+			}
+			input.Capabilities = []string{runtimecontract.ArtifactCapability}
+			if err := PrepareHomeWithAuth(input, "http://127.0.0.1:12345/mcp", auth); err != nil {
+				t.Fatal(err)
+			}
+			raw, err = os.ReadFile(filepath.Join(home, "config.toml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := toml.Decode(string(raw), &config); err != nil {
+				t.Fatal(err)
+			}
+			outboxAccess := "read"
+			if sandbox == "workspace-write" {
+				outboxAccess = "write"
+			}
+			if config.Permissions[config.DefaultPermissions].Filesystem[filepath.Join(workspace, ".kodex/outbox")] != outboxAccess {
+				t.Fatal("outbox write did not require both sandbox write and artifact authority")
 			}
 		})
 	}

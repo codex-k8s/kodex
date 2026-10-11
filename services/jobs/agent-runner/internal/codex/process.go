@@ -416,7 +416,7 @@ func turnStartParams(input model.Input, threadID string, prompt []byte) (map[str
 	if err != nil {
 		return nil, err
 	}
-	params := map[string]any{"threadId": threadID, "cwd": input.WorkspaceRoot, "model": input.Model,
+	params := map[string]any{"threadId": threadID, "cwd": workingDirectory(input), "model": input.Model,
 		"approvalPolicy": input.CodexApprovalPolicy, "input": items}
 	// Resume не должен сохранять reasoning/personality предыдущей attempt.
 	if input.ReasoningMode == runtimecontract.ReasoningSupported {
@@ -582,7 +582,7 @@ func RequiredMCPToolNames(input model.Input) []string {
 
 func startAppServer(input model.Input, mcpProxyToken string) (*appServer, error) {
 	command := exec.Command("/usr/local/bin/codex", "app-server", "--strict-config", "--listen", "stdio://")
-	command.Dir = input.WorkspaceRoot
+	command.Dir = workingDirectory(input)
 	command.Env = appServerEnvironment(input, mcpProxyToken)
 	if command.Env == nil {
 		return nil, errors.New("runtime environment projection is unavailable")

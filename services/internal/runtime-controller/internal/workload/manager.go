@@ -740,7 +740,7 @@ func (manager *Manager) baseInput(revision *controlplanev1.RuntimeRevisionSnapsh
 		EnvironmentBindingDigest:   revision.GetEnvironmentBindingDigest(),
 		EnvironmentPolicy:          environmentPolicy,
 		EffectiveKubernetesAccess:  effectiveAccess,
-		CodexSandbox:               "read-only", CodexApprovalPolicy: "never",
+		CodexSandbox:               "workspace-write", CodexApprovalPolicy: "never",
 		CallbackURL: "https://" + net.JoinHostPort(manager.config.ControllerPodIP, "8444"),
 		CallbackTLS: runtimecontract.RuntimeTLSBinding{ServerName: manager.config.CallbackTLSServerName,
 			CAFile: "/var/run/config/kodex/runtime/callback/ca.crt", CertificateFile: "/var/run/secrets/kodex/runtime/callback-client/tls.crt", PrivateKeyFile: "/var/run/secrets/kodex/runtime/callback-client/tls.key"},
@@ -947,9 +947,6 @@ func validateCredentialProjection(input runtimecontract.RunnerInput, projection 
 func (manager *Manager) addCatalog(input *runtimecontract.RunnerInput, revision *controlplanev1.RuntimeRevisionSnapshot) {
 	for _, capability := range revision.GetCapabilities() {
 		input.Capabilities = append(input.Capabilities, capability.GetKey())
-		if capability.GetKey() == runtimecontract.ArtifactCapability {
-			input.CodexSandbox = "workspace-write"
-		}
 	}
 	for _, message := range revision.GetSessionContext() {
 		input.SessionContext = append(input.SessionContext, runtimecontract.RunnerSessionMessage{Role: message.GetRole(), Content: message.GetContent()})
@@ -2108,6 +2105,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 	}
 	resources := runtimePolicyResourceRequirements(input.EnvironmentPolicy.Resources)
 	role := corev1.Container{Name: "role-runtime", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: roleArgs,
+		WorkingDir: runtimecontract.RuntimeWorkspaceWorkingRoot,
 		Env: []corev1.EnvVar{
 			{Name: "KODEX_RUNTIME_REVISION_FILE", Value: "/var/run/config/kodex/runtime/runtime.json"},
 			{Name: "OTEL_SDK_DISABLED", Value: "true"},
@@ -2117,6 +2115,7 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		Resources:    smallResources(),
 		StartupProbe: httpProbe("/readyz", "runtime-health", 2, 60), ReadinessProbe: httpProbe("/readyz", "runtime-health", 5, 3), LivenessProbe: httpProbe("/healthz", "runtime-health", 10, 3)}
 	provider := corev1.Container{Name: "provider-runtime", Image: input.ImageReference, ImagePullPolicy: corev1.PullIfNotPresent, Args: []string{"runtime-provider"},
+		WorkingDir: runtimecontract.RuntimeWorkspaceWorkingRoot,
 		Env: []corev1.EnvVar{{Name: "HOME", Value: "/tmp"}, {Name: "CODEX_HOME", Value: input.CodexHome},
 			{Name: "HTTPS_PROXY", Value: providerProxy}, {Name: "HTTP_PROXY", Value: providerProxy},
 			{Name: "SSL_CERT_FILE", Value: "/var/run/config/kodex/runtime/egress-trust/ca-bundle.crt"},

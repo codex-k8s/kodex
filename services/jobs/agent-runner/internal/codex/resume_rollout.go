@@ -34,7 +34,7 @@ type confirmedResumeSource struct {
 }
 
 func (server *appServer) bindExecutionThread(ctx context.Context, state *protocolState, input model.Input) error {
-	params := map[string]any{"approvalPolicy": input.CodexApprovalPolicy, "cwd": input.WorkspaceRoot, "model": input.Model}
+	params := map[string]any{"approvalPolicy": input.CodexApprovalPolicy, "cwd": workingDirectory(input), "model": input.Model}
 	method := "thread/start"
 	if input.CodexSessionID == "" {
 		params["ephemeral"] = false
@@ -59,7 +59,7 @@ func (server *appServer) bindExecutionThread(ctx context.Context, state *protoco
 	if err != nil {
 		return atProviderStage(providerStageThreadCall, err)
 	}
-	if err := state.bindThread(raw, input.Model, input.WorkspaceRoot, input.CodexApprovalPolicy); err != nil {
+	if err := state.bindThread(raw, input.Model, workingDirectory(input), input.CodexApprovalPolicy); err != nil {
 		return atProviderStage(providerStageThreadBind, err)
 	}
 	return nil

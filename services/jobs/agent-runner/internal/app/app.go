@@ -492,7 +492,7 @@ func materializeWorkspace(ctx context.Context, input model.Input) error {
 }
 
 func materializeWorkspaceDirectories() error {
-	for _, relative := range []string{".kodex", ".kodex/inbox", ".kodex/outbox", ".kodex/state", ".kodex/state/codex-home", "input", "session", "knowledge"} {
+	for _, relative := range []string{".kodex", ".kodex/inbox", ".kodex/outbox", ".kodex/state", ".kodex/state/codex-home", "input", "session", "knowledge", "work"} {
 		if err := security.EnsureSharedWorkspaceDirectory(relative); err != nil {
 			return err
 		}

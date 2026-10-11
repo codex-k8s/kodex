@@ -48,6 +48,53 @@ func TestPromptStructuredVariablesRejectInvalidArtifact(t *testing.T) {
 	}
 }
 
+func TestPromptWorkspaceSeparatesEditableInputFromReadonlyProvenance(t *testing.T) {
+	items := []map[string]any{
+		promptArtifactFixture("artifact_abcdefgh", "edit.txt", runtimecontract.AttachmentScopeInput, "aset_abcdefgh", 1),
+		promptArtifactFixture("artifact_ijklmnop", "prior.txt", runtimecontract.AttachmentScopeSession, "aset_ijklmnop", 1),
+		promptArtifactFixture("artifact_qrstuvwx", "knowledge.md", runtimecontract.AttachmentScopeKnowledge, "", 1),
+	}
+	variables, err := promptStructuredVariables(items, nil, runtimecontract.RuntimeEnvironmentImage{}, "", "aset_abcdefgh", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := variables["input"].(map[string]any)
+	workspace := input["workspace"].(map[string]any)
+	if workspace["working_directory"] != "/workspace/work" || workspace["editable_input_directory"] != "/workspace/work/input/aset_abcdefgh/files" || workspace["original_input_directory"] != input["files_dir"] || workspace["original_input_manifest"] != input["manifest_path"] {
+		t.Fatal("workspace descriptor lost canonical isolated paths")
+	}
+	for _, file := range variables["run"].(map[string]any)["files"].([]any) {
+		descriptor := file.(map[string]any)
+		if descriptor["original_read_only"] != true || descriptor["sha256"] != strings.Repeat("a", 64) {
+			t.Fatal("original provenance changed")
+		}
+		if descriptor["name"] == "edit.txt" {
+			if descriptor["working_copy_path"] != "/workspace/work"+strings.TrimPrefix(descriptor["path"].(string), "/workspace") {
+				t.Fatal("editable input path is not derived from canonical original")
+			}
+		} else if _, exists := descriptor["working_copy_path"]; exists {
+			t.Fatal("context or knowledge falsely advertised as editable input")
+		}
+	}
+	for _, guard := range []string{"Only INPUT", "remain read-only", "digests describe the originals", "no artifact publication", "already authorized", "Do not invent a repository, token or network access", "exact pinned paths"} {
+		if !strings.Contains(workspace["guidance"].(string), guard) {
+			t.Fatalf("workspace guidance lost boundary: %q", guard)
+		}
+	}
+}
+
+func TestPromptWorkspaceExistsWithoutArtifactPublicationCapability(t *testing.T) {
+	variables, err := promptStructuredVariables(nil, nil, runtimecontract.RuntimeEnvironmentImage{}, "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := variables["input"].(map[string]any)
+	workspace := input["workspace"].(map[string]any)
+	if input["files_count"] != 0 || workspace["working_directory"] != runtimecontract.RuntimeWorkspaceWorkingRoot || workspace["editable_input_directory"] != "/workspace/work/input" {
+		t.Fatal("empty workspace depended on artifacts or invented a checkout")
+	}
+}
+
 func promptArtifactFixture(ref, name, scope, setRef string, position int64) map[string]any {
 	return map[string]any{
 		"ref": ref, "fileName": name, "mediaType": "text/plain", "sizeBytes": float64(1),

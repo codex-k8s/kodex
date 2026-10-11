@@ -77,7 +77,7 @@ func continuationTaskOracleFixture(t *testing.T) runtimecontract.RunnerInput {
 
 func TestContinuationTaskProducerMatchesRunnerOracle(t *testing.T) {
 	actual := continuationTaskOracleFixture(t)
-	raw, err := os.ReadFile("testdata/continuation_task_projection_v1_instructions_v3.json")
+	raw, err := os.ReadFile("testdata/continuation_task_projection_v1_instructions_v4.json")
 	var fixture runtimecontract.RunnerInput
 	if err != nil || json.Unmarshal(raw, &fixture) != nil || !reflect.DeepEqual(actual, fixture) {
 		t.Fatal("exact producer output differs from shared synthetic runner fixture")
@@ -92,6 +92,14 @@ func TestContinuationTaskProducerMatchesRunnerOracle(t *testing.T) {
 	}
 	if notice, err := runtimecontract.ValidateRuntimeSessionContext(historical); err != nil || !notice {
 		t.Fatal("historical v2 notice rejected by unchanged shared runner consumer")
+	}
+	v3Raw, err := os.ReadFile("testdata/continuation_task_projection_v1_instructions_v3.json")
+	var v3 runtimecontract.RunnerInput
+	if err != nil || json.Unmarshal(v3Raw, &v3) != nil {
+		t.Fatal("historical v3 fixture is unavailable")
+	}
+	if notice, err := runtimecontract.ValidateRuntimeSessionContext(v3); err != nil || !notice {
+		t.Fatal("historical v3 notice rejected by unchanged shared runner consumer")
 	}
 }
 

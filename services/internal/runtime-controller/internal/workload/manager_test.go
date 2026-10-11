@@ -133,6 +133,9 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 	provider := containerByName(t, pod.Spec.Containers, "provider-runtime")
 	relay := containerByName(t, pod.Spec.Containers, "provider-credential-relay")
 	init := containerByName(t, pod.Spec.InitContainers, "workspace-init")
+	if role.WorkingDir != runtimecontract.RuntimeWorkspaceWorkingRoot || provider.WorkingDir != role.WorkingDir {
+		t.Fatal("runtime working directory is not the isolated writable workspace")
+	}
 	if relay.Image != testManagerConfig().DefaultRoleImageReference || relay.Image == provider.Image {
 		t.Fatalf("provider credential relay image = %q, provider image = %q", relay.Image, provider.Image)
 	}
@@ -259,7 +262,7 @@ func TestEnsureTurnMaterializesExactRoleImageAndIsolatesProviderCredential(t *te
 		pod.Spec.SecurityContext.FSGroupChangePolicy == nil || *pod.Spec.SecurityContext.FSGroupChangePolicy != corev1.FSGroupChangeOnRootMismatch {
 		t.Fatalf("runtime Pod fsGroup matrix = %#v", pod.Spec.SecurityContext)
 	}
-	for _, volume := range []string{"vfs-input", "vfs-knowledge"} {
+	for _, volume := range []string{"vfs-input", "vfs-knowledge", "runtime-context"} {
 		if !mountReadOnly(provider, volume, true) || !mountReadOnly(role, volume, true) {
 			t.Fatalf("runtime VFS mount mode %q is invalid", volume)
 		}
@@ -790,23 +793,25 @@ func TestBuildTurnInputRejectsAttachmentProvenanceDrift(t *testing.T) {
 	}
 }
 
-func TestBuildTurnInputSelectsCodexSandboxFromArtifactCapability(t *testing.T) {
+func TestBuildTurnInputAllowsLocalWorkspaceWithoutArtifactCapability(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name         string
 		capabilities []*controlplanev1.PlatformCapability
 		want         string
+		publishes    bool
 	}{
 		{
 			name:         "artifact output",
 			capabilities: []*controlplanev1.PlatformCapability{{Key: runtimecontract.ArtifactCapability}},
 			want:         "workspace-write",
+			publishes:    true,
 		},
-		{name: "no capability", want: "read-only"},
+		{name: "no capability", want: "workspace-write"},
 		{
 			name:         "unknown workspace capability",
 			capabilities: []*controlplanev1.PlatformCapability{{Key: "platform.workspace.write"}},
-			want:         "read-only",
+			want:         "workspace-write",
 		},
 	}
 	for _, test := range tests {
@@ -814,7 +819,7 @@ func TestBuildTurnInputSelectsCodexSandboxFromArtifactCapability(t *testing.T) {
 			t.Parallel()
 			execution := testExecution(false)
 			execution.Revision.Capabilities = test.capabilities
-			if test.want == "read-only" {
+			if !test.publishes {
 				execution.Revision.AttachmentSetRef = ""
 				execution.Revision.AttachmentSetManifestDigest = ""
 				execution.Revision.AttachmentContext = ""
@@ -830,7 +835,30 @@ func TestBuildTurnInputSelectsCodexSandboxFromArtifactCapability(t *testing.T) {
 			if input.CodexSandbox != test.want {
 				t.Fatalf("CodexSandbox = %q, want %q", input.CodexSandbox, test.want)
 			}
+			if len(input.Capabilities) != len(test.capabilities) {
+				t.Fatal("local workspace access changed effective capabilities")
+			}
+			for index, capability := range test.capabilities {
+				if input.Capabilities[index] != capability.GetKey() {
+					t.Fatal("local workspace access changed an effective capability")
+				}
+			}
 		})
+	}
+}
+
+func TestBuildWarmInputAllowsLocalWorkspaceWithoutArtifactCapability(t *testing.T) {
+	t.Parallel()
+	revision := testWarmRevision()
+	revision.Capabilities = nil
+	sealTestWarmRevision(revision)
+	manager := newTestManager(t, fake.NewSimpleClientset())
+	input, _, err := manager.BuildWarmInput(revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if input.CodexSandbox != "workspace-write" || len(input.Capabilities) != 0 {
+		t.Fatal("warm local workspace access requires or grants artifact publication")
 	}
 }
 
@@ -1041,6 +1069,17 @@ func TestEnsureWarmRecreatesTerminalPod(t *testing.T) {
 	}
 	if pod.Status.Phase == corev1.PodFailed || pod.Annotations[revisionAnnotation] != input.RuntimeRevisionDigest {
 		t.Fatalf("terminal warm Pod was not recreated: phase=%q", pod.Status.Phase)
+	}
+	for _, name := range []string{"role-runtime", "provider-runtime"} {
+		container := containerByName(t, pod.Spec.Containers, name)
+		if container.WorkingDir != runtimecontract.RuntimeWorkspaceWorkingRoot || input.CodexSandbox != "workspace-write" {
+			t.Fatal("warm runtime does not use the writable working directory")
+		}
+		for _, volume := range []string{"vfs-input", "vfs-knowledge", "runtime-context"} {
+			if !mountReadOnly(container, volume, true) {
+				t.Fatalf("warm runtime %q can modify protected volume %q", name, volume)
+			}
+		}
 	}
 }
 

@@ -1063,3 +1063,26 @@ implementation0. Новый приоритет владельца: основн�
 Все текущие Running service pods Ready, рестарты CP/RC/GW0. Chrome35 screenshot
 файлов визуально читаемый, Console0; upload/finalization/create HTTP201,
 Connected после navigation. Это ограниченная dev-проверка, Full65 OPEN.
+
+## Checkpoint 11.10.2026 04:06 UTC — единая файловая среда агентов
+
+Root run_IC4m0TMblr2NDqIC74eh6OOJ FAILED/seq309; INTAKE semantic BLOCKED
+после native READ неверного пути `docs/ops/self-development-handoff.md`.
+Канонический путь в source38d3ab52 — `docs/operations/self-development-handoff.md`.
+Ответ INTEGRATION_REQUEST_REJECTED не содержит причины; HTTP404 не доказан.
+История не исправляется USER сообщением, host бизнес-код не пишет.
+
+Новое решение владельца относится ко всем агентам: отдельный writable workspace
+с рабочими файлами, read-only источники отдельно и точные инструкции по путям.
+ARCH-MC-008 фиксирует working copies, сохраняет immutable input и отдельное
+право публикации. Source38d3ab52/HOT2b409353; новый layout, runner delivery и
+live результат пока NOT RUN. Checklist дальнейшей работы — свежий checkpoint
+OPS-DOC-SELFDEV-002. Узлы Ready, рабочая Chrome35 доступна. Основной сценарий
+приоритетен; косметику и широкие повторные suites не добавлять.
+
+Интеграция workspace: shared tests PASS0.012s, CP platform/prompt
+PASS0.232s/0.028s, RC workload PASS0.074s, runner codex/app PASS0.299s/0.021s.
+Отдельный synthetic two-UID fixture PASS; исходные protected bytes не меняются,
+ArtifactCapability остаётся обязательной для публикации. Files.workspace
+даёт карту каталогов, INPUT содержит working_copy_path отдельно от оригинала.
+Новый OCI runner/actual Pod/Codex sandbox и живой результат ещё NOT RUN.

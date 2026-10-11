@@ -546,6 +546,9 @@ func serveBrokerRequest(ctx context.Context, connection net.Conn, proofObserver 
 		return writeProviderBrokerFailureAtStage(frames, providerStageHomePrepare, err)
 	}
 	execute := func(ctx context.Context, input model.Input, prompt []byte, token string) (Result, error) {
+		if err := prepareWorkingDirectory(ctx, input); err != nil {
+			return Result{}, atProviderStage(providerStageHomePrepare, err)
+		}
 		return executeLocalWithInputProof(ctx, input, prompt, token, frames.activity, proofObserver)
 	}
 	result, err := executeProviderTurn(ctx, request.Input, request.Prompt, request.MCPProxyToken, execute, credentialrelay.Commit)

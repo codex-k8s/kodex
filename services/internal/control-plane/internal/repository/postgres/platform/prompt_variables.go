@@ -62,8 +62,17 @@ func promptStructuredVariables(
 		}
 		toolDescriptors = append(toolDescriptors, map[string]any{"name": tool.Name, "description": tool.Description})
 	}
+	inputScope := promptFileScope(inputFiles, inputFilesDir, inputManifestPath)
+	inputScope["workspace"] = map[string]any{
+		"working_directory":            runtimecontract.RuntimeWorkspaceWorkingRoot,
+		"editable_input_directory":     runtimecontract.RuntimeWorkspaceWorkingRoot + strings.TrimPrefix(inputFilesDir, runtimecontract.RuntimeWorkspaceRoot),
+		"original_input_directory":     inputFilesDir,
+		"original_input_manifest":      inputManifestPath,
+		"readonly_knowledge_directory": runtimecontract.RuntimeWorkspaceRoot + "/knowledge",
+		"guidance":                     promptWorkspaceGuidance,
+	}
 	return map[string]any{
-		"input":    promptFileScope(inputFiles, inputFilesDir, inputManifestPath),
+		"input":    inputScope,
 		"session":  promptFileScope(sessionFiles, "/workspace/input", "/workspace/input/manifest.json"),
 		"run":      promptFileScope(runFiles, "/workspace", "/workspace/input/manifest.json"),
 		"workflow": promptFileScope(workflowFiles, "/workspace", "/workspace/input/manifest.json"),
@@ -76,6 +85,8 @@ func promptStructuredVariables(
 		}},
 	}, nil
 }
+
+const promptWorkspaceGuidance = "Use the isolated writable working directory for local edits and scratch files. Only INPUT attachments have editable working copies at working_copy_path. Original input files, manifests, SESSION/context attachments and project knowledge remain read-only; their digests describe the originals, not modified working copies. Do not edit internal .kodex state. Local workspace access grants no artifact publication, repository, credential, network or external-effect permission. Use an existing authorized repository checkout in the working directory, or create one there only when the assigned repository and Git operation are already authorized by the current runtime. Do not invent a repository, token or network access. Resolve applicable document IDs and exact pinned paths from current authorized sources before reading mandatory documents."
 
 func promptArtifactDescriptor(item map[string]any) (runtimecontract.RunnerInputArtifact, map[string]any, error) {
 	artifact := runtimecontract.RunnerInputArtifact{
@@ -102,12 +113,17 @@ func promptArtifactDescriptor(item map[string]any) (runtimecontract.RunnerInputA
 	if err != nil || artifact.Ref == "" || artifact.Digest == "" || artifact.MediaType == "" || artifact.Revision < 1 || artifact.Version < 1 {
 		return runtimecontract.RunnerInputArtifact{}, nil, fmt.Errorf("prompt artifact descriptor is invalid")
 	}
-	return artifact, map[string]any{
+	descriptor := map[string]any{
 		"artifact_ref": artifact.Ref, "revision_ref": fmt.Sprintf("%s@%d", artifact.Ref, artifact.Revision),
 		"name": artifact.FileName, "media_type": artifact.MediaType, "size": artifact.SizeBytes,
 		"sha256": artifact.Digest, "path": path, "source": artifact.Source,
 		"version": artifact.Version, "purpose": artifact.AttachmentPurpose,
-	}, nil
+		"original_read_only": true,
+	}
+	if artifact.Scope == runtimecontract.AttachmentScopeInput {
+		descriptor["working_copy_path"] = runtimecontract.RuntimeWorkspaceWorkingRoot + strings.TrimPrefix(path, runtimecontract.RuntimeWorkspaceRoot)
+	}
+	return artifact, descriptor, nil
 }
 
 func promptFileScope(files []any, directory, manifestPath string) map[string]any {

@@ -473,6 +473,10 @@ func semanticValues(snapshot Snapshot, data map[string]any, effective []string, 
 		scope, _ := data[name].(map[string]any)
 		files[name] = map[string]any{"files": scope["files"], "files_count": scope["files_count"], "files_dir": scope["files_dir"], "manifest_path": scope["manifest_path"]}
 	}
+	// Старые immutable snapshots без descriptor сохраняют прежний FILES.
+	if workspace, ok := input["workspace"].(map[string]any); ok {
+		files["workspace"] = workspace
+	}
 	resultInstruction := "Place every file requested as a user-visible result directly in this directory. Use the requested file name. Keep scratch files outside this directory."
 	if snapshot.Locale == "ru" {
 		resultInstruction = "Помещай каждый запрошенный пользователем файл результата прямо в этот каталог. Используй запрошенное имя файла. Черновые файлы храни вне этого каталога."

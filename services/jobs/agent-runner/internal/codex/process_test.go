@@ -340,7 +340,7 @@ func TestTurnStartPinsModelReasoningAndPersonalityOnEveryAttempt(t *testing.T) {
 		snapshot.Digest, _ = snapshot.ComputeDigest()
 		input.ContextSnapshot = &snapshot
 		params, err := turnStartParams(input, "exact-thread", []byte("exact server prompt"))
-		if err != nil || params["model"] != "gpt-6-astra" || params["effort"] != "high" ||
+		if err != nil || params["cwd"] != runtimecontract.RuntimeWorkspaceWorkingRoot || params["model"] != "gpt-6-astra" || params["effort"] != "high" ||
 			params["personality"] != "pragmatic" || params["threadId"] != "exact-thread" {
 			t.Fatalf("turn parameters = %#v, error = %v", params, err)
 		}

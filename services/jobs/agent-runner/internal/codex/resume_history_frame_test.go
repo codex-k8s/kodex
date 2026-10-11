@@ -42,7 +42,7 @@ func (fixture *resumeHistoryFixture) Write(raw []byte) (int, error) {
 		if request.Params["excludeTurns"] != true {
 			thread["turns"] = fixture.history
 		}
-		result["approvalPolicy"], result["approvalsReviewer"], result["cwd"], result["model"], result["modelProvider"], result["sandbox"] = "never", "user", fixture.input.WorkspaceRoot, fixture.input.Model, "openai", map[string]any{"type": "readOnly"}
+		result["approvalPolicy"], result["approvalsReviewer"], result["cwd"], result["model"], result["modelProvider"], result["sandbox"] = "never", "user", workingDirectory(fixture.input), fixture.input.Model, "openai", map[string]any{"type": "readOnly"}
 	} else if request.Method != "thread/read" || request.Params["includeTurns"] != false {
 		fixture.t.Fatal("synthetic pre-read changed")
 	}
@@ -97,7 +97,7 @@ func TestResumeLongHistoryMetadataDoesNotOverflowFrame(t *testing.T) {
 	if _, present := fixture.resumeParams["omitHistory"]; present {
 		t.Fatal("resume used an unsupported history flag")
 	}
-	if fixture.resumeParams["model"] != fixture.input.Model || fixture.resumeParams["cwd"] != fixture.input.WorkspaceRoot || fixture.resumeParams["approvalPolicy"] != fixture.input.CodexApprovalPolicy {
+	if fixture.resumeParams["model"] != fixture.input.Model || fixture.resumeParams["cwd"] != workingDirectory(fixture.input) || fixture.resumeParams["approvalPolicy"] != fixture.input.CodexApprovalPolicy {
 		t.Fatal("metadata-only resume changed configuration pins")
 	}
 	if state.threadID != fixture.input.CodexSessionID || state.threadPath != fixture.path || state.resumeSource == nil || state.resumeSource.verifyIdentity(fixture.input) != nil || state.baselineCaptured || state.result.Usage.TotalTokens != 0 || state.turnID != "" {

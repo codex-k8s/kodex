@@ -12,7 +12,7 @@ import (
 func TestPlatformStageGateV3SeparatesCodeFromAuthAndDeployment(t *testing.T) {
 	for _, locale := range []string{"en", "ru"} {
 		t.Run(locale, func(t *testing.T) {
-			binding, err := platformInstructionBinding(locale)
+			binding, err := platformInstructionBindingForRevision("platform-source-conformity-v3", locale)
 			if err != nil || binding.Revision != "platform-source-conformity-v3" || binding.Ref != "pinst_source_conformity_v3_"+locale || len(binding.Content) > maximumPlatformInstructionBytes {
 				t.Fatal("fresh stage guidance is not exactly versioned and bounded")
 			}
@@ -56,7 +56,7 @@ func TestPlatformStageGateV3ContinuationChangesOnlyInstructionDependency(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	currentBinding, err := platformInstructionBinding(snapshot.Locale)
+	currentBinding, err := platformInstructionBindingForRevision("platform-source-conformity-v3", snapshot.Locale)
 	if err != nil || currentBinding.Revision != "platform-source-conformity-v3" {
 		t.Fatal("fresh v3 binding missing")
 	}

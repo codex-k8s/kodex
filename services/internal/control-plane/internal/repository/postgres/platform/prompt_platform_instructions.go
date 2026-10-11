@@ -13,7 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
-const platformSourceConformityRevision = "platform-source-conformity-v3"
+const platformSourceConformityRevision = "platform-source-conformity-v4"
 const maximumPlatformInstructionBytes = 8 << 10
 
 // Этот versioned input меняется только новой revision. Compiled v3 и прежние
@@ -40,6 +40,13 @@ const platformStageGateEnglish = `For policy gates distinguish CODE_ONLY design,
 
 const platformStageGateRussian = `В policy gate различай CODE_ONLY: дизайн, реализацию и offline-тесты — и исполнение авторизации и deployment. Реально запрещённое действие остаётся STOP; не выполняй его и не обходи policy. Неизвестный будущий deployment не запрещает code-only целиком, но обязательное доказательство текущего gate не пропускай. Проверяй auth use по текущей official policy и доверенное происхождение deployment, не по одному Pod, VM или лицензии. Недоказанные deployment/compliance сохраняй UNKNOWN, не PASS/READY; если факт нужен текущему действию, его gate закрыт. Guidance не выдаёт прав, исключений или verdict соответствия.`
 
+// Только v4 сокращает Git guidance; опубликованные v1/v2/v3 неизменны.
+const platformGitGuidanceV4Russian = `При явно разрешённых runtime GH_TOKEN и HTTPS github.com к назначенному repo, для разрешённой Git-операции: git -c credential.https://github.com.helper= -c 'credential.https://github.com.helper=!/usr/local/bin/gh auth git-credential' <разрешённые аргументы>. Helper читает credential окружения без API; вызывай лишь через Git credential protocol, не напрямую, вывод не печатай. Токен запрещён в argv/URL/config/logs/artifacts/messages; не сохраняй credentials, не меняй host/global Git. Запрещены login/refresh, ротация, расширение прав/сети. gh auth status не gate: API могут быть вне policy; FAIL не доказывает invalid token. Сообщай операцию и exact независимый readback; denied/failed/unknown → STOP по прежней effect/retry policy. Нет новых прав/repo scope/capabilities или replay denied/unknown effect.`
+
+const platformDocumentDiscoveryEnglish = `Before READ of mandatory documents, resolve applicable exact DocID and exact repository/ref/path from the current canonical registry or an already authorized pinned directory listing. Do not guess IDs/paths or reuse historical links. An optional stale context link does not create a mandatory source gate. Missing mandatory facts remain UNKNOWN/BLOCKED; never bypass actual denied/unknown effects. Independent authorized discovery of another resource is not replay of the rejected target; do not replay that target through an alias, transport or identity. A 404 does not establish absence or permission. This guidance grants no authority.`
+
+const platformDocumentDiscoveryRussian = `До READ обязательных документов разреши точный DocID и точные repo/ref/path по текущему canonical registry либо уже разрешённому pinned directory listing. Не угадывай DocID/пути и не бери исторические ссылки. Optional stale context link не назначает обязательный gate. Missing mandatory fact остаётся UNKNOWN/BLOCKED; реальный deny/unknown effect не обходи. Независимый разрешённый discovery другого ресурса не replay отказавшего target; 404 не доказывает отсутствие или разрешение. Guidance не выдаёт authority.`
+
 func platformInstructionBinding(locale string) (entity.PromptPlatformInstructions, error) {
 	return platformInstructionBindingForRevision(platformSourceConformityRevision, locale)
 }
@@ -60,27 +67,39 @@ func platformInstructionBindingForRevision(revision, locale string) (entity.Prom
 	refPrefix := "pinst_source_conformity_v1_"
 	switch revision {
 	case "platform-source-conformity-v1":
-	case "platform-source-conformity-v2", platformSourceConformityRevision:
+	case "platform-source-conformity-v2", "platform-source-conformity-v3", platformSourceConformityRevision:
 		refPrefix = "pinst_source_conformity_v2_"
-		if revision == platformSourceConformityRevision && locale == "ru" {
+		if revision != "platform-source-conformity-v2" && locale == "ru" {
 			prefix, _, found := strings.Cut(content, "\nЕсли текущий runtime явно предоставляет разрешённый GH_TOKEN")
 			if !found {
 				return entity.PromptPlatformInstructions{}, errs.ErrConflict
 			}
-			content = prefix + "\n" + platformGitGuidanceV3Russian
+			gitGuidance := platformGitGuidanceV3Russian
+			if revision == platformSourceConformityRevision {
+				gitGuidance = platformGitGuidanceV4Russian
+			}
+			content = prefix + "\n" + gitGuidance
 		}
 		guidance := platformEvidenceGuidanceEnglish
 		if locale == "ru" {
 			guidance = platformEvidenceGuidanceRussian
 		}
 		content += "\n" + guidance
-		if revision == platformSourceConformityRevision {
+		if revision != "platform-source-conformity-v2" {
 			refPrefix = "pinst_source_conformity_v3_"
 			stageGate := platformStageGateEnglish
 			if locale == "ru" {
 				stageGate = platformStageGateRussian
 			}
 			content += "\n" + stageGate
+		}
+		if revision == platformSourceConformityRevision {
+			refPrefix = "pinst_source_conformity_v4_"
+			discovery := platformDocumentDiscoveryEnglish
+			if locale == "ru" {
+				discovery = platformDocumentDiscoveryRussian
+			}
+			content += "\n" + discovery
 		}
 	default:
 		return entity.PromptPlatformInstructions{}, errs.ErrConflict

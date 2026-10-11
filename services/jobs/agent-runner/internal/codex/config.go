@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -136,6 +137,20 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 		return err
 	}
 	const permissionProfileName = "kodex-runtime"
+	filesystem := map[string]string{
+		filepath.Join(input.CodexHome, "auth.json"): "deny",
+		"/run/secrets": "deny",
+		"/proc":        "deny",
+		filepath.Join(input.WorkspaceRoot, "AGENTS.md"):     "read",
+		filepath.Join(input.WorkspaceRoot, "input"):         "read",
+		filepath.Join(input.WorkspaceRoot, "knowledge"):     "read",
+		runtimecontract.RuntimeContextRoot:                  "read",
+		filepath.Join(input.WorkspaceRoot, ".kodex/inbox"):  "read",
+		filepath.Join(input.WorkspaceRoot, ".kodex/outbox"): "read",
+	}
+	if input.CodexSandbox == "workspace-write" && !input.IsAssistant() && slices.Contains(input.Capabilities, runtimecontract.ArtifactCapability) {
+		filesystem[filepath.Join(input.WorkspaceRoot, ".kodex/outbox")] = "write"
+	}
 	permissionBase, err := codexPermissionBase(input.CodexSandbox)
 	if err != nil {
 		return err
@@ -190,11 +205,7 @@ func PrepareHomeWithAuth(input model.Input, mcpURL string, auth []byte) error {
 			Enabled: false, DirectOnlyToolNamespaces: []string{"functions", "web", "mcp__kodex"},
 		}},
 		Permissions: map[string]permissionProfile{permissionProfileName: {Extends: permissionBase,
-			Filesystem: map[string]string{
-				filepath.Join(input.CodexHome, "auth.json"): "deny",
-				"/run/secrets": "deny",
-				"/proc":        "deny",
-			}, Network: codexNetworkPolicy(input.EnvironmentPolicy.Network.WebAccess)}},
+			Filesystem: filesystem, Network: codexNetworkPolicy(input.EnvironmentPolicy.Network.WebAccess)}},
 		ShellEnvironmentPolicy: shellEnvironmentPolicy{Inherit: "all", IgnoreDefaultExcludes: true,
 			Filters: filters, Set: environmentSet},
 		MCPServers: map[string]mcpServerConfig{"kodex": {URL: mcpURL,

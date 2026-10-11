@@ -42,7 +42,7 @@ func TestPlatformInstructionsV1ContentIsImmutableAndScoped(t *testing.T) {
 
 func TestPlatformInstructionsGitHelperIsConditionalScopedAndNotAuthority(t *testing.T) {
 	for _, locale := range []string{"en", "ru"} {
-		binding, err := platformInstructionBinding(locale)
+		binding, err := platformInstructionBindingForRevision("platform-source-conformity-v3", locale)
 		if err != nil {
 			t.Fatal(err)
 		}
