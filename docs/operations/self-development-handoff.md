@@ -10,6 +10,35 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 12:34 UTC — два образа и три окружения доставлены
+
+Общий runtime source/HOT91a02d6d, runner069a5081 остаются прежними.
+Staff artifactbcaf1d4f/helper artifactd670477d: оба exact build COMPLETED,
+admission ACCEPTED и promotion PROMOTED штатными PROJECT commands.
+Три ENV/семь intended bindings опубликованы: draft201, fresh validation200,
+impact201, полные owner pages200 до EOF, publication200 и fresh ENV3/agent7
+GET200. Saved-response final proof SHAf6918363 PASS: сохранены38tools каждого
+ENV, non-image параметры/секретные descriptors/сеть, версии выросли точно на1,
+выбранные outcomes APPLIED, остальные NOT_SELECTED. SYSTEM custom image не
+обновлялся в этом cohort; общий source/code применяется всем ролям.
+
+Закрытый offline planner впервые отклонил ENV draft только из-за порядка
+networkDestinations. Сервер канонически сортирует этот set; planner теперь
+выдаёт такой же порядок. Состав прав и остальные exact guards не изменены,
+первые saved plans/receipts не переписаны. Canonical/private unit110/78 PASS
+на изменённом дереве. Первый validation403 FRESH_AUTHENTICATION_REQUIRED
+сохранён; после штатного свежего SSO validation200, gate не обходился.
+Первый recipe-ready ещё не был PROMOTED и закрыто отклонён без ENV effects;
+публикация использовала следующий свежий authoritative receipt.
+
+Original task retry200: run_4FDzDR24Syrqi40rj1lDHYnu, attempt2,
+session ses_NP_88hYp-4d1GrV38gOkQ_-C. Исходный INPUT не менялся,
+USER corrections0/host business implementation0. Root RUNNING, Manager
+QUEUED; actual guide/provider receipt и semantic business acceptance пока
+NOT RUN. Chrome35 переведён только на новый собственный run, reload сохранён.
+Продолжать наблюдение обычного Manager/Architect, затем Developer/ONE Review/
+Manager/owner и оставшийся QA; цель не завершена.
+
 ## Checkpoint 11.10.2026 12:11 UTC — source91 и новый runner
 
 HOT/source `91a02d6dfdfe78ba60ae645403843237acdd882f` clean перед доставкой.

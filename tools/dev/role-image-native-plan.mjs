@@ -67,7 +67,7 @@ export function environmentDraft(environment, artifactRef, expectedToolCount = 3
     return { name, secretRef, revision };
   });
   const specification = clone({ name: environment.name, description: environment.description, imageArtifactRef: artifactRef, tools: current.tools, values: current.values, secretBindings,
-    policy: { resources: policy.resources, volumes: policy.volumes.map(({ name, kind, sizeMib }) => ({ name, kind, sizeMib })), networkDestinations: ['DNS', 'RUNTIME_CALLBACK', 'PROVIDER_PROXY'], kubernetesAccess: 'NONE', webAccess: policy.network.webAccess } });
+    policy: { resources: policy.resources, volumes: policy.volumes.map(({ name, kind, sizeMib }) => ({ name, kind, sizeMib })), networkDestinations: ['DNS', 'PROVIDER_PROXY', 'RUNTIME_CALLBACK'], kubernetesAccess: 'NONE', webAccess: policy.network.webAccess } });
   return { environmentRef: environment.ref, expectedEnvironmentVersion: environment.version, specification };
 }
 export function environmentPreservationSHA256(environment) {

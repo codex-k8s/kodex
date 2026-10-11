@@ -28,6 +28,18 @@ test('ENV сохраняет38 tools, values, policy и exact Secret revision; s
   assert.equal(body.expectedEnvironmentVersion, 7); assert.equal(body.specification.imageArtifactRef, 'imgart_next'); assert.equal(Object.hasOwn(body.specification.secretBindings[0], 'secretUid'), false);
 });
 for (const change of [e => e.currentVersion.secretDescriptors[0].revision = 0, e => e.currentVersion.tools.pop(), e => e.currentVersion.policy.kubernetesAccess.kind = 'UNKNOWN', e => e.currentVersion.policy.network.denyByDefault = false]) test('ENV неполные/неизвестные pins закрыты', () => { const e = env(); change(e); assert.throws(() => environmentDraft(e, 'imgart_next')); });
+test('ENV destinations совпадают с canonical server sorted set независимо от source порядка', () => {
+  for (const order of [['RUNTIME_CALLBACK', 'DNS', 'PROVIDER_PROXY'], ['PROVIDER_PROXY', 'RUNTIME_CALLBACK', 'DNS']]) {
+    const e = env(); e.currentVersion.policy.network.egress = order.map(destination => ({ destination }));
+    const original = structuredClone(e), draft = environmentDraft(e, 'imgart_next');
+    assert.deepEqual(draft.specification.policy.networkDestinations, ['DNS', 'PROVIDER_PROXY', 'RUNTIME_CALLBACK']);
+    assert.deepEqual(e, original); assert.deepEqual(draft.specification.policy.webAccess, e.currentVersion.policy.network.webAccess);
+    for (const destination of ['UNSUPPORTED', 'DNS']) {
+      const invalid = structuredClone(e); invalid.currentVersion.policy.network.egress[0].destination = destination;
+      assert.throws(() => environmentDraft(invalid, 'imgart_next'), /POLICY_UNSUPPORTED/);
+    }
+  }
+});
 test('Сохранность ENV исключает только image-bound revision identity и включает все non-image настройки', () => {
   const original = env(), changed = structuredClone(original), before = environmentPreservationSHA256(original);
   Object.assign(changed.currentVersion, { ref: 'renvv_next', revision: 5, version: 20, digest: 'next', createdAt: '2099-01-01', image: { artifactRef: 'imgart_next' } });

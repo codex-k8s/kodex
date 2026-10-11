@@ -10,6 +10,27 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 12:34 UTC — общая файловая схема доставлена
+
+- [x] Два PROJECT образа built/admitted/promoted штатно: staffbcaf1d4f,
+      helperd670477d; runner069a5081/source91a02d6d. История сохранена.
+- [x] Три PROJECT ENV и семь intended bindings переключены через validation,
+      полные impact pages до EOF и publication. Fresh readback200 и final
+      saved-response proof SHAf6918363 PASS:38tools каждого ENV/non-image
+      параметры сохранены, exact version increments и APPLIED outcomes.
+      SYSTEM custom image не входит в этот cohort и не назван обновлённым.
+- [x] Найден и устранён offline-only порядок networkDestinations: состав
+      неизменён, canonical server sorted set. Targeted canonical110/private78
+      unit PASS на изменённом дереве; прежний closed FAIL не переписан.
+      Validation403 fresh-auth gate соблюдён: новый штатный SSO →200.
+- [x] Original INPUT retry200 →run_4FDzDR24Syrqi40rj1lDHYnu/attempt2/
+      прежняя session ses_NP_88hYp-4d1GrV38gOkQ_-C. USER corrections0,
+      host business implementation0; это запуск, не business success.
+- [ ] Actual current guide/current-instructions receipt в обычном агенте
+      нового образа; source-only carrier не считать model read.
+- [ ] Успешный Architect → Developer → ONE Review → Manager/owner;
+      полный QA65 и bootstrap merge остаются открытыми.
+
 ## Checkpoint 11.10.2026 12:11 UTC — общий workspace доставляется
 
 - [x] Source/HOT `91a02d6dfdfe78ba60ae645403843237acdd882f`, clean перед
