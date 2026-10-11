@@ -10,6 +10,32 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 07:51 UTC — INTAKE завершился отказом, причина уточняется
+
+Native attempt4 run_zP5cfYGUXVKoMdQhw6STWR0- FAILED/graph seq300:
+Manager child run_BngmsNLjXqMjZdF71g-dwj6j FAILED07:38:10 UTC,
+Architect/Developer/Reviewer/Manager CANCELLED. Общий workspace в actual Pod
+подтверждён; Manager успешно использовал CODEX_SHELL в WORKSPACE. Это не
+успешное завершение бизнес-задачи. USER corrections0, host business code0.
+
+Provider сообщил TERMINAL_WAIT/PROVIDER/CONTEXT_CANCELLED; это вторичная
+отмена, не доказательство первоначальной причины. Runtime-controller сохранил
+diagnostic_status=UNAVAILABLE. Pod удалён, два точных CRI paths отсутствуют.
+В role boundary не было безопасной классификации ошибки чтения broker frame.
+Интегрирована узкая typed-category диагностика с прежним Unwrap/sentinel и
+закрытым логом category/context_state/activity_failed; лимиты, decoder,
+authority и terminal semantics не меняются. Патч735548f6 на base5b5b1c58:
+ROOT exact Go1.26.6 Broker/RuntimeExecutionFailure unit PASS0.291s/5.302s,
+vet/build PASS; worker exact Go1.26.6 targeted/race/vet/build PASS, шесть post
+hashes совпали. Доставка нового runner и следующий native retry NOT RUN.
+
+Source ROOT5b5b1c58/HOT56d25af2 clean, remote Draft1807 exact readback PASS.
+25 archive unit PASS8.167s на5b5b1c58; это сохранность журнала, не QA65.
+Chrome35 session/run200, FAILED виден после reload; token usage0 не является
+доказательством отсутствия расходов провайдера. Продолжить после доставки
+диагностики: первичная причина, platform fix и Architect/Developer/ONE Review/
+Manager/owner. QA65 и bootstrap readiness OPEN.
+
 ## Checkpoint 11.10.2026 07:33 UTC — workspace доставлен, INTAKE продолжается
 
 Исполняемый HOT/source56d25af2 не менялся: native attempt4

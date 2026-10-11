@@ -296,6 +296,9 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 		activityFailed = activityFailed || err != nil
 		return err
 	})
+	if executionErr != nil {
+		logRuntimeExecutionFailure(ctx, executionErr, activityFailed)
+	}
 	if input.ExecutionDeadline != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_TIMEOUT")
 	}

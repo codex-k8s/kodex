@@ -735,3 +735,31 @@ Canonical roll-plan от c34ce328 сохранил51443B в checkpoints-006.txt 
 прежний full preimage130399B с Git pins; active78956B до этой записи.
 Verifier previous snapshot prefix PASS, bytes/checkbox не переписаны.
 Это сохранность журнала, не acceptance. HOT не менялся в active native run.
+
+## Checkpoint 11.10.2026 07:51 UTC — native INTAKE FAILED, первичная причина UNKNOWN
+
+Native attempt4 root run_zP5cfYGUXVKoMdQhw6STWR0- FAILED/seq300;
+Manager run_BngmsNLjXqMjZdF71g-dwj6j FAILED07:38:10, четыре downstream
+шага CANCELLED. Последние штатные CODEX_SHELL WORKSPACE/ZERO и Git READ
+успешны; общий writable/readonly workspace подтверждён, но бизнес-результата
+нет. USER corrections0, host business implementation0.
+
+Provider safe stage TERMINAL_WAIT/classPROVIDER/detailCONTEXT_CANCELLED
+фиксирует вторичную отмену. Durable RC diagnostic_statusUNAVAILABLE,
+role Pod удалён, exact CRI files отсутствуют. Первичная причина UNKNOWN:
+не объявляется сетью, timeout или конкретной parser category. Узкая закрытая
+broker-reader typed-category диагностика интегрирована без изменения поведения;
+новая actual попытка до её доставки NOT RUN. Architect/Developer/ONE Review/
+Manager/owner, QA65 и bootstrap readiness остаются OPEN.
+
+25 archive unit PASS8.167s на5b5b1c58; ROOT/HOT clean перед этими записями,
+Draft1807 readback exact5b5b/main unchanged. Chrome35 reload/run200/FAILED;
+zero token usage в owner projection не доказывает отсутствие расходов.
+
+Патч735548f6 на base5b5b1c58 изменяет только шесть runner файлов. ROOT exact
+Go1.26.6 targeted Broker/RuntimeExecutionFailure unit PASS0.291s/5.302s,
+vet/build PASS; worker exact1.26.6 targeted/race/vet/build PASS. Форматирование
+и apply-check PASS; posthash broker_activity4c8c0557/app c4417893 совпали.
+Закрытый log не содержит raw error/frame/args; прежние errors.Is/Unwrap и
+функциональные исходы сохранены. Это наблюдаемость, не устранённая причина
+конкретного native отказа и не успешный business/QA результат.
