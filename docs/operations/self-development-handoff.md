@@ -10,6 +10,48 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 20:00 UTC — CP fix обслуживается, attempt6 запущена
+
+Source/HOT/remote Draft1807:3eeb8eb0a50850acd5e56efc93b9b71b5035eba5,
+mainab4992e0, commit/push/PR body readbacks PASS. Quiescent owner query19:55:
+openBuilds/activeRuns/claimedLeases/pendingAdmission/promotion0, promoted79,
+pins63387f52e988459e0b02f5f93e79233027cfb7624ddcbc80dfd142b5cff6d4bf.
+HOT ff-only8f→3e; mounted CP source2hashes MATCH, actual /proc/368/exe
+SHA995122dfc90048ddbea7aa9891e05733e1921f991d31cd2e9ba02caa39c3e7be
+совпал с отдельной Go1.26.6 trimpath/buildvcs=false сборкой.
+Air build/running наблюдались, build failure/ERROR0, Pod Ready/restarts0.
+Основные active Deployments Ready. Нового runner OCI для этого CP scope нет.
+
+Штатный UI Retry200 создал run_n-yMSNg02STIwZr0Jifg0IRP/attempt6,
+retryOf прежний failed root; session ses_NP_88hYp-4d1GrV38gOkQ_-C.
+Exact inputSummary/target/initiator/source SHA
+b8ce900460d27c7a5bd9d0d3e2a8f2bd4d6349bde4c6b1de8d48b25fe5730609
+MATCH original. Новых corrective USER сообщений0, host business code0.
+Новые stages PLANNED; старые results не считаются завершением новой attempt.
+
+Root turn trn_Rz-zE7XklBCH-c8e5aHpUJik/node nod_aUlp6Qtd1x0ESIqUZHSJpMIG
+сам делегировал INTAKE run_1-MbgCXK-MzIneQE5B-IEBj0,
+session ses_EvMVuZvi5-N7VxZzkx12lNR4/turn trn_d1-vIrZWmGQwks3LPhOHMi2-.
+Root provider ACK: same UID7298d6a7-764e-4660-87c5-5934a13f6efc/rejoin,
+model gpt-6.1-sol medium/SUPPORTED, instructions88541B/3ed59003 и
+provider prompt262985B/110c8e5c input/file EQUAL, task_in_prompt=true.
+Файл binary root capture NOT RUN; не выдаётся за serving proof.
+Root provider turn SUCCEEDED, graph root остаётся RUNNING до children.
+
+INTAKE Pod runtime-turn-5bd87b388a4c8052,
+UID946e2199-0301-4968-98ea-e6426fadf82c: early ACK observed,
+runtime revision b2a78247/inputa711c2db/binding3cd2bde0.
+Actual image5cb2711fe34e15704bf0c05ed5fcfafaaf041add93a7c388fdb515540e1ce8c0;
+отдельный read-only image-file ELF2991a81b MATCH expected runner.
+Это image-file, не PID proof. Bounded dual-source collector сопровождает INTAKE;
+root listener после finished provider получил FOLLOW_STREAM_ENDED,
+failure observation отсутствует: это не application FAIL и не full PASS.
+
+Chrome11 connected/graph sequence растёт, screenshot/overflow=false/Console0;
+Retry/graph/events/ticket200, «Весь граф» показывает все8узлов и routed callback.
+INTAKE/Architect/Developer/ONE Review/Manager/owner, QA65 и bootstrap merge OPEN.
+Business PR1808 по-прежнему не merge/approve/auto-merge.
+
 ## Checkpoint 11.10.2026 19:53 UTC — образы и окружения доставлены
 
 Canonical base b90c0cc2 остаётся compiled source8f0fd117. Staff generation23

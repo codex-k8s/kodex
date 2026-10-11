@@ -10,6 +10,21 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 20:00 UTC — source/serving и native Retry
+
+- [x] Pushed3eeb8eb0/HOT ff-only и Draft1807 body readback MATCH.
+- [x] CP mounted source и serving ELF995122df совпали с независимой сборкой;
+      quiescent build window и79promoted pins доказаны до доставки.
+- [x] Native UI Retry200/attempt6, original input digestb8ce9004 MATCH,
+      fresh root stages; root provider ACK/rejoin и INTAKE ранний ACK.
+- [x] Actual INTAKE image5cb2711f/file ELF2991a81b соответствует новому
+      runner; Chrome screenshot/connected/Console0/relevant200.
+- [ ] Успешные новые role results, Developer substantive handoff/PR,
+      ONE Review/Manager/owner и остальные QA/bootstrap gates.
+
+Ранний ACK не является final. ROOT implementation0/USER corrections0;
+исторический Developer FAILED и PR1808 не изменены.
+
 ## Checkpoint 11.10.2026 19:53 UTC — exact project image delivery
 
 - [x] Два current recipes ACCEPTED/PROMOTED; staff после штатного lease
