@@ -10,6 +10,35 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 09:52 UTC — полный source INPUT и native root
+
+ROOT/HOT6f66b14e clean/remote1807/body PASS, mainab4992e0 unchanged.
+Actual immutable TEXT artifacts main5693 FULL/40 exclusions e6aa620a,
+upstream11 FULL d603b87a, neutral extractor71f6782a/navigationdc22c0cf
+имеют server CLEAN/ACTIVE и metadata200 exact sizes/digests/revision1.
+Scope не весь repository/transitive graph; документы вне scope требуют своего
+canonical READ. No archive/type/scan bypass, no source task script execution.
+Первый upstream upload имел UNKNOWN response body, но exact owner readback200
+подтвердил созданный файл; повторной mutation нет. Остальные POST201/GET200.
+FILES screenshot визуально проверен/overflow=false, MCP Console0; отдельные
+Playwright startup401/Console1/aborts не считаются clean baseline.
+
+Новый finalized WORKFLOW_INPUT aset_P0U6CKWFwXClTfxFqrXoqEdP v2/rev2,
+7files/53057068B/manifestac554353, сохранены предыдущие3 inputs. Workflow40/rev13
+PUBLISHED/READY с ровно5steps/ONE comprehensive review. POST runs201 создал
+run_LlIz48K85YNyVwYQFpb79dgK attempt1; task и4 input fields неизменны,
+только новая immutable source attachment set. ROOT не посылал USER corrections
+и не делал business implementation. Current RUNNING/seq24, safe ROLE log
+capture active; HOT frozen6f66 до terminal.
+
+Actual Pod UID9bfb3934/role imageaa8994e1/relay23089dc8/3Ready/restarts0.
+Provider read-only observation подтвердил writable /workspace/work и readonly
+original input/context/knowledge; guide SHAdd753bb6 и рабочие copies трёх TXT
+совпали с immutable source. ROOT только читал. Graph/events200, Chrome35
+Console0/overflow=false; separate screenshot проверен, штатный fit-click.
+Это delivery/start, не semantic PASS; Developer PR/ONE review/Manager/owner,
+QA65/bootstrap readiness/merge остаются OPEN.
+
 ## Checkpoint 11.10.2026 09:41 UTC — actual guidance6994d3fd
 
 Exact Draft1807 HEAD6994d3fd readback/body PASS; mainab4992e0 unchanged.

@@ -10,6 +10,43 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 09:52 UTC — новый native запуск с полными исходниками
+
+ROOT/HOT6f66b14e clean, Draft1807 exact remote/body PASS. Исполняемые
+guidance/CP/RC source6994d3fd сохраняются; во время native работы HOT не менять.
+Четыре neutral TEXT fixtures прошли actual server CLEAN/ACTIVE с exact hashes:
+main packet5693 FULL/40 явных исключений наab4992e0 — e6aa620a;
+upstream11 FULL наa956835d — d603b87a; extractor71f6782a;
+navigationdc22c0cf. Это ограниченный source scope, не полный checkout/все
+transitive sources и не auth permission. Никакие source task scripts ROOT не
+исполнял. Текстовые fixtures не являются business implementation.
+
+Первый upload upstream создал файл, но ответный body недоступен Playwright.
+Авторитетный owner GET200 с exact size/digest/CLEAN доказал эффект; повторного
+POST не было. Остальные три POST201 и независимый metadata GET200 совпали.
+Screenshot FILES визуально проверен, overflow=false; MCP Console0 и
+session/bootstrap200. Startup401/Console1/abort отдельного Playwright сохранены,
+не объявлены чистым browser baseline. Client path restriction MCP не менялась.
+
+Штатный новый WORKFLOW_INPUT draft201 → finalized201/version2/revision2,
+aset_P0U6CKWFwXClTfxFqrXoqEdP содержит прежние3 и новые4 INPUT файла;
+53057068B, manifestac554353. Workflow40/revision13 PUBLISHED/READY:
+INTAKE/Architect/Developer/ONE comprehensive review/Final Manager.
+Новый POST runs201 создал run_LlIz48K85YNyVwYQFpb79dgK, attempt1,
+session ses_VL1eU3CCiNmaqkaDHB2vdJ-8; исходные task/четыре input fields
+byte-equivalent, изменён только immutable attachment set. USER corrections0,
+host business implementation0. Root RUNNING, seq24, tool calls выполняются.
+
+Actual Pod runtime-turn-1d051805faf77006/UID9bfb3934 Running/3 Ready/restarts0:
+role imageaa8994e1, relay23089dc8; provider UID подтвердил writable work и
+readonly input/context/knowledge. WORKSPACE.md SHAdd753bb6 и три .txt
+рабочие копии имеют exact source hashes; ничего в workspace ROOT не писал.
+Graph/events200, Chrome35 Console0/overflow=false; отдельный screenshot
+визуально проверен, сохранённый zoom исправлен штатным «Весь граф».
+Следующий шаг — сопровождать новый root, проверить самостоятельное исследование
+полных source и own RUN_RESULT discovery, Developer PR, ONE review и owner.
+Native semantic/business success, общий QA65 и bootstrap merge остаются OPEN.
+
 ## Checkpoint 11.10.2026 09:41 UTC — FILES guidance доставлен
 
 Source6994d3fd817ea975217d6b9a2db27ff8669ec073 clean опубликован в Draft1807;
