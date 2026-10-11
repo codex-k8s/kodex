@@ -10,6 +10,29 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Приоритет владельца 11.10.2026 03:09 UTC — основное до рабочей приёмки
+
+Из-за дневного лимита токенов больше не расширять регресс и косметику.
+Довести главный реальный сценарий помощник→команда→результат, исправлять
+блокирующие ошибки и передать рабочее приложение с честными ограничениями.
+Дополнительные UX-кандидаты не принимаются; полный Full65 не объявляется PASS.
+
+Production/HOT2b409353; remote journal head129bc28b. Retry12 RUNNING/seq459,
+INTAKE SUCCEEDED и semantic PASS только подготовки. ROOT прочитал
+manager-plan.md34015B до EOF, exact SHA07784935…eafa75 MATCH;
+артефакт art_Pf8Hataij8YlbiiJQnRyxyoL/revision arv_b646130ee6284d809c26b19ed33e5d75.
+Callback2 и Architect ACK+metadata CAPTURED/currentv3/COLD/sameUID/rejoin.
+Architect run_EsMCShhtzNMpp3ph-lKpbUHR RUNNING, Developer ещё NOT RUN.
+Новый callback3 packet готов, actual tuple UNKNOWN. Пока граф активен HOT FF0.
+
+Из уже завершённого принят только e2e split768 (3 файла, production0):
+ROOT post3 MATCH, unit27 PASS1.56s, lint/format3 и public types/discovery PASS.
+1920 PASS, 900 PASS сокращённого scope; старый ALL768 FAIL120s сохранён.
+Пять новых768 групп: первый запуск4PASS/1private-isolationFAIL, затем
+адресный PROVIDERS PASS после readonly contracts link; source неизменен.
+Все пять имеют PASS, единого green5/5run нет; Console/Network guards достигнуты.
+Новые широкие проверки и cosmetic live apply не выполнять.
+
 ## Checkpoint 11.10.2026 02:54 UTC — публикация, serving v3 и новый native запуск
 
 Source/remote/HOT 2b409353a5532f2c6eedd4f75649b6ee0af4bc64, clean;

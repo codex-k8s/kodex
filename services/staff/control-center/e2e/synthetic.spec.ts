@@ -2092,7 +2092,7 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
       );
     }
     if (includes("FILES_HISTORY")) {
-      if (width === 1440 || width === 390 || width === 2900)
+      if (width === 1440 || width === 390 || width === 768 || width === 2900)
         await checkFileSelection(
           page,
           catalogProject.ref,
@@ -2103,14 +2103,14 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
             });
           },
         );
-      if (width === 1440 || width === 390)
+      if (width === 1440 || width === 390 || width === 768)
         await checkAssistantHistory(
           page,
           catalogProject.ref,
           assistant,
           installSnapshot,
         );
-      if (width === 2900 || width === 390)
+      if (width === 2900 || width === 390 || width === 768)
         await checkHomeResults(
           page,
           catalogProject.ref,
@@ -2122,7 +2122,7 @@ for (const { width, height, part, title } of syntheticJourneyProfiles()) {
           },
           installSnapshot,
         );
-      if (width === 2900 || width === 390)
+      if (width === 2900 || width === 390 || width === 768)
         await checkResumableSessions(
           page,
           catalogProject.ref,

@@ -18,13 +18,13 @@ import {
 } from "./synthetic-journey-profile";
 
 describe("bounded synthetic mobile journey", () => {
-  it("сохраняет семь desktop journeys и покрывает каждую mobile секцию ровно один раз", () => {
+  it("сохраняет шесть ALL journeys и покрывает каждую mobile секцию ровно один раз", () => {
     const profiles = syntheticJourneyProfiles();
     expect(
       profiles
         .filter((profile) => profile.part === "ALL")
         .map((profile) => profile.width),
-    ).toEqual([2900, 2560, 1920, 1440, 1280, 900, 768]);
+    ).toEqual([2900, 2560, 1920, 1440, 1280, 900]);
     const mobile = profiles.filter((profile) => profile.width === 390);
     expect(mobile.map((profile) => profile.part)).toEqual([
       ...mobileJourneyParts,
@@ -38,6 +38,63 @@ describe("bounded synthetic mobile journey", () => {
       expect(includesJourneySection("ALL", section)).toBe(true);
     }
     expect(mobile.every((profile) => profile.height === 844)).toBe(true);
+  });
+  it("разбивает 768 на пять непустых секций без изменения остальных размеров", () => {
+    const profiles = syntheticJourneyProfiles();
+    const narrow = profiles.filter((profile) => profile.width === 768);
+    expect(narrow.map((profile) => profile.part)).toEqual([
+      ...mobileJourneyParts,
+    ]);
+    expect(narrow.every((profile) => profile.height === 1024)).toBe(true);
+    expect(narrow.map((profile) => profile.title)).toEqual(
+      mobileJourneyParts.map((part) => `synthetic: tablet768 ${part}`),
+    );
+    for (const section of mobileJourneyParts)
+      expect(
+        narrow.filter((profile) =>
+          includesJourneySection(profile.part, section),
+        ),
+      ).toHaveLength(1);
+    expect(profiles.find((profile) => profile.width === 1920)?.part).toBe(
+      "ALL",
+    );
+    expect(
+      mobileJourneyParts.map((part) => expectedJourneyDiagnostics(part, 768)),
+    ).toEqual([
+      { snapshotConflicts: 0, publicationTimeouts: 2 },
+      { snapshotConflicts: 0, publicationTimeouts: 0 },
+      { snapshotConflicts: 0, publicationTimeouts: 0 },
+      { snapshotConflicts: 0, publicationTimeouts: 0 },
+      { snapshotConflicts: 1, publicationTimeouts: 0 },
+    ]);
+  });
+  it("явно расширяет 768 file/history coverage, сохраняя проверки и исключение микрофона", () => {
+    const source = readFileSync(
+      new URL("./synthetic.spec.ts", import.meta.url),
+      "utf8",
+    );
+    const begin = source.indexOf('if (includes("FILES_HISTORY")) {');
+    const end = source.indexOf("const diagnostics =", begin);
+    expect(begin).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(begin);
+    const files = source.slice(begin, end);
+    for (const name of [
+      "checkFileSelection",
+      "checkAssistantHistory",
+      "checkHomeResults",
+      "checkResumableSessions",
+    ]) {
+      const call = files.indexOf(`await ${name}(`);
+      expect(call).toBeGreaterThan(0);
+      expect(files.slice(files.lastIndexOf("if (", call), call)).toContain(
+        "width === 768",
+      );
+    }
+    expect(source).toContain(
+      "if (width === 1440 || width === 390)\n      await prepareSyntheticMicrophone(",
+    );
+    expect(source).toContain("expect(failures).toEqual([])");
+    expect(source).toContain("test.setTimeout(120_000)");
   });
   it("создаёт fresh descriptors без разделяемого изменяемого состояния", () => {
     const first = syntheticJourneyProfiles();

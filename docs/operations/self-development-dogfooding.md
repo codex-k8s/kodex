@@ -994,3 +994,40 @@ Exact published2b source1177blobs MATCH. Viewports900/768 ещё RUNNING;
 historical desktop результаты не подменяют текущую проверку. Full65 OPEN,
 Developer/ONE review/Manager acceptance pending; USER corrections0/host
 business implementation0. До idle новый HOT FF не выполняется.
+
+## Checkpoint 11.10.2026 03:09 UTC — основной сценарий и приёмка
+
+Дневной лимит токенов: довести основное до рабочего состояния, без излишних
+проверок и неважных улучшений, затем передать приложение на приёмку.
+ROOT остановил дальнейшие cosmetic/расширенные host задачи. Неосуществлённый
+Full65/regression не отмечать PASS; обязательные authority/security границы
+и один реальный review в текущем Workflow не обходятся.
+
+Retry12 RUNNING/seq459, INTAKE технически SUCCEEDED/semantic PASS только
+подготовки. ROOT штатным owner PREVIEW прочитал manager-plan.md34015B до EOF,
+SHA2560778493583f4184130636321e9f8ecf405646236a2a1529c56fd29b528eafa75 MATCH,
+artifact art_Pf8Hataij8YlbiiJQnRyxyoL/revision arv_b646130ee6284d809c26b19ed33e5d75.
+Buffer удалён, raw content на диск не сохранялся. Callback2 exact
+trn_hroRaU-Ds-bW84c1Etoi1IFf/nod_ppARZHtDWx8LVprOdYscN7Kq/attempt2:
+ACK+metadata CAPTURED, COLD/currentv3/notice PRESENT_CURRENT_TUPLE/sameUID/rejoin.
+Coordinator SUCCEEDED и делегировал Architect run_EsMCShhtzNMpp3ph-lKpbUHR/
+session ses__Lc9S8KNA2YNhdcAbqjw7F0s/turn trn_H3SWHtRKuvDpMk2zK1UMaagK/
+node nod_J7eLFA_vUXCpqyjtqxCKAnpw/attempt1. Architect RUNNING, ACK+metadata
+CAPTURED/currentv3/COLD/sameUID/rejoin VERIFIED; это delivery, не semantic PASS.
+Developer/ONE review/Manager/owner ещё OPEN; USER corrections0/business implementation0.
+
+Уже проверенный TABLET768-SPLIT3 принят ROOT:3e2e posthash MATCH,
+unit27/2suites PASS1.56s, lint/format3 PASS, public types/discovery PASS.
+Production0 изменений; budgets120s/test, workers1/retries0 сохраняются.
+Historical ALL768 FAIL120s не исправлен продлением: накопленный общий бюджет,
+не доказанный production route defect. Новые finite5 расширяют FILES/history
+покрытие768. Первый run4PASS/1FAIL из-за private missing contracts symlink;
+после исправления только оснастки affected PROVIDERS PASS31.0s отдельно.
+Все пять имеют actual PASS одинакового source, единого green5/5run нет.
+1920 ALL PASS119233ms; 900 PASS45.6s имеет меньший применимый scope.
+Expected Console negatives/aborts сохранены; финальные guards успешных групп
+достигнуты. Новый неизменный all768 повтор не запускался.
+Root/HOT/source2b unchanged при активном графе; свежий journal remote129bc28b.
+Chrome35 периодически reload после unsent0; Console0/native HTTP200, transient
+reconnect возвращается Connected, overflow0. Backend bounded log lines0
+не выдаётся за глобальный PASS. Косметический label candidate НЕ принят.

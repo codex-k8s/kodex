@@ -24,7 +24,6 @@ export function syntheticJourneyProfiles(): SyntheticJourneyProfile[] {
       { width: 1440, height: 900 },
       { width: 1280, height: 900 },
       { width: 900, height: 1080 },
-      { width: 768, height: 1024 },
     ].map(({ width, height }) => ({
       width,
       height,
@@ -36,6 +35,12 @@ export function syntheticJourneyProfiles(): SyntheticJourneyProfile[] {
       height: 844,
       part,
       title: `synthetic: mobile390 ${part}`,
+    })),
+    ...mobileJourneyParts.map((part) => ({
+      width: 768,
+      height: 1024,
+      part,
+      title: `synthetic: tablet768 ${part}`,
     })),
   ];
 }
@@ -52,7 +57,7 @@ export function expectedJourneyDiagnostics(
   return {
     snapshotConflicts:
       includesJourneySection(part, "FILES_HISTORY") &&
-      (width === 390 || width === 2900)
+      (width === 390 || width === 768 || width === 2900)
         ? 1
         : 0,
     publicationTimeouts: includesJourneySection(part, "CORE_ENV") ? 2 : 0,
