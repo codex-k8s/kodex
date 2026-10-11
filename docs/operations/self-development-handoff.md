@@ -10,6 +10,57 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 04:40 UTC — workspace доставлен, обновляются окружения
+
+Source `6c30d655815f0b12bf0385063e517fc0dc5cef47` запушен в Draft PR1807;
+main `ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69` не изменён. HOT-клон
+переведён на source6c30 только после свежей проверки отсутствия активной работы.
+Реализация относится ко всем агентам, а не только к помощнику или Developer.
+
+- [x] Адресно проверить writable scratch, защищённые оригиналы и запрет
+      публикации без ArtifactCapability. Проверки перечислены ниже в04:06.
+- [x] Собрать и доставить full runner из source6c30: OCI digest
+      `sha256:789aae84fb02971c9782f4afe5b540ae301e4489ffaa23613fb816155a587e16`;
+      runner binary SHA256
+      `9bacf30b070ca1966c191b523d6f8b5557fefe27dfd729f37410862d90aa241c`.
+- [x] Пройти все девять repo-owned фаз policy transition, восстановить gateway
+      и доказать HTTPS/CRI pull exact digest на обоих dev-узлах. Первый запуск
+      verifier до переключения policy дал PIN_MISMATCH; последующая отдельная
+      проверка после перехода PASS. Первый prepare без нужного Node PATH не
+      создал bundle; этот FAIL не скрыт.
+- [x] Проверить CP/controller: новые Pod UID, совпадение source hashes,
+      обслуживаемого ELF и build receipts; desired/available1, restarts0.
+      Receipt SHA256
+      `2d9ce0dfbba2bb060048183205797503c3c7a6a44c0eb638df5f31238c592791`.
+- [x] Завершить admission/promotion трёх пользовательских образов, затем
+      штатную versioned публикацию четырёх окружений и восьми bindings.
+      Изменяется только image; tools, variables, secrets и policy сохраняются.
+- [ ] Проверить actual agent workspace/Codex sandbox и основной живой сценарий;
+      ONE Review/Manager/owner и финальная приёмка пока OPEN.
+
+Chrome35: inline screenshot получен и просмотрен; Console0 после reload,
+bootstrap/session/graph/ticket и релевантные owner GET200, горизонтального
+переполнения нет. Сохранение screenshot в неподдерживаемый путь отклонено,
+отдельный inline capture ранее завис; это не выдаётся за PASS. UI «Подключено»
+не заменяет проверку фактических WebSocket frames. Старый root остаётся FAILED.
+Новый бизнес-запуск ещё не выполнен. Никаких дополнительных reviews, merge,
+обхода admission или сообщений от имени пользователя не было.
+
+04:58 UTC: все три артефакта ACCEPTED/PROMOTED; четыре ENV current versions
+37/19/18/22 READY. Все четыре draft PUBLISHED и ровно восемь intended items
+APPLIED. Fresh owner readback сверяет exact images/provenance/inventory,
+неизменность всех non-image параметров и новые версии всех eight bindings.
+Offline verifier PASS4/4 preserved,8/8 bindings; proof SHA256
+`3eba4164f71e6503f1ff53a8f194a12bc698cc512d57d31d2e378c2593f41139`.
+Его `effect: NOT_RUN` означает, что verifier только проверяет данные; сами
+native публикации подтверждены HTTP200 и APPLIED readback, не offline планом.
+Первый validation403/FRESH_AUTHENTICATION_REQUIRED не обходился: выполнен
+штатный свежий вход через обе SSO-границы и сохранённые draft/version проверены
+повторно. Первый интерактивный transport публикации не дал ACK; сохранён UNKNOWN,
+после authoritative VALID/v2 readback использованы те же idempotency keys,
+получены четыре HTTP200 и проверены итоговые результаты. Новые ключи для
+скрытого повторного эффекта не создавались. Actual sandbox/business ещё OPEN.
+
 ## Checkpoint 11.10.2026 04:06 UTC — платформенный workspace всех агентов
 
 Свежий root run_IC4m0TMblr2NDqIC74eh6OOJ завершился FAILED/seq309.

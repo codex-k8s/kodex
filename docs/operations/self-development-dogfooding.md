@@ -1086,3 +1086,34 @@ PASS0.232s/0.028s, RC workload PASS0.074s, runner codex/app PASS0.299s/0.021s.
 ArtifactCapability остаётся обязательной для публикации. Files.workspace
 даёт карту каталогов, INPUT содержит working_copy_path отдельно от оригинала.
 Новый OCI runner/actual Pod/Codex sandbox и живой результат ещё NOT RUN.
+
+## Checkpoint 11.10.2026 04:40 UTC — новая файловая среда доставлена в dev
+
+Source6c30d655 запушен в тот же Draft1807 и guard-переводом подключён к HOT.
+Full runner digest789aae84/binary9bacf30b доставлен штатными build/seed;
+девять фаз exact policy transition PASS, HTTPS/CRI pull обоих узлов PASS.
+CP/controller новые UID, обслуживаемый ELF/build и source hashes проверены;
+receipt2d9ce0df. Это доказательство dev-доставки, не финальная release-проверка.
+
+Три пользовательских recipes переведены на новый base штатной публикацией
+revision: system22, staff18, project-helper12. Build всех трёх COMPLETED;
+system/staff admission ACCEPTED и promotion PROMOTED. Последний helper scan
+COMPLETED, подпись и admit ещё выполняются. Изменения четырёх ENV/восьми
+bindings и новый actual agent run пока NOT RUN. Non-image параметры должны
+сохраняться с отдельным readback, вручную SQL/статусы не менялись.
+
+Chrome35: разрешённый inline screenshot просмотрен; Console0 после reload,
+bootstrap/session/graph/ticket200, горизонтального overflow нет. Запрещённое
+сохранение screenshot в неподдерживаемый путь не повторялось через другой
+транспорт; предыдущий зависший inline capture сохранён как NOT RUN. UI
+Connected не выдаётся за actual WebSocket-frame proof. Основной бизнес-поток
+и ONE Review остаются открытыми; прежний FAILED не переименован в PASS.
+
+04:58 UTC: helper тоже ACCEPTED/PROMOTED. Четыре ENV опубликованы штатно:
+versions37/19/18/22, READY; drafts PUBLISHED,8/8 intended bindings APPLIED.
+Exact owner READ + offline verifier подтверждают4/4 non-image preservation,
+image/provenance/inventory и все восемь новых consumer/binding versions;
+proof3eba4164. Публикации native HTTP200, verifier сам никаких эффектов не
+исполняет. Fresh-auth403 и отсутствие первого interactive ACK сохранены;
+возобновление после обычного входа и readback использовало прежние ключи.
+Новый actual sandbox и основной workflow ещё NOT RUN; old root FAILED.
