@@ -5,10 +5,34 @@ type: operations
 status: approved
 owner: manager
 version: 1.1.0
-updated: 2026-10-10
+updated: 2026-10-11
 ---
 
 # Текущее состояние
+
+## Checkpoint 11.10.2026 09:00 UTC — следующий runner подготовлен без activation
+
+ROOTe49aad3e clean и опубликован в Draft1807, body/readback PASS;
+HOTc4bd2028 остаётся frozen. Canonical build-local-runner full-profile
+завершился PASS, новый digest6d27a427f3ad711c514fb3170b8842b2944a355bb578a9f3e6305ed232738097
+импортирован с exact durable pins на оба узла. Provenance SHA256
+09bdb18bf5f000a0e2de5218a52b40b167bc11c1fdb17378ba47d50873349b71;
+ELF41f23efdd16f3f9d6c0f90eaf1272dfb55aeebab6c963437d8d103e9302d837c
+совпал с независимой Go1.26.6 trimpath/buildvcs=false сборкой e49aad3e.
+Новые policy/default/role recipes/ENV не применялись. Actual native Pod
+по-прежнему использует предыдущий imageaa8994e1; JSON logger delivery NOT RUN.
+ROOT targeted unit повторён на exact e49aad3e PASS5.285s.
+
+Native attempt5 RUNNING, Manager semantic INTAKE PASS. Обычный Architect
+run_zARDQy9RiINWUn9rhD9oNzPU RUNNING, owner cursor594: собственные snapshot,
+Context7, web и GitHub READ. Его COMMENTARY подтвердил serving Codex0.160.0
+и native генерацию JSON/TS в своём work; полный итог/pins ещё ожидаются.
+Actual provider proof: gpt-6.1-sol/medium/SUPPORTED, task_in_prompt=true,
+instructions_file_comparison=EQUAL, inbox_prompt_comparison=EQUAL.
+Два CODEX_SHELL FAILED с последующими SUCCEEDED не скрыты; category отказа
+всего исполнения пока не наблюдалась. Pod3 Ready/restarts0 не является
+бизнес-приёмкой. Chrome35 reload/API200/Console0, чужие вкладки не трогались.
+Architect/Developer/ONE Review/Manager/owner, QA65 и bootstrap readiness OPEN.
 
 ## Checkpoint 11.10.2026 08:47 UTC — INTAKE принят, Architect запущен
 

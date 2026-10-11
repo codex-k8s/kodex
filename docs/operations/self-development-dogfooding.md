@@ -5,7 +5,7 @@ type: operations
 status: approved
 owner: manager
 version: 1.1.0
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
 # Цель и источники
@@ -828,3 +828,23 @@ Chrome35 reload/API200/Console0/overflow=false, separate settled screenshot
 превращаются в чистый PASS. ONE Review уже закреплён в published Workflow
 version40/revision13 с ровно5steps; это не выполненное review.
 Architect/Developer/ONE Review/Manager/owner, QA65 и readiness остаются OPEN.
+
+## Checkpoint 11.10.2026 09:00 UTC — runner заранее собран, native продолжён
+
+Exact e49aad3e clean/remote1807/body PASS; HOTc4bd2028 frozen. Canonical
+full runner6d27a427 собран, provenance09bdb18b PASS, durable exact node
+import PASS на двух узлах. Образный ELF41f23efd совпал с независимой exact
+Go1.26.6 trimpath/buildvcs=false сборкой e49aad3e. ROOT targeted unit
+повторён на committed e49aad3e PASS5.285s. Это подготовка, не activation:
+policy/default/role recipes/ENV не менялись, actual imageaa8994e1 прежний.
+
+Attempt5 root RUNNING, Manager PASS_INTAKE_FOR_ARCHITECT_HANDOFF;
+обычный Architect run_zARDQy9RiINWUn9rhD9oNzPU RUNNING, cursor594.
+Его собственные snapshot/Context7/web/GitHub READ выполняются; COMMENTARY
+подтвердил process Codex0.160.0, JSON/TS generation и binary SHA12eb3e81
+в actual work. Полный финальный provider/pins proof ещё ожидается.
+Actual provider gpt-6.1-sol/medium/SUPPORTED и instructions/inbox EQUAL;
+task_in_prompt=true. CODEX_SHELL FAILED2 не скрыты, последующие вызовы
+успешны; весь turn не объявляется прошедшим. Primary ROLE capture active.
+Chrome35 reload/API200/Console0; USER corrections0, host business code0.
+Architect/Developer/ONE Review/Manager/owner, QA65 и bootstrap readiness OPEN.
