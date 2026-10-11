@@ -60,6 +60,9 @@ native download и полная suite NOT RUN. Это не исправлени�
 - [x] Developer17:52:14 UTC: actual template03041170/revision2 доставлен;
   full instructions91830B/58f6bfb6, owner task3241B/c32b553f,
   same UID/inbox/file/image ELF rejoin MATCH. Это delivery, не implementation.
+- [x] Actual substantive business commit c784ee85ec2e8c9aaf481014d46401d61110ca5e
+  и Draft PR #1808 опубликованы Developer; remote head/base readback18:47
+  MATCH. Это не успешная финализация, проверка business scope или review.
 - [ ] Подтвердить substantive branch/commit/push/PR Developer, tests нового
   бизнес-scope и собственные full-read receipts опубликованного handoff.
 - [ ] ONE Reviewer: exact diff/SHA, направления, prompt/handoff и findings;
@@ -74,6 +77,16 @@ native download и полная suite NOT RUN. Это не исправлени�
   помощников/ролей, business branch/PR/reviewed SHA, проверки и ограничения.
 
 ## Неустранённые ограничения
+
+Fresh Developer FAILED18:52:14 UTC; root FAILED/graph1213, Reviewer и Manager
+CANCELLED, циклов ревью0. Capture56547 сохранил actual same-UID
+TERMINAL_FAILURE/RUNTIME_ARTIFACT_INVALID/rejoin VERIFIED; публичный summary
+RUNTIME_WORKSPACE_INVALID. Конкретный filesystem guard UNKNOWN. Доказанный
+общий порядок outbox denial → пропущенная normalization → canary denial
+исправляется отдельно, не выдаётся за установленную actual причину.
+Retained rollout содержит metadata пяти подготовленных файлов менее1MiB;
+Developer artifacts не опубликованы. Work/outbox emptyDir удалены вместе
+с Pod, retained session PVC сохраняет только codex-home. PR1808 не сливать.
 
 Balance/units/spending/live paid continuation пока UNKNOWN/NOT RUN.
 Причина удалённой attempt4 UNKNOWN; successful attempt5 не доказывает её

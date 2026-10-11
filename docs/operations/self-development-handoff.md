@@ -10,6 +10,51 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 19:03 UTC — бизнес-PR сохранён, финализация Developer отказала
+
+Source b41a6e1062432d5cb29eb73518d4dd8aea1ced97, HOT68c66645 clean.
+Actual Developer создал commit c784ee85ec2e8c9aaf481014d46401d61110ca5e
+и Draft PR #1808, branch developer/issue-1796-financial-summary-aHIcy0dd;
+remote head/base mainab4992e0 подтверждены отдельно18:47 UTC.
+Это substantive delivery, не успешная приёмка: native final сообщает
+offline PASS, full suites/browser/real paid continuation NOT RUN,
+готовность BLOCKED/NOT READY. ROOT business implementation0,
+новые корректирующие USER prompts0; бизнес-PR не слит и не approved.
+
+Developer run_aHIcy0ddWiBbQEfB6vwemybW FAILED18:52:14.097131 UTC,
+root run_wOIiZv9ZtpMsqQO4H_tCGGR2 FAILED, graph1213;
+Reviewer и финальный Manager CANCELLED, циклов ревью0.
+Same-UID dual-source collector56547 завершился OBSERVATIONS_CAPTURED:
+provider TERMINAL_FAILURE/RUNTIME_ARTIFACT_INVALID18:52:13.653426 UTC,
+client NOT_OBSERVED, STREAM_ENDED/rejoin VERIFIED, initial3pins MATCH.
+Owner GET200 после reload сохранил safeErrorCode RUNTIME_INPUT_INVALID,
+resultSummary RUNTIME_WORKSPACE_INVALID и11 inherited artifacts;
+новые Developer handoff/evidence не опубликованы.
+
+По коду artifact failure может возникнуть в publishProviderOutbox либо
+normalizeProviderWorkspaceAccess. App проверяет workspace раньше FAILED
+result и может заменить summary на WORKSPACE_INVALID. Достижим общий дефект:
+outbox denial переводит result в FAILED, после чего post-join directory
+normalization полностью пропускается. Actual rejecting guard пока UNKNOWN;
+не объявлять причиной сеть, превышение квоты или размер файла без доказательств.
+
+Подтверждён retained PVC runtime-session-4c82064259c2ffe9 exact session hash;
+сохраняется codex-home, но work/outbox были emptyDir удалённого Pod.
+Bounded read-only разбор retained rollout подтверждает пять подготовленных
+артефактов размером5612/22029/20725/755903/1788B, все меньше1MiB.
+Это metadata receipts агента, не публикация или повторный live inode read.
+Рабочие файлы и полномочия не менялись, quota/link/owner guards не обходились.
+
+Own Chrome11 подключён/authenticated; reload, screenshot, Console0,
+session/bootstrap/ticket/graph200, horizontal overflow=false. Граф сохраняет
+старый viewport и часть узлов вне видимой области; это не приёмка graph fit.
+Полная gateway package unit на exact b41a6e10 PASS2.549s дополнительно
+к scoped unit/build; fixed egress ещё не обслуживает HOT. Активных ordinary
+runtime Pods сейчас нет, только system-assistant-warm. Следующий этап:
+минимальный post-join fix/закрытая диагностика, адресная проверка и доставка;
+сохранить PR1808 и восстановить native review путь без фиктивного SUCCEEDED
+и без слепого повторения часовой бизнес-реализации.
+
 Краткий реестр применимости проверок и оставшихся шлюзов разделов45/64:
 [QA-DOC-SELFDEV-002](../qa/bootstrap-1797-evidence-ledger.md).
 
