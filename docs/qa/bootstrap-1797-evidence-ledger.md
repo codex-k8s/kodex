@@ -10,6 +10,22 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 11.10.2026 22:52 UTC
+
+772a4778 detail4 actual source/mount/h1/breadcrumb/screenshot/Console0/
+Network200/overflow=false PASS;22Deployment Ready. GH mergeable clean,
+checks0/statuses0/combined pending не CI PASS, full acceptance OPEN.
+
+Safe PROJECT scope12 source post hashes MATCH: owner RR exact published
+GitHub config→public owner/repository/kind/digest→Proto9→CP caster→strict
+RC native projection; unknown/malformed/cursor drift failclosed, arbitrary
+maps remain forbidden. SYSTEM/HTTP scope NOT IMPLEMENTED этим пакетом.
+ROOT CP unit0.142/0.047s/RC0.132s/vet/build PASS, canonical Proto gen/check/
+lint/build PASS. ROOT disposablePG56.268s exit0,21proposal331ms/full reads0;
+worker frozen race CP1.806/1.152s/RC1.382s отдельно PASS.
+CP build ELF4e0d119c/RCa405c256; actual serving/native scope/plan21/full121/
+business EOF/ONE Review/Manager/QA65/merge NOT RUN/OPEN.
+
 ## Новое scoped evidence 11.10.2026 22:46 UTC
 
 69545cb5 SOURCE/HOT/remote; SYSTEM actual CP ELF7c060119 и mounted header/

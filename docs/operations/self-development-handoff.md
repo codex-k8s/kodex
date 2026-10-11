@@ -10,6 +10,38 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 22:52 UTC — safe PROJECT scope source PASS
+
+SOURCE/HOT/remote772a4778 до нового каталога. Supplemental detail4 уже
+доставлен: mounted RunPage42035ce8/AppShell56f880c7 MATCH, h1/breadcrumb
+«Команда помощнику проекта», screenshot SHA256996ed6f5, Console0,
+relevant Network200/overflow=false. Все22 Deployment доступны. Fresh GH
+772a readback: mergeable clean, checks0/statuses0/combined pending; это не
+CI или merge readiness PASS. PRbody exact readback PASS.
+
+Frozen PROJECT scope12 интегрирован: exact published GitHub package и
+owner RR public configuration дают только owner/repository/kind/digest.
+Proto field9, explicit CP caster и strict RC whitelist согласованы;
+generic protobuf validator по-прежнему запрещает произвольные maps.
+Unknown keys/kind/digest/Proto fields и cursor drift закрыто отклоняются.
+Authority/grants/locks/5s budget/runner ABI неизменны, SYSTEM и HTTP scope
+не материализованы. Source post12 MATCH; canonical gen/check/lint/build
+Proto PASS (rate-limit remote plugin обработан exact local plugins).
+ROOT CP unit0.142s/0.047s, RC0.132s, vet/build обоих PASS. Disposable
+PostgreSQL56.268s exit0: scope drift/unknown configuration guards,
+21operations331ms/full connection projection0 и existing lifecycle PASS.
+Worker отдельно race CP1.806/1.152s и RC1.382s PASS на frozen12.
+
+Новые binaries: CP4e0d119c4afd147108e96e277ce900b52094436a5789dabfecbc50ca1db561cc,
+RCa405c25693cf9b095723c8995fbd28e4c9757ac8f793eb04f8c47f4868f8f83a.
+Actual serving нового scope пока NOT RUN. После fresh idle — публикация,
+HOT ff-only, exact serving readback CP/RC и неизменный admin prompt12099B/
+29bae477 в том же conversation с новым stable key. Owner basis6x200:
+connection728/CONNECTED/MATCH/100enabled, Cversion5/всеturns COMPLETED,
+plan отсутствует; list100 не EOF и не доказательство отсутствия других чатов.
+Plan21→freshVALID→freshAPPLIED→full121, business original Retry/EOF/ONE
+Review/Manager/QA65/main delivery остаются OPEN. ROOT business code0/USER0.
+
 ## Checkpoint 11.10.2026 22:46 UTC — SYSTEM serving PASS, detail title source PASS
 
 SOURCE/HOT/remote1807 clean69545cb5 до supplemental FE4. SYSTEM minimal

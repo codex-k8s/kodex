@@ -7,6 +7,8 @@ type SystemAssistantIntegrationGrantCandidate struct {
 	CurrentGrantVersion                            int64
 	CurrentApprovalScopePaths                      []string
 	CurrentGrantEnabled                            bool
+	ResourceScope                                  map[string]string
+	ResourceScopeDigest                            string
 }
 
 type SystemAssistantIntegrationGrantCandidates struct {

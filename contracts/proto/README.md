@@ -431,6 +431,34 @@ domain service напрямую. Полный профиль задают `GO-DO
 
 ## Ограниченный каталог для подтверждаемой настройки
 
+### Public scope собственного PROJECT подключения
+
+`PROJECT_INTEGRATION_GRANTS` сохраняет прежний exact lease/source helper/project/profile
+и owner eligibility. Для GitHub каждая typed candidate содержит обязательный
+`resource_scope`: только `GITHUB_REPOSITORY`, ровно public `owner`/`repository`
+и SHA256 canonical JSON этих двух values. Producer получает их через
+`ResourceScopeValues` проверенного exact published package и свежую public
+configuration того же owner transaction; connection version и definition
+version/digest остаются в родительском entry. Cursor дополнительно связывает
+scope digest. Credential/headers/full configuration и full UI grants не выдаются.
+
+| Сценарий | Граница |
+| --- | --- |
+| Действующий own PROJECT helper | Тот же RR owner snapshot, exact connection/pins и whitelist scope |
+| Foreign/revoked/missing/expired lease | Прежний закрытый отказ; public scope не является grant |
+| Unknown GitHub shape/kind/fields или digest mismatch | Producer/consumer закрыто отклоняют весь ответ, без пустого fallback |
+| Повтор/page/rejoin | Fresh eligibility; cursor binding включает текущий scope commitment |
+| Propose/Apply | Прежние confirmation, authority, package/snapshot/OCC; чтение не выдаёт права |
+
+Существующий `IntegrationResourceScope` передаётся дополнительным полем shared
+candidate. Его SYSTEM producer этим изменением не материализован: optional
+field не доказывает SYSTEM поддержку. CP shared caster и native PROJECT
+callback передают его явно. External HTTP candidate DTO использует отдельный
+whitelist в gateway, не сериализует candidate целиком и это поле не выдаёт;
+OpenAPI/HTTP resource scope этим пакетом не расширяется. Новый RPC/tool name,
+grant, image inventory или runner rebuild не требуются; CP/RC generated
+Proto и consumer доставляются согласованно перед native proof.
+
 `RuntimeWorkService.SearchAssistantResources` обслуживает четыре взаимоисключающих
 режима: обычный поиск, каталог определений интеграций и типизированный
 `assistant_configuration_catalog` и чтение `assistant_task_session_read`.

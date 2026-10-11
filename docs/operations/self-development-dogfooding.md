@@ -10,6 +10,21 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 22:52 UTC — detail live PASS, typed scope source PASS
+
+- [x] 772a4778 actual detail title/breadcrumb/mount/screenshot/Console0/
+      Network200/overflow=false;22Deployment Ready, PRbody readback PASS.
+- [x] PROJECT public scope12 post MATCH; ROOT CP/RC unit/vet/build,
+      canonical Proto gen/check/lint/build и disposablePG56.268s PASS.
+      Scope drift/unknown fields failclosed;21operations331ms/full reads0.
+- [ ] Доставить CP/RC scope и доказать exact serving ELF;SYSTEM/HTTP scope
+      не реализован этим пакетом. Authority/grants/runner ABI не расширены.
+- [ ] Тот же admin prompt/new stable key → native21/VALID/APPLIED/full121,
+      исходный business Retry/large EOF/ONE Review/Manager/QA65/main delivery.
+
+GH checks0/combined pending не CI PASS. ROOT business code0/USER0,
+business PR1808 неизменён. Context7 Vue/PostgreSQL/Proto проверены.
+
 ## Checkpoint 11.10.2026 22:46 UTC — SYSTEM доставлен, detail4 проверен в source
 
 - [x] 69545cb5 SOURCE/HOT/remote; SYSTEM CP process ELF7c060119 и mounted

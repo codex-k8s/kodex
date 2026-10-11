@@ -3267,6 +3267,8 @@ message SystemAssistantIntegrationGrantCandidate {
   IntegrationApprovalPolicy current_approval_policy = 6;
   repeated string current_approval_scope_paths = 7;
   bool current_grant_enabled = 8;
+  // Только safe public scope PROJECT candidate; не grant или credentials.
+  IntegrationResourceScope resource_scope = 9;
 }
 message GetSystemAssistantIntegrationGrantCandidatesResponse {
   RuntimeResourceScopeKind scope_kind = 1;

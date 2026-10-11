@@ -121,6 +121,34 @@ func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 	if candidates.ProjectRef != project.Ref || candidates.ProfileRef != profile.Ref || candidates.AssistantRef != profile.AgentRef || candidates.ScopeKind != "ORGANIZATION" {
 		t.Fatal("candidate owner tuple mismatch")
 	}
+	for _, item := range candidates.Items {
+		if item.ResourceScope["owner"] != "fixture" || item.ResourceScope["repository"] != "repository" || len(item.ResourceScope) != 2 || item.ResourceScopeDigest == "" {
+			t.Fatal("own candidate omitted exact approved repository scope")
+		}
+	}
+	t.Run("public scope commitment invalidates candidate cursor", func(t *testing.T) {
+		page, err := service.GetProjectAssistantIntegrationGrantCandidates(ctx, owner, project.Ref, connection.Ref, "", query.Page{Size: 1})
+		if err != nil || page.NextPageToken == "" {
+			t.Fatal("missing bounded candidate cursor")
+		}
+		// Только disposable corruption fixture: даже drift без версии не позволяет
+		// продолжить старый cursor или выдать произвольный public configuration.
+		if _, err = pool.Exec(ctx, `UPDATE control_plane.integration_connections SET public_configuration='{"owner":"changed","repository":"repository"}'::jsonb WHERE ref=$1`, connection.Ref); err != nil {
+			t.Fatal("prepare scope drift fixture")
+		}
+		if _, err = service.GetProjectAssistantIntegrationGrantCandidates(ctx, owner, project.Ref, connection.Ref, "", query.Page{Size: 1, Token: page.NextPageToken}); !errors.Is(err, errs.ErrInvalid) {
+			t.Fatal("candidate cursor accepted changed public scope")
+		}
+		if _, err = pool.Exec(ctx, `UPDATE control_plane.integration_connections SET public_configuration='{"owner":"fixture","repository":"repository","token":"PRIVATE_SENTINEL"}'::jsonb WHERE ref=$1`, connection.Ref); err != nil {
+			t.Fatal("prepare malformed scope fixture")
+		}
+		if value, err := service.GetProjectAssistantIntegrationGrantCandidates(ctx, owner, project.Ref, connection.Ref, "", query.Page{Size: 1}); !errors.Is(err, errs.ErrUnavailable) || len(value.Items) != 0 {
+			t.Fatal("malformed public scope did not fail closed")
+		}
+		if _, err = pool.Exec(ctx, `UPDATE control_plane.integration_connections SET public_configuration='{"owner":"fixture","repository":"repository"}'::jsonb WHERE ref=$1`, connection.Ref); err != nil {
+			t.Fatal("restore disposable public scope")
+		}
+	})
 	conversation := execute(command.CreateAssistantConversation, owner, "grant-conversation", nil, command.AssistantConversationInput{AssistantScope: "PROJECT", ProjectRef: project.Ref}).Conversation
 	if !contains(conversation.Context.AllowedOperations, changeProjectAssistantIntegrationGrant) {
 		t.Fatal("context omitted own grant")
@@ -145,6 +173,9 @@ func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 	for _, item := range catalog.ProjectIntegrationGrants {
 		if item.ConnectionRef != connection.Ref {
 			t.Fatal("foreign connection leaked in own catalog")
+		}
+		if item.Candidate.ResourceScope["owner"] != "fixture" || item.Candidate.ResourceScope["repository"] != "repository" || len(item.Candidate.ResourceScope) != 2 || item.Candidate.ResourceScopeDigest == "" {
+			t.Fatal("native catalog omitted safe public scope")
 		}
 	}
 	t.Run("aggregate ignores unresolved exact package but preserves current corruption failure", func(t *testing.T) {
