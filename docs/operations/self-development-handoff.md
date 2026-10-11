@@ -10,6 +10,38 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 12:43 UTC — новый workspace обычного Manager
+
+Source08042e691cf5156ecd1af7175cff5ea20d1fcd89 опубликован в Draft1807,
+remote/body exact readback PASS. Committed canonical planner unit110 PASS
+1.017s; runtime/HOT91a02d6d не менялся (delta только tools/docs).
+
+Новый обычный Manager run_EnzYR56qZANWcX2vUrIg-42Y, Pod
+runtime-turn-66b24bb27fc89685/UID55d5fef2-d424-4cf2-a4db-6fc318a6cd1a:
+role+provider imagebcaf1d4f, runner file ELF2f1d0958 exact; current TURN ACK
+80359B Instructions/SHA3af53723 равен AGENTS-файлу, origin/role/session/turn
+pins и Pod UID rejoin равны. Guide SHA14075b8e/5739B равен source guide;
+spec cwd обоих контейнеров /workspace/work, observer providerUID10002.
+Это actual byte delivery/mount proof, не native serving-process/wire/model read.
+
+INPUT-only receipt SHAad0b8afe CAPTURED12:41:52.354Z:7/7 originals равны
+canonical manifest digest/size;7/7 независимых copies равны по байтам,
+отдельные inode,0640/ownerUID10002 и writable mount. Originals0440/UID10001,
+input/context/knowledge отдельные readonly mounts. Потоковый checksum прочёл
+106114136B в ограниченных buffers, содержимое не выводилось. Первоначальный
+full observer NOT_CAPTURED/BOUNDED_FILE_REQUIRED сохранён: projected runtime
+config не использован в отдельном INPUT probe, symlink guard не ослаблен.
+Private parser bare/prefixed digest mismatch исправлен;14hermetic PASS.
+Native wire/model semantic full-source read остаются NOT_CAPTURED/NOT_PROVEN.
+
+Chrome35 own screenshot просмотрен: overflow=false, graph pannable/clipped,
+не full-fit PASS; fresh Console0/relevant API200. CP/RC last5m log channels
+пустые (0bytes), отсутствие вывода не подтверждает business success.
+Root и Manager RUNNING12:42, artifacts0; catch-up170 complete=true означает
+EOF текущих events, а не terminal Workflow. Дальше сопровождать ту же попытку,
+без USER corrections и host business implementation. Architect/Developer/
+ONE Review/Manager-owner acceptance и остальные QA остаются открытыми.
+
 ## Checkpoint 11.10.2026 12:34 UTC — два образа и три окружения доставлены
 
 Общий runtime source/HOT91a02d6d, runner069a5081 остаются прежними.

@@ -10,6 +10,24 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 12:43 UTC — actual файловая схема обычного агента
+
+- [x] Committed08042e69 canonical planner110unit PASS1.017s; Draft1807
+      exact remote/body readback PASS. Runtime/HOT91a02d6d не менялся.
+- [x] Новый обычный Manager/Pod UID55d5fef2: imagebcaf1d4f и runner file ELF
+      2f1d0958 exact, current80359B Instructions ACK/AGENTS equality,
+      guide14075b8e/5739B source equality, cwd/work и UID/mount rejoin.
+- [x] INPUT-only SHAad0b8afe actual receipt12:41:52.354Z:7/7 originals
+      digest/size=manifest,7/7 independent writable copies byte-equal,
+      input/context/knowledge readonly. Потоковый budget106114136B;
+      source contents не выводились, write-probes не запускались.
+- [ ] Native direct wire/current serving executable и model semantic
+      source-read НЕ доказаны этим receipt: NOT_CAPTURED/NOT_PROVEN.
+      Первоначальный full observer fail сохранён, отдельный INPUT probe
+      не использует projected runtime config и не ослабляет symlink guard.
+- [ ] Root/Manager RUNNING12:42, artifacts0; downstream Architect/Developer/
+      ONE Review/Manager-owner/business acceptance и QA65 остаются открытыми.
+
 ## Checkpoint 11.10.2026 12:34 UTC — общая файловая схема доставлена
 
 - [x] Два PROJECT образа built/admitted/promoted штатно: staffbcaf1d4f,
