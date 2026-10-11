@@ -10,6 +10,38 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 11:03 UTC — файловый порядок подтверждён в обычном агенте
+
+- [x] Общий код использует `/workspace/work` как cwd для сотрудников и
+      помощников, создаёт `WORKSPACE.md` и независимые редактируемые INPUT
+      копии. Оригиналы `/workspace/input`, `/workspace/context` и
+      `/workspace/knowledge` защищены read-only mount, не только инструкцией.
+      SESSION/knowledge не копируются в редактируемые входы. FILES содержит
+      точные оригинальные пути и `working_copy_path`; каталог не выдаёт grants.
+- [x] Fresh read-only proof обычного Manager, Pod UID660beadc: оба runtime
+      container имеют cwd `/workspace/work` и одинаковые read-only mounts;
+      provider uid10002 реально может писать в work, но не в input/context/
+      knowledge. INPUT copies/outbox присутствуют. Guide SHAdd753bb6,
+      actual AGENTS.md равен runtime instructions, local-first присутствует.
+      Нативные файлы при наблюдении не изменялись.
+- [x] На committed integration3968cabb, неизменный code source0a116993:
+      Go1.26.6 full callback package PASS7.349s, full platform package
+      PASS1.219s; runner `TestWorkingDirectory*` PASS0.028s. Отдельный
+      two-UID container fixture в этом запуске SKIP; PostgreSQL component,
+      release и полный QA этими командами не проверялись.
+- [x] Chrome35 fresh reload: Console0, session/bootstrap/graph/events200;
+      отдельный screenshot просмотрен, overflow=false. Граф частично вне
+      viewport из-за текущего pan/zoom, полный fit не объявляется PASS.
+      Прежние Playwright startup ошибки неизменны и не скрыты.
+- [ ] Текущий root run_w_im32za9V7Kketf5TNZTk5y RUNNING, INTAKE Manager
+      ещё RUNNING, artifacts0; Architect/Developer/ONE Reviewer/Final Manager
+      остаются PLANNED. Полный semantic результат и business приёмка не получены.
+
+Запрос владельца о едином workspace для всех агентов реализован общим runtime,
+а не настройкой отдельной роли. HOT0a116993 заморожен на время текущего native;
+этот checkpoint меняет только журнал. USER corrections0 и host business
+implementation0, история и immutable snapshots не переписываются.
+
 ## Checkpoint 11.10.2026 10:46 UTC — workspace local-first доставлен
 
 - [x] Source0a116993 запушен в Draft1807, exact remote/body readback PASS,

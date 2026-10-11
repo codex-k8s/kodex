@@ -10,6 +10,26 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 11:03 UTC — единый workspace всех ролей проверен
+
+HOT0a116993/source неизменны. Fresh обычный Manager UID660beadc: role/provider
+cwd `/workspace/work`, writable work, read-only input/context/knowledge,
+редактируемые INPUT copies и `WORKSPACE.md` SHAdd753bb6; provider uid10002
+проверен через read-only наблюдение. Actual AGENTS.md/runtime instructions
+равны, local-first присутствует. Это общая materialization всех execution,
+не индивидуальный override и не новое право публикации/сети/Git.
+
+На integration3968cabb: Go1.26.6 callback package PASS7.349s, platform package
+PASS1.219s, runner WorkingDirectory tests PASS0.028s; отдельный two-UID fixture
+SKIP, PostgreSQL component/full QA этими быстрыми unit не доказаны.
+Chrome35 Console0/API200, собственный screenshot просмотрен/overflow=false;
+прежние Playwright startup ошибки сохранены. Native root RUNNING, Manager
+RUNNING/artifacts0; новые результаты следующих ролей ещё не получены.
+
+Продолжать сопровождение того же root без restart/USER corrections/host
+business implementation. ONE Review total и финальный owner gate сохраняются.
+Файловый запрос выполнен; общий goal/QA65/bootstrap merge остаются открытыми.
+
 ## Checkpoint 11.10.2026 10:46 UTC — source0a116993 live, новый native
 
 Source0a116993 опубликован в Draft1807/body/readback PASS, HOT exact FF clean
