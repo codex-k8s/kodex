@@ -1117,3 +1117,15 @@ proof3eba4164. Публикации native HTTP200, verifier сам никаки
 исполняет. Fresh-auth403 и отсутствие первого interactive ACK сохранены;
 возобновление после обычного входа и readback использовало прежние ключи.
 Новый actual sandbox и основной workflow ещё NOT RUN; old root FAILED.
+
+## Checkpoint 11.10.2026 05:03 UTC — реальный workspace на новом основном запуске
+
+Native POST201 root run_otNkDk7sv9Qd_bK4xEB4QAxT/Workflow40. Исходная задача
+и четыре поля не переписаны; прежний FAILED сохранён. Owner graph200 seq64,
+RUNNING. Actual provider UID10002/GID10002/supplemental29000 читает три editable INPUT-копии,
+Codex CWD /workspace/work; original packet0440/owner10001, copy0640/owner10002,
+SHA совпадают. /workspace/input/context/knowledge фактически RO; runner binary
+9bacf30b совпадает с source6c30. Это read-only проверка прав без host edits в
+рабочих файлах агента. Actual agent sandbox write и business success ещё OPEN.
+Chrome35 screenshot просмотрен, Console0, graph/events/bootstrap/session/ticket
+200; Developer/ONE Review/Manager и owner gate не объявлены выполненными.

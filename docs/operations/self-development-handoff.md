@@ -10,6 +10,36 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 05:03 UTC — actual workspace и новый Workflow работают
+
+Новый штатный root `run_otNkDk7sv9Qd_bK4xEB4QAxT`, session
+`ses_vHEfVF1ufHd_rtSu4j-JAUlf`, native HTTP201, Workflow40/пять этапов/ONE
+Review. Исходные Task/title/four input fields сохранены; attachment FINALIZED/v2
+с теми же тремя файлами. Это новый запуск после terminal прежнего, не Retry,
+не corrective USER turn и не подмена бизнес-реализации host-кодом.
+
+05:03 owner graph200: root RUNNING/seq64; Coordinator читает входные материалы.
+Бизнес-результат, Developer PR, ONE Review и финальный owner gate ещё OPEN.
+Код runner/HOT остаётся6c30d655, журнал fc7006fb запушен в тот же Draft1807.
+
+Actual Pod `runtime-turn-478bfbe22b83f476`, UID
+`4eb1b724-e1d3-472b-81c7-0ecbaccf8ec8`, три контейнера Running/Ready.
+Provider UID10002/GID10002/supplemental29000; native Codex cwd
+`/workspace/work`. Три working copies перечисляются в work/input, editable
+packet mode0640/owner10002, исходный packet0440/owner10001. Проверка Unix
+write eligibility PASS: копия writable, оригинал not writable. Оба SHA256
+совпадают с immutable input `a382233b...`; source/input/knowledge/context
+фактически смонтированы `ro,relatime`. Protected runner binary совпадает с
+buildSHA9bacf30b. ROOT не создавал/редактировал файлов в actual agent workspace.
+Эта проверка подтверждает доставку/layout/CWD/permissions; actual sandbox write
+самим агентом и успешный business outcome пока не заявляются.
+
+Chrome35 новый run: screenshot просмотрен, Console0 после navigation,
+bootstrap/session/graph/events/ticket200; UI получает sequence без ручного
+перезапуска, показывает RUNNING и отмену. Actual WebSocket frames отдельно не
+подтверждены. Следующий шаг — сопровождать этот же run, исправлять платформенный
+дефект при доказанном отказе, не добавлять бизнес-подсказки от USER.
+
 ## Checkpoint 11.10.2026 04:40 UTC — workspace доставлен, обновляются окружения
 
 Source `6c30d655815f0b12bf0385063e517fc0dc5cef47` запушен в Draft PR1807;
