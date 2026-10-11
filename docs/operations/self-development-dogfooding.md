@@ -10,6 +10,24 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 10:02 UTC — workspace обычной роли подтверждён
+
+- [x] Actual Manager child run_88EWIUzOnPsCIv1_FwYBqAhw: owner sessionHash
+      2feb3c657efc0eb7 соответствует Pod UIDe9f791ed/3Ready/restarts0.
+- [x] Provider uid10002 имеет writable /workspace/work; input/context/knowledge
+      readonly. Общий WORKSPACE.md SHAdd753bb6 присутствует у второй роли.
+      ROOT выполнял только чтение, не изменял native рабочие файлы.
+- [x] Chrome35 reload, session/bootstrap/graph/events200, Console0 в новом окне,
+      overflow=false; отдельный screenshot просмотрен. Обратная дуга не скрыта
+      узлами. Старые Playwright startup errors не превращаются в PASS.
+- [ ] Native semantic success, Developer PR, ONE review, Manager/owner и QA65.
+
+Source6994d3fd/HOT6f66b14e frozen; root run_LlIz48K85YNyVwYQFpb79dgK
+RUNNING, Coordinator SUCCEEDED, Manager RUNNING, cursor271. Новые Context7,
+repository READ и чтения файлов успешны. USER corrections0, host business
+implementation0. Это доказательство общей writable/readonly файловой модели
+и прогресса текущего процесса, не законченного workflow или полного acceptance.
+
 ## Checkpoint 11.10.2026 09:52 UTC — полный source INPUT и native root
 
 ROOT/HOT6f66b14e clean/remote1807/body PASS, mainab4992e0 unchanged.

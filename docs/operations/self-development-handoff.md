@@ -10,6 +10,33 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 10:02 UTC — общий workspace проверен у следующей роли
+
+Исполняемый source6994d3fd и HOT6f66b14e не менялись. Native root
+run_LlIz48K85YNyVwYQFpb79dgK RUNNING: Coordinator SUCCEEDED, Manager child
+run_88EWIUzOnPsCIv1_FwYBqAhw RUNNING. Owner graph/events200, cursor271;
+новые Context7, repository READ и чтения файлов успешны. Это progress, не
+semantic PASS или завершённый business результат.
+
+Повторная read-only проверка actual Manager Pod runtime-turn-451c7b0f1f427274,
+UIDe9f791ed/3Ready/restarts0, sessionHash2feb3c657efc0eb7 совпала с owner
+run. Provider uid10002: /workspace/work writable, /workspace/input,
+/workspace/context и /workspace/knowledge readonly. WORKSPACE.md имеет тот же
+exact SHAdd753bb63b845407211181ea745a2806843e405c1be5cc916a4a75ba4fe592bc.
+Таким образом, файловая модель действует не только для Coordinator: следующая
+обычная роль получает независимый рабочий каталог и понятную карту источников.
+ROOT не писал в workspace, не исполнял business scripts и не посылал USER
+corrections. Ранние отдельные tool failures не объявляются причиной отказа:
+последующие чтения и команды успешны, root остаётся RUNNING.
+
+Chrome35 обновлён, session/bootstrap/graph/events200, Console0 в текущем окне,
+overflow=false. Отдельный Playwright screenshot визуально проверен: состояния
+узлов читаемы, обратная связь вынесена дугой над ними; сохранённый zoom требует
+штатного «Весь граф». Его прежние startup401/Console1/aborted requests не
+объявляются чистым baseline. Следующий шаг — сопровождать самостоятельный
+Architect/Developer/ONE review/Manager/owner. Полный QA65/готовность bootstrap
+merge и business acceptance всё ещё OPEN; HOT сохранять frozen до terminal.
+
 ## Checkpoint 11.10.2026 09:52 UTC — новый native запуск с полными исходниками
 
 ROOT/HOT6f66b14e clean, Draft1807 exact remote/body PASS. Исполняемые
