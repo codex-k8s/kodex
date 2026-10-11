@@ -26,7 +26,13 @@ import (
 func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
-	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
+	poolConfig, err := pgxpool.ParseConfig(isolatedAssistantComponentDSN(t))
+	if err != nil {
+		t.Fatal("parse isolated connection PostgreSQL")
+	}
+	projectionCounter := &projectGrantProjectionCounter{}
+	poolConfig.ConnConfig.Tracer = projectionCounter
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		t.Fatal("open isolated connection PostgreSQL")
 	}
@@ -364,18 +370,20 @@ func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	readKeys := strings.Fields("github.repository.metadata.read github.repository.content.list github.repository.content.read github.branch.list github.branch.read github.commit.list github.commit.read github.issue.list github.issue.read github.pull_request.list github.pull_request.read github.pull_request.file.list github.pull_request.review.list github.pull_request.review.read github.check_run.list github.check_run.read github.actions.run.list github.actions.run.read github.actions.job.list github.actions.job.read")
+	readKeys := strings.Fields("github.repository.metadata.read github.repository.content.list github.repository.content.read github.branch.list github.branch.read github.commit.list github.commit.read github.issue.list github.issue.read github.pull_request.list github.pull_request.read github.pull_request.file.list github.pull_request.review.list github.pull_request.review.read github.check_run.list github.check_run.read github.actions.run.list github.actions.run.read github.actions.job.list github.actions.job.read github.actions.workflow.list")
 	operations := []entity.AssistantPlanOperation{}
 	for _, item := range candidates.Items {
 		if contains(readKeys, item.Capability.Key) && item.Capability.Risk == "READ" && item.Capability.ApprovalPolicy == "NONE" {
 			operations = append(operations, entity.AssistantPlanOperation{Key: fmt.Sprintf("read%d", len(operations)), Type: changeProjectAssistantIntegrationGrant, Title: "Own repository read", Summary: "Confirm project helper repository read", Parameters: map[string]any{"projectAssistantRef": profile.AgentRef, "connectionRef": connection.Ref, "capabilityKey": item.Capability.Key, "enabled": true, "approvalPolicy": "NONE"}})
 		}
 	}
-	if len(operations) != 20 {
-		t.Fatalf("expected current GitHub20 READ capabilities, got %d", len(operations))
+	if len(operations) != 21 {
+		t.Fatalf("expected current GitHub21 READ capabilities, got %d", len(operations))
 	}
 	propose := func(key string, ops []entity.AssistantPlanOperation) (command.Result, error) {
-		return service.Execute(ctx, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "project-self-grant-" + key}, Payload: command.ProposeAssistantPlanInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64), Summary: "Confirm20 own repository reads", Operations: ops}})
+		request, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		return service.Execute(request, command.Command{Kind: command.ProposeAssistantPlan, Principal: worker, Mutation: value.Mutation{IdempotencyKey: "project-self-grant-" + key}, Payload: command.ProposeAssistantPlanInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: lease["generation"].(int64), Summary: "Confirm21 own repository reads", Operations: ops}})
 	}
 	bad := operations[0]
 	bad.Parameters = cloneAssistantFields(bad.Parameters)
@@ -388,6 +396,10 @@ func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 	bad.Parameters["connectionRef"] = foreignConnection.Ref
 	if _, err = propose("foreign-origin", []entity.AssistantPlanOperation{bad}); !errors.Is(err, errs.ErrNotFound) {
 		t.Fatalf("foreign origin proposal: %v", err)
+	}
+	bad.Parameters["connectionRef"] = "int_missing_fixture"
+	if _, err = propose("missing-origin", []entity.AssistantPlanOperation{bad}); !errors.Is(err, errs.ErrNotFound) {
+		t.Fatal("missing connection became an owner grant proposal")
 	}
 	bad = operations[0]
 	bad.Type = "CHANGE_SYSTEM_ASSISTANT_INTEGRATION_GRANT"
@@ -408,14 +420,17 @@ func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 	if proposal, err := propose("package-none-write", []entity.AssistantPlanOperation{allowedWrite}); err != nil || proposal.Plan == nil {
 		t.Fatalf("package-allowed WRITE/NONE proposal: %v", err)
 	}
-	prepared, err := propose("prepare20", operations)
+	projectionCounter.fullReads.Store(0)
+	started := time.Now()
+	prepared, err := propose("prepare21", operations)
 	if err != nil {
 		t.Fatal(err)
 	}
 	plan := prepared.Plan
-	if plan == nil || len(plan.Operations) != 20 {
+	if plan == nil || len(plan.Operations) != 21 || projectionCounter.fullReads.Load() != 0 {
 		t.Fatal("missing typed plan")
 	}
+	t.Logf("operations=21 full_connection_projection_reads=%d elapsed_ms=%d", projectionCounter.fullReads.Load(), time.Since(started).Milliseconds())
 	for _, op := range plan.Operations {
 		if op.Parameters["projectAssistantRef"] != profile.AgentRef || op.Parameters["assistantProfileRef"] != profile.Ref || op.Parameters["projectRef"] != project.Ref || op.Parameters["assistantScope"] != "PROJECT" || op.Parameters["scopeKind"] != "ORGANIZATION" || op.Target.Ref != connection.Ref {
 			t.Fatal("server owner pins mismatch")
@@ -429,12 +444,12 @@ func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 	}
 	validated := execute(command.ValidateAssistantPlan, owner, "validate", &plan.Version, command.AssistantPlanInput{PlanRef: plan.Ref, Revision: plan.Revision}).Plan
 	if validated == nil || validated.State != "VALID" {
-		t.Fatalf("validate20: %+v", validated)
+		t.Fatalf("validate21: %+v", validated)
 	}
 	immutable, _ := json.Marshal(validated.Operations)
 	applied := execute(command.ApplyAssistantPlan, owner, "apply", &validated.Version, command.AssistantPlanInput{PlanRef: validated.Ref, Revision: validated.Revision})
-	if applied.Plan == nil || applied.Plan.State != "APPLIED" || applied.PlanReceipt == nil || len(applied.PlanReceipt.Operations) != 20 || !assistantJSONEqual(json.RawMessage(immutable), applied.Plan.Operations) {
-		t.Fatal("atomic20 grants changed snapshot or self-conflicted")
+	if applied.Plan == nil || applied.Plan.State != "APPLIED" || applied.PlanReceipt == nil || len(applied.PlanReceipt.Operations) != 21 || !assistantJSONEqual(json.RawMessage(immutable), applied.Plan.Operations) {
+		t.Fatal("atomic21 grants changed snapshot or self-conflicted")
 	}
 	fresh, err := service.GetProjectAssistantIntegrationGrantCandidates(ctx, owner, project.Ref, connection.Ref, "", query.Page{Size: 100})
 	if err != nil {
@@ -449,8 +464,8 @@ func TestProjectAssistantIntegrationGrantsComponent(t *testing.T) {
 			}
 		}
 	}
-	if enabled != 20 || fresh.ConnectionVersion != candidates.ConnectionVersion+20 {
-		t.Fatalf("20grant readback: count=%d version=%d", enabled, fresh.ConnectionVersion)
+	if enabled != 21 || fresh.ConnectionVersion != candidates.ConnectionVersion+21 {
+		t.Fatalf("21grant readback: count=%d version=%d", enabled, fresh.ConnectionVersion)
 	}
 	replay := execute(command.ApplyAssistantPlan, owner, "apply", &validated.Version, command.AssistantPlanInput{PlanRef: validated.Ref, Revision: validated.Revision})
 	if replay.PlanReceipt == nil || replay.PlanReceipt.Ref != applied.PlanReceipt.Ref {

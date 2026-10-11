@@ -134,6 +134,15 @@ rollback и закрытие получают контекст вызывающ�
 rollback после отмены request выполняется через отдельный bounded shutdown
 контекст, переданный composition root, без скрытого `context.Background()`.
 
+Подготовка типизированного плана не загружает полную UI-проекцию подключения
+со всеми дочерними grants, если потребителю нужны только ref, version и
+definition pins. Минимальный приватный header читается внутри прежней
+авторитетной транзакции с exact owner/tenant boundary; существующие admission,
+grant snapshot и повторная authorization перед исполнением сохраняются.
+Оптимизация не добавляет кеш полномочий, не меняет блокировки или request
+budget. Отсутствие лишнего fan-out проверяется счётчиком query identity в
+disposable fixture, без записи SQL, аргументов или секретных результатов.
+
 ## Роли подключения и достижимость
 
 - Runtime, migrator, bootstrap/reconciler и read-only diagnostics используют

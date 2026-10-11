@@ -10,6 +10,25 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 22:28 UTC — source header и оставшиеся UI consumers
+
+- [x] PROJECT owner header вместо full connection projection: exact5 hashes,
+      ROOT unit0.053s/vet/build PASS; disposable PG55.815s/exit0, proposal21
+      elapsed295ms/full projection reads0. Authority/locks/snapshot/budget прежние.
+- [x] cb687 live overview/agents: misleading ENV снят, mounts MATCH,
+      screenshot/Console0/API200. Supplemental RunsBoard/AttentionList3
+      интегрирован: ROOT55/55 unit2.06s/lint/format/forced build PASS.
+- [ ] Доставить новый CP и supplemental UI, actual ELF/source/visual readback;
+      SYSTEM аналог пока OPEN, не объявлять весь fan-out исправленным.
+- [ ] Новый native admin turn с неизменным исходным prompt и новым stable key;
+      persisted21→VALID→APPLIED→full121. Старый SUCCEEDED/semanticBLOCKED не
+      имеет RETRY; использовать штатный POST turns, не fabricated plan.
+- [ ] Исходный business Retry/large-source EOF, ONE Review/Manager/owner,
+      applicable QA65/merge gates/bootstrap main delivery и ручная приёмка.
+
+CP build ELF5af10511 подготовлен, serving NOT RUN. ROOT business code0,
+corrective business USER0; PR1808 Draft без merge/approve. Полные pins в handoff.
+
 ## Checkpoint 11.10.2026 22:12 UTC — grants100 PASS, native helper plan BLOCKED
 
 - [x] Source/HOT/remote6c00, actual serving CP ELFf89d77d3 и SQL mount MATCH;

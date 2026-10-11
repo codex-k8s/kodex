@@ -1,6 +1,8 @@
 -- name: project_assistant_integration_grants__owner :one
 SELECT agent.ref, agent.name, agent.version, agent.enabled AND agent.state='READY',
-       project.id::text, project.ref, profile.ref, profile.version
+       project.id::text, project.ref, profile.ref, profile.version,
+       connection.ref,connection.name,connection.version,
+       connection.definition_key,connection.definition_version,connection.definition_digest
 FROM control_plane.project_assistant_profiles profile
 JOIN control_plane.projects project ON project.id=profile.project_id AND project.organization_id=profile.organization_id
 JOIN control_plane.agents agent ON agent.id=profile.agent_id AND agent.organization_id=profile.organization_id

@@ -10,6 +10,21 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 11.10.2026 22:28 UTC
+
+PROJECT header frozen5 на cb687: post hashes MATCH, ROOT targeted unit
+PASS0.053s/vet/build/diff PASS, canonical disposable PG PASS55.815s/exit0.
+21 synthetic READ proposal295ms/full UI projection query reads0, existing
+owner/admission/FOR SHARE/snapshot/OCC/replay/revocation negatives сохранены.
+Это source proof; actual slow SQL UNKNOWN, новый native plan NOT RUN.
+SYSTEM analogue OPEN; новые locks/cache/budget/schema/contracts не вводились.
+
+cb687 live project overview/agents screenshot/mount/Console0/API200 PASS.
+Оставшиеся два title consumer исправлены supplemental3 в SOURCE; ROOT55/55
+unit/3suites2.06s, lint/format/forced production build PASS8.69s. Live
+supplemental NOT RUN, chunk>500kB advisory сохранён. Context7 Vue и PostgreSQL17
+проверены. Native admin21/полный121/business EOF/ONE Review/QA65/merge OPEN.
+
 ## Новое scoped evidence 11.10.2026 22:12 UTC
 
 Source/HOT/remote6c00 и actual CP serving ELFf89d77d3 MATCH; native owner

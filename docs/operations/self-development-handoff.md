@@ -10,6 +10,36 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 22:28 UTC — PROJECT plan fan-out устранён в source
+
+SOURCE/HOT/remote1807 cb687d9e333b548eeb7e5f607b38fad6b3139efb до нового
+overlay. PROJECT frozen5 post hashes MATCH: exact owner SQL возвращает
+минимальный connection header вместо повторной полной UI-проекции grants
+для каждой операции. Прежние owner/admission, FOR SHARE, grant snapshots,
+fresh prepared authorization, транзакции и request5s неизменны.
+ROOT targeted unit PASS0.053s, vet/build/diff-check PASS; canonical disposable
+PostgreSQL PASS55.815s/exit0, proposal21 elapsed295ms/full projection reads0.
+Fixture содержит21 READ, не выдаётся за exact native capability set.
+Сборка CP ELF5af1051115ddd772971ae1b57000ea869fe989aa2213be8bc9758d06fa3eaf5e;
+новая actual serving доставка и native plan21 пока NOT RUN.
+SYSTEM аналог исследуется отдельным исполнителем; весь аналогичный scope
+ещё не закрыт. Общий invariant minimal authority header внесён в GO-DOC-002.
+
+На cb687 live overview/agents screenshot, source mount, Console0 и API200
+проверены: runtime profile не выдаётся за окружение. RunsBoard/AttentionList
+оставались отдельными потребителями старого title; frozen supplemental3
+интегрирован в SOURCE. ROOT55/55 unit/3suites PASS2.06s, lint/format и
+production build с forced typecheck PASS/exit0; Vite8.69s, chunk>500kB warning
+сохранён. Live этих трёх файлов NOT RUN. Context7 Vue/PostgreSQL17 сверены.
+
+Current connection728 CONNECTED/100 employee enabled/PROJECT21 off/SYSTEM0.
+Старый admin run SUCCEEDED с semantic BLOCKED и без RETRY сохраняется.
+После actual fix serving — новый turn ТОГО ЖЕ административного диалога с
+неизменным prompt12099B/SHA29bae477 и НОВЫМ stable intent key, затем native
+plan21→fresh validation→fresh application→full121 semantic match. Не runRetry
+SUCCEEDED и не corrective business USER. Далее исходный business Retry,
+large-source EOF, ONE Review/Manager/owner и QA65. PR1808 не трогать.
+
 ## Checkpoint 11.10.2026 22:12 UTC — employees100 восстановлены, native plan пока BLOCKED
 
 SOURCE/HOT/remote Draft1807 clean6c00ad723611b069c96e43d32dd13f786305b646

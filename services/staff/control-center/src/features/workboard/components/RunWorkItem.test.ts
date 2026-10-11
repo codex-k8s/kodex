@@ -9,6 +9,8 @@ import { i18n } from "@/app/i18n";
 import type { Agent, Run } from "@/shared/api/generated/openapi/types.gen";
 import RunWorkItem from "./RunWorkItem.vue";
 import ProjectAgentList from "./ProjectAgentList.vue";
+import RunsBoard from "./RunsBoard.vue";
+import AttentionList from "./AttentionList.vue";
 
 const source = readFileSync(
   new URL("./RunWorkItem.vue", import.meta.url),
@@ -59,8 +61,37 @@ function fixture(
   };
 }
 
-async function render(run: Run, locale = "ru") {
-  const app = createSSRApp(RunWorkItem, { run, preserveProject: true });
+async function render(
+  run: Run,
+  locale = "ru",
+  surface: "ITEM" | "BOARD" | "ATTENTION" = "ITEM",
+) {
+  const app =
+    surface === "BOARD"
+      ? createSSRApp(RunsBoard, { runs: [run], preserveProject: true })
+      : surface === "ATTENTION"
+        ? createSSRApp(AttentionList, {
+            preserveProject: true,
+            items: [
+              {
+                kind: "INCIDENT",
+                ref: "incident_own",
+                run,
+                incident: {
+                  ref: "incident_own",
+                  runRef: run.ref,
+                  category: "RUNTIME",
+                  severity: "ERROR",
+                  state: "OPEN",
+                  safeSummary: "Повторите проверку",
+                  safeNextStep: "Открыть запуск",
+                  coreAffected: false,
+                  createdAt: run.createdAt,
+                },
+              },
+            ],
+          })
+        : createSSRApp(RunWorkItem, { run, preserveProject: true });
   app.use(
     createI18n({
       legacy: false,
@@ -106,6 +137,61 @@ describe("RunWorkItem", () => {
       },
     };
   }
+  it.each(["BOARD", "ATTENTION"] as const)(
+    "единая PROJECT подпись и доступные ссылки в %s, без изменения аудита",
+    async (surface) => {
+      const value = assistant();
+      const before = JSON.stringify(value);
+      for (const [locale, title] of [
+        ["ru", "Команда помощнику проекта"],
+        ["en", "Command to project assistant"],
+      ] as const) {
+        const html = await render(value, locale, surface);
+        expect(html).toContain(title);
+        expect(html).not.toContain("Команда системному помощнику");
+        expect(html).toContain('href="/projects/project_own/runs/run_child"');
+        if (surface === "BOARD") {
+          expect(html).toContain(`title="${title}"`);
+          expect(html).toContain(
+            `aria-label="${locale === "ru" ? "Открыть" : "Open"}: ${title}"`,
+          );
+        }
+      }
+      expect(JSON.stringify(value)).toBe(before);
+    },
+  );
+  it.each(["BOARD", "ATTENTION"] as const)(
+    "%s сохраняет SYSTEM, редактируемые и недоказанные PROJECT названия",
+    async (surface) => {
+      const value = assistant();
+      const pin = value.assistantPin;
+      if (!pin) throw new Error("Missing assistant fixture pin");
+      for (const candidate of [
+        { ...value, titleSource: "USER_EDITED" as const },
+        { ...value, titleSource: "AGENT_PROPOSED" as const },
+        { ...value, assistantPin: undefined },
+        {
+          ...value,
+          assistantPin: {
+            ...pin,
+            scope: "SYSTEM" as const,
+            profileRef: undefined,
+          },
+        },
+        { ...value, assistantPin: { ...pin, projectRef: "project_other" } },
+        { ...value, assistantPin: { ...pin, assistantRef: "assistant_other" } },
+        { ...value, assistantPin: { ...pin, profileRef: undefined } },
+      ]) {
+        const html = await render(candidate, "ru", surface);
+        expect(html).toContain("Команда системному помощнику");
+        expect(html).not.toContain("Команда помощнику проекта");
+        if (surface === "BOARD")
+          expect(html).toContain(
+            'aria-label="Открыть: Команда системному помощнику"',
+          );
+      }
+    },
+  );
   it.each([
     ["ru", "Команда помощнику проекта"],
     ["en", "Command to project assistant"],
