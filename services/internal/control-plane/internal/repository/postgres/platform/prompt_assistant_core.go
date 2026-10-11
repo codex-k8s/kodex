@@ -17,6 +17,8 @@ import (
 var queryPromptAssistantCore string
 
 // База разрешается только по server-owned профилю того же проекта/организации.
+// SYSTEM принадлежит организации; его project screen context не меняет owner
+// базы. PROJECT и обычный агент сохраняют exact project boundary.
 // Ни agent payload, ни owner template не могут объявить себя помощником.
 // Текущая база закрепляется только в новом snapshot; история не перечитывается.
 func (repository *Repository) hydrateAssistantCoreTx(ctx context.Context, tx pgx.Tx, current scope, snapshot *entity.PromptMaterializationSnapshot) error {

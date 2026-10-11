@@ -201,7 +201,7 @@ func TestWorkingDirectoryGuideExistsWithoutAttachmentsAndUsesQuota(t *testing.T)
 	if guide, err := os.ReadFile(guidePath); err != nil || string(guide) != workspaceGuide {
 		t.Fatal("empty workspace lost navigation guide")
 	}
-	for _, guard := range []string{"/workspace/work/input/", "/workspace/input/", "/workspace/context/", "/workspace/knowledge/", "working_copy_path", "не требуй от пользователя", "текущими capabilities", "сбрасываются"} {
+	for _, guard := range []string{"/workspace/work/input/", "/workspace/input/", "/workspace/context/", "/workspace/knowledge/", "working_copy_path", "не требуй от пользователя", "текущими capabilities", "сбрасываются", "## Карта каталогов", "## Как начать", "при совпадении", "отсутствие файла не разрешает", "во внутреннем state"} {
 		if !strings.Contains(workspaceGuide, guard) {
 			t.Fatalf("workspace guide lost boundary %q", guard)
 		}

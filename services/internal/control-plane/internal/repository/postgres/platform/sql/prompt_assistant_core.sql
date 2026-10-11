@@ -28,5 +28,14 @@ LEFT JOIN control_plane.agent_instruction_bindings active_instruction
  AND active_instruction.organization_id = runtime.organization_id
  AND active_instruction.instruction_id = instruction.id
 WHERE agent.organization_id = @organization_id::uuid AND agent.ref = @agent_ref
-  AND COALESCE(project.ref, '') = @project_ref
+  AND (
+      (agent.system_key = 'system-assistant' AND agent.project_id IS NULL
+       AND (@project_ref = '' OR EXISTS (
+           SELECT 1 FROM control_plane.projects context_project
+           WHERE context_project.organization_id = agent.organization_id
+             AND context_project.ref = @project_ref AND context_project.lifecycle = 'ACTIVE'
+       )))
+      OR (agent.system_key IS DISTINCT FROM 'system-assistant'
+          AND COALESCE(project.ref, '') = @project_ref)
+  )
   AND agent.enabled AND agent.state <> 'ARCHIVED';
