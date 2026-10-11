@@ -10,6 +10,36 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 12:11 UTC — source91 и новый runner
+
+HOT/source `91a02d6dfdfe78ba60ae645403843237acdd882f` clean перед доставкой.
+Focused CoreInheritance disposable PG PASS8.450s/4cases, стандартные
+worker-grant/policy readbacks PASS, оснастка удалена. Предыдущий combined FAIL
+сохраняется как исторический; remaining PROJECT notice дефект закрыт новым
+результатом. Committed unit runner codex/app5.244s/17.143s и CP0.028s/0.275s PASS.
+
+Canonical full runner069a5081/provenance8b6d5213/ELF2f1d0958 опубликован;
+policy7e7b8064 через9freshphases, runtime binding/default CP+RC/stabilization,
+HTTPS graph и exact CRI pull обеих нод PASS. Исторические published artifacts
+не удалены. Debug-serving readback CP3fd0690c/RC5888eec7,18mountedsource hashes,
+PID1/UID/process freshness/readyz/rejoin PASS; exact compile SHA UNKNOWN без
+independent reproducible receipt при buildvcs=false, не release acceptance.
+
+Два PROJECT recipes staff/helper: свежие full histories20/20 и14/14, только
+FROM обновлён; draft201/validation200/publication200. Builds создаются самой
+publication. Доставка их admission/promotion и трёх ENV/семи bindings идёт;
+не повторять POST вслепую и не добавлять SYSTEM ради старого3/4planner.
+После PROMOTED full owner read сохранить38tools/non-image settings и exact
+intended bindings через validation/impact fullEOF/publication/readback.
+
+Chrome35 authenticated/reload/Console0/API200, отдельный screenshot просмотрен,
+overflow=false; clipped pannable graph не называется full-fit UX PASS.
+Playwright cumulative maintenance/startup failures сохранены. Новый actual
+provider/guide proof и semantic business acceptance ещё NOT RUN; root прошлой
+попытки FAILED и неизменён. USER corrections0, host business implementation0.
+Далее actual обычный агент и business1796/ONE Review/Manager/owner, QA65;
+цель не завершена, bootstrap merge ещё не разрешён проверками готовности.
+
 ## Checkpoint 11.10.2026 11:50 UTC — текущие инструкции и compact continuation
 
 Navigation source310905cd закреплён локально: runner WorkingDirectory

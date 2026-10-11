@@ -10,6 +10,41 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 12:11 UTC — общий workspace доставляется
+
+- [x] Source/HOT `91a02d6dfdfe78ba60ae645403843237acdd882f`, clean перед
+      доставкой. Runner codex/app unit PASS5.244s/17.143s, CP prompt и
+      continuation/workspace targeted PASS0.028s/0.275s на exact commit.
+- [x] Focused disposable `TestAssistantCoreInheritanceComponent` PASS8.450s:
+      SYSTEM, SYSTEM+project context и обе PROJECT ветви. Стандартные
+      worker-grant/runner-policy readbacks PASS; собственный контейнер удалён.
+      Это закрывает оставшийся continuation FAIL новым результатом, не
+      переписывает исторические combined FAIL и не доказывает все QA65.
+- [x] Full runner `sha256:069a5081e0504f30c2450a01d18050c24f7069cce3e11e7c700b22fbd4e81688`
+      собран из91a02d6d, provenance SHA8b6d5213/ELF2f1d0958, exact import и
+      publication PASS. Fresh nine-phase policy7e7b8064, runtime binding,
+      default CP/RC и stabilization PASS; все старые published pins сохранены.
+      HTTPS OCI graph и exact CRI pull на обоих узлах PASS, config3b29c8a8.
+- [x] Debug-serving readback PASS30.318s:18 source hashes/mount, Go1.26.6,
+      Air PID1, application ELF/build equality, freshness и readyz/rejoin.
+      CP ELF3fd0690c, RC ELF5888eec7. Первый readback UNKNOWN совпал с
+      controlled rollout. Exact compilation revision UNKNOWN при buildvcs=false;
+      этот debug proof не объявляется immutable release acceptance.
+- [x] Два существующих PROJECT recipes обновлены image-only: fresh полные
+      histories20/20 и14/14, draft201/validation200/publication200;
+      publication сама создала builds. Второй REQUEST_BUILD не выполнялся.
+- [ ] Завершить эти два build/admission/promotion и image-only публикацию
+      трёх PROJECT ENV/семи intended bindings; SYSTEM не включать в этот cohort.
+- [ ] Actual current-instructions/workspace guide receipt в обычном агенте
+      и успешный Architect → Developer → ONE Review → Manager/owner.
+
+Chrome35 reload/Console0/relevant API200 после переключения, screenshot
+просмотрен: document overflow=false, граф остаётся pannable и частично
+за viewport; full-fit UX PASS не заявлен. Отдельный Playwright сохранил
+накопленные startup/maintenance HTTP/Console failures, не назван чистым PASS.
+Новые real AI/STT/device-code в этом checkpoint не запускались. USER
+corrections0, host business implementation0. Business1796/QA65/merge OPEN.
+
 ## Checkpoint 11.10.2026 11:50 UTC — workspace и свежие инструкции
 
 - [x] Exact navigation310905cd: Go1.26.6 runner WorkingDirectory PASS0.024s,
