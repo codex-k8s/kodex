@@ -1129,3 +1129,21 @@ SHA совпадают. /workspace/input/context/knowledge фактически 
 рабочих файлах агента. Actual agent sandbox write и business success ещё OPEN.
 Chrome35 screenshot просмотрен, Console0, graph/events/bootstrap/session/ticket
 200; Developer/ONE Review/Manager и owner gate не объявлены выполненными.
+
+## Checkpoint 11.10.2026 05:16 UTC — native чтение и навигация рабочего каталога
+
+Тот же root RUNNING/seq316. Coordinator делегировал INTAKE; Manager подтвердил
+native EOF всех трёх вложений, actual main SHA и применимые документы актуального
+bootstrap HEAD. Пять успешных CODEX_SHELL подтверждают shell/READ/LIST_FILES в
+WORKSPACE. Actual write и business outcome ещё OPEN, UNKNOWN action fingerprint
+не используется как доказательство записи.
+
+Exact-call read-only диагностика раннего exit127 доказала отсутствие алиаса
+`python` при доступном `python3`, не sandbox/permission failure. Текущий Pod
+UIDda3ca21b-7731-4bea-840c-aabbe6326f01 Running/3 Ready/restarts0; stat только
+метаданных work показал подготовленные директории UID10002/GID29000, без
+manager-plan.md. Actual Pod/workspace не изменялись ROOT, запуск не прерывался.
+Одно TOOL_UNAVAILABLE сохраняется отдельным наблюдением, native READ продолжаются.
+Chrome35 свежие screenshot/Console0/owner HTTP200/Connected/overflow0 относятся
+только к текущему navigation window, не стирают прежний WebSocket transient.
+Developer/ONE Review/Manager/owner всё ещё OPEN; HOT/source6c30 неизменён.

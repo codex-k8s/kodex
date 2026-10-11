@@ -10,6 +10,41 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 05:16 UTC — файловая среда проверяется штатной командой
+
+Основной root `run_otNkDk7sv9Qd_bK4xEB4QAxT` остаётся RUNNING/sequence316.
+Coordinator передал INTAKE отдельному Manager. Native COMMENTARY подтверждает
+чтение всех трёх входных файлов до EOF, проверенный main SHA, отсутствие business
+PR и сохранение ровно одного comprehensive Review. Применимые документы
+прочитаны на актуальном bootstrap HEAD; guessed source path не повторяется.
+Developer, Review, финальный Manager и owner gate ещё OPEN.
+
+Для всех агентов уже доставлен единый layout из source6c30: writable
+`/workspace/work`, editable INPUT copies, отдельно readonly оригиналы,
+контекст и knowledge. Текущий INTAKE Pod `runtime-turn-de1f23951a7f69ba`, UID
+`da3ca21b-7731-4bea-840c-aabbe6326f01`, Running/3 Ready/restarts0.
+Read-only stat верхнего уровня work подтверждает шесть подготовленных
+директорий с UID10002/GID29000; `manager-plan.md` пока отсутствует.
+Пять последующих CODEX_SHELL завершились SUCCEEDED/exit ZERO, в том числе
+LIST_FILES и READ. Это подтверждает рабочий shell и ориентацию в каталогах,
+но UNKNOWN action fingerprint и наличие директорий не выдаются за actual
+write самим агентом или успешный бизнес-результат.
+
+Ранний shell FAIL исследован bounded exact-call read-only проекцией:
+UTILITY_COMMAND_NOT_FOUND/PYTHON/exit127. В образе доступен `python3`, алиас
+`python` отсутствует; признаков sandbox, Git и permission failure не найдено.
+Последующий успешный shell не стирает этот FAIL. Активный запуск не прерывался,
+пакеты в actual Pod не устанавливались; необязательный rebuild отложен.
+Один integration TOOL_UNAVAILABLE сохранён; остальные native READ продолжаются,
+обхода authority и corrective USER сообщений нет.
+
+Chrome35 после reload: Console error/warn0 в текущем navigation window,
+bootstrap/session/graph/events/ticket HTTP200, Connected и live sequence
+наблюдаются; screenshot просмотрен, global horizontal overflow отсутствует.
+Исторический transient WebSocket error предыдущего окна не скрыт; actual
+frames отдельно не проверялись. Новые broad suites и косметика не запускались.
+HOT/source6c30 и runner789aae84 не изменены во время активной работы.
+
 ## Checkpoint 11.10.2026 05:03 UTC — actual workspace и новый Workflow работают
 
 Новый штатный root `run_otNkDk7sv9Qd_bK4xEB4QAxT`, session
