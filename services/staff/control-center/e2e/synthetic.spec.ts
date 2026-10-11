@@ -1967,7 +1967,7 @@ for (const { width, height } of [
         fullPage: true,
       });
       if (width === 390 || width === 2900) {
-        await checkEffectiveCapabilities(page, project.ref);
+        await checkEffectiveCapabilities(page, project.ref, installSnapshot);
         await page.screenshot({
           path: testInfo.outputPath(
             `effective-capabilities-${String(width)}.png`,

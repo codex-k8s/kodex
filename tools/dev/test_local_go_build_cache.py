@@ -177,6 +177,97 @@ class ColdCacheTests(unittest.TestCase):
         self.assertNotIn('PRIVATE_CANARY', output.getvalue())
         self.assertEqual(json.loads(output.getvalue())['removedCount'], 0)
 
+    def test_default72_and_explicit24_age_profiles(self):
+        with patch.object(C.time, 'time_ns', return_value=time.time_ns() - 48 * 3600 * 10**9):
+            self.assertEqual(self.cache.audit()['records'], [])
+            cache = C.Cache(self.root, minimum_age_hours=24)
+            plan = cache.audit()
+            self.assertEqual(plan['ageHours'], 24)
+            self.assertEqual(len(plan['records']), 1)
+        self.assertEqual(self.cache.audit()['ageHours'], 72)
+
+    def test_every_cross_profile_plan_rejected_before_unlink(self):
+        for source, destination in ((24, 72), (72, 24)):
+            plan = C.Cache(self.root, minimum_age_hours=source).audit()
+            with patch.object(C.os, 'unlink') as unlink:
+                with self.assertRaisesRegex(C.Failure, 'PLAN_SCOPE_INVALID'):
+                    C.Cache(self.root, minimum_age_hours=destination).prune(plan, plan['fingerprint'])
+                unlink.assert_not_called()
+
+    def test_changed_supported_age_cannot_reuse_trusted_fingerprint(self):
+        plan = self.cache.audit()
+        expected = plan['fingerprint']
+        plan['ageHours'] = 24
+        with patch.object(C.os, 'unlink') as unlink:
+            with self.assertRaisesRegex(C.Failure, 'FINGERPRINT_CHANGED'):
+                C.Cache(self.root, minimum_age_hours=24).prune(plan, expected)
+            unlink.assert_not_called()
+
+    def test_corruption_preflight_retained_for24_profile(self):
+        cache = C.Cache(self.root, minimum_age_hours=24)
+        for change in ('scope', 'expired', 'duplicate', 'escape'):
+            plan = cache.audit()
+            if change == 'scope':
+                plan['root'] = '/not-selected'
+            elif change == 'expired':
+                plan['createdAtNs'] -= C.PLAN_AGE_NS + 1
+            elif change == 'duplicate':
+                plan['records'] *= 2
+            else:
+                plan['records'][0]['path'] = '../escape'
+            plan['fingerprint'] = C.fingerprint({k: v for k, v in plan.items() if k != 'fingerprint'})
+            with patch.object(C.os, 'unlink') as unlink:
+                with self.assertRaises(C.Failure):
+                    cache.prune(plan, plan['fingerprint'])
+                unlink.assert_not_called()
+
+    def test24_fresh_all_timestamps_and_exact_boundary_preserved(self):
+        cache = C.Cache(self.root, minimum_age_hours=24)
+        info = self.old.stat()
+        for field in ('st_mtime_ns', 'st_atime_ns', 'st_ctime_ns'):
+            for hours in (0, 23, 24):
+                values = {name: getattr(info, name) for name in dir(info) if name.startswith('st_')}
+                values[field] = self.now - hours * 3600 * 10**9
+                fake = type('Stat', (), values)()
+                self.assertFalse(C.eligible(fake, self.now, cache.minimum_age_ns))
+
+    def test_forged_age_and_unsupported_profiles_fail_closed(self):
+        for age in (0, 1, 23, 25, 48, 73, True, '24'):
+            with self.subTest(age=age):
+                with self.assertRaises(C.Failure):
+                    C.Cache(self.root, minimum_age_hours=age)
+                plan = self.cache.audit()
+                plan['ageHours'] = age
+                plan['fingerprint'] = C.fingerprint({k: v for k, v in plan.items() if k != 'fingerprint'})
+                with patch.object(C.os, 'unlink') as unlink:
+                    with self.assertRaises(C.Failure):
+                        self.cache.prune(plan, plan['fingerprint'])
+                    unlink.assert_not_called()
+
+    def test24_explicit_prune_and_changed_file_skip(self):
+        cache = C.Cache(self.root, minimum_age_hours=24)
+        plan = cache.audit()
+        os.utime(self.old, ns=(self.now, self.now))
+        self.assertEqual(cache.prune(plan, plan['fingerprint'])['removedCount'], 0)
+        os.utime(self.old, ns=(1, 1))
+        plan = cache.audit()
+        self.assertEqual(cache.prune(plan, plan['fingerprint'])['removedCount'], 1)
+
+    def test_cli_closed_age_choices_and_profile_forwarding(self):
+        for age in ('1', '4', '0', '48', '24h', 'PRIVATE_CANARY'):
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(C.main(['audit', '--minimum-age-hours', age]), 1)
+            self.assertNotIn('PRIVATE_CANARY', output.getvalue())
+        for args, age in ((['audit'], 72), (['audit', '--minimum-age-hours', '24'], 24),
+                          (['audit', '--minimum-age-hours', '72'], 72)):
+            with patch.object(C.Cache, 'audit', return_value={'status': 'PASS'}) as audit:
+                with patch.object(C, 'Cache', wraps=C.Cache) as constructor:
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        self.assertEqual(C.main(args), 0)
+                    self.assertEqual(constructor.call_args.kwargs['minimum_age_hours'], age)
+                    audit.assert_called_once()
+
 
 if __name__ == '__main__':
     unittest.main()

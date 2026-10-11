@@ -411,6 +411,13 @@ export async function checkWorkflowEditor(
   expect(workflow.draft.steps[0]?.requiredCapabilityKeys).toEqual([
     effectiveFiles.key,
   ]);
+  await contextPreview
+    .getByRole("button", { name: "Закрыть", exact: true })
+    .click();
+  await expect(contextPreview).toHaveCount(0);
+  // Новая опубликованная ревизия появляется после ухода из редактора:
+  // прежние version-pinned чтения отменяются до смены текущего fixture state.
+  await page.goto("/");
   workflow.state = "PUBLISHED";
   workflow = {
     ...workflow,

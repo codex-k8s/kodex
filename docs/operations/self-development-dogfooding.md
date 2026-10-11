@@ -759,3 +759,40 @@ acceptance. Новый source ещё не опубликован/доставл�
 serving/core49/runtime ACK и Retry11 NOT RUN. Дальше publish→guarded idle FF→
 actual CP serving/new core readback→штатный retry исходной задачи без USER
 коррекций→Developer PR→одно review→Manager/owner. Full65 OPEN.
+
+## Checkpoint 11.10.2026 01:30 UTC — восстановление диска и адресные fixtures
+
+Source predecessor17495680, clean HOT32178949. Guarded idle FF нового source
+закрыто отклонён: PostgreSQL Pending при DiskPressure server-ноды; source не
+сменился. Обе ноды Ready не означают готовность приложения: собственная Chrome5
+показала bootstrap/session503 и отсутствие realtime Connected. Чужие вкладки
+не затронуты. Данные, volumes, база, сессии и образы текущего/restore набора KEEP.
+
+ROOT штатными опубликованными утилитами удалил33515 exact Go outputs старше72ч
+(8,218,481,340 logical bytes; changed/absent0) и семь obsolete OCI архивов
+(12,376,580,096 bytes); их current/restore pins проверены до каждого unlink.
+DATA free25→44GiB. Это воспроизводимые caches/архивы, не данные приложения.
+Свежий configz: hard imagefs/nodefs5%, minimumReclaim10%, transition5m.
+Гипотеза default hard15% была неверной; именно reclaim удерживает давление.
+Node containerd cleanup не выполнялся: complete eligibility UNKNOWN, KEEP.
+
+Принята минимальная2file утилита выбора cold Go24/72ч, default72 прежний.
+Профиль включён в fingerprint, prune требует exact request/plan age; прежние
+double-stat/inode/owner/nlink/symlink/expiration и changed-skip gates сохранены.
+ROOT21 synthetic unit PASS0.047s, все post hashes совпали. Fresh audit24 даёт
+119237 outputs/31,451,820,652 logical bytes, но реальный prune24 ещё NOT RUN.
+Применять только после публикации и fresh private plan, если давление сохраняется.
+
+ROOT принял4 fixture файла: HTTP Agent и scoped bootstrap используют один current
+state; adaptive6..100/canonical cursor/sentinel и strict version/digest сохраняются.
+Workflow editor закрывается/unmount до fixture published2→3. ROOT17unit PASS1.35s,
+lint4/format4 PASS; worker types/build/discovery PASS. Actual Chromium390 прошёл
+affected Workflow/effective/catalog screens, затем общий120s deadline в Organization.
+Full mobile FAIL, финальные Console/Network NOT REACHED; хвост NOT RUN.
+Вместо повторов этого journey готовится независимый bounded mobile набор с теми
+же guards/budgets. Initial packaging anchor FAIL без эффекта сохранён диагностикой.
+
+Далее: publish→нужный exact cold-cache prune→DiskPressure/PVC/DB/app readback→
+guarded idle FF→actual CP serving/core49READY→fresh current-v2 input→Retry11.
+USER corrections0/host business implementation0; Developer/ONE review/Manager
+acceptance NOT RUN, Full65 OPEN. Исторические PASS/FAIL не переписаны.

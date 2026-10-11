@@ -12,7 +12,9 @@ import stat
 import time
 
 ROOT = Path('/home/s/.cache/go-build')
-AGE_NS = 72 * 3600 * 10**9
+AGE_HOURS = (24, 72)
+DEFAULT_AGE_HOURS = 72
+AGE_NS = DEFAULT_AGE_HOURS * 3600 * 10**9
 PLAN_AGE_NS = 15 * 60 * 10**9
 MAX_FILES = 500000
 MAX_BYTES = 128 << 30
@@ -53,11 +55,11 @@ def directory(info):
     return identity(info)
 
 
-def eligible(info, now):
+def eligible(info, now, age_ns=AGE_NS):
     return (stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid() and info.st_nlink == 1 and
             not info.st_mode & 0o002 and (not info.st_mode & 0o020 or info.st_gid == os.getgid()) and
             0 <= info.st_size <= MAX_BYTES and
-            max(info.st_mtime_ns, info.st_atime_ns, info.st_ctime_ns) < now - AGE_NS)
+            max(info.st_mtime_ns, info.st_atime_ns, info.st_ctime_ns) < now - age_ns)
 
 
 def relative(value):
@@ -91,8 +93,11 @@ def opened_shard(fd, shard):
 
 
 class Cache:
-    def __init__(self, root=ROOT):
+    def __init__(self, root=ROOT, *, minimum_age_hours=DEFAULT_AGE_HOURS):
+        require(type(minimum_age_hours) is int and minimum_age_hours in AGE_HOURS, 'AGE_PROFILE_INVALID')
         self.root = Path(root)
+        self.minimum_age_hours = minimum_age_hours
+        self.minimum_age_ns = minimum_age_hours * 3600 * 10**9
         self.removed_count = self.removed_bytes = self.skipped_count = 0
 
     def audit(self):
@@ -114,14 +119,14 @@ class Cache:
                             info = os.stat(name, dir_fd=child, follow_symlinks=False)
                         except FileNotFoundError:
                             continue
-                        if not eligible(info, now):
+                        if not eligible(info, now, self.minimum_age_ns):
                             continue
                         total += info.st_size
                         require(total <= MAX_BYTES, 'BYTE_BUDGET')
                         records.append({'path': shard + '/' + name, 'stat': snapshot(info)})
             require(directory(self.root.lstat()) == root_identity, 'ROOT_CHANGED')
         result = {'schema': SCHEMA, 'root': str(self.root), 'createdAtNs': now,
-                  'ageHours': 72, 'rootIdentity': root_identity, 'shards': shards,
+                  'ageHours': self.minimum_age_hours, 'rootIdentity': root_identity, 'shards': shards,
                   'records': sorted(records, key=lambda item: item['path']), 'totalBytes': total}
         result['fingerprint'] = fingerprint(result)
         return result
@@ -133,7 +138,7 @@ class Cache:
         value = {key: item for key, item in plan.items() if key != 'fingerprint'}
         require(plan['fingerprint'] == expected == fingerprint(value), 'FINGERPRINT_CHANGED')
         require(plan['schema'] == SCHEMA and plan['root'] == str(self.root) and
-                type(plan['ageHours']) is int and plan['ageHours'] == 72, 'PLAN_SCOPE_INVALID')
+                type(plan['ageHours']) is int and plan['ageHours'] == self.minimum_age_hours, 'PLAN_SCOPE_INVALID')
         now = time.time_ns()
         require(type(plan['createdAtNs']) is int and 0 <= now - plan['createdAtNs'] <= PLAN_AGE_NS,
                 'PLAN_EXPIRED')
@@ -168,7 +173,7 @@ class Cache:
                     except FileNotFoundError:
                         self.skipped_count += 1
                         continue
-                    if snapshot(info) != item['stat'] or not eligible(info, time.time_ns()):
+                    if snapshot(info) != item['stat'] or not eligible(info, time.time_ns(), self.minimum_age_ns):
                         self.skipped_count += 1
                         continue
                     # Никаких reads: содержимое не раскрывается и atime не меняется.
@@ -176,7 +181,7 @@ class Cache:
                     require(directory(os.stat(shard, dir_fd=fd, follow_symlinks=False)) == shard_identity,
                             'DIRECTORY_CHANGED')
                     final = os.stat(name, dir_fd=child, follow_symlinks=False)
-                    if snapshot(final) != item['stat'] or not eligible(final, time.time_ns()):
+                    if snapshot(final) != item['stat'] or not eligible(final, time.time_ns(), self.minimum_age_ns):
                         self.skipped_count += 1
                         continue
                     os.unlink(name, dir_fd=child)
@@ -223,7 +228,9 @@ def main(argv=None):
         parser.add_argument('mode', choices=('audit', 'prune'))
         parser.add_argument('--plan')
         parser.add_argument('--expected-fingerprint')
+        parser.add_argument('--minimum-age-hours', type=int, choices=AGE_HOURS, default=DEFAULT_AGE_HOURS)
         args = parser.parse_args(argv)
+        cache = Cache(minimum_age_hours=args.minimum_age_hours)
         if args.mode == 'audit':
             require(args.plan is None and args.expected_fingerprint is None, 'AUDIT_TARGET_FORBIDDEN')
             result = cache.audit()

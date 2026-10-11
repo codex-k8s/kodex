@@ -1,4 +1,8 @@
 import { expect, type Page } from "@playwright/test";
+import {
+  scopedSyntheticSnapshot,
+  type SyntheticSnapshotInstaller,
+} from "./runs-catalog";
 import type {
   Agent,
   AgentCommand,
@@ -47,9 +51,10 @@ export function effectivePage(
   };
 }
 
-export async function checkEffectiveCapabilities(
+export async function installEffectiveCapabilitiesFixture(
   page: Page,
   projectRef: string,
+  installSnapshot?: SyntheticSnapshotInstaller,
 ) {
   let requested = true;
   let commands = 0;
@@ -108,9 +113,14 @@ export async function checkEffectiveCapabilities(
     `**/api/v1/agents/${agent.ref}/effective-capabilities*`,
     (route) => {
       const url = new URL(route.request().url());
-      expect(url.searchParams.get("pageSize")).toBe("30");
+      const size = url.searchParams.get("pageSize");
+      expect(size).toMatch(/^[1-9]\d*$/);
+      expect(Number(size)).toBeGreaterThanOrEqual(6);
+      expect(Number(size)).toBeLessThanOrEqual(100);
       const search = url.searchParams.get("query") ?? "";
-      const more = Boolean(url.searchParams.get("pageToken"));
+      const token = url.searchParams.get("pageToken");
+      expect([null, "capability_next"]).toContain(token);
+      const more = token === "capability_next";
       const platform: AgentEffectiveCapability[] = [
         {
           ...effectiveFiles,
@@ -145,6 +155,25 @@ export async function checkEffectiveCapabilities(
     agent.capabilities = [];
     await route.fulfill({ json: agent });
   });
+  installSnapshot?.(
+    "AGENT",
+    scopedSyntheticSnapshot(projectRef, () => ({
+      catalog: { agents: [agent], page: {} },
+    })),
+  );
+  return { agent, commandCount: () => commands };
+}
+
+export async function checkEffectiveCapabilities(
+  page: Page,
+  projectRef: string,
+  installSnapshot?: SyntheticSnapshotInstaller,
+) {
+  const { agent, commandCount } = await installEffectiveCapabilitiesFixture(
+    page,
+    projectRef,
+    installSnapshot,
+  );
   await page.goto(`/projects/${projectRef}/agents/${agent.ref}?tab=access`);
   const catalog = page.locator(".effective-capabilities");
   await expect(
@@ -159,8 +188,10 @@ export async function checkEffectiveCapabilities(
   await files.uncheck();
   await expect(files).not.toBeChecked();
   await expect(files).toBeDisabled();
-  expect(commands).toBe(1);
-  await catalog.getByRole("button", { name: "Загрузить ещё" }).click();
+  expect(commandCount()).toBe(1);
+  await catalog.locator(".effective-capabilities__rows").evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
   await expect(catalog.locator(".effective-capabilities__row")).toHaveCount(4);
   await expect(catalog.getByText(/connection_one · grant_one/)).toBeVisible();
   await expect(catalog.getByText(/connection_two · grant_two/)).toBeVisible();

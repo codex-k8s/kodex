@@ -10,6 +10,23 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 01:30 UTC — DiskPressure блокирует доставку
+
+Source predecessor17495680, HOT32178949; guarded FF не выполнился из-за Pending
+PostgreSQL. Chrome bootstrap/session503, realtime disconnected; Ready nodes не
+означают app readiness. ROOT удалил только old Go72 outputs8.22GB и obsolete
+OCI archives12.38GB с exact guards, DATA free25→44GiB; volumes/data/current
+и restore images KEEP. Actual hard5% +minimumReclaim10% +transition5m требуют
+дополнительного свободного места. Node containerd eligibility UNKNOWN, не тронут.
+
+Новый closed cold-Go24/72 профиль default72 +21unit PASS; реальные prune24
+NOT RUN до publish/freshplan/readback. FE fixture4 exact hashes/17unit/lint/format
+PASS, worker types/build. Actual390 affected checks прошли, full FAIL120s,
+final Console/Network NOT REACHED. Bounded split отдельно, без новых AI effects.
+Далее publish→cache reclaim если нужен→nodes/PVC/DB→guarded FF→новый CP
+ELF/source/core49→native original-task Retry11→Developer/ONE review/Manager/owner.
+USER corrections0/host business implementation0. Full65 OPEN, business PR не merge.
+
 ## Checkpoint 11.10.2026 01:15 UTC — source-v2/core49 готов к доставке
 
 ROOT поверхca088122 принял exact frozen7 CP instructions/guide/tests и mobile2.

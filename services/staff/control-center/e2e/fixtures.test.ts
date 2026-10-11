@@ -22,6 +22,7 @@ import {
 } from "./fixtures/organization-catalog";
 import { checkEmailEffects } from "./fixtures/email-effects";
 import { checkWorkflowEditor } from "./fixtures/workflow";
+import { installEffectiveCapabilitiesFixture } from "./fixtures/effective-capabilities";
 import {
   syntheticSecretDraftImpactPage,
   syntheticSecretCatalog,
@@ -33,6 +34,127 @@ import type {
 } from "../src/shared/api/generated/openapi/types.gen";
 
 describe("synthetic typed catalog producers", () => {
+  it("workflow fixture сохраняет strict pins и меняет published state только после unmount прежнего редактора", () => {
+    const source = readFileSync(
+      new URL("./fixtures/workflow.ts", import.meta.url),
+      "utf8",
+    );
+    const close = source.indexOf("await expect(contextPreview).toHaveCount(0)");
+    const leave = source.indexOf('await page.goto("/")', close);
+    const publish = source.indexOf('workflow.state = "PUBLISHED"', leave);
+    const rejoin = source.indexOf("pausePublishedCapabilities = true", publish);
+    expect(close).toBeGreaterThan(0);
+    expect(leave).toBeGreaterThan(close);
+    expect(publish).toBeGreaterThan(leave);
+    expect(rejoin).toBeGreaterThan(publish);
+    expect(source).toContain(
+      "expect(body.context?.expectedWorkflowVersion).toBe(workflow.version)",
+    );
+    expect(source).toContain(
+      "expect(body.expectedContextDigest).toBe(contextPin().digest)",
+    );
+  });
+  it("effective capability fixture использует текущего eligible Agent для HTTP и bootstrap, сохраняет version и cursor", async () => {
+    const handlers = new Map<string, (route: Route) => Promise<void>>();
+    const readers = new Map<string, SyntheticSnapshotReader>();
+    const page = {
+      route: (pattern: string, handler: (route: Route) => Promise<void>) => {
+        handlers.set(pattern, handler);
+      },
+    } as unknown as Page;
+    const state = await installEffectiveCapabilitiesFixture(
+      page,
+      "project_owned",
+      (kind, read) => readers.set(kind, read),
+    );
+    const read = readers.get("AGENT");
+    if (!read)
+      throw new Error("Synthetic capability Agent snapshot is missing");
+    expect(read()).toBeUndefined();
+    expect(read("project_foreign")).toBeUndefined();
+    const before = read("project_owned");
+    expect(before?.catalog?.agents).toEqual([state.agent]);
+    expect(before?.catalog?.page).toEqual({});
+    const base = `**/api/v1/agents/${state.agent.ref}`;
+    expect(handlers.has("**/api/v1/agents/agent_foreign")).toBe(false);
+    const invoke = async (
+      pattern: string,
+      url: string,
+      body?: unknown,
+    ): Promise<unknown> => {
+      const handler = handlers.get(pattern);
+      if (!handler)
+        throw new Error("Synthetic capability HTTP handler is missing");
+      let json: unknown;
+      await handler({
+        request: () => ({
+          url: () => url,
+          postDataJSON: () => body,
+          headers: () => ({
+            "if-match": '"1"',
+            "idempotency-key": "synthetic-revoke",
+          }),
+        }),
+        fulfill: (response: { json: unknown }) => {
+          json = response.json;
+          return Promise.resolve();
+        },
+      } as unknown as Route);
+      return structuredClone(json);
+    };
+    const ownURL = `https://kodex.test/api/v1/agents/${state.agent.ref}`;
+    expect(await invoke(base, ownURL)).toEqual(before?.catalog?.agents?.[0]);
+    const capabilities = base + "/effective-capabilities*";
+    const first = await invoke(
+      capabilities,
+      ownURL + "/effective-capabilities?pageSize=6",
+    );
+    expect(first).toMatchObject({
+      agentRef: state.agent.ref,
+      agentVersion: 1,
+      projectRef: "project_owned",
+      total: 4,
+      nextPageToken: "capability_next",
+    });
+    const tail = await invoke(
+      capabilities,
+      ownURL + "/effective-capabilities?pageSize=100&pageToken=capability_next",
+    );
+    expect(tail).toMatchObject({
+      total: 4,
+      items: [
+        { connectionRef: "connection_one", grantRef: "grant_one" },
+        { connectionRef: "connection_two", grantRef: "grant_two" },
+      ],
+    });
+    expect(tail).not.toHaveProperty("nextPageToken");
+    for (const query of [
+      "pageSize=5",
+      "pageSize=101",
+      "pageSize=6&pageToken=foreign_cursor",
+    ])
+      await expect(
+        invoke(capabilities, ownURL + "/effective-capabilities?" + query),
+      ).rejects.toThrow();
+    await invoke(base + "/commands", ownURL + "/commands", {
+      action: "REVOKE_CAPABILITY",
+      capabilityKey: "platform.artifact.manage",
+    });
+    expect(state.commandCount()).toBe(1);
+    expect(read("project_owned")?.catalog?.agents).toEqual([state.agent]);
+    expect(state.agent.version).toBe(2);
+    expect(state.agent.capabilities).toEqual([]);
+    expect(before?.catalog?.agents?.[0]?.version).toBe(1);
+    expect(await invoke(base, ownURL)).toEqual(
+      read("project_owned")?.catalog?.agents?.[0],
+    );
+    expect(
+      await invoke(capabilities, ownURL + "/effective-capabilities?pageSize=6"),
+    ).toMatchObject({
+      agentVersion: 2,
+      items: [{ requested: false }, { requested: false }],
+    });
+  });
   it("MEMBERSHIP HTTP mirrors и bootstrap сохраняют полный профиль, текущие subjects и exact scope", async () => {
     const handlers = new Map<string, (route: Route) => Promise<void>>();
     const readers = new Map<string, SyntheticSnapshotReader>();
