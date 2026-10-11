@@ -10,6 +10,22 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 01:15 UTC — source-v2/core49 готов к доставке
+
+ROOT поверхca088122 принял exact frozen7 CP instructions/guide/tests и mobile2.
+Новые binding v2/core49, immutable v1/core48 и exact historical registry
+сохранены; grants/ABI/runner/policy/ENV/Workflow не менялись. Evidence правило
+не отменяет обязательных неизвестных facts и не назначает бизнес-решение.
+ROOT pinned Go1.26.6 race/vet/build и disposable CoreInheritance7.014s PASS;
+frontend28unit1.34s/lint/format PASS, worker types/build/discovery PASS.
+Full synthetic390 FAIL после исправленной RoleImage geometry/history на
+effective-capabilities fixture; это не mobile/full QA PASS. Native source-v2
+доставка и Retry11 ещё NOT RUN. Publish/readback→guarded idleFF→новый actual
+CP ELF/source/core49READY→fresh current-v2 ACK/metadata→native Retry11.
+Не повторять runner/recipe/ENV effects: текущий diff CP-only плюс FE.
+Retry10 rootFAILED/version3, Developer/ONEreview/Manager acceptance NOT RUN.
+USER corrections0/host business implementation0; Full65 OPEN.
+
 ## Checkpoint 11.10.2026 01:00 UTC — native source gate и завершённый Chromium
 
 Source/remote/HOT32178949, guarded idle FF и Email ROOT→HOT→Pod hashes PASS.

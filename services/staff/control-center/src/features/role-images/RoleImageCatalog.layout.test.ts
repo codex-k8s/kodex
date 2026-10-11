@@ -16,6 +16,24 @@ const editor = readFileSync(
 );
 
 describe("каталог образов ИИ-сотрудников", () => {
+  it("в минимальной таблице вмещает touch-действие44px с отступами и сохраняет прокрутку", () => {
+    expect(catalog).toMatch(
+      /\.role-image-catalog__table\s*\{[^}]*min-width: 980px;[^}]*table-layout: fixed;/s,
+    );
+    expect(catalog).toMatch(
+      /\.role-image-catalog__table-wrap\s*\{[^}]*overflow-x: auto;/s,
+    );
+    expect(catalog).toMatch(
+      /\.role-image-catalog__table td\s*\{[^}]*padding: 10px 12px;/s,
+    );
+    const widths = Array.from(
+      catalog.matchAll(/th:nth-child\(\d\)\s*\{\s*width: (\d+)%;/g),
+      (match) => Number(match[1]),
+    );
+    expect(widths).toEqual([28, 18, 12, 15, 8, 12, 7]);
+    expect(widths.reduce((sum, width) => sum + width, 0)).toBe(100);
+    expect((980 * (widths[6] ?? 0)) / 100).toBeGreaterThanOrEqual(44 + 12 * 2);
+  });
   it("на 390px выделяет имени и роли всю строку, отделяет длинный статус и сохраняет desktop", () => {
     const desktop = editor.slice(
       editor.indexOf(".image-summary {"),

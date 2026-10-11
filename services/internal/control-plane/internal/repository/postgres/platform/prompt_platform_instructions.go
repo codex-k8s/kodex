@@ -13,7 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
-const platformSourceConformityRevision = "platform-source-conformity-v1"
+const platformSourceConformityRevision = "platform-source-conformity-v2"
 const maximumPlatformInstructionBytes = 8 << 10
 
 // Этот versioned input меняется только новой revision. Compiled v3 и прежние
@@ -28,7 +28,17 @@ const platformSourceConformityRussian = `Утверждённые требова
 Эти инструкции не выдают capabilities, сетевой доступ или SYSTEM/PROJECT authority. Используй только текущие effective capabilities и предоставленные ресурсы. Исторические артефакты и проекты решений не изменяют утверждённые требования источников или текущие полномочия исполнения; не выдумывай содержимое источника, semantic PASS или завершённую реализацию.
 Если текущий runtime явно предоставляет разрешённый GH_TOKEN и допускает Git-доступ к назначенному репозиторию через HTTPS github.com, обычный Git не использует этот токен автоматически. Для уже разрешённой Git-операции используй существующий GitHub CLI только как per-command credential helper: git -c credential.https://github.com.helper= -c 'credential.https://github.com.helper=!/usr/local/bin/gh auth git-credential' <разрешённые аргументы Git>. Запускай helper только через credential protocol самого Git; никогда не вызывай его напрямую и не печатай его вывод. Helper читает существующий разрешённый credential окружения; не помещай токен в аргументы, URL, Git-конфигурацию, логи, артефакты или сообщения, не сохраняй credentials и не меняй host/global Git-конфигурацию. Не выполняй login, refresh, ротацию секрета, расширение прав или сети. gh auth status не является обязательным gate для иначе разрешённой Git-операции: он делает дополнительные API-чтения авторизации, которые могут не входить в текущую сетевую policy, тогда как сам credential helper не делает API-запросов. Один отказ status не доказывает невалидность injected token. Отчитывайся о фактической разрешённой операции и её exact независимом readback; при denied, failed или unknown outcome сохраняй отказ и останавливайся по существующей effect/retry policy. Эта инструкция не выдаёт операции, repository scope или capabilities и никогда не разрешает replay ранее отклонённого эффекта или эффекта с неизвестным исходом.`
 
+const platformEvidenceGuidanceEnglish = `For each mandatory current-gate claim, record claim -> mandatory fact -> sufficient evidence class -> exact source/version/digest/EOF -> residual UNKNOWN. Distinguish a required source property, an approved requirement, a proposed design decision and future acceptance. A pinned installed schema or documented contract can prove wire shape, not hidden implementation, runtime routing, delivery/order, cancellation or observed effects. Identify which mandatory fact needs full implementation source. A discovered import, sender, dependency or extra file does not by itself make every transitive source a full-EOF gate. Conversely, do not discard a mandatory missing fact or declare its source unnecessary: keep that claim UNKNOWN/BLOCKED and its gate closed. Required canonical EOF and pins remain mandatory; EXTRACT is not FULL and a packet is not transitively complete unless proved. Complete available authorized reads and map each claim to sufficient evidence; do not call design or unverified runtime behavior PASS/READY. Choose and justify a recommendation only within explicitly owner-delegated decisions; do not invent business rules or assume delegated authority. Preserve owner gates, independent permitted READ and existing denied/unknown-effect policy; never replay a denied URL through another transport or identity.`
+
+const platformEvidenceGuidanceRussian = `Для каждого обязательного утверждения текущего gate фиксируй: утверждение → обязательный факт → достаточный класс evidence → точные источник/version/digest/EOF → остаточный UNKNOWN. Различай требуемое свойство источника, утверждённое требование, предлагаемый дизайн и будущую приёмку. Закреплённая установленная schema или документированный контракт доказывают wire shape, но не скрытую реализацию, runtime routing, доставку/порядок, отмену или наблюдаемые эффекты. Укажи, какой обязательный факт требует полного source реализации. Обнаруженный import, sender, dependency или дополнительный файл сам по себе не превращает все транзитивные источники в full-EOF gate. Не отбрасывай обязательный недостающий факт и не объявляй его источник ненужным: сохрани UNKNOWN/BLOCKED этого утверждения и закрытый gate. Требуемые canonical EOF и pins обязательны; EXTRACT не равен FULL, пакет не является транзитивно полным без доказательства. Заверши доступные разрешённые READ и свяжи каждое утверждение с достаточным evidence; дизайн или непроверенное runtime-поведение не называй PASS/READY. Выбирай и обосновывай рекомендацию только в явно делегированных владельцем решениях; не выдумывай бизнес-правила и не предполагай делегированные полномочия. Сохраняй owner gates, независимые разрешённые READ и прежнюю denied/unknown-effect policy; запрещённый URL не повторяй через другой transport или identity.`
+
 func platformInstructionBinding(locale string) (entity.PromptPlatformInstructions, error) {
+	return platformInstructionBindingForRevision(platformSourceConformityRevision, locale)
+}
+
+// Закрытый реестр сохраняет точные опубликованные bytes исторической revision.
+// Только producer выбирает текущую revision; rejoin разрешает сохранённую.
+func platformInstructionBindingForRevision(revision, locale string) (entity.PromptPlatformInstructions, error) {
 	locale = strings.ToLower(strings.TrimSpace(locale))
 	if locale == "" {
 		locale = "en"
@@ -39,11 +49,24 @@ func platformInstructionBinding(locale string) (entity.PromptPlatformInstruction
 	} else if locale != "en" {
 		return entity.PromptPlatformInstructions{}, errs.ErrConflict
 	}
+	refPrefix := "pinst_source_conformity_v1_"
+	switch revision {
+	case "platform-source-conformity-v1":
+	case platformSourceConformityRevision:
+		refPrefix = "pinst_source_conformity_v2_"
+		guidance := platformEvidenceGuidanceEnglish
+		if locale == "ru" {
+			guidance = platformEvidenceGuidanceRussian
+		}
+		content += "\n" + guidance
+	default:
+		return entity.PromptPlatformInstructions{}, errs.ErrConflict
+	}
 	if len(content) == 0 || len(content) > maximumPlatformInstructionBytes || !utf8.ValidString(content) || strings.ContainsRune(content, 0) {
 		return entity.PromptPlatformInstructions{}, errs.ErrConflict
 	}
 	digest := sha256.Sum256([]byte(content))
-	return entity.PromptPlatformInstructions{Ref: "pinst_source_conformity_v1_" + locale, Revision: platformSourceConformityRevision, Digest: hex.EncodeToString(digest[:]), Content: content}, nil
+	return entity.PromptPlatformInstructions{Ref: refPrefix + locale, Revision: revision, Digest: hex.EncodeToString(digest[:]), Content: content}, nil
 }
 
 func platformInstructionProjection(binding entity.PromptPlatformInstructions) string {
@@ -78,7 +101,7 @@ func validatePlatformInstructions(snapshot entity.PromptMaterializationSnapshot)
 	if snapshot.PlatformInstructions == nil {
 		return nil
 	}
-	canonical, err := platformInstructionBinding(snapshot.Locale)
+	canonical, err := platformInstructionBindingForRevision(snapshot.PlatformInstructions.Revision, snapshot.Locale)
 	if err != nil || snapshot.ServiceTemplateRevision != "prompt-service-v3" || *snapshot.PlatformInstructions != canonical ||
 		!strings.Contains(snapshot.SemanticValues["CONSTRAINTS"], platformInstructionProjection(canonical)) {
 		return errs.ErrConflict

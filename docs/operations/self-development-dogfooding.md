@@ -722,3 +722,40 @@ host business implementation0; Full65 и business owner gate OPEN.
 FAIL CHECKPOINT_HISTORY_REWRITTEN; запись перенесена в конец хвоста.
 Fresh verify against321 PASS/PREVIOUS_SNAPSHOT_PREFIX_CHECKED,
 active78865B; прежние checkpoints и baseline не изменены.
+
+## Checkpoint 11.10.2026 01:15 UTC — source-v2/core49 и мобильный каталог
+
+На predecessor ca088122 ROOT интегрировал frozen7 CP instruction/guide/tests
+и два мобильных файла; exact pre/post hashes совпали. Новые ходы получают
+platform-source-conformity-v2, core49; published v1/core48 bytes неизменны,
+historical rejoin проверяет exact ref/revision/locale/content/digest.
+Общее правило связывает claim с обязательным фактом, достаточным классом
+доказательства и residual UNKNOWN. Import не создаёт автоматически gate полного
+транзитивного source; действительно обязательный недостающий факт сохраняет
+закрытый gate. Нет task-specific исключения, новой authority или USER подсказки.
+ABI, grants, runner/image/policy, окружения и Workflow не менялись.
+
+ROOT на explicit Go1.26.6: targeted three-package race PASS, vet/build PASS;
+disposable PostgreSQL AssistantCoreInheritance PASS7.014s, SYSTEM и два PROJECT
+получают current compiled core. Worker scoped69 test events/vet на том же
+компиляторе PASS. Initial новый test fixture без TargetKind дал FAIL, исправлен
+тестом; пустая строка EOF core49 удалена отдельной delta, historical48 не менялся.
+Первый ROOT supplementary запуск использовал host Go1.27.1: не canonical
+baseline; затем exact1.26.6 повторён. Ошибочный posthash probe из Go cwd
+получил ENOENT; повтор из корня подтвердил оба mobile postimages.
+
+Mobile action-column980px: 5% не вмещали44px touch-button плюс24px padding.
+Перераспределение двух колонок14/5→12/7 сохраняет100% и горизонтальную прокрутку.
+ROOT28unit/2suites PASS1.34s, scoped lint/format PASS; worker forcedtypes,
+synthetic build и E2E discovery PASS. Новый actual synthetic Chromium390
+прошёл RoleImage geometry/history и Workflow, затем FAIL на отсутствующем
+AgentDetail effective-capabilities fixture. Full journey/финальные Console и
+Network acceptance не PASS; старые FAIL сохранены. Narrow fixture RCA отдельно.
+
+Own Chrome5 Connected после reload, Console errors/warnings0, native reads200;
+скрин графа сохранён, чужие вкладки не затронуты. Два узла Ready, все22
+Deployments имеют desired Ready replicas. Это health/debug, не live business
+acceptance. Новый source ещё не опубликован/доставлен в этом checkpoint;
+serving/core49/runtime ACK и Retry11 NOT RUN. Дальше publish→guarded idle FF→
+actual CP serving/new core readback→штатный retry исходной задачи без USER
+коррекций→Developer PR→одно review→Manager/owner. Full65 OPEN.

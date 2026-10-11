@@ -29,7 +29,7 @@ func assertPlatformInstructions(t *testing.T, snapshot entity.PromptMaterializat
 
 func TestPlatformInstructionsV1ContentIsImmutableAndScoped(t *testing.T) {
 	for locale, expected := range map[string]string{"en": "fa572d1632e72e967d8e3855ad4922505e55b68c2ea3807bab53a6fdd44b3fa0", "ru": "6d0134419a5a5c2543cf1a10244faa93c25e0d4cb3aece94084ed0906481e9ea"} {
-		binding, err := platformInstructionBinding(locale)
+		binding, err := platformInstructionBindingForRevision("platform-source-conformity-v1", locale)
 		if err != nil || binding.Digest != expected || binding.Revision != "platform-source-conformity-v1" || binding.Ref != "pinst_source_conformity_v1_"+locale {
 			t.Fatal("published v1 text must change only through a new revision")
 		}
