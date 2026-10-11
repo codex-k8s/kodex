@@ -129,6 +129,15 @@ DiskPressure; актуальный owner run state UNKNOWN при API 500, recov
 
 ## Обязательный checklist
 
+Актуальный checkpoint11.10.2026 09:14 UTC: общая файловая модель всех ролей
+подтверждена в actual execution Pod и собственной записью Architect.
+Его own snapshot доказывает provider OBSERVED CODEX0.160.0, но semantic
+Architect BLOCKED: auth applicability и незавершённое source/handoff research.
+Root attempt5 FAILED/RUNTIME_WORKFLOW_INCOMPLETE, зависимые этапы CANCELLED;
+business PR/review/Manager/owner NOT RUN. Exact pins, ограничения доказательств
+и следующие действия — в [точке продолжения](self-development-handoff.md).
+Пункт11 и оставшиеся QA65 не отмечаются выполненными.
+
 - [x] 1. Создать связанное Issue, ветку от свежего main и один Draft bootstrap
       PR; фиксировать результаты PASS/FAIL/NOT RUN/BLOCKED на точном SHA.
 - [x] 2. Полные управляемые MCP/tool profiles системного помощника,

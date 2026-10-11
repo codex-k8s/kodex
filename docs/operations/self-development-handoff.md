@@ -10,6 +10,50 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 09:14 UTC — workspace PASS, semantic gate Architect закрыт
+
+Общая файловая модель всех ролей доставлена: `/workspace/work` и независимые
+INPUT copies доступны для записи; originals/input, context и knowledge остаются
+readonly. `WORKSPACE.md` объясняет расположение, временный lifecycle и отдельное
+право публикации. Native Architect самостоятельно создал offline JSON/TS
+файлы и семь результатов; ROOT не писал business code или actual workspace.
+
+Architect run_zARDQy9RiINWUn9rhD9oNzPU SUCCEEDED09:06:36.348309,
+но semantic verdict **BLOCKED**, не архитектурный PASS. Его exact revision
+arv_3cc41be33c46424998d8c9f6c6e671f2, artifact art_Fy-K6fCL7DQjP-SiTUVXSecT,
+digest ccff09d6c0ece42aa5ddb17084ded52b30ac4d85eed8a13d65cb7b1eabecf3e1
+прочитана через защищённый PREVIEW200. Собственное get_execution_snapshot
+Architect подтверждает provider OBSERVED INITIALIZE_USER_AGENT/CODEX0.160.0,
+RuntimeRevision rrev_lV9ln_9G1CXVrbz9_Ji_SGTW; offline binary/schema proof
+сохранён отдельно. Это не наблюдение баланса, списания или business success.
+
+Незакрытые пункты отчёта: A1 — применимость upstream auth policy;
+A2/A3 — незавершённое исследование обязательных source/contracts;
+A4 — недостающие exact tuples двух callback inputs в handoff Architect.
+Ни реального upstream deny, ни нового отказа исполнения не наблюдалось.
+Official OpenAI app-server Auth endpoints различают local/open-source и
+commercial/hosted use; fetched guidance не заменяет version-pinned контракт
+0.160.0 или доказательство конкретного deployment. При дальнейшем исправлении
+отделить CODE_ONLY исследование/дизайн от auth execution, не выдумывать
+разрешение, не обходить подтверждённый deny и не менять авторизацию ради smoke.
+Лимит одного комплексного PR review не означает запрет чтения источников
+в первоначальном исследовании; исторические snapshots не переписывать.
+
+Coordinator дочитал семь результатов до EOF и не запустил зависимые роли.
+Root run_ptBfmAM107l_qzCiqaUZoiRP завершён FAILED /
+RUNTIME_WORKFLOW_INCOMPLETE, cursor700; Developer/Reviewer/Final Manager
+CANCELLED. Business implementation/tests/PR/review/owner gate **NOT RUN**.
+USER corrections0, host business implementation0. Следующий шаг — устранить
+source/handoff/instruction gaps платформы, а не повторять неизменённый процесс.
+
+ROOT13a65ebc/HOTc4bd2028 до checkpoint не менялись. Runner6d27a427
+подготовлен и импортирован, но activation всё ещё NOT RUN. Chrome35:
+session/bootstrap/graph и обе страницы events200, Console0; terminal экран
+проверен screenshot, overflow=false. Сохранённый zoom исправлен штатной
+кнопкой «Весь граф», не кодом. Startup401/Console1 отдельного Playwright
+не выдаются за чистый новый browser PASS. QA65/пункты11,12,14,15 OPEN,
+bootstrap остаётся Draft без merge/ready; цель не объявлена завершённой.
+
 ## Checkpoint 11.10.2026 09:00 UTC — следующий runner подготовлен без activation
 
 ROOTe49aad3e clean и опубликован в Draft1807, body/readback PASS;
