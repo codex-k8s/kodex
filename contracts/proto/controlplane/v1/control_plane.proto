@@ -3892,6 +3892,7 @@ message ReportExecutionProgressRequest {
   string progress = 4;
   // Сообщение публикуется отдельно от служебного progress, после completed item.
   RunMessage message = 5;
+  ProviderFinancialObservation financial = 6;
 }
 message ReportExecutionProgressResponse {
   Run run = 1;
@@ -6044,6 +6045,8 @@ message ProviderAccount {
   google.protobuf.Timestamp updated_at = 12;
   string safe_status_reason = 13;
   ProviderAccountUsage usage = 14;
+  ProviderFinancialSummary financial_summary = 18;
+  bool financial_eligible = 19;
   ProviderAccountDeletion deletion = 15;
   ProviderAccountVerification verification = 16;
   int32 maximum_concurrent_executions = 17;
@@ -8654,4 +8657,30 @@ message AssistantAgentConfiguration {
   // Полная безопасная конфигурация только текущего AGENT context, не runtime materialization.
   bytes configuration_json = 4;
   string configuration_sha256 = 5;
+}
+
+// Безопасные supported наблюдения; identity берётся только из lease.
+message ProviderFinancialWindow {
+  int32 used_percent = 1;
+  optional int64 duration_minutes = 2;
+  optional int64 resets_at = 3;
+}
+message ProviderFinancialCredits {
+  bool has_credits = 1;
+  bool unlimited = 2;
+  optional string balance = 3;
+}
+message ProviderFinancialObservation {
+  int64 sequence = 1;
+  string state = 2;
+  repeated ProviderFinancialWindow windows = 3;
+  ProviderFinancialCredits credits = 4;
+  optional bool ordinary_usage_allowed = 5;
+  optional bool spend_control_reached = 6;
+  string restriction = 7;
+}
+message ProviderFinancialSummary {
+  ProviderFinancialObservation observation = 1;
+  google.protobuf.Timestamp received_at = 2;
+  int64 version = 3;
 }

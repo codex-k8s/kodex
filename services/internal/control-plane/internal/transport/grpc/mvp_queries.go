@@ -130,10 +130,13 @@ func castModelCapability(value entity.ModelCapability) *controlplanev1.ModelCapa
 func castProviderAccount(value entity.ProviderAccount) *controlplanev1.ProviderAccount {
 	result := &controlplanev1.ProviderAccount{
 		Deletion: castProviderAccountDeletion(value.Deletion), Verification: castProviderAccountVerification(value.Verification),
-		Ref: value.Ref, Version: value.Version, DefinitionKey: value.DefinitionKey, Name: value.Name,
+		FinancialEligible: value.FinancialEligible, Ref: value.Ref, Version: value.Version, DefinitionKey: value.DefinitionKey, Name: value.Name,
 		ExternalAccountMasked: value.ExternalAccountMasked, State: providerAccountState(value.State),
 		Enabled: value.Enabled, Ready: value.Ready, MaximumConcurrentExecutions: value.MaximumConcurrentExecutions, NextActions: nextActions(value.NextActions),
 		CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt), SafeStatusReason: value.SafeStatusReason,
+	}
+	if value.FinancialSummary != nil {
+		result.FinancialSummary = &controlplanev1.ProviderFinancialSummary{Observation: castFinancialObservation(value.FinancialSummary.Observation), ReceivedAt: timestamp(value.FinancialSummary.ReceivedAt), Version: value.FinancialSummary.Version}
 	}
 	if value.Authorization != nil {
 		result.Authorization = &controlplanev1.ProviderAuthorization{

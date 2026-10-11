@@ -254,6 +254,16 @@ func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt [
 	if err := classifyAccountReadResponse(raw, err); err != nil {
 		return Result{}, atProviderStage(providerStageAccountRead, server.abort(ctx, state, err))
 	}
+	var financialAccount struct {
+		Account *struct {
+			Type string `json:"type"`
+		} `json:"account"`
+	}
+	_ = json.Unmarshal(raw, &financialAccount)
+	state.financialEnabled = financialAccount.Account != nil && financialAccount.Account.Type == "chatgpt"
+	if err := server.observeFinancial(ctx, state); err != nil {
+		return Result{}, server.abort(ctx, state, err)
+	}
 	if err := server.bindExecutionThread(ctx, state, input); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
@@ -275,6 +285,9 @@ func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt [
 	}
 	if err := state.bindThreadRead(raw); err != nil {
 		return Result{}, atProviderStage(providerStageThreadRead, server.abort(ctx, state, err))
+	}
+	if err := server.observeFinancial(ctx, state); err != nil {
+		return Result{}, server.abort(ctx, state, err)
 	}
 	if err := server.stop(state); err != nil {
 		return Result{}, atProviderStage(providerStageProcessStop, err)
@@ -775,6 +788,11 @@ func protocolError(method string, raw json.RawMessage) error {
 
 func (server *appServer) waitTerminal(ctx context.Context, state *protocolState) error {
 	for state.terminals == 0 {
+		if state.financialWake {
+			if err := server.observeFinancial(ctx, state); err != nil {
+				return err
+			}
+		}
 		select {
 		case <-ctx.Done():
 			return callFailure("CONTEXT_CANCELLED", context.Canceled)
@@ -1177,7 +1195,7 @@ var suppressedNotificationMethods = []string{
 	"turn/plan/updated", "item/autoApprovalReview/started", "item/autoApprovalReview/completed", "item/agentMessage/delta",
 	"item/plan/delta", "command/exec/outputDelta", "process/outputDelta", "process/exited",
 	"item/commandExecution/outputDelta", "item/commandExecution/terminalInteraction", "item/fileChange/outputDelta",
-	"item/fileChange/patchUpdated", "serverRequest/resolved", "item/mcpToolCall/progress", "account/rateLimits/updated",
+	"item/fileChange/patchUpdated", "serverRequest/resolved", "item/mcpToolCall/progress",
 	"rawResponseItem/completed",
 	"app/list/updated", "remoteControl/status/changed", "externalAgentConfig/import/progress",
 	"externalAgentConfig/import/completed", "fs/changed", "item/reasoning/summaryTextDelta",

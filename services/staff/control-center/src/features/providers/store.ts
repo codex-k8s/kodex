@@ -34,6 +34,8 @@ let loadGeneration = 0;
 let loadController: AbortController | undefined;
 
 interface ProvidersState {
+  financialAccounts: ProviderAccount[];
+  financialComplete: boolean;
   definitions: ProviderDefinition[];
   definitionsNextPageToken: string;
   definitionsLoadingMore: boolean;
@@ -56,6 +58,8 @@ interface ProvidersState {
 
 export const useProvidersStore = defineStore("providers", {
   state: (): ProvidersState => ({
+    financialAccounts: [],
+    financialComplete: false,
     definitions: [],
     definitionsNextPageToken: "",
     definitionsLoadingMore: false,
@@ -76,6 +80,10 @@ export const useProvidersStore = defineStore("providers", {
     snapshotReady: false,
   }),
   actions: {
+    clearFinancial(): void {
+      this.financialAccounts = [];
+      this.financialComplete = false;
+    },
     applySnapshot(
       accounts: ProviderAccount[],
       nextPageToken = "",
@@ -83,6 +91,10 @@ export const useProvidersStore = defineStore("providers", {
       definitions?: ProviderDefinition[],
       definitionsNextPageToken = "",
     ): void {
+      this.financialAccounts = accounts.filter(
+        (account) => account.financialEligible === true,
+      );
+      this.financialComplete = nextPageToken === "";
       this.snapshotAccounts = accounts;
       this.snapshotAccountsNextPageToken = nextPageToken;
       this.snapshotNextActions = nextActions;
