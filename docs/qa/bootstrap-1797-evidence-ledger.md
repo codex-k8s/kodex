@@ -10,6 +10,34 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 11.10.2026 23:39 UTC
+
+Remote SOURCE8b9d0692/HOT74b9/mainab4992e0 MATCH. Chrome11 после reload
+авторизован, screenshot terminal graph просмотрен/Console0/relevant GET200/
+realtime/overflow=false;22Deployment ready/desired MATCH. Эти факты не
+являются полной продуктовой приёмкой.
+
+Attempt8 root FAILED/seq293; INTAKE technical SUCCEEDED/semantic
+INTAKE_INCOMPLETE. Все дальнейшие этапы CANCELLED; coordinator gate
+закрыт корректно. Four CLEAN published exact artifact revisions:
+result.md480B/6c188e05, workspace-write-result.json328B/9c7a1915,
+intake-evidence.json16718B/daa81d27, manager-plan.md22156B/5559c1f9;
+sequential native content GET200/size/SHA MATCH. Initial parallel reads
+200/503/503/503 остаются unexplained UNKNOWN, не исправленный PASS.
+Packet467840B/29pages/nativeEOF и PR index52/EOF подтверждены evidence;
+partial OpenAPI692602B/generated Proto3590649B не названы FULL.
+Manager собственный snapshot CODEX0.160.0 OBSERVED/INITIALIZE_USER_AGENT;
+Architect observation текущего root NOT RUN.
+
+Owner safe projection Manager37/binding4 и Workflow40/publication13
+требует actual business diff и применимые обязательные источники, не
+каждый полный generated файл. Диагностика подтверждает доступные READ
+и добровольный FINAL с собственной незавершённой работой. Готовится
+immutable instruction v5 без изменения historical bytes, parser success,
+code-mode, grants или gates; source/delivery/native retry NOT RUN.
+Business PR1808/пользовательский input не менялись, review cycles0.
+Full QA/merge readiness/main readback остаются OPEN.
+
 ## Новое scoped evidence 11.10.2026 23:25 UTC
 
 Exact SOURCE b92c4ebd: ROOT diff-check main→b92 и pinnedGo1.26.6 offline

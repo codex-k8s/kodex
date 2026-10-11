@@ -10,6 +10,28 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 23:39 UTC — честный terminal и границы INTAKE
+
+- [x] SOURCE/remote8b9d0692, mainab4992e0 и HOT74b9 свежим readback MATCH;
+     22Deployment доступны. Chrome11 reload/terminal screenshot/Console0/
+      relevant GET200/realtime/overflow=false проверены; чужие вкладки сохранены.
+- [x] Attempt8 root FAILED/seq293; INTAKE technical SUCCEEDED, semantic
+      INTAKE_INCOMPLETE. Четыре CLEAN результата exact revisions прочитаны
+      последовательно GET200/size/SHA MATCH; coordinator не допустил Architect,
+      все зависимые этапы CANCELLED. Это failclosed PASS, не business PASS.
+- [x] Native packet467840B/29pages/EOF, PR index52/EOF и собственный Manager
+      CODEX0.160.0 OBSERVED подтверждены опубликованным evidence. Последнее
+      не заменяет обязательное собственное наблюдение Architect.
+- [ ] Уточнение immutable platform instructions v5, адресные тесты и доставка:
+      actual business diff/явные mandatory EOF сохраняются; все generated
+      index entries сами не назначают whole-file semantic gate. Недочитанная
+      доступная работа не становится FINAL. После исправления original Retry.
+- [ ] Первый параллельный artifact content read200/503/503/503: причина503
+      UNKNOWN; последующий sequential200 не доказывает устранение причины.
+- [ ] Architect/Developer/ONE comprehensive Review/Manager/owner и оставшийся
+      QA65/bootstrap gates/main delivery. Review cycles0, business PR1808 и
+      исходный пользовательский input не изменялись.
+
 ## Checkpoint 11.10.2026 23:25 UTC — Chrome rejoin и актуальные static gates
 
 - [x] Chrome MCP/reload/rejoin собственной вкладки: screenshot панели хода

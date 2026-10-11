@@ -10,6 +10,43 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 23:39 UTC — attempt8 завершена, причина INTAKE установлена
+
+SOURCE/remote1807 clean8b9d0692/HOT code74b9 подтверждены свежим bot
+readback после возобновления. Mainab4992e0 неизменён;22Deployment
+ready/desired MATCH. Chrome11 подключён и авторизован после reload,
+terminal screenshot просмотрен, Console0, relevant GET200/realtime,
+overflow=false. Чужие вкладки не изменялись.
+
+Предыдущая запись RUNNING историческая: attempt8 root
+run_UYRRRagBAbTl2nolP_0mv8aB теперь FAILED/seq293. INTAKE
+run_7hPFoT7Nx980caA9KUvhGQ2B технически SUCCEEDED, но собственный
+semantic verdict INTAKE_INCOMPLETE. Четыре CLEAN результата опубликованы:
+result480B/SHA6c188e05, workspace receipt328B/9c7a1915,
+intake-evidence16718B/daa81d27, manager-plan22156B/5559c1f9.
+Последовательные exact revision content GET200/size/digest MATCH.
+Первый параллельный read дал200/503/503/503; причина503 UNKNOWN,
+последующий успешный read не объявляет её устранённой.
+
+Native packet467840B/29pages/EOF/digest подтверждён опубликованным
+checkpoint. PR index52/EOF подтверждён; большие OpenAPI692602B и
+generated Proto3590649B остались partial. Git diff755903B — supplemental,
+не замена явно обязательного native EOF. Собственный Manager snapshot
+CODEX0.160.0/OBSERVED/INITIALIZE_USER_AGENT подтверждён, не Architect proof.
+Координатор полностью прочитал четыре результата и корректно не допустил
+Architect; все зависимые этапы CANCELLED. Review cycles0/ROOT business
+code0/corrective USER0; PR1808 не изменялся.
+
+Fresh owner projection Manager37/instruction binding4 и Workflow40/rev13
+требует actual business diff и применимые обязательные источники, а не
+полное чтение каждого generated файла индекса. Готовится immutable v5
+общих инструкций: происхождение FULL gate, отделение полного byte provenance
+от содержательного чтения применимых declarations, запрет добровольного
+FINAL при доступной обязательной работе. Explicit packet/native EOF,
+denied/unknown-effect policy и owner gates не сокращаются. Code-mode,
+parser success и полномочия не меняются. Доставка v5 и новый original
+Retry пока NOT RUN; full QA/ONE Review/Manager/merge/main acceptance OPEN.
+
 ## Checkpoint 11.10.2026 23:25 UTC — возобновление без повторного business effect
 
 SOURCE/remote b92c4ebd/HOT code74b9 подтверждены свежим bot readback.
