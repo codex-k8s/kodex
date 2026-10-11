@@ -1277,3 +1277,20 @@ Workflow40/revision13, пять этапов, ОДНО комплексное р
 Full65/checklist11/14/15 OPEN. USER corrections0/host business implementation0;
 Retry10 ещё не запущен. Далее promotion→4ENV/8bindings→fresh Retry10 с ранним
 capture Pod exit→Developer PR→одно комплексное review→Manager/owner.
+
+## Checkpoint 11.10.2026 00:18 UTC — native promotion3/3 и4ENV/8bindings PASS
+
+Production/HOT eba5f054, remote checkpoint3581785a. Native SYSTEM21/STAFF17/
+helper11 ACCEPTED/verified/PROMOTED. Штатные owner drafts обновили ENV36/18/
+17/21;4 impact APPLIED, intended bindings8/8 APPLIED с exact+1 binding/consumer.
+Fresh full owner readback и offline verification подтвердили preservation4/4:
+38 tools, immutable secret descriptors, ресурсы/volumes/network/web,
+Developer GitHub API GET/HEAD/PATCH/POST. Private final input SHA256
+d248c93ed966c9e051c55afd8a1b0cfbc2248ef3e0f7cad9c127f5bf58e8cbf2;
+verifier output SHA2563eba4164f71e6503f1ff53a8f194a12bc698cc512d57d31d2e378c2593f41139.
+Это configuration delivery PASS, не business workflow acceptance.
+Validation сначала403 FRESH_AUTHENTICATION_REQUIRED, затем штатная owner
+SSO reauth без policy changes;4VALID/4EOF/4publication200. Отказ сохранён.
+Own Chrome5 desktop organizational ENV screenshot/Console0/API200–201.
+Retry10 пока NOT RUN, USER corrections0/host business implementation0.
+Worker fixture-only128unit/10suites PASS, Chromium pending; Full65 OPEN.
