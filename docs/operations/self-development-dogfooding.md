@@ -1031,3 +1031,35 @@ Root/HOT/source2b unchanged при активном графе; свежий jou
 Chrome35 периодически reload после unsent0; Console0/native HTTP200, transient
 reconnect возвращается Connected, overflow0. Backend bounded log lines0
 не выдаётся за глобальный PASS. Косметический label candidate НЕ принят.
+
+## Checkpoint 11.10.2026 03:37 UTC — source gate и новое штатное выполнение
+
+Retry12 FAILED/seq662 после semantic BLOCKED Architect; технический SUCCEEDED
+не принят за завершённый дизайн. Review artifact exact revision
+arv_6f481472d629492ead619d9e09022e3b/24592B прочитан ROOT до EOF,
+SHA2562a808d1d861753a42bdce9e8253310ffdf294a4bbf9399e06ad63a882b2b253f MATCH.
+Причина текущего STOP — отсутствующий concrete client publisher/turn/error
+source. Установленный provider0.160.0 OBSERVED native Architect; actual
+оплаченный баланс, единицы, списание и backend billing UNKNOWN. Callback3
+ACK/metadata CAPTURED/currentv3/sameUID/rejoin; прежний FAIL не переписан.
+
+ROOT дополнил доказательства публичными source bytes из managed GitHub READ,
+openai/codex commit a956835d020762cb2b570053af06f643a11c0ecc. Штатный upload
+public-client-routes-0.160.0.md HTTP201: art_ohqulGNfSUOPcdu-73HBGxRX,
+exact revision arv_f4f29dcea28b4b13bce2b0b62f46b698,66134B/scan CLEAN,
+SHA256f197daa438c850bbbd1857051d6f58d0d6dab11453750851a6fa40d4d0e65ca3.
+FULL и ограниченные EXTRACT явно различены. Это source, не бизнес-реализация
+host и не самостоятельный semantic PASS. Finalized input3files
+aset_CV9KrsDYIo_1A6iZ-YQoXaRD/558138B сохраняет оба исходных файла;
+manifest43ae388fbc1809498de10047f29500524cbc14374b57a65e2a58c8929584a878.
+
+Original task/input fields неизменны. CreateRun HTTP20103:36:44Z:
+run_IC4m0TMblr2NDqIC74eh6OOJ/session ses_T3s76vcoC3NZEWL1BIw6NaM7,
+attempt1, Workflow40, RUNNING/seq12. После фактического FAILED и новых source
+это новый обычный запуск, не повтор эффекта с неизвестным исходом. Developer,
+ONE Review, Manager и owner gate ещё OPEN; USER corrections0/host business
+implementation0. Новый приоритет владельца: основные blocker fixes и приёмка,
+без расширения косметики/регресса. HOT2b409353 unchanged, journal e3c3d742.
+Все текущие Running service pods Ready, рестарты CP/RC/GW0. Chrome35 screenshot
+файлов визуально читаемый, Console0; upload/finalization/create HTTP201,
+Connected после navigation. Это ограниченная dev-проверка, Full65 OPEN.

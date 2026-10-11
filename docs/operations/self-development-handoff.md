@@ -10,6 +10,38 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 03:37 UTC — новый запуск с дополнительными исходниками
+
+Основной приоритет — рабочий сценарий и приёмка, без новых косметических
+задач и широких повторных проверок. Production/HOT2b409353 не изменён;
+опубликованный journal head e3c3d742. Все работающие поды сервисов готовы.
+
+Retry12 завершился FAILED/seq662: Architect технически SUCCEEDED, но
+architecture-review.md сохраняет BLOCKED до реализации из-за недостающего
+client publisher/turn/error source. Exact revision
+arv_6f481472d629492ead619d9e09022e3b прочитана ROOT до EOF; SHA256
+2a808d1d861753a42bdce9e8253310ffdf294a4bbf9399e06ad63a882b2b253f MATCH.
+Installed provider0.160.0 уже OBSERVED самим Architect, не host-подменой.
+Callback3 ACK/metadata CAPTURED/currentv3/sameUID/rejoin. История FAIL сохранена.
+
+Недостающие публичные client source получены разрешёнными managed GitHub READ
+на commit a956835d020762cb2b570053af06f643a11c0ecc. Штатно загружен
+public-client-routes-0.160.0.md: 66134B, SHA256
+f197daa438c850bbbd1857051d6f58d0d6dab11453750851a6fa40d4d0e65ca3,
+art_ohqulGNfSUOPcdu-73HBGxRX/revision arv_f4f29dcea28b4b13bce2b0b62f46b698,
+scan CLEAN. FULL/EXTRACT разделены; backend billing и actual баланс UNKNOWN.
+
+Новый finalized INPUT aset_CV9KrsDYIo_1A6iZ-YQoXaRD содержит прежние два
+source-файла и дополнение. Исходные task/input fields не изменены.
+Обычный create Run HTTP201: run_IC4m0TMblr2NDqIC74eh6OOJ,
+session ses_T3s76vcoC3NZEWL1BIw6NaM7, attempt1, Workflow40; RUNNING/seq12.
+Это новый запуск после фактического terminal и нового evidence, не слепой Retry.
+Semantic source gate ещё не PASS; Developer/один Review/Manager/owner OPEN.
+USER corrections0, host business implementation0. Chrome35 Connected,
+Console0 на новом экране, upload/finalization/create HTTP201. Суженный browser
+readback не означает Full65 PASS. Следить за текущим запуском, исправлять лишь
+блокирующие платформенные ошибки; не перезапускать из-за одного ожидания.
+
 ## Приоритет владельца 11.10.2026 03:09 UTC — основное до рабочей приёмки
 
 Из-за дневного лимита токенов больше не расширять регресс и косметику.
