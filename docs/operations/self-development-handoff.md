@@ -10,6 +10,37 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 14:15 UTC — INTAKE опубликован, Architect работает
+
+Source/HOT01f78c1a clean/remote Draft1807 PASS; runner source44a0c7bb,
+ELF b31da159 и PROJECT staff manifestd6e5bae2 не менялись. Manager
+run_CuBuLaxng4Thcy6kEp_o9IN8 SUCCEEDED: result.md, workspace-write-result.json,
+intake-evidence.json и manager-plan.md опубликованы. Owner metadata/content
+GET200, полный bounded body, size/SHA и revision rejoin четырёх результатов
+проверены; manager-plan.md20757B/SHA1e24c39e, intake31952B/SHA7e19c849.
+Это actual publication, не только подготовленные outbox файлы. Семантическая
+приёмка архитектуры и всего business Workflow ещё не выполнена.
+
+Root run_EkUINHgWmQoJhllZquLzIgNt штатно передал результаты обычному
+Architect run_0EkwoYmq5CIfddssVEEQ7oNJ; root turn SUCCEEDED, весь root RUNNING.
+Actual Architect Pod UID837696f1: gpt-6.1-sol medium/SUPPORTED, новый runner
+file ELF, current instruction/task ACK и Pod/revision pins совпали.
+RuntimeRevision rrev_XDGRlYPPztf4yzatvWjtH8vO; instructions73327B/SHA6d2ab216,
+task4952B/SHAee4652fb. Safe prompt preview200/complete=true подтвердил
+templateDigest99e61fae/materializationDigest5b0c3afd из ACK; sections содержат
+только безопасные placeholders, отсутствие там artifact IDs не доказывает
+потерю входа. Свой get_execution_snapshot SUCCEEDED, но его32-character
+safeResult не является OBSERVED provider-version proof. Architect RUNNING,
+owner events доseq362/EOF текущей страницы; CODEX_SHELL и чтения идут.
+
+Chrome35: свежий inline screenshot просмотрен, Console0, reload/rejoin и
+owner reads200; граф pannable/clipped, не full-fit PASS. Drawer «Ход работы»
+проверен отдельно: компактные tool groups, нормальная прокрутка и отсутствие
+document overflow. Первые local диагностические ошибки path/parser/cookie
+не объявляются application failure; исправленные probes сохранены отдельно.
+USER corrections0/host business implementation0. Далее Architect publication,
+Developer substantive PR, ONE Review, Manager/owner и оставшиеся QA; goal открыт.
+
 ## Checkpoint 11.10.2026 13:54 UTC — общий workspace доставлен всем выбранным ролям
 
 Source/HOT44a0c7bb clean; тот же Draft1807/Issue1797. Canonical runner

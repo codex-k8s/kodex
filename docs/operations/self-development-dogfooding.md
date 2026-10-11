@@ -10,6 +10,30 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 14:15 UTC — успешная публикация и native handoff
+
+- [x] Обычный Manager SUCCEEDED; четыре actual artifacts опубликованы.
+      Owner metadata/content200 до EOF, size/SHA и revision rejoin PASS:
+      result.md764B, workspace-write-result.json328B, intake-evidence.json31952B,
+      manager-plan.md20757B. Это не только agent assertion/outbox.
+- [x] Штатный Manager→Architect handoff без USER corrections; root turn
+      SUCCEEDED, весь Workflow RUNNING. Actual Architect gpt-6.1-sol medium,
+      runner ELF b31da159, current ACK/pins/rejoin PASS. Safe preview200
+      template99e61fae/materialization5b0c3afd совпал с текущим ACK; безопасные
+      placeholder sections не выдаются за full input или semantic read.
+- [x] Chrome35 inline graph screenshot и drawer «Ход работы» просмотрены,
+      Console0, relevant API200, reload/rejoin; tool groups компактны,
+      drawer прокручивается без document overflow. Не full-fit graph PASS.
+- [ ] Actual Architect own OBSERVED provider-version evidence, semantic
+      architecture publication и Developer→ONE Review→Manager/owner;
+      остальные обязательные QA и bootstrap acceptance остаются открытыми.
+
+Source/HOT01f78c1a, runner source44a0c7bb; ROOT business implementation0.
+Owner receipt root handoff SHA58848b99, Architect watch SHAa41e3bed;
+seq362 означает текущий EOF, не terminal Workflow. Первые ошибочные
+диагностические path/parser/cookie probes сохранены отдельно; исправленный
+preview не объявляет прочтение всех source файлов агентом.
+
 ## Checkpoint 11.10.2026 13:54 UTC — доставка общего workspace завершена
 
 - [x] Source44a0c7bb: новый runner e4fc62f4/provenance2a01d3ce/ELF b31da159
