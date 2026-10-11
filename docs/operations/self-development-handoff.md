@@ -10,6 +10,26 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 10:46 UTC — source0a116993 live, новый native
+
+Source0a116993 опубликован в Draft1807/body/readback PASS, HOT exact FF clean
+после fresh owner idle0. Serving proof0d4bfcb9 PASS: actual CP/RC ELF750ab63d/
+5888eec7 равны exact Go1.26.6 host build, mounted source/UID/process rejoin и
+/readyz PASS. RC targeted committed PASS2.392s, vet/build обоих unit PASS.
+
+Новая root run_w_im32za9V7Kketf5TNZTk5y, session ses_NP_88hYp-4d1GrV38gOkQ_-C,
+POST201/RUNNING; Task/INPUT четыре поля неизменны, прежний attachment set7.
+Actual Coordinator provider Pod runtime-turn-cbeb134ef43e4be5/UID4566ce50:
+Instructions EQUAL/SHAbafea2ff и local-first/verify-original/no-denial-replay
+присутствуют; cwd /workspace/work, INPUT copies/originals, guideSHAdd753bb6.
+Chrome35 и собственный Playwright открыты на новом root; screenshot/overflow,
+Console0 и relevant HTTP200 проверены. Scope DEBUG_SERVING, не release/QA PASS.
+
+Продолжать сопровождение native без hot source/role image изменений до terminal.
+HOT0a116993 frozen, integration-журнал может публиковаться отдельно. ONE Review
+total, USER corrections0/host business implementation0. Semantic Architect/
+Developer PR/Final Manager/owner/full QA и bootstrap merge OPEN/NOT RUN.
+
 ## Checkpoint 11.10.2026 10:39 UTC — local-first и malformed entry fix
 
 Новый пакет поверх90c23d6a: общие FILES инструкции всех ролей используют

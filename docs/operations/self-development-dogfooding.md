@@ -10,6 +10,34 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 10:46 UTC — workspace local-first доставлен
+
+- [x] Source0a116993 запушен в Draft1807, exact remote/body readback PASS,
+      mainab4992e0 unchanged. Первый immediate PR readback был UNKNOWN из-за
+      задержки обновления; повторный readback PASS, push не повторялся.
+- [x] Fresh fixed owner readback10:42:04: active runs/claimed leases/builds/
+      admissions/promotions0; HOT exact FF0a116993 clean, без restart native.
+- [x] Serving proof0d4bfcb9: host/Pod source hashes, CP/RC UID/process rejoin,
+      /readyz PASS; exact Go1.26.6 host ELF750ab63d/5888eec7 совпали с actual.
+      Targeted RC на committed0a116993 PASS2.392s; vet/build PASS обоих unit.
+- [x] Новая штатная попытка run_w_im32za9V7Kketf5TNZTk5y POST201,
+      исходные Task/INPUT четыре поля byte-identical, attachment set прежний;
+      USER corrections0, host business implementation0. Native RUNNING,
+      Coordinator RUNNING/cursor10; business результат ещё не получен.
+- [x] Actual provider Pod UID4566ce50: Instructions EQUAL runtime input,
+      SHAbafea2ff; local-first/original digest/no-denial-replay guidance присутствует.
+      Cwd /workspace/work, INPUT copies и originals присутствуют, общий
+      WORKSPACE.md SHAdd753bb6 неизменён. Это не semantic role acceptance.
+- [x] Chrome35: session/bootstrap/graph/events200, Console0; собственный
+      screenshot просмотрен/overflow=false. Graph pan/zoom обрезает часть узлов;
+      full fit не заявлен, прежние Playwright startup errors сохранены.
+- [ ] Semantic Architect PASS, substantive Developer PR, ONE Review,
+      Final Manager/owner, остальные обязательные QA и bootstrap merge.
+
+HOT0a116993 заморожен на время native. Историческая неуспешная попытка и её
+malformed-entry доказательства сохраняются отдельно; старый semantic BLOCKED
+не переносится на новую root попытку как готовый результат.
+
 ## Checkpoint 11.10.2026 10:39 UTC — local-first и malformed entry
 
 - [x] Причина native FILES отказа доказана: Architect потерял два символа
