@@ -10,6 +10,26 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 06:37 UTC — runner доставлен, role admission идёт
+
+ROOT/HOT source d053e6bc, Draft1807 содержит общий WORKSPACE.md и parser fix.
+Runner b3c8fd6bc321bcca0aa37a7b59affa968c4b38b38cf9092866ab4e8d127c4e9d
+импортирован на оба узла, опубликован; exact policy/default transition PASS.
+Actual CP/RC mounted source и serving ELF/rejoin PASS. Контрольный CP ELF
+пересобран точным Go1.26.6 и совпал с actual ed5920eb; первоначальное
+сравнение Go1.27.1 не было доказательством source. Первый observer POD_SET
+NOT_PROVEN сохранён; следующий receipt74cdbe32 PASS.
+
+Новые три recipe generations23/19/13 опубликованы и builds COMPLETED;
+admission/sign/promotion ещё идут. После их PROMOTED readback подготовить
+четыре ENV native draft/validation/impact fullEOF/publication и выбрать лишь
+восемь intended bindings (1/1/5/1), сохранив38tools и все non-image настройки.
+Canonical planner role-image-native-plan.mjs не выполняет HTTP effects;
+после publication обязательны fresh ENV/runtime-configuration и fullEOF outcomes.
+До этого actual новый guide в Pod NOT RUN и не создавать business retry.
+Root FAILED1001/Architect997 сохранён, точная причина UNKNOWN;
+Developer/ONE Review/Manager/owner ещё OPEN. USER corrections0.
+
 ## Checkpoint 11.10.2026 06:16 UTC — файловая навигация всех агентов и parser fix
 
 Root `run_otNkDk7sv9Qd_bK4xEB4QAxT` FAILED: terminal Architect seq997,

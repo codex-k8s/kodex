@@ -1263,3 +1263,30 @@ RUNTIME_PROVIDER_UNAVAILABLE не доказывает транспортную 
 category причины997 UNKNOWN. Static final parser defect доказан независимо,
 не объявлен причиной997. Restart/retry пока не выполнялся. USER corrections0,
 host business implementation0; прежнее actual write proof81a88c04 сохранено.
+
+## Checkpoint 11.10.2026 06:37 UTC — delivery общего workspace
+
+Source d053e6bc опубликован в Draft1807, HOT fast-forward d053 после exact
+owner-idle readback. Новый runner OCI b3c8fd6bc321bcca0aa37a7b59affa968c4b38b38cf9092866ab4e8d127c4e9d
+собран каноническим full profile и импортирован на оба dev-узла; registry seed,
+exact policy f9df583806f1ef5ee833b6936fafe7ff, runtime binding и default
+transition завершены PASS. Предыдущие admitted/promoted artifacts сохранены.
+
+- [x] Actual CP/RC source/mount/rejoin PASS, serving proof SHA256
+      74cdbe327d3e285ce915db95791414e68c0ff5e315fe2d8d34d5736463298c55.
+      Первое наблюдение NOT_PROVEN/POD_SET сохранено. Первый контрольный ELF
+      использовал Go1.27.1; сравнение признано некорректным. Повтор env-i
+      Go1.26.6 совпал с actual CP ELF ed5920ebcbb9152675b8a5640764115adac1e834474ac931e52afb0bc21172b5.
+- [x] Native новые recipe generations23/19/13 опубликованы, builds COMPLETED;
+      source/history прочитаны до EOF. Изменён только FROM pinned runner.
+      Окружения37/19/18/22 и восемь bindings прочитаны; каждый имеет38tools.
+- [ ] Admission/sign/promotion трёх новых artifacts, затем четыре ENV и восемь
+      intended bindings. Сборка COMPLETED не считается admitted/promoted.
+- [ ] Actual новый WORKSPACE.md в Pod и успешный native бизнес-сценарий;
+      root FAILED1001 сохранён, retry ещё NOT RUN. ONE Review/Manager/owner OPEN.
+
+Chrome35 owner session/bootstrap200 после штатного открытия API. Console0
+сразу после reload относится к своему окну; последующие диагностические404/405
+ошибочных read URLs сохранены, не объявлены безошибочным пользовательским QA.
+Чужие вкладки не закрывались. Provider cause997 остаётся UNKNOWN;
+самостоятельный parser regression не подменяет этот диагноз.
