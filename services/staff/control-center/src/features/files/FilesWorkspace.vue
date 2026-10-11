@@ -566,10 +566,22 @@ watch(
   },
 );
 
+const infiniteScrollContext = computed(() =>
+  JSON.stringify([
+    props.projectRef,
+    collectionTab.value,
+    kind.value,
+    scanState.value,
+    source.value,
+    query.value,
+    artifactRealtimeRevision.value,
+  ]),
+);
 useCursorInfiniteScroll({
   root: scrollRoot,
   sentinel,
   enabled: hasMore,
+  contextKey: infiniteScrollContext,
   loadMore,
 });
 

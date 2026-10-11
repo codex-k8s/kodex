@@ -13,7 +13,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
-const platformSourceConformityRevision = "platform-source-conformity-v2"
+const platformSourceConformityRevision = "platform-source-conformity-v3"
 const maximumPlatformInstructionBytes = 8 << 10
 
 // Этот versioned input меняется только новой revision. Compiled v3 и прежние
@@ -31,6 +31,14 @@ const platformSourceConformityRussian = `Утверждённые требова
 const platformEvidenceGuidanceEnglish = `For each mandatory current-gate claim, record claim -> mandatory fact -> sufficient evidence class -> exact source/version/digest/EOF -> residual UNKNOWN. Distinguish a required source property, an approved requirement, a proposed design decision and future acceptance. A pinned installed schema or documented contract can prove wire shape, not hidden implementation, runtime routing, delivery/order, cancellation or observed effects. Identify which mandatory fact needs full implementation source. A discovered import, sender, dependency or extra file does not by itself make every transitive source a full-EOF gate. Conversely, do not discard a mandatory missing fact or declare its source unnecessary: keep that claim UNKNOWN/BLOCKED and its gate closed. Required canonical EOF and pins remain mandatory; EXTRACT is not FULL and a packet is not transitively complete unless proved. Complete available authorized reads and map each claim to sufficient evidence; do not call design or unverified runtime behavior PASS/READY. Choose and justify a recommendation only within explicitly owner-delegated decisions; do not invent business rules or assume delegated authority. Preserve owner gates, independent permitted READ and existing denied/unknown-effect policy; never replay a denied URL through another transport or identity.`
 
 const platformEvidenceGuidanceRussian = `Для каждого обязательного утверждения текущего gate фиксируй: утверждение → обязательный факт → достаточный класс evidence → точные источник/version/digest/EOF → остаточный UNKNOWN. Различай требуемое свойство источника, утверждённое требование, предлагаемый дизайн и будущую приёмку. Закреплённая установленная schema или документированный контракт доказывают wire shape, но не скрытую реализацию, runtime routing, доставку/порядок, отмену или наблюдаемые эффекты. Укажи, какой обязательный факт требует полного source реализации. Обнаруженный import, sender, dependency или дополнительный файл сам по себе не превращает все транзитивные источники в full-EOF gate. Не отбрасывай обязательный недостающий факт и не объявляй его источник ненужным: сохрани UNKNOWN/BLOCKED этого утверждения и закрытый gate. Требуемые canonical EOF и pins обязательны; EXTRACT не равен FULL, пакет не является транзитивно полным без доказательства. Заверши доступные разрешённые READ и свяжи каждое утверждение с достаточным evidence; дизайн или непроверенное runtime-поведение не называй PASS/READY. Выбирай и обосновывай рекомендацию только в явно делегированных владельцем решениях; не выдумывай бизнес-правила и не предполагай делегированные полномочия. Сохраняй owner gates, независимые разрешённые READ и прежнюю denied/unknown-effect policy; запрещённый URL не повторяй через другой transport или identity.`
+
+// Только v3 сокращает эквивалентный Git-фрагмент для прежнего 8KiB budget.
+// Опубликованные v1/v2 используют прежние константы без изменения bytes.
+const platformGitGuidanceV3Russian = `Если текущий runtime явно предоставляет разрешённый GH_TOKEN и допускает HTTPS github.com к назначенному репозиторию, Git не берёт токен сам. Для уже разрешённой Git-операции используй gh как per-command helper: git -c credential.https://github.com.helper= -c 'credential.https://github.com.helper=!/usr/local/bin/gh auth git-credential' <разрешённые аргументы Git>. Запускай helper только через credential protocol самого Git; никогда не вызывай его напрямую и не печатай его вывод. Helper читает разрешённый credential окружения без API-запроса. Токен запрещён в аргументах, URL, Git-конфигурации, логах, артефактах и сообщениях; не сохраняй credentials и не меняй host/global Git-конфигурацию. Не выполняй login, refresh, ротацию секрета, расширение прав или сети. gh auth status не является обязательным gate: его дополнительные API-чтения могут быть вне сетевой policy; отказ status сам по себе не доказывает невалидность токена. Сообщай разрешённую операцию и exact независимый readback; при denied, failed или unknown outcome сохрани отказ и STOP по прежней effect/retry policy. Guidance не выдаёт операции, repository scope или capabilities и никогда не разрешает replay denied/unknown effect.`
+
+const platformStageGateEnglish = `For policy gates distinguish CODE_ONLY design, implementation and offline tests from authentication execution and deployment. A prohibited action remains STOP; do not execute it or bypass policy. Unknown future deployment is not by itself a blanket code-only blocker; required current-gate proof still cannot be skipped. Assess actual auth use separately against current official policy and trusted deployment provenance; do not infer permission or prohibition from a Pod, VM or license alone. Keep unproved deployment and compliance UNKNOWN, not PASS/READY. If a missing fact is required for the current action, keep that gate closed. This guidance grants no permission, exemption or compliance verdict.`
+
+const platformStageGateRussian = `В policy gate различай CODE_ONLY: дизайн, реализацию и offline-тесты — и исполнение авторизации и deployment. Реально запрещённое действие остаётся STOP; не выполняй его и не обходи policy. Неизвестный будущий deployment не запрещает code-only целиком, но обязательное доказательство текущего gate не пропускай. Проверяй auth use по текущей official policy и доверенное происхождение deployment, не по одному Pod, VM или лицензии. Недоказанные deployment/compliance сохраняй UNKNOWN, не PASS/READY; если факт нужен текущему действию, его gate закрыт. Guidance не выдаёт прав, исключений или verdict соответствия.`
 
 func platformInstructionBinding(locale string) (entity.PromptPlatformInstructions, error) {
 	return platformInstructionBindingForRevision(platformSourceConformityRevision, locale)
@@ -52,13 +60,28 @@ func platformInstructionBindingForRevision(revision, locale string) (entity.Prom
 	refPrefix := "pinst_source_conformity_v1_"
 	switch revision {
 	case "platform-source-conformity-v1":
-	case platformSourceConformityRevision:
+	case "platform-source-conformity-v2", platformSourceConformityRevision:
 		refPrefix = "pinst_source_conformity_v2_"
+		if revision == platformSourceConformityRevision && locale == "ru" {
+			prefix, _, found := strings.Cut(content, "\nЕсли текущий runtime явно предоставляет разрешённый GH_TOKEN")
+			if !found {
+				return entity.PromptPlatformInstructions{}, errs.ErrConflict
+			}
+			content = prefix + "\n" + platformGitGuidanceV3Russian
+		}
 		guidance := platformEvidenceGuidanceEnglish
 		if locale == "ru" {
 			guidance = platformEvidenceGuidanceRussian
 		}
 		content += "\n" + guidance
+		if revision == platformSourceConformityRevision {
+			refPrefix = "pinst_source_conformity_v3_"
+			stageGate := platformStageGateEnglish
+			if locale == "ru" {
+				stageGate = platformStageGateRussian
+			}
+			content += "\n" + stageGate
+		}
 	default:
 		return entity.PromptPlatformInstructions{}, errs.ErrConflict
 	}

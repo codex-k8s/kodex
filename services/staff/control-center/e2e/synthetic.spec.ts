@@ -1,4 +1,9 @@
 import { syntheticNetworkJournal } from "./synthetic-network-journal";
+import {
+  syntheticJourneyProfiles,
+  includesJourneySection,
+  expectedJourneyDiagnostics,
+} from "./synthetic-journey-profile";
 import { observeSyntheticAssetCancellation } from "./synthetic-asset-cancellation";
 import { expect, type Request } from "@playwright/test";
 import {
@@ -183,21 +188,10 @@ test.afterEach(async ({ page }) => {
   await journals.get(page)?.finish();
 });
 
-for (const { width, height } of [
-  { width: 2900, height: 1600 },
-  { width: 2560, height: 1440 },
-  { width: 1920, height: 1080 },
-  { width: 1440, height: 900 },
-  { width: 1280, height: 900 },
-  { width: 900, height: 1080 },
-  { width: 768, height: 1024 },
-  { width: 390, height: 844 },
-]) {
-  test(`synthetic: Home и ассистент ${String(width)}px`, async ({
-    context,
-    page,
-    browserName,
-  }, testInfo) => {
+for (const { width, height, part, title } of syntheticJourneyProfiles()) {
+  test(title, async ({ context, page, browserName }, testInfo) => {
+    const includes = (section: Exclude<typeof part, "ALL">) =>
+      includesJourneySection(part, section);
     // Общий сценарий последовательно проверяет более двадцати экранов; отдельные ожидания сохраняют прежние лимиты.
     test.setTimeout(120_000);
     if (width === 1440 || width === 390)
@@ -224,6 +218,7 @@ for (const { width, height } of [
     const initialHomeCatalogs = new Promise<void>((resolve) => {
       releaseInitialHomeCatalogs = resolve;
     });
+    if (!includes("CORE_ENV")) releaseInitialHomeCatalogs();
     if (width === 1440) await page.clock.install();
     await page.setViewportSize({ width, height });
     page.on("pageerror", (error) => failures.push(error.message));
@@ -551,6 +546,16 @@ for (const { width, height } of [
       nextActions: [],
       nextPageToken: "",
     };
+    const installIntegrationBase = async () => {
+      await page.route("**/api/v1/integration-definitions**", (route) =>
+        route.fulfill({ json: integrationDefinitions }),
+      );
+      await page.route("**/api/v1/integration-connections**", (route) =>
+        route.fulfill({ json: integrationConnections }),
+      );
+      integrationCatalogReady = true;
+    };
+    if (part === "PROVIDERS_INTEGRATIONS") await installIntegrationBase();
     const catalogReaders = new Map<
       PlatformSnapshotEnvelope["kind"],
       SyntheticSnapshotReader[]
@@ -760,6 +765,16 @@ for (const { width, height } of [
         },
       });
     });
+    let contextEnvironment: RuntimeEnvironmentSet | undefined;
+    if (part === "WORKFLOW_CONTEXT") {
+      contextEnvironment = (
+        await installEnvironmentFixture(
+          page,
+          projects[0]?.ref ?? "project_synthetic_0",
+          installSnapshot,
+        )
+      ).environment;
+    }
     await page.goto("/");
     await expect(page.locator("main h1")).toBeVisible();
     await expect(page.locator("header .realtime-status")).toHaveAttribute(
@@ -774,782 +789,392 @@ for (const { width, height } of [
         "live",
       );
     }
-    await expect(
-      page.getByText(projects[0]?.name ?? "", { exact: true }).first(),
-    ).toBeVisible();
-    // Ждём именно карточки секции Проектов: глобальный текст первого проекта
-    // может появиться раньше готовности самой интерактивной секции.
-    await expect(
-      page.locator(".home-project-section .home-project"),
-    ).toHaveCount(4);
-    await expect(
-      page.locator(".home-project-section .home-project h3"),
-    ).toHaveText(
-      [projects[0], projects[1], projects[2], projects[3]].map(
-        (project) => project?.name ?? "",
-      ),
-    );
-    const allProjects = page
-      .locator(".home-project-section")
-      .getByRole("link", { name: "Все проекты", exact: true });
-    await expect(allProjects).toHaveAttribute("href", "/projects");
-    releaseInitialHomeCatalogs();
-    await expect(allProjects).toBeVisible();
-    await expect(
-      page.locator(".home-attention-section .home-attention__skeleton"),
-    ).toHaveCount(0);
-    await expect
-      .poll(() =>
-        page.evaluate(
-          () => document.documentElement.scrollWidth <= window.innerWidth,
+    if (!includes("CORE_ENV")) {
+      await expect(
+        page.locator(".home-project-section .home-project"),
+      ).toHaveCount(4);
+      await expect(
+        page.locator(".home-attention-section .home-attention__skeleton"),
+      ).toHaveCount(0);
+    }
+    if (includes("CORE_ENV")) {
+      await expect(
+        page.getByText(projects[0]?.name ?? "", { exact: true }).first(),
+      ).toBeVisible();
+      // Ждём именно карточки секции Проектов: глобальный текст первого проекта
+      // может появиться раньше готовности самой интерактивной секции.
+      await expect(
+        page.locator(".home-project-section .home-project"),
+      ).toHaveCount(4);
+      await expect(
+        page.locator(".home-project-section .home-project h3"),
+      ).toHaveText(
+        [projects[0], projects[1], projects[2], projects[3]].map(
+          (project) => project?.name ?? "",
         ),
-      )
-      .toBe(true);
-    await page.screenshot({
-      path: testInfo.outputPath(`home-${String(width)}.png`),
-      fullPage: true,
-    });
-    await page
-      .getByRole("button", { name: "Новый запуск", exact: true })
-      .click();
-    const homeProjects = page.getByRole("dialog", {
-      name: "Выберите Проект",
-      exact: true,
-    });
-    await homeProjects
-      .getByRole("button", { name: "Выберите Проект", exact: true })
-      .click();
-    const projectOptions = page.getByRole("option");
-    await expect(projectOptions).toHaveCount(8);
-    await expect(projectOptions.locator("strong")).toHaveText(
-      projects.map((project) => project.name),
-    );
-    await page.getByRole("combobox").fill("Проект 2");
-    await expect(projectOptions).toHaveCount(1);
-    await expect(projectOptions).toContainText("Проект 2");
-    await page.getByRole("combobox").fill("");
-    await expect(projectOptions).toHaveCount(8);
-    await expect(projectOptions.locator("strong")).toHaveText(
-      projects.map((project) => project.name),
-    );
-    await page.getByRole("combobox").press("Escape");
-    await homeProjects
-      .getByRole("button", { name: "Закрыть", exact: true })
-      .click();
-    await page
-      .getByRole("button", { name: "Открыть Kodex", exact: true })
-      .click();
-    await expect(
-      page.getByRole("dialog", { name: "Kodex", exact: true }),
-    ).toBeVisible();
-    await expectAssistantConversationActions(
-      page.getByRole("dialog", { name: "Kodex", exact: true }),
-      false,
-    );
-    const assistantGeometry = await page
-      .locator("#assistant-workspace")
-      .evaluate((element) => {
-        const rect = element.getBoundingClientRect();
-        return {
-          width: rect.width / innerWidth,
-          height: rect.height / innerHeight,
-          horizontalMarginDifference: Math.abs(
-            rect.left - (innerWidth - rect.right),
+      );
+      const allProjects = page
+        .locator(".home-project-section")
+        .getByRole("link", { name: "Все проекты", exact: true });
+      await expect(allProjects).toHaveAttribute("href", "/projects");
+      releaseInitialHomeCatalogs();
+      await expect(allProjects).toBeVisible();
+      await expect(
+        page.locator(".home-attention-section .home-attention__skeleton"),
+      ).toHaveCount(0);
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth,
           ),
-          verticalMarginDifference: Math.abs(
-            rect.top - (innerHeight - rect.bottom),
-          ),
-          headerHeight: element
-            .querySelector(".assistant-drawer__header")
-            ?.getBoundingClientRect().height,
-        };
+        )
+        .toBe(true);
+      await page.screenshot({
+        path: testInfo.outputPath(`home-${String(width)}.png`),
+        fullPage: true,
       });
-    const expectedFraction = width <= 720 ? 1 : 0.92;
-    expect(assistantGeometry.width).toBeCloseTo(expectedFraction, 2);
-    expect(assistantGeometry.height).toBeCloseTo(expectedFraction, 2);
-    expect(assistantGeometry.horizontalMarginDifference).toBeLessThan(2);
-    expect(assistantGeometry.verticalMarginDifference).toBeLessThan(2);
-    expect(assistantGeometry.headerHeight).toBe(72);
-    await expect
-      .poll(() =>
-        page.evaluate(
-          () => document.documentElement.scrollWidth <= window.innerWidth,
-        ),
-      )
-      .toBe(true);
-    await page.screenshot({
-      path: testInfo.outputPath(`assistant-${String(width)}.png`),
-      fullPage: true,
-    });
-    await page
-      .getByRole("dialog", { name: "Kodex", exact: true })
-      .getByRole("button", { name: "Закрыть", exact: true })
-      .click();
-    let configuration: ManagedConfiguration = {
-      ref: "configuration_synthetic",
-      version: 1,
-      kind: "PROMPT_TEMPLATE",
-      projectRef: projects[0]?.ref,
-      name: "Шаблон",
-      managedBy: "UI",
-      archived: false,
-      nextActions: [],
-      source: "ui",
-      sourceRevision: "1",
-      updatedAt: "2026-09-04T11:00:00Z",
-    };
-    let revision: ManagedConfigurationRevision = {
-      ref: "revision_synthetic",
-      revision: 1,
-      state: "DRAFT",
-      contentFormat: "TEXT",
-      content: "",
-      digest: "a".repeat(64),
-      validationDiagnostics: [],
-      createdAt: configuration.updatedAt,
-    };
-    const commands: string[] = [];
-    let promptPlan: RevisionImpactPlan | undefined;
-    let firstPromptPublicationKey: string | undefined;
-    const draftHistory: ManagedConfigurationRevision[] = [];
-    await page.route("**/api/v1/**", async (route) => {
-      const path = new URL(route.request().url()).pathname;
-      const method = route.request().method();
-      if (path === "/api/v1/revision-impact-plans/prompt_plan_synthetic") {
-        if (!promptPlan) throw new Error("Prompt plan was not prepared");
-        const report: RevisionImpactPage = {
-          plan: promptPlan,
-          total: 1,
-          items: [
-            {
-              ref: "prompt_item_synthetic",
-              scopeKind: "PROJECT",
-              organizationRef: "org_synthetic",
-              projectRef: projects[0]?.ref ?? "project_synthetic",
-              consumerKind: "AGENT",
-              consumerRef: "agent_prompt_consumer",
-              consumerVersion: 2,
-              bindingRef: "prompt_binding",
-              bindingVersion: 3,
-              sourceRevisionRef: "previous_prompt",
-              outcome: promptPlan.state === "APPLIED" ? "CONFLICT" : "PENDING",
-            },
-          ],
-        };
-        await route.fulfill({ json: report });
-        return;
-      }
-      if (
-        path.endsWith("/impact-plans") &&
-        path.startsWith("/api/v1/prompt-template-configurations/")
-      ) {
-        expect(method).toBe("POST");
-        expect(route.request().headers()["if-match"]).toBe(
-          `"${String(configuration.version)}"`,
-        );
-        expect(revision.state).toBe("VALID");
-        promptPlan = {
-          ref: "prompt_plan_synthetic",
-          version: 1,
-          kind: "PROMPT_TEMPLATE",
-          sourceRef: configuration.ref,
-          sourceVersion: configuration.version,
-          draftRef: revision.ref,
-          draftVersion: revision.revision,
-          targetDigest: revision.digest,
-          digest: "plan-digest",
-          total: 2,
-          state: "PREPARED",
-          createdAt: "2026-09-06T00:00:00Z",
-          expiresAt: "2099-09-06T00:00:00Z",
-        };
-        commands.push("prepare");
-        await route.fulfill({ json: promptPlan });
-        return;
-      }
-      if (
-        path === "/api/v1/prompt-template-configurations/drafts" &&
-        method === "POST"
-      ) {
-        const body = route.request().postDataJSON() as {
-          name: string;
-          content: string;
-          configurationRef?: string;
-          projectRef?: string;
-        };
-        expect(body.configurationRef).toBeUndefined();
-        expect(body.projectRef).toBe(projects[0]?.ref);
-        expect(body.content).toBe("Проверить документы");
-        configuration = { ...configuration, name: body.name };
-        revision = { ...revision, content: body.content };
-        commands.push("create");
-        await route.fulfill({ status: 201, json: { configuration, revision } });
-        return;
-      }
-      if (
-        path === `/api/v1/managed-configurations/${configuration.ref}/revisions`
-      ) {
-        await route.fulfill({
-          json: {
-            configuration,
-            items: [revision, ...draftHistory],
-            total: 1 + draftHistory.length,
-          },
-        });
-        return;
-      }
-      const base = `/api/v1/prompt-template-configurations/${configuration.ref}/revisions/${revision.ref}`;
-      if (path === `${base}/saves`) {
-        expect(route.request().headers()["if-match"]).toBe(
-          `"${String(configuration.version)}"`,
-        );
-        const body = route.request().postDataJSON() as {
-          content: string;
-          contentFormat: string;
-        };
-        expect(body.contentFormat).toBe("TEXT");
-        draftHistory.unshift({ ...revision, state: "DISCARDED" });
-        revision = {
-          ...revision,
-          ref: `${revision.ref}_next`,
-          parentRevisionRef: revision.ref,
-          revision: revision.revision + 1,
-          content: body.content,
-          state: "DRAFT",
-        };
-        configuration = {
-          ...configuration,
-          version: configuration.version + 1,
-        };
-        commands.push("save");
-        await route.fulfill({
-          headers: { ETag: `"${String(configuration.version)}"` },
-          json: { configuration, revision },
-        });
-        return;
-      }
-      if (path === `${base}/validation` || path === `${base}/publication`) {
-        expect(route.request().headers()["if-match"]).toBe(
-          `"${String(configuration.version)}"`,
-        );
-        expect(route.request().headers()["idempotency-key"]).toMatch(
-          /^[0-9a-f-]{36}$/,
-        );
-        const publishing = path.endsWith("publication");
-        if (publishing) {
-          if (!promptPlan)
-            throw new Error("Prompt publication requires prepared plan");
-          expect(route.request().postDataJSON()).toEqual({
-            planRef: promptPlan.ref,
-            selectedItemRefs: ["prompt_item_synthetic"],
-          });
-          const key = route.request().headers()["idempotency-key"];
-          if (!firstPromptPublicationKey) {
-            firstPromptPublicationKey = key;
-            commands.push("publish-unknown");
-            await route.fulfill({
-              status: 504,
-              json: {
-                type: "about:blank",
-                title: "Gateway Timeout",
-                status: 504,
-              },
-            });
-            return;
-          }
-          expect(key).toBe(firstPromptPublicationKey);
-          promptPlan = {
-            ...promptPlan,
-            state: "APPLIED",
-            version: 2,
-            publishedRevisionRef: revision.ref,
-          };
-        }
-        expect(revision.state).toBe(publishing ? "VALID" : "DRAFT");
-        revision = { ...revision, state: publishing ? "PUBLISHED" : "VALID" };
-        configuration = {
-          ...configuration,
-          version: configuration.version + 1,
-          ...(publishing ? { currentRevision: revision } : {}),
-        };
-        commands.push(publishing ? "publish" : "validate");
-        await route.fulfill({
-          json: {
-            configuration,
-            revision,
-            ...(publishing ? { plan: promptPlan } : {}),
-          },
-        });
-        return;
-      }
-      await route.fallback();
-    });
-    await page.goto("/configurations/PROMPT_TEMPLATE/new");
-    const savePromptDraft = page.getByRole("button", {
-      name: "Сохранить черновик",
-      exact: true,
-    });
-    await expect(savePromptDraft).toBeDisabled();
-    await expect(savePromptDraft).toHaveAttribute(
-      "aria-describedby",
-      "managed-project-required",
-    );
-    await expect(
-      page.getByText(
-        "Выберите проект. Шаблон промпта и конфигурация образа роли создаются только в выбранном проекте.",
-        { exact: true },
-      ),
-    ).toBeVisible();
-    await page
-      .locator("#main-content")
-      .getByRole("button", { name: "Проект", exact: true })
-      .click();
-    await page
-      .getByRole("option")
-      .filter({ hasText: projects[0]?.name ?? "" })
-      .click();
-    await expect(page).toHaveURL(
-      new RegExp(
-        `/configurations/PROMPT_TEMPLATE/new\\?projectRef=${String(projects[0]?.ref)}$`,
-      ),
-    );
-    await page.getByLabel("Название", { exact: true }).fill("Шаблон");
-    await page
-      .getByRole("textbox", { name: "Содержимое", exact: true })
-      .fill("Проверить документы");
-    await expect(savePromptDraft).toBeEnabled();
-    await page
-      .getByRole("button", { name: "Сохранить черновик", exact: true })
-      .click();
-    await expect(page).toHaveURL(
-      new RegExp(
-        `/configurations/PROMPT_TEMPLATE/configuration_synthetic\\?projectRef=${String(projects[0]?.ref)}$`,
-      ),
-    );
-    await page
-      .getByRole("textbox", { name: "Содержимое", exact: true })
-      .fill("");
-    await page
-      .getByRole("button", { name: "Сохранить черновик", exact: true })
-      .click();
-    await expect.poll(() => revision.content).toBe("");
-    await expect(
-      page.getByRole("button", { name: "Сохранить черновик", exact: true }),
-    ).toBeDisabled();
-    await page
-      .getByRole("textbox", { name: "Содержимое", exact: true })
-      .fill("Проверить документы");
-    await page
-      .getByRole("button", { name: "Сохранить черновик", exact: true })
-      .click();
-    await expect.poll(() => revision.revision).toBe(3);
-    await expect(
-      page.getByRole("button", { name: "Опубликовать", exact: true }),
-    ).toBeDisabled();
-    await page.getByRole("button", { name: "Проверить", exact: true }).click();
-    await expect(
-      page.getByRole("button", { name: "Опубликовать", exact: true }),
-    ).toBeEnabled();
-    await page
-      .getByRole("button", { name: "Опубликовать", exact: true })
-      .click();
-    const promptPlanDialog = page.getByRole("dialog", {
-      name: "План публикации",
-      exact: true,
-    });
-    await expect(
-      promptPlanDialog.getByText("В исходном плане: 2", { exact: true }),
-    ).toBeVisible();
-    await promptPlanDialog
-      .getByRole("checkbox", { name: "agent_prompt_consumer", exact: true })
-      .check();
-    await promptPlanDialog
-      .getByRole("button", {
-        name: "Опубликовать и обновить выбранных: 1",
+      await page
+        .getByRole("button", { name: "Новый запуск", exact: true })
+        .click();
+      const homeProjects = page.getByRole("dialog", {
+        name: "Выберите Проект",
         exact: true,
-      })
-      .click();
-    await promptPlanDialog
-      .getByRole("button", { name: "Повторить исходный запрос", exact: true })
-      .click();
-    await expect(
-      promptPlanDialog.locator('[data-state="CONFLICT"]'),
-    ).toBeVisible();
-    await promptPlanDialog
-      .getByRole("button", { name: "Закрыть", exact: true })
-      .click();
-    await expect(
-      page.locator(".configuration-editor [data-state='PUBLISHED']"),
-    ).toBeVisible();
-    await expect
-      .poll(() =>
-        page.evaluate(
-          () => document.documentElement.scrollWidth <= window.innerWidth,
-        ),
-      )
-      .toBe(true);
-    await page.screenshot({
-      path: testInfo.outputPath(`configuration-${String(width)}.png`),
-      fullPage: true,
-    });
-    expect(commands).toEqual([
-      "create",
-      "save",
-      "save",
-      "validate",
-      "prepare",
-      "publish-unknown",
-      "publish",
-    ]);
-    const summaries: ManagedConfigurationSummary[] = Array.from(
-      { length: 8 },
-      (_, index) => ({
-        ref: `configuration_${String(index)}`,
+      });
+      await homeProjects
+        .getByRole("button", { name: "Выберите Проект", exact: true })
+        .click();
+      const projectOptions = page.getByRole("option");
+      await expect(projectOptions).toHaveCount(8);
+      await expect(projectOptions.locator("strong")).toHaveText(
+        projects.map((project) => project.name),
+      );
+      await page.getByRole("combobox").fill("Проект 2");
+      await expect(projectOptions).toHaveCount(1);
+      await expect(projectOptions).toContainText("Проект 2");
+      await page.getByRole("combobox").fill("");
+      await expect(projectOptions).toHaveCount(8);
+      await expect(projectOptions.locator("strong")).toHaveText(
+        projects.map((project) => project.name),
+      );
+      await page.getByRole("combobox").press("Escape");
+      await homeProjects
+        .getByRole("button", { name: "Закрыть", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Открыть Kodex", exact: true })
+        .click();
+      await expect(
+        page.getByRole("dialog", { name: "Kodex", exact: true }),
+      ).toBeVisible();
+      await expectAssistantConversationActions(
+        page.getByRole("dialog", { name: "Kodex", exact: true }),
+        false,
+      );
+      const assistantGeometry = await page
+        .locator("#assistant-workspace")
+        .evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            width: rect.width / innerWidth,
+            height: rect.height / innerHeight,
+            horizontalMarginDifference: Math.abs(
+              rect.left - (innerWidth - rect.right),
+            ),
+            verticalMarginDifference: Math.abs(
+              rect.top - (innerHeight - rect.bottom),
+            ),
+            headerHeight: element
+              .querySelector(".assistant-drawer__header")
+              ?.getBoundingClientRect().height,
+          };
+        });
+      const expectedFraction = width <= 720 ? 1 : 0.92;
+      expect(assistantGeometry.width).toBeCloseTo(expectedFraction, 2);
+      expect(assistantGeometry.height).toBeCloseTo(expectedFraction, 2);
+      expect(assistantGeometry.horizontalMarginDifference).toBeLessThan(2);
+      expect(assistantGeometry.verticalMarginDifference).toBeLessThan(2);
+      expect(assistantGeometry.headerHeight).toBe(72);
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth,
+          ),
+        )
+        .toBe(true);
+      await page.screenshot({
+        path: testInfo.outputPath(`assistant-${String(width)}.png`),
+        fullPage: true,
+      });
+      await page
+        .getByRole("dialog", { name: "Kodex", exact: true })
+        .getByRole("button", { name: "Закрыть", exact: true })
+        .click();
+      let configuration: ManagedConfiguration = {
+        ref: "configuration_synthetic",
         version: 1,
         kind: "PROMPT_TEMPLATE",
         projectRef: projects[0]?.ref,
-        name: `Шаблон ${String(index + 1)}`,
-        managedBy: index === 0 ? "GIT" : "UI",
+        name: "Шаблон",
+        managedBy: "UI",
         archived: false,
         nextActions: [],
-        source: index === 0 ? "repository/templates/summary.txt" : "ui",
-        sourceRevision: "revision-1",
+        source: "ui",
+        sourceRevision: "1",
         updatedAt: "2026-09-04T11:00:00Z",
-        currentRevision: {
-          ref: `revision_${String(index)}`,
-          revision: 1,
-          state: "PUBLISHED",
-          digest: "b".repeat(64),
-        },
-      }),
-    );
-    managedCatalog = summaries;
-    const rootNodes: VfsNode[] = projects.map((project) => ({
-      ref: `node_${project.ref}`,
-      path: `/projects/${project.ref}`,
-      parentPath: "/projects",
-      name: project.name,
-      kind: "PROJECT",
-      directory: true,
-      projectRef: project.ref,
-      entityRef: project.ref,
-      runRef: "",
-      sizeBytes: 0,
-      digest: "",
-      modifiedAt: project.updatedAt,
-      version: 0,
-      revisionRef: "",
-      revision: 0,
-      lifecycleState: "ACTIVE",
-      scanState: "",
-      resourceKind: "",
-      selectable: false,
-      selectionReason: "DIRECTORY",
-      nextActions: [],
-    }));
-    const vfsRequests: string[] = [];
-    await page.route("**/api/v1/**", async (route) => {
-      const url = new URL(route.request().url());
-      if (url.pathname === "/api/v1/managed-configurations") {
-        expect(url.searchParams.get("kind")).toBe("PROMPT_TEMPLATE");
-        expect(url.searchParams.get("projectRef")).toBe(projects[0]?.ref);
-        const query = url.searchParams.get("query") ?? "";
-        const items = summaries.filter((item) => item.name.includes(query));
-        await route.fulfill({ json: { items, total: items.length } });
-        return;
-      }
-      if (url.pathname === "/api/v1/vfs/nodes") {
-        const path = url.searchParams.get("path");
-        vfsRequests.push(path ?? "");
-        const first = rootNodes[0];
-        const items =
-          path === "/projects"
-            ? rootNodes
-            : first && path === first.path
-              ? [
-                  {
-                    ...first,
-                    ref: "folder_runs",
-                    path: `${first.path}/runs`,
-                    parentPath: first.path,
-                    kind: "DIRECTORY",
-                    name: "Запуски",
-                    entityRef: "",
-                  },
-                ]
-              : [];
-        await route.fulfill({
-          json: { items, total: items.length, nextPageToken: "" },
-        });
-        return;
-      }
-      if (url.pathname === "/api/v1/vfs/search") {
-        expect(url.searchParams.get("query")).toBe("Проект 2");
-        await route.fulfill({
-          json: { items: [rootNodes[1]], total: 1, nextPageToken: "" },
-        });
-        return;
-      }
-      await route.fallback();
-    });
-    await page.goto(
-      `/configurations/PROMPT_TEMPLATE?projectRef=${String(projects[0]?.ref)}`,
-    );
-    await expect(page.locator(".configuration-catalog__row")).toHaveCount(8);
-    const catalog = page.locator(".configuration-catalog");
-    await expect(
-      catalog.locator(".configuration-catalog__identity strong"),
-    ).toHaveText(summaries.map((item) => item.name));
-    await catalog.getByRole("searchbox").fill("Шаблон 8");
-    await expect(catalog.locator(".configuration-catalog__row")).toHaveCount(1);
-    await expect(catalog.locator(".configuration-catalog__row")).toContainText(
-      "Шаблон 8",
-    );
-    await page.screenshot({
-      path: testInfo.outputPath(`catalog-${String(width)}.png`),
-      fullPage: true,
-    });
-    await page.goto("/files");
-    await expect(page.locator(".vfs-row")).toHaveCount(8);
-    await expect(page.locator(".vfs-inspector")).toHaveCount(0);
-    await page.locator(".vfs-row").first().click();
-    await expect(page.locator(".vfs-inspector")).toHaveCount(0);
-    await expect(page.locator(".vfs-row")).toHaveCount(1);
-    await expect(page.locator(".vfs-row")).toContainText("Запуски");
-    expect(vfsRequests).toContain(rootNodes[0]?.path);
-    await page.getByRole("button", { name: "Назад", exact: true }).click();
-    await expect(page.locator(".vfs-row")).toHaveCount(8);
-    await page
-      .getByRole("searchbox", { name: "Найти файл", exact: true })
-      .fill("Проект 2");
-    await expect(page.locator(".vfs-row")).toHaveCount(1);
-    await page.locator(".vfs-row").click();
-    await expect
-      .poll(() =>
-        page.evaluate(
-          () => document.documentElement.scrollWidth <= window.innerWidth,
-        ),
-      )
-      .toBe(true);
-    await page.screenshot({
-      path: testInfo.outputPath(`vfs-${String(width)}.png`),
-      fullPage: true,
-    });
-    await page.goto("/projects");
-    await expect(page.locator(".project-list__item")).toHaveCount(8);
-    await expect(page.locator(".project-list__identity > div > a")).toHaveText(
-      projects.map((project) => project.name),
-    );
-    // Каталог использует штатный query route; отдельной expansion-модалки больше нет.
-    await page.goto(`/projects?q=${encodeURIComponent("Проект 2")}`);
-    await expect(page.locator(".project-list__item")).toHaveCount(1);
-    await expect(page.locator(".project-list__item")).toContainText("Проект 2");
-    expect(projectQueries).toContain("Проект 2");
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= window.innerWidth,
-      ),
-    ).toBe(true);
-    await page.screenshot({
-      path: testInfo.outputPath(`projects-${String(width)}.png`),
-      fullPage: true,
-    });
-    await page.route("**/api/v1/integration-definitions**", (route) =>
-      route.fulfill({
-        json: integrationDefinitions,
-      }),
-    );
-    await page.route("**/api/v1/integration-connections**", (route) =>
-      route.fulfill({
-        json: integrationConnections,
-      }),
-    );
-    integrationCatalogReady = true;
-    await page.goto("/integrations");
-    await page.getByRole("tab", { name: /Каталог/ }).click();
-    const card = page.locator(".package-row");
-    await expect(card).toHaveCount(1);
-    const beforeDetails = await card.boundingBox();
-    await card.getByRole("button", { name: "Подробнее", exact: true }).click();
-    await expect(page.getByRole("dialog")).toContainText("GITHUB_REPOSITORY");
-    const afterDetails = await card.boundingBox();
-    if (!beforeDetails || !afterDetails)
-      throw new Error("Missing card geometry");
-    expect(
-      [
-        beforeDetails.width,
-        beforeDetails.height,
-        afterDetails.width,
-        afterDetails.height,
-      ].every(Number.isFinite),
-    ).toBe(true);
-    expect(afterDetails.width).toBeCloseTo(beforeDetails.width, 2);
-    expect(afterDetails.height).toBeCloseTo(beforeDetails.height, 2);
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Подключить", exact: true })
-      .click();
-    await page
-      .getByRole("dialog")
-      .getByLabel("Организация", { exact: true })
-      .fill("synthetic-owner");
-    await expect(
-      page.getByRole("dialog").getByLabel("Организация", { exact: true }),
-    ).toHaveValue("synthetic-owner");
-    await expect(
-      page.getByRole("dialog").getByLabel("Название", { exact: true }),
-    ).toHaveValue("GitHub");
-
-    await page
-      .getByRole("dialog")
-      .getByLabel("Репозиторий", { exact: true })
-      .fill("synthetic-repository");
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "YAML", exact: true })
-      .click();
-    await expect(page.getByRole("dialog").locator(".cm-content")).toContainText(
-      "owner: synthetic-owner",
-    );
-    await page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Форма", exact: true })
-      .click();
-    await expect(
-      page.getByRole("dialog").getByLabel("Репозиторий", { exact: true }),
-    ).toHaveValue("synthetic-repository");
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= window.innerWidth,
-      ),
-    ).toBe(true);
-    await page.screenshot({
-      path: testInfo.outputPath(`integration-${String(width)}.png`),
-      fullPage: true,
-    });
-    let contextEnvironment: RuntimeEnvironmentSet | undefined;
-    {
-      const projectRef = projects[0]?.ref ?? "project_synthetic_0";
-      const fixture = await installEnvironmentFixture(
-        page,
-        projectRef,
-        installSnapshot,
-      );
-      const openEnvironmentActions = async () => {
-        const actions = page.locator(".environment-secondary-actions");
-        if (
-          !(await actions.evaluate((element) => element.hasAttribute("open")))
-        )
-          await actions.locator("summary").click();
       };
-      contextEnvironment = fixture.environment;
-      await page.goto(`/projects/${projectRef}/environments/new`);
-      const saveDraft = page.getByRole("button", {
+      let revision: ManagedConfigurationRevision = {
+        ref: "revision_synthetic",
+        revision: 1,
+        state: "DRAFT",
+        contentFormat: "TEXT",
+        content: "",
+        digest: "a".repeat(64),
+        validationDiagnostics: [],
+        createdAt: configuration.updatedAt,
+      };
+      const commands: string[] = [];
+      let promptPlan: RevisionImpactPlan | undefined;
+      let firstPromptPublicationKey: string | undefined;
+      const draftHistory: ManagedConfigurationRevision[] = [];
+      await page.route("**/api/v1/**", async (route) => {
+        const path = new URL(route.request().url()).pathname;
+        const method = route.request().method();
+        if (path === "/api/v1/revision-impact-plans/prompt_plan_synthetic") {
+          if (!promptPlan) throw new Error("Prompt plan was not prepared");
+          const report: RevisionImpactPage = {
+            plan: promptPlan,
+            total: 1,
+            items: [
+              {
+                ref: "prompt_item_synthetic",
+                scopeKind: "PROJECT",
+                organizationRef: "org_synthetic",
+                projectRef: projects[0]?.ref ?? "project_synthetic",
+                consumerKind: "AGENT",
+                consumerRef: "agent_prompt_consumer",
+                consumerVersion: 2,
+                bindingRef: "prompt_binding",
+                bindingVersion: 3,
+                sourceRevisionRef: "previous_prompt",
+                outcome:
+                  promptPlan.state === "APPLIED" ? "CONFLICT" : "PENDING",
+              },
+            ],
+          };
+          await route.fulfill({ json: report });
+          return;
+        }
+        if (
+          path.endsWith("/impact-plans") &&
+          path.startsWith("/api/v1/prompt-template-configurations/")
+        ) {
+          expect(method).toBe("POST");
+          expect(route.request().headers()["if-match"]).toBe(
+            `"${String(configuration.version)}"`,
+          );
+          expect(revision.state).toBe("VALID");
+          promptPlan = {
+            ref: "prompt_plan_synthetic",
+            version: 1,
+            kind: "PROMPT_TEMPLATE",
+            sourceRef: configuration.ref,
+            sourceVersion: configuration.version,
+            draftRef: revision.ref,
+            draftVersion: revision.revision,
+            targetDigest: revision.digest,
+            digest: "plan-digest",
+            total: 2,
+            state: "PREPARED",
+            createdAt: "2026-09-06T00:00:00Z",
+            expiresAt: "2099-09-06T00:00:00Z",
+          };
+          commands.push("prepare");
+          await route.fulfill({ json: promptPlan });
+          return;
+        }
+        if (
+          path === "/api/v1/prompt-template-configurations/drafts" &&
+          method === "POST"
+        ) {
+          const body = route.request().postDataJSON() as {
+            name: string;
+            content: string;
+            configurationRef?: string;
+            projectRef?: string;
+          };
+          expect(body.configurationRef).toBeUndefined();
+          expect(body.projectRef).toBe(projects[0]?.ref);
+          expect(body.content).toBe("Проверить документы");
+          configuration = { ...configuration, name: body.name };
+          revision = { ...revision, content: body.content };
+          commands.push("create");
+          await route.fulfill({
+            status: 201,
+            json: { configuration, revision },
+          });
+          return;
+        }
+        if (
+          path ===
+          `/api/v1/managed-configurations/${configuration.ref}/revisions`
+        ) {
+          await route.fulfill({
+            json: {
+              configuration,
+              items: [revision, ...draftHistory],
+              total: 1 + draftHistory.length,
+            },
+          });
+          return;
+        }
+        const base = `/api/v1/prompt-template-configurations/${configuration.ref}/revisions/${revision.ref}`;
+        if (path === `${base}/saves`) {
+          expect(route.request().headers()["if-match"]).toBe(
+            `"${String(configuration.version)}"`,
+          );
+          const body = route.request().postDataJSON() as {
+            content: string;
+            contentFormat: string;
+          };
+          expect(body.contentFormat).toBe("TEXT");
+          draftHistory.unshift({ ...revision, state: "DISCARDED" });
+          revision = {
+            ...revision,
+            ref: `${revision.ref}_next`,
+            parentRevisionRef: revision.ref,
+            revision: revision.revision + 1,
+            content: body.content,
+            state: "DRAFT",
+          };
+          configuration = {
+            ...configuration,
+            version: configuration.version + 1,
+          };
+          commands.push("save");
+          await route.fulfill({
+            headers: { ETag: `"${String(configuration.version)}"` },
+            json: { configuration, revision },
+          });
+          return;
+        }
+        if (path === `${base}/validation` || path === `${base}/publication`) {
+          expect(route.request().headers()["if-match"]).toBe(
+            `"${String(configuration.version)}"`,
+          );
+          expect(route.request().headers()["idempotency-key"]).toMatch(
+            /^[0-9a-f-]{36}$/,
+          );
+          const publishing = path.endsWith("publication");
+          if (publishing) {
+            if (!promptPlan)
+              throw new Error("Prompt publication requires prepared plan");
+            expect(route.request().postDataJSON()).toEqual({
+              planRef: promptPlan.ref,
+              selectedItemRefs: ["prompt_item_synthetic"],
+            });
+            const key = route.request().headers()["idempotency-key"];
+            if (!firstPromptPublicationKey) {
+              firstPromptPublicationKey = key;
+              commands.push("publish-unknown");
+              await route.fulfill({
+                status: 504,
+                json: {
+                  type: "about:blank",
+                  title: "Gateway Timeout",
+                  status: 504,
+                },
+              });
+              return;
+            }
+            expect(key).toBe(firstPromptPublicationKey);
+            promptPlan = {
+              ...promptPlan,
+              state: "APPLIED",
+              version: 2,
+              publishedRevisionRef: revision.ref,
+            };
+          }
+          expect(revision.state).toBe(publishing ? "VALID" : "DRAFT");
+          revision = { ...revision, state: publishing ? "PUBLISHED" : "VALID" };
+          configuration = {
+            ...configuration,
+            version: configuration.version + 1,
+            ...(publishing ? { currentRevision: revision } : {}),
+          };
+          commands.push(publishing ? "publish" : "validate");
+          await route.fulfill({
+            json: {
+              configuration,
+              revision,
+              ...(publishing ? { plan: promptPlan } : {}),
+            },
+          });
+          return;
+        }
+        await route.fallback();
+      });
+      await page.goto("/configurations/PROMPT_TEMPLATE/new");
+      const savePromptDraft = page.getByRole("button", {
         name: "Сохранить черновик",
         exact: true,
       });
-      await expect(saveDraft).toBeEnabled();
-      await saveDraft.click();
-      await expect(page).toHaveURL(/draftRef=draft_synthetic_environment/);
-      await expect(page.locator(".environment-draft-state")).toContainText(
-        "Новое окружение: опубликованной базы нет",
+      await expect(savePromptDraft).toBeDisabled();
+      await expect(savePromptDraft).toHaveAttribute(
+        "aria-describedby",
+        "managed-project-required",
       );
       await expect(
-        page.locator(".environment-draft-state time"),
-      ).toHaveAttribute("datetime", "2026-09-05T00:00:00Z");
-      expect(fixture.events).not.toContain("publish");
+        page.getByText(
+          "Выберите проект. Шаблон промпта и конфигурация образа роли создаются только в выбранном проекте.",
+          { exact: true },
+        ),
+      ).toBeVisible();
       await page
-        .getByRole("button", { name: "Проверить", exact: true })
+        .locator("#main-content")
+        .getByRole("button", { name: "Проект", exact: true })
         .click();
-      await expect(page.locator(".environment-draft-state")).toContainText(
-        "Окружение не прошло проверку",
+      await page
+        .getByRole("option")
+        .filter({ hasText: projects[0]?.name ?? "" })
+        .click();
+      await expect(page).toHaveURL(
+        new RegExp(
+          `/configurations/PROMPT_TEMPLATE/new\\?projectRef=${String(projects[0]?.ref)}$`,
+        ),
       );
+      await page.getByLabel("Название", { exact: true }).fill("Шаблон");
+      await page
+        .getByRole("textbox", { name: "Содержимое", exact: true })
+        .fill("Проверить документы");
+      await expect(savePromptDraft).toBeEnabled();
+      await page
+        .getByRole("button", { name: "Сохранить черновик", exact: true })
+        .click();
+      await expect(page).toHaveURL(
+        new RegExp(
+          `/configurations/PROMPT_TEMPLATE/configuration_synthetic\\?projectRef=${String(projects[0]?.ref)}$`,
+        ),
+      );
+      await page
+        .getByRole("textbox", { name: "Содержимое", exact: true })
+        .fill("");
+      await page
+        .getByRole("button", { name: "Сохранить черновик", exact: true })
+        .click();
+      await expect.poll(() => revision.content).toBe("");
       await expect(
-        page.locator(".environment-draft-state time"),
-      ).toHaveAttribute("datetime", "2026-09-05T00:00:00Z");
+        page.getByRole("button", { name: "Сохранить черновик", exact: true }),
+      ).toBeDisabled();
+      await page
+        .getByRole("textbox", { name: "Содержимое", exact: true })
+        .fill("Проверить документы");
+      await page
+        .getByRole("button", { name: "Сохранить черновик", exact: true })
+        .click();
+      await expect.poll(() => revision.revision).toBe(3);
       await expect(
         page.getByRole("button", { name: "Опубликовать", exact: true }),
       ).toBeDisabled();
-      await page
-        .getByLabel("Название", { exact: true })
-        .fill("Незавершённое окружение");
-      await saveDraft.click();
-      await page.reload();
-      await expect(page.getByLabel("Название", { exact: true })).toHaveValue(
-        "Незавершённое окружение",
-      );
-      await expect(
-        page.locator(".environment-draft-state time"),
-      ).toHaveAttribute("datetime", "2026-09-05T00:05:00Z");
-      await page
-        .getByLabel("Название", { exact: true })
-        .fill("Изменения перед выходом");
-      await openEnvironmentActions();
-      await page.getByRole("link", { name: "Отмена", exact: true }).click();
-      await page
-        .getByRole("dialog")
-        .getByRole("button", { name: "Остаться", exact: true })
-        .click();
-      await expect(page.getByLabel("Название", { exact: true })).toHaveValue(
-        "Изменения перед выходом",
-      );
-      const savedDraftUrl = page.url();
-      await openEnvironmentActions();
-      await page.getByRole("link", { name: "Отмена", exact: true }).click();
-      await page
-        .getByRole("dialog")
-        .getByRole("button", { name: "Сохранить и выйти", exact: true })
-        .click();
-      await expect(page).toHaveURL(
-        new RegExp(`/projects/${projectRef}/environments$`),
-      );
-      await expect(page.locator(".environment-name")).toHaveCount(1);
-      await expect(page.locator(".environment-inspector")).toHaveCount(0);
-      expect(fixture.events).not.toContain("readiness");
-      await page.locator(".environment-name").click();
-      await expect(page.locator(".environment-inspector")).toBeVisible();
-      await expect.poll(() => fixture.events.includes("readiness")).toBe(true);
-      cancelInspectorRequests();
-      await page.locator(".environment-name").click();
-      await expect(page.locator(".environment-inspector")).toHaveCount(0);
-      await expect(page.locator(".environment-name")).toHaveCount(1);
-      await expect(page.locator(".environment-name")).toContainText(
-        fixture.environment.name,
-      );
-      await page.goto(savedDraftUrl);
-      await expect(page.getByLabel("Название", { exact: true })).toHaveValue(
-        "Изменения перед выходом",
-      );
-      await page.getByLabel("Название", { exact: true }).fill("Не сохранять");
-      await openEnvironmentActions();
-      await page.getByRole("link", { name: "Отмена", exact: true }).click();
-      await page
-        .getByRole("dialog")
-        .getByRole("button", { name: "Выйти без сохранения", exact: true })
-        .click();
-      await expect(page).toHaveURL(
-        new RegExp(`/projects/${projectRef}/environments$`),
-      );
-      await page.goto(savedDraftUrl);
-      await expect(page.getByLabel("Название", { exact: true })).toHaveValue(
-        "Изменения перед выходом",
-      );
-      await openEnvironmentActions();
-      await page
-        .getByRole("button", { name: "Удалить черновик", exact: true })
-        .click();
-      await page
-        .getByRole("dialog")
-        .getByRole("button", { name: "Удалить черновик", exact: true })
-        .click();
-      await expect(page).not.toHaveURL(/draftRef=/);
-      expect(fixture.events).toContain("discard");
-      await page.goto(
-        `/projects/${projectRef}/environments/new?draftRef=${fixture.preparedRef}`,
-      );
-      await expect(page.getByLabel("Название", { exact: true })).toHaveValue(
-        "Окружение synthetic",
-      );
       await page
         .getByRole("button", { name: "Проверить", exact: true })
         .click();
@@ -1559,152 +1184,559 @@ for (const { width, height } of [
       await page
         .getByRole("button", { name: "Опубликовать", exact: true })
         .click();
-      const environmentPlan = page.getByRole("dialog", {
+      const promptPlanDialog = page.getByRole("dialog", {
         name: "План публикации",
         exact: true,
       });
-      await environmentPlan
+      await expect(
+        promptPlanDialog.getByText("В исходном плане: 2", { exact: true }),
+      ).toBeVisible();
+      await promptPlanDialog
+        .getByRole("checkbox", { name: "agent_prompt_consumer", exact: true })
+        .check();
+      await promptPlanDialog
         .getByRole("button", {
-          name: "Опубликовать и обновить выбранных: 0",
+          name: "Опубликовать и обновить выбранных: 1",
           exact: true,
         })
         .click();
-      await environmentPlan
-        .getByRole("button", { name: "Обновить", exact: true })
+      await promptPlanDialog
+        .getByRole("button", { name: "Повторить исходный запрос", exact: true })
         .click();
       await expect(
-        environmentPlan.locator('[data-state="APPLIED"]'),
+        promptPlanDialog.locator('[data-state="CONFLICT"]'),
       ).toBeVisible();
-      await environmentPlan
+      await promptPlanDialog
         .getByRole("button", { name: "Закрыть", exact: true })
         .click();
-      await page.getByRole("link", { name: "Открыть", exact: true }).click();
-      await expect(page).toHaveURL(
-        new RegExp(
-          `/projects/${projectRef}/environments/environment_synthetic$`,
-        ),
-      );
-      expect(
-        fixture.events.filter((event) => event === "publish"),
-      ).toHaveLength(1);
-      expect(fixture.events).toContain("environment-readback");
-      await page
-        .getByRole("button", { name: "Влияние ревизии", exact: true })
-        .click();
-      const environmentImpact = page.getByRole("dialog", {
-        name: "Перепривязка окружения",
-        exact: true,
+      await expect(
+        page.locator(".configuration-editor [data-state='PUBLISHED']"),
+      ).toBeVisible();
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth,
+          ),
+        )
+        .toBe(true);
+      await page.screenshot({
+        path: testInfo.outputPath(`configuration-${String(width)}.png`),
+        fullPage: true,
       });
-      await environmentImpact.getByRole("checkbox").check();
-      await environmentImpact
-        .getByRole("button", {
-          name: "Перепривязать выбранные: 1",
-          exact: true,
-        })
-        .click();
-      await expect(environmentImpact.locator(".impact-receipt")).toContainText(
-        "agent_impact_synthetic",
+      expect(commands).toEqual([
+        "create",
+        "save",
+        "save",
+        "validate",
+        "prepare",
+        "publish-unknown",
+        "publish",
+      ]);
+      const summaries: ManagedConfigurationSummary[] = Array.from(
+        { length: 8 },
+        (_, index) => ({
+          ref: `configuration_${String(index)}`,
+          version: 1,
+          kind: "PROMPT_TEMPLATE",
+          projectRef: projects[0]?.ref,
+          name: `Шаблон ${String(index + 1)}`,
+          managedBy: index === 0 ? "GIT" : "UI",
+          archived: false,
+          nextActions: [],
+          source: index === 0 ? "repository/templates/summary.txt" : "ui",
+          sourceRevision: "revision-1",
+          updatedAt: "2026-09-04T11:00:00Z",
+          currentRevision: {
+            ref: `revision_${String(index)}`,
+            revision: 1,
+            state: "PUBLISHED",
+            digest: "b".repeat(64),
+          },
+        }),
       );
-      expect(fixture.events.filter((event) => event === "rebind")).toHaveLength(
+      managedCatalog = summaries;
+      const rootNodes: VfsNode[] = projects.map((project) => ({
+        ref: `node_${project.ref}`,
+        path: `/projects/${project.ref}`,
+        parentPath: "/projects",
+        name: project.name,
+        kind: "PROJECT",
+        directory: true,
+        projectRef: project.ref,
+        entityRef: project.ref,
+        runRef: "",
+        sizeBytes: 0,
+        digest: "",
+        modifiedAt: project.updatedAt,
+        version: 0,
+        revisionRef: "",
+        revision: 0,
+        lifecycleState: "ACTIVE",
+        scanState: "",
+        resourceKind: "",
+        selectable: false,
+        selectionReason: "DIRECTORY",
+        nextActions: [],
+      }));
+      const vfsRequests: string[] = [];
+      await page.route("**/api/v1/**", async (route) => {
+        const url = new URL(route.request().url());
+        if (url.pathname === "/api/v1/managed-configurations") {
+          expect(url.searchParams.get("kind")).toBe("PROMPT_TEMPLATE");
+          expect(url.searchParams.get("projectRef")).toBe(projects[0]?.ref);
+          const query = url.searchParams.get("query") ?? "";
+          const items = summaries.filter((item) => item.name.includes(query));
+          await route.fulfill({ json: { items, total: items.length } });
+          return;
+        }
+        if (url.pathname === "/api/v1/vfs/nodes") {
+          const path = url.searchParams.get("path");
+          vfsRequests.push(path ?? "");
+          const first = rootNodes[0];
+          const items =
+            path === "/projects"
+              ? rootNodes
+              : first && path === first.path
+                ? [
+                    {
+                      ...first,
+                      ref: "folder_runs",
+                      path: `${first.path}/runs`,
+                      parentPath: first.path,
+                      kind: "DIRECTORY",
+                      name: "Запуски",
+                      entityRef: "",
+                    },
+                  ]
+                : [];
+          await route.fulfill({
+            json: { items, total: items.length, nextPageToken: "" },
+          });
+          return;
+        }
+        if (url.pathname === "/api/v1/vfs/search") {
+          expect(url.searchParams.get("query")).toBe("Проект 2");
+          await route.fulfill({
+            json: { items: [rootNodes[1]], total: 1, nextPageToken: "" },
+          });
+          return;
+        }
+        await route.fallback();
+      });
+      await page.goto(
+        `/configurations/PROMPT_TEMPLATE?projectRef=${String(projects[0]?.ref)}`,
+      );
+      await expect(page.locator(".configuration-catalog__row")).toHaveCount(8);
+      const catalog = page.locator(".configuration-catalog");
+      await expect(
+        catalog.locator(".configuration-catalog__identity strong"),
+      ).toHaveText(summaries.map((item) => item.name));
+      await catalog.getByRole("searchbox").fill("Шаблон 8");
+      await expect(catalog.locator(".configuration-catalog__row")).toHaveCount(
         1,
       );
+      await expect(
+        catalog.locator(".configuration-catalog__row"),
+      ).toContainText("Шаблон 8");
       await page.screenshot({
-        path: testInfo.outputPath(`environment-impact-${String(width)}.png`),
-        fullPage: false,
+        path: testInfo.outputPath(`catalog-${String(width)}.png`),
+        fullPage: true,
       });
-      await environmentImpact
-        .getByRole("button", { name: "Закрыть", exact: true })
-        .last()
-        .click();
-      expect(fixture.failures).toEqual([]);
+      await page.goto("/files");
+      await expect(page.locator(".vfs-row")).toHaveCount(8);
+      await expect(page.locator(".vfs-inspector")).toHaveCount(0);
+      await page.locator(".vfs-row").first().click();
+      await expect(page.locator(".vfs-inspector")).toHaveCount(0);
+      await expect(page.locator(".vfs-row")).toHaveCount(1);
+      await expect(page.locator(".vfs-row")).toContainText("Запуски");
+      expect(vfsRequests).toContain(rootNodes[0]?.path);
+      await page.getByRole("button", { name: "Назад", exact: true }).click();
+      await expect(page.locator(".vfs-row")).toHaveCount(8);
+      await page
+        .getByRole("searchbox", { name: "Найти файл", exact: true })
+        .fill("Проект 2");
+      await expect(page.locator(".vfs-row")).toHaveCount(1);
+      await page.locator(".vfs-row").click();
+      await expect
+        .poll(() =>
+          page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth,
+          ),
+        )
+        .toBe(true);
+      await page.screenshot({
+        path: testInfo.outputPath(`vfs-${String(width)}.png`),
+        fullPage: true,
+      });
+      await page.goto("/projects");
+      await expect(page.locator(".project-list__item")).toHaveCount(8);
+      await expect(
+        page.locator(".project-list__identity > div > a"),
+      ).toHaveText(projects.map((project) => project.name));
+      // Каталог использует штатный query route; отдельной expansion-модалки больше нет.
+      await page.goto(`/projects?q=${encodeURIComponent("Проект 2")}`);
+      await expect(page.locator(".project-list__item")).toHaveCount(1);
+      await expect(page.locator(".project-list__item")).toContainText(
+        "Проект 2",
+      );
+      expect(projectQueries).toContain("Проект 2");
       expect(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= window.innerWidth,
         ),
       ).toBe(true);
       await page.screenshot({
-        path: testInfo.outputPath(`environment-${String(width)}.png`),
+        path: testInfo.outputPath(`projects-${String(width)}.png`),
         fullPage: true,
       });
+      await installIntegrationBase();
+      await page.goto("/integrations");
+      await page.getByRole("tab", { name: /Каталог/ }).click();
+      const card = page.locator(".package-row");
+      await expect(card).toHaveCount(1);
+      const beforeDetails = await card.boundingBox();
+      await card
+        .getByRole("button", { name: "Подробнее", exact: true })
+        .click();
+      await expect(page.getByRole("dialog")).toContainText("GITHUB_REPOSITORY");
+      const afterDetails = await card.boundingBox();
+      if (!beforeDetails || !afterDetails)
+        throw new Error("Missing card geometry");
+      expect(
+        [
+          beforeDetails.width,
+          beforeDetails.height,
+          afterDetails.width,
+          afterDetails.height,
+        ].every(Number.isFinite),
+      ).toBe(true);
+      expect(afterDetails.width).toBeCloseTo(beforeDetails.width, 2);
+      expect(afterDetails.height).toBeCloseTo(beforeDetails.height, 2);
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Подключить", exact: true })
+        .click();
+      await page
+        .getByRole("dialog")
+        .getByLabel("Организация", { exact: true })
+        .fill("synthetic-owner");
       await expect(
-        page.getByRole("button", { name: "Добавить переменную", exact: true }),
-      ).toHaveCount(0);
-      for (const section of [
-        "Образ и инструменты",
-        "Переменные",
-        "Секреты",
-        "Ресурсы и доступ",
-        "Готовность",
-      ]) {
-        await page.getByRole("tab", { name: section, exact: true }).click();
-        await expect(page.getByRole("tabpanel")).toBeVisible();
+        page.getByRole("dialog").getByLabel("Организация", { exact: true }),
+      ).toHaveValue("synthetic-owner");
+      await expect(
+        page.getByRole("dialog").getByLabel("Название", { exact: true }),
+      ).toHaveValue("GitHub");
+
+      await page
+        .getByRole("dialog")
+        .getByLabel("Репозиторий", { exact: true })
+        .fill("synthetic-repository");
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "YAML", exact: true })
+        .click();
+      await expect(
+        page.getByRole("dialog").locator(".cm-content"),
+      ).toContainText("owner: synthetic-owner");
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: "Форма", exact: true })
+        .click();
+      await expect(
+        page.getByRole("dialog").getByLabel("Репозиторий", { exact: true }),
+      ).toHaveValue("synthetic-repository");
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      ).toBe(true);
+      await page.screenshot({
+        path: testInfo.outputPath(`integration-${String(width)}.png`),
+        fullPage: true,
+      });
+      {
+        const projectRef = projects[0]?.ref ?? "project_synthetic_0";
+        const fixture = await installEnvironmentFixture(
+          page,
+          projectRef,
+          installSnapshot,
+        );
+        const openEnvironmentActions = async () => {
+          const actions = page.locator(".environment-secondary-actions");
+          if (
+            !(await actions.evaluate((element) => element.hasAttribute("open")))
+          )
+            await actions.locator("summary").click();
+        };
+        contextEnvironment = fixture.environment;
+        await page.goto(`/projects/${projectRef}/environments/new`);
+        const saveDraft = page.getByRole("button", {
+          name: "Сохранить черновик",
+          exact: true,
+        });
+        await expect(saveDraft).toBeEnabled();
+        await saveDraft.click();
+        await expect(page).toHaveURL(/draftRef=draft_synthetic_environment/);
+        await expect(page.locator(".environment-draft-state")).toContainText(
+          "Новое окружение: опубликованной базы нет",
+        );
         await expect(
-          page.getByRole("button", {
-            name: "Добавить переменную",
+          page.locator(".environment-draft-state time"),
+        ).toHaveAttribute("datetime", "2026-09-05T00:00:00Z");
+        expect(fixture.events).not.toContain("publish");
+        await page
+          .getByRole("button", { name: "Проверить", exact: true })
+          .click();
+        await expect(page.locator(".environment-draft-state")).toContainText(
+          "Окружение не прошло проверку",
+        );
+        await expect(
+          page.locator(".environment-draft-state time"),
+        ).toHaveAttribute("datetime", "2026-09-05T00:00:00Z");
+        await expect(
+          page.getByRole("button", { name: "Опубликовать", exact: true }),
+        ).toBeDisabled();
+        await page
+          .getByLabel("Название", { exact: true })
+          .fill("Незавершённое окружение");
+        await saveDraft.click();
+        await page.reload();
+        await expect(page.getByLabel("Название", { exact: true })).toHaveValue(
+          "Незавершённое окружение",
+        );
+        await expect(
+          page.locator(".environment-draft-state time"),
+        ).toHaveAttribute("datetime", "2026-09-05T00:05:00Z");
+        await page
+          .getByLabel("Название", { exact: true })
+          .fill("Изменения перед выходом");
+        await openEnvironmentActions();
+        await page.getByRole("link", { name: "Отмена", exact: true }).click();
+        await page
+          .getByRole("dialog")
+          .getByRole("button", { name: "Остаться", exact: true })
+          .click();
+        await expect(page.getByLabel("Название", { exact: true })).toHaveValue(
+          "Изменения перед выходом",
+        );
+        const savedDraftUrl = page.url();
+        await openEnvironmentActions();
+        await page.getByRole("link", { name: "Отмена", exact: true }).click();
+        await page
+          .getByRole("dialog")
+          .getByRole("button", { name: "Сохранить и выйти", exact: true })
+          .click();
+        await expect(page).toHaveURL(
+          new RegExp(`/projects/${projectRef}/environments$`),
+        );
+        await expect(page.locator(".environment-name")).toHaveCount(1);
+        await expect(page.locator(".environment-inspector")).toHaveCount(0);
+        expect(fixture.events).not.toContain("readiness");
+        await page.locator(".environment-name").click();
+        await expect(page.locator(".environment-inspector")).toBeVisible();
+        await expect
+          .poll(() => fixture.events.includes("readiness"))
+          .toBe(true);
+        cancelInspectorRequests();
+        await page.locator(".environment-name").click();
+        await expect(page.locator(".environment-inspector")).toHaveCount(0);
+        await expect(page.locator(".environment-name")).toHaveCount(1);
+        await expect(page.locator(".environment-name")).toContainText(
+          fixture.environment.name,
+        );
+        await page.goto(savedDraftUrl);
+        await expect(page.getByLabel("Название", { exact: true })).toHaveValue(
+          "Изменения перед выходом",
+        );
+        await page.getByLabel("Название", { exact: true }).fill("Не сохранять");
+        await openEnvironmentActions();
+        await page.getByRole("link", { name: "Отмена", exact: true }).click();
+        await page
+          .getByRole("dialog")
+          .getByRole("button", { name: "Выйти без сохранения", exact: true })
+          .click();
+        await expect(page).toHaveURL(
+          new RegExp(`/projects/${projectRef}/environments$`),
+        );
+        await page.goto(savedDraftUrl);
+        await expect(page.getByLabel("Название", { exact: true })).toHaveValue(
+          "Изменения перед выходом",
+        );
+        await openEnvironmentActions();
+        await page
+          .getByRole("button", { name: "Удалить черновик", exact: true })
+          .click();
+        await page
+          .getByRole("dialog")
+          .getByRole("button", { name: "Удалить черновик", exact: true })
+          .click();
+        await expect(page).not.toHaveURL(/draftRef=/);
+        expect(fixture.events).toContain("discard");
+        await page.goto(
+          `/projects/${projectRef}/environments/new?draftRef=${fixture.preparedRef}`,
+        );
+        await expect(page.getByLabel("Название", { exact: true })).toHaveValue(
+          "Окружение synthetic",
+        );
+        await page
+          .getByRole("button", { name: "Проверить", exact: true })
+          .click();
+        await expect(
+          page.getByRole("button", { name: "Опубликовать", exact: true }),
+        ).toBeEnabled();
+        await page
+          .getByRole("button", { name: "Опубликовать", exact: true })
+          .click();
+        const environmentPlan = page.getByRole("dialog", {
+          name: "План публикации",
+          exact: true,
+        });
+        await environmentPlan
+          .getByRole("button", {
+            name: "Опубликовать и обновить выбранных: 0",
             exact: true,
-          }),
-        ).toHaveCount(section === "Переменные" ? 1 : 0);
+          })
+          .click();
+        await environmentPlan
+          .getByRole("button", { name: "Обновить", exact: true })
+          .click();
+        await expect(
+          environmentPlan.locator('[data-state="APPLIED"]'),
+        ).toBeVisible();
+        await environmentPlan
+          .getByRole("button", { name: "Закрыть", exact: true })
+          .click();
+        await page.getByRole("link", { name: "Открыть", exact: true }).click();
+        await expect(page).toHaveURL(
+          new RegExp(
+            `/projects/${projectRef}/environments/environment_synthetic$`,
+          ),
+        );
+        expect(
+          fixture.events.filter((event) => event === "publish"),
+        ).toHaveLength(1);
+        expect(fixture.events).toContain("environment-readback");
+        await page
+          .getByRole("button", { name: "Влияние ревизии", exact: true })
+          .click();
+        const environmentImpact = page.getByRole("dialog", {
+          name: "Перепривязка окружения",
+          exact: true,
+        });
+        await environmentImpact.getByRole("checkbox").check();
+        await environmentImpact
+          .getByRole("button", {
+            name: "Перепривязать выбранные: 1",
+            exact: true,
+          })
+          .click();
+        await expect(
+          environmentImpact.locator(".impact-receipt"),
+        ).toContainText("agent_impact_synthetic");
+        expect(
+          fixture.events.filter((event) => event === "rebind"),
+        ).toHaveLength(1);
+        await page.screenshot({
+          path: testInfo.outputPath(`environment-impact-${String(width)}.png`),
+          fullPage: false,
+        });
+        await environmentImpact
+          .getByRole("button", { name: "Закрыть", exact: true })
+          .last()
+          .click();
+        expect(fixture.failures).toEqual([]);
         expect(
           await page.evaluate(
             () => document.documentElement.scrollWidth <= window.innerWidth,
           ),
         ).toBe(true);
         await page.screenshot({
-          path: testInfo.outputPath(
-            `environment-${String(width)}-${section}.png`,
-          ),
+          path: testInfo.outputPath(`environment-${String(width)}.png`),
           fullPage: true,
         });
-      }
-      for (const [endpoint, status] of [
-        ["readiness", 404],
-        ["agents", 404],
-        ["readiness", 503],
-      ] as const) {
-        fixture.setInspectorFailure(undefined);
-        await page.goto(`/projects/${projectRef}/environments`);
-        const selectEnvironment = page.locator(".environment-name").first();
-        await selectEnvironment.click();
-        const inspector = page.locator(".environment-inspector");
         await expect(
-          inspector.locator(".environment-lifecycle .status-badge"),
-        ).toHaveText("Готов");
-        cancelInspectorRequests();
-        await selectEnvironment.click();
-        await expect(inspector).toHaveCount(0);
-        const beforeLists = fixture.events.filter(
-          (event) => event === "list",
-        ).length;
-        const beforeDiagnostics = inspectorFailureDiagnostics;
-        fixture.setInspectorFailure({ endpoint, status });
-        expectedInspectorFailure = status;
-        await selectEnvironment.click();
-        if (status === 404) {
-          await expect(inspector).toHaveCount(0);
-          await expect(page.locator(".environment-table tbody tr")).toHaveCount(
-            0,
-          );
+          page.getByRole("button", {
+            name: "Добавить переменную",
+            exact: true,
+          }),
+        ).toHaveCount(0);
+        for (const section of [
+          "Образ и инструменты",
+          "Переменные",
+          "Секреты",
+          "Ресурсы и доступ",
+          "Готовность",
+        ]) {
+          await page.getByRole("tab", { name: section, exact: true }).click();
+          await expect(page.getByRole("tabpanel")).toBeVisible();
+          await expect(
+            page.getByRole("button", {
+              name: "Добавить переменную",
+              exact: true,
+            }),
+          ).toHaveCount(section === "Переменные" ? 1 : 0);
           expect(
-            fixture.events.filter((event) => event === "list"),
-          ).toHaveLength(beforeLists + 1);
-        } else {
-          await expect(inspector).toBeVisible();
+            await page.evaluate(
+              () => document.documentElement.scrollWidth <= window.innerWidth,
+            ),
+          ).toBe(true);
+          await page.screenshot({
+            path: testInfo.outputPath(
+              `environment-${String(width)}-${section}.png`,
+            ),
+            fullPage: true,
+          });
+        }
+        for (const [endpoint, status] of [
+          ["readiness", 404],
+          ["agents", 404],
+          ["readiness", 503],
+        ] as const) {
+          fixture.setInspectorFailure(undefined);
+          await page.goto(`/projects/${projectRef}/environments`);
+          const selectEnvironment = page.locator(".environment-name").first();
+          await selectEnvironment.click();
+          const inspector = page.locator(".environment-inspector");
           await expect(
             inspector.locator(".environment-lifecycle .status-badge"),
-          ).toHaveCount(0);
-          await expect(page.locator(".environment-table tbody tr")).toHaveCount(
-            1,
-          );
-          expect(
-            fixture.events.filter((event) => event === "list"),
-          ).toHaveLength(beforeLists);
+          ).toHaveText("Готов");
+          cancelInspectorRequests();
+          await selectEnvironment.click();
+          await expect(inspector).toHaveCount(0);
+          const beforeLists = fixture.events.filter(
+            (event) => event === "list",
+          ).length;
+          const beforeDiagnostics = inspectorFailureDiagnostics;
+          fixture.setInspectorFailure({ endpoint, status });
+          expectedInspectorFailure = status;
+          await selectEnvironment.click();
+          if (status === 404) {
+            await expect(inspector).toHaveCount(0);
+            await expect(
+              page.locator(".environment-table tbody tr"),
+            ).toHaveCount(0);
+            expect(
+              fixture.events.filter((event) => event === "list"),
+            ).toHaveLength(beforeLists + 1);
+          } else {
+            await expect(inspector).toBeVisible();
+            await expect(
+              inspector.locator(".environment-lifecycle .status-badge"),
+            ).toHaveCount(0);
+            await expect(
+              page.locator(".environment-table tbody tr"),
+            ).toHaveCount(1);
+            expect(
+              fixture.events.filter((event) => event === "list"),
+            ).toHaveLength(beforeLists);
+          }
+          await expect
+            .poll(() => inspectorFailureDiagnostics)
+            .toBe(beforeDiagnostics + 1);
+          expectedInspectorFailure = undefined;
         }
-        await expect
-          .poll(() => inspectorFailureDiagnostics)
-          .toBe(beforeDiagnostics + 1);
-        expectedInspectorFailure = undefined;
+        fixture.setInspectorFailure(undefined);
       }
-      fixture.setInspectorFailure(undefined);
     }
     if (width === 1440) {
       let speechAvailable = true;
@@ -1772,7 +1804,7 @@ for (const { width, height } of [
         page.getByRole("textbox", { name: "Содержимое", exact: true }),
       ).toHaveText("");
     }
-    if (width !== 900) {
+    if (width !== 900 && includes("PROVIDERS_INTEGRATIONS")) {
       await page.goto("/administration/providers");
       await page
         .getByRole("button", { name: "Добавить учётную запись", exact: true })
@@ -1917,169 +1949,197 @@ for (const { width, height } of [
     if (width !== 900) {
       const project = projects[0];
       if (!project) throw new Error("Missing synthetic project");
-      await checkSecretEditor(
-        page,
-        project.ref,
-        testInfo.outputPath(`secret-draft-${String(width)}.png`),
-        installSnapshot,
-      );
-      await page.screenshot({
-        path: testInfo.outputPath(`secrets-${String(width)}.png`),
-        fullPage: true,
-      });
-      await checkInteractionIdentities(page, installSnapshot);
-      await page.screenshot({
-        path: testInfo.outputPath(
-          `interaction-identities-${String(width)}.png`,
-        ),
-        fullPage: true,
-      });
-      const recipe = await checkRoleImageCatalog(
-        page,
-        project.ref,
-        installSnapshot,
-      );
-      await page.screenshot({
-        path: testInfo.outputPath(`role-images-${String(width)}.png`),
-        fullPage: true,
-      });
-      await checkRoleImageHistory(page, recipe);
-      await page.screenshot({
-        path: testInfo.outputPath(`role-image-history-${String(width)}.png`),
-        fullPage: true,
-      });
-      await checkWorkflowEditor(
-        page,
-        project.ref,
-        width === 1440 || width === 390 ? bootstrap : undefined,
-        async () => {
-          await page.screenshot({
-            path: testInfo.outputPath(
-              `workflow-unpublished-${String(width)}.png`,
-            ),
-            fullPage: true,
-          });
-        },
-        installSnapshot,
-      );
-      await page.screenshot({
-        path: testInfo.outputPath(`workflow-${String(width)}.png`),
-        fullPage: true,
-      });
-      if (width === 390 || width === 2900) {
-        await checkEffectiveCapabilities(page, project.ref, installSnapshot);
+      if (includes("PROVIDERS_INTEGRATIONS")) {
+        await checkSecretEditor(
+          page,
+          project.ref,
+          testInfo.outputPath(`secret-draft-${String(width)}.png`),
+          installSnapshot,
+        );
+        await page.screenshot({
+          path: testInfo.outputPath(`secrets-${String(width)}.png`),
+          fullPage: true,
+        });
+        await checkInteractionIdentities(page, installSnapshot);
         await page.screenshot({
           path: testInfo.outputPath(
-            `effective-capabilities-${String(width)}.png`,
+            `interaction-identities-${String(width)}.png`,
           ),
           fullPage: true,
         });
       }
-      await checkContextResources(
-        page,
-        project.ref,
-        contextEnvironment,
-        async (name) => {
+      if (includes("WORKFLOW_CONTEXT")) {
+        const recipe = await checkRoleImageCatalog(
+          page,
+          project.ref,
+          installSnapshot,
+        );
+        await page.screenshot({
+          path: testInfo.outputPath(`role-images-${String(width)}.png`),
+          fullPage: true,
+        });
+        await checkRoleImageHistory(page, recipe);
+        await page.screenshot({
+          path: testInfo.outputPath(`role-image-history-${String(width)}.png`),
+          fullPage: true,
+        });
+        await checkWorkflowEditor(
+          page,
+          project.ref,
+          width === 1440 || width === 390 ? bootstrap : undefined,
+          async () => {
+            await page.screenshot({
+              path: testInfo.outputPath(
+                `workflow-unpublished-${String(width)}.png`,
+              ),
+              fullPage: true,
+            });
+          },
+          installSnapshot,
+        );
+        await page.screenshot({
+          path: testInfo.outputPath(`workflow-${String(width)}.png`),
+          fullPage: true,
+        });
+        if (width === 390 || width === 2900) {
+          await checkEffectiveCapabilities(page, project.ref, installSnapshot);
           await page.screenshot({
-            path: testInfo.outputPath(`${name}-${String(width)}.png`),
+            path: testInfo.outputPath(
+              `effective-capabilities-${String(width)}.png`,
+            ),
+            fullPage: true,
+          });
+        }
+        if (!contextEnvironment)
+          throw new Error("Missing synthetic context environment");
+        await checkContextResources(
+          page,
+          project.ref,
+          contextEnvironment,
+          async (name) => {
+            await page.screenshot({
+              path: testInfo.outputPath(`${name}-${String(width)}.png`),
+              fullPage: false,
+            });
+          },
+          testInfo,
+        );
+        await page.screenshot({
+          path: testInfo.outputPath(`context-${String(width)}.png`),
+          fullPage: true,
+        });
+      }
+      if (includes("PROVIDERS_INTEGRATIONS")) {
+        await checkIntegrationPackage(page, integration, installSnapshot);
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.screenshot({
+          path: testInfo.outputPath(`integration-package-${String(width)}.png`),
+          fullPage: true,
+        });
+        await checkEmailEffects(
+          page,
+          async () => {
+            await page.screenshot({
+              path: testInfo.outputPath(`email-effect-${String(width)}.png`),
+              fullPage: false,
+            });
+          },
+          installSnapshot,
+        );
+        await checkGrantCandidates(page, project.ref, installSnapshot);
+      }
+    }
+    const catalogProject = projects[0];
+    if (!catalogProject) throw new Error("Missing synthetic project");
+    if (includes("CATALOGS")) {
+      await checkRunsCatalog(
+        page,
+        catalogProject.ref,
+        async () => {
+          await page.screenshot({
+            path: testInfo.outputPath(`runs-catalog-${String(width)}.png`),
             fullPage: false,
           });
         },
-        testInfo,
+        (runs) => {
+          if (!invalidateRuns)
+            throw new Error("Missing synthetic platform stream");
+          invalidateRuns(runs, catalogProject.ref);
+        },
+        installSnapshot,
       );
-      await page.screenshot({
-        path: testInfo.outputPath(`context-${String(width)}.png`),
-        fullPage: true,
-      });
-      await checkIntegrationPackage(page, integration, installSnapshot);
-      await page.evaluate(() => window.scrollTo(0, 0));
-      await page.screenshot({
-        path: testInfo.outputPath(`integration-package-${String(width)}.png`),
-        fullPage: true,
-      });
-      await checkEmailEffects(
+      await checkOrganizationCatalog(
         page,
+        projects,
+        (agents, projectRef, workflows) => {
+          if (!invalidateAgents)
+            throw new Error("Missing synthetic platform stream");
+          invalidateAgents(agents, projectRef, workflows);
+        },
         async () => {
           await page.screenshot({
-            path: testInfo.outputPath(`email-effect-${String(width)}.png`),
+            path: testInfo.outputPath(
+              `organization-catalog-${String(width)}.png`,
+            ),
             fullPage: false,
           });
         },
         installSnapshot,
       );
-      await checkGrantCandidates(page, project.ref, installSnapshot);
-    }
-    const catalogProject = projects[0];
-    if (!catalogProject) throw new Error("Missing synthetic project");
-    await checkRunsCatalog(
-      page,
-      catalogProject.ref,
-      async () => {
-        await page.screenshot({
-          path: testInfo.outputPath(`runs-catalog-${String(width)}.png`),
-          fullPage: false,
-        });
-      },
-      (runs) => {
-        if (!invalidateRuns)
-          throw new Error("Missing synthetic platform stream");
-        invalidateRuns(runs, catalogProject.ref);
-      },
-      installSnapshot,
-    );
-    await checkOrganizationCatalog(
-      page,
-      projects,
-      (agents, projectRef, workflows) => {
-        if (!invalidateAgents)
-          throw new Error("Missing synthetic platform stream");
-        invalidateAgents(agents, projectRef, workflows);
-      },
-      async () => {
-        await page.screenshot({
-          path: testInfo.outputPath(
-            `organization-catalog-${String(width)}.png`,
-          ),
-          fullPage: false,
-        });
-      },
-      installSnapshot,
-    );
-    await expect(page.locator("header .realtime-status")).toHaveAttribute(
-      "data-presentation-state",
-      "live",
-    );
-    if (width === 1440 || width === 390 || width === 2900)
-      await checkFileSelection(
-        page,
-        catalogProject.ref,
-        async (name = "file-selection") => {
-          await page.screenshot({
-            path: testInfo.outputPath(`${name}-${String(width)}.png`),
-            fullPage: name === "file-selection",
-          });
-        },
+      await expect(page.locator("header .realtime-status")).toHaveAttribute(
+        "data-presentation-state",
+        "live",
       );
-    if (width === 1440 || width === 390)
-      await checkAssistantHistory(page, catalogProject.ref);
-    if (width === 2900 || width === 390)
-      await checkHomeResults(page, catalogProject.ref, async () => {
-        await page.screenshot({
-          path: testInfo.outputPath(`home-results-${String(width)}.png`),
-          fullPage: false,
-        });
-      });
-    if (width === 2900 || width === 390)
-      await checkResumableSessions(page, catalogProject.ref, async () => {
-        await page.screenshot({
-          path: testInfo.outputPath(`resumable-sessions-${String(width)}.png`),
-          fullPage: false,
-        });
-      });
-    expect(snapshotConflictDiagnostics).toBe(
-      width === 390 || width === 2900 ? 1 : 0,
-    );
-    expect(publicationTimeoutDiagnostics).toBe(2);
+    }
+    if (includes("FILES_HISTORY")) {
+      if (width === 1440 || width === 390 || width === 2900)
+        await checkFileSelection(
+          page,
+          catalogProject.ref,
+          async (name = "file-selection") => {
+            await page.screenshot({
+              path: testInfo.outputPath(`${name}-${String(width)}.png`),
+              fullPage: name === "file-selection",
+            });
+          },
+        );
+      if (width === 1440 || width === 390)
+        await checkAssistantHistory(
+          page,
+          catalogProject.ref,
+          assistant,
+          installSnapshot,
+        );
+      if (width === 2900 || width === 390)
+        await checkHomeResults(
+          page,
+          catalogProject.ref,
+          async () => {
+            await page.screenshot({
+              path: testInfo.outputPath(`home-results-${String(width)}.png`),
+              fullPage: false,
+            });
+          },
+          installSnapshot,
+        );
+      if (width === 2900 || width === 390)
+        await checkResumableSessions(
+          page,
+          catalogProject.ref,
+          async () => {
+            await page.screenshot({
+              path: testInfo.outputPath(
+                `resumable-sessions-${String(width)}.png`,
+              ),
+              fullPage: false,
+            });
+          },
+          installSnapshot,
+        );
+    }
+    const diagnostics = expectedJourneyDiagnostics(part, width);
+    expect(snapshotConflictDiagnostics).toBe(diagnostics.snapshotConflicts);
+    expect(publicationTimeoutDiagnostics).toBe(diagnostics.publicationTimeouts);
     for (const { request, changedRoute, code } of failedRequests) {
       const explicitCancellation =
         cancelledRequests.has(request) ||

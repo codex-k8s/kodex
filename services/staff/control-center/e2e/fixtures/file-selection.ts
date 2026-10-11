@@ -4,7 +4,21 @@ import type {
   Artifact,
   ArtifactImpact,
   ArtifactBindingTarget,
+  ArtifactRevision,
 } from "../../src/shared/api/generated/openapi/types.gen";
+import { assertSyntheticAdaptivePageSize } from "./runs-catalog";
+
+export function fileSelectionInitialItems(artifact: Artifact): Artifact[] {
+  return [
+    artifact,
+    {
+      ...artifact,
+      ref: "artifact_no_delete",
+      fileName: "Без удаления.txt",
+      nextActions: [],
+    },
+  ];
+}
 
 export async function checkFileSelection(
   page: Page,
@@ -49,6 +63,28 @@ export async function checkFileSelection(
     nextActions: ["DELETE", "BIND"],
   };
   let impactCalls = 0;
+  await page.route(
+    `**/api/v1/artifacts/${artifact.ref}/revisions?**`,
+    async (route) => {
+      expect(new URL(route.request().url()).searchParams.get("pageSize")).toBe(
+        "5",
+      );
+      const revision: ArtifactRevision = {
+        ref: artifact.currentRevisionRef,
+        artifactRef: artifact.ref,
+        revision: artifact.revision,
+        fileName: artifact.fileName,
+        mediaType: artifact.mediaType,
+        sizeBytes: artifact.sizeBytes,
+        digest: `sha256:${artifact.digest}`,
+        scanState: artifact.scanState,
+        source: artifact.source,
+        previewAvailable: artifact.previewAvailable,
+        createdAt: artifact.createdAt,
+      };
+      await route.fulfill({ json: { items: [revision], total: 1 } });
+    },
+  );
   let permitted = false;
   await page.route(
     `**/api/v1/projects/${projectRef}/agents*`,
@@ -85,7 +121,7 @@ export async function checkFileSelection(
       const query = new URL(route.request().url()).searchParams;
       const text = query.get("query") ?? "";
       bindingQueries.push(text);
-      expect(query.get("pageSize")).toBe("30");
+      assertSyntheticAdaptivePageSize(query.get("pageSize"));
       if (query.get("pageToken")) {
         expect(query.get("pageToken")).toBe("binding-next");
         bindingCursorCalls++;
@@ -162,10 +198,9 @@ export async function checkFileSelection(
       const query = new URL(route.request().url()).searchParams;
       expect(query.get("lifecycleState")).toBe("ACTIVE");
       expect(query.get("sourceKind")).toBeNull();
-      expect(query.getAll("sourceKinds")).toEqual([
-        "CONTROL_CENTER",
-        "INTERACTION_ATTACHMENT",
-      ]);
+      // Текущий blank-query каталог читает все eligible sources и фильтрует tab локально.
+      expect(query.get("query") ?? "").toBe("");
+      expect(query.getAll("sourceKinds")).toEqual([]);
       if (query.get("pageToken")) {
         expect(query.get("pageToken")).toBe("files-next");
         await route.fulfill({
@@ -184,17 +219,7 @@ export async function checkFileSelection(
       }
       await route.fulfill({
         json: {
-          items: query.getAll("sourceKinds").includes("CONTROL_CENTER")
-            ? [
-                artifact,
-                {
-                  ...artifact,
-                  ref: "artifact_no_delete",
-                  fileName: "Без удаления.txt",
-                  nextActions: [],
-                },
-              ]
-            : [],
+          items: fileSelectionInitialItems(artifact),
           total: 7,
           nextPageToken: "files-next",
         },
@@ -234,7 +259,10 @@ export async function checkFileSelection(
     '[data-artifact-ref="artifact_no_delete"] input[type="checkbox"]',
   );
   await expect(selected).toBeEnabled();
-  await expect(page.locator(".files-workspace__toolbar")).toContainText("из 7");
+  await expect(page.locator(".files-workspace__count")).toHaveText(
+    "Загружено 7",
+  );
+  await expect(page.locator("[data-artifact-ref]")).toHaveCount(7);
   await expect(page.locator(".files-workspace__count")).toBeVisible();
   await expect(unavailable).toBeDisabled();
   await selected.check();
@@ -247,14 +275,15 @@ export async function checkFileSelection(
     await expect(page.locator(".files-list__head")).toBeHidden();
   }
   await screenshot();
-  const toggleBox = await page
-    .getByRole("button", { name: "Сетка", exact: true })
+  // Единый responsive список заменил отдельный Grid/List переключатель.
+  const rowBox = await page
+    .locator(`[data-artifact-ref="${artifact.ref}"]`)
     .boundingBox();
-  expect(toggleBox).not.toBeNull();
-  expect((toggleBox?.x ?? 0) + (toggleBox?.width ?? 0)).toBeLessThanOrEqual(
+  expect(rowBox).not.toBeNull();
+  expect((rowBox?.x ?? 0) + (rowBox?.width ?? 0)).toBeLessThanOrEqual(
     page.viewportSize()?.width ?? 0,
   );
-  await page.getByRole("button", { name: "Сетка", exact: true }).click();
+  await expect(page.locator(".files-list[role='list']")).toBeVisible();
   await expect(selected).toBeChecked();
   await expect(selected).toBeEnabled();
   await expect(unavailable).toBeDisabled();
@@ -279,21 +308,20 @@ export async function checkFileSelection(
   ).toBeEnabled();
   expect(impactCalls).toBe(2);
   await dialog.getByRole("button", { name: "Отмена", exact: true }).click();
-  await page.locator(`[data-artifact-ref="${artifact.ref}"]`).click();
+  await page
+    .locator(`[data-artifact-ref="${artifact.ref}"] .file-list-row`)
+    .click();
   const binding = page
     .locator(".file-details__bindings")
     .getByRole("checkbox", { name: agent.name });
   await expect(binding).toBeChecked();
   await expect(binding).toBeEnabled();
-  await expect(
-    page
-      .locator(".file-details__bindings")
-      .getByText("Видимых сотрудников: 3", { exact: true }),
-  ).toBeVisible();
   await page
-    .locator(".file-details__bindings")
-    .getByRole("button", { name: "Загрузить ещё", exact: true })
-    .click();
+    .locator(".file-details__bindings .binding-targets__rows")
+    .evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+      element.dispatchEvent(new Event("scroll"));
+    });
   await expect(
     page
       .locator(".file-details__bindings")

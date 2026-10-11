@@ -1,4 +1,5 @@
-import { ssrContextKey } from "vue";
+import { readFileSync } from "node:fs";
+import { computed, ssrContextKey, watch } from "vue";
 import { effectScope, nextTick, ref, shallowRef, type Ref } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRenderer, defineComponent, type SetupContext } from "vue";
@@ -14,6 +15,151 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("смена контекста async selector", () => {
+  it("files observer использует текущие scalar filters и authoritative revision без append state", () => {
+    const source = readFileSync(
+      new URL("../../features/files/FilesWorkspace.vue", import.meta.url),
+      "utf8",
+    );
+    const context = source.slice(
+      source.indexOf("const infiniteScrollContext = computed"),
+      source.indexOf("function formatBytes"),
+    );
+    for (const field of [
+      "props.projectRef",
+      "collectionTab.value",
+      "kind.value",
+      "scanState.value",
+      "source.value",
+      "query.value",
+      "artifactRealtimeRevision.value",
+    ])
+      expect(context).toContain(field);
+    expect(context).toContain("contextKey: infiniteScrollContext");
+    expect(context).not.toContain("items.value");
+  });
+  it("очистка query перенаблюдает snapshot даже при схлопнувшемся null→same cursor", async () => {
+    const observe = vi.fn();
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        observe = observe;
+        disconnect() {}
+      },
+    );
+    const scope = effectScope();
+    const collection = scope.run(() =>
+      useAsyncEntityCollection(vi.fn(), { immediate: false }),
+    );
+    if (!collection) throw new Error("Missing collection");
+    const snapshot = {
+      items: [{ id: "prefix", label: "Префикс" }],
+      nextCursor: "next",
+    };
+    collection.applySnapshot(snapshot);
+    const contextKey = computed(() => collection.query.value);
+    scope.run(() => {
+      watch(collection.query, () => collection.applySnapshot(snapshot), {
+        flush: "sync",
+      });
+      useCursorInfiniteScroll({
+        sentinel: shallowRef({} as Element),
+        enabled: collection.hasMore,
+        contextKey,
+        loadMore: collection.loadMore,
+      });
+    });
+    collection.query.value = "search";
+    await nextTick();
+    expect(collection.hasMore.value).toBe(true);
+    expect(observe).toHaveBeenCalledTimes(2);
+    collection.query.value = "";
+    await nextTick();
+    expect(collection.hasMore.value).toBe(true);
+    expect(observe).toHaveBeenCalledTimes(3);
+    scope.stop();
+  });
+  it("перенаблюдает новый scope при прежних sentinel/cursor, не повторяет append или duplicate snapshot", async () => {
+    const callbacks: IntersectionObserverCallback[] = [];
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(callback: IntersectionObserverCallback) {
+          callbacks.push(callback);
+        }
+        observe = observe;
+        disconnect = disconnect;
+      },
+    );
+    let finishOld!: (page: { items: { id: string; label: string }[] }) => void;
+    const loader = vi.fn((request: AsyncEntityLoadRequest) => {
+      void request;
+      if (loader.mock.calls.length === 1)
+        return new Promise<{ items: { id: string; label: string }[] }>(
+          (resolve) => {
+            finishOld = resolve;
+          },
+        );
+      return Promise.resolve({
+        items: [{ id: "tail", label: "Хвост" }],
+        nextCursor: "last",
+      });
+    });
+    const scope = effectScope();
+    const contextKey = ref("FILES");
+    const sentinel = shallowRef({} as Element);
+    const collection = scope.run(() =>
+      useAsyncEntityCollection(loader, { immediate: false }),
+    );
+    if (!collection) throw new Error("Missing collection");
+    const snapshot = {
+      items: [{ id: "prefix", label: "Префикс" }],
+      nextCursor: "next",
+    };
+    collection.applySnapshot(snapshot);
+    scope.run(() =>
+      useCursorInfiniteScroll({
+        sentinel,
+        enabled: collection.hasMore,
+        contextKey,
+        loadMore: collection.loadMore,
+      }),
+    );
+    const intersect = () => [
+      { isIntersecting: true } as IntersectionObserverEntry,
+    ];
+    callbacks[0]?.(intersect(), {} as IntersectionObserver);
+    expect(loader).toHaveBeenCalledOnce();
+    collection.applySnapshot(snapshot);
+    contextKey.value = "RESULTS";
+    await nextTick();
+    expect(loader.mock.calls[0]?.[0].signal.aborted).toBe(true);
+    expect(observe).toHaveBeenCalledTimes(2);
+    finishOld({ items: [{ id: "obsolete", label: "Устаревший" }] });
+    await Promise.resolve();
+    callbacks[0]?.(intersect(), {} as IntersectionObserver);
+    expect(loader).toHaveBeenCalledOnce();
+    callbacks[1]?.(intersect(), {} as IntersectionObserver);
+    await Promise.resolve();
+    expect(collection.items.value.map((item) => item.id)).toEqual([
+      "prefix",
+      "tail",
+    ]);
+    await nextTick();
+    expect(observe).toHaveBeenCalledTimes(2);
+    collection.applySnapshot(snapshot);
+    await nextTick();
+    expect(observe).toHaveBeenCalledTimes(2);
+    collection.cancel(true);
+    await nextTick();
+    callbacks[1]?.(intersect(), {} as IntersectionObserver);
+    expect(loader).toHaveBeenCalledTimes(2);
+    scope.stop();
+    expect(disconnect).toHaveBeenCalledTimes(2);
+    callbacks[1]?.(intersect(), {} as IntersectionObserver);
+    expect(loader).toHaveBeenCalledTimes(2);
+  });
   it("отменяет старую страницу и игнорирует loader, не соблюдающий abort", async () => {
     vi.useFakeTimers();
     let finish!: (value: { items: { id: string; label: string }[] }) => void;

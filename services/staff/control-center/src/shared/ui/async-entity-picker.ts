@@ -394,6 +394,7 @@ export interface CursorInfiniteScrollOptions {
   root?: Ref<HTMLElement | null | undefined>;
   sentinel: Ref<Element | null | undefined>;
   enabled: MaybeRefOrGetter<boolean>;
+  contextKey?: MaybeRefOrGetter<string>;
   loadMore: () => void | Promise<void>;
   rootMargin?: string;
 }
@@ -402,8 +403,10 @@ export function useCursorInfiniteScroll(
   options: CursorInfiniteScrollOptions,
 ): void {
   let observer: IntersectionObserver | undefined;
+  let observerEpoch = 0;
 
   function disconnect(): void {
+    observerEpoch += 1;
     observer?.disconnect();
     observer = undefined;
   }
@@ -423,11 +426,15 @@ export function useCursorInfiniteScroll(
       requestedRoot.contains(sentinel)
         ? requestedRoot
         : null;
+    const epoch = observerEpoch;
+    const onIntersection = createCursorIntersectionHandler(
+      () => toValue(options.enabled),
+      options.loadMore,
+    );
     observer = new IntersectionObserver(
-      createCursorIntersectionHandler(
-        () => toValue(options.enabled),
-        options.loadMore,
-      ),
+      (entries, currentObserver) => {
+        if (epoch === observerEpoch) onIntersection(entries, currentObserver);
+      },
       {
         root: observerRoot,
         rootMargin: options.rootMargin ?? "0px 0px 120px",
@@ -441,6 +448,7 @@ export function useCursorInfiniteScroll(
       options.root?.value,
       options.sentinel.value,
       toValue(options.enabled),
+      toValue(options.contextKey),
     ],
     reconnect,
     { flush: "post", immediate: true },

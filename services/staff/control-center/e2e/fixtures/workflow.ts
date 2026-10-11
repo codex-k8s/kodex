@@ -418,6 +418,13 @@ export async function checkWorkflowEditor(
   // Новая опубликованная ревизия появляется после ухода из редактора:
   // прежние version-pinned чтения отменяются до смены текущего fixture state.
   await page.goto("/");
+  await expect(page.locator(".home-project-section .home-project")).toHaveCount(
+    4,
+  );
+  await expect(page.locator("header .realtime-status")).toHaveAttribute(
+    "data-presentation-state",
+    "live",
+  );
   workflow.state = "PUBLISHED";
   workflow = {
     ...workflow,

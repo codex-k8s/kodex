@@ -10,6 +10,55 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 02:32 UTC — stage-v3 и mobile5 проверены в интеграции
+
+Основа f9ec8657, новые frozen CP6 и FE11 приняты ROOT, exact posthash17/17.
+Свежий isolated Chromium390 PASS5/5, 2.3min, worker1/retries0 и120s/test;
+Console/Network guards reached, ожидаемые negative diagnostics сохранены.
+ROOT80unit/6suites3.82s, lint/format11 и forcedtypes/synthetic build PASS
+(application7.71s/document1.00s). ROOT Go1.26.6 full race трёх пакетов
+PASS10.512/2.545/1.200s и vet PASS. Worker150unit PASS/1SKIP,
+57targeted race PASS; disposable warm component NOT RUN.
+
+Fresh binding platform-source-conformity-v3: RU8139B/fbe4937c…18a654,
+EN5321B/58db8296…38dc48. Старые v1/v2/core49/history/ABI/ENV/grants KEEP.
+CODE_ONLY отделён от auth execution/deployment, запреты не обходятся;
+current compliance UNKNOWN, не READY. Новый protected capture packet готов,
+actual v3 serving и native Retry12 пока NOT RUN. Retry11 FAILED/seq712.
+
+При интеграции один относительный patch ошибочно затронул HOT6; ROOT
+проверил exact own post/prehash и восстановил только эти изменения через
+apply_patch. HOT снова clean ba5286ea; новых native effects не было.
+Это не штатная доставка: нужен новый guarded idle FF и serving ELF proof.
+Далее publish/readback→fresh owner-idle FF→CP source/ELF/v3 proof→Retry12.
+Developer/ONE review/Manager acceptance/Full65 OPEN, USER corrections0,
+host business implementation0; бизнес-PR не merge/approve.
+
+## Checkpoint 11.10.2026 02:20 UTC — Architect завершён, уточняется граница policy
+
+Source/remote Draft1807 f9ec8657, HOT clean ba5286ea. Retry11 root FAILED/seq712;
+Architect run_XFRSvd4KWdzTQ0HpaBD7lBKt SUCCEEDED технически, semantic BLOCKED:
+применимость upstream auth policy к фактической эксплуатации UNKNOWN.
+ROOT прочитал architecture-review30949B до EOF, digest8d8a6e8b…27325a MATCH.
+Manager callback3 SUCCEEDED технически; exact turn trn_mZqWn9LjWEAaDHi4qclc105K /
+node nod_j0XJbewlavJvSeWbi5-yfCyn /attempt3, ACK+metadata CAPTURED,
+sameUID/rejoin VERIFIED/current-v2 canonical MATCH, mode COLD.
+
+Official auth policy проверена отдельно: local/open-source приложения и
+commercial/hosted services различаются; Kubernetes/VM не классификатор.
+Готовится generic stage-gate correction: code-only реализация не равна
+реальному auth execution или будущей публикации. Current auth compliance
+не объявляется PASS, запрет конкретного действия не обходится.
+
+Mobile finite5:4 historical PASS; FILES_HISTORY ещё FAIL/pending на точных
+assertions. Отдельный production defect подтверждён RED: прежний sentinel
+при смене вкладки не перенаблюдался. Кандидат3 учитывает filters/query/revision,
+старые observer callbacks и ACK; ROOT ещё не принял frozen пакет.
+Далее freeze→адресные проверки→publish→только fresh owner-idle HOT FF→
+serving/current binding proof→штатное продолжение исходной задачи.
+Developer/ONE review/Manager acceptance/§64–65 OPEN. USER corrections0,
+host business implementation0; конечный business PR не merge/approve.
+
 ## Checkpoint 11.10.2026 01:58 UTC — INTAKE завершён, Architect работает
 
 Source/remote Draft1807 0fca5fc0, HOT clean ba5286ea; bot readback PASS.

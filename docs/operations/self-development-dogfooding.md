@@ -866,3 +866,88 @@ Full65 OPEN. Mobile finite5: четыре группы PASS, FILES_HISTORY ещ�
 на устаревших fixtures/assertions; production source не меняется этим пакетом,
 budget/Console/Network/negative guards не ослабляются. USER corrections0,
 host business implementation0; конечный business PR не merge/approve.
+
+## Checkpoint 11.10.2026 02:32 UTC — интеграция current stage-v3 и mobile5
+
+Base f9ec86570e4784afcb0f3c57b94cf0fbbb14fe93, CP6+FE11 exact posthash17/17.
+FE manifest310d6057…29d/e5d5c950…89b, CP manifest7c47fcf4…2dbc.
+Production cursor observer получает scalar contextKey; stale callbacks
+отбрасываются. Tab/filter/query/realtime scope меняет наблюдение,
+append/duplicate не меняют; прежние loader/abort/authority guards сохранены.
+Fresh isolated Chromium mobile390 PASS5/5,2.3min,workers1/retries0,
+прежние120s/test. CORE33.5s/PROVIDERS32.4s/WORKFLOW32.1s/CATALOGS14.7s/
+FILES22.3s. Все финальные Console/Network guards достигнуты; expected
+negative console5/0/0/0/1 и lifecycle cancellations сохранены, не Console0.
+Browser log SHAef85281a…449c7a; mobile receipt SHA1ba85535…004b855.
+Native/Desktop/fullQA65 этим исходом не объявляются PASS.
+
+ROOT80unit/6suites3.82s, ESLint/Prettier11 PASS, canonical build:synthetic
+exit0 с forced vue-tsc, application7.71s/document1.00s; chunk/plugin warnings
+сохранены. Worker final public test:e2e:check PASS — discovery/types, не browser.
+ROOT Go1.26.6 full race platform10.512s/prompt2.545s/systemassistant1.200s,
+vet3packages PASS. Worker150unit PASS/1SKIP,57targeted race PASS;
+warm disposable component NOT RUN, пропуск не засчитан за PASS.
+
+Fresh platform-source-conformity-v3 EN5321B/digest58db8296…38dc48,
+RU8139B/fbe4937c…18a654≤8192. Exact historical v1/v2/core49/fixture KEEP;
+новая CP-only fixture проверяет actual fresh producer общим runner validator.
+Continuation меняет только INSTRUCTIONS, MODEL/ENV/capabilities/policy/tools
+не меняются. CODE_ONLY не равен auth/deployment; forbidden STOP и обязательный
+UNKNOWN gate сохраняются, текущий compliance verdict не назначается.
+Новый protected ACK/metadata packet готов, actual capture NOT RUN.
+
+Диагностика ROOT: относительный patch ошибочно изменил own6 в HOT.
+До следующих действий exact posthash6/prehash6 проверены, только эти правки
+восстановлены apply_patch; HOT clean ba5286ea. Native effects0, Retry11 terminal.
+Временную hot-reload сборку не выдаём за опубликованный serving proof.
+Далее bot publish/readback, fresh owner-idle guarded FF, fresh source/ELF/v3
+proof и штатный Retry12 исходного запроса. Console0/native HTTP200/Connected
+на прежнем HOT, screenshot/overflow0; чужие вкладки не затронуты.
+Developer/ONE review/Manager acceptance/Full65 OPEN; USER corrections0,
+host business implementation0, конечный business PR не merge/approve.
+
+## Checkpoint 11.10.2026 02:20 UTC — policy stage и загрузка при смене вкладки
+
+Source/remote Draft1807 f9ec86570e4784afcb0f3c57b94cf0fbbb14fe93;
+HOT clean ba5286ea. Native Retry11 root FAILED, owner graph sequence712,
+finished_at2026-10-11T02:20:11.228132Z. Manager callback3 SUCCEEDED технически;
+сохранил semantic BLOCKED и не делегировал Developer через закрытый gate.
+Architect run_XFRSvd4KWdzTQ0HpaBD7lBKt SUCCEEDED технически, semantic BLOCKED
+из-за UNKNOWN применимости upstream auth policy. Девять выходных артефактов
+captured/CLEAN. ROOT protected PREVIEW architecture-review.md
+art_sQrtN8Qz71b7l9pH2CYXgOKC/revision arv_5fd58e19e8ae49eca314ce2adcf19ea2:
+HTTP200,30949B,23176 UTF-8 characters, полный EOF и SHA256
+8d8a6e8b3e95c4c9e926b3fa4955b0ca96e36aa2218687697bcb4aea4527325a MATCH.
+RAM буфер после чтения удалён; raw credentials/input не сохранялись.
+
+Manager callback3 actual run/session сохранены; turn
+trn_mZqWn9LjWEAaDHi4qclc105K/node nod_j0XJbewlavJvSeWbi5-yfCyn/attempt3.
+ACK и protected metadata CAPTURED до cleanup: Pod UID
+12ac89a6-f1a6-4dc7-8269-4dc317ac6b79, RuntimeRevision
+rrev_OlzI407GcPiLjkesxhHhgSGQ/digest44630527…1e6f6, sameUID/rejoin VERIFIED.
+Точная v2 canonical7702B/853b0a34…9cdd5 совпала в base и current notice.
+Provider mode COLD; наличие callback/notice не объявляется provider RESUME.
+Это delivery proof, не semantic PASS или подтверждение auth eligibility.
+
+ROOT официально прочитал Codex App Server Auth endpoints и SIWC overview,
+дополнительно Context7 /openai/codex. Local/open-source приложения допускаются,
+commercial/hosted services ограничены; MIT и наличие Pod/VM сами по себе не
+классифицируют фактическую эксплуатацию. Подтверждена необходимость различать
+code-only реализацию, реальный auth execution и будущую публикацию. Готовится
+новая immutable generic instruction revision; прежние v1/v2 не переписываются.
+Current auth compliance UNKNOWN не станет PASS, доказанный запрет не обходится.
+
+Отдельный FE defect: после tab switch во время cursor read тот же DOM sentinel
+не получал нового IntersectionObserver callback при прежнем true hasMore.
+Targeted RED ожидает observe2, получает1; старый signal закрыт корректно.
+Кандидат3 задаёт scalar contextKey из project/tab/filters/query/realtime revision
+и отбрасывает callbacks прежнего observer. Append/duplicate snapshots не
+перенаблюдаются; query-clear аналог включён. Worker targeted80/6 suites,
+types/build PASS; ROOT adoption/current final browser EOF ещё NOT RUN.
+Четыре старых mobile группы PASS исторически; FILES_HISTORY tail FAIL/pending,
+итоговые Console/Network в этом хвосте ещё не достигнуты. Full5/5 не заявляется.
+
+Chrome5 reload/Connected/Console0/bootstrap/session/graph/events/ticket200,
+overflow0; оба NodeReady, root84GiB/DATA72GiB свободны. Чужие вкладки не тронуты.
+Developer/ONE review/Manager acceptance/Full65 OPEN. USER corrections0,
+host business implementation0; конечный business PR не merge/approve.
