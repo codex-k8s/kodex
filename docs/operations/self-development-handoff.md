@@ -10,6 +10,40 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 06:00 UTC — actual запись в workspace подтверждена
+
+Тот же root RUNNING/seq986, Architect RUNNING; INTAKE завершён, Developer ещё
+PLANNED. Actual Pod Architect `runtime-turn-dc465e9845b5258d`, UID
+`ccc6242e-e275-417d-af9e-c90817d620cd`, Running/3 Ready/restarts0. Read-only
+проверка контейнера provider-runtime подтверждает cwd `/workspace/work` и
+созданный агентом каталог `architect-run_J7d5C2822GYUpgbBb6Qduch2/schema`.
+Generated `codex_app_server_protocol.v2.schemas.json`:611560B,
+UID10002/GID29000/mode0644, mtime11.10.2026 05:28:16 UTC, SHA256
+`81a88c04ae4984b16d73080f4109d0477682bc76c8adbe483e371175ce54c054`.
+Файл появился при native offline codegen; ROOT не писал в actual workspace.
+Это actual write proof для Architect, не доказательство business success.
+Первая read-only диагностика указала неверное имя контейнера и была отклонена;
+повтор с actual provider-runtime успешен, отказ не скрывается.
+
+- [x] Actual запись агентом в изолированный workspace, дополнительно к
+      synthetic two-UID и readonly/working-copy permissions.
+- [ ] Native provider-version OBSERVED: собственные get_execution_snapshot
+      Architect seq356/357 и978/979 SUCCEEDED, но содержимое и immutable
+      доказательство должны быть проверены в его published результате.
+- [ ] Получить architecture-review и штатную проверку Coordinator, затем
+      Developer/ONE Review/Manager/owner; бизнес-PR агентами не merge/approve.
+- [ ] Завершить приёмку bootstrap1807 и merge/main readback без обхода gates.
+
+Architect сообщил о неполном EOF применимого OpenAPI и UNKNOWN deployment/auth
+профиле; окончательного callback/verdict пока нет. Вопрос seq969 отображён как
+обычный FINAL text, не интерактивный Human Gate/форма ответа. ROOT не посылал
+corrective USER turn. Текущая установка самостоятельно размещена; официальные
+OpenAI app-server auth docs и Context7 проверены отдельно, но это не заменяет
+получение native источников или server-observed provider proof самим Architect.
+Таймаут наблюдения не считается terminal. Chrome35 Console0 в текущем окне,
+owner bootstrap/session/graph/events/ticket200; оба dev-узла Ready.
+HOT/source6c30 не меняется во время активного запуска.
+
 ## Checkpoint 11.10.2026 05:24 UTC — оставшаяся критическая цепочка
 
 Root run_otNkDk7sv9Qd_bK4xEB4QAxT RUNNING/seq441, Architect

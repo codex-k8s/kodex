@@ -1180,3 +1180,31 @@ shell-write proof. Journal0376f329 remote/readback PASS после отдель�
       business PR не merge/auto-merge/approve агентами.
 
 HOT6c30 и активный граф не изменялись; новые runtime/policy/grants не вводились.
+
+## Checkpoint 11.10.2026 06:00 UTC — actual запись Architect в workspace
+
+- [x] Подтвердить не только права, но и реальную запись агентом. Actual Pod
+      runtime-turn-dc465e9845b5258d/UIDccc6242e-e275-417d-af9e-c90817d620cd,
+      provider-runtime cwd /workspace/work. Native offline codegen создал
+      architect-run_J7d5C2822GYUpgbBb6Qduch2/schema/
+      codex_app_server_protocol.v2.schemas.json:611560B/UID10002/GID29000/
+      mode0644/mtime05:28:16 UTC, SHA256
+      81a88c04ae4984b16d73080f4109d0477682bc76c8adbe483e371175ce54c054.
+      ROOT выполнил только read-only stat/hash, actual workspace не изменял.
+- [ ] Проверить server OBSERVED в published результате собственных native
+      get_execution_snapshot Architect; completed seq357/979 не доказывает
+      содержимое response. CLI version и schema hash не подменяют эту границу.
+- [ ] Завершить основной business Workflow/ONE Review/Manager/owner gate;
+      root RUNNING/seq986, Architect RUNNING, Developer ещё PLANNED.
+
+Первая диагностика использовала неверное имя контейнера и была отклонена;
+actual provider-runtime прочитан отдельной успешной командой. Shell FAIL seq981
+сохранён; последующие983/985 SUCCEEDED, cause981 отдельно не исследован.
+Architect сообщил current EOF/auth profile gaps; FINAL text с вопросом
+не представлен интерактивной формой/gate. Native callback/verdict ещё нет,
+corrective USER turn не посылался. Официальная документация app-server auth
+https://learn.chatgpt.com/docs/app-server#auth-endpoints и Context7 /openai/codex
+прочитаны ROOT для узкого уточнения, не для подмены native источников.
+Chrome35 reload/Console0/Connected и owner HTTP200 — ограниченное окно проверки;
+actual WebSocket frames отдельно не проверены. Оба узла Ready, actual agent Pod
+3 Ready/restarts0; HOT6c30 и runtime/grants остаются неизменными.
