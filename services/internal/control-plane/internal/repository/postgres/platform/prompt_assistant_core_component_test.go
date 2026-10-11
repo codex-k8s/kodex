@@ -209,9 +209,21 @@ func TestAssistantCoreInheritanceComponent(t *testing.T) {
 				t.Fatal("native continuation lost exact predecessor and core")
 			}
 			notice, err := promptservice.Materialize(continuation.TemplateContent, promptservice.FromSnapshot(continuation))
-			if err != nil || notice.Digest != stringMap(second, "continuationNoticeDigest") ||
-				(scopeKind == "PROJECT" && !strings.Contains(notice.Prompt, "get_configuration_catalog")) {
+			if err != nil || notice.Digest != stringMap(second, "continuationNoticeDigest") || len(notice.Prompt) > runtimecontract.MaximumContinuationNoticeBytes {
 				t.Fatal("native continuation lost exact core materialization")
+			}
+			if scopeKind == "PROJECT" {
+				runtime, ok := continuation.StructuredVariables["runtime"].(map[string]any)
+				projectionJSON, _ := json.Marshal(runtime[promptservice.AssistantCoreContinuationProjectionKey])
+				var projection promptservice.AssistantCoreContinuationProjection
+				if !ok || json.Unmarshal(projectionJSON, &projection) != nil || projection.CoreRef != next.AssistantCore.Ref ||
+					projection.CoreRevision != next.AssistantCore.Revision || projection.CoreDigest != next.AssistantCore.Digest ||
+					projection.RuntimeRevisionRef != stringMap(second, "runtimeRevisionRef") ||
+					projection.InstructionsSHA256 != stringMap(second, "instructionDigest") ||
+					projection.PromptMaterializationDigest != stringMap(second, "promptMaterializationDigest") ||
+					!strings.Contains(stringMap(second, "instructions"), "get_configuration_catalog") || strings.Contains(notice.Prompt, "get_configuration_catalog") {
+					t.Fatal("compact continuation lost full current main core or exact source binding")
+				}
 			}
 			copiedJSON, _ := json.Marshal(second)
 			var changed map[string]any

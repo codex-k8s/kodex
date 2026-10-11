@@ -10,6 +10,36 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 11:50 UTC — workspace и свежие инструкции
+
+- [x] Exact navigation310905cd: Go1.26.6 runner WorkingDirectory PASS0.024s,
+      CP PromptWorkspace PASS0.050s. Платформенная карта read-only/writable
+      применяется всем ролям; live новая карта пока NOT RUN.
+- [x] Общий native carrier текущих полных Instructions: thread/start и cold
+      thread/resume, без замены встроенной base. На pinned upstream
+      rust-v0.160.0/a956835d подтверждены обе schemas и config→Session→
+      developer fragment. AGENTS local equality не выдаётся за model receipt:
+      parent discovery и default32KiB ограничивали прежний файловый путь.
+      Dirty-tree runner codex/app PASS5.499s/17.250s, vet PASS; oracle
+      сравнивает actual synthetic wire >32KiB побайтово, history не изменяется.
+- [x] PROJECT notice получает versioned opt-in exact core/reference binding.
+      Полные main body64303B и core pins сохранены; notice12812B ниже прежнего
+      лимита65536B. Исторический no-marker render и canonical rejoin проверены.
+      Первый dirty-tree unit FAIL из-за struct/map JSON order исправлен;
+      domain full PASS0.268s, CP continuation targeted PASS0.410s, vet PASS.
+- [ ] Проверить на финальном commit focused CoreInheritance PostgreSQL,
+      опубликовать и доставить source/runner/role images после fresh idle.
+- [ ] Actual current-instructions provider readback и успешный бизнес-сценарий;
+      Technical SUCCEEDED предыдущего Architect не считается semantic PASS.
+
+Закреплённые публичные первоисточники: [resume processor](https://github.com/openai/codex/blob/a956835d020762cb2b570053af06f643a11c0ecc/codex-rs/app-server/src/request_processors/thread_processor.rs),
+[config](https://github.com/openai/codex/blob/a956835d020762cb2b570053af06f643a11c0ecc/codex-rs/core/src/config/mod.rs),
+[Session](https://github.com/openai/codex/blob/a956835d020762cb2b570053af06f643a11c0ecc/codex-rs/core/src/session/mod.rs),
+[AGENTS discovery](https://github.com/openai/codex/blob/a956835d020762cb2b570053af06f643a11c0ecc/codex-rs/core/src/agents_md.rs).
+Current official App Server и Context7 Codex/Go также прочитаны; current docs
+не подменяют exact0.160 protocol proof. Новые real AI/STT/device-code запуски
+в этом checkpoint не выполнялись. HOT0a116993 остаётся прежним до доставки.
+
 ## Checkpoint 11.10.2026 — платформенный порядок работы с файлами
 
 - [x] Общий cwd всех ролей — `/workspace/work`; INPUT предоставляется

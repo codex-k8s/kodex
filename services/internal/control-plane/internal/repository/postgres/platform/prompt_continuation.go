@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -111,6 +112,9 @@ func (repository *Repository) prepareRuntimeContinuationNotice(ctx context.Conte
 	if err := bindRuntimeContinuationTaskProjection(&noticeSnapshot, snapshot); err != nil {
 		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationTaskProjection, err)
 	}
+	if err := bindRuntimeContinuationCoreProjection(&noticeSnapshot, promptSnapshot, snapshot); err != nil {
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationBinding, err)
+	}
 	materialized, err := promptservice.Materialize(content, promptservice.FromSnapshot(noticeSnapshot))
 	if err != nil {
 		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationMaterialization, errs.ErrConflict)
@@ -126,6 +130,69 @@ func (repository *Repository) prepareRuntimeContinuationNotice(ctx context.Conte
 	}
 	snapshot["continuationPromptSnapshot"], snapshot["continuationRuntimeDiff"], snapshot["continuationNoticeDigest"] = noticeSnapshot, diff, materialized.Digest
 	return &preparedContinuationNotice{PreviousID: previousID, Diff: diff, Snapshot: noticeSnapshot, Materialization: materialized}, nil
+}
+
+// Только дополнительный PROJECT notice получает compact marker. Main prompt,
+// core pins/content и прежняя immutable история не изменяются. Runner передаёт
+// полные current Instructions отдельно при thread/start и thread/resume.
+func bindRuntimeContinuationCoreProjection(notice *entity.PromptMaterializationSnapshot, source entity.PromptMaterializationSnapshot, current map[string]any) error {
+	if source.AssistantCore == nil || source.AssistantCore.Scope != "PROJECT" {
+		return nil
+	}
+	if notice.TargetKind != promptservice.TargetSessionContinuation || notice.TargetRef != source.SessionRef ||
+		!reflect.DeepEqual(notice.AssistantCore, source.AssistantCore) || notice.ProjectRef != source.ProjectRef ||
+		notice.ContextPin.AgentRef != source.ContextPin.AgentRef {
+		return errs.ErrConflict
+	}
+	main, err := promptservice.Materialize(source.TemplateContent, promptservice.FromSnapshot(source))
+	if err != nil || !main.Complete || main.Prompt != stringMap(current, "instructions") ||
+		main.Digest != stringMap(current, "promptMaterializationDigest") ||
+		source.ContextPin.AgentRef != stringMap(current, "agentRef") || source.ProjectRef != stringMap(current, "projectRef") ||
+		source.RunRef != stringMap(current, "runRef") || source.SessionRef != stringMap(current, "sessionRef") ||
+		source.Variables["node.ref"] != stringMap(current, "nodeRef") || source.Variables["turn.ref"] != stringMap(current, "turnRef") ||
+		runtimeRevisionMapInt64(current, "attempt") < 1 || runtimeRevisionMapInt64(current, "attempt") > math.MaxInt32 {
+		return errs.ErrConflict
+	}
+	digest := sha256.Sum256([]byte(main.Prompt))
+	if hex.EncodeToString(digest[:]) != stringMap(current, "instructionDigest") {
+		return errs.ErrConflict
+	}
+	sourceRaw, err := json.Marshal(source)
+	currentRaw, currentErr := json.Marshal(current["promptSnapshot"])
+	var sourceObject, currentObject map[string]any
+	if err != nil || currentErr != nil || json.Unmarshal(sourceRaw, &sourceObject) != nil ||
+		json.Unmarshal(currentRaw, &currentObject) != nil || !reflect.DeepEqual(sourceObject, currentObject) {
+		return errs.ErrConflict
+	}
+	runtime, ok := notice.StructuredVariables["runtime"].(map[string]any)
+	if !ok && notice.StructuredVariables["runtime"] != nil {
+		return errs.ErrConflict
+	}
+	if _, present := runtime[promptservice.AssistantCoreContinuationProjectionKey]; present {
+		return errs.ErrConflict
+	}
+	if runtime == nil {
+		runtime = make(map[string]any)
+	}
+	core := source.AssistantCore
+	projection := promptservice.AssistantCoreContinuationProjection{
+		Revision:  promptservice.AssistantCoreContinuationProjectionRevision,
+		CoreScope: core.Scope, CoreRef: core.Ref, CoreRevision: core.Revision, CoreDigest: core.Digest,
+		InstructionsSHA256: hex.EncodeToString(digest[:]), InstructionsBytes: len(main.Prompt), PromptMaterializationDigest: main.Digest,
+		RuntimeRevisionRef: stringMap(current, "runtimeRevisionRef"), AgentRef: source.ContextPin.AgentRef, ProjectRef: source.ProjectRef,
+		RunRef: source.RunRef, NodeRef: source.Variables["node.ref"], SessionRef: source.SessionRef, TurnRef: source.Variables["turn.ref"],
+		Attempt: int32(runtimeRevisionMapInt64(current, "attempt")),
+	}
+	// Object имеет одинаковый canonical JSON до seal и после durable readback;
+	// typed struct внутри any дал бы другой порядок keys на rejoin.
+	projectionRaw, err := json.Marshal(projection)
+	var projectionObject map[string]any
+	if err != nil || json.Unmarshal(projectionRaw, &projectionObject) != nil {
+		return errs.ErrConflict
+	}
+	runtime[promptservice.AssistantCoreContinuationProjectionKey] = projectionObject
+	notice.StructuredVariables["runtime"] = runtime
+	return nil
 }
 
 // Полный server notice проверяется тем же consumer predicate до seal. История

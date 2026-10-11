@@ -147,3 +147,129 @@ func TestSystemAssistantCorePinDoesNotDuplicateBase(t *testing.T) {
 		})
 	}
 }
+
+func continuationCoreProjectionFixture(t *testing.T) Snapshot {
+	t.Helper()
+	snapshot := semanticFixture()
+	snapshot.TargetKind, snapshot.TargetRef = TargetSessionContinuation, "ses_current"
+	snapshot.ProjectRef, snapshot.RunRef, snapshot.SessionRef = "prj_current", "run_current", "ses_current"
+	snapshot.ContextPin.AgentRef = "agt_current"
+	snapshot.Variables["node.ref"], snapshot.Variables["turn.ref"] = "nod_current", "trn_current"
+	snapshot.AssistantCore = assistantCoreFixture("CURRENT_FULL_CORE_BODY")
+	components := map[string][]RuntimeDescriptor{}
+	for _, component := range runtimeComponentOrder {
+		components[component] = nil
+	}
+	diff, err := CompareRuntimeContexts(components, components, RuntimeDiff{PreviousRevisionRef: "rrev_previous", CurrentRevisionRef: "rrev_current", SessionRef: "ses_current", TurnRef: "trn_current", Attempt: 2})
+	if err != nil {
+		t.Fatal("create exact continuation diff")
+	}
+	raw, _ := json.Marshal(diff)
+	snapshot.SessionContinuation = string(raw)
+	core := snapshot.AssistantCore
+	snapshot.StructuredVariables = map[string]any{"runtime": map[string]any{AssistantCoreContinuationProjectionKey: AssistantCoreContinuationProjection{
+		Revision: AssistantCoreContinuationProjectionRevision, CoreScope: core.Scope, CoreRef: core.Ref, CoreRevision: core.Revision, CoreDigest: core.Digest,
+		InstructionsSHA256: strings.Repeat("a", 64), InstructionsBytes: 1024, PromptMaterializationDigest: strings.Repeat("b", 64),
+		RuntimeRevisionRef: "rrev_current", AgentRef: "agt_current", ProjectRef: "prj_current", RunRef: "run_current", NodeRef: "nod_current", SessionRef: "ses_current", TurnRef: "trn_current", Attempt: 2,
+	}}}
+	structuredRaw, _ := json.Marshal(snapshot.StructuredVariables)
+	if json.Unmarshal(structuredRaw, &snapshot.StructuredVariables) != nil {
+		t.Fatal("canonical projection object")
+	}
+	return snapshot
+}
+
+func TestContinuationCoreProjectionPreservesInitialAndHistoricalRendering(t *testing.T) {
+	snapshot := continuationCoreProjectionFixture(t)
+	projected, err := Materialize("Continue", snapshot)
+	if err != nil || !projected.Complete || strings.Contains(projected.Prompt, snapshot.AssistantCore.Content) ||
+		!strings.Contains(projected.Prompt, AssistantCoreContinuationProjectionRevision) || !strings.Contains(projected.Prompt, snapshot.AssistantCore.Ref) ||
+		!strings.Contains(projected.Prompt, snapshot.AssistantCore.Revision) || !strings.Contains(projected.Prompt, snapshot.AssistantCore.Digest) {
+		t.Fatal("compact notice lost exact binding or duplicated full core body")
+	}
+	raw, _ := json.Marshal(snapshot)
+	var stored Snapshot
+	if json.Unmarshal(raw, &stored) != nil || !reflect.DeepEqual(stored.AssistantCore, snapshot.AssistantCore) {
+		t.Fatal("projection changed durable full core pins or content")
+	}
+	rejoined, err := Materialize("Continue", stored)
+	if err != nil || rejoined.Prompt != projected.Prompt || rejoined.Digest != projected.Digest || rejoined.VariableSnapshotDigest != projected.VariableSnapshotDigest {
+		t.Fatal("compact notice changed on durable rejoin")
+	}
+	delete(snapshot.StructuredVariables["runtime"].(map[string]any), AssistantCoreContinuationProjectionKey)
+	fullCore, err := renderAssistantCore(snapshot, canonicalTemplateData(nil))
+	expectedFullCore := "Platform assistant base (scope=PROJECT, ref=" + snapshot.AssistantCore.Ref + ", revision=" + snapshot.AssistantCore.Revision + ", digest=" + snapshot.AssistantCore.Digest + "):\n" + snapshot.AssistantCore.Content
+	if err != nil || fullCore != expectedFullCore {
+		t.Fatal("historical no-marker core changed its exact published rendering bytes")
+	}
+	historical, err := Materialize("Continue", snapshot)
+	if err != nil || !strings.Contains(historical.Prompt, "Platform assistant base (scope=PROJECT,") || strings.Count(historical.Prompt, snapshot.AssistantCore.Content) != 1 {
+		t.Fatal("historical notice without marker changed full core rendering")
+	}
+	snapshot.TargetKind, snapshot.TargetRef = TargetAgent, "agt_current"
+	snapshot.SessionContinuation = ""
+	initial, err := Materialize("Initial owner overlay", snapshot)
+	if err != nil || strings.Count(initial.Prompt, snapshot.AssistantCore.Content) != 1 || strings.Contains(initial.Prompt, AssistantCoreContinuationProjectionRevision) {
+		t.Fatal("initial project prompt lost full core body")
+	}
+}
+
+func TestContinuationCoreProjectionRejectsInvalidPins(t *testing.T) {
+	for _, mutation := range []string{"scope", "content", "digest", "ref", "revision", "target", "project", "marker-version", "unknown-field", "core-pin", "instructions-digest", "instructions-bytes", "materialization-digest", "runtime-revision", "agent", "run", "node", "session", "turn", "attempt"} {
+		t.Run(mutation, func(t *testing.T) {
+			snapshot := continuationCoreProjectionFixture(t)
+			runtime := snapshot.StructuredVariables["runtime"].(map[string]any)
+			raw, _ := json.Marshal(runtime[AssistantCoreContinuationProjectionKey])
+			var marker map[string]any
+			if json.Unmarshal(raw, &marker) != nil {
+				t.Fatal("marker fixture")
+			}
+			runtime[AssistantCoreContinuationProjectionKey] = marker
+			switch mutation {
+			case "scope":
+				snapshot.AssistantCore.Scope = "SYSTEM"
+			case "content":
+				snapshot.AssistantCore.Content += "changed"
+			case "digest":
+				snapshot.AssistantCore.Digest = strings.Repeat("f", 64)
+			case "ref":
+				snapshot.AssistantCore.Ref = "invalid/ref"
+			case "revision":
+				snapshot.AssistantCore.Revision = "system-assistant-core-v047"
+			case "target":
+				snapshot.TargetKind = TargetAgent
+			case "project":
+				snapshot.ProjectRef = ""
+			case "marker-version":
+				marker["revision"] = "future"
+			case "unknown-field":
+				marker["unapproved"] = true
+			case "core-pin":
+				marker["core_digest"] = strings.Repeat("f", 64)
+			case "instructions-digest":
+				marker["instructions_sha256"] = "invalid"
+			case "instructions-bytes":
+				marker["instructions_bytes"] = 0
+			case "materialization-digest":
+				marker["prompt_materialization_digest"] = "invalid"
+			case "runtime-revision":
+				marker["runtime_revision_ref"] = "rrev_other"
+			case "agent":
+				marker["agent_ref"] = "agt_other"
+			case "run":
+				marker["run_ref"] = "run_other"
+			case "node":
+				marker["node_ref"] = "nod_other"
+			case "session":
+				marker["session_ref"] = "ses_other"
+			case "turn":
+				marker["turn_ref"] = "trn_other"
+			case "attempt":
+				marker["attempt"] = 3
+			}
+			if result, err := Materialize("Continue", snapshot); err == nil || result.Complete || result.Prompt != "" {
+				t.Fatal("invalid projection or full original core was accepted")
+			}
+		})
+	}
+}

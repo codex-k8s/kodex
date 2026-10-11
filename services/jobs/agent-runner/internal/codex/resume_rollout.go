@@ -34,7 +34,12 @@ type confirmedResumeSource struct {
 }
 
 func (server *appServer) bindExecutionThread(ctx context.Context, state *protocolState, input model.Input) error {
-	params := map[string]any{"approvalPolicy": input.CodexApprovalPolicy, "cwd": workingDirectory(input), "model": input.Model}
+	// Полная свежая server-owned инструкция передаётся native developer слоем.
+	// Файл в родителе cwd может не попасть в AGENTS discovery либо обрезаться
+	// project_doc_max_bytes; он остаётся локальным источником provenance.
+	// Каждый execution запускает новый app-server, поэтому resume здесь cold.
+	params := map[string]any{"approvalPolicy": input.CodexApprovalPolicy, "cwd": workingDirectory(input), "model": input.Model,
+		"developerInstructions": input.Instructions}
 	method := "thread/start"
 	if input.CodexSessionID == "" {
 		params["ephemeral"] = false

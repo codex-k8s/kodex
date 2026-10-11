@@ -37,9 +37,9 @@ func (fixture *resumeHistoryFixture) Write(raw []byte) (int, error) {
 	thread := codex160ThreadFixture(fixture.t)
 	thread["id"], thread["sessionId"], thread["path"], thread["cwd"] = fixture.input.CodexSessionID, fixture.input.CodexSessionID, fixture.path, fixture.input.WorkspaceRoot
 	result := map[string]any{"thread": thread}
-	if request.Method == "thread/resume" {
+	if request.Method == "thread/resume" || request.Method == "thread/start" {
 		fixture.resumeParams = request.Params
-		if request.Params["excludeTurns"] != true {
+		if request.Method == "thread/resume" && request.Params["excludeTurns"] != true {
 			thread["turns"] = fixture.history
 		}
 		result["approvalPolicy"], result["approvalsReviewer"], result["cwd"], result["model"], result["modelProvider"], result["sandbox"] = "never", "user", workingDirectory(fixture.input), fixture.input.Model, "openai", map[string]any{"type": "readOnly"}
@@ -111,6 +111,40 @@ func TestResumeLongHistoryMetadataDoesNotOverflowFrame(t *testing.T) {
 		t.Fatal("metadata-only resume prevented fresh usage baseline")
 	}
 	t.Logf("synthetic metadata-only resume: frame_bytes=%d retained_history_bytes=%d", fixture.frameBytes, len(archive))
+}
+
+func TestThreadBindingCarriesFullCurrentInstructionsForStartAndResume(t *testing.T) {
+	for _, resumed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "start", true: "resume"}[resumed], func(t *testing.T) {
+			fixture, state, sourceSHA := syntheticResumeHistory(t)
+			current := fixture.input
+			current.Instructions = "Current server-owned runtime revision\n" + strings.Repeat("Полная инструкция.\n", 5000) + "\nEND_CURRENT_INSTRUCTIONS"
+			if !resumed {
+				current.CodexSessionID = ""
+				state = newProtocolState("")
+			}
+			server := &appServer{stdin: fixture, messages: fixture.events}
+			if err := server.bindExecutionThread(t.Context(), state, current); err != nil {
+				t.Fatal("fresh instructions prevented thread binding")
+			}
+			if state.resumeSource != nil {
+				defer state.resumeSource.file.Close()
+			}
+			if len(current.Instructions) <= 32<<10 || fixture.resumeParams["developerInstructions"] != current.Instructions {
+				t.Fatal("native thread binding omitted or truncated current instructions")
+			}
+			if _, replaced := fixture.resumeParams["baseInstructions"]; replaced {
+				t.Fatal("runtime instructions replaced the provider built-in base")
+			}
+			if fixture.resumeParams["cwd"] != workingDirectory(current) || fixture.resumeParams["model"] != current.Model || fixture.resumeParams["approvalPolicy"] != current.CodexApprovalPolicy {
+				t.Fatal("instruction delivery changed execution pins")
+			}
+			archive, err := os.ReadFile(fixture.path)
+			if err != nil || sha256.Sum256(archive) != sourceSHA {
+				t.Fatal("current instruction delivery rewrote retained history")
+			}
+		})
+	}
 }
 
 func TestResumeHistoryFrameOverflowIsClosed(t *testing.T) {

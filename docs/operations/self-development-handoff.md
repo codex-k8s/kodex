@@ -10,6 +10,34 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 11:50 UTC — текущие инструкции и compact continuation
+
+Navigation source310905cd закреплён локально: runner WorkingDirectory
+PASS0.024s и CP PromptWorkspace PASS0.050s на exact SHA. HOT0a116993 и
+старый live runner пока не менялись. Native предыдущей попытки FAILED;
+business success не заявляется.
+
+Подготовлен общий runner fix: полные current Instructions передаются native
+developerInstructions в thread/start и cold thread/resume каждого нового
+app-server; встроенная base не заменяется. Exact upstream rust-v0.160.0 /
+a956835d подтверждает schema и cold-resume delivery. Прежний AGENTS-file
+receipt доказывает только локальное byte equality, не чтение моделью:
+parent /workspace не обязан входить в project discovery от cwd/work,
+default doc budget32768B может обрезать большой файл.
+
+CP новый PROJECT continuation получает opt-in reference marker с exact core,
+current revision/session/turn/attempt и full main instructions SHA/bytes.
+Main body и original snapshots сохраняются полностью, notice limit65536
+не повышен, исторический no-marker render неизменён. Synthetic oracle:
+main64303B, notice12812B. Initial unit FAIL обнаружил struct/map JSON order
+на rejoin; canonical object исправлен, последующие unit/vet PASS.
+Runner codex/app PASS5.499s/17.250s, native wire start/resume >32KiB
+byte equality и неизменность history проверены без модели/сети.
+
+Далее: exact commit, focused CoreInheritance disposable PG, push Draft1807,
+fresh owner idle и source/runner/role image доставка штатными repo scripts.
+Новый actual provider/semantic business PASS и full QA ещё NOT RUN.
+
 ## Checkpoint 11.10.2026 — общая файловая карта и SYSTEM context
 
 Integrationeec47c9f содержит общую карту каталогов/первые действия в

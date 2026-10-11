@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.21
+version: 1.1.22
 updated: 2026-10-11
 ---
 
@@ -451,6 +451,17 @@ size/digest и читают разрешённым локальным инстр
 локальные файлы устойчивыми результатами. После join прежнего provider
 следующее исполнение заново создаёт рабочую область и копии из pinned
 оригиналов; результат до terminal сохраняется разрешённым artifact/Git path.
+
+Полные current `RuntimeRevision.instructions` доставляются native
+`developerInstructions` при `thread/start` и cold `thread/resume` нового
+app-server каждого execution. Файл `/workspace/AGENTS.md` сохраняет точные
+байты для локального чтения и provenance, но не доказывает доставку модели:
+parent вне discovered project root может не читаться, а provider doc budget
+может обрезать файл. Встроенная base Codex не заменяется; старое содержимое
+rollout не становится текущими инструкциями. Дополнительный continuation
+notice может содержать только exact opt-in ссылочную проекцию свежей базы;
+полные main instructions/core pins сохраняются и доставляются отдельно,
+исторические snapshots без marker материализуются неизменно.
 
 | Файловый путь исполнения | Граница и результат |
 | --- | --- |
