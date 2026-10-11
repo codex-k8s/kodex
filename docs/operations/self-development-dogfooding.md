@@ -10,6 +10,25 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 23:52 UTC — immutable v5 и source RCA
+
+- [x] Frozen producer/test5 files post hashes MATCH; platform v5 EN6885B/RU7501B
+      ограничены8KiB. Historicalv1–v4/shared JSONv4 exact, forged pins rejection,
+      unchanged owner/core/INPUT/authority; общий invariant в GO-DOC-001.
+- [x] ROOT pinnedGo1.26.6 addressed unit0.218s/race2.842s/vet/diff-check PASS.
+      Main256KiB/notice64KiB unchanged; synthetic consumer66000/68811B PASS.
+- [ ] Build/delivery/actual source and serving ELF, original Retry с тем же
+      root USER input и new immutable runtime v5; не текущий business PASS.
+- [x] Source artifact preview40001 воспроизведён disposable component:
+      audit INSERT→503 либо Commit→409; sequential exact bytes MATCH.
+      Actual live SQLSTATE UNKNOWN, source RCA не подменяет live correlation.
+- [ ] Узкий fresh owner transaction retry40001, cleanup/authority/version
+      invariants, disposable GREEN и живой parallel preview.
+- [ ] Architect/Developer/ONE Review/Manager/owner и остальной QA/main delivery.
+
+Chrome11 authenticated/reload/Console0/GET200; failed attempt8/version3 и
+terminal descendants подтверждены. Business1808/input неизменны, review0.
+
 ## Checkpoint 11.10.2026 23:39 UTC — честный terminal и границы INTAKE
 
 - [x] SOURCE/remote8b9d0692, mainab4992e0 и HOT74b9 свежим readback MATCH;

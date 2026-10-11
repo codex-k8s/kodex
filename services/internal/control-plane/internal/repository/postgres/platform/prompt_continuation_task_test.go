@@ -77,10 +77,22 @@ func continuationTaskOracleFixture(t *testing.T) runtimecontract.RunnerInput {
 
 func TestContinuationTaskProducerMatchesRunnerOracle(t *testing.T) {
 	actual := continuationTaskOracleFixture(t)
+	if !strings.Contains(actual.Instructions, "Revision: platform-source-conformity-v5") {
+		t.Fatal("fresh continuation omitted v5 instructions")
+	}
+	freshRaw, err := json.Marshal(actual)
+	var fresh runtimecontract.RunnerInput
+	if err != nil || json.Unmarshal(freshRaw, &fresh) != nil || !reflect.DeepEqual(actual, fresh) {
+		t.Fatal("fresh v5 producer changed exact input on serialized rejoin")
+	}
 	raw, err := os.ReadFile("testdata/continuation_task_projection_v1_instructions_v4.json")
 	var fixture runtimecontract.RunnerInput
-	if err != nil || json.Unmarshal(raw, &fixture) != nil || !reflect.DeepEqual(actual, fixture) {
-		t.Fatal("exact producer output differs from shared synthetic runner fixture")
+	digest := sha256.Sum256(raw)
+	if err != nil || hex.EncodeToString(digest[:]) != "5bd8d0b6f3d41032f0ac3a6356448caa32195b1a43d91021adaac0521ac5954e" || json.Unmarshal(raw, &fixture) != nil {
+		t.Fatal("historical v4 shared synthetic fixture is unavailable")
+	}
+	if notice, err := runtimecontract.ValidateRuntimeSessionContext(fixture); err != nil || !notice {
+		t.Fatal("historical v4 notice rejected by unchanged shared runner consumer")
 	}
 	if notice, err := runtimecontract.ValidateRuntimeSessionContext(actual); err != nil || !notice {
 		t.Fatal("exact fresh producer notice rejected by shared runner consumer")

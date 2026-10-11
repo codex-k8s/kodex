@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/systemassistant"
 )
 
 func assertPlatformInstructions(t *testing.T, snapshot entity.PromptMaterializationSnapshot) {
@@ -242,5 +244,42 @@ func TestPlatformInstructionsDependencyChangesResumeAndDiff(t *testing.T) {
 		if !reflect.DeepEqual(before[component], after[component]) {
 			t.Fatal("instruction expanded runtime authority")
 		}
+	}
+}
+
+func TestPlatformInstructionsV5ConsumerBudget(t *testing.T) {
+	// Реальный shipped core и synthetic owner snapshot, не live readback.
+	// Main instructions ограничены consumer 256KiB; 64KiB относятся к notice.
+	for _, locale := range []string{"en", "ru"} {
+		old, err := platformInstructionBindingForRevision("platform-source-conformity-v4", locale)
+		if err != nil {
+			t.Fatal(err)
+		}
+		current, err := platformInstructionBinding(locale)
+		if err != nil {
+			t.Fatal(err)
+		}
+		materialize := func(binding entity.PromptPlatformInstructions) promptservice.Materialization {
+			t.Helper()
+			snapshot := workflowPromptFixture()
+			snapshot.Locale, snapshot.TargetKind, snapshot.TargetRef = locale, promptservice.TargetAgent, "agt_fixture"
+			snapshot.PlatformInstructions = &binding
+			snapshot.SemanticValues = map[string]string{"CONSTRAINTS": platformInstructionProjection(binding), "INPUT": "EXACT_OWNER_INPUT"}
+			result, err := promptservice.Materialize("{{"+strconv.Quote(systemassistant.CorePrompt())+"}}", promptservice.FromSnapshot(snapshot))
+			if err != nil || !result.Complete {
+				t.Fatal("composite materialization failed")
+			}
+			return result
+		}
+		before, after := materialize(old), materialize(current)
+		if len(after.Prompt) > 256<<10 || before.ServiceTemplateDigest != after.ServiceTemplateDigest ||
+			!reflect.DeepEqual(before.EffectiveCapabilities, after.EffectiveCapabilities) {
+			t.Fatal("v5 changed authority, service ABI or exceeded consumer budget")
+		}
+		if _, err := runtimecontract.DecodePromptService(runtimecontract.RunnerInput{Instructions: after.Prompt, Capabilities: after.EffectiveCapabilities, PromptTargetKind: promptservice.TargetAgent,
+			PromptServiceTemplateRevision: after.ServiceTemplateRevision, PromptServiceTemplateDigest: after.ServiceTemplateDigest}); err != nil {
+			t.Fatal("unchanged shared consumer rejected bounded v5 composite")
+		}
+		t.Logf("locale=%s instruction_bytes=%d instruction_sha256=%s composite_bytes=%d", locale, len(current.Content), current.Digest, len(after.Prompt))
 	}
 }

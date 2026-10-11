@@ -10,6 +10,38 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 23:52 UTC — v5 source проверен, доставка следующая
+
+На SOURCE80a517cd интегрированы frozen5 файлов: один producer инструкций и
+четыре теста; post SHA2565/5 MATCH. Новая immutable platform-source-conformity-v5:
+EN6885B/99962742, RU7501B/b73efb28. Происхождение FULL gate назначается явным
+требованием владельца или обязательным фактом текущего этапа, не самим
+generated index entry. Требуемые actual business diff/native EOF остаются;
+checkpoint не становится FINAL при доступной обязательной работе.
+Historicalv1–v4 и shared JSONv4 сохранены byte-exact, registry отвергает
+подделанные pins. Core/owner/INPUT, capabilities, grants, SQL и ABI не менялись.
+Общий invariant закреплён в GO-DOC-001.
+
+ROOT exact Go1.26.6 offline addressed unit PASS0.218s, frozen post-image race
+PASS2.842s и scoped vet PASS; diff-check PASS. Worker unit/race/vet также PASS.
+Binding8KiB, main consumer256KiB и continuation notice64KiB неизменны;
+synthetic full core+owner composite66000/68811B проходит unchanged consumer.
+Build/live delivery/native original Retry пока NOT RUN на момент записи.
+
+Artifact503 воспроизведён в isolated disposable PostgreSQL: параллельные
+same-principal PREVIEW трёх distinct revisions получают40001 при audit INSERT
+или Commit; последний даёт Conflict409, первый Unavailable503. Sequential
+до/после exact bytes/digest MATCH. Live SQLSTATE остаётся UNKNOWN; диагностика
+не приписывает ему доказанный source trace. Готовится узкий whole-owner-tx
+retry только подтверждённого40001 после cleanup/rollback; без client retry,
+понижения isolation или повторов неизвестного commit/network/deny.
+
+Chrome11 reload/Console0/relevant GET200, исходный root FAILED/attempt8/version3
+и все зависимые terminal подтверждены; чужие вкладки сохранены. Business
+PR1808 и root USER input неизменны, ROOT business code0/review cycles0.
+Следом published checkpoint→fresh idle→HOT ff→actual CP ELF/source→original
+Retry и ранний provider ACK. Полная QA/ONE Review/Manager/owner/main OPEN.
+
 ## Checkpoint 11.10.2026 23:39 UTC — attempt8 завершена, причина INTAKE установлена
 
 SOURCE/remote1807 clean8b9d0692/HOT code74b9 подтверждены свежим bot

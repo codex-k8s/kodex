@@ -10,6 +10,22 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 11.10.2026 23:52 UTC
+
+Frozen5 producer/test files на SOURCE80a517cd post SHA256 MATCH. Immutable
+PLATFORMv5 EN6885B/SHA99962742, RU7501B/b73efb28; v1–v4/shared JSONv4 byte-exact.
+ROOT addressed unit0.218s/race2.842s/scoped vet/diff-check PASS, worker scoped
+unit/race/vet PASS. Full core+owner synthetic consumer66000/68811B PASS;
+binding8KiB/main256KiB/notice64KiB unchanged. Build/live/new runtime v5/original
+Retry NOT RUN на момент записи, следовательно не новый business acceptance.
+
+Disposable source repro concurrent3distinct PREVIEW → SQLSTATE40001 в audit
+INSERT (503) либо Commit (409), sequential3 до/после bytes/digest MATCH.
+Component RED4.465s доказывает source defect; actual live SQLSTATE UNKNOWN.
+Исправление/negative tests/GREEN/live parallel пока NOT RUN.
+Chrome11 reload/Console0/relevant GET200 и root FAILED/attempt8/version3;
+ROOT business code0/USER corrections0/review cycles0, full QA/owner gates OPEN.
+
 ## Новое scoped evidence 11.10.2026 23:39 UTC
 
 Remote SOURCE8b9d0692/HOT74b9/mainab4992e0 MATCH. Chrome11 после reload

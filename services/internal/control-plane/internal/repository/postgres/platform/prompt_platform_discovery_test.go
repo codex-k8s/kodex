@@ -13,7 +13,7 @@ import (
 func TestPlatformDiscoveryV4ResolvesCanonicalDocumentsWithoutAuthority(t *testing.T) {
 	for _, locale := range []string{"en", "ru"} {
 		t.Run(locale, func(t *testing.T) {
-			binding, err := platformInstructionBinding(locale)
+			binding, err := platformInstructionBindingForRevision("platform-source-conformity-v4", locale)
 			if err != nil || binding.Revision != "platform-source-conformity-v4" || binding.Ref != "pinst_source_conformity_v4_"+locale || len(binding.Content) > maximumPlatformInstructionBytes {
 				t.Fatal("fresh discovery binding is not exactly pinned and bounded")
 			}
@@ -36,6 +36,15 @@ func TestPlatformDiscoveryV4ResolvesCanonicalDocumentsWithoutAuthority(t *testin
 					t.Fatalf("existing Git boundary missing: %q", guard)
 				}
 			}
+			current, err := platformInstructionBinding(locale)
+			discovery := platformDocumentDiscoveryEnglish
+			if locale == "ru" {
+				discovery = platformDocumentDiscoveryRussian
+			}
+			if err != nil || current.Revision != "platform-source-conformity-v5" || len(current.Content) > maximumPlatformInstructionBytes ||
+				!strings.Contains(binding.Content, discovery) || !strings.Contains(current.Content, discovery) {
+				t.Fatal("current v5 lost exact historical discovery boundary")
+			}
 		})
 	}
 }
@@ -49,12 +58,12 @@ func TestPlatformDiscoveryV4KeepsHistoricalV3ExactPins(t *testing.T) {
 	}
 }
 
-func TestPlatformDiscoveryV4ProducerPassesUnchangedRunnerConsumer(t *testing.T) {
+func TestPlatformDiscoveryCurrentProducerPassesUnchangedRunnerConsumer(t *testing.T) {
 	input := continuationTaskOracleFixture(t)
 	if notice, err := runtimecontract.ValidateRuntimeSessionContext(input); err != nil || !notice {
 		t.Fatal("fresh CP discovery binding rejected by unchanged shared consumer")
 	}
-	if !strings.Contains(input.SessionContext[len(input.SessionContext)-1].Content, "platform-source-conformity-v4") {
+	if !strings.Contains(input.SessionContext[len(input.SessionContext)-1].Content, platformSourceConformityRevision) {
 		t.Fatal("fresh producer did not deliver current discovery binding")
 	}
 	for _, invalid := range []string{"ref", "revision", "content", "digest", "locale"} {

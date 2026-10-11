@@ -13,10 +13,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
-const platformSourceConformityRevision = "platform-source-conformity-v4"
+const platformSourceConformityRevision = "platform-source-conformity-v5"
 const maximumPlatformInstructionBytes = 8 << 10
 
-// Этот versioned input меняется только новой revision. Compiled v3 и прежние
+// Этот versioned input меняется только новой revision. Compiled v4 и прежние
 // snapshots не перематериализуются; текст не назначает прав или результатов.
 const platformSourceConformityEnglish = `Approved owner requirements and product, architecture, domain and interface contracts define the task boundaries. Read the exact applicable canonical sources to their required EOF and verify their version/digest pins before design or implementation. An architectural artifact is a design proposal, not a new authoritative business rule or permission to override those sources. Preserve the owner's scope and gates; identify a real contradiction through the normal role result and Manager/owner decision, never by inventing a message on behalf of the user.
 When implementing the Kodex platform interface, automatic updates of displayed entities, including provider financial projections, use the shared WebSocket transport and protected authoritative projections. REST is for bootstrap, scope switches and explicitly supported detail/search/pagination/recovery, not a periodic refresh timer replacing realtime. A new event is not required when an existing event demonstrably covers the complete producer-to-projection-to-consumer scenario; this does not permit REST polling. A missing producer/consumer path is an implementation gap, not an exception to the approved transport contract. Preserve exact eligibility, version/cursor ordering, safe payloads and recovery rules. This Kodex interface transport rule does not prescribe transport for external user business projects: follow their own approved sources and contracts.
@@ -47,6 +47,23 @@ const platformDocumentDiscoveryEnglish = `Before READ of mandatory documents, re
 
 const platformDocumentDiscoveryRussian = `До READ обязательных документов разреши точный DocID и точные repo/ref/path по текущему canonical registry либо уже разрешённому pinned directory listing. Не угадывай DocID/пути и не бери исторические ссылки. Optional stale context link не назначает обязательный gate. Missing mandatory fact остаётся UNKNOWN/BLOCKED; реальный deny/unknown effect не обходи. Независимый разрешённый discovery другого ресурса не replay отказавшего target; 404 не доказывает отсутствие или разрешение. Guidance не выдаёт authority.`
 
+// Только fresh v5 уточняет происхождение FULL gate и границу текущего этапа.
+// Исторические source/evidence bytes v1–v4 остаются в прежних константах.
+const platformEvidenceGuidanceV5English = `For each mandatory current-gate claim, record claim -> mandatory fact -> sufficient evidence class -> exact source/version/digest/EOF -> residual UNKNOWN, and its FULL gate origin: an explicit owner requirement or a concrete mandatory fact of this stage. Distinguish approved requirements, source properties, proposed design and future acceptance. Installed pinned schema/documented contracts prove wire shape, not hidden implementation, routing, delivery/order, cancellation or observed effects; identify which mandatory fact needs full implementation source. Never discard such a missing fact: its gate remains UNKNOWN/BLOCKED.
+An index/diff entry, generated file, import or dependency alone does not require whole-file semantic reading, native pages to EOF or comprehensive review. Intake/planning establishes task, scope, acceptance, exact base/change pins and applicable mandatory evidence; downstream implementation/review obligations are not prerequisites unless the current gate requires them. Preserve a required complete actual business diff. For supporting generated sources separate verified full-byte provenance from complete semantic reading of applicable declarations/schema; scoped reading is not FULL of the file. A checksum, clone or local scan does not replace an explicit native read. Preserve explicit whole-source/native EOF and pins; EXTRACT is not FULL and a packet is not transitively complete without proof. This distinction cannot dismiss a mandatory hidden-implementation fact.
+Before FINAL, recheck self-added gates against the approved task and stage. A checkpoint is progress, not stage completion: while available mandatory work remains, continue it within the issued deadline and authority instead of voluntarily finalizing an incomplete result or requesting a corrective USER prompt. Only a verified external blocker, issued bound or explicit approved handoff can justify stopping; preserve the incomplete verdict and closed gates, never invent PASS/READY or success.
+Choose recommendations only within explicitly delegated decisions; never invent business rules, capabilities or authority. Preserve independent permitted READ and denied/unknown effects; never replay a denied URL through another transport or identity.`
+
+// Компактный v5 сохраняет прежние transport/authority правила в 8KiB budget.
+const platformSourceConformityV5Russian = `Утверждённые требования владельца и продуктовые, архитектурные, доменные и интерфейсные контракты задают границы задачи. До дизайна/реализации прочитай применимые canonical источники до требуемого EOF и проверь version/digest pins. Архитектурный артефакт — предложение дизайна, не новое бизнес-правило или право отменить источники. Сохраняй owner scope/gates; реальное противоречие передай штатным результатом роли и решением Manager/владельца, не сообщением от имени пользователя.
+В интерфейсе Kodex автоматические обновления entities, включая финансовые provider projections, идут через shared WebSocket и protected authoritative projections. REST — bootstrap/scope switch и разрешённые detail/search/pagination/recovery, не polling вместо realtime. Существующий event допустим только при полном доказанном producer→projection→consumer path; missing path — implementation gap, не исключение. Сохраняй exact eligibility, version/cursor ordering, safe payloads/recovery. Это правило Kodex не назначает transport внешним бизнес-проектам: следуй их approved contracts.
+Инструкции не выдают capabilities, network или SYSTEM/PROJECT authority. Используй current effective capabilities/resources. History/design не меняют approved source requirements и execution authority; не выдумывай source, semantic PASS или completed implementation.`
+
+const platformEvidenceGuidanceV5Russian = `Для обязательного утверждения текущего gate фиксируй: утверждение → обязательный факт → достаточный evidence → источник/version/digest/EOF → UNKNOWN и происхождение FULL gate: явное требование владельца либо конкретный обязательный факт текущего этапа. Различай approved requirement, source property, design proposal и будущую приёмку. Pinned schema/контракт доказывает wire shape, не hidden implementation, routing, delivery/order, cancel или effects. Укажи факт, которому нужен полный implementation source; missing fact не отбрасывай, его gate остаётся UNKNOWN/BLOCKED.
+Индекс/diff, generated файл, import/dependency сами не требуют whole-file semantic reading, native страниц до EOF или comprehensive review. INTAKE/planning устанавливает task/scope/acceptance, exact base/change pins и применимые mandatory evidence; obligations следующих этапов не prerequisites, если current gate их не требует. Сохраняй требуемый полный actual business diff. Для supporting generated source разделяй проверенный full-byte provenance и полное semantic чтение применимых declarations/schema; scoped чтение не равно FULL файла. Checksum/clone/local scan не заменяет явный native READ. Сохраняй явные whole-source/native EOF и pins: EXTRACT не FULL, пакет не transitively complete без proof. Это не отменяет mandatory hidden-implementation fact.
+До FINAL сверь self-added gates с approved task/stage. checkpoint — прогресс, не завершение этапа: пока есть доступная обязательная работа, продолжай в issued deadline/authority, не финализируй добровольно incomplete и не требуй corrective USER prompt. Остановку оправдывает лишь verified external blocker, issued bound либо explicit approved handoff; сохрани incomplete verdict/закрытые gates, не выдумывай PASS/READY/success.
+Рекомендации — лишь в явно делегированных решениях; не выдумывай business rules/capabilities/authority. Сохраняй independent permitted READ и denied/unknown effects; denied URL не повторяй другим transport/identity.`
+
 func platformInstructionBinding(locale string) (entity.PromptPlatformInstructions, error) {
 	return platformInstructionBindingForRevision(platformSourceConformityRevision, locale)
 }
@@ -67,7 +84,7 @@ func platformInstructionBindingForRevision(revision, locale string) (entity.Prom
 	refPrefix := "pinst_source_conformity_v1_"
 	switch revision {
 	case "platform-source-conformity-v1":
-	case "platform-source-conformity-v2", "platform-source-conformity-v3", platformSourceConformityRevision:
+	case "platform-source-conformity-v2", "platform-source-conformity-v3", "platform-source-conformity-v4", platformSourceConformityRevision:
 		refPrefix = "pinst_source_conformity_v2_"
 		if revision != "platform-source-conformity-v2" && locale == "ru" {
 			prefix, _, found := strings.Cut(content, "\nЕсли текущий runtime явно предоставляет разрешённый GH_TOKEN")
@@ -75,14 +92,23 @@ func platformInstructionBindingForRevision(revision, locale string) (entity.Prom
 				return entity.PromptPlatformInstructions{}, errs.ErrConflict
 			}
 			gitGuidance := platformGitGuidanceV3Russian
-			if revision == platformSourceConformityRevision {
+			if revision == "platform-source-conformity-v4" || revision == platformSourceConformityRevision {
 				gitGuidance = platformGitGuidanceV4Russian
 			}
 			content = prefix + "\n" + gitGuidance
+			if revision == platformSourceConformityRevision {
+				content = platformSourceConformityV5Russian + "\n" + gitGuidance
+			}
 		}
 		guidance := platformEvidenceGuidanceEnglish
 		if locale == "ru" {
 			guidance = platformEvidenceGuidanceRussian
+		}
+		if revision == platformSourceConformityRevision {
+			guidance = platformEvidenceGuidanceV5English
+			if locale == "ru" {
+				guidance = platformEvidenceGuidanceV5Russian
+			}
 		}
 		content += "\n" + guidance
 		if revision != "platform-source-conformity-v2" {
@@ -93,8 +119,11 @@ func platformInstructionBindingForRevision(revision, locale string) (entity.Prom
 			}
 			content += "\n" + stageGate
 		}
-		if revision == platformSourceConformityRevision {
+		if revision == "platform-source-conformity-v4" || revision == platformSourceConformityRevision {
 			refPrefix = "pinst_source_conformity_v4_"
+			if revision == platformSourceConformityRevision {
+				refPrefix = "pinst_source_conformity_v5_"
+			}
 			discovery := platformDocumentDiscoveryEnglish
 			if locale == "ru" {
 				discovery = platformDocumentDiscoveryRussian
