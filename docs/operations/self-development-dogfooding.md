@@ -10,6 +10,58 @@ updated: 2026-10-11
 
 # Цель и источники
 
+## Checkpoint 11.10.2026 — платформенный порядок работы с файлами
+
+- [x] Общий cwd всех ролей — `/workspace/work`; INPUT предоставляется
+      независимыми рабочими копиями. Оригиналы, SESSION, context и knowledge
+      остаются read-only. Этот общий путь уже проверен в живом обычном агенте
+      на source0a116993; доступ не зависит от разрешения публикации artifacts.
+- [x] Пакет0a7c46fd добавляет в общий `WORKSPACE.md` карту каталогов и четыре
+      первых действия: найти материал по имени, проверить источник, читать
+      оригинал/править копию, сохранить результат. Повторное remote чтение уже
+      локального файла не требуется; чужие или недоступные данные не выдаются.
+      Guide unit на exact0a7c46fd PASS0.026s; новый guide в live image NOT RUN.
+- [x] Исправлены оба системных аналога SYSTEM+project context: owner query
+      сохраняет SYSTEM на уровне организации, а materializer не отвергает
+      проверенный project context. PROJECT/ordinary сохраняют exact boundary.
+      SQL fix0a7c46fd сам по себе не закрыл component FAIL; второй fixeec47c9f
+      устраняет render guard. Исторический FAIL не заменяется unit PASS.
+- [x] SYSTEM context исправление проверено disposable PostgreSQLeec47c9f:
+      CredentialScopes PASS5.11s, ProjectAssistantProfiles PASS27.26s,
+      Bootstrap PASS99.89s/schedule-preview PASS2.76s. SYSTEM и SYSTEM+project
+      context теперь проходят и в CoreInheritance. Предыдущий0a7c46fd:
+      Bootstrap PASS100.27s,
+      schedule-preview PASS3.87s; CredentialScopes, ProjectAssistantProfiles
+      и CoreInheritance FAIL в prompt_materialization/CONFLICT. Контейнер
+      удалён, последующие script readbacks NOT RUN из-за fail-fast.
+- [ ] Combinedeec47c9f всё ещё FAIL: только PROJECT continuation subcases
+      CoreInheritance отвергнуты runtime_context/CONTINUATION_NOTICE_BYTES.
+      Ищется причина; этот остаток не отменяет доказанный SYSTEM fix и не
+      превращается в PASS. Собственный disposable контейнер удалён.
+- [x] Общий FILES guidance различает обход дерева исходников, полное чтение
+      нужного файла и integrity scan пакета. Весь репозиторий не выгружается
+      автоматически в prompt, remote read не дублирует уже разрешённый local
+      EOF. Явные mandatory full-read gates и origin/version/digest сохраняются;
+      checksum не объявляется содержательным чтением. Targeted workspace
+      units нового diff PASS0.060s, live доставка этого уточнения NOT RUN.
+- [x] Текущий INTAKE Manager завершён: четыре CLEAN captured результата
+      прочитаны защищённым owner PREVIEW до EOF с exact size/digest; Coordinator
+      штатно передал их Architect. Semantic PASS_INTAKE_ONLY, не business PASS.
+- [ ] Architect завершился technical SUCCEEDED, но semantic BLOCKED:
+      самостоятельно не закончил обязательное чтение трёх source-пакетов
+      и достаточное исследование. Это не network/permission denial.
+      `result.md`715B/SHA57bd96d8 и architecture-review20846B/SHA2ae32d4c
+      проверены owner PREVIEW200 до EOF. Developer/ONE Reviewer/Final Manager
+      не запущены; задача1796 и общий QA не завершены.
+
+Chrome35: session/graph/events/artifacts200, Console0; собственный screenshot
+просмотрен, overflow=false, существующий pan/zoom не доказывает полный fit.
+Прежние Playwright startup ошибки сохранены. Native workspace не изменялся
+ROOT; исправляющих USER сообщений и host business implementation нет.
+Root terminal FAILED11:28:19.768805Z/cursor597: закрыт semantic gate Architect,
+не network отказ. До fresh owner idle0 HOT0a116993 не обновлять. Применение нового
+пакета, новый runner guide и успешный business результат пока NOT RUN.
+
 ## Checkpoint 11.10.2026 11:03 UTC — файловый порядок подтверждён в обычном агенте
 
 - [x] Общий код использует `/workspace/work` как cwd для сотрудников и

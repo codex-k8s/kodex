@@ -10,6 +10,41 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 — общая файловая карта и SYSTEM context
+
+Integrationeec47c9f содержит общую карту каталогов/первые действия в
+`WORKSPACE.md`, разделение SYSTEM owner и project screen context в SQL
+и materializer, отрицательные owner/project tests и точный Automation
+continuation preview oracle. HOT0a116993 пока неизменён: общая writable work/
+read-only input/context/knowledge схема уже live; расширенная карта guide
+требует следующей безопасной доставки runner, её live PASS не заявлен.
+
+На exact0a7c46fd guide units PASS0.026s, platform targeted units PASS0.196s.
+Combined PG0a7: Bootstrap/schedule-preview PASS, три assistant suites FAIL
+в materialization/CONFLICT. Первый SQL fix без исправления render guard
+недостаточен; второй fixeec47c9f проверен: CredentialScopes PASS5.11s,
+ProjectAssistantProfiles PASS27.26s, Bootstrap PASS99.89s/schedule-preview
+PASS2.76s. SYSTEM и SYSTEM+context CoreInheritance PASS. Остаток combined
+FAIL — PROJECT continuation CoreInheritance/runtime_context/
+CONTINUATION_NOTICE_BYTES; диагноз в работе, script readbacks NOT RUN.
+Предыдущая оснастка удалила только собственный контейнер. Новый результат
+не подменять прошлым FAIL или unit PASS.
+
+Current root run_w_im32za9V7Kketf5TNZTk5y: Manager semantic PASS_INTAKE_ONLY,
+его четыре результата опубликованы и штатно прочитаны Coordinator/Architect.
+Architect run_FgWHNECjlymyJFVN3-gPm_D5 technical SUCCEEDED, semantic BLOCKED:
+собственное обязательное source-чтение/дизайн не закончены, access denial нет.
+Owner full PREVIEW подтверждает result715B/SHA57bd96d8 и review20846B/
+SHA2ae32d4c. Coordinator корректно не запускает Developer/review/acceptance
+с закрытым gate. Root FAILED11:28:19.768805Z/cursor597 по actual owner read200.
+
+Продолжение: устранить remaining CoreInheritance fail, зафиксировать точный
+disposable результат, затем публиковать пакет в тот же Draft.
+До fresh owner idle0 не менять HOT/images. Для дальнейшего QA устранить
+причину незавершённого own-source gate платформенными/системными средствами,
+не корректирующим USER prompt и не подменой бизнес-реализации ROOT.
+Business1796/ONE Review/Final Manager/owner/full QA/bootstrap merge OPEN.
+
 ## Checkpoint 11.10.2026 11:03 UTC — единый workspace всех ролей проверен
 
 HOT0a116993/source неизменны. Fresh обычный Manager UID660beadc: role/provider

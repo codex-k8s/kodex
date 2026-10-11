@@ -133,6 +133,11 @@ func TestPromptWorkspaceUsesVerifiedLocalSourcesBeforeRemoteDiscovery(t *testing
 		"never treat a modified working copy as the pinned original",
 		"authorized files not already materialized locally", "missing predecessor results",
 		"not an alternate transport after a remote denial or failure", "never use it to replay or bypass a rejected read",
+		"inspect its authorized directory listing or index first",
+		"Do not dump the entire repository into the model context",
+		"checksum or EOF scan alone does not prove",
+		"explicitly requiring a full source or artifact read still requires that exact read",
+		"does not require calling remote read_file again or printing every byte",
 	} {
 		if !strings.Contains(guidance, hint) {
 			t.Fatalf("local-first workspace guidance lost boundary: %q", hint)
