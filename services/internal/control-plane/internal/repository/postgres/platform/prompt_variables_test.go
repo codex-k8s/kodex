@@ -98,6 +98,24 @@ func TestPromptWorkspaceExistsWithoutArtifactPublicationCapability(t *testing.T)
 	}
 }
 
+func TestPromptWorkspaceDistinguishesMountedFilesFromOwnResultDiscovery(t *testing.T) {
+	for _, artifacts := range [][]map[string]any{nil, {promptArtifactFixture("artifact_abcdefgh", "result.txt", runtimecontract.AttachmentScopeInput, "aset_abcdefgh", 1)}} {
+		variables, err := promptStructuredVariables(artifacts, nil, runtimecontract.RuntimeEnvironmentImage{}, "", "aset_abcdefgh", "wfl_example")
+		if err != nil {
+			t.Fatal(err)
+		}
+		guidance := variables["input"].(map[string]any)["workspace"].(map[string]any)["guidance"].(string)
+		for _, hint := range []string{"mounted attachments, not the complete RUN_RESULT catalog", "missing handoff tuple or local file alone", "own get_file_manifest", "all next_cursor pages", "current root/run/dependency", "own entry_ref", "mandatory content to EOF", "actual absence after discovery or remote denial stays blocked", "independent authorized discovery"} {
+			if !strings.Contains(guidance, hint) {
+				t.Fatalf("workspace result discovery omitted boundary: %q", hint)
+			}
+		}
+		if variables["run"].(map[string]any)["files_count"] != len(artifacts) {
+			t.Fatal("guidance invented mounted result descriptors")
+		}
+	}
+}
+
 func promptArtifactFixture(ref, name, scope, setRef string, position int64) map[string]any {
 	return map[string]any{
 		"ref": ref, "fileName": name, "mediaType": "text/plain", "sizeBytes": float64(1),

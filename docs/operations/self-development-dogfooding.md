@@ -857,3 +857,27 @@ task_in_prompt=true. CODEX_SHELL FAILED2 не скрыты, последующи
 успешны; весь turn не объявляется прошедшим. Primary ROLE capture active.
 Chrome35 reload/API200/Console0; USER corrections0, host business code0.
 Architect/Developer/ONE Review/Manager/owner, QA65 и bootstrap readiness OPEN.
+
+## Checkpoint 11.10.2026 09:34 UTC — FILES discovery guidance без расширения прав
+
+Интегрированы5 файлов наbasee6dfb484, frozen patch d1fc363c/manifest555b342f,
+pre/post SHA2565/5 PASS. Mounted INPUT/context/knowledge manifests не
+объявляются полным RUN_RESULT каталогом; отсутствие tuple в handoff не
+останавливает независимый разрешённый own-manifest discovery. Пагинация до
+EOF, exact run/source/artifact pins и own entry_ref обязательны; filename hit
+не доказывает происхождение. Denied reads не повторяются, реальные отсутствие
+или неподтверждённые pins остаются BLOCKED. Grants/SQL/API/ABI не менялись.
+
+ROOT exact Go1.26.6 targeted CP PASS0.043s, RC PASS2.255s; disposable component
+PASS9.016s, новый specialist subtest0.15s: собственная пагинация размера1,
+foreign-result distinction, own entry, parent-entry denial и full body. Worker
+CP6/RC92 targeted и vet PASS. Все проверки относятся к exact frozen post-images,
+не к будущему live rollout. Системная writable/readonly модель уже подтверждена
+actual Pod ранее; delivery нового guidance и native acceptance NOT RUN.
+
+Source-only fixtures подготовлены с полными11 public upstream файлами на
+a956835d и5733 tracked main-scope файлами наab4992e0. Архивыe5331a0b/94855d9c
+не загружены и не приняты scan policy: MCP SOURCES.md file selection отклонён
+границей разрешённого пути до эффекта. Type/scan границы не обходить.
+Chrome35 reload/FILES layout overflow=false, USER corrections0, host business
+implementation0; Architect/Developer/ONE Review/Manager/owner и QA65 OPEN.

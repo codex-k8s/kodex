@@ -405,6 +405,9 @@ func TestRuntimeFileToolsExplainCatalogLocalFileSelection(t *testing.T) {
 			"artifact_ref/revision/digest", "Follow next_cursor with the same purpose/query",
 			"page_size=100 is not the whole catalog", "Missing exact pins or remote denial stay blocked",
 			"no automatic remote-error retry",
+			"mounted attachments, not the complete RUN_RESULT catalog", "missing handoff tuple alone",
+			"all next_cursor pages", "current root/run/dependency", "run_ref/source", "mandatory content to EOF",
+			"actual absence after discovery", "independent authorized discovery",
 		} {
 			if !strings.Contains(description, hint) {
 				t.Fatal("file tool description omitted catalog-local selection guidance")

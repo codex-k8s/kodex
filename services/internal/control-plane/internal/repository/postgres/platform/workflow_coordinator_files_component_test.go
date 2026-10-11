@@ -437,6 +437,55 @@ func testWorkflowCoordinatorFilesComponent(t *testing.T, freshRetry bool) {
 	secondRun := delegate("second-delegate", callback, "second")
 	complete("first-callback-complete", callback, "")
 	secondLease := claim("second-claim", secondRun.Ref)
+	t.Run("specialist_resolves_predecessor_in_own_paginated_manifest", func(t *testing.T) {
+		execution := runtimeFilesTestContext(t, secondLease, runtimecontract.FilePurposeRunResult)
+		var predecessor entity.ExecutionFileDescriptor
+		var foreignSeen bool
+		cursor := ""
+		catalog := secondLease["fileCatalog"].(runtimecontract.RuntimeFileCatalog)
+		for pages := int64(0); ; pages++ {
+			if pages > catalog.Total {
+				t.Fatal("own catalog pagination did not terminate")
+			}
+			page, err := service.GetExecutionFileManifest(ctx, manifestReader, execution, query.Page{Size: 1, Token: cursor})
+			if err != nil || page.Catalog.Ref != catalog.Ref || page.Catalog.Digest != catalog.Digest || page.Catalog.Total != catalog.Total || !slices.Equal(page.Catalog.Purposes, catalog.Purposes) || len(page.Items) > 1 {
+				t.Fatal("own paginated manifest binding changed", err)
+			}
+			for _, file := range page.Items {
+				foreignSeen = foreignSeen || file.ArtifactRef == foreignResult
+				if file.ArtifactRef == files[0].ArtifactRef {
+					predecessor = file
+				}
+			}
+			cursor = page.Next
+			if cursor == "" {
+				break
+			}
+		}
+		if !foreignSeen || predecessor.RunRef != first.Ref || predecessor.Source != "AGENT_RESULT" ||
+			predecessor.EntryRef == "" || predecessor.EntryRef == files[0].EntryRef ||
+			predecessor.Revision != files[0].Revision || predecessor.Digest != files[0].Digest {
+			t.Fatal("specialist confused permitted foreign result or inherited parent entry with predecessor")
+		}
+		parentExact := query.ExecutionFileRef{EntryRef: files[0].EntryRef, ArtifactRef: predecessor.ArtifactRef, Revision: predecessor.Revision, Digest: predecessor.Digest}
+		if _, err := service.GetExecutionFileMetadata(ctx, metadataReader, execution, parentExact); !errors.Is(err, errs.ErrNotFound) {
+			t.Fatal("parent entry selector crossed runtime catalogs", err)
+		}
+		ownExact := parentExact
+		ownExact.EntryRef = predecessor.EntryRef
+		if _, err := service.GetExecutionFileMetadata(ctx, metadataReader, execution, ownExact); err != nil {
+			t.Fatal("own predecessor metadata is unavailable", err)
+		}
+		download, err := service.ReadExecutionArtifact(ctx, bodyReader, execution.LeaseRef, execution.Fence, execution.Generation, predecessor.ArtifactRef)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, readErr := io.ReadAll(download.Reader)
+		closeErr := download.Reader.Close()
+		if readErr != nil || closeErr != nil || string(body) != firstText {
+			t.Fatal("own predecessor full body differs")
+		}
+	})
 	nestedRun := execute(command.LaunchWorkflowExecution, "nested-launch", workflowCatalogLaunchInput(t, service, worker, secondLease, nested.Ref, "Produce nested result"), nil).Run
 	complete("second-wait", secondLease, "")
 	nestedInitial := claim("nested-initial", nestedRun.Ref)

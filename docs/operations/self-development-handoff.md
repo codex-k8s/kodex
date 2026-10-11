@@ -10,6 +10,34 @@ updated: 2026-10-11
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 09:34 UTC — уточнено обнаружение файлов результатов
+
+Поверх e6dfb484 интегрирован guidance-only пакет пяти файлов с проверкой
+pre/post SHA2565/5. Общие FILES-инструкции CP и описания RC теперь явно
+различают локальный manifest подмонтированных вложений и полный разрешённый
+RUN_RESULT каталог. Отсутствие handoff tuple или локального файла не является
+доказательством отсутствия результата: агент завершает собственную пагинацию,
+сверяет origin/run/source и immutable pins, читает обязательный body до EOF.
+Реальное отсутствие после discovery и remote denial сохраняют закрытый gate.
+Новых grants, SQL eligibility, контрактов и исторических snapshot изменений нет.
+
+ROOT exact Go1.26.6 targeted CP PASS0.043s и RC PASS2.255s; disposable
+TestWorkflowCoordinatorFilesComponent PASS9.016s, новый specialist own-catalog
+subtest PASS0.15s. Он проверяет pagination по одному элементу, отличие foreign
+result, собственный entry_ref и отказ parent entry_ref, metadata/full body.
+Это не доказательство наличия двух конкретных outputs в historical A4.
+Frozen worker package d1fc363c и manifest555b342f; его targeted/vet PASS.
+Live доставка нового guidance и следующий native root пока NOT RUN.
+
+Подготовлены только source fixtures: полные11 upstream Rust-файлов на
+a956835d, и5733 tracked regular files разрешённого main scope наab4992e0.
+Критические архивы имеют SHA256e5331a0b/94855d9c; это не business code
+или upstream auth permission. Через MCP их загрузка ещё не выполнена:
+выбор SOURCES.md отклонён ограничением разрешённых путей, эффекта upload нет.
+Архивный format дополнительно должен соответствовать artifact policy; не
+обходить scan/type restrictions. Chrome35 reload и FILES layout overflow=false;
+native попытка5 остаётся terminal, business/QA65 OPEN.
+
 ## Checkpoint 11.10.2026 09:14 UTC — workspace PASS, semantic gate Architect закрыт
 
 Общая файловая модель всех ролей доставлена: `/workspace/work` и независимые
