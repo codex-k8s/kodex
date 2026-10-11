@@ -951,3 +951,46 @@ Chrome5 reload/Connected/Console0/bootstrap/session/graph/events/ticket200,
 overflow0; оба NodeReady, root84GiB/DATA72GiB свободны. Чужие вкладки не тронуты.
 Developer/ONE review/Manager acceptance/Full65 OPEN. USER corrections0,
 host business implementation0; конечный business PR не merge/approve.
+
+## Checkpoint 11.10.2026 02:54 UTC — v3 доставлен, Retry12 и экономичный medium
+
+Source/remote Draft1807/HOT2b409353a5532f2c6eedd4f75649b6ee0af4bc64 clean,
+main ab4992e0 unchanged. Initial push выполнился, но immediate PR head readback
+был stale: FAIL_OR_UNKNOWN сохранён; свежий readback подтвердил exact remote
+и PR head, push не повторялся. Compact PR body published/readback PASS.
+Guarded owner-idle FF PASS02:44:09.503Z; active build/admission/promotion/run/
+lease counters0, promoted64 и exact pins fa36f85d…b7ff сохранены.
+Отдельный accepted/unrequested artifact не изменён.
+
+Fresh CP source proof PASS16.131s, expected head2b; source/mount14 MATCH,
+Pod control-plane-d4b8bf7f-8b2nw/UID1d9f8602-6465-4129-850a-4558d6876a42,
+serving ELF=Air build9b390ec3c731aa1f418e9490c7dffad24c913ee299de39603250e13e809c9fd5,
+AirPID1/servicePID1333/Go1.26.6, readiness/rejoin PASS. Receipt SHA256
+1f25d1d6a074d0bb42a7809d66d53250e73533b115e5c770f4fcd9d590495f02.
+Это debug hot-reload proof, не immutable release acceptance. Core49/runner/
+policy/ENV/image не изменялись.
+
+Native original-task Retry12 started once02:45Z:
+root run_UVP1-7L7m9kr28Mcep6dAVfD/session ses_zRPR2EL6KVjROhCJ08rhGbte,
+turn trn_pbtT793h7jL8mSh3NuLrdZqT/node nod_NcdWOd94XY8rU9NAcpRPmx94/attempt1.
+Root RUNNING, native sequence158. INTAKE run_7uK6rFIS72FLcSS3z4ThlG5T/
+session ses_ye8HBSCV7kJEk-NRW2UREDjC/turn trn_wuQGLG_UFAHZPmhOImruLgfG/
+node nod_pmIjYB0msO3g1gU8BxONG4I7/attempt1 RUNNING. Both ACK+protected
+metadata CAPTURED, exact current-v3 canonical/base, COLD/sameUID/rejoin VERIFIED.
+INTAKE semantic result ещё UNKNOWN. Callback2 actual tuple UNKNOWN, fresh
+exclusive packet готов; старые outputs не копировались и не переписывались.
+Delivery proof не объявляется auth compliance, source EOF или semantic PASS.
+
+Новый запрос владельца о модели: штатный owner runtime-configuration GET
+подтвердил7/7 project agents gpt-6.1-sol с medium в published overlay/revision3.
+Model mutations0, поскольку все уже имеют требуемое значение. System defaults
+не изменялись. Chrome35 после перезапуска доступен, own reload/Connected,
+Console0/native graph HTTP200/overflow0; чужие вкладки не затронуты.
+CP last5min log lines0; это ограниченный readback, не глобальный backend PASS.
+
+Isolated Chromium1920 ALL actual PASS1/1, original120s/test, worker1/retries0,
+span119233ms; final Console/Network guards reached, expected negatives сохранены.
+Exact published2b source1177blobs MATCH. Viewports900/768 ещё RUNNING;
+historical desktop результаты не подменяют текущую проверку. Full65 OPEN,
+Developer/ONE review/Manager acceptance pending; USER corrections0/host
+business implementation0. До idle новый HOT FF не выполняется.

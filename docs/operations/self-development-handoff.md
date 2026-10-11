@@ -10,6 +10,34 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 02:54 UTC — публикация, serving v3 и новый native запуск
+
+Source/remote/HOT 2b409353a5532f2c6eedd4f75649b6ee0af4bc64, clean;
+Draft1807 сохранён, main ab4992e0 не изменён. После успешного push первый
+readback ещё видел прежний PR head: FAIL_OR_UNKNOWN сохранён. Отдельный
+свежий readback подтвердил exact remote/PR head; push не повторялся.
+PR body сокращён и проверен после публикации. Guarded owner-idle FF
+PASS02:44:09Z: пять active counters0, promoted pins сохранены.
+
+Actual CP source/mount14, samePodUID, Air/compiler1.26.6, serving ELF=build
+9b390ec3c731aa1f418e9490c7dffad24c913ee299de39603250e13e809c9fd5,
+readiness/rejoin PASS. Receipt1f25d1d6…495f02. Это hot-reload debug proof,
+не immutable release acceptance. Native Retry12 исходного запроса RUNNING:
+run_UVP1-7L7m9kr28Mcep6dAVfD, sequence158; INTAKE
+run_7uK6rFIS72FLcSS3z4ThlG5T ещё RUNNING. Root и INTAKE ACK+metadata
+CAPTURED, exact v3 canonical, provider COLD/sameUID/rejoin VERIFIED.
+Semantic INTAKE ещё не PASS; callback2 tuple UNKNOWN, новый packet готов.
+
+По новому запросу владельца effective project model7/7 подтверждён штатным
+owner GET: gpt-6.1-sol/medium, overlay revision3. Mutations0: уже нужное
+значение. Chrome после перезапуска доступен, собственная вкладка35 reload,
+Connected/Console0/native graph HTTP200/overflow0; чужие вкладки не менялись.
+CP за последние5min log lines0 — лишь ограниченный readback, не доказательство
+отсутствия всех backend ошибок. Chromium1920 ALL PASS1/1 в isolated mock
+на exact source2b, исходные120s/test; viewport900/768 ещё RUNNING.
+Developer/ONE review/Manager acceptance/Full65 OPEN. USER corrections0,
+host business implementation0. Пока граф активен, новый HOT FF запрещён.
+
 ## Checkpoint 11.10.2026 02:32 UTC — stage-v3 и mobile5 проверены в интеграции
 
 Основа f9ec8657, новые frozen CP6 и FE11 приняты ROOT, exact posthash17/17.
