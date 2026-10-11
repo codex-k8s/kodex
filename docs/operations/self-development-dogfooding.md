@@ -830,3 +830,39 @@ Root attempt1/current-v2 ACK CAPTURED, sameUID/image/binary pins совпали;
 root RUNNING, INTAKE RUNNING. Это не семантическая приёмка или финальный PR.
 USER corrections0/host business implementation0, review всего одно.
 Developer/ONE review/Manager acceptance и Full65 остаются OPEN.
+
+## Checkpoint 11.10.2026 01:58 UTC — INTAKE принят, Architect работает
+
+Source/remote Draft1807 0fca5fc080b459aa678b1b8fba8543bc88c2024a;
+fresh bot readback PASS, main ab4992e0 неизменён. HOT clean ba5286ea;
+новый source не переносится в обслуживающий checkout при активном Workflow.
+Два Node Ready/DiskPressureFalse, Pending/Unknown Pods0, основные
+control-plane/runtime-controller/gateway Running/Ready/restarts0.
+Own Chrome5: штатный reload, Connected, Console0, bootstrap/session/graph/
+events/ticket HTTP200, desktop screenshot и overflow0. Диагностический GET
+artifact content без обязательного purpose дал400; корректный version-pinned
+PREVIEW дал200,31608B, полный UTF-8 EOF и SHA256
+61325ed203bb4ba40a18820dbf02a0063bb206535323fc3f066e92096fe98014.
+Это исправление ROOT probe, не дефект пользовательского read path.
+
+Retry11 root run_OVfEtlncuy8JYTEkVb_AGy72 RUNNING. INTAKE
+run_6H0SMpAYWdp1mkm-MqQTxaqN SUCCEEDED технически; manager-plan.md
+art_yGcQw7cES5kdEyXGYU6TCKUj/revision arv_b88dfd92f5aa4b6f8a67ca147d241617
+прочитан ROOT до EOF с exact digest. Его semantic PASS относится только
+к INTAKE; schema, balance/units/spending и business acceptance не подтверждены.
+Manager callback attempt2 SUCCEEDED, native прочёл результаты до EOF
+и делегировал Architect run_XFRSvd4KWdzTQ0HpaBD7lBKt.
+
+Для INTAKE, Manager callback2 и Architect protected current-v2 metadata
+CAPTURED: ACK tuple→same Pod UID→image/binary/input→canonical binding
+pinst_source_conformity_v2_ru/853b0a34…9cdd5, rejoin VERIFIED.
+Callback2 mode COLD с current-tuple notice; Architect mode COLD без notice,
+sealed session отсутствует. Название callback не подменяет provider start mode.
+Первый root metadata NOT_CAPTURED сохранён: поздний POD_REJOIN после cleanup
+не доказывает исходную причину отказа и не является отсутствием binding.
+
+Architect RUNNING, Developer/ONE review/Manager product acceptance NOT RUN;
+Full65 OPEN. Mobile finite5: четыре группы PASS, FILES_HISTORY ещё FAIL/pending
+на устаревших fixtures/assertions; production source не меняется этим пакетом,
+budget/Console/Network/negative guards не ослабляются. USER corrections0,
+host business implementation0; конечный business PR не merge/approve.

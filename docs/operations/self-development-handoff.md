@@ -10,6 +10,27 @@ updated: 2026-10-10
 
 # Текущее состояние
 
+## Checkpoint 11.10.2026 01:58 UTC — INTAKE завершён, Architect работает
+
+Source/remote Draft1807 0fca5fc0, HOT clean ba5286ea; bot readback PASS.
+Кластер Ready/DiskPressureFalse, Pending0, serving core49 ранее доказан;
+Chrome5 Connected/Console0/native HTTP200, screenshot/overflow0.
+Retry11 root run_OVfEtlncuy8JYTEkVb_AGy72 RUNNING. INTAKE
+run_6H0SMpAYWdp1mkm-MqQTxaqN SUCCEEDED; manager-plan31608B прочитан
+ROOT полностью, digest61325ed2…8014 совпал. Semantic PASS только INTAKE.
+Manager callback2 SUCCEEDED и делегировал Architect
+run_XFRSvd4KWdzTQ0HpaBD7lBKt/session ses_FDYCHiLZXO3ZPFtDhhY3_Fuo,
+turn trn_ISbBeHlH2CUhtRwODQ1HryMD/node nod_wZI8NxO0IQ5BKB-RVzRQedc8,
+attempt1/agent agt_KmYyn3hhyr6GQ8an4KbZgO3R. Architect RUNNING.
+Protected ACK/current-v2 metadata INTAKE/callback2/Architect CAPTURED,
+sameUID/rejoin VERIFIED; old root NOT_CAPTURED не переписан.
+Далее actual Architect semantic outcome→Developer business PR→ONE review→
+Manager/final-readiness/owner→§64–65. FVi Developer/Reviewer capture готов,
+tuple получать только из нового owner read; metadata сразу после ACK.
+Mobile finite5:4PASS, FILES_HISTORY fixtures-only tail8 pending; не full PASS.
+Не переносить source в HOT при active graph, не писать USER corrections
+или бизнес-задачу вместо Developer, не сливать конечный business PR.
+
 ## Checkpoint 11.10.2026 01:44 UTC — core49 доставлен, исходный Retry11 работает
 
 Source/remote/HOT ba5286ea, guarded owner-idle FF PASS01:39:13.
