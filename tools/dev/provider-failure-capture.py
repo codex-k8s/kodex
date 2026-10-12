@@ -29,6 +29,7 @@ Failure, require = ACK.Failure, ACK.require
 MAX_BYTES = 512 << 10
 MAX_LINE = 4096
 MAX_FOLLOW_REJOINS = 2
+PRE_ACK_READ_RETRY_CODES = frozenset(('KUBECTL_READ_FAILED', 'KUBECTL_READ_TIMEOUT'))
 STAGES = frozenset('SELECTION CONTEXT BROKER_REQUEST AUTH_READ MCP_BINDING MCP_BRIDGE '
                    'HOME_PREPARE ACCOUNT_PIN ARCHIVE_RESTORE PROCESS_START INITIALIZE SKILLS '
                    'ACCOUNT_READ THREAD_CALL THREAD_BIND MCP_READINESS USAGE_BASELINE '
@@ -94,10 +95,12 @@ CLIENT_CATEGORIES = frozenset('UNKNOWN CALLBACKS POST_TERMINAL FRAME_LIMIT FRAME
                              'DIAGNOSTIC_TUPLE ARCHIVE_PROOF STREAM_READ TERMINAL_ABSENT TERMINAL_RESULT '
                              'ACTIVITY_DELIVERY'.split())
 CLIENT_CONTEXTS = frozenset(('ACTIVE', 'CANCELED', 'DEADLINE_EXCEEDED', 'UNKNOWN'))
+STREAM_ERRORS = frozenset('NONE FRAME_TOO_LARGE MESSAGE_LIMIT EMPTY_FRAME WIRE_INVALID READ_ERROR'.split())
 STAMP = re.compile(r'^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} ')
 REQUEST = re.compile(r'^' + re.escape(REQUEST_PREFIX) +
                      r'([^;]+); class: ([^;]+); detail: ([^;]+); rpc_code: (-?[0-9]{1,19}); '
-                     r'notification: ([^;]+); account_read: ([^;]+); notification_error: ([^;]+)$')
+                     r'notification: ([^;]+); account_read: ([^;]+); notification_error: ([^;]+); '
+                     r'stream_error: ([^;]+)$')
 
 
 def parse_line(raw):
@@ -130,11 +133,12 @@ def parse_line(raw):
     require(len(raw) <= MAX_LINE, 'PROVIDER_DIAGNOSTIC_INVALID')
     match = REQUEST.fullmatch(line)
     require(match is not None, 'PROVIDER_DIAGNOSTIC_INVALID')
-    stage, category, detail, code, notification, account, notification_error = match.groups()
+    stage, category, detail, code, notification, account, notification_error, stream_error = match.groups()
     code = int(code)
     require(stage in STAGES and category in CLASSES and detail in DETAILS and
             notification in NOTIFICATIONS and account in ACCOUNT_READ and
-            notification_error in NOTIFICATION_ERRORS and -(1 << 63) <= code < (1 << 63),
+            notification_error in NOTIFICATION_ERRORS and stream_error in STREAM_ERRORS and
+            -(1 << 63) <= code < (1 << 63),
             'PROVIDER_DIAGNOSTIC_INVALID')
     require(detail == 'RPC_ERROR' or code == 0, 'PROVIDER_DIAGNOSTIC_INVALID')
     require(not detail.startswith('RESUME_SOURCE_') or (stage == 'THREAD_READ' and category == 'PROVIDER'),
@@ -149,7 +153,7 @@ def parse_line(raw):
             'PROVIDER_DIAGNOSTIC_INVALID')
     return {'kind': 'REQUEST_FAILURE', 'stage': stage, 'class': category, 'detail': detail,
             'rpc_code': code, 'notification': notification, 'account_read': account,
-            'notification_error': notification_error}
+            'notification_error': notification_error, 'stream_error': stream_error}
 
 
 def validate_options(options):
@@ -703,10 +707,18 @@ def capture(options, read, follow, now=time.monotonic, sleep=time.sleep, on_obse
     deadline = now() + options.timeout_seconds
     pod, proof = None, None
     while now() < deadline:
-        pod = selected_pod(read, options)
-        if pod is not None:
-            raw = read(['logs', pod['name'], '-n', ACK.NAMESPACE, '-c', 'provider-runtime',
-                        '--tail=256', '--limit-bytes=524288', '--timestamps=false'])
+        # До ACK повторяются только read transport failures в прежнем бюджете.
+        # Ошибки identity/schema не повторяются; бизнес execution не меняется.
+        try:
+            pod = selected_pod(read, options)
+            raw = None if pod is None else read([
+                'logs', pod['name'], '-n', ACK.NAMESPACE, '-c', 'provider-runtime',
+                '--tail=256', '--limit-bytes=524288', '--timestamps=false'])
+        except Failure as error:
+            if str(error) not in PRE_ACK_READ_RETRY_CODES:
+                raise
+            raw = None
+        if raw is not None:
             proof = ACK.ack_from_logs(raw, options.run_ref, options.assistant_scope, expected_project_ref)
             if proof is not None:
                 require(proof['session_ref'] == options.session_ref and proof['turn_ref'] == options.turn_ref and

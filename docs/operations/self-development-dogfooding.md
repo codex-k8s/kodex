@@ -10,6 +10,21 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 11:46 UTC — delivery и диагностическая оснастка
+
+- [x] Native Developer/root terminal FAILED1359 подтверждены; Review/Manager
+      CANCELLED, cycles0. Closed RC tuple observationadb87496 сохранён; причина
+      CONTEXT_CANCELLED не подменяется первичным диагнозом.
+- [x] Summary CSS штатно доставлен на idle,83promoted pins unchanged;
+      desktop/mobile screenshots READ. Mobile Console0/Network0/overflowfalse/
+      live/rejoin1359; desktop pre-auth401 отдельно retained, не whole clean PASS.
+- [x] Актуальный producer format и bounded pre-ACK read retry исправлены в
+      collector2files; ROOT100unit6.298s PASS, frozen posthash MATCH. Без новых
+      runtime/image/ENV/authority изменений и legacy декодера.
+- [ ] Следующая actual dual PRIMARY capture/установление причины/исправление
+      платформы, успешный Developer→ONE Review→Manager→owner; без USER corrections.
+- [ ] A8 owner decision, bootstrap/fresh-main и remaining QA65; цель не завершена.
+
 ## Checkpoint 12.10.2026 11:26 UTC — current Developer prompt proof
 
 - [x] Native full preview200 после штатного fresh owner SSO: task6948B и

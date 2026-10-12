@@ -32,11 +32,12 @@ def fixture():
 
 def request(**fields):
     values = dict(stage='TERMINAL_WAIT', category='PROVIDER', detail='STREAM_CLOSED', code=0,
-                  notification='NONE', account='NONE', notification_error='NONE')
+                  notification='NONE', account='NONE', notification_error='NONE', stream_error='NONE')
     values.update(fields)
     return ('2026/10/07 07:49:00 ' + CAPTURE.REQUEST_PREFIX + '{stage}; class: {category}; '
             'detail: {detail}; rpc_code: {code}; notification: {notification}; '
-            'account_read: {account}; notification_error: {notification_error}\n').format(**values).encode()
+            'account_read: {account}; notification_error: {notification_error}; '
+            'stream_error: {stream_error}\n').format(**values).encode()
 
 
 class FakeClock:
@@ -142,6 +143,95 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual([call[0] for call in calls], ['get', 'logs', 'get', 'get'])
         self.assertEqual(len(followed), 1)
         self.assertEqual(closed, [True])
+
+    def test_pre_ack_transient_reads_recover_with_exact_ack_and_closed_output(self):
+        for code in ('KUBECTL_READ_FAILED', 'KUBECTL_READ_TIMEOUT'):
+            for operation in ('get', 'logs'):
+                with self.subTest(code=code, operation=operation):
+                    proof, columns, options = fixture()
+                    clock, failed, closed = FakeClock(), [], []
+                    ack = json.dumps({'event': CAPTURE.ACK.EVENT, 'proof': proof,
+                                      'private': SENTINEL}).encode() + b'\n'
+
+                    def read(args):
+                        if args[0] == operation and not failed:
+                            failed.append(True)
+                            raise CAPTURE.Failure(code)
+                        return columns if args[0] == 'get' else ack
+
+                    def follow(pod):
+                        try:
+                            yield ack
+                            yield request()
+                        finally:
+                            closed.append(pod['uid'])
+
+                    actual = CAPTURE.capture(options, read, follow, now=clock.now, sleep=clock.sleep)
+                    self.assertEqual(actual['status'], 'CAPTURED')
+                    self.assertEqual(actual['rejoin'], 'VERIFIED')
+                    self.assertEqual(actual['session_ref'], proof['session_ref'])
+                    self.assertEqual(actual['turn_ref'], proof['turn_ref'])
+                    self.assertEqual(actual['attempt'], proof['attempt'])
+                    self.assertEqual(clock.value, 0.5)
+                    self.assertEqual(closed, [actual['pod']['uid']])
+                    self.assertNotIn(SENTINEL, json.dumps(actual))
+
+    def test_pre_ack_repeated_transient_is_bounded_observer_timeout(self):
+        for code in ('KUBECTL_READ_FAILED', 'KUBECTL_READ_TIMEOUT'):
+            for operation in ('get', 'logs'):
+                with self.subTest(code=code, operation=operation):
+                    _, columns, options = fixture()
+                    clock, failures = FakeClock(), []
+
+                    def read(args):
+                        if args[0] == operation:
+                            failures.append(clock.now())
+                            raise CAPTURE.Failure(code)
+                        return columns
+
+                    with self.assertRaisesRegex(CAPTURE.Failure, '^EXACT_ACK_NOT_OBSERVED$'):
+                        CAPTURE.capture(options, read, lambda _: self.fail('unexpected follow'),
+                                        now=clock.now, sleep=clock.sleep)
+                    self.assertEqual(clock.value, options.timeout_seconds)
+                    self.assertEqual(len(failures), 2 * options.timeout_seconds)
+                    self.assertLess(failures[-1], options.timeout_seconds)
+
+    def test_pre_ack_non_transport_failures_are_not_retried(self):
+        for code in ('KUBECTL_UNAVAILABLE', 'KUBECTL_FOLLOW_FAILED', 'POD_UID_MISMATCH',
+                     'POD_ACK_PIN_MISMATCH', 'DUPLICATE_JSON_KEY', 'ACK_SHAPE_INVALID',
+                     'PROVIDER_DIAGNOSTIC_INVALID', 'UNKNOWN'):
+            with self.subTest(code=code):
+                _, _, options = fixture()
+                clock, calls = FakeClock(), []
+
+                def read(args):
+                    calls.append(args)
+                    raise CAPTURE.Failure(code)
+
+                with self.assertRaisesRegex(CAPTURE.Failure, '^' + code + '$'):
+                    CAPTURE.capture(options, read, lambda _: self.fail('unexpected follow'),
+                                    now=clock.now, sleep=clock.sleep)
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(clock.value, 0)
+
+    def test_verified_ack_read_failure_before_follow_is_not_retried(self):
+        proof, columns, options = fixture()
+        clock, gets = FakeClock(), []
+        ack = json.dumps({'event': CAPTURE.ACK.EVENT, 'proof': proof}).encode()
+
+        def read(args):
+            if args[0] == 'get':
+                gets.append(args)
+                if len(gets) == 2:
+                    raise CAPTURE.Failure('KUBECTL_READ_FAILED')
+                return columns
+            return ack
+
+        with self.assertRaisesRegex(CAPTURE.Failure, '^KUBECTL_READ_FAILED$'):
+            CAPTURE.capture(options, read, lambda _: self.fail('unexpected follow'),
+                            now=clock.now, sleep=clock.sleep)
+        self.assertEqual(len(gets), 2)
+        self.assertEqual(clock.value, 0)
 
     def test_system_and_project_use_same_source_scope_contract(self):
         for scope in ('SYSTEM', 'PROJECT'):
@@ -370,6 +460,73 @@ class CaptureTests(unittest.TestCase):
             'provider_error_info_invalid', 'provider_interrupted', 'RUNTIME_ARTIFACT_INVALID'})
         account = (source / 'account_read_failure.go').read_text().split('func safeAccountReadFailure(', 1)[1]
         self.assertEqual(CAPTURE.ACCOUNT_READ, set(re.findall(r'"([A-Z_]+)"', account)))
+        stream = (source / 'stream_failure.go').read_text()
+        reasons = set(re.findall(r'streamFailure\w+\s+appServerStreamFailureReason = "([A-Z_]+)"', stream))
+        self.assertEqual(CAPTURE.STREAM_ERRORS, reasons | {'NONE'})
+
+    def test_current_request_matches_actual_producer_format(self):
+        source = Path(__file__).resolve().parents[2] / 'services/jobs/agent-runner/internal/codex/broker.go'
+        producer = re.search(r'providerSafeFailureLog\s*=\s*"([^"]+)"', source.read_text()).group(1)
+        for stream_error in CAPTURE.STREAM_ERRORS:
+            with self.subTest(stream_error=stream_error):
+                line = producer % ('TERMINAL_WAIT', 'PROVIDER', 'CONTEXT_CANCELLED', 0,
+                                   'NONE', 'NONE', 'NONE', stream_error)
+                actual = CAPTURE.parse_line(line.encode())
+                self.assertEqual(actual['detail'], 'CONTEXT_CANCELLED')
+                self.assertEqual(actual['stream_error'], stream_error)
+                self.assertNotIn(SENTINEL, json.dumps(actual))
+
+    def test_stream_error_rejects_legacy_unknown_and_extra_fields(self):
+        for stream_error in ('UNKNOWN', SENTINEL, 'NONE '+SENTINEL, ''):
+            with self.subTest(stream_error=stream_error), self.assertRaisesRegex(
+                    CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$'):
+                CAPTURE.parse_line(request(stream_error=stream_error))
+        current = request()
+        invalid = (current.replace(b'; stream_error: NONE', b''),
+                   current.rstrip(b'\n') + b'; stream_error: READ_ERROR\n',
+                   current.rstrip(b'\n') + b'; raw_error: ' + SENTINEL.encode() + b'\n')
+        for line in invalid:
+            with self.subTest(line=line), self.assertRaisesRegex(
+                    CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$'):
+                CAPTURE.parse_line(line)
+
+    def test_stream_error_survives_dual_capture_with_exact_ack_before_cleanup(self):
+        proof, columns, options = fixture()
+        options.include_client_observation = True
+        ack = json.dumps({'event': CAPTURE.ACK.EVENT, 'proof': proof}).encode() + b'\n'
+        client = json.dumps({'msg': CAPTURE.CLIENT_MESSAGE, 'category': 'TERMINAL_RESULT',
+                             'context_state': 'ACTIVE', 'activity_failed': False}).encode() + b'\n'
+        gets, checkpoints, closed = 0, [], []
+
+        def read(args):
+            nonlocal gets
+            if args[0] == 'get':
+                gets += 1
+                return columns if gets < 3 else b''
+            return ack
+
+        def follow(pod):
+            try:
+                yield 'PROVIDER', ack
+                yield 'CLIENT', client
+                yield 'PROVIDER', request(detail='STREAM_INVALID', stream_error='FRAME_TOO_LARGE')
+            finally:
+                closed.append(pod['uid'])
+
+        clock = FakeClock()
+        actual = CAPTURE.capture(options, read, follow, now=clock.now, sleep=clock.sleep,
+                                 on_observation=checkpoints.append)
+        self.assertEqual(actual['rejoin'], 'POD_CLEANED_AFTER_CAPTURE')
+        self.assertEqual(actual['diagnostic']['stream_error'], 'FRAME_TOO_LARGE')
+        self.assertEqual(actual['client_observation']['category'], 'TERMINAL_RESULT')
+        self.assertFalse(actual['client_observation']['activity_failed'])
+        self.assertEqual([row['source'] for row in checkpoints], ['ACK', 'CLIENT', 'PROVIDER'])
+        for row in checkpoints:
+            for key in ('session_ref', 'turn_ref', 'attempt', 'input_digest',
+                        'runtime_revision_digest', 'execution_binding_digest'):
+                self.assertEqual(row[key], proof[key])
+        self.assertEqual(closed, [actual['pod']['uid']])
+        self.assertNotIn(SENTINEL, json.dumps(actual))
 
     def test_closed_token_usage_reasons_bind_exact_method_and_preserve_privacy(self):
         for reason in CAPTURE.TOKEN_USAGE_ERRORS | {'TOKEN_USAGE'}:
@@ -381,7 +538,7 @@ class CaptureTests(unittest.TestCase):
                     self.assertEqual(parsed['notification'], method)
                     self.assertNotIn(SENTINEL, json.dumps(parsed))
                     self.assertEqual(set(parsed), {'kind', 'stage', 'class', 'detail', 'rpc_code',
-                                                  'notification', 'account_read', 'notification_error'})
+                                                  'notification', 'account_read', 'notification_error', 'stream_error'})
             if reason != 'TOKEN_USAGE':
                 for method in CAPTURE.NOTIFICATIONS - CAPTURE.TOKEN_USAGE_METHODS:
                     with self.subTest(reason=reason, foreign_method=method), self.assertRaisesRegex(
@@ -416,7 +573,7 @@ class CaptureTests(unittest.TestCase):
                             notification=method, notification_error=reason))
 
     def test_unknown_or_malformed_diagnostic_never_reflects_sentinel(self):
-        for field in ('stage', 'category', 'detail', 'notification', 'account', 'notification_error', 'code'):
+        for field in ('stage', 'category', 'detail', 'notification', 'account', 'notification_error', 'stream_error', 'code'):
             with self.subTest(field=field), self.assertRaisesRegex(
                     CAPTURE.Failure, '^PROVIDER_DIAGNOSTIC_INVALID$') as caught:
                 CAPTURE.parse_line(request(**{field: SENTINEL}))

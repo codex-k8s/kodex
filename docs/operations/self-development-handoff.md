@@ -10,6 +10,40 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 11:46 UTC — terminal Developer, CSS live и collector исправлен
+
+Developer2S7Q FAILED11:28:03 после2450.678s, rootbfFf FAILED/version3/seq1359;
+ONE Reviewer и final Manager CANCELLED, Review cycles0. Под удалён штатно,
+exact role log paths отсутствуют на двух нодах. RC post-owner-completion log
+OBSERVED REQUEST_FAILURE/TERMINAL_WAIT/PROVIDER/CONTEXT_CANCELLED, exact
+runtime/input/execution/session/turn/attempt MATCH. Receiptadb87496. Это
+postcommit observation, не durable CP diagnostic receipt; первичная причина
+UNKNOWN. Ни сеть, ни квоты, ни callback failure не объявлены доказанными.
+Чистые decoder early returns несовместимы с OBSERVED result, callback failure
+с expected RUNTIME_UNAVAILABLE; actual PROVIDER_UNAVAILABLE согласуется
+с validated provider failure/TERMINAL_RESULT. Источник отмены пока не установлен.
+
+На idle11:35:10 ROOT штатноFF HOTdaf→published SOURCEc80490c5:5busy counters0,
+promoted83/pinsa92e5d30 неизменны, query9c147119/guardede8440c exact. Production
+diff только9CSSlines, без backend/contract/image edits. Current desktop1280×960
+и mobile390×844 screenshots READ: заголовок сводки теперь читается, badge/link
+не зажаты, controls/scroll/overflowfalse. Desktop receiptbf70b585/PNG442775d9
+сохраняет3 pre-auth401/Console3; own MCP после reload Console0 и rejoin1359.
+Mobile receipt96754cd2/PNG24d26d4f Console0/Network0/live/readinessTRUE.
+Это закрывает доставку summary CSS, не whole browser/QA65 PASS.
+
+Collector-only patcha55e329d исправляет доказанную несовместимость актуального
+producer `stream_error` с прежним parser. Только current format,6closed values,
+без legacy fallback/raw reflection; pre-ACK read transport retry только2codes
+в прежнем deadline, identity/schema/unknown и post-ACK не повторяются. Два файла
+post SHA1b1d131b/7a867f50 совпали с frozen manifest. ROOT100unittest PASS6.298s,
+worker100PASS6.349s/py_compile вне repo/diff-check/apply-check PASS. Runner/RC/
+authority/grants не менялись, rebuild/ENV не требуются. Actual новый primary
+capture пока NOT RUN; следующую real attempt наблюдать ACK-bound dual ROLE+
+PROVIDER заранее, не принимать observer timeout за terminal и не писать новые
+business USER corrections. A8 owner choice, business completion/ONE Review/
+Manager/owner/bootstrap merge/fresh-main/QA65 OPEN; цель ACTIVE.
+
 ## Checkpoint 12.10.2026 11:26 UTC — полный промпт Developer подтверждён
 
 SOURCE/remoteeb9bc48f, HOTdaf0d99d чистый. Штатный fresh SSO/password через
