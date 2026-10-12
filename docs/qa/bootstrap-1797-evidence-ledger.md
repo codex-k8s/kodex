@@ -10,6 +10,27 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 12.10.2026 — live e317 и текущий FAIL среды
+
+Exact source/remote/HOT e31714cd: owner idle FF05:41:21/busy0/pins81 unchanged,
+egress active_connections0. CP/RC bounded source/mount/UID/process/rejoin
+receipt3bab425aff08db734a15239f65b6a5dee0aa88ab34ed2b2b1fa54e3f696d54fe PASS.
+Actual CP a09a559d и egress4258f077 ELF MATCH независимым Go1.26.6 rebuild;
+первый host1.27.1 build не выдаётся за exact compiler proof. Initial pinned
+GOROOT mismatch FAIL сохранён, исправлен только выбор правильного compiler root.
+
+Chrome live PREVIEW05:42:4+8 requests все200/size/SHA MATCH. Drawer open/close:
+8/8 nodes inside canvas, overflow=false, screenshots READ. Fresh reload Console0,
+owner/stored666/666/readiness=true. Два503 graph при reload сохранены;
+последующие502/503 относятся к наблюдаемому инфраструктурному FAIL:
+server node DiskPressure=True, CP Evicted, RC/gateway not Ready. Прежний serving
+receipt после этого не доказывает текущую готовность. Cleanup/recovery OPEN.
+
+RootFAILED666/ArchitectSTREAM_INVALID не quota proof. Только retained closed
+metadata: CommandExecution completed2,297,142B; aggregatedOutputJSON1,127,042B
+и UTF81,048,606B; exact app-server stdout frame UNKNOWN. Synthetic fix готовится,
+никаких платных повторов/корректирующих USER/ROOT business code.
+
 ## Новое scoped evidence 12.10.2026 05:38 UTC
 
 Fresh Chrome owner graph/events200: новый root FAILED/666; Architect

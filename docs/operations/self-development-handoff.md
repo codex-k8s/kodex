@@ -10,6 +10,42 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 — e317 доставлен; новый инфраструктурный отказ
+
+SOURCE/remote/HOT e31714cd26f24aaade364c85dce1173c6b2f9a5f clean. Safe FF
+05:41:21 UTC: все пять busy counters0, promoted81/pins unchanged, active
+CONNECT0. Mounted CP artifact retry и egress encoded-path hashes MATCH;
+serving CP ELF a09a559d5035b436f9431274221f0f97b568a2aea9b2bf3ce29dc6bbbb89e6c4
+и egress4258f07734fe1145d0b97b124e53bb07f66d9f35aeec895dbea6b114feed36e2
+совпали с независимой Go1.26.6/CGO0/trimpath/buildvcs=false сборкой.
+CP/RC serving/rejoin receipt3bab425aff08db734a15239f65b6a5dee0aa88ab34ed2b2b1fa54e3f696d54fe.
+Первый host build Go1.27.1 не был digest proof; pinned invocation с неверным
+унаследованным GOROOT дал FAIL, затем exact GOROOT1.26.6 исправлен и MATCH.
+ROOT unit четырёх пакетов на pinned1.26.6 PASS; первоначальные unit/race/vet
+и disposable component выполнялись host1.27.1, их версия не подменяется.
+
+Chrome MCP вкладка4: parallel PREVIEW4+8 все200/size/SHA MATCH, граф8 узлов
+помещается при открытии/закрытии drawer, overflow=false; screenshots просмотрены.
+Fresh owner/stored666/666/readiness=true и Console0 после reload. Два graph503
+во время Air reload сохранены. Последующее Console502/503 уже связано с новой
+недоступностью backend: server node DiskPressure=True, CP Pod Evicted;
+не использовать прежний Ready proof как текущую готовность.
+
+Kubelet imagefs available24.07GB/capacity501.33GB, nodefs47.71GB/501.20GB.
+Готовится адресная очистка исключительно старых собственных build caches,
+без удаления данных, артефактов, dirty worktrees или чужих ресурсов. Порог
+DiskPressure не понижается; восстановление CP и новый serving proof OPEN.
+
+Architect failure подтверждён owner completion diagnostic: TERMINAL_WAIT/
+PROVIDER/STREAM_INVALID, attempt1 @05:33:55.216. Retained own rollout885 JSONL
+EOF/SHA95e8438d67eb9bc6f21c2ab2c79ec0ef582b0b503bb0ab6414f0243ca3f49e37.
+Последний CommandExecution completed: record2,297,142B, aggregated output
+1,048,606UTF8/1,127,042JSON; formatted output40,109B, stderr0. Точный stdout
+frame UNKNOWN; нельзя объявлять scanner1MiB причиной только по retained item.
+Готовится synthetic bounded JSONL regression без увеличения semantic quotas
+или ослабления strict parsing. Quota/429/overload/credit depletion не доказаны.
+Workflow/root terminal666 сохранён, новой отправки нет; ONE Review0/fullQA OPEN.
+
 ## Checkpoint 12.10.2026 05:38 UTC — Chrome восстановлен, текущий Workflow terminal
 
 Chrome MCP connected: создана только собственная вкладка4 Kodex, чужие tabs
