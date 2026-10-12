@@ -4,11 +4,38 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.0
+version: 1.1.1
 updated: 2026-10-12
 ---
 
 # Текущее состояние
+
+## Checkpoint 12.10.2026 06:33 UTC — очистка выполнена, recovery ещё FAIL
+
+SOURCE/remote5fdbb2c9f0484210f627022e83b481edae0b5dbc; HOTe31714cd.
+Новый JSONL transport bound8MiB и закрытая диагностика опубликованы в исходниках;
+новый runner OCI, admission/policy и role ENV ещё NOT RUN. Air этого runner
+исправления не доставляет. Review0, real Workflow/full QA/owner OPEN.
+
+Опубликованными exact scripts очищены только9081 cold Go output и23 старые
+temporary cosign копии:1,238,734,797+3,247,099,750 logical bytes. Активные
+инструменты, OCI pins, artifacts, PVC и чужие ресурсы сохранены. Установщик
+исправлен: единый EXIT trap очищает оба временных каталога.
+
+Fresh kubelet1.35.5 configz: hard imagefs/nodefs5%, minimum reclaim10%,
+pressure transition5m. Summary06:33: imagefs27,918,008,320/501,334,663,168B;
+nodefs44,073,816,064/501,201,502,208B. После прежнего crossing hard threshold
+15% recovery следует из официального eviction manager: ранее unmet threshold
+сохраняется до hard+minimum reclaim. Это не обычное ожидание transition5m.
+Не утверждается, что оба filesystem ранее пересекали hard threshold.
+
+Server DiskPressureTRUE, CP/основная PostgreSQL/Keycloak PostgreSQL Pending,
+SSO не готов. Chrome MCP connected, собственная вкладка4 после штатного перехода
+всё ещё «no available server»; повторный owner login сейчас не поможет.
+Идёт read-only аудит дополнительных собственных rebuildable caches. Не
+понижать thresholds, не снимать taint и protected pins, не удалять данные.
+Следующий шаг: доказанная безопасная очистка → DiskPressureFALSE/DB/SSO/CP
+readiness → fresh idle/delivery/serving proof → runner OCI и native workflow.
 
 ## Checkpoint 12.10.2026 — e317 доставлен; новый инфраструктурный отказ
 

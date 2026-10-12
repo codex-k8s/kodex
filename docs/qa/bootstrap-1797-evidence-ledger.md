@@ -10,6 +10,37 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Подтверждённая причина сохранения DiskPressure 12.10.2026 06:33 UTC
+
+Actual kubelet1.35.5+k3s1: hard imagefs/nodefs5%, minimum reclaim10%,
+transition5m. Fresh summary: imagefs27,918,008,320/501,334,663,168B (5.57%);
+nodefs44,073,816,064/501,201,502,208B (8.79%). Server DiskPressureTRUE;
+CP/основная PostgreSQL/Keycloak PostgreSQL Pending, SSO «no available server».
+Chrome MCP подключён, собственная вкладка4; foreign tabs untouched.
+
+Официальные [правила minimum reclaim](https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/#minimum-eviction-reclaim)
+и [код точной версии](https://github.com/kubernetes/kubernetes/blob/v1.35.5/pkg/kubelet/eviction/eviction_manager.go#L292-L325)
+подтверждают: уже нарушенный threshold остаётся unmet до hard+minimum reclaim,
+то есть15%, а не до5%. Затем отдельно действует transition5m. Actual imagefs
+recovery target75,200,199,475B, deficit47,282,191,155B в данном снимке.
+Не доказано, что nodefs ранее пересёк hard5%; target для него не объявляется
+обязательным без соответствующего evidence. Context7 Kubernetes checked.
+Ослабление thresholds, removal taint/pins/restart не выполнялись. Идёт
+read-only audit дополнительных только собственных caches; recovery/full QA
+остаются FAIL/OPEN, historical serving/browser PASS не заменяет готовность.
+
+## Исполнение очистки временных копий 12.10.2026
+
+SOURCE/remote5fdbb2c9f0484210f627022e83b481edae0b5dbc GitHub readback PASS.
+Тот же опубликованный script, fresh0600 plan/fingerprint: prune PASS,
+removedCount23/removedLogicalBytes3,247,099,750. Выделенное место до
+удаления3,247,161,344B. Удалены только старые temporary cosign копии;
+активные инструменты, ZIP/nsc/каталоги/артефакты/OCI/данные сохранены.
+Вместе с прежним9081 Go cache file это около4.5GB пересоздаваемых outputs.
+Fresh df показывает27GiB free/data; DiskPressure ещёTRUE в первом readback,
+CP/DB/SSO recovery не объявлен PASS. Точный последующий статус проверяется
+до runner OCI/import/activation и нового native запуска.
+
 ## Подготовка очистки временных установочных копий 12.10.2026
 
 Дополнительно доказаны23 old .install.<6alnum>/cosign копии в собственном
