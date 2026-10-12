@@ -10,6 +10,58 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 04:54 UTC — повтор с checkpoint, шесть окружений переключены
+
+Прежний root run_ToAIsXnQVn9tdRdJTwAFV_KB штатно FAILED/sequence1440;
+Developer technical SUCCEEDED, semantic BLOCKED IMPLEMENTATION. Полный
+AsyncAPI codegen и callback replay/idempotency не доказаны, commit/push его
+27 файлов не выполнены. Review cycles0, downstream CANCELLED. Бизнес-PR1808
+остаётся прежним Draft; его содержимое не заменяется host-правками.
+
+Все семь артефактов Developer сохранены и проверены owner HTTP200/UTF8/
+size/SHA. Полный current-step diff содержит27 файлов,88634B,
+SHA1e4784af037eae0c7e3dc91ec39ac8f2a5c105f83a702d00dd3375f7822c497c.
+Worktree был EmptyDir и не входит в session archive; recovery checkout ещё
+не реализован. Архивы root и Developer подтверждены ARCHIVED; обе
+DELETE_PVC задачи SUCCEEDED/attempt1. Это не восстановление рабочей папки.
+
+После terminal fresh canonical impact EOF1+5 и два bulk rebind200:
+Developer ENV26/binding27/agent33; пять review consumers ENV25/binding26,
+agent versions Manager38/Architect29/Security35/Documentation29/Lexical29.
+Изменены только назначения окружений и зависимые computed projections;
+прочие параметры совпадают, обе ENV byte-exact неизменны. Fresh runtime
+revision и успешные Go/npm downloads пока NOT RUN.
+
+HOT/SOURCE/remote79d11e49 совпадают. Repo-owned idle guard: все пять busy
+counters0, promoted81/pins неизменны, FF без restart активных исполнителей.
+Air rebuilt CP: actual ELF7ac555b8 совпадает с независимой scoped сборкой;
+RC630680f4 неизменён. Source/mount/UID/process/Deployment/readiness/rejoin
+proof PASS; private observer исправлен для Air PID1, прежний READ_FAILED
+сохранён. Новая закрытая диагностика теперь LIVE, не OCI release acceptance.
+
+Новый обычный UI root run_2HDgJ-yd6I-hukcu269914cf/attempt1 RUNNING,
+не восстановление прежнего этапа IMPLEMENTATION. Исходный task и четыре
+fields byte-exact, digest a711c2db0c5324448002c90f34b1dfe003e7125cc279a34bd26f3a8331b9457a.
+Owner readback подтверждает manifest10/53188041B: original7 со всеми pins
+и порядком EXACT MATCH плюс3 опубликованных Developer checkpoint. Developer
+должен сам восстановить собственный patch и закончить работу; ROOT code0/
+corrective business USER0. INTAKE run_DNMCjumBVpeZNQE_8wPWV3sk RUNNING,
+native snapshot/Issue/main read выполнены. Review cycles0, остальные gates OPEN.
+
+Prepare/launch screenshots READ, Console0/API без ошибок/overflow=false.
+Первый QA matcher ожидал неверный POST URL и сообщил timeout уже после
+фактического создания; fresh read-only обнаружил ровно один root, без второго
+POST. 04:54 graph/events200, platform/run live/sequence55; readiness cursor
+ещё не совпал в данном снимке, не полный rejoin PASS. Chrome MCP TIMEOUT;
+изолированный Playwright работает, чужие tabs untouched. Full QA/paid live OPEN.
+
+04:57 actual INTAKE Pod provider-runtime содержит все три Go values и
+image66a00394/restart0. ROOT diagnostic assigned-proxy HEAD Go metadata200,
+npm scoped metadata CONNECT200→403. Static cause: blanket RawPath guard
+в egress gateway отвергает npm percent-escaped slash до WebAccess проверки.
+Native package download по-прежнему не PASS; готовится адресный proxy fix
+без расширения host/method authority и provider exact-path маршрутов.
+
 ## Checkpoint 12.10.2026 04:14 UTC — dependency policy сохранена, активные роли неизменны
 
 Developer run_oWXbkMuhDiSctpezv20LLP9j RUNNING, native1365: A1–A3 и адресные

@@ -10,6 +10,57 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 12.10.2026 04:54 UTC
+
+На79d11e49 прежний root terminal FAILED/1440; Developer SUCCEEDED технически,
+семантически BLOCKED: generated AsyncAPI financial mappings отсутствуют,
+callback replay ещё не доказан, business commit/push NOT RUN. Ноль Review,
+финальная приёмка NOT RUN; downstream CANCELLED. Seven captured revisions
+HTTP200/size/SHA/UTF8 MATCH, receipt969659B. Full27-file current-step diff
+88634B/SHA1e4784af037eae0c7e3dc91ec39ac8f2a5c105f83a702d00dd3375f7822c497c
+сохранён как artifact; ROOT не применяет его в бизнес-репозиторий.
+
+04:37 owner fresh root+Developer storage API200: ARCHIVED, DELETE_PVC
+SUCCEEDED/attempt1/max5/NONE. Архив не включает EmptyDir checkout; текущий
+путь recovery рабочего дерева NOT RUN. Native resume после ENV rebind
+не совместим по pins и будет свежей сессией.
+
+04:34 canonical impact EOF1+5 и rebind2POST200, fresh8GET200 подтверждают
+6 intended consumers: ENVwrite26/review25, Developer binding27/agent33,
+review binding26/agent38,29,35,29,29. ENV byte-exact, non-ENV параметры
+EXACT MATCH; изменены binding, agentVersion и expected computed projections.
+Receipt rebind d21f62b85b4d67ca9c7e371118ed104defeaa3c257bd1a2b12cf36d9668a8317,
+read3c36d8fed5f657edef5614983533a2ebc39ba874684c49133cf851b352286260.
+Fresh RuntimeRevision/Go/npm downloads не объявлены PASS.
+
+04:38 repo-owned idle FF79d11e49 PASS: busy counters5/5 ноль, promoted81
+pins unchanged. Scoped serving observer PASS после исправления его
+PID1 ancestor walk: exact host/mount/source, Deployment/UID, process,
+actual CP ELF7ac555b8 и RC630680f4, readiness/rejoin MATCH. Receipt
+8f3c0aae76361133118ad9da5a9d9e29e0a7fc3e8b317074f979feb1f0712d4f.
+Закрытая диагностика LIVE; OCI attestation/full baseline не заявлены.
+
+04:50 isolated Playwright prepare PASS: исходный task/четыре поля unchanged,
+7 original attachments exact pins плюс3 собственных Developer checkpoint.
+Console0/API ошибок0/overflow=false, screenshot READ. Первый QA locator
+FAIL после выбора файла исправлен в private harness: accessible name search
+меняется с выбранными элементами; точный единственный input selector.
+Затем Launch произошёл, но private matcher неверно ожидал project-prefixed
+POST вместо /api/v1/runs: timeout не объявлен отсутствием эффекта. Read-only
+каталог выявил ровно один новый root run_2HDgJ-yd6I-hukcu269914cf/RUNNING/
+attempt1. Fresh task/title/pins/order/manifest10/53188041B EXACT MATCH;
+manifest470f162c16846f2463ed2dd585f124e6f6a2ec5f5a82c176f36715aad7a50ece.
+04:54 graph/events200/live55/Console0; readiness на данном cursor false,
+полный rejoin не заявлен. New INTAKE own snapshot25 и native Issue/main READ.
+Chrome MCP TIMEOUT; все чужие tabs сохранены. ROOT code0/corrective USER0/
+Review cycles0. Workflow completion/paid continuation/full QA/final gates OPEN.
+
+04:57 ROOT actual INTAKE Pod diagnostic: GOROOT/GOTOOLCHAIN/GOENV совпадают с
+новой ENV, image66a00394/restarts0. Assigned proxy Go metadata HEAD200;
+npm /@asyncapi%2fparser HEAD CONNECT200→403. Static proxy RawPath guard
+срабатывает до host/method WebAccess. Это FAIL package-manager request path,
+не доказательство native dependency download и не разрешение обходить policy.
+
 ## Новое scoped evidence 12.10.2026 04:14 UTC
 
 ROOT owner API current read confirmed selfdev-write/review network allowlists

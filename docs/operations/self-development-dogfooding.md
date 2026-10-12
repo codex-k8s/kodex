@@ -10,6 +10,34 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 04:54 UTC — зависимости назначены, штатный повтор с checkpoint
+
+- [x] Сохранить honest terminal: прежний root FAILED/1440, Developer technical
+      SUCCEEDED/semantic BLOCKED, downstream CANCELLED/Review cycles0. Seven
+      artifacts HTTP200/UTF8/size/SHA MATCH; full27-file current-step patch
+      88634B сохранён, но business commit/push и AsyncAPI/replay ещё NOT RUN.
+- [x] Подтвердить ARCHIVED root/Developer и DELETE_PVC SUCCEEDED; только затем
+      fresh impact EOF1+5 и canonical bulk rebind6 intended consumers на
+      write26/review25. Non-ENV параметры и ENV содержимое EXACT MATCH.
+- [x] Штатно доставить79d11e49 при idle counters0: host/mount/source и serving
+      CP7ac555b8/RC630680f4 MATCH, promoted81/pins сохранены. Closed diagnostics
+      LIVE; это не OCI release/full acceptance. Active writer не прерывался.
+- [x] Открыть normal UI новый root run_2HDgJ-yd6I-hukcu269914cf/attempt1.
+      Original task/четыре поля unchanged; seven source pins/order плюс3
+      Developer checkpoint, finalized manifest10/53188041B. Launch matcher
+      timeout разобран read-only, второго POST нет. INTAKE RUNNING, own native
+      snapshot/Issue/main READ. Screenshot/Console0/API200/live55; cursor
+      readiness false в этом снимке, не полный rejoin PASS. MCP TIMEOUT.
+- [ ] Fresh RuntimeRevision, native recovery собственного patch Developer,
+      фактические Go/npm downloads, full AsyncAPI mappings/replay, targeted
+      tests, business commit/push/Draft PR; один Review/Manager/owner.
+- [ ] Durable recovery workspace: EmptyDir work checkout не включён в session
+      archive; сохранённые patch artifacts — обход потери данных штатными
+      входными файлами, не доказательство сохранения рабочей папки платформой.
+
+ROOT business implementation0/corrective business USER0. Full65/paid live/
+bootstrap gates OPEN; прежние checkpoint ниже сохранены как история.
+
 ## Checkpoint 12.10.2026 04:14 UTC — Go/npm ENV опубликованы без live rebind
 
 - [x] Owner API подтвердил отсутствие Go/npm доменов в exact selfdev-write/review.
