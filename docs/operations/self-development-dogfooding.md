@@ -10,6 +10,22 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 02:22 UTC — обязательное native чтение INTAKE
+
+- [x] Собственный Workflow PUBLICATION: четыре диапазона0→51338B/EOF,
+      configuration SHA12b0ddf5, published spec ddb424bd MATCH assignment.
+      Object46/published15 и readiness context b9e96624 — разные пространства.
+- [x] Собственный packet READ:29 contiguous pages/467840B/EOF/seq205,
+      exact artifact/revision/SHAa382233b; native receipt, не host substitute.
+- [x] Actual Pod/model medium, RuntimeRevision/input set pins MATCH;
+      assignment purpose1299B/cf1b316a и AGENTS80650B/06f9c8cc MATCH model input.
+      Child AGENTS не подменяет полный Workflow; каталог прочитан отдельно.
+- [x] Safe Chrome reload/rejoin, screenshot READ/Console0, штатные HTTP200;
+     22 Deployment Ready. SOURCE/remote dcbbee4c, HOT code f88194d3, journal-only
+      delta; работающий writer не перезапускался.
+- [ ] Semantic INTAKE RUNNING/seq320, exact root instructions ACK,
+      Architect/Developer/ONE Review/Manager/owner/full QA ещё OPEN.
+
 ## Checkpoint 12.10.2026 02:07 UTC — подтверждённая матрица ролей и новый original launch
 
 - [x] Новый administrative plan pln_W_6_J4yc9jiKOSVBlAIPZorD/revision1

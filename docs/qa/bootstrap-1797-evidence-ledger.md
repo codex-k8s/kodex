@@ -10,6 +10,26 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 12.10.2026 02:22 UTC
+
+Native INTAKE PUBLICATION READ seq63/65/67/69: четыре contiguous страницы,
+51338B/EOF, configuration SHA12b0ddf549f43bb403b70bace0771a6f1f86f9a66e5bebacecb8725bf2f91ca5,
+spec ddb424bd59ac04aa9194244c7abaecca9ef5f42a25c1d2ff44dc09290d140917 MATCH assignment.
+Public readiness context b9e96624 не spec digest; workflow_version46 и
+published_version15 не несовместимые версии. Root full instructions ACK этим
+child catalogue proof не подменён. Actual child role AGENTS80650B/06f9c8cc и
+assigned purpose1299B/cf1b316a MATCH model input; medium/current RuntimeRevision
+e05621e5, set/manifest MATCH. Это доставка входа, не semantic acceptance.
+
+Packet native seq43→205:29 contiguous successful страницы0→467840B/EOF,
+artifact art_k1AYEZpvhLYgc8DzWiLsDMwZ/revision1/SHAa382233b. Private receipt
+native-role-packet-eof-0221.json83824B/SHA4bdf45a039d9e094080d9e0df600cb9c6e9d948b2a3fb234b3a1bb035d38b44c.
+Root/INTAKE RUNNING/seq320; implementation/review/product/gates NOT RUN.
+SOURCE/remote dcbbee4c, HOT code f88194d3; журнал отличается, code не менялся.
+Screenshot chat READ, safe reload/history/rejoin, Console0 и relevant API200;
+22 Deployment Ready. CP/RC stdout5min empty — backend error coverage UNKNOWN,
+не скрытый PASS. Actual full QA/ONE Review/bootstrap merge/owner остаются OPEN.
+
 ## Новое scoped evidence 12.10.2026 02:07 UTC
 
 Plan pln_W_6_J4yc9jiKOSVBlAIPZorD: revision1, VALID/version2/problems[],

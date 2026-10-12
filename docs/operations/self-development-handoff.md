@@ -10,6 +10,35 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 02:22 UTC — native чтение Workflow15 и packet завершено
+
+INTAKE run_DxoWxnEzs099iglWVFvd9mPm остаётся RUNNING, root
+run_ToAIsXnQVn9tdRdJTwAFV_KB/attempt1 RUNNING, sequence320.
+Собственный PUBLICATION READ сотрудника: четыре последовательных диапазона
+0→51338B, EOF; configuration SHA12b0ddf549f43bb403b70bace0771a6f1f86f9a66e5bebacecb8725bf2f91ca5.
+Опубликованный spec digest ddb424bd59ac04aa9194244c7abaecca9ef5f42a25c1d2ff44dc09290d140917
+совпадает с assignment. Это другой namespace, чем launchReadiness.contextDigest
+b9e9662409e00fec4bc354323739b8b6de23ebf00ca5713ac0be9fd284ddbeaa;
+workflow_version46 и published_version15 не drift.
+
+Packet art_k1AYEZpvhLYgc8DzWiLsDMwZ/revision1 прочитан самим INTAKE:
+29 contiguous pages,467840B, EOF/seq205, SHAa382233b MATCH. Native receipts
+сверены без замены чтения host-загрузкой. В actual Pod назначены medium,
+RuntimeRevision rrev_obd2u44wYpEEWgcjekOp4Y7w/digest e05621e5 MATCH,
+новый attachment set/manifest MATCH. Purpose INTAKE1299B/SHAcf1b316a
+совпадает с префиксом task; AGENTS80650B/SHA06f9c8cc совпадает с model input.
+Полный Workflow instructions не является содержимым child AGENTS: сотрудник
+получает role instructions, assignment и собственный version-pinned каталог.
+Root exact instructions ACK этим child proof не заявлен.
+
+SOURCE/remote dcbbee4cc5029344ec4ad534390dd35abc802f2b, HOT code f88194d3;
+разница только в журналах. Активный writer не перезапускался. После безопасного
+reload11 native history/rejoin восстановлены; screenshot просмотрен, Console0,
+bootstrap/session/graph/ticket/events200. Все22 Deployment Ready. В stdout
+CP/RC за окно5min записей0: это не доказательство полноты backend log coverage.
+Semantic INTAKE, Architect, Developer, ONE Review и финальные gates ещё OPEN;
+ROOT business implementation0/corrective business USER0.
+
 ## Checkpoint 12.10.2026 02:07 UTC — Workflow15 опубликован, исходная задача заново запущена
 
 Native UPDATE_WORKFLOW pln_W_6_J4yc9jiKOSVBlAIPZorD/revision1:
