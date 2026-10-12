@@ -10,6 +10,38 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Recovery и уточнение владельца 12.10.2026 07:24 UTC
+
+Опубликованный SOURCEf1377de6; same script и fresh fingerprint
+0f8b444287a7375ad71d989b56d48b7e617b03dce3c66ec5ea22f840dfc95f04.
+Transfer/readback PASS11MOVED/19,456,413,184B, receipt11INTENT/COPIED/REMOVED,
+provenance неизменна. Pins81 обоих CRI сохранены; actual metadata hash
+1180b567a0faaeb16043adfae7a7c0612746f8f2bcd7d508e18e3f370a31f4a2
+MATCH before/after. Первое неправильное k3s/crictl invocation было FAIL,
+empty pipeline hash не считался доказательством; plain crictl с pipefail
+исправил только диагностическую команду.
+
+Node wait PASS07:24: обе DiskPressureFALSE, без threshold/taint изменений
+и ручных restart. CP2/2/gateway1/1, PostgreSQL/NATS/S3/proxy-store и SSO
+PostgreSQL/SSOReady. DATA около73GiB free/root32GiB после relocation.
+Chrome новая собственная вкладка19, прежняя4 ранее закрыта не ROOT;
+document/runtime config200, bootstrap/session401, UI штатная форма входа,
+screenshot READ. Нет доказательства авторизованного пользовательского QA;
+401 не выдается за backend недоступность. Foreign tabs untouched.
+
+После переноса владелец уточнил: архивы, которые не используются, удалить;
+dev-контур не требует сохранения этих rollback copies. Поэтому старое
+требование сохранить11MOVED archives более не действует. Образы/pins/PVC/
+данные/provenance/plan/receipt сохраняются; staging/production не затронуты.
+Новый narrow discard CLI фиксирует exact11 names/destination/старый immutable
+plan/receipt, проверяет stat/SHA/manifest/provenance и zero inode references
+whole-proc privileged readonly scanner. Explicit plan/fingerprint/confirmation,
+dirfd/finalstat/fsync и durable discard journal обязательны. Новый code ещё
+не выполнялся до публикации; user-approved deletion не означает unpin/image GC.
+ROOT9discard +18transfer unit PASS0.095/0.084s, diff check PASS на тех же
+production hashes. Frozen patch563700168e52e3fc56b6593fcadd9ce735c0948349a17ebc34a87b1adfe609ec,
+producte0de422531ca7e585b40e6593dcfe5d545d8f4111cf70b5c8031827b84c3292e.
+
 ## Разрешённая расширенная очистка 12.10.2026
 
 Владелец ответом «очищай» разрешил рекомендованный вариант1: только cold
