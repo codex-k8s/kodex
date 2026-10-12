@@ -10,6 +10,63 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 12.10.2026 00:51 UTC
+
+Core51 SOURCE55884B/bfb82eb9 = immutable50 prefix +1836B. Рекомендация
+редактируемого agent/workflow плана отделяет supporting byte provenance
+от обязательного semantic FULL применимых source/diff/docs; explicit owner
+native EOF и hidden-implementation/authority proof не заменяются checksum.
+Текущие snapshots/INPUT/права/граф не переписываются, host не включается.
+Worker12unit0.113s/vet/format PASS; ROOT pinned1.26.6 race1.563s/scopedvet/build
+PASS на этих postimages. ELFfe1b43029805c29002c1715a16e38bc2fbf26a01a7d61d321869ae51db96b45b;
+fixture66000→67838B/unchanged256KiB consumer/ownerliteral/authority0 PASS.
+Historicalv50 bytes/65281B fixture сохранены; первоначальные worker test
+и ROOT inherited GOROOT mismatch FAIL отдельно, corrected reruns GREEN.
+
+Native administrative run_nLWPz-fnBT7lYOT3VjACTLLy прочитал fresh full
+configuration79627B/EOF/version40 и Issue1797. Proposal37 FAILED
+PLAN_INPUT_INVALID/WORKFLOW_INVARIANTS, persisted plan/effect отсутствует;
+fresh schema READ→proposal46 SUCCEEDED: pln_7W7SG2pRnOVkUKAPryeyOKTP,
+revision1/version1/DRAFT, one UPDATE_WORKFLOW/version40, validationProblems[].
+ROOT full instructions read и recursive diff: меняются только reading texts,
+non-text fields/graph/agents/capabilities/inputs/limits/gates MATCH. Run
+COMPLETED/seq48; receipt222683B/711d9c38. Plan apply/publish,
+new business launch и core51 live delivery NOT RUN, HOT3dd/CP7d014e2b.
+Это административная конфигурация, не corrective business USER и не
+ROOT business implementation; review cycles0/full QA/main gates OPEN.
+
+## Новое scoped evidence 12.10.2026 00:41 UTC
+
+Attempt9 root FAILED/seq540, INTAKE PASS_INTAKE_SCOPE retained. Architect
+technical SUCCEEDED/semantic BLOCKED/seq476: incomplete native EOF и missing
+workspace receipt/discovery; Developer/ONE Reviewer/final Manager CANCELLED.
+Review cycles0/ROOT business code0/corrective business USER0; не приёмка.
+
+Own Architect OBSERVED Codex0.160.0/INITIALIZE_USER_AGENT и
+`/usr/local/bin/codex` own version/hash
+61b0194f3bb6534439c8d26a3ed57d0805f84b884588b761795323eeb92fcf70,
+offline JSON Schema/TypeScript1048 inventory PASS своего scope. Source
+attestation UNKNOWN. Native published artifacts GET200/size/SHA MATCH4/4,
+ROOT report20260B full READ; private architect receipt SHA256
+86049941c0e106643f2fb7a528a5907110b903207315e0895cde2e37aba916b9.
+Bundle integrity/EOF не переименованы в semantic FULL mandatory source.
+
+Artifactfix native delivery PASS: safe idle/ff00:34→HOT3ddfbfe8, CP actual
+`/proc/2274/exe`/start20613217 SHA256
+7d014e2b0dca1806fb862eea9d4dda23ede19f521e25708dabedf6b2bbae0e20,
+mounted artifactsbb50b5b5/helper31060ec4 MATCH. Native Chrome parallel4×3
+GET12/12 HTTP200/size/SHA MATCH00:39:57; receipt SHA256
+469bfdded2131ff91bf86a32a2f9d6c2c7775eaf1b36cd022bbe028f574efe49.
+Console0/22Deployment ready/terminal screenshot/DOM overflowfalse PASS;
+graph pan partial/curved return visible не full graph screenshot. Actual old
+503 SQLSTATE UNKNOWN остаётся, disposable trace не стал live доказательством.
+
+Owner original FULL gate: native packet467840B EOF + applicable sources/docs,
+НЕ whole51MB. Published helper-generated Workflow13/version40 blanket native
+EOF all input text подтверждён как overconstraint; exact RCA продолжается.
+v6/host enable/NEW business launch NOT RUN. ONE Review/Manager/owner/fullQA/
+bootstrap/main gates OPEN; READY/acceptance/merge не заявлены.
+
 ## Новое scoped evidence 12.10.2026 00:18 UTC
 
 Current INTAKE technical SUCCEEDED/PASS_INTAKE_SCOPE, четыре CLEAN published

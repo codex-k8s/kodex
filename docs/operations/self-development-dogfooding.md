@@ -10,6 +10,49 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 00:51 UTC — scoped recommendation готова к доставке
+
+- [x] SOURCE core5155884B/bfb82eb9: immutable50 сохранён, supporting bundle
+      provenance не заменяет обязательное семантическое чтение; explicit
+      owner native EOF/implementation/authority остаются. Только предложение
+      редактируемого подтверждаемого плана, не скрытая инструкция всем.
+- [x] Worker unit12/0.113s/vet/format и ROOT Go1.26.6 race1.563s/vet/build
+      PASS, ELFfe1b4302. Composite66000→67838B/consumer256KiB, owner literal
+      и authority0; historical65281B сохранён. Initial test fixture и
+      ROOT GOROOT mismatch FAIL сохранены, исправленные адресные повторы GREEN.
+- [ ] Native административный UPDATE_WORKFLOW: fresh configuration79627B
+      EOF/version40, первое предложение отвергнуто WORKFLOW_INVARIANTS,
+      effect0; следующий proposal46 SUCCEEDED, plan pln_7W7SG2pRnOVkUKAPryeyOKTP
+      revision1/version1/DRAFT, one UPDATE/version40. ROOT full instructions
+      прочитаны, non-text before/after MATCH; validationProblems[]. Application/publication
+      и последующий original business launch не выполнены. Current HOT3dd.
+- [ ] Core51 actual serving/native proof и business Architect→Developer→
+      ONE Review→Manager/owner остаются OPEN; никакого READY/merge.
+
+## Checkpoint 12.10.2026 00:41 UTC — attempt9 завершена, native artifactfix подтверждён
+
+- [x] INTAKE PASS_INTAKE_SCOPE сохранён; Architect technical SUCCEEDED,
+      own OBSERVED Codex0.160.0/INITIALIZE_USER_AGENT и own binary SHA61b0194f,
+      offline JSON Schema/TypeScript inventory1048. Source attestation UNKNOWN.
+- [x] Четыре published Architect artifact native GET200/size/SHA MATCH;
+      ROOT report20260B прочитан полностью, receipt86049941. Bundle bytes
+      не являются semantic FULL применимых обязательных источников.
+- [x] Safe idle/ff00:34→actual HOT3ddfbfe8/CP `/proc/2274/exe`7d014e2b,
+      start20613217/source artifactsbb50b5b5/helper31060ec4 MATCH;
+      native parallel4×3 GET12/12 HTTP200/size/SHA MATCH00:39:57,
+      receipt469bfdded2131ff91bf86a32a2f9d6c2c7775eaf1b36cd022bbe028f574efe49.
+      Console0/22Deployment ready/terminal screenshot/overflow=false;
+      graph pan partial, curved return виден, DOM overflow отсутствует.
+- [ ] Attempt9 root FAILED540: Architect semantic BLOCKED476 из-за incomplete
+      native EOF/missing workspace receipt/discovery; Developer/ONE Reviewer/
+      final Manager CANCELLED. Cycles0/ROOT business code0/corrective USER0.
+- [ ] RCA: owner требует native packet467840B EOF + применимые sources/docs,
+      не whole51MB; helper-generated Workflow13/version40 blanket all input
+      text native EOF подтверждён как избыточное ограничение. v6/host enable/
+      NEW business launch не выполнялись; никакого READY/acceptance/merge.
+- [ ] ONE Review/Manager/owner/full QA/bootstrap/main gates OPEN. Actual
+      старого503 SQLSTATE UNKNOWN сохранён; native PASS не приписывает trace.
+
 ## Checkpoint 12.10.2026 00:18 UTC — native INTAKE допускает Architect
 
 - [x] Current INTAKE PASS_INTAKE_SCOPE/technical SUCCEEDED; four CLEAN artifacts

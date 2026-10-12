@@ -10,6 +10,73 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 00:51 UTC — core51 SOURCE готов, административный план готовится
+
+Исправление рекомендации помощника: immutable core51 = exact core50 prefix
++1836B,55884B/bfb82eb9. При создании/изменении agent/workflow предлагается
+разделять обязательный handoff/native EOF и supporting source bundles:
+full-byte provenance отдельно от семантического чтения полных применимых
+документов, diff и implementation source. Explicit owner packet/native EOF,
+authority/hidden implementation proof и закрытые gates сохранены. Это
+редактируемый подтверждаемый вариант, не hidden injection всем сотрудникам;
+code-mode host не включён, original business INPUT не изменён.
+
+Worker unit12/0.113s/vet/format PASS; ROOT pinned Go1.26.6 race1.563s,
+scoped vet и CGO0/GOWORKoff build PASS. Independent ELF
+fe1b43029805c29002c1715a16e38bc2fbf26a01a7d61d321869ae51db96b45b.
+Synthetic current composite66000→67838B проходит прежний consumer256KiB,
+owner literal/authority0; historical core50/fixture65281B сохранены.
+Первый ROOT test/build FAIL из-за унаследованного GOROOT1.27.1; после
+удаления только GOROOT exact1.26.6 PASS. Source semantics не изменялись.
+Initial worker FAIL расчёта JSON []byte исправлен в тесте, final GREEN.
+
+Отдельный PROJECT administrative helper run_nLWPz-fnBT7lYOT3VjACTLLy:
+fresh configuration79627B/EOF/version40 и Issue1797 прочитаны; предлагается
+один UPDATE_WORKFLOW без business launch/новых grants. Первое сохранение
+отклонено PLAN_INPUT_INVALID/WORKFLOW_INVARIANTS, effect отсутствует; helper
+перечитал схему и сохранил pln_7W7SG2pRnOVkUKAPryeyOKTP/revision1/version1:
+одна UPDATE_WORKFLOW/version40, validationProblems[], run COMPLETED/seq48.
+ROOT полностью прочитал новые instructions; diff меняет только reading text,
+non-text graph/agents/capabilities/inputs/limits/gates MATCH. Private receipt
+222683B/711d9c380b4a43aa3cb2dd2fc162ea0513eccc8ae178d4d5d34025bb4eec12ec.
+Application/publication и core51 native delivery пока NOT RUN;
+HOT остаётся3dd/CP7d014e2b.
+
+## Checkpoint 12.10.2026 00:41 UTC — attempt9 terminal BLOCKED, artifactfix native PASS
+
+Attempt9 root FAILED/seq540; INTAKE PASS_INTAKE_SCOPE сохранён. Architect
+technical SUCCEEDED, но semantic BLOCKED/seq476: неполное native EOF,
+недостающий workspace receipt/discovery. Developer, ONE Reviewer и final
+Manager CANCELLED; review cycles0, ROOT business code0/corrective business USER0.
+Это не READY, не приёмка и не основание для merge или нового business launch.
+
+Собственный Architect подтвердил OBSERVED Codex0.160.0/INITIALIZE_USER_AGENT
+и `/usr/local/bin/codex` own version/hash
+61b0194f3bb6534439c8d26a3ed57d0805f84b884588b761795323eeb92fcf70;
+offline JSON Schema/TypeScript inventory1048. Source attestation UNKNOWN.
+Четыре native published Architect artifact GET200/size/SHA MATCH;
+ROOT полностью прочитал report20260B. Private receipt
+`.agents/postjoin-browser-1797.wNJkKa/github6-attempt9-architect-artifacts.json`
+SHA25686049941c0e106643f2fb7a528a5907110b903207315e0895cde2e37aba916b9.
+Полные bytes bundle не доказывают semantic FULL обязательных источников.
+
+Artifactfix доставлен после безопасного idle/ff в00:34: actual HOT
+3ddfbfe8773c0358b89cf4b1c0548e13e00cdbc9, CP `/proc/2274/exe`/start20613217
+SHA2567d014e2b0dca1806fb862eea9d4dda23ede19f521e25708dabedf6b2bbae0e20;
+mounted source artifactsbb50b5b5/helper31060ec4 MATCH. Live Chrome native
+parallel4×3 GET12/12 HTTP200/size/SHA MATCH в00:39:57; receipt
+469bfdded2131ff91bf86a32a2f9d6c2c7775eaf1b36cd022bbe028f574efe49.
+Console0,22Deployment ready, terminal screenshot просмотрен/overflow=false;
+graph pan показывает часть графа, curved return виден, DOM overflow нет.
+Actual прежнего503 SQLSTATE остаётся UNKNOWN: новый PASS его trace не объясняет.
+
+Original owner требует native EOF packet467840B и применимые sources/docs,
+НЕ whole51MB. Published helper-generated Workflow13/version40 содержит
+blanket native EOF всех input text; подтверждено избыточное ограничение,
+его точный RCA продолжается. v6/host enable/NEW business launch не выполнялись.
+Далее только scoped RCA/решение по этому ограничению; ONE Review/Manager/owner,
+полный QA/bootstrap/main gates остаются OPEN. Исторические проверки сохранены.
+
 ## Checkpoint 12.10.2026 00:18 UTC — INTAKE PASS_SCOPE, штатный Architect запущен
 
 Attempt9 INTAKE technical SUCCEEDED, опубликованы четыре CLEAN результата:
