@@ -10,6 +10,23 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 — адресное удаление оставшейся неактивированной выгрузки
+
+По уточнению владельца не хранить ненужные архивы в development подготовлен
+`tools/dev/discard-abandoned-runner-oci.py`. Единственная разрешённая цель —
+неактивированный runner manifest c1149622, 1 757 796 864 байт; оставшиеся
+11 canonical current/restore OCI не затрагиваются. Они используются существующими
+сценариями импорта и восстановления; наличие runtime image само по себе не
+является основанием сохранять отдельную выгрузку.
+
+Скрипт проверяет чистый SHA, exact metadata/manifest/full archive hash,
+provenance, неизменные pins, привилегированный process scan и Docker mounts,
+затем требует fresh audit fingerprint и явное подтверждение. Удаляется только
+один regular file; image store, registry, PVC, source и metadata сохраняются.
+ROOT 15 адресных тестов discard PASS, diff-check PASS. Публикация и actual
+apply/readback на этом checkpoint ещё NOT RUN; успешное удаление следует
+подтвердить отдельно. Это не исправление primary runtime failure и не QA65 PASS.
+
 ## Checkpoint 12.10.2026 11:56 UTC — опубликованный collector и диагностический Retry3
 
 SOURCE/remote/HOT1d846245 clean, body1807 exact readback PASS. На committed
