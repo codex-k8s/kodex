@@ -10,6 +10,22 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 03:34 UTC — точный disposable PREVIEW и Developer checkout
+
+- [x] SOURCE e66f19d8: repo-owned control-plane-postgres-test.sh с фильтром
+      TestArtifactPreviewParallelComponent, pinned Go1.26.6, disposable loopback
+      PostgreSQL exit0/PASS3.950s. Четыре parallel rounds success3; два40001
+      на audit/content восстановлены, committed grants/audits без дублей,
+      Reader cleanup и foreign revision/tenant/purpose negative checks PASS.
+- [x] Developer native checkout exact business head c784ee85, собственная
+      ветка developer/issue-1796-oWXbkMuh, CLEAN; mandatory nine handoffs и
+      packet own EOF/pins MATCH. Implementation и ONE Review ещё OPEN.
+- [x] Playwright03:31: Console0/API200/platform+run live/readiness1132;
+      свежий heartbeat, оба nodes Ready, actual Developer Pod restart0.
+- [ ] Chrome MCP list_pages TIMEOUT; historical503 cause UNKNOWN.
+      Diagnostics NOT LIVE/HOT f88194d3; активный writer не перезапускался.
+      Это scoped component proof, не полный QA/live/paid-credit acceptance.
+
 ## Checkpoint 12.10.2026 03:14 UTC — собственный Architect proof и Developer
 
 - [x] Architect technical SUCCEEDED; bounded design CHANGES_REQUESTED/A1–A3

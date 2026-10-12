@@ -10,6 +10,23 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 12.10.2026 03:34 UTC
+
+Exact SOURCE e66f19d8b373ecca030d8a819a5e7ffbf8d8168d: repo-owned disposable
+PostgreSQL18.3 fixture, pinned Go1.26.6, TestArtifactPreviewParallelComponent
+PASS3.950s/exit0. Четыре parallel rounds success3/unavailable0/conflict0;
+два реально наблюдённых40001 на insert_audit_event/select_artifact_content
+восстановлены. Grant/audit counts, Reader cleanup и foreign revision/tenant/
+unknown purpose negative checks PASS. Bootstrap migrations и два repo-owned
+worker/runner read-only fixture queries exit0. Это локальный scoped component,
+не проверка live503/полного baseline/paid-credit continuation.
+
+Playwright03:31 Console0/API200/platform+run live/readiness1132; оба nodes Ready,
+Developer actual Pod restart0. Native1114 own checkout c784ee85/clean branch
+developer/issue-1796-oWXbkMuh/mainab499, nine handoffs+packet own EOF/pins MATCH.
+Chrome MCP TIMEOUT; HOT f88194d3 не перезапускался, diagnostics NOT LIVE.
+ROOT business code0/corrective USER0/Review cycles0; remaining gates OPEN.
+
 ## Новое scoped evidence 12.10.2026 03:14 UTC
 
 Current Architect technical SUCCEEDED, design CHANGES_REQUESTED/A1–A3,

@@ -10,6 +10,23 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 03:34 UTC — disposable PREVIEW PASS, Developer checkout готов
+
+На exact SOURCE e66f19d8 repo-owned PostgreSQL fixture с фильтром
+TestArtifactPreviewParallelComponent exit0/PASS3.950s: четыре parallel rounds
+success3, два воспроизведённых40001 на audit/content восстановлены. Grant/audit
+не дублируются, Reader закрыт, foreign revision/tenant/unknown purpose отклонены.
+Только одноразовая loopback БД; текущий workflow и живая БД не затронуты.
+Исторический503 остаётся cause UNKNOWN; закрытая диагностика ещё NOT LIVE.
+
+Developer native seq1114 подтвердил checkout c784ee85 и CLEAN branch
+developer/issue-1796-oWXbkMuh, main/baseab499 MATCH. Все nine mandatory handoffs
+и packet прочитаны им до EOF/pins MATCH; теперь применимые гайды/реализация.
+Playwright03:31 Console0/API200/platform+run live/heartbeat/readiness1132.
+Оба nodes Ready, actual Pod restart0. Chrome MCP TIMEOUT; чужие tabs untouched.
+SOURCE/remote e66f19d8, HOT f88194d3 с прежними тремя owned journal copies.
+Не FF/restart при writer. ONE Review/Manager/owner/paid live/full QA OPEN.
+
 ## Checkpoint 12.10.2026 03:14 UTC — Architect передал дизайн, Developer допущен
 
 Architect run_PcOu9IIP1XADEd3tXcHjHqtX technical SUCCEEDED. Semantic
