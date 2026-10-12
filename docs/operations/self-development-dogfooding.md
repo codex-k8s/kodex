@@ -10,6 +10,17 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 11:26 UTC — current Developer prompt proof
+
+- [x] Native full preview200 после штатного fresh owner SSO: task6948B и
+      instructions99121B bytes/SHA MATCH actual ACK; template/materialization/
+      INPUT MATCH,11sections/diagnostics0. Reduced receipt80397160; raw export0.
+- [ ] Developer implementation/test receipts/commit/PR/terminal: тот же2S7Q
+      RUNNING, rootbfFf RUNNING/seq1349. Его codegen/test commentary пока не
+      подменяет exact effect receipts. ONE Review/Manager/owner ещё не выполнены.
+- [ ] A8 owner decision и остальные live/bootstrap/fresh-main/QA65 gates;
+      независимая работа продолжается, спорный auth path не менялся.
+
 ## Checkpoint 12.10.2026 11:20 UTC — независимая реализация продолжается
 
 - [x] SOURCE165cc214/remote/body1807 MATCH, HOTdaf чистый; businessDraft1808

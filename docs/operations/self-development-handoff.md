@@ -10,6 +10,28 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 11:26 UTC — полный промпт Developer подтверждён
+
+SOURCE/remoteeb9bc48f, HOTdaf0d99d чистый. Штатный fresh SSO/password через
+одноразовый owner UI helper завершился CONSUMED/exit0; provider device-code/STT
+не выполнялись. После authenticated/bootstrap native RUN full prompt preview200:
+Developer2S7Q task6948B/016cbd5c и instructions99121B/5ea31aee точно совпадают
+с actual provider ACKd467868d, template03041170/materialization07ba1400 и
+INPUT5c180c89 MATCH;11sections/diagnostics0. Private reduced receipt
+8039716011b4c16cdb2c9e00e29e492681bae6b70d0c2f6871bb30476a906f32.
+Raw task/full prompt не сохранены, privileged fresh-auth guard не ослаблялся.
+Эта проверка закрывает полный immutable prompt Developer, но не его business
+acceptance или отдельное serving process proof. Первый ROOT probe отсутствующей
+SDK-функции и один probe до active Pinia завершились без запросов/effects;
+после bootstrap выполнен канонический previewPromptTemplate. Не app finding.
+
+Тот же WorkflowbfFf RUNNING/seq1349, Developer RUNNING. Ordinary1337 сообщил
+remote Proto codegen service failure и успешный fallback по существующему
+buf.gen.local.yaml с exact local plugins, OpenAPI/AsyncAPI regeneration;
+ROOT ещё не прочитал test/effect receipts и не объявляет это собственным PASS.
+Review/Manager/owner, A8 owner decision, idle CSS delivery/live UX и full QA65
+остаются OPEN. Новых business USER messages/Retry/ROOT business edits0.
+
 ## Checkpoint 12.10.2026 11:20 UTC — текущий Developer и уточнение auth gate
 
 SOURCE/remote165cc214 и тело Draft1807 readback PASS; HOTdaf0d99d чистый и
