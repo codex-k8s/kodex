@@ -728,6 +728,7 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 		}
 	}
 	var result any
+	workflowCatalogInputRejected := false
 	startedAt := time.Now()
 	err = nil
 	// До запуска effect сохраняется только закрытая безопасная проекция.
@@ -758,7 +759,11 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	case "launch_workflow":
 		result, err = server.launchWorkflow(request.Context(), input, params.Arguments, rpc.ID)
 	case "get_workflow_catalog":
-		result, err = server.workflowCatalog(request.Context(), input, params.Arguments)
+		err = validateWorkflowCatalogInput(params.Arguments)
+		workflowCatalogInputRejected = err != nil
+		if err == nil {
+			result, err = server.workflowCatalog(request.Context(), input, params.Arguments)
+		}
 	case "invoke_integration":
 		result, err = server.invoke(request.Context(), input, params.Arguments, rpc.ID)
 	case runtimecontract.Context7ResolveTool, runtimecontract.Context7QueryTool:
@@ -817,6 +822,12 @@ func (server *Server) callTool(writer http.ResponseWriter, request *http.Request
 	structured := result
 	if err != nil {
 		structured = map[string]any{"error_code": "TOOL_UNAVAILABLE", "retryable": false}
+		if params.Name == "get_workflow_catalog" && workflowCatalogInputRejected && projectionErr == nil {
+			if guidance := workflowCatalogInputRecoveryGuidance(err); guidance != "" {
+				structured = map[string]any{"error_code": workflowCatalogInputInvalidCode, "retryable": true,
+					"guidance": guidance}
+			}
+		}
 		if runtimecontract.IsRuntimeFileTool(params.Name) && projectionErr == nil && errors.Is(err, errRuntimeFileInput) {
 			structured = map[string]any{"error_code": runtimeFileInputInvalidCode, "retryable": true,
 				"guidance": runtimeFileInputGuidance}

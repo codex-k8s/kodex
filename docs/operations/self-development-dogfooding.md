@@ -10,6 +10,42 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 01:43 UTC — адресные исправления SOURCE
+
+- [x] Core52 role/stage evidence recommendation:57356B/66e76fe7,
+      v51 exact prefix; explicit owner EOF и все authority/gates сохранены.
+- [x] Malformed workflow catalog READ отличён от owner/audit отказа;
+      один исправленный caller READ, без автоматического retry или новых прав.
+- [x] ROOT pinned1.26.6 race CP1.838s/RC5.725s, vet/build PASS;
+      independent ELF CP94a88b22/RC630680f4. Кластер22/22+два nodes Ready.
+- [ ] Idle delivery/exact serving proof и новый подтверждённый Workflow план;
+      actual original business success/ONE Review/Manager/owner ещё OPEN.
+
+## Checkpoint 12.10.2026 01:38 UTC — attempt10 INTAKE_INCOMPLETE, дальнейшие роли не запущены
+
+- [x] Original attempt10 root run_VMIPsg7iB2pylviXeBqEqZjw теперь
+      FAILED/version3/seq283/RUNTIME_WORKFLOW_INCOMPLETE. INTAKE
+      run_PUet8iDlth683R27tatk85ve technical SUCCEEDED, semantic
+      INTAKE_INCOMPLETE: полный business diff не прочитан. Coordinator
+      прочитал4 native handoffs до EOF, Architect не запускал;
+      downstream CANCELLED, review cycles0/ROOT business edits0/corrective USER0.
+- [x] Native artifact download4×HTTP200/size/SHA MATCH; receipt34883B/
+      95e3657b97e2d6008c01078a49dd49c21cac830b603acf838cfd73636511cdc2.
+      ROOT полностью прочитал manager-plan24555B/SHA69ae2320.
+- [x] Exact discovery25/26 modeDISCOVERY+receipt SUCCEEDED; catalog27/28
+      отклонён локально за bad tool shape/safeParams{} до owner RPC.
+      Generic TOOL_UNAVAILABLE/retryfalse вводит в заблуждение;
+      это не доказательство отсутствующего инструмента или owner RPC отказа.
+- [x] SOURCE/remote72a2f1c9 и HOT37186456 различаются только журналами;
+      Console0/live240 rejoin/session GET200,12h expiry13:09:56UTC.
+- [ ] Workflow14 избыточно требует full business diff на всех стадиях.
+      Original4AC требуют полного review Reviewer; INTAKE достаточно
+      bounded plan с source pins/index/applicable proof, без implementation PASS.
+      Confirmed typed plan pending/NOT RUN; scoped RC guidance worker и core52
+      recommendation pending/NOT LIVE, их результата PASS ещё нет.
+- [ ] Current business gates/ONE Review/Manager/owner/full QA/bootstrap/main
+      остаются OPEN; READY/acceptance/merge не заявлены. История сохранена.
+
 ## Checkpoint 12.10.2026 01:15 UTC — подтверждённое исправление чтения доставлено
 
 - [x] Core51 commit/source/remote/HOT37186456, actual CP ELFfe1b4302,

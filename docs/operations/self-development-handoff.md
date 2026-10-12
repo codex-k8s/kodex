@@ -10,6 +10,55 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 01:43 UTC — core52 и восстановление malformed READ готовы
+
+На SOURCE72a2f1c9+точный diff: core52=57356B/66e76fe7c279e0f97d611608a0b29071228fe88d5f4eb2aaabd46501426fe698,
+exact v51 prefix сохранён, addendum1472B. Рекомендация role/stage→fact→inputs→
+future proof только для подтверждаемого плана, не вставка всем сотрудникам.
+Native malformed get_workflow_catalog после accepted audit получает
+WORKFLOW_CATALOG_INPUT_INVALID и один корректирующий read по tools/list;
+никакого автоматического retry, owner/lease/pins/integrity/projection/audit
+отказы остаются закрытыми. Durable прежний TOOL_UNAVAILABLE не переписывается.
+
+ROOT pinned Go1.26.6 scoped race CP1.838s/RC5.725s, vet и две independent
+CGO0 trimpath/buildvcs=false сборки PASS. CP ELF94a88b22bd5fbfe7297aec25ece966d3f56648f3dede27403d0338904e832734;
+RC ELF630680f497b60129a4b63f37eeb8bd748ae222f09962be38813956af54158235.
+13 malformed/no owner RPC и отрицательные authority/integrity/audit fixtures
+воспроизводят recovery boundary; локальный RED сохранён. Worker14 prompt unit
+PASS0.152s/RC scoped PASS0.573s. Native delivery/admin plan ещё NOT RUN;
+business/full QA/gates OPEN. Кластер22/22 deployments и два nodes Ready.
+
+## Checkpoint 12.10.2026 01:38 UTC — attempt10 закрыта, две причины локализованы
+
+Source/remote72a2f1c97ba32d2c0013e3a7be32a6bdad6c91c9; HOT37186456.
+Разница только в трёх журналах; активный writer не перезапускался. Bot push
+и body readback PASS, mainab499/Draft1807 сохранены. Current root
+run_VMIPsg7iB2pylviXeBqEqZjw FAILED/version3/sequence283,
+RUNTIME_WORKFLOW_INCOMPLETE. INTAKE technical SUCCEEDED, semantic
+INTAKE_INCOMPLETE: полный business diff не дочитан. Coordinator прочитал
+четыре child artifacts native до EOF и законно не допустил Architect;
+Developer/ONE Review/Manager acceptance NOT RUN. ROOT business edits0 и
+corrective business USER prompts0. Прежние результаты не переписывались.
+
+Owner revision download четырёх артефактов: HTTP200/size/SHA MATCH;
+private receipt34883B/95e3657b97e2d6008c01078a49dd49c21cac830b603acf838cfd73636511cdc2.
+Полный manager-plan.md24555B/69ae2320 прочитан ROOT. Original input AC
+назначает полный actual diff единственному comprehensive Reviewer; Workflow14
+добавил этот объём и подготовительному INTAKE. Это scoped причина новой
+подтверждаемой настройки процесса, не разрешение непроверенной реализации.
+
+Native catalog25/26 имеет mode=DISCOVERY/receipt и работает. Detail27/28
+safeParameters={} доказывает невалидную local shape до owner RPC; неверное
+поле UNKNOWN. Ошибка сообщила TOOL_UNAVAILABLE/retryable=false. Безопасный
+исправленный read по точной схеме надо отличать от authority/integrity/audit
+failure; эти gates и durable история сохраняются. Последующий отдельный
+подтверждаемый план должен разделить входы INTAKE и actual Review, сохранив
+explicit packet EOF, полные обязательные handoff и все исходные AC.
+
+Chrome owner session200/BACKEND_REFRESH/absolute13:09:56UTC, Console0,
+live sequence240/rejoin подтверждены; graph return curve читается над nodes.
+Cross-client helper cache cause UNKNOWN, никакой speculative frontend fix.
+
 ## Checkpoint 12.10.2026 01:15 UTC — Workflow14 опубликован, original attempt10 работает
 
 Source/remote/HOT371864562f26b74c08152a337217873b8827c8fc, bot readback PASS;

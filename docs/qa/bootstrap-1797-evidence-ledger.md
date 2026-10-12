@@ -10,6 +10,47 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 12.10.2026 01:43 UTC
+
+SOURCE72a2f1c9+точный diff: core52=57356B/66e76fe7, immutable51 сохранён,
+1472B role-stage recommendation не назначает authority/verdict. Local shape
+recovery после accepted pre-audit, только при successful terminal projection:
+13 malformed fixtures owner catalogRPC0; owner/auth/stale pins/integrity/
+response/audit/joined errors generic false, valid three modes unchanged.
+Историческая durable TOOL_UNAVAILABLE проекция сохранена; auto retry нет.
+Worker local RED→PASS, ROOT Go1.26.6 race CP1.838s/RC5.725s, scoped vet/build
+exit0. Independent CP ELF94a88b22bd5fbfe7297aec25ece966d3f56648f3dede27403d0338904e832734,
+RC ELF630680f497b60129a4b63f37eeb8bd748ae222f09962be38813956af54158235.
+Native serving delivery/admin plan NOT RUN, actual business/gates OPEN.
+22/22 deployments Ready и два nodes Ready — health, не business acceptance.
+
+## Новое scoped evidence 12.10.2026 01:38 UTC
+
+Original attempt10 root run_VMIPsg7iB2pylviXeBqEqZjw FAILED/version3/seq283,
+RUNTIME_WORKFLOW_INCOMPLETE. INTAKE run_PUet8iDlth683R27tatk85ve technical
+SUCCEEDED/semantic INTAKE_INCOMPLETE: full business diff не прочитан.
+Coordinator прочитал4 native handoffs до EOF и не допустил Architect;
+downstream CANCELLED/no Review. Cycles0/ROOT business edits0/corrective USER0.
+
+Native artifact download4×HTTP200/size/SHA MATCH. Receipt34883B
+`.agents/postjoin-browser-1797.wNJkKa/native-reading-attempt10-intake-artifacts.json`
+SHA25695e3657b97e2d6008c01078a49dd49c21cac830b603acf838cfd73636511cdc2.
+ROOT full manager-plan24555B/SHA69ae2320 READ; это проверка опубликованных
+handoffs, не full business diff/implementation/acceptance PASS.
+
+Exact native discovery25/26 modeDISCOVERY+receipt SUCCEEDED. Catalog27/28
+bad tool shape/safeParams{} отклонён локально до owner RPC; generic
+TOOL_UNAVAILABLE/retryfalse вводит в заблуждение, не подтверждает отсутствие tool
+или owner RPC отказ. Scoped RC guidance worker pending/NOT LIVE.
+
+Workflow14 избыточно требует full business diff на всех стадиях: original4AC
+требуют полного review Reviewer; INTAKE готовит bounded plan/source pins/index/
+applicable proof, без implementation PASS. Confirmed typed plan pending/NOT RUN;
+core52 recommendation worker pending, source/live результата PASS ещё нет.
+SOURCE/remote72a2f1c9→HOT37186456 только journal diff. Console0/live240 rejoin,
+session GET200/12h expiry13:09:56UTC. Actual business gates/ONE Review/Manager/
+owner/fullQA/bootstrap/main остаются OPEN, READY/acceptance/merge не заявлены.
+
 ## Новое scoped evidence 12.10.2026 01:15 UTC
 
 371864562f26b74c08152a337217873b8827c8fc SOURCE/remote/HOT MATCH, Draft1807,
