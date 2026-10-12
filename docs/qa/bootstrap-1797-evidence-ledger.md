@@ -10,6 +10,26 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Удаление неиспользуемых архивов 12.10.2026 07:35 UTC
+
+SOURCE/remotee97ef743 GitHub readback PASS; тот же опубликованный CLI,
+fresh discard plan/fingerprint
+28a85397276084783bbdc4c044514342225100f8c68c392e4bb68a6a8c33cd5e.
+Apply PASS11/19,456,413,184B, discard receipt11INTENT/REMOVED. Полный byte/
+manifest/stat/provenance proof и fresh whole-proc refs0 precede unlinks;
+не fuser-only check. Ничего кроме этих11 exact MOVED archives не выбиралось.
+Старые immutable plan/receipt/provenance сохранены. Это owner-authorized
+retirement локальных копий, не ошибка или потеря runtime images.
+
+Fresh df DATA73GiB/root50GiB; обе node DiskPressureFALSE. Core stateful,
+CP/gateway/SSOReady; authorised user journey/full QA ещё NOT RUN после
+восстановления. Финальный discard readback PASS11; image/pin hash
+1180b567a0faaeb16043adfae7a7c0612746f8f2bcd7d508e18e3f370a31f4a2
+MATCH обеих nodes before/after transfer/discard. Архивы
+удалены без корзины; retained images можно re-export, exact tar bytes не
+обещаются. Current task не запускает модель, не merge бизнес-PR и не меняет
+authority/RuntimeRevision/workflow states вместо штатного lifecycle.
+
 ## Recovery и уточнение владельца 12.10.2026 07:24 UTC
 
 Опубликованный SOURCEf1377de6; same script и fresh fingerprint

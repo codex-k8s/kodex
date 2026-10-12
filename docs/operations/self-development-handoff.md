@@ -10,6 +10,34 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 07:35 UTC — дисковый блокер устранён
+
+Владелец разрешил cold shared Go/private BuildKit cleanup, затем отдельно
+потребовал удалить неиспользуемые архивы в dev-контуре. Published SOURCE
+e97ef743b3f8ff740a5d7709b309588cca362c33; HOTe317 unchanged. Удалены64,819
+cold Go outputs/30,536,230,173logicalB,466 unused private BuildKit refs и
+11 старых OCI/19,456,413,184B. OCI сначала перенесены с full byte proof,
+после уточнения владельца discarded; копии больше не сохраняются для rollback.
+Удаление без корзины. Образы81/pins обоих nodes, provenance, планы/receipts,
+PVC/данные/исходники не изменены. Re-export сохранённых образов возможен,
+восстановление прежних байтов tar-архивов не утверждается.
+
+Apply/readback exact scripts/plan/fingerprints PASS, whole-proc inode refs0,
+metadata/SHA/manifest guards; unknown/active/changed targets закрыто denied.
+Для cache/root reclaim figures сохранена concurrent attribution граница.
+Fresh available DATA73GiB/root50GiB. Node wait PASS07:24, обеDiskPressureFALSE,
+без уменьшения thresholds и ручных node/Pod restart. CP2/2/gateway1/1,
+основная и Keycloak PostgreSQL, NATS, S3, proxy store и SSOReady.
+
+Chrome собственная вкладка теперь19; прежняя4 закрыта не ROOT. Screenshot
+прочитан: штатная форма входа; document/runtime config200, session/bootstrap401.
+Это доступный вход, не авторизованный UI QA PASS. Чужие вкладки не трогались.
+Следующая критическая цепочка: fresh owner auth/idle readback → source/HOT
+и новое serving proof → runner OCI с JSONL8MiB → intended recipes/ENV/bindings
+→ real native Workflow с единственным Review → остальные QA/gates/owner.
+Большая цель не завершена; технический статус goal ранее BLOCKED требует
+штатного возобновления владельцем/интерфейсом, не нового objective.
+
 ## Checkpoint 12.10.2026 06:45 UTC — необходим выбор дополнительной области
 
 576cbaf95a18214c3d0667efffd8ccdf60da3a19 опубликован и readback подтверждён;
