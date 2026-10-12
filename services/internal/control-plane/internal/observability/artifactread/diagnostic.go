@@ -8,6 +8,9 @@ import (
 )
 
 const (
+	// MaximumAttempts принадлежит только owner artifact READ, не mutation retry.
+	MaximumAttempts = 8
+
 	StageUnknown      = "UNCLASSIFIED"
 	StageScope        = "SCOPE"
 	StageBegin        = "BEGIN"
@@ -112,7 +115,7 @@ func normalize(value Diagnostic) Diagnostic {
 			value.SQLState = "OTHER"
 		}
 	}
-	if value.Attempt < 0 || value.Attempt > 3 {
+	if value.Attempt < 0 || value.Attempt > MaximumAttempts {
 		value.Attempt = 0
 	}
 	return value

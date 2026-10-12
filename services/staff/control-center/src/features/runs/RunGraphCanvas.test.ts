@@ -145,6 +145,7 @@ beforeEach(() => {
 
 interface CanvasState {
   userAdjustedView: Ref<boolean>;
+  minimumZoom: Ref<number>;
   markUserAdjusted(): void;
   fit(userInitiated?: boolean, currentWork?: boolean): Promise<void>;
 }
@@ -205,6 +206,23 @@ function mountCanvas(props = canvasProps()): CanvasState {
 function required<T>(value: T | undefined): T {
   if (value === undefined) throw new Error("Missing graph test fixture");
   return value;
+}
+
+function expectGraphVisible(props: ReturnType<typeof canvasProps>): void {
+  const bounds = layoutRunGraph(props.nodes, props.edges).bounds;
+  const { width, height } = required(flow.dimensions).value;
+  expect(
+    bounds.x * flow.viewport.zoom + flow.viewport.x,
+  ).toBeGreaterThanOrEqual(0);
+  expect(
+    (bounds.x + bounds.width) * flow.viewport.zoom + flow.viewport.x,
+  ).toBeLessThanOrEqual(width);
+  expect(
+    bounds.y * flow.viewport.zoom + flow.viewport.y,
+  ).toBeGreaterThanOrEqual(0);
+  expect(
+    (bounds.y + bounds.height) * flow.viewport.zoom + flow.viewport.y,
+  ).toBeLessThanOrEqual(height);
 }
 
 async function render(
@@ -411,29 +429,103 @@ describe("RunGraphCanvas", () => {
     expect(flow.setViewport).not.toHaveBeenCalled();
   });
 
-  it("resize сохраняет ручной world-center и zoom; события без resize их не сбрасывают", async () => {
-    const state = mountCanvas();
+  it("открытие и закрытие drawer возвращают весь граф после ручного pan/zoom без realtime-автослежения", async () => {
+    const props = canvasProps();
+    const state = mountCanvas(props);
     const dimensions = required(flow.dimensions);
     flow.viewport = { x: 320, y: 90, zoom: 0.72 };
     state.markUserAdjusted();
-    const center = { x: (1921 / 2 - 320) / 0.72, y: (780 / 2 - 90) / 0.72 };
+    // Старое сохранение центра сдвигало корень за левый край нового canvas.
+    const root = required(layoutRunGraph(props.nodes, props.edges).nodes[0]);
+    expect(root.x * 0.72 + 320 + (1201 - 1921) / 2).toBeLessThan(0);
     dimensions.value = { width: 1201, height: 680 };
     await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
-    expect(flow.viewport.zoom).toBe(0.72);
-    expect((1201 / 2 - flow.viewport.x) / flow.viewport.zoom).toBeCloseTo(
-      center.x,
-    );
-    expect((680 / 2 - flow.viewport.y) / flow.viewport.zoom).toBeCloseTo(
-      center.y,
-    );
+    expectGraphVisible(props);
+    expect(flow.setViewport).toHaveBeenLastCalledWith(flow.viewport, {
+      duration: 0,
+    });
     expect(state.userAdjustedView.value).toBe(true);
     flow.setViewport.mockClear();
     dimensions.value = { width: 1201, height: 680 };
     await nextTick();
     expect(flow.setViewport).not.toHaveBeenCalled();
+    props.compact = false;
     dimensions.value = { width: 1921, height: 780 };
     await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
-    expect(flow.viewport).toEqual({ x: 320, y: 90, zoom: 0.72 });
+    expectGraphVisible(props);
+    expect(state.userAdjustedView.value).toBe(true);
+    const resizedViewport = { ...flow.viewport };
+    flow.setViewport.mockClear();
+    props.nodes = [
+      required(props.nodes[0]),
+      { ...required(props.nodes[1]), state: "RUNNING" },
+    ];
+    props.activeNodeRefs = ["node_agent"];
+    props.edges = [...props.edges, { ...required(edges[0]), ref: "new_edge" }];
+    await nextTick();
+    await nextTick();
+    expect(flow.setViewport).not.toHaveBeenCalled();
+    expect(flow.viewport).toEqual(resizedViewport);
+  });
+
+  it("resize не превращает начальную загрузку из нулевых размеров в обзор большого графа", async () => {
+    const props = canvasProps();
+    props.nodes = [
+      required(props.nodes[0]),
+      { ...required(props.nodes[1]), state: "RUNNING" },
+    ];
+    props.activeNodeRefs = ["node_agent"];
+    required(flow.dimensions).value = { width: 0, height: 0 };
+    const state = mountCanvas(props);
+    required(flow.dimensions).value = { width: 1201, height: 160 };
+    await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
+    const initialViewport = { ...flow.viewport };
+    await state.fit(true, true);
+    expect(flow.viewport).toEqual(initialViewport);
+  });
+
+  it("игнорирует subpixel jitter и повторный ResizeObserver callback без смены размеров", async () => {
+    const state = mountCanvas();
+    state.markUserAdjusted();
+    required(flow.dimensions).value = { width: 1921.5, height: 780.5 };
+    await nextTick();
+    expect(flow.setViewport).not.toHaveBeenCalled();
+    required(flow.dimensions).value = { width: 1201, height: 680 };
+    await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
+    flow.setViewport.mockClear();
+    required(flow.dimensions).value = { width: 1201, height: 680 };
+    await nextTick();
+    await nextTick();
+    expect(flow.setViewport).not.toHaveBeenCalled();
+  });
+
+  it("resize помещает большой граф вместе с обратной связью ниже обычного minZoom", async () => {
+    const props = canvasProps();
+    props.nodes = Array.from({ length: 80 }, (_, index) => ({
+      ...required(nodes[index === 0 ? 0 : 1]),
+      ref: `node_${String(index)}`,
+    }));
+    props.edges = props.nodes.slice(1).map((node, index) => ({
+      ...required(edges[0]),
+      ref: `edge_${String(index)}`,
+      sourceNodeRef: required(props.nodes[index]).ref,
+      targetNodeRef: node.ref,
+    }));
+    props.edges.push({
+      ...required(edges[0]),
+      ref: "edge_callback",
+      sourceNodeRef: required(props.nodes.at(-1)).ref,
+      targetNodeRef: required(props.nodes[0]).ref,
+      type: "CALLBACK_TO",
+    });
+    const state = mountCanvas(props);
+    state.markUserAdjusted();
+    required(flow.dimensions).value = { width: 942, height: 680 };
+    await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
+    expectGraphVisible(props);
+    expect(flow.viewport.zoom).toBeGreaterThan(0);
+    expect(flow.viewport.zoom).toBeLessThan(0.15);
+    expect(state.minimumZoom.value).toBe(flow.viewport.zoom);
   });
 
   it("пустые dimensions при скрытом canvas не применяют синтетический viewport", async () => {

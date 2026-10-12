@@ -5,9 +5,11 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/observability/artifactread"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -26,17 +28,88 @@ func (tx *artifactReadCleanupStub) Rollback(ctx context.Context) error {
 func TestArtifactContentReadRetryKeepsExhaustedFallbackAndCleanup(t *testing.T) {
 	for _, fallback := range []error{errs.ErrUnavailable, errs.ErrConflict} {
 		attempts, rollbacks := 0, 0
-		_, err := retryArtifactContentRead(t.Context(), func() (_ platformrepo.ArtifactDownload, resultError error) {
+		_, err := retryArtifactContentReadWithBackoff(t.Context(), func() (_ platformrepo.ArtifactDownload, resultError error) {
 			attempts++
 			base := &artifactReadCleanupStub{}
 			tx := &artifactContentReadTx{Tx: base}
 			defer func() { tx.finish(t.Context(), &resultError); rollbacks += base.calls }()
 			tx.observe(&pgconn.PgError{Code: "40001", Message: "PRIVATE_SQL_SENTINEL"})
 			return platformrepo.ArtifactDownload{}, fallback
-		})
-		if attempts != 3 || rollbacks != 3 || !errors.Is(err, fallback) || strings.Contains(err.Error(), "PRIVATE_SQL_SENTINEL") {
+		}, artifactReadImmediateBackoff)
+		if attempts != artifactContentReadAttempts || rollbacks != artifactContentReadAttempts || !errors.Is(err, fallback) || strings.Contains(err.Error(), "PRIVATE_SQL_SENTINEL") {
 			t.Fatal("retry bounds, cleanup or original fallback changed")
 		}
+	}
+}
+
+func artifactReadImmediateBackoff(int, time.Duration) time.Duration { return 0 }
+
+func TestArtifactContentReadRetryRecoversFourthAndEighthSlot(t *testing.T) {
+	for _, successAttempt := range []int{4, artifactContentReadAttempts} {
+		attempts, rollbacks := 0, 0
+		result, err := retryArtifactContentRead(t.Context(), func() (_ platformrepo.ArtifactDownload, resultError error) {
+			attempts++
+			if attempts == successAttempt {
+				return platformrepo.ArtifactDownload{GrantRef: "committed-once"}, nil
+			}
+			base := &artifactReadCleanupStub{}
+			tx := &artifactContentReadTx{Tx: base, stage: artifactread.StageAudit}
+			defer func() { tx.finish(t.Context(), &resultError); rollbacks += base.calls }()
+			tx.observe(&pgconn.PgError{Code: "40001", Message: "PRIVATE_SQL_SENTINEL"})
+			return platformrepo.ArtifactDownload{GrantRef: "discarded"}, errs.ErrUnavailable
+		})
+		if err != nil || attempts != successAttempt || rollbacks != successAttempt-1 || result.GrantRef != "committed-once" {
+			t.Fatal("bounded artifact READ did not recover available serialization slot")
+		}
+	}
+	if serializableTransactionAttempts != 3 || artifactContentReadBudget != 5*time.Second {
+		t.Fatal("artifact contention recovery changed mutation retry or request budget")
+	}
+}
+
+func TestArtifactContentReadBackoffJitterAndBudgetBounds(t *testing.T) {
+	for attempt := 1; attempt <= artifactContentReadAttempts+1; attempt++ {
+		window := artifactContentReadBackoffBase
+		for step := 1; step < attempt && window < artifactContentReadBackoffMaximum; step++ {
+			window *= 2
+		}
+		if window > artifactContentReadBackoffMaximum {
+			window = artifactContentReadBackoffMaximum
+		}
+		seen := map[time.Duration]bool{}
+		for sample := 0; sample < 32; sample++ {
+			delay := artifactContentReadBackoff(attempt, artifactContentReadBudget)
+			if delay < window/2 || delay > window {
+				t.Fatal("artifact backoff escaped bounded jitter window")
+			}
+			seen[delay] = true
+			if clipped := artifactContentReadBackoff(attempt, time.Nanosecond); clipped != time.Nanosecond {
+				t.Fatal("backoff exceeded remaining budget")
+			}
+		}
+		if len(seen) < 2 {
+			t.Fatal("artifact backoff does not separate concurrent retries")
+		}
+	}
+	if artifactContentReadBackoff(1, 0) != 0 || artifactContentReadBackoff(1, -time.Second) != 0 {
+		t.Fatal("exhausted budget produced another wait")
+	}
+}
+
+func TestArtifactContentReadRetryCancellationKeepsPrimaryDiagnostic(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	attempts := 0
+	_, err := retryArtifactContentReadWithBackoff(ctx, func() (_ platformrepo.ArtifactDownload, resultError error) {
+		attempts++
+		tx := &artifactContentReadTx{Tx: &artifactReadCleanupStub{}, stage: artifactread.StageAudit}
+		defer tx.finish(ctx, &resultError)
+		tx.observe(&pgconn.PgError{Code: "40001", Message: "PRIVATE_SQL"})
+		return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
+	}, func(int, time.Duration) time.Duration { cancel(); return time.Second })
+	diagnostic, ok := artifactread.From(err)
+	if !ok || attempts != 1 || !errors.Is(err, errs.ErrUnavailable) || diagnostic.Stage != artifactread.StageAudit || diagnostic.SQLState != "40001" || diagnostic.Attempt != 1 || !diagnostic.RetryExhausted {
+		t.Fatal("cancellation hid primary serialization diagnostic or started another attempt")
 	}
 }
 

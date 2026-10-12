@@ -65,7 +65,7 @@ func (tx *artifactReadFaultTx) Exec(context.Context, string, ...any) (pgconn.Com
 }
 func (tx *artifactReadFaultTx) Commit(context.Context) error { return tx.cause }
 
-func TestArtifactDownloadDiagnosticSurvivesEverySQLBoundaryAndThreeRetries(t *testing.T) {
+func TestArtifactDownloadDiagnosticSurvivesEverySQLBoundaryAndBoundedArtifactRetries(t *testing.T) {
 	for _, operation := range []string{"query_row", "query", "row_scan", "rows_error", "exec", "commit"} {
 		t.Run(operation, func(t *testing.T) {
 			attempts, rollbacks := 0, 0
@@ -74,7 +74,7 @@ func TestArtifactDownloadDiagnosticSurvivesEverySQLBoundaryAndThreeRetries(t *te
 			if operation == "commit" {
 				outcome, stage = errs.ErrConflict, artifactread.StageCommit
 			}
-			_, err := retryArtifactContentRead(t.Context(), func() (_ platformrepo.ArtifactDownload, resultError error) {
+			_, err := retryArtifactContentReadWithBackoff(t.Context(), func() (_ platformrepo.ArtifactDownload, resultError error) {
 				attempts++
 				base := &artifactReadFaultTx{cause: &pgconn.PgError{Code: "40001", Message: "PRIVATE_SQL", InternalQuery: "PRIVATE_QUERY"}}
 				tx := &artifactContentReadTx{Tx: base, stage: stage}
@@ -94,9 +94,9 @@ func TestArtifactDownloadDiagnosticSurvivesEverySQLBoundaryAndThreeRetries(t *te
 					_ = tx.Commit(t.Context())
 				}
 				return platformrepo.ArtifactDownload{}, outcome
-			})
+			}, artifactReadImmediateBackoff)
 			diagnostic, ok := artifactread.From(err)
-			if !ok || attempts != 3 || rollbacks != 3 || !errors.Is(err, outcome) || diagnostic.Stage != stage || diagnostic.Class != artifactread.ClassPostgres || diagnostic.SQLState != "40001" || diagnostic.Attempt != 3 || !diagnostic.RetryExhausted {
+			if !ok || attempts != artifactContentReadAttempts || rollbacks != artifactContentReadAttempts || !errors.Is(err, outcome) || diagnostic.Stage != stage || diagnostic.Class != artifactread.ClassPostgres || diagnostic.SQLState != "40001" || diagnostic.Attempt != artifactContentReadAttempts || !diagnostic.RetryExhausted {
 				t.Fatal("SQL observation, retry bounds or exhausted outcome changed")
 			}
 			var raw *pgconn.PgError

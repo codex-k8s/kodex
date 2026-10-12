@@ -3,6 +3,7 @@ package platform
 import (
 	"context"
 	"errors"
+	"math/rand/v2"
 	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -10,6 +11,13 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/observability/artifactread"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+)
+
+const (
+	artifactContentReadAttempts       = artifactread.MaximumAttempts
+	artifactContentReadBudget         = 5 * time.Second
+	artifactContentReadBackoffBase    = 10 * time.Millisecond
+	artifactContentReadBackoffMaximum = 250 * time.Millisecond
 )
 
 type artifactReadSerializationRetry struct{ fallback error }
@@ -22,9 +30,16 @@ func (err *artifactReadSerializationRetry) Unwrap() error { return err.fallback 
 // Reader использует исходный caller context. Его нельзя отменять при возврате
 // из retry helper: тело ещё предстоит передать транспортному consumer.
 func retryArtifactContentRead(ctx context.Context, operation func() (platformrepo.ArtifactDownload, error)) (platformrepo.ArtifactDownload, error) {
-	deadline := time.Now().Add(5 * time.Second)
+	return retryArtifactContentReadWithBackoff(ctx, operation, artifactContentReadBackoff)
+}
+
+// Backoff подменяется только в адресных unit-тестах. Production policy закрыта:
+// максимум восемь попыток и прежний бюджет начала повторов, без нового context
+// для выдаваемого Reader и без изменения общего mutation retry.
+func retryArtifactContentReadWithBackoff(ctx context.Context, operation func() (platformrepo.ArtifactDownload, error), backoff func(int, time.Duration) time.Duration) (platformrepo.ArtifactDownload, error) {
+	deadline := time.Now().Add(artifactContentReadBudget)
 	var fallback error = errs.ErrUnavailable
-	for attempt := 0; attempt < serializableTransactionAttempts; attempt++ {
+	for attempt := 0; attempt < artifactContentReadAttempts; attempt++ {
 		if ctx.Err() != nil || (attempt > 0 && !time.Now().Before(deadline)) {
 			if _, ok := artifactread.From(fallback); !ok {
 				fallback = artifactread.WithFailure(fallback, artifactReadDiagnostic(artifactread.StageRetry, ctx.Err()))
@@ -40,10 +55,18 @@ func retryArtifactContentRead(ctx context.Context, operation func() (platformrep
 			return platformrepo.ArtifactDownload{}, artifactread.WithAttempt(err, attempt+1, false)
 		}
 		fallback = retry.fallback
-		if attempt+1 == serializableTransactionAttempts || ctx.Err() != nil || !time.Now().Before(deadline) {
+		if attempt+1 == artifactContentReadAttempts || ctx.Err() != nil || !time.Now().Before(deadline) {
 			return platformrepo.ArtifactDownload{}, artifactread.WithAttempt(retry.fallback, attempt+1, true)
 		}
-		timer := time.NewTimer(time.Duration(attempt+1) * 5 * time.Millisecond)
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return platformrepo.ArtifactDownload{}, artifactread.WithAttempt(retry.fallback, attempt+1, true)
+		}
+		delay := backoff(attempt+1, remaining)
+		if delay > remaining {
+			delay = remaining
+		}
+		timer := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -52,6 +75,27 @@ func retryArtifactContentRead(ctx context.Context, operation func() (platformrep
 		}
 	}
 	return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
+}
+
+// Equal jitter разносит одновременные новые SERIALIZABLE snapshots. Он меняет
+// только ожидание; authority, rollback и граница выдачи результата прежние.
+func artifactContentReadBackoff(attempt int, remaining time.Duration) time.Duration {
+	if remaining <= 0 {
+		return 0
+	}
+	window := artifactContentReadBackoffBase
+	for step := 1; step < attempt && window < artifactContentReadBackoffMaximum; step++ {
+		window *= 2
+	}
+	if window > artifactContentReadBackoffMaximum {
+		window = artifactContentReadBackoffMaximum
+	}
+	minimum := window / 2
+	delay := minimum + time.Duration(rand.Int64N(int64(window-minimum)+1))
+	if delay > remaining {
+		return remaining
+	}
+	return delay
 }
 
 // Обёртка принадлежит одному owner READ и замечает SQLSTATE до domain helpers,

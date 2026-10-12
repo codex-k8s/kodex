@@ -10,6 +10,33 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 05:38 UTC — Chrome восстановлен, текущий Workflow terminal
+
+Chrome MCP connected: создана только собственная вкладка4 Kodex, чужие tabs
+не затронуты. Owner graph/events200 подтверждают FAILED/sequence666 нового
+root run_2HDgJ-yd6I-hukcu269914cf. INTAKE SUCCEEDED; Architect
+run_OAkcnudWpLjqS0LmdVbfSims FAILED/PROVIDER_UNAVAILABLE, downstream
+Developer/Review/Manager CANCELLED. Review cycles0. Это общий публичный
+класс ошибки, не доказательство quota, кредита или network cause.
+Причина устанавливается read-only; новой бизнес-отправки ещё нет.
+
+SOURCE base1473e051 содержит две интегрированные scoped правки: artifact READ
+до8 попыток с jitter10–250ms в прежнем5s start budget и обзор всего графа
+после существенного resize canvas. Общий mutation retry3, authority/Reader
+cleanup и manual/realtime viewport guards сохранены. ROOT unit четырёх Go
+пакетов, frontend59/59, typecheck/адресные ESLint/Prettier и vet/build PASS
+на dirty SOURCE tree. ROOT race четырёх пакетов PASS (platform13.945s),
+disposable PG parallel4/8 PASS8.03s/exit0,64 grant/audit без дублей и
+Reader cleanup/negative cases. Frontend build PASS8.50s; size/plugin warnings
+сохранены. Это адресные проверки, не полный QA или новый live workflow;
+commit SHA и последующая live доставка фиксируются следующим checkpoint.
+HOT79d11e49 clean; обе правки пока NOT LIVE.
+
+05:38 fresh repo-owned owner readback: все пять busy counters0, promoted81
+и прежние pins MATCH. Runtime namespace содержит только system warm Pod.
+Это позволяет готовить safe delivery, но actual serving proof ещё не получен.
+Current Chrome Console0, API200; full QA/business/ONE Review/owner OPEN.
+
 ## Checkpoint 12.10.2026 05:11 UTC — исправлен encoded npm path, delivery отложена
 
 SOURCE base1ee2fcb0: адресное исправление egress proxy позволяет validated

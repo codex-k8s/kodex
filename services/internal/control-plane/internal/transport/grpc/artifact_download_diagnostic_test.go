@@ -14,13 +14,13 @@ import (
 func TestArtifactDownloadDiagnosticPreservesExactGRPCStatus(t *testing.T) {
 	for _, outcome := range []error{errs.ErrUnavailable, errs.ErrConflict} {
 		err := artifactread.WithFailure(outcome, artifactread.NewDiagnostic(artifactread.StageAudit, artifactread.ClassPostgres, "40001"))
-		err = artifactread.WithAttempt(err, 3, true)
+		err = artifactread.WithAttempt(err, artifactread.MaximumAttempts, true)
 		mapped := artifactDownloadTransportError(err)
 		if !proto.Equal(status.Convert(mapped).Proto(), status.Convert(transportError(outcome)).Proto()) || mapped.Error() != transportError(outcome).Error() || !errors.Is(mapped, outcome) {
 			t.Fatal("GRPCStatus text/code/details or domain sentinel changed")
 		}
 		diagnostic, ok := artifactread.From(mapped)
-		if !ok || diagnostic.Stage != artifactread.StageAudit || diagnostic.SQLState != "40001" || diagnostic.Attempt != 3 || !diagnostic.RetryExhausted {
+		if !ok || diagnostic.Stage != artifactread.StageAudit || diagnostic.SQLState != "40001" || diagnostic.Attempt != artifactread.MaximumAttempts || !diagnostic.RetryExhausted {
 			t.Fatal("safe diagnostic did not reach server error observer")
 		}
 	}

@@ -254,39 +254,33 @@ watch(
   [() => dimensions.value.width, () => dimensions.value.height],
   async ([width, height], [previousWidth, previousHeight]) => {
     if (!width || !height || viewMode.value !== "graph") return;
-    if (!userAdjustedView.value) {
-      await fit(false);
+    const viewportResized = previousWidth > 0 && previousHeight > 0;
+    if (
+      viewportResized &&
+      Math.abs(width - previousWidth) < 2 &&
+      Math.abs(height - previousHeight) < 2
+    )
       return;
-    }
-    if (!previousWidth || !previousHeight) return;
-    // Resize сохраняет выбранный пользователем центр и масштаб графа.
-    const viewport = getViewport();
-    programmaticViewportChange.value = true;
-    try {
-      await setViewport(
-        {
-          x: viewport.x + (width - previousWidth) / 2,
-          y: viewport.y + (height - previousHeight) / 2,
-          zoom: viewport.zoom,
-        },
-        { duration: 0 },
-      );
-    } finally {
-      programmaticViewportChange.value = false;
-    }
+    // После открытия или закрытия панели весь граф снова помещается в canvas.
+    // Ручной viewport остаётся защищённым от последующих realtime-обновлений.
+    await fit(false, false, viewportResized);
   },
   { flush: "post" },
 );
 
-async function fit(userInitiated = true, currentWork = false): Promise<void> {
-  if (!userInitiated && userAdjustedView.value) return;
+async function fit(
+  userInitiated = true,
+  currentWork = false,
+  viewportResized = false,
+): Promise<void> {
+  if (!userInitiated && !viewportResized && userAdjustedView.value) return;
   if (userInitiated) userAdjustedView.value = true;
   const generation = ++fitGeneration;
   programmaticViewportChange.value = true;
   try {
     await nextTick();
     if (generation !== fitGeneration) return;
-    if (!userInitiated && userAdjustedView.value) return;
+    if (!userInitiated && !viewportResized && userAdjustedView.value) return;
     if (
       !Number.isFinite(dimensions.value.width) ||
       !Number.isFinite(dimensions.value.height) ||
@@ -296,7 +290,7 @@ async function fit(userInitiated = true, currentWork = false): Promise<void> {
     )
       return;
     const options =
-      userInitiated && !currentWork
+      (userInitiated || viewportResized) && !currentWork
         ? runGraphFitViewOptions(dimensions.value.width, props.compact)
         : runGraphInitialFitOptions(
             dimensions.value.width,

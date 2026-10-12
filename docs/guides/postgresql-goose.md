@@ -4,7 +4,7 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.3
+version: 1.2.4
 updated: 2026-10-12
 ---
 
@@ -129,6 +129,14 @@ Reader выдаётся только после commit, с исходным call
 временного retry context при возврате не должна прерывать последующий stream.
 Disposable concurrency проверяет bytes/digest, один committed grant/audit
 на successful READ, отсутствие утечки Reader и отрицательные tenant/pin cases.
+
+Для owner artifact READ допустим отдельный предел восьми попыток с equal
+jitter в окне10–250ms и общим бюджетом начала повторов5s; общий mutation
+retry не увеличивается. Jitter ограничивается оставшимся бюджетом, отмена
+не запускает следующую попытку. Четыре и восемь одновременных PREVIEW
+проверяются на настоящем disposable PostgreSQL, включая40001 на audit/commit,
+точные bytes/digest и cardinality committed grant/audit. Известный abort
+не разрешает повторять неизвестный commit либо скрывать cleanup failure.
 
 Составной авторитетный snapshot не читается несколькими независимыми
 statement через pool. Если aggregate собирается из основной строки и дочерних

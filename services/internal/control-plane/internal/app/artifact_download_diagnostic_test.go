@@ -46,7 +46,7 @@ func TestArtifactDownloadDiagnosticStreamObserverLogsOnlyClosedProjection(t *tes
 	for _, sqlState := range []string{"40001", "PRIVATE_SQLSTATE"} {
 		output.Reset()
 		cause := artifactread.WithFailure(fmt.Errorf("PRIVATE_TOKEN SELECT secret user@example.test: %w", errs.ErrUnavailable), artifactread.NewDiagnostic(artifactread.StageAudit, artifactread.ClassPostgres, sqlState))
-		cause = artifactread.WithAttempt(cause, 3, true)
+		cause = artifactread.WithAttempt(cause, artifactread.MaximumAttempts, true)
 		failure := artifactDiagnosticTestStatus{cause: cause, code: codes.Unavailable}
 		calls := 0
 		boundary := grpcserver.StreamErrorBoundary(grpcserver.ErrorObserverFunc(func(ctx context.Context, method string, code codes.Code, err error) {
@@ -68,7 +68,7 @@ func TestArtifactDownloadDiagnosticStreamObserverLogsOnlyClosedProjection(t *tes
 		expected := map[string]any{
 			"level": "ERROR", "msg": unexpectedGRPCStreamFailureMessage, "method": method, "code": "Unavailable",
 			artifactReadStageKey: artifactread.StageAudit, artifactReadClassKey: artifactread.ClassPostgres,
-			artifactReadSQLStateKey: state, artifactReadAttemptKey: float64(3), artifactReadExhaustedKey: true,
+			artifactReadSQLStateKey: state, artifactReadAttemptKey: float64(artifactread.MaximumAttempts), artifactReadExhaustedKey: true,
 		}
 		if len(record) != len(expected)+1 || record["time"] == nil || strings.Contains(output.String(), "PRIVATE") || strings.Contains(output.String(), "user@example") {
 			t.Fatal("stream diagnostic leaked raw cause or introduced unexpected fields")

@@ -10,6 +10,34 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 12.10.2026 05:38 UTC
+
+Fresh Chrome owner graph/events200: новый root FAILED/666; Architect
+FAILED/PROVIDER_UNAVAILABLE, INTAKE SUCCEEDED, downstream CANCELLED, Review0.
+Console errors/warnings0. Chrome MCP connected, создана одна своя вкладка4;
+чужие вкладки сохранены. Причина provider terminal пока UNKNOWN.
+
+Live PREVIEW05:14 дал3×200/MATCH+1×503. Closed backend diagnostic доказал
+AUDIT_INSERT/POSTGRES/40001/attempt3/retry_exhausted=true. Исправление
+SOURCEbase1473: owner READ до8 попыток, equal jitter10–250ms с исходным5s
+budget начала повторов; общий mutation retry3 неизменён. Worker disposable
+PG:4rounds×4+4rounds×8,64 committed grants/64 audits, bytes/SHA/Reader
+cleanup и negative tenant/revision/purpose PASS. ROOT повтор выполняется.
+Frozen patch SHA422c9985dbf68afc90e981e1c35a35569321051e0ad38d36fd741d81ef146612.
+Это не live исправление503; HOT79d11e49 неизменён.
+
+Граф: старое сохранение world-center при открытии720px drawer могло скрыть
+корень. Resize≥2px теперь без анимации помещает весь граф с callback bounds;
+initial focus и запрет realtime-autofollow после ручного pan/zoom сохранены.
+Frozen patch SHA65775b28686262acd0a3e9b79bbf2ea4519dbb58799b394f39fde26c7d92f960.
+ROOT frontend4files/59tests, typecheck/targeted lint/format PASS. Scoped Go
+unit четырёх пакетов/vet/build PASS; race/ROOT component/frontend build
+завершены: ROOT race exit0/platform13.945s; repo-owned disposable PG
+parallel4/8 PASS8.03s,64 grant/audit/cleanup/negative cases; frontend build
+exit0/8.50s с сохранёнными chunk/plugin warnings. Все результаты относятся
+к dirty tree base1473, не HOT.
+Context7 VueFlow и pgx проверены. Общий invariant внесён в GO-DOC-002.
+
 ## Новое scoped evidence 12.10.2026 05:11 UTC
 
 На SOURCE base1ee2fcb0 интегрирован общий WebAccess encoded-path validator и

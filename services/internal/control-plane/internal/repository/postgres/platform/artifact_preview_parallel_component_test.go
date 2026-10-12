@@ -56,10 +56,11 @@ func (body *previewTrackedBody) Close() error {
 type previewTraceContextKey struct{}
 type previewTraceEvent struct{ identity, state string }
 type previewParallelTrace struct {
-	mu      sync.Mutex
-	events  []previewTraceEvent
-	barrier chan struct{}
-	arrived int
+	mu       sync.Mutex
+	events   []previewTraceEvent
+	barrier  chan struct{}
+	arrived  int
+	expected int
 }
 
 // SQL и аргументы не сохраняются: tracer распознаёт только закрытые identities.
@@ -102,7 +103,7 @@ func (trace *previewParallelTrace) TraceQueryEnd(ctx context.Context, _ *pgx.Con
 	barrier := trace.barrier
 	if barrier != nil && state == "NONE" && identity == "artifacts_downloadartifact_select_artifact_for_grant" {
 		trace.arrived++
-		if trace.arrived == 3 {
+		if trace.arrived == trace.expected {
 			close(barrier)
 		}
 	} else {
@@ -117,11 +118,11 @@ func (trace *previewParallelTrace) TraceQueryEnd(ctx context.Context, _ *pgx.Con
 	}
 }
 
-func (trace *previewParallelTrace) reset(parallel bool) {
+func (trace *previewParallelTrace) reset(parallel int) {
 	trace.mu.Lock()
 	defer trace.mu.Unlock()
-	trace.events, trace.arrived, trace.barrier = nil, 0, nil
-	if parallel {
+	trace.events, trace.arrived, trace.barrier, trace.expected = nil, 0, nil, parallel
+	if parallel > 0 {
 		trace.barrier = make(chan struct{})
 	}
 }
@@ -145,7 +146,7 @@ func TestArtifactPreviewScanDropsSerializationCause(t *testing.T) {
 }
 
 // Это regression настоящего owner PREVIEW, а не live запрос и не grant обход.
-// Все три файла относятся к одному синтетическому Run; provider не запускается.
+// Четыре и восемь файлов относятся к одному Run; provider не запускается.
 func TestArtifactPreviewParallelComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
@@ -199,8 +200,8 @@ func TestArtifactPreviewParallelComponent(t *testing.T) {
 		}
 		t.Fatalf("create synthetic run without provider execution: class=%s", classification)
 	}
-	artifacts := make([]entity.Artifact, 3)
-	bodies := []string{strings.Repeat("a", 328), strings.Repeat("b", 16718), strings.Repeat("c", 22156)}
+	artifacts := make([]entity.Artifact, 8)
+	bodies := []string{strings.Repeat("a", 328), strings.Repeat("b", 16718), strings.Repeat("c", 22156), strings.Repeat("d", 3090), strings.Repeat("e", 8180), strings.Repeat("f", 2400), strings.Repeat("g", 22000), strings.Repeat("h", 4055)}
 	for index := range artifacts {
 		artifact, uploadErr := service.UploadArtifact(ctx, owner, value.Mutation{IdempotencyKey: "preview-upload-" + string(rune('0'+index))}, platformrepo.ArtifactUpload{ProjectRef: project.Project.Ref, RunRef: run.Run.Ref, FileName: "preview-" + string(rune('0'+index)) + ".txt", MediaType: "text/plain", SizeBytes: int64(len(bodies[index])), Reader: strings.NewReader(bodies[index])})
 		if uploadErr != nil {
@@ -224,7 +225,10 @@ func TestArtifactPreviewParallelComponent(t *testing.T) {
 		}
 		return nil
 	}
-	refs := []string{artifacts[0].Ref, artifacts[1].Ref, artifacts[2].Ref}
+	refs := make([]string, len(artifacts))
+	for index := range artifacts {
+		refs[index] = artifacts[index].Ref
+	}
 	counts := func() (int64, int64) {
 		var grants, audits int64
 		if err := pool.QueryRow(ctx, queryPreviewEffectCounts, refs).Scan(&grants, &audits); err != nil {
@@ -234,58 +238,63 @@ func TestArtifactPreviewParallelComponent(t *testing.T) {
 	}
 	beforeGrants, beforeAudits := counts()
 	beforeGets, beforeCloses := objects.gets.Load(), objects.closes.Load()
-	trace.reset(false)
+	trace.reset(0)
 	for index := range artifacts {
 		if read(ctx, index) != nil {
 			t.Fatal("sequential exact preview failed")
 		}
 	}
 	var failed bool
-	for round := 0; round < 4; round++ {
-		trace.reset(true)
-		batch, stop := context.WithTimeout(ctx, 5*time.Second)
-		results := make(chan error, 3)
-		for index := range artifacts {
-			go func() { results <- read(batch, index) }()
-		}
-		unavailable, conflict, success := 0, 0, 0
-		for range artifacts {
-			switch result := <-results; {
-			case result == nil:
-				success++
-			case errors.Is(result, errs.ErrUnavailable):
-				unavailable++
-			case errors.Is(result, errs.ErrConflict):
-				conflict++
-			default:
-				t.Error("parallel preview returned another closed error")
+	const rounds = 4
+	expectedReads := int64(2 * len(artifacts))
+	for _, parallel := range []int{4, 8} {
+		expectedReads += int64(rounds * parallel)
+		for round := 0; round < rounds; round++ {
+			trace.reset(parallel)
+			batch, stop := context.WithTimeout(ctx, 5*time.Second)
+			results := make(chan error, parallel)
+			for index := 0; index < parallel; index++ {
+				go func() { results <- read(batch, index) }()
+			}
+			unavailable, conflict, success := 0, 0, 0
+			for received := 0; received < parallel; received++ {
+				switch result := <-results; {
+				case result == nil:
+					success++
+				case errors.Is(result, errs.ErrUnavailable):
+					unavailable++
+				case errors.Is(result, errs.ErrConflict):
+					conflict++
+				default:
+					t.Error("parallel preview returned another closed error")
+					failed = true
+				}
+			}
+			stop()
+			trace.mu.Lock()
+			for _, event := range trace.events {
+				if event.state != "NONE" {
+					t.Logf("preview_trace identity=%s sqlstate=%s", event.identity, event.state)
+				}
+			}
+			trace.mu.Unlock()
+			t.Logf("preview_batch parallel=%d round=%d success=%d unavailable=%d conflict=%d", parallel, round, success, unavailable, conflict)
+			if success != parallel {
 				failed = true
 			}
 		}
-		stop()
-		trace.mu.Lock()
-		for _, event := range trace.events {
-			if event.state != "NONE" {
-				t.Logf("preview_trace identity=%s sqlstate=%s", event.identity, event.state)
-			}
-		}
-		trace.mu.Unlock()
-		t.Logf("preview_batch round=%d success=%d unavailable=%d conflict=%d", round, success, unavailable, conflict)
-		if success != 3 {
-			failed = true
-		}
 	}
-	trace.reset(false)
+	trace.reset(0)
 	for index := range artifacts {
 		if read(ctx, index) != nil {
 			t.Fatal("sequential exact preview after parallel failed")
 		}
 	}
 	afterGrants, afterAudits := counts()
-	if !failed && (afterGrants-beforeGrants != 18 || afterAudits-beforeAudits != 18) {
+	if !failed && (afterGrants-beforeGrants != expectedReads || afterAudits-beforeAudits != expectedReads) {
 		t.Fatal("preview retry duplicated committed grant or audit")
 	}
-	trace.reset(false)
+	trace.reset(0)
 	if _, err := service.DownloadArtifactRevision(ctx, owner, artifacts[0].Ref, artifacts[1].CurrentRevisionRef, "PREVIEW"); !errors.Is(err, errs.ErrNotFound) {
 		t.Fatal("foreign revision became readable")
 	}
