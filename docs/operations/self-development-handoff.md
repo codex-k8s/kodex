@@ -10,6 +10,67 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 00:02 UTC — preview40001 исправлен в SOURCE, live пока прежний
+
+Поверх1be8f23c интегрирован frozen artifact owner fix5/5 post SHA MATCH:
+artifacts bb50b5b5/helper31060ec4/testsc0d38968/6648051d/fixtureSQLfc23a2d1.
+Private pgx Tx/Row/Rows замечает только40001 до безопасного error mapping;
+весь owner READ повторяется максимум3 после rollback/known abort и закрытия
+невыданного Reader. Fresh principal/eligibility/revision/grant/audit обязательны,
+unknown commit/network/40P01/deny/cleanup failure не повторяются. Exhaused503/409
+и caller Reader lifetime сохранены; SQL/API/isolation/grants/events не менялись.
+Общий invariant закреплён в GO-DOC-002. Context7 pgx5.10.0 и actual tx.go,
+официальный PostgreSQL serialization handling проверены; pgconn SafeToRetry
+не используется как разрешение транзакционного повтора.
+
+ROOT combined v5+artifact race PASS2.905s, vet/build PASS, CGO0 ELF7d014e2b.
+Публичный disposable PostgreSQL script с exact filter PASS3.676s:
+4batches×3success, caught audit40001/0client failures, sequential bytes/digest,
+18consumed grants/18audits, object Get/Close balance и negative tenant/revision/
+purpose. Migrations/up/status/up и public owner readbacks PASS/exit0.
+Первый ROOT command не нашёл node в ограниченном PATH и не начал fixture;
+после исправления только PATH повторён штатный script. Worker final6.574s
+и независимый replay race1.282s PASS отдельно, не новый live serving.
+
+Live HOT/CP всё ещё1be8/v5: attempt9/INTAKE RUNNING, own READ продолжаются;
+CODEX_SHELL NONZERO/UNIFIED_EXEC_STARTUP1 сохранён, subsequent shell/READ
+SUCCEEDED. Hot update artifactfix не выполнялся при активной работе.
+Далее публикация, безопасная delivery при подтверждённом idle, actual serving
+и parallel native PREVIEW; текущий live503 SQLSTATE остаётся UNKNOWN.
+ONE Review/Manager/owner/full QA/main gates OPEN; business input/code0correction.
+
+## Checkpoint 11.10.2026 23:57 UTC — v5 доставлен и original attempt9 RUNNING
+
+Exact SOURCE/remote/HOT1be8f23cf728903df57a6554002cd91773201228 published
+readback/PR body PASS. Первая push-команда завершилась readback UNKNOWN;
+отдельный fresh readback подтвердил exact remote, без повторного push.
+ROOT committed unit PASS0.229s, build PASS; CGO0/GOWORKoff independent ELF
+9acbb22456cfa15de7e8632d78bea365c911530df30add3cc1c8d2ac933aeeac
+совпадает с actual CP /proc/2010/exe/start20368870 и Air build/main.
+Mounted producer SHA ccc4e046 MATCH. Fresh idle23:52:54Z все5counts0,
+promoted81/pins c8b1e3da неизменны; HOT обновлён только ff-only.22Deployment
+ready/desired MATCH, RC/runner/image не пересобирались ради instruction text.
+
+Original retry с заранее сохранённым stable intent/current If-Match3 дал
+native200: attempt9 root run_nZyRMrJKM3z-Rw1sT0tTCdp2 RUNNING. Root input
+digest a711c2db EQUAL прежнему; corrective business USER0/ROOT business code0.
+INTAKE run_tqIxGOvygXtKP8rOP9_Q0akL/session ses_2KyzVD4dcRXX6Nz7BVgQ7-9H,
+turn trn_J0aJ7gPAbfeY8fSCZU_jXcy6, rrev_9YjiX9bcEzaKYX9xO2ZJ5MIc/a8ad1399.
+Same-UID ACK/rejoin PASS, instructions/inbox EQUAL/task_in_prompt=true;
+80208B/c253c966 и actual /workspace/AGENTS.md SHA MATCH/PLATFORMv5 present.
+Image66a00394/ENV24/binding25/tools38/grants22/model6.1-sol medium сохранены.
+Expected task hash flag NOT RUN. Первый ACK capture неверно использовал
+run attempt9 вместо turn attempt1 и NOT_CAPTURED; исправленный exact tuple
+capture PASS, эта ошибка оснастки не объявляется production отказом.
+
+Browser screenshot стартового графа просмотрен/overflow=false. Navigation
+дала один ERR_NETWORK_CHANGED, последующий graph GET200 и realtime
+«Подключено» восстановлены; начальная Console не названа чистой. Native
+READ продолжаются, новый INTAKE semantic verdict и Architect proof ещё OPEN.
+Worker disposable artifact40001 fix впервые GREEN7.677s, final расширенные
+negative/body cleanup проверки готовятся; source integration/live ещё NOT RUN.
+Business1808/ONE Review/Manager/owner и full QA/main acceptance OPEN.
+
 ## Checkpoint 11.10.2026 23:52 UTC — v5 source проверен, доставка следующая
 
 На SOURCE80a517cd интегрированы frozen5 файлов: один producer инструкций и

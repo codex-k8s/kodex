@@ -4,8 +4,8 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.2
-updated: 2026-09-05
+version: 1.2.3
+updated: 2026-10-12
 ---
 
 # PostgreSQL, именованные SQL-запросы и goose
@@ -116,6 +116,19 @@ SQL не собирается конкатенацией пользовател�
 свежие actor/tenant/lease/fence/generation и eligibility checks. Общий request
 budget и число попыток ограничены; stale/cancel/expiry/forbidden не повторяются,
 частичный результат не выдаётся. Отказ rollback закрыто останавливает повтор.
+
+Авторитетный `SERIALIZABLE` READ с одноразовым download grant и audit может
+получить `40001` и при audit INSERT, и при Commit. Driver SQLSTATE распознаётся
+до безопасного domain error mapping, без сохранения SQL/аргументов. Повтор
+разрешён только после подтверждённого rollback либо известного PostgreSQL
+abort и закрытия невыданного object Reader; весь owner path заново проверяет
+principal, eligibility, exact revision/content receipt и grant. Неизвестный
+commit/network result, отказ доступа или cleanup не повторяются. Сохраняются
+исходные exhausted error mappings и ограниченные число/начало повторов.
+Reader выдаётся только после commit, с исходным caller context: отмена
+временного retry context при возврате не должна прерывать последующий stream.
+Disposable concurrency проверяет bytes/digest, один committed grant/audit
+на successful READ, отсутствие утечки Reader и отрицательные tenant/pin cases.
 
 Составной авторитетный snapshot не читается несколькими независимыми
 statement через pool. Если aggregate собирается из основной строки и дочерних

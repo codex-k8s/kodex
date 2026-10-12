@@ -10,6 +10,38 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 12.10.2026 00:02 UTC
+
+Frozen artifact5 post hashes MATCH на SOURCE1be8+packet. ROOT combined
+instruction/artifact race2.905s/vet/build PASS; independent CGO0 ELF7d014e2b
+ещё не serving. Public disposable PostgreSQL exact artifact component
+PASS3.676s/4×3parallel success/actual audit40001/retried max3, sequential
+bytes/digest/18grants+18audits/body balance/tenant+revision+purpose negatives,
+owner readbacks/exit0. Worker final component6.574s/replay race1.282s отдельно.
+First ROOT missing node PATH FAIL доfixture; corrected canonical repeat PASS.
+SQL/API/isolation/authority неизменны; common invariant GO-DOC-002.
+Context7 pgx5.10.0/actual pinned tx.go и official PostgreSQL docs проверены.
+HOT/live1be8/attempt9 RUNNING; artifactfix delivery/native preview NOT RUN,
+live503 SQLSTATE UNKNOWN. Shell startup NONZERO1 не объявлен PASS.
+Semantic business verdict/ONE review/owner/fullQA/main acceptance OPEN.
+
+## Новое scoped evidence 11.10.2026 23:57 UTC
+
+Exact1be8f23c source/remote/HOT, committed unit0.229s/build PASS. Fresh idle
+all5counts0/promoted81/pins unchanged→HOT ff-only; actual CP executable
+9acbb22456cfa15de7e8632d78bea365c911530df30add3cc1c8d2ac933aeeac
+равен independent CGO0/GOWORKoff build. Mounted producer ccc4e046 MATCH.
+Native original Retry200 attempt9 RUNNING/root input a711c2db EQUAL,
+same-UID INTAKE ACK/rejoin/instructions/inbox EQUAL. Actual AGENTS
+80208B/c253c966/v5 present, image/env/tools/grants/model unchanged.
+Expected task hash comparison NOT RUN; new semantic business verdict OPEN.
+
+Browser initial ERR_NETWORK_CHANGED затем graph200/realtime recovered,
+screenshot просмотрен/overflow=false; initial Console не clean PASS.
+Capture first wrong run attempt9 NOT_CAPTURED→correct turn attempt1 PASS.
+Worker first artifact40001 componentGREEN7.677s, final regression/code
+integration/live NOT RUN. ONE Review0, business1808/QA65/main gates OPEN.
+
 ## Новое scoped evidence 11.10.2026 23:52 UTC
 
 Frozen5 producer/test files на SOURCE80a517cd post SHA256 MATCH. Immutable

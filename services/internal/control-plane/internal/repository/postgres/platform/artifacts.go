@@ -627,15 +627,22 @@ func (repository *Repository) downloadArtifactRevision(ctx context.Context, prin
 	if purpose != "DOWNLOAD" && purpose != "PREVIEW" {
 		return platformrepo.ArtifactDownload{}, errs.ErrInvalid
 	}
+	return retryArtifactContentRead(ctx, func() (platformrepo.ArtifactDownload, error) {
+		return repository.downloadArtifactRevisionOnce(ctx, principal, ref, revisionRef, purpose)
+	})
+}
+
+func (repository *Repository) downloadArtifactRevisionOnce(ctx context.Context, principal value.Principal, ref, revisionRef, purpose string) (_ platformrepo.ArtifactDownload, resultError error) {
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return platformrepo.ArtifactDownload{}, err
 	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	rawTx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
 	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	tx := &artifactContentReadTx{Tx: rawTx}
+	defer tx.finish(ctx, &resultError)
 
 	var artifactID, projectID, scanState, revisionID, selectedRevisionRef string
 	var artifactVersion int64
@@ -734,7 +741,7 @@ func (repository *Repository) downloadArtifactRevision(ctx context.Context, prin
 	keepBody := false
 	defer func() {
 		if !keepBody {
-			_ = object.Body.Close()
+			tx.bodyCleanupFailed = object.Body.Close() != nil
 		}
 	}()
 	if object.Digest != objectDigest || object.SizeBytes != objectSize ||

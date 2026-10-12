@@ -10,6 +10,45 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 00:02 UTC — artifact owner40001 SOURCE GREEN
+
+- [x] Frozen5 files post hashes MATCH; whole owner transaction retry только
+      explicit40001 после cleanup, max3, fresh authority/revision/grants;
+      unknown commit/network/40P01/denial не повторяются,503/409 preserved.
+- [x] ROOT combined v5+artifact race2.905s/vet/build PASS/ELF7d014e2b;
+      public disposable PostgreSQL filter PASS3.676s/exit0.4×3parallel success,
+      exact bytes/digest/18grants+18audits/Get-Close balance/negative tenant/pin.
+      Worker final component6.574s/replay race1.282s PASS отдельно.
+- [x] Общий invariant GO-DOC-002; Context7 pgx5.10.0/actual source и official
+      PostgreSQL full-transaction serialization handling проверены.
+- [ ] Artifact fix published/delivery/actual serving/native parallel preview;
+      HOT1be8 frozen при RUNNING attempt9, liveSQLSTATE UNKNOWN сохраняется.
+- [ ] INTAKE/Architect/Developer/ONE Review/Manager/owner/full QA/main gates.
+
+ROOT first fixture command PATH без node FAIL до создания БД; corrected PATH
+canonical repeat PASS. INTAKE shell startup NONZERO1 не скрыт, subsequent
+calls SUCCEEDED; business USER/implementation correction0.
+
+## Checkpoint 11.10.2026 23:57 UTC — live v5 и unchanged original Retry
+
+- [x] Exact1be8f23c published readback/body PASS, committed unit0.229s/build.
+      Fresh idle all5counts0/promoted81/pins unchanged→HOT ff-only.
+      Actual CP /proc/2010/exe9acbb224 равен независимой CGO0 сборке;
+      mounted producer ccc4e046 MATCH,22Deployment ready/desired.
+- [x] Original native Retry200→attempt9 RUNNING; root input a711c2db EQUAL,
+      stable intent/OCC сохранены. Host business code0/USER corrections0.
+- [x] INTAKE exact same-UID ACK/rejoin/instructions/inbox EQUAL, actual
+      AGENTS80208B/c253c966/PLATFORMv5; image66a00394/ENV24/binding25/
+      tools38/grants22/modelmedium unchanged. Expected task flag NOT RUN.
+- [ ] INTAKE verdict, own Architect observed snapshot/source EOF и остальные
+      Developer/ONE Review/Manager/owner/QA/main gates.
+- [ ] Artifact40001 fix final regression/integration/live. Worker first GREEN
+     7.677s, extended body-close/foreign-tenant final checks ещё NOT RUN.
+
+Initial browser ERR_NETWORK_CHANGED затем graph200/realtime recovered;
+стартовый screenshot просмотрен/overflow=false, начальный Console не clean.
+ACK first wrong run-attempt9 NOT_CAPTURED, corrected turn-attempt1 PASS.
+
 ## Checkpoint 11.10.2026 23:52 UTC — immutable v5 и source RCA
 
 - [x] Frozen producer/test5 files post hashes MATCH; platform v5 EN6885B/RU7501B
