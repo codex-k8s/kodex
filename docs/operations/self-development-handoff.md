@@ -10,6 +10,29 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 11:56 UTC — опубликованный collector и диагностический Retry3
+
+SOURCE/remote/HOT1d846245 clean, body1807 exact readback PASS. На committed
+1d846245 ROOT100unittest PASS6.414s. Guarded HOT FF11:50:07 при5busy0,
+promoted83/pinsa92e5d30 unchanged; backend/runner/images/ENV не менялись.
+Штатный RETRY rootbfFf FAILED/version3 создал run_hVfrL7jw_PFGE9F3DyjUeu5U
+attempt3/RUNNING/version2, same session и finalized input setaset_pBFNnzHREPncDRxyMuRZVIkm,
+тот же Workflow46/published15/ONE Review. Receipt609dcb33. Это диагностический
+повтор подтверждённого terminal, не повтор после observer timeout, не новая
+business USER task и не доказательство исправления прежнего provider отказа.
+
+Coordinator технически SUCCEEDED и естественно делегировал INTAKE
+run_LfoaPlXbrONf0ln3tK8eDtMe RUNNING. Его sameUID exact ACK checkpointe33834a7:
+provider imagefe2225c1, inputa711c2db/runtime676ce79d/executionea27c730 MATCH,
+Pod2f198904/turnvmU9r3w8/attempt1. Actual исправленный dual collector запущен
+до terminal и следует ROLE+PROVIDER независимо; primary пока NOT OBSERVED.
+Coordinator collector успел ACK, затем FOLLOW_STREAM_ENDED после штатного
+успеха; это не terminal всего Workflow и не provider failure. Console0/API200/
+live/readinessTRUE/overflowfalse в own19 текущего root/seq53; чужие вкладки
+не затронуты. Primary cause/fix/успешный Developer/ONE Review/Manager/owner,
+A8 решение и bootstrap/main/QA65 OPEN. Цель ACTIVE; активный диагностический
+observer и обычный native run не перезапускать по одному timeout чтения.
+
 ## Checkpoint 12.10.2026 11:46 UTC — terminal Developer, CSS live и collector исправлен
 
 Developer2S7Q FAILED11:28:03 после2450.678s, rootbfFf FAILED/version3/seq1359;

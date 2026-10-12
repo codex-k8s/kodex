@@ -10,6 +10,17 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 11:56 UTC — actual диагностический repeat
+
+- [x] SOURCE/remote/HOT1d846245 exact; committed ROOT100unit6.414s PASS,
+      штатная idle доставка collector без runtime/image/ENV изменений.
+- [x] Native Retry3 hVfr с прежним input set/Workflow46: Coordinator SUCCEEDED,
+      INTAKELfoa RUNNING; actual early dual collector ACK e33834a7 MATCH.
+- [ ] Получить actual primary diagnostics/устранить доказанную причину и
+      сопровождать successful Developer/ONE Review/Manager/owner. Наблюдение
+      пока активно, прежний CONTEXT_CANCELLED не считается root cause/fix.
+- [ ] A8 решение, bootstrap/fresh-main/QA65; никаких corrective business USER.
+
 ## Checkpoint 12.10.2026 11:46 UTC — delivery и диагностическая оснастка
 
 - [x] Native Developer/root terminal FAILED1359 подтверждены; Review/Manager
