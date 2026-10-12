@@ -10,6 +10,63 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Разрешённая расширенная очистка 12.10.2026
+
+Владелец ответом «очищай» разрешил рекомендованный вариант1: только cold
+shared Go/private BuildKit cache и проверенный перенос старых own OCI с
+сохранением данных, pins, provenance и rollback. Recovery policy не меняется.
+
+Exact опубликованный SOURCEa5b29937/readback PASS, fresh shared24h plan0600
+fingerprintb569b7b9193db3c6bae08eaf371aab5feda7d85e01d40fcd481cc3ee31d84ff7.
+Go prune PASS:64,819removed/30,536,230,173logicalB/skipped0. Directory/inode/
+owner/mode/nlink/все три timestamps проверялись перед каждым unlink; свежие
+и изменённые outputs не выбирались. ROOT29unit PASS. Это cache outputs,
+пересоздаваемые следующей сборкой; не исходники, данные или artifacts.
+
+BuildKit default private4h fresh audit217eligible; первая bounded партия128
+exact IDs/fingerprints PASS,128ABSENT_AFTER/no errors. Наблюдаемый root free
+delta5,140,795,392B concurrent, не исключительная атрибуция. ROOT27unit PASS.
+Fresh filesystem: DATA58,556,878,848B/root49,201,635,328B. DiskPressure ещё
+TRUE:15% recovery DATA75,200,199,475B не достигнут. Повтор — только через
+новый audit/state readback, не по прежним target IDs.
+
+Старые OCI пока не перемещались. Готовится narrow repo-owned transfer с
+EXCL publication, durable copy/SHA/fsync before source unlink, exact manifest/
+UID/inode/process guards и достаточным root headroom. Архивы11 protected
+manifest и canonical12KEEP не удалять; source archives сохранены до proof.
+Кластер/full QA пока не объявлены восстановленными.
+
+После каждого fresh audit выполнены ещё четыре партии:128+96private4h,
+69+30private1h; профиль1h консервативно выбирает только относительный возраст
+не менее2hours/1day, не последние свежие записи. Все451 выбранные за пять
+партий refs ABSENT_AFTER/no errors, каждое in-use/private/age guard выполнял
+сам BuildKit. Не выбирались shared image layers, active builds и volumes.
+Наблюдаемый aggregate root delta9,519,984,640B не исключительная атрибуция.
+07:05:40 summary DATA58,549,358,592B/root53,715,169,280B. Для всех12 OCI
+21GB root headroom пока чуть недостаточен; subset11 protected оставляет
+abandoned source наDATA и может пройтиguard без уменьшения5%+8GiB запаса.
+Перенос всё ещё NOT RUN до опубликованного script/plan и fresh budget proof.
+
+Шестая fresh private1h партия15:PASS15ABSENT_AFTER/no errors. Итого466refs
+и concurrent aggregate root delta9,840,795,648B; root54,029,393,920B в
+07:10:59, DATA58,547,785,728B. Очистка BuildKit остановлена на достаточном
+запасе для11OCI subset, без удаления images/volumes.
+
+Narrow transfer CLI ограничен12 exact own archive/manifest/size tuples;
+audit позволяет exact subset11 без abandonedc114. Новый private root-FS
+destination700, plan/receipt0600, source/script SHA и inode binding,
+headroom AFTER всех оставшихся copy≥hard5%+8GiB. Перед source unlink —
+fresh metadata/process/provenance, full SHA/manifest MATCH, fsync copy,
+atomic no-replace publication, durable COPIED receipt и parent fsync.
+Resume толькоsamejournal/INTENT; чужие или corrupted partial/final не
+перезаписываются. Root child разрешён только metadata process-check,
+не writes. Source provenance/render/logs/pins не меняются. Locations
+сохранённых архивов фиксирует private receipt, не symlink fallback.
+ROOT18transfer +15OCI unit PASS0.087/0.245s, diff check PASS.
+ProductSHA2bacc0dda988ad9cf9f81e9498d4af2fe45570a38e8b124be34dca38dd46a762,
+frozen patch1c23be719307de0ab304aef3a4197addf0363f8052102786c95f67a726b8786f.
+Перенос ещё NOT RUN до публикации этих файлов и fresh plan/fingerprint.
+
 ## Read-only дополнительная ёмкость 12.10.2026 06:45 UTC
 
 На576cbaf9 два worker audit не меняли код/данные/поды. Canonical OCI12KEEP,
