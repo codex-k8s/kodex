@@ -10,6 +10,35 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 12.10.2026 03:14 UTC
+
+Current Architect technical SUCCEEDED, design CHANGES_REQUESTED/A1–A3,
+mandatory architecture proof complete. Own snapshot394:
+OBSERVED/CODEX0.160.0/INITIALIZE_USER_AGENT, exact RuntimeRevision bd3fe892
+MATCH actual Pod; native binary12eb3e81/wrapper61b0194f. Offline schema/TS
+exit0, selected25/inventory1048; semantic FULL1048 и binary-source attestation
+не заявлены. Source/mainab499/business headc784 unchanged.
+
+Owner five captured revisions HTTP200/all size/SHA MATCH:
+architecture-review36191B/fd6a7ce8, evidence335240B/323c3753,
+contracts39708B/eaaba04c, result1083B/1bb567b9, workspace-result328B/850cb61d.
+Private receipt448592B/
+d52083a7d051d3df1e48111bee03155fabc0f15dc78c57da8a962006db324a59.
+ROOT architecture-review полностью READ. Coordinator native29 contiguous pages
+всех5 EOF до817; не host substitute. После original AC scope сверки штатно
+делегирован CODE_ONLY Developer run_oWXbkMuhDiSctpezv20LLP9j/attempt1,
+actual Pod03:12:28/session ses_tdFXBVmSo8R52tn4KK4IVZ4P,
+rrev_Z150mCrK64zLg9NPf1CUnkpM/f0e980fe/medium/image66a00394.
+Implementation/review/product/paid live gates ещё NOT RUN.
+
+Exact SOURCE8f554e14 scoped race4 packages PASS(1.024/1.503/1.165/1.187s),
+bot remote/body readback MATCH. GitHub checks0/reviews0/combined pending —
+не CI PASS. HOT f88194d3/active writer unchanged, diagnostics NOT LIVE.
+Playwright03:13 screenshot READ/Console0/API200/live/rejoin. Одно открытие03:05
+UI load FAIL/Console44 без API metadata; последующие два PASS, cause UNKNOWN,
+speculative frontend edit0. Chrome MCP TIMEOUT, чужие tabs untouched.
+ROOT business code0/corrective USER0/Review cycles0; final/fullQA/gates OPEN.
+
 ## Новое scoped evidence 12.10.2026 02:58 UTC
 
 INTAKE run_DxoWxnEzs099iglWVFvd9mPm technical SUCCEEDED/semantic

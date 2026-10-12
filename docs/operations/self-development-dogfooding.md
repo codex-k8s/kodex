@@ -10,6 +10,23 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 03:14 UTC — собственный Architect proof и Developer
+
+- [x] Architect technical SUCCEEDED; bounded design CHANGES_REQUESTED/A1–A3
+      передан Developer, mandatory architecture proof complete, не final Review.
+- [x] Own fresh snapshot OBSERVED/CODEX0.160.0/INITIALIZE_USER_AGENT,
+      actual runtime bd3fe892 MATCH; offline schema/TS exit0/25 selected.
+      Source attestation UNKNOWN, не заменена version label.
+- [x] Пять server-captured handoffs HTTP200/size/SHA MATCH; Coordinator
+      own29 contiguous pages/все EOF, включая335240B evidence и39708B contract.
+- [x] Developer run_oWXbkMuhDiSctpezv20LLP9j штатно RUNNING/attempt1;
+      actual medium/rrev_Z150mCrK64zLg9NPf1CUnkpM/f0e980fe/image66a00394.
+- [x] SOURCE/remote8f554e14/body readback MATCH, exact scoped race PASS;
+      Playwright03:13 screenshot/Console0/API200/live. Chrome MCP TIMEOUT.
+- [ ] Одно UI load FAIL03:05/Console44; fresh repeats PASS, причина UNKNOWN.
+      HOT f88194d3/active writer unchanged, diagnostics ещё NOT LIVE.
+      Developer implementation/tests, ONE Review/Manager/owner/paid live/QA OPEN.
+
 ## Checkpoint 12.10.2026 02:58 UTC — native INTAKE завершён
 
 - [x] INTAKE technical SUCCEEDED/semantic PASS_INTAKE_SCOPE; четыре CLEAN

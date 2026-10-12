@@ -10,6 +10,35 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 03:14 UTC — Architect передал дизайн, Developer допущен
+
+Architect run_PcOu9IIP1XADEd3tXcHjHqtX technical SUCCEEDED. Semantic
+CHANGES_REQUESTED относится к A1 accountId binding, A2 financial RPC error
+aborts и A3 partial balance parser; это требования Developer, не полный Review.
+Mandatory architecture proof complete; implementation/live acceptance NOT RUN.
+Собственный fresh snapshot: CODEX OBSERVED/INITIALIZE_USER_AGENT/0.160.0,
+RuntimeRevision bd3fe892 MATCH actual Pod; ELF12eb3e81. Offline schema/TS exit0,
+25 выбранных declarations из inventory1048. Binary-source attestation UNKNOWN.
+
+Пять captured CLEAN/ACTIVE artifacts HTTP200/size/SHA MATCH. Root полностью
+прочитал architecture-review.md36191B/fd6a7ce8; private receipt448592B/
+d52083a7. Coordinator native прочитал все пять до EOF:29 contiguous pages,
+architecture-evidence335240B/323c3753, contract39708B/eaaba04c и три остальных.
+После сверки original AC штатно допущен CODE_ONLY Developer
+run_oWXbkMuhDiSctpezv20LLP9j/session ses_tdFXBVmSo8R52tn4KK4IVZ4P/attempt1.
+Actual Pod03:12:28: modelmedium, rrev_Z150mCrK64zLg9NPf1CUnkpM/f0e980fe,
+image66a00394. ROOT business implementation0/corrective USER0/Review cycles0.
+
+03:13 Playwright screenshot/Console0/API200/run live/rejoin подтверждены.
+Одно промежуточное открытие03:05 показало UI load FAIL/Console44 без API
+response metadata; последующие два открытия PASS, первичная причина UNKNOWN.
+Chrome MCP всё ещё TIMEOUT. Не внесено speculative frontend исправление.
+SOURCE/remote8f554e149afba50cd604d460da5d10963b4b0820, HOT f88194d3;
+closed diagnostics/source journals пока NOT LIVE, writer не перезапускался.
+Exact8f ROOT race4 packages PASS(1.024/1.503/1.165/1.187s), body/remote readback
+MATCH. GitHub checks0/status pending/reviews0 не CI PASS. Developer diff/tests,
+ONE Review/Manager/owner/paid live/full QA/bootstrap merge остаются OPEN.
+
 ## Checkpoint 12.10.2026 02:58 UTC — INTAKE принят, Architect работает
 
 INTAKE run_DxoWxnEzs099iglWVFvd9mPm technical SUCCEEDED и semantic
