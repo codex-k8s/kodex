@@ -268,6 +268,112 @@ class ColdCacheTests(unittest.TestCase):
                     self.assertEqual(constructor.call_args.kwargs['minimum_age_hours'], age)
                     audit.assert_called_once()
 
+    def test_cli_default_root_preserved_and_exact_owned_profile_forwarded(self):
+        self.assertEqual(C.PROFILES['shared'], C.ROOT)
+        self.assertEqual(C.PROFILES['kodex-realtime-1797'], Path(
+            '/home/s/.local/state/kodex-dev/realtime-combined-check.2Jlsd4pc/go-cache'))
+        for args, root, age in (
+                (['audit'], C.ROOT, 72),
+                (['audit', '--profile', 'shared'], C.ROOT, 72),
+                (['audit', '--profile', 'kodex-realtime-1797'], C.PROFILES['kodex-realtime-1797'], 72),
+                (['audit', '--profile', 'kodex-realtime-1797', '--minimum-age-hours', '24'],
+                 C.PROFILES['kodex-realtime-1797'], 24)):
+            with patch.object(C.Cache, 'audit', return_value={'status': 'PASS'}) as audit:
+                with patch.object(C, 'Cache', wraps=C.Cache) as constructor:
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        self.assertEqual(C.main(args), 0)
+                    self.assertEqual(constructor.call_args.args, (root,))
+                    self.assertEqual(constructor.call_args.kwargs['minimum_age_hours'], age)
+                    audit.assert_called_once()
+
+    def test_closed_profile_rejects_arbitrary_paths_without_mutation_or_raw_errors(self):
+        for value in ('PRIVATE_CANARY', '/PRIVATE_CANARY', 'kodex-realtime-1797/../shared', ''):
+            with patch.object(C.os, 'unlink') as unlink:
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    self.assertEqual(C.main(['prune', '--profile', value]), 1)
+                self.assertNotIn('PRIVATE_CANARY', output.getvalue())
+                unlink.assert_not_called()
+
+    def test_plan_from_another_root_rejected_before_unlink_for_both_ages(self):
+        for age in (24, 72):
+            plan = C.Cache(self.root, minimum_age_hours=age).audit()
+            with patch.object(C.os, 'unlink') as unlink:
+                with self.assertRaisesRegex(C.Failure, 'PLAN_SCOPE_INVALID'):
+                    C.Cache(self.root.parent / 'other-cache', minimum_age_hours=age).prune(
+                        plan, plan['fingerprint'])
+                unlink.assert_not_called()
+
+    def test_output_plan_new_private_file_loads_without_changing_cache(self):
+        output = self.root.parent / 'fresh-plan.json'
+        before = C.snapshot(self.old.stat())
+        plan = self.cache.audit()
+        summary = C.write_plan(str(output), plan)
+        self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(C.load_plan(str(output)), plan)
+        self.assertEqual(C.snapshot(self.old.stat()), before)
+        self.assertEqual(summary['recordCount'], 1)
+        self.assertEqual(summary['fingerprint'], plan['fingerprint'])
+        self.assertNotIn('records', summary)
+
+    def test_output_plan_existing_file_and_symlink_never_overwritten(self):
+        output = self.root.parent / 'existing.json'
+        output.write_bytes(b'private fixture remains unchanged')
+        link = self.root.parent / 'link.json'
+        link.symlink_to(output)
+        plan = self.cache.audit()
+        before = C.snapshot(output.stat())
+        for path in (output, link):
+            with self.assertRaises(OSError):
+                C.write_plan(str(path), plan)
+            self.assertEqual(C.snapshot(output.stat()), before)
+        self.assertEqual(output.read_bytes(), b'private fixture remains unchanged')
+
+    def test_output_plan_unsafe_parent_path_and_size_rejected_before_creation(self):
+        parent = self.root.parent
+        link = parent / 'parent-link'
+        link.symlink_to(parent)
+        plan = self.cache.audit()
+        for path in ('relative.json', str(parent / '..' / 'escape.json'),
+                     str(parent / 'not-json.txt'), str(link / 'plan.json')):
+            with self.assertRaises(C.Failure):
+                C.write_plan(path, plan)
+        parent.chmod(0o755)
+        with self.assertRaisesRegex(C.Failure, 'OUTPUT_PARENT_UNSAFE'):
+            C.write_plan(str(parent / 'unsafe.json'), plan)
+        parent.chmod(0o700)
+        with patch.object(C, 'MAX_PLAN_BYTES', 1):
+            with self.assertRaisesRegex(C.Failure, 'OUTPUT_PLAN_TOO_LARGE'):
+                C.write_plan(str(parent / 'too-large.json'), plan)
+        self.assertFalse((parent / 'unsafe.json').exists())
+        self.assertFalse((parent / 'too-large.json').exists())
+
+    def test_output_plan_parent_replacement_rejected_before_file_open(self):
+        before = self.root.parent.stat()
+        changed = list(C.identity(before))
+        changed[1] += 1
+        plan = self.cache.audit()
+        with patch.object(C, 'identity', side_effect=[changed, C.identity(before)]):
+            with self.assertRaisesRegex(C.Failure, 'OUTPUT_PARENT_CHANGED'):
+                C.write_plan(str(self.root.parent / 'race.json'), plan)
+        self.assertFalse((self.root.parent / 'race.json').exists())
+
+    def test_cli_output_plan_prints_summary_and_is_forbidden_for_prune(self):
+        output = self.root.parent / 'cli-plan.json'
+        plan = self.cache.audit()
+        with patch.object(C.Cache, 'audit', return_value=plan):
+            text = io.StringIO()
+            with contextlib.redirect_stdout(text):
+                self.assertEqual(C.main(['audit', '--profile', 'kodex-realtime-1797',
+                                         '--output-plan', str(output)]), 0)
+            self.assertNotIn('records', json.loads(text.getvalue()))
+            self.assertEqual(C.load_plan(str(output)), plan)
+        with patch.object(C, 'load_plan') as load, patch.object(C.Cache, 'prune') as prune:
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(C.main(['prune', '--output-plan', str(output)]), 1)
+            load.assert_not_called()
+            prune.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()

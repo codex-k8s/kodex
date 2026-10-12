@@ -4,8 +4,8 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.23
-updated: 2026-10-11
+version: 1.1.24
+updated: 2026-10-12
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
@@ -471,6 +471,19 @@ rollout не становится текущими инструкциями. Д�
 notice может содержать только exact opt-in ссылочную проекцию свежей базы;
 полные main instructions/core pins сохраняются и доставляются отдельно,
 исторические snapshots без marker материализуются неизменно.
+
+Транспортный JSONL frame app-server имеет отдельный ограниченный бюджет8MiB:
+полный terminal aggregate может быть больше квоты отдельного смыслового поля.
+Это предел платформы, не обещание upstream максимума. Очередь8frames сохраняет
+прежний предел64MiB queued raw bytes; scanner и единственный pending frame
+ограничены отдельно. Это не верхняя граница RSS: transient decoder copies
+имеют собственную зависимость от bounded frame. Semantic1MiB, final/published
+limits, strict JSON/identity/authority checks и message count100000 остаются
+неизменны. Более крупный кадр закрыто отклоняется, без усечения либо выдачи
+непроверенного payload. Stop/full-queue сохраняет cancel/close/join.
+Логи сообщают только закрытый stream_error subtype; public diagnostic не
+приобретает сырых parser/reader ошибок. Retained rollout item не равен stdout
+wire frame: его размер не доказывает конкретный rejecting guard.
 
 | Файловый путь исполнения | Граница и результат |
 | --- | --- |

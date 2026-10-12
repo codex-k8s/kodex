@@ -10,6 +10,44 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Подготовка ограниченной очистки 12.10.2026
+
+Добавлен закрытый CLI profile kodex-realtime-1797 только для прежнего
+собственного realtime Go cache. Не произвольный --root; shared/default72h
+не меняется. Все старые owner/mode/inode/atime/mtime/ctime/nlink/age/size
+и fresh fingerprint проверки сохранены. Audit --output-plan создаёт только
+новый0600 JSON в private canonical parent, EXCL/NOFOLLOW/dirfd/fsync;
+prune не принимает output-plan. ROOT29unit PASS, worker29PASS после исправления
+первого fixture mock FAIL. Fresh audit9081records/1,238,734,797logical bytes;
+allocated estimate1,271,988,224B. Prune ещё NOT RUN, не восстановление среды.
+Frozen patch SHA7e46e801a026f9c541781c06cd4bbe38232f387644c9e93f43590014f0e8f946.
+Широкая очистка shared Go58GB, world-writable active runtime caches, OCI
+archives/pins и dirty worktrees не выполняется.
+
+## Новая runner реализация 12.10.2026 — пока NOT LIVE
+
+SOURCE base38ab780a: пять runner/codex файлов frozen patch
+SHAa44441eeb5b3c0b259b513924b1485b5a6166aa6709992ff00f59c99cf8ca5c3.
+Синтетический terminal2,297,142B через настоящий reader/waitTerminal был FAIL
+на прежнем1MiB transport; новый8MiB frame проходит. Queue8 вместо64 сохраняет
+64MiB queued raw bytes, без заявления RSS64MiB. Semantic1MiB/published64KiB/
+final480000/count100000/strictJSON/identity/authority и stop/join неизменны.
+Внутренний closed log stream_error отличает frame/message/empty/wire/read
+failure; public runtimecontract STREAM_INVALID не меняется.
+
+Worker pinnedGo1.26.6 full module unit9.554s, codex race47.273s, vet/build и
+diff PASS. ROOT integrated адресные reader/terminal/resume tests PASS7.946s
+на тех же production hashes; ROOT полный module unit выполняется отдельно.
+ROOT полный module unit теперь PASS (app17.196s/codex8.301s, остальные пакеты
+exit0), pinnedGo1.26.6/networkoff. Это локальный source proof, не OCI delivery.
+Exact8MiB EOF/LF/CRLF PASS, +1byte отказ, >8MiB history закрыто, foreign thread
+и semantic overflows denied, full queue stop/join PASS. Context7 Go Scanner
+и официальная Codex App Server Protocol documentation checked.
+Конкретная cause текущего live Architect всё ещё UNKNOWN; synthetic defect
+не подменяет exact stdout proof. Требуется новый защищённый runner OCI,
+canonical admission/digest/bindings и следующий native execution; Air/source
+update сам по себе не доставляет этот код. Новой model отправки нет.
+
 ## Новое scoped evidence 12.10.2026 — live e317 и текущий FAIL среды
 
 Exact source/remote/HOT e31714cd: owner idle FF05:41:21/busy0/pins81 unchanged,

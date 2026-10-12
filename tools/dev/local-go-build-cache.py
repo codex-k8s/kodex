@@ -12,6 +12,10 @@ import stat
 import time
 
 ROOT = Path('/home/s/.cache/go-build')
+PROFILES = {
+    'shared': ROOT,
+    'kodex-realtime-1797': Path('/home/s/.local/state/kodex-dev/realtime-combined-check.2Jlsd4pc/go-cache'),
+}
 AGE_HOURS = (24, 72)
 DEFAULT_AGE_HOURS = 72
 AGE_NS = DEFAULT_AGE_HOURS * 3600 * 10**9
@@ -216,6 +220,50 @@ def load_plan(path):
     return json.loads(raw, object_pairs_hook=unique)
 
 
+def write_plan(path, plan):
+    value = Path(path)
+    require(value.is_absolute() and str(value) == path and
+            re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.json', value.name), 'OUTPUT_PATH_UNSAFE')
+    parent = value.parent
+    require(parent.resolve(strict=True) == parent, 'OUTPUT_PARENT_UNSAFE')
+    before = parent.lstat()
+    require(stat.S_ISDIR(before.st_mode) and before.st_uid == os.getuid() and
+            stat.S_IMODE(before.st_mode) == 0o700, 'OUTPUT_PARENT_UNSAFE')
+    raw = (json.dumps(plan, sort_keys=True) + '\n').encode()
+    require(len(raw) <= MAX_PLAN_BYTES, 'OUTPUT_PLAN_TOO_LARGE')
+    directory_fd = os.open(parent, FLAGS | os.O_DIRECTORY)
+    try:
+        require(identity(os.fstat(directory_fd)) == identity(before) and
+                identity(parent.lstat()) == identity(before), 'OUTPUT_PARENT_CHANGED')
+        output_fd = os.open(value.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                            os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=directory_fd)
+        try:
+            os.fchmod(output_fd, 0o600)
+            created = os.fstat(output_fd)
+            require(stat.S_ISREG(created.st_mode) and created.st_uid == os.getuid() and
+                    created.st_nlink == 1 and stat.S_IMODE(created.st_mode) == 0o600, 'OUTPUT_FILE_UNSAFE')
+            pending = memoryview(raw)
+            while pending:
+                count = os.write(output_fd, pending)
+                require(count > 0, 'OUTPUT_WRITE_FAILED')
+                pending = pending[count:]
+            os.fsync(output_fd)
+            require(os.fstat(output_fd).st_size == len(raw) and
+                    identity(os.stat(value.name, dir_fd=directory_fd, follow_symlinks=False)) == identity(created),
+                    'OUTPUT_FILE_CHANGED')
+        finally:
+            os.close(output_fd)
+        require(identity(os.fstat(directory_fd)) == identity(before) and
+                identity(parent.lstat()) == identity(before) and
+                parent.resolve(strict=True) == parent, 'OUTPUT_PARENT_CHANGED')
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+    return {'status': 'PASS', 'mode': 'audit', 'outputPlan': str(value),
+            'recordCount': len(plan['records']), 'totalBytes': plan['totalBytes'],
+            'fingerprint': plan['fingerprint']}
+
+
 class Parser(argparse.ArgumentParser):
     def error(self, message):
         raise Failure('ARGUMENTS_INVALID')
@@ -226,14 +274,19 @@ def main(argv=None):
     try:
         parser = Parser(allow_abbrev=False)
         parser.add_argument('mode', choices=('audit', 'prune'))
+        parser.add_argument('--profile', choices=tuple(PROFILES), default='shared')
+        parser.add_argument('--output-plan')
         parser.add_argument('--plan')
         parser.add_argument('--expected-fingerprint')
         parser.add_argument('--minimum-age-hours', type=int, choices=AGE_HOURS, default=DEFAULT_AGE_HOURS)
         args = parser.parse_args(argv)
-        cache = Cache(minimum_age_hours=args.minimum_age_hours)
+        require(args.mode == 'audit' or args.output_plan is None, 'OUTPUT_PLAN_AUDIT_ONLY')
+        cache = Cache(PROFILES[args.profile], minimum_age_hours=args.minimum_age_hours)
         if args.mode == 'audit':
             require(args.plan is None and args.expected_fingerprint is None, 'AUDIT_TARGET_FORBIDDEN')
             result = cache.audit()
+            if args.output_plan is not None:
+                result = write_plan(args.output_plan, result)
         else:
             require(args.plan is not None and args.expected_fingerprint is not None, 'EXPLICIT_PLAN_REQUIRED')
             result = cache.prune(load_plan(args.plan), args.expected_fingerprint)

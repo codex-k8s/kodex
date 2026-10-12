@@ -149,22 +149,27 @@ func TestThreadBindingCarriesFullCurrentInstructionsForStartAndResume(t *testing
 
 func TestResumeHistoryFrameOverflowIsClosed(t *testing.T) {
 	fixture, state, _ := syntheticResumeHistory(t)
+	// Полная история превышает именно транспортный, а не смысловой предел.
+	for repeat := 0; repeat < 3; repeat++ {
+		fixture.history = append(append([]any{}, fixture.history...), fixture.history...)
+	}
 	server := &appServer{stdin: fixture, messages: fixture.events}
 	_, err := server.call(t.Context(), state, "thread/resume", map[string]any{"threadId": fixture.input.CodexSessionID})
 	var failure *appServerCallFailure
-	if !errors.As(err, &failure) || failure.detail != "STREAM_INVALID" || fixture.frameBytes <= maximumJSONLLineBytes {
+	if !errors.As(err, &failure) || failure.detail != "STREAM_INVALID" || safeAppServerStreamFailureReason(err) != "FRAME_TOO_LARGE" || fixture.frameBytes <= maximumAppServerFrameBytes {
 		t.Fatal("oversized history frame did not preserve closed stream refusal")
 	}
-	t.Logf("synthetic overflow: detail=%s frame_bytes=%d frame_bound=%d", failure.detail, fixture.frameBytes, maximumJSONLLineBytes)
+	t.Logf("synthetic overflow: detail=%s frame_bytes=%d frame_bound=%d", failure.detail, fixture.frameBytes, maximumAppServerFrameBytes)
 }
 
 func TestResumeHistoryTransportBudgetIsPerFrame(t *testing.T) {
 	frame := marshalProtocolFixture(t, map[string]any{"id": 1, "result": map[string]any{"padding": strings.Repeat("x", 100<<10)}})
-	stream := bytes.Repeat(append(frame, '\n'), 12)
-	if len(stream) <= maximumJSONLLineBytes {
+	const frameCount = 84
+	stream := bytes.Repeat(append(frame, '\n'), frameCount)
+	if len(stream) <= maximumAppServerFrameBytes {
 		t.Fatal("synthetic aggregate did not cross frame budget")
 	}
-	events := make(chan streamEvent, 13)
+	events := make(chan streamEvent, frameCount+1)
 	readAppServerMessages(bytes.NewReader(stream), events)
 	count := 0
 	for event := range events {
@@ -173,7 +178,7 @@ func TestResumeHistoryTransportBudgetIsPerFrame(t *testing.T) {
 		}
 		count++
 	}
-	if count != 12 {
+	if count != frameCount {
 		t.Fatal("valid bounded frames were lost")
 	}
 }

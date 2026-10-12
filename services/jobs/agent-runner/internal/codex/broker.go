@@ -39,7 +39,7 @@ const (
 	providerResultDeliveryGrace  = processGrace + terminationGrace + providerRefreshCommitTimeout + 5*time.Second
 	providerWriterUID            = 10002
 	rolloutCaptureSchema         = "kodex.provider-rollout-capture.v1"
-	providerSafeFailureLog       = "Codex provider request failed at safe stage: %s; class: %s; detail: %s; rpc_code: %d; notification: %s; account_read: %s; notification_error: %s"
+	providerSafeFailureLog       = "Codex provider request failed at safe stage: %s; class: %s; detail: %s; rpc_code: %d; notification: %s; account_read: %s; notification_error: %s; stream_error: %s"
 )
 
 var (
@@ -336,7 +336,7 @@ func providerSafeFailureClass(err error) string {
 
 func logProviderSafeFailure(stage providerExecutionStage, err error) {
 	diagnostic, code := providerFailureDetails(stage, err)
-	log.Printf(providerSafeFailureLog, stage, diagnostic.Class, diagnostic.Detail, code, diagnostic.Notification, diagnostic.AccountRead, diagnostic.NotificationError)
+	log.Printf(providerSafeFailureLog, stage, diagnostic.Class, diagnostic.Detail, code, diagnostic.Notification, diagnostic.AccountRead, diagnostic.NotificationError, safeAppServerStreamFailureReason(err))
 }
 
 func providerFailureDetails(stage providerExecutionStage, err error) (runtimecontract.ProviderFailureDiagnostic, int64) {

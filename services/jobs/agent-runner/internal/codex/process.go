@@ -30,8 +30,12 @@ const (
 	maximumArchiveBytes   = 64 << 20
 	maximumDiagnosticSize = 1 << 20
 	maximumRequestBytes   = 2 << 20
-	mcpReadinessTimeout   = 15 * time.Second
-	mcpReadinessPoll      = 100 * time.Millisecond
+	// Terminal aggregate может превышать квоту отдельного смыслового поля.
+	// Очередь сохраняет прежний суммарный транспортный бюджет 64 MiB.
+	maximumAppServerFrameBytes    = 8 << 20
+	appServerMessageQueueCapacity = (64 << 20) / maximumAppServerFrameBytes
+	mcpReadinessTimeout           = 15 * time.Second
+	mcpReadinessPoll              = 100 * time.Millisecond
 )
 
 var rolloutPathPattern = regexp.MustCompile(`^\.kodex/state/codex-home/sessions/[0-9]{4}/[0-9]{2}/[0-9]{2}/rollout-[A-Za-z0-9._-]+\.jsonl$`)
@@ -622,7 +626,7 @@ func startAppServerCommand(command *exec.Cmd, readerGate <-chan struct{}) (*appS
 	// process group, а Cmd.Wait не владеет reader ends и не закрывает их под readers.
 	_ = stdoutChild.Close()
 	_ = stderrChild.Close()
-	messages := make(chan streamEvent, 64)
+	messages := make(chan streamEvent, appServerMessageQueueCapacity)
 	readerStop, readerDone := make(chan struct{}), make(chan struct{})
 	go func() {
 		if readerGate != nil {
@@ -702,17 +706,27 @@ func readAppServerMessagesUntil(reader io.Reader, events chan<- streamEvent, sto
 		}
 	}
 	scanner := bufio.NewScanner(reader)
-	scanner.Buffer(make([]byte, 64<<10), maximumJSONLLineBytes)
+	// Два дополнительных байта нужны только для LF/CRLF; длина JSON ниже
+	// проверяется отдельно, включая последний кадр без перевода строки.
+	scanner.Buffer(make([]byte, 64<<10), maximumAppServerFrameBytes+2)
 	count := 0
 	for scanner.Scan() {
 		count++
-		if count > maximumJSONLMessages || len(scanner.Bytes()) == 0 {
-			send(streamEvent{err: errors.New("Codex app-server message budget exceeded")})
+		if count > maximumJSONLMessages {
+			send(streamEvent{err: &appServerStreamFailure{reason: streamFailureMessageLimit}})
+			return
+		}
+		if len(scanner.Bytes()) > maximumAppServerFrameBytes {
+			send(streamEvent{err: &appServerStreamFailure{reason: streamFailureFrameTooLarge}})
+			return
+		}
+		if len(scanner.Bytes()) == 0 {
+			send(streamEvent{err: &appServerStreamFailure{reason: streamFailureEmptyFrame}})
 			return
 		}
 		message, err := parseWireMessage(scanner.Bytes())
 		if err != nil {
-			send(streamEvent{err: err})
+			send(streamEvent{err: &appServerStreamFailure{reason: streamFailureWireInvalid}})
 			return
 		}
 		if !send(streamEvent{message: message}) {
@@ -720,7 +734,11 @@ func readAppServerMessagesUntil(reader io.Reader, events chan<- streamEvent, sto
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		send(streamEvent{err: errors.New("read Codex app-server response stream")})
+		reason := streamFailureReadError
+		if errors.Is(err, bufio.ErrTooLong) {
+			reason = streamFailureFrameTooLarge
+		}
+		send(streamEvent{err: &appServerStreamFailure{reason: reason}})
 	}
 }
 
