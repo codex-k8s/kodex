@@ -27,12 +27,21 @@ def external_references():
     T.require(len(ids) <= 256, 'CONTAINER_LIMIT')
     if not ids:
         return
-    raw = subprocess.check_output(['docker', 'inspect', '--format', '{{json .Mounts}}', *ids], env=env, timeout=30)
+    raw = subprocess.check_output(['docker', 'inspect', '--format', '[{{json .Name}},{{json .Mounts}}]', *ids], env=env, timeout=30)
     T.require(len(raw) <= 4 << 20, 'MOUNT_LIMIT')
     target = Path(TARGET).resolve(strict=True)
     for line in raw.splitlines():
-        for mount in json.loads(line):
+        name, mounts = json.loads(line)
+        for mount in mounts:
             source = Path(mount.get('Source', '/nonexistent'))
+            # Штатный общий bind mount состояния не закрепляет каждую выгрузку.
+            # Для этих трёх точных контейнеров доступ к самому inode проверяет
+            # привилегированный process scan, включая контейнерные процессы.
+            shared = (name in ('/k3d-kodex-serverlb', '/k3d-kodex-server-0', '/k3d-kodex-agent-0') and
+                      source == T.OCI.STATE and mount.get('Destination') == str(T.OCI.STATE) and
+                      mount.get('Type') == 'bind' and mount.get('RW') is True)
+            if shared:
+                continue
             # Каталог-предок тоже считается используемым: контейнер может открыть файл позже.
             T.require(source != target and not target.is_relative_to(source), 'ARCHIVE_MOUNTED')
 

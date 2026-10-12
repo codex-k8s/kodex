@@ -51,13 +51,25 @@ class DiscardTests(unittest.TestCase):
 
     def test_mounted_file_or_ancestor_is_refused(self):
         for source in [str(self.path), str(self.path.parent), '/']:
-            with patch.object(M.subprocess, 'check_output', side_effect=[b'fixture\n', json.dumps([{'Source': source}]).encode()]):
+            with patch.object(M.subprocess, 'check_output', side_effect=[b'fixture\n', json.dumps(['/fixture', [{'Source': source}]]).encode()]):
                 with self.assertRaises(RuntimeError):
                     M.external_references()
 
     def test_unrelated_mount_is_allowed(self):
-        with patch.object(M.subprocess, 'check_output', side_effect=[b'fixture\n', b'[{"Source":"/unrelated"}]']):
+        with patch.object(M.subprocess, 'check_output', side_effect=[b'fixture\n', b'["/fixture",[{"Source":"/unrelated"}]]']):
             M.external_references()
+
+    def test_exact_shared_cluster_mount_and_unknown_ancestor(self):
+        mount = {'Source': str(self.path.parent), 'Destination': str(self.path.parent), 'Type': 'bind', 'RW': True}
+        with patch.object(M.T.OCI, 'STATE', self.path.parent):
+            for name in ['/k3d-kodex-serverlb', '/k3d-kodex-server-0', '/k3d-kodex-agent-0']:
+                with patch.object(M.subprocess, 'check_output', side_effect=[b'fixture\n', json.dumps([name, [mount]]).encode()]):
+                    M.external_references()
+            for name, destination in [('/other', str(self.path.parent)), ('/k3d-kodex-server-0', '/different')]:
+                changed = {**mount, 'Destination': destination}
+                with patch.object(M.subprocess, 'check_output', side_effect=[b'fixture\n', json.dumps([name, [changed]]).encode()]):
+                    with self.assertRaises(RuntimeError):
+                        M.external_references()
 
 
 if __name__ == '__main__':
