@@ -10,6 +10,21 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 10:59 UTC — текущий SYSTEM и переход Developer
+
+- [x] SYSTEM short read-only smokeSUCCEEDED/own snapshot0.160.0, exact native
+      task/full preview/ACK tupleMATCH;38tools/2grants, screenshot/Console0/Network0.
+- [x] §45 byte applicability99paths/21scopes и7module trees; final CP pin gap
+      race/vet/public disposablePG на763/Go1.26.6 PASS, summarybfd6854b.
+- [x] Architect technicalSUCCEEDED/CODE_ONLY designPASS,8pinnedCLEAN artifacts,
+      Coordinator самостоятельноEOF→Developer2S7Q RUNNING; ACKd467868d/MATCH.
+- [ ] Developer implementation/recovery/tests/commit/PR и полный prompt proof;
+      ONE Review/Manager/owner, без повторного reviewцикла.
+- [ ] A8 owner decision: supported managed catalogue path без internal-only
+      login (рекомендуется) либо retainedBLOCKED live gate/CODE_ONLY. Текущие
+      official docs и pinned0.160 marker расходятся; ROOT priority не назначает.
+- [ ] Idle CSS actual UX, bootstrap merge/fresh-main delivery/readback и QA65.
+
 ## Checkpoint 12.10.2026 10:19 UTC — входы и промпты текущих ролей
 
 - [x] SOURCE77fb43f2 frontend typecheck/build PASS; chunk/plugin warnings retained.

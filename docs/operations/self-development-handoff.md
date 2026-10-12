@@ -10,6 +10,63 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 10:59 UTC — Developer допущен, SYSTEM и compiler proof закрыты
+
+Published SOURCE76323992/HOTdaf0d99d clean. Native Architecta7SJs4C
+technical SUCCEEDED,8CLEAN/ACTIVE artifacts с exact run/session/revision.
+result767B/40f76062 и handoff6486B/529a432a PREVIEW200/fullEOF/hash MATCH.
+Semantic gate PASS bounded CODE_ONLY design; входной businessDraft1808
+CHANGES_REQUESTED/A1–A8, не independent Review и не READY. Own snapshot
+339/340/ordinary367 и pinned evidence212181B/6e2aa35c подтвердили0.160.0.
+Exact provider declarations35940B/97027689 readback200/hash MATCH.
+Coordinator сам прочитал full INTAKE/Architect EOF и делегировал Developer
+run_2S7QsvjeKtGD_VCehECnCnui, теперь RUNNING. Review cycles0.
+ACK/rejoind467868d92f667680c95da341a94ab20a02458a7db53a4d6bb7ae79d50fc9770:
+imagefe2225c1/file437a92a3 EQUAL,38tools/26grants, gpt-6.1-sol medium,
+instructions/inbox EQUAL. Owner task6948B/016cbd5c MATCH actual prompt ACK;
+полный native preview Developer ещё NOT RUN. File hash не serving process proof.
+
+Новый самостоятельный SYSTEM read-only smoke run_5AFCbjpKm81TGHnM0I48rG2a
+SUCCEEDED, own get_execution_snapshot SUCCEEDED и final0.160.0/gpt-6.1-sol.
+Это не corrective business USER: отдельная проверка текущего helper profile,
+без plans/repo writes/delegation.38tools/2SYSTEM grants, medium, текущий
+admitted image602d8577/gen24 сохранён, не переименован в новыйPROJECTfe22.
+SameUID ACK49ad0f60 инструкции/inbox EQUAL; binary/serving capture NOT RUN
+после быстрого terminal. Owner native task410B/9fc1da57 и полный immutable
+preview96110B/a9df3d9d, template/materialization/INPUT EQUAL;8sections,
+diagnostics0. Prooffile e1281c8e809fa2a0a4373e9d444316c252995695e712233e7a6cf1485d96d45b.
+Actual desktop screenshot READ: user справа, helper слева, компактный tool,
+startup под details, controls ровные/overflowfalse; Console0/Network0/live/rejoin,
+receiptbac70991ca4197e178be2c26d9adf8e0c78a5a1884f287ba08ac46dc587b64bb.
+Два ранних fallback READYFAIL вызваны hidden mobile action в desktop probe;
+после выбора видимого FAB capturePASS. Это ошибка probe, не app finding.
+
+§45 applicability:106paths после60bf,99 nondoc/21scopes;7module trees
+byte-identical retained tested snapshots, нет новых deploy/contract/migration
+scopes. Private manifest81df169f/матрица863b0799. Реальный remaining compiler
+pin gap e317 закрыт наSOURCE763/Go1.26.6: race4packages23PASS118.91s,
+vet40.656s PASS; public disposable TestArtifactPreviewParallelComponent
+PASS5.853s плюс штатный ScheduleUpgrade4.928s/readbacks. Summary
+bfd6854bc17c944435a739bb0e558024beda2773c8c7bc869dcc3f61b3cdddd5,
+closurecaf06dff до/после MATCH/CLEAN.48parallel successes,64grant/audit,
+Reader cleanup/foreign negatives PASS; только свой fixture штатно удалён.
+Это адресные проверки и применимость retained receipts, не combined whole QA.
+
+Открыто противоречие A8: текущий model_catalog_process.go/a4d3e976 содержит
+account/login/start typechatgptAuthTokens; native exact0.160 declaration
+помечает его unstable/internal-only. [Текущая официальная документация](https://learn.chatgpt.com/docs/app-server#authentication-modes)
+описывает experimental external-token режим для host apps с собственным auth
+lifecycle. [Auth deployment guidance](https://learn.chatgpt.com/docs/app-server#auth-endpoints)
+отдельно разрешает local/open-source приложения и не commercial/hosted services.
+Context7main сохранил internal-only marker; exact pin не заменён current docs.
+ROOT не назначает приоритет источников: спорные auth изменения/live paid gate
+ожидают owner выбора. Рекомендуется supported managed-catalogue path с одним
+владельцем credential/refresh, без internal-only login. Альтернатива — сохранить
+этот live gate BLOCKED и закончить только CODE_ONLY с честным ограничением.
+Текущий независимый CODE_ONLY Workflow не прерывался; корректирующих USER
+сообщений и ROOT business edits0. CSS остаётся NOT LIVE, ONE Review/Manager/
+owner/bootstrap merge/main/fullQA65 OPEN. Цель не завершена и не паузилась.
+
 ## Checkpoint 12.10.2026 10:19 UTC — входы двух ролей сверены с provider ACK
 
 Published SOURCE77fb43f2/HOTdaf0d99d; ROOT frontend typecheck/production build

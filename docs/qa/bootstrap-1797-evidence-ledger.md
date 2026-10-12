@@ -10,6 +10,35 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## SYSTEM, final compiler scope и Developer 12.10.2026 10:59 UTC
+
+SOURCE763/HOTdaf unchanged. §45 byte proof99paths/21scopes,7module trees
+EQUAL retained snapshots; новая race/vet/public disposablePG закрыла точный
+Go1.26.6 gap final CP-e317. Summarybfd6854b/compiled closurecaf06dff MATCH,
+race23PASS/0FAIL/SKIP, vetPASS, PGparallel48/48 и64grant/audit/Reader negatives
+PASS, свой fixture после штатного trap absent. Не whole-suite/CI/liveDB PASS.
+
+SYSTEM smoke5AFC SUCCEEDED: own snapshot/final0.160.0, model6.1medium,
+38tools/2grants, sameUID ACK49ad0f60; текущий image602/gen24 не новое fe22.
+Native task410B и full preview96110B MATCH ACK/template/materialization/INPUT,
+8sections/diagnostics0; prooffile e1281c8e. Binary captureNOTRUN/не serving.
+Actual screenshot READ/Console0/Network0/live/rejoin/overflowfalse,
+receiptbac70991; предыдущие hidden-action probeFAIL сохранены отдельно.
+
+Architect technicalSUCCEEDED/8CLEAN files; handoff529a432a CODE_ONLY PASS,
+business DraftCHANGES_REQUESTED/8findings. Own evidence6e2aa35c version0.160.0,
+exact installed declarations97027689; normal CoordinatorEOF accepted→Developer
+2S7Q RUNNING. ACKd467868d image/file/instructions/inbox EQUAL,38tools/26grants;
+owner task6948B/016cbd5c MATCH actual provider ACK. Full preview/serving Developer
+ещёNOTRUN; независимый Review0. Бизнес-результат и paid acceptance не подменяются.
+
+A8 требует owner выбора источника/поддерживаемого auth-пути: exact0.160
+internal-only marker против актуального официального experimental external-token
+описания. Проверены реальные страницы официальной документации и Context7;
+provider credentials не использовались в docs-check и не экспортировались в отчёт. Auth/live paid gate OPEN/
+BLOCKED до решения, CODE_ONLY Workflow не остановлен. CSS live/ONE Review/
+Manager/owner/bootstrap merge/main/whole QA65 OPEN.
+
 ## Exact task и materialization 12.10.2026 10:19 UTC
 
 SOURCE77fb43f2 ROOT frontend typecheck/build PASS; Vite8.12s, warnings retained.
