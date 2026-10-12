@@ -261,9 +261,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 			grpcserver.RejectMalformedUnary,
 		),
 		grpc.ChainStreamInterceptor(
-			grpcserver.StreamErrorBoundary(grpcserver.ErrorObserverFunc(func(_ context.Context, method string, code codes.Code, _ error) {
-				slog.Error("unexpected gRPC stream failure", "method", method, "code", code.String())
-			})),
+			grpcserver.StreamErrorBoundary(grpcserver.ErrorObserverFunc(logUnexpectedGRPCStreamFailure)),
 			verifiedStream,
 			grpcserver.RejectMalformedStream,
 		),

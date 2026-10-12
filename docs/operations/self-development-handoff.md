@@ -10,6 +10,40 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 02:58 UTC — INTAKE принят, Architect работает
+
+INTAKE run_DxoWxnEzs099iglWVFvd9mPm technical SUCCEEDED и semantic
+PASS_INTAKE_SCOPE. Capture опубликовал четыре CLEAN/ACTIVE артефакта:
+manager-plan.md50479B/de79f574, intake-evidence.json38466B/fe331f66,
+workspace-write-result.json328B/43f63928 и result.md706B/e337a04f.
+Owner последовательные downloads200/size/SHA MATCH, private receipt94283B/
+fdaca488. Coordinator сам прочитал все четыре до EOF:9 contiguous страниц,
+seq360→376; native refs/revisions/digests MATCH capture. Это не host substitute.
+
+Architect run_PcOu9IIP1XADEd3tXcHjHqtX RUNNING/attempt1, actual Pod с02:32:51,
+model gpt-6.1-sol medium, RuntimeRevision rrev_mEq5-07eGdR_ltH-XVQqPCrQ/
+bd3fe892 и image66a00394. Собственный get_execution_snapshot seq394 SUCCEEDED;
+commentary сообщает Codex0.160.0/offline Schema/TS. Полный provider proof и
+semantic verdict проверять по его штатно опубликованному handoff, пока OPEN.
+Developer/единственный Reviewer/Manager/owner ещё не допущены.
+
+Chrome MCP list_pages TIMEOUT; old request body не извлечён. Разрешённый
+изолированный Playwright fallback вошёл штатным SSO, чужие tabs не тронуты.
+02:57 screenshot просмотрен, Console0/relevant API200, platform/run live,
+fresh heartbeat02:57:07/readiness наcursor704. Receipt47212B/f79cedd9.
+Все22 Deployment Ready. ROOT business implementation0/corrective USER0.
+
+Новый owner parallel download дал один503, последовательный повтор всех4
+успешен. CP stream log02:32:31 содержит только Unavailable; точная первичная
+причина/SQLSTATE UNKNOWN. SOURCE base1d7726d7+isolated diagnostic patch86824bbd:
+только закрытые stage/class/SQLSTATE/attempt, без raw cause/wire changes/новых
+retry или прав. ROOT pinned Go1.26.6 race4 packages PASS, vet/build PASS,
+independent CGO0 ELF7ac555b8. Первый запуск проверок FAIL из-за inherited
+GOROOT1.27.1; после explicit pinned GOROOT исправлены, глобальные настройки
+не менялись. Live delivery диагностики NOT RUN; HOT code f88194d3 и активный
+writer не перезапускались. SOURCE/remote до commit1d7726d7, mainab499/Draft1807;
+full QA/Review/bootstrap merge/owner gates остаются OPEN.
+
 ## Checkpoint 12.10.2026 02:22 UTC — native чтение Workflow15 и packet завершено
 
 INTAKE run_DxoWxnEzs099iglWVFvd9mPm остаётся RUNNING, root

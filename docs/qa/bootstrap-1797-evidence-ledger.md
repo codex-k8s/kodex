@@ -10,6 +10,40 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 12.10.2026 02:58 UTC
+
+INTAKE run_DxoWxnEzs099iglWVFvd9mPm technical SUCCEEDED/semantic
+PASS_INTAKE_SCOPE. Четыре captured CLEAN/ACTIVE artifacts: manager-plan50479B/
+de79f574, evidence38466B/fe331f66, workspace-result328B/43f63928,
+result706B/e337a04f. Owner sequential HTTP200/all size/SHA MATCH;
+receipt94283B/fdaca488. Coordinator native9 contiguous read pages/seq360→376,
+все четыре EOF/ref/revision/digest MATCH. Developer/Review ещё NOT RUN.
+
+Current Architect run_PcOu9IIP1XADEd3tXcHjHqtX RUNNING/attempt1, Pod02:32:51,
+modelmedium, RuntimeRevision rrev_mEq5-07eGdR_ltH-XVQqPCrQ/bd3fe892,
+image66a00394. Own get_execution_snapshot394 SUCCEEDED; final exact provider
+proof/semantic verdict пока OPEN, не подменены ROOT проверкой.
+Playwright fallback02:57: screenshot READ, Console0/API200, run/platform live,
+heartbeat02:57:07/readiness704. Receipt47212B/
+f79cedd9e32a57609ffdd5384928b6f9df123aa056cfae17f58b5179d3a4fe1a.
+Chrome MCP TIMEOUT; чужие tabs не тронуты.22 Deployment Ready — health only.
+
+Новый parallel owner GET result.md503; sequential4GET200/size/SHA MATCH.
+CP stream02:32:31 Unavailable не содержит первичной причины: SQLSTATE UNKNOWN.
+SOURCE base1d7726d7+exact13files patch
+86824bbd154c59fcb6d903f3e2d9a13e189cae65dc96c4443212e744fa21d81f:
+diagnostic closed stage/class/allowlisted SQLSTATE/attempt/retry_exhausted,
+raw errors и новые wire fields отсутствуют. Прежние3 bounded attempts,
+domain/code/text/details и rollback/Reader cleanup сохранены. Negative fixtures
+не допускают arbitrary SQLSTATE/raw token/SQL/identifiers/дубли log.
+ROOT Go1.26.6 scoped race4 packages PASS(1.034/1.511/1.162/1.208s), vet/build
+exit0. Independent CGO0 trimpath ELF
+7ac555b843a492c026f0fae477f0eb0a8cf96fa241843056b9b8977a8814e000.
+Первый запуск FAIL: inherited GOROOT1.27.1 не соответствовал pinned compiler;
+explicit GOROOT1.26.6/GOTOOLCHAINlocal восстановили проверки без global edit.
+Context7 pgx5.10.0/grpc-go status проверены. Live diagnostic/component acceptance
+NOT RUN, HOT f88194d3/активный writer неизменны; QA/Review/merge/gates OPEN.
+
 ## Новое scoped evidence 12.10.2026 02:22 UTC
 
 Native INTAKE PUBLICATION READ seq63/65/67/69: четыре contiguous страницы,

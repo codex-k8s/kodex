@@ -342,7 +342,7 @@ func (server *Server) downloadArtifact(request *controlplanev1.DownloadArtifactR
 		download, err = server.service.DownloadArtifactRevision(ctx, p, request.GetArtifactRef(), revisionRef, purpose)
 	}
 	if err != nil {
-		return transportError(err)
+		return artifactDownloadTransportError(err)
 	}
 	defer download.Reader.Close()
 	if err := send(&controlplanev1.DownloadArtifactResponse{

@@ -944,9 +944,18 @@ func (repository *Repository) AcceptWorkerGrant(ctx context.Context, input platf
 }
 
 func (repository *Repository) resolveScope(ctx context.Context, principal value.Principal) (scope, error) {
+	return repository.resolveScopeObserved(ctx, principal, nil)
+}
+
+// Наблюдатель owner DOWNLOAD видит driver class до прежнего domain mapping.
+// Все callers используют тот же единственный SQL path и authority checks.
+func (repository *Repository) resolveScopeObserved(ctx context.Context, principal value.Principal, observe func(error)) (scope, error) {
 	var result scope
 	err := repository.pool.QueryRow(ctx, queryRepositoryResolvescopeSelectMembershipsOrganizationIdSubjectIdActive, principal.ActorID, principal.AuthorityTenant).Scan(
 		&result.organizationID, &result.organizationRef, &result.actorID, &result.actorRef, &result.actorName, &result.role)
+	if err != nil && observe != nil {
+		observe(err)
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return scope{}, errs.ErrForbidden
 	}

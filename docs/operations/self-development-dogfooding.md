@@ -10,6 +10,25 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 02:58 UTC — native INTAKE завершён
+
+- [x] INTAKE technical SUCCEEDED/semantic PASS_INTAKE_SCOPE; четыре CLEAN
+      captured handoffs, owner downloads200/size/SHA MATCH. Coordinator
+      собственными9 contiguous pages прочитал их до EOF/seq376.
+- [x] Architect штатно делегирован: run_PcOu9IIP1XADEd3tXcHjHqtX/attempt1,
+      actual medium/RuntimeRevision bd3fe892/image66a00394; own snapshot394
+      SUCCEEDED. Публичная commentary о0.160.0 не подменяет конечный proof.
+- [x] Изолированный Playwright fallback: screenshot READ/Console0/API200,
+      platform/run live/heartbeat/readiness704; чужие tabs не затронуты.
+      Chrome MCP сейчас TIMEOUT, его восстановление не заявлено.
+- [x] SOURCE base1d7726d7+diagnostic patch86824bbd: закрытая диагностика
+      owner DOWNLOAD без raw errors/wire fields/смены authority/retry;
+      ROOT pinned Go1.26.6 race4 packages, vet/CGO0 build PASS. Первый FAIL
+      inherited GOROOT исправлен только в процессе проверки.
+- [ ] Причина единственного нового503 UNKNOWN; диагностика ещё NOT LIVE.
+      HOT f88194d3/активный writer не перезапускались. Architect semantic
+      verdict/own provider proof, Developer, ONE Review, Manager/owner и QA OPEN.
+
 ## Checkpoint 12.10.2026 02:22 UTC — обязательное native чтение INTAKE
 
 - [x] Собственный Workflow PUBLICATION: четыре диапазона0→51338B/EOF,

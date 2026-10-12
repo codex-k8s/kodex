@@ -7,6 +7,7 @@ import (
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/observability/artifactread"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -25,7 +26,10 @@ func retryArtifactContentRead(ctx context.Context, operation func() (platformrep
 	var fallback error = errs.ErrUnavailable
 	for attempt := 0; attempt < serializableTransactionAttempts; attempt++ {
 		if ctx.Err() != nil || (attempt > 0 && !time.Now().Before(deadline)) {
-			return platformrepo.ArtifactDownload{}, fallback
+			if _, ok := artifactread.From(fallback); !ok {
+				fallback = artifactread.WithFailure(fallback, artifactReadDiagnostic(artifactread.StageRetry, ctx.Err()))
+			}
+			return platformrepo.ArtifactDownload{}, artifactread.WithAttempt(fallback, attempt, true)
 		}
 		result, err := operation()
 		if err == nil {
@@ -33,17 +37,17 @@ func retryArtifactContentRead(ctx context.Context, operation func() (platformrep
 		}
 		var retry *artifactReadSerializationRetry
 		if !errors.As(err, &retry) {
-			return platformrepo.ArtifactDownload{}, err
+			return platformrepo.ArtifactDownload{}, artifactread.WithAttempt(err, attempt+1, false)
 		}
 		fallback = retry.fallback
 		if attempt+1 == serializableTransactionAttempts || ctx.Err() != nil || !time.Now().Before(deadline) {
-			return platformrepo.ArtifactDownload{}, retry.fallback
+			return platformrepo.ArtifactDownload{}, artifactread.WithAttempt(retry.fallback, attempt+1, true)
 		}
 		timer := time.NewTimer(time.Duration(attempt+1) * 5 * time.Millisecond)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return platformrepo.ArtifactDownload{}, retry.fallback
+			return platformrepo.ArtifactDownload{}, artifactread.WithAttempt(retry.fallback, attempt+1, true)
 		case <-timer.C:
 		}
 	}
@@ -56,9 +60,20 @@ type artifactContentReadTx struct {
 	pgx.Tx
 	serializationFailure bool
 	bodyCleanupFailed    bool
+	stage                string
+	diagnostic           artifactread.Diagnostic
+	observedFailure      bool
+}
+
+func (tx *artifactContentReadTx) observeFailure(err error) {
+	if err != nil && !tx.observedFailure {
+		tx.diagnostic = artifactReadDiagnostic(tx.stage, err)
+		tx.observedFailure = true
+	}
 }
 
 func (tx *artifactContentReadTx) observe(err error) {
+	tx.observeFailure(err)
 	var cause *pgconn.PgError
 	if errors.As(err, &cause) && cause.Code == "40001" {
 		tx.serializationFailure = true
@@ -91,6 +106,13 @@ func (tx *artifactContentReadTx) Commit(ctx context.Context) error {
 }
 
 func (tx *artifactContentReadTx) finish(ctx context.Context, resultError *error) {
+	if *resultError != nil {
+		diagnostic := tx.diagnostic
+		if !tx.observedFailure {
+			diagnostic = artifactread.Diagnostic{Stage: tx.stage, Class: artifactread.ClassDomain}
+		}
+		*resultError = artifactread.WithFailure(*resultError, diagnostic)
+	}
 	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
 	defer cancel()
 	err := tx.Tx.Rollback(cleanup)

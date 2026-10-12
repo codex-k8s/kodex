@@ -17,6 +17,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/observability/artifactread"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -633,19 +634,23 @@ func (repository *Repository) downloadArtifactRevision(ctx context.Context, prin
 }
 
 func (repository *Repository) downloadArtifactRevisionOnce(ctx context.Context, principal value.Principal, ref, revisionRef, purpose string) (_ platformrepo.ArtifactDownload, resultError error) {
-	scope, err := repository.resolveScope(ctx, principal)
+	scopeDiagnostic := artifactread.NewDiagnostic(artifactread.StageScope, artifactread.ClassDomain, "")
+	scope, err := repository.resolveScopeObserved(ctx, principal, func(cause error) {
+		scopeDiagnostic = artifactReadDiagnostic(artifactread.StageScope, cause)
+	})
 	if err != nil {
-		return platformrepo.ArtifactDownload{}, err
+		return platformrepo.ArtifactDownload{}, artifactread.WithFailure(err, scopeDiagnostic)
 	}
 	rawTx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
-		return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
+		return platformrepo.ArtifactDownload{}, artifactread.WithFailure(errs.ErrUnavailable, artifactReadDiagnostic(artifactread.StageBegin, err))
 	}
 	tx := &artifactContentReadTx{Tx: rawTx}
 	defer tx.finish(ctx, &resultError)
 
 	var artifactID, projectID, scanState, revisionID, selectedRevisionRef string
 	var artifactVersion int64
+	tx.stage = artifactread.StageSelect
 	err = tx.QueryRow(ctx, queryArtifactsDownloadartifactSelectArtifactForGrant, pgx.StrictNamedArgs{
 		"organization_id":   scope.organizationID,
 		"artifact_ref":      ref,
@@ -662,13 +667,16 @@ func (repository *Repository) downloadArtifactRevisionOnce(ctx context.Context, 
 	if scanState != "CLEAN" {
 		return platformrepo.ArtifactDownload{}, errs.ErrForbidden
 	}
+	tx.stage = artifactread.StageMetadata
 	item, err := scanArtifact(tx.QueryRow(ctx, queryQueriesGetartifactSelectArtifactBindingsArtifactIdIdOrganizationId, scope.organizationID, ref, scope.role, scope.actorID))
 	if err != nil {
 		return platformrepo.ArtifactDownload{}, err
 	}
+	tx.stage = artifactread.StageEligibility
 	if err := projectArtifactEligibility(ctx, tx, scope, &item); err != nil {
 		return platformrepo.ArtifactDownload{}, err
 	}
+	tx.stage = artifactread.StageRevision
 	selected, err := artifactRevisionRow(tx.QueryRow(ctx, queryArtifactRevisionGet, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID, "artifact_ref": ref, "revision_ref": selectedRevisionRef}))
 	if err != nil {
@@ -685,11 +693,14 @@ func (repository *Repository) downloadArtifactRevisionOnce(ctx context.Context, 
 		return platformrepo.ArtifactDownload{}, errs.ErrForbidden
 	}
 
+	tx.stage = artifactread.StageGrantRef
 	grantRef, err := newRef("adg")
 	if err != nil {
+		tx.observeFailure(err)
 		return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
 	}
 	var grantID, storedGrantRef string
+	tx.stage = artifactread.StageGrantCreate
 	err = tx.QueryRow(ctx, queryArtifactsDownloadartifactInsertDownloadGrant, pgx.StrictNamedArgs{
 		"grant_ref":        grantRef,
 		"organization_id":  scope.organizationID,
@@ -704,6 +715,7 @@ func (repository *Repository) downloadArtifactRevisionOnce(ctx context.Context, 
 		return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
 	}
 	var consumedAt time.Time
+	tx.stage = artifactread.StageGrantConsume
 	err = tx.QueryRow(ctx, queryArtifactsDownloadartifactConsumeDownloadGrant, pgx.StrictNamedArgs{
 		"grant_id":         grantID,
 		"organization_id":  scope.organizationID,
@@ -722,6 +734,7 @@ func (repository *Repository) downloadArtifactRevisionOnce(ctx context.Context, 
 	}
 	var objectKey, objectVersion, objectETag, objectDigest string
 	var objectSize int64
+	tx.stage = artifactread.StageContent
 	if err := tx.QueryRow(ctx, queryArtifactsDownloadartifactSelectArtifactContent, pgx.StrictNamedArgs{
 		"artifact_id":     artifactID,
 		"revision_id":     revisionID,
@@ -734,8 +747,10 @@ func (repository *Repository) downloadArtifactRevisionOnce(ctx context.Context, 
 	if objectDigest != item.Digest || objectSize != item.SizeBytes || objectKey == "" {
 		return platformrepo.ArtifactDownload{}, errs.ErrConflict
 	}
+	tx.stage = artifactread.StageStorage
 	object, err := repository.objects.Get(ctx, objectKey, objectVersion)
 	if err != nil {
+		tx.observeFailure(err)
 		return platformrepo.ArtifactDownload{}, mapObjectStorageError(err)
 	}
 	keepBody := false
@@ -753,10 +768,13 @@ func (repository *Repository) downloadArtifactRevisionOnce(ctx context.Context, 
 	if purpose == "PREVIEW" {
 		action, safeSummary = "artifact.preview", "i18n:ARTIFACT_PREVIEWED"
 	}
+	tx.stage = artifactread.StageAuditRef
 	auditRef, err := newRef("aud")
 	if err != nil {
+		tx.observeFailure(err)
 		return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
 	}
+	tx.stage = artifactread.StageAudit
 	if _, err := tx.Exec(ctx, queryArtifactsDownloadartifactInsertAuditEvent, pgx.StrictNamedArgs{
 		"audit_ref":       auditRef,
 		"organization_id": scope.organizationID,
@@ -772,6 +790,7 @@ func (repository *Repository) downloadArtifactRevisionOnce(ctx context.Context, 
 	if consumedAt.IsZero() || storedGrantRef != grantRef {
 		return platformrepo.ArtifactDownload{}, errs.ErrConflict
 	}
+	tx.stage = artifactread.StageCommit
 	if err := tx.Commit(ctx); err != nil {
 		return platformrepo.ArtifactDownload{}, errs.ErrConflict
 	}
