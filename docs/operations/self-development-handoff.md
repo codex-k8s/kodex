@@ -10,6 +10,41 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 10:19 UTC — входы двух ролей сверены с provider ACK
+
+Published SOURCE77fb43f2/HOTdaf0d99d; ROOT frontend typecheck/production build
+PASS, Vite build8.12s. Chunk/plugin warnings сохранены. Новые CSS ещё NOT LIVE.
+Тот же native WorkflowRUNNING, Architecta7SJs4C RUNNING/seq646, Review0.
+Own get_execution_snapshot339/340 SUCCEEDED; ordinary COMMENTARY367 того же
+run/session/turn подтверждает Codex0.160.0. Это собственное наблюдение роли,
+не helper/host замена; полный архитектурный terminal ещё не получен.
+
+Owner API inputSummary обеих ролей полностью совпал с фактическим task и
+provider prompt ACK: INTAKE4259B/387fd338, Architect4395B/c3edcce2.
+Authoritative full native preview после штатного fresh-auth403→200 совпал
+с обоими ACK по template/materialization, full instructions bytes/SHA и INPUT.
+INTAKE87681B/f3153652, Architect80428B/c0119c1a;11 sections/diagnostics0,
+INPUTa711c2db/da68db77. Receipt6a85988375e403ee13ca320cfc401f8a7cab83ca83be6a2a0478e4198dbbf577
+PASS; raw task/prompt не экспортированы. Это закрывает точное сравнение
+server-owned normalized assignment→actual provider input для этих двух ролей.
+Не означает равенство child assignment исходному raw USER task и не переносится
+на Developer/Reviewer/финального Manager: их inputs ещё не созданы.
+
+INTAKE6artifact metadata200/CLEAN/ACTIVE с exact run/session/revision.
+manager-plan25330B/91a0c6c0 PREVIEW200/полный EOF/hash MATCH;
+semantic token PASS_INTAKE_SCOPE и ограничение ONE Review сохранены.
+ROOT hash/readback не заменяет обязательное semantic чтение Coordinator.
+Один неверный диагностический запрос disposition вместо purpose получил400
+без effects. Direct SDK до readiness попытался default .example и дал DNSFAIL;
+после authenticated штатный origin200. Это ошибки ROOT probe, не скрытый
+дефект приложения и не полномочия для обхода auth/transport.
+
+Private remaining matrix прочитана: основная цепочка current Architect→Developer
+recovery/tests/commit/PR→ONE Review→Manager/sole owner gate. Current SYSTEM
+prompt tuple, idle CSS/desktop/mobile UX, final scoped applicability и bootstrap
+merge/fresh-main delivery/readback остаются OPEN. Не запускать второй бизнес-
+review ради post-merge smoke; business PR1808 не merge/approve.
+
 ## Checkpoint 12.10.2026 10:02 UTC — INTAKE завершён, Architect работает
 
 Повторный read-only discard readback:11 REMOVED и все11 exact paths absent;

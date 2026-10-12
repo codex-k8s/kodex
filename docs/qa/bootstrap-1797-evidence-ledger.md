@@ -10,6 +10,23 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Exact task и materialization 12.10.2026 10:19 UTC
+
+SOURCE77fb43f2 ROOT frontend typecheck/build PASS; Vite8.12s, warnings retained.
+Owner native task4259/4395B→provider ACK387fd338/c3edcce2 EQUAL.
+Native immutable full preview→ACK instructions87681/80428B f3153652/c0119c1a,
+template/materialization/input-slot EQUAL для INTAKE и Architect,11sections,
+diagnostics0. Proof6a85988375e403ee13ca320cfc401f8a7cab83ca83be6a2a0478e4198dbbf577
+PASS, raw bytes не экспортированы. Raw USER task versus child assignment
+отдельно не сравниваются на равенство; server-owned normalized task проверен.
+Architect own snapshot339/340 SUCCEEDED, ordinary COMMENTARY367 сообщает
+Codex0.160.0. Это native роль, не host/provider-version substitution.
+INTAKE6metadata CLEAN/ACTIVE, exact manager-plan revision/25330B/91a0c6c0
+PREVIEW200/fullEOF/hash MATCH. Semantic review принадлежит Coordinator.
+ROOT probes400/early SDK default DNS failure сохранены; после readiness/fresh
+interactive authentication protected preview200. Новый CSS пока NOT LIVE;
+current Architect terminal/Developer/ONE Review/Manager/owner/QA65 OPEN.
+
 ## Architect ACK и summary-card 12.10.2026 10:02 UTC
 
 Native Retry2 тот же; INTAKE SUCCEEDED, Architecta7SJs4C RUNNING.

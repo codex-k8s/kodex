@@ -10,6 +10,20 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 10:19 UTC — входы и промпты текущих ролей
+
+- [x] SOURCE77fb43f2 frontend typecheck/build PASS; chunk/plugin warnings retained.
+- [x] INTAKE/Architect server-owned normalized task bytes/SHA→actual ACK EQUAL;
+      full native preview template/materialization/instructions/INPUT EQUAL.
+      Receipt6a859883; raw task/prompt не экспортированы.
+- [x] Architect собственный get_execution_snapshot339/340 SUCCEEDED и ordinary
+      message367 подтверждает0.160.0; это не отдельный helper proof.
+- [x] INTAKE6CLEAN/ACTIVE metadata, manager-plan25330B/fullEOF/hash MATCH.
+- [ ] Current Architect semantic terminal; Developer recovery/tests/commit/PR,
+      downstream prompt proofs, ONE Review/Manager/sole owner gate.
+- [ ] Idle CSS live UX, current SYSTEM tuple, final scoped applicability,
+      bootstrap merge/fresh-main delivery/readback и итог QA65.
+
 ## Checkpoint 12.10.2026 10:02 UTC — Architect и узкая сводка
 
 - [x] INTAKE technical SUCCEEDED, естественное делегирование Architect;
