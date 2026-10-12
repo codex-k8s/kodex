@@ -10,6 +10,48 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Architect ACK и summary-card 12.10.2026 10:02 UTC
+
+Native Retry2 тот же; INTAKE SUCCEEDED, Architecta7SJs4C RUNNING.
+ACK f72dbde202e8034ff9cffebbc382b79268674800808df0ecfa498815c208bff3:
+same Pod UID/image/file pinned EQUAL,38tools/18grants, instructions/inbox EQUAL,
+medium. Task expected comparison NOT RUN; file hash не serving ELF proof.
+ROOT37tests PASS2.30s для desktop summary clipping/layout и graphcanvas,
+worker lint/format PASS. Новые CSS/source ещё не HOT/live, не browser PASS.
+Chrome19 reload/Console0/relevant200;11 discarded archive paths absent.
+Новый terminal business result/ONE Review/Manager/owner и QA65 OPEN.
+
+## Завершённая доставка и новый native Workflow 12.10.2026 09:49 UTC
+
+SOURCE/remote/HOTdaf0d99d:4 name attrs фильтра, ROOT9 unit1.87s,
+worker lint/format PASS. Fresh Chrome issue0/overflowfalse/staff screenshot READ.
+Новый runner1c5d8eb5 привёл к2PROJECT ACCEPTED/PROMOTED images:
+staff fe2225c1/artifact3zeXzXlJ/gen25 и helper700187df/artifactRhxwWQr9/gen19.
+Current promoted83 после2 typed requests; old resources/history сохранены.
+3ENV/7binding final proof
+19fc0d482574d77ca5639621edbbff1218af5e71fe593d76b578c75598b68d38 PASS:
+full EOF/APPLIED1+5+1, wrappers27/26/29,38tools и non-image equality.
+Initial validation403/fresh-auth сохранён; после normal SSO все DRAFT1
+повторены теми же idempotency/OCC и получилиVALID2/diagnostics0.
+
+Native Retry2 run_bfFf3UJWWagyEtHBUtvj4ziB RUNNING с прежним input set и
+Workflow46. Root Coordinator technical SUCCEEDED, INTAKEfZ4k1SWs RUNNING;
+Review0 и downstream PLANNED. Новый business outcome ещё NOT RUN/PENDING.
+INTAKE ACK/rejoin44ba96cc: expected image/file437a92a3 EQUAL, actual medium,
+38tools/22grants, inputDigest a711c2db EQUAL, instructions/inbox EQUAL.
+Normalized task/raw USER comparison NOT RUN. Actual node read-only CRI→same
+PodUID/containerID→initPID152004→runnerPID152022/start23852346 доказал
+serving /proc/exe437a92a3 EQUAL с устойчивым parent/start/hash и Pod rejoin.
+Предшествующий container-level diagnostic FAIL не скрыт, guard не ослаблялся.
+
+MCP ENV screenshot protocol timeout; следующий actual Workflow screenshot
+получен Playwright, без чужих tabs: stable dbb5b701/Console0/Network errors0,
+platform+run live/stored228 vs owner229/readinessTRUE/overflowfalse. Первый
+fallback recovering/expected401 не использован как green live proof.
+Первый CODEX_SHELL NONZERO89: command/cause UNKNOWN, не quota/network claim.
+Исторический terminal666 сохранён. UX узкой graph summary открыт;
+Architect/Developer/ONE Review/Manager/owner, QA65 и GitHub gates OPEN.
+
 ## Доставка runner и восстановленная авторизованная проверка 12.10.2026 08:54 UTC
 
 Exact source/HOT8fbd29a2: full runner1c5d8eb5/protected binary437a92a3,

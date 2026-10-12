@@ -107,6 +107,40 @@ describe("RunPage layout при открытом ходе работы", () => {
     );
   });
 
+  it("не сжимает заголовок сводки до одной буквы рядом с badge при desktop1280 и открытом ходе работы", () => {
+    const heading = desktop.match(
+      /\.run-workspace--activity \.run-canvas-summary__heading \{([^}]+)\}/,
+    )?.[1];
+    expect(heading).toContain("grid-template-columns: minmax(0, 1fr)");
+    const title = desktop.match(
+      /\.run-workspace--activity \.run-canvas-summary__heading strong \{([^}]+)\}/,
+    )?.[1];
+    expect(title).toContain("overflow-wrap: anywhere");
+    const link = desktop.match(
+      /\.run-workspace--activity \.run-canvas-summary__details > a \{([^}]+)\}/,
+    )?.[1];
+    expect(link).toContain("grid-column: 1 / -1");
+    // С прежним auto-столбцом badge оставлял SOFTWARE_CHANGE лишь одну букву.
+    const workspaceWidth = 1280 - 256;
+    const drawerWidth = Math.min(720, Math.max(520, workspaceWidth * 0.54));
+    const contentWidth = (workspaceWidth - drawerWidth) / 2 - 86 - 2 * 12 - 2;
+    expect(contentWidth - 104 - 10).toBeLessThan(16);
+    expect(contentWidth).toBeGreaterThan(120);
+    expect(mobile).not.toContain(
+      ".run-workspace--activity .run-canvas-summary__heading",
+    );
+    const style = parse(source).descriptor.styles[0];
+    if (!style) throw new Error("RunPage style missing");
+    expect(
+      compileStyle({
+        filename: "RunPage.vue",
+        source: style.content,
+        id: "data-v-run-page",
+        scoped: true,
+      }).errors,
+    ).toEqual([]);
+  });
+
   it("сохраняет отдельные мобильные строки и существующий режим fit графа", () => {
     expect(mobile).toMatch(/\.run-canvas-summary\s*\{\s*top: 136px;/);
     expect(mobile).toMatch(

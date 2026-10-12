@@ -10,6 +10,86 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 10:02 UTC — INTAKE завершён, Architect работает
+
+Повторный read-only discard readback:11 REMOVED и все11 exact paths absent;
+новое удаление не выполнялось. Свободно root46GiB/DATA73GiB; runtime images,
+PVC и данные сохранены. Архивы удалены без корзины, прежние tar bytes не
+восстанавливаются из локальной копии.
+
+Тот же Retry2 run_bfFf3UJWWagyEtHBUtvj4ziB RUNNING. INTAKEfZ4k1SWs SUCCEEDED,
+координатор естественно делегировал Architect run_a7SJs4C_GOnKcxfClpBuAPmw.
+Fresh ACK/rejoinf72dbde202e8034ff9cffebbc382b79268674800808df0ecfa498815c208bff3:
+same PodUID9ee238bd-ed55-4792-b071-e31f24d5d1f9/imagefe2225c1/file437a92a3
+EQUAL,38tools/18grants, gpt-6.1-sol medium, instructions/inbox EQUAL.
+Это file proof, не отдельное serving process proof Architect и не его terminal.
+InputDigestda68db77; сравнение нормализованного task с raw USER NOT RUN.
+
+ROOT принял узкий CSS fix summary-card: heading занимает полную строку,
+badge следующую, предыдущая попытка не сжимается до половины карточки.
+ROOT37/37 unit PASS2.30s; worker lint/format PASS. Только RunPage и layout-test,
+данные/fit/zoom не менялись. SOURCE diff сохранён, HOTdaf0d99d не меняется
+во время Workflow; live проверка этого нового CSS ещё NOT RUN.
+Own Chrome19 reload/Console0, bootstrap/session/graph/events200.
+Developer/ONE Review/Manager/owner, QA65 и merge gates остаются OPEN.
+
+## Checkpoint 12.10.2026 09:49 UTC — новая доставка полностью применена, Retry2 выполняется
+
+SOURCE/remote/HOTdaf0d99dcbb9f44959fbf08ab3609ed9def46f7a clean. Дополнительная
+UI правка4 name полей vulnerability filters доставлена09:12:31 при пяти busy
+counters0/promoted83; ROOT9/9 unit PASS1.87s, worker lint/format PASS.
+Own Chrome19: fields4 names, Console issue исчез, overflow=false;
+staff image screenshot READ. Histories bounded480/528px/overflow:auto.
+
+Оба PROJECT images нового runner1c5d8eb5 ACCEPTED/PROMOTED:
+staff imgart_3zeXzXlJnKUqNtqfCmEBexWC/gen25/manifestfe2225c1;
+helper imgart_RhxwWQr9kZc7Z0Cu3iD_TyIr/gen19/manifest700187df.
+Publication→autobuild→scan/sign/admission→promotion штатные, native receipts
+201/200/200/202 и fresh activeArtifact подтвердили exact lineage.
+Две promotion увеличили authoritative count81→83; прежние policy history
+сохранены, manual image unpin/SQL bypass не выполнялись.
+
+Три ENV drafts201/VALID200/impact201/publication200. Первый validation403
+FRESH_AUTHENTICATION_REQUIRED; normal fresh SSO восстановлен, все3 draft
+до повторения оставалисьDRAFT/version1. Повтор сохранил прежние keys/versions.
+Full EOF impact1+5+1 и exact selectedItemRefs7; final pages APPLIED.
+Fresh readback: write27/review26/helper29; все7 binding и agent versions+1,
+38tools и full non-image preservation MATCH, неизвестных consumers нет.
+Final proof19fc0d482574d77ca5639621edbbff1218af5e71fe593d76b578c75598b68d38;
+publication receipt6c2d32ab3567f89b2798e33d60602dd7f0c593bfb9db18eb53c72b4dd2ab7fbd.
+
+Native RETRY previous run_2HDgJ-yd6I-hukcu269914cf/FAILED/version3 создал
+run_bfFf3UJWWagyEtHBUtvj4ziB/attempt2/RUNNING. Тот же finalized input set
+aset_pBFNnzHREPncDRxyMuRZVIkm и Workflow46/published15; новый USER_TASK0.
+Root Coordinator SUCCEEDED и сам делегировал INTAKE run_fZ4k1SWszWUPqN3Q_X5IxOnt,
+сейчас RUNNING. One Review cycles0, Architect/Developer/Review/Manager PLANNED.
+INTAKE sameUID ACK/rejoin44ba96cc2ea9b67ffd39bc88accd80919c757762da3da43e0fcc17e13d8a4054:
+imagefe2225c1/file437a92a3 EQUAL, gpt-6.1-sol medium,38tools/22grants,
+instructions/inbox EQUAL; exact inputDigest a711c2db совпал с исходными4fields.
+Отдельное сравнение normalized task со raw USER task NOT RUN, не PASS.
+
+Прямой container-level process reader не получил executable identity;
+его FAIL не выдаётся за defect агента. Read-only CRI связывает тот же PodUID
+74e8e621-a6fa-431d-9c29-b4ee35528954 с exact provider container и живым
+init PID152004/start23852341. Единственный direct child runnerPID152022/
+start23852346: /proc/exe437a92a3 EQUAL, PPID и start/hash rejoin стабильны;
+Pod UID/containerID повторно MATCH. Это actual serving proof нового runner,
+не один file hash или node cache claim; роли/политики не ослаблялись.
+
+Chrome MCP own19 connected/Console0/API200/live/readiness; screenshot ENV
+завершился protocol timeout, не browser/access FAIL. Разрешённый изолированный
+Playwright native run screenshot READ и stable receipt
+dbb5b701fd866302fe9315d5e2f95d6e283821ed3067f0380decea97182b88e6:
+Console0/Network errors0/platform+run live, owner cursor229/stored228/readinessTRUE,
+overflow=false. Initial fallback snapshot былrecovering/readinessFALSE и
+имел3 expected pre-auth401; он сохранён, не считается live PASS.
+Один CODEX_SHELL NONZERO89 имеет безопасный resultFAILED; INTAKE работает,
+конкретный command/cause UNKNOWN. Root не компенсирует это USER сообщениями.
+Замечание UX о слишком узкой summary-card графа исследуется отдельно;
+HOT не менять во время запуска. Дальше сопровождать этот же Retry2,
+не запускать ещё один Retry по timeout наблюдения. Business PR1808 без изменений;
+QA65/ONE Review/Manager/owner/merge gates остаются OPEN.
+
 ## Checkpoint 12.10.2026 08:54 UTC — runner доставлен, проектные сборки начаты
 
 SOURCE/remote/HOT8fbd29a2 clean; безопасный HOT ff08:32:35 выполнен при

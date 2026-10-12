@@ -1702,6 +1702,15 @@ onBeforeUnmount(() => {
     top: 70px;
     width: min(360px, calc((100% - var(--run-activity-width)) / 2 - 86px));
   }
+  .run-workspace--activity .run-canvas-summary__heading {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .run-workspace--activity .run-canvas-summary__heading strong {
+    overflow-wrap: anywhere;
+  }
+  .run-workspace--activity .run-canvas-summary__details > a {
+    grid-column: 1 / -1;
+  }
   .run-workspace--activity .run-workspace-toolbar {
     top: 70px;
   }

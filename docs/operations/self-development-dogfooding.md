@@ -10,6 +10,37 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 10:02 UTC — Architect и узкая сводка
+
+- [x] INTAKE technical SUCCEEDED, естественное делегирование Architect;
+      sameUID ACK/rejoin image/file/instructions/inbox EQUAL,38tools/18grants.
+- [x] Summary-card clipping исправлен в SOURCE; ROOT37/37 unit PASS2.30s,
+      worker lint/format PASS. HOTdaf неизменен во время активного Retry2.
+- [x] Readback11 удалённых архивов: все paths absent, новый unlink не нужен.
+- [ ] Доставить CSS при безопасном idle и проверить actual screenshot/UX.
+- [ ] Успешные Architect/Developer, ONE Review/Manager/owner и remaining QA65.
+
+## Checkpoint 12.10.2026 09:49 UTC — runner/recipes/ENV применены, Retry2
+
+- [x] Новый runner1c5d8eb5 и2PROJECT images ACCEPTED/PROMOTED (fe2225c1,
+      700187df), typed3ENV/7bindings/fullEOF APPLIED1+5+1;38tools/full
+      non-image preservation MATCH. Proof19fc0d48, wrappers27/26/29.
+- [x] Source/HOTdaf0d99d и4 form names; ROOT9tests, actual Chrome Console0/
+      screenshot/overflow. MCP screenshot timeout сохранён, native run
+      fallback Playwright stable screenshot/Console0/Network0/live/rejoin PASS.
+- [x] Native Retry2 run_bfFf3UJWWagyEtHBUtvj4ziB, same input set/Workflow46;
+      собственный root Coordinator делегировал INTAKEfZ4k1SWs. Actual sameUID
+      ACK/image/file/inbox/instructions и inputDigest a711c2db EQUAL.
+- [x] CRI lineage того же INTAKE Pod→init→actual serving runner437a92a3,
+      process generation/hash и PodUID/containerID rejoin MATCH.
+- [ ] INTAKE final receipts, Architect/Developer successful original task
+      и восстановленный checkpoint; ONE Review/Manager/owner, remaining QA65.
+- [ ] Проверить native CODEX_SHELL NONZERO89/causeUNKNOWN и UX узкой
+      summary-card графа. Активный Retry2 не прерывать; owner invariants сохранять.
+
+Нового USER task/corrective message/business implementation ROOT не создавал;
+PR1808 не merge/approve. Technical start/ACK не заменяют успешный terminal.
+
 ## Checkpoint 12.10.2026 08:54 UTC — новый runner, проектные сборки
 
 - [x] Source/HOT8fbd при idle, новый runner1c5d8eb5/provenance/binary,
