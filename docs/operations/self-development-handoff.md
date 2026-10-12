@@ -10,6 +10,31 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 16:24 UTC — новый RC live и штатный Retry4
+
+SOURCE/remote/HOTfcdc8d49 clean; committed app race Go1.26.6 PASS1.417s.
+Idle FF16:21:06: пять busy counters0, promoted83/pinsa92e5d30 unchanged,
+query9c147119/guardede8440c MATCH, readback313B/1cdaec49. Три mounted production
+file hashes MATCH frozen patch. Actual serving RC PID672/start26294984
+`/proc/672/exe` e6d74421 MATCH независимой сборке, Ready1; CP/gateway/frontend
+Available1. Runner/custom images/ENV/grants не менялись. Это dev hot proof,
+не release acceptance и не доказанный fix прежнего renew failure.
+
+Fresh root hVfr FAILED/version3/attempt3 подтверждён; native platform.changeRun
+RETRY вернул run_17BLZrftmdO8HmIVvqrClbcr RUNNING/attempt4/version2,
+same sessionHJind/input set/Workflow46. Intent294f8a6f; новый USER task0,
+ROOT business edits0, Review cycles0. Own19 на новом root: graph200/live,
+Console0/overflowfalse, screenshot READa16ff6c0. Это подтверждает readable
+summary/controls, не обзор всех nodes: часть карточек вне начального viewport,
+pan/fit остаются отдельными интерактивными действиями.
+
+Ранний Coordinator ACK11676ba8: Podb717bf3f/turnl6pEeVu1/attempt1,
+imagefe2225c1/inputa711c2db/runtimea980056f/execution97d292c5 MATCH.
+Dual observer37955 следует sameUID; primary пока NOT OBSERVED. Следующие
+дочерние роли наблюдать отдельно по fresh pins, success EOF не считать failure.
+Полный Developer/ONE Review/Manager/owner/A8/bootstrap/main/QA65 OPEN;
+цель ACTIVE, не завершена. После активного запуска HOT не обновлять.
+
 ## Checkpoint 12.10.2026 16:18 UTC — Retry3 terminal и renew observation
 
 Retry3 root hVfr FAILED13:43:21/sequence1047; INTAKE и Architect SUCCEEDED.

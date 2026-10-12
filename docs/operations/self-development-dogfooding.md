@@ -10,6 +10,15 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 16:24 UTC — RC live и диагностический Retry4
+
+- [x] SOURCE/HOTfcdc8d49 idle FF,83promoted pins unchanged; mounted3files и
+      actual RC PID672/exe e6d74421 MATCH independent Go1.26.6 build; Ready1.
+- [x] Committed app race PASS1.417s. Native Retry4 run17BL прежних input/Workflow46
+      RUNNING; ранний ACK11676ba8 exact pins сохранён, observer37955 активен.
+- [ ] Подтвердить успешные Developer/ONE Review/Manager/owner и remaining QA65;
+      primary нового failure не observed, прежняя причина renew UNKNOWN.
+
 ## Checkpoint 12.10.2026 16:18 UTC — текущий terminal и RC observation
 
 - [x] Retry3 FAILED1047; INTAKE/Architect SUCCEEDED, Developer FAILED по
