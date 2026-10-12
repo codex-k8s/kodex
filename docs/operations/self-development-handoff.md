@@ -10,6 +10,50 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 00:18 UTC — INTAKE PASS_SCOPE, штатный Architect запущен
+
+Attempt9 INTAKE technical SUCCEEDED, опубликованы четыре CLEAN результата:
+result632B/458477aa, workspace328B/ec59bc15,
+manager-evidence102817B/b83d889d и manager-plan22474B/323e773e.
+ROOT sequential exact revision GET200/bytes/SHA MATCH4/4; private receipt
+737f6deb60171cf21ead5d5cc028ea7b5c68fe432eafb9595b49d0e812e2a5e6.
+Semantic PASS_INTAKE_SCOPE относится только к планированию; packet467840B/
+29pages/EOF,23FULL/4EXTRACT, actual diff755903B и index52/EOF подтверждены.
+Managed EOF всех changed source не заявлен; binary/source attestation UNKNOWN.
+Manager самостоятельно прочитал current artifacts до EOF и делегировал
+Architect, не Developer. ROOT business code0/corrective USER0/review cycles0.
+
+Architect run_QDlEf3Lwaw7tbSpspr99Qs98/turn trn_ySPBmJnuxcfbb4ZVBbYPvGs6
+RUNNING, session ses_rccuRQq0Yz_U-6YSfQkBiNZp, attempt1. Early same-UID ACK/
+rejoin PASS на runtime-turn-e5a55a382322176c/UIDeb2903ad-b03e-4c56-aa6f-0c4c7df1a992.
+RuntimeRevision rrev_imufEUnk0XZHm-Hyy8ADpgd3/d60c8be0;
+instructions72691B/f5186889, task5521B/96ed51a7, actual files EQUAL/task=true.
+Image66a00394/ENV24/binding25/tools38/grants18/model6.1-sol medium;
+runner image-file ad2e2f42 не serving-process proof. Expected task hash NOT RUN.
+Собственный get_execution_snapshot SUCCEEDED/seq342, safe event не содержит
+provider tuple; обязательный own OBSERVED proof ещё не заявлен до native evidence.
+Artifactfix SOURCEdb809 не delivered/HOT1be8; текущий запуск не прерывался.
+Далее Architect→Developer→ONE Review→Manager/owner и оставшиеся QA/main gates.
+
+## Checkpoint 12.10.2026 00:14 UTC — возобновление, attempt9 продолжает INTAKE
+
+SOURCE/remote1807 db809bb6 и HOT1be8f23c clean, fresh bot readback PASS;
+mainab4992e0 unchanged. Chrome11 доступен после перезапуска владельцем,
+safe reload авторизован, Console0/relevant GET200/realtime recovered,
+screenshot просмотрен;22Deployment ready/desired MATCH. Другие вкладки
+не затронуты. Последний own INTAKE sequence285 RUNNING: packet467840B
+полностью прочитан,23 FULL FILE size/SHA MATCH и4 EXTRACT не названы FULL;
+PR1808 base/head unchanged/reviews0, native plan готовится. Semantic
+verdict/следующие этапы пока OPEN, ROOT бизнес-код и USER corrections0.
+
+Retained §44/45 reconciliation SHA a216bee7 проверена: неизменные create,
+template и approval policy paths сохраняют исторические PASS без нового
+CREATE/self-config/WRITE ради revision. Точные scopes и ограничения внесены
+в реестр доказательств; historical grants/prompt tuples не current pins.
+Artifactfix db809 source checks PASS, live HOT остаётся1be8 до безопасной
+delivery. Следом: native INTAKE→Architect ACK/own snapshot→Developer→один
+Review→Manager/owner; parallel native PREVIEW после actual serving fix.
+
 ## Checkpoint 12.10.2026 00:02 UTC — preview40001 исправлен в SOURCE, live пока прежний
 
 Поверх1be8f23c интегрирован frozen artifact owner fix5/5 post SHA MATCH:

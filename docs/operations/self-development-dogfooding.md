@@ -10,6 +10,25 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 00:18 UTC — native INTAKE допускает Architect
+
+- [x] Current INTAKE PASS_INTAKE_SCOPE/technical SUCCEEDED; four CLEAN artifacts
+      sequential exact revision GET200/size/SHA MATCH. Packet467840B/29pages/EOF,
+     23FULL/4EXTRACT и actual diff/index52 evidence опубликованы; это planning,
+      не current implementation/acceptance или full managed source EOF.
+- [x] Coordinator прочитал current results до EOF и штатно делегировал Architect
+      run_QDlEf3Lwaw7tbSpspr99Qs98. Own early same-UID ACK/rejoin PASS,
+      instructions72691B/f5186889/task5521B/96ed51a7 actual files EQUAL,
+      image66a00394/ENV24/binding25/tools38/grants18/modelmedium. Expected
+      task flag NOT RUN, image-file runner hash не serving-process proof.
+- [x] Retained §44/45 semantic applicability matrix a216bee7: create/templates/
+      approval policy paths unchanged; повторные effects ради revision не нужны.
+- [ ] Architect own OBSERVED snapshot/exact contract/source→Developer→ONE
+      comprehensive Review→Manager/owner; current business input/code0correction.
+- [ ] Artifactfix live delivery/actual serving/native parallel PREVIEW;
+      source checks PASS, HOT1be8 пока заморожен при текущем RUNNING.
+- [ ] Остальные QA/bootstrap GitHub gates/fresh main; business1808 не merge/approve.
+
 ## Checkpoint 12.10.2026 00:02 UTC — artifact owner40001 SOURCE GREEN
 
 - [x] Frozen5 files post hashes MATCH; whole owner transaction retry только

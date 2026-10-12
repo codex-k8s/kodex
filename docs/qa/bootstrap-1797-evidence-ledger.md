@@ -10,6 +10,48 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 12.10.2026 00:18 UTC
+
+Current INTAKE technical SUCCEEDED/PASS_INTAKE_SCOPE, четыре CLEAN published
+exact revisions result632B/458477aa, workspace328B/ec59bc15,
+evidence102817B/b83d889d, plan22474B/323e773e. ROOT native sequential GET200
+и size/digest MATCH4/4, private receipt737f6deb. Packet29pages/467840B/EOF,
+23FULL/4EXTRACT и diff/index52 подтверждены только planning evidence;
+managed full changed-source EOF/implementation/acceptance НЕ PASS.
+Native Coordinator read current results EOF→delegate Architect; root input
+не исправлялся/ROOT business code0/review cycles0.
+
+Architect RUNNING exact run_QDlEf3Lwaw7tbSpspr99Qs98/turn ySPBmJnu/attempt1,
+same UID early ACK/rejoin PASS, instructions72691B/f5186889/task5521B/
+96ed51a7 files EQUAL/task=true, image66a00394/ENV24/binding25/tools38.
+Own snapshot tool SUCCEEDED342, но provider tuple не виден в safe event:
+own OBSERVED pending, не заменяется host/Manager observation. Expected
+task hash NOT RUN; binary ad2e2f42 scope image-file, не actual process.
+Artifactfix source db809 checks PASS, HOT1be8 still old serving/native fix
+NOT RUN. Остальной business/ONEReview/Manager/owner/fullQA/main OPEN.
+
+## Reconciliation §44/§45 на SOURCE db809bb6 — сохранённые проверки без повторных effects
+
+Exact read-only сопоставление функций, SQL и сохранённых receipts выполнено
+на clean db809bb6fef7940c063f59e9445e1b1fc7fc6cdf. Private matrix SHA256
+a216bee787a7c7beeffb3a9f20178e77e0fd7c58d46327519f7b498c3e7c36be.
+Это applicability исторических PASS, не новые тесты на данном SHA и не
+перенос старых runtime/grant/scope/prompt pins в нынешний запуск.
+
+| Сценарий | Сохранённое доказательство | Граница текущего утверждения |
+| --- | --- | --- |
+| SYSTEM self-configuration, Context7/web | Native typed plan APPLIED, published ENV/binding, четыре SUCCEEDED turns и actual provider ACK | Функциональные сценарии сохранены; последний полный SYSTEM tuple на v5 UNKNOWN, старые hashes не current |
+| Создание проекта, помощника и шести ролей | Exact createProject/createProjectAssistant/createAgent byte-identical с исходными receipt SHA; matching CREATE SQL не менялся | Persisted project/profile/agents подтверждены; повторное создание не нужно |
+| Project helper configuration/Context7/repository | Native APPLIED plans, managed README READ, актуальные exact21/full121 readbacks | Старый README receipt не подтверждает FULL нынешних business sources |
+| Template variables | Stable parser/validator/render helpers и persistence SQL byte-identical; native six-role materialization | Новые INPUT workspace descriptors/core50/platform-v5 проверяются отдельно; old six hashes не нынешние prompts |
+| NONE/EACH/SCOPED | Native effects/gates/rejection receipts, policy helpers/owner commands/SQL byte-identical; прежние comment IDs в новых safe bounds | Поведение сохранено, current full121 NONE подтверждён; старый approved scope не current grant, current Developer WRITE ещё OPEN |
+
+Фактический остаток: native stages текущей attempt9 с обязательными EOF,
+собственным Architect snapshot, Developer WRITE/PR и одним comprehensive
+Review, затем Manager/owner; доставка artifactfix и parallel native PREVIEW;
+финальные QA/GitHub/bootstrap/main gates. Новый effect ради смены revision
+не требуется. Полная приёмка и current-wide SYSTEM prompt proof не заявлены.
+
 ## Новое scoped evidence 12.10.2026 00:02 UTC
 
 Frozen artifact5 post hashes MATCH на SOURCE1be8+packet. ROOT combined
