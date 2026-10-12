@@ -34,6 +34,18 @@ repository_root=$(cd -- "$script_directory/../.." && pwd -P)
 lock_file="$repository_root/tools/install/components.lock.json"
 tool_bin="$state_directory/tools/bin"
 material_root="$state_directory/tools/material"
+temporary_directory=""
+readback_directory=""
+
+cleanup_installation() {
+  if [[ -n "$temporary_directory" ]]; then
+    rm -rf -- "$temporary_directory"
+  fi
+  if [[ -n "$readback_directory" ]]; then
+    rm -rf -- "$readback_directory"
+  fi
+}
+trap cleanup_installation EXIT
 
 download_artifact() {
   local name=$1 output=$2 url expected_sha actual_sha
@@ -49,7 +61,6 @@ download_artifact() {
 if [[ "$mode" == apply ]]; then
   install -d -m 0700 "$tool_bin" "$material_root"
   temporary_directory=$(mktemp -d "$material_root/.install.XXXXXX")
-  trap 'rm -rf -- "$temporary_directory"' EXIT
 
   download_artifact cosign "$temporary_directory/cosign"
   install -m 0555 "$temporary_directory/cosign" "$material_root/cosign"
@@ -81,7 +92,6 @@ cmp --silent "$script_directory/htpasswd.py" "$material_root/htpasswd" ||
   fail 'htpasswd helper differs from the repository source'
 
 readback_directory=$(mktemp -d "$material_root/.readback.XXXXXX")
-trap 'rm -rf -- "$readback_directory"' EXIT
 printf '%s\n' fixture-password | "$tool_bin/htpasswd" -i -B -C 4 -c \
   "$readback_directory/users" fixture >/dev/null
 grep -Eq '^fixture:\$2[aby]\$04\$' "$readback_directory/users" ||

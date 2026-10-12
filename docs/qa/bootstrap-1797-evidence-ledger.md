@@ -10,6 +10,35 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Подготовка очистки временных установочных копий 12.10.2026
+
+Дополнительно доказаны23 old .install.<6alnum>/cosign копии в собственном
+material cache, age>72h,3,247,161,344allocatedB. Active binaries, ZIP/nsc,
+каталоги и OCI не выбираются. Metadata-only privileged process scan проверяет
+cwd/exe/fd/maps/inodes без env/cmdline/contents; deny/unknown/in-use закрыты.
+Полный batch preflight и повтор scope/stat/process proof перед каждым unlink.
+Generated plan0600/fingerprint, explicit --apply обязательны; privileged
+child разрешён только process-check и не получает filesystem write path.
+Installer rootcause: второй EXITtrap заменял очистку download temporary;
+теперь единый trap очищает оба mktemp каталога при success/error.
+ROOT9 material +29 Go-cache unit PASS, bash syntax/diff PASS. Worker aggregate
+98 cache tests PASS. Fresh audit/prune и последующий recovery ещё отдельные
+доказательства; oldplan не используется после изменений metadata.
+Frozen patch SHA3eecc548dfbca01815318ad82621180af91a36bed88542245e92aed78b791b71.
+
+## Исполнение ограниченной очистки 12.10.2026
+
+SOURCE/remote a95f6551cbba9cf87183c769ac1c5c80ec340daa подтверждены GitHub
+readback; HOT покаe317. Запущен тот же опубликованный CLI с exact own profile,
+свежим0600 audit plan и fingerprint. Prune PASS:9081 холодный cache file,
+1,238,734,797logical bytes, skipped0. Это пересоздаваемые build outputs;
+артефакты/данные/OCI/dirtyworktrees/sharedcache не удалены. DiskPressure пока
+TRUE: fresh imagefs24,872,706,048B/501,334,663,168B всё ещё чуть ниже hard5%,
+так что удаление не доказало пересечения порога. Дальнейший recovery/readiness
+проверяются отдельно. Eviction hard5%/minimum reclaim10% получены из actual
+configz, прежняя оценка default15% не использована как факт или для изменения
+политики. Новое runner исправление published source, OCI delivery NOT RUN.
+
 ## Подготовка ограниченной очистки 12.10.2026
 
 Добавлен закрытый CLI profile kodex-realtime-1797 только для прежнего
