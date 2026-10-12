@@ -10,6 +10,41 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 12.10.2026 02:07 UTC
+
+Plan pln_W_6_J4yc9jiKOSVBlAIPZorD: revision1, VALID/version2/problems[],
+UI atomic APPLIED/version3/receipt rct_HWlu_k0TE1RY7VhKRSD96rul. Private applied
+receipt245028B/SHA644210cd2ba704950393481d996a9b43499527372825903983099ab736e4f588.
+Before43 MATCH; changed paths только /instructions,/steps/0/purpose и
+/steps/0/expectedResult. Все остальные параметры и четыре steps EXACT MATCH.
+Instructions32549B/SHA1387d668. Workflow46/revision15 опубликован после validate,
+READY/wfv_gEWZxE3ATENoeAc7izeQ4RkF; public receipt36211B/SHA04185f73.
+Runtime exact instructions ACK ещё NOT RUN: публичный API их не проецирует.
+
+Normal original launch run_ToAIsXnQVn9tdRdJTwAFV_KB/attempt1/RUNNING.
+Task identical; восстановленные четыре fields JSON SHAa711c2db MATCH уже
+проверенному handoff. Новый set aset_2uv2vcTtHaGdKKKzfYWQ_5D1 FINALIZED,
+семь members/all pins/order/53057068B EXACT MATCH. Новая identity входит в
+canonical manifest: manifest equality между разными sets не ожидается.
+INTAKE run_DxoWxnEzs099iglWVFvd9mPm RUNNING/seq22, one delegation.
+ROOT business implementation0/corrective business USER0; Review0/gates OPEN.
+Browser context change/rejoin/screenshots проверены, Console0. Локальные
+assert ошибки разных DTO key/ref и scope-bound digest не runtime failures;
+исправленная адресная проверка подтверждает payload preservation.
+
+## Новое scoped evidence 12.10.2026 01:50 UTC
+
+SOURCE/remote/HOT f88194d33bb587a7202be2d75d1ac97e2290beab CLEAN;
+bootstrap1807 Draft/main ab499 unchanged. Idle guard01:44:06 counts0,
+promotion81/c8b1e3da unchanged. Actual serving CP ELF94a88b22 и RC630680f4
+MATCH independent build, mounted core52/dispatch/source MATCH. Readiness PASS;
+это не полный QA или business gate. Новый PROJECT UI send принят ровно один
+раз: conversation version5, run_jvx1cxtzFIvxR_m_KkZt77Bw. Screenshot READ,
+composer очищен, стороны сообщений/active dots/Stop/queue/interrupt доступны.
+Новый role plan/apply/publication и business acceptance NOT RUN. ROOT
+диагностический неверный single-conversation GET405 не является runtime defect;
+правильный list200 подтвердил exact USER/run. Workflow14 пока не изменён.
+
 ## Новое scoped evidence 12.10.2026 01:43 UTC
 
 SOURCE72a2f1c9+точный diff: core52=57356B/66e76fe7, immutable51 сохранён,

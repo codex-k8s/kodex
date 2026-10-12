@@ -10,6 +10,54 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 02:07 UTC — Workflow15 опубликован, исходная задача заново запущена
+
+Native UPDATE_WORKFLOW pln_W_6_J4yc9jiKOSVBlAIPZorD/revision1:
+VALID/version2/problems[] → UI atomic APPLIED/version3/receipt
+rct_HWlu_k0TE1RY7VhKRSD96rul. Before exact current43 MATCH; изменены только
+instructions и purpose/expectedResult INTAKE, все non-text поля и четыре
+остальных step EXACT MATCH. Instructions32549B/SHA1387d66838f3733950a600c2890e16f5954e1eb6c14a84aae7d44fe7e8d4f379.
+Workflow44 DRAFT → validate → publish46/revision15,
+wfv_gEWZxE3ATENoeAc7izeQ4RkF, READY/digest
+b9e9662409e00fec4bc354323739b8b6de23ebf00ca5713ac0be9fd284ddbeaa.
+Public fields MATCH с штатной step key→ref/position проекцией; instructions
+публичный owner API не возвращает. Исторические revisions/runs неизменны.
+
+Через обычную форму принят новый root run_ToAIsXnQVn9tdRdJTwAFV_KB,
+attempt1/session ses_O9ProK2clZiCKZbj1BsCe_Qo, RUNNING/version2, не Retry.
+Task EXACT MATCH прежнему, четыре field values восстановлены из проверенного
+Manager artifact: JSON digest a711c2db0c5324448002c90f34b1dfe003e7125cc279a34bd26f3a8331b9457a MATCH.
+Новый FINALIZED aset_2uv2vcTtHaGdKKKzfYWQ_5D1/revision3: семь members,
+все refs/revisions/versions/size/digest/position EXACT MATCH прежним,53057068B.
+Manifest digest9a680534 отличается: BuildAttachmentManifest включает новый
+setRef; равенство members не означает равенство scope-bound manifest.
+INTAKE run_DxoWxnEzs099iglWVFvd9mPm делегирован один раз, текущий seq22
+RUNNING. Никакого corrective business USER/ROOT business implementation;
+ONE Review и финальные gates ещё NOT RUN. Новые UI/screenshots/Console0,
+штатный context RUN→WORKFLOW и reload/rejoin того же admin диалога проверены.
+Следующий шаг: native Workflow15/runtime ACK, semantic INTAKE, Architect exact
+provider-version proof, затем Developer/ONE Review/Manager/owner gate.
+
+## Checkpoint 12.10.2026 01:50 UTC — core52 доставлен, отдельный план ролей готовится
+
+SOURCE/remote/HOT f88194d33bb587a7202be2d75d1ac97e2290beab CLEAN;
+main ab4992e0cdfeb8e16370a5a53a3e71373f4cfc69, bootstrap1807 Draft.
+Repo-owned idle guard01:44:06: пять busy counts0, promoted81/pin c8b1e3da
+неизменны. Actual CP /proc/2775/exe SHA94a88b22 и RC /proc/747/exe
+SHA630680f4 MATCH independent build; mounted core52/dispatch/source hashes
+MATCH. Оба Deployment Ready. Это serving proof, не business acceptance.
+
+Через штатный PROJECT composer отправлено одно административное уточнение
+границ INTAKE/Architect/Developer/единственного Reviewer/Manager. Conversation
+cnv_H7PxOJKoQ1--9dgEjgcZLrjp version5; USER trn_b0FoOYj61wWs7tZ6sdRvE30A,
+run_jvx1cxtzFIvxR_m_KkZt77Bw RUNNING. Запрошен один UPDATE_WORKFLOW план,
+без apply/publication/LAUNCH, без изменения прежних input/артефактов. Workflow14
+пока остаётся опубликованным. Новый план и business continuation NOT RUN.
+Скриншот composer проверен: user справа, компактный активный статус слева,
+Stop/queue/interrupt доступны, введённый текст после отправки очищен. ROOT
+ошибочный диагностический single-conversation GET дал405; штатный list200
+подтвердил приём хода. Это ошибка проверки, не отказ приложения.
+
 ## Checkpoint 12.10.2026 01:43 UTC — core52 и восстановление malformed READ готовы
 
 На SOURCE72a2f1c9+точный diff: core52=57356B/66e76fe7c279e0f97d611608a0b29071228fe88d5f4eb2aaabd46501426fe698,

@@ -10,6 +10,33 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 02:07 UTC — подтверждённая матрица ролей и новый original launch
+
+- [x] Новый administrative plan pln_W_6_J4yc9jiKOSVBlAIPZorD/revision1
+      штатно VALID→APPLIED/version3, conflicts/problems[]. Before43 MATCH;
+      только instructions и два INTAKE text fields, все non-text/другие steps MATCH.
+- [x] Separate validate/publication: Workflow46/revision15,
+      wfv_gEWZxE3ATENoeAc7izeQ4RkF READY, digest b9e9662409e00fec4bc354323739b8b6de23ebf00ca5713ac0be9fd284ddbeaa.
+- [x] Normal UI новый root run_ToAIsXnQVn9tdRdJTwAFV_KB/attempt1, не Retry.
+      Original task MATCH; четыре fields digest a711c2db MATCH; семь attachment
+      members/all pins EXACT MATCH,53057068B. Новый scope-bound manifest иной.
+- [x] INTAKE run_DxoWxnEzs099iglWVFvd9mPm штатно делегирован один раз,
+      RUNNING/seq22. RUN→WORKFLOW context и admin reload/rejoin, Console0 PASS.
+- [ ] Native exact new instructions ACK, semantic INTAKE/Architect provider proof,
+      Developer substantive implementation/ONE Review/Manager/owner/full QA OPEN.
+
+## Checkpoint 12.10.2026 01:50 UTC — пакет доставлен, role plan ещё не применён
+
+- [x] SOURCE/remote/HOT f88194d33bb587a7202be2d75d1ac97e2290beab;
+      repo-owned idle guard пять counts0. Actual CP94a88b22/RC630680f4,
+      mounted core52/dispatch MATCH independent build/source, Deployment Ready.
+- [x] Один административный UI ход принят в PROJECT conversation version5:
+      run_jvx1cxtzFIvxR_m_KkZt77Bw. Screenshot: правильные стороны сообщений,
+      компактный активный статус, Stop/queue/interrupt; composer после send пуст.
+- [ ] Новый подтверждаемый план разграничения INTAKE и полного Review,
+      separate validate/apply/publication и исходная бизнес-задача ещё OPEN.
+      Workflow14 пока current; ROOT business implementation/corrective USER0.
+
 ## Checkpoint 12.10.2026 01:43 UTC — адресные исправления SOURCE
 
 - [x] Core52 role/stage evidence recommendation:57356B/66e76fe7,
