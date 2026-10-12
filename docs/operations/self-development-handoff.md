@@ -10,6 +10,44 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 11:20 UTC — текущий Developer и уточнение auth gate
+
+SOURCE/remote165cc214 и тело Draft1807 readback PASS; HOTdaf0d99d чистый и
+не менялся. BusinessDraft1808 по-прежнему c784ee85/open/Draft, без owner
+approve/merge. Тот же rootbfFf RUNNING, Developer2S7Q RUNNING; native
+graph200/seq1310, stored1310, live/rejoin/readinessTRUE. Две роли завершены,
+Review/финальный Manager ещё PLANNED. Developer ordinary1253 сообщает первый
+runtimecontract go test PASS и pending PostgreSQL; ROOT не выдаёт это сообщение
+за собственную проверенную test receipt. Корректирующих business USER и ROOT
+business edits0, новая попытка не запускалась.
+
+Chrome own19 после reload: authenticated, Console0, relevant session/bootstrap/
+graph/events/ticket200, overflowfalse. Ошибки диагностических ROOT probes
+`runs.find`, `events.at` и readiness без обязательного cursor сохранены как
+ошибки проверки, не дефекты приложения; повтор с корректным cursor TRUE.
+Bounded CP/RC logs5min по160lines:0 строк, не whole-backend acceptance.
+Изолированный Playwright screenshot READ: compact commentary/tools; старая
+summary-card сжимает заголовок и previous link, исправление77fb остаётся NOT LIVE.
+Receipt5b8333eccd50bcef646e565664494507d33c9883a15e7e14f7f7229aacb5a7a0;
+PNGcc32ae666226ac6d1766b64e95b9ac2122fa9f264d915c73e76e89c987dc4702.
+Fallback startup дал3 ожидаемых401/Console3 до штатного SSO; после входа
+readiness/live подтверждены. Это не Console0 всего fallback и не QA65 PASS.
+
+Exact pinned provider declarations35940B/97027689 повторно PREVIEW200/hash
+MATCH: internal-only marker и chatgptAuthTokens присутствуют. Официальные
+authentication-modes/auth-endpoints реально fetched, external mode experimental;
+managed mode оставляет OAuth/refresh у Codex. По противоречию отправлены owner
+варианты: supported managed single-owner path (рекомендуется), явный приоритет
+current official experimental для local open-source либо retained BLOCKED live.
+Спорный auth/live path не запускался и не менялся; CODE_ONLY Developer работает.
+
+По новому прямому разрешению владельца штатный local-oci-cache.py удалил один
+OBSOLETE runner transfer archive:1 769 853 440B, manifest789aae84. Exact path
+absent;11 остальных штатных current/restore архивов KEEP, защиты не обходились.
+Две ноды Ready, actual Developer/warm3/3 без новых рестартов; тома/данные/образы
+runtime не менялись. Auth decision, Developer terminal/ONE Review/Manager/owner,
+idle CSS/bootstrap/fresh-main/QA65 OPEN. Цель ACTIVE, не завершена.
+
 ## Checkpoint 12.10.2026 10:59 UTC — Developer допущен, SYSTEM и compiler proof закрыты
 
 Published SOURCE76323992/HOTdaf0d99d clean. Native Architecta7SJs4C

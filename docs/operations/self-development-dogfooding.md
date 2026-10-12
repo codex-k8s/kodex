@@ -10,6 +10,22 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 11:20 UTC — независимая реализация продолжается
+
+- [x] SOURCE165cc214/remote/body1807 MATCH, HOTdaf чистый; businessDraft1808
+      c784ee85 неизменён ROOT. Native Developer2S7Q RUNNING, rootbfFf seq1310,
+      stored/live/rejoin/readinessTRUE; ни Retry, ни USER correction не было.
+- [x] Own Chrome19 reload/Console0/relevant200/overflowfalse; screenshot
+      fallback5b8333ec/PNGcc32ae66 визуально READ. Его3 pre-auth401/Console3
+      сохранены отдельно; не combined clean-browser PASS. CP/RC logs5min0lines.
+- [x] По owner разрешению удалён один exact OBSOLETE OCI transfer file
+      1 769 853 440B; current/restore pins и работающие поды сохранены.
+- [ ] A8 owner source-priority/auth-path decision: exact installed declarations
+      повторно200/hash MATCH; official docs fetched. Варианты переданы, спорный
+      live path не выполняется. Независимый CODE_ONLY не прерывался.
+- [ ] Developer terminal/tests/commit/PR/prompt proof, ONE Review/Manager/owner,
+      idle CSS/live UX, bootstrap merge/fresh-main и whole QA65.
+
 ## Checkpoint 12.10.2026 10:59 UTC — текущий SYSTEM и переход Developer
 
 - [x] SYSTEM short read-only smokeSUCCEEDED/own snapshot0.160.0, exact native
