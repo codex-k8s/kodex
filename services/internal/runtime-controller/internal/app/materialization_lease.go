@@ -34,7 +34,12 @@ func (runtime *runtime) keepMaterializationClaims(parent context.Context, execut
 	keepers := make([]*materializationLeaseKeeper, len(executions))
 	for index, execution := range executions {
 		lease := execution.GetLease()
-		input := runtimecontract.RunnerInput{LeaseRef: lease.GetRef(), LeaseFence: lease.GetFence(), LeaseGeneration: lease.GetGeneration()}
+		revision := execution.GetRevision()
+		// Только owner claim pins для диагностики; исполняемый input здесь не строится.
+		input := runtimecontract.RunnerInput{LeaseRef: lease.GetRef(), LeaseFence: lease.GetFence(), LeaseGeneration: lease.GetGeneration(),
+			RunRef: execution.GetRun().GetRef(), NodeRef: execution.GetNode().GetRef(),
+			SessionRef: revision.GetSessionRef(), TurnRef: revision.GetTurnRef(), Attempt: revision.GetAttempt(),
+			InputDigest: revision.GetInputDigest(), RuntimeRevisionDigest: revision.GetRevisionDigest()}
 		deadline, err := workload.RuntimeExecutionDeadlineFromProto(execution.GetRevision().GetExecutionDeadline())
 		input.ExecutionDeadline = deadline
 		keeperParent := parent
@@ -110,6 +115,7 @@ func (runtime *runtime) renewMaterializationLease(parent context.Context, input 
 	defer cancel()
 	_, err := runtime.control.RenewExecution(request, &controlplanev1.RenewExecutionRequest{
 		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration})
+	runtime.logRenewalFailure(request, parent, input, renewalPhaseMaterialization, err)
 	return err
 }
 

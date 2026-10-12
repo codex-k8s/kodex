@@ -10,6 +10,37 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 16:18 UTC — Retry3 terminal и renew observation
+
+Retry3 root hVfr FAILED13:43:21/sequence1047; INTAKE и Architect SUCCEEDED.
+Developer _t00y FAILED, Reviewer/Manager CANCELLED, Review cycles0. Business
+Draft1808 c784ee85 unchanged, Developer artifacts0. Exact RC post-owner-completion
+tuple: OBSERVED TERMINAL_FAILURE/TERMINAL_RESULT/PROVIDER/NONE, terminal_code
+server_overloaded; receipt70ef48b0. Это closed capacity code, не прежний
+CONTEXT_CANCELLED и не durable CP diagnostic receipt. Developer ACK не captured;
+Architect observer87065 FOLLOW_STREAM_ENDED после его success, не root failure.
+
+Штатный owner SSO helper CONSUMED16:06; credentials export0. Native session
+renewal16:16 version1→2, idle expiry16:21→16:31, absolute12h unchanged.
+Исторический401/WS failures retained, причина прежнего истечения UNKNOWN.
+Run screenshot READf3be0afe/Console0/relevant API200/overflowfalse. Первый screenshot
+после входа показывал главную, не RunPage. ROOT preview без обязательного purpose
+дал400 без effects; исправленный PREVIEW evidence64148B/1dd168ca200/hash MATCH —
+byte integrity, не full semantic Review. Account AUTHORIZED/catalog reachable/
+capacity available10/active0 не доказывают model inference.
+
+ROOT полностью прочитал frozen RC-only patchcda766e6, apply_patch/posthash4files
+MATCH. TRACK/DRAIN/MATERIALIZATION фиксируют canonical grpc code и context до
+cancelRequest; CLAIM_PINS/EXECUTION_PINS различаются, fence/raw error/payload
+не пишутся. Requests, retries, TTL, Stop/Delete/done и handoff authority unchanged.
+Это диагностика следующего отказа, не fix исторического CONTEXT_CANCELLED.
+Общий инвариант — GO-DOC-003. ROOT Go1.26.6 app race PASS1.498s/vet PASS,
+whole binary build PASS/ELFe6d74421; worker app unit/vet/gofmt PASS.
+Публикация/idle delivery/serving нового RC пока NOT RUN. Затем fresh terminal
+readback и штатный Retry того же input/Workflow; USER corrections/ROOT business
+code и дополнительный Review не допускаются. Successful Developer/ONE Review/
+Manager/owner, A8 decision и bootstrap/main/QA65 OPEN. Цель ACTIVE.
+
 ## Checkpoint 12.10.2026 — адресное удаление оставшейся неактивированной выгрузки
 
 По уточнению владельца не хранить ненужные архивы в development подготовлен

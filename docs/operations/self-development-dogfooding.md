@@ -10,6 +10,20 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 16:18 UTC — текущий terminal и RC observation
+
+- [x] Retry3 FAILED1047; INTAKE/Architect SUCCEEDED, Developer FAILED по
+      observed closed server_overloaded; ONE Review cycles0, downstream CANCELLED.
+      Exact RC postcommit tuple70ef48b0 сохранён; причина Retry2 остаётся UNKNOWN.
+- [x] Штатный owner SSO восстановлен; native session renewal version1→2
+      наблюдался без повторного входа. Run screenshot READ/Console0/API200.
+- [x] RC-only primary renew observation3paths, frozen4files MATCH;
+      ROOT Go1.26.6 app race/vet/whole binary build PASS. Lifecycle unchanged.
+- [ ] Опубликовать, штатно доставить RC на idle и доказать mounted/serving ELF;
+      после fresh terminal readback повторить тот же input/Workflow без USER task.
+- [ ] Successful Developer→ONE Review→Manager→owner, A8 source decision,
+      bootstrap/fresh-main и оставшийся QA65. Частичная реализация не завершение.
+
 ## Checkpoint 12.10.2026 11:56 UTC — actual диагностический repeat
 
 - [x] SOURCE/remote/HOT1d846245 exact; committed ROOT100unit6.414s PASS,

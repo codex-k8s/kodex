@@ -380,6 +380,7 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 		case <-renew.C:
 			request, cancelRequest := context.WithTimeout(execution, runtime.config.RequestTimeout)
 			_, err := runtime.control.RenewExecution(request, &controlplanev1.RenewExecutionRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration})
+			runtime.logRenewalFailure(request, parent, input, renewalPhaseTrack, err)
 			cancelRequest()
 			if err != nil {
 				runtime.closeRevokedTurn(parent, input, done)
@@ -449,6 +450,7 @@ func (runtime *runtime) drainTurn(parent context.Context, input runtimecontract.
 		case <-renew.C:
 			request, cancel := context.WithTimeout(base, runtime.config.RequestTimeout)
 			_, err := runtime.control.RenewExecution(request, &controlplanev1.RenewExecutionRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration})
+			runtime.logRenewalFailure(request, parent, input, renewalPhaseDrain, err)
 			cancel()
 			if err != nil {
 				runtime.closeRevokedTurn(base, input, done)

@@ -59,6 +59,12 @@ typed stage, нормализованного domain kind и error class; SQLSTA
 первичного отказа, чтобы окончание retry budget не скрывало PostgreSQL или
 domain rejection. Sentinel tests включают вложенные ошибки и неизвестные поля.
 
+При отказе продления lease keeper, tracker и drain записывают закрытое
+наблюдение исходного RPC и request/parent context до собственного cleanup
+cancel. Точные trusted claim/execution pins различаются явно; отсутствующие
+координаты не выдумываются. Такой лог не доказывает отзыв lease или owner commit
+и не разрешает повтор, увеличение срока или продолжение исполнения.
+
 ## Общая библиотека
 
 Composition root читает shared telemetry env через `RuntimeConfigFromEnv`.
