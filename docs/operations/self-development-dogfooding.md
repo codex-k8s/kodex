@@ -10,6 +10,24 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 08:54 UTC — новый runner, проектные сборки
+
+- [x] Source/HOT8fbd при idle, новый runner1c5d8eb5/provenance/binary,
+      repository publish/policy/runtime binding/defaults и exact node HTTPS/
+      CRI proofs обеих нод. Старые promoted81/pins сохранены.
+- [x] Fresh CP/RC source/mount/serving/rejoin PASS на8fbd, transition33 unit;
+      own Chrome19 owner, screenshot/overflow/Console0/API200 после readiness.
+      Transient503 during rollout сохранены, не объявлены отсутствовавшими.
+- [x] Два fresh PROJECT recipes draft→VALID→PUBLISHED; source/OCC MATCH,
+      generation25/19, autobuilds начаты. Второй REQUEST_BUILD не выполнялся.
+- [ ] Exact new admission/promotion и3ENV/7intended bindings с fresh
+      preservation38tools/values/resources/volumes/secret descriptors/network.
+- [ ] Real native recovery исходной задачи/checkpoint: actual runner ELF,
+      successful Architect/Developer, ONE Review/Manager/owner, остальные QA65.
+
+Node CRI proof не равен runtime proof. Business PR1808 не merge/approve;
+ROOT не реализует бизнес-задачу и не отправляет corrective USER сообщения.
+
 ## Checkpoint 12.10.2026 04:54 UTC — зависимости назначены, штатный повтор с checkpoint
 
 - [x] Сохранить honest terminal: прежний root FAILED/1440, Developer technical

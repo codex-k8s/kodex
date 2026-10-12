@@ -10,6 +10,41 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 08:54 UTC — runner доставлен, проектные сборки начаты
+
+SOURCE/remote/HOT8fbd29a2 clean; безопасный HOT ff08:32:35 выполнен при
+пяти busy counters0 и прежних promoted81/pinsc8b1e3da. Новый full runner
+sha256:1c5d8eb53ae2aaef9a60a219a1d39f7fb4a293b2d239dd048e8c9268c99122f6
+собран из того же SHA; protected binary437a92a3, provenancec85b040c.
+Canonical publish, policy maintenance/reader/resources/binding/CP/builder/
+controller/resume/open, runtime binding и defaults двух приложений PASS.
+Новая immutable policy6135cb1c; старые81 promoted artifacts/pins сохранены.
+Canonical state pin обновлён только approved exact cache reuse, не вручную.
+Обе ноды: полный HTTPS graph/digest и CRI pull/configID04e6a78d PASS;
+это не runtime ELF proof агента, новый real turn ещё не запускался.
+
+Fresh CP/RC serving/source/mount/Go1.26.6/UID/Ready/rejoin PASS;
+receiptb5ab3d705d61e4862d4bef5660a6aec6cc4e898e9c3aaaac4cab423588aed63e.
+Serving ELFs CP a09a559d/RC630680f4 совпадают с прежними independently built
+бинарями того же production-кода. Scoped transition unit33/33 PASS97.56s.
+Chrome own19 owner authenticated: screenshot READ, overflow=false, Console0;
+session/bootstrap/graph200, terminal graph666 unchanged. Во время штатного
+default rollout были4 transient503, сохранены как история, после readiness
+повторная проверка PASS. Bounded CP/RC logs за4мин: строк0; это не полное
+логовое покрытие или доказательство отсутствия ошибок во всех сервисах.
+
+Два PROJECT recipe draft/validation/publication201/200/200, exact source
+и OCC подтверждены: staff cfg52/recipe49/gen25, helper cfg44/recipe38/gen19.
+Autobuilds imgbld_s9BnLpZTIKZtgoipYgdcvhio и imgbld_XKzWwkceFcSdginKf7FgTP0I
+начаты; первый MATERIALIZATION, второй QUEUED. Не делать второй REQUEST_BUILD.
+Direct CDP transport CONNECT_FAILED до INTENT/effect; ROOT использовал
+разрешённый Chrome MCP session/CSRF path, cookie/credential export0.
+Private receipts и offline intents сохранены; это не admission/promotion PASS.
+Дальше наблюдать exact builds до admission, затем штатная promotion,
+fresh3ENV/7bindings, preservation38tools и всех non-image настроек →
+native recovery original task/checkpoint → ONE Review/Manager/owner → QA/gates.
+Большая цель ACTIVE, не завершена; бизнес-PR1808 не изменён/не слит.
+
 ## Checkpoint 12.10.2026 07:35 UTC — дисковый блокер устранён
 
 Владелец разрешил cold shared Go/private BuildKit cleanup, затем отдельно

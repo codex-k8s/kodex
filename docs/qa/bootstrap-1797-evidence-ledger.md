@@ -10,6 +10,34 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Доставка runner и восстановленная авторизованная проверка 12.10.2026 08:54 UTC
+
+Exact source/HOT8fbd29a2: full runner1c5d8eb5/protected binary437a92a3,
+provenancec85b040c PASS. Repo-owned publish/policy/runtime binding/defaults
+PASS, новая policy6135cb1c; ни один прежний promoted81 pin не изменён.
+Две ноды: полный HTTPS graph/digest и CRI imageID04e6a78d MATCH. Actual
+agent runtime ELF/новый turn NOT RUN; node cache proof его не заменяет.
+Policy bundlef9d4eb1934c23a205391d8d6ef6257be58f13a863333d7089dc2b9b85de3e181,
+publication receipt60a00303087f13c5d9dfaa36c69a5230d8487d7e991585c9b90f46cd8d5a0287,
+default receipt106a658554ce745fd75759541cec0f02533b8182e3e4ad96f3df8c2bebf355c7.
+Root33 transition unit PASS97.56s на том же SOURCE SHA.
+
+Serving receiptb5ab3d705d61e4862d4bef5660a6aec6cc4e898e9c3aaaac4cab423588aed63e
+PASS: CP/RC current Deployment/RS/Pod/процесс/Air/Go1.26.6,11 host/mount
+hashes, sourceHead8fbd, Ready и same-generation rejoin. CP a09a559d/RC630680f4
+равны independently built ELFs прежнего того же production-кода. Это local
+debug serving, не release acceptance. Chrome own19 owner: screenshot READ,
+overflow=false, Console0; session/bootstrap/graph200 и rootFAILED666.
+Rollout transient5034 сохранены; после Ready их повторение не обнаружено.
+Bounded logs CP/RC4min:0 lines, не whole-backend log acceptance.
+
+Fresh typed PROJECT drafts/validation/publication подтверждены201/200/200,
+source/OCC exact: staff generation25/config52 и helper generation19/config44.
+Builds s9BnLpZT/XKzWwkce начаты, admission/promotion/ENV3/bindings7 ещё
+NOT RUN в новой generation. Старые accepted resources не выдаются за новые.
+38 tools и non-image preservation будут проверены на fresh ENV receipts.
+Business Workflow recovery, ONE Review/Manager/owner, QA65 и merge gates OPEN.
+
 ## Удаление неиспользуемых архивов 12.10.2026 07:35 UTC
 
 SOURCE/remotee97ef743 GitHub readback PASS; тот же опубликованный CLI,
