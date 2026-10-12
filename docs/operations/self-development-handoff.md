@@ -23,9 +23,19 @@ updated: 2026-10-12
 provenance, неизменные pins, привилегированный process scan и Docker mounts,
 затем требует fresh audit fingerprint и явное подтверждение. Удаляется только
 один regular file; image store, registry, PVC, source и metadata сохраняются.
-ROOT 15 адресных тестов discard PASS, diff-check PASS. Публикация и actual
-apply/readback на этом checkpoint ещё NOT RUN; успешное удаление следует
-подтвердить отдельно. Это не исправление primary runtime failure и не QA65 PASS.
+ROOT 16 адресных тестов discard PASS, diff-check PASS. Код cf2e6173/f9422b39
+опубликован в Draft1807, remote readback PASS. Первый audit закрыто отклонён:
+общий bind mount состояния ошибочно считался отдельным закреплением файла.
+Уточнение допускает только exact общий mount трёх штатных k3d-kodex контейнеров;
+неизвестный ancestor mount и открытые inode по-прежнему отклоняются.
+
+Fresh audit/apply fingerprint1deea11c3d526d8a3586a15ff7fc713737f9c27b31e555f57a891613265c73fe
+PASS: удалён только archive manifest c1149622, exact path absent. Удаление
+окончательное, корзины нет; provenance и metadata сохранены, пересборка возможна.
+Две ноды Ready, текущий role runtime и warm Running/restarts0. Все 11 canonical
+current/restore archives сохранены. DATA available71GiB/root43GiB — снимок при
+параллельных писателях, не exact attribution. Runtime/registry/PVC не менялись.
+Это не исправление primary runtime failure и не QA65 PASS.
 
 ## Checkpoint 12.10.2026 11:56 UTC — опубликованный collector и диагностический Retry3
 
