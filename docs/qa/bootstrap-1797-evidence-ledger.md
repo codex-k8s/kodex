@@ -10,6 +10,33 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 12.10.2026 04:14 UTC
+
+ROOT owner API current read confirmed selfdev-write/review network allowlists
+без Go/npm dependency domains. Actual Pod Go module GET: CONNECT aborted/
+HTTP000; native Developer1365 сообщил race/parser/RPC classifier, пять UI
+model tests и Proto lint/build/generation scoped PASS, full Go/
+frontend suites и AsyncAPI generation blocked dependency transport. Это не
+доказательство успешного полного module/codegen/live исполнения.
+
+Canonical ENV drafts201 → fresh authentication → validation200/VALID/
+diagnostics0 → impact201/full EOF1+5 → publication200/APPLIED с пустым
+selectedItemRefs. Write ENV version/revision26/renvv_wd_47bpJowObNDcopLZD-8yL,
+review25/renvv_W4BxpDioOp9jVGDZ0NqfY-zP; both READY. Four exact HTTPS443
+READ domains: proxy.golang.org, sum.golang.org, storage.googleapis.com,
+registry.npmjs.org. Go values GOROOT=/usr/local/go,GOTOOLCHAIN=local,GOENV=off.
+Existing GitHub methods, image/38tools/resources/volumes/secrets/RBAC MATCH;
+all6 bindings/agent versions unchanged. First preservation check FAIL on
+expected changed networkDigest; corrected field/content projection PASS,
+without ignoring unrelated changes. Rebind/new RuntimeRevision/download live
+NOT RUN; deferred until current graph terminal and callback/archive captured.
+
+Private readback receipts current1b9afd60 → finald5145532, publication8f8ea3b0;
+Context7 /golang/go GOROOT/GOTOOLCHAIN/GOENV checked. No new image or workload
+restart. Actual nodes2 Ready and Developer Pod restart0. Playwright04:13
+screenshot READ/Console0/API200/platform+run live/rejoin1386; Chrome MCP
+TIMEOUT. ROOT corrective business USER0/business code0; ONE Review/fullQA OPEN.
+
 ## Новое scoped evidence 12.10.2026 03:34 UTC
 
 Exact SOURCE e66f19d8b373ecca030d8a819a5e7ffbf8d8168d: repo-owned disposable

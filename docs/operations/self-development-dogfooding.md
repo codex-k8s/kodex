@@ -10,6 +10,25 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 04:14 UTC — Go/npm ENV опубликованы без live rebind
+
+- [x] Owner API подтвердил отсутствие Go/npm доменов в exact selfdev-write/review.
+      Добавлены только HTTPS443 GET/HEAD для proxy.golang.org, sum.golang.org,
+      storage.googleapis.com и registry.npmjs.org, а также GOROOT=/usr/local/go,
+      GOTOOLCHAIN=local и GOENV=off. Прежние GitHub правила сохранены.
+- [x] Два canonical drafts VALID/diagnostics0; full EOF impact1+5, publication
+      APPLIED с selectedItemRefs=[]; write revision26 и review revision25 READY.
+      Exact readback: image/38tools/resources/volumes/secrets/RBAC неизменны;
+      все6 bindings и agent versions прежние. Новая networkDigest ожидаема.
+- [x] Playwright04:13 screenshot/Console0/API200/platform+run live/rejoin1386.
+      Два узла Ready, текущий Developer Running/restart0. Native frontend
+      sorting/parser scoped PASS сообщён самим Developer; полные suites
+      заблокированы download/CONNECT, отсутствует local AsyncAPI parser.
+- [ ] Rebind команды только после terminal/callback/archive текущего Workflow;
+      новый RuntimeRevision и реальные dependency downloads ещё NOT RUN.
+      ONE Review/Manager/owner/paid live/full QA OPEN. ROOT business code0,
+      corrective business USER0; HOT f88194d3 не тронут, Chrome MCP TIMEOUT.
+
 ## Checkpoint 12.10.2026 03:34 UTC — точный disposable PREVIEW и Developer checkout
 
 - [x] SOURCE e66f19d8: repo-owned control-plane-postgres-test.sh с фильтром

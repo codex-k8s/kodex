@@ -10,6 +10,38 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 04:14 UTC — dependency policy сохранена, активные роли неизменны
+
+Developer run_oWXbkMuhDiSctpezv20LLP9j RUNNING, native1365: A1–A3 и адресные
+race/parser/RPC classifier, пять UI model tests и Proto lint/build/generation
+готовы; полный Go/frontend/codegen заблокирован
+dependency download/CONNECT и отсутствием local @asyncapi/parser. Не PASS.
+Owner current ENV подтвердил отсутствие proxy.golang.org/sum.golang.org/
+storage.googleapis.com/registry.npmjs.org; Pod curl Go module CONNECT aborted.
+Go launcher offline proof: explicit GOROOT устраняет недоступность executable
+discovery. Сеть и Go metadata не дают нового grant текущему execution.
+
+Штатно созданы/валидированы/опубликованы две ENV: write version/revision26,
+renvv_wd_47bpJowObNDcopLZD-8yL; review version/revision25,
+renvv_W4BxpDioOp9jVGDZ0NqfY-zP. Новые четыре домена только HTTPS443 GET/HEAD;
+GOROOT=/usr/local/go, GOTOOLCHAIN=local, GOENV=off. Full impact EOF1+5;
+selectedItemRefs=[] и оба plans APPLIED. Readback image/38tools/resources/
+volumes/secrets/RBAC EXACT MATCH; все6 bindings и agent versions неизменны.
+Первый preservation check ошибочно сравнил прежнюю networkDigest; отдельная
+сверка содержимого policy и ожидаемо нового digest PASS. Current Pod не изменён.
+
+Следующий шаг: дождаться terminal и подтверждённых callback/archive, затем
+fresh canonical impact/rebind intended6 и доказать новый RuntimeRevision/
+Go/npm downloads. При смене ENV прежний native resume несовместим — fresh
+session; не переключать активный Coordinator/Developer ради обхода network.
+Это не исправление business code от ROOT и не новый пользовательский input.
+Reviewer ровно один; бизнес-PR1808 Draft/c784ee85, не merge/approve.
+
+Playwright04:13 Console0/API200/platform+run live/rejoin1386; screenshot READ.
+Два узла Ready, Developer Pod restart0. MCP list_pages TIMEOUT, чужие tabs
+untouched. SOURCE/remote до fc513e95; HOT f88194d3 с прежними owned journals,
+новая closed диагностика NOT LIVE. Остальные gates/full QA/paid live OPEN.
+
 ## Checkpoint 12.10.2026 03:34 UTC — disposable PREVIEW PASS, Developer checkout готов
 
 На exact SOURCE e66f19d8 repo-owned PostgreSQL fixture с фильтром
