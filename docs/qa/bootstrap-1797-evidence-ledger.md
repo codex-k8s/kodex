@@ -10,6 +10,30 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Read-only дополнительная ёмкость 12.10.2026 06:45 UTC
+
+На576cbaf9 два worker audit не меняли код/данные/поды. Canonical OCI12KEEP,
+OBSOLETE0. Delivery OCI12/21,214,210,048B различны;11manifest защищены
+обеими CRI81 и не имеют canonical duplicate, удаление не разрешено. Один
+abandoned unpinned archive1,757,796,864B имеет exact provenance/hash,
+не был активирован, process references0. Два own cold72 cache с existing
+guards PASS:147,286,541B и411,406,419B, пока без CLI profiles. Runtime
+world-writable roots777 rejected; guards не ослаблены. Own available scopes
+недостаточно для полного recovery, stale plans не применяются.
+
+Общий Go cold24 read-only audit:64,819records/30,536,230,173logicalB.
+Default BuildKit private4h audit:217eligible leaves/7,016,140,095logicalB;
+это не guaranteed reclaimable physical bytes и не разрешение очистки чужих
+задач. Ни общий Go, ни default BuildKit не изменены. Для расширенного scope
+и verified перемещения own OCI без потери rollback/provenance требуется
+решение владельца либо дополнительная DATA capacity. Thresholds/pins/taints
+не менялись, PV/данные не удалялись.
+
+PR1807/body/readback576cbaf9 PASS; HOTe317 unchanged. Chrome собственная
+вкладка4 подключена: screenshot READ, Console503/document503/favicon503.
+Это current infrastructure FAIL, не PASS браузерного пользовательского
+сценария; full QA/runner activation/native business task остаются OPEN.
+
 ## Подтверждённая причина сохранения DiskPressure 12.10.2026 06:33 UTC
 
 Actual kubelet1.35.5+k3s1: hard imagefs/nodefs5%, minimum reclaim10%,

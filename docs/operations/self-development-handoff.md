@@ -10,6 +10,36 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 06:45 UTC — необходим выбор дополнительной области
+
+576cbaf95a18214c3d0667efffd8ccdf60da3a19 опубликован и readback подтверждён;
+PR1807 body обновлён с текущим FAIL среды и NOT LIVE runner. HOTe317 unchanged.
+Chrome MCP4: screenshot прочитан, Console resource503, document/favicon503;
+это отказ SSO dependency, не browser approval. Foreign tabs untouched.
+
+Read-only аудит: canonical OCI12 KEEP/OBSOLETE0; delivery OCI12/21,214,210,048B
+не duplicates,11 manifests защищены обеими CRI81. Единственный abandoned
+архив1,757,796,864B не активировался, absent current/restore/CRI pins и
+process references0. Два безопасных own cold72 Go cache содержат147,286,541B
+и411,406,419B, но пока нет CLI profiles. Большие runtime cache roots777
+не проходят existing guards; ограничения не ослаблялись. Эти own targets
+недостаточны для imagefs deficit47GB. Standalone ELF аудит ещё read-only.
+
+Общий cold24 Go audit:64,819records/30,536,230,173logicalB; default BuildKit
+private4h leaves217/7,016,140,095logicalB. Это не обещание allocated/free bytes:
+references, parent graph и параллельные записи требуют fresh audit/readback.
+Общие caches затрагивают скорость сборок других задач; без отдельного выбора
+владельца их очистка не выполняется. OCI rollback копии не удалять: допустим
+только отдельно согласованный verified перенос с достаточным root headroom.
+
+Рекомендуемый owner-вариант: расширить scope на только cold shared Go/private
+BuildKit cache и verified перенос своих старых OCI на root-FS с сохранением
+pins/provenance/данных. Альтернатива: обеспечить ещё не менее50GB свободных
+bytes на DATA внешним безопасным обслуживанием/расширением. Более быстрый,
+но меняющий recovery policy вариант: repo-owned переход minimum reclaim
+с10% на bounded GiB при неизменном hard5%; без решения не применять.
+Новых запусков агентов/OCI build/policy activation пока нет. Цель не завершена.
+
 ## Checkpoint 12.10.2026 06:33 UTC — очистка выполнена, recovery ещё FAIL
 
 SOURCE/remote5fdbb2c9f0484210f627022e83b481edae0b5dbc; HOTe31714cd.
