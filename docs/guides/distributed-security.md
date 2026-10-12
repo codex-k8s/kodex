@@ -706,6 +706,18 @@ invalid signature, прежний signer и запрещённый destination �
 write deadline и cancel/join. Static и другие listeners не получают anonymous
 fallback; header/body/credential bytes не записываются в диагностику.
 
+В HTTPS WebAccess scope определяется подписанными host/protocol/port/method,
+а не представлением path. Корректный percent-escaped path не должен закрыто
+отклоняться только из-за непустого `RawPath`: package managers используют
+encoded slash для scoped packages. Шлюз проверяет exact decoded/escaped
+соответствие, UTF-8, отсутствие управляющих символов, backslash, dot segments,
+вложенных escapes и URL confusion, затем сохраняет исходные path/query при
+TLS пересылке без второго decode. Это не исключение из grant, DNS/IP, SNI/CA,
+method или redirect policy. Provider-only grant и WebSocket routes не получают
+encoded-path fallback; отдельный WebAccess проверяется по собственному scope.
+Отрицательные signed-wire проверки
+доказывают отказ до DNS/dial; локальный тест не заменяет actual proxy download.
+
 Закрытый реестр provider transport проверяется по закреплённой версии SDK:
 штатный standalone search Codex0.160 использует только POST
 `chatgpt.com/backend-api/codex/alpha/search` либо `api.openai.com/v1/alpha/search`

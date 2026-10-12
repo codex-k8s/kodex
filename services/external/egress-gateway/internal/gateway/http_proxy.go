@@ -12,9 +12,12 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/textproto"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
@@ -370,14 +373,50 @@ func proxyRequestAllowed(request *http.Request, target connect.Target, access ru
 		host = parsedHost
 	}
 	host = strings.ToLower(strings.TrimSuffix(host, "."))
-	if host != target.Hostname || request.URL.RawPath != "" {
+	if host != target.Hostname {
 		return false
 	}
 	if hasWebSocketUpgrade(request.Header) {
-		return access.ProviderAccess && runtimecontract.RuntimeProviderAllowsWebSocket(host, request.URL.Path, request.Method) && validWebSocketRequest(request)
+		return request.URL.RawPath == "" && access.ProviderAccess && runtimecontract.RuntimeProviderAllowsWebSocket(host, request.URL.Path, request.Method) && validWebSocketRequest(request)
 	}
-	return access.ProviderAccess && runtimecontract.RuntimeProviderAllowsRequest(host, request.URL.Path, request.Method) ||
-		runtimecontract.RuntimeWebAccessAllowsRequest(access.WebAccess, host, request.Method)
+	if request.URL.RawPath == "" && access.ProviderAccess && runtimecontract.RuntimeProviderAllowsRequest(host, request.URL.Path, request.Method) {
+		return true
+	}
+	return runtimecontract.RuntimeWebAccessAllowsRequest(access.WebAccess, host, request.Method) && validProxyWebPath(request.URL)
+}
+
+// WebAccess разрешает host/method, а не path. Escape не выдаёт provider authority;
+// исходный RawPath сохраняется при пересылке без нормализации и второго decode.
+func validProxyWebPath(target *url.URL) bool {
+	if target.Opaque != "" || target.Host != "" || target.User != nil || target.Fragment != "" {
+		return false
+	}
+	escaped := target.EscapedPath()
+	decoded, err := url.PathUnescape(escaped)
+	if err != nil || decoded != target.Path || target.RawPath != "" && escaped != target.RawPath ||
+		!strings.HasPrefix(decoded, "/") || strings.HasPrefix(decoded, "//") || !utf8.ValidString(decoded) {
+		return false
+	}
+	for _, character := range decoded {
+		if unicode.IsControl(character) || character == '\\' {
+			return false
+		}
+	}
+	for _, segment := range strings.Split(decoded, "/") {
+		if segment == "." || segment == ".." {
+			return false
+		}
+	}
+	// Литерал % допустим, но вложенный escape не должен получить второй смысл
+	// у upstream decoder. Запрет действует и для канонического пустого RawPath.
+	for index := 0; index+2 < len(decoded); index++ {
+		if decoded[index] == '%' {
+			if _, err := url.PathUnescape(decoded[index : index+3]); err == nil {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func upstreamRequest(request *http.Request, target connect.Target) *http.Request {

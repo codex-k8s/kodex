@@ -10,6 +10,34 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 05:11 UTC — исправлен encoded npm path, delivery отложена
+
+SOURCE base1ee2fcb0: адресное исправление egress proxy позволяет validated
+escaped paths только уже разрешённому WebAccess, без hardcode registry и
+расширения grant/host/method. Provider/WebSocket exact paths сохраняют запрет
+RawPath. Scoped npm GET/HEAD, path/query preservation через signed CONNECT/TLS,
+malformed/nested escape/CTL/backslash/dot/foreign/no-grant/write/upgrade
+negative tests готовы. ROOT module unit PASS: gateway2.824s, остальные пакеты
+exit0. ROOT gateway race PASS5.355s, vet/build exit0, diff check PASS на том же
+коде; exact commit фиксируется отдельно. Live npm download NOT RUN.
+Первый worker unit/race FAIL был в HEAD error-body тестовой оснастке, исправлен
+только тест, повтор worker PASS. История отказа не заменена заявлением green.
+
+HOT79d11e49 неизменён, source fix пока NOT LIVE. Egress graceful shutdown имеет
+bounded budget и прекращает новые CONNECT; его restart во время provider turn
+может прервать активное исполнение. Current INTAKE writer не рестартуем и
+policy/grants не меняем, доставку проверяем на безопасной границе процесса.
+
+Новый root run_2HDgJ-yd6I-hukcu269914cf RUNNING/288, Manager INTAKE ещё RUNNING;
+packet и historical implementation-handoff прочитаны native до EOF. Review0,
+ROOT business code0/corrective USER0. Playwright05:10 Console0/API errors0,
+platform/run live, stored/server cursor288/288/readiness=true, чужие tabs
+untouched; Chrome MCP снова TIMEOUT12s.
+05:03 полный UI rejoin229/229/readiness=true; позднейшее отставание UI cursor
+от отдельного свежего owner GET не объявляется отсутствием UI readiness.
+Durable EmptyDir checkout recovery, paid continuation, бизнес-реализация,
+ONE Review/Manager/owner и full QA65 остаются OPEN.
+
 ## Checkpoint 12.10.2026 04:54 UTC — повтор с checkpoint, шесть окружений переключены
 
 Прежний root run_ToAIsXnQVn9tdRdJTwAFV_KB штатно FAILED/sequence1440;

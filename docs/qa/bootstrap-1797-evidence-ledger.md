@@ -10,6 +10,36 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 12.10.2026 05:11 UTC
+
+На SOURCE base1ee2fcb0 интегрирован общий WebAccess encoded-path validator и
+258 строк scoped unit/signed TLS wire tests. Exact unescape/UTF8/CTL/backslash/
+dot/nested escapes/URL confusion проверяются до DNS/dial; original RawPath/query
+сохранены upstream. Нет новых destinations/methods/provider/WebSocket routes.
+Frozen worker patch SHA28db0370bb2049acc3c630044a6c18477c640b4d44e1c3a9ee17659436cffba2;
+ROOT module unit exit0, gateway2.824s; ROOT gateway race PASS5.355s, vet/build
+exit0, diff check PASS на той же production/test паре55afc4a2/b70946c1.
+Worker all unit/race/vet/build PASS после исправления HEAD fixture.
+Initial fixture FAIL сохранён. Live npm request/download NOT RUN, HOT79d unchanged.
+
+05:03 owner graph и UI storedCursor229/229, readiness=true, platform/run live;
+05:10 root RUNNING/288, UI/owner cursor288/288/readiness=true, Console0/
+relevant API errors0, native failed tools0.
+Screenshot/rejoin последующих переходов проверяется отдельно от исторического
+PASS. Chrome MCP TIMEOUT12s, isolated Playwright approved fallback работает.
+Egress restart с active turn не выполнен; свежий proxy delivery/actual download,
+durable workspace recovery и final fullQA/ONE Review gates OPEN.
+
+Scoped карта запроса: package manager текущего execution → подписанный
+RuntimeProxyAccess exact session/turn/revision → authenticated CONNECT
+HTTPS443 → inner HTTP host/method/path validation в egress gateway →
+DNS/IP/SNI/CA verified upstream → неизменённый escaped request и HTTP response.
+Authority принадлежит опубликованной ENV и immutable RuntimeRevision, не URL
+или имени пакета. Нет command/RPC/state transition/idempotency receipt или
+domain event: это прежний transport read path, результат принадлежит upstream.
+Отказ403 до DNS/dial; malformed/foreign/unauthorized/upgrade остаются denied.
+Проверки подписанного synthetic wire не доказывают текущую package загрузку.
+
 ## Новое scoped evidence 12.10.2026 04:54 UTC
 
 На79d11e49 прежний root terminal FAILED/1440; Developer SUCCEEDED технически,
