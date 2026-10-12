@@ -10,6 +10,22 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 12.10.2026 01:15 UTC — подтверждённое исправление чтения доставлено
+
+- [x] Core51 commit/source/remote/HOT37186456, actual CP ELFfe1b4302,
+      mounted prompt/addendum MATCH; idle/ff/promoted81 guard PASS.
+- [x] Native admin plan revision1→UI VALID→APPLIED(version3/problems[]);
+      Workflow VALIDATE/PUBLISH→revision14/version43/READY. Public fields,
+      non-text graph/agents/capabilities/inputs/limits/gates MATCH.
+- [x] Новый native Coordinator получил exact confirmed instructions,
+      published wfv_N8R5RWjpjBkToI-YloiUZ9EI/digest5fb13c3b; старые runs
+      и Workflow13 не менялись. План не содержит business launch.
+- [x] Штатный original RETRY→attempt10 run_VMIPsg7iB2pylviXeBqEqZjw,
+      InputSummary/attachmentSet EQUAL, Coordinator делегировал INTAKE.
+      Live UI sequence/Console0/screenshot подтверждены, не semantic PASS.
+- [ ] Дождаться exact INTAKE/Architect результатов и законного допуска
+      Developer→ONE Review→Manager/owner; bootstrap/main/full QA gates OPEN.
+
 ## Checkpoint 12.10.2026 00:51 UTC — scoped recommendation готова к доставке
 
 - [x] SOURCE core5155884B/bfb82eb9: immutable50 сохранён, supporting bundle

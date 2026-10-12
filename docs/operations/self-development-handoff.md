@@ -10,6 +10,39 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 12.10.2026 01:15 UTC — Workflow14 опубликован, original attempt10 работает
+
+Source/remote/HOT371864562f26b74c08152a337217873b8827c8fc, bot readback PASS;
+PR1807 Draft/body readback MATCH, mainab499 unchanged. Safe idle/ff00:58:25:
+openBuilds/activeRuntimeRuns/pendingAdmissions/pendingPromotions/claimedLeases=0,
+promoted81/c8b1e3da unchanged. Actual CP `/proc/2533/exe`
+fe1b43029805c29002c1715a16e38bc2fbf26a01a7d61d321869ae51db96b45b;
+mounted prompt45b72768/addendum bfb82eb9 MATCH, readiness restored00:58:40.
+
+Native plan pln_7W7SG2pRnOVkUKAPryeyOKTP/revision1: UI validation→APPLIED,
+version3/problems[]. Applied receipt216548B/cb66eb2c. Workflow draft41→
+VALIDATE→PUBLISH/version43/revision14/wfv_N8R5RWjpjBkToI-YloiUZ9EI,
+launchReadiness READY. Все публично проецируемые before/after поля и шаги MATCH;
+instructions API не проецирует. Native initial task нового Coordinator
+включает exact confirmed instructions целиком и Workflow14 digest
+5fb13c3b270ce72e6864a4f9b2931d0fd8d4ccdcf6cab032c2dccab62c7d617d.
+Исторические Workflow13/runs не изменены, capabilities/agents/gates сохранены.
+
+Штатный RETRY один раз через UI после fresh owner readback: новая attempt10
+run_VMIPsg7iB2pylviXeBqEqZjw, previous run_nZyRMrJKM3z-Rw1sT0tTCdp2,
+RUNNING. InputSummary и attachmentSet exact EQUAL; retry source прочитан:
+launch разрешает current published spec, прежние шаги не наследует. Coordinator
+делегировал INTAKE run_PUet8iDlth683R27tatk85ve; events43/read_file работают,
+UI realtime41 при одновременном REST43/inflight2, screenshot/Console0.
+Это не semantic PASS/приёмка; Developer/ONE Review/Manager/owner ещё OPEN.
+
+SSO штатно восстановлен, owner session200/BACKEND_REFRESH, absolute expiry
+13:09:56UTC; чужие вкладки не закрывались. Последующие screenshot/Console
+очищенной навигации PASS, прежние auth401 отдельно, не app regressions PASS.
+Native admin live COMMENTARY/tools появились после reload; routing реализован,
+cross-client cache cause UNKNOWN, без production fix по одному предположению.
+Source readonly worker layout58 и пять suites132 PASS; frontend без изменений.
+
 ## Checkpoint 12.10.2026 00:51 UTC — core51 SOURCE готов, административный план готовится
 
 Исправление рекомендации помощника: immutable core51 = exact core50 prefix

@@ -10,6 +10,33 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Новое scoped evidence 12.10.2026 01:15 UTC
+
+371864562f26b74c08152a337217873b8827c8fc SOURCE/remote/HOT MATCH, Draft1807,
+actual CP `/proc/2533/exe` fe1b43029805c29002c1715a16e38bc2fbf26a01a7d61d321869ae51db96b45b;
+mounted prompt45b72768/core51bfb82eb9 MATCH, readiness00:58:40.
+Repo-owned idle/ff00:58:25 five busy counters0, promoted81/c8b1e3da retained.
+
+Private native plan read222683B/711d9c38: one UPDATE_WORKFLOW/version40,
+recursive before/after только reading texts, ROOT full new instructions read.
+UI validation→application APPLIED/version3/problems[];
+receipt216548B/cb66eb2ced19f5d15ee37565e51103dc29c41006a6f8a4a0a909dd7efbd29c51.
+Workflow43/revision14/wfv_N8R5RWjpjBkToI-YloiUZ9EI PUBLISHED/READY,
+publication34885B/b686f717801069551b42f5ceaaa679761d9bf251fc1d259850e34c130742a56b.
+Public projected fields/steps MATCH; instructions not in public API. Native
+new Coordinator USER task embeds exact entire confirmed instructions and
+5fb13c3b270ce72e6864a4f9b2931d0fd8d4ccdcf6cab032c2dccab62c7d617d pins.
+
+Single UI RETRY after fresh runversion3→attempt10/run_VMIPsg7iB2pylviXeBqEqZjw,
+RUNNING; InputSummary/attachmentSet EQUAL, prior attempt9 immutable. Delegated
+INTAKE run_PUet8iDlth683R27tatk85ve; early events63432B/f36dcdad, UI live41
+при REST43/inflight2, screenshot и Console0. Позднее оба UI/REST184 MATCH.
+Owner session200/BACKEND_REFRESH/absolute13:09:56UTC restored; prior401 retained
+as auth recovery, not claimed clean initial auth. Foreign tabs untouched.
+Worker readonly layout58/132 scoped tests PASS; frontend bytes unchanged,
+cross-client live helper cause UNKNOWN. Business verdict/ONE Review/Manager/
+owner/full QA/GitHub/main still OPEN; this is not READY or final acceptance.
+
 ## Новое scoped evidence 12.10.2026 00:51 UTC
 
 Core51 SOURCE55884B/bfb82eb9 = immutable50 prefix +1836B. Рекомендация
