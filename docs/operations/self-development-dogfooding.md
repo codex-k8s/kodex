@@ -10,6 +10,25 @@ updated: 2026-10-13
 
 # Цель и источники
 
+## Checkpoint 13.10.2026 07:26 UTC — отдельный capacity failure / Retry8
+
+- [x] Retry7 FAILED73 честно: own primary server_overloaded/TERMINAL_FAILURE,
+      sameUID rejoinVERIFIED/proof52e58218, client failure NOT_OBSERVED.
+- [x] Exact decoder/owner retry action и fresh idle/NoSessionBlocker; один
+      UI Retry после4min35s без смены модели/INPUT/прав и USER corrections.
+- [x] Retry8ggaA/HJind/same INPUT/version2, CoordinatorSUCCEEDED→INTAKEti6E
+      RUNNING; full fresh ACKd0ac52ed/image-filef87/sameUID/38tools/22grants.
+- [ ] Сопроводить currentrootRUNNING53 и dual18587live, затем Architect/
+      Developer/ONE Review/Manager/owner. Новый Retry только после exact terminal
+      и собственной причины, не по окончанию observation timeout.
+- [ ] A8/remaining QA65/GitHub gates/bootstrap/main; historical CP latencyUNKNOWN.
+
+HOT308 неизменен во время run. Source419231f1 до doc записи, code9c3e serving7d6d.
+Официальные OpenAI protocol/turn events/error docs fetched; WS/Agents API не
+подменяют нашу stdio source/proof. Native positive heartbeat живой, transient
+recovery live-case ещё не наблюдался. Нет новых субагентов, business edits,
+дисковых удалений, hidden provider retries или смены модели.
+
 ## Checkpoint 13.10.2026 07:16 UTC — доставлен RC / живой Retry7
 
 - [x] SOURCE/remote308ca168/Draft1807 body readback; first metadata lag не вызвал

@@ -10,6 +10,42 @@ updated: 2026-10-13
 
 # Текущее состояние
 
+## Checkpoint 13.10.2026 07:26 UTC — provider overload доказан, Retry8 идёт
+
+Retry7fcPX FAILED07:16:31/version3/seq73; INTAKERrMi FAILED, downstream
+CANCELLED/Review0. Dual10798 завершён0: sameUIDf43e225e rejoin VERIFIED,
+PRIMARY `TERMINAL_FAILURE/server_overloaded`07:16:30.723992, receipt52e58218.
+Client observation NOT_OBSERVED, не «оба канала captured». Это не прежний
+renew DeadlineExceeded/context cancellation: в bounded RC log окне8min renew
+failure не observed, only claimdegraded/restored. NoSessionBlocker/RESTORE
+SUCCEEDED и fresh idle5busy0/85pins прочитаны07:20. Исторический CP delayUNKNOWN.
+
+По source exact decoder serverOverloaded — capacity failure/RETRY_LATER,
+owner safe code PROVIDER_UNAVAILABLE. OpenAI Docs fetched App Server protocol/
+turn-events и Agents API turn-errors: рекомендации различены по transport/API;
+WS ingress-32001 не приписан нашему stdio terminal. Это не upstream source pin
+и не доказательство billing/auth. Никаких hidden provider retry, новой модели,
+rights expansion или USER поправок. После4min35s от owner terminal выполнен
+один штатный UI Retry, не повтор «потому что collector истёк».
+
+Retry8 `run_ggaA15yU-XZBcOs9wgzMwBJX`/attempt8/version2/HJind/same finalized
+INPUTaset_pBFN/retryOffcPX. Coordinator nodeaDX SUCCEEDED07:22:03 и естественно
+делегировал INTAKE `run_ti6EokpzxpXaMHZGe_oOgN9g`/
+`ses_LFtO9VT9gH6txHWL_naEwxIW`/`trn_KuZfzFShszmxGV4aYL3pPaei`, nodeg5Cc/
+attempt1. CurrentrootRUNNING53 на07:26. Early root dual55840 ACK observed,
+FOLLOW_STREAM_ENDED после success; не provider/root failure и не новый retry.
+
+INTAKE dual18587 подтверждён live, primary пока NOT OBSERVED. Full ACK84796
+завершён0/proofd0ac52ed: sameUID64252abc/Podruntime-turn-335aee963be9658f,
+image5cc/ENV28/binding29/tools38/grants22/6.1medium. Runtime0e7e12ab/execution
+74205d3f/INPUTa711 pins MATCH, instructions/inbox EQUAL, image-filef87 MATCH;
+expected task comparison NOT RUN, serving provider ELF не подменяется.
+HOT308ca168 сохраняется; SOURCE/remote419231f1 clean до этой записи, новые code
+changes0, никаких disk deletions/subagents/business edits. Own27 авторизован,
+screenshots7/8 READ/Console0/RunGraph200, partial active viewport не whole UX.
+Продолжать тот же native run и polling18587; не FF/restart активные workload.
+Далее INTAKE→Architect→Developer→ONE Review→Manager→owner, A8/QA65/bootstrap/main.
+
 ## Checkpoint 13.10.2026 07:16 UTC — RC доставлен, Retry7 INTAKE работает
 
 SOURCE/remote/HOT308ca168 clean до этой doc записи, Draft1807 push/readback/body

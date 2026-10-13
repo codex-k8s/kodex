@@ -10,6 +10,31 @@ updated: 2026-10-13
 
 # Область и границы результата
 
+## Retry7 overload / Retry8 13.10.2026 07:26 UTC
+
+Dual10798 terminal0 с полным closed sameUID proof52e58218: primary
+TERMINAL_FAILURE/server_overloaded07:16:30, exact INTAKERrMi/SowTS/w9z/
+attempt1/a330 runtime/d473 execution/5cc image. RejoinVERIFIED; client failure
+NOT_OBSERVED — не full dual failure PASS. Owner rootFAILED73/version3
+07:16:31/PROVIDER_UNAVAILABLE, downstreamcancel/Review0. В bounded8min RC log
+renew failures не observed, claimdegraded/restored сохранены. Нет доказательства
+полного устранения исторической CP latency; source/serving delivery отдельный PASS.
+
+OpenAI official pages fetched: [App Server turn events](https://learn.chatgpt.com/docs/app-server#turn-events),
+[protocol](https://learn.chatgpt.com/docs/app-server#protocol),
+[Agents API turn errors](https://developers.openai.com/api/docs/guides/agents-api/errors#turn-errors).
+Это разные transport/API: WS-32001 не считается наблюдением stdio terminal;
+документация не source attestation installed0.160. Exact local parser capacity/
+RETRY_LATER и owner actionRETRY подтверждены отдельно. После4min35s и fresh
+idle5busy0/NoSessionBlocker выполнен один новый native Retry, не hidden re-exec.
+
+Retry8ggaA/HJind/same finalized INPUT/version2, CoordinatorSUCCEEDED07:22:03,
+INTAKEti6E/LFtO/KuZ/nodeg5Cc/attempt1 RUNNING; rootRUNNING53. Dual18587live,
+ACKd0ac52ed complete sameUID64252abc/rejoin/5cc/ENV28/binding29/38tools/22grants/
+6.1medium, image-filef87 MATCH. Runtime/input/execution fresh, inbox/instructions
+EQUAL; expected-task/provider-serving proof NOT RUN. Whole Workflow, paid QA,
+ONEReview/Manager/owner и A8/remaining65/bootstrap/main не выполнены.
+
 ## Actual RC delivery / Retry7 13.10.2026 07:16 UTC
 
 Guarded idle FF308ca16807:09:09 и after read07:09:47:5busy0,
