@@ -1508,6 +1508,8 @@ onBeforeUnmount(() => {
 }
 .run-workspace {
   position: relative;
+  container-type: inline-size;
+  container-name: run-workspace;
   width: 100%;
   min-width: 0;
   min-height: 0;
@@ -1707,7 +1709,9 @@ onBeforeUnmount(() => {
     grid-template-columns: minmax(0, 1fr);
   }
   .run-workspace--activity .run-canvas-summary__heading strong {
-    overflow-wrap: anywhere;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .run-workspace--activity .run-canvas-summary__details > a {
     grid-column: 1 / -1;
@@ -1720,6 +1724,55 @@ onBeforeUnmount(() => {
   .run-workspace-toolbar,
   .run-workspace--activity .run-workspace-toolbar {
     top: 84px;
+  }
+}
+@media (min-width: 761px) {
+  @container run-workspace (max-width: 1344px) {
+    .run-workspace--activity .run-canvas-summary {
+      top: 136px;
+      width: calc(100% - var(--run-activity-width) - 28px);
+      max-height: max(46px, calc(100% - 280px));
+      grid-template-rows: auto minmax(0, 1fr);
+      padding: 6px 8px;
+    }
+    .run-workspace--activity .run-canvas-summary__heading {
+      grid-template-columns: minmax(0, 1fr) auto 32px;
+      align-items: center;
+      gap: 6px;
+    }
+    .run-workspace--activity .run-canvas-summary__toggle {
+      display: inline-flex;
+      width: 32px;
+      height: 32px;
+      min-height: 32px;
+      padding: 0;
+    }
+    .run-workspace--activity
+      .run-canvas-summary__toggle[aria-expanded="true"]
+      svg {
+      transform: rotate(180deg);
+    }
+    .run-workspace--activity .run-canvas-summary__details {
+      display: none;
+    }
+    .run-workspace--activity .run-canvas-summary__details--expanded {
+      display: grid;
+      min-height: 0;
+      overflow: auto;
+    }
+    .run-workspace--activity .run-workspace-toolbar {
+      top: 84px;
+    }
+  }
+  @container run-workspace (max-width: 920px) {
+    .run-activity-overlay {
+      left: 0;
+      width: 100%;
+      min-width: 0;
+    }
+    .run-workspace--activity .graph-panel {
+      right: 0;
+    }
   }
 }
 @media (max-width: 760px) {

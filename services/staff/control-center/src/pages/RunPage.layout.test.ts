@@ -141,7 +141,9 @@ describe("RunPage layout при открытом ходе работы", () => {
     const title = desktop.match(
       /\.run-workspace--activity \.run-canvas-summary__heading strong \{([^}]+)\}/,
     )?.[1];
-    expect(title).toContain("overflow-wrap: anywhere");
+    expect(title).toContain("white-space: nowrap");
+    expect(title).toContain("text-overflow: ellipsis");
+    expect(source).toContain(':title="run.target.displayName"');
     const link = desktop.match(
       /\.run-workspace--activity \.run-canvas-summary__details > a \{([^}]+)\}/,
     )?.[1];
@@ -165,6 +167,62 @@ describe("RunPage layout при открытом ходе работы", () => {
         scoped: true,
       }).errors,
     ).toEqual([]);
+  });
+
+  it("сворачивает сводку по ширине workspace, а не только viewport", () => {
+    const workspace = source.match(/\.run-workspace \{([^}]+)\}/)?.[1];
+    expect(workspace).toContain("container-type: inline-size");
+    expect(workspace).toContain("container-name: run-workspace");
+    const compact = desktop.slice(
+      desktop.indexOf("@container run-workspace (max-width: 1344px)"),
+      desktop.indexOf("@container run-workspace (max-width: 920px)"),
+    );
+    expect(compact).toContain("top: 136px");
+    expect(compact).toContain("calc(100% - var(--run-activity-width) - 28px)");
+    expect(compact).toContain(
+      "grid-template-columns: minmax(0, 1fr) auto 32px",
+    );
+    expect(compact).toMatch(
+      /\.run-canvas-summary__details \{\s*display: none;/,
+    );
+    expect(compact).toMatch(
+      /\.run-canvas-summary__details--expanded \{\s*display: grid;/,
+    );
+    expect(compact).toMatch(
+      /\.run-canvas-summary__toggle \{\s*display: inline-flex;/,
+    );
+    expect(compact).toContain("overflow: auto");
+    expect(compact).toContain("top: 84px");
+    for (const width of [921, 1022, 1100, 1344]) {
+      const drawer = Math.min(720, Math.max(520, width * 0.54));
+      const summary = width - drawer - 28;
+      expect(summary).toBeGreaterThan(300);
+      expect(14 + summary).toBeLessThanOrEqual(width - drawer - 14);
+    }
+  });
+
+  it("показывает ход работы на всю ширину тесного workspace", () => {
+    const overlay = desktop.slice(
+      desktop.indexOf("@container run-workspace (max-width: 920px)"),
+    );
+    expect(overlay).toMatch(
+      /\.run-activity-overlay \{\s*left: 0;\s*width: 100%;/,
+    );
+    expect(overlay).toMatch(
+      /\.run-workspace--activity \.graph-panel \{\s*right: 0;/,
+    );
+    const style = parse(source).descriptor.styles[0];
+    if (!style) throw new Error("RunPage style missing");
+    const compiled = compileStyle({
+      filename: "RunPage.vue",
+      source: style.content,
+      id: "data-v-run-page",
+      scoped: true,
+    });
+    expect(compiled.errors).toEqual([]);
+    expect(compiled.code).toContain(
+      "@container run-workspace (max-width: 920px)",
+    );
   });
 
   it("сохраняет отдельные мобильные строки и существующий режим fit графа", () => {
