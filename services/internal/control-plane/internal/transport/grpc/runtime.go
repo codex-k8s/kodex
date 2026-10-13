@@ -21,6 +21,7 @@ import (
 )
 
 const maximumExecutionArtifactBytes = runtimecontract.MaximumSkillFileBytes
+const warmRuntimeReconcileRejectedMessage = "warm runtime reconciliation rejected"
 
 func mapString(values map[string]any, key string) string {
 	value, _ := values[key].(string)
@@ -644,7 +645,7 @@ func (server *Server) ReconcileWarmRuntime(ctx context.Context, request *control
 	}
 	assistant, desired, required, err := server.service.ReconcileWarmRuntime(ctx, p, request.GetWorkloadInstance())
 	if err != nil {
-		slog.WarnContext(ctx, "warm runtime reconciliation rejected", "error", err)
+		slog.WarnContext(ctx, warmRuntimeReconcileRejectedMessage, "stage", errs.WarmRuntimeStage(err), "grpc_code", status.Code(transportError(err)).String())
 		return nil, transportError(err)
 	}
 	return &controlplanev1.ReconcileWarmRuntimeResponse{Assistant: castAssistant(assistant), DesiredRevision: castRuntimeRevision(desired), MaterializationRequired: required}, nil

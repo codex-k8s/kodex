@@ -4,7 +4,7 @@ title: Диагностика нехватки памяти исполнител
 type: operations
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.0.1
 updated: 2026-10-13
 ---
 
@@ -49,3 +49,17 @@ RUNTIME_UNAVAILABLE; новый wire enum не вводится. Сам OOMKille
 commit до cleanup; отсутствие новой диагностики для replay/success/owner error;
 сохранение usage/payload и redaction; локализация ru/en. Живое провоцирование
 OOM и новый Workflow остаются отдельными проверками, не подменяются fixtures.
+
+## Закрытая диагностика warm reconciliation
+
+Постоянный Aborted после hot reload проверяется через прежний
+RuntimeWorkService.ReconcileWarmRuntime, workload principal и owner transaction.
+Серверный enum показывает фактический rejecting stage: scope/transaction,
+provider policy read/decode/catalog/publication, session binding/replacement,
+runtime snapshot, overlay, session catalog, environment, lifecycle, prompt,
+workspace, context, specification, digest и commit. Marker сохраняет cause
+для errors.Is/As и более точный внутренний stage; unknown остаётся UNKNOWN.
+Log содержит только stage и прежний gRPC code, не ошибку SDK, payload,
+provider credential или SQL. Endpoint, ответ, scope, locks, rollback/commit,
+OCC/fences, refresh policy, события и eligibility не изменяются. Успех не
+приобретает failure marker. Это диагностика причины, не исправление конфликта.
