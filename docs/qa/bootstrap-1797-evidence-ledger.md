@@ -4,11 +4,65 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.1
+version: 1.0.2
 updated: 2026-10-13
 ---
 
 # Область и границы результата
+
+## Retry8 terminal и новый полный readonly source — 13.10.2026 09:14 UTC
+
+На SOURCE/remote/HOTd6ea подтверждены own terminal rootggaA FAILED08:37:55,
+version3/sequence734/RUNTIME_WORKFLOW_INCOMPLETE. Coordinator3 технически
+SUCCEEDED, но не делегировал Developer по semantic BLOCKED Architect77RE;
+remaining CANCELLED, reviewcycles0. Это не heartbeat/RPC failure: в bounded
+RC15min/CP10min relevant error records не observed, историческая причина CP
+latency всё ещё UNKNOWN. Dual streams завершились после technical success;
+окончание stream не считается самостоятельной причиной root failure.
+
+INTAKE шесть собственных pinned CLEAN/ACTIVE artifacts: full UTF-8/bytes/SHA
+MATCH; полный business index52/52/eoftrue, sourceReadfalse — не семантическое
+чтение всего diff. Architect11 refs =6 inherited+5 own. Полные пять own body
+hashes: resultabcc0c64(852B), write6cfc5be8(328B), reviewca01b09b(31372B),
+source183d180d(31051B), contract9384c508(289134B), все MATCH metadata pins.
+Own contract snapshot provider OBSERVED0.160.0/INITIALIZE_USER_AGENT,
+runtime0faf3bb6/exact image5cc MATCH ACKacbda8c8. Установленный native CLI
+hash12eb3e81 не serving process proof; source attestationUNKNOWN.
+
+Архитектурный gate явно требует полного upstream initialization/dispatch.
+packet full-body EOF не означает FULL message_processor: он был EXTRACT.
+Public Raw exact URL отказал restricted URL; слой/причина UNKNOWN. ROOT не
+повторял этот URL другим transport/identity. Предоставлены ранее независимо
+полученные FULL27 sources; initialize_processor/request_serialization получены
+новыми GitHub MCP READ других разрешённых exact paths, Git blobs
+d68a29df9f364ed0836904847bae3927db1ae339 и
+390896a6cccf8e3cc0a2f2bbfa6421e72030f4ea MATCH bytes. Новый inert fixture29/29
+1077149B/SHA337dfbebb5f348b2c8742ed4c10f42cce73427a64f10118b6e0043dfca0a2ecb
+с exact path/size/SHA256/Git blob/FULL и EOF прошёл local roundtrip.
+
+Chrome штатный upload201 → artifactart_DEzRm7KeEcXsqz5zOqY9L5ho CLEAN/ACTIVE,
+revision1/arv_3282d7128b0e423081534767f73a4250; pinned whole download200 bytes/
+hash MATCH. Шесть UI knowledge bindings → artifactversion7; agent Manager42,
+Architect33, Developer37, Security39, Documentation33, Lexical33. Baseline пяти
+дополнительных ролей all-other-fields hash EQUAL; первый Architect comparison
+начался после первого binding, не blanket six pre/post proof. Private receipt
+SHA256dfd0ab6eaf7e00df32fa67e0662110b245d407272c4f4ab9fa0a1d87b9e6eac3.
+Native next-runtime knowledge descriptor, полное semantic EOF/Architecture PASS
+NOT RUN; host-read bytes не заменяют proof роли. Original INPUT/user prompt/
+network/Git grants неизменны, новые business edits0.
+
+Exact frontend code d6ea: three targeted suites45 PASS, scoped lint/typecheck/
+prettier/build/diffcheck PASS, production chunk warning retained. Frontend-only
+HOT FF08:39:16 с zero backend/libs/contracts/deploy/infra/tools diff; RC PID567/
+start31623348/ELF7d6d unchanged. Root terminal раньше FF. Actual user zoom250%
+не изменён: CSS viewport888x383, workspace480, vertical page scroll614/214,
+prototypefalse; settled screenshot READ. Это bounded geometry, не whole graph
+UX PASS. FILES/binding modal screenshots READ/Console0; новая source upload/
+binding authoritative READ PASS. Browser wrong-origin CERT_AUTHORITY_INVALID
+и diagnostic q/query ошибки сохранены и исправлены без TLS bypass.
+
+Current Draft1807/mainab499 live readback PASS; full baseline/review/live paid/
+A8/QA65/bootstrap merge/main всё ещё OPEN. Без host субагентов и disk deletes.
 
 ## Retry7 overload / Retry8 13.10.2026 07:26 UTC
 

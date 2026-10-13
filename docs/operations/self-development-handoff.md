@@ -4,11 +4,63 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.1
+version: 1.1.2
 updated: 2026-10-13
 ---
 
 # Текущее состояние
+
+## Checkpoint 13.10.2026 09:14 UTC — Retry8 остановлен на неполном источнике, полный источник доставлен как знания
+
+SOURCE/remote/HOT `d6ea0277d7675097175580dd0098b42d50b08bef` clean до этой
+записи, Draft1807/mainab499 readback PASS. Retry8ggaA FAILED08:37:55/version3/
+sequence734, safe code RUNTIME_WORKFLOW_INCOMPLETE; downstream CANCELLED,
+Review cycles0. INTAKEti6E SUCCEEDED07:51:46: шесть собственных ACTIVE/CLEAN
+результатов прочитаны pinned целиком, bytes/SHA256 MATCH. Architect77RE
+SUCCEEDED08:29:53 технически, semantic BLOCKED: packet содержал EXTRACT
+message_processor, а exact public Raw READ вернул restricted URL. Причина
+ограничения transport UNKNOWN. Denied URL не повторялся; gate не ослаблялся.
+Пять собственных результатов Architect (не все11 inherited+own) также прочитаны
+полностью с bytes/SHA MATCH. Собственный contract289134B/9384c508 содержит
+OBSERVED Codex0.160.0/INITIALIZE_USER_AGENT, runtime0faf3bb6 MATCH ACKacbda8c8.
+Source-to-binary attestation UNKNOWN; serving provider ELF не подменяется.
+
+ROOT нашёл уже ранее owner-acquired FULL27 публичных файлов exact upstream
+a956835d; для initialize_processor и request_serialization выполнены два новых
+независимых разрешённых GitHub MCP READ других exact путей. Их Git blob pins
+d68a29df/390896a6 совпали с полными bytes. Инертный UTF-8 JSONL fixture29/29
+сформирован с size/SHA256/Git blob/EOF roundtrip:1077149B,
+337dfbebb5f348b2c8742ed4c10f42cce73427a64f10118b6e0043dfca0a2ecb.
+Штатный Chrome upload201 и server scan CLEAN/ACTIVE PASS. Artifact
+art_DEzRm7KeEcXsqz5zOqY9L5ho, current revision
+arv_3282d7128b0e423081534767f73a4250, revision1/version7; pinned download200
+повторно подтвердил полный byte/hash. Через штатные UI checkboxes файл привязан
+как readonly KNOWLEDGE к шести ролям, без нового USER сообщения или изменения
+исходного finalized INPUT. Fresh agent versions: Manager42, Architect33,
+Developer37, Security39, Documentation33, Lexical33. Пять дополнительных ролей:
+все остальные поля до/после hash EQUAL; для первого Architect полной baseline
+до binding не было, blanket6/6 unchanged не заявляется. Proofdfd0ab6e.
+Actual runtime materialization/own semantic source EOF пока NOT RUN.
+
+Frontend-only d6ea доставлен08:39:16 после подтверждения отсутствия backend/
+libs/contracts/deploy/infra/tools diff; RC PID567/start31623348/ELF7d6d неизменны.
+Root terminal предшествует UI FF, не вызван этой доставкой. Exact frontend
+targeted45 tests, scoped lint/typecheck/prettier/build/diffcheck PASS; chunk
+warning сохранён. При фактическом Chrome zoom250% CSS viewport888x383:
+workspace480px, page overflow hidden auto, scrollHeight614/client214;
+actual screenshot READ. Global user zoom не менялся, prototype удалён.
+Это bounded short-height geometry, не whole graph/mobile UX acceptance.
+FILES и binding modal screenshots READ, Console0, bounded RC/CP error records
+не observed. Неправильно угаданный browser origin дал CERT_AUTHORITY_INVALID;
+возврат в свою history и exact фактический origin исправили навигацию без
+ослабления TLS. Первое диагностическое q вместо query игнорировалось API;
+исправленный query дал exact singleton artifact, не broad result proof.
+
+Далее: fresh idle/source/pins, один штатный Retry с тем же INPUT; проверить
+новый KNOWLEDGE descriptor и реальный native EOF/semantic architecture gate,
+затем Developer→ONE Review→Manager→owner. Не повторять denied Raw URL и не
+принимать host fixture вместо native proof. A8/QA65/GitHub gates/bootstrap/main
+OPEN. Новых host субагентов, business code edits, дисковых удалений нет.
 
 ## Checkpoint 13.10.2026 07:26 UTC — provider overload доказан, Retry8 идёт
 

@@ -4,11 +4,44 @@ title: Самонастройка и разработка Kodex средства
 type: operations
 status: approved
 owner: manager
-version: 1.1.0
+version: 1.1.1
 updated: 2026-10-13
 ---
 
 # Цель и источники
+
+## Checkpoint 13.10.2026 09:14 UTC — full source KNOWLEDGE вместо неполного gate
+
+- [x] Retry8ggaA owner terminal FAILED734/version3/RUNTIME_WORKFLOW_INCOMPLETE;
+      INTAKE технически SUCCEEDED, шесть собственных pinned bodies MATCH.
+      Architect технически SUCCEEDED/semantic BLOCKED, пять собственных bodies
+      MATCH и own OBSERVED0.160.0/runtime0faf proof; Review0, не accepted Workflow.
+- [x] Установить недостающий current-gate факт: FULL message_processor и
+      initialization/dispatch path; restricted Raw URL не повторять и не
+      подменять source proof схемой либо host runtime.
+- [x] Из прежних27 full receipts и двух независимых permitted public source
+      READ собрать inert29-file exact a956 source fixture; size/hash/blob/EOF
+      roundtrip. Штатный UI upload201, CLEAN/ACTIVE, pinned full download MATCH;
+      artifactDEz/revisionarv_3282/revision1/version7/SHA337dfbebb.
+- [x] Через UI привязать источник знаний к шести ролям; fresh versions42/33/37/
+      39/33/33, five additional other-fields hashes EQUAL. Первый Architect
+      baseline32→33 не полная; immutable original INPUT и USER prompt неизменны.
+- [x] Доставить frontend-only d6ea без backend restart: RC process unchanged,
+      exact45 frontend tests/lint/typecheck/build PASS; actual short viewport
+     888x383/workspace480/page scroll. FILES/binding modal screenshots READ,
+      Console0/bounded logs; это не whole UX или full baseline.
+- [ ] Новый native runtime KNOWLEDGE descriptor, собственный FULL source EOF
+      и semantic gate; затем successful Developer→ONE Review→Manager→owner.
+- [ ] A8/remaining QA65/GitHub gates/bootstrap/main. Source attestation и live
+      paid остаются UNKNOWN/NOT RUN; новые retries не оправдываются timeout.
+
+Current SOURCE/remote/HOTd6ea до этой doc записи; Draft1807/mainab499 readback
+PASS. Historical Retry8 semantic STOP сохранён, не переписан как PASS. Новый
+source artifact — отдельная readonly dependency, не corrective USER сообщение,
+не расширение Git/network/effect authority и не транзитивно полное дерево.
+Knowledge private proofdfd0ab6e. Browser origin typo/CERT failure и q/query
+ошибка исправлены read-only/own history, TLS не ослаблен. Без субагентов,
+host business implementation и новых disk deletions.
 
 ## Checkpoint 13.10.2026 07:26 UTC — отдельный capacity failure / Retry8
 
