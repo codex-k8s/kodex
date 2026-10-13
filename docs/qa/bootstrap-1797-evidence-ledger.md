@@ -4,11 +4,60 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.4
+version: 1.0.5
 updated: 2026-10-13
 ---
 
 # Область и границы результата
+
+## Current Architect semantic gate и ранний Developer ACK — 13.10.2026 10:28 UTC
+
+Источник/remote38cb0885a60348d4fa69e797c4b442dbf523c10f до doc записи,
+HOTb1e418b1; Draft1807 exact READ PASS после первого PR metadata lag, без repush.
+Architectrun_VABYmMY-Bvo92gHqA6tfNi6N SUCCEEDED10:17:22.554252 UTC.
+Шесть собственных ACTIVE/CLEAN artifacts, whole pinned DOWNLOAD200 и UTF8:
+
+| Файл | Revision ref | Revision | Bytes | SHA256 |
+| --- | --- | --- | --- | --- |
+| result.md | arv_1efef212bd424757928c38d40c3095ea | 196 | 735 | 70514a38668c705f85a1ae433610b948b0062c260f4d5e7349f1957ba8671ec9 |
+| workspace-write-result.json | arv_9c9643934d1742779109edeb1c1c03c9 | 196 | 328 | d8b6623dc388a8d3181b9a10f21cffb21886227f664d673136c9155c3653fe16 |
+| architecture-evidence.json | arv_77b738e17a254893baa9cfe059da8871 | 7 | 290742 | c4c3c07e91b8c22da95926e288453e8e918aa73652683d5aed11d2edc13f01f7 |
+| architecture-result-index.json | arv_1a9aa11f9bab4e9fabc70369d9b26eed | 1 | 1008 | 15f7c449c532cc8c64e0d7eb303d03d8f92fd51eeba382820a1bc191ba2ca31e |
+| architecture-review.md | arv_62c5530e312441f3b2fa58e5c61685c1 | 31 | 31283 | 4c0a4b5d36550048f176ff31774f4cd6f5a1f359cee079277f4abb9e506c2144 |
+| codex-contract.json | arv_831defff68ec459bb9fb4a27b4e3015f | 1 | 30233 | 5463c11335df8af0d53db8eda56d92c0a3caff7bc02e16b0eb677eb022bc789a |
+
+All bytes/digests MATCH metadata; write69b runtime/8e61 execution MATCH ACK.
+Свои evidence: exact upstreama956835d dispatch29 extract/hash PASS, 40 files
+EOF; семантика применимых declarations/dispatch/identity/errors, не blanket
+whole repository/source review. Own provider observed0.160.0,
+INITIALIZE_USER_AGENT/runtime69b/5cc image MATCH host ACK; offline schema/TS
+generation experimental=false. Semantic PASS ограничен CODE_ONLY дизайном.
+Paid balance/units/charging/continuation UNKNOWN/NOT RUN, source attestation
+UNKNOWN/serving provider ELF NOT CAPTURED. Эти ограничения не скрыты.
+
+Coordinator3Vqjx/wRJ attempt3 SUCCEEDED после native11 handoffsEOF→Developer.
+Current run_mdJQJqyXeJC02BNV2I0TUnZE/sessionGmzra/turn5A1/nodeuGz/attempt1
+RUNNING10:23:26. FullACKa13b23ea0ec9f52c9919cf815ebb18c93d083cacea43199de05425184ca08c8a:
+sameUID53cbfcd5-71f2-4c1a-9b06-65b8ec161e3a/Podruntime-turn-373dac48cba43113,
+runtime12bde9011a389cb063dcee2e4b15ce87e4c965fdf1649b2416729ac67d08b580,
+execution7d1dbe01de5316d59ac813fd1b2912b95d90527b5192c14c86e7087af13d61bb,
+input287613db55a7a506f841460a3e409775b3c690539b2575fe63e2b302dfecdd25,
+ENV29/binding30/38tools/26grants/6.1medium/5cc image. Instructions/inbox EQUAL,
+task_expected NOT RUN/image-filef87 MATCH, не serving provider ELF.
+Dual21587 live10:27/ACK OBSERVED10:26:37/primaryNOT OBSERVED; завершённый
+Architectdual94296 FOLLOW_STREAM_ENDED после SUCCEEDED не failure.
+
+Own27 reload10:25/900x900 graph screenshot READ/overflowfalse/Console0,
+accessible status Подключено/events795..807. Visible innerText не содержит
+скрытый label компактного header и не является connection predicate.
+Relevant session/bootstrap/ticket/graph/events/full artifacts200 просмотрены;
+domain polling не выводится из отдельного dev revision polling.
+RC8min WARN claim degraded10:23:07→restored10:23:28/ERROR0, transientcause
+UNKNOWN, не blanket logPASS. Gateway8min WARN/ERROR0. Backend не менялся.
+Дисковый аудит read-only: md3 avail45GiB, builder reclaimable9.205GB,
+11toolchainimages KEEP. Отсутствие текущего container не разрешает удаление
+promoted/pinned images. Удалений/host субагентов/USER поправок/business edits0.
+ONE Review/Manager/owner, A8/live paid, QA65 и bootstrap/main остаются OPEN.
 
 ## Current Architect и исправленная sibling-panel геометрия — 13.10.2026 10:11 UTC
 
