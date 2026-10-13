@@ -10,6 +10,29 @@ updated: 2026-10-13
 
 # Область и границы результата
 
+## Actual active readiness и gates 13.10.2026 05:58 UTC
+
+HOTeaebb/SOURCE707bfd clean, rootoXJ1 RUNNING781/Architect7ImF RUNNING;
+dual14988 live, no primary diagnostic observed. Actual sameUID4f429e29 role
+readiness503/READ_ONLY since05:27:28/restarts0; provider/relay Ready.
+Role10001 не обходит provider10002 source directories2700/shared group29000;
+root work2770 и ENV root2777 неизменны. Point-in-time metadata7318entries/
+6763files/105258206B ниже workspace10000/1GiB, cache5entries/0files. Это не
+atomic quota snapshot или terminal proof. Права/квоты/Pod не менялись.
+
+Имеющийся post-join normalizer source826162c6 MATCH immutable runner60594
+и HOT: writer после stop/join открывает group traversal своих directories,
+затем role выполняет полный metadata/quota контроль; private file bodies не
+открываются. ROOT exact Go1.26.6 на707bfd workspaceAccess/health tests PASS
+codex0.062s/app0.024s, отдельно PostJoinWorkspace0.017s. Live terminal
+нормализация ещё NOT RUN; active READ_ONLY не объявлен устранённым или fatal.
+
+GitHub707bfd: mergeable=true/clean, Draft, checks0/statuses0/reviews0 и combined
+pending; это не CI/acceptance PASS. Architect COMMENTARY723 сообщил два actual
+business findings accountId/replayed financial callback; implementation остаётся
+у Developer. OWN providerVersion evidence/semantic terminal/ONE Review/Manager/
+owner/A8/bootstrap/main/whole QA65 OPEN. Reduced receiptbae46294 retained.
+
 ## Actual Architect prompt и локальный UI 13.10.2026 05:41 UTC
 
 HOTeaebb/SOURCE0c8d9b clean; active execution source не менялся. Проверены
