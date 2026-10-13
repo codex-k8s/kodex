@@ -4,9 +4,40 @@ title: Самонастройка и разработка Kodex средства
 type: operations
 status: approved
 owner: manager
-version: 1.1.6
+version: 1.1.7
 updated: 2026-10-13
 ---
+
+## 13.10.2026 12:56 UTC — диагностический OOM fix и оставшиеся runtime gates
+
+Code481b37e475830d70fcf492851991d6e758522d5f опубликован в Draft1807 и
+доставлен HOT после свежего owner idle READ; native execution не перезапускалось.
+Retry9 остаётся FAILED, Review0, незакоммиченный business checkout не восстановлен.
+
+- [x] Различить текущий OOM известных контейнеров, не угадывая по exit137,
+      прошлой истории или неизвестному имени. Tracker имеет понятное резюме;
+      callback сохраняет intent и добавляет закрытую post-commit диагностику.
+      Unit/negative/race и локализация39tests PASS в указанной области.
+- [x] Проверить hot source/mount/actual serving ELF/symbol/readiness/rejoin:
+      proof ef1d9be7f780ea5bda5d6ee0f6a7e18911708965628d7b7ce5da624e2fc66bb5.
+      Не immutable release attestation и не успешный Workflow.
+- [ ] Исправить обнаруженный повторный warm ReconcileWarmRuntime Aborted;
+      bounded WARN не объявляются clean logs, причина пока UNKNOWN.
+- [ ] После свежего owner входа проверить и опубликовать уже сохранённый draft
+      12Gi/4CPU с exact non-resource equality и intended Developer binding.
+      Настроить ранние Git checkpoint и ограниченную параллельность через
+      редактируемые проектные инструкции, не USER бизнес-сообщение или hardcode.
+- [ ] Проверить пользовательскую ошибку OOM в живом сценарии: callback, который
+      опередил Kubernetes status, может сохранить прежнюю общую ошибку.
+      Данные/usage/archive и исторические результаты не переписываются.
+- [ ] Developer → один Review → Manager/owner, A8/live paid и остальные QA65,
+      bootstrap acceptance/gates/merge/main остаются обязательными.
+
+Первый Go test FAIL из-за GOROOT/toolchain mismatch сохранён; explicit local
+Go1.26.6 повтор PASS. Frontend build PASS с chunk warning. Own27 сейчас SSO
+step-up, Console0/fetch0 и просмотренный screenshot доказывают только форму
+входа, не рабочий Kodex API или новый error UX. Без host субагентов, удаления
+диска, native Retry и новых сообщений от лица пользователя.
 
 # Цель и источники
 

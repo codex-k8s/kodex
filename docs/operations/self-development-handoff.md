@@ -4,11 +4,67 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.7
+version: 1.1.8
 updated: 2026-10-13
 ---
 
 # Текущее состояние
+
+## Checkpoint 13.10.2026 12:56 UTC — OOM-диагностика доставлена, конфигурация ждёт step-up
+
+Code SOURCE/remote/HOT481b37e475830d70fcf492851991d6e758522d5f clean;
+Draft1807 exact separate readback PASS после metadata lag первого push READ.
+Не было второго push. Изменены только OOM observation/fallback/localization
+и связанные доказательства; ROOT не пишет #1796 и не посылает USER corrections.
+
+PASS на code481: whole runtime-controller unit, app/callback race,
+scoped vet и build; frontend scoped
+lint/typecheck, две suites39tests, build8.42s. Первое Go test FAIL до компиляции:
+унаследованный GOROOT1.27.1 не соответствовал explicit Go1.26.6. Повтор с
+env -u GOROOT/GOTOOLCHAIN=local PASS; отказ не скрыт. Build chunk warning
+сохранён. Это адресный baseline, не полный QA65/CI/Workflow acceptance.
+
+Текущий OOMKilled известных контейнеров различается от exit137, прошлой
+LastTerminationState, неизвестного контейнера и чужой revision. Tracker после
+прежнего callback grace сохраняет RUNTIME_UNAVAILABLE и локализуемое
+RUNTIME_MEMORY_EXHAUSTED. Callback до cleanup только добавляет закрытое
+наблюдение после нового owner commit, не меняя payload/usage/archive или
+idempotency intent. При опережении Kubernetes status прежняя общая ошибка
+callback всё ещё возможна: полноценная пользовательская классификация OPEN.
+Матрица и ограничения: OPS-RUNTIME-MEMORY-001.
+
+Перед HOT FF repo-owned owner READ12:48:29.924747 UTC: activeRuntimeRuns0,
+claimedRuntimeLeases0, builds/admissions/promotions0; promoted85 и pin digest
+f82202f667bdbfbe88ab3c02e9e39cf49baf3feb404bf2294728a88ad042f603.
+Serving proof ef1d9be7f780ea5bda5d6ee0f6a7e18911708965628d7b7ce5da624e2fc66bb5:
+host/Pod source hashes MATCH, actual RC PID872/start33659664/ELF44c5f863137bf5efe493838543fe9a4bb01a5bc695f4ebd4854f11b1ea8d1e21,
+compiled memory-observation symbol и build freshness PASS. CP PID372/start30613555/
+ELFe489 unchanged. Оба serving readiness/rejoin PASS, без immutable release
+attestation: buildvcs=false. Это не доказательство успешного нового исполнения.
+
+Открытый LIVE FAIL: bounded RC logs содержат повторные warm reconciliation
+WARN; закрытый gRPC класс Aborted подтверждён12:55 UTC. Runtime readiness PASS
+не равен готовности помощника. Причина owner conflict ещё UNKNOWN; проверить
+ReconcileWarmRuntime, не обходить OCC/fence и не рестартовать Workflow вслепую.
+
+Resource draft renvd_gj3Tzy-Pzm4zKOE5I4RJKtGe/version1 сохранён через UI:
+CPU request/limit4000, memory request/limit12288MiB. Последняя authoritative ENV29/
+binding30 ещё не опубликована/перепривязана. Non-resource baseline SHA
+f36f475cf16cf4c7d73b3eaea8e28b9b0b1044b2f13629f458e98b1a1a8c89c4;
+полный после-draft comparison и publication NOT RUN. Own Chrome27 остаётся
+на обязательном owner re-auth; secure local CDP login недоступен. Вопрос о
+свежем входе уже передан владельцу. 12:50 reload только своей вкладки после
+проверки отсутствия ввода; screenshot просмотрен, Console0, fetch/xhr0 на SSO.
+Это не проверка frontend/API Kodex или нового сообщения об OOM. Чужие вкладки
+не изменены. Browser OOM case/new Workflow NOT RUN.
+
+Далее: разрешить warm Aborted, свежий owner вход → проверить/publish тот же
+resource draft с non-resource equality → intended Developer binding и editable
+early Git checkpoint/ограниченную тестовую параллельность. Оценить recovery
+старой истории штатным путём; временный незакоммиченный checkout не восстановлен.
+Затем новый native процесс с прежним INPUT, Developer→ONE Review→Manager/owner.
+A8/live paid, QA65, bootstrap gates/merge/main остаются OPEN. Диск не очищался,
+host subagents0, цель не завершена.
 
 ## Checkpoint 13.10.2026 11:56 UTC — Retry9 FAILED из-за exact Pod OOM
 

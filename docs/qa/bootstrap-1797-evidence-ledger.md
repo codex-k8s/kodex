@@ -4,9 +4,34 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.7
+version: 1.0.8
 updated: 2026-10-13
 ---
+
+## 13.10.2026 12:56 UTC — code481 OOM diagnostics
+
+SOURCE/remote/HOT481b37e475830d70fcf492851991d6e758522d5f, Draft1807.
+Матрица: [OPS-RUNTIME-MEMORY-001](../operations/runtime-memory-failure.md).
+
+| Контур | Результат и точная область |
+| --- | --- |
+| Первый explicit Go1.26.6 test | FAIL: inherited GOROOT1.27.1; код не скомпилирован этим запуском |
+| Whole runtime-controller unit | PASS на481: env -u GOROOT/GOTOOLCHAIN=local, p2, timeout90s |
+| app/callback race | PASS на code481 при отдельном повторе после commit; первый equivalent-code run1.665s/38.248s тоже PASS; не whole-module race |
+| Scoped vet / Go build | PASS в изменённых пакетах и runtime-controller ./...; не остальные services |
+| Frontend | PASS на481: scoped lint, typecheck, server-message/runtime-text39tests; build8.42s с chunk warning |
+| Подлинный source/serving | PASS после FF: exact host/Pod hashes, RC PID872/start33659664/ELF44c5f863137bf5efe493838543fe9a4bb01a5bc695f4ebd4854f11b1ea8d1e21; CP372/e489 unchanged; compiled symbol/freshness, readiness/rejoin |
+| Proof | ef1d9be7f780ea5bda5d6ee0f6a7e18911708965628d7b7ce5da624e2fc66bb5; DEBUG_SERVING_NOT_IMMUTABLE_RELEASE_ACCEPTANCE; buildvcs=false |
+| Owner idle preflight | PASS12:48:29 UTC: runs/leases/builds/admissions/promotions0, promoted85 и прежние pins |
+| RC логи | LIVE FAIL: repeated warm reconciliation WARN, gRPC Aborted; ERROR0 в ограниченном окне не clean logs и не готовность помощника |
+| Chrome | PASS только SSO form read/screenshot/Console0/fetch0 после собственного reload; Kodex app/new OOM UX NOT RUN из-за owner step-up |
+| Resource config | Draft12Gi/4CPU сохранён; full equality/validation/publication/rebind NOT RUN, последняя ENV29/binding30 |
+| Workflow / Review / paid / full65 | NOT RUN для нового исполнения; Retry9 FAILED и незакоммиченный checkout не восстановлен; Review0; цель не завершена |
+
+Callback diagnostic read не меняет completion payload/usage/archive или
+idempotency intent. OOM classification по callback при race с Pod status
+остаётся OPEN, как и warm owner conflict. ROOT не пишет бизнес-задачу,
+не посылает USER corrections, не удаляет диск и не запускает host субагентов.
 
 # Область и границы результата
 
