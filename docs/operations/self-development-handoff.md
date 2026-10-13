@@ -4,11 +4,68 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.9
+version: 1.1.10
 updated: 2026-10-13
 ---
 
 # Текущее состояние
+
+## Checkpoint 13.10.2026 14:44 UTC — Developer checkpoints опубликованы, auth boundary уточнена
+
+SOURCE/remote/PR06df3f44da4d3e4fd2a080a938d9cc725d6b2e3b повторно MATCH;
+body1807 обновлён с независимым readback. HOT/code остаётся7f919f1f39ad1dc4bf37e567fa0ada19d1c37ce6,
+новых code/deploy/native Workflow effects в этом этапе нет.
+
+Через штатный UI сохранён и проверен instruction draft Developer, затем
+опубликована revision3 `ins_PYeOCBKsZbCqzFJXQXrfx4z5`. Authoritative read после
+публикации: agent version41, draft отсутствует, binding
+`inb_9IPhbBffr_i4IY0YY2ETli0q` version3/effective=true на exact revision3.
+Шаблон20220B/SHA3379e781e7f360db62abd0e93d698643f7c3b2a65ba5ffd6ba25e99af1b89774.
+Удаление только добавленного блока восстанавливает исходные17978B/
+SHA03041170d029e08a48f469199825db19f58b6df9d21fee9b7ea95513c7f2b6b6.
+Существующие инструкции, переменные и ограничение одного review не заменены.
+Добавлены ранние разрешённые Git checkpoints до тяжёлых проверок и не более
+одной тяжёлой suite одновременно; Go compile parallelism2 как настройка роли,
+не hardcoded инструкция всех сотрудников. Новые permissions не выдавались.
+
+Preview original/loaded/selected1 of1, только Developer, прежний instruction
+binding2. Environment binding31/refrenvv_xGep3oldTAlDAAS_yEA3YlsW остался точным;
+runtimeModel gpt-6.1-sol. Полное before/after сравнение всех остальных полей
+агента отдельно NOT RUN: не подменяется проверкой только environment binding.
+Первый checker ошибочно требовал200 вместо штатного save201; save был принят,
+он не повторялся. Второй checker ждал неправильное название Validate и не
+отправил mutation; fresh READ подтвердил тот же DRAFT39. Validation штатным
+UI дала200/VALID/agent40. После publication observer TIMEOUT не считался
+terminal failure: fresh READ подтвердил published41/r3; повтор публикации0.
+Скриншот инструкции просмотрен на1280x900, overflowfalse, Console0/relevant
+API без ошибок после готовности app session. Mobile/новый provider execution
+этой revision NOT RUN. Чужие Chrome вкладки не менялись.
+
+Auth diagnosis: существующий RefreshProviderAccountAuthorization допускает
+только PENDING device-code attempt, а не обновление AUTHORIZED account.
+CommitProviderCredentialRefresh требует живую exact runtime lease/revision;
+bootstrap reconcile не допускает content rotation. Catalog task остаётся
+READ-only по OPS-PROVIDER-MODEL-CATALOG-1068: OAuth refresh прямо запрещён.
+Ни один из этих путей нельзя использовать как обход отсутствующей owner renewal
+task. OpenAI Docs и Context7 /openai/codex сверены: current official external
+mode и source internal-only marker расходятся; прежнее решение A8 остаётся
+открытым. Рекомендуемый вариант — отдельный CP-owned renewal task с обычным
+managed auth, durable publication новой credential revision и свежей catalog
+task; это не разрешение молча активировать его вместо согласования границы.
+Альтернатива — сохранить live gate BLOCKED и выполнять независимый CODE_ONLY.
+
+Latest owner UI catalog14:36:24 UTC: FAILED/UNAVAILABLE, account AUTHORIZED/
+enabled. Closed broker logs25min: model_list_call:AUTHORIZATION_REJECTED3,
+cleanup:UNAVAILABLE2; смена итогового failure не доказывает восстановление
+или upstream revoke. Четыре serving CP/gateway/RC/broker Pod Running/Ready;
+historical terminal Pods не объявляются активными. Новый Workflow не запущен.
+
+Далее: owner выбор поддерживаемого auth path и полный renewal lifecycle;
+подтверждённый catalog → native Developer с12GiB и новым instruction pin →
+ONE Review → Manager/owner; recovery истории, A8/live paid, QA65 и bootstrap
+gates/merge/main остаются. Goal ACTIVE, не complete; host subagents0,
+USER corrections0, host business edits0. Disk audit READ-only:44GiB available
+на root; очистка не выполнялась, согласование на новое удаление не подразумевается.
 
 ## Checkpoint 13.10.2026 14:18 UTC — причина warm установлена, Developer ENV30 опубликована
 

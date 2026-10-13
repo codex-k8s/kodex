@@ -4,9 +4,30 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.9
+version: 1.0.10
 updated: 2026-10-13
 ---
+
+## 13.10.2026 14:44 UTC — publication Developer instructions3
+
+| Контур | Результат и границы |
+| --- | --- |
+| Remote/body | PASS06df3f44da4d3e4fd2a080a938d9cc725d6b2e3b; Draft1807/body exact readback, HOT code7f unchanged |
+| Save | PASS201/draft3/agent39; checker FAIL из-за ошибочного ожидания200, mutation не повторена |
+| Первое Validate наблюдение | Checker FAIL/TIMEOUT: неверное название UI-кнопки, fresh READ тот же DRAFT39; не объявляется product defect |
+| Validate | PASS200/VALID3/agent40 через правильную штатную кнопку |
+| Publication | Preview1/1 только Developer binding2; observer TIMEOUT после действия; повтор0, отдельный authoritative read published41/r3/binding3/effective PASS |
+| Content | PASS20220B/3379e781e7f360db62abd0e93d698643f7c3b2a65ba5ffd6ba25e99af1b89774; original prefix17978B/03041170…MATCH, новые guidance editable/role-specific |
+| Runtime binding | PASS environment binding31 на exact ENV30/refrenvv_xGep3oldTAlDAAS_yEA3YlsW, модельgpt-6.1-sol; full non-instruction equality NOT RUN |
+| Browser | PASS desktop1280x900 screenshot READ/overflowfalse/Console0/relevant API; mobile и actual provider input новой revision NOT RUN |
+| Catalog | FAIL14:36:24 FAILED/UNAVAILABLE; accountAUTHORIZED/enabled. Closed logs model_list_call:AUTHORIZATION_REJECTED3/cleanup:UNAVAILABLE2; upstream исходная причина UNKNOWN |
+| Auth boundary | Source-proven existing refresh endpoint только PENDING device-code, runtime refresh требует live lease, bootstrap content rotation запрещена; catalog READ-only contract не расширен |
+| Remaining | A8 source-priority/managed owner-renewal decision, renewal lifecycle, new Workflow/ONE Review/Manager/owner, QA65/bootstrap gates/main NOT RUN |
+
+Поддерживаемый managed auth и host-owned experimental tokens — разные режимы;
+current official docs не отменяют source internal-only marker либо границу
+approved catalog observer. Источники OpenAI Docs/Context7 проверены. Новых
+credentials/permissions/inference effects, disk deletion и host субагентов нет.
 
 ## 13.10.2026 14:18 UTC — code7f и реальная ENV30 publication
 

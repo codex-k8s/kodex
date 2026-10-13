@@ -4,9 +4,36 @@ title: Самонастройка и разработка Kodex средства
 type: operations
 status: approved
 owner: manager
-version: 1.1.8
+version: 1.1.9
 updated: 2026-10-13
 ---
+
+## 13.10.2026 14:44 UTC — editable Developer checkpoints и auth source boundary
+
+- [x] Повторно доказать remote/PR06df3f44 и body1807, HOT/code7f не менять.
+- [x] Штатно сохранить/validate/publish только Developer instructions:
+      revision3/refins_PYeOCBKsZbCqzFJXQXrfx4z5, agent41, binding3/effective.
+      Добавлены ранние Git checkpoints и bounded heavy-test concurrency;
+      исходный17978B SHA03041170…MATCH, новый20220B SHA3379e781…MATCH.
+      Environment binding31 и exact ENV30 ref сохранены; модельgpt-6.1-sol.
+- [x] Проверить screenshot/desktop UX/overflowfalse/Console0/relevant API;
+      сохранить ошибки checker save201/button-name/observer TIMEOUT отдельно,
+      не повторять принятые mutations. Fresh published readback PASS.
+- [x] Исключить ложные готовые auth пути: refresh authorization — только
+      PENDING device-code; runtime refresh — только exact live lease;
+      bootstrap не обновляет содержимое credential, catalog READ-only.
+- [ ] Согласовать A8 supported managed owner-renewal task либо сохранить
+      live BLOCKED/CODE_ONLY; не использовать existing READ grant как WRITE,
+      internal-only mode, stale token либо выдуманную runtime lease.
+- [ ] Выполнить catalog renewal/durable publication/crash recovery, native
+      execution нового Developer pin/ENV30, ONE Review/Manager/owner,
+      A8/live paid/QA65/bootstrap gates/merge/main. Full non-instruction
+      before/after comparison и mobile здесь NOT RUN, не подразумеваемый PASS.
+
+Latest14:36:24 catalogFAILED/UNAVAILABLE, accountAUTHORIZED/enabled;
+closed broker25min model_list_call:AUTHORIZATION_REJECTED3/cleanup:UNAVAILABLE2.
+Ready основных сервисов не заменяет успешный Workflow. Никакого нового
+ИИ-запуска, корректирующего USER ввода, host business code либо disk deletion.
 
 ## 13.10.2026 14:18 UTC — warm diagnosis и Developer resource publication
 
