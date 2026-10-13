@@ -4,11 +4,36 @@ title: Самонастройка и разработка Kodex средства
 type: operations
 status: approved
 owner: manager
-version: 1.1.2
+version: 1.1.3
 updated: 2026-10-13
 ---
 
 # Цель и источники
+
+## Checkpoint 13.10.2026 10:11 UTC — current Architect / workspace container UX
+
+- [x] INTAKE1cLq SUCCEEDED09:39:47/version2; пять own pinned CLEAN artifacts
+      целиком bytes/SHA MATCH. Native packet EOF и PR index52/52; not implementation.
+- [x] Coordinator2 SUCCEEDED→ArchitectVABY/5RUq/JdtZ/nodeEgJ5/attempt1/target33;
+      own full ACKd27dfdcd/sameUID879c2376/69b runtime/8e61 execution/5cc image/
+      ENV28/binding29/38tools/18grants/6.1medium, instructions/inbox/image-file MATCH.
+- [x] UI container1344 compact summary и920 full panel; live900 FAIL исправлен
+      общим parentbody query/AST regression. Unsafe test typing lintFAIL исправлен;
+      final48tests/scoped lint/typecheck PASS, runtime-equivalent dd7 build PASS.
+- [x] Exact frontend-only6/2-file FF с zero backend diff; CP372/e489/start30613555
+      и RC567/7d6d/start31623348 EQUAL, native jobs не перезапускались. b1 remote/
+      Draft1807/HOT MATCH; metadata lag и intentional HOT read race сохранены.
+- [x] Actual1280 collapsed/expanded screenshot,900 full overlay и390 mobile
+      screenshots READ/overflowfalse/Console0; zoom не изменён. Transient amber
+      после reload отдельно от settled Connected/live609 и bounded logs.
+- [ ] Current Architect FULL source/semantic verdict и successful Developer→ONE
+      Review→Manager→owner; rootRUNNING589, dual94296live, primaryNOT OBSERVED.
+- [ ] A8, remaining QA65, natural-language cases, GitHub/bootstrap merge/main.
+
+SOURCE/HOTb1e418b1 до journal; source gate не объявлен закрытым только по host
+fixture или commentary. Snapshot/version собственного текущего role и required
+source semantic EOF подтвердить pinned published result. Нет host субагентов,
+business edits, USER corrections или новых disk effects.
 
 ## Checkpoint 13.10.2026 09:26 UTC — Retry9 с прежним INPUT и новым знанием
 

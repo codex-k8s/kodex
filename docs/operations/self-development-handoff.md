@@ -4,11 +4,64 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.3
+version: 1.1.4
 updated: 2026-10-13
 ---
 
 # Текущее состояние
+
+## Checkpoint 13.10.2026 10:11 UTC — INTAKE завершён, Architect работает, адаптивная панель исправлена
+
+SOURCE/remote/HOTb1e418b165f5f591bb24d9ad547f26b2977e412a clean до этой записи,
+Draft1807 exact remote/PR readback PASS. UI5e46586e: компактная раскрываемая
+сводка по container1344; canvas до920 — full overlay. Live900 FAIL выявил
+реальную структуру: overlay является соседним элементом, query на самом graph
+не действует на него. Исправлениеdd7b8a06 переносит query на общий run-page-body;
+AST regression доказывает обоих descendants и отсутствие ложного graph parent.
+Первый lint теста дал6unsafe-any errors; commitb1e418b1 исправил закрытый unknown
+parser, final lint48tests/typecheck PASS. Builddd7 PASS8.52s, chunk/plugin warning
+сохранены; runtime Vue source междуdd7/b1 неизменён, тест изменён отдельно.
+Не считать первый47tests или lint process exit0 blanket PASS: shell sequence
+тогда продолжил typecheck после ESLint FAIL. Final checks используют &&.
+
+Frontend-only FF5e выполнен09:42:47, затемb1 09:59:38: точный allowlist6/2
+files и zero backend/libs/contracts/deploy/infra/tools diff. Actual CP PID372/
+start30613555/ELFe489 и RC PID567/start31623348/ELF7d6d before/after EQUAL;
+native execution не рестартовался. Первый publisher readback видел PR metadata
+lag; другой readback raced с намеренным HOT FF и закрылся HOT_DRIFT. Повторный
+отдельный READ подтвердилb1, без repush и ослабления guard.
+
+Actual screenshot READ: CSS1280x900/workspace1022, summary442x51.6 collapsed/
+110.4 expanded; CSS900x900 full overlay900, CSS390x844 full overlay384/height480,
+horizontal overflowfalse. Query container на общем body, inner workspace none.
+Browser zoom250% сохранён; immediate resize capture не final readback. Screenshot
+после rejoin видел transient amber; settled actual header Connected и live609
+подтверждены10:07. Console0, bounded gateway/RC8min relevant errors не observed;
+это не whole QA или provider transient-recovery proof.
+
+Retry9zpLe RUNNING; INTAKE1cLq SUCCEEDED09:39:47/version2 с пятью собственными
+CLEAN/ACTIVE results. Pinned whole downloads bytes/SHA MATCH: result577B/f1fcbae1,
+write328B/1c5fe313, index10185B/81ccb249, evidence43881B/fb401e89,
+manager-plan27293B/7d50eaa2. Native original packet EOF29pages, index52/52;
+INTAKE не implementation/review/live acceptance. Coordinator2/aDE/EjZ/attempt2
+SUCCEEDED и естественно делегировал Architect, без USER corrections/Review0.
+Root2 ACKdce5e878 sameUID09d87301/runtimea305/inputa711/image-filef87 MATCH;
+dual92373 FOLLOW_STREAM_ENDED после success, не primary failure.
+
+Current Architectrun_VABYmMY-Bvo92gHqA6tfNi6N/ses_5RUqfcZhbc7SW3m9U3p9nFG3/
+trn_JdtZBznJo6K42-h9rifuy6Db/nodeEgJ5/attempt1/target33 RUNNING.
+Full ACKd27dfdcd: sameUID879c2376/Podruntime-turn-c9251eeb6b168611,
+runtime69b29acd/execution8e61c51b/input8a40d050/ENV28/binding29/38tools/18grants/
+6.1medium; instructions/inbox EQUAL, image-filef87 MATCH. Первая ROOT выдача
+collector обрезана output budget; повторён только same-UID READ и сохранён
+полный receipt, не native execution. Dual94296 подтверждён live10:10,
+PRIMARY NOT OBSERVED; rootseq58910:05. Собственный pinned semantic source proof
+и current architecture verdict ещё NOT RUN; commentary не full accepted artifact.
+
+Далее сопровождать этот Architect до verdict/source EOF, затем Developer→ONE
+Review→Manager→owner. A8 source/auth решение, QA65, natural-language кейсы,
+bootstrap GitHub gates/merge/main OPEN. Без host субагентов, business edits,
+corrective USER сообщений и disk deletions. Не рестартовать active backend.
 
 ## Checkpoint 13.10.2026 09:26 UTC — Retry9 INTAKE, источник фактически в Pod
 

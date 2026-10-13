@@ -4,11 +4,66 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.3
+version: 1.0.4
 updated: 2026-10-13
 ---
 
 # Область и границы результата
+
+## Current Architect и исправленная sibling-panel геометрия — 13.10.2026 10:11 UTC
+
+SOURCE/remote/HOTb1e418b165f5f591bb24d9ad547f26b2977e412a clean до этой записи,
+Draft1807 readback PASS. UI5e46586e47tests/build8.97s PASS доказывал только
+initial implementation; actual900 overlay не расширялся — LIVE FAIL. Cause:
+container graph являлся sibling overlay, а не его ancestor. dd7b8a06 переносит
+query на commonbody, AST test проверяет настоящее ancestry. First lint six
+unsafe-any FAIL сохранён: shell semicolon masked final process exit0 успешным
+typecheck; ESLint не объявлен PASS. b1e418b1 закрывает unknown AST boundary,
+&& scoped lint + final48tests PASS4.40s, final typecheck PASS. Builddd7 PASS8.52s;
+runtime Vue source b1 byte-equivalent, изменён только тест. Chunk>500KB и plugin
+timing warnings retained, не whole-platform baseline/CI.
+
+Frontend-only exact allowlist FF5e09:42:47 (six paths) иb1 09:59:38(two paths),
+zero internal/external/jobs/libs/contracts/deploy/infra/tools diff. Actual before/
+after CP Pod45mxg PID372/start30613555/exee48930135d59ec1d1faa3f65729c6021116ba267b82eb6a11132e9b489910aa7
+и RC Podr7zht PID567/start31623348/exe7d6d7a5bb39030da84c6b47eabe3d54d144b6bed92444a55278a2c3ce8e47111
+EQUAL. Доказано отсутствие backend restart, не TTL/permission change. Publisher
+PR metadata lag и separate HOT_DRIFT при read/FF race retained; fresh independent
+READ PASS, повтор push не выполнялся.
+
+Actual own27 screenshot READ без CSS prototype/user-zoom reset:
+1280x900/workspace1022 — collapsed summary442x51.6, expanded110.4; container
+on commonbody. 900x900 — full overlay900;390x844 — full overlay384/480h,
+overflowfalse. Первые unsettled resize reads не final evidence. Screenshots
+после reload видел transient amber, не clean-connected PASS; settled actual
+header Connected/live609 подтверждён10:07. Console0, bounded gateway/RC8min
+relevant error records не observed. Это scoped UI/transport observation,
+не full UX/QA65/transient-provider recovery.
+
+INTAKErun_1cLqm8Alrl0d0qqAATJs6Dye SUCCEEDED09:39:47/version2. Own five ACTIVE/
+CLEAN artifacts exact full bytes/SHA MATCH: result577/f1fcbae1,
+write328/1c5fe313,index10185/81ccb249,evidence43881/fb401e89,
+plan27293/7d50eaa2. Evidence сохраняет original packet29pageEOF и полный52-index,
+не business-source semantic FULL. Coordinator2/aDE/EjZ/attempt2 SUCCEEDED и
+естественно делегировал Architect. Root2 sameUID09d87301 full ACK receipt
+dce5e8782e83fb44c45ebad28320ead82c1ecf32e7a81721c7146d1577d0a59e;
+image-filef87/runtimea305/inputa711 MATCH. Dual92373 FOLLOW_STREAM_ENDED после
+success не primary failure; reviewcycles0/USER corrections0/host business edits0.
+
+Current Architectrun_VABYmMY-Bvo92gHqA6tfNi6N/ses_5RUqfcZhbc7SW3m9U3p9nFG3/
+trn_JdtZBznJo6K42-h9rifuy6Db/attempt1/nodeEgJ5/target33 RUNNING. Exact full ACK
+receipt d27dfdcda1700ff0d1be49d373a0a54116699caa79cf1ab079d29d15ae54a159:
+sameUID879c2376-7e46-4105-b7e7-cf20c7c5c96f/Podruntime-turn-c9251eeb6b168611,
+runtime69b29acd/execution8e61c51b/input8a40d050/5cc/ENV28/binding29/38tools/
+18grants/6.1medium; instructions/inbox EQUAL, image-filef87 MATCH,
+task_expected NOT RUN, serving provider ELF не подменён. First ROOT collector
+output truncated, authoritative same-UID read повторён без execution replay.
+Dual94296live10:10/primaryNOT OBSERVED; rootRUNNING58910:05. Current pinned own
+semantic source/architecture verdict pending, commentary не accepted artifact.
+
+Successful Developer/ONEReview/Manager/owner, A8 source/auth decision, remaining
+QA65/natural-language cases/bootstrap merge/fresh-main OPEN. Host subagents0,
+new USER business corrections0, disk deletions0.
 
 ## Retry9 / фактическое readonly knowledge materialization — 13.10.2026 09:26 UTC
 
