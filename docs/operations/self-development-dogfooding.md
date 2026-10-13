@@ -4,11 +4,35 @@ title: Самонастройка и разработка Kodex средства
 type: operations
 status: approved
 owner: manager
-version: 1.1.1
+version: 1.1.2
 updated: 2026-10-13
 ---
 
 # Цель и источники
+
+## Checkpoint 13.10.2026 09:26 UTC — Retry9 с прежним INPUT и новым знанием
+
+- [x] SOURCE/remote/HOTc0c4a0f4/Draft1807 exact readback/body PASS; lag metadata
+      исправлен отдельным READ, не повторным push. Fresh idle5busy0/85pins
+      сохранены; doc-only HOT FF, actual RC PID567/start31623348/ELF7d6d unchanged.
+- [x] Один штатный UI Retry после terminal734 и RESTORE/NoSessionBlocker:
+      rootzpLe/attempt9/HJind/same finalized INPUTaset_pBFN/retryOfggaA.
+      CoordinatorSUCCEEDED→INTAKE1cLq/B7Gy/ALz/nodezo1C, targetManager42.
+- [x] Early sameUID full ACKcef81ddf, ENV28/binding29/38tools/22grants/6.1medium,
+      instructions/inbox EQUAL/image-filef87 MATCH. Actual knowledgefile440/
+      1077149B/SHA337dfbebb MATCH uploaded exact revision. Parent2777 не объявлен
+      Unix readonly; существующий provider filesystem profile read-only отдельно.
+- [x] Own focused desktop graph1280x900/zoom1.1/active card268px screenshot READ,
+      Console0/overflowfalse. Whole overview after resize мелкий; blanket UX PASS
+      не заявляется. User zoom не изменён; new backend delivery во время run0.
+- [ ] INTAKE own semantic result/Architect FULL source EOF и gate; currentroot
+      RUNNING119/dual36010live/primaryNOT OBSERVED. Root FOLLOW_STREAM_ENDED
+      после success не terminal failure и не основание нового Retry.
+- [ ] Successful Developer→ONE Review→Manager→owner, A8/QA65/GitHub/bootstrap/main.
+
+Фиксировать только SOURCE journal; HOTc0c4 остаётся frozen. Нет host субагентов,
+новых USER messages, business implementation или disk deletions. Native current
+proof не подменять host knowledge hash либо результатом исторического root.
 
 ## Checkpoint 13.10.2026 09:14 UTC — full source KNOWLEDGE вместо неполного gate
 

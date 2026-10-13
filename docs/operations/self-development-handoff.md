@@ -4,11 +4,50 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.2
+version: 1.1.3
 updated: 2026-10-13
 ---
 
 # Текущее состояние
+
+## Checkpoint 13.10.2026 09:26 UTC — Retry9 INTAKE, источник фактически в Pod
+
+SOURCE/remote/HOTc0c4a0f4 clean до этой doc записи; Draft1807 body/readback PASS.
+Первый push readback увидел lag PR metadataD6 при correct remotec0, повторный
+READ PASS без второго push. Fresh idle09:16:34:5busy0/85promoted/f82202f6 EQUAL;
+HOT doc-only FF без service/libs/contracts/deploy/infra/tools diff. Actual RC
+PID567/start31623348/ELF7d6d MATCH, Deployment93/93 Ready1. Новый source fixture
+не требовал rebuild/policy/ENV/grant изменения.
+
+После exact rootFAILED734 и RESTORE/NoSessionBlocker штатный UI Retry создал
+run_zpLeqPy_uLLg4gczQkbTI38H/attempt9/version2, ту же HJind Session и finalized
+INPUTaset_pBFN/retryOfggaA. Initial Coordinator SUCCEEDED, естественно передал
+INTAKErun_1cLqm8Alrl0d0qqAATJs6Dye/ses_B7GyoiMSJJPlpaegxZ-aOtQ5/
+trn_ALz6rI5qjhQMyoreD9WEC2uX/nodezo1C/attempt1, targetManager42. Current root
+RUNNING/sequence119 на09:25:12. Review0/USER corrections0/business edits0.
+Root dual завершён FOLLOW_STREAM_ENDED после technical success, не причина
+root Retry. ACK8c14e444 sameUID02f52061; file binary NOT RUN из-за закрытия.
+
+INTAKE dual36010 подтверждён live09:22, PRIMARY пока NOT OBSERVED; full ACK
+cef81ddf/sameUID9c86e3f9/Podruntime-turn-31340627769a9af8/image5cc/ENV28/binding29/
+38tools/22grants/6.1medium. Runtime735e7d55/execution54801b61/input140f8f6a,
+instructions/inbox EQUAL, image-filef87 MATCH; expected-task comparison NOT RUN,
+serving provider ELF не подменяется. В actual provider Pod
+/workspace/knowledge/0001-codex-0.160.0-full-dispatch-sources.txt:1077149B,
+SHA337dfbebb MATCH uploaded revision, filemode440/UID10001/group29000. Parent
+directory2777, поэтому одной Unix directory mode не доказывается readonly;
+provider filesystem profile отдельно ограничивает knowledge чтением. Native
+semantic EOF/architecture verdict ещё NOT RUN. Host materialization proof не
+подменяет свой required READ роли.
+
+Own27 reload09:25, actual CSS viewport1280x900 при неизменённом user zoom250%.
+After resize whole-graph overview мелкий; явный «Текущая работа» дал zoom1.1 и
+active card268px, screenshot READ/Console0/overflowfalse. Это конкретный focused
+desktop path, не blanket graph/mobile UX PASS. High-zoom short-height и FILES
+проверки из предыдущего checkpoint сохранены. Код/Pods во время native работы
+не обновлять; SOURCE можно дополнять журналом. Продолжать same run/dual36010,
+затем early Architect ACK и собственный full source proof. Successful
+Developer→ONE Review→Manager→owner, A8/QA65/bootstrap/main OPEN.
 
 ## Checkpoint 13.10.2026 09:14 UTC — Retry8 остановлен на неполном источнике, полный источник доставлен как знания
 

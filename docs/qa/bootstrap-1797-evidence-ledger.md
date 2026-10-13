@@ -4,11 +4,51 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.2
+version: 1.0.3
 updated: 2026-10-13
 ---
 
 # Область и границы результата
+
+## Retry9 / фактическое readonly knowledge materialization — 13.10.2026 09:26 UTC
+
+Current SOURCE/remote/HOTc0c4a0f406f76fd7b9165b70ee06d85a76413a58 до этой
+записи, Draft1807 exact body/readback PASS. Initial post-push lag сохранён;
+отдельный readback PASS без второго push. Fresh repository owner READ09:16:34:
+openBuilds/pendingAdmissions/pendingPromotions/activeRuntimeRuns/claimedLeases0,
+85promoted/f82202f6 EQUAL; unrequestedAcceptedArtifacts1 не active task. HOT
+doc-only FF с zero executable/deploy diff; RC PID567/start31623348/ELF7d6d
+unchanged, deployment93/93 Ready1. Backend не рестартовался.
+
+Native UI Retry9 rootrun_zpLeqPy_uLLg4gczQkbTI38H, HJind Session,
+attempt9/version2/same finalized INPUTaset_pBFN/retryOfggaA. RESTORE SUCCEEDED/
+NO_SESSION_BLOCKER. Coordinator technicalSUCCEEDED, downstream INTAKE
+run_1cLqm8Alrl0d0qqAATJs6Dye/ses_B7GyoiMSJJPlpaegxZ-aOtQ5/
+trn_ALz6rI5qjhQMyoreD9WEC2uX/nodezo1C/attempt1/Manager target42 RUNNING.
+Root sequence119 на09:25:12; reviewcycles0. Root dual ACK observed, затем
+FOLLOW_STREAM_ENDED после success; это не captured terminal failure. SameUID
+root ACK8c14e444, image-file binary NOT RUN, не serving proof.
+
+INTAKE dual36010 живой на09:22; PRIMARY NOT OBSERVED. Full ACK receipt
+cef81ddfb003725acc7b0e6694a2300b8364bc889fb21a7f9341fbee667223c5:
+sameUID9c86e3f9-d233-48c5-8908-9a6609da753c, Podruntime-turn-31340627769a9af8,
+image5cc/ENV28/binding29/38tools/22grants/6.1medium; runtime735e7d55/execution
+54801b61/input140f8f6a. Instructions/inbox EQUAL, image-filef87 MATCH,
+task_expected NOT RUN. Root INPUT digesta711 сохранён; child digest относится
+к новому server-owned delegated input, не объявлен root digest.
+
+Actual provider Pod source body knowledge0001:1077149B/SHA337dfbebb MATCH
+exact uploaded artifact revision, mode440/UID10001/group29000. Parent directory
+mode2777; readonly доступ задаёт также существующий provider filesystem profile,
+не одна parent Unix mode. Native source semantic EOF и current Architect gate
+NOT RUN; host hash не заменяет own role proof. Source attestation/serving provider
+ELF и live paid по-прежнему UNKNOWN/NOT RUN.
+
+Own27 actual CSS1280x900/dpr2.5 при неизменном user zoom250%. Resize whole fit
+масштаб0.162896 дал мелкий обзор; explicit current-work focus scale1.1 дал active
+card268px. Screenshot READ, Console0, document overflowfalse. Это focused path,
+не whole graph/mobile UX PASS. Full QA65/A8/native final Workflow/bootstrap/main
+OPEN; новых USER corrections/business edits/host subagents/disk effects0.
 
 ## Retry8 terminal и новый полный readonly source — 13.10.2026 09:14 UTC
 
