@@ -4,9 +4,39 @@ title: Самонастройка и разработка Kodex средства
 type: operations
 status: approved
 owner: manager
-version: 1.1.7
+version: 1.1.8
 updated: 2026-10-13
 ---
+
+## 13.10.2026 14:18 UTC — warm diagnosis и Developer resource publication
+
+Code7f919f1f39ad1dc4bf37e567fa0ada19d1c37ce6 SOURCE/remote/HOT, Draft1807.
+Scoped unit/vet/build и disposable ProviderOptionalBootstrapComponent PASS;
+serving proof96d7fc9cefd5e3e2c6abe87f55193fc41e368f31669a34188214fec1765c84a6
+подтверждает new CP stage code, hashes/process/readiness/rejoin, не full release.
+
+- [x] Доказать реальный rejecting warm stage: PROVIDER_POLICY_CATALOG,
+      failed account-specific catalog и model_list_call:AUTHORIZATION_REJECTED.
+      Account остаётся AUTHORIZED/enabled; не объявлять его revoked.
+- [x] Штатно validate/publish уже сохранённый ресурсный draft и обновить только
+      Developer: ENV30/refrenvv_xGep3oldTAlDAAS_yEA3YlsW, binding31, draft
+      PUBLISHED/v3, tools38 и before/after non-resource SHAf36f…MATCH;
+      memory12288MiB/CPU4000, ephemeral4096/16384 неизменны.
+      Actual runtime с новым профилем NOT RUN.
+- [x] Playwright fallback: обычный SSO, строгий HTTPS, editor/validation/
+      publication screenshots/UX/Console0/API200; чужие вкладки не изменены.
+      Ошибочные ранние401 и первый computed/input policy guard FAIL сохранены.
+- [ ] Исправить owner-bound token refresh/catalog chain: текущий adapter
+      отклоняет account/chatgptAuthTokens/refresh. Не новый experimental opt-in,
+      stale token reply, credential seeding либо расширение grants. Upstream
+      исходная401/expiry и результат будущего обновления остаются UNKNOWN.
+- [ ] Editable ранние Git checkpoints/concurrency, допустимый recovery,
+      новый Developer→ONE Review→Manager/owner, A8/live paid/QA65 и bootstrap
+      gates/merge/main. Retry9 FAILED и review0 остаются исторической правдой.
+
+OpenAI Docs app-server authentication/refresh protocol, Context7 pgx/Playwright
+проверены. Перед/после UI owner idle0, promoted85 и pinsf822 unchanged. Нет
+host субагентов, USER corrections, host business edits или disk cleanup.
 
 ## 13.10.2026 12:56 UTC — диагностический OOM fix и оставшиеся runtime gates
 

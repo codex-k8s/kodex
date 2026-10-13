@@ -4,11 +4,77 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.8
+version: 1.1.9
 updated: 2026-10-13
 ---
 
 # Текущее состояние
+
+## Checkpoint 13.10.2026 14:18 UTC — причина warm установлена, Developer ENV30 опубликована
+
+SOURCE/remote/HOT7f919f1f39ad1dc4bf37e567fa0ada19d1c37ce6 clean до записи.
+Draft1807 separate readback PASS; первые metadata lag и HOT_DRIFT при намеренном
+FF сохранены как observer FAIL_OR_UNKNOWN, без repush. Код добавляет только
+закрытые warm error stages с сохранением errors.Is/As/public status и более
+точного inner stage. Scope, locks, transaction, policies, grants и SQL прежние.
+Unit errs/grpc/platform, scoped vet и CP build PASS на7f. Реальный disposable
+PostgreSQL через canonical entrypoint: ProviderOptionalBootstrapComponent
+PASS0.90s, first up/repeated up/worker and runner readback PASS. Это одна suite,
+не полный component baseline. Проверены Context7 pgx и Playwright.
+
+Перед FF13:16:12 UTC owner runs/leases/builds/admissions/promotions0, promoted85/
+pinsf822 unchanged. Actual serving proof
+96d7fc9cefd5e3e2c6abe87f55193fc41e368f31669a34188214fec1765c84a6:
+host/Pod source hashes, new CP warm-stage symbol/freshness и stable process/
+readiness/rejoin PASS; RC memory-observation code сохраняется. Debug proof,
+не immutable release attestation или новый успешный Workflow.
+
+Причина repeated warm Aborted сужена до PROVIDER_POLICY_CATALOG. Авторитетный
+UI/API read: единственный intended account AUTHORIZED/enabled, но catalog
+FAILED/AUTHORIZATION_REJECTED, gpt-6.1-sol unavailable с соответствующим blocker.
+Свежая observation13:35:08 UTC, не просто истёкшая старая запись. Secret-broker
+closed logs подтверждают model_list_call:AUTHORIZATION_REJECTED и отдельные
+cleanup:UNAVAILABLE. Source appserver.call отклоняет server request
+account/chatgptAuthTokens/refresh как неподдерживаемую authority и переводит
+его в errModelCatalogAuthorization; raw provider payload не извлекался.
+Точная upstream причина запроса refresh/expiry/revoke отдельно UNKNOWN.
+Официальный app-server контракт требует host token renewal для external mode;
+managed chatgpt mode обновляет токены сам. Это не разрешение активировать
+experimental mode, выдавать новые grants или обойти A8. Далее спроектировать
+поддерживаемый owner-bound refresh/catalog path с точными credential/task pins,
+durable publication и crash/unknown outcome; не возвращать stale token и не
+объявлять account revoked только по отказу локального handler.
+
+Chrome MCP own27 доступен, остаётся на прежней форме step-up; foreign29/30
+не менялись. Разрешённый Playwright fallback успешно прошёл штатные ingress
+и application SSO с включённой HTTPS-проверкой. Ранние probe401/ложный READY
+были ошибкой синхронизации ROOT: guard не дождался actual app-shell/JSON session.
+После исправления private checker рабочая сессия, screenshot/UX/API200 и
+Console0 подтверждены; cookies/tokens не переносились между браузерами.
+Проверены Environment editor, validation и publication modal. Это не всё QA65.
+
+Resource draft renvd_gj3Tzy-Pzm4zKOE5I4RJKtGe прошёл VALID/version2/diagnostics0.
+Первый publication guard остановил операцию из-за сравнения четырёх computed
+egress rules с тремя input destinations. Source schema подтверждает DNS TCP/UDP;
+после корректной canonical input projection все четыре non-resource policy
+поля равны. Не было публикации после отказа guard либо ослабления policy.
+UI plan: original/loaded/selected1 of1, только Developer, binding30/agent37.
+Полный before/after non-resource SHA MATCH
+f36f475cf16cf4c7d73b3eaea8e28b9b0b1044b2f13629f458e98b1a1a8c89c4.
+Publication через штатный UI успешно создала ENV30,
+renvv_xGep3oldTAlDAAS_yEA3YlsW; только intended binding31 указывает на этот ref.
+Draft PUBLISHED/version3. CPU request/limit4000, memory request/limit12288MiB;
+ephemeral4096/16384 unchanged, tools38, image/values/secret descriptors/policy
+не изменены. Новый runtime с этими ресурсами ещё NOT RUN. Post-read14:15:53 UTC
+owner idle0/promoted85/pinsf822 unchanged. Screenshot ревизии30 просмотрен,
+Console0/relevant API200, publication UX readable на1280x900.
+
+Остаются: исправить catalog refresh path без authority bypass; editable ранние
+Git checkpoints и bounded test concurrency Developer, recovery прежней истории,
+новый native Workflow с исходным INPUT → ONE Review → Manager/owner; A8/live
+paid/QA65 и bootstrap acceptance/gates/merge/main. User corrections0,
+host business edits0, host subagents0; disk cleanup не выполнялась. Цель активна,
+не завершена. Прежний Retry9 FAILED не переписывался, новые ИИ-запуски не делались.
 
 ## Checkpoint 13.10.2026 12:56 UTC — OOM-диагностика доставлена, конфигурация ждёт step-up
 

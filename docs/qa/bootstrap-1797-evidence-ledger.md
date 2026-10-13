@@ -4,9 +4,33 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.8
+version: 1.0.9
 updated: 2026-10-13
 ---
+
+## 13.10.2026 14:18 UTC — code7f и реальная ENV30 publication
+
+| Контур | Результат и границы |
+| --- | --- |
+| Source/PR/HOT | 7f919f1f39ad1dc4bf37e567fa0ada19d1c37ce6; отдельный exact remote/PR READ PASS, первые lag/HOT_DRIFT FAIL_OR_UNKNOWN сохранены |
+| CP unit/vet/build | PASS errs/grpc/platform и CP build; component tests без DSN в обычном unit не называются выполненными |
+| Disposable PostgreSQL | PASS canonical entrypoint с фильтром ProviderOptionalBootstrapComponent0.90s, fresh/repeated up и readbacks; не whole component suite |
+| Serving | PASS96d7fc9cefd5e3e2c6abe87f55193fc41e368f31669a34188214fec1765c84a6: new CP symbol/freshness, exact source/mount/process/ready/rejoin; debug, не immutable release |
+| Warm | LIVE FAIL, но rejecting stage OBSERVED: PROVIDER_POLICY_CATALOG; API catalog FAILED/AUTHORIZATION_REJECTED, observer model_list_call, source host refresh request denied |
+| Playwright auth/UI | PASS после правильного app-shell/JSON session proof; начальные premature probe401/READY не acceptance. Строгий HTTPS, editor/validation/publication screenshot/UX/Console0/API200 |
+| Validation | PASS draftVALID/v2/diagnostics0; state change выполнен обычным UI |
+| Первый publication guard | FAIL closed до публикации: четыре computed egress rules против трёх symbolic destinations. Correct input projection соответствует schema, policy не ослаблялась |
+| Publication/rebind | PASS только Developer: ENV30/refrenvv_xGep3oldTAlDAAS_yEA3YlsW, binding31 на exact ref, draftPUBLISHED/v3; CPU4000/memory12288; tools38/ephemeral unchanged |
+| Non-resource equality | PASS before/after f36f475cf16cf4c7d73b3eaea8e28b9b0b1044b2f13629f458e98b1a1a8c89c4, включая image/values/secret descriptors/policy |
+| Owner post-read | PASS14:15:53 UTC runs/leases/builds/admissions/promotions0, promoted85, pinsf822 unchanged |
+| Remaining | New runtime/Workflow, catalog renewal/crash safety, early Git checkpoints/recovery, ONE Review/Manager/owner, A8/live paid/QA65/bootstrap gates/merge/main NOT RUN |
+
+Официальный [app-server authentication contract](https://learn.chatgpt.com/docs/app-server#3c-log-in-with-externally-managed-chatgpt-tokens-chatgptauthtokens)
+описывает refresh callback host-owned external mode; источник не подтверждает
+actual upstream401/expiry или разрешение нового experimental deployment.
+Исходная причина upstream и future renewal UNKNOWN. Ранние helper failures
+не выдаются за доказанный product auth defect. Retry9 FAILED/review0 не менялись,
+нет USER corrections, host business edits, host субагентов и disk deletion.
 
 ## 13.10.2026 12:56 UTC — code481 OOM diagnostics
 
