@@ -10,6 +10,28 @@ updated: 2026-10-13
 
 # Область и границы результата
 
+## Native Retry6 INTAKE/Architect 13.10.2026 05:26 UTC
+
+SOURCE/remote1807 cd4fa328 and exact body readback PASS; HOTeaebb unchanged.
+INTAKEn7kn SUCCEEDED05:20:03/version2/five artifacts; Coordinator same-root
+continuation SUCCEEDED/native READ EOF and Architect7ImF delegated05:22:08.
+Root RUNNING/seq412, Developer/ONE Review/Manager PLANNED, Review cycles0.
+INTAKE52/52 PR file index not actual diff review or paid balance/units/charging.
+
+Architect UID4f429e29 early dual14988 live/ACK observed05:23:59. FullACK tool
+exit0/proof514d8439 sameUID/rejoin/manifest5cc/file ELFf87 EQUAL,38tools/18grants,
+ENV28/binding29/6.1medium/inbox and instructions EQUAL. Image-file qualifier
+preserved; actual provider process ELF and task_expected_comparison NOT RUN.
+Native own snapshot369 SUCCEEDED safe summary only; own providerVersion evidence
+not yet captured. Retained FOLLOW_STREAM_ENDED of successful INTAKE/coordinator
+not interpreted as native failure; no retry/task/business edit by ROOT.
+
+Screenshots active/fit graph READ; entire topology fits at small zoom, not whole
+UX acceptance. Console Vite debug only and relevant GET200/rejoin. Wrong ROOT
+logs namespace NotFound corrected; RC no lines, CP file_input_invalid WARN1 at
+05:20:32 retained. No broad clean backend or complete QA/CI claim. A8/bootstrap/
+main/remaining QA65 OPEN, no cleanup or host delegation.
+
 ## Actual initializer delivery / early Retry6 13.10.2026 05:11 UTC
 
 SOURCE/remote/HOTeaebb before doc-only checkpoint. Policy CAS/inspect PASS,

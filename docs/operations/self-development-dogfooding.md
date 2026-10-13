@@ -10,6 +10,24 @@ updated: 2026-10-13
 
 # Цель и источники
 
+## Checkpoint 13.10.2026 05:26 UTC — native INTAKE и Architect
+
+- [x] Published SOURCE/Draft1807 cd4fa328 и body exact readback PASS;
+      HOTeaebb не менялся во время активной работы.
+- [x] INTAKE SUCCEEDED05:20:03, пять results; Coordinator собственным READ
+      прочитал их до EOF и штатно передал Architect текущего root, без USER correction.
+- [x] Architect early ACK/sameUID/rejoin/image-file ELFf87 MATCH, proof514d8439;
+      ENV28/binding29/38tools/18grants/6.1medium, inbox/instructions EQUAL.
+- [ ] Architect semantic verdict и own providerVersion OBSERVED evidence;
+      snapshot369 SUCCEEDED — только safe summary, не полный result proof.
+- [ ] Developer/ONE Review/Manager/owner, A8/remaining QA65/bootstrap/main.
+
+Dual14988 подтверждён live; старые90932/30859 FOLLOW_STREAM_ENDED после success,
+не причина нового Retry. Graph обзор/active screenshots READ, API200/Vite debug;
+whole UX не принят. ROOT неправильный logs namespace NotFound и corrected CP
+file_input_invalid WARN сохранены; нет утверждения broad backend clean.
+Без host субагентов/business edits/новых USER task/очистки диска.
+
 ## Checkpoint 13.10.2026 05:11 UTC — actual initializer delivery и Retry6
 
 - [x] Repo-owned exact policy CAS/inspect PASS, compilation generation4/4,
