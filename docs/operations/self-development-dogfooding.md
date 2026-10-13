@@ -10,6 +10,24 @@ updated: 2026-10-13
 
 # Цель и источники
 
+## Checkpoint 13.10.2026 07:16 UTC — доставлен RC / живой Retry7
+
+- [x] SOURCE/remote308ca168/Draft1807 body readback; first metadata lag не вызвал
+      повторного push. Guarded HOT FF5busy0/85pins preservation PASS.
+- [x] Actual RC PID567/start31623348/ELF7d6d7a5b и mounted hashes EQUAL,
+      Ready1/generation93; older second PodSUCCEEDED, не второй live leader.
+- [x] Штатный Retry7fcPX/HJind/same INPUT; Coordinator SUCCEEDED→INTAKE
+      RrMi RUNNING. Fresh full ACK16c33365/sameUID/ELF-filef87/38tools/22grants.
+- [ ] Native INTAKE/Architect→Developer→ONE Review→Manager→owner завершить;
+      dual10798live/no primary observed, rootRUNNING43, старый rootFAILED896.
+- [ ] При новом timeout доказать owner transaction/lock stage, не расширять
+      TTL/authority; CP latency исторически UNKNOWN, не «исправлена» по claim.
+- [ ] A8/remaining QA65/GitHub gates/bootstrap/main.
+
+HOT308 сохраняется во время live run. Current screenshot READ/Console0/network200;
+future nodes вне viewport, whole UX не PASS. Degraded/restored claim11s observed,
+новых USER tasks/business edits/subagents/deletions0. Collector timeout не terminal.
+
 ## Checkpoint 13.10.2026 07:06 UTC — bounded renewal готов локально
 
 - [x] На9c3e639e реализовать и проверить MATERIALIZATION/TRACK/DRAIN recovery

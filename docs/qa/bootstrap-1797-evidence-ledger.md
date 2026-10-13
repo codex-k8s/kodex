@@ -10,6 +10,32 @@ updated: 2026-10-13
 
 # Область и границы результата
 
+## Actual RC delivery / Retry7 13.10.2026 07:16 UTC
+
+Guarded idle FF308ca16807:09:09 и after read07:09:47:5busy0,
+85promoted/f82202f6 EQUAL. Actual serving Podr7zht/d37c46e8 PID567/
+start31623348/exe7d6d7a5bb39030da84c6b47eabe3d54d144b6bed92444a55278a2c3ce8e47111
+MATCH exact9c3e same-hot-flags independent build. Mounted files38ba78f8/
+41d26e3a/501edbbd MATCH, Deployment93/93 Ready1. Older second RC PodSUCCEEDED;
+«Found2pods» не доказывает двух live leaders. Это actual source/binary delivery,
+не доказательство исправления всех CP RPC latency и whole QA.
+
+Retry7fcPX/HJind/same INPUT/version2 штатно через UI, oldrootterminal proven.
+Coordinator завершён и делегировал INTAKERrMi/SowTS/trn_w9z/nodeOhJq/attempt1,
+rootRUNNING43. Review0/business edits0/USER corrections0. SameUID coordinator
+ACKe96d9fa2, file-binary NOT RUN; ordinary INTAKE full ACK16c33365/rejoin/
+image-file ELFf87 MATCH, ENV28/binding29/tools38/grants22/6.1medium. Runtime/
+execution/input pins fresh; expected task comparison NOT RUN, serving provider
+ELF не подменяется image-file. Dual10798live, первичного provider отказа пока
+не observed; rootobserver FOLLOW_STREAM_ENDED после обычного success сохранён.
+
+Own27 initial screenshot READ, current nodes читаются/future вне viewport;
+Console0 и relevant network200 после refresh07:15. Whole UX не PASS. ROOT
+undefined completed handle и log parser ошибки исправлены только orchestration
+READ, без повторного execution. Actual RC claimdegraded07:12:09→restored20;
+renew failure в данном ограниченном log окне не observed, latency causeUNKNOWN.
+Successful current Workflow/A8/remaining QA/bootstrap merge/main OPEN.
+
 ## Bounded RC heartbeat 13.10.2026 07:06 UTC — local PASS / live NOT RUN
 
 Exact code SHA9c3e639e475de8bb89446967abc3ebcc73e54abe. Producer остаётся

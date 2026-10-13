@@ -10,6 +10,45 @@ updated: 2026-10-13
 
 # Текущее состояние
 
+## Checkpoint 13.10.2026 07:16 UTC — RC доставлен, Retry7 INTAKE работает
+
+SOURCE/remote/HOT308ca168 clean до этой doc записи, Draft1807 push/readback/body
+PASS. Первый post-push readback видел lag PR metadata70c94 при уже correct
+remote308; отдельный READ подтвердил SHA без второго push.
+Guarded idle FF07:09:09 PASS:5busy0 и85promoted/f82202f667bdbfbe88ab3c02e9e39cf49baf3feb404bf2294728a88ad042f603
+сохранены на отдельном after read07:09:47. Actual RC Podr7zht/d37c46e8,
+PID567/start31623348/exe7d6d7a5b MATCH независимому exact9c3e build; три mounted
+source hashes38ba78f8/41d26e3a/501edbbd EQUAL. Deployment93/93 Ready1. Второй
+старый RC Pod имеет phaseSUCCEEDED, не второй действующий heartbeat writer.
+
+Штатная UI Retry создала `run_fCpX4MSAC0JaN0AiXozju0z2`/attempt7/version2
+в той же HJind Session с тем же finalized INPUTaset_pBFN, retryOf oXJ1.
+Coordinator kxx/trn_cbq завершился и естественно делегировал INTAKE
+`run_RrMiXvFy8ygpJFtiwH2U_IhG`/`ses_SowTSBPcLY4tvi8u4xHzBT0L`/
+`trn_w9zHcqwuIR7B_Hra6VMTiCLp`, nodeOhJq/attempt1. RootRUNNING/seq43 на07:14.
+Новое USER сообщение/business edits0, Review cycles0; не successful Workflow.
+
+Coordinator sameUID ACK/rejoin e96d9fa2, image5cc/ENV28/binding29/tools38,
+file binary NOT RUN из-за завершения, не serving proof. INTAKE full proof
+16c33365: sameUIDf43e225e/runtime-turn-c318b9c3c304e292/image5cc, ENV28/binding29,
+tools38/grants22/6.1medium, runtimea3300965/executiond4730584 MATCH; input/inbox
+и instructions EQUAL, image-file ELFf87 MATCH. task_expected NOT RUN отдельно.
+Root observer44531 FOLLOW_STREAM_ENDED после обычного success, не root failure;
+INTAKE dual observer10798 подтверждён live07:14, primary пока NOT OBSERVED.
+ACK tool завершился0; ROOT повторно выполнил только read после orchestration
+undefined-handle ошибки, native execution не повторял. RC claim delivery degraded
+07:12:09→restored07:12:20; renew failure в этом окне не observed. Причина CP
+старой задержки UNKNOWN; не объявлять recovered latency по одному успешному claim.
+
+Own27 refreshed07:15:57, Console0, relevant bootstrap/session/Run/Graph/events200.
+Initial screenshot READ: active/root/current nodes читаются, future справа вне
+viewport; это не whole graph UX PASS. Первый ROOT log jq parse failure сохранён,
+corrected closed line parser дал реальные degraded/restored, без raw logs.
+SOURCE можно дополнять журналом; HOT/source servicing во время run не FF.
+Далее сопровождать INTAKE→Architect→Developer→ONE Review→Manager→owner и fresh
+child ACK/dual. Нет оснований для нового Retry по timeout collector. A8/QA65/
+bootstrap/main OPEN; без субагентов и новых disk deletions.
+
 ## Checkpoint 13.10.2026 07:06 UTC — bounded heartbeat реализован и проверен, delivery впереди
 
 Code commit `9c3e639e475de8bb89446967abc3ebcc73e54abe`, HOT по-прежнему
