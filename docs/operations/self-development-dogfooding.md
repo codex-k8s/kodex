@@ -10,6 +10,23 @@ updated: 2026-10-13
 
 # Цель и источники
 
+## Checkpoint 13.10.2026 05:11 UTC — actual initializer delivery и Retry6
+
+- [x] Repo-owned exact policy CAS/inspect PASS, compilation generation4/4,
+      Fail/Deny/binding/parameters/controller/85promoted preserved; public8+5unit PASS.
+- [x] Idle HOTeaebb, actual RC PID389/ELF36cc MATCH независимой сборке;
+      source/mount hashEQUAL. Старый PID139 probe retained отдельно.
+- [x] Native Retry6 same INPUT/session, Coordinator SUCCEEDED→INTAKE RUNNING;
+      новые USER tasks/business edits0, Review cycles0.
+- [x] Early INTAKE ACK/rejoin/image-file proofa5ce1044: ENV28/binding29,
+      recipe26/5cc image,38tools/22grants, gpt-6.1-sol medium; inbox/instructions EQUAL.
+- [x] Actual initializer/role/provider cache mounts8Gi и quota4Gi/16Gi,
+     4cache variables/provider writable; init Completed0, role servingf87 MATCH.
+      PID1 wrapperd8ac отдельно; provider serving ELF NOT CAPTURED.
+- [ ] Native successful INTAKE/Architect/Developer/ONE Review/Manager/owner,
+      primary observer90932 live с04:58:40; отсутствие diagnostics не acceptance.
+- [ ] A8 source choice, remaining QA65/bootstrap/main. HOT во время run не менять.
+
 ## Checkpoint 13.10.2026 04:49 UTC — delivery tool для initializer mounts
 
 - [x] Repo-owned closed plan/apply/inspect только двух exact CEL validations;

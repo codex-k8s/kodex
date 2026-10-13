@@ -10,6 +10,28 @@ updated: 2026-10-13
 
 # Область и границы результата
 
+## Actual initializer delivery / early Retry6 13.10.2026 05:11 UTC
+
+SOURCE/remote/HOTeaebb before doc-only checkpoint. Policy CAS/inspect PASS,
+generation4/4/spec157b38a8; binding/parameters/controller/cluster and85pins
+preserved. Public make8+5PASS. Actual serving RC PID389/exe36cc equals
+independent same-hot-flags build; source manager hashEQUAL. Earlier old139
+probe и delayed GitHub PR metadata retained, no repeated WRITE.
+
+Retry6oXJ1 same HJind/INPUT, Coordinator SUCCEEDED→INTAKEn7kn RUNNING.
+Observer90932 actual live04:58:40 with exact ACK, no PRIMARY observed yet;
+root seq153/RUNNING last05:04. ACK/rejoin/image-file proofa5ce1044:
+ENV28/binding29/recipe26/5cc,38tools/22grants,6.1medium, input/runtime/execution
+MATCH, inbox/instructions EQUAL; task_expected_comparison NOT RUN.
+
+Native init Completed0, exact8Gi cache3mounts/quota4Gi/16Gi/4ENV/writable PASS,
+reduced mount proofa458c71c. Actual role PID13/exef87 MATCH; PID1 wrapperd8ac
+не runner proof. Provider serving ELF NOT CAPTURED; image-file pin MATCH отдельно.
+Own screenshot READ/Console0/relevant200/overflow context, CP/RC10min logs0lines;
+partial graph viewport не whole UX PASS. Root orchestration undefined finished
+collector handle failed before next diagnostics, execution не перезапускался.
+Successful Workflow/ONE Review/Manager/owner/A8/remaining QA65 NOT COMPLETE.
+
 ## Initializer policy delivery tool 13.10.2026 04:49 UTC
 
 ROOT5synthetic transition negatives PASS0.003s. Public runtime-admission gate

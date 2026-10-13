@@ -10,6 +10,51 @@ updated: 2026-10-13
 
 # Текущее состояние
 
+## Checkpoint 13.10.2026 05:11 UTC — startup исправлен, Retry6 INTAKE работает
+
+SOURCE/remote/HOTeaebb68e clean перед doc checkpoint. Repo-owned admission
+plan/apply/inspect PASS: native generation4/observed4, desired normalized
+spec157b38a8, UID0a989401 unchanged. Binding47fb673d/parameters354fd4d0,
+controller spec/cluster/ns и85promoted pinsf82202f6 preserved. Safe intent/PASS
+readback retained; первая GitHub PR metadata отставала от pushed ref, отдельный
+READ подтвердил SHA без повторного WRITE. Public make gate8+5tests PASS.
+
+Guarded idle HOT FF04:53:33 PASS5busy0/pins unchanged. Mounted RC manager
+e1896132 MATCH source. Первый probe ещё видел прежний PID139/ELFe6d74421;
+повтор actual PID389/start30810033/exe36cc6438 MATCH independent same-hot-flags
+Go1.26.6 build. Deployment Ready1. CP core53 сохраняется, warm кратко
+PROVISIONING при штатном reconciliation не объявляется новым отказом.
+
+Native Retry6 run_oXJ1PAMPJtUIxtq3EyIm9KP4 в04:55:47/attempt6/version2,
+same HJind session/INPUTaset_pBFN, rootPFy terminal перед повтором подтверждён.
+Coordinator SUCCEEDED и естественно делегировал INTAKErun_n7kniveJDYW1fQeV6CZRhq0v,
+session4i8G/turn16t4/attempt1. Root остаётся RUNNING/seq153 на05:04;
+Review cycles0. Новых USER task/ROOT business edits0.
+
+Early Coordinator ACK observed, затем FOLLOW_STREAM_ENDED после success;
+не root terminal и не failure модели. ROOT orchestration попытался сохранить
+undefined handle уже завершённого collector и закрыто остановился; execution
+не повторялся. INTAKE dual observer90932 live с04:58:40 UTC,
+sameUID4d8d5d48, PRIMARY пока NOT OBSERVED. ACKcapture8740 завершён0,
+full sameUID/rejoin/binary-file pin PASS/a5ce1044;38tools/22grants/model6.1medium,
+ENVreview28/binding29/image recipe26/manifest5cc8, input/runtime/execution pins
+MATCH. Inbox/instructions EQUAL, task_expected_comparison NOT RUN отдельно.
+
+Native Pod init prepare/init Completed0. Exact cache volume8Gi у initializer/
+role/provider, relay excluded, no subPath/propagation, provider quota4Gi/16Gi
+и4cache ENV variables MATCH. Provider test-w observed true. Role actual
+PID13/exef87a50a1 MATCH OCI; PID1 обоих контейнеров — kodex-init/d8ac588e,
+его hash не выдан за runner. Provider serving ELF NOT CAPTURED; образный
+runner-file hash f87 MATCH отдельно. Reduced mount proofa458c71c retained.
+
+Own27 screenshot READ/Console0/relevant bootstrap/session/graph/events/ticket200,
+realtime; частичный viewport не whole graph UX PASS. CP/RC10min logs0lines.
+Чужие вкладки не трогались. Пока run активен, HOT/source servicing не менять.
+Далее native INTAKE→Architect→Developer→ONE Review→Manager→owner; для каждого
+нового child fresh pins и early dual capture. Timeout collector не terminal:
+проверять тот же handle/native state, не делать blind Retry. A8/QA65/bootstrap/
+fresh-main остаются OPEN, цель ACTIVE и работа без host субагентов.
+
 ## Checkpoint 13.10.2026 04:49 UTC — exact admission transition подготовлен
 
 Добавлен repo-owned `tools/dev/transition-runtime-initializer-mounts.py`:
