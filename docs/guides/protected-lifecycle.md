@@ -4,8 +4,8 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.24
-updated: 2026-10-12
+version: 1.1.25
+updated: 2026-10-13
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
@@ -297,6 +297,36 @@ keepers до закрытия RPC клиента. TTL, attempt, authority и own
 при этом не расширяются; transport 404 сам по себе не доказывает expiry.
 
 ## Решение владельца
+
+### Ограниченное восстановление доставки runtime heartbeat
+
+Источник — тот же `RuntimeWorkService.RenewExecution` и authoritative
+`WorkLease.expires_at`. Контроллер передаёт только прежние exact lease/fence/
+generation; actor и workload проверяются обычным transport/owner command.
+Нет нового endpoint, grant, attempt, события или локального продления TTL.
+Ответ принимается только с совпавшими pins и допустимым ещё не истёкшим expiry.
+Предыдущее подтверждённое expiry ограничивает весь новый RPC и его повторы;
+ответ после этого срока не восстанавливает исполнение. Наблюдение сетевого
+сбоя не доказывает revoke, но и не назначает новый срок полномочий.
+
+| Переход heartbeat | Контроллер и владелец состояния |
+| --- | --- |
+| Claim → materialization | До первой подтверждённой renewal нет повторов по предполагаемому TTL; свежий exact owner ответ обязателен до публикации |
+| Периодическая materialization / публикация | Только `Unavailable/DeadlineExceeded`, ограниченные число/задержки и прежнее expiry; публикация сериализована с renewal и отдельно ограничена expiry |
+| Keeper → tracker | Keeper отменён и joined; последний успешный renew передаёт tracker подтверждённый expiry, без второго heartbeat writer |
+| Track → drain | Тот же expiry; graceful stop не выдаёт authority, renew ограничен независимым drain budget и потерей leadership |
+| Renew success | Owner повторно проверяет exact живую lease/graph; контроллер принимает только matching pins и свежий expiry, без подмены input/revision |
+| Permission/NotFound/stale/mismatch | Немедленный закрытый отказ без повторов, Stop/Delete и завершение локального coordinator; owner terminal не переписывается |
+| Временная доставка без подтверждённого expiry | Один bounded RPC, затем закрытый отказ; неизвестный commit не считается renewal success |
+| Подтверждённое expiry / исчерпание попыток | RPC прекращён, workload закрыт; устаревший success не оживляет terminal/root и не запускает retry attempt |
+| Cancel/delete/root terminal/lease expiry | Прежняя owner-транзакция отзывает leases/grants всего графа; свежий renew отвергается, исторические receipts не назначают новый expiry |
+| Callback завершился во время recovery | Локальный watcher joined; callback сохраняет terminal result, heartbeat не создаёт второе completion |
+
+Небольшой запас до authoritative expiry используется только для раннего
+прекращения RPC и локального cleanup, никогда для расширения срока. Heartbeat
+не разрешает новый пользовательский effect при отказе его отдельной authority.
+Проверки покрывают три фазы, ошибочный ответ, повторный exact tuple, revoke,
+parent cancellation, expiry и отсутствие публикации/воскрешения после отказа.
 
 ### Обязательный дочерний Workflow обычного сотрудника
 

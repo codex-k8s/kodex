@@ -324,7 +324,7 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 		runtime.trackers.Add(1)
 		go func() {
 			defer runtime.trackers.Done()
-			runtime.track(ctx, input, done, warmExecution)
+			runtime.track(ctx, input, done, warmExecution, keeper.confirmedUntil)
 		}()
 	}
 	return len(response.GetExecutions()), nil
@@ -352,7 +352,7 @@ func warmFileProjectionEligible(input runtimecontract.RunnerInput) bool {
 	return len(input.AttachmentSets) == 0 && len(input.InputArtifacts) == 0
 }
 
-func (runtime *runtime) track(parent context.Context, input runtimecontract.RunnerInput, done <-chan struct{}, warmExecution bool) {
+func (runtime *runtime) track(parent context.Context, input runtimecontract.RunnerInput, done <-chan struct{}, warmExecution bool, confirmedUntil time.Time) {
 	defer func() { <-runtime.capacity }()
 	execution, cancel := input.BoundExecutionDeadline(parent, runtime.config.ExecutionTimeout)
 	defer cancel()
@@ -360,9 +360,14 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 	defer renew.Stop()
 	inspect := time.NewTicker(runtime.inspectInterval)
 	defer inspect.Stop()
+	expiry := time.NewTimer(time.Hour)
+	defer expiry.Stop()
+	expired := resetLeaseExpiry(expiry, confirmedUntil)
 	var terminalObservedAt time.Time
 	terminalDiagnostic := ""
-	_ = runtime.progress(execution, input, "WORKLOAD_SCHEDULED")
+	progress, cancelProgress := leaseBoundedRequest(execution, runtime.config.RequestTimeout, confirmedUntil)
+	_ = runtime.progress(progress, input, "WORKLOAD_SCHEDULED")
+	cancelProgress()
 	for {
 		select {
 		case <-done:
@@ -375,19 +380,32 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 				runtime.closeRevokedTurn(parent, input, done)
 				return
 			}
-			runtime.drainTurn(parent, input, done)
+			runtime.drainTurn(parent, input, done, confirmedUntil)
+			return
+		case <-expired:
+			runtime.closeRevokedTurn(parent, input, done)
 			return
 		case <-renew.C:
-			request, cancelRequest := context.WithTimeout(execution, runtime.config.RequestTimeout)
-			_, err := runtime.control.RenewExecution(request, &controlplanev1.RenewExecutionRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration})
-			runtime.logRenewalFailure(request, parent, input, renewalPhaseTrack, err)
-			cancelRequest()
+			select {
+			case <-done:
+				return
+			default:
+			}
+			until, err := runtime.renewLease(execution, input, renewalPhaseTrack, confirmedUntil)
 			if err != nil {
+				if execution.Err() != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || transientControlPlaneFailure(err)) &&
+					!errors.Is(context.Cause(parent), workload.ErrLeadershipLost) &&
+					(confirmedUntil.IsZero() || time.Now().Before(confirmedUntil)) {
+					runtime.drainTurn(parent, input, done, confirmedUntil)
+					return
+				}
 				runtime.closeRevokedTurn(parent, input, done)
 				return
 			}
+			confirmedUntil = until
+			expired = resetLeaseExpiry(expiry, confirmedUntil)
 		case <-inspect.C:
-			request, cancelRequest := context.WithTimeout(execution, runtime.config.RequestTimeout)
+			request, cancelRequest := leaseBoundedRequest(execution, runtime.config.RequestTimeout, confirmedUntil)
 			observation, err := runtime.turns.ObserveTurnPod(request, input, warmExecution)
 			cancelRequest()
 			if err != nil || !terminalTurnState(observation.State) {
@@ -415,7 +433,7 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 	}
 }
 
-func (runtime *runtime) drainTurn(parent context.Context, input runtimecontract.RunnerInput, done <-chan struct{}) {
+func (runtime *runtime) drainTurn(parent context.Context, input runtimecontract.RunnerInput, done <-chan struct{}, confirmedUntil time.Time) {
 	select {
 	case <-done:
 		return
@@ -432,12 +450,31 @@ func (runtime *runtime) drainTurn(parent context.Context, input runtimecontract.
 	defer timer.Stop()
 	renew := time.NewTicker(runtime.config.LeaseRenewInterval)
 	defer renew.Stop()
+	expiry := time.NewTimer(time.Hour)
+	defer expiry.Stop()
+	expired := resetLeaseExpiry(expiry, confirmedUntil)
+	drain, cancelDrain := context.WithTimeout(base, runtime.terminalGrace)
+	joined := make(chan struct{})
+	go func() {
+		defer close(joined)
+		select {
+		case <-workload.LeadershipDone(parent):
+			cancelDrain()
+		case <-done:
+			cancelDrain()
+		case <-drain.Done():
+		}
+	}()
+	defer func() { cancelDrain(); <-joined }()
 	for {
 		select {
 		case <-workload.LeadershipDone(parent):
 			runtime.closeRevokedTurn(base, input, done)
 			return
 		case <-done:
+			return
+		case <-expired:
+			runtime.closeRevokedTurn(base, input, done)
 			return
 		case <-timer.C:
 			select {
@@ -448,14 +485,23 @@ func (runtime *runtime) drainTurn(parent context.Context, input runtimecontract.
 			runtime.completeFailure(base, input, "RUNTIME_TIMEOUT", "")
 			return
 		case <-renew.C:
-			request, cancel := context.WithTimeout(base, runtime.config.RequestTimeout)
-			_, err := runtime.control.RenewExecution(request, &controlplanev1.RenewExecutionRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration})
-			runtime.logRenewalFailure(request, parent, input, renewalPhaseDrain, err)
-			cancel()
+			select {
+			case <-done:
+				return
+			default:
+			}
+			until, err := runtime.renewLease(drain, input, renewalPhaseDrain, confirmedUntil)
 			if err != nil {
+				if errors.Is(renewalContextError(drain), context.DeadlineExceeded) && (errors.Is(err, context.DeadlineExceeded) || transientControlPlaneFailure(err)) &&
+					(confirmedUntil.IsZero() || time.Now().Before(confirmedUntil)) {
+					runtime.completeFailure(base, input, "RUNTIME_TIMEOUT", "")
+					return
+				}
 				runtime.closeRevokedTurn(base, input, done)
 				return
 			}
+			confirmedUntil = until
+			expired = resetLeaseExpiry(expiry, confirmedUntil)
 		}
 	}
 }

@@ -32,7 +32,7 @@ func (client *materializationRenewClient) RenewExecution(ctx context.Context, re
 			return nil, err
 		}
 	}
-	return &controlplanev1.RenewExecutionResponse{}, nil
+	return renewalTestResponse(request, time.Now().Add(time.Minute)), nil
 }
 
 func keeperTestRuntime(client *materializationRenewClient) *runtime {

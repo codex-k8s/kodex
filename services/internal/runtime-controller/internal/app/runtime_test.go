@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type runtimeWorkClientStub struct {
@@ -27,13 +28,18 @@ type runtimeWorkClientStub struct {
 	renew    func() error
 }
 
-func (client *runtimeWorkClientStub) RenewExecution(context.Context, *controlplanev1.RenewExecutionRequest, ...grpc.CallOption) (*controlplanev1.RenewExecutionResponse, error) {
+func (client *runtimeWorkClientStub) RenewExecution(_ context.Context, request *controlplanev1.RenewExecutionRequest, _ ...grpc.CallOption) (*controlplanev1.RenewExecutionResponse, error) {
 	if client.renew != nil {
 		if err := client.renew(); err != nil {
 			return nil, err
 		}
 	}
-	return &controlplanev1.RenewExecutionResponse{}, nil
+	return renewalTestResponse(request, time.Now().Add(time.Minute)), nil
+}
+
+func renewalTestResponse(request *controlplanev1.RenewExecutionRequest, expiry time.Time) *controlplanev1.RenewExecutionResponse {
+	return &controlplanev1.RenewExecutionResponse{Lease: &controlplanev1.WorkLease{Ref: request.LeaseRef, Fence: request.Fence,
+		Generation: request.Generation, ExpiresAt: timestamppb.New(expiry)}}
 }
 
 func (client *runtimeWorkClientStub) ReportExecutionProgress(context.Context, *controlplanev1.ReportExecutionProgressRequest, ...grpc.CallOption) (*controlplanev1.ReportExecutionProgressResponse, error) {
@@ -86,7 +92,7 @@ func TestTrackShutdownWaitsForReceiptWithoutDeletingCallbackMaterial(t *testing.
 	runtime.terminalGrace = time.Second
 	ctx, cancel := context.WithCancel(t.Context())
 	finished := make(chan struct{})
-	go func() { runtime.track(ctx, input, done, false); close(finished) }()
+	go func() { runtime.track(ctx, input, done, false, time.Time{}); close(finished) }()
 	cancel()
 	<-turns.stopped
 	if turns.deletions.Load() != 0 || client.count() != 0 {
@@ -114,7 +120,7 @@ func TestTrackDrainHonorsOwnerRenewalDenial(t *testing.T) {
 	runtime.config.LeaseRenewInterval = time.Millisecond
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	runtime.track(ctx, input, done, false)
+	runtime.track(ctx, input, done, false, time.Time{})
 	if turns.deletions.Load() != 1 || client.count() != 0 {
 		t.Fatal("revoked lease was extended or completed with fabricated result")
 	}
@@ -128,7 +134,7 @@ func TestDrainDoesNotStopAlreadyCompletedWarmTurn(t *testing.T) {
 	turns := &turnLifecycleStub{}
 	client := &runtimeWorkClientStub{}
 	runtime := trackingRuntime(client, turns, coordinator)
-	runtime.drainTurn(t.Context(), input, done)
+	runtime.drainTurn(t.Context(), input, done, time.Time{})
 	if turns.stops.Load() != 0 || turns.deletions.Load() != 0 || client.count() != 0 {
 		t.Fatal("completed warm turn was stopped by shutdown fallback")
 	}
@@ -161,7 +167,7 @@ func TestTrackAcceptsCallbackDuringTerminalGrace(t *testing.T) {
 		<-turns.observed
 		coordinator.Complete(input.LeaseRef)
 	}()
-	runtime.track(t.Context(), input, done, false)
+	runtime.track(t.Context(), input, done, false, time.Time{})
 
 	if client.count() != 0 {
 		t.Fatalf("failure completion count = %d, want 0", client.count())
@@ -187,7 +193,7 @@ func TestTrackRetriesFailureCompletionBeforeCleanup(t *testing.T) {
 	turns := &turnLifecycleStub{observation: workload.TurnPodObservation{State: "FAILED", DiagnosticCode: "ROLE_RUNTIME_EXITED_NONZERO"}}
 	runtime := trackingRuntime(client, turns, coordinator)
 
-	runtime.track(t.Context(), input, done, false)
+	runtime.track(t.Context(), input, done, false, time.Time{})
 
 	if client.count() != 3 {
 		t.Fatalf("failure completion count = %d, want 3", client.count())
@@ -326,7 +332,7 @@ func TestTrackPinnedWorkflowDeadlineDoesNotUseShorterFallback(t *testing.T) {
 	runtime := trackingRuntime(client, turns, coordinator)
 	runtime.config.ExecutionTimeout = time.Millisecond
 	finished := make(chan struct{})
-	go func() { runtime.track(t.Context(), input, done, false); close(finished) }()
+	go func() { runtime.track(t.Context(), input, done, false, time.Time{}); close(finished) }()
 	time.Sleep(20 * time.Millisecond)
 	coordinator.Complete(input.LeaseRef)
 	select {
@@ -347,7 +353,7 @@ func TestTrackExpiredWorkflowDeadlineClosesWithTimeoutAndJoins(t *testing.T) {
 	client := &runtimeWorkClientStub{}
 	turns := &turnLifecycleStub{}
 	runtime := trackingRuntime(client, turns, coordinator)
-	runtime.track(t.Context(), input, done, false)
+	runtime.track(t.Context(), input, done, false, time.Time{})
 	client.mu.Lock()
 	defer client.mu.Unlock()
 	if turns.stops.Load() != 1 || turns.deletions.Load() != 1 || len(client.requests) != 1 || client.requests[0].SafeErrorCode != "RUNTIME_TIMEOUT" {
@@ -363,7 +369,7 @@ func TestWorkflowDeadlineOwnerDenialClosesRevokedPodWithoutRetry(t *testing.T) {
 	client := &runtimeWorkClientStub{complete: func(int) error { return status.Error(codes.PermissionDenied, "lease revoked") }}
 	turns := &turnLifecycleStub{}
 	runtime := trackingRuntime(client, turns, coordinator)
-	runtime.track(t.Context(), input, done, false)
+	runtime.track(t.Context(), input, done, false, time.Time{})
 	if client.count() != 1 || turns.deletions.Load() != 1 || turns.stops.Load() != 2 {
 		t.Fatal("owner expiry denial retained old Pod or retried authority")
 	}

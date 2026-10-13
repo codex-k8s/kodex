@@ -215,12 +215,12 @@ func TestRenewalObservationPrecedesTrackAndDrainDeletionWithoutChangingFailures(
 				runtime.config.LeaseRenewInterval, runtime.inspectInterval, runtime.terminalGrace = time.Millisecond, time.Hour, time.Second
 				wantStops := int32(1)
 				if phase == renewalPhaseTrack {
-					runtime.track(t.Context(), input, done, false)
+					runtime.track(t.Context(), input, done, false, time.Time{})
 				} else {
 					wantStops = 2
 					parent, cancel := context.WithCancel(t.Context())
 					cancel()
-					runtime.drainTurn(parent, input, done)
+					runtime.drainTurn(parent, input, done, time.Time{})
 				}
 				if client.calls.Load() != 1 || client.count() != 0 || turns.stops.Load() != wantStops || turns.deletions.Load() != 1 || client.request.Err() != context.Canceled {
 					t.Fatal("observation changed renew retry, fallback completion, stop/delete or request cleanup")
