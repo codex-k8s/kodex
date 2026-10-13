@@ -25,6 +25,8 @@ updated: 2026-10-13
 - [x] Forward core53 предлагает scoped repo cache только редактируемым планом,
       без hardcode/скрытой вставки всем; core52 immutable. ROOT full helper unit,
       targeted materialization/authority/bounds, vet/CP build PASS на working tree.
+      Staged diff-check сначала FAIL на пустой EOF строке; исправлен, повторные
+      diff-check/full unit0.122s/build295afd1c PASS, core58957B/b779cfe8.
 - [ ] Commit/push и actual HOT/CP/core53 delivery; AI runtime volume/image/ENV
       pins, fresh early dual observer и успешный Developer→ONE Review→Manager→owner.
 - [ ] A8 source choice, remaining QA65 и bootstrap/fresh-main. Не выдавать

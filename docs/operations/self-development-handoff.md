@@ -42,12 +42,15 @@ relevant native API/session/ticket200; CP/RC последние10мин logs0lin
 сохранены отдельно. Штатные fresh SSO/proxy восстановления подтверждены;
 current authenticated/visible readback не обещает бессрочную сессию.
 
-В SOURCE подготовлен forward core53 (58958B/4a817bed, addendum1602B): помощник
+В SOURCE подготовлен forward core53 (58957B/b779cfe8, addendum1601B): помощник
 предлагает bounded cache/scratch под конкретный repo stack через confirmed
 plan и publication, без hardcoded путей/размеров, скрытой настройки всем,
 расширения прав или canary bypass. Published core52 bytes unchanged.
 ROOT Go1.26.6 systemassistant full unit PASS0.183s, exact v53 test0.044s,
-vet и CP binary build PASS/e60b6b7f. Доставка core53/actual serving пока NOT RUN.
+vet и CP binary build PASS/e60b6b7f до удаления лишней пустой строки EOF.
+Первый staged diff-check FAIL на этой строке; после её удаления diff-check,
+повторный full helper unit0.122s и CP binary build295afd1c PASS.
+Доставка core53/actual serving пока NOT RUN.
 
 Далее: commit/push core53 и checkpoint, guarded idle HOT FF/CP serving proof;
 actual fresh runtime image/ENV/volume pins, early dual observer, штатный Retry

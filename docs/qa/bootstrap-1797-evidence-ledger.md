@@ -29,9 +29,11 @@ total85/f82202f6; busy5zero. Query54e68190/raw9e63f1de.
 Own main/resources UI screenshots READ, overflowfalse/Console0/relevant200;
 CP/RC10min logs0lines. Historical fresh-auth403/local intent expiry/ingress
 expiry retained отдельно; normal SSO/proxy recovery не auth bypass.
-Current source core53 working tree58958B/4a817bed preserves52 bytes;
+Current source core53 working tree58957B/b779cfe8 preserves52 bytes;
 scoped cache recommendation не hardcode forall и не authority. ROOT full unit
-0.183s/targeted0.044s/vet/CP build e60b6b7f PASS. New core serving/AI volume
+0.183s/targeted0.044s/vet/CP build e60b6b7f PASS до EOF cleanup. Первоначальный
+staged diff-check FAIL на лишней пустой строке; после исправления diff-check,
+full unit0.122s/build295afd1c PASS. New core serving/AI volume
 proof и successful Workflow NOT RUN. Первичная историческая eviction quota
 UNKNOWN; READY/QA65/CI не заявляются. A8/bootstrap/main/owner gates OPEN.
 
