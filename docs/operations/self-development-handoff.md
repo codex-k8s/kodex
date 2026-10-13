@@ -4,11 +4,60 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.6
+version: 1.1.7
 updated: 2026-10-13
 ---
 
 # Текущее состояние
+
+## Checkpoint 13.10.2026 11:56 UTC — Retry9 FAILED из-за exact Pod OOM
+
+SOURCE/remote75838971acccd0c8e77c32774c6d0067ad4d07ec clean до записи,
+Draft1807 body/readback PASS, HOTb1 unchanged. RootzpLe FAILED11:38:26.312908/
+version3/sequence1373, safe PROVIDER_UNAVAILABLE/RUNTIME_PROVIDER_UNAVAILABLE.
+DevelopermdJQ FAILED, artifacts0; Reviewer/Manager CANCELLED, reviewcycles0.
+Новый commit/push не наблюдался: последняя own Git HEADab499, dirty tree52files.
+Проверки контракта/binding/callback и RU/EN SSR были заявлены в commentary,
+не accepted final SHA/report; whole runner /proc/FS/UDS и i18n5s FAIL сохранены.
+Последний commentary1362 описывает устранение лишнего SystemAssistant resync;
+это не независимое подтверждение исправления.
+
+FIRST observer21587 завершён FAILURE_NOT_OBSERVED_BEFORE_DEADLINE, не execution
+failure. После authoritative RUNNING/sameUID READ новый observer48679 получил
+тот же ACK/runtime12bd/execution7d1d/input2876, без native restart. В11:38:26
+CLIENT TERMINAL_ABSENT/contextACTIVE/activity_failedfalse; final sameUID rejoin
+VERIFIED/provider primaryNOT OBSERVED. Receipt
+3fe9e72b5be29510619d6ec3e79d4cb87080581371e8cc856dcc5e965ce2e2f0.
+Авторитетный kernel journal независимо подтвердил OOM exact PodUID
+53cbfcd5-71f2-4c1a-9b06-65b8ec161e3a: memoryusage/limit4194304KiB/4Gi,
+Node MainThread anonymous RSS2965620KiB; group kill включил Codex, npm lint,
+npm unit, Go compiler/link и runner. Причина memory limit доказана, отказ
+OpenAI не доказан. Наблюдаемая классификация ProviderUnavailable неточна;
+диагностический/resource handling fix ещё NOT RUN.
+
+Root Session HJind ARCHIVED/DELETE_PVC SUCCEEDED; child Session Gmzra API
+UNTRACKED/NO_SESSION_BLOCKER, но exact PVC927fb558 Bound/UID9b9f9667 на server0.
+Он содержит codex-home/state, не writable checkout. /workspace/work по канонике
+emptyDir и очищается между исполнениями; exact deleted Pod workspace directory
+на agent0 ABSENT. Сохранность незакоммиченного source не подтверждена;
+восстановление из разрешённой истории NOT RUN. Не объявлять сам PVC сохранённым
+checkout и не запускать blind Retry. ROOT не восстанавливает business code
+собственным написанием и не отправляет корректирующий USER prompt.
+
+Далее: resource profile selfdev-write увеличить в пределах реальных квот,
+проверить сохранение non-resource pins; repository-specific инструкции ранних
+Git checkpoints и ограниченной параллельности дать через editable configuration,
+не hardcode для всех агентов. Оценить доступный recovery и честную OOM
+классификацию до нового native процесса. Persistent workspace не объявляется
+существующим и не вводится молча вместо утверждённого temporary contract.
+Сохранить новые FAIL, затем Developer→ONE Review→Manager/owner, A8/QA65/
+bootstrap acceptance/merge/main остаются OPEN. Owner decision по A8 не подменён.
+
+Own27 connected/Console0 до ошибочного ROOT probe /sessions/{ref}: endpoint
+не существует, HTML404/JSON parse error/Console1; это probe FAIL, не дефект
+входа или общий clean Console PASS. Правильный child RunGraph200 и exact PVC
+READ выполнены. Все node workloads idle после failure; host subagents0,
+USER corrections0/business edits0/disk deletions0. Цель не завершена.
 
 ## Checkpoint 13.10.2026 10:52 UTC — Developer пишет в собственном checkout
 

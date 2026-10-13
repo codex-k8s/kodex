@@ -4,11 +4,48 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.6
+version: 1.0.7
 updated: 2026-10-13
 ---
 
 # Область и границы результата
+
+## Exact Developer OOM / неуспешный Retry9 — 13.10.2026 11:56 UTC
+
+SOURCE/remote75838971/Draft1807 body/readback PASS, HOTb1 unchanged.
+Rootrun_zpLeqPy_uLLg4gczQkbTI38H FAILED11:38:26.312908/version3/seq1373,
+safePROVIDER_UNAVAILABLE; childmdJQ FAILED/artifacts0, Review/Manager CANCELLED,
+reviewcycles0. Нового commit/push нет; последняя ownHEADab499/52dirty paths.
+Адресные Go и RU/EN SSR PASS из commentary не final SHA/report proof.
+Whole runner /proc/FS/UDS и общий i18n5s timeout FAIL retained; latestcommentary
+1362 об исправлении SystemAssistant resync не independent verification.
+
+Observer21587 deadline NOT_CAPTURED не terminal execution. После exactRUNNING/
+sameUID READ observer48679 ACK/runtime12bd/execution7d1d/input2876 MATCH без
+execution restart. Он captured11:38:26 CLIENT TERMINAL_ABSENT/ACTIVE,
+activity_failedfalse; providerNOT OBSERVED/STREAM_ENDED/sameUID rejoinVERIFIED.
+Full reduced receipt SHA256
+3fe9e72b5be29510619d6ec3e79d4cb87080581371e8cc856dcc5e965ce2e2f0.
+Kernel независимо связал OOM с exactUID53cbfcd5-71f2-4c1a-9b06-65b8ec161e3a:
+usage/limit4194304KiB, Node anonymousRSS2965620KiB; group killed Codex, npm lint/
+unit, Go/compile/link и runner. Это доказанный memory-limit cause, не upstream
+OpenAI failure. Resource/config/diagnostic fix и новая активация NOT RUN.
+
+Child Session Gmzra RunGraph200: storageUNTRACKED/NO_SESSION_BLOCKER;
+exact PVC runtime-session-927fb558363cf16e Bound/UID9b9f9667-2b75-4ae8-b056-d899a67b5422
+на server0 содержит codex-home/state. Workspace work канонически emptyDir,
+prepareWorkingTree очищает его; deleted Pod53cb directory на agent0 ABSENT.
+Persistent state не declared source checkout; recovery незакоммиченных файлов
+NOT RUN/UNKNOWN. Root Session HJind ARCHIVED/DELETE_PVC SUCCEEDED отдельно.
+Нет blind Retry, USER corrections или написания business code ROOT.
+
+Ошибочный ROOT GET /sessions/{ref} вернулHTML404, JSON parse error и Console1;
+это probe FAIL, не defect login. Child RunGraph и PVC READ корректны.
+Новых host agents/backend restart/disk deletions0. Перед next run поднять
+resource budget штатной editable ENV публикацией и предусмотреть ранние
+repository-specific Git checkpoints/test concurrency. Temporary workspace
+contract не заменён неутверждённой durable semantics. Все исходные mandatory
+Developer/ONEReview/Manager/owner/A8/QA65/bootstrap/main gates OPEN.
 
 ## Current Developer checkout / actual GitHub gates — 13.10.2026 10:52 UTC
 

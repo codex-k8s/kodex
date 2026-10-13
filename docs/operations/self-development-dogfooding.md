@@ -4,11 +4,33 @@ title: Самонастройка и разработка Kodex средства
 type: operations
 status: approved
 owner: manager
-version: 1.1.5
+version: 1.1.6
 updated: 2026-10-13
 ---
 
 # Цель и источники
+
+## Checkpoint 13.10.2026 11:56 UTC — OOM Developer, процесс не принят
+
+- [x] RootzpLe/attempt9 FAILED11:38:26/version3/1373; DevelopermdJQ FAILED,
+      artifacts0, downstream CANCELLED/Review0. Нет нового business commit/push.
+- [x] FIRST observer deadline не выдан за terminal; second48679 sameUID ACK и
+      final rejoin VERIFIED, CLIENT TERMINAL_ABSENT/ACTIVE/providerNOT OBSERVED.
+- [x] Kernel exact PodUID53cb подтвердил4Gi OOM/group kill Codex/npm/Go/runner;
+      Node RSS~2.8Gi. Это memory failure, не подтверждённый OpenAI отказ.
+- [x] Child persistent PVC927fb Bound сохраняет codex-home/state; временный
+      checkout emptyDir удалён. PVC не объявлен сохранённым source/recovery.
+- [ ] Исправить ресурсный профиль и editable repository-specific checkpoint/
+      test-concurrency инструкции; проверить non-resource preservation.
+- [ ] Проверить разрешённый recovery и resource failure classification;
+      no blind Retry/no исправляющего USER сообщения/no host business implementation.
+- [ ] Developer final SHA/tests/push/ONE Review/Manager/owner, A8/live paid,
+      QA65/bootstrap acceptance/merge/fresh-main остаются открытыми.
+
+Native targeted Go/SSR PASS пока только commentary; whole runner/kernel и
+i18n timeout FAIL не скрыты. Ссылка на exact receipts и ограничения — в
+handoff/ledger. Wrong ROOT session endpoint probe404/Console1 отдельно от
+working child RunGraph200. SOURCE758/HOTb1 до записи, новых host agents/disk effects0.
 
 ## Checkpoint 13.10.2026 10:52 UTC — самостоятельная реализация Developer
 
