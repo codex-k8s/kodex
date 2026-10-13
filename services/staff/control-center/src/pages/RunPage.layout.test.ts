@@ -15,6 +15,32 @@ const canvas = readFileSync(
 );
 
 describe("RunPage layout при открытом ходе работы", () => {
+  it("сохраняет доступный граф и вертикальную прокрутку при zoom и коротком viewport", () => {
+    const page = source.match(/\.run-page\.run-page \{([^}]+)\}/)?.[1];
+    expect(page).toContain("overflow-x: hidden");
+    expect(page).toContain("overflow-y: auto");
+    const body = source.match(/\.run-page-body \{([^}]+)\}/)?.[1];
+    expect(body).toContain("min-height: 480px");
+    expect(body).toContain("flex: 1 0 480px");
+    expect(mobile).not.toMatch(/\.run-page-body\s*\{\s*min-height: 0;/);
+    const shortCanvas = 383 - 108 - 134 - 62;
+    expect(shortCanvas).toBeLessThan(100);
+    // Реальный browser fixture при250%:79px canvas скрывал nodes и legend.
+    expect(480 - 134 - 147 - 28).toBeGreaterThan(150);
+    expect(480 + 134).toBeGreaterThan(383 - 108 - 62);
+  });
+
+  it("разводит центральные действия и toolbar графа на средней ширине", () => {
+    const medium = source.match(
+      /@media \(min-width: 761px\) and \(max-width: 1100px\) \{([\s\S]*?)\n\}/,
+    )?.[1];
+    expect(medium).toContain(".run-workspace-toolbar,");
+    expect(medium).toContain(".run-workspace--activity .run-workspace-toolbar");
+    expect(medium).toContain("top: 84px");
+    // Верхняя graph-панель заканчивается на72px, следующий ряд имеет запас12px.
+    expect(84 - (14 + 58)).toBe(12);
+  });
+
   it("переносит мобильный доступ к помощнику в toolbar без нижнего резерва списка", () => {
     const action = source.match(
       /<button\s+class="icon-button run-workspace-assistant"([^>]+)>/,

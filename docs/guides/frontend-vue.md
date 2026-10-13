@@ -4,8 +4,8 @@ title: PWA на Vue и TypeScript
 type: guide
 status: approved
 owner: developer
-version: 1.2.8
-updated: 2026-10-10
+version: 1.2.9
+updated: 2026-10-13
 ---
 
 # PWA на Vue и TypeScript
@@ -234,6 +234,11 @@ Frontend не подменяет серверное ограждение: под
   segmented control, stepper и field validation.
 - Кнопки с общеизвестным действием используют иконку и tooltip.
 - Интерфейс проверяется на desktop и mobile без пересечения текста и controls.
+- Workspace с absolute-панелями сохраняет минимальную читаемую геометрию;
+  недостаток высоты включает прокрутку страницы, а не обрезание всего canvas.
+  Проверяется также короткий CSS viewport при browser zoom и landscape;
+  toolbar, сводка и легенда не перекрывают друг друга. Масштаб браузера
+  пользователя не сбрасывается ради успешного скриншота.
 - Пользователь не видит сырой backend error, stack trace, secret или внутренний
   identifier вместо понятного имени.
 

@@ -1371,7 +1371,8 @@ onBeforeUnmount(() => {
   max-width: 100%;
   flex: 1 1 auto;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 .run-page :deep(.page-header) {
   flex: 0 0 auto;
@@ -1381,8 +1382,8 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   min-width: 0;
-  min-height: 0;
-  flex: 1 1 auto;
+  min-height: 480px;
+  flex: 1 0 480px;
   margin: 0 calc(var(--page-frame-gutter) * -1);
   overflow: hidden;
 }
@@ -1715,6 +1716,12 @@ onBeforeUnmount(() => {
     top: 70px;
   }
 }
+@media (min-width: 761px) and (max-width: 1100px) {
+  .run-workspace-toolbar,
+  .run-workspace--activity .run-workspace-toolbar {
+    top: 84px;
+  }
+}
 @media (max-width: 760px) {
   .run-workspace-toolbar .run-workspace-assistant {
     display: inline-flex;
@@ -1755,9 +1762,6 @@ onBeforeUnmount(() => {
   }
   .graph-panel__canvas :deep(.graph-toolbar__separator) {
     display: none;
-  }
-  .run-page-body {
-    min-height: 0;
   }
   .run-notices {
     top: 116px;
