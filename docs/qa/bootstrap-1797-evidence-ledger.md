@@ -4,11 +4,38 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.5
+version: 1.0.6
 updated: 2026-10-13
 ---
 
 # Область и границы результата
+
+## Current Developer checkout / actual GitHub gates — 13.10.2026 10:52 UTC
+
+SOURCE/remote191e6efffcbf43561d7abcd9f852690728d422d9/Draft1807 exact body/
+context/readback PASS; HOTb1 unchanged. Actual gates: mergeabletrue/clean,
+checkCount0/statusCount0/combinedStatuspending/reviewCount0, paginationcomplete;
+main rulescreation/deletion/non_fast_forward. Это READ PASS, не CI/acceptance
+PASS и не authority обойти применимые проверки. Mainab499 unchanged.
+
+Native DevelopermdJQ/5A1/attempt1 actual checkout /workspace/work/issue-1796:
+branch developer/issue-1796-mdjq, HEADab4992e0cdfeb8e16370a5a53a3e71373f4cfc69,
+initialclean подтверждены read-only exec. Later status52changed paths включает
+contracts/runtime/callback/CP/gateway/UI/tests; принадлежат Developer, ROOT
+business edits0. Его managed Context7 resolve/query975/978 SUCCEEDED,
+CODEX_FILE_CHANGE1128 observed. Commentary1090 о same-account binding gap/fix
+не является independent code/test proof. Новый commit/push/results NOT OBSERVED.
+Failed shells906/1085/1107/1112 retained; safe metadata NONZERO не объясняет
+причину, не выводится production failure. SameUID53cb/Pod restarts0, dual21587
+подтверждён live10:52:37, primaryNOT OBSERVED; rootRUNNING1134. Backend frozen.
+
+Own27 amber recovering10:35, затем15s actual Connected/visible с10:35:58;
+transient retained, не blanket uninterrupted realtime PASS. Relevant ticket200,
+Console0; refresh после drafts0, чужие вкладки untouched. RC latest5min WARN/
+ERROR0, прежний claim degradation не скрыт. Checklist final tests/ONE Review/
+Manager/owner/A8/live paid/bootstrap/main остаётся OPEN. Никаких новых host
+subagents/USER corrections/disk effects. Полная цель не переопределена partial
+CODE_ONLY delivery.
 
 ## Current Architect semantic gate и ранний Developer ACK — 13.10.2026 10:28 UTC
 

@@ -4,11 +4,29 @@ title: Самонастройка и разработка Kodex средства
 type: operations
 status: approved
 owner: manager
-version: 1.1.4
+version: 1.1.5
 updated: 2026-10-13
 ---
 
 # Цель и источники
+
+## Checkpoint 13.10.2026 10:52 UTC — самостоятельная реализация Developer
+
+- [x] Actual own checkout /workspace/work/issue-1796, branch developer/issue-1796-mdjq,
+      HEADab4992e0/initial clean подтверждены ROOT read-only. Later substantive
+      contracts/runtime/CP/gateway/UI/test changes принадлежат native Developer.
+- [x] Его managed Context7 resolve/query975/978 SUCCEEDED; CODEX_FILE_CHANGE1128
+      observed, dual21587 actual live/Pod restarts0/rootRUNNING1134.
+- [x] Draft1807/source191 body/context/readback PASS, HOTb1 unchanged.
+      GitHub checks0/statuses0/combinedpending/reviews0 — не CI PASS/merge gate.
+- [ ] Current tests/commit/push и substantive result нового Developer; комментарий
+      о same-account fix не заменяет доказательств. Shell FAILED сохранены,
+      причина UNKNOWN по закрытому metadata, native execution не перезапускается.
+- [ ] ONE Review/Manager/owner, A8/live paid, QA65/bootstrap merge/fresh-main.
+
+Own27 transient recovery отдельно от settled connected15s/visible, Console0;
+reload после drafts0. Host business edits/USER corrections/new subagents/disk
+effects0. Предыдущие критерии не сужены до CODE_ONLY и partial PASS.
 
 ## Checkpoint 13.10.2026 10:28 UTC — native Architect PASS → Developer
 

@@ -4,11 +4,41 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.5
+version: 1.1.6
 updated: 2026-10-13
 ---
 
 # Текущее состояние
+
+## Checkpoint 13.10.2026 10:52 UTC — Developer пишет в собственном checkout
+
+SOURCE/remote191e6efffcbf43561d7abcd9f852690728d422d9 clean до этой записи,
+Draft1807 body/context/readback PASS; HOTb1 unchanged. Actual GitHub gates:
+mergeable=true/clean, checks0/statuses0/combinedpending/reviews0. Rules только
+creation/deletion/non_fast_forward; absence of checks не CI PASS и не разрешение
+досрочного merge без обязательного bootstrap acceptance.
+
+Current DevelopermdJQ/5A1 samePod/UID53cb RUNNING, rootRUNNING1134.
+Native самостоятельно создал /workspace/work/issue-1796, branch
+developer/issue-1796-mdjq, HEADab4992e0cdfeb8e16370a5a53a3e71373f4cfc69;
+ROOT подтвердил branch/head/initial clean через read-only exec. Позже actual
+status содержит substantive changes52 paths, включая contracts, runtime,
+callback/CP/gateway/UI/tests; commit/push нового результата ещё не наблюдался.
+CODEX_FILE_CHANGE live1128 и successful managed Context7 resolve/query receipts
+975/978 подтверждены; host не пишет и не исправляет business checkout.
+Developer commentary1090 сообщает найденный same-account binding gap и
+исправление с negatives; это ещё не independently verified fix/test PASS.
+Shell FAILED906/1085/1107/1112 сохранены; причина по закрытому tool status
+UNKNOWN, их нельзя назвать причиной отказа execution. Dual21587 actual live
+10:52:37/primaryNOT OBSERVED; Pod containers restarts0, backend frozen.
+
+Own27: amber recovery10:35 отдельно от actual15s connected/visible observation
+с10:35:58; не blanket uninterrupted-live PASS. Reload после drafts0 10:37,
+10:44/10:48; Console0/connected state сохранены. RC latest5min WARN/ERROR0,
+но historical claim degradation остаётся в предыдущем checkpoint. Никаких
+новых host субагентов/USER поправок/disk deletions. Продолжать same Developer
+до pinned результата, затем ровно ONE Review и Manager/owner. A8/live paid,
+QA65/bootstrap acceptance/merge/main всё ещё OPEN; цель не завершена.
 
 ## Checkpoint 13.10.2026 10:28 UTC — Architect передал доказанный дизайн, Developer работает
 
