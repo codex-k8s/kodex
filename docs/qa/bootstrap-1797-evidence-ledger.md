@@ -5,10 +5,35 @@ type: qa-report
 status: approved
 owner: manager
 version: 1.0.1
-updated: 2026-10-12
+updated: 2026-10-13
 ---
 
 # Область и границы результата
+
+## Native runner/images/cache delivery 13.10.2026 04:18 UTC
+
+SOURCE/HOT60594a79: immutable base ccb6ed9067e5, independent same-flags
+binaryf87a50a1 MATCH OCI. Repo-owned publication/policy14/93b5130f/binding/
+defaults/verify PASS. Native custom manifests5cc8533b5b2f/957830818e9b,
+generation26/20, COMPLETED/ACCEPTED/PROMOTED. Три image-only ENV28/27/30 и
+7bindings PASS/full applied EOF/38tools/non-image preservation.
+
+Отдельный confirmed cache change: ENV29/28,6exactbindings,8192MiB disk,
+ephemeral request4096/limit16384MiB и4tool cache variables на canonical mount.
+Остальные specification fields и helper/default ENV30 сохранены; full EOF
+cache proof b404d570, image proof retained separately. Profile/overlay/memory/
+skills unchanged; safe config diff ожидаемые ENV pins/4cache variables.
+READ ONLY preservation04:17:44: old83/a92e5d30 unchanged, exact2added,
+total85/f82202f6; busy5zero. Query54e68190/raw9e63f1de.
+
+Own main/resources UI screenshots READ, overflowfalse/Console0/relevant200;
+CP/RC10min logs0lines. Historical fresh-auth403/local intent expiry/ingress
+expiry retained отдельно; normal SSO/proxy recovery не auth bypass.
+Current source core53 working tree58958B/4a817bed preserves52 bytes;
+scoped cache recommendation не hardcode forall и не authority. ROOT full unit
+0.183s/targeted0.044s/vet/CP build e60b6b7f PASS. New core serving/AI volume
+proof и successful Workflow NOT RUN. Первичная историческая eviction quota
+UNKNOWN; READY/QA65/CI не заявляются. A8/bootstrap/main/owner gates OPEN.
 
 ## Retry4 terminal и filesystem volumes 13.10.2026 03:10 UTC
 

@@ -5,10 +5,30 @@ type: operations
 status: approved
 owner: manager
 version: 1.1.0
-updated: 2026-10-12
+updated: 2026-10-13
 ---
 
 # Цель и источники
+
+## Checkpoint 13.10.2026 04:18 UTC — runner, native images и cache ENV
+
+- [x] Immutable runner ccb6ed9067e5 / same-flags ELFf87a50a1, repo-owned
+      publication/policy14/binding/defaults/readback PASS на SOURCE60594a79.
+- [x] Native recipe26/20 COMPLETED/ACCEPTED/PROMOTED, manifests5cc8533b/95783081;
+      image-only ENV28/27/30 и7exactbindings,38tools/non-image preservation PASS.
+- [x] Отдельные cache drafts/validation/full impact EOF/publication: ENV29/28,
+      bounded8192MiB disk и4096/16384MiB ephemeral budget,4tool cache variables,
+     6bindings; helper/default unchanged, остальные настройки сохранены.
+- [x] Fresh idle/preservation: прежние83pins unchanged,2confirmed additions,
+      total85/f82202f6. Own main/resources UI screenshots READ/Console0/API200,
+      overflowfalse, CP/RC10min logs0; historical auth refusals retained.
+- [x] Forward core53 предлагает scoped repo cache только редактируемым планом,
+      без hardcode/скрытой вставки всем; core52 immutable. ROOT full helper unit,
+      targeted materialization/authority/bounds, vet/CP build PASS на working tree.
+- [ ] Commit/push и actual HOT/CP/core53 delivery; AI runtime volume/image/ENV
+      pins, fresh early dual observer и успешный Developer→ONE Review→Manager→owner.
+- [ ] A8 source choice, remaining QA65 и bootstrap/fresh-main. Не выдавать
+      code-only/новый cache за whole acceptance или установленную eviction cause.
 
 ## Checkpoint 13.10.2026 03:10 UTC — resource eviction и declared tooling volumes
 

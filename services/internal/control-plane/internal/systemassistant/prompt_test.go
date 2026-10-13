@@ -13,7 +13,7 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v52" {
+	if CorePromptRevision != "system-assistant-core-v53" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
@@ -416,11 +416,15 @@ func TestCorePromptV51MaterializationPreservesConsumerBounds(t *testing.T) {
 
 func TestCorePromptV52PreservesV51AndScopesRoleEvidence(t *testing.T) {
 	previous, err := os.ReadFile("prompts/system-assistant-core-v51.md")
-	if err != nil || fmt.Sprintf("%x", sha256.Sum256(previous)) != "bfb82eb9aea99b4e590bcc962d2ecf15900102dfa8708690e8bd7e8cf797d1bf" ||
-		CorePromptRevision != "system-assistant-core-v52" || !strings.HasPrefix(CorePrompt(), string(previous)+"\n") {
-		t.Fatal("published v51 bytes or current v52 binding changed")
+	if err != nil {
+		t.Fatal(err)
 	}
-	addition := strings.TrimPrefix(CorePrompt(), string(previous))
+	published, err := os.ReadFile("prompts/system-assistant-core-v52.md")
+	if err != nil || fmt.Sprintf("%x", sha256.Sum256(previous)) != "bfb82eb9aea99b4e590bcc962d2ecf15900102dfa8708690e8bd7e8cf797d1bf" ||
+		fmt.Sprintf("%x", sha256.Sum256(published)) != "66e76fe7c279e0f97d611608a0b29071228fe88d5f4eb2aaabd46501426fe698" || !strings.HasPrefix(string(published), string(previous)+"\n") {
+		t.Fatal("published v51 or v52 bytes changed")
+	}
+	addition := strings.TrimPrefix(string(published), string(previous))
 	if len(addition) > 2048 {
 		t.Fatal("role evidence recommendation exceeds its byte budget")
 	}

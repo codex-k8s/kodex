@@ -5,10 +5,56 @@ type: operations
 status: approved
 owner: manager
 version: 1.1.1
-updated: 2026-10-12
+updated: 2026-10-13
 ---
 
 # Текущее состояние
+
+## Checkpoint 13.10.2026 04:18 UTC — новые образы и ограниченный repo cache опубликованы
+
+SOURCE/remote/HOT60594a79 clean до следующей правки core. Immutable runner
+ccb6ed9067e5 штатно built/imported/published; independent same-flags ELF
+f87a50a1 MATCH OCI provenance. Все фазы repo-owned policy/binding/defaults/
+verify PASS; exact policy revision14/93b5130f8e75, CP/RC defaults и admission
+binding закреплены на новом digest. Это не proof фактически запущенного AI.
+
+Два native recipe generation26/20 built COMPLETED, admitted ACCEPTED и
+PROMOTED: manifests5cc8533b5b2f/957830818e9b. Через штатные owner API опубликованы
+три image-only ENV28/27/30 и ровно7 выбранных bindings. Full impact EOF,
+38tools и весь non-image snapshot сохранены, proof image-stage PASS.
+Затем отдельные drafts/validation/impact/publication добавили только write/review
+ENV29/28 bounded EPHEMERAL_DISK build-cache8192MiB, ephemeral request4096/
+limit16384MiB и GOCACHE/GOMODCACHE/GOTMPDIR/NPM_CONFIG_CACHE на exact объявленный
+mount. Ровно6bindings updated, helper/default ENV30 и его binding unchanged.
+CPU/memory/workspace quotas, tools, secrets descriptors, сеть, инструкции и
+остальные values не менялись. Full applied EOF и exact specification PASS;
+cache proof b404d570. Safe effective config изменился только ожидаемыми
+ENV digest/version и4cache values; profile/overlay/memory/skill fields unchanged.
+
+Fresh READ ONLY preservation04:17:44 подтвердил прежние83promoted pins
+a92e5d30 unchanged и только2 native additions: total85/f82202f6. Пять busy
+counters0; query54e68190/raw9e63f1de. Очистка диска13.10 не выполнялась.
+Не переиспользовать прежний guard83 для следующей доставки без этого delta proof.
+
+Own Chrome27: main/resources screenshots READ, overflowfalse, Console0,
+relevant native API/session/ticket200; CP/RC последние10мин logs0lines.
+Исторические fresh-auth403, expired local reauth intent и ingress proxy expiry
+сохранены отдельно. Штатные fresh SSO/proxy восстановления подтверждены;
+current authenticated/visible readback не обещает бессрочную сессию.
+
+В SOURCE подготовлен forward core53 (58958B/4a817bed, addendum1602B): помощник
+предлагает bounded cache/scratch под конкретный repo stack через confirmed
+plan и publication, без hardcoded путей/размеров, скрытой настройки всем,
+расширения прав или canary bypass. Published core52 bytes unchanged.
+ROOT Go1.26.6 systemassistant full unit PASS0.183s, exact v53 test0.044s,
+vet и CP binary build PASS/e60b6b7f. Доставка core53/actual serving пока NOT RUN.
+
+Далее: commit/push core53 и checkpoint, guarded idle HOT FF/CP serving proof;
+actual fresh runtime image/ENV/volume pins, early dual observer, штатный Retry
+прежнего INPUT/Workflow46, Developer→ONE Review→Manager→owner. Новый USER task
+и ROOT business edits0; blind Retry5 не выполнялся. A8/QA65/bootstrap/main OPEN.
+Историческая eviction quota/usage остаётся UNKNOWN, cache plan не объявлен
+доказанным устранением конкретного исторического лимита. Цель ACTIVE, без субагентов.
 
 ## Checkpoint 13.10.2026 03:10 UTC — Retry4 FAILED, eviction и тома tooling
 
