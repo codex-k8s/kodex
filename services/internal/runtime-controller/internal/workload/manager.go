@@ -2099,6 +2099,8 @@ func (manager *Manager) runtimePod(input runtimecontract.RunnerInput, providerBi
 		environmentMounts = append(environmentMounts, corev1.VolumeMount{Name: volumeName, MountPath: item.MountPath})
 	}
 	roleMounts = append(roleMounts, environmentMounts...)
+	// Инициализатор выполняет ту же canary объявленных томов до запуска provider.
+	initMounts = append(initMounts, environmentMounts...)
 	serviceAccountName := manager.config.RunnerServiceAccount
 	if mode == "turn" {
 		serviceAccountName = input.EffectiveKubernetesAccess.ServiceAccountName

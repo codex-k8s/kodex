@@ -10,6 +10,31 @@ updated: 2026-10-13
 
 # Цель и источники
 
+## Checkpoint 13.10.2026 04:34 UTC — pre-provider startup и initializer mounts
+
+- [x] Core53 native READY, source/mount MATCH; CP actuale4893013 равен
+      независимой Go1.26.6 same-hot-flags сборке, guarded idle delivery6ce PASS.
+- [x] Native Retry5 PFy02 same INPUT/Workflow/session; restore LIVE, затем
+      init Error1 до provider, root FAILED11/Review0/downstream CANCELLED.
+      Exact5cc image spec MATCH; ACK/AI inference NOT CAPTURED, denial reason UNKNOWN.
+- [x] Статически доказан init shared-canary/mount gap. RC+CEL исправлены:
+      exact3-container mounts, отсутствующие/лишние/чужие/readonly mounts DENY;
+      preparer и credential relay не получают ENV volume. Quotas/canary preserved.
+- [x] ROOT layout/CEL0.115s, full workload0.998s/vet/RC build36cc PASS;
+      Python22tests PASS, первоначальные fixture/import FAIL сохранены отдельно.
+- [ ] Repo-owned exact admission CAS/compilation и idle serving RC delivery,
+      затем actual mounts/ACK и успешный Workflow. Retry6 ещё не создавался.
+- [ ] Developer→ONE Review→Manager→owner, A8, remaining QA65/bootstrap/main.
+
+| Путь declared volume | Полномочия и ожидаемый результат |
+| --- | --- |
+| ENV draft/validate/publish | Прежний owner/OCC/impact; новые immutable ENV pins, только выбранные bindings |
+| Fresh claim/retry | CP назначает RuntimeRevision/lease; старый input не выдаёт новые права |
+| RC Pod materialization | Только normalized/pinned volume catalog; exact init/role/provider mounts |
+| API admission | Fail/Deny, имена/cardinality/paths/subPath/propagation проверяются до создания Pod |
+| workspace-init | Та же bounded canary до provider; ошибка сохраняет startup failure, не пропускает probe |
+| terminal/cancel/delete | Прежние owner graph closure/lease/grant/storage paths; mount fix не меняет переходы |
+
 ## Checkpoint 13.10.2026 04:18 UTC — runner, native images и cache ENV
 
 - [x] Immutable runner ccb6ed9067e5 / same-flags ELFf87a50a1, repo-owned

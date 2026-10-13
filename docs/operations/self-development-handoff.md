@@ -10,6 +10,52 @@ updated: 2026-10-13
 
 # Текущее состояние
 
+## Checkpoint 13.10.2026 04:34 UTC — core53 live и startup declared volumes
+
+SOURCE/remote/HOT6ce778f7 clean перед следующей правкой. Guarded idle FF04:20:43
+PASS:5busy0,total85/f82202f6 unchanged. CP actual PID372/start30613555/exe
+e4893013 MATCH independent Go1.26.6 CGO0/GOWORKoff/trimpath build; mounted
+prompt.go d4d43cf4/core53 b779cfe8 MATCH host. Native bootstrap200/core53/READY.
+Первый publisher остановился на hot-drift до push; следующий push readback
+потребовал отдельного READ, который подтвердил exact remote/PR6ce без повторного
+WRITE. Core52 bytes и исторические prompt snapshots сохранены.
+
+Native RETRY04:23:56: run_PFy02KlCAXBbEspc5hlAHLyq/attempt5/version2,
+same HJind session и finalized INPUTaset_pBFN; новый USER task/business edits0.
+Storage штатно RESTORE SUCCEEDED→LIVE. Runtime Pod3e0f4f69 UID5e190d88
+имел exact new5cc8533b image; workspace-prepare Completed0, workspace-init
+Error1, остальные контейнеры остались PodInitializing. Provider ACK/AI inference
+не captured. Root FAILED/version3/sequence11 в04:26:23/RUNTIME_UNAVAILABLE,
+все planned stages CANCELLED/Review cycles0. Storage снова ARCHIVED штатно.
+
+Первый ACK collector с неверным timeout180 закрыто отказал; исправленный60
+не captured до cleanup. Dual collector POD_IMAGE_MISMATCH означает отсутствие
+container imageID до старта, не доказанный другой digest. Readback spec image
+MATCH. Его Pod/init status captured до удаления; raw logs/task/credentials не
+экспортированы. Точная runtime denial reason UNKNOWN.
+
+Статически доказан отдельный обязательный startup defect: materializeWorkspace
+вызывает shared canary объявленных ENV volumes в workspace-init, а RC до сих
+пор монтировал их только role/provider; admission также запрещал init mounts.
+В SOURCE исправлены RC и CEL: exact same mounts у workspace-init/role/provider,
+обязательное равенство и cardinality1; preparer/relay/subPath/propagation/
+readonly/asymmetric paths закрыто отклоняются. Canary, quota, Secret/RBAC и
+network не ослаблены. Manager sourcee1896132/policy sourcea37e0a1d.
+
+ROOT Go1.26.6 targeted layout/CEL tests PASS0.115s, full workload unit0.998s/
+vet и same-hot-flags RC build36cc6438 PASS. Первый новый fixture FAIL на nil
+fake client; исправлен. Python первый invocation FAIL на import path; штатный
+tools/dev cwd22tests PASS13.422s, repeat13.374s. Diff-check PASS.
+Actual RC/admission delivery пока NOT RUN, новый Retry6 не создавался.
+
+Следующий безопасный шаг — repo-owned exact old→new CAS только runtime Pod
+ValidatingAdmissionPolicy в trusted-cluster, сохранив binding/policy14/85pins,
+Fail/Deny и свежую CEL compilation/readback; затем idle HOT FF, serving RC
+ELF36cc proof и штатный Retry того же INPUT. Не rerender старый global runner
+state поверх активного ccb6. Не создавать новый USER task и не убирать volume
+canary ради startup. Затем early observation до provider ACK, Developer→ONE
+Review→Manager→owner, A8/remaining QA65/bootstrap/main. Цель ACTIVE, без субагентов.
+
 ## Checkpoint 13.10.2026 04:18 UTC — новые образы и ограниченный repo cache опубликованы
 
 SOURCE/remote/HOT60594a79 clean до следующей правки core. Immutable runner

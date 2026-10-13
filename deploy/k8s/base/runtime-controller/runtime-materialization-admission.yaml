@@ -899,7 +899,7 @@ spec:
         variables.allContainers.all(container,
           !has(container.volumeMounts) || container.volumeMounts.all(mount,
             !mount.name.matches('^environment-[a-f0-9]{16}$') ||
-            (container.name in ['role-runtime', 'provider-runtime'] &&
+            (container.name in ['workspace-init', 'role-runtime', 'provider-runtime'] &&
              !has(mount.subPath) && !has(mount.subPathExpr) &&
              !has(mount.mountPropagation) &&
              (!has(mount.readOnly) || mount.readOnly == false)))) &&
@@ -909,11 +909,17 @@ spec:
             mount.name == volume.name)) == 1 &&
           size(variables.providerContainers[0].volumeMounts.filter(mount,
             mount.name == volume.name)) == 1 &&
+          size(object.spec.initContainers[1].volumeMounts.filter(mount,
+            mount.name == volume.name)) == 1 &&
           variables.roleContainers[0].volumeMounts.filter(mount,
             mount.name == volume.name)[0].mountPath ==
           variables.providerContainers[0].volumeMounts.filter(mount,
+            mount.name == volume.name)[0].mountPath &&
+          variables.roleContainers[0].volumeMounts.filter(mount,
+            mount.name == volume.name)[0].mountPath ==
+          object.spec.initContainers[1].volumeMounts.filter(mount,
             mount.name == volume.name)[0].mountPath)
-      message: runtime environment volumes must have exact shared driver and executor mounts
+      message: runtime environment volumes must have exact shared initializer driver and executor mounts
     - expression: >-
         variables.allContainers.all(container,
           !has(container.volumeMounts) || container.volumeMounts.all(mount,
@@ -1032,7 +1038,8 @@ spec:
         object.spec.initContainers[1].volumeMounts.all(mount,
           mount.name in ['workspace', 'session', 'vfs-input', 'vfs-knowledge', 'runtime-context',
             'runtime-input', 'runtime-ticket', 'callback-ca', 'callback-client',
-            'runtime-egress-ca', 'runtime-egress-trust', 'tmp']) &&
+            'runtime-egress-ca', 'runtime-egress-trust', 'tmp'] ||
+          mount.name.matches('^environment-[a-f0-9]{16}$')) &&
         ['workspace', 'session', 'vfs-input', 'vfs-knowledge', 'runtime-context'].all(name,
           size(object.spec.initContainers[1].volumeMounts.filter(mount,
             mount.name == name && (!has(mount.readOnly) || mount.readOnly == false))) == 1) &&

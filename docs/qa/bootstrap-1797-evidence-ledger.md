@@ -10,6 +10,26 @@ updated: 2026-10-13
 
 # Область и границы результата
 
+## Core53 live / Retry5 startup 13.10.2026 04:34 UTC
+
+SOURCE/remote/HOT6ce exact, idle85/f822 preserved. CP PID372/exe e4893013
+MATCH independent same-hot-flags build; prompt.go/core53 mounted hashes MATCH,
+native bootstrap200/core53/READY. Unknown publisher readback подтверждён
+отдельным READ, не повтором WRITE. Retained earlier staged EOF check FAIL.
+
+Retry5 PFy02 attempt5 same INPUT/HJind session, restore LIVE SUCCEEDED;
+Pod3e0f4f69 UID5e190d88 exact5cc image. prepare0/init1/main PodInitializing,
+ACK/AI inference NOT CAPTURED. Root FAILED04:26:23/version3/seq11,
+RUNTIME_UNAVAILABLE, downstream CANCELLED/Review0. Specific denial UNKNOWN.
+Collector timeout180 fixture rejected, correct60 missed pre-provider cleanup;
+dual POD_IMAGE_MISMATCH не alternate-image proof: imageIDs отсутствовали.
+
+SOURCE pending fix RCe1896132 + CELa37e0a1d materializes exact initializer
+ENV mounts и сохраняет fail-closed canary. ROOT target0.115s/full workload0.998s/
+vet/build36cc PASS; Python22PASS13.422/13.374. Первые nil/import fixtures FAIL,
+corrected invocations PASS. Actual admission/RC delivery NOT RUN; Retry6 NOT RUN.
+Это не successful Workflow/whole QA/merge readiness. Business edits0/USER tasks0.
+
 ## Native runner/images/cache delivery 13.10.2026 04:18 UTC
 
 SOURCE/HOT60594a79: immutable base ccb6ed9067e5, independent same-flags

@@ -1850,6 +1850,13 @@ gate — `make test-runtime-admission-gate`, предел процесса 60 с
 а не исключаются из canary либо квоты рабочего checkout. Новый том и его
 ресурсный бюджет требуют обычной validation/publication и свежей RuntimeRevision.
 
+Если общий workspace initializer запускает ту же canary объявленных томов,
+он получает ровно те же exact bounded mounts, что driver и executor. Admission
+требует их присутствия, равенства имён/путей, отсутствия subPath/propagation и
+не разрешает их preparer либо credential relay. Инициализация не получает новых
+Secret, RBAC, hostPath или источников authority; canary не пропускается ради
+прохождения startup. Mount contract проверяется также до запуска провайдера.
+
 Outbox текущего execution публикует фактический provider writer после штатного
 stop/join app-server и до terminal handoff. UID10002 через nofollow directory/file
 descriptors проверяет provider-owned regular inode, единственную hard link,
