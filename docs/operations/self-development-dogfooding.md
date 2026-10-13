@@ -10,6 +10,21 @@ updated: 2026-10-13
 
 # Цель и источники
 
+## Checkpoint 13.10.2026 05:41 UTC — actual prompt и run UI
+
+- [x] Desktop/mobile activity drawer, session details и safe prompt: scroll,
+      compact tool groups, dots, right owner/left agent, selector32px/overflowfalse;
+      settled screenshots READ и Console0 после reload/rejoin200.
+- [x] Штатный fresh SSO после закрытого full-preview403; full prompt80191B/
+      50546e1e MATCH actual ACK, template/materialization/INPUT и task4672B MATCH.
+      Raw bytes не экспортированы, semantic whole-stage PASS не заявлен.
+- [ ] Own Architect providerVersion evidence/semantic verdict; root595 RUNNING,
+      CODEX_SHELL FAILED594 retained, primary dual14988 live.
+- [ ] Developer/ONE Review/Manager/owner, A8/remaining QA65/bootstrap/main.
+
+HOTeaebb не менялся. Первые immediate mobile blank/render timing captures и
+403 сохранены как ограничения, не замаскированы clean blanket PASS.
+
 ## Checkpoint 13.10.2026 05:26 UTC — native INTAKE и Architect
 
 - [x] Published SOURCE/Draft1807 cd4fa328 и body exact readback PASS;

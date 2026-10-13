@@ -10,6 +10,22 @@ updated: 2026-10-13
 
 # Текущее состояние
 
+## Checkpoint 13.10.2026 05:41 UTC — UI и actual Architect prompt проверены
+
+HOTeaebb unchanged, SOURCE/remote0c8d9b before doc checkpoint. Native root
+RUNNING/595, Architect7ImF RUNNING; dual14988 live/no primary observed.
+CODEX_SHELL FAILED594 не скрыт; сам turn не terminal. Packet EOF29pages/467840B
+подтверждён statement роли, own providerVersion evidence ещё ожидается.
+Desktop/mobile transcript/scroll/groups/dots/alignment и session/safe preview
+screenshots READ/overflowfalse, selector32px. Первые transient captures retained.
+Full owner preview403 требовал fresh SSO: штатный password/callback завершены,
+без auth bypass и stop run. Full preview80191B/50546e1e MATCH ACK; template/
+materialization/11sections/diagnostics0. Owner task4672B/a22fff7a и INPUT1c55472c
+совпали с runtime ACK; сырые prompt/task не сохранялись. Это отдельная §54/55
+проверка, не собственное providerVersion доказательство Architect. Продолжить
+сопровождение Architect→Developer→ONE Review→Manager→owner, без host subagents.
+Остаточные A8/remaining QA65/bootstrap/main не выполнены; HOT во время run не FF.
+
 ## Checkpoint 13.10.2026 05:26 UTC — INTAKE завершён, Architect работает
 
 SOURCE/remote/Draft1807 cd4fa328 exact readback и body PASS; HOTeaebb68e

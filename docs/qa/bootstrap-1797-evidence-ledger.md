@@ -10,6 +10,29 @@ updated: 2026-10-13
 
 # Область и границы результата
 
+## Actual Architect prompt и локальный UI 13.10.2026 05:41 UTC
+
+HOTeaebb/SOURCE0c8d9b clean; active execution source не менялся. Проверены
+desktop2221×959/mobile390×844 activity drawer, compact expandable tool groups,
+active dots, owner справа/agent слева, scroll и selector32px, overflowfalse.
+Session details/safe prompt screenshots READ; Console0 после reload/rejoin200.
+Receipt7a67a49d retained: первый immediate mobile capture blank, settled captures
+READ; первые renderer queries и full-preview failures не объявлены UI PASS.
+
+Full owner preview сначала403 FRESH_AUTHENTICATION_REQUIRED, guard не обходился.
+Штатный fresh SSO/password вход и callback восстановили рабочую own27 без
+отмены run. Затем preview200/full80191B SHA50546e1e MATCH actual ACK instructions,
+template/materialization EQUAL,11sections/10slots/diagnostics0; proof4aa0e58f.
+Normalized owner task4672B/a22fff7a MATCH ACK/task/provider user prompt; INPUT
+section1c55472c MATCH ACK/input. Полный task comparison в отдельном proof;
+сырые prompt/task не экспортированы. Это не own Architect providerVersion proof.
+
+Native Architect COMMENTARY571 сообщает packet467840B/29pages EOF и source
+auth conflict без активации спорного пути; это statement роли, не host measurement.
+Root RUNNING/seq595, Architect RUNNING, CODEX_SHELL FAILED594 retained;
+dual14988 подтверждён live/no primary observed. Successful whole turn/Developer/
+ONE Review/Manager/owner/A8/remaining QA65/bootstrap/main OPEN.
+
 ## Native Retry6 INTAKE/Architect 13.10.2026 05:26 UTC
 
 SOURCE/remote1807 cd4fa328 and exact body readback PASS; HOTeaebb unchanged.
