@@ -10,6 +10,22 @@ updated: 2026-10-13
 
 # Цель и источники
 
+## Checkpoint 13.10.2026 07:06 UTC — bounded renewal готов локально
+
+- [x] На9c3e639e реализовать и проверить MATERIALIZATION/TRACK/DRAIN recovery
+      только exact acknowledged expiry; no first-unknown retry, max4, revoke/
+      mismatch/expired/late-success закрыты. GUIDE006v1.1.25 lifecycle matrix.
+- [x] Exact9c3e Go1.26.6 module unit/vet/build, app race/count10 PASS;
+      same-hot-flags RC ELF7d6d7a5b. Первые FAIL и исправленные fixtures сохранены.
+- [ ] Доставить в HOT с fresh idle barrier/pins; actual serving ELF7d6d MATCH.
+- [ ] Проверить native retry/renew recovery и установить CP задержку, если
+      она повторится; исторический rootFAILED896 не выдавать за success.
+- [ ] Successful Developer/ONE Review/Manager/owner, A8/remaining QA65/main.
+
+HOTeaebb unchanged; basic Run/Graph200, nodesReady, only warm Pod. Новых USER
+task/business edits/subagents/deletions0. GitHub preflight70c94 PASS/того же Draft.
+Live recovery/whole QA/CI NOT RUN, причина CP RPC latency UNKNOWN.
+
 ## Checkpoint 13.10.2026 06:30 UTC — own providerVersion и реальная причина отмены
 
 - [x] Actual Architect SUCCEEDED,7CLEAN results; complete pinned contract47953B

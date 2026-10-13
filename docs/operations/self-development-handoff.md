@@ -10,6 +10,37 @@ updated: 2026-10-13
 
 # Текущее состояние
 
+## Checkpoint 13.10.2026 07:06 UTC — bounded heartbeat реализован и проверен, delivery впереди
+
+Code commit `9c3e639e475de8bb89446967abc3ebcc73e54abe`, HOT по-прежнему
+eaebb68e clean. Новый RC `renewLease` используется в MATERIALIZATION/TRACK/
+DRAIN: максимум4 вызова только Unavailable/DeadlineExceeded при ранее
+подтверждённом exact expiry; первый unknown-expiry RPC не повторяется. Ответ
+проверяет ref/fence/generation/timestamp. Monotonic expiry с сокращающим запасом
+ограничивает весь RPC/retry, publication и отдельный expiry watcher. Keeper
+joined перед handoff; tracker получает последний acknowledged expiry. Denial,
+foreign/stale response и поздний success не оживляют lease. Drain cancellation
+joined, grace timeout сохраняет прежний durable completion, не fabricated revoke.
+Полная матрица закреплена в GUIDE-DOC-006v1.1.25; ABI/SQL/TTL30s не менялись.
+
+На exact9c3e Go1.26.6: app race/count10 PASS5.923s, whole RC unit PASS
+(часть пакетов cached), vet PASS, diffcheck PASS. Same-hot-flags build
+trimpath/buildvcsfalse/CGO0 PASS, ELF `7d6d7a5bb39030da84c6b47eabe3d54d144b6bed92444a55278a2c3ce8e47111`.
+Первые FAIL не скрыты: сверхкороткие synthetic1ms бюджеты и повторный tick
+после callback, grace deadline с отложенным context timer, несовпадающее
+ожидание SafeErrorCode fallback. Исправленные fixtures/closed deadline checks
+и повторные проверки проходят. Это не actual live delivery или CI.
+
+Native root остаётся FAILED/version3/sequence896, basic Run/Graph200,
+оба cluster nodes Ready, runtime только warm. Новых USER task/Retry/business
+edits/subagents/disk deletions0. CP без CPU limit, current host load около5;
+историческая причина CP задержки UNKNOWN, не объявлена исправленной.
+Далее commit/push journal в тот же Draft1807; fresh idle5busy0 и сохранение
+85image pins перед HOT FF; actual RC serving ELF должен совпасть с7d6d.
+Затем native same-INPUT Retry, early dual/ACK и наблюдение renew/CP latency;
+при повторной задержке выяснять transaction/lock stage, а не расширять TTL.
+Successful Developer/ONE Review/Manager/owner, A8/QA65/bootstrap/main OPEN.
+
 ## Checkpoint 13.10.2026 06:30 UTC — Architect PASS технически, первичный renew timeout доказан
 
 HOTeaebb/SOURCE702d0192 clean, новых code/runtime изменений не было.

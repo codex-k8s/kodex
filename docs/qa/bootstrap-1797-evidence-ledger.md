@@ -10,6 +10,35 @@ updated: 2026-10-13
 
 # Область и границы результата
 
+## Bounded RC heartbeat 13.10.2026 07:06 UTC — local PASS / live NOT RUN
+
+Exact code SHA9c3e639e475de8bb89446967abc3ebcc73e54abe. Producer остаётся
+existing CP RenewExecution/WorkLease.expires_at, consumer — keeper/tracker/drain.
+Same lease/fence/generation, fresh owner command и прежний atomic graph fence;
+не вводятся ABI/SQL/event, новые grants/attempt либо локальное TTL продление.
+GUIDE-DOC-006v1.1.25 содержит отдельную полную lifecycle matrix.
+
+Go1.26.6: `go test -race ./internal/app -count=10` PASS5.923s; `go test ./...`
+PASS (app0.426s, остальные пакеты cached); `go vet ./...` и diffcheck PASS.
+`go build -trimpath -buildvcs=false`/CGO0 PASS, RC ELF7d6d7a5bb39030da84c6b47eabe3d54d144b6bed92444a55278a2c3ce8e47111.
+До фикса были FAIL synthetic timeout/tick и grace deadline checks; отдельное
+неверное ожидание fallback SafeErrorCode исправлено, production mapping сохранён.
+Это локальный модульный контур, не whole-platform baseline/GitHub CI/live QA.
+
+Положительные/негативные fixtures: все три phase, transient recovery exact pins,
+unknown expiry без retry, Permission/NotFound/auth/stale и остальные закрытые
+codes без retry, nil/foreign/invalid/expired response, bounded maximum/outage,
+parent cancel, expiry in-flight и поздний success, callback без cleanup,
+tracker expiry без ожидания tick, publication recovery/revoke, keeper expiry,
+drain recovery и independent grace timeout/join. Historical owner receipts,
+expiry/reclaim/cancel/root terminal не изменены; неизвестный response не PASS.
+
+HOTeaebb unchanged; actual delivery/native recovery NOT RUN. RootFAILED896
+и оба nodesReady прочитаны live; Run/Graph200. RPC delay cause UNKNOWN;
+отсутствие CP CPU limit и низкая текущая нагрузка не доказывают старый lock.
+Следующий обязательный gate: guarded HOT FF/serving ELF, затем same INPUT
+native chain и primary renew observation. QA65/A8/business review/owner OPEN.
+
 ## Own Architect snapshot и primary renew failure 13.10.2026 06:30 UTC
 
 Architect7ImF SUCCEEDED06:11:27,7new ACTIVE/CLEAN artifacts. Contract47953B/
