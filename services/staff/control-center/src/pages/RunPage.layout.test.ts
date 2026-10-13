@@ -170,9 +170,12 @@ describe("RunPage layout при открытом ходе работы", () => {
   });
 
   it("сворачивает сводку по ширине workspace, а не только viewport", () => {
-    const workspace = source.match(/\.run-workspace \{([^}]+)\}/)?.[1];
+    const workspace = source.match(/\.run-page-body \{([^}]+)\}/)?.[1];
     expect(workspace).toContain("container-type: inline-size");
     expect(workspace).toContain("container-name: run-workspace");
+    expect(source.match(/\.run-workspace \{([^}]+)\}/)?.[1]).not.toContain(
+      "container-name",
+    );
     const compact = desktop.slice(
       desktop.indexOf("@container run-workspace (max-width: 1344px)"),
       desktop.indexOf("@container run-workspace (max-width: 920px)"),
@@ -223,6 +226,30 @@ describe("RunPage layout при открытом ходе работы", () => {
     expect(compiled.code).toContain(
       "@container run-workspace (max-width: 920px)",
     );
+  });
+
+  it("query container является общим предком графа и соседней панели", () => {
+    const paths: Record<string, string[]> = {};
+    function visit(node: unknown, parents: string[]) {
+      if (typeof node !== "object" || node === null) return;
+      const value = node as Record<string, unknown>;
+      let classes: string[] = [];
+      if (typeof value.tag === "string" && Array.isArray(value.props)) {
+        const attribute = value.props.find(
+          (prop) => prop.type === 6 && prop.name === "class",
+        );
+        classes = attribute?.value?.content?.split(/\s+/) ?? [];
+        for (const target of ["run-workspace", "run-activity-overlay"])
+          if (classes.includes(target)) paths[target] = parents;
+      }
+      if (Array.isArray(value.children))
+        for (const child of value.children)
+          visit(child, [...parents, ...classes]);
+    }
+    visit(parse(source).descriptor.template?.ast, []);
+    expect(paths["run-workspace"]).toContain("run-page-body");
+    expect(paths["run-activity-overlay"]).toContain("run-page-body");
+    expect(paths["run-activity-overlay"]).not.toContain("run-workspace");
   });
 
   it("сохраняет отдельные мобильные строки и существующий режим fit графа", () => {

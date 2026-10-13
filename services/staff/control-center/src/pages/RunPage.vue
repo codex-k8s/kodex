@@ -1380,6 +1380,8 @@ onBeforeUnmount(() => {
 .run-page-body {
   --run-activity-width: clamp(520px, 54%, 720px);
   position: relative;
+  container-type: inline-size;
+  container-name: run-workspace;
   display: flex;
   min-width: 0;
   min-height: 480px;
@@ -1508,8 +1510,6 @@ onBeforeUnmount(() => {
 }
 .run-workspace {
   position: relative;
-  container-type: inline-size;
-  container-name: run-workspace;
   width: 100%;
   min-width: 0;
   min-height: 0;
