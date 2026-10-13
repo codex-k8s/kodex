@@ -10,6 +10,30 @@ updated: 2026-10-13
 
 # Область и границы результата
 
+## Own Architect snapshot и primary renew failure 13.10.2026 06:30 UTC
+
+Architect7ImF SUCCEEDED06:11:27,7new ACTIVE/CLEAN artifacts. Contract47953B/
+e3a6b415/revisiondca0 прочитан полностью по owner version-pinned API, ownrun/session
+и hash verified. Role proof18f22d0b: own snapshot369, observed Codex0.160.0/
+INITIALIZE_USER_AGENT, exact913c8812 runtime MATCH ACK. Executable12eb3e81,
+schema inventory1923/5481d268; source attestation UNKNOWN/provider serving ELF
+NOT CAPTURED. Context7 role invocations recorded, exact version pinfalse.
+Initial owner diagnostic400 omitted required purpose; corrected DOWNLOAD200,
+не platform content defect. Нет raw prompt/token/body export.
+
+Coordinator accepted CODE_ONLY handoff/native EOF, delegate886 committed;
+DeveloperTURN_STARTED888, startup not captured. RootFAILED89606:19:48,
+downstream CANCELLED/Review0. Public RUNTIME_INPUT_INVALID separately retained.
+PRIMARY RCe2893f9d06:19:27 exactROOTturn3: TRACK/DeadlineExceeded,
+requestDEADLINE_EXCEEDED/parentACTIVE before cleanup. Dual1309 observed sameUID
+provider CONTEXT_CANCELLED и client TERMINAL_RESULT/CANCELED/activityfalse/rejoin
+VERIFIED; secondary effects не названы primary. Native Kubernetes Killing sameUID
+at06:19:27, not observed eviction. Why CP exceeded budget UNKNOWN.
+Source inspected: RC cancels on first renew error, CP authoritative expiry30s,
+RC budget5s/interval10s. Bounded recovery/latency fix NOT IMPLEMENTED/NOT RUN.
+Никаких blind retry, business edits, chmod, quota/authority bypass. Whole QA,
+Developer/ONE Review/Manager/owner, A8/bootstrap/main remain OPEN.
+
 ## Actual active readiness и gates 13.10.2026 05:58 UTC
 
 HOTeaebb/SOURCE707bfd clean, rootoXJ1 RUNNING781/Architect7ImF RUNNING;

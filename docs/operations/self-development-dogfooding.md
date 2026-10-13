@@ -10,6 +10,20 @@ updated: 2026-10-13
 
 # Цель и источники
 
+## Checkpoint 13.10.2026 06:30 UTC — own providerVersion и реальная причина отмены
+
+- [x] Actual Architect SUCCEEDED,7CLEAN results; complete pinned contract47953B
+      и own snapshot Codex0.160.0/INITIALIZE_USER_AGENT/runtime913c MATCH ACK.
+      Source attestation/serving ELF и live paid measurements не подменяются.
+- [x] Coordinator native EOF принял CODE_ONLY и делегировал Developer886;
+      root затем FAILED896, downstream CANCELLED, Review0. Blind retry0.
+- [x] PRIMARY before cleanup: exact RC TRACK renew DeadlineExceeded при parent
+      ACTIVE; receipt e2893f9d. Dual secondary CONTEXT_CANCELLED/TERMINAL_RESULT
+      CANCELED/activityfalse/sameUID VERIFIED. No observed eviction.
+- [ ] Исправить renew delivery latency/bounded recovery с authoritative expiry,
+      revoke/fence/generation/cancel/terminal negative tests и actual verification.
+- [ ] Successful Developer/ONE Review/Manager/owner, A8/remaining QA65/main.
+
 ## Checkpoint 13.10.2026 05:41 UTC — actual prompt и run UI
 
 - [x] Desktop/mobile activity drawer, session details и safe prompt: scroll,

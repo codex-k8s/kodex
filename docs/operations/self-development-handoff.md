@@ -10,6 +10,41 @@ updated: 2026-10-13
 
 # Текущее состояние
 
+## Checkpoint 13.10.2026 06:30 UTC — Architect PASS технически, первичный renew timeout доказан
+
+HOTeaebb/SOURCE702d0192 clean, новых code/runtime изменений не было.
+Architect7ImF SUCCEEDED06:11:27; семь собственных AGENT_RESULT artifacts ACTIVE/
+CLEAN/version1 получены owner metadata. Pinned полный contract JSON47953B/
+e3a6b415 прочитан200 с точным revision/run/session/размером/hash. Собственное
+get_execution_snapshot369 и published role evidence18f22d0b: Codex0.160.0/
+INITIALIZE_USER_AGENT, rrev_n62/913c8812 MATCH actual ACK. Это ordinary Architect,
+не host version substitution. Codegen inventory1923/5481d268; source attestation
+UNKNOWN и serving provider ELF NOT CAPTURED, balance/units/charging/live UNKNOWN.
+Workspace post-join/canary/publication path завершился; active503 не ослаблялся.
+
+Coordinator3 дочитал handoff native EOF и принял CODE_ONLY/CHANGES_REQUESTED
+как требования первоначальной реализации. Delegate886 принят06:19:21.976;
+DeveloperPXB4/node0qBD TURN_STARTED88806:19:36, provider startup NOT CAPTURED.
+Но rootFAILED06:19:48/version3/seq896, Developer/Review/Manager CANCELLED,
+Review cycles0. Не считать Workflow успешным и не Retry вслепую.
+
+Сохранён PRIMARY RC recorde2893f9d06:19:27 до cleanup: phaseTRACK, exact
+lease_dWQ1/generation1/run/turnvov/attempt3/runtime3afbbd37/execution214847a4,
+RPCDeadlineExceeded/requestDEADLINE_EXCEEDED при parentACTIVE. Затем exact dual
+1309 зафиксировал provider CONTEXT_CANCELLED и client TERMINAL_RESULT/CANCELED/
+activity_failedfalse/sameUID rejoin VERIFIED. Вторичная отмена не причина RPC.
+Killing sameUIDe99da40306:19:27 соответствует RC closeRevokedTurn; eviction не
+observed. Public root diagnostic RUNTIME_INPUT_INVALID сохраняется отдельно.
+
+Следующий шаг: устранить первичный renew delivery failure. RC track/drain/
+materialization на любой RPC error сразу закрывают workload; CP renew выдаёт
+authoritative30s lease, RC request budget5s/interval10s. Причина задержки CP пока
+UNKNOWN. Изучить owner lease transaction/locks и bounded recovery только внутри
+подтверждённого expiry/fence/generation, с полными revoke/expiry/cancel негативами;
+не увеличивать timeout вслепую, не продолжать после authority denial и не оживлять
+terminal root. Полный GUIDE-DOC-006 lifecycle matrix обязателен до code change.
+Source702d связан с Draft1807; business1808 не merge/approve. A8/QA65/main OPEN.
+
 ## Checkpoint 13.10.2026 05:58 UTC — active readiness исследована, Workflow идёт
 
 HOTeaebb/SOURCE707bfd unchanged. RootRUNNING781/ArchitectRUNNING, dual14988 live;
