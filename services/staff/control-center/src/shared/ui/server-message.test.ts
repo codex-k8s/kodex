@@ -8,6 +8,24 @@ import SafeMarkdown from "./SafeMarkdown.vue";
 import SafeStructuredData from "./SafeStructuredData.vue";
 import { serverMessageKey } from "./server-message";
 describe("Closed server message keys", () => {
+  it.each(["ru", "en"] as const)(
+    "показывает понятную причину нехватки памяти в %s",
+    async (locale) => {
+      i18n.global.locale.value = locale;
+      const content = "i18n:RUNTIME_MEMORY_EXHAUSTED";
+      const app = createSSRApp({ render: () => h(SafeSummary, { content }) });
+      app.use(i18n);
+      const html = await renderToString(app);
+      expect(html).toContain(
+        locale === "ru"
+          ? "Исполнителю не хватило памяти"
+          : "The executor ran out of memory",
+      );
+      expect(html).not.toContain("i18n:");
+      expect(html).not.toContain("RUNTIME_MEMORY_EXHAUSTED");
+      i18n.global.locale.value = "ru";
+    },
+  );
   it("сохраняет literal intent без перевода токенов, статусов и скрытия похожих refs", async () => {
     const app = createSSRApp({
       render: () =>

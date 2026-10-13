@@ -38,6 +38,10 @@ export const serverTokenTranslations = {
     "Провайдер модели временно недоступен. Повторите запрос позже.",
     "The model provider is temporarily unavailable. Try again later.",
   ],
+  RUNTIME_MEMORY_EXHAUSTED: [
+    "Исполнителю не хватило памяти. Проверьте лимит памяти окружения и свободную память узла перед повторным запуском.",
+    "The executor ran out of memory. Check the environment memory limit and the node's available memory before retrying.",
+  ],
   REQUIRED_WORKFLOW_FAILED: [
     "Запуск завершён с ошибкой: обязательный дочерний процесс не выполнен.",
     "The run failed because a required child workflow did not complete successfully.",

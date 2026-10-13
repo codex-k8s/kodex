@@ -419,6 +419,9 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 				continue
 			}
 			if time.Since(terminalObservedAt) < runtime.terminalGrace {
+				if observation.DiagnosticCode == workload.TurnPodMemoryDiagnostic {
+					terminalDiagnostic = observation.DiagnosticCode
+				}
 				continue
 			}
 			select {
@@ -426,8 +429,13 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 				return
 			default:
 			}
+			failureCode := "RUNTIME_WORKLOAD_EXITED"
+			if terminalDiagnostic == workload.TurnPodMemoryDiagnostic || observation.DiagnosticCode == workload.TurnPodMemoryDiagnostic {
+				failureCode = "RUNTIME_MEMORY_EXHAUSTED"
+				terminalDiagnostic = workload.TurnPodMemoryDiagnostic
+			}
 			runtime.logger.WarnContext(parent, "runtime terminal callback grace expired", "diagnostic_code", terminalDiagnostic)
-			runtime.completeFailure(context.WithoutCancel(parent), input, "RUNTIME_WORKLOAD_EXITED", terminalDiagnostic)
+			runtime.completeFailure(context.WithoutCancel(parent), input, failureCode, terminalDiagnostic)
 			return
 		}
 	}

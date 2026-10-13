@@ -1565,6 +1565,8 @@ type TurnPodObservation struct {
 	DiagnosticCode string
 }
 
+const TurnPodMemoryDiagnostic = "CONTAINER_OOM_KILLED"
+
 func (manager *Manager) ObserveTurnPod(ctx context.Context, input runtimecontract.RunnerInput, warmExecution bool) (TurnPodObservation, error) {
 	podName := runtimecontract.RuntimeTurnPodName(input.LeaseRef)
 	if warmExecution {
@@ -1611,6 +1613,19 @@ func (manager *Manager) TurnPodState(ctx context.Context, input runtimecontract.
 }
 
 func terminalContainerDiagnostic(pod *corev1.Pod) string {
+	// OOM одного известного контейнера важнее обычного выхода соседа.
+	// Исторический LastTerminationState и один exit137 не доказывают OOM.
+	for _, statuses := range [][]corev1.ContainerStatus{pod.Status.InitContainerStatuses, pod.Status.ContainerStatuses} {
+		for _, status := range statuses {
+			if status.State.Terminated == nil || status.State.Terminated.Reason != "OOMKilled" {
+				continue
+			}
+			switch status.Name {
+			case "workspace-prepare", "workspace-init", "role-runtime", "provider-runtime", "provider-credential-relay":
+				return TurnPodMemoryDiagnostic
+			}
+		}
+	}
 	for _, status := range pod.Status.InitContainerStatuses {
 		if status.State.Terminated == nil {
 			continue

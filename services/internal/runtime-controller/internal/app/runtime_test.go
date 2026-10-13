@@ -213,6 +213,25 @@ func TestTrackRetriesFailureCompletionBeforeCleanup(t *testing.T) {
 	}
 }
 
+func TestTrackMemoryFailurePreservesOwnerCompletionAndCleanup(t *testing.T) {
+	input := runtimeTrackingInput()
+	coordinator := callback.NewCoordinator()
+	done := coordinator.Register(input)
+	client := &runtimeWorkClientStub{}
+	turns := &turnLifecycleStub{observation: workload.TurnPodObservation{State: "FAILED", DiagnosticCode: workload.TurnPodMemoryDiagnostic}}
+	runtime := trackingRuntime(client, turns, coordinator)
+	runtime.track(t.Context(), input, done, false, time.Time{})
+	if client.count() != 1 || turns.deletions.Load() != 1 {
+		t.Fatal("memory failure changed completion cardinality or cleanup")
+	}
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	request := client.requests[0]
+	if request.GetSuccess() || request.GetSafeErrorCode() != "RUNTIME_UNAVAILABLE" || request.GetResultSummary() != "i18n:RUNTIME_MEMORY_EXHAUSTED" || request.GetLeaseRef() != input.LeaseRef || request.GetFence() != input.LeaseFence || request.GetGeneration() != input.LeaseGeneration {
+		t.Fatal("memory failure lost its exact owner tuple or safe summary")
+	}
+}
+
 func TestCompleteFailureDistinguishesInvalidInputFromUnsupportedProfile(t *testing.T) {
 	tests := []struct {
 		code, safeCode, summary string
