@@ -10,6 +10,49 @@ updated: 2026-10-12
 
 # Текущее состояние
 
+## Checkpoint 13.10.2026 03:10 UTC — Retry4 FAILED, eviction и тома tooling
+
+Fresh native root17BL FAILED/version3/sequence1484; DeveloperOhDI FAILED
+12.10.2026 19:07:37, Reviewer/final Manager CANCELLED, Review cycles0.
+INTAKE/Architect технически SUCCEEDED. Exact RC post-owner-completion tuple
+OBSERVED REQUEST_FAILURE/TERMINAL_WAIT/PROVIDER/CONTEXT_CANCELLED; это не
+durable CP diagnostic receipt и не primary network/quota proof.
+Retained RC window18:30–19:10 содержит0 renew-failure records. Kubernetes
+узел сохранил eviction runtime-turn-3e1869515043b421 в19:07:38.127,
+его startup18:35:39 совпадает с окном Developer. Exact lease→Pod pin не
+captured; конкретная eviction quota/usage UNKNOWN, исторические events отсутствуют.
+Reduced receipt3aa5f62c; таймаут старого INTAKE observer не terminal proof.
+
+selfdev-write ENV27 имеет38tools, ephemeral limit4096MiB, volumes0,
+GOCACHE/GOMODCACHE/GOTMPDIR не заданы. Системный provider `/tmp`512MiB,
+checkout1GiB: node DiskPressure=False не исключает отдельную resource eviction.
+Context7 Kubernetes storage docs и official Codex permissions фактически прочитаны.
+Не увеличивались квоты workspace, TTL, provider privileges или внешняя сеть.
+
+Поверх SOURCEaa3a37f5 исправлены только runner config.go/config_test.go:
+published normalized volume paths с exact volumesDigest добавляются в Codex
+filesystem profile; workspace-write WRITE, read-only READ, invalid/foreign/
+duplicate/unpinned отклоняются. Parents/state/INPUT/необъявленные тома не открыты.
+Go1.26.6 full runner module unit PASS (app17.211s/codex9.095s), targeted
+race1.274s, vet, whole binary build и diff-check PASS. Binary221305ce;
+production source5965ebec/test1a841c9d. Первый host probe FAIL из-за inherited
+GOROOT1.27.1; явный matching GOROOT1.26.6 устранил ошибку оснастки, не код.
+Serving HOTfcdc8d49 не менялся: новый runner/образы/ENV ещё NOT RUN.
+
+Следующая цепочка: immutable runner build/publication/admission и intended
+custom images; штатный confirmed ENV plan с bounded build-cache томом и
+tool-specific cache/temp variables, сохраняя38tools/остальные параметры.
+Это конфигурация repo-ролей, не hardcoded Go-настройка всем пользователям.
+После actual pins/bindings и early dual observer — Retry прежнего INPUT,
+Developer→ONE Review→Manager→owner. Не делать blind Retry5 и не писать
+corrective business USER или business code. A8/QA65/bootstrap/main OPEN.
+
+Own Chrome27 authenticated/rejoin1484; screenshot READ, overflowfalse,
+bootstrap/session/graph/events/ticket200. Один404/Console error относится к
+ошибочному ROOT probe URL environment-sets, не рабочему API; правильный
+runtime-environments200. Частичный viewport графа не whole UX acceptance.
+Цель ACTIVE; дальше без субагентов. Дополнительная очистка диска13.10 не выполнялась.
+
 ## Checkpoint 12.10.2026 16:24 UTC — новый RC live и штатный Retry4
 
 SOURCE/remote/HOTfcdc8d49 clean; committed app race Go1.26.6 PASS1.417s.

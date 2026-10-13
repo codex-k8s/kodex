@@ -10,6 +10,31 @@ updated: 2026-10-12
 
 # Область и границы результата
 
+## Retry4 terminal и filesystem volumes 13.10.2026 03:10 UTC
+
+Root17BL FAILED/version3/sequence1484, DeveloperOhDI FAILED19:07:37;
+Review/Manager CANCELLED, independent Review cycles0. RC exact pins дают
+OBSERVED REQUEST_FAILURE/TERMINAL_WAIT/PROVIDER/CONTEXT_CANCELLED, не durable
+CP receipt. Retained renew-failure records0. Kubelet eviction pod3e18
+19:07:38 и startup18:35:39 коррелируют с Developer; exact lease binding и
+eviction quota/usage UNKNOWN. Reduced receipt3aa5f62c сохранён приватно.
+Не утверждаются model quota, credits, network либо точно установленный volume.
+
+SOURCE working tree поверхaa3a37f5: declared volumes filesystem profile,
+только normalized/pinned exact paths, WRITE лишь workspace-write; read-only
+READ, parents/state/INPUT/foreign paths без нового доступа. ROOT Go1.26.6
+full runner module unit PASS, codex9.095s/app17.211s; targeted race1.274s,
+vet/build/diff-check PASS. Source5965ebec/test1a841c9d/binary221305ce.
+Первый inherited GOROOT probe FAIL, исправленный explicit1.26.6 PASS.
+Actual immutable delivery/ENV cache plan и новый successful Workflow NOT RUN.
+Context7 Kubernetes storage и official Codex permissions страницы fetched.
+
+Chrome own27: native session/graph200/rejoin1484, screenshot READ/overflowfalse.
+ROOT ошибочный environment-sets probe404/Console1 сохранён отдельно; правильный
+environment API200. Это не combined Console0, whole browser либо QA65 PASS.
+HOTfcdc без новых изменений; новый USER task/business edits/Retry0.
+Все остальные открытые gates сохранены; цель не завершена.
+
 ## SYSTEM, final compiler scope и Developer 12.10.2026 10:59 UTC
 
 SOURCE763/HOTdaf unchanged. §45 byte proof99paths/21scopes,7module trees

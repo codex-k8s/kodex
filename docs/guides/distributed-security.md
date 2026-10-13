@@ -1841,6 +1841,15 @@ gate — `make test-runtime-admission-gate`, предел процесса 60 с
 
 ## Полнота deployable
 
+Объявленный том runtime-окружения материализуется также в filesystem profile
+провайдера по exact canonical mount path и закреплённому volumes digest.
+`workspace-write` разрешает запись только в эти отдельные тома; `read-only`
+не получает запись. Не разрешаются родитель `.kodex/volumes`, необъявленные
+соседи, provider state, INPUT или произвольный caller path. Кэш и scratch
+для repository tooling настраиваются в отдельном bounded томе окружения,
+а не исключаются из canary либо квоты рабочего checkout. Новый том и его
+ресурсный бюджет требуют обычной validation/publication и свежей RuntimeRevision.
+
 Outbox текущего execution публикует фактический provider writer после штатного
 stop/join app-server и до terminal handoff. UID10002 через nofollow directory/file
 descriptors проверяет provider-owned regular inode, единственную hard link,

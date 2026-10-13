@@ -10,6 +10,27 @@ updated: 2026-10-12
 
 # Цель и источники
 
+## Checkpoint 13.10.2026 03:10 UTC — resource eviction и declared tooling volumes
+
+- [x] Native Retry4 root/Developer FAILED1484; ONE Review cycles0, downstream
+      CANCELLED. Exact RC CONTEXT_CANCELLED tuple сохранён3aa5f62c; исторический
+      наблюдатель завершился, новый запуск по timeout не создавался.
+- [x] Kubelet подтвердил eviction runtime-turn3e18 в том же окне19:07:38;
+      node DiskPressure=False. Exact lease→Pod pin/конкретная quota/usage UNKNOWN;
+      retained RC renew-failure records0 не объявляются отсутствием всех отмен.
+- [x] Runner materializes exact declared volume filesystem permissions;
+      invalid path/name/quota/digest/duplicate negatives, read-only и protected
+      paths проверены. Go1.26.6 full module unit, targeted race/vet/binary build
+      PASS; source5965ebec/test1a841c9d/binary221305ce. HOT остаётсяfcdc.
+- [ ] Доставить immutable runner и intended promoted custom images; затем
+      confirmed ENV draft/validation/impact/publication/bindings для bounded
+      build-cache и cache/temp переменных repo tooling. Сохранить38tools и
+      остальные параметры; scratch не выводить из quota/canary и не hardcode всем.
+- [ ] Actual serving/image/ENV pins, early dual observation, успешный
+      Developer→ONE Reviewer→Manager→owner. Blind Retry5 не выполнялся.
+- [ ] A8 source decision, bootstrap/main и remaining QA65. Цель ACTIVE;
+      ROOT business edits/USER corrections0, дальнейшая работа без субагентов.
+
 ## Checkpoint 12.10.2026 16:24 UTC — RC live и диагностический Retry4
 
 - [x] SOURCE/HOTfcdc8d49 idle FF,83promoted pins unchanged; mounted3files и
