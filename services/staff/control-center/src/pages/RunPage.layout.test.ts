@@ -230,21 +230,28 @@ describe("RunPage layout при открытом ходе работы", () => {
 
   it("query container является общим предком графа и соседней панели", () => {
     const paths: Record<string, string[]> = {};
+    function object(value: unknown): Record<string, unknown> | undefined {
+      if (typeof value !== "object" || value === null) return undefined;
+      return value as Record<string, unknown>;
+    }
     function visit(node: unknown, parents: string[]) {
-      if (typeof node !== "object" || node === null) return;
-      const value = node as Record<string, unknown>;
+      const value = object(node);
+      if (!value) return;
       let classes: string[] = [];
       if (typeof value.tag === "string" && Array.isArray(value.props)) {
-        const attribute = value.props.find(
-          (prop) => prop.type === 6 && prop.name === "class",
-        );
-        classes = attribute?.value?.content?.split(/\s+/) ?? [];
+        const props = value.props as unknown[];
+        const attribute = props
+          .map(object)
+          .find((prop) => prop?.type === 6 && prop.name === "class");
+        const content = object(attribute?.value)?.content;
+        classes = typeof content === "string" ? content.split(/\s+/) : [];
         for (const target of ["run-workspace", "run-activity-overlay"])
           if (classes.includes(target)) paths[target] = parents;
       }
-      if (Array.isArray(value.children))
-        for (const child of value.children)
-          visit(child, [...parents, ...classes]);
+      if (Array.isArray(value.children)) {
+        const children = value.children as unknown[];
+        for (const child of children) visit(child, [...parents, ...classes]);
+      }
     }
     visit(parse(source).descriptor.template?.ast, []);
     expect(paths["run-workspace"]).toContain("run-page-body");
