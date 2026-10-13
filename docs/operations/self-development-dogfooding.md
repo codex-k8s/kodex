@@ -10,6 +10,16 @@ updated: 2026-10-13
 
 # Цель и источники
 
+## Checkpoint 13.10.2026 04:49 UTC — delivery tool для initializer mounts
+
+- [x] Repo-owned closed plan/apply/inspect только двух exact CEL validations;
+      UID/RV CAS, source/old delta, active binding/parameters/controller/85pins,
+      fresh idle и fresh compilation. Safe durable intent/readback, без WRITE retry.
+- [x] ROOT5unit negatives0.003s и authoritative previous policy87ef35cd MATCH.
+      Public entrypoint сохраняет общий60s budget; Context7 CEL/status прочитаны.
+- [ ] Commit/push, actual plan/apply/inspect и idle serving RC36cc, затем
+      native Retry с exact mounts/ACK; current Retry5 terminal FAILED.
+
 ## Checkpoint 13.10.2026 04:34 UTC — pre-provider startup и initializer mounts
 
 - [x] Core53 native READY, source/mount MATCH; CP actuale4893013 равен

@@ -10,6 +10,29 @@ updated: 2026-10-13
 
 # Текущее состояние
 
+## Checkpoint 13.10.2026 04:49 UTC — exact admission transition подготовлен
+
+Добавлен repo-owned `tools/dev/transition-runtime-initializer-mounts.py`:
+plan/apply/inspect в exact trusted local context, source/ancestor/clean HEAD,
+closed semantic old→new delta лишь двух validations. Current policy generation3
+87ef35cd MATCH прежнему source6ce; desired normalized policy157b38a8.
+JSON Patch тестирует UID/resourceVersion и прежние exact validations. Binding,
+ConfigMap/CRD parameters, controller spec, cluster/ns UID и85promoted pins
+сохраняются; fresh5busy0 требуется до effects и на readback. Fail/Deny остаются;
+новый spec требует свежей compilation/observedGeneration без warnings.
+INTENT сохраняется до patch, PASS — отдельным durable readback; UNKNOWN
+не разрешает повтор WRITE. Inspect проверяет уже обслуживаемое состояние.
+
+ROOT5synthetic negatives PASS0.003s: closed delta, unknown/duplicate/missing
+rules, literal-preserving normalization, compilation and private file boundary.
+Проверки добавлены в прежний `make test-runtime-admission-gate` с общим60s budget.
+Live READ ONLY: previous source/live SHA EQUAL, active policy/parameters и85pins
+unchanged, source controller trusted/hot. Context7 Kubernetes CEL/status fetched.
+Actual transition/новый RC пока NOT RUN; commit/push, exact plan/apply/inspect,
+потом idle HOT FF и serving36cc proof. Существующие ENV без томов не меняют
+допуск; прежний startup объявленных томов уже не проходил init canary.
+Native Retry5 остаётся FAILED; blind Retry6 и новые USER task не создавались.
+
 ## Checkpoint 13.10.2026 04:34 UTC — core53 live и startup declared volumes
 
 SOURCE/remote/HOT6ce778f7 clean перед следующей правкой. Guarded idle FF04:20:43

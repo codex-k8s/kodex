@@ -43,7 +43,7 @@ test-workspace-policy-contract: check-go-toolchain
 
 .PHONY: test-runtime-admission-gate
 test-runtime-admission-gate:
-	@timeout 60s python3 -B tools/dev/test_runtime_admission_gate.py
+	@timeout 60s sh -c 'python3 -B tools/dev/test_runtime_admission_gate.py && python3 -B tools/dev/test_transition_runtime_initializer_mounts.py'
 
 .PHONY: test-pwa-public-assets-http
 test-pwa-public-assets-http:
