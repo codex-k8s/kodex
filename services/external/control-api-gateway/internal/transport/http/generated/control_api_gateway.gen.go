@@ -12943,8 +12943,8 @@ type ProviderDefinitionPage struct {
 type ProviderFinancialCredits struct {
 	// Balance Точная upstream строка. Единица и денежный эквивалент не установлены.
 	Balance    *string `json:"balance,omitempty"`
-	HasCredits bool    `json:"hasCredits"`
-	Unlimited  bool    `json:"unlimited"`
+	HasCredits *bool   `json:"hasCredits,omitempty"`
+	Unlimited  *bool   `json:"unlimited,omitempty"`
 }
 
 // ProviderFinancialObservation defines model for ProviderFinancialObservation.

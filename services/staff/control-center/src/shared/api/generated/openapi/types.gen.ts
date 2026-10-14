@@ -3836,8 +3836,8 @@ export type ProviderFinancialWindow = {
 };
 
 export type ProviderFinancialCredits = {
-    hasCredits: boolean;
-    unlimited: boolean;
+    hasCredits?: boolean;
+    unlimited?: boolean;
     /**
      * Точная upstream строка. Единица и денежный эквивалент не установлены.
      */

@@ -205,8 +205,9 @@ func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt [
 	if onActivity == nil {
 		return Result{}, atProviderStage(providerStageSelection, errors.New("Codex runtime activity consumer is unavailable"))
 	}
-	if err := verifyAccountPin(input); err != nil {
-		return Result{}, atProviderStage(providerStageAccountPin, err)
+	financialIdentity, pinErr := readPinnedFinancialIdentity(input)
+	if pinErr != nil {
+		return Result{}, atProviderStage(providerStageAccountPin, pinErr)
 	}
 	if err := verifyRestoreArchive(input); err != nil {
 		return Result{}, atProviderStage(providerStageArchiveRestore, err)
@@ -220,6 +221,9 @@ func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt [
 	}
 	state := newProtocolState(input.CodexSessionID)
 	state.onActivity = onActivity
+	state.financialExpectedAccount = financialIdentity
+	state.financialEpoch = 1
+	state.financialBoundEpoch = 1
 	captureAttempted := false
 	defer func() {
 		if state.resumeSource != nil {
@@ -1055,22 +1059,45 @@ func (server *appServer) closeStreams() {
 }
 
 func verifyAccountPin(input model.Input) error {
-	path := filepath.Join(input.CodexHome, "auth.json")
-	file, info, err := openProtectedFile(input.WorkspaceRoot, path)
+	_, err := readPinnedFinancialIdentity(input)
+	return err
+}
+
+// Private identity читается только из уже закреплённого snapshot внутри provider
+// процесса. Credentials и account ID не сериализуются в callback или diagnostic.
+func readPinnedFinancialIdentity(input model.Input) (string, error) {
+	file, info, err := openProtectedFile(input.WorkspaceRoot, filepath.Join(input.CodexHome, "auth.json"))
 	if err != nil {
-		return errors.New("Codex authentication snapshot is unavailable")
+		return "", errors.New("Codex authentication snapshot is unavailable")
 	}
 	defer file.Close()
 	if info.Size() <= 0 || info.Size() > 1<<20 {
-		return errors.New("Codex authentication snapshot metadata is invalid")
+		return "", errors.New("Codex authentication snapshot metadata is invalid")
 	}
-	digest := sha256.New()
-	expectedDigest, expectedErr := pinnedProviderDigest(input)
-	if _, err := io.Copy(digest, io.LimitReader(file, 1<<20+1)); err != nil || expectedErr != nil ||
-		hex.EncodeToString(digest.Sum(nil)) != expectedDigest {
-		return errors.New("Codex authentication snapshot does not match the pinned provider account")
+	raw, err := io.ReadAll(io.LimitReader(file, 1<<20+1))
+	defer clear(raw)
+	digest := sha256.Sum256(raw)
+	expected, expectedErr := pinnedProviderDigest(input)
+	after, statErr := file.Stat()
+	if err != nil || expectedErr != nil || hex.EncodeToString(digest[:]) != expected || int64(len(raw)) != info.Size() || statErr != nil || !os.SameFile(info, after) || after.Size() != info.Size() || !after.ModTime().Equal(info.ModTime()) || rejectDuplicateJSONKeys(raw) != nil {
+		return "", errors.New("Codex authentication snapshot does not match the pinned provider account")
 	}
-	return nil
+	var identity struct {
+		Tokens *struct {
+			AccountID *string `json:"account_id"`
+		} `json:"tokens"`
+	}
+	if json.Unmarshal(raw, &identity) != nil {
+		return "", errors.New("Codex authentication snapshot is invalid")
+	}
+	if identity.Tokens == nil || identity.Tokens.AccountID == nil {
+		return "", nil
+	}
+	account := *identity.Tokens.AccountID
+	if account == "" || len(account) > 512 {
+		return "", errors.New("Codex authentication identity is invalid")
+	}
+	return account, nil
 }
 
 func verifyRestoreArchive(input model.Input) error {

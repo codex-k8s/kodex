@@ -52,3 +52,48 @@ func TestBrokerFinancialSequenceRejectsReplayAndMixedActivity(t *testing.T) {
 		t.Fatal("mixed financial/model activity accepted")
 	}
 }
+
+func TestFinancialAccountBindingAndCurrentProcessEpoch(t *testing.T) {
+	for _, row := range []struct {
+		id        string
+		changed   bool
+		available bool
+		rejected  bool
+	}{
+		{`"fixture-private-account"`, false, true, false},
+		{`null`, false, false, false},
+		{`"other-private-account"`, false, false, true},
+		{`"fixture-private-account"`, true, false, false},
+	} {
+		state := newProtocolState("")
+		state.financialEnabled = true
+		state.financialExpectedAccount = "fixture-private-account"
+		state.financialEpoch = 1
+		state.financialBoundEpoch = 1
+		var delivered *runtimecontract.ProviderFinancialObservation
+		state.onActivity = func(activity runtimecontract.RuntimeActivity) error { delivered = activity.Financial; return nil }
+		messages := make(chan streamEvent, 2)
+		if row.changed {
+			messages <- streamEvent{message: wireMessage{kind: messageNotification, method: "account/updated", payload: json.RawMessage(`{"authMode":null,"planType":null}`)}}
+		}
+		messages <- streamEvent{message: wireMessage{kind: messageResponse, id: json.RawMessage(`1`), payload: json.RawMessage(`{"accountId":` + row.id + `,"rateLimits":{"primary":{"usedPercent":100},"credits":{"hasCredits":true,"unlimited":false,"balance":"59999.9"}}}`)}}
+		server := &appServer{stdin: &proofRequestWriter{beforeWrite: func() {}}, messages: messages}
+		err := server.observeFinancial(t.Context(), state)
+		if (err != nil) != row.rejected {
+			t.Fatal("identity mismatch outcome is invalid")
+		}
+		if row.rejected {
+			if delivered != nil {
+				t.Fatal("foreign measurement was published")
+			}
+			continue
+		}
+		if delivered == nil || (delivered.State == "AVAILABLE") != row.available {
+			t.Fatal("nullable identity or epoch guard failed")
+		}
+		safe, err := json.Marshal(delivered)
+		if err != nil || bytes.Contains(safe, []byte("private-account")) || bytes.Contains(safe, []byte("accountId")) {
+			t.Fatal("private identity escaped the observation")
+		}
+	}
+}

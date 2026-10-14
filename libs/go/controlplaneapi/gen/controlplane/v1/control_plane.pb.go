@@ -79993,8 +79993,8 @@ func (x *ProviderFinancialWindow) GetResetsAt() int64 {
 
 type ProviderFinancialCredits struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	HasCredits    bool                   `protobuf:"varint,1,opt,name=has_credits,json=hasCredits,proto3" json:"has_credits,omitempty"`
-	Unlimited     bool                   `protobuf:"varint,2,opt,name=unlimited,proto3" json:"unlimited,omitempty"`
+	HasCredits    *bool                  `protobuf:"varint,1,opt,name=has_credits,json=hasCredits,proto3,oneof" json:"has_credits,omitempty"`
+	Unlimited     *bool                  `protobuf:"varint,2,opt,name=unlimited,proto3,oneof" json:"unlimited,omitempty"`
 	Balance       *string                `protobuf:"bytes,3,opt,name=balance,proto3,oneof" json:"balance,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -80031,15 +80031,15 @@ func (*ProviderFinancialCredits) Descriptor() ([]byte, []int) {
 }
 
 func (x *ProviderFinancialCredits) GetHasCredits() bool {
-	if x != nil {
-		return x.HasCredits
+	if x != nil && x.HasCredits != nil {
+		return *x.HasCredits
 	}
 	return false
 }
 
 func (x *ProviderFinancialCredits) GetUnlimited() bool {
-	if x != nil {
-		return x.Unlimited
+	if x != nil && x.Unlimited != nil {
+		return *x.Unlimited
 	}
 	return false
 }
@@ -86496,12 +86496,15 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"\tresets_at\x18\x03 \x01(\x03H\x01R\bresetsAt\x88\x01\x01B\x13\n" +
 	"\x11_duration_minutesB\f\n" +
 	"\n" +
-	"_resets_at\"\x84\x01\n" +
-	"\x18ProviderFinancialCredits\x12\x1f\n" +
-	"\vhas_credits\x18\x01 \x01(\bR\n" +
-	"hasCredits\x12\x1c\n" +
-	"\tunlimited\x18\x02 \x01(\bR\tunlimited\x12\x1d\n" +
-	"\abalance\x18\x03 \x01(\tH\x00R\abalance\x88\x01\x01B\n" +
+	"_resets_at\"\xac\x01\n" +
+	"\x18ProviderFinancialCredits\x12$\n" +
+	"\vhas_credits\x18\x01 \x01(\bH\x00R\n" +
+	"hasCredits\x88\x01\x01\x12!\n" +
+	"\tunlimited\x18\x02 \x01(\bH\x01R\tunlimited\x88\x01\x01\x12\x1d\n" +
+	"\abalance\x18\x03 \x01(\tH\x02R\abalance\x88\x01\x01B\x0e\n" +
+	"\f_has_creditsB\f\n" +
+	"\n" +
+	"_unlimitedB\n" +
 	"\n" +
 	"\b_balance\"\xa4\x03\n" +
 	"\x1cProviderFinancialObservation\x12\x1a\n" +

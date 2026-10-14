@@ -209,36 +209,39 @@ func decodeRPCError(raw json.RawMessage) (int64, error) {
 }
 
 type protocolState struct {
-	financialEnabled     bool
-	financialWake        bool
-	financialSequence    int64
-	resumeSource         *confirmedResumeSource
-	expectedSessionID    string
-	threadID             string
-	threadPath           string
-	requiredMCPThread    string
-	requiredMCPStatus    string
-	requiredMCPReady     bool
-	turnID               string
-	turnStarted          uint32
-	terminals            uint32
-	result               Result
-	latestDisplayUsage   providerDisplayUsage
-	measuredUsage        runtimecontract.TokenUsage
-	responseReceipts     map[string][sha256.Size]byte
-	missingResponseUsage bool
-	measuredResponses    uint32
-	baselineCaptured     bool
-	agentMessages        map[string]agentMessage
-	toolCalls            map[string]runtimecontract.NativeToolCall
-	toolCallOrder        []string
-	itemStartedAtMS      map[string]int64
-	workspaceRoot        string
-	finalID              string
-	fallbackID           string
-	onActivity           func(runtimecontract.RuntimeActivity) error
-	activityErr          error
-	startedToolCalls     map[string]runtimecontract.NativeToolCall
+	financialExpectedAccount string
+	financialEpoch           uint64
+	financialBoundEpoch      uint64
+	financialEnabled         bool
+	financialWake            bool
+	financialSequence        int64
+	resumeSource             *confirmedResumeSource
+	expectedSessionID        string
+	threadID                 string
+	threadPath               string
+	requiredMCPThread        string
+	requiredMCPStatus        string
+	requiredMCPReady         bool
+	turnID                   string
+	turnStarted              uint32
+	terminals                uint32
+	result                   Result
+	latestDisplayUsage       providerDisplayUsage
+	measuredUsage            runtimecontract.TokenUsage
+	responseReceipts         map[string][sha256.Size]byte
+	missingResponseUsage     bool
+	measuredResponses        uint32
+	baselineCaptured         bool
+	agentMessages            map[string]agentMessage
+	toolCalls                map[string]runtimecontract.NativeToolCall
+	toolCallOrder            []string
+	itemStartedAtMS          map[string]int64
+	workspaceRoot            string
+	finalID                  string
+	fallbackID               string
+	onActivity               func(runtimecontract.RuntimeActivity) error
+	activityErr              error
+	startedToolCalls         map[string]runtimecontract.NativeToolCall
 }
 
 type agentMessage struct {
@@ -474,6 +477,10 @@ func (state *protocolState) notification(method string, raw json.RawMessage) err
 		return errors.New("Codex app-server notification is invalid")
 	}
 	switch method {
+	case "account/updated":
+		state.financialEpoch++
+		state.financialWake = true
+		return nil
 	case "account/rateLimits/updated":
 		state.financialWake = true
 		return nil

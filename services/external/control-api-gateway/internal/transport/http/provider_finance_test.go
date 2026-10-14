@@ -8,7 +8,7 @@ import (
 
 func TestFinancialProjectionPreservesKnownZeroAndUnknown(t *testing.T) {
 	ordinary := false
-	value, err := ProtoMap(&cp.ProviderFinancialObservation{Sequence: 1, State: "AVAILABLE", Windows: []*cp.ProviderFinancialWindow{{UsedPercent: 0}}, Credits: &cp.ProviderFinancialCredits{}, OrdinaryUsageAllowed: &ordinary})
+	value, err := ProtoMap(&cp.ProviderFinancialObservation{Sequence: 1, State: "AVAILABLE", Windows: []*cp.ProviderFinancialWindow{{UsedPercent: 0}}, Credits: &cp.ProviderFinancialCredits{HasCredits: new(false), Unlimited: new(false)}, OrdinaryUsageAllowed: &ordinary})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,5 +32,14 @@ func TestFinancialProjectionPreservesKnownZeroAndUnknown(t *testing.T) {
 	}
 	if _, exists := value["spendControlReached"]; exists {
 		t.Fatal("unknown spending flag invented")
+	}
+	unknown, err := ProtoMap(&cp.ProviderFinancialCredits{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"hasCredits", "unlimited", "balance"} {
+		if _, exists := unknown[field]; exists {
+			t.Fatal("absent credit field became a measurement")
+		}
 	}
 }
