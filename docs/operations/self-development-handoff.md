@@ -4,11 +4,33 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.24
+version: 1.1.25
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 15:37 UTC — новый native checkpoint уже в PR
+
+SOURCE/remote/Draft1807 33c7560111f948db70c8f674dbf313d360b55935 MATCH,
+HOT0b5af51c clean. Developer самостоятельно восстановил прежний checkout/
+ветку1809 и создал новый checkpoint1b64c2dfb4192611942bc3400a05d5e025769962;
+локальный HEAD и GitHub head1809 MATCH, status0 на15:34. Старый1808 не менялся.
+Это фактический ранний commit/push, не final/tests/Review acceptance.
+
+Current root/Developer RUNNING, sequence1108→1188 за наблюдение;
+CODEX_FILE_CHANGE1173 SUCCEEDED, Context7 resolve/query SUCCEEDED.
+Неуспешные отдельные shell1021/1167 сохранены, но terminal failure не было.
+Provider/relay Ready, все контейнеры restart0. Role жив, но readiness503
+READ_ONLY подтверждён через localhost readyz15:36. Точный недоступный каталог
+не определён; прежний post-join directory-only normalization protocol
+сохраняется. Проверить readiness/completion после stop/join; не исправлять
+permissions вручную и не называть текущий Pod полностью Ready.
+
+Own36 Chrome MCP/reload/rejoin/connected PASS, Console0. Source/PR journals
+и body опубликованы, последний diff-check относительноmain PASS.
+Следующие этапы прежние: native final → ONE Review → Manager/owner;
+idle metadata delivery/retest, supported paid/weekly, QA65/gates/main.
 
 ## Checkpoint 14.10.2026 15:23 UTC — Developer начал исходную задачу
 
