@@ -20,7 +20,7 @@ import {
   UserRoundCheck,
   Workflow,
 } from "@lucide/vue";
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import type { Component } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -45,7 +45,10 @@ import {
   layoutRunGraph,
   runGraphContentBounds,
 } from "@/features/runs/run-graph-layout";
-import { runGraphViewportCommand } from "@/features/runs/run-graph-viewport";
+import {
+  runGraphDefaultViewMode,
+  runGraphViewportCommand,
+} from "@/features/runs/run-graph-viewport";
 import type {
   RunEdge,
   RunNode,
@@ -80,6 +83,7 @@ const { t } = useI18n();
 
 const flowId = "run-session-graph";
 const viewMode = ref<"graph" | "outline">("graph");
+const explicitViewMode = ref(false);
 const legendExpanded = ref(false);
 const outline = ref<HTMLElement>();
 const userAdjustedView = ref(false);
@@ -327,11 +331,26 @@ async function changeZoom(direction: "in" | "out"): Promise<void> {
 }
 
 function setViewMode(mode: "graph" | "outline"): void {
+  explicitViewMode.value = true;
   viewMode.value = mode;
   if (mode === "graph" && !userAdjustedView.value) {
     void nextTick(() => fit(false));
   }
 }
+
+function updateDefaultViewMode(): void {
+  if (explicitViewMode.value) return;
+  viewMode.value = runGraphDefaultViewMode(window.innerWidth);
+  if (viewMode.value === "graph" && !userAdjustedView.value) {
+    void nextTick(() => fit(false));
+  }
+}
+
+onMounted(() => {
+  updateDefaultViewMode();
+  window.addEventListener("resize", updateDefaultViewMode);
+});
+onUnmounted(() => window.removeEventListener("resize", updateDefaultViewMode));
 
 function handleNodeClick(event: NodeMouseEvent): void {
   emit("select", domainNode(event.node));

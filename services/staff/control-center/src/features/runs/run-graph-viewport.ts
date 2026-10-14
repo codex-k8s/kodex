@@ -9,6 +9,12 @@ export interface RunGraphViewportKey {
   shiftKey?: boolean;
 }
 
+export function runGraphDefaultViewMode(width: number): "graph" | "outline" {
+  return Number.isFinite(width) && width > 0 && width <= 640
+    ? "outline"
+    : "graph";
+}
+
 export function runGraphViewportCommand(
   event: RunGraphViewportKey,
 ): RunGraphViewportCommand | undefined {

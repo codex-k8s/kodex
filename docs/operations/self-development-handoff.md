@@ -4,11 +4,34 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.19
+version: 1.1.20
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 13:35 UTC — metadata reader опубликован, mobile подготовлен
+
+SOURCE/remote/Draft1807 MATCH488fc55f0ce632702a340f9136367638b4a7be14;
+serving HOT остаётсяbb938a00. CP package PASS2.003s, callback PASS6.580s,
+named metadata component PASS49.334s. Host builds для следующего safe delivery:
+CPe3cba3719d22fed8e1b98be6c3e6ff809e43ec0350af1697b061d313098f9df0,
+RC96bf385b24ba2bd3689d975e511e2a478818dceb04c819879b2899e197bd9945.
+Новые binaries ещё НЕ serving; natural config retest NOT RUN.
+
+Mobile graph default изменён на outline при viewport≤640px; graph доступен
+явно, ручной выбор не отменяется resize. Unit4 PASS324ms, scoped ESLint и
+frontend typecheck PASS. Hot reload/screenshot нового default пока NOT RUN.
+
+Developer создал новый Draft1809 для текущей session/branch
+developer/issue-1796-supported-finance-ZFTA; remote head29125ba…9550.
+Прежний Draft1808 относится к прошлой попытке и не подменяет результат retry10.
+Local evidence progress уже headb47e1e79625346420a18aa2be8c2f8ec510b8394;
+финальный push ещё не подтверждён. Не merge/approve ни один business PR.
+Сопровождать именно current-root result и один Review; готовность по прежнему
+head1808 или одному checkpoint не объявлять. Rootseq1511 RUNNING.
+Current Developer clock заканчивается13:46:35 UTC, root clock —15.10 09:43:56;
+immutable timeout не продлевается вручную и не обходится.
 
 ## Checkpoint 14.10.2026 13:20 UTC — named runtime metadata, CODE_ONLY готов
 

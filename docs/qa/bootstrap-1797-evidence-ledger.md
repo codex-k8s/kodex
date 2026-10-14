@@ -4,9 +4,21 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.19
+version: 1.0.20
 updated: 2026-10-14
 ---
+
+## 14.10.2026 13:35 UTC — exact published metadata code и следующий UX шаг
+
+- SOURCE/remote/Draft1807 MATCH488fc55f, HOTbb938a00; новые CP/RC binaries
+  собраны, но не serving. CP package PASS2.003s, callback6.580s, component49.334s.
+- Mobile default outline≤640px CODE_ONLY: unit4 PASS324ms, ESLint/typecheck PASS;
+  новая visual acceptance NOT RUN. Ручной graph/outline выбор сохраняется.
+- Actual current-session business Draft1809/head29125ba…9550; старый1808/head
+  c784ee85 относится к предыдущему retry. Local progressb47e1e79…8394 ещё не
+  является remote/final/tests/Review PASS. Host business edits/USER corrections0.
+- Developer RUNNING/rootseq1511, deadline13:46:35 UTC; owner gate/paid case,
+  metadata native retest и другие остатки7/QA65 остаются OPEN.
 
 ## 14.10.2026 13:20 UTC — no-ID configuration FAIL, адресное исправление CODE_ONLY
 
