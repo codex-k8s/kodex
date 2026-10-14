@@ -209,6 +209,8 @@ publication, admission, node pull либо развёртывание.
 | runtime-controller | `2e07f737b824b79451ba5a8408c4f7744e33471c` | `31e7e50f84cc506b99f87a31abe0dbf272d59ba935871e176f6e2be3c0abf3a9` |
 | control-api-gateway | `9e54c6e8bcfee675559c6a16f2ed6d1141d3a4ba` | `58f064ba63be2e9658c9641b673ca4ba18dc8eed45ec73f49911ae8a42c061b5` |
 | staff-control-center | `9e54c6e8bcfee675559c6a16f2ed6d1141d3a4ba` | `79db365eed79750907d4558a04ea46431ed90ef1eed74f85e76d5952b00374cc` |
+| secret-broker | `d093118e0843a2e9ed0217538e9b6795d83cd04b` | `a83a43835cd5cc05ce0c5cb65c29f3ab894ad6c4c5f97cbe8c5c414ae948a571` |
+| egress-gateway | `d093118e0843a2e9ed0217538e9b6795d83cd04b` | `aa4f231a94c2a5cbcd75f258fca459946a8bd843403e4b0337fef13b67eefa38` |
 
 Первый frontend build завершился FAIL: Dockerfile не копировал актуальные
 test/config dependencies TypeScript. Следующий выявил неполный
@@ -231,3 +233,9 @@ live cache cluster, replacement/login и upgrade ещё NOT RUN.
 
 Проверены официальные [Keycloak cache docs](https://www.keycloak.org/server/caching)
 и [Docker COPY docs](https://docs.docker.com/reference/dockerfile/#copy).
+
+Повтор на exact `d093118e0843a2e9ed0217538e9b6795d83cd04b`: 27 быстрых
+проверок и полный `web-only-release-test.sh` PASS после изменения identity
+manifests. GitHub Draft #1811 exact head подтверждён; рабочий main по-прежнему
+`8c19ffb76328ae559698fae2806be79ef0bd64ae`, чистый. Live контроль трёх основных
+Deployment подтвердил исходные1/1; новые replica settings ещё не применялись.
