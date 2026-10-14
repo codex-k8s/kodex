@@ -97,3 +97,30 @@ func TestFinancialAccountBindingAndCurrentProcessEpoch(t *testing.T) {
 		}
 	}
 }
+
+func TestFinancialMethodAbsenceDoesNotSuppressOtherFailures(t *testing.T) {
+	for _, code := range []int64{-32601, -32603, -32000} {
+		state := newProtocolState("")
+		state.financialEnabled = true
+		var delivered *runtimecontract.ProviderFinancialObservation
+		state.onActivity = func(activity runtimecontract.RuntimeActivity) error {
+			delivered = activity.Financial
+			return nil
+		}
+		payload, err := json.Marshal(map[string]any{"code": code, "message": "synthetic upstream error"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		messages := make(chan streamEvent, 1)
+		messages <- streamEvent{message: wireMessage{kind: messageError, id: json.RawMessage(`1`), payload: payload}}
+		server := &appServer{stdin: &proofRequestWriter{beforeWrite: func() {}}, messages: messages}
+		err = server.observeFinancial(t.Context(), state)
+		if code == -32601 {
+			if err != nil || delivered == nil || delivered.State != "UNAVAILABLE" || delivered.Validate() != nil {
+				t.Fatal("supported method absence blocked the execution")
+			}
+		} else if err == nil || delivered != nil {
+			t.Fatal("unknown provider failure was suppressed")
+		}
+	}
+}

@@ -21,9 +21,10 @@ func (server *appServer) observeFinancial(ctx context.Context, state *protocolSt
 	observation := runtimecontract.ProviderFinancialObservation{Sequence: state.financialSequence, State: "UNAVAILABLE"}
 	if err != nil {
 		var failure *appServerCallFailure
-		// Только точный pinned no-snapshots outcome завершённого RPC.
+		// Только method absence либо точный pinned no-snapshots outcome
+		// завершённого коррелированного RPC.
 		// Auth, transport и policy failure сохраняют закрытый gate.
-		if !errors.As(err, &failure) || failure.detail != "RPC_ERROR" || !failure.financialUnavailable {
+		if !errors.As(err, &failure) || failure.detail != "RPC_ERROR" || (failure.code != -32601 && !failure.financialUnavailable) {
 			return err
 		}
 	} else {
