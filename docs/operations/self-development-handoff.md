@@ -4,11 +4,40 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.29
+version: 1.1.30
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 18:06 UTC — бизнес-код сохранён, финализация ещё активна
+
+SOURCE/remote/Draft1807 2d0a00c70cc996515be9c7e6fc9ff2d8b89e69ac MATCH;
+HOT0b5af51c clean, mainab4992e0 неизменён. GitHub readback: bootstrap
+mergeable clean, checks0/statuses0/reviews0, combined pending. Это не CI
+или approval PASS; merge/ready не выполнялись.
+
+Native Developer самостоятельно довёл Draft1809 до
+28334101067d7a650e2041d1db581ba8e7134dfc. GitHub head и actual checkout
+/workspace/work/issue-1796 MATCH18:03, git status пустой. Native commentary
+сообщает11 финальных адресных Go test/race/build PASS и81 changed file;
+ROOT не выполнял эти бизнес-проверки и не рецензировал код. Полный frontend
+baseline FAIL и PostgreSQL/browser/paid NOT RUN/UNKNOWN остаются в handoff,
+а не подменяются нашим отдельным frontend3993PASS.
+
+Rootrun_4E4x4FCjIg44_NnXl35XGlil и Developerrun_9_JUkSv_xFac1SII28AUnI42
+RUNNING; sequence1901 на18:06. Reviewer и final Manager PLANNED, циклов
+Review0. Native final artifacts пока не опубликованы: inherited refs12
+не являются результатами Developer. Same Pod UID086b5bc0/restarts0,
+provider/relay Ready, role readiness по-прежнему false. Post-join workspace
+и успешная финализация ещё NOT RUN; поды не перезапускались.
+
+Chrome MCP own36 connected/SSO, bootstrap/session/graph/ticket200, Console0;
+reload после пустого draft, чужие вкладки не изменены. Далее дождаться
+результатов этого же запуска, проверить exact artifact revisions/size/SHA/EOF
+и native переход к ONE Reviewer/Manager. Metadata205 ещё NOT SERVING:
+guarded FF и новые CP/RC только после authoritative idle, не между child
+этапами активного root. Paid/QA65/merge/main/final report остаются OPEN.
 
 ## Checkpoint 14.10.2026 16:46 UTC — SQL boundary PASS, native wait подтверждён
 

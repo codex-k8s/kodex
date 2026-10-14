@@ -4,9 +4,26 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.29
+version: 1.0.30
 updated: 2026-10-14
 ---
+
+## 14.10.2026 18:06 UTC — actual Git checkpoint и граница финализации
+
+- Bootstrap SOURCE/remote/PR2d0a00c7 MATCH, HOT0b5/mainab4992 unchanged.
+  GitHub mergeable clean, checks/statuses/reviews0/combined pending;
+  CI/approval NOT RUN, merge/ready0.
+- Business Draft1809/head28334101067d7a650e2041d1db581ba8e7134dfc MATCH
+  actual Developer checkout18:03, status0. Early commit/push PASS; ROOT
+  business implementation/review/USER steering0. Native declaration11 Go
+  checks PASS и81 files — заявление исполнителя, не ROOT test receipt.
+- Current root/Developer RUNNING1901, Reviewer/Manager PLANNED, Review0.
+  Inherited artifacts12 не являются final Developer results. Native handoff
+  сохраняет frontend baseline FAIL и PG/browser/paid NOT RUN/UNKNOWN.
+- Same Pod UID086b5bc0, all restarts0, provider/relay Ready; role readiness
+  false. Post-join workspace/completion/EOF и native Reviewer ещё OPEN.
+- Own36 MCP/SSO/API200/Console0/reload с пустым draft; foreign tabs untouched.
+  Guarded metadata delivery, real paid/QA65/bootstrap/main/final report OPEN.
 
 ## 14.10.2026 16:46 UTC — SQL и наблюдение текущего процесса
 
