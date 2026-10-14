@@ -8,7 +8,7 @@ import (
 
 func TestFinancialProjectionPreservesKnownZeroAndUnknown(t *testing.T) {
 	ordinary := false
-	value, err := ProtoMap(&cp.ProviderFinancialObservation{Sequence: 1, State: "AVAILABLE", Windows: []*cp.ProviderFinancialWindow{{UsedPercent: 0}}, Credits: &cp.ProviderFinancialCredits{HasCredits: new(false), Unlimited: new(false)}, OrdinaryUsageAllowed: &ordinary})
+	value, err := ProtoMap(&cp.ProviderFinancialObservation{Sequence: 1, State: "AVAILABLE", Windows: []*cp.ProviderFinancialWindow{{UsedPercent: new(int32(0))}}, Credits: &cp.ProviderFinancialCredits{HasCredits: new(false), Unlimited: new(false)}, OrdinaryUsageAllowed: &ordinary})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,6 +32,13 @@ func TestFinancialProjectionPreservesKnownZeroAndUnknown(t *testing.T) {
 	}
 	if _, exists := value["spendControlReached"]; exists {
 		t.Fatal("unknown spending flag invented")
+	}
+	absent, err := ProtoMap(&cp.ProviderFinancialWindow{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := absent["usedPercent"]; exists {
+		t.Fatal("missing window became known zero")
 	}
 	unknown, err := ProtoMap(&cp.ProviderFinancialCredits{})
 	if err != nil {

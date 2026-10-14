@@ -17,7 +17,7 @@ type ProviderFinancialObservation struct {
 	Restriction          string                    `json:"restriction,omitempty"`
 }
 type ProviderFinancialWindow struct {
-	UsedPercent     int32  `json:"usedPercent"`
+	UsedPercent     *int32 `json:"usedPercent"`
 	DurationMinutes *int64 `json:"durationMinutes,omitempty"`
 	ResetsAt        *int64 `json:"resetsAt,omitempty"`
 }
@@ -37,7 +37,7 @@ func (value ProviderFinancialObservation) Validate() error {
 		return errors.New("unavailable financial observation contains measurements")
 	}
 	for _, window := range value.Windows {
-		if window.UsedPercent < 0 || window.UsedPercent > 100 || window.DurationMinutes != nil && (*window.DurationMinutes <= 0 || *window.DurationMinutes > 5256000) || window.ResetsAt != nil && (*window.ResetsAt < 0 || *window.ResetsAt > 253402300799) {
+		if window.UsedPercent == nil || *window.UsedPercent < 0 || *window.UsedPercent > 100 || window.DurationMinutes != nil && (*window.DurationMinutes <= 0 || *window.DurationMinutes > 5256000) || window.ResetsAt != nil && (*window.ResetsAt < 0 || *window.ResetsAt > 253402300799) {
 			return errors.New("provider financial window is invalid")
 		}
 	}

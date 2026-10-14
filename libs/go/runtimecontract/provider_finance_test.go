@@ -5,7 +5,7 @@ import "testing"
 func TestFinancialObservationPreservesUnknownAndPaid(t *testing.T) {
 	balance := "59999.12345678901234567890123456789"
 	ordinary := false
-	value := ProviderFinancialObservation{Sequence: 1, State: "AVAILABLE", Windows: []ProviderFinancialWindow{{UsedPercent: 100}}, Credits: &ProviderFinancialCredits{HasCredits: new(true), Balance: &balance}, OrdinaryUsageAllowed: &ordinary}
+	value := ProviderFinancialObservation{Sequence: 1, State: "AVAILABLE", Windows: []ProviderFinancialWindow{{UsedPercent: new(int32(100))}}, Credits: &ProviderFinancialCredits{HasCredits: new(true), Balance: &balance}, OrdinaryUsageAllowed: &ordinary}
 	if err := value.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -22,15 +22,18 @@ func TestFinancialObservationPreservesUnknownAndPaid(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
 func TestFinancialObservationBounds(t *testing.T) {
 	invalidBalance := "1e9"
 	invalidReset := int64(-1)
 	invalidDuration := int64(0)
 	tests := []ProviderFinancialObservation{
-		{State: "AVAILABLE"}, {Sequence: 65, State: "AVAILABLE"}, {Sequence: 1, State: "UNKNOWN"},
+		{State: "AVAILABLE"},
+		{Sequence: 65, State: "AVAILABLE"},
+		{Sequence: 1, State: "UNKNOWN"},
 		{Sequence: 1, State: "UNAVAILABLE", Credits: &ProviderFinancialCredits{}},
-		{Sequence: 1, State: "AVAILABLE", Windows: []ProviderFinancialWindow{{UsedPercent: 101}}},
-		{Sequence: 1, State: "AVAILABLE", Windows: []ProviderFinancialWindow{{UsedPercent: -1}}},
+		{Sequence: 1, State: "AVAILABLE", Windows: []ProviderFinancialWindow{{UsedPercent: new(int32(101))}}},
+		{Sequence: 1, State: "AVAILABLE", Windows: []ProviderFinancialWindow{{UsedPercent: new(int32(-1))}}},
 		{Sequence: 1, State: "AVAILABLE", Windows: []ProviderFinancialWindow{{ResetsAt: &invalidReset}}},
 		{Sequence: 1, State: "AVAILABLE", Windows: []ProviderFinancialWindow{{DurationMinutes: &invalidDuration}}},
 		{Sequence: 1, State: "AVAILABLE", Credits: &ProviderFinancialCredits{Balance: &invalidBalance}},

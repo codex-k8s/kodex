@@ -771,9 +771,10 @@ onBeforeUnmount(() => {
             {{
               $t(
                 store.catalogUnavailable
-                  ? "common.unavailable" : search.trim()
-                  ? "providers.searchEmptyTitle"
-                  : "providers.emptyTitle",
+                  ? "common.unavailable"
+                  : search.trim()
+                    ? "providers.searchEmptyTitle"
+                    : "providers.emptyTitle",
               )
             }}
           </h2>
@@ -781,9 +782,10 @@ onBeforeUnmount(() => {
             {{
               $t(
                 store.catalogUnavailable
-                  ? "providers.catalogUnavailableText" : search.trim()
-                  ? "providers.searchEmptyText"
-                  : "providers.emptyText",
+                  ? "providers.catalogUnavailableText"
+                  : search.trim()
+                    ? "providers.searchEmptyText"
+                    : "providers.emptyText",
               )
             }}
           </p>

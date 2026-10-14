@@ -2,15 +2,16 @@ package entity
 
 import (
 	"fmt"
-	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"testing"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 func TestFinancialOverviewRanksCompleteSetWithBoundedStorage(t *testing.T) {
 	at := time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC)
 	summary := func(used int32) *ProviderFinancialSummary {
-		return &ProviderFinancialSummary{Observation: runtimecontract.ProviderFinancialObservation{Sequence: 1, State: "AVAILABLE", Windows: []runtimecontract.ProviderFinancialWindow{{UsedPercent: used}}}, ReceivedAt: at, Version: 1}
+		return &ProviderFinancialSummary{Observation: runtimecontract.ProviderFinancialObservation{Sequence: 1, State: "AVAILABLE", Windows: []runtimecontract.ProviderFinancialWindow{{UsedPercent: new(int32(used))}}}, ReceivedAt: at, Version: 1}
 	}
 	result := ProviderFinancialOverview{ObservedAt: at, Accounts: []ProviderFinancialDisplayAccount{}}
 	for i := 0; i < 6200; i++ {

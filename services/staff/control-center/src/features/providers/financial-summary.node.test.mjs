@@ -4,6 +4,7 @@ import {
   financialSummary,
   financialCredits,
   financialReset,
+  validateFinancialOverview,
 } from "./financial-summary.ts";
 const now = Date.parse("2026-10-11T00:00:00Z");
 const account = (ref, used, credits, financialEligible = true) => ({
@@ -102,4 +103,52 @@ test("scope/resource filtering precedes counts and ranking", () => {
   assert.equal(result.total, 1);
   assert.equal(result.exhausted, 0);
   assert.equal(result.accounts[0].account.ref, "visible");
+});
+
+test("protected bounded summary retains complete counts and rejects malformed presence", () => {
+  const value = {
+    accounts: [
+      account("a", 100),
+      account("b", 10),
+      account("c", undefined),
+    ].map(({ ref, name, financialSummary }) => ({
+      ref,
+      name,
+      financialSummary,
+    })),
+    total: 6200,
+    exhausted: 10,
+    unknown: 5,
+    observedAt: new Date(now).toISOString(),
+    validUntil: new Date(now + 300000).toISOString(),
+  };
+  const overview = validateFinancialOverview(value);
+  const result = financialSummary(
+    overview.accounts.map((item) => ({ ...item, financialEligible: true })),
+    true,
+    true,
+    now,
+    overview,
+  );
+  assert.equal(result.total, 6200);
+  assert.equal(result.exhausted, 10);
+  assert.equal(result.unknown, 5);
+  assert.equal(
+    financialSummary([], true, true, now + 300001, overview).unknown,
+    6200,
+  );
+  for (const mutate of [
+    (v) => (v.accounts[0].financialSummary.observation.windows = [{}]),
+    (v) =>
+      (v.accounts[0].financialSummary.observation.credits = {
+        hasCredits: null,
+      }),
+    (v) => (v.accounts[0].financialSummary.observation.accountId = "private"),
+    (v) => (v.total = 2),
+    (v) => v.accounts.push(v.accounts[0]),
+  ]) {
+    const invalid = structuredClone(value);
+    mutate(invalid);
+    assert.throws(() => validateFinancialOverview(invalid));
+  }
 });

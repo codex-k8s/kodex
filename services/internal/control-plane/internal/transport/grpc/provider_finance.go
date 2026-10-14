@@ -19,7 +19,7 @@ func castFinancialObservation(value runtimecontract.ProviderFinancialObservation
 func financialObservation(value *controlplanev1.ProviderFinancialObservation) runtimecontract.ProviderFinancialObservation {
 	result := runtimecontract.ProviderFinancialObservation{Sequence: value.GetSequence(), State: value.GetState(), OrdinaryUsageAllowed: value.OrdinaryUsageAllowed, SpendControlReached: value.SpendControlReached, Restriction: value.GetRestriction()}
 	for _, window := range value.GetWindows() {
-		result.Windows = append(result.Windows, runtimecontract.ProviderFinancialWindow{UsedPercent: window.GetUsedPercent(), DurationMinutes: window.DurationMinutes, ResetsAt: window.ResetsAt})
+		result.Windows = append(result.Windows, runtimecontract.ProviderFinancialWindow{UsedPercent: window.UsedPercent, DurationMinutes: window.DurationMinutes, ResetsAt: window.ResetsAt})
 	}
 	if credits := value.GetCredits(); credits != nil {
 		result.Credits = &runtimecontract.ProviderFinancialCredits{HasCredits: credits.HasCredits, Unlimited: credits.Unlimited, Balance: credits.Balance}

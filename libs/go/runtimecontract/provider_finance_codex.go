@@ -53,7 +53,7 @@ func ParseCodexFinancialObservation(raw json.RawMessage, sequence int64) Provide
 		if used == nil {
 			continue
 		}
-		value.Windows = append(value.Windows, ProviderFinancialWindow{UsedPercent: int32(*used), DurationMinutes: financialInteger(window["windowDurationMins"], 1, 5256000), ResetsAt: financialInteger(window["resetsAt"], 0, 253402300799)})
+		value.Windows = append(value.Windows, ProviderFinancialWindow{UsedPercent: new(int32(*used)), DurationMinutes: financialInteger(window["windowDurationMins"], 1, 5256000), ResetsAt: financialInteger(window["resetsAt"], 0, 253402300799)})
 	}
 	var credits map[string]json.RawMessage
 	if json.Unmarshal(bucket["credits"], &credits) == nil && credits != nil {
@@ -68,6 +68,7 @@ func ParseCodexFinancialObservation(raw json.RawMessage, sequence int64) Provide
 	}
 	return value
 }
+
 func financialBool(raw json.RawMessage) *bool {
 	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return nil
@@ -78,6 +79,7 @@ func financialBool(raw json.RawMessage) *bool {
 	}
 	return &value
 }
+
 func financialInteger(raw json.RawMessage, minimum, maximum int64) *int64 {
 	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return nil

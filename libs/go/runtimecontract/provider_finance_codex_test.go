@@ -9,7 +9,7 @@ import (
 func TestCodexFinancialSupportedSubset(t *testing.T) {
 	raw := json.RawMessage(`{"accountId":"discard-me","ordinaryUsageAllowed":false,"rateLimits":{"limitId":"codex","primary":{"usedPercent":100,"windowDurationMins":10080,"resetsAt":1800000000},"credits":{"hasCredits":true,"unlimited":false,"balance":"59999.1234567890123456789"},"spendControlReached":false,"rateLimitReachedType":"rate_limit_reached"},"rateLimitUpsell":{"private":"discard-me"}}`)
 	value := ParseCodexFinancialObservation(raw, 1)
-	if value.State != "AVAILABLE" || len(value.Windows) != 1 || value.Windows[0].UsedPercent != 100 || value.OrdinaryUsageAllowed == nil || *value.OrdinaryUsageAllowed || value.Credits == nil || value.Credits.Balance == nil || *value.Credits.Balance != "59999.1234567890123456789" {
+	if value.State != "AVAILABLE" || len(value.Windows) != 1 || value.Windows[0].UsedPercent == nil || *value.Windows[0].UsedPercent != 100 || value.OrdinaryUsageAllowed == nil || *value.OrdinaryUsageAllowed || value.Credits == nil || value.Credits.Balance == nil || *value.Credits.Balance != "59999.1234567890123456789" {
 		t.Fatalf("supported measurement was lost: %#v", value)
 	}
 	encoded, err := json.Marshal(value)
@@ -25,6 +25,7 @@ func TestCodexFinancialSupportedSubset(t *testing.T) {
 		t.Fatal("sparse response invented data")
 	}
 }
+
 func TestCodexFinancialRejectsMalformedAndAmbiguous(t *testing.T) {
 	cases := []string{
 		`{}`, `{"rateLimits":null}`,
@@ -47,7 +48,7 @@ func TestCodexFinancialRejectsMalformedAndAmbiguous(t *testing.T) {
 
 func TestFinancialPresenceFieldsRemainIndependent(t *testing.T) {
 	value := ParseCodexFinancialObservation(json.RawMessage(`{"rateLimits":{"primary":{"usedPercent":0,"windowDurationMins":"invalid","resetsAt":null},"secondary":{"usedPercent":100,"resetsAt":1800000000},"credits":{"hasCredits":false,"unlimited":null,"balance":"malformed"},"spendControlReached":false},"ordinaryUsageAllowed":null}`), 1)
-	if value.State != "AVAILABLE" || len(value.Windows) != 2 || value.Windows[0].UsedPercent != 0 || value.Windows[0].DurationMinutes != nil || value.Windows[0].ResetsAt != nil || value.Windows[1].ResetsAt == nil || value.Credits == nil || value.Credits.HasCredits == nil || *value.Credits.HasCredits || value.Credits.Unlimited != nil || value.Credits.Balance != nil || value.SpendControlReached == nil || *value.SpendControlReached || value.OrdinaryUsageAllowed != nil {
+	if value.State != "AVAILABLE" || len(value.Windows) != 2 || value.Windows[0].UsedPercent == nil || *value.Windows[0].UsedPercent != 0 || value.Windows[0].DurationMinutes != nil || value.Windows[0].ResetsAt != nil || value.Windows[1].ResetsAt == nil || value.Credits == nil || value.Credits.HasCredits == nil || *value.Credits.HasCredits || value.Credits.Unlimited != nil || value.Credits.Balance != nil || value.SpendControlReached == nil || *value.SpendControlReached || value.OrdinaryUsageAllowed != nil {
 		t.Fatal("independent presence was lost")
 	}
 	encoded, err := json.Marshal(value)

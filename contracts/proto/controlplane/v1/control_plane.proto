@@ -8664,7 +8664,7 @@ message AssistantAgentConfiguration {
 
 // Безопасные supported наблюдения; identity берётся только из lease.
 message ProviderFinancialWindow {
-  int32 used_percent = 1;
+  optional int32 used_percent = 1;
   optional int64 duration_minutes = 2;
   optional int64 resets_at = 3;
 }

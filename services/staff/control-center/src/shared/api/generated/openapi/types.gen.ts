@@ -4614,6 +4614,21 @@ export type AdministrationState = {
     observedAt: Timestamp;
 };
 
+export type ProviderFinancialDisplayAccount = {
+    ref: OpaqueRef;
+    name: string;
+    financialSummary?: ProviderFinancialSummary;
+};
+
+export type ProviderFinancialOverview = {
+    accounts: Array<ProviderFinancialDisplayAccount>;
+    total: number;
+    exhausted: number;
+    unknown: number;
+    observedAt: string;
+    validUntil: string;
+};
+
 export type EmailMailboxCredentialInputWritable = {
     kind: EmailMailboxCredentialKind;
     /**

@@ -1,8 +1,9 @@
 package entity
 
 import (
-	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
 // Проекция назначается владельцем account и не влияет на launch eligibility.
@@ -69,7 +70,7 @@ func FinancialRemaining(account ProviderFinancialDisplayAccount, at time.Time) (
 	}
 	remaining := int32(100)
 	for _, window := range summary.Observation.Windows {
-		if value := 100 - window.UsedPercent; value < remaining {
+		if value := 100 - *window.UsedPercent; value < remaining {
 			remaining = value
 		}
 	}
