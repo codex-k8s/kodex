@@ -4,9 +4,21 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.14
+version: 1.0.15
 updated: 2026-10-14
 ---
+
+## 14.10.2026 10:35 UTC — cancelled intent и native INTAKE PASS
+
+- Published c1858c63 remote/Draft1807 MATCH; serving HOT0c56 unchanged.
+- INTAKE Manager SUCCEEDED с plan/evidence/input artifacts; Architect RUNNING,
+  root retry10 seq706, Developer/ONE Review/Manager final NOT RUN.
+- Disposable trigger cancellation fixture: CANCELLED, старый WRITE/READ
+  запрещены, late completion/recovery не принимаются; component3 PASS4.513s.
+  Не полная browser disable/delete команда.
+- Первое расширение FAIL при выдаче fresh proof после cancellation; это
+  ожидаемый owner deny. Исправлен порядок fixture, fresh repeat PASS.
+- Worker3 lifecycle tests и race PASS1.084s; Console0, provider catalog NONE.
 
 ## 14.10.2026 10:10 UTC — serving0c56 и native retry10
 

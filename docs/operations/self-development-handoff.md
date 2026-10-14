@@ -4,11 +4,30 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.14
+version: 1.1.15
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 10:35 UTC — INTAKE успешен, Architect в работе
+
+Published SOURCE/remote/Draft1807c1858c632a282ad584da8cdca56dcf6fd56c010f
+MATCH; HOT остаётся0c56, во время работы не FF. Native retry10 ROOT RUNNING/
+seq706: INTAKE Manager SUCCEEDED, manager-plan/evidence/full inputs переданы
+Coordinator; Architectrun_6Wf-nkjcPOQnsId0oS0jJCc6 RUNNING, Developer PLANNED,
+Review0. Временный workspace READ_ONLY разрешился штатным post-join, без
+ручного chmod и вмешательства в файлы агента. Provider REMOTE_CODEX/NONE/10
+models продолжает обновляться. Browser Console0, собственная вкладка rejoin.
+
+Дополнена disposable проверка смены account version: trigger CANCELLED,
+прежний WRITE и ранее выданный READ запрещены, поздний result не активируется,
+recovery list пуст. Первый расширенный fixture FAIL попытался получить свежий
+proof уже после отмены — owner корректно отказал. Principal перенесён ДО
+отмены, чтобы проверить отзыв прежнего разрешения; fresh repeat PASS4.513s.
+Component3 cases, worker3 tests/race1.084s. Никаких новых production changes,
+миграций или native calls этой проверкой нет; публикация test/checkpoint далее.
+
 
 ## Checkpoint 14.10.2026 10:10 UTC — serving proof и новый native INTAKE
 

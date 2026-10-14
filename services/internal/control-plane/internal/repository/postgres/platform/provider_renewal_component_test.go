@@ -17,11 +17,12 @@ import (
 )
 
 func TestProviderCredentialRenewalComponent(t *testing.T) {
-	t.Run("completion", func(t *testing.T) { testProviderCredentialRenewalComponent(t, false) })
-	t.Run("unknown-read-recovery", func(t *testing.T) { testProviderCredentialRenewalComponent(t, true) })
+	t.Run("completion", func(t *testing.T) { testProviderCredentialRenewalComponent(t, false, false) })
+	t.Run("unknown-read-recovery", func(t *testing.T) { testProviderCredentialRenewalComponent(t, true, false) })
+	t.Run("account-version-cancels-authorized-intent", func(t *testing.T) { testProviderCredentialRenewalComponent(t, false, true) })
 }
 
-func testProviderCredentialRenewalComponent(t *testing.T, recoverUnknown bool) {
+func testProviderCredentialRenewalComponent(t *testing.T, recoverUnknown, cancelIntent bool) {
 	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
@@ -84,6 +85,32 @@ func testProviderCredentialRenewalComponent(t *testing.T, recoverUnknown bool) {
 	}
 	result := port.ProviderCredentialRenewalResult{State: "SUCCEEDED", ReceiptUID: "73000000-0000-4000-8000-000000000001", ReceiptVersion: "1",
 		Credential: &entity.ProviderCredentialDescriptor{SecretName: "provider-credential-component-result", SecretUID: "74000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("b", 64)}}
+	if cancelIntent {
+		readPrincipal := resolvedTestPrincipal(t, ctx, repository, port.ProofPrincipalInput{ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+			CallerWorkload: "secret-broker", Operation: port.ProviderCredentialRenewalValidateOperation, RequestDigestSHA256: task.OwnerRequestDigest}, "secret-broker")
+		// Только disposable fixture: проверяется owner trigger, не полная UI-команда.
+		if _, err := pool.Exec(ctx, queryCatalogFixtureAdvanceAccount, task.OrganizationID, task.AccountRef); err != nil {
+			t.Fatal("fixture account version change", err)
+		}
+		if err := service.AuthorizeProviderCredentialRenewal(ctx, principal, task); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatal("cancelled intent authorized another effect")
+		}
+		if err := service.ValidateProviderCredentialRenewalObservation(ctx, readPrincipal, task); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatal("cancelled intent retained READ recovery authority")
+		}
+		result.Recovered = true
+		if err := repository.CompleteProviderCredentialRenewalTask(ctx, task, result); !errors.Is(err, errs.ErrConflict) {
+			t.Fatal("cancelled intent activated late credential")
+		}
+		if tasks, err := repository.ListProviderCredentialRenewalRecoveryTasks(ctx); err != nil || len(tasks) != 0 {
+			t.Fatal("cancelled intent was renewed through recovery")
+		}
+		var state string
+		if err := pool.QueryRow(ctx, `SELECT state FROM control_plane.provider_credential_renewal_tasks WHERE ref=$1`, task.Ref).Scan(&state); err != nil || state != "CANCELLED" {
+			t.Fatal("owner version change did not atomically cancel intent")
+		}
+		return
+	}
 	if recoverUnknown {
 		if err := repository.CompleteProviderCredentialRenewalTask(ctx, task, port.ProviderCredentialRenewalResult{State: "UNKNOWN_OUTCOME"}); err != nil {
 			t.Fatal("durable unknown outcome", err)
