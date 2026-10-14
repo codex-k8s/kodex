@@ -4,9 +4,19 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.11
+version: 1.0.12
 updated: 2026-10-14
 ---
+
+## 14.10.2026 09:24 UTC — code bd79b400, до trusted-dev доставки
+
+| Область | Доказательство |
+| --- | --- |
+| Source/remote | bd79b4001612e0d6ee0efedc6ce335b31232ec5b MATCH отдельным readback, Draft1807; immediate PR metadata lag UNKNOWN, повтор push0 |
+| Вертикальный код | CP forward task/schema/claim/fence/owner consume/completion/runtime exclusion, broker RPC, generated adapters, policy96/trusted routes и owned worker |
+| PostgreSQL | Tree до bd79: completion и UNKNOWN→READ recovery PASS3.639s; чужой caller/stale generation/duplicate claim/replay audit guards. Не live OAuth |
+| Быстрые проверки | CP/broker адресные tests, CP cmd build, Proto lint/registry/policy-codegen и migrator20 PASS; shared-client exact operations fixture FAIL на bd79, исправляется отдельно |
+| Live | HOT7f unchanged; migration/renewal/fresh catalog/source serving новых файлов NOT RUN, UI unavailable. Chrome session/Console0 |
 
 ## 14.10.2026 07:42 UTC — managed renewal code checkpoints, без live activation
 

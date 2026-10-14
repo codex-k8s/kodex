@@ -4,11 +4,31 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.11
+version: 1.1.12
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 09:24 UTC — вертикальный managed renewal, доставка следующая
+
+Code bd79b4001612e0d6ee0efedc6ce335b31232ec5b опубликован и отдельно
+сверен с remote/Draft1807. HOT7f пока не менялся. Реализованы forward migration,
+CP task/claim/fence/authorization/completion/runtime exclusion, Proto/generated
+adapters, broker RPC, точные trusted и protected маршруты, owned worker и
+schema readiness. Все pins вложены в canonical request digest; policy96.
+
+Адресные CP/broker tests и CP cmd build PASS; lint-proto/registry/policy-codegen
+PASS; migrator20 tests PASS. Disposable PostgreSQL на tree перед bd79: completion
+и UNKNOWN→fresh READ recovery PASS3.639s, без настоящего OAuth. Shared client
+полный test на bd79 FAIL: exact fixture ещё содержал семь старых операций;
+добавляются только два реализованных метода, затем fresh test. Этот FAIL не скрыт.
+
+Следующее: проверенный checkpoint → guarded idle HOT FF → штатная migration
+и source/serving readback → живое managed renewal и fresh catalog. До этого
+provider UI всё ещё unavailable; Console0, чужие вкладки не меняются.
+Native Developer/ONE Reviewer/Manager, остальные QA65 и merge/main NOT RUN.
+
 
 ## Checkpoint 14.10.2026 07:42 UTC — HTTPS доказан, managed kernel и receipt опубликованы
 

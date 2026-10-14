@@ -4,7 +4,7 @@ title: Управляемое обновление авторизации про
 type: operations
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.0.1
 updated: 2026-10-14
 ---
 
@@ -62,10 +62,10 @@ bootstrap reconciliation, повтор старого access token или экс
 - [x] Адресные синтетические process tests managed kernel: стабильный режим,
   изменённый token, сохранение ровно один раз, чужой аккаунт/неизменённый token/
   отказ хранилища закрыто отклоняются. Это CODE_ONLY, не live refresh.
-- [ ] Durable materializer receipt, rejoin и межрепличный single-winner.
+- [x] Durable materializer receipt, rejoin и single-winner синтетически проверены в131b295c; живой межрепличный сценарий ещё NOT RUN.
 - [ ] Полный CP task/claim/authorization/completion lifecycle и runtime exclusion.
 - [ ] Proto/authority/generated clients/worker/readiness/render.
-- [ ] Disposable component negative/restart/lost-ACK/concurrent-writer проверки.
+- [x] Disposable PostgreSQL: один claim аккаунта, изменённое поколение/чужой caller отклоняются, атомарная активация, exact replay, UNKNOWN без повторного OAuth и свежий READ recovery. Полный restart/expired/concurrent-runtime набор ещё NOT RUN.
 - [ ] Trusted-dev delivery, новая credential revision и REMOTE_CODEX catalog.
 - [ ] Native Developer/ONE Reviewer/Manager и остальные шесть этапов цели.
 

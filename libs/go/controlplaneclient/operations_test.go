@@ -17,6 +17,8 @@ func TestRuntimeOperationsRegistersProviderCredentialRefresh(t *testing.T) {
 func TestProviderCredentialMaterializerOperationsAreExact(t *testing.T) {
 	t.Parallel()
 	want := map[string]string{
+		"platform.provider-accounts.credential.renew":           controlplanev1.ProviderCredentialMaterializerService_RenewManagedProviderCredential_FullMethodName,
+		"platform.provider-accounts.credential.renewal.observe": controlplanev1.ProviderCredentialMaterializerService_ObserveManagedProviderCredentialRenewal_FullMethodName,
 		"platform.provider-accounts.model-catalog.observe":      controlplanev1.ProviderCredentialMaterializerService_ObserveProviderModelCatalog_FullMethodName,
 		"platform.provider-credentials.readiness.check":         controlplanev1.ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_FullMethodName,
 		"platform.provider-credentials.device-authorize.start":  controlplanev1.ProviderCredentialMaterializerService_StartDeviceAuthorization_FullMethodName,
