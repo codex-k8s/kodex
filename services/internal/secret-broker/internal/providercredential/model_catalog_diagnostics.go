@@ -1,6 +1,18 @@
 package providercredential
 
-import "errors"
+import (
+	"context"
+	"errors"
+)
+
+// Cleanup не превращает успех в PASS, но сохраняет уже доказанный первичный отказ.
+// Иначе принудительная остановка после denied refresh скрывает причину AUTHORIZATION_REJECTED.
+func catalogCleanupFailure(ctx context.Context, result ModelCatalog, resultErr, cleanupErr error) (ModelCatalog, error) {
+	if resultErr != nil || result.Failure != "" && result.Failure != CatalogFailureNone {
+		return result, resultErr
+	}
+	return catalogFailure(ctx, atCatalogStage(catalogStageCleanup, cleanupErr))
+}
 
 // Этапы принадлежат observer, а не входному payload или тексту ошибки провайдера.
 type catalogStage string
