@@ -4,11 +4,50 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.30
+version: 1.1.31
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 18:24 UTC — отказ финализации, metadata LIVE PASS, Retry12
+
+Retry11 Developer опубликовал FINAL1910 с PR1809/head28334101 и handoff,
+но18:12:31 TURN_COMPLETED1911 FAILED/RUNTIME_ARTIFACT_INVALID. Root1914
+FAILED, Reviewer/Manager CANCELLED атомарно; Review0. Новые артефакты не
+опубликовались:12 refs у failed child остаются inherited. До terminal в
+outbox наблюдались7 подготовленных файлов, включая899757B diff и21792B
+handoff; это не published revisions/EOF proof. Worktree/head сохранены в Git.
+
+Под UID086b5bc0 удалён штатно. Exact Pod log directory и retained crictl
+handles на обоих узлах отсутствуют. RuntimeController18:12:32 closed
+completion diagnostic для exact tuple: UNAVAILABLE/UNKNOWN, не OOM proof.
+Первичная причина filesystem guard НЕ установлена; native workspace PASS
+не подменяет post-join runner проверку. Ручной chmod, обход guard и Host
+business fixes0. Следующий повтор требует долгого exact-UID закрытого
+stdout observer до terminal, а не ещё одного короткого timeout probe.
+
+Authoritative idle18:17 PASS: activeRuntimeRuns/leases/builds/admissions/
+promotions0, promoted85/pinsf82202f6 unchanged. Guarded HOT ff-only до
+5d0854973a2d63df5aa8bf0f9536337ed0012303 PASS; CP actual PID3391 ELF38549814,
+RC PID752 ELFe861d02e MATCH prepared code205. Host/Pod metadata99f02816 и
+callback849b5b5d MATCH. Applied migrations/images/pins не менялись.
+
+WORKFLOW_METADATA natural PROJECT retest run_Ot30Ax_MyXmR5zNTe4hfZle7
+SUCCEEDED2/24: published16, пять этапов/агентов/зависимости, ONE Review,
+human gate только final Manager. Public workflow49/PUBLISHED MATCH.
+No plan/mutation; screenshots desktop/mobile просмотрены, overflowfalse,
+Console0/Network0/API200. Initial fallback screenshot RESTORING не является
+connected proof; own36 после штатного SSO/rejoin connected/API200.
+
+18:23:49 UI RETRY исходного root без нового USER input создал Retry12:
+run_B7CPJ87KuTKxQAKR10A6ZXWX RUNNING, reused root sessionHJind.
+Developer planned nod_NEkBou-ONhj_Xd4cEFNavsh6; Reviewer planned
+nod_qGE0jWDNP-WpuL568Yg8OxG6; final Manager nod_g3e3sQFOLhOTmWdqnWVXg9Nc.
+Задача/текущий PR1809 сохраняются, Host не пишет бизнес-код и не подменяет
+финальный результат. Дальше exact long observer нового Developer до
+post-join, первичный guard reason/fix и successful handoff/ONE Review/Manager.
+Baseline FAIL/PG-browser-paid UNKNOWN/NOT RUN, QA65/merge/main/report OPEN.
 
 ## Checkpoint 14.10.2026 18:06 UTC — бизнес-код сохранён, финализация ещё активна
 

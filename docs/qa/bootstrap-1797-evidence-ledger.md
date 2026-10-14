@@ -4,9 +4,30 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.30
+version: 1.0.31
 updated: 2026-10-14
 ---
+
+## 14.10.2026 18:24 UTC — terminal FAIL и отдельный metadata LIVE PASS
+
+- Retry11 root/Developer FAILED18:12:31 RUNTIME_ARTIFACT_INVALID; later
+  Review/Manager CANCELLED, Review0, final artifacts NOT PUBLISHED.
+  Actual7 outbox filenames/sizes до terminal не заменяют publication proof.
+  Draft1809/head28334101 сохранён; Host implementation/USER steering0.
+- Pod удалён, exact node log/retained-container handles отсутствуют.
+  RC closed completion diagnostic UNAVAILABLE/UNKNOWN. Primary guard reason
+  UNKNOWN, post-join FAIL; не объявляется OOM/provider failure или исправлением.
+- Safe idle18:17/guard PASS, HOT5d085497; promoted85/pinsf82202f6 unchanged.
+  Actual CP PID3391/ELF38549814 и RC PID752/ELFe861d02e MATCH code205,
+  host/mounted metadata99f02816 и callback849b5b5d MATCH. No new migration/image.
+- Natural PROJECT published-workflow read Ot30 SUCCEEDED2/24, enum14 tool
+  SUCCEEDED, five stages/roles/dependencies/ONE Review/final gate MATCH
+  public49/PUBLISHED. Read-only/no plan; response desktop/mobile viewed,
+  overflowfalse/Console0/relevant API200/Network0. Fallback screenshot initial
+  RESTORING не connected proof; own MCP fresh SSO/rejoin connected separately.
+- UI Retry12 rootB7CP RUNNING18:24, no new USER task, next Developer planned.
+  Exact long filesystem observer требуется до terminal; retry не success.
+  Native successful publication/ONE Review/Manager/paid/QA65/main OPEN.
 
 ## 14.10.2026 18:06 UTC — actual Git checkpoint и граница финализации
 
