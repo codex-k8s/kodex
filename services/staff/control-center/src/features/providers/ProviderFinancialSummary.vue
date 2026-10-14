@@ -2,13 +2,10 @@
 import { useI18n } from "vue-i18n";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useProvidersStore } from "./store";
-import {
-  financialSummary,
-  financialCredits,
-  financialReset,
-} from "./financial-summary";
+import ProviderFinancialAccount from "./ProviderFinancialAccount.vue";
+import { financialSummary, financialCredits } from "./financial-summary";
 
-const { t, locale } = useI18n();
+const { t } = useI18n();
 const props = defineProps<{ live: boolean }>();
 const providers = useProvidersStore();
 const now = ref(Date.now());
@@ -19,7 +16,7 @@ onMounted(() => {
   }, 30_000);
 });
 onBeforeUnmount(() => {
-  if (clock) clearInterval(clock);
+  if (clock !== undefined) clearInterval(clock);
 });
 const summary = computed(() =>
   financialSummary(
@@ -30,6 +27,12 @@ const summary = computed(() =>
     providers.financialOverview,
   ),
 );
+const exhausted = computed(() =>
+  summary.value.accounts.filter((item) => item.remaining === 0),
+);
+const ordinary = computed(() =>
+  summary.value.accounts.filter((item) => item.remaining !== 0),
+);
 </script>
 
 <template>
@@ -37,72 +40,45 @@ const summary = computed(() =>
     <strong>Codex</strong>
     <span v-if="!summary.total">{{ t("providers.finance.unavailable") }}</span>
     <ul v-else>
-      <li
-        v-for="item in summary.accounts"
-        :key="item.account.ref"
-        :class="{ exhausted: item.remaining === 0 }"
-      >
-        <span class="account-name" :title="item.account.name">{{
-          item.account.name
-        }}</span>
-        <span>{{
-          item.remaining === undefined
-            ? item.stale && item.account.financialSummary
-              ? t("providers.finance.stale")
-              : t("providers.finance.limitUnknown")
-            : t("providers.finance.remaining", { remaining: item.remaining })
-        }}</span>
-        <span :title="t('providers.finance.balanceUnit')">{{
-          financialCredits(item.account, item.available, (key, params) =>
-            t(`providers.finance.${key}`, params ?? {}),
-          )
-        }}</span>
-        <span v-if="item.available && item.observation?.spendControlReached">{{
-          t("providers.finance.spending")
-        }}</span>
-        <span
-          v-if="
-            item.available &&
-            item.observation?.restriction &&
-            item.observation.restriction !== 'rate_limit_reached'
-          "
-          >{{ t("providers.finance.restriction") }}</span
-        >
-        <span
-          v-for="(window, index) in item.available && item.remaining !== 0
-            ? (item.observation?.windows ?? [])
-            : []"
-          :key="index"
-        >
-          <small>{{
-            t("providers.finance.window", {
-              duration:
-                window.durationMinutes === undefined
-                  ? t("providers.finance.durationUnknown")
-                  : t("providers.finance.minutes", {
-                      duration: window.durationMinutes,
-                    }),
-              remaining: 100 - window.usedPercent,
-            })
-          }}</small>
-          <small v-if="financialReset(window.resetsAt, locale)">{{
-            t("providers.finance.reset", {
-              date: financialReset(window.resetsAt, locale),
-            })
-          }}</small>
-        </span>
-        <small v-if="item.account.financialSummary && item.remaining !== 0">{{
-          t("providers.finance.observed", {
-            date: new Date(
-              item.account.financialSummary.receivedAt,
-            ).toLocaleString(locale),
-          })
-        }}</small>
+      <li v-if="exhausted.length" class="exhausted-group">
+        <details>
+          <summary>
+            <span>{{
+              t("providers.finance.exhausted", { count: summary.exhausted })
+            }}</span>
+            <span
+              v-for="item in exhausted"
+              :key="item.account.ref"
+              class="credit-chip"
+              :title="
+                item.account.name +
+                ': ' +
+                financialCredits(item.account, item.available, (key, params) =>
+                  t(`providers.finance.${key}`, params ?? {}),
+                )
+              "
+            >
+              {{ item.account.name }}:
+              {{
+                financialCredits(item.account, item.available, (key, params) =>
+                  t(`providers.finance.${key}`, params ?? {}),
+                )
+              }}
+            </span>
+          </summary>
+          <div class="exhausted-accounts">
+            <ProviderFinancialAccount
+              v-for="item in exhausted"
+              :key="item.account.ref"
+              :item="item"
+            />
+          </div>
+        </details>
+      </li>
+      <li v-for="item in ordinary" :key="item.account.ref">
+        <ProviderFinancialAccount :item="item" />
       </li>
     </ul>
-    <small v-if="summary.exhausted">{{
-      t("providers.finance.exhausted", { count: summary.exhausted })
-    }}</small>
     <small v-if="summary.unknown || !summary.complete">{{
       t("providers.finance.incomplete")
     }}</small>
@@ -137,12 +113,22 @@ const summary = computed(() =>
   gap: 0.3rem 0.65rem;
   min-width: 0;
 }
-.account-name {
-  max-width: 12rem;
+.exhausted-group summary {
+  cursor: pointer;
+}
+.credit-chip {
+  display: inline-block;
+  max-width: 16rem;
+  margin-left: 0.5rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
+  vertical-align: bottom;
+}
+.exhausted-accounts {
+  display: grid;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
 }
 .provider-finance small {
   color: var(--muted);

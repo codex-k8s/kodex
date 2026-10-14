@@ -50,7 +50,11 @@ export function financialSummary(
     .sort(
       (left, right) =>
         (left.remaining ?? Infinity) - (right.remaining ?? Infinity) ||
-        left.account.ref.localeCompare(right.account.ref),
+        (left.account.ref < right.account.ref
+          ? -1
+          : left.account.ref > right.account.ref
+            ? 1
+            : 0),
     );
   const fresh = authoritativeFresh;
   return {
@@ -79,6 +83,11 @@ export function financialCredits(
     ? account.financialSummary?.observation.credits
     : undefined;
   if (!credits) return translate?.("creditsUnknown") ?? "Кредиты: недоступно";
+  if (credits.unlimited && credits.balance !== undefined)
+    return (
+      translate?.("creditsUnlimitedBalance", { balance: credits.balance }) ??
+      `Кредиты: без ограничения; баланс: ${credits.balance}`
+    );
   if (credits.unlimited)
     return translate?.("creditsUnlimited") ?? "Кредиты: без ограничения";
   if (credits.balance !== undefined)

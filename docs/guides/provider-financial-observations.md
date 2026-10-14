@@ -4,7 +4,7 @@ title: Наблюдения лимитов и credits Codex
 type: guide
 status: approved
 owner: developer
-version: 0.2.1
+version: 0.2.2
 updated: 2026-10-14
 ---
 
@@ -24,11 +24,11 @@ Broker передаёт закрытый `ProviderFinancialObservation`, отд�
 
 ## Защищённый subset
 
-`financialEligible` назначает CP после `provider.account.view` для resource instance. В organization scope требуется `organization.manage`; в project scope учитываются только current candidates/selected account agents, для которых доступен `agent.manage` или `agent.launch`. При смене scope/session, resync и stream problem финансовое состояние очищается.
+`financialEligible` назначает CP после `provider.account.view` для resource instance. В organization scope требуется `organization.manage`; в project scope учитываются только current candidates/selected account agents, для которых доступен `agent.manage` или `agent.launch`. При смене scope/session, resync и stream/session problem финансовое состояние очищается. После renewal требуется свежий owner snapshot при сохранённых run cursors; старый ACK не применяет finance. Весь provider kind проверяется до изменения finance store, чтобы malformed соседний catalog не оставлял частичный snapshot.
 
 Идентификатор upstream account, email, diagnostics, upsell и arbitrary provider JSON в финансовую проекцию не входят. Сохраняются только codex primary/secondary windows, точная строка credits balance, hasCredits/unlimited, nullable ordinaryUsageAllowed/spendControlReached и закрытый restriction. Неподдерживаемый bucket, malformed/duplicate/oversized JSON и неизвестные wire fields дают UNAVAILABLE. Имена полей response, codex bucket, windows и credits закреплены allowlist точного upstream source. Известные metadata не становятся публичной authority. Поля supported subset проверяются независимо: недоступный balance не удаляет достоверное окно или flags. Sparse/null остаётся unknown; значение не подменяется нулём.
 
-UI показывает до трёх eligible accounts по минимальному известному included remaining среди окон; ties — по opaque ref. Unknown не участвует в числовом сравнении и явно помечает неполноту порядка. Exhausted группируется счётчиком, credits остаются отдельно. Unlimited credits не означает unlimited included window. Balance не преобразуется в число, USD или tokens; единицы неизвестны. Reset показывается только по upstream seconds, наступление даты не объявляется восстановлением лимита.
+UI показывает до трёх eligible accounts по минимальному известному included remaining среди окон; ties — по opaque ref. Unknown не участвует в числовом сравнении и явно помечает неполноту порядка. Exhausted группируется одним раскрываемым элементом внутри трёх слотов; credits выбранных аккаунтов видны в summary, supported reset и окна доступны в раскрытии. Название credits не утверждает их оплату или денежную единицу. Unlimited credits не означает unlimited included window. Balance не преобразуется в число, USD или tokens; единицы неизвестны. Reset показывается только по upstream seconds, наступление даты не объявляется восстановлением лимита.
 
 Порог 5 минут в UI — индикатор устаревания отображения, не policy запуска или expiration upstream. Локальный clock обновляет только подпись, не делает network requests. При потере live WS значения считаются устаревшими.
 

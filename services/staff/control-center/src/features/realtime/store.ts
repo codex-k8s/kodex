@@ -436,21 +436,40 @@ export const useRealtimeStore = defineStore("realtime", () => {
         });
       } else if (kind === "PROVIDER_ACCOUNT") {
         const catalog = recordField(envelope.snapshot, "catalog");
-        providers.applyFinancialSnapshot(
-          recordField(catalog, "financialSummary"),
-        );
-        providers.catalogUnavailable =
-          catalog.providerCatalogUnavailable === true;
-        if (!providers.catalogUnavailable) {
+        const financial = recordField(catalog, "financialSummary");
+        if (
+          catalog.providerCatalogUnavailable !== undefined &&
+          typeof catalog.providerCatalogUnavailable !== "boolean"
+        )
+          return false;
+        const unavailable = catalog.providerCatalogUnavailable === true;
+        if (!unavailable) {
+          // Проверяем весь kind до первого изменения store, включая finance.
+          const accounts = entityArrayField<ProviderAccount>(
+            catalog,
+            "accounts",
+          );
+          const nextPage = optionalStringField(
+            recordField(catalog, "page"),
+            "nextPageToken",
+          );
+          const actions = stringArrayField<NextAction>(catalog, "nextActions");
+          const definitions = keyedArrayField<ProviderDefinition>(
+            catalog,
+            "providerDefinitions",
+          );
+          const definitionsPage = optionalStringField(
+            recordField(catalog, "providerDefinitionsPage"),
+            "nextPageToken",
+          );
+          entityArrayField(catalog, "runtimes");
+          providers.applyFinancialSnapshot(financial);
           providers.applySnapshot(
-            entityArrayField<ProviderAccount>(catalog, "accounts"),
-            optionalStringField(recordField(catalog, "page"), "nextPageToken"),
-            stringArrayField<NextAction>(catalog, "nextActions"),
-            keyedArrayField<ProviderDefinition>(catalog, "providerDefinitions"),
-            optionalStringField(
-              recordField(catalog, "providerDefinitionsPage"),
-              "nextPageToken",
-            ),
+            accounts,
+            nextPage,
+            actions,
+            definitions,
+            definitionsPage,
           );
           platform.applyPlatformSnapshot(
             "RUNTIME_SELECTION",
@@ -459,7 +478,10 @@ export const useRealtimeStore = defineStore("realtime", () => {
               catalog,
             },
           );
-        } else providers.applyUnavailableCatalog();
+        } else {
+          providers.applyFinancialSnapshot(financial);
+          providers.applyUnavailableCatalog();
+        }
         platform.markRealtimeSnapshot(kind, selectedProjectRef(), catalog);
       } else if (kind === "MEMBERSHIP") {
         const catalog = recordField(envelope.snapshot, "catalog");
@@ -797,6 +819,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
         failProtocol(socket, "INVALID_SESSION_PROBLEM");
         return;
       }
+      providers.clearFinancial();
       platformSnapshotReady = false;
       platformBootstrapCursor = undefined;
       Object.assign(platformState, {
@@ -1142,6 +1165,8 @@ export const useRealtimeStore = defineStore("realtime", () => {
 
   function refreshSession(): void {
     providers.clearFinancial();
+    platformSnapshotReady = false;
+    platformBootstrapCursor = undefined;
     disconnect("SESSION_RENEWED");
     session.stopped = false;
     void connect();

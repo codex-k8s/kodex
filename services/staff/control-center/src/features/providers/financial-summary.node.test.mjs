@@ -61,6 +61,15 @@ test("0/1/2/3 and full set beyond first page, stable ties", () => {
     ).accounts.map((item) => item.account.ref),
     ["a", "b"],
   );
+  assert.deepEqual(
+    financialSummary(
+      [account("pac_a0001", 30), account("pac_A0001", 30)],
+      true,
+      true,
+      now,
+    ).accounts.map((item) => item.account.ref),
+    ["pac_A0001", "pac_a0001"],
+  );
 });
 test("unknown, unlimited credits, upstream restrictions and stale do not invent included balance", () => {
   const unknown = account("unknown", undefined, {
@@ -82,6 +91,17 @@ test("unknown, unlimited credits, upstream restrictions and stale do not invent 
   );
   assert.equal(financialSummary([unknown], true, false, now).complete, false);
   assert.match(financialCredits(unknown, false), /недоступно/);
+  assert.equal(
+    financialCredits(
+      account("pac_unlimited", 100, {
+        hasCredits: true,
+        unlimited: true,
+        balance: "59999.1234567890123456789",
+      }),
+      true,
+    ),
+    "Кредиты: без ограничения; баланс: 59999.1234567890123456789",
+  );
   assert.match(
     financialCredits(
       account("paid", 100, { hasCredits: true, unlimited: false }),
