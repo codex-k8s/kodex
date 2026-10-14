@@ -62,7 +62,7 @@ func TestFinancialSnapshotOversizedCatalogKeepsOtherKinds(t *testing.T) {
 			continue
 		}
 		b, err := json.Marshal(frame)
-		if err != nil || len(b) > maximumFrameBytes || frame.Snapshot.Catalog.FinancialSummary == nil || frame.Snapshot.Catalog.ProviderCatalogUnavailable == nil || !*frame.Snapshot.Catalog.ProviderCatalogUnavailable {
+		if err != nil || len(b) > maximumFrameBytes || frame.Snapshot.Catalog.FinancialSummary == nil || !frame.Snapshot.Catalog.ProviderCatalogUnavailable {
 			t.Fatal("bounded protected financial summary was lost")
 		}
 		financial = true

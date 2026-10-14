@@ -12947,6 +12947,13 @@ type ProviderFinancialCredits struct {
 	Unlimited  *bool   `json:"unlimited,omitempty"`
 }
 
+// ProviderFinancialDisplayAccount defines model for ProviderFinancialDisplayAccount.
+type ProviderFinancialDisplayAccount struct {
+	FinancialSummary *ProviderFinancialSummary `json:"financialSummary,omitempty"`
+	Name             string                    `json:"name"`
+	Ref              OpaqueRef                 `json:"ref"`
+}
+
 // ProviderFinancialObservation defines model for ProviderFinancialObservation.
 type ProviderFinancialObservation struct {
 	Credits              *ProviderFinancialCredits                `json:"credits,omitempty"`
@@ -12963,6 +12970,16 @@ type ProviderFinancialObservationRestriction string
 
 // ProviderFinancialObservationState defines model for ProviderFinancialObservation.State.
 type ProviderFinancialObservationState string
+
+// ProviderFinancialOverview defines model for ProviderFinancialOverview.
+type ProviderFinancialOverview struct {
+	Accounts   []ProviderFinancialDisplayAccount `json:"accounts"`
+	Exhausted  int64                             `json:"exhausted"`
+	ObservedAt time.Time                         `json:"observedAt"`
+	Total      int64                             `json:"total"`
+	Unknown    int64                             `json:"unknown"`
+	ValidUntil time.Time                         `json:"validUntil"`
+}
 
 // ProviderFinancialSummary defines model for ProviderFinancialSummary.
 type ProviderFinancialSummary struct {
