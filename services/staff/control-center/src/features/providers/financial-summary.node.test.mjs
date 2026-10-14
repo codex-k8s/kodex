@@ -108,9 +108,9 @@ test("scope/resource filtering precedes counts and ranking", () => {
 test("protected bounded summary retains complete counts and rejects malformed presence", () => {
   const value = {
     accounts: [
-      account("a", 100),
-      account("b", 10),
-      account("c", undefined),
+      account("acct_a001", 100),
+      account("acct_b001", 10),
+      account("acct_c001", undefined),
     ].map(({ ref, name, financialSummary }) => ({
       ref,
       name,
@@ -146,9 +146,22 @@ test("protected bounded summary retains complete counts and rejects malformed pr
     (v) => (v.accounts[0].financialSummary.observation.accountId = "private"),
     (v) => (v.total = 2),
     (v) => v.accounts.push(v.accounts[0]),
+    (v) => (v.accounts[0].ref = ""),
+    (v) => (v.accounts[0].ref = "acct/foreign"),
+    (v) => (v.accounts[0].name = ""),
+    (v) => {
+      v.observedAt = 123;
+      v.validUntil = 123;
+    },
   ]) {
     const invalid = structuredClone(value);
     mutate(invalid);
     assert.throws(() => validateFinancialOverview(invalid));
   }
+  const unicodeName = structuredClone(value);
+  unicodeName.accounts[0].name = "😀".repeat(160);
+  unicodeName.accounts[0].ref = "a".repeat(128);
+  assert.doesNotThrow(() => validateFinancialOverview(unicodeName));
+  unicodeName.accounts[0].name += "😀";
+  assert.throws(() => validateFinancialOverview(unicodeName));
 });

@@ -140,8 +140,10 @@ export function validateFinancialOverview(
     row.accounts.length !== Math.min(total, 3)
   )
     throw new Error(invalidFinancialOverview);
-  const at = Date.parse(String(row.observedAt)),
-    until = Date.parse(String(row.validUntil));
+  if (typeof row.observedAt !== "string" || typeof row.validUntil !== "string")
+    throw new Error(invalidFinancialOverview);
+  const at = Date.parse(row.observedAt),
+    until = Date.parse(row.validUntil);
   if (
     !Number.isFinite(at) ||
     !Number.isFinite(until) ||
@@ -159,9 +161,10 @@ export function validateFinancialOverview(
         (key) => !["ref", "name", "financialSummary"].includes(key),
       ) ||
       typeof item.ref !== "string" ||
-      item.ref.length > 96 ||
+      !/^[A-Za-z0-9_-]{8,128}$/.test(item.ref) ||
       typeof item.name !== "string" ||
-      item.name.length > 160 ||
+      Array.from(item.name).length < 1 ||
+      Array.from(item.name).length > 160 ||
       refs.has(item.ref)
     )
       throw new Error(invalidFinancialOverview);
