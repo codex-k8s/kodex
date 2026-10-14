@@ -211,6 +211,8 @@ publication, admission, node pull либо развёртывание.
 | staff-control-center | `9e54c6e8bcfee675559c6a16f2ed6d1141d3a4ba` | `79db365eed79750907d4558a04ea46431ed90ef1eed74f85e76d5952b00374cc` |
 | secret-broker | `d093118e0843a2e9ed0217538e9b6795d83cd04b` | `a83a43835cd5cc05ce0c5cb65c29f3ab894ad6c4c5f97cbe8c5c414ae948a571` |
 | egress-gateway | `d093118e0843a2e9ed0217538e9b6795d83cd04b` | `aa4f231a94c2a5cbcd75f258fca459946a8bd843403e4b0337fef13b67eefa38` |
+| integration-gateway | `c61e42bacf94ffafdcabbd166f4895a670bab272` | `9b5364df61072ca82b03104407a329e3b01d66d38753290f2c436077ed1621a4` |
+| email-bridge | `c61e42bacf94ffafdcabbd166f4895a670bab272` | `2ad6093e18498bb9477ca7a8301df6f4f9a0f32be51ce7dca0d17dddd6298239` |
 
 Первый frontend build завершился FAIL: Dockerfile не копировал актуальные
 test/config dependencies TypeScript. Следующий выявил неполный
@@ -239,3 +241,33 @@ live cache cluster, replacement/login и upgrade ещё NOT RUN.
 manifests. GitHub Draft #1811 exact head подтверждён; рабочий main по-прежнему
 `8c19ffb76328ae559698fae2806be79ef0bd64ae`, чистый. Live контроль трёх основных
 Deployment подтвердил исходные1/1; новые replica settings ещё не применялись.
+
+## Уточнение системного singleton перед применением
+
+При дополнительном read-only inventory Kubernetes infrastructure найден
+`local-path-provisioner` версии `v0.0.36`, одна реплика. В
+[точном upstream source](https://github.com/rancher/local-path-provisioner/blob/v0.0.36/main.go#L281-L290)
+выбор лидера отключён. Он выполняет создание/удаление локальных PV; простое
+удвоение controller не является поддерживаемым HA и создаёт риск гонок
+операций с диском. Изменений этого controller или его PVC не было.
+
+Для буквального требования двух реплик всех постоянно работающих компонентов
+нужно отдельное решение владельца:
+
+1. Рекомендуется оставить cluster storage controller одной репликой как
+   исключение для инфраструктуры хранения, наряду с исключёнными данными;
+   обычные прикладные сервисы и поддерживаемые HA controllers — по две.
+2. Расширить работу до HA storage controller: отдельная поддерживаемая
+   реализация/изменение leader election, воспроизводимые create/delete/failover
+   проверки и доказательство сохранности существующих PV. Без этой работы
+   две Ready реплики не объявляются готовым HA storage.
+
+Решение PENDING. Цель не завершена, обязательные этапы не отмечены. До решения
+переход к применению не выполняется; текущее приложение и соседний доступ
+остаются без изменений. Уже собраны десять локальных OCI, ещё без публикации.
+
+Подготовка public edge дополнительно связывает исходную CA с exact cluster и
+ConfigMap UID; private keys не читаются и не копируются. Модель теперь имеет
+два независимых relay процесса и два endpoint вместо нового singleton.
+Она покрыта текущими model tests, но новый план с CA projection/node binding
+и исполняемый edge apply/rollback ещё NOT RUN/не завершены.

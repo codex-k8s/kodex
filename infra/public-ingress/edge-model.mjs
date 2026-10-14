@@ -15,7 +15,7 @@ function dnsName(value) {
 // Рендерится только добавочный Host/SNI route. Действующие ingress/80/443,
 // чужие Secrets и firewall rules не входят в набор управляемых ресурсов.
 export function renderPublicEdge(config) {
-  const { platformHost, oidcHost, namespace, bridgeIP, allowedPeers, backendIP, httpsPort,
+  const { platformHost, oidcHost, namespace, bridgeIP, allowedPeers, backendIP, relayPorts,
     upstreamServerName, certResolver } = config ?? {};
   requireValue(dnsName(platformHost) && dnsName(oidcHost) && platformHost !== oidcHost,
     "EDGE_EXACT_HOSTS_REQUIRED");
@@ -26,7 +26,8 @@ export function renderPublicEdge(config) {
   requireValue(Array.isArray(allowedPeers) && allowedPeers.length > 0 && allowedPeers.length <= 8 &&
     allowedPeers.every(privateIPv4) && new Set(allowedPeers).size === allowedPeers.length &&
     !allowedPeers.includes(bridgeIP), "EDGE_EXACT_PEERS_REQUIRED");
-  requireValue(Number.isSafeInteger(httpsPort) && httpsPort >= 1024 && httpsPort <= 65535, "EDGE_PRIVATE_PORTS_REQUIRED");
+  requireValue(Array.isArray(relayPorts) && relayPorts.length === 2 && new Set(relayPorts).size === 2 &&
+    relayPorts.every(port => Number.isSafeInteger(port) && port >= 1024 && port <= 65535), "EDGE_PRIVATE_PORTS_REQUIRED");
   requireValue(dnsName(upstreamServerName) && typeof certResolver === "string" &&
     /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/.test(certResolver), "EDGE_TLS_BOUNDARY_REQUIRED");
   const labels = { "app.kubernetes.io/managed-by": "kodex-public-edge", "kodex.dev/capability": "public-edge" };
@@ -35,12 +36,12 @@ export function renderPublicEdge(config) {
   const hostRule = `Host(\`${platformHost}\`) || Host(\`${oidcHost}\`)`;
   const resources = [
     { apiVersion: "v1", kind: "Service", metadata: meta(service), spec: { ports: [
-      { name: "https", protocol: "TCP", port: 443, targetPort: httpsPort },
+      { name: "https", protocol: "TCP", port: 443, targetPort: "https" },
     ] } },
-    { apiVersion: "discovery.k8s.io/v1", kind: "EndpointSlice", metadata: { ...meta(service), labels: {
+    ...relayPorts.map((port, index) => ({ apiVersion: "discovery.k8s.io/v1", kind: "EndpointSlice", metadata: { ...meta(`${service}-${index}`), labels: {
       ...labels, "kubernetes.io/service-name": service, "endpointslice.kubernetes.io/managed-by": "kodex-public-edge" } },
     addressType: "IPv4", endpoints: [{ addresses: [bridgeIP], conditions: { ready: true } }],
-    ports: [{ name: "https", protocol: "TCP", port: httpsPort }] },
+    ports: [{ name: "https", protocol: "TCP", port }] })),
     { apiVersion: "traefik.io/v1alpha1", kind: "ServersTransport", metadata: meta("kodex-public-edge-upstream"),
       spec: { serverName: upstreamServerName, insecureSkipVerify: false,
         rootCAsSecrets: ["kodex-public-edge-upstream-ca"],
@@ -49,13 +50,14 @@ export function renderPublicEdge(config) {
     // challenge handler и certificate storage не меняются. Private keys не
     // копируются между кластерами; вверх передаётся только публичная CA.
     { apiVersion: "traefik.io/v1alpha1", kind: "IngressRoute", metadata: meta("kodex-public-edge-tls"),
-      spec: { entryPoints: ["websecure"], routes: [{ kind: "Rule", match: hostRule,
+      spec: { entryPoints: ["websecure"], routes: [{ kind: "Rule", priority: 10000, match: hostRule,
         services: [{ name: service, port: "https", scheme: "https", passHostHeader: true,
           serversTransport: "kodex-public-edge-upstream" }],
       }], tls: { certResolver, domains: [{ main: platformHost, sans: [oidcHost] }] } } },
   ];
   const units = {};
-  for (const [protocol, port, upstream] of [["https", httpsPort, 443]]) {
+  for (const [index, port] of relayPorts.entries()) {
+    const protocol = `https-${index}`, upstream = 443;
     const name = `kodex-public-edge-${protocol}`;
     const peerRules = allowedPeers.map(ip => `IPAddressAllow=${ip}/32`).join("\n");
     units[`${name}.socket`] = `[Unit]\nDescription=Kodex exact public edge ${protocol} listener\nAfter=network-online.target docker.service\nWants=network-online.target\n\n[Socket]\nListenStream=${bridgeIP}:${port}\nAccept=no\nIPAddressDeny=any\n${peerRules}\n\n[Install]\nWantedBy=sockets.target\n`;
