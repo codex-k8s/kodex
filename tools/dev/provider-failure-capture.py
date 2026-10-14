@@ -83,6 +83,10 @@ REQUEST_PREFIX = 'Codex provider request failed at safe stage: '
 TERMINAL_PREFIX = 'Codex provider turn completed with safe failure code: '
 CLIENT_MESSAGE = 'runtime execution failed before completion'
 FILESYSTEM_MESSAGE = 'Provider post-join filesystem denied'
+WORKSPACE_COMPLETION_MESSAGE = 'Runtime workspace completion denied'
+WORKSPACE_COMPLETION_STAGES = frozenset(('CHECK_WORKSPACE', 'PUBLISH_RESULT', 'UNKNOWN'))
+WORKSPACE_COMPLETION_REASONS = frozenset(('READ_ONLY', 'QUOTA_EXCEEDED',
+                                        'PATH_OUTSIDE_WORKSPACE', 'RUNTIME_IO_ERROR'))
 FILESYSTEM_STAGES = frozenset(('OUTBOX_PUBLICATION', 'WORKSPACE_NORMALIZATION', 'UNKNOWN'))
 FILESYSTEM_REASONS = frozenset('UNKNOWN CONTEXT_DONE POLICY_INVALID LOCK_UNAVAILABLE '
                               'DIRECTORY_UNAVAILABLE DIRECTORY_IDENTITY_INVALID ENTRY_COUNT_EXCEEDED '
@@ -175,14 +179,28 @@ def validate_options(options):
 
 def parse_client_line(raw):
     """Только закрытая app producer-проекция; JSON envelope не возвращается."""
-    if not raw.startswith(b'{') or CLIENT_MESSAGE.encode() not in raw:
+    if not raw.startswith(b'{') or not any(message.encode() in raw for message in
+                                          (CLIENT_MESSAGE, WORKSPACE_COMPLETION_MESSAGE)):
         return None
     require(len(raw) <= MAX_LINE, 'CLIENT_DIAGNOSTIC_INVALID')
     try:
         record = json.loads(raw, object_pairs_hook=ACK.unique)
     except (Failure, ValueError, UnicodeError):
         raise Failure('CLIENT_DIAGNOSTIC_INVALID') from None
-    if not isinstance(record, dict) or record.get('msg') != CLIENT_MESSAGE:
+    if not isinstance(record, dict):
+        return None
+    if record.get('msg') == WORKSPACE_COMPLETION_MESSAGE:
+        require(record.get('level') == 'WARN' and
+                isinstance(record.get('stage'), str) and
+                record['stage'] in WORKSPACE_COMPLETION_STAGES and
+                isinstance(record.get('reason'), str) and
+                record['reason'] in WORKSPACE_COMPLETION_REASONS,
+                'CLIENT_DIAGNOSTIC_INVALID')
+        # Logger может добавлять service/trace поля. Ни они, ни error/path/body
+        # не выходят из reader: только два закрытых значения rejecting guard.
+        return {'kind': 'WORKSPACE_COMPLETION_DENIAL', 'stage': record['stage'],
+                'reason': record['reason']}
+    if record.get('msg') != CLIENT_MESSAGE:
         return None
     require(isinstance(record.get('category'), str) and record['category'] in CLIENT_CATEGORIES and
             isinstance(record.get('context_state'), str) and record['context_state'] in CLIENT_CONTEXTS and
@@ -676,7 +694,8 @@ def observations_from_chunks(stream, proof, options, deadline, on_observation=No
                     prefix = STAMP.sub('', bytes(pending[source][:256]).decode('ascii', errors='ignore'), count=1)
                     require(source != 'PROVIDER' or not prefix.startswith((REQUEST_PREFIX, TERMINAL_PREFIX)),
                             'PROVIDER_DIAGNOSTIC_INVALID')
-                    require(source != 'CLIENT' or CLIENT_MESSAGE.encode() not in pending[source],
+                    require(source != 'CLIENT' or not any(message.encode() in pending[source]
+                            for message in (CLIENT_MESSAGE, WORKSPACE_COMPLETION_MESSAGE)),
                             'CLIENT_DIAGNOSTIC_INVALID')
                 if len(pending[source]) > 65536:
                     dropping[source] = True

@@ -4,9 +4,21 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.31
+version: 1.0.32
 updated: 2026-10-14
 ---
+
+## 14.10.2026 18:34 UTC — reader покрывает закрытый completion guard
+
+- Новый observer source поверх41b3d708: существующий CLIENT producer
+  workspace completion stage/reason больше не теряется; только закрытые
+  enums, без raw paths/errors/trace/body. Runtime/authority/policy/ABI unchanged.
+- Fresh104 synthetic tests PASS6.597s: invalid/duplicate/oversized, privacy,
+  fragmented stream/exact UID cleanup/rejoin и producer enum equality.
+  Это observer CODE_ONLY, не actual filesystem repair или native PASS.
+- Retry12 root RUNNING150/INTAKE Manager; exact Developer nodeNEk planned.
+  Bounded observer18:34 WAITING_EXACT_DEVELOPER. Actual primary guard reason,
+  final publication/ONE Review/Manager/paid/main/QA65 всё ещё OPEN.
 
 ## 14.10.2026 18:24 UTC — terminal FAIL и отдельный metadata LIVE PASS
 

@@ -4,11 +4,34 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.31
+version: 1.1.32
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 18:34 UTC — observer покрывает финальную canary
+
+SOURCE/remote/PR41b3d708 MATCH, HOT5d085497 clean; runtime binaries прежние
+38549814/e861d02e. Retry12 RUNNING150, текущий INTAKE Manager активен;
+Developer planned. No new Review/business merge/USER corrections.
+
+Найден CODE_ONLY пробел tools/dev/provider-failure-capture.py: CLIENT stream
+разбирал broker failures, но игнорировал существующий runner log
+`Runtime workspace completion denied`. Reader теперь сохраняет только
+закрытые stage CHECK_WORKSPACE/PUBLISH_RESULT/UNKNOWN и четыре workspace
+reason. Service/trace/error/path/body поля не отражаются; duplicate/unknown-enum/
+oversized/corrupt diagnostic fail closed. Producer и runtime semantics не
+менялись, это не исправление actual RUNTIME_ARTIFACT_INVALID.
+
+Fresh synthetic collector suite104 tests PASS6.597s: privacy/negative,
+fragmented stream, exact UID cleanup/rejoin и соответствие enum реальному
+Go producer. Diagnostic wrapper ожидает только server-created Developer
+nodeNEk; после exact Pod/input/project/agent/UID/image/annotation proof
+подключает bounded3600s capture обеих stdout, с сохранением закрытых receipt.
+Первый запуск18:34 WAITING_EXACT_DEVELOPER — не capture или terminal PASS.
+Далее дождаться следующего actual rejecting guard и исправить доказанную
+причину; первичная причина Retry11 пока UNKNOWN. QA65/final/main OPEN.
 
 ## Checkpoint 14.10.2026 18:24 UTC — отказ финализации, metadata LIVE PASS, Retry12
 

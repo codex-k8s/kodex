@@ -52,6 +52,38 @@ class FakeClock:
 
 
 class CaptureTests(unittest.TestCase):
+    def test_workspace_completion_projects_only_closed_stage_and_reason(self):
+        for stage in CAPTURE.WORKSPACE_COMPLETION_STAGES:
+            for reason in CAPTURE.WORKSPACE_COMPLETION_REASONS:
+                row = dict(time=SENTINEL, level='WARN',
+                           msg=CAPTURE.WORKSPACE_COMPLETION_MESSAGE,
+                           stage=stage, reason=reason, trace_id=SENTINEL,
+                           raw_error=SENTINEL)
+                actual = CAPTURE.parse_client_line(json.dumps(row).encode())
+                self.assertEqual(actual, dict(kind='WORKSPACE_COMPLETION_DENIAL',
+                                             stage=stage, reason=reason))
+                self.assertNotIn(SENTINEL, json.dumps(actual))
+
+    def test_workspace_completion_rejects_unknown_corrupt_and_duplicate_values(self):
+        base = dict(time='2026-10-14T18:12:31Z', level='WARN',
+                    msg=CAPTURE.WORKSPACE_COMPLETION_MESSAGE,
+                    stage='CHECK_WORKSPACE', reason='READ_ONLY')
+        for key, value in [('stage', SENTINEL), ('stage', None), ('stage', []),
+                           ('reason', SENTINEL), ('reason', None), ('reason', []),
+                           ('level', 'INFO')]:
+            row = dict(base)
+            row[key] = value
+            with self.subTest(key=key, value=value), self.assertRaisesRegex(
+                    CAPTURE.Failure, '^CLIENT_DIAGNOSTIC_INVALID$'):
+                CAPTURE.parse_client_line(json.dumps(row).encode())
+        duplicate = json.dumps(base).replace('"stage": "CHECK_WORKSPACE"',
+            '"stage": "CHECK_WORKSPACE", "stage": "PUBLISH_RESULT"').encode()
+        for raw in (duplicate, json.dumps(dict(base, raw_error=SENTINEL*500)).encode(),
+                    b'{'+CAPTURE.WORKSPACE_COMPLETION_MESSAGE.encode()):
+            with self.assertRaisesRegex(CAPTURE.Failure, '^CLIENT_DIAGNOSTIC_INVALID$'):
+                CAPTURE.parse_client_line(raw)
+        self.assertIsNone(CAPTURE.parse_client_line(b'ordinary output'))
+
     def test_post_join_filesystem_closed_projection(self):
         for stage in CAPTURE.FILESYSTEM_STAGES:
             for reason in CAPTURE.FILESYSTEM_REASONS:
@@ -1300,6 +1332,35 @@ def client_line(**fields):
 
 
 class ClientObservationTests(unittest.TestCase):
+    def test_workspace_completion_survives_chunking_and_exact_pod_cleanup(self):
+        ack, _, _, _ = self.bound()
+        row = dict(time=SENTINEL, level='WARN',
+                   msg=CAPTURE.WORKSPACE_COMPLETION_MESSAGE,
+                   stage='CHECK_WORKSPACE', reason='RUNTIME_IO_ERROR', trace_id=SENTINEL)
+        line = json.dumps(row).encode() + b'\n'
+        events = [('PROVIDER', ack)] + [('CLIENT', line[index:index+7])
+                                       for index in range(0, len(line), 7)]
+        result, checkpoints, closed, _ = self.exercise(events, after=b'')
+        self.assertEqual(result['rejoin'], 'POD_CLEANED_AFTER_CAPTURE')
+        self.assertEqual(result['client_observation'], dict(
+            kind='WORKSPACE_COMPLETION_DENIAL', stage='CHECK_WORKSPACE',
+            reason='RUNTIME_IO_ERROR'))
+        self.assertNotIn('diagnostic', result)
+        self.assertTrue(checkpoints)
+        self.assertEqual(closed, [True])
+        self.assertNotIn(SENTINEL, json.dumps(result))
+
+    def test_workspace_completion_matches_actual_producer(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root/'services/jobs/agent-runner/internal/app/workspace_completion_diagnostic.go').read_text()
+        self.assertIn('workspaceCompletionMessage = "'+CAPTURE.WORKSPACE_COMPLETION_MESSAGE+'"', source)
+        stages = re.findall(r'workspaceCompletion(?:Check|Publish)\s*=\s*"([A-Z_]+)"', source)
+        self.assertEqual(CAPTURE.WORKSPACE_COMPLETION_STAGES,
+                         frozenset(stages + ['UNKNOWN']))
+        contract = (root/'libs/go/runtimecontract/workspace_policy.go').read_text()
+        reasons = re.findall(r'RuntimeWorkspace(?:ReadOnly|QuotaExceeded|PathOutsideWorkspace|IOError)\s*=\s*"([A-Z_]+)"', contract)
+        self.assertEqual(CAPTURE.WORKSPACE_COMPLETION_REASONS, frozenset(reasons))
+
     def bound(self):
         source, columns, options = fixture()
         options.include_client_observation = True
