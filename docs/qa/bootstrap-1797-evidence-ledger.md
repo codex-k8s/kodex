@@ -4,9 +4,21 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.28
+version: 1.0.29
 updated: 2026-10-14
 ---
+
+## 14.10.2026 16:46 UTC — SQL и наблюдение текущего процесса
+
+- Source/PRec6e25d1: canonical make check-sql-boundary/Go1.26.6 PASS.
+  Это статический разбор, не query или migration живой PostgreSQL.
+- Root/Developer RUNNING1504, private checkoutaa0130c/dirty8.
+  Role/provider процессы живы; compiler процессов на16:43 не наблюдалось.
+- Repo-owned30s closed failure capture подтвердил ACK binding; terminal
+  FAILURE_NOT_OBSERVED_BEFORE_DEADLINE/NOT_CAPTURED. Не terminal failure,
+  не provider health PASS и не полный rejoin. Native task не перезапускалась.
+- Own36 connected/reload/SSO сохранены. Final/ONE Review/Manager/post-join,
+  metadata delivery/native QA/paid/bootstrap/main остаются OPEN.
 
 ## 14.10.2026 16:33 UTC — Developer detail desktop/mobile
 

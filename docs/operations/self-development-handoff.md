@@ -4,11 +4,31 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.28
+version: 1.1.29
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 16:46 UTC — SQL boundary PASS, native wait подтверждён
+
+SOURCE/remote/Draft1807 ec6e25d1e6416aab57ae5f320e667fa4444e2cd8 MATCH,
+HOT0b5af51c. Canonical make check-sql-boundary наec6/Go1.26.6 PASS;
+после последнего8896636a были изменены164 Go/SQL paths, поэтому прежний
+receipt не подменял новую проверку. Команда не обращалась к живой БД.
+
+Native root/Developer RUNNING1504, checkoutaa0130c/dirty8 на16:38.
+После последней failed shell нет нового terminal. Actual provider Pod
+содержит живые kodex-agent-run PID14 и codex PID40, runtime около96min.
+Read-only30s provider-failure capture: exact ACK_BINDING_CAPTURED,
+последующий FAILURE_NOT_OBSERVED_BEFORE_DEADLINE/NOT_CAPTURED.
+Это ограниченный observer без terminal receipt, не failure исполнения,
+не full rejoin PASS и не доказательство отсутствия сетевой ошибки.
+Input42a28c06/revision9c686224/binding29132cd5/PODUID086b MATCH.
+Повторять native task, менять часы, credentials или permissions не требуется.
+
+Own36 reload/SSO/connected сохранены. Далее тот же Developer до финального
+результата, ONE Review/Manager; прочие metadata/paid/QA65/main gates OPEN.
 
 ## Checkpoint 14.10.2026 16:33 UTC — текущая карточка Developer проверена
 
