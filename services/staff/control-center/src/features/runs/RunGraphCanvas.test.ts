@@ -136,14 +136,22 @@ const edges: RunEdge[] = [
 ];
 
 const apps: App[] = [];
-afterEach(() => apps.splice(0).forEach((app) => app.unmount()));
+let browserWindow: EventTarget & { innerWidth: number };
+afterEach(() => {
+  apps.splice(0).forEach((app) => app.unmount());
+  vi.unstubAllGlobals();
+});
 beforeEach(() => {
+  browserWindow = Object.assign(new EventTarget(), { innerWidth: 1921 });
+  vi.stubGlobal("window", browserWindow);
   vi.clearAllMocks();
   if (flow.dimensions) flow.dimensions.value = { width: 1921, height: 780 };
   flow.viewport = { x: 0, y: 0, zoom: 1 };
 });
 
 interface CanvasState {
+  viewMode: Ref<"graph" | "outline">;
+  setViewMode(mode: "graph" | "outline"): void;
   userAdjustedView: Ref<boolean>;
   minimumZoom: Ref<number>;
   markUserAdjusted(): void;
@@ -290,6 +298,35 @@ async function render(
 }
 
 describe("RunGraphCanvas", () => {
+  it("мобильная ширина открывает список и resize меняет только невыбранный режим", () => {
+    browserWindow.innerWidth = 390;
+    const state = mountCanvas();
+    expect(state.viewMode.value).toBe("outline");
+
+    browserWindow.innerWidth = 1280;
+    browserWindow.dispatchEvent(new Event("resize"));
+    expect(state.viewMode.value).toBe("graph");
+
+    browserWindow.innerWidth = 390;
+    browserWindow.dispatchEvent(new Event("resize"));
+    expect(state.viewMode.value).toBe("outline");
+  });
+
+  it.each(["graph", "outline"] as const)(
+    "явный выбор %s сохраняется при desktop/mobile resize",
+    (mode) => {
+      browserWindow.innerWidth = mode === "graph" ? 390 : 1280;
+      const state = mountCanvas();
+      state.setViewMode(mode);
+
+      for (const width of [1280, 390]) {
+        browserWindow.innerWidth = width;
+        browserWindow.dispatchEvent(new Event("resize"));
+        expect(state.viewMode.value).toBe(mode);
+      }
+    },
+  );
+
   it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
     "не применяет fit до валидного размера canvas %s",
     async (height) => {
