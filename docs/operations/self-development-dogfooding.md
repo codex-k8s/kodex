@@ -4,9 +4,30 @@ title: Самонастройка и разработка Kodex средства
 type: operations
 status: approved
 owner: manager
-version: 1.1.9
-updated: 2026-10-13
+version: 1.1.10
+updated: 2026-10-14
 ---
+
+## 14.10.2026 07:42 UTC — новый автономный этап обновления авторизации
+
+- [x] Владелец поручил все семь оставшихся пунктов до конца; новая goal ACTIVE,
+  supported managed owner-renewal выбран, прежнее ожидание выбора снято.
+- [x] Реальный Pod HTTPS CONNECT/TLS probe без credentials; оба домена200/
+  TLS verified. Root403 не объявляется OAuth/API failure либо catalog PASS.
+- [x] Code50d9f609 и131b295c запушены в тот же Draft1807 с отдельным readback;
+  stable native kernel, закрытая primary diagnostics, durable materializer
+  receipt/rejoin/service glue проверены unit/race/vet/build.
+- [ ] Полностью материализовать CP task/claim/proof/completion, runtime
+  exclusion, Proto/authority/worker/readiness/render и disposable component.
+- [ ] Доставить и доказать новую immutable credential revision/fresh catalog.
+- [ ] Native Developer ENV30/instruction3/checkpoints, business1808,
+  ровно ONE Reviewer, Manager и финальный owner gate.
+- [ ] Supported usage/weekly/paid credits, остальные no-ID/isolation/lifecycle
+  QA65, bootstrap gates/merge/fresh main и готовность к ручной приёмке.
+
+HOT7f не менялся, live renewal и новое ИИ-исполнение NOT RUN. Карта:
+[OPS-PROVIDER-RENEWAL-001](provider-managed-renewal.md). Code-only kernel не
+является выполнением пункта о доступности провайдера.
 
 ## 13.10.2026 14:44 UTC — editable Developer checkpoints и auth source boundary
 

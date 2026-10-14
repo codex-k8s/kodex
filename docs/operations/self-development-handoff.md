@@ -4,11 +4,64 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.10
-updated: 2026-10-13
+version: 1.1.11
+updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 07:42 UTC — HTTPS доказан, managed kernel и receipt опубликованы
+
+SOURCE/remote/Draft1807 `131b295ceb9a5a3e19913dcdd8f04b0b9609e546`
+подтверждены отдельным readback; предшествующий code checkpoint
+`50d9f609f3bd4cd621f8b94acf1441e604e7cce2` также MATCH. Оба push прошли;
+немедленная PR metadata отставала и была FAIL_OR_UNKNOWN, повтор push не
+использовался. HOT/serving остаётся7f919f1f39ad1dc4bf37e567fa0ada19d1c37ce6;
+новые методы пока не зарегистрированы и не активированы. Mainab499 неизменен.
+
+Владелец14.10 поручил выполнить все семь оставшихся этапов автономно до конца.
+Новая goal ACTIVE; прежний вопрос выбора A8 больше не ожидание решения.
+Выбран отдельный supported CP-owned managed renewal, READ observer не получает
+WRITE. Полная карта и матрица: [OPS-PROVIDER-RENEWAL-001](provider-managed-renewal.md).
+
+Настоящий bounded probe из serving secret-broker UID
+09712766-8d5f-46cd-8e5a-657b0a55ecbe: chatgpt.com и auth.openai.com
+CONNECT200, TLS1.3/exact hostname/verified chain, rootHTTP403. Это PASS только
+transport, не OAuth/API/каталог. Probe не получает credentials и не читает
+response body. Ранние BusyBox wget failures не являются сетевым доказательством.
+Actual Codex binary0.160.0 подтверждён; tag/source соответствует
+a956835d020762cb2b570053af06f643a11c0ecc.
+
+Code50 добавляет stable managed file-store kernel initialize/experimentalApi=false
+и account/read/refreshToken=true, bounded stop/join, same native account,
+changed token/fresh native last_refresh и durable sink до private cleanup.
+Он отделён от observer и пока не является рабочим owner renewal path.
+Auth file read укреплён nofollow/regular600/ownUID/single-link/path rejoin;
+ошибка catalog cleanup не скрывает уже доказанный первичный отказ, а прежний
+успех при ошибке cleanup закрывается. Code131 добавляет межрепличную Create
+квитанцию, exact immutable result recovery без OAuth, CAS completion и service
+glue без регистрации RPC. READ rejoin не выполняет mutations.
+
+Проверки code131: providercredential/kubernetes race PASS29.192s/cached,
+scoped vet PASS и secret-broker cmd build PASS; code50 tests/build/vet также
+PASS. Probe unit PASS на50. Первый service fixture compile FAIL из-за
+двух embedded Check исправлен отдельным методом; fresh повтор PASS.
+Disposable PostgreSQL/new task, contract/codegen/render и live renewal NOT RUN.
+Один native process не объявляется доказательством одного HTTP OAuth запроса:
+native proactive/explicit refresh имеет собственный guarded protocol.
+
+Chrome MCP доступен, создана своя вкладка; SSO JSON session200, desktop
+screenshot просмотрен, overflowfalse, Console error/warn0, relevant bootstrap/
+session/ticket200. Catalog по-прежнему unavailable; mobile и UI нового renewal
+NOT RUN. Чужие вкладки не менялись. Native запусков, USER corrections,
+business edits, host субагентов и новой disk cleanup нет.
+
+Далее без паузы: CP durable task/proof/claim/authorization/completion и runtime
+exclusion; Proto/authority/generated adapters/worker/readiness; component и
+trusted-dev delivery; actual fresh catalog; native Developer ENV30/instruction3
+и Git checkpoints → ONE Reviewer → Manager/owner; usage/credits/QA65 и
+bootstrap gates/merge/fresh main/ручная приёмка. Ни один из этих оставшихся
+этапов не отмечен выполненным по kernel unit.
 
 ## Checkpoint 13.10.2026 14:44 UTC — Developer checkpoints опубликованы, auth boundary уточнена
 

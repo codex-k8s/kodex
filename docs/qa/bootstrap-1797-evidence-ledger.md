@@ -4,9 +4,27 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.10
-updated: 2026-10-13
+version: 1.0.11
+updated: 2026-10-14
 ---
+
+## 14.10.2026 07:42 UTC — managed renewal code checkpoints, без live activation
+
+| Контур | Факт и граница |
+| --- | --- |
+| Source/remote/PR | PASS50d9f609f3bd4cd621f8b94acf1441e604e7cce2 и131b295ceb9a5a3e19913dcdd8f04b0b9609e546; Draft1807, отдельный readback. Первые metadata lag FAIL_OR_UNKNOWN, repush0 |
+| HTTPS из broker | PASS только transport: Pod UID09712766-8d5f-46cd-8e5a-657b0a55ecbe, оба exact OpenAI домена CONNECT200/TLS verified, rootHTTP403; auth/API outcome UNKNOWN |
+| CLI/source | PASS actual0.160.0; upstream taga956835d020762cb2b570053af06f643a11c0ecc; managed/external auth разделены |
+| Code50 | Stable managed kernel, regular600/nofollow/UID/link/rejoin и primary catalog failure; process/store guards unit/race/vet/build PASS |
+| Code131 | Durable one-winner receipt, exact immutable recovery, completion CAS, service lost-ACK/lifecycle tests; race29.192s/cached, scoped vet и cmd build PASS |
+| Fixture | Первый compile FAIL из-за ambiguous embedded Check; explicit fixture method и fresh race повтор PASS. Не live product failure |
+| Chrome | Own tab/session200/screenshot viewed/overflowfalse/Console0; relevant bootstrap/session/ticket200. Mobile NOT RUN, catalog по-прежнему FAIL |
+| Delivery/remaining | HOT7f unchanged; новые RPC/task/worker не зарегистрированы, component/codegen/render/live renewal/new Developer/ONE Review/QA65/gates/main NOT RUN |
+
+Новая goal ACTIVE на все семь пунктов. Managed owner-renewal выбран новым
+поручением владельца; READ observer не расширен. Kernel не называется полным
+рабочим путём; одноразовый materializer process не доказывает количество HTTP
+refresh запросов внутри native Codex. Секреты в доказательства не включены.
 
 ## 13.10.2026 14:44 UTC — publication Developer instructions3
 

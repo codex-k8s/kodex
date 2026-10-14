@@ -30,7 +30,7 @@ bootstrap reconciliation, повтор старого access token или экс
 | Инициатор | CP maintenance по текущему DEVICE_CODE account и подтверждённому `AUTHORIZATION_REJECTED` каталогу. Browser endpoint отсутствует; payload не назначает actor/org |
 | Создание задачи | Owner-транзакция CP блокирует account; назначает task/attempt/claimant/fence/generation/expiry, account version и exact current credential ref/revision/descriptor. Активные executions этого аккаунта и другая renewal исключают внешний эффект |
 | Авторизация записи | Отдельный `ProviderCredentialMaterializerService.RenewManagedProviderCredential`, операция `platform.provider-accounts.credential.renew`, caller `control-plane`, target `secret-broker`, SERVICE actor, без project override. Registered exact method, request digest и свежий CP task proof обязательны |
-| Materializer | Перед native process durable receipt exact task/input в Kubernetes. Только создатель receipt может начать OAuth; повтор читает результат, не запускает процесс. Seed — exact immutable credential, private managed CODEX_HOME и штатный file store |
+| Materializer | Перед native process durable receipt exact task/input в Kubernetes. Только создатель receipt может начать managed flow; повтор читает результат, не запускает процесс. Seed — exact immutable credential, private managed CODEX_HOME и штатный file store |
 | Native protocol | Закреплённый Codex0.160.0, `initialize` с `experimentalApi=false`, `account/read` с `refreshToken=true`. Нет inference, нового login/device-code, token callback или сетевого bypass |
 | Сохранение | После bounded stop/join writer exact regular600/single-link/own-UID auth file читается через nofollow descriptor. Account identity прежняя, access token действительно изменён, native last_refresh свежий. Bytes не выходят из broker; новая immutable Secret сохраняется до очистки home |
 | Rejoin | Отдельный `ProviderCredentialMaterializerService.ObserveManagedProviderCredentialRenewal`, READ операция `platform.provider-accounts.credential.renewal.observe`. Exact сохранённые task/input pins; возвращает только закрытое состояние и descriptor. Чтение не повторяет OAuth |
@@ -43,8 +43,8 @@ bootstrap reconciliation, повтор старого access token или экс
 | Переход | Cardinality, событие и восстановление |
 | --- | --- |
 | Eligible → PENDING → CLAIMED | Одна текущая task на credential, server-owned attempt/fence. До внешнего эффекта durable owner authorization; события нет, authoritative read — owner task ledger |
-| CLAIMED → AUTHORIZED | Одноразовое право внешнего refresh. Runtime claim того же аккаунта не допускается до завершения; никакой глобальной блокировки других аккаунтов |
-| AUTHORIZED → SUCCEEDED | Не более одного OAuth effect и одной новой active revision; owner completion/audit/event атомарны. Повтор exact completion возвращает тот же receipt |
+| CLAIMED → AUTHORIZED | Одноразовое право запуска managed flow. Runtime claim того же аккаунта не допускается до завершения; никакой глобальной блокировки других аккаунтов |
+| AUTHORIZED → SUCCEEDED | Не более одного materializer process и одной новой active revision; owner completion/audit/event атомарны. Повтор exact completion возвращает тот же receipt. Внутреннее число HTTP refresh запросов native Codex не объявляется равным одному |
 | Повтор broker call / lost ACK | Exact durable receipt либо recovery произведённой immutable Secret. OAuth не повторяется. Неизвестное состояние не объявляется успехом |
 | Истечение до авторизации эффекта | FAILED, прежний claim закрыт; новая попытка получает новые pins/fence. События нет, ledger authoritative |
 | Истечение/crash после авторизации эффекта | UNKNOWN_OUTCOME; старый refresh token не используется повторно. READ rejoin может восстановить доказанный материализованный результат; отсутствие результата требует штатной повторной авторизации владельцем |
