@@ -4,11 +4,34 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.35
+version: 1.1.36
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 20:02 UTC — current INTAKE результаты опубликованы
+
+`run_qbkSA18tTpG49Fcm88t2Na75` SUCCEEDED/version2. Шесть собственных CLEAN
+outputs прочитаны owner через exact revision content до EOF: HTTP200,
+bytes/SHA256 MATCH6/6, fresh metadata version/revision/digest rejoin MATCH6/6.
+Это INTAKE, не Developer tests/publication или paid acceptance.
+
+| Файл | Байты | SHA256 |
+| --- | ---: | --- |
+| result.md | 528 | 9432233ef6b15c49061ef86f9c3905e15c77070e2953c2c8b0aee38046b19317 |
+| workspace-write-result.json | 328 | 91a96cb9d3e1fee8a189678059369850bc8eee87f8891a15ca6cdcc9a6985db9 |
+| business-pr-index.md | 10253 | b9e6866c3e5a3ca3f7d6fe4a0038470f48a74f8c04667f29776efeeee110b1da |
+| intake-evidence.json | 33229 | 9e8916897df9b5ebb4d523afaa8bb99d99b407de32b68a542e96ee6f7020a117 |
+| manager-plan.md | 49593 | d906ceed564ac9e5d486e00b09922415533fed929cc4c0edc551e3bba2e22a8b |
+| owner-input.json | 6790 | 21dfc1489375a7cd6c205c9e666f327fc75413b3927a291aa7554bc536366812 |
+
+Current root hC5h RUNNING398, coordinator node xrzp RUNNING;
+Architect/Developer/Reviewer/final Manager пока PLANNED. Observer58183 жив.
+SOURCE/remote/Draft1807 cda4bb00 MATCH; HOT5d clean, frontend fix не доставлен.
+Продолжать native delegation, не создавать ещё один root/retry/USER turn.
+Следующее: Architect проверяет полный routing input, затем Developer с exact
+observer; primary filesystem reason, paid/ONE Review/QA65/main остаются OPEN.
 
 ## Checkpoint 14.10.2026 20:00 UTC — frontend checks и публикация
 

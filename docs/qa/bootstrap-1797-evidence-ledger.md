@@ -4,9 +4,19 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.35
+version: 1.0.36
 updated: 2026-10-14
 ---
+
+## 14.10.2026 20:02 UTC — current INTAKE EOF6/6
+
+- Native current INTAKE run_qbk SUCCEEDED/version2; шесть своих CLEAN outputs
+  owner exact revision READ до EOF HTTP200, bytes/SHA256 и повтор metadata
+  version/revision/digest MATCH6/6. Полная таблица — current handoff checkpoint.
+- Root hC5h RUNNING398/coordinator xrzp; Architect/Developer/ONE Reviewer/
+  final Manager PLANNED, observer58183 жив. Не implementation/paid PASS.
+- SOURCE/remote/Draft1807 cda4bb00 MATCH; HOT5d clean. Исправленный initial
+  file link ещё SOURCE-only, live retest NOT RUN. QA65/main остаются OPEN.
 
 ## 14.10.2026 20:00 UTC — проверки exact06 и GitHub readback
 
