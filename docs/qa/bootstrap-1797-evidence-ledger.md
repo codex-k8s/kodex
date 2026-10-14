@@ -4,9 +4,22 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.12
+version: 1.0.13
 updated: 2026-10-14
 ---
+
+## 14.10.2026 09:40 UTC — actual managed renewal и fresh catalog PASS
+
+| Контур | Факт |
+| --- | --- |
+| Delivery | Source/remote/HOT f24d8173 MATCH, idle FF09:26:19/busy0, render SHA855f9258…280f1; goose20261014000100/schema true |
+| Первое применение | FAIL StartError до процесса: missing readonly mountpoint; OAuth/SQL effects0. Failed Job не повторялась. Штатный scoped deploy-local migrate PASS |
+| Managed outcome | Taskpcrt_bZZ6O388k5KBgRPN6Ky6lTVb SUCCEEDED/gen1, account8→9/credential1→2; без device-code и inference |
+| Fresh catalog | REMOTE_CODEX/NONE/10models, observed09:39:57/expiry09:54:57 на exact current account/credential |
+| Browser | Provider «Готов», desktop/mobile screenshot viewed, Console0; page overflowfalse, собственные прокручиваемые таблицы |
+| Component f24 | PASS3.580s completion/UNKNOWN fresh READ recovery; shared-client fixture fresh PASS |
+| Residual fix | Старый trusted policy generator FAIL из-за orphan controller classification2; explicit typed trusted-only READ, generate/check и5 negative tests/CP app PASS на tree; публикация следующая |
+| Остатки | Exact serving proof/new checkpoint, native Developer/ONE Review/Manager/owner, credit case, QA65/gates/merge/main NOT RUN |
 
 ## 14.10.2026 09:24 UTC — code bd79b400, до trusted-dev доставки
 

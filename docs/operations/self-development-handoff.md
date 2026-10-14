@@ -4,11 +4,38 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.12
+version: 1.1.13
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 09:40 UTC — живой провайдер восстановлен
+
+SOURCE/remote/HOT f24d8173beb2685eb5099573beb5de65c26c6e81 MATCH.
+Guarded FF09:26:19: пять busy counters0, promoted85/pinsf822 неизменны.
+Render f24 PASS855f9258a48d46bbc10109511bb11a0bd611a6dd0cac9246f760b45e256280f1.
+Migration Job control-plane-migrate-6c241dec65ce PASS: goose20261014000100;
+schema readback true. Первоначальная Job20261014000100 FAIL/StartError до
+процесса из-за missing readonly mountpoint, повтор0; использован штатный
+deploy-local migrate только для CP, не ручной SQL и не отключение guard.
+
+Renewal task pcrt_bZZ6O388k5KBgRPN6Ky6lTVb SUCCEEDED/gen1/account8→9,
+credential1→2. Свежий exact catalog09:39:57 REMOTE_CODEX/NONE/10models,
+TTL09:54:57. Это actual managed renewal и authenticated catalog, не inference.
+Chrome provider «Готов»/«Нет ограничений»; desktop/mobile screenshot просмотрены,
+Console0, mobile overflowfalse, таблицы имеют собственный horizontal scroll.
+
+Component на exact f24 PASS3.580s/completion+UNKNOWN READ recovery; shared client
+test PASS после исправления exact fixture. Генератор trusted policy выявил
+старые orphan classification READ2 controller: они теперь явно typed/digest
+trusted-only, protected producer не возвращается. Generate/check,5 tests и CP
+app test PASS на новом tree; публикация этого исправления следующая.
+
+Остаются serving/source proof нового checkpoint; native Developer12GiB/
+instructions3 → ONE Review → Manager/owner, paid-credit/weekly-case, no-ID и
+остальные QA65/gates/bootstrap merge/main. Business1808 не трогался ROOT.
+
 
 ## Checkpoint 14.10.2026 09:24 UTC — вертикальный managed renewal, доставка следующая
 

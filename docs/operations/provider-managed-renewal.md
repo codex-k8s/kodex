@@ -65,8 +65,11 @@ bootstrap reconciliation, повтор старого access token или экс
 - [x] Durable materializer receipt, rejoin и single-winner синтетически проверены в131b295c; живой межрепличный сценарий ещё NOT RUN.
 - [ ] Полный CP task/claim/authorization/completion lifecycle и runtime exclusion.
 - [ ] Proto/authority/generated clients/worker/readiness/render.
-- [x] Disposable PostgreSQL: один claim аккаунта, изменённое поколение/чужой caller отклоняются, атомарная активация, exact replay, UNKNOWN без повторного OAuth и свежий READ recovery. Полный restart/expired/concurrent-runtime набор ещё NOT RUN.
-- [ ] Trusted-dev delivery, новая credential revision и REMOTE_CODEX catalog.
+- [x] Disposable PostgreSQL: один claim аккаунта, изменённое поколение/чужой caller отклоняются, атомарная активация, exact replay, UNKNOWN без повторного OAuth и свежий READ recovery.
+- [ ] Дополнительные restart/expired/concurrent-runtime проверки.
+- [x] Trusted-dev delivery f24d8173: штатная forward migration20261014000100,
+  taskgen1 SUCCEEDED, account8→9/credential1→2, fresh REMOTE_CODEX/NONE/
+  10models09:39:57. Это authenticated catalog, не реальное inference.
 - [ ] Native Developer/ONE Reviewer/Manager и остальные шесть этапов цели.
 
 Проверены Context7 `/openai/codex`, официальная документация app-server и

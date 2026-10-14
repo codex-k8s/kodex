@@ -34,7 +34,7 @@ test("workflow catalog preserves leased source binding in local service registry
 });
 test("control-plane policy preserves exact bindings and excludes STT continuation",() => {
   const policy=buildServicePolicy(source,classification);
-  assert.equal(policy.bindings.length,412);
+  assert.equal(policy.bindings.length,415);
   for (const operation of ["platform.role-images.admission.recovery-terminal.get", "platform.role-images.supply-work.get"]) {
     const bindings=policy.bindings.filter(value=>value.operation_id===operation);
     assert.equal(bindings.length,1);assert.equal(bindings[0].caller_spiffe_id,"spiffe://kodex.local/ns/kodex-system/sa/image-admission-controller");
@@ -79,7 +79,7 @@ test("control-plane policy preserves exact bindings and excludes STT continuatio
   }
   assert.equal(policy.bindings.some(b=>b.operation_id==="platform.stt.policy.resolve"),false);
   for(const binding of policy.bindings) {
-    const original=source.policy.operation_bindings.find(b=>b.operation_id===binding.operation_id);
+    const original=source.policy.operation_bindings.find(b=>b.operation_id===binding.operation_id) ?? classification.operations.find(r=>r.operation_id===binding.operation_id).trusted_binding;
     for(const key of ["caller_spiffe_id","full_method","permission","project_required"]) assert.deepEqual(binding[key],original[key]);
   }
 });
@@ -96,4 +96,21 @@ test("delegation cannot be downgraded even with updated source digest",()=>{
   record.actor_mode="SERVICE_OWNER_RESOLVED";
   record.source_binding_sha256=bindingDigest(source.policy.operation_bindings.find(b=>b.operation_id===record.operation_id));
   assert.throws(()=>buildServicePolicy(source,copy));
+});
+test("trusted controller READ pair cannot expand methods, caller or protected authority",()=>{
+ for (const mutate of [
+   b=>b.full_method="/controlplane.v1.RoleImageService/CompleteImageAdmission",
+   b=>b.caller_spiffe_id="spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+   b=>b.project_required=true,
+   b=>b.permission="expanded.permission",
+   b=>b.actor_mode="USER_CREDENTIAL_REQUIRED",
+   b=>b.extra="unknown",
+ ]) {
+   const copy=structuredClone(classification), record=copy.operations.find(r=>r.trusted_binding);
+   mutate(record.trusted_binding); record.trusted_binding_sha256=bindingDigest(record.trusted_binding);
+   assert.throws(()=>buildServicePolicy(source,copy),/trusted controller read classification rejected/);
+ }
+ const changed=structuredClone(source), record=classification.operations.find(r=>r.trusted_binding);
+ changed.policy.operation_bindings.push({...record.trusted_binding,target_spiffe_id:source.policy.operation_bindings.find(b=>b.target_workload_id==="control-plane").target_spiffe_id});
+ assert.throws(()=>buildServicePolicy(changed,classification),/protected authority/);
 });

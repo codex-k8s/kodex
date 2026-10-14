@@ -4,9 +4,19 @@ title: Самонастройка и разработка Kodex средства
 type: operations
 status: approved
 owner: manager
-version: 1.1.10
+version: 1.1.11
 updated: 2026-10-14
 ---
+
+## 14.10.2026 09:40 UTC — восстановленный провайдер, следующий реальный Workflow
+
+- [x] Source/remote/HOT f24d8173, idle FF, render и штатная forward migration20261014000100.
+- [x] Actual managed task gen1 SUCCEEDED, account8→9/credential1→2;
+  exact REMOTE_CODEX catalog NONE/10models09:39:57, не inference.
+- [x] Provider UI «Готов», desktop/mobile screenshot, Console0 и bounded READ.
+- [ ] Опубликовать закрытую trusted-only READ classification2 и serving/source proof.
+- [ ] Native Developer ENV30/instructions3/checkpoints, ONE Reviewer, Manager/owner.
+- [ ] Paid credits/weekly-limit case, no-ID/lifecycle QA65, gates/bootstrap merge/main и приёмка.
 
 ## 14.10.2026 07:42 UTC — новый автономный этап обновления авторизации
 

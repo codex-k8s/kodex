@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.19
-updated: 2026-10-10
+version: 1.7.20
+updated: 2026-10-14
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -132,6 +132,15 @@ Local renderer дополнительно закрепляет read-only source 
 и не должны читаться application Pod через source mount. Профиль переносим
 между средами; сейчас разрешена только локальная активация. Staging и production
 требуют отдельных разрешений владельца.
+
+Генератор target-owned trusted-реестра явно отличает bindings защищённого
+профиля от двух READ-only методов `image-admission-controller`: проверки
+доступности supply work и чтения recovery terminal. Эта пара имеет собственные
+полные `trusted_binding` и digest в classification; её старый protected
+producer не восстанавливается ради генерации. Caller, method, permission,
+actor и отсутствие project override проверяются по закрытому набору. Из этой
+пары нельзя вывести новый метод, WRITE, человеческие полномочия либо protected
+authority; unknown поле и изменение любого binding закрыто отклоняются.
 
 Для реализации проверены Context7 `/kubernetes/website` (NetworkPolicy,
 securityContext), `/grpc/grpc-go` (transport credentials, metadata/interceptors),
