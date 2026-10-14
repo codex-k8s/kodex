@@ -24,6 +24,33 @@ func (server *appServer) observeFinancialWithinBudget(ctx context.Context, state
 	if !state.financialEnabled || state.financialSequence >= maximumSequence {
 		return nil
 	}
+	// После account/updated прежняя epoch больше не связывает read. Свежий
+	// account/read подтверждает только ordinary account type; identity по-прежнему
+	// берётся из private binding и проверяется в rate-limit response.
+	if state.financialEpoch != state.financialBoundEpoch {
+		epoch := state.financialEpoch
+		account, err := server.call(ctx, state, "account/read", map[string]bool{"refreshToken": false})
+		if err := classifyAccountReadResponse(account, err); err != nil {
+			return err
+		}
+		var response struct {
+			Account *struct {
+				Type string `json:"type"`
+			} `json:"account"`
+		}
+		if json.Unmarshal(account, &response) != nil {
+			return errAccountReadResponseInvalid
+		}
+		state.financialEnabled = response.Account != nil && response.Account.Type == "chatgpt"
+		if state.financialEnabled && epoch == state.financialEpoch {
+			state.financialBoundEpoch = epoch
+		}
+		if !state.financialEnabled {
+			state.financialSequence++
+			unavailable := runtimecontract.ProviderFinancialObservation{Sequence: state.financialSequence, State: "UNAVAILABLE"}
+			return state.publishActivity(runtimecontract.RuntimeActivity{Financial: &unavailable})
+		}
+	}
 	epoch := state.financialEpoch
 	raw, err := server.call(ctx, state, "account/rateLimits/read", map[string]bool{"supportsLunaReserve": false, "excludeResetCreditDetails": true})
 	state.financialSequence++

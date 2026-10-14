@@ -171,3 +171,54 @@ func TestFinancialBudgetPreservesFinalRead(t *testing.T) {
 		t.Fatal("collector exceeded the bounded observation budget")
 	}
 }
+
+func TestFinancialAuthEpochRequiresFreshAccountRead(t *testing.T) {
+	for _, changedDuringRead := range []bool{false, true} {
+		state := newProtocolState("")
+		state.financialEnabled = true
+		state.financialExpectedAccount = "synthetic-private-account"
+		state.financialEpoch, state.financialBoundEpoch = 2, 1
+		var observation *runtimecontract.ProviderFinancialObservation
+		state.onActivity = func(activity runtimecontract.RuntimeActivity) error {
+			observation = activity.Financial
+			return nil
+		}
+		messages := make(chan streamEvent, 3)
+		if changedDuringRead {
+			messages <- streamEvent{message: wireMessage{kind: messageNotification, method: "account/updated", payload: json.RawMessage(`{"authMode":null,"planType":null}`)}}
+		}
+		messages <- streamEvent{message: wireMessage{kind: messageResponse, id: json.RawMessage(`1`), payload: json.RawMessage(`{"requiresOpenaiAuth":true,"account":{"type":"chatgpt","email":null,"planType":"pro"}}`)}}
+		messages <- streamEvent{message: wireMessage{kind: messageResponse, id: json.RawMessage(`2`), payload: json.RawMessage(`{"accountId":"synthetic-private-account","rateLimits":{"primary":{"usedPercent":100},"credits":{"balance":"59999.1234567890123456789","hasCredits":true}}}`)}}
+		writes := 0
+		server := &appServer{stdin: &proofRequestWriter{beforeWrite: func() { writes++ }}, messages: messages}
+		if err := server.observeFinancial(t.Context(), state); err != nil || writes != 2 || observation == nil {
+			t.Fatal("fresh account binding was not read")
+		}
+		if (observation.State == "AVAILABLE") == changedDuringRead {
+			t.Fatal("auth epoch race produced a stale measurement")
+		}
+	}
+}
+
+func TestFinancialAuthChangeStopsReadsOutsideManagedAccount(t *testing.T) {
+	for _, account := range []string{`null`, `{"type":"apiKey"}`} {
+		state := newProtocolState("")
+		state.financialEnabled = true
+		state.financialEpoch, state.financialBoundEpoch = 2, 1
+		var observation *runtimecontract.ProviderFinancialObservation
+		state.onActivity = func(activity runtimecontract.RuntimeActivity) error {
+			observation = activity.Financial
+			return nil
+		}
+		messages := make(chan streamEvent, 1)
+		messages <- streamEvent{message: wireMessage{kind: messageResponse, id: json.RawMessage(`1`), payload: json.RawMessage(`{"requiresOpenaiAuth":false,"account":` + account + `}`)}}
+		writes := 0
+		server := &appServer{stdin: &proofRequestWriter{beforeWrite: func() { writes++ }}, messages: messages}
+		if err := server.observeFinancial(t.Context(), state); err != nil || state.financialEnabled || writes != 1 || observation == nil || observation.State != "UNAVAILABLE" {
+			t.Fatal("finance reader continued outside the managed account")
+		}
+		if err := server.observeFinancialFinal(t.Context(), state); err != nil || writes != 1 {
+			t.Fatal("final finance read reopened a disabled account path")
+		}
+	}
+}

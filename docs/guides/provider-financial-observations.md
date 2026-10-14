@@ -4,7 +4,7 @@ title: Наблюдения лимитов и credits Codex
 type: guide
 status: approved
 owner: developer
-version: 0.2.0
+version: 0.2.1
 updated: 2026-10-14
 ---
 
@@ -14,7 +14,7 @@ updated: 2026-10-14
 
 ## Путь данных
 
-Обычный авторизованный managed process после `account/read` для ChatGPT делает пассивное чтение с `supportsLunaReserve=false`, `excludeResetCreditDetails=true`. Новый collector требует private identity из проверенного immutable managed snapshot с `auth_mode=chatgpt`; external-token snapshot не активирует finance reader. Отсутствующий binding не назначается из email, routing или notification. Ответ сверяется с private expected accountId и process/auth epoch; missing/null остаётся unavailable, mismatch отклоняется без выдачи ID.
+Обычный авторизованный managed process после `account/read` для ChatGPT делает пассивное чтение с `supportsLunaReserve=false`, `excludeResetCreditDetails=true`. Новый collector требует private identity из проверенного immutable managed snapshot с `auth_mode=chatgpt`; external-token snapshot не активирует finance reader. Отсутствующий binding не назначается из email, routing или notification. Ответ сверяется с private expected accountId и process/auth epoch; missing/null остаётся unavailable, mismatch отклоняется без выдачи ID. После account/updated collector повторно читает account/read. Только стабильная epoch и ordinary ChatGPT type связывают новое чтение; смена epoch во время metadata read сохраняет unavailable. Signed-out/API-key metadata закрывают finance reader после unavailable observation. Identity и credential fence по-прежнему не назначаются из account/read.
 
 Финальное чтение выполняется до остановки активного процесса. `account/rateLimits/updated` только будит повторное чтение; из notification нельзя получить account authority. Чтения ограничены 64 наблюдениями на execution: обычные чтения используют максимум63, последний слот резервируется для финального read. Достигнутый предел очищает wake без дополнительного RPC. Дополнительный idle process, копия credentials и internal-only `chatgptAuthTokens` для finance не используются. Новый external-token auth/deployment gate этим изменением не разрешается.
 
