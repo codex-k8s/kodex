@@ -11,10 +11,19 @@ import (
 )
 
 func (server *appServer) observeFinancial(ctx context.Context, state *protocolState) error {
-	if !state.financialEnabled || state.financialSequence >= 64 {
+	// Последний из 64 слотов сохраняется для чтения перед stop/join.
+	return server.observeFinancialWithinBudget(ctx, state, 63)
+}
+
+func (server *appServer) observeFinancialFinal(ctx context.Context, state *protocolState) error {
+	return server.observeFinancialWithinBudget(ctx, state, 64)
+}
+
+func (server *appServer) observeFinancialWithinBudget(ctx context.Context, state *protocolState, maximumSequence int64) error {
+	state.financialWake = false
+	if !state.financialEnabled || state.financialSequence >= maximumSequence {
 		return nil
 	}
-	state.financialWake = false
 	epoch := state.financialEpoch
 	raw, err := server.call(ctx, state, "account/rateLimits/read", map[string]bool{"supportsLunaReserve": false, "excludeResetCreditDetails": true})
 	state.financialSequence++

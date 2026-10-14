@@ -292,7 +292,7 @@ func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt [
 	if err := state.bindThreadRead(raw); err != nil {
 		return Result{}, atProviderStage(providerStageThreadRead, server.abort(ctx, state, err))
 	}
-	if err := server.observeFinancial(ctx, state); err != nil {
+	if err := server.observeFinancialFinal(ctx, state); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
 	if err := server.stop(state); err != nil {

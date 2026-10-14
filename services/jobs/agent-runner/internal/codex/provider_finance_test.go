@@ -142,3 +142,32 @@ func TestFinancialCollectorRequiresOrdinaryManagedIdentity(t *testing.T) {
 		}
 	}
 }
+
+func TestFinancialBudgetPreservesFinalRead(t *testing.T) {
+	state := newProtocolState("")
+	state.financialEnabled = true
+	state.financialSequence = 63
+	state.financialWake = true
+	delivered := 0
+	state.onActivity = func(activity runtimecontract.RuntimeActivity) error {
+		if activity.Financial == nil || activity.Financial.Sequence != 64 {
+			t.Fatal("final observation sequence is invalid")
+		}
+		delivered++
+		return nil
+	}
+	writes := 0
+	messages := make(chan streamEvent, 1)
+	messages <- streamEvent{message: wireMessage{kind: messageResponse, id: json.RawMessage(`1`), payload: json.RawMessage(`{"accountId":null,"rateLimits":{}}`)}}
+	server := &appServer{stdin: &proofRequestWriter{beforeWrite: func() { writes++ }}, messages: messages}
+	if err := server.observeFinancial(t.Context(), state); err != nil || writes != 0 || delivered != 0 || state.financialWake {
+		t.Fatal("wake consumed the reserved final read")
+	}
+	if err := server.observeFinancialFinal(t.Context(), state); err != nil || writes != 1 || delivered != 1 {
+		t.Fatal("final read was not delivered before process stop")
+	}
+	state.financialWake = true
+	if err := server.observeFinancialFinal(t.Context(), state); err != nil || writes != 1 || delivered != 1 || state.financialWake {
+		t.Fatal("collector exceeded the bounded observation budget")
+	}
+}
