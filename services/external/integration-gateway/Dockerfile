@@ -25,9 +25,22 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -o /out/integration-gateway ./cmd/integration-gateway
 
-FROM docker.io/library/alpine:3.23@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40 AS runtime
+FROM build AS synthetic-build
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
+    -ldflags="-s -w -X main.version=${VERSION}" \
+    -o /out/integration-synthetic ./cmd/integration-synthetic
+
+FROM docker.io/library/alpine:3.23@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40 AS runtime-base
 RUN apk add --no-cache git=2.52.0-r0 ca-certificates && \
     addgroup -g 10001 kodex && adduser -D -H -u 10001 -G kodex kodex
+
+# Существующий тестовый adapter имеет отдельный образ и не попадает в gateway.
+FROM runtime-base AS synthetic
+COPY --from=synthetic-build --chmod=0555 /out/integration-synthetic /usr/local/bin/integration-synthetic
+USER 10001:10001
+ENTRYPOINT ["/usr/local/bin/integration-synthetic"]
+
+FROM runtime-base AS runtime
 COPY --from=build --chmod=0555 /out/integration-gateway /usr/local/bin/integration-gateway
 USER 10001:10001
 ENTRYPOINT ["/usr/local/bin/integration-gateway"]

@@ -4,7 +4,7 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.1.0
 updated: 2026-10-15
 ---
 
@@ -26,6 +26,13 @@ Kodex переходит с hot reload на штатные собранные im
 Kodex TLS, SSO и backend остаются отдельными. Связность между ingress и
 Kodex проверяется до выбора exact upstream; общий доступ между сетями,
 TLS skip, wildcard route/egress и копирование чужих секретов запрещены.
+
+После проверки текущего ingress выбран Host routing с публичным TLS на
+внешнем ingress и повторным HTTPS до отдельного Kodex ingress. Публичные
+сертификаты выпускает существующий ACME resolver только для новых Kodex
+hostnames; private keys не копируются между кластерами. Вверх доставляется
+только публичная CA для проверки exact upstream SNI. Это не требует менять
+глобальный HTTP redirect или challenge handler соседнего приложения.
 
 # Этапы
 
@@ -88,3 +95,59 @@ PostgreSQL/NATS/session-store/S3 по одному; их данные не тр�
 
 Реализация, сборка, live cutover, certificates и внешняя browser-проверка
 пока NOT RUN. Рабочий main и действующие Pod не менялись.
+
+# Матрица компонентов и оставшихся ограничений
+
+| Область | Штатная цель | Условие перед применением |
+| --- | --- | --- |
+| Go приложения и фоновые контроллеры | 2 compiled Pod | Exact image/provenance, сохранённые Secret references, CAS, idle/drain и существующие leases/claims |
+| `session-archive` | 2 compiled Pod | Сохранить аргумент `controller`; не подменять его одноразовым execution |
+| `integration-synthetic` | 2 compiled Pod текущего стенда | Отдельный существующий fixture adapter в target `synthetic`, не внутри рабочего gateway |
+| Фронтенд | 2 nginx Pod из сборки | Удалить Vite/source mounts; согласовать штатные TLS/Service/ServersTransport и runtime ConfigMap |
+| Keycloak | 2 Pod | Вместо local cache — поддерживаемый кластерный cache, exact peer network rules; PostgreSQL остаётся одним |
+| oauth2-proxy | 2 Pod | Сохранить Redis/TLS session store, согласовать issuer/callback/logout/cookies с внешними hostnames |
+| Registry | 2 Pod на роль | Общее существующее хранилище, exact node для local RWO, общий HTTP upload secret; pull/push/promotion/evidence identities не смешиваются |
+| BuildKit и image workers | 2 Pod | Изолированные scratch/cache и существующие атомарные claim/fence; новый Pod не дублирует задачу |
+| Grafana | 2 Pod | Нельзя независимо запускать два SQLite; сначала поддерживаемая общая БД с сохранением данных и SSO |
+| Alertmanager | 2 Pod | Настройка cluster peers и отдельных PVC через авторитетный operator, не ручной patch его StatefulSet |
+| PostgreSQL, NATS, S3, Redis, Prometheus TSDB | Без репликации | Не менять данные, volumes или количество Pod хранилищ |
+| Runtime execution, Job, CronJob, DaemonSet | По своему контракту | Не превращать один execution/одноразовую task в две работы |
+| Ingress и certificate controllers Kodex | 2 сервисные реплики | Проверить их собственный leader/storage protocol; не масштабировать соседние controllers |
+
+Inventory не выдаёт неизвестный StatefulSet за исключённую БД: Grafana и
+Alertmanager относятся к сервисам с обязательной storage review. Discovery
+основного списка покрывает четыре платформенных namespace; cluster ingress
+и certificate controllers дополнительно проверены read-only, но полный
+release/fence matrix ещё не завершён. Пункт 2 остаётся незакрытым.
+
+# Журнал реализации до первого применения
+
+15.10.2026: main `8c19ffb76328ae559698fae2806be79ef0bd64ae` не изменялся.
+Новый код находится в отдельной ветке PR [#1811](https://github.com/codex-k8s/kodex/pull/1811).
+
+- PASS: read-only inventory 141 ресурсов; 13 платформенных Deployment с hot
+  commands, две oauth proxy deployment уже имеют по две реплики. Это не
+  доказательство готовности новой поставки.
+- PASS: 18 Node unit tests моделей inventory/cutover/public edge и реального
+  ограниченного Bash build pool. Проверены отказ на unknown binary, wrong
+  source command, placeholder digest, shared dev mounts, single-Pod PVC,
+  unsafe registry storage, wildcard routing, public listener и broad peers.
+- PASS: Go toolchain contract с repo-pinned Go1.26.6; `bash -n`, `shellcheck`
+  release builder и `git diff --check`. Первый запуск с системным Go1.27.1
+  завершился FAIL; повтор выполнен с правильным toolchain и без чужого GOROOT.
+- Реализован отдельный immutable Docker target существующего synthetic
+  adapter. Рабочий integration gateway этот binary не содержит.
+- Сборка релиза имеет бюджет 1..4, по умолчанию 2. Обычные buildctl процессы
+  ограничены пулом; отказ дожидается batch и запрещает публикацию release lock.
+  Runner и зависящий от него role base сохраняют порядок.
+- Public edge model/plan создаёт только добавочные exact Host resources и
+  приватный loopback relay с exact peers. Existing ingress Deployment,
+  публичные80/443, firewall и глобальные redirect/ACME параметры не меняются.
+- Chrome MCP подключён, собственная вкладка обновлена без несохранённого
+  ввода; чужие вкладки не затрагивались.
+- NOT RUN: build/push новых OCI, live apply, две рабочие реплики, публичный
+  certificate, новый OIDC login/logout и внешняя browser-приёмка.
+
+Эти проверки относятся к изменённому дереву после `d4c77e18c28d7393e3f54bd6f83c08b99a66c0bb`;
+после коммита точный проверенный SHA фиксируется отдельной записью. Модели и
+план не объявляются завершёнными executable apply/rollback.

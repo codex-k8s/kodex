@@ -11,7 +11,8 @@ usage() {
     "Usage: $0 --source-sha <40-hex> --output <release-lock.json>" \
     '  --registry-push <host[:port][/prefix]> --node-pull <host[:port][/prefix]>' \
     '  [--repository-prefix <path>] [--build-proxy <url> --build-no-proxy <list>]' \
-    '  [--profile <web-only|web-with-mattermost>] [--build-run-id <digits>]' >&2
+    '  [--profile <web-only|web-with-mattermost>] [--build-run-id <digits>]' \
+    '  [--parallelism <1..4>]' >&2
 }
 
 source_sha=""
@@ -23,6 +24,7 @@ build_proxy=""
 build_no_proxy=""
 build_run_id="${GITHUB_RUN_ID:-local}"
 profile="web-only"
+parallelism=2
 
 while (($# > 0)); do
   case "$1" in
@@ -35,6 +37,7 @@ while (($# > 0)); do
     --build-no-proxy) build_no_proxy="${2:-}"; shift 2 ;;
     --build-run-id) build_run_id="${2:-}"; shift 2 ;;
     --profile) profile="${2:-}"; shift 2 ;;
+    --parallelism) parallelism="${2:-}"; shift 2 ;;
     --help) usage; exit 0 ;;
     *) usage; fail "unsupported argument: $1" ;;
   esac
@@ -48,6 +51,7 @@ valid_registry_path() {
 [[ "$source_sha" =~ ^[a-f0-9]{40}$ ]] || fail 'source SHA must be exact lowercase 40-hex'
 [[ "$profile" == "web-only" || "$profile" == "web-with-mattermost" ]] || fail 'release profile is invalid'
 [[ -n "$output" ]] || fail 'output path is required'
+[[ "$parallelism" =~ ^[1-4]$ ]] || fail 'parallelism must be between 1 and 4'
 valid_registry_path "$registry_push" || fail 'registry push path is invalid'
 valid_registry_path "$node_pull" || fail 'node pull path is invalid'
 registry_push_host=${registry_push%%/*}
@@ -95,7 +99,18 @@ if [[ -n "$build_proxy" ]]; then
 fi
 
 temporary_directory=$(mktemp -d)
-trap 'rm -rf -- "$temporary_directory"' EXIT
+build_pids=()
+cleanup() {
+  # Контекст нельзя удалять, пока дочерняя сборка продолжает его читать.
+  if ((${#build_pids[@]} > 0)); then
+    kill -- "${build_pids[@]}" 2>/dev/null || true
+    for build_pid in "${build_pids[@]}"; do wait "$build_pid" 2>/dev/null || true; done
+  fi
+  rm -rf -- "$temporary_directory"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 metadata_directory="$temporary_directory/metadata"
 source_context="$temporary_directory/source"
 mkdir -p "$metadata_directory" "$source_context"
@@ -123,13 +138,24 @@ admission_tools_digest=$(jq -r '."containerimage.digest" // empty' \
 admission_tools_build_ref="$registry_push/$repository_prefix/$admission_tools_component@$admission_tools_digest"
 admission_tools_pull_ref="$node_pull/$repository_prefix/$admission_tools_component@$admission_tools_digest"
 
-while IFS=$'\t' read -r component dockerfile target; do
+wait_build_batch() {
+  local failed=false build_pid
+  for build_pid in "${build_pids[@]}"; do
+    wait "$build_pid" || failed=true
+  done
+  build_pids=()
+  [[ "$failed" == false ]] || fail 'component build failed'
+}
+
+build_component() {
+  local component="$1" dockerfile="$2" target="$3" destination agent_runner_digest
+  local -a target_options=() component_options=()
   [[ "$component" =~ ^[a-z0-9-]+$ ]] || fail 'invalid component name'
   "$repository_root/tools/release/validate-image-dockerfile-path.sh" "$dockerfile" ||
     fail "invalid Dockerfile path for $component"
   [[ -f "$repository_root/$dockerfile" ]] || fail "Dockerfile is missing for $component"
   case "$component:$target" in
-    role-image-builder:runtime|image-admission:admission-runtime|email-bridge:runtime|email-bridge-migration:migration|*:) ;;
+    role-image-builder:runtime|image-admission:admission-runtime|email-bridge:runtime|email-bridge-migration:migration|integration-synthetic:synthetic|*:) ;;
     *) fail "unexpected Dockerfile target for $component" ;;
   esac
 
@@ -145,12 +171,10 @@ while IFS=$'\t' read -r component dockerfile target; do
       "$repository_root/scripts/build-agent-runner-image.sh" \
         --builder docker --context "$source_context" --dockerfile "$source_context/$dockerfile" \
         --tag "$destination" --network host
-    continue
+    return
   fi
 
-  target_options=()
   [[ -z "$target" ]] || target_options=(--opt "target=$target")
-  component_options=()
   if [[ "$component" == image-admission ]]; then
     component_options=(--opt "build-arg:ADMISSION_TOOLS_IMAGE=$admission_tools_build_ref")
   elif [[ "$component" == role-base-documents ]]; then
@@ -158,7 +182,7 @@ while IFS=$'\t' read -r component dockerfile target; do
     [[ "$agent_runner_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || fail 'agent-runner digest is unavailable for role base'
     component_options=(--opt "build-arg:AGENT_RUNNER_IMAGE=$registry_push/$repository_prefix/agent-runner@$agent_runner_digest")
   fi
-  "$buildctl_path" --addr "$buildkit_host" build \
+  exec "$buildctl_path" --addr "$buildkit_host" build \
     --frontend dockerfile.v0 \
     --local context="$source_context" \
     --local dockerfile="$source_context/$(dirname -- "$dockerfile")" \
@@ -170,7 +194,23 @@ while IFS=$'\t' read -r component dockerfile target; do
     "${proxy_frontend_options[@]}" \
     --output "type=image,name=$destination,push=true" \
     --metadata-file "$metadata_directory/$component.json"
+}
+
+while IFS=$'\t' read -r component dockerfile target; do
+  if [[ "$component" == agent-runner ]]; then
+    # Специализированная сборка runner владеет собственной цепочкой процессов.
+    # Она не входит в параллельный пул обычных buildctl процессов.
+    wait_build_batch
+    (build_component "$component" "$dockerfile" "$target")
+    continue
+  fi
+  # role-base потребляет exact digest runner, а не будущий mutable tag.
+  [[ "$component" != role-base-documents ]] || wait_build_batch
+  build_component "$component" "$dockerfile" "$target" &
+  build_pids+=("$!")
+  ((${#build_pids[@]} < parallelism)) || wait_build_batch
 done < <(jq -r '.images[] | [.component, .dockerfile, (.target // "")] | @tsv' "$manifest")
+wait_build_batch
 
 role_image_input_result="$temporary_directory/role-image-input.json"
 (
