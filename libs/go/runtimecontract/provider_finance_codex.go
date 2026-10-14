@@ -18,6 +18,9 @@ func ParseCodexFinancialObservation(raw json.RawMessage, sequence int64) Provide
 	if json.Unmarshal(raw, &response) != nil || response == nil {
 		return unavailable
 	}
+	if !financialKnownFields(response, "ordinaryUsageAllowed", "rateLimits", "rateLimitsByLimitId", "rateLimitResetCredits", "accountId", "rateLimitUpsell") {
+		return unavailable
+	}
 	selected := response["rateLimits"]
 	if byID := response["rateLimitsByLimitId"]; len(byID) > 0 && !bytes.Equal(bytes.TrimSpace(byID), []byte("null")) {
 		var buckets map[string]json.RawMessage
@@ -28,6 +31,9 @@ func ParseCodexFinancialObservation(raw json.RawMessage, sequence int64) Provide
 	}
 	var bucket map[string]json.RawMessage
 	if json.Unmarshal(selected, &bucket) != nil || bucket == nil {
+		return unavailable
+	}
+	if !financialKnownFields(bucket, "limitId", "limitName", "normalModelSlug", "primary", "secondary", "credits", "individualLimit", "spendControlReached", "planType", "rateLimitReachedType") {
 		return unavailable
 	}
 	if id := bucket["limitId"]; len(id) > 0 && !bytes.Equal(bytes.TrimSpace(id), []byte("null")) {
@@ -49,6 +55,9 @@ func ParseCodexFinancialObservation(raw json.RawMessage, sequence int64) Provide
 		if json.Unmarshal(bucket[key], &window) != nil || window == nil {
 			continue
 		}
+		if !financialKnownFields(window, "usedPercent", "windowDurationMins", "resetsAt") {
+			return unavailable
+		}
 		used := financialInteger(window["usedPercent"], 0, 100)
 		if used == nil {
 			continue
@@ -57,6 +66,9 @@ func ParseCodexFinancialObservation(raw json.RawMessage, sequence int64) Provide
 	}
 	var credits map[string]json.RawMessage
 	if json.Unmarshal(bucket["credits"], &credits) == nil && credits != nil {
+		if !financialKnownFields(credits, "hasCredits", "unlimited", "balance") {
+			return unavailable
+		}
 		value.Credits = &ProviderFinancialCredits{HasCredits: financialBool(credits["hasCredits"]), Unlimited: financialBool(credits["unlimited"])}
 		var balance string
 		if json.Unmarshal(credits["balance"], &balance) == nil && financialBalance.MatchString(balance) {
@@ -67,6 +79,24 @@ func ParseCodexFinancialObservation(raw json.RawMessage, sequence int64) Provide
 		return unavailable
 	}
 	return value
+}
+
+// Allowlist закреплён account.rs Codex0.160.0; новые wire поля требуют проверки
+// контракта. Известные presentation metadata не переносятся в проекцию.
+func financialKnownFields(object map[string]json.RawMessage, allowed ...string) bool {
+	for key := range object {
+		known := false
+		for _, name := range allowed {
+			if key == name {
+				known = true
+				break
+			}
+		}
+		if !known {
+			return false
+		}
+	}
+	return true
 }
 
 func financialBool(raw json.RawMessage) *bool {

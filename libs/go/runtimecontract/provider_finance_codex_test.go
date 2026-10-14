@@ -56,3 +56,23 @@ func TestFinancialPresenceFieldsRemainIndependent(t *testing.T) {
 		t.Fatal("unknown became a measurement")
 	}
 }
+
+func TestCodexFinancialUnknownWireFieldsCloseProjection(t *testing.T) {
+	for _, raw := range []string{
+		`{"rateLimits":{},"paidContinuationAllowed":true}`,
+		`{"rateLimits":{"remaining":0}}`,
+		`{"rateLimits":{"primary":{"usedPercent":100,"resetAt":1800000000}}}`,
+		`{"rateLimits":{"credits":{"hasCredits":true,"balance":"59999","currency":"USD"}}}`,
+		`{"rateLimitsByLimitId":{"codex":{"credits":{"unlimited":true,"paid":true}}},"rateLimits":{}}`,
+	} {
+		observation := ParseCodexFinancialObservation(json.RawMessage(raw), 3)
+		if observation.State != "UNAVAILABLE" || observation.Sequence != 3 || observation.Validate() != nil {
+			t.Fatal("unknown wire field produced a measurement")
+		}
+	}
+	// Supported metadata отбрасываются, не расширяя публичный subset.
+	observation := ParseCodexFinancialObservation(json.RawMessage(`{"rateLimits":{"limitId":"codex","limitName":null,"normalModelSlug":null,"planType":"pro","individualLimit":null,"primary":{"usedPercent":100},"credits":{"hasCredits":true,"balance":"59999"}},"rateLimitResetCredits":null,"rateLimitUpsell":null,"accountId":null,"ordinaryUsageAllowed":null}`), 4)
+	if observation.State != "AVAILABLE" || observation.Credits == nil || observation.Credits.Balance == nil || *observation.Credits.Balance != "59999" {
+		t.Fatal("supported metadata blocked independent measurements")
+	}
+}
