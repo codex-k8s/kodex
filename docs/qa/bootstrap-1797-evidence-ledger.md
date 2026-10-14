@@ -4,9 +4,26 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.15
+version: 1.0.16
 updated: 2026-10-14
 ---
+
+## 14.10.2026 11:40 UTC — no-ID SYSTEM и причина queued claim
+
+- SYSTEM no-ID READ-only запрос о лимитах/кредитах PASS: самостоятельно
+  разрешены1796/текущий Architect/прежний retry, три READ tools, без мутаций.
+- PROJECT аналогичный запрос QUEUED: completion NOT RUN. Native Architect
+  SUCCEEDED с четырьмя design findings; Developer QUEUED без lease, Review0.
+- Claim candidates обоих run соответствуют authoritative SQL; аккаунт свободен,
+  admission/promotion/configuration/ENV/contract pins совпадают.
+- Серия21 read-only pg_stat samples обнаружила runtime_files_capture_entries
+  около3.94s внутри4.77s транзакции; claim deadline5s вызывает rollback/retry.
+- Read-only EXPLAIN ANALYZE:672 результата, повторный visibility nested loop3
+  прохода/4.884s → MATERIALIZED один проход/1.677s. JIT не причина.
+- Go regression/database-error tests PASS0.068s, maintenance guard2 PASS.
+  Disposable coordinator/Retry PASS17.405s, live delivery NOT RUN на этом checkpoint.
+- Desktop screenshot/Console0/API200/reload/rejoin проверены; новые native
+  Developer12GiB, финальный ONE Review/Manager и остальные QA ещё не PASS.
 
 ## 14.10.2026 10:35 UTC — cancelled intent и native INTAKE PASS
 

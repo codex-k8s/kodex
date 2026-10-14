@@ -4,7 +4,9 @@ WITH catalog AS MATERIALIZED (
         control_plane.runtime_file_coordinator(organization_id,actor_id,project_id,agent_id,node_id) AS is_coordinator
     FROM control_plane.runtime_file_catalogs
     WHERE id=@catalog_id::uuid
-), candidates AS (
+-- Материализация не позволяет planner повторять дорогую проверку видимости
+-- для каждой ветви UNION и каждого прохода вложенного соединения.
+), candidates AS MATERIALIZED (
     SELECT artifact.id,artifact.ref,artifact.revision,artifact.version,artifact.digest,artifact.file_name,
         artifact.media_type,artifact.size_bytes,'PROJECT'::text AS purpose,artifact.source,
         artifact.ref AS source_ref,''::text AS source_revision_ref

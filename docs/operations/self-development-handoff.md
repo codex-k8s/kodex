@@ -4,11 +4,41 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.15
+version: 1.1.16
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 11:40 UTC — причина очереди и SQL исправление
+
+Provider готов: account AUTHORIZED, active executions0/max10, credential2,
+каталог REMOTE_CODEX/NONE. INTAKE и Architect SUCCEEDED; Architect передал
+четыре bounded finding и CODE_ONLY дизайн. Developer делегирован в
+run_ZFTAokhCuuF4QYo2zF94dXFU, но QUEUED без lease; ENV30/12GiB/4CPU ещё
+не проверены исполняющимся Pod. Root retry10 RUNNING/seq966, Review0.
+
+Реальный SYSTEM no-ID запрос о задаче лимитов и кредитов PASS: помощник
+сам нашёл Issue1796, назвал актуальный этап и прежний неуспешный retry,
+выполнил только три READ tools. PROJECT аналогичный запрос принят, но стоит
+в очереди; результата пока нет. Desktop screenshot просмотрен, сообщения
+справа/слева и компактные tools корректны, Console0/API200, reload/rejoin PASS.
+
+Причина очереди — runtime_files_capture_entries: повторные nested-loop проходы
+вызывали eligibility трижды, каталог из672 файлов занимал4.88s плюс прочие
+операции, срывая5s claim. Read-only EXPLAIN ANALYZE на тех же данных:
+candidates MATERIALIZED сохраняет672 результата и сокращает время до1.68s;
+JIT on/off не меняет причину. Правила доступа и immutable pins не ослаблены.
+Адресные Go tests PASS0.068s; два теста maintenance guard PASS. Disposable
+координатор и Retry PASS17.405s, включая собственный paginated manifest и
+сохранение eligibility/актуального retry root. Включение исправления NOT RUN.
+
+Для включения добавлен узкий repo-owned queued-runtime-source-update:
+разрешён только закрытый SQL/test/doc diff; выполняющихся AGENT_EXECUTION,
+CLAIMED leases и supply-chain work быть не должно. Controller quiesce →
+fresh idle-turn readback → FF → exact serving ELF → restore. Published image
+pins сохраняются. Это не отменяет общий idle gate runner/policy и не разрешает
+смену authority, миграций или образов при активной работе.
 
 ## Checkpoint 14.10.2026 10:35 UTC — INTAKE успешен, Architect в работе
 
