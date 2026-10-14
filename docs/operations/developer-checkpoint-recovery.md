@@ -4,7 +4,7 @@ title: Контрольные точки и продолжение разраб�
 type: operations
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.0.1
 updated: 2026-10-14
 ---
 
@@ -41,6 +41,7 @@ Developer и Manager дополняются общим правилом сохр
 - [x] Editable инструкции сохранены, validated, опубликованы и exact binding readback подтверждён.
 - [x] Future Workflow publication и сохранение прочих security/lifecycle полей подтверждены.
 - [x] Штатное продолжение исходной задачи, не новый business prompt.
+- [x] Новая attempt самостоятельно восстановила существующий собственный PR и точный checkpoint в отдельном workspace.
 - [ ] Реальный final Developer → один Reviewer → Manager/owner.
 
 Readback13:55–13:59 UTC: Developer revision4/agent44/binding4,
@@ -56,6 +57,16 @@ step-004: это новые server-owned keys будущей revision, не из
 исторического графа. Fresh Retry11/run_4E4x4FCjIg44_NnXl35XGlil RUNNING,
 retryOf original10, прежняя root session сохранена. Новый бизнес-текст и
 host business implementation отсутствуют; final/Review пока NOT RUN.
+
+14.10.2026 15:25 UTC actual Developer retry11
+run_9_JUkSv_xFac1SII28AUnI42/Podruntime-turn-fa1eba14e45bedea:
+самостоятельно создан checkout /workspace/work/issue-1796 на прежней ветке
+developer/issue-1796-supported-finance-ZFTA, HEAD
+a00706022058573157fe50bf431aa67485507b03, status clean. GitHub
+READ подтверждает тот же head/base main у Draft1809; прежний Draft1808
+не изменён. Host прочитал только Git metadata, не переносил checkout,
+не писал business code и не отправлял исправляющее USER сообщение.
+Это LIVE PASS восстановления checkpoint, не final/tests/Review PASS.
 
 # Дополнение editable инструкций
 
