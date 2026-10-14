@@ -4,11 +4,37 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.23
+version: 1.1.24
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 15:23 UTC — Developer начал исходную задачу
+
+SOURCE/remote/Draft1807 fb120a12c7e801e62e8879eba4c8844486da5797 MATCH,
+HOT0b5af51c clean. Chrome MCP own36 подключён, SSO сохранена;
+reload после проверки пустого draft, realtime «Подключено», Console0 и
+проверенные session/bootstrap/graph API200. Чужие вкладки не изменены.
+
+Retry11/rootrun_4E4x4FCjIg44_NnXl35XGlil RUNNING/sequence968;
+Developer run_9_JUkSv_xFac1SII28AUnI42 RUNNING, штатные READ tools продолжаются.
+Pod runtime-turn-fa1eba14e45bedea/UID086b5bc0-dc8e-492e-a2ec-6197717cf57b:
+три контейнера Ready/restarts0, provider requests/limits4CPU/12GiB,
+image5cc8533b…9f0d5. RuntimeRevisionrrev_hnaJ1c-K8SoEkIk1PzL_poli
+digest9c686224…ff237 назначена15:07:04 UTC: ENV30/binding31 и новая
+Developer instruction4/ins_8USqmczP7X5WoeXl7YSUtwx- подтверждены через
+авторитетный public runtime-revision-diff. Материализованный digest инструкции
+не подменяется digest её исходного content. Новой git-контрольной точки этого
+Developer пока не наблюдалось; прежний business1809/a0070602 сохранён.
+
+Адресный frontend i18n test на HOT0b5af51c PASS11/11 за5.84s;
+его frontend tree идентичен SOURCEfb120a12. Это свежий успешный повтор,
+исторический5s timeout FAIL не удаляется и full frontend baseline не заявляется.
+WORKFLOW_METADATA code205 готов, но NOT SERVING: root RUNNING не позволяет
+idle FF. Следующие обязательные шаги прежние: native Developer final →
+ONE Review → Manager/owner, безопасная доставка metadata/native повтор,
+supported paid/weekly, остатки QA65, bootstrap gates/main и ручная приёмка.
 
 ## Checkpoint 14.10.2026 15:07 UTC — Architect завершён, ambiguity PASS
 

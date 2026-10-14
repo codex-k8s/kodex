@@ -4,9 +4,18 @@ title: Самонастройка и разработка Kodex средства
 type: operations
 status: approved
 owner: manager
-version: 1.1.16
+version: 1.1.17
 updated: 2026-10-14
 ---
+
+## 14.10.2026 15:23 UTC — актуальная инструкция нового Developer
+
+- [x] Retry11 actual RuntimeRevision: ENV30/binding31, instruction4,
+  gpt-6.1-sol; provider4CPU/12GiB, image5cc, все контейнеры Ready/restarts0.
+- [x] Own36 Chrome MCP/SSO/reload/realtime; Console0, проверенные API200.
+- [x] Frontend i18n адресный повтор PASS11/11 наHOT0b5af51c/source-equivalent tree.
+- [ ] Native финальные код/tests/push, ONE Review, Manager/owner и paid case.
+- [ ] Idle delivery WORKFLOW_METADATA/native повтор, QA65 и bootstrap gates/main.
 
 ## 14.10.2026 14:00 UTC — актуальный остаток
 

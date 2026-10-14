@@ -4,9 +4,22 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.23
+version: 1.0.24
 updated: 2026-10-14
 ---
+
+## 14.10.2026 15:23 UTC — runtime нового Developer и свежая локализация
+
+- SOURCE/remote/PRfb120a12 MATCH; HOT0b5af51c clean. Own36 Chrome MCP доступен,
+  SSO/reload/realtime PASS; Console0, проверенные API200, overflowfalse.
+- Developer run_9_JUkSv_xFac1SII28AUnI42 RUNNING, Podfa1eba14 all Ready,
+  restarts0. Actual provider4CPU/12GiB и exact image5cc подтверждены;
+  public RuntimeRevisionrrev_hnaJ1c-K8SoEkIk1PzL_poli pins ENV30/binding31,
+  modelgpt-6.1-sol и новую instruction4. Final/checkpoint/Review ещё OPEN.
+- HOT frontend i18n unit PASS11/11 за5.84s, source frontend tree MATCH;
+  исторический timeout FAIL сохранён. Не full frontend или GitHub CI PASS.
+- RootRUNNING968 запрещает metadata idle cutover; работающие агенты не
+  перезапускались. Paid/live Workflow/QA65/bootstrap gates не выполнены.
 
 ## 14.10.2026 15:07 UTC — exact205 и новые живые доказательства
 
