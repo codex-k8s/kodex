@@ -4,9 +4,31 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.20
+version: 1.0.21
 updated: 2026-10-14
 ---
+
+## 14.10.2026 14:00 UTC — actual reader/UX и штатное восстановление
+
+- HOT/source/remote0b5af51c MATCH, idle FF13:48:17; CP ELFe3cba371…9df0,
+  RC96bf385b…945 MATCH host. Owner reader0 active/claimed, published85/pinsf822 unchanged.
+- Named metadata natural PROJECT PASS: cnv_Nk_E-_v6HnBODlxAq9Pxi6QX,
+  four READ tools, правильные Developer/gpt-6.1-sol/ENV30/4CPU/12GiB.
+  Предыдущий semantic FAIL сохранён как история; ID/карточка не потребовались.
+- Actual desktop/mobile screenshots PASS после штатного двухступенчатого SSO;
+  Console0, relevant API200, horizontal overflowfalse. Mobile outline читаемый.
+  Explicit switch/resize и fresh mobile initial viewport пока NOT RUN.
+- Retry10 actual FAILED/RUNTIME_TIMEOUT13:46:35, final/Review NOT RUN;
+  business1809 remotea00706022058573157fe50bf431aa67485507b03 checkpoint сохранён.
+  Host business edits/USER business corrections0, owner approve/merge0.
+- Editable Developer4/Manager5/Reviewer4 content SHA и binding MATCH,
+  exact single-consumer impact APPLIED. Scoped пять циклов Manager устранены,
+  Reviewer scoped ONE exception добавлено. Workflow49/revision16 PUBLISHED,
+  IMPLEMENTATION14400s, остальные semantic fields/grants/gates MATCH;
+  editor назначил новые future step keys, прежние run/revision не менялись.
+- Original Retry11/run_4E4x4FCjIg44_NnXl35XGlil RUNNING13:59:06,
+  session сохранена. Новый native final/ONE Review/Manager ещё не выполнены.
+  Paid/QA65/bootstrap gates остаются OPEN; checkpoint не готовность приложения.
 
 ## 14.10.2026 13:35 UTC — exact published metadata code и следующий UX шаг
 

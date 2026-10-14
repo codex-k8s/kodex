@@ -4,7 +4,7 @@ title: Чтение модели и ресурсов сотрудника пом
 type: operations
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.0.1
 updated: 2026-10-14
 ---
 
@@ -41,8 +41,8 @@ SYSTEM не превращается в право читать чужой tenan
 - [x] Canonical response модели и resource policy; private env/Secret/instruction fields отсутствуют.
 - [x] Callback schema/parser/caster/pagination и guidance, без legacy decoder.
 - [x] Быстрые unit и disposable positive/foreign/stale/expiry/no-effect проверки.
-- [ ] Repo-owned доставка только при безопасном останове текущих model turns; exact source/serving readback.
-- [ ] Повтор того же натурального вопроса, ответ с фактическими model/CPU/memory, Console/Network/UX.
+- [x] Repo-owned доставка только при безопасном останове текущих model turns; exact source/serving readback.
+- [x] Повтор того же натурального вопроса, ответ с фактическими model/CPU/memory, Console/Network/UX.
 
 Code-tree evidence14.10: callback package PASS6.580s, CP projection tests
 PASS0.086s, disposable ProjectAssistantIntegrationGrantsComponent PASS49.334s
@@ -51,3 +51,11 @@ PASS0.086s, disposable ProjectAssistantIntegrationGrantsComponent PASS49.334s
 инструкции остались закрытыми, ожидание metadata обновлено. Ранние stale
 schema/pagination fixtures FAIL исправлены. Serving HOT остаётсяbb938a00:
 новый reader не выдаётся за доступный модели до доставки и native повтора.
+
+14.10 13:48 UTC: idle owner read0 active/claimed, published85 pinsf822
+неизменны; guarded FF HOT0b5af51c. CP serving ELFe3cba371…9df0,
+RC96bf385b…945 совпали с host build. Native PROJECT повтор в новом диалоге
+cnv_Nk_E-_v6HnBODlxAq9Pxi6QX13:52:38–13:53:27 завершён корректно:
+Developer/gpt-6.1-sol/openai-codex, ENV30/selfdev-write, CPU4000m,
+memory12288MiB, requests=limits. Четыре READ tools, без изменений и без ID
+в запросе. Это actual natural metadata PASS, а не прежний semantic FAIL.

@@ -4,11 +4,39 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.20
+version: 1.1.21
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 14:00 UTC — reader live, recovery опубликован
+
+SOURCE/remote/Draft1807/HOT0b5af51c MATCH перед новым documentation diff.
+Guarded idle FF13:48:17: activeRuntimeRuns0/leases0/builds0/admissions0/
+promotions0; published85/pinsf822 unchanged. CP actual ELFe3cba371…9df0,
+RC96bf385b…945 MATCH ранее собранным host binaries. Native no-ID PROJECT
+модель/ресурсы Developer PASS13:53:27, cnv_Nk_E-_v6HnBODlxAq9Pxi6QX:
+gpt-6.1-sol/ENV30/4CPU/12GiB, без карточки/ID/изменений.
+
+Mobile default outline actual screenshot390x844 PASS: читаемые карточки,
+без horizontal page overflow; desktop1280x900, post-auth Console0 и
+relevant API200. Проверка переключения/resize с явным выбором ещё NOT RUN.
+
+Retry10 FAILED13:46:35 по immutable IMPLEMENTATION7200s, не OOM.
+Developer сохранил новый business Draft1809/heada00706022058573157fe50bf431aa67485507b03;
+это checkpoint, не final. Reviewer/Manager отменены root terminal.
+Старый1808 не является результатом этой попытки; business PR не менялись host.
+
+Устранено противоречие старых пяти review циклов в editable Manager/Reviewer
+для scoped dogfooding. Developer4, Manager5, Reviewer4 опубликованы через
+VALID→exact impact selection→PUBLISH; content SHA/binding MATCH.
+Workflow49/revision16: новый IMPLEMENTATION14400s, остальные semantic fields/
+grants/единственный Review/owner gate MATCH. Новый Retry11 запущен13:59:06
+штатной командой прежнего FAILED run; run_4E4x4FCjIg44_NnXl35XGlil RUNNING,
+session прежняя. USER business corrections0, host business code0.
+Процедура/проверки: developer-checkpoint-recovery.md. Сопровождать actual
+Developer checkpoint → ONE Reviewer → Manager/owner; paid/QA65/gates остаются.
 
 ## Checkpoint 14.10.2026 13:35 UTC — metadata reader опубликован, mobile подготовлен
 
