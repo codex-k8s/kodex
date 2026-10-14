@@ -4,9 +4,25 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.36
+version: 1.0.37
 updated: 2026-10-14
 ---
+
+## 14.10.2026 20:10 UTC — ускоренный план и direct-link LIVE PASS
+
+- Новый scope владельца: код/демонстрация к ближайшим15.10 13:00 Саратов,
+  без prompt debugging, основной+3. План OPS-DOC-DEMO-001; QA65 backlog
+  сохраняется, не full PASS. Existing native Workflow не отменён.
+- Узкий single .vue HOT overlay preimage e1aafa38/postimage f19ad6bd;
+  SHA25683aa27c9 SOURCE/host/mounted frontend MATCH. Backend pre/post
+  CP PID3391 ELF38549814/RC PID752 ELFe861d02e unchanged. Whole checkout
+  остаётся5d, source7c не объявляется целиком serving; normal idle FF впереди.
+- Direct artifact URL без ручного выбора строки открывает exact details.
+  Desktop/mobile screenshots просмотрены, overflowfalse/Console0/Network0,
+  relevant API200. Это corrected-link LIVE PASS; no data mutation.
+- Current Architect KeHdy RUNNING, exact47458363 Pod/runtime/input/image
+  pins прочитаны; native INTAKE EOF→delegation доказан, Developer/ONE Review/
+  Manager ещё OPEN. Runtime publication/финальный demo smoke не завершены.
 
 ## 14.10.2026 20:02 UTC — current INTAKE EOF6/6
 

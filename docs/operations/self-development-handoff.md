@@ -4,11 +4,40 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.36
+version: 1.1.37
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 20:10 UTC — ускоренная демонстрационная цель
+
+Владелец очистил полную QA-цель и запросил новую: только код Kodex, без
+отладки промптов и неплатформенных улучшений; основной + до3 исполнителей.
+Новый план: [OPS-DOC-DEMO-001](demo-readiness-20261015.md), шесть пунктов с
+чекбоксами; ближайший безопасный deadline15.10 13:00 Europe/Saratov,
+финальный smoke/отчёт до12:30. QA65 сохраняется, но не повторяется целиком
+до демонстрации и не объявляется пройденным. Existing native run не отменён.
+
+Файловый deep-link теперь LIVE PASS без row click: normal SSO/route →
+автоматически открытая карточка exact artifact; desktop1280/mobile390
+screenshots просмотрены, overflowfalse/Console0/Network0/relevant API200.
+HOT HEAD5d085497 имеет ровно один собственный tracked frontend overlay:
+`services/staff/control-center/src/features/files/FilesWorkspace.vue`, blob
+`f19ad6bd3fe9bc1fdec2881a6d689c09d730ace3`, SHA256
+`83aa27c93c4d8741254ac38ba48b0340dce273dd22ca884f9e834493da9d3b8c`.
+Host/SOURCE/mounted staff-control-center-grtjp совпали. Это узкая frontend
+доставка, не весь checkout source7c. Go watcher этот .vue/module не следит;
+actual CP3391/ELF38549814 и RC752/ELFe861d02e pre/post unchanged.
+После native idle сверить exact overlay, снять только его через apply_patch
+и выполнить прежний clean FF; не ослаблять idle guard или терять чужие правки.
+
+Current Architect run_KeHdyc3teWsN95R1eaMEq_AK RUNNING/attempt1,
+session8t5/turnlVk/nodepx8, PodUID47458363-c94d-45e2-9cd6-266a7ff72e57.
+Exact input8d003be6/runtime0fff20f2/execution076dcb38/image5cc MATCH,
+все restarts0. Native Manager сам прочитал шесть INTAKE results и делегировал;
+Architect читает pinned sources, не Host prompt steering. Observer58183
+ожидает exact Developer node. Новый runtime completion ещё не подтверждён.
 
 ## Checkpoint 14.10.2026 20:02 UTC — current INTAKE результаты опубликованы
 
