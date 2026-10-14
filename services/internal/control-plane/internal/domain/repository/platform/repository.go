@@ -315,6 +315,7 @@ type Repository interface {
 	GetRevisionImpactPlan(context.Context, value.Principal, string, string, query.Page) (entity.RevisionImpactPage, error)
 	GetEffectiveManagedConfiguration(context.Context, value.Principal, string, string, string) (entity.ManagedConfigurationBindingSnapshot, error)
 	GetSystemSTTConfiguration(context.Context, value.Principal) (entity.SystemSTTConfiguration, error)
+	GetProviderFinancialOverview(context.Context, value.Principal) (entity.ProviderFinancialOverview, error)
 	ListProviderAccounts(context.Context, value.Principal, query.Filter) ([]entity.ProviderAccount, string, []string, error)
 	ListProviderAccountBlockers(context.Context, value.Principal, query.ProviderAccountBlockers) (entity.ProviderAccountBlockerPage, error)
 	GetProviderAccount(context.Context, value.Principal, string) (entity.ProviderAccount, error)

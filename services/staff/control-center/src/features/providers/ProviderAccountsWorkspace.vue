@@ -770,7 +770,8 @@ onBeforeUnmount(() => {
           <h2>
             {{
               $t(
-                search.trim()
+                store.catalogUnavailable
+                  ? "common.unavailable" : search.trim()
                   ? "providers.searchEmptyTitle"
                   : "providers.emptyTitle",
               )
@@ -779,7 +780,8 @@ onBeforeUnmount(() => {
           <p>
             {{
               $t(
-                search.trim()
+                store.catalogUnavailable
+                  ? "providers.catalogUnavailableText" : search.trim()
                   ? "providers.searchEmptyText"
                   : "providers.emptyText",
               )

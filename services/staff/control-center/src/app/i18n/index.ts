@@ -3537,6 +3537,7 @@ const ru = {
     },
   },
   providers: {
+    catalogUnavailableText: "Каталог временно недоступен. Финансовая сводка получена отдельно.",
     catalogObserved: "Проверено",
     accountSettings: "Настройки аккаунта",
     accountSettingsTitle: "Настройки аккаунта: {name}",
@@ -8144,6 +8145,7 @@ const en = {
     },
   },
   providers: {
+    catalogUnavailableText: "The catalog is unavailable. The financial summary was read separately.",
     ...ru.providers,
     accountSettings: "Account settings",
     accountSettingsTitle: "Account settings: {name}",

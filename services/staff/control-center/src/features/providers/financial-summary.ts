@@ -1,3 +1,4 @@
+import type { ProviderFinancialOverview } from "@/shared/api/generated/openapi/types.gen";
 import type { ProviderAccount } from "./model";
 
 export type FinancialAccount = Pick<
@@ -11,7 +12,9 @@ export function financialSummary(
   live: boolean,
   complete: boolean,
   now = Date.now(),
+  authoritative?: ProviderFinancialOverview,
 ) {
+  const authoritativeFresh = !authoritative || (live && Date.parse(authoritative.validUntil) > now && Date.parse(authoritative.observedAt) <= now + 30_000);
   const eligible = accounts.filter(
     (account) => account.financialEligible === true,
   );
@@ -20,7 +23,7 @@ export function financialSummary(
       const summary = account.financialSummary;
       const received = summary ? Date.parse(summary.receivedAt) : Number.NaN;
       const stale =
-        !live ||
+        !live || !authoritativeFresh ||
         !Number.isFinite(received) ||
         now - received > 300_000 ||
         received > now + 30_000;
@@ -44,12 +47,13 @@ export function financialSummary(
         (left.remaining ?? Infinity) - (right.remaining ?? Infinity) ||
         left.account.ref.localeCompare(right.account.ref),
     );
+  const fresh = authoritativeFresh;
   return {
     accounts: ranked.slice(0, 3),
-    exhausted: ranked.filter((item) => item.remaining === 0).length,
-    unknown: ranked.filter((item) => item.remaining === undefined).length,
-    total: ranked.length,
-    complete,
+    exhausted: authoritative ? (fresh ? authoritative.exhausted : 0) : ranked.filter((item) => item.remaining === 0).length,
+    unknown: authoritative ? (fresh ? authoritative.unknown : authoritative.total) : ranked.filter((item) => item.remaining === undefined).length,
+    total: authoritative?.total ?? ranked.length,
+    complete: complete && fresh,
   };
 }
 
@@ -80,4 +84,22 @@ export function financialReset(
   )
     return undefined;
   return new Date(seconds * 1000).toLocaleString("ru-RU");
+}
+
+const invalidFinancialOverview = "provider financial overview is invalid";
+export function validateFinancialOverview(value: unknown): ProviderFinancialOverview {
+ if (!value || typeof value!=="object" || Array.isArray(value)) throw new Error(invalidFinancialOverview);
+ const row=value as Record<string,unknown>;
+ const fields=["accounts","total","exhausted","unknown","observedAt","validUntil"];
+ if (Object.keys(row).some(key=>!fields.includes(key)) || fields.some(key=>!(key in row))) throw new Error(invalidFinancialOverview);
+ const total=row.total as number, exhausted=row.exhausted as number, unknown=row.unknown as number;
+ if (![total,exhausted,unknown].every(item=>Number.isSafeInteger(item)&&item>=0) || exhausted+unknown>total || !Array.isArray(row.accounts) || row.accounts.length>3 || row.accounts.length!==Math.min(total,3)) throw new Error(invalidFinancialOverview);
+ const at=Date.parse(String(row.observedAt)),until=Date.parse(String(row.validUntil));
+ if (!Number.isFinite(at)||!Number.isFinite(until)||until<at||until-at>300_000) throw new Error(invalidFinancialOverview);
+ const refs=new Set<string>();
+ for (const item of row.accounts) {
+  if (!item || typeof item!=="object" || Array.isArray(item) || Object.keys(item).some(key=>!["ref","name","financialSummary"].includes(key)) || typeof item.ref!=="string" || item.ref.length>96 || typeof item.name!=="string" || item.name.length>160 || refs.has(item.ref)) throw new Error(invalidFinancialOverview);
+  refs.add(item.ref);
+ }
+ return value as ProviderFinancialOverview;
 }

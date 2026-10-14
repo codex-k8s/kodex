@@ -18605,3 +18605,26 @@ components:
             items: { $ref: "#/components/schemas/Incident" },
           }
         observedAt: { $ref: "#/components/schemas/Timestamp" }
+
+    ProviderFinancialDisplayAccount:
+      type: object
+      additionalProperties: false
+      required: [ref, name]
+      properties:
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        financialSummary: { $ref: "#/components/schemas/ProviderFinancialSummary" }
+    ProviderFinancialOverview:
+      type: object
+      additionalProperties: false
+      required: [accounts, total, exhausted, unknown, observedAt, validUntil]
+      properties:
+        accounts:
+          type: array
+          maxItems: 3
+          items: { $ref: "#/components/schemas/ProviderFinancialDisplayAccount" }
+        total: { type: integer, format: int64, minimum: 0 }
+        exhausted: { type: integer, format: int64, minimum: 0 }
+        unknown: { type: integer, format: int64, minimum: 0 }
+        observedAt: { type: string, format: date-time }
+        validUntil: { type: string, format: date-time }

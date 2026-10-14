@@ -1,3 +1,5 @@
+import type { ProviderFinancialOverview } from "@/shared/api/generated/openapi/types.gen";
+import {validateFinancialOverview,type FinancialAccount} from "./financial-summary";
 import { defineStore } from "pinia";
 
 import { asProblem, type AppProblem } from "@/shared/api/problem";
@@ -34,7 +36,9 @@ let loadGeneration = 0;
 let loadController: AbortController | undefined;
 
 interface ProvidersState {
-  financialAccounts: ProviderAccount[];
+  financialAccounts: FinancialAccount[];
+ financialOverview?: ProviderFinancialOverview;
+ catalogUnavailable: boolean;
   financialComplete: boolean;
   definitions: ProviderDefinition[];
   definitionsNextPageToken: string;
@@ -59,6 +63,8 @@ interface ProvidersState {
 export const useProvidersStore = defineStore("providers", {
   state: (): ProvidersState => ({
     financialAccounts: [],
+ financialOverview:undefined,
+ catalogUnavailable:false,
     financialComplete: false,
     definitions: [],
     definitionsNextPageToken: "",
@@ -82,8 +88,22 @@ export const useProvidersStore = defineStore("providers", {
   actions: {
     clearFinancial(): void {
       this.financialAccounts = [];
+ this.financialOverview=undefined;
       this.financialComplete = false;
     },
+    applyUnavailableCatalog():void {
+ this.stopAllPolling();
+ this.accounts=[]; this.snapshotAccounts=[];
+ this.accountsNextPageToken=""; this.snapshotAccountsNextPageToken="";
+ this.pageNextActions=[]; this.snapshotNextActions=[]; this.snapshotReady=false;
+ this.catalogUnavailable=true;
+ },
+    applyFinancialSnapshot(value:unknown):void {
+ const overview=validateFinancialOverview(value);
+ this.financialOverview=overview;
+ this.financialAccounts=overview.accounts.map(account=>({...account,financialEligible:true}));
+ this.financialComplete=true;
+ },
     applySnapshot(
       accounts: ProviderAccount[],
       nextPageToken = "",
@@ -91,10 +111,7 @@ export const useProvidersStore = defineStore("providers", {
       definitions?: ProviderDefinition[],
       definitionsNextPageToken = "",
     ): void {
-      this.financialAccounts = accounts.filter(
-        (account) => account.financialEligible === true,
-      );
-      this.financialComplete = nextPageToken === "";
+      this.catalogUnavailable=false;
       this.snapshotAccounts = accounts;
       this.snapshotAccountsNextPageToken = nextPageToken;
       this.snapshotNextActions = nextActions;

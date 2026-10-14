@@ -6252,8 +6252,11 @@ message ListProviderAccountsRequest {
   ProviderAccountState state = 3;
   string definition_key = 4;
   ProviderAccountUsageContext usage_context = 5;
+  // Полная protected финансовая summary; filters/page для этого режима запрещены.
+  bool financial_summary_only = 6;
 }
 message ListProviderAccountsResponse {
+  ProviderFinancialOverview financial_summary = 4;
   repeated ProviderAccount accounts = 1;
   PageInfo page = 2;
   repeated NextAction next_actions = 3;
@@ -8683,4 +8686,19 @@ message ProviderFinancialSummary {
   ProviderFinancialObservation observation = 1;
   google.protobuf.Timestamp received_at = 2;
   int64 version = 3;
+}
+
+// Bounded display результата полного eligibility scan, не каталог и не launch grant.
+message ProviderFinancialDisplayAccount {
+  string ref = 1;
+  string name = 2;
+  ProviderFinancialSummary financial_summary = 3;
+}
+message ProviderFinancialOverview {
+  repeated ProviderFinancialDisplayAccount accounts = 1;
+  int64 total = 2;
+  int64 exhausted = 3;
+  int64 unknown = 4;
+  google.protobuf.Timestamp observed_at = 5;
+  google.protobuf.Timestamp valid_until = 6;
 }

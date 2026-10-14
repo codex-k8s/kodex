@@ -266,6 +266,7 @@ func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt [
 	}
 	_ = json.Unmarshal(raw, &financialAccount)
 	state.financialEnabled = financialAccount.Account != nil && financialAccount.Account.Type == "chatgpt"
+	state.financialBoundEpoch = state.financialEpoch
 	if err := server.observeFinancial(ctx, state); err != nil {
 		return Result{}, server.abort(ctx, state, err)
 	}
@@ -1063,8 +1064,8 @@ func verifyAccountPin(input model.Input) error {
 	return err
 }
 
-// Private identity читается только из уже закреплённого snapshot внутри provider
-// процесса. Credentials и account ID не сериализуются в callback или diagnostic.
+// Приватная идентичность читается только из закреплённого снимка внутри provider
+// процесса. Учётные данные и account ID не сериализуются в callback или диагностике.
 func readPinnedFinancialIdentity(input model.Input) (string, error) {
 	file, info, err := openProtectedFile(input.WorkspaceRoot, filepath.Join(input.CodexHome, "auth.json"))
 	if err != nil {

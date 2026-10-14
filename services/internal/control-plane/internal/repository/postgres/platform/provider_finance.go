@@ -96,22 +96,31 @@ func (repository *Repository) financialEligibility(ctx context.Context, tx pgx.T
 		refs = append(refs, ref)
 	}
 	rows.Close()
-	if rows.Err() != nil || len(refs) > 4096 {
+	if rows.Err() != nil {
 		return nil, false, errs.ErrUnavailable
 	}
 	allowed := map[string]bool{}
 	if len(refs) == 0 {
 		return allowed, false, nil
 	}
-	agents, err := readProviderUsageAgents(ctx, tx, current.organizationID, refs)
-	if err != nil {
-		return nil, false, err
+	agents := map[string]providerUsageAgent{}
+	for start := 0; start < len(refs); start += 4096 {
+		batch, err := readProviderUsageAgents(ctx, tx, current.organizationID, refs[start:min(start+4096, len(refs))])
+		if err != nil {
+			return nil, false, err
+		}
+		for ref, agent := range batch {
+			agents[ref] = agent
+		}
 	}
 	for _, agent := range agents {
 		if !agent.Enabled || agent.State == "ARCHIVED" || agent.Provider != "openai-codex" {
 			continue
 		}
 		_, target, err := repository.resolveRuntimeConfigurationTarget(ctx, tx, current, "agent.view", agent.Ref)
+		if errors.Is(err, errs.ErrForbidden) || errors.Is(err, errs.ErrNotFound) {
+			continue
+		}
 		if err != nil {
 			return nil, false, err
 		}

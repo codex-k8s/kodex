@@ -25,6 +25,7 @@ const summary = computed(() =>
     props.live,
     providers.financialComplete,
     now.value,
+ providers.financialOverview,
   ),
 );
 </script>
