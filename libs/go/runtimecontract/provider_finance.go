@@ -40,6 +40,27 @@ func ParseProviderFinancialObservation(raw []byte) (ProviderFinancialObservation
 	if len(raw) == 0 || len(raw) > maximumProjectionBytes || !utf8.Valid(raw) || financialJSONKeys(raw) != nil {
 		return ProviderFinancialObservation{}, invalid
 	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil || fields == nil ||
+		!financialKnownFields(fields, "sequence", "state", "windows", "credits", "ordinaryUsageAllowed", "spendControlReached", "restriction") {
+		return ProviderFinancialObservation{}, invalid
+	}
+	var windows []map[string]json.RawMessage
+	if value := fields["windows"]; len(value) > 0 {
+		if json.Unmarshal(value, &windows) != nil {
+			return ProviderFinancialObservation{}, invalid
+		}
+		for _, window := range windows {
+			if !financialKnownFields(window, "usedPercent", "durationMinutes", "resetsAt") {
+				return ProviderFinancialObservation{}, invalid
+			}
+		}
+	}
+	var credits map[string]json.RawMessage
+	if value := fields["credits"]; len(value) > 0 &&
+		(json.Unmarshal(value, &credits) != nil || !financialKnownFields(credits, "hasCredits", "unlimited", "balance")) {
+		return ProviderFinancialObservation{}, invalid
+	}
 	// Alias исключает повторный вызов UnmarshalJSON при проверке wire payload.
 	type plainObservation ProviderFinancialObservation
 	var decoded plainObservation

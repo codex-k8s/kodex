@@ -40,6 +40,10 @@ func TestFinancialHTTPCallbackPreservesBindingPresenceAndRejectsMalformed(t *tes
 	}{
 		{"valid", valid, "", http.StatusNoContent},
 		{"duplicate", `{"sequence":1,"sequence":2,"state":"AVAILABLE"}`, "", http.StatusBadRequest},
+		{"duplicate payload", valid, `,"financial":` + valid, http.StatusBadRequest},
+		{"aliased sequence", `{"sequence":1,"Sequence":2,"state":"AVAILABLE"}`, "", http.StatusBadRequest},
+		{"aliased credits", `{"sequence":1,"state":"AVAILABLE","credits":{"Balance":"59999"}}`, "", http.StatusBadRequest},
+		{"aliased payload", valid, `,"Financial":` + valid, http.StatusBadRequest},
 		{"unknown", `{"sequence":1,"state":"AVAILABLE","paid":true}`, "", http.StatusBadRequest},
 		{"mixed", valid, `,"progress":"runtime.running"`, http.StatusBadRequest},
 		{"invalid window", `{"sequence":1,"state":"AVAILABLE","windows":[{"usedPercent":101}]}`, "", http.StatusBadRequest},

@@ -4,7 +4,7 @@ title: Наблюдения лимитов и credits Codex
 type: guide
 status: draft
 owner: developer
-version: 0.2.3
+version: 0.2.4
 updated: 2026-10-14
 ---
 
@@ -22,7 +22,7 @@ updated: 2026-10-14
 
 Broker передаёт закрытый `ProviderFinancialObservation`, отдельно от model messages и ToolCall. Sequence проверяется в sealed stream. Controller проверяет execution binding и RuntimeRevision digest; CP выводит account/current credential из immutable revision. Lease/fence/generation/expiry, root/node/session/turn/attempt, текущая credential и порядок collector проверяются перед записью. Root lock сериализует запись с terminal transition. Account lock защищает collector ordering; старое валидное наблюдение отбрасывается, sequence с изменённым содержимым отклоняется как idempotency reuse. Проекция, account version, command receipt/audit и outbox записываются одной существующей command transaction.
 
-Вложенная observation HTTP callback и stored projection используют один закрытый parser: duplicate/unknown JSON fields, невалидный UTF-8 и превышение 4 KiB отклоняются до semantic validation. OpenAPI Go generation сохраняет модели, используемые AsyncAPI shared WS, даже если они не достижимы из HTTP paths (`skip-prune=true`).
+Вложенная observation HTTP callback и stored projection используют один закрытый parser: duplicate/unknown JSON fields, невалидный UTF-8 и превышение 4 KiB отклоняются до semantic validation. Envelope callback также отвергает повторный payload и неизвестные ключи; имена полей observation/windows/credits/envelope проверяются с точным регистром. OpenAPI Go generation сохраняет модели, используемые AsyncAPI shared WS, даже если они не достижимы из HTTP paths (`skip-prune=true`).
 
 Существующий `PROVIDER_ACCOUNT_CHANGED` приводит к защищённому `PROVIDER_ACCOUNT` snapshot общего WebSocket. Cursor CP закрепляет источник всех страниц; gateway заканчивает bounded discovery до ranking, не смешивает drift. При изменении agent/membership eligibility используется штатный resync. REST polling финансовых данных отсутствует; REST сохраняет bootstrap/detail-проекции того же account.
 
