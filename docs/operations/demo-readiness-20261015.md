@@ -4,7 +4,7 @@ title: Подготовка рабочего прототипа Kodex к дем�
 type: operations
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.0.1
 updated: 2026-10-15
 ---
 
@@ -49,11 +49,14 @@ host не ждёт отладки промптов, чтобы исправля�
   трактуется как запрет при доступных credits. Не выдумывать внешний баланс,
   units/charging/API или live PASS. Нет данных — честное UNKNOWN, не отказ
   доступа по предположению; security/provider rejection не обходить.
-- [ ] **4. Закрыть критические frontend/realtime регрессии.** Direct file
+- [x] **4. Закрыть критические frontend/realtime регрессии.** Direct file
   links, session isolation/rejoin и очевидные мешающие демонстрации layout
   дефекты. Каждый новый экран: desktop/mobile screenshot, Console/relevant
   Network; только быстрые применимые tests/lint/types/build. Уже доставленный
   узкий FilesWorkspace overlay проверить и штатно включить в clean checkout.
+  Direct-link LIVE PASS; late Send/Stop ACK RED→GREEN195 tests и отдельный
+  browser UI fixture PASS, synthetic/serverMutations0. SOURCE/host/mount двух
+  overlays MATCH; clean checkout включение относится к этапу5. Это не QA65 PASS.
 - [ ] **5. Зафиксировать и доставить финальное дерево.** Commit/push/readback
   того же PR, краткий список экранов/сценариев и оставшихся ограничений.
   Bootstrap merge только при фактических разрешённых gates, без bypass;
@@ -88,3 +91,25 @@ Chrome MCP: list_pages каждые10–15 calls/5–10мин; reload своей
 в5мин после проверки ввода; чужие вкладки не менять. Source/base и узкие HOT
 overlays фиксировать честно; серверы не перезапускать из-за frontend правки.
 Applied migrations forward-only, данные и активные workloads сохранять.
+
+# Адресный checkpoint 15.10.2026 00:36 Саратов
+
+- SOURCE9e1d75eb: late Send/Stop selection fix7ee8f9ac; основной повтор195 tests
+  PASS3.67s, исполнитель lint/types/build PASS. Browser fixture Send/Stop A→B
+  →delayed ACK остаётсяB, Console0/Network0, без server writes/ИИ. Первый
+  helper FAIL на async readiness исправлен только в оснастке.
+- Runtime9e1d75eb: missing completionArtifacts observation воспроизведён
+  RED→GREEN; существующие PUBLISH_RESULT/closed reason, без смены guard/квот.
+  ROOT app whole unit PASS17.207s/vet exit0; исполнитель race/build PASS.
+  Это диагностика, actual historical rejecting guard остаётся UNKNOWN.
+- Account7c91943d: адресные maintenance/catalog/client/usage tests PASS,
+  доказанного дополнительного blocker нет. CP не имеет weekly-zero/credits
+  gate; свежий exact credential/catalog eligibility используется штатно.
+  Live paid balance/units/charging не проверены и не выдумываются.
+- Runner full image14e8162e собран штатным build-local-runner из source9e,
+  exact manifest/binary provenance и local node import PASS. Policy/admission/
+  defaults/project ENV не изменены, текущий image5cc не заменён.
+- Native Architect SUCCEEDED: пять outputs owner EOF/hash/rejoin MATCH;
+  CODE_ONLY допуск Developer, не live finance. Developer u35bu RUNNING,
+  exact UID/input/runtime/image ACK; long closed observer и read-only outbox
+  metadata sensor подключены до terminal. Нет новых USER инструкций.

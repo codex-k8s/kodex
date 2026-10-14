@@ -4,11 +4,63 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.37
+version: 1.1.38
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 20:36 UTC — UI гонка закрыта, Developer запущен
+
+SOURCE/remote9e1d75eb MATCH, HOTHEAD5d с ровно двумя собственными frontend
+overlays: FilesWorkspace.vue blobf19ad6bd/SHA83aa27c9 и assistant/store.ts
+blob018f2be6/SHA17903bac. Host/SOURCE/mounted frontend hashes MATCH; Go/CP/RC
+не менялись. Перед clean FF снять только exact overlays через apply_patch.
+
+Late Send/Stop ACK после ручного выбора другого диалога больше не выбирает
+прежний: direct195 scoped tests PASS3.67s на7ee8f9ac, executor lint/types/build
+PASS. Реальный browser UI с synthetic delayed ACK PASS обеих операций,
+serverMutations0/Console0/Network0. Это не проверка настоящего Stop на сервере.
+Первый helper FAIL async readiness сохранён; исправлена только тестовая оснастка.
+
+Runtime9e1d75eb закрывает missing observation completionArtifacts failure:
+existing PUBLISH_RESULT и typed workspace reason, без raw error/path/body.
+Guard/permissions/quotas/contracts/collector unchanged. ROOT app unit17.207s
+и vet PASS; executor RED→GREEN0.573s/race1.702s/build PASS. Actual прежний
+primary guard всё ещё UNKNOWN; не объявлять его исправленным.
+
+Заранее собран repo-owned build-local-runner full OCI из exact9e1d75eb:
+manifest `sha256:14e8162ed4427854fe487529367b7213951721d58d882c7326138229e6da8cec`,
+ELF `db24752ee6c4df0cb3d08f2ab0fee107aaa17b8c681f47f6835d78e63e9b0fa4`,
+build input `c12eaec209a17305f5f94f93c61381ef933d2c3c6cdb05d5a6ffa65c2d3fc254`,
+provenance SHA `6bef34e492a5d91582617e1ab417607624a617cae9126046b91e832a3ffabec0`.
+Node import завершён exit0. Это подготовка, не promotion/policy/default/ENV
+activation; active5cc не заменён. Activation требует прежнего safe idle.
+
+Current Architect KeHdy SUCCEEDED; свои5 CLEAN results exact owner content
+EOF/size/SHA/revision metadata rejoin MATCH5/5:
+
+| Файл | Байты | SHA256 |
+| --- | ---: | --- |
+| result.md | 648 | 7922891aff5814c04371b10ab86770de21f04d28b4abf84a71a589019a1b37af |
+| workspace-write-result.json | 328 | b85f843cd2b453a2db528e87a2b3bf85a35bbc754f7738fbfc00640f700cc178 |
+| architecture-review.md | 30216 | f544059c6981ae720ff35b8f8942b37c23e93de92b7985c72f2ff6328436145b |
+| architecture-source-evidence.json | 21024 | 3a9705f94d168e20a16cf9aa929c5685a2c9b737989e772bfc9f866ba27c31dd |
+| codex-contract-evidence.json | 18785 | e8fbc9480ee6ab9c4c9cce2c24312142ecd0b8de25955e07d3bca0017a9a1b61 |
+
+Semantic PASS bounded design/Developer CODE_ONLY допущен; finance UNKNOWN.
+Native coordinator сам делегировал Developer `run_u35bu_lvZMNx2w32pOylqfRW`,
+sessionR8l/turnjcr/nodeQck/attempt1, started20:25:48.031108 UTC.
+Exact Pod runtime-turn-5f6db52e9131dcd3/UIDae4b9225-ad28-4699-85f2-9a6ed4b74d95,
+image5cc/ENV30; input60e20a88/runtime dd397ddb/execution390af9f8 verified.
+Observer58183 selected20:26:20, ACK observed20:26:22, bound rejoin ещё требуется.
+Read-only outbox sensor5208 пишет только aggregate metadata, не имена/тела;
+сам по себе не rejecting guard или publication proof. Terminal/Review/demo OPEN.
+
+Account executor found no additional code blocker: maintained/catalog/usage
+tests на7c PASS, CP weekly/credit gate отсутствует; UNKNOWN health не запрещает
+submit, после renewal нужен fresh exact catalog. Live paid UNKNOWN, без новых
+auth/read/billing effects. Промпты не менялись; QA65 backlog сохраняется.
 
 ## Checkpoint 14.10.2026 20:10 UTC — ускоренная демонстрационная цель
 

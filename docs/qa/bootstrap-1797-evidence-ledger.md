@@ -4,9 +4,29 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.37
+version: 1.0.38
 updated: 2026-10-14
 ---
+
+## 14.10.2026 20:36 UTC — ускоренный код и browser fixture
+
+- Late Send/Stop selection fix7ee8f9ac: RED→GREEN195 tests, ROOT repeat
+  PASS3.67s, executor lint/types/build PASS. Browser UI synthetic delayed ACK
+  Send/Stop A→B остаётсяB; serverMutations0, Console0/Network0. Это не live Stop.
+- HOT5d имеет два exact frontend overlays f19ad6bd/018f2be6; source/host/mounted
+  SHA83aa27c9/17903bac MATCH. Backend неизменен, clean whole-tree FF впереди.
+- Missing completionArtifacts observation fixed on9e1d75eb, closed existing
+  PUBLISH_RESULT/reason; no semantics/quota/permissions/contracts changes.
+  ROOT app unit17.207s/vet PASS, executor scoped/race/build PASS. Primary UNKNOWN.
+- Full runner OCI source9e → manifest14e8162e/ELFdb24752e, exact provenance
+  SHA6bef34e4/local node import PASS. Activation/policy/ENV/defaults NOT RUN.
+- Architect KeHdy SUCCEEDED, own5 outputs EOF/size/SHA/metadata rejoin MATCH;
+  CODE_ONLY design PASS, finance UNKNOWN. Native Developer u35bu RUNNING,
+  exact PodUIDae4b9225/input/runtime/image ACK captured до terminal.
+  Observer58183+metadata5208 живы; publication/ONE Review/demo ещё OPEN.
+- Account7c scoped tests PASS, новых code blockers не найдено; CP не запрещает
+  submit только из-за UNKNOWN health, weekly/credit gate отсутствует.
+  Real paid balance/units/charging UNKNOWN. Full QA65 не объявлен выполненным.
 
 ## 14.10.2026 20:10 UTC — ускоренный план и direct-link LIVE PASS
 
