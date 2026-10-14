@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	accessservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/access"
@@ -445,11 +446,16 @@ func scanProviderAccount(row rowScanner) (entity.ProviderAccount, error) {
 		}
 		return entity.ProviderAccount{}, errs.ErrUnavailable
 	}
-	if len(financial) > 0 && receivedAt != nil {
-		var summary entity.ProviderFinancialSummary
-		if json.Unmarshal(financial, &summary.Observation) != nil || summary.Observation.Validate() != nil {
+	if len(financial) > 0 {
+		if receivedAt == nil {
 			return entity.ProviderAccount{}, errs.ErrUnavailable
 		}
+		var summary entity.ProviderFinancialSummary
+		observation, err := runtimecontract.ParseProviderFinancialObservation(financial)
+		if err != nil {
+			return entity.ProviderAccount{}, errs.ErrUnavailable
+		}
+		summary.Observation = observation
 		summary.ReceivedAt = *receivedAt
 		summary.Version = item.Version
 		item.FinancialSummary = &summary

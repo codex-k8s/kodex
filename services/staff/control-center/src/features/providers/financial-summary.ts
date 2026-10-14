@@ -108,6 +108,26 @@ export function financialReset(
 }
 
 const invalidFinancialOverview = "provider financial overview is invalid";
+
+// Канонический Timestamp — RFC3339 date-time, а не любое значение Date.parse.
+function financialTimestamp(value: unknown): number {
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}[Tt](?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(
+      value,
+    )
+  )
+    return Number.NaN;
+  const date = value.slice(0, 10);
+  const calendar = new Date(`${date}T00:00:00Z`);
+  if (
+    !Number.isFinite(calendar.getTime()) ||
+    calendar.toISOString().slice(0, 10) !== date
+  )
+    return Number.NaN;
+  return Date.parse(value);
+}
+
 export function validateFinancialOverview(
   value: unknown,
 ): ProviderFinancialOverview {
@@ -142,8 +162,8 @@ export function validateFinancialOverview(
     throw new Error(invalidFinancialOverview);
   if (typeof row.observedAt !== "string" || typeof row.validUntil !== "string")
     throw new Error(invalidFinancialOverview);
-  const at = Date.parse(row.observedAt),
-    until = Date.parse(row.validUntil);
+  const at = financialTimestamp(row.observedAt),
+    until = financialTimestamp(row.validUntil);
   if (
     !Number.isFinite(at) ||
     !Number.isFinite(until) ||
@@ -152,11 +172,11 @@ export function validateFinancialOverview(
   )
     throw new Error(invalidFinancialOverview);
   const refs = new Set<string>();
-  for (const item of row.accounts) {
+  for (const account of row.accounts as unknown[]) {
+    if (!account || typeof account !== "object" || Array.isArray(account))
+      throw new Error(invalidFinancialOverview);
+    const item = account as Record<string, unknown>;
     if (
-      !item ||
-      typeof item !== "object" ||
-      Array.isArray(item) ||
       Object.keys(item).some(
         (key) => !["ref", "name", "financialSummary"].includes(key),
       ) ||
@@ -201,7 +221,7 @@ function validateFinancialMeasurement(value: unknown): void {
   if (
     !integer(summary.version, 1, Number.MAX_SAFE_INTEGER) ||
     typeof summary.receivedAt !== "string" ||
-    !Number.isFinite(Date.parse(summary.receivedAt))
+    !Number.isFinite(financialTimestamp(summary.receivedAt))
   )
     fail();
   const observation = object(summary.observation, [
@@ -215,7 +235,8 @@ function validateFinancialMeasurement(value: unknown): void {
   ]);
   if (
     !integer(observation.sequence, 1, 64) ||
-    !["AVAILABLE", "UNAVAILABLE"].includes(String(observation.state))
+    typeof observation.state !== "string" ||
+    !["AVAILABLE", "UNAVAILABLE"].includes(observation.state)
   )
     fail();
   for (const field of ["ordinaryUsageAllowed", "spendControlReached"])
@@ -255,14 +276,15 @@ function validateFinancialMeasurement(value: unknown): void {
   }
   if (
     observation.restriction !== undefined &&
-    ![
-      "",
-      "rate_limit_reached",
-      "workspace_owner_credits_depleted",
-      "workspace_member_credits_depleted",
-      "workspace_owner_usage_limit_reached",
-      "workspace_member_usage_limit_reached",
-    ].includes(String(observation.restriction))
+    (typeof observation.restriction !== "string" ||
+      ![
+        "",
+        "rate_limit_reached",
+        "workspace_owner_credits_depleted",
+        "workspace_member_credits_depleted",
+        "workspace_owner_usage_limit_reached",
+        "workspace_member_usage_limit_reached",
+      ].includes(observation.restriction))
   )
     fail();
   if (

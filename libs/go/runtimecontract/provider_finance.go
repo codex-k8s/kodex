@@ -1,8 +1,11 @@
 package runtimecontract
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"regexp"
+	"unicode/utf8"
 )
 
 // ProviderFinancialObservation — безопасный subset supported account/rateLimits/read.
@@ -28,6 +31,23 @@ type ProviderFinancialCredits struct {
 }
 
 var financialBalance = regexp.MustCompile(`^[0-9]{1,64}(\.[0-9]{1,64})?$`)
+
+// Stored/callback projection проверяется отдельно от upstream ответа. Ни один
+// consumer не удаляет неизвестные поля до semantic validation.
+func ParseProviderFinancialObservation(raw []byte) (ProviderFinancialObservation, error) {
+	const maximumProjectionBytes = 4 << 10
+	invalid := errors.New("provider financial projection is invalid")
+	if len(raw) == 0 || len(raw) > maximumProjectionBytes || !utf8.Valid(raw) || financialJSONKeys(raw) != nil {
+		return ProviderFinancialObservation{}, invalid
+	}
+	var observation ProviderFinancialObservation
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&observation) != nil || observation.Validate() != nil {
+		return ProviderFinancialObservation{}, invalid
+	}
+	return observation, nil
+}
 
 func (value ProviderFinancialObservation) Validate() error {
 	if value.Sequence < 1 || value.Sequence > 64 || (value.State != "AVAILABLE" && value.State != "UNAVAILABLE") || len(value.Windows) > 2 {

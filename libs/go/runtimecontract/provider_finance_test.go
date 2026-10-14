@@ -1,6 +1,10 @@
 package runtimecontract
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
 
 func TestFinancialObservationPreservesUnknownAndPaid(t *testing.T) {
 	balance := "59999.12345678901234567890123456789"
@@ -46,5 +50,35 @@ func TestFinancialObservationBounds(t *testing.T) {
 	}
 	if err := (ProviderFinancialObservation{Sequence: 1, State: "UNAVAILABLE"}).Validate(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestFinancialProjectionStrictReadPreservesPaidAndPresence(t *testing.T) {
+	raw := []byte(`{"sequence":64,"state":"AVAILABLE","windows":[{"usedPercent":100}],"credits":{"hasCredits":true,"balance":"59999.123456789012345678901"},"ordinaryUsageAllowed":false}`)
+	observation, err := ParseProviderFinancialObservation(raw)
+	if err != nil || observation.Credits == nil || observation.Credits.Unlimited != nil || observation.Credits.Balance == nil || *observation.Credits.Balance != "59999.123456789012345678901" {
+		t.Fatal("strict projection lost paid precision or unknown presence")
+	}
+	encoded, err := json.Marshal(observation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParseProviderFinancialObservation(encoded); err != nil {
+		t.Fatal("producer projection failed strict roundtrip")
+	}
+	for _, raw := range []string{
+		`{"sequence":1,"state":"AVAILABLE","accountId":"synthetic-private"}`,
+		`{"sequence":1,"state":"AVAILABLE","credits":{"balance":"59999","currency":"USD"}}`,
+		`{"sequence":1,"sequence":2,"state":"AVAILABLE"}`,
+		`{"sequence":1,"state":"AVAILABLE","windows":[{"usedPercent":null}]}`,
+		`{"sequence":1,"state":"UNAVAILABLE","credits":{"hasCredits":true}}`,
+		`{"sequence":1,"state":"AVAILABLE"} {}`,
+		"null",
+		strings.Repeat(" ", 4097),
+	} {
+		observation, err := ParseProviderFinancialObservation([]byte(raw))
+		if err == nil || observation.State != "" || strings.Contains(err.Error(), "synthetic-private") {
+			t.Fatal("invalid projection was partially read or leaked diagnostics")
+		}
 	}
 }

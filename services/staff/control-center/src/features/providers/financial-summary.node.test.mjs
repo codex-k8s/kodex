@@ -153,12 +153,25 @@ test("protected bounded summary retains complete counts and rejects malformed pr
       v.observedAt = 123;
       v.validUntil = 123;
     },
+    (v) => {
+      v.observedAt = "2026-10-14";
+      v.validUntil = "2026-10-14";
+    },
+    (v) => {
+      v.observedAt = "2026-02-30T00:00:00Z";
+      v.validUntil = "2026-02-30T00:00:00Z";
+    },
+    (v) => (v.accounts[0].financialSummary.observation.state = ["AVAILABLE"]),
+    (v) =>
+      (v.accounts[0].financialSummary.observation.restriction = [
+        "rate_limit_reached",
+      ]),
   ]) {
-    const invalid = structuredClone(value);
+    const invalid = globalThis.structuredClone(value);
     mutate(invalid);
     assert.throws(() => validateFinancialOverview(invalid));
   }
-  const unicodeName = structuredClone(value);
+  const unicodeName = globalThis.structuredClone(value);
   unicodeName.accounts[0].name = "😀".repeat(160);
   unicodeName.accounts[0].ref = "a".repeat(128);
   assert.doesNotThrow(() => validateFinancialOverview(unicodeName));

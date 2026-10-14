@@ -3,9 +3,9 @@ package platform
 import (
 	"context"
 	_ "embed"
-	"encoding/json"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	accessservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/access"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -68,10 +68,12 @@ func (repository *Repository) GetProviderFinancialOverview(ctx context.Context, 
 				return entity.ProviderFinancialOverview{}, errs.ErrUnavailable
 			}
 			summary := &entity.ProviderFinancialSummary{ReceivedAt: *received, Version: version}
-			if json.Unmarshal(raw, &summary.Observation) != nil || summary.Observation.Validate() != nil {
+			observation, err := runtimecontract.ParseProviderFinancialObservation(raw)
+			if err != nil {
 				rows.Close()
 				return entity.ProviderFinancialOverview{}, errs.ErrUnavailable
 			}
+			summary.Observation = observation
 			account.FinancialSummary = summary
 		}
 		result.Add(account)
