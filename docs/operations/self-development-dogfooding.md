@@ -4,9 +4,25 @@ title: Самонастройка и разработка Kodex средства
 type: operations
 status: approved
 owner: manager
-version: 1.1.12
+version: 1.1.13
 updated: 2026-10-14
 ---
+
+## 14.10.2026 12:25 UTC — актуальный остаток
+
+- [x] Provider managed renewal/fresh catalog и serving/source proof.
+- [x] Исправить тяжёлый file-catalog SQL и batch claim; code/servingbb938a00,
+  actual Developer/PROJECT leases получены, published pins сохранены.
+- [x] Actual Developer ENV30/12GiB/4CPU, instructions3 и gpt-6.1-sol/medium;
+  без OOM/restart на этом checkpoint, выполнение ещё продолжается.
+- [x] SYSTEM и PROJECT no-ID READ-only вопросы о прежней задаче; actual
+  параллельный Developer+PROJECT, отдельные session/Pod.
+- [x] Run screen desktop/mobile, Console/Network/realtime/rejoin; screenshot
+  fallback после обычного SSO, не подмена недоступного MCP снимка успехом.
+- [ ] Native Developer final/checkpoints/tests/push → ONE Review → Manager/owner.
+- [ ] Paid credits/weekly-limit и остальные no-ID/tenant/lifecycle/QA65.
+- [ ] Mobile graph default: читаемый outline либо active-node focus.
+- [ ] Exact gates/bootstrap merge/fresh-main/serving и ручная приёмка.
 
 ## 14.10.2026 09:40 UTC — восстановленный провайдер, следующий реальный Workflow
 

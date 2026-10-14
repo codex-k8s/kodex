@@ -4,11 +4,50 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.17
+version: 1.1.18
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 12:25 UTC — выдача восстановлена, Developer реально работает
+
+Published SOURCE/remote/Draft1807/HOTbb938a00e460c0566777fede036f0cc8d216f9f9
+MATCH. Второй queued-only handover PASS11:46:22, CP serving ELF24f1dfe6…d3d09
+сохранён. Новый controller UID27d531d3-c9d1-42f8-abd5-8bf91c7a4bc7,
+serving ELF4bca83c40d4e6ef4591496ab829a34e8f69775148915469df7b6a29525c64133
+совпадает с host build; source runtime.go SHA10c5a17b…4f953 MATCH.
+Published85/pinsf822 unchanged; после batch1 claim timeout больше не наблюдался.
+
+Developer run_ZFTAokhCuuF4QYo2zF94dXFU RUNNING, настоящий Pod
+runtime-turn-0c04f4505a910839/UIDe400e6b6-807a-4226-9f64-1b9fc4d66822:
+provider requests/limits12GiB/4CPU, role image manifest5cc8533b…9f0d5,
+restarts0. RuntimeRevisionrrev_D9qTVPxc59ulFz8ZwTlgfGid подтверждает модель
+gpt-6.1-sol/medium и instructions3/ins_PYeOCBKsZbCqzFJXQXrfx4z5.
+Root seq1325→1336, native shell/READ/docs calls продолжаются; отдельные tool
+FAIL не равны terminal failure. Новой реализации/tests/push/Review ещё нет.
+Active writer может временно давать прежний READ_ONLY readiness; это не
+устраняется ручными chmod, Pod/provider не перезапускались.
+
+PROJECT no-ID запрос завершён SUCCEEDED, пять READ tools, корректно найдена
+задача1796 и текущий Developer, указаны завершённые INTAKE/Architect и
+UNKNOWN реальных финансов. SYSTEM аналогичный кейс ранее PASS. PROJECT и
+Developer действительно выполнялись одновременно в отдельных session/Pod,
+а не через singleton warm. Это не10-chat stress PASS.
+
+Chrome MCP Console0/relevant API200/reload/rejoin PASS. MCP screenshots
+зависли; прерваны только ожидания снимков, не вкладки/агенты. Разрешённый
+Playwright fallback: обычный вход через обе SSO границы, затем exact run
+и ожидание реальных graph nodes. Desktop1280x900/mobile390x844 снимки
+просмотрены: page overflowfalse, Console0 и relevant API200, realtime ready.
+Первые fixture проверки остановились слишком рано/после одного SSO входа;
+они FAIL/NOT RUN для приложения, а не подтверждённый auth defect.
+Mobile fit-all десяти узлов слишком мелкий: перед приёмкой улучшить default
+mobile presentation (читаемый outline или фокус активного узла); пока OPEN.
+
+Business1808 остаётся Draft/headc784ee85ec2e8c9aaf481014d46401d61110ca5e.
+Developer final/checkpoints/tests/push → ONE Review → Manager/owner, paid
+case, остатки QA65 и bootstrap gates/merge/main не объявлены завершёнными.
 
 ## Checkpoint 14.10.2026 11:45 UTC — SQL включён, batch требует разделения
 

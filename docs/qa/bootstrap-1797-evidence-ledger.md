@@ -4,9 +4,28 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.17
+version: 1.0.18
 updated: 2026-10-14
 ---
+
+## 14.10.2026 12:25 UTC — actual claim/parallel no-ID PASS
+
+- Serving code bb938a00, CP ELF24f1dfe6…d3d09 и controller ELF4bca83c4…64133
+  MATCH. Queued-only maintenance PASS11:46:22, published85/pinsf822 unchanged.
+- Developer RUNNING/ENV30, actual provider12GiB/4CPU, instructions3,
+  gpt-6.1-sol/medium, restart0. Не final implementation/test/push PASS.
+- PROJECT helper SUCCEEDED: натуральный вопрос без ID, пять READ tools,
+  правильные1796/Developer/предшествующие этапы/финансовый UNKNOWN.
+  SYSTEM аналогичный кейс PASS; actual concurrent Developer+PROJECT PASS,
+  не10-chat stress. Данные других tenant и negative cases ещё не проверены.
+- Chrome Console0/API200/reload/rejoin. MCP screenshot timeout NOT RUN;
+  Playwright fallback после обеих SSO границ и real graph-node readiness:
+  desktop/mobile screenshots просмотрены, page overflowfalse/Console0/API200.
+  Ранние auth/loading fixture FAIL сохранены; исправлено ожидание проверки,
+  а не SSO код. Чужие вкладки и native процессы не изменялись.
+- Mobile graph fit-all слишком мелкий: default outline/active focus OPEN.
+- Business1808 Draft/headc784ee85…10ca5e; ONE Review/Manager/owner, paid
+  evidence, remaining QA65 и bootstrap merge/fresh-main NOT RUN/OPEN.
 
 ## 14.10.2026 11:45 UTC — serving SQL PASS, batch fix ещё не включён
 
