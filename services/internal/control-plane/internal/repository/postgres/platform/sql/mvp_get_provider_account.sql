@@ -3,7 +3,9 @@ SELECT account.ref, account.definition_key, account.name, account.external_accou
        account.state, account.enabled, account.version, account.created_at, account.updated_at,
        COALESCE(attempt.ref, ''), COALESCE(attempt.method, ''), COALESCE(attempt.state, ''),
        COALESCE(attempt.verification_uri, ''), COALESCE(attempt.user_code, ''), attempt.expires_at,
-       COALESCE(attempt.safe_failure_code, ''), COALESCE(attempt.materializer_attempt_ref, ''), account.max_concurrent_executions
+       COALESCE(attempt.safe_failure_code, ''), COALESCE(attempt.materializer_attempt_ref, ''), account.max_concurrent_executions,
+       CASE WHEN account.current_credential_revision_id = account.financial_credential_revision_id AND account.state = 'AUTHORIZED' AND account.enabled THEN account.financial_observation ELSE NULL END,
+       account.financial_received_at
 FROM control_plane.provider_accounts account
 LEFT JOIN LATERAL (
     SELECT attempt_row.ref, attempt_row.method, attempt_row.state, attempt_row.materializer_attempt_ref,

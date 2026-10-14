@@ -20,6 +20,7 @@ import type {
   Project,
   ProviderAccount,
   ProviderDefinition,
+  ProviderFinancialOverview,
   RoleEnvironment,
   RoleImageRecipe,
   Run,
@@ -31,6 +32,8 @@ import type {
 } from "../openapi/types.gen";
 
 export interface PlatformCatalogSnapshot {
+  providerCatalogUnavailable?: boolean;
+  financialSummary?: ProviderFinancialOverview;
   organizationRecipes?: RoleImageRecipe[];
   organizationRecipesPage?: PlatformPageCursor;
   organizationSecrets?: RuntimeSecret[];

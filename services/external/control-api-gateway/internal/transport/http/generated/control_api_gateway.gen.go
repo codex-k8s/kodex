@@ -4840,6 +4840,51 @@ func (e ProviderDefinitionKey) Valid() bool {
 	}
 }
 
+// Defines values for ProviderFinancialObservationRestriction.
+const (
+	RateLimitReached                 ProviderFinancialObservationRestriction = "rate_limit_reached"
+	WorkspaceMemberCreditsDepleted   ProviderFinancialObservationRestriction = "workspace_member_credits_depleted"
+	WorkspaceMemberUsageLimitReached ProviderFinancialObservationRestriction = "workspace_member_usage_limit_reached"
+	WorkspaceOwnerCreditsDepleted    ProviderFinancialObservationRestriction = "workspace_owner_credits_depleted"
+	WorkspaceOwnerUsageLimitReached  ProviderFinancialObservationRestriction = "workspace_owner_usage_limit_reached"
+)
+
+// Valid indicates whether the value is a known member of the ProviderFinancialObservationRestriction enum.
+func (e ProviderFinancialObservationRestriction) Valid() bool {
+	switch e {
+	case RateLimitReached:
+		return true
+	case WorkspaceMemberCreditsDepleted:
+		return true
+	case WorkspaceMemberUsageLimitReached:
+		return true
+	case WorkspaceOwnerCreditsDepleted:
+		return true
+	case WorkspaceOwnerUsageLimitReached:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProviderFinancialObservationState.
+const (
+	ProviderFinancialObservationStateAVAILABLE   ProviderFinancialObservationState = "AVAILABLE"
+	ProviderFinancialObservationStateUNAVAILABLE ProviderFinancialObservationState = "UNAVAILABLE"
+)
+
+// Valid indicates whether the value is a known member of the ProviderFinancialObservationState enum.
+func (e ProviderFinancialObservationState) Valid() bool {
+	switch e {
+	case ProviderFinancialObservationStateAVAILABLE:
+		return true
+	case ProviderFinancialObservationStateUNAVAILABLE:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProviderModelCatalogStatusFailure.
 const (
 	ProviderModelCatalogStatusFailureAUTHORIZATIONREJECTED ProviderModelCatalogStatusFailure = "AUTHORIZATION_REJECTED"
@@ -9594,16 +9639,16 @@ func (e ListVFSNodesParamsLifecycleState) Valid() bool {
 
 // Defines values for SearchVFSParamsLifecycleState.
 const (
-	SearchVFSParamsLifecycleStateACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
-	SearchVFSParamsLifecycleStateDELETED SearchVFSParamsLifecycleState = "DELETED"
+	ACTIVE  SearchVFSParamsLifecycleState = "ACTIVE"
+	DELETED SearchVFSParamsLifecycleState = "DELETED"
 )
 
 // Valid indicates whether the value is a known member of the SearchVFSParamsLifecycleState enum.
 func (e SearchVFSParamsLifecycleState) Valid() bool {
 	switch e {
-	case SearchVFSParamsLifecycleStateACTIVE:
+	case ACTIVE:
 		return true
-	case SearchVFSParamsLifecycleStateDELETED:
+	case DELETED:
 		return true
 	default:
 		return false
@@ -12632,6 +12677,8 @@ type ProviderAccount struct {
 	Deletion                    *ProviderAccountDeletion     `json:"deletion,omitempty"`
 	Enabled                     bool                         `json:"enabled"`
 	ExternalAccountMasked       string                       `json:"externalAccountMasked"`
+	FinancialEligible           *bool                        `json:"financialEligible,omitempty"`
+	FinancialSummary            *ProviderFinancialSummary    `json:"financialSummary,omitempty"`
 	MaximumConcurrentExecutions int32                        `json:"maximumConcurrentExecutions"`
 	Name                        string                       `json:"name"`
 	NextActions                 []NextAction                 `json:"nextActions"`
@@ -12890,6 +12937,62 @@ type ProviderDefinitionKey string
 type ProviderDefinitionPage struct {
 	Items         []ProviderDefinition `json:"items"`
 	NextPageToken string               `json:"nextPageToken"`
+}
+
+// ProviderFinancialCredits defines model for ProviderFinancialCredits.
+type ProviderFinancialCredits struct {
+	// Balance Точная upstream строка. Единица и денежный эквивалент не установлены.
+	Balance    *string `json:"balance,omitempty"`
+	HasCredits *bool   `json:"hasCredits,omitempty"`
+	Unlimited  *bool   `json:"unlimited,omitempty"`
+}
+
+// ProviderFinancialDisplayAccount defines model for ProviderFinancialDisplayAccount.
+type ProviderFinancialDisplayAccount struct {
+	FinancialSummary *ProviderFinancialSummary `json:"financialSummary,omitempty"`
+	Name             string                    `json:"name"`
+	Ref              OpaqueRef                 `json:"ref"`
+}
+
+// ProviderFinancialObservation defines model for ProviderFinancialObservation.
+type ProviderFinancialObservation struct {
+	Credits              *ProviderFinancialCredits                `json:"credits,omitempty"`
+	OrdinaryUsageAllowed *bool                                    `json:"ordinaryUsageAllowed,omitempty"`
+	Restriction          *ProviderFinancialObservationRestriction `json:"restriction,omitempty"`
+	Sequence             int64                                    `json:"sequence"`
+	SpendControlReached  *bool                                    `json:"spendControlReached,omitempty"`
+	State                ProviderFinancialObservationState        `json:"state"`
+	Windows              *[]ProviderFinancialWindow               `json:"windows,omitempty"`
+}
+
+// ProviderFinancialObservationRestriction defines model for ProviderFinancialObservation.Restriction.
+type ProviderFinancialObservationRestriction string
+
+// ProviderFinancialObservationState defines model for ProviderFinancialObservation.State.
+type ProviderFinancialObservationState string
+
+// ProviderFinancialOverview defines model for ProviderFinancialOverview.
+type ProviderFinancialOverview struct {
+	Accounts   []ProviderFinancialDisplayAccount `json:"accounts"`
+	Exhausted  int64                             `json:"exhausted"`
+	ObservedAt time.Time                         `json:"observedAt"`
+	Total      int64                             `json:"total"`
+	Unknown    int64                             `json:"unknown"`
+	ValidUntil time.Time                         `json:"validUntil"`
+}
+
+// ProviderFinancialSummary defines model for ProviderFinancialSummary.
+type ProviderFinancialSummary struct {
+	Observation ProviderFinancialObservation `json:"observation"`
+	ReceivedAt  Timestamp                    `json:"receivedAt"`
+	Version     int64                        `json:"version"`
+}
+
+// ProviderFinancialWindow defines model for ProviderFinancialWindow.
+type ProviderFinancialWindow struct {
+	DurationMinutes *int64 `json:"durationMinutes,omitempty"`
+	ResetsAt        *int64 `json:"resetsAt,omitempty"`
+	UsedPercent     int32  `json:"usedPercent"`
 }
 
 // ProviderModelCatalogStatus defines model for ProviderModelCatalogStatus.

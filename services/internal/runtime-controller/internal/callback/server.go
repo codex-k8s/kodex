@@ -458,7 +458,8 @@ func (server *Server) progress(writer http.ResponseWriter, request *http.Request
 	var payload runtimecontract.RunnerProgressRequest
 	if decode(request, &payload, runtimecontract.MaximumRuntimeMessageBytes*6+2048) != nil ||
 		payload.RuntimeRevisionDigest != input.RuntimeRevisionDigest ||
-		payload.Message == nil && !progressCodePattern.MatchString(payload.Progress) ||
+		payload.Financial == nil && payload.Message == nil && !progressCodePattern.MatchString(payload.Progress) ||
+		payload.Financial != nil && (payload.Message != nil || payload.Progress != "" || payload.Financial.Validate() != nil) ||
 		payload.Message != nil && (payload.Progress != "" || payload.Message.Validate() != nil) {
 		http.Error(writer, "invalid runtime progress", http.StatusBadRequest)
 		return
@@ -466,7 +467,9 @@ func (server *Server) progress(writer http.ResponseWriter, request *http.Request
 	ctx, cancel := context.WithTimeout(request.Context(), server.config.RequestTimeout)
 	defer cancel()
 	projection := &controlplanev1.ReportExecutionProgressRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration}
-	if message := payload.Message; message != nil {
+	if payload.Financial != nil {
+		projection.Financial = castFinancialObservation(*payload.Financial)
+	} else if message := payload.Message; message != nil {
 		digest := sha256.Sum256([]byte(stableKey(input.LeaseRef, "message:"+message.ItemID)))
 		projection.Message = &controlplanev1.RunMessage{Ref: "msg_" + hex.EncodeToString(digest[:16]),
 			Phase: controlplanev1.RunMessagePhase(controlplanev1.RunMessagePhase_value["RUN_MESSAGE_PHASE_"+message.Phase]), Revision: message.Revision, Text: message.Text}

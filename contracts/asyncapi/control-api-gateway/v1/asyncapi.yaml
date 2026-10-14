@@ -408,6 +408,14 @@ components:
       type: object
       additionalProperties: false
       properties:
+        providerCatalogUnavailable: { type: boolean }
+        financialSummary:
+          type: object
+          x-go-type: httpgenerated.ProviderFinancialOverview
+          x-go-import: github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated
+          x-go-import-alias: httpgenerated
+          x-typescript-type: ProviderFinancialOverview
+          x-typescript-import: ../openapi/types.gen
         organizationRecipes:
           type: array
           items:

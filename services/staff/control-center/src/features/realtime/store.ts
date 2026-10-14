@@ -373,6 +373,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
     const cursor = Number(envelope.cursor);
     if (envelope.type === "PLATFORM_RESYNC_REQUIRED") {
       if (envelope.reason !== "AUTHORITATIVE_READ_REQUIRED") return false;
+      providers.clearFinancial();
       Object.assign(platformState, {
         state: "recovering",
         attempt: session.attempt,
@@ -435,23 +436,52 @@ export const useRealtimeStore = defineStore("realtime", () => {
         });
       } else if (kind === "PROVIDER_ACCOUNT") {
         const catalog = recordField(envelope.snapshot, "catalog");
-        providers.applySnapshot(
-          entityArrayField<ProviderAccount>(catalog, "accounts"),
-          optionalStringField(recordField(catalog, "page"), "nextPageToken"),
-          stringArrayField<NextAction>(catalog, "nextActions"),
-          keyedArrayField<ProviderDefinition>(catalog, "providerDefinitions"),
-          optionalStringField(
+        const financial = recordField(catalog, "financialSummary");
+        if (
+          catalog.providerCatalogUnavailable !== undefined &&
+          typeof catalog.providerCatalogUnavailable !== "boolean"
+        )
+          return false;
+        const unavailable = catalog.providerCatalogUnavailable === true;
+        if (!unavailable) {
+          // Проверяем весь kind до первого изменения store, включая finance.
+          const accounts = entityArrayField<ProviderAccount>(
+            catalog,
+            "accounts",
+          );
+          const nextPage = optionalStringField(
+            recordField(catalog, "page"),
+            "nextPageToken",
+          );
+          const actions = stringArrayField<NextAction>(catalog, "nextActions");
+          const definitions = keyedArrayField<ProviderDefinition>(
+            catalog,
+            "providerDefinitions",
+          );
+          const definitionsPage = optionalStringField(
             recordField(catalog, "providerDefinitionsPage"),
             "nextPageToken",
-          ),
-        );
-        platform.applyPlatformSnapshot(
-          "RUNTIME_SELECTION",
-          selectedProjectRef(),
-          {
-            catalog,
-          },
-        );
+          );
+          entityArrayField(catalog, "runtimes");
+          providers.applyFinancialSnapshot(financial);
+          providers.applySnapshot(
+            accounts,
+            nextPage,
+            actions,
+            definitions,
+            definitionsPage,
+          );
+          platform.applyPlatformSnapshot(
+            "RUNTIME_SELECTION",
+            selectedProjectRef(),
+            {
+              catalog,
+            },
+          );
+        } else {
+          providers.applyFinancialSnapshot(financial);
+          providers.applyUnavailableCatalog();
+        }
         platform.markRealtimeSnapshot(kind, selectedProjectRef(), catalog);
       } else if (kind === "MEMBERSHIP") {
         const catalog = recordField(envelope.snapshot, "catalog");
@@ -571,8 +601,10 @@ export const useRealtimeStore = defineStore("realtime", () => {
         );
         if (!availableKinds.includes("RUNTIME_ENVIRONMENT"))
           runtime.applyEnvironmentSnapshot(selectedProjectRef(), []);
-        if (!availableKinds.includes("PROVIDER_ACCOUNT"))
+        if (!availableKinds.includes("PROVIDER_ACCOUNT")) {
+          providers.clearFinancial();
           providers.applySnapshot([], undefined, []);
+        }
       }
       platformSnapshotReady = true;
       platformBootstrapCursor = undefined;
@@ -761,6 +793,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
       envelope.streamRef === platformStreamRef &&
       envelope.requestRef === session.requestRef
     ) {
+      providers.clearFinancial();
       platformSnapshotReady = false;
       platformBootstrapCursor = undefined;
       Object.assign(platformState, {
@@ -786,6 +819,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
         failProtocol(socket, "INVALID_SESSION_PROBLEM");
         return;
       }
+      providers.clearFinancial();
       platformSnapshotReady = false;
       platformBootstrapCursor = undefined;
       Object.assign(platformState, {
@@ -1107,6 +1141,7 @@ export const useRealtimeStore = defineStore("realtime", () => {
   }
 
   function closeAll(): void {
+    providers.clearFinancial();
     session.stopped = true;
     for (const active of activeRuns.values())
       if (active.timer !== undefined) window.clearTimeout(active.timer);
@@ -1129,12 +1164,16 @@ export const useRealtimeStore = defineStore("realtime", () => {
   }
 
   function refreshSession(): void {
+    providers.clearFinancial();
+    platformSnapshotReady = false;
+    platformBootstrapCursor = undefined;
     disconnect("SESSION_RENEWED");
     session.stopped = false;
     void connect();
   }
 
   function changeProjectScope(): void {
+    providers.clearFinancial();
     platformSequence.value = 0;
     platformSnapshotReady = false;
     platformBootstrapCursor = undefined;

@@ -16681,6 +16681,8 @@ components:
         maximumConcurrentExecutions:
           { type: integer, format: int32, minimum: 1, maximum: 256 }
         usage: { $ref: "#/components/schemas/ProviderAccountUsage" }
+        financialSummary: { $ref: "#/components/schemas/ProviderFinancialSummary" }
+        financialEligible: { type: boolean }
         authorization: { $ref: "#/components/schemas/ProviderAuthorization" }
         deletion: { $ref: "#/components/schemas/ProviderAccountDeletion" }
         verification:
@@ -16689,6 +16691,49 @@ components:
           { type: array, items: { $ref: "#/components/schemas/NextAction" } }
         createdAt: { $ref: "#/components/schemas/Timestamp" }
         updatedAt: { $ref: "#/components/schemas/Timestamp" }
+    ProviderFinancialSummary:
+      type: object
+      additionalProperties: false
+      required: [observation, receivedAt, version]
+      properties:
+        observation: { $ref: "#/components/schemas/ProviderFinancialObservation" }
+        receivedAt: { $ref: "#/components/schemas/Timestamp" }
+        version: { type: integer, format: int64, minimum: 1 }
+    ProviderFinancialObservation:
+      type: object
+      additionalProperties: false
+      required: [sequence, state]
+      properties:
+        sequence: { type: integer, format: int64, minimum: 1, maximum: 64 }
+        state: { type: string, enum: [AVAILABLE, UNAVAILABLE] }
+        ordinaryUsageAllowed: { type: boolean }
+        spendControlReached: { type: boolean }
+        restriction:
+          type: string
+          enum: [rate_limit_reached, workspace_owner_credits_depleted, workspace_member_credits_depleted, workspace_owner_usage_limit_reached, workspace_member_usage_limit_reached]
+        windows:
+          type: array
+          maxItems: 2
+          items: { $ref: "#/components/schemas/ProviderFinancialWindow" }
+        credits: { $ref: "#/components/schemas/ProviderFinancialCredits" }
+    ProviderFinancialWindow:
+      type: object
+      additionalProperties: false
+      required: [usedPercent]
+      properties:
+        usedPercent: { type: integer, format: int32, minimum: 0, maximum: 100 }
+        durationMinutes: { type: integer, format: int64, minimum: 1, maximum: 5256000 }
+        resetsAt: { type: integer, format: int64, minimum: 0, maximum: 253402300799 }
+    ProviderFinancialCredits:
+      type: object
+      additionalProperties: false
+      properties:
+        hasCredits: { type: boolean }
+        unlimited: { type: boolean }
+        balance:
+          type: string
+          pattern: '^[0-9]{1,64}(\.[0-9]{1,64})?$'
+          description: Точная upstream строка. Единица и денежный эквивалент не установлены.
     ProviderAccountConcurrencyInput:
       type: object
       additionalProperties: false
@@ -18560,3 +18605,26 @@ components:
             items: { $ref: "#/components/schemas/Incident" },
           }
         observedAt: { $ref: "#/components/schemas/Timestamp" }
+
+    ProviderFinancialDisplayAccount:
+      type: object
+      additionalProperties: false
+      required: [ref, name]
+      properties:
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        financialSummary: { $ref: "#/components/schemas/ProviderFinancialSummary" }
+    ProviderFinancialOverview:
+      type: object
+      additionalProperties: false
+      required: [accounts, total, exhausted, unknown, observedAt, validUntil]
+      properties:
+        accounts:
+          type: array
+          maxItems: 3
+          items: { $ref: "#/components/schemas/ProviderFinancialDisplayAccount" }
+        total: { type: integer, format: int64, minimum: 0 }
+        exhausted: { type: integer, format: int64, minimum: 0 }
+        unknown: { type: integer, format: int64, minimum: 0 }
+        observedAt: { type: string, format: date-time }
+        validUntil: { type: string, format: date-time }

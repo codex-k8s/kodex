@@ -464,6 +464,7 @@ type AssistantPlanDraftInput struct {
 }
 type AssistantInstructionsInput struct{ Instructions string }
 type LeaseInput struct {
+	Financial                         *entity.ProviderFinancialSummary
 	WorkloadInstance, LeaseRef, Fence string
 	Generation                        int64
 	Limit                             int32

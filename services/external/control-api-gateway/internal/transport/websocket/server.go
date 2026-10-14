@@ -563,6 +563,11 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignalWithin(ctx context.Con
 	if signal.Sequence != multiplexer.platformCursor+1 {
 		return multiplexer.synchronizePlatformWithin(ctx)
 	}
+	// Изменение eligibility требует полного owner read; финансовая проекция
+	// не остаётся закешированной после отзыва доступа или смены config.
+	if signal.Kind == "AGENT" || signal.Kind == "MEMBERSHIP" || signal.Kind == "PLATFORM_MEMBERSHIP" || signal.Kind == "SYSTEM_ASSISTANT" {
+		return multiplexer.synchronizePlatformWithin(ctx)
+	}
 	if platformSignalOutsideScope(signal, multiplexer.projectRef) {
 		return multiplexer.advancePlatformCursor(signal)
 	}
@@ -579,6 +584,9 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignalWithin(ctx context.Con
 	envelope, err := multiplexer.boundedPlatformSnapshotWithin(ctx, envelope)
 	if err != nil {
 		if status.Code(err) == codes.PermissionDenied {
+			if signal.Kind == "PROVIDER_ACCOUNT" {
+				return multiplexer.synchronizePlatformWithin(ctx)
+			}
 			if signal.EventName == "RUN_CHANGED" && !multiplexer.refreshSubscribedRunsWithin(ctx) {
 				return false
 			}

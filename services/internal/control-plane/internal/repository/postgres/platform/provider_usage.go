@@ -73,7 +73,10 @@ func readProviderUsageAccounts(ctx context.Context, tx pgx.Tx, organization stri
 			&item.Catalog.State, &item.Catalog.Source, &item.Catalog.Failure, &item.ContentDigest, &raw, &item.ObservedAt, &item.CatalogSource) != nil {
 			return nil, errs.ErrUnavailable
 		}
-		if len(result) >= 4096 || len(raw) > 131072 || item.Maximum < 1 || item.Active < 0 || !validProviderAccountLifecycle(item.State, item.Enabled) || decodeStrict(raw, &item.Models) != nil {
+		if len(result) >= 4096 {
+			return nil, errs.ErrProviderCatalogTooLarge
+		}
+		if len(raw) > 131072 || item.Maximum < 1 || item.Active < 0 || !validProviderAccountLifecycle(item.State, item.Enabled) || decodeStrict(raw, &item.Models) != nil {
 			return nil, errs.ErrUnavailable
 		}
 		if !validProviderUsageCatalog(item) {

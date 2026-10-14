@@ -240,6 +240,8 @@ func transportError(err error) error {
 		return status.Error(codes.FailedPrecondition, "resource is already resolved")
 	case errors.Is(err, errs.ErrConflict):
 		return status.Error(codes.Aborted, "resource state changed")
+	case errors.Is(err, errs.ErrProviderCatalogTooLarge):
+		return statusErrorWithReason(codes.Unavailable, "provider catalog exceeds its bound", "PROVIDER_CATALOG_TOO_LARGE")
 	case errors.Is(err, errs.ErrUnavailable):
 		return status.Error(codes.Unavailable, "operation is temporarily unavailable")
 	default:
