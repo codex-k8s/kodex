@@ -4,7 +4,7 @@ title: Самонастройка и разработка Kodex средства
 type: operations
 status: approved
 owner: manager
-version: 1.1.14
+version: 1.1.15
 updated: 2026-10-14
 ---
 
@@ -25,7 +25,10 @@ updated: 2026-10-14
 - [ ] Native Developer final/checkpoints/tests/push → ONE Review → Manager/owner.
 - [ ] Paid credits/weekly-limit и остальные no-ID/tenant/lifecycle/QA65.
 - [x] Mobile graph default: читаемый outline, actual screenshot/Console/Network.
-- [ ] Mobile fresh viewport и ручное переключение/resize сохраняют выбранный режим.
+- [x] Mobile fresh viewport и ручное переключение/resize сохраняют выбранный режим.
+- [x] Disposable capacity2/10/11, снижение лимита, Stop/queue/interrupt/retry/restart/rejoin.
+- [x] Natural named ENV/resources/tools и файлы1796; stale plan не выдан за publication.
+- [ ] Workflow metadata вне карточки: CODE_ONLY enum14/tests готовы, safe delivery и native retest.
 - [ ] Exact gates/bootstrap merge/fresh-main/serving и ручная приёмка.
 
 ## 14.10.2026 09:40 UTC — восстановленный провайдер, следующий реальный Workflow

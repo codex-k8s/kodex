@@ -4,11 +4,46 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.21
+version: 1.1.22
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 14:37 UTC — named Workflow read подготовлен
+
+SOURCE/remote/Draft1807c66a46c5 MATCH до текущего metadata code diff;
+HOT0b5af51c serving, controller не перезапускался под Architect.
+Native original Retry11/run_4E4x4FCjIg44_NnXl35XGlil RUNNING/rootseq481;
+INTAKE SUCCEEDED, Architect run_RwYawk8h8VjgWk-1wITqtuKM RUNNING.
+Current Pod runtime-turn-83bf1e54541516a2/UIDa58908fa-b2ce-4dfc-b161-4bb25021051c,
+all containers Ready/restarts0. Новый final Developer/ONE Review ещё не получен.
+
+Дополнительный natural PROJECT кейс cnv_2LsgbQaJYJzFpa79bSxUAv6z /
+run_YqlAqgBjmKZTNfJ2IC_MIbKJ COMPLETED: ENV30/resources/tools и материалы
+по1796 найдены без ID, но exact publication graph/human gates вне карточки
+не подтверждены. Старый manager-plan не выдан за текущее состояние; итог
+по Workflow — semantic partial FAIL, а не полный PASS. USER corrections0.
+
+Добавлен отдельный WORKFLOW_METADATA enum14: canonical GetWorkflow eligibility,
+fresh lease actor/source boundary, только published stages/dependencies/gates,
+без draft/instructions/defaults/grants. Full configuration/update gate прежний.
+Matrix/checklist и exact code evidence — assistant-workflow-metadata-read.md.
+CP packages PASS, callback6.618s, disposable51.430s, Proto/codegen PASS;
+первые stale/invalid fixtures FAIL исправлены. CP binary38549814…6ed3,
+RCe861d02e…6a77 подготовлены, новый code пока NOT SERVING.
+
+Fresh mobile390x844 outline и manual graph→resize1280 сохранение выбора PASS,
+снимок просмотрен, overflowfalse. First fresh-tab fixture FAIL исправлен:
+Playwright browser.newPage создаёт single-page context; использован собственный
+explicit browser.newContext, чужой Chrome не изменялся. Console/Network0.
+Disposable parallel admission2/10/11/lower-limit/Stop PASS5.440s;
+parallel lifecycle/retry/queue/interrupt/repository restart и SYSTEM/PROJECT
+session resume PASS15.950s. Это synthetic checks, не real10-chat stress.
+
+Далее: native Workflow до результата; safe idle metadata delivery/real retest;
+paid и оставшиеся QA65, gates/bootstrap main и handoff. Нельзя FF/restart
+controller под активным model turn или считать checkpoint готовностью.
 
 ## Checkpoint 14.10.2026 14:00 UTC — reader live, recovery опубликован
 

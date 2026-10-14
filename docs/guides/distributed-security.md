@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.21
+version: 1.7.22
 updated: 2026-10-14
 ---
 
@@ -1987,6 +1987,14 @@ values, Secret, команд инструментов, инструкций ил
 не выходит из своего проекта; SYSTEM не обходит eligibility root USER.
 Полные instructions и подтверждаемые изменения сохраняют отдельный current
 server-owned context/OCC gate; metadata read не расширяет их authority.
+
+Тот же принцип применяется к published Workflow metadata: owner повторяет
+публичный eligibility resolver и `workflow.view`, а PROJECT остаётся в exact
+source project. Отдельный закрытый read kind выдаёт только publication pins,
+порядок/зависимости этапов и human gates. Draft, инструкции, input defaults,
+ResultSchema и grants в эту проекцию не входят; full configuration и UPDATE
+сохраняют прежний context gate. Исторические планы/файлы не заменяют текущую
+publication; metadata текущего процесса не подменяет immutable revision run.
 
 Owner-generated continuation notice и обычный `USER` имеют разные закрытые
 бюджеты. Исключение до 64KiB допустимо только для последнего полного

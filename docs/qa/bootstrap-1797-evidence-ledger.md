@@ -4,9 +4,33 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.21
+version: 1.0.22
 updated: 2026-10-14
 ---
+
+## 14.10.2026 14:37 UTC — адресные проверки и следующий natural gap
+
+- Source/remote c66a46c5 MATCH; HOT0b5af51c, code workflow metadata подготовлен,
+  пока NOT SERVING. Native retry11: Intake SUCCEEDED, Architect RUNNING/seq481,
+  runtime-turn-83bf1e54541516a2 all Ready/restarts0.
+- cnv_2LsgbQaJYJzFpa79bSxUAv6z/run_YqlAqgBjmKZTNfJ2IC_MIbKJ:
+  ENV/resources/tools/materials natural no-ID PASS; exact published process
+  вне карточки не подтверждён — semantic partial FAIL, не ложный полный PASS.
+- WORKFLOW_METADATA enum14 CODE_ONLY: CP packages PASS; callback PASS6.618s;
+  disposable own/foreign/source/fence/generation/terminal PASS51.430s;
+  Proto lint/build/codegen PASS. Producer/caster shared golden, private/null/
+  duplicate/version/mixed/ordinary negatives. First invalid fixtures and old
+  schema hashes FAIL corrected, новая live acceptance NOT RUN.
+- Fresh mobile outline/manual switch/resize actual PASS; screenshot просмотрен,
+  overflowfalse. Ошибка single-page Playwright context устранена только в
+  checker, не в приложении. MCP Console0, relevant network200. Twelve-minute
+  CP/controller stdout sample пуст; это не доказательство всех backend paths.
+- Disposable capacity2/10/11/lower/Stop PASS5.440s; queue/interrupt/retry/
+  repository restart/SYSTEM+PROJECT resume PASS15.950s наc66 unchanged code.
+  Initial test selector не включил Bootstrap subtests; отдельный exact selector
+  выполнил их успешно. Это не реальный10-chat stress или весь QA65.
+- Final native Developer/ONE Review/Manager/owner, paid, metadata delivery/
+  native retest, bootstrap gates/merge/main ещё OPEN. USER business corrections0.
 
 ## 14.10.2026 14:00 UTC — actual reader/UX и штатное восстановление
 

@@ -14,7 +14,7 @@ const maximumAssistantDiscoveredSchemas = 4
 const maximumAssistantCatalogAgents = 20
 
 const configurationCatalogBaseDescription = "Discover refs/schemas; omit operation_types for index. No mixed selectors; MODELS needs account_ref. Fresh catalog; execution_snapshot turn-pinned."
-const configurationCatalogContextGuidance = "Full instructions and change plans require the current server-owned context. Safe AGENT_RUNTIME_CONFIGURATION reads use an exact eligible agent ref resolved by find_platform_resources; never guess refs or broaden authority. If a full context-bound read is absent from inputSchema, ask the owner to open its matching native resource route and submit a new turn."
+const configurationCatalogContextGuidance = "Full instructions and change plans require the current server-owned context. Safe AGENT_RUNTIME_CONFIGURATION and WORKFLOW_METADATA reads use exact eligible refs resolved by find_platform_resources; never guess refs or broaden authority. Historical plans do not replace current published workflow metadata. If a full context-bound read is absent from inputSchema, ask the owner to open its matching native resource route and submit a new turn."
 const configurationCatalogPageGuidance = "Use assistant_configuration_catalog with its required kind, assistant_ref, entity_kind and entity_ref. Read configuration_page.text from configuration_offset_bytes=0 via next_offset_bytes to eof=true; pin configuration_sha256 on continuation, maximum_bytes 4..16384."
 
 func configurationCatalogDescription(input runtimecontract.RunnerInput) string {
@@ -29,11 +29,17 @@ func configurationCatalogDescription(input runtimecontract.RunnerInput) string {
 	if assistantAgentRuntimeConfigurationAvailable(input) {
 		reads = append(reads, "AGENT_RUNTIME_CONFIGURATION")
 	}
+	if assistantWorkflowMetadataAvailable(input) {
+		reads = append(reads, "WORKFLOW_METADATA")
+	}
 	if len(reads) > 0 {
 		description += " Available resource reads: " + strings.Join(reads, ", ") + ". " + configurationCatalogPageGuidance
 	}
 	if assistantAgentRuntimeConfigurationAvailable(input) {
 		description += " AGENT_RUNTIME_CONFIGURATION reads a resolved eligible project agent without opening its card: current model, CPU/memory policy, bound ENV/image, configured tool names and verified image inventory; no environment values, secrets or instructions."
+	}
+	if assistantWorkflowMetadataAvailable(input) {
+		description += " WORKFLOW_METADATA reads a resolved eligible workflow published revision, ordered stages, dependencies and human gates without opening its card; no draft, instructions, grants or input defaults. It describes configuration, not a running workflow immutable revision."
 	}
 	return description + " " + configurationCatalogContextGuidance
 }

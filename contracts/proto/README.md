@@ -194,6 +194,19 @@ compiled runner catalog и bound custom images доставляются до nat
 
 ### Адресное чтение Workflow и назначенных сотрудников
 
+`WORKFLOW_METADATA` (enum14) разрешает безопасное чтение опубликованной схемы
+eligible процесса по найденному имени вне текущего WORKFLOW экрана. Прежний
+leased RPC и свежий root actor, GetWorkflow eligibility/`workflow.view`, точная
+PROJECT boundary сохраняются. Typed `WorkflowConfiguration` envelope переносит
+отдельную закрытую JSON projection: workflow/project/version, state/name,
+published ref/revision, coordinator, concurrency/timeout и ordered steps с
+dependencies/human gates. Draft, инструкции, defaults, ResultSchema и grants
+исключены. Отсутствие publication выражается revision0 и пустыми этапами, не
+подменяется draft. Consumer проверяет exact enum/source/target/version/SHA,
+закрытую типизированную модель и bounded страницы до EOF. Full
+`WORKFLOW_CONFIGURATION` и UPDATE сохраняют прежний current-context gate;
+metadata конфигурации не подменяет immutable revision конкретного Run.
+
 `AGENT_RUNTIME_CONFIGURATION` читает безопасные runtime metadata найденного
 eligible сотрудника SYSTEM/PROJECT помощником, независимо от текущего экрана, через
 `get_configuration_catalog` → `RuntimeWorkService.SearchAssistantResources`.

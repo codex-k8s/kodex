@@ -78,6 +78,17 @@ func readAssistantConfigurationMCP(t *testing.T, input runtimecontract.RunnerInp
 		server.logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	selector := arguments["assistant_configuration_catalog"].(map[string]any)
+	// Metadata reads не зависят от экранного контекста; version назначена owner.
+	expectedVersion := float64(0)
+	if key == "workflow_metadata" || key == "agent_runtime_configuration" {
+		var metadata map[string]any
+		if json.Unmarshal(expected, &metadata) != nil {
+			t.Fatal("invalid metadata fixture")
+		}
+		expectedVersion, _ = metadata["version"].(float64)
+	} else if input.AssistantContext != nil && input.AssistantContext.EntityVersion != nil {
+		expectedVersion = float64(*input.AssistantContext.EntityVersion)
+	}
 	defer func() {
 		delete(selector, "configuration_offset_bytes")
 		delete(selector, "configuration_sha256")
@@ -120,7 +131,7 @@ func readAssistantConfigurationMCP(t *testing.T, input runtimecontract.RunnerInp
 		}
 		text := page["text"].(string)
 		hash := sha256.Sum256([]byte(text))
-		if configuration["configuration_sha256"] != digest || configuration["version"] != float64(*input.AssistantContext.EntityVersion) || page["offset_bytes"] != float64(full.Len()) || page["size_bytes"] != float64(len(expected)) || page["page_sha256"] != hex.EncodeToString(hash[:]) || len(text) > 16384 {
+		if configuration["configuration_sha256"] != digest || configuration["version"] != expectedVersion || page["offset_bytes"] != float64(full.Len()) || page["size_bytes"] != float64(len(expected)) || page["page_sha256"] != hex.EncodeToString(hash[:]) || len(text) > 16384 {
 			t.Fatal("native page lost immutable digest, offset, size or byte budget")
 		}
 		full.WriteString(text)
