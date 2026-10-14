@@ -150,6 +150,7 @@ func (repository *Repository) promptContinuationPreviewForActorTx(ctx context.Co
 		"configOverlayRef": view.PublishedOverlay.Ref, "configOverlayVersion": view.PublishedOverlay.Revision, "configOverlayDigest": view.PublishedOverlay.Digest,
 		"contextSnapshot": contextSnapshot, "environmentTools": view.Environment.CurrentVersion.Tools, "integrationGrants": grants, "capabilities": materialized.EffectiveCapabilities,
 		"artifacts": []any{}}
+	next["promptSnapshot"] = snapshot
 	// Файлы берутся из того же проверенного typed descriptor, без locator.
 	for _, item := range snapshot.Artifacts {
 		next["artifacts"] = append(next["artifacts"].([]any), map[string]any{"ref": item.Ref, "revision": item.Revision, "digest": item.Digest})
@@ -190,6 +191,9 @@ func (repository *Repository) promptContinuationPreviewForActorTx(ctx context.Co
 	}
 	snapshot.TargetKind, snapshot.TargetRef, snapshot.SessionRef = promptservice.TargetSessionContinuation, sessionRef, sessionRef
 	snapshot.StagePurposeTemplate, snapshot.StageExpectedResultTemplate = "", ""
+	if err := bindProspectiveContinuationTaskProjection(&snapshot); err != nil {
+		return entity.PromptMaterializationSnapshot{}, err
+	}
 	snapshot.ExtraTemplates = nil
 	snapshot.ContextPin.PreviousRuntimeRevisionRef = previousRef
 	snapshot.ContextPin.Digest = ""
@@ -199,7 +203,9 @@ func (repository *Repository) promptContinuationPreviewForActorTx(ctx context.Co
 		Actor, Session, Task, AttachmentSet, TemplateRef, TemplateDigest string
 		Components                                                       map[string][]promptservice.RuntimeDescriptor
 		ContextPin                                                       entity.PromptContextPin
-	}{current.actorRef, sessionRef, input.Task, input.AttachmentSetRef, snapshot.TemplateRef, snapshot.TemplateDigest, currentComponents, dependencyPin})
+		AssistantCore                                                    *entity.PromptAssistantCore        `json:",omitempty"`
+		PlatformInstructions                                             *entity.PromptPlatformInstructions `json:",omitempty"`
+	}{current.actorRef, sessionRef, input.Task, input.AttachmentSetRef, snapshot.TemplateRef, snapshot.TemplateDigest, currentComponents, dependencyPin, snapshot.AssistantCore, snapshot.PlatformInstructions})
 	if err != nil {
 		return entity.PromptMaterializationSnapshot{}, errs.ErrUnavailable
 	}

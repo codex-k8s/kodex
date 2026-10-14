@@ -11,6 +11,7 @@ import (
 
 const (
 	RuntimeWorkspaceRoot                = "/workspace"
+	RuntimeWorkspaceWorkingRoot         = RuntimeWorkspaceRoot + "/work"
 	RuntimeWorkspaceWritableBytes int64 = 1 << 30
 	RuntimeWorkspaceMaximumFiles  int64 = 10_000
 

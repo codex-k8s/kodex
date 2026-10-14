@@ -328,6 +328,8 @@ export const usePlatformStore = defineStore("platform", () => {
   const runLoading = reactive<Record<string, boolean>>({});
   const runProblems = reactive<Partial<Record<string, AppProblem>>>({});
   const runReadGeneration = new Map<string, number>();
+  const runTranscriptGeneration = new Map<string, number>();
+  const runTranscriptProblems = reactive<Record<string, AppProblem>>({});
   const runSnapshotRefs = new Map<
     string,
     { refs: Set<string>; sequence: number }
@@ -819,12 +821,15 @@ export const usePlatformStore = defineStore("platform", () => {
     );
   }
 
-  async function loadRun(ref: string): Promise<void> {
+  async function loadRun(ref: string, signal?: AbortSignal): Promise<void> {
     const ownerSignal = ownerRequestSignal();
+    const readSignal = signal
+      ? AbortSignal.any([ownerSignal, signal])
+      : ownerSignal;
     const current = (runReadGeneration.get(ref) ?? 0) + 1;
     runReadGeneration.set(ref, current);
     const active = () =>
-      !ownerSignal.aborted && runReadGeneration.get(ref) === current;
+      !readSignal.aborted && runReadGeneration.get(ref) === current;
     runLoading[ref] = true;
     Reflect.deleteProperty(runProblems, ref);
     try {
@@ -834,7 +839,7 @@ export const usePlatformStore = defineStore("platform", () => {
       const graphReadback = await unwrap(
         getRunGraph({
           path: { runRef: ref },
-          signal: requestSignal(ownerSignal),
+          signal: requestSignal(readSignal),
         }),
       );
       if (!active()) return;
@@ -854,7 +859,7 @@ export const usePlatformStore = defineStore("platform", () => {
       const history = await loadRunEventHistory(
         ref,
         workspace.graph.sequence,
-        ownerSignal,
+        readSignal,
         active,
       );
       if (!active()) return;
@@ -876,7 +881,80 @@ export const usePlatformStore = defineStore("platform", () => {
     } catch (error) {
       if (active()) runProblems[ref] = asProblem(error);
     } finally {
-      if (active()) runLoading[ref] = false;
+      if (!ownerSignal.aborted && runReadGeneration.get(ref) === current)
+        runLoading[ref] = false;
+    }
+  }
+
+  function runTranscriptSequence(ref: string): number {
+    const bucket = events[ref];
+    let sequence = 0;
+    while (bucket?.[sequence + 1]) sequence += 1;
+    return sequence;
+  }
+
+  // История detail view не меняет graph/readiness и не отменяется их snapshots.
+  async function loadRunTranscript(
+    ref: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const ownerSignal = ownerRequestSignal();
+    const current = (runTranscriptGeneration.get(ref) ?? 0) + 1;
+    runTranscriptGeneration.set(ref, current);
+    const active = () =>
+      !ownerSignal.aborted &&
+      !signal?.aborted &&
+      runTranscriptGeneration.get(ref) === current;
+    Reflect.deleteProperty(runTranscriptProblems, ref);
+    try {
+      const organizationRef = requireRuntimeOrganizationRef(
+        bootstrap.value?.organizationRef,
+      );
+      const run = runs[ref],
+        graph = graphs[ref];
+      if (!run || !graph || run.rootRunRef !== ref || graph.runRef !== ref)
+        throw new Error("Run transcript owner snapshot is unavailable");
+      assertRunOwner(run, organizationRef);
+      const throughSequence = graph.sequence;
+      if (!Number.isSafeInteger(throughSequence) || throughSequence < 0)
+        throw new Error("Run transcript cursor is invalid");
+      const historySignal = requestSignal(
+        signal ? AbortSignal.any([ownerSignal, signal]) : ownerSignal,
+      );
+      const history = await loadRunEventHistory(
+        ref,
+        throughSequence,
+        historySignal,
+        active,
+        runTranscriptSequence(ref),
+      );
+      if (!active()) return;
+      assertOwnerRequest(ownerSignal);
+      if (
+        history.some((event) => event.runRef !== ref || event.run.ref !== ref)
+      )
+        throw new Error("Run transcript history identity mismatch");
+      const latest = runs[ref];
+      if (!latest) return;
+      assertRunOwner(latest, organizationRef);
+      if (
+        requireRuntimeOrganizationRef(bootstrap.value?.organizationRef) !==
+          organizationRef ||
+        latest.rootRunRef !== run.rootRunRef ||
+        latest.projectRef !== run.projectRef ||
+        latest.sessionRef !== run.sessionRef ||
+        latest.attempt !== run.attempt ||
+        latest.source !== run.source ||
+        latest.target.type !== run.target.type ||
+        latest.target.ref !== run.target.ref ||
+        !sameAssistantRunPin(run, latest)
+      )
+        throw new Error("Run transcript owner identity changed");
+      const bucket = events[ref] ?? {};
+      for (const event of history) bucket[event.sequence] = event;
+      events[ref] = bucket;
+    } catch (error) {
+      if (active()) runTranscriptProblems[ref] = asProblem(error);
     }
   }
 
@@ -885,9 +963,9 @@ export const usePlatformStore = defineStore("platform", () => {
     throughSequence: number,
     ownerSignal: AbortSignal,
     active: () => boolean,
+    afterSequence = 0,
   ): Promise<RunEvent[]> {
     const result: RunEvent[] = [];
-    let afterSequence = 0;
     while (afterSequence < throughSequence) {
       assertOwnerRequest(ownerSignal);
       if (!active()) throw new Error(runHistorySupersededMessage);
@@ -2140,6 +2218,10 @@ export const usePlatformStore = defineStore("platform", () => {
     }
     for (const ref of refs) {
       runReadGeneration.set(ref, (runReadGeneration.get(ref) ?? 0) + 1);
+      runTranscriptGeneration.set(
+        ref,
+        (runTranscriptGeneration.get(ref) ?? 0) + 1,
+      );
       runLoading[ref] = false;
       Reflect.deleteProperty(runs, ref);
       Reflect.deleteProperty(graphs, ref);
@@ -2981,6 +3063,7 @@ export const usePlatformStore = defineStore("platform", () => {
     platformReloadScope = undefined;
     generation.clear();
     runReadGeneration.clear();
+    runTranscriptGeneration.clear();
     runSnapshotRefs.clear();
     for (const target of [
       runtimes,
@@ -2996,6 +3079,7 @@ export const usePlatformStore = defineStore("platform", () => {
       runs,
       graphs,
       events,
+      runTranscriptProblems,
       gates,
       artifacts,
       schedules,
@@ -3148,6 +3232,9 @@ export const usePlatformStore = defineStore("platform", () => {
     loadWorkflow,
     loadRuns,
     loadRun,
+    loadRunTranscript,
+    runTranscriptSequence,
+    runTranscriptProblems,
     loadGates,
     loadPendingGateCount,
     loadArtifacts,

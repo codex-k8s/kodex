@@ -19,6 +19,47 @@ export interface RuntimeImageOption extends AsyncEntityOption {
   generation: number;
 }
 
+// Только подписи текущей страницы; идентичность и проверка выбора не меняются.
+export function runtimeImagePagePresentation<T extends AsyncEntityOption>(
+  items: readonly T[],
+  generationLabel: (generation: number) => string,
+): (T & AsyncEntityOption)[] {
+  const recipeRef = (item: AsyncEntityOption): string | undefined =>
+    "recipeRef" in item && typeof item.recipeRef === "string" && item.recipeRef
+      ? item.recipeRef
+      : undefined;
+  const shortRef = (value: string): string =>
+    value.length > 12 ? `…${value.slice(-8)}` : value;
+  const identities = new Map<string, Set<string>>();
+  for (const item of items) {
+    const ref = recipeRef(item);
+    if (!ref) continue;
+    const label = shortRef(ref);
+    const refs = identities.get(label) ?? new Set<string>();
+    refs.add(ref);
+    identities.set(label, refs);
+  }
+  return items.map((item) => {
+    const ref = recipeRef(item);
+    if (
+      !ref ||
+      !("generation" in item) ||
+      typeof item.generation !== "number" ||
+      !Number.isSafeInteger(item.generation) ||
+      item.generation < 1
+    )
+      return item;
+    const short = shortRef(ref);
+    const identity = identities.get(short)?.size === 1 ? short : ref;
+    return {
+      ...item,
+      description: `${generationLabel(item.generation)} · ${identity}`,
+      meta: undefined,
+      tooltip: [item.title, ref, item.description].filter(Boolean).join("\n"),
+    };
+  });
+}
+
 export interface RuntimeImageCatalog {
   loadPage(
     scope: RuntimeResourceScope,

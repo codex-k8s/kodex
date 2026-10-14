@@ -49,9 +49,19 @@ onMounted(async () => {
       <div class="brand-mark" aria-hidden="true">
         <img src="/logo.png" alt="" />
       </div>
-      <h1>{{ $t("auth.callback") }}</h1>
+      <h1>{{ $t(problem ? "auth.failed" : "auth.callback") }}</h1>
       <p v-if="!problem" role="status">{{ $t("common.loading") }}</p>
       <ProblemNotice v-else :problem="problem" @retry="restartLogin" />
+      <template v-if="problem?.kind === 'unauthorized'">
+        <p>{{ $t("auth.callbackSignInRequired") }}</p>
+        <button
+          class="button button--primary"
+          type="button"
+          @click="restartLogin"
+        >
+          {{ $t("auth.signIn") }}
+        </button>
+      </template>
     </section>
   </main>
 </template>

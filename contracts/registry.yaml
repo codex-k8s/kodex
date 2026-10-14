@@ -69,6 +69,7 @@ packages:
       go: libs/go/controlplaneapi/gen/controlplane/v1
     consumers:
       - control-plane
+      - secret-broker
       - control-api-gateway
       - runtime-controller
       - automation-scheduler

@@ -70,6 +70,33 @@ const activeRun = computed(() => {
     : props.activityRuns.find((entry) => entry.ref === runRef);
 });
 const activeItemId = computed(() => {
+  if (!selectedNodeRef.value && props.run.source !== "SYSTEM_ASSISTANT") {
+    if (props.run.state !== "RUNNING") return null;
+    // Общая лента выбирает последний exact кандидат, а не состояние coordinator.
+    // Каждый child требует собственный owner snapshot того же root/project.
+    const candidates = new Set(
+      [
+        props.run,
+        ...props.activityRuns.filter(
+          (entry) =>
+            entry.ref !== props.run.ref &&
+            entry.rootRunRef === props.run.rootRunRef &&
+            entry.projectRef === props.run.projectRef &&
+            entry.source !== "SYSTEM_ASSISTANT",
+        ),
+      ].map((entry) =>
+        ordinaryRunActiveTranscriptItemId(
+          entry,
+          props.nodes,
+          filteredItems.value,
+        ),
+      ),
+    );
+    return (
+      filteredItems.value.filter((item) => candidates.has(item.id)).at(-1)
+        ?.id ?? null
+    );
+  }
   if (!activeRun.value) return null;
   return activeRun.value.source === "SYSTEM_ASSISTANT"
     ? undefined

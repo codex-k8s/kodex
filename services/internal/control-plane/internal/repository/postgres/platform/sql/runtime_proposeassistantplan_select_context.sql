@@ -42,8 +42,8 @@ JOIN control_plane.subjects actor
  AND actor.id = run.initiated_by
  AND actor.active
 JOIN control_plane.organizations organization ON organization.id = run.organization_id
-JOIN LATERAL control_plane.assistant_context_projection_v2(run.organization_id,actor.id,run.project_id,
-    run.assistant_context_entity_kind,run.assistant_context_entity_ref,transaction_timestamp(),conversation.project_id) context ON true
+JOIN LATERAL control_plane.assistant_context_projection_v3(run.organization_id,actor.id,run.project_id,
+    run.assistant_context_entity_kind,run.assistant_context_entity_ref,transaction_timestamp(),conversation.project_id,conversation.assistant_scope) context ON true
 LEFT JOIN control_plane.projects project ON project.id = conversation.project_id
 LEFT JOIN LATERAL (
     SELECT membership.role

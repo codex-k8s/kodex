@@ -15,6 +15,8 @@ func validWorkspacePolicy() RuntimeWorkspacePolicy {
 func TestRuntimeWorkspacePolicyNormalizesAndAppliesLongestPrefix(t *testing.T) {
 	policy := validWorkspacePolicy()
 	for _, test := range []struct{ candidate, access, denial string }{
+		{RuntimeWorkspaceWorkingRoot + "/repository/main.go", RuntimeWorkspaceWritable, ""},
+		{"work/attachment.txt", RuntimeWorkspaceWritable, ""},
 		{".kodex/outbox/result.md", RuntimeWorkspaceWritable, ""},
 		{"/workspace/input/set/files/a.txt", RuntimeWorkspaceReadOnly, ""},
 		{"/workspace/knowledge/memory.md", RuntimeWorkspaceReadOnly, ""},

@@ -31,3 +31,24 @@ func TestCancellationServiceCodeRealtimeProjection(t *testing.T) {
 		})
 	}
 }
+
+func TestRootCompletionServiceCodeRealtimeProjection(t *testing.T) {
+	for _, summary := range []string{"Корневой процесс завершён", "Root workflow completed"} {
+		event := &cp.RunEvent{
+			Type:        cp.RunEventType_RUN_EVENT_TYPE_NODE_STATE_CHANGED,
+			MessageKind: cp.RunEventMessageKind_RUN_EVENT_MESSAGE_KIND_STATE,
+			Summary:     "i18n:ROOT_PROCESS_COMPLETED", NodeRef: "nod_fixture01",
+			NodeState: cp.RunNodeState_RUN_NODE_STATE_FAILED,
+			Node:      &cp.RunNode{Ref: "nod_fixture01", Type: cp.RunNodeType_RUN_NODE_TYPE_ROOT_PROCESS, State: cp.RunNodeState_RUN_NODE_STATE_FAILED},
+		}
+		got, err := projectRunEvent(event, func(string) string { return summary })
+		if err != nil || got.ServiceCode == nil || string(*got.ServiceCode) != "ROOT_PROCESS_COMPLETED" || got.Summary != summary {
+			t.Fatal("realtime root completion discriminator or localized summary lost", err)
+		}
+		event.Summary = "i18n:RUNTIME_WORKFLOW_INCOMPLETE"
+		got, err = projectRunEvent(event, func(string) string { return summary })
+		if err != nil || got.ServiceCode != nil {
+			t.Fatal("different root reason acquired a service code", err)
+		}
+	}
+}

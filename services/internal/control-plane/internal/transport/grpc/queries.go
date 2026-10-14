@@ -474,6 +474,34 @@ func (server *Server) GetArtifact(ctx context.Context, request *controlplanev1.G
 	return &controlplanev1.GetArtifactResponse{Artifact: castArtifact(item)}, nil
 }
 
+func (server *Server) ListArtifactRevisions(ctx context.Context, request *controlplanev1.ListArtifactRevisionsRequest) (*controlplanev1.ListArtifactRevisionsResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_ListArtifactRevisions_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	items, total, next, err := server.service.ListArtifactRevisions(ctx, p, request.GetArtifactRef(), query.Page{Size: request.GetPage().GetPageSize(), Token: request.GetPage().GetPageToken()})
+	if err != nil {
+		return nil, transportError(err)
+	}
+	response := &controlplanev1.ListArtifactRevisionsResponse{Total: total, Page: &controlplanev1.PageInfo{NextPageToken: next}}
+	for _, item := range items {
+		response.Items = append(response.Items, castArtifactRevision(item))
+	}
+	return response, nil
+}
+
+func (server *Server) GetArtifactRevision(ctx context.Context, request *controlplanev1.GetArtifactRevisionRequest) (*controlplanev1.GetArtifactRevisionResponse, error) {
+	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetArtifactRevision_FullMethodName)
+	if err != nil {
+		return nil, err
+	}
+	item, err := server.service.GetArtifactRevision(ctx, p, request.GetArtifactRef(), request.GetRevisionRef())
+	if err != nil {
+		return nil, transportError(err)
+	}
+	return &controlplanev1.GetArtifactRevisionResponse{Revision: castArtifactRevision(item)}, nil
+}
+
 func (server *Server) GetAttachmentSet(ctx context.Context, request *controlplanev1.GetAttachmentSetRequest) (*controlplanev1.GetAttachmentSetResponse, error) {
 	p, err := principal(ctx, controlplanev1.PlatformQueryService_GetAttachmentSet_FullMethodName)
 	if err != nil {

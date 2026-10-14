@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
@@ -22,20 +21,7 @@ func appendSessionContext(builder *strings.Builder, input model.Input) (bool, er
 	if len(messages) == 0 {
 		return false, nil
 	}
-	if len(messages) > 128 {
-		return false, errSessionContext
-	}
-	for _, message := range messages {
-		if message.Role == "USER" {
-			if !runtimecontract.ValidAssistantTurnContent(message.Content) {
-				return false, errSessionContext
-			}
-		} else if (message.Role != "ASSISTANT" && message.Role != "SYSTEM") ||
-			len(message.Content) > 64<<10 || !utf8.ValidString(message.Content) {
-			return false, errSessionContext
-		}
-	}
-	notice, err := runtimecontract.CurrentContinuationNotice(input)
+	notice, err := runtimecontract.ValidateRuntimeSessionContext(input)
 	if err != nil {
 		return false, err
 	}

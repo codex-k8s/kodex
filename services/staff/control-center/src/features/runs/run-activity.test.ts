@@ -418,6 +418,78 @@ describe("компактное представление exact хода", () =>
     });
   });
 
+  it("складывает только закрытый root completion в details одного exact terminal этапа", () => {
+    const failure = item("failure", {
+      executionNodeType: "AGENT_EXECUTION",
+      executionSafeErrorCode: "PROVIDER_UNAVAILABLE",
+      eventType: "TURN_COMPLETED",
+      messageKind: "FINAL_MESSAGE",
+      state: "FAILED",
+      summary: "Провайдер временно недоступен",
+    });
+    const rootExecution = { ...execution, nodeRef: "nod_root" };
+    const root = item("root", {
+      execution: rootExecution,
+      executionNodeType: "ROOT_PROCESS",
+      serviceCompletionCode: "ROOT_PROCESS_COMPLETED",
+      eventType: "NODE_STATE_CHANGED",
+      messageKind: "STATE",
+      state: "FAILED",
+      summary: "Корневой процесс завершён",
+    });
+    const original = JSON.stringify([failure, root]);
+    const folded = presentRunTranscriptItems([failure, root], null);
+    expect(folded).toHaveLength(1);
+    expect(folded[0]).toMatchObject({
+      id: "failure",
+      summary: failure.summary,
+      serviceHistory: [failure, root],
+    });
+    expect(JSON.stringify([failure, root])).toBe(original);
+    expect(
+      presentRunTranscriptItems(
+        [failure, { ...root, executionSafeErrorCode: "PROVIDER_UNAVAILABLE" }],
+        null,
+      ),
+    ).toHaveLength(1);
+    for (const changes of [
+      { serviceCompletionCode: undefined },
+      { executionNodeType: undefined },
+      { state: "CANCELLED" as const },
+      { executionSafeErrorCode: "RUNTIME_WORKFLOW_INCOMPLETE" },
+      { execution: { ...rootExecution, runRef: "run_foreign" } },
+      { execution: { ...rootExecution, sessionRef: "ses_other" } },
+      { execution: { ...rootExecution, turnRef: "trn_other" } },
+      { execution: { ...rootExecution, turnNumber: 2 } },
+      { execution: { ...rootExecution, attempt: 2 } },
+      { execution: undefined, historical: true },
+      { phase: "FINAL" as const, kind: "agent" as const },
+      { progress: "Самостоятельная причина" },
+    ]) {
+      expect(
+        presentRunTranscriptItems([failure, { ...root, ...changes }], null),
+      ).toHaveLength(2);
+    }
+    const second = {
+      ...failure,
+      id: "second",
+      execution: { ...execution, nodeRef: "nod_second" },
+    };
+    expect(
+      presentRunTranscriptItems([failure, second, root], null),
+    ).toHaveLength(3);
+    const otherReason = {
+      ...root,
+      id: "root-other-reason",
+      serviceCompletionCode: undefined,
+      summary: "Отдельная причина",
+      eventType: "TURN_COMPLETED" as const,
+    };
+    expect(
+      presentRunTranscriptItems([failure, otherReason, root], null),
+    ).toHaveLength(2);
+  });
+
   it("сводит локализованные HTTP/WS события exact отмены по typed serviceCode", () => {
     const base = required(events[0]);
     const entries = buildRunTranscriptItems([
@@ -2161,6 +2233,142 @@ describe("buildRunActivityItems", () => {
       expect(show([failed, { ...completion, summary }])).toHaveLength(2);
     });
 
+    function failedCompletionFixture(
+      summary = "i18n:INTEGRATION_ACTION_FAILED",
+    ): [RunEvent, RunEvent] {
+      const [tool, completion] = completionFixture();
+      const rawCompletion = { ...completion };
+      delete (rawCompletion as Partial<PresentedRunEvent>).displaySummary;
+      return [
+        {
+          ...tool,
+          toolCall: {
+            ...required(tool.toolCall),
+            tool: "invoke_integration",
+            safeResult: JSON.stringify({
+              version: 1,
+              invocationRef: "inv_fixture123",
+              state: "FAILED",
+              inputSHA256: "a".repeat(64),
+            }),
+          },
+        },
+        {
+          ...rawCompletion,
+          summary,
+          runState: "RUNNING",
+          nodeState: "RUNNING",
+        },
+      ];
+    }
+
+    it.each([
+      "i18n:INTEGRATION_ACTION_FAILED",
+      "Действие интеграции отклонено или завершилось ошибкой",
+      "Integration action was rejected or failed",
+    ])("убирает только exact generic FAILED дубликат %s", (summary) => {
+      const input = failedCompletionFixture(summary);
+      const original = JSON.stringify(input);
+      const result = show(input);
+      expect(result).toHaveLength(1);
+      expect(
+        integrationToolPresentationState(required(result[0]?.toolCall)),
+      ).toBe("FAILED");
+      expect(JSON.stringify(input)).toBe(original);
+      expect(show([...input].reverse())).toEqual(result);
+      expect(show([required(input[1])])).toHaveLength(1);
+    });
+
+    it.each([
+      "runRef",
+      "nodeRef",
+      "sessionRef",
+      "turnRef",
+      "turnNumber",
+      "attempt",
+    ] as const)("сохраняет generic FAILED другого %s", (field) => {
+      const [tool, completion] = failedCompletionFixture();
+      const execution = required(completion.execution);
+      expect(
+        show([
+          tool,
+          {
+            ...completion,
+            execution: {
+              ...execution,
+              [field]:
+                typeof execution[field] === "number"
+                  ? 2
+                  : `${execution[field]}_foreign`,
+            },
+          },
+        ]),
+      ).toHaveLength(2);
+    });
+
+    it("сохраняет unbound, terminal, самостоятельные причины и ambiguous FAILED", () => {
+      const [tool, completion] = failedCompletionFixture();
+      const variants: RunEvent[] = [
+        { ...completion, integrationInvocationRef: undefined },
+        { ...completion, integrationInvocationRef: "inv_otherfixture" },
+        { ...completion, execution: undefined },
+        { ...completion, runRef: "run_foreignfixture" },
+        { ...completion, nodeRef: "nod_foreignfixture" },
+        { ...completion, type: "TURN_COMPLETED" },
+        { ...completion, messageKind: "FINAL_MESSAGE" },
+        { ...completion, runState: "FAILED" },
+        { ...completion, nodeState: "FAILED" },
+        { ...completion, nodeState: "CANCELLED" },
+        { ...completion, summary: "i18n:INTEGRATION_ACTION_OUTCOME_UNKNOWN" },
+        { ...completion, summary: "i18n:INTEGRATION_AUTH_REJECTED" },
+        {
+          ...completion,
+          summary:
+            "Действие интеграции отклонено или завершилось ошибкой: нет доступа",
+        },
+        { ...completion, progress: "Нет доступа к репозиторию" },
+        { ...completion, artifactRef: "art_fixture123" },
+        { ...completion, gateRef: "gat_fixture123" },
+        { ...completion, edgeRef: "edg_fixture123" },
+        {
+          ...completion,
+          message: {
+            source: { origin: "ORDINARY" },
+            ref: "msg_fixture123",
+            phase: "COMMENTARY",
+            revision: 1,
+            text: "i18n:INTEGRATION_ACTION_FAILED",
+          },
+        },
+      ];
+      for (const variant of variants)
+        expect(show([tool, variant])).toHaveLength(2);
+      const translated = {
+        ...completion,
+        displaySummary: "Нет доступа к репозиторию",
+      } as PresentedRunEvent;
+      expect(show([tool, translated])).toHaveLength(2);
+      const second = {
+        ...tool,
+        ref: "evt_other_tool",
+        toolCall: { ...required(tool.toolCall), ref: "tcl_otherfixture" },
+      };
+      expect(show([tool, second, completion])).toHaveLength(3);
+      for (const changes of [
+        { ref: "tcl_bad" },
+        { revision: 1 },
+        { state: "FAILED" as const },
+        { safeResult: "INTEGRATION_ACTION_FAILED" },
+        { safeResult: required(tool.toolCall).safeResult + " " },
+      ])
+        expect(
+          show([
+            { ...tool, toolCall: { ...required(tool.toolCall), ...changes } },
+            completion,
+          ]),
+        ).toHaveLength(2);
+    });
+
     it("не использует unknown, stale или противоречивую tool receipt", () => {
       const [tool, completion] = completionFixture();
       const call = required(tool.toolCall);
@@ -2521,6 +2729,63 @@ describe("buildRunActivityItems", () => {
     expect(result[0]?.summary).toBe("Полный ответ");
   });
 
+  it("принимает root discriminator только вместе с exact опубликованным node binding", () => {
+    const base = required(events[0]);
+    const execution = required(base.execution);
+    const rootNode: RunNode = {
+      ...node,
+      ref: "nod_rootfixture",
+      type: "ROOT_PROCESS",
+      runRef: execution.runRef,
+      turnRef: execution.turnRef,
+      attempt: execution.attempt,
+      state: "FAILED",
+    };
+    const root: RunEvent = {
+      ...base,
+      ref: "evt_rootfixture",
+      type: "NODE_STATE_CHANGED",
+      messageKind: "STATE",
+      message: undefined,
+      nodeRef: rootNode.ref,
+      node: rootNode,
+      nodeState: "FAILED",
+      serviceCode: "ROOT_PROCESS_COMPLETED",
+      execution: { ...execution, nodeRef: rootNode.ref },
+      runRef: execution.runRef,
+      run: { ...base.run, ref: execution.runRef },
+      summary: "Корневой процесс завершён",
+    };
+    expect(buildRunTranscriptItems([root])[0]).toMatchObject({
+      serviceCompletionCode: "ROOT_PROCESS_COMPLETED",
+      executionNodeType: "ROOT_PROCESS",
+    });
+    for (const variant of [
+      { ...root, serviceCode: undefined },
+      { ...root, runRef: "run_other" },
+      { ...root, run: { ...root.run, ref: "run_other" } },
+      { ...root, run: { ...root.run, version: 0 } },
+      { ...root, nodeRef: "nod_other" },
+      { ...root, node: { ...rootNode, turnRef: "trn_other" } },
+      { ...root, node: { ...rootNode, runRef: "run_other" } },
+      { ...root, node: { ...rootNode, attempt: 2 } },
+      { ...root, node: undefined },
+      { ...root, execution: undefined },
+      { ...root, gateRef: "gat_fixture" },
+      {
+        ...root,
+        nodeState: "RUNNING" as const,
+        node: { ...rootNode, state: "RUNNING" as const },
+      },
+      { ...root, edgeRef: "edg_fixture" },
+      { ...root, progress: "Different outcome" },
+    ]) {
+      expect(
+        buildRunTranscriptItems([variant])[0]?.serviceCompletionCode,
+      ).toBeUndefined();
+    }
+  });
+
   it("разделяет сообщение инициатора и сообщения ИИ-сотрудника", () => {
     const items = buildRunActivityItems(
       run,
@@ -2596,6 +2861,7 @@ describe("buildRunActivityItems", () => {
       artifactRef: "art_report",
       artifact: {
         ref: "art_report",
+        currentRevisionRef: "arv_fixture_report",
         version: 1,
         projectRef: run.projectRef,
         runRef: run.ref,

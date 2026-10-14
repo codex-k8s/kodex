@@ -101,3 +101,41 @@ func TestMaskedAccountMasksEmailAndRejectsInvalidMetadata(t *testing.T) {
 		}
 	}
 }
+
+func TestReadAuthJSONRejectsUnsafeFileIdentity(t *testing.T) {
+	for _, mode := range []string{"regular", "symlink", "hardlink", "fifo", "public"} {
+		t.Run(mode, func(t *testing.T) {
+			home := t.TempDir()
+			path := filepath.Join(home, "auth.json")
+			if mode == "fifo" {
+				createCatalogFIFO(t, path)
+			} else {
+				if err := os.WriteFile(path, []byte(`{"auth_mode":"chatgpt"}`), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				switch mode {
+				case "symlink":
+					if err := os.Rename(path, filepath.Join(home, "target")); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.Symlink("target", path); err != nil {
+						t.Fatal(err)
+					}
+				case "hardlink":
+					if err := os.Link(path, filepath.Join(home, "alias")); err != nil {
+						t.Fatal(err)
+					}
+				case "public":
+					if err := os.Chmod(path, 0o644); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			raw, err := readAuthJSON(home)
+			defer clear(raw)
+			if mode == "regular" && (err != nil || len(raw) == 0) || mode != "regular" && (err == nil || len(raw) != 0) {
+				t.Fatal("unsafe auth file accepted or regular file rejected")
+			}
+		})
+	}
+}

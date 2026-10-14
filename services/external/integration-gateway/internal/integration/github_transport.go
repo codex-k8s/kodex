@@ -15,6 +15,10 @@ type githubBoundedTransport struct{ next http.RoundTripper }
 
 func (transport githubBoundedTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	request = request.Clone(request.Context())
+	maximum, valid := githubProviderResponseLimit(request)
+	if !valid {
+		return nil, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+	}
 	if request.Method != http.MethodGet && request.Method != http.MethodHead {
 		request.GetBody = nil
 		if request.Body == nil || request.Body == http.NoBody {
@@ -26,7 +30,6 @@ func (transport githubBoundedTransport) RoundTrip(request *http.Request) (*http.
 	if err != nil {
 		return nil, err
 	}
-	maximum := maximumGitHubProviderResponseBytes
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		maximum = maximumResponseBytes
 	}

@@ -30,6 +30,12 @@ export const additionalPermissionTranslations = {
     "Restore files",
     "Restore accessible files from trash.",
   ],
+  "artifact.revision.create": [
+    "Создавать версии файлов",
+    "Сохранять новое содержимое доступных файлов, сохраняя предыдущие версии.",
+    "Create file revisions",
+    "Save new content for accessible files while retaining previous revisions.",
+  ],
   "artifact.upload": [
     "Загружать файлы",
     "Добавлять файлы в разрешённую область.",
@@ -170,6 +176,7 @@ export const serverPermissionKeys = [
   "artifact.download",
   "artifact.purge",
   "artifact.restore",
+  "artifact.revision.create",
   "artifact.upload",
   "artifact.view",
   "audit.view",

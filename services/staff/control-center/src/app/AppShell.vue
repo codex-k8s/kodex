@@ -35,6 +35,7 @@ import { useRoute, useRouter } from "vue-router";
 import { buildBreadcrumbs, type BreadcrumbLabels } from "@/app/breadcrumbs";
 import {
   activeNavigationSection,
+  configurationRouteProjectRef,
   routeProjectRef,
 } from "@/app/navigation-context";
 import { resolveShellRealtimeState } from "@/app/realtime-presentation";
@@ -54,6 +55,8 @@ import {
   SearchCoordinator,
 } from "@/features/search/model";
 import { useSessionStore } from "@/features/session/store";
+import { runDefaultTaskTitleKey } from "@/features/workboard/model";
+import type { Run } from "@/shared/api/generated/openapi/types.gen";
 import ProjectPicker from "@/features/projects/ProjectPicker.vue";
 import { useSpeechInput } from "@/features/speech/useSpeechInput";
 import { selectProjectRef } from "@/shared/project-context";
@@ -129,7 +132,7 @@ const projectRef = computed(
     routeProjectRef(route.params) ??
     (route.name === "configuration-catalog" || route.name === "onboarding"
       ? routeProjectRef(route.query)
-      : undefined),
+      : configurationRouteProjectRef(route.name, route.params, route.query)),
 );
 const activeSection = computed(() => activeNavigationSection(route.name));
 const fullBleedRunWorkspace = computed(
@@ -153,6 +156,10 @@ const realtimeLabels = computed<RealtimeStatusLabels>(() => ({
   reconnecting: t("app.reconnecting"),
   offline: online.value ? t("states.NOT_CONNECTED") : t("app.offline"),
 }));
+function runDisplayTitle(run: Run): string {
+  const key = runDefaultTaskTitleKey(run);
+  return key ? t(key) : run.title;
+}
 const breadcrumbs = computed(() => {
   const agentRef =
     typeof route.params.agentRef === "string"
@@ -223,7 +230,7 @@ const breadcrumbs = computed(() => {
         ? { workflowName: platform.workflows[workflowRef].name }
         : {}),
       ...(runRef && platform.runs[runRef]
-        ? { runName: platform.runs[runRef].title }
+        ? { runName: runDisplayTitle(platform.runs[runRef]) }
         : {}),
       ...(environmentRef && runtime.environments[environmentRef]
         ? { environmentName: runtime.environments[environmentRef].name }
@@ -249,6 +256,14 @@ const assistantContext = computed(() => {
     workflows: platform.workflows,
     runs: platform.runs,
     roleImages: roleImages.recipes,
+    environments: runtime.environments,
+    organizationRef: platform.bootstrap?.organizationRef,
+    environmentReadBlocked:
+      typeof route.params.environmentRef === "string" &&
+      Boolean(
+        runtime.loading[`environment:${route.params.environmentRef}`] ||
+        runtime.problems[`environment:${route.params.environmentRef}`],
+      ),
   });
   if (
     route.query.assistantForm === "1" &&

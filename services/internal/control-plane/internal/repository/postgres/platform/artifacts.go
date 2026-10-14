@@ -17,6 +17,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/observability/artifactread"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -126,7 +127,7 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	}
 	receiptRef, _ := newRef("obj")
 	var item entity.Artifact
-	err = tx.QueryRow(ctx, queryArtifactsUploadartifactInsertArtifactsRefProjectIdFileName, ref, scope.organizationID, projectID, runID, fileName, input.MediaType, input.SizeBytes, input.Digest, input.ScanState, receiptRef, input.PreviewState, scope.actorID).Scan(&item.Ref, &item.FileName, &item.MediaType, &item.SizeBytes, &item.Digest, &item.ScanState, &item.PreviewState, &item.Revision, &item.Version, &item.CreatedAt)
+	err = tx.QueryRow(ctx, queryArtifactsUploadartifactInsertArtifactsRefProjectIdFileName, ref, scope.organizationID, projectID, runID, fileName, input.MediaType, input.SizeBytes, input.Digest, input.ScanState, receiptRef, input.PreviewState, scope.actorID).Scan(&item.Ref, &item.FileName, &item.MediaType, &item.SizeBytes, &item.Digest, &item.ScanState, &item.PreviewState, &item.Revision, &item.Version, &item.CreatedAt, &item.CurrentRevisionRef)
 	if err != nil {
 		return entity.Artifact{}, mapWriteError(err)
 	}
@@ -179,7 +180,7 @@ func (repository *Repository) createProjectFile(ctx context.Context, tx pgx.Tx, 
 	if err != nil || prepared.MediaType != input.MediaType {
 		return commandOutcome{}, errs.ErrInvalid
 	}
-	if prepared.ObjectKey != artifactObjectKey(current.organizationRef, current.actorRef, input.ProjectRef, prepared.Ref, prepared.Digest) {
+	if input.PreparedLedgerID == "" || input.ContentRef == "" {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	projectID := mustProjectID(ctx, tx, current.organizationID, input.ProjectRef)
@@ -202,7 +203,7 @@ func (repository *Repository) createProjectFile(ctx context.Context, tx pgx.Tx, 
 		prepared.Ref, current.organizationID, projectID, nil, input.FileName, prepared.MediaType,
 		prepared.SizeBytes, prepared.Digest, prepared.ScanState, receiptRef, prepared.PreviewState, current.actorID,
 	).Scan(&item.Ref, &item.FileName, &item.MediaType, &item.SizeBytes, &item.Digest, &item.ScanState,
-		&item.PreviewState, &item.Revision, &item.Version, &item.CreatedAt); err != nil {
+		&item.PreviewState, &item.Revision, &item.Version, &item.CreatedAt, &item.CurrentRevisionRef); err != nil {
 		return commandOutcome{}, mapWriteError(err)
 	}
 	if _, err := tx.Exec(ctx, queryArtifactsUploadartifactInsertArtifactContentArtifactId,
@@ -214,6 +215,13 @@ func (repository *Repository) createProjectFile(ctx context.Context, tx pgx.Tx, 
 	item.Source = "CONTROL_CENTER"
 	item.LifecycleState = "ACTIVE"
 	item.NextActions = []string{"DOWNLOAD", "BIND"}
+	var revisionID string
+	if err := tx.QueryRow(ctx, queryArtifactRevisionCurrentID, current.organizationID, item.Ref, item.CurrentRevisionRef).Scan(&revisionID); err != nil {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	if err := repository.adoptPreparedContentTx(ctx, tx, current, input.PreparedLedgerID, revisionID); err != nil {
+		return commandOutcome{}, err
+	}
 	return commandOutcome{
 		result: command.Result{Artifact: &item}, projectID: projectID, projectRef: input.ProjectRef,
 		resourceKind: "ARTIFACT", resourceRef: item.Ref, summary: "i18n:ARTIFACT_AVAILABLE",
@@ -376,13 +384,18 @@ func mapObjectStorageError(err error) error {
 }
 
 type artifactPurgeReceipt struct {
-	ArtifactRef    string `json:"artifactRef"`
-	ArtifactID     string `json:"artifactId"`
-	ProjectID      string `json:"projectId"`
-	ProjectRef     string `json:"projectRef"`
-	ObjectKey      string `json:"objectKey"`
-	ObjectVersion  string `json:"objectVersion"`
-	LifecycleState string `json:"lifecycleState"`
+	ArtifactRef    string                `json:"artifactRef"`
+	ArtifactID     string                `json:"artifactId"`
+	ProjectID      string                `json:"projectId"`
+	ProjectRef     string                `json:"projectRef"`
+	Objects        []artifactPurgeObject `json:"objects"`
+	LifecycleState string                `json:"lifecycleState"`
+}
+
+type artifactPurgeObject struct {
+	RevisionID    string `json:"revisionId"`
+	ObjectKey     string `json:"objectKey"`
+	ObjectVersion string `json:"objectVersion"`
 }
 
 func (repository *Repository) PurgeArtifact(ctx context.Context, principal value.Principal, mutation value.Mutation, artifactRef, impactDigest string) (string, error) {
@@ -397,14 +410,16 @@ func (repository *Repository) PurgeArtifact(ctx context.Context, principal value
 	if receipt.LifecycleState == "PURGED" {
 		return receipt.LifecycleState, nil
 	}
-	if err := repository.objects.Delete(ctx, receipt.ObjectKey, receipt.ObjectVersion); err != nil && !errors.Is(err, objectstorage.ErrNotFound) {
-		return "", mapObjectStorageError(err)
-	}
-	if _, err := repository.objects.Head(ctx, receipt.ObjectKey, receipt.ObjectVersion); !errors.Is(err, objectstorage.ErrNotFound) {
-		if err == nil {
-			return "", errs.ErrConflict
+	for _, object := range receipt.Objects {
+		if err := repository.objects.Delete(ctx, object.ObjectKey, object.ObjectVersion); err != nil && !errors.Is(err, objectstorage.ErrNotFound) {
+			return "", mapObjectStorageError(err)
 		}
-		return "", mapObjectStorageError(err)
+		if _, err := repository.objects.Head(ctx, object.ObjectKey, object.ObjectVersion); !errors.Is(err, objectstorage.ErrNotFound) {
+			if err == nil {
+				return "", errs.ErrConflict
+			}
+			return "", mapObjectStorageError(err)
+		}
 	}
 	return repository.finalizeArtifactPurge(ctx, scope, mutation, receipt)
 }
@@ -434,7 +449,8 @@ func (repository *Repository) prepareArtifactPurge(ctx context.Context, scope sc
 			return artifactPurgeReceipt{}, errs.ErrIdempotencyReuse
 		}
 		var receipt artifactPurgeReceipt
-		if json.Unmarshal(stored, &receipt) != nil || receipt.ArtifactRef != artifactRef {
+		if json.Unmarshal(stored, &receipt) != nil || receipt.ArtifactRef != artifactRef ||
+			(receipt.LifecycleState != "PURGED" && len(receipt.Objects) == 0) {
 			return artifactPurgeReceipt{}, errs.ErrConflict
 		}
 		if err := tx.Commit(ctx); err != nil {
@@ -447,14 +463,18 @@ func (repository *Repository) prepareArtifactPurge(ctx context.Context, scope sc
 	}
 	var receipt artifactPurgeReceipt
 	var version int64
+	var objects []byte
 	if err := tx.QueryRow(ctx, queryArtifactsPurgeSelectArtifactContentForUpdate, pgx.StrictNamedArgs{
 		"organization_id": scope.organizationID,
 		"artifact_ref":    artifactRef,
-	}).Scan(&receipt.ArtifactID, &receipt.ProjectID, &receipt.ProjectRef, &version, &receipt.LifecycleState, &receipt.ObjectKey, &receipt.ObjectVersion); err != nil {
+	}).Scan(&receipt.ArtifactID, &receipt.ProjectID, &receipt.ProjectRef, &version, &receipt.LifecycleState, &objects); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return artifactPurgeReceipt{}, errs.ErrNotFound
 		}
 		return artifactPurgeReceipt{}, errs.ErrUnavailable
+	}
+	if json.Unmarshal(objects, &receipt.Objects) != nil || len(receipt.Objects) == 0 {
+		return artifactPurgeReceipt{}, errs.ErrConflict
 	}
 	receipt.ArtifactRef = artifactRef
 	if mutation.ExpectedVersion == nil || version != *mutation.ExpectedVersion {
@@ -498,11 +518,29 @@ func (repository *Repository) finalizeArtifactPurge(ctx context.Context, scope s
 	if _, err := tx.Exec(ctx, queryCommandsExecuteLockIdempotencyScope, scope.organizationID, scope.actorID, mutation.Operation, mutation.IdempotencyKey); err != nil {
 		return "", errs.ErrUnavailable
 	}
-	if _, err := tx.Exec(ctx, queryArtifactsPurgeDeleteBindings, pgx.StrictNamedArgs{"artifact_id": receipt.ArtifactID}); err != nil {
-		return "", errs.ErrUnavailable
+	_, target, err := repository.resolveCommandTarget(ctx, tx, scope, "artifact.purge", "ARTIFACT", receipt.ArtifactRef, "")
+	if err != nil {
+		return "", err
 	}
-	if _, err := tx.Exec(ctx, queryArtifactsPurgeDeleteDownloadGrants, pgx.StrictNamedArgs{"artifact_id": receipt.ArtifactID}); err != nil {
-		return "", errs.ErrUnavailable
+	if err := repository.requireAccess(ctx, tx, scope, "artifact.purge", target); err != nil {
+		return "", errs.ErrNotFound
+	}
+	var artifactID, projectID, projectRef, lifecycle string
+	var version int64
+	var inventory []byte
+	if err := tx.QueryRow(ctx, queryArtifactsPurgeSelectArtifactContentForUpdate, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID, "artifact_ref": receipt.ArtifactRef,
+	}).Scan(&artifactID, &projectID, &projectRef, &version, &lifecycle, &inventory); err != nil {
+		return "", errs.ErrNotFound
+	}
+	var objects []artifactPurgeObject
+	if json.Unmarshal(inventory, &objects) != nil || artifactID != receipt.ArtifactID || projectID != receipt.ProjectID || projectRef != receipt.ProjectRef || lifecycle != "PURGE_PENDING" {
+		return "", errs.ErrConflict
+	}
+	actual, _ := json.Marshal(objects)
+	expected, _ := json.Marshal(receipt.Objects)
+	if string(actual) != string(expected) {
+		return "", errs.ErrConflict
 	}
 	if _, err := tx.Exec(ctx, queryArtifactsPurgeDeleteContent, pgx.StrictNamedArgs{"artifact_id": receipt.ArtifactID}); err != nil {
 		return "", errs.ErrUnavailable
@@ -519,6 +557,9 @@ func (repository *Repository) finalizeArtifactPurge(ctx context.Context, scope s
 		}).Scan(new(string), new(string), new(string), new(int64), &lifecycleState); err != nil || lifecycleState != "PURGED" {
 			return "", errs.ErrConflict
 		}
+	}
+	if _, err := tx.Exec(ctx, queryArtifactsPurgeDeleteRevisions, pgx.StrictNamedArgs{"artifact_id": receipt.ArtifactID}); err != nil {
+		return "", errs.ErrConflict
 	}
 	receipt.LifecycleState = "PURGED"
 	storedReceipt := artifactPurgeReceipt{
@@ -573,27 +614,50 @@ func safeFileName(name string) string {
 }
 
 func (repository *Repository) DownloadArtifact(ctx context.Context, principal value.Principal, ref, purpose string) (platformrepo.ArtifactDownload, error) {
+	return repository.downloadArtifactRevision(ctx, principal, ref, "", purpose)
+}
+
+func (repository *Repository) DownloadArtifactRevision(ctx context.Context, principal value.Principal, ref, revisionRef, purpose string) (platformrepo.ArtifactDownload, error) {
+	if revisionRef == "" {
+		return platformrepo.ArtifactDownload{}, errs.ErrInvalid
+	}
+	return repository.downloadArtifactRevision(ctx, principal, ref, revisionRef, purpose)
+}
+
+func (repository *Repository) downloadArtifactRevision(ctx context.Context, principal value.Principal, ref, revisionRef, purpose string) (platformrepo.ArtifactDownload, error) {
 	if purpose != "DOWNLOAD" && purpose != "PREVIEW" {
 		return platformrepo.ArtifactDownload{}, errs.ErrInvalid
 	}
-	scope, err := repository.resolveScope(ctx, principal)
-	if err != nil {
-		return platformrepo.ArtifactDownload{}, err
-	}
-	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-	if err != nil {
-		return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
+	return retryArtifactContentRead(ctx, func() (platformrepo.ArtifactDownload, error) {
+		return repository.downloadArtifactRevisionOnce(ctx, principal, ref, revisionRef, purpose)
+	})
+}
 
-	var artifactID, projectID, scanState string
+func (repository *Repository) downloadArtifactRevisionOnce(ctx context.Context, principal value.Principal, ref, revisionRef, purpose string) (_ platformrepo.ArtifactDownload, resultError error) {
+	scopeDiagnostic := artifactread.NewDiagnostic(artifactread.StageScope, artifactread.ClassDomain, "")
+	scope, err := repository.resolveScopeObserved(ctx, principal, func(cause error) {
+		scopeDiagnostic = artifactReadDiagnostic(artifactread.StageScope, cause)
+	})
+	if err != nil {
+		return platformrepo.ArtifactDownload{}, artifactread.WithFailure(err, scopeDiagnostic)
+	}
+	rawTx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
+	if err != nil {
+		return platformrepo.ArtifactDownload{}, artifactread.WithFailure(errs.ErrUnavailable, artifactReadDiagnostic(artifactread.StageBegin, err))
+	}
+	tx := &artifactContentReadTx{Tx: rawTx}
+	defer tx.finish(ctx, &resultError)
+
+	var artifactID, projectID, scanState, revisionID, selectedRevisionRef string
 	var artifactVersion int64
+	tx.stage = artifactread.StageSelect
 	err = tx.QueryRow(ctx, queryArtifactsDownloadartifactSelectArtifactForGrant, pgx.StrictNamedArgs{
 		"organization_id":   scope.organizationID,
 		"artifact_ref":      ref,
+		"revision_ref":      revisionRef,
 		"authority_project": scope.authorityProjectID,
 		"subject_id":        scope.actorID,
-	}).Scan(&artifactID, &projectID, &artifactVersion, &scanState)
+	}).Scan(&artifactID, &projectID, &artifactVersion, &scanState, &revisionID, &selectedRevisionRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return platformrepo.ArtifactDownload{}, errs.ErrNotFound
 	}
@@ -603,27 +667,46 @@ func (repository *Repository) DownloadArtifact(ctx context.Context, principal va
 	if scanState != "CLEAN" {
 		return platformrepo.ArtifactDownload{}, errs.ErrForbidden
 	}
+	tx.stage = artifactread.StageMetadata
 	item, err := scanArtifact(tx.QueryRow(ctx, queryQueriesGetartifactSelectArtifactBindingsArtifactIdIdOrganizationId, scope.organizationID, ref, scope.role, scope.actorID))
 	if err != nil {
 		return platformrepo.ArtifactDownload{}, err
 	}
+	tx.stage = artifactread.StageEligibility
 	if err := projectArtifactEligibility(ctx, tx, scope, &item); err != nil {
 		return platformrepo.ArtifactDownload{}, err
+	}
+	tx.stage = artifactread.StageRevision
+	selected, err := artifactRevisionRow(tx.QueryRow(ctx, queryArtifactRevisionGet, pgx.StrictNamedArgs{
+		"organization_id": scope.organizationID, "artifact_ref": ref, "revision_ref": selectedRevisionRef}))
+	if err != nil {
+		return platformrepo.ArtifactDownload{}, err
+	}
+	item.CurrentRevisionRef = selected.Ref
+	item.FileName, item.MediaType, item.Digest = selected.FileName, selected.MediaType, selected.Digest
+	item.SizeBytes, item.Revision, item.ScanState, item.Source = selected.SizeBytes, selected.Revision, selected.ScanState, selected.Source
+	item.PreviewState = "UNAVAILABLE"
+	if selected.PreviewAvailable {
+		item.PreviewState = "AVAILABLE"
 	}
 	if purpose == "PREVIEW" && item.PreviewState != "AVAILABLE" {
 		return platformrepo.ArtifactDownload{}, errs.ErrForbidden
 	}
 
+	tx.stage = artifactread.StageGrantRef
 	grantRef, err := newRef("adg")
 	if err != nil {
+		tx.observeFailure(err)
 		return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
 	}
 	var grantID, storedGrantRef string
+	tx.stage = artifactread.StageGrantCreate
 	err = tx.QueryRow(ctx, queryArtifactsDownloadartifactInsertDownloadGrant, pgx.StrictNamedArgs{
 		"grant_ref":        grantRef,
 		"organization_id":  scope.organizationID,
 		"project_id":       projectID,
 		"artifact_id":      artifactID,
+		"revision_id":      revisionID,
 		"artifact_version": artifactVersion,
 		"subject_id":       scope.actorID,
 		"purpose":          purpose,
@@ -632,11 +715,13 @@ func (repository *Repository) DownloadArtifact(ctx context.Context, principal va
 		return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
 	}
 	var consumedAt time.Time
+	tx.stage = artifactread.StageGrantConsume
 	err = tx.QueryRow(ctx, queryArtifactsDownloadartifactConsumeDownloadGrant, pgx.StrictNamedArgs{
 		"grant_id":         grantID,
 		"organization_id":  scope.organizationID,
 		"project_id":       projectID,
 		"artifact_id":      artifactID,
+		"revision_id":      revisionID,
 		"artifact_version": artifactVersion,
 		"subject_id":       scope.actorID,
 		"purpose":          purpose,
@@ -649,10 +734,11 @@ func (repository *Repository) DownloadArtifact(ctx context.Context, principal va
 	}
 	var objectKey, objectVersion, objectETag, objectDigest string
 	var objectSize int64
+	tx.stage = artifactread.StageContent
 	if err := tx.QueryRow(ctx, queryArtifactsDownloadartifactSelectArtifactContent, pgx.StrictNamedArgs{
-		"artifact_id":      artifactID,
-		"organization_id":  scope.organizationID,
-		"artifact_version": artifactVersion,
+		"artifact_id":     artifactID,
+		"revision_id":     revisionID,
+		"organization_id": scope.organizationID,
 	}).Scan(&objectKey, &objectVersion, &objectETag, &objectDigest, &objectSize); errors.Is(err, pgx.ErrNoRows) {
 		return platformrepo.ArtifactDownload{}, errs.ErrNotFound
 	} else if err != nil {
@@ -661,14 +747,16 @@ func (repository *Repository) DownloadArtifact(ctx context.Context, principal va
 	if objectDigest != item.Digest || objectSize != item.SizeBytes || objectKey == "" {
 		return platformrepo.ArtifactDownload{}, errs.ErrConflict
 	}
+	tx.stage = artifactread.StageStorage
 	object, err := repository.objects.Get(ctx, objectKey, objectVersion)
 	if err != nil {
+		tx.observeFailure(err)
 		return platformrepo.ArtifactDownload{}, mapObjectStorageError(err)
 	}
 	keepBody := false
 	defer func() {
 		if !keepBody {
-			_ = object.Body.Close()
+			tx.bodyCleanupFailed = object.Body.Close() != nil
 		}
 	}()
 	if object.Digest != objectDigest || object.SizeBytes != objectSize ||
@@ -680,10 +768,13 @@ func (repository *Repository) DownloadArtifact(ctx context.Context, principal va
 	if purpose == "PREVIEW" {
 		action, safeSummary = "artifact.preview", "i18n:ARTIFACT_PREVIEWED"
 	}
+	tx.stage = artifactread.StageAuditRef
 	auditRef, err := newRef("aud")
 	if err != nil {
+		tx.observeFailure(err)
 		return platformrepo.ArtifactDownload{}, errs.ErrUnavailable
 	}
+	tx.stage = artifactread.StageAudit
 	if _, err := tx.Exec(ctx, queryArtifactsDownloadartifactInsertAuditEvent, pgx.StrictNamedArgs{
 		"audit_ref":       auditRef,
 		"organization_id": scope.organizationID,
@@ -699,6 +790,7 @@ func (repository *Repository) DownloadArtifact(ctx context.Context, principal va
 	if consumedAt.IsZero() || storedGrantRef != grantRef {
 		return platformrepo.ArtifactDownload{}, errs.ErrConflict
 	}
+	tx.stage = artifactread.StageCommit
 	if err := tx.Commit(ctx); err != nil {
 		return platformrepo.ArtifactDownload{}, errs.ErrConflict
 	}
@@ -860,11 +952,11 @@ func (repository *Repository) GetArtifactImpact(ctx context.Context, principal v
 func (repository *Repository) artifactImpactTx(ctx context.Context, tx pgx.Tx, current scope, artifactRef, action string) (entity.ArtifactImpact, string, error) {
 	var artifactID, lifecycleState string
 	var activeRunsJSON []byte
-	var version, bindingCount, attachmentCount, activeRuntimeCount, skillRevisionCount int64
+	var version, bindingCount, attachmentCount, activeRuntimeCount, skillRevisionCount, activeBindingCount int64
 	err := tx.QueryRow(ctx, queryArtifactsImpact, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID,
 		"artifact_ref":    artifactRef,
-	}).Scan(&artifactID, &version, &lifecycleState, &bindingCount, &attachmentCount, &activeRuntimeCount, &activeRunsJSON, &skillRevisionCount)
+	}).Scan(&artifactID, &version, &lifecycleState, &bindingCount, &attachmentCount, &activeRuntimeCount, &activeRunsJSON, &skillRevisionCount, &activeBindingCount)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return entity.ArtifactImpact{}, "", errs.ErrNotFound
 	}
@@ -894,7 +986,7 @@ func (repository *Repository) artifactImpactTx(ctx context.Context, tx pgx.Tx, c
 		if lifecycleState != "DELETED" {
 			blockers = append(blockers, "ARTIFACT_NOT_DELETED")
 		}
-		if bindingCount > 0 {
+		if activeBindingCount > 0 {
 			blockers = append(blockers, "ARTIFACT_HAS_BINDINGS")
 		}
 		if activeRuntimeCount > 0 {
@@ -902,12 +994,12 @@ func (repository *Repository) artifactImpactTx(ctx context.Context, tx pgx.Tx, c
 		}
 	}
 	digestPayload, _ := json.Marshal(struct {
-		ArtifactRef, Action, LifecycleState                                                    string
-		ArtifactVersion, BindingCount, AttachmentCount, ActiveRuntimeCount, SkillRevisionCount int64
-		Blockers                                                                               []string
-		ActiveRuns                                                                             []entity.ArtifactImpactRun
-		ActiveRunsTruncated                                                                    bool
-	}{artifactRef, action, lifecycleState, version, bindingCount, attachmentCount, activeRuntimeCount, skillRevisionCount, blockers, activeRuns, activeRunsTruncated})
+		ArtifactRef, Action, LifecycleState                                                                        string
+		ArtifactVersion, BindingCount, AttachmentCount, ActiveRuntimeCount, SkillRevisionCount, ActiveBindingCount int64
+		Blockers                                                                                                   []string
+		ActiveRuns                                                                                                 []entity.ArtifactImpactRun
+		ActiveRunsTruncated                                                                                        bool
+	}{artifactRef, action, lifecycleState, version, bindingCount, attachmentCount, activeRuntimeCount, skillRevisionCount, activeBindingCount, blockers, activeRuns, activeRunsTruncated})
 	digestValue := sha256.Sum256(digestPayload)
 	return entity.ArtifactImpact{
 		ArtifactRef: artifactRef, Action: action, Digest: hex.EncodeToString(digestValue[:]),

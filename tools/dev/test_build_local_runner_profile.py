@@ -23,6 +23,9 @@ if name == "docker" and args == ["buildx", "version"]:
 if name == "ensure-local-buildx-builder.sh":
     sys.exit(0)
 if name == "import-local-image.sh":
+    if os.environ.get("MUTATE_REUSE_ARCHIVE"):
+        with pathlib.Path(args[args.index("--archive") + 1]).open("ab") as stream:
+            stream.write(b"changed after verification")
     sys.exit(42 if os.environ.get("FAIL_IMPORT") else 0)
 assert name == "docker" and args[:2] == ["buildx", "build"]
 profile = args[args.index("--label") + 1].split("=", 1)[1]
@@ -82,7 +85,8 @@ class BuildLocalRunnerProfile(unittest.TestCase):
         (self.source / "tools/dev").mkdir()
         for name in ("ensure-local-buildx-builder.sh", "import-local-image.sh"):
             (self.source / "tools/dev" / name).symlink_to(mock)
-        self.env = {"PATH": str(self.bin) + os.pathsep + os.defpath, "RUNNER_FIXTURE": str(self.root), "LANG": "C"}
+        self.env = {"PATH": str(self.bin) + os.pathsep + os.defpath, "RUNNER_FIXTURE": str(self.root),
+                    "LANG": "C", "TMPDIR": str(self.root)}
         for args in (("init", "-q"), ("add", "."), ("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture")):
             subprocess.run(["git", *args], cwd=self.source, check=True, capture_output=True, env=self.env)
 
@@ -94,6 +98,147 @@ class BuildLocalRunnerProfile(unittest.TestCase):
     def calls(self):
         path = self.root / "calls.jsonl"
         return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+    def reuse_fixture(self):
+        result = self.run_builder("--image-profile", "full")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        manifest = (self.state / "agent-runner-image").read_text().strip().split("@")[1]
+        cache = self.state / "cache"
+        reusable = self.root / "reusable-cache"
+        cache.rename(reusable)
+        previous = "registry.fixture.invalid/previous@sha256:" + "a" * 64 + "\n"
+        (self.state / "agent-runner-image").write_text(previous)
+        (self.state / "agent-runner-image").chmod(0o600)
+        (self.root / "calls.jsonl").unlink()
+        return reusable, manifest, previous
+
+    def reuse_builder(self, cache, manifest, **kwargs):
+        return self.run_builder("--image-profile", "full", "--cache-directory", str(cache),
+                                "--expected-manifest", manifest, **kwargs)
+
+    def assert_reuse_denied(self, cache, manifest, previous, **kwargs):
+        result = self.reuse_builder(cache, manifest, **kwargs)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.state / "agent-runner-image").read_text(), previous)
+        self.assertFalse(any(c["name"] == "import-local-image.sh" or
+                             (c["name"] == "docker" and c["args"][:2] == ["buildx", "build"])
+                             for c in self.calls()))
+        return result
+
+    def test_reuse_cache_imports_existing_exact_full_archive_without_build_or_cache_writes(self):
+        cache, manifest, _previous = self.reuse_fixture()
+        archive = next(cache.glob("*.oci.tar"))
+        archive.chmod(0o664)  # Private700 parent сохраняет существующий builder mode.
+        before = {p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in cache.iterdir()}
+        result = self.reuse_builder(cache, manifest)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.state / "agent-runner-image").read_text().strip(),
+                         "registry.local.kodex/kodex/agent-runner@" + manifest)
+        self.assertEqual((self.state / "agent-runner-image").stat().st_mode & 0o777, 0o600)
+        self.assertEqual(before, {p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in cache.iterdir()})
+        self.assertFalse((self.state / "cache").exists())
+        self.assertEqual([c["name"] for c in self.calls()], ["docker", "import-local-image.sh"])
+
+    def test_reuse_cache_miss_never_builds(self):
+        cache, manifest, previous = self.reuse_fixture()
+        next(cache.glob("*.oci.tar")).unlink()
+        self.assert_reuse_denied(cache, manifest, previous)
+
+    def test_reuse_manifest_mismatch_stops_before_import_or_pin(self):
+        cache, _manifest, previous = self.reuse_fixture()
+        self.assert_reuse_denied(cache, "sha256:" + "b" * 64, previous)
+
+    def test_reuse_requires_existing_exact_source_revision_provenance(self):
+        cache, manifest, previous = self.reuse_fixture()
+        proof = next(cache.glob("*.provenance.json"))
+        original = proof.read_bytes()
+        value = json.loads(original)
+        value["sourceRevision"] = "b" * 40
+        proof.write_text(json.dumps(value))
+        self.assert_reuse_denied(cache, manifest, previous)
+        proof.unlink()
+        self.assert_reuse_denied(cache, manifest, previous)
+        self.assertFalse(proof.exists())
+
+    def test_reuse_dirty_source_or_wrong_profile_never_builds_or_imports(self):
+        cache, manifest, previous = self.reuse_fixture()
+        result = self.run_builder("--cache-directory", str(cache), "--expected-manifest", manifest)
+        self.assertNotEqual(result.returncode, 0)
+        (self.source / "libs/go/fixture.txt").write_text("changed\n")
+        self.assert_reuse_denied(cache, manifest, previous)
+
+    def test_reuse_rejects_nonprivate_symlink_or_noncanonical_directory(self):
+        cache, manifest, previous = self.reuse_fixture()
+        alias = self.root / "cache-alias"
+        alias.symlink_to(cache, target_is_directory=True)
+        for invalid in (alias, str(cache) + "/../" + cache.name, "relative-cache"):
+            self.assert_reuse_denied(invalid, manifest, previous)
+        cache.chmod(0o755)
+        self.assert_reuse_denied(cache, manifest, previous)
+
+    def test_reuse_rejects_symlink_hardlink_world_writable_or_oversized_archive(self):
+        cache, manifest, previous = self.reuse_fixture()
+        archive = next(cache.glob("*.oci.tar"))
+        original = archive.read_bytes()
+        external = self.root / "external.oci.tar"
+        archive.rename(external)
+        archive.symlink_to(external)
+        self.assert_reuse_denied(cache, manifest, previous)
+        archive.unlink()
+        os.link(external, archive)
+        self.assert_reuse_denied(cache, manifest, previous)
+        archive.unlink()
+        archive.write_bytes(original)
+        archive.chmod(0o666)
+        self.assert_reuse_denied(cache, manifest, previous)
+        archive.chmod(0o600)
+        with archive.open("r+b") as stream:
+            stream.truncate((8 << 30) + 1)
+        self.assert_reuse_denied(cache, manifest, previous)
+
+    def test_reuse_import_failure_keeps_previous_pin(self):
+        cache, manifest, previous = self.reuse_fixture()
+        result = self.reuse_builder(cache, manifest, overrides={"FAIL_IMPORT": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.state / "agent-runner-image").read_text(), previous)
+        self.assertEqual([c["name"] for c in self.calls()], ["docker", "import-local-image.sh"])
+
+    def test_reuse_changed_archive_after_import_never_publishes_pin(self):
+        cache, manifest, previous = self.reuse_fixture()
+        result = self.reuse_builder(cache, manifest, overrides={"MUTATE_REUSE_ARCHIVE": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("cache reuse archive changed during import", result.stderr)
+        self.assertEqual((self.state / "agent-runner-image").read_text(), previous)
+
+    def test_reuse_rejects_foreign_directory_owner_without_effects(self):
+        cache, manifest, previous = self.reuse_fixture()
+        mock = self.bin / "stat"
+        mock.write_text('#!/bin/sh\nif [ "$2" = "%u:%a" ] && [ "$4" = "$FOREIGN_CACHE" ]; then\n'
+                        'printf "999999:700\\n"\nelse exec /usr/bin/stat "$@"; fi\n')
+        mock.chmod(0o700)
+        self.assert_reuse_denied(cache, manifest, previous, overrides={"FOREIGN_CACHE": str(cache)})
+
+    def test_reuse_rejects_unsafe_destination_and_pin(self):
+        cache, manifest, previous = self.reuse_fixture()
+        self.state.chmod(0o755)
+        self.assert_reuse_denied(cache, manifest, previous)
+        self.state.chmod(0o700)
+        pin = self.state / "agent-runner-image"
+        external = self.root / "external-pin"
+        pin.rename(external)
+        pin.symlink_to(external)
+        self.assert_reuse_denied(cache, manifest, previous)
+
+    def test_reuse_arguments_are_paired_exact_and_not_duplicated(self):
+        for args in (("--cache-directory", str(self.root)), ("--expected-manifest", "sha256:" + "a" * 64),
+                     ("--cache-directory",), ("--expected-manifest",),
+                     ("--cache-directory", str(self.root), "--expected-manifest", "latest"),
+                     ("--cache-directory", str(self.root), "--cache-directory", str(self.root),
+                      "--expected-manifest", "sha256:" + "a" * 64),
+                     ("--cache-directory", str(self.root), "--expected-manifest", "sha256:" + "a" * 64,
+                      "--expected-manifest", "sha256:" + "a" * 64)):
+            self.assertNotEqual(self.run_builder(*args).returncode, 0)
+        self.assertEqual(self.calls(), [])
 
     def test_local_default_and_full_do_not_share_archive_or_provenance(self):
         references = []

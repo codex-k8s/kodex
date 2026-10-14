@@ -359,104 +359,109 @@ describe("runtime store", () => {
     );
   });
 
-  it("выбирает только promoted images и читает verified tools exact artifact", async () => {
-    const environment = {
-      environmentKey: "standard",
-      dockerfile: "FROM registry.example/base@sha256:" + "a".repeat(64),
-    };
-    listRoleImageRecipesMock
-      .mockResolvedValueOnce(
+  it.each(["продаж", "imgrec_main", runtimeImage.reference])(
+    "выбирает только promoted images и сохраняет полный поиск %s",
+    async (query) => {
+      const environment = {
+        environmentKey: "standard",
+        dockerfile: "FROM registry.example/base@sha256:" + "a".repeat(64),
+      };
+      listRoleImageRecipesMock
+        .mockResolvedValueOnce(
+          response({
+            items: [
+              {
+                ref: "imgrec_draft",
+                version: 1,
+                projectRef: "project_sales",
+                roleDefinitionRef: "role_sales",
+                name: "Черновик",
+                state: "ACTIVE",
+                environment,
+                generation: 1,
+                promotedImageReady: false,
+                createdAt: "2026-08-29T10:00:00Z",
+                updatedAt: "2026-08-29T10:00:00Z",
+                nextActions: [],
+              },
+            ],
+            nextPageToken: "cursor-2",
+          }),
+        )
+        .mockResolvedValueOnce(
+          response({
+            items: [
+              {
+                ref: "imgrec_main",
+                version: 2,
+                projectRef: "project_sales",
+                roleDefinitionRef: "role_sales",
+                name: "Инструменты продаж",
+                state: "ACTIVE",
+                environment,
+                generation: 2,
+                promotedImageReady: true,
+                activeImageArtifactRef: "imgart_main",
+                promotedImageReference: runtimeImage.reference,
+                createdAt: "2026-08-29T10:00:00Z",
+                updatedAt: "2026-08-29T11:00:00Z",
+                nextActions: [],
+              },
+            ],
+          }),
+        );
+      getRoleImageRecipeMock.mockResolvedValueOnce(
         response({
-          items: [
-            {
-              ref: "imgrec_draft",
-              version: 1,
-              projectRef: "project_sales",
-              roleDefinitionRef: "role_sales",
-              name: "Черновик",
-              state: "ACTIVE",
-              environment,
-              generation: 1,
-              promotedImageReady: false,
-              createdAt: "2026-08-29T10:00:00Z",
-              updatedAt: "2026-08-29T10:00:00Z",
-              nextActions: [],
+          recipe: { name: "Инструменты продаж" },
+          builds: [],
+          activeArtifact: {
+            ref: "imgart_main",
+            version: 1,
+            recipeRef: "imgrec_main",
+            recipeGeneration: 2,
+            manifestDigest: "f".repeat(64),
+            promotedReference: runtimeImage.reference,
+            admissionVerdict: "ACCEPTED",
+            promotionState: "PROMOTED",
+            promotionRequested: true,
+            declaredTools: [{ name: "gh", version: "2.80.0" }],
+            verifiedToolInventory: {
+              status: "UNAVAILABLE",
+              sha256: "",
+              imageDigest: "",
+              provenanceSha256: "",
+              platforms: [],
             },
-          ],
-          nextPageToken: "cursor-2",
-        }),
-      )
-      .mockResolvedValueOnce(
-        response({
-          items: [
-            {
-              ref: "imgrec_main",
-              version: 2,
-              projectRef: "project_sales",
-              roleDefinitionRef: "role_sales",
-              name: "Инструменты продаж",
-              state: "ACTIVE",
-              environment,
-              generation: 2,
-              promotedImageReady: true,
-              activeImageArtifactRef: "imgart_main",
-              promotedImageReference: runtimeImage.reference,
-              createdAt: "2026-08-29T10:00:00Z",
-              updatedAt: "2026-08-29T11:00:00Z",
-              nextActions: [],
-            },
-          ],
+            promotedAt: "2026-08-29T11:00:00Z",
+          },
         }),
       );
-    getRoleImageRecipeMock.mockResolvedValueOnce(
-      response({
-        recipe: { name: "Инструменты продаж" },
-        builds: [],
-        activeArtifact: {
-          ref: "imgart_main",
-          version: 1,
-          recipeRef: "imgrec_main",
-          recipeGeneration: 2,
-          manifestDigest: "f".repeat(64),
-          promotedReference: runtimeImage.reference,
-          admissionVerdict: "ACCEPTED",
-          promotionState: "PROMOTED",
-          promotionRequested: true,
-          declaredTools: [{ name: "gh", version: "2.80.0" }],
-          verifiedToolInventory: {
-            status: "UNAVAILABLE",
-            sha256: "",
-            imageDigest: "",
-            provenanceSha256: "",
-            platforms: [],
-          },
-          promotedAt: "2026-08-29T11:00:00Z",
-        },
-      }),
-    );
-    const store = useRuntimeStore();
+      const store = useRuntimeStore();
 
-    const page = await store.searchPromotedRoleImagePage(
-      "project_sales",
-      "продаж",
-    );
-    expect(page.items).toEqual([
-      expect.objectContaining({
-        ref: "imgart_main",
-        recipeRef: "imgrec_main",
-      }),
-    ]);
-    const promoted = await store.loadPromotedRoleImageArtifact(
-      "project_sales",
-      "imgrec_main",
-      "imgart_main",
-    );
-    expect(promoted.artifact.declaredTools).toEqual([
-      { name: "gh", version: "2.80.0" },
-    ]);
-    expect(promoted.artifact.verifiedToolInventory.status).toBe("UNAVAILABLE");
-    expect(promoted.recipeName).toBe("Инструменты продаж");
-  });
+      const page = await store.searchPromotedRoleImagePage(
+        "project_sales",
+        query,
+      );
+      expect(page.items).toEqual([
+        expect.objectContaining({
+          ref: "imgart_main",
+          recipeRef: "imgrec_main",
+        }),
+      ]);
+      const promoted = await store.loadPromotedRoleImageArtifact(
+        "project_sales",
+        "imgrec_main",
+        "imgart_main",
+      );
+      expect(promoted.artifact.declaredTools).toEqual([
+        { name: "gh", version: "2.80.0" },
+      ]);
+      expect(promoted.artifact.verifiedToolInventory.status).toBe(
+        "UNAVAILABLE",
+      );
+      expect(promoted.recipeName).toBe("Инструменты продаж");
+    },
+  );
 
   it("отличает старый артефакт от временной недоступности сервиса", async () => {
     getRoleImageRecipeMock.mockResolvedValueOnce(

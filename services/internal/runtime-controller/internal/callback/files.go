@@ -24,15 +24,16 @@ const (
 	runtimeFileInputFailureClass = "file_input_invalid"
 	runtimeFileReplyFailureClass = "file_reply_binding_invalid"
 	runtimeFileInputInvalidCode  = "FILE_INPUT_INVALID"
-	runtimeFileInputGuidance     = "Correct the arguments once using the current tool schema and exact entry_ref, artifact_ref, revision and sha256: digest from your own runtime catalog. For read_file use offset_bytes=0 first, then the returned next_offset_bytes; maximum_bytes must be 4..16384. This is not an authority denial."
+	runtimeFileInputGuidance     = "Correct the arguments once using the current tool schema and exact entry_ref, artifact_ref, revision and sha256: digest from your own runtime catalog. entry_ref must be vfe_ followed by 32 lowercase hexadecimal characters; copy the exact entry_ref without editing it. For read_file use offset_bytes=0 first, then the returned next_offset_bytes; maximum_bytes must be 4..16384. This is not an authority denial."
 	runtimeFileHandoffGuidance   = "Immutable file pins: artifact_ref/revision/digest+file_name only; child resolves own entry."
-	runtimeFileCatalogGuidance   = "entry_ref, catalog and cursors are runtime-local: never copy from parent, sibling or another turn/attempt. Resolve artifact_ref/revision/digest via your own search_files by file name (not artifact_ref) or get_file_manifest pages; use the matched own entry_ref for metadata/preview/read_file. Follow next_cursor with the same purpose/query; page_size=100 is not the whole catalog. Missing exact pins or remote denial stay blocked; no automatic remote-error retry."
+	runtimeFileCatalogGuidance   = "entry_ref, catalog and cursors are runtime-local: never copy from parent, sibling or another turn/attempt. Local manifests describe mounted attachments, not the complete RUN_RESULT catalog; a missing handoff tuple alone does not prove a required result unavailable. Resolve artifact_ref/revision/digest via your own search_files by file name (not artifact_ref) or get_file_manifest pages; use the matched own entry_ref for metadata/preview/read_file. For unresolved required results, finish independent authorized discovery through all next_cursor pages of own RUN_RESULT manifest. Follow next_cursor with the same purpose/query; page_size=100 is not the whole catalog. Match current root/run/dependency provenance using run_ref/source and exact artifact pins; a filename hit alone does not establish origin. Read matched mandatory content to EOF. Missing exact pins or remote denial stay blocked; actual absence after discovery remains blocked; no automatic remote-error retry, replay of a denied read or invented pins."
 )
 
 var (
 	errRuntimeFileInput      = errors.New("runtime file tool input is invalid")
 	errRuntimeFileReply      = errors.New("runtime file tool response binding is invalid")
 	runtimeFileRefPattern    = regexp.MustCompile(`^[A-Za-z0-9_-]{8,96}$`)
+	runtimeFileEntryPattern  = regexp.MustCompile(`^vfe_[a-f0-9]{32}$`)
 	runtimeFileDigestPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
 )
 
@@ -79,7 +80,8 @@ func runtimeFileTools(input runtimecontract.RunnerInput) []map[string]any {
 				properties["query"] = stringSchema(0, 200)
 			}
 		} else {
-			properties["entry_ref"], properties["artifact_ref"] = opaqueRefSchema(), opaqueRefSchema()
+			properties["entry_ref"] = map[string]any{"type": "string", "minLength": 36, "maxLength": 36, "pattern": runtimeFileEntryPattern.String()}
+			properties["artifact_ref"] = opaqueRefSchema()
 			properties["revision"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 9007199254740991}
 			properties["digest"] = map[string]any{"type": "string", "pattern": runtimeFileDigestPattern.String()}
 			required = append(required, "entry_ref", "artifact_ref", "revision", "digest")
@@ -206,6 +208,11 @@ func optionalFileString(arguments map[string]any, key string, maximum int) (stri
 }
 
 func validFileRef(ref, prefix string) bool {
+	// Entry назначается capture SQL как vfe_ + UUID без дефисов;
+	// opaque artifact/run refs имеют другой, независимый формат.
+	if prefix == "vfe_" {
+		return runtimeFileEntryPattern.MatchString(ref)
+	}
 	return strings.HasPrefix(ref, prefix) && runtimeFileRefPattern.MatchString(ref)
 }
 

@@ -1,10 +1,14 @@
 import { expect, type Page } from "@playwright/test";
+import type { SyntheticSnapshotInstaller } from "./runs-catalog";
 import type {
   IntegrationConnection,
   InteractionIdentity,
   InteractionIdentityBindInput,
 } from "../../src/shared/api/generated/openapi/types.gen";
-export async function checkInteractionIdentities(page: Page): Promise<void> {
+export async function checkInteractionIdentities(
+  page: Page,
+  installSnapshot?: SyntheticSnapshotInstaller,
+): Promise<void> {
   const connection: IntegrationConnection = {
     ref: "connection_identity_synthetic",
     version: 17,
@@ -116,8 +120,17 @@ export async function checkInteractionIdentities(page: Page): Promise<void> {
       },
     }),
   );
+  installSnapshot?.("INTEGRATION_CONNECTION", () => ({
+    connections: {
+      connections: [structuredClone(connection)],
+      nextActions: [],
+      page: { nextPageToken: "connections_next" },
+    },
+  }));
   await page.goto("/integrations");
   await page
+    .locator(".connection-row")
+    .filter({ has: page.getByText(connection.name, { exact: true }) })
     .getByRole("button", { name: "Сведения о подключении", exact: true })
     .click();
   const details = page.getByRole("dialog", {
@@ -169,25 +182,22 @@ export async function checkInteractionIdentities(page: Page): Promise<void> {
     .getByRole("button", { name: "Закрыть", exact: true })
     .last()
     .click();
-  await page
-    .locator(".connections-panel")
-    .getByRole("button", { name: "Загрузить ещё", exact: true })
-    .click();
-  await expect(page.locator(".connection-card")).toHaveCount(2);
+  const rows = page.locator(".connection-row");
+  await page.locator(".connection-table-wrap").evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(rows).toHaveCount(2);
+  await expect(rows.locator(".connection-name")).toHaveText([
+    connection.name,
+    "Mattermost second",
+  ]);
   await page.locator(".connection-search input").fill("Нет совпадений");
   await expect.poll(() => queries.includes("Нет совпадений")).toBe(true);
-  await expect(page.locator(".connection-card")).toHaveCount(0);
+  await expect(rows).toHaveCount(0);
   await page.locator(".connection-search input").fill("");
-  await expect(page.locator(".connection-card")).toHaveCount(1);
-  await page
-    .getByRole("button", { name: "Развернуть список", exact: true })
-    .click();
-  const expanded = page
-    .getByRole("dialog")
-    .filter({ has: page.locator(".connection-grid") });
-  await expect(expanded.locator(".connection-card")).toHaveCount(1);
-  await expanded
-    .getByRole("button", { name: "Закрыть", exact: true })
-    .last()
-    .click();
+  await expect(rows).toHaveCount(2);
+  await expect(rows.locator(".connection-name")).toHaveText([
+    connection.name,
+    "Mattermost second",
+  ]);
 }

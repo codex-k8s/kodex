@@ -11,13 +11,27 @@ import {
 } from "vue";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { captureSetupState } from "@/test-utils/setup-harness";
-import type { Agent } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  Agent,
+  RevisionImpactPlan,
+} from "@/shared/api/generated/openapi/types.gen";
+import { rememberPublicationAttempt } from "@/features/runtime/publication-attempt";
+import { AppProblem } from "@/shared/api/problem";
+const publicationApi = vi.hoisted(() => ({
+  getRevisionImpactPlan: vi.fn(),
+  readInstructionPublicationAgent: vi.fn(),
+  publishInstructions: vi.fn(),
+}));
 const navigation = vi.hoisted(() => ({ replace: vi.fn() }));
 const routeState = vi.hoisted(() => ({
   query: { tab: "runtime" },
   params: { agentRef: "agent_one", projectRef: "project_one" },
 }));
 const platform = vi.hoisted(() => ({
+  bootstrap: { organizationRef: "org_synthetic" } as
+    | { organizationRef: string }
+    | undefined,
+  problems: {} as Record<string, AppProblem | undefined>,
   agents: {} as Record<string, Agent>,
   loadProject: vi.fn(),
   loadAgent: vi.fn(),
@@ -37,6 +51,26 @@ vi.mock("@/features/platform/store", () => ({
   usePlatformStore: () => currentPlatform,
 }));
 vi.mock("@/shared/ui/unsaved-changes", () => ({ useUnsavedChanges: vi.fn() }));
+vi.mock("@/shared/config/runtime", () => ({
+  runtimeConfig: () => ({ requestTimeoutMs: 1000 }),
+}));
+vi.mock("@/shared/api/generated/openapi/sdk.gen", async (original) => ({
+  ...(await original<
+    typeof import("@/shared/api/generated/openapi/sdk.gen")
+  >()),
+  getRevisionImpactPlan: publicationApi.getRevisionImpactPlan,
+}));
+vi.mock(
+  "@/features/agents/detail/instruction-publication",
+  async (original) => ({
+    ...(await original<
+      typeof import("@/features/agents/detail/instruction-publication")
+    >()),
+    readInstructionPublicationAgent:
+      publicationApi.readInstructionPublicationAgent,
+    publishInstructions: publicationApi.publishInstructions,
+  }),
+);
 import AgentDetailPage from "./AgentDetailPage.vue";
 
 const currentRoute = reactive(routeState);
@@ -44,6 +78,7 @@ const currentPlatform = reactive(platform);
 const unmounts: Array<() => void> = [];
 afterEach(() => {
   for (const unmount of unmounts.splice(0)) unmount();
+  vi.unstubAllGlobals();
 });
 type EditorState = {
   load(): Promise<void>;
@@ -165,6 +200,9 @@ it("не переносит поздний snapshot инструкций в др
 });
 
 beforeEach(() => {
+  for (const mock of Object.values(publicationApi)) mock.mockReset();
+  currentPlatform.bootstrap = { organizationRef: "org_synthetic" };
+  currentPlatform.problems = {};
   navigation.replace.mockReset();
   routeState.query = { tab: "runtime" };
   routeState.params = { agentRef: "agent_one", projectRef: "project_one" };
@@ -253,3 +291,114 @@ it("не меняет новый редактор поздним ответом 
   expect(state.instructions.value).toBe("Новый контекст");
   expect(state.busy.value).toBe(false);
 });
+
+it.each(["recover", "retry", "stored"] as const)(
+  "instruction %s передаёт trusted organization impact anchor",
+  async (operation) => {
+    const values = new Map<string, string>();
+    const storage: Storage = {
+      get length() {
+        return values.size;
+      },
+      key: (index) => [...values.keys()][index] ?? null,
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => {
+        values.set(key, value);
+      },
+      removeItem: (key) => {
+        values.delete(key);
+      },
+      clear: () => values.clear(),
+    };
+    vi.stubGlobal("window", { sessionStorage: storage });
+    const agent = {
+      ...agentSnapshot(),
+      nextActions: ["EDIT", "PUBLISH"],
+      draftInstructions: {
+        ref: "draft_synthetic",
+        version: 1,
+        content: "Опубликованные инструкции",
+        state: "VALID",
+      },
+    } as Agent;
+    currentPlatform.agents.agent_one = agent;
+    const plan: RevisionImpactPlan = {
+      ref: "plan_synthetic",
+      version: 1,
+      kind: "AGENT_INSTRUCTIONS",
+      sourceRef: agent.ref,
+      sourceVersion: agent.version,
+      draftRef: "draft_synthetic",
+      draftVersion: 1,
+      targetDigest: "d".repeat(64),
+      digest: "e".repeat(64),
+      total: 0,
+      state: "PREPARED",
+      createdAt: "2026-09-06T00:00:00Z",
+      expiresAt: "2099-09-06T00:00:00Z",
+    };
+    const attempt = {
+      kind: "AGENT_INSTRUCTIONS" as const,
+      ownerRef: agent.ref,
+      planRef: plan.ref,
+      version: agent.version,
+      selectedItemRefs: [],
+      key: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    };
+    const state = (await captureSetupState(AgentDetailPage)) as unknown as {
+      instructionPlan: Ref<RevisionImpactPlan | undefined>;
+      instructionAttempt: Ref<typeof attempt | undefined>;
+      problem: Ref<AppProblem | undefined>;
+      instructionsDirty: Ref<boolean>;
+      load(): Promise<void>;
+      recoverInstructionPublication(): Promise<void>;
+      retryInstructionPublication(): Promise<void>;
+      instructionAction(action: "PUBLISH"): Promise<void>;
+    };
+    await state.load();
+    expect(state.instructionsDirty.value).toBe(false);
+    state.instructionPlan.value = plan;
+    state.instructionAttempt.value = attempt;
+    const applied = {
+      ...plan,
+      version: 2,
+      state: "APPLIED" as const,
+      publishedRevisionRef: "published_synthetic",
+    };
+    publicationApi.getRevisionImpactPlan.mockResolvedValueOnce({
+      data: {
+        plan: operation === "retry" ? plan : applied,
+        total: 0,
+        items: [],
+      },
+      response: new Response(null, { status: 200 }),
+    });
+    if (operation === "stored") {
+      rememberPublicationAttempt(attempt, storage);
+      await state.instructionAction("PUBLISH");
+    } else if (operation === "recover")
+      await state.recoverInstructionPublication();
+    else {
+      publicationApi.readInstructionPublicationAgent.mockResolvedValueOnce(
+        agent,
+      );
+      publicationApi.publishInstructions.mockRejectedValueOnce(
+        new AppProblem({
+          status: 503,
+          code: "SERVICE_UNAVAILABLE",
+          retryable: true,
+          kind: "unavailable",
+        }),
+      );
+      await state.retryInstructionPublication();
+      expect(publicationApi.publishInstructions).toHaveBeenCalledOnce();
+      expect(publicationApi.publishInstructions.mock.calls[0]?.[3]).toBe(
+        attempt.key,
+      );
+      return;
+    }
+    expect(state.problem.value).toBeUndefined();
+    expect(state.instructionPlan.value).toMatchObject({ state: "APPLIED" });
+    expect(publicationApi.publishInstructions).not.toHaveBeenCalled();
+  },
+);

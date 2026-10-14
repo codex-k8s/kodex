@@ -13,6 +13,12 @@ var (
 	queryDeleteDownloadGrants string
 	//go:embed sql/delete_content.sql
 	queryDeleteContent string
+	//go:embed sql/delete_revisions.sql
+	queryDeleteRevisions string
+	//go:embed sql/has_content.sql
+	queryHasContent string
+	//go:embed sql/release_claim.sql
+	queryReleaseClaim string
 	//go:embed sql/upsert_service_subject.sql
 	queryUpsertServiceSubject string
 	//go:embed sql/finalize_tombstone.sql

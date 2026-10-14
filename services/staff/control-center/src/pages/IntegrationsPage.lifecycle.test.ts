@@ -3,11 +3,25 @@ import { readFile } from "node:fs/promises";
 import { createPinia } from "pinia";
 import { createI18n } from "vue-i18n";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { nextTick } from "vue";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createRenderer,
+  defineComponent,
+  nextTick,
+  ssrContextKey,
+  watch,
+  type App,
+  type SetupContext,
+} from "vue";
 
 import { usePlatformStore } from "@/features/platform/store";
 import IntegrationsPage from "@/pages/IntegrationsPage.vue";
+import EmailMailboxConfigurationPanel from "@/features/integrations/ui/EmailMailboxConfigurationPanel.vue";
+import * as mailboxApi from "@/features/integrations/email-mailbox-api";
+import {
+  confirmationState,
+  resolveConfirmation,
+} from "@/shared/ui/confirmation";
 import type {
   IntegrationConnection,
   IntegrationDefinition,
@@ -85,10 +99,205 @@ interface IntegrationsSetup {
   refreshTestFeedback: (connection?: IntegrationConnection) => void;
   submit: () => Promise<void>;
   detailsConnection: { value?: IntegrationConnection };
+  openConnectionDetails: (connection: IntegrationConnection) => void;
+}
+
+const unmounts: Array<() => void> = [];
+afterEach(() => {
+  for (const unmount of unmounts.splice(0)) unmount();
+});
+function mountedPage(configure: (app: App) => void): IntegrationsSetup {
+  let state: IntegrationsSetup | undefined;
+  const renderer = createRenderer<object, object>({
+    insert() {},
+    remove() {},
+    patchProp() {},
+    createElement: () => ({}),
+    createText: () => ({}),
+    createComment: () => ({}),
+    setText() {},
+    setElementText() {},
+    parentNode: () => null,
+    nextSibling: () => null,
+  });
+  const app = renderer.createApp(
+    defineComponent({
+      setup(_props, context) {
+        state = (
+          IntegrationsPage as unknown as {
+            setup(props: object, context: SetupContext): IntegrationsSetup;
+          }
+        ).setup({}, context);
+        return () => null;
+      },
+    }),
+  );
+  configure(app);
+  app.provide(ssrContextKey, {});
+  app.mount({});
+  unmounts.push(() => app.unmount());
+  if (!state) throw new Error("Integrations page setup is missing");
+  return state;
 }
 
 describe("IntegrationsPage lifecycle", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    resolveConfirmation(false);
+    vi.clearAllMocks();
+  });
+
+  it("сначала завершает query открытия, затем монтирует busy-панель без leave confirmation", async () => {
+    const pinia = createPinia();
+    const platform = usePlatformStore(pinia);
+    const selected = {
+      ...connection("connection_email", ["UPDATE"]),
+      definitionKey: "email",
+    };
+    vi.spyOn(platform, "loadIntegrations").mockResolvedValue();
+    vi.spyOn(platform, "loadProjects").mockResolvedValue();
+    const read = vi
+      .spyOn(platform, "readConnection")
+      .mockResolvedValue(selected);
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: "/integrations", component: IntegrationsPage },
+        {
+          path: "/elsewhere",
+          component: defineComponent({ render: () => null }),
+        },
+      ],
+    });
+    await router.push("/integrations");
+    const i18n = createI18n({
+      legacy: false,
+      locale: "ru",
+      missingWarn: false,
+      messages: { ru: {} },
+    });
+    const configure = (app: import("vue").App) => {
+      app.use(pinia);
+      app.use(i18n);
+      app.use(router);
+    };
+    const setup = mountedPage(configure);
+    let panel:
+      | {
+          editor: {
+            busy: boolean;
+            dirty: boolean;
+            name: string;
+            catalog(): Promise<void>;
+          };
+        }
+      | undefined;
+    const stop = watch(
+      () => setup.detailsConnection.value,
+      (current) => {
+        if (!current) return;
+        const component = defineComponent({
+          setup(_props, context) {
+            const state = (
+              EmailMailboxConfigurationPanel as unknown as {
+                setup(
+                  props: object,
+                  context: import("vue").SetupContext,
+                ): typeof panel;
+              }
+            ).setup({ connection: current, realtimeRevision: 0 }, context);
+            if (!state) throw new Error("Mailbox panel setup is missing");
+            state.editor.busy = true;
+            panel = state;
+            return state;
+          },
+        });
+        void captureSetupState(component, configure);
+      },
+    );
+    setup.openConnectionDetails(selected);
+    await vi.waitFor(() =>
+      expect(router.currentRoute.value.query.connectionRef).toBe(selected.ref),
+    );
+    expect(confirmationState.open).toBe(false);
+    await vi.waitFor(() => expect(panel?.editor.busy).toBe(true));
+    expect(read).toHaveBeenCalledOnce();
+    expect(setup.detailsConnection.value?.ref).toBe(selected.ref);
+
+    // Начальная загрузка по-прежнему защищает настоящий уход из редактора.
+    const leave = router.push("/elsewhere");
+    await vi.waitFor(() => expect(confirmationState.open).toBe(true));
+    resolveConfirmation(false);
+    await leave;
+    expect(router.currentRoute.value.path).toBe("/integrations");
+    expect(setup.detailsConnection.value?.ref).toBe(selected.ref);
+    if (!panel) throw new Error("Mailbox panel setup is missing");
+    panel.editor.busy = false;
+    const listMailboxes = vi
+      .spyOn(mailboxApi, "listMailboxes")
+      .mockResolvedValue({
+        items: [],
+        nextPageToken: "",
+        total: 0,
+        nextActions: [
+          { action: "CREATE_DRAFT", enabled: true, reason: "NONE" },
+        ],
+      });
+    await panel.editor.catalog();
+    listMailboxes.mockRestore();
+    panel.editor.name = "Несохранённая конфигурация";
+    expect(panel.editor.dirty).toBe(true);
+    const changeConnection = router.replace({
+      query: { connectionRef: "connection_other" },
+    });
+    await vi.waitFor(() => expect(confirmationState.open).toBe(true));
+    resolveConfirmation(false);
+    await changeConnection;
+    expect(router.currentRoute.value.query.connectionRef).toBe(selected.ref);
+    expect(panel.editor.name).toBe("Несохранённая конфигурация");
+    expect(read).toHaveBeenCalledOnce();
+    stop();
+  });
+
+  it("отмена dirty-перехода к другому подключению не заменяет открытый редактор", async () => {
+    const pinia = createPinia();
+    const platform = usePlatformStore(pinia);
+    const current = connection("connection_current", ["UPDATE"]);
+    const other = connection("connection_other", ["UPDATE"]);
+    vi.spyOn(platform, "loadIntegrations").mockResolvedValue();
+    vi.spyOn(platform, "loadProjects").mockResolvedValue();
+    const read = vi
+      .spyOn(platform, "readConnection")
+      .mockResolvedValue(current);
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: "/integrations", component: IntegrationsPage }],
+    });
+    await router.push(`/integrations?connectionRef=${current.ref}`);
+    const setup = (await captureSetupState(IntegrationsPage, (app) => {
+      app.use(pinia);
+      app.use(router);
+      app.use(
+        createI18n({
+          legacy: false,
+          locale: "ru",
+          missingWarn: false,
+          messages: { ru: {} },
+        }),
+      );
+    })) as unknown as IntegrationsSetup;
+    await vi.waitFor(() =>
+      expect(setup.detailsConnection.value?.ref).toBe(current.ref),
+    );
+    const guard = vi.fn(() => false);
+    const remove = router.beforeEach(guard);
+    setup.openConnectionDetails(other);
+    await vi.waitFor(() => expect(guard).toHaveBeenCalledOnce());
+    await nextTick();
+    expect(router.currentRoute.value.query.connectionRef).toBe(current.ref);
+    expect(setup.detailsConnection.value?.ref).toBe(current.ref);
+    expect(read).toHaveBeenCalledOnce();
+    remove();
+  });
 
   it("обновляет только публичную конфигурацию и удаляет лишь после подтверждения", async () => {
     const pinia = createPinia();

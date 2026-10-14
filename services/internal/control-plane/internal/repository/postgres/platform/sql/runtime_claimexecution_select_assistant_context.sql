@@ -22,8 +22,8 @@ SELECT CASE WHEN EXISTS (SELECT 1 FROM control_plane.runs candidate
     FROM control_plane.runs run
     JOIN control_plane.assistant_conversations conversation
       ON conversation.organization_id=run.organization_id AND conversation.session_id=run.session_id
-    JOIN LATERAL control_plane.assistant_context_projection_v2(run.organization_id,run.initiated_by,
-        run.project_id,run.assistant_context_entity_kind,run.assistant_context_entity_ref,transaction_timestamp(),conversation.project_id) context ON true
+    JOIN LATERAL control_plane.assistant_context_projection_v3(run.organization_id,run.initiated_by,
+        run.project_id,run.assistant_context_entity_kind,run.assistant_context_entity_ref,transaction_timestamp(),conversation.project_id,conversation.assistant_scope) context ON true
     LEFT JOIN control_plane.projects project ON project.id=conversation.project_id
     WHERE run.organization_id=$1::uuid AND run.id=$2::uuid AND run.target_type='SYSTEM_ASSISTANT'
       AND conversation.state='ACTIVE'

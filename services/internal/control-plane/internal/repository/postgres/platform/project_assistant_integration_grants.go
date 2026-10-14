@@ -20,6 +20,12 @@ type projectAssistantIntegrationGrantTarget struct {
 	ref, name, projectID, projectRef, profileRef string
 	version, profileVersion                      int64
 	ready                                        bool
+	connection                                   projectAssistantGrantConnectionHeader
+}
+
+type projectAssistantGrantConnectionHeader struct {
+	ref, name, definitionKey, definitionVersion, definitionDigest string
+	version                                                       int64
 }
 
 func (repository *Repository) projectAssistantIntegrationGrantOwner(ctx context.Context, tx pgx.Tx, current scope, assistantRef, connectionRef string) (projectAssistantIntegrationGrantTarget, error) {
@@ -27,17 +33,25 @@ func (repository *Repository) projectAssistantIntegrationGrantOwner(ctx context.
 	err := tx.QueryRow(ctx, queryProjectAssistantIntegrationGrantOwner, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "actor_id": current.actorID,
 		"assistant_ref": assistantRef, "connection_ref": connectionRef, "authority_project": current.authorityProjectID,
-	}).Scan(&target.ref, &target.name, &target.version, &target.ready, &target.projectID, &target.projectRef, &target.profileRef, &target.profileVersion)
+	}).Scan(&target.ref, &target.name, &target.version, &target.ready, &target.projectID, &target.projectRef, &target.profileRef, &target.profileVersion,
+		&target.connection.ref, &target.connection.name, &target.connection.version,
+		&target.connection.definitionKey, &target.connection.definitionVersion, &target.connection.definitionDigest)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return target, errs.ErrNotFound
 	}
 	if err != nil {
 		return target, errs.ErrUnavailable
 	}
-	if target.ref == "" || target.projectRef == "" || target.profileRef == "" || target.version < 1 || target.profileVersion < 1 {
+	if target.ref != assistantRef || target.projectRef == "" || target.profileRef == "" || target.version < 1 || target.profileVersion < 1 ||
+		!validProjectAssistantGrantConnectionHeader(target.connection, connectionRef) {
 		return target, errs.ErrUnavailable
 	}
 	return target, nil
+}
+
+func validProjectAssistantGrantConnectionHeader(header projectAssistantGrantConnectionHeader, connectionRef string) bool {
+	return connectionRef != "" && header.ref == connectionRef && header.name != "" && header.version > 0 &&
+		header.definitionKey != "" && header.definitionVersion != "" && validAssistantDefinitionDigest(header.definitionDigest)
 }
 
 func (repository *Repository) projectAssistantIntegrationGrantInput(ctx context.Context, tx pgx.Tx, current scope, raw any) (command.IntegrationGrantInput, projectAssistantIntegrationGrantTarget, error) {

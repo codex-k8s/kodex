@@ -120,6 +120,42 @@ export function runExecutor(run: Run): string | undefined {
   return run.target.type === "AGENT" ? run.target.displayName : undefined;
 }
 
+const defaultTaskTitles = new Set([
+  "SOFTWARE_CHANGE",
+  "INTAKE",
+  "ANALYSIS_AND_ARCHITECTURE",
+  "IMPLEMENTATION",
+  "DOCUMENTATION_REVIEW",
+  "SECURITY_REVIEW",
+  "LEXICAL_REVIEW",
+  "REVIEW_AGGREGATION",
+  "DEVELOPER_FIX",
+  "FINAL_MANAGER_REVIEW",
+  "READY_FOR_HUMAN_REVIEW",
+]);
+
+export function runDefaultTaskTitleKey(
+  run: Pick<Run, "title" | "titleSource"> &
+    Partial<Pick<Run, "source" | "target" | "assistantPin" | "projectRef">>,
+): string | undefined {
+  const pin = run.assistantPin;
+  if (
+    run.titleSource === "SERVER_DEFAULT" &&
+    run.source === "SYSTEM_ASSISTANT" &&
+    run.target?.type === "SYSTEM_ASSISTANT" &&
+    pin?.scope === "PROJECT" &&
+    pin.projectRef &&
+    pin.projectRef === run.projectRef &&
+    pin.assistantRef === run.target.ref &&
+    pin.profileRef
+  )
+    return "workboard.projectAssistantCommand";
+  return run.titleSource === "SERVER_DEFAULT" &&
+    defaultTaskTitles.has(run.title)
+    ? `workboard.taskTitle.${run.title}`
+    : undefined;
+}
+
 export function collectAttention(
   runs: Run[],
   gates: OwnerGate[],

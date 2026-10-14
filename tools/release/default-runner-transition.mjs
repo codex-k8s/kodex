@@ -6,11 +6,11 @@ import { closeSync, fsyncSync, lstatSync, openSync, readFileSync, writeFileSync,
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fingerprint } from "./scoped-release.mjs";
+import { runnerPullReference } from "./runner-policy-model.mjs";
 
 const namespace = "kodex-system";
 const annotation = "kodex.dev/default-runner-transition";
 const stabilizedAnnotation = "kodex.dev/default-runner-transition-stabilized";
-const referencePattern = /^pull\.kodex\.works\/kodex\/agent-runner@sha256:[a-f0-9]{64}$/;
 const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const requireValue = (condition, code) => { if (!condition) throw new Error(code); };
 
@@ -22,7 +22,15 @@ function application(deployment) {
     metadata.labels?.["app.kubernetes.io/part-of"] === "kodex" &&
     (metadata.labels?.["kodex.dev/local-profile"] === "hot-reload" || metadata.labels?.["kodex.dev/environment"] === "staging"),
   "STAGING_DEPLOYMENT_REQUIRED");
-  requireValue(spec.strategy?.type === "RollingUpdate" && spec.strategy.rollingUpdate?.maxUnavailable === 0 &&
+  const trustedHotRecreate = metadata.labels?.["kodex.dev/local-profile"] === "hot-reload" &&
+    metadata.labels?.["kodex.dev/environment"] === "staging" &&
+    spec.template?.metadata?.labels?.["kodex.dev/local-profile"] === "hot-reload" &&
+    spec.template?.metadata?.labels?.["kodex.dev/security-profile"] === "trusted-cluster" &&
+    spec.replicas === 1 && spec.strategy?.type === "Recreate" &&
+    fingerprint(spec.strategy) === fingerprint({type:"Recreate"});
+  // Существующая canonical trusted strategy сохраняется; production/staging не мигрируем.
+  const rollingUpdate = spec.strategy?.type === "RollingUpdate" && spec.strategy.rollingUpdate?.maxUnavailable === 0;
+  requireValue((trustedHotRecreate || rollingUpdate) &&
     Number.isSafeInteger(spec.replicas) && spec.replicas > 0 && deployment.status?.observedGeneration >= metadata.generation &&
     deployment.status.availableReplicas === spec.replicas && deployment.status.updatedReplicas === spec.replicas &&
     deployment.status.replicas === spec.replicas, "HEALTHY_ROLLOUT_REQUIRED");
@@ -38,8 +46,9 @@ function literal(container, name) {
   return entries[0];
 }
 
-export function planDefaultRunner(deployments, nextReference, operationID = randomUUID()) {
-  requireValue(referencePattern.test(nextReference) && uuidPattern.test(operationID) && deployments.length === 2,
+export function planDefaultRunner(deployments, nextReference, operationID = randomUUID(), policy) {
+  requirePublishedNodeReadback(policy, nextReference);
+  requireValue(uuidPattern.test(operationID) && deployments.length === 2,
     "DEFAULT_RUNNER_INPUT_INVALID");
   const byName = new Map(deployments.map((item) => [item.metadata?.name, item]));
   requireValue(byName.size === 2, "DEFAULT_RUNNER_TARGETS_INVALID");
@@ -47,7 +56,8 @@ export function planDefaultRunner(deployments, nextReference, operationID = rand
   const configs = [["runtime-controller", "RUNTIME_CONTROLLER_DEFAULT_ROLE_IMAGE_REFERENCE"], ["control-plane", "CONTROL_PLANE_DEFAULT_ROLE_IMAGE_REFERENCE"]];
   const operations = configs.map(([name, key]) => {
     const deployment = byName.get(name), container = application(deployment), current = literal(container, key).value;
-    requireValue(referencePattern.test(current), "CURRENT_DEFAULT_RUNNER_INVALID");
+    const currentDigest = /@(sha256:[a-f0-9]{64})$/.exec(current)?.[1];
+    requireValue(currentDigest && current === runnerPullReference(policy.data, currentDigest), "CURRENT_DEFAULT_RUNNER_INVALID");
     if (name === "control-plane") requireValue(literal(container, "CONTROL_PLANE_TRUSTED_ROLE_BASE_DIGEST").value === digest, "RUNNER_NOT_TRUSTED_BY_CONTROL_PLANE");
     const after = structuredClone(deployment.spec), nextContainer = after.template.spec.containers.find((item) => item.name === name);
     literal(nextContainer, key).value = nextReference;
@@ -70,12 +80,14 @@ export function planDefaultRunner(deployments, nextReference, operationID = rand
 export function requirePublishedNodeReadback(policy, nextReference) {
   requireValue(policy?.apiVersion === "v1" && policy.kind === "ConfigMap" && policy.metadata?.namespace === namespace &&
     policy.immutable === true && policy.metadata.labels?.["app.kubernetes.io/part-of"] === "kodex" &&
-    policy.metadata.labels?.["kodex.dev/owner-intent"] === "true" && policy.data?.nodeReadbackImage === nextReference,
+    policy.metadata.labels?.["kodex.dev/owner-intent"] === "true" && policy.data?.nodeReadbackImage === nextReference &&
+    nextReference === runnerPullReference(policy.data, policy.data.trustedRoleBaseDigest),
   "RUNNER_NODE_READBACK_NOT_PUBLISHED");
 }
 
 export function requireRuntimeBinding(policy, binding, nextReference) {
   requireValue(policy?.data?.nodeReadbackImage === nextReference &&
+    nextReference === runnerPullReference(policy.data, policy.data.trustedRoleBaseDigest) &&
     binding?.apiVersion === "admissionregistration.k8s.io/v1" && binding.kind === "ValidatingAdmissionPolicyBinding" &&
     binding.metadata?.name === "runtime-role-pod-exact-secret-projection" &&
     binding.spec?.policyName === binding.metadata.name && binding.spec?.paramRef?.namespace === namespace &&
@@ -101,7 +113,7 @@ function main(args) {
     requireValue(options["--runner-reference"]&&options["--output"]&&Object.keys(options).length===3,"PLAN_ARGUMENTS_INVALID");
     requirePublishedNodeReadback(activePolicy,options["--runner-reference"]);
     requireRuntimeBinding(activePolicy,runtimeBinding,options["--runner-reference"]);
-    const plan={...planDefaultRunner(deployments(),options["--runner-reference"]),context,clusterUID};writeFileSync(options["--output"],`${JSON.stringify(plan)}\n`,{flag:"wx",mode:0o600});process.stdout.write(`${JSON.stringify({status:"PLANNED",id:plan.id,targets:plan.operations.length})}\n`);return;
+    const plan={...planDefaultRunner(deployments(),options["--runner-reference"],randomUUID(),activePolicy),context,clusterUID};writeFileSync(options["--output"],`${JSON.stringify(plan)}\n`,{flag:"wx",mode:0o600});process.stdout.write(`${JSON.stringify({status:"PLANNED",id:plan.id,targets:plan.operations.length})}\n`);return;
   }
   requireValue(options["--plan"]&&options["--evidence"]&&(command!=="apply"||options["--confirm"]==="APPLY-STAGING-DEFAULT-RUNNER"),"OPERATION_ARGUMENTS_INVALID");
   const saved=privateJSON(options["--plan"]);requireValue(saved.context===context&&saved.clusterUID===clusterUID,"PLAN_SCOPE_CHANGED");
@@ -112,7 +124,7 @@ function main(args) {
     const states=deployments().map((deployment)=>{const expected=saved.operations.find((item)=>item.name===deployment.metadata.name),current=literal(application(deployment),expected.key).value;return{name:expected.name,status:current===expected.afterReference?"NEW":current===expected.beforeReference?"OLD":"DRIFT"};});
     writeFileSync(options["--evidence"],`${JSON.stringify({at:new Date().toISOString(),status:"INSPECTED",states})}\n`,{flag:"wx",mode:0o600});process.stdout.write(`${JSON.stringify({status:"INSPECTED",states})}\n`);return;
   }
-  requireValue(Object.keys(options).length===4,"APPLY_ARGUMENTS_INVALID");const current=planDefaultRunner(deployments(),saved.nextReference,saved.id);requireValue(fingerprint(current.operations)===fingerprint(saved.operations),"PLAN_PRECONDITION_CHANGED");
+  requireValue(Object.keys(options).length===4,"APPLY_ARGUMENTS_INVALID");const current=planDefaultRunner(deployments(),saved.nextReference,saved.id,activePolicy);requireValue(fingerprint(current.operations)===fingerprint(saved.operations),"PLAN_PRECONDITION_CHANGED");
   const fd=openSync(options["--evidence"],"wx",0o600),journal=(value)=>{writeSync(fd,`${JSON.stringify({at:new Date().toISOString(),id:saved.id,...value})}\n`);fsyncSync(fd);};
   try{for(const operation of saved.operations){journal({status:"INTENT",target:operation.name});kube(["-n",namespace,"patch","deployment",operation.name,"--type=json","-p",JSON.stringify(operation.patch)]);kube(["-n",namespace,"rollout","status",`deployment/${operation.name}`,"--timeout=300s"]);let after=get(operation.name);requireValue(after.metadata.uid===operation.uid&&fingerprint(after.spec)===operation.afterSpecSHA256,"TARGET_READBACK_MISMATCH");journal({status:"APPLIED",target:operation.name});if(operation.name==="control-plane"){journal({status:"STABILIZATION_INTENT",target:operation.name});const stabilizationPatch=[{op:"test",path:"/metadata/uid",value:operation.uid},{op:"test",path:"/metadata/resourceVersion",value:after.metadata.resourceVersion},{op:"replace",path:"/spec",value:operation.stabilizedAfter}];kube(["-n",namespace,"patch","deployment",operation.name,"--type=json","-p",JSON.stringify(stabilizationPatch)]);kube(["-n",namespace,"rollout","status",`deployment/${operation.name}`,"--timeout=300s"]);after=get(operation.name);requireValue(after.metadata.uid===operation.uid&&fingerprint(after.spec)===operation.stabilizedAfterSpecSHA256,"STABILIZATION_READBACK_MISMATCH");journal({status:"STABILIZED",target:operation.name});}}journal({status:"PASS",nextReference:saved.nextReference});process.stdout.write(`${JSON.stringify({status:"PASS",id:saved.id})}\n`);}catch{journal({status:"UNKNOWN",code:"DEFAULT_RUNNER_TRANSITION_FAILED"});throw new Error("DEFAULT_RUNNER_TRANSITION_FAILED");}finally{closeSync(fd);}
 }

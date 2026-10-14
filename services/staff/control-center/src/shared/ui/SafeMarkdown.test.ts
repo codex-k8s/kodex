@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createSSRApp, h } from "vue";
 import { createI18n } from "vue-i18n";
 import { renderToString } from "@vue/server-renderer";
@@ -33,6 +34,34 @@ async function render(content: string): Promise<string> {
 }
 
 describe("SafeMarkdown", () => {
+  it("сохраняет читаемые колонки и полный текст в локально прокручиваемой таблице", async () => {
+    const longText =
+      "Подробное описание результата проверки без усечения ".repeat(12);
+    const reference = "sha256:" + "a".repeat(64);
+    const html = await render(
+      `| Попытка | Результат | Источник |\n| --- | --- | --- |\n| Первая попытка проверки | ${longText} | ${reference} |`,
+    );
+    expect(html).toMatch(/class="markdown-table-wrap"[^>]*tabindex="0"/);
+    expect(html).toMatch(/<th[^>]*>[^]*?Попытка/);
+    expect(html).toContain("Первая попытка проверки");
+    expect(html).toContain(longText.trim());
+    expect(html).toContain(reference);
+    expect(html.match(/<td\b/g)).toHaveLength(3);
+    const source = readFileSync(
+      new URL("./SafeMarkdown.vue", import.meta.url),
+      "utf8",
+    );
+    const wrapper = source.match(/\.markdown-table-wrap\s*\{([^}]*)\}/)?.[1];
+    const cells = source.match(
+      /\.safe-markdown :where\(th, td\)\s*\{([^}]*)\}/,
+    )?.[1];
+    expect(wrapper).toContain("min-width: 0");
+    expect(wrapper).toContain("max-width: 100%");
+    expect(wrapper).toContain("overflow-x: auto");
+    expect(cells).toContain("min-width: 10rem");
+    expect(cells).not.toMatch(/text-overflow|line-clamp|overflow:\s*hidden/);
+  });
+
   it("не выдаёт локальный отчёт выполнения за маршрут приложения", async () => {
     const path = "/workspace/.kodex/outbox/qa1797-manager-smoke.md";
     const html = await render(`[Отчёт](${path})`);

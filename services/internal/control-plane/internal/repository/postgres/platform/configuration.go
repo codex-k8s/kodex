@@ -1345,23 +1345,18 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			_ = effectTx.Rollback(ctx)
 			return commandOutcome{}, err
 		}
-		if operation.Type == "CREATE_PROJECT_FILE" {
-			prepared, exists := payload.PreparedFiles[operation.Key]
-			projectFile, valid := planned.Payload.(command.ProjectFileInput)
-			if !exists || !valid || prepared.Prepared == nil || prepared.FileName != projectFile.FileName ||
-				prepared.SizeBytes != projectFile.SizeBytes || !strings.EqualFold(prepared.SHA256, projectFile.SHA256) {
-				_ = operationEffectsTx.Rollback(ctx)
-				_ = effectTx.Rollback(ctx)
-				return commandOutcome{}, errs.ErrConflict
-			}
-			projectFile.Prepared = prepared.Prepared
-			projectFile.Content = nil
-			planned.Payload = projectFile
-		}
 		if err := repository.authorizeCommand(ctx, operationEffectsTx, operationScope, planned); err != nil {
 			_ = operationEffectsTx.Rollback(ctx)
 			_ = effectTx.Rollback(ctx)
 			return commandOutcome{}, err
+		}
+		if assistantFileOperation(operation.Type) {
+			planned, err = repository.resolveAssistantFileOperationTx(ctx, operationEffectsTx, operationScope, planID, revision, operation, planned)
+			if err != nil {
+				_ = operationEffectsTx.Rollback(ctx)
+				_ = effectTx.Rollback(ctx)
+				return commandOutcome{}, err
+			}
 		}
 		var outcome commandOutcome
 		if operation.Type == prepareProjectAssistantConnection {
@@ -1503,7 +1498,9 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			_ = effectTx.Rollback(ctx)
 			return commandOutcome{}, fmt.Errorf("apply assistant plan operation: %w", err)
 		}
-		created = append(created, outcome.resourceRef)
+		if operation.Type != createProjectFileRevision {
+			created = append(created, outcome.resourceRef)
+		}
 		if connection := outcome.result.Connection; grantConnectionRef != "" && connection != nil && connection.Ref == grantConnectionRef && connection.Version > 0 {
 			appliedGrantConnectionVersions[grantConnectionRef] = connection.Version
 		}
@@ -1525,8 +1522,19 @@ func (repository *Repository) applyAssistantPlanCommand(ctx context.Context, tx 
 			_ = effectTx.Rollback(ctx)
 			return commandOutcome{}, fmt.Errorf("audit assistant plan operation: %w", err)
 		}
-		operationReceipts = append(operationReceipts, entity.AssistantPlanOperationReceipt{OperationRef: operation.Key,
-			ResourceRef: outcome.resourceRef, Outcome: "APPLIED", AuditRef: auditRef})
+		operationReceipt := entity.AssistantPlanOperationReceipt{OperationRef: operation.Key, ResourceRef: outcome.resourceRef, Outcome: "APPLIED", AuditRef: auditRef}
+		if operation.Type == createProjectFileRevision && outcome.result.Artifact != nil {
+			item := outcome.result.Artifact
+			immutable, readErr := artifactRevisionRow(operationEffectsTx.QueryRow(ctx, queryArtifactRevisionGet, pgx.StrictNamedArgs{
+				"organization_id": scope.organizationID, "artifact_ref": item.Ref, "revision_ref": item.CurrentRevisionRef}))
+			if readErr != nil {
+				_ = operationEffectsTx.Rollback(ctx)
+				_ = effectTx.Rollback(ctx)
+				return commandOutcome{}, readErr
+			}
+			operationReceipt.ArtifactRevision = &immutable
+		}
+		operationReceipts = append(operationReceipts, operationReceipt)
 		if outcome.platformEvent != "" {
 			if err := repository.emitCommandOutcomePlatformEvent(ctx, operationEffectsTx, scope, outcome); err != nil {
 				_ = operationEffectsTx.Rollback(ctx)

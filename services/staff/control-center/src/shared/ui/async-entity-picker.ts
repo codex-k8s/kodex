@@ -154,7 +154,11 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
     controller = undefined;
   }
 
-  async function loadPage(append: boolean, expectedGeneration: number) {
+  async function loadPage(
+    append: boolean,
+    expectedGeneration: number,
+    preserveItems = false,
+  ) {
     if (disposed || expectedGeneration !== generation) return;
     if (append) loadingMore.value = true;
     else initialLoading.value = true;
@@ -220,6 +224,15 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
         return;
       }
       error.value = loadError;
+      if (
+        preserveItems &&
+        loadError instanceof AppProblem &&
+        ["unauthorized", "forbidden", "not-found"].includes(loadError.kind)
+      ) {
+        items.value = [];
+        total.value = undefined;
+        nextCursor.value = null;
+      }
       hasLoaded.value = true;
     } finally {
       if (expectedGeneration === generation) {
@@ -230,25 +243,31 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
     }
   }
 
-  function schedule(delay = debounceMs): void {
+  function schedule(delay = debounceMs, preserveItems = false): void {
     cancelPending();
     generation += 1;
     cursors.clear();
     const expectedGeneration = generation;
-    items.value = [];
-    total.value = undefined;
+    if (!preserveItems) {
+      items.value = [];
+      total.value = undefined;
+    }
     nextCursor.value = null;
     error.value = undefined;
     hasLoaded.value = false;
     initialLoading.value = true;
     timer = setTimeout(() => {
       timer = undefined;
-      void loadPage(false, expectedGeneration);
+      void loadPage(false, expectedGeneration, preserveItems);
     }, delay);
   }
 
   function refresh(): void {
     schedule(0);
+  }
+
+  function refreshPreservingItems(): void {
+    schedule(0, true);
   }
 
   function applySnapshot(page: AsyncEntityPage<T>): void {
@@ -344,6 +363,7 @@ export function useAsyncEntityCollection<T extends AsyncEntityPickerItem>(
     phase,
     query,
     refresh,
+    refreshPreservingItems,
     applySnapshot,
     upsert,
     remove,
@@ -374,6 +394,7 @@ export interface CursorInfiniteScrollOptions {
   root?: Ref<HTMLElement | null | undefined>;
   sentinel: Ref<Element | null | undefined>;
   enabled: MaybeRefOrGetter<boolean>;
+  contextKey?: MaybeRefOrGetter<string>;
   loadMore: () => void | Promise<void>;
   rootMargin?: string;
 }
@@ -382,8 +403,10 @@ export function useCursorInfiniteScroll(
   options: CursorInfiniteScrollOptions,
 ): void {
   let observer: IntersectionObserver | undefined;
+  let observerEpoch = 0;
 
   function disconnect(): void {
+    observerEpoch += 1;
     observer?.disconnect();
     observer = undefined;
   }
@@ -403,11 +426,15 @@ export function useCursorInfiniteScroll(
       requestedRoot.contains(sentinel)
         ? requestedRoot
         : null;
+    const epoch = observerEpoch;
+    const onIntersection = createCursorIntersectionHandler(
+      () => toValue(options.enabled),
+      options.loadMore,
+    );
     observer = new IntersectionObserver(
-      createCursorIntersectionHandler(
-        () => toValue(options.enabled),
-        options.loadMore,
-      ),
+      (entries, currentObserver) => {
+        if (epoch === observerEpoch) onIntersection(entries, currentObserver);
+      },
       {
         root: observerRoot,
         rootMargin: options.rootMargin ?? "0px 0px 120px",
@@ -421,6 +448,7 @@ export function useCursorInfiniteScroll(
       options.root?.value,
       options.sentinel.value,
       toValue(options.enabled),
+      toValue(options.contextKey),
     ],
     reconnect,
     { flush: "post", immediate: true },
@@ -437,6 +465,7 @@ export interface AsyncEntityOption {
   title: string;
   description?: string;
   meta?: string;
+  tooltip?: string;
   disabled?: boolean;
   disabledReason?: string;
 }

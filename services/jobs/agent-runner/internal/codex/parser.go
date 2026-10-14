@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
 	"github.com/google/uuid"
 )
 
@@ -84,6 +85,17 @@ type Result struct {
 	UsageCompleteness   UsageCompleteness                `json:"UsageCompleteness,omitempty"`
 	ToolCalls           []runtimecontract.NativeToolCall `json:"ToolCalls,omitempty"`
 	rolloutCapture      *rolloutCaptureProof
+	providerDiagnostic  *runtimecontract.ProviderFailureDiagnostic
+}
+
+// Только проверенный private IPC terminal назначает diagnostic; JSON Result
+// или произвольные caller fields не могут создать этот внутренний маркер.
+func (result Result) ProviderDiagnostic(input model.Input) *runtimecontract.ProviderFailureDiagnostic {
+	if result.providerDiagnostic == nil || !result.providerDiagnostic.Matches(input) {
+		return nil
+	}
+	value := *result.providerDiagnostic
+	return &value
 }
 
 type messageKind uint8
@@ -209,6 +221,7 @@ func decodeRPCError(raw json.RawMessage) (int64, error) {
 }
 
 type protocolState struct {
+	processVersion       string
 	resumeSource         *confirmedResumeSource
 	expectedSessionID    string
 	threadID             string
@@ -271,6 +284,11 @@ func (state *protocolState) initialize(raw json.RawMessage, expectedHome string)
 		family != "unix" || operatingSystem != "linux" || userAgent == "" {
 		return errors.New("Codex app-server initialize binding is invalid")
 	}
+	version, err := parseProviderProcessVersion(userAgent)
+	if err != nil || state.processVersion != "" {
+		return errProviderProcessInitialize
+	}
+	state.processVersion = version
 	return nil
 }
 
@@ -1131,9 +1149,8 @@ func (state *protocolState) consumeItem(raw json.RawMessage, authoritative bool,
 	}
 	state.agentMessages[id] = value
 	if phase == "final_answer" {
-		if state.finalID != "" && state.finalID != id {
-			return errors.New("Codex app-server emitted duplicate final messages")
-		}
+		// Фаза сообщения не завершает ход: его результатом становится последнее
+		// final_answer только после авторитетного turn/completed.
 		state.finalID = id
 	} else if phase == "" {
 		state.fallbackID = id
@@ -1355,7 +1372,7 @@ func safeCommandActions(raw json.RawMessage) (safeActionSummary, error) {
 		return safeActionSummary{}, errors.New("Codex app-server command actions are invalid")
 	}
 	seen := make(map[string]struct{})
-	result := safeActionSummary{count: len(items)}
+	result := safeActionSummary{count: len(items), kinds: []string{}}
 	for _, item := range items {
 		fields, err := decodeObject(item, schema([]string{"command", "type"}, "command", "name", "path", "query", "type"))
 		if err != nil {
@@ -1397,7 +1414,7 @@ func (state *protocolState) safeFileChanges(raw json.RawMessage) (safeFileChange
 	if strictDecode(raw, &items) != nil || len(items) > 10_000 {
 		return safeFileChangeSummary{}, errors.New("Codex app-server file changes are invalid")
 	}
-	result := safeFileChangeSummary{count: len(items)}
+	result := safeFileChangeSummary{count: len(items), kinds: []string{}, paths: []string{}}
 	seenKinds := make(map[string]struct{})
 	for _, item := range items {
 		fields, err := decodeObject(item, schema([]string{"diff", "kind", "path"}, "diff", "kind", "path"))

@@ -1,10 +1,12 @@
 import { renderToString } from "@vue/server-renderer";
+import { readFileSync } from "node:fs";
 import {
   createSSRApp,
   createRenderer,
   defineComponent,
   h,
   nextTick,
+  reactive,
   ssrContextKey,
   type App,
   type Ref,
@@ -134,18 +136,40 @@ const edges: RunEdge[] = [
 ];
 
 const apps: App[] = [];
-afterEach(() => apps.splice(0).forEach((app) => app.unmount()));
+let browserWindow: EventTarget & { innerWidth: number };
+afterEach(() => {
+  apps.splice(0).forEach((app) => app.unmount());
+  vi.unstubAllGlobals();
+});
 beforeEach(() => {
+  browserWindow = Object.assign(new EventTarget(), { innerWidth: 1921 });
+  vi.stubGlobal("window", browserWindow);
   vi.clearAllMocks();
   if (flow.dimensions) flow.dimensions.value = { width: 1921, height: 780 };
   flow.viewport = { x: 0, y: 0, zoom: 1 };
 });
 
 interface CanvasState {
+  viewMode: Ref<"graph" | "outline">;
+  setViewMode(mode: "graph" | "outline"): void;
   userAdjustedView: Ref<boolean>;
+  minimumZoom: Ref<number>;
   markUserAdjusted(): void;
+  fit(userInitiated?: boolean, currentWork?: boolean): Promise<void>;
 }
-function mountCanvas(): CanvasState {
+function canvasProps() {
+  return reactive({
+    nodes: [...nodes],
+    edges: [...edges],
+    rootRef: "run_example",
+    selectedRef: "node_root",
+    futureNodeRefs: [] as string[],
+    activeNodeRefs: [] as string[],
+    executionLabels: {},
+    compact: true,
+  });
+}
+function mountCanvas(props = canvasProps()): CanvasState {
   let state: CanvasState | undefined;
   const renderer = createRenderer<object, object>({
     patchProp() {},
@@ -167,18 +191,7 @@ function mountCanvas(): CanvasState {
   const app = renderer.createApp(
     defineComponent({
       setup(_, context) {
-        state = original(
-          {
-            nodes,
-            edges,
-            selectedRef: "node_root",
-            futureNodeRefs: [],
-            activeNodeRefs: [],
-            executionLabels: {},
-            compact: true,
-          },
-          context,
-        );
+        state = original(props, context);
         return () => null;
       },
     }),
@@ -201,6 +214,23 @@ function mountCanvas(): CanvasState {
 function required<T>(value: T | undefined): T {
   if (value === undefined) throw new Error("Missing graph test fixture");
   return value;
+}
+
+function expectGraphVisible(props: ReturnType<typeof canvasProps>): void {
+  const bounds = layoutRunGraph(props.nodes, props.edges).bounds;
+  const { width, height } = required(flow.dimensions).value;
+  expect(
+    bounds.x * flow.viewport.zoom + flow.viewport.x,
+  ).toBeGreaterThanOrEqual(0);
+  expect(
+    (bounds.x + bounds.width) * flow.viewport.zoom + flow.viewport.x,
+  ).toBeLessThanOrEqual(width);
+  expect(
+    bounds.y * flow.viewport.zoom + flow.viewport.y,
+  ).toBeGreaterThanOrEqual(0);
+  expect(
+    (bounds.y + bounds.height) * flow.viewport.zoom + flow.viewport.y,
+  ).toBeLessThanOrEqual(height);
 }
 
 async function render(
@@ -228,10 +258,12 @@ async function render(
             graph: "Граф выполнения",
             graphControls: "Управление графом",
             connections: "Связи графа",
+            nodeList: "Список узлов",
             zoom: "Масштаб графа",
             zoomIn: "Увеличить масштаб",
             zoomOut: "Уменьшить масштаб",
-            fitGraph: "Вместить",
+            fitGraph: "Весь граф",
+            focusCurrentWork: "Текущая работа",
             minimap: "Мини-карта графа",
             waitingForActivity: "Ожидает начала работы",
             sessionNode: "Сессия",
@@ -266,6 +298,145 @@ async function render(
 }
 
 describe("RunGraphCanvas", () => {
+  it("мобильная ширина открывает список и resize меняет только невыбранный режим", () => {
+    browserWindow.innerWidth = 390;
+    const state = mountCanvas();
+    expect(state.viewMode.value).toBe("outline");
+
+    browserWindow.innerWidth = 1280;
+    browserWindow.dispatchEvent(new Event("resize"));
+    expect(state.viewMode.value).toBe("graph");
+
+    browserWindow.innerWidth = 390;
+    browserWindow.dispatchEvent(new Event("resize"));
+    expect(state.viewMode.value).toBe("outline");
+  });
+
+  it.each(["graph", "outline"] as const)(
+    "явный выбор %s сохраняется при desktop/mobile resize",
+    (mode) => {
+      browserWindow.innerWidth = mode === "graph" ? 390 : 1280;
+      const state = mountCanvas();
+      state.setViewMode(mode);
+
+      for (const width of [1280, 390]) {
+        browserWindow.innerWidth = width;
+        browserWindow.dispatchEvent(new Event("resize"));
+        expect(state.viewMode.value).toBe(mode);
+      }
+    },
+  );
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    "не применяет fit до валидного размера canvas %s",
+    async (height) => {
+      const state = mountCanvas();
+      required(flow.dimensions).value = { width: 1201, height };
+      await state.fit(false);
+      expect(flow.setViewport).not.toHaveBeenCalled();
+    },
+  );
+
+  it("ручное изменение во время ожидающего fit отменяет этот автофокус", async () => {
+    const state = mountCanvas();
+    const pending = state.fit(false);
+    state.userAdjustedView.value = true;
+    await pending;
+    expect(flow.setViewport).not.toHaveBeenCalled();
+  });
+
+  it("конкурирующие realtime fit и короткий resize применяют только свежий положительный viewport без анимации", async () => {
+    const state = mountCanvas();
+    const dimensions = required(flow.dimensions);
+    const first = state.fit(false);
+    dimensions.value = { width: 1201, height: 160 };
+    const second = state.fit(false);
+    await Promise.all([first, second]);
+    await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
+    expect(flow.viewport.zoom).toBeGreaterThan(0);
+    expect(Object.values(flow.viewport).every(Number.isFinite)).toBe(true);
+    expect(flow.setViewport).toHaveBeenLastCalledWith(flow.viewport, {
+      duration: 0,
+    });
+    flow.setViewport.mockClear();
+    await state.fit(true);
+    expect(flow.setViewport).toHaveBeenLastCalledWith(flow.viewport, {
+      duration: 180,
+    });
+  });
+  it("отложенный автофокус не перезаписывает ручной viewport", async () => {
+    const state = mountCanvas();
+    flow.viewport = { x: -420, y: 90, zoom: 0.72 };
+    state.markUserAdjusted();
+    await state.fit(false);
+    expect(flow.setViewport).not.toHaveBeenCalled();
+    expect(flow.viewport).toEqual({ x: -420, y: 90, zoom: 0.72 });
+  });
+
+  it("смена активного исполнения фокусирует untouched viewport, не меняя выбранный root", async () => {
+    const props = canvasProps();
+    const state = mountCanvas(props);
+    props.nodes = [
+      required(props.nodes[0]),
+      { ...required(props.nodes[1]), state: "RUNNING" },
+    ];
+    props.activeNodeRefs = ["node_root", "node_agent"];
+    await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
+    expect(props.selectedRef).toBe("node_root");
+    expect(state.userAdjustedView.value).toBe(false);
+    const focused = flow.viewport;
+    await state.fit(true, true);
+    expect(flow.viewport).toEqual(focused);
+    expect(state.userAdjustedView.value).toBe(true);
+  });
+
+  it("ручной viewport переживает новый child run, активное состояние и переключение selection", async () => {
+    const props = canvasProps();
+    const state = mountCanvas(props);
+    flow.viewport = { x: -420, y: 90, zoom: 0.72 };
+    state.markUserAdjusted();
+    props.nodes = [
+      required(props.nodes[0]),
+      { ...required(props.nodes[1]), runRef: "run_child", state: "RUNNING" },
+    ];
+    props.activeNodeRefs = ["node_root", "node_agent"];
+    props.edges = [
+      ...props.edges,
+      { ...required(edges[0]), ref: "new_edge", type: "CONTINUES" },
+    ];
+    props.selectedRef = "node_agent";
+    await nextTick();
+    await nextTick();
+    expect(flow.setViewport).not.toHaveBeenCalled();
+    expect(flow.viewport).toEqual({ x: -420, y: 90, zoom: 0.72 });
+    expect(state.userAdjustedView.value).toBe(true);
+  });
+
+  it("только новый корневой граф снимает защиту ручного viewport", async () => {
+    const props = canvasProps();
+    const state = mountCanvas(props);
+    state.markUserAdjusted();
+    props.rootRef = "another_root_run";
+    await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
+    expect(state.userAdjustedView.value).toBe(false);
+  });
+
+  it("явный обзор всего графа не включает последующее автослежение", async () => {
+    const props = canvasProps();
+    const state = mountCanvas(props);
+    await state.fit(true);
+    expect(state.userAdjustedView.value).toBe(true);
+    flow.setViewport.mockClear();
+    props.nodes = [
+      required(props.nodes[0]),
+      { ...required(props.nodes[1]), state: "RUNNING" },
+    ];
+    props.activeNodeRefs = ["node_agent"];
+    await nextTick();
+    await nextTick();
+    expect(flow.setViewport).not.toHaveBeenCalled();
+  });
+
   it("поздний resize после открытия drawer пересчитывает untouched viewport по ширине1201", async () => {
     const state = mountCanvas();
     const dimensions = required(flow.dimensions);
@@ -295,29 +466,103 @@ describe("RunGraphCanvas", () => {
     expect(flow.setViewport).not.toHaveBeenCalled();
   });
 
-  it("resize сохраняет ручной world-center и zoom; события без resize их не сбрасывают", async () => {
-    const state = mountCanvas();
+  it("открытие и закрытие drawer возвращают весь граф после ручного pan/zoom без realtime-автослежения", async () => {
+    const props = canvasProps();
+    const state = mountCanvas(props);
     const dimensions = required(flow.dimensions);
     flow.viewport = { x: 320, y: 90, zoom: 0.72 };
     state.markUserAdjusted();
-    const center = { x: (1921 / 2 - 320) / 0.72, y: (780 / 2 - 90) / 0.72 };
+    // Старое сохранение центра сдвигало корень за левый край нового canvas.
+    const root = required(layoutRunGraph(props.nodes, props.edges).nodes[0]);
+    expect(root.x * 0.72 + 320 + (1201 - 1921) / 2).toBeLessThan(0);
     dimensions.value = { width: 1201, height: 680 };
     await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
-    expect(flow.viewport.zoom).toBe(0.72);
-    expect((1201 / 2 - flow.viewport.x) / flow.viewport.zoom).toBeCloseTo(
-      center.x,
-    );
-    expect((680 / 2 - flow.viewport.y) / flow.viewport.zoom).toBeCloseTo(
-      center.y,
-    );
+    expectGraphVisible(props);
+    expect(flow.setViewport).toHaveBeenLastCalledWith(flow.viewport, {
+      duration: 0,
+    });
     expect(state.userAdjustedView.value).toBe(true);
     flow.setViewport.mockClear();
     dimensions.value = { width: 1201, height: 680 };
     await nextTick();
     expect(flow.setViewport).not.toHaveBeenCalled();
+    props.compact = false;
     dimensions.value = { width: 1921, height: 780 };
     await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
-    expect(flow.viewport).toEqual({ x: 320, y: 90, zoom: 0.72 });
+    expectGraphVisible(props);
+    expect(state.userAdjustedView.value).toBe(true);
+    const resizedViewport = { ...flow.viewport };
+    flow.setViewport.mockClear();
+    props.nodes = [
+      required(props.nodes[0]),
+      { ...required(props.nodes[1]), state: "RUNNING" },
+    ];
+    props.activeNodeRefs = ["node_agent"];
+    props.edges = [...props.edges, { ...required(edges[0]), ref: "new_edge" }];
+    await nextTick();
+    await nextTick();
+    expect(flow.setViewport).not.toHaveBeenCalled();
+    expect(flow.viewport).toEqual(resizedViewport);
+  });
+
+  it("resize не превращает начальную загрузку из нулевых размеров в обзор большого графа", async () => {
+    const props = canvasProps();
+    props.nodes = [
+      required(props.nodes[0]),
+      { ...required(props.nodes[1]), state: "RUNNING" },
+    ];
+    props.activeNodeRefs = ["node_agent"];
+    required(flow.dimensions).value = { width: 0, height: 0 };
+    const state = mountCanvas(props);
+    required(flow.dimensions).value = { width: 1201, height: 160 };
+    await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
+    const initialViewport = { ...flow.viewport };
+    await state.fit(true, true);
+    expect(flow.viewport).toEqual(initialViewport);
+  });
+
+  it("игнорирует subpixel jitter и повторный ResizeObserver callback без смены размеров", async () => {
+    const state = mountCanvas();
+    state.markUserAdjusted();
+    required(flow.dimensions).value = { width: 1921.5, height: 780.5 };
+    await nextTick();
+    expect(flow.setViewport).not.toHaveBeenCalled();
+    required(flow.dimensions).value = { width: 1201, height: 680 };
+    await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
+    flow.setViewport.mockClear();
+    required(flow.dimensions).value = { width: 1201, height: 680 };
+    await nextTick();
+    await nextTick();
+    expect(flow.setViewport).not.toHaveBeenCalled();
+  });
+
+  it("resize помещает большой граф вместе с обратной связью ниже обычного minZoom", async () => {
+    const props = canvasProps();
+    props.nodes = Array.from({ length: 80 }, (_, index) => ({
+      ...required(nodes[index === 0 ? 0 : 1]),
+      ref: `node_${String(index)}`,
+    }));
+    props.edges = props.nodes.slice(1).map((node, index) => ({
+      ...required(edges[0]),
+      ref: `edge_${String(index)}`,
+      sourceNodeRef: required(props.nodes[index]).ref,
+      targetNodeRef: node.ref,
+    }));
+    props.edges.push({
+      ...required(edges[0]),
+      ref: "edge_callback",
+      sourceNodeRef: required(props.nodes.at(-1)).ref,
+      targetNodeRef: required(props.nodes[0]).ref,
+      type: "CALLBACK_TO",
+    });
+    const state = mountCanvas(props);
+    state.markUserAdjusted();
+    required(flow.dimensions).value = { width: 942, height: 680 };
+    await vi.waitFor(() => expect(flow.setViewport).toHaveBeenCalledOnce());
+    expectGraphVisible(props);
+    expect(flow.viewport.zoom).toBeGreaterThan(0);
+    expect(flow.viewport.zoom).toBeLessThan(0.15);
+    expect(state.minimumZoom.value).toBe(flow.viewport.zoom);
   });
 
   it("пустые dimensions при скрытом canvas не применяют синтетический viewport", async () => {
@@ -383,6 +628,27 @@ describe("RunGraphCanvas", () => {
     expect(attempts.has("other")).toBe(false);
   });
 
+  it("резервирует отдельную мобильную полосу, не обрезая счётчики и кнопки", () => {
+    const source = readFileSync(
+      new URL("./RunGraphCanvas.vue", import.meta.url),
+      "utf8",
+    );
+    const mobile = source.slice(source.indexOf("@media (max-width: 760px)"));
+    expect(mobile).toMatch(
+      /\.graph-toolbar\s*\{[^}]*top: var\(--run-graph-toolbar-top, 8px\)/,
+    );
+    expect(mobile).toMatch(
+      /\.graph-toolbar\s*\{[^}]*left: 8px;[^}]*right: 8px/,
+    );
+    expect(mobile).toMatch(
+      /\.graph-toolbar__count\s*\{[^}]*min-width: 0;[^}]*white-space: normal/,
+    );
+    expect(mobile).toMatch(
+      /\.graph-toolbar__count\s*\{[^}]*overflow-wrap: anywhere/,
+    );
+    expect(mobile).toMatch(/\.graph-view-switch\s*\{[^}]*flex: 0 0 auto/);
+  });
+
   it("держит контролы вне полотна и предоставляет доступное дерево", async () => {
     const html = await render();
 
@@ -390,6 +656,8 @@ describe("RunGraphCanvas", () => {
       html.indexOf("graph-viewport"),
     );
     expect(html).toContain('role="toolbar"');
+    expect(html).toContain('aria-label="Список узлов"');
+    expect(html).toContain('title="Список узлов"');
     expect(html).toContain('role="tree"');
     expect(html).toContain('aria-level="1"');
     expect(html).toContain('aria-level="2"');
@@ -397,7 +665,10 @@ describe("RunGraphCanvas", () => {
     expect(html).toContain('class="graph-toolbar"');
     expect(html).toContain('aria-label="Уменьшить масштаб"');
     expect(html).toContain('aria-label="Увеличить масштаб"');
-    expect(html).toContain('aria-label="Вместить"');
+    expect(html).toContain('aria-label="Весь граф"');
+    expect(html).toContain('title="Весь граф"');
+    expect(html).toContain('aria-label="Текущая работа"');
+    expect(html).toContain('title="Текущая работа"');
     expect(html).not.toContain("vue-flow__controls");
     expect(html).toContain("vue-flow__minimap");
     expect(html).toContain("Мини-карта графа");
@@ -433,7 +704,7 @@ describe("RunGraphCanvas", () => {
     expect(assistant).toContain("Помощник Kodex");
     expect(assistant).not.toContain("ИИ-сотрудник</span>");
     const unknown = await render({ node_agent: "SESSION" });
-    expect(unknown).toContain("Сессия");
+    expect(unknown).toContain("ИИ-сотрудник");
     const employee = await render({ node_agent: "EMPLOYEE" });
     expect(employee).toContain("ИИ-сотрудник");
     expect(employee).not.toContain("Помощник Kodex");

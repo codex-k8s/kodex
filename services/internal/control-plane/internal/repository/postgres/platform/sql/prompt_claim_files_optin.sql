@@ -1,7 +1,7 @@
 -- name: prompt_claim_files_optin :one
 SELECT EXISTS (
     SELECT 1 FROM control_plane.artifact_bindings binding
-    JOIN control_plane.artifacts artifact ON artifact.id=binding.artifact_id
+    JOIN control_plane.artifact_history artifact ON artifact.id=binding.artifact_id AND artifact.revision_id=binding.revision_id
     WHERE binding.target_kind='KNOWLEDGE' AND binding.target_ref=@agent_ref
       AND artifact.organization_id=@organization_id::uuid
       AND artifact.project_id IS NOT DISTINCT FROM NULLIF(@project_id,'')::uuid

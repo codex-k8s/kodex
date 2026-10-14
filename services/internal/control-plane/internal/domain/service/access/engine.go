@@ -38,6 +38,7 @@ var definitions = []entity.PermissionDefinition{
 	permission("artifact.view", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
 	permission("artifact.download", "READ", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
 	permission("artifact.upload", "WRITE", []string{"ORGANIZATION", "PROJECT"}, []string{"ORGANIZATION", "PROJECT", "ARTIFACT"}, false),
+	permission("artifact.revision.create", "WRITE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
 	permission("artifact.bind", "WRITE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
 	permission("artifact.delete", "WRITE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),
 	permission("artifact.restore", "WRITE", []string{"ORGANIZATION", "PROJECT", "RESOURCE_KIND", "RESOURCE_INSTANCE"}, []string{"ARTIFACT"}, false),

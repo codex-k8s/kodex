@@ -58,13 +58,14 @@ type Server struct {
 	secretbrokerv1.UnimplementedRuntimeCredentialProjectionServiceServer
 	sttv1.UnimplementedTranscriptionCredentialProjectionServiceServer
 	controlplanev1.UnimplementedProviderCredentialMaterializerServiceServer
-	owner               Owner
-	store               Store
-	recovery            Recovery
-	providerCredentials ProviderCredentialMaterializer
-	drafts              DraftCommands
-	namespace           string
-	maximumSize         int
+	owner                Owner
+	store                Store
+	recovery             Recovery
+	providerCredentials  ProviderCredentialMaterializer
+	providerRenewalOwner ProviderRenewalOwner
+	drafts               DraftCommands
+	namespace            string
+	maximumSize          int
 }
 
 type ProviderCredentialMaterializer interface {

@@ -36,6 +36,9 @@ func (repository *Repository) GetPromptMaterializationSnapshot(ctx context.Conte
 	if err != nil || json.Unmarshal(raw, &result) != nil || result.TemplateRef == "" || result.TemplateContent == "" {
 		return entity.PromptMaterializationSnapshot{}, errs.ErrUnavailable
 	}
+	if err := validatePlatformInstructions(result); err != nil {
+		return entity.PromptMaterializationSnapshot{}, err
+	}
 	_, target, err := repository.resolveCommandTarget(ctx, tx, current, "run.view", "RUN", runRef, "")
 	if err != nil || repository.requireAccess(ctx, tx, current, "run.view", target) != nil {
 		return entity.PromptMaterializationSnapshot{}, errs.ErrNotFound

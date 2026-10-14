@@ -69,19 +69,19 @@ func TestRuntimeExecutorUsesConfiguredResourcesAndSharedEnvironmentVolumes(t *te
 			for _, name := range []string{"scratch", "cache"} {
 				volumeName := "environment-" + shortHash(name)
 				var mounts []corev1.VolumeMount
-				for _, container := range pod.Spec.Containers[:2] {
+				for _, container := range append(slices.Clone(pod.Spec.Containers[:2]), pod.Spec.InitContainers[1]) {
 					for _, mount := range container.VolumeMounts {
 						if mount.Name == volumeName {
 							mounts = append(mounts, mount)
 						}
 					}
 				}
-				if len(mounts) != 2 || !reflect.DeepEqual(mounts[0], mounts[1]) || mounts[0].ReadOnly || mounts[0].MountPath != "/workspace/.kodex/volumes/"+name {
-					t.Fatal("executor and driver do not share exact workspace volumes")
+				if len(mounts) != 3 || !reflect.DeepEqual(mounts[0], mounts[1]) || !reflect.DeepEqual(mounts[0], mounts[2]) || mounts[0].ReadOnly || mounts[0].MountPath != "/workspace/.kodex/volumes/"+name {
+					t.Fatal("initializer executor and driver do not share exact workspace volumes")
 				}
-				for _, container := range append(slices.Clone(pod.Spec.InitContainers), pod.Spec.Containers[2]) {
+				for _, container := range []corev1.Container{pod.Spec.InitContainers[0], pod.Spec.Containers[2]} {
 					if hasMount(container, volumeName) {
-						t.Fatal("environment volume reached an authority or init container")
+						t.Fatal("environment volume reached an unrelated authority or preparation container")
 					}
 				}
 			}
@@ -93,13 +93,33 @@ func TestRuntimeExecutorUsesConfiguredResourcesAndSharedEnvironmentVolumes(t *te
 }
 
 func TestEnvironmentVolumeAdmissionRejectsAsymmetricAndAuthorityMounts(t *testing.T) {
-	programs := runtimeAdmissionPrograms(t, "runtime environment volume mount path is outside the closed workspace catalog", "runtime environment volumes must have exact shared driver and executor mounts")
+	programs := runtimeAdmissionPrograms(t, "runtime environment volume mount path is outside the closed workspace catalog", "runtime environment volumes must have exact shared initializer driver and executor mounts")
 	pod := executorEnvironmentPod(t, "turn")
 	volumeName := "environment-" + shortHash("scratch")
 	for name, mutate := range map[string]func(*corev1.Pod){
 		"exact": func(*corev1.Pod) {},
 		"missing executor": func(p *corev1.Pod) {
 			p.Spec.Containers[1].VolumeMounts = slices.DeleteFunc(p.Spec.Containers[1].VolumeMounts, func(m corev1.VolumeMount) bool { return m.Name == volumeName })
+		},
+		"missing initializer": func(p *corev1.Pod) {
+			p.Spec.InitContainers[1].VolumeMounts = slices.DeleteFunc(p.Spec.InitContainers[1].VolumeMounts, func(m corev1.VolumeMount) bool { return m.Name == volumeName })
+		},
+		"preparer": func(p *corev1.Pod) {
+			p.Spec.InitContainers[0].VolumeMounts = append(p.Spec.InitContainers[0].VolumeMounts, corev1.VolumeMount{Name: volumeName, MountPath: "/workspace/.kodex/volumes/scratch"})
+		},
+		"initializer readonly": func(p *corev1.Pod) {
+			for i := range p.Spec.InitContainers[1].VolumeMounts {
+				if p.Spec.InitContainers[1].VolumeMounts[i].Name == volumeName {
+					p.Spec.InitContainers[1].VolumeMounts[i].ReadOnly = true
+				}
+			}
+		},
+		"initializer different path": func(p *corev1.Pod) {
+			for i := range p.Spec.InitContainers[1].VolumeMounts {
+				if p.Spec.InitContainers[1].VolumeMounts[i].Name == volumeName {
+					p.Spec.InitContainers[1].VolumeMounts[i].MountPath = "/workspace/.kodex/volumes/foreign"
+				}
+			}
 		},
 		"alias": func(p *corev1.Pod) {
 			p.Spec.Containers[1].VolumeMounts = append(p.Spec.Containers[1].VolumeMounts, corev1.VolumeMount{Name: volumeName, MountPath: "/workspace/.kodex/volumes/alias"})

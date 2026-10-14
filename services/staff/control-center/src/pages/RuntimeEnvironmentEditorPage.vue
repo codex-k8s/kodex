@@ -8,6 +8,7 @@ import {
   assertPromotedRuntimeImage,
   restoreRuntimeImageOption,
   runtimeImageOption,
+  runtimeImagePagePresentation,
   toolsForRuntimeImage,
 } from "@/features/runtime/image-tools-selection";
 import {
@@ -79,6 +80,7 @@ import {
   type RuntimeEnvironmentPolicyDraftOperation,
 } from "@/features/runtime/environment-reauth-draft";
 import { useRuntimeStore } from "@/features/runtime/store";
+import { usePlatformStore } from "@/features/platform/store";
 import {
   createEnvironmentDraft,
   readEnvironmentDraft,
@@ -128,6 +130,7 @@ const router = useRouter();
 const { t, locale } = useI18n();
 const localizeServerMessage = useServerMessage();
 const runtime = useRuntimeStore();
+const platform = usePlatformStore();
 const session = useSessionStore();
 const assistantForm = computed(() => route.query.assistantForm === "1");
 const projectRef = computed(() => String(route.params.projectRef));
@@ -553,10 +556,13 @@ async function loadImagePage(
   );
   return {
     ...page,
-    items: page.items.map((item) => ({
-      ...item,
-      title: localizeServerMessage(item.title),
-    })),
+    items: runtimeImagePagePresentation(
+      page.items.map((item) => ({
+        ...item,
+        title: localizeServerMessage(item.title),
+      })),
+      (generation) => t("roleImages.generationLabel", { generation }),
+    ),
   };
 }
 
@@ -600,18 +606,18 @@ async function load(): Promise<void> {
   const environment = environmentRef.value;
   const project = projectRef.value;
   const generation = initializationGeneration;
+  const previousProblem = problem.value;
+  const applicable = () =>
+    !disposed &&
+    generation === initializationGeneration &&
+    environment === environmentRef.value &&
+    project === projectRef.value;
   if (!environment) return;
   await Promise.all([
     runtime.loadEnvironment(environment),
     runtime.loadEnvironmentVersions(environment, true, versionPageSize.value),
   ]);
-  if (
-    disposed ||
-    generation !== initializationGeneration ||
-    environment !== environmentRef.value ||
-    project !== projectRef.value
-  )
-    return;
+  if (!applicable()) return;
   sync();
   if (current.value)
     await Promise.all([
@@ -627,6 +633,21 @@ async function load(): Promise<void> {
         boundAgentPageSize.value,
       ),
     ]);
+  const readKeys = [
+    `environment:${environment}`,
+    `environment-versions:${environment}`,
+    `environment-readiness:${environment}`,
+    `environment-agents:${environment}`,
+  ] as const;
+  if (
+    applicable() &&
+    current.value?.ref === environment &&
+    current.value.projectRef === project &&
+    !imageProblem.value &&
+    !readKeys.some((key) => runtime.problems[key] || runtime.loading[key]) &&
+    problem.value === previousProblem
+  )
+    problem.value = undefined;
 }
 
 function currentOperation(): RuntimeEnvironmentPolicyDraftOperation {
@@ -846,6 +867,7 @@ async function preparePublication(): Promise<void> {
       const report = await restorePublicationImpact(
         stored.planRef,
         draftController.signal,
+        platform.bootstrap?.organizationRef,
       );
       if (
         report.plan.kind !== "RUNTIME_ENVIRONMENT" ||
@@ -896,6 +918,10 @@ async function recoverPublication(): Promise<void> {
     const report = await readPublicationImpact(
       publicationPlan.value,
       draftController.signal,
+      "",
+      undefined,
+      40,
+      platform.bootstrap?.organizationRef,
     );
     if (report.plan.state === "EXPIRED") {
       publicationPlan.value = report.plan;
@@ -946,7 +972,14 @@ async function retryPublication(): Promise<void> {
       attempt.ownerRef,
       draftController.signal,
     );
-    const report = await readPublicationImpact(plan, draftController.signal);
+    const report = await readPublicationImpact(
+      plan,
+      draftController.signal,
+      "",
+      undefined,
+      40,
+      platform.bootstrap?.organizationRef,
+    );
     if (report.plan.state !== "PREPARED") {
       busy.value = false;
       await recoverPublication();

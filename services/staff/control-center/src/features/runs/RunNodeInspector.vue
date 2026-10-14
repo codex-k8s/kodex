@@ -20,6 +20,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { asProblem } from "@/shared/api/problem";
 import { runNodePresentationKey } from "@/features/runs/run-owner";
+import { runNodeProgressFallbackKey } from "@/features/runs/runtime-text";
 import { runPath } from "@/shared/routes";
 import ProblemNotice from "@/shared/ui/ProblemNotice.vue";
 import SafeMarkdown from "@/shared/ui/SafeMarkdown.vue";
@@ -93,14 +94,14 @@ function formatDate(value: string): string {
           aria-hidden="true"
         />
       </span>
-      <div>
+      <div class="run-node-inspector__identity">
         <h2>{{ node.displayName }}</h2>
         <p>
           {{ $t(sessionNode ? "runs.sessionNode" : "runs.controlNode") }} ·
           {{ roleLabel }}
         </p>
       </div>
-      <StatusBadge :state="node.state" />
+      <StatusBadge class="run-node-inspector__state" :state="node.state" />
       <button
         class="icon-button run-node-inspector__close"
         type="button"
@@ -128,7 +129,9 @@ function formatDate(value: string): string {
 
       <div class="run-node-inspector__status">
         <SafeMarkdown
-          :content="node.progressSummary || $t('runs.waitingForActivity')"
+          :content="
+            node.progressSummary || $t(runNodeProgressFallbackKey(node.state))
+          "
         />
       </div>
 
@@ -264,6 +267,9 @@ function formatDate(value: string): string {
 .run-node-inspector__header p {
   margin: 0;
 }
+.run-node-inspector__identity {
+  min-width: 0;
+}
 .run-node-inspector__header h2 {
   overflow-wrap: anywhere;
   font-size: 1rem;
@@ -396,9 +402,23 @@ function formatDate(value: string): string {
     box-shadow: 0 -18px 44px rgba(16, 22, 30, 0.18);
   }
   .run-node-inspector__header {
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "icon state close"
+      "identity identity identity";
+  }
+  .run-node-inspector__icon {
+    grid-area: icon;
+  }
+  .run-node-inspector__identity {
+    grid-area: identity;
+  }
+  .run-node-inspector__state {
+    grid-area: state;
+    justify-self: start;
   }
   .run-node-inspector__close {
+    grid-area: close;
     display: inline-grid;
   }
   .run-node-inspector__body {

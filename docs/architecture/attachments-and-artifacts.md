@@ -4,8 +4,8 @@ title: Вложения и artifacts
 type: architecture
 status: approved
 owner: architect
-version: 2.1.0
-updated: 2026-08-29
+version: 2.2.0
+updated: 2026-10-10
 ---
 
 # Вложения и artifacts
@@ -115,6 +115,82 @@ S3 upload и PostgreSQL transaction не объявляются общей ра�
 transaction. Fail-closed readback, идемпотентный finalize и cleanup exact
 prepared object являются явным компенсирующим контрактом.
 
+## Новая версия файла через native plan
+
+`CREATE_PROJECT_FILE_REVISION` создаёт только следующую неизменяемую revision
+существующего стабильного `Artifact`; filename и логический ref сохраняются.
+Изменение mutable тела, создание одноимённого дубликата и fallback на latest
+не являются этим сценарием. Отдельного публичного mutable `PUT` нет.
+
+Server-owned context projection v3 сохраняет старые screen gates и вводит
+только следующую специализированную матрицу:
+
+| Профиль | Сохранённый source context | Target и authority |
+| --- | --- | --- |
+| `PROJECT` | Любой доступный screen kind без смены conversation/context pins | Только Artifact exact source project; immutable и текущий профиль, действующая lease, fresh actor `artifact.view`, `artifact.download`, `artifact.revision.create` и frozen/current `platform.artifact.manage` |
+| `SYSTEM` | Только сохранённый `PROJECT` или `FILE` | Только server-approved target project этого source context; те же exact Artifact authority и lease/pin проверки; произвольный discovery result не назначает проект |
+| Прежний `CREATE_PROJECT_FILE` | Прежний screen gate `PROJECT` | Прежняя upload authority; новая project-global граница на него не распространяется |
+
+Capability не выдаёт permission. Actor, organization, profile, project и lease
+выводятся владельцем из доверенного transport и доменного состояния, не из
+parameters. Existing Artifact разрешается и свежие права проверяются до OCC и
+idempotency replay. Head OCC и точный `previousRevisionRef` защищают создание
+следующей revision, но не подменяют pins исторического чтения. Default
+`OWNER`/`ADMINISTRATOR` получают явную permission через новую role version;
+custom roles и прежние upload-only grants не расширяются автоматически.
+
+Callback передаёт bounded UTF-8 text без NUL, до 1 MiB bytes, exact Artifact ref
+и allowlisted media type. Owner может заменить содержимое в native draft;
+сервер пересчитывает digest/size и canonical after, не принимает их как
+полномочия. Filename существующего Artifact не редактируется. Полный план
+проверяется до внешней записи. Для новой revision и прежнего create тела
+заменяются prepared content receipt до первого PostgreSQL write версии плана.
+В durable parameters остаются `contentRef`, digest и размер; body/base64,
+storage key/version/ETag не попадают в plan, audit, outbox или prompt.
+
+Частный prepared content ledger фиксирует unique intent до единственного Put.
+Новый intent получает server-assigned monotonic generation/fence и private key.
+Put не повторяется при неизвестном исходе. `UNKNOWN` и один HEAD 404 не являются
+успешной очисткой: три bounded owner attempts завершаются `WAITING_OWNER` с
+сохранением ledger. Независимые валидные revisions этим не блокируются.
+Cleanup выполняет существующий owner worker `artifact-retention` после startup
+barrier с bounded cancel/join; positive receipt проверяет exact owner/key/
+version/digest/size под locked adoption state. Leased writer и `ADOPTED` никогда
+не удаляются cleanup. TTL подготовленного неиспользованного content закрывает
+точную текущую pending plan revision в `STALE`; reuse требует нового proposal.
+
+Apply атомарно фиксирует новую immutable revision и exact content receipt,
+advance head, ledger adoption, audit, idempotency/application receipt и
+`ARTIFACT_CHANGED` с immutable revision ref/number/digest. Стабильный Artifact
+не включается в `CreatedResourceRefs`. Сохранённые source conversation/context,
+старые bindings, AttachmentSets, skills, frozen snapshots и download grants не
+переписываются. Event consumer использует защищённое version-pinned чтение;
+current head не является разрешением читать другое тело.
+
+Metadata history разрешает все пять scan states: `PENDING`, `SCANNING`, `CLEAN`,
+`QUARANTINED`, `FAILED`. Download/preview/materialization по-прежнему разрешены
+только для `CLEAN` и свежей lifecycle/actor/project eligibility. History имеет
+bounded pagination в порядке revision DESC; cursor связан с actor, tenant,
+Artifact и head version, head drift возвращает conflict. Exact revision GET и
+content GET требуют явного revision ref и никогда не заменяют его latest.
+
+Старые pending raw-content plans закрываются как `STALE`/incompatible с новым
+proposal, без legacy apply. Applied DB history и public receipts неизменны;
+безопасная публичная history projection удаляет raw body при выдаче, включая
+idempotency replay. Это не переписывание сохранённых доказательств.
+
+После fenced terminal owner purge и подтверждённого exact object deletion
+immutable metadata/receipts физически удаляются. Technical ledger также теряет
+contentRef, filename/media type, standalone content digest/size/scan/preview и
+все locators. После подтверждённой очистки неусыновлённого content `CLEANED`
+получает ту же минимальную маску немедленно. Сохраняются terminal
+`ADOPTED`/`CLEANED`, opaque origin refs, deletion receipt digest и opaque intent/
+request idempotency commitments; они не разрешают resolve/download, новый apply,
+restore/materialization или повторный Put. Nullable technical FK release не
+меняет immutable public receipt и не удаляет lineage. Prepared, unresolved,
+leased или `WAITING_OWNER` content блокирует project/conversation purge до
+подтверждённой terminal cleanup; orphan без deletion readback запрещён.
+
 ## Generated result
 
 Agent-runner завершает execution с bounded result manifest. Control-plane
@@ -171,6 +247,38 @@ cookies, provider payload или неразрешённые metadata. До за�
 Каталог input и manifests неизменяемы для процесса агента. Запись результатов
 идёт в отдельный output boundary. Изменение исходного Artifact, binding или
 Project после старта не меняет workspace уже работающего attempt.
+
+### Рабочие файлы всех агентов
+
+Каждый агент, включая системного помощника и рецензента, получает собственный
+редактируемый `/workspace/work`. Это локальная область работы attempt, а не
+полномочие менять Project Files, публиковать Artifact или выполнять внешние
+effects. Право локальной записи не зависит от capability публикации результатов.
+Общий изменяемый checkout, hostPath исходников владельца и workspace другого
+агента не выдаются.
+
+Вложения текущего входа копируются в `/workspace/work/input/<attachmentSetRef>/files/`
+после проверки точных исходных manifest, размера и digest. Это отдельные
+редактируемые файлы, не ссылки на оригиналы. Исходные `/workspace/input`,
+`/workspace/knowledge` и `/workspace/context` остаются read-only. Provenance
+рабочих копий указывает на immutable вход: изменение копии не переписывает его
+digest и не создаёт новую revision Artifact. Копирование ограничено квотами
+workspace; traversal, symlink, hardlink и частично подготовленный workspace
+не считаются успешной подготовкой.
+
+Prompt каждого запуска явно сообщает рабочий каталог, каталоги read-only,
+место результатов и путь к manifest. Агент может изучать дерево и искать файлы
+локальными инструментами. Checkout назначенного репозитория размещается в
+рабочем каталоге только при уже выданных Git/сетевых полномочиях; имя репозитория
+в тексте задачи не выдаёт credential, доступ к сети или право push. При отсутствии
+checkout агент не объявляет его наличие, а использует разрешённое discovery.
+
+Новый attempt заново готовит рабочие копии из своего immutable input. Локальные
+изменения не становятся неявным входом continuation или другого агента:
+долговечная передача по-прежнему идёт через Git branch либо точные
+ArtifactRevision/AttachmentSet. Публикуются только допущенные файлы отдельного
+outbox и только с существующим exact grant; writable workspace этого права
+не заменяет.
 
 ## Типизированные prompt descriptors
 
@@ -243,6 +351,31 @@ revision:
    подтверждённого отсутствия exact version transaction удаляет locator,
    переводит Artifact в `PURGED` и создаёт audit tombstone. Ошибка оставляет
    `PURGE_FAILED` с bounded retry; UI и API не заявляют успешную очистку.
+
+Канонический `Artifact` состоит из stable head и immutable revisions: head
+владеет lifecycle/OCC и current pointer, revision — единственной metadata и
+receipt body. Current/history являются производными read-проекциями. Смена
+current pointer не меняет сохранённые `ArtifactVersion`, attachment items,
+`RuntimeRevision`, catalog entry digest, skill pins или callback receipts.
+Каждый reader разрешает exact revision/digest/metadata отдельно от свежей
+actor/project/lifecycle/source eligibility; сравнение старого body pin с новым
+head OCC и подстановка latest запрещены. Неверный или отсутствующий pin
+закрыто отклоняется.
+
+Purge перечисляет все receipts, включая не-current revisions. Активные Runs,
+их historical attachment/catalog/callback pins и retained skill revisions
+удерживают aggregate независимо от current pointer. Worker удаляет exact
+versions последовательно: подтверждённый receipt можно закрыть отдельно,
+но head остаётся `PURGE_PENDING`, пока не закрыты все версии. Только после
+полного retention guard и deletion readback transaction физически удаляет
+revision metadata и receipts, оставляя minimal head `PURGED` с NULL current
+pointer. Обычное/current/history/runtime чтение не восстанавливает body.
+
+Исторические bindings, download grants и immutable snapshots не удаляются
+каскадом и не переписываются. Технический FK revision может стать NULL только
+при fenced terminal purge; opaque origin ref/номер и прежний semantic pin
+сохраняются. NULL не разрешает ACTIVE read, latest fallback или rebind;
+tenant-validated повтор завершённого purge возвращает только `PURGED`.
 
 В MVP exact content locator не разделяется разными Artifact. Если позднее будет
 добавлена физическая дедупликация, purge обязан использовать авторитетный

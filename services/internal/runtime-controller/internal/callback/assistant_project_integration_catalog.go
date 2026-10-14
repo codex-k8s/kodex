@@ -5,11 +5,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
+	"google.golang.org/protobuf/proto"
 )
 
 func castProjectAssistantIntegrationCatalog(input runtimecontract.RunnerInput, request *controlplanev1.AssistantConfigurationCatalogRequest, response *controlplanev1.AssistantConfigurationCatalogResponse) (map[string]any, error) {
@@ -22,7 +24,7 @@ func castProjectAssistantIntegrationCatalog(input runtimecontract.RunnerInput, r
 	entries := make([]map[string]any, 0, len(response.GetProjectIntegrationGrants()))
 	seen := map[string]bool{}
 	for _, entry := range response.GetProjectIntegrationGrants() {
-		if entry == nil || !validAssistantCurrentReadMessage(entry.ProtoReflect(), 0) || !validAssistantResourceRef(entry.GetConnectionRef()) || entry.GetConnectionVersion() < 1 ||
+		if entry == nil || !projectCatalogEntryMessageValid(entry) || !validAssistantResourceRef(entry.GetConnectionRef()) || entry.GetConnectionVersion() < 1 ||
 			strings.TrimSpace(entry.GetConnectionName()) == "" || !utf8.ValidString(entry.GetConnectionName()) || utf8.RuneCountInString(entry.GetConnectionName()) > 160 ||
 			entry.GetDefinitionVersion() == "" || len(entry.GetDefinitionVersion()) > 128 || !validAssistantCatalogDigest(entry.GetDefinitionDigest()) {
 			return nil, invalid
@@ -30,6 +32,9 @@ func castProjectAssistantIntegrationCatalog(input runtimecontract.RunnerInput, r
 		candidate, err := projectIntegrationCandidateProjection(entry.GetCandidate())
 		if err != nil {
 			return nil, err
+		}
+		if strings.HasPrefix(entry.GetCandidate().GetCapability().GetKey(), "github.") && entry.GetCandidate().GetResourceScope() == nil {
+			return nil, invalid
 		}
 		key := entry.GetConnectionRef() + "\x00" + entry.GetCandidate().GetCapability().GetKey()
 		if seen[key] {
@@ -46,7 +51,7 @@ func castProjectAssistantIntegrationCatalog(input runtimecontract.RunnerInput, r
 
 func projectIntegrationCandidateProjection(candidate *controlplanev1.SystemAssistantIntegrationGrantCandidate) (map[string]any, error) {
 	invalid := errors.New("project assistant integration catalog candidate is invalid")
-	if candidate == nil || !validAssistantCurrentReadMessage(candidate.ProtoReflect(), 0) {
+	if candidate == nil || !projectCatalogCandidateMessageValid(candidate) {
 		return nil, invalid
 	}
 	capability := candidate.GetCapability()
@@ -112,10 +117,63 @@ func projectIntegrationCandidateProjection(candidate *controlplanev1.SystemAssis
 	if risk != "READ" && risk != "WRITE" && risk != "SENSITIVE" && risk != "DESTRUCTIVE" {
 		return nil, invalid
 	}
-	return map[string]any{"capability": map[string]any{"key": capability.GetKey(), "name": capability.GetName(), "description": capability.GetDescription(),
+	result := map[string]any{"capability": map[string]any{"key": capability.GetKey(), "name": capability.GetName(), "description": capability.GetDescription(),
 		"risk": risk, "approval_policy": defaultPolicy, "allowed_approval_policies": policies, "input_schema": schema, "input_schema_sha256": capability.GetInputSchemaSha256()},
 		"grantable": candidate.GetGrantable(), "reason": reason, "current_grant_ref": candidate.GetCurrentGrantRef(), "current_grant_version": candidate.GetCurrentGrantVersion(),
-		"current_grant_enabled": candidate.GetCurrentGrantEnabled(), "current_approval_policy": currentPolicy, "current_approval_scope_paths": append([]string{}, candidate.GetCurrentApprovalScopePaths()...)}, nil
+		"current_grant_enabled": candidate.GetCurrentGrantEnabled(), "current_approval_policy": currentPolicy, "current_approval_scope_paths": append([]string{}, candidate.GetCurrentApprovalScopePaths()...)}
+	if scope := candidate.GetResourceScope(); scope != nil {
+		projection, err := projectCatalogPublicGitHubScope(candidate)
+		if err != nil {
+			return nil, err
+		}
+		result["resource_scope"] = projection
+	}
+	return result, nil
+}
+
+var projectCatalogGitHubIdentifier = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,100}$`)
+
+// Новый map разрешён только отдельной закрытой проверкой public GitHub scope.
+// Общий current-read validator по-прежнему запрещает произвольные maps.
+func projectCatalogEntryMessageValid(entry *controlplanev1.ProjectAssistantIntegrationGrantCatalogEntry) bool {
+	copy := proto.Clone(entry).(*controlplanev1.ProjectAssistantIntegrationGrantCatalogEntry)
+	if copy.Candidate != nil {
+		copy.Candidate.ResourceScope = nil
+	}
+	return validAssistantCurrentReadMessage(copy.ProtoReflect(), 0)
+}
+
+func projectCatalogCandidateMessageValid(candidate *controlplanev1.SystemAssistantIntegrationGrantCandidate) bool {
+	copy := proto.Clone(candidate).(*controlplanev1.SystemAssistantIntegrationGrantCandidate)
+	copy.ResourceScope = nil
+	return validAssistantCurrentReadMessage(copy.ProtoReflect(), 0)
+}
+
+func projectCatalogPublicGitHubScope(candidate *controlplanev1.SystemAssistantIntegrationGrantCandidate) (map[string]any, error) {
+	invalid := errors.New("project assistant public resource scope is invalid")
+	scope := candidate.GetResourceScope()
+	if scope == nil || len(scope.ProtoReflect().GetUnknown()) != 0 || !strings.HasPrefix(candidate.GetCapability().GetKey(), "github.") ||
+		candidate.GetCapability().GetResourceKind() != controlplanev1.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_GITHUB_REPOSITORY ||
+		scope.GetKind() != controlplanev1.IntegrationResourceKind_INTEGRATION_RESOURCE_KIND_GITHUB_REPOSITORY || len(scope.GetValues()) != 2 || !validAssistantCatalogDigest(scope.GetDigest()) {
+		return nil, invalid
+	}
+	values := map[string]string{}
+	for _, key := range []string{"owner", "repository"} {
+		value := scope.GetValues()[key]
+		if !projectCatalogGitHubIdentifier.MatchString(value) || value == "." || value == ".." {
+			return nil, invalid
+		}
+		values[key] = value
+	}
+	encoded, err := json.Marshal(values)
+	if err != nil {
+		return nil, invalid
+	}
+	digest := sha256.Sum256(encoded)
+	if hex.EncodeToString(digest[:]) != scope.GetDigest() {
+		return nil, invalid
+	}
+	return map[string]any{"kind": "GITHUB_REPOSITORY", "values": values, "digest": scope.GetDigest()}, nil
 }
 func projectCatalogApprovalPolicy(policy controlplanev1.IntegrationApprovalPolicy) (string, bool) {
 	value := strings.TrimPrefix(policy.String(), "INTEGRATION_APPROVAL_POLICY_")

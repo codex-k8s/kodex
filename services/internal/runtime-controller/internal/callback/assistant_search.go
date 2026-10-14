@@ -15,13 +15,13 @@ func assistantResourceSearchTool() map[string]any {
 	query["description"] = assistantSearchQueryDescription
 	return map[string]any{
 		"name":        "find_platform_resources",
-		"description": "Search resource metadata visible to the initiating user; never returns secret values. Use exact result refs. For another project, ask the user to open its route before proposing changes. Search never changes context or grants access.",
+		"description": "Search resource metadata visible to the initiating user; never returns secret values. Use exact result refs. For another project, ask the user to open its route before proposing changes. Search never changes context or grants access. ARTIFACT results are metadata and UI links only: discovery does not grant file content access. To verify contents, use search_files by file name with purpose PROJECT in your own current file catalog, then read_file with exact returned pins. If that PROJECT catalog/grant is missing or the exact file is absent, state that you cannot verify its contents; never infer access from plan approval, previous turns or a UI link.",
 		"inputSchema": objectSchema([]string{"query"}, map[string]any{"query": query}),
 		"outputSchema": objectSchema([]string{"current_project_ref", "results", "truncated"}, map[string]any{
 			"current_project_ref": map[string]any{"type": "string"},
 			"results": map[string]any{"type": "array", "maxItems": maximumAssistantSearchResults,
 				"items": objectSchema([]string{"kind", "ref", "project_ref", "title", "subtitle", "state", "route", "requires_context_switch"}, map[string]any{
-					"kind": enumSchema("PROJECT", "AGENT", "WORKFLOW", "RUN", "ROLE_IMAGE", "RUNTIME_ENVIRONMENT", "SCHEDULE", "INTEGRATION", "SECRET"), "ref": opaqueRefSchema(),
+					"kind": enumSchema("PROJECT", "AGENT", "WORKFLOW", "RUN", "ROLE_IMAGE", "RUNTIME_ENVIRONMENT", "SCHEDULE", "INTEGRATION", "SECRET", "ARTIFACT"), "ref": opaqueRefSchema(),
 					"project_ref": stringSchema(0, 96), "title": stringSchema(0, 160), "subtitle": stringSchema(0, 160),
 					"state": map[string]any{"type": "string"}, "route": map[string]any{"type": "string"},
 					"requires_context_switch": map[string]any{"type": "boolean"},
@@ -96,7 +96,7 @@ func (server *Server) findPlatformResources(ctx context.Context, input runtimeco
 	if err != nil {
 		return nil, &assistantSearchError{class: assistantSearchOwnerFailed, cause: err}
 	}
-	if response == nil || response.GetAssistantConfigurationCatalog() != nil || len(response.GetDefinitions()) != 0 || response.GetNextDefinitionOffset() != 0 || len(response.GetResults()) > maximumAssistantSearchResults {
+	if response == nil || response.GetAssistantTaskSession() != nil || response.GetAssistantConfigurationCatalog() != nil || len(response.GetDefinitions()) != 0 || response.GetNextDefinitionOffset() != 0 || len(response.GetResults()) > maximumAssistantSearchResults {
 		return nil, &assistantSearchError{class: assistantSearchResponseShapeInvalid}
 	}
 	items := make([]map[string]any, 0, len(response.GetResults()))
@@ -158,6 +158,8 @@ func assistantResourceRoute(item *controlplanev1.SearchResult) (string, string) 
 		return "WORKFLOW", project + "/workflows/" + url.PathEscape(item.GetRef())
 	case controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_RUN:
 		return "RUN", project + "/runs/" + url.PathEscape(item.GetRef())
+	case controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_ARTIFACT:
+		return "ARTIFACT", project + "/files?artifactRef=" + url.QueryEscape(item.GetRef())
 	case controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_ROLE_IMAGE:
 		return "ROLE_IMAGE", project + "/role-images/" + url.PathEscape(item.GetRef())
 	case controlplanev1.SearchResultKind_SEARCH_RESULT_KIND_RUNTIME_ENVIRONMENT:

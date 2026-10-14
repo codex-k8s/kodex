@@ -8,6 +8,13 @@ import (
 )
 
 func TestWorkflowLaunchClosedControllerProfile(t *testing.T) {
+	catalogMethod := controlplaneclient.RuntimeOperations()["platform.runtime.execution.workflow.catalog"]
+	if catalogMethod != controlplanev1.RuntimeWorkService_GetExecutionWorkflowCatalog_FullMethodName {
+		t.Fatal("closed workflow catalog operation missing")
+	}
+	if operationRequestProfile("platform.runtime.execution.workflow.catalog", catalogMethod) != (requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}) {
+		t.Fatal("workflow catalog request profile drift")
+	}
 	const operation = "platform.runtime.execution.workflow.launch"
 	method := controlplaneclient.RuntimeOperations()[operation]
 	if method != controlplanev1.RuntimeWorkService_LaunchWorkflowExecution_FullMethodName {

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApplicationSource, inspectSource, planSourceChange, prepareApplicationSource, sourceGitArguments, validSource } from "./application-source.mjs";
@@ -82,15 +82,15 @@ test("frontend changes only source directory and requires prepared unchanged dep
   assert.throws(() => planSourceChange(current, structuredClone(current.spec), 0, source, inspect), /FRONTEND_NESTED_MOUNT_UNSUPPORTED/);
 });
 
-function checkout() {
-  const path = mkdtempSync(join(tmpdir(), "kodex-source-"));
+function checkout(parent = tmpdir()) {
+  const path = mkdtempSync(join(parent, "kodex-source-"));
   chmodSync(path, 0o755);
   const frontend = `${path}/services/staff/control-center`;
   mkdirSync(`${frontend}/public/config`, { recursive: true });
   writeFileSync(`${frontend}/package.json`, "{}\n");
   writeFileSync(`${frontend}/package-lock.json`, "{}\n");
   writeFileSync(`${frontend}/public/config/runtime-config.json`, "{}\n");
-  writeFileSync(`${path}/.gitignore`, "node_modules/\nprivate-state\n");
+  writeFileSync(`${path}/.gitignore`, "node_modules/\nprivate-state\n.env*\n.kodex-env\n.kodex-dev-env\n.kodex-remote-env\n.agents/\n.kodex-dev/\n");
   const git = (...args) => execFileSync("git", ["-C", path, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   git("init"); git("remote", "add", "origin", "https://github.com/codex-k8s/kodex.git");
   git("add", "."); git("commit", "-m", "fixture");
@@ -189,4 +189,62 @@ test("mountpoint creation restores a private mask and preserves executable files
     writeFileSync(`${current.path}/private-state`, "private fixture");
     assert.equal(lstatSync(`${current.path}/private-state`).mode & 0o777, 0o600);
   } finally { process.umask(previous); rmSync(current.path, { recursive: true, force: true }); }
+});
+
+test("clean clone empty env mountpoint is compatible with trusted mask preparation and exact inspector", () => {
+  const parent=mkdtempSync(join(tmpdir(),"kodex-mask-integration-")),current=checkout(parent);
+  try {
+    const before = inspectSource(current.path, true);
+    execFileSync("python3", ["-B", new URL("../dev/local_hot_reload.py", import.meta.url).pathname,
+      "prepare-source-mask", "--source-root", current.path, "--cache-root", `${current.path}-cache`,
+      "--host-uid", "1000", "--host-gid", "1000"], {encoding:"utf8",timeout:10000,stdio:["ignore","pipe","pipe"]});
+    const stat=lstatSync(`${current.path}/.env`);
+    assert.equal(stat.size,0);assert.equal(stat.mode & 0o7777,0o600);
+    assert.equal(inspectSource(current.path,true).revision,current.revision);
+    assert.equal(inspectSource(current.path,true).dependenciesSHA256,before.dependenciesSHA256);
+    assert.equal(current.git("status","--porcelain","--untracked-files=all"),"");
+    prepareApplicationSource({path:current.path,revision:current.revision});
+    assert.equal(lstatSync(`${current.path}/.env`).ino,stat.ino);
+  } finally {rmSync(parent,{recursive:true,force:true});}
+});
+
+test("empty env exception rejects nonempty, foreign-owner, symlink, hardlink, directory, broad mode and foreign env names", () => {
+  for (const change of [
+    f=>writeFileSync(`${f.path}/.env`,"synthetic private fixture",{mode:0o600}),
+    f=>writeFileSync(`${f.path}/.env`,"",{mode:0o644}),
+    f=>symlinkSync("missing",`${f.path}/.env`),
+    f=>{writeFileSync(`${f.path}/private-state`,"",{mode:0o600});linkSync(`${f.path}/private-state`,`${f.path}/.env`);},
+    f=>mkdirSync(`${f.path}/.env`),
+    f=>writeFileSync(`${f.path}/.env.foreign`,"",{mode:0o600}),
+    f=>writeFileSync(`${f.path}/.kodex-env`,"",{mode:0o600}),
+    f=>writeFileSync(`${f.path}/.kodex-dev-env`,"",{mode:0o600}),
+    f=>writeFileSync(`${f.path}/.kodex-remote-env`,"",{mode:0o600}),
+  ]) {
+    const current=checkout();
+    try {change(current);assert.throws(()=>inspectSource(current.path),/SOURCE_CHECKOUT_NOT_EXACT/);}
+    finally {rmSync(current.path,{recursive:true,force:true});}
+  }
+  const current=checkout(), getuid=process.getuid;
+  try {
+    writeFileSync(`${current.path}/.env`,"",{mode:0o600});
+    process.getuid=()=>getuid()+1;
+    assert.throws(()=>inspectSource(current.path),/SOURCE_CHECKOUT_NOT_EXACT/);
+  } finally {process.getuid=getuid;rmSync(current.path,{recursive:true,force:true});}
+});
+
+test("empty env must be ignored and untracked; tracked public env examples remain exact source", () => {
+  const current=checkout();
+  try {
+    writeFileSync(`${current.path}/.env`,"",{mode:0o600});
+    current.git("add","-f",".env");current.git("commit","-m","tracked mountpoint fixture");
+    assert.throws(()=>inspectSource(current.path),/SOURCE_CHECKOUT_NOT_EXACT/);
+    current.git("rm",".env");current.git("commit","-m","remove tracked mountpoint fixture");
+    writeFileSync(`${current.path}/.env.example`,"PUBLIC_SETTING=synthetic\n");
+    current.git("add","-f",".env.example");current.git("commit","-m","public example fixture");
+    assert.equal(inspectSource(current.path).revision,current.git("rev-parse","HEAD"));
+    writeFileSync(`${current.path}/.gitignore`,"node_modules/\nprivate-state\n");
+    current.git("add",".gitignore");current.git("commit","-m","unignored mountpoint fixture");
+    writeFileSync(`${current.path}/.env`,"",{mode:0o600});
+    assert.throws(()=>inspectSource(current.path),/SOURCE_CHECKOUT_NOT_EXACT/);
+  } finally {rmSync(current.path,{recursive:true,force:true});}
 });

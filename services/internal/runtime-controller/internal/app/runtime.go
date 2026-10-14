@@ -27,8 +27,12 @@ const (
 	failureCompletionMaximumTries = 5
 	warmReconcileRPCFailure       = "reconcile system assistant warm runtime"
 	warmReportRPCFailure          = "report system assistant warm runtime"
+	runtimeClaimRPCFailure        = "claim runtime execution"
 	warmDesiredRevisionMissing    = "system assistant warm runtime desired revision is missing"
 	turnMaterializationFailure    = "runtime turn materialization"
+	turnInputRejectionMessage     = "runtime turn input rejected"
+	turnInputStageAttribute       = "stage"
+	turnInputReasonAttribute      = "reason"
 )
 
 var defaultFailureCompletionRetryDelays = [...]time.Duration{
@@ -113,7 +117,7 @@ func (runtime *runtime) Run(ctx context.Context) error {
 			claimed, err := runtime.claim(ctx)
 			if err != nil && !errors.Is(err, context.Canceled) && !claimDegraded {
 				claimDegraded = true
-				runtime.logger.WarnContext(ctx, "runtime claim delivery degraded", "error_class", "control_plane")
+				runtime.logger.WarnContext(ctx, "runtime claim delivery degraded", "error_class", "control_plane", "error", boundedRPCFailure(runtimeClaimRPCFailure, err))
 			} else if err == nil && claimDegraded {
 				claimDegraded = false
 				runtime.logger.InfoContext(ctx, "runtime claim delivery restored")
@@ -213,8 +217,10 @@ func (runtime *runtime) setAssistantUnavailable(ctx context.Context) {
 
 func (runtime *runtime) claim(ctx context.Context) (int, error) {
 	limit := cap(runtime.capacity) - len(runtime.capacity)
-	if limit > 8 {
-		limit = 8
+	// Каталог и authority каждого задания фиксируются отдельной bounded
+	// транзакцией. Это не ограничивает число одновременно работающих tracker.
+	if limit > 1 {
+		limit = 1
 	}
 	if limit < 1 {
 		return 0, nil
@@ -239,11 +245,13 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 		input, providerBinding, buildErr := runtime.manager.BuildTurnInput(execution)
 		if buildErr != nil {
 			stage := "unknown"
+			reason := "UNKNOWN"
 			var inputFailure *workload.TurnInputBuildError
 			if errors.As(buildErr, &inputFailure) {
 				stage = inputFailure.Stage
+				reason = inputFailure.ValidationReason()
 			}
-			runtime.logger.WarnContext(ctx, "runtime turn input rejected", "stage", stage)
+			runtime.logger.WarnContext(ctx, turnInputRejectionMessage, turnInputStageAttribute, stage, turnInputReasonAttribute, reason)
 			runtime.failClaim(ctx, input, execution, "RUNTIME_REVISION_INVALID")
 			continue
 		}
@@ -318,7 +326,7 @@ func (runtime *runtime) claim(ctx context.Context) (int, error) {
 		runtime.trackers.Add(1)
 		go func() {
 			defer runtime.trackers.Done()
-			runtime.track(ctx, input, done, warmExecution)
+			runtime.track(ctx, input, done, warmExecution, keeper.confirmedUntil)
 		}()
 	}
 	return len(response.GetExecutions()), nil
@@ -346,7 +354,7 @@ func warmFileProjectionEligible(input runtimecontract.RunnerInput) bool {
 	return len(input.AttachmentSets) == 0 && len(input.InputArtifacts) == 0
 }
 
-func (runtime *runtime) track(parent context.Context, input runtimecontract.RunnerInput, done <-chan struct{}, warmExecution bool) {
+func (runtime *runtime) track(parent context.Context, input runtimecontract.RunnerInput, done <-chan struct{}, warmExecution bool, confirmedUntil time.Time) {
 	defer func() { <-runtime.capacity }()
 	execution, cancel := input.BoundExecutionDeadline(parent, runtime.config.ExecutionTimeout)
 	defer cancel()
@@ -354,9 +362,14 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 	defer renew.Stop()
 	inspect := time.NewTicker(runtime.inspectInterval)
 	defer inspect.Stop()
+	expiry := time.NewTimer(time.Hour)
+	defer expiry.Stop()
+	expired := resetLeaseExpiry(expiry, confirmedUntil)
 	var terminalObservedAt time.Time
 	terminalDiagnostic := ""
-	_ = runtime.progress(execution, input, "WORKLOAD_SCHEDULED")
+	progress, cancelProgress := leaseBoundedRequest(execution, runtime.config.RequestTimeout, confirmedUntil)
+	_ = runtime.progress(progress, input, "WORKLOAD_SCHEDULED")
+	cancelProgress()
 	for {
 		select {
 		case <-done:
@@ -369,18 +382,32 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 				runtime.closeRevokedTurn(parent, input, done)
 				return
 			}
-			runtime.drainTurn(parent, input, done)
+			runtime.drainTurn(parent, input, done, confirmedUntil)
+			return
+		case <-expired:
+			runtime.closeRevokedTurn(parent, input, done)
 			return
 		case <-renew.C:
-			request, cancelRequest := context.WithTimeout(execution, runtime.config.RequestTimeout)
-			_, err := runtime.control.RenewExecution(request, &controlplanev1.RenewExecutionRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration})
-			cancelRequest()
+			select {
+			case <-done:
+				return
+			default:
+			}
+			until, err := runtime.renewLease(execution, input, renewalPhaseTrack, confirmedUntil)
 			if err != nil {
+				if execution.Err() != nil && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || transientControlPlaneFailure(err)) &&
+					!errors.Is(context.Cause(parent), workload.ErrLeadershipLost) &&
+					(confirmedUntil.IsZero() || time.Now().Before(confirmedUntil)) {
+					runtime.drainTurn(parent, input, done, confirmedUntil)
+					return
+				}
 				runtime.closeRevokedTurn(parent, input, done)
 				return
 			}
+			confirmedUntil = until
+			expired = resetLeaseExpiry(expiry, confirmedUntil)
 		case <-inspect.C:
-			request, cancelRequest := context.WithTimeout(execution, runtime.config.RequestTimeout)
+			request, cancelRequest := leaseBoundedRequest(execution, runtime.config.RequestTimeout, confirmedUntil)
 			observation, err := runtime.turns.ObserveTurnPod(request, input, warmExecution)
 			cancelRequest()
 			if err != nil || !terminalTurnState(observation.State) {
@@ -394,6 +421,9 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 				continue
 			}
 			if time.Since(terminalObservedAt) < runtime.terminalGrace {
+				if observation.DiagnosticCode == workload.TurnPodMemoryDiagnostic {
+					terminalDiagnostic = observation.DiagnosticCode
+				}
 				continue
 			}
 			select {
@@ -401,14 +431,19 @@ func (runtime *runtime) track(parent context.Context, input runtimecontract.Runn
 				return
 			default:
 			}
+			failureCode := "RUNTIME_WORKLOAD_EXITED"
+			if terminalDiagnostic == workload.TurnPodMemoryDiagnostic || observation.DiagnosticCode == workload.TurnPodMemoryDiagnostic {
+				failureCode = "RUNTIME_MEMORY_EXHAUSTED"
+				terminalDiagnostic = workload.TurnPodMemoryDiagnostic
+			}
 			runtime.logger.WarnContext(parent, "runtime terminal callback grace expired", "diagnostic_code", terminalDiagnostic)
-			runtime.completeFailure(context.WithoutCancel(parent), input, "RUNTIME_WORKLOAD_EXITED", terminalDiagnostic)
+			runtime.completeFailure(context.WithoutCancel(parent), input, failureCode, terminalDiagnostic)
 			return
 		}
 	}
 }
 
-func (runtime *runtime) drainTurn(parent context.Context, input runtimecontract.RunnerInput, done <-chan struct{}) {
+func (runtime *runtime) drainTurn(parent context.Context, input runtimecontract.RunnerInput, done <-chan struct{}, confirmedUntil time.Time) {
 	select {
 	case <-done:
 		return
@@ -425,12 +460,31 @@ func (runtime *runtime) drainTurn(parent context.Context, input runtimecontract.
 	defer timer.Stop()
 	renew := time.NewTicker(runtime.config.LeaseRenewInterval)
 	defer renew.Stop()
+	expiry := time.NewTimer(time.Hour)
+	defer expiry.Stop()
+	expired := resetLeaseExpiry(expiry, confirmedUntil)
+	drain, cancelDrain := context.WithTimeout(base, runtime.terminalGrace)
+	joined := make(chan struct{})
+	go func() {
+		defer close(joined)
+		select {
+		case <-workload.LeadershipDone(parent):
+			cancelDrain()
+		case <-done:
+			cancelDrain()
+		case <-drain.Done():
+		}
+	}()
+	defer func() { cancelDrain(); <-joined }()
 	for {
 		select {
 		case <-workload.LeadershipDone(parent):
 			runtime.closeRevokedTurn(base, input, done)
 			return
 		case <-done:
+			return
+		case <-expired:
+			runtime.closeRevokedTurn(base, input, done)
 			return
 		case <-timer.C:
 			select {
@@ -441,13 +495,23 @@ func (runtime *runtime) drainTurn(parent context.Context, input runtimecontract.
 			runtime.completeFailure(base, input, "RUNTIME_TIMEOUT", "")
 			return
 		case <-renew.C:
-			request, cancel := context.WithTimeout(base, runtime.config.RequestTimeout)
-			_, err := runtime.control.RenewExecution(request, &controlplanev1.RenewExecutionRequest{LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration})
-			cancel()
+			select {
+			case <-done:
+				return
+			default:
+			}
+			until, err := runtime.renewLease(drain, input, renewalPhaseDrain, confirmedUntil)
 			if err != nil {
+				if errors.Is(renewalContextError(drain), context.DeadlineExceeded) && (errors.Is(err, context.DeadlineExceeded) || transientControlPlaneFailure(err)) &&
+					(confirmedUntil.IsZero() || time.Now().Before(confirmedUntil)) {
+					runtime.completeFailure(base, input, "RUNTIME_TIMEOUT", "")
+					return
+				}
 				runtime.closeRevokedTurn(base, input, done)
 				return
 			}
+			confirmedUntil = until
+			expired = resetLeaseExpiry(expiry, confirmedUntil)
 		}
 	}
 }
@@ -478,7 +542,11 @@ func (runtime *runtime) completeFailure(base context.Context, input runtimecontr
 	if input.ExecutionDeadline != nil && code == "RUNTIME_TIMEOUT" {
 		safeCode = code
 	}
-	request := &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableIdempotency(input.LeaseRef, "failure:"+code)}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: false, ResultSummary: "i18n:" + code, SafeErrorCode: safeCode}
+	summary := "i18n:" + code
+	if code == "RUNTIME_REVISION_INVALID" {
+		summary = "i18n:" + safeCode
+	}
+	request := &controlplanev1.CompleteExecutionRequest{Mutation: &controlplanev1.MutationContext{IdempotencyKey: stableIdempotency(input.LeaseRef, "failure:"+code)}, LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration, Success: false, ResultSummary: summary, SafeErrorCode: safeCode}
 	var err error
 	for attempt := 0; attempt < failureCompletionMaximumTries; attempt++ {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(base), runtime.config.RequestTimeout)
@@ -546,7 +614,10 @@ func stableIdempotency(left, right string) string {
 }
 
 func safeRuntimeErrorCode(code string) string {
-	if code == "RUNTIME_REVISION_INVALID" || code == "RUNTIME_CONFIGURATION_STALE" {
+	if code == "RUNTIME_REVISION_INVALID" {
+		return "RUNTIME_INPUT_INVALID"
+	}
+	if code == "RUNTIME_CONFIGURATION_STALE" {
 		return "RUNTIME_PROFILE_UNSUPPORTED"
 	}
 	return "RUNTIME_UNAVAILABLE"

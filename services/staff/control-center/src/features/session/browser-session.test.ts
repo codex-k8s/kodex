@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { OwnerSessionMetadata } from "@/shared/api/generated/openapi/types.gen";
 import {
   authorizationCallback,
+  AuthorizationCallbackError,
   authorizationRedirect,
   browserSessionIdentity,
   browserSessionTiming,
@@ -77,6 +78,11 @@ describe("BFF browser boundary", () => {
       "#access_token=not-allowed",
       "&error=access_denied",
     ])
-      expect(() => authorizationCallback(new URL(callback + suffix))).toThrow();
+      expect(() => authorizationCallback(new URL(callback + suffix))).toThrow(
+        AuthorizationCallbackError,
+      );
+    expect(() =>
+      authorizationCallback(new URL("https://kodex.test/auth/callback")),
+    ).toThrow(AuthorizationCallbackError);
   });
 });

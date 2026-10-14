@@ -1,0 +1,2019 @@
+{
+  "format": "selfdev-journal-archive-v1",
+  "baseCommit": "cb611a2ed08def5071c2fc7c108c30ed3e63e03e",
+  "source": {
+    "commit": "892c029241548a887c8ff2459de8c461f69c367e",
+    "path": "docs/operations/self-development-dogfooding.md",
+    "gitBlob": "f84a5b11149a7c6b8a1fe4b4880b4db9d5e400c7",
+    "sha256": "894ac60e3fb362f617961eca2e2d0aadb0d2b63d00f05bfe040a71d25e2c7df6",
+    "size": 1159280,
+    "lines": 13666,
+    "encoding": "UTF-8",
+    "lineEnding": "LF"
+  },
+  "reconstruction": "В порядке parts: конкатенация исходных bytes без заголовков, разделителей и завершающих добавлений.",
+  "parts": [
+    {
+      "file": "892c0292-part-001.txt",
+      "lines": [
+        1,
+        3053
+      ],
+      "bytes": [
+        0,
+        262089
+      ],
+      "size": 262089,
+      "sha256": "18c32f0d4f6e5b20cc9a43adec1f803ebd49bb49cb4231722a84549aaa1369f5"
+    },
+    {
+      "file": "892c0292-part-002.txt",
+      "lines": [
+        3054,
+        6092
+      ],
+      "bytes": [
+        262089,
+        524210
+      ],
+      "size": 262121,
+      "sha256": "e625666442e8059de5aa73bc76417b6919fdaf2ff1dfc3a3f15c447d45ee6a05"
+    },
+    {
+      "file": "892c0292-part-003.txt",
+      "lines": [
+        6093,
+        9222
+      ],
+      "bytes": [
+        524210,
+        786256
+      ],
+      "size": 262046,
+      "sha256": "0cadfdf1d2764545d246a9a689fb73471422d3f03df978124b3a976ce3e9b340"
+    },
+    {
+      "file": "892c0292-part-004.txt",
+      "lines": [
+        9223,
+        12276
+      ],
+      "bytes": [
+        786256,
+        1048318
+      ],
+      "size": 262062,
+      "sha256": "fc66486a82e51b0febfb11db52fbef0469ed318b67156c741cdb34117611d756"
+    },
+    {
+      "file": "892c0292-part-005.txt",
+      "lines": [
+        12277,
+        13666
+      ],
+      "bytes": [
+        1048318,
+        1159280
+      ],
+      "size": 110962,
+      "sha256": "66e1c74e0e6ed54a2266656bfa1f0f11d1982d54886cf680372a4cebc24de24b"
+    }
+  ],
+  "active": {
+    "path": "docs/operations/self-development-dogfooding.md",
+    "size": 71628,
+    "sha256": "0c84dc5f993230e1855c7295cbb1580c64c17948d0b95f96aebab12286452ec2",
+    "unchangedRanges": [
+      {
+        "lines": [
+          1,
+          12
+        ],
+        "bytes": [
+          0,
+          255
+        ],
+        "sha256": "8837be0aad0c6395c38c5857a618d8974f716a973122b1341aa7de927f39fd79"
+      },
+      {
+        "lines": [
+          4534,
+          4623
+        ],
+        "bytes": [
+          378863,
+          388161
+        ],
+        "sha256": "77ff823e4ea5e7ae186c1e8dc5b5bff37a97bed3c1c4ed6e0833f07c232b549c"
+      },
+      {
+        "lines": [
+          4624,
+          4802
+        ],
+        "bytes": [
+          388161,
+          417778
+        ],
+        "sha256": "fd56b401f20a833ef06baa1030f69f2978e6905ea6f435dd34c5cbeabecae61e"
+      },
+      {
+        "lines": [
+          13,
+          125
+        ],
+        "bytes": [
+          255,
+          10719
+        ],
+        "sha256": "b4488110bdc0e527e1b1261b695a8797dcfdb1196105a159123115beb1dbe84a"
+      }
+    ],
+    "fragments": [
+      {
+        "key": "dag",
+        "first": 1199,
+        "last": 1210,
+        "date": "08.10.2026 11:30 UTC",
+        "scope": "Матрица DAG; exact39-stage относится к прежней публикации, не к текущему порядку review.",
+        "lines": [
+          1199,
+          1210
+        ],
+        "bytes": [
+          101071,
+          102354
+        ],
+        "sha256": "11cdd005078a93594319c259f2e849e3d29313e213191ec73ef345ea947b370b"
+      },
+      {
+        "key": "inputs-product",
+        "first": 1233,
+        "last": 1282,
+        "date": "08.10.2026 11:03 UTC",
+        "scope": "Immutable inputs и рекомендованные продуктовые детали; исторический NOT RUN и отсутствие human approval сохранены.",
+        "lines": [
+          1233,
+          1282
+        ],
+        "bytes": [
+          104264,
+          109614
+        ],
+        "sha256": "c92926df0e827111d1fc47c2385844bb95f27acbc9489e28f66dcb20bb1d51a2"
+      },
+      {
+        "key": "autonomy",
+        "first": 2392,
+        "last": 2404,
+        "date": "08.10.2026 до 14:00 Саратов",
+        "scope": "Датированное разрешение; срок не продлевается переносом. Защитные и визуальные ограничения сохранены.",
+        "lines": [
+          2392,
+          2404
+        ],
+        "bytes": [
+          204189,
+          205580
+        ],
+        "sha256": "2fad383d239e5f9923d7f4dd20084d8e16da35e3aaba20c01f4c81b71576dcfa"
+      },
+      {
+        "key": "intake",
+        "first": 3194,
+        "last": 3202,
+        "date": "07.10.2026 17:13 UTC",
+        "scope": "Business output INTAKE и технические квитанции; исходный опубликованный процесс не переписывается.",
+        "lines": [
+          3194,
+          3202
+        ],
+        "bytes": [
+          273858,
+          274727
+        ],
+        "sha256": "cdc22ef643d1b141d0315ae1fdaa095b72ad0a171a032c1a7d1a6aee19310fbe"
+      },
+      {
+        "key": "own-catalog",
+        "first": 3370,
+        "last": 3378,
+        "date": "07.10.2026 16:23 UTC",
+        "scope": "Собственный immutable catalog/entry, неизменённые границы и закрытый отказ.",
+        "lines": [
+          3370,
+          3378
+        ],
+        "bytes": [
+          287358,
+          288197
+        ],
+        "sha256": "320d164cdd928fbe42e4ed04db889c8fa4d28ed68faeea708cfafb2bc08f37cf"
+      },
+      {
+        "key": "github-eof",
+        "first": 5179,
+        "last": 5208,
+        "date": "07.10.2026 09:32–09:37 UTC",
+        "scope": "Карта большого чтения; требование EOF и старые pins, не новое разрешение публикации.",
+        "lines": [
+          5179,
+          5208
+        ],
+        "bytes": [
+          448964,
+          451511
+        ],
+        "sha256": "df92df1312bba688e2c7dfd606ac558c813276828e821d3a8931549e36da750b"
+      },
+      {
+        "key": "file-receipt",
+        "first": 5707,
+        "last": 5735,
+        "date": "07.10.2026 06:47 UTC",
+        "scope": "Матрица metadata-only квитанции; historical actual NOT RUN не повышается до PASS.",
+        "lines": [
+          5707,
+          5735
+        ],
+        "bytes": [
+          492037,
+          496472
+        ],
+        "sha256": "8c6f8a6bcabfedc2a764f31458e56f6dff4421038831adc6c54099b3e21b3985"
+      },
+      {
+        "key": "chronology",
+        "first": 8144,
+        "last": 8148,
+        "date": "04.10.2026, checkpoint 2c103867",
+        "scope": "Полная хронология и bounded текст сообщения, а не служебный summary.",
+        "lines": [
+          8144,
+          8148
+        ],
+        "bytes": [
+          690907,
+          691521
+        ],
+        "sha256": "2cb9b9cf67fd78093cb3dabf48f539c902ef34ce66aa24ad8bbc5c4de1fa6d05"
+      },
+      {
+        "key": "single-review",
+        "first": 12860,
+        "last": 12873,
+        "date": "08.10.2026 19:21 UTC",
+        "scope": "Исходное решение об одном review; дата и прежний NOT CHANGED сохранены. Действующее решение — GOV-OD-003.",
+        "lines": [
+          12860,
+          12873
+        ],
+        "bytes": [
+          1095433,
+          1097062
+        ],
+        "sha256": "2dfdcd1788e18914dd92ec161cbb83424453110132e87d36918175a63b5b4f87"
+      }
+    ]
+  },
+  "coverage": {
+    "file": "coverage.json",
+    "sha256": "465da8e0ccd5e7619e40c307253de6cdfc8b0e04cd7430b36d02b51cc40c3946",
+    "paragraphs": 2519
+  },
+  "semanticCoverage": [
+    {
+      "family": "Цель, решения владельца, checkbox1–16, четыре сценария и полные lifecycle матрицы",
+      "sourceLines": [
+        4534,
+        4802
+      ],
+      "disposition": "Дословно в активной части; временные разрешения и старые review отделены от GOV-OD-003."
+    },
+    {
+      "family": "Последние исходные статусы, backend freeze и независимость serving/live доказательств",
+      "sourceLines": [
+        13,
+        125
+      ],
+      "disposition": "Дословно в активном журнале по исходной дате, не актуальный readback нового runtime."
+    },
+    {
+      "family": "DAG Before/After/OCC/immutable, Workflow inputs, phase-specific outputs, own catalog и полный EOF",
+      "fragments": [
+        "dag",
+        "inputs-product",
+        "intake",
+        "own-catalog",
+        "github-eof",
+        "file-receipt"
+      ],
+      "disposition": "Дословные исторические фрагменты активны как источник формулировок; старый39-stage и NOT RUN остаются историей. Текущий порядок review задаёт GOV-OD-003."
+    },
+    {
+      "family": "Продуктовые рекомендации сводки лимитов: максимум3, группы исчерпанных, unknown/stale, min remainder, tie-break, supported credits/reset",
+      "sourceLines": [
+        1263,
+        1282
+      ],
+      "disposition": "Дословно; статус рекомендации и отсутствие human approval не повышены переносом."
+    },
+    {
+      "family": "Автономия, даты/условия разрешений и visual QA",
+      "fragments": [
+        "autonomy"
+      ],
+      "disposition": "Дословно с исходным сроком; не создаёт нового разрешения эффекта, продления автономии или отмены текущего freeze."
+    },
+    {
+      "family": "Полная хронология, safe metadata receipt и полный bounded текст сообщения",
+      "fragments": [
+        "chronology",
+        "file-receipt"
+      ],
+      "disposition": "Дословно; повторяющиеся исторические fixes остаются в архиве, core содержит общий lifecycle."
+    },
+    {
+      "family": "Одно комплексное review, Manager acceptance, пять циклов после первого, sole final owner gate",
+      "fragments": [
+        "single-review"
+      ],
+      "disposition": "Дословно и linked GOV-OD-003. Старые3/4 review,33/39-stage и ошибочные fixtures сохранены в архиве, не current authority."
+    },
+    {
+      "family": "Исторические решения конкретных implementation: URI/routes, budgets, thresholds, resources, loaded image/policy pins, migration/apply порядок, cleanup selectors",
+      "disposition": "Датированные evidence/границы конкретного source. Все абзацы сохранены в coverage с архивными offsets; они не становятся новым правилом текущего workflow. Общие boundary/lifecycle/QA/proof требования направлены к действующим AGENTS, core, Full65 и GOV-DOC-003."
+    }
+  ],
+  "historicalNorms": [
+    {
+      "lines": [
+        4553,
+        4555
+      ],
+      "status": "Истёкший автономный срок, не продлён",
+      "active": true
+    },
+    {
+      "lines": [
+        4566,
+        4567
+      ],
+      "status": "Историческая модель нескольких review; локально заменена GOV-OD-003",
+      "active": true
+    },
+    {
+      "lines": [
+        1284,
+        1293
+      ],
+      "status": "Исторический предложенный39-stage порядок, не текущий21-stage",
+      "active": false
+    },
+    {
+      "lines": [
+        10552,
+        10625
+      ],
+      "status": "Датированные owner pause и последующее возобновление; не новый gate",
+      "active": false
+    }
+  ],
+  "headingIndex": [
+    {
+      "line": 11,
+      "context": 1
+    },
+    {
+      "line": 13,
+      "context": 2
+    },
+    {
+      "line": 32,
+      "context": 3
+    },
+    {
+      "line": 82,
+      "context": 4
+    },
+    {
+      "line": 126,
+      "context": 5
+    },
+    {
+      "line": 148,
+      "context": 6
+    },
+    {
+      "line": 185,
+      "context": 7
+    },
+    {
+      "line": 231,
+      "context": 8
+    },
+    {
+      "line": 277,
+      "context": 9
+    },
+    {
+      "line": 311,
+      "context": 10
+    },
+    {
+      "line": 343,
+      "context": 11
+    },
+    {
+      "line": 380,
+      "context": 12
+    },
+    {
+      "line": 392,
+      "context": 13
+    },
+    {
+      "line": 404,
+      "context": 14
+    },
+    {
+      "line": 426,
+      "context": 15
+    },
+    {
+      "line": 444,
+      "context": 16
+    },
+    {
+      "line": 462,
+      "context": 17
+    },
+    {
+      "line": 482,
+      "context": 18
+    },
+    {
+      "line": 510,
+      "context": 19
+    },
+    {
+      "line": 537,
+      "context": 20
+    },
+    {
+      "line": 566,
+      "context": 21
+    },
+    {
+      "line": 603,
+      "context": 22
+    },
+    {
+      "line": 638,
+      "context": 23
+    },
+    {
+      "line": 663,
+      "context": 24
+    },
+    {
+      "line": 688,
+      "context": 25
+    },
+    {
+      "line": 711,
+      "context": 26
+    },
+    {
+      "line": 734,
+      "context": 27
+    },
+    {
+      "line": 760,
+      "context": 28
+    },
+    {
+      "line": 797,
+      "context": 29
+    },
+    {
+      "line": 820,
+      "context": 30
+    },
+    {
+      "line": 893,
+      "context": 31
+    },
+    {
+      "line": 921,
+      "context": 32
+    },
+    {
+      "line": 951,
+      "context": 33
+    },
+    {
+      "line": 982,
+      "context": 34
+    },
+    {
+      "line": 1014,
+      "context": 35
+    },
+    {
+      "line": 1038,
+      "context": 36
+    },
+    {
+      "line": 1065,
+      "context": 37
+    },
+    {
+      "line": 1122,
+      "context": 38
+    },
+    {
+      "line": 1157,
+      "context": 39
+    },
+    {
+      "line": 1200,
+      "context": 40
+    },
+    {
+      "line": 1211,
+      "context": 41
+    },
+    {
+      "line": 1233,
+      "context": 42
+    },
+    {
+      "line": 1263,
+      "context": 43
+    },
+    {
+      "line": 1295,
+      "context": 44
+    },
+    {
+      "line": 1325,
+      "context": 45
+    },
+    {
+      "line": 1356,
+      "context": 46
+    },
+    {
+      "line": 1414,
+      "context": 47
+    },
+    {
+      "line": 1454,
+      "context": 48
+    },
+    {
+      "line": 1491,
+      "context": 49
+    },
+    {
+      "line": 1517,
+      "context": 50
+    },
+    {
+      "line": 1572,
+      "context": 51
+    },
+    {
+      "line": 1603,
+      "context": 52
+    },
+    {
+      "line": 1684,
+      "context": 53
+    },
+    {
+      "line": 1720,
+      "context": 54
+    },
+    {
+      "line": 1722,
+      "context": 55
+    },
+    {
+      "line": 1788,
+      "context": 56
+    },
+    {
+      "line": 1812,
+      "context": 57
+    },
+    {
+      "line": 1855,
+      "context": 58
+    },
+    {
+      "line": 1895,
+      "context": 59
+    },
+    {
+      "line": 1930,
+      "context": 60
+    },
+    {
+      "line": 1979,
+      "context": 61
+    },
+    {
+      "line": 2003,
+      "context": 62
+    },
+    {
+      "line": 2042,
+      "context": 63
+    },
+    {
+      "line": 2063,
+      "context": 64
+    },
+    {
+      "line": 2107,
+      "context": 65
+    },
+    {
+      "line": 2150,
+      "context": 66
+    },
+    {
+      "line": 2189,
+      "context": 67
+    },
+    {
+      "line": 2215,
+      "context": 68
+    },
+    {
+      "line": 2255,
+      "context": 69
+    },
+    {
+      "line": 2287,
+      "context": 70
+    },
+    {
+      "line": 2320,
+      "context": 71
+    },
+    {
+      "line": 2349,
+      "context": 72
+    },
+    {
+      "line": 2392,
+      "context": 73
+    },
+    {
+      "line": 2405,
+      "context": 74
+    },
+    {
+      "line": 2438,
+      "context": 75
+    },
+    {
+      "line": 2487,
+      "context": 76
+    },
+    {
+      "line": 2500,
+      "context": 77
+    },
+    {
+      "line": 2529,
+      "context": 78
+    },
+    {
+      "line": 2565,
+      "context": 79
+    },
+    {
+      "line": 2588,
+      "context": 80
+    },
+    {
+      "line": 2625,
+      "context": 81
+    },
+    {
+      "line": 2659,
+      "context": 82
+    },
+    {
+      "line": 2703,
+      "context": 83
+    },
+    {
+      "line": 2741,
+      "context": 84
+    },
+    {
+      "line": 2784,
+      "context": 85
+    },
+    {
+      "line": 2814,
+      "context": 86
+    },
+    {
+      "line": 2857,
+      "context": 87
+    },
+    {
+      "line": 2893,
+      "context": 88
+    },
+    {
+      "line": 2918,
+      "context": 89
+    },
+    {
+      "line": 2939,
+      "context": 90
+    },
+    {
+      "line": 2971,
+      "context": 91
+    },
+    {
+      "line": 3005,
+      "context": 92
+    },
+    {
+      "line": 3032,
+      "context": 93
+    },
+    {
+      "line": 3073,
+      "context": 94
+    },
+    {
+      "line": 3122,
+      "context": 95
+    },
+    {
+      "line": 3187,
+      "context": 96
+    },
+    {
+      "line": 3193,
+      "context": 97
+    },
+    {
+      "line": 3234,
+      "context": 98
+    },
+    {
+      "line": 3303,
+      "context": 99
+    },
+    {
+      "line": 3368,
+      "context": 100
+    },
+    {
+      "line": 3420,
+      "context": 101
+    },
+    {
+      "line": 3470,
+      "context": 102
+    },
+    {
+      "line": 3534,
+      "context": 103
+    },
+    {
+      "line": 3579,
+      "context": 104
+    },
+    {
+      "line": 3655,
+      "context": 105
+    },
+    {
+      "line": 3687,
+      "context": 106
+    },
+    {
+      "line": 3743,
+      "context": 107
+    },
+    {
+      "line": 3775,
+      "context": 108
+    },
+    {
+      "line": 3818,
+      "context": 109
+    },
+    {
+      "line": 3855,
+      "context": 110
+    },
+    {
+      "line": 3898,
+      "context": 111
+    },
+    {
+      "line": 3960,
+      "context": 112
+    },
+    {
+      "line": 4005,
+      "context": 113
+    },
+    {
+      "line": 4055,
+      "context": 114
+    },
+    {
+      "line": 4122,
+      "context": 115
+    },
+    {
+      "line": 4182,
+      "context": 116
+    },
+    {
+      "line": 4245,
+      "context": 117
+    },
+    {
+      "line": 4275,
+      "context": 118
+    },
+    {
+      "line": 4342,
+      "context": 119
+    },
+    {
+      "line": 4381,
+      "context": 120
+    },
+    {
+      "line": 4407,
+      "context": 121
+    },
+    {
+      "line": 4441,
+      "context": 122
+    },
+    {
+      "line": 4480,
+      "context": 123
+    },
+    {
+      "line": 4551,
+      "context": 124
+    },
+    {
+      "line": 4593,
+      "context": 125
+    },
+    {
+      "line": 4726,
+      "context": 126
+    },
+    {
+      "line": 4733,
+      "context": 127
+    },
+    {
+      "line": 4746,
+      "context": 128
+    },
+    {
+      "line": 4760,
+      "context": 129
+    },
+    {
+      "line": 4780,
+      "context": 130
+    },
+    {
+      "line": 4803,
+      "context": 131
+    },
+    {
+      "line": 4805,
+      "context": 132
+    },
+    {
+      "line": 4837,
+      "context": 133
+    },
+    {
+      "line": 4865,
+      "context": 134
+    },
+    {
+      "line": 4892,
+      "context": 135
+    },
+    {
+      "line": 4909,
+      "context": 136
+    },
+    {
+      "line": 4933,
+      "context": 137
+    },
+    {
+      "line": 4953,
+      "context": 138
+    },
+    {
+      "line": 4988,
+      "context": 139
+    },
+    {
+      "line": 5036,
+      "context": 140
+    },
+    {
+      "line": 5073,
+      "context": 141
+    },
+    {
+      "line": 5097,
+      "context": 142
+    },
+    {
+      "line": 5144,
+      "context": 143
+    },
+    {
+      "line": 5179,
+      "context": 144
+    },
+    {
+      "line": 5209,
+      "context": 145
+    },
+    {
+      "line": 5256,
+      "context": 146
+    },
+    {
+      "line": 5278,
+      "context": 147
+    },
+    {
+      "line": 5311,
+      "context": 148
+    },
+    {
+      "line": 5353,
+      "context": 149
+    },
+    {
+      "line": 5375,
+      "context": 150
+    },
+    {
+      "line": 5417,
+      "context": 151
+    },
+    {
+      "line": 5445,
+      "context": 152
+    },
+    {
+      "line": 5511,
+      "context": 153
+    },
+    {
+      "line": 5548,
+      "context": 154
+    },
+    {
+      "line": 5564,
+      "context": 155
+    },
+    {
+      "line": 5608,
+      "context": 156
+    },
+    {
+      "line": 5657,
+      "context": 157
+    },
+    {
+      "line": 5707,
+      "context": 158
+    },
+    {
+      "line": 5736,
+      "context": 159
+    },
+    {
+      "line": 5768,
+      "context": 160
+    },
+    {
+      "line": 5830,
+      "context": 161
+    },
+    {
+      "line": 5878,
+      "context": 162
+    },
+    {
+      "line": 5899,
+      "context": 163
+    },
+    {
+      "line": 5927,
+      "context": 164
+    },
+    {
+      "line": 5963,
+      "context": 165
+    },
+    {
+      "line": 6007,
+      "context": 166
+    },
+    {
+      "line": 6039,
+      "context": 167
+    },
+    {
+      "line": 6076,
+      "context": 168
+    },
+    {
+      "line": 6108,
+      "context": 169
+    },
+    {
+      "line": 6154,
+      "context": 170
+    },
+    {
+      "line": 6190,
+      "context": 171
+    },
+    {
+      "line": 6212,
+      "context": 172
+    },
+    {
+      "line": 6256,
+      "context": 173
+    },
+    {
+      "line": 6290,
+      "context": 174
+    },
+    {
+      "line": 6326,
+      "context": 175
+    },
+    {
+      "line": 6364,
+      "context": 176
+    },
+    {
+      "line": 6408,
+      "context": 177
+    },
+    {
+      "line": 6443,
+      "context": 178
+    },
+    {
+      "line": 6482,
+      "context": 179
+    },
+    {
+      "line": 6531,
+      "context": 180
+    },
+    {
+      "line": 6574,
+      "context": 181
+    },
+    {
+      "line": 6619,
+      "context": 182
+    },
+    {
+      "line": 6635,
+      "context": 183
+    },
+    {
+      "line": 6713,
+      "context": 184
+    },
+    {
+      "line": 6770,
+      "context": 185
+    },
+    {
+      "line": 6812,
+      "context": 186
+    },
+    {
+      "line": 6868,
+      "context": 187
+    },
+    {
+      "line": 6904,
+      "context": 188
+    },
+    {
+      "line": 6933,
+      "context": 189
+    },
+    {
+      "line": 6962,
+      "context": 190
+    },
+    {
+      "line": 6998,
+      "context": 191
+    },
+    {
+      "line": 7019,
+      "context": 192
+    },
+    {
+      "line": 7043,
+      "context": 193
+    },
+    {
+      "line": 7082,
+      "context": 194
+    },
+    {
+      "line": 7111,
+      "context": 195
+    },
+    {
+      "line": 7154,
+      "context": 196
+    },
+    {
+      "line": 7186,
+      "context": 197
+    },
+    {
+      "line": 7234,
+      "context": 198
+    },
+    {
+      "line": 7275,
+      "context": 199
+    },
+    {
+      "line": 7303,
+      "context": 200
+    },
+    {
+      "line": 7359,
+      "context": 201
+    },
+    {
+      "line": 7410,
+      "context": 202
+    },
+    {
+      "line": 7458,
+      "context": 203
+    },
+    {
+      "line": 7482,
+      "context": 204
+    },
+    {
+      "line": 7503,
+      "context": 205
+    },
+    {
+      "line": 7539,
+      "context": 206
+    },
+    {
+      "line": 7564,
+      "context": 207
+    },
+    {
+      "line": 7596,
+      "context": 208
+    },
+    {
+      "line": 7624,
+      "context": 209
+    },
+    {
+      "line": 7647,
+      "context": 210
+    },
+    {
+      "line": 7686,
+      "context": 211
+    },
+    {
+      "line": 7728,
+      "context": 212
+    },
+    {
+      "line": 7754,
+      "context": 213
+    },
+    {
+      "line": 7782,
+      "context": 214
+    },
+    {
+      "line": 7822,
+      "context": 215
+    },
+    {
+      "line": 7863,
+      "context": 216
+    },
+    {
+      "line": 7900,
+      "context": 217
+    },
+    {
+      "line": 7932,
+      "context": 218
+    },
+    {
+      "line": 7972,
+      "context": 219
+    },
+    {
+      "line": 8022,
+      "context": 220
+    },
+    {
+      "line": 8061,
+      "context": 221
+    },
+    {
+      "line": 8095,
+      "context": 222
+    },
+    {
+      "line": 8125,
+      "context": 223
+    },
+    {
+      "line": 8140,
+      "context": 224
+    },
+    {
+      "line": 8150,
+      "context": 225
+    },
+    {
+      "line": 8174,
+      "context": 226
+    },
+    {
+      "line": 8194,
+      "context": 227
+    },
+    {
+      "line": 8222,
+      "context": 228
+    },
+    {
+      "line": 8250,
+      "context": 229
+    },
+    {
+      "line": 8264,
+      "context": 230
+    },
+    {
+      "line": 8272,
+      "context": 231
+    },
+    {
+      "line": 8292,
+      "context": 232
+    },
+    {
+      "line": 8310,
+      "context": 233
+    },
+    {
+      "line": 8331,
+      "context": 234
+    },
+    {
+      "line": 8349,
+      "context": 235
+    },
+    {
+      "line": 8370,
+      "context": 236
+    },
+    {
+      "line": 8387,
+      "context": 237
+    },
+    {
+      "line": 8403,
+      "context": 238
+    },
+    {
+      "line": 8417,
+      "context": 239
+    },
+    {
+      "line": 8432,
+      "context": 240
+    },
+    {
+      "line": 8447,
+      "context": 241
+    },
+    {
+      "line": 8473,
+      "context": 242
+    },
+    {
+      "line": 8484,
+      "context": 243
+    },
+    {
+      "line": 8511,
+      "context": 244
+    },
+    {
+      "line": 8531,
+      "context": 245
+    },
+    {
+      "line": 8552,
+      "context": 246
+    },
+    {
+      "line": 8579,
+      "context": 247
+    },
+    {
+      "line": 8592,
+      "context": 248
+    },
+    {
+      "line": 8615,
+      "context": 249
+    },
+    {
+      "line": 8630,
+      "context": 250
+    },
+    {
+      "line": 8647,
+      "context": 251
+    },
+    {
+      "line": 8677,
+      "context": 252
+    },
+    {
+      "line": 8712,
+      "context": 253
+    },
+    {
+      "line": 8740,
+      "context": 254
+    },
+    {
+      "line": 8767,
+      "context": 255
+    },
+    {
+      "line": 8799,
+      "context": 256
+    },
+    {
+      "line": 8833,
+      "context": 257
+    },
+    {
+      "line": 8855,
+      "context": 258
+    },
+    {
+      "line": 8878,
+      "context": 259
+    },
+    {
+      "line": 8896,
+      "context": 260
+    },
+    {
+      "line": 8935,
+      "context": 261
+    },
+    {
+      "line": 8962,
+      "context": 262
+    },
+    {
+      "line": 8993,
+      "context": 263
+    },
+    {
+      "line": 9024,
+      "context": 264
+    },
+    {
+      "line": 9046,
+      "context": 265
+    },
+    {
+      "line": 9074,
+      "context": 266
+    },
+    {
+      "line": 9093,
+      "context": 267
+    },
+    {
+      "line": 9121,
+      "context": 268
+    },
+    {
+      "line": 9135,
+      "context": 269
+    },
+    {
+      "line": 9170,
+      "context": 270
+    },
+    {
+      "line": 9204,
+      "context": 271
+    },
+    {
+      "line": 9255,
+      "context": 272
+    },
+    {
+      "line": 9265,
+      "context": 273
+    },
+    {
+      "line": 9283,
+      "context": 274
+    },
+    {
+      "line": 9298,
+      "context": 275
+    },
+    {
+      "line": 9321,
+      "context": 276
+    },
+    {
+      "line": 9348,
+      "context": 277
+    },
+    {
+      "line": 9386,
+      "context": 278
+    },
+    {
+      "line": 9429,
+      "context": 279
+    },
+    {
+      "line": 9476,
+      "context": 280
+    },
+    {
+      "line": 9502,
+      "context": 281
+    },
+    {
+      "line": 9514,
+      "context": 282
+    },
+    {
+      "line": 9542,
+      "context": 283
+    },
+    {
+      "line": 9555,
+      "context": 284
+    },
+    {
+      "line": 9589,
+      "context": 285
+    },
+    {
+      "line": 9616,
+      "context": 286
+    },
+    {
+      "line": 9628,
+      "context": 287
+    },
+    {
+      "line": 9670,
+      "context": 288
+    },
+    {
+      "line": 9685,
+      "context": 289
+    },
+    {
+      "line": 9721,
+      "context": 290
+    },
+    {
+      "line": 9728,
+      "context": 291
+    },
+    {
+      "line": 9748,
+      "context": 292
+    },
+    {
+      "line": 9773,
+      "context": 293
+    },
+    {
+      "line": 9794,
+      "context": 294
+    },
+    {
+      "line": 9814,
+      "context": 295
+    },
+    {
+      "line": 9840,
+      "context": 296
+    },
+    {
+      "line": 9865,
+      "context": 297
+    },
+    {
+      "line": 9894,
+      "context": 298
+    },
+    {
+      "line": 9925,
+      "context": 299
+    },
+    {
+      "line": 9950,
+      "context": 300
+    },
+    {
+      "line": 9967,
+      "context": 301
+    },
+    {
+      "line": 10002,
+      "context": 302
+    },
+    {
+      "line": 10038,
+      "context": 303
+    },
+    {
+      "line": 10051,
+      "context": 304
+    },
+    {
+      "line": 10069,
+      "context": 305
+    },
+    {
+      "line": 10075,
+      "context": 306
+    },
+    {
+      "line": 10088,
+      "context": 307
+    },
+    {
+      "line": 10098,
+      "context": 308
+    },
+    {
+      "line": 10105,
+      "context": 309
+    },
+    {
+      "line": 10139,
+      "context": 310
+    },
+    {
+      "line": 10161,
+      "context": 311
+    },
+    {
+      "line": 10192,
+      "context": 312
+    },
+    {
+      "line": 10221,
+      "context": 313
+    },
+    {
+      "line": 10230,
+      "context": 314
+    },
+    {
+      "line": 10256,
+      "context": 315
+    },
+    {
+      "line": 10283,
+      "context": 316
+    },
+    {
+      "line": 10294,
+      "context": 317
+    },
+    {
+      "line": 10322,
+      "context": 318
+    },
+    {
+      "line": 10335,
+      "context": 319
+    },
+    {
+      "line": 10383,
+      "context": 320
+    },
+    {
+      "line": 10414,
+      "context": 321
+    },
+    {
+      "line": 10436,
+      "context": 322
+    },
+    {
+      "line": 10447,
+      "context": 323
+    },
+    {
+      "line": 10480,
+      "context": 324
+    },
+    {
+      "line": 10497,
+      "context": 325
+    },
+    {
+      "line": 10510,
+      "context": 326
+    },
+    {
+      "line": 10522,
+      "context": 327
+    },
+    {
+      "line": 10533,
+      "context": 328
+    },
+    {
+      "line": 10552,
+      "context": 329
+    },
+    {
+      "line": 10589,
+      "context": 330
+    },
+    {
+      "line": 10607,
+      "context": 331
+    },
+    {
+      "line": 10639,
+      "context": 332
+    },
+    {
+      "line": 10667,
+      "context": 333
+    },
+    {
+      "line": 10695,
+      "context": 334
+    },
+    {
+      "line": 10718,
+      "context": 335
+    },
+    {
+      "line": 10731,
+      "context": 336
+    },
+    {
+      "line": 10762,
+      "context": 337
+    },
+    {
+      "line": 10801,
+      "context": 338
+    },
+    {
+      "line": 10835,
+      "context": 339
+    },
+    {
+      "line": 11132,
+      "context": 340
+    },
+    {
+      "line": 11162,
+      "context": 341
+    },
+    {
+      "line": 11196,
+      "context": 342
+    },
+    {
+      "line": 11250,
+      "context": 343
+    },
+    {
+      "line": 11328,
+      "context": 344
+    },
+    {
+      "line": 11395,
+      "context": 345
+    },
+    {
+      "line": 11415,
+      "context": 346
+    },
+    {
+      "line": 11442,
+      "context": 347
+    },
+    {
+      "line": 11479,
+      "context": 348
+    },
+    {
+      "line": 11562,
+      "context": 349
+    },
+    {
+      "line": 11578,
+      "context": 350
+    },
+    {
+      "line": 11774,
+      "context": 351
+    },
+    {
+      "line": 11842,
+      "context": 352
+    },
+    {
+      "line": 11886,
+      "context": 353
+    },
+    {
+      "line": 11945,
+      "context": 354
+    },
+    {
+      "line": 11983,
+      "context": 355
+    },
+    {
+      "line": 12026,
+      "context": 356
+    },
+    {
+      "line": 12066,
+      "context": 357
+    },
+    {
+      "line": 12116,
+      "context": 358
+    },
+    {
+      "line": 12171,
+      "context": 359
+    },
+    {
+      "line": 12214,
+      "context": 360
+    },
+    {
+      "line": 12267,
+      "context": 361
+    },
+    {
+      "line": 12295,
+      "context": 362
+    },
+    {
+      "line": 12328,
+      "context": 363
+    },
+    {
+      "line": 12352,
+      "context": 364
+    },
+    {
+      "line": 12369,
+      "context": 365
+    },
+    {
+      "line": 12395,
+      "context": 366
+    },
+    {
+      "line": 12408,
+      "context": 367
+    },
+    {
+      "line": 12428,
+      "context": 368
+    },
+    {
+      "line": 12442,
+      "context": 369
+    },
+    {
+      "line": 12465,
+      "context": 370
+    },
+    {
+      "line": 12478,
+      "context": 371
+    },
+    {
+      "line": 12512,
+      "context": 372
+    },
+    {
+      "line": 12544,
+      "context": 373
+    },
+    {
+      "line": 12561,
+      "context": 374
+    },
+    {
+      "line": 12603,
+      "context": 375
+    },
+    {
+      "line": 12635,
+      "context": 376
+    },
+    {
+      "line": 12672,
+      "context": 377
+    },
+    {
+      "line": 12695,
+      "context": 378
+    },
+    {
+      "line": 12719,
+      "context": 379
+    },
+    {
+      "line": 12746,
+      "context": 380
+    },
+    {
+      "line": 12784,
+      "context": 381
+    },
+    {
+      "line": 12834,
+      "context": 382
+    },
+    {
+      "line": 12875,
+      "context": 383
+    },
+    {
+      "line": 12934,
+      "context": 384
+    },
+    {
+      "line": 12972,
+      "context": 385
+    },
+    {
+      "line": 13004,
+      "context": 386
+    },
+    {
+      "line": 13046,
+      "context": 387
+    },
+    {
+      "line": 13100,
+      "context": 388
+    },
+    {
+      "line": 13145,
+      "context": 389
+    },
+    {
+      "line": 13172,
+      "context": 390
+    },
+    {
+      "line": 13190,
+      "context": 391
+    },
+    {
+      "line": 13225,
+      "context": 392
+    },
+    {
+      "line": 13272,
+      "context": 393
+    },
+    {
+      "line": 13305,
+      "context": 394
+    },
+    {
+      "line": 13348,
+      "context": 395
+    },
+    {
+      "line": 13359,
+      "context": 396
+    },
+    {
+      "line": 13392,
+      "context": 397
+    },
+    {
+      "line": 13417,
+      "context": 398
+    },
+    {
+      "line": 13430,
+      "context": 399
+    },
+    {
+      "line": 13443,
+      "context": 400
+    },
+    {
+      "line": 13455,
+      "context": 401
+    },
+    {
+      "line": 13477,
+      "context": 402
+    },
+    {
+      "line": 13495,
+      "context": 403
+    },
+    {
+      "line": 13524,
+      "context": 404
+    },
+    {
+      "line": 13555,
+      "context": 405
+    },
+    {
+      "line": 13586,
+      "context": 406
+    },
+    {
+      "line": 13640,
+      "context": 407
+    }
+  ],
+  "consumers": [
+    "docs/governance/codification.md:131",
+    "docs/governance/open-decisions.md:59",
+    "docs/qa/full-qa-task.md:17",
+    "docs/operations/self-development-handoff.md:3838,3884,7009,7234",
+    "docs/operations/assistant-prototype-debug-1763.md:22,44"
+  ]
+}

@@ -1,0 +1,134 @@
+{
+  "schema": "",
+  "mode": "TURN",
+  "workload_instance": "",
+  "organization_ref": "",
+  "run_ref": "run_current",
+  "node_ref": "nod_current",
+  "session_ref": "ses_current",
+  "turn_ref": "trn_current",
+  "agent_ref": "",
+  "attempt": 8,
+  "runtime_revision_ref": "rrev_current",
+  "runtime_revision_version": 0,
+  "runtime_revision_digest": "",
+  "image_reference": "",
+  "image_manifest_digest": "",
+  "environment_image": {
+    "reference": "",
+    "digest": ""
+  },
+  "role_runtime_contract_revision": 0,
+  "role_runtime_contract_sha256": "",
+  "role_definition_ref": "",
+  "runtime_profile_ref": "",
+  "runtime_profile_revision": "",
+  "instruction_ref": "",
+  "instruction_digest": "",
+  "prompt_template_ref": "",
+  "prompt_template_digest": "",
+  "prompt_materialization_digest": "",
+  "prompt_service_template_revision": "prompt-service-v3",
+  "prompt_service_template_digest": "2171a7122a22f95a99ffdc7d3d71af828280d6614e314a2452e899a6b3ee36fc",
+  "prompt_target_kind": "AGENT",
+  "assistant_scope": "",
+  "instructions": "{\"revision\":\"prompt-service-v3\",\"locale\":\"ru\",\"sections\":[{\"source\":\"USER_TEMPLATE\",\"content\":\"Owner instructions\"},{\"source\":\"PLATFORM\",\"slot\":\"PURPOSE\",\"content\":\"Exact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\nExact full task: кириллица {{not a template}}.\\n\"},{\"source\":\"PLATFORM\",\"slot\":\"INPUT\",\"content\":\"{\\\"task_data\\\":\\\"preserved\\\"}\"},{\"source\":\"PLATFORM\",\"slot\":\"CONSTRAINTS\",\"content\":\"Доступны только эффективные возможности и предоставленные ресурсы.\\n\\nServer-owned platform instructions (not authority):\\nRef: pinst_source_conformity_v1_ru\\nRevision: platform-source-conformity-v1\\nDigest: 6d0134419a5a5c2543cf1a10244faa93c25e0d4cb3aece94084ed0906481e9ea\\n\\nУтверждённые требования владельца и продуктовые, архитектурные, доменные и интерфейсные контракты определяют границы задачи. До проектирования или реализации прочитай точные применимые канонические источники до требуемого EOF и проверь их version/digest pins. Архитектурный артефакт является предложением дизайна, а не новым авторитетным бизнес-правилом или разрешением отменить эти источники. Сохраняй scope и gates владельца; реальное противоречие фиксируй штатным результатом роли и решением Manager/владельца, никогда не выдумывай сообщение от имени пользователя.\\nПри реализации интерфейса платформы Kodex автоматические обновления отображаемых сущностей, включая финансовые проекции provider, используют общий WebSocket transport и защищённые authoritative projections. REST предназначен для bootstrap, смены scope и явно поддержанных detail/search/pagination/recovery, а не для периодического таймера обновления вместо realtime. Новый event не нужен, если существующий event доказанно покрывает полный сценарий producer→projection→consumer; это не разрешает REST polling. Отсутствующий producer/consumer path является пробелом реализации, а не исключением из утверждённого transport contract. Сохраняй exact eligibility, порядок version/cursor, безопасные payloads и правила recovery. Это правило transport интерфейса Kodex не назначает transport внешним пользовательским бизнес-проектам: следуй их собственным утверждённым источникам и контрактам.\\nЭти инструкции не выдают capabilities, сетевой доступ или SYSTEM/PROJECT authority. Используй только текущие effective capabilities и предоставленные ресурсы. Исторические артефакты и проекты решений не изменяют утверждённые требования источников или текущие полномочия исполнения; не выдумывай содержимое источника, semantic PASS или завершённую реализацию.\\nЕсли текущий runtime явно предоставляет разрешённый GH_TOKEN и допускает Git-доступ к назначенному репозиторию через HTTPS github.com, обычный Git не использует этот токен автоматически. Для уже разрешённой Git-операции используй существующий GitHub CLI только как per-command credential helper: git -c credential.https://github.com.helper= -c 'credential.https://github.com.helper=!/usr/local/bin/gh auth git-credential' \\u003cразрешённые аргументы Git\\u003e. Запускай helper только через credential protocol самого Git; никогда не вызывай его напрямую и не печатай его вывод. Helper читает существующий разрешённый credential окружения; не помещай токен в аргументы, URL, Git-конфигурацию, логи, артефакты или сообщения, не сохраняй credentials и не меняй host/global Git-конфигурацию. Не выполняй login, refresh, ротацию секрета, расширение прав или сети. gh auth status не является обязательным gate для иначе разрешённой Git-операции: он делает дополнительные API-чтения авторизации, которые могут не входить в текущую сетевую policy, тогда как сам credential helper не делает API-запросов. Один отказ status не доказывает невалидность injected token. Отчитывайся о фактической разрешённой операции и её exact независимом readback; при denied, failed или unknown outcome сохраняй отказ и останавливайся по существующей effect/retry policy. Эта инструкция не выдаёт операции, repository scope или capabilities и никогда не разрешает replay ранее отклонённого эффекта или эффекта с неизвестным исходом.\\n\\nПри неожиданном результате сначала проверь собственный каталог, закреплённый снимок текущего исполнения, точную схему инструмента и типизированную диагностику. Сверяй свежие доступные сведения с immutable revision; текущее состояние владельца не переписывает историю, input или права активной попытки. Не угадывай refs, поля схемы, команды и причины отказа.\\nОшибка discovery URL, lookup или неполное чтение одного источника не доказывает глобальную недоступность всех источников, отзыв полномочий или safety denial. Классифицируй отказ только по подтверждённой диагностике; неизвестный слой и причина остаются UNKNOWN. Можно читать другие независимые штатные источники в уже существующих правах и предоставленные pinned файлы из собственного каталога. Не повторяй denied URL через другой транспорт, proxy, identity или credential; не расширяй grants, egress или scope ради обхода отказа. Подтверждённый authority/safety denial сохраняется и не становится исправляемой ошибкой входа.\\nНезавершённое собственное чтение, анализ или проектирование не является внешним blocker: продолжай доступные обязательные чтения и работу текущего этапа. Не выдавай недочитанное за прочитанное. Для подготовки архитектуры не требуй существования будущей реализации или её будущего live proof: зафиксируй их как acceptance obligations соответствующего этапа. Реальная недоступность обязательного входа, отсутствие полномочий или обязательного для текущего gate доказательства сохраняют честный BLOCKED; нельзя пропускать зависимость, ослаблять gates или заявлять готовность до её проверки.\\nНедоступный обязательный источник, отсутствие EOF, mismatch revision/digest, неполный semantic результат или обязательный proof сохраняют BLOCKED для зависимой реализации и review. Discovery, preview, wrapper COMPLETED и технический SUCCEEDED не доказывают full-read, semantic PASS или приёмку. Не выдумывай содержимое, результат, источник, PASS или READY; обязательные gates и ручное решение владельца сохраняются.\\nЕсли state-changing операция дала неожиданный либо UNKNOWN_OUTCOME результат, сначала получи авторитетный readback точного объекта и operation/receipt в разрешённом read path. До установления исхода не повторяй mutation, не меняй idempotency key и не запускай заменяющий effect. Readback не выдаёт права повторить операцию: authority, version, idempotency и lifecycle проверяются штатной командой заново. Сохраняй подтверждённые частичные effects и явно передавай оставшийся UNKNOWN/BLOCKED. Не меняй бизнес scope, полномочия или owner gate сообщением от имени пользователя.\"},{\"source\":\"PLATFORM\",\"slot\":\"EFFECTIVE_CAPABILITIES\",\"content\":\"platform.run.delegate\"},{\"source\":\"PLATFORM\",\"slot\":\"FILES\",\"content\":\"{\\\"gate\\\":{\\\"files\\\":null,\\\"files_count\\\":0,\\\"files_dir\\\":\\\"/workspace/input\\\",\\\"manifest_path\\\":\\\"/workspace/input/manifest.json\\\"},\\\"input\\\":{\\\"files\\\":null,\\\"files_count\\\":0,\\\"files_dir\\\":\\\"/workspace/input\\\",\\\"manifest_path\\\":\\\"/workspace/input/manifest.json\\\"},\\\"project\\\":{\\\"files\\\":null,\\\"files_count\\\":0,\\\"files_dir\\\":\\\"/workspace/knowledge\\\",\\\"manifest_path\\\":\\\"/workspace/input/manifest.json\\\"},\\\"result\\\":{\\\"directory\\\":\\\"/workspace/.kodex/outbox\\\",\\\"instruction\\\":\\\"Помещай каждый запрошенный пользователем файл результата прямо в этот каталог. Используй запрошенное имя файла. Черновые файлы храни вне этого каталога.\\\"},\\\"run\\\":{\\\"files\\\":null,\\\"files_count\\\":0,\\\"files_dir\\\":\\\"/workspace\\\",\\\"manifest_path\\\":\\\"/workspace/input/manifest.json\\\"},\\\"session\\\":{\\\"files\\\":null,\\\"files_count\\\":0,\\\"files_dir\\\":\\\"/workspace/input\\\",\\\"manifest_path\\\":\\\"/workspace/input/manifest.json\\\"},\\\"workflow\\\":{\\\"files\\\":null,\\\"files_count\\\":1,\\\"files_dir\\\":\\\"/workspace\\\",\\\"manifest_path\\\":\\\"/workspace/input/manifest.json\\\"}}\"},{\"source\":\"PLATFORM\",\"slot\":\"TOOLS\",\"content\":\"[]\"},{\"source\":\"PLATFORM\",\"slot\":\"INTEGRATIONS\",\"content\":\"{\\\"items\\\":[],\\\"summary\\\":\\\"\\\"}\"}]}",
+  "task": "Exact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\nExact full task: кириллица {{not a template}}.\n",
+  "session_context": [
+    {
+      "role": "USER",
+      "content": "Exact original USER"
+    },
+    {
+      "role": "ASSISTANT",
+      "content": "Exact previous result"
+    },
+    {
+      "role": "USER",
+      "content": "{\"revision\":\"prompt-service-v3\",\"locale\":\"ru\",\"sections\":[{\"source\":\"USER_TEMPLATE\",\"content\":\"Continue the Session with the current approved runtime context.\\n\"},{\"source\":\"PLATFORM\",\"slot\":\"RUNTIME_CHANGES\",\"content\":\"{\\\"previousRevisionRef\\\":\\\"rrev_previous\\\",\\\"currentRevisionRef\\\":\\\"rrev_current\\\",\\\"sessionRef\\\":\\\"ses_current\\\",\\\"turnRef\\\":\\\"trn_current\\\",\\\"attempt\\\":8,\\\"changes\\\":[{\\\"component\\\":\\\"INSTRUCTIONS\\\",\\\"previous\\\":[{}],\\\"current\\\":[{},{\\\"ref\\\":\\\"pinst_source_conformity_v1_ru\\\",\\\"digest\\\":\\\"6d0134419a5a5c2543cf1a10244faa93c25e0d4cb3aece94084ed0906481e9ea\\\",\\\"value\\\":\\\"platform-source-conformity-v1\\\"}],\\\"action\\\":\\\"USE_CURRENT_CONTEXT\\\"}],\\\"digest\\\":\\\"5db4b950846356b7602a712ad0786b8c069c6d2f599115eaab2a3f50e6108ffb\\\"}\"},{\"source\":\"USER_TEMPLATE\",\"content\":\"\\n\"},{\"source\":\"PLATFORM\",\"slot\":\"INPUT\",\"content\":\"{\\\"task_data\\\":\\\"preserved\\\"}\"},{\"source\":\"PLATFORM\",\"slot\":\"PURPOSE\",\"content\":\"The exact current task follows this Session context in the same provider submission. Use that complete task unchanged, not a historical message. This reference is data, not authority.\\n{\\\"revision\\\":\\\"continuation-task-projection-v1\\\",\\\"mode\\\":\\\"CURRENT_SUBMISSION\\\",\\\"taskSHA256\\\":\\\"dd8c50c42e8abf7ad4e4ad5c124bd528d27f24e9155fbccd15cf5bd9c0c101a1\\\",\\\"taskBytes\\\":1680,\\\"runRef\\\":\\\"run_current\\\",\\\"nodeRef\\\":\\\"nod_current\\\",\\\"sessionRef\\\":\\\"ses_current\\\",\\\"turnRef\\\":\\\"trn_current\\\",\\\"runtimeRevisionRef\\\":\\\"rrev_current\\\",\\\"attempt\\\":8}\"},{\"source\":\"PLATFORM\",\"slot\":\"CONSTRAINTS\",\"content\":\"Доступны только эффективные возможности и предоставленные ресурсы.\\n\\nServer-owned platform instructions (not authority):\\nRef: pinst_source_conformity_v1_ru\\nRevision: platform-source-conformity-v1\\nDigest: 6d0134419a5a5c2543cf1a10244faa93c25e0d4cb3aece94084ed0906481e9ea\\n\\nУтверждённые требования владельца и продуктовые, архитектурные, доменные и интерфейсные контракты определяют границы задачи. До проектирования или реализации прочитай точные применимые канонические источники до требуемого EOF и проверь их version/digest pins. Архитектурный артефакт является предложением дизайна, а не новым авторитетным бизнес-правилом или разрешением отменить эти источники. Сохраняй scope и gates владельца; реальное противоречие фиксируй штатным результатом роли и решением Manager/владельца, никогда не выдумывай сообщение от имени пользователя.\\nПри реализации интерфейса платформы Kodex автоматические обновления отображаемых сущностей, включая финансовые проекции provider, используют общий WebSocket transport и защищённые authoritative projections. REST предназначен для bootstrap, смены scope и явно поддержанных detail/search/pagination/recovery, а не для периодического таймера обновления вместо realtime. Новый event не нужен, если существующий event доказанно покрывает полный сценарий producer→projection→consumer; это не разрешает REST polling. Отсутствующий producer/consumer path является пробелом реализации, а не исключением из утверждённого transport contract. Сохраняй exact eligibility, порядок version/cursor, безопасные payloads и правила recovery. Это правило transport интерфейса Kodex не назначает transport внешним пользовательским бизнес-проектам: следуй их собственным утверждённым источникам и контрактам.\\nЭти инструкции не выдают capabilities, сетевой доступ или SYSTEM/PROJECT authority. Используй только текущие effective capabilities и предоставленные ресурсы. Исторические артефакты и проекты решений не изменяют утверждённые требования источников или текущие полномочия исполнения; не выдумывай содержимое источника, semantic PASS или завершённую реализацию.\\nЕсли текущий runtime явно предоставляет разрешённый GH_TOKEN и допускает Git-доступ к назначенному репозиторию через HTTPS github.com, обычный Git не использует этот токен автоматически. Для уже разрешённой Git-операции используй существующий GitHub CLI только как per-command credential helper: git -c credential.https://github.com.helper= -c 'credential.https://github.com.helper=!/usr/local/bin/gh auth git-credential' \\u003cразрешённые аргументы Git\\u003e. Запускай helper только через credential protocol самого Git; никогда не вызывай его напрямую и не печатай его вывод. Helper читает существующий разрешённый credential окружения; не помещай токен в аргументы, URL, Git-конфигурацию, логи, артефакты или сообщения, не сохраняй credentials и не меняй host/global Git-конфигурацию. Не выполняй login, refresh, ротацию секрета, расширение прав или сети. gh auth status не является обязательным gate для иначе разрешённой Git-операции: он делает дополнительные API-чтения авторизации, которые могут не входить в текущую сетевую policy, тогда как сам credential helper не делает API-запросов. Один отказ status не доказывает невалидность injected token. Отчитывайся о фактической разрешённой операции и её exact независимом readback; при denied, failed или unknown outcome сохраняй отказ и останавливайся по существующей effect/retry policy. Эта инструкция не выдаёт операции, repository scope или capabilities и никогда не разрешает replay ранее отклонённого эффекта или эффекта с неизвестным исходом.\\n\\nПри неожиданном результате сначала проверь собственный каталог, закреплённый снимок текущего исполнения, точную схему инструмента и типизированную диагностику. Сверяй свежие доступные сведения с immutable revision; текущее состояние владельца не переписывает историю, input или права активной попытки. Не угадывай refs, поля схемы, команды и причины отказа.\\nОшибка discovery URL, lookup или неполное чтение одного источника не доказывает глобальную недоступность всех источников, отзыв полномочий или safety denial. Классифицируй отказ только по подтверждённой диагностике; неизвестный слой и причина остаются UNKNOWN. Можно читать другие независимые штатные источники в уже существующих правах и предоставленные pinned файлы из собственного каталога. Не повторяй denied URL через другой транспорт, proxy, identity или credential; не расширяй grants, egress или scope ради обхода отказа. Подтверждённый authority/safety denial сохраняется и не становится исправляемой ошибкой входа.\\nНезавершённое собственное чтение, анализ или проектирование не является внешним blocker: продолжай доступные обязательные чтения и работу текущего этапа. Не выдавай недочитанное за прочитанное. Для подготовки архитектуры не требуй существования будущей реализации или её будущего live proof: зафиксируй их как acceptance obligations соответствующего этапа. Реальная недоступность обязательного входа, отсутствие полномочий или обязательного для текущего gate доказательства сохраняют честный BLOCKED; нельзя пропускать зависимость, ослаблять gates или заявлять готовность до её проверки.\\nНедоступный обязательный источник, отсутствие EOF, mismatch revision/digest, неполный semantic результат или обязательный proof сохраняют BLOCKED для зависимой реализации и review. Discovery, preview, wrapper COMPLETED и технический SUCCEEDED не доказывают full-read, semantic PASS или приёмку. Не выдумывай содержимое, результат, источник, PASS или READY; обязательные gates и ручное решение владельца сохраняются.\\nЕсли state-changing операция дала неожиданный либо UNKNOWN_OUTCOME результат, сначала получи авторитетный readback точного объекта и operation/receipt в разрешённом read path. До установления исхода не повторяй mutation, не меняй idempotency key и не запускай заменяющий effect. Readback не выдаёт права повторить операцию: authority, version, idempotency и lifecycle проверяются штатной командой заново. Сохраняй подтверждённые частичные effects и явно передавай оставшийся UNKNOWN/BLOCKED. Не меняй бизнес scope, полномочия или owner gate сообщением от имени пользователя.\"},{\"source\":\"PLATFORM\",\"slot\":\"EFFECTIVE_CAPABILITIES\",\"content\":\"platform.run.delegate\"},{\"source\":\"PLATFORM\",\"slot\":\"FILES\",\"content\":\"{\\\"gate\\\":{\\\"files\\\":null,\\\"files_count\\\":0,\\\"files_dir\\\":\\\"/workspace/input\\\",\\\"manifest_path\\\":\\\"/workspace/input/manifest.json\\\"},\\\"input\\\":{\\\"files\\\":null,\\\"files_count\\\":0,\\\"files_dir\\\":\\\"/workspace/input\\\",\\\"manifest_path\\\":\\\"/workspace/input/manifest.json\\\"},\\\"project\\\":{\\\"files\\\":null,\\\"files_count\\\":0,\\\"files_dir\\\":\\\"/workspace/knowledge\\\",\\\"manifest_path\\\":\\\"/workspace/input/manifest.json\\\"},\\\"result\\\":{\\\"directory\\\":\\\"/workspace/.kodex/outbox\\\",\\\"instruction\\\":\\\"Помещай каждый запрошенный пользователем файл результата прямо в этот каталог. Используй запрошенное имя файла. Черновые файлы храни вне этого каталога.\\\"},\\\"run\\\":{\\\"files\\\":null,\\\"files_count\\\":0,\\\"files_dir\\\":\\\"/workspace\\\",\\\"manifest_path\\\":\\\"/workspace/input/manifest.json\\\"},\\\"session\\\":{\\\"files\\\":null,\\\"files_count\\\":0,\\\"files_dir\\\":\\\"/workspace/input\\\",\\\"manifest_path\\\":\\\"/workspace/input/manifest.json\\\"},\\\"workflow\\\":{\\\"files\\\":null,\\\"files_count\\\":1,\\\"files_dir\\\":\\\"/workspace\\\",\\\"manifest_path\\\":\\\"/workspace/input/manifest.json\\\"}}\"},{\"source\":\"PLATFORM\",\"slot\":\"TOOLS\",\"content\":\"[]\"},{\"source\":\"PLATFORM\",\"slot\":\"INTEGRATIONS\",\"content\":\"{\\\"items\\\":[],\\\"summary\\\":\\\"\\\"}\"}]}"
+    }
+  ],
+  "capabilities": [
+    "platform.run.delegate"
+  ],
+  "provider": "",
+  "model": "",
+  "provider_account_ref": "",
+  "provider_credential_revision_ref": "",
+  "provider_credential_revision": 0,
+  "provider_credential_sha256": "",
+  "runtime_config_ref": "",
+  "runtime_config_version": 0,
+  "runtime_config_digest": "",
+  "provider_policy_ref": "",
+  "provider_policy_version": 0,
+  "provider_policy_digest": "",
+  "config_overlay_ref": "",
+  "config_overlay_version": 0,
+  "config_overlay_digest": "",
+  "config_overlay": "",
+  "effective_reasoning_effort": "",
+  "reasoning_mode": "",
+  "runtime_environment_ref": "",
+  "runtime_environment_version": 0,
+  "runtime_environment_digest": "",
+  "environment_binding_ref": "",
+  "environment_binding_version": 0,
+  "environment_binding_digest": "",
+  "environment_policy": {
+    "resources": {
+      "cpu_request_milli": 0,
+      "cpu_limit_milli": 0,
+      "memory_request_mib": 0,
+      "memory_limit_mib": 0,
+      "ephemeral_storage_request_mib": 0,
+      "ephemeral_storage_limit_mib": 0
+    },
+    "volumes": null,
+    "network": {
+      "deny_by_default": false,
+      "egress": null,
+      "web_access": {
+        "mode": "",
+        "rules": null
+      }
+    },
+    "kubernetes_access": {
+      "kind": "",
+      "namespace": ""
+    }
+  },
+  "workspace_policy": {
+    "revision": 0,
+    "root": "",
+    "rules": null,
+    "maximum_writable_bytes": 0,
+    "maximum_file_count": 0,
+    "digest": "",
+    "denial_reasons": null
+  },
+  "effective_kubernetes_access": {
+    "profile": {
+      "kind": "",
+      "namespace": ""
+    },
+    "service_account_name": "",
+    "rules": null,
+    "digest": ""
+  },
+  "codex_sandbox": "",
+  "codex_approval_policy": "",
+  "callback_url": "",
+  "callback_tls": {
+    "server_name": "",
+    "ca_file": "",
+    "certificate_file": "",
+    "private_key_file": ""
+  },
+  "execution_ticket_file": "",
+  "provider_auth_file": "",
+  "provider_auth_sha256_file": "",
+  "workspace_root": "",
+  "outbox_root": "",
+  "codex_home": ""
+}

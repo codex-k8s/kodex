@@ -59,6 +59,12 @@ typed stage, нормализованного domain kind и error class; SQLSTA
 первичного отказа, чтобы окончание retry budget не скрывало PostgreSQL или
 domain rejection. Sentinel tests включают вложенные ошибки и неизвестные поля.
 
+При отказе продления lease keeper, tracker и drain записывают закрытое
+наблюдение исходного RPC и request/parent context до собственного cleanup
+cancel. Точные trusted claim/execution pins различаются явно; отсутствующие
+координаты не выдумываются. Такой лог не доказывает отзыв lease или owner commit
+и не разрешает повтор, увеличение срока или продолжение исполнения.
+
 ## Общая библиотека
 
 Composition root читает shared telemetry env через `RuntimeConfigFromEnv`.
@@ -194,6 +200,12 @@ dependency объявлена обязательной конкретным эк
 7. обернуть технический HTTP mux общим middleware;
 8. при shutdown остановить servers, отменить и дождаться workers, затем
    выполнить flush traces и Sentry с независимыми bounded contexts.
+
+Созданный `Runtime.Logger` передаётся явно всем runtime-путям этого
+deployable. Наличие telemetry runtime не устанавливает глобальный `slog`
+logger: вызов package-level logger не доказывает JSON/trace контракт.
+Адресный тест использует настоящий shared logger, проверяет безопасные
+поля и trace identifiers без подмены глобального logger.
 
 Composition root принимает два явно различимых контекста по `GO-DOC-001`:
 

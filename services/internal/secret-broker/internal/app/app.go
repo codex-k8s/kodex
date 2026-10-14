@@ -79,6 +79,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 		controlplanev1.ProviderCredentialMaterializerService_MaterializeAPIKey_FullMethodName:                            "provider_api_key",
 		controlplanev1.ProviderCredentialMaterializerService_DiscardProviderCredentialMaterialization_FullMethodName:     "provider_discard",
 		controlplanev1.ProviderCredentialMaterializerService_CleanupProviderCredential_FullMethodName:                    "provider_cleanup",
+		controlplanev1.ProviderCredentialMaterializerService_RenewManagedProviderCredential_FullMethodName:               "provider_credential_renew",
+		controlplanev1.ProviderCredentialMaterializerService_ObserveManagedProviderCredentialRenewal_FullMethodName:      "provider_credential_renewal_observe",
 	}
 	metrics := sharedobservability.NewMetrics(metricsSubsystem, buildVersion, methods)
 	recoveryMetrics := recovery.NewMetrics()
@@ -171,6 +173,7 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	}
 	handler, err := transportgrpc.New(owner, store, reconciler, config.MaximumSecretBytes,
 		transportgrpc.WithProviderCredentialMaterializer(providerCredentials), transportgrpc.WithDraftCommands(drafts),
+		transportgrpc.WithProviderRenewalOwner(owner),
 		transportgrpc.WithCatalogLogger(logger))
 	if err != nil {
 		return err
@@ -258,6 +261,8 @@ func routeProtectedUnary(protected grpc.UnaryServerInterceptor) grpc.UnaryServer
 	return func(ctx context.Context, request any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		switch info.FullMethod {
 		case controlplanev1.ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_FullMethodName,
+			controlplanev1.ProviderCredentialMaterializerService_RenewManagedProviderCredential_FullMethodName,
+			controlplanev1.ProviderCredentialMaterializerService_ObserveManagedProviderCredentialRenewal_FullMethodName,
 			secretbrokerv1.SecretBrokerService_SaveSecretDraft_FullMethodName,
 			secretbrokerv1.SecretBrokerService_ValidateSecretDraft_FullMethodName,
 			secretbrokerv1.SecretBrokerService_PublishSecretDraft_FullMethodName,

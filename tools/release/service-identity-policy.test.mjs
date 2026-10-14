@@ -5,9 +5,36 @@ import { buildServicePolicy, bindingDigest } from "./service-identity-policy.mjs
 
 const source = JSON.parse(readFileSync(new URL("../../deploy/k8s/base/internal-rpc-authority-publisher/authority-policy.json",import.meta.url),"utf8"));
 const classification = JSON.parse(readFileSync(new URL("../../services/internal/control-plane/internal/app/service-identity-classification.json",import.meta.url),"utf8"));
+test("workflow catalog preserves leased source binding in local service registry",() => {
+  const operation="platform.runtime.execution.workflow.catalog";
+  const originals=source.policy.operation_bindings.filter(binding=>binding.operation_id===operation);
+  assert.equal(originals.length,1);
+  const original=originals[0];
+  assert.equal(original.full_method,"/controlplane.v1.RuntimeWorkService/GetExecutionWorkflowCatalog");
+  assert.equal(original.permission,operation);
+  assert.deepEqual(original.authority_sources,["DOMAIN_STATE"]);
+  const records=classification.operations.filter(record=>record.operation_id===operation);
+  assert.equal(records.length,1);
+  assert.equal(records[0].actor_mode,"SERVICE_OWNER_RESOLVED");
+  assert.equal(records[0].source_binding_sha256,bindingDigest(original));
+  const local=buildServicePolicy(source,classification).bindings.filter(binding=>binding.operation_id===operation);
+  assert.deepEqual(local,[{
+    caller_spiffe_id:"spiffe://kodex.local/ns/kodex-system/sa/runtime-controller",
+    full_method:original.full_method,operation_id:operation,permission:operation,
+    actor_mode:"SERVICE_OWNER_RESOLVED",project_required:false,
+  }]);
+  const generated=JSON.parse(readFileSync(new URL("../../services/internal/control-plane/internal/app/service-identity-policy.json",import.meta.url),"utf8"));
+  assert.deepEqual(generated.bindings.filter(binding=>binding.operation_id===operation),local);
+  const missing=structuredClone(classification);
+  missing.operations=missing.operations.filter(record=>record.operation_id!==operation);
+  assert.throws(()=>buildServicePolicy(source,missing),/service operation classification drift/);
+  const changed=structuredClone(source);
+  changed.policy.operation_bindings.find(binding=>binding.operation_id===operation).request_profile.version="REQUIRED";
+  assert.throws(()=>buildServicePolicy(changed,classification),/service operation classification drift/);
+});
 test("control-plane policy preserves exact bindings and excludes STT continuation",() => {
   const policy=buildServicePolicy(source,classification);
-  assert.equal(policy.bindings.length,406);
+  assert.equal(policy.bindings.length,415);
   for (const operation of ["platform.role-images.admission.recovery-terminal.get", "platform.role-images.supply-work.get"]) {
     const bindings=policy.bindings.filter(value=>value.operation_id===operation);
     assert.equal(bindings.length,1);assert.equal(bindings[0].caller_spiffe_id,"spiffe://kodex.local/ns/kodex-system/sa/image-admission-controller");
@@ -20,7 +47,7 @@ test("control-plane policy preserves exact bindings and excludes STT continuatio
     assert.equal(bindings[0].actor_mode,"SERVICE_OWNER_RESOLVED");
     assert.equal(bindings[0].project_required,false);
   }
-  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,315);
+  assert.equal(policy.bindings.filter(b=>b.actor_mode==="USER_CREDENTIAL_REQUIRED").length,319);
   for (const operation of [
     "platform.organization.role-images.recipes.list",
     "platform.organization.role-images.recipes.get",
@@ -52,7 +79,7 @@ test("control-plane policy preserves exact bindings and excludes STT continuatio
   }
   assert.equal(policy.bindings.some(b=>b.operation_id==="platform.stt.policy.resolve"),false);
   for(const binding of policy.bindings) {
-    const original=source.policy.operation_bindings.find(b=>b.operation_id===binding.operation_id);
+    const original=source.policy.operation_bindings.find(b=>b.operation_id===binding.operation_id) ?? classification.operations.find(r=>r.operation_id===binding.operation_id).trusted_binding;
     for(const key of ["caller_spiffe_id","full_method","permission","project_required"]) assert.deepEqual(binding[key],original[key]);
   }
 });
@@ -69,4 +96,21 @@ test("delegation cannot be downgraded even with updated source digest",()=>{
   record.actor_mode="SERVICE_OWNER_RESOLVED";
   record.source_binding_sha256=bindingDigest(source.policy.operation_bindings.find(b=>b.operation_id===record.operation_id));
   assert.throws(()=>buildServicePolicy(source,copy));
+});
+test("trusted controller READ pair cannot expand methods, caller or protected authority",()=>{
+ for (const mutate of [
+   b=>b.full_method="/controlplane.v1.RoleImageService/CompleteImageAdmission",
+   b=>b.caller_spiffe_id="spiffe://kodex.local/ns/kodex-system/sa/control-api-gateway",
+   b=>b.project_required=true,
+   b=>b.permission="expanded.permission",
+   b=>b.actor_mode="USER_CREDENTIAL_REQUIRED",
+   b=>b.extra="unknown",
+ ]) {
+   const copy=structuredClone(classification), record=copy.operations.find(r=>r.trusted_binding);
+   mutate(record.trusted_binding); record.trusted_binding_sha256=bindingDigest(record.trusted_binding);
+   assert.throws(()=>buildServicePolicy(source,copy),/trusted controller read classification rejected/);
+ }
+ const changed=structuredClone(source), record=classification.operations.find(r=>r.trusted_binding);
+ changed.policy.operation_bindings.push({...record.trusted_binding,target_spiffe_id:source.policy.operation_bindings.find(b=>b.target_workload_id==="control-plane").target_spiffe_id});
+ assert.throws(()=>buildServicePolicy(changed,classification),/protected authority/);
 });

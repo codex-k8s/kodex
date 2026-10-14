@@ -27,7 +27,8 @@ vi.mock("@/shared/config/runtime", () => ({
     oidc: { authority: "https://identity.example.test/realms/kodex" },
   }),
 }));
-vi.mock("@/shared/api/problem", () => ({
+vi.mock("@/shared/api/problem", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/shared/api/problem")>()),
   asProblem: (error: unknown) => error,
   resetUnauthorizedNotification: vi.fn(),
   unwrap: async (request: Promise<unknown>) => await request,
@@ -502,17 +503,52 @@ describe("BFF session lifecycle", () => {
     expect(window.location.href).not.toContain("code=");
     expect(values.has("kodex.session.authorization-state")).toBe(false);
   });
+  test("отсутствующий pending callback требует нового входа без callback POST", async () => {
+    callback();
+    values.delete("kodex.session.authorization-state");
+    const session = useSessionStore();
+    await expect(session.completeLogin()).rejects.toMatchObject({
+      status: 401,
+      code: "UNAUTHENTICATED",
+      kind: "unauthorized",
+      retryable: false,
+    });
+    expect(session.problem?.kind).toBe("unauthorized");
+    expect(api.completeOwnerAuthorization).not.toHaveBeenCalled();
+    expect(api.beginOwnerAuthorization).not.toHaveBeenCalled();
+  });
+  test.each([
+    { kind: "unauthorized", code: "UNAUTHENTICATED", retryable: false },
+    { kind: "unknown", code: "UNKNOWN", retryable: false },
+  ])(
+    "не повторяет non-retryable callback и сохраняет исходный $kind",
+    async (error) => {
+      callback();
+      api.completeOwnerAuthorization.mockRejectedValueOnce(error);
+      const session = useSessionStore();
+      await expect(session.completeLogin()).rejects.toBe(error);
+      expect(session.problem).toEqual(error);
+      expect(api.completeOwnerAuthorization).toHaveBeenCalledOnce();
+      expect(api.beginOwnerAuthorization).not.toHaveBeenCalled();
+    },
+  );
   test("отклоняет чужой state и повторный callback", async () => {
     callback();
     values.set("kodex.session.authorization-state", "b".repeat(43));
     const session = useSessionStore();
-    await expect(session.completeLogin()).rejects.toThrow("does not match");
+    await expect(session.completeLogin()).rejects.toMatchObject({
+      code: "UNAUTHENTICATED",
+      kind: "unauthorized",
+      retryable: false,
+    });
     expect(api.completeOwnerAuthorization).not.toHaveBeenCalled();
     callback();
     await session.completeLogin();
-    await expect(session.completeLogin()).rejects.toThrow(
-      "callback is invalid",
-    );
+    await expect(session.completeLogin()).rejects.toMatchObject({
+      code: "UNAUTHENTICATED",
+      kind: "unauthorized",
+      retryable: false,
+    });
     expect(api.completeOwnerAuthorization).toHaveBeenCalledOnce();
   });
   test("связывает fresh Reveal purpose с точным секретом и расходует local intent один раз", async () => {

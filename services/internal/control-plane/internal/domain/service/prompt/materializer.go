@@ -35,6 +35,7 @@ type Diagnostic struct {
 
 // Snapshot содержит только проверенные server-owned значения одной immutable revision.
 type Snapshot struct {
+	AssistantCore                                         *entity.PromptAssistantCore `json:",omitempty"`
 	ExtraTemplates                                        []entity.PromptUserTemplate `json:",omitempty"`
 	ContextPin                                            entity.PromptContextPin
 	UnavailableVariables                                  map[string]string
@@ -72,6 +73,7 @@ func FromSnapshot(snapshot entity.PromptMaterializationSnapshot) Snapshot {
 		values[SemanticSlot(name)] = value
 	}
 	return Snapshot{ServiceTemplateRevision: snapshot.ServiceTemplateRevision, Locale: snapshot.Locale, SemanticValues: values,
+		AssistantCore:        snapshot.AssistantCore,
 		ExtraTemplates:       snapshot.ExtraTemplates,
 		ContextPin:           snapshot.ContextPin,
 		UnavailableVariables: snapshot.UnavailableVariables,

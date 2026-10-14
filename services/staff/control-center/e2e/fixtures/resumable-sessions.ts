@@ -1,16 +1,19 @@
 import { expect, type Page } from "@playwright/test";
 import type {
   Agent,
+  Run,
   PromptVariableCatalogInput,
   PromptTemplatePreviewInput,
   PromptTemplatePreview,
 } from "../../src/shared/api/generated/openapi/types.gen";
 import { syntheticCatalogRun } from "./catalog-run";
+import { type SyntheticSnapshotInstaller } from "./runs-catalog";
 
 export async function checkResumableSessions(
   page: Page,
   projectRef: string,
   capture: () => Promise<void>,
+  installSnapshot: SyntheticSnapshotInstaller,
 ) {
   let stale = false;
   let targetReads = 0;
@@ -33,11 +36,11 @@ export async function checkResumableSessions(
     updatedAt: "2026-09-05T00:00:00Z",
     nextActions: ["OPEN", "LAUNCH"],
   };
-  const run = (index: number) => ({
+  const run = (index: number): Run => ({
     ...syntheticCatalogRun(index, projectRef),
     title: `Продолжение ${String(index)}`,
     state: "SUCCEEDED" as const,
-    nextActions: ["OPEN", "ADD_TURN"] as const,
+    nextActions: ["OPEN", "ADD_TURN"],
     target: {
       type: "AGENT" as const,
       ref: agent.ref,
@@ -45,21 +48,47 @@ export async function checkResumableSessions(
       version: 1,
     },
   });
+  installSnapshot("AGENT", (scope) =>
+    scope === projectRef
+      ? structuredClone({ catalog: { agents: [agent], page: {} } })
+      : undefined,
+  );
+  installSnapshot("RUN", (scope) =>
+    scope === undefined || scope === projectRef
+      ? structuredClone({
+          catalog: {
+            runs: stale
+              ? [run(50)]
+              : Array.from({ length: 30 }, (_, index) => run(index)),
+            page: {},
+            gates: [],
+            gatesPage: {},
+          },
+        })
+      : undefined,
+  );
   await page.route("**/api/v1/runs?**", async (route) => {
     const params = new URL(route.request().url()).searchParams;
     if (params.get("resumableSessionsOnly") !== "true") return route.fallback();
     expect(params.getAll("states")).toEqual([]);
-    expect(params.get("pageSize")).toBe("30");
+    const size = Number(params.get("pageSize"));
+    expect(Number.isSafeInteger(size)).toBe(true);
+    expect(size).toBeGreaterThanOrEqual(6);
+    expect(size).toBeLessThanOrEqual(100);
     if (params.get("targetRef")) {
       expect(params.get("projectRef")).toBe(projectRef);
       expect(params.get("targetType")).toBe("AGENT");
       expect(params.get("targetRef")).toBe(agent.ref);
       targetReads++;
-      await route.fulfill({ json: { items: [run(70)], total: 1 } });
-      return;
+      if (params.get("query")) {
+        expect(params.get("query")).toBe("Продолжение 70");
+        await route.fulfill({ json: { items: [run(70)], total: 1 } });
+        return;
+      }
     }
     if (params.get("pageToken")) {
       expect(params.get("pageToken")).toBe("session-snapshot");
+      expect(stale).toBe(false);
       stale = true;
       await route.fulfill({
         status: 412,
@@ -75,7 +104,9 @@ export async function checkResumableSessions(
       json: {
         items: stale
           ? [run(50)]
-          : Array.from({ length: 30 }, (_, index) => run(index)),
+          : Array.from({ length: Math.min(30, size) }, (_, index) =>
+              run(index),
+            ),
         total: stale ? 1 : 43,
         ...(stale ? {} : { nextPageToken: "session-snapshot" }),
       },
@@ -83,7 +114,7 @@ export async function checkResumableSessions(
   });
   await page.goto("/");
   const card = page.locator('.home-result-catalog[data-kind="SESSION"]');
-  await expect(card.locator("header > span")).toHaveText("43");
+  await expect(card.locator("header > span")).toHaveText("30");
   expect(
     await card
       .locator(".home-result-rows")
@@ -93,24 +124,13 @@ export async function checkResumableSessions(
     element.scrollTop = element.scrollHeight;
     element.dispatchEvent(new Event("scroll"));
   });
-  await expect(card.locator("header > span")).toHaveText("1");
-  await expect(card.locator(".home-result-row")).toHaveCount(1);
+  await expect
+    .poll(() => card.locator(".home-result-row").count())
+    .toBeGreaterThan(5);
+  expect(stale).toBe(false);
   await expect(
-    card.getByRole("link", { name: "Продолжение 50", exact: true }),
-  ).toBeVisible();
-  await card
-    .getByRole("button", { name: "Развернуть список", exact: true })
-    .click();
-  await expect(
-    page
-      .getByRole("dialog", { name: "Продолжить сессию", exact: true })
-      .locator(".home-result-row"),
-  ).toHaveCount(1);
-  await page
-    .getByRole("dialog")
-    .last()
-    .getByRole("button", { name: "Закрыть", exact: true })
-    .click();
+    card.getByRole("link", { name: "Все запуски", exact: true }),
+  ).toHaveAttribute("href", "/runs");
   await page.route(`**/api/v1/agents/${agent.ref}`, (route) =>
     route.fulfill({ json: agent }),
   );
@@ -147,6 +167,25 @@ export async function checkResumableSessions(
   await expect(continuation).toBeEnabled();
   await continuation.check();
   await expect(page.locator(".new-run-session-picker__overlay")).toBeVisible();
+  const picker = page.locator(".new-run-session-picker__overlay");
+  // Автодогрузка может уже завершить412/rejoin до первого пользовательского scroll.
+  await expect.poll(() => targetReads).toBeGreaterThan(0);
+  expect(
+    await picker
+      .locator(".async-picker__options")
+      .evaluate((element) => element.clientHeight),
+  ).toBeLessThanOrEqual(552);
+  await picker.locator(".async-picker__options").evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  await expect.poll(() => stale).toBe(true);
+  expect(targetReads).toBeGreaterThanOrEqual(2);
+  await expect(picker.locator(".async-picker__option")).toHaveCount(1);
+  await expect(
+    picker.getByText("Продолжение 50", { exact: true }),
+  ).toBeVisible();
+  await picker.getByRole("combobox").fill("Продолжение 70");
   await expect(
     page
       .locator(".new-run-session-picker__overlay")
@@ -167,11 +206,13 @@ export async function checkResumableSessions(
     "Продолжение 70",
   );
   await expect.poll(() => attachmentReads.includes(run(70).ref)).toBe(true);
-  await expect(
-    page.getByText("Не всем исполнителям предоставлена возможность «Файлы».", {
-      exact: true,
-    }),
-  ).toBeVisible();
+  const attachmentNotice = page
+    .getByRole("region", { name: /^Входные файлы/ })
+    .getByRole("paragraph");
+  await expect(attachmentNotice).toHaveText(
+    "Не всем исполнителям предоставлена возможность «Файлы».",
+  );
+  await expect(attachmentNotice).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Выбрать файлы", exact: true }),
   ).toBeDisabled();
@@ -247,6 +288,12 @@ export async function checkResumableSessions(
       exact: true,
     })
     .click();
+  const previewDialog = page.getByRole("dialog", {
+    name: "Просмотреть контекст исполнения",
+    exact: true,
+  });
+  await expect(previewDialog).toBeVisible();
+  await previewDialog.locator(".prompt-target-preview__raw > summary").click();
   await expect(
     page.getByText("Сообщение Session: Продолжить проверку", { exact: true }),
   ).toBeVisible();
@@ -257,9 +304,18 @@ export async function checkResumableSessions(
   await expect(
     page.locator('.launch-summary button[type="submit"]'),
   ).toBeEnabled();
+  await previewDialog
+    .getByRole("button", { name: "Закрыть", exact: true })
+    .click();
+  await expect(
+    page.locator(".prompt-target-preview .status-badge"),
+  ).toBeVisible();
   await page
     .getByRole("textbox", { name: /^Задание\s/ })
     .fill("Продолжить с новым вводом");
+  await expect(
+    page.locator(".prompt-target-preview .status-badge"),
+  ).toHaveCount(0);
   await expect(
     page.getByText("Сообщение Session: Продолжить проверку", { exact: true }),
   ).toHaveCount(0);
@@ -272,12 +328,17 @@ export async function checkResumableSessions(
       exact: true,
     })
     .click();
+  await expect(previewDialog).toBeVisible();
+  await previewDialog.locator(".prompt-target-preview__raw > summary").click();
   await expect(
     page.getByText("Сообщение Session: Продолжить с новым вводом", {
       exact: true,
     }),
   ).toBeVisible();
   expect(previews).toBe(2);
+  await previewDialog
+    .getByRole("button", { name: "Закрыть", exact: true })
+    .click();
   await expect(
     page.locator('.launch-summary button[type="submit"]'),
   ).toBeEnabled();

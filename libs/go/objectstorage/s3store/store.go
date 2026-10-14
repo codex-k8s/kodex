@@ -86,6 +86,10 @@ func (store *Store) Put(ctx context.Context, input objectstorage.PutInput) (obje
 		ContentLength: aws.Int64(input.SizeBytes), ContentType: aws.String(input.MediaType),
 		ChecksumSHA256: aws.String(base64.StdEncoding.EncodeToString(checksum)),
 		Metadata:       map[string]string{digestMetadataKey: input.Digest},
+	}, func(options *s3.Options) {
+		// Один immutable write не повторяется SDK при неизвестном исходе.
+		// Readback и следующие owner attempts имеют отдельный lifecycle.
+		options.RetryMaxAttempts = 1
 	})
 	if err != nil {
 		return objectstorage.Receipt{}, objectstorage.ErrUnavailable

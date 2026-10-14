@@ -12,8 +12,8 @@ import (
 var ErrLostClaim = errors.New("artifact retention claim is lost")
 
 type Claim struct {
-	ArtifactID, ArtifactRef, ObjectKey, ObjectVersion string
-	Generation                                        int64
+	ArtifactID, ArtifactRef, RevisionID, ObjectKey, ObjectVersion string
+	Generation                                                    int64
 }
 
 type Repository interface {
@@ -48,7 +48,7 @@ func (processor *Processor) Process(
 	processed := 0
 	var resultErr error
 	for _, claim := range claims {
-		if claim.ArtifactID == "" || claim.ObjectKey == "" || claim.ObjectVersion == "" || claim.Generation < 1 {
+		if claim.ArtifactID == "" || claim.RevisionID == "" || claim.ObjectKey == "" || claim.ObjectVersion == "" || claim.Generation < 1 {
 			resultErr = errors.Join(resultErr, errors.New("artifact retention claim is incomplete"))
 			continue
 		}

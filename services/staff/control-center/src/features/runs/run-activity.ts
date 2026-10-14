@@ -8,6 +8,7 @@ import type {
 } from "@/shared/api/generated/openapi/types.gen";
 import { assertRunOwner } from "@/features/runs/run-owner";
 import { serverMessageKey } from "@/shared/ui/server-message";
+import { serverTokenTranslations } from "@/shared/ui/server-message-catalog";
 
 export type PresentedRunEvent = RunEvent & {
   displaySummary: string;
@@ -36,7 +37,11 @@ export interface RunActivityItem {
   eventType?: RunEvent["type"];
   serviceProgressCode?: "WORKLOAD_SCHEDULED" | "MODEL_REQUEST_RUNNING";
   serviceCancellationCode?: RunEvent["serviceCode"];
+  serviceCompletionCode?: "ROOT_PROCESS_COMPLETED";
+  executionNodeType?: RunNode["type"];
+  executionSafeErrorCode?: RunNode["safeErrorCode"];
   integrationInvocationRef?: string;
+  genericIntegrationFailure?: boolean;
 }
 
 // Только exact машинная квитанция успешной подготовки плана, не его описание.
@@ -64,6 +69,22 @@ function successfulIntegrationInvocationRef(
 ): string | undefined {
   const receipt = integrationToolReceipt(tool);
   return receipt?.state === "SUCCEEDED" ? receipt.invocationRef : undefined;
+}
+
+function failedIntegrationInvocationRef(
+  tool: NonNullable<RunActivityItem["toolCall"]>,
+): string | undefined {
+  const receipt = integrationToolReceipt(tool);
+  return receipt?.state === "FAILED" ? receipt.invocationRef : undefined;
+}
+
+function genericIntegrationFailureSummary(value: string | undefined): boolean {
+  return (
+    value === "i18n:INTEGRATION_ACTION_FAILED" ||
+    serverTokenTranslations.INTEGRATION_ACTION_FAILED.some(
+      (translation) => translation === value,
+    )
+  );
 }
 
 type IntegrationReceiptState =
@@ -186,6 +207,29 @@ export function executionKey(
   ]);
 }
 
+// Root stream связывает child execution только через авторитетный owner graph.
+export function isGraphChildExecutionBound(
+  event: RunEvent,
+  context: ActivityContext,
+): boolean {
+  const candidates = context.nodes?.filter(
+    (node) => node.ref === event.execution?.nodeRef,
+  );
+  const node = candidates?.[0];
+  return Boolean(
+    executionKey(event.execution) &&
+    context.graphRootRunRef &&
+    event.runRef === context.graphRootRunRef &&
+    event.execution?.runRef !== context.graphRootRunRef &&
+    candidates?.length === 1 &&
+    node?.type === "AGENT_EXECUTION" &&
+    node.runRef === event.execution?.runRef &&
+    node.turnRef === event.execution.turnRef &&
+    node.attempt === event.execution.attempt &&
+    context.nodes?.some((parent) => parent.childRunRefs.includes(node.runRef)),
+  );
+}
+
 export function buildRunTranscriptItems(
   events: readonly RunEvent[],
   context: ActivityContext = {},
@@ -257,20 +301,7 @@ export function buildRunTranscriptItems(
     );
     const graphExecutionNode = graphExecutionNodes?.[0];
     // Root stream хранит события дочернего run: lineage берётся из owner graph.
-    const graphChildBound = Boolean(
-      scope &&
-      context.graphRootRunRef &&
-      event.runRef === context.graphRootRunRef &&
-      event.execution?.runRef !== context.graphRootRunRef &&
-      graphExecutionNodes?.length === 1 &&
-      graphExecutionNode?.type === "AGENT_EXECUTION" &&
-      graphExecutionNode.runRef === event.execution?.runRef &&
-      graphExecutionNode.turnRef === event.execution.turnRef &&
-      graphExecutionNode.attempt === event.execution.attempt &&
-      context.nodes?.some((node) =>
-        node.childRunRefs.includes(graphExecutionNode.runRef),
-      ),
-    );
+    const graphChildBound = isGraphChildExecutionBound(event, context);
     const integrationBound = Boolean(
       scope &&
       event.execution &&
@@ -279,6 +310,20 @@ export function buildRunTranscriptItems(
       event.run.ref === event.runRef &&
       Number.isSafeInteger(event.run.version) &&
       event.run.version >= 1,
+    );
+    const executionNode = event.node ?? graphExecutionNode;
+    const executionNodeBound = Boolean(
+      scope &&
+      event.execution &&
+      (event.runRef === event.execution.runRef || graphChildBound) &&
+      event.nodeRef === event.execution.nodeRef &&
+      event.run.ref === event.runRef &&
+      Number.isSafeInteger(event.run.version) &&
+      event.run.version >= 1 &&
+      executionNode?.ref === event.execution.nodeRef &&
+      executionNode.runRef === event.execution.runRef &&
+      executionNode.turnRef === event.execution.turnRef &&
+      executionNode.attempt === event.execution.attempt,
     );
     const item: RunActivityItem = {
       id: previous?.id ?? key ?? event.ref,
@@ -326,13 +371,55 @@ export function buildRunTranscriptItems(
       serviceCancellationCode: transcriptServiceCancellationCode(
         event.serviceCode,
       ),
+      executionNodeType: executionNodeBound ? executionNode?.type : undefined,
+      executionSafeErrorCode: executionNodeBound
+        ? executionNode?.safeErrorCode
+        : undefined,
+      serviceCompletionCode:
+        executionNodeBound &&
+        executionNode?.type === "ROOT_PROCESS" &&
+        event.type === "NODE_STATE_CHANGED" &&
+        event.messageKind === "STATE" &&
+        event.serviceCode === "ROOT_PROCESS_COMPLETED" &&
+        event.nodeState === executionNode.state &&
+        ["SUCCEEDED", "FAILED", "CANCELLED"].includes(event.nodeState ?? "") &&
+        !event.message &&
+        !event.toolCall &&
+        !event.artifact &&
+        !event.artifactRef &&
+        !event.gate &&
+        !event.gateRef &&
+        !event.edge &&
+        !event.edgeRef &&
+        !event.incident &&
+        !event.progress?.trim()
+          ? "ROOT_PROCESS_COMPLETED"
+          : undefined,
       integrationInvocationRef: integrationBound
         ? tool
-          ? successfulIntegrationInvocationRef(tool)
+          ? (successfulIntegrationInvocationRef(tool) ??
+            failedIntegrationInvocationRef(tool))
           : !event.message && !event.progress?.trim()
             ? event.integrationInvocationRef
             : undefined
         : undefined,
+      genericIntegrationFailure:
+        integrationBound &&
+        event.type === "TURN_PROGRESS" &&
+        event.messageKind === "INTERMEDIATE_MESSAGE" &&
+        event.runState === "RUNNING" &&
+        event.nodeState === "RUNNING" &&
+        genericIntegrationFailureSummary(event.summary) &&
+        !event.message &&
+        !event.progress?.trim() &&
+        !event.toolCall &&
+        !event.artifact &&
+        !event.artifactRef &&
+        !event.gate &&
+        !event.gateRef &&
+        !event.edge &&
+        !event.edgeRef &&
+        !event.incident,
     };
     if (previousPosition !== undefined) items[previousPosition] = item;
     else {
@@ -754,6 +841,7 @@ export function presentRunTranscriptItems(
   closedExecutionKeys: readonly string[] = [],
 ): PresentedTranscriptItem[] {
   const successfulInvocations = new Set<string>();
+  const failedInvocations = new Map<string, Set<string>>();
   for (const item of items) {
     const scope = executionKey(item.execution);
     if (
@@ -772,6 +860,26 @@ export function presentRunTranscriptItems(
       successfulInvocations.add(
         JSON.stringify([scope, item.integrationInvocationRef]),
       );
+    if (
+      scope &&
+      !item.historical &&
+      item.kind === "tool" &&
+      !item.phase &&
+      item.eventType === "TOOL_CALL_RECORDED" &&
+      item.messageKind === "TOOL_CALL" &&
+      item.integrationInvocationRef &&
+      item.toolCall &&
+      /^tcl_[A-Za-z0-9_-]{8,124}$/.test(item.toolCall.ref) &&
+      Number.isSafeInteger(item.toolCall.revision) &&
+      (item.toolCall.revision ?? 0) >= 2 &&
+      failedIntegrationInvocationRef(item.toolCall) ===
+        item.integrationInvocationRef
+    ) {
+      const key = JSON.stringify([scope, item.integrationInvocationRef]);
+      const calls = failedInvocations.get(key) ?? new Set<string>();
+      calls.add(item.toolCall.ref);
+      failedInvocations.set(key, calls);
+    }
   }
   const services = new Map<
     string,
@@ -821,6 +929,62 @@ export function presentRunTranscriptItems(
     ];
   });
   const finals = new Map<string, PresentedTranscriptItem[]>();
+  // Типизированный итог агрегата не становится вторым ответом того же хода.
+  // Разные nodeRef сохраняются внутри истории, а остальные pins совпадают точно.
+  const foldedRoots = new Set<string>();
+  for (const root of presented) {
+    const history = root.serviceHistory;
+    if (
+      root.working ||
+      root.progress?.trim() ||
+      root.executionNodeType !== "ROOT_PROCESS" ||
+      root.serviceCompletionCode !== "ROOT_PROCESS_COMPLETED" ||
+      !history ||
+      history.some(
+        (step) =>
+          terminalTranscriptStates.has(step.state ?? "") &&
+          step.serviceCompletionCode !== "ROOT_PROCESS_COMPLETED",
+      ) ||
+      !root.execution
+    )
+      continue;
+    const targets = presented.filter(
+      (entry) =>
+        entry.executionNodeType === "AGENT_EXECUTION" &&
+        !entry.historical &&
+        !entry.working &&
+        entry.state === root.state &&
+        (root.executionSafeErrorCode === undefined ||
+          entry.executionSafeErrorCode === root.executionSafeErrorCode) &&
+        terminalTranscriptStates.has(entry.state ?? "") &&
+        entry.execution &&
+        entry.execution.runRef === root.execution?.runRef &&
+        entry.execution.sessionRef === root.execution.sessionRef &&
+        entry.execution.turnRef === root.execution.turnRef &&
+        entry.execution.turnNumber === root.execution.turnNumber &&
+        entry.execution.attempt === root.execution.attempt &&
+        (entry.phase === "FINAL" ||
+          entry.serviceHistory?.some(
+            (step) =>
+              step.eventType === "TURN_COMPLETED" &&
+              step.messageKind === "FINAL_MESSAGE",
+          )),
+    );
+    const target = targets.length === 1 ? targets[0] : undefined;
+    if (!target) continue;
+    const combined = [
+      ...(target.serviceHistory ?? target.completedServiceHistory ?? []),
+      ...history,
+    ].sort(
+      (left, right) =>
+        Date.parse(left.occurredAt) - Date.parse(right.occurredAt) ||
+        (left.sequence ?? 0) - (right.sequence ?? 0) ||
+        left.id.localeCompare(right.id),
+    );
+    if (target.serviceHistory) target.serviceHistory = combined;
+    else target.completedServiceHistory = combined;
+    foldedRoots.add(root.id);
+  }
   for (const item of presented) {
     const key = executionKey(item.execution);
     if (!key || item.historical || item.phase !== "FINAL") continue;
@@ -846,6 +1010,7 @@ export function presentRunTranscriptItems(
   }
   return presented
     .filter((item) => {
+      if (foldedRoots.has(item.id)) return false;
       if (hidden.has(item.id)) return false;
       const scope = executionKey(item.execution);
       // Квитанция инструмента уже показывает этот exact успешный результат.
@@ -866,6 +1031,20 @@ export function presentRunTranscriptItems(
         successfulInvocations.has(
           JSON.stringify([scope, item.integrationInvocationRef]),
         )
+      )
+        return false;
+      // Только generic повтор owner outcome того же exact вызова. Квитанция
+      // FAILED остаётся видимой; иная причина, terminal и ambiguity сохраняются.
+      if (
+        scope &&
+        !item.historical &&
+        item.kind === "system" &&
+        item.genericIntegrationFailure === true &&
+        genericIntegrationFailureSummary(item.summary) &&
+        item.integrationInvocationRef &&
+        failedInvocations.get(
+          JSON.stringify([scope, item.integrationInvocationRef]),
+        )?.size === 1
       )
         return false;
       // До FINAL пустая successful квитанция не образует отдельный пузырь.

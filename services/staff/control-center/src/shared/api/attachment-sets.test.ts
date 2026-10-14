@@ -92,6 +92,7 @@ function attachmentSet(purpose: AttachmentSet["purpose"]): AttachmentSet {
 function artifact(): Artifact {
   return {
     ref: "artifact_organization",
+    currentRevisionRef: "arv_fixture_organization",
     version: 1,
     fileName: "context.txt",
     mediaType: "text/plain",

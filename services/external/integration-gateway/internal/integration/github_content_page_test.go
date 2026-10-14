@@ -195,7 +195,7 @@ func TestGitHubContentPagesRejectInvalidInput(t *testing.T) {
 }
 
 func TestGitHubContentPagesLargeSourcePreservesPinsAndDeliveryBudget(t *testing.T) {
-	for _, size := range []int{536156, maximumGitHubContentSourceBytes} {
+	for _, size := range []int{536156, maximumGitHubInlineContentBytes} {
 		t.Run(strconv.Itoa(size), func(t *testing.T) {
 			content := strings.Repeat("x", size)
 			file := githubPageFixtureFile(content, "docs/operations/large-source.md")

@@ -162,7 +162,7 @@ export function runNodeExecutionLabels(
       assertRunOwner(run, organizationRef);
       labels[node.ref] = "EMPLOYEE";
     } catch {
-      // Неизвестная принадлежность сохраняет нейтральную подпись сессии.
+      // Неизвестная принадлежность не подтверждает личность исполнителя.
     }
   }
   return labels;
@@ -172,9 +172,7 @@ export function runNodePresentationKey(
   label: "ASSISTANT" | "EMPLOYEE" | "SESSION" | undefined,
   type: RunNode["type"],
 ): string {
-  return label === "ASSISTANT"
+  return type === "AGENT_EXECUTION" && label === "ASSISTANT"
     ? "runs.assistantNode"
-    : label === "SESSION"
-      ? "runs.sessionNode"
-      : `runs.nodeTypes.${type}`;
+    : `runs.nodeTypes.${type}`;
 }

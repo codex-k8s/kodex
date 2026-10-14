@@ -7,7 +7,7 @@ SELECT EXISTS (
     JOIN control_plane.run_nodes node
       ON node.root_run_id = run.root_run_id
     WHERE item.artifact_id = @artifact_id::uuid
-      AND item.artifact_version = @artifact_version
+      AND @artifact_version::bigint > 0
       AND node.type = 'AGENT_EXECUTION'
       AND node.state = 'QUEUED'
 
@@ -20,7 +20,7 @@ SELECT EXISTS (
     JOIN control_plane.run_nodes node
       ON node.turn_id = turn.id
     WHERE item.artifact_id = @artifact_id::uuid
-      AND item.artifact_version = @artifact_version
+      AND @artifact_version::bigint > 0
       AND node.type = 'AGENT_EXECUTION'
       AND node.state = 'QUEUED'
 );

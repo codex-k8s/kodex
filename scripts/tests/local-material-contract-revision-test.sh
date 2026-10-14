@@ -18,14 +18,6 @@ kubeconfig="$temporary_directory/kubeconfig"
 mkdir -p "$fixture_root/tools/dev" "$fixture_root/tools/install" "$fixture_root/tools/deploy" \
   "$state_directory/provider-accounts/default" "$state_directory/cache" "$cluster_state" "$fake_bin"
 cp "$source_script" "$fixture_root/tools/dev/reconcile-local-material.sh"
-cat >"$fixture_root/tools/install/draft-key-recovery.py" <<'PY'
-import os,pathlib,sys
-assert sys.argv[1:] == ['preserve','--context','fixture-local']
-state = pathlib.Path(os.environ['KODEX_TEST_CLUSTER_STATE'])
-if (state/'key-recovery-blocked').exists():
-    raise SystemExit(1)
-(state/'key-recovery-checked').touch()
-PY
 for path in \
   tools/install/secret-projections.json \
   tools/install/generate-material.sh \
@@ -62,7 +54,8 @@ case "$*" in
   'get namespace/kodex-system') [[ -f "${KODEX_TEST_CLUSTER_STATE:?}/kodex-system" ]] ;;
   'get namespace/identity') [[ -f "${KODEX_TEST_CLUSTER_STATE:?}/identity" ]] ;;
   'delete namespace kodex-system identity --wait=false')
-    rm -f "${KODEX_TEST_CLUSTER_STATE:?}/kodex-system" "${KODEX_TEST_CLUSTER_STATE:?}/identity"
+    touch "${KODEX_TEST_CLUSTER_STATE:?}/forbidden-delete"
+    exit 1
     ;;
   *) printf 'unexpected kubectl call: %s\n' "$*" >&2; exit 1 ;;
 esac
@@ -92,6 +85,28 @@ create_material_fixture() {
   done
 }
 
+# Повторный reconcile не получает полномочий удалять state или менять ключи.
+fixture_fingerprint() {
+  find "$state_directory" "$cluster_state" -type f -print0 | sort -z | xargs -0 sha256sum
+  find "$state_directory" "$cluster_state" -printf '%p %y %m\n' | LC_ALL=C sort
+}
+
+assert_preserved_rejection() {
+  local before after
+  before=$(fixture_fingerprint | sha256sum)
+  if "$fixture_root/tools/dev/reconcile-local-material.sh" --context fixture-local \
+    --state-directory "$state_directory" --mode reconcile \
+    >"$temporary_directory/rejected.stdout" 2>"$temporary_directory/rejected.stderr"; then
+    fail 'ineligible existing material was accepted'
+  fi
+  [[ ! -s "$temporary_directory/rejected.stdout" ]] || fail 'rejection returned a material action'
+  grep -Fxq 'Kodex local material reconciliation failed: material revision differs; preserve existing state and request an explicit recovery decision' \
+    "$temporary_directory/rejected.stderr" || fail 'explicit recovery rejection is absent'
+  after=$(fixture_fingerprint | sha256sum)
+  [[ "$before" == "$after" && ! -e "$cluster_state/forbidden-delete" ]] ||
+    fail 'rejected reconciliation changed existing state'
+}
+
 action=$("$fixture_root/tools/dev/reconcile-local-material.sh" \
   --context fixture-local --state-directory "$state_directory" --mode reconcile)
 [[ "$action" == create ]] || fail 'fresh state did not request material creation'
@@ -110,43 +125,39 @@ action=$("$fixture_root/tools/dev/reconcile-local-material.sh" \
   --context fixture-local --state-directory "$state_directory" --mode reconcile)
 [[ "$action" == reuse ]] || fail 'matching revision was not reused'
 
+# Повреждённый сертификат не разрешает автоматическую замену существующего материала.
+cp "$state_directory/material/node-pull/client.crt" "$temporary_directory/preserved.crt"
+printf 'invalid certificate\n' >"$state_directory/material/node-pull/client.crt"
+assert_preserved_rejection
+cp "$temporary_directory/preserved.crt" "$state_directory/material/node-pull/client.crt"
+
 printf '%s\n' '{"metadata":{"labels":{"app.kubernetes.io/part-of":"kodex","kodex.dev/environment":"staging","kodex.dev/local-profile":"hot-reload"}}}' \
   >"$cluster_state/kodex-system"
 printf '%s\n' '{"metadata":{"labels":{"app.kubernetes.io/part-of":"kodex","kodex.dev/capability":"identity"}}}' \
   >"$cluster_state/identity"
 printf 'radar\n' >"$cluster_state/radar-dev"
 printf 'changed\n' >>"$fixture_root/tools/install/secret-projections.json"
-touch "$cluster_state/key-recovery-blocked"
-if "$fixture_root/tools/dev/reconcile-local-material.sh" --context fixture-local \
-  --state-directory "$state_directory" --mode reconcile >/dev/null 2>&1; then
-  fail 'missing retained keys did not block material refresh'
-fi
-[[ -f "$cluster_state/kodex-system" && -f "$cluster_state/identity" && -d "$state_directory/material" ]] ||
-  fail 'failed key preservation destroyed namespace or material'
-rm "$cluster_state/key-recovery-blocked"
-action=$("$fixture_root/tools/dev/reconcile-local-material.sh" \
-  --context fixture-local --state-directory "$state_directory" --mode reconcile)
-[[ "$action" == recreate ]] || fail 'contract drift did not request recreation'
-[[ ! -e "$state_directory/material" && ! -e "$marker" ]] ||
-  fail 'stale material or marker survived reconciliation'
-[[ ! -e "$cluster_state/kodex-system" && ! -e "$cluster_state/identity" ]] ||
-  fail 'local application namespaces survived reconciliation'
+assert_preserved_rejection
+[[ -d "$state_directory/material" && -f "$marker" &&
+  -f "$cluster_state/kodex-system" && -f "$cluster_state/identity" ]] ||
+  fail 'contract drift removed material or application namespaces'
 [[ -e "$cluster_state/radar-dev" ]] || fail 'unrelated radar-dev state was touched'
 for preserved in credentials.env provider-accounts/default/auth.json cache/preserved; do
   [[ -f "$state_directory/$preserved" ]] || fail "preserved local state was removed: $preserved"
 done
 
-create_material_fixture
-"$fixture_root/tools/dev/reconcile-local-material.sh" \
-  --context fixture-local --state-directory "$state_directory" --mode commit >/dev/null
 printf '%s\n' '{"metadata":{"labels":{"app.kubernetes.io/part-of":"unmanaged"}}}' \
   >"$cluster_state/kodex-system"
 printf 'changed-again\n' >>"$fixture_root/tools/install/secret-projections.json"
+unmanaged_before=$(fixture_fingerprint | sha256sum)
 if "$fixture_root/tools/dev/reconcile-local-material.sh" \
   --context fixture-local --state-directory "$state_directory" --mode reconcile >/dev/null 2>&1; then
   fail 'unmanaged namespace was accepted for deletion'
 fi
 [[ -e "$cluster_state/kodex-system" ]] || fail 'unmanaged namespace was deleted'
+[[ ! -e "$cluster_state/forbidden-delete" ]] || fail 'namespace deletion was attempted'
+[[ "$unmanaged_before" == "$(fixture_fingerprint | sha256sum)" ]] ||
+  fail 'unmanaged namespace rejection changed existing state'
 
 reconcile_line=$(grep -n 'reconcile-local-material.sh.*--context' "$repository_root/dev.sh" | head -1 | cut -d: -f1)
 namespace_line=$(grep -n '^kubectl create namespace kodex-system' "$repository_root/dev.sh" | cut -d: -f1)

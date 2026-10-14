@@ -5,7 +5,11 @@ import { createI18n } from "vue-i18n";
 import { captureSetupState } from "@/test-utils/setup-harness";
 import Component from "./RuntimeEnvironmentToolsEditor.vue";
 
-function renderTools(disabled: boolean, locale = "ru") {
+function renderTools(
+  disabled: boolean,
+  locale = "ru",
+  availability: { inventoryAvailable?: boolean; loading?: boolean } = {},
+) {
   const tools = Array.from({ length: 38 }, (_, index) => ({
     name: `Инструмент ${String(index)}`,
     command: `tool-${String(index)}`,
@@ -14,10 +18,14 @@ function renderTools(disabled: boolean, locale = "ru") {
   }));
   const props = {
     tools,
-    catalog: tools.map((tool) => ({ name: tool.command, version: "1.2.3" })),
+    catalog:
+      availability.inventoryAvailable === false
+        ? []
+        : tools.map((tool) => ({ name: tool.command, version: "1.2.3" })),
     disabled,
     imageSelected: true,
-    inventoryAvailable: true,
+    inventoryAvailable: availability.inventoryAvailable ?? true,
+    loading: availability.loading ?? false,
   };
   const app = createSSRApp({ render: () => h(Component, props) });
   app.use(
@@ -29,6 +37,8 @@ function renderTools(disabled: boolean, locale = "ru") {
           common: {
             edit: locale === "ru" ? "Изменить" : "Edit",
             description: "Описание",
+            selectedCount: "Выбрано: {count}",
+            loading: "Загрузка",
           },
           runtime: {
             verifiedTools: "Проверенные инструменты",
@@ -37,6 +47,7 @@ function renderTools(disabled: boolean, locale = "ru") {
             toolDisplayName: "Название",
             toolCommand: "Команда",
             toolUsageHint: "Подсказка",
+            imageInventoryUnavailable: "Каталог недоступен",
           },
         },
       },
@@ -44,6 +55,20 @@ function renderTools(disabled: boolean, locale = "ru") {
   );
   return { html: renderToString(app), tools };
 }
+
+it.each([{ inventoryAvailable: false }, { loading: true }])(
+  "не показывает выдуманный знаменатель при неизвестном каталоге %j",
+  async (availability) => {
+    const { html, tools } = renderTools(false, "ru", availability);
+    const before = structuredClone(tools);
+    const rendered = await html;
+    expect(rendered).toContain("Выбрано: 38");
+    expect(rendered).not.toContain("38 / 0");
+    expect(rendered).not.toContain("38 / 38");
+    expect(rendered).not.toContain("<article");
+    expect(tools).toEqual(before);
+  },
+);
 
 it.each(["ru", "en"])(
   "сохраняет все 38 выбранных инструментов, прячет все поля под индивидуальное раскрытие (%s)",

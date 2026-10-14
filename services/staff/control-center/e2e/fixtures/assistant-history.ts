@@ -1,13 +1,22 @@
 import { expect, type Page } from "@playwright/test";
-import type { AssistantConversation } from "../../src/shared/api/generated/openapi/types.gen";
+import type {
+  AssistantConversation,
+  SystemAssistant,
+} from "../../src/shared/api/generated/openapi/types.gen";
+import {
+  scopedSyntheticSnapshot,
+  type SyntheticSnapshotInstaller,
+} from "./runs-catalog";
 export async function checkAssistantHistory(
   page: Page,
   projectRef: string,
+  assistant: SystemAssistant,
+  installSnapshot: SyntheticSnapshotInstaller,
 ): Promise<void> {
   const conversation: AssistantConversation = {
     ref: "cnv_recent",
     assistantScope: "SYSTEM",
-    assistantRef: "ast_system_assistant",
+    assistantRef: assistant.ref,
     state: "ACTIVE",
     projectRef,
     version: 1,
@@ -35,6 +44,16 @@ export async function checkAssistantHistory(
   const searches: { query: string; state: string; cursor: string | null }[] =
     [];
   let archives = 0;
+  installSnapshot(
+    "SYSTEM_ASSISTANT",
+    scopedSyntheticSnapshot(projectRef, () => ({
+      assistant: { assistant },
+      conversations: {
+        conversations: [conversation],
+        page: { nextPageToken: "history_next" },
+      },
+    })),
+  );
   await page.route(
     "**/api/v1/assistant-conversations/cnv_older/archive",
     async (route) => {
@@ -47,10 +66,14 @@ export async function checkAssistantHistory(
       await route.fulfill({ json: older, headers: { ETag: '"2"' } });
     },
   );
-  await page.route("**/api/v1/assistant-conversations*", async (route) => {
+  await page.route("**/api/v1/assistant-conversations?**", async (route) => {
     const query = new URL(route.request().url()).searchParams;
     expect(query.get("projectRef")).toBe(projectRef);
-    expect(query.get("pageSize")).toBe("40");
+    const size = Number(query.get("pageSize"));
+    expect(Number.isSafeInteger(size)).toBe(true);
+    expect(size).toBeGreaterThanOrEqual(6);
+    expect(size).toBeLessThanOrEqual(100);
+    expect(query.get("assistantScope")).toBe("SYSTEM");
     const cursor = query.get("pageToken");
     const text = query.get("query") ?? "";
     const state = query.get("state") ?? "ACTIVE";
@@ -74,6 +97,7 @@ export async function checkAssistantHistory(
         : { items: [conversation], nextPageToken: "history_next" },
     });
   });
+  await page.goto(`/projects/${projectRef}/files`);
   await page
     .getByRole("button", { name: "Открыть Kodex", exact: true })
     .click();
@@ -95,15 +119,16 @@ export async function checkAssistantHistory(
   await expect(dialog).toHaveAttribute("data-conversation-ref", "cnv_older");
   const composer = dialog.locator(".assistant-composer textarea");
   await composer.fill("Несохранённый текст");
-  let closeWarning = "";
-  page.once("dialog", async (prompt) => {
-    closeWarning = prompt.message();
-    await prompt.dismiss();
-  });
   await composer.press("Escape");
+  const confirmation = page
+    .getByRole("dialog")
+    .filter({ has: page.locator(".confirmation-dialog") });
+  await expect(confirmation).toContainText("неотправленным сообщением");
+  await confirmation
+    .getByRole("button", { name: "Отмена", exact: true })
+    .click();
   await expect(dialog).toBeVisible();
   await expect(composer).toHaveValue("Несохранённый текст");
-  expect(closeWarning).toContain("неотправленным сообщением");
   await composer.fill("");
   if (mobile)
     await dialog
@@ -124,9 +149,12 @@ export async function checkAssistantHistory(
     cursor: null,
   });
   await history.getByRole("button", { name: /Предыдущий диалог/ }).click();
-  page.once("dialog", (prompt) => prompt.accept());
   await dialog
-    .getByRole("button", { name: "Архивировать диалог", exact: true })
+    .getByRole("button", { name: "Удалить диалог", exact: true })
+    .click();
+  await expect(confirmation).toContainText("Переместить диалог в корзину?");
+  await confirmation
+    .getByRole("button", { name: "Удалить диалог", exact: true })
     .click();
   await expect.poll(() => archives).toBe(1);
   await expect(dialog).not.toHaveAttribute(
@@ -151,7 +179,7 @@ export async function checkAssistantHistory(
   await history.getByRole("button", { name: /Предыдущий диалог/ }).click();
   await expect(dialog).toHaveAttribute("data-conversation-ref", "cnv_older");
   await expect(
-    dialog.getByRole("button", { name: "Архивировать диалог", exact: true }),
+    dialog.getByRole("button", { name: "Удалить диалог", exact: true }),
   ).toHaveCount(0);
   await expect(dialog.locator(".assistant-composer textarea")).toBeDisabled();
   await dialog

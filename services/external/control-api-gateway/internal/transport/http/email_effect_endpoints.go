@@ -88,9 +88,9 @@ func (server *Server) ReconcileEmailEffect(w http.ResponseWriter, r *http.Reques
 
 func emailReconciliationOutcome(value generated.EmailReconciliationOutcome) (controlplanev1.EmailEffectOutcome, bool) {
 	switch value {
-	case generated.EmailReconciliationOutcomeEFFECTCONFIRMED:
+	case generated.EFFECTCONFIRMED:
 		return controlplanev1.EmailEffectOutcome_EMAIL_EFFECT_OUTCOME_EFFECT_CONFIRMED, true
-	case generated.EmailReconciliationOutcomeNOEFFECTCONFIRMED:
+	case generated.NOEFFECTCONFIRMED:
 		return controlplanev1.EmailEffectOutcome_EMAIL_EFFECT_OUTCOME_NO_EFFECT_CONFIRMED, true
 	default:
 		return controlplanev1.EmailEffectOutcome_EMAIL_EFFECT_OUTCOME_UNSPECIFIED, false

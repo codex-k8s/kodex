@@ -45,11 +45,11 @@ WITH projects AS (
                 source.id,source.project_id,source.owner_id,source.related_ids,@evaluated_at,false)))
 ), knowledge_files AS (
     SELECT agent.ref AS agent_ref, project.ref AS project_ref, artifact.ref AS artifact_ref,
-           artifact.file_name, artifact.size_bytes, artifact.digest, artifact.created_at
+           artifact.file_name, artifact.size_bytes, artifact.digest, artifact.created_at,artifact.revision AS artifact_revision
     FROM control_plane.artifact_bindings binding
     JOIN control_plane.agents agent ON agent.ref=binding.target_ref
     JOIN projects project ON project.id=agent.project_id
-    JOIN control_plane.artifacts artifact ON artifact.id=binding.artifact_id
+    JOIN control_plane.artifact_history artifact ON artifact.id=binding.artifact_id AND artifact.revision_id=binding.revision_id
       AND artifact.organization_id=agent.organization_id AND artifact.project_id=agent.project_id
     WHERE binding.target_kind='KNOWLEDGE' AND agent.organization_id=@organization_id::uuid
       AND agent.system_key IS NULL AND agent.state<>'ARCHIVED'
@@ -61,25 +61,25 @@ WITH projects AS (
            '/projects/' || binding.project_ref || '/agents/' || binding.agent_ref || '/' || binding.folder || '/' || binding.ref AS path,
            '/projects/' || binding.project_ref || '/agents/' || binding.agent_ref || '/' || binding.folder AS parent_path,
            binding.name,binding.kind,binding.kind='SKILL' AS directory,binding.project_ref,binding.entity_ref,''::text AS run_ref,
-           binding.size_bytes,binding.digest,binding.updated_at AS modified_at,'AGENT'::text AS access_kind,binding.agent_ref AS access_ref
+           binding.size_bytes,binding.digest,binding.updated_at AS modified_at,'AGENT'::text AS access_kind,binding.agent_ref AS access_ref,0::bigint AS artifact_revision
     FROM context_bindings binding
     UNION ALL
     SELECT 'dir:' || binding.agent_ref || ':' || binding.folder,
            '/projects/' || binding.project_ref || '/agents/' || binding.agent_ref || '/' || binding.folder,
            '/projects/' || binding.project_ref || '/agents/' || binding.agent_ref,
-           binding.folder,'DIRECTORY',true,binding.project_ref,'','',0,'',max(binding.updated_at),'AGENT',binding.agent_ref
+           binding.folder,'DIRECTORY',true,binding.project_ref,'','',0,'',max(binding.updated_at),'AGENT',binding.agent_ref,0::bigint
     FROM context_bindings binding GROUP BY binding.project_ref,binding.agent_ref,binding.folder
     UNION ALL
     SELECT 'knowledge-input:'||file.agent_ref||':'||file.artifact_ref,
            '/projects/'||file.project_ref||'/agents/'||file.agent_ref||'/workspace/inputs/'||file.artifact_ref,
            '/projects/'||file.project_ref||'/agents/'||file.agent_ref||'/workspace/inputs',
-           file.file_name,'INPUT',false,file.project_ref,file.artifact_ref,'',file.size_bytes,file.digest,file.created_at,'ARTIFACT',file.artifact_ref
+           file.file_name,'INPUT',false,file.project_ref,file.artifact_ref,'',file.size_bytes,file.digest,file.created_at,'ARTIFACT',file.artifact_ref,file.artifact_revision
     FROM knowledge_files file
     UNION ALL
     SELECT 'dir:'||file.agent_ref||':'||directory.name,
            '/projects/'||file.project_ref||'/agents/'||file.agent_ref||'/'||directory.name,
            '/projects/'||file.project_ref||'/agents/'||file.agent_ref||CASE WHEN directory.name='workspace' THEN '' ELSE '/workspace' END,
-           CASE WHEN directory.name='workspace' THEN 'workspace' ELSE 'inputs' END,'DIRECTORY',true,file.project_ref,'','',0,'',max(file.created_at),'AGENT',file.agent_ref
+           CASE WHEN directory.name='workspace' THEN 'workspace' ELSE 'inputs' END,'DIRECTORY',true,file.project_ref,'','',0,'',max(file.created_at),'AGENT',file.agent_ref,0::bigint
     FROM knowledge_files file CROSS JOIN (VALUES ('workspace'),('workspace/inputs')) directory(name)
     GROUP BY file.project_ref,file.agent_ref,directory.name
     UNION ALL
@@ -87,18 +87,18 @@ WITH projects AS (
            '/projects' AS parent_path, project.name AS name, 'PROJECT' AS kind, true AS directory,
            project.ref AS project_ref, project.ref AS entity_ref, '' AS run_ref,
            0::bigint AS size_bytes, '' AS digest, project.updated_at AS modified_at,
-           'PROJECT'::text AS access_kind, project.ref AS access_ref
+           'PROJECT'::text AS access_kind, project.ref AS access_ref,0::bigint
     FROM projects AS project
     UNION ALL
     SELECT 'dir:' || project.ref || ':' || directory.name,
            '/projects/' || project.ref || '/' || directory.name,
            '/projects/' || project.ref, directory.name, 'DIRECTORY', true,
-           project.ref, '', '', 0, '', project.updated_at, 'PROJECT', project.ref
+           project.ref, '', '', 0, '', project.updated_at, 'PROJECT', project.ref,0::bigint
     FROM projects AS project CROSS JOIN (VALUES ('runs'),('skills'),('memories'),('files')) directory(name)
     UNION ALL
     SELECT 'skill:' || bundle.ref, '/projects/' || project.ref || '/skills/' || bundle.ref,
            '/projects/' || project.ref || '/skills', revision.name, 'SKILL', true,
-           project.ref, bundle.ref, '', 0, revision.digest, bundle.updated_at, 'PROJECT', project.ref
+           project.ref, bundle.ref, '', 0, revision.digest, bundle.updated_at, 'PROJECT', project.ref,0::bigint
     FROM control_plane.skill_bundles bundle
     JOIN projects project ON project.id=bundle.project_id
     JOIN control_plane.skill_bundle_revisions revision ON revision.id=COALESCE(bundle.draft_revision_id,bundle.current_revision_id)
@@ -117,7 +117,7 @@ WITH projects AS (
            project.ref, memory.ref, COALESCE(source.ref,''), octet_length(revision.summary)::bigint,
            revision.digest, memory.updated_at,
            CASE WHEN memory.agent_id IS NULL THEN 'PROJECT' ELSE 'AGENT' END,
-           COALESCE(agent.ref,project.ref)
+           COALESCE(agent.ref,project.ref),0::bigint
     FROM control_plane.memory_records memory
     JOIN projects project ON project.id=memory.project_id
     JOIN control_plane.memory_record_revisions revision ON revision.id=memory.current_revision_id
@@ -130,24 +130,24 @@ WITH projects AS (
     SELECT 'dir:' || project.ref || ':' || directory.name,
            '/projects/' || project.ref || '/' || directory.name,
            '/projects/' || project.ref || '', directory.name, 'DIRECTORY', true,
-           project.ref, '', '', 0, '', project.updated_at, 'PROJECT', project.ref
+           project.ref, '', '', 0, '', project.updated_at, 'PROJECT', project.ref,0::bigint
     FROM projects AS project CROSS JOIN (VALUES ('agents'),('workflows'),('automations'),('environments')) directory(name)
     UNION ALL
     SELECT 'agent:' || agent.ref, '/projects/' || project.ref || '/agents/' || agent.ref,
            '/projects/' || project.ref || '/agents', agent.name, 'AGENT', true,
-           project.ref, agent.ref, '', 0, '', agent.updated_at, 'AGENT', agent.ref
+           project.ref, agent.ref, '', 0, '', agent.updated_at, 'AGENT', agent.ref,0::bigint
     FROM control_plane.agents AS agent JOIN projects AS project ON project.id = agent.project_id
     WHERE agent.system_key IS NULL AND agent.state <> 'ARCHIVED'
     UNION ALL
     SELECT 'workflow:' || workflow.ref, '/projects/' || project.ref || '/workflows/' || workflow.ref,
            '/projects/' || project.ref || '/workflows', workflow.name, 'WORKFLOW', true,
-           project.ref, workflow.ref, '', 0, '', workflow.updated_at, 'WORKFLOW', workflow.ref
+           project.ref, workflow.ref, '', 0, '', workflow.updated_at, 'WORKFLOW', workflow.ref,0::bigint
     FROM control_plane.workflows AS workflow JOIN projects AS project ON project.id = workflow.project_id
     WHERE workflow.state <> 'ARCHIVED'
     UNION ALL
     SELECT 'run:' || run.ref, '/projects/' || project.ref || '/runs/' || run.ref,
            '/projects/' || project.ref || '/runs', run.title, 'RUN', true,
-           project.ref, run.ref, run.ref, 0, '', run.updated_at, 'RUN', run.ref
+           project.ref, run.ref, run.ref, 0, '', run.updated_at, 'RUN', run.ref,0::bigint
     FROM control_plane.runs AS run JOIN projects AS project ON project.id = run.project_id
     UNION ALL
     SELECT 'dir:' || run.ref || ':' || directory.name,
@@ -157,7 +157,7 @@ WITH projects AS (
            CASE WHEN directory.name = 'workspace' THEN '/projects/' || project.ref || '/runs/' || run.ref
                 ELSE '/projects/' || project.ref || '/runs/' || run.ref || '/workspace' END,
            directory.name, 'DIRECTORY', true, project.ref, run.ref, run.ref, 0, '', run.updated_at,
-           'RUN', run.ref
+           'RUN', run.ref,0::bigint
     FROM control_plane.runs AS run JOIN projects AS project ON project.id = run.project_id
     CROSS JOIN (VALUES ('workspace'),('inputs'),('results')) directory(name)
     UNION ALL
@@ -165,7 +165,7 @@ WITH projects AS (
            '/projects/' || project.ref || '/runs/' || run.ref || '/workspace/inputs/' || item.artifact_ref,
            '/projects/' || project.ref || '/runs/' || run.ref || '/workspace/inputs',
            item.file_name, 'INPUT', false, project.ref, item.artifact_ref, run.ref,
-           item.size_bytes, item.digest, artifact.created_at, 'ARTIFACT', item.artifact_ref
+           item.size_bytes, item.digest, artifact.created_at, 'ARTIFACT', item.artifact_ref,item.artifact_revision
     FROM control_plane.runs AS run
     JOIN projects AS project ON project.id = run.project_id
     JOIN control_plane.attachment_bindings AS binding
@@ -176,7 +176,7 @@ WITH projects AS (
     JOIN control_plane.attachment_sets AS attachment_set
       ON attachment_set.id = binding.attachment_set_id AND attachment_set.state = 'FINALIZED'
     JOIN control_plane.attachment_set_items AS item ON item.attachment_set_id = attachment_set.id
-    JOIN control_plane.artifacts AS artifact
+    JOIN control_plane.artifact_history AS artifact
       ON artifact.id = item.artifact_id
      AND artifact.organization_id = run.organization_id
      AND artifact.project_id = run.project_id
@@ -193,7 +193,7 @@ WITH projects AS (
            '/projects/' || project.ref || '/runs/' || run.ref || '/workspace/results/' || artifact.ref,
            '/projects/' || project.ref || '/runs/' || run.ref || '/workspace/results',
            artifact.file_name, 'RESULT', false, project.ref, artifact.ref, run.ref,
-           artifact.size_bytes, artifact.digest, artifact.created_at, 'ARTIFACT', artifact.ref
+           artifact.size_bytes, artifact.digest, artifact.created_at, 'ARTIFACT', artifact.ref,artifact.revision
     FROM control_plane.artifacts AS artifact
     JOIN control_plane.runs AS run ON run.id = artifact.run_id
     JOIN projects AS project ON project.id = artifact.project_id
@@ -204,7 +204,7 @@ WITH projects AS (
            '/projects/' || project.ref || '/files/' || artifact.ref,
            '/projects/' || project.ref || '/files', artifact.file_name, 'INPUT', false,
            project.ref, artifact.ref, '', artifact.size_bytes, artifact.digest, artifact.created_at,
-           'ARTIFACT', artifact.ref
+           'ARTIFACT', artifact.ref,artifact.revision
     FROM control_plane.artifacts AS artifact JOIN projects AS project ON project.id = artifact.project_id
     WHERE artifact.run_id IS NULL AND artifact.lifecycle_state = @lifecycle_state
     UNION ALL
@@ -212,7 +212,7 @@ WITH projects AS (
            '/projects/' || project.ref || '/environments/' || environment.ref,
            '/projects/' || project.ref || '/environments', environment.name, 'ENVIRONMENT', true,
            project.ref, environment.ref, '', 0, version.digest, version.created_at,
-           'PROJECT', project.ref
+           'PROJECT', project.ref,0::bigint
     FROM control_plane.runtime_environment_sets AS environment
     JOIN projects AS project ON project.id = environment.project_id
     JOIN control_plane.runtime_environment_versions AS version ON version.id = environment.current_version_id
@@ -221,7 +221,7 @@ WITH projects AS (
     SELECT 'automation:' || schedule.ref,
            '/projects/' || project.ref || '/automations/' || schedule.ref,
            '/projects/' || project.ref || '/automations', schedule.name, 'AUTOMATION', true,
-           project.ref, schedule.ref, '', 0, revision.digest, schedule.updated_at, 'SCHEDULE', schedule.ref
+           project.ref, schedule.ref, '', 0, revision.digest, schedule.updated_at, 'SCHEDULE', schedule.ref,0::bigint
     FROM control_plane.schedules schedule
     JOIN projects project ON project.id = schedule.project_id
     JOIN control_plane.schedule_revisions revision ON revision.id = schedule.current_revision_id
@@ -231,10 +231,10 @@ WITH projects AS (
            '/projects/' || project.ref || '/agents/' || agent.ref || '/avatar',
            '/projects/' || project.ref || '/agents/' || agent.ref,
            artifact.file_name, 'AVATAR', false, project.ref, artifact.ref, '', artifact.size_bytes,
-           artifact.digest, artifact.created_at, 'ARTIFACT', artifact.ref
+           artifact.digest, artifact.created_at, 'ARTIFACT', artifact.ref,artifact.revision
     FROM control_plane.agents agent
     JOIN projects project ON project.id = agent.project_id
-    JOIN control_plane.artifacts artifact ON artifact.id = agent.avatar_artifact_id
+    JOIN control_plane.artifact_history artifact ON artifact.id = agent.avatar_artifact_id
       AND artifact.organization_id = agent.organization_id AND artifact.project_id = agent.project_id
       AND artifact.revision = agent.avatar_artifact_revision
     WHERE agent.system_key IS NULL AND agent.state <> 'ARCHIVED'
@@ -287,14 +287,14 @@ WITH projects AS (
 ), skill_files AS MATERIALIZED (
     SELECT parent.ref AS parent_ref,parent.path AS source_path,parent.project_ref,parent.run_ref,
            file.item->>'Path' AS file_path,artifact.ref AS artifact_ref,artifact.file_name,
-           artifact.size_bytes,artifact.digest,artifact.created_at
+           artifact.size_bytes,artifact.digest,artifact.created_at,artifact.revision AS artifact_revision
     FROM visible parent
     JOIN control_plane.skill_bundles bundle ON bundle.organization_id=@organization_id::uuid AND bundle.ref=parent.entity_ref
     LEFT JOIN control_plane.agent_context_bindings binding ON binding.organization_id=@organization_id::uuid AND parent.ref='context-binding:'||binding.ref
     JOIN control_plane.skill_bundle_revisions revision ON revision.bundle_id=bundle.id
       AND revision.id=COALESCE(binding.skill_revision_id,bundle.draft_revision_id,bundle.current_revision_id)
     CROSS JOIN LATERAL jsonb_array_elements(revision.files) file(item)
-    JOIN control_plane.artifacts artifact ON artifact.organization_id=@organization_id::uuid AND artifact.project_id=bundle.project_id
+    JOIN control_plane.artifact_history artifact ON artifact.organization_id=@organization_id::uuid AND artifact.project_id=bundle.project_id
       AND artifact.ref=file.item->>'ArtifactRef' AND to_jsonb(artifact.revision)=file.item->'ArtifactRevision'
       AND artifact.digest=file.item->>'Digest' AND to_jsonb(artifact.size_bytes)=file.item->'SizeBytes'
     JOIN control_plane.catalog_access_targets target ON target.organization_id=artifact.organization_id AND target.kind='ARTIFACT' AND target.id=artifact.id
@@ -308,13 +308,13 @@ WITH projects AS (
            file.source_path||'/'||file.file_path,
            file.source_path||CASE WHEN strpos(file.file_path,'/')=0 THEN '' ELSE '/'||regexp_replace(file.file_path,'/[^/]+$','') END,
            regexp_replace(file.file_path,'^.*/',''),'INPUT',false,file.project_ref,file.artifact_ref,file.run_ref,
-           file.size_bytes,file.digest,file.created_at,'ARTIFACT',file.artifact_ref
+           file.size_bytes,file.digest,file.created_at,'ARTIFACT',file.artifact_ref,file.artifact_revision
     FROM skill_files file
     UNION ALL
     SELECT 'skill-dir:'||file.parent_ref||':'||array_to_string(parts.items[1:depth.level],'/'),
            file.source_path||'/'||array_to_string(parts.items[1:depth.level],'/'),
            file.source_path||CASE WHEN depth.level=1 THEN '' ELSE '/'||array_to_string(parts.items[1:depth.level-1],'/') END,
-           parts.items[depth.level],'DIRECTORY',true,file.project_ref,'','',0,'',max(file.created_at),'PROJECT',file.project_ref
+           parts.items[depth.level],'DIRECTORY',true,file.project_ref,'','',0,'',max(file.created_at),'PROJECT',file.project_ref,0::bigint
     FROM skill_files file
     CROSS JOIN LATERAL (SELECT string_to_array(file.file_path,'/') AS items) parts
     CROSS JOIN LATERAL generate_series(1,cardinality(parts.items)-1) depth(level)
@@ -324,13 +324,14 @@ WITH projects AS (
     SELECT visible.*,
         COALESCE(artifact.version,bundle.version,memory.version,0) AS version,
         COALESCE(artifact.revision,skill_revision.revision,memory_revision.revision,0) AS revision,
-        COALESCE(skill_revision.ref,memory_revision.ref,'') AS revision_ref,
+        COALESCE(artifact.revision_ref,skill_revision.ref,memory_revision.ref,'') AS revision_ref,
         COALESCE(artifact.lifecycle_state,bundle.state,memory.state,'ACTIVE') AS lifecycle_state,
         COALESCE(artifact.scan_state,skill_revision.scan_state,'') AS scan_state,
         CASE WHEN artifact.id IS NOT NULL THEN 'ARTIFACT' WHEN bundle.id IS NOT NULL THEN 'SKILL_BUNDLE'
             WHEN memory.id IS NOT NULL THEN 'MEMORY_RECORD' ELSE '' END AS resource_kind
     FROM expanded visible
-    LEFT JOIN control_plane.artifacts artifact ON artifact.organization_id=@organization_id::uuid AND visible.access_kind='ARTIFACT' AND artifact.ref=visible.entity_ref
+    LEFT JOIN control_plane.artifact_history artifact ON artifact.organization_id=@organization_id::uuid AND visible.access_kind='ARTIFACT' AND artifact.ref=visible.entity_ref
+      AND artifact.digest=visible.digest AND artifact.size_bytes=visible.size_bytes AND artifact.revision=visible.artifact_revision
     LEFT JOIN control_plane.agent_context_bindings binding ON binding.organization_id=@organization_id::uuid AND visible.ref='context-binding:'||binding.ref
     LEFT JOIN control_plane.skill_bundles bundle ON bundle.organization_id=@organization_id::uuid AND visible.kind='SKILL' AND bundle.ref=visible.entity_ref
     LEFT JOIN control_plane.skill_bundle_revisions skill_revision ON skill_revision.organization_id=@organization_id::uuid

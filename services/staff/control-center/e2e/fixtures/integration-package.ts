@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, type Page } from "@playwright/test";
+import type { SyntheticSnapshotInstaller } from "./runs-catalog";
 import { load, JSON_SCHEMA } from "js-yaml";
 import type {
   ManagedConfiguration,
@@ -10,6 +11,7 @@ import type {
 export async function checkIntegrationPackage(
   page: Page,
   definition: IntegrationDefinition,
+  installSnapshot?: SyntheticSnapshotInstaller,
 ): Promise<void> {
   const source = readFileSync(
     new URL(
@@ -137,10 +139,18 @@ export async function checkIntegrationPackage(
       });
     },
   );
+  installSnapshot?.("INTEGRATION_CONNECTION", () => ({
+    definitions: {
+      definitions: [{ ...definition, nextActions: ["COPY"] }],
+      coreReady: true,
+      nextActions: ["CREATE_CONNECTION"],
+      page: {},
+    },
+  }));
   await page.goto("/integrations");
   await page.getByRole("tab", { name: /Каталог/ }).click();
   await page
-    .locator(".package-card")
+    .locator(".package-row")
     .getByRole("button", { name: "Создать копию", exact: true })
     .click();
   const copyDialog = page.getByRole("dialog", {

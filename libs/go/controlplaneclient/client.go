@@ -85,6 +85,7 @@ type Client struct {
 	RoleImages              controlplanev1.RoleImageServiceClient
 	Access                  controlplanev1.AccessServiceClient
 	ProviderCredentials     controlplanev1.ProviderCredentialMaterializerServiceClient
+	ProviderRenewals        controlplanev1.ProviderCredentialRenewalWorkServiceClient
 	resolver                internalrpcauthorityv1.AuthorityProofResolverServiceClient
 	issuer                  *authorityclient.LocalConnection
 	raw, protected          *grpc.ClientConn
@@ -184,6 +185,7 @@ func (client *Client) bindServices(protected *grpc.ClientConn) {
 	client.RoleImages = controlplanev1.NewRoleImageServiceClient(protected)
 	client.Access = controlplanev1.NewAccessServiceClient(protected)
 	client.ProviderCredentials = controlplanev1.NewProviderCredentialMaterializerServiceClient(protected)
+	client.ProviderRenewals = controlplanev1.NewProviderCredentialRenewalWorkServiceClient(protected)
 }
 
 func validateOperations(source map[string]string) (operationSet, error) {

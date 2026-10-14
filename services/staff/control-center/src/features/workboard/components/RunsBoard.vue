@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 
 import {
   groupRuns,
+  runDefaultTaskTitleKey,
   runListSummary,
   type RunLane,
 } from "@/features/workboard/model";
@@ -64,6 +65,11 @@ function link(run: Run): string {
   return runPath(run.ref, props.preserveProject ? run.projectRef : undefined);
 }
 
+function runTitle(run: Run): string {
+  const key = runDefaultTaskTitleKey(run);
+  return key ? t(key) : run.title;
+}
+
 for (const lane of order)
   useCursorInfiniteScroll({
     root: scrollRoot,
@@ -100,8 +106,8 @@ for (const lane of order)
             <div class="runs-board__identity">
               <EntityIcon kind="RUN" :size="16" />
               <div>
-                <RouterLink :to="link(run)" :title="run.title">{{
-                  run.title
+                <RouterLink :to="link(run)" :title="runTitle(run)">{{
+                  runTitle(run)
                 }}</RouterLink>
                 <SafeSummary
                   :content="runListSummary(run)"
@@ -135,7 +141,7 @@ for (const lane of order)
             <RouterLink
               :to="link(run)"
               class="button button--ghost runs-board__action"
-              :aria-label="`${t('common.open')}: ${run.title}`"
+              :aria-label="`${t('common.open')}: ${runTitle(run)}`"
               :title="t('common.open')"
               ><ArrowRight :size="17" aria-hidden="true"
             /></RouterLink>

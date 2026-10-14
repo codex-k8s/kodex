@@ -1253,8 +1253,23 @@
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {
+      "operation_id": "platform.command.artifact-revisions.download",
+      "source_binding_sha256": "ea03b1bfed9e5c324dfed4ea9b9d58429477478cad859a2656043893584fc30b",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
       "operation_id": "platform.query.artifact-binding-targets.list",
       "source_binding_sha256": "7e4cac6d80224e12eee9c81b7bae275b1f6cc45dc9f76fc896ee9d8a88e9f071",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.artifact-revisions.get",
+      "source_binding_sha256": "1cfdd4125cc32722a79f1d4116658bba3f6ba31ac8455a8a408793c108f9b817",
+      "actor_mode": "USER_CREDENTIAL_REQUIRED"
+    },
+    {
+      "operation_id": "platform.query.artifact-revisions.list",
+      "source_binding_sha256": "019c34d1266be1d2d0069b519848285e07bfe3892385ef8dc6475f04ce58be21",
       "actor_mode": "USER_CREDENTIAL_REQUIRED"
     },
     {
@@ -1714,13 +1729,29 @@
     },
     {
       "operation_id": "platform.role-images.admission.recovery-terminal.get",
-      "source_binding_sha256": "d1abdb287d5d3bb48f0a0c458479197c8229533dabff49099755aa01501304df",
-      "actor_mode": "SERVICE_OWNER_RESOLVED"
+      "trusted_binding_sha256": "eaa4156c772161a3d2123ffbfc1a2c428ca9492c6885182048014c16d21f8067",
+      "actor_mode": "SERVICE_OWNER_RESOLVED",
+      "trusted_binding": {
+        "actor_mode": "SERVICE_OWNER_RESOLVED",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/image-admission-controller",
+        "full_method": "/controlplane.v1.RoleImageService/GetImageAdmissionRecoveryTerminal",
+        "operation_id": "platform.role-images.admission.recovery-terminal.get",
+        "permission": "platform.role-images.admission.recovery-terminal.get",
+        "project_required": false
+      }
     },
     {
       "operation_id": "platform.role-images.supply-work.get",
-      "source_binding_sha256": "1bbfbdcc1008e19742bc17e2ecf5f035f4bda42144296f11e18bc17d6aedc3b0",
-      "actor_mode": "SERVICE_OWNER_RESOLVED"
+      "trusted_binding_sha256": "38ca39f086e3560e8a760df565eb0a3f8c3adca98256b8720d69b1affab0c89b",
+      "actor_mode": "SERVICE_OWNER_RESOLVED",
+      "trusted_binding": {
+        "actor_mode": "SERVICE_OWNER_RESOLVED",
+        "caller_spiffe_id": "spiffe://kodex.local/ns/kodex-system/sa/image-admission-controller",
+        "full_method": "/controlplane.v1.RoleImageService/GetImageSupplyWorkAvailability",
+        "operation_id": "platform.role-images.supply-work.get",
+        "permission": "platform.role-images.supply-work.get",
+        "project_required": false
+      }
     },
     {
       "operation_id": "platform.role-images.builds.claim",
@@ -1888,6 +1919,11 @@
       "actor_mode": "SERVICE_OWNER_RESOLVED"
     },
     {
+      "operation_id": "platform.runtime.execution.workflow.catalog",
+      "source_binding_sha256": "b7f4d6cbf4e9a44a6c0dfe10b402d3d2188468ae607a65c35ae6cc4d61ce0ca4",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
       "operation_id": "platform.runtime.execution.workflow.launch",
       "source_binding_sha256": "d6e92aaa3530c2ee1aea505d63c0e4b28172c3bfa564c24e24c54185d227412a",
       "actor_mode": "SERVICE_OWNER_RESOLVED"
@@ -2046,6 +2082,21 @@
       "operation_id": "platform.stt.policy.resolve",
       "source_binding_sha256": "fdfda133c8ec2d90f6ff201980bfab849b24beed04bf8eeda11e51963a9c3300",
       "actor_mode": "PRESERVE_DELEGATION"
+    },
+    {
+      "operation_id": "platform.provider-accounts.credential.renewal.authorize",
+      "source_binding_sha256": "e8dce94b5433910b6b371269666af5e98e56b6f49b3a8afa0d924b7c960028c2",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.provider-accounts.credential.renewal.validate",
+      "source_binding_sha256": "48f5a021180b7eb8332b0799a9a868f224445adfbf9f84c9340ce0f1e793e6de",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
+    },
+    {
+      "operation_id": "platform.provider-accounts.credential.renewal.work.check",
+      "source_binding_sha256": "d0c218702f8864fa9243f03e383eb8d4877a1cbbca1a7289d9b57f07a1f436b1",
+      "actor_mode": "SERVICE_OWNER_RESOLVED"
     }
   ]
 }

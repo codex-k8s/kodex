@@ -29,25 +29,31 @@ import (
 
 const credentialProjectionPendingCode = "INTEGRATION_CREDENTIAL_PROJECTION_PENDING"
 
-func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principal value.Principal, instance string) (entity.SystemAssistant, map[string]any, bool, error) {
+func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principal value.Principal, instance string) (result entity.SystemAssistant, desired map[string]any, materializationRequired bool, returnedError error) {
+	stage := errs.WarmReconcileScope
+	defer func() { returnedError = errs.WithWarmRuntimeStage(returnedError, stage) }()
 	scope, err := repository.resolveScope(ctx, principal)
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, err
 	}
+	stage = errs.WarmReconcileTransaction
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrUnavailable
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	stage = errs.WarmReconcileProviderPolicy
 	if _, err := repository.reconcileSystemAssistantProviderPolicy(ctx, tx, scope); err != nil {
 		return entity.SystemAssistant{}, nil, false, err
 	}
+	stage = errs.WarmReconcileSessionBinding
 	sessionBinding, err := repository.lockWarmSessionBinding(ctx, tx, scope.organizationID)
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, err
 	}
 	sessionMigrated := false
 	if !sessionBinding.providerAccountEligible {
+		stage = errs.WarmReconcileSessionReplacement
 		providerAccountID, selectErr := repository.selectProviderAccountForAgent(
 			ctx, tx, scope.organizationID, sessionBinding.assistantRef,
 		)
@@ -72,6 +78,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		}
 		sessionMigrated = true
 	}
+	stage = errs.WarmReconcileSnapshot
 	var assistant entity.SystemAssistant
 	var limits []byte
 	var promptRef, promptDigest, promptContent, ownerInstructions, systemSessionRef string
@@ -114,14 +121,17 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrUnavailable
 	}
+	stage = errs.WarmReconcileOverlay
 	canonicalOverlay, verifiedOverlayDigest, err := runtimecontract.CanonicalConfigOverlay(configOverlay)
 	if err != nil || canonicalOverlay != configOverlay || verifiedOverlayDigest != configOverlayDigest {
 		return entity.SystemAssistant{}, nil, false, fmt.Errorf("verify config overlay: %w", errs.ErrConflict)
 	}
+	stage = errs.WarmReconcileSessionBinding
 	currentBinding, err := repository.lockWarmSessionBinding(ctx, tx, scope.organizationID)
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, err
 	}
+	stage = errs.WarmReconcileCatalog
 	configuration, _, err := readRuntimeCatalogConfiguration(ctx, tx, scope.organizationID, assistant.Ref, "")
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, err
@@ -133,6 +143,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	if retainedPolicy != nil {
 		providerPolicyRef, providerPolicyVersion, providerPolicyDigest = retainedPolicy.PolicyRef, retainedPolicy.PolicyVersion, retainedPolicy.PolicyDigest
 	}
+	stage = errs.WarmReconcileOverlay
 	parsedOverlay, err := runtimecontract.ParseConfigOverlay(configOverlay)
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, fmt.Errorf("parse config overlay: %w", errs.ErrConflict)
@@ -145,6 +156,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	if effectiveEffort == "" {
 		reasoningMode = runtimecontract.ReasoningUnsupported
 	}
+	stage = errs.WarmReconcileEnvironment
 	var environmentValues []runtimecontract.RuntimeEnvironmentValue
 	var secretProjections []runtimecontract.RuntimeSecretProjection
 	if err := decodeStoredRuntimeEnvironment(rawEnvironmentValues, rawSecretProjections, &environmentValues, &secretProjections); err != nil {
@@ -183,6 +195,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 	assistant.WarmSessionRef = systemSessionRef
 	assistant.System = true
 	assistant.Deletable = false
+	stage = errs.WarmReconcileLifecycle
 	stale := assistant.LastHeartbeatAt == nil || time.Since(*assistant.LastHeartbeatAt) > 45*time.Second
 	required := sessionMigrated || !contains([]string{"READY", "BUSY"}, assistant.RuntimeState) || assistant.RuntimeRevision != assistant.DesiredRuntimeRevision || warmInstance != instance || stale
 	if required && !sessionMigrated {
@@ -192,13 +205,15 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		assistant.RuntimeState = "RECOVERING"
 		assistant.Version++
 	}
-	materializedPrompt, err := promptservice.MaterializeWarm(promptContent, ownerInstructions, promptRef, promptDigest, assistant.Ref, systemSessionRef)
+	stage = errs.WarmReconcilePrompt
+	materializedPrompt, promptSnapshot, err := materializeWarmPlatformPrompt(promptContent, ownerInstructions, promptRef, promptDigest, assistant.Ref, systemSessionRef)
 	if err != nil || !materializedPrompt.Complete {
 		return entity.SystemAssistant{}, nil, false, fmt.Errorf("materialize warm prompt: %w", errs.ErrConflict)
 	}
 	resolvedInstructions := materializedPrompt.Prompt
 	resolvedInstructionsSum := sha256.Sum256([]byte(resolvedInstructions))
 	resolvedInstructionsDigest := hex.EncodeToString(resolvedInstructionsSum[:])
+	stage = errs.WarmReconcileWorkspace
 	workspacePolicy, err := runtimeWorkspacePolicyWithLimits(environmentPolicy.Resources.WorkspaceLimits)
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
@@ -225,6 +240,7 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		"promptTemplateRef":             promptRef,
 		"promptTemplateDigest":          promptDigest,
 		"promptMaterializationDigest":   materializedPrompt.Digest,
+		"promptSnapshot":                promptSnapshot,
 		"promptRuntimeContractVersion":  1,
 		"promptServiceTemplateRevision": materializedPrompt.ServiceTemplateRevision,
 		"promptServiceTemplateDigest":   materializedPrompt.ServiceTemplateDigest,
@@ -263,21 +279,25 @@ func (repository *Repository) ReconcileWarmRuntime(ctx context.Context, principa
 		"effectiveKubernetesAccess":   effectiveKubernetesAccess,
 		"workspacePolicy":             workspacePolicy,
 	}
+	stage = errs.WarmReconcileContext
 	contextSnapshot, err := repository.runtimeContextSnapshot(ctx, tx, scope, "", "", assistant.Ref)
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, err
 	}
 	snapshot["contextSnapshot"] = contextSnapshot
+	stage = errs.WarmReconcileSpecification
 	specificationChanged, err := repository.bindWarmSpecification(ctx, tx, scope, &assistant, snapshot)
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, err
 	}
 	required = required || specificationChanged
+	stage = errs.WarmReconcileDigest
 	revisionDigest, err := runtimeRevisionDigestFromSnapshot(snapshot)
 	if err != nil {
 		return entity.SystemAssistant{}, nil, false, fmt.Errorf("digest warm runtime revision: %w", errs.ErrConflict)
 	}
 	snapshot["revisionDigest"] = revisionDigest
+	stage = errs.WarmReconcileCommit
 	if err := tx.Commit(ctx); err != nil {
 		return entity.SystemAssistant{}, nil, false, errs.ErrConflict
 	}
@@ -294,7 +314,9 @@ func (repository *Repository) reconcileSystemAssistantProviderPolicy(
 	ctx context.Context,
 	tx pgx.Tx,
 	current scope,
-) (bool, error) {
+) (changed bool, returnedError error) {
+	stage := errs.WarmReconcileProviderPolicyRead
+	defer func() { returnedError = errs.WithWarmRuntimeStage(returnedError, stage) }()
 	var snapshot systemAssistantProviderPolicySnapshot
 	var rawCurrent, rawDesired []byte
 	err := tx.QueryRow(ctx, queryWorkersReconcilewarmruntimeSelectSystemProviderPolicy, pgx.StrictNamedArgs{
@@ -317,6 +339,7 @@ func (repository *Repository) reconcileSystemAssistantProviderPolicy(
 	if err != nil {
 		return false, errs.ErrUnavailable
 	}
+	stage = errs.WarmReconcileProviderPolicyDecode
 	if json.Unmarshal(rawCurrent, &snapshot.currentCandidates) != nil ||
 		json.Unmarshal(rawDesired, &snapshot.desiredCandidates) != nil ||
 		(!validProviderPolicy(snapshot.mode, snapshot.currentCandidates) &&
@@ -328,6 +351,7 @@ func (repository *Repository) reconcileSystemAssistantProviderPolicy(
 	}
 	bootstrapPolicy := snapshot.configVersion == 1 && snapshot.mode == "LEAST_USED" && len(snapshot.currentCandidates) == 0
 	desiredCandidates := snapshot.desiredCandidates
+	stage = errs.WarmReconcileProviderPolicyCatalog
 	snapshot.desiredCandidates, err = captureRuntimeCatalogPins(ctx, tx, current, snapshot.provider, snapshot.model, desiredCandidates)
 	if bootstrapPolicy && errors.Is(err, errs.ErrConflict) {
 		snapshot.model, err = firstRunProviderDefaultModel(ctx, tx, current, snapshot.provider, desiredCandidates)
@@ -338,6 +362,7 @@ func (repository *Repository) reconcileSystemAssistantProviderPolicy(
 	if err != nil {
 		return false, err
 	}
+	stage = errs.WarmReconcileProviderPolicyPublish
 	desiredMode := "LEAST_USED"
 	if len(snapshot.desiredCandidates) == 1 {
 		desiredMode = "FIXED"

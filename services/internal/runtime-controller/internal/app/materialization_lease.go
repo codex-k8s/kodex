@@ -28,13 +28,19 @@ type materializationLeaseKeeper struct {
 	done           chan struct{}
 	mu             sync.Mutex
 	failure        error
+	confirmedUntil time.Time
 }
 
 func (runtime *runtime) keepMaterializationClaims(parent context.Context, executions []*controlplanev1.ClaimedExecution) []*materializationLeaseKeeper {
 	keepers := make([]*materializationLeaseKeeper, len(executions))
 	for index, execution := range executions {
 		lease := execution.GetLease()
-		input := runtimecontract.RunnerInput{LeaseRef: lease.GetRef(), LeaseFence: lease.GetFence(), LeaseGeneration: lease.GetGeneration()}
+		revision := execution.GetRevision()
+		// Только owner claim pins для диагностики; исполняемый input здесь не строится.
+		input := runtimecontract.RunnerInput{LeaseRef: lease.GetRef(), LeaseFence: lease.GetFence(), LeaseGeneration: lease.GetGeneration(),
+			RunRef: execution.GetRun().GetRef(), NodeRef: execution.GetNode().GetRef(),
+			SessionRef: revision.GetSessionRef(), TurnRef: revision.GetTurnRef(), Attempt: revision.GetAttempt(),
+			InputDigest: revision.GetInputDigest(), RuntimeRevisionDigest: revision.GetRevisionDigest()}
 		deadline, err := workload.RuntimeExecutionDeadlineFromProto(execution.GetRevision().GetExecutionDeadline())
 		input.ExecutionDeadline = deadline
 		keeperParent := parent
@@ -67,14 +73,33 @@ func (keeper *materializationLeaseKeeper) run() {
 	}
 	ticker := time.NewTicker(keeper.runtime.config.LeaseRenewInterval)
 	defer ticker.Stop()
+	expiry := time.NewTimer(time.Hour)
+	defer expiry.Stop()
+	keeper.mu.Lock()
+	expired := resetLeaseExpiry(expiry, keeper.confirmedUntil)
+	keeper.mu.Unlock()
 	for {
 		select {
 		case <-keeper.ctx.Done():
 			return
+		case <-expired:
+			keeper.mu.Lock()
+			// publish мог продлить lease, пока run ожидал mutex.
+			if !time.Now().Before(keeper.confirmedUntil) {
+				keeper.failure = context.DeadlineExceeded
+				keeper.cancel(keeper.failure)
+				keeper.mu.Unlock()
+				return
+			}
+			expired = resetLeaseExpiry(expiry, keeper.confirmedUntil)
+			keeper.mu.Unlock()
 		case <-ticker.C:
 			if keeper.renew() != nil {
 				return
 			}
+			keeper.mu.Lock()
+			expired = resetLeaseExpiry(expiry, keeper.confirmedUntil)
+			keeper.mu.Unlock()
 		}
 	}
 }
@@ -89,7 +114,10 @@ func (keeper *materializationLeaseKeeper) renewLocked() error {
 	if err := context.Cause(keeper.ctx); err != nil {
 		return err
 	}
-	err := keeper.runtime.renewMaterializationLease(keeper.ctx, keeper.input)
+	until, err := keeper.runtime.renewLease(keeper.ctx, keeper.input, renewalPhaseMaterialization, keeper.confirmedUntil)
+	if err == nil {
+		keeper.confirmedUntil = until
+	}
 	if err != nil {
 		// Отмена handoff может прервать RPC; настоящий ответ владельца об
 		// отказе нельзя потерять за первым локальным cancellation cause.
@@ -99,17 +127,6 @@ func (keeper *materializationLeaseKeeper) renewLocked() error {
 		}
 		keeper.cancel(err)
 	}
-	return err
-}
-
-func (runtime *runtime) renewMaterializationLease(parent context.Context, input runtimecontract.RunnerInput) error {
-	if input.LeaseRef == "" || input.LeaseFence == "" || input.LeaseGeneration < 1 {
-		return errors.New("runtime materialization lease binding is invalid")
-	}
-	request, cancel := context.WithTimeout(parent, runtime.config.RequestTimeout)
-	defer cancel()
-	_, err := runtime.control.RenewExecution(request, &controlplanev1.RenewExecutionRequest{
-		LeaseRef: input.LeaseRef, Fence: input.LeaseFence, Generation: input.LeaseGeneration})
 	return err
 }
 
@@ -128,7 +145,7 @@ func (keeper *materializationLeaseKeeper) publish(action func(context.Context) e
 	if err := keeper.renewLocked(); err != nil {
 		return err
 	}
-	publication, cancel := context.WithTimeout(keeper.ctx, keeper.runtime.config.RequestTimeout)
+	publication, cancel := leaseBoundedRequest(keeper.ctx, keeper.runtime.config.RequestTimeout, keeper.confirmedUntil)
 	defer cancel()
 	return action(publication)
 }
@@ -143,13 +160,17 @@ func (keeper *materializationLeaseKeeper) stop() {
 func (keeper *materializationLeaseKeeper) handoff() error {
 	keeper.stop()
 	keeper.mu.Lock()
+	defer keeper.mu.Unlock()
 	failure := keeper.failure
-	keeper.mu.Unlock()
 	if failure != nil {
 		return failure
 	}
 	if cause := context.Cause(keeper.ctx); !errors.Is(cause, errMaterializationLeaseStopped) {
 		return cause
 	}
-	return keeper.runtime.renewMaterializationLease(keeper.parent, keeper.input)
+	until, err := keeper.runtime.renewLease(keeper.parent, keeper.input, renewalPhaseMaterialization, keeper.confirmedUntil)
+	if err == nil {
+		keeper.confirmedUntil = until
+	}
+	return err
 }

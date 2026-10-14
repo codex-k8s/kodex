@@ -420,10 +420,10 @@ onBeforeUnmount(() => store.dispose());
   width: 8%;
 }
 .role-image-catalog__table th:nth-child(6) {
-  width: 14%;
+  width: 12%;
 }
 .role-image-catalog__table th:nth-child(7) {
-  width: 5%;
+  width: 7%;
 }
 .role-image-catalog__row {
   min-height: 72px;

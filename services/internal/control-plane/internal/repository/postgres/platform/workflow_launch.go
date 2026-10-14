@@ -17,6 +17,7 @@ import (
 )
 
 var workflowLaunchRefPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{8,96}$`)
+var workflowSpecDigestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 func (repository *Repository) validateRequiredWorkflowAuthorities(ctx context.Context, tx pgx.Tx, machine scope, rootID string) error {
 	rows, err := tx.Query(ctx, queryWorkflowLaunchClaimAuthorities, pgx.StrictNamedArgs{"organization_id": machine.organizationID, "root_run_id": rootID})
@@ -70,7 +71,7 @@ func (repository *Repository) validateRequiredWorkflowAuthorities(ctx context.Co
 // lease и не заменяет актуальное право пользователя/сотрудника.
 func (repository *Repository) validateWorkflowLaunchAuthority(ctx context.Context, tx pgx.Tx, machine scope, input command.Command) error {
 	payload, ok := input.Payload.(command.LaunchWorkflowInput)
-	if !ok {
+	if !ok || !workflowLaunchRefPattern.MatchString(payload.ExpectedPublishedRef) || !workflowSpecDigestPattern.MatchString(payload.ExpectedSpecDigest) || payload.ExpectedWorkflowVersion < 1 {
 		return errs.ErrInvalid
 	}
 	fence := sha256.Sum256([]byte(payload.Fence))
@@ -164,7 +165,7 @@ func lockWorkflowLaunchProjects(ctx context.Context, tx pgx.Tx, current scope, i
 
 func (repository *Repository) launchWorkflowExecution(ctx context.Context, tx pgx.Tx, machine scope, input command.Command) (commandOutcome, error) {
 	payload, ok := input.Payload.(command.LaunchWorkflowInput)
-	if !ok || !runtimecontract.ValidAssistantTurnContent(payload.Task) || !workflowLaunchRefPattern.MatchString(payload.WorkflowRef) || len([]rune(payload.Title)) > 240 || !validBoundedRunInput(payload.Input) {
+	if !ok || !runtimecontract.ValidAssistantTurnContent(payload.Task) || !workflowLaunchRefPattern.MatchString(payload.WorkflowRef) || !workflowLaunchRefPattern.MatchString(payload.ExpectedPublishedRef) || !workflowSpecDigestPattern.MatchString(payload.ExpectedSpecDigest) || payload.ExpectedWorkflowVersion < 1 || len([]rune(payload.Title)) > 240 || !validBoundedRunInput(payload.Input) {
 		return commandOutcome{}, errs.ErrInvalid
 	}
 	fence := sha256.Sum256([]byte(payload.Fence))
@@ -204,9 +205,10 @@ func (repository *Repository) launchWorkflowExecution(ctx context.Context, tx pg
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	requestHash := sha256.Sum256(asJSON(struct {
-		Workflow, Task, Title string
-		Input                 map[string]any
-	}{payload.WorkflowRef, payload.Task, payload.Title, payload.Input}))
+		Workflow, Task, Title, PublishedRef, SpecDigest string
+		WorkflowVersion                                 int64
+		Input                                           map[string]any
+	}{payload.WorkflowRef, payload.Task, payload.Title, payload.ExpectedPublishedRef, payload.ExpectedSpecDigest, payload.ExpectedWorkflowVersion, payload.Input}))
 	requestDigest := hex.EncodeToString(requestHash[:])
 	var childRef, launchRef, callbackRef string
 	err = tx.QueryRow(ctx, queryWorkflowLaunchExisting, pgx.StrictNamedArgs{"organization_id": machine.organizationID, "revision_id": revisionID, "workflow_ref": payload.WorkflowRef, "request_digest": requestDigest}).Scan(&childRef, &launchRef, &callbackRef)
@@ -216,6 +218,20 @@ func (repository *Repository) launchWorkflowExecution(ctx context.Context, tx pg
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return commandOutcome{}, errs.ErrUnavailable
+	}
+	// Accepted exact intent выше возвращает прежнюю квитанцию. Новый intent
+	// блокирует owner row и сравнивает exact published pins до materialization.
+	var publishedRef, specDigest string
+	var workflowVersion int64
+	err = tx.QueryRow(ctx, queryWorkflowLaunchPublishedPins, pgx.StrictNamedArgs{"organization_id": machine.organizationID, "project_id": projectID, "workflow_ref": payload.WorkflowRef}).Scan(&publishedRef, &specDigest, &workflowVersion)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return commandOutcome{}, errs.ErrConflict
+	}
+	if err != nil {
+		return commandOutcome{}, errs.ErrUnavailable
+	}
+	if publishedRef != payload.ExpectedPublishedRef || specDigest != payload.ExpectedSpecDigest || workflowVersion != payload.ExpectedWorkflowVersion {
+		return commandOutcome{}, errs.ErrConflict
 	}
 	var bounded bool
 	if tx.QueryRow(ctx, queryWorkflowLaunchBound, pgx.StrictNamedArgs{"organization_id": machine.organizationID, "root_run_id": rootID}).Scan(&bounded) != nil {

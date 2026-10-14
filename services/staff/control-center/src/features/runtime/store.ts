@@ -369,6 +369,7 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
             !artifactRef ||
             (needle &&
               !recipe.name.toLocaleLowerCase().includes(needle) &&
+              !recipe.ref.toLocaleLowerCase().includes(needle) &&
               !recipe.promotedImageReference
                 ?.toLocaleLowerCase()
                 .includes(needle))

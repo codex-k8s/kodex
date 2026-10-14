@@ -19,6 +19,7 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
+  shallowRef,
   useId,
   watch,
 } from "vue";
@@ -35,7 +36,10 @@ import { currentRoleImageAdmissionFailure } from "./admission-failure";
 import ConfigurationCopyDialog from "@/features/managed-configurations/ConfigurationCopyDialog.vue";
 import { verifiedImageInventoryAvailable } from "@/shared/lib/verified-image-tools";
 import { recipeCopySource } from "@/features/managed-configurations/copy-source";
-import type { ManagedConfiguration } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  ManagedConfiguration,
+  RoleImageRecipe,
+} from "@/shared/api/generated/openapi/types.gen";
 import {
   buildIsActive,
   buildRevisionIdentity,
@@ -89,6 +93,8 @@ const name = ref("");
 const roleDefinitionRef = ref("");
 const environmentKey = ref("");
 const dockerfile = ref("");
+const editBaseline = shallowRef<RoleImageRecipe>();
+const loadingForm = ref(false);
 const diffOpen = ref(false);
 const buildsExpanded = ref(false);
 const revisionsExpanded = ref(false);
@@ -277,7 +283,12 @@ const hasLocalChanges = computed(() =>
     sourceVisible.value &&
     (name.value !== recipe.value.name ||
       environmentKey.value !== recipe.value.environment.environmentKey ||
-      dockerfile.value !== recipe.value.environment.dockerfile),
+      dockerfile.value !== recipe.value.environment.dockerfile ||
+      (editBaseline.value &&
+        (name.value !== editBaseline.value.name ||
+          environmentKey.value !==
+            editBaseline.value.environment.environmentKey ||
+          dockerfile.value !== editBaseline.value.environment.dockerfile))),
   ),
 );
 const requestBuildBlocked = computed(
@@ -289,12 +300,16 @@ const requestBuildBlocked = computed(
 );
 const canSave = computed(
   () =>
+    !loadingForm.value &&
     sourceVisible.value &&
     name.value.trim().length > 0 &&
     (Boolean(props.organizationScope) || Boolean(roleDefinitionRef.value)) &&
     Boolean(selectedEnvironment.value?.available) &&
     dockerfileMessages.value.length === 0 &&
-    (!recipe.value || recipe.value.nextActions.includes("UPDATE")),
+    (!props.recipeRef ||
+      Boolean(
+        recipe.value?.nextActions.includes("UPDATE") && editBaseline.value,
+      )),
 );
 const roleLabel = computed(() => {
   if (props.organizationScope) return t("assistant.settings.systemScope");
@@ -312,6 +327,23 @@ const environmentLabel = computed(() => {
 });
 let disposed = false;
 let loadGeneration = 0;
+let contextGeneration = 0;
+
+function contextIsCurrent(generation: number): boolean {
+  return !disposed && generation === contextGeneration;
+}
+
+function canApplySavedDraft(
+  generation: number,
+  baseline: RoleImageRecipe,
+): boolean {
+  return (
+    contextIsCurrent(generation) &&
+    editBaseline.value === baseline &&
+    sourceVisible.value &&
+    recipe.value?.nextActions.includes("UPDATE") === true
+  );
+}
 
 const supportingCatalogVersion = computed(() =>
   props.organizationScope
@@ -345,18 +377,48 @@ watch(supportingCatalogVersion, () => {
   );
 });
 
-function sync(): void {
-  if (!recipe.value) return;
-  name.value = recipe.value.name;
-  roleDefinitionRef.value = recipe.value.roleDefinitionRef;
-  environmentKey.value = recipe.value.environment.environmentKey;
+function setEditBaseline(value: RoleImageRecipe): void {
+  // Snapshot не разделяет изменяемые source/OCC поля с realtime store.
+  editBaseline.value = {
+    ...value,
+    environment: {
+      ...value.environment,
+      ...(value.environment.packageKeys
+        ? { packageKeys: [...value.environment.packageKeys] }
+        : {}),
+      ...(value.environment.toolKeys
+        ? { toolKeys: [...value.environment.toolKeys] }
+        : {}),
+    },
+  };
+}
+
+function clearDraft(): void {
+  editBaseline.value = undefined;
+  name.value = "";
+  roleDefinitionRef.value = "";
+  environmentKey.value = "";
+  dockerfile.value = "";
+  diffOpen.value = false;
+  openedBuildSources.value.clear();
+}
+
+function sync(value = recipe.value): void {
+  if (!value) return;
+  name.value = value.name;
+  roleDefinitionRef.value = value.roleDefinitionRef;
+  environmentKey.value = value.environment.environmentKey;
   dockerfile.value = sourceVisible.value
-    ? (recipe.value.environment.dockerfile ?? "")
+    ? (value.environment.dockerfile ?? "")
     : "";
+  if (sourceVisible.value && recipe.value?.nextActions.includes("UPDATE"))
+    setEditBaseline(value);
+  else editBaseline.value = undefined;
 }
 
 async function load(): Promise<void> {
   const current = ++loadGeneration;
+  loadingForm.value = true;
   const tasks: Promise<void>[] = [
     store.loadSupportingCatalogs(
       resourceScope.value,
@@ -379,15 +441,19 @@ async function load(): Promise<void> {
         revisionPageSize.value,
       ),
     );
-  await Promise.all(tasks);
-  if (disposed || current !== loadGeneration) return;
-  if (!props.recipeRef && !environmentKey.value) {
-    const recommended = store.environments.find(
-      (environment) => environment.available && environment.recommended,
-    );
-    if (recommended) selectEnvironment(recommended.key);
+  try {
+    await Promise.all(tasks);
+    if (disposed || current !== loadGeneration) return;
+    if (!props.recipeRef && !environmentKey.value) {
+      const recommended = store.environments.find(
+        (environment) => environment.available && environment.recommended,
+      );
+      if (recommended) selectEnvironment(recommended.key);
+    }
+    sync();
+  } finally {
+    if (current === loadGeneration) loadingForm.value = false;
   }
-  sync();
 }
 
 function selectEnvironment(key: string): void {
@@ -398,29 +464,51 @@ function selectEnvironment(key: string): void {
 }
 
 async function save(): Promise<void> {
-  if (!canSave.value || !selectedEnvironment.value) return;
+  if (
+    disposed ||
+    store.mutating ||
+    !canSave.value ||
+    !selectedEnvironment.value
+  )
+    return;
+  const baseline = editBaseline.value;
+  const currentContext = contextGeneration;
   const keepsEnvironmentSelection =
-    recipe.value?.environment.environmentKey === selectedEnvironment.value.key;
+    baseline?.environment.environmentKey === selectedEnvironment.value.key;
   const selection = {
     environmentKey: selectedEnvironment.value.key,
     dockerfile: dockerfile.value.replace(/\r\n?/g, "\n"),
-    ...(keepsEnvironmentSelection && recipe.value.environment.packageKeys
-      ? { packageKeys: [...recipe.value.environment.packageKeys] }
+    ...(keepsEnvironmentSelection && baseline.environment.packageKeys
+      ? { packageKeys: [...baseline.environment.packageKeys] }
       : {}),
-    ...(keepsEnvironmentSelection && recipe.value.environment.toolKeys
-      ? { toolKeys: [...recipe.value.environment.toolKeys] }
+    ...(keepsEnvironmentSelection && baseline.environment.toolKeys
+      ? { toolKeys: [...baseline.environment.toolKeys] }
       : {}),
-    ...(keepsEnvironmentSelection && recipe.value.environment.installationBlock
-      ? { installationBlock: recipe.value.environment.installationBlock }
+    ...(keepsEnvironmentSelection && baseline.environment.installationBlock
+      ? { installationBlock: baseline.environment.installationBlock }
       : {}),
   };
   try {
-    if (recipe.value) {
-      await store.update(resourceScope.value, recipe.value, {
+    if (recipe.value && baseline) {
+      const submittedDraft = [
+        name.value,
+        environmentKey.value,
+        dockerfile.value,
+      ];
+      const saved = await store.update(resourceScope.value, baseline, {
         name: name.value.trim(),
         environment: selection,
       });
-      sync();
+      if (!canApplySavedDraft(currentContext, baseline)) return;
+      if (
+        submittedDraft.every(
+          (value, index) =>
+            value ===
+            [name.value, environmentKey.value, dockerfile.value][index],
+        )
+      )
+        sync(saved);
+      else setEditBaseline(saved);
       return;
     }
     const created = await store.create(resourceScope.value, {
@@ -430,6 +518,7 @@ async function save(): Promise<void> {
       name: name.value.trim(),
       environment: selection,
     });
+    if (!contextIsCurrent(currentContext)) return;
     await router.replace({
       path: `${catalogPath.value}/${encodeURIComponent(created.ref)}`,
       query: route.query,
@@ -446,7 +535,6 @@ async function runCommand(
   try {
     await store.command(resourceScope.value, recipe.value, action);
     confirmationAction.value = undefined;
-    sync();
   } catch {
     // Store сохраняет нормализованную problem-модель для видимого состояния.
   }
@@ -526,7 +614,6 @@ async function cancelCurrentBuild(): Promise<void> {
       "CANCEL_BUILD",
       current.ref,
     );
-    sync();
   } catch {
     // Store сохраняет нормализованную problem-модель для видимого состояния.
   }
@@ -549,17 +636,23 @@ async function promote(): Promise<void> {
   if (!canPromoteRoleImage(recipe.value, artifact.value)) return;
   try {
     await store.promote(resourceScope.value, recipe.value, artifact.value);
-    sync();
   } catch {
     // Store сохраняет нормализованную problem-модель для видимого состояния.
   }
 }
 
 watch(
-  sourceVisible,
-  (value) => {
-    if (value) return;
-    dockerfile.value = "";
+  [
+    sourceVisible,
+    () => recipe.value?.nextActions.includes("UPDATE"),
+    () =>
+      recipe.value?.nextActions.includes("UPDATE") ? undefined : recipe.value,
+  ],
+  ([visible, editable]) => {
+    if (visible && (!props.recipeRef || editable)) return;
+    editBaseline.value = undefined;
+    if (visible) sync();
+    else dockerfile.value = "";
     diffOpen.value = false;
     openedBuildSources.value.clear();
   },
@@ -568,19 +661,18 @@ watch(
 watch(
   () => [scopeKey.value, props.recipeRef],
   () => {
+    contextGeneration += 1;
+    clearDraft();
     void load();
   },
+  { flush: "sync" },
 );
 watch(
   () => platform.roleImageRealtimeRevision,
-  async () => {
-    const current = ++loadGeneration;
-    const projectRef = resourceScope.value;
-    const recipeRef = props.recipeRef;
-    if (disposed || !recipeRef) return;
-    await store.loadDetail(projectRef, recipeRef, false);
-    if (current !== loadGeneration) return;
-    sync();
+  () => {
+    if (disposed || !props.recipeRef) return;
+    // Realtime обновляет status/metadata, но не source и исходную OCC-версию.
+    void store.loadDetail(resourceScope.value, props.recipeRef, false);
   },
 );
 onMounted(() => void load());
@@ -599,6 +691,8 @@ watch(
 onBeforeUnmount(() => {
   disposed = true;
   loadGeneration += 1;
+  contextGeneration += 1;
+  clearDraft();
   store.dispose();
 });
 </script>
@@ -611,7 +705,11 @@ onBeforeUnmount(() => {
       @retry="load"
     />
 
-    <div v-if="store.loadingDetail" class="editor-loading" role="status">
+    <div
+      v-if="store.loadingDetail || loadingForm"
+      class="editor-loading"
+      role="status"
+    >
       {{ t("common.loading") }}
     </div>
     <template v-else-if="!props.recipeRef || recipe">
@@ -1855,6 +1953,43 @@ onBeforeUnmount(() => {
 @media (max-width: 640px) {
   .role-image-editor {
     padding-bottom: calc(144px + env(safe-area-inset-bottom));
+  }
+  .image-summary {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+  }
+  .image-summary__identity {
+    width: 100%;
+    align-items: flex-start;
+  }
+  .image-summary__identity > div {
+    flex: 1;
+    min-width: 0;
+  }
+  .image-summary > .status-badge {
+    grid-column: 1 / -1;
+    box-sizing: border-box;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .image-summary__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
+    min-width: 0;
+  }
+  .image-summary__actions > .button {
+    min-width: 0;
+    max-width: 100%;
+    min-height: 44px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+  .image-summary__actions > .button > svg {
+    flex: 0 0 auto;
   }
   .lifecycle-step {
     grid-template-columns: 28px minmax(0, 1fr);

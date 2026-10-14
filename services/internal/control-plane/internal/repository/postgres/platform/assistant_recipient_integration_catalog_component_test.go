@@ -29,6 +29,7 @@ func testAssistantRecipientIntegrationCatalog(t *testing.T, ctx context.Context,
 		t.Fatal(err)
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, project.Ref, "recipient-catalog-agent", "Catalog Developer")
+	seedAssistantAgentRuntimeInventoryFixture(t, ctx, repository, service, owner, agent.Ref)
 	unassigned := createLifecycleAgent(t, ctx, service, owner, project.Ref, "recipient-catalog-unassigned", "Unassigned Developer")
 	unbound, err := service.Execute(ctx, command.Command{Kind: command.CreateConnection, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "recipient-catalog-unbound-registry"}, Payload: command.ConnectionInput{DefinitionKey: "github", Name: "Recipient registry github.repository fixture", PublicConfiguration: map[string]any{"owner": "fixture", "repository": "registry"}}})
 	if err != nil || unbound.Connection == nil {
@@ -38,6 +39,18 @@ func testAssistantRecipientIntegrationCatalog(t *testing.T, ctx context.Context,
 	workflow, err := service.Execute(ctx, command.Command{Kind: command.CreateWorkflow, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "recipient-catalog-workflow"}, Payload: command.WorkflowInput{ProjectRef: project.Ref, Name: draft.Name, Purpose: draft.Purpose, CoordinatorAgentRef: agent.Ref, Draft: &draft}})
 	if err != nil || workflow.Workflow == nil {
 		t.Fatal("create recipient workflow")
+	}
+	foreignHelper, err := service.GetAgent(ctx, owner, foreignHelperRef)
+	if err != nil || foreignHelper.ProjectRef == project.Ref || foreignHelper.ProjectRef == "" {
+		t.Fatal("foreign metadata fixture missing", err)
+	}
+	foreignDraft := draft
+	foreignDraft.CoordinatorAgentRef = foreignHelperRef
+	foreignDraft.Steps = append([]entity.WorkflowStep{}, draft.Steps...)
+	foreignDraft.Steps[0].AgentRef = foreignHelperRef
+	foreignWorkflow, err := service.Execute(ctx, command.Command{Kind: command.CreateWorkflow, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "recipient-catalog-foreign-workflow"}, Payload: command.WorkflowInput{ProjectRef: foreignHelper.ProjectRef, Name: "Foreign metadata", Purpose: foreignDraft.Purpose, CoordinatorAgentRef: foreignHelperRef, Draft: &foreignDraft}})
+	if err != nil || foreignWorkflow.Workflow == nil {
+		t.Fatal("create foreign metadata fixture", err)
 	}
 	for _, recipient := range []struct{ agent, workflow string }{{agent.Ref, ""}, {"", workflow.Workflow.Ref}} {
 		for _, enabled := range []bool{true, false} {
@@ -82,12 +95,54 @@ func testAssistantRecipientIntegrationCatalog(t *testing.T, ctx context.Context,
 					t.Fatal("missing exact recipient lease")
 				}
 				lease := leases[0]
+				metadataInput := entity.AssistantConfigurationCatalogRequest{Kind: "WORKFLOW_METADATA", AssistantRef: stringMap(lease, "agentRef"), EntityKind: "WORKFLOW", EntityRef: workflow.Workflow.Ref}
+				metadata, metadataErr := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), metadataInput)
+				if metadataErr != nil || metadata.WorkflowConfiguration == nil || metadata.WorkflowConfiguration.WorkflowRef != workflow.Workflow.Ref || metadata.ProjectRef != project.Ref {
+					t.Fatal("eligible workflow metadata unavailable outside matching screen", metadataErr)
+				}
+				var metadataSnapshot map[string]any
+				if json.Unmarshal(metadata.WorkflowConfiguration.ConfigurationJSON, &metadataSnapshot) != nil || len(metadataSnapshot) != 11 || metadataSnapshot["published_revision"] != float64(0) {
+					t.Fatal("draft workflow falsely exposed as published")
+				}
+				for _, invalid := range []struct {
+					fence      string
+					generation int64
+				}{{"wrong-fence", lease["generation"].(int64)}, {stringMap(lease, "fence"), lease["generation"].(int64) + 1}} {
+					if _, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), invalid.fence, invalid.generation, metadataInput); err == nil {
+						t.Fatal("workflow metadata bypassed exact lease")
+					}
+				}
+				wrongSource := metadataInput
+				wrongSource.AssistantRef = foreignHelperRef
+				if _, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), wrongSource); err == nil {
+					t.Fatal("workflow metadata trusted caller source")
+				}
+				foreignInput := metadataInput
+				foreignInput.EntityRef = foreignWorkflow.Workflow.Ref
+				foreignResult, foreignErr := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), foreignInput)
+				if scope == "PROJECT" && !errors.Is(foreignErr, errs.ErrNotFound) {
+					t.Fatal("metadata escaped project scope", foreignErr)
+				}
+				if scope == "SYSTEM" && (foreignErr != nil || foreignResult.ProjectRef != foreignHelper.ProjectRef) {
+					t.Fatal("system metadata lost root user eligibility", foreignErr)
+				}
 				if recipient.kind == "AGENT" {
-					testAssistantAgentConfigurationUnderLease(t, ctx, repository, service, owner, reader, lease, agent.Ref, unassigned.Ref, foreignHelperRef)
+					private := metadataInput
+					private.Kind = "WORKFLOW_CONFIGURATION"
+					if _, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), private); !errors.Is(err, errs.ErrNotFound) {
+						t.Fatal("metadata read widened full workflow source", err)
+					}
+				}
+				if recipient.kind == "AGENT" {
+					testAssistantAgentConfigurationUnderLease(t, ctx, repository, service, owner, reader, lease, agent.Ref, unassigned.Ref, foreignHelperRef, scope)
 				} else {
 					_, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), entity.AssistantConfigurationCatalogRequest{Kind: "AGENT_CONFIGURATION", AssistantRef: stringMap(lease, "agentRef"), EntityKind: "AGENT", EntityRef: agent.Ref})
 					if !errors.Is(err, errs.ErrNotFound) {
 						t.Fatal("Workflow context read agent instructions")
+					}
+					result, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), entity.AssistantConfigurationCatalogRequest{Kind: "AGENT_RUNTIME_CONFIGURATION", AssistantRef: stringMap(lease, "agentRef"), EntityKind: "AGENT", EntityRef: agent.Ref})
+					if err != nil || result.AgentRuntimeConfiguration == nil || result.AgentRuntimeConfiguration.AgentRef != agent.Ref {
+						t.Fatal("eligible agent metadata unavailable from Workflow context", err)
 					}
 				}
 				runRef := turn.Turns[0].RunRef
@@ -99,6 +154,9 @@ func testAssistantRecipientIntegrationCatalog(t *testing.T, ctx context.Context,
 					}
 					if _, err := service.Execute(ctx, command.Command{Kind: command.CancelRun, Principal: owner, Mutation: value.Mutation{IdempotencyKey: prefix + "cancel", ExpectedVersion: &run.Version}, Payload: command.RunCommandInput{RunRef: run.Ref, Reason: "Synthetic catalog complete"}}); err != nil {
 						t.Errorf("cancel synthetic catalog run: %v", err)
+					}
+					if _, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), metadataInput); err == nil {
+						t.Error("workflow metadata survived terminal lease")
 					}
 				}()
 				input := entity.AssistantConfigurationCatalogRequest{Kind: "RECIPIENT_INTEGRATION_GRANTS", AssistantRef: stringMap(lease, "agentRef"), Query: "Own repository"}

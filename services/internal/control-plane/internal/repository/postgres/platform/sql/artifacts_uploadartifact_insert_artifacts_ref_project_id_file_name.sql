@@ -6,4 +6,4 @@ WHERE previous.organization_id=$2::uuid
   AND previous.project_id IS NOT DISTINCT FROM NULLIF($3,'')::uuid
   AND previous.file_name=$5
   AND (NULLIF($3,'') IS NOT NULL OR previous.created_by=$12::uuid)
-RETURNING ref,file_name,media_type,size_bytes,digest,scan_state,preview_state,revision,version,created_at
+RETURNING ref,file_name,media_type,size_bytes,digest,scan_state,preview_state,revision,version,created_at,current_revision_ref

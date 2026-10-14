@@ -467,6 +467,24 @@ func (server *Server) GetArtifact(w http.ResponseWriter, r *http.Request, ref ge
 	}
 	writeMessage(w, http.StatusOK, response, "artifact", "")
 }
+
+func (server *Server) ListArtifactRevisions(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, p generated.ListArtifactRevisionsParams) {
+	response, err := server.control.Query.ListArtifactRevisions(r.Context(), &controlplanev1.ListArtifactRevisionsRequest{ArtifactRef: ref, Page: page(p.PageSize, p.PageToken)})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "", "items")
+}
+
+func (server *Server) GetArtifactRevision(w http.ResponseWriter, r *http.Request, ref generated.ArtifactRef, revisionRef string) {
+	response, err := server.control.Query.GetArtifactRevision(r.Context(), &controlplanev1.GetArtifactRevisionRequest{ArtifactRef: ref, RevisionRef: revisionRef})
+	if err != nil {
+		writeRPCProblem(w, err)
+		return
+	}
+	writeMessage(w, http.StatusOK, response, "revision", "")
+}
 func (server *Server) ListSchedules(w http.ResponseWriter, r *http.Request, ref generated.ProjectRef, p generated.ListSchedulesParams) {
 	r, ok := withProjectReference(w, r, ref)
 	if !ok {

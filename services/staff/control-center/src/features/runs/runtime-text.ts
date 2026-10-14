@@ -1,4 +1,24 @@
-import type { RunEvent } from "@/shared/api/generated/openapi/types.gen";
+import type {
+  RunEvent,
+  RunNode,
+} from "@/shared/api/generated/openapi/types.gen";
+
+export function runNodeProgressFallbackKey(state: RunNode["state"]): string {
+  switch (state) {
+    case "PLANNED":
+    case "QUEUED":
+      return "runs.waitingForActivity";
+    case "RUNNING":
+    case "WAITING":
+    case "SUCCEEDED":
+    case "FAILED":
+    case "CANCELLED":
+    case "SKIPPED":
+      return `states.${state}`;
+    default:
+      return "common.unknownStatus";
+  }
+}
 
 const opaqueRefPattern =
   /`?(?:agt|art|bld|cap|cnv|con|edg|evt|gat|inc|int|job|mbr|msg|nod|pln|prj|rev|rol|rti|run|sch|ses|trn|usr|wfl)_[A-Za-z0-9_-]{8,}`?/g;

@@ -17,8 +17,9 @@ const maximumGitHubContentPageBytes = 16 << 10
 const maximumGitHubContentEnvelopeBytes = 64 << 10
 
 // Полный UTF-8 источник имеет отдельный бюджет: страница и provider JSON
-// не определяют его размер. Contents API используется без download fallback.
-const maximumGitHubContentSourceBytes = 1 << 20
+// не определяют его размер. Contents связывает commit/path/blob; большой
+// источник читается через Git blob того же API без download fallback.
+const maximumGitHubContentSourceBytes = 8 << 20
 
 type githubContentPage struct {
 	Path            string `json:"path"`
@@ -49,7 +50,11 @@ func executeGitHubContentRead(ctx context.Context, client *github.Client, owner,
 	if err != nil {
 		return Result{}, err
 	}
-	page, err := projectGitHubContentPage(file, in, maximum)
+	content, err := readGitHubContentSource(ctx, client, owner, repo, capability, file, in)
+	if err != nil {
+		return Result{}, err
+	}
+	page, err := projectGitHubContentPageSource(file, content, in, maximum)
 	if err != nil {
 		return Result{}, err
 	}
@@ -70,13 +75,25 @@ func validateGitHubContentPageInput(in githubCatalogInput) (int, error) {
 }
 
 func projectGitHubContentPage(file *github.RepositoryContent, in githubCatalogInput, maximum int) (githubContentPage, error) {
-	if file == nil || file.GetPath() != in.Path || file.GetType() != "file" || file.GetEncoding() != "base64" ||
-		file.GetSize() < 0 || file.GetSize() > maximumGitHubContentSourceBytes || !sourceCommitPattern.MatchString(file.GetSHA()) {
+	if err := validateGitHubContentMetadata(file, in); err != nil {
+		return githubContentPage{}, err
+	}
+	if file.GetEncoding() != "base64" {
 		return githubContentPage{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}
 	content, err := file.GetContent()
+	if err != nil {
+		return githubContentPage{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
+	}
+	return projectGitHubContentPageSource(file, content, in, maximum)
+}
+
+func projectGitHubContentPageSource(file *github.RepositoryContent, content string, in githubCatalogInput, maximum int) (githubContentPage, error) {
+	if err := validateGitHubContentMetadata(file, in); err != nil {
+		return githubContentPage{}, err
+	}
 	// Проверяется весь источник, а не только выдаваемая страница.
-	if err != nil || len(content) != file.GetSize() || !utf8.ValidString(content) || strings.IndexByte(content, 0) >= 0 ||
+	if len(content) != file.GetSize() || !utf8.ValidString(content) || strings.IndexByte(content, 0) >= 0 ||
 		!matchesGitBlobSHA([]byte(content), file.GetSHA()) {
 		return githubContentPage{}, &SafeError{Code: "INTEGRATION_RESPONSE_INVALID"}
 	}

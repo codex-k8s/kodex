@@ -128,6 +128,15 @@ func TestProviderOutboxPublicationRejectsUnsafeEntries(t *testing.T) {
 			}
 			if err := publishOutboxDirectory(ctx, directory, limit, runnerUID, providerUID, group); !errors.Is(err, errProviderOutboxPublication) || strings.Contains(err.Error(), "private-sentinel") {
 				t.Fatal("unsafe artifact publication did not fail closed")
+			} else {
+				want := map[string]providerFilesystemReason{
+					"symlink": filesystemEntryOpen, "hardlink": filesystemLinkCount, "fifo": filesystemFileType,
+					"empty": filesystemFileSize, "oversized": filesystemFileSize, "foreign owner": filesystemOwner,
+					"reserved provenance": filesystemEntryName, "invalid name": filesystemEntryName,
+					"directory owner": filesystemDirectoryIdentity, "directory mode": filesystemDirectoryIdentity,
+					"too many": filesystemEntryCount, "cancelled": filesystemContext, "zero limit": filesystemPolicy, "excess limit": filesystemPolicy,
+				}[kind]
+				assertProviderFilesystemReason(t, err, errProviderOutboxPublication, want)
 			}
 		})
 	}

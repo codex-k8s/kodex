@@ -1,5 +1,5 @@
 -- name: artifacts_lifecycle_restore :exec
-UPDATE control_plane.artifacts
+UPDATE control_plane.artifact_heads
 SET lifecycle_state = 'ACTIVE',
     deleted_at = NULL,
     purge_after = NULL,

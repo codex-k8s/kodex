@@ -13,6 +13,10 @@ import {
   runSessionStorageBlocker,
 } from "@/features/runs/run-owner";
 import { projectAssistantConnectionPlanOwner } from "./project-connection-plan";
+import {
+  isProjectFileOperation,
+  projectFileRevisionSource,
+} from "./project-file-plan";
 
 function assistantAppliedResourceRef(
   plan: AssistantPlan,
@@ -642,6 +646,7 @@ export interface EditablePlanOperation {
 export type FriendlyPlanOperationType =
   | "CREATE_PROJECT"
   | "CREATE_PROJECT_FILE"
+  | "CREATE_PROJECT_FILE_REVISION"
   | "UPDATE_PROJECT"
   | "CREATE_AGENT"
   | "CREATE_PROJECT_ASSISTANT"
@@ -676,6 +681,20 @@ export type FriendlyPlanOperationType =
 export function friendlyPlanOperationType(
   operation: EditablePlanOperation,
 ): FriendlyPlanOperationType | undefined {
+  if (operation.value.type === "CREATE_PROJECT_FILE_REVISION") {
+    try {
+      return projectFileRevisionSource({
+        ...operation.value,
+        parameters: parseObject(operation.parametersText),
+        before: parseObject(operation.beforeText),
+        after: parseObject(operation.afterText),
+      })
+        ? operation.value.type
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }
   if (
     operation.value.type === "PREPARE_PROJECT_ASSISTANT_INTEGRATION_CONNECTION"
   ) {
@@ -792,6 +811,15 @@ export function updateOperationParameter(
   const parameters = parseObject(operation.parametersText);
   const after = parseObject(operation.afterText);
   parameters[key] = value;
+  if (isProjectFileOperation(operation.value.type)) {
+    if (key === "content") {
+      delete parameters.contentRef;
+      delete parameters.digest;
+      delete parameters.sizeBytes;
+    }
+    operation.parametersText = prettyJSON(parameters);
+    return;
+  }
   const nextAfter =
     operation.value.type === "CREATE_PROJECT_FILE" && key === "content"
       ? Object.fromEntries(
@@ -868,7 +896,7 @@ export function operationInputs(
 ): AssistantPlanOperationInput[] {
   return operations.map((operation) => {
     const after = parseObject(operation.afterText);
-    if (operation.value.type === "CREATE_PROJECT_FILE") delete after.content;
+    if (isProjectFileOperation(operation.value.type)) delete after.content;
     return {
       ...cloneOperation(operation.value),
       parameters: parseObject(operation.parametersText),
@@ -876,6 +904,22 @@ export function operationInputs(
       after,
     };
   });
+}
+
+export function assistantPlanCardPresentation(
+  plan: Pick<AssistantPlan, "state" | "auditSummary" | "operations">,
+  editHints: { plan: string; operation: string },
+): Pick<AssistantPlan, "auditSummary" | "operations"> {
+  if (plan.state !== "APPLIED" && plan.state !== "REJECTED")
+    return { auditSummary: plan.auditSummary, operations: plan.operations };
+  return {
+    auditSummary: plan.auditSummary === editHints.plan ? "" : plan.auditSummary,
+    operations: plan.operations.map((operation) =>
+      operation.summary === editHints.operation
+        ? { ...operation, summary: "" }
+        : operation,
+    ),
+  };
 }
 
 export function honestEditedPlanSummaries(
@@ -892,7 +936,7 @@ export function honestEditedPlanSummaries(
     if (!original) return { operation, changed: false };
     const content = (item: AssistantPlanOperationInput) => {
       const after = cloneJSONRecord(item.after);
-      if (item.type === "CREATE_PROJECT_FILE") delete after.content;
+      if (isProjectFileOperation(item.type)) delete after.content;
       return JSON.stringify([
         item.type,
         item.action,

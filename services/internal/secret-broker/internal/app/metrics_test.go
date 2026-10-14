@@ -32,7 +32,9 @@ func TestMetricsSubsystemProducesValidPrometheusNames(t *testing.T) {
 func TestSecretBrokerOwnerOperationsIncludeFailureAndRecovery(t *testing.T) {
 	t.Parallel()
 	operations := secretBrokerOperations()
-	if len(operations) != 17 ||
+	if len(operations) != 20 ||
+		operations["platform.provider-accounts.credential.renewal.authorize"] != controlplanev1.ProviderCredentialRenewalWorkService_AuthorizeProviderCredentialRenewal_FullMethodName ||
+		operations["platform.provider-accounts.credential.renewal.validate"] != controlplanev1.ProviderCredentialRenewalWorkService_ValidateProviderCredentialRenewalObservation_FullMethodName ||
 		operations["platform.runtime-secrets.operations.fail"] != controlplanev1.RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName ||
 		operations["platform.runtime-secrets.operations.recover"] != controlplanev1.RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName ||
 		operations["platform.runtime-secrets.materialization.recover"] != controlplanev1.RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_FullMethodName ||

@@ -18,6 +18,7 @@ import { describe, expect, it, vi } from "vitest";
 import RunSessionDetailsDialog from "@/features/runs/RunSessionDetailsDialog.vue";
 import dialogSource from "@/features/runs/RunSessionDetailsDialog.vue?raw";
 import RunTranscript from "@/features/runs/RunTranscript.vue";
+import { AppProblem } from "@/shared/api/problem";
 import type {
   PresentedRunEvent,
   RunActivityItem,
@@ -42,11 +43,15 @@ async function renderActivity(
   currentRun: Run = run,
   currentNode: RunNode = node,
   additionalNodes: RunNode[] = [],
+  rootRun?: Run,
+  historyProblem?: AppProblem,
 ): Promise<string> {
   const app = createSSRApp({
     render: () =>
       h(RunSessionDetailsDialog, {
         run: currentRun,
+        rootRun,
+        historyProblem,
         node: currentNode,
         nodes: [currentNode, toolNode, ...additionalNodes],
         events,
@@ -130,6 +135,7 @@ const toolNode: RunNode = {
 
 const artifact: Artifact = {
   ref: "art_report",
+  currentRevisionRef: "arv_fixture_report",
   version: 1,
   projectRef: run.projectRef,
   runRef: run.ref,
@@ -205,6 +211,115 @@ const toolEvent: PresentedRunEvent = {
 };
 
 describe("RunSessionDetailsDialog", () => {
+  it("отказ protected history виден внутри modal, не выдаётся за пустую историю", async () => {
+    const problem = new AppProblem({
+      status: 503,
+      code: "UPSTREAM_UNAVAILABLE",
+      retryable: true,
+      kind: "unavailable",
+      title: "История временно недоступна",
+    });
+    const html = await renderActivity([], run, node, [], undefined, problem);
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("История временно недоступна");
+    expect(html).not.toContain("runs.noNodeActivity");
+  });
+  it("читает child transcript из root envelope только по точной owner graph привязке", async () => {
+    const childRun: Run = { ...run, ref: "run_child", rootRunRef: run.ref };
+    const childNode: RunNode = {
+      ...node,
+      ref: "nod_child",
+      runRef: childRun.ref,
+      turnRef: execution.turnRef,
+    };
+    const parentNode = { ...node, childRunRefs: [childRun.ref] };
+    const childEvent: PresentedRunEvent = {
+      ...event,
+      nodeRef: childNode.ref,
+      execution: { ...execution, runRef: childRun.ref, nodeRef: childNode.ref },
+      messageKind: "INTERMEDIATE_MESSAGE",
+      message: {
+        ref: "msg_child",
+        revision: 1,
+        source: { origin: "ORDINARY" },
+        phase: "COMMENTARY",
+        text: "CHILD_COMMENTARY_SENTINEL",
+      },
+    };
+    const render = (value: PresentedRunEvent, nodes = [parentNode]) =>
+      renderActivity([value], childRun, childNode, nodes, run);
+    expect(await render(childEvent)).toContain("CHILD_COMMENTARY_SENTINEL");
+    const childHistory = await renderActivity(
+      [
+        childEvent,
+        {
+          ...childEvent,
+          ref: "evt_child_tool",
+          sequence: 2,
+          message: undefined,
+          messageKind: "TOOL_CALL",
+          toolCall: { ...toolCall, revision: 1 },
+        },
+        {
+          ...childEvent,
+          ref: "evt_child_final",
+          sequence: 3,
+          messageKind: "FINAL_MESSAGE",
+          message: {
+            ref: "msg_child_final",
+            revision: 1,
+            source: { origin: "ORDINARY" },
+            phase: "FINAL",
+            text: "CHILD_FINAL_SENTINEL",
+          },
+        },
+      ],
+      childRun,
+      childNode,
+      [parentNode],
+      run,
+    );
+    expect(childHistory).toContain("CHILD_FINAL_SENTINEL");
+    expect(childHistory).toContain("project_files.search");
+    for (const value of [
+      { ...childEvent, runRef: "run_foreign" },
+      { ...childEvent, nodeRef: "nod_foreign" },
+      { ...childEvent, run: { ...childEvent.run, ref: "run_foreign" } },
+      { ...childEvent, execution: undefined },
+      ...(
+        ["runRef", "nodeRef", "sessionRef", "turnRef", "attempt"] as const
+      ).map((field) => ({
+        ...childEvent,
+        execution: {
+          ...childEvent.execution,
+          ...execution,
+          runRef: childRun.ref,
+          nodeRef: childNode.ref,
+          [field]: field === "attempt" ? 2 : "foreign_pin",
+        },
+      })),
+    ])
+      expect(await render(value)).not.toContain("CHILD_COMMENTARY_SENTINEL");
+    expect(await render(childEvent, [])).not.toContain(
+      "CHILD_COMMENTARY_SENTINEL",
+    );
+    expect(await render(childEvent, [parentNode, childNode])).not.toContain(
+      "CHILD_COMMENTARY_SENTINEL",
+    );
+    for (const value of [
+      { ...childRun, rootRunRef: "run_foreign" },
+      { ...childRun, projectRef: "prj_foreign" },
+      { ...childRun, sessionRef: "ses_foreign" },
+    ])
+      expect(
+        await renderActivity([childEvent], value, childNode, [parentNode], run),
+      ).not.toContain("CHILD_COMMENTARY_SENTINEL");
+    expect(dialogSource).toContain(':run="run"');
+    expect(dialogSource).toContain(
+      'v-if="sessionNode && node.runRef === run.ref"',
+    );
+  });
+
   it("показывает только размер контекстного окна без нулевых строк расхода", async () => {
     const html = await renderActivity([], {
       ...run,
@@ -473,10 +588,108 @@ describe("RunSessionDetailsDialog", () => {
     expect(dialogSource).toMatch(
       /\.session-details__activity \{[^}]*grid-template-rows: auto minmax\(0, 1fr\);[^}]*overflow: hidden;/,
     );
-    expect(dialogSource).toContain(
-      "grid-template-rows: minmax(0, 0.18fr) minmax(0, 0.82fr)",
+    const mobile = dialogSource.split("@media (max-width: 760px)")[1];
+    expect(mobile).toMatch(
+      /\.session-details__workspace \{[^}]*display: flex;[^}]*flex-direction: column;/,
     );
     expect(dialogSource).not.toContain("overflow: visible");
+  });
+
+  it("сворачивает mobile профиль по умолчанию, сохраняя метаданные и переписку", async () => {
+    const html = await renderActivity([event]);
+    expect(html).toMatch(
+      /class="button button--ghost session-details__profile-toggle"[^>]*aria-expanded="false"[^>]*aria-controls="([^"]+)"/,
+    );
+    const id = html.match(/aria-controls="([^"]+)"/)?.[1];
+    expect(id).toBeDefined();
+    expect(html).toContain(`id="${id ?? ""}"`);
+    expect(html).toContain("agents.profile");
+    expect(html).toContain("Проверь квартальный отчёт");
+    expect(html).toContain(event.displaySummary);
+    expect(html).not.toContain("session-details__sidebar--expanded");
+    const desktop = dialogSource.split("@media (max-width: 760px)")[0];
+    expect(desktop).toMatch(
+      /\.session-details__profile-toggle \{[^}]*display: none;/,
+    );
+    expect(desktop).toContain(
+      "grid-template-columns: minmax(280px, 0.34fr) minmax(0, 1fr)",
+    );
+    expect(desktop).toMatch(/\.session-details__sidebar \{[^}]*display: grid;/);
+    const mobile = dialogSource.split("@media (max-width: 760px)")[1];
+    expect(mobile).toMatch(/\.session-details__sidebar \{[^}]*display: none;/);
+    expect(mobile).toMatch(
+      /\.session-details__sidebar--expanded \{[^}]*display: grid;[^}]*max-height: min\(40%, 280px\);/,
+    );
+    expect(mobile).toMatch(/\.session-details__activity \{[^}]*flex: 1;/);
+  });
+
+  it("раскрытие профиля меняет только локальное отображение, не transcript или props", () => {
+    const renderer = createRenderer<object, object>({
+      createElement: () => ({}),
+      createText: () => ({}),
+      createComment: () => ({}),
+      setText() {},
+      setElementText() {},
+      patchProp() {},
+      insert() {},
+      remove() {},
+      parentNode: () => null,
+      nextSibling: () => null,
+    });
+    const props = {
+      run,
+      node,
+      nodes: [node, toolNode],
+      events: [event],
+      artifacts: [],
+    };
+    const before = structuredClone(props);
+    const dialog = RunSessionDetailsDialog as unknown as {
+      setup(
+        props: object,
+        context: SetupContext,
+      ): {
+        profileExpanded: Ref<boolean>;
+        transcriptItems: ComputedRef<RunActivityItem[]>;
+      };
+    };
+    let state: ReturnType<typeof dialog.setup> | undefined;
+    const app = renderer.createApp(
+      defineComponent({
+        setup(_props, context) {
+          state = dialog.setup(props, context);
+          return () => null;
+        },
+      }),
+    );
+    app.use(
+      createI18n({
+        legacy: false,
+        locale: "ru",
+        missingWarn: false,
+        fallbackWarn: false,
+        messages: { ru: {} },
+      }),
+    );
+    app.provide(ssrContextKey, {});
+    try {
+      app.mount({});
+      if (!state) throw new Error("Dialog setup is missing");
+      const items = state.transcriptItems.value;
+      expect(state.profileExpanded.value).toBe(false);
+      state.profileExpanded.value = true;
+      expect(state.profileExpanded.value).toBe(true);
+      expect(state.transcriptItems.value).toBe(items);
+      state.profileExpanded.value = false;
+      expect(state.profileExpanded.value).toBe(false);
+      expect(state.transcriptItems.value).toBe(items);
+      expect(props).toEqual(before);
+    } finally {
+      app.unmount();
+    }
+    expect(dialogSource).toContain(
+      '@click="profileExpanded = !profileExpanded"',
+    );
   });
 
   it("не передаёт высоту и горизонтальный flex внешнего dialog во вложенный preview", () => {

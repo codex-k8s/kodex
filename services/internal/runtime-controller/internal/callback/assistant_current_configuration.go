@@ -118,7 +118,8 @@ func assistantCurrentExecutionSnapshot(input runtimecontract.RunnerInput) (map[s
 		"runtime_config_ref": input.RuntimeConfigRef, "runtime_config_version": input.RuntimeConfigVersion, "runtime_config_digest": input.RuntimeConfigDigest,
 		"environment_ref": input.RuntimeEnvironmentRef, "environment_version": input.RuntimeEnvironmentVersion, "environment_digest": input.RuntimeEnvironmentDigest,
 		"image_reference": input.ImageReference, "image_manifest_digest": input.ImageManifestDigest,
-		"instruction_ref": input.InstructionRef, "instruction_digest": input.InstructionDigest, "prompt_template_ref": input.PromptTemplateRef,
+		"provider_process": map[string]any{"status": "UNKNOWN", "provider": "CODEX"},
+		"instruction_ref":  input.InstructionRef, "instruction_digest": input.InstructionDigest, "prompt_template_ref": input.PromptTemplateRef,
 		"prompt_template_digest": input.PromptTemplateDigest, "model": input.Model, "reasoning_effort": input.EffectiveReasoningEffort,
 		"workspace_policy": workspace, "hosted_native_search": search}, nil
 }

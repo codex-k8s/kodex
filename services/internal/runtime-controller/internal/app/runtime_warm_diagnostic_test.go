@@ -87,6 +87,7 @@ func TestWarmRPCDiagnosticsDropMessagesAndDetails(t *testing.T) {
 			}
 			assertWarmDiagnostic(t, runtime.reconcileWarm(t.Context()), warmReconcileRPCFailure+": grpc_code="+wantCode.String())
 			assertWarmDiagnostic(t, runtime.reportWarm(t.Context(), "test-revision", controlplanev1.AssistantRuntimeState_ASSISTANT_RUNTIME_STATE_READY, ""), warmReportRPCFailure+": grpc_code="+wantCode.String())
+			assertWarmDiagnostic(t, boundedRPCFailure(runtimeClaimRPCFailure, owner.err), runtimeClaimRPCFailure+": grpc_code="+wantCode.String())
 			if owner.calls != 2 {
 				t.Fatal("diagnostics repeated owner effect")
 			}

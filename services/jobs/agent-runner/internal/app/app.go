@@ -140,6 +140,7 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 		resultErr = errors.Join(resultErr, telemetry.FlushSentry(sentry))
 		cancelSentry()
 	}()
+	logger := telemetry.Logger(os.Stderr)
 	state := &health{input: input}
 	state.live.Store(true)
 	stopWorkspaceMonitor := startWorkspaceMonitor(lifecycleContext, state, checkWorkspaceProcess)
@@ -159,10 +160,10 @@ func Run(baseContext, lifecycleContext context.Context, args []string, buildVers
 	runtime := turnRuntime{prepare: func(ctx context.Context, input model.Input, client *callback.Client) (preparedTurn, string, error) {
 		prepared, code, err := prepareRuntimeTurn(ctx, input, client)
 		if code == "RUNTIME_MCP_UNAVAILABLE" && err != nil {
-			logMCPStartupFailure(ctx, telemetry.Logger(os.Stderr), err)
+			logMCPStartupFailure(ctx, logger, err)
 		}
 		return prepared, code, err
-	}, execute: codex.ExecuteViaBroker, checkWorkspace: checkWorkspaceProcess}
+	}, execute: codex.ExecuteViaBroker, checkWorkspace: checkWorkspaceProcess, logger: logger}
 	if mode == "runtime-session" {
 		resultErr = runTurn(lifecycleContext, input, client, func() { state.ready.Store(true) }, runtime)
 		return resultErr
@@ -212,6 +213,7 @@ type turnRuntime struct {
 	prepare        func(context.Context, model.Input, *callback.Client) (preparedTurn, string, error)
 	execute        func(context.Context, model.Input, []byte, string, string, func(runtimecontract.RuntimeActivity) error) (codex.Result, error)
 	checkWorkspace func(context.Context) error
+	logger         *slog.Logger
 }
 
 func prepareRuntimeTurn(ctx context.Context, input model.Input, client *callback.Client) (prepared preparedTurn, code string, resultErr error) {
@@ -286,7 +288,9 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 			return errors.New("runtime activity is invalid")
 		}
 		var err error
-		if activity.Message != nil {
+		if activity.ProviderProcess != nil {
+			err = client.ProviderProcess(ctx, input, *activity.ProviderProcess)
+		} else if activity.Message != nil {
 			err = client.PublishedMessage(ctx, input, *activity.Message)
 		} else {
 			err = client.RecordNativeToolCall(ctx, input, *activity.ToolCall)
@@ -294,6 +298,9 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 		activityFailed = activityFailed || err != nil
 		return err
 	})
+	if executionErr != nil {
+		logRuntimeExecutionFailure(ctx, runtime.logger, executionErr, activityFailed)
+	}
 	if input.ExecutionDeadline != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return completeMeasuredFailure(ctx, input, client, result, "RUNTIME_TIMEOUT")
 	}
@@ -307,7 +314,7 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 		}
 		return completeMeasuredFailure(ctx, input, client, result, code)
 	}
-	return completeExecutedTurn(ctx, input, client, result, runtime.checkWorkspace)
+	return completeExecutedTurn(ctx, input, client, result, runtime.checkWorkspace, runtime.logger)
 }
 
 // Ошибка execute не подтверждает итог; только отдельное подтверждение capture
@@ -315,6 +322,7 @@ func runTurn(ctx context.Context, input model.Input, client *callback.Client, wo
 func completeMeasuredFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, code string) error {
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt,
 		Success: false, SafeErrorCode: safeFailureCode(code), ResultSummary: "i18n:" + code, Usage: result.Usage}
+	payload.ProviderDiagnostic = result.ProviderDiagnostic(input)
 	if result.HasVerifiedRollout(input) {
 		payload.CodexSessionID, payload.ArchiveRelativePath, payload.ArchiveSHA256, payload.ArchiveSizeBytes = result.SessionID, result.ArchiveRelativePath, result.ArchiveSHA256, result.ArchiveSizeBytes
 	}
@@ -323,8 +331,9 @@ func completeMeasuredFailure(ctx context.Context, input model.Input, client *cal
 
 // Завершение учитывает расход провайдера даже при отказе последующей проверки
 // workspace или публикации результата; повтор callback сохраняет тот же Usage.
-func completeExecutedTurn(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, checkWorkspace func(context.Context) error) error {
+func completeExecutedTurn(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, checkWorkspace func(context.Context) error, logger *slog.Logger) error {
 	if err := checkWorkspace(ctx); err != nil {
+		logWorkspaceCompletionDenial(ctx, logger, workspaceCompletionCheck, err)
 		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_WORKSPACE_INVALID", "i18n:RUNTIME_WORKSPACE_INVALID")
 	}
 	if result.Outcome != "SUCCEEDED" {
@@ -343,11 +352,13 @@ func completeExecutedTurn(ctx context.Context, input model.Input, client *callba
 			RuntimeRevisionVersion: input.RuntimeRevisionVersion, RuntimeRevisionDigest: input.RuntimeRevisionDigest,
 			Attempt: input.Attempt, ExecutionBindingDigest: input.ExecutionBindingDigest,
 		}); err != nil {
+			logWorkspaceCompletionDenial(ctx, logger, workspaceCompletionPublish, err)
 			return completeExecutedFailure(ctx, input, client, result, "RUNTIME_WORKSPACE_INVALID", "i18n:RUNTIME_WORKSPACE_INVALID")
 		}
 	}
 	artifacts, err := completionArtifacts(input, result.FinalMessage)
 	if err != nil {
+		logWorkspaceCompletionDenial(ctx, logger, workspaceCompletionPublish, err)
 		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID")
 	}
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: result.FinalMessage, Usage: result.Usage, Artifacts: artifacts, CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
@@ -360,10 +371,16 @@ func completeExecutedTurn(ctx context.Context, input model.Input, client *callba
 // Только результат завершённого execute может сохранить проверенный rollout
 // при последующем отказе публикации. Generic execution failures сюда не входят.
 func completeExecutedFailure(ctx context.Context, input model.Input, client *callback.Client, result codex.Result, code, summary string) error {
+	// Отказ сохранения после execute не означает ошибку пользовательского ввода.
+	// Canary остаётся обязательным; наружу выдаётся существующий закрытый код.
+	if code == "RUNTIME_WORKSPACE_INVALID" {
+		code, summary = "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID"
+	}
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt,
 		Success: false, ResultSummary: summary, SafeErrorCode: safeFailureCode(code), Usage: result.Usage,
 		CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath,
 		ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
+	payload.ProviderDiagnostic = result.ProviderDiagnostic(input)
 	if (result.Outcome != "SUCCEEDED" && result.Outcome != "FAILED") || payload.Validate() != nil {
 		return completeFailureWithSummaryAndUsage(ctx, input, client, code, summary, result.Usage)
 	}
@@ -374,6 +391,7 @@ func completeResultFailure(ctx context.Context, input model.Input, client *callb
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: false, ResultSummary: summary,
 		SafeErrorCode: safeFailureCode(result.FailureCode), Usage: result.Usage, CodexSessionID: result.SessionID,
 		ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
+	payload.ProviderDiagnostic = result.ProviderDiagnostic(input)
 	return client.Complete(context.WithoutCancel(ctx), input, payload)
 }
 
@@ -487,7 +505,7 @@ func materializeWorkspace(ctx context.Context, input model.Input) error {
 }
 
 func materializeWorkspaceDirectories() error {
-	for _, relative := range []string{".kodex", ".kodex/inbox", ".kodex/outbox", ".kodex/state", ".kodex/state/codex-home", "input", "session", "knowledge"} {
+	for _, relative := range []string{".kodex", ".kodex/inbox", ".kodex/outbox", ".kodex/state", ".kodex/state/codex-home", "input", "session", "knowledge", "work"} {
 		if err := security.EnsureSharedWorkspaceDirectory(relative); err != nil {
 			return err
 		}
@@ -976,12 +994,12 @@ func collectArtifacts(input model.Input, markdown string) ([]runtimecontract.Run
 	artifacts := []runtimecontract.RunnerArtifact{artifact("result.md", "text/markdown", []byte(markdown))}
 	directory, err := workspacepolicy.OpenOutbox(input.WorkspaceRoot)
 	if err != nil {
-		return nil, errors.New("read runtime outbox")
+		return nil, denyCompletionArtifact(err)
 	}
 	defer directory.Close()
 	entries, err := directory.ReadDir(-1)
 	if err != nil {
-		return nil, errors.New("read runtime outbox")
+		return nil, denyCompletionArtifact(err)
 	}
 	sort.Slice(entries, func(i, j int) bool {
 		if entries[i].Name() == "workspace-write-result.json" && entries[j].Name() != entries[i].Name() {
@@ -1002,12 +1020,12 @@ func collectArtifacts(input model.Input, markdown string) ([]runtimecontract.Run
 		}
 		descriptor, err := unix.Openat(int(directory.Fd()), name, unix.O_RDONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 		if err != nil {
-			return nil, errors.New("open runtime artifact")
+			return nil, denyCompletionArtifact(err)
 		}
 		file := os.NewFile(uintptr(descriptor), "runtime-artifact")
 		if file == nil {
 			_ = unix.Close(descriptor)
-			return nil, errors.New("open runtime artifact")
+			return nil, denyCompletionArtifact(nil)
 		}
 		info, statErr := file.Stat()
 		if statErr != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > 1<<20 {
@@ -1017,12 +1035,12 @@ func collectArtifacts(input model.Input, markdown string) ([]runtimecontract.Run
 		metadata, ok := info.Sys().(*syscall.Stat_t)
 		if !ok || metadata.Nlink != 1 {
 			file.Close()
-			return nil, errors.New("runtime artifact metadata is invalid")
+			return nil, denyCompletionArtifact(nil)
 		}
 		raw, readErr := io.ReadAll(io.LimitReader(file, 1<<20+1))
 		closeErr := file.Close()
 		if readErr != nil || closeErr != nil || int64(len(raw)) != info.Size() {
-			return nil, errors.New("read runtime artifact")
+			return nil, denyCompletionArtifact(errors.Join(readErr, closeErr))
 		}
 		mediaType := mime.TypeByExtension(filepath.Ext(name))
 		if mediaType == "" {

@@ -1,6 +1,7 @@
 package providercredential
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -8,6 +9,27 @@ import (
 	"testing"
 	"time"
 )
+
+func TestCatalogCleanupPreservesPrimaryFailureAndRejectsSuccess(t *testing.T) {
+	cleanup := errors.New("synthetic-private-cleanup")
+	for _, failure := range []ModelCatalogFailure{CatalogFailureAuthorization, CatalogFailureUnverified, CatalogFailureUnavailable} {
+		primary := ModelCatalog{Failure: failure, stage: catalogStageListCall}
+		result, err := catalogCleanupFailure(t.Context(), primary, nil, cleanup)
+		if err != nil || result.Failure != failure || result.DiagnosticStage() != string(catalogStageListCall) {
+			t.Fatal("cleanup masked primary failure")
+		}
+	}
+	for _, success := range []ModelCatalog{{}, {Failure: CatalogFailureNone, Source: CatalogRemoteCodex, Models: []CatalogModel{{ID: "fixture-model"}}}} {
+		result, err := catalogCleanupFailure(t.Context(), success, nil, cleanup)
+		if err != nil || result.Failure != CatalogFailureUnavailable || result.DiagnosticStage() != string(catalogStageCleanup) || len(result.Models) != 0 || result.Source != "" {
+			t.Fatal("cleanup failure allowed a successful catalog")
+		}
+	}
+	_, err := catalogCleanupFailure(t.Context(), ModelCatalog{}, context.Canceled, cleanup)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatal("cleanup masked cancellation")
+	}
+}
 
 func TestCatalogDiagnosticProcessStagesAndCleanup(t *testing.T) {
 	binary, err := os.Executable()

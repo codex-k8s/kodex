@@ -58,8 +58,11 @@ func testScheduleMaterializedPreview(t *testing.T, ctx context.Context, r *Repos
 	fresh.CredentialACR = "urn:kodex:acr:interactive"
 	fresh.CredentialAMR = []string{"pwd"}
 	full, _, _, err := service.PreviewScheduleMaterialization(ctx, fresh, input, current.Ref, current.Version, when, "", true, "CURRENT_REVISION")
-	if err != nil || !full.Complete || !strings.Contains(full.Prompt, input.AutomationText) {
+	if err != nil || !full.Complete {
 		t.Fatalf("full materialized Automation: complete=%v err=%v", full.Complete, err)
+	}
+	if err := validateSchedulePreviewTask(full.Prompt, input.AutomationText, continued, current.ContinueSessionRef); err != nil {
+		t.Fatalf("full materialized Automation task: %v", err)
 	}
 	if _, _, _, err := service.PreviewScheduleMaterialization(ctx, principal, input, current.Ref, current.Version, when, strings.Repeat("f", 64), false, "CURRENT_REVISION"); !errors.Is(err, errs.ErrVersionMismatch) {
 		t.Fatalf("stale preview digest: %v", err)

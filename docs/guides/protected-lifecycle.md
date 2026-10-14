@@ -4,11 +4,18 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.15
-updated: 2026-10-08
+version: 1.1.26
+updated: 2026-10-13
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
+
+Диагностика отказа worker различает подтверждённую текущую причину, прошлую
+историю и неизвестность. Exit code либо потеря локального потока не доказывают
+отказ внешнего провайдера или конкретного ресурса. Закрытое наблюдение до
+cleanup не меняет semantic intent повторного completion по тому же ключу;
+результат принадлежит прежней owner-транзакции, usage/archive не теряются.
+Матрица локального OOM-пути — [OPS-RUNTIME-MEMORY-001](../operations/runtime-memory-failure.md).
 
 `childRunRefs` принадлежит точному узлу, а не всем узлам родительского run.
 Ordinary child подтверждается серверными `DELEGATED_TO`/`CALLBACK_TO` и
@@ -277,6 +284,15 @@ Late success не меняет terminal verdict; подтверждённые us
 row/OCC/fence-моделью с одним победителем. Повтор с тем же idempotency scope и
 request hash возвращает сохранённый результат; новый эффект не создаётся.
 
+Для Report/Renew/Complete/Fail сборки образа semantic intent исключает только
+назначаемый заново transport CorrelationRef. Исходный Principal проходит
+свежую проверку без изменений; actor/organization/project/permission/workload,
+credential revision/authentication, lease/token/attempt/fence/OCC и payload
+остаются в commitment. Новый correlation не создаёт второй effect, а чужая
+authority и изменённый intent закрыто отклоняются. Сохранённые receipt hashes
+не переписываются и не получают fallback decoder: cutover выполняется при
+отсутствии активных сборок, последующие команды используют новые keys.
+
 Полученный batch runtime claims продлевается с момента получения ответа, а
 не только после последовательной материализации Pod. Каждый keeper немедленно
 и периодически вызывает существующий exact lease/fence/generation renew;
@@ -288,6 +304,36 @@ keepers до закрытия RPC клиента. TTL, attempt, authority и own
 при этом не расширяются; transport 404 сам по себе не доказывает expiry.
 
 ## Решение владельца
+
+### Ограниченное восстановление доставки runtime heartbeat
+
+Источник — тот же `RuntimeWorkService.RenewExecution` и authoritative
+`WorkLease.expires_at`. Контроллер передаёт только прежние exact lease/fence/
+generation; actor и workload проверяются обычным transport/owner command.
+Нет нового endpoint, grant, attempt, события или локального продления TTL.
+Ответ принимается только с совпавшими pins и допустимым ещё не истёкшим expiry.
+Предыдущее подтверждённое expiry ограничивает весь новый RPC и его повторы;
+ответ после этого срока не восстанавливает исполнение. Наблюдение сетевого
+сбоя не доказывает revoke, но и не назначает новый срок полномочий.
+
+| Переход heartbeat | Контроллер и владелец состояния |
+| --- | --- |
+| Claim → materialization | До первой подтверждённой renewal нет повторов по предполагаемому TTL; свежий exact owner ответ обязателен до публикации |
+| Периодическая materialization / публикация | Только `Unavailable/DeadlineExceeded`, ограниченные число/задержки и прежнее expiry; публикация сериализована с renewal и отдельно ограничена expiry |
+| Keeper → tracker | Keeper отменён и joined; последний успешный renew передаёт tracker подтверждённый expiry, без второго heartbeat writer |
+| Track → drain | Тот же expiry; graceful stop не выдаёт authority, renew ограничен независимым drain budget и потерей leadership |
+| Renew success | Owner повторно проверяет exact живую lease/graph; контроллер принимает только matching pins и свежий expiry, без подмены input/revision |
+| Permission/NotFound/stale/mismatch | Немедленный закрытый отказ без повторов, Stop/Delete и завершение локального coordinator; owner terminal не переписывается |
+| Временная доставка без подтверждённого expiry | Один bounded RPC, затем закрытый отказ; неизвестный commit не считается renewal success |
+| Подтверждённое expiry / исчерпание попыток | RPC прекращён, workload закрыт; устаревший success не оживляет terminal/root и не запускает retry attempt |
+| Cancel/delete/root terminal/lease expiry | Прежняя owner-транзакция отзывает leases/grants всего графа; свежий renew отвергается, исторические receipts не назначают новый expiry |
+| Callback завершился во время recovery | Локальный watcher joined; callback сохраняет terminal result, heartbeat не создаёт второе completion |
+
+Небольшой запас до authoritative expiry используется только для раннего
+прекращения RPC и локального cleanup, никогда для расширения срока. Heartbeat
+не разрешает новый пользовательский effect при отказе его отдельной authority.
+Проверки покрывают три фазы, ошибочный ответ, повторный exact tuple, revoke,
+parent cancellation, expiry и отсутствие публикации/воскрешения после отказа.
 
 ### Обязательный дочерний Workflow обычного сотрудника
 
@@ -360,6 +406,13 @@ snapshot либо terminal execution закрыто отклоняются. До
 сохраняется RUNNING; SUCCEEDED/FAILED используют ту же привязку и terminal
 fence. Этот путь не заменяет отдельную проверку точного integration grant.
 
+SYSTEM core принадлежит организации, а выбранный в диалоге проект — контекст
+экрана, не владелец системного помощника. Непустой context разрешается только
+для существующего ACTIVE проекта той же организации. Для PROJECT профиля и
+обычного сотрудника сохраняется точная привязка проекта самого агента.
+Отсутствующий или чужой context закрыто отклоняется до seal/claim; continuation
+закрепляет свежую базу, не переписывая прежнюю immutable историю.
+
 Материализованные `SessionContext` и continuation notice имеют исполняемый
 consumer вплоть до фактического provider input, а не только запись в snapshot
 или projection. Свежий provider thread получает ограниченную историю как данные;
@@ -368,6 +421,115 @@ consumer вплоть до фактического provider input, а не то
 Это сообщение доставляется один раз без дополнительного дублирующего delta;
 повтор terminal callback не запускает provider turn заново. Роль сообщения
 в истории не становится источником новых полномочий.
+
+`PURPOSE` продолжения может ссылаться на полное текущее задание через
+версионированную серверную проекцию его точных размера, digest и
+run/node/session/turn/revision/attempt только при доказанной доставке
+неизменённых байтов задания в том же provider input. Для предварительного
+просмотра используется отдельный prospective вид без выдуманных turn pins.
+`INPUT`, ограничения владельца и сохранённая история не усекаются ради
+размера notice. Собственный шаблон владельца с `{{.task}}` по-прежнему
+получает полное задание; превышение consumer bound закрыто отклоняется.
+Исторические sealed snapshots и опубликованные renderer/instruction версии
+не переписываются. Связка producer → фактический consumer проверяется одним
+синтетическим immutable input для нового и продолженного provider thread.
+
+Свежая root-попытка Workflow, включая Retry в прежней Session, не наследует
+выполненность шагов из истории provider, старых callback или `RETRY_OF`.
+CP до seal закрепляет свежую owner-проекцию current root/node/session/turn/
+attempt, exact опубликованной версии и состояний её шагов в обязательном
+PLATFORM `CONSTRAINTS` существующего snapshot. При continuation проекция
+перечитывается из текущего owner состояния, а не копируется из прошлого ввода.
+Same-root continuation определяется проверенным `CONTINUES`, а не наличием
+истории; завершённые шаги этого root не повторяются. Каталог до первого child
+result может быть пустым: это само по себе не blocker первого допустимого шага.
+Все данные и guidance остаются advisory, не переносят artifacts/grants и не
+заменяют свежий owner frontier при effect. История и прежние immutable pins
+сохраняются; ошибочное поведение исправляется поставляемым системным контекстом,
+не управляющим сообщением от имени пользователя.
+
+| Проекция Workflow prompt | Сохраняемый инвариант |
+| --- | --- |
+| Initial claim / новый Retry root | Только шаги нового root; прежний INTAKE не считается выполненным |
+| Same-root callback / continuation | Только текущие callback receipts и permitted result pins; прежние SemanticValues не переиспользуются |
+| Durable snapshot / rejoin | JSON-представление до seal сохраняет все поля и точные числа; Prompt и оба digest совпадают после roundtrip |
+| Неизвестная lineage / несовпадающие pins | Закрытый отказ до materialization; grants, историю и старый snapshot не исправляют |
+
+Инструкции публикации результата поставляются всем новым execution через
+версионированный PLATFORM `FILES`, а не исправляющим сообщением пользователя.
+В outbox помещаются только запрошенные допущенные файлы; промежуточные архивы,
+копии репозитория и материалы сборки остаются вне каталога результата.
+Доказательства контрактов публикуются отдельными UTF-8 файлами или валидным
+JSON. Неподдерживаемый запрошенный формат не подменяется молча: агент сообщает
+ограничение. Финальный текст не доказывает публикацию: owner сохраняет прежний
+artifact inspection и атомарный terminal commit. Исторический sealed `FILES`
+не переписывается новой инструкцией. Отказ completion callback фиксируется
+закрытыми stage/reason/code и доверенными execution pins без сырых payload,
+credentials и remote error details; запись отказа не подтверждает commit.
+
+Все роли используют один файловый порядок: уже материализованный attachment
+сначала находят по имени и точному пути в FILES/manifest, сверяют исходные
+size/digest и читают разрешённым локальным инструментом. Редактирование идёт
+только в отдельной рабочей копии INPUT либо собственных файлах workspace;
+оригиналы, SESSION/context и знания остаются read-only. Каталог через API
+применяется для ещё не материализованных разрешённых файлов, в том числе
+результатов предыдущей роли. Локальная копия, имя и справочник не выдают
+полномочий и не подтверждают публикацию результата. Локальное чтение не
+является запасным транспортом после remote denial/failure.
+
+Этот порядок задаётся платформой для сотрудников, SYSTEM и PROJECT
+помощников, включая дочерние execution и warm/continuation, а не отдельным
+пользовательским промптом. Cwd — `/workspace/work`; `WORKSPACE.md` содержит
+карту каталогов и порядок первых действий. Редактируемые INPUT-копии лежат
+в `/workspace/work/input`, прочие рабочие файлы — в `/workspace/work`.
+Оригиналы и история — `/workspace/input`, контекст — `/workspace/context`,
+знания — `/workspace/knowledge`; защита обеспечивается read-only mounts
+и проверкой путей, а не только инструкцией. Пользователь называет файл или
+задачу; агент самостоятельно разрешает имя по текущему дереву и manifest,
+при неоднозначности различая происхождение и версию, без угадывания ID.
+При работе с исходниками агент сначала смотрит разрешённое дерево/индекс,
+затем полностью читает нужные файлы. Полное byte-integrity/EOF сканирование
+пакета и содержательное чтение — разные доказательства; весь репозиторий
+не выводится в prompt автоматически. Явное требование полного чтения
+конкретного источника сохраняется. Разрешённое локальное чтение до EOF
+не требует повторного remote read_file или вывода каждого байта в tool response.
+Справочник не выдаёт Git/network/credential/publication grants и не делает
+локальные файлы устойчивыми результатами. После join прежнего provider
+следующее исполнение заново создаёт рабочую область и копии из pinned
+оригиналов; результат до terminal сохраняется разрешённым artifact/Git path.
+
+Полные current `RuntimeRevision.instructions` доставляются native
+`developerInstructions` при `thread/start` и cold `thread/resume` нового
+app-server каждого execution. Файл `/workspace/AGENTS.md` сохраняет точные
+байты для локального чтения и provenance, но не доказывает доставку модели:
+parent вне discovered project root может не читаться, а provider doc budget
+может обрезать файл. Встроенная base Codex не заменяется; старое содержимое
+rollout не становится текущими инструкциями. Дополнительный continuation
+notice может содержать только exact opt-in ссылочную проекцию свежей базы;
+полные main instructions/core pins сохраняются и доставляются отдельно,
+исторические snapshots без marker материализуются неизменно.
+
+Транспортный JSONL frame app-server имеет отдельный ограниченный бюджет8MiB:
+полный terminal aggregate может быть больше квоты отдельного смыслового поля.
+Это предел платформы, не обещание upstream максимума. Очередь8frames сохраняет
+прежний предел64MiB queued raw bytes; scanner и единственный pending frame
+ограничены отдельно. Это не верхняя граница RSS: transient decoder copies
+имеют собственную зависимость от bounded frame. Semantic1MiB, final/published
+limits, strict JSON/identity/authority checks и message count100000 остаются
+неизменны. Более крупный кадр закрыто отклоняется, без усечения либо выдачи
+непроверенного payload. Stop/full-queue сохраняет cancel/close/join.
+Логи сообщают только закрытый stream_error subtype; public diagnostic не
+приобретает сырых parser/reader ошибок. Retained rollout item не равен stdout
+wire frame: его размер не доказывает конкретный rejecting guard.
+
+| Файловый путь исполнения | Граница и результат |
+| --- | --- |
+| Уже материализованный источник | Точные текущие FILES pins и проверка оригинальных байтов; обязательный источник читается до EOF, без повторного remote чтения того же вложения |
+| Отсутствующий локально результат другой роли | Собственный разрешённый каталог, полная пагинация и проверка происхождения; parent entry_ref не переиспользуется |
+| Невалидная форма entry_ref | Закрытый локальный отказ до metadata RPC; FILE_INPUT_INVALID допускает только одно исправление аргументов по собственному каталогу, не угадывание ссылки |
+| Валидный, но отсутствующий/недоступный tuple, отозванная lease либо audit failure | Обычный закрытый отказ без автоматического retry, другого транспорта или расширения grants |
+| Cancel/delete/terminal/expiry и новая attempt | Прежние fences и owner-транзакции сохраняются; новые файлы, каталог и pins принадлежат свежему execution, исторические snapshots не переписываются |
+
 Continuation после дочерней работы несёт в самом новом вводе результаты
 из точных server-owned callback receipts: run/node, terminal state, безопасное
 резюме и ссылки на artifacts. Для Workflow туда же входят ещё не
@@ -400,6 +562,17 @@ Callback обычного сотрудника сохраняет каталог
 получает новое server-owned ребро от текущего узла и свежую revision.
 Отзыв capability закрывает каталог и команду; опубликованный Workflow
 по-прежнему предлагает только ещё не материализованные шаги своей версии.
+
+Опубликованный Workflow предлагает только текущий серверный фронт: у каждого
+`WAITING_FOR` predecessor exact root состояние должно быть `SUCCEEDED`.
+`PLANNED`, `QUEUED`, `RUNNING`, ожидание Gate и любой terminal failure не
+разрешают queue-ahead. Owner command после проверки lease/capability/relationship
+повторно проверяет этот predicate до materialization, receipt, audit и child
+effects; отказ использует прежний typed conflict без автоматического retry.
+Каталог остаётся advisory, ordinary delegation не получает Workflow-ограничение,
+а nested Workflow использует собственный root. Готовые parallel peers допустимы;
+scheduler не обходит зависимости. Ранее материализованный заблокированный граф
+этим preflight не исправляется и остаётся под штатным cancel/deadline lifecycle.
 
 Исправление локально неверного входа делегирования не является повтором
 исполняемой команды. Различимый typed отказ shape/recipient-step/task/input

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
+import type { AsyncEntityOptionPage } from "@/shared/ui/async-entity-picker";
 import {
   createRenderer,
   defineComponent,
@@ -12,6 +13,7 @@ import {
 import { createI18n } from "vue-i18n";
 import { captureSetupState } from "@/test-utils/setup-harness";
 import { verifiedImageTools } from "@/shared/lib/verified-image-tools";
+import { defaultRuntimeEnvironmentPolicy } from "@/features/runtime/environment-form";
 import {
   verifiedInventoryFixture,
   unavailableInventoryFixture,
@@ -20,6 +22,7 @@ import type {
   RoleImageArtifact,
   RuntimeEnvironmentInput,
   RuntimeEnvironmentDraft,
+  RuntimeEnvironmentDraftSpecification,
   RuntimeEnvironmentSet,
   RevisionImpactPlan,
 } from "@/shared/api/generated/openapi/types.gen";
@@ -32,15 +35,24 @@ const runtime = vi.hoisted(() => ({
   environmentAgents: {},
   environmentAgentCursors: {},
   loading: {},
+  problems: {} as Record<string, AppProblem | undefined>,
   loadPromotedRoleImageArtifact: vi.fn(),
   loadEnvironment: vi.fn(),
   loadEnvironmentVersions: vi.fn(),
+  loadEnvironmentReadiness: vi.fn(),
+  loadEnvironmentAgents: vi.fn(),
   searchPromotedRoleImagePage: vi.fn(),
 }));
 const cleanup = vi.hoisted(() => [] as Array<() => void>);
 const session = vi.hoisted(() => ({
   beginRuntimeEnvironmentPolicyReauth: vi.fn(),
 }));
+const platform = vi.hoisted(() => ({
+  bootstrap: { organizationRef: "org_synthetic" } as
+    | { organizationRef: string }
+    | undefined,
+}));
+const getRevisionImpactPlan = vi.hoisted(() => vi.fn());
 const draftApi = vi.hoisted(() => ({
   createEnvironmentDraft: vi.fn(),
   saveEnvironmentDraft: vi.fn(),
@@ -67,11 +79,23 @@ vi.mock("vue-router", () => ({
 }));
 vi.mock("@/features/runtime/store", () => ({ useRuntimeStore: () => runtime }));
 vi.mock("@/features/session/store", () => ({ useSessionStore: () => session }));
+vi.mock("@/features/platform/store", () => ({
+  usePlatformStore: () => platform,
+}));
+vi.mock("@/shared/api/generated/openapi/sdk.gen", async (original) => ({
+  ...(await original<
+    typeof import("@/shared/api/generated/openapi/sdk.gen")
+  >()),
+  getRevisionImpactPlan,
+}));
 vi.mock("@/features/runtime/environment-drafts", async (original) => ({
   ...(await original<typeof import("@/features/runtime/environment-drafts")>()),
   ...draftApi,
 }));
 vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
+vi.mock("@/shared/config/runtime", () => ({
+  runtimeConfig: () => ({ requestTimeoutMs: 1000 }),
+}));
 import RuntimeEnvironmentEditorPage from "./RuntimeEnvironmentEditorPage.vue";
 import { i18n } from "@/app/i18n";
 import { AppProblem } from "@/shared/api/problem";
@@ -83,6 +107,8 @@ import {
   createRuntimeEnvironmentPolicyIntent,
   recordRuntimeEnvironmentPolicyReauthCompletion,
 } from "@/features/session/reauth";
+import { rememberPublicationAttempt } from "@/features/runtime/publication-attempt";
+import type { PublicationAttempt } from "@/features/runtime/publication-attempt";
 const mountedEditors: Array<() => void> = [];
 afterEach(() => {
   for (const dispose of mountedEditors.splice(0)) dispose();
@@ -101,22 +127,28 @@ async function editor(localized = false) {
     draftDirty: Ref<boolean>;
     problem: Ref<AppProblem | undefined>;
     reauthRestored: Ref<boolean>;
-    specification: Ref<{ name: string; description: string }>;
+    specification: Ref<RuntimeEnvironmentDraftSpecification>;
     imageArtifact: Ref<RoleImageArtifact | undefined>;
     imageInventoryReady: Ref<boolean>;
     imageLoading: Ref<boolean>;
     imageProblem: Ref<unknown>;
     imageBadgeLabel: Ref<string>;
     publicationPlan: Ref<RevisionImpactPlan | undefined>;
+    publicationAttempt: Ref<PublicationAttempt | undefined>;
+    publicationUnknown: Ref<boolean>;
     selectedImage: Ref<{ ref: string; title: string } | undefined>;
     applyRestoredInput(input: RuntimeEnvironmentInput): void;
     applyServerDraft(draft: RuntimeEnvironmentDraft): void;
     loadImageArtifact(recipe: string, artifact: string): Promise<void>;
     selectImage(option: typeof ownImageOption): Promise<void>;
+    loadImagePage(query: string): Promise<AsyncEntityOptionPage>;
     load(): Promise<void>;
+    initialize(): Promise<void>;
     validateDraft(): Promise<void>;
     publish(selected: string[]): Promise<void>;
     preparePublication(): Promise<void>;
+    recoverPublication(): Promise<void>;
+    retryPublication(): Promise<void>;
     restoreAfterFreshAuthentication(): Promise<void>;
   };
 }
@@ -170,6 +202,7 @@ beforeEach(() => {
   route.params.environmentRef = "environment_1";
   route.query = {};
   runtime.environments = {};
+  platform.bootstrap = { organizationRef: "org_synthetic" };
 });
 
 function browserStorage(): Storage {
@@ -211,6 +244,130 @@ function savedDraft(): RuntimeEnvironmentDraft {
     },
   };
 }
+
+describe("ошибка страницы после повторного чтения", () => {
+  const oldProblem = () =>
+    new AppProblem({
+      status: 0,
+      code: "UNKNOWN",
+      retryable: true,
+      kind: "unavailable",
+    });
+  const apiProblem = () =>
+    new AppProblem({
+      status: 503,
+      code: "SERVICE_UNAVAILABLE",
+      retryable: true,
+      kind: "unavailable",
+    });
+  beforeEach(() => {
+    route.params = { projectRef: "project_1", environmentRef: "environment_1" };
+    route.query = {};
+    vi.stubGlobal("window", {
+      sessionStorage: browserStorage(),
+      removeEventListener: vi.fn(),
+    });
+    runtime.problems = {};
+    const policy = defaultRuntimeEnvironmentPolicy();
+    runtime.environments = {
+      environment_1: {
+        ref: "environment_1",
+        projectRef: "project_1",
+        version: 1,
+        name: "Окружение",
+        description: "",
+        currentVersion: {
+          image: {
+            artifactRef: "image_own",
+            recipeRef: "recipe_own",
+            recipeGeneration: 3,
+            reference: "Образ",
+          },
+          tools: [],
+          values: [],
+          secretDescriptors: [],
+          policy: {
+            resources: policy.resources,
+            volumes: [],
+            network: { webAccess: policy.webAccess },
+          },
+        },
+      },
+    };
+    runtime.loadEnvironment.mockResolvedValue(undefined);
+    runtime.loadEnvironmentVersions.mockResolvedValue(undefined);
+    runtime.loadEnvironmentReadiness.mockResolvedValue(undefined);
+    runtime.loadEnvironmentAgents.mockResolvedValue(undefined);
+    runtime.loadPromotedRoleImageArtifact.mockResolvedValue({
+      artifact: promotedArtifact("image_own"),
+      recipeName: "Образ",
+    });
+  });
+  it.each(["load", "initialize"] as const)(
+    "успешный текущий %s очищает прежний UNKNOWN",
+    async (action) => {
+      const state = await editor(true);
+      state.problem.value = oldProblem();
+      await state[action]();
+      expect(state.problem.value).toBeUndefined();
+    },
+  );
+  it("текущая API ошибка не очищается после отказа чтения", async () => {
+    const state = await editor(true);
+    const failure = apiProblem();
+    state.problem.value = failure;
+    runtime.loadEnvironment.mockImplementationOnce(() => {
+      runtime.problems["environment:environment_1"] = failure;
+      return Promise.resolve();
+    });
+    await state.load();
+    expect(state.problem.value).toBe(failure);
+    expect(runtime.problems["environment:environment_1"]).toBe(failure);
+  });
+  it("поздний load старого поколения не очищает новую ошибку", async () => {
+    const state = await editor(true);
+    const failure = apiProblem();
+    state.problem.value = failure;
+    const request = pending<undefined>();
+    runtime.loadEnvironmentAgents.mockReturnValueOnce(request.promise);
+    const loading = state.load();
+    await Promise.resolve();
+    await Promise.resolve();
+    await state.initialize();
+    state.problem.value = failure;
+    request.resolve(undefined);
+    await loading;
+    expect(state.problem.value).toBe(failure);
+  });
+  it("закрытый редактор не очищает ошибку после позднего readback", async () => {
+    const state = await editor(true);
+    const failure = apiProblem();
+    state.problem.value = failure;
+    const request = pending<undefined>();
+    runtime.loadEnvironmentAgents.mockReturnValueOnce(request.promise);
+    const loading = state.load();
+    await Promise.resolve();
+    await Promise.resolve();
+    for (const callback of cleanup) callback();
+    request.resolve(undefined);
+    await loading;
+    expect(state.problem.value).toBe(failure);
+  });
+  it("новая ошибка во время текущего чтения не подменяется успехом", async () => {
+    const state = await editor(true);
+    state.problem.value = oldProblem();
+    const request = pending<undefined>();
+    runtime.loadEnvironmentAgents.mockReturnValueOnce(request.promise);
+    const loading = state.load();
+    await Promise.resolve();
+    await Promise.resolve();
+    const failure = apiProblem();
+    state.problem.value = failure;
+    request.resolve(undefined);
+    await loading;
+    expect(state.problem.value).toBe(failure);
+  });
+});
 const freshAuthenticationProblem = new AppProblem({
   status: 403,
   code: "FRESH_AUTHENTICATION_REQUIRED",
@@ -219,6 +376,26 @@ const freshAuthenticationProblem = new AppProblem({
 });
 
 describe("проверка черновика после свежего SSO", () => {
+  it("PROJECT список использует такую же компактную подпись без нового чтения", async () => {
+    const image = {
+      ref: "artifact_fixture",
+      title: "Базовый системный образ",
+      recipeRef: "imgrecipe_exact",
+      generation: 3,
+      description: "example.invalid/image@sha256:" + "a".repeat(64),
+    };
+    runtime.searchPromotedRoleImagePage.mockResolvedValue({ items: [image] });
+    const state = await editor(true);
+    const page = await state.loadImagePage(image.recipeRef);
+    expect(page.items[0]).toMatchObject({
+      ref: image.ref,
+      title: image.title,
+      description: "Поколение 3 · …pe_exact",
+    });
+    expect(page.items[0]?.tooltip).toContain(image.description);
+    expect(runtime.searchPromotedRoleImagePage).toHaveBeenCalledTimes(1);
+    expect(runtime.loadPromotedRoleImageArtifact).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     runtime.environments = {
       environment_1: { ref: "environment_1", version: 1 },
@@ -560,6 +737,208 @@ function promotedArtifact(ref: string): RoleImageArtifact {
     verifiedToolInventory: verifiedInventoryFixture(),
   };
 }
+
+describe("восстановление публикации привязано к текущей организации", () => {
+  function plan(): RevisionImpactPlan {
+    return {
+      ref: "plan_synthetic",
+      version: 1,
+      kind: "RUNTIME_ENVIRONMENT",
+      sourceRef: "environment_1",
+      sourceVersion: 1,
+      draftRef: "draft_synthetic",
+      draftVersion: 1,
+      targetDigest: "d".repeat(64),
+      digest: "e".repeat(64),
+      total: 1,
+      state: "PREPARED",
+      createdAt: "2026-09-06T00:00:00Z",
+      expiresAt: "2099-09-06T00:00:00Z",
+    };
+  }
+  function page(applied: boolean, organizationRef = "org_synthetic") {
+    return {
+      plan: {
+        ...plan(),
+        ...(applied
+          ? {
+              version: 2,
+              state: "APPLIED" as const,
+              publishedRevisionRef: "published_revision",
+            }
+          : {}),
+      },
+      total: 1,
+      items: [
+        {
+          ref: "item_synthetic",
+          scopeKind: "PROJECT" as const,
+          organizationRef,
+          projectRef: "project_1",
+          consumerKind: "AGENT" as const,
+          consumerRef: "agent_synthetic",
+          consumerVersion: 2,
+          bindingRef: "binding_synthetic",
+          bindingVersion: 3,
+          outcome: applied ? ("APPLIED" as const) : ("PENDING" as const),
+          ...(applied
+            ? {
+                resultRevisionRef: "published_revision",
+                resultBindingRef: "binding_synthetic",
+                resultBindingVersion: 4,
+                resultConsumerVersion: 3,
+              }
+            : {}),
+        },
+      ],
+    };
+  }
+  const attempt = (): PublicationAttempt => ({
+    kind: "RUNTIME_ENVIRONMENT",
+    ownerRef: "draft_synthetic",
+    planRef: "plan_synthetic",
+    version: 1,
+    selectedItemRefs: ["item_synthetic"],
+    key: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  });
+  async function publicationEditor() {
+    vi.stubGlobal("window", {
+      sessionStorage: browserStorage(),
+      removeEventListener: vi.fn(),
+    });
+    runtime.environments = {
+      environment_1: {
+        ref: "environment_1",
+        version: 1,
+        nextActions: ["UPDATE"],
+      },
+    };
+    const state = await editor(true);
+    const draft = {
+      ...savedDraft(),
+      state: "VALID" as const,
+      validationDigest: "c".repeat(64),
+      specification: { ...state.specification.value },
+    };
+    state.applyServerDraft(draft);
+    state.publicationPlan.value = plan();
+    state.publicationAttempt.value = attempt();
+    state.publicationUnknown.value = true;
+    return { state, draft };
+  }
+  it("APPLIED recovery после GET200 принимает exact owner impact без повторной mutation", async () => {
+    const { state, draft } = await publicationEditor();
+    const published = {
+      ...draft,
+      state: "PUBLISHED" as const,
+      publishedEnvironmentRef: "environment_1",
+    };
+    draftApi.readEnvironmentDraft.mockResolvedValueOnce(published);
+    getRevisionImpactPlan.mockResolvedValueOnce({
+      data: page(true),
+      response: new Response(null, { status: 200 }),
+    });
+    await state.recoverPublication();
+    expect(state.problem.value).toBeUndefined();
+    expect(state.serverDraft.value).toEqual(published);
+    expect(state.publicationUnknown.value).toBe(false);
+    expect(state.publicationAttempt.value).toBeUndefined();
+    expect(runtime.loadEnvironment).toHaveBeenCalledExactlyOnceWith(
+      "environment_1",
+    );
+    expect(draftApi.publishEnvironmentDraft).not.toHaveBeenCalled();
+  });
+  it("PREPARED retry читает owner impact и сохраняет exact исходные intent/OCC/key", async () => {
+    const { state, draft } = await publicationEditor();
+    draftApi.readEnvironmentDraft.mockResolvedValueOnce(draft);
+    getRevisionImpactPlan.mockResolvedValueOnce({
+      data: page(false),
+      response: new Response(null, { status: 200 }),
+    });
+    draftApi.publishEnvironmentDraft.mockRejectedValueOnce(
+      new AppProblem({
+        status: 503,
+        code: "SERVICE_UNAVAILABLE",
+        retryable: true,
+        kind: "unavailable",
+      }),
+    );
+    await state.retryPublication();
+    expect(draftApi.publishEnvironmentDraft).toHaveBeenCalledOnce();
+    expect(draftApi.publishEnvironmentDraft.mock.calls[0]?.slice(0, 3)).toEqual(
+      [draft, plan(), attempt().selectedItemRefs],
+    );
+    expect(draftApi.publishEnvironmentDraft.mock.calls[0]?.[4]).toBe(
+      attempt().key,
+    );
+  });
+  it("stored recovery передаёт owner anchor и не публикует повторно", async () => {
+    const { state, draft } = await publicationEditor();
+    rememberPublicationAttempt(attempt(), window.sessionStorage);
+    getRevisionImpactPlan.mockResolvedValueOnce({
+      data: page(true),
+      response: new Response(null, { status: 200 }),
+    });
+    await state.preparePublication();
+    expect(state.problem.value).toBeUndefined();
+    expect(state.publicationPlan.value?.state).toBe("APPLIED");
+    expect(state.serverDraft.value).toEqual(draft);
+    expect(draftApi.prepareEnvironmentPublication).not.toHaveBeenCalled();
+    expect(draftApi.publishEnvironmentDraft).not.toHaveBeenCalled();
+  });
+  it.each(["foreign", "missing"] as const)(
+    "%s organization не принимается из response/draft",
+    async (kind) => {
+      const { state, draft } = await publicationEditor();
+      if (kind === "missing") platform.bootstrap = undefined;
+      draftApi.readEnvironmentDraft.mockResolvedValueOnce({
+        ...draft,
+        state: "PUBLISHED",
+        publishedEnvironmentRef: "environment_1",
+      });
+      getRevisionImpactPlan.mockResolvedValueOnce({
+        data: page(true, kind === "foreign" ? "org_foreign" : "org_synthetic"),
+        response: new Response(null, { status: 200 }),
+      });
+      await state.recoverPublication();
+      expect(state.problem.value).toBeDefined();
+      expect(state.serverDraft.value).toEqual(draft);
+      expect(state.publicationUnknown.value).toBe(true);
+      expect(runtime.loadEnvironment).not.toHaveBeenCalled();
+      expect(draftApi.publishEnvironmentDraft).not.toHaveBeenCalled();
+    },
+  );
+  it("unmount отменяет impact read и не принимает поздний APPLIED", async () => {
+    const { state, draft } = await publicationEditor();
+    draftApi.readEnvironmentDraft.mockResolvedValueOnce({
+      ...draft,
+      state: "PUBLISHED",
+      publishedEnvironmentRef: "environment_1",
+    });
+    const request = pending<{
+      data: ReturnType<typeof page>;
+      response: Response;
+    }>();
+    getRevisionImpactPlan.mockReturnValueOnce(request.promise);
+    const reading = state.recoverPublication();
+    await vi.waitFor(() =>
+      expect(getRevisionImpactPlan).toHaveBeenCalledOnce(),
+    );
+    const options = getRevisionImpactPlan.mock.calls[0]?.[0] as {
+      signal: AbortSignal;
+    };
+    const signal = options.signal;
+    for (const close of cleanup) close();
+    expect(signal.aborted).toBe(true);
+    request.resolve({
+      data: page(true),
+      response: new Response(null, { status: 200 }),
+    });
+    await reading;
+    expect(state.serverDraft.value).toEqual(draft);
+    expect(runtime.loadEnvironment).not.toHaveBeenCalled();
+  });
+});
 const ownImageOption = {
   ref: "image_own",
   recipeRef: "recipe_own",

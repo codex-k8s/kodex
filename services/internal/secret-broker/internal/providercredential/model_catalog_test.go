@@ -233,7 +233,7 @@ func runCatalogProcessFixture() int {
 	defer clear(raw)
 	// API observation не должна запускать app-server вообще.
 	if len(raw) != 0 {
-		return 12
+		return runManagedRenewalFixture(home, raw)
 	}
 	external, refresh, hang := false, false, false
 	diagnosticMode := ""

@@ -16,6 +16,7 @@ import type {
   Project,
   RoleImageRecipe,
   Run,
+  RuntimeEnvironmentSet,
   Workflow,
 } from "@/shared/api/generated/openapi/types.gen";
 
@@ -177,7 +178,7 @@ describe("подписи экранов системного помощника"
     ).toBe("Сохранённое имя");
   });
 
-  it.each([undefined, "unknown-route", "runtime-environment", Symbol("route")])(
+  it.each([undefined, "unknown-route", Symbol("route")])(
     "не назначает системную подпись неизвестному или проектному маршруту %s",
     (name) => {
       expect(assistantContextRouteLabelKey(name)).toBeUndefined();
@@ -191,6 +192,116 @@ describe("подписи экранов системного помощника"
 });
 
 describe("assistant route context", () => {
+  const environmentRoute = () => {
+    const current = route(
+      "/projects/prj_sales/environments/env_1?draftRef=draft_1#image",
+      {
+        projectRef: "prj_sales",
+        environmentRef: "env_1",
+      },
+    );
+    current.name = "runtime-environment";
+    return current;
+  };
+  const environment = {
+    ref: "env_1",
+    projectRef: "prj_sales",
+    organizationRef: "org_sales",
+    scopeKind: "PROJECT",
+    name: "Окружение проверки",
+    state: "ACTIVE",
+    version: 12,
+  } as RuntimeEnvironmentSet;
+
+  it("показывает поздно загруженное exact имя окружения без изменения pins/identity/operations", () => {
+    const current = environmentRoute();
+    const missing = resolveAssistantContext(current, sources);
+    const loaded = resolveAssistantContext(current, {
+      ...sources,
+      environments: { env_1: environment },
+      organizationRef: "org_sales",
+    });
+    expect(loaded.descriptor.entityName).toBe("Окружение проверки");
+    expect(assistantContextTitle(loaded.descriptor)).toBe("Окружение проверки");
+    expect(assistantContextIdentity(loaded.descriptor, loaded.projectRef)).toBe(
+      assistantContextIdentity(missing.descriptor, missing.projectRef),
+    );
+    expect({ ...loaded.descriptor, entityName: "" }).toEqual(
+      missing.descriptor,
+    );
+    expect(loaded.descriptor.allowedOperations).toEqual([]);
+    expect(loaded.descriptor.entityVersion).toBeUndefined();
+    expect(loaded.descriptor.route).toBe(current.fullPath);
+  });
+
+  it.each([
+    { ref: "env_other" },
+    { projectRef: "prj_other" },
+    { organizationRef: "org_other" },
+    { scopeKind: "ORGANIZATION" as const },
+    { state: "DELETED" as const },
+  ])("не переносит имя чужого/удалённого/позднего окружения %j", (change) => {
+    const value = resolveAssistantContext(environmentRoute(), {
+      ...sources,
+      environments: { env_1: { ...environment, ...change } },
+      organizationRef: "org_sales",
+    });
+    expect(value.descriptor.entityName).toBe("");
+    expect(value.descriptor.entityKind).toBe("ENVIRONMENT");
+    expect(value.descriptor.entityRef).toBe("env_1");
+    expect(value.descriptor.allowedOperations).toEqual([]);
+  });
+
+  it.each([undefined, "org_other"])(
+    "без exact owner organization %s имя не показывается",
+    (organizationRef) => {
+      const value = resolveAssistantContext(environmentRoute(), {
+        ...sources,
+        environments: { env_1: environment },
+        organizationRef,
+      });
+      expect(value.descriptor.entityName).toBe("");
+    },
+  );
+
+  it("не показывает сохранённое имя при незавершённом или отказавшем current read", () => {
+    const value = resolveAssistantContext(environmentRoute(), {
+      ...sources,
+      environments: { env_1: environment },
+      organizationRef: "org_sales",
+      environmentReadBlocked: true,
+    });
+    expect(value.descriptor.entityName).toBe("");
+  });
+
+  it("смена route не принимает позднее имя предыдущего окружения даже под новым cache key", () => {
+    const current = environmentRoute();
+    current.params.environmentRef = "env_next";
+    current.fullPath = "/projects/prj_sales/environments/env_next";
+    const value = resolveAssistantContext(current, {
+      ...sources,
+      environments: { env_1: environment, env_next: environment },
+      organizationRef: "org_sales",
+    });
+    expect(value.descriptor.entityRef).toBe("env_next");
+    expect(value.descriptor.entityName).toBe("");
+  });
+
+  it.each(["ru", "en"] as const)(
+    "до загрузки имени окружения использует локализованную подпись в %s без URL",
+    (locale) => {
+      const current = environmentRoute();
+      const value = resolveAssistantContext(current, sources);
+      const key = assistantContextRouteLabelKey(current.name);
+      expect(key).toBe("nav.environment");
+      const label = i18n.global.t(key ?? "", {}, { locale });
+      expect(assistantContextTitle(value.descriptor, undefined, label)).toBe(
+        locale === "ru" ? "Окружение" : "Environment",
+      );
+      expect(value.descriptor.entityName).toBe("");
+    },
+  );
+
   it.each([
     "CREATE_PROJECT_ASSISTANT",
     "CREATE_INSTRUCTION_DRAFT",

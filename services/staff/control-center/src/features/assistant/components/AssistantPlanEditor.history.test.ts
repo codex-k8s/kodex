@@ -14,6 +14,12 @@ vi.mock("@/features/platform/store", () => ({
 vi.mock("@/features/runtime/store", () => ({ useRuntimeStore: () => ({}) }));
 vi.mock("@/shared/api/generated/openapi/sdk.gen", () => ({
   listAgents: vi.fn(() => new Promise(() => {})),
+  getAgent: vi.fn(() => new Promise(() => {})),
+  listPlatformCapabilities: vi.fn(() => new Promise(() => {})),
+}));
+vi.mock("@/shared/api/client", () => ({
+  requestSignal: (signal?: AbortSignal) =>
+    signal ?? new AbortController().signal,
 }));
 vi.mock("@/features/role-images/api", () => ({
   loadRoleEnvironmentCatalog: vi.fn(() => new Promise(() => {})),
@@ -25,9 +31,56 @@ vi.mock("@/features/role-images/RoleImageDockerfileEditor.vue", () => ({
 import { i18n } from "@/app/i18n";
 import type { AssistantPlan } from "@/shared/api/generated/openapi/types.gen";
 import Editor from "./AssistantPlanEditor.vue";
+import { appliedFilePlanFixture } from "../project-file-plan.fixtures";
 
 afterEach(() => {
   i18n.global.locale.value = "ru";
+});
+
+describe("file revision native editor", () => {
+  it("APPLIED receipt в штатном Editor показывает полученную v2 и убирает будущее применение", async () => {
+    const input = appliedFilePlanFixture();
+    const html = await renderPlan(input);
+    expect(html).toContain("v2");
+    expect(html).not.toContain("Будет назначена при применении");
+    expect(html).not.toContain(i18n.global.t("fileRevision.staged"));
+    expect(html).not.toContain(
+      i18n.global.t("assistant.planEditor.projectFileBoundary"),
+    );
+    expect(html).not.toContain("staging-not-a-grant");
+  });
+  it("отдельный receipt prop используется без изменения исходного APPLIED plan", async () => {
+    const input = appliedFilePlanFixture();
+    const receipt = input.receipt;
+    delete input.receipt;
+    const html = await renderPlan(input, false, receipt);
+    expect(html).toContain("v2");
+    expect(html).not.toContain("Будет назначена при применении");
+    expect(input.receipt).toBeUndefined();
+  });
+  it("APPLIED без receipt остаётся неподтверждённым, не показывает будущее применение", async () => {
+    const input = appliedFilePlanFixture();
+    delete input.receipt;
+    const html = await renderPlan(input);
+    expect(html).toContain(i18n.global.t("fileRevision.inspectFailed"));
+    expect(html).not.toContain("v2");
+    expect(html).not.toContain("Будет назначена при применении");
+  });
+  it("показывает stable before/new, не выводит contentRef и не принимает staged body за пустое поле", async () => {
+    const input = appliedFilePlanFixture();
+    input.state = "DRAFT";
+    input.applied = false;
+    delete input.receipt;
+    const html = await renderPlan(input);
+    expect(html).toContain("document.md");
+    expect(html).toContain("v1");
+    expect(html).toContain("Будет назначена при применении");
+    expect(html).toContain("Содержимое подготовлено");
+    expect(html).not.toContain("staging-not-a-grant");
+    expect(html).not.toContain("assistant-project-file-content-0");
+    expect(html).not.toContain("assistant-project-file-name-0");
+    expect(html).not.toContain("assistant-operation-parameters-0");
+  });
 });
 
 function plan(state: AssistantPlan["state"]): AssistantPlan {
@@ -69,15 +122,25 @@ function plan(state: AssistantPlan["state"]): AssistantPlan {
 }
 
 async function render(state: AssistantPlan["state"], readonly = false) {
-  const input = plan(state);
+  return renderPlan(plan(state), readonly);
+}
+
+async function renderPlan(
+  input: AssistantPlan,
+  readonly = false,
+  receipt?: AssistantPlan["receipt"],
+) {
   const before = JSON.stringify(input);
   const events: unknown[] = [];
   const app = createSSRApp({
     render: () =>
       h(Editor, {
         plan: input,
+        receipt,
         readonly,
         onSave: (...args) => events.push(args),
+        onValidate: () => events.push("validate"),
+        onApply: () => events.push("apply"),
       }),
   });
   app.use(i18n);
@@ -130,5 +193,126 @@ describe("AssistantPlanEditor: история рецепта образа", () =
     );
     expect(html).toContain('name="assistant-role-image-environment-0"');
     expect(html).toMatch(/<option[^>]*value="standard"/);
+  });
+});
+
+function capabilityPlan(
+  state: AssistantPlan["state"],
+  enabled = true,
+): AssistantPlan {
+  const input = plan(state);
+  input.operations = [
+    {
+      ref: "op_capability_synthetic",
+      type: "CHANGE_CAPABILITY",
+      action: "UPDATE",
+      title:
+        "CHANGE_CAPABILITY platform.artifact.manage для agt_synthetic с expectedVersion=17",
+      summary:
+        "Сотрудник сможет изменять файлы проекта.\nДополнительное последствие: потребуется проверка результата <script>не выполнять</script>.",
+      target: {
+        kind: "AGENT",
+        name: "Аналитик",
+        ref: "agt_synthetic",
+        version: 17,
+      },
+      expectedVersion: 17,
+      parameters: {
+        agentRef: "agt_synthetic",
+        capabilityKey: "platform.artifact.manage",
+        enabled,
+      },
+      before: { enabled: !enabled },
+      after: { enabled },
+      selected: true,
+      permitted: true,
+      validationProblems: [],
+    },
+  ];
+  return input;
+}
+
+describe("AssistantPlanEditor: понятное отображение платформенного права", () => {
+  it.each([
+    ["APPLIED", false, true, "ru"],
+    ["APPLIED", false, false, "ru"],
+    ["DRAFT", true, true, "ru"],
+    ["DRAFT", false, true, "ru"],
+    ["APPLIED", false, true, "en"],
+  ] as const)(
+    "%s readonly=%s enabled=%s locale=%s сохраняет последствия и original envelope",
+    async (state, readonly, enabled, locale) => {
+      i18n.global.locale.value = locale;
+      const input = capabilityPlan(state, enabled);
+      const item = input.operations[0];
+      if (!item) throw new Error("Synthetic capability operation is missing");
+      const html = await renderPlan(input, readonly);
+      const heading = html.match(
+        /<span[^>]*class="assistant-plan-operation__title"[^>]*>([^]*?)<\/span>/,
+      )?.[1];
+      expect(heading).toContain(
+        "Аналитик · " +
+          i18n.global.t(
+            "assistant.planEditor.capabilities.platform_artifact_manage",
+          ),
+      );
+      expect(heading).not.toContain("platform.artifact.manage");
+      expect(heading).not.toContain("agt_synthetic");
+      const presentation = html.match(
+        /<div[^>]*class="assistant-capability-presentation"[^>]*>([^]*?)<\/div>/,
+      )?.[1];
+      expect(presentation).not.toContain("display:none");
+      expect(presentation).toContain(
+        i18n.global.t(
+          enabled
+            ? "assistant.planEditor.grantEnableShort"
+            : "assistant.planEditor.grantDisableShort",
+        ),
+      );
+      expect(presentation).toContain(
+        i18n.global.t("serverMessages.CAPABILITY_ARTIFACT_MANAGE_DESCRIPTION"),
+      );
+      expect(presentation).toContain("Дополнительное последствие");
+      expect(presentation).toContain(
+        "&lt;script&gt;не выполнять&lt;/script&gt;",
+      );
+      expect(presentation).toContain("\n");
+      const details = html.slice(
+        html.indexOf('<details class="assistant-plan-friendly__snapshot"'),
+      );
+      expect(details).toContain(item.title);
+      expect(details).toContain("agentRef");
+      expect(details).toContain("agt_synthetic");
+      expect(details).toContain("platform.artifact.manage");
+      expect(details).not.toMatch(/<details[^>]*\sopen(?:\s|=|>)/);
+    },
+  );
+
+  it.each(["platform.unknown.manage", "constructor"])(
+    "не угадывает заголовок неизвестного права %s",
+    async (key) => {
+      const input = capabilityPlan("APPLIED");
+      const item = input.operations[0];
+      if (!item) throw new Error("Synthetic capability operation is missing");
+      item.parameters.capabilityKey = key;
+      const html = await renderPlan(input);
+      expect(html).not.toContain('class="assistant-capability-presentation"');
+      expect(html).toContain(item.title);
+    },
+  );
+
+  it("не выдумывает имя получателя или направление из original title", async () => {
+    const input = capabilityPlan("APPLIED");
+    const item = input.operations[0];
+    if (!item) throw new Error("Synthetic capability operation is missing");
+    item.target.name = "";
+    expect(await renderPlan(input)).not.toContain(
+      'class="assistant-capability-presentation"',
+    );
+    item.target.name = "Аналитик";
+    delete item.parameters.enabled;
+    expect(await renderPlan(input)).not.toContain(
+      'class="assistant-capability-presentation"',
+    );
   });
 });

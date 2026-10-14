@@ -1,5 +1,5 @@
 -- name: artifacts_lifecycle_soft_delete :exec
-UPDATE control_plane.artifacts
+UPDATE control_plane.artifact_heads
 SET lifecycle_state = 'DELETED',
     deleted_at = clock_timestamp(),
     purge_after = clock_timestamp() + interval '30 days',

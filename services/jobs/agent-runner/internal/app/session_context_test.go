@@ -140,6 +140,45 @@ func TestSessionContextPreservesWholeBoundedUserJSON(t *testing.T) {
 	}
 }
 
+func TestLargeStrictContinuationReachesColdAndProviderResumeUnchanged(t *testing.T) {
+	for _, resumed := range []bool{false, true} {
+		input := semanticRunnerFixture("AGENT")
+		input.RuntimeRevisionRef, input.SessionRef, input.TurnRef, input.Attempt = "rrev_current", "ses_current", "turn_current", 2
+		var envelope runtimecontract.PromptServiceEnvelope
+		if json.Unmarshal([]byte(continuationContextFixture(t, input)), &envelope) != nil {
+			t.Fatal("invalid fixture")
+		}
+		for index := range envelope.Sections {
+			if envelope.Sections[index].Slot == "INPUT" {
+				envelope.Sections[index].Content = strings.Repeat("a", 50000)
+			}
+		}
+		raw, _ := json.Marshal(envelope)
+		notice := string(raw)
+		input.SessionContext = []runtimecontract.RunnerSessionMessage{{Role: "USER", Content: "Exact original task"}, {Role: "ASSISTANT", Content: "Exact prior answer"}, {Role: "USER", Content: notice}}
+		if resumed {
+			semantic := semanticRunnerFixture("SESSION_CONTINUATION")
+			input.Instructions, input.PromptTargetKind, input.PromptServiceTemplateDigest = semantic.Instructions, semantic.PromptTargetKind, semantic.PromptServiceTemplateDigest
+			input.CodexSessionID = "previous-provider-thread"
+		}
+		prompt, err := buildPrompt(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		messages := promptSessionMessages(t, prompt)
+		if messages[len(messages)-1].Content != notice || len(messages) != map[bool]int{false: 3, true: 1}[resumed] {
+			t.Fatal("large full notice changed or duplicated")
+		}
+		if !resumed && messages[0] != input.SessionContext[0] {
+			t.Fatal("cold history changed")
+		}
+		input.SessionContext[0].Content = strings.Repeat("a", runtimecontract.MaximumAssistantTurnCodepoints+1)
+		if _, err := buildPrompt(input); err == nil {
+			t.Fatal("ordinary USER budget was expanded")
+		}
+	}
+}
+
 func TestSessionContextRejectsStaleNoticeAndInvalidHistory(t *testing.T) {
 	for _, mode := range []string{"revision", "session", "turn", "attempt", "role", "size", "utf8", "count"} {
 		t.Run(mode, func(t *testing.T) {

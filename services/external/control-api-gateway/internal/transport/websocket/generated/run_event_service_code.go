@@ -8,4 +8,5 @@ const (
 	RunEventServiceCodeRunCancelled           RunEventServiceCode = "RUN_CANCELLED"
 	RunEventServiceCodeRunNodeCancelled       RunEventServiceCode = "RUN_NODE_CANCELLED"
 	RunEventServiceCodeAssistantTurnCancelled RunEventServiceCode = "ASSISTANT_TURN_CANCELLED"
+	RunEventServiceCodeRootProcessCompleted   RunEventServiceCode = "ROOT_PROCESS_COMPLETED"
 )

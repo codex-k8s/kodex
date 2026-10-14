@@ -302,6 +302,33 @@ Air закреплён на `v1.67.4` в `components.lock.json`. Prime разм�
 Это обновление инструмента требует rollout Pod, но не сборки application
 image; обычные изменения Go/Vue по-прежнему обслуживают Air/Vite.
 
+## Повторное использование exact runner OCI
+
+`build-local-runner.sh` принимает совместно `--cache-directory` и
+`--expected-manifest sha256:<digest>` для существующего private cache другого
+state. Обычный вызов без этих flags сохраняет build/cache поведение.
+
+```bash
+bash tools/dev/build-local-runner.sh \
+  --source-root "$exact_build_source" --state-directory "$destination_state" \
+  --context k3d-kodex --image-profile full \
+  --cache-directory "$existing_private_cache" \
+  --expected-manifest "$approved_manifest"
+```
+
+Source должен быть clean и соответствовать исходной immutable revision:
+cache key связывает source inputs и image profile, а существующая provenance
+проверяет exact revision, OCI bytes и protected runner binary. Reuse требует
+реальный owned каталог mode700, regular same-UID archive без symlink/hardlink,
+размером до8GiB и без special/world-write mode. Существующий mode664 допустим
+только внутри этого private parent; helper не меняет его права. Отсутствующий
+archive/provenance или mismatch закрыто останавливается без build и без записи
+global pin. Cache и provenance не записываются. После проверки того же archive
+выполняются обычный exact import и запись `destination_state/agent-runner-image`
+mode0600; import failure сохраняет прежний pin. Directory/archive identity
+повторно проверяются перед import и перед записью pin. Это не ENV publication,
+policy/default transition, deployment или доказательство serving ELF.
+
 Причина обновления — локально подтверждённый `close of closed channel` при
 `rerun=true` в Air v1.63.4. Сверены Context7 `/air-verse/air`, upstream
 release v1.67.4 и код `runner/engine.go`. Отдельно проверяются изменение,

@@ -7,6 +7,7 @@ import type { RoleImageArtifact } from "@/shared/api/generated/openapi/types.gen
 import {
   assertPromotedRuntimeImage,
   runtimeImageOption,
+  runtimeImagePagePresentation,
   restoreRuntimeImageOption,
   type RuntimeImageCatalog,
   toolsForRuntimeImage,
@@ -38,6 +39,89 @@ function artifact(
 }
 
 describe("Выбор образа и проверенных инструментов", () => {
+  it("различает одноимённые рецепты без digest в строке и не меняет выбор", () => {
+    const options = ["recipe_manager_12345678", "recipe_helper_87654321"].map(
+      (recipeRef, index) => ({
+        ref: `artifact_${String(index)}`,
+        recipeRef,
+        title: "Базовый системный образ",
+        generation: 7,
+        description: artifact().promotedReference,
+        meta: "generation 7",
+      }),
+    );
+    const before = JSON.stringify(options);
+    const result = runtimeImagePagePresentation(
+      options,
+      (generation) => `Поколение ${String(generation)}`,
+    );
+    expect(result.map((item) => item.description)).toEqual([
+      "Поколение 7 · …12345678",
+      "Поколение 7 · …87654321",
+    ]);
+    for (const [index, item] of result.entries()) {
+      expect(item.ref).toBe(options[index]?.ref);
+      expect(item.title).toBe("Базовый системный образ");
+      expect(item.meta).toBeUndefined();
+      expect(item.tooltip).toContain(options[index]?.recipeRef);
+      expect(item.tooltip).toContain(artifact().promotedReference);
+      expect(runtimeImageOption(item)).toMatchObject({
+        ref: options[index]?.ref,
+        recipeRef: options[index]?.recipeRef,
+        generation: 7,
+      });
+    }
+    expect(JSON.stringify(options)).toBe(before);
+  });
+
+  it("коллизия сокращений на текущей странице оставляет полные recipe refs", () => {
+    const refs = ["recipe_manager_12345678", "recipe_helper_12345678"];
+    const result = runtimeImagePagePresentation(
+      refs.map((recipeRef) => ({
+        ref: recipeRef,
+        recipeRef,
+        title: "Образ",
+        generation: 1,
+      })),
+      () => "Поколение 1",
+    );
+    expect(result.map((item) => item.description)).toEqual(
+      refs.map((ref) => `Поколение 1 · ${ref}`),
+    );
+  });
+
+  it("не выдумывает подпись для sparse metadata и сохраняет короткий exact ref", () => {
+    const items = [
+      { ref: "without_recipe", title: "Образ", generation: 2 },
+      { ref: "without_generation", title: "Образ", recipeRef: "recipe_one" },
+      {
+        ref: "invalid_generation",
+        title: "Образ",
+        recipeRef: "recipe_one",
+        generation: 0,
+      },
+    ];
+    const label = vi.fn(() => "Поколение 2");
+    const result = runtimeImagePagePresentation(items, label);
+    expect(result).toEqual(items);
+    expect(result[0]).toBe(items[0]);
+    expect(label).not.toHaveBeenCalled();
+    expect(runtimeImagePagePresentation([], label)).toEqual([]);
+    expect(
+      runtimeImagePagePresentation(
+        [
+          {
+            ref: "artifact",
+            title: "Образ",
+            recipeRef: "recipe_one",
+            generation: 2,
+          },
+        ],
+        label,
+      )[0]?.description,
+    ).toBe("Поколение 2 · recipe_one");
+  });
+
   it("принимает только точную promoted версию с совпадающим digest", () => {
     expect(() =>
       assertPromotedRuntimeImage(artifact(), expected),

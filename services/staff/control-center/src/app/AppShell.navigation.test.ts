@@ -1,4 +1,7 @@
 import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
+import { transpileModule } from "typescript";
+import { runDefaultTaskTitleKey } from "@/features/workboard/model";
 
 import { describe, expect, it } from "vitest";
 
@@ -9,6 +12,89 @@ const bootstrapSource = readFileSync(
 );
 
 describe("AppShell navigation", () => {
+  it("breadcrumb использует тот же PROJECT default resolver и сохраняет остальные названия", () => {
+    expect(source).toContain("runName: runDisplayTitle(platform.runs[runRef])");
+    const start = source.indexOf("function runDisplayTitle(");
+    const end = source.indexOf("const breadcrumbs = computed", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const compiled = transpileModule(source.slice(start, end), {}).outputText;
+    const value = {
+      title: "Команда системному помощнику",
+      titleSource: "SERVER_DEFAULT" as const,
+      source: "SYSTEM_ASSISTANT" as const,
+      projectRef: "project_own",
+      target: {
+        type: "SYSTEM_ASSISTANT" as const,
+        ref: "assistant_own",
+        displayName: "Помощник",
+        version: 1,
+      },
+      assistantPin: {
+        scope: "PROJECT" as const,
+        projectRef: "project_own",
+        organizationRef: "organization_own",
+        assistantRef: "assistant_own",
+        profileRef: "profile_own",
+        conversationRef: "conversation_own",
+      },
+    };
+    const display = (run: Parameters<typeof runDefaultTaskTitleKey>[0]) =>
+      runInNewContext(`${compiled}\nrunDisplayTitle(value);`, {
+        value: run,
+        runDefaultTaskTitleKey,
+        t: () => "Команда помощнику проекта",
+      }) as unknown;
+    expect(display(value)).toBe("Команда помощнику проекта");
+    for (const candidate of [
+      { ...value, titleSource: "USER_EDITED" as const },
+      { ...value, titleSource: "AGENT_PROPOSED" as const },
+      { ...value, assistantPin: undefined },
+      {
+        ...value,
+        assistantPin: { ...value.assistantPin, scope: "SYSTEM" as const },
+      },
+      {
+        ...value,
+        assistantPin: { ...value.assistantPin, projectRef: "project_other" },
+      },
+      {
+        ...value,
+        assistantPin: {
+          ...value.assistantPin,
+          assistantRef: "assistant_other",
+        },
+      },
+    ])
+      expect(display(candidate)).toBe(value.title);
+  });
+  it("передаёт подпись окружения из уже загруженного exact owner state без новых запросов", () => {
+    const context = source.slice(
+      source.indexOf("const assistantContext = computed"),
+      source.indexOf("const assistantRunEvents = computed"),
+    );
+    expect(context).toContain("environments: runtime.environments");
+    expect(context).toContain(
+      "organizationRef: platform.bootstrap?.organizationRef",
+    );
+    expect(context).toContain(
+      "runtime.loading[`environment:${route.params.environmentRef}`]",
+    );
+    expect(context).toContain(
+      "runtime.problems[`environment:${route.params.environmentRef}`]",
+    );
+    expect(context).not.toContain("loadEnvironment");
+    expect(context).not.toContain("allowedOperations:");
+  });
+  it("PROJECT configuration detail сохраняет project picker и sidebar в том же query scope", () => {
+    expect(source).toContain(
+      "configurationRouteProjectRef(route.name, route.params, route.query)",
+    );
+    expect(source.indexOf("routeProjectRef(route.params) ??")).toBeLessThan(
+      source.indexOf(
+        "configurationRouteProjectRef(route.name, route.params, route.query)",
+      ),
+    );
+  });
   it("даёт глобальному поиску стабильное имя поля", () => {
     expect(source).toContain('name="global-search"');
     expect(source).toContain("useAdaptiveCursorPageSize");

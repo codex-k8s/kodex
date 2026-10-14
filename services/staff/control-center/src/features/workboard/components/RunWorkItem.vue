@@ -9,7 +9,10 @@ import {
 } from "@lucide/vue";
 import { computed } from "vue";
 
-import { runExecutor } from "@/features/workboard/model";
+import {
+  runDefaultTaskTitleKey,
+  runExecutor,
+} from "@/features/workboard/model";
 import type { Run } from "@/shared/api/generated/openapi/types.gen";
 import { runPath } from "@/shared/routes";
 import SafeSummary from "@/shared/ui/SafeSummary.vue";
@@ -22,7 +25,8 @@ const props = withDefaults(
     compact: false,
   },
 );
-const executor = computed(() => runExecutor(props.run));
+const executor = computed(() => runExecutor(props.run)?.trim() || undefined);
+const titleKey = computed(() => runDefaultTaskTitleKey(props.run));
 const link = computed(() =>
   runPath(
     props.run.ref,
@@ -54,16 +58,18 @@ const sourceIcon = computed(() => {
     :class="{ 'run-work-item--compact': compact }"
   >
     <div class="run-work-item__body">
-      <h3 :title="run.title">{{ run.title }}</h3>
+      <h3 :title="titleKey ? $t(titleKey) : run.title">
+        {{ titleKey ? $t(titleKey) : run.title }}
+      </h3>
       <SafeSummary
         :content="run.currentActivity ?? run.resultSummary"
         :fallback="run.target.displayName"
       />
       <dl class="run-work-item__actors">
-        <div>
+        <div v-if="executor">
           <dt>{{ $t("workboard.executor") }}</dt>
           <dd :title="executor">
-            {{ executor ?? $t("workboard.executorUnavailable") }}
+            {{ executor }}
           </dd>
         </div>
         <div>

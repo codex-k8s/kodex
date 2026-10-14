@@ -36,6 +36,53 @@ func cancellationProjectionEvent(code string) *cp.RunEvent {
 	}
 }
 
+func TestRootCompletionServiceCodeProjection(t *testing.T) {
+	for _, state := range []cp.RunNodeState{cp.RunNodeState_RUN_NODE_STATE_FAILED, cp.RunNodeState_RUN_NODE_STATE_SUCCEEDED, cp.RunNodeState_RUN_NODE_STATE_CANCELLED} {
+		event := rootCompletionProjectionEvent()
+		event.NodeState, event.Node.State = state, state
+		got, err := messageMap(event)
+		if err != nil || got["serviceCode"] != "ROOT_PROCESS_COMPLETED" {
+			t.Fatal("closed root completion code is missing", err)
+		}
+		LocalizeSafeErrors(got, func(string) string { return "Корневой процесс завершён" })
+		if got["serviceCode"] != "ROOT_PROCESS_COMPLETED" || got["summary"] != "Корневой процесс завершён" || event.Summary != "i18n:ROOT_PROCESS_COMPLETED" {
+			t.Fatal("localization lost the discriminator or changed the source")
+		}
+	}
+	for _, mutate := range []func(*cp.RunEvent){
+		func(e *cp.RunEvent) { e.Summary = "Корневой процесс завершён" },
+		func(e *cp.RunEvent) { e.Summary = "i18n:RUNTIME_WORKFLOW_INCOMPLETE" },
+		func(e *cp.RunEvent) { e.Node.Type = cp.RunNodeType_RUN_NODE_TYPE_AGENT_EXECUTION },
+		func(e *cp.RunEvent) { e.Node = nil },
+		func(e *cp.RunEvent) { e.Node.Ref = "nod_other" },
+		func(e *cp.RunEvent) { e.Node.State = cp.RunNodeState_RUN_NODE_STATE_RUNNING },
+		func(e *cp.RunEvent) { e.Type = cp.RunEventType_RUN_EVENT_TYPE_TURN_COMPLETED },
+		func(e *cp.RunEvent) { e.MessageKind = cp.RunEventMessageKind_RUN_EVENT_MESSAGE_KIND_FINAL_MESSAGE },
+		func(e *cp.RunEvent) {
+			e.Message = &cp.RunMessage{Text: "Full final", Source: &cp.MessageSource{Origin: cp.MessageOrigin_MESSAGE_ORIGIN_ORDINARY}}
+		},
+		func(e *cp.RunEvent) { e.Progress = "Different outcome" },
+		func(e *cp.RunEvent) { e.GateRef = "gat_fixture" },
+		func(e *cp.RunEvent) { e.Incident = &cp.Incident{} },
+		func(e *cp.RunEvent) { e.ToolCall = &cp.RunToolCall{} },
+		func(e *cp.RunEvent) { e.ArtifactRef = "art_fixture" },
+	} {
+		event := rootCompletionProjectionEvent()
+		mutate(event)
+		assertNoCancellationServiceCode(t, event)
+	}
+}
+
+func rootCompletionProjectionEvent() *cp.RunEvent {
+	return &cp.RunEvent{
+		Type:        cp.RunEventType_RUN_EVENT_TYPE_NODE_STATE_CHANGED,
+		MessageKind: cp.RunEventMessageKind_RUN_EVENT_MESSAGE_KIND_STATE,
+		Summary:     "i18n:ROOT_PROCESS_COMPLETED",
+		NodeRef:     "nod_rootfixture", NodeState: cp.RunNodeState_RUN_NODE_STATE_FAILED,
+		Node: &cp.RunNode{Ref: "nod_rootfixture", Type: cp.RunNodeType_RUN_NODE_TYPE_ROOT_PROCESS, State: cp.RunNodeState_RUN_NODE_STATE_FAILED},
+	}
+}
+
 func TestRunCancellationServiceCodeDoesNotClassifyContent(t *testing.T) {
 	for _, summary := range []string{"RUN_CANCELLED", "Запуск отменён", "Run cancelled", "i18n:RUN_CANCELLED extra", "i18n:FUTURE_CANCELLATION"} {
 		event := cancellationProjectionEvent("RUN_CANCELLED")

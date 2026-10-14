@@ -154,7 +154,8 @@ func main() {
 		worker("email-bridge", "control-plane.email-bridge", controlplaneclient.EmailBridgeOperations()),
 		worker("role-image-builder", "control-plane.role-image-builder", controlplaneclient.RoleImageBuilderOperations()),
 		worker("image-admission", "control-plane.image-admission", controlplaneclient.ImageAdmissionOperations()),
-		worker("image-admission-controller", "control-plane.image-admission-controller", controlplaneclient.ImageAdmissionControllerOperations()),
+		// Controller owner reads реализованы только в trusted-cluster. Запись
+		// signed producer без protected identity/key delivery не выдаёт права.
 		worker("image-promotion", "control-plane.image-promotion", controlplaneclient.ImagePromotionOperations()),
 		worker("secret-broker", "control-plane.secret-broker", controlplaneclient.SecretBrokerOperations()),
 		targetedWorker(
@@ -184,7 +185,7 @@ func main() {
 		Operations: controlplaneclient.SecretDraftGatewayOperations(), AuthoritySources: []string{"OIDC_SESSION", "DOMAIN_STATE"},
 		TargetWorkloadID: secretBrokerID, TargetSPIFFEID: secretBrokerPeer, TargetAudience: secretBrokerAudience, TargetTLSServerName: secretBrokerTLS,
 	})
-	value := document{Version: 1, PolicyRevision: 92, Policy: policy{
+	value := document{Version: 1, PolicyRevision: 96, Policy: policy{
 		AuthorityABIVersion: 2,
 		TrustDomain:         "kodex.local", DefaultDecision: "DENY", TokenTTLSeconds: 30,
 		AllowedClockSkewSeconds: 5, MaxCompactJWSBytes: 8192,
@@ -284,6 +285,13 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 	// Полный nested execution/catalog pin покрывается canonical Proto digest.
 	// Отдельные resource/version/attempt headers здесь не назначают полномочия.
 	switch operationID {
+	case "platform.provider-accounts.credential.renew", "platform.provider-accounts.credential.renewal.observe", "platform.provider-accounts.credential.renewal.authorize", "platform.provider-accounts.credential.renewal.validate", "platform.provider-accounts.credential.renewal.work.check":
+		// Все pins вложены в binding и закреплены digest; authority выдаёт owner task.
+		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "FORBIDDEN", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
+	case "platform.query.artifact-revisions.list", "platform.query.artifact-revisions.get":
+		// Exact Artifact и revision locator покрываются запросом; head OCC
+		// не подменяет immutable revision pin исторического чтения.
+		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}
 	case "platform.query.organization.role-images.vulnerability-report.get", "platform.query.role-images.vulnerability-report.get":
 		// Полный report locator и filters закреплены canonical Proto; scope назначает owner.
 		return requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "REQUIRED", Version: "FORBIDDEN", Attempt: "FORBIDDEN", Idempotency: "FORBIDDEN"}

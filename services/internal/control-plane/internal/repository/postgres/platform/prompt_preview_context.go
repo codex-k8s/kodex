@@ -291,6 +291,12 @@ func (repository *Repository) promptPreviewAgentForActorTx(ctx context.Context, 
 	if err != nil {
 		return entity.PromptMaterializationSnapshot{}, errs.ErrUnavailable
 	}
+	if err := repository.hydrateAssistantCoreTx(ctx, tx, current, &snapshot); err != nil {
+		return entity.PromptMaterializationSnapshot{}, err
+	}
+	if err := bindPlatformInstructions(&snapshot); err != nil {
+		return entity.PromptMaterializationSnapshot{}, err
+	}
 	view, err := repository.getRuntimeConfigurationViewTx(ctx, tx, current, ref)
 	if err != nil {
 		return entity.PromptMaterializationSnapshot{}, err

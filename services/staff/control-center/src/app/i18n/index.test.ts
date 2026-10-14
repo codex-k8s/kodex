@@ -15,6 +15,25 @@ function entries(value: unknown, prefix = ""): [string, string][] {
   );
 }
 describe("Control Center translations", () => {
+  it("кратко объясняет подключение модели без смешения языков", () => {
+    expect(
+      i18n.global.t(
+        "assistant.providerAccountRequiredHelp",
+        {},
+        { locale: "ru" },
+      ),
+    ).toBe("Подключите аккаунт модели, чтобы начать диалог.");
+    expect(
+      i18n.global.t("assistant.openProviderAccounts", {}, { locale: "ru" }),
+    ).toBe("Перейти к аккаунтам моделей");
+  });
+  it.each([
+    ["ru", "Список узлов"],
+    ["en", "Node list"],
+  ] as const)("называет список узлов в %s без fallback", (locale, label) => {
+    expect(i18n.global.te("runs.nodeList", locale)).toBe(true);
+    expect(i18n.global.t("runs.nodeList", {}, { locale })).toBe(label);
+  });
   it.each([
     ["ru", "Да", "Нет"],
     ["en", "Yes", "No"],

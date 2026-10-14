@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { runGraphViewportCommand } from "@/features/runs/run-graph-viewport";
+import {
+  runGraphDefaultViewMode,
+  runGraphViewportCommand,
+} from "@/features/runs/run-graph-viewport";
 
 describe("run graph viewport", () => {
+  it("показывает читаемое дерево на узком экране вместо микроскопического fit-all", () => {
+    expect(runGraphDefaultViewMode(390)).toBe("outline");
+    expect(runGraphDefaultViewMode(640)).toBe("outline");
+    expect(runGraphDefaultViewMode(1280)).toBe("graph");
+    expect(runGraphDefaultViewMode(0)).toBe("graph");
+    expect(runGraphDefaultViewMode(Number.NaN)).toBe("graph");
+  });
   it("сопоставляет клавиши с fit и масштабированием Vue Flow", () => {
     expect(runGraphViewportCommand({ key: "0" })).toEqual({ type: "FIT" });
     expect(runGraphViewportCommand({ key: "+" })).toEqual({

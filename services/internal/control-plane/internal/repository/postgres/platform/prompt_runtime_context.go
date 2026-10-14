@@ -26,6 +26,12 @@ func (repository *Repository) hydrateRuntimePromptContext(ctx context.Context, t
 	}
 	snapshot.ServiceTemplateRevision = promptservice.ServiceTemplateRevision
 	snapshot.ContextPin.AgentRef = snapshot.Variables["agent.ref"]
+	if err := bindPlatformInstructions(snapshot); err != nil {
+		return err
+	}
+	if err := repository.hydrateAssistantCoreTx(ctx, tx, current, snapshot); err != nil {
+		return err
+	}
 	if workflowRef == "" {
 		return nil
 	}
@@ -41,7 +47,10 @@ func (repository *Repository) hydrateRuntimePromptContext(ctx context.Context, t
 		return errs.ErrConflict
 	}
 	applyWorkflowPromptContext(snapshot, workflowRef, revision, version, step)
-	return repository.hydrateWorkflowPromptTemplateTx(ctx, tx, current, snapshot)
+	if err := repository.hydrateWorkflowPromptTemplateTx(ctx, tx, current, snapshot); err != nil {
+		return err
+	}
+	return repository.hydrateWorkflowExecutionPromptTx(ctx, tx, current, nodeRef, snapshot)
 }
 
 func promptWorkflowStep(version entity.WorkflowVersion, key string) (entity.WorkflowStep, bool) {

@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Ограниченный local read-only capture закрытой диагностики provider-runtime.
 
-Run связывается существующим exact provider ACK, а не locator из payload.
+Run связывается exact provider ACK либо отдельным trusted workload receipt.
 Сырые строки, stderr и provider input никогда не становятся результатом.
 Источники enum: agent-runner/internal/codex/{broker,process,parser}.go.
 """
 import argparse
+import copy
+from contextlib import ExitStack
+from datetime import datetime, timezone
 import importlib.util
 import json
 import os
@@ -26,6 +29,7 @@ Failure, require = ACK.Failure, ACK.require
 MAX_BYTES = 512 << 10
 MAX_LINE = 4096
 MAX_FOLLOW_REJOINS = 2
+PRE_ACK_READ_RETRY_CODES = frozenset(('KUBECTL_READ_FAILED', 'KUBECTL_READ_TIMEOUT'))
 STAGES = frozenset('SELECTION CONTEXT BROKER_REQUEST AUTH_READ MCP_BINDING MCP_BRIDGE '
                    'HOME_PREPARE ACCOUNT_PIN ARCHIVE_RESTORE PROCESS_START INITIALIZE SKILLS '
                    'ACCOUNT_READ THREAD_CALL THREAD_BIND MCP_READINESS USAGE_BASELINE '
@@ -33,7 +37,9 @@ STAGES = frozenset('SELECTION CONTEXT BROKER_REQUEST AUTH_READ MCP_BINDING MCP_B
                    'TERMINAL_RESULT ARCHIVE_CAPTURE UNKNOWN'.split())
 CLASSES = frozenset('AUTHENTICATION AUTHORITY MCP CONFIGURATION PROVIDER ACCOUNT_RESPONSE_SCHEMA'.split())
 DETAILS = frozenset('NONE REQUEST_WRITE CONTEXT_CANCELLED STREAM_CLOSED STREAM_INVALID '
-                    'NOTIFICATION_INVALID REQUEST_REJECTED RESPONSE_CORRELATION MESSAGE_KIND RPC_ERROR'.split())
+                    'NOTIFICATION_INVALID REQUEST_REJECTED RESPONSE_CORRELATION MESSAGE_KIND RPC_ERROR '
+                    'RESUME_SOURCE_SCHEMA RESUME_SOURCE_ID RESUME_SOURCE_LOCATOR RESUME_SOURCE_OPEN '
+                    'RESUME_SOURCE_METADATA RESUME_SOURCE_IDENTITY'.split())
 ACCOUNT_READ = frozenset('NONE UNKNOWN REQUIREMENTS_LOAD MISSING_ACCOUNT_ID DISCOVERY_CANCELLED '
                          'ACCOUNT_CHANGED DISCOVERY_UNAUTHORIZED DISCOVERY_FAILED MISSING_WORKSPACE '
                          'DUPLICATE_WORKSPACE REQUIREMENTS_RELOAD CONFIGURATION_CHANGED SHUTDOWN '
@@ -75,19 +81,53 @@ thread_rollback_failed provider_sandbox_error provider_other_error active_turn_n
 provider_transport_failure provider_interrupted RUNTIME_ARTIFACT_INVALID'''.split())
 REQUEST_PREFIX = 'Codex provider request failed at safe stage: '
 TERMINAL_PREFIX = 'Codex provider turn completed with safe failure code: '
+CLIENT_MESSAGE = 'runtime execution failed before completion'
+FILESYSTEM_MESSAGE = 'Provider post-join filesystem denied'
+WORKSPACE_COMPLETION_MESSAGE = 'Runtime workspace completion denied'
+WORKSPACE_COMPLETION_STAGES = frozenset(('CHECK_WORKSPACE', 'PUBLISH_RESULT', 'UNKNOWN'))
+WORKSPACE_COMPLETION_REASONS = frozenset(('READ_ONLY', 'QUOTA_EXCEEDED',
+                                        'PATH_OUTSIDE_WORKSPACE', 'RUNTIME_IO_ERROR'))
+FILESYSTEM_STAGES = frozenset(('OUTBOX_PUBLICATION', 'WORKSPACE_NORMALIZATION', 'UNKNOWN'))
+FILESYSTEM_REASONS = frozenset('UNKNOWN CONTEXT_DONE POLICY_INVALID LOCK_UNAVAILABLE '
+                              'DIRECTORY_UNAVAILABLE DIRECTORY_IDENTITY_INVALID ENTRY_COUNT_EXCEEDED '
+                              'ENTRY_NAME_INVALID ENTRY_OPEN_DENIED FILE_TYPE_INVALID OWNER_INVALID '
+                              'LINK_COUNT_INVALID FILE_SIZE_INVALID BYTE_QUOTA_EXCEEDED MOUNT_INVALID '
+                              'PERMISSION_UPDATE_FAILED METADATA_CHANGED FILESYSTEM_IO_FAILED'.split())
+CLIENT_CATEGORIES = frozenset('UNKNOWN CALLBACKS POST_TERMINAL FRAME_LIMIT FRAME_SCHEMA FRAME_VERSION '
+                             'FRAME_SEQUENCE FRAME_KIND ACTIVITY_SCHEMA PROVIDER_PROCESS_TUPLE '
+                             'MESSAGE_REPLAY MESSAGE_LIMIT TOOL_LIFECYCLE TOOL_LIMIT TERMINAL_SCHEMA '
+                             'DIAGNOSTIC_TUPLE ARCHIVE_PROOF STREAM_READ TERMINAL_ABSENT TERMINAL_RESULT '
+                             'ACTIVITY_DELIVERY'.split())
+CLIENT_CONTEXTS = frozenset(('ACTIVE', 'CANCELED', 'DEADLINE_EXCEEDED', 'UNKNOWN'))
+STREAM_ERRORS = frozenset('NONE FRAME_TOO_LARGE MESSAGE_LIMIT EMPTY_FRAME WIRE_INVALID READ_ERROR'.split())
 STAMP = re.compile(r'^\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} ')
 REQUEST = re.compile(r'^' + re.escape(REQUEST_PREFIX) +
                      r'([^;]+); class: ([^;]+); detail: ([^;]+); rpc_code: (-?[0-9]{1,19}); '
-                     r'notification: ([^;]+); account_read: ([^;]+); notification_error: ([^;]+)$')
+                     r'notification: ([^;]+); account_read: ([^;]+); notification_error: ([^;]+); '
+                     r'stream_error: ([^;]+)$')
 
 
 def parse_line(raw):
-    """Только две точные producer-строки; недоверенный текст не отражается."""
+    """Точные закрытые producer records; недоверенный текст не отражается."""
     try:
         line = raw.decode('utf-8')
     except UnicodeDecodeError:
         return None
     line = STAMP.sub('', line.rstrip('\n'), count=1)
+    if line.startswith('{') and FILESYSTEM_MESSAGE in line:
+        require(len(raw) <= MAX_LINE, 'PROVIDER_DIAGNOSTIC_INVALID')
+        try:
+            record = json.loads(line, object_pairs_hook=ACK.unique)
+        except (Failure, ValueError, UnicodeError):
+            raise Failure('PROVIDER_DIAGNOSTIC_INVALID') from None
+        if not isinstance(record, dict) or record.get('msg') != FILESYSTEM_MESSAGE:
+            return None
+        require(set(record) == {'time', 'level', 'msg', 'stage', 'reason'} and
+                record['level'] == 'WARN' and isinstance(record['stage'], str) and
+                record['stage'] in FILESYSTEM_STAGES and isinstance(record['reason'], str) and
+                record['reason'] in FILESYSTEM_REASONS, 'PROVIDER_DIAGNOSTIC_INVALID')
+        # Только отказ guard: не выдумываем terminal code или причину provider.
+        return {'kind': 'FILESYSTEM_DENIAL', 'stage': record['stage'], 'reason': record['reason']}
     if line.startswith(TERMINAL_PREFIX):
         code = line[len(TERMINAL_PREFIX):]
         require(code in TERMINAL_CODES, 'PROVIDER_DIAGNOSTIC_INVALID')
@@ -97,13 +137,16 @@ def parse_line(raw):
     require(len(raw) <= MAX_LINE, 'PROVIDER_DIAGNOSTIC_INVALID')
     match = REQUEST.fullmatch(line)
     require(match is not None, 'PROVIDER_DIAGNOSTIC_INVALID')
-    stage, category, detail, code, notification, account, notification_error = match.groups()
+    stage, category, detail, code, notification, account, notification_error, stream_error = match.groups()
     code = int(code)
     require(stage in STAGES and category in CLASSES and detail in DETAILS and
             notification in NOTIFICATIONS and account in ACCOUNT_READ and
-            notification_error in NOTIFICATION_ERRORS and -(1 << 63) <= code < (1 << 63),
+            notification_error in NOTIFICATION_ERRORS and stream_error in STREAM_ERRORS and
+            -(1 << 63) <= code < (1 << 63),
             'PROVIDER_DIAGNOSTIC_INVALID')
     require(detail == 'RPC_ERROR' or code == 0, 'PROVIDER_DIAGNOSTIC_INVALID')
+    require(not detail.startswith('RESUME_SOURCE_') or (stage == 'THREAD_READ' and category == 'PROVIDER'),
+            'PROVIDER_DIAGNOSTIC_INVALID')
     require(detail == 'NOTIFICATION_INVALID' or
             (notification == 'NONE' and notification_error == 'NONE'), 'PROVIDER_DIAGNOSTIC_INVALID')
     require(detail != 'NOTIFICATION_INVALID' or
@@ -114,7 +157,7 @@ def parse_line(raw):
             'PROVIDER_DIAGNOSTIC_INVALID')
     return {'kind': 'REQUEST_FAILURE', 'stage': stage, 'class': category, 'detail': detail,
             'rpc_code': code, 'notification': notification, 'account_read': account,
-            'notification_error': notification_error}
+            'notification_error': notification_error, 'stream_error': stream_error}
 
 
 def validate_options(options):
@@ -130,6 +173,40 @@ def validate_options(options):
             'TIMEOUT_INVALID')
     require(options.pod_name is None or ACK.matches(r'[a-z0-9-]{1,253}', options.pod_name), 'POD_NAME_INVALID')
     require(options.pod_uid is None or ACK.matches(ACK.UUID, options.pod_uid), 'POD_UID_INVALID')
+    require(not getattr(options, 'include_client_observation', False) or
+            getattr(options, 'capture_mode', 'ACK') == 'ACK', 'CLIENT_OBSERVATION_REQUIRES_ACK')
+
+
+def parse_client_line(raw):
+    """Только закрытая app producer-проекция; JSON envelope не возвращается."""
+    if not raw.startswith(b'{') or not any(message.encode() in raw for message in
+                                          (CLIENT_MESSAGE, WORKSPACE_COMPLETION_MESSAGE)):
+        return None
+    require(len(raw) <= MAX_LINE, 'CLIENT_DIAGNOSTIC_INVALID')
+    try:
+        record = json.loads(raw, object_pairs_hook=ACK.unique)
+    except (Failure, ValueError, UnicodeError):
+        raise Failure('CLIENT_DIAGNOSTIC_INVALID') from None
+    if not isinstance(record, dict):
+        return None
+    if record.get('msg') == WORKSPACE_COMPLETION_MESSAGE:
+        require(record.get('level') == 'WARN' and
+                isinstance(record.get('stage'), str) and
+                record['stage'] in WORKSPACE_COMPLETION_STAGES and
+                isinstance(record.get('reason'), str) and
+                record['reason'] in WORKSPACE_COMPLETION_REASONS,
+                'CLIENT_DIAGNOSTIC_INVALID')
+        # Logger может добавлять service/trace поля. Ни они, ни error/path/body
+        # не выходят из reader: только два закрытых значения rejecting guard.
+        return {'kind': 'WORKSPACE_COMPLETION_DENIAL', 'stage': record['stage'],
+                'reason': record['reason']}
+    if record.get('msg') != CLIENT_MESSAGE:
+        return None
+    require(isinstance(record.get('category'), str) and record['category'] in CLIENT_CATEGORIES and
+            isinstance(record.get('context_state'), str) and record['context_state'] in CLIENT_CONTEXTS and
+            type(record.get('activity_failed')) is bool, 'CLIENT_DIAGNOSTIC_INVALID')
+    return {'kind': 'CLIENT_FAILURE', 'category': record['category'],
+            'context_state': record['context_state'], 'activity_failed': record['activity_failed']}
 
 
 def selected_pod(read, options, pending_identity=False):
@@ -157,6 +234,247 @@ def selected_pod(read, options, pending_identity=False):
                 container['image_id'].endswith('@' + options.image_manifest) and
                 container['restarts'] == '0', 'POD_IMAGE_MISMATCH')
     return None if pending and not pending_identity else pod
+
+
+def validate_workload_options(options):
+    validate_options(options)
+    require(options.pod_name is not None and options.pod_uid is not None,
+            'WORKLOAD_EXACT_POD_REQUIRED')
+    require(ACK.matches(ACK.REF, options.node_ref), 'WORKLOAD_NODE_INVALID')
+    require(options.assistant_scope == 'NONE' and
+            ACK.matches(ACK.REF, options.expected_project_ref), 'WORKLOAD_SCOPE_INVALID')
+    require(options.expected_input_digest is None or
+            ACK.matches(ACK.HASH, options.expected_input_digest), 'WORKLOAD_INPUT_PIN_INVALID')
+
+
+def workload_timestamp(value):
+    require(isinstance(value, str) and
+            ACK.matches(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z', value),
+            'WORKLOAD_TIMESTAMP_INVALID')
+    try:
+        return datetime.fromisoformat(value.removesuffix('Z')).replace(tzinfo=timezone.utc)
+    except ValueError:
+        raise Failure('WORKLOAD_TIMESTAMP_INVALID') from None
+
+
+def workload_projection(read, options):
+    """Только server-created fresh turn; отсутствие ACK не становится ACK."""
+    pod = selected_pod(read, options)
+    if pod is None:
+        return None
+    extra_paths = ['.metadata.resourceVersion', '.metadata.creationTimestamp',
+                   '.spec.restartPolicy',
+                   '.spec.volumes[?(@.name=="runtime-input")].configMap.name']
+    extra_keys = ('controller-pod-uid', 'organization-hash', 'project-hash')
+    extra_paths += ['.metadata.annotations.runtime\\.kodex\\.dev/' + key for key in extra_keys]
+    extra_paths += ['.metadata.labels.runtime\\.kodex\\.dev/execution-hash']
+    path = '{"|"}'.join('{' + item + '}' for item in extra_paths)
+    raw = read(['get', 'pod', pod['name'], '-n', ACK.NAMESPACE, '-o', 'jsonpath=' + path])
+    require(len(raw) <= 2048, 'WORKLOAD_POD_METADATA_INVALID')
+    parts = raw.decode('utf-8').split('|')
+    require(len(parts) == 8 and ACK.matches(r'[1-9][0-9]{0,19}', parts[0]) and
+            parts[2] == 'Never' and ACK.matches(ACK.UUID, parts[4]) and
+            all(ACK.matches(r'[a-f0-9]{16}', value) for value in parts[5:]),
+            'WORKLOAD_POD_METADATA_INVALID')
+    lease = pod['annotations']['lease-ref']
+    workload_timestamp(parts[1])
+    short = ACK.sha(lease)[:16]
+    require(pod['name'] == 'runtime-turn-' + short and parts[3] == 'runtime-projection-' + short and
+            parts[7] == short and parts[6] == ACK.sha(options.expected_project_ref)[:16],
+            'WORKLOAD_LEASE_BINDING_INVALID')
+    fields = ['.metadata.namespace', '.metadata.name', '.metadata.uid',
+              '.metadata.resourceVersion', '.immutable',
+              '.metadata.labels.runtime\\.kodex\\.dev/managed',
+              '.metadata.labels.runtime\\.kodex\\.dev/mode', '.metadata.creationTimestamp']
+    keys = ACK.ANNOTATIONS[:-1] + extra_keys + ('pod-name',)
+    fields += ['.metadata.annotations.runtime\\.kodex\\.dev/' + key for key in keys]
+    path = '{"|"}'.join('{' + field + '}' for field in fields) + '{"\\n"}{.data.results\\.json}'
+    raw = read(['get', 'configmap', parts[3], '-n', ACK.NAMESPACE, '-o', 'jsonpath=' + path])
+    require(len(raw) <= 16384, 'WORKLOAD_PROJECTION_LIMIT')
+    metadata, separator, data = raw.decode('utf-8').partition('\n')
+    values = metadata.split('|')
+    require(separator and len(values) == len(fields) and values[0] == ACK.NAMESPACE and
+            values[1] == parts[3] and ACK.matches(ACK.UUID, values[2]) and
+            ACK.matches(r'[1-9][0-9]{0,19}', values[3]) and values[4:7] == ['true', 'true', 'turn'],
+            'WORKLOAD_PROJECTION_METADATA_INVALID')
+    workload_timestamp(values[7])
+    require(workload_timestamp(values[7]) <= workload_timestamp(parts[1]),
+            'WORKLOAD_PROJECTION_CREATED_AFTER_POD')
+    annotations = dict(zip(keys, values[8:]))
+    require(all(annotations[key] == pod['annotations'][key] for key in ACK.ANNOTATIONS[:-1]) and
+            annotations['controller-pod-uid'] == parts[4] and
+            annotations['organization-hash'] == parts[5] and
+            annotations['project-hash'] == parts[6] and annotations['pod-name'] == pod['name'],
+            'WORKLOAD_PROJECTION_BINDING_INVALID')
+    try:
+        result = json.loads(data, object_pairs_hook=ACK.unique)
+    except (ValueError, UnicodeError):
+        raise Failure('WORKLOAD_PROJECTION_JSON_INVALID') from None
+    require(isinstance(result, dict) and set(result) ==
+            {'identity', 'root', 'maximum_writable_bytes', 'maximum_file_count'} and
+            isinstance(result['root'], str) and 0 < len(result['root']) <= 4096 and
+            '\x00' not in result['root'] and
+            all(type(result[key]) is int and 0 < result[key] <= (1 << 53) - 1
+                for key in ('maximum_writable_bytes', 'maximum_file_count')),
+            'WORKLOAD_PROJECTION_SHAPE_INVALID')
+    identity = result['identity']
+    refs = ('organization_ref', 'project_ref', 'run_ref', 'node_ref', 'session_ref',
+            'turn_ref', 'runtime_revision_ref')
+    numbers = ('attempt', 'runtime_revision_version')
+    hashes = ('runtime_revision_digest', 'input_digest')
+    require(isinstance(identity, dict) and set(identity) == set(refs + numbers + hashes) and
+            all(ACK.matches(ACK.REF, identity[key]) for key in refs) and
+            all(type(identity[key]) is int and 0 < identity[key] <= (1 << 53) - 1 for key in numbers) and
+            all(ACK.matches(ACK.HASH, identity[key]) for key in hashes),
+            'WORKLOAD_IDENTITY_INVALID')
+    require(all(identity[key] == getattr(options, key) for key in
+                ('run_ref', 'node_ref', 'session_ref', 'turn_ref', 'attempt')) and
+            identity['project_ref'] == options.expected_project_ref and
+            identity['runtime_revision_digest'] == annotations['revision-digest'] and
+            ACK.sha(identity['organization_ref'])[:16] == parts[5] and
+            ACK.sha(identity['project_ref'])[:16] == parts[6] and
+            (options.expected_input_digest is None or
+             identity['input_digest'] == options.expected_input_digest),
+            'WORKLOAD_IDENTITY_BINDING_INVALID')
+    # Raw results root/limits не сохраняются даже в приватном receipt.
+    return {'pod': {key: value for key, value in pod.items() if key != 'phase'},
+            'pod_created_at': parts[1], 'controller_uid': parts[4],
+            'projection': {'name': values[1], 'uid': values[2], 'resource_version': values[3],
+                           'created_at': values[7]},
+            'identity': identity}
+
+
+def admission_expression(value):
+    """Render whitespace не меняет CEL tokens или байты строковых литералов."""
+    require(isinstance(value, str), 'WORKLOAD_ADMISSION_SHAPE_INVALID')
+    segments = re.split(r'''('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*")''', value)
+    normalized = []
+    for index, segment in enumerate(segments):
+        if index % 2:
+            normalized.append(segment)
+        else:
+            require(not any(marker in segment for marker in ("'", '"', '//', '/*', '*/')),
+                    'WORKLOAD_ADMISSION_EXPRESSION_INVALID')
+            normalized.append(re.sub(r'[ \t\r\n]+', ' ', segment))
+    return ''.join(normalized).strip(' \t\r\n')
+
+
+def admission_spec(spec, kind):
+    """Только документированные API defaults; неизвестные поля остаются при сравнении."""
+    require(isinstance(spec, dict), 'WORKLOAD_ADMISSION_SHAPE_INVALID')
+    normalized = copy.deepcopy(spec)
+    key = 'matchConstraints' if kind == 'ValidatingAdmissionPolicy' else 'matchResources'
+    match = normalized.get(key)
+    require(isinstance(match, dict), 'WORKLOAD_ADMISSION_SHAPE_INVALID')
+    for field, default in (('matchPolicy', 'Equivalent'), ('namespaceSelector', {}),
+                           ('objectSelector', {})):
+        match.setdefault(field, default)
+    for field in ('resourceRules', 'excludeResourceRules'):
+        require(isinstance(match.get(field, []), list), 'WORKLOAD_ADMISSION_SHAPE_INVALID')
+        for rule in match.get(field, []):
+            require(isinstance(rule, dict), 'WORKLOAD_ADMISSION_SHAPE_INVALID')
+            rule.setdefault('scope', '*')
+    for field in ('validations', 'matchConditions', 'variables'):
+        require(isinstance(normalized.get(field, []), list), 'WORKLOAD_ADMISSION_SHAPE_INVALID')
+        for item in normalized.get(field, []):
+            require(isinstance(item, dict) and 'expression' in item,
+                    'WORKLOAD_ADMISSION_SHAPE_INVALID')
+            item['expression'] = admission_expression(item['expression'])
+    return normalized
+
+
+def require_workload_admission(read, projection_created_at):
+    """Доверенный API сверяет фактические Fail/Deny guards с repo-owned source."""
+    try:
+        import yaml
+        source = Path(__file__).resolve().parents[2] / 'deploy/k8s/base/runtime-controller/runtime-materialization-admission.yaml'
+        try:
+            objects = list(yaml.safe_load_all(source.read_text()))
+        except yaml.YAMLError:
+            raise Failure('WORKLOAD_ADMISSION_SOURCE_INVALID') from None
+    except (ImportError, OSError, ValueError):
+        raise Failure('WORKLOAD_ADMISSION_SOURCE_UNAVAILABLE') from None
+    names = (('ValidatingAdmissionPolicy', 'runtime-revision-exact-configmap-projection'),
+             ('ValidatingAdmissionPolicyBinding', 'runtime-revision-exact-configmap-projection'))
+    pins = []
+    for kind, name in names:
+        expected = [item for item in objects if item and item.get('kind') == kind and
+                    item.get('metadata', {}).get('name') == name]
+        require(len(expected) == 1, 'WORKLOAD_ADMISSION_SOURCE_INVALID')
+        raw = read(['get', kind, name, '-o', 'json'])
+        require(len(raw) <= MAX_BYTES, 'WORKLOAD_ADMISSION_LIMIT')
+        try:
+            actual = json.loads(raw, object_pairs_hook=ACK.unique)
+        except (ValueError, UnicodeError):
+            raise Failure('WORKLOAD_ADMISSION_JSON_INVALID') from None
+        require(isinstance(actual, dict) and isinstance(actual.get('metadata'), dict),
+                'WORKLOAD_ADMISSION_SHAPE_INVALID')
+        metadata = actual['metadata']
+        require(actual.get('kind') == kind and actual.get('apiVersion') == expected[0]['apiVersion'] and
+                metadata.get('name') == name and
+                ACK.matches(ACK.UUID, metadata.get('uid')) and
+                ACK.matches(r'[1-9][0-9]{0,19}', metadata.get('resourceVersion')) and
+                not metadata.get('deletionTimestamp') and
+                admission_spec(actual.get('spec'), kind) == admission_spec(expected[0]['spec'], kind),
+                'WORKLOAD_ADMISSION_BINDING_INVALID')
+        require(type(metadata.get('generation')) is int and metadata['generation'] == 1 and
+                workload_timestamp(metadata.get('creationTimestamp')) <=
+                workload_timestamp(projection_created_at), 'WORKLOAD_ADMISSION_ORIGIN_UNPROVEN')
+        if kind == 'ValidatingAdmissionPolicy':
+            status = actual.get('status', {})
+            require(isinstance(status, dict) and
+                    isinstance(status.get('typeChecking', {}), dict) and
+                    type(metadata.get('generation')) is int and metadata['generation'] > 0 and
+                    status.get('observedGeneration') == metadata['generation'] and
+                    type(status.get('observedGeneration')) is int and
+                    not status.get('typeChecking', {}).get('expressionWarnings'),
+                    'WORKLOAD_ADMISSION_NOT_READY')
+        pins.append({'kind': kind, 'name': name, 'uid': metadata['uid'],
+                     'resource_version': metadata['resourceVersion']})
+    return pins
+
+
+def capture_workload(options, read, follow, now=time.monotonic, sleep=time.sleep):
+    validate_workload_options(options)
+    deadline = now() + options.timeout_seconds
+    bound = None
+    while now() < deadline:
+        bound = workload_projection(read, options)
+        if bound is not None:
+            break
+        sleep(min(0.5, max(0, deadline - now())))
+    require(bound is not None, 'WORKLOAD_POD_NOT_OBSERVED')
+    admission = require_workload_admission(read, bound['projection']['created_at'])
+    require(workload_projection(read, options) == bound, 'WORKLOAD_CHANGED_BEFORE_LOG_READ')
+    raw = read(['logs', bound['pod']['name'], '-n', ACK.NAMESPACE, '-c', 'provider-runtime',
+                '--tail=256', '--limit-bytes=524288', '--timestamps=false'])
+    try:
+        diagnostic = diagnostic_from_chunks(iter([raw]), deadline=deadline, now=now)
+    except Failure as error:
+        if str(error) != 'FOLLOW_STREAM_ENDED':
+            raise
+        require(workload_projection(read, options) == bound, 'WORKLOAD_CHANGED_BEFORE_FOLLOW')
+        stream = follow(bound['pod'])
+        try:
+            diagnostic = diagnostic_from_chunks(stream, deadline=deadline, now=now)
+        finally:
+            stream.close()
+    # Нет повторов effects и нет присоединения к новому Pod/attempt.
+    current = workload_projection(read, options)
+    require(current is not None, 'WORKLOAD_REJOIN_UNAVAILABLE')
+    require(current == bound, 'WORKLOAD_CHANGED_AFTER_CAPTURE')
+    require(require_workload_admission(read, bound['projection']['created_at']) == admission,
+            'WORKLOAD_ADMISSION_CHANGED')
+    return {'version': 1, 'status': 'WORKLOAD_DIAGNOSTIC_CAPTURED',
+            'proof_kind': 'TRUSTED_KUBERNETES_WORKLOAD', 'provider_ack': 'NOT_OBSERVED',
+            'provider_input_acceptance': 'UNKNOWN', 'execution_binding_recomputed': 'NOT_RUN',
+            'identity': bound['identity'], 'pod': {key: bound['pod'][key] for key in
+                                                ('name', 'uid', 'namespace')},
+            'projection': bound['projection'], 'image_manifest_digest': options.image_manifest,
+            'lease_ref': bound['pod']['annotations']['lease-ref'],
+            'execution_binding_digest': bound['pod']['annotations']['execution-binding-digest'],
+            'mcp_binding_digest': bound['pod']['annotations']['mcp-binding-digest'],
+            'rejoin': 'VERIFIED', 'diagnostic': diagnostic}
 
 
 def stop_process(process):
@@ -284,17 +602,142 @@ class Kubectl:
         finally:
             stop_process(process)
 
+    def follow_observations(self, pod):
+        """Оба subprocess принадлежат одному bounded cancel/join, без reconnect."""
+        with ExitStack() as cleanup:
+            processes = {}
+            for source, container in (('PROVIDER', 'provider-runtime'), ('CLIENT', 'role-runtime')):
+                process = self.start(['logs', pod['name'], '-n', ACK.NAMESPACE, '-c', container,
+                                      '--follow', '--tail=256', '--timestamps=false'])
+                cleanup.callback(stop_process, process)
+                processes[source] = process
+            with selectors.DefaultSelector() as selector:
+                received = dict.fromkeys(processes, 0)
+                for source, process in processes.items():
+                    selector.register(process.stdout, selectors.EVENT_READ, source)
+                while selector.get_map() and time.monotonic() < self.deadline:
+                    events = selector.select(min(0.25, max(0, self.deadline - time.monotonic())))
+                    for key, _ in events:
+                        source = key.data
+                        data = os.read(key.fileobj.fileno(), 4096)
+                        if data:
+                            received[source] += len(data)
+                            require(received[source] <= MAX_BYTES, 'OBSERVATION_LOG_LIMIT')
+                            yield source, data
+                            continue
+                        selector.unregister(key.fileobj)
+                        remaining = self.deadline - time.monotonic()
+                        try:
+                            code = processes[source].wait(timeout=min(0.5, max(0, remaining)))
+                        except subprocess.TimeoutExpired:
+                            raise Failure('KUBECTL_FOLLOW_EXIT_TIMEOUT') from None
+                        require(code == 0, 'KUBECTL_FOLLOW_FAILED')
+                        yield source, None
 
-def capture(options, read, follow, now=time.monotonic, sleep=time.sleep):
+
+def observations_from_chunks(stream, proof, options, deadline, on_observation=None, now=time.monotonic):
+    """Два независимых первых наблюдения; client не доказывает provider cause."""
+    pending = {'PROVIDER': bytearray(), 'CLIENT': bytearray()}
+    dropping = dict.fromkeys(pending, False)
+    observed = {}
+    acknowledged = False
+    announced = set()
+    ended = set()
+
+    def announce():
+        if acknowledged and on_observation is not None:
+            for source in ('PROVIDER', 'CLIENT'):
+                if source in observed and source not in announced:
+                    on_observation(source, observed[source])
+                    announced.add(source)
+
+    def consume(source, line):
+        nonlocal acknowledged
+        if source == 'PROVIDER':
+            if ACK.EVENT.encode() in line:
+                repeated = ACK.ack_from_logs(line, options.run_ref, options.assistant_scope,
+                                             getattr(options, 'expected_project_ref', None))
+                if repeated is not None:
+                    require(repeated == proof, 'FOLLOW_ACK_BINDING_MISMATCH')
+                    if not acknowledged and on_observation is not None:
+                        on_observation('ACK', None)
+                    acknowledged = True
+            result = parse_line(line)
+            if result is not None:
+                require(acknowledged, 'FOLLOW_ACK_NOT_OBSERVED')
+        else:
+            result = parse_client_line(line)
+        if result is not None and source not in observed:
+            observed[source] = result
+        announce()
+
+    for source, data in stream:
+        if now() >= deadline:
+            break
+        require(source in pending, 'OBSERVATION_SOURCE_INVALID')
+        require(source not in ended, 'OBSERVATION_STREAM_INVALID')
+        if data is None:
+            ended.add(source)
+            if pending[source] and not dropping[source]:
+                consume(source, bytes(pending[source]))
+            pending[source].clear()
+            if source == 'PROVIDER':
+                require(acknowledged, 'FOLLOW_ACK_NOT_OBSERVED')
+            if acknowledged and len(observed) == 2:
+                return observed
+            continue
+        require(isinstance(data, bytes), 'OBSERVATION_CHUNK_INVALID')
+        for segment in data.splitlines(keepends=True):
+            if not dropping[source]:
+                pending[source].extend(segment)
+                if len(pending[source]) > MAX_LINE:
+                    prefix = STAMP.sub('', bytes(pending[source][:256]).decode('ascii', errors='ignore'), count=1)
+                    require(source != 'PROVIDER' or not prefix.startswith((REQUEST_PREFIX, TERMINAL_PREFIX)),
+                            'PROVIDER_DIAGNOSTIC_INVALID')
+                    require(source != 'CLIENT' or not any(message.encode() in pending[source]
+                            for message in (CLIENT_MESSAGE, WORKSPACE_COMPLETION_MESSAGE)),
+                            'CLIENT_DIAGNOSTIC_INVALID')
+                if len(pending[source]) > 65536:
+                    dropping[source] = True
+                    pending[source].clear()
+            if segment.endswith(b'\n'):
+                if not dropping[source]:
+                    consume(source, bytes(pending[source]))
+                dropping[source] = False
+                pending[source].clear()
+        if acknowledged and len(observed) == 2:
+            return observed
+    for source in pending:
+        if pending[source] and not dropping[source]:
+            consume(source, bytes(pending[source]))
+    if not observed and now() >= deadline:
+        raise Failure('FAILURE_NOT_OBSERVED_BEFORE_DEADLINE')
+    require(acknowledged, 'FOLLOW_ACK_NOT_OBSERVED')
+    if observed:
+        return observed
+    if now() >= deadline:
+        raise Failure('FAILURE_NOT_OBSERVED_BEFORE_DEADLINE')
+    raise Failure('FOLLOW_STREAM_ENDED')
+
+
+def capture(options, read, follow, now=time.monotonic, sleep=time.sleep, on_observation=None):
     validate_options(options)
     expected_project_ref = getattr(options, 'expected_project_ref', None)
     deadline = now() + options.timeout_seconds
     pod, proof = None, None
     while now() < deadline:
-        pod = selected_pod(read, options)
-        if pod is not None:
-            raw = read(['logs', pod['name'], '-n', ACK.NAMESPACE, '-c', 'provider-runtime',
-                        '--tail=256', '--limit-bytes=524288', '--timestamps=false'])
+        # До ACK повторяются только read transport failures в прежнем бюджете.
+        # Ошибки identity/schema не повторяются; бизнес execution не меняется.
+        try:
+            pod = selected_pod(read, options)
+            raw = None if pod is None else read([
+                'logs', pod['name'], '-n', ACK.NAMESPACE, '-c', 'provider-runtime',
+                '--tail=256', '--limit-bytes=524288', '--timestamps=false'])
+        except Failure as error:
+            if str(error) not in PRE_ACK_READ_RETRY_CODES:
+                raise
+            raw = None
+        if raw is not None:
             proof = ACK.ack_from_logs(raw, options.run_ref, options.assistant_scope, expected_project_ref)
             if proof is not None:
                 require(proof['session_ref'] == options.session_ref and proof['turn_ref'] == options.turn_ref and
@@ -307,17 +750,41 @@ def capture(options, read, follow, now=time.monotonic, sleep=time.sleep):
     current = selected_pod(read, options, pending_identity=True)
     require(current is not None and current['uid'] == pod['uid'], 'POD_CHANGED_BEFORE_FOLLOW')
     ACK.bind_pod(current, proof)
+    include_client = getattr(options, 'include_client_observation', False)
+    observations = None
+
+    def checkpoint(source, observation):
+        if on_observation is not None:
+            receipt = {'version': 1, 'status': 'OBSERVATION_CAPTURED_POD_REJOIN_PENDING',
+                            'source': source, 'run_ref': options.run_ref, 'session_ref': options.session_ref,
+                            'turn_ref': options.turn_ref, 'attempt': options.attempt,
+                            'pod': {'name': pod['name'], 'uid': pod['uid'], 'namespace': ACK.NAMESPACE},
+                            'image_manifest_digest': options.image_manifest,
+                            'input_digest': proof['input_digest'],
+                            'runtime_revision_digest': proof['runtime_revision_digest'],
+                            'execution_binding_digest': proof['execution_binding_digest'],
+                            'captured_at': datetime.now(timezone.utc).isoformat(),
+                            'provider_ack': 'OBSERVED'}
+            if source == 'ACK':
+                receipt['status'] = 'ACK_BINDING_CAPTURED_POD_REJOIN_PENDING'
+            else:
+                receipt['observation'] = observation
+            on_observation(receipt)
     rejoins = 0
     while True:
         require(now() < deadline, 'FAILURE_NOT_OBSERVED_BEFORE_DEADLINE')
         stream = follow(current)
         try:
+            if include_client:
+                observations = observations_from_chunks(stream, proof, options, deadline,
+                                                        on_observation=checkpoint, now=now)
+                break
             diagnostic = diagnostic_from_chunks(stream, expected_ack=proof,
                                                 run_ref=options.run_ref, scope=options.assistant_scope,
                                                 deadline=deadline, now=now, expected_project_ref=expected_project_ref)
             break
         except Failure as error:
-            if str(error) != 'FOLLOW_STREAM_ENDED':
+            if include_client or str(error) != 'FOLLOW_STREAM_ENDED':
                 raise
         finally:
             stream.close()
@@ -341,9 +808,12 @@ def capture(options, read, follow, now=time.monotonic, sleep=time.sleep):
         current = selected_pod(read, options, pending_identity=True)
     except Failure as error:
         # Только недоступность transport не подменяет mismatch/коррупцию.
-        if str(error) not in ('KUBECTL_READ_FAILED', 'KUBECTL_READ_TIMEOUT', 'KUBECTL_UNAVAILABLE'):
+        if include_client and str(error) == 'CAPTURE_DEADLINE':
+            rejoin = 'NOT_RUN_DEADLINE_AFTER_CAPTURE'
+        elif str(error) in ('KUBECTL_READ_FAILED', 'KUBECTL_READ_TIMEOUT', 'KUBECTL_UNAVAILABLE'):
+            rejoin = 'READ_UNAVAILABLE_AFTER_CAPTURE'
+        else:
             raise
-        rejoin = 'READ_UNAVAILABLE_AFTER_CAPTURE'
     else:
         if current is None:
             rejoin = 'POD_CLEANED_AFTER_CAPTURE'
@@ -354,7 +824,22 @@ def capture(options, read, follow, now=time.monotonic, sleep=time.sleep):
     result = {'status': 'CAPTURED', 'run_ref': options.run_ref, 'session_ref': options.session_ref,
             'turn_ref': options.turn_ref, 'attempt': options.attempt, 'assistant_scope': options.assistant_scope,
             'pod': {'name': pod['name'], 'uid': pod['uid'], 'namespace': ACK.NAMESPACE},
-            'image_manifest_digest': options.image_manifest, 'rejoin': rejoin, 'diagnostic': diagnostic}
+            'image_manifest_digest': options.image_manifest, 'rejoin': rejoin}
+    if include_client:
+        result.update({'status': 'OBSERVATIONS_CAPTURED', 'provider_ack': 'OBSERVED',
+                       'observation_end': 'BOTH_OBSERVED' if len(observations) == 2 else
+                       ('DEADLINE' if now() >= deadline else 'STREAM_ENDED'),
+                       'provider_observation': 'OBSERVED' if 'PROVIDER' in observations else 'NOT_OBSERVED',
+                       'client_observation_status': 'OBSERVED' if 'CLIENT' in observations else 'NOT_OBSERVED',
+                       'input_digest': proof['input_digest'],
+                       'runtime_revision_digest': proof['runtime_revision_digest'],
+                       'execution_binding_digest': proof['execution_binding_digest']})
+        if 'PROVIDER' in observations:
+            result['diagnostic'] = observations['PROVIDER']
+        if 'CLIENT' in observations:
+            result['client_observation'] = observations['CLIENT']
+    else:
+        result['diagnostic'] = diagnostic
     if expected_project_ref is not None:
         result['project_ref'] = proof['project_ref']
     return result
@@ -380,13 +865,25 @@ def main(argv=None):
     parser.add_argument('--timeout-seconds', type=int, default=120)
     parser.add_argument('--pod-name')
     parser.add_argument('--pod-uid')
+    parser.add_argument('--capture-mode', choices=('ACK', 'WORKLOAD'), default='ACK')
+    parser.add_argument('--node-ref')
+    parser.add_argument('--expected-input-digest')
+    parser.add_argument('--include-client-observation', action='store_true',
+                        help='Follow same-UID role-runtime closed diagnostics after exact provider ACK')
     try:
         options = parser.parse_args(argv)
         validate_options(options)
+        if options.capture_mode == 'WORKLOAD':
+            validate_workload_options(options)
         with tempfile.TemporaryDirectory(prefix='provider-failure-', dir='/home/s/.cache') as private:
             os.chmod(private, 0o700)
             client = Kubectl(private, time.monotonic() + options.timeout_seconds)
-            result = capture(options, client.read, client.follow)
+            operation = capture_workload if options.capture_mode == 'WORKLOAD' else capture
+            if options.include_client_observation:
+                emit = lambda value: print(json.dumps(value, sort_keys=True), flush=True)
+                result = capture(options, client.read, client.follow_observations, on_observation=emit)
+            else:
+                result = operation(options, client.read, client.follow)
         print(json.dumps(result, sort_keys=True))
         return 0
     except Failure as error:

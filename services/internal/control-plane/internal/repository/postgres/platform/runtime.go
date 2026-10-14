@@ -274,6 +274,10 @@ func (repository *Repository) recordRunToolCall(ctx context.Context, tx pgx.Tx, 
 }
 
 func validToolCallProjection(input command.RunToolCallInput) bool {
+	if input.Tool == runtimecontract.ExecutionSnapshotTool &&
+		(len(input.SafeParameters) != 0 || input.CapabilityRef != "" || input.GrantRef != "") {
+		return false
+	}
 	if len(input.CallRef) < 8 || len(input.CallRef) > 96 || len(input.Tool) < 1 || len(input.Tool) > 120 ||
 		!validToolActivityLifecycle(input.State, input.Revision, input.SafeResult, input.DurationMS) || input.DurationMS < 0 || input.DurationMS > 86_400_000 ||
 		len([]rune(input.SafeResult)) > 2000 || input.SafeParameters == nil || len(input.SafeParameters) > 32 ||
@@ -319,6 +323,8 @@ func toolCapabilityMatches(tool, capability string, integration, configurationAs
 		}
 	}
 	switch tool {
+	case runtimecontract.ExecutionSnapshotTool:
+		return capability == ""
 	case runtimecontract.NativeToolKindShell, runtimecontract.NativeToolKindFileChange,
 		runtimecontract.NativeToolKindWebSearch, runtimecontract.NativeToolKindDynamicTool,
 		runtimecontract.NativeToolKindImageView, runtimecontract.NativeToolKindImageGeneration,
@@ -329,13 +335,15 @@ func toolCapabilityMatches(tool, capability string, integration, configurationAs
 		"get_configuration_catalog":  "platform.configuration.read",
 		"get_integration_catalog":    "platform.integration.catalog",
 		"find_platform_resources":    "platform.resources.search",
+		"read_task_session":          "platform.resources.search",
 		"propose_configuration_plan": "platform.configuration.plan",
 		"propose_assistant_metadata": "platform.presentation.propose",
 		"propose_run_metadata":       "platform.presentation.propose",
 		"delegate_agent":             "platform.run.delegate",
 		"launch_workflow":            "platform.run.launch",
+		"get_workflow_catalog":       "platform.run.launch",
 	}
-	if (tool == "get_configuration_catalog" || tool == "find_platform_resources" || tool == "propose_configuration_plan" || tool == "propose_assistant_metadata") && !configurationAssistant {
+	if (tool == "get_configuration_catalog" || tool == "find_platform_resources" || tool == "read_task_session" || tool == "propose_configuration_plan" || tool == "propose_assistant_metadata") && !configurationAssistant {
 		return false
 	}
 	return expected[tool] != "" && expected[tool] == capability
@@ -404,6 +412,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		return commandOutcome{}, err
 	}
 	terminalStorage = append(terminalStorage, deadlineFailures...)
+	readinessChanged := false
 	rows, err := tx.Query(ctx, queryRuntimeClaimExecutionSelectClaimableAgentExecutions,
 		scope.organizationID, payload.Limit, repository.roleImages.RoleRuntimeContractRevision,
 		repository.roleImages.RoleRuntimeContractSHA256)
@@ -487,6 +496,16 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	claimedRoots := make(map[string]string)
 	for _, candidate := range claimable {
 		if failedRoots[candidate.rootRunID] {
+			continue
+		}
+		// Account lock уже взят; новый statement видит renewal/rotation,
+		// завершившиеся после первоначального candidate snapshot.
+		var providerCredentialEligible bool
+		if err := tx.QueryRow(ctx, queryProviderRenewalRuntimeCandidate, scope.organizationID,
+			candidate.providerAccountID, candidate.providerCredentialID).Scan(&providerCredentialEligible); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if !providerCredentialEligible {
 			continue
 		}
 		var activeExecutions int64
@@ -926,12 +945,12 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 			eligibilityStage = "runtime_context"
 			contextSnapshot, err := repository.runtimeContextSnapshot(ctx, tx, scope, runRef, projectRef, agentRef)
 			if err != nil {
-				return commandOutcome{}, err
+				return commandOutcome{}, runtimeEligibilityDiagnostic(runtimeReasonRuntimeContext, err)
 			}
 			snapshot["contextSnapshot"] = contextSnapshot
 			snapshot["codexSessionID"], err = runtimeSessionResumeID(ctx, tx, scope, snapshot, codexSessionID)
 			if err != nil {
-				return commandOutcome{}, err
+				return commandOutcome{}, runtimeEligibilityDiagnostic(runtimeReasonSessionResume, err)
 			}
 			var continuationNotice *preparedContinuationNotice
 			if candidate.turnNumber > 1 {
@@ -1022,11 +1041,23 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if errors.Is(candidateErr, errManagedMCPHealthPending) {
 			continue
 		}
+		var recovery *managedMCPStartupRecovery
+		if errors.As(candidateErr, &recovery) {
+			created, err := enqueueManagedMCPStartupRecovery(ctx, tx, scope, recovery)
+			if err != nil {
+				return commandOutcome{}, err
+			}
+			readinessChanged = readinessChanged || created
+			if created && firstRunRef == "" {
+				firstProjectID, firstProjectRef, firstRunRef = candidate.projectID, candidate.projectRef, candidate.runRef
+			}
+			continue
+		}
 		if !runtimeCandidateEligibilityFailure(candidateErr) {
 			return commandOutcome{}, candidateErr
 		}
 		slog.WarnContext(ctx, runtimeCandidateEligibilityDiagnosticMessage, "safe_stage", eligibilityStage,
-			"error_class", runtimeEligibilityErrorClass(candidateErr), "run_ref", candidate.runRef, "node_ref", candidate.nodeRef)
+			"error_class", runtimeEligibilityErrorClass(candidateErr), runtimeEligibilityReasonAttribute, runtimeEligibilityReason(candidateErr), "run_ref", candidate.runRef, "node_ref", candidate.nodeRef)
 		if err := repository.failRuntimeCandidateGraph(ctx, tx, scope, input, candidate); err != nil {
 			return commandOutcome{}, err
 		}
@@ -1045,7 +1076,7 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 	if firstRunRef == "" && expired {
 		firstRunRef = scope.organizationRef
 	}
-	return commandOutcome{result: command.Result{RuntimeItems: items}, projectID: firstProjectID, projectRef: firstProjectRef, resourceKind: "RUNTIME_CLAIM", resourceRef: firstRunRef, summary: "i18n:RUNTIME_WORK_CLAIMS_MATERIALIZED", runtimeGraphChanged: expired || len(failedRoots) > 0}, nil
+	return commandOutcome{result: command.Result{RuntimeItems: items}, projectID: firstProjectID, projectRef: firstProjectRef, resourceKind: "RUNTIME_CLAIM", resourceRef: firstRunRef, summary: "i18n:RUNTIME_WORK_CLAIMS_MATERIALIZED", runtimeGraphChanged: expired || len(failedRoots) > 0, runtimeReadinessChanged: readinessChanged}, nil
 }
 
 func (repository *Repository) commitProviderCredentialRefresh(ctx context.Context, tx pgx.Tx, machineScope scope, input command.Command) (commandOutcome, error) {
@@ -1963,14 +1994,19 @@ func (repository *Repository) delegateExecution(ctx context.Context, tx pgx.Tx, 
 	if err != nil {
 		return commandOutcome{}, err
 	}
-	var capabilityAllowed, relationshipAllowed bool
+	var capabilityAllowed, relationshipAllowed, dependenciesReady bool
 	var workflowInstructions, workflowStepName, plannedNodeID, plannedNodeRef, plannedEdgeRef string
 	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionSelectRunNodesId, pgx.StrictNamedArgs{
 		"parent_node_id":    lease["nodeID"],
 		"target_agent_ref":  payload.TargetAgentRef,
 		"workflow_step_key": payload.WorkflowStepKey,
-	}).Scan(&capabilityAllowed, &relationshipAllowed, &workflowInstructions, &workflowStepName, &plannedNodeID, &plannedNodeRef, &plannedEdgeRef); err != nil || !capabilityAllowed || !relationshipAllowed {
+	}).Scan(&capabilityAllowed, &relationshipAllowed, &dependenciesReady, &workflowInstructions, &workflowStepName, &plannedNodeID, &plannedNodeRef, &plannedEdgeRef); err != nil || !capabilityAllowed || !relationshipAllowed {
 		return commandOutcome{}, errs.ErrForbidden
+	}
+	// Каталог не выдаёт authority: перед любыми effects заново проверяем
+	// серверный фронт exact опубликованного графа, не ослабляя scheduler.
+	if !dependenciesReady {
+		return commandOutcome{}, errs.ErrConflict
 	}
 	var agentID, agentName, role string
 	if err := tx.QueryRow(ctx, queryRuntimeDelegateexecutionSelectAgentsOrganizationIdProjectIdRef, scope.organizationID, lease["projectID"], payload.TargetAgentRef).Scan(&agentID, &agentName, &role); err != nil {

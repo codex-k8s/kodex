@@ -118,7 +118,7 @@ func TestContextDiscoveryProcessFixture(t *testing.T) {
 				CWDs        []string `json:"cwds"`
 				ForceReload bool     `json:"forceReload"`
 			}
-			if json.Unmarshal(request.Params, &params) != nil || len(params.CWDs) != 1 || params.CWDs[0] != "/workspace" || !params.ForceReload {
+			if json.Unmarshal(request.Params, &params) != nil || len(params.CWDs) != 1 || params.CWDs[0] != runtimecontract.RuntimeWorkspaceWorkingRoot || !params.ForceReload {
 				t.Fatal("unexpected discovery request")
 			}
 			skills := []discoveredSkill{{Name: "local-unbound", Description: "Not authorized", Path: "/etc/codex/skills/local/SKILL.md", Enabled: enabled, Scope: "admin"}}
@@ -128,7 +128,7 @@ func TestContextDiscoveryProcessFixture(t *testing.T) {
 			if mode == "wrong metadata" {
 				skills[len(skills)-1].Description = "Changed"
 			}
-			result = map[string]any{"data": []any{map[string]any{"cwd": "/workspace", "skills": skills, "errors": []any{}}}}
+			result = map[string]any{"data": []any{map[string]any{"cwd": runtimecontract.RuntimeWorkspaceWorkingRoot, "skills": skills, "errors": []any{}}}}
 		case "skills/config/write":
 			var params struct {
 				Path    string `json:"path"`

@@ -30,7 +30,7 @@ func TestRuntimeWorkflowLaunchCatalogRequiresExactOrdinaryCapability(t *testing.
 		t.Run(name, func(t *testing.T) {
 			copy := input
 			change(&copy)
-			if RuntimeWorkflowLaunchAvailable(copy) != (name == "valid") || slices.Contains(RuntimeMCPToolNames(copy), "launch_workflow") != (name == "valid") {
+			if RuntimeWorkflowLaunchAvailable(copy) != (name == "valid") || slices.Contains(RuntimeMCPToolNames(copy), "launch_workflow") != (name == "valid") || slices.Contains(RuntimeMCPToolNames(copy), "get_workflow_catalog") != (name == "valid") {
 				t.Fatal("workflow launch catalog expanded or lost exact ordinary authority")
 			}
 		})

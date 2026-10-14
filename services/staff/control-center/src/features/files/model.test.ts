@@ -18,6 +18,7 @@ import type { Artifact } from "@/shared/api/generated/openapi/types.gen";
 function artifact(options: Partial<Artifact> = {}): Artifact {
   return {
     ref: "artifact_file",
+    currentRevisionRef: "arv_fixture_file",
     version: 1,
     projectRef: "project_sales",
     fileName: "report.pdf",

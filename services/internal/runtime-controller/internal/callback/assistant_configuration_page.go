@@ -29,7 +29,7 @@ func parseAssistantConfigurationPage(selector map[string]any, kind string) (assi
 		return page, errAssistantConfigurationPage
 	}
 	for _, key := range []string{"configuration_offset_bytes", "maximum_bytes", "configuration_sha256"} {
-		if _, supplied := selector[key]; supplied && kind != "WORKFLOW_CONFIGURATION" && kind != "AGENT_CONFIGURATION" {
+		if _, supplied := selector[key]; supplied && kind != "WORKFLOW_CONFIGURATION" && kind != "WORKFLOW_METADATA" && kind != "AGENT_CONFIGURATION" && kind != "AGENT_RUNTIME_CONFIGURATION" {
 			return page, errAssistantConfigurationPage
 		}
 	}
@@ -83,17 +83,19 @@ func pageAssistantConfigurationSnapshot(configuration map[string]any, page assis
 	switch configuration["kind"] {
 	case "WORKFLOW_CONFIGURATION":
 		key = "workflow_configuration"
+	case "WORKFLOW_METADATA":
+		key = "workflow_metadata"
 	case "AGENT_CONFIGURATION":
 		key = "agent_configuration"
+	case "AGENT_RUNTIME_CONFIGURATION":
+		key = "agent_runtime_configuration"
 	default:
 		return nil, errAssistantConfigurationPage
 	}
-	other := "agent_configuration"
-	if key == other {
-		other = "workflow_configuration"
-	}
-	if _, mixed := configuration[other]; mixed {
-		return nil, errAssistantConfigurationPage
+	for _, other := range []string{"agent_configuration", "workflow_configuration", "workflow_metadata", "agent_runtime_configuration"} {
+		if _, mixed := configuration[other]; mixed && other != key {
+			return nil, errAssistantConfigurationPage
+		}
 	}
 	inner, ok := configuration[key].(map[string]any)
 	if !ok {

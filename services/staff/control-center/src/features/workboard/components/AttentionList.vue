@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { useServerMessage } from "@/shared/ui/server-message";
 import { AlertTriangle, ShieldQuestion } from "@lucide/vue";
+import { useI18n } from "vue-i18n";
 
-import type { AttentionItem } from "@/features/workboard/model";
+import {
+  runDefaultTaskTitleKey,
+  type AttentionItem,
+} from "@/features/workboard/model";
+import type { Run } from "@/shared/api/generated/openapi/types.gen";
 import { runPath } from "@/shared/routes";
 import SafeSummary from "@/shared/ui/SafeSummary.vue";
 import StatusBadge from "@/shared/ui/StatusBadge.vue";
@@ -25,6 +30,11 @@ function itemPath(item: AttentionItem): string {
   return runPath(ref, projectRef);
 }
 const serverMessage = useServerMessage();
+const { t } = useI18n();
+function runTitle(run: Run): string {
+  const key = runDefaultTaskTitleKey(run);
+  return key ? t(key) : run.title;
+}
 </script>
 
 <template>
@@ -51,7 +61,7 @@ const serverMessage = useServerMessage();
           {{
             item.kind === "GATE"
               ? serverMessage(item.gate.title)
-              : item.run.title
+              : runTitle(item.run)
           }}
         </h3>
         <SafeSummary

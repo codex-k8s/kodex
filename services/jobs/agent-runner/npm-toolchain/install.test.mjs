@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import {
   mkdtempSync,
+  mkdirSync,
   readFileSync,
   writeFileSync,
   rmSync,
@@ -20,6 +21,7 @@ import {
   npmSourceEntries,
   securityFloors,
   verifyLock,
+  verifyInstalled,
 } from "./install.mjs";
 
 const root = fileURLToPath(new URL("./", import.meta.url));
@@ -168,6 +170,72 @@ test("сохраняет прежние CLI и закрытые manifest/lock б
   ])
     assert.ok(commands[command]);
 });
+
+function installedFixture(directory) {
+  const manifest = JSON.parse(readFileSync(join(root, "package.json")));
+  for (const file of ["package.json", "package-lock.json"])
+    writeFileSync(join(directory, file), readFileSync(join(root, file)));
+  for (const [name, version] of Object.entries(manifest.dependencies)) {
+    const path = join(directory, "node_modules", name);
+    mkdirSync(path, { recursive: true });
+    writeFileSync(
+      join(path, "package.json"),
+      JSON.stringify({ name, version }),
+    );
+  }
+  const bundled = join(directory, "node_modules/pnpm/dist/node_modules");
+  for (const [name, version] of [
+    ["tar", "7.5.22"],
+    ["undici", "6.28.1"],
+  ]) {
+    mkdirSync(join(bundled, name), { recursive: true });
+    writeFileSync(
+      join(bundled, name, "package.json"),
+      JSON.stringify({ name, version }),
+    );
+  }
+  return bundled;
+}
+
+test("проверяет фактические bundled tar и undici внутри pnpm dist", () =>
+  temporary((directory) => {
+    installedFixture(directory);
+    const versions = verifyInstalled(directory);
+    assert.deepEqual(versions.tar, ["7.5.22"]);
+    assert.deepEqual(versions.undici, ["6.28.1"]);
+  }));
+
+for (const [name, version] of [
+  ["tar", "7.5.19"],
+  ["undici", "6.27.0"],
+]) {
+  test(`отклоняет уязвимый bundled ${name} ${version} при исправном root lock`, () =>
+    temporary((directory) => {
+      const bundled = installedFixture(directory);
+      writeFileSync(
+        join(bundled, name, "package.json"),
+        JSON.stringify({ name, version }),
+      );
+      assert.throws(
+        () => verifyInstalled(directory),
+        /NPM_SECURITY_VERSION_REJECTED/,
+      );
+    }));
+}
+
+for (const suffix of ["dist", "dist/node_modules"]) {
+  test(`не обходит symlink вместо pnpm ${suffix}`, () =>
+    temporary((directory) => {
+      installedFixture(directory);
+      const path = join(directory, "node_modules/pnpm", suffix);
+      rmSync(path, { recursive: true });
+      symlinkSync(directory, path);
+      assert.throws(
+        () => verifyInstalled(directory),
+        /NPM_INSTALLED_LINK_REJECTED/,
+      );
+    }));
+}
 test("проверяет digest до использования source", () => {
   const { bytes } = archive(base);
   assert.throws(

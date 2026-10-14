@@ -12,13 +12,10 @@ func TestClaimQueryKeepsBoundedFencedLifecycle(t *testing.T) {
 		"content.object_version",
 		"retention_claim_generation + 1",
 		"@lease_seconds * interval '1 second'",
-		"active_run.state IN ('QUEUED', 'RUNNING', 'WAITING_HUMAN', 'CANCELLING')",
-		"input_item.artifact_revision = artifact.revision",
-		"source_turn.created_at < active_run.created_at",
-		"artifact.deleted_at > active_run.created_at",
-		"runtime_revision.safe_snapshot -> 'artifacts'",
-		"runtime_revision.root_run_id = active_run.id",
-		"exact.item -> 'revision' = to_jsonb(artifact.revision)",
+		"artifact_has_retained_revisions(artifact.id)",
+		"control_plane.artifact_heads",
+		"content.revision_id=revision.id",
+		"ORDER BY revision.revision, revision.id LIMIT 1",
 	} {
 		if !strings.Contains(queryClaimDue, fragment) {
 			t.Fatalf("claim query lacks %q", fragment)
@@ -36,8 +33,10 @@ func TestFinalizationRequiresOwnerAndGenerationFence(t *testing.T) {
 	}
 }
 
-func TestFinalizationKeepsPurgedTombstoneNameUnique(t *testing.T) {
-	if !strings.Contains(queryFinalizeTombstone, "file_name = 'purged-' || ref") {
-		t.Fatal("artifact retention finalization reuses a shared tombstone file name")
+func TestFinalizationRequiresAllVersionReceiptsCleared(t *testing.T) {
+	if !strings.Contains(queryFinalizeTombstone, "current_revision_id = NULL") ||
+		!strings.Contains(queryFinalizeTombstone, "NOT EXISTS") ||
+		!strings.Contains(queryFinalizeTombstone, "artifact_revision_content") {
+		t.Fatal("artifact retention finalization keeps a current pointer or ignores historical receipts")
 	}
 }

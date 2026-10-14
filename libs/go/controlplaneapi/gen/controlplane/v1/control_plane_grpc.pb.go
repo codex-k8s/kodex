@@ -62,6 +62,8 @@ const (
 	PlatformQueryService_GetOwnerGate_FullMethodName                                  = "/controlplane.v1.PlatformQueryService/GetOwnerGate"
 	PlatformQueryService_ListArtifacts_FullMethodName                                 = "/controlplane.v1.PlatformQueryService/ListArtifacts"
 	PlatformQueryService_GetArtifact_FullMethodName                                   = "/controlplane.v1.PlatformQueryService/GetArtifact"
+	PlatformQueryService_ListArtifactRevisions_FullMethodName                         = "/controlplane.v1.PlatformQueryService/ListArtifactRevisions"
+	PlatformQueryService_GetArtifactRevision_FullMethodName                           = "/controlplane.v1.PlatformQueryService/GetArtifactRevision"
 	PlatformQueryService_GetArtifactImpact_FullMethodName                             = "/controlplane.v1.PlatformQueryService/GetArtifactImpact"
 	PlatformQueryService_GetAttachmentSet_FullMethodName                              = "/controlplane.v1.PlatformQueryService/GetAttachmentSet"
 	PlatformQueryService_ListSchedules_FullMethodName                                 = "/controlplane.v1.PlatformQueryService/ListSchedules"
@@ -167,6 +169,8 @@ type PlatformQueryServiceClient interface {
 	GetOwnerGate(ctx context.Context, in *GetOwnerGateRequest, opts ...grpc.CallOption) (*GetOwnerGateResponse, error)
 	ListArtifacts(ctx context.Context, in *ListArtifactsRequest, opts ...grpc.CallOption) (*ListArtifactsResponse, error)
 	GetArtifact(ctx context.Context, in *GetArtifactRequest, opts ...grpc.CallOption) (*GetArtifactResponse, error)
+	ListArtifactRevisions(ctx context.Context, in *ListArtifactRevisionsRequest, opts ...grpc.CallOption) (*ListArtifactRevisionsResponse, error)
+	GetArtifactRevision(ctx context.Context, in *GetArtifactRevisionRequest, opts ...grpc.CallOption) (*GetArtifactRevisionResponse, error)
 	GetArtifactImpact(ctx context.Context, in *GetArtifactImpactRequest, opts ...grpc.CallOption) (*GetArtifactImpactResponse, error)
 	GetAttachmentSet(ctx context.Context, in *GetAttachmentSetRequest, opts ...grpc.CallOption) (*GetAttachmentSetResponse, error)
 	ListSchedules(ctx context.Context, in *ListSchedulesRequest, opts ...grpc.CallOption) (*ListSchedulesResponse, error)
@@ -656,6 +660,26 @@ func (c *platformQueryServiceClient) GetArtifact(ctx context.Context, in *GetArt
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetArtifactResponse)
 	err := c.cc.Invoke(ctx, PlatformQueryService_GetArtifact_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) ListArtifactRevisions(ctx context.Context, in *ListArtifactRevisionsRequest, opts ...grpc.CallOption) (*ListArtifactRevisionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListArtifactRevisionsResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_ListArtifactRevisions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *platformQueryServiceClient) GetArtifactRevision(ctx context.Context, in *GetArtifactRevisionRequest, opts ...grpc.CallOption) (*GetArtifactRevisionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetArtifactRevisionResponse)
+	err := c.cc.Invoke(ctx, PlatformQueryService_GetArtifactRevision_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1251,6 +1275,8 @@ type PlatformQueryServiceServer interface {
 	GetOwnerGate(context.Context, *GetOwnerGateRequest) (*GetOwnerGateResponse, error)
 	ListArtifacts(context.Context, *ListArtifactsRequest) (*ListArtifactsResponse, error)
 	GetArtifact(context.Context, *GetArtifactRequest) (*GetArtifactResponse, error)
+	ListArtifactRevisions(context.Context, *ListArtifactRevisionsRequest) (*ListArtifactRevisionsResponse, error)
+	GetArtifactRevision(context.Context, *GetArtifactRevisionRequest) (*GetArtifactRevisionResponse, error)
 	GetArtifactImpact(context.Context, *GetArtifactImpactRequest) (*GetArtifactImpactResponse, error)
 	GetAttachmentSet(context.Context, *GetAttachmentSetRequest) (*GetAttachmentSetResponse, error)
 	ListSchedules(context.Context, *ListSchedulesRequest) (*ListSchedulesResponse, error)
@@ -1444,6 +1470,12 @@ func (UnimplementedPlatformQueryServiceServer) ListArtifacts(context.Context, *L
 }
 func (UnimplementedPlatformQueryServiceServer) GetArtifact(context.Context, *GetArtifactRequest) (*GetArtifactResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetArtifact not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) ListArtifactRevisions(context.Context, *ListArtifactRevisionsRequest) (*ListArtifactRevisionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListArtifactRevisions not implemented")
+}
+func (UnimplementedPlatformQueryServiceServer) GetArtifactRevision(context.Context, *GetArtifactRevisionRequest) (*GetArtifactRevisionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetArtifactRevision not implemented")
 }
 func (UnimplementedPlatformQueryServiceServer) GetArtifactImpact(context.Context, *GetArtifactImpactRequest) (*GetArtifactImpactResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetArtifactImpact not implemented")
@@ -2398,6 +2430,42 @@ func _PlatformQueryService_GetArtifact_Handler(srv interface{}, ctx context.Cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PlatformQueryServiceServer).GetArtifact(ctx, req.(*GetArtifactRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_ListArtifactRevisions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListArtifactRevisionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).ListArtifactRevisions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_ListArtifactRevisions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).ListArtifactRevisions(ctx, req.(*ListArtifactRevisionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PlatformQueryService_GetArtifactRevision_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetArtifactRevisionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PlatformQueryServiceServer).GetArtifactRevision(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PlatformQueryService_GetArtifactRevision_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PlatformQueryServiceServer).GetArtifactRevision(ctx, req.(*GetArtifactRevisionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3554,6 +3622,14 @@ var PlatformQueryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PlatformQueryService_GetArtifact_Handler,
 		},
 		{
+			MethodName: "ListArtifactRevisions",
+			Handler:    _PlatformQueryService_ListArtifactRevisions_Handler,
+		},
+		{
+			MethodName: "GetArtifactRevision",
+			Handler:    _PlatformQueryService_GetArtifactRevision_Handler,
+		},
+		{
 			MethodName: "GetArtifactImpact",
 			Handler:    _PlatformQueryService_GetArtifactImpact_Handler,
 		},
@@ -3864,6 +3940,7 @@ const (
 	PlatformCommandService_UploadArtifact_FullMethodName                            = "/controlplane.v1.PlatformCommandService/UploadArtifact"
 	PlatformCommandService_UploadOrganizationArtifact_FullMethodName                = "/controlplane.v1.PlatformCommandService/UploadOrganizationArtifact"
 	PlatformCommandService_DownloadArtifact_FullMethodName                          = "/controlplane.v1.PlatformCommandService/DownloadArtifact"
+	PlatformCommandService_DownloadArtifactRevision_FullMethodName                  = "/controlplane.v1.PlatformCommandService/DownloadArtifactRevision"
 	PlatformCommandService_ChangeArtifactBinding_FullMethodName                     = "/controlplane.v1.PlatformCommandService/ChangeArtifactBinding"
 	PlatformCommandService_DeleteArtifact_FullMethodName                            = "/controlplane.v1.PlatformCommandService/DeleteArtifact"
 	PlatformCommandService_RestoreArtifact_FullMethodName                           = "/controlplane.v1.PlatformCommandService/RestoreArtifact"
@@ -4048,6 +4125,7 @@ type PlatformCommandServiceClient interface {
 	UploadArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadArtifactRequest, UploadArtifactResponse], error)
 	UploadOrganizationArtifact(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[UploadOrganizationArtifactRequest, UploadOrganizationArtifactResponse], error)
 	DownloadArtifact(ctx context.Context, in *DownloadArtifactRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadArtifactResponse], error)
+	DownloadArtifactRevision(ctx context.Context, in *DownloadArtifactRevisionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadArtifactRevisionResponse], error)
 	ChangeArtifactBinding(ctx context.Context, in *ChangeArtifactBindingRequest, opts ...grpc.CallOption) (*ChangeArtifactBindingResponse, error)
 	DeleteArtifact(ctx context.Context, in *DeleteArtifactRequest, opts ...grpc.CallOption) (*DeleteArtifactResponse, error)
 	RestoreArtifact(ctx context.Context, in *RestoreArtifactRequest, opts ...grpc.CallOption) (*RestoreArtifactResponse, error)
@@ -5051,6 +5129,25 @@ func (c *platformCommandServiceClient) DownloadArtifact(ctx context.Context, in 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PlatformCommandService_DownloadArtifactClient = grpc.ServerStreamingClient[DownloadArtifactResponse]
 
+func (c *platformCommandServiceClient) DownloadArtifactRevision(ctx context.Context, in *DownloadArtifactRevisionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[DownloadArtifactRevisionResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &PlatformCommandService_ServiceDesc.Streams[4], PlatformCommandService_DownloadArtifactRevision_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[DownloadArtifactRevisionRequest, DownloadArtifactRevisionResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PlatformCommandService_DownloadArtifactRevisionClient = grpc.ServerStreamingClient[DownloadArtifactRevisionResponse]
+
 func (c *platformCommandServiceClient) ChangeArtifactBinding(ctx context.Context, in *ChangeArtifactBindingRequest, opts ...grpc.CallOption) (*ChangeArtifactBindingResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ChangeArtifactBindingResponse)
@@ -5989,6 +6086,7 @@ type PlatformCommandServiceServer interface {
 	UploadArtifact(grpc.ClientStreamingServer[UploadArtifactRequest, UploadArtifactResponse]) error
 	UploadOrganizationArtifact(grpc.ClientStreamingServer[UploadOrganizationArtifactRequest, UploadOrganizationArtifactResponse]) error
 	DownloadArtifact(*DownloadArtifactRequest, grpc.ServerStreamingServer[DownloadArtifactResponse]) error
+	DownloadArtifactRevision(*DownloadArtifactRevisionRequest, grpc.ServerStreamingServer[DownloadArtifactRevisionResponse]) error
 	ChangeArtifactBinding(context.Context, *ChangeArtifactBindingRequest) (*ChangeArtifactBindingResponse, error)
 	DeleteArtifact(context.Context, *DeleteArtifactRequest) (*DeleteArtifactResponse, error)
 	RestoreArtifact(context.Context, *RestoreArtifactRequest) (*RestoreArtifactResponse, error)
@@ -6350,6 +6448,9 @@ func (UnimplementedPlatformCommandServiceServer) UploadOrganizationArtifact(grpc
 }
 func (UnimplementedPlatformCommandServiceServer) DownloadArtifact(*DownloadArtifactRequest, grpc.ServerStreamingServer[DownloadArtifactResponse]) error {
 	return status.Error(codes.Unimplemented, "method DownloadArtifact not implemented")
+}
+func (UnimplementedPlatformCommandServiceServer) DownloadArtifactRevision(*DownloadArtifactRevisionRequest, grpc.ServerStreamingServer[DownloadArtifactRevisionResponse]) error {
+	return status.Error(codes.Unimplemented, "method DownloadArtifactRevision not implemented")
 }
 func (UnimplementedPlatformCommandServiceServer) ChangeArtifactBinding(context.Context, *ChangeArtifactBindingRequest) (*ChangeArtifactBindingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ChangeArtifactBinding not implemented")
@@ -8186,6 +8287,17 @@ func _PlatformCommandService_DownloadArtifact_Handler(srv interface{}, stream gr
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type PlatformCommandService_DownloadArtifactServer = grpc.ServerStreamingServer[DownloadArtifactResponse]
+
+func _PlatformCommandService_DownloadArtifactRevision_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(DownloadArtifactRevisionRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(PlatformCommandServiceServer).DownloadArtifactRevision(m, &grpc.GenericServerStream[DownloadArtifactRevisionRequest, DownloadArtifactRevisionResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PlatformCommandService_DownloadArtifactRevisionServer = grpc.ServerStreamingServer[DownloadArtifactRevisionResponse]
 
 func _PlatformCommandService_ChangeArtifactBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ChangeArtifactBindingRequest)
@@ -10404,6 +10516,11 @@ var PlatformCommandService_ServiceDesc = grpc.ServiceDesc{
 			Handler:       _PlatformCommandService_DownloadArtifact_Handler,
 			ServerStreams: true,
 		},
+		{
+			StreamName:    "DownloadArtifactRevision",
+			Handler:       _PlatformCommandService_DownloadArtifactRevision_Handler,
+			ServerStreams: true,
+		},
 	},
 	Metadata: "controlplane/v1/control_plane.proto",
 }
@@ -11221,6 +11338,189 @@ var RuntimeSecretDraftWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CompleteRuntimeSecretDraftCleanup",
 			Handler:    _RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftCleanup_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "controlplane/v1/control_plane.proto",
+}
+
+const (
+	ProviderCredentialRenewalWorkService_CheckProviderCredentialRenewalWorkReadiness_FullMethodName  = "/controlplane.v1.ProviderCredentialRenewalWorkService/CheckProviderCredentialRenewalWorkReadiness"
+	ProviderCredentialRenewalWorkService_AuthorizeProviderCredentialRenewal_FullMethodName           = "/controlplane.v1.ProviderCredentialRenewalWorkService/AuthorizeProviderCredentialRenewal"
+	ProviderCredentialRenewalWorkService_ValidateProviderCredentialRenewalObservation_FullMethodName = "/controlplane.v1.ProviderCredentialRenewalWorkService/ValidateProviderCredentialRenewalObservation"
+)
+
+// ProviderCredentialRenewalWorkServiceClient is the client API for ProviderCredentialRenewalWorkService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Отдельная owner boundary для managed OAuth, не READ catalog и не execution lease.
+type ProviderCredentialRenewalWorkServiceClient interface {
+	CheckProviderCredentialRenewalWorkReadiness(ctx context.Context, in *CheckProviderCredentialRenewalWorkReadinessRequest, opts ...grpc.CallOption) (*CheckProviderCredentialRenewalWorkReadinessResponse, error)
+	AuthorizeProviderCredentialRenewal(ctx context.Context, in *AuthorizeProviderCredentialRenewalRequest, opts ...grpc.CallOption) (*AuthorizeProviderCredentialRenewalResponse, error)
+	ValidateProviderCredentialRenewalObservation(ctx context.Context, in *ValidateProviderCredentialRenewalObservationRequest, opts ...grpc.CallOption) (*ValidateProviderCredentialRenewalObservationResponse, error)
+}
+
+type providerCredentialRenewalWorkServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewProviderCredentialRenewalWorkServiceClient(cc grpc.ClientConnInterface) ProviderCredentialRenewalWorkServiceClient {
+	return &providerCredentialRenewalWorkServiceClient{cc}
+}
+
+func (c *providerCredentialRenewalWorkServiceClient) CheckProviderCredentialRenewalWorkReadiness(ctx context.Context, in *CheckProviderCredentialRenewalWorkReadinessRequest, opts ...grpc.CallOption) (*CheckProviderCredentialRenewalWorkReadinessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckProviderCredentialRenewalWorkReadinessResponse)
+	err := c.cc.Invoke(ctx, ProviderCredentialRenewalWorkService_CheckProviderCredentialRenewalWorkReadiness_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerCredentialRenewalWorkServiceClient) AuthorizeProviderCredentialRenewal(ctx context.Context, in *AuthorizeProviderCredentialRenewalRequest, opts ...grpc.CallOption) (*AuthorizeProviderCredentialRenewalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuthorizeProviderCredentialRenewalResponse)
+	err := c.cc.Invoke(ctx, ProviderCredentialRenewalWorkService_AuthorizeProviderCredentialRenewal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerCredentialRenewalWorkServiceClient) ValidateProviderCredentialRenewalObservation(ctx context.Context, in *ValidateProviderCredentialRenewalObservationRequest, opts ...grpc.CallOption) (*ValidateProviderCredentialRenewalObservationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateProviderCredentialRenewalObservationResponse)
+	err := c.cc.Invoke(ctx, ProviderCredentialRenewalWorkService_ValidateProviderCredentialRenewalObservation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ProviderCredentialRenewalWorkServiceServer is the server API for ProviderCredentialRenewalWorkService service.
+// All implementations must embed UnimplementedProviderCredentialRenewalWorkServiceServer
+// for forward compatibility.
+//
+// Отдельная owner boundary для managed OAuth, не READ catalog и не execution lease.
+type ProviderCredentialRenewalWorkServiceServer interface {
+	CheckProviderCredentialRenewalWorkReadiness(context.Context, *CheckProviderCredentialRenewalWorkReadinessRequest) (*CheckProviderCredentialRenewalWorkReadinessResponse, error)
+	AuthorizeProviderCredentialRenewal(context.Context, *AuthorizeProviderCredentialRenewalRequest) (*AuthorizeProviderCredentialRenewalResponse, error)
+	ValidateProviderCredentialRenewalObservation(context.Context, *ValidateProviderCredentialRenewalObservationRequest) (*ValidateProviderCredentialRenewalObservationResponse, error)
+	mustEmbedUnimplementedProviderCredentialRenewalWorkServiceServer()
+}
+
+// UnimplementedProviderCredentialRenewalWorkServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedProviderCredentialRenewalWorkServiceServer struct{}
+
+func (UnimplementedProviderCredentialRenewalWorkServiceServer) CheckProviderCredentialRenewalWorkReadiness(context.Context, *CheckProviderCredentialRenewalWorkReadinessRequest) (*CheckProviderCredentialRenewalWorkReadinessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckProviderCredentialRenewalWorkReadiness not implemented")
+}
+func (UnimplementedProviderCredentialRenewalWorkServiceServer) AuthorizeProviderCredentialRenewal(context.Context, *AuthorizeProviderCredentialRenewalRequest) (*AuthorizeProviderCredentialRenewalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AuthorizeProviderCredentialRenewal not implemented")
+}
+func (UnimplementedProviderCredentialRenewalWorkServiceServer) ValidateProviderCredentialRenewalObservation(context.Context, *ValidateProviderCredentialRenewalObservationRequest) (*ValidateProviderCredentialRenewalObservationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateProviderCredentialRenewalObservation not implemented")
+}
+func (UnimplementedProviderCredentialRenewalWorkServiceServer) mustEmbedUnimplementedProviderCredentialRenewalWorkServiceServer() {
+}
+func (UnimplementedProviderCredentialRenewalWorkServiceServer) testEmbeddedByValue() {}
+
+// UnsafeProviderCredentialRenewalWorkServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ProviderCredentialRenewalWorkServiceServer will
+// result in compilation errors.
+type UnsafeProviderCredentialRenewalWorkServiceServer interface {
+	mustEmbedUnimplementedProviderCredentialRenewalWorkServiceServer()
+}
+
+func RegisterProviderCredentialRenewalWorkServiceServer(s grpc.ServiceRegistrar, srv ProviderCredentialRenewalWorkServiceServer) {
+	// If the following call panics, it indicates UnimplementedProviderCredentialRenewalWorkServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&ProviderCredentialRenewalWorkService_ServiceDesc, srv)
+}
+
+func _ProviderCredentialRenewalWorkService_CheckProviderCredentialRenewalWorkReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckProviderCredentialRenewalWorkReadinessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderCredentialRenewalWorkServiceServer).CheckProviderCredentialRenewalWorkReadiness(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderCredentialRenewalWorkService_CheckProviderCredentialRenewalWorkReadiness_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderCredentialRenewalWorkServiceServer).CheckProviderCredentialRenewalWorkReadiness(ctx, req.(*CheckProviderCredentialRenewalWorkReadinessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderCredentialRenewalWorkService_AuthorizeProviderCredentialRenewal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuthorizeProviderCredentialRenewalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderCredentialRenewalWorkServiceServer).AuthorizeProviderCredentialRenewal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderCredentialRenewalWorkService_AuthorizeProviderCredentialRenewal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderCredentialRenewalWorkServiceServer).AuthorizeProviderCredentialRenewal(ctx, req.(*AuthorizeProviderCredentialRenewalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderCredentialRenewalWorkService_ValidateProviderCredentialRenewalObservation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateProviderCredentialRenewalObservationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderCredentialRenewalWorkServiceServer).ValidateProviderCredentialRenewalObservation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderCredentialRenewalWorkService_ValidateProviderCredentialRenewalObservation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderCredentialRenewalWorkServiceServer).ValidateProviderCredentialRenewalObservation(ctx, req.(*ValidateProviderCredentialRenewalObservationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// ProviderCredentialRenewalWorkService_ServiceDesc is the grpc.ServiceDesc for ProviderCredentialRenewalWorkService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ProviderCredentialRenewalWorkService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "controlplane.v1.ProviderCredentialRenewalWorkService",
+	HandlerType: (*ProviderCredentialRenewalWorkServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CheckProviderCredentialRenewalWorkReadiness",
+			Handler:    _ProviderCredentialRenewalWorkService_CheckProviderCredentialRenewalWorkReadiness_Handler,
+		},
+		{
+			MethodName: "AuthorizeProviderCredentialRenewal",
+			Handler:    _ProviderCredentialRenewalWorkService_AuthorizeProviderCredentialRenewal_Handler,
+		},
+		{
+			MethodName: "ValidateProviderCredentialRenewalObservation",
+			Handler:    _ProviderCredentialRenewalWorkService_ValidateProviderCredentialRenewalObservation_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -12441,6 +12741,7 @@ const (
 	RuntimeWorkService_CompleteExecution_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/CompleteExecution"
 	RuntimeWorkService_DelegateExecution_FullMethodName                               = "/controlplane.v1.RuntimeWorkService/DelegateExecution"
 	RuntimeWorkService_LaunchWorkflowExecution_FullMethodName                         = "/controlplane.v1.RuntimeWorkService/LaunchWorkflowExecution"
+	RuntimeWorkService_GetExecutionWorkflowCatalog_FullMethodName                     = "/controlplane.v1.RuntimeWorkService/GetExecutionWorkflowCatalog"
 	RuntimeWorkService_ProposeAssistantPlan_FullMethodName                            = "/controlplane.v1.RuntimeWorkService/ProposeAssistantPlan"
 	RuntimeWorkService_ProposeAssistantMetadata_FullMethodName                        = "/controlplane.v1.RuntimeWorkService/ProposeAssistantMetadata"
 	RuntimeWorkService_ProposeRunMetadata_FullMethodName                              = "/controlplane.v1.RuntimeWorkService/ProposeRunMetadata"
@@ -12491,6 +12792,9 @@ type RuntimeWorkServiceClient interface {
 	// Запускает опубликованный Workflow из exact active execution; actor/project
 	// и обязательную связь родителя назначает владелец, не caller payload.
 	LaunchWorkflowExecution(ctx context.Context, in *LaunchWorkflowExecutionRequest, opts ...grpc.CallOption) (*LaunchWorkflowExecutionResponse, error)
+	// Каталог опубликованных Workflow exact ordinary execution; owner/project
+	// разрешаются из действующей lease, не из аргументов инструмента.
+	GetExecutionWorkflowCatalog(ctx context.Context, in *GetExecutionWorkflowCatalogRequest, opts ...grpc.CallOption) (*GetExecutionWorkflowCatalogResponse, error)
 	ProposeAssistantPlan(ctx context.Context, in *ProposeAssistantPlanRequest, opts ...grpc.CallOption) (*ProposeAssistantPlanResponse, error)
 	ProposeAssistantMetadata(ctx context.Context, in *ProposeAssistantMetadataRequest, opts ...grpc.CallOption) (*ProposeAssistantMetadataResponse, error)
 	ProposeRunMetadata(ctx context.Context, in *ProposeRunMetadataRequest, opts ...grpc.CallOption) (*ProposeRunMetadataResponse, error)
@@ -12719,6 +13023,16 @@ func (c *runtimeWorkServiceClient) LaunchWorkflowExecution(ctx context.Context, 
 	return out, nil
 }
 
+func (c *runtimeWorkServiceClient) GetExecutionWorkflowCatalog(ctx context.Context, in *GetExecutionWorkflowCatalogRequest, opts ...grpc.CallOption) (*GetExecutionWorkflowCatalogResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetExecutionWorkflowCatalogResponse)
+	err := c.cc.Invoke(ctx, RuntimeWorkService_GetExecutionWorkflowCatalog_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *runtimeWorkServiceClient) ProposeAssistantPlan(ctx context.Context, in *ProposeAssistantPlanRequest, opts ...grpc.CallOption) (*ProposeAssistantPlanResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ProposeAssistantPlanResponse)
@@ -12920,6 +13234,9 @@ type RuntimeWorkServiceServer interface {
 	// Запускает опубликованный Workflow из exact active execution; actor/project
 	// и обязательную связь родителя назначает владелец, не caller payload.
 	LaunchWorkflowExecution(context.Context, *LaunchWorkflowExecutionRequest) (*LaunchWorkflowExecutionResponse, error)
+	// Каталог опубликованных Workflow exact ordinary execution; owner/project
+	// разрешаются из действующей lease, не из аргументов инструмента.
+	GetExecutionWorkflowCatalog(context.Context, *GetExecutionWorkflowCatalogRequest) (*GetExecutionWorkflowCatalogResponse, error)
 	ProposeAssistantPlan(context.Context, *ProposeAssistantPlanRequest) (*ProposeAssistantPlanResponse, error)
 	ProposeAssistantMetadata(context.Context, *ProposeAssistantMetadataRequest) (*ProposeAssistantMetadataResponse, error)
 	ProposeRunMetadata(context.Context, *ProposeRunMetadataRequest) (*ProposeRunMetadataResponse, error)
@@ -13005,6 +13322,9 @@ func (UnimplementedRuntimeWorkServiceServer) DelegateExecution(context.Context, 
 }
 func (UnimplementedRuntimeWorkServiceServer) LaunchWorkflowExecution(context.Context, *LaunchWorkflowExecutionRequest) (*LaunchWorkflowExecutionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method LaunchWorkflowExecution not implemented")
+}
+func (UnimplementedRuntimeWorkServiceServer) GetExecutionWorkflowCatalog(context.Context, *GetExecutionWorkflowCatalogRequest) (*GetExecutionWorkflowCatalogResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetExecutionWorkflowCatalog not implemented")
 }
 func (UnimplementedRuntimeWorkServiceServer) ProposeAssistantPlan(context.Context, *ProposeAssistantPlanRequest) (*ProposeAssistantPlanResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ProposeAssistantPlan not implemented")
@@ -13413,6 +13733,24 @@ func _RuntimeWorkService_LaunchWorkflowExecution_Handler(srv interface{}, ctx co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RuntimeWorkService_GetExecutionWorkflowCatalog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetExecutionWorkflowCatalogRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RuntimeWorkServiceServer).GetExecutionWorkflowCatalog(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: RuntimeWorkService_GetExecutionWorkflowCatalog_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RuntimeWorkServiceServer).GetExecutionWorkflowCatalog(ctx, req.(*GetExecutionWorkflowCatalogRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _RuntimeWorkService_ProposeAssistantPlan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ProposeAssistantPlanRequest)
 	if err := dec(in); err != nil {
@@ -13797,6 +14135,10 @@ var RuntimeWorkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LaunchWorkflowExecution",
 			Handler:    _RuntimeWorkService_LaunchWorkflowExecution_Handler,
+		},
+		{
+			MethodName: "GetExecutionWorkflowCatalog",
+			Handler:    _RuntimeWorkService_GetExecutionWorkflowCatalog_Handler,
 		},
 		{
 			MethodName: "ProposeAssistantPlan",
@@ -14442,6 +14784,8 @@ var InteractionWorkService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	ProviderCredentialMaterializerService_RenewManagedProviderCredential_FullMethodName               = "/controlplane.v1.ProviderCredentialMaterializerService/RenewManagedProviderCredential"
+	ProviderCredentialMaterializerService_ObserveManagedProviderCredentialRenewal_FullMethodName      = "/controlplane.v1.ProviderCredentialMaterializerService/ObserveManagedProviderCredentialRenewal"
 	ProviderCredentialMaterializerService_ObserveProviderModelCatalog_FullMethodName                  = "/controlplane.v1.ProviderCredentialMaterializerService/ObserveProviderModelCatalog"
 	ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_FullMethodName = "/controlplane.v1.ProviderCredentialMaterializerService/CheckProviderCredentialMaterializerReadiness"
 	ProviderCredentialMaterializerService_StartDeviceAuthorization_FullMethodName                     = "/controlplane.v1.ProviderCredentialMaterializerService/StartDeviceAuthorization"
@@ -14459,6 +14803,8 @@ const (
 // create immutable Kubernetes Secret от основного control-plane. Ни один ответ
 // этого сервиса не содержит credential value.
 type ProviderCredentialMaterializerServiceClient interface {
+	RenewManagedProviderCredential(ctx context.Context, in *RenewManagedProviderCredentialRequest, opts ...grpc.CallOption) (*RenewManagedProviderCredentialResponse, error)
+	ObserveManagedProviderCredentialRenewal(ctx context.Context, in *ObserveManagedProviderCredentialRenewalRequest, opts ...grpc.CallOption) (*ObserveManagedProviderCredentialRenewalResponse, error)
 	ObserveProviderModelCatalog(ctx context.Context, in *ObserveProviderModelCatalogRequest, opts ...grpc.CallOption) (*ObserveProviderModelCatalogResponse, error)
 	CheckProviderCredentialMaterializerReadiness(ctx context.Context, in *CheckProviderCredentialMaterializerReadinessRequest, opts ...grpc.CallOption) (*CheckProviderCredentialMaterializerReadinessResponse, error)
 	StartDeviceAuthorization(ctx context.Context, in *ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest, opts ...grpc.CallOption) (*ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse, error)
@@ -14479,6 +14825,26 @@ type providerCredentialMaterializerServiceClient struct {
 
 func NewProviderCredentialMaterializerServiceClient(cc grpc.ClientConnInterface) ProviderCredentialMaterializerServiceClient {
 	return &providerCredentialMaterializerServiceClient{cc}
+}
+
+func (c *providerCredentialMaterializerServiceClient) RenewManagedProviderCredential(ctx context.Context, in *RenewManagedProviderCredentialRequest, opts ...grpc.CallOption) (*RenewManagedProviderCredentialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenewManagedProviderCredentialResponse)
+	err := c.cc.Invoke(ctx, ProviderCredentialMaterializerService_RenewManagedProviderCredential_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerCredentialMaterializerServiceClient) ObserveManagedProviderCredentialRenewal(ctx context.Context, in *ObserveManagedProviderCredentialRenewalRequest, opts ...grpc.CallOption) (*ObserveManagedProviderCredentialRenewalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ObserveManagedProviderCredentialRenewalResponse)
+	err := c.cc.Invoke(ctx, ProviderCredentialMaterializerService_ObserveManagedProviderCredentialRenewal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *providerCredentialMaterializerServiceClient) ObserveProviderModelCatalog(ctx context.Context, in *ObserveProviderModelCatalogRequest, opts ...grpc.CallOption) (*ObserveProviderModelCatalogResponse, error) {
@@ -14559,6 +14925,8 @@ func (c *providerCredentialMaterializerServiceClient) CleanupProviderCredential(
 // create immutable Kubernetes Secret от основного control-plane. Ни один ответ
 // этого сервиса не содержит credential value.
 type ProviderCredentialMaterializerServiceServer interface {
+	RenewManagedProviderCredential(context.Context, *RenewManagedProviderCredentialRequest) (*RenewManagedProviderCredentialResponse, error)
+	ObserveManagedProviderCredentialRenewal(context.Context, *ObserveManagedProviderCredentialRenewalRequest) (*ObserveManagedProviderCredentialRenewalResponse, error)
 	ObserveProviderModelCatalog(context.Context, *ObserveProviderModelCatalogRequest) (*ObserveProviderModelCatalogResponse, error)
 	CheckProviderCredentialMaterializerReadiness(context.Context, *CheckProviderCredentialMaterializerReadinessRequest) (*CheckProviderCredentialMaterializerReadinessResponse, error)
 	StartDeviceAuthorization(context.Context, *ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest) (*ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse, error)
@@ -14581,6 +14949,12 @@ type ProviderCredentialMaterializerServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedProviderCredentialMaterializerServiceServer struct{}
 
+func (UnimplementedProviderCredentialMaterializerServiceServer) RenewManagedProviderCredential(context.Context, *RenewManagedProviderCredentialRequest) (*RenewManagedProviderCredentialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenewManagedProviderCredential not implemented")
+}
+func (UnimplementedProviderCredentialMaterializerServiceServer) ObserveManagedProviderCredentialRenewal(context.Context, *ObserveManagedProviderCredentialRenewalRequest) (*ObserveManagedProviderCredentialRenewalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ObserveManagedProviderCredentialRenewal not implemented")
+}
 func (UnimplementedProviderCredentialMaterializerServiceServer) ObserveProviderModelCatalog(context.Context, *ObserveProviderModelCatalogRequest) (*ObserveProviderModelCatalogResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ObserveProviderModelCatalog not implemented")
 }
@@ -14622,6 +14996,42 @@ func RegisterProviderCredentialMaterializerServiceServer(s grpc.ServiceRegistrar
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&ProviderCredentialMaterializerService_ServiceDesc, srv)
+}
+
+func _ProviderCredentialMaterializerService_RenewManagedProviderCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenewManagedProviderCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderCredentialMaterializerServiceServer).RenewManagedProviderCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderCredentialMaterializerService_RenewManagedProviderCredential_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderCredentialMaterializerServiceServer).RenewManagedProviderCredential(ctx, req.(*RenewManagedProviderCredentialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderCredentialMaterializerService_ObserveManagedProviderCredentialRenewal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ObserveManagedProviderCredentialRenewalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderCredentialMaterializerServiceServer).ObserveManagedProviderCredentialRenewal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderCredentialMaterializerService_ObserveManagedProviderCredentialRenewal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderCredentialMaterializerServiceServer).ObserveManagedProviderCredentialRenewal(ctx, req.(*ObserveManagedProviderCredentialRenewalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _ProviderCredentialMaterializerService_ObserveProviderModelCatalog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -14757,6 +15167,14 @@ var ProviderCredentialMaterializerService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "controlplane.v1.ProviderCredentialMaterializerService",
 	HandlerType: (*ProviderCredentialMaterializerServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "RenewManagedProviderCredential",
+			Handler:    _ProviderCredentialMaterializerService_RenewManagedProviderCredential_Handler,
+		},
+		{
+			MethodName: "ObserveManagedProviderCredentialRenewal",
+			Handler:    _ProviderCredentialMaterializerService_ObserveManagedProviderCredentialRenewal_Handler,
+		},
 		{
 			MethodName: "ObserveProviderModelCatalog",
 			Handler:    _ProviderCredentialMaterializerService_ObserveProviderModelCatalog_Handler,

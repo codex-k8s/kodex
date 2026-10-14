@@ -86,11 +86,11 @@ func (repository *Repository) hydrateSystemAssistantIntegrationGrant(ctx context
 	if err != nil {
 		return operation, err
 	}
-	connection, err := readConnection(ctx, tx, current, payload.ConnectionRef)
+	connection, err := repository.systemAssistantGrantHeader(ctx, tx, current, payload.ConnectionRef)
 	if err != nil {
 		return operation, err
 	}
-	definition, err := repository.integrationPackage(ctx, tx, current.organizationID, connection.Ref, connection.DefinitionKey, connection.DefinitionVersion, connection.DefinitionDigest)
+	definition, err := repository.integrationPackage(ctx, tx, current.organizationID, connection.ref, connection.definitionKey, connection.definitionVersion, connection.definitionDigest)
 	if err != nil {
 		return operation, err
 	}
@@ -109,7 +109,7 @@ func (repository *Repository) hydrateSystemAssistantIntegrationGrant(ctx context
 	var grantVersion int64
 	var existingEnabled bool
 	var existingPaths []string
-	if err = tx.QueryRow(ctx, querySystemAssistantIntegrationGrantSnapshot, current.organizationID, connection.Ref, target.ref, payload.CapabilityKey).Scan(&grantRef, &grantVersion, &policy, &existingEnabled, &existingPaths); err != nil {
+	if err = tx.QueryRow(ctx, querySystemAssistantIntegrationGrantSnapshot, current.organizationID, connection.ref, target.ref, payload.CapabilityKey).Scan(&grantRef, &grantVersion, &policy, &existingEnabled, &existingPaths); err != nil {
 		return operation, errs.ErrUnavailable
 	}
 	if grantRef == "" {
@@ -118,13 +118,13 @@ func (repository *Repository) hydrateSystemAssistantIntegrationGrant(ctx context
 	if enabled == existingEnabled && policy == payload.ApprovalPolicy && assistantJSONEqual(sortedApprovalScopePaths(existingPaths), sortedApprovalScopePaths(paths)) {
 		return operation, errs.ErrConflict
 	}
-	params := map[string]any{"connectionRef": connection.Ref, "capabilityKey": payload.CapabilityKey, "enabled": enabled, "approvalPolicy": payload.ApprovalPolicy, "approvalScopePaths": append([]string{}, paths...), "scopeKind": "ORGANIZATION", "organizationRef": current.organizationRef, "systemAssistantRef": target.ref, "definitionVersion": connection.DefinitionVersion, "definitionDigest": connection.DefinitionDigest, "grantRef": grantRef, "grantVersion": grantVersion, "defaultApprovalPolicy": capability.ApprovalPolicy, "allowedApprovalPolicies": append([]string{}, capability.AllowedApprovalPolicies...)}
+	params := map[string]any{"connectionRef": connection.ref, "capabilityKey": payload.CapabilityKey, "enabled": enabled, "approvalPolicy": payload.ApprovalPolicy, "approvalScopePaths": append([]string{}, paths...), "scopeKind": "ORGANIZATION", "organizationRef": current.organizationRef, "systemAssistantRef": target.ref, "definitionVersion": connection.definitionVersion, "definitionDigest": connection.definitionDigest, "grantRef": grantRef, "grantVersion": grantVersion, "defaultApprovalPolicy": capability.ApprovalPolicy, "allowedApprovalPolicies": append([]string{}, capability.AllowedApprovalPolicies...)}
 	before := cloneAssistantFields(params)
 	before["enabled"], before["approvalPolicy"], before["approvalScopePaths"] = existingEnabled, policy, append([]string{}, existingPaths...)
 	operation.Parameters, operation.Before, operation.After = params, before, cloneAssistantFields(params)
-	version := connection.Version
+	version := connection.version
 	operation.ExpectedVersion = &version
-	operation.Target = entity.AssistantPlanTarget{Kind: "INTEGRATION_CONNECTION", Ref: connection.Ref, Name: connection.Name, Version: &version}
+	operation.Target = entity.AssistantPlanTarget{Kind: "INTEGRATION_CONNECTION", Ref: connection.ref, Name: connection.name, Version: &version}
 	operation.Action = "UPDATE"
 	operation.Selected = true
 	return operation, nil

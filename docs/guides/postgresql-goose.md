@@ -4,8 +4,8 @@ title: PostgreSQL, именованные SQL-запросы и goose
 type: guide
 status: approved
 owner: developer
-version: 1.2.2
-updated: 2026-09-05
+version: 1.2.4
+updated: 2026-10-12
 ---
 
 # PostgreSQL, именованные SQL-запросы и goose
@@ -117,6 +117,27 @@ SQL не собирается конкатенацией пользовател�
 budget и число попыток ограничены; stale/cancel/expiry/forbidden не повторяются,
 частичный результат не выдаётся. Отказ rollback закрыто останавливает повтор.
 
+Авторитетный `SERIALIZABLE` READ с одноразовым download grant и audit может
+получить `40001` и при audit INSERT, и при Commit. Driver SQLSTATE распознаётся
+до безопасного domain error mapping, без сохранения SQL/аргументов. Повтор
+разрешён только после подтверждённого rollback либо известного PostgreSQL
+abort и закрытия невыданного object Reader; весь owner path заново проверяет
+principal, eligibility, exact revision/content receipt и grant. Неизвестный
+commit/network result, отказ доступа или cleanup не повторяются. Сохраняются
+исходные exhausted error mappings и ограниченные число/начало повторов.
+Reader выдаётся только после commit, с исходным caller context: отмена
+временного retry context при возврате не должна прерывать последующий stream.
+Disposable concurrency проверяет bytes/digest, один committed grant/audit
+на successful READ, отсутствие утечки Reader и отрицательные tenant/pin cases.
+
+Для owner artifact READ допустим отдельный предел восьми попыток с equal
+jitter в окне10–250ms и общим бюджетом начала повторов5s; общий mutation
+retry не увеличивается. Jitter ограничивается оставшимся бюджетом, отмена
+не запускает следующую попытку. Четыре и восемь одновременных PREVIEW
+проверяются на настоящем disposable PostgreSQL, включая40001 на audit/commit,
+точные bytes/digest и cardinality committed grant/audit. Известный abort
+не разрешает повторять неизвестный commit либо скрывать cleanup failure.
+
 Составной авторитетный snapshot не читается несколькими независимыми
 statement через pool. Если aggregate собирается из основной строки и дочерних
 коллекций, все части читаются в одной read-only `REPEATABLE READ` transaction
@@ -125,10 +146,23 @@ commit может смешать version `N` основной записи с ve
 превратить корректное состояние в ложную ошибку целостности.
 
 Для `Get`, `BatchGet` и `List` действует одно правило snapshot consistency.
+Дорогой eligibility predicate каталога вычисляется один раз для уникального
+полного набора его authority-аргументов в том же snapshot, а не заново для
+каждой дочерней capability row. Материализация не выносит проверку из
+транзакции, не ослабляет count/page/cursor и не превращается в stale cache.
 Открытые `Rows` закрываются и проверяются до следующего statement. Commit,
 rollback и закрытие получают контекст вызывающего lifecycle; обязательный
 rollback после отмены request выполняется через отдельный bounded shutdown
 контекст, переданный composition root, без скрытого `context.Background()`.
+
+Подготовка типизированного плана не загружает полную UI-проекцию подключения
+со всеми дочерними grants, если потребителю нужны только ref, version и
+definition pins. Минимальный приватный header читается внутри прежней
+авторитетной транзакции с exact owner/tenant boundary; существующие admission,
+grant snapshot и повторная authorization перед исполнением сохраняются.
+Оптимизация не добавляет кеш полномочий, не меняет блокировки или request
+budget. Отсутствие лишнего fan-out проверяется счётчиком query identity в
+disposable fixture, без записи SQL, аргументов или секретных результатов.
 
 ## Роли подключения и достижимость
 

@@ -21,6 +21,7 @@ import (
 )
 
 const maximumExecutionArtifactBytes = runtimecontract.MaximumSkillFileBytes
+const warmRuntimeReconcileRejectedMessage = "warm runtime reconciliation rejected"
 
 func mapString(values map[string]any, key string) string {
 	value, _ := values[key].(string)
@@ -367,6 +368,9 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 	if err != nil {
 		return nil, err
 	}
+	if request.GetAssistantTaskSessionRead() != nil {
+		return server.readAssistantTaskSession(ctx, p, request)
+	}
 	if catalog := request.GetAssistantConfigurationCatalog(); catalog != nil {
 		if len(request.ProtoReflect().GetUnknown()) != 0 || len(catalog.ProtoReflect().GetUnknown()) != 0 || request.GetQuery() != "" || request.GetIntegrationDefinitionCatalog() || request.GetDefinitionQuery() != "" || request.GetDefinitionOffset() != 0 {
 			return nil, transportError(errs.ErrInvalid)
@@ -377,6 +381,9 @@ func (server *Server) SearchAssistantResources(ctx context.Context, request *con
 			return nil, assistantCatalogTransportError(catalog.GetKind(), err)
 		}
 		response := &controlplanev1.AssistantConfigurationCatalogResponse{Kind: catalog.GetKind(), AssistantRef: result.AssistantRef, ScopeKind: result.ScopeKind, OrganizationRef: result.OrganizationRef, ProjectRef: result.ProjectRef, AssistantProfileRef: result.AssistantProfileRef, NextOffset: result.NextOffset}
+		if agent := result.AgentRuntimeConfiguration; agent != nil {
+			response.AgentRuntimeConfiguration = &controlplanev1.AssistantAgentRuntimeConfiguration{AgentRef: agent.AgentRef, ProjectRef: agent.ProjectRef, Version: agent.Version, ConfigurationJson: agent.ConfigurationJSON, ConfigurationSha256: agent.ConfigurationSHA256}
+		}
 		if agent := result.AgentConfiguration; agent != nil {
 			response.AgentConfiguration = &controlplanev1.AssistantAgentConfiguration{AgentRef: agent.AgentRef, ProjectRef: agent.ProjectRef, Version: agent.Version, ConfigurationJson: agent.ConfigurationJSON, ConfigurationSha256: agent.ConfigurationSHA256}
 		}
@@ -638,7 +645,7 @@ func (server *Server) ReconcileWarmRuntime(ctx context.Context, request *control
 	}
 	assistant, desired, required, err := server.service.ReconcileWarmRuntime(ctx, p, request.GetWorkloadInstance())
 	if err != nil {
-		slog.WarnContext(ctx, "warm runtime reconciliation rejected", "error", err)
+		slog.WarnContext(ctx, warmRuntimeReconcileRejectedMessage, "stage", errs.WarmRuntimeStage(err), "grpc_code", status.Code(transportError(err)).String())
 		return nil, transportError(err)
 	}
 	return &controlplanev1.ReconcileWarmRuntimeResponse{Assistant: castAssistant(assistant), DesiredRevision: castRuntimeRevision(desired), MaterializationRequired: required}, nil

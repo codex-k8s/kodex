@@ -45,7 +45,7 @@ func (process *AppServerProcess) ObserveModelCatalog(ctx context.Context, authJS
 	}
 	defer func() {
 		if err := os.RemoveAll(home); err != nil {
-			result, resultErr = catalogFailure(ctx, atCatalogStage(catalogStageCleanup, errors.New("remove model catalog state directory")))
+			result, resultErr = catalogCleanupFailure(ctx, result, resultErr, errors.New("remove model catalog state directory"))
 		}
 	}()
 	started := time.Now().UTC()
@@ -66,7 +66,7 @@ func (process *AppServerProcess) ObserveModelCatalog(ctx context.Context, authJS
 		close(stopWatch)
 		<-watched
 		if err := server.terminate(); err != nil {
-			result, resultErr = catalogFailure(ctx, atCatalogStage(catalogStageCleanup, err))
+			result, resultErr = catalogCleanupFailure(ctx, result, resultErr, err)
 		}
 	}()
 	if _, err := server.call(ctx, "initialize", map[string]any{

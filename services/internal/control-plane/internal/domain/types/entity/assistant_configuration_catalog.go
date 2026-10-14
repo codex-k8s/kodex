@@ -36,6 +36,7 @@ type AssistantConfigurationCatalogResponse struct {
 	RecipientIntegrationGrants                                                      *AssistantRecipientIntegrationGrantCatalog
 	WorkflowConfiguration                                                           *AssistantWorkflowConfiguration
 	AgentConfiguration                                                              *AssistantAgentConfiguration
+	AgentRuntimeConfiguration                                                       *AssistantAgentConfiguration
 }
 
 type AssistantAgentConfiguration struct {

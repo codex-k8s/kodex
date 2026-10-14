@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ListChecks,
   PanelRightOpen,
+  Sparkles,
 } from "@lucide/vue";
 import {
   type ComponentPublicInstance,
@@ -27,11 +28,18 @@ import {
 } from "@/features/platform/run-refresh";
 import { usePlatformStore } from "@/features/platform/store";
 import { useRealtimeStore } from "@/features/realtime/store";
-import { requestAssistantRunDebug } from "@/features/assistant/events";
-import { isTerminalRun } from "@/features/workboard/model";
+import {
+  openAssistantWorkspace,
+  requestAssistantRunDebug,
+} from "@/features/assistant/events";
+import {
+  isTerminalRun,
+  runDefaultTaskTitleKey,
+} from "@/features/workboard/model";
 import { hasValidGateScope } from "@/features/workboard/gate-scope";
 import RunActivityDrawer from "@/features/runs/RunActivityDrawer.vue";
 import RunGraphCanvas from "@/features/runs/RunGraphCanvas.vue";
+import { observeRunOutlineClearance } from "@/features/runs/run-outline-clearance";
 import RunNodeInspector from "@/features/runs/RunNodeInspector.vue";
 import RunSessionDetailsDialog from "@/features/runs/RunSessionDetailsDialog.vue";
 import RunTokenUsage from "@/features/runs/RunTokenUsage.vue";
@@ -90,6 +98,12 @@ const routeProjectRef = computed(() =>
     : undefined,
 );
 const run = computed(() => platform.runs[runRef.value]);
+const runDisplayTitle = computed(() => {
+  const current = run.value;
+  if (!current) return translator.t("runs.title");
+  const key = runDefaultTaskTitleKey(current);
+  return key ? translator.t(key) : current.title;
+});
 const sessionStorageBlocker = computed(() =>
   runSessionStorageBlocker(run.value, platform.bootstrap?.organizationRef),
 );
@@ -331,10 +345,102 @@ const problem = ref<AppProblem>();
 const artifactProblem = ref<AppProblem>();
 const activityOpen = ref(false);
 const summaryExpanded = ref(false);
+const canvasSummary = ref<HTMLElement>();
+const outlineSummaryBottom = ref(0);
+watch(
+  [canvasSummary, activityOpen, summaryExpanded],
+  ([summary], _previous, onCleanup) => {
+    if (!summary) {
+      outlineSummaryBottom.value = 0;
+      return;
+    }
+    onCleanup(
+      observeRunOutlineClearance(summary, (bottom) => {
+        outlineSummaryBottom.value = bottom;
+      }),
+    );
+  },
+  { flush: "post" },
+);
 const activityNodeRef = ref<string>();
 const activityDrawer = ref<HTMLElement>();
 const nodeInspectorOpen = ref(false);
 const nodeDetailsOpen = ref(false);
+const transcriptReadProblem = ref<AppProblem>();
+const transcriptProblem = computed(() =>
+  activityOpen.value || nodeDetailsOpen.value
+    ? (transcriptReadProblem.value ??
+      platform.runTranscriptProblems[graph.value?.runRef ?? runRef.value])
+    : undefined,
+);
+let transcriptScope: string | undefined;
+let transcriptController: AbortController | undefined;
+let transcriptAttemptedSequence = -1;
+let transcriptReading = false;
+
+function closeTranscriptRead(): void {
+  transcriptController?.abort();
+  transcriptController = undefined;
+  transcriptScope = undefined;
+  transcriptAttemptedSequence = -1;
+  transcriptReading = false;
+  transcriptReadProblem.value = undefined;
+}
+
+// Readiness graph не содержит историю. Читаем только открытый exact root,
+// один inflight; новый cursor объединяется, ошибка не запускает цикл повторов.
+function refreshTranscriptHistory(): void {
+  const snapshot = graph.value;
+  const current = run.value;
+  const organizationRef = platform.bootstrap?.organizationRef;
+  const nextScope =
+    (activityOpen.value || nodeDetailsOpen.value) &&
+    organizationRef &&
+    current &&
+    snapshot &&
+    (!routeProjectRef.value || current.projectRef === routeProjectRef.value) &&
+    current.rootRunRef === snapshot.runRef
+      ? JSON.stringify([
+          organizationRef,
+          routeProjectRef.value,
+          current.ref,
+          snapshot.runRef,
+        ])
+      : undefined;
+  if (nextScope !== transcriptScope) {
+    closeTranscriptRead();
+    transcriptScope = nextScope;
+  }
+  if (!nextScope || !snapshot) return;
+  const sequence = snapshot.sequence;
+  if (
+    !Number.isSafeInteger(sequence) ||
+    sequence < 0 ||
+    platform.runTranscriptSequence(snapshot.runRef) >= sequence ||
+    transcriptReading ||
+    transcriptAttemptedSequence === sequence
+  )
+    return;
+  const ownerSignal = ownerRequestSignal();
+  if (ownerSignal.aborted) return;
+  const controller = new AbortController();
+  transcriptController = controller;
+  const signal = AbortSignal.any([ownerSignal, controller.signal]);
+  transcriptReading = true;
+  transcriptAttemptedSequence = sequence;
+  transcriptReadProblem.value = undefined;
+  void platform
+    .loadRunTranscript(snapshot.runRef, signal)
+    .catch((error: unknown) => {
+      if (!signal.aborted && transcriptController === controller)
+        transcriptReadProblem.value = asProblem(error);
+    })
+    .finally(() => {
+      if (signal.aborted || transcriptController !== controller) return;
+      transcriptReading = false;
+      refreshTranscriptHistory();
+    });
+}
 const gateDialogOpen = ref(false);
 const activityTrigger = ref<HTMLButtonElement>();
 const hasAuthoritativeSnapshot = computed(() =>
@@ -730,6 +836,19 @@ watch(refreshKey, (next) => {
   void refreshScheduler.request(runRef.value);
 });
 watch(
+  [
+    activityOpen,
+    nodeDetailsOpen,
+    runRef,
+    routeProjectRef,
+    () => platform.bootstrap?.organizationRef,
+    () => graph.value?.runRef,
+    () => graph.value?.sequence,
+    () => run.value?.rootRunRef,
+  ],
+  refreshTranscriptHistory,
+);
+watch(
   () =>
     `${run.value?.ref ?? ""}:${[...artifactRefs.value].join(",")}:${
       [...artifactRefs.value].some((ref) => !platform.artifacts[ref])
@@ -779,6 +898,7 @@ onMounted(async () => {
   if (runRef.value === initialRef) openCurrentStream();
 });
 onBeforeUnmount(() => {
+  closeTranscriptRead();
   artifactController?.abort();
   mutationGeneration++;
   refreshScheduler.dispose();
@@ -786,10 +906,7 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-  <PageFrame
-    class="run-page"
-    :title="run?.title ?? $t('runs.title')"
-    :subtitle="runSubtitle"
+  <PageFrame class="run-page" :title="runDisplayTitle" :subtitle="runSubtitle"
     ><template #actions
       ><div v-if="run" class="run-statuses">
         <span>
@@ -858,6 +975,9 @@ onBeforeUnmount(() => {
         <div
           class="run-workspace"
           :class="{ 'run-workspace--activity': activityOpen }"
+          :style="{
+            '--run-outline-summary-bottom': `${outlineSummaryBottom}px`,
+          }"
         >
           <nav
             class="run-workspace-toolbar"
@@ -885,6 +1005,16 @@ onBeforeUnmount(() => {
               <Activity :size="18" aria-hidden="true" />
             </button>
             <button
+              class="icon-button run-workspace-assistant"
+              type="button"
+              :aria-label="$t('assistant.open')"
+              :title="$t('assistant.open')"
+              aria-controls="assistant-workspace"
+              @click="openAssistantWorkspace"
+            >
+              <Sparkles :size="18" aria-hidden="true" />
+            </button>
+            <button
               v-if="openGateList.length"
               class="icon-button run-toolbar-action--attention"
               type="button"
@@ -897,7 +1027,7 @@ onBeforeUnmount(() => {
             </button>
           </nav>
 
-          <aside class="run-canvas-summary">
+          <aside ref="canvasSummary" class="run-canvas-summary">
             <div class="run-canvas-summary__heading">
               <strong :title="run.target.displayName">{{
                 run.target.displayName
@@ -964,6 +1094,7 @@ onBeforeUnmount(() => {
             <div class="graph-panel__canvas">
               <RunGraphCanvas
                 :compact="activityOpen"
+                :root-ref="sessionGraph.runRef"
                 :nodes="sessionGraph.nodes"
                 :edges="sessionGraph.edges"
                 :selected-ref="selectedNode?.ref"
@@ -1153,8 +1284,20 @@ onBeforeUnmount(() => {
             @close="closeActivity"
             @download="downloadArtifact"
           >
-            <template v-if="run.nextActions.includes('ADD_TURN')" #composer>
-              <form class="run-continuation" @submit.prevent="continueRun">
+            <template
+              v-if="transcriptProblem || run.nextActions.includes('ADD_TURN')"
+              #composer
+            >
+              <ProblemNotice
+                v-if="transcriptProblem"
+                :problem="transcriptProblem"
+                compact
+              />
+              <form
+                v-if="run.nextActions.includes('ADD_TURN')"
+                class="run-continuation"
+                @submit.prevent="continueRun"
+              >
                 <label class="field">
                   <span>{{ $t("runs.continueTask") }}</span>
                   <VoiceTextarea
@@ -1194,6 +1337,7 @@ onBeforeUnmount(() => {
           :node="selectedNode"
           :nodes="allRunNodes"
           :events="eventList"
+          :history-problem="transcriptProblem"
           :artifacts="artifactList"
           :agent="selectedAgent"
           :execution-label="nodeExecutionLabels[selectedNode.ref]"
@@ -1227,7 +1371,8 @@ onBeforeUnmount(() => {
   max-width: 100%;
   flex: 1 1 auto;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 .run-page :deep(.page-header) {
   flex: 0 0 auto;
@@ -1235,10 +1380,12 @@ onBeforeUnmount(() => {
 .run-page-body {
   --run-activity-width: clamp(520px, 54%, 720px);
   position: relative;
+  container-type: inline-size;
+  container-name: run-workspace;
   display: flex;
   min-width: 0;
-  min-height: 0;
-  flex: 1 1 auto;
+  min-height: 480px;
+  flex: 1 0 480px;
   margin: 0 calc(var(--page-frame-gutter) * -1);
   overflow: hidden;
 }
@@ -1398,6 +1545,9 @@ onBeforeUnmount(() => {
   border-right: 0;
   border-radius: 0 7px 7px 0;
 }
+.run-workspace-toolbar .run-workspace-assistant {
+  display: none;
+}
 .run-toolbar-count {
   position: absolute;
   top: 2px;
@@ -1455,6 +1605,10 @@ onBeforeUnmount(() => {
 .run-canvas-summary__toggle {
   display: none;
 }
+.run-canvas-summary__details {
+  grid-auto-rows: max-content;
+  align-content: start;
+}
 .run-canvas-summary strong,
 .run-canvas-summary span,
 .run-canvas-summary a {
@@ -1466,6 +1620,7 @@ onBeforeUnmount(() => {
 .run-canvas-summary a {
   color: var(--muted);
   font-size: 0.75rem;
+  overflow-wrap: anywhere;
 }
 .run-canvas-summary .live-indicator {
   grid-column: 1 / -1;
@@ -1542,17 +1697,124 @@ onBeforeUnmount(() => {
   }
 }
 @media (min-width: 761px) {
+  .run-workspace-toolbar .icon-button:nth-last-child(2) {
+    border-right: 0;
+    border-radius: 0 7px 7px 0;
+  }
   .run-workspace--activity .run-canvas-summary {
     top: 70px;
     width: min(360px, calc((100% - var(--run-activity-width)) / 2 - 86px));
+  }
+  .run-workspace--activity .run-canvas-summary__heading {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .run-workspace--activity .run-canvas-summary__heading strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .run-workspace--activity .run-canvas-summary__details > a {
+    grid-column: 1 / -1;
   }
   .run-workspace--activity .run-workspace-toolbar {
     top: 70px;
   }
 }
+@media (min-width: 761px) and (max-width: 1100px) {
+  .run-workspace-toolbar,
+  .run-workspace--activity .run-workspace-toolbar {
+    top: 84px;
+  }
+}
+@media (min-width: 761px) {
+  @container run-workspace (max-width: 1344px) {
+    .run-workspace--activity .run-canvas-summary {
+      top: 136px;
+      width: calc(100% - var(--run-activity-width) - 28px);
+      max-height: max(46px, calc(100% - 280px));
+      grid-template-rows: auto minmax(0, 1fr);
+      padding: 6px 8px;
+    }
+    .run-workspace--activity .run-canvas-summary__heading {
+      grid-template-columns: minmax(0, 1fr) auto 32px;
+      align-items: center;
+      gap: 6px;
+    }
+    .run-workspace--activity .run-canvas-summary__toggle {
+      display: inline-flex;
+      width: 32px;
+      height: 32px;
+      min-height: 32px;
+      padding: 0;
+    }
+    .run-workspace--activity
+      .run-canvas-summary__toggle[aria-expanded="true"]
+      svg {
+      transform: rotate(180deg);
+    }
+    .run-workspace--activity .run-canvas-summary__details {
+      display: none;
+    }
+    .run-workspace--activity .run-canvas-summary__details--expanded {
+      display: grid;
+      min-height: 0;
+      overflow: auto;
+    }
+    .run-workspace--activity .run-workspace-toolbar {
+      top: 84px;
+    }
+  }
+  @container run-workspace (max-width: 920px) {
+    .run-activity-overlay {
+      left: 0;
+      width: 100%;
+      min-width: 0;
+    }
+    .run-workspace--activity .graph-panel {
+      right: 0;
+    }
+  }
+}
 @media (max-width: 760px) {
-  .run-page-body {
-    min-height: 0;
+  .run-workspace-toolbar .run-workspace-assistant {
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+  :global(
+    body:has(.run-workspace-assistant:not(:disabled):not([hidden]))
+      .assistant-fab
+  ) {
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .run-workspace {
+    --run-graph-toolbar-top: 56px;
+  }
+  .graph-panel__canvas :deep(.graph-toolbar) {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-rows: 44px 16px;
+    gap: 4px 2px;
+  }
+  .graph-panel__canvas :deep(.graph-view-switch) {
+    grid-column: 1 / span 2;
+    grid-row: 1;
+    justify-content: center;
+  }
+  .graph-panel__canvas :deep(.graph-toolbar > .icon-button) {
+    grid-row: 1;
+    justify-self: center;
+  }
+  .graph-panel__canvas :deep(.graph-toolbar__count) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding: 0;
+    text-align: center;
+  }
+  .graph-panel__canvas :deep(.graph-toolbar__separator) {
+    display: none;
   }
   .run-notices {
     top: 116px;
@@ -1565,9 +1827,11 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
   .run-canvas-summary {
-    top: 62px;
+    top: 136px;
     left: 8px;
     width: min(320px, calc(100% - 16px));
+    max-height: max(46px, calc(100% - 280px));
+    grid-template-rows: auto minmax(0, 1fr);
     padding: 6px 8px;
   }
   .run-canvas-summary__heading {
@@ -1597,10 +1861,11 @@ onBeforeUnmount(() => {
   }
   .run-canvas-summary__details--expanded {
     display: grid;
-    max-height: min(260px, 40dvh);
+    min-height: 0;
     overflow: auto;
   }
-  .run-workspace-toolbar {
+  .run-workspace-toolbar,
+  .run-workspace--activity .run-workspace-toolbar {
     top: 8px;
     left: 8px;
     transform: none;

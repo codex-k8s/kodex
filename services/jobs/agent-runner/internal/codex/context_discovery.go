@@ -35,11 +35,11 @@ func (server *appServer) configureContextSkills(ctx context.Context, state *prot
 		return runtimecontract.ErrRuntimeContext
 	}
 	list := func() ([]discoveredSkill, error) {
-		raw, err := server.call(ctx, state, "skills/list", map[string]any{"cwds": []string{input.WorkspaceRoot}, "forceReload": true})
+		raw, err := server.call(ctx, state, "skills/list", map[string]any{"cwds": []string{workingDirectory(input)}, "forceReload": true})
 		if err != nil {
 			return nil, err
 		}
-		return decodeContextSkills(raw, input.WorkspaceRoot)
+		return decodeContextSkills(raw, workingDirectory(input))
 	}
 	discovered, err := list()
 	if err != nil {

@@ -37,7 +37,7 @@ WITH target AS (
       AND binding.target_kind = 'AGENT'
       AND binding.target_ref = target.ref
 ), retired_artifact AS (
-    UPDATE control_plane.artifacts AS artifact
+    UPDATE control_plane.artifact_heads AS artifact
     SET lifecycle_state = 'DELETED',
         deleted_at = clock_timestamp(),
         purge_after = clock_timestamp() + interval '30 days',

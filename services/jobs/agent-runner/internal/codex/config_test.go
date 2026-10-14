@@ -71,6 +71,10 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 		t.Fatal("provider local memory is not explicitly disabled")
 	}
 	if err != nil || len(metadata.Undecoded()) != 0 || profile.Extends != ":workspace" ||
+		profile.Filesystem[filepath.Join(workspace, "input")] != "read" ||
+		profile.Filesystem[filepath.Join(workspace, "knowledge")] != "read" ||
+		profile.Filesystem[runtimecontract.RuntimeContextRoot] != "read" ||
+		profile.Filesystem[filepath.Join(workspace, ".kodex/outbox")] != "read" ||
 		profile.Filesystem[filepath.Join(home, "auth.json")] != "deny" || profile.Filesystem[home] != "" ||
 		profile.Filesystem["/proc"] != "deny" ||
 		profile.Filesystem["/run/secrets"] != "deny" ||
@@ -85,6 +89,75 @@ func TestPrepareHomeDeniesShellReadOfProviderState(t *testing.T) {
 		if filepath.IsAbs(path) && strings.Contains(path, "*") {
 			t.Fatalf("absolute deny path must not require a pre-sandbox glob scan: %q", path)
 		}
+	}
+}
+
+func TestPublishedVolumePermissionsAreExactAndRespectSandbox(t *testing.T) {
+	setRuntimeTransportFixture(t)
+	policy := runtimecontract.DefaultRuntimeEnvironmentPolicy()
+	policy.Volumes = []runtimecontract.RuntimeVolume{
+		{Name: "build-cache", Kind: runtimecontract.RuntimeVolumeEphemeralDisk, SizeMiB: 4096},
+		{Name: "scratch", Kind: runtimecontract.RuntimeVolumeEphemeralMemory, SizeMiB: 128},
+	}
+	policy, err := runtimecontract.NormalizeRuntimeEnvironmentPolicy(policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for sandbox, access := range map[string]string{"workspace-write": "write", "read-only": "read"} {
+		t.Run(sandbox, func(t *testing.T) {
+			workspace := t.TempDir()
+			auth := []byte(`{"tokens":{"access_token":"test-only"}}`)
+			digest := sha256.Sum256(auth)
+			digestFile := filepath.Join(workspace, "auth.sha256")
+			if err := os.WriteFile(digestFile, []byte(hex.EncodeToString(digest[:])), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			input := model.Input{WorkspaceRoot: workspace, CodexHome: filepath.Join(workspace, ".kodex", "state", "codex-home"),
+				Model: "fixture-model", ReasoningMode: runtimecontract.ReasoningSupported, EffectiveReasoningEffort: "high",
+				CodexApprovalPolicy: "never", CodexSandbox: sandbox, EnvironmentPolicy: policy,
+				ProviderAuthSHA256File: digestFile, ProviderCredentialSHA256: hex.EncodeToString(digest[:])}
+			if err := PrepareHomeWithAuth(input, "http://127.0.0.1:12345/mcp", auth); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(filepath.Join(input.CodexHome, "config.toml"))
+			var config runtimeConfig
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := toml.Decode(string(raw), &config); err != nil {
+				t.Fatal(err)
+			}
+			paths := config.Permissions[config.DefaultPermissions].Filesystem
+			for _, volume := range policy.Volumes {
+				if paths[volume.MountPath] != access {
+					t.Fatal("published volume permission was lost")
+				}
+			}
+			for _, path := range []string{"/workspace", "/workspace/.kodex", "/workspace/.kodex/volumes", "/workspace/.kodex/volumes/undeclared", input.CodexHome} {
+				if paths[path] != "" {
+					t.Fatal("volume permission broadened the protected filesystem boundary")
+				}
+			}
+			if paths[filepath.Join(input.CodexHome, "auth.json")] != "deny" || paths[filepath.Join(workspace, "input")] != "read" {
+				t.Fatal("volume permission replaced a protected rule")
+			}
+		})
+	}
+	for name, mutate := range map[string]func(*runtimecontract.RuntimeEnvironmentPolicy){
+		"foreign mount": func(p *runtimecontract.RuntimeEnvironmentPolicy) { p.Volumes[0].MountPath = "/run/secrets" },
+		"reserved name": func(p *runtimecontract.RuntimeEnvironmentPolicy) { p.Volumes[0].Name = "workspace" },
+		"changed quota": func(p *runtimecontract.RuntimeEnvironmentPolicy) { p.Volumes[0].SizeMiB++ },
+		"missing pin":   func(p *runtimecontract.RuntimeEnvironmentPolicy) { p.VolumesDigest = "" },
+		"duplicate":     func(p *runtimecontract.RuntimeEnvironmentPolicy) { p.Volumes = append(p.Volumes, p.Volumes[0]) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := policy
+			candidate.Volumes = append([]runtimecontract.RuntimeVolume(nil), policy.Volumes...)
+			mutate(&candidate)
+			if _, err := runtimeVolumePermissions(model.Input{EnvironmentPolicy: candidate, CodexSandbox: "workspace-write"}); !errors.Is(err, ErrRuntimeProfile) {
+				t.Fatal("unbound or invalid volume reached the permission profile")
+			}
+		})
 	}
 }
 
@@ -116,6 +189,24 @@ func TestPrepareHomePreservesPinnedSandboxBoundary(t *testing.T) {
 				config.Features.CodeModeOnly || config.Features.CodeMode.Enabled ||
 				!slices.Equal(config.Features.CodeMode.DirectOnlyToolNamespaces, []string{"functions", "web", "mcp__kodex"}) {
 				t.Fatalf("sandbox %s expanded to %#v: %v", sandbox, config.Permissions, err)
+			}
+			input.Capabilities = []string{runtimecontract.ArtifactCapability}
+			if err := PrepareHomeWithAuth(input, "http://127.0.0.1:12345/mcp", auth); err != nil {
+				t.Fatal(err)
+			}
+			raw, err = os.ReadFile(filepath.Join(home, "config.toml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := toml.Decode(string(raw), &config); err != nil {
+				t.Fatal(err)
+			}
+			outboxAccess := "read"
+			if sandbox == "workspace-write" {
+				outboxAccess = "write"
+			}
+			if config.Permissions[config.DefaultPermissions].Filesystem[filepath.Join(workspace, ".kodex/outbox")] != outboxAccess {
+				t.Fatal("outbox write did not require both sandbox write and artifact authority")
 			}
 		})
 	}

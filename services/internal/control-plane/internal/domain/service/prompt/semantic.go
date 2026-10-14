@@ -10,10 +10,16 @@ import (
 	"strings"
 	"text/template"
 	"text/template/parse"
+
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
 // ServiceTemplateRevision изменяется при изменении порядка, формы или семантики блоков.
-const ServiceTemplateRevision = "prompt-service-v2"
+const ServiceTemplateRevision = "prompt-service-v3"
+
+// Закреплённые v2 снимки воспроизводятся без новых правил и изменения digests.
+// Это точная историческая версия, не fallback для неизвестного контракта.
+const pinnedServiceTemplateV2 = "prompt-service-v2"
 
 type SemanticSlot string
 
@@ -80,7 +86,7 @@ func materializeSemantic(text string, snapshot Snapshot) (Materialization, error
 	invalid := func(code, message string) (Materialization, error) {
 		return Materialization{Diagnostics: []Diagnostic{{Severity: "ERROR", Code: code, Message: message, Line: 1, Column: 1}}}, ErrInvalid
 	}
-	if snapshot.ServiceTemplateRevision != ServiceTemplateRevision || !validTargetKind(snapshot.TargetKind) ||
+	if (snapshot.ServiceTemplateRevision != ServiceTemplateRevision && snapshot.ServiceTemplateRevision != pinnedServiceTemplateV2) || !validTargetKind(snapshot.TargetKind) ||
 		snapshot.TargetRef == "" || snapshot.TemplateRef == "" || !validDigest(snapshot.TemplateDigest) {
 		return invalid("PROMPT_SNAPSHOT_INVALID", "Prompt snapshot is incomplete")
 	}
@@ -141,7 +147,11 @@ func materializeSemantic(text string, snapshot Snapshot) (Materialization, error
 	}
 	effective := Intersection(snapshot.UserCapabilities, Union(snapshot.AgentCapabilities, snapshot.ConnectionCapabilities), snapshot.WorkflowCapabilities, snapshot.HumanGateCapabilities)
 	required := requiredSlots(snapshot.TargetKind)
-	values := semanticValues(snapshot, data, effective)
+	core, err := renderAssistantCore(snapshot, data)
+	if err != nil {
+		return invalid("PROMPT_ASSISTANT_CORE_INVALID", "Platform assistant core is invalid")
+	}
+	values := semanticValues(snapshot, data, effective, core)
 	if snapshot.StagePurposeTemplate != "" {
 		values[SlotPurpose] = data["step"].(map[string]any)["purpose"].(string)
 	}
@@ -243,23 +253,24 @@ func materializeSemantic(text string, snapshot Snapshot) (Materialization, error
 		section.Content = content
 		safeSections = append(safeSections, section)
 	}
-	encoded, err := json.Marshal(semanticEnvelope{Revision: ServiceTemplateRevision, Locale: locale, Sections: sections})
+	encoded, err := json.Marshal(semanticEnvelope{Revision: snapshot.ServiceTemplateRevision, Locale: locale, Sections: sections})
 	if err != nil || len(encoded) > 256<<10 {
 		return invalid("PROMPT_MATERIALIZATION_TOO_LARGE", "Materialized prompt exceeds the size limit")
 	}
-	safeEncoded, err := json.Marshal(semanticEnvelope{Revision: ServiceTemplateRevision, Locale: locale, Sections: safeSections})
+	safeEncoded, err := json.Marshal(semanticEnvelope{Revision: snapshot.ServiceTemplateRevision, Locale: locale, Sections: safeSections})
 	if err != nil || len(safeEncoded) > 256<<10 {
 		return invalid("PROMPT_MATERIALIZATION_TOO_LARGE", "Materialized prompt exceeds the size limit")
 	}
 	serviceDigest := semanticDigest(struct {
 		Revision, Locale, Kind string
 		Slots                  []SemanticSlot
-	}{ServiceTemplateRevision, locale, snapshot.TargetKind, required})
+	}{snapshot.ServiceTemplateRevision, locale, snapshot.TargetKind, required})
 	variableDigest := semanticDigest(struct {
-		Data      map[string]any
-		Values    map[SemanticSlot]string
-		Effective []string
-	}{data, values, effective})
+		AssistantCore *entity.PromptAssistantCore `json:",omitempty"`
+		Data          map[string]any
+		Values        map[SemanticSlot]string
+		Effective     []string
+	}{snapshot.AssistantCore, data, values, effective})
 	digest := semanticDigest(struct {
 		Snapshot                     Snapshot
 		Service, Variables, Rendered string
@@ -269,7 +280,7 @@ func materializeSemantic(text string, snapshot Snapshot) (Materialization, error
 	}
 	result := Materialization{Complete: true, Prompt: string(encoded), SafePrompt: string(safeEncoded), Digest: digest,
 		TemplateRef: snapshot.TemplateRef, TemplateDigest: snapshot.TemplateDigest, EffectiveCapabilities: effective,
-		ServiceTemplateRevision: ServiceTemplateRevision, ServiceTemplateDigest: serviceDigest, VariableSnapshotDigest: variableDigest,
+		ServiceTemplateRevision: snapshot.ServiceTemplateRevision, ServiceTemplateDigest: serviceDigest, VariableSnapshotDigest: variableDigest,
 		Locale: locale, Slots: provenance, Sections: safeSections, FullSections: sections}
 	if snapshot.TargetKind == TargetSessionContinuation && snapshot.SessionContinuation != "" {
 		var diff RuntimeDiff
@@ -281,6 +292,15 @@ func materializeSemantic(text string, snapshot Snapshot) (Materialization, error
 		result.RuntimeDiff = &diff
 	}
 	references := templateVariableReferences(parsed.Tree.Root)
+	if snapshot.AssistantCore != nil {
+		// Тот же validated catalog и single-pass renderer; mandatory context
+		// базы не превращается в optional только потому, что owner его не читает.
+		coreTemplate, err := parseTemplate(snapshot.AssistantCore.Content)
+		if err != nil {
+			return invalid("PROMPT_ASSISTANT_CORE_INVALID", "Platform assistant core is invalid")
+		}
+		references = append(references, templateVariableReferences(coreTemplate.Tree.Root)...)
+	}
 	for _, extra := range snapshot.ExtraTemplates {
 		if template, err := parseTemplate(extra.Content); err == nil {
 			references = append(references, templateVariableReferences(template.Tree.Root)...)
@@ -442,7 +462,7 @@ func semanticDigest(value any) string {
 	return hex.EncodeToString(digest[:])
 }
 
-func semanticValues(snapshot Snapshot, data map[string]any, effective []string) map[SemanticSlot]string {
+func semanticValues(snapshot Snapshot, data map[string]any, effective []string, core string) map[SemanticSlot]string {
 	encode := func(value any) string { encoded, _ := json.Marshal(value); return string(encoded) }
 	workflow, _ := data["workflow"].(map[string]any)
 	input, _ := data["input"].(map[string]any)
@@ -453,14 +473,26 @@ func semanticValues(snapshot Snapshot, data map[string]any, effective []string) 
 		scope, _ := data[name].(map[string]any)
 		files[name] = map[string]any{"files": scope["files"], "files_count": scope["files_count"], "files_dir": scope["files_dir"], "manifest_path": scope["manifest_path"]}
 	}
+	// Старые immutable snapshots без descriptor сохраняют прежний FILES.
+	if workspace, ok := input["workspace"].(map[string]any); ok {
+		files["workspace"] = workspace
+	}
 	resultInstruction := "Place every file requested as a user-visible result directly in this directory. Use the requested file name. Keep scratch files outside this directory."
 	if snapshot.Locale == "ru" {
 		resultInstruction = "Помещай каждый запрошенный пользователем файл результата прямо в этот каталог. Используй запрошенное имя файла. Черновые файлы храни вне этого каталога."
 	}
-	files["result"] = map[string]any{
-		"directory":   "/workspace/.kodex/outbox",
-		"instruction": resultInstruction,
+	if snapshot.ServiceTemplateRevision == ServiceTemplateRevision {
+		if snapshot.Locale == "ru" {
+			resultInstruction += " Промежуточные архивы GZIP, TAR и ZIP, копии репозитория и материалы сборки храни вне этого каталога. Доказательства контрактов публикуй отдельными текстовыми файлами UTF-8 или валидным JSON, не сжатыми архивами. Публикуются только допущенные форматы результата; если запрошенный формат не поддерживается, сообщи об ограничении, не подменяя формат и не объявляя файл опубликованным. Один финальный ответ не подтверждает публикацию артефактов."
+		} else {
+			resultInstruction += " Keep intermediate GZIP, TAR and ZIP archives, repository copies and generated build evidence outside this directory. Publish contract evidence as individual UTF-8 text files or valid JSON, not compressed archives. Only admitted result formats can be published; if a requested format is unsupported, report that restriction without changing the requested format or claiming publication. A final message alone does not confirm artifact publication."
+		}
 	}
+	resultFiles := map[string]any{"directory": "/workspace/.kodex/outbox", "instruction": resultInstruction}
+	if snapshot.ServiceTemplateRevision == ServiceTemplateRevision {
+		resultFiles["instruction_revision"] = "runtime-result-guidance-v1"
+	}
+	files["result"] = resultFiles
 	workflowContext := map[string]any{"ref": workflow["ref"], "name": workflow["name"], "purpose": workflow["purpose"]}
 	if publication, ok := workflow["publication"]; ok {
 		workflowContext["publication"] = publication
@@ -479,6 +511,19 @@ func semanticValues(snapshot Snapshot, data map[string]any, effective []string) 
 	}
 	if snapshot.Locale == "ru" {
 		values[SlotConstraints] = "Доступны только эффективные возможности и предоставленные ресурсы."
+	}
+	if snapshot.ServiceTemplateRevision == ServiceTemplateRevision {
+		values[SlotConstraints] = "Only the effective capabilities and provided resources are available."
+		if snapshot.Locale == "ru" {
+			values[SlotConstraints] = "Доступны только эффективные возможности и предоставленные ресурсы."
+		}
+		if owner, present := snapshot.SemanticValues[SlotConstraints]; present && owner != "" && owner != values[SlotConstraints] {
+			values[SlotConstraints] += "\n\n" + owner
+		}
+		if core != "" {
+			values[SlotConstraints] += "\n\n" + core
+		}
+		values[SlotConstraints] += "\n\n" + unexpectedOutcomeConstraints(snapshot.Locale)
 	}
 	return values
 }

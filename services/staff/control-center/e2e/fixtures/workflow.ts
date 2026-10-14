@@ -1,5 +1,9 @@
 import { expect, type Page, type Route } from "@playwright/test";
 import {
+  scopedSyntheticSnapshot,
+  type SyntheticSnapshotInstaller,
+} from "./runs-catalog";
+import {
   deniedLaunch,
   effectiveFiles,
   effectivePage,
@@ -20,6 +24,7 @@ export async function checkWorkflowEditor(
   projectRef: string,
   speechBootstrap?: BootstrapState,
   captureUnpublished?: () => Promise<void>,
+  installSnapshot?: SyntheticSnapshotInstaller,
 ) {
   let pausePublishedCapabilities = false;
   let releasePublishedCapabilities: (() => void) | undefined;
@@ -237,6 +242,9 @@ export async function checkWorkflowEditor(
   await page.route(`**/api/v1/projects/${projectRef}/agents*`, (route) =>
     route.fulfill({ json: { items: [agent], nextPageToken: "" } }),
   );
+  await page.route(`**/api/v1/agents/${agent.ref}`, (route) =>
+    route.fulfill({ json: agent }),
+  );
   await page.route("**/api/v1/workflows/workflow_synthetic", async (route) => {
     if (route.request().method() === "PATCH") {
       saves += 1;
@@ -281,16 +289,31 @@ export async function checkWorkflowEditor(
       failures.push("Unexpected workflow method");
     await route.fulfill({ json: workflow });
   });
+  installSnapshot?.(
+    "AGENT",
+    scopedSyntheticSnapshot(projectRef, () => ({
+      catalog: { agents: [structuredClone(agent)], page: {} },
+    })),
+  );
+  installSnapshot?.(
+    "WORKFLOW",
+    scopedSyntheticSnapshot(projectRef, () => ({
+      catalog: { workflows: [structuredClone(workflow)], page: {} },
+    })),
+  );
   await page.goto(`/projects/${projectRef}/workflows/${workflow.ref}`);
   await page.getByRole("button", { name: "Координатор", exact: true }).click();
   await page.getByRole("option", { name: /Аналитик synthetic/ }).click();
+  const step = page.locator(".workflow-step-disclosure").first();
+  await expect(step).not.toHaveAttribute("open");
+  await step.locator(":scope > summary").click();
+  await expect(step).toHaveAttribute("open");
   await page.getByRole("button", { name: "Исполнитель", exact: true }).click();
   await page.getByRole("option", { name: /Аналитик synthetic/ }).click();
   await page.getByLabel("Название", { exact: true }).fill("Изменённый процесс");
   await expect(
     page.getByRole("button", { name: "Запустить", exact: true }),
   ).toBeDisabled();
-  const step = page.locator(".workflow-step").first();
   const instructions = step.locator(".cm-content").first();
   await instructions.fill("  Synthetic instructions  ");
   await instructions.press("End");
@@ -307,8 +330,14 @@ export async function checkWorkflowEditor(
   await expect(
     page.getByRole("button", { name: "Проверить Процесс", exact: true }),
   ).toBeDisabled();
-  page.once("dialog", (dialog) => dialog.dismiss());
   await page.getByRole("link", { name: "Kodex", exact: true }).click();
+  const discard = page.getByRole("dialog", {
+    name: "Подтвердите действие",
+    exact: true,
+  });
+  await expect(discard).toContainText("Отменить несохранённые изменения?");
+  await discard.getByRole("button", { name: "Отмена", exact: true }).click();
+  await expect(discard).toHaveCount(0);
   await expect(page).toHaveURL(new RegExp(`/workflows/${workflow.ref}$`));
   await expect(page.getByLabel("Название", { exact: true })).toHaveValue(
     "Изменённый процесс",
@@ -358,8 +387,17 @@ export async function checkWorkflowEditor(
       exact: true,
     })
     .click();
+  const contextPreview = page.getByRole("dialog", {
+    name: "Просмотреть контекст исполнения",
+    exact: true,
+  });
+  await contextPreview
+    .locator("summary", { hasText: "Точный формат сообщения" })
+    .click();
   await expect(
-    page.getByText(/Точный сохранённый этап:.*Synthetic instructions/),
+    contextPreview.getByText(
+      /Точный сохранённый этап:.*Synthetic instructions/,
+    ),
   ).toBeVisible();
   expect(previews).toBe(1);
   if (speechBootstrap) {
@@ -373,6 +411,20 @@ export async function checkWorkflowEditor(
   expect(workflow.draft.steps[0]?.requiredCapabilityKeys).toEqual([
     effectiveFiles.key,
   ]);
+  await contextPreview
+    .getByRole("button", { name: "Закрыть", exact: true })
+    .click();
+  await expect(contextPreview).toHaveCount(0);
+  // Новая опубликованная ревизия появляется после ухода из редактора:
+  // прежние version-pinned чтения отменяются до смены текущего fixture state.
+  await page.goto("/");
+  await expect(page.locator(".home-project-section .home-project")).toHaveCount(
+    4,
+  );
+  await expect(page.locator("header .realtime-status")).toHaveAttribute(
+    "data-presentation-state",
+    "live",
+  );
   workflow.state = "PUBLISHED";
   workflow = {
     ...workflow,
@@ -395,6 +447,7 @@ export async function checkWorkflowEditor(
   };
   pausePublishedCapabilities = true;
   await page.goto(`/projects/${projectRef}/workflows/${workflow.ref}`);
+  await page.locator(".workflow-step-disclosure > summary").first().click();
   await page.locator(".step-advanced > summary").first().click();
   await expect.poll(() => Boolean(releasePublishedCapabilities)).toBe(true);
   const publishedInspector = page.getByRole("button", {

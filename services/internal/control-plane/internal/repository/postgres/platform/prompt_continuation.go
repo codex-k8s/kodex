@@ -7,11 +7,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	promptservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/prompt"
@@ -48,29 +50,29 @@ func (repository *Repository) prepareRuntimeContinuationNotice(ctx context.Conte
 			// Retry до первого успешного claim не имеет предыдущего runtime snapshot.
 			return nil, nil
 		}
-		return nil, errs.ErrUnavailable
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationPreviousRead, errs.ErrUnavailable)
 	}
 	var previous map[string]any
 	if json.Unmarshal(rawPrevious, &previous) != nil {
-		return nil, errs.ErrConflict
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationPreviousJson, errs.ErrConflict)
 	}
 	prior, err := continuationComponents(previous)
 	if err != nil {
-		return nil, err
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationPreviousDependencies, err)
 	}
 	next, err := continuationComponents(snapshot)
 	if err != nil {
-		return nil, err
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationCurrentDependencies, err)
 	}
 	diff, err := promptservice.CompareRuntimeContexts(prior, next, promptservice.RuntimeDiff{PreviousRevisionRef: previousRef,
 		CurrentRevisionRef: stringMap(snapshot, "runtimeRevisionRef"), SessionRef: stringMap(snapshot, "sessionRef"), TurnRef: stringMap(snapshot, "turnRef"), Attempt: int32(runtimeRevisionMapInt64(snapshot, "attempt"))})
 	if err != nil {
-		return nil, fmt.Errorf("compare continuation runtime (%v): %w", err, errs.ErrConflict)
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationDiff, errs.ErrConflict)
 	}
 	var noticeSnapshot entity.PromptMaterializationSnapshot
 	raw, err := json.Marshal(promptSnapshot)
 	if err != nil || json.Unmarshal(raw, &noticeSnapshot) != nil {
-		return nil, errs.ErrConflict
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationSnapshot, errs.ErrConflict)
 	}
 	content := defaultContinuationTemplate
 	noticeSnapshot.TemplateRef = defaultContinuationTemplateRef
@@ -78,18 +80,18 @@ func (repository *Repository) prepareRuntimeContinuationNotice(ctx context.Conte
 	noticeSnapshot.TemplateDigest = hex.EncodeToString(digest[:])
 	err = tx.QueryRow(ctx, queryPromptContinuationTemplate, pgx.StrictNamedArgs{"organization_id": current.organizationID, "agent_ref": stringMap(snapshot, "agentRef")}).Scan(&noticeSnapshot.TemplateRef, &noticeSnapshot.TemplateDigest, &content)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return nil, errs.ErrUnavailable
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationTemplateRead, errs.ErrUnavailable)
 	}
 	if len(content) > 16<<10 {
-		return nil, errs.ErrConflict
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationTemplateBytes, errs.ErrConflict)
 	}
 	digest = sha256.Sum256([]byte(content))
 	if noticeSnapshot.TemplateDigest != hex.EncodeToString(digest[:]) {
-		return nil, errs.ErrConflict
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationTemplateDigest, errs.ErrConflict)
 	}
 	rawDiff, err := json.Marshal(diff)
 	if err != nil {
-		return nil, errs.ErrConflict
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationDiffJson, errs.ErrConflict)
 	}
 	noticeSnapshot.TemplateContent = content
 	noticeSnapshot.ServiceTemplateRevision = promptservice.ServiceTemplateRevision
@@ -99,21 +101,123 @@ func (repository *Repository) prepareRuntimeContinuationNotice(ctx context.Conte
 	noticeSnapshot.ContextPin.PreviousRuntimeRevisionRef = previousRef
 	noticeSnapshot.SessionContinuation = string(rawDiff)
 	noticeSnapshot.SemanticValues = nil
+	noticeSnapshot.PlatformInstructions = nil
 	noticeSnapshot.UnavailableVariables = nil
+	if err := bindPlatformInstructions(&noticeSnapshot); err != nil {
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationBinding, err)
+	}
+	if err := repository.hydrateWorkflowExecutionPromptTx(ctx, tx, current, stringMap(snapshot, "nodeRef"), &noticeSnapshot); err != nil {
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationWorkflowContext, err)
+	}
+	if err := bindRuntimeContinuationTaskProjection(&noticeSnapshot, snapshot); err != nil {
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationTaskProjection, err)
+	}
+	if err := bindRuntimeContinuationCoreProjection(&noticeSnapshot, promptSnapshot, snapshot); err != nil {
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationBinding, err)
+	}
 	materialized, err := promptservice.Materialize(content, promptservice.FromSnapshot(noticeSnapshot))
-	if err != nil || !materialized.Complete || len(materialized.Prompt) > 64<<10 {
-		return nil, fmt.Errorf("materialize continuation template: %w", errs.ErrConflict)
+	if err != nil {
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationMaterialization, errs.ErrConflict)
 	}
-	messages, ok := snapshot["sessionContext"].([]map[string]string)
-	if !ok && snapshot["sessionContext"] != nil {
-		return nil, errs.ErrConflict
+	if !materialized.Complete {
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationIncomplete, errs.ErrConflict)
 	}
-	if len(messages) >= 128 {
-		return nil, errs.ErrConflict
+	if len(materialized.Prompt) > runtimecontract.MaximumContinuationNoticeBytes {
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationNoticeBytes, errs.ErrConflict)
 	}
-	snapshot["sessionContext"] = append(append([]map[string]string{}, messages...), map[string]string{"role": "USER", "content": materialized.Prompt})
+	if err := appendRuntimeContinuationContext(snapshot, materialized); err != nil {
+		return nil, runtimeEligibilityDiagnostic(runtimeReasonContinuationSessionContext, err)
+	}
 	snapshot["continuationPromptSnapshot"], snapshot["continuationRuntimeDiff"], snapshot["continuationNoticeDigest"] = noticeSnapshot, diff, materialized.Digest
 	return &preparedContinuationNotice{PreviousID: previousID, Diff: diff, Snapshot: noticeSnapshot, Materialization: materialized}, nil
+}
+
+// Только дополнительный PROJECT notice получает compact marker. Main prompt,
+// core pins/content и прежняя immutable история не изменяются. Runner передаёт
+// полные current Instructions отдельно при thread/start и thread/resume.
+func bindRuntimeContinuationCoreProjection(notice *entity.PromptMaterializationSnapshot, source entity.PromptMaterializationSnapshot, current map[string]any) error {
+	if source.AssistantCore == nil || source.AssistantCore.Scope != "PROJECT" {
+		return nil
+	}
+	if notice.TargetKind != promptservice.TargetSessionContinuation || notice.TargetRef != source.SessionRef ||
+		!reflect.DeepEqual(notice.AssistantCore, source.AssistantCore) || notice.ProjectRef != source.ProjectRef ||
+		notice.ContextPin.AgentRef != source.ContextPin.AgentRef {
+		return errs.ErrConflict
+	}
+	main, err := promptservice.Materialize(source.TemplateContent, promptservice.FromSnapshot(source))
+	if err != nil || !main.Complete || main.Prompt != stringMap(current, "instructions") ||
+		main.Digest != stringMap(current, "promptMaterializationDigest") ||
+		source.ContextPin.AgentRef != stringMap(current, "agentRef") || source.ProjectRef != stringMap(current, "projectRef") ||
+		source.RunRef != stringMap(current, "runRef") || source.SessionRef != stringMap(current, "sessionRef") ||
+		source.Variables["node.ref"] != stringMap(current, "nodeRef") || source.Variables["turn.ref"] != stringMap(current, "turnRef") ||
+		runtimeRevisionMapInt64(current, "attempt") < 1 || runtimeRevisionMapInt64(current, "attempt") > math.MaxInt32 {
+		return errs.ErrConflict
+	}
+	digest := sha256.Sum256([]byte(main.Prompt))
+	if hex.EncodeToString(digest[:]) != stringMap(current, "instructionDigest") {
+		return errs.ErrConflict
+	}
+	sourceRaw, err := json.Marshal(source)
+	currentRaw, currentErr := json.Marshal(current["promptSnapshot"])
+	var sourceObject, currentObject map[string]any
+	if err != nil || currentErr != nil || json.Unmarshal(sourceRaw, &sourceObject) != nil ||
+		json.Unmarshal(currentRaw, &currentObject) != nil || !reflect.DeepEqual(sourceObject, currentObject) {
+		return errs.ErrConflict
+	}
+	runtime, ok := notice.StructuredVariables["runtime"].(map[string]any)
+	if !ok && notice.StructuredVariables["runtime"] != nil {
+		return errs.ErrConflict
+	}
+	if _, present := runtime[promptservice.AssistantCoreContinuationProjectionKey]; present {
+		return errs.ErrConflict
+	}
+	if runtime == nil {
+		runtime = make(map[string]any)
+	}
+	core := source.AssistantCore
+	projection := promptservice.AssistantCoreContinuationProjection{
+		Revision:  promptservice.AssistantCoreContinuationProjectionRevision,
+		CoreScope: core.Scope, CoreRef: core.Ref, CoreRevision: core.Revision, CoreDigest: core.Digest,
+		InstructionsSHA256: hex.EncodeToString(digest[:]), InstructionsBytes: len(main.Prompt), PromptMaterializationDigest: main.Digest,
+		RuntimeRevisionRef: stringMap(current, "runtimeRevisionRef"), AgentRef: source.ContextPin.AgentRef, ProjectRef: source.ProjectRef,
+		RunRef: source.RunRef, NodeRef: source.Variables["node.ref"], SessionRef: source.SessionRef, TurnRef: source.Variables["turn.ref"],
+		Attempt: int32(runtimeRevisionMapInt64(current, "attempt")),
+	}
+	// Object имеет одинаковый canonical JSON до seal и после durable readback;
+	// typed struct внутри any дал бы другой порядок keys на rejoin.
+	projectionRaw, err := json.Marshal(projection)
+	var projectionObject map[string]any
+	if err != nil || json.Unmarshal(projectionRaw, &projectionObject) != nil {
+		return errs.ErrConflict
+	}
+	runtime[promptservice.AssistantCoreContinuationProjectionKey] = projectionObject
+	notice.StructuredVariables["runtime"] = runtime
+	return nil
+}
+
+// Полный server notice проверяется тем же consumer predicate до seal. История
+// и исходный USER ввод не усекаются и не переписываются для прохождения бюджета.
+func appendRuntimeContinuationContext(snapshot map[string]any, materialized promptservice.Materialization) error {
+	messages, ok := snapshot["sessionContext"].([]map[string]string)
+	if !ok && snapshot["sessionContext"] != nil {
+		return errs.ErrConflict
+	}
+	if len(messages) >= 128 {
+		return errs.ErrConflict
+	}
+	candidate := append(append([]map[string]string{}, messages...), map[string]string{"role": "USER", "content": materialized.Prompt})
+	input := runtimecontract.RunnerInput{Mode: runtimecontract.RunnerModeTurn,
+		RuntimeRevisionRef: stringMap(snapshot, "runtimeRevisionRef"), SessionRef: stringMap(snapshot, "sessionRef"),
+		TurnRef: stringMap(snapshot, "turnRef"), Attempt: int32(runtimeRevisionMapInt64(snapshot, "attempt")),
+		Capabilities:                  runtimeRevisionStringSlice(snapshot["capabilities"]),
+		PromptServiceTemplateRevision: stringMap(snapshot, "promptServiceTemplateRevision"),
+		SessionContext:                runtimeRevisionSessionContext(candidate),
+	}
+	if notice, err := runtimecontract.ValidateRuntimeSessionContext(input); err != nil || !notice {
+		return errs.ErrConflict
+	}
+	snapshot["sessionContext"] = candidate
+	return nil
 }
 
 func (repository *Repository) persistRuntimeContinuationNotice(ctx context.Context, tx pgx.Tx, current scope, currentID string, notice *preparedContinuationNotice) error {
@@ -157,6 +261,28 @@ func continuationComponents(snapshot map[string]any) (map[string][]promptservice
 		result["INSTRUCTIONS"] = append(result["INSTRUCTIONS"], tuple("promptServiceTemplateRevision", "", "promptServiceTemplateDigest"))
 	}
 	promptSnapshot, _ := data["promptSnapshot"].(map[string]any)
+	if raw, present := data["promptSnapshot"]; present {
+		encoded, err := json.Marshal(raw)
+		if err != nil {
+			return nil, errs.ErrConflict
+		}
+		instruction, err := platformInstructionDependency(encoded)
+		if err != nil {
+			return nil, err
+		}
+		if instruction != nil {
+			result["INSTRUCTIONS"] = append(result["INSTRUCTIONS"], *instruction)
+		}
+	}
+	if core, present := promptSnapshot["assistantCore"]; present {
+		binding, ok := core.(map[string]any)
+		if !ok || continuationString(binding, "Ref") == "" || continuationString(binding, "Revision") == "" || continuationString(binding, "Digest") == "" {
+			return nil, errs.ErrConflict
+		}
+		result["INSTRUCTIONS"] = append(result["INSTRUCTIONS"], promptservice.RuntimeDescriptor{
+			Ref: continuationString(binding, "Ref"), Digest: continuationString(binding, "Digest"), Value: continuationString(binding, "Revision"),
+		})
+	}
 	for _, extra := range continuationObjects(promptSnapshot["extraTemplates"]) {
 		result["INSTRUCTIONS"] = append(result["INSTRUCTIONS"], promptservice.RuntimeDescriptor{Ref: continuationString(extra, "Ref"), Digest: continuationString(extra, "Digest"), Value: continuationString(extra, "Kind")})
 	}

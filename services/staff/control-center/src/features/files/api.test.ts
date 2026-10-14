@@ -56,6 +56,7 @@ import {
 function artifact(ref: string, options: Partial<Artifact> = {}): Artifact {
   return {
     ref,
+    currentRevisionRef: `arv_fixture_${ref}`,
     version: 1,
     projectRef: "project_sales",
     fileName: `${ref}.pdf`,

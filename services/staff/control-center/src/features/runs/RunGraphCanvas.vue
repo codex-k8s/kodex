@@ -10,6 +10,7 @@ import { MiniMap } from "@vue-flow/minimap";
 import {
   Bot,
   ChevronDown,
+  Focus,
   ListTree,
   Maximize2,
   Minus,
@@ -19,7 +20,7 @@ import {
   UserRoundCheck,
   Workflow,
 } from "@lucide/vue";
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import type { Component } from "vue";
 import { useI18n } from "vue-i18n";
 
@@ -44,7 +45,10 @@ import {
   layoutRunGraph,
   runGraphContentBounds,
 } from "@/features/runs/run-graph-layout";
-import { runGraphViewportCommand } from "@/features/runs/run-graph-viewport";
+import {
+  runGraphDefaultViewMode,
+  runGraphViewportCommand,
+} from "@/features/runs/run-graph-viewport";
 import type {
   RunEdge,
   RunNode,
@@ -55,6 +59,7 @@ const props = withDefaults(
   defineProps<{
     nodes: RunNode[];
     edges: RunEdge[];
+    rootRef?: string;
     selectedRef?: string;
     futureNodeRefs?: string[];
     activeNodeRefs?: string[];
@@ -62,6 +67,7 @@ const props = withDefaults(
     compact?: boolean;
   }>(),
   {
+    rootRef: undefined,
     selectedRef: undefined,
     futureNodeRefs: () => [],
     activeNodeRefs: () => [],
@@ -77,10 +83,12 @@ const { t } = useI18n();
 
 const flowId = "run-session-graph";
 const viewMode = ref<"graph" | "outline">("graph");
+const explicitViewMode = ref(false);
 const legendExpanded = ref(false);
 const outline = ref<HTMLElement>();
 const userAdjustedView = ref(false);
 const programmaticViewportChange = ref(false);
+let fitGeneration = 0;
 const minimumZoom = ref(runGraphMinimumZoom);
 const futureRefs = computed(() => new Set(props.futureNodeRefs));
 const activeRefs = computed(() => new Set(props.activeNodeRefs));
@@ -129,8 +137,28 @@ const flowElements = computed(() =>
     edgeAccessibleLabel,
   }),
 );
-const runSignature = computed(() =>
-  [...new Set(props.nodes.map((node) => node.runRef))].sort().join("\u0000"),
+const rootIdentity = computed(
+  () =>
+    props.rootRef ??
+    [...props.nodes]
+      .filter((node) => node.type === "ROOT_PROCESS")
+      .sort(
+        (left, right) =>
+          left.createdAt.localeCompare(right.createdAt) ||
+          left.ref.localeCompare(right.ref),
+      )[0]?.ref,
+);
+const activeSignature = computed(() =>
+  props.nodes
+    .filter(
+      (node) =>
+        node.type === "AGENT_EXECUTION" &&
+        node.state === "RUNNING" &&
+        activeRefs.value.has(node.ref),
+    )
+    .map((node) => node.ref)
+    .sort()
+    .join("\u0000"),
 );
 const graphSignature = computed(() => {
   const nodeSignature = props.nodes
@@ -216,60 +244,67 @@ const outlineItems = computed(() => {
 onInit(() => {
   void fit(false);
 });
-watch(runSignature, (current, previous) => {
-  if (current !== previous) userAdjustedView.value = false;
-});
-watch(graphSignature, () => {
-  if (!userAdjustedView.value) void nextTick(() => fit(false));
-});
+watch(
+  [rootIdentity, graphSignature, activeSignature],
+  ([root], [previousRoot]) => {
+    // Новый дочерний запуск не отменяет ручной выбор viewport.
+    if (root !== previousRoot) userAdjustedView.value = false;
+    if (!userAdjustedView.value && viewMode.value === "graph") {
+      void nextTick(() => fit(false));
+    }
+  },
+);
 watch(
   [() => dimensions.value.width, () => dimensions.value.height],
   async ([width, height], [previousWidth, previousHeight]) => {
     if (!width || !height || viewMode.value !== "graph") return;
-    if (!userAdjustedView.value) {
-      await fit(false);
+    const viewportResized = previousWidth > 0 && previousHeight > 0;
+    if (
+      viewportResized &&
+      Math.abs(width - previousWidth) < 2 &&
+      Math.abs(height - previousHeight) < 2
+    )
       return;
-    }
-    if (!previousWidth || !previousHeight) return;
-    // Resize сохраняет выбранный пользователем центр и масштаб графа.
-    const viewport = getViewport();
-    programmaticViewportChange.value = true;
-    try {
-      await setViewport(
-        {
-          x: viewport.x + (width - previousWidth) / 2,
-          y: viewport.y + (height - previousHeight) / 2,
-          zoom: viewport.zoom,
-        },
-        { duration: 0 },
-      );
-    } finally {
-      programmaticViewportChange.value = false;
-    }
+    // После открытия или закрытия панели весь граф снова помещается в canvas.
+    // Ручной viewport остаётся защищённым от последующих realtime-обновлений.
+    await fit(false, false, viewportResized);
   },
   { flush: "post" },
 );
 
-async function fit(userInitiated = true): Promise<void> {
+async function fit(
+  userInitiated = true,
+  currentWork = false,
+  viewportResized = false,
+): Promise<void> {
+  if (!userInitiated && !viewportResized && userAdjustedView.value) return;
   if (userInitiated) userAdjustedView.value = true;
+  const generation = ++fitGeneration;
   programmaticViewportChange.value = true;
   try {
+    await nextTick();
+    if (generation !== fitGeneration) return;
+    if (!userInitiated && !viewportResized && userAdjustedView.value) return;
     if (
-      !dimensions.value.width ||
-      !dimensions.value.height ||
+      !Number.isFinite(dimensions.value.width) ||
+      !Number.isFinite(dimensions.value.height) ||
+      dimensions.value.width <= 0 ||
+      dimensions.value.height <= 0 ||
       !props.nodes.length
     )
       return;
-    const options = userInitiated
-      ? runGraphFitViewOptions(dimensions.value.width, props.compact)
-      : runGraphInitialFitOptions(
-          dimensions.value.width,
-          props.nodes,
-          props.edges,
-          props.selectedRef,
-          props.compact,
-          dimensions.value.height,
-        );
+    const options =
+      (userInitiated || viewportResized) && !currentWork
+        ? runGraphFitViewOptions(dimensions.value.width, props.compact)
+        : runGraphInitialFitOptions(
+            dimensions.value.width,
+            props.nodes,
+            props.edges,
+            props.selectedRef,
+            props.compact,
+            dimensions.value.height,
+            props.activeNodeRefs,
+          );
     const bounds = runGraphContentBounds(layout.value, options.nodes);
     const viewport = runGraphFitTransform(
       bounds,
@@ -279,9 +314,13 @@ async function fit(userInitiated = true): Promise<void> {
     );
     minimumZoom.value = Math.min(runGraphMinimumZoom, viewport.zoom);
     await nextTick();
-    await setViewport(viewport, { duration: options.duration });
+    if (generation !== fitGeneration) return;
+    // Realtime и resize применяют актуальный fit без конкурирующих анимаций.
+    await setViewport(viewport, {
+      duration: userInitiated ? options.duration : 0,
+    });
   } finally {
-    programmaticViewportChange.value = false;
+    if (generation === fitGeneration) programmaticViewportChange.value = false;
   }
 }
 
@@ -292,11 +331,26 @@ async function changeZoom(direction: "in" | "out"): Promise<void> {
 }
 
 function setViewMode(mode: "graph" | "outline"): void {
+  explicitViewMode.value = true;
   viewMode.value = mode;
   if (mode === "graph" && !userAdjustedView.value) {
     void nextTick(() => fit(false));
   }
 }
+
+function updateDefaultViewMode(): void {
+  if (explicitViewMode.value) return;
+  viewMode.value = runGraphDefaultViewMode(window.innerWidth);
+  if (viewMode.value === "graph" && !userAdjustedView.value) {
+    void nextTick(() => fit(false));
+  }
+}
+
+onMounted(() => {
+  updateDefaultViewMode();
+  window.addEventListener("resize", updateDefaultViewMode);
+});
+onUnmounted(() => window.removeEventListener("resize", updateDefaultViewMode));
 
 function handleNodeClick(event: NodeMouseEvent): void {
   emit("select", domainNode(event.node));
@@ -515,8 +569,8 @@ function compareNodes(left: RunNode, right: RunNode): number {
         <button
           class="icon-button"
           type="button"
-          :aria-label="$t('runs.connections')"
-          :title="$t('runs.connections')"
+          :aria-label="$t('runs.nodeList')"
+          :title="$t('runs.nodeList')"
           :aria-pressed="viewMode === 'outline'"
           @click="setViewMode('outline')"
         >
@@ -528,6 +582,16 @@ function compareNodes(left: RunNode, right: RunNode): number {
         {{ $t("runs.graphEdges", { count: edges.length }) }}
       </span>
       <span class="graph-toolbar__separator" aria-hidden="true" />
+      <button
+        class="icon-button"
+        type="button"
+        :aria-label="$t('runs.focusCurrentWork')"
+        :title="$t('runs.focusCurrentWork')"
+        :disabled="viewMode !== 'graph'"
+        @click="fit(true, true)"
+      >
+        <Focus :size="17" aria-hidden="true" />
+      </button>
       <button
         class="icon-button"
         type="button"
@@ -862,19 +926,22 @@ function compareNodes(left: RunNode, right: RunNode): number {
 .graph-outline {
   position: absolute;
   inset: 0;
+  top: max(144px, calc(var(--run-outline-summary-bottom, 0px) + 12px));
   display: grid;
   align-content: start;
+  grid-auto-rows: max-content;
   min-width: 0;
   min-height: 0;
   gap: 8px;
-  padding: 144px 14px 100px;
-  scroll-padding-top: 144px;
+  padding: 14px;
+  scroll-padding-top: 14px;
   overflow: auto;
   background: var(--canvas);
 }
 .graph-outline-node {
   display: grid;
   width: calc(100% - min(calc(var(--tree-depth) * 18px), 72px));
+  height: auto;
   min-width: 0;
   min-height: 72px;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -914,7 +981,9 @@ function compareNodes(left: RunNode, right: RunNode): number {
 .graph-outline-node small,
 .graph-outline-node__connection {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .graph-outline-node small,
 .graph-outline-node__connection {
@@ -1007,11 +1076,22 @@ function compareNodes(left: RunNode, right: RunNode): number {
 }
 @media (max-width: 760px) {
   .graph-toolbar {
-    top: 8px;
+    top: var(--run-graph-toolbar-top, 8px);
     bottom: auto;
+    left: 8px;
     right: 8px;
     min-height: 40px;
     padding: 4px;
+  }
+  .graph-view-switch {
+    flex: 0 0 auto;
+  }
+  .graph-toolbar__count {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
   }
   .run-flow :deep(.vue-flow__minimap) {
     right: 8px;

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/shared/locale", () => ({ currentLocale: () => "ru" }));
 import { i18n } from "@/app/i18n";
 import type { AssistantPlanOperation } from "@/shared/api/generated/openapi/types.gen";
+import { platformCapabilityMessages } from "@/shared/ui/server-message-catalog";
 import Card from "./AssistantPlanCard.vue";
 
 function operation(index: number): AssistantPlanOperation {
@@ -47,6 +48,76 @@ async function render(operations: AssistantPlanOperation[]) {
   return renderToString(app);
 }
 describe("AssistantPlanCard", () => {
+  it.each([true, false])(
+    "показывает точные последствия платформенного права без изменения summary, enabled=%s",
+    async (enabled) => {
+      const item = operation(0);
+      item.type = "CHANGE_CAPABILITY";
+      item.title = "platform.artifact.manage";
+      item.summary =
+        "Сотрудник agt_private сможет изменить файлы; <script>не выполнять</script>";
+      item.target = { kind: "AGENT", name: "Аналитик", ref: "agt_private" };
+      item.expectedVersion = 17;
+      item.parameters = {
+        agentRef: "agt_private",
+        capabilityKey: "platform.artifact.manage",
+        enabled,
+      };
+      item.before = { enabled: !enabled };
+      item.after = { enabled };
+      const original = structuredClone(item);
+      const html = await render([item]);
+      const visible = html.slice(0, html.indexOf("<details"));
+      expect(visible).toContain("Аналитик · Работа с файлами");
+      expect(visible).toContain(enabled ? "Выдать" : "Отозвать");
+      expect(visible).toContain(
+        "Чтение, создание, изменение и удаление файлов",
+      );
+      expect(visible).toContain("в разрешённой области");
+      expect(visible).toContain("&lt;script&gt;не выполнять&lt;/script&gt;");
+      expect(visible).not.toContain("platform.artifact.manage");
+      expect(html).toContain("Технические детали изменения");
+      expect(html).toContain("platform.artifact.manage");
+      expect(html).toContain("agt_private");
+      expect(html).toContain("17");
+      expect(html).not.toMatch(/<details[^>]*\sopen(?:\s|=|>)/);
+      expect(item).toEqual(original);
+    },
+  );
+  it.each(["platform.unknown.manage", "constructor", "__proto__"])(
+    "не угадывает подпись неизвестного права %s",
+    async (key) => {
+      const item = operation(0);
+      item.type = "CHANGE_CAPABILITY";
+      item.parameters.capabilityKey = key;
+      item.summary = "Полное описание неизвестного права";
+      expect(platformCapabilityMessages(key)).toBeUndefined();
+      expect(await render([item])).toContain(item.summary);
+      expect(await render([item])).not.toContain("Работа с файлами");
+    },
+  );
+  it.each([
+    ["platform.run.delegate", "Делегирование другим сотрудникам"],
+    ["platform.run.launch", "Запуск сотрудников и процессов"],
+  ])("использует существующую подпись права %s", async (key, name) => {
+    const item = operation(0);
+    item.type = "CHANGE_CAPABILITY";
+    item.parameters.capabilityKey = key;
+    item.target.name = "Аналитик";
+    expect(await render([item])).toContain(`Аналитик · ${name}`);
+  });
+  it("не выдумывает направление или имя получателя из технических параметров", async () => {
+    const item = operation(0);
+    item.type = "CHANGE_CAPABILITY";
+    item.parameters.capabilityKey = "platform.artifact.manage";
+    item.target.name = "";
+    item.summary = "Операция требует проверки";
+    expect(await render([item])).toContain(item.summary);
+    expect(await render([item])).not.toContain("Работа с файлами");
+    item.target.name = "Аналитик";
+    delete item.parameters.enabled;
+    expect(await render([item])).not.toContain("Работа с файлами");
+  });
   it("показывает первые пять из 21, сохраняет остальные mounted под доступным закрытым details", async () => {
     const input = Array.from({ length: 21 }, (_, index) => operation(index));
     const html = await render(input);

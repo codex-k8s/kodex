@@ -487,21 +487,29 @@ func maskedAccount(raw json.RawMessage) (string, error) {
 
 func readAuthJSON(home string) ([]byte, error) {
 	path := filepath.Join(home, "auth.json")
-	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 ||
-		info.Mode().Perm()&0o077 != 0 || info.Size() < 1 || info.Size() > maximumAuthJSONBytes {
-		return nil, errors.New("Codex authorization material is unavailable")
-	}
-	file, err := os.Open(path)
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, errors.New("read Codex authorization material")
 	}
 	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 || info.Size() < 1 || info.Size() > maximumAuthJSONBytes {
+		return nil, errors.New("Codex authorization material is unavailable")
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || stat.Nlink != 1 || stat.Uid != uint32(os.Geteuid()) {
+		return nil, errors.New("Codex authorization material identity is invalid")
+	}
 	value, err := io.ReadAll(io.LimitReader(file, maximumAuthJSONBytes+1))
 	if err != nil || len(value) < 1 || len(value) > maximumAuthJSONBytes || !json.Valid(value) ||
 		bytes.Equal(bytes.TrimSpace(value), []byte("{}")) {
 		clear(value)
 		return nil, errors.New("Codex authorization material is invalid")
+	}
+	current, err := os.Lstat(path)
+	if err != nil || !os.SameFile(info, current) {
+		clear(value)
+		return nil, errors.New("Codex authorization material identity changed")
 	}
 	return value, nil
 }

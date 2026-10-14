@@ -340,7 +340,7 @@ func TestTurnStartPinsModelReasoningAndPersonalityOnEveryAttempt(t *testing.T) {
 		snapshot.Digest, _ = snapshot.ComputeDigest()
 		input.ContextSnapshot = &snapshot
 		params, err := turnStartParams(input, "exact-thread", []byte("exact server prompt"))
-		if err != nil || params["model"] != "gpt-6-astra" || params["effort"] != "high" ||
+		if err != nil || params["cwd"] != runtimecontract.RuntimeWorkspaceWorkingRoot || params["model"] != "gpt-6-astra" || params["effort"] != "high" ||
 			params["personality"] != "pragmatic" || params["threadId"] != "exact-thread" {
 			t.Fatalf("turn parameters = %#v, error = %v", params, err)
 		}
@@ -613,6 +613,7 @@ func TestRequiredMCPToolNamesMatchRuntimeAuthority(t *testing.T) {
 		"propose_run_metadata",
 		"get_configuration_catalog",
 		"find_platform_resources",
+		"read_task_session",
 		"propose_configuration_plan",
 		"propose_assistant_metadata",
 		"delegate_agent",

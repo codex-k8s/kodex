@@ -16,6 +16,55 @@ const editor = readFileSync(
 );
 
 describe("каталог образов ИИ-сотрудников", () => {
+  it("в минимальной таблице вмещает touch-действие44px с отступами и сохраняет прокрутку", () => {
+    expect(catalog).toMatch(
+      /\.role-image-catalog__table\s*\{[^}]*min-width: 980px;[^}]*table-layout: fixed;/s,
+    );
+    expect(catalog).toMatch(
+      /\.role-image-catalog__table-wrap\s*\{[^}]*overflow-x: auto;/s,
+    );
+    expect(catalog).toMatch(
+      /\.role-image-catalog__table td\s*\{[^}]*padding: 10px 12px;/s,
+    );
+    const widths = Array.from(
+      catalog.matchAll(/th:nth-child\(\d\)\s*\{\s*width: (\d+)%;/g),
+      (match) => Number(match[1]),
+    );
+    expect(widths).toEqual([28, 18, 12, 15, 8, 12, 7]);
+    expect(widths.reduce((sum, width) => sum + width, 0)).toBe(100);
+    expect((980 * (widths[6] ?? 0)) / 100).toBeGreaterThanOrEqual(44 + 12 * 2);
+  });
+  it("на 390px выделяет имени и роли всю строку, отделяет длинный статус и сохраняет desktop", () => {
+    const desktop = editor.slice(
+      editor.indexOf(".image-summary {"),
+      editor.indexOf("@media (max-width: 1000px)"),
+    );
+    expect(desktop).toMatch(
+      /\.image-summary\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) auto auto;/s,
+    );
+    expect(desktop).toMatch(
+      /\.image-summary__actions\s*\{[^}]*display: flex;[^}]*flex-wrap: wrap;/s,
+    );
+    const mobile = editor.slice(editor.indexOf("@media (max-width: 640px)"));
+    expect(mobile).toMatch(
+      /\.image-summary\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);[^}]*align-items: start;/s,
+    );
+    expect(mobile).toMatch(
+      /\.image-summary__identity\s*\{[^}]*width: 100%;[^}]*align-items: flex-start;/s,
+    );
+    expect(mobile).toMatch(
+      /\.image-summary__identity > div\s*\{[^}]*flex: 1;[^}]*min-width: 0;/s,
+    );
+    expect(mobile).toMatch(
+      /\.image-summary > \.status-badge\s*\{[^}]*grid-column: 1 \/ -1;[^}]*box-sizing: border-box;[^}]*max-width: 100%;[^}]*white-space: normal;[^}]*overflow-wrap: anywhere;/s,
+    );
+    expect(mobile).toMatch(
+      /\.image-summary__actions\s*\{[^}]*display: grid;[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/s,
+    );
+    expect(mobile).toMatch(
+      /\.image-summary__actions > \.button\s*\{[^}]*min-width: 0;[^}]*max-width: 100%;[^}]*min-height: 44px;[^}]*white-space: normal;[^}]*overflow-wrap: anywhere;/s,
+    );
+  });
   it("на любом экране отделяет lifecycle заголовок от статуса и не обрезает дату сборки", () => {
     const desktop = editor.slice(
       editor.indexOf(".image-lifecycle {"),
@@ -133,7 +182,9 @@ describe("каталог образов ИИ-сотрудников", () => {
 
   it("повторяет FAILED/EXPIRED и обновляет детали по realtime-событию", () => {
     expect(editor).toContain("platform.roleImageRealtimeRevision");
-    expect(editor).toContain("store.loadDetail(projectRef, recipeRef, false)");
+    expect(editor).toContain(
+      "store.loadDetail(resourceScope.value, props.recipeRef, false)",
+    );
     expect(editor).not.toContain("scheduleBuildPolling");
     expect(editor).toContain("!buildIsActive(current) ||");
     expect(editor).toContain("buildIsActive(currentBuild)");

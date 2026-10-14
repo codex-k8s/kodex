@@ -15,11 +15,11 @@ import (
 )
 
 const (
-	providerBrokerVersion    = 2
+	providerBrokerVersion    = 3
 	maximumPublishedMessages = 1024
 	maximumBrokerFrameBytes  = 1 << 20
 	maximumBrokerStreamBytes = 64 << 20
-	maximumBrokerFrames      = 2*runtimecontract.MaximumNativeToolCalls + maximumPublishedMessages + 1
+	maximumBrokerFrames      = 2*runtimecontract.MaximumNativeToolCalls + maximumPublishedMessages + 2
 	brokerFrameActivity      = "ACTIVITY"
 	brokerFrameTerminal      = "TERMINAL"
 	brokerFrameWriteTimeout  = 5 * time.Second
@@ -38,6 +38,7 @@ type brokerFrameWriter struct {
 	sequence uint64
 	bytes    int
 	terminal bool
+	input    *model.Input
 }
 
 func (writer *brokerFrameWriter) Write([]byte) (int, error) {
@@ -63,7 +64,7 @@ func (writer *brokerFrameWriter) finish(response brokerResponse) error {
 		return err
 	}
 	// Ограниченный отказ сохраняет измеренный usage, не подтверждая большой итог.
-	failure := brokerResponse{Failure: providerBrokerFailureProvider, Result: failedProviderResult(response.Result), RolloutCapture: response.RolloutCapture}
+	failure := brokerResponse{Failure: providerBrokerFailureProvider, Result: failedProviderResult(response.Result), RolloutCapture: response.RolloutCapture, Diagnostic: response.Diagnostic}
 	return writer.frame(brokerFrame{Kind: brokerFrameTerminal, Terminal: &failure})
 }
 
@@ -118,7 +119,7 @@ func readProviderBrokerResponse(reader io.Reader, callbacks ...func(runtimecontr
 
 func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, writerUID uint32, callbacks ...func(runtimecontract.RuntimeActivity) error) (Result, error) {
 	if len(callbacks) > 1 {
-		return Result{}, errProviderBrokerResponseInvalid
+		return Result{}, brokerResponseError(brokerResponseCallbacks, errProviderBrokerResponseInvalid)
 	}
 	var callback func(runtimecontract.RuntimeActivity) error
 	if len(callbacks) == 1 {
@@ -131,40 +132,61 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 	var sequence uint64
 	seenMessages := make(map[string]struct{})
 	toolStates := make(map[string]runtimecontract.NativeToolCall)
+	providerProcessSeen := false
 	for scanner.Scan() {
-		if terminal != nil || sequence >= maximumBrokerFrames || rejectDuplicateJSONKeys(scanner.Bytes()) != nil {
-			return Result{}, errProviderBrokerResponseInvalid
+		if terminal != nil {
+			return Result{}, brokerResponseError(brokerResponsePostTerminal, errProviderBrokerResponseInvalid)
+		}
+		if sequence >= maximumBrokerFrames {
+			return Result{}, brokerResponseError(brokerResponseFrameLimit, errProviderBrokerResponseInvalid)
+		}
+		if rejectDuplicateJSONKeys(scanner.Bytes()) != nil {
+			return Result{}, brokerResponseError(brokerResponseFrameSchema, errProviderBrokerResponseInvalid)
 		}
 		var frame brokerFrame
-		if strictDecode(scanner.Bytes(), &frame) != nil || frame.Version != providerBrokerVersion || frame.Sequence != sequence+1 {
-			return Result{}, errProviderBrokerResponseInvalid
+		if strictDecode(scanner.Bytes(), &frame) != nil {
+			return Result{}, brokerResponseError(brokerResponseFrameSchema, errProviderBrokerResponseInvalid)
+		}
+		if frame.Version != providerBrokerVersion {
+			return Result{}, brokerResponseError(brokerResponseFrameVersion, errProviderBrokerResponseInvalid)
+		}
+		if frame.Sequence != sequence+1 {
+			return Result{}, brokerResponseError(brokerResponseFrameSequence, errProviderBrokerResponseInvalid)
 		}
 		fields, err := decodeObject(scanner.Bytes(), schema([]string{"version", "sequence", "kind"}, "version", "sequence", "kind", "activity", "terminal"))
 		if err != nil {
-			return Result{}, errProviderBrokerResponseInvalid
+			return Result{}, brokerResponseError(brokerResponseFrameSchema, errProviderBrokerResponseInvalid)
 		}
 		sequence++
 		switch frame.Kind {
 		case brokerFrameActivity:
 			if _, present := fields["terminal"]; present {
-				return Result{}, errProviderBrokerResponseInvalid
+				return Result{}, brokerResponseError(brokerResponseActivitySchema, errProviderBrokerResponseInvalid)
 			}
 			if frame.Activity == nil || frame.Terminal != nil || frame.Activity.Validate() != nil {
-				return Result{}, errProviderBrokerResponseInvalid
+				return Result{}, brokerResponseError(brokerResponseActivitySchema, errProviderBrokerResponseInvalid)
 			}
-			if message := frame.Activity.Message; message != nil {
-				if _, exists := seenMessages[message.ItemID]; exists || len(seenMessages) >= maximumPublishedMessages {
-					return Result{}, errProviderBrokerResponseInvalid
+			if observation := frame.Activity.ProviderProcess; observation != nil {
+				if input == nil || writerUID != providerWriterUID || !observation.Matches(*input) || providerProcessSeen || sequence != 1 {
+					return Result{}, brokerResponseError(brokerResponseProviderTuple, errProviderBrokerResponseInvalid)
+				}
+				providerProcessSeen = true
+			} else if message := frame.Activity.Message; message != nil {
+				if _, exists := seenMessages[message.ItemID]; exists {
+					return Result{}, brokerResponseError(brokerResponseMessageReplay, errProviderBrokerResponseInvalid)
+				}
+				if len(seenMessages) >= maximumPublishedMessages {
+					return Result{}, brokerResponseError(brokerResponseMessageLimit, errProviderBrokerResponseInvalid)
 				}
 				seenMessages[message.ItemID] = struct{}{}
 			} else {
 				call := *frame.Activity.ToolCall
 				if previous, exists := toolStates[call.CallID]; exists {
 					if previous.Kind != call.Kind || previous.Revision != 1 || call.Revision != 2 {
-						return Result{}, errProviderBrokerResponseInvalid
+						return Result{}, brokerResponseError(brokerResponseToolLifecycle, errProviderBrokerResponseInvalid)
 					}
 				} else if len(toolStates) >= runtimecontract.MaximumNativeToolCalls {
-					return Result{}, errProviderBrokerResponseInvalid
+					return Result{}, brokerResponseError(brokerResponseToolLimit, errProviderBrokerResponseInvalid)
 				}
 				toolStates[call.CallID] = call
 			}
@@ -176,39 +198,62 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 			}
 		case brokerFrameTerminal:
 			if _, present := fields["activity"]; present {
-				return Result{}, errProviderBrokerResponseInvalid
+				return Result{}, brokerResponseError(brokerResponseTerminalSchema, errProviderBrokerResponseInvalid)
 			}
 			if frame.Activity != nil || frame.Terminal == nil {
-				return Result{}, errProviderBrokerResponseInvalid
+				return Result{}, brokerResponseError(brokerResponseTerminalSchema, errProviderBrokerResponseInvalid)
 			}
-			terminalFields, err := decodeObject(fields["terminal"], schema([]string{"result", "ok"}, "result", "ok", "failure", "rollout_capture"))
+			terminalFields, err := decodeObject(fields["terminal"], schema([]string{"result", "ok"}, "result", "ok", "failure", "rollout_capture", "diagnostic"))
 			if err != nil {
-				return Result{}, errProviderBrokerResponseInvalid
+				return Result{}, brokerResponseError(brokerResponseTerminalSchema, errProviderBrokerResponseInvalid)
 			}
-			if _, err := decodeObject(terminalFields["result"], schema(nil, "SessionID", "FinalMessage", "Outcome", "FailureCode", "ArchivePath", "ArchiveRelativePath", "ArchiveSHA256", "ArchiveSizeBytes", "Usage")); err != nil {
-				return Result{}, errProviderBrokerResponseInvalid
+			if _, err := decodeObject(terminalFields["result"], schema(nil, "SessionID", "FinalMessage", "Outcome", "FailureCode", "ArchivePath", "ArchiveRelativePath", "ArchiveSHA256", "ArchiveSizeBytes", "Usage", "UsageCompleteness")); err != nil {
+				return Result{}, brokerResponseError(brokerResponseTerminalSchema, errProviderBrokerResponseInvalid)
 			}
 			terminal = frame.Terminal
+			if _, present := terminalFields["diagnostic"]; present {
+				if input == nil || writerUID != providerWriterUID || terminal.Diagnostic == nil || !terminal.Diagnostic.Matches(*input) ||
+					(terminal.OK && (terminal.Result.Outcome != "FAILED" || terminal.Diagnostic.Kind != "TERMINAL_FAILURE" || terminal.Diagnostic.TerminalCode != terminal.Result.FailureCode)) {
+					return Result{}, brokerResponseError(brokerResponseDiagnostic, errProviderBrokerResponseInvalid)
+				}
+				if !terminal.OK {
+					class := terminal.Diagnostic.Class
+					if class == "ACCOUNT_RESPONSE_SCHEMA" {
+						class = "PROVIDER"
+					}
+					if class != string(terminal.Failure) {
+						return Result{}, brokerResponseError(brokerResponseDiagnostic, errProviderBrokerResponseInvalid)
+					}
+				}
+				value := *terminal.Diagnostic
+				terminal.Result.providerDiagnostic = &value
+			}
 			if raw, present := terminalFields["rollout_capture"]; present {
 				keys := []string{"schema", "execution_binding_digest", "runtime_revision_digest", "input_digest", "attempt", "session_ref", "turn_ref", "codex_session_id", "archive_relative_path", "archive_sha256", "archive_size_bytes"}
 				if _, err := decodeObject(raw, schema(keys, keys...)); err != nil || input == nil || terminal.RolloutCapture == nil || verifyRolloutCapture(*input, terminal.Result, terminal.RolloutCapture, writerUID) != nil {
-					return Result{}, errProviderBrokerResponseInvalid
+					return Result{}, brokerResponseError(brokerResponseArchive, errProviderBrokerResponseInvalid)
 				}
 				terminal.RolloutCapture.sealed = true
 				terminal.Result = withRolloutCapture(terminal.Result, terminal.RolloutCapture)
 			} else if terminal.Result.SessionID != "" || terminal.Result.ArchivePath != "" || terminal.Result.ArchiveRelativePath != "" || terminal.Result.ArchiveSHA256 != "" || terminal.Result.ArchiveSizeBytes != 0 {
-				return Result{}, errProviderBrokerResponseInvalid
+				return Result{}, brokerResponseError(brokerResponseArchive, errProviderBrokerResponseInvalid)
 			}
 		default:
-			return Result{}, errProviderBrokerResponseInvalid
+			return Result{}, brokerResponseError(brokerResponseFrameKind, errProviderBrokerResponseInvalid)
 		}
 	}
-	if scanner.Err() != nil || terminal == nil {
-		return Result{}, errProviderBrokerFailed
+	if scanner.Err() != nil {
+		return Result{}, brokerResponseError(brokerResponseStreamRead, errProviderBrokerFailed)
+	}
+	if terminal == nil {
+		return Result{}, brokerResponseError(brokerResponseNoTerminal, errProviderBrokerFailed)
 	}
 	result, err := validateBrokerTerminal(*terminal)
 	if callbackError != nil && !errors.Is(err, errProviderBrokerResponseInvalid) {
-		return failedProviderResult(result), callbackError
+		return failedProviderResult(result), brokerResponseError(brokerResponseActivityFailed, callbackError)
+	}
+	if err != nil {
+		err = brokerResponseError(brokerResponseTerminalResult, err)
 	}
 	return result, err
 }

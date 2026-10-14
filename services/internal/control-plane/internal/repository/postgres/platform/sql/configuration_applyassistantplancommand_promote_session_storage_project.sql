@@ -126,7 +126,7 @@ WITH target_session AS (
       AND revision.project_id IS NULL
     RETURNING revision.id
 ), promoted_artifacts AS (
-    UPDATE control_plane.artifacts artifact
+    UPDATE control_plane.artifact_heads artifact
     SET project_id = session.project_id
     FROM session_runs run, target_session session, boundary
     WHERE boundary.allowed

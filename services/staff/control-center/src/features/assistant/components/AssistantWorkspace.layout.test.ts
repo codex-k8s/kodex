@@ -4,7 +4,8 @@ import { compileStyle } from "@vue/compiler-sfc";
 import { createSSRApp, effectScope, ref, watch } from "vue";
 import { renderToString } from "vue/server-renderer";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import ts from "typescript";
 
 const source = readFileSync(
   new URL("./AssistantWorkspace.vue", import.meta.url),
@@ -49,6 +50,136 @@ const template = source.slice(
 const styles = source.slice(source.indexOf("<style scoped>"));
 
 describe("AssistantWorkspace layout", () => {
+  it.each([
+    {
+      name: "desktop FAB",
+      fab: "visible",
+      toolbar: "visible",
+      expected: "fab",
+    },
+    {
+      name: "после unmount RunPage",
+      fab: "visible",
+      toolbar: "missing",
+      expected: "fab",
+    },
+    {
+      name: "mobile toolbar",
+      fab: "hidden",
+      toolbar: "visible",
+      expected: "toolbar",
+    },
+    {
+      name: "отсутствующий FAB",
+      fab: "missing",
+      toolbar: "visible",
+      expected: "toolbar",
+    },
+    {
+      name: "оба отсутствуют",
+      fab: "missing",
+      toolbar: "missing",
+      expected: "none",
+    },
+    {
+      name: "disabled toolbar",
+      fab: "hidden",
+      toolbar: "disabled",
+      expected: "none",
+    },
+    {
+      name: "hidden toolbar",
+      fab: "hidden",
+      toolbar: "hidden",
+      expected: "none",
+    },
+    {
+      name: "атрибут hidden",
+      fab: "hidden",
+      toolbar: "attribute",
+      expected: "none",
+    },
+    {
+      name: "нет client rects",
+      fab: "hidden",
+      toolbar: "noRects",
+      expected: "none",
+    },
+    {
+      name: "inert toolbar",
+      fab: "hidden",
+      toolbar: "inert",
+      expected: "none",
+    },
+    {
+      name: "unmounted toolbar",
+      fab: "hidden",
+      toolbar: "disconnected",
+      expected: "none",
+    },
+  ])(
+    "возвращает фокус только доступному invoker: $name",
+    ({ fab, toolbar, expected }) => {
+      expect(source).toContain("void nextTick(restoreAssistantCloseFocus)");
+      const helper = source.slice(
+        source.indexOf("function restoreAssistantCloseFocus"),
+        source.indexOf("async function closeAssistantForm"),
+      );
+      expect(helper).toContain("function restoreAssistantCloseFocus");
+      function button(state: string) {
+        if (state === "missing") return null;
+        return {
+          isConnected: state !== "disconnected",
+          disabled: state === "disabled",
+          hidden: state === "attribute",
+          closest: () => (state === "inert" ? {} : null),
+          getClientRects: () => (state === "noRects" ? [] : [{}]),
+          visibility: state === "hidden" ? "hidden" : "visible",
+          focus: vi.fn(),
+        };
+      }
+      const floating = button(fab);
+      const action = button(toolbar);
+      const querySelector = vi.fn(() => action);
+      runInNewContext(
+        ts.transpileModule(helper, {
+          compilerOptions: { target: ts.ScriptTarget.ES2022 },
+        }).outputText + "\nrestoreAssistantCloseFocus();",
+        {
+          fab: { value: floating },
+          document: { querySelector },
+          getComputedStyle: (target: NonNullable<typeof floating>) => target,
+        },
+      );
+      expect(floating?.focus.mock.calls.length ?? 0).toBe(
+        expected === "fab" ? 1 : 0,
+      );
+      expect(action?.focus.mock.calls.length ?? 0).toBe(
+        expected === "toolbar" ? 1 : 0,
+      );
+      if (expected !== "fab") {
+        expect(querySelector).toHaveBeenCalledWith(
+          ".run-page-body .run-workspace-toolbar > .run-workspace-assistant",
+        );
+      }
+    },
+  );
+  it("именует выбор помощника и сохраняет локализованную подпись и scope semantics", () => {
+    const selector = template.match(
+      /<label[^>]*class="assistant-scope-selector"[^]*?<\/label>/,
+    )?.[0];
+    expect(selector).toBeDefined();
+    expect(selector).toContain('name="assistant-scope"');
+    expect(selector).toContain(
+      ":aria-label=\"$t('assistant.projectProfile.scopeLabel')\"",
+    );
+    expect(selector).toContain(':value="store.assistantScope"');
+    expect(selector).toContain(':disabled="store.busy || store.loading"');
+    expect(selector).toContain('@change="selectAssistantScope"');
+    expect(selector).toContain('<option value="SYSTEM">');
+    expect(selector).toContain('<option value="PROJECT">');
+  });
+
   it("блокирует Send/Queue при session blocker, сохраняя черновик, Stop и штатный новый диалог", () => {
     const eligibility = source.slice(
       source.indexOf("const canSend = computed"),
@@ -256,7 +387,9 @@ describe("AssistantWorkspace layout", () => {
       template.indexOf("</AssistantPlanRecord>"),
     );
     expect(record).toContain("turn.plan.state === 'APPLIED'");
-    expect(record).toContain(':content="transcriptTurnContent(turn)"');
+    expect(record).toContain("!turnHasPublishedMessage(turn)");
+    expect(record).toContain(':content="planCardFallbackContent(turn)"');
+    expect(record).not.toContain(':content="transcriptTurnContent(turn)"');
   });
   it("не дублирует exact активный transcript нижним working fallback", () => {
     expect(template).toContain(
@@ -275,10 +408,14 @@ describe("AssistantWorkspace layout", () => {
   });
   it("объединяет owner-checked историю run в чат без отдельного cache и отпускает scoped subscriptions", () => {
     expect(source).toContain("Object.values(platform.events[runRef] ?? {})");
-    expect(source).toContain("await platform.loadRun(runRef)");
+    expect(source).toContain("platform.loadRun(runRef, signal)");
+    expect(source).toContain("platform.loadRunTranscript(runRef, signal)");
     expect(source).toContain("realtime.acquireRun(runRef)");
-    expect(source).toContain(
-      "for (const release of transcriptLeases.values()) release()",
+    expect(source).toContain("transcriptSubscriptions.close()");
+    expect(source).toContain("platform.graphs[runRef]?.sequence");
+    expect(template).toContain(':problem="transcriptProblem.problem"');
+    expect(template).toContain(
+      "transcriptSubscriptions.retry(transcriptProblem.runRef)",
     );
     expect(template).toContain('v-for="entry in chatTimeline"');
     expect(template).toContain(':events="entry.events"');

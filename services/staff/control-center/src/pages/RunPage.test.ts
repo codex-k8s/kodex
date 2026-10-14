@@ -1,6 +1,7 @@
 import { createPinia } from "pinia";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
+import { transpileModule } from "typescript";
 import { createSSRApp } from "vue";
 import { createI18n } from "vue-i18n";
 import { createMemoryHistory, createRouter } from "vue-router";
@@ -27,6 +28,8 @@ afterAll(() => vi.unstubAllGlobals());
 
 function messages() {
   return {
+    workboard: { projectAssistantCommand: "Команда помощнику проекта" },
+    assistant: { open: "Открыть Kodex" },
     serverMessages: {
       RUN_COORDINATION_ROLE: "Координатор запуска",
       REQUIRED_WORKFLOW_FAILED:
@@ -62,6 +65,8 @@ function messages() {
       context: "Контекст узла",
       workspaceTools: "Инструменты запуска",
       connections: "Связи графа",
+      nodeList: "Список узлов",
+      focusCurrentWork: "Текущая работа",
       artifacts: "Результаты и файлы",
       incidents: "Диагностика",
       noIncidents: "Активных инцидентов нет",
@@ -128,6 +133,311 @@ function messages() {
 }
 
 describe("RunPage runtime presentation", () => {
+  it("заголовок PROJECT-команды определяется pin, без замены SYSTEM и авторских названий", async () => {
+    const value: Run = {
+      ref: "run_own",
+      version: 1,
+      projectRef: "project_own",
+      sessionRef: "session_own",
+      rootRunRef: "run_own",
+      title: "Команда системному помощнику",
+      titleSource: "SERVER_DEFAULT",
+      source: "SYSTEM_ASSISTANT",
+      target: {
+        type: "SYSTEM_ASSISTANT",
+        ref: "assistant_own",
+        displayName: "Помощник",
+        version: 1,
+      },
+      assistantPin: {
+        scope: "PROJECT",
+        projectRef: "project_own",
+        organizationRef: "organization_own",
+        assistantRef: "assistant_own",
+        profileRef: "profile_own",
+        conversationRef: "conversation_own",
+      },
+      state: "RUNNING",
+      activitySummary: "Работает",
+      initiator: { ref: "user_own", displayName: "Владелец" },
+      attempt: 1,
+      graphRevision: 1,
+      lastEventSequence: 0,
+      artifactRefs: [],
+      gateRefs: [],
+      nextActions: [],
+      createdAt: "2026-10-12T00:00:00Z",
+      usage: {
+        totalTokens: 0,
+        inputTokens: 0,
+        cachedInputTokens: 0,
+        cacheWriteInputTokens: 0,
+        outputTokens: 0,
+        reasoningOutputTokens: 0,
+        modelContextWindow: 0,
+      },
+    };
+    const pin = value.assistantPin;
+    if (!pin) throw new Error("Missing assistant fixture pin");
+    for (const candidate of [
+      value,
+      { ...value, titleSource: "USER_EDITED" as const },
+      { ...value, titleSource: "AGENT_PROPOSED" as const },
+      { ...value, assistantPin: undefined },
+      {
+        ...value,
+        assistantPin: {
+          ...pin,
+          scope: "SYSTEM" as const,
+          profileRef: undefined,
+        },
+      },
+      { ...value, assistantPin: { ...pin, projectRef: "project_other" } },
+    ]) {
+      const pinia = createPinia();
+      const platform = usePlatformStore(pinia);
+      platform.runs[value.ref] = candidate;
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: "/runs/:runRef", component: RunPage }],
+      });
+      await router.push(`/runs/${value.ref}`);
+      const app = createSSRApp(RunPage);
+      app
+        .use(pinia)
+        .use(router)
+        .use(
+          createI18n({
+            legacy: false,
+            locale: "ru",
+            messages: { ru: messages() },
+          }),
+        );
+      const before = JSON.stringify(candidate);
+      const html = await renderToString(app);
+      expect(html).toMatch(
+        candidate === value
+          ? /<h1[^>]*>Команда помощнику проекта<\/h1>/
+          : /<h1[^>]*>Команда системному помощнику<\/h1>/,
+      );
+      expect(JSON.stringify(platform.runs[value.ref])).toBe(before);
+    }
+  });
+  it("разводит мобильные context, graph controls и summary по отдельным полосам", () => {
+    const source = readFileSync(
+      new URL("./RunPage.vue", import.meta.url),
+      "utf8",
+    );
+    const mobile = source.slice(source.indexOf("@media (max-width: 760px)"));
+    expect(mobile).toMatch(
+      /\.run-workspace\s*\{[^}]*--run-graph-toolbar-top: 56px/,
+    );
+    expect(mobile).toMatch(/\.run-canvas-summary\s*\{[^}]*top: 136px/);
+    expect(mobile).toMatch(
+      /:deep\(\.graph-toolbar\)\s*\{[^}]*display: grid;[^}]*grid-template-columns: repeat\(6, minmax\(0, 1fr\)\);[^}]*grid-template-rows: 44px 16px;[^}]*gap: 4px 2px/,
+    );
+    expect(mobile).toMatch(
+      /:deep\(\.graph-view-switch\)\s*\{[^}]*grid-column: 1 \/ span 2;[^}]*grid-row: 1/,
+    );
+    expect(mobile).toMatch(
+      /:deep\(\.graph-toolbar > \.icon-button\)\s*\{[^}]*grid-row: 1/,
+    );
+    expect(mobile).toMatch(
+      /:deep\(\.graph-toolbar__count\)\s*\{[^}]*grid-column: 1 \/ -1;[^}]*grid-row: 2/,
+    );
+    expect(mobile).toMatch(
+      /:deep\(\.graph-toolbar__separator\)\s*\{[^}]*display: none/,
+    );
+    const globalStyle = readFileSync(
+      new URL("../app/styles/base.css", import.meta.url),
+      "utf8",
+    );
+    expect(globalStyle).toMatch(
+      /@media \(max-width: 900px\)[\s\S]*?\.icon-button,[^}]*width: 44px;[^}]*min-width: 44px;[^}]*height: 44px;[^}]*min-height: 44px/,
+    );
+    const canvas = readFileSync(
+      new URL("../features/runs/RunGraphCanvas.vue", import.meta.url),
+      "utf8",
+    );
+    expect(canvas).toMatch(/\.graph-toolbar\s*\{[^}]*border: 1px solid/);
+    expect(canvas).toMatch(
+      /@media \(max-width: 760px\)[\s\S]*?\.graph-toolbar\s*\{[^}]*padding: 4px/,
+    );
+    const toolbarHeight = 44 + 16 + 4 + 2 * 4 + 2;
+    expect(56 + toolbarHeight + 6).toBe(136);
+    for (const viewport of [320, 390]) {
+      const cellWidth = (viewport - 16 - 2 - 8 - 5 * 2) / 6;
+      expect(cellWidth).toBeGreaterThanOrEqual(44);
+      expect(cellWidth * 2 + 2).toBeGreaterThanOrEqual(2 * 44 + 5);
+    }
+    expect(mobile).toMatch(
+      /\.run-workspace-toolbar,[\s\S]*?\.run-workspace--activity \.run-workspace-toolbar\s*\{[^}]*top: 8px;[^}]*left: 8px;[^}]*transform: none/,
+    );
+    expect(source).toMatch(
+      /@media \(min-width: 761px\)[\s\S]*?\.run-workspace--activity \.run-workspace-toolbar\s*\{\s*top: 70px/,
+    );
+  });
+
+  function transcriptReader() {
+    const source = readFileSync(
+      new URL("./RunPage.vue", import.meta.url),
+      "utf8",
+    );
+    const body = source.slice(
+      source.indexOf("let transcriptScope:"),
+      source.indexOf("const gateDialogOpen"),
+    );
+    const owner = new AbortController();
+    const pending: Array<{
+      resolve: () => void;
+      signal: AbortSignal;
+      ref: string;
+    }> = [];
+    const history: Record<string, number> = {};
+    const run = {
+      value: {
+        ref: "run_fixture",
+        rootRunRef: "run_fixture",
+        projectRef: "project_fixture",
+      },
+    };
+    const routeProjectRef = { value: undefined as string | undefined };
+    const graph = { value: { runRef: "run_fixture", sequence: 13 } };
+    const activityOpen = { value: false };
+    const nodeDetailsOpen = { value: false };
+    const transcriptReadProblem = { value: undefined as unknown };
+    const loadRunTranscript = vi.fn(
+      (ref: string, signal: AbortSignal) =>
+        new Promise<void>((resolve) => pending.push({ ref, signal, resolve })),
+    );
+    const platform = {
+      bootstrap: { organizationRef: "org_fixture" },
+      runTranscriptSequence: (ref: string) => history[ref] ?? 0,
+      loadRunTranscript,
+    };
+    const output = transpileModule(
+      body + "\n({refreshTranscriptHistory, closeTranscriptRead});",
+      {},
+    ).outputText;
+    const api = runInNewContext(output, {
+      run,
+      routeProjectRef,
+      graph,
+      platform,
+      activityOpen,
+      nodeDetailsOpen,
+      transcriptReadProblem,
+      ownerRequestSignal: () => owner.signal,
+      AbortController,
+      AbortSignal,
+      asProblem,
+    }) as { refreshTranscriptHistory(): void; closeTranscriptRead(): void };
+    return {
+      api,
+      run,
+      routeProjectRef,
+      graph,
+      platform,
+      history,
+      activityOpen,
+      nodeDetailsOpen,
+      owner,
+      pending,
+      loadRunTranscript,
+      transcriptReadProblem,
+      source,
+    };
+  }
+
+  it("открытый modal догружает пропущенную историю после readiness snapshot, без повторного graph read", async () => {
+    const state = transcriptReader();
+    state.api.refreshTranscriptHistory();
+    expect(state.loadRunTranscript).not.toHaveBeenCalled();
+    state.history.run_fixture = 2;
+    state.nodeDetailsOpen.value = true;
+    state.api.refreshTranscriptHistory();
+    expect(state.loadRunTranscript).toHaveBeenCalledTimes(1);
+    expect(state.pending[0]?.ref).toBe("run_fixture");
+    state.history.run_fixture = 13;
+    state.pending[0]?.resolve();
+    await vi.waitFor(() => state.api.refreshTranscriptHistory());
+    expect(state.loadRunTranscript).toHaveBeenCalledTimes(1);
+    expect(state.source).toContain(':history-problem="transcriptProblem"');
+    expect(state.source).toContain("closeTranscriptRead();");
+  });
+
+  it("объединяет graph cursor изменения в один inflight и дочитывает последний cursor", async () => {
+    const state = transcriptReader();
+    state.activityOpen.value = true;
+    state.api.refreshTranscriptHistory();
+    state.graph.value.sequence = 14;
+    state.api.refreshTranscriptHistory();
+    state.graph.value.sequence = 15;
+    state.api.refreshTranscriptHistory();
+    expect(state.loadRunTranscript).toHaveBeenCalledTimes(1);
+    state.history.run_fixture = 13;
+    state.pending[0]?.resolve();
+    await vi.waitFor(() =>
+      expect(state.loadRunTranscript).toHaveBeenCalledTimes(2),
+    );
+    state.history.run_fixture = 15;
+    state.pending[1]?.resolve();
+    await vi.waitFor(() => state.api.refreshTranscriptHistory());
+    expect(state.loadRunTranscript).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["close", "route", "project", "owner"] as const)(
+    "отменяет собственный read при %s и не применяет old completion",
+    async (change) => {
+      const state = transcriptReader();
+      state.activityOpen.value = true;
+      state.api.refreshTranscriptHistory();
+      if (change === "close") state.activityOpen.value = false;
+      else if (change === "route") {
+        state.run.value = {
+          ref: "run_newfixture",
+          rootRunRef: "run_newfixture",
+          projectRef: "project_fixture",
+        };
+        state.graph.value = { runRef: "run_newfixture", sequence: 0 };
+      } else if (change === "project")
+        state.routeProjectRef.value = "project_foreign";
+      else state.owner.abort();
+      state.api.refreshTranscriptHistory();
+      expect(state.pending[0]?.signal.aborted).toBe(true);
+      state.pending[0]?.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      state.api.refreshTranscriptHistory();
+      expect(state.loadRunTranscript).toHaveBeenCalledTimes(1);
+      state.api.closeTranscriptRead();
+    },
+  );
+
+  it("ошибка history не создаёт repeat loop; covered/foreign/malformed snapshots не читаются", async () => {
+    const state = transcriptReader();
+    state.activityOpen.value = true;
+    state.loadRunTranscript.mockRejectedValueOnce(
+      new Error("Synthetic history unavailable"),
+    );
+    state.api.refreshTranscriptHistory();
+    await vi.waitFor(() =>
+      expect(state.transcriptReadProblem.value).toBeDefined(),
+    );
+    for (let i = 0; i < 3; i++) state.api.refreshTranscriptHistory();
+    expect(state.loadRunTranscript).toHaveBeenCalledTimes(1);
+    state.api.closeTranscriptRead();
+    state.history.run_fixture = 13;
+    state.api.refreshTranscriptHistory();
+    expect(state.loadRunTranscript).toHaveBeenCalledTimes(1);
+    state.history.run_fixture = 0;
+    state.graph.value.runRef = "run_foreignfixture";
+    state.api.refreshTranscriptHistory();
+    state.graph.value = { runRef: "run_fixture", sequence: -1 };
+    state.api.refreshTranscriptHistory();
+    expect(state.loadRunTranscript).toHaveBeenCalledTimes(1);
+  });
+
   it.each(["ERROR", "PURGED", "late ERROR"] as const)(
     "не продолжает сессию при %s и сохраняет ввод после async подготовки",
     async (state) => {

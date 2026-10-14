@@ -74,8 +74,15 @@ export function createScopedRuntimeImageCatalog(
     const detail = await reader.read(scope, recipeRef, signal);
     signal.throwIfAborted();
     assertRuntimeResourceIdentity(scope, detail.recipe, organizationRef);
-    if (detail.recipe.ref !== recipeRef || !detail.activeArtifact)
+    if (detail.recipe.ref !== recipeRef)
       throw new Error("Runtime image catalog artifact identity is invalid");
+    if (!detail.activeArtifact)
+      throw new AppProblem({
+        status: 409,
+        code: "IMAGE_ARTIFACT_NOT_CURRENT",
+        retryable: false,
+        kind: "conflict",
+      });
     assertRuntimeResourceIdentity(
       scope,
       detail.activeArtifact,
@@ -87,12 +94,18 @@ export function createScopedRuntimeImageCatalog(
       recipeGeneration: detail.activeArtifact.recipeGeneration,
     };
     assertPromotedRuntimeImageIdentity(detail.activeArtifact, expected);
+    if (detail.recipe.state !== "ACTIVE")
+      throw new Error("Runtime image catalog artifact is not active");
     if (
-      detail.recipe.state !== "ACTIVE" ||
       !detail.recipe.promotedImageReady ||
       detail.recipe.activeImageArtifactRef !== artifactRef
     )
-      throw new Error("Runtime image catalog artifact is not active");
+      throw new AppProblem({
+        status: 409,
+        code: "IMAGE_ARTIFACT_NOT_CURRENT",
+        retryable: false,
+        kind: "conflict",
+      });
     const inventory = detail.activeArtifact.verifiedToolInventory;
     if (
       inventory.status === "UNAVAILABLE" &&
@@ -133,6 +146,7 @@ export function createScopedRuntimeImageCatalog(
             recipe.activeImageArtifactRef &&
             (!needle ||
               recipe.name.toLocaleLowerCase().includes(needle) ||
+              recipe.ref.toLocaleLowerCase().includes(needle) ||
               recipe.promotedImageReference
                 ?.toLocaleLowerCase()
                 .includes(needle)),

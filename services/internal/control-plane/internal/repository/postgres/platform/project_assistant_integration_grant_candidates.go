@@ -71,6 +71,30 @@ func (repository *Repository) projectAssistantIntegrationGrantCandidatesTx(ctx c
 	if err != nil {
 		return result, err
 	}
+	configuration := map[string]string{}
+	if definition.Metadata.Key == "github" {
+		configuration, _, _, err = integrationCandidateScope(ctx, tx, current, integrationCandidateRow{ConnectionRef: connectionRef, RecipientKind: "AGENT", RecipientRef: target.ref})
+		if err != nil {
+			return result, err
+		}
+	}
+	publicScopes := map[string]map[string]string{}
+	publicDigests := map[string]string{}
+	scopeCommitment := ""
+	for _, capability := range definition.Spec.Capabilities {
+		if !capability.CallableByAgent() {
+			continue
+		}
+		values, digest, err := projectAssistantPublicResourceScope(definition, capability, configuration)
+		if err != nil {
+			return result, err
+		}
+		publicScopes[capability.Key], publicDigests[capability.Key] = values, digest
+		if scopeCommitment != "" && digest != scopeCommitment {
+			return result, errs.ErrUnavailable
+		}
+		scopeCommitment = digest
+	}
 	grants := map[string]entity.SystemAssistantIntegrationGrantCandidate{}
 	rows, err := tx.Query(ctx, querySystemAssistantIntegrationGrantsCurrent, current.organizationID, connectionRef, target.ref)
 	if err != nil {
@@ -90,9 +114,9 @@ func (repository *Repository) projectAssistantIntegrationGrantCandidatesTx(ctx c
 		return result, errs.ErrUnavailable
 	}
 	encoded, _ := json.Marshal(struct {
-		Tenant, Actor, Connection, Assistant, Definition, Search, Project, Profile string
-		ConnectionVersion, AssistantVersion, ProfileVersion                        int64
-	}{current.organizationID, current.actorID, connectionRef, target.ref, result.DefinitionDigest, search, target.projectRef, target.profileRef, result.ConnectionVersion, target.version, target.profileVersion})
+		Tenant, Actor, Connection, Assistant, Definition, Search, Project, Profile, PublicScope string
+		ConnectionVersion, AssistantVersion, ProfileVersion                                     int64
+	}{current.organizationID, current.actorID, connectionRef, target.ref, result.DefinitionDigest, search, target.projectRef, target.profileRef, scopeCommitment, result.ConnectionVersion, target.version, target.profileVersion})
 	digest := sha256.Sum256(encoded)
 	contextDigest := hex.EncodeToString(digest[:])
 	after := ""
@@ -112,6 +136,7 @@ func (repository *Repository) projectAssistantIntegrationGrantCandidatesTx(ctx c
 			continue
 		}
 		item := grants[capability.Key]
+		item.ResourceScope, item.ResourceScopeDigest = publicScopes[capability.Key], publicDigests[capability.Key]
 		item.CurrentApprovalScopePaths = append([]string{}, item.CurrentApprovalScopePaths...)
 		item.Grantable = executable && connectionReady && target.ready
 		item.Reason = "READY"

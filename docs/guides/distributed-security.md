@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.15
-updated: 2026-10-08
+version: 1.7.22
+updated: 2026-10-14
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -132,6 +132,15 @@ Local renderer дополнительно закрепляет read-only source 
 и не должны читаться application Pod через source mount. Профиль переносим
 между средами; сейчас разрешена только локальная активация. Staging и production
 требуют отдельных разрешений владельца.
+
+Генератор target-owned trusted-реестра явно отличает bindings защищённого
+профиля от двух READ-only методов `image-admission-controller`: проверки
+доступности supply work и чтения recovery terminal. Эта пара имеет собственные
+полные `trusted_binding` и digest в classification; её старый protected
+producer не восстанавливается ради генерации. Caller, method, permission,
+actor и отсутствие project override проверяются по закрытому набору. Из этой
+пары нельзя вывести новый метод, WRITE, человеческие полномочия либо protected
+authority; unknown поле и изменение любого binding закрыто отклоняются.
 
 Для реализации проверены Context7 `/kubernetes/website` (NetworkPolicy,
 securityContext), `/grpc/grpc-go` (transport credentials, metadata/interceptors),
@@ -314,6 +323,14 @@ policy. Общий session proof без привязки содержимого 
 Повторный initial request, неверный дайджест, отсутствие mTLS или replay
 закрыто отклоняются. Срок stream ограничен deadline и не продлевает grant.
 
+При добавлении streaming RPC его exact full method и stream shape согласованно
+включаются в реестр authority, client adapter, server allowlist и применимый
+рабочий readiness path. Проверка проходит через фактические stream interceptors
+и generated request/response, а не только handler stub; она сохраняет actor,
+credential, привязку запроса и отзыв до следующего chunk. Неизвестный метод или
+неверная форма stream закрыто отклоняются до обращения к owner. Unary metadata
+readiness либо успешный старый content path не доказывают новый stream path.
+
 Передача большого файла ограничивает размер отдельного chunk и общий размер,
 проверяет размер и checksum полного источника, затем повторяет текущую owner
 eligibility перед terminal receipt. Consumer держит partial bytes в ограниченном
@@ -321,6 +338,17 @@ eligibility перед terminal receipt. Consumer держит partial bytes в 
 Ошибка, отмена, отзыв или повреждение удаляют этот файл; содержимое, временные
 пути и удостоверения не попадают в диагностику. Разрешённый размер файла не
 обеспечивается увеличением общего unary buffer до размера всего файла.
+
+В object-storage adapter один immutable `Put` не повторяется скрыто внутри
+SDK при HTTP-ошибке или обрыве после передачи тела: неизвестный исход принадлежит
+owner intent/receipt lifecycle, а не автоматическому повтору записи. Retry
+`Head`/`Get`/`Delete` имеет отдельный контракт и не меняется вместе с `Put`.
+Bounded body для подписанного S3 payload сохраняет требуемый SDK `io.Seeker`:
+ограничивающая reader-обёртка не должна терять `Seek`. Для небольшого уже
+inspected body допустим ограниченный in-memory snapshot с повторной проверкой
+size/digest; он не попадает в PostgreSQL, audit, outbox или prompt. Проверка
+охватывает реальный SDK HTTP path, exact receipt и неизвестный исход, а не
+только in-memory adapter, который не выполняет payload signing.
 
 Постраничное native-чтение текста сохраняет тот же полный verified source:
 каждая страница выдаётся только после проверки всего размера, SHA256,
@@ -686,6 +714,18 @@ invalid signature, прежний signer и запрещённый destination �
 Ответ не отражает credential/request values, не имеет body и использует прежний
 write deadline и cancel/join. Static и другие listeners не получают anonymous
 fallback; header/body/credential bytes не записываются в диагностику.
+
+В HTTPS WebAccess scope определяется подписанными host/protocol/port/method,
+а не представлением path. Корректный percent-escaped path не должен закрыто
+отклоняться только из-за непустого `RawPath`: package managers используют
+encoded slash для scoped packages. Шлюз проверяет exact decoded/escaped
+соответствие, UTF-8, отсутствие управляющих символов, backslash, dot segments,
+вложенных escapes и URL confusion, затем сохраняет исходные path/query при
+TLS пересылке без второго decode. Это не исключение из grant, DNS/IP, SNI/CA,
+method или redirect policy. Provider-only grant и WebSocket routes не получают
+encoded-path fallback; отдельный WebAccess проверяется по собственному scope.
+Отрицательные signed-wire проверки
+доказывают отказ до DNS/dial; локальный тест не заменяет actual proxy download.
 
 Закрытый реестр provider transport проверяется по закреплённой версии SDK:
 штатный standalone search Codex0.160 использует только POST
@@ -1583,8 +1623,14 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   credential-free GitHub origin (с `.git` либо без), runtime file access и
   существующие readonly mounts CP/gateway/PWA. Ignored owner-private `.env`
   допускается только по metadata, без чтения, загрузки, переноса или нового
-  mount. Общий protected source inspector не ослабляется. Dockerfile-specific
-  context задаётся deny-all allowlist фактических COPY-входов с последними
+  mount. Общий protected source inspector не допускает secret-bearing env.
+  Единственный структурный env mountpoint нового clean clone — пустой ignored
+  untracked `.env`: regular single-link файл текущего владельца с exact `0600`.
+  Его отсутствие устраняет exclusive anchored create без чтения либо перезаписи
+  existing owner file. Непустой файл, symlink, hardlink, другой владелец/режим или
+  private env другого имени закрыто отклоняется protected inspector; публичные
+  tracked examples не являются runtime input. ConfigMap mask остаётся обязательной.
+  Dockerfile-specific context задаётся deny-all allowlist фактических COPY-входов с последними
   private exclusions; ignore-файл входит в input digest/cache key. Closed COPY
   сам по себе не доказывает исключение private files из передаваемого context.
 - Read-only availability включает не только claimable admission, но и
@@ -1696,6 +1742,54 @@ grants и внешних effects. Неизвестное состояние, н�
 pins закрыто останавливают обслуживание; history/receipts не удаляются для
 получения искусственного idle.
 
+Счётчик ожидающих публикаций образов отличает исторический snapshot от
+достижимой работы только по строгому read-only доказательству владельца.
+Исключается лишь `PENDING` без запроса публикации (включая обратную ссылку),
+promoted reference и любых следов claim/fence/authorization, с полным допустимым
+заключением и точным завершённым build того же organization/project/scope.
+Текущий активный рецепт должен иметь строго большие **обе** монотонные величины:
+version и generation. Штатные request/claim требуют их точного равенства
+artifact; назад они не переводятся. Число таких superseded snapshots выводится
+отдельно; сами artifacts, receipts и promoted pins не меняются. Неизвестные,
+неполные, текущие, requested, `CLAIMED` и `AUTHORIZED` состояния по-прежнему
+блокируют обслуживание. Несовпадение одного pin или отсутствие Pod этого
+исключения не доказывает и не выдаёт права повторить либо отменить публикацию.
+
+Начальное `promotion_state=PENDING` само по себе не является живой публикацией:
+admission `PENDING|CLAIMED` учитывается отдельным счётчиком, а известные terminal
+`REJECTED|FAILED` без запроса и активных claim/authorization не имеют promotion
+effect. Любой активный effect, неизвестное состояние или незавершённый request
+продолжает блокировать переход policy. Readback не меняет eligibility или историю.
+
+Публичный адрес runner выводится только из выбранной immutable policy:
+`pullRegistryHost`, согласованного `promotedPullRepository`, поколения pull
+identity и exact base digest. Значение host конкретной установки не зашивается
+в guard и не берётся из произвольного caller alias. Исправление ошибочного
+nodeReadbackImage выполняется новой ревизией policy даже при прежнем digest;
+catalog, TLS, identities, инструменты и остальные security pins сохраняются.
+Registry publication, cache import, свежий node HTTPS graph и CRI pull являются
+разными доказательствами; одно нельзя объявлять другим или running ELF proof.
+
+Переход default runner сохраняет фактическую strategy в exact full-spec CAS.
+Обычный staging требует прежний `RollingUpdate/maxUnavailable=0`; только exact
+trusted hot-reload со staging labels на Deployment, hot/trusted template labels,
+одной полностью здоровой репликой и strategy ровно `{type:Recreate}` допускает
+штатный `Recreate`. Unknown keys, другой security profile и нездоровый rollout
+не получают исключения. Native omitempty в миграции нормализует лишь отсутствующий
+и пустой массив volumeMounts; непустые mounts и остальные security fields
+должны совпасть. Успешный goose log без полного exact readback не является PASS.
+
+Системная постановка проверки готовности managed MCP не выдаёт полномочия
+исполнения: RuntimeRevision, lease и Pod grant требуют настоящего exact fresh
+gateway receipt. Startup может поставить прежнюю maintenance `DUE` лишь для
+stale latest `SUCCEEDED` с неизменившимися semantic pins, текущей actual effective
+парой READ/NONE и без любого active probe. Materialization кандидата полностью
+откатывается, а единственный queue effect фиксируется owner-транзакцией вместе
+с audit и receipt. Restart/retry не сбрасывает createdAt и бюджет существующего
+цикла; cold, failed, changed и revoked состояния закрыто отклоняются. Probe
+исполняет только зарегистрированный integration-gateway; root cancel не
+воскрешает Run, connection disable/delete/revoke сохраняют прежние guards.
+
 Terminal проверяется по полному закрытому набору каждого вида: для Run это
 `SUCCEEDED|FAILED|CANCELLED`, для RunNode также `SKIPPED`; `QUEUED`, `PLANNED`,
 `RUNNING`, состояния ожидания и `CANCELLING` не являются terminal. У Job отдельно
@@ -1756,6 +1850,22 @@ gate — `make test-runtime-admission-gate`, предел процесса 60 с
 
 ## Полнота deployable
 
+Объявленный том runtime-окружения материализуется также в filesystem profile
+провайдера по exact canonical mount path и закреплённому volumes digest.
+`workspace-write` разрешает запись только в эти отдельные тома; `read-only`
+не получает запись. Не разрешаются родитель `.kodex/volumes`, необъявленные
+соседи, provider state, INPUT или произвольный caller path. Кэш и scratch
+для repository tooling настраиваются в отдельном bounded томе окружения,
+а не исключаются из canary либо квоты рабочего checkout. Новый том и его
+ресурсный бюджет требуют обычной validation/publication и свежей RuntimeRevision.
+
+Если общий workspace initializer запускает ту же canary объявленных томов,
+он получает ровно те же exact bounded mounts, что driver и executor. Admission
+требует их присутствия, равенства имён/путей, отсутствия subPath/propagation и
+не разрешает их preparer либо credential relay. Инициализация не получает новых
+Secret, RBAC, hostPath или источников authority; canary не пропускается ради
+прохождения startup. Mount contract проверяется также до запуска провайдера.
+
 Outbox текущего execution публикует фактический provider writer после штатного
 stop/join app-server и до terminal handoff. UID10002 через nofollow directory/file
 descriptors проверяет provider-owned regular inode, единственную hard link,
@@ -1765,6 +1875,21 @@ Runner UID10001 не получает CAP_CHOWN, приватный provider hom
 другого execution; symlink, foreign owner, специальные файлы и превышение
 границ закрывают completion с безопасным `RUNTIME_ARTIFACT_INVALID`.
 Публикация согласуется с workspace canary/cleanup через прежний directory lock.
+
+Та же writer boundary после stop/join делает только provider-owned рабочие
+каталоги `/workspace/work` доступными группе29000 для metadata/quota обхода
+runner: добавляет group read/traverse через проверенный directory descriptor,
+не открывая тела regular files и не меняя их mode. Корень остаётся
+runnerUID10001/group29000/mode2770; runner-owned INPUT каталоги принимаются
+только с уже существующим shared traversal и не изменяются. UID10002 не
+передаёт runner приватный provider home, а runner не получает CAP_CHOWN.
+Операция ограничена временем, числом записей и байтами; nofollow/beneath/
+no-mount-crossing, identity rejoin, foreign-owner/type/link и resource guards
+сохраняются. Ошибка закрывает completion с прежним безопасным кодом,
+сохраняя измеренный Usage и проверенный rollout receipt. Это не исключение
+рабочего дерева из canary или квоты: новый runnable checkout и scratch
+по-прежнему проверяются. Во время исполнения private directory может временно
+закрыть readiness; post-join нормализация не доказывает исправление этой фазы.
 
 Восстановленный native history принадлежит фактическому writer/capture UID,
 а не UID контейнера, передающего запрос. В текущем Pod ABI Codex app-server
@@ -1852,6 +1977,32 @@ rejoin или retry не переводят диалог на другой пр�
 grants. Подмена enum/profile ref меняет digest и закрыто отклоняется.
 Неизвестная область и старый runtime input не имеют decoder fallback:
 переход на новый ABI требует новой server-owned revision и exact admission.
+
+Безопасное чтение runtime metadata другого сотрудника разрешается по exact
+locator, полученному из authoritative eligible поиска, а не по открытому экрану.
+Owner заново выводит USER/tenant и область помощника из действующей lease,
+проверяет `agent.view` и inherited project boundary в одном snapshot. READ
+возвращает только versioned model/resource/binding/image metadata, без ENV
+values, Secret, команд инструментов, инструкций или новых grants. PROJECT
+не выходит из своего проекта; SYSTEM не обходит eligibility root USER.
+Полные instructions и подтверждаемые изменения сохраняют отдельный current
+server-owned context/OCC gate; metadata read не расширяет их authority.
+
+Тот же принцип применяется к published Workflow metadata: owner повторяет
+публичный eligibility resolver и `workflow.view`, а PROJECT остаётся в exact
+source project. Отдельный закрытый read kind выдаёт только publication pins,
+порядок/зависимости этапов и human gates. Draft, инструкции, input defaults,
+ResultSchema и grants в эту проекцию не входят; full configuration и UPDATE
+сохраняют прежний context gate. Исторические планы/файлы не заменяют текущую
+publication; metadata текущего процесса не подменяет immutable revision run.
+
+Owner-generated continuation notice и обычный `USER` имеют разные закрытые
+бюджеты. Исключение до 64KiB допустимо только для последнего полного
+current-bound semantic notice: CP до seal, RC и runner используют один строгий
+predicate, обычный `USER` сохраняет предел 32768 Unicode codepoints. Notice
+не выдаёт authority и не переписывает историю; malformed, stale и oversize
+закрываются до provider effect. Доставка нового predicate требует нового
+неизменяемого runner, а не только hot reload производителя или контроллера.
 
 ## Доказательство результата
 
@@ -2031,3 +2182,20 @@ backup не должен воскрешать отозванные сессии.
 Background fetch не следует auth redirect на чужой origin: redirect hint
 приводит к обычному authoritative session read и bounded re-auth lifecycle,
 а не становится самостоятельно выданным 401 либо основанием для refresh loop.
+
+## GitHub CLI и Git credentials в runtime
+
+Токен, назначенный существующим разрешённым binding, не становится
+автоматически credential обычного Git. HTTPS credential helper ограничивается
+точным host и конкретной уже разрешённой операцией; секрет остаётся в среде
+и credential pipe, а не в argv, URL, Git-конфигурации, логе или артефакте.
+Прямой вывод helper, persistent store, host/global configuration и неявные
+login/refresh/rotation запрещены. Такой helper не выдаёт repository permission
+или сетевой доступ и не разрешает повтор denied/unknown эффекта.
+
+Git endpoint и GitHub API являются разными точными destinations. `gh auth
+status` делает дополнительные API-чтения и не заменяет результат разрешённой
+Git-операции с независимым readback. Его отказ не доказывает невалидность токена.
+Недостающий API destination добавляется только штатной owner-публикацией новой
+ENV revision с validation, полным impact, exact intended bindings и preservation
+proof остальных параметров; агент сам не расширяет policy ради обхода отказа.

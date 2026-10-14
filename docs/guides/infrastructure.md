@@ -111,6 +111,13 @@ artifact storage: это самостоятельные deployable units #1002 �
 - controller/worker не начинает внешние действия до startup barrier;
 - alert содержит абсолютный HTTPS `runbook_url`.
 
+Guard постоянного filesystem закрепляет UUID, тип, mountpoint и inode
+каталога; номер устройства `st_dev`/`MAJ:MIN` сравнивается с текущим mount,
+но не используется как постоянная идентичность между перезагрузками.
+Обновление установленного guard выполняется forward-only из опубликованного
+кода с durable pending hash и закрытым отказом при прерывании. Bind mount
+и фактический container path независимо сверяются с текущим device/inode.
+
 ## Версии
 
 CLI/binary/chart pins и SHA-256 хранятся в `tools/install/components.lock.json`,

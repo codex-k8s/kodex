@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type runtimeWorkClientStub struct {
@@ -27,13 +28,48 @@ type runtimeWorkClientStub struct {
 	renew    func() error
 }
 
-func (client *runtimeWorkClientStub) RenewExecution(context.Context, *controlplanev1.RenewExecutionRequest, ...grpc.CallOption) (*controlplanev1.RenewExecutionResponse, error) {
+type claimBatchClient struct {
+	controlplanev1.RuntimeWorkServiceClient
+	limit int32
+}
+
+func (client *claimBatchClient) ClaimExecution(_ context.Context, request *controlplanev1.ClaimExecutionRequest, _ ...grpc.CallOption) (*controlplanev1.ClaimExecutionResponse, error) {
+	client.limit = request.Limit
+	return &controlplanev1.ClaimExecutionResponse{}, nil
+}
+
+func TestClaimSeparatesCatalogTransactionsWithoutSerializingTrackers(t *testing.T) {
+	for _, occupied := range []int{0, 1, 9, 15, 16} {
+		client := &claimBatchClient{}
+		runtime := &runtime{control: client, capacity: make(chan struct{}, 16), config: Config{RequestTimeout: time.Second}}
+		for range occupied {
+			runtime.capacity <- struct{}{}
+		}
+		if _, err := runtime.claim(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		want := int32(1)
+		if occupied == 16 {
+			want = 0
+		}
+		if client.limit != want || len(runtime.capacity) != occupied || cap(runtime.capacity) != 16 {
+			t.Fatal("claim batch must be bounded independently of parallel tracker capacity")
+		}
+	}
+}
+
+func (client *runtimeWorkClientStub) RenewExecution(_ context.Context, request *controlplanev1.RenewExecutionRequest, _ ...grpc.CallOption) (*controlplanev1.RenewExecutionResponse, error) {
 	if client.renew != nil {
 		if err := client.renew(); err != nil {
 			return nil, err
 		}
 	}
-	return &controlplanev1.RenewExecutionResponse{}, nil
+	return renewalTestResponse(request, time.Now().Add(time.Minute)), nil
+}
+
+func renewalTestResponse(request *controlplanev1.RenewExecutionRequest, expiry time.Time) *controlplanev1.RenewExecutionResponse {
+	return &controlplanev1.RenewExecutionResponse{Lease: &controlplanev1.WorkLease{Ref: request.LeaseRef, Fence: request.Fence,
+		Generation: request.Generation, ExpiresAt: timestamppb.New(expiry)}}
 }
 
 func (client *runtimeWorkClientStub) ReportExecutionProgress(context.Context, *controlplanev1.ReportExecutionProgressRequest, ...grpc.CallOption) (*controlplanev1.ReportExecutionProgressResponse, error) {
@@ -86,7 +122,7 @@ func TestTrackShutdownWaitsForReceiptWithoutDeletingCallbackMaterial(t *testing.
 	runtime.terminalGrace = time.Second
 	ctx, cancel := context.WithCancel(t.Context())
 	finished := make(chan struct{})
-	go func() { runtime.track(ctx, input, done, false); close(finished) }()
+	go func() { runtime.track(ctx, input, done, false, time.Time{}); close(finished) }()
 	cancel()
 	<-turns.stopped
 	if turns.deletions.Load() != 0 || client.count() != 0 {
@@ -114,7 +150,7 @@ func TestTrackDrainHonorsOwnerRenewalDenial(t *testing.T) {
 	runtime.config.LeaseRenewInterval = time.Millisecond
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	runtime.track(ctx, input, done, false)
+	runtime.track(ctx, input, done, false, time.Time{})
 	if turns.deletions.Load() != 1 || client.count() != 0 {
 		t.Fatal("revoked lease was extended or completed with fabricated result")
 	}
@@ -128,7 +164,7 @@ func TestDrainDoesNotStopAlreadyCompletedWarmTurn(t *testing.T) {
 	turns := &turnLifecycleStub{}
 	client := &runtimeWorkClientStub{}
 	runtime := trackingRuntime(client, turns, coordinator)
-	runtime.drainTurn(t.Context(), input, done)
+	runtime.drainTurn(t.Context(), input, done, time.Time{})
 	if turns.stops.Load() != 0 || turns.deletions.Load() != 0 || client.count() != 0 {
 		t.Fatal("completed warm turn was stopped by shutdown fallback")
 	}
@@ -161,7 +197,7 @@ func TestTrackAcceptsCallbackDuringTerminalGrace(t *testing.T) {
 		<-turns.observed
 		coordinator.Complete(input.LeaseRef)
 	}()
-	runtime.track(t.Context(), input, done, false)
+	runtime.track(t.Context(), input, done, false, time.Time{})
 
 	if client.count() != 0 {
 		t.Fatalf("failure completion count = %d, want 0", client.count())
@@ -187,7 +223,7 @@ func TestTrackRetriesFailureCompletionBeforeCleanup(t *testing.T) {
 	turns := &turnLifecycleStub{observation: workload.TurnPodObservation{State: "FAILED", DiagnosticCode: "ROLE_RUNTIME_EXITED_NONZERO"}}
 	runtime := trackingRuntime(client, turns, coordinator)
 
-	runtime.track(t.Context(), input, done, false)
+	runtime.track(t.Context(), input, done, false, time.Time{})
 
 	if client.count() != 3 {
 		t.Fatalf("failure completion count = %d, want 3", client.count())
@@ -204,6 +240,64 @@ func TestTrackRetriesFailureCompletionBeforeCleanup(t *testing.T) {
 			request.GetGeneration() != first.GetGeneration() {
 			t.Fatalf("failure retry changed the immutable request: first=%#v retry=%#v", first, request)
 		}
+	}
+}
+
+func TestTrackMemoryFailurePreservesOwnerCompletionAndCleanup(t *testing.T) {
+	input := runtimeTrackingInput()
+	coordinator := callback.NewCoordinator()
+	done := coordinator.Register(input)
+	client := &runtimeWorkClientStub{}
+	turns := &turnLifecycleStub{observation: workload.TurnPodObservation{State: "FAILED", DiagnosticCode: workload.TurnPodMemoryDiagnostic}}
+	runtime := trackingRuntime(client, turns, coordinator)
+	runtime.track(t.Context(), input, done, false, time.Time{})
+	if client.count() != 1 || turns.deletions.Load() != 1 {
+		t.Fatal("memory failure changed completion cardinality or cleanup")
+	}
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	request := client.requests[0]
+	if request.GetSuccess() || request.GetSafeErrorCode() != "RUNTIME_UNAVAILABLE" || request.GetResultSummary() != "i18n:RUNTIME_MEMORY_EXHAUSTED" || request.GetLeaseRef() != input.LeaseRef || request.GetFence() != input.LeaseFence || request.GetGeneration() != input.LeaseGeneration {
+		t.Fatal("memory failure lost its exact owner tuple or safe summary")
+	}
+}
+
+func TestCompleteFailureDistinguishesInvalidInputFromUnsupportedProfile(t *testing.T) {
+	tests := []struct {
+		code, safeCode, summary string
+	}{
+		{"RUNTIME_REVISION_INVALID", "RUNTIME_INPUT_INVALID", "i18n:RUNTIME_INPUT_INVALID"},
+		{"RUNTIME_CONFIGURATION_STALE", "RUNTIME_PROFILE_UNSUPPORTED", "i18n:RUNTIME_CONFIGURATION_STALE"},
+		{"UNKNOWN_PRIVATE_DIAGNOSTIC", "RUNTIME_UNAVAILABLE", "i18n:UNKNOWN_PRIVATE_DIAGNOSTIC"},
+	}
+	for _, test := range tests {
+		t.Run(test.code, func(t *testing.T) {
+			input := runtimeTrackingInput()
+			coordinator := callback.NewCoordinator()
+			done := coordinator.Register(input)
+			client := &runtimeWorkClientStub{}
+			turns := &turnLifecycleStub{}
+			runtime := trackingRuntime(client, turns, coordinator)
+			runtime.completeFailure(t.Context(), input, test.code, "")
+			if len(client.requests) != 1 {
+				t.Fatal("failure completion cardinality changed")
+			}
+			request := client.requests[0]
+			if request.SafeErrorCode != test.safeCode || request.ResultSummary != test.summary || request.Success {
+				t.Fatal("failure completion has an incorrect public classification")
+			}
+			if request.GetLeaseRef() != input.LeaseRef || request.GetFence() != input.LeaseFence || request.GetGeneration() != input.LeaseGeneration || request.GetMutation().GetIdempotencyKey() != stableIdempotency(input.LeaseRef, "failure:"+test.code) {
+				t.Fatal("failure completion changed its immutable binding")
+			}
+			if turns.deletions.Load() != 1 {
+				t.Fatal("failure cleanup cardinality changed")
+			}
+			select {
+			case <-done:
+			default:
+				t.Fatal("coordinator remains active after durable failure completion")
+			}
+		})
 	}
 }
 
@@ -287,7 +381,7 @@ func TestTrackPinnedWorkflowDeadlineDoesNotUseShorterFallback(t *testing.T) {
 	runtime := trackingRuntime(client, turns, coordinator)
 	runtime.config.ExecutionTimeout = time.Millisecond
 	finished := make(chan struct{})
-	go func() { runtime.track(t.Context(), input, done, false); close(finished) }()
+	go func() { runtime.track(t.Context(), input, done, false, time.Time{}); close(finished) }()
 	time.Sleep(20 * time.Millisecond)
 	coordinator.Complete(input.LeaseRef)
 	select {
@@ -308,7 +402,7 @@ func TestTrackExpiredWorkflowDeadlineClosesWithTimeoutAndJoins(t *testing.T) {
 	client := &runtimeWorkClientStub{}
 	turns := &turnLifecycleStub{}
 	runtime := trackingRuntime(client, turns, coordinator)
-	runtime.track(t.Context(), input, done, false)
+	runtime.track(t.Context(), input, done, false, time.Time{})
 	client.mu.Lock()
 	defer client.mu.Unlock()
 	if turns.stops.Load() != 1 || turns.deletions.Load() != 1 || len(client.requests) != 1 || client.requests[0].SafeErrorCode != "RUNTIME_TIMEOUT" {
@@ -324,7 +418,7 @@ func TestWorkflowDeadlineOwnerDenialClosesRevokedPodWithoutRetry(t *testing.T) {
 	client := &runtimeWorkClientStub{complete: func(int) error { return status.Error(codes.PermissionDenied, "lease revoked") }}
 	turns := &turnLifecycleStub{}
 	runtime := trackingRuntime(client, turns, coordinator)
-	runtime.track(t.Context(), input, done, false)
+	runtime.track(t.Context(), input, done, false, time.Time{})
 	if client.count() != 1 || turns.deletions.Load() != 1 || turns.stops.Load() != 2 {
 		t.Fatal("owner expiry denial retained old Pod or retried authority")
 	}
