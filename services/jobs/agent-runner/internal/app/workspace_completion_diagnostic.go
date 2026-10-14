@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"syscall"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	workspacepolicy "github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/workspace"
@@ -26,6 +28,10 @@ func logWorkspaceCompletionDenial(ctx context.Context, logger *slog.Logger, stag
 		stage = "UNKNOWN"
 	}
 	reason := workspacepolicy.DenialReason(err)
+	var artifactDenial *completionArtifactDenial
+	if errors.As(err, &artifactDenial) {
+		reason = artifactDenial.reason
+	}
 	switch reason {
 	case runtimecontract.RuntimeWorkspaceReadOnly, runtimecontract.RuntimeWorkspaceQuotaExceeded,
 		runtimecontract.RuntimeWorkspacePathOutsideWorkspace, runtimecontract.RuntimeWorkspaceIOError:
@@ -34,4 +40,27 @@ func logWorkspaceCompletionDenial(ctx context.Context, logger *slog.Logger, stag
 	}
 	logger.WarnContext(ctx, workspaceCompletionMessage,
 		workspaceCompletionStage, stage, workspaceCompletionReason, reason)
+}
+
+// Сборка артефактов сохраняет только закрытую причину своего guard. Исходная
+// ошибка не хранится: её path, тело или driver message не нужны диагностике.
+type completionArtifactDenial struct{ reason string }
+
+func (*completionArtifactDenial) Error() string { return "runtime artifact collection denied" }
+
+func denyCompletionArtifact(err error) error {
+	reason := workspacepolicy.DenialReason(err)
+	switch {
+	case errors.Is(err, syscall.EROFS), errors.Is(err, syscall.EACCES), errors.Is(err, syscall.EPERM):
+		reason = runtimecontract.RuntimeWorkspaceReadOnly
+	case errors.Is(err, syscall.ELOOP), errors.Is(err, syscall.ENOTDIR), errors.Is(err, syscall.EXDEV), errors.Is(err, syscall.EINVAL):
+		reason = runtimecontract.RuntimeWorkspacePathOutsideWorkspace
+	}
+	switch reason {
+	case runtimecontract.RuntimeWorkspaceReadOnly, runtimecontract.RuntimeWorkspaceQuotaExceeded,
+		runtimecontract.RuntimeWorkspacePathOutsideWorkspace, runtimecontract.RuntimeWorkspaceIOError:
+	default:
+		reason = runtimecontract.RuntimeWorkspaceIOError
+	}
+	return &completionArtifactDenial{reason: reason}
 }

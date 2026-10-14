@@ -358,6 +358,7 @@ func completeExecutedTurn(ctx context.Context, input model.Input, client *callba
 	}
 	artifacts, err := completionArtifacts(input, result.FinalMessage)
 	if err != nil {
+		logWorkspaceCompletionDenial(ctx, logger, workspaceCompletionPublish, err)
 		return completeExecutedFailure(ctx, input, client, result, "RUNTIME_ARTIFACT_INVALID", "i18n:RUNTIME_ARTIFACT_INVALID")
 	}
 	payload := runtimecontract.RunnerCompletionRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Attempt: input.Attempt, Success: true, ResultSummary: result.FinalMessage, Usage: result.Usage, Artifacts: artifacts, CodexSessionID: result.SessionID, ArchiveRelativePath: result.ArchiveRelativePath, ArchiveSHA256: result.ArchiveSHA256, ArchiveSizeBytes: result.ArchiveSizeBytes}
@@ -993,12 +994,12 @@ func collectArtifacts(input model.Input, markdown string) ([]runtimecontract.Run
 	artifacts := []runtimecontract.RunnerArtifact{artifact("result.md", "text/markdown", []byte(markdown))}
 	directory, err := workspacepolicy.OpenOutbox(input.WorkspaceRoot)
 	if err != nil {
-		return nil, errors.New("read runtime outbox")
+		return nil, denyCompletionArtifact(err)
 	}
 	defer directory.Close()
 	entries, err := directory.ReadDir(-1)
 	if err != nil {
-		return nil, errors.New("read runtime outbox")
+		return nil, denyCompletionArtifact(err)
 	}
 	sort.Slice(entries, func(i, j int) bool {
 		if entries[i].Name() == "workspace-write-result.json" && entries[j].Name() != entries[i].Name() {
@@ -1019,12 +1020,12 @@ func collectArtifacts(input model.Input, markdown string) ([]runtimecontract.Run
 		}
 		descriptor, err := unix.Openat(int(directory.Fd()), name, unix.O_RDONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 		if err != nil {
-			return nil, errors.New("open runtime artifact")
+			return nil, denyCompletionArtifact(err)
 		}
 		file := os.NewFile(uintptr(descriptor), "runtime-artifact")
 		if file == nil {
 			_ = unix.Close(descriptor)
-			return nil, errors.New("open runtime artifact")
+			return nil, denyCompletionArtifact(nil)
 		}
 		info, statErr := file.Stat()
 		if statErr != nil || !info.Mode().IsRegular() || info.Size() < 1 || info.Size() > 1<<20 {
@@ -1034,12 +1035,12 @@ func collectArtifacts(input model.Input, markdown string) ([]runtimecontract.Run
 		metadata, ok := info.Sys().(*syscall.Stat_t)
 		if !ok || metadata.Nlink != 1 {
 			file.Close()
-			return nil, errors.New("runtime artifact metadata is invalid")
+			return nil, denyCompletionArtifact(nil)
 		}
 		raw, readErr := io.ReadAll(io.LimitReader(file, 1<<20+1))
 		closeErr := file.Close()
 		if readErr != nil || closeErr != nil || int64(len(raw)) != info.Size() {
-			return nil, errors.New("read runtime artifact")
+			return nil, denyCompletionArtifact(errors.Join(readErr, closeErr))
 		}
 		mediaType := mime.TypeByExtension(filepath.Ext(name))
 		if mediaType == "" {
