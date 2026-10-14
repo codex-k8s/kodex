@@ -4,9 +4,25 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.40
+version: 1.0.41
 updated: 2026-10-14
 ---
+
+## 14.10.2026 21:31 UTC — actual heavy publication
+
+- Normal direct AGENT xVvh SUCCEEDED3: реальные7000 ordinary cache files
+  по4096B,6data files200000B +report6560B, Node.js стандартная библиотека.
+  Nine CLEAN owner artifact reads exact revision EOF/size/SHA/metadata rejoin
+  MATCH9/9,1207297B. Не simulation и не прежняя business1796 implementation.
+- Exact Pod59cfddd8/image5cc/runtime eec3786f/executionabc91a15 ACK observed
+  до terminal; observer89970 завершился FOLLOW_STREAM_ENDED/NOT_CAPTURED.
+  Итоговый diagnostic rejoin NOT RUN, но owner public completion/outputs PASS.
+- Desktop/mobile screenshot viewed, Console0/Network0/API200/overflowfalse,
+  MCP session200/connected. Exact Pod штатно удалён,22 Deployment Ready.
+- SOURCE/HOT/remote07b clean idle FF21:26 PASS, promoted85/pinsf822 preserved,
+  PR body readback PASS. GitHub checks/statuses/reviews0: не CI/approval PASS.
+- Historical primary UNKNOWN/NOT_REPRODUCED. Stage1/merge/main/handoff OPEN,
+  live paid/balance/units/charging UNKNOWN, full QA65 и business Review NOT RUN.
 
 ## 14.10.2026 21:25 UTC — тяжёлый kernel fixture
 

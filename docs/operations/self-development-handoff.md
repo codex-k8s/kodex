@@ -4,11 +4,49 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.40
+version: 1.1.41
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 21:31 UTC — реальная тяжёлая публикация PASS
+
+SOURCE/remote/HOT07b278bb clean MATCH после approved idle FF21:26:33,
+promoted85/pinsf822 unchanged. PR1807 body и remote exact head readback PASS;
+GitHub checks/statuses/reviews0, правила прежние, merge/ready не выполнялись.
+
+Отдельный normal platform.launch direct AGENT
+`run_xVvhlfYouMbeI_q-BHlIzVkk`, sessiondVj/turniK5/nodei1u/attempt1:
+SUCCEEDED/version3. Exact Pod runtime-turn-d0fb0eb2343c5936,
+UID59cfddd8-bd0f-462a-8108-d3d06803cc5f, image5cc, input44136fa3,
+runtime eec3786f/executionabc91a15; три containers restarts0 до terminal.
+Новый независимый technical task, не corrective USER прежнего Workflow и
+не правка системных инструкций. Никаких GitHub/repository/network effects.
+
+Actual Node.js/fs/path создал7000 ordinary cache files по4096B, полностью
+прочитал/сверил28672000B; outbox6data files по200000B и report6560B.
+Это реальные provider/filesystem/completion/publication, не synthetic fixture.
+Все9 собственных CLEAN results owner exact revision EOF/bytes/hash/rejoin
+MATCH9/9,1207297B. Общий hash шести одинаковых ASCII data outputs:
+0eaf8f0df29219fcc8c134618c4a0e35b7cefe43a7d4d6b85b79a80913f46a28.
+
+| Файл | Байты | SHA256 |
+| --- | ---: | --- |
+| result.md | 409 | 103a67c3e88599bd7a906a0661ed2f0486ff731f40329c985cb60010c12a1d11 |
+| workspace-write-result.json | 328 | d63f8ea8b3ced3e0122b81381f495fb358f11923840074cc25bdf5ea134e124e |
+| report-heavy.md | 6560 | 058f0a6cef9813ee0f03b1f6df86fd767a807d7fb19750872d673136c7594b31 |
+
+Observer89970 подключён до terminal, ACK OBSERVED exact pins; после завершения
+stream EOF/FOLLOW_STREAM_ENDED/NOT_CAPTURED. Это не failure, не итоговый
+diagnostic rejoin PASS и не доказательство устранения historical guard.
+Exact Pod удалён штатно, основные22 Deployment Ready. Chrome36 connected,
+session200/Console0; независимый обычный SSO screenshot helper desktop/mobile
+Console0/Network0/API200/overflowfalse, оба screenshot просмотрены.
+
+Current heavy publication PASS; old primary UNKNOWN/NOT_REPRODUCED и
+stage1 остаётся открытым. Финансовая business1796/native Review NOT RUN,
+Draft1809 не меняется. Merge/main/final handoff ещё не выполнены.
 
 ## Checkpoint 14.10.2026 21:25 UTC — тяжёлая оснастка без ослабления policy
 

@@ -4,7 +4,7 @@ title: Подготовка рабочего прототипа Kodex к дем�
 type: operations
 status: approved
 owner: manager
-version: 1.0.3
+version: 1.0.4
 updated: 2026-10-15
 ---
 
@@ -159,3 +159,22 @@ Applied migrations forward-only, данные и активные workloads со
   Ошибочная ручная probe /api/v1/auth/session дала404; правильный endpoint
   /api/v1/session200. Это ошибка диагностической команды, не дефект приложения.
   Merge/main/final handoff остаются отдельными открытыми этапами.
+
+# Адресный checkpoint 15.10.2026 01:31 Саратов
+
+- SOURCE/remote/HOT07b278bb clean MATCH, approved idle FF21:26:33;
+  promoted85/pinsf822 сохранены. Test-only fixture не требует нового OCI.
+- Отдельный normal AGENT run_xVvhlfYouMbeI_q-BHlIzVkk SUCCEEDED/version3:
+  фактический Node.js стандартной библиотеки создал7000 ordinary files
+  по4096B в собственном work и6data outputs по200000B плюс report-heavy.md.
+  Ни GitHub, ни сеть, ни настройки, ни прежняя бизнес-задача не изменялись.
+- Все9 собственных CLEAN artifacts прочитаны owner по exact revision до EOF;
+  size/SHA256/fresh metadata version/revision/digest MATCH9/9, всего1207297B.
+  Report6560B/SHA058f0a6c содержит фактическую команду и полное чтение файлов.
+- Actual Pod59cfddd8/image5cc/input44136fa3/runtime eec3786f/executionabc91a15
+  связан ранним ACK. Observer89970 после terminal stream EOF: NOT_CAPTURED,
+  не failure и не итоговый diagnostic rejoin PASS. Exact Pod штатно удалён.
+- Desktop/mobile screenshot просмотрены, Console0/Network0/API200,
+  overflowfalse, connected, session200. Все22 основных Deployment Ready.
+  Actual heavy publication PASS не доказывает historical primary repair;
+  stage1/merge/main/final handoff остаются открытыми, QA65 не объявлен PASS.
