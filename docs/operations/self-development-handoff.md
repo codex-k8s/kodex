@@ -4,11 +4,41 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.32
+version: 1.1.33
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 18:52 UTC — Retry12 INTAKE опубликован, Architect запущен
+
+SOURCE/remote/Draft1807 a4f9ac04ae7fd2ae3706862c578488ac394bed51 MATCH,
+HOT5d085497 clean. INTAKErun_BOu3pBBS-g2Wuj_FIVM4yPLb SUCCEEDED; семь
+собственных результатов опубликованы18:49 UTC. ROOT owner READ каждого
+exact revision до EOF: HTTP200, size/SHA256 MATCH; повтор metadata read
+подтвердил неизменные revision/digest. Это результат INTAKE, не Developer.
+
+| Файл | Байты | SHA256 |
+| --- | ---: | --- |
+| result.md | 677 | fe50b27e99163704ceaa7e53a0ef9a07fb18c5a9d305a42bb7ff4904e62a745f |
+| workspace-write-result.json | 328 | 9c063e2ef6a153bf4569240bbd9db903e300cc0a3396789af315e51e3f43aac0 |
+| business-pr-index.md | 7025 | 3f6e3f0d2e248b49447e850bb4ffbafac93f66b70997f4adb2689e89c359cf9b |
+| intake-evidence.json | 40951 | 71e83f97d55d8d10417cfd97335b17678572e967dc83f3a363cd507bf0feb174 |
+| intake-output-manifest.json | 864 | 274f186bfdeb70184e22240ef2350787aa0d1342d36e04a1e06ede88777d340a |
+| manager-plan.md | 26770 | 42748c2f48e5ba4dc594c05f757c913ad9841ac63520dc797e1e181fdd6c03a2 |
+| owner-input.json | 6180 | 282d31a53c694ed9401f8fa11376600236aab000ca80341391cd952884ebb164 |
+
+Native coordinator delegate_agent376/379 SUCCEEDED/DELEGATION_CREATED377,
+не Host USER steering. Architect run_8anc5J2TaX3yfn8feuf99Ced на
+nod_kqkOFmDYFdoIcTg56jnO9-AF RUNNING, source Manager передал exact pins.
+RootB7CP RUNNING394; Developer/ONE Reviewer/final Manager ещё PLANNED.
+INTAKE не подменяет actual Developer post-join публикацию или paid acceptance.
+
+Закрытый observer session81263 жив, пока WAITING_EXACT_DEVELOPER nodeNEk;
+не workflow blocker и не capture PASS. Чужие вкладки не менялись, own36
+Chrome/API200/SSO/realtime connected сохранены. Следующий шаг — Architect
+handoff и новый Developer с observer до terminal; primary filesystem repair,
+ONE Review/Manager/paid/QA65/bootstrap/main остаются OPEN.
 
 ## Checkpoint 14.10.2026 18:34 UTC — observer покрывает финальную canary
 

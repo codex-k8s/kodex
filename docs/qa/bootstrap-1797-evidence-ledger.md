@@ -4,9 +4,22 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.32
+version: 1.0.33
 updated: 2026-10-14
 ---
+
+## 14.10.2026 18:52 UTC — новый INTAKE EOF и native Architect delegation
+
+- Current Manager INTAKErun_BOu3pBBS-g2Wuj_FIVM4yPLb SUCCEEDED,
+  свои7 results опубликованы18:49; full owner READ каждого exact revision,
+  bytes/SHA256 и повтор version/revision rejoin MATCH, HTTP200/EOF7/7.
+  Файлы677/328/7025/40951/864/26770/6180B; exact digests в handoff checkpoint.
+- Native delegate_agent376/379 SUCCEEDED, DELEGATION_CREATED377;
+  Architectrun_8anc5J2TaX3yfn8feuf99Ced RUNNING на своём nodekqk.
+  RootB7CP394 RUNNING; Developer/ONE Reviewer/final Manager PLANNED.
+- Source/remote/PRa4f9ac04 MATCH, HOT5d clean; Host business code/USER input0.
+  Observer81263 жив/WAITING_EXACT_DEVELOPER, не capture PASS.
+  Actual Developer publication/primary fix/Review/Manager/paid/QA65/main OPEN.
 
 ## 14.10.2026 18:34 UTC — reader покрывает закрытый completion guard
 
