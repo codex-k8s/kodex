@@ -73,21 +73,29 @@ export function financialSummary(
 export function financialCredits(
   account: FinancialAccount,
   available: boolean,
+  translate?: (key: string, params?: Record<string, string>) => string,
 ): string {
   const credits = available
     ? account.financialSummary?.observation.credits
     : undefined;
-  if (!credits) return "Кредиты: недоступно";
-  if (credits.unlimited) return "Кредиты: без ограничения";
-  if (credits.balance !== undefined) return `Кредиты: ${credits.balance}`;
-  if (credits.hasCredits === undefined) return "Кредиты: недоступно";
+  if (!credits) return translate?.("creditsUnknown") ?? "Кредиты: недоступно";
+  if (credits.unlimited)
+    return translate?.("creditsUnlimited") ?? "Кредиты: без ограничения";
+  if (credits.balance !== undefined)
+    return (
+      translate?.("creditsBalance", { balance: credits.balance }) ??
+      `Кредиты: ${credits.balance}`
+    );
+  if (credits.hasCredits === undefined)
+    return translate?.("creditsUnknown") ?? "Кредиты: недоступно";
   return credits.hasCredits
-    ? "Кредиты: есть; баланс недоступен"
-    : "Кредиты: нет; баланс недоступен";
+    ? (translate?.("creditsPresent") ?? "Кредиты: есть; баланс недоступен")
+    : (translate?.("creditsAbsent") ?? "Кредиты: нет; баланс недоступен");
 }
 
 export function financialReset(
   seconds: number | undefined,
+  locale = "ru-RU",
 ): string | undefined {
   if (
     seconds === undefined ||
@@ -96,7 +104,7 @@ export function financialReset(
     seconds > 253402300799
   )
     return undefined;
-  return new Date(seconds * 1000).toLocaleString("ru-RU");
+  return new Date(seconds * 1000).toLocaleString(locale);
 }
 
 const invalidFinancialOverview = "provider financial overview is invalid";

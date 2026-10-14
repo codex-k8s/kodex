@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useProvidersStore } from "./store";
 import {
@@ -7,6 +8,7 @@ import {
   financialReset,
 } from "./financial-summary";
 
+const { t, locale } = useI18n();
 const props = defineProps<{ live: boolean }>();
 const providers = useProvidersStore();
 const now = ref(Date.now());
@@ -31,9 +33,9 @@ const summary = computed(() =>
 </script>
 
 <template>
-  <section class="provider-finance" aria-label="Лимиты аккаунтов Codex">
+  <section class="provider-finance" :aria-label="t('providers.finance.label')">
     <strong>Codex</strong>
-    <span v-if="!summary.total">Лимиты и кредиты недоступны</span>
+    <span v-if="!summary.total">{{ t("providers.finance.unavailable") }}</span>
     <ul v-else>
       <li
         v-for="item in summary.accounts"
@@ -46,60 +48,64 @@ const summary = computed(() =>
         <span>{{
           item.remaining === undefined
             ? item.stale && item.account.financialSummary
-              ? "Данные устарели"
-              : "Лимит недоступен"
-            : `Осталось ${item.remaining}% включённого лимита`
+              ? t("providers.finance.stale")
+              : t("providers.finance.limitUnknown")
+            : t("providers.finance.remaining", { remaining: item.remaining })
         }}</span>
-        <span :title="'Единица баланса и денежный эквивалент не установлены'">{{
-          financialCredits(item.account, item.available)
+        <span :title="t('providers.finance.balanceUnit')">{{
+          financialCredits(item.account, item.available, (key, params) =>
+            t(`providers.finance.${key}`, params ?? {}),
+          )
         }}</span>
-        <span v-if="item.available && item.observation?.spendControlReached"
-          >Ограничение расходов upstream</span
-        >
+        <span v-if="item.available && item.observation?.spendControlReached">{{
+          t("providers.finance.spending")
+        }}</span>
         <span
           v-if="
             item.available &&
             item.observation?.restriction &&
             item.observation.restriction !== 'rate_limit_reached'
           "
-          >Ограничение аккаунта upstream</span
+          >{{ t("providers.finance.restriction") }}</span
         >
         <span
-          v-for="(window, index) in item.available
+          v-for="(window, index) in item.available && item.remaining !== 0
             ? (item.observation?.windows ?? [])
             : []"
           :key="index"
         >
-          <small
-            >Окно
-            {{
-              window.durationMinutes === undefined
-                ? "длительность недоступна"
-                : `${window.durationMinutes} мин`
-            }}: осталось {{ 100 - window.usedPercent }}%</small
-          >
-          <small v-if="financialReset(window.resetsAt)"
-            >Reset: {{ financialReset(window.resetsAt) }}</small
-          >
+          <small>{{
+            t("providers.finance.window", {
+              duration:
+                window.durationMinutes === undefined
+                  ? t("providers.finance.durationUnknown")
+                  : t("providers.finance.minutes", {
+                      duration: window.durationMinutes,
+                    }),
+              remaining: 100 - window.usedPercent,
+            })
+          }}</small>
+          <small v-if="financialReset(window.resetsAt, locale)">{{
+            t("providers.finance.reset", {
+              date: financialReset(window.resetsAt, locale),
+            })
+          }}</small>
         </span>
-        <small v-if="item.account.financialSummary"
-          >Наблюдение:
-          {{
-            new Date(item.account.financialSummary.receivedAt).toLocaleString(
-              "ru-RU",
-            )
-          }}</small
-        >
+        <small v-if="item.account.financialSummary && item.remaining !== 0">{{
+          t("providers.finance.observed", {
+            date: new Date(
+              item.account.financialSummary.receivedAt,
+            ).toLocaleString(locale),
+          })
+        }}</small>
       </li>
     </ul>
-    <small v-if="summary.exhausted"
-      >Включённый лимит исчерпан: {{ summary.exhausted }}. Оплаченные кредиты
-      показаны отдельно.</small
-    >
-    <small v-if="summary.unknown || !summary.complete"
-      >Порядок неполный: недоступные данные не сравниваются с известными
-      остатками.</small
-    >
+    <small v-if="summary.exhausted">{{
+      t("providers.finance.exhausted", { count: summary.exhausted })
+    }}</small>
+    <small v-if="summary.unknown || !summary.complete">{{
+      t("providers.finance.incomplete")
+    }}</small>
   </section>
 </template>
 

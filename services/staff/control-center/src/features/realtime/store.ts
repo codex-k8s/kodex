@@ -436,26 +436,29 @@ export const useRealtimeStore = defineStore("realtime", () => {
         });
       } else if (kind === "PROVIDER_ACCOUNT") {
         const catalog = recordField(envelope.snapshot, "catalog");
-        providers.applyFinancialSnapshot(recordField(catalog,"financialSummary"));
-        providers.catalogUnavailable=catalog.providerCatalogUnavailable===true;
+        providers.applyFinancialSnapshot(
+          recordField(catalog, "financialSummary"),
+        );
+        providers.catalogUnavailable =
+          catalog.providerCatalogUnavailable === true;
         if (!providers.catalogUnavailable) {
-        providers.applySnapshot(
-          entityArrayField<ProviderAccount>(catalog, "accounts"),
-          optionalStringField(recordField(catalog, "page"), "nextPageToken"),
-          stringArrayField<NextAction>(catalog, "nextActions"),
-          keyedArrayField<ProviderDefinition>(catalog, "providerDefinitions"),
-          optionalStringField(
-            recordField(catalog, "providerDefinitionsPage"),
-            "nextPageToken",
-          ),
-        );
-        platform.applyPlatformSnapshot(
-          "RUNTIME_SELECTION",
-          selectedProjectRef(),
-          {
-            catalog,
-          },
-        );
+          providers.applySnapshot(
+            entityArrayField<ProviderAccount>(catalog, "accounts"),
+            optionalStringField(recordField(catalog, "page"), "nextPageToken"),
+            stringArrayField<NextAction>(catalog, "nextActions"),
+            keyedArrayField<ProviderDefinition>(catalog, "providerDefinitions"),
+            optionalStringField(
+              recordField(catalog, "providerDefinitionsPage"),
+              "nextPageToken",
+            ),
+          );
+          platform.applyPlatformSnapshot(
+            "RUNTIME_SELECTION",
+            selectedProjectRef(),
+            {
+              catalog,
+            },
+          );
         } else providers.applyUnavailableCatalog();
         platform.markRealtimeSnapshot(kind, selectedProjectRef(), catalog);
       } else if (kind === "MEMBERSHIP") {
@@ -577,9 +580,9 @@ export const useRealtimeStore = defineStore("realtime", () => {
         if (!availableKinds.includes("RUNTIME_ENVIRONMENT"))
           runtime.applyEnvironmentSnapshot(selectedProjectRef(), []);
         if (!availableKinds.includes("PROVIDER_ACCOUNT")) {
- providers.clearFinancial();
- providers.applySnapshot([],undefined,[]);
- }
+          providers.clearFinancial();
+          providers.applySnapshot([], undefined, []);
+        }
       }
       platformSnapshotReady = true;
       platformBootstrapCursor = undefined;

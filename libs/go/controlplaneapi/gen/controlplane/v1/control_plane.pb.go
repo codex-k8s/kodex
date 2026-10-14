@@ -79950,7 +79950,7 @@ func (x *AssistantAgentConfiguration) GetConfigurationSha256() string {
 // Безопасные supported наблюдения; identity берётся только из lease.
 type ProviderFinancialWindow struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
-	UsedPercent     int32                  `protobuf:"varint,1,opt,name=used_percent,json=usedPercent,proto3" json:"used_percent,omitempty"`
+	UsedPercent     *int32                 `protobuf:"varint,1,opt,name=used_percent,json=usedPercent,proto3,oneof" json:"used_percent,omitempty"`
 	DurationMinutes *int64                 `protobuf:"varint,2,opt,name=duration_minutes,json=durationMinutes,proto3,oneof" json:"duration_minutes,omitempty"`
 	ResetsAt        *int64                 `protobuf:"varint,3,opt,name=resets_at,json=resetsAt,proto3,oneof" json:"resets_at,omitempty"`
 	unknownFields   protoimpl.UnknownFields
@@ -79988,8 +79988,8 @@ func (*ProviderFinancialWindow) Descriptor() ([]byte, []int) {
 }
 
 func (x *ProviderFinancialWindow) GetUsedPercent() int32 {
-	if x != nil {
-		return x.UsedPercent
+	if x != nil && x.UsedPercent != nil {
+		return *x.UsedPercent
 	}
 	return 0
 }
@@ -86653,11 +86653,12 @@ const file_controlplane_v1_control_plane_proto_rawDesc = "" +
 	"projectRef\x12\x18\n" +
 	"\aversion\x18\x03 \x01(\x03R\aversion\x12-\n" +
 	"\x12configuration_json\x18\x04 \x01(\fR\x11configurationJson\x121\n" +
-	"\x14configuration_sha256\x18\x05 \x01(\tR\x13configurationSha256\"\xb1\x01\n" +
-	"\x17ProviderFinancialWindow\x12!\n" +
-	"\fused_percent\x18\x01 \x01(\x05R\vusedPercent\x12.\n" +
-	"\x10duration_minutes\x18\x02 \x01(\x03H\x00R\x0fdurationMinutes\x88\x01\x01\x12 \n" +
-	"\tresets_at\x18\x03 \x01(\x03H\x01R\bresetsAt\x88\x01\x01B\x13\n" +
+	"\x14configuration_sha256\x18\x05 \x01(\tR\x13configurationSha256\"\xc7\x01\n" +
+	"\x17ProviderFinancialWindow\x12&\n" +
+	"\fused_percent\x18\x01 \x01(\x05H\x00R\vusedPercent\x88\x01\x01\x12.\n" +
+	"\x10duration_minutes\x18\x02 \x01(\x03H\x01R\x0fdurationMinutes\x88\x01\x01\x12 \n" +
+	"\tresets_at\x18\x03 \x01(\x03H\x02R\bresetsAt\x88\x01\x01B\x0f\n" +
+	"\r_used_percentB\x13\n" +
 	"\x11_duration_minutesB\f\n" +
 	"\n" +
 	"_resets_at\"\xac\x01\n" +
