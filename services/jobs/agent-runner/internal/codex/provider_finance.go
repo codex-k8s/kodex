@@ -17,12 +17,11 @@ func (server *appServer) observeFinancial(ctx context.Context, state *protocolSt
 	observation := runtimecontract.ProviderFinancialObservation{Sequence: state.financialSequence, State: "UNAVAILABLE"}
 	if err != nil {
 		var failure *appServerCallFailure
-		// Только отсутствие supported метода — мягкая недоступность. Auth, transport
-		// и protocol failure сохраняют закрытый gate и не маскируются метрикой.
-		if !errors.As(err, &failure) || failure.detail != "RPC_ERROR" || failure.code != -32601 {
+		// Только точный pinned no-snapshots outcome завершённого RPC.
+		// Auth, transport и policy failure сохраняют закрытый gate.
+		if !errors.As(err, &failure) || failure.detail != "RPC_ERROR" || !failure.financialUnavailable {
 			return err
 		}
-		state.financialEnabled = false
 	} else {
 		observation = runtimecontract.ParseCodexFinancialObservation(raw, state.financialSequence)
 	}

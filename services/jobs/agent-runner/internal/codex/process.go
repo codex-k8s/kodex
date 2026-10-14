@@ -104,12 +104,13 @@ type streamEvent struct {
 
 // Причина транспортного отказа закрыта и не содержит payload провайдера.
 type appServerCallFailure struct {
-	detail            string
-	code              int64
-	notification      string
-	notificationError string
-	accountRead       string
-	err               error
+	financialUnavailable bool
+	detail               string
+	code                 int64
+	notification         string
+	notificationError    string
+	accountRead          string
+	err                  error
 }
 
 func (failure *appServerCallFailure) Error() string { return failure.err.Error() }
@@ -783,7 +784,8 @@ func protocolError(method string, raw json.RawMessage) error {
 		return errors.New("Codex app-server returned an invalid protocol error")
 	}
 	return &appServerCallFailure{detail: "RPC_ERROR", code: code, accountRead: closedAccountReadFailure(method, code, raw),
-		err: fmt.Errorf("Codex app-server returned a protocol error for %s (code %d)", method, code)}
+		financialUnavailable: financialSnapshotsUnavailable(method, raw),
+		err:                  fmt.Errorf("Codex app-server returned a protocol error for %s (code %d)", method, code)}
 }
 
 func (server *appServer) waitTerminal(ctx context.Context, state *protocolState) error {
