@@ -4,9 +4,20 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.34
+version: 1.0.35
 updated: 2026-10-14
 ---
+
+## 14.10.2026 20:00 UTC — проверки exact06 и GitHub readback
+
+- SOURCE/remote/Draft1807 exact06af96008936a89bb3e7103b69ffb8fba5f93a83
+  MATCH. Первое отставание PR metadata сохранено, отдельный readback PASS;
+  без повторного push. Current HOT5d clean/active root не менялся.
+- Exact06:18 loading/layout tests PASS2.50s, ESLint/vue-tsc exit0,
+  production build exit0/Vite10.28s. Большой chunk warning сохранён.
+  Это scoped local PASS; CI/full baseline/live fixed-link NOT RUN.
+- Body PR1807 сокращён и readback PASS, Draft сохранён. Current INTAKE/root
+  RUNNING358; native Developer/ONE Review/Manager/paid/QA65/main OPEN.
 
 ## 14.10.2026 19:56 UTC — source fixture и initial file link
 

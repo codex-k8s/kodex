@@ -4,11 +4,23 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.34
+version: 1.1.35
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 20:00 UTC — frontend checks и публикация
+
+SOURCE/remote/Draft1807 `06af96008936a89bb3e7103b69ffb8fba5f93a83`
+совпали после отдельного readback; первый post-push PR metadata отставал,
+повторного push не было. HOT5d clean, active root не перезапускался.
+На exact06: FilesWorkspace loading/layout18 tests PASS2.50s, ESLint/vue-tsc
+exit0, production build exit0/Vite10.28s. Chunk-size warning сохранён.
+Это local scoped verification, не full baseline/CI или delivered link PASS.
+PR body обновлён до компактных экранов/сценариев с явными остатками; readback
+PASS. Current root RUNNING358, INTAKE собственные интеграции/файлы продолжаются.
+Developer observer58183 ждёт exact node; не terminal-health PASS.
 
 ## Checkpoint 14.10.2026 19:56 UTC — полный routing source и новый обычный запуск
 
