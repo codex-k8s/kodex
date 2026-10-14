@@ -4,11 +4,57 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.38
+version: 1.1.39
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 21:13 UTC — рабочий smoke и полный runner rollout
+
+HOT/SOURCE/remote dc97665e clean. Exact frontend overlays сняты через
+apply_patch только после hash equality; approved idle FF20:47:02 PASS,
+runtime runs/leases/builds/admissions/promotions0, promoted85/pinsf82202f6
+preserved. Это полный текущий checkout, не временная накладка.
+
+Current business root hC5h FAILED973, будущие этапы остановлены. Developer
+u35bu технически SUCCEEDED,4 своих outputs owner EOF/hash/revision rejoin
+MATCH4/4; semantic BLOCKED проверки происхождения старой Git-ветки. Новые
+implementation/tests/commit/push/Review не выполнены. На prompt debugging и
+новый Retry этой задачи не переходить; scope новой цели — код/демонстрация.
+Historical primary filesystem guard UNKNOWN; успешный короткий run его
+устранение не доказывает. Observer58183 завершился4 NOT_CAPTURED follow EOF,
+metadata5208 завершён code137 после terminal Pod; это не OOM proof.
+
+Через normal platform.launch создан отдельный прямой AGENT smoke
+`run_nuBy7ud_A8uftOnM9gZ30rBg`, без старых веток/Repo/GitHub/настроек.
+SUCCEEDED/version3/events22. Native Go1.26.6 offline run дал stdout4/exit0;
+runtime-smoke.md содержит фактическую команду и код. Три CLEAN results
+прочитаны owner по exact revision до EOF, bytes/SHA/rejoin MATCH3/3:
+
+| Файл | Байты | SHA256 |
+| --- | ---: | --- |
+| result.md | 295 | 4bd62af1c1913dea9249c0f6891cf1372916cf0ec86f11c3f84a3c78bcc15bc6 |
+| workspace-write-result.json | 328 | db9171e67fc742d27453aff8cacc9a50d406b5ecebdcce22269228921f7ecfee |
+| runtime-smoke.md | 968 | 3fab0a0e43d8ef4a7eb749110c4afc9212e037b5f0f468551ee461216f6f2987 |
+
+Desktop1280/mobile390 screenshots просмотрены: graph/outline/results читаемы,
+overflowfalse, Console0/Network0/relevant API200. Это actual обычное выполнение
+и публикация, не complete QA65 или live finance.
+
+Новый14e runner полностью доставлен через прежние repo-owned entrypoints:
+publish/preflight/policy/binding/defaults/verify PASS. Build/compiled source9e
+и ELFdb24752e неизменны; frozen worktree только для точных release inputs.
+Actual policy `kodex-image-admission-policy-07691e4bbf43dfab2b5528967cdfcd83`,
+CP/RC default pull reference14e. Existing custom project role images не
+перепривязывались. Final owner READ21:09:17 — runtime/build/admission/lease0,
+promoted85/pinsf822 unchanged. Пять Deployment Ready1/1.
+Transient maintenance gateway0/API503 сохранён; open/verify вернули200.
+
+Actual new CP Pod38447df3/PID141/ELF38549814 и RC Pod3bf3197e/PID140/
+ELFe861d02e совпали прежним source-equivalent binaries. После reload Console0,
+session/graph200, SUCCEEDED smoke22 rejoin сохранён. Следующее — финальная
+source фиксация/gates/bootstrap merge/fresh main/readback/handoff.
 
 ## Checkpoint 14.10.2026 20:36 UTC — UI гонка закрыта, Developer запущен
 

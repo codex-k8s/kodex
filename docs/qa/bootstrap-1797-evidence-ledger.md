@@ -4,9 +4,29 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.38
+version: 1.0.39
 updated: 2026-10-14
 ---
+
+## 14.10.2026 21:13 UTC — normal smoke и full delivery
+
+- Approved clean HOT FF dc97665e после owner idle0, overlay exact hashes
+  сверены/сняты, promoted85/pinsf822 unchanged. SOURCE/remote/HOT clean MATCH.
+- Normal AGENT nuBy SUCCEEDED3/22, actual Go1.26.6/stdout4/exit0 и файл
+  runtime-smoke.md. Все3 CLEAN results exact revision owner EOF/size/SHA/
+  fresh metadata rejoin MATCH3/3. Desktop/mobile UI viewed, overflowfalse,
+  Console0/Network0/API200; не simulation или full QA65/finance PASS.
+- Business hC5h FAILED semantic BLOCKED branch provenance; u35bu technical
+  SUCCEEDED4 actual outputs owner EOF/rejoin MATCH. Implementation/tests/Review
+  этого нового business этапа NOT RUN. Historical rejecting guard UNKNOWN;
+  успешная публикация basic case не объявляется устранением старой причины.
+- Runner14e/source9e/ELFdb24752e: publish/preflight/policy/binding/defaults/
+  verify PASS, actual CP/RC default14e/policy07691e4b,5 Deployments Ready1/1.
+  Final owner READ21:09:17 idle0 и promoted85/pinsf822 unchanged.
+  Custom project role images не перепривязаны. Transient maintenance503
+  сохранён; post-open/reload session/graph200/Console0.
+- Actual CP38447df3/PID141/ELF38549814 и RC3bf3197e/PID140/ELFe861d02e
+  MATCH прежним проверенным binaries. Bootstrap merge/main/final handoff OPEN.
 
 ## 14.10.2026 20:36 UTC — ускоренный код и browser fixture
 

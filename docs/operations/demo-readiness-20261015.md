@@ -4,7 +4,7 @@ title: Подготовка рабочего прототипа Kodex к дем�
 type: operations
 status: approved
 owner: manager
-version: 1.0.1
+version: 1.0.2
 updated: 2026-10-15
 ---
 
@@ -39,16 +39,19 @@ host не ждёт отладки промптов, чтобы исправля�
   удаления Pod. Воспроизвести и исправить доказанную кодовую причину,
   проверить адресным тестом и нормальной публикацией результата. Не обходить
   workspace quotas, canary, admission, owner/tenant или provider ограничения.
-- [ ] **2. Обеспечить основной пользовательский путь.** Провайдер/модель,
+- [x] **2. Обеспечить основной пользовательский путь.** Провайдер/модель,
   системный и проектный помощник, диалог/сообщения/инструменты, Stop/очередь,
   проект/сотрудник/процесс, graph/rejoin, файлы и результаты. Проверить только
   изменённые и ранее не доказанные части; фиксы по Console, Network и backend.
   Не тратить время на качество промптов и анализ бизнес-ответов ролей.
-- [ ] **3. Проверить код доступности аккаунта и лимитов.** Авторизованный
+- [x] **3. Проверить код доступности аккаунта и лимитов.** Авторизованный
   аккаунт не блокируется ошибочной конфигурацией; weekly exhaustion не
   трактуется как запрет при доступных credits. Не выдумывать внешний баланс,
   units/charging/API или live PASS. Нет данных — честное UNKNOWN, не отказ
   доступа по предположению; security/provider rejection не обходить.
+  Account/catalog/renewal адресный кодовый путь PASS; ошибочного weekly-zero
+  gate нет, реальный обычный запуск SUCCEEDED. Financial balance/units/charging
+  остаются UNKNOWN и не объявляются проверенными или реализованным widget1796.
 - [x] **4. Закрыть критические frontend/realtime регрессии.** Direct file
   links, session isolation/rejoin и очевидные мешающие демонстрации layout
   дефекты. Каждый новый экран: desktop/mobile screenshot, Console/relevant
@@ -113,3 +116,25 @@ Applied migrations forward-only, данные и активные workloads со
   CODE_ONLY допуск Developer, не live finance. Developer u35bu RUNNING,
   exact UID/input/runtime/image ACK; long closed observer и read-only outbox
   metadata sensor подключены до terminal. Нет новых USER инструкций.
+
+# Адресный checkpoint 15.10.2026 01:13 Саратов
+
+- HOT/SOURCE/remote dc97665e clean, штатный FF после owner idle0; оба своих
+  frontend overlays включены без потери других правок. Promoted85/pinsf822
+  сохранены. CP/RC ELF38549814/e861d02e совпадают прежним проверенным binaries.
+- Отдельный normal AGENT smoke nuBy SUCCEEDED/version3: Go1.26.6,2+2→4,
+  exit0, actual runtime-smoke.md опубликован. Все3 results owner exact
+  revision EOF/size/SHA/metadata rejoin MATCH3/3; desktop/mobile UI просмотрен,
+  overflowfalse/Console0/Network0/API200. Ни GitHub, ни настройки не менялись.
+- Native business hC5h FAILED на semantic BLOCKED прежней ветки; Developer
+  u35bu технически SUCCEEDED и4 results полностью опубликованы/прочитаны.
+  Не новая реализация/tests/Review1796 и не устранение historical guard.
+  На продолжение этой бизнес-задачи и prompt debugging время не тратится.
+- Runner14e из exact9e прошёл publish→preflight→policy→binding→defaults→verify
+  штатными repo-owned скриптами. Actual CP/RC default reference14e, exact
+  policy07691e4b,5 основных Deployment Ready1/1. Existing project role images
+  не переназначались; политика/guard/прочие promoted pins сохранены.
+- Во время штатной maintenance gateway был0 и API503; после open/полного
+  verify/reload API200 и Console0. Эти transient errors не скрываются.
+  Остались final source фиксация/merge/main/readback/handoff; stage1 требует
+  честного ограничения по невоспроизведённой historical primary причине.
