@@ -195,3 +195,39 @@ BuildKit. Он не пересоздаёт builder, не импортирует 
 не трогает Pods. Receipt содержит source/context/archive/manifest digests;
 admission, publication и node pull явно NOT RUN до отдельных проверок.
 Синтаксис/ShellCheck PASS; реальная OCI сборка этого нового пути ещё NOT RUN.
+
+## Реальные OCI сборки и исправление фронтенда
+
+Локальная compiled OCI сборка нового пути выполнена. Это не registry
+publication, admission, node pull либо развёртывание.
+
+| Компонент | Exact source SHA | Manifest SHA256 |
+| --- | --- | --- |
+| control-plane | `2087c69d4d3a3fb7aba8736c3c6bc7ab2c9f6411` | `850912011101bd8c6a8af8f2f07c01da24e9bc3fd5831e23f8a15cf790dd71c9` |
+| session-archive | `2087c69d4d3a3fb7aba8736c3c6bc7ab2c9f6411` | `9b8a8155ccb400ba98600aae8e95b2845ee70541b27a4bfeeeaf370339697399` |
+| integration-synthetic | `2087c69d4d3a3fb7aba8736c3c6bc7ab2c9f6411` | `08e8079b14e29bd94bbad52a709a6f6e1fd4a733528dd72a02a7a3b862cf38ac` |
+| runtime-controller | `2e07f737b824b79451ba5a8408c4f7744e33471c` | `31e7e50f84cc506b99f87a31abe0dbf272d59ba935871e176f6e2be3c0abf3a9` |
+| control-api-gateway | `9e54c6e8bcfee675559c6a16f2ed6d1141d3a4ba` | `58f064ba63be2e9658c9641b673ca4ba18dc8eed45ec73f49911ae8a42c061b5` |
+| staff-control-center | `9e54c6e8bcfee675559c6a16f2ed6d1141d3a4ba` | `79db365eed79750907d4558a04ea46431ed90ef1eed74f85e76d5952b00374cc` |
+
+Первый frontend build завершился FAIL: Dockerfile не копировал актуальные
+test/config dependencies TypeScript. Следующий выявил неполный
+Dockerfile-specific allowlist. Исправлены оба источника: configs, E2E helpers
+и их настоящие declarations доступны build stage, секреты/локальные файлы
+по-прежнему исключены. Ничего из tools/e2e не копируется в итоговый nginx.
+Третий build на указанном SHA прошёл PASS с обычным `npm run build`; typecheck
+не отключался. Добавлен регрессионный тест контекста и модель nginx cutover,
+сохраняющая current runtime ConfigMap. Переключение8080→8443 требует отдельной
+Service/transport-фазы; zero-downtime для него пока не заявляется.
+
+## Две реплики identity
+
+В repo-owned identity manifest теперь две Keycloak реплики, cache `ispn`,
+discovery `jdbc-ping`, embedded mTLS включён явно, PodDisruptionBudget
+`minAvailable: 1`. Cache и failure-detection ports доступны только peer Pod
+с обоими identity labels в том же namespace, в ingress и egress. База остаётся
+одной репликой, её manifest не изменялся. Два render/network unit tests PASS;
+live cache cluster, replacement/login и upgrade ещё NOT RUN.
+
+Проверены официальные [Keycloak cache docs](https://www.keycloak.org/server/caching)
+и [Docker COPY docs](https://docs.docker.com/reference/dockerfile/#copy).
