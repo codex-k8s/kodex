@@ -2,15 +2,17 @@
 id: GO-DOC-007
 title: Наблюдения лимитов и credits Codex
 type: guide
-status: approved
+status: draft
 owner: developer
-version: 0.2.2
+version: 0.2.3
 updated: 2026-10-14
 ---
 
 # Наблюдения лимитов и credits Codex
 
 Реализация Issue1796 использует supported `account/rateLimits/read` Codex 0.160.0. Точный upstream source — `rust-v0.160.0`, commit `a956835d020762cb2b570053af06f643a11c0ecc`; owner packet.md, SHA256 `a382233ba184727cce10e7b10ff0a7030b4e65722f4c5a586d61b7d0ba60270b`, прочитан native до EOF467840. Текущий architecture-review.md@33 имеет verdict `PASS_CODE_ONLY_BOUNDED_DESIGN`. Контракт и fixtures не измеряют баланс владельца и не доказывают live acceptance.
+
+Документ описывает proposed implementation в Draft PR и ожидает единственного независимого review и Manager acceptance. Его статус не назначает owner approval.
 
 ## Путь данных
 
@@ -19,6 +21,8 @@ updated: 2026-10-14
 Финальное чтение выполняется до остановки активного процесса. `account/rateLimits/updated` только будит повторное чтение; из notification нельзя получить account authority. Чтения ограничены 64 наблюдениями на execution: обычные чтения используют максимум63, последний слот резервируется для финального read. Достигнутый предел очищает wake без дополнительного RPC. Дополнительный idle process, копия credentials и internal-only `chatgptAuthTokens` для finance не используются. Новый external-token auth/deployment gate этим изменением не разрешается.
 
 Broker передаёт закрытый `ProviderFinancialObservation`, отдельно от model messages и ToolCall. Sequence проверяется в sealed stream. Controller проверяет execution binding и RuntimeRevision digest; CP выводит account/current credential из immutable revision. Lease/fence/generation/expiry, root/node/session/turn/attempt, текущая credential и порядок collector проверяются перед записью. Root lock сериализует запись с terminal transition. Account lock защищает collector ordering; старое валидное наблюдение отбрасывается, sequence с изменённым содержимым отклоняется как idempotency reuse. Проекция, account version, command receipt/audit и outbox записываются одной существующей command transaction.
+
+Вложенная observation HTTP callback и stored projection используют один закрытый parser: duplicate/unknown JSON fields, невалидный UTF-8 и превышение 4 KiB отклоняются до semantic validation. OpenAPI Go generation сохраняет модели, используемые AsyncAPI shared WS, даже если они не достижимы из HTTP paths (`skip-prune=true`).
 
 Существующий `PROVIDER_ACCOUNT_CHANGED` приводит к защищённому `PROVIDER_ACCOUNT` snapshot общего WebSocket. Cursor CP закрепляет источник всех страниц; gateway заканчивает bounded discovery до ranking, не смешивает drift. При изменении agent/membership eligibility используется штатный resync. REST polling финансовых данных отсутствует; REST сохраняет bootstrap/detail-проекции того же account.
 
