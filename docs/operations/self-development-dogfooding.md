@@ -4,7 +4,7 @@ title: Самонастройка и разработка Kodex средства
 type: operations
 status: approved
 owner: manager
-version: 1.1.15
+version: 1.1.16
 updated: 2026-10-14
 ---
 
@@ -28,6 +28,9 @@ updated: 2026-10-14
 - [x] Mobile fresh viewport и ручное переключение/resize сохраняют выбранный режим.
 - [x] Disposable capacity2/10/11, снижение лимита, Stop/queue/interrupt/retry/restart/rejoin.
 - [x] Natural named ENV/resources/tools и файлы1796; stale plan не выдан за publication.
+- [x] Natural ambiguity: уточнение сотрудника, plan0/mutations0; settled transcript/rejoin/desktop/mobile.
+- [x] На205 CP gRPC, policy codegen и fresh web-only/optional Mattermost render.
+- [x] Retry11 INTAKE/Architect completed; bounded design CODE_ONLY PASS, не final Review/live finance.
 - [ ] Workflow metadata вне карточки: CODE_ONLY enum14/tests готовы, safe delivery и native retest.
 - [ ] Exact gates/bootstrap merge/fresh-main/serving и ручная приёмка.
 

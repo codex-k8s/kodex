@@ -4,9 +4,28 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.22
+version: 1.0.23
 updated: 2026-10-14
 ---
+
+## 14.10.2026 15:07 UTC — exact205 и новые живые доказательства
+
+- SOURCE/remote/Draft1807/head205bc83d MATCH, HOT0b5af51c. Body MATCH;
+  mergeable clean, checks/statuses/reviews0/combined pending: CI/approval NOT RUN.
+- CP gRPC tests PASS0.518s; authority policy codegen PASS; fresh release
+  render web-only/web-with-mattermost PASS. Никакого apply/rollout этой suite.
+- Natural ambiguity «увеличь память у сотрудника» COMPLETED, уточнение имени,
+  plan0/mutations0. Own cnv_av7rM_hnqvtnALgQ9-WKEzKT/
+  run_kd23efp3a_o12f_n1Tp4jcxP, reload/rejoin сохранил commentary/три tools.
+  Settled desktop/mobile screenshots PASS/overflowfalse/Console0/Network0.
+  Ранний fallback screenshot не used как доказательство полной истории;
+  MCP screenshot timeout и intermittent click/fill FAIL не скрыты.
+- Architect native SUCCEEDED15:03:05, result814B/digest MATCH:
+  bounded CODE_ONLY дизайн PASS, real finance/paid UNKNOWN/NOT RUN.
+  Architecture review43660B/hash MATCH, host прочитал diagnostic subset,
+  не выдаёт его за native EOF. Coordinator continuation RUNNING.
+- Подготовленный Workflow metadata205 ещё NOT SERVING/native retest NOT RUN.
+  Native final Developer/ONE Reviewer/Manager, real credits/QA65/main остаются OPEN.
 
 ## 14.10.2026 14:37 UTC — адресные проверки и следующий natural gap
 

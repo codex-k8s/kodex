@@ -4,11 +4,42 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.22
+version: 1.1.23
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 15:07 UTC — Architect завершён, ambiguity PASS
+
+SOURCE/remote/Draft1807 MATCH205bc83df4014cbc3f39c580149721485be7da4b,
+HOT0b5af51c. Body и gates readback PASS: mergeable/clean, но checks/statuses/
+reviews0, combined pending; это не CI PASS и не owner approval. Нового
+WORKFLOW_METADATA serving всё ещё нет, текущий model turn не прерывался.
+
+Retry11 Architect run_RwYawk8h8VjgWk-1wITqtuKM SUCCEEDED15:03:05;
+result814B/digesteec9…7ead полностью fetched/hash MATCH, verdict PASS для
+bounded CODE_ONLY Developer, не comprehensive Review или live finance PASS.
+Architecture review43660B/hash15f7…e869 fetched/hash MATCH; host диагностически
+проверил headings/verdict, это не подмена native EOF. Source evidence56133B
+и output manifest1412B опубликованы CLEAN. Root RUNNING, Coordinator continue
+читает handoff; Developer/ONE Review/Manager final пока не выполнены.
+
+Natural ambiguity cnv_av7rM_hnqvtnALgQ9-WKEzKT/run_kd23efp3a_o12f_n1Tp4jcxP
+COMPLETED18:54 local: «увеличь память у сотрудника…» → уточнение имени,
+нет plan/изменений. Reload/rejoin сохранил промежуточный ответ и три tools.
+Desktop/mobile settled transcript screenshots просмотрены: компактные
+commentary/tool cards, agent слева, user справа, overflowfalse, Console0/
+Network0. Initial fallback capture слишком ранний; checker ждёт full transcript.
+Первый MCP screenshot снова завис, outer wait отменён; вкладки/модель не закрыты.
+Click/fill MCP intermittently FAIL при видимом enabled элементе; обычные DOM
+input/click events собственной вкладки успешно отправили один QA turn.
+
+На205: CP grpc package PASS0.518s, policy codegen PASS, web-only release
+render PASS обоих профилей. Empty backend stdout sample не доказательство
+всех путей; runtime Pod49m/115Mi, lease CLAIMED/not expired, рестартов0.
+Дальше — native Developer с восстановлением1809, один Review и Manager;
+safe metadata delivery/real retest, paid/QA65/bootstrap main/owner handoff.
 
 ## Checkpoint 14.10.2026 14:37 UTC — named Workflow read подготовлен
 
