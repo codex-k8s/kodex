@@ -25,6 +25,7 @@ test("normal cutover preserves mode secrets and source input with exact CAS", ()
   assert.deepEqual(after.template.spec.volumes, [original.spec.template.spec.volumes[1]]);
   assert.deepEqual(after.template.spec.securityContext, original.spec.template.spec.securityContext);
   assert.deepEqual(result.patch.slice(0, 3).map(p => p.op), ["test", "test", "test"]);
+  assert.equal(after.template.metadata.labels["kodex.dev/local-profile"], "stable");
 });
 
 test("unregistered component wrong command and placeholder images fail closed", () => {
@@ -56,4 +57,21 @@ test("RWO needs exact node affinity and registries need a common upload secret",
   assert.equal(validateStorageProtocol(value, { claims, sharedHTTPSecret: true }), true);
   claims[0].accessModes = ["ReadWriteOncePod"];
   assert.throws(() => validateStorageProtocol(value, { claims, sharedHTTPSecret: true }), /SINGLE_POD_ONLY/);
+});
+
+test("artifact spool init switches to the same compiled controller without losing its storage", () => {
+  const value = fixture("runtime-controller", "services/internal/runtime-controller", []);
+  value.spec.template.spec.volumes.push({ name: "dev-build-artifact-spool-init", hostPath: { path: "/fixture/cache" } },
+    { name: "artifact-spool", emptyDir: { sizeLimit: "1Gi" } });
+  value.spec.template.spec.initContainers = [{ name: "artifact-spool-init", image: "dev", command: ["/bin/sh", "-ec"],
+    args: ["go build ./cmd/runtime-controller; exec binary --prepare-artifact-spool /var/lib/kodex/runtime-controller/artifact-spool"],
+    volumeMounts: [{ name: "dev-source", mountPath: "/workspace" }, { name: "dev-build-artifact-spool-init", mountPath: "/go/build-cache" },
+      { name: "artifact-spool", mountPath: "/var/lib/kodex/runtime-controller/artifact-spool" }] }];
+  const after = prepareGoCutover(value, { ...release, component: "runtime-controller" }).patch.at(-1).value;
+  const init = after.template.spec.initContainers[0];
+  assert.equal(init.image, release.image);
+  assert.deepEqual(init.command, ["/usr/local/bin/runtime-controller"]);
+  assert.deepEqual(init.args, ["--prepare-artifact-spool", "/var/lib/kodex/runtime-controller/artifact-spool"]);
+  assert.equal(init.volumeMounts.length, 1);
+  assert.ok(after.template.spec.volumes.some(v => v.name === "artifact-spool"));
 });

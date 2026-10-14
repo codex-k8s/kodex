@@ -151,3 +151,17 @@ release/fence matrix ещё не завершён. Пункт 2 остаётся
 Эти проверки относятся к изменённому дереву после `d4c77e18c28d7393e3f54bd6f83c08b99a66c0bb`;
 после коммита точный проверенный SHA фиксируется отдельной записью. Модели и
 план не объявляются завершёнными executable apply/rollback.
+
+## Контрольное чтение на `213ba8f33c6a68a5697954193575b3dc3f12f7fa`
+
+- PASS: тот же набор 18 unit tests, pinned Go toolchain contract,
+  `web-only-release-test.sh`, Bash syntax, ShellCheck и diff whitespace.
+- PASS: push/readback GitHub — Draft #1811 содержит этот exact SHA,
+  main остаётся `8c19ffb76328ae559698fae2806be79ef0bd64ae`.
+- PASS: read-only public edge plan на фактическом внешнем cluster; четыре
+  добавочных ресурса и два systemd unit. `systemd-analyze verify` завершился0;
+  сообщения об устаревшей CPUAccounting относятся к существующим сторонним
+  system units, не к создаваемому relay.
+- NOT RUN: установка relay, создание CA projection, новые маршруты и ACME,
+  SSO cutover, новые образы и масштабирование. Private plan остаётся только
+  локальным: topology и чужие resource details не добавляются в репозиторий.

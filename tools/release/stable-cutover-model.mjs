@@ -19,7 +19,8 @@ const goServices = {
   "session-archive": ["services/jobs/session-archive", "session-archive", "session-archive"],
   "backup-controller": ["services/jobs/backup-controller", "backup-controller", "backup-controller"],
 };
-const devEnv = new Set(["GOTOOLCHAIN", "GOPATH", "GOMODCACHE", "GOCACHE", "GOSUMDB", "GOPROXY", "GOFLAGS"]);
+const devEnv = new Set(["GOTOOLCHAIN", "GOPATH", "GOMODCACHE", "GOCACHE", "GOSUMDB", "GOPROXY", "GOFLAGS",
+  "GOWORK", "GOTMPDIR", "KODEX_DEV_AIR_VERSION", "KODEX_DEV_AIR_SHA256"]);
 const imagePattern = /^[a-z0-9][a-z0-9.:/_-]*@sha256:[a-f0-9]{64}$/;
 function requireValue(value, code) { if (!value) throw Error(code); }
 
@@ -32,16 +33,32 @@ export function prepareGoCutover(deployment, release) {
     typeof deployment.metadata.resourceVersion === "string", "CUTOVER_IDENTITY_INVALID");
   requireValue(release && /^[a-f0-9]{40}$/.test(release.sourceSHA ?? "") && imagePattern.test(release.image ?? "") &&
     !release.image.endsWith("0".repeat(64)) && release.component === entry[2] &&
-    /^[a-f0-9]{64}$/.test(release.provenanceSHA256 ?? ""), "CUTOVER_RELEASE_INVALID");
+    /^[a-f0-9]{64}$/.test(release.provenanceSHA256 ?? "") && release.provenanceSHA256 !== "0".repeat(64), "CUTOVER_RELEASE_INVALID");
   const before = deployment.spec;
   const after = structuredClone(before);
+  requireValue(!Object.hasOwn(after.selector?.matchLabels ?? {}, "kodex.dev/local-profile") &&
+    !(after.selector?.matchExpressions ?? []).some(e => e.key === "kodex.dev/local-profile"), "CUTOVER_PROFILE_SELECTOR_BOUND");
   const pod = after.template.spec;
   const app = pod.containers.find(c => c.name === name);
   requireValue(app && app.command?.length === 1 && app.command[0] === "/workspace/tools/dev/run-go-hot-reload.sh" &&
     app.args?.[0] === entry[0] && app.args[1] === `./cmd/${entry[1]}` &&
     // clamav-egress-gateway использует то же бинарное содержимое.
     [name, entry[1]].includes(app.args[2]), "CUTOVER_SOURCE_COMMAND_MISMATCH");
-  const devVolumes = new Set(["dev-source", "dev-go-mod", "dev-go-sumdb", "dev-go-tools", `dev-build-${name}`]);
+  const spoolInit = name === "runtime-controller" ? pod.initContainers?.find(c => c.name === "artifact-spool-init") : undefined;
+  if (spoolInit) {
+    requireValue(spoolInit.command?.join(" ") === "/bin/sh -ec" && spoolInit.args?.length === 1 &&
+      spoolInit.args[0].includes("go build") && spoolInit.args[0].includes("./cmd/runtime-controller") &&
+      spoolInit.args[0].includes("--prepare-artifact-spool /var/lib/kodex/runtime-controller/artifact-spool") &&
+      spoolInit.volumeMounts?.some(m => m.name === "artifact-spool" && m.mountPath === "/var/lib/kodex/runtime-controller/artifact-spool"),
+      "CUTOVER_SPOOL_INIT_MISMATCH");
+    spoolInit.image = release.image;
+    spoolInit.command = ["/usr/local/bin/runtime-controller"];
+    spoolInit.args = ["--prepare-artifact-spool", "/var/lib/kodex/runtime-controller/artifact-spool"];
+    spoolInit.env = (spoolInit.env ?? []).filter(e => !devEnv.has(e.name));
+    spoolInit.securityContext = { ...spoolInit.securityContext, runAsUser: 10001, runAsGroup: 10001 };
+  }
+  const devVolumes = new Set(["dev-source", "dev-go-mod", "dev-go-sumdb", "dev-go-tools", `dev-build-${name}`,
+    ...(spoolInit ? ["dev-build-artifact-spool-init"] : [])]);
   const removedVolumes = new Set();
   for (const volume of pod.volumes ?? []) {
     if (devVolumes.has(volume.name)) {
@@ -53,14 +70,16 @@ export function prepareGoCutover(deployment, release) {
       removedVolumes.add(volume.name);
     }
   }
-  const others = [...pod.containers, ...(pod.initContainers ?? [])].filter(c => c !== app);
+  const converted = [app, ...(spoolInit ? [spoolInit] : [])];
+  const others = [...pod.containers, ...(pod.initContainers ?? [])].filter(c => !converted.includes(c));
   requireValue(!others.some(c => (c.volumeMounts ?? []).some(m => removedVolumes.has(m.name))),
     "CUTOVER_DEV_VOLUME_SHARED");
   app.image = release.image;
   app.command = [`/usr/local/bin/${entry[1]}`];
   app.args = app.args.slice(3);
   app.env = (app.env ?? []).filter(e => !devEnv.has(e.name));
-  app.volumeMounts = (app.volumeMounts ?? []).filter(m => !removedVolumes.has(m.name));
+  for (const container of converted)
+    container.volumeMounts = (container.volumeMounts ?? []).filter(m => !removedVolumes.has(m.name));
   pod.volumes = (pod.volumes ?? []).filter(v => !removedVolumes.has(v.name));
   // UID приложения из Dockerfile; fsGroup и identity sidecar не меняются.
   // Secret references и существующие supplementary groups сохраняются.
@@ -73,6 +92,11 @@ export function prepareGoCutover(deployment, release) {
   after.template.metadata.annotations = { ...after.template.metadata.annotations,
     "kodex.dev/source-sha": release.sourceSHA,
     "kodex.dev/release-provenance-sha256": release.provenanceSHA256 };
+  for (const key of ["source-root", "cache-root", "host-uid", "host-gid", "source-content-sha256", "source-revision"])
+    delete after.template.metadata.annotations[`kodex.dev/${key}`];
+  after.template.metadata.annotations["kodex.dev/deployment-profile"] = "trusted-cluster";
+  after.template.metadata.labels = { ...after.template.metadata.labels, "kodex.dev/local-profile": "stable" };
+  if (name === "runtime-controller") after.template.metadata.annotations["kodex.dev/controller-image"] = release.image;
   return {
     name, uid: deployment.metadata.uid, beforeSpecSHA256: fingerprint(before), afterSpecSHA256: fingerprint(after),
     sourceSHA: release.sourceSHA,
@@ -80,6 +104,7 @@ export function prepareGoCutover(deployment, release) {
       { op: "test", path: "/metadata/uid", value: deployment.metadata.uid },
       { op: "test", path: "/metadata/resourceVersion", value: deployment.metadata.resourceVersion },
       { op: "test", path: "/spec", value: before },
+      { op: "add", path: "/metadata/labels", value: { ...deployment.metadata.labels, "kodex.dev/local-profile": "stable" } },
       { op: "replace", path: "/spec", value: after },
     ],
   };
