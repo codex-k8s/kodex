@@ -69,7 +69,17 @@ func (repository *Repository) listAssistantConfigurationCatalogOnce(ctx context.
 	if sourceScope != "SYSTEM" && sourceScope != "PROJECT" || (sourceScope == "PROJECT" || input.Kind == "CURRENT_CONFIGURATION" || input.Kind == "RECIPIENT_INTEGRATION_GRANTS" || input.Kind == "WORKFLOW_CONFIGURATION" || input.Kind == "AGENT_CONFIGURATION" || input.Kind == "AGENT_RUNTIME_CONFIGURATION") && input.AssistantRef != sourceRef {
 		return entity.AssistantConfigurationCatalogResponse{}, errs.ErrForbidden
 	}
-	if input.Kind == "AGENT_CONFIGURATION" || input.Kind == "AGENT_RUNTIME_CONFIGURATION" {
+	if input.Kind == "AGENT_RUNTIME_CONFIGURATION" {
+		result, readErr := repository.assistantResolvedAgentRuntimeConfigurationTx(ctx, tx, current, sourceScope, sourceProjectRef, input)
+		if readErr != nil {
+			return result, readErr
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return result, assistantLockedReadError(err, errs.ErrUnavailable)
+		}
+		return result, nil
+	}
+	if input.Kind == "AGENT_CONFIGURATION" {
 		result, readErr := repository.assistantAgentConfigurationCatalogTx(ctx, tx, current, leaseRef, input)
 		if readErr != nil {
 			return result, readErr

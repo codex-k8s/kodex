@@ -4,9 +4,24 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.18
+version: 1.0.19
 updated: 2026-10-14
 ---
+
+## 14.10.2026 13:20 UTC — no-ID configuration FAIL, адресное исправление CODE_ONLY
+
+- Named Developer model/resources question: run_V2SY0BCq6iE0AHs-Ac4rgBcb
+  SUCCEEDED envelope, semantic FAIL; четыре successful tools не дали ответ.
+  Причина — current-screen-only catalog, а не права владельца на сотрудника.
+- Новый reader: lease-derived actor/scope, eligible exact ref, no project escape;
+  безопасные model/resource pins, no private values/commands/instructions.
+  Full instructions/change gates не ослаблены; старый JSON decoder удалён.
+- Callback package PASS6.580s, CP projection PASS0.086s, disposable full
+  component PASS49.334s, включая cross-project negative и no-effect.
+  Stale Workflow-context/schema/page fixture FAIL исправлены, история сохранена.
+- HOTbb938a00 не обновлён под active Developer; live named config retest NOT RUN.
+- Developer actual git checkpoint29125ba…9550/13:16:17, dirty1, restart0;
+  не final/push/Review PASS. Rootseq1498, ONE Review/Manager и paid case OPEN.
 
 ## 14.10.2026 12:25 UTC — actual claim/parallel no-ID PASS
 

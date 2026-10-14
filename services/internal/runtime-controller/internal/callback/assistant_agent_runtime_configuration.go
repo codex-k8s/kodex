@@ -37,17 +37,30 @@ type assistantAgentRuntimeReadSnapshot struct {
 	ConfiguredTools           []string                            `json:"configured_tools"`
 	VerifiedToolInventory     *runtimecontract.ImageToolInventory `json:"verified_tool_inventory"`
 	VerifiedToolInventoryHash string                              `json:"verified_tool_inventory_sha256"`
+	ModelConfiguration        struct {
+		Ref      string `json:"ref"`
+		Version  int64  `json:"version"`
+		Digest   string `json:"digest"`
+		Provider string `json:"provider"`
+		Model    string `json:"model"`
+	} `json:"model_configuration"`
+	Resources runtimecontract.RuntimeResourcePolicy `json:"resources"`
+}
+
+func assistantAgentRuntimeConfigurationAvailable(input runtimecontract.RunnerInput) bool {
+	return input.IsAssistant() && (input.AssistantScope == runtimecontract.AssistantScopeSystem ||
+		input.AssistantScope == runtimecontract.AssistantScopeProject && validAssistantResourceRef(input.ProjectRef))
 }
 
 func castAssistantAgentRuntimeConfiguration(input runtimecontract.RunnerInput, request *controlplanev1.AssistantConfigurationCatalogRequest, response *controlplanev1.AssistantConfigurationCatalogResponse) (map[string]any, error) {
 	invalid := errors.New("assistant agent runtime configuration response is invalid")
-	if !assistantAgentConfigurationAvailable(input) || request.GetAssistantRef() != input.AgentRef || request.GetEntityKind() != "AGENT" || request.GetEntityRef() != input.AssistantContext.EntityRef || response == nil ||
+	if !assistantAgentRuntimeConfigurationAvailable(input) || request.GetAssistantRef() != input.AgentRef || request.GetEntityKind() != "AGENT" || !validAssistantResourceRef(request.GetEntityRef()) || response == nil ||
 		len(response.ProtoReflect().GetUnknown()) != 0 || response.GetKind() != request.GetKind() || response.GetAssistantRef() != input.AgentRef || response.GetOrganizationRef() != input.OrganizationRef || response.GetScopeKind() != "PROJECT" || !validAssistantResourceRef(response.GetProjectRef()) || response.GetAssistantProfileRef() != "" ||
 		input.AssistantScope == runtimecontract.AssistantScopeProject && response.GetProjectRef() != input.ProjectRef || response.GetNextOffset() != 0 || len(response.GetEntries()) != 0 || len(response.GetProjectIntegrationGrants()) != 0 || response.GetRecipientIntegrationGrants() != nil || response.GetCurrentConfiguration() != nil || response.GetWorkflowConfiguration() != nil || response.GetAgentConfiguration() != nil {
 		return nil, invalid
 	}
 	configuration := response.GetAgentRuntimeConfiguration()
-	if configuration == nil || len(configuration.ProtoReflect().GetUnknown()) != 0 || configuration.GetAgentRef() != request.GetEntityRef() || configuration.GetProjectRef() != response.GetProjectRef() || configuration.GetVersion() != *input.AssistantContext.EntityVersion || configuration.GetVersion() > 9007199254740991 {
+	if configuration == nil || len(configuration.ProtoReflect().GetUnknown()) != 0 || configuration.GetAgentRef() != request.GetEntityRef() || configuration.GetProjectRef() != response.GetProjectRef() || configuration.GetVersion() < 1 || configuration.GetVersion() > 9007199254740991 {
 		return nil, invalid
 	}
 	raw := configuration.GetConfigurationJson()
@@ -62,11 +75,19 @@ func castAssistantAgentRuntimeConfiguration(input runtimecontract.RunnerInput, r
 		return nil, invalid
 	}
 	var snapshot map[string]any
-	if json.Unmarshal(raw, &snapshot) != nil || len(snapshot) != 16 || !onlyKeys(snapshot, "agent_ref", "project_ref", "version", "binding_ref", "binding_version", "binding_digest", "environment_ref", "environment_name", "environment_version", "published_version_ref", "published_revision", "published_digest", "image", "configured_tools", "verified_tool_inventory", "verified_tool_inventory_sha256") {
+	if json.Unmarshal(raw, &snapshot) != nil || len(snapshot) != 18 || !onlyKeys(snapshot, "agent_ref", "project_ref", "version", "binding_ref", "binding_version", "binding_digest", "environment_ref", "environment_name", "environment_version", "published_version_ref", "published_revision", "published_digest", "image", "configured_tools", "verified_tool_inventory", "verified_tool_inventory_sha256", "model_configuration", "resources") {
 		return nil, invalid
 	}
 	image, ok := snapshot["image"].(map[string]any)
 	if !ok || len(image) != 5 || !onlyKeys(image, "artifact_ref", "recipe_ref", "reference", "digest", "recipe_generation") {
+		return nil, invalid
+	}
+	model, ok := snapshot["model_configuration"].(map[string]any)
+	if !ok || len(model) != 5 || !onlyKeys(model, "ref", "version", "digest", "provider", "model") {
+		return nil, invalid
+	}
+	resources, ok := snapshot["resources"].(map[string]any)
+	if !ok || len(resources) != 6 || !onlyKeys(resources, "cpu_request_milli", "cpu_limit_milli", "memory_request_mib", "memory_limit_mib", "ephemeral_storage_request_mib", "ephemeral_storage_limit_mib") {
 		return nil, invalid
 	}
 	canonical, err := json.Marshal(snapshot)
@@ -84,6 +105,18 @@ func castAssistantAgentRuntimeConfiguration(input runtimecontract.RunnerInput, r
 }
 
 func validAssistantAgentRuntimeReadSnapshot(value assistantAgentRuntimeReadSnapshot) bool {
+	model, resources := value.ModelConfiguration, value.Resources
+	if !validAssistantResourceRef(model.Ref) || model.Version < 1 || model.Version > 9007199254740991 || !validAssistantCatalogDigest(model.Digest) ||
+		strings.TrimSpace(model.Provider) == "" || len(model.Provider) > 96 || strings.TrimSpace(model.Model) == "" || len(model.Model) > 160 ||
+		!utf8.ValidString(model.Provider) || !utf8.ValidString(model.Model) || strings.ContainsRune(model.Provider, 0) || strings.ContainsRune(model.Model, 0) ||
+		resources.WorkspaceLimits != nil {
+		return false
+	}
+	policy := runtimecontract.DefaultRuntimeEnvironmentPolicyWithoutDigests()
+	policy.Resources = resources
+	if _, err := runtimecontract.NormalizeRuntimeEnvironmentPolicy(policy); err != nil {
+		return false
+	}
 	for _, ref := range []string{value.AgentRef, value.ProjectRef, value.BindingRef, value.EnvironmentRef, value.PublishedVersionRef, value.Image.ArtifactRef, value.Image.RecipeRef} {
 		if !validAssistantResourceRef(ref) {
 			return false

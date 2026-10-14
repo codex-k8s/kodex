@@ -33,7 +33,9 @@ func assistantAgentRuntimeConfigurationFixture(t *testing.T) (runtimecontract.Ru
 		"environment_ref": "renv_fixture123", "environment_name": "Окружение Developer", "environment_version": 12,
 		"published_version_ref": "renvv_fixture123", "published_revision": 4, "published_digest": digest,
 		"image":            map[string]any{"artifact_ref": "imgart_fixture123", "recipe_ref": "recipe_fixture123", "recipe_generation": 2, "reference": "registry.test/runtime@sha256:" + digest, "digest": "sha256:" + digest},
-		"configured_tools": []string{"Configured tool"}, "verified_tool_inventory": inventory}
+		"configured_tools": []string{"Configured tool"}, "verified_tool_inventory": inventory,
+		"model_configuration": map[string]any{"ref": "arcfg_fixture123", "version": 5, "digest": digest, "provider": "openai-codex", "model": "gpt-6.1-sol"},
+		"resources":           runtimecontract.DefaultRuntimeEnvironmentPolicy().Resources}
 	raw, _ := json.Marshal(snapshot)
 	_ = json.Unmarshal(raw, &snapshot)
 	inventoryRaw, _ := json.Marshal(snapshot["verified_tool_inventory"])
@@ -98,17 +100,32 @@ func TestAssistantAgentRuntimeConfigurationProducerContractFixture(t *testing.T)
 	}
 }
 
+func TestAssistantNamedRuntimeConfigurationWithoutCurrentAgentScreen(t *testing.T) {
+	for _, scope := range []runtimecontract.AssistantScope{runtimecontract.AssistantScopeSystem, runtimecontract.AssistantScopeProject} {
+		input, arguments, response := assistantAgentRuntimeConfigurationFixture(t)
+		input.AssistantScope, input.AssistantContext = scope, nil
+		selector := arguments["assistant_configuration_catalog"].(map[string]any)
+		request, err := parseAssistantConfigurationCatalog(input, arguments, selector)
+		if err != nil {
+			t.Fatal("resolved metadata target rejected without screen", err)
+		}
+		if _, err := castAssistantConfigurationCatalog(input, request, response); err != nil {
+			t.Fatal("fresh named metadata response rejected", err)
+		}
+		selector["kind"] = "AGENT_CONFIGURATION"
+		if _, err := parseAssistantConfigurationCatalog(input, arguments, selector); err == nil {
+			t.Fatal("full instructions lost current-context boundary")
+		}
+	}
+}
+
 func TestAssistantAgentRuntimeConfigurationRejectsForeignAndOwnSelectors(t *testing.T) {
 	for _, mutate := range []func(*runtimecontract.RunnerInput, map[string]any){
 		func(i *runtimecontract.RunnerInput, _ map[string]any) {
 			i.AssistantScope = runtimecontract.AssistantScopeNone
 		},
-		func(i *runtimecontract.RunnerInput, _ map[string]any) { i.AssistantContext.EntityKind = "WORKFLOW" },
-		func(i *runtimecontract.RunnerInput, _ map[string]any) {
-			i.AssistantContext.AllowedOperations = []string{"CHANGE_INTEGRATION_GRANT"}
-		},
+		func(_ *runtimecontract.RunnerInput, s map[string]any) { s["entity_kind"] = "WORKFLOW" },
 		func(_ *runtimecontract.RunnerInput, s map[string]any) { s["assistant_ref"] = "agt_foreign123" },
-		func(_ *runtimecontract.RunnerInput, s map[string]any) { s["entity_ref"] = "agt_foreign123" },
 		func(_ *runtimecontract.RunnerInput, s map[string]any) { s["entity_ref"] = "" },
 		func(_ *runtimecontract.RunnerInput, s map[string]any) { s["query"] = "Developer" },
 		func(_ *runtimecontract.RunnerInput, s map[string]any) { s["offset"] = 10 },
@@ -122,8 +139,8 @@ func TestAssistantAgentRuntimeConfigurationRejectsForeignAndOwnSelectors(t *test
 			t.Fatal("foreign or unsupported selector accepted")
 		}
 		kinds := assistantConfigurationCatalogInputSchema(input)["properties"].(map[string]any)["kind"].(map[string]any)["enum"].([]string)
-		if !assistantAgentConfigurationAvailable(input) && slices.Contains(kinds, "AGENT_RUNTIME_CONFIGURATION") {
-			t.Fatal("catalog exposed without exact context")
+		if !assistantAgentRuntimeConfigurationAvailable(input) && slices.Contains(kinds, "AGENT_RUNTIME_CONFIGURATION") {
+			t.Fatal("catalog exposed outside assistant scope")
 		}
 	}
 	input, arguments, _ := assistantAgentRuntimeConfigurationFixture(t)
@@ -150,6 +167,15 @@ func TestAssistantAgentRuntimeConfigurationRejectsMismatchAndSecrets(t *testing.
 			s["image"].(map[string]any)["credential"] = "PRIVATE_SENTINEL"
 		},
 		func(_ *cp.AssistantConfigurationCatalogResponse, s map[string]any) { s["binding_version"] = float64(0) },
+		func(_ *cp.AssistantConfigurationCatalogResponse, s map[string]any) {
+			s["model_configuration"].(map[string]any)["account_ref"] = "PRIVATE_SENTINEL"
+		},
+		func(_ *cp.AssistantConfigurationCatalogResponse, s map[string]any) {
+			s["resources"].(map[string]any)["memory_limit_mib"] = float64(-1)
+		},
+		func(_ *cp.AssistantConfigurationCatalogResponse, s map[string]any) {
+			s["resources"].(map[string]any)["workspace_limits"] = map[string]any{}
+		},
 		func(_ *cp.AssistantConfigurationCatalogResponse, s map[string]any) {
 			s["verified_tool_inventory_sha256"] = strings.Repeat("b", 64)
 		},

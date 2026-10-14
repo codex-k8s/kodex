@@ -84,15 +84,15 @@ func testAssistantRecipientIntegrationCatalog(t *testing.T, ctx context.Context,
 				}
 				lease := leases[0]
 				if recipient.kind == "AGENT" {
-					testAssistantAgentConfigurationUnderLease(t, ctx, repository, service, owner, reader, lease, agent.Ref, unassigned.Ref, foreignHelperRef)
+					testAssistantAgentConfigurationUnderLease(t, ctx, repository, service, owner, reader, lease, agent.Ref, unassigned.Ref, foreignHelperRef, scope)
 				} else {
 					_, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), entity.AssistantConfigurationCatalogRequest{Kind: "AGENT_CONFIGURATION", AssistantRef: stringMap(lease, "agentRef"), EntityKind: "AGENT", EntityRef: agent.Ref})
 					if !errors.Is(err, errs.ErrNotFound) {
 						t.Fatal("Workflow context read agent instructions")
 					}
-					_, err = service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), entity.AssistantConfigurationCatalogRequest{Kind: "AGENT_RUNTIME_CONFIGURATION", AssistantRef: stringMap(lease, "agentRef"), EntityKind: "AGENT", EntityRef: agent.Ref})
-					if !errors.Is(err, errs.ErrNotFound) {
-						t.Fatal("Workflow context read agent runtime configuration")
+					result, err := service.ListAssistantConfigurationCatalog(ctx, reader, stringMap(lease, "leaseRef"), stringMap(lease, "fence"), lease["generation"].(int64), entity.AssistantConfigurationCatalogRequest{Kind: "AGENT_RUNTIME_CONFIGURATION", AssistantRef: stringMap(lease, "agentRef"), EntityKind: "AGENT", EntityRef: agent.Ref})
+					if err != nil || result.AgentRuntimeConfiguration == nil || result.AgentRuntimeConfiguration.AgentRef != agent.Ref {
+						t.Fatal("eligible agent metadata unavailable from Workflow context", err)
 					}
 				}
 				runRef := turn.Turns[0].RunRef

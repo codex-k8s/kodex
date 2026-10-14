@@ -55,7 +55,7 @@ func TestAssistantAgentConfigurationJSONFullPreservation(t *testing.T) {
 
 // Вызывается публичной TestProjectAssistantIntegrationGrantsComponent в SYSTEM
 // и PROJECT fixture. Все эффекты принадлежат только disposable PostgreSQL.
-func testAssistantAgentConfigurationUnderLease(t *testing.T, ctx context.Context, repository *Repository, service *serviceplatform.Service, owner, reader value.Principal, lease map[string]any, agentRef, otherRef, foreignHelperRef string) {
+func testAssistantAgentConfigurationUnderLease(t *testing.T, ctx context.Context, repository *Repository, service *serviceplatform.Service, owner, reader value.Principal, lease map[string]any, agentRef, otherRef, foreignHelperRef, expectedScope string) {
 	t.Helper()
 	input := entity.AssistantConfigurationCatalogRequest{Kind: "AGENT_CONFIGURATION", AssistantRef: stringMap(lease, "agentRef"), EntityKind: "AGENT", EntityRef: agentRef}
 	read := func(request entity.AssistantConfigurationCatalogRequest, fence string, generation int64) (entity.AssistantConfigurationCatalogResponse, error) {
@@ -87,11 +87,27 @@ func testAssistantAgentConfigurationUnderLease(t *testing.T, ctx context.Context
 		t.Fatal("exact agent runtime configuration read failed", runtimeErr)
 	}
 	var runtimeSnapshot map[string]any
-	if json.Unmarshal(runtimeResult.AgentRuntimeConfiguration.ConfigurationJSON, &runtimeSnapshot) != nil || len(runtimeSnapshot) != 16 || runtimeSnapshot["agent_ref"] != agentRef || runtimeSnapshot["project_ref"] != result.ProjectRef || runtimeSnapshot["configured_tools"] == nil || runtimeSnapshot["verified_tool_inventory"] == nil {
+	if json.Unmarshal(runtimeResult.AgentRuntimeConfiguration.ConfigurationJSON, &runtimeSnapshot) != nil || len(runtimeSnapshot) != 18 || runtimeSnapshot["agent_ref"] != agentRef || runtimeSnapshot["project_ref"] != result.ProjectRef || runtimeSnapshot["configured_tools"] == nil || runtimeSnapshot["verified_tool_inventory"] == nil {
 		t.Fatal("runtime configuration lost exact bound environment or tools")
 	}
 	if err := repository.pool.QueryRow(ctx, queryAssistantConfigurationComponentEffects, actor.organizationID).Scan(&afterEffects); err != nil || beforeEffects != afterEffects {
 		t.Fatal("runtime configuration read mutated receipt/audit/outbox state")
+	}
+	otherRuntime := runtimeInput
+	otherRuntime.EntityRef = otherRef
+	otherRuntimeResult, err := read(otherRuntime, stringMap(lease, "fence"), lease["generation"].(int64))
+	if err != nil || otherRuntimeResult.AgentRuntimeConfiguration == nil || otherRuntimeResult.AgentRuntimeConfiguration.AgentRef != otherRef || otherRuntimeResult.ProjectRef != result.ProjectRef {
+		t.Fatal("eligible named agent runtime metadata requires current screen", err)
+	}
+	if err := repository.pool.QueryRow(ctx, queryAssistantConfigurationComponentEffects, actor.organizationID).Scan(&afterEffects); err != nil || beforeEffects != afterEffects {
+		t.Fatal("named metadata read mutated receipt/audit/outbox state")
+	}
+	if expectedScope == "PROJECT" {
+		foreign := runtimeInput
+		foreign.EntityRef = foreignHelperRef
+		if _, err := read(foreign, stringMap(lease, "fence"), lease["generation"].(int64)); !errors.Is(err, errs.ErrNotFound) {
+			t.Fatal("project helper metadata crossed project boundary", err)
+		}
 	}
 	current, err := service.GetAgent(ctx, owner, agentRef)
 	if err != nil {
@@ -121,6 +137,9 @@ func testAssistantAgentConfigurationUnderLease(t *testing.T, ctx context.Context
 	} {
 		t.Run("agent configuration "+name, func(t *testing.T) {
 			for _, kind := range []string{"AGENT_CONFIGURATION", "AGENT_RUNTIME_CONFIGURATION"} {
+				if kind == "AGENT_RUNTIME_CONFIGURATION" && name == "foreign recipient" {
+					continue // Этот same-project recipient теперь разрешён для metadata READ, но не instructions.
+				}
 				bad := input
 				bad.Kind = kind
 				mutate(&bad)

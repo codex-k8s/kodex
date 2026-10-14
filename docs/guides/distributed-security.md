@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.20
+version: 1.7.21
 updated: 2026-10-14
 ---
 
@@ -1977,6 +1977,16 @@ rejoin или retry не переводят диалог на другой пр�
 grants. Подмена enum/profile ref меняет digest и закрыто отклоняется.
 Неизвестная область и старый runtime input не имеют decoder fallback:
 переход на новый ABI требует новой server-owned revision и exact admission.
+
+Безопасное чтение runtime metadata другого сотрудника разрешается по exact
+locator, полученному из authoritative eligible поиска, а не по открытому экрану.
+Owner заново выводит USER/tenant и область помощника из действующей lease,
+проверяет `agent.view` и inherited project boundary в одном snapshot. READ
+возвращает только versioned model/resource/binding/image metadata, без ENV
+values, Secret, команд инструментов, инструкций или новых grants. PROJECT
+не выходит из своего проекта; SYSTEM не обходит eligibility root USER.
+Полные instructions и подтверждаемые изменения сохраняют отдельный current
+server-owned context/OCC gate; metadata read не расширяет их authority.
 
 Owner-generated continuation notice и обычный `USER` имеют разные закрытые
 бюджеты. Исключение до 64KiB допустимо только для последнего полного

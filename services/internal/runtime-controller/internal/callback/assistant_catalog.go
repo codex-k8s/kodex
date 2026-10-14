@@ -137,17 +137,20 @@ func assistantConfigurationCatalogInputSchema(input runtimecontract.RunnerInput)
 		kinds = append(kinds, "WORKFLOW_CONFIGURATION")
 	}
 	if assistantAgentConfigurationAvailable(input) {
-		kinds = append(kinds, "AGENT_CONFIGURATION", "AGENT_RUNTIME_CONFIGURATION")
+		kinds = append(kinds, "AGENT_CONFIGURATION")
+	}
+	if assistantAgentRuntimeConfigurationAvailable(input) {
+		kinds = append(kinds, "AGENT_RUNTIME_CONFIGURATION")
 	}
 	properties := map[string]any{
 		"kind": enumSchema(kinds...), "assistant_ref": assistantRef,
 		"query": stringSchema(0, 80), "offset": map[string]any{"type": "integer", "minimum": 0, "maximum": 10000},
 		"account_ref": opaqueRefSchema(), "runtime_profile_ref": assistantRuntimeProfileKeySchema(),
 	}
-	if assistantRecipientIntegrationCatalogAvailable(input) || assistantWorkflowConfigurationAvailable(input) || assistantAgentConfigurationAvailable(input) {
+	if assistantRecipientIntegrationCatalogAvailable(input) || assistantWorkflowConfigurationAvailable(input) || assistantAgentConfigurationAvailable(input) || assistantAgentRuntimeConfigurationAvailable(input) {
 		properties["entity_kind"], properties["entity_ref"] = enumSchema("AGENT", "WORKFLOW"), opaqueRefSchema()
 	}
-	if assistantWorkflowConfigurationAvailable(input) || assistantAgentConfigurationAvailable(input) {
+	if assistantWorkflowConfigurationAvailable(input) || assistantAgentConfigurationAvailable(input) || assistantAgentRuntimeConfigurationAvailable(input) {
 		properties["configuration_offset_bytes"] = map[string]any{"type": "integer", "minimum": 0, "maximum": maximumAssistantCurrentConfigurationBytes, "default": 0}
 		properties["maximum_bytes"] = map[string]any{"type": "integer", "minimum": 4, "maximum": maximumAssistantConfigurationPageBytes, "default": maximumAssistantConfigurationPageBytes}
 		properties["configuration_sha256"] = map[string]any{"type": "string", "pattern": "^[a-f0-9]{64}$"}
@@ -184,7 +187,8 @@ func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, argum
 	if kind == "PROJECT_INTEGRATION_GRANTS" && input.AssistantScope != runtimecontract.AssistantScopeProject ||
 		kind == "RECIPIENT_INTEGRATION_GRANTS" && !assistantRecipientIntegrationCatalogAvailable(input) ||
 		kind == "WORKFLOW_CONFIGURATION" && !assistantWorkflowConfigurationAvailable(input) ||
-		(kind == "AGENT_CONFIGURATION" || kind == "AGENT_RUNTIME_CONFIGURATION") && !assistantAgentConfigurationAvailable(input) {
+		kind == "AGENT_CONFIGURATION" && !assistantAgentConfigurationAvailable(input) ||
+		kind == "AGENT_RUNTIME_CONFIGURATION" && !assistantAgentRuntimeConfigurationAvailable(input) {
 		return nil, invalid
 	}
 	if _, err := parseAssistantConfigurationPage(selector, kind); err != nil {
@@ -269,11 +273,19 @@ func parseAssistantConfigurationCatalog(input runtimecontract.RunnerInput, argum
 			return nil, invalidInput
 		}
 	}
-	if kind == "AGENT_CONFIGURATION" || kind == "AGENT_RUNTIME_CONFIGURATION" {
+	if kind == "AGENT_CONFIGURATION" {
 		if assistantRef != input.AgentRef || hasRef && request.EntityRef != input.AssistantContext.EntityRef {
 			return nil, invalid
 		}
 		if request.EntityKind != "AGENT" || request.Query != "" || request.Offset != 0 {
+			return nil, invalidInput
+		}
+	}
+	if kind == "AGENT_RUNTIME_CONFIGURATION" {
+		if assistantRef != input.AgentRef {
+			return nil, invalid
+		}
+		if request.EntityKind != "AGENT" || !hasRef || request.EntityRef == "" || request.Query != "" || request.Offset != 0 || request.AccountRef != "" || request.RuntimeProfileRef != "" {
 			return nil, invalidInput
 		}
 	}

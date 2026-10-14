@@ -73,10 +73,11 @@ func TestAssistantAgentRuntimeConfigurationProjectionExcludesPrivateData(t *test
 		t.Fatal(err)
 	}
 	view := entity.AgentRuntimeConfigurationView{AgentVersion: agent.Version,
+		Configuration:       entity.AgentRuntimeConfiguration{Ref: "arcfg_fixture123", AgentRef: agent.Ref, Version: 5, Digest: digest, Provider: "openai-codex", Model: "gpt-6.1-sol"},
 		EnvironmentBinding:  entity.AgentRuntimeEnvironmentBinding{Ref: "aenv_fixture123", AgentRef: agent.Ref, EnvironmentRef: "renv_fixture123", VersionRef: "renvv_fixture123", Version: 3, Digest: digest},
 		SafeEffectiveConfig: "PRIVATE_SENTINEL",
 		Environment: entity.RuntimeEnvironmentSet{Ref: "renv_fixture123", ProjectRef: agent.ProjectRef, Name: "Developer", Version: 8,
-			CurrentVersion: entity.RuntimeEnvironmentVersion{Ref: "renvv_fixture123", Revision: 4, Digest: digest,
+			CurrentVersion: entity.RuntimeEnvironmentVersion{Ref: "renvv_fixture123", Revision: 4, Digest: digest, Policy: runtimecontract.DefaultRuntimeEnvironmentPolicy(),
 				Image:             entity.RuntimeEnvironmentImage{ArtifactRef: "imgart_fixture123", RecipeRef: "recipe_fixture123", RecipeGeneration: 2, Reference: "registry.test/runtime@sha256:" + digest, Digest: "sha256:" + digest},
 				Tools:             []entity.RuntimeEnvironmentTool{{Name: "Настроенный git", Command: "PRIVATE_SENTINEL", Description: "PRIVATE_SENTINEL", UsageHint: "PRIVATE_SENTINEL"}},
 				Values:            []entity.RuntimeEnvironmentValue{{Name: "PRIVATE_VALUE", Value: "PRIVATE_SENTINEL"}},
@@ -86,7 +87,7 @@ func TestAssistantAgentRuntimeConfigurationProjectionExcludesPrivateData(t *test
 		t.Fatal("private runtime fields exposed", err)
 	}
 	var snapshot map[string]any
-	if json.Unmarshal(raw, &snapshot) != nil || len(snapshot) != 16 || snapshot["configured_tools"].([]any)[0] != "Настроенный git" || snapshot["published_version_ref"] != view.EnvironmentBinding.VersionRef {
+	if json.Unmarshal(raw, &snapshot) != nil || len(snapshot) != 18 || snapshot["configured_tools"].([]any)[0] != "Настроенный git" || snapshot["published_version_ref"] != view.EnvironmentBinding.VersionRef {
 		t.Fatal("binding pins or configured tool names lost")
 	}
 	for _, mutate := range []func(*entity.AgentRuntimeConfigurationView){
@@ -120,9 +121,10 @@ func TestAssistantAgentRuntimeConfigurationCanonicalAdmissionInventory(t *testin
 	}
 	agent := entity.Agent{Ref: "agt_recipient123", ProjectRef: "prj_context123", Version: 9}
 	view := entity.AgentRuntimeConfigurationView{AgentVersion: agent.Version,
+		Configuration:      entity.AgentRuntimeConfiguration{Ref: "arcfg_fixture123", AgentRef: agent.Ref, Version: 5, Digest: digest, Provider: "openai-codex", Model: "gpt-6.1-sol"},
 		EnvironmentBinding: entity.AgentRuntimeEnvironmentBinding{Ref: "aenv_binding123", AgentRef: agent.Ref, EnvironmentRef: "renv_fixture123", VersionRef: "renvv_fixture123", Version: 7, Digest: digest},
 		Environment: entity.RuntimeEnvironmentSet{Ref: "renv_fixture123", ProjectRef: agent.ProjectRef, Name: "Окружение Developer", Version: 12,
-			CurrentVersion: entity.RuntimeEnvironmentVersion{Ref: "renvv_fixture123", Revision: 4, Digest: digest,
+			CurrentVersion: entity.RuntimeEnvironmentVersion{Ref: "renvv_fixture123", Revision: 4, Digest: digest, Policy: runtimecontract.DefaultRuntimeEnvironmentPolicy(),
 				Image: entity.RuntimeEnvironmentImage{ArtifactRef: "imgart_fixture123", RecipeRef: "recipe_fixture123", RecipeGeneration: 2, Reference: "registry.test/runtime@sha256:" + digest, Digest: "sha256:" + digest},
 				Tools: []entity.RuntimeEnvironmentTool{{Name: "Configured tool"}}}}}
 	golden, err := os.ReadFile("../../../../../../../contracts/proto/testdata/assistant_agent_runtime_configuration.json")

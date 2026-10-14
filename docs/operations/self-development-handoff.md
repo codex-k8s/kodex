@@ -4,11 +4,43 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.18
+version: 1.1.19
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 13:20 UTC — named runtime metadata, CODE_ONLY готов
+
+SOURCE/remote/Draft1807 опубликованы0b51a24e, HOT/codebb938a00 без изменений.
+Новый no-ID PROJECT кейс cnv_WaWganERBfzzE8nH37oQ83Bg /
+run_V2SY0BCq6iE0AHs-Ac4rgBcb завершён, но semantic FAIL: Developer найден,
+модель/CPU/memory вне AGENT экрана недоступны. Четыре tools completed не
+означают успешный ответ; корректирующего USER ввода не было.
+
+Подготовлен безопасный metadata read по resolved eligible ref. Actor/tenant,
+scope и helper назначает прежний exact lease resolver; PROJECT не выходит
+из своего проекта, SYSTEM сохраняет user eligibility. Private инструкции/
+изменения по-прежнему требуют current context. Canonical JSON содержит model
+configuration pins и шесть resource request/limit значений, без ENV values,
+Secret descriptors/values, instructions или configured commands; legacy16
+fields decoder не оставлен. Протокол/authority матрица и checklist —
+assistant-named-runtime-read.md; общий инвариант закреплён в GUIDE-DOC-003.
+
+Callback package PASS6.580s, CP projection PASS0.086s, disposable full
+ProjectAssistantIntegrationGrantsComponent PASS49.334s: eligible другой agent,
+Workflow context, project isolation, source/fence/expiry/revocation и no-effect.
+Первые stale-context/schema/pagination fixtures FAIL исправлены; shared
+producer/caster golden обновлён по новой закрытой схеме. Новый code пока не
+доставлен: нельзя перезапускать controller под работающим Developer ради QA.
+
+Native Developer RUNNING/rootseq1498, restart0; правильный checkout находится
+в /workspace/work/issue1796, backing git отдельно. Первый замеченный checkpoint
+29125ba22356547a0823c44e184c85fd76009550 создан13:16:17 UTC, dirty count1.
+Проверка git на корне workspace дала NOT_REPOSITORY: там snapshot с пустым
+.git, не actual checkout; данные/команды агента не менялись. Final/push/ONE
+Review/Manager/owner ещё не подтверждены. Продолжать их сопровождение, затем
+safe delivery/natural retest, mobile presentation и оставшиеся7/QA65/gates.
 
 ## Checkpoint 14.10.2026 12:25 UTC — выдача восстановлена, Developer реально работает
 

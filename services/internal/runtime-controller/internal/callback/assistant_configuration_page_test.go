@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"math"
 	"reflect"
 	"strings"
@@ -238,7 +239,11 @@ func TestAssistantConfigurationPageSchemaBudget(t *testing.T) {
 		t.Fatal("schema, parser и guidance расходятся по размеру страницы")
 	}
 	input.AssistantContext = nil
+	if _, exposed := assistantConfigurationCatalogInputSchema(input)["properties"].(map[string]any)["maximum_bytes"]; !exposed {
+		t.Fatal("safe runtime metadata pages require unrelated screen context")
+	}
+	input.AssistantScope = runtimecontract.AssistantScopeNone
 	if _, exposed := assistantConfigurationCatalogInputSchema(input)["properties"].(map[string]any)["maximum_bytes"]; exposed {
-		t.Fatal("страницы раскрыты вне доступного exact resource context")
+		t.Fatal("configuration pages exposed outside assistant scope")
 	}
 }

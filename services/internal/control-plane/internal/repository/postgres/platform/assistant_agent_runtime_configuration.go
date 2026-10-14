@@ -5,12 +5,36 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 	"github.com/jackc/pgx/v5"
 )
+
+// Locator найденного сотрудника не несёт полномочий. Actor/project назначены
+// fresh lease resolver; оба штатных reader повторяют agent.view eligibility.
+// Полные инструкции и любые изменения остаются на отдельном context-bound пути.
+func (repository *Repository) assistantResolvedAgentRuntimeConfigurationTx(ctx context.Context, tx pgx.Tx, current scope, sourceScope, sourceProjectRef string, input entity.AssistantConfigurationCatalogRequest) (entity.AssistantConfigurationCatalogResponse, error) {
+	result := entity.AssistantConfigurationCatalogResponse{Kind: input.Kind, AssistantRef: input.AssistantRef, ScopeKind: "PROJECT", OrganizationRef: current.organizationRef, Entries: []entity.AssistantConfigurationCatalogEntry{}}
+	if input.EntityKind != "AGENT" || input.EntityRef == "" || input.Query != "" || input.Offset != 0 || input.AccountRef != "" || input.RuntimeProfileRef != "" {
+		return result, errs.ErrInvalid
+	}
+	agent, err := repository.readAssistantAgentConfigurationSnapshot(ctx, tx, current, input.EntityRef)
+	if err != nil {
+		return result, err
+	}
+	if agent.System || agent.ProjectRef == "" || sourceScope == "PROJECT" && (sourceProjectRef == "" || agent.ProjectRef != sourceProjectRef) {
+		return result, errs.ErrNotFound
+	}
+	configuration, err := repository.assistantAgentRuntimeConfigurationTx(ctx, tx, current, agent)
+	if err != nil {
+		return result, err
+	}
+	result.ProjectRef, result.AgentRuntimeConfiguration = agent.ProjectRef, &configuration
+	return result, nil
+}
 
 // Context и agent.view проверены до чтения; штатный target resolver сохраняет
 // точную project authority. Этот query не создаёт grants, audit или events.
@@ -57,6 +81,15 @@ func assistantAgentRuntimeConfigurationJSON(agent entity.Agent, view entity.Agen
 	if !exactSHA256(inventorySourceDigest) {
 		return nil, errs.ErrUnavailable
 	}
+	if view.Configuration.AgentRef != agent.Ref || view.Configuration.Ref == "" || view.Configuration.Version < 1 || !exactSHA256(view.Configuration.Digest) ||
+		strings.TrimSpace(view.Configuration.Provider) == "" || strings.TrimSpace(view.Configuration.Model) == "" {
+		return nil, errs.ErrUnavailable
+	}
+	policy := runtimecontract.DefaultRuntimeEnvironmentPolicyWithoutDigests()
+	policy.Resources = environment.CurrentVersion.Policy.Resources
+	if _, err := runtimecontract.NormalizeRuntimeEnvironmentPolicy(policy); err != nil {
+		return nil, errs.ErrUnavailable
+	}
 	// Настроенные инструменты ENV и подтверждённые бинарники image — разные наборы.
 	tools := make([]string, 0, len(environment.CurrentVersion.Tools))
 	for _, tool := range environment.CurrentVersion.Tools {
@@ -66,7 +99,17 @@ func assistantAgentRuntimeConfigurationJSON(agent entity.Agent, view entity.Agen
 		"binding_ref": binding.Ref, "binding_version": binding.Version, "binding_digest": binding.Digest,
 		"environment_ref": environment.Ref, "environment_name": environment.Name, "environment_version": environment.Version,
 		"published_version_ref": environment.CurrentVersion.Ref, "published_revision": environment.CurrentVersion.Revision, "published_digest": environment.CurrentVersion.Digest,
-		"image": image, "configured_tools": tools, "verified_tool_inventory": inventory}
+		"image": image, "configured_tools": tools, "verified_tool_inventory": inventory,
+		"model_configuration": map[string]any{"ref": view.Configuration.Ref, "version": view.Configuration.Version,
+			"digest": view.Configuration.Digest, "provider": view.Configuration.Provider, "model": view.Configuration.Model},
+		"resources": runtimecontract.RuntimeResourcePolicy{
+			CPURequestMilli:            environment.CurrentVersion.Policy.Resources.CPURequestMilli,
+			CPULimitMilli:              environment.CurrentVersion.Policy.Resources.CPULimitMilli,
+			MemoryRequestMiB:           environment.CurrentVersion.Policy.Resources.MemoryRequestMiB,
+			MemoryLimitMiB:             environment.CurrentVersion.Policy.Resources.MemoryLimitMiB,
+			EphemeralStorageRequestMiB: environment.CurrentVersion.Policy.Resources.EphemeralStorageRequestMiB,
+			EphemeralStorageLimitMiB:   environment.CurrentVersion.Policy.Resources.EphemeralStorageLimitMiB,
+		}}
 	raw, err := json.Marshal(snapshot)
 	if err != nil || len(raw) > 1<<20 {
 		return nil, errs.ErrUnavailable
