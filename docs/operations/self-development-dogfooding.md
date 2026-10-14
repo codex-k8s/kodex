@@ -4,7 +4,7 @@ title: Самонастройка и разработка Kodex средства
 type: operations
 status: approved
 owner: manager
-version: 1.1.18
+version: 1.1.19
 updated: 2026-10-14
 ---
 
@@ -17,6 +17,8 @@ updated: 2026-10-14
   linewise content presence5/5. Не новое original USER/DB equality.
 - [x] Own36 Chrome MCP/SSO/reload/realtime; Console0, проверенные API200.
 - [x] Frontend i18n адресный повтор PASS11/11 наHOT0b5af51c/source-equivalent tree.
+- [x] Fresh frontend203 whole unit400files/3993tests и production build/types;
+  исходный6FAIL canvas fixture исправлен без ослабления geometry asserts.
 - [ ] Native финальные код/tests/push, ONE Review, Manager/owner и paid case.
 - [ ] Idle delivery WORKFLOW_METADATA/native повтор, QA65 и bootstrap gates/main.
 

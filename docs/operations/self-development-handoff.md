@@ -4,11 +4,37 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.26
+version: 1.1.27
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 16:09 UTC — полный frontend unit/build PASS
+
+SOURCE/remote/Draft1807 203abbfd83aea112f8236ffacb50876786c72194 MATCH;
+HOT0b5af51c без обновления. Первый полный frontend unit наHOT:400files,
+3984PASS/6FAIL за105.47s. Все6 FAIL относятся к RunGraphCanvas.test.ts:
+Node custom renderer не имел window для новой mobile onMounted логики.
+Оснастка теперь создаёт локальный EventTarget/innerWidth через vi.stubGlobal,
+сначала unmount, потом unstubAllGlobals. Старые geometry/resize asserts
+не ослаблены; добавлены3 desktop/mobile/default/explicit-choice проверки.
+Context7 Vitest4.1.6 stubGlobal/unstubAllGlobals проверен.
+
+На203: scoped RunGraphCanvas30/30 PASS749ms, ESLint/Prettier PASS,
+typecheck PASS. Fresh полный unit SOURCE:400files/3993tests/failed0/pending0/
+todo0, elapsed103.518s, JSONreport digest
+77f9df3059f87840c2ded30121446b05f7728702155b092a54c693d362652a2c.
+Production build/typecheck PASS, Vite9.30s; предупреждение chunks>500kB
+сохранено, не объявляется отсутствующим. Runtime PWA bytes не менялись:
+единственное frontend отличие отHOT — исправленный test файл. Это не
+новый deploy или Playwright/full QA acceptance.
+
+Native root/Developer RUNNING1411, latest local business head
+e4c14d8508e488fe34481c574d565ed63ccbb9e7/dirty1 на16:08;
+это не подтверждённый remote/final/tests verdict. Model Pod не перезапускался.
+Дальше — native final/ONE Review/Manager, workspace post-join check,
+idle metadata delivery/retest, supported finance/QA65/gates/main.
 
 ## Checkpoint 14.10.2026 15:52 UTC — prompt и serving process Developer доказаны
 

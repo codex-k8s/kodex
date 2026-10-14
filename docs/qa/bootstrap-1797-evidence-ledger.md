@@ -4,9 +4,23 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.26
+version: 1.0.27
 updated: 2026-10-14
 ---
+
+## 14.10.2026 16:09 UTC — frontend baseline на203
+
+- Initial full HOT0b5 unit FAIL:400files/3984PASS/6FAIL/105.47s; Node canvas
+  fixture не предоставляла browser window новой mobile логике.
+- Source203 исправляет только test harness: EventTarget/innerWidth и
+  cleanup после unmount, прежние assert сохранены,3 новых mobile/resize tests.
+  Context7 Vitest4.1.6 проверен. Scoped30PASS/749ms, lint/format/types PASS.
+- Fresh whole frontend unit203 PASS:400files/3993tests/failed0/pending0/todo0,
+  103.518s; JSON reportSHA77f9df30…2a2c. Production build/typecheck PASS,
+  Vite9.30s; large chunk warning сохранён. Это local checks, не GitHub CI.
+- HOT/source production frontend byte-equivalent; test не доставлялся в Pods,
+  native root/Developer RUNNING1411, current final/Review/Manager ещё OPEN.
+- Metadata idle delivery, paid/QA65/bootstrap gates/merge/main не выполнены.
 
 ## 14.10.2026 15:52 UTC — current Developer materialization и process scope
 
