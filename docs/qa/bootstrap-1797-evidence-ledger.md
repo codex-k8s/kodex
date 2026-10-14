@@ -4,9 +4,24 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.25
+version: 1.0.26
 updated: 2026-10-14
 ---
+
+## 14.10.2026 15:52 UTC — current Developer materialization и process scope
+
+- Repo-owned ACK capture CAPTURED/same PodUID/rejoin; actual ENV30/binding31,
+  instruction4, gpt-6.1-sol/medium, tools38/grants26/capabilities27.
+- Instructions105641B/e2039c88 и task7188B/536385ef MATCH actual files/inbox;
+  expected assignment из pinned runtime.json MATCH provider task. Первое
+  expected-task NOT_RUN superseded адресным повтором, не root USER/DB equality.
+- Role serving PID14/start43131587/ELFf87a50a1 MATCH image-file и fresh rejoin.
+  Provider /proc/exe UNAVAILABLE остаётся отдельно; identity не повышалась.
+- Four bounded fields1/1/1/2 строк доставлены без потери содержательных строк;
+  source lengths46/2243/15/3796B. Whole fourth substring absent, linewise
+  presence5/5 PASS; не заявляется byte-concatenation или original USER/DB proof.
+- Native PR1809 remotec03137e MATCH; later local55d97c74/dirty3 ещё не remote
+  либо final/tests/Review PASS. Root/Developer RUNNING1324, всё остальное OPEN.
 
 ## 14.10.2026 15:37 UTC — commit/push восстановленной ветки
 

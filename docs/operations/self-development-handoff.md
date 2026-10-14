@@ -4,11 +4,47 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.25
+version: 1.1.26
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 15:52 UTC — prompt и serving process Developer доказаны
+
+SOURCE/remote/Draft1807 bbd48c8dd66d138a59d27be217fc509c83f4d816 MATCH,
+HOT0b5af51c clean. Retry11 Developer по-прежнему RUNNING/rootseq1324;
+native PR1809 уже headc03137e29a3be02b4bd5552edf0cfb279152d259 MATCH15:42,
+позже локальный head55d97c744029ce9ce4817b1ab5ba48c4aa208d9b/dirty3.
+Последний local head не выдаётся за remote/final/tests PASS.
+
+Repo-owned provider-input-ack-capture read-only завершён CAPTURED/same UID
+086b5bc0-dc8e-492e-a2ec-6197717cf57b/rejoin: sessionR2n7/turnhTpU/attempt1,
+RuntimeRevisionhna/9c686224 MATCH. Actual modelgpt-6.1-sol/medium/SUPPORTED,
+ENV30/binding31/instruction4, tools38/grants26/capabilities27.
+105641B instructions/e2039c8878d7b07570c0c35cdcad73691eb132d4eeeaa1e7f867f57fbc17a055
+и7188B task/inbox536385efdeb3c3aee9ee0431d9f0634299b51a4762642bbd7733b8654187c0e9
+EQUAL. Fresh expected-task hash взят из pinned immutable runtime.json;
+первая проверка NOT_RUN, повтор task_expected_comparison EQUAL.
+Это assignment → provider proof, не отдельное сравнение всей исходной
+owner USER записи с PostgreSQL. InputDigest42a28c06 MATCH; raw JSON file SHA
+не является этим canonical bounded-input digest и не сравнивается с ним.
+
+Same Pod actual role runner PID14/startTicks43131587 ELF
+f87a50a1b1a28edeb9a2b0dfc45e5e3a2e84e0ce53bee2339176b8e8304bbc4b
+совпал с image-file; повторные PID/start/ELF/PodUID MATCH. Provider UID не
+позволил прочитать его /proc/exe; это не обходилось и не подменяет scope
+доказанного role serving process. Сами инструкции прочитаны только для
+digest/наличия строк, значения не опубликованы.
+
+Проверены four bounded fields:1/1/1/2 непустые строки, все5 присутствуют
+в actual AGENTS.md/task. Fourth3796B не присутствует цельной подстрокой,
+но обе его строки доставлены полностью; потеря содержания не доказана.
+Исходные fingerprints: field0013dd070af/46B, field0028078c8f1/2243B,
+field00313033031/15B, field0043ed38104/3796B. Неверный workspace path guard
+первого checker завершился exit2, затем использован contract root/workspace;
+это оснастка, не ошибка приложения. Native final/ONE Review/Manager/paid,
+idle metadata delivery/QA65/gates/main по-прежнему OPEN.
 
 ## Checkpoint 14.10.2026 15:37 UTC — новый native checkpoint уже в PR
 
