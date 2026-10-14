@@ -4,9 +4,23 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.27
+version: 1.0.28
 updated: 2026-10-14
 ---
+
+## 14.10.2026 16:33 UTC — Developer detail desktop/mobile
+
+- Current own node карточка Developer/start19:07 local: Playwright обычный
+  owner SSO, desktop1280x900/mobile390x844 screenshots просмотрены;
+  page overflowfalse, compact messages/tools, Console0/relevant API200/Network0.
+  17 transcript fragments соответствуют текущему исполнителю; не чужим chats.
+- Root/Developer RUNNING1496, business1809 remoteaa0130c MATCH.
+  Измеренный provider memory2254Mi→262Mi не является peak или final PASS.
+- Native commentary сообщает4FAIL собственного business frontend набора;
+  ROOT не выполнял/не правил его checkout, scoped finance acceptance OPEN.
+  Наш independent frontend203 whole3993PASS остаётся отдельным receipt.
+- Результат/ONE Review/Manager/owner, post-join readiness, metadata delivery,
+  real paid/QA65/bootstrap gates/main ещё OPEN. Чужие вкладки не изменены.
 
 ## 14.10.2026 16:09 UTC — frontend baseline на203
 

@@ -4,11 +4,34 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.27
+version: 1.1.28
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 16:33 UTC — текущая карточка Developer проверена
+
+SOURCE/remote/Draft1807 8bf89ff6e082f94279cc54fffc04d4418a3e8e3d MATCH,
+HOT0b5af51c. Real Developer RUNNING/rootseq1496, remote business1809
+headaa0130c6d5284b4c1b3aec8dc57f969c233a6ab6 MATCH16:19.
+Pod metrics16:17: provider4CPU/2254Mi; позже262Mi. Это samples, не peak
+или доказательство final/tests PASS. Readiness пока не объявляется зелёной.
+
+Own36 закрыт только собственный пустой helper overlay; обычный node dblclick
+открыл карточку именно текущего Developer, start19:07 local. Разрешённый
+Playwright fallback с обычным SSO: desktop1280x900/mobile390x844 screenshots
+просмотрены. Компактные intermediate/tool groups, профиль/мобильное сворачивание,
+внутренняя прокрутка и отсутствие page overflow PASS; Console0, relevant
+API200/Network0.17 transcript fragments — группы текущего Developer,
+не17 чужих сессий. Это UI proof, не comprehensive review бизнес-кода.
+
+Его published commentary20:24 local сообщает business frontend3509PASS/4FAIL:
+две realtime fixtures без finance projection, i18n timeout и Playwright
+reporter HOME fixture. Это заявление исполнителя, не ROOT test receipt;
+оно не подменяет наш frontend203/3993PASS. Native исправления продолжаются,
+Host business code/USER corrections0. Следующие gates прежние: final/ONE
+Review/Manager, workspace post-join, idle metadata/live QA, paid/main.
 
 ## Checkpoint 14.10.2026 16:09 UTC — полный frontend unit/build PASS
 
