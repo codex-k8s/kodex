@@ -40,13 +40,25 @@ func ParseProviderFinancialObservation(raw []byte) (ProviderFinancialObservation
 	if len(raw) == 0 || len(raw) > maximumProjectionBytes || !utf8.Valid(raw) || financialJSONKeys(raw) != nil {
 		return ProviderFinancialObservation{}, invalid
 	}
-	var observation ProviderFinancialObservation
+	// Alias исключает повторный вызов UnmarshalJSON при проверке wire payload.
+	type plainObservation ProviderFinancialObservation
+	var decoded plainObservation
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&observation) != nil || observation.Validate() != nil {
+	if decoder.Decode(&decoded) != nil || ProviderFinancialObservation(decoded).Validate() != nil {
 		return ProviderFinancialObservation{}, invalid
 	}
-	return observation, nil
+	return ProviderFinancialObservation(decoded), nil
+}
+
+// Вложенный callback проходит ту же закрытую проверку, что stored projection.
+func (value *ProviderFinancialObservation) UnmarshalJSON(raw []byte) error {
+	observation, err := ParseProviderFinancialObservation(raw)
+	if err != nil {
+		return err
+	}
+	*value = observation
+	return nil
 }
 
 func (value ProviderFinancialObservation) Validate() error {
