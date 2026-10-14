@@ -4,9 +4,32 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.33
+version: 1.0.34
 updated: 2026-10-14
 ---
+
+## 14.10.2026 19:56 UTC — source fixture и initial file link
+
+- Retry12 Architect technical SUCCEEDED/semantic BLOCKED из-за отсутствующего
+  full routing source; пять своих outputs owner EOF/hash/revision MATCH5/5.
+  Root FAILED, Developer не запущен, Review0; Web refusal не объявлен OAuth
+  отказом или устранённым. Старый observer остановлен после terminal.
+- Public upstream exact commit/tag/blob/Git-object proof;6 FULL account files,
+  CLEAN artifact105716B/71674182, повтор owner EOF/metadata MATCH. Новый sealed
+  set11items сохраняет прежние10 без изменений,53293757B/manifest31e1c7be.
+  Это public source delivery, не native architecture/finance acceptance.
+- Normal new root hC5h/attempt1 с original title/task/four input UTF8/hash
+  MATCH, только новый attachment set. В19:56 INTAKE/root RUNNING342; Developer,
+  ONE Review/Manager PLANNED. Exact observer58183 жив, ожидание не capture PASS.
+- Files deep-link LIVE FAIL на HOT5d: immediate watch терял initial ref до
+  загрузки списка. SOURCE-only fix использует existing guarded canonical read,
+  exact project/lifecycle и AbortSignal;18 targeted tests PASS2.63s.
+  Первые fixture/lifecycle/typecheck FAIL исправлены и не скрыты;
+  повтор18 tests/ESLint/vue-tsc exit0, corrected-link live delivery NOT RUN.
+- Current file details desktop/mobile screenshots просмотрены, overflowfalse,
+  Console0/Network0/API200. Это normal row selection, не deep-link retest.
+- Current MCP owner36 подключён; run API/graph/events200, Console0,
+  exact runtime Pod restarts0. Foreign tabs untouched. Paid/QA65/main OPEN.
 
 ## 14.10.2026 18:52 UTC — новый INTAKE EOF и native Architect delegation
 

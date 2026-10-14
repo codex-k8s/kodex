@@ -96,12 +96,6 @@ const scanState = ref<"ALL" | Artifact["scanState"]>("ALL");
 const source = ref<FileSource>("ALL");
 const selectedRef = ref(props.initialArtifactRef ?? "");
 watch(selectedRef, (value) => emit("selection", value));
-watch(
-  () => props.initialArtifactRef,
-  (value) => {
-    selectedRef.value = value ?? "";
-  },
-);
 const selectedRefs = ref<string[]>([]);
 const uploadQueue = ref<UploadQueueItem[]>([]);
 const activeUploadCount = ref(0);
@@ -254,8 +248,44 @@ const loadedArtifacts = computed(() =>
   items.value.map((item) => item.artifact),
 );
 const filteredArtifacts = computed(() => loadedArtifacts.value);
-const selectedArtifact = computed(() =>
-  loadedArtifacts.value.find((artifact) => artifact.ref === selectedRef.value),
+const selectedArtifact = computed(() => {
+  const artifact =
+    platform.artifacts[selectedRef.value] ??
+    loadedArtifacts.value.find((item) => item.ref === selectedRef.value);
+  return artifact?.projectRef === props.projectRef &&
+    artifact.lifecycleState === (trashMode.value ? "DELETED" : "ACTIVE")
+    ? artifact
+    : undefined;
+});
+watch(
+  () => props.initialArtifactRef,
+  (value, _previous, onCleanup) => {
+    selectedRef.value = value ?? "";
+    if (!value) return;
+    const controller = new AbortController();
+    onCleanup(() => controller.abort());
+    void (async () => {
+      try {
+        const artifact = await platform.readArtifact(
+          value,
+          controller.signal,
+          props.projectRef,
+        );
+        if (controller.signal.aborted || selectedRef.value !== value) return;
+        if (
+          artifact.ref !== value ||
+          artifact.projectRef !== props.projectRef ||
+          artifact.lifecycleState !== (trashMode.value ? "DELETED" : "ACTIVE")
+        )
+          throw new Error("Artifact deep-link eligibility mismatch");
+      } catch (error) {
+        if (controller.signal.aborted || selectedRef.value !== value) return;
+        selectedRef.value = "";
+        operationProblem.value = asProblem(error);
+      }
+    })();
+  },
+  { immediate: true },
 );
 const selectedArtifacts = computed(() => {
   const refs = new Set(selectedRefs.value);
@@ -539,6 +569,8 @@ const custom = computed(() =>
 watch(
   filteredArtifacts,
   (artifacts) => {
+    if (selectedRef.value && selectedRef.value === props.initialArtifactRef)
+      return;
     if (initialLoading.value && artifacts.length === 0) return;
     if (!artifacts.some((artifact) => artifact.ref === selectedRef.value))
       selectedRef.value = "";

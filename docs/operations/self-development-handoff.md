@@ -4,11 +4,59 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.33
+version: 1.1.34
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 19:56 UTC — полный routing source и новый обычный запуск
+
+Retry12 root `run_B7CPJ87KuTKxQAKR10A6ZXWX` FAILED после Architect:
+технически SUCCEEDED, содержательно BLOCKED. Его пять собственных результатов
+прочитаны до EOF с повторным metadata readback: bytes/SHA/revision MATCH5/5.
+Обязательного `workspace_routing.rs` не было в прежнем source packet; native
+Web зафиксировал `Failed to fetch restricted URL`. Developer не запускался,
+Reviewer/Manager CANCELLED. Это не отказ OAuth и не устранённая filesystem
+причина Retry11. Старый bounded observer завершён только после terminal root.
+
+В рамках разрешённого независимого pinned public source подготовлено полное
+содержимое шести файлов account processor/routing/tests на upstream commit
+`a956835d020762cb2b570053af06f643a11c0ecc`, tag `rust-v0.160.0`.
+Public repository pull eligibility подтверждена; GitHub blob и независимые
+Git objects совпали. Routing21222B/SHA256
+`2d2e1badd55ac8805ac344f8b921ac10d7f6bc0b8b9679108ddb3bb288f09c92`.
+Это отдельная публичная source fixture, не повтор заблокированного Web URL,
+не бизнес-реализация Host и не доказательство native source gate PASS.
+
+Штатный UI upload создал CLEAN/ACTIVE artifact `art_ihZjk38_EzA7E5FkgBqD4jGQ`,
+revision `arv_52b7a4a955c24ec0b09ba70706d34796`, version1,105716B/SHA256
+`7167418244521096ffd1c9ff13097d3f91f10c23f22add3f112da3975239d5a6`.
+Full owner READ до EOF и повтор metadata MATCH. Новое FINALIZED attachment set
+`aset_QxjOo0CVg24610MC7zYQ2VzE` revision2 содержит прежние10 items без изменения
+их позиции/ref/revision/version/digest/size плюс новый файл, всего53293757B;
+manifest `31e1c7be0e988e5094cea0198d911de20434bf7721e2f601af2ceee368972678`.
+
+После terminal Retry12 создан normal RunCreate
+`run_hC5hBpEwC0W1JRrytnZaUkf2`, session `ses_8Sr9N2P2DAhRXfPPl8BfN9g1`,
+attempt1, Workflow49/published16. Original title121B/task1405B и четыре input
+поля независимо сверены по полным UTF8 bytes/hash с исходной owner записью
+и native owner-input. Изменён только attachment set; новых USER указаний,
+ручного SQL или Host business implementation нет. В19:56 root RUNNING342,
+INTAKE `run_qbkSA18tTpG49Fcm88t2Na75` активен; прочие этапы PLANNED.
+Exact Developer observer58183 ожидает server-created node
+`nod_Qck_zazkF6rWhF38nM_M00HU`; это не capture или terminal PASS.
+
+Файловый экран: текущий HOT5d открывает файл по клику, но initial deep-link
+теряется до первой загрузки списка — LIVE FAIL. SOURCE исправляет чтение
+exact artifact через существующий owner/project guarded canonical store,
+независимо от первой страницы/вкладки; чужой/удалённый файл и поздний ответ
+после unmount отклоняются. Адресные18 tests PASS2.63s; первоначальные unit и
+typecheck FAIL сохранены, неверный lifecycle helper исправлен. Повтор18 tests,
+ESLint и vue-tsc exit0; hot delivery NOT RUN, активный HOT не менялся.
+Desktop/mobile file details screenshots просмотрены: overflowfalse,
+Console0/Network0/relevant API200. Это открытие по клику, не corrected
+deep-link LIVE PASS. ONE Review/Manager/paid/QA65/bootstrap/main OPEN.
 
 ## Checkpoint 14.10.2026 18:52 UTC — Retry12 INTAKE опубликован, Architect запущен
 

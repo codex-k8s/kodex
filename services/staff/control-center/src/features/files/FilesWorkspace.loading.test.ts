@@ -8,7 +8,7 @@ import {
   type SetupContext,
 } from "vue";
 import { createI18n } from "vue-i18n";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import FilesWorkspace from "./FilesWorkspace.vue";
 import { AppProblem } from "@/shared/api/problem";
 import type { Artifact } from "@/shared/api/generated/openapi/types.gen";
@@ -18,6 +18,7 @@ const platform = vi.hoisted(() => ({
   artifacts: {} as Record<string, Artifact>,
   projects: {},
   realtimeSnapshot: vi.fn(),
+  readArtifact: vi.fn(),
 }));
 vi.mock("./api", () => ({
   ...api,
@@ -67,9 +68,12 @@ type State = {
   initialLoading: Ref<boolean>;
   refresh: () => void;
   query: Ref<string>;
+  selectedRef: Ref<string>;
+  selectedArtifact: Ref<Artifact | undefined>;
+  operationProblem: Ref<AppProblem | undefined>;
 };
 const unmounts: (() => void)[] = [];
-function mount() {
+function mount(initialArtifactRef?: string) {
   let state!: State;
   const renderer = createRenderer<object, object>({
     patchProp() {},
@@ -90,7 +94,11 @@ function mount() {
     defineComponent({
       setup(_props, context) {
         state = component.setup(
-          reactive({ projectRef: "prj_fixture", mode: "ACTIVE" }),
+          reactive({
+            projectRef: "prj_fixture",
+            mode: "ACTIVE",
+            initialArtifactRef,
+          }),
           context,
         );
         return () => null;
@@ -111,6 +119,9 @@ function mount() {
   unmounts.push(() => app.unmount());
   return state;
 }
+beforeEach(() => {
+  platform.artifacts = reactive({});
+});
 afterEach(() => {
   unmounts.splice(0).forEach((unmount) => unmount());
   platform.artifacts = {};
@@ -119,6 +130,71 @@ afterEach(() => {
 });
 
 describe("FilesWorkspace initial loading and retry", () => {
+  it("сохраняет ссылку до загрузки списка и читает файл отдельно от первой страницы", async () => {
+    vi.useFakeTimers();
+    platform.realtimeSnapshot.mockReturnValue({ scopeKey: "prj_fixture" });
+    const resultArtifact = { ...artifact, source: "AGENT_RESULT" as const };
+    platform.readArtifact.mockImplementationOnce(() => {
+      platform.artifacts[artifact.ref] = resultArtifact;
+      return Promise.resolve(resultArtifact);
+    });
+    const state = mount(artifact.ref);
+    expect(state.selectedRef.value).toBe(artifact.ref);
+    await vi.runAllTimersAsync();
+    expect(platform.readArtifact).toHaveBeenCalledWith(
+      artifact.ref,
+      expect.any(AbortSignal),
+      "prj_fixture",
+    );
+    expect(state.items.value).toEqual([]);
+    expect(state.selectedArtifact.value).toEqual(resultArtifact);
+    expect(state.selectedRef.value).toBe(artifact.ref);
+  });
+
+  it("не показывает чужой проект, удалённый файл и отказ прямого чтения", async () => {
+    vi.useFakeTimers();
+    platform.realtimeSnapshot.mockReturnValue({ scopeKey: "prj_fixture" });
+    for (const candidate of [
+      { ...artifact, projectRef: "prj_foreign" },
+      { ...artifact, lifecycleState: "DELETED" as const },
+    ]) {
+      platform.artifacts[artifact.ref] = candidate;
+      platform.readArtifact.mockResolvedValueOnce(candidate);
+      const state = mount(artifact.ref);
+      await vi.runAllTimersAsync();
+      expect(state.selectedArtifact.value).toBeUndefined();
+      expect(state.selectedRef.value).toBe("");
+      expect(state.operationProblem.value).toBeDefined();
+      unmounts.pop()?.();
+    }
+    platform.artifacts = {};
+    platform.readArtifact.mockRejectedValueOnce(unavailable);
+    const state = mount(artifact.ref);
+    await vi.runAllTimersAsync();
+    expect(state.selectedArtifact.value).toBeUndefined();
+    expect(state.operationProblem.value).toBe(unavailable);
+  });
+
+  it("unmount отменяет прямое чтение файла и не принимает поздний результат", async () => {
+    vi.useFakeTimers();
+    platform.realtimeSnapshot.mockReturnValue({ scopeKey: "prj_fixture" });
+    let accept!: (value: Artifact) => void;
+    platform.readArtifact.mockImplementationOnce(
+      () =>
+        new Promise<Artifact>((resolve) => {
+          accept = resolve;
+        }),
+    );
+    const state = mount(artifact.ref);
+    const signal = platform.readArtifact.mock.calls[0]?.[1] as AbortSignal;
+    unmounts.pop()?.();
+    expect(signal.aborted).toBe(true);
+    accept({ ...artifact, projectRef: "prj_foreign" });
+    await vi.runAllTimersAsync();
+    expect(state.operationProblem.value).toBeUndefined();
+    expect(state.selectedRef.value).toBe(artifact.ref);
+  });
+
   it("без realtime snapshot читает typed list, показывает503 и явно повторяет чтение", async () => {
     vi.useFakeTimers();
     api.loadArtifactPage
