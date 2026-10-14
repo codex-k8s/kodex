@@ -1528,6 +1528,61 @@ describe("assistant workspace store", () => {
     );
   });
 
+  it("поздний ответ Send обновляет исходный диалог, сохраняя новый ручной выбор", async () => {
+    const initial = conversation();
+    const other = { ...conversation(), ref: "cnv_other", turns: [] };
+    const accepted = {
+      ...initial,
+      version: initial.version + 1,
+      turns: [...initial.turns, userTurn("QUEUED")],
+    };
+    const pending = deferred<AssistantConversation>();
+    appendTurnMock.mockReturnValueOnce(pending.promise);
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.conversations = [initial, other];
+    store.selectedRef = initial.ref;
+
+    const sending = store.send("Новое сообщение");
+    expect(appendTurnMock).toHaveBeenCalledOnce();
+    store.selectedRef = other.ref;
+    pending.resolve(accepted);
+    await sending;
+
+    expect(store.selectedRef).toBe(other.ref);
+    expect(store.selectedConversation?.turns).toEqual([]);
+    expect(
+      store.conversations.find((item) => item.ref === initial.ref),
+    ).toEqual(accepted);
+  });
+
+  it("поздний ответ Stop обновляет исходный ход, сохраняя новый ручной выбор", async () => {
+    const initial = {
+      ...conversation(),
+      turns: [{ ...userTurn("RUNNING"), runRef: "run_active" }],
+    };
+    const other = { ...conversation(), ref: "cnv_other", turns: [] };
+    const pending = deferred<string>();
+    cancelAssistantTurnMock.mockReturnValueOnce(pending.promise);
+    const store = useAssistantStore();
+    store.setContext(context, "prj_sales");
+    store.conversations = [initial, other];
+    store.selectedRef = initial.ref;
+
+    const stopping = store.stopActiveTurn();
+    expect(cancelAssistantTurnMock).toHaveBeenCalledOnce();
+    store.selectedRef = other.ref;
+    pending.resolve("run_active");
+    await stopping;
+
+    expect(store.selectedRef).toBe(other.ref);
+    expect(store.selectedConversation?.turns).toEqual([]);
+    expect(
+      store.conversations.find((item) => item.ref === initial.ref)?.turns[0]
+        ?.state,
+    ).toBe("CANCELLED");
+  });
+
   it.each(["CLOSED", "ARCHIVED"] as const)(
     "Stop не отправляет mutation для %s",
     async (state) => {

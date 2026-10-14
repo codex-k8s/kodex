@@ -1021,7 +1021,7 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
             undefined,
             deliveryMode,
           );
-      upsertConversation(appended);
+      upsertConversation(appended, false);
     });
   }
 
@@ -1030,15 +1030,18 @@ export const useAssistantStore = defineStore("assistant-workspace", () => {
     if (!conversation || conversation.state !== "ACTIVE") return;
     await runMutation(async () => {
       const runRef = await cancelAssistantTurn(conversation);
-      upsertConversation({
-        ...conversation,
-        turns: conversation.turns.map((turn) =>
-          turn.runRef === runRef &&
-          (turn.state === "QUEUED" || turn.state === "RUNNING")
-            ? { ...turn, state: "CANCELLED" }
-            : turn,
-        ),
-      });
+      upsertConversation(
+        {
+          ...conversation,
+          turns: conversation.turns.map((turn) =>
+            turn.runRef === runRef &&
+            (turn.state === "QUEUED" || turn.state === "RUNNING")
+              ? { ...turn, state: "CANCELLED" }
+              : turn,
+          ),
+        },
+        false,
+      );
     });
   }
 
