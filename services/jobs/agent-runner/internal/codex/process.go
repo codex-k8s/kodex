@@ -265,7 +265,7 @@ func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt [
 		} `json:"account"`
 	}
 	_ = json.Unmarshal(raw, &financialAccount)
-	state.financialEnabled = financialAccount.Account != nil && financialAccount.Account.Type == "chatgpt"
+	state.financialEnabled = financialIdentity != "" && financialAccount.Account != nil && financialAccount.Account.Type == "chatgpt"
 	state.financialBoundEpoch = state.financialEpoch
 	if err := server.observeFinancial(ctx, state); err != nil {
 		return Result{}, server.abort(ctx, state, err)
@@ -1083,13 +1083,23 @@ func readPinnedFinancialIdentity(input model.Input) (string, error) {
 	if err != nil || expectedErr != nil || hex.EncodeToString(digest[:]) != expected || int64(len(raw)) != info.Size() || statErr != nil || !os.SameFile(info, after) || after.Size() != info.Size() || !after.ModTime().Equal(info.ModTime()) || rejectDuplicateJSONKeys(raw) != nil {
 		return "", errors.New("Codex authentication snapshot does not match the pinned provider account")
 	}
+	return managedFinancialIdentity(raw)
+}
+
+// Вызывается только после проверки immutable snapshot digest. Этот selector
+// не авторизует process и не читает external-token auth для нового finance path.
+func managedFinancialIdentity(raw []byte) (string, error) {
 	var identity struct {
-		Tokens *struct {
+		AuthMode string `json:"auth_mode"`
+		Tokens   *struct {
 			AccountID *string `json:"account_id"`
 		} `json:"tokens"`
 	}
 	if json.Unmarshal(raw, &identity) != nil {
 		return "", errors.New("Codex authentication snapshot is invalid")
+	}
+	if identity.AuthMode != "chatgpt" {
+		return "", nil
 	}
 	if identity.Tokens == nil || identity.Tokens.AccountID == nil {
 		return "", nil

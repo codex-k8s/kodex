@@ -124,3 +124,21 @@ func TestFinancialMethodAbsenceDoesNotSuppressOtherFailures(t *testing.T) {
 		}
 	}
 }
+
+func TestFinancialCollectorRequiresOrdinaryManagedIdentity(t *testing.T) {
+	for _, row := range []struct {
+		raw  string
+		want string
+	}{
+		{`{"auth_mode":"chatgpt","tokens":{"account_id":"synthetic-private-account"}}`, "synthetic-private-account"},
+		{`{"auth_mode":"chatgptAuthTokens","tokens":{"account_id":"synthetic-private-account"}}`, ""},
+		{`{"auth_mode":"apikey"}`, ""},
+		{`{"tokens":{"account_id":"synthetic-private-account"}}`, ""},
+		{`{"auth_mode":"chatgpt","tokens":{"account_id":null}}`, ""},
+	} {
+		got, err := managedFinancialIdentity([]byte(row.raw))
+		if err != nil || got != row.want {
+			t.Fatal("financial identity crossed the managed auth boundary")
+		}
+	}
+}
