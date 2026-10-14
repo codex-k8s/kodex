@@ -12,7 +12,7 @@ func TestFinancialWireRoundTripDoesNotInferPaidAdmission(t *testing.T) {
 	spending := true
 	balance := "59999.1234567890123456789"
 	reset := int64(1800000000)
-	observation := runtimecontract.ProviderFinancialObservation{Sequence: 1, State: "AVAILABLE", Windows: []runtimecontract.ProviderFinancialWindow{{UsedPercent: 100, ResetsAt: &reset}}, Credits: &runtimecontract.ProviderFinancialCredits{HasCredits: true, Balance: &balance}, OrdinaryUsageAllowed: &ordinary, SpendControlReached: &spending, Restriction: "workspace_owner_usage_limit_reached"}
+	observation := runtimecontract.ProviderFinancialObservation{Sequence: 1, State: "AVAILABLE", Windows: []runtimecontract.ProviderFinancialWindow{{UsedPercent: 100, ResetsAt: &reset}}, Credits: &runtimecontract.ProviderFinancialCredits{HasCredits: new(true), Balance: &balance}, OrdinaryUsageAllowed: &ordinary, SpendControlReached: &spending, Restriction: "workspace_owner_usage_limit_reached"}
 	if actual := financialObservation(castFinancialObservation(observation)); !reflect.DeepEqual(actual, observation) {
 		t.Fatal("wire conversion lost independent financial facts")
 	}

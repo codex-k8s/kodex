@@ -8666,8 +8666,8 @@ message ProviderFinancialWindow {
   optional int64 resets_at = 3;
 }
 message ProviderFinancialCredits {
-  bool has_credits = 1;
-  bool unlimited = 2;
+  optional bool has_credits = 1;
+  optional bool unlimited = 2;
   optional string balance = 3;
 }
 message ProviderFinancialObservation {

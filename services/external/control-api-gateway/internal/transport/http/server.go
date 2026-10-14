@@ -623,7 +623,7 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 		return float64(0), field.JSONName() == "usedPercent"
 	}
 	if descriptor.FullName() == "controlplane.v1.ProviderFinancialCredits" && field.Kind() == protoreflect.BoolKind {
-		return false, field.JSONName() == "hasCredits" || field.JSONName() == "unlimited"
+		return false, false
 	}
 	if descriptor.FullName() == "controlplane.v1.ProviderAccount" && field.Kind() == protoreflect.BoolKind {
 		return false, field.JSONName() == "enabled" || field.JSONName() == "ready"

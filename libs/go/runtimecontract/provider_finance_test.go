@@ -5,7 +5,7 @@ import "testing"
 func TestFinancialObservationPreservesUnknownAndPaid(t *testing.T) {
 	balance := "59999.12345678901234567890123456789"
 	ordinary := false
-	value := ProviderFinancialObservation{Sequence: 1, State: "AVAILABLE", Windows: []ProviderFinancialWindow{{UsedPercent: 100}}, Credits: &ProviderFinancialCredits{HasCredits: true, Balance: &balance}, OrdinaryUsageAllowed: &ordinary}
+	value := ProviderFinancialObservation{Sequence: 1, State: "AVAILABLE", Windows: []ProviderFinancialWindow{{UsedPercent: 100}}, Credits: &ProviderFinancialCredits{HasCredits: new(true), Balance: &balance}, OrdinaryUsageAllowed: &ordinary}
 	if err := value.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -17,7 +17,7 @@ func TestFinancialObservationPreservesUnknownAndPaid(t *testing.T) {
 	if err := value.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	value.Credits.Unlimited = true
+	value.Credits.Unlimited = new(true)
 	if err := value.Validate(); err != nil {
 		t.Fatal(err)
 	}

@@ -5,72 +5,88 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"unicode/utf8"
 )
 
-// Обрабатываем только codex bucket; расширения upstream не становятся payload UI.
+// Поля supported codex bucket проверяются независимо; unknown не становится zero.
 func ParseCodexFinancialObservation(raw json.RawMessage, sequence int64) ProviderFinancialObservation {
 	unavailable := ProviderFinancialObservation{Sequence: sequence, State: "UNAVAILABLE"}
-	if len(raw) > 64<<10 || financialJSONKeys(raw) != nil {
+	if len(raw) > 64<<10 || !utf8.Valid(raw) || financialJSONKeys(raw) != nil {
 		return unavailable
 	}
-	type window struct {
-		UsedPercent        *int32 `json:"usedPercent"`
-		WindowDurationMins *int64 `json:"windowDurationMins"`
-		ResetsAt           *int64 `json:"resetsAt"`
-	}
-	type bucket struct {
-		LimitID   *string `json:"limitId"`
-		Primary   *window `json:"primary"`
-		Secondary *window `json:"secondary"`
-		Credits   *struct {
-			HasCredits *bool   `json:"hasCredits"`
-			Unlimited  *bool   `json:"unlimited"`
-			Balance    *string `json:"balance"`
-		} `json:"credits"`
-		SpendControlReached *bool   `json:"spendControlReached"`
-		Restriction         *string `json:"rateLimitReachedType"`
-	}
-	var response struct {
-		RateLimits *bucket            `json:"rateLimits"`
-		ByID       map[string]*bucket `json:"rateLimitsByLimitId"`
-		Ordinary   *bool              `json:"ordinaryUsageAllowed"`
-	}
-	if json.Unmarshal(raw, &response) != nil || response.RateLimits == nil || len(response.ByID) > 32 {
+	var response map[string]json.RawMessage
+	if json.Unmarshal(raw, &response) != nil || response == nil {
 		return unavailable
 	}
-	selected := response.RateLimits
-	if response.ByID != nil {
-		selected = response.ByID["codex"]
-		if selected == nil {
+	selected := response["rateLimits"]
+	if byID := response["rateLimitsByLimitId"]; len(byID) > 0 && !bytes.Equal(bytes.TrimSpace(byID), []byte("null")) {
+		var buckets map[string]json.RawMessage
+		if json.Unmarshal(byID, &buckets) != nil || len(buckets) > 32 {
+			return unavailable
+		}
+		selected = buckets["codex"]
+	}
+	var bucket map[string]json.RawMessage
+	if json.Unmarshal(selected, &bucket) != nil || bucket == nil {
+		return unavailable
+	}
+	if id := bucket["limitId"]; len(id) > 0 && !bytes.Equal(bytes.TrimSpace(id), []byte("null")) {
+		var value string
+		if json.Unmarshal(id, &value) != nil || value != "codex" {
 			return unavailable
 		}
 	}
-	if selected.LimitID != nil && *selected.LimitID != "codex" {
-		return unavailable
+	value := ProviderFinancialObservation{Sequence: sequence, State: "AVAILABLE", OrdinaryUsageAllowed: financialBool(response["ordinaryUsageAllowed"]), SpendControlReached: financialBool(bucket["spendControlReached"])}
+	var restriction string
+	if json.Unmarshal(bucket["rateLimitReachedType"], &restriction) == nil {
+		switch restriction {
+		case "rate_limit_reached", "workspace_owner_credits_depleted", "workspace_member_credits_depleted", "workspace_owner_usage_limit_reached", "workspace_member_usage_limit_reached":
+			value.Restriction = restriction
+		}
 	}
-	value := ProviderFinancialObservation{Sequence: sequence, State: "AVAILABLE", OrdinaryUsageAllowed: response.Ordinary, SpendControlReached: selected.SpendControlReached}
-	if selected.Restriction != nil {
-		value.Restriction = *selected.Restriction
-	}
-	for _, item := range []*window{selected.Primary, selected.Secondary} {
-		if item == nil {
+	for _, key := range []string{"primary", "secondary"} {
+		var window map[string]json.RawMessage
+		if json.Unmarshal(bucket[key], &window) != nil || window == nil {
 			continue
 		}
-		if item.UsedPercent == nil {
-			return unavailable
+		used := financialInteger(window["usedPercent"], 0, 100)
+		if used == nil {
+			continue
 		}
-		value.Windows = append(value.Windows, ProviderFinancialWindow{UsedPercent: *item.UsedPercent, DurationMinutes: item.WindowDurationMins, ResetsAt: item.ResetsAt})
+		value.Windows = append(value.Windows, ProviderFinancialWindow{UsedPercent: int32(*used), DurationMinutes: financialInteger(window["windowDurationMins"], 1, 5256000), ResetsAt: financialInteger(window["resetsAt"], 0, 253402300799)})
 	}
-	if credits := selected.Credits; credits != nil {
-		if credits.HasCredits == nil || credits.Unlimited == nil {
-			return unavailable
+	var credits map[string]json.RawMessage
+	if json.Unmarshal(bucket["credits"], &credits) == nil && credits != nil {
+		value.Credits = &ProviderFinancialCredits{HasCredits: financialBool(credits["hasCredits"]), Unlimited: financialBool(credits["unlimited"])}
+		var balance string
+		if json.Unmarshal(credits["balance"], &balance) == nil && financialBalance.MatchString(balance) {
+			value.Credits.Balance = &balance
 		}
-		value.Credits = &ProviderFinancialCredits{HasCredits: *credits.HasCredits, Unlimited: *credits.Unlimited, Balance: credits.Balance}
 	}
 	if value.Validate() != nil {
 		return unavailable
 	}
 	return value
+}
+func financialBool(raw json.RawMessage) *bool {
+	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil
+	}
+	var value bool
+	if json.Unmarshal(raw, &value) != nil {
+		return nil
+	}
+	return &value
+}
+func financialInteger(raw json.RawMessage, minimum, maximum int64) *int64 {
+	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil
+	}
+	var value int64
+	if json.Unmarshal(raw, &value) != nil || value < minimum || value > maximum {
+		return nil
+	}
+	return &value
 }
 
 // Закрываем повторные ключи до декодирования финансовых полей.

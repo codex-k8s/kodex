@@ -22,8 +22,8 @@ type ProviderFinancialWindow struct {
 	ResetsAt        *int64 `json:"resetsAt,omitempty"`
 }
 type ProviderFinancialCredits struct {
-	HasCredits bool    `json:"hasCredits"`
-	Unlimited  bool    `json:"unlimited"`
+	HasCredits *bool   `json:"hasCredits,omitempty"`
+	Unlimited  *bool   `json:"unlimited,omitempty"`
 	Balance    *string `json:"balance,omitempty"`
 }
 

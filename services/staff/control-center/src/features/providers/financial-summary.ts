@@ -63,6 +63,7 @@ export function financialCredits(
   if (!credits) return "Кредиты: недоступно";
   if (credits.unlimited) return "Кредиты: без ограничения";
   if (credits.balance !== undefined) return `Кредиты: ${credits.balance}`;
+  if (credits.hasCredits === undefined) return "Кредиты: недоступно";
   return credits.hasCredits
     ? "Кредиты: есть; баланс недоступен"
     : "Кредиты: нет; баланс недоступен";
