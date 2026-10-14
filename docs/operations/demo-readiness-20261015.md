@@ -4,7 +4,7 @@ title: Подготовка рабочего прототипа Kodex к дем�
 type: operations
 status: approved
 owner: manager
-version: 1.0.2
+version: 1.0.3
 updated: 2026-10-15
 ---
 
@@ -138,3 +138,24 @@ Applied migrations forward-only, данные и активные workloads со
   verify/reload API200 и Console0. Эти transient errors не скрываются.
   Остались final source фиксация/merge/main/readback/handoff; stage1 требует
   честного ограничения по невоспроизведённой historical primary причине.
+
+# Адресный checkpoint 15.10.2026 01:25 Саратов
+
+- HOT/SOURCE/remote9a94bae2 clean MATCH после approved owner idle FF21:16;
+  новая интеграция3db94948 добавляет только два kernel fixture-теста, не
+  production-код и не новый OCI. ROOT повторил fixture на exact3db94948:
+  PASS2.56s/vet/diff-check, реальные процессы UID10001/10002 без provider/сети.
+- Local Git worktree и7000 sparse cache files:7625 записей/114761864B,
+  normalization205ms при прежнем2s, canary131ms. Семь flat outputs дают
+  девять собранных artifacts/1201882B; canonical completion Validate PASS.
+  Приватные cache bodies mode0600 остаются EACCES для runner UID10001.
+- Negative guards PASS:10626 записей → ENTRY_COUNT_EXCEEDED,
+  1075454089B → BYTE_QUOTA_EXCEEDED, symlink → FILE_TYPE_INVALID.
+  Квоты10k/1GiB, canary, права и production-поведение не ослаблены.
+- Historical primary NOT_REPRODUCED/UNKNOWN, сравнение старого OCI NOT RUN.
+  Stage1 остаётся открытым: успешный synthetic fixture и actual normal smoke
+  не выдают утраченную первичную диагностику за установленную причину.
+- MCP owner UI connected/без overflow, actual session endpoint200 и Console0.
+  Ошибочная ручная probe /api/v1/auth/session дала404; правильный endpoint
+  /api/v1/session200. Это ошибка диагностической команды, не дефект приложения.
+  Merge/main/final handoff остаются отдельными открытыми этапами.

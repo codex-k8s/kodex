@@ -4,11 +4,36 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.39
+version: 1.1.40
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 21:25 UTC — тяжёлая оснастка без ослабления policy
+
+Approved owner idle FF21:16:01 доставил clean9a94bae2; runtime/leases/builds/
+admissions/promotions0, promoted85/pinsf82202f6 сохранены. SOURCE3db94948
+добавляет только два test-файла, без production/release изменений. ROOT
+прочитал оба файла и повторил compile двух test ELF, bounded dual-UID kernel
+fixture PASS2.56s и vet/diff-check PASS. Production image14e/source9e неизменны.
+
+Оснастка содержит реальный local Git worktree,7000 sparse cache files и
+семь flat outputs суммарно1201549B. Clean7625entries/114761864B:
+normalization205ms при прежнем2s, canary131ms, collect9/1201882B с проверкой
+каждого digest и canonical completion Validate. Mode0600 cache bodies
+остаются EACCES для UID10001. Overflow10626entries и1075454089B,
+symlink дают exact ENTRY_COUNT_EXCEEDED/BYTE_QUOTA_EXCEEDED/FILE_TYPE_INVALID.
+Только synthetic disposable процессы, без provider/GitHub/сети/live data.
+Реальная историческая причина NOT_REPRODUCED/UNKNOWN, old OCI comparison
+NOT RUN; stage1 не закрывается по этому PASS. Промпты не правились.
+
+MCP36 connected/session200/Console0/overflowfalse; ошибочная диагностическая
+probe /api/v1/auth/session404 не является application regression, штатный
+endpoint /api/v1/session200. GitHub на9a: mergeable clean, checks/statuses/
+reviews0; branch rules deletion/non_fast_forward/creation. Это не CI или
+approval PASS. Финальная публикация оснастки, bootstrap merge/main и handoff
+открыты; бизнес Draft1809 не меняется. Активная цель — OPS-DOC-DEMO-001.
 
 ## Checkpoint 14.10.2026 21:13 UTC — рабочий smoke и полный runner rollout
 

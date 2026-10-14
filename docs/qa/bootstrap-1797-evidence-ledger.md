@@ -4,9 +4,26 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.39
+version: 1.0.40
 updated: 2026-10-14
 ---
+
+## 14.10.2026 21:25 UTC — тяжёлый kernel fixture
+
+- Source3db94948, только2test files. ROOT compile двух ELF/vet/diff-check PASS;
+  dual-UID synthetic fixture PASS2.56s. Actual local Git worktree/7000 sparse
+  cache files/7flat outputs:7625entries/114761864B, normalizer205ms при2s,
+  canary131ms, collect9/1201882B, each digest/canonical completion Validate PASS.
+- Private cache bodies600 остаются EACCES UID10001. Count10626/bytes1075454089/
+  symlink дают точные закрытые negative reasons. Policy10k/1GiB unchanged.
+- Historical primary NOT_REPRODUCED/UNKNOWN, old OCI comparison NOT RUN.
+  Synthetic PASS не закрывает stage1 и не заменяет actual normal run proof.
+  Serving14e/compiled9e не пересобирается из-за test-only commit.
+- HOT/remote9a clean idle FF21:16 PASS, promoted85/pinsf822 preserved.
+  Chrome owner connected/session200/Console0/overflowfalse. Ошибочная
+  diagnostic endpoint probe404 отмечена отдельно, не app failure.
+- GitHub exact9a checks/statuses/reviews0, mergeable clean, только rules
+  deletion/non_fast_forward/creation; CI/approval NOT RUN, merge/main OPEN.
 
 ## 14.10.2026 21:13 UTC — normal smoke и full delivery
 
