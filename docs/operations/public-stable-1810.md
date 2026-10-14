@@ -165,3 +165,33 @@ release/fence matrix ещё не завершён. Пункт 2 остаётся
 - NOT RUN: установка relay, создание CA projection, новые маршруты и ACME,
   SSO cutover, новые образы и масштабирование. Private plan остаётся только
   локальным: topology и чужие resource details не добавляются в репозиторий.
+
+## Следующий пакет: исполняемый Go cutover и локальная сборка
+
+Добавлен `tools/release/stable-go-release.mjs`: приватные plan/apply/readback,
+exact cluster/resource identity, проверка drift до первого write и перед
+каждым PATCH, свежий owner idle read через существующий read-only SQL,
+сохранение promoted pins, журнал намерения до PATCH и контроль двух
+принадлежащих Deployment готовых Pod с фактическими imageID. Env/spec не
+сохраняются в плане и не передаются в argv; Secret references сохраняются.
+Apply требует отдельного owner решения и exact plan SHA, сам аргумент не
+заменяет проектное review. Rollback этого пути пока не реализован.
+
+Модель теперь закрыто проверяет реальный PVC protocol перед Go cutover;
+local RWO получает exact node pin, RWOP отклоняется. Init artifact spool
+переходит на тот же compiled controller, исходное хранилище не теряется.
+Старые host source annotations снимаются, normal Pod не помечается hot reload.
+
+На дереве после `c1e6909dcf2990591a8ca6670d388cfb3823dadf`: 22 Node tests,
+включая synthetic CLI plan/apply/readback и отказ без PATCH при неверном
+подтверждении либо занятости, PASS. Это disposable test, не живой cutover.
+Server dry-run четырёх Go Deployment до добавления PVC guard прошёл PASS;
+он использовал тестовые image references, ничего не применял и не доказывает
+admission/publication/node pull новых образов.
+
+`tools/release/build-stable-local.sh` собирает выбранный compiled компонент
+из credential-free `git archive` точного чистого SHA через существующий
+BuildKit. Он не пересоздаёт builder, не импортирует и не публикует образы,
+не трогает Pods. Receipt содержит source/context/archive/manifest digests;
+admission, publication и node pull явно NOT RUN до отдельных проверок.
+Синтаксис/ShellCheck PASS; реальная OCI сборка этого нового пути ещё NOT RUN.

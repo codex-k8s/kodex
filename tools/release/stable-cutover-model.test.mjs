@@ -75,3 +75,13 @@ test("artifact spool init switches to the same compiled controller without losin
   assert.equal(init.volumeMounts.length, 1);
   assert.ok(after.template.spec.volumes.some(v => v.name === "artifact-spool"));
 });
+
+test("actual Go cutover cannot bypass the PVC protocol gate", () => {
+  const value = fixture(); value.spec.template.spec.volumes.push({ name: "data", persistentVolumeClaim: { claimName: "scanner" } });
+  assert.throws(() => prepareGoCutover(value, release), /STORAGE_CLAIM_NOT_BOUND/);
+  const storageClaims = [{ name: "scanner", bound: true, accessModes: ["ReadWriteOnce"], nodeName: "node-a" }];
+  const after = prepareGoCutover(value, release, { storageClaims }).patch.at(-1).value;
+  assert.equal(after.template.spec.nodeSelector["kubernetes.io/hostname"], "node-a");
+  storageClaims[0].accessModes = ["ReadWriteOncePod"];
+  assert.throws(() => prepareGoCutover(value, release, { storageClaims }), /SINGLE_POD_ONLY/);
+});

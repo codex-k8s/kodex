@@ -1,0 +1,179 @@
+#!/usr/bin/env node
+import { execFile } from "node:child_process";
+import { open, readFile } from "node:fs/promises";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { promisify } from "node:util";
+import { readPrivateJSON } from "../../infra/public-ingress/edge-plan.mjs";
+import { fingerprint } from "./stable-inventory.mjs";
+import { prepareGoCutover, validateGoReleaseReference } from "./stable-cutover-model.mjs";
+import { requireIdle } from "./runner-policy-model.mjs";
+
+const execute = promisify(execFile);
+const sqlPath = fileURLToPath(new URL("../dev/supply-chain-owner-readback.sql", import.meta.url));
+function requireValue(value, code) { if (!value) throw Error(code); }
+function publicPlan(target) {
+  const { patch: _patch, ...result } = target;
+  return result;
+}
+async function createPrivate(path, value) {
+  const file = await open(path, "wx", 0o600);
+  try { await file.writeFile(JSON.stringify(value) + "\n"); await file.sync(); }
+  finally { await file.close(); }
+}
+
+async function main(args) {
+  const mode = args.shift(), options = {};
+  while (args.length) {
+    const key = args.shift();
+    requireValue(["--context", "--manifest", "--plan", "--output", "--approved-plan-sha"].includes(key) &&
+      !Object.hasOwn(options, key) && args.length, "STABLE_ARGUMENTS_INVALID");
+    options[key] = args.shift();
+  }
+  const context = options["--context"];
+  requireValue(["plan", "apply", "readback"].includes(mode) && /^[A-Za-z0-9_.:@/-]{1,160}$/.test(context ?? "") &&
+    options["--output"], "STABLE_ARGUMENTS_INVALID");
+  const env = Object.fromEntries(["HOME", "PATH", "LANG", "KUBECONFIG"].filter(k => process.env[k]).map(k => [k, process.env[k]]));
+  const kubectl = async (arguments_, input, timeout = 35000) => {
+    // Node stdin — socketpair. cat создаёт настоящий pipe для /dev/stdin.
+    // Полный patch не попадает в argv или вывод вызывающей стороны.
+    const command = input === undefined ? "kubectl" : "/bin/sh";
+    const argv = ["--context", context, "--request-timeout=30s", ...arguments_];
+    const invocation = input === undefined ? argv : ["-c", 'cat | kubectl "$@"', "kodex-stable-pipe", ...argv];
+    try {
+      const pending = execute(command, invocation, { env, timeout, maxBuffer: 8 << 20 });
+      if (input !== undefined) {
+        pending.child.stdin.on("error", () => {});
+        pending.child.stdin.end(input);
+      }
+      const { stdout } = await pending;
+      return stdout;
+    } catch { throw Error("STABLE_KUBERNETES_OPERATION_FAILED"); }
+  };
+  const get = async (kind, name, namespace = "kodex-system") =>
+    JSON.parse(await kubectl(["-n", namespace, "get", kind, name, "-o", "json"]));
+  const clusterUID = (await get("namespace", "kube-system", "default")).metadata.uid;
+  const storageFor = async deployment => {
+    const claims = [];
+    for (const v of deployment.spec.template.spec.volumes ?? []) {
+      if (!v.persistentVolumeClaim) continue;
+      const name = v.persistentVolumeClaim.claimName, claim = await get("pvc", name);
+      requireValue(claim.status.phase === "Bound" && claim.spec.volumeName, "STORAGE_CLAIM_NOT_BOUND");
+      const pv = await get("pv", claim.spec.volumeName);
+      const terms = pv.spec.nodeAffinity?.required?.nodeSelectorTerms ?? [];
+      const nodeName = terms.length === 1 ? terms[0].matchExpressions?.find(e => e.key === "kubernetes.io/hostname" &&
+        e.operator === "In" && e.values?.length === 1)?.values[0] : undefined;
+      claims.push({ name, bound: true, accessModes: claim.spec.accessModes, nodeName,
+        commitment: fingerprint({ claimUID: claim.metadata.uid, spec: claim.spec, pvUID: pv.metadata.uid, pvSpec: pv.spec }) });
+    }
+    return claims;
+  };
+  const prepare = async requested => {
+    const deployment = await get("deployment", requested.name);
+    const storageClaims = await storageFor(deployment);
+    return { ...prepareGoCutover(deployment, requested.release, { storageClaims }),
+      storageSHA256: fingerprint(storageClaims), requested };
+  };
+  if (mode === "plan") {
+    requireValue(options["--manifest"] && !options["--plan"] && !options["--approved-plan-sha"], "STABLE_ARGUMENTS_INVALID");
+    const manifest = await readPrivateJSON(options["--manifest"]);
+    requireValue(manifest.schema === "kodex.stable-go-manifest/v1" && Array.isArray(manifest.targets) &&
+      manifest.targets.length > 0 && manifest.targets.length <= 16 &&
+      new Set(manifest.targets.map(t => t.name)).size === manifest.targets.length, "STABLE_MANIFEST_INVALID");
+    const targets = [];
+    for (const requested of manifest.targets) {
+      validateGoReleaseReference(requested.name, requested.release);
+      targets.push(publicPlan(await prepare(requested)));
+    }
+    const plan = { schema: "kodex.stable-go-plan/v1", context, clusterUID, targets };
+    await createPrivate(options["--output"], plan);
+    process.stdout.write(JSON.stringify({ status: "PASS", phase: "PLAN_ONLY", targets: targets.length,
+      planSHA256: fingerprint(plan) }) + "\n");
+    return;
+  }
+  requireValue(options["--plan"] && !options["--manifest"], "STABLE_ARGUMENTS_INVALID");
+  const plan = await readPrivateJSON(options["--plan"]);
+  requireValue(plan.schema === "kodex.stable-go-plan/v1" && plan.context === context && plan.clusterUID === clusterUID &&
+    Array.isArray(plan.targets) && plan.targets.length > 0 && plan.targets.length <= 16 &&
+    new Set(plan.targets.map(t => t.name)).size === plan.targets.length, "STABLE_PLAN_IDENTITY_MISMATCH");
+  for (const item of plan.targets) validateGoReleaseReference(item.name, item.requested?.release);
+  const idle = async () => {
+    const stdout = await kubectl(["-n", "kodex-system", "exec", "-i", "kodex-postgresql-0", "--",
+      "psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "control_plane"], await readFile(sqlPath, "utf8"));
+    const value = JSON.parse(stdout.trim());
+    requireIdle(value);
+    return { promotedArtifactCount: value.promotedArtifactCount, promotedPinsSHA256: value.promotedPinsSHA256 };
+  };
+  const readback = async item => {
+    const current = await get("deployment", item.name);
+    requireValue(current.metadata.uid === item.uid && fingerprint(current.spec) === item.afterSpecSHA256 &&
+      current.spec.template.metadata.annotations?.["kodex.dev/source-sha"] === item.requested.release.sourceSHA &&
+      !current.spec.template.spec.volumes?.some(v => v.hostPath) &&
+      current.spec.template.spec.containers.some(c => c.name === item.name && c.command?.length === 1 &&
+        c.command[0].startsWith("/usr/local/bin/")) &&
+      current.spec.replicas === 2 && current.status.observedGeneration >= current.metadata.generation &&
+      current.status.replicas === 2 && current.status.readyReplicas === 2 && current.status.availableReplicas === 2 && current.status.updatedReplicas === 2,
+      "STABLE_READBACK_MISMATCH");
+    const selector = `app.kubernetes.io/name=${item.name}`;
+    const list = JSON.parse(await kubectl(["-n", "kodex-system", "get", "replicasets,pods", "-l", selector, "-o", "json"]));
+    const owners = new Set(list.items.filter(r => r.kind === "ReplicaSet" &&
+      r.metadata.ownerReferences?.some(o => o.uid === item.uid && o.kind === "Deployment" && o.controller === true)).map(r => r.metadata.uid));
+    const pods = list.items.filter(r => r.kind === "Pod" && r.metadata.ownerReferences?.some(o => owners.has(o.uid) && o.controller === true));
+    const digest = item.requested.release.image.split("@").at(-1);
+    requireValue(pods.length === 2 && pods.every(p => !p.metadata.deletionTimestamp &&
+      p.spec.containers.some(c => c.name === item.name && c.image === item.requested.release.image) &&
+      p.status.conditions?.some(c => c.type === "Ready" && c.status === "True") &&
+      p.status.containerStatuses?.some(c => c.name === item.name && c.ready === true && c.imageID?.endsWith(digest))),
+      "STABLE_SERVING_POD_MISMATCH");
+    return { name: item.name, status: "PASS", specSHA256: item.afterSpecSHA256,
+      pods: pods.map(p => ({ uid: p.metadata.uid, servedDigest: digest })) };
+  };
+  if (mode === "apply") {
+    requireValue(options["--approved-plan-sha"] === fingerprint(plan), "STABLE_EXACT_OWNER_CONFIRMATION_REQUIRED");
+    // Обязательные review/owner решение принадлежат процессу поставки.
+    // Этот аргумент подтверждает exact plan, но сам не заменяет решение владельца.
+    for (const item of plan.targets) {
+      const prepared = await prepare(item.requested);
+      requireValue(prepared.uid === item.uid && prepared.beforeSpecSHA256 === item.beforeSpecSHA256 &&
+        prepared.afterSpecSHA256 === item.afterSpecSHA256 && prepared.storageSHA256 === item.storageSHA256,
+        "STABLE_PLAN_DRIFT");
+    }
+    const preserved = await idle();
+    await createPrivate(options["--output"], { schema: "kodex.stable-go-apply/v1", status: "IN_PROGRESS",
+      planSHA256: fingerprint(plan), preserved });
+    const journal = await open(options["--output"], "a");
+    const record = async value => { await journal.writeFile(JSON.stringify(value) + "\n"); await journal.sync(); };
+    try {
+      for (const item of plan.targets) {
+        requireValue(fingerprint(await idle()) === fingerprint(preserved), "STABLE_PINS_CHANGED");
+        const prepared = await prepare(item.requested);
+        requireValue(prepared.uid === item.uid && prepared.beforeSpecSHA256 === item.beforeSpecSHA256 &&
+          prepared.afterSpecSHA256 === item.afterSpecSHA256 && prepared.storageSHA256 === item.storageSHA256, "STABLE_PLAN_DRIFT");
+        await record({ name: item.name, status: "PATCH_ATTEMPT" });
+        await kubectl(["-n", "kodex-system", "patch", "deployment", item.name, "--type=json",
+          "--patch-file=/dev/stdin", "-o", "name"], JSON.stringify(prepared.patch));
+        await kubectl(["-n", "kodex-system", "rollout", "status", `deployment/${item.name}`, "--timeout=600s"], undefined, 635000);
+        await record(await readback(item));
+      }
+      requireValue(fingerprint(await idle()) === fingerprint(preserved), "STABLE_PINS_CHANGED");
+      await record({ status: "PASS" });
+      process.stdout.write(JSON.stringify({ status: "PASS", phase: "GO_CUTOVER", targets: plan.targets.length }) + "\n");
+    } catch (error) {
+      await record({ status: "FAIL_OR_UNKNOWN", code: /^[A-Z_]+$/.test(error.message ?? "") ? error.message : "STABLE_APPLY_FAILED" });
+      throw error;
+    } finally { await journal.close(); }
+    return;
+  }
+  requireValue(!options["--approved-plan-sha"], "STABLE_ARGUMENTS_INVALID");
+  const results = [];
+  for (const item of plan.targets) {
+    results.push(await readback(item));
+  }
+  await createPrivate(options["--output"], { schema: "kodex.stable-go-readback/v1", planSHA256: fingerprint(plan), results });
+  process.stdout.write(JSON.stringify({ status: "PASS", phase: "DEPLOYMENT_READBACK", results }) + "\n");
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
+  main(process.argv.slice(2)).catch(error => {
+    const code = /^[A-Z_]+$/.test(error.message ?? "") ? error.message : "STABLE_RELEASE_FAILED";
+    process.stderr.write(JSON.stringify({ status: "FAIL", code }) + "\n"); process.exitCode = 1;
+  });

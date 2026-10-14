@@ -24,21 +24,37 @@ const devEnv = new Set(["GOTOOLCHAIN", "GOPATH", "GOMODCACHE", "GOCACHE", "GOSUM
 const imagePattern = /^[a-z0-9][a-z0-9.:/_-]*@sha256:[a-f0-9]{64}$/;
 function requireValue(value, code) { if (!value) throw Error(code); }
 
-export function prepareGoCutover(deployment, release) {
+export function validateGoReleaseReference(name, release) {
+  const entry = goServices[name];
+  requireValue(entry && release && /^[a-f0-9]{40}$/.test(release.sourceSHA ?? "") &&
+    imagePattern.test(release.image ?? "") && !release.image.endsWith("0".repeat(64)) &&
+    release.component === entry[2] && /^[a-f0-9]{64}$/.test(release.provenanceSHA256 ?? "") &&
+    release.provenanceSHA256 !== "0".repeat(64), "CUTOVER_RELEASE_INVALID");
+}
+
+export function prepareGoCutover(deployment, release, { storageClaims = [] } = {}) {
   const name = deployment?.metadata?.name;
   const entry = goServices[name];
   requireValue(deployment?.kind === "Deployment" && deployment.metadata.namespace === "kodex-system" && entry,
     "CUTOVER_COMPONENT_UNSUPPORTED");
   requireValue(typeof deployment.metadata.uid === "string" && deployment.metadata.uid &&
     typeof deployment.metadata.resourceVersion === "string", "CUTOVER_IDENTITY_INVALID");
-  requireValue(release && /^[a-f0-9]{40}$/.test(release.sourceSHA ?? "") && imagePattern.test(release.image ?? "") &&
-    !release.image.endsWith("0".repeat(64)) && release.component === entry[2] &&
-    /^[a-f0-9]{64}$/.test(release.provenanceSHA256 ?? "") && release.provenanceSHA256 !== "0".repeat(64), "CUTOVER_RELEASE_INVALID");
+  validateGoReleaseReference(name, release);
   const before = deployment.spec;
   const after = structuredClone(before);
   requireValue(!Object.hasOwn(after.selector?.matchLabels ?? {}, "kodex.dev/local-profile") &&
     !(after.selector?.matchExpressions ?? []).some(e => e.key === "kodex.dev/local-profile"), "CUTOVER_PROFILE_SELECTOR_BOUND");
   const pod = after.template.spec;
+  const claims = (pod.volumes ?? []).filter(v => v.persistentVolumeClaim).map(v =>
+    storageClaims.find(c => c.name === v.persistentVolumeClaim.claimName));
+  requireValue(claims.every(c => c && c.bound && c.accessModes?.length > 0), "STORAGE_CLAIM_NOT_BOUND");
+  const nodes = [...new Set(claims.filter(c => !c.accessModes.includes("ReadWriteMany")).map(c => c.nodeName))];
+  if (nodes.length) {
+    requireValue(nodes.length === 1 && nodes[0] && (!pod.nodeSelector?.["kubernetes.io/hostname"] ||
+      pod.nodeSelector["kubernetes.io/hostname"] === nodes[0]), "STORAGE_NODE_PIN_REQUIRED");
+    pod.nodeSelector = { ...pod.nodeSelector, "kubernetes.io/hostname": nodes[0] };
+  }
+  validateStorageProtocol({ metadata: deployment.metadata, spec: { template: { spec: pod } } }, { claims: storageClaims });
   const app = pod.containers.find(c => c.name === name);
   requireValue(app && app.command?.length === 1 && app.command[0] === "/workspace/tools/dev/run-go-hot-reload.sh" &&
     app.args?.[0] === entry[0] && app.args[1] === `./cmd/${entry[1]}` &&
