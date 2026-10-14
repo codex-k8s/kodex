@@ -4,9 +4,21 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.13
+version: 1.0.14
 updated: 2026-10-14
 ---
+
+## 14.10.2026 10:10 UTC — serving0c56 и native retry10
+
+| Контур | Доказательство |
+| --- | --- |
+| Source/serving | Source/remote/HOT0c56c5ce MATCH; CP ELF62d805b3…1e816, broker ELF71cfd069…58f52 совпадают host/process; source files MATCH. Debug, не release |
+| Durable receipt | UID7adbc129-4d12-4a1b-a2c2-3857b7cb7d6c/RV1774282 в kodex-runtime, только metadata readback |
+| Native workflow | Retry10 run_gjXc6kOoqE2KRH1VGv80_pHF RUNNING/seq333; Manager INTAKE run_3VZ-xywLdibxasIC5zdrBSsp, Review0; Developer12GiB пока NOT RUN |
+| Readiness | Active READ_ONLY из private writer directories; прежняя post-join normalization не обходится, terminal ещё NOT RUN |
+| Browser | Graph/messages/rejoin screenshot viewed, Console0/API200/page overflowfalse; own tab only |
+| Проверки | CP6 scoped packages PASS0c56; tree-only worker3 tests PASS, publication следующая |
+| GitHub | Body1807 exact PASS; checks0/statuses0/reviews0/mergeable clean. Не CI PASS и не owner approval |
 
 ## 14.10.2026 09:40 UTC — actual managed renewal и fresh catalog PASS
 

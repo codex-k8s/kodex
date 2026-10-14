@@ -4,11 +4,42 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.13
+version: 1.1.14
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 10:10 UTC — serving proof и новый native INTAKE
+
+SOURCE/remote/HOT0c56c5ce7495190edb3db6a601536ac936b5aab7 сверены.
+Guarded FF09:42:40/busy0/published pins unchanged. CP serving ELF SHA
+62d805b35836ed66d41893809c6167c5aacb01887997b48e58dd9bb09781e816
+совпадает с host build на0c56; PodUID1032501a-2470-47f3-97d9-a8a372e76abd,
+policy/source files MATCH. Broker ELF71cfd0699befba4f97b26a79e8b243b90b1b246b4460bff187f5aefe06458f52
+тоже host/serving MATCH, exact kernel/RPC files MATCH. Это debug hot-reload
+readback, не immutable production release. Durable renewal receipt реально
+существует в kodex-runtime: UID7adbc129-4d12-4a1b-a2c2-3857b7cb7d6c/RV1774282.
+Provider catalog продолжает REMOTE_CODEX/NONE, browser «Готов».
+
+Штатная Retry9→10 без новых USER corrections: root
+run_gjXc6kOoqE2KRH1VGv80_pHF, session прежняя, RUNNING. Coordinator делегировал
+INTAKE Manager run_3VZ-xywLdibxasIC5zdrBSsp; authenticated model/tools работают,
+sequence333. Developer/ENV30 пока PLANNED — не объявлять его12GiB запущенным.
+Review0. Manager Podruntime-turn-0835850203affd7e имеет прежний4GiB/2CPU.
+Role readiness503 READ_ONLY после private provider-owned main-source directories:
+это уже описанная активная фаза, post-join normalization включена в runner.
+Permissions/данные вручную не менялись; terminal outcome ещё NOT RUN.
+
+UI graph/messages/rejoin screenshots просмотрены, Compact tool groups,
+Console0/relevant API200; mainpage overflowfalse. Published body1807 exact
+readback PASS. Merge gates: mergeable clean, checks0/statuses0/reviews0,
+rules deletion/non_fast_forward/creation; отсутствие checks не является CI PASS.
+CP scoped6 packages PASS на0c56. Новый tree-only worker test PASS: startup
+barrier/cancel-independent completion/READ-only recovery; checkpoint следующий.
+HOT не обновлять во время native work. Прогресс не заменяет final EOF/Review/
+Manager/owner и остальные этапы7/QA65.
+
 
 ## Checkpoint 14.10.2026 09:40 UTC — живой провайдер восстановлен
 
