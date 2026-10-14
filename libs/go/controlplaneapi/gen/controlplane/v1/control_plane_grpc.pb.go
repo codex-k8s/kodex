@@ -11345,6 +11345,189 @@ var RuntimeSecretDraftWorkService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	ProviderCredentialRenewalWorkService_CheckProviderCredentialRenewalWorkReadiness_FullMethodName  = "/controlplane.v1.ProviderCredentialRenewalWorkService/CheckProviderCredentialRenewalWorkReadiness"
+	ProviderCredentialRenewalWorkService_AuthorizeProviderCredentialRenewal_FullMethodName           = "/controlplane.v1.ProviderCredentialRenewalWorkService/AuthorizeProviderCredentialRenewal"
+	ProviderCredentialRenewalWorkService_ValidateProviderCredentialRenewalObservation_FullMethodName = "/controlplane.v1.ProviderCredentialRenewalWorkService/ValidateProviderCredentialRenewalObservation"
+)
+
+// ProviderCredentialRenewalWorkServiceClient is the client API for ProviderCredentialRenewalWorkService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Отдельная owner boundary для managed OAuth, не READ catalog и не execution lease.
+type ProviderCredentialRenewalWorkServiceClient interface {
+	CheckProviderCredentialRenewalWorkReadiness(ctx context.Context, in *CheckProviderCredentialRenewalWorkReadinessRequest, opts ...grpc.CallOption) (*CheckProviderCredentialRenewalWorkReadinessResponse, error)
+	AuthorizeProviderCredentialRenewal(ctx context.Context, in *AuthorizeProviderCredentialRenewalRequest, opts ...grpc.CallOption) (*AuthorizeProviderCredentialRenewalResponse, error)
+	ValidateProviderCredentialRenewalObservation(ctx context.Context, in *ValidateProviderCredentialRenewalObservationRequest, opts ...grpc.CallOption) (*ValidateProviderCredentialRenewalObservationResponse, error)
+}
+
+type providerCredentialRenewalWorkServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewProviderCredentialRenewalWorkServiceClient(cc grpc.ClientConnInterface) ProviderCredentialRenewalWorkServiceClient {
+	return &providerCredentialRenewalWorkServiceClient{cc}
+}
+
+func (c *providerCredentialRenewalWorkServiceClient) CheckProviderCredentialRenewalWorkReadiness(ctx context.Context, in *CheckProviderCredentialRenewalWorkReadinessRequest, opts ...grpc.CallOption) (*CheckProviderCredentialRenewalWorkReadinessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckProviderCredentialRenewalWorkReadinessResponse)
+	err := c.cc.Invoke(ctx, ProviderCredentialRenewalWorkService_CheckProviderCredentialRenewalWorkReadiness_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerCredentialRenewalWorkServiceClient) AuthorizeProviderCredentialRenewal(ctx context.Context, in *AuthorizeProviderCredentialRenewalRequest, opts ...grpc.CallOption) (*AuthorizeProviderCredentialRenewalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AuthorizeProviderCredentialRenewalResponse)
+	err := c.cc.Invoke(ctx, ProviderCredentialRenewalWorkService_AuthorizeProviderCredentialRenewal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerCredentialRenewalWorkServiceClient) ValidateProviderCredentialRenewalObservation(ctx context.Context, in *ValidateProviderCredentialRenewalObservationRequest, opts ...grpc.CallOption) (*ValidateProviderCredentialRenewalObservationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ValidateProviderCredentialRenewalObservationResponse)
+	err := c.cc.Invoke(ctx, ProviderCredentialRenewalWorkService_ValidateProviderCredentialRenewalObservation_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ProviderCredentialRenewalWorkServiceServer is the server API for ProviderCredentialRenewalWorkService service.
+// All implementations must embed UnimplementedProviderCredentialRenewalWorkServiceServer
+// for forward compatibility.
+//
+// Отдельная owner boundary для managed OAuth, не READ catalog и не execution lease.
+type ProviderCredentialRenewalWorkServiceServer interface {
+	CheckProviderCredentialRenewalWorkReadiness(context.Context, *CheckProviderCredentialRenewalWorkReadinessRequest) (*CheckProviderCredentialRenewalWorkReadinessResponse, error)
+	AuthorizeProviderCredentialRenewal(context.Context, *AuthorizeProviderCredentialRenewalRequest) (*AuthorizeProviderCredentialRenewalResponse, error)
+	ValidateProviderCredentialRenewalObservation(context.Context, *ValidateProviderCredentialRenewalObservationRequest) (*ValidateProviderCredentialRenewalObservationResponse, error)
+	mustEmbedUnimplementedProviderCredentialRenewalWorkServiceServer()
+}
+
+// UnimplementedProviderCredentialRenewalWorkServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedProviderCredentialRenewalWorkServiceServer struct{}
+
+func (UnimplementedProviderCredentialRenewalWorkServiceServer) CheckProviderCredentialRenewalWorkReadiness(context.Context, *CheckProviderCredentialRenewalWorkReadinessRequest) (*CheckProviderCredentialRenewalWorkReadinessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckProviderCredentialRenewalWorkReadiness not implemented")
+}
+func (UnimplementedProviderCredentialRenewalWorkServiceServer) AuthorizeProviderCredentialRenewal(context.Context, *AuthorizeProviderCredentialRenewalRequest) (*AuthorizeProviderCredentialRenewalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AuthorizeProviderCredentialRenewal not implemented")
+}
+func (UnimplementedProviderCredentialRenewalWorkServiceServer) ValidateProviderCredentialRenewalObservation(context.Context, *ValidateProviderCredentialRenewalObservationRequest) (*ValidateProviderCredentialRenewalObservationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ValidateProviderCredentialRenewalObservation not implemented")
+}
+func (UnimplementedProviderCredentialRenewalWorkServiceServer) mustEmbedUnimplementedProviderCredentialRenewalWorkServiceServer() {
+}
+func (UnimplementedProviderCredentialRenewalWorkServiceServer) testEmbeddedByValue() {}
+
+// UnsafeProviderCredentialRenewalWorkServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ProviderCredentialRenewalWorkServiceServer will
+// result in compilation errors.
+type UnsafeProviderCredentialRenewalWorkServiceServer interface {
+	mustEmbedUnimplementedProviderCredentialRenewalWorkServiceServer()
+}
+
+func RegisterProviderCredentialRenewalWorkServiceServer(s grpc.ServiceRegistrar, srv ProviderCredentialRenewalWorkServiceServer) {
+	// If the following call panics, it indicates UnimplementedProviderCredentialRenewalWorkServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&ProviderCredentialRenewalWorkService_ServiceDesc, srv)
+}
+
+func _ProviderCredentialRenewalWorkService_CheckProviderCredentialRenewalWorkReadiness_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckProviderCredentialRenewalWorkReadinessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderCredentialRenewalWorkServiceServer).CheckProviderCredentialRenewalWorkReadiness(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderCredentialRenewalWorkService_CheckProviderCredentialRenewalWorkReadiness_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderCredentialRenewalWorkServiceServer).CheckProviderCredentialRenewalWorkReadiness(ctx, req.(*CheckProviderCredentialRenewalWorkReadinessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderCredentialRenewalWorkService_AuthorizeProviderCredentialRenewal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AuthorizeProviderCredentialRenewalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderCredentialRenewalWorkServiceServer).AuthorizeProviderCredentialRenewal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderCredentialRenewalWorkService_AuthorizeProviderCredentialRenewal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderCredentialRenewalWorkServiceServer).AuthorizeProviderCredentialRenewal(ctx, req.(*AuthorizeProviderCredentialRenewalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderCredentialRenewalWorkService_ValidateProviderCredentialRenewalObservation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateProviderCredentialRenewalObservationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderCredentialRenewalWorkServiceServer).ValidateProviderCredentialRenewalObservation(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderCredentialRenewalWorkService_ValidateProviderCredentialRenewalObservation_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderCredentialRenewalWorkServiceServer).ValidateProviderCredentialRenewalObservation(ctx, req.(*ValidateProviderCredentialRenewalObservationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// ProviderCredentialRenewalWorkService_ServiceDesc is the grpc.ServiceDesc for ProviderCredentialRenewalWorkService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ProviderCredentialRenewalWorkService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "controlplane.v1.ProviderCredentialRenewalWorkService",
+	HandlerType: (*ProviderCredentialRenewalWorkServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CheckProviderCredentialRenewalWorkReadiness",
+			Handler:    _ProviderCredentialRenewalWorkService_CheckProviderCredentialRenewalWorkReadiness_Handler,
+		},
+		{
+			MethodName: "AuthorizeProviderCredentialRenewal",
+			Handler:    _ProviderCredentialRenewalWorkService_AuthorizeProviderCredentialRenewal_Handler,
+		},
+		{
+			MethodName: "ValidateProviderCredentialRenewalObservation",
+			Handler:    _ProviderCredentialRenewalWorkService_ValidateProviderCredentialRenewalObservation_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "controlplane/v1/control_plane.proto",
+}
+
+const (
 	RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_FullMethodName          = "/controlplane.v1.RuntimeSecretWorkService/CheckRuntimeSecretWorkReadiness"
 	RuntimeSecretWorkService_CheckCredentialProjectionWorkReadiness_FullMethodName   = "/controlplane.v1.RuntimeSecretWorkService/CheckCredentialProjectionWorkReadiness"
 	RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName            = "/controlplane.v1.RuntimeSecretWorkService/ListRuntimeSecretRecoveryWork"
@@ -14601,6 +14784,8 @@ var InteractionWorkService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	ProviderCredentialMaterializerService_RenewManagedProviderCredential_FullMethodName               = "/controlplane.v1.ProviderCredentialMaterializerService/RenewManagedProviderCredential"
+	ProviderCredentialMaterializerService_ObserveManagedProviderCredentialRenewal_FullMethodName      = "/controlplane.v1.ProviderCredentialMaterializerService/ObserveManagedProviderCredentialRenewal"
 	ProviderCredentialMaterializerService_ObserveProviderModelCatalog_FullMethodName                  = "/controlplane.v1.ProviderCredentialMaterializerService/ObserveProviderModelCatalog"
 	ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_FullMethodName = "/controlplane.v1.ProviderCredentialMaterializerService/CheckProviderCredentialMaterializerReadiness"
 	ProviderCredentialMaterializerService_StartDeviceAuthorization_FullMethodName                     = "/controlplane.v1.ProviderCredentialMaterializerService/StartDeviceAuthorization"
@@ -14618,6 +14803,8 @@ const (
 // create immutable Kubernetes Secret от основного control-plane. Ни один ответ
 // этого сервиса не содержит credential value.
 type ProviderCredentialMaterializerServiceClient interface {
+	RenewManagedProviderCredential(ctx context.Context, in *RenewManagedProviderCredentialRequest, opts ...grpc.CallOption) (*RenewManagedProviderCredentialResponse, error)
+	ObserveManagedProviderCredentialRenewal(ctx context.Context, in *ObserveManagedProviderCredentialRenewalRequest, opts ...grpc.CallOption) (*ObserveManagedProviderCredentialRenewalResponse, error)
 	ObserveProviderModelCatalog(ctx context.Context, in *ObserveProviderModelCatalogRequest, opts ...grpc.CallOption) (*ObserveProviderModelCatalogResponse, error)
 	CheckProviderCredentialMaterializerReadiness(ctx context.Context, in *CheckProviderCredentialMaterializerReadinessRequest, opts ...grpc.CallOption) (*CheckProviderCredentialMaterializerReadinessResponse, error)
 	StartDeviceAuthorization(ctx context.Context, in *ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest, opts ...grpc.CallOption) (*ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse, error)
@@ -14638,6 +14825,26 @@ type providerCredentialMaterializerServiceClient struct {
 
 func NewProviderCredentialMaterializerServiceClient(cc grpc.ClientConnInterface) ProviderCredentialMaterializerServiceClient {
 	return &providerCredentialMaterializerServiceClient{cc}
+}
+
+func (c *providerCredentialMaterializerServiceClient) RenewManagedProviderCredential(ctx context.Context, in *RenewManagedProviderCredentialRequest, opts ...grpc.CallOption) (*RenewManagedProviderCredentialResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenewManagedProviderCredentialResponse)
+	err := c.cc.Invoke(ctx, ProviderCredentialMaterializerService_RenewManagedProviderCredential_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerCredentialMaterializerServiceClient) ObserveManagedProviderCredentialRenewal(ctx context.Context, in *ObserveManagedProviderCredentialRenewalRequest, opts ...grpc.CallOption) (*ObserveManagedProviderCredentialRenewalResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ObserveManagedProviderCredentialRenewalResponse)
+	err := c.cc.Invoke(ctx, ProviderCredentialMaterializerService_ObserveManagedProviderCredentialRenewal_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *providerCredentialMaterializerServiceClient) ObserveProviderModelCatalog(ctx context.Context, in *ObserveProviderModelCatalogRequest, opts ...grpc.CallOption) (*ObserveProviderModelCatalogResponse, error) {
@@ -14718,6 +14925,8 @@ func (c *providerCredentialMaterializerServiceClient) CleanupProviderCredential(
 // create immutable Kubernetes Secret от основного control-plane. Ни один ответ
 // этого сервиса не содержит credential value.
 type ProviderCredentialMaterializerServiceServer interface {
+	RenewManagedProviderCredential(context.Context, *RenewManagedProviderCredentialRequest) (*RenewManagedProviderCredentialResponse, error)
+	ObserveManagedProviderCredentialRenewal(context.Context, *ObserveManagedProviderCredentialRenewalRequest) (*ObserveManagedProviderCredentialRenewalResponse, error)
 	ObserveProviderModelCatalog(context.Context, *ObserveProviderModelCatalogRequest) (*ObserveProviderModelCatalogResponse, error)
 	CheckProviderCredentialMaterializerReadiness(context.Context, *CheckProviderCredentialMaterializerReadinessRequest) (*CheckProviderCredentialMaterializerReadinessResponse, error)
 	StartDeviceAuthorization(context.Context, *ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest) (*ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse, error)
@@ -14740,6 +14949,12 @@ type ProviderCredentialMaterializerServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedProviderCredentialMaterializerServiceServer struct{}
 
+func (UnimplementedProviderCredentialMaterializerServiceServer) RenewManagedProviderCredential(context.Context, *RenewManagedProviderCredentialRequest) (*RenewManagedProviderCredentialResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenewManagedProviderCredential not implemented")
+}
+func (UnimplementedProviderCredentialMaterializerServiceServer) ObserveManagedProviderCredentialRenewal(context.Context, *ObserveManagedProviderCredentialRenewalRequest) (*ObserveManagedProviderCredentialRenewalResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ObserveManagedProviderCredentialRenewal not implemented")
+}
 func (UnimplementedProviderCredentialMaterializerServiceServer) ObserveProviderModelCatalog(context.Context, *ObserveProviderModelCatalogRequest) (*ObserveProviderModelCatalogResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ObserveProviderModelCatalog not implemented")
 }
@@ -14781,6 +14996,42 @@ func RegisterProviderCredentialMaterializerServiceServer(s grpc.ServiceRegistrar
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&ProviderCredentialMaterializerService_ServiceDesc, srv)
+}
+
+func _ProviderCredentialMaterializerService_RenewManagedProviderCredential_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenewManagedProviderCredentialRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderCredentialMaterializerServiceServer).RenewManagedProviderCredential(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderCredentialMaterializerService_RenewManagedProviderCredential_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderCredentialMaterializerServiceServer).RenewManagedProviderCredential(ctx, req.(*RenewManagedProviderCredentialRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderCredentialMaterializerService_ObserveManagedProviderCredentialRenewal_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ObserveManagedProviderCredentialRenewalRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderCredentialMaterializerServiceServer).ObserveManagedProviderCredentialRenewal(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderCredentialMaterializerService_ObserveManagedProviderCredentialRenewal_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderCredentialMaterializerServiceServer).ObserveManagedProviderCredentialRenewal(ctx, req.(*ObserveManagedProviderCredentialRenewalRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _ProviderCredentialMaterializerService_ObserveProviderModelCatalog_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -14916,6 +15167,14 @@ var ProviderCredentialMaterializerService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "controlplane.v1.ProviderCredentialMaterializerService",
 	HandlerType: (*ProviderCredentialMaterializerServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "RenewManagedProviderCredential",
+			Handler:    _ProviderCredentialMaterializerService_RenewManagedProviderCredential_Handler,
+		},
+		{
+			MethodName: "ObserveManagedProviderCredentialRenewal",
+			Handler:    _ProviderCredentialMaterializerService_ObserveManagedProviderCredentialRenewal_Handler,
+		},
 		{
 			MethodName: "ObserveProviderModelCatalog",
 			Handler:    _ProviderCredentialMaterializerService_ObserveProviderModelCatalog_Handler,

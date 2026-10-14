@@ -23,6 +23,8 @@ canonical="$repository_root/deploy/k8s/base/internal-rpc-authority-publisher/aut
 cmp -s "$generated" "$canonical" || fail 'generated policy differs from the canonical file'
 jq -e '
   def provider_operations: [
+    "platform.provider-accounts.credential.renew",
+    "platform.provider-accounts.credential.renewal.observe",
     "platform.provider-accounts.model-catalog.observe",
     "platform.provider-credentials.api-key.materialize",
     "platform.provider-credentials.cleanup",
@@ -32,7 +34,13 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-	.policy_revision == 95 and .policy.authority_abi_version == 2 and
+	.policy_revision == 96 and .policy.authority_abi_version == 2 and
+  ([.policy.operation_bindings[] | select(.operation_id == "platform.provider-accounts.credential.renewal.work.check" or
+      .operation_id == "platform.provider-accounts.credential.renewal.authorize" or .operation_id == "platform.provider-accounts.credential.renewal.validate") |
+    select(.caller_workload_id == "secret-broker" and .target_workload_id == "control-plane" and
+      .authority_proof_producer_id == "control-plane.secret-broker" and .project_required == false and
+      .permission == .operation_id and .authority_sources == ["DOMAIN_STATE"] and
+      .request_profile == {"mode":"UNARY_PROTO_SHA256","resource":"FORBIDDEN","version":"FORBIDDEN","attempt":"FORBIDDEN","idempotency":"FORBIDDEN"})] | length) == 3 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.query.artifact-revisions.list" or .operation_id == "platform.query.artifact-revisions.get") |
     select(.caller_workload_id == "control-api-gateway" and .target_workload_id == "control-plane" and .project_required == false and
       .authority_proof_producer_id == "control-plane.oidc" and .authority_sources == ["OIDC_SESSION", "DOMAIN_STATE"] and

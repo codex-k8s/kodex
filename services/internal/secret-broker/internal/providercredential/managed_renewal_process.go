@@ -13,6 +13,8 @@ import (
 
 var errManagedRenewalUnknown = errors.New("managed provider credential renewal outcome is unknown")
 
+func ManagedRenewalOutcomeUnknown(err error) bool { return errors.Is(err, errManagedRenewalUnknown) }
+
 type managedRenewalAuth struct {
 	Mode   string `json:"auth_mode"`
 	APIKey string `json:"OPENAI_API_KEY"`

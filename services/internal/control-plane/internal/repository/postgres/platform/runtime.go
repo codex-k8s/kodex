@@ -498,6 +498,16 @@ func (repository *Repository) claimExecution(ctx context.Context, tx pgx.Tx, sco
 		if failedRoots[candidate.rootRunID] {
 			continue
 		}
+		// Account lock уже взят; новый statement видит renewal/rotation,
+		// завершившиеся после первоначального candidate snapshot.
+		var providerCredentialEligible bool
+		if err := tx.QueryRow(ctx, queryProviderRenewalRuntimeCandidate, scope.organizationID,
+			candidate.providerAccountID, candidate.providerCredentialID).Scan(&providerCredentialEligible); err != nil {
+			return commandOutcome{}, errs.ErrUnavailable
+		}
+		if !providerCredentialEligible {
+			continue
+		}
 		var activeExecutions int64
 		if err := tx.QueryRow(ctx, queryRuntimeClaimexecutionCountActiveProviderLeases,
 			candidate.providerAccountID, scope.organizationID).Scan(&activeExecutions); err != nil {

@@ -359,23 +359,26 @@ func ControlAPIGatewayOperations() map[string]string {
 
 func SecretBrokerOperations() map[string]string {
 	return map[string]string{
-		"platform.runtime-secret-drafts.readiness.check":         controlplanev1.RuntimeSecretDraftWorkService_CheckRuntimeSecretDraftWorkReadiness_FullMethodName,
-		"platform.runtime-secret-drafts.operations.consume":      controlplanev1.RuntimeSecretDraftWorkService_ConsumeRuntimeSecretDraftOperation_FullMethodName,
-		"platform.runtime-secret-drafts.operations.complete":     controlplanev1.RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftOperation_FullMethodName,
-		"platform.runtime-secret-drafts.operations.fail":         controlplanev1.RuntimeSecretDraftWorkService_FailRuntimeSecretDraftOperation_FullMethodName,
-		"platform.runtime-secret-drafts.operations.recover":      controlplanev1.RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_FullMethodName,
-		"platform.runtime-secret-drafts.materialization.recover": controlplanev1.RuntimeSecretDraftWorkService_RecoverRuntimeSecretDraftMaterialization_FullMethodName,
-		"platform.runtime-secret-drafts.cleanup.complete":        controlplanev1.RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftCleanup_FullMethodName,
-		"platform.runtime-secrets.readiness.check":               controlplanev1.RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_FullMethodName,
-		"platform.credential-projections.readiness.check":        controlplanev1.RuntimeSecretWorkService_CheckCredentialProjectionWorkReadiness_FullMethodName,
-		"platform.credential-projections.runtime.resolve":        controlplanev1.RuntimeSecretWorkService_ResolveRuntimeCredentialProjection_FullMethodName,
-		"platform.credential-projections.runtime.validate":       controlplanev1.RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_FullMethodName,
-		"platform.credential-projections.stt.resolve":            controlplanev1.RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_FullMethodName,
-		"platform.runtime-secrets.operations.consume":            controlplanev1.RuntimeSecretWorkService_ConsumeRuntimeSecretOperation_FullMethodName,
-		"platform.runtime-secrets.operations.complete":           controlplanev1.RuntimeSecretWorkService_CompleteRuntimeSecretOperation_FullMethodName,
-		"platform.runtime-secrets.operations.fail":               controlplanev1.RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName,
-		"platform.runtime-secrets.operations.recover":            controlplanev1.RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName,
-		"platform.runtime-secrets.materialization.recover":       controlplanev1.RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_FullMethodName,
+		"platform.provider-accounts.credential.renewal.work.check": controlplanev1.ProviderCredentialRenewalWorkService_CheckProviderCredentialRenewalWorkReadiness_FullMethodName,
+		"platform.provider-accounts.credential.renewal.authorize":  controlplanev1.ProviderCredentialRenewalWorkService_AuthorizeProviderCredentialRenewal_FullMethodName,
+		"platform.provider-accounts.credential.renewal.validate":   controlplanev1.ProviderCredentialRenewalWorkService_ValidateProviderCredentialRenewalObservation_FullMethodName,
+		"platform.runtime-secret-drafts.readiness.check":           controlplanev1.RuntimeSecretDraftWorkService_CheckRuntimeSecretDraftWorkReadiness_FullMethodName,
+		"platform.runtime-secret-drafts.operations.consume":        controlplanev1.RuntimeSecretDraftWorkService_ConsumeRuntimeSecretDraftOperation_FullMethodName,
+		"platform.runtime-secret-drafts.operations.complete":       controlplanev1.RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftOperation_FullMethodName,
+		"platform.runtime-secret-drafts.operations.fail":           controlplanev1.RuntimeSecretDraftWorkService_FailRuntimeSecretDraftOperation_FullMethodName,
+		"platform.runtime-secret-drafts.operations.recover":        controlplanev1.RuntimeSecretDraftWorkService_ListRuntimeSecretDraftRecoveryWork_FullMethodName,
+		"platform.runtime-secret-drafts.materialization.recover":   controlplanev1.RuntimeSecretDraftWorkService_RecoverRuntimeSecretDraftMaterialization_FullMethodName,
+		"platform.runtime-secret-drafts.cleanup.complete":          controlplanev1.RuntimeSecretDraftWorkService_CompleteRuntimeSecretDraftCleanup_FullMethodName,
+		"platform.runtime-secrets.readiness.check":                 controlplanev1.RuntimeSecretWorkService_CheckRuntimeSecretWorkReadiness_FullMethodName,
+		"platform.credential-projections.readiness.check":          controlplanev1.RuntimeSecretWorkService_CheckCredentialProjectionWorkReadiness_FullMethodName,
+		"platform.credential-projections.runtime.resolve":          controlplanev1.RuntimeSecretWorkService_ResolveRuntimeCredentialProjection_FullMethodName,
+		"platform.credential-projections.runtime.validate":         controlplanev1.RuntimeSecretWorkService_ValidateRuntimeCredentialProjection_FullMethodName,
+		"platform.credential-projections.stt.resolve":              controlplanev1.RuntimeSecretWorkService_ResolveTranscriptionCredentialProjection_FullMethodName,
+		"platform.runtime-secrets.operations.consume":              controlplanev1.RuntimeSecretWorkService_ConsumeRuntimeSecretOperation_FullMethodName,
+		"platform.runtime-secrets.operations.complete":             controlplanev1.RuntimeSecretWorkService_CompleteRuntimeSecretOperation_FullMethodName,
+		"platform.runtime-secrets.operations.fail":                 controlplanev1.RuntimeSecretWorkService_FailRuntimeSecretOperation_FullMethodName,
+		"platform.runtime-secrets.operations.recover":              controlplanev1.RuntimeSecretWorkService_ListRuntimeSecretRecoveryWork_FullMethodName,
+		"platform.runtime-secrets.materialization.recover":         controlplanev1.RuntimeSecretWorkService_RecoverRuntimeSecretMaterialization_FullMethodName,
 	}
 }
 
@@ -383,6 +386,8 @@ func SecretBrokerOperations() map[string]string {
 // materializer, ответы которого содержат только Secret descriptors.
 func ProviderCredentialMaterializerOperations() map[string]string {
 	return map[string]string{
+		"platform.provider-accounts.credential.renew":           controlplanev1.ProviderCredentialMaterializerService_RenewManagedProviderCredential_FullMethodName,
+		"platform.provider-accounts.credential.renewal.observe": controlplanev1.ProviderCredentialMaterializerService_ObserveManagedProviderCredentialRenewal_FullMethodName,
 		"platform.provider-accounts.model-catalog.observe":      controlplanev1.ProviderCredentialMaterializerService_ObserveProviderModelCatalog_FullMethodName,
 		"platform.provider-credentials.readiness.check":         controlplanev1.ProviderCredentialMaterializerService_CheckProviderCredentialMaterializerReadiness_FullMethodName,
 		"platform.provider-credentials.device-authorize.start":  controlplanev1.ProviderCredentialMaterializerService_StartDeviceAuthorization_FullMethodName,

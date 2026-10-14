@@ -337,6 +337,13 @@ service RuntimeSecretDraftWorkService {
   rpc CompleteRuntimeSecretDraftCleanup(CompleteRuntimeSecretDraftCleanupRequest) returns (CompleteRuntimeSecretDraftCleanupResponse);
 }
 
+// Отдельная owner boundary для managed OAuth, не READ catalog и не execution lease.
+service ProviderCredentialRenewalWorkService {
+  rpc CheckProviderCredentialRenewalWorkReadiness(CheckProviderCredentialRenewalWorkReadinessRequest) returns (CheckProviderCredentialRenewalWorkReadinessResponse);
+  rpc AuthorizeProviderCredentialRenewal(AuthorizeProviderCredentialRenewalRequest) returns (AuthorizeProviderCredentialRenewalResponse);
+  rpc ValidateProviderCredentialRenewalObservation(ValidateProviderCredentialRenewalObservationRequest) returns (ValidateProviderCredentialRenewalObservationResponse);
+}
+
 service RuntimeSecretWorkService {
   rpc CheckRuntimeSecretWorkReadiness(CheckRuntimeSecretWorkReadinessRequest) returns (CheckRuntimeSecretWorkReadinessResponse);
   rpc CheckCredentialProjectionWorkReadiness(CheckCredentialProjectionWorkReadinessRequest) returns (CheckCredentialProjectionWorkReadinessResponse);
@@ -450,6 +457,8 @@ service InteractionWorkService {
 // create immutable Kubernetes Secret от основного control-plane. Ни один ответ
 // этого сервиса не содержит credential value.
 service ProviderCredentialMaterializerService {
+  rpc RenewManagedProviderCredential(RenewManagedProviderCredentialRequest) returns (RenewManagedProviderCredentialResponse);
+  rpc ObserveManagedProviderCredentialRenewal(ObserveManagedProviderCredentialRenewalRequest) returns (ObserveManagedProviderCredentialRenewalResponse);
   rpc ObserveProviderModelCatalog(ObserveProviderModelCatalogRequest) returns (ObserveProviderModelCatalogResponse);
   rpc CheckProviderCredentialMaterializerReadiness(CheckProviderCredentialMaterializerReadinessRequest) returns (CheckProviderCredentialMaterializerReadinessResponse);
   rpc StartDeviceAuthorization(ProviderCredentialMaterializerServiceStartDeviceAuthorizationRequest) returns (ProviderCredentialMaterializerServiceStartDeviceAuthorizationResponse);
@@ -4245,8 +4254,12 @@ message ExecutionWorkflowReadPins {
   string spec_digest = 3;
   int64 workflow_version = 4;
 }
-message ExecutionWorkflowPublicationRead { ExecutionWorkflowReadPins pins = 1; }
-message ExecutionWorkflowActiveRunsRead { ExecutionWorkflowReadPins pins = 1; }
+message ExecutionWorkflowPublicationRead {
+  ExecutionWorkflowReadPins pins = 1;
+}
+message ExecutionWorkflowActiveRunsRead {
+  ExecutionWorkflowReadPins pins = 1;
+}
 message ExecutionWorkflowPublication {
   bytes configuration_json = 1;
   string configuration_sha256 = 2;
@@ -8149,6 +8162,64 @@ message ProviderModelCatalogRecord {
 
 // Все поля сверяются с active owner task в proof issuance до credential read.
 // expires_at только ограничивает budget; payload сам по себе не даёт authority.
+enum ProviderCredentialRenewalState {
+  PROVIDER_CREDENTIAL_RENEWAL_STATE_UNSPECIFIED = 0;
+  PROVIDER_CREDENTIAL_RENEWAL_STATE_RUNNING = 1;
+  PROVIDER_CREDENTIAL_RENEWAL_STATE_SUCCEEDED = 2;
+  PROVIDER_CREDENTIAL_RENEWAL_STATE_UNKNOWN_OUTCOME = 3;
+}
+
+// Все pins назначает owner task; binding сам по себе не является authority.
+message ProviderCredentialRenewalBinding {
+  string task_ref = 1;
+  string claimant_id = 2;
+  int64 claim_generation = 3;
+  string fence = 4;
+  string account_ref = 5;
+  int64 account_version = 6;
+  string credential_revision_ref = 7;
+  int64 credential_revision = 8;
+  ProviderCredentialDescriptor previous_credential = 9;
+  google.protobuf.Timestamp expires_at = 10;
+}
+
+message RenewManagedProviderCredentialRequest {
+  ProviderCredentialRenewalBinding binding = 1;
+}
+message RenewManagedProviderCredentialResponse {
+  ProviderCredentialRenewalState state = 1;
+  ProviderCredentialDescriptor credential = 2;
+  string materializer_receipt_uid = 3;
+  string materializer_receipt_resource_version = 4;
+}
+message ObserveManagedProviderCredentialRenewalRequest {
+  ProviderCredentialRenewalBinding binding = 1;
+}
+message ObserveManagedProviderCredentialRenewalResponse {
+  ProviderCredentialRenewalState state = 1;
+  ProviderCredentialDescriptor credential = 2;
+  string materializer_receipt_uid = 3;
+  string materializer_receipt_resource_version = 4;
+}
+message CheckProviderCredentialRenewalWorkReadinessRequest {}
+message CheckProviderCredentialRenewalWorkReadinessResponse {
+  bool ready = 1;
+}
+message AuthorizeProviderCredentialRenewalRequest {
+  ProviderCredentialRenewalBinding binding = 1;
+  string renewal_request_sha256 = 2;
+}
+message AuthorizeProviderCredentialRenewalResponse {
+  bool authorized = 1;
+}
+message ValidateProviderCredentialRenewalObservationRequest {
+  ProviderCredentialRenewalBinding binding = 1;
+  string renewal_request_sha256 = 2;
+}
+message ValidateProviderCredentialRenewalObservationResponse {
+  bool eligible = 1;
+}
+
 message ObserveProviderModelCatalogRequest {
   string task_ref = 1;
   string claimant_id = 2;

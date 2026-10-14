@@ -278,6 +278,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	controlplanev1.RegisterManagedConfigurationSourceWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterManagedConfigurationGitWriteBackWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRuntimeSecretWorkServiceServer(grpcServer, transport)
+	controlplanev1.RegisterProviderCredentialRenewalWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterRuntimeSecretDraftWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterSessionArchiveWorkServiceServer(grpcServer, transport)
 	controlplanev1.RegisterInteractionWorkServiceServer(grpcServer, transport)
@@ -311,6 +312,10 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if catalogErr != nil {
 		return fmt.Errorf("construct provider model catalog worker: %w", catalogErr)
 	}
+	renewalWorker, err := providermodelcatalog.NewRenewalWorker(repository, providerMaterializer, service.Ready, config.InstanceID, slog.Default())
+	if err != nil {
+		return errors.New("construct provider credential renewal worker")
+	}
 	listener, err := net.Listen("tcp", config.GRPCListen)
 	if err != nil {
 		return errors.New("listen control-plane gRPC")
@@ -327,6 +332,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		runOutboxRelay(repository, publisher, shutdownBase, config),
 		cleanupWorker.Run,
 		catalogWorker.Run,
+		renewalWorker.Run,
 		runAgentAvatarCleanup(repository, slog.Default()),
 		projectpurge.Run(repository, objects, config.RuntimeSecretNamespace, slog.Default()),
 		assistantconversationpurge.Run(repository, slog.Default()),
