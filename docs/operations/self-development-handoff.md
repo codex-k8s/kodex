@@ -4,11 +4,27 @@ title: Точка продолжения самонастройки и dogfoodin
 type: operations
 status: approved
 owner: manager
-version: 1.1.16
+version: 1.1.17
 updated: 2026-10-14
 ---
 
 # Текущее состояние
+
+## Checkpoint 14.10.2026 11:45 UTC — SQL включён, batch требует разделения
+
+Published SOURCE/remote/Draft1807/HOTcd4376fb7f16c3a3bae4f204acf54b0c6311ef16
+MATCH. Queued-only handover PASS11:41:40: controller quiesce/FF/restore,
+CP serving ELF24f1dfe6d681098ba97f80d14e6a2fc4a77abc4a27add93a505b27b4698d3d09,
+published85 pinsf822 unchanged. Новый controller Ready, но обе задачи всё ещё
+QUEUED. Это не live success выдачи lease.
+
+Новые17 pg_stat samples подтверждают вторую причину: второй capture1.5s
+начинается внутри уже4.84s batch transaction. Claim ограничен одним заданием
+на owner-транзакцию; параллельные tracker16/account10 не сериализуются.
+Регрессионный тест проверяет batch1 при0/1/9/15 занятых tracker и отсутствие
+claim при16. TestClaim/TestTrack PASS0.113s. Maintenance handover разрешает
+только точную замену batch8→1, другие изменения runtime-controller запрещены.
+Включение batch fix и live Developer/PROJECT результат пока NOT RUN.
 
 ## Checkpoint 14.10.2026 11:40 UTC — причина очереди и SQL исправление
 

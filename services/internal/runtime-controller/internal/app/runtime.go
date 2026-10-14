@@ -217,8 +217,10 @@ func (runtime *runtime) setAssistantUnavailable(ctx context.Context) {
 
 func (runtime *runtime) claim(ctx context.Context) (int, error) {
 	limit := cap(runtime.capacity) - len(runtime.capacity)
-	if limit > 8 {
-		limit = 8
+	// Каталог и authority каждого задания фиксируются отдельной bounded
+	// транзакцией. Это не ограничивает число одновременно работающих tracker.
+	if limit > 1 {
+		limit = 1
 	}
 	if limit < 1 {
 		return 0, nil

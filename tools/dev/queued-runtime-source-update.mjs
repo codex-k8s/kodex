@@ -18,6 +18,8 @@ export function verifyDelta(paths) {
     'services/internal/control-plane/internal/repository/postgres/platform/runtime_files_capture_plan_test.go',
     'services/internal/control-plane/internal/repository/postgres/platform/provider_renewal_component_test.go',
     'services/internal/control-plane/internal/maintenance/providermodelcatalog/renewal_worker_test.go',
+    'services/internal/runtime-controller/internal/app/runtime.go',
+    'services/internal/runtime-controller/internal/app/runtime_test.go',
     'tools/dev/runtime-queue-state-readback.sql', 'tools/dev/queued-runtime-source-update.sql',
     'tools/dev/queued-runtime-source-update.mjs', 'tools/dev/queued-runtime-source-update.test.mjs',
     'docs/operations/self-development-handoff.md', 'docs/operations/self-development-dogfooding.md',
@@ -48,6 +50,11 @@ async function main() {
       git(hot,'branch','--show-current')==='kodex-agent/issue-1797-full21-v7','SOURCE_PRECONDITION_FAILED');
     git(hot,'merge-base','--is-ancestor',previous,target);
     verifyDelta(git(source,'diff','--name-only',previous,target).split('\n'));
+    const runtimePath='services/internal/runtime-controller/internal/app/runtime.go';
+    const oldRuntime=git(hot,'show',previous+':'+runtimePath);
+    const newRuntime=git(source,'show',target+':'+runtimePath);
+    const claimPatch='\t// Каталог и authority каждого задания фиксируются отдельной bounded\n\t// транзакцией. Это не ограничивает число одновременно работающих tracker.\n\tif limit > 1 {\n\t\tlimit = 1\n\t}';
+    check(newRuntime===oldRuntime || newRuntime===oldRuntime.replace('\tif limit > 8 {\n\t\tlimit = 8\n\t}',claimPatch),'CLAIM_BATCH_DELTA_REQUIRED');
     const expectedELF=hash(readFileSync(binary));
     const before=state(); verifyIdleTurns(before);
     deployment=readDeployment(); originalTemplate=hash(JSON.stringify(deployment.spec.template));

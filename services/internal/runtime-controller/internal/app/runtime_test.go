@@ -28,6 +28,36 @@ type runtimeWorkClientStub struct {
 	renew    func() error
 }
 
+type claimBatchClient struct {
+	controlplanev1.RuntimeWorkServiceClient
+	limit int32
+}
+
+func (client *claimBatchClient) ClaimExecution(_ context.Context, request *controlplanev1.ClaimExecutionRequest, _ ...grpc.CallOption) (*controlplanev1.ClaimExecutionResponse, error) {
+	client.limit = request.Limit
+	return &controlplanev1.ClaimExecutionResponse{}, nil
+}
+
+func TestClaimSeparatesCatalogTransactionsWithoutSerializingTrackers(t *testing.T) {
+	for _, occupied := range []int{0, 1, 9, 15, 16} {
+		client := &claimBatchClient{}
+		runtime := &runtime{control: client, capacity: make(chan struct{}, 16), config: Config{RequestTimeout: time.Second}}
+		for range occupied {
+			runtime.capacity <- struct{}{}
+		}
+		if _, err := runtime.claim(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		want := int32(1)
+		if occupied == 16 {
+			want = 0
+		}
+		if client.limit != want || len(runtime.capacity) != occupied || cap(runtime.capacity) != 16 {
+			t.Fatal("claim batch must be bounded independently of parallel tracker capacity")
+		}
+	}
+}
+
 func (client *runtimeWorkClientStub) RenewExecution(_ context.Context, request *controlplanev1.RenewExecutionRequest, _ ...grpc.CallOption) (*controlplanev1.RenewExecutionResponse, error) {
 	if client.renew != nil {
 		if err := client.renew(); err != nil {

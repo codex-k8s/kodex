@@ -4,9 +4,20 @@ title: Реестр доказательств bootstrap и оставшихся
 type: qa-report
 status: approved
 owner: manager
-version: 1.0.16
+version: 1.0.17
 updated: 2026-10-14
 ---
+
+## 14.10.2026 11:45 UTC — serving SQL PASS, batch fix ещё не включён
+
+- SOURCE/remote/Draft1807/HOTcd4376fb MATCH. Maintenance quiesce/FF/restore
+  PASS11:41:40; CP serving ELF24f1dfe6…d3d09 MATCH, published pinsf822 unchanged.
+- Новый controller Ready; Developer и PROJECT helper всё ещё QUEUED без lease.
+  SQL ускорение само по себе не устранило суммарный5s batch deadline.
+- Новые17 pg_stat samples: второй capture1.50s внутри4.84s transaction.
+  Code-only batch1 вместо8; account10 и tracker capacity16 сохранены.
+- TestClaim/TestTrack PASS0.113s, maintenance guard2 PASS. Live batch fix,
+  Developer12GiB и PROJECT completion NOT RUN на этом checkpoint.
 
 ## 14.10.2026 11:40 UTC — no-ID SYSTEM и причина queued claim
 
