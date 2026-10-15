@@ -112,6 +112,10 @@ export function nativeTraefikTransition(before, desired, profile) {
 }
 
 export const nativeMetadataHash = r => fingerprint({ labels: r.metadata.labels ?? {}, annotations: r.metadata.annotations ?? {}, ownerReferences: r.metadata.ownerReferences ?? [] });
+export function nativeChartMetadataHash(r) {
+  const annotations = { ...r.metadata.annotations }; delete annotations["helmcharts.helm.cattle.io/replace-wait"];
+  return fingerprint({ labels: r.metadata.labels ?? {}, annotations, ownerReferences: r.metadata.ownerReferences ?? [] });
+}
 export function nativeDeploymentMetadataHash(r) {
   const annotations = { ...r.metadata.annotations }; delete annotations["deployment.kubernetes.io/revision"];
   return fingerprint({ labels: r.metadata.labels ?? {}, annotations });

@@ -3,13 +3,21 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { applyReverseSpec } from "./stable-reverse-patch.mjs";
-import { nativeAddonBinding, nativeRecoveryConfig, nativeSkipPaths, nativeTraefikTransition, prepareNativeDeployment, traefikHelmConfig, verifyNativeImage } from "./stable-native-model.mjs";
+import { nativeAddonBinding, nativeChartMetadataHash, nativeRecoveryConfig, nativeSkipPaths, nativeTraefikTransition, prepareNativeDeployment, traefikHelmConfig, verifyNativeImage } from "./stable-native-model.mjs";
 const profiles = JSON.parse(await readFile(new URL("../../infra/stable-system/native-profiles.json", import.meta.url), "utf8")).profiles;
 const fixture = profile => ({ apiVersion: "apps/v1", kind: "Deployment", metadata: { name: profile.name, namespace: "kube-system", uid: "uid", resourceVersion: "1" },
   spec: { replicas: 1, template: { metadata: { labels: { app: profile.name } }, spec: { containers: [{ name: profile.container, image: profile.sourceImage,
     resources: {}, env: [...(profile.name === "traefik" ? [{ name: "POD_NAME", valueFrom: { fieldRef: { fieldPath: "metadata.name" } } },
       { name: "POD_NAMESPACE", valueFrom: { fieldRef: { fieldPath: "metadata.namespace" } } }, { name: "USER", value: "traefik" }] : []),
     { name: "EXAMPLE", value: "PRIVATE_NATIVE_SENTINEL" }] }] } } } });
+
+test("native HC commitment ignores only controller replace-wait, not unmanaged or other metadata", () => {
+  const chart = { metadata: { labels: { app: "traefik" }, annotations: { source: "fixed" } } }, original = nativeChartMetadataHash(chart);
+  chart.metadata.annotations["helmcharts.helm.cattle.io/replace-wait"] = "job-uid";
+  assert.equal(nativeChartMetadataHash(chart), original);
+  chart.metadata.annotations["helmcharts.helm.cattle.io/unmanaged"] = "true";
+  assert.notEqual(nativeChartMetadataHash(chart), original);
+});
 
 test("native cutover changes only replica/strategy/resources and verified digest, inverse preserves source", () => {
   for (const p of profiles) {

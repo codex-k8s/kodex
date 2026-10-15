@@ -7,8 +7,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { fingerprint } from "./stable-inventory.mjs";
 import { validateNodeContainer } from "./stable-node-registry-model.mjs";
-import { readSystemObjects, systemDesiredValues, systemExpectedObjects, systemObjectState, systemServing } from "./stable-system-helm-state.mjs";
-import { nativeAddonBinding, nativeDeploymentMetadataHash, nativeMetadataHash, nativeRecoveryConfig, nativeSupportMatches, nativeTraefikTransition, prepareNativeDeployment, traefikHelmConfig, verifyNativeImage } from "./stable-native-model.mjs";
+import { readSystemObjects, systemDesiredValues, systemExpectedObjects, systemObjectState, systemRecoveryManifest, systemServing } from "./stable-system-helm-state.mjs";
+import { nativeAddonBinding, nativeChartMetadataHash, nativeDeploymentMetadataHash, nativeMetadataHash, nativeRecoveryConfig, nativeSupportMatches, nativeTraefikTransition, prepareNativeDeployment, traefikHelmConfig, verifyNativeImage } from "./stable-native-model.mjs";
+import { nativeHelmJob } from "./stable-native-helm-job.mjs";
 
 const execute = promisify(execFile), root = fileURLToPath(new URL("../../", import.meta.url));
 function requireValue(value, code) { if (!value) throw Error(code); }
@@ -77,6 +78,14 @@ export async function planNative(args, port) {
   const sourceConfig = sourceHcc ? nativeRecoveryConfig(chart, traefikProfile, sourceHcc) : null;
   requireValue(chart?.spec?.chart === "https://%{KUBERNETES_API}%" + config.traefikChart.apiPath,
     "NATIVE_TRAEFIK_SOURCE_CONFLICT");
+  const job = await get("job", "helm-install-traefik"), pods = JSON.parse(await kube(["-n", "kube-system", "get", "pods", "-l", "job-name=helm-install-traefik", "-o", "json"]));
+  const sourceJob = nativeHelmJob(job, pods, chart.metadata.uid);
+  requireValue(sourceJob.terminal && sourceJob.complete, "NATIVE_TRAEFIK_SOURCE_JOB_NOT_COMPLETE");
+  for (const server of servers) {
+    const compiledImage = (await text("docker", ["exec", server.containerID, "sh", "-ec",
+      'strings /bin/k3s | grep -oE "rancher/klipper-helm:v[0-9A-Za-z._-]+" | sort -u'])).trim();
+    requireValue(compiledImage === sourceJob.image, "NATIVE_TRAEFIK_CONTROLLER_JOB_IMAGE_CHANGED");
+  }
   const intent = fingerprint({ source, clusterUID, chartUID: chart.metadata.uid, config });
   const targets = [], addonRows = [];
   for (const profile of config.profiles) {
@@ -166,6 +175,11 @@ export async function planNative(args, port) {
     "--reset-values", "--values", "-", "--dry-run=server", "--no-hooks", "-o", "json"], JSON.stringify(values), 180000));
   const desired = await decode(dryRun.manifest), transition = nativeTraefikTransition(before, desired, traefik);
   const objects = await objectGuards(traefik, before, desired);
+  const recoveryHcc = traefikHelmConfig(chart, traefik, intent, true), recoveryValues = systemDesiredValues(sourceValues, JSON.parse(recoveryHcc.spec.valuesContent));
+  const recoveryRun = JSON.parse(await text("helm", ["upgrade", "traefik", chartPath, "--namespace", "kube-system", "--kube-context", context,
+    "--reset-values", "--values", "-", "--dry-run=server", "--no-hooks", "-o", "json"], JSON.stringify(recoveryValues), 180000));
+  const recovery = await decode(recoveryRun.manifest);
+  requireValue(fingerprint(recovery) === fingerprint(systemRecoveryManifest(before, desired)), "NATIVE_TRAEFIK_RECOVERY_RENDER_DRIFT");
   for (const target of targets) {
     const d = await get("deployment", target.name);
     requireValue(d.metadata.uid === target.uid && fingerprint(d.spec) === target.beforeSHA256, "NATIVE_SOURCE_CHANGED_DURING_PLAN");
@@ -175,10 +189,11 @@ export async function planNative(args, port) {
     (await get("namespace", "kube-system")).metadata.uid === clusterUID && (await text("git", ["rev-parse", "HEAD"])).trim() === source &&
     !(await text("git", ["status", "--porcelain", "--untracked-files=normal"])).trim(), "NATIVE_EXECUTOR_OR_CLUSTER_DRIFT");
   const plan = { schema: "kodex.stable-native-plan/v2", source, context, clusterUID, intent, profileSHA256: fingerprint(config),
-    nodes: bindings, targets, addons: addonRows, traefik: { uid: chart.metadata.uid, specSHA256: fingerprint(chart.spec),
+    nodes: bindings, targets, addons: addonRows, traefik: { uid: chart.metadata.uid, specSHA256: fingerprint(chart.spec), chartMetadataSHA256: nativeChartMetadataHash(chart),
       objects, sourceConfig, sourcePdb: sourcePdb ? { uid: sourcePdb.metadata.uid, metadataSHA256: nativeMetadataHash(sourcePdb), specSHA256: fingerprint(sourcePdb.spec) } : null,
       releaseRevision: metadata.revision, metadataSHA256: fingerprint(metadata), chartSHA256: hash(chartBytes), chartPath, hcc,
-      recoveryHcc: traefikHelmConfig(chart, traefik, intent, true), ...transition }, apply: "NOT_RUN" };
+      sourceValuesSHA256: hash(Buffer.from(chart.spec.valuesContent)), sourceJob,
+      recoveryHcc, recoverySHA256: fingerprint(recovery), ...transition }, apply: "NOT_RUN" };
   const document = { plan, planSHA256: fingerprint(plan) };
   await writePrivate(options["--output"], JSON.stringify(document) + "\n"); return document;
 }

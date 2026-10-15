@@ -4,7 +4,7 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.1.6
+version: 1.1.7
 updated: 2026-10-15
 ---
 
@@ -1434,3 +1434,44 @@ Actual native AddOn apply/rollback/restart всё ещё NOT RUN. Для Traefik
   activation/recovery, остальные системные/public OIDC фазы — NOT RUN.
   Для Traefik native controller job lifecycle исполняемый workflow ещё нужен.
   Main/live source сохранены; общий review и отдельный owner gate не пройдены.
+
+## Native Traefik: HCC handoff и forward recovery
+
+Добавлен `tools/release/stable-native-traefik-release.mjs` с режимами
+`apply`, `inspect`, `readback`, `rollback`. Он изменяет только принадлежащий
+исходному HelmChart `HelmChartConfig`, не создаёт второй Helm release,
+не правит Deployment напрямую и не удаляет Job или release. Перед изменением
+повторно сверяются cluster/node/container, HC UID/spec/metadata, полный
+набор объектов и исходная Helm revision; chart bytes сверяются по SHA.
+Actual apply допускается только с exact `--approved-plan-sha` после общего
+review и отдельного owner gate. Подготовленный native plan теперь включает
+исходную завершённую Job и server dry-run recovery manifest.
+
+| Переход | Подтверждение и ограничение |
+| --- | --- |
+| Исходное состояние | Native Job принадлежит exact HC, использует штатный klipper image и TLS; все её и известных predecessor Pod действительно остановлены |
+| HCC activation | Fsync intent → create либо UID/RV/spec CAS сохранённого recovery HCC; `failurePolicy=abort`, только закрытый профиль replicas/resources/digest/PDB |
+| Handoff | Краткое отсутствие Job допустимо только после intent; новая Job UID, Helm revision R+1, exact manifest и два проверенных values key; затем bounded Deployment rollout и actual serving proof2 |
+| Потерянный ответ | Write не повторяется; inspect читает authoritative состояние. Восстановление разрешается только после terminal original journal и доказанного завершения forward Job |
+| Recovery | Та же HCC UID → source-profile config; новая Job, revision R+2, source spec/actual serving1. Созданные PDB и HCC остаются с прежними UID, без удаления ресурсов |
+| Повтор recovery | Нет новых writes; после lost create ACK lineage промежуточной Job берётся из завершённого `--recovery-journal` того же plan |
+| Failed/pending | Не сбрасывать Helm status и не переустанавливать release. Failed либо недоказанное завершение producer — закрытый FAIL, ручное решение владельца; автоматическое исправление vendor job здесь не заявляется |
+
+`replace-wait` HelmChart исключён только как controller-owned observation;
+`unmanaged`, остальные annotations, labels, owner references и spec защищены.
+Job condition `Complete` не заменяет проверку остановки regular/init/debug
+containers. Из native values Secret читаются только два известных ключа,
+сравниваются их hashes; values, SA token и остальные Secret data не
+попадают в plan, operation journal и вывод.
+
+Документация проверена через Context7 `/k3s-io/helm-controller`: API
+HelmChartConfig, failurePolicy и replace-wait lifecycle. Actual Helm Job
+образ дополнительно сопоставляется с compiled default установленного K3s,
+а не принимается по одному тегу из произвольной новой Job.
+
+Локальные synthetic проверки нового workflow: normal handoff/recovery,
+краткий Job gap, delayed readiness, lost create ACK, causal recovery journal,
+HC/HCC/PDB/Job ownership drift, changed values и drift во время dry-run.
+Actual activation/recovery, public TLS/OIDC и live acceptance пока NOT RUN;
+данные и живой ingress не менялись. Exact SHA полного прогона фиксируется
+следующей записью после commit.
