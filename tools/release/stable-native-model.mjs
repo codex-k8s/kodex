@@ -39,6 +39,15 @@ export function prepareNativeDeployment(deployment, profile) {
     digestPattern.test(profile.indexDigest ?? ""), "NATIVE_SOURCE_PROFILE_INVALID");
   const c = pod.containers[0]; c.image = (profile.owner === "helmchart" ? profile.sourceImage : profile.repository) + "@" + profile.indexDigest;
   c.resources = boundedResources(profile.resources, c.resources ?? {});
+  if (profile.name === "traefik") {
+    // Закреплённый chart автоматически добавляет эти два Go runtime env при
+    // появлении limits. Не разрешать произвольное изменение source env.
+    requireValue(c.env?.slice(0, 3).map(e => e.name).join(",") === "POD_NAME,POD_NAMESPACE,USER" &&
+      !c.env.some(e => ["GOMAXPROCS", "GOMEMLIMIT"].includes(e.name)) && c.resources.limits.memory === "512Mi",
+    "NATIVE_TRAEFIK_RUNTIME_ENV_INVALID");
+    c.env.splice(3, 0, { name: "GOMAXPROCS", valueFrom: { resourceFieldRef: { resource: "limits.cpu", divisor: "1" } } },
+      { name: "GOMEMLIMIT", value: "460MiB" });
+  }
   after.replicas = 2; after.strategy = { type: "RollingUpdate", rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } };
   return { beforeSHA256: fingerprint(deployment.spec), afterSHA256: fingerprint(after), after,
     inverse: reverseSpecPatch(deployment.spec, after), uid: deployment.metadata.uid };
@@ -61,7 +70,7 @@ export function traefikHelmConfig(chart, profile, intent, rollback = false) {
     chart.metadata.uid && !chart.metadata.deletionTimestamp && /^[a-f0-9]{64}$/.test(intent ?? "") &&
     !chart.spec?.valuesSecrets?.length && !chart.spec?.targetNamespace && !chart.spec?.releaseName &&
     Object.keys(chart.spec.set ?? {}).every(k => k === "global.systemDefaultRegistry"), "NATIVE_TRAEFIK_CHART_INVALID");
-  const values = { deployment: { replicas: rollback ? 1 : 2 }, resources: rollback ? {} : boundedResources(profile.resources),
+  const values = { deployment: { replicas: rollback ? 1 : 2, goMemLimitPercentage: 0.9 }, resources: rollback ? {} : boundedResources(profile.resources),
     image: { tag: profile.sourceImage.split(":").at(-1) + (rollback ? "" : "@" + profile.indexDigest) },
     updateStrategy: { type: "RollingUpdate", rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } },
     podDisruptionBudget: { enabled: true, minAvailable: 1 } };

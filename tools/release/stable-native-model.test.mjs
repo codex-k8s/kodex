@@ -7,13 +7,15 @@ import { nativeAddonBinding, nativeSkipPaths, nativeTraefikTransition, prepareNa
 const profiles = JSON.parse(await readFile(new URL("../../infra/stable-system/native-profiles.json", import.meta.url), "utf8")).profiles;
 const fixture = profile => ({ apiVersion: "apps/v1", kind: "Deployment", metadata: { name: profile.name, namespace: "kube-system", uid: "uid", resourceVersion: "1" },
   spec: { replicas: 1, template: { metadata: { labels: { app: profile.name } }, spec: { containers: [{ name: profile.container, image: profile.sourceImage,
-    resources: {}, env: [{ name: "EXAMPLE", value: "PRIVATE_NATIVE_SENTINEL" }] }] } } } });
+    resources: {}, env: [...(profile.name === "traefik" ? [{ name: "POD_NAME", valueFrom: { fieldRef: { fieldPath: "metadata.name" } } },
+      { name: "POD_NAMESPACE", valueFrom: { fieldRef: { fieldPath: "metadata.namespace" } } }, { name: "USER", value: "traefik" }] : []),
+    { name: "EXAMPLE", value: "PRIVATE_NATIVE_SENTINEL" }] }] } } } });
 
 test("native cutover changes only replica/strategy/resources and verified digest, inverse preserves source", () => {
   for (const p of profiles) {
     const d = fixture(p), original = structuredClone(d), transition = prepareNativeDeployment(d, p);
     assert.equal(transition.after.replicas, 2); assert.equal(transition.after.template.spec.containers[0].image.endsWith("@" + p.indexDigest), true);
-    assert.deepEqual(transition.after.template.spec.containers[0].env, d.spec.template.spec.containers[0].env);
+    assert.deepEqual(transition.after.template.spec.containers[0].env.filter(e => !["GOMAXPROCS", "GOMEMLIMIT"].includes(e.name)), d.spec.template.spec.containers[0].env);
     assert.deepEqual(applyReverseSpec(transition.after, transition.inverse), d.spec); assert.deepEqual(d, original);
     assert.equal(JSON.stringify(transition.inverse).includes("PRIVATE_NATIVE_SENTINEL"), false);
   }
