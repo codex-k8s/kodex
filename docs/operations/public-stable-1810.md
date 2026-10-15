@@ -734,3 +734,26 @@ physical upstream и уже передаёт containerd `ns` query, не исп�
 publication и actual node pulls ещё требуют согласованного maintenance этапа.
 Frontend TLS cutover, полный Go rollback, оставшаяся replica matrix и
 certificate/OIDC также остаются незавершёнными. Чекбоксы общего плана не закрыты.
+
+## Фронтенд: фазовая поставка compiled nginx
+
+Переход использует один exact план: исходный Deployment/Service/три Ingress/
+NetworkPolicy, существующие TLS references и текущий публичный runtime config.
+UI получает новую immutable версию того же публичного config с согласованными
+content revision/readiness/template pins; прежний mutable dev ConfigMap не
+переписывается. Public issuer и client permissions на этой фазе не меняются.
+
+| Фаза | Состояние и проверка |
+| --- | --- |
+| plan | Canonical nginx template, проверка server defaults через dry-run без persist; exact SSO middleware/TLS/peer selectors; public config schema без secrets |
+| create dependencies | Только новый content-addressed runtime ConfigMap и exact mTLS ServersTransport; intent до запроса, чужой collision закрыто отклоняется |
+| quiesce | CAS frontend до0, observed generation и отсутствие всех owned Pod; API direct route остаётся защищённым |
+| activate | Exact ingress peer только8443; compiled2, без host mounts/dev env; readiness nginx подтверждает загрузку TLS |
+| route switch | Service8443 и три точных Ingress backends; существующие SSO middleware/hosts/TLS не меняются; API/WS идут через nginx с проверкой API certificate |
+| partial / unknown | Никакого автоматического повторения create/patch; наблюдаемая before/quiesced/after классификация, не ложный PASS |
+| rollback | До effects проверить все UID/spec/annotation/reference pins; остановить только изменённый frontend, восстановить узкие обратные patches, удалить только собственные новые ресурсы по UID/RV |
+
+Это короткое согласованное maintenance окно, не zero-downtime обещание.
+Обратные patches содержат только изменённые поля, не целые Deployment/env.
+Неизвестные дополнительные frontend env закрыто отклоняются до сохранения
+recovery material; допустимы только существующие публичные dev knobs.

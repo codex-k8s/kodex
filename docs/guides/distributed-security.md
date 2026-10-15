@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.23
+version: 1.7.24
 updated: 2026-10-15
 ---
 
@@ -2162,6 +2162,15 @@ high-watermarks. Изменение одной константы last-known-goo
 доказательством и не заменяет согласованный протокол распространения отзыва.
 
 ## Обновление сессии через forward authentication
+
+HTTP edge не записывает raw request/URI/query, headers, cookies, IP или
+browser identity в access log: OAuth callback содержит одноразовый code,
+а обычный query может содержать пользовательские данные. Метод и route
+классифицируются закрытыми enum, остальные поля — только числовой status,
+размер и duration. Неструктурированный request error log без возможности
+redaction не включается; диагностика сохраняет безопасный access outcome,
+startup/reload validation и авторитетные backend наблюдения. Это относится
+и к штатному nginx, не только к Go gateway и proxy.
 
 Если authentication proxy обновляет credentials через response cookies,
 промежуточный HTTP gateway передаёт клиенту полный ограниченный набор cookies

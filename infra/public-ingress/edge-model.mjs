@@ -44,7 +44,7 @@ export function renderPublicEdge(config) {
     ports: [{ name: "https", protocol: "TCP", port }] })),
     { apiVersion: "traefik.io/v1alpha1", kind: "ServersTransport", metadata: meta("kodex-public-edge-upstream"),
       spec: { serverName: upstreamServerName, insecureSkipVerify: false,
-        rootCAsSecrets: ["kodex-public-edge-upstream-ca"],
+        rootCAs: [{ secret: "kodex-public-edge-upstream-ca" }],
         forwardingTimeouts: { dialTimeout: "5s", responseHeaderTimeout: "30s", idleConnTimeout: "90s" } } },
     // ACME остаётся у существующего внешнего ingress. Его глобальный redirect,
     // challenge handler и certificate storage не меняются. Private keys не
