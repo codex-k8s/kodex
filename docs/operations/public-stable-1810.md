@@ -1764,3 +1764,26 @@ admission leader2; guarded BuildKit/role-image-builder/Keycloak2 и общий
 внешние TLS/SSO/API/WS/browser и replica replacement/соседний baseline.
 Главные Go/frontend cutover больше не являются NOT RUN. Этапы полного
 чеклиста2–8 ещё не закрыты: указанные зависимости и внешний вход обязательны.
+
+## Оставшиеся platform Deployment
+
+`stable-platform-infra.mjs` ограничен четырьмя exact Deployment: rolling update
+standalone pull-helper в уже двухрепличном read-only registry; BuildKit2 с
+отдельным scratch каждого Pod и canonical resource bounds; role-image-builder2
+с отдельным scratch и прежним owner claim/fence; Keycloak2 с `ispn`, `jdbc-ping`
+и encrypted embedded cache. PostgreSQL/credentials/issuer не меняются.
+Keycloak peer NetworkPolicy добавляет только два TCP-порта между exact
+same-namespace sso Pod. Context7 Keycloak caching docs подтверждают jdbc-ping
+и embedded mTLS; сервис mesh не устанавливается и TLS не ослабляется.
+
+Plan связывает clean source, cluster/deployment UIDs, полные spec hashes,
+metadata/config references, storage commitment и исходные main/init image IDs.
+Перед переходами требуется idle owner state и прежние promoted pins. Actual
+helper cache проверяется отдельным bootstrap readback. После durable intent
+один CAS patch; потерянный ACK не повторяется. Inspect/readback/rollback
+используют исходный journal; восстановление возвращает только exact source
+spec/policy, не откатывая данные. Все partial states проверяются до первого
+restore. Source-owned credentials и прочие network rules сохраняются.
+
+Пять быстрых model/source-boundary tests PASS; реальный server dry-run и
+применение этого четырёхкомпонентного workflow требуют следующего clean SHA.
