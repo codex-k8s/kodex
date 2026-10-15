@@ -499,3 +499,55 @@ runtime-controller не изменён и не заменяется image кон
 Go rollback/полная replica матрица, certificate/OIDC migration и финальные
 review/owner gate с реальным rollout/browser readback. Main и live PodSpec
 остаются исходными; частичные успехи не закрывают этапы общего checklist.
+
+## Сохранённые служебные артефакты: отдельный тип доказательства
+
+На exact `49cc03949cbb160682eef7410c672fa8435d22ce`:
+
+- PASS: 45 Node tests, 30 Python tests, ShellCheck и `git diff --check`.
+- PASS PLAN ONLY: оба сохранённых OCI полностью проверены через
+  `stable-image-publication.mjs retained-plan`, с текущим Kubernetes
+  Deployment → ReplicaSet → Ready Pod lineage и фактическим `imageID`.
+  Сверены все blobs, descriptor graph, archive integrity, user/config и
+  исходный cache tag; неподвязанные blobs не принимаются.
+- План `image-admission` имеет hash
+  `67c5a2180b8c2e49d7ce42c952c98bf082e106676685519fa1d2b19d94708c44`.
+  План `image-admission-tools` имеет hash
+  `9874038bdb08791982e0073967ed642cfb38419967eaad0a6c97b9ce724d7959`.
+  Оба сохраняют уже записанные выше exact image digests.
+- PASS LOCAL/SYNTHETIC: настоящий CLI и worker обработали оба retained
+  компонента, publication/readback и отрицательные проверки serving drift,
+  смешанных build/retained claims и старой schema.
+- NOT RUN: registry import этих OCI и любые изменения в живой среде.
+
+Новая private plan schema — `kodex.stable-image-publication/v2` с обязательным
+`artifactProfile: built|retained`; decoder v1 и неявного fallback нет. Старые
+локальные v1 планы были только preflight evidence и не применяются. Built
+проверяет прежний Git build context; retained не содержит build receipt и
+ссылается только на текущие разрешённые serving consumers. Эта проекция
+не выдаёт новый domain admission и не меняет business/runtime pins. Реальный
+consumer/repository, owner lineage и digest разрешаются из API, а не из
+caller payload. Raw specs/env не попадают в evidence. До эффекта retained
+план повторно проверяет Deployment bindings и свежий serving digest.
+
+Повторное чтение обнаружило ещё необходимую транспортную часть: сохранённые
+platform refs используют логическое имя registry, а текущий node runtime
+настроен только на physical promoted-pull endpoint. Произвольная замена refs
+во всех исторических immutable admission snapshots не выполняется. Требуется
+code-first exact registry mirror с одной канонической TLS/auth конфигурацией,
+без wildcard, второго credential source или default-endpoint fallback;
+либо эквивалентный проверенный forward transition всех затронутых consumers.
+Перезапуск/проверка нод относятся к отдельному owner-approved maintenance
+stage. Ничего в node registry configuration сейчас не менялось.
+Проверены Context7 и официальные
+[K3s private registry docs](https://docs.k3s.io/installation/private-registry)
+по exact mirror endpoint, auth/TLS, restart и отключению default fallback.
+
+Также проверен preserved worker OCI
+`sha256:ca8eacdc22f2dc76a8080460659f2dd01afc9cdb61866bf7a123fae003460b49`.
+Его recorded cache input hash не совпал с повторным filesystem fingerprint
+текущего main. Это не доказывает функциональную регрессию (в hash входят
+метаданные файлов), но не позволяет объявить старый binary эквивалентным
+текущим исходникам. Переиспользование этого OCI для controller пока не принято
+как доказанное решение; controller/worker/admission coupling остаётся
+открытым до проверки настоящего source closure либо согласованного transition.
