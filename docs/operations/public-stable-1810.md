@@ -936,3 +936,30 @@ Digest alias больше не перезаписывается через `--fo
 helper activation/replicas, native mirror apply/restart и fresh pull всё ещё
 NOT RUN. Следующие части — registry activation/shared storage/HTTP state,
 ресурсная матрица, public TLS/OIDC, review/owner gate, применение и browser.
+
+## Матрица registry activation и двух сервисных реплик
+
+Пять существующих ролей registry сохраняют отдельные endpoints, credentials,
+readonly/write/admin границы и существующие PVC. Две сервисные реплики
+используют тот же файловый storage protocol и exact PV node affinity, а не
+изображают репликацию содержимого. Это защита от потери одного Pod, не отказа
+узла/тома/сервера. `pull` получает проверенный standalone helper, прочие
+контейнеры и admitted artifacts остаются прежними.
+
+| Фаза | Источник и эффект |
+| --- | --- |
+| plan | Exact UID/spec пяти Deployment, PVC/PV/node binding, credential/config references и Service/NetworkPolicy commitments; зависимые Deployment сохраняются |
+| seed dependency | Для activation требуется actual cache readback helper через bootstrap workflow на том же clean SHA; metadata labels не заменяют CRI proof |
+| HTTP state | Для push/promotion/evidence создаются три отдельные immutable Secret с cryptographic random HTTP state key; existing credentials не дополняются и не перезаписываются |
+| writer quiesce | Fresh authoritative owner idle/pins, CAS replicas0 и join всех owned Pods до смены upload state; intents записываются до effects |
+| activation | Тот же PVC, exact node pin, общий HTTP state обеих writer replicas; RollingUpdate0/1, два Ready/available Pod; pull/read-only роли не получают WRITE |
+| partial / unknown | Не переотправлять create/patch; inspect source/quiesced/desired и secret intent/UID; unknown не является успешной activation |
+| rollback | До effects сверить весь набор, исходный apply journal/pins и неизменённые downstream Deployment; quiesce/join, восстановить exact spec, затем удалить только собственные unused Secret по UID/RV |
+| readback | Реальные served imageIDs, two replicas, source references/storage/routes и owner pins; public SSO/browser/fresh node pull ещё проверяются отдельно |
+
+Секретное значение генерируется только при apply и передаётся в Kubernetes
+по stdin; в плане/журнале остаются только commitment и UID. Потерянный create
+разрешается по durable intent и content hash, известный UID не переиспользуется
+для чужого replacement. Эта операция не выдаёт новых доменных grants и не
+создаёт domain events; авторитетный результат — Kubernetes/owner readback.
+Применение остаётся за review и отдельным exact owner gate.
