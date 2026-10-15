@@ -21,6 +21,16 @@ spec/replicas, архиватор — строго к paused source с safe Role
 самостоятельной публичной OIDC-фазы. Факт локальной сборки или synthetic
 recovery не заменяет registry/node pull и live browser приёмку.
 
+Для bootstrap самого pull gateway используется
+`stable-pull-bootstrap.mjs plan|apply|inspect|readback`. Он принимает private
+`--publication-plan` v2 только для standalone `registry-pull-authorizer`,
+связывает checked OCI и exact node identities и использует существующий
+`import-local-image.sh`. Применение требует отдельного допуска на exact план;
+`NODE_CACHE_ONLY` не означает публикацию, activation или fresh pull. При
+unknown import сначала inspect/readback, старый изменившийся план не повторяется.
+Seed не меняет Deployment; безопасный immutable cache при отмене сохраняется,
+а rollback активации gateway принадлежит отдельной registry-поставке.
+
 Задача: #1222, общий план: #1204.
 
 `scoped-release.mjs` обновляет digest образа или подготовленный source checkout

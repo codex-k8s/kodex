@@ -878,3 +878,61 @@ available. Hot Go requests в основном50m/128Mi, ряд limits отсу�
 Go rollback/recovery реализован, но actual apply/rollback и две живые compiled
 реплики ещё NOT RUN. Archive pause — только аварийная фаза, не выполненная
 конечная цель. Новые images не опубликованы и не загружались узлами кластера.
+
+## Exact bootstrap кэша registry pull helper
+
+Для устранения bootstrap-цикла предусмотрен отдельный cache-only шаг:
+новый pull helper сначала доставляется как проверенный локальный OCI на все
+точные workload node, затем отдельная registry-фаза меняет работающий Pod.
+Загрузка через ещё не активированный helper не используется. Это не замена
+дальнейшей registry publication и настоящей сетевой загрузки остальных images.
+
+`stable-pull-bootstrap.mjs plan|apply|inspect|readback` принимает только
+publication plan v2 профиля `built` для `registry-pull-authorizer`, который
+уже прошёл полный OCI graph/source preflight. Receipt/digest/target, immutable
+archive hash, unchanged build inputs и cluster/app namespace UID сверяются
+повторно. Schema1 не поддерживается. Plan связывает clean executor SHA и
+точные Kubernetes UID/Docker container IDs/images/cluster-role labels каждой
+Ready linux/amd64 node. Docker env остаётся только внутри commitment.
+
+| Переход | Действие и доказательство |
+| --- | --- |
+| plan | Только Git/Kubernetes/Docker reads и private output; exact tag/digest aliases отсутствуют либо уже совпадают с проверенным артефактом |
+| apply | После review/owner gate и exact plan hash — durable intent, единственный импорт закрытого helper repository; drift блокирует первый write |
+| lost import response | Нет автоматического повторения; inspect показывает частичные cache tuples, старый план не переимпортирует изменившийся набор |
+| readback | Тот же repo-owned importer в readback-only режиме: manifest bytes, native unpack, managed/pinned metadata и CRI pinned/repoDigest на каждом узле |
+| последующая activation | Отдельная exact registry-поставка, существующие credentials/PVC/прочие контейнеры сохраняются; cache-only PASS не означает Ready helper |
+| отмена bootstrap/rollback приложения | Работающие Deployment не менялись; безопасный immutable cache сохраняется, чужие aliases/images и существующие pins не удаляются; activation rollback относится к registry-поставке |
+
+Общий importer получил только один дополнительный закрытый repository.
+Digest alias больше не перезаписывается через `--force`: существующий alias
+проверяется, отсутствующий создаётся атомарно без overwrite; гонка даёт отказ
+с последующим readback. Простая запись label не заменяет доказательство CRI.
+
+На exact `cc7d41aa865bcc5c5a0c178a15b6f6b506dd4448`:
+
+- PASS83 Node tests, без пропусков; PASS45 Python tests (OCI плюс полный
+  existing image supply-chain contour и новая helper import проверка);
+  web-only render, Bash syntax, ShellCheck и diff whitespace PASS.
+- Новый реальный read-only publication preflight standalone helper OCI PASS:
+  source `69cded420aeb39511ce58123a45aed694aad3de9`, digest
+  `sha256:02e42ed073443c9afc11c4a16e2046e5f8f1368139d2bef23f591fd59b3cf9be`,
+  publication plan commitment
+  `14bb0c8ed26680a211e9ad1ae0f40fb80073010cbc42f97a8681ccde3826b0e1`.
+- Реальный bootstrap read-only plan двух Ready node PASS, commitment
+  `a3ccdb5842dc95313a8755d4b823c66ebaad1f76c8b06c2f850b402ecb6f7d70`.
+  Inspect подтвердил `tagged=false`, `exact=false` у обоих узлов,
+  `complete=false`: import не запускался.
+- Synthetic проверки покрывают partial import без повтора, wrong approval,
+  foreign alias/node, изменённый archive, старый publication profile и CRI
+  mismatch. Отдельно настоящий Bash importer прошёл hermetic проверку обоих
+  узлов с копированием pinned labels без `--force`.
+- Проверены Context7 [K3s import images docs](https://docs.k3s.io/add-ons/import-images)
+  и airgap bootstrap. Документация не подменяет actual node pull proof.
+
+В существующем registry credential projection names-only read подтвердил
+наличие `node-client-ca.pem` и остальных файлов, нужных новому helper.
+Значения credentials не читались этим read и не публиковались. Live import,
+helper activation/replicas, native mirror apply/restart и fresh pull всё ещё
+NOT RUN. Следующие части — registry activation/shared storage/HTTP state,
+ресурсная матрица, public TLS/OIDC, review/owner gate, применение и browser.
