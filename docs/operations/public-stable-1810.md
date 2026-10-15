@@ -4,7 +4,7 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.1.4
+version: 1.1.5
 updated: 2026-10-15
 ---
 
@@ -1306,3 +1306,34 @@ pending lock, повторный restore и сохранение PDB. Actual п�
   обязательный пакет — native K3s profile (без второго ingress), оставшийся
   BuildKit/role-builder/identity/resource cutover и публичная TLS/OIDC-фаза.
   Затем применимые review и отдельный owner gate, только после них live apply.
+
+## Native K3s: устойчивость реплик и существующий deploy owner
+
+Read-only source proof подтвердил точные источники двух AddOn:
+`coredns` из штатного `coredns.yaml` и `metrics-server-deployment` из вложенного
+`metrics-server/metrics-server-deployment.yaml`. SHA256 файлов совпали с
+`Addon.spec.checksum`; остальные metrics-server RBAC/Service/APIService AddOn
+не требуют изменения. Встроенные манифесты переписываются при старте K3s.
+По [официальному описанию K3s](https://docs.k3s.io/installation/packaged-components)
+`.skip` останавливает применение соответствующего файла, не удаляя уже
+созданные AddOn и ресурсы; `--disable` активно удаляет их и здесь не подходит.
+
+Закрытый native профиль сохраняет существующие ресурсы, Service/RBAC/DNS/TLS,
+назначает две replicas, bounded resources, exact PDB и immutable vendor index.
+Для двух native Deployment требуется будущий guarded переход exact `.skip`
+на каждом текущем server node; другой AddOn не останавливается. Traefik остаётся
+под исходным K3s HelmChart через новый exact HelmChartConfig; второй ingress
+или отдельный конкурирующий Helm release не добавляется. Recovery оставляет
+PDB и должен доказать возврат source profile до возврата native reconciliation.
+
+`stable-native-plan.mjs` проверяет cluster/node/container/Addon UID, исходные
+file metadata/checksum и отсутствие `.skip`/PDB/HCC collision; live serving
+image IDs сверяются с криптографически связанными index/manifest/config bytes
+native containerd cache. API dry-run проверяет все три Deployment и support
+objects. Точный Traefik chart39.0.701+up39.0.7 проверяется по уже наблюдённому
+SHA256, source values берутся из существующего HelmChart. Полный desired render
+закрыто разрешает только профильные изменения; Service, TLS и RBAC сохраняются.
+Private plan не хранит полный source spec/values, а только commitments,
+безопасный inverse изменённых полей и точные non-secret support templates.
+Остальные фазы native cutover/восстановления и доказательство restart пока
+NOT RUN. Сам plan не является завершением этапов2–4.

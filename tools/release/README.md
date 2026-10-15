@@ -37,6 +37,18 @@ Restore выполняется новой forward revision из exact перво
 rollback «на предыдущую revision», удаление PVC/Secret/PDB и force запрещены.
 Failed/pending частичный переход не выдаётся за готовность.
 
+`stable-native-plan.mjs --context k3d-kodex --output /private/new-plan.json`
+готовит отдельный read-only/server dry-run native K3s-профиля. Три текущих vendor
+image связаны с index→linux/amd64 manifest→config и source serving image IDs.
+CoreDNS/metrics-server сохраняют точные существующие AddOn/Service/RBAC;
+для устойчивости профиля планируются только два соответствующих `.skip`
+маркера. Это не `--disable` с удалением компонентов. Traefik получает
+HelmChartConfig того же HelmChart, без второго release/ingress. Полный Helm
+render разрешает только replica/resource/image/strategy и exact PDB; маршруты,
+Service, TLS, RBAC и остальные объекты неизменны. Chart скачивается только из
+существующего K3s API, проверяется lock SHA, сохраняется рядом с планом0600.
+Это пока plan: native apply/recovery/перезапуск K3s ещё не выполнены.
+
 `stable-go-release.mjs` предоставляет `plan|apply|inspect|readback|rollback`;
 принимается только plan v3 с clean executor SHA. `plan` выполняет server-side
 dry-run каждого target без persist. Apply/rollback требуют отдельного допуска
