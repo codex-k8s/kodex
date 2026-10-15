@@ -577,3 +577,45 @@ stage. Ничего в node registry configuration сейчас не менял�
 текущим исходникам. Переиспользование этого OCI для controller пока не принято
 как доказанное решение; controller/worker/admission coupling остаётся
 открытым до проверки настоящего source closure либо согласованного transition.
+
+## Архиватор: исправление опасного старта второй реплики
+
+На exact `f10fe2e21e4e36f9dd42cf12f53a6a6d6710c93e`:
+
+- PASS: Go unit всех пакетов session-archive, `go test -race` controller/app,
+  `go vet ./...`; используется Go1.26.6.
+- PASS: 47 Node tests, 30 Python OCI tests, полный
+  `scripts/tests/web-only-release-test.sh`, `git diff --check`.
+  ShellCheck завершился с кодом0; renderer сохраняет прежние информационные
+  SC2016 для yq expressions, эти строки не менялись.
+- PASS READ-ONLY LIVE: новый SQL oracle прочитал `openArchiveTasks=0`,
+  `transitionalStorage=0`; managed archive Job/Pod отсутствовали. Это
+  наблюдение до cutover, а не доказательство будущего maintenance окна.
+- PASS LOCAL OCI: исправленный session-archive собран из этого source,
+  digest `sha256:3d8e397f0d7029d65c72cf38d7bc16db304705b6dfa0053a7acbede3c5fa5f2c`.
+  Он заменяет прежний локальный controller9b8a в плане поставки, не live pin.
+  Первый вызов build CLI с неверным `--output` был отклонён до эффекта;
+  повтор с документированным `--output-directory` успешно завершился.
+- PASS PLAN ONLY: реальный publication preflight проверил новый OCI/context,
+  hash `2404404d25373579baf9568d20d93092bf15695a79efeb82e93cca362d813265`.
+- NOT RUN: registry import/node pull, новый RBAC и controller в кластере,
+  actual restart/retry с worker Pods. Запуски настоящих агентов не выполнялись.
+
+Устранён найденный дефект: startup больше не выполняет managed-label
+DeleteCollection по всему namespace. RBAC не даёт `deletecollection`.
+Retry адресно проверяет immutable input предыдущих attempts (максимум5),
+полный owner tuple, deterministic name и exact Job identity. До удаления
+подтверждается свежая owner lease; UID/RV preconditions и foreground deletion
+с ожиданием Pods защищают от replacement и преждевременного запуска writer.
+Собственный cleanup не удаляет неизвестный результат Create по одному имени.
+Тесты охватывают две параллельные сессии/реплики, чужой input, потерю renew,
+заменённый UID, оставшийся Pod и потерянный ответ Create с fenced retry.
+
+Модель cutover теперь связывает `SESSION_ARCHIVE_WORKER_IMAGE` с тем же OCI,
+что controller, и отвергает отсутствующий/двойной/динамический исходный pin.
+Apply дополнительно проверяет archive tasks/storage/managed Job/Pod. Сам
+переход от старого глобального startup cleanup всё ещё требует bounded
+quiesce старого controller и согласованной установки RBAC; одна idle-проверка
+не объявляется атомарной блокировкой новых claims. Исполняемый переход и
+rollback остаются частью незавершённого этапа4. Пункты общего плана не закрыты.
+Проверены Context7 Kubernetes foreground GC и ownerReference docs.
