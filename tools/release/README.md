@@ -15,6 +15,10 @@ apply journal и сохранённые pins. Обычные сервисы во
 spec/replicas, архиватор — строго к paused source с safe Role. Его доступность
 восстанавливается отдельным свежим forward plan исправленного compiled OCI,
 а не выдачей отозванного `deletecollection`. Recovery не объявляет релиз готовым.
+CPU/memory/scratch bounds main и spool-init берутся из canonical Deployment
+того же clean executor SHA. Hot toolchain requests без limits не переносятся
+в compiled профиль. Sidecar ресурсы не меняются; inverse включает прежние
+ресурсы без копирования неизменённых credentials.
 
 `stable-frontend-release.mjs` отдельно переключает nginx/TLS/Service/Ingress
 и immutable публичный runtime config; hostnames/SSO middleware сохраняются до

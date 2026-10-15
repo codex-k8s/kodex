@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { prepareGoCutover, validateStorageProtocol } from "./stable-cutover-model.mjs";
+import { prepareGoCutover as prepareModel, validateStorageProtocol } from "./stable-cutover-model.mjs";
 import { applyReverseSpec } from "./stable-reverse-patch.mjs";
+
+const resources = { requests: { cpu: "100m", memory: "128Mi" }, limits: { cpu: "1", memory: "512Mi" } };
+const prepareGoCutover = (deployment, release, options = {}) => prepareModel(deployment, release,
+  { resourceProfile: { main: resources, spoolInit: resources }, ...options });
 
 function fixture(name = "session-archive", module = "services/jobs/session-archive", args = ["controller"]) {
   return { kind: "Deployment", metadata: { name, namespace: "kodex-system", uid: "uid", resourceVersion: "2" },
@@ -34,6 +38,7 @@ test("normal cutover preserves mode secrets and source input with exact CAS", ()
   assert.deepEqual(result.patch.slice(0, 3).map(p => p.op), ["test", "test", "test"]);
   assert.equal(after.template.metadata.labels["kodex.dev/local-profile"], "stable");
   assert.equal(Object.hasOwn(after.template.spec.containers[0], "workingDir"), false);
+  assert.deepEqual(after.template.spec.containers[0].resources, resources);
   assert.deepEqual(applyReverseSpec(after, result.recovery.inverse), original.spec);
 });
 
@@ -92,6 +97,7 @@ test("artifact spool init switches to the same compiled controller without losin
     { sourceSpoolScript: value.spec.template.spec.initContainers[0].args[0] }).patch.at(-1).value;
   const init = after.template.spec.initContainers[0];
   assert.equal(init.image, release.image);
+  assert.deepEqual(init.resources, resources);
   assert.deepEqual(init.command, ["/usr/local/bin/runtime-controller"]);
   assert.deepEqual(init.args, ["--prepare-artifact-spool", "/var/lib/kodex/runtime-controller/artifact-spool"]);
   assert.equal(init.volumeMounts.length, 1);
@@ -124,4 +130,15 @@ test("actual Go cutover cannot bypass the PVC protocol gate", () => {
   assert.equal(after.template.spec.nodeSelector["kubernetes.io/hostname"], "node-a");
   storageClaims[0].accessModes = ["ReadWriteOncePod"];
   assert.throws(() => prepareGoCutover(value, release, { storageClaims }), /SINGLE_POD_ONLY/);
+});
+
+test("Go conversion requires bounded canonical resources and preserves unrelated sidecar limits", () => {
+  const value = fixture();
+  assert.throws(() => prepareModel(value, release), /RESOURCE_PROFILE_INVALID/);
+  value.spec.template.spec.containers[0].resources = { requests: { cpu: "50m", memory: "64Mi" } };
+  value.spec.template.spec.containers.push({ name: "scanner", resources: { requests: { cpu: "100m", memory: "512Mi" },
+    limits: { cpu: "2", memory: "2Gi" } } });
+  const result = prepareGoCutover(value, release), after = result.patch.at(-1).value;
+  assert.deepEqual(after.template.spec.containers[1], value.spec.template.spec.containers[1]);
+  assert.deepEqual(applyReverseSpec(after, result.recovery.inverse), value.spec);
 });

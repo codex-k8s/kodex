@@ -1,5 +1,6 @@
 import { fingerprint } from "./stable-inventory.mjs";
 import { reverseSpecPatch } from "./stable-reverse-patch.mjs";
+import { boundedResources } from "./stable-resources.mjs";
 
 // Закрытый реестр текущих исполняемых путей: произвольный binary из payload
 // не получает возможность заменить штатный сервис.
@@ -56,7 +57,12 @@ export function validateGoReleaseReference(name, release) {
     release.provenanceSHA256 !== "0".repeat(64), "CUTOVER_RELEASE_INVALID");
 }
 
-export function prepareGoCutover(deployment, release, { storageClaims = [], sourceSpoolScript } = {}) {
+export function goResourceComponent(name) {
+  requireValue(Object.hasOwn(goServices, name), "CUTOVER_COMPONENT_UNSUPPORTED");
+  return goServices[name][2];
+}
+
+export function prepareGoCutover(deployment, release, { storageClaims = [], sourceSpoolScript, resourceProfile } = {}) {
   const name = deployment?.metadata?.name;
   const entry = goServices[name];
   requireValue(deployment?.kind === "Deployment" && deployment.metadata.namespace === "kodex-system" && entry,
@@ -99,6 +105,7 @@ export function prepareGoCutover(deployment, release, { storageClaims = [], sour
     requireValue(spoolInit.workingDir === undefined || spoolInit.workingDir === `/workspace/${entry[0]}`, "CUTOVER_SOURCE_WORKDIR_UNSUPPORTED");
     validateRemovedEnvironment(spoolInit);
     spoolInit.image = release.image;
+    spoolInit.resources = boundedResources(resourceProfile?.spoolInit, spoolInit.resources);
     spoolInit.command = ["/usr/local/bin/runtime-controller"];
     spoolInit.args = ["--prepare-artifact-spool", "/var/lib/kodex/runtime-controller/artifact-spool"];
     spoolInit.env = (spoolInit.env ?? []).filter(e => !devEnv.has(e.name));
@@ -125,6 +132,7 @@ export function prepareGoCutover(deployment, release, { storageClaims = [], sour
   requireValue(!others.some(c => (c.volumeMounts ?? []).some(m => removedVolumes.has(m.name))),
     "CUTOVER_DEV_VOLUME_SHARED");
   app.image = release.image;
+  app.resources = boundedResources(resourceProfile?.main, app.resources);
   app.command = [`/usr/local/bin/${entry[1]}`];
   app.args = app.args.slice(3);
   if (!app.args.length) delete app.args;

@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { readPrivateJSON } from "../../infra/public-ingress/edge-plan.mjs";
 import { fingerprint } from "./stable-inventory.mjs";
-import { prepareGoCutover, validateGoReleaseReference } from "./stable-cutover-model.mjs";
+import { prepareGoCutover, validateGoReleaseReference, goResourceComponent } from "./stable-cutover-model.mjs";
 import { requireIdle } from "./runner-policy-model.mjs";
 import { archiveTransition, sameArchiveBoundary, activeDeploymentPods } from "./stable-archive-transition.mjs";
 import { prepareGoRecovery } from "./stable-go-recovery.mjs";
@@ -101,7 +101,16 @@ async function main(args) {
     const scripts = [...renderer.matchAll(/\.args = (\["(?:[^"\\]|\\.)*"\])/g)].map(m => JSON.parse(m[1]))
       .filter(a => a[0].includes("--prepare-artifact-spool"));
     requireValue(scripts.length === 1, "STABLE_SPOOL_SOURCE_UNAVAILABLE");
-    const prepared = prepareGoCutover(deployment, requested.release, { storageClaims, sourceSpoolScript: scripts[0][0] });
+    const component = goResourceComponent(requested.name);
+    let resourceProfile;
+    try {
+      const { stdout } = await execute("yq", ["eval", "-o=json", "-I=0",
+        `{"main": ([.spec.template.spec.containers[] | select(.name == "${component}") | .resources] | .[0]), "spoolInit": ([.spec.template.spec.initContainers[]? | select(.name == "artifact-spool-init") | .resources] | .[0])}`,
+        fileURLToPath(new URL(`../../deploy/k8s/base/${component}/deployment.yaml`, import.meta.url))],
+      { env, timeout: 10000, maxBuffer: 64 << 10 });
+      resourceProfile = JSON.parse(stdout);
+    } catch { throw Error("STABLE_CANONICAL_RESOURCES_UNAVAILABLE"); }
+    const prepared = prepareGoCutover(deployment, requested.release, { storageClaims, sourceSpoolScript: scripts[0][0], resourceProfile });
     const dry = JSON.parse(await kubectl(["-n", "kodex-system", "patch", "deployment", requested.name, "--type=json",
       "--dry-run=server", "--patch-file=/dev/stdin", "-o", "json"], JSON.stringify(prepared.patch)));
     requireValue(fingerprint(dry.spec) === prepared.afterSpecSHA256, "STABLE_SERVER_DEFAULTS_MISMATCH");

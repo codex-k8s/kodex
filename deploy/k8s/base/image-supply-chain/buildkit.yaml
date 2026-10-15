@@ -8,6 +8,9 @@ metadata:
 spec:
   replicas: 2
   revisionHistoryLimit: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
   selector:
     matchLabels:
       app.kubernetes.io/name: kodex-buildkit
@@ -142,11 +145,11 @@ spec:
             failureThreshold: 4
           resources:
             requests:
-              cpu: 500m
-              memory: 512Mi
+              cpu: "2"
+              memory: 2Gi
             limits:
-              cpu: "4"
-              memory: 4Gi
+              cpu: "8"
+              memory: 16Gi
           securityContext:
             runAsUser: 0
             runAsGroup: 0

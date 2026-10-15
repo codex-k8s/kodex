@@ -993,3 +993,39 @@ readonly/write/admin границы и существующие PVC. Две се
 pull, rollout и публичный SSO/browser остаются NOT RUN. Рабочий main и live
 Deployment не менялись. План на этом SHA после следующего commit требует
 перегенерации, а не применения со старым executor commitment.
+
+## Ресурсы штатных приложений и сборщика
+
+Профиль main/spool-init для Go cutover берётся из canonical Deployment
+репозитория на clean executor SHA, не из user request и не из прежнего hot
+toolchain Pod. Обязательны CPU/memory requests и limits; request выше limit,
+unknown resource и незаметная потеря scratch bound отклоняются до PATCH.
+Readback связывает ресурсы тем же spec commitment; rollback восстанавливает
+их exact inverse. Sidecar, Secret references и domain state не меняются.
+
+BuildKit получает2 Pod с независимым `emptyDir` scratch: каждый requests2CPU/
+2GiB, limits8CPU/16GiB. Steady-state общий предел —16CPU/32GiB; при одном
+rolling surge —24CPU/48GiB. Это часть общего бюджета одного физического
+сервера, не сумма двух рекламируемых k3d allocatable. `hostUsers=false`,
+TLS/registry identities, image и sandbox сохраняются. CPU limit допускает
+throttling; memory limit — не резерв и требует контроля OOM после применения.
+Остальные зависимые сервисы и сборки учитываются отдельно до owner gate.
+
+В read-only metrics snapshot hot integration-gateway занимал270MiB при
+canonical256MiB limit. Для штатного профиля выбран запас: request128MiB,
+limit512MiB. Это не нагрузочный тест compiled образа; после cutover нужны
+actual readiness/metrics. Vite637MiB не переносится в бюджет nginx: у него
+отдельный canonical compiled профиль25m/32MiB request и250m/128MiB limit.
+
+Расчёт Pod учитывает сумму main containers и максимум init-фаз, включая
+restartable init, плюс Pod overhead. Отсутствующий limit явно обозначается
+unbounded, а не нулевым потреблением. Профиль не меняет количество execution,
+grants, Job или попыток; domain events не создаются.
+
+Дополнительное read-only изучение image-admission-controller показало, что
+он ограничивает активный workspace через inventory и timestamp run ID.
+Одного этого недостаточно для безопасного удвоения: два reconcile могут
+начать разные run ID до появления workspace в другом snapshot. Перед его
+двумя репликами необходим собственный leader/lease protocol либо доказанная
+атомарная orchestration reservation; одной owner claim в выполняемом Job
+недостаточно для workspace cardinality. Этот пункт не объявляется готовым.
