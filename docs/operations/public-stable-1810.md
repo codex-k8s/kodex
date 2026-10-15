@@ -285,5 +285,77 @@ review и owner gates. Цель не завершена, обязательны�
 Подготовка public edge дополнительно связывает исходную CA с exact cluster и
 ConfigMap UID; private keys не читаются и не копируются. Модель теперь имеет
 два независимых relay процесса и два endpoint вместо нового singleton.
-Она покрыта текущими model tests, но новый план с CA projection/node binding
-и исполняемый edge apply/rollback ещё NOT RUN/не завершены.
+Она покрыта model tests. Результаты нового плана и исполняемого edge workflow
+зафиксированы ниже; live apply остаётся NOT RUN.
+
+## Завершение локальных сборок и исполняемый публичный маршрут
+
+На source `80438038f991d152455d7753f061bbac7e4903e8` успешно собраны ещё
+два OCI, с точными receipt и SHA-256 архива:
+
+| Компонент | OCI manifest digest |
+| --- | --- |
+| `automation-scheduler` | `sha256:f79299556a9e7bdd292bd0a72d7f67b9ee3dbb493c9f70c80f7ab9e9357475b0` |
+| `artifact-retention` | `sha256:0b59a91ad5700aaab9cd910bac65043ae75b996f75ab867b4d7048fff9d38706` |
+
+Всего локально собраны 12 разных compiled OCI для 13 текущих hot Deployment:
+два egress Deployment используют один образ. Это завершение локальной сборки,
+а не этапа 3 целиком: registry publication, release provenance/admission,
+node pull и реальное serving imageID ещё NOT RUN.
+
+На exact `58d69f543c60429b1735bc91acb5ee9d4ac22361`:
+
+- PASS: 35 быстрых Node tests, `git diff --check` и полный
+  `scripts/tests/web-only-release-test.sh` с закреплённым Go toolchain.
+- PASS: реальный read-only `edge-plan.mjs` создал v2 plan для двух разных
+  кластеров, exact Docker node identities и текущей публичной CA. В плане
+  6 добавочных Kubernetes ресурсов и 4 unit-файла; hash
+  `84483d1711b2579a73d7e42e865aacdcf74681f80bfe00225c0d5ab0813bee3f`.
+- PASS: `systemd-analyze verify` новых четырёх units. Два предупреждения
+  относятся к уже установленным системным units и устаревшему CPUAccounting,
+  а не к новым файлам Kodex.
+- PASS LOCAL/SYNTHETIC: `edge-release.mjs` apply/readback/rollback с fake
+  Kubernetes/host adapters. Проверены exact owner confirmation, сохранение
+  чужого baseline, два socket listeners, lost create response без повтора,
+  отказ удаления подменённого UID до первого DELETE и удаление только своих
+  ресурсов. Реальный `kubectl` отдельно отправил DELETE с UID/resourceVersion
+  preconditions в одноразовый loopback HTTP fixture, не в кластер.
+- Исправлены ошибки первой версии оснастки: тестовый Stats wrapper терял
+  методы prototype, а actual raw DELETE добавляет штатный `timeout` query.
+  Первый запуск был FAIL; повтор после исправлений — PASS на указанном SHA.
+- NOT RUN: установка units в `/etc`, создание public ingress ресурсов,
+  публичный certificate, новый OIDC issuer и browser SSO. Рабочий main и
+  application PodSpec не менялись.
+
+`edge-release.mjs` повторно рендерит все артефакты из плана, проверяет CA и
+cluster/node identities, записывает intent в fsync-журнал до эффекта. Unit
+создаётся с noclobber, root ownership и сохранением на диск; чужой файл не
+перезаписывается. Kubernetes объекты создаются через `create`, не универсальный
+`apply`. Известные API defaults не разрешают добавить Service selector,
+ExternalName, иной route, root CA, finalizer или ownerReference. Rollback
+проверяет весь набор до удаления и передаёт серверу UID/resourceVersion
+preconditions. Неопределённый create не повторяется автоматически; его точный
+intent может быть разрешён при rollback. Частично записанный unit с неверным
+содержимым закрыто останавливает операцию и требует отдельного разбора.
+
+Пример команд после обязательных review и отдельного owner OK на exact plan:
+
+```bash
+node infra/public-ingress/edge-release.mjs apply \
+  --context <edge-context> --plan /private/edge/plan.json \
+  --approved-plan-sha <approved-sha256> --output /private/edge-apply.jsonl
+node infra/public-ingress/edge-release.mjs readback \
+  --context <edge-context> --plan /private/edge/plan.json \
+  --journal /private/edge-apply.jsonl --output /private/edge-readback.jsonl
+node infra/public-ingress/edge-release.mjs rollback \
+  --context <edge-context> --plan /private/edge/plan.json \
+  --approved-plan-sha <approved-sha256> --journal /private/edge-apply.jsonl \
+  --output /private/edge-rollback.jsonl
+```
+
+CLI подтверждает только `EDGE_RESOURCES_ONLY`, не успешный публичный TLS,
+SSO или итоговую приёмку. Аргумент hash не заменяет процесс review/owner gate.
+Остаются публикация образов, штатный frontend/Service TLS cutover, полный
+Go rollback и двухрепличный профиль, certificate/OIDC/client migration,
+review/owner gate, live cutover и внешняя browser-приёмка. Цель активна;
+обязательные этапы не отмечаются по частичным локальным доказательствам.
