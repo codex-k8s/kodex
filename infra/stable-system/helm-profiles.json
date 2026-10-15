@@ -48,7 +48,7 @@
           "podDisruptionBudget": { "minAvailable": 1 }
         },
         "alertmanager": {
-          "podDisruptionBudget": { "enabled": true, "minAvailable": 1 },
+          "podDisruptionBudget": { "enabled": true, "minAvailable": 1, "unhealthyPodEvictionPolicy": "AlwaysAllow" },
           "alertmanagerSpec": {
             "replicas": 2,
             "resources": { "requests": { "cpu": "50m", "memory": "128Mi" }, "limits": { "cpu": "500m", "memory": "1Gi" } }

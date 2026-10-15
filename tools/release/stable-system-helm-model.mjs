@@ -51,7 +51,8 @@ export function systemHelmTransition(profile, before, after) {
     const allowed = profile.deployments.includes(a.metadata?.name) || a.metadata?.name === profile.alertmanager;
     requireValue(allowed && a.kind === "PodDisruptionBudget" && a.apiVersion === "policy/v1" &&
       a.metadata.namespace === profile.namespace && a.spec?.minAvailable === 1 && a.spec.maxUnavailable === undefined &&
-      Object.keys(a.spec).every(k => ["minAvailable", "selector"].includes(k)) &&
+      Object.keys(a.spec).every(k => ["minAvailable", "selector"].includes(k) ||
+        k === "unhealthyPodEvictionPolicy" && a.metadata.name === profile.alertmanager && a.spec[k] === "AlwaysAllow") &&
       Object.keys(a.spec.selector?.matchLabels ?? {}).length > 0 && !a.spec.selector?.matchExpressions?.length,
     "SYSTEM_HELM_RESOURCE_ADDITION_FORBIDDEN");
     const target = after.find(r => r.metadata?.namespace === profile.namespace && r.metadata?.name === a.metadata.name &&

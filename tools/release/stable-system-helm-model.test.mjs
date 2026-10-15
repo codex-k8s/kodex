@@ -73,3 +73,14 @@ test("Prometheus operator and data replicas cannot change in monitoring render",
     assert.throws(() => systemHelmTransition(f.profile, f.before, f.after), /SYSTEM_HELM_UNRELATED_CHANGE_FORBIDDEN/);
   }
 });
+
+test("only the exact Alertmanager PDB permits the pinned chart eviction policy", () => {
+  const f = fixture(profiles[2]);
+  f.after.at(-1).spec.unhealthyPodEvictionPolicy = "AlwaysAllow";
+  assert.ok(systemHelmTransition(f.profile, f.before, f.after));
+  f.after.at(-2).spec.unhealthyPodEvictionPolicy = "AlwaysAllow";
+  assert.throws(() => systemHelmTransition(f.profile, f.before, f.after), /SYSTEM_HELM_RESOURCE_ADDITION_FORBIDDEN/);
+  delete f.after.at(-2).spec.unhealthyPodEvictionPolicy;
+  f.after.at(-1).spec.unhealthyPodEvictionPolicy = "Unknown";
+  assert.throws(() => systemHelmTransition(f.profile, f.before, f.after), /SYSTEM_HELM_RESOURCE_ADDITION_FORBIDDEN/);
+});
