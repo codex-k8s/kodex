@@ -189,10 +189,19 @@ export async function releaseAdmission(args, commandPort) {
       fingerprint({ roleRef: binding.roleRef, subjects: binding.subjects }) === item.role.bindingSHA256 &&
       [item.role.beforeRulesSHA256, item.role.afterRulesSHA256].includes(value), "ADMISSION_ROLE_DRIFT"); return r;
   };
-  const patch = (r, field, value, labels) => kube(["-n", ns, "patch", r.kind, r.metadata.name, "--type=json", "--patch-file=/dev/stdin", "-o", "json"], JSON.stringify([
-    { op: "test", path: "/metadata/uid", value: r.metadata.uid }, { op: "test", path: "/metadata/resourceVersion", value: r.metadata.resourceVersion },
-    { op: "test", path: "/" + field, value: r[field] }, { op: "replace", path: "/" + field, value },
-    ...(labels ? [{ op: "test", path: "/metadata/labels", value: r.metadata.labels }, { op: "replace", path: "/metadata/labels", value: labels }] : [])]));
+  const patch = async (r, field, value, labels) => {
+    requireValue(r.kind === "Deployment" && field === "spec" || r.kind === "Role" && field === "rules", "ADMISSION_PATCH_SCOPE_INVALID");
+    // Role/owner проверки после quiesce могут пересечься с обычным status
+    // update Deployment. Свежий RV принимается только при прежних UID,
+    // конфигурации и metadata; единственный mutation request не повторяется.
+    const fresh = await get(r.kind, r.metadata.name);
+    requireValue(fresh.metadata.uid === r.metadata.uid && !fresh.metadata.deletionTimestamp &&
+      fingerprint(fresh[field]) === fingerprint(r[field]) && metadataHash(fresh) === metadataHash(r), "ADMISSION_PATCH_SOURCE_DRIFT");
+    return kube(["-n", ns, "patch", r.kind, r.metadata.name, "--type=json", "--patch-file=/dev/stdin", "-o", "json"], JSON.stringify([
+      { op: "test", path: "/metadata/uid", value: fresh.metadata.uid }, { op: "test", path: "/metadata/resourceVersion", value: fresh.metadata.resourceVersion },
+      { op: "test", path: "/" + field, value: r[field] }, { op: "replace", path: "/" + field, value },
+      ...(labels ? [{ op: "test", path: "/metadata/labels", value: r.metadata.labels }, { op: "replace", path: "/metadata/labels", value: labels }] : [])]));
+  };
   const quiesce = async () => {
     let d = await observe(); if (d.spec.replicas !== 0) await patch(d, "spec", { ...d.spec, replicas: 0 });
     const deadline = Date.now() + 120000;

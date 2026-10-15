@@ -1787,3 +1787,22 @@ restore. Source-owned credentials и прочие network rules сохраняю
 
 Пять быстрых model/source-boundary tests PASS; реальный server dry-run и
 применение этого четырёхкомпонентного workflow требуют следующего clean SHA.
+
+На `061290a25ab75f34819fad0397db2cb23cb80219` четырёхкомпонентный план
+`d8a7a195d3560e68539be0aa55c6991a0ca437f9294fce0d32f626e90ee1e4c9`
+прошёл actual server dry-run, apply и отдельный readback. Helper, BuildKit,
+role-image-builder и Keycloak —2/2 с прежними image IDs остальных контейнеров,
+неизменными Secret/ConfigMap references и сохранёнными85 promoted pins.
+Оба Keycloak Pod подтвердили в собственных логах cache cluster size2,
+jdbc discovery и mTLS. После rollout всего Kodex:80 нетерминальных Pod,
+заявленные requests13.54 CPU/20.75GiB;19 Pod сохраняют прежние unbounded
+CPU либо memory limits. Это не гарантия верхней границы потребления.
+Физический сервер общий: его32 CPU/123GiB не суммируются по k3d nodes.
+
+Первый admission apply на этом SHA получил FAIL до activation: status-only
+RV change пересёк quiesce/Role checks. Exact inspect подтвердил source0;
+guarded rollback восстановил исходную serving replica и Role, сохранив UID
+Lease/PDB и монотонное состояние Lease. Следующее исправление перечитывает
+RV при прежних UID/config/metadata перед одним patch. Новые fixtures
+подтверждают отсутствие повторной activation; принцип закреплён в GUIDE-DOC-003.
+Новый actual admission plan/apply после commit ещё требуется.

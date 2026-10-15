@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.27
+version: 1.7.28
 updated: 2026-10-15
 ---
 
@@ -145,6 +145,17 @@ authority; unknown поле и изменение любого binding закр�
 Для реализации проверены Context7 `/kubernetes/website` (NetworkPolicy,
 securityContext), `/grpc/grpc-go` (transport credentials, metadata/interceptors),
 `/jackc/pgx` (QueryRow/ErrNoRows) и `/pressly/goose` (transactional SQL migrations).
+
+## CAS поставки Kubernetes
+
+В SRE-переходах status update контроллера может изменить `resourceVersion`
+после quiesce без изменения конфигурации. Непосредственно перед единственным
+mutation request разрешено перечитать RV, только если UID, изменяемые поля,
+labels и несущая конфигурацию metadata остались прежними; authority/binding
+guards не снимаются. Изменившаяся конфигурация требует нового плана.
+Это новое observation до отправки, а не retry. После timeout или lost ACK
+команда не повторяется вслепую: используются исходный intent и authoritative
+inspect/recovery. Правило не меняет доменные expectedVersion/fence/grant.
 
 ## Сохранённый защищённый профиль
 

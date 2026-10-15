@@ -64,6 +64,9 @@ function fixture() {
           status: { conditions: [{ type: "Ready", status: "True" }], containerStatuses: [{ name, ready: true, imageID: live.spec.template.spec.containers[0].image }] } }))] });
       }
       const r = resources.get((kinds[kind] ?? kind) + "/" + target);
+      if (["rolebinding", "RoleBinding"].includes(kind) && flags.statusOnlyRVDrift) {
+        const d = resources.get("Deployment/" + name); d.metadata.resourceVersion = String(Number(d.metadata.resourceVersion) + 1);
+      }
       if (kind === "Lease" && flags.disruptServing && ++flags.leaseReads === 2)
         resources.get("Deployment/" + name).status.readyReplicas = 1;
       if (!r && !argv.includes("--ignore-not-found")) throw Error("FIXTURE_RESOURCE_NOT_FOUND");
@@ -148,6 +151,17 @@ test("apply drains old binary, grants exact lock, proves two pods/current leader
     const count = writes(f).length;
     await f.run("rollback", "already.json", [...args(f), ...approval(plan), ...journal(f)]);
     assert.equal(writes(f).length, count);
+  } finally { rmSync(f.directory, { recursive: true, force: true }); }
+});
+
+test("status-only RV updates during role checks do not replay activation or weaken its CAS", async () => {
+  const f = fixture();
+  try {
+    const plan = await f.plan(); f.flags.statusOnlyRVDrift = true;
+    await f.run("apply", "apply.jsonl", [...args(f), ...approval(plan)]);
+    await f.run("readback", "readback.jsonl", [...args(f), ...journal(f)]);
+    assert.equal(writes(f).filter(t => t.argv.includes("Deployment")).length, 2);
+    assert.equal(f.resources.get("Deployment/" + name).spec.replicas, 2);
   } finally { rmSync(f.directory, { recursive: true, force: true }); }
 });
 
