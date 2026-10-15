@@ -24,7 +24,7 @@ async function processIdentity(pid) {
   } catch (error) { if (error.code === "ENOENT") return null; throw Error("SYSTEM_HELM_PROCESS_READ_FAILED"); }
 }
 
-export async function releaseSystemHelm(args, port, planPort = planSystemHelm, verifyChart = verifyStableChart) {
+export async function releaseSystemHelm(args, port, planPort = planSystemHelm, verifyChart = verifyStableChart, scopeFactory) {
   const mode = args.shift(), options = {};
   while (args.length) {
     const key = args.shift();
@@ -46,8 +46,14 @@ export async function releaseSystemHelm(args, port, planPort = planSystemHelm, v
   requireValue(/^[a-f0-9]{40}$/.test(source) && !(await run("git", ["status", "--porcelain", "--untracked-files=normal"])).trim(),
     "SYSTEM_HELM_CLEAN_SOURCE_REQUIRED");
   const document = await readPrivateJSON(options["--plan"]), { plan } = document, hash = fingerprint(plan);
-  const profiles = JSON.parse(await readFile(root + "infra/stable-system/helm-profiles.json", "utf8")).profiles;
-  requireValue(plan.schema === "kodex.stable-system-helm-plan/v2" && document.planSHA256 === hash && plan.source === source &&
+  const contextKube = (argv, input) => input === undefined ? run("kubectl", ["--context", context, "--request-timeout=15s", ...argv]) :
+    run("/bin/sh", ["-c", 'cat | kubectl "$@"', "kodex-system-helm-pipe", "--context", context, "--request-timeout=15s", ...argv], input, 180000);
+  const scope = scopeFactory ? await scopeFactory({ kube: contextKube, run, source, plan }) : null;
+  const profiles = scope?.profiles ?? JSON.parse(await readFile(root + "infra/stable-system/helm-profiles.json", "utf8")).profiles;
+  const desiredValues = scope?.desiredValues ?? ((p, v) => systemDesiredValues(v, p.values));
+  const recoveryValuesFor = scope?.recoveryValues ?? systemRecoveryValues;
+  requireValue(plan.schema === (scope?.planSchema ?? "kodex.stable-system-helm-plan/v2") && document.planSHA256 === hash && plan.source === source &&
+    (!scope || fingerprint(plan.environment) === fingerprint(scope.environment)) &&
     plan.context === context && plan.rows?.length === profiles.length && profiles.every((p, i) => {
       const r = plan.rows[i]; return r.name === p.name && r.namespace === p.namespace && r.release === p.release &&
         r.profileSHA256 === fingerprint(p) && Number.isSafeInteger(r.sourceRevision) && r.sourceRevision > 0 &&
@@ -59,6 +65,7 @@ export async function releaseSystemHelm(args, port, planPort = planSystemHelm, v
     run("/bin/sh", ["-c", 'cat | kubectl "$@"', "kodex-system-helm-pipe", "--context", context, "--request-timeout=15s", ...argv], input, 180000);
   requireValue(JSON.parse(await kube(["get", "namespace", "kube-system", "-o", "json"])).metadata.uid === plan.clusterUID,
     "SYSTEM_HELM_CLUSTER_CHANGED");
+  await scope?.assertBoundary();
   const decode = async raw => (await run("yq", ["eval-all", "-N", "-o=json", "-I=0", ".", "-"], raw))
     .trim().split("\n").filter(Boolean).map(JSON.parse).filter(Boolean);
   const helm = (row, argv, input, timeout) => run("helm", [...argv, "--namespace", row.namespace, "--kube-context", context], input, timeout);
@@ -114,11 +121,11 @@ export async function releaseSystemHelm(args, port, planPort = planSystemHelm, v
     await systemServing(current.profile, kube, row.serving, phase === "after" ? 2 : undefined);
   };
   const preflight = names => planPort(["--context", context, "--charts", options["--charts"], "--output", options["--output"] + ".preflight"], run,
-    { inMemory: true, ...(names ? { names } : {}) });
-  const assertSource = async () => requireValue((await run("git", ["rev-parse", "HEAD"])).trim() === source &&
+    { inMemory: true, ...(scope ? { environment: scope.environment } : {}), ...(names ? { names } : {}) });
+  const assertSource = async () => { await scope?.assertBoundary(); requireValue((await run("git", ["rev-parse", "HEAD"])).trim() === source &&
     !(await run("git", ["status", "--porcelain", "--untracked-files=normal"])).trim() &&
     JSON.parse(await kube(["get", "namespace", "kube-system", "-o", "json"])).metadata.uid === plan.clusterUID,
-  "SYSTEM_HELM_EXECUTOR_OR_CLUSTER_CHANGED");
+  "SYSTEM_HELM_EXECUTOR_OR_CLUSTER_CHANGED"); };
   if (mode === "apply") {
     const fresh = await preflight();
     requireValue(fingerprint(fresh.document.plan) === hash, "SYSTEM_HELM_PLAN_DRIFT");
@@ -153,19 +160,19 @@ export async function releaseSystemHelm(args, port, planPort = planSystemHelm, v
         await prove(row, current); await record({ status: "APPLIED", name: row.name, objects: current.observed });
       }
     } else {
-      const locks = await stableChartLocks();
+      const locks = scope?.locks ?? await stableChartLocks();
       // Все releases проверены до первого restore; pending Helm operation не
       // разблокируется ручной правкой Secret и не повторяется вслепую.
       requireValue(observed.every(o => !o.current.status.startsWith("pending")), "SYSTEM_HELM_PENDING_OPERATION_UNRESOLVED");
       for (const { row, current } of [...observed].reverse()) {
         if (current.phase !== "after") { await prove(row, current); continue; }
-        const lock = locks.find(l => l.name === row.name), chart = `${options["--charts"]}/${lock.name}-${lock.version}.tgz`;
+        const lock = locks.find(l => l.name === (current.profile.chartName ?? row.name)), chart = `${options["--charts"]}/${lock.name}-${lock.version}.tgz`;
         requireValue(lock.sha256 === row.chartSHA256, "SYSTEM_HELM_CHART_CHANGED"); await verifyChart(chart, lock);
         const before = await decode(await helm(row, ["get", "manifest", row.release, "--revision", String(row.sourceRevision)]));
         const values = JSON.parse(await helm(row, ["get", "values", row.release, "--revision", String(row.sourceRevision), "-o", "json"]));
-        const recovery = systemRecoveryValues(current.profile, values);
+        const recovery = recoveryValuesFor(current.profile, values);
         requireValue(fingerprint(before) === row.beforeSHA256 && fingerprint(values) === row.valuesSHA256 &&
-          fingerprint(systemDesiredValues(values, current.profile.values)) === row.desiredValuesSHA256 &&
+          fingerprint(desiredValues(current.profile, values)) === row.desiredValuesSHA256 &&
           fingerprint(recovery) === row.recoveryValuesSHA256, "SYSTEM_HELM_HISTORY_CHANGED");
         const dry = JSON.parse(await helm(row, ["upgrade", row.release, chart, "--reset-values", "--values", "-", "--dry-run=server", "--no-hooks", "-o", "json"], JSON.stringify(recovery), 180000));
         const rendered = await decode(dry.manifest);
@@ -183,7 +190,7 @@ export async function releaseSystemHelm(args, port, planPort = planSystemHelm, v
         await record({ status: "RESTORED", name: row.name, objects: restored.observed });
       }
     }
-    await record({ status: "COMPLETE" });
+    await assertSource(); await record({ status: "COMPLETE" });
   } catch (error) { await record({ status: "UNKNOWN" }); throw error; }
   finally { await output.close(); }
 }

@@ -4,7 +4,11 @@ import { activeDeploymentPods, isProvenStoppedPod } from "./stable-archive-trans
 function requireValue(value, code) { if (!value) throw Error(code); }
 const namePattern = /^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$/;
 export const systemObjectKey = r => `${r.apiVersion}/${r.kind}/${r.metadata?.namespace ?? ""}/${r.metadata?.name}`;
-const metadataOnly = r => ["Secret", "ConfigMap"].includes(r.kind);
+const metadataOnly = r => ["Secret", "ConfigMap"].includes(r.kind) && !contentConfig(r);
+// Единственное изменяемое содержимое CM в public Helm scope: несекретный
+// grafana.ini. Все остальные CM и любые Secret читаются только как UID/RV.
+const contentConfig = r => r.kind === "ConfigMap" && r.metadata?.namespace === "observability" &&
+  r.metadata.name === "kodex-monitoring-grafana";
 
 // Status, managedFields и timestamps не являются конфигурацией. Значения
 // Secret/ConfigMap для проверки drift вообще не запрашиваются: достаточно UID/RV.
@@ -161,10 +165,11 @@ export function matchSystemObjects(expected, actual, phases, receipts = []) {
 export async function systemServing(profile, kube, baseline, count) {
   const targets = profile.deployments.map(name => ({ kind: "Deployment", name }));
   if (profile.alertmanager) targets.push({ kind: "StatefulSet", name: "alertmanager-" + profile.alertmanager });
+  if (profile.grafana) targets.push({ kind: "StatefulSet", name: profile.grafana, singleton: true });
   const proof = [];
   for (const target of targets) {
     const d = JSON.parse(await kube(["-n", profile.namespace, "get", target.kind, target.name, "-o", "json"]));
-    const replicas = count ?? d.spec.replicas, previous = baseline?.find(r => r.kind === target.kind && r.name === target.name);
+    const replicas = target.singleton ? 1 : count ?? d.spec.replicas, previous = baseline?.find(r => r.kind === target.kind && r.name === target.name);
     requireValue([1, 2].includes(replicas) && d.spec.replicas === replicas && d.metadata.uid && !d.metadata.deletionTimestamp &&
       (!baseline || previous && previous.uid === d.metadata.uid) && d.status?.observedGeneration >= d.metadata.generation &&
       ["replicas", "updatedReplicas", "readyReplicas"].every(k => d.status[k] === replicas) &&
@@ -180,8 +185,14 @@ export async function systemServing(profile, kube, baseline, count) {
     let pods, operatorOwnerUID;
     if (target.kind === "Deployment") pods = activeDeploymentPods(list, d.metadata.uid);
     else {
-      const owners = d.metadata.ownerReferences?.filter(o => o.kind === "Alertmanager" && o.name === profile.alertmanager && o.controller === true) ?? [];
-      requireValue(owners.length === 1 && owners[0].uid, "SYSTEM_HELM_OPERATED_OWNER_INVALID"); operatorOwnerUID = owners[0].uid;
+      if (target.singleton) {
+        requireValue(!d.metadata.ownerReferences?.length && d.metadata.annotations?.["meta.helm.sh/release-name"] === profile.release &&
+          d.metadata.annotations?.["meta.helm.sh/release-namespace"] === profile.namespace,
+        "SYSTEM_HELM_GRAFANA_OWNER_INVALID");
+      } else {
+        const owners = d.metadata.ownerReferences?.filter(o => o.kind === "Alertmanager" && o.name === profile.alertmanager && o.controller === true) ?? [];
+        requireValue(owners.length === 1 && owners[0].uid, "SYSTEM_HELM_OPERATED_OWNER_INVALID"); operatorOwnerUID = owners[0].uid;
+      }
       requireValue(["whenScaled", "whenDeleted"].every(k => (d.spec.persistentVolumeClaimRetentionPolicy?.[k] ?? "Retain") === "Retain"),
         "SYSTEM_HELM_OPERATED_STORAGE_RETENTION_INVALID");
       requireValue(Array.isArray(list.items) && list.items.every(p => p.metadata.ownerReferences?.some(o => o.kind === "StatefulSet" &&
@@ -208,7 +219,7 @@ export async function systemServing(profile, kube, baseline, count) {
       }
     }
     const observed = { kind: target.kind, name: target.name, uid: d.metadata.uid,
-      ...(target.kind === "StatefulSet" ? { operatorOwnerUID, storageSHA256: fingerprint({ claims: d.spec.volumeClaimTemplates ?? [],
+      ...(target.kind === "StatefulSet" ? { ...(operatorOwnerUID ? { operatorOwnerUID } : {}), storageSHA256: fingerprint({ claims: d.spec.volumeClaimTemplates ?? [],
         retention: d.spec.persistentVolumeClaimRetentionPolicy ?? {} }) } : {}),
       images: [...images].sort().map(([name, imageID]) => ({ name, imageID })) };
     requireValue(!previous || fingerprint(observed) === fingerprint(previous), "SYSTEM_HELM_SERVING_IMAGE_CHANGED");

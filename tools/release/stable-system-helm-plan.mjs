@@ -35,19 +35,25 @@ export async function planSystemHelm(args, port, internal = {}) {
   const dir = await lstat(options["--charts"]);
   requireValue(dir.isDirectory() && dir.uid === process.getuid() && (dir.mode & 0o777) === 0o700,
     "SYSTEM_HELM_CHART_DIRECTORY_INVALID");
-  const profiles = JSON.parse(await readFile(root + "infra/stable-system/helm-profiles.json", "utf8"));
-  requireValue(profiles.schema === "kodex.stable-system-helm/v1" && profiles.profiles.length === 3, "SYSTEM_HELM_PROFILE_INVALID");
-  const locks = await stableChartLocks(), context = options["--context"];
+  const context = options["--context"];
   const kube = (args, input) => input === undefined ? run("kubectl", ["--context", context, "--request-timeout=15s", ...args]) :
     run("/bin/sh", ["-c", 'cat | kubectl "$@"', "kodex-system-helm-pipe", "--context", context, "--request-timeout=15s", ...args], input, 180000);
   const clusterUID = JSON.parse(await kube(["get", "namespace", "kube-system", "-o", "json"])).metadata.uid;
+  // Scope задаётся только repo-owned wrapper, не произвольным CLI input.
+  const scope = internal.scopeFactory ? await internal.scopeFactory({ kube, run, source }) : null;
+  const profiles = scope ? { profiles: scope.profiles } : JSON.parse(await readFile(root + "infra/stable-system/helm-profiles.json", "utf8"));
+  requireValue(scope || profiles.schema === "kodex.stable-system-helm/v1" && profiles.profiles.length === 3, "SYSTEM_HELM_PROFILE_INVALID");
+  const locks = scope?.locks ?? await stableChartLocks();
+  const desiredValues = scope?.desiredValues ?? ((p, v) => systemDesiredValues(v, p.values));
+  const recoveryValuesFor = scope?.recoveryValues ?? systemRecoveryValues;
+  await scope?.assertBoundary();
   const decode = async raw => (await run("yq", ["eval-all", "-N", "-o=json", "-I=0", ".", "-"], raw))
     .trim().split("\n").filter(Boolean).map(JSON.parse).filter(Boolean);
   const rows = [], runtime = new Map();
   requireValue(!internal.names || internal.inMemory === true && Array.isArray(internal.names) &&
     internal.names.length > 0 && internal.names.every(name => profiles.profiles.some(p => p.name === name)), "SYSTEM_HELM_INTERNAL_SCOPE_INVALID");
   for (const profile of profiles.profiles.filter(p => !internal.names || internal.names.includes(p.name))) {
-    const lock = locks.find(l => l.name === profile.name);
+    const lock = locks.find(l => l.name === (profile.chartName ?? profile.name));
     requireValue(lock, "SYSTEM_HELM_CHART_LOCK_MISSING");
     const chart = `${options["--charts"]}/${lock.name}-${lock.version}.tgz`;
     await verifyStableChart(chart, lock);
@@ -63,20 +69,20 @@ export async function planSystemHelm(args, port, internal = {}) {
     // наружу выдаются только commitment и закрытый перечень разрешённых объектов.
     const dryRun = JSON.parse(await run("helm", ["upgrade", profile.release, chart, "--namespace", profile.namespace,
       "--kube-context", context, "--reset-values", "--values", "-", "--dry-run=server", "--no-hooks", "-o", "json"],
-    JSON.stringify(systemDesiredValues(values, profile.values)), 180000));
+    JSON.stringify(desiredValues(profile, values)), 180000));
     requireValue(typeof dryRun.manifest === "string" && dryRun.name === profile.release &&
       dryRun.namespace === profile.namespace && dryRun.version === metadata.revision + 1,
     "SYSTEM_HELM_DRY_RUN_IDENTITY_INVALID");
-    const after = await decode(dryRun.manifest), transition = systemHelmTransition(profile, before, after), targets = [];
+    const after = await decode(dryRun.manifest), transition = (scope?.transition ?? systemHelmTransition)(profile, before, after), targets = [];
     requireValue(dryRun.config && typeof dryRun.config === "object", "SYSTEM_HELM_DRY_RUN_VALUES_INVALID");
-    const recoveryValues = systemRecoveryValues(profile, values);
+    const recoveryValues = recoveryValuesFor(profile, values);
     const recoveryRun = JSON.parse(await run("helm", ["upgrade", profile.release, chart, "--namespace", profile.namespace,
       "--kube-context", context, "--reset-values", "--values", "-", "--dry-run=server", "--no-hooks", "-o", "json"],
     JSON.stringify(recoveryValues), 180000));
     const recovery = await decode(recoveryRun.manifest);
     requireValue(fingerprint(recovery) === fingerprint(systemRecoveryManifest(before, after)), "SYSTEM_HELM_RECOVERY_RENDER_DRIFT");
     const live = await readSystemObjects(profile, after, kube);
-    const objects = await systemExpectedObjects(profile, before, after, live, kube);
+    const objects = await (scope?.expectedObjects ?? systemExpectedObjects)(profile, before, after, live, kube);
     for (const name of profile.deployments) {
       const live = JSON.parse(await kube(["-n", profile.namespace, "get", "deployment", name, "-o", "json"]));
       requireValue(live.metadata?.uid && live.metadata?.resourceVersion &&
@@ -103,9 +109,11 @@ export async function planSystemHelm(args, port, internal = {}) {
   }
   requireValue(JSON.parse(await kube(["get", "namespace", "kube-system", "-o", "json"])).metadata.uid === clusterUID,
     "SYSTEM_HELM_CLUSTER_CHANGED");
+  await scope?.assertBoundary();
   requireValue((await run("git", ["rev-parse", "HEAD"])).trim() === source &&
     !(await run("git", ["status", "--porcelain", "--untracked-files=normal"])).trim(), "SYSTEM_HELM_SOURCE_CHANGED_DURING_PLAN");
-  const plan = { schema: "kodex.stable-system-helm-plan/v2", source, context, clusterUID, rows, apply: "NOT_RUN" };
+  const plan = { schema: scope?.planSchema ?? "kodex.stable-system-helm-plan/v2", source, context, clusterUID,
+    ...(scope ? { environment: scope.environment } : {}), rows, apply: "NOT_RUN" };
   const document = { plan, planSHA256: fingerprint(plan) };
   if (internal.inMemory) return { document, runtime };
   const output = await open(options["--output"],

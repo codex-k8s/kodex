@@ -1833,3 +1833,22 @@ map переходит в один canonical array; новый exact SSO whiteli
 render и не public activation. Следующий шаг — связать модель с имеющимся
 Helm plan/apply/recovery и Grafana singleton/ConfigMap readback, затем завершить
 public ingress/identity/edge orchestration. Credentials/values не сохранялись.
+
+## Публичный Helm: исполняемый guarded workflow
+
+`stable-public-helm.mjs` использует прежний проверенный Helm executor с закрытым
+repo-owned scope трёх releases. Доступны plan/apply/inspect/readback/rollback;
+source SHA, cluster UID, chart locks, полные render commitments, release revision,
+operation marker и UID/RV зависимостей связываются с sealed plan. Применение не
+повторяется после потерянного ACK; восстановление создаёт новую forward revision.
+Endpoints CM и точный SSO Service проверяются до и после операции. Секретные
+values/render остаются только в памяти. Только известный несекретный Grafana CM
+проверяется по содержимому; Secret и прочие CM — только по metadata. Grafana
+сохраняет одну Helm-owned SQLite replica, PVC и main/init image IDs.
+
+На рабочем дереве поверх `c12ffeafcbd5e766f95549fbd80fe92cfee05b9f` 19 быстрых
+public-model/live-state/shared-executor tests PASS. Включены drift CM/Ingress,
+singleton/PVC, foreign UID/owner и потерянный ACK. Public actual apply NOT RUN.
+Один read-only combined dry-run завершился непрозрачной диагностикой; отдельный
+контроль desired control-proxy render PASS. Полный sealed plan всех трёх releases
+на следующем clean SHA ещё требуется; не выдавать частичный dry-run за PASS.
