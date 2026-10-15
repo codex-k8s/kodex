@@ -662,3 +662,27 @@ Binding не меняется: controller ServiceAccount остаётся пре
 проверка, полный Go rollback, frontend/service TLS cutover, native registry
 mirror/activation, replica matrix и certificate/OIDC остаются в работе.
 Новый план не применён и перед поставкой потребует свежего drift/idle чтения.
+
+## Native registry mirror: границы перехода
+
+Источник — действующая конфигурация каждой точной Kodex node/container и
+server-owned Kubernetes node/cluster UID, не credential из пользовательского
+payload. Добавляется один exact logical mirror к уже настроенному physical
+HTTPS endpoint. Его auth/TLS остаются единственным источником; копирования
+credential под logical hostname или переписывания immutable admission refs нет.
+K3s default endpoint fallback отключается в native config. Прочие настройки,
+сертификаты, private keys и registry roles не меняются.
+
+| Фаза | Проверка и граница |
+| --- | --- |
+| plan | Только чтение node/container identity, private config hashes и TLS file hashes; plan без auth/raw YAML |
+| apply preflight | Exact approved plan после review/owner gate, clean executor SHA, все nodes Ready, полный idle graph; сначала проверить все nodes |
+| stage files | Exact before hashes/owner/mode, node-local private backup и intent; atomic rename двух известных files, без credential на host/argv/env |
+| restart | Один exact Docker container за раз; следующие действия только после RuntimeReady/NetworkReady, API и свежего Ready heartbeat |
+| lost response / partial write | Не повторять install/restart по предположению; inspect/readback и явный rollback по intent |
+| rollback | До первого изменения проверить все exact before/after states и node-local backups; чужой drift не перезаписывать; последовательный restart |
+| readback | Native config и generated exact mirror, отсутствие logical fallback/TLS skip; это ещё не actual fresh registry pull |
+
+Ни один этап не меняет соседний кластер, DNS/firewall, kubeconfig, Kubernetes
+Secrets или registry permission profile. Node restart и rollback — отдельное
+owner-approved maintenance окно, не побочный эффект plan.
