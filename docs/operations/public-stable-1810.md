@@ -1224,3 +1224,25 @@ Prometheus Operator troubleshooting и Helm upgrade/rollback/get values.
 Helm предупреждает, что dry-run может содержать Secret; захват в памяти
 не заменяется надеждой на безопасный обычный stdout. Exact SHA результатов
 проверок фиксируется следующим journal readback, без отметки этапов2–8.
+
+### Результаты на `7b6b2131862b2beeb27267a88c39cdc2c393b16d`
+
+- PASS117 Node tests,0 failed/0 skipped, включая closed Helm render,
+  сохранность Secret/env/RBAC/PVC, exact PDB selector, запрещённые изменения
+  singleton/data replicas и проверку chart hash/permissions/symlink.
+- PASS31 Python OCI/archive tests и web-only release render.
+- PASS реальный server dry-run трёх Helm releases. Source revisions:
+  cert-manager10, kodex-trust-manager10, kodex-monitoring6. Plan commitment
+  `815a5b50bbd345124accb45cf61d69205f3500f14fbd183ee84b658f91e295a8`.
+  Изменяются5 Deployment,1 Alertmanager CR и добавляются6 exact PDB.
+  Остальные объекты полного render неизменны, включая credentials/PKI/RBAC,
+  Prometheus/Grafana и storage templates. Values/render не сохранены.
+- Начальные планы на `2fb77e14d060e5df3211ee985228338e4a1e01c1` и
+  `c26ced27a` дали FAIL закрытой проверки нового PDB: сначала удалён пустой
+  `maxUnavailable`, затем закреплён штатный `AlwaysAllow` только для exact
+  Alertmanager PDB. Отказ не обходился широким разрешением ресурсов.
+  Повторный полный план на указанном выше SHA прошёл.
+- Actual Helm upgrade/rollback/leader handoff NOT RUN. Эти три releases ещё
+  работают в исходных revisions, штатный cutover пока не выполнен. Нужны
+  соответствующий guarded apply/recovery, native K3s/resource профиль,
+  публичная OIDC-фаза, review/отдельный owner gate и live проверки.
