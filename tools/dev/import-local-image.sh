@@ -36,7 +36,7 @@ case "$repository" in
   registry.local.kodex/kodex/role-image-builder|registry.local.kodex/kodex/internal-rpc-authority|\
   registry.local.kodex/kodex/image-admission|registry.local.kodex/kodex/image-admission-tools|\
   registry.local.kodex/kodex/stt-hot-reload|registry.local.kodex/kodex/integration-hot-reload|\
-  registry.local.kodex/kodex/backup-controller) ;;
+  registry.local.kodex/kodex/backup-controller|registry.local.kodex/kodex/control-plane) ;;
   *) fail 'repository is outside the closed local platform profile' ;;
 esac
 [[ "$tag" == "$repository":* ]] || fail 'tagged reference does not match repository'
