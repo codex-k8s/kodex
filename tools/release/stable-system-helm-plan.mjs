@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { fingerprint } from "./stable-inventory.mjs";
 import { stableChartLocks, verifyStableChart } from "./fetch-stable-charts.mjs";
 import { systemHelmTransition } from "./stable-system-helm-model.mjs";
-import { readSystemObjects, systemDesiredValues, systemExpectedObjects, systemRecoveryManifest, systemRecoveryValues } from "./stable-system-helm-state.mjs";
+import { readSystemObjects, systemDesiredValues, systemExpectedObjects, systemRecoveryManifest, systemRecoveryValues, systemServing } from "./stable-system-helm-state.mjs";
 
 const execute = promisify(execFile), root = fileURLToPath(new URL("../../", import.meta.url));
 function requireValue(value, code) { if (!value) throw Error(code); }
@@ -38,7 +38,8 @@ export async function planSystemHelm(args, port, internal = {}) {
   const profiles = JSON.parse(await readFile(root + "infra/stable-system/helm-profiles.json", "utf8"));
   requireValue(profiles.schema === "kodex.stable-system-helm/v1" && profiles.profiles.length === 3, "SYSTEM_HELM_PROFILE_INVALID");
   const locks = await stableChartLocks(), context = options["--context"];
-  const kube = (args, input) => run("kubectl", ["--context", context, "--request-timeout=15s", ...args], input);
+  const kube = (args, input) => input === undefined ? run("kubectl", ["--context", context, "--request-timeout=15s", ...args]) :
+    run("/bin/sh", ["-c", 'cat | kubectl "$@"', "kodex-system-helm-pipe", "--context", context, "--request-timeout=15s", ...args], input, 180000);
   const clusterUID = JSON.parse(await kube(["get", "namespace", "kube-system", "-o", "json"])).metadata.uid;
   const decode = async raw => (await run("yq", ["eval-all", "-N", "-o=json", "-I=0", ".", "-"], raw))
     .trim().split("\n").filter(Boolean).map(JSON.parse).filter(Boolean);
@@ -91,10 +92,11 @@ export async function planSystemHelm(args, port, internal = {}) {
     const freshValues = JSON.parse(await helm(["get", "values", profile.release, "--revision", revision, "-o", "json"]));
     requireValue(fingerprint(fresh) === fingerprint(metadata) && fingerprint(freshValues) === fingerprint(values),
       "SYSTEM_HELM_SOURCE_CHANGED_DURING_PLAN");
+    const serving = await systemServing(profile, kube);
     rows.push({ name: profile.name, namespace: profile.namespace, release: profile.release, sourceRevision: metadata.revision,
       metadataSHA256: fingerprint(metadata), valuesSHA256: fingerprint(values), profileSHA256: fingerprint(profile),
       desiredValuesSHA256: fingerprint(dryRun.config), recoveryValuesSHA256: fingerprint(recoveryValues),
-      recoverySHA256: fingerprint(recovery), chartSHA256: lock.sha256, targets, objects, ...transition });
+      recoverySHA256: fingerprint(recovery), chartSHA256: lock.sha256, targets, objects, serving, ...transition });
     runtime.set(profile.name, { profile, chart, before, after, recovery, desiredValues: dryRun.config, recoveryValues });
   }
   requireValue(JSON.parse(await kube(["get", "namespace", "kube-system", "-o", "json"])).metadata.uid === clusterUID,

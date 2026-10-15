@@ -1,4 +1,5 @@
 import { fingerprint } from "./stable-inventory.mjs";
+import { activeDeploymentPods, isProvenStoppedPod } from "./stable-archive-transition.mjs";
 
 function requireValue(value, code) { if (!value) throw Error(code); }
 const namePattern = /^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$/;
@@ -145,4 +146,58 @@ export function matchSystemObjects(expected, actual, phases, receipts = []) {
   }
   requireValue(observations.length === actual.size, "SYSTEM_HELM_OBJECT_SET_INVALID");
   return observations;
+}
+
+export async function systemServing(profile, kube, baseline, count) {
+  const targets = profile.deployments.map(name => ({ kind: "Deployment", name }));
+  if (profile.alertmanager) targets.push({ kind: "StatefulSet", name: "alertmanager-" + profile.alertmanager });
+  const proof = [];
+  for (const target of targets) {
+    const d = JSON.parse(await kube(["-n", profile.namespace, "get", target.kind, target.name, "-o", "json"]));
+    const replicas = count ?? d.spec.replicas, previous = baseline?.find(r => r.kind === target.kind && r.name === target.name);
+    requireValue([1, 2].includes(replicas) && d.spec.replicas === replicas && d.metadata.uid && !d.metadata.deletionTimestamp &&
+      (!baseline || previous && previous.uid === d.metadata.uid) && d.status?.observedGeneration >= d.metadata.generation &&
+      ["replicas", "updatedReplicas", "readyReplicas"].every(k => d.status[k] === replicas) &&
+      (target.kind !== "Deployment" || d.status.availableReplicas === replicas) &&
+      (target.kind !== "StatefulSet" || d.status.currentRevision === d.status.updateRevision), "SYSTEM_HELM_SERVING_INCOMPLETE");
+    const labels = d.spec.selector?.matchLabels;
+    requireValue(labels && Object.keys(labels).length && !d.spec.selector.matchExpressions?.length &&
+      Object.entries(labels).every(([k, v]) => /^[A-Za-z0-9_./-]{1,200}$/.test(k) && /^[A-Za-z0-9_.-]{1,63}$/.test(v)),
+    "SYSTEM_HELM_SELECTOR_INVALID");
+    const selector = Object.entries(labels).sort().map(([k, v]) => `${k}=${v}`).join(",");
+    const list = JSON.parse(await kube(["-n", profile.namespace, "get", target.kind === "Deployment" ? "replicasets,pods" : "pods",
+      "-l", selector, "-o", "json"]));
+    let pods;
+    if (target.kind === "Deployment") pods = activeDeploymentPods(list, d.metadata.uid);
+    else {
+      requireValue(d.metadata.ownerReferences?.some(o => o.kind === "Alertmanager" && o.name === profile.alertmanager && o.controller === true),
+        "SYSTEM_HELM_OPERATED_OWNER_INVALID");
+      requireValue(Array.isArray(list.items) && list.items.every(p => p.metadata.ownerReferences?.some(o => o.kind === "StatefulSet" &&
+        o.uid === d.metadata.uid && o.controller === true)), "SYSTEM_HELM_FOREIGN_SERVING_POD");
+      pods = list.items.filter(p => !isProvenStoppedPod(p));
+    }
+    requireValue(pods.length === replicas && new Set(pods.map(p => p.metadata.uid)).size === replicas, "SYSTEM_HELM_SERVING_INCOMPLETE");
+    const images = new Map();
+    for (const p of pods) {
+      requireValue(!p.metadata.deletionTimestamp && p.status?.conditions?.some(c => c.type === "Ready" && c.status === "True"),
+        "SYSTEM_HELM_SERVING_INCOMPLETE");
+      for (const [group, statuses] of [["containers", "containerStatuses"], ["initContainers", "initContainerStatuses"]]) {
+        const containers = d.spec.template.spec[group] ?? [], actual = p.spec[group] ?? [], states = p.status[statuses] ?? [];
+        requireValue(actual.length === containers.length && states.length === containers.length &&
+          new Set(states.map(s => s.name)).size === states.length, "SYSTEM_HELM_SERVING_CONTAINER_INVALID");
+        for (const c of containers) {
+          const state = states.find(s => s.name === c.name), key = group + "/" + c.name;
+          requireValue(actual.some(a => a.name === c.name && a.image === c.image) && state &&
+            /(?:^|[/:@])sha256:[a-f0-9]{64}$/.test(state.imageID ?? "") &&
+            (group === "containers" || c.restartPolicy === "Always" ? state.ready && state.state?.running : state.state?.terminated?.exitCode === 0) &&
+            (!images.has(key) || images.get(key) === state.imageID), "SYSTEM_HELM_SERVING_IMAGE_INVALID");
+          images.set(key, state.imageID);
+        }
+      }
+    }
+    const observed = { kind: target.kind, name: target.name, uid: d.metadata.uid, images: [...images].sort().map(([name, imageID]) => ({ name, imageID })) };
+    requireValue(!previous || fingerprint(observed) === fingerprint(previous), "SYSTEM_HELM_SERVING_IMAGE_CHANGED");
+    proof.push(observed);
+  }
+  return proof;
 }

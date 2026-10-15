@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { matchSystemObjects, readSystemObjects, systemDesiredValues, systemExpectedObjects, systemObjectKey,
-  systemObjectState, systemRecoveryManifest, systemRecoveryValues } from "./stable-system-helm-state.mjs";
+  systemObjectState, systemRecoveryManifest, systemRecoveryValues, systemServing } from "./stable-system-helm-state.mjs";
 
 const profile = JSON.parse(await readFile(new URL("../../infra/stable-system/helm-profiles.json", import.meta.url), "utf8")).profiles[0];
 const object = (kind = "Deployment", name = "cert-manager") => ({ apiVersion: kind === "Deployment" ? "apps/v1" : "v1", kind,
@@ -80,4 +80,21 @@ test("phase matching rejects credential drift, foreign UID and unplanned live ch
     const broken = structuredClone(serving); mutate(broken);
     assert.throws(() => matchSystemObjects(expected, broken, ["before", "after", "recovery"]), /SYSTEM_HELM_/);
   }
+});
+
+test("serving proof binds current owned pods and image IDs, not desired replica count alone", async () => {
+  const p = { ...profile, deployments: ["cert-manager"] }, d = object();
+  d.metadata.generation = 1; d.spec.selector = { matchLabels: { app: "cert-manager" } };
+  d.status = { observedGeneration: 1, replicas: 1, updatedReplicas: 1, readyReplicas: 1, availableReplicas: 1 };
+  const pod = { kind: "Pod", metadata: { name: "pod", uid: "pod-uid", ownerReferences: [{ kind: "ReplicaSet", uid: "rs-uid", controller: true }] },
+    spec: structuredClone(d.spec.template.spec), status: { conditions: [{ type: "Ready", status: "True" }],
+      containerStatuses: [{ name: "app", ready: true, imageID: "containerd://sha256:" + "a".repeat(64), state: { running: {} } }] } };
+  const rs = { kind: "ReplicaSet", metadata: { uid: "rs-uid", ownerReferences: [{ kind: "Deployment", uid: d.metadata.uid, controller: true }] } };
+  const port = async argv => JSON.stringify(argv.includes("replicasets,pods") ? { items: [rs, pod] } : d);
+  const proof = await systemServing(p, port); assert.equal(proof[0].images[0].imageID, pod.status.containerStatuses[0].imageID);
+  await assert.rejects(systemServing(p, port, proof, 2), /SYSTEM_HELM_SERVING_INCOMPLETE/);
+  pod.status.containerStatuses[0].imageID = "containerd://sha256:" + "b".repeat(64);
+  await assert.rejects(systemServing(p, port, proof, 1), /SYSTEM_HELM_SERVING_IMAGE_CHANGED/);
+  pod.metadata.ownerReferences[0].uid = "foreign";
+  await assert.rejects(systemServing(p, port), /STABLE_FOREIGN_SERVING_POD/);
 });
