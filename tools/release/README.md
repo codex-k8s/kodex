@@ -49,6 +49,20 @@ Service, TLS, RBAC и остальные объекты неизменны. Char
 существующего K3s API, проверяется lock SHA, сохраняется рядом с планом0600.
 Это пока plan: native apply/recovery/перезапуск K3s ещё не выполнены.
 
+Для двух AddOn существует `stable-native-addon-release.mjs
+apply|inspect|readback|rollback --context k3d-kodex --plan /private/v2-plan
+--output /private/new-journal`. Apply/rollback требуют `--approved-plan-sha`
+после review/отдельного owner gate. Кроме apply нужен исходный `--journal`.
+Повторный rollback после неизвестного create/patch дополнительно принимает
+`--recovery-journal` завершённого первого восстановления, чтобы не подменять
+causal receipt одним отсутствием ресурса. Непроверенное отсутствие после
+create intent закрыто отклоняется. Созданные PDB удаляются только после source
+serving proof, с exact UID/resourceVersion preconditions; `.skip` снимается
+последним по marker inode receipt. Source manifests не переписываются.
+Offline Docker tests проверяют настоящий marker worker без network/host mounts;
+осиротевший lock не сносится автоматически. Traefik этим driver не меняется:
+для HCC остаётся отдельный native controller workflow. Plan v1 не принимается.
+
 `stable-go-release.mjs` предоставляет `plan|apply|inspect|readback|rollback`;
 принимается только plan v3 с clean executor SHA. `plan` выполняет server-side
 dry-run каждого target без persist. Apply/rollback требуют отдельного допуска

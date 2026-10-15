@@ -83,7 +83,7 @@ export function traefikHelmConfig(chart, profile, intent, rollback = false) {
 export function nativeTraefikTransition(before, desired, profile) {
   const key = r => `${r.apiVersion}/${r.kind}/${r.metadata?.namespace ?? ""}/${r.metadata?.name}`;
   requireValue(Array.isArray(before) && Array.isArray(desired) && before.length > 0 && before.length < 100 &&
-    desired.length === before.length + 1 && new Set(before.map(key)).size === before.length &&
+    [before.length, before.length + 1].includes(desired.length) && new Set(before.map(key)).size === before.length &&
     new Set(desired.map(key)).size === desired.length, "NATIVE_TRAEFIK_RENDER_INVALID");
   const old = new Map(before.map(r => [key(r), r])); let deployment, pdb;
   for (const r of desired) {
@@ -96,6 +96,9 @@ export function nativeTraefikTransition(before, desired, profile) {
       "NATIVE_TRAEFIK_ADDITION_FORBIDDEN"); pdb = r; continue;
     }
     const expected = structuredClone(source);
+    if (r.kind === "PodDisruptionBudget" && r.metadata?.name === "traefik" && r.metadata.namespace === "kube-system") {
+      requireValue(!pdb && r.spec?.minAvailable === 1 && r.spec.maxUnavailable == null, "NATIVE_TRAEFIK_RENDER_INVALID"); pdb = r;
+    }
     if (r.kind === "Deployment" && r.metadata?.name === "traefik" && r.metadata.namespace === "kube-system") {
       requireValue(!deployment, "NATIVE_TRAEFIK_RENDER_INVALID");
       expected.spec = prepareNativeDeployment({ ...source, metadata: { ...source.metadata, uid: "render", resourceVersion: "0" } }, profile).after;
@@ -106,4 +109,21 @@ export function nativeTraefikTransition(before, desired, profile) {
   requireValue(deployment && pdb && Object.entries(pdb.spec.selector.matchLabels).every(([k, v]) =>
     deployment.spec.template.metadata.labels[k] === v), "NATIVE_TRAEFIK_PDB_SELECTOR_INVALID");
   return { beforeSHA256: fingerprint(before), afterSHA256: fingerprint(desired) };
+}
+
+export const nativeMetadataHash = r => fingerprint({ labels: r.metadata.labels ?? {}, annotations: r.metadata.annotations ?? {}, ownerReferences: r.metadata.ownerReferences ?? [] });
+export function nativeDeploymentMetadataHash(r) {
+  const annotations = { ...r.metadata.annotations }; delete annotations["deployment.kubernetes.io/revision"];
+  return fingerprint({ labels: r.metadata.labels ?? {}, annotations });
+}
+export function nativeSupportMatches(actual, desired) {
+  return actual?.apiVersion === desired.apiVersion && actual.kind === desired.kind && actual.metadata?.namespace === desired.metadata.namespace &&
+    actual.metadata.name === desired.metadata.name && actual.metadata.uid && !actual.metadata.deletionTimestamp &&
+    nativeMetadataHash(actual) === nativeMetadataHash(desired) && fingerprint(actual.spec) === fingerprint(desired.spec);
+}
+export function nativeRecoveryConfig(chart, profile, actual) {
+  const intent = actual?.metadata?.annotations?.["kodex.dev/stable-native-intent"];
+  requireValue(/^[a-f0-9]{64}$/.test(intent ?? "") && nativeSupportMatches(actual, traefikHelmConfig(chart, profile, intent, true)),
+    "NATIVE_TRAEFIK_RECOVERY_SOURCE_INVALID");
+  return { uid: actual.metadata.uid, metadataSHA256: nativeMetadataHash(actual), specSHA256: fingerprint(actual.spec), intent };
 }

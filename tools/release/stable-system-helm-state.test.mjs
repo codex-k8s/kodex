@@ -14,6 +14,7 @@ const bounds = { requests: { cpu: "50m", memory: "64Mi" }, limits: { cpu: "500m"
 test("object commitments bind configuration/UID, but not status and managedFields", () => {
   const a = object(), b = structuredClone(a); b.status.readyReplicas = 2;
   b.metadata.resourceVersion = "2"; b.metadata.managedFields = [{ manager: "controller" }];
+  b.metadata.annotations = { "deployment.kubernetes.io/revision": "2" };
   assert.deepEqual(systemObjectState(a), systemObjectState(b));
   b.spec.replicas = 2; assert.notDeepEqual(systemObjectState(a), systemObjectState(b));
   assert.equal(JSON.stringify(systemObjectState(a)).includes("PRIVATE_STATE_SENTINEL"), false);

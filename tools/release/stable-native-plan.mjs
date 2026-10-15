@@ -7,8 +7,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { fingerprint } from "./stable-inventory.mjs";
 import { validateNodeContainer } from "./stable-node-registry-model.mjs";
-import { systemDesiredValues, systemServing } from "./stable-system-helm-state.mjs";
-import { nativeAddonBinding, nativeTraefikTransition, prepareNativeDeployment, traefikHelmConfig, verifyNativeImage } from "./stable-native-model.mjs";
+import { readSystemObjects, systemDesiredValues, systemExpectedObjects, systemObjectState, systemServing } from "./stable-system-helm-state.mjs";
+import { nativeAddonBinding, nativeDeploymentMetadataHash, nativeMetadataHash, nativeRecoveryConfig, nativeSupportMatches, nativeTraefikTransition, prepareNativeDeployment, traefikHelmConfig, verifyNativeImage } from "./stable-native-model.mjs";
 
 const execute = promisify(execFile), root = fileURLToPath(new URL("../../", import.meta.url));
 function requireValue(value, code) { if (!value) throw Error(code); }
@@ -44,6 +44,18 @@ export async function planNative(args, port) {
     const raw = await kube(["-n", "kube-system", "get", kind, name, "-o", "json", ...(optional ? ["--ignore-not-found"] : [])]);
     return raw.trim() ? JSON.parse(raw) : null;
   };
+  const decode = async raw => (await text("yq", ["eval-all", "-N", "-o=json", "-I=0", ".", "-"], raw)).trim().split("\n").filter(Boolean)
+    .map(JSON.parse).filter(Boolean).flatMap(r => r.kind === "List" && r.apiVersion === "v1" ? r.items : [r]);
+  const objectGuards = async (profile, before, desired) => {
+    const target = { ...profile, namespace: "kube-system", release: profile.owner === "helmchart" ? "traefik" : undefined, deployments: [profile.name] };
+    const live = await readSystemObjects(target, desired, kube);
+    const guards = await systemExpectedObjects(target, before, desired, live, kube);
+    const source = live.get("apps/v1/Deployment/kube-system/" + profile.name);
+    requireValue(source, "NATIVE_SOURCE_OBJECT_MISSING");
+    const native = prepareNativeDeployment(source, profile), expected = { ...source, spec: native.after };
+    guards.find(g => g.kind === "Deployment" && g.name === profile.name).after = systemObjectState(expected).contentSHA256;
+    return guards;
+  };
   const source = (await text("git", ["rev-parse", "HEAD"])).trim();
   requireValue(/^[a-f0-9]{40}$/.test(source) && !(await text("git", ["status", "--porcelain", "--untracked-files=normal"])).trim(),
     "NATIVE_CLEAN_SOURCE_REQUIRED");
@@ -61,7 +73,9 @@ export async function planNative(args, port) {
   requireValue(servers.length > 0 && bindings.length <= 8, "NATIVE_SERVER_SET_INVALID");
   const serving = await systemServing({ namespace: "kube-system", deployments: config.profiles.map(p => p.name) }, kube, undefined, 1);
   const chart = await get("helmchart", "traefik");
-  requireValue(!await get("helmchartconfig", "traefik", true) && chart?.spec?.chart === "https://%{KUBERNETES_API}%" + config.traefikChart.apiPath,
+  const sourceHcc = await get("helmchartconfig", "traefik", true), traefikProfile = config.profiles.find(p => p.name === "traefik");
+  const sourceConfig = sourceHcc ? nativeRecoveryConfig(chart, traefikProfile, sourceHcc) : null;
+  requireValue(chart?.spec?.chart === "https://%{KUBERNETES_API}%" + config.traefikChart.apiPath,
     "NATIVE_TRAEFIK_SOURCE_CONFLICT");
   const intent = fingerprint({ source, clusterUID, chartUID: chart.metadata.uid, config });
   const targets = [], addonRows = [];
@@ -85,10 +99,10 @@ export async function planNative(args, port) {
     requireValue(observed.uid === d.metadata.uid && observed.images.length === 1 && observed.images.every(i =>
       [image.index, image.manifest, image.config].includes(i.imageID.match(/sha256:[a-f0-9]{64}$/)?.[0])), "NATIVE_SERVING_IMAGE_MISMATCH");
     const { after: _after, ...safe } = transition;
-    targets.push({ name: profile.name, ...safe, metadataSHA256: fingerprint({ labels: d.metadata.labels, annotations: d.metadata.annotations }),
+    targets.push({ name: profile.name, ...safe, metadataSHA256: nativeDeploymentMetadataHash(d),
       serving: observed, image, cacheNodeUID: cache.uid });
     if (profile.owner === "addon") {
-      const addon = await get("addons.k3s.cattle.io", profile.addon), files = [];
+      const addon = await get("addons.k3s.cattle.io", profile.addon), files = []; let documents;
       for (const server of servers) {
         const metadata = (await text("docker", ["exec", server.containerID, "sh", "-ec",
           'test -f "$1" && test ! -L "$1" && test ! -e "$1.skip" && test ! -L "$1.skip"; stat -c "%u:%g:%a:%h:%d:%i:%s" "$1"', "kodex-native-file", profile.manifest])).trim();
@@ -97,6 +111,11 @@ export async function planNative(args, port) {
           !(parseInt(fields[2], 8) & 0o022) && Number(fields[6]) > 0 && Number(fields[6]) < (1 << 20), "NATIVE_MANIFEST_FILE_INVALID");
         const fileHash = (await text("docker", ["exec", server.containerID, "sha256sum", profile.manifest])).split(/\s+/)[0];
         const binding = nativeAddonBinding(profile, addon, fileHash);
+        const raw = await run("docker", ["exec", server.containerID, "cat", profile.manifest]);
+        requireValue(hash(raw) === fileHash, "NATIVE_MANIFEST_CHANGED");
+        const rows = await decode(raw);
+        if (documents) requireValue(fingerprint(documents) === fingerprint(rows), "NATIVE_SERVER_MANIFEST_DISAGREEMENT");
+        else documents = rows;
         requireValue((await text("docker", ["exec", server.containerID, "stat", "-c", "%u:%g:%a:%h:%d:%i:%s", profile.manifest])).trim() === metadata,
           "NATIVE_MANIFEST_CHANGED");
         files.push({ serverUID: server.uid, containerID: server.containerID, metadata, ...binding });
@@ -105,20 +124,37 @@ export async function planNative(args, port) {
         labels: { "app.kubernetes.io/managed-by": "kodex-stable-native" }, annotations: { "kodex.dev/stable-native-intent": intent } },
       spec: { minAvailable: 1, selector: structuredClone(d.spec.selector) } };
       requireValue(!await get("poddisruptionbudget", pdb.metadata.name, true), "NATIVE_PDB_COLLISION");
-      await kube(["create", "--dry-run=server", "-f", "/dev/stdin", "-o", "json"], JSON.stringify(pdb));
-      addonRows.push({ name: profile.name, files, pdb });
+      const pdbDryRun = JSON.parse(await kube(["create", "--dry-run=server", "-f", "/dev/stdin", "-o", "json"], JSON.stringify(pdb)));
+      pdb.spec = pdbDryRun.spec;
+      addonRows.push({ name: profile.name, files, pdb, objects: await objectGuards(profile, documents, documents) });
     }
   }
   const traefik = config.profiles.find(p => p.name === "traefik"), hcc = traefikHelmConfig(chart, traefik, intent);
-  await kube(["create", "--dry-run=server", "-f", "/dev/stdin", "-o", "json"], JSON.stringify(hcc));
+  if (!sourceHcc) await kube(["create", "--dry-run=server", "-f", "/dev/stdin", "-o", "json"], JSON.stringify(hcc));
+  else await kube(["-n", "kube-system", "patch", "helmchartconfig", "traefik", "--type=json", "--patch-file=/dev/stdin", "--dry-run=server", "-o", "json"], JSON.stringify([
+    { op: "test", path: "/metadata/uid", value: sourceHcc.metadata.uid }, { op: "test", path: "/metadata/resourceVersion", value: sourceHcc.metadata.resourceVersion },
+    { op: "test", path: "/spec", value: sourceHcc.spec }, { op: "replace", path: "/spec", value: hcc.spec },
+    { op: "test", path: "/metadata/annotations", value: sourceHcc.metadata.annotations }, { op: "replace", path: "/metadata/annotations", value: hcc.metadata.annotations }]));
+  const sourcePdb = await get("poddisruptionbudget", "traefik", true);
+  requireValue(Boolean(sourceConfig) === Boolean(sourcePdb) && (!sourcePdb || sourceConfig && sourcePdb.metadata.annotations?.["meta.helm.sh/release-name"] === "traefik" &&
+    sourcePdb.metadata.annotations?.["meta.helm.sh/release-namespace"] === "kube-system"), "NATIVE_TRAEFIK_PDB_COLLISION");
   const chartBytes = await run("kubectl", ["--context", context, "--request-timeout=15s", "get", "--raw=" + config.traefikChart.apiPath]);
   requireValue(hash(chartBytes) === config.traefikChart.sha256, "NATIVE_TRAEFIK_CHART_HASH_MISMATCH");
   const chartPath = options["--output"] + ".traefik.tgz"; await writePrivate(chartPath, chartBytes);
-  const decode = async raw => (await text("yq", ["eval-all", "-N", "-o=json", "-I=0", ".", "-"], raw)).trim().split("\n").filter(Boolean).map(JSON.parse).filter(Boolean);
   const metadata = JSON.parse(await text("helm", ["get", "metadata", "traefik", "--namespace", "kube-system", "--kube-context", context, "-o", "json"]));
   requireValue(metadata.name === "traefik" && metadata.chart === "traefik" && metadata.version === config.traefikChart.version &&
     metadata.status === "deployed" && Number.isSafeInteger(metadata.revision), "NATIVE_TRAEFIK_RELEASE_INVALID");
   const before = await decode(await text("helm", ["get", "manifest", "traefik", "--namespace", "kube-system", "--kube-context", context, "--revision", String(metadata.revision)]));
+  if (sourcePdb) {
+    const desiredPdb = structuredClone(before.find(r => r.kind === "PodDisruptionBudget" && r.metadata.name === "traefik"));
+    requireValue(desiredPdb, "NATIVE_TRAEFIK_PDB_SOURCE_MISSING");
+    desiredPdb.metadata.annotations = { ...desiredPdb.metadata.annotations, "meta.helm.sh/release-name": "traefik", "meta.helm.sh/release-namespace": "kube-system" };
+    desiredPdb.metadata.labels = { ...desiredPdb.metadata.labels, "app.kubernetes.io/managed-by": "Helm" };
+    for (const key of ["maxUnavailable", "minAvailable"]) if (desiredPdb.spec[key] === null) delete desiredPdb.spec[key];
+    if (sourcePdb.spec.unhealthyPodEvictionPolicy === "IfHealthyBudget" && !desiredPdb.spec.unhealthyPodEvictionPolicy)
+      desiredPdb.spec.unhealthyPodEvictionPolicy = "IfHealthyBudget";
+    requireValue(nativeSupportMatches(sourcePdb, desiredPdb), "NATIVE_TRAEFIK_PDB_SOURCE_DRIFT");
+  }
   const sourceValues = (await decode(chart.spec.valuesContent))[0];
   requireValue(sourceValues && typeof sourceValues === "object" && !Array.isArray(sourceValues), "NATIVE_TRAEFIK_VALUES_INVALID");
   if (Object.hasOwn(chart.spec.set ?? {}, "global.systemDefaultRegistry")) {
@@ -128,7 +164,8 @@ export async function planNative(args, port) {
   const values = systemDesiredValues(sourceValues, JSON.parse(hcc.spec.valuesContent));
   const dryRun = JSON.parse(await text("helm", ["upgrade", "traefik", chartPath, "--namespace", "kube-system", "--kube-context", context,
     "--reset-values", "--values", "-", "--dry-run=server", "--no-hooks", "-o", "json"], JSON.stringify(values), 180000));
-  const transition = nativeTraefikTransition(before, await decode(dryRun.manifest), traefik);
+  const desired = await decode(dryRun.manifest), transition = nativeTraefikTransition(before, desired, traefik);
+  const objects = await objectGuards(traefik, before, desired);
   for (const target of targets) {
     const d = await get("deployment", target.name);
     requireValue(d.metadata.uid === target.uid && fingerprint(d.spec) === target.beforeSHA256, "NATIVE_SOURCE_CHANGED_DURING_PLAN");
@@ -137,9 +174,11 @@ export async function planNative(args, port) {
     fingerprint((await get("helmchart", "traefik")).spec) === fingerprint(chart.spec) &&
     (await get("namespace", "kube-system")).metadata.uid === clusterUID && (await text("git", ["rev-parse", "HEAD"])).trim() === source &&
     !(await text("git", ["status", "--porcelain", "--untracked-files=normal"])).trim(), "NATIVE_EXECUTOR_OR_CLUSTER_DRIFT");
-  const plan = { schema: "kodex.stable-native-plan/v1", source, context, clusterUID, intent, profileSHA256: fingerprint(config),
+  const plan = { schema: "kodex.stable-native-plan/v2", source, context, clusterUID, intent, profileSHA256: fingerprint(config),
     nodes: bindings, targets, addons: addonRows, traefik: { uid: chart.metadata.uid, specSHA256: fingerprint(chart.spec),
-      releaseRevision: metadata.revision, metadataSHA256: fingerprint(metadata), chartSHA256: hash(chartBytes), chartPath, hcc, ...transition }, apply: "NOT_RUN" };
+      objects, sourceConfig, sourcePdb: sourcePdb ? { uid: sourcePdb.metadata.uid, metadataSHA256: nativeMetadataHash(sourcePdb), specSHA256: fingerprint(sourcePdb.spec) } : null,
+      releaseRevision: metadata.revision, metadataSHA256: fingerprint(metadata), chartSHA256: hash(chartBytes), chartPath, hcc,
+      recoveryHcc: traefikHelmConfig(chart, traefik, intent, true), ...transition }, apply: "NOT_RUN" };
   const document = { plan, planSHA256: fingerprint(plan) };
   await writePrivate(options["--output"], JSON.stringify(document) + "\n"); return document;
 }

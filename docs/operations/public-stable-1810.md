@@ -4,7 +4,7 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.1.5
+version: 1.1.6
 updated: 2026-10-15
 ---
 
@@ -1365,3 +1365,48 @@ NOT RUN. Сам plan не является завершением этапов2�
   шаг — исполняемый native apply/readback/recovery с точными server/file/UID
   guards, затем оставшийся системный и публичный OIDC cutover. Общие review и
   отдельный owner gate сохраняются; этапы2–8 не закрыты.
+
+## Native AddOn: исполняемый переход и восстановление
+
+Native plan заменён v2 без legacy reader. К source/file/image proof добавлены
+UID/configuration guards всех ресурсов в исходных package manifests и полного
+Traefik render; Secret/ConfigMap — только UID/RV. PDB dry-run сохраняет API
+defaults. После завершённого HCC recovery свежий plan может привязать только
+exact типизированный source-profile HCC и прежний Helm PDB, не произвольную
+конфигурацию по совпавшему имени/label.
+
+`stable-native-addon-release.mjs` управляет только CoreDNS и metrics-server,
+не меняя Traefik или соседний ingress. Основной путь:
+
+| Переход | Предусловия | Эффект/подтверждение |
+| --- | --- | --- |
+| apply preflight | Clean executor, exact plan hash после owner gate, повторная генерация полного native plan, исходные cluster/node/container/Addon/file/object identities | Только чтение и server dry-run; до первого write состояние сверено |
+| marker install | Fsync intent, root single-link source file/checksum, свободный exact lock | Durable stage → atomic link без перезаписи → exact inode receipt; source file не меняется |
+| native activation | Marker доказан на всех server, exact PDB create и receipt, сохранены package objects | UID/RV/spec CAS Deployment2, bounded rollout; authoritative Kube/Pod/image readback |
+| unknown result | Original private intent/journal, exact field/inode proof; исходный executor terminal по своему журналу | Только inspect; install/create/patch не повторяются. Необъяснимое отсутствие или lock — FAIL, не PASS |
+| recovery | Весь исходный source/after граф и чужой drift проверены до первого write | CAS source spec1 → Pod/image/metrics proof → PDB delete с UID/RV → marker remove по receipt, source file checksum сохранён |
+| repeated recovery | Original apply плюс при unknown create/patch — завершённый recovery journal того же plan | Проверяется восстановленный source без повторных writes; чужой UID/metadata/ConfigMap RV закрывает путь |
+
+Marker worker ограничен двумя exact путями, root ownership и private permissions.
+Partial link publication распознаётся как двухссылочный receipt и завершается
+отдельным `finalize` под тем же lock, а не повторным install. Чужой inode,
+symlink, содержимое или неизвестный lock закрыто отклоняются. Source inode может
+быть переписан самим K3s после restart, но его hash/owner/mode и marker inode
+сохраняют границу. Неподтверждённые stage/lock автоматически не чистятся.
+
+Readback включает actual owned Pod counts, прежние source image IDs и рабочий
+Kubernetes metrics API для всех подтверждённых node. Domain data, grants,
+leases, events и runtime executions этим SRE-переходом не изменяются; источник
+результата — Kubernetes/Helm/native files плюс private operation journal,
+нового бизнесового события нет.
+
+Системно исправлен configuration commitment Deployment: единственная
+controller-owned annotation `deployment.kubernetes.io/revision` исключена из
+config hash вместе со status/managedFields. Rollout штатно меняет её; source
+labels, остальные annotations, owner references и spec остаются защищены.
+Правило применяется и к уже подготовленному Helm release workflow, иначе
+реальный успешный rollout ошибочно считался бы configuration drift.
+
+Actual native AddOn apply/rollback/restart всё ещё NOT RUN. Для Traefik
+исполняемые HCC handoff/recovery и native Helm job lifecycle ещё остаются;
+двухрепличный native профиль не объявлен завершённым по одним fixture tests.

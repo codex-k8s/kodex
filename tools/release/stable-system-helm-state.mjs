@@ -14,8 +14,12 @@ export function systemObjectState(r) {
     uid: r.metadata.uid };
   if (metadataOnly(r)) return { ...identity, resourceVersion: r.metadata.resourceVersion };
   const content = structuredClone(r); delete content.status;
+  const annotations = { ...r.metadata.annotations };
+  // Deployment controller меняет rollout revision при штатном обновлении.
+  // Это наблюдаемое поколение, не source configuration и не authority.
+  if (r.kind === "Deployment") delete annotations["deployment.kubernetes.io/revision"];
   content.metadata = { name: r.metadata.name, ...(r.metadata.namespace ? { namespace: r.metadata.namespace } : {}),
-    labels: r.metadata.labels ?? {}, annotations: r.metadata.annotations ?? {},
+    labels: r.metadata.labels ?? {}, annotations,
     ...(r.metadata.ownerReferences ? { ownerReferences: r.metadata.ownerReferences } : {}),
     ...(r.metadata.finalizers ? { finalizers: r.metadata.finalizers } : {}) };
   return { ...identity, contentSHA256: fingerprint(content) };

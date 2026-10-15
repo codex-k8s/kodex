@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { applyReverseSpec } from "./stable-reverse-patch.mjs";
-import { nativeAddonBinding, nativeSkipPaths, nativeTraefikTransition, prepareNativeDeployment, traefikHelmConfig, verifyNativeImage } from "./stable-native-model.mjs";
+import { nativeAddonBinding, nativeRecoveryConfig, nativeSkipPaths, nativeTraefikTransition, prepareNativeDeployment, traefikHelmConfig, verifyNativeImage } from "./stable-native-model.mjs";
 const profiles = JSON.parse(await readFile(new URL("../../infra/stable-system/native-profiles.json", import.meta.url), "utf8")).profiles;
 const fixture = profile => ({ apiVersion: "apps/v1", kind: "Deployment", metadata: { name: profile.name, namespace: "kube-system", uid: "uid", resourceVersion: "1" },
   spec: { replicas: 1, template: { metadata: { labels: { app: profile.name } }, spec: { containers: [{ name: profile.container, image: profile.sourceImage,
@@ -76,7 +76,17 @@ test("Traefik full render rejects changes to services, TLS, RBAC and wrong PDB s
     metadata: { name: "traefik", namespace: "kube-system" }, spec: { minAvailable: 1, selector: { matchLabels: { app: "traefik" } } } }];
   desired[0].spec = prepareNativeDeployment(d, p).after;
   assert.ok(nativeTraefikTransition(source, desired, p));
+  assert.ok(nativeTraefikTransition([...source, structuredClone(desired[2])], desired, p));
   desired[1].spec.type = "NodePort"; assert.throws(() => nativeTraefikTransition(source, desired, p), /NATIVE_TRAEFIK_UNRELATED_CHANGE_FORBIDDEN/);
   desired[1].spec.type = "LoadBalancer"; desired[2].spec.selector.matchLabels.app = "foreign";
   assert.throws(() => nativeTraefikTransition(source, desired, p), /NATIVE_TRAEFIK_PDB_SELECTOR_INVALID/);
+});
+
+test("fresh forward plan can bind only a typed source-profile HCC retained by recovery", () => {
+  const p = profiles.find(p => p.name === "traefik"), chart = { apiVersion: "helm.cattle.io/v1", kind: "HelmChart",
+    metadata: { name: "traefik", namespace: "kube-system", uid: "chart-uid" }, spec: {} };
+  const hcc = traefikHelmConfig(chart, p, "a".repeat(64), true); hcc.metadata.uid = "hcc-uid";
+  assert.equal(nativeRecoveryConfig(chart, p, hcc).uid, "hcc-uid");
+  hcc.spec.valuesContent = JSON.stringify({ deployment: { replicas: 2 } });
+  assert.throws(() => nativeRecoveryConfig(chart, p, hcc), /NATIVE_TRAEFIK_RECOVERY_SOURCE_INVALID/);
 });
