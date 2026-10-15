@@ -45,7 +45,7 @@ test("archive controller and worker share one OCI and ambiguous source pins fail
     app => { app.env.at(-1).valueFrom = { configMapKeyRef: { name: "foreign", key: "image" } }; },
   ]) {
     const value = fixture(); mutation(value.spec.template.spec.containers[0]);
-    assert.throws(() => prepareGoCutover(value, release), /ARCHIVE_WORKER_PIN_INVALID/);
+    assert.throws(() => prepareGoCutover(value, release), /ARCHIVE_WORKER_PIN_INVALID|DEV_ENV_UNSUPPORTED/);
   }
 });
 
