@@ -109,13 +109,14 @@ export async function publicClients(args, port, apiPort = keycloakAPI) {
       actualLB.Id === boundary.loadBalancerID && actualLB.State?.Running === true &&
       fingerprint(actualLB.NetworkSettings?.Ports?.["443/tcp"]) === fingerprint(bindings), "PUBLIC_CLIENT_BOUNDARY_DRIFT");
   };
-  const intents = new Set(), acknowledged = new Set();
+  const intents = new Set(), acknowledged = new Set(); let originalJournalSHA256, recoveryComplete = false;
   if (options["--journal"]) {
     const f = await open(options["--journal"], constants.O_RDONLY | constants.O_NOFOLLOW); let records;
     try {
       const s = await f.stat(); requireValue(s.isFile() && s.uid === process.getuid() && (s.mode & 0o777) === 0o600 && s.nlink === 1 && s.size > 0 && s.size < (1 << 20), "PUBLIC_CLIENT_JOURNAL_INVALID");
       records = (await f.readFile("utf8")).trim().split("\n").map(JSON.parse);
     } finally { await f.close(); }
+    originalJournalSHA256 = fingerprint(records);
     const header = records.shift(); requireValue(header.schema === "kodex.public-clients-journal/v1" && header.mode === "apply" && header.planSHA256 === hash && records.length <= 16,
       "PUBLIC_CLIENT_JOURNAL_INVALID");
     if (mode === "rollback") requireValue(["COMPLETE", "UNKNOWN"].includes(records.at(-1)?.status), "PUBLIC_CLIENT_ORIGINAL_EXECUTOR_NOT_TERMINAL");
@@ -124,6 +125,22 @@ export async function publicClients(args, port, apiPort = keycloakAPI) {
       if (r.status === "APPLY_INTENT") { requireValue(plan.rows.some(row => row.clientId === r.clientId) && !intents.has(r.clientId), "PUBLIC_CLIENT_JOURNAL_INVALID"); intents.add(r.clientId); }
       if (r.status === "APPLIED") { requireValue(intents.has(r.clientId), "PUBLIC_CLIENT_JOURNAL_INVALID"); acknowledged.add(r.clientId); }
     }
+  }
+  const recoveryPath = options["--journal"] + ".recovery.jsonl";
+  if (mode === "rollback") {
+    const parent = await lstat(dirname(options["--journal"]));
+    requireValue(parent.isDirectory() && parent.uid === process.getuid() && (parent.mode & 0o777) === 0o700, "PUBLIC_CLIENT_PRIVATE_DIRECTORY_REQUIRED");
+    let file;
+    try { file = await open(recoveryPath, constants.O_RDONLY | constants.O_NOFOLLOW); }
+    catch (error) { if (error.code !== "ENOENT") throw Error("PUBLIC_CLIENT_RECOVERY_JOURNAL_INVALID"); }
+    if (file) try {
+      const s = await file.stat(); requireValue(s.isFile() && s.uid === process.getuid() && (s.mode & 0o777) === 0o600 && s.nlink === 1 && s.size > 0 && s.size < (1 << 20),
+        "PUBLIC_CLIENT_RECOVERY_JOURNAL_INVALID");
+      const records = (await file.readFile("utf8")).trim().split("\n").map(JSON.parse), header = records.shift();
+      requireValue(header.schema === "kodex.public-clients-recovery/v1" && header.planSHA256 === hash && header.originalJournalSHA256 === originalJournalSHA256 &&
+        records.length <= 8 && records.every(r => ["ROLLBACK_INTENT", "RESTORED", "UNKNOWN", "COMPLETE"].includes(r.status)), "PUBLIC_CLIENT_RECOVERY_JOURNAL_INVALID");
+      requireValue(records.at(-1)?.status === "COMPLETE", "PUBLIC_CLIENT_RECOVERY_ALREADY_STARTED_REQUIRES_OWNER"); recoveryComplete = true;
+    } finally { await file.close(); }
   }
   // Значения читаются только после plan/journal/approval validation. Два
   // заранее известных key остаются в памяти, не в argv/env/plan/journal.
@@ -152,11 +169,26 @@ export async function publicClients(args, port, apiPort = keycloakAPI) {
       if (mode === "apply") requireValue(phase === "before", "PUBLIC_CLIENT_PREDECESSOR_INVALID");
       if (mode === "readback") requireValue(phase === "after", "PUBLIC_CLIENT_READBACK_INCOMPLETE");
       if (mode === "rollback" && intents.has(name)) requireValue(acknowledged.has(name), "PUBLIC_CLIENT_UNKNOWN_PUT_REQUIRES_OWNER");
+      if (recoveryComplete) requireValue(phase === "before", "PUBLIC_CLIENT_COMPLETED_RECOVERY_DRIFT");
     }
   }
   if (mode === "plan") for (const row of plan.rows) requireValue(publicClientPhase(await read(row.clientId), row) === "before", "PUBLIC_CLIENT_SOURCE_CHANGED_DURING_PLAN");
   await assertBoundary();
-  const output = await open(options["--output"], "wx", 0o600), record = async row => { await output.writeFile(JSON.stringify(row) + "\n"); await output.sync(); };
+  let recoveryFile;
+  if (mode === "rollback" && !recoveryComplete) {
+    try { recoveryFile = await open(recoveryPath, "wx", 0o600); }
+    catch { throw Error("PUBLIC_CLIENT_RECOVERY_ALREADY_STARTED_REQUIRES_OWNER"); }
+    try {
+      await recoveryFile.writeFile(JSON.stringify({ schema: "kodex.public-clients-recovery/v1", planSHA256: hash, originalJournalSHA256 }) + "\n"); await recoveryFile.sync();
+    } catch (error) { await recoveryFile.close(); throw error; }
+  }
+  let output;
+  try { output = await open(options["--output"], "wx", 0o600); }
+  catch (error) { await recoveryFile?.close(); throw error; }
+  const record = async row => {
+    const raw = JSON.stringify(row) + "\n"; await output.writeFile(raw); await output.sync();
+    if (recoveryFile && !row.schema) { await recoveryFile.writeFile(raw); await recoveryFile.sync(); }
+  };
   try {
     if (mode === "plan") { await record({ plan, planSHA256: fingerprint(plan) }); return { plan }; }
     await record({ schema: "kodex.public-clients-journal/v1", mode, planSHA256: hash });
@@ -173,7 +205,7 @@ export async function publicClients(args, port, apiPort = keycloakAPI) {
     }
     await record({ status: "COMPLETE" }); return { plan };
   } catch (error) { await record({ status: "UNKNOWN" }); throw error; }
-  finally { await output.close(); }
+  finally { await output.close(); await recoveryFile?.close(); }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)

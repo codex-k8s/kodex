@@ -112,3 +112,10 @@ test("lost API PUT response can be inspected but is never retried or automatical
   await assert.rejects(f.invoke("rollback", "rollback.jsonl"), /PUBLIC_CLIENT_UNKNOWN_PUT_REQUIRES_OWNER/);
   assert.equal(f.writes().length, 1);
 });
+
+test("lost rollback PUT ACK leaves a canonical recovery claim; another output cannot replay the write", async t => {
+  const f = await fixture(t); await f.makePlan(); await f.invoke("apply", "apply.jsonl"); f.flags.lostPut = true;
+  await assert.rejects(f.invoke("rollback", "rollback.jsonl"), /FIXTURE_PUT_ACK_LOST/); assert.equal(f.writes().length, 3);
+  await assert.rejects(f.invoke("rollback", "rollback-again.jsonl"), /PUBLIC_CLIENT_RECOVERY_ALREADY_STARTED_REQUIRES_OWNER/);
+  assert.equal(f.writes().length, 3);
+});

@@ -1608,7 +1608,15 @@ configuration hash перед узким PUT и контроль всех неи
 
 Context7 `/websites/keycloak_docs-api_rest-api`: официальный PUT
 `/admin/realms/{realm}/clients/{client-uuid}`, ClientRepresentation и204.
-Пять synthetic тестов покрывают minimal payload, PKCE/scopes/secret
+Шесть synthetic тестов покрывают minimal payload, PKCE/scopes/secret
 preservation, negative grants/URLs, normal/repeated recovery, wrong approval
 до чтения credential values и lost ACK fail-closed. Actual PUT, client
 recovery, public issuer activation и browser acceptance пока NOT RUN.
+
+Recovery дополнительно публикует canonical private claim рядом с исходным
+apply journal: `<apply-journal>.recovery.jsonl`. Claim создаётся exclusively
+и fsync до первого restore PUT, связывает exact plan и original journal
+digest. После потерянного restore ACK другой `--output` не обходит прежний
+intent: incomplete/UNKNOWN claim закрывает recovery до решения владельца.
+Завершённый claim допускает только повторный readback обоих исходных client
+hashes без новых PUT. Этот путь проверяется отдельным lost rollback ACK тестом.
