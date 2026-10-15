@@ -413,3 +413,44 @@ repositories для существующей node identity, отрицатель
 bootstrap самого registry-serving образа. Последующий actual node pull должен
 проверять тот же штатный TLS/DNS/identity путь, не только наличие в node cache.
 Probe, BuildKit/input profiles и права записи не расширяются этим решением.
+
+### Материализация node pull для штатного профиля
+
+Дополнение code-first плана: закрытый compiled список node repositories
+покрывает все shipped Pod images, migration/optional jobs, существующие
+admission/tools images и динамический `roles`. OCI build inputs (`dockerfile`,
+`role-base-documents`, `role-image-inputs`) и evidence/admin не выдаются node
+identity. Совпадение списка с release inventory проверяется тестом; новые
+repositories не добавляются wildcard или env-параметром. Probe сохраняет
+только прежний control-plane read, BuildKit/input profiles не меняются.
+
+Путь: kubelet/containerd с существующими exact node mTLS/basic credentials →
+public pull DNS/SAN и exact ingress → `registry-pull-authorizer` → внутренний
+read-only registry. Только GET/HEAD manifest/blob; существующие certificate
+generation, peer IP и application credential checks остаются до repository
+решения. Это чтение immutable artifact, без DB mutation, task/grant, owner
+state transition или domain event. Его авторитетное readback — manifest digest
+и фактический serving `imageID` через CRI каждой ноды.
+
+Для обычной поставки authorizer выделен в минимальный distroless target
+`registry-pull-runtime` того же unit. В base он имеет собственный image ref,
+command и прежние credentials/readiness/sidecar. Release lock требует exact
+новый digest. Hot local profile явно использует свой admission bundle, где
+тот же binary уже собирается; это отдельный dev profile, не fallback при
+ошибке штатного pull. Никакого копирования исполняемого файла в live Pod.
+
+Старый authorizer не разрешает скачивать новый registry-serving repository.
+Его bootstrap поэтому требует отдельной проверяемой фазы: durable публикация
+нового exact OCI, затем однократная материализация только этого проверенного
+registry-serving digest в cache точных принадлежащих кластеру нод и rollout
+проверенного PodSpec. Это не альтернативный путь для приложений. После rollout
+`imagePullPolicy: Always` на exact node probes обязан доказать обычный
+TLS/DNS/credential pull и для самого gateway, и для приложений; preload/Ready
+не считается таким доказательством. Сам import, rollback и контроль этой фазы
+ещё требуют исполняемого repo-owned адаптера, review и отдельного owner OK.
+
+Текущий read-only Pod inventory также подтвердил сохраняемые compiled
+`image-admission` и `image-admission-tools`. Их прежние exact artifacts должны
+быть доступны через durable pull endpoint, а не только из node cache;
+бизнесовые pins/grants не пересоздаются ради публикации. До доказательства
+всего пути этапы 2/3/4/7 остаются незавершёнными.

@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.22
-updated: 2026-10-14
+version: 1.7.23
+updated: 2026-10-15
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -1703,9 +1703,15 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   descriptors, platform и exact manifest digest; private копия исходных байтов
   передаётся существующему promotion writer по mTLS/application identity.
   Controller и его worker используют один exact digest через настроенный
-  promoted pull host. Node и installer получают только закрытый repository
-  `kodex/session-archive` и `kodex/role-image-builder`, не право произвольной
-  публикации или role admission. Одинаковые guards связывают repository,
+  promoted pull host. Node и installer получают только закрытый список
+  runtime/platform repositories из `nodePullRepositories`, включая штатные
+  приложения и сам pull gateway, не право произвольной публикации или role
+  admission. Probe, BuildKit/base и input-reader сохраняют отдельные списки:
+  расширение node pull не расширяет их полномочия. Разрешены только GET/HEAD
+  manifest/blob точного repository и одного ограниченного selector; пустой
+  selector, dot segments, вложенный/escaped slash и соседний repository
+  отклоняются до upstream. Evidence, inputs, tags/list, upload и admin не
+  становятся доступными через общий prefix. Одинаковые guards связывают repository,
   entrypoint, cache input digest/tag и platform; builder использует тот же
   promoted pull host без зависимости от сохранности preload.
   Unknown исход публикации проверяется отдельным readback без повторного import;

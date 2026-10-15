@@ -70,3 +70,12 @@ COPY --from=build --chmod=0555 /out/registry-pull-authorizer /usr/local/bin/regi
 COPY --chmod=0555 tools/render-image-admission-job.sh /opt/kodex/render-image-admission-job.sh
 RUN command -v image-vulnerability-report-validator >/dev/null
 USER 10001:10001
+
+# Штатный pull gateway не получает сканеры, shell или builder runtime.
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35 AS registry-pull-runtime
+ARG SOURCE_SHA=unknown
+LABEL org.opencontainers.image.source="https://github.com/codex-k8s/kodex" \
+      org.opencontainers.image.revision="$SOURCE_SHA"
+COPY --from=build --chmod=0555 /out/registry-pull-authorizer /usr/local/bin/registry-pull-authorizer
+USER 10001:10001
+ENTRYPOINT ["/usr/local/bin/registry-pull-authorizer"]

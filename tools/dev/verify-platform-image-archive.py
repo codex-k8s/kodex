@@ -32,7 +32,7 @@ try:
         component, expected = receipt['component'], receipt['imageDigest']
         require(component in ('control-plane', 'secret-broker', 'email-bridge', 'runtime-controller',
                 'integration-gateway', 'integration-synthetic', 'control-api-gateway', 'staff-control-center',
-                'egress-gateway', 'automation-scheduler', 'artifact-retention', 'session-archive'))
+                'egress-gateway', 'automation-scheduler', 'artifact-retention', 'session-archive', 'registry-pull-authorizer'))
         require(receipt['schema'] == 'kodex.stable-local-build/v1'
                 and re.fullmatch(r'[a-f0-9]{40}', receipt['sourceSHA']) and receipt['sourceSHA'] != '0' * 40
                 and all(re.fullmatch(r'[a-f0-9]{64}', receipt[key]) and receipt[key] != '0' * 64

@@ -17,7 +17,7 @@ done
 for program in kubectl docker jq sha256sum timeout realpath; do command -v "$program" >/dev/null || fail 'required program is absent'; done
 component=$(jq -er '.image.component' "$plan")
 case "$component" in
-  control-plane|secret-broker|email-bridge|runtime-controller|integration-gateway|integration-synthetic|control-api-gateway|staff-control-center|egress-gateway|automation-scheduler|artifact-retention|session-archive) ;;
+  control-plane|secret-broker|email-bridge|runtime-controller|integration-gateway|integration-synthetic|control-api-gateway|staff-control-center|egress-gateway|automation-scheduler|artifact-retention|session-archive|registry-pull-authorizer) ;;
   *) fail 'component is not a stable platform image' ;;
 esac
 digest=$(jq -er '.image.digest' "$plan")

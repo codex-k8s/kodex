@@ -148,7 +148,7 @@ func decidePullAuthorization(
 	if !authorizedNodePull(request, certificate, registryHost) {
 		return denyPullRequest("node_identity")
 	}
-	if !pathInRepositories(request.URL.Path, []string{"kodex/agent-runner", "kodex/roles", "kodex/session-archive", "kodex/role-image-builder"}) {
+	if !pathInRepositories(request.URL.Path, nodePullRepositories()) {
 		return denyPullRequest("node_repository")
 	}
 	return pullAuthorizationDecision{}
@@ -159,7 +159,21 @@ func pullProfiles() map[string]pullProfile {
 		"kodex-image-registry-pull-probe": {"/identity/probe-dockerconfig.json", []string{"kodex/control-plane"}},
 		"kodex-buildkit-base-pull":        {"/identity/buildkit-dockerconfig.json", []string{"kodex/dockerfile", "kodex/agent-runner", "kodex/role-base-documents"}},
 		"role-image-builder-input-read":   {"/identity/input-dockerconfig.json", []string{"kodex/role-image-inputs"}},
-		"kodex-node-pull-installer":       {"/identity/pull-dockerconfigjson", []string{"kodex/agent-runner", "kodex/roles", "kodex/session-archive", "kodex/role-image-builder"}},
+		"kodex-node-pull-installer":       {"/identity/pull-dockerconfigjson", nodePullRepositories()},
+	}
+}
+
+// Только узлы и установщик читают штатные platform images. Probe, BuildKit
+// и input-reader сохраняют собственные точные списки и прежние credentials.
+func nodePullRepositories() []string {
+	return []string{
+		"kodex/agent-runner", "kodex/roles", "kodex/session-archive", "kodex/role-image-builder",
+		"kodex/control-plane", "kodex/secret-broker", "kodex/email-bridge", "kodex/runtime-controller",
+		"kodex/integration-gateway", "kodex/integration-synthetic", "kodex/control-api-gateway",
+		"kodex/staff-control-center", "kodex/egress-gateway", "kodex/automation-scheduler",
+		"kodex/artifact-retention", "kodex/registry-pull-authorizer",
+		"kodex/image-admission", "kodex/image-admission-tools", "kodex/internal-rpc-authority",
+		"kodex/stt-tts-service", "kodex/interaction-gateway", "kodex/backup-controller", "kodex/email-bridge-migration",
 	}
 }
 
@@ -267,9 +281,26 @@ func pathInRepositories(path string, repositories []string) bool {
 		return true
 	}
 	for _, repository := range repositories {
-		if strings.HasPrefix(path, "/v2/"+repository+"/manifests/") || strings.HasPrefix(path, "/v2/"+repository+"/blobs/") {
-			return true
+		for _, operation := range []string{"manifests", "blobs"} {
+			selector, ok := strings.CutPrefix(path, "/v2/"+repository+"/"+operation+"/")
+			if ok && validPullSelector(selector) {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+func validPullSelector(selector string) bool {
+	if selector == "" || len(selector) > 128 || selector == "." || selector == ".." {
+		return false
+	}
+	for _, character := range selector {
+		if character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' ||
+			character >= '0' && character <= '9' || character == '_' || character == '-' || character == '.' || character == ':' {
+			continue
+		}
+		return false
+	}
+	return true
 }

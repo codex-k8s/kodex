@@ -155,7 +155,7 @@ build_component() {
     fail "invalid Dockerfile path for $component"
   [[ -f "$repository_root/$dockerfile" ]] || fail "Dockerfile is missing for $component"
   case "$component:$target" in
-    role-image-builder:runtime|image-admission:admission-runtime|email-bridge:runtime|email-bridge-migration:migration|integration-synthetic:synthetic|*:) ;;
+    role-image-builder:runtime|image-admission:admission-runtime|registry-pull-authorizer:registry-pull-runtime|email-bridge:runtime|email-bridge-migration:migration|integration-synthetic:synthetic|*:) ;;
     *) fail "unexpected Dockerfile target for $component" ;;
   esac
 
