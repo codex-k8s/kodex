@@ -1852,3 +1852,9 @@ singleton/PVC, foreign UID/owner и потерянный ACK. Public actual appl
 Один read-only combined dry-run завершился непрозрачной диагностикой; отдельный
 контроль desired control-proxy render PASS. Полный sealed plan всех трёх releases
 на следующем clean SHA ещё требуется; не выдавать частичный dry-run за PASS.
+
+На `1e59ebb9e80cdec61f951e010965d695b5ddf932` actual public plan остановился
+до mutation: выбран default system lock set без oauth2-proxy. Исправлен явный
+выбор закрытого `public-identity`; regression проверяет наличие locks для всех
+трёх profiles и отклонение endpoint/Service drift. Четыре новых public-state
+tests PASS в рабочем дереве; actual apply по-прежнему NOT RUN.

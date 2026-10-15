@@ -59,7 +59,7 @@ export async function publicHelmScope({ kube, plan, environment: inherited }) {
     "PUBLIC_HELM_BOUNDARY_CHANGED");
   };
   await assertBoundary();
-  return { profiles: publicHelmProfiles, locks: await stableChartLocks(), environment,
+  return { profiles: publicHelmProfiles, locks: await stableChartLocks("public-identity"), environment,
     planSchema: "kodex.public-helm-plan/v1", assertBoundary,
     desiredValues: (p, v) => publicHelmValues(v, p, endpoints, profile, service.spec.clusterIP),
     recoveryValues: (_p, v) => structuredClone(v),

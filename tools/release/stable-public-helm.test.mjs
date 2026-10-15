@@ -1,12 +1,31 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { publicHelmExpectedObjects } from "./stable-public-helm.mjs";
+import { publicHelmExpectedObjects, publicHelmScope } from "./stable-public-helm.mjs";
 import { publicHelmProfiles } from "./stable-public-helm-model.mjs";
 import { matchSystemObjects, readSystemObjects, systemObjectKey, systemObjectState, systemServing } from "./stable-system-helm-state.mjs";
 
 const profile = JSON.parse(readFileSync(new URL("../../infra/public-ingress/identity-profile.json", import.meta.url)));
 const identify = r => ({ ...r, metadata: { ...r.metadata, uid: r.metadata.name + "-uid", resourceVersion: "1" } });
+
+test("closed public scope uses its own exact chart locks and rejects endpoint/service drift", async () => {
+  const cm = identify({ apiVersion: "v1", kind: "ConfigMap", metadata: { name: profile.endpointsName, namespace: "kodex-system" }, data: {
+    publicOrigin: "https://control.example.test", oidcIssuer: "https://sso.example.test/realms/kodex",
+    oidcJwksUrl: "https://sso.example.test/realms/kodex/protocol/openid-connect/certs",
+    oidcConnectAddress: profile.oidcConnectAddress, oidcTlsServerName: "sso.example.test" } });
+  const service = identify({ apiVersion: "v1", kind: "Service", metadata: { name: "sso", namespace: "identity" },
+    spec: { type: "ClusterIP", clusterIP: "10.43.0.10", ports: [{ name: "https", port: 443 }], selector: { "app.kubernetes.io/name": "sso" } } });
+  const kube = async args => JSON.stringify(args.includes("service") ? service : cm);
+  const scope = await publicHelmScope({ kube });
+  assert.deepEqual(scope.locks.map(l => l.name), ["oauth2-proxy", "kube-prometheus-stack"]);
+  assert.ok(scope.profiles.every(p => scope.locks.some(l => l.name === p.chartName)));
+  const inherited = await publicHelmScope({ kube, plan: { environment: scope.environment } });
+  assert.deepEqual(inherited.environment, scope.environment);
+  cm.data = structuredClone(scope.environment.endpoints.after); await scope.assertBoundary();
+  cm.data.publicOrigin = "https://foreign.example.test"; await assert.rejects(scope.assertBoundary(), /BOUNDARY_CHANGED/);
+  cm.data = structuredClone(scope.environment.endpoints.before); service.metadata.uid = "foreign";
+  await assert.rejects(scope.assertBoundary(), /BOUNDARY_CHANGED/);
+});
 
 test("public live Grafana commitment reads only its exact nonsecret CM and detects content drift", async () => {
   const p = publicHelmProfiles[2], cm = identify({ apiVersion: "v1", kind: "ConfigMap", metadata: { name: p.grafana, namespace: p.namespace },
