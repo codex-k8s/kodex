@@ -670,7 +670,8 @@ server-owned Kubernetes node/cluster UID, не credential из пользова�
 payload. Добавляется один exact logical mirror к уже настроенному physical
 HTTPS endpoint. Его auth/TLS остаются единственным источником; копирования
 credential под logical hostname или переписывания immutable admission refs нет.
-K3s default endpoint fallback отключается в native config. Прочие настройки,
+K3s default endpoint fallback для настроенных mirrors отключается в native
+config; unlisted registries не объявляются air-gapped. Прочие настройки,
 сертификаты, private keys и registry roles не меняются.
 
 | Фаза | Проверка и граница |
@@ -686,3 +687,50 @@ K3s default endpoint fallback отключается в native config. Проч�
 Ни один этап не меняет соседний кластер, DNS/firewall, kubeconfig, Kubernetes
 Secrets или registry permission profile. Node restart и rollback — отдельное
 owner-approved maintenance окно, не побочный эффект plan.
+
+## Native registry mirror: реализация и preflight
+
+На exact `334418d643cdf46f09b2378cdd00788a18ea5b67`:
+
+- PASS: 61 Node tests без skipped; в их числе настоящий CLI с synthetic
+  Docker/Kubernetes adapters и настоящий shell worker в disposable контейнере
+  из уже имеющегося exact node image. K3s/кластер в fixture не запускается:
+  только shell, `network=none`, read-only rootfs и отдельный временный bind.
+  Временные контейнеры завершены и удалены; реальные node mounts не доступны.
+- PASS: 30 Python OCI tests, полный web-only release render, ShellCheck нового
+  worker без замечаний, `node --check` и `git diff --check`.
+- PASS PLAN ONLY: настоящий read-only CLI проверил обе текущие Kodex nodes,
+  Docker labels/UID/image, private file identity, canonical TLS/auth и source
+  SHA. Plan hash
+  `a5d24e11ef69181cfa4260b2f76a794a291810f35d436ef981d86f88161831d3`.
+- PASS SYNTHETIC: последовательные install/restart/readback/rollback двух
+  нод; wrong approval и file drift не меняют файлов; потерянный первый restart
+  не запускает второй, rollback пропускает ещё не затронутую ноду.
+- PASS COMPONENT: действительный shell worker выполнил install/restore,
+  отказ при повторной установке/чужом drift и восстановление после оборванного
+  payload до effects. Credential sentinels не попали в trace/output/journal.
+- NOT RUN: изменения файлов/backup/restart на живых nodes, generated native
+  mirror readback и fresh registry pull. Кластер и действующий main не менялись.
+
+Публичные точки входа: `tools/release/stable-node-registry.mjs`
+`plan|apply|readback|rollback`; exact context, physical host только для plan,
+private plan/output и approved plan hash для apply/rollback. CLI сохраняет
+только commitments; private YAML обрабатывается в памяти. Backup с original
+bytes остаётся только внутри соответствующей node под root-owned0700,
+intent и private0600; cert/key файлы не копируются и не вращаются.
+
+Source guard связывает исполнение с clean exact SHA и tracked worker/model.
+Монотонный журнал fsync предшествует effects. Worker использует exclusive
+lock, private input pipe, before hash/owner/mode и atomic file rename.
+Неизвестный ответ не повторяется автоматически. Перед каждым restart
+проверяются idle graph и сохранённые promotion pins; затем ожидаются
+RuntimeReady/NetworkReady, API и свежий Node Ready heartbeat. Native readback
+проверяет exact physical endpoint, отсутствие logical fallback и TLS skip;
+его результат явно `NATIVE_CONFIGURATION_ONLY`, `freshPull=NOT_RUN`.
+
+Проверены Context7 K3s private-registry/agent docs. Pull gateway сохраняет
+physical upstream и уже передаёт containerd `ns` query, не используя её
+для выбора authority либо destination. Активация нового pull-authorizer,
+publication и actual node pulls ещё требуют согласованного maintenance этапа.
+Frontend TLS cutover, полный Go rollback, оставшаяся replica matrix и
+certificate/OIDC также остаются незавершёнными. Чекбоксы общего плана не закрыты.
