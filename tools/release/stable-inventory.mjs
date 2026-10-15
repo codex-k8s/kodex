@@ -12,6 +12,7 @@ const dataNames = new Set(["kodex-postgresql", "email-bridge-postgresql", "keycl
 const approvedSingletons = new Set([
   "kube-system/Deployment/local-path-provisioner",
   "observability/StatefulSet/kodex-monitoring-grafana",
+  "observability/Deployment/kodex-monitoring-kube-prom-operator",
 ]);
 
 function requireValue(value, code) {

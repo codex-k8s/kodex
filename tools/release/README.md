@@ -7,6 +7,21 @@ immutable OCI и две реплики совместимых сервисов. 
 текущее состояние — [OPS-PUBLIC-STABLE-001](../../docs/operations/public-stable-1810.md).
 Это не команда глобального dev bootstrap и не смена режима других установок.
 
+`fetch-stable-charts.mjs --output /absolute/new-private-directory` анонимно
+получает только три закреплённых chart существующих системных Helm release.
+SHA256 проверяется по repo-owned locks; credentials пользовательского Helm
+не используются. Каталог новый0700, архивы0600, перезаписи нет.
+`stable-system-helm-plan.mjs --context k3d-kodex --charts /absolute/directory
+--output /absolute/new-plan.json` выполняет только read-only/server dry-run.
+Закрытый профиль `infra/stable-system/helm-profiles.json` допускает две реплики
+cert-manager/cainjector/webhook/trust-manager, kube-state-metrics и Alertmanager,
+resource bounds и exact PDB. Сравниваются все объекты исходного и нового render:
+Secret, ключи, сертификаты, RBAC, PVC, images и любой посторонний объект должны
+остаться неизменными. В плане только commitments, metadata и перечень изменений;
+Helm values/render с возможными secrets остаются в памяти. Эта команда не
+предоставляет apply и сама не завершает системный cutover. Operator Prometheus
+без leader election остаётся1 вместе с ранее согласованными singleton.
+
 `stable-go-release.mjs` предоставляет `plan|apply|inspect|readback|rollback`;
 принимается только plan v3 с clean executor SHA. `plan` выполняет server-side
 dry-run каждого target без persist. Apply/rollback требуют отдельного допуска

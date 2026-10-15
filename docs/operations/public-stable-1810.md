@@ -4,7 +4,7 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.1.2
+version: 1.1.3
 updated: 2026-10-15
 ---
 
@@ -1188,3 +1188,39 @@ CoreDNS и metrics-server — native K3s workloads; storage provisioner оста
 Cert-manager1.21.1, trust-manager0.24.0 и monitoring chart88.5.4 принадлежат
 существующим Helm releases. OAuth proxy chart10.7.0 уже имеет две replica.
 Это inventory, не изменение их release/configuration и не завершение этапа2.
+
+## Закрытый HA-профиль существующих Helm releases
+
+Для Prometheus Operator подтверждено ограничение установленного v0.93.1:
+его CLI не содержит leader election; `--controller-id` разделяет независимые
+наборы управляемых объектов и не даёт failover двух операторов над одним набором.
+Официальное [описание troubleshooting](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/platform/troubleshooting.md)
+предупреждает о конфликтах нескольких операторов над одними ресурсами.
+В рамках уже согласованного исключения инфраструктуры без безопасного HA
+`observability/Deployment/kodex-monitoring-kube-prom-operator` сохраняется1;
+inventory закрепляет exact namespace/kind/name, без широкого исключения
+остальных controller. Сам Alertmanager поддерживает кластер и получает2
+через принадлежащий оператору Alertmanager CR, не patch дочернего StatefulSet.
+
+Добавлен closed профиль трёх существующих Helm releases: cert-manager,
+trust-manager и monitoring. Он ограничен replicas/resources/PDB, не меняет
+image tags, CRD, сертификаты, credentials, storage и RBAC. Controller/cainjector
+cert-manager и trust-manager сохраняют native leader election; webhook и
+kube-state-metrics обслуживают независимо. Requests/limits назначены всем
+затронутым main/init container. Две реплики не дают отказоустойчивости сервера
+или общего PVC; Alertmanager использует прежний per-replica claim template.
+
+`fetch-stable-charts.mjs` скачал все три точных chart анонимно из их официальных
+источников; SHA256 всех архивов совпали с имеющимися repo locks. Это downloads,
+не Helm upgrade. Отдельный `stable-system-helm-plan.mjs` сверяет существующие
+release/chart/version/revision и clean executor, делает server dry-run и
+сравнивает полный исходный/новый render по закрытой allowlist. Неизвестное
+изменение или исчезновение объекта закрыто отклоняется. Полные Helm values,
+Secret и render не записываются и не выдаются: только commitments и metadata.
+Команда пока только plan; применение, восстановление и live handoff NOT RUN.
+
+Проверены через Context7 официальные cert-manager HA best practices,
+Prometheus Operator troubleshooting и Helm upgrade/rollback/get values.
+Helm предупреждает, что dry-run может содержать Secret; захват в памяти
+не заменяется надеждой на безопасный обычный stdout. Exact SHA результатов
+проверок фиксируется следующим journal readback, без отметки этапов2–8.

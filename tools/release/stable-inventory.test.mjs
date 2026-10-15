@@ -62,7 +62,8 @@ test("native sidecar hot command and source mounts are included", () => {
 
 test("system controllers are included while exact approved singletons remain single", () => {
   for (const [namespace, kind, name] of [["kube-system", "Deployment", "local-path-provisioner"],
-    ["observability", "StatefulSet", "kodex-monitoring-grafana"]]) {
+    ["observability", "StatefulSet", "kodex-monitoring-grafana"],
+    ["observability", "Deployment", "kodex-monitoring-kube-prom-operator"]]) {
     const value = fixture(kind, name); value.metadata.namespace = namespace;
     const row = summarizeWorkload(value);
     assert.equal(row.category, "SINGLETON"); assert.equal(row.targetReplicas, 1);
