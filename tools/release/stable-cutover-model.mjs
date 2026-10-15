@@ -94,6 +94,13 @@ export function prepareGoCutover(deployment, release, { storageClaims = [] } = {
   app.command = [`/usr/local/bin/${entry[1]}`];
   app.args = app.args.slice(3);
   app.env = (app.env ?? []).filter(e => !devEnv.has(e.name));
+  if (name === "session-archive") {
+    const workers = app.env.filter(e => e.name === "SESSION_ARCHIVE_WORKER_IMAGE");
+    requireValue(workers.length === 1 && !workers[0].valueFrom && imagePattern.test(workers[0].value ?? "") &&
+      !workers[0].value.endsWith("0".repeat(64)), "CUTOVER_ARCHIVE_WORKER_PIN_INVALID");
+    // Controller и worker — два режима одного проверенного binary/OCI.
+    workers[0].value = release.image;
+  }
   for (const container of converted)
     container.volumeMounts = (container.volumeMounts ?? []).filter(m => !removedVolumes.has(m.name));
   pod.volumes = (pod.volumes ?? []).filter(v => !removedVolumes.has(v.name));

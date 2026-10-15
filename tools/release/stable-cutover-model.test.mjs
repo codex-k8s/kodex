@@ -7,7 +7,8 @@ function fixture(name = "session-archive", module = "services/jobs/session-archi
     spec: { replicas: 1, template: { metadata: { annotations: {} }, spec: { securityContext: { fsGroup: 1001 },
       containers: [{ name, image: "dev", command: ["/workspace/tools/dev/run-go-hot-reload.sh"],
         args: [module, `./cmd/${name}`, name, ...args],
-        env: [{ name: "GOCACHE", value: "/go" }, { name: "TOKEN", valueFrom: { secretKeyRef: { name: "exact", key: "key" } } }],
+        env: [{ name: "GOCACHE", value: "/go" }, { name: "TOKEN", valueFrom: { secretKeyRef: { name: "exact", key: "key" } } },
+          ...(name === "session-archive" ? [{ name: "SESSION_ARCHIVE_WORKER_IMAGE", value: "example.invalid/kodex/session-archive@sha256:" + "d".repeat(64) }] : [])],
         volumeMounts: [{ name: "dev-source", mountPath: "/workspace" }, { name: "secret", mountPath: "/var/run/secret", readOnly: true }] }],
       volumes: [{ name: "dev-source", hostPath: { path: "/private" } }, { name: "secret", secret: { secretName: "exact" } }] } } } };
 }
@@ -21,11 +22,25 @@ test("normal cutover preserves mode secrets and source input with exact CAS", ()
   assert.equal(after.replicas, 2); assert.equal(after.strategy.rollingUpdate.maxUnavailable, 0);
   assert.deepEqual(after.template.spec.containers[0].command, ["/usr/local/bin/session-archive"]);
   assert.deepEqual(after.template.spec.containers[0].args, ["controller"]);
-  assert.deepEqual(after.template.spec.containers[0].env, original.spec.template.spec.containers[0].env.slice(1));
+  const expectedEnv = original.spec.template.spec.containers[0].env.slice(1);
+  expectedEnv.find(e => e.name === "SESSION_ARCHIVE_WORKER_IMAGE").value = release.image;
+  assert.deepEqual(after.template.spec.containers[0].env, expectedEnv);
   assert.deepEqual(after.template.spec.volumes, [original.spec.template.spec.volumes[1]]);
   assert.deepEqual(after.template.spec.securityContext, original.spec.template.spec.securityContext);
   assert.deepEqual(result.patch.slice(0, 3).map(p => p.op), ["test", "test", "test"]);
   assert.equal(after.template.metadata.labels["kodex.dev/local-profile"], "stable");
+});
+
+test("archive controller and worker share one OCI and ambiguous source pins fail closed", () => {
+  for (const mutation of [
+    app => { app.env = app.env.filter(e => e.name !== "SESSION_ARCHIVE_WORKER_IMAGE"); },
+    app => { app.env.push(structuredClone(app.env.at(-1))); },
+    app => { app.env.at(-1).value = "image:latest"; },
+    app => { app.env.at(-1).valueFrom = { configMapKeyRef: { name: "foreign", key: "image" } }; },
+  ]) {
+    const value = fixture(); mutation(value.spec.template.spec.containers[0]);
+    assert.throws(() => prepareGoCutover(value, release), /ARCHIVE_WORKER_PIN_INVALID/);
+  }
 });
 
 test("unregistered component wrong command and placeholder images fail closed", () => {

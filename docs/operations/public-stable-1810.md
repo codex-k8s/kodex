@@ -85,6 +85,32 @@ hostnames; private keys не копируются между кластерам�
 Stateful зависимости остаются текущими; это двухрепличная поставка сервисов,
 не заявление о HA всего сервера, диска, БД, broker или S3.
 
+## Архиватор: изоляция попыток двух реплик
+
+Источник состояния — `SessionArchiveTask` control-plane, не Kubernetes label.
+`ClaimSessionArchiveTasks` использует workload identity/mTLS/application grant,
+organization scope, `FOR UPDATE SKIP LOCKED`, новую attempt/generation и exact
+lease/fence. Generated client `SessionArchiveOperations` и существующий renew
+связывают controller с этим владельцем. Внешнего endpoint для cleanup нет.
+Jobs и immutable ConfigMap — производная материализация, не новый источник
+полномочий; каждый прежний input проверяется по полной owner-связке.
+
+| Переход | Проверка и результат |
+| --- | --- |
+| startup / readiness второй реплики | Только read Kubernetes API и рабочий RPC; namespace-wide cleanup запрещён |
+| claim SNAPSHOT / RESTORE / DELETE_OBJECT | Свежий exact renew; адресное завершение прежних attempt той же task/content generation; immutable input и UID/RV; затем новая Job |
+| claim DELETE_PVC | Та же свежая authority; существующая exact PVC identity/deletion; Job не создаётся |
+| retry / lease expiry | CP назначает следующую attempt; максимум5, прежняя lease не восстанавливается; новый writer ждёт foreground удаления прежней Job и отсутствия её Pods |
+| renew / cancel / terminal / project purge | Прежний owner fence; отказ renew прекращает работу и удаляет только доказанно собственную материализацию; чужая task не затрагивается |
+| complete / fail | Диагностика до cleanup; собственные Job/Pods joined до owner completion; CP сохраняет receipt/audit и существующие session/run события |
+| unknown Create / заменённый UID | Не удалять объект по имени; сохранить input для проверки следующей attempt; ошибка не превращается в success |
+| dead letter / orphan / несовпадающий input | Нет глобального sweep либо автоматического расширения authority; закрытый отказ, exact readback через CP task/session storage и Kubernetes metadata |
+| cutover / rollback | До смены worker pin нет READY/CLAIMED archive tasks и managed Job/Pod; controller/worker используют один проверенный OCI; прежние данные не изменяются |
+
+RBAC controller больше не выдаёт `deletecollection`; точечное чтение input
+нужно для проверки predecessor. Worker сохраняет пустую Kubernetes роль.
+Поддерживаемый путь не содержит второго decoder или legacy API.
+
 # Начальный журнал
 
 15.10.2026 02:35 Саратов: read-only DNS/ports/ingress inventory PASS,

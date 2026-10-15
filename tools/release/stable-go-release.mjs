@@ -10,6 +10,7 @@ import { requireIdle } from "./runner-policy-model.mjs";
 
 const execute = promisify(execFile);
 const sqlPath = fileURLToPath(new URL("../dev/supply-chain-owner-readback.sql", import.meta.url));
+const archiveSQLPath = fileURLToPath(new URL("./stable-archive-idle.sql", import.meta.url));
 function requireValue(value, code) { if (!value) throw Error(code); }
 function publicPlan(target) {
   const { patch: _patch, ...result } = target;
@@ -101,6 +102,15 @@ async function main(args) {
       "psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "control_plane"], await readFile(sqlPath, "utf8"));
     const value = JSON.parse(stdout.trim());
     requireIdle(value);
+    if (plan.targets.some(target => target.name === "session-archive")) {
+      const archive = JSON.parse((await kubectl(["-n", "kodex-system", "exec", "-i", "kodex-postgresql-0", "--",
+        "psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "control_plane"],
+      await readFile(archiveSQLPath, "utf8"))).trim());
+      requireValue(archive.openArchiveTasks === 0 && archive.transitionalStorage === 0, "STABLE_ARCHIVE_NOT_IDLE");
+      const workers = JSON.parse(await kubectl(["-n", "kodex-runtime", "get", "jobs,pods", "-l",
+        "session-archive.kodex.dev/managed=true", "-o", "json"]));
+      requireValue(Array.isArray(workers.items) && workers.items.length === 0, "STABLE_ARCHIVE_WORKERS_PRESENT");
+    }
     return { promotedArtifactCount: value.promotedArtifactCount, promotedPinsSHA256: value.promotedPinsSHA256 };
   };
   const readback = async item => {

@@ -16,6 +16,7 @@ const i=a.indexOf('get');
 if(i>=0){
   if(a[i+1]==='namespace')console.log(JSON.stringify({metadata:{uid:'cluster'}}));
   else if(a[i+1]==='deployment')console.log(JSON.stringify(d));
+  else if(a[i+1]==='jobs,pods')console.log(JSON.stringify({items:s.archiveWorkers?[{kind:'Job'}]:[]}));
   else if(a[i+1]==='replicasets,pods'){
     const digest=d.spec.template.spec.containers[0].image.split('@').pop();
     const items=[{kind:'ReplicaSet',metadata:{uid:'rs',ownerReferences:[{kind:'Deployment',uid:d.metadata.uid,controller:true}]}},
@@ -25,6 +26,7 @@ if(i>=0){
   }else process.exit(4);
 }else if(a.includes('exec')){
   const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN TRANSACTION READ ONLY'))process.exit(5);
+  if(sql.includes('stable_archive_idle')){console.log(JSON.stringify({openArchiveTasks:s.archiveBusy?1:0,transitionalStorage:0}));process.exit(0);}
   console.log(JSON.stringify({at:new Date().toISOString(),openBuilds:s.busy?1:0,pendingAdmissions:0,pendingPromotions:0,
     activeRuntimeRuns:0,claimedRuntimeLeases:0,promotedArtifactCount:3,promotedPinsSHA256:'d'.repeat(64)}));
 }else if(a.includes('patch')){
@@ -45,7 +47,8 @@ function setup() {
     spec: { replicas: 1, template: { metadata: {}, spec: {
       containers: [{ name: "session-archive", image: "dev", command: ["/workspace/tools/dev/run-go-hot-reload.sh"],
         args: ["services/jobs/session-archive", "./cmd/session-archive", "session-archive", "controller"],
-        env: [{ name: "PRIVATE", value: "CLI_PRIVATE_SENTINEL" }], volumeMounts: [] }], volumes: [] } } },
+        env: [{ name: "PRIVATE", value: "CLI_PRIVATE_SENTINEL" },
+          { name: "SESSION_ARCHIVE_WORKER_IMAGE", value: "example.invalid/kodex/session-archive@sha256:" + "e".repeat(64) }], volumeMounts: [] }], volumes: [] } } },
     status: { observedGeneration: 1, replicas: 1, readyReplicas: 1 } };
   writeFileSync(join(directory, "fixture.json"), JSON.stringify({ deployment }), { mode: 0o600 });
   const release = { component: "session-archive", sourceSHA: "a".repeat(40), provenanceSHA256: "b".repeat(64),
@@ -75,6 +78,24 @@ test("private plan never persists raw spec and exact approved cutover proves two
     const readback = run(["readback", "--context", "fixture", "--plan", planPath, "--output", join(directory, "readback.json")]);
     assert.equal(readback.status, 0, readback.output);
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("archive tasks or surviving workers block cutover before any patch", () => {
+  for (const flag of ["archiveBusy", "archiveWorkers"]) {
+    const { directory, run } = setup();
+    try {
+      const planPath = join(directory, "plan.json");
+      assert.equal(run(["plan", "--context", "fixture", "--manifest", join(directory, "manifest.json"), "--output", planPath]).status, 0);
+      const plan = JSON.parse(readFileSync(planPath, "utf8"));
+      const path = join(directory, "fixture.json"), state = JSON.parse(readFileSync(path, "utf8"));
+      state[flag] = true; writeFileSync(path, JSON.stringify(state));
+      const applied = run(["apply", "--context", "fixture", "--plan", planPath, "--output", join(directory, "apply.jsonl"),
+        "--approved-plan-sha", fingerprint(plan)]);
+      assert.notEqual(applied.status, 0);
+      assert.match(applied.output, /STABLE_ARCHIVE_(NOT_IDLE|WORKERS_PRESENT)/);
+      assert.equal(readFileSync(join(directory, "trace"), "utf8").includes('"patch"'), false);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  }
 });
 
 test("wrong confirmation and busy owner state never perform a patch", () => {
