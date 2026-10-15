@@ -1475,3 +1475,21 @@ HC/HCC/PDB/Job ownership drift, changed values и drift во время dry-run.
 Actual activation/recovery, public TLS/OIDC и live acceptance пока NOT RUN;
 данные и живой ingress не менялись. Exact SHA полного прогона фиксируется
 следующей записью после commit.
+
+### Проверки на `8c1f93df98d34b8e16062a0d537691206dd97e9a`
+
+- PASS156 Node tests,0 failed/0 skipped,31 Python OCI/archive tests и
+  web-only release render. Новые10 тестов дополнили предыдущий набор146:
+ 4 Job/container lineage,5 native Traefik lifecycle и1 HC metadata exception.
+- PASS actual native plan v2/server dry-run, включая исходную Job/Pod proof,
+  compiled klipper default, desired и recovery render. Commitment
+  `5fc0b1ffc1f20bac7eb4046f661d7997ecac91d4d758b4337a4f187ad395ea08`.
+  Привязаны все три исходных Deployment и точный executor SHA; apply NOT RUN.
+- Первый вызов preflight дал FAIL до обращения к API: вручную указанный
+  исторический kubeconfig path отсутствует после смены среды. Проверено:
+  default kubeconfig содержит действующий exact `k3d-kodex`; повторный plan
+  с этим context без переопределения файла PASS. Kubeconfig не создавался,
+  не копировался и не менялся.
+- Actual HCC/Job/replica mutation, node restart, public TLS/OIDC, fresh pull
+  и browser acceptance NOT RUN. Общие этапы2–8 не отмечены выполненными;
+  данный результат завершает реализацию native workflow, не live cutover.
