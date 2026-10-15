@@ -23,13 +23,14 @@ async function main(args) {
   const mode = args.shift(), options = {};
   while (args.length) {
     const key = args.shift();
-    requireValue(["--context", "--physical-host", "--plan", "--output", "--approved-plan-sha"].includes(key) &&
+    requireValue(["--context", "--physical-host", "--plan", "--output", "--approved-plan-sha", "--approved-executor-sha"].includes(key) &&
       !Object.hasOwn(options, key) && args.length, "NODE_MIRROR_ARGUMENTS_INVALID");
     options[key] = args.shift();
   }
   const context = options["--context"];
   requireValue(["plan", "apply", "readback", "rollback"].includes(mode) &&
     /^k3d-[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(context ?? "") && options["--output"], "NODE_MIRROR_ARGUMENTS_INVALID");
+  requireValue(!options["--approved-executor-sha"] || mode === "rollback", "NODE_MIRROR_ARGUMENTS_INVALID");
   const cluster = context.slice(4);
   const env = Object.fromEntries(["HOME", "PATH", "LANG", "KUBECONFIG"].filter(k => process.env[k]).map(k => [k, process.env[k]]));
   // stdout/stderr внешних программ никогда не включаются в diagnostic: среди
@@ -114,11 +115,22 @@ async function main(args) {
   }
   requireValue(options["--plan"] && !options["--physical-host"], "NODE_MIRROR_ARGUMENTS_INVALID");
   const plan = await readPrivateJSON(options["--plan"]), planSHA256 = fingerprint(plan);
-  requireValue(plan.schema === "kodex.stable-node-registry/v1" && plan.context === context && plan.executorSHA === executorSHA &&
+  requireValue(plan.schema === "kodex.stable-node-registry/v1" && plan.context === context && /^[a-f0-9]{40}$/.test(plan.executorSHA ?? "") &&
     plan.logicalHost === logicalRegistryHost && plan.clusterUID === clusterIdentity.clusterUID && plan.namespaceUID === clusterIdentity.namespaceUID &&
     Array.isArray(plan.nodes) && plan.nodes.length > 0 && plan.nodes.length <= 8, "NODE_MIRROR_PLAN_IDENTITY_INVALID");
   requireValue(mode === "readback" ? !options["--approved-plan-sha"] : options["--approved-plan-sha"] === planSHA256,
     "NODE_MIRROR_EXACT_OWNER_CONFIRMATION_REQUIRED");
+  if (plan.executorSHA !== executorSHA) {
+    // Исправление observation-кода может потребоваться после partial apply.
+    // Только явный forward recovery: старый immutable plan и новый executor
+    // подтверждаются отдельно; bytes/model установки обязаны быть прежними.
+    requireValue(mode === "rollback" && options["--approved-executor-sha"] === executorSHA,
+      "NODE_MIRROR_RECOVERY_EXECUTOR_CONFIRMATION_REQUIRED");
+    await run("git", ["merge-base", "--is-ancestor", plan.executorSHA, executorSHA]);
+    await run("git", ["diff", "--quiet", plan.executorSHA, executorSHA, "--",
+      "tools/release/stable-node-registry-model.mjs", "tools/release/stable-node-registry-worker.sh"]);
+  } else requireValue(!options["--approved-executor-sha"] || options["--approved-executor-sha"] === executorSHA,
+    "NODE_MIRROR_RECOVERY_EXECUTOR_CONFIRMATION_REQUIRED");
   const current = await snapshot(plan.physicalHost);
   requireValue(current.length === plan.nodes.length, "NODE_MIRROR_NODE_SET_DRIFT");
   const stableBinding = node => ({ name: node.name, uid: node.uid, containerID: node.containerID, imageID: node.imageID,
@@ -194,7 +206,8 @@ async function main(args) {
       actual.config.beforeSHA256 === node.config.beforeSHA256, "NODE_MIRROR_MISSING_ROLLBACK_INTENT");
     else { requireValue(state === "PRESENT", "NODE_MIRROR_ROLLBACK_INTENT_INVALID"); await work(node, "verify-backup"); touched.add(node.uid); }
   }
-  await createPrivate(options["--output"], { schema: "kodex.stable-node-registry-journal/v1", mode, planSHA256, status: "IN_PROGRESS", preserved });
+  await createPrivate(options["--output"], { schema: "kodex.stable-node-registry-journal/v1", mode, planSHA256, executorSHA,
+    planExecutorSHA: plan.executorSHA, status: "IN_PROGRESS", preserved });
   const journal = await open(options["--output"], "a");
   const record = async value => { await journal.writeFile(encoded(value)); await journal.sync(); };
   try {
@@ -215,7 +228,7 @@ async function main(args) {
       const deadline = Date.now() + 240000;
       for (;;) {
         try {
-          const runtime = JSON.parse(await docker(node.containerID, ["k3s", "crictl", "info"]));
+          const runtime = JSON.parse(await docker(node.containerID, ["crictl", "--runtime-endpoint", "unix:///run/k3s/containerd/containerd.sock", "info"]));
           const observed = await get(["get", "node", node.name]);
           const ready = observed.status?.conditions?.find(c => c.type === "Ready" && c.status === "True");
           requireValue(observed.metadata.uid === node.uid && ready && Date.parse(ready.lastHeartbeatTime) >= restartAt &&

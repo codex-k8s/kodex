@@ -1694,3 +1694,17 @@ hashes без новых PUT. Этот путь проверяется отде�
 identity/edge-фаза ещё не завершены. Исторические NOT RUN выше относятся к
 своим SHA; этот раздел фиксирует первые live изменения. Готовность к ручной
 приёмке всей платформы пока не заявляется.
+
+На `31940be9c38ffda0ae3f278952840968685e1633` PASS16 targeted Node tests,
+включая actual Docker owner fixture, и PASS actual registry2 apply всех пяти
+ролей. Повторный readback registry пересёкся с restart узла и получил FAIL;
+его нужно повторить после стабилизации, не выдавая apply за отдельный readback.
+
+Первый native mirror apply остановился после restart только первого узла:
+установленный K3s не поддерживает `k3s crictl`; standalone `crictl` с exact
+runtime endpoint подтверждает RuntimeReady/NetworkReady. Это FAIL verifier,
+а не доказательство отказа узла. Исправляется команда проверки. Для bounded
+rollback старого immutable plan новым executor нужен дополнительный exact
+`--approved-executor-sha`, ancestry и неизменные model/install-worker bytes;
+apply старого плана новым кодом не разрешается. После recovery потребуется
+новый plan/apply. Частично установленный mirror не считается завершённым.

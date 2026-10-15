@@ -15,7 +15,7 @@ const a=process.argv.slice(2),dir=path.join(__dirname,'..'),p=path.join(dir,'sta
 const program=path.basename(process.argv[1]),hash=v=>crypto.createHash('sha256').update(v).digest('hex');
 const save=()=>fs.writeFileSync(p,JSON.stringify(s));
 fs.appendFileSync(path.join(dir,'trace'),JSON.stringify({program,args:a})+'\\n');
-if(program==='git'){if(a[0]==='rev-parse')console.log('f'.repeat(40));process.exit(0);}
+if(program==='git'){if(a[0]==='rev-parse')console.log((s.executorSHA??'f').repeat(40));if(a[0]==='diff'&&s.workerDrift)process.exit(1);process.exit(0);}
 if(program==='yq'){console.log(JSON.stringify(JSON.parse(fs.readFileSync(0,'utf8'))));process.exit(0);}
 if(program==='kubectl'){
  if(a.includes('exec')){const sql=fs.readFileSync(0,'utf8');console.log(JSON.stringify(sql.includes('stable_archive_idle')?
@@ -51,7 +51,7 @@ if(b[0]==='cat'){if(b[1].endsWith('hosts.toml')){if(!n.hosts)process.exit(8);pro
  else process.stdout.write(n.files[b[1]].raw);process.exit(0);}
 if(b[0]==='stat'){console.log(meta(n.files[b.at(-1)]));process.exit(0);}
 if(b[0]==='sha256sum'){for(const x of b.slice(1))console.log('a'.repeat(64)+'  '+x);process.exit(0);}
-if(b[0]==='k3s'){console.log(JSON.stringify({status:{conditions:[{type:'RuntimeReady',status:true},{type:'NetworkReady',status:true}]}}));process.exit(0);}
+if(b.join(' ')==='crictl --runtime-endpoint unix:///run/k3s/containerd/containerd.sock info'){console.log(JSON.stringify({status:{conditions:[{type:'RuntimeReady',status:true},{type:'NetworkReady',status:true}]}}));process.exit(0);}
 if(b.includes('kodex-node-file')){const f=n.files[b.at(-1)];console.log(f?meta(f):'ABSENT');process.exit(0);}
 if(b.includes('kodex-node-intent')){console.log(n.backup?'PRESENT':'ABSENT');process.exit(0);}
 if(b.includes('kodex-node-hosts')){process.exit(n.hosts?9:0);}
@@ -99,8 +99,9 @@ function setup() {
   assert.equal(planned.status, 0, planned.output);
   assert.equal(readFileSync(planPath, "utf8").includes("SENTINEL"), false);
   const plan = JSON.parse(readFileSync(planPath, "utf8"));
-  const action = (mode, output, approval = fingerprint(plan)) => run([mode, "--context", "k3d-fixture", "--plan", planPath,
-    "--output", join(directory, output), ...(mode === "readback" ? [] : ["--approved-plan-sha", approval])]);
+  const action = (mode, output, approval = fingerprint(plan), executor) => run([mode, "--context", "k3d-fixture", "--plan", planPath,
+    "--output", join(directory, output), ...(mode === "readback" ? [] : ["--approved-plan-sha", approval]),
+    ...(executor ? ["--approved-executor-sha", executor] : [])]);
   return { directory, action, state: () => JSON.parse(readFileSync(join(directory, "state.json"), "utf8")),
     change: value => writeFileSync(join(directory, "state.json"), JSON.stringify(value)),
     trace: () => readFileSync(join(directory, "trace"), "utf8").trim().split("\n").map(JSON.parse) };
@@ -138,5 +139,23 @@ test("lost first restart stops the next node and partial rollback leaves untouch
     assert.equal(f.action("rollback", "rollback.jsonl").status, 0);
     assert.deepEqual(f.trace().filter(t => t.program === "docker" && t.args[0] === "restart").map(t => t.args[1][0]), ["1", "1"]);
     assert.match(readFileSync(join(f.directory, "apply.jsonl"), "utf8"), /FAIL_OR_UNKNOWN/);
+  } finally { rmSync(f.directory, { recursive: true, force: true }); }
+});
+
+test("repaired executor needs its own approval and unchanged install bytes for partial recovery", () => {
+  const f = setup();
+  try {
+    const s = f.state(); s.lostRestart = true; f.change(s);
+    assert.notEqual(f.action("apply", "apply.jsonl").status, 0);
+    const changed = f.state(); changed.lostRestart = false; changed.executorSHA = "e"; f.change(changed);
+    const count = () => f.trace().filter(t => t.program === "docker" && t.args[0] === "restart").length;
+    assert.equal(count(), 1);
+    assert.notEqual(f.action("rollback", "unapproved.jsonl").status, 0); assert.equal(count(), 1);
+    changed.workerDrift = true; f.change(changed);
+    assert.notEqual(f.action("rollback", "changed-worker.jsonl", undefined, "e".repeat(40)).status, 0); assert.equal(count(), 1);
+    changed.workerDrift = false; f.change(changed);
+    const recovery = f.action("rollback", "recovery.jsonl", undefined, "e".repeat(40));
+    assert.equal(recovery.status, 0, recovery.output); assert.equal(count(), 2);
+    assert.equal(f.action("apply", "forward.jsonl", undefined, "e".repeat(40)).status === 0, false);
   } finally { rmSync(f.directory, { recursive: true, force: true }); }
 });
