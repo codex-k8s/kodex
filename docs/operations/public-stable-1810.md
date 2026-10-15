@@ -359,3 +359,57 @@ SSO или итоговую приёмку. Аргумент hash не заме�
 Go rollback и двухрепличный профиль, certificate/OIDC/client migration,
 review/owner gate, live cutover и внешняя browser-приёмка. Цель активна;
 обязательные этапы не отмечаются по частичным локальным доказательствам.
+
+## Проверенная публикация штатных приложений
+
+На exact `1c653c314a2cf7cd4f8a9bd0198b52913a8f0180` добавлен отдельный
+`tools/release/stable-image-publication.mjs` с plan/apply/readback и ограниченный
+`publish-stable-image-worker.sh`. Bootstrap `seed ... --component all` не
+используется: его тестовая подстановка runner под control-plane не является
+поставкой приложения.
+
+- PASS: 39 быстрых Node tests, 26 Python tests preserved/stable OCI,
+  Bash syntax, ShellCheck и `git diff --check`.
+- PASS PLAN ONLY: все 12 фактических OCI прошли проверку через новый CLI.
+  Сверены архив целиком, каждый blob/descriptor, config/entrypoint/non-root
+  user, точный Dockerfile target, Git source context hash и неизменность
+  build inputs соответствующего компонента. Проверенные копии `0400` и
+  owner-private планы сохранены вне Git; schema/receipt не объявляют
+  подпись, SBOM или завершённый domain admission.
+- Один первоначальный preflight FAIL закрыл доступ к изменяемому указателю
+  инструмента. Использован уже существующий приватный pinned artifact той
+  же установки; guard не ослаблялся, общий указатель не менялся.
+- PASS LOCAL/SYNTHETIC: настоящий CLI и Bash worker прошли plan/apply/readback
+  с fake Kubernetes/Docker. Проверены закрытый список компонентов, точный
+  owner hash, drift registry, lost publication response, readback без нового
+  import и завершение helper/port-forward до удаления временных данных.
+  Sentinel не попал в plan, journal, stdout или argv.
+- NOT RUN: фактический import в registry, node pull и любые PodSpec mutations.
+  Планы связываются с clean executor SHA и после следующего коммита требуют
+  повторного формирования перед owner-approved применением.
+
+Публикация разрешает только 12 названий приложений и уникальный
+source/digest-specific tag, не `runner`, `roles`, inputs или старый readiness
+tag. Существующие repository pins не перезаписываются. Registry и writer
+projection связываются с exact cluster/namespace/resource identities.
+Worker использует отдельную mTLS/basic identity promotion registry,
+строгую CA/SNI проверку, случайный loopback port-forward и pinned tools
+image. Credentials не передаются в argv или env контейнера; helper читает
+только private read-only input, не пишет HOME на host и не получает Docker
+socket, kubeconfig либо другие credentials. До registry effect сохраняется
+fsync intent; неопределённый результат разрешается отдельным readback.
+CLI явно возвращает только `REGISTRY_PUBLICATION_ONLY`, `nodePull: NOT_RUN`.
+
+### Обязательное продолжение node pull
+
+Проверка рабочего consumer выявила текущий закрытый список в
+`services/jobs/role-image-builder/cmd/registry-pull-authorizer/main.go`:
+node identity и installer profile разрешают только runner, roles,
+session-archive и role-image-builder. Поэтому публикации нового API/frontend
+недостаточно: их скачивание узлом сейчас будет отклонено. Это не внешний
+blocker и не повод отключить authorizer. Требуется точный список platform
+repositories для существующей node identity, отрицательные GET/HEAD/WRITE и
+чужие repository проверки, новый compiled authorizer и воспроизводимый
+bootstrap самого registry-serving образа. Последующий actual node pull должен
+проверять тот же штатный TLS/DNS/identity путь, не только наличие в node cache.
+Probe, BuildKit/input profiles и права записи не расширяются этим решением.
