@@ -26,6 +26,8 @@ const imagePattern = /^[a-z0-9][a-z0-9.:/_-]*@sha256:[a-f0-9]{64}$/;
 function requireValue(value, code) { if (!value) throw Error(code); }
 
 function validateRemovedEnvironment(container) {
+  requireValue(new Set((container.env ?? []).map(e => e.name)).size === (container.env ?? []).length,
+    "CUTOVER_DEV_ENV_UNSUPPORTED");
   const selected = (container.env ?? []).filter(e => devEnv.has(e.name));
   requireValue(new Set(selected.map(e => e.name)).size === selected.length, "CUTOVER_DEV_ENV_UNSUPPORTED");
   for (const { name, value, valueFrom } of selected) {

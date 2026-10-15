@@ -105,6 +105,9 @@ test("Go recovery material roundtrips source without copying unchanged credentia
   assert.deepEqual(applyReverseSpec(result.patch.at(-1).value, result.recovery.inverse), value.spec);
   assert.equal(JSON.stringify(result.recovery).includes("DO_NOT_COPY_PRIVATE_1810"), false);
   assert.equal(result.recovery.mode, "ARCHIVE_PAUSE_FORWARD_ONLY");
+  const duplicate = structuredClone(value);
+  duplicate.spec.template.spec.containers[0].env.push({ name: "PRIVATE", value: "OTHER_PRIVATE_1810" });
+  assert.throws(() => prepareGoCutover(duplicate, release), /DEV_ENV_UNSUPPORTED/);
   for (const env of [{ name: "GOPROXY", value: "https://user:private@example.test" },
     { name: "GOCACHE", valueFrom: { secretKeyRef: { name: "private", key: "value" } } },
     { name: "GOFLAGS", value: "-ldflags=private" }]) {

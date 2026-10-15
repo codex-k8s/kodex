@@ -161,6 +161,7 @@ async function main(args) {
   const readback = async item => {
     const current = await get("deployment", item.name);
     requireValue(current.metadata.uid === item.uid && fingerprint(current.spec) === item.afterSpecSHA256 &&
+      fingerprint(current.metadata.labels ?? {}) === item.recovery.afterLabelsSHA256 &&
       current.spec.template.metadata.annotations?.["kodex.dev/source-sha"] === item.requested.release.sourceSHA &&
       !current.spec.template.spec.volumes?.some(v => v.hostPath) &&
       current.spec.template.spec.containers.some(c => c.name === item.name && c.command?.length === 1 &&
@@ -187,7 +188,9 @@ async function main(args) {
     for (const item of plan.targets) {
       const prepared = await prepare(item.requested);
       requireValue(prepared.uid === item.uid && prepared.beforeSpecSHA256 === item.beforeSpecSHA256 &&
-        prepared.afterSpecSHA256 === item.afterSpecSHA256 && prepared.storageSHA256 === item.storageSHA256,
+        prepared.afterSpecSHA256 === item.afterSpecSHA256 && prepared.storageSHA256 === item.storageSHA256 &&
+        prepared.recovery.beforeLabelsSHA256 === item.recovery.beforeLabelsSHA256 &&
+        prepared.recovery.afterLabelsSHA256 === item.recovery.afterLabelsSHA256,
         "STABLE_PLAN_DRIFT");
       if (item.name === "session-archive") requireValue(sameArchiveBoundary(prepared.archive, item.archive), "STABLE_ARCHIVE_ROLE_DRIFT");
     }
@@ -201,7 +204,9 @@ async function main(args) {
         requireValue(fingerprint(await idle()) === fingerprint(preserved), "STABLE_PINS_CHANGED");
         let prepared = await prepare(item.requested);
         requireValue(prepared.uid === item.uid && prepared.beforeSpecSHA256 === item.beforeSpecSHA256 &&
-          prepared.afterSpecSHA256 === item.afterSpecSHA256 && prepared.storageSHA256 === item.storageSHA256, "STABLE_PLAN_DRIFT");
+          prepared.afterSpecSHA256 === item.afterSpecSHA256 && prepared.storageSHA256 === item.storageSHA256 &&
+          prepared.recovery.beforeLabelsSHA256 === item.recovery.beforeLabelsSHA256 &&
+          prepared.recovery.afterLabelsSHA256 === item.recovery.afterLabelsSHA256, "STABLE_PLAN_DRIFT");
         if (item.name === "session-archive") {
           requireValue(sameArchiveBoundary(prepared.archive, item.archive), "STABLE_ARCHIVE_ROLE_DRIFT");
           const oldSpec = prepared.patch[2].value;
@@ -235,7 +240,9 @@ async function main(args) {
           requireValue(sameArchiveBoundary((await archiveRole()).proof, item.archive, "after"), "STABLE_ARCHIVE_ROLE_READBACK_MISMATCH");
           prepared = await prepare(item.requested);
           requireValue(prepared.uid === item.uid && prepared.beforeSpecSHA256 === item.quiescedBeforeSpecSHA256 &&
-            prepared.afterSpecSHA256 === item.afterSpecSHA256 && prepared.storageSHA256 === item.storageSHA256,
+            prepared.afterSpecSHA256 === item.afterSpecSHA256 && prepared.storageSHA256 === item.storageSHA256 &&
+            prepared.recovery.beforeLabelsSHA256 === item.recovery.beforeLabelsSHA256 &&
+            prepared.recovery.afterLabelsSHA256 === item.recovery.afterLabelsSHA256,
             "STABLE_ARCHIVE_ACTIVATION_DRIFT");
           requireValue(sameArchiveBoundary(prepared.archive, item.archive, "after"), "STABLE_ARCHIVE_ROLE_DRIFT");
         }
