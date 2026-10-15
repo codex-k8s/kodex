@@ -1410,3 +1410,27 @@ labels, остальные annotations, owner references и spec остаютс�
 Actual native AddOn apply/rollback/restart всё ещё NOT RUN. Для Traefik
 исполняемые HCC handoff/recovery и native Helm job lifecycle ещё остаются;
 двухрепличный native профиль не объявлен завершённым по одним fixture tests.
+
+### Проверки на `c2d941d949993bad615e451ce9b35de0dc854884`
+
+- PASS146 Node tests,0 failed/0 skipped,31 Python OCI/archive tests и web-only
+  release render. Включены5 настоящих marker Docker tests с network=none,
+  read-only root и отдельным tmpfs без host mounts;3 synthetic AddOn lifecycle
+  tests покрывают apply/readback/recovery, lost marker/PDB/patch ACK, causal
+  recovery journal, UID/inode/ConfigMap drift и отсутствие лишних writes.
+- PASS реальный native plan v2/server dry-run. Защищены6 package-объектов
+  CoreDNS,2 metrics-server и7 полного Traefik desired render. Commitment
+  `2bab816f49a19ca3ed54ca13c9b9b8b46eddd903651e4ba59547027788bdd990`.
+  `.skip`/PDB/HCC в живом контуре не создавались.
+- PASS повторный реальный Helm v2 desired/recovery plan после системного
+  исправления rollout annotation и singleton metadata response. Commitment
+  `dfe2031e06bf3277e60f5db07bc8c75fc7f72de0f39e2ab750ad7b7d1357eefc`.
+  На предыдущем `45213829457fd01489633646d91fb655043f9636` также PASS145 tests
+  и Helm server dry-run; native package guard тогда дал FAIL. Причина —
+  `kubectl get` возвращает одиночный ConfigMap вместо List, и `.items` пуст.
+  Исправление читает обе формы metadata-only, не запрашивая data; отдельный
+  тест и поздний actual native plan выше подтвердили путь.
+- Actual CoreDNS/metrics-server apply/rollback, native restart, Traefik HCC
+  activation/recovery, остальные системные/public OIDC фазы — NOT RUN.
+  Для Traefik native controller job lifecycle исполняемый workflow ещё нужен.
+  Main/live source сохранены; общий review и отдельный owner gate не пройдены.
