@@ -192,9 +192,18 @@ export async function releaseRegistry(args, commandPort) {
       fingerprint(await storage(current)) === fingerprint(item.storage), "REGISTRY_DEPLOYMENT_OR_STORAGE_DRIFT");
     return current;
   };
-  const patch = (current, spec) => kube(["-n", ns, "patch", "deployment", current.metadata.name, "--type=json", "--patch-file=/dev/stdin", "-o", "json"], JSON.stringify([
-    { op: "test", path: "/metadata/uid", value: current.metadata.uid }, { op: "test", path: "/metadata/resourceVersion", value: current.metadata.resourceVersion },
-    { op: "test", path: "/spec", value: current.spec }, { op: "replace", path: "/spec", value: spec }]));
+  const patch = async (current, spec) => {
+    // Между quiesce и activation выполняются owner/dependency reads. Штатный
+    // status update контроллера меняет RV, но не разрешает менять source spec.
+    // Обновляем только наблюдение RV до единственного запроса; lost ACK не retry.
+    const fresh = await get("deployment", current.metadata.name);
+    requireValue(fresh.metadata.uid === current.metadata.uid && !fresh.metadata.deletionTimestamp &&
+      fingerprint(fresh.spec) === fingerprint(current.spec) &&
+      fingerprint(fresh.metadata.labels ?? {}) === fingerprint(current.metadata.labels ?? {}), "REGISTRY_PATCH_SOURCE_DRIFT");
+    return kube(["-n", ns, "patch", "deployment", current.metadata.name, "--type=json", "--patch-file=/dev/stdin", "-o", "json"], JSON.stringify([
+      { op: "test", path: "/metadata/uid", value: fresh.metadata.uid }, { op: "test", path: "/metadata/resourceVersion", value: fresh.metadata.resourceVersion },
+      { op: "test", path: "/spec", value: current.spec }, { op: "replace", path: "/spec", value: spec }]));
+  };
   const quiesce = async item => {
     let current = await observe(item);
     if (current.spec.replicas !== 0) await patch(current, { ...current.spec, replicas: 0 });

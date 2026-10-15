@@ -50,7 +50,11 @@ function fixture() {
     if (i >= 0) {
       const kind = argv[i + 1], name = argv[i + 2];
       if (kind === "namespace") return JSON.stringify({ metadata: { uid: name === "kube-system" ? "system" : "app" } });
-      if (kind === "deployments") return JSON.stringify({ items: [...resources.values()].filter(r => r.kind === "Deployment") });
+      if (kind === "deployments") {
+        if (flags.statusOnlyRVDrift) for (const r of resources.values()) if (r.kind === "Deployment")
+          r.metadata.resourceVersion = String(Number(r.metadata.resourceVersion) + 1);
+        return JSON.stringify({ items: [...resources.values()].filter(r => r.kind === "Deployment") });
+      }
       if (kind === "replicasets") return JSON.stringify({ items: names.map(name => ({ metadata: { uid: "rs-Deployment-" + name,
         ownerReferences: [{ kind: "Deployment", uid: "Deployment-" + name, controller: true }] } })) });
       if (kind === "pods" && flags.ownHistory) return JSON.stringify({ items: [{ metadata: { ownerReferences: [{ kind: "ReplicaSet",
@@ -137,6 +141,17 @@ test("registry apply creates private state then proves two pods and rollback res
     for (const name of names) assert.deepEqual(f.resources.get("Deployment/" + name).spec, f.original.get(name));
     assert.equal([...f.resources.values()].filter(r => r.kind === "Secret").length, 0);
     assert.equal(readFileSync(join(f.directory, "apply.jsonl"), "utf8").includes("PRIVATE_SENTINEL"), false);
+  } finally { rmSync(f.directory, { recursive: true, force: true }); }
+});
+
+test("status-only resource version changes between dependency reads do not replay a patch", async () => {
+  const f = fixture();
+  try {
+    const plan = await f.plan(); f.flags.statusOnlyRVDrift = true;
+    await f.run("apply", "apply.jsonl", ["--plan", join(f.directory, "plan.json"), "--approved-plan-sha", fingerprint(plan)]);
+    const patches = f.trace.filter(r => r.argv.includes("patch") && !r.argv.includes("--dry-run=server"));
+    assert.equal(patches.length, names.length * 2);
+    assert.ok(names.every(n => f.resources.get("Deployment/" + n).spec.replicas === 2));
   } finally { rmSync(f.directory, { recursive: true, force: true }); }
 });
 

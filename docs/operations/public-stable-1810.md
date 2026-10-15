@@ -1649,3 +1649,48 @@ hashes без новых PUT. Этот путь проверяется отде�
   guards, публичные/канонические ingress, затем связанный identity
   apply/readback/recovery. Остальные infra cutover, review/owner gate,
   actual delivery и внешняя приёмка также остаются открытыми.
+
+## Разрешённое применение без review15.10.2026
+
+После отдельного запроса владелец явно отменил review для #1810 и заранее
+подтвердил развёртывание для ручной проверки и демонстрации. Это scoped owner
+решение заменяет review gate именно этой поставки; exact source/plan,
+сохранность данных, TLS и контрольное чтение не отменены. Реальные ИИ-запуски
+не выполняются. Новая собственная Chrome page52 открыта на текущем Kodex;
+чужие вкладки не менялись.
+
+На executor `150733de2e6b9e569e6ec03b33017e40a250bc01`:
+
+- PASS actual Helm apply и отдельный readback трёх releases. Cert-manager,
+  cainjector, webhook, trust-manager, kube-state-metrics и Alertmanager
+  обслуживают по две реплики. Commitments, owned Pod/image IDs и storage
+  сохранены; Grafana/Prometheus/operator остаются singleton. План
+  `4ec92c90b9b0c9476d22db2cc73607b626453c62e594ec68b8733e5d38ada3f2`.
+- PASS actual CoreDNS/metrics-server apply и отдельный readback:2/2 у каждого,
+  native source markers/PDB сохранены, API metrics выдаёт оба узла.
+  Первый immediate readback после rollout получил FAIL из-за ещё пустого
+  metrics cache; последующее авторитетное чтение прошло без новой мутации.
+  Native план
+  `fab13291c844c4559d09f839ece5fbc664388444f41f0bf8c322814181aadea0`.
+- PASS actual native Traefik HCC apply на том же плане, exact Helm Job lineage
+  и два Ready/available Pod; прямого Deployment patch нет.
+- PASS helper cache bootstrap обоих узлов, план
+  `3dcbdec24973ca47d4ad62db3b7de6ff82d181ef407c88a9b20c4150a73cf6a8`.
+  Это native cache proof, не fresh network pull.
+- FAIL actual registry activation, затем PASS guarded source recovery всех
+  пяти ролей и удаление только трёх созданных этим attempt HTTP-state Secret.
+  Pull остановился в quiesced source, activation не наблюдалась; rollback
+  восстановил прежний serving spec. Данные/credentials/promoted pins сохранены.
+  План `9f9f0a765fcbedabc1e0e896e44e1e58dfd4bb4df7a41c4dd6465a232186e62e`.
+- FAIL initial image publication: capability-free helper под UID0 не мог
+  читать owned0600 inputs. Из-за пропуска config regctl выдавал CA error.
+  Исправляется UID/GID на фактического владельца файлов, без DAC capability
+  и без TLS skip; добавлен реальный network-none Docker fixture.
+  Registry patch перечитывает только RV при неизменных UID/spec/labels,
+  чтобы status update между owner reads и activation не вызывал ложный CAS
+  отказ. Слепого retry после lost ACK нет.
+
+Полный application cutover, registry2, native mirrors/fresh pull и публичная
+identity/edge-фаза ещё не завершены. Исторические NOT RUN выше относятся к
+своим SHA; этот раздел фиксирует первые live изменения. Готовность к ручной
+приёмке всей платформы пока не заявляется.

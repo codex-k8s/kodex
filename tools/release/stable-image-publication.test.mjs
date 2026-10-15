@@ -66,9 +66,10 @@ if(program==='git'){
   const mounts=a.filter((_,i)=>a[i-1]==='-v'),work=mounts.find(v=>v.endsWith(':/work:ro')).slice(0,-9);
   const c=JSON.parse(fs.readFileSync(path.join(work,'regctl.json'),'utf8')),host=Object.values(c.hosts)[0];
   if(host.tls!=='enabled'||!host.clientCert||!host.clientKey||a.some(x=>x.includes('PRIVATE_AUTH_SENTINEL')))process.exit(4);
-  if(!a.includes('--read-only')||!mounts.every(v=>v.endsWith(':ro')))process.exit(5);
+  if(!a.includes('--read-only')||!mounts.every(v=>v.endsWith(':ro'))||a[a.indexOf('--user')+1]!==process.getuid()+':'+process.getgid())process.exit(5);
   s.creates++;s.mode=a.find(x=>x.startsWith('KODEX_PUBLICATION_MODE=')).split('=')[1];save();console.log('2'.repeat(64));
  }else if(a[0]==='start'){
+  if(s.clientFailure){console.error(s.clientFailure);process.exit(7);}
   if(s.mode==='apply'){s.imports++;s.published=true;}else if(!s.published)process.exit(6);
   save();if(s.loseResponse&&s.mode==='apply')process.exit(7);
  }else if(a[0]==='inspect')console.log('0');
@@ -134,6 +135,23 @@ async function setup(retainedComponent) {
   return { directory, fixture, run, plan };
 }
 
+test("capability-free publication container reads private inputs only as their actual owner", { skip: !process.env.KODEX_PUBLICATION_FIXTURE_IMAGE }, async () => {
+  const image = process.env.KODEX_PUBLICATION_FIXTURE_IMAGE;
+  assert.match(image, /^sha256:[a-f0-9]{64}$/);
+  const directory = await mkdtemp(join(tmpdir(), "kodex-publication-owner-fixture-"));
+  try {
+    await chmod(directory, 0o700); await writeFile(join(directory, "input"), "NONSECRET_OWNER_FIXTURE", { mode: 0o600 });
+    const args = ["run", "--rm", "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+      "--user", process.getuid() + ":" + process.getgid(), "-v", directory + ":/work:ro", "--entrypoint", "/bin/sh", image,
+      "-ec", 'test "$(cat /work/input)" = NONSECRET_OWNER_FIXTURE'];
+    execFileSync("docker", args, { encoding: "utf8", timeout: 15000, stdio: ["ignore", "pipe", "pipe"] });
+    if (process.getuid() !== 0) {
+      args[args.indexOf("--user") + 1] = "0:0";
+      assert.throws(() => execFileSync("docker", args, { timeout: 15000, stdio: ["ignore", "pipe", "pipe"] }));
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test("real publication CLI and worker keep credentials private and readback never imports again", async () => {
   const { directory, run, plan } = await setup();
   try {
@@ -151,6 +169,24 @@ test("real publication CLI and worker keep credentials private and readback neve
     assert.throws(() => process.kill(state.forwardPID, 0), { code: "ESRCH" });
     const trace = await readFile(join(directory, "trace"), "utf8"); assert.equal(trace.includes("PRIVATE_AUTH_SENTINEL"), false);
     assert.equal((await readFile(join(directory, "apply.jsonl"), "utf8")).includes("PRIVATE_AUTH_SENTINEL"), false);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("publication failure exposes only a closed category without raw client diagnostics", async () => {
+  const { directory, fixture, run, plan } = await setup();
+  try {
+    assert.equal(plan().status, 0);
+    fixture.clientFailure = 'x509: PRIVATE_ENDPOINT_AND_CREDENTIAL_SENTINEL';
+    await writeFile(join(directory, "fixture.json"), JSON.stringify(fixture));
+    const path = join(directory, "plan", "plan.json"), value = JSON.parse(await readFile(path, "utf8"));
+    // CLI не включает stderr worker; direct worker выдаёт только закрытую категорию.
+    let output = "";
+    try { execFileSync("bash", [new URL("./publish-stable-image-worker.sh", import.meta.url).pathname, "--context", "fixture", "--plan", path, "--mode", "readback"],
+      { env: { PATH: join(directory, "bin") + ":/usr/local/bin:/usr/bin:/bin" }, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }); }
+    catch (e) { output = e.stderr; }
+    assert.match(output, /REGISTRY_TLS_REJECTED/); assert.equal(output.includes("SENTINEL"), false);
+    const failed = run("apply", "apply.jsonl", ["--plan", path, "--approved-plan-sha", fingerprint(value)]);
+    assert.notEqual(failed.status, 0); assert.equal(failed.output.includes("SENTINEL"), false);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

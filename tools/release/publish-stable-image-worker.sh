@@ -14,11 +14,11 @@ while (($#)); do
 done
 [[ "$context" =~ ^[A-Za-z0-9_.:@/-]{1,160}$ && "${context,,}" != *prod* && ("$mode" == apply || "$mode" == readback) ]] || fail 'exact local context and mode are required'
 [[ "$plan" == /* && -f "$plan" && ! -L "$plan" && "$(stat -c '%u:%a' "$plan")" == "$(id -u):600" ]] || fail 'private plan is required'
-for program in kubectl docker jq sha256sum timeout realpath; do command -v "$program" >/dev/null || fail 'required program is absent'; done
+for program in kubectl docker jq sha256sum timeout realpath grep; do command -v "$program" >/dev/null || fail 'required program is absent'; done
 component=$(jq -er '.image.component' "$plan")
 profile=$(jq -er '.artifactProfile' "$plan")
 case "$component" in
-  control-plane|secret-broker|email-bridge|runtime-controller|integration-gateway|integration-synthetic|control-api-gateway|staff-control-center|egress-gateway|automation-scheduler|artifact-retention|session-archive|registry-pull-authorizer) [[ "$profile" == built ]] || fail 'build profile is required' ;;
+  control-plane|secret-broker|email-bridge|runtime-controller|integration-gateway|integration-synthetic|control-api-gateway|staff-control-center|egress-gateway|automation-scheduler|artifact-retention|session-archive|registry-pull-authorizer|image-admission-controller) [[ "$profile" == built ]] || fail 'build profile is required' ;;
   image-admission|image-admission-tools) [[ "$profile" == retained ]] || fail 'retained profile is required' ;;
   *) fail 'component is not a stable platform image' ;;
 esac
@@ -89,7 +89,8 @@ jq -n --arg target "$target" --rawfile ca "$temporary_directory/ca.pem" \
     user:($user|gsub("[\r\n]";"")),pass:($pass|gsub("[\r\n]";""))}}}' >"$temporary_directory/regctl.json"
 
 # Helper читает только immutable input; HOME/tmp не пишутся на host mount.
-container_id=$(docker create --network host --user 0:0 --read-only --cap-drop ALL \
+# CAP_DAC_OVERRIDE не выдаётся: private input читается его настоящим владельцем.
+container_id=$(docker create --network host --user "$(id -u):$(id -g)" --read-only --cap-drop ALL \
   --security-opt no-new-privileges --pids-limit 128 --memory 256m --cpus 1 \
   --tmpfs /tmp:rw,nosuid,nodev,size=32m \
   --label kodex.dev/capability=stable-platform-publication \
@@ -99,6 +100,8 @@ container_id=$(docker create --network host --user 0:0 --read-only --cap-drop AL
   -e "KODEX_PUBLICATION_MODE=$mode" -e "KODEX_PUBLICATION_TARGET=$target" \
   -e "KODEX_PUBLICATION_COMPONENT=$component" -e "KODEX_PUBLICATION_DIGEST=$digest" -e "KODEX_PUBLICATION_TAG=$tag" \
   --entrypoint /bin/sh "$tools_image" -ec '
+    test "$(regctl config get --format "{{.Filename}}")" = "$REGCTL_CONFIG"
+    test "$(regctl config get --format "{{range .Hosts}}{{if and .RegCert .ClientCert .ClientKey}}configured{{end}}{{end}}")" = configured
     if [ "$KODEX_PUBLICATION_MODE" = apply ]; then
       regctl image import "$KODEX_PUBLICATION_TARGET/kodex/$KODEX_PUBLICATION_COMPONENT:$KODEX_PUBLICATION_TAG" /input/image.oci.tar
     fi
@@ -107,7 +110,22 @@ container_id=$(docker create --network host --user 0:0 --read-only --cap-drop AL
 [[ "$container_id" =~ ^[a-f0-9]{64}$ ]] || fail 'publication helper identity is invalid'
 timeout 120s docker start --attach "$container_id" >"$temporary_directory/operation.log" 2>&1 &
 docker_pid=$!
-wait "$docker_pid" || fail 'registry operation outcome is unknown; use readback'
+if ! wait "$docker_pid"; then
+  # Сырой вывод клиента может содержать endpoint или credential. Выдаётся
+  # только закрытая категория; исход операции по-прежнему требует readback.
+  reason=REGISTRY_CLIENT_FAILED_OR_UNKNOWN
+  if grep -Eiq 'certificate signed by unknown authority' "$temporary_directory/operation.log"; then reason=REGISTRY_TLS_CA_REJECTED
+  elif grep -Eiq 'certificate is valid for|cannot validate certificate.*SAN|certificate.*not valid for' "$temporary_directory/operation.log"; then reason=REGISTRY_TLS_HOSTNAME_REJECTED
+  elif grep -Eiq 'certificate has expired|certificate.*not yet valid' "$temporary_directory/operation.log"; then reason=REGISTRY_TLS_EXPIRED
+  elif grep -Eiq 'remote error.*tls|certificate required' "$temporary_directory/operation.log"; then reason=REGISTRY_MTLS_PEER_REJECTED
+  elif grep -Eiq 'x509|certificate|tls handshake' "$temporary_directory/operation.log"; then reason=REGISTRY_TLS_REJECTED
+  elif grep -Eiq 'unauthorized|authentication required|status.?401|status.?403|access denied' "$temporary_directory/operation.log"; then reason=REGISTRY_AUTH_REJECTED
+  elif grep -Eiq 'connection refused|no such host|i/o timeout|context deadline' "$temporary_directory/operation.log"; then reason=REGISTRY_TRANSPORT_UNAVAILABLE
+  elif grep -Eiq 'manifest unknown|manifest.*not found|not found.*manifest|status.?404' "$temporary_directory/operation.log"; then reason=REGISTRY_ARTIFACT_NOT_OBSERVED
+  elif grep -Eiq 'unknown command|not found|exec format|permission denied|invalid config' "$temporary_directory/operation.log"; then reason=REGISTRY_CLIENT_CONFIGURATION_INVALID
+  fi
+  fail "$reason"
+fi
 docker_pid=""
 [[ "$(docker inspect --format '{{.State.ExitCode}}' "$container_id")" == 0 ]] || fail 'publication helper did not complete'
 printf 'Stable image registry operation completed\n'
