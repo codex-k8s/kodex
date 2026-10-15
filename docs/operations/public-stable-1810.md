@@ -1337,3 +1337,31 @@ Private plan не хранит полный source spec/values, а только 
 безопасный inverse изменённых полей и точные non-secret support templates.
 Остальные фазы native cutover/восстановления и доказательство restart пока
 NOT RUN. Сам plan не является завершением этапов2–4.
+
+### Native результаты на `df9d430ae83d980a845ae94ad1e948316df6598a`
+
+- PASS136 Node tests,0 failed/0 skipped,31 Python OCI/archive tests и web-only
+  release render. Добавленные7 native tests проверяют сохранность source и
+  inverse, отклонение чужого UID/profile/storage, OCI descriptor/platform
+  lineage, точные AddOn paths, HCC owner и неизменность Service/TLS/RBAC render.
+- PASS реальный native plan/server dry-run трёх Deployment, двух PDB и
+  HelmChartConfig; полный Traefik Helm render также PASS. Commitment
+  `a6de9b4085d0940786434a3cca3a1174f0cd419ba32c98a28f82aafceb3e3d74`.
+  Проверены оба node/container binding, единственный server, исходные AddOn
+  и source file metadata/checksums. Все три native index→manifest→config bytes
+  повторно считаны из serving node cache и связаны с actual source image IDs.
+- Полный новый Traefik render меняет только Deployment replica/resource/image/
+  strategy и2 auto Go runtime env, добавляет1 PDB. Chart при появлении limits
+  генерирует `GOMAXPROCS` через limits.cpu и `GOMEMLIMIT=460MiB` для512Mi с
+  закреплённой долей0.9. Эти два exact env включены в модель; произвольная
+  мутация env запрещена. Остальные original env не записываются в inverse.
+- Первые native планы дали FAIL: optional `resources:null` в исходном Helm
+  render нормализован как пустой объект, затем учтены указанные auto env.
+  Первоначальный binary chart diagnostic использовал неверное UTF8-декодирование
+  gzip; исправленный путь получает Buffer, проверяет lock SHA и только затем
+  использует chart. Это не повреждало ни live ресурсы, ни исходный chart.
+- Actual создание `.skip`/PDB/HCC, native scaling/pull/recovery и restart
+  NOT RUN. Ни `.skip`, ни `--disable`, ни live patch не выполнялись. Следующий
+  шаг — исполняемый native apply/readback/recovery с точными server/file/UID
+  guards, затем оставшийся системный и публичный OIDC cutover. Общие review и
+  отдельный owner gate сохраняются; этапы2–8 не закрыты.
