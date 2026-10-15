@@ -38,7 +38,7 @@ export function prepareNativeDeployment(deployment, profile) {
     pod.containers[0].image === profile.sourceImage && /^docker\.io\/rancher\/[a-z0-9-]+$/.test(profile.repository ?? "") &&
     digestPattern.test(profile.indexDigest ?? ""), "NATIVE_SOURCE_PROFILE_INVALID");
   const c = pod.containers[0]; c.image = (profile.owner === "helmchart" ? profile.sourceImage : profile.repository) + "@" + profile.indexDigest;
-  c.resources = boundedResources(profile.resources, c.resources);
+  c.resources = boundedResources(profile.resources, c.resources ?? {});
   after.replicas = 2; after.strategy = { type: "RollingUpdate", rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } };
   return { beforeSHA256: fingerprint(deployment.spec), afterSHA256: fingerprint(after), after,
     inverse: reverseSpecPatch(deployment.spec, after), uid: deployment.metadata.uid };

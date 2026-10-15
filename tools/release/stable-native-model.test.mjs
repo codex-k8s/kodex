@@ -27,6 +27,14 @@ test("unknown native sources, paused deployments, changed images and shared stor
   }
 });
 
+test("optional null resources in the installed Helm render become an explicit bounded profile", () => {
+  const p = profiles.find(p => p.name === "traefik"), d = fixture(p);
+  d.spec.template.spec.containers[0].resources = null;
+  const transition = prepareNativeDeployment(d, p);
+  assert.deepEqual(transition.after.template.spec.containers[0].resources, p.resources);
+  assert.deepEqual(applyReverseSpec(transition.after, transition.inverse), d.spec);
+});
+
 test("addon binds only two exact paths, original UID and actual source bytes", () => {
   for (const p of profiles.filter(p => p.owner === "addon")) {
     const hash = "a".repeat(64), addon = { apiVersion: "k3s.cattle.io/v1", kind: "Addon", metadata: { namespace: "kube-system", name: p.addon, uid: "addon-uid" },
