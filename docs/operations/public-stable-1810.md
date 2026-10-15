@@ -963,3 +963,33 @@ readonly/write/admin границы и существующие PVC. Две се
 для чужого replacement. Эта операция не выдаёт новых доменных grants и не
 создаёт domain events; авторитетный результат — Kubernetes/owner readback.
 Применение остаётся за review и отдельным exact owner gate.
+
+## Проверка registry-поставки до применения
+
+На exact `506d4b8565a908c11ab69d2962169f41f28b3ecb`:
+
+- PASS90 Node tests без пропусков: registry activation/recovery, bootstrap,
+  native mirrors, Go/frontend cutover, edge и identity. Disposable Docker
+  fixtures используют явно закреплённые images. PASS30 Python OCI tests,
+  web-only render и diff whitespace.
+- Реальный read-only bootstrap plan PASS, commitment
+  `4dcada006d0e3da287d9da657b66bd925d19f59efe157188debed91aec5a1f50`.
+  Реальный server-side dry-run всех пяти registry Deployment PASS, commitment
+  `b5724a9bf5bb64105044871a7e3cc1cccfab2ac8d32543d549f0b320f17ff8cf`.
+  Это проверка сервером без persist, не activation/readiness нового профиля.
+- Первый plan на72fad07c дал FAIL `REGISTRY_SOURCE_NOT_READY`: старые Failed
+  Pod ошибочно учитывались как действующие реплики. У push обнаружены два,
+  у staging-read три таких Pod при одной Ready актуальной реплике у каждой
+  роли. Исправлены также Go/frontend checks. Исключается только подтверждённое
+  завершение всех контейнеров; unknown остаётся блокирующим. История не удалялась.
+- Synthetic recovery покрывает потерянный create/patch response, immutable
+  Secret UID replacement, credential RV drift, downstream change и чужого
+  consumer. До удаления HTTP-state Secret проверяются все namespace Pod;
+  исторический consumer допускается только с полным stopped/owner proof.
+- Проверены Context7 Distribution load-balancing docs: общий storage driver,
+  root и HTTP secret обязательны для обслуживающих один endpoint реплик.
+
+Фактические seed/activation, network upload через разные реплики, node fresh
+pull, rollout и публичный SSO/browser остаются NOT RUN. Рабочий main и live
+Deployment не менялись. План на этом SHA после следующего commit требует
+перегенерации, а не применения со старым executor commitment.

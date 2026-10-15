@@ -31,6 +31,20 @@ unknown import сначала inspect/readback, старый изменивши�
 Seed не меняет Deployment; безопасный immutable cache при отмене сохраняется,
 а rollback активации gateway принадлежит отдельной registry-поставке.
 
+`stable-registry-release.mjs plan|apply|inspect|readback|rollback` управляет
+только пятью существующими registry Deployment. Для `plan` нужны `--context`,
+`--bootstrap-plan` и новый private `--output`; для остальных фаз — `--plan`,
+`--journal` исходного apply и новый `--output`. Apply/rollback дополнительно
+требуют `--approved-plan-sha` после отдельного допуска владельца. Activation
+проверяет настоящий cache readback, приостанавливает старые Pod и сохраняет
+PVC, credentials и маршруты. Три writer-роли получают отдельные immutable
+HTTP-state Secret, общие для двух реплик каждой роли. Значения не попадают
+в план/журнал. Rollback сверяет downstream drift, восстанавливает exact source
+spec и удаляет только собственные Secret без действующих consumers.
+Historical terminal Pod не считается репликой только при полном terminated
+proof всех regular/init/ephemeral containers и проверенном owner lineage.
+Это две сервисные реплики на том же диске, не HA содержимого или сервера.
+
 Задача: #1222, общий план: #1204.
 
 `scoped-release.mjs` обновляет digest образа или подготовленный source checkout
