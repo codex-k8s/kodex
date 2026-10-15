@@ -60,6 +60,22 @@ test("native sidecar hot command and source mounts are included", () => {
   const row = summarizeWorkload(value); assert.equal(row.hotContainerCount, 2); assert.equal(row.hostSourceMountCount, 2);
 });
 
+test("system controllers are included while exact approved singletons remain single", () => {
+  for (const [namespace, kind, name] of [["kube-system", "Deployment", "local-path-provisioner"],
+    ["observability", "StatefulSet", "kodex-monitoring-grafana"]]) {
+    const value = fixture(kind, name); value.metadata.namespace = namespace;
+    const row = summarizeWorkload(value);
+    assert.equal(row.category, "SINGLETON"); assert.equal(row.targetReplicas, 1);
+    value.metadata.namespace = "kodex-system";
+    assert.equal(summarizeWorkload(value).category, "SERVICE");
+  }
+  for (const [namespace, name] of [["kube-system", "traefik"], ["kube-system", "coredns"],
+    ["kube-system", "metrics-server"], ["cert-manager", "cert-manager"], ["cert-manager", "trust-manager"]]) {
+    const value = fixture("Deployment", name); value.metadata.namespace = namespace;
+    assert.equal(summarizeWorkload(value).targetReplicas, 2);
+  }
+});
+
 test("inventory identity duplicates corrupt input and bounds fail closed", () => {
   assert.throws(() => summarizeInventory([]), /INVENTORY_BOUND_INVALID/);
   assert.throws(() => summarizeInventory([fixture(), fixture()]), /DUPLICATE_WORKLOAD/);

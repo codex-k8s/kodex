@@ -4,11 +4,15 @@ import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
 
 const execute = promisify(execFile);
-const namespaces = ["kodex-system", "kodex-runtime", "identity", "observability"];
+const namespaces = ["kodex-system", "kodex-runtime", "identity", "observability", "kube-system", "cert-manager"];
 const types = new Set(["Deployment", "StatefulSet", "DaemonSet", "CronJob", "Job", "Pod"]);
 const namePattern = /^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$/;
 const digestPattern = /^sha256:[a-f0-9]{64}$/;
 const dataNames = new Set(["kodex-postgresql", "email-bridge-postgresql", "keycloak-postgresql", "kodex-nats", "seaweedfs", "proxy-session-store"]);
+const approvedSingletons = new Set([
+  "kube-system/Deployment/local-path-provisioner",
+  "observability/StatefulSet/kodex-monitoring-grafana",
+]);
 
 function requireValue(value, code) {
   if (!value) throw Error(code);
@@ -44,7 +48,7 @@ export function summarizeWorkload(resource) {
   const hotContainers = containers.filter(c => [...(c.command ?? []), ...(c.args ?? [])].some(a =>
     typeof a === "string" && /(?:run-go-hot-reload\.sh|run-frontend\.sh|(?:^|\/)air(?:$|\s)|(?:^|\/)vite(?:$|\s))/.test(a)));
   const category = kind === "Pod" ? "INSTANCE" : kind === "Job" || kind === "CronJob" ? "EXECUTION" :
-    kind === "DaemonSet" ? "PER_NODE" : dataNames.has(meta.name) ||
+    kind === "DaemonSet" ? "PER_NODE" : approvedSingletons.has(`${meta.namespace}/${kind}/${meta.name}`) ? "SINGLETON" : dataNames.has(meta.name) ||
       kind === "StatefulSet" && meta.name.startsWith("prometheus-") ? "DATA" : "SERVICE";
   const replicas = ["Deployment", "StatefulSet"].includes(kind) ? spec.replicas ?? 1 : null;
   requireValue(replicas === null || Number.isSafeInteger(replicas) && replicas >= 0 && replicas <= 256, "REPLICAS_INVALID");
