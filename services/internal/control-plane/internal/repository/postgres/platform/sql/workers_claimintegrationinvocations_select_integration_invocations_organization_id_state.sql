@@ -66,6 +66,14 @@ WHERE i.organization_id=$1::uuid
       AND approval.scope_paths=g.approval_scope_paths
       AND approval.revoked_at IS NULL AND approval.expires_at>clock_timestamp()
       AND root.state IN ('RUNNING','WAITING_HUMAN')) OR
+    (i.approval_policy='NONE' AND c.definition_key='email' AND i.mailbox_gate_required AND EXISTS(
+      SELECT 1 FROM control_plane.owner_gates gate
+      WHERE gate.integration_invocation_id=i.id
+        AND gate.organization_id=i.organization_id
+        AND gate.root_run_id=r.root_run_id
+        AND gate.project_id IS NOT DISTINCT FROM r.project_id
+        AND gate.state='APPROVED'
+    )) OR
     (i.approval_policy='HUMAN_EACH_EFFECT' AND EXISTS(
       SELECT 1 FROM control_plane.owner_gates gate
       WHERE gate.integration_invocation_id=i.id AND gate.state='APPROVED'

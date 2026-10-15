@@ -305,6 +305,14 @@ keepers до закрытия RPC клиента. TTL, attempt, authority и own
 
 ## Решение владельца
 
+Mailbox Human Gate проверяется независимо от generic integration approval policy.
+Для email с generic `NONE` подтверждение exact mailbox gate открывает только
+исходную invocation с теми же organization/project/root/input и активной версией
+grant. Завершившийся сотрудник не блокирует этот effect, если root ещё находится
+в `WAITING_HUMAN` и точный gate одобрен; это не оживляет terminal root, отозванную
+lease либо grant. Claim и последующая email authorization используют одинаковое
+ограждение. Повторное одобрение не создаёт новую invocation или отправку.
+
 ### Ограниченное восстановление доставки runtime heartbeat
 
 Источник — тот же `RuntimeWorkService.RenewExecution` и authoritative
