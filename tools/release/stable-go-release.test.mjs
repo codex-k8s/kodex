@@ -45,6 +45,7 @@ if(i>=0){
     else if(op.op==='remove')delete parent[key];
     else process.exit(8);
   }
+  if(a.includes('--dry-run=server')){console.log(JSON.stringify(d));process.exit(0);}
   target.metadata.resourceVersion=String(Number(target.metadata.resourceVersion)+1);
   if(kind==='deployment'){
     d.metadata.generation++;
@@ -95,6 +96,9 @@ function setup(name = "session-archive") {
     catch (error) { return { status: error.status, output: (error.stdout ?? "") + (error.stderr ?? "") }; }
   } };
 }
+
+const writes = directory => readFileSync(join(directory, "trace"), "utf8").trim().split("\n").map(JSON.parse)
+  .filter(args => args.includes("patch") && !args.includes("--dry-run=server"));
 
 test("private plan never persists raw spec and exact approved cutover proves two serving pods", () => {
   const { directory, run } = setup();
@@ -151,7 +155,7 @@ test("archive binding drift stops before any patch or before role activation", (
         "--output", join(directory, "apply.jsonl")]);
       assert.notEqual(result.status, 0);
       const trace = readFileSync(join(directory, "trace"), "utf8").trim().split("\n").map(JSON.parse);
-      const patches = trace.filter(args => args.includes("patch"));
+      const patches = writes(directory);
       assert.equal(patches.length, scenario === "before" ? 0 : 1);
       const current = JSON.parse(readFileSync(path, "utf8"));
       assert.equal(current.role.rules.some(r => r.verbs.includes("deletecollection")), true);
@@ -179,10 +183,10 @@ test("unknown quiesce or role response is never retried and never starts compile
       assert.equal(observation.results[0].complete, false);
       assert.equal(observation.results[0].phase, flag === "lostQuiesceResponse" ? "QUIESCED" : "QUIESCED_ROLE_READY");
       const trace = () => readFileSync(join(directory, "trace"), "utf8").trim().split("\n").map(JSON.parse);
-      const before = trace().filter(args => args.includes("patch")).length;
+      const before = writes(directory).length;
       assert.equal(before, flag === "lostQuiesceResponse" ? 1 : 2);
       assert.notEqual(run([...args, "--output", join(directory, "retry.jsonl")]).status, 0);
-      assert.equal(trace().filter(args => args.includes("patch")).length, before);
+      assert.equal(writes(directory).length, before);
       assert.match(readFileSync(join(directory, "apply.jsonl"), "utf8"), /FAIL_OR_UNKNOWN/);
     } finally { rmSync(directory, { recursive: true, force: true }); }
   }
@@ -235,7 +239,7 @@ test("old Go plan schema is rejected without compatibility decoder or writes", (
     const result = run(["inspect", "--context", "fixture", "--plan", planPath, "--output", join(directory, "inspect.json")]);
     assert.notEqual(result.status, 0);
     assert.match(result.output, /STABLE_PLAN_IDENTITY_MISMATCH/);
-    assert.equal(readFileSync(join(directory, "trace"), "utf8").includes('"patch"'), false);
+    assert.equal(writes(directory).length, 0);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -252,7 +256,7 @@ test("archive tasks or surviving workers block cutover before any patch", () => 
         "--approved-plan-sha", fingerprint(plan)]);
       assert.notEqual(applied.status, 0);
       assert.match(applied.output, /STABLE_ARCHIVE_(NOT_IDLE|WORKERS_PRESENT)/);
-      assert.equal(readFileSync(join(directory, "trace"), "utf8").includes('"patch"'), false);
+      assert.equal(writes(directory).length, 0);
     } finally { rmSync(directory, { recursive: true, force: true }); }
   }
 });
@@ -268,7 +272,7 @@ test("wrong confirmation and busy owner state never perform a patch", () => {
     const path = join(directory, "fixture.json"), state = JSON.parse(readFileSync(path, "utf8"));
     state.busy = true; writeFileSync(path, JSON.stringify(state));
     assert.notEqual(run([...base, fingerprint(plan)]).status, 0);
-    assert.equal(readFileSync(join(directory, "trace"), "utf8").includes('"patch"'), false);
+    assert.equal(writes(directory).length, 0);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -343,7 +347,7 @@ test("recovery refuses foreign deployment role journal or promoted pins before w
         const rows = readFileSync(applyPath, "utf8").trim().split("\n").map(JSON.parse); rows[0].planSHA256 = "0".repeat(64);
         writeFileSync(applyPath, rows.map(JSON.stringify).join("\n") + "\n");
       }
-      const patches = () => readFileSync(join(directory, "trace"), "utf8").split("\n").filter(r => r.includes('"patch"')).length;
+      const patches = () => writes(directory).length;
       const count = patches();
       assert.notEqual(run(["rollback", "--context", "fixture", "--plan", planPath, "--approved-plan-sha", fingerprint(plan),
         "--journal", applyPath, "--output", join(directory, "rollback.jsonl")]).status, 0);
@@ -362,7 +366,7 @@ test("lost restore response is resolved by observed source without repeating the
     const state = JSON.parse(readFileSync(path, "utf8")); state.lostRestoreResponse = true; writeFileSync(path, JSON.stringify(state));
     const args = ["rollback", "--context", "fixture", "--plan", planPath, "--approved-plan-sha", fingerprint(plan), "--journal", applyPath];
     assert.notEqual(run([...args, "--output", join(directory, "unknown.jsonl")]).status, 0);
-    const patches = () => readFileSync(join(directory, "trace"), "utf8").split("\n").filter(r => r.includes('"patch"')).length;
+    const patches = () => writes(directory).length;
     const count = patches(), observed = run([...args, "--output", join(directory, "observed.jsonl")]);
     assert.equal(observed.status, 0, observed.output); assert.equal(patches(), count);
   } finally { rmSync(directory, { recursive: true, force: true }); }

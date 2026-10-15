@@ -101,7 +101,11 @@ async function main(args) {
     const scripts = [...renderer.matchAll(/\.args = (\["(?:[^"\\]|\\.)*"\])/g)].map(m => JSON.parse(m[1]))
       .filter(a => a[0].includes("--prepare-artifact-spool"));
     requireValue(scripts.length === 1, "STABLE_SPOOL_SOURCE_UNAVAILABLE");
-    return { ...prepareGoCutover(deployment, requested.release, { storageClaims, sourceSpoolScript: scripts[0][0] }),
+    const prepared = prepareGoCutover(deployment, requested.release, { storageClaims, sourceSpoolScript: scripts[0][0] });
+    const dry = JSON.parse(await kubectl(["-n", "kodex-system", "patch", "deployment", requested.name, "--type=json",
+      "--dry-run=server", "--patch-file=/dev/stdin", "-o", "json"], JSON.stringify(prepared.patch)));
+    requireValue(fingerprint(dry.spec) === prepared.afterSpecSHA256, "STABLE_SERVER_DEFAULTS_MISMATCH");
+    return { ...prepared,
       storageSHA256: fingerprint(storageClaims), requested,
       ...(requested.name === "session-archive" ? { archive: (await archiveRole()).proof } : {}) };
   };

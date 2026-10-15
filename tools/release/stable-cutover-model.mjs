@@ -100,6 +100,7 @@ export function prepareGoCutover(deployment, release, { storageClaims = [], sour
     spoolInit.command = ["/usr/local/bin/runtime-controller"];
     spoolInit.args = ["--prepare-artifact-spool", "/var/lib/kodex/runtime-controller/artifact-spool"];
     spoolInit.env = (spoolInit.env ?? []).filter(e => !devEnv.has(e.name));
+    if (!spoolInit.env.length) delete spoolInit.env;
     spoolInit.securityContext = { ...spoolInit.securityContext, runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001,
       allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } };
   }
@@ -124,6 +125,7 @@ export function prepareGoCutover(deployment, release, { storageClaims = [], sour
   app.image = release.image;
   app.command = [`/usr/local/bin/${entry[1]}`];
   app.args = app.args.slice(3);
+  if (!app.args.length) delete app.args;
   app.env = (app.env ?? []).filter(e => !devEnv.has(e.name));
   if (name === "session-archive") {
     const workers = app.env.filter(e => e.name === "SESSION_ARCHIVE_WORKER_IMAGE");
@@ -132,17 +134,20 @@ export function prepareGoCutover(deployment, release, { storageClaims = [], sour
     // Controller и worker — два режима одного проверенного binary/OCI.
     workers[0].value = release.image;
   }
+  if (!app.env.length) delete app.env;
   for (const container of converted) {
     container.volumeMounts = (container.volumeMounts ?? []).filter(m => !removedVolumes.has(m.name));
+    if (!container.volumeMounts.length) delete container.volumeMounts;
     // В distroless runtime нет каталога исходников или Go build cache.
     delete container.workingDir;
   }
   pod.volumes = (pod.volumes ?? []).filter(v => !removedVolumes.has(v.name));
+  if (!pod.volumes.length) delete pod.volumes;
   // UID приложения из Dockerfile; fsGroup и identity sidecar не меняются.
   // Secret references и существующие supplementary groups сохраняются.
   app.securityContext = { ...app.securityContext, runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001,
     allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } };
-  requireValue(!app.volumeMounts.some(m => m.mountPath === "/workspace" || m.mountPath.startsWith("/workspace/")) &&
+  requireValue(!(app.volumeMounts ?? []).some(m => m.mountPath === "/workspace" || m.mountPath.startsWith("/workspace/")) &&
     !(pod.volumes ?? []).some(v => v.hostPath), "CUTOVER_HOST_MOUNT_REMAINS");
   after.replicas = 2;
   after.strategy = { type: "RollingUpdate", rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } };
