@@ -7,7 +7,7 @@ import { readPrivateJSON } from "../../infra/public-ingress/edge-plan.mjs";
 import { fingerprint } from "./stable-inventory.mjs";
 import { prepareGoCutover, validateGoReleaseReference } from "./stable-cutover-model.mjs";
 import { requireIdle } from "./runner-policy-model.mjs";
-import { archiveTransition, sameArchiveBoundary, ownedDeploymentPods } from "./stable-archive-transition.mjs";
+import { archiveTransition, sameArchiveBoundary, activeDeploymentPods } from "./stable-archive-transition.mjs";
 import { prepareGoRecovery } from "./stable-go-recovery.mjs";
 import { constants } from "node:fs";
 
@@ -171,7 +171,7 @@ async function main(args) {
       "STABLE_READBACK_MISMATCH");
     if (item.name === "session-archive") requireValue(sameArchiveBoundary((await archiveRole()).proof, item.archive, "after"),
       "STABLE_ARCHIVE_ROLE_READBACK_MISMATCH");
-    const pods = ownedDeploymentPods(await podList(item.name), item.uid);
+    const pods = activeDeploymentPods(await podList(item.name), item.uid);
     const digest = item.requested.release.image.split("@").at(-1);
     requireValue(pods.length === 2 && pods.every(p => !p.metadata.deletionTimestamp &&
       p.spec.containers.some(c => c.name === item.name && c.image === item.requested.release.image) &&
@@ -221,7 +221,7 @@ async function main(args) {
             const current = await get("deployment", item.name);
             requireValue(current.metadata.uid === item.uid && fingerprint(current.spec) === item.quiescedBeforeSpecSHA256,
               "STABLE_ARCHIVE_QUIESCE_DRIFT");
-            const pods = ownedDeploymentPods(await podList(item.name), item.uid);
+            const pods = activeDeploymentPods(await podList(item.name), item.uid);
             if (current.status?.observedGeneration >= current.metadata.generation &&
               (current.status.replicas ?? 0) === 0 && (current.status.readyReplicas ?? 0) === 0 &&
               (current.status.availableReplicas ?? 0) === 0 && pods.length === 0) break;
@@ -298,7 +298,7 @@ async function main(args) {
       { op: "test", path: "/metadata/uid", value: resource.metadata.uid },
       { op: "test", path: "/metadata/resourceVersion", value: resource.metadata.resourceVersion }, ...operations]));
     const proof = async (item, expectedSpec) => {
-      const current = await get("deployment", item.name), pods = ownedDeploymentPods(await podList(item.name), item.uid);
+      const current = await get("deployment", item.name), pods = activeDeploymentPods(await podList(item.name), item.uid);
       const replicas = expectedSpec.replicas ?? 1;
       const serving = pods.every(p => {
         if (p.metadata.deletionTimestamp || !p.status?.conditions?.some(c => c.type === "Ready" && c.status === "True")) return false;
@@ -340,7 +340,7 @@ async function main(args) {
           requireValue(current.metadata.uid === item.uid && fingerprint(current.spec) === expectedQuiesced &&
             fingerprint(current.metadata.labels ?? {}) === expectedLabels,
             "STABLE_RECOVERY_QUIESCE_DRIFT");
-          const pods = ownedDeploymentPods(await podList(item.name), item.uid);
+          const pods = activeDeploymentPods(await podList(item.name), item.uid);
           if (current.status?.observedGeneration >= current.metadata.generation && !(current.status.replicas ?? 0) && pods.length === 0) break;
           requireValue(Date.now() < deadline, "STABLE_RECOVERY_QUIESCE_TIMEOUT");
           await new Promise(resolve => setTimeout(resolve, 250));
@@ -399,14 +399,14 @@ async function main(args) {
       } else if (specSHA256 === item.recovery.quiescedAfterSpecSHA256) {
         prepareGoRecovery(current, item);
         if (item.name === "session-archive") requireValue(sameArchiveBoundary((await archiveRole()).proof, item.archive, "after"), "STABLE_ARCHIVE_ROLE_DRIFT");
-        const pods = ownedDeploymentPods(await podList(item.name), item.uid);
+        const pods = activeDeploymentPods(await podList(item.name), item.uid);
         phase = current.status?.observedGeneration >= current.metadata.generation && !(current.status.replicas ?? 0) && !pods.length ?
           "COMPILED_PAUSED" : "COMPILED_QUIESCING";
       } else if (item.name === "session-archive" && specSHA256 === item.quiescedBeforeSpecSHA256) {
         const boundary = (await archiveRole()).proof;
         const before = sameArchiveBoundary(boundary, item.archive), after = sameArchiveBoundary(boundary, item.archive, "after");
         requireValue(before || after, "STABLE_ARCHIVE_ROLE_DRIFT");
-        const pods = ownedDeploymentPods(await podList(item.name), item.uid);
+        const pods = activeDeploymentPods(await podList(item.name), item.uid);
         const joined = current.status?.observedGeneration >= current.metadata.generation &&
           (current.status.replicas ?? 0) === 0 && (current.status.readyReplicas ?? 0) === 0 &&
           (current.status.availableReplicas ?? 0) === 0 && pods.length === 0;

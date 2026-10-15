@@ -59,3 +59,18 @@ export function ownedDeploymentPods(list, deploymentUID) {
     o.kind === "ReplicaSet" && owners.has(o.uid) && o.controller === true)), "STABLE_FOREIGN_SERVING_POD");
   return pods;
 }
+
+// Terminal history сохраняется в API до отдельной GC, но не является
+// действующей replica. Отсекается только доказанно завершённый Pod: неизвестные
+// статусы, продолжающийся init/debug container и чужой lineage не скрываются.
+export function activeDeploymentPods(list, deploymentUID) {
+  return ownedDeploymentPods(list, deploymentUID).filter(pod => {
+    if (!["Succeeded", "Failed"].includes(pod.status?.phase)) return true;
+    const expected = [...(pod.spec?.containers ?? []), ...(pod.spec?.initContainers ?? []), ...(pod.spec?.ephemeralContainers ?? [])].map(c => c.name);
+    const states = [...(pod.status.containerStatuses ?? []), ...(pod.status.initContainerStatuses ?? []), ...(pod.status.ephemeralContainerStatuses ?? [])];
+    const stopped = expected.length > 0 && new Set(expected).size === expected.length && states.length === expected.length &&
+      new Set(states.map(s => s.name)).size === states.length && states.every(s => expected.includes(s.name) &&
+        s.state?.terminated && Number.isInteger(s.state.terminated.exitCode) && !s.state.running && !s.state.waiting);
+    return !stopped;
+  });
+}

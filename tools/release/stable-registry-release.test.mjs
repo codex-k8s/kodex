@@ -8,6 +8,7 @@ import test from "node:test";
 import { releaseRegistry } from "./stable-registry-release.mjs";
 import { prepareRegistry, registryRoles, httpStateName } from "./stable-registry-model.mjs";
 import { fingerprint } from "./stable-inventory.mjs";
+import { activeDeploymentPods } from "./stable-archive-transition.mjs";
 
 const base = fileURLToPath(new URL("../../deploy/k8s/base/image-supply-chain/", import.meta.url));
 const names = Object.keys(registryRoles), helperImage = "registry.local.kodex/kodex/registry-pull-authorizer@sha256:" + "b".repeat(64);
@@ -186,4 +187,21 @@ test("changed downstream deployment blocks rollback and a foreign consumer retai
       assert.ok(f.resources.has("Secret/" + httpStateName("kodex-image-registry-push")));
     } finally { rmSync(f.directory, { recursive: true, force: true }); }
   }
+});
+
+test("terminal history is excluded only with complete stopped container proof and owned lineage", () => {
+  const rs = { kind: "ReplicaSet", metadata: { uid: "rs", ownerReferences: [{ kind: "Deployment", uid: "deployment", controller: true }] } };
+  const historical = { kind: "Pod", metadata: { uid: "history", ownerReferences: [{ kind: "ReplicaSet", uid: "rs", controller: true }] },
+    spec: { containers: [{ name: "registry" }], initContainers: [{ name: "init" }] }, status: { phase: "Failed",
+      containerStatuses: [{ name: "registry", state: { terminated: { exitCode: 1 } } }],
+      initContainerStatuses: [{ name: "init", state: { terminated: { exitCode: 0 } } }] } };
+  const list = { items: [rs, historical] };
+  assert.equal(activeDeploymentPods(list, "deployment").length, 0);
+  for (const mutate of [p => { p.status.containerStatuses = []; }, p => { p.status.initContainerStatuses[0].state = { running: {} }; },
+    p => { p.status.phase = "Unknown"; }, p => { p.spec.ephemeralContainers = [{ name: "debug" }]; }]) {
+    const p = structuredClone(historical); mutate(p);
+    assert.equal(activeDeploymentPods({ items: [rs, p] }, "deployment").length, 1);
+  }
+  const foreign = structuredClone(historical); foreign.metadata.ownerReferences[0].uid = "foreign-rs";
+  assert.throws(() => activeDeploymentPods({ items: [rs, foreign] }, "deployment"), /FOREIGN_SERVING_POD/);
 });

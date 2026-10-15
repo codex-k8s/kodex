@@ -10,7 +10,7 @@ import { fingerprint } from "./stable-inventory.mjs";
 import { prepareFrontendCutover } from "./stable-frontend-model.mjs";
 import { frontendIntentAnnotation, frontendRuntimeSnapshot, frontendRouting, frontendTransportAnnotation } from "./stable-frontend-transition.mjs";
 import { applyReverseSpec } from "./stable-reverse-patch.mjs";
-import { ownedDeploymentPods } from "./stable-archive-transition.mjs";
+import { activeDeploymentPods } from "./stable-archive-transition.mjs";
 
 const execute = promisify(execFile), root = fileURLToPath(new URL("../../", import.meta.url));
 const folder = fileURLToPath(new URL("../../deploy/k8s/base/staff-control-center/", import.meta.url));
@@ -160,7 +160,7 @@ export async function releaseFrontend(args, commandPort) {
       const value = await get("Deployment", name);
       requireValue(value.metadata.uid === plan.deployment.uid && [plan.quiescedBeforeSpecSHA256, plan.quiescedAfterSpecSHA256].includes(fingerprint(value.spec)), "FRONTEND_QUIESCE_DRIFT");
       if (value.status?.observedGeneration >= value.metadata.generation && !(value.status.replicas ?? 0) &&
-        ownedDeploymentPods(await podList(), plan.deployment.uid).length === 0) return value;
+        activeDeploymentPods(await podList(), plan.deployment.uid).length === 0) return value;
       requireValue(Date.now() < deadline, "FRONTEND_QUIESCE_TIMEOUT"); await new Promise(resolve => setTimeout(resolve, 250));
     }
   };
@@ -169,7 +169,7 @@ export async function releaseFrontend(args, commandPort) {
     const current = await get("Deployment", name), entry = plan.deployment;
     requireValue(matches(current, entry, "after") && current.status.observedGeneration >= current.metadata.generation &&
       ["replicas", "readyReplicas", "availableReplicas", "updatedReplicas"].every(k => current.status[k] === 2), "FRONTEND_READBACK_INCOMPLETE");
-    const pods = ownedDeploymentPods(await podList(), entry.uid), digest = plan.release.image.split("@").at(-1);
+    const pods = activeDeploymentPods(await podList(), entry.uid), digest = plan.release.image.split("@").at(-1);
     requireValue(pods.length === 2 && pods.every(p => !p.metadata.deletionTimestamp && p.status?.conditions?.some(c => c.type === "Ready" && c.status === "True") &&
       p.spec.containers?.length === 1 && p.spec.containers[0].image === plan.release.image && !p.spec.containers[0].command &&
       !p.spec.volumes?.some(v => v.hostPath) && p.status.containerStatuses?.some(c => c.ready && c.imageID?.endsWith(digest))), "FRONTEND_SERVING_POD_MISMATCH");

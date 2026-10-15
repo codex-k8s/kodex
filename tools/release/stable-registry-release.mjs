@@ -9,7 +9,7 @@ import { readPrivateJSON } from "../../infra/public-ingress/edge-plan.mjs";
 import { fingerprint } from "./stable-inventory.mjs";
 import { prepareRegistry, registryRoles, registryIntent, httpStateName } from "./stable-registry-model.mjs";
 import { applyReverseSpec } from "./stable-reverse-patch.mjs";
-import { ownedDeploymentPods } from "./stable-archive-transition.mjs";
+import { activeDeploymentPods } from "./stable-archive-transition.mjs";
 import { requireIdle } from "./runner-policy-model.mjs";
 
 const execute = promisify(execFile), root = fileURLToPath(new URL("../../", import.meta.url)), ns = "kodex-system";
@@ -66,7 +66,7 @@ export async function releaseRegistry(args, commandPort) {
       "REGISTRY_SELECTOR_UNSUPPORTED");
     const selector = Object.entries(deployment.spec.selector.matchLabels).sort().map(([k, v]) => `${k}=${v}`).join(",");
     const list = JSON.parse(await kube(["-n", ns, "get", "replicasets,pods", "-l", selector, "-o", "json"]));
-    return ownedDeploymentPods(list, deployment.metadata.uid);
+    return activeDeploymentPods(list, deployment.metadata.uid);
   };
   const dependencies = async () => {
     const list = JSON.parse(await kube(["-n", ns, "get", "deployments", "-o", "json"]));
