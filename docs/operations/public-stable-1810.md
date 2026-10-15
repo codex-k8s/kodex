@@ -1620,3 +1620,31 @@ digest. После потерянного restore ACK другой `--output` н
 intent: incomplete/UNKNOWN claim закрывает recovery до решения владельца.
 Завершённый claim допускает только повторный readback обоих исходных client
 hashes без новых PUT. Этот путь проверяется отдельным lost rollback ACK тестом.
+
+### Проверки на `0671f22a770f72375c52cf4a67fd38b2734f52f0`
+
+- PASS172 Node tests,0 failed/0 skipped. Шесть новых client tests покрывают
+  также lost rollback ACK и canonical claim, который не обходится выбором
+  нового output. На предыдущем `e2c35f85bcd791a2e767d6bab8234c52fde897db`
+  PASS171 Node tests,31 Python OCI/archive tests и web-only render; после
+  него изменены только client recovery и его тест/описание.
+- PASS actual read-only Keycloak client plan: существующий service client,
+  проверенный HTTPS/SNI/CA и повторные GET обоих исходных ClientRepresentation.
+  Commitment
+  `646b45c599c501f6845f3ddb7bd584e07b8bbc07e216edf182faa25585aa68e6`.
+  Actual PUT, callback recovery и issued public TLS NOT RUN. Предыдущий
+  pre-recovery-claim plan на `e2c35f85bcd791a2e767d6bab8234c52fde897db`
+  также PASS; актуальный apply требует fresh plan на финальном executor SHA.
+- PASS actual negative TLS check на `e2c35f85bcd791a2e767d6bab8234c52fde897db`:
+  тот же loopback upstream и public CA с заведомо неверным SNI отклонён
+  HTTPS adapter. Проверка использовала только synthetic credential values,
+  не действующие credential. Secret/client/registration values в выводе,
+  plan и journals отсутствуют. Context7 Node.js24 TLS/HTTPS docs подтвердили
+  SNI, default hostname validation и `rejectUnauthorized` semantics.
+- Предыдущая рабочая Chrome page была закрыта извне; создана только одна
+  новая собственная page45 для Kodex. Она на штатной форме SSO. Чужие вкладки
+  не закрывались/не навигировались, browser acceptance остаётся NOT RUN.
+- Следующий public этап: Helm-owned proxy/Grafana values и полные render
+  guards, публичные/канонические ingress, затем связанный identity
+  apply/readback/recovery. Остальные infra cutover, review/owner gate,
+  actual delivery и внешняя приёмка также остаются открытыми.
