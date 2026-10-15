@@ -4,7 +4,7 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.2.3
+version: 1.2.4
 updated: 2026-10-15
 ---
 
@@ -1858,3 +1858,38 @@ singleton/PVC, foreign UID/owner и потерянный ACK. Public actual appl
 выбор закрытого `public-identity`; regression проверяет наличие locks для всех
 трёх profiles и отклонение endpoint/Service drift. Четыре новых public-state
 tests PASS в рабочем дереве; actual apply по-прежнему NOT RUN.
+
+На `fb509904a95d15a50a575244567b4b1c9860eb2c` actual public Helm plan PASS:
+`1bbeaa5f89a722423f0a963db52618ea62ca98590adf8b44f34f9ddc7c2dcaaa`.
+Все три desired/recovery server renders, live object/UID/credential commitments
+и serving image baselines проверены. Это ещё не mutation/public acceptance.
+
+## Поэтапный public cutover
+
+Новый `stable-public-cutover.mjs` даёт четыре закрытые фазы:
+
+1. `prepare`: два отдельных Certificate и immutable frontend runtime CM;
+   ожидание выпуска, проверка срока/SAN/подписи той же CA без чтения private key.
+2. `identity`: добавить public SSO route, exact backend TLS SNI и Keycloak
+   hostname/leaf reference. Старый ingress leaf остаётся для прежнего SNI.
+3. `platform`: общий endpoint CM, rollout трёх compiled Deployment и три
+   public ingress с прежними auth/Exact assets boundaries.
+4. `canonical`: отдельные приоритетные редиректы старых host на публичные root.
+   OAuth code/query/fragment не переносятся между hostnames.
+
+Client callbacks применяются отдельным готовым Keycloak workflow до hostname
+flip; Helm proxies/Grafana — после готовности public SSO, до platform phase.
+Наружный edge добавляет только собственные host/SNI routes и CA projection.
+Plan/apply/inspect/readback/rollback связывают source, cluster, CA, свежий idle
+owner/pins, неизменные UID/config и main/init image baselines. CAS использует
+свежий RV при неизменной конфигурации, после durable intent выполняется один
+запрос без retry неизвестного outcome. Recovery удаляет только exact собственные
+объекты, не находящиеся в использовании; удалённый Certificate не означает
+удаление его leaf Secret. Изначальные TLS Secrets не меняются. Один canonical
+recovery claim запрещает повторить неизвестный rollback новым именем output.
+
+В рабочем дереве поверх `fb509904a95d15a50a575244567b4b1c9860eb2c`38 tests PASS:
+public routes/patches, model и shared Helm executor, synthetic canonical
+apply/readback/recovery, lost ACK и foreign UID/config/pins rejection. Actual
+public prepare и последующие phases пока NOT RUN; следующий шаг — clean SHA,
+публикация в тот же PR и исполнение scoped prepare.
