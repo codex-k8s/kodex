@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { fingerprint } from "./stable-inventory.mjs";
+import { archiveTransition, sameArchiveBoundary, ownedDeploymentPods } from "./stable-archive-transition.mjs";
 
 const cli = fileURLToPath(new URL("./stable-go-release.mjs", import.meta.url));
 const mock = `#!${process.execPath}
@@ -16,11 +17,15 @@ const i=a.indexOf('get');
 if(i>=0){
   if(a[i+1]==='namespace')console.log(JSON.stringify({metadata:{uid:'cluster'}}));
   else if(a[i+1]==='deployment')console.log(JSON.stringify(d));
+  else if(a[i+1]==='role')console.log(JSON.stringify(s.role));
+  else if(a[i+1]==='rolebinding')console.log(JSON.stringify(s.binding));
   else if(a[i+1]==='jobs,pods')console.log(JSON.stringify({items:s.archiveWorkers?[{kind:'Job'}]:[]}));
   else if(a[i+1]==='replicasets,pods'){
     const digest=d.spec.template.spec.containers[0].image.split('@').pop();
+    const draining=d.spec.replicas===0&&s.drainPolls>0;
+    if(draining){s.drainPolls--;fs.writeFileSync(p,JSON.stringify(s));}
     const items=[{kind:'ReplicaSet',metadata:{uid:'rs',ownerReferences:[{kind:'Deployment',uid:d.metadata.uid,controller:true}]}},
-      ...['pod-a','pod-b'].map(uid=>({kind:'Pod',metadata:{uid,ownerReferences:[{kind:'ReplicaSet',uid:'rs',controller:true}]},
+      ...(d.spec.replicas===0&&!draining?[]:['pod-a','pod-b']).map(uid=>({kind:'Pod',metadata:{uid,ownerReferences:[{kind:'ReplicaSet',uid:'rs',controller:true}]},
         spec:d.spec.template.spec,status:{conditions:[{type:'Ready',status:'True'}],containerStatuses:[{name:d.metadata.name,ready:true,imageID:'fixture@'+digest}]}}))];
     console.log(JSON.stringify({items}));
   }else process.exit(4);
@@ -31,10 +36,25 @@ if(i>=0){
     activeRuntimeRuns:0,claimedRuntimeLeases:0,promotedArtifactCount:3,promotedPinsSHA256:'d'.repeat(64)}));
 }else if(a.includes('patch')){
   const patch=JSON.parse(fs.readFileSync(0,'utf8'));
-  if(patch[0].value!==d.metadata.uid||patch[1].value!==d.metadata.resourceVersion)process.exit(6);
-  d.spec=patch.at(-1).value;d.metadata.labels=patch.at(-2).value;
-  d.metadata.generation=2;d.status={observedGeneration:2,replicas:2,readyReplicas:2,availableReplicas:2,updatedReplicas:2};
-  fs.writeFileSync(p,JSON.stringify(s));console.log('deployment.apps/session-archive');
+  const kind=a[a.indexOf('patch')+1],target=kind==='role'?s.role:d;
+  for(const op of patch){
+    const keys=op.path.slice(1).split('/').map(x=>x.replaceAll('~1','/').replaceAll('~0','~'));
+    const key=keys.pop();let parent=target;for(const k of keys)parent=parent[k];
+    if(op.op==='test'){if(JSON.stringify(parent[key])!==JSON.stringify(op.value))process.exit(6);}
+    else if(op.op==='replace'||op.op==='add')parent[key]=op.value;
+    else process.exit(8);
+  }
+  target.metadata.resourceVersion=String(Number(target.metadata.resourceVersion)+1);
+  if(kind==='deployment'){
+    d.metadata.generation++;
+    d.status={observedGeneration:d.metadata.generation,replicas:d.spec.replicas,readyReplicas:d.spec.replicas,
+      availableReplicas:d.spec.replicas,updatedReplicas:d.spec.replicas};
+    if(s.driftAfterQuiesce&&d.spec.replicas===0)s.binding.metadata.uid='replaced-binding';
+  }
+  fs.writeFileSync(p,JSON.stringify(s));
+  if(s.lostQuiesceResponse&&kind==='deployment'&&d.spec.replicas===0)process.exit(9);
+  if(s.lostRoleResponse&&kind==='role')process.exit(9);
+  console.log(kind+'/session-archive');
 }else if(a.includes('rollout'))console.log('complete');else process.exit(7);
 `;
 
@@ -50,14 +70,24 @@ function setup() {
         env: [{ name: "PRIVATE", value: "CLI_PRIVATE_SENTINEL" },
           { name: "SESSION_ARCHIVE_WORKER_IMAGE", value: "example.invalid/kodex/session-archive@sha256:" + "e".repeat(64) }], volumeMounts: [] }], volumes: [] } } },
     status: { observedGeneration: 1, replicas: 1, readyReplicas: 1 } };
-  writeFileSync(join(directory, "fixture.json"), JSON.stringify({ deployment }), { mode: 0o600 });
+  const desiredRole = JSON.parse(execFileSync("yq", ["eval-all", "-o=json", "-I=0",
+    'select(.kind == "Role" and .metadata.name == "session-archive-controller")',
+    fileURLToPath(new URL("../../deploy/k8s/base/session-archive/runtime/rbac.yaml", import.meta.url))], { encoding: "utf8" }));
+  const role = { ...desiredRole, metadata: { ...desiredRole.metadata, uid: "archive-role", resourceVersion: "1" } };
+  role.rules.find(r => r.resources[0] === "configmaps").verbs = ["create", "delete", "deletecollection"];
+  role.rules.find(r => r.resources[0] === "jobs").verbs.push("deletecollection");
+  const binding = { apiVersion: role.apiVersion, kind: "RoleBinding",
+    metadata: { name: role.metadata.name, namespace: role.metadata.namespace, uid: "archive-binding", resourceVersion: "1" },
+    roleRef: { apiGroup: "rbac.authorization.k8s.io", kind: "Role", name: role.metadata.name },
+    subjects: [{ kind: "ServiceAccount", name: "session-archive", namespace: "kodex-system" }] };
+  writeFileSync(join(directory, "fixture.json"), JSON.stringify({ deployment, role, binding }), { mode: 0o600 });
   const release = { component: "session-archive", sourceSHA: "a".repeat(40), provenanceSHA256: "b".repeat(64),
     image: "example.invalid/kodex/session-archive@sha256:" + "c".repeat(64) };
   writeFileSync(join(directory, "manifest.json"), JSON.stringify({ schema: "kodex.stable-go-manifest/v1",
     targets: [{ name: "session-archive", release }] }), { mode: 0o600 });
   return { directory, run: args => {
     try { return { status: 0, output: execFileSync(process.execPath, [cli, ...args], {
-      env: { PATH: join(directory, "bin") + ":/usr/bin:/bin", FIXTURE: join(directory, "fixture.json"), TRACE: join(directory, "trace") },
+      env: { PATH: join(directory, "bin") + ":" + process.env.PATH, FIXTURE: join(directory, "fixture.json"), TRACE: join(directory, "trace") },
       timeout: 10000, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }) }; }
     catch (error) { return { status: error.status, output: (error.stdout ?? "") + (error.stderr ?? "") }; }
   } };
@@ -75,8 +105,134 @@ test("private plan never persists raw spec and exact approved cutover proves two
     assert.equal(applied.status, 0, applied.output);
     assert.equal(applied.output.includes("CLI_PRIVATE_SENTINEL"), false);
     assert.equal(JSON.parse(readFileSync(applyPath, "utf8").trim().split("\n").at(-1)).status, "PASS");
+    const journal = readFileSync(applyPath, "utf8").trim().split("\n").map(line => JSON.parse(line).status);
+    assert.deepEqual(journal, ["IN_PROGRESS", "QUIESCE_ATTEMPT", "QUIESCED", "ROLE_PATCH_ATTEMPT", "PATCH_ATTEMPT", "PASS", "PASS"]);
+    const state = JSON.parse(readFileSync(join(directory, "fixture.json"), "utf8"));
+    assert.equal(state.role.rules.some(r => r.verbs.includes("deletecollection")), false);
+    assert.equal(state.deployment.spec.template.spec.containers[0].env.find(e => e.name === "SESSION_ARCHIVE_WORKER_IMAGE").value,
+      state.deployment.spec.template.spec.containers[0].image);
     const readback = run(["readback", "--context", "fixture", "--plan", planPath, "--output", join(directory, "readback.json")]);
     assert.equal(readback.status, 0, readback.output);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("archive role changes only after all old controller pods disappear", () => {
+  const { directory, run } = setup();
+  try {
+    const planPath = join(directory, "plan.json"), statePath = join(directory, "fixture.json");
+    assert.equal(run(["plan", "--context", "fixture", "--manifest", join(directory, "manifest.json"), "--output", planPath]).status, 0);
+    const plan = JSON.parse(readFileSync(planPath, "utf8")), state = JSON.parse(readFileSync(statePath, "utf8"));
+    state.drainPolls = 2; writeFileSync(statePath, JSON.stringify(state));
+    const applied = run(["apply", "--context", "fixture", "--plan", planPath, "--approved-plan-sha", fingerprint(plan),
+      "--output", join(directory, "apply.jsonl")]);
+    assert.equal(applied.status, 0, applied.output);
+    const trace = readFileSync(join(directory, "trace"), "utf8").trim().split("\n").map(JSON.parse);
+    const index = trace.findIndex(args => args.includes("patch") && args[args.indexOf("patch") + 1] === "role");
+    assert.ok(index > 0);
+    assert.equal(trace.slice(0, index).filter(args => args.includes("replicasets,pods")).length, 3);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("archive binding drift stops before any patch or before role activation", () => {
+  for (const scenario of ["before", "after quiesce"]) {
+    const { directory, run } = setup();
+    try {
+      const planPath = join(directory, "plan.json");
+      assert.equal(run(["plan", "--context", "fixture", "--manifest", join(directory, "manifest.json"), "--output", planPath]).status, 0);
+      const plan = JSON.parse(readFileSync(planPath, "utf8"));
+      const path = join(directory, "fixture.json"), state = JSON.parse(readFileSync(path, "utf8"));
+      if (scenario === "before") state.binding.subjects[0].name = "foreign";
+      else state.driftAfterQuiesce = true;
+      writeFileSync(path, JSON.stringify(state));
+      const result = run(["apply", "--context", "fixture", "--plan", planPath, "--approved-plan-sha", fingerprint(plan),
+        "--output", join(directory, "apply.jsonl")]);
+      assert.notEqual(result.status, 0);
+      const trace = readFileSync(join(directory, "trace"), "utf8").trim().split("\n").map(JSON.parse);
+      const patches = trace.filter(args => args.includes("patch"));
+      assert.equal(patches.length, scenario === "before" ? 0 : 1);
+      const current = JSON.parse(readFileSync(path, "utf8"));
+      assert.equal(current.role.rules.some(r => r.verbs.includes("deletecollection")), true);
+      if (scenario !== "before") assert.equal(current.deployment.spec.replicas, 0);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  }
+});
+
+test("unknown quiesce or role response is never retried and never starts compiled pods", () => {
+  for (const flag of ["lostQuiesceResponse", "lostRoleResponse"]) {
+    const { directory, run } = setup();
+    try {
+      const planPath = join(directory, "plan.json");
+      assert.equal(run(["plan", "--context", "fixture", "--manifest", join(directory, "manifest.json"), "--output", planPath]).status, 0);
+      const plan = JSON.parse(readFileSync(planPath, "utf8"));
+      const path = join(directory, "fixture.json"), state = JSON.parse(readFileSync(path, "utf8"));
+      state[flag] = true; writeFileSync(path, JSON.stringify(state));
+      const args = ["apply", "--context", "fixture", "--plan", planPath, "--approved-plan-sha", fingerprint(plan)];
+      assert.notEqual(run([...args, "--output", join(directory, "apply.jsonl")]).status, 0);
+      assert.equal(JSON.parse(readFileSync(path, "utf8")).deployment.spec.replicas, 0);
+      const observed = run(["inspect", "--context", "fixture", "--plan", planPath, "--output", join(directory, "inspect.json")]);
+      assert.equal(observed.status, 0, observed.output);
+      const observation = JSON.parse(observed.output);
+      assert.equal(observation.status, "OBSERVED");
+      assert.equal(observation.results[0].complete, false);
+      assert.equal(observation.results[0].phase, flag === "lostQuiesceResponse" ? "QUIESCED" : "QUIESCED_ROLE_READY");
+      const trace = () => readFileSync(join(directory, "trace"), "utf8").trim().split("\n").map(JSON.parse);
+      const before = trace().filter(args => args.includes("patch")).length;
+      assert.equal(before, flag === "lostQuiesceResponse" ? 1 : 2);
+      assert.notEqual(run([...args, "--output", join(directory, "retry.jsonl")]).status, 0);
+      assert.equal(trace().filter(args => args.includes("patch")).length, before);
+      assert.match(readFileSync(join(directory, "apply.jsonl"), "utf8"), /FAIL_OR_UNKNOWN/);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  }
+});
+
+test("archive transition rejects wildcard permissions foreign subjects and namespace drift", () => {
+  const { directory } = setup();
+  try {
+    const { role, binding } = JSON.parse(readFileSync(join(directory, "fixture.json"), "utf8"));
+    const desiredRole = structuredClone(role);
+    desiredRole.rules.forEach(r => { r.verbs = r.verbs.filter(v => v !== "deletecollection"); });
+    desiredRole.rules.find(r => r.resources[0] === "configmaps").verbs.unshift("get");
+    const original = archiveTransition(role, binding, desiredRole);
+    assert.equal(sameArchiveBoundary(original.proof, original.proof), true);
+    const newRole = { ...role, rules: desiredRole.rules };
+    assert.equal(sameArchiveBoundary(archiveTransition(newRole, binding, desiredRole).proof, original.proof, "after"), true);
+    for (const mutation of [
+      (r, b) => { b.subjects[0].namespace = "foreign"; },
+      (r, b) => { b.roleRef.kind = "ClusterRole"; },
+      r => { r.rules[0].verbs = ["*"]; },
+      r => { r.rules[0].resources = ["secrets"]; },
+      r => { r.metadata.namespace = "kodex-system"; },
+    ]) {
+      const source = structuredClone(role), target = structuredClone(binding);
+      mutation(source, target);
+      assert.throws(() => archiveTransition(source, target, desiredRole), /STABLE_ARCHIVE_/);
+    }
+    const foreign = structuredClone(original.proof); foreign.roleUID = "replacement-role";
+    assert.equal(sameArchiveBoundary(foreign, original.proof), false);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("serving pod lineage does not hide foreign pods behind valid replicas", () => {
+  const list = { items: [
+    { kind: "ReplicaSet", metadata: { uid: "rs", ownerReferences: [{ kind: "Deployment", uid: "dep", controller: true }] } },
+    { kind: "Pod", metadata: { uid: "pod", ownerReferences: [{ kind: "ReplicaSet", uid: "rs", controller: true }] } },
+  ] };
+  assert.equal(ownedDeploymentPods(list, "dep").length, 1);
+  list.items.push({ kind: "Pod", metadata: { uid: "foreign", ownerReferences: [{ kind: "ReplicaSet", uid: "foreign-rs", controller: true }] } });
+  assert.throws(() => ownedDeploymentPods(list, "dep"), /FOREIGN_SERVING_POD/);
+});
+
+test("old Go plan schema is rejected without compatibility decoder or writes", () => {
+  const { directory, run } = setup();
+  try {
+    const planPath = join(directory, "plan.json");
+    assert.equal(run(["plan", "--context", "fixture", "--manifest", join(directory, "manifest.json"), "--output", planPath]).status, 0);
+    const plan = JSON.parse(readFileSync(planPath, "utf8"));
+    plan.schema = "kodex.stable-go-plan/v1"; writeFileSync(planPath, JSON.stringify(plan));
+    const result = run(["inspect", "--context", "fixture", "--plan", planPath, "--output", join(directory, "inspect.json")]);
+    assert.notEqual(result.status, 0);
+    assert.match(result.output, /STABLE_PLAN_IDENTITY_MISMATCH/);
+    assert.equal(readFileSync(join(directory, "trace"), "utf8").includes('"patch"'), false);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

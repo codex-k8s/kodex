@@ -122,6 +122,7 @@ export function prepareGoCutover(deployment, release, { storageClaims = [] } = {
   if (name === "runtime-controller") after.template.metadata.annotations["kodex.dev/controller-image"] = release.image;
   return {
     name, uid: deployment.metadata.uid, beforeSpecSHA256: fingerprint(before), afterSpecSHA256: fingerprint(after),
+    ...(name === "session-archive" ? { quiescedBeforeSpecSHA256: fingerprint({ ...before, replicas: 0 }) } : {}),
     sourceSHA: release.sourceSHA,
     patch: [
       { op: "test", path: "/metadata/uid", value: deployment.metadata.uid },

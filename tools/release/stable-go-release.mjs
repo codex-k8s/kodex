@@ -7,10 +7,12 @@ import { readPrivateJSON } from "../../infra/public-ingress/edge-plan.mjs";
 import { fingerprint } from "./stable-inventory.mjs";
 import { prepareGoCutover, validateGoReleaseReference } from "./stable-cutover-model.mjs";
 import { requireIdle } from "./runner-policy-model.mjs";
+import { archiveTransition, sameArchiveBoundary, ownedDeploymentPods } from "./stable-archive-transition.mjs";
 
 const execute = promisify(execFile);
 const sqlPath = fileURLToPath(new URL("../dev/supply-chain-owner-readback.sql", import.meta.url));
 const archiveSQLPath = fileURLToPath(new URL("./stable-archive-idle.sql", import.meta.url));
+const archiveRolePath = fileURLToPath(new URL("../../deploy/k8s/base/session-archive/runtime/rbac.yaml", import.meta.url));
 function requireValue(value, code) { if (!value) throw Error(code); }
 function publicPlan(target) {
   const { patch: _patch, ...result } = target;
@@ -31,7 +33,7 @@ async function main(args) {
     options[key] = args.shift();
   }
   const context = options["--context"];
-  requireValue(["plan", "apply", "readback"].includes(mode) && /^[A-Za-z0-9_.:@/-]{1,160}$/.test(context ?? "") &&
+  requireValue(["plan", "apply", "readback", "inspect"].includes(mode) && /^[A-Za-z0-9_.:@/-]{1,160}$/.test(context ?? "") &&
     options["--output"], "STABLE_ARGUMENTS_INVALID");
   const env = Object.fromEntries(["HOME", "PATH", "LANG", "KUBECONFIG"].filter(k => process.env[k]).map(k => [k, process.env[k]]));
   const kubectl = async (arguments_, input, timeout = 35000) => {
@@ -53,6 +55,21 @@ async function main(args) {
   const get = async (kind, name, namespace = "kodex-system") =>
     JSON.parse(await kubectl(["-n", namespace, "get", kind, name, "-o", "json"]));
   const clusterUID = (await get("namespace", "kube-system", "default")).metadata.uid;
+  let desiredArchiveRole;
+  const archiveRole = async () => {
+    if (!desiredArchiveRole) {
+      try {
+        const { stdout } = await execute("yq", ["eval-all", "-o=json", "-I=0",
+          'select(.kind == "Role" and .metadata.name == "session-archive-controller")', archiveRolePath],
+        { env, timeout: 10000, maxBuffer: 64 << 10 });
+        desiredArchiveRole = JSON.parse(stdout);
+      } catch { throw Error("STABLE_ARCHIVE_DESIRED_ROLE_UNAVAILABLE"); }
+    }
+    return archiveTransition(await get("role", "session-archive-controller", "kodex-runtime"),
+      await get("rolebinding", "session-archive-controller", "kodex-runtime"), desiredArchiveRole);
+  };
+  const podList = async name => JSON.parse(await kubectl(["-n", "kodex-system", "get", "replicasets,pods", "-l",
+    `app.kubernetes.io/name=${name}`, "-o", "json"]));
   const storageFor = async deployment => {
     const claims = [];
     for (const v of deployment.spec.template.spec.volumes ?? []) {
@@ -72,7 +89,8 @@ async function main(args) {
     const deployment = await get("deployment", requested.name);
     const storageClaims = await storageFor(deployment);
     return { ...prepareGoCutover(deployment, requested.release, { storageClaims }),
-      storageSHA256: fingerprint(storageClaims), requested };
+      storageSHA256: fingerprint(storageClaims), requested,
+      ...(requested.name === "session-archive" ? { archive: (await archiveRole()).proof } : {}) };
   };
   if (mode === "plan") {
     requireValue(options["--manifest"] && !options["--plan"] && !options["--approved-plan-sha"], "STABLE_ARGUMENTS_INVALID");
@@ -85,7 +103,7 @@ async function main(args) {
       validateGoReleaseReference(requested.name, requested.release);
       targets.push(publicPlan(await prepare(requested)));
     }
-    const plan = { schema: "kodex.stable-go-plan/v1", context, clusterUID, targets };
+    const plan = { schema: "kodex.stable-go-plan/v2", context, clusterUID, targets };
     await createPrivate(options["--output"], plan);
     process.stdout.write(JSON.stringify({ status: "PASS", phase: "PLAN_ONLY", targets: targets.length,
       planSHA256: fingerprint(plan) }) + "\n");
@@ -93,10 +111,14 @@ async function main(args) {
   }
   requireValue(options["--plan"] && !options["--manifest"], "STABLE_ARGUMENTS_INVALID");
   const plan = await readPrivateJSON(options["--plan"]);
-  requireValue(plan.schema === "kodex.stable-go-plan/v1" && plan.context === context && plan.clusterUID === clusterUID &&
+  requireValue(plan.schema === "kodex.stable-go-plan/v2" && plan.context === context && plan.clusterUID === clusterUID &&
     Array.isArray(plan.targets) && plan.targets.length > 0 && plan.targets.length <= 16 &&
     new Set(plan.targets.map(t => t.name)).size === plan.targets.length, "STABLE_PLAN_IDENTITY_MISMATCH");
-  for (const item of plan.targets) validateGoReleaseReference(item.name, item.requested?.release);
+  for (const item of plan.targets) {
+    validateGoReleaseReference(item.name, item.requested?.release);
+    if (item.name === "session-archive") requireValue(item.archive &&
+      /^[a-f0-9]{64}$/.test(item.quiescedBeforeSpecSHA256 ?? ""), "STABLE_ARCHIVE_PLAN_INVALID");
+  }
   const idle = async () => {
     const stdout = await kubectl(["-n", "kodex-system", "exec", "-i", "kodex-postgresql-0", "--",
       "psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "control_plane"], await readFile(sqlPath, "utf8"));
@@ -123,11 +145,9 @@ async function main(args) {
       current.spec.replicas === 2 && current.status.observedGeneration >= current.metadata.generation &&
       current.status.replicas === 2 && current.status.readyReplicas === 2 && current.status.availableReplicas === 2 && current.status.updatedReplicas === 2,
       "STABLE_READBACK_MISMATCH");
-    const selector = `app.kubernetes.io/name=${item.name}`;
-    const list = JSON.parse(await kubectl(["-n", "kodex-system", "get", "replicasets,pods", "-l", selector, "-o", "json"]));
-    const owners = new Set(list.items.filter(r => r.kind === "ReplicaSet" &&
-      r.metadata.ownerReferences?.some(o => o.uid === item.uid && o.kind === "Deployment" && o.controller === true)).map(r => r.metadata.uid));
-    const pods = list.items.filter(r => r.kind === "Pod" && r.metadata.ownerReferences?.some(o => owners.has(o.uid) && o.controller === true));
+    if (item.name === "session-archive") requireValue(sameArchiveBoundary((await archiveRole()).proof, item.archive, "after"),
+      "STABLE_ARCHIVE_ROLE_READBACK_MISMATCH");
+    const pods = ownedDeploymentPods(await podList(item.name), item.uid);
     const digest = item.requested.release.image.split("@").at(-1);
     requireValue(pods.length === 2 && pods.every(p => !p.metadata.deletionTimestamp &&
       p.spec.containers.some(c => c.name === item.name && c.image === item.requested.release.image) &&
@@ -146,6 +166,7 @@ async function main(args) {
       requireValue(prepared.uid === item.uid && prepared.beforeSpecSHA256 === item.beforeSpecSHA256 &&
         prepared.afterSpecSHA256 === item.afterSpecSHA256 && prepared.storageSHA256 === item.storageSHA256,
         "STABLE_PLAN_DRIFT");
+      if (item.name === "session-archive") requireValue(sameArchiveBoundary(prepared.archive, item.archive), "STABLE_ARCHIVE_ROLE_DRIFT");
     }
     const preserved = await idle();
     await createPrivate(options["--output"], { schema: "kodex.stable-go-apply/v1", status: "IN_PROGRESS",
@@ -155,9 +176,46 @@ async function main(args) {
     try {
       for (const item of plan.targets) {
         requireValue(fingerprint(await idle()) === fingerprint(preserved), "STABLE_PINS_CHANGED");
-        const prepared = await prepare(item.requested);
+        let prepared = await prepare(item.requested);
         requireValue(prepared.uid === item.uid && prepared.beforeSpecSHA256 === item.beforeSpecSHA256 &&
           prepared.afterSpecSHA256 === item.afterSpecSHA256 && prepared.storageSHA256 === item.storageSHA256, "STABLE_PLAN_DRIFT");
+        if (item.name === "session-archive") {
+          requireValue(sameArchiveBoundary(prepared.archive, item.archive), "STABLE_ARCHIVE_ROLE_DRIFT");
+          const oldSpec = prepared.patch[2].value;
+          const quiesced = { ...oldSpec, replicas: 0 };
+          requireValue(fingerprint(quiesced) === item.quiescedBeforeSpecSHA256, "STABLE_ARCHIVE_QUIESCE_PLAN_MISMATCH");
+          await record({ name: item.name, status: "QUIESCE_ATTEMPT" });
+          await kubectl(["-n", "kodex-system", "patch", "deployment", item.name, "--type=json",
+            "--patch-file=/dev/stdin", "-o", "name"], JSON.stringify([...prepared.patch.slice(0, 3),
+            { op: "replace", path: "/spec", value: quiesced }]));
+          const deadline = Date.now() + 120000;
+          for (;;) {
+            const current = await get("deployment", item.name);
+            requireValue(current.metadata.uid === item.uid && fingerprint(current.spec) === item.quiescedBeforeSpecSHA256,
+              "STABLE_ARCHIVE_QUIESCE_DRIFT");
+            const pods = ownedDeploymentPods(await podList(item.name), item.uid);
+            if (current.status?.observedGeneration >= current.metadata.generation &&
+              (current.status.replicas ?? 0) === 0 && (current.status.readyReplicas ?? 0) === 0 &&
+              (current.status.availableReplicas ?? 0) === 0 && pods.length === 0) break;
+            requireValue(Date.now() < deadline, "STABLE_ARCHIVE_QUIESCE_TIMEOUT");
+            await new Promise(resolve => setTimeout(resolve, 250));
+          }
+          await record({ name: item.name, status: "QUIESCED", specSHA256: item.quiescedBeforeSpecSHA256 });
+          requireValue(fingerprint(await idle()) === fingerprint(preserved), "STABLE_PINS_CHANGED");
+          const boundary = await archiveRole();
+          requireValue(sameArchiveBoundary(boundary.proof, item.archive), "STABLE_ARCHIVE_ROLE_DRIFT");
+          if (boundary.proof.beforeRulesSHA256 !== boundary.proof.afterRulesSHA256) {
+            await record({ name: item.name, status: "ROLE_PATCH_ATTEMPT" });
+            await kubectl(["-n", "kodex-runtime", "patch", "role", "session-archive-controller", "--type=json",
+              "--patch-file=/dev/stdin", "-o", "name"], JSON.stringify(boundary.patch));
+          }
+          requireValue(sameArchiveBoundary((await archiveRole()).proof, item.archive, "after"), "STABLE_ARCHIVE_ROLE_READBACK_MISMATCH");
+          prepared = await prepare(item.requested);
+          requireValue(prepared.uid === item.uid && prepared.beforeSpecSHA256 === item.quiescedBeforeSpecSHA256 &&
+            prepared.afterSpecSHA256 === item.afterSpecSHA256 && prepared.storageSHA256 === item.storageSHA256,
+            "STABLE_ARCHIVE_ACTIVATION_DRIFT");
+          requireValue(sameArchiveBoundary(prepared.archive, item.archive, "after"), "STABLE_ARCHIVE_ROLE_DRIFT");
+        }
         await record({ name: item.name, status: "PATCH_ATTEMPT" });
         await kubectl(["-n", "kodex-system", "patch", "deployment", item.name, "--type=json",
           "--patch-file=/dev/stdin", "-o", "name"], JSON.stringify(prepared.patch));
@@ -174,6 +232,37 @@ async function main(args) {
     return;
   }
   requireValue(!options["--approved-plan-sha"], "STABLE_ARGUMENTS_INVALID");
+  if (mode === "inspect") {
+    const results = [];
+    for (const item of plan.targets) {
+      const current = await get("deployment", item.name), specSHA256 = fingerprint(current.spec);
+      requireValue(current.metadata.uid === item.uid, "STABLE_INSPECTION_IDENTITY_DRIFT");
+      let phase;
+      if (specSHA256 === item.afterSpecSHA256) {
+        await readback(item);
+        phase = "COMPILED_TWO_READY";
+      } else if (item.name === "session-archive" && specSHA256 === item.quiescedBeforeSpecSHA256) {
+        const boundary = (await archiveRole()).proof;
+        const before = sameArchiveBoundary(boundary, item.archive), after = sameArchiveBoundary(boundary, item.archive, "after");
+        requireValue(before || after, "STABLE_ARCHIVE_ROLE_DRIFT");
+        const pods = ownedDeploymentPods(await podList(item.name), item.uid);
+        const joined = current.status?.observedGeneration >= current.metadata.generation &&
+          (current.status.replicas ?? 0) === 0 && (current.status.readyReplicas ?? 0) === 0 &&
+          (current.status.availableReplicas ?? 0) === 0 && pods.length === 0;
+        requireValue(joined || before, "STABLE_ARCHIVE_ROLE_ACTIVATED_BEFORE_JOIN");
+        phase = joined ? (after ? "QUIESCED_ROLE_READY" : "QUIESCED") : "QUIESCING";
+      } else {
+        requireValue(specSHA256 === item.beforeSpecSHA256, "STABLE_INSPECTION_SPEC_DRIFT");
+        if (item.name === "session-archive") requireValue(sameArchiveBoundary((await archiveRole()).proof, item.archive),
+          "STABLE_ARCHIVE_ROLE_DRIFT");
+        phase = "SOURCE_UNCHANGED";
+      }
+      results.push({ name: item.name, uid: item.uid, phase, complete: phase === "COMPILED_TWO_READY", specSHA256 });
+    }
+    await createPrivate(options["--output"], { schema: "kodex.stable-go-inspection/v1", planSHA256: fingerprint(plan), results });
+    process.stdout.write(JSON.stringify({ status: "OBSERVED", phase: "INSPECTION_ONLY", results }) + "\n");
+    return;
+  }
   const results = [];
   for (const item of plan.targets) {
     results.push(await readback(item));

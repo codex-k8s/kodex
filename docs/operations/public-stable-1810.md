@@ -111,6 +111,16 @@ RBAC controller больше не выдаёт `deletecollection`; точечн�
 нужно для проверки predecessor. Worker сохраняет пустую Kubernetes роль.
 Поддерживаемый путь не содержит второго decoder или legacy API.
 
+Переход старого controller выполняется в отдельной фазе того же exact плана:
+CAS → `replicas=0` → observed zero и отсутствие owned Pod → повторный owner
+idle read → CAS только `Role.rules` из repo-owned manifest → compiled2.
+RoleBinding, UID ресурсов и storage/pins проверяются до каждой фазы.
+Новая роль не ставится при живом старом controller; возобновление writer не
+происходит при оставшемся Pod, drift, unknown ответе или занятом owner graph.
+Потерянный ответ patch фиксируется как `FAIL_OR_UNKNOWN`, не повторяется
+по предположению. Отдельный readback устанавливает достигнутое состояние;
+автоматическое восстановление старого hot startup cleanup запрещено.
+
 # Начальный журнал
 
 15.10.2026 02:35 Саратов: read-only DNS/ports/ingress inventory PASS,
