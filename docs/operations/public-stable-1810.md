@@ -1081,3 +1081,46 @@ Client-go leader election сам по себе не является fencing д�
 Timeout/cancel и lease gap ограничивают overlap штатного shutdown, а право
 на actual admission/promotion по-прежнему проверяет авторитетный владелец.
 Нельзя объявлять fencing доказанным только по двум Ready Pod или holder label.
+
+На exact `d795720cf77edcf835d0a06950e4bd6860407325`:
+
+- PASS99 Node tests без пропусков, PASS31 Python OCI tests, web-only render,
+  Bash syntax/ShellCheck и diff whitespace. Полный модуль role-image-builder:
+  `GOWORK=off go test -race ./...` и `go vet ./...` PASS на Go1.26.6.
+- Election tests используют настоящий client-go elector и fake Kubernetes
+  API с явно реализованным RV/UID CAS. Две replica с различными будущими run ID
+  создают одну admission/PVC и одну promotion Job; takeover сохраняет их.
+  Проверены lost renew/cancel/join, отсутствие раннего release, неготовность
+  при replacement Lease UID, stale RV и запрет writes из non-holder loop.
+  Первый race-запуск нашёл изменение reactor chain в тестовой оснастке во время
+  работы fake API. Переключение отказа заменено атомарным флагом до запуска
+  loops; итоговый полный `-race` повторён успешно. Это не live leader test.
+- Новый standalone `image-admission-controller` реально собран, digest
+  `sha256:9136cca57542a1af0aa80b2982d458107f3b1bf29d5b5f08557bd152c1911dd9`,
+  OCI21230080bytes. Образ содержит только controller, Bash/jq и renderer,
+  без scanners/signers/registry binaries. Полный OCI graph/hash/source receipt
+  проверен. В actual Docker container без сети/read-only/drop ALL прошли
+  renderer syntax и fail-closed запуск без обязательного Pod UID. Kubernetes
+  и AI этим запуском не вызывались.
+- Pull helper пересобран на том же source: digest
+  `sha256:a1a81dffac271688eb48db19a17277cd01c3b60117bc7e6dd8821e6ba6d78717`,
+  OCI3663360bytes. Его полный OCI graph и source receipt тоже PASS.
+- Реальные read-only publication plans PASS: controller commitment
+  `7fb862e095c42be131224c54fc7eb7fda95e26b60295dcf67c6af8631a1ce1dc`,
+  helper commitment
+  `e4758103505798b29b9daea86b30bf409fe4ab561c501e27ebd2cced5556e371`.
+  Неверный tools state directory был закрыто отклонён до output/helper effects;
+  затем выбран существующий профиль с тем же ранее проверенным tools imageID,
+  без изменения tag/state files. Публикация не выполнялась.
+- Actual Kubernetes server dry-run создания exact Lease и PDB PASS, без persist.
+  Context7 client-go leader election docs и исходный pinned v0.36.3 изучены:
+  отказ от `ReleaseOnCancel` и явный join необходимы для этого lifecycle;
+  автоматический process panic/`RunOrDie` не используется.
+
+Две живые controller replica, actual leader handoff и перенос его Role/image
+ещё NOT RUN: остаётся exact admission release workflow с drain старого binary,
+сохранением Lease transitions при recovery и fresh serving readback. Старые
+bootstrap/registry plans с предыдущим helper digest неприменимы к этому новому
+набору: перед owner gate их нужно пересоздать. Остальные controller profiles,
+public TLS/OIDC, проектные review/owner gate и финальная browser-приёмка также
+остаются открытыми. Live workload и main не менялись.
