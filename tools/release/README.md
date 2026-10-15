@@ -1,5 +1,26 @@
 # Независимое обновление приложений
 
+## Переход этой серверной установки на штатный профиль
+
+По решению владельца #1810 готовится отдельный переход с hot reload на
+immutable OCI и две реплики совместимых сервисов. План, exact проверки и
+текущее состояние — [OPS-PUBLIC-STABLE-001](../../docs/operations/public-stable-1810.md).
+Это не команда глобального dev bootstrap и не смена режима других установок.
+
+`stable-go-release.mjs` предоставляет `plan|apply|inspect|readback|rollback`;
+принимается только plan v3 с clean executor SHA. `plan` выполняет server-side
+dry-run каждого target без persist. Apply/rollback требуют отдельного допуска
+владельца на exact план после review. Для rollback обязательны исходный private
+apply journal и сохранённые pins. Обычные сервисы возвращаются к исходному
+spec/replicas, архиватор — строго к paused source с safe Role. Его доступность
+восстанавливается отдельным свежим forward plan исправленного compiled OCI,
+а не выдачей отозванного `deletecollection`. Recovery не объявляет релиз готовым.
+
+`stable-frontend-release.mjs` отдельно переключает nginx/TLS/Service/Ingress
+и immutable публичный runtime config; hostnames/SSO middleware сохраняются до
+самостоятельной публичной OIDC-фазы. Факт локальной сборки или synthetic
+recovery не заменяет registry/node pull и live browser приёмку.
+
 Задача: #1222, общий план: #1204.
 
 `scoped-release.mjs` обновляет digest образа или подготовленный source checkout

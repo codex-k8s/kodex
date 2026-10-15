@@ -832,3 +832,49 @@ Rollback дополнительно читает private apply journal с сов
 после exact owner gate, transport — scoped Kubernetes CAS. Это deploy recovery,
 не изменение доменных агрегатов; новые domain events не создаются, результат
 читается через actual Kubernetes/owner readback и private intent journal.
+
+## Проверки Go recovery и реальный план всех Go Deployment
+
+- На exact `bfd9476d7ed5f930dbabdb51acd274c4c24269d5` PASS 79 Node tests
+  без пропусков, 30 Python OCI tests и полный web-only render. Это локальные
+  и disposable проверки, не live acceptance.
+- На exact `cb551f5ba8ee9229a781bb4e738e3d446d97b7dd` PASS 24 проверки
+  cutover/recovery/inverse. Включены exact возврат spec/labels/replicas,
+  сохранение приватных env без копирования в recovery material, частичные
+  archive transitions, восстановление двумя репликами по новому forward плану,
+  foreign UID/RoleBinding/journal/pins и потерянный ответ restore без повторного
+  write. Старые plan schemas не принимаются. После запрета duplicate env
+  первоначально упало ожидание более позднего кода отказа в negative test;
+  уточнено ожидание закрытого отказа, свежий прогон24 завершился0.
+- На exact `bfd9476d7ed5f930dbabdb51acd274c4c24269d5` реальный server dry-run
+  всех12 Go Deployment PASS, plan commitment
+  `f0029ddc792890415544f05ae8fa86954726674434cafff53614818dbd3d1088`.
+  Использованы действительные собранные OCI/provenance, не fixture digests.
+  Inspect всех12 — `SOURCE_UNCHANGED`, `complete=false`; apply не выполнялся.
+- У всех12 исходных Go main containers подтверждены source workingDir и
+  build HOME. В compiled profile они снимаются, иначе distroless не может
+  использовать отсутствующее дерево исходников. Init spool тоже получает
+  compiled nonroot/read-only/drop ALL. Пустые args/env/mounts нормализованы
+  согласно фактическому Kubernetes JSON; server defaults сравниваются до
+  сохранения плана, inverse выводится из тех же exact spec.
+- У13 преобразуемых main/init containers read-only проверка не нашла
+  duplicate env names. Новые неизвестные/дублированные env закрыто отклоняются,
+  чтобы inverse не копировал неизменённые credentials из неоднозначного списка.
+- Свежий read-only owner snapshot: openBuilds/activeRuntimeRuns/
+  pendingAdmissions/pendingPromotions/claimedRuntimeLeases равны0,
+  promotedArtifactCount85, commitment
+  `f82202f667bdbfbe88ab3c02e9e39cf49baf3feb404bf2294728a88ad042f603`.
+  Это наблюдение, не maintenance lease и не подтверждение будущей idle-фазы.
+- Проверены Context7 Kubernetes API/JSON Patch docs: exact `test`/RV и
+  серверная проверка не заменяются безусловным merge patch.
+
+Для оставшейся ресурсной матрицы важно: две k3d node видят один физический
+сервер, каждая сообщает32 CPU и примерно126GiB. Их allocatable нельзя
+складывать как ресурсы двух серверов. Host snapshot: около126GiB total и83GiB
+available. Hot Go requests в основном50m/128Mi, ряд limits отсутствует;
+нормальный ресурсный профиль ещё требуется согласовать с repo manifests и
+общим бюджетом до применения. Изменения host/node limits не выполнялись.
+
+Go rollback/recovery реализован, но actual apply/rollback и две живые compiled
+реплики ещё NOT RUN. Archive pause — только аварийная фаза, не выполненная
+конечная цель. Новые images не опубликованы и не загружались узлами кластера.
