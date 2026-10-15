@@ -1151,3 +1151,40 @@ Readback и rollback требуют исходный owned0600 apply journal, ex
 и иной policy binding блокируют effects. Неизменённые env/секретные значения
 не копируются в план и journal. Применение остаётся за review и отдельным
 допуском владельца; synthetic recovery не является live acceptance.
+
+На exact `e7ed564e985ed3310ab01082dbc75702324ff0be`:
+
+- PASS108 Node tests без пропусков, PASS31 Python OCI tests, web-only render
+  и diff whitespace. Девять admission release tests покрывают exact source/
+  Role, lost Lease/PDB create, lost Role/activation/restore response, foreign
+  UID/Binding, owner/phase activity, credential drift и current leader proof.
+- Synthetic rollback возвращает исходные spec/labels/Role rules, сохраняет
+  Lease UID/transitions и PDB; повторное восстановление уже наблюдаемого source
+  не создаёт новых writes. Свежий forward plan переиспользует retained support
+  UID и не пересоздаёт lock. Private env sentinel отсутствует в plan/journal.
+- Дополнительно закрыт readback race: UID/metadata и holder берутся из одного
+  проверенного Lease snapshot. Во время ожидания заново читаются serving Pod;
+  потерявшая Ready replica не принимается по прежнему успешному снимку.
+- Actual read-only publication preflight нового controller OCI PASS,
+  commitment `4cc0589cd9e3e9099ccec7c35d620ae4dbdb6ab44eea30b23031e7287f0e3688`.
+  Реальный admission plan/server dry-run PASS, commitment
+  `60e47eda0d0a97269ef4a19eb79adb78b0983199e24498a07729184f5fe4c0fd`.
+  На предыдущем `0fe3863dce3974a191caed7490f13cc164f0688c` также PASS107 tests
+  и первый server dry-run; это не заменяет более позднюю проверку.
+- Source env read подтвердил `trusted-cluster`, `PAUSE_NEW_RUNS=false` и
+  `HOLD_PROOF_JOBS=false`. Migration не снимает неизвестный maintenance hold
+  молча. Secret values не читались этим read.
+
+Actual apply/rollback/handoff, публикация OCI, native fresh pull и две новые
+живые replica всё ещё NOT RUN. Code и планы не меняли live workload.
+
+### Владельцы остальных системных компонентов
+
+Read-only inventory текущего контура подтвердил: Traefik принадлежит встроенному
+K3s Helm release `traefik`/`traefik-crd`, а не bootstrap release с иным именем.
+Chart39.0.701+up39.0.7. Для его HA-профиля нужно сохранять этот deploy owner
+через соответствующий HelmChartConfig, не устанавливать второй ingress.
+CoreDNS и metrics-server — native K3s workloads; storage provisioner остаётся1.
+Cert-manager1.21.1, trust-manager0.24.0 и monitoring chart88.5.4 принадлежат
+существующим Helm releases. OAuth proxy chart10.7.0 уже имеет две replica.
+Это inventory, не изменение их release/configuration и не завершение этапа2.
