@@ -4,7 +4,7 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.1.3
+version: 1.1.4
 updated: 2026-10-15
 ---
 
@@ -1246,3 +1246,38 @@ Helm предупреждает, что dry-run может содержать Se
   работают в исходных revisions, штатный cutover пока не выполнен. Нужны
   соответствующий guarded apply/recovery, native K3s/resource профиль,
   публичная OIDC-фаза, review/отдельный owner gate и live проверки.
+
+## Жизненный цикл Helm-перехода и forward recovery
+
+План заменён v2 без compatibility reader. Он связывает полный live набор
+chart-объектов по UID и configuration commitment, Secret/ConfigMap — по UID/RV
+без чтения data. Неизменяемые Helm values/render с возможными credentials
+читаются только в память для exact source/desired/recovery commitments.
+Current release и immutable source revision не подменяются значением «last».
+Перед фактическим upgrade используются pinned values с `--reset-values`,
+а не неопределённое повторное слияние с изменившимся current release.
+
+| Переход | Источник полномочий и проверки | Эффект и авторитетное чтение |
+| --- | --- | --- |
+| plan | SRE в exact выданном context, clean executor, существующие chart/version/revision | Server dry-run desired/recovery; private v2 plan; доменного события нет |
+| apply | Отдельный owner OK на plan hash после review; полный повторный preflight всех releases и каждой строки, cluster UID/source guard | Fsync intent → один Helm upgrade существующего release; новый operation marker/revision; authoritative Helm status/manifest/config и Kubernetes UID/configuration |
+| потерянный ответ/crash | Исходный private journal, exact operation marker, revision и source/desired hashes; прежний процесс должен завершиться | inspect только читает известные before/after состояния; upgrade не повторяется; pending lock вручную не снимается |
+| readback | Исходный apply journal и неизменный v2 plan | Только deployed phase after, все объекты desired; actual owned Pod counts и одинаковые прежние main/init image IDs; не новый rollout |
+| rollback | Отдельный owner OK на тот же plan hash, все releases/UID/configuration проверены до первого restore | Новый forward Helm upgrade с исходными values; replicas/resources source, PDB сохраняются с теми же UID; domain state не откатывается |
+| повторное восстановление | Уже наблюдаемая exact recovery revision/marker/configuration и serving proof | Только readback, повторного Helm upgrade нет |
+| foreign drift/pending/unknown | Чужая revision/marker/UID, Secret RV либо неизвестная configuration закрыто отклоняются | Никаких force/unlock/delete/слепого retry; отдельный bounded разбор состояния; PASS не объявляется |
+
+Source-owned Role в leader/trust namespaces остаются на своих exact путях;
+read не принуждает их к release namespace и не переносит authority. Для
+Alertmanager дополнительно проверяются owner CR UID, StatefulSet UID и storage
+template/retention commitment. `whenScaled/whenDeleted=Delete` блокирует переход;
+первая/вторая per-replica PVC не удаляются при восстановлении одной replica.
+Domain grants/leases/inbox/events и runtime executions не меняются этим
+служебным переходом. Native leader election upstream компонентов сохраняется;
+проверка замены лидера на живых двух репликах остаётся отдельной после owner gate.
+
+Команда восстановления не использует Helm rollback с удалением новых объектов.
+Новый release driver пишет только metadata/commitments/receipts; credentials
+не передаются в argv и не попадают в private journal/stdout. Synthetic tests
+проверяют lost apply/restore ACK, foreign UID/revision/operation, credential RV,
+pending lock, повторный restore и сохранение PDB. Actual применение NOT RUN.

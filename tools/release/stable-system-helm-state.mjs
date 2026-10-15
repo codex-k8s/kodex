@@ -38,7 +38,9 @@ export async function readSystemObjects(profile, rendered, kube) {
     const items = definitions.filter(r => metadataOnly(r) === onlyMetadata);
     if (!items.length) continue;
     const format = onlyMetadata ? 'jsonpath={range .items[*]}{.apiVersion}{"|"}{.kind}{"|"}{.metadata.namespace}{"|"}{.metadata.name}{"|"}{.metadata.uid}{"|"}{.metadata.resourceVersion}{"\\n"}{end}' : "json";
-    const raw = await kube(["-n", profile.namespace, "get", "-f", "/dev/stdin", "--ignore-not-found", "-o", format],
+    // Helm владеет также exact Role в leader/trust namespaces. -n здесь
+    // принудительно заменил бы namespace документов и сломал cross-namespace read.
+    const raw = await kube(["get", "-f", "/dev/stdin", "--ignore-not-found", "-o", format],
       JSON.stringify({ apiVersion: "v1", kind: "List", items }));
     const resources = onlyMetadata ? raw.trim().split("\n").filter(Boolean).map(line => {
       const values = line.split("|");
@@ -167,11 +169,13 @@ export async function systemServing(profile, kube, baseline, count) {
     const selector = Object.entries(labels).sort().map(([k, v]) => `${k}=${v}`).join(",");
     const list = JSON.parse(await kube(["-n", profile.namespace, "get", target.kind === "Deployment" ? "replicasets,pods" : "pods",
       "-l", selector, "-o", "json"]));
-    let pods;
+    let pods, operatorOwnerUID;
     if (target.kind === "Deployment") pods = activeDeploymentPods(list, d.metadata.uid);
     else {
-      requireValue(d.metadata.ownerReferences?.some(o => o.kind === "Alertmanager" && o.name === profile.alertmanager && o.controller === true),
-        "SYSTEM_HELM_OPERATED_OWNER_INVALID");
+      const owners = d.metadata.ownerReferences?.filter(o => o.kind === "Alertmanager" && o.name === profile.alertmanager && o.controller === true) ?? [];
+      requireValue(owners.length === 1 && owners[0].uid, "SYSTEM_HELM_OPERATED_OWNER_INVALID"); operatorOwnerUID = owners[0].uid;
+      requireValue(["whenScaled", "whenDeleted"].every(k => (d.spec.persistentVolumeClaimRetentionPolicy?.[k] ?? "Retain") === "Retain"),
+        "SYSTEM_HELM_OPERATED_STORAGE_RETENTION_INVALID");
       requireValue(Array.isArray(list.items) && list.items.every(p => p.metadata.ownerReferences?.some(o => o.kind === "StatefulSet" &&
         o.uid === d.metadata.uid && o.controller === true)), "SYSTEM_HELM_FOREIGN_SERVING_POD");
       pods = list.items.filter(p => !isProvenStoppedPod(p));
@@ -195,7 +199,10 @@ export async function systemServing(profile, kube, baseline, count) {
         }
       }
     }
-    const observed = { kind: target.kind, name: target.name, uid: d.metadata.uid, images: [...images].sort().map(([name, imageID]) => ({ name, imageID })) };
+    const observed = { kind: target.kind, name: target.name, uid: d.metadata.uid,
+      ...(target.kind === "StatefulSet" ? { operatorOwnerUID, storageSHA256: fingerprint({ claims: d.spec.volumeClaimTemplates ?? [],
+        retention: d.spec.persistentVolumeClaimRetentionPolicy ?? {} }) } : {}),
+      images: [...images].sort().map(([name, imageID]) => ({ name, imageID })) };
     requireValue(!previous || fingerprint(observed) === fingerprint(previous), "SYSTEM_HELM_SERVING_IMAGE_CHANGED");
     proof.push(observed);
   }

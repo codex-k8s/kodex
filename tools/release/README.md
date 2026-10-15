@@ -18,9 +18,24 @@ cert-manager/cainjector/webhook/trust-manager, kube-state-metrics и Alertmanage
 resource bounds и exact PDB. Сравниваются все объекты исходного и нового render:
 Secret, ключи, сертификаты, RBAC, PVC, images и любой посторонний объект должны
 остаться неизменными. В плане только commitments, metadata и перечень изменений;
-Helm values/render с возможными secrets остаются в памяти. Эта команда не
-предоставляет apply и сама не завершает системный cutover. Operator Prometheus
-без leader election остаётся1 вместе с ранее согласованными singleton.
+Helm values/render с возможными secrets остаются в памяти. Plan v2 связывает
+все165 объектов текущих chart по UID/configuration; Secret/ConfigMap читаются
+только через UID/RV, без data. Operator Prometheus без leader election остаётся1
+вместе с ранее согласованными singleton.
+
+`stable-system-helm-release.mjs apply|inspect|readback|rollback` принимает
+`--context k3d-kodex --charts /absolute/chart-directory --plan /private/v2-plan
+--output /private/new-journal`. Apply/rollback требуют `--approved-plan-sha`
+после review и отдельного owner gate; кроме apply нужен `--journal` исходного
+apply. Старые планы v1 не принимаются. Перед upgrade повторяются полный render,
+revision, UID/configuration и clean source guards. Намерение fsync записывается
+до Helm; неизвестный ответ не повторяется, проверяется exact revision/operation
+и сохранённый render/values commitment. `inspect` не означает serving acceptance.
+Readback проверяет две актуальные owned replica и прежние image IDs main/init.
+Restore выполняется новой forward revision из exact первоначальных values,
+с сохранением созданных PDB UID. Ручное снятие pending Helm lock, массовый
+rollback «на предыдущую revision», удаление PVC/Secret/PDB и force запрещены.
+Failed/pending частичный переход не выдаётся за готовность.
 
 `stable-go-release.mjs` предоставляет `plan|apply|inspect|readback|rollback`;
 принимается только plan v3 с clean executor SHA. `plan` выполняет server-side

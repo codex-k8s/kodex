@@ -93,6 +93,8 @@ export async function planSystemHelm(args, port, internal = {}) {
     requireValue(fingerprint(fresh) === fingerprint(metadata) && fingerprint(freshValues) === fingerprint(values),
       "SYSTEM_HELM_SOURCE_CHANGED_DURING_PLAN");
     const serving = await systemServing(profile, kube);
+    requireValue(!profile.alertmanager || serving.find(s => s.kind === "StatefulSet")?.operatorOwnerUID ===
+      objects.find(o => o.kind === "Alertmanager" && o.name === profile.alertmanager)?.uid, "SYSTEM_HELM_OPERATED_OWNER_INVALID");
     rows.push({ name: profile.name, namespace: profile.namespace, release: profile.release, sourceRevision: metadata.revision,
       metadataSHA256: fingerprint(metadata), valuesSHA256: fingerprint(values), profileSHA256: fingerprint(profile),
       desiredValuesSHA256: fingerprint(dryRun.config), recoveryValuesSHA256: fingerprint(recoveryValues),
@@ -101,6 +103,8 @@ export async function planSystemHelm(args, port, internal = {}) {
   }
   requireValue(JSON.parse(await kube(["get", "namespace", "kube-system", "-o", "json"])).metadata.uid === clusterUID,
     "SYSTEM_HELM_CLUSTER_CHANGED");
+  requireValue((await run("git", ["rev-parse", "HEAD"])).trim() === source &&
+    !(await run("git", ["status", "--porcelain", "--untracked-files=normal"])).trim(), "SYSTEM_HELM_SOURCE_CHANGED_DURING_PLAN");
   const plan = { schema: "kodex.stable-system-helm-plan/v2", source, context, clusterUID, rows, apply: "NOT_RUN" };
   const document = { plan, planSHA256: fingerprint(plan) };
   if (internal.inMemory) return { document, runtime };
