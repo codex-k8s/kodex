@@ -20,12 +20,14 @@ test("compiled nginx validates actual TLS config as nonroot without network or r
     for (const name of ["fixture.key", "fixture.crt"]) chmodSync(join(directory, name), 0o444);
     writeFileSync(join(directory, "security-headers.conf"), readFileSync(base + "security-headers.conf", "utf8")
       .replaceAll("__KODEX_OIDC_ORIGIN__", "https://sso.example.test"), { mode: 0o444 });
+    writeFileSync(join(directory, "public-assets.conf"), readFileSync(base + "public-assets.conf"), { mode: 0o444 });
     const mounts = [
       ["fixture.key", "/var/run/secrets/kodex/staff-control-center/backend-tls/tls.key"],
       ["fixture.crt", "/var/run/secrets/kodex/staff-control-center/backend-tls/tls.crt"],
       ["fixture.crt", "/var/run/secrets/kodex/staff-control-center/ingress-client-tls/ca.crt"],
       ["fixture.crt", "/var/run/config/kodex/staff-control-center/control-api-ca/ca.crt"],
       ["security-headers.conf", "/var/run/config/kodex/staff-control-center/runtime/security-headers.conf"],
+      ["public-assets.conf", "/var/run/config/kodex/staff-control-center/runtime/public-assets.conf"],
     ];
     const output = execFileSync("docker", ["run", "--rm", "--pull=never", "--network=none", "--read-only", "--user", "101:101",
       "--cap-drop=ALL", "--security-opt=no-new-privileges", "--entrypoint", "nginx",
