@@ -103,11 +103,17 @@ export async function releasePublicEdge(args, hostFilesystem = { lstat, open }) 
       return (await invocation).stdout;
     } catch { throw Error("EDGE_OPERATION_FAILED_OR_UNKNOWN"); }
   };
-  const kube = (argv, input, source = false) => run("kubectl", source ? ["--kubeconfig", plan.source.kubeconfig,
+  const kube = (argv, input, source = false) => !source && plan.edgeNode ? run("docker", ["exec", "-i", plan.edgeNode.name, "kubectl", "--request-timeout=30s", ...argv], input) : run("kubectl", source ? ["--kubeconfig", plan.source.kubeconfig,
     "--context", plan.source.context, "--request-timeout=30s", ...argv] :
   ["--context", plan.context, "--request-timeout=30s", ...argv], input);
   const get = async (argv, source = false) => JSON.parse(await kube([...argv, "-o", "json"], undefined, source));
   const identities = async () => {
+    if (plan.edgeNode) {
+      requireValue(/^k3d-[a-z0-9-]+-server-[0-9]+$/.test(plan.edgeNode.name ?? "") && /^[a-f0-9]{64}$/.test(plan.edgeNode.id ?? ""), "EDGE_NODE_IDENTITY_INVALID");
+      const node = JSON.parse(await run("docker", ["inspect", plan.edgeNode.name]))[0];
+      requireValue(node?.Id === plan.edgeNode.id && node.State?.Running && node.Config?.Labels?.["k3d.cluster"] &&
+        node.Config.Labels["k3d.cluster"] !== "kodex" && node.Config.Labels["k3d.role"] === "server", "EDGE_NODE_IDENTITY_INVALID");
+    }
     const sourceFile = await open(plan.source.kubeconfig, constants.O_RDONLY | constants.O_NOFOLLOW);
     try {
       const stat = await sourceFile.stat();

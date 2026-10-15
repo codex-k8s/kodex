@@ -48,12 +48,12 @@ export async function keycloakAPI(origin, connectIP, ca, clientID, clientSecret)
 export async function publicClients(args, port, apiPort = keycloakAPI) {
   const mode = args.shift(), options = {};
   while (args.length) {
-    const key = args.shift(); requireValue(["--context", "--output", "--plan", "--journal", "--tls-phase", "--approved-plan-sha"].includes(key) &&
+    const key = args.shift(); requireValue(["--context", "--output", "--plan", "--journal", "--tls-phase", "--approved-plan-sha", "--approved-executor-sha"].includes(key) &&
       !Object.hasOwn(options, key) && args.length, "PUBLIC_CLIENT_ARGUMENTS_INVALID"); options[key] = args.shift();
   }
-  requireValue(["plan", "apply", "inspect", "readback", "rollback"].includes(mode) && options["--context"] === "k3d-kodex" &&
+  requireValue(["plan", "apply", "continue", "inspect", "readback", "rollback"].includes(mode) && options["--context"] === "k3d-kodex" &&
     options["--output"]?.startsWith("/") && (mode === "plan" ? !options["--plan"] && !options["--journal"] : options["--plan"]) &&
-    (["inspect", "readback", "rollback"].includes(mode) ? options["--journal"] : !options["--journal"]) &&
+    (["continue", "inspect", "readback", "rollback"].includes(mode) ? options["--journal"] : !options["--journal"]) &&
     ["before", "after"].includes(options["--tls-phase"] ?? "before"), "PUBLIC_CLIENT_ARGUMENTS_INVALID");
   const parent = await lstat(dirname(options["--output"]));
   requireValue(parent.isDirectory() && parent.uid === process.getuid() && (parent.mode & 0o777) === 0o700, "PUBLIC_CLIENT_PRIVATE_DIRECTORY_REQUIRED");
@@ -90,12 +90,17 @@ export async function publicClients(args, port, apiPort = keycloakAPI) {
       endpoints: publicEndpoints(sourceEndpoints, profile), rows: [], apply: "NOT_RUN" };
   } else {
     const document = await readPrivateJSON(options["--plan"]); plan = document.plan; hash = fingerprint(plan);
-    requireValue(plan.schema === "kodex.public-clients-plan/v1" && document.planSHA256 === hash && plan.source === source && plan.context === context &&
+    if (plan.source !== source) {
+      requireValue(mode !== "apply" && options["--approved-executor-sha"] === source && /^[a-f0-9]{40}$/.test(plan.source ?? ""), "PUBLIC_CLIENT_EXECUTOR_CONFIRMATION_REQUIRED");
+      await run("git", ["merge-base", "--is-ancestor", plan.source, source]);
+      await run("git", ["diff", "--quiet", plan.source, source, "--", "tools/release/stable-public-clients-model.mjs", "infra/public-ingress/identity-profile.json"]);
+    } else requireValue(!options["--approved-executor-sha"] || options["--approved-executor-sha"] === source, "PUBLIC_CLIENT_EXECUTOR_CONFIRMATION_REQUIRED");
+    requireValue(plan.schema === "kodex.public-clients-plan/v1" && document.planSHA256 === hash && plan.context === context &&
       plan.profileSHA256 === fingerprint(profile) && fingerprint(plan.boundary) === fingerprint(boundary) && plan.rows?.length === 2 &&
       plan.rows.map(r => r.clientId).join(",") === "kodex-control-center,kodex-control-center-proxy" &&
       sourceEndpoints.metadata.uid === plan.endpoints.uid &&
       [fingerprint(plan.endpoints.before), fingerprint(plan.endpoints.after)].includes(fingerprint(sourceEndpoints.data)), "PUBLIC_CLIENT_PLAN_DRIFT");
-    requireValue(["apply", "rollback"].includes(mode) ? options["--approved-plan-sha"] === hash : !options["--approved-plan-sha"], "PUBLIC_CLIENT_EXACT_OWNER_CONFIRMATION_REQUIRED");
+    requireValue(["apply", "continue", "rollback"].includes(mode) ? options["--approved-plan-sha"] === hash : !options["--approved-plan-sha"], "PUBLIC_CLIENT_EXACT_OWNER_CONFIRMATION_REQUIRED");
   }
   const assertBoundary = async () => {
     await assertSource();
@@ -119,7 +124,7 @@ export async function publicClients(args, port, apiPort = keycloakAPI) {
     originalJournalSHA256 = fingerprint(records);
     const header = records.shift(); requireValue(header.schema === "kodex.public-clients-journal/v1" && header.mode === "apply" && header.planSHA256 === hash && records.length <= 16,
       "PUBLIC_CLIENT_JOURNAL_INVALID");
-    if (mode === "rollback") requireValue(["COMPLETE", "UNKNOWN"].includes(records.at(-1)?.status), "PUBLIC_CLIENT_ORIGINAL_EXECUTOR_NOT_TERMINAL");
+    if (["continue", "rollback"].includes(mode)) requireValue(["COMPLETE", "UNKNOWN"].includes(records.at(-1)?.status), "PUBLIC_CLIENT_ORIGINAL_EXECUTOR_NOT_TERMINAL");
     for (const r of records) {
       requireValue(["APPLY_INTENT", "APPLIED", "UNKNOWN", "COMPLETE"].includes(r.status), "PUBLIC_CLIENT_JOURNAL_INVALID");
       if (r.status === "APPLY_INTENT") { requireValue(plan.rows.some(row => row.clientId === r.clientId) && !intents.has(r.clientId), "PUBLIC_CLIENT_JOURNAL_INVALID"); intents.add(r.clientId); }
@@ -167,6 +172,7 @@ export async function publicClients(args, port, apiPort = keycloakAPI) {
       const row = plan.rows.find(r => r.clientId === name), phase = publicClientPhase(value, row);
       requireValue(phase === "before" || intents.has(name), "PUBLIC_CLIENT_UNOWNED_AFTER_STATE");
       if (mode === "apply") requireValue(phase === "before", "PUBLIC_CLIENT_PREDECESSOR_INVALID");
+      if (mode === "continue") requireValue(phase === "after" && intents.has(name) || phase === "before" && !intents.has(name), "PUBLIC_CLIENT_UNKNOWN_PUT_REQUIRES_OWNER");
       if (mode === "readback") requireValue(phase === "after", "PUBLIC_CLIENT_READBACK_INCOMPLETE");
       if (mode === "rollback" && intents.has(name)) requireValue(acknowledged.has(name), "PUBLIC_CLIENT_UNKNOWN_PUT_REQUIRES_OWNER");
       if (recoveryComplete) requireValue(phase === "before", "PUBLIC_CLIENT_COMPLETED_RECOVERY_DRIFT");
@@ -191,17 +197,33 @@ export async function publicClients(args, port, apiPort = keycloakAPI) {
   };
   try {
     if (mode === "plan") { await record({ plan, planSHA256: fingerprint(plan) }); return { plan }; }
-    await record({ schema: "kodex.public-clients-journal/v1", mode, planSHA256: hash });
+    await record({ schema: "kodex.public-clients-journal/v1", mode: mode === "continue" ? "apply" : mode, planSHA256: hash,
+      ...(mode === "continue" ? { originalJournalSHA256, executor: source } : {}) });
+    if (mode === "continue") for (const row of plan.rows.filter(r => intents.has(r.clientId))) {
+      // Exact full configuration hash подтверждает уже выполненный PUT.
+      // Неизвестный before-state никогда не переписывается повторно.
+      requireValue(publicClientPhase(await read(row.clientId), row) === "after", "PUBLIC_CLIENT_CONTINUATION_DRIFT");
+      await record({ status: "APPLY_INTENT", clientId: row.clientId });
+      await record({ status: "APPLIED", clientId: row.clientId }); acknowledged.add(row.clientId);
+    }
     if (["inspect", "readback"].includes(mode)) { await record({ status: mode === "inspect" ? "OBSERVED" : "SERVING", clients: plan.rows.map(row =>
       ({ clientId: row.clientId, phase: publicClientPhase(current.get(row.clientId), row) })) }); return { plan }; }
-    for (const row of (mode === "apply" ? plan.rows : [...plan.rows].reverse())) {
+    const forward = ["apply", "continue"].includes(mode);
+    for (const row of (forward ? plan.rows : [...plan.rows].reverse())) {
       const client = await read(row.clientId), phase = publicClientPhase(client, row);
+      if (mode === "continue" && acknowledged.has(row.clientId)) continue;
       if (mode === "rollback" && phase === "before") continue;
       await assertBoundary();
-      await record({ status: mode === "apply" ? "APPLY_INTENT" : "ROLLBACK_INTENT", clientId: row.clientId });
-      await api("PUT", "/admin/realms/kodex/clients/" + row.id, publicClientPut(client, row, mode === "apply"));
-      requireValue(publicClientPhase(await read(row.clientId), row) === (mode === "apply" ? "after" : "before"), "PUBLIC_CLIENT_PUT_RESULT_UNKNOWN");
-      await record({ status: mode === "apply" ? "APPLIED" : "RESTORED", clientId: row.clientId });
+      await record({ status: forward ? "APPLY_INTENT" : "ROLLBACK_INTENT", clientId: row.clientId });
+      await api("PUT", "/admin/realms/kodex/clients/" + row.id, publicClientPut(client, row, forward));
+      let settled = false;
+      for (let attempt = 0; attempt < 8 && !settled; attempt++) {
+        try { settled = publicClientPhase(await read(row.clientId), row) === (forward ? "after" : "before"); }
+        catch (error) { if (error.message !== "PUBLIC_CLIENT_CONFIGURATION_DRIFT") throw error; }
+        if (!settled) await new Promise(resolve => setTimeout(resolve, 250));
+      }
+      requireValue(settled, "PUBLIC_CLIENT_PUT_RESULT_UNKNOWN");
+      await record({ status: forward ? "APPLIED" : "RESTORED", clientId: row.clientId });
     }
     await record({ status: "COMPLETE" }); return { plan };
   } catch (error) { await record({ status: "UNKNOWN" }); throw error; }

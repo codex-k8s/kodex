@@ -87,7 +87,7 @@ async function main(args) {
   const options = {};
   while (args.length) {
     const key = args.shift();
-    requireValue(["--config", "--context", "--output", "--kodex-context", "--kodex-kubeconfig"].includes(key) && !Object.hasOwn(options, key) && args.length,
+    requireValue(["--config", "--context", "--output", "--kodex-context", "--kodex-kubeconfig", "--edge-node"].includes(key) && !Object.hasOwn(options, key) && args.length,
       "EDGE_ARGUMENTS_INVALID");
     options[key] = args.shift();
   }
@@ -99,8 +99,18 @@ async function main(args) {
   const config = await readPrivateJSON(resolve(options["--config"]));
   const rendered = renderPublicEdge(config);
   const env = Object.fromEntries(["HOME", "PATH", "LANG", "KUBECONFIG"].filter(k => process.env[k]).map(k => [k, process.env[k]]));
+  let edgeNode;
+  if (options["--edge-node"]) {
+    requireValue(/^k3d-[a-z0-9-]+-server-[0-9]+$/.test(options["--edge-node"]), "EDGE_NODE_IDENTITY_INVALID");
+    const node = JSON.parse((await execute("docker", ["inspect", options["--edge-node"]], { env, timeout: 15000, maxBuffer: 1 << 20 })).stdout)[0];
+    requireValue(node?.State?.Running && node.Config?.Labels?.["k3d.cluster"] && node.Config.Labels["k3d.cluster"] !== "kodex" &&
+      node.Config.Labels["k3d.role"] === "server" && /^[a-f0-9]{64}$/.test(node.Id ?? ""), "EDGE_NODE_IDENTITY_INVALID");
+    edgeNode = { name: options["--edge-node"], id: node.Id };
+  }
   const get = async arguments_ => {
-    const { stdout } = await execute("kubectl", ["--context", context, "--request-timeout=15s", ...arguments_, "-o", "json"],
+    const { stdout } = await execute(edgeNode ? "docker" : "kubectl", edgeNode ?
+      ["exec", edgeNode.name, "kubectl", "--request-timeout=15s", ...arguments_, "-o", "json"] :
+      ["--context", context, "--request-timeout=15s", ...arguments_, "-o", "json"],
       { env, timeout: 20000, maxBuffer: 8 << 20 });
     return JSON.parse(stdout);
   };
@@ -113,8 +123,8 @@ async function main(args) {
   // Начальный plan создаёт только новые ресурсы. Recovery продолжает прежний
   // журнал, а не принимает существующий объект по одному managed-by label.
   requireValue(!existing.items.some(r => managedObjects.has(`${r.kind}/${r.metadata.name}`)), "EDGE_NAME_COLLISION");
-  const caName = await execute("kubectl", ["--context", context, "--request-timeout=15s", "-n", config.namespace,
-    "get", "secret", "kodex-public-edge-upstream-ca", "--ignore-not-found", "-o", "name"],
+  const caArgs = ["--request-timeout=15s", "-n", config.namespace, "get", "secret", "kodex-public-edge-upstream-ca", "--ignore-not-found", "-o", "name"];
+  const caName = await execute(edgeNode ? "docker" : "kubectl", edgeNode ? ["exec", edgeNode.name, "kubectl", ...caArgs] : ["--context", context, ...caArgs],
   { env, timeout: 20000, maxBuffer: 4096 });
   requireValue(caName.stdout.trim() === "", "EDGE_NAME_COLLISION");
   const namespace = await get(["get", "namespace", config.namespace]);
@@ -152,6 +162,7 @@ async function main(args) {
   const directory = resolve(options["--output"]);
   await mkdir(directory, { mode: 0o700 });
   const plan = { schema: "kodex.public-edge-plan/v2", context, clusterUID: cluster.metadata.uid,
+    ...(edgeNode ? { edgeNode } : {}),
     namespaceUID: namespace.metadata.uid, config, contentSHA256: rendered.contentSHA256,
     protectedSHA256: protectedCommitment(existing.items), peers, source: { context: options["--kodex-context"],
       kubeconfig: options["--kodex-kubeconfig"], clusterUID: sourceCluster.metadata.uid,

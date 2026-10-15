@@ -76,8 +76,8 @@ async function fixture(t) {
   const invoke = async (mode, file, override) => {
     const { plan } = JSON.parse(await readFile(planPath, "utf8"));
     return publicClients([mode, "--context", "k3d-kodex", "--plan", planPath, "--output", dir + "/" + file,
-      ...(["inspect", "readback", "rollback"].includes(mode) ? ["--journal", dir + "/apply.jsonl"] : []),
-      ...(["apply", "rollback"].includes(mode) ? ["--approved-plan-sha", override ?? fingerprint(plan)] : [])], command, factory);
+      ...(["continue", "inspect", "readback", "rollback"].includes(mode) ? ["--journal", dir + "/apply.jsonl"] : []),
+      ...(["apply", "continue", "rollback"].includes(mode) ? ["--approved-plan-sha", override ?? fingerprint(plan)] : [])], command, factory);
   };
   const writes = () => trace.filter(r => r.program === "api" && r.method === "PUT");
   return { dir, makePlan, invoke, trace, flags, clients, endpoint, ca, writes };
@@ -111,6 +111,15 @@ test("lost API PUT response can be inspected but is never retried or automatical
   await f.invoke("inspect", "inspect.jsonl"); assert.equal(f.writes().length, 1);
   await assert.rejects(f.invoke("rollback", "rollback.jsonl"), /PUBLIC_CLIENT_UNKNOWN_PUT_REQUIRES_OWNER/);
   assert.equal(f.writes().length, 1);
+});
+
+test("explicit continuation observes exact completed PUT and writes only the untouched next client", async t => {
+  const f = await fixture(t); await f.makePlan(); f.flags.lostPut = true;
+  await assert.rejects(f.invoke("apply", "apply.jsonl"), /FIXTURE_PUT_ACK_LOST/);
+  await f.invoke("continue", "continued.jsonl"); assert.equal(f.writes().length, 2);
+  const rows = (await readFile(f.dir + "/continued.jsonl", "utf8")).trim().split("\n").map(JSON.parse);
+  assert.equal(rows[0].mode, "apply"); assert.ok(rows[0].originalJournalSHA256);
+  assert.equal(rows.filter(r => r.status === "APPLIED").length, 2);
 });
 
 test("lost rollback PUT ACK leaves a canonical recovery claim; another output cannot replay the write", async t => {

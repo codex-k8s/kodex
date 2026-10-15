@@ -1893,3 +1893,29 @@ public routes/patches, model и shared Helm executor, synthetic canonical
 apply/readback/recovery, lost ACK и foreign UID/config/pins rejection. Actual
 public prepare и последующие phases пока NOT RUN; следующий шаг — clean SHA,
 публикация в тот же PR и исполнение scoped prepare.
+
+На `79bdd87e87492f733b4eb94c39e99c39c3f2c0e4`38 targeted tests PASS;
+fresh identity baseline и prepare plan/apply/отдельный readback PASS.
+Prepare plan `5068f656c9692e9a11d28d610c9bb18567e77655d0c1a5eb4b7a8dce70590c62`:
+оба новых leaf выпущены, проверены hostname/срок/подпись CA; runtime CM создан.
+Identity phase actual dry-run PASS, mutation ещё NOT RUN.
+
+Первый client PUT применил точные callback/origin/logout, но немедленное
+чтение на двухрепличном Keycloak дало transient configuration hash FAIL.
+Позднейший read-only readback доказал полный exact after hash; обратная
+подстановка трёх origin полей восстанавливает прежний полный before hash.
+Права/scopes/grants/прочие attributes не изменились. Второй клиент остался
+before. Новый `continue` требует terminal исходного journal и exact after
+для прежнего intent; только untouched следующий клиент получает PUT. Ни
+неизвестный before, ни уже выполненный PUT не повторяются. После PUT добавлено
+bounded read-only ожидание exact after; неизвестный итог остаётся ошибкой.
+Новый executor подтверждается exact SHA, ancestry и неизменной client model.
+Подготовленный cutover baseline также допускает только явно подтверждённый
+новый executor при неизменных models/profile, без редактирования старого плана.
+
+У host kubectl отсутствует прежний внешний context. Внешний edge workflow
+получил явный `--edge-node`: команды выполняются штатным kubectl внутри exact
+существующего k3d server без экспорта kubeconfig. Docker ID/role/cluster и
+Kubernetes cluster UID связываются с sealed plan и повторно проверяются перед
+операцией. Исходный Kodex context остаётся отдельным; соседние объекты не
+меняются. Новый узел/кластер/ingress не устанавливается.

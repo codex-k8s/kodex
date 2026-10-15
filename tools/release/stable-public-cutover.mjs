@@ -38,7 +38,7 @@ export function publicLeafProof(pem, caPEM, hostname) {
 export async function publicCutover(args, port) {
   const mode = args.shift(), options = {};
   while (args.length) {
-    const k = args.shift(); requireValue(["--context", "--stage", "--baseline", "--plan", "--journal", "--output", "--approved-plan-sha"].includes(k) &&
+    const k = args.shift(); requireValue(["--context", "--stage", "--baseline", "--plan", "--journal", "--output", "--approved-plan-sha", "--approved-executor-sha"].includes(k) &&
       !Object.hasOwn(options, k) && args.length, "PUBLIC_CUTOVER_ARGUMENTS_INVALID"); options[k] = args.shift();
   }
   requireValue(["plan", "apply", "inspect", "readback", "rollback"].includes(mode) && options["--context"] === "k3d-kodex" &&
@@ -65,6 +65,13 @@ export async function publicCutover(args, port) {
     !(await run("git", ["status", "--porcelain", "--untracked-files=normal"])).trim() &&
     (await get("namespace", "kube-system")).metadata.uid === clusterUID, "PUBLIC_CUTOVER_EXECUTOR_OR_CLUSTER_CHANGED");
   await assertSource();
+  const compatibleSource = async previous => {
+    if (previous === source) return;
+    requireValue(/^[a-f0-9]{40}$/.test(previous ?? "") && options["--approved-executor-sha"] === source, "PUBLIC_CUTOVER_EXECUTOR_CONFIRMATION_REQUIRED");
+    await run("git", ["merge-base", "--is-ancestor", previous, source]);
+    await run("git", ["diff", "--quiet", previous, source, "--", "tools/release/stable-public-cutover-model.mjs",
+      "tools/release/stable-public-identity-model.mjs", "infra/public-ingress/identity-profile.json"]);
+  };
   const profile = JSON.parse(await readFile(root + "infra/public-ingress/identity-profile.json", "utf8")); publicIdentityProfile(profile);
   const idle = async () => {
     const state = JSON.parse(await kube(["-n", "kodex-system", "exec", "-i", "kodex-postgresql-0", "--", "psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "control_plane"],
@@ -93,7 +100,8 @@ export async function publicCutover(args, port) {
   if (mode === "plan") {
     requireValue(!options["--approved-plan-sha"], "PUBLIC_CUTOVER_ARGUMENTS_INVALID");
     const b = await readPrivateJSON(options["--baseline"]), stage = options["--stage"], sourcePlan = b.plan;
-    requireValue(b.planSHA256 === fingerprint(sourcePlan) && sourcePlan.source === source && (stage === "prepare" ?
+    await compatibleSource(sourcePlan.source);
+    requireValue(b.planSHA256 === fingerprint(sourcePlan) && (stage === "prepare" ?
       sourcePlan.schema === "kodex.public-identity-plan/v1" && sourcePlan.clusterUID === clusterUID && sourcePlan.profileSHA256 === fingerprint(profile) :
       sourcePlan.schema === "kodex.public-cutover-plan/v1" && sourcePlan.stage === "prepare" && same(sourcePlan.boundary, boundary)), "PUBLIC_CUTOVER_BASELINE_INVALID");
     const baseline = structuredClone(stage === "prepare" ? sourcePlan : sourcePlan.baseline);
@@ -150,7 +158,8 @@ export async function publicCutover(args, port) {
     hash = fingerprint(plan); await write({ plan, planSHA256: hash }); return { status: "PASS", phase: mode, stage, source, planSHA256: hash, apply: "NOT_RUN" };
   }
   const document = await readPrivateJSON(options["--plan"]); plan = document.plan; hash = fingerprint(plan);
-  requireValue(document.planSHA256 === hash && plan.schema === "kodex.public-cutover-plan/v1" && plan.source === source && plan.context === context &&
+  await compatibleSource(plan.source);
+  requireValue(document.planSHA256 === hash && plan.schema === "kodex.public-cutover-plan/v1" && plan.context === context &&
     same(plan.boundary, boundary) && Object.hasOwn(scopes, plan.stage) && /^[a-f0-9]{32}$/.test(plan.operation ?? "") &&
     plan.rows?.length > 0 && plan.rows.length < 12 && new Set(plan.rows.map(key)).size === plan.rows.length && plan.rows.every(r =>
       mapping[r.kind] && ["kodex-system", "identity"].includes(r.namespace) && /^[a-z0-9-]{1,253}$/.test(r.name) &&
