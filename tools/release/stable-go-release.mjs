@@ -180,7 +180,21 @@ async function main(args) {
       "STABLE_READBACK_MISMATCH");
     if (item.name === "session-archive") requireValue(sameArchiveBoundary((await archiveRole()).proof, item.archive, "after"),
       "STABLE_ARCHIVE_ROLE_READBACK_MISMATCH");
-    const pods = activeDeploymentPods(await podList(item.name), item.uid);
+    let pods = activeDeploymentPods(await podList(item.name), item.uid);
+    const desiredPod = p => p.spec.containers.some(c => c.name === item.name && c.image === item.requested.release.image);
+    // rollout status подтверждает новые реплики раньше завершения старого
+    // terminating Pod. Не считаем его исчезнувшим и не повторяем mutation:
+    // ждём только exact owned старый image при двух уже наблюдаемых новых Pod.
+    const deadline = Date.now() + Math.min(330, Math.max(30, current.spec.template.spec.terminationGracePeriodSeconds ?? 30) + 30) * 1000;
+    while (pods.length > 2 && pods.filter(desiredPod).length === 2 &&
+      pods.filter(p => !desiredPod(p)).every(p => p.metadata.deletionTimestamp)) {
+      requireValue(Date.now() < deadline, "STABLE_OLD_PODS_JOIN_TIMEOUT");
+      await new Promise(resolve => setTimeout(resolve, 250));
+      const fresh = await get("deployment", item.name);
+      requireValue(fresh.metadata.uid === item.uid && fingerprint(fresh.spec) === item.afterSpecSHA256 &&
+        fingerprint(fresh.metadata.labels ?? {}) === item.recovery.afterLabelsSHA256, "STABLE_CONVERGENCE_DRIFT");
+      pods = activeDeploymentPods(await podList(item.name), item.uid);
+    }
     const digest = item.requested.release.image.split("@").at(-1);
     requireValue(pods.length === 2 && pods.every(p => !p.metadata.deletionTimestamp &&
       p.spec.containers.some(c => c.name === item.name && c.image === item.requested.release.image) &&

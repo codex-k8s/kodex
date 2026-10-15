@@ -171,7 +171,7 @@ func nodePullRepositories() []string {
 		"kodex/control-plane", "kodex/secret-broker", "kodex/email-bridge", "kodex/runtime-controller",
 		"kodex/integration-gateway", "kodex/integration-synthetic", "kodex/control-api-gateway",
 		"kodex/staff-control-center", "kodex/egress-gateway", "kodex/automation-scheduler",
-		"kodex/artifact-retention", "kodex/registry-pull-authorizer",
+		"kodex/artifact-retention", "kodex/registry-pull-authorizer", "kodex/image-admission-controller",
 		"kodex/image-admission", "kodex/image-admission-tools", "kodex/internal-rpc-authority",
 		"kodex/stt-tts-service", "kodex/interaction-gateway", "kodex/backup-controller", "kodex/email-bridge-migration",
 	}

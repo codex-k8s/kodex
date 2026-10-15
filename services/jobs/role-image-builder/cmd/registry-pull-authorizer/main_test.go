@@ -109,7 +109,7 @@ func TestInstallationNodePullProfileIsBounded(t *testing.T) {
 	if profile.configFile != "/identity/pull-dockerconfigjson" {
 		t.Fatalf("installation credential path = %q", profile.configFile)
 	}
-	if !reflect.DeepEqual(profile.repositories, nodePullRepositories()) || len(profile.repositories) != 23 {
+	if !reflect.DeepEqual(profile.repositories, nodePullRepositories()) || len(profile.repositories) != 24 {
 		t.Fatalf("installation repositories = %v", profile.repositories)
 	}
 }

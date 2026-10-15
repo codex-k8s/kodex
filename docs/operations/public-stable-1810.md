@@ -4,7 +4,7 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.2.0
+version: 1.2.1
 updated: 2026-10-15
 ---
 
@@ -1708,3 +1708,28 @@ rollback старого immutable plan новым executor нужен допол
 `--approved-executor-sha`, ancestry и неизменные model/install-worker bytes;
 apply старого плана новым кодом не разрешается. После recovery потребуется
 новый plan/apply. Частично установленный mirror не считается завершённым.
+
+На `8831ec1fdd0748960564f33d44fc82cd38c0e3b8` recovery partial mirror PASS,
+новые plan/apply прошли оба node restart/serving proof. Финальное немедленное
+owner SQL чтение пересеклось с восстановлением PostgreSQL после server restart
+и дало FAIL. Последующий отдельный native readback PASS; PostgreSQL Ready,
+owner state idle, все85 promoted artifacts и прежний pins commitment сохранены.
+Новый mirror plan
+`fbf283b9055e975c6c50a37761b9dec70488ea38cdebdb19fb06ccdce13f1e82`.
+
+На том же SHA PASS публикация12 штатных application images с exact digest.
+PASS compiled frontend apply и отдельный readback: два Ready Pod,0 host mounts,
+HTTPS backend routes и immutable runtime; browser reload без Console errors.
+Frontend plan
+`937a44a1f673290f0da05b03e320d8261d7d2dc061f9c3a9ab6bfbe2b58fad3c`.
+Secret-broker также переведён на два compiled Pod с exact image digest;
+общий Go apply остановился на слишком раннем pod-list readback старого
+terminating Pod. Источник не восстанавливался: новые2/2 исправны. Добавляется
+bounded join только exact owned terminating source Pod при уже наблюдаемых
+двух новых Pod; mutation не повторяется. Остальные11 Deployment требуют
+нового плана на следующем clean executor.
+
+Уточнён exact node-pull список для отдельного repository standalone admission
+controller. Остальные credential profiles не расширены. Новый helper/image
+нужно собрать и активировать до поставки standalone controller; изменение
+одного исходного списка не считается его действующим разрешением в кластере.

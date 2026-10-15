@@ -27,6 +27,11 @@ if(i>=0){
     const items=[{kind:'ReplicaSet',metadata:{uid:'rs',ownerReferences:[{kind:'Deployment',uid:d.metadata.uid,controller:true}]}},
       ...Array.from({length:draining?1:d.spec.replicas},(_,i)=>'pod-'+i).map(uid=>({kind:'Pod',metadata:{uid,ownerReferences:[{kind:'ReplicaSet',uid:'rs',controller:true}]},
         spec:d.spec.template.spec,status:{conditions:[{type:'Ready',status:'True'}],containerStatuses:[{name:d.metadata.name,ready:true,imageID:'fixture@'+digest}]}}))];
+    if(d.spec.replicas===2&&s.oldTerminatingPolls>0){s.oldTerminatingPolls--;fs.writeFileSync(p,JSON.stringify(s));
+      items.push({kind:'ReplicaSet',metadata:{uid:'rs-old',ownerReferences:[{kind:'Deployment',uid:d.metadata.uid,controller:true}]}},
+        {kind:'Pod',metadata:{uid:'old',deletionTimestamp:new Date().toISOString(),ownerReferences:[{kind:'ReplicaSet',uid:'rs-old',controller:true}]},
+          spec:{containers:[{name:d.metadata.name,image:'old'}]},status:{containerStatuses:[{name:d.metadata.name,state:{running:{}}}]}});
+    }
     console.log(JSON.stringify({items}));
   }else process.exit(4);
 }else if(a.includes('exec')){
@@ -99,6 +104,20 @@ function setup(name = "session-archive") {
 
 const writes = directory => readFileSync(join(directory, "trace"), "utf8").trim().split("\n").map(JSON.parse)
   .filter(args => args.includes("patch") && !args.includes("--dry-run=server"));
+
+test("completed rollout waits for its old terminating pod without replaying the patch", () => {
+  const { directory, run } = setup();
+  try {
+    const planPath = join(directory, "plan.json");
+    assert.equal(run(["plan", "--context", "fixture", "--manifest", join(directory, "manifest.json"), "--output", planPath]).status, 0);
+    const statePath = join(directory, "fixture.json"), state = JSON.parse(readFileSync(statePath, "utf8"));
+    state.oldTerminatingPolls = 1; writeFileSync(statePath, JSON.stringify(state));
+    const plan = JSON.parse(readFileSync(planPath, "utf8"));
+    const r = run(["apply", "--context", "fixture", "--plan", planPath, "--approved-plan-sha", fingerprint(plan), "--output", join(directory, "apply.jsonl")]);
+    assert.equal(r.status, 0, r.output); assert.equal(JSON.parse(readFileSync(statePath, "utf8")).oldTerminatingPolls, 0);
+    assert.equal(writes(directory).filter(a => a[a.indexOf("patch") + 1] === "deployment").length, 2);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
 
 test("private plan never persists raw spec and exact approved cutover proves two serving pods", () => {
   const { directory, run } = setup();
