@@ -49,6 +49,19 @@ Historical terminal Pod не считается репликой только п
 proof всех regular/init/ephemeral containers и проверенном owner lineage.
 Это две сервисные реплики на том же диске, не HA содержимого или сервера.
 
+`stable-admission-release.mjs plan|apply|inspect|readback|rollback` отдельно
+переключает admission orchestrator. `plan` принимает `--context`, проверенный
+`--publication-plan` v2 standalone controller и новый private `--output`.
+Остальные фазы используют `--plan`; кроме apply нужен исходный `--journal`,
+а apply/rollback требуют `--approved-plan-sha` после отдельного owner gate.
+При owner idle и сохранённых pins старый binary сначала drain/join; затем
+создаются отсутствующие Lease/PDB и добавляется только exact get/update Lease.
+Проверяется не только serving digest двух Pod, но и свежий holder UID одного
+из них. Потерянные ответы не повторяются. Rollback возвращает exact source
+spec/labels и прежние Role rules после остановки новых Pod; Lease/PDB остаются,
+holder/transitions не перезаписываются. Свежий forward plan закрепляет их
+существующие UID. Уже наблюдаемое восстановление не повторяет PATCH.
+
 Задача: #1222, общий план: #1204.
 
 `scoped-release.mjs` обновляет digest образа или подготовленный source checkout

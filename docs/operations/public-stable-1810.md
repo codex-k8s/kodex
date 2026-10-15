@@ -1124,3 +1124,30 @@ bootstrap/registry plans с предыдущим helper digest непримен�
 набору: перед owner gate их нужно пересоздать. Остальные controller profiles,
 public TLS/OIDC, проектные review/owner gate и финальная browser-приёмка также
 остаются открытыми. Live workload и main не менялись.
+
+## Exact переход admission orchestrator
+
+`stable-admission-release.mjs` реализует отдельный закрытый переход текущего
+trusted-cluster controller: private plan на clean executor SHA, cluster/app UID,
+проверенный standalone publication plan, exact source Deployment/Role/Binding,
+policy name и credential/config metadata references. Unknown namespace,
+второй container, source mount/PVC, неоднозначный env, иной RPC profile,
+maintenance/proof hold и расширенные Role rules закрыто отклоняются.
+
+| Фаза | Эффект и контроль |
+| --- | --- |
+| plan | Server-side dry-run Deployment и отсутствующих Lease/PDB; никаких живых изменений |
+| apply preflight | Actual registry readback отдельным publication workflow, immutable source, fresh owner idle и отсутствие managed phase Jobs/Pods/PVC |
+| drain | CAS replicas0, observe generation и join всех owned active Pod; historical terminal исключается только по полному proof |
+| bootstrap support | Создание только отсутствующих exact Lease/PDB; intent fsync до create, UID receipt после ответа; existing UID не переписывается |
+| permission/image | После join добавить только get/update fixed Lease, сохранить остальные правила/Binding; новая image/POD_UID/resources и2 replica |
+| serving proof | Два Ready/available updated Pod, exact imageID и свежий holder Lease с UID одного из них; естественный expiry ожидается bounded read-only loop |
+| unknown response | Остановиться; inspect классифицирует source/paused/compiled, не объявляя завершение; старый apply не повторяет мутацию |
+| rollback | Проверить весь набор до effects, остановить новые Pod, восстановить Role и source spec/labels через narrow inverse; не менять Lease/PDB/transition |
+| repeated recovery | Уже восстановленный source доказывается без повторного PATCH; следующий forward plan закрепляет retained support UID |
+
+Readback и rollback требуют исходный owned0600 apply journal, exact plan hash
+и сохранённые owner pins. Replacement UID, changed Binding, credential RV drift
+и иной policy binding блокируют effects. Неизменённые env/секретные значения
+не копируются в план и journal. Применение остаётся за review и отдельным
+допуском владельца; synthetic recovery не является live acceptance.
