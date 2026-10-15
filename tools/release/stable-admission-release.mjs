@@ -218,10 +218,10 @@ export async function releaseAdmission(args, commandPort) {
       // Используется тот же snapshot, в котором проверены exact UID/metadata,
       // а не отдельный повторный GET с несвязанным holder.
       const lease = (await checkSupport(true)).get("Lease"), renewed = Date.parse(lease.spec?.renewTime);
-      if (list.some(p => p.metadata.uid === lease.spec.holderIdentity) && Number.isFinite(renewed) && renewed <= Date.now() + 5000 &&
+      const current = await observe(), currentPods = await pods(current);
+      requireValue(serving(current, currentPods), "ADMISSION_SERVING_INCOMPLETE");
+      if (currentPods.some(p => p.metadata.uid === lease.spec.holderIdentity) && Number.isFinite(renewed) && renewed <= Date.now() + 5000 &&
         Date.now() - renewed <= 45000 && lease.spec.leaseDurationSeconds === 45) {
-        const current = await observe(), currentPods = await pods(current);
-        requireValue(serving(current, currentPods) && currentPods.some(p => p.metadata.uid === lease.spec.holderIdentity), "ADMISSION_SERVING_INCOMPLETE");
         await rolePhase(); break;
       }
       requireValue(Date.now() < deadline, "ADMISSION_CURRENT_LEADER_UNPROVEN"); await new Promise(resolve => setTimeout(resolve, 250));
