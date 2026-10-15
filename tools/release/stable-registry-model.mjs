@@ -9,6 +9,13 @@ export const registryRoles = {
   "kodex-image-registry-evidence": { claim: "kodex-image-registry-evidence", readOnly: false },
 };
 export const registryIntent = "kodex.dev/stable-registry-plan";
+const containerNames = {
+  "kodex-image-registry-pull": ["registry", "pull-authorizer", "certificate-guard"],
+  "kodex-image-registry-staging-read": ["registry"],
+  "kodex-image-registry-push": ["registry", "write-authorizer"],
+  "kodex-image-registry-promotion": ["registry", "certificate-guard"],
+  "kodex-image-registry-evidence": ["registry", "evidence-authorizer", "certificate-guard"],
+};
 export const httpStateName = name => name + "-http-state-stable";
 function requireValue(value, code) { if (!value) throw Error(code); }
 
@@ -20,6 +27,7 @@ export function prepareRegistry(deployment, storage, helperImage, executorSHA) {
   requireValue(main && /^registry:2\.8\.3@sha256:[a-f0-9]{64}$/.test(main.image ?? "") &&
     !(main.command ?? []).length && !(main.args ?? []).length &&
     pod.containers.every(c => /@sha256:[a-f0-9]{64}$/.test(c.image ?? "")) && !pod.volumes?.some(v => v.hostPath) &&
+    !(pod.initContainers ?? []).length && fingerprint(pod.containers.map(c => c.name).sort()) === fingerprint([...containerNames[name]].sort()) &&
     new Set(pod.containers.map(c => c.name)).size === pod.containers.length &&
     pod.containers.every(c => new Set((c.env ?? []).map(e => e.name)).size === (c.env ?? []).length), "REGISTRY_SOURCE_PROFILE_INVALID");
   const claims = (pod.volumes ?? []).filter(v => v.persistentVolumeClaim);

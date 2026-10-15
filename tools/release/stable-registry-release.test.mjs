@@ -51,6 +51,12 @@ function fixture() {
       const kind = argv[i + 1], name = argv[i + 2];
       if (kind === "namespace") return JSON.stringify({ metadata: { uid: name === "kube-system" ? "system" : "app" } });
       if (kind === "deployments") return JSON.stringify({ items: [...resources.values()].filter(r => r.kind === "Deployment") });
+      if (kind === "replicasets") return JSON.stringify({ items: names.map(name => ({ metadata: { uid: "rs-Deployment-" + name,
+        ownerReferences: [{ kind: "Deployment", uid: "Deployment-" + name, controller: true }] } })) });
+      if (kind === "pods" && flags.ownHistory) return JSON.stringify({ items: [{ metadata: { ownerReferences: [{ kind: "ReplicaSet",
+        uid: "rs-Deployment-kodex-image-registry-push", controller: true }] }, spec: { containers: [{ name: "old-registry", env: [{ name: "STATE", valueFrom: {
+        secretKeyRef: { name: httpStateName("kodex-image-registry-push"), key: "secret" } } }] }] }, status: { phase: "Failed",
+        containerStatuses: [{ name: "old-registry", state: { terminated: { exitCode: 1 } } }] } }] });
       if (kind === "pods") return JSON.stringify({ items: flags.foreignConsumer ? [{ spec: { containers: [{ env: [{ name: "STATE", valueFrom: {
         secretKeyRef: { name: httpStateName("kodex-image-registry-push"), key: "secret" } } }] }] } }] : [] });
       if (kind === "services,networkpolicies") return JSON.stringify({ items: names.map(name => ({ kind: "Service", metadata: { name, uid: name }, spec: { selector: { name } } })) });
@@ -126,6 +132,7 @@ test("registry apply creates private state then proves two pods and rollback res
     await f.run("apply", "apply.jsonl", [...args, ...approval]);
     assert.equal([...f.resources.values()].filter(r => r.kind === "Secret").length, 3);
     await f.run("readback", "readback.json", [...args, "--journal", join(f.directory, "apply.jsonl")]);
+    f.flags.ownHistory = true;
     await f.run("rollback", "rollback.jsonl", [...args, ...approval, "--journal", join(f.directory, "apply.jsonl")]);
     for (const name of names) assert.deepEqual(f.resources.get("Deployment/" + name).spec, f.original.get(name));
     assert.equal([...f.resources.values()].filter(r => r.kind === "Secret").length, 0);

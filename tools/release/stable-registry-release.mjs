@@ -9,7 +9,7 @@ import { readPrivateJSON } from "../../infra/public-ingress/edge-plan.mjs";
 import { fingerprint } from "./stable-inventory.mjs";
 import { prepareRegistry, registryRoles, registryIntent, httpStateName } from "./stable-registry-model.mjs";
 import { applyReverseSpec } from "./stable-reverse-patch.mjs";
-import { activeDeploymentPods } from "./stable-archive-transition.mjs";
+import { activeDeploymentPods, isProvenStoppedPod } from "./stable-archive-transition.mjs";
 import { requireIdle } from "./runner-policy-model.mjs";
 
 const execute = promisify(execFile), root = fileURLToPath(new URL("../../", import.meta.url)), ns = "kodex-system";
@@ -284,7 +284,11 @@ export async function releaseRegistry(args, commandPort) {
     if (mode === "rollback") for (const item of plan.targets.filter(t => t.secretName)) {
       const s = await get("secret", item.secretName, true); if (!s) continue;
       const allPods = JSON.parse(await kube(["-n", ns, "get", "pods", "-o", "json"]));
-      const used = allPods.items.some(p => (p.spec.volumes ?? []).some(v => v.secret?.secretName === item.secretName ||
+      const replicaSets = JSON.parse(await kube(["-n", ns, "get", "replicasets", "-o", "json"]));
+      const ownSets = new Set(replicaSets.items.filter(r => r.metadata.ownerReferences?.some(o => o.kind === "Deployment" && o.controller === true &&
+        plan.targets.some(t => t.uid === o.uid))).map(r => r.metadata.uid));
+      const unusedHistorical = p => isProvenStoppedPod(p) && p.metadata?.ownerReferences?.some(o => o.kind === "ReplicaSet" && o.controller === true && ownSets.has(o.uid));
+      const used = allPods.items.filter(p => !unusedHistorical(p)).some(p => (p.spec.volumes ?? []).some(v => v.secret?.secretName === item.secretName ||
         v.projected?.sources?.some(s => s.secret?.name === item.secretName)) || (p.spec.imagePullSecrets ?? []).some(s => s.name === item.secretName) ||
         [...p.spec.containers, ...(p.spec.initContainers ?? [])].some(c => (c.env ?? []).some(e => e.valueFrom?.secretKeyRef?.name === item.secretName) ||
           (c.envFrom ?? []).some(e => e.secretRef?.name === item.secretName)));
