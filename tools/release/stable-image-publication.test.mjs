@@ -49,7 +49,8 @@ if(program==='git'){
  if(a.includes('port-forward')){s.forwardPID=process.pid;save();console.log('Forwarding from 127.0.0.1:45231 -> 5003');setInterval(()=>{},1000);}
  else{
   const i=a.indexOf('get'),kind=a[i+1],name=a[i+2];
-  if(kind==='namespace'){if(a.some(x=>x.startsWith('jsonpath=')))console.log('uid-'+name);else console.log(JSON.stringify({metadata:{uid:'uid-'+name}}));}
+  if(kind==='deployments,replicasets,pods')console.log(JSON.stringify({items:s.workloads??[]}));
+  else if(kind==='namespace'){if(a.some(x=>x.startsWith('jsonpath=')))console.log('uid-'+name);else console.log(JSON.stringify({metadata:{uid:'uid-'+name}}));}
   else if(kind==='secret'){
    if(a.some(x=>x.startsWith('jsonpath=')))console.log('fixture-writer|1');
    else console.log(JSON.stringify({metadata:{uid:'fixture-writer',resourceVersion:'1'},data:Object.fromEntries([
@@ -76,7 +77,7 @@ if(program==='git'){
 }else process.exit(10);
 `;
 
-async function setup() {
+async function setup(retainedComponent) {
   const directory = await mkdtemp(join(tmpdir(), "kodex-stable-publication-test-"));
   await mkdir(join(directory, "bin")); await mkdir(join(directory, "tools"), { mode: 0o700 });
   for (const name of ["git", "kubectl", "docker"]) await writeFile(join(directory, "bin", name), mock, { mode: 0o700 });
@@ -90,26 +91,45 @@ async function setup() {
     const name = "blobs/sha256/" + digest; await writeFile(join(layout, name), bytes); files.push(name);
     return { mediaType, digest: "sha256:" + digest, size: Buffer.byteLength(bytes) };
   };
+  const component = retainedComponent ?? "control-plane", referenceTag = retainedComponent ? "local-" + "c".repeat(64) : "a".repeat(40);
   const config = await document({ os: "linux", architecture: "amd64", config: { User: "10001:10001",
-    Entrypoint: ["/usr/local/bin/control-plane"] } }, "application/vnd.oci.image.config.v1+json");
+    ...(retainedComponent ? { Cmd: ["/bin/sh"], Labels: { "org.opencontainers.image.revision": "a".repeat(40) } } :
+      { Entrypoint: ["/usr/local/bin/control-plane"] }) } }, "application/vnd.oci.image.config.v1+json");
   const layer = await document("synthetic layer", "application/vnd.oci.image.layer.v1.tar");
   const manifest = await document({ schemaVersion: 2, config, layers: [layer] }, "application/vnd.oci.image.manifest.v1+json");
-  manifest.annotations = { "org.opencontainers.image.ref.name": "a".repeat(40),
-    "io.containerd.image.name": "registry.local.kodex/kodex/control-plane:" + "a".repeat(40) };
+  manifest.annotations = { "org.opencontainers.image.ref.name": referenceTag,
+    "io.containerd.image.name": "registry.local.kodex/kodex/" + component + ":" + referenceTag };
   await writeFile(join(layout, "index.json"), JSON.stringify({ schemaVersion: 2, manifests: [manifest] }));
   await writeFile(join(layout, "oci-layout"), '{"imageLayoutVersion":"1.0.0"}'); files.push("index.json", "oci-layout");
-  const archive = join(directory, "image.tar"); execFileSync("tar", ["-cf", archive, "-C", layout, ...files]); await chmod(archive, 0o600);
+  const archive = join(directory, retainedComponent ? component + "-" + "c".repeat(64) + ".oci.tar" : "image.tar");
+  execFileSync("tar", ["-cf", archive, "-C", layout, ...files]); await chmod(archive, 0o600);
   const receipt = { schema: "kodex.stable-local-build/v1", component: "control-plane", sourceSHA: "a".repeat(40),
     contextSHA256: sha("synthetic git archive"), archiveSHA256: sha(await readFile(archive)), imageDigest: manifest.digest,
     dockerfile: "services/internal/control-plane/Dockerfile", target: "", admission: "NOT_RUN", publication: "NOT_RUN", nodePull: "NOT_RUN" };
-  await writeFile(join(directory, "receipt.json"), JSON.stringify(receipt), { mode: 0o600 });
+  if (!retainedComponent) await writeFile(join(directory, "receipt.json"), JSON.stringify(receipt), { mode: 0o600 });
+  else {
+    const name = component === "image-admission" ? "image-admission-controller" : "kodex-image-registry-promotion";
+    const meta = (name, uid) => ({ name, uid, namespace: "kodex-system", labels: { "app.kubernetes.io/part-of": "kodex" } });
+    const image = "registry.local.kodex/kodex/" + component + "@" + manifest.digest;
+    const deployment = { kind: "Deployment", metadata: meta(name, "retained-deployment"), spec: { template: { spec: {
+      containers: [{ name: "consumer", image }] } } } };
+    fixture.workloads = [deployment,
+      { kind: "ReplicaSet", metadata: { ...meta("retained-set", "retained-set"), ownerReferences: [
+        { kind: "Deployment", uid: "retained-deployment", controller: true }] } },
+      { kind: "Pod", metadata: { ...meta("retained-pod", "retained-pod"), ownerReferences: [
+        { kind: "ReplicaSet", uid: "retained-set", controller: true }] }, spec: deployment.spec.template.spec,
+      status: { conditions: [{ type: "Ready", status: "True" }], containerStatuses: [{ name: "consumer", ready: true, imageID: image }] } },
+    ];
+    await writeFile(join(directory, "fixture.json"), JSON.stringify(fixture));
+  }
   const run = (mode, output, extra = []) => {
     try { return { status: 0, output: execFileSync(process.execPath, [cli, mode, "--context", "fixture",
       "--output", join(directory, output), ...extra], { env: { PATH: join(directory, "bin") + ":/usr/local/bin:/usr/bin:/bin",
         PYTHONDONTWRITEBYTECODE: "1" }, timeout: 30000, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }) }; }
     catch (error) { return { status: error.status, output: (error.stdout ?? "") + (error.stderr ?? "") }; }
   };
-  const plan = () => run("plan", "plan", ["--receipt", join(directory, "receipt.json"), "--archive", archive,
+  const plan = () => run(retainedComponent ? "retained-plan" : "plan", "plan", [...(retainedComponent ? ["--component", component] :
+    ["--receipt", join(directory, "receipt.json")]), "--archive", archive,
     "--tool-state-directory", join(directory, "tools")]);
   return { directory, fixture, run, plan };
 }
@@ -131,6 +151,44 @@ test("real publication CLI and worker keep credentials private and readback neve
     assert.throws(() => process.kill(state.forwardPID, 0), { code: "ESRCH" });
     const trace = await readFile(join(directory, "trace"), "utf8"); assert.equal(trace.includes("PRIVATE_AUTH_SENTINEL"), false);
     assert.equal((await readFile(join(directory, "apply.jsonl"), "utf8")).includes("PRIVATE_AUTH_SENTINEL"), false);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("retained-plan and real worker preserve serving artifacts without invented build receipts", async () => {
+  for (const component of ["image-admission", "image-admission-tools"]) {
+    const { directory, run, plan } = await setup(component);
+    try {
+      const planned = plan(); assert.equal(planned.status, 0, planned.output);
+      const value = JSON.parse(await readFile(join(directory, "plan", "plan.json"), "utf8"));
+      assert.equal(value.schema, "kodex.stable-image-publication/v2");
+      assert.equal(value.artifactProfile, "retained"); assert.equal(Object.hasOwn(value, "receipt"), false);
+      assert.equal(value.image.component, component); assert.match(value.image.tag, /^retained-[a-f0-9]{64}$/);
+      const args = ["--plan", join(directory, "plan", "plan.json")];
+      const applied = run("apply", "apply.jsonl", [...args, "--approved-plan-sha", fingerprint(value)]);
+      assert.equal(applied.status, 0, applied.output);
+      const readback = run("readback", "readback.jsonl", args); assert.equal(readback.status, 0, readback.output);
+      const state = JSON.parse(await readFile(join(directory, "fixture.json"), "utf8"));
+      assert.equal(state.imports, 1); assert.equal(state.removes, 2);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  }
+});
+
+test("retained serving drift mixed claims and old schema are rejected before helper creation", async () => {
+  const { directory, fixture, run, plan } = await setup("image-admission");
+  try {
+    const planned = plan(); assert.equal(planned.status, 0, planned.output);
+    const value = JSON.parse(await readFile(join(directory, "plan", "plan.json"), "utf8"));
+    for (const altered of [{ ...value, receipt: null }, { ...value, schema: "kodex.stable-image-publication/v1" }]) {
+      const path = join(directory, "plan", "invalid.json"); await writeFile(path, JSON.stringify(altered), { mode: 0o600 });
+      const invalid = run("apply", "invalid-" + (Object.hasOwn(altered, "receipt") ? "mixed" : "old") + ".jsonl",
+        ["--plan", path, "--approved-plan-sha", fingerprint(altered)]);
+      assert.notEqual(invalid.status, 0); assert.match(invalid.output, /PUBLICATION_PLAN_INVALID/);
+    }
+    fixture.workloads[2].status.containerStatuses[0].imageID = "sha256:" + "f".repeat(64);
+    await writeFile(join(directory, "fixture.json"), JSON.stringify(fixture));
+    const changed = run("apply", "changed.jsonl", ["--plan", join(directory, "plan", "plan.json"), "--approved-plan-sha", fingerprint(value)]);
+    assert.notEqual(changed.status, 0); assert.match(changed.output, /RETAINED_SERVING_DIGEST_MISMATCH/);
+    assert.equal(JSON.parse(await readFile(join(directory, "fixture.json"), "utf8")).creates, 0);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

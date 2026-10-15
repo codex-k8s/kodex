@@ -16,15 +16,20 @@ done
 [[ "$plan" == /* && -f "$plan" && ! -L "$plan" && "$(stat -c '%u:%a' "$plan")" == "$(id -u):600" ]] || fail 'private plan is required'
 for program in kubectl docker jq sha256sum timeout realpath; do command -v "$program" >/dev/null || fail 'required program is absent'; done
 component=$(jq -er '.image.component' "$plan")
+profile=$(jq -er '.artifactProfile' "$plan")
 case "$component" in
-  control-plane|secret-broker|email-bridge|runtime-controller|integration-gateway|integration-synthetic|control-api-gateway|staff-control-center|egress-gateway|automation-scheduler|artifact-retention|session-archive|registry-pull-authorizer) ;;
+  control-plane|secret-broker|email-bridge|runtime-controller|integration-gateway|integration-synthetic|control-api-gateway|staff-control-center|egress-gateway|automation-scheduler|artifact-retention|session-archive|registry-pull-authorizer) [[ "$profile" == built ]] || fail 'build profile is required' ;;
+  image-admission|image-admission-tools) [[ "$profile" == retained ]] || fail 'retained profile is required' ;;
   *) fail 'component is not a stable platform image' ;;
 esac
 digest=$(jq -er '.image.digest' "$plan")
 tag=$(jq -er '.image.tag' "$plan")
 tools_image=$(jq -er '.toolsImageID' "$plan")
-[[ "$digest" =~ ^sha256:[a-f0-9]{64}$ && "$tools_image" =~ ^sha256:[a-f0-9]{64}$ && "$tag" =~ ^stable-[a-f0-9]{40}-[a-f0-9]{12}$ ]] || fail 'immutable image identity is invalid'
-[[ "$(jq -er '.context' "$plan")" == "$context" && "$(jq -er '.schema' "$plan")" == kodex.stable-image-publication/v1 ]] || fail 'plan context is invalid'
+[[ "$digest" =~ ^sha256:[a-f0-9]{64}$ && "$tools_image" =~ ^sha256:[a-f0-9]{64}$ ]] || fail 'immutable image identity is invalid'
+if [[ "$profile" == built ]]; then [[ "$tag" =~ ^stable-[a-f0-9]{40}-[a-f0-9]{12}$ ]] || fail 'build tag is invalid'; else
+  [[ "$tag" == "retained-${digest#sha256:}" ]] || fail 'retained tag is invalid'
+fi
+[[ "$(jq -er '.context' "$plan")" == "$context" && "$(jq -er '.schema' "$plan")" == kodex.stable-image-publication/v2 ]] || fail 'plan context is invalid'
 archive=$(realpath -e "$(dirname -- "$plan")/image.oci.tar")
 [[ "$archive" =~ ^/[A-Za-z0-9_./-]+$ && -f "$archive" && ! -L "$archive" && "$(stat -c '%u:%a:%h' "$archive")" == "$(id -u):400:1" ]] || fail 'verified archive is invalid'
 [[ "$(sha256sum "$archive" | cut -d ' ' -f 1)" == "$(jq -er '.archiveSHA256' "$plan")" ]] || fail 'verified archive changed'
