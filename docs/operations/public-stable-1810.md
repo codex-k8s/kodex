@@ -1281,3 +1281,28 @@ Domain grants/leases/inbox/events и runtime executions не меняются э
 не передаются в argv и не попадают в private journal/stdout. Synthetic tests
 проверяют lost apply/restore ACK, foreign UID/revision/operation, credential RV,
 pending lock, повторный restore и сохранение PDB. Actual применение NOT RUN.
+
+### Проверки на `a5f68e1abb996cdde52c218724c7b499c6764633`
+
+- PASS129 Node tests,0 failed/0 skipped. В их числе12 дополнительных
+  state/release tests: настоящие owned Pod/images против desired-only count,
+  до/после UID/configuration, отсутствие Secret data reads, lost apply/restore
+  ACK, чужая revision/description, source drift, pending lock и повторное
+  восстановление без новой мутации. Synthetic не является live activation.
+- PASS31 Python OCI/archive tests и web-only release render.
+- PASS реальный v2 plan/server dry-run desired и recovery трёх Helm releases.
+  Source revisions всё ещё10/10/6; защищено165 chart-объектов. Commitment
+  `ca220e06a011356c4d46a52eefdb76a24f32a8f5cc0c8e66aa6b07b84ae2608b`.
+  Source serving proof включает main/init image IDs и actual owner lineage;
+  Alertmanager — исходный StatefulSet/CR UID и retain storage template.
+- Начальные v2 preflight на `2bb79f560`/`187ad5e42`/`1501ca9b7` дали FAIL:
+  учтены штатные RBAC names с `:` и отдельные leader/trust namespaces;
+  aggregate read больше не принуждает чужой exact namespace к release
+  namespace. Добавлены bounded stdin transport и проверка clean SHA повторно
+  в конце плана. Поздний final plan выше прошёл уже без диагностических
+  подмен; промежуточный working-tree diagnostic не является evidence SHA.
+- Live Helm upgrade/recovery/leader replacement и public OIDC/browser всё ещё
+  NOT RUN. Реализованный driver не запускался в изменяющих режимах. Следующий
+  обязательный пакет — native K3s profile (без второго ingress), оставшийся
+  BuildKit/role-builder/identity/resource cutover и публичная TLS/OIDC-фаза.
+  Затем применимые review и отдельный owner gate, только после них live apply.
