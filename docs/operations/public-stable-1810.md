@@ -629,3 +629,36 @@ quiesce старого controller и согласованной установк
 не объявляется атомарной блокировкой новых claims. Исполняемый переход и
 rollback остаются частью незавершённого этапа4. Пункты общего плана не закрыты.
 Проверены Context7 Kubernetes foreground GC и ownerReference docs.
+
+## Исполняемый quiesce и смена прав архиватора
+
+На exact `caad97a4ede8dcfbe217e16e485ac46e4dcc2866`:
+
+- PASS: 53 Node tests, 30 Python OCI tests, полный web-only release render
+  и `git diff --check`. Go-код относительно проверенного `f10fe2e2` не менялся.
+- PASS PLAN ONLY: реальный `stable-go-release.mjs plan` прочитал live
+  Deployment/Role/RoleBinding и построил exact переход для уже собранного
+  `session-archive@sha256:3d8e397f0d7029d65c72cf38d7bc16db304705b6dfa0053a7acbede3c5fa5f2c`.
+  Plan hash `5df849f13120822c1250b7b62445c953e66dd321b3e0bafa57e291c42eb70e51`.
+- OBSERVED READ-ONLY: `inspect` подтвердил `SOURCE_UNCHANGED`, `complete=false`.
+  Replica count, Role и работающие Pod не менялись. Этот результат не является
+  PASS rollout либо приёмкой двух реплик.
+- PASS SYNTHETIC: настоящий CLI выполнил порядок quiesce → zero/Pod join →
+  Role CAS → compiled2; новые права не применялись до исчезновения старых Pod.
+  Потерянные quiesce/Role ответы не переотправлялись; inspect различил
+  `QUIESCED` и `QUIESCED_ROLE_READY`, оба с `complete=false`.
+- PASS NEGATIVE: drift RoleBinding/UID, чужие subject/namespace, wildcard
+  permissions, foreign serving Pod и старая plan schema закрыто отклоняются.
+- NOT RUN: эти phases в живом кластере; publication/node pull; публичные TLS/SSO.
+
+Go plan теперь `kodex.stable-go-plan/v2`, без decoder прежней schema.
+Desired Role читается из единственного repo-owned `runtime/rbac.yaml`;
+в private plan сохраняются только commitments, а не сырой Deployment/env.
+Binding не меняется: controller ServiceAccount остаётся прежним, worker не
+получает Kubernetes полномочий. Подтверждение exact plan не заменяет review
+и отдельное owner решение. Journal fsync предшествует каждому patch.
+
+Прежний открытый quiesce/RBAC путь реализован и проверен локально; live
+проверка, полный Go rollback, frontend/service TLS cutover, native registry
+mirror/activation, replica matrix и certificate/OIDC остаются в работе.
+Новый план не применён и перед поставкой потребует свежего drift/idle чтения.
