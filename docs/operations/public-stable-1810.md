@@ -454,3 +454,48 @@ TLS/DNS/credential pull и для самого gateway, и для приложе
 быть доступны через durable pull endpoint, а не только из node cache;
 бизнесовые pins/grants не пересоздаются ради публикации. До доказательства
 всего пути этапы 2/3/4/7 остаются незавершёнными.
+
+## Собранный pull gateway и результаты проверок
+
+На exact `69cded420aeb39511ce58123a45aed694aad3de9`:
+
+- PASS: Go unit/race и `go vet` для pull-authorizer/nodepullidentity.
+  Проверены signed node credential, GET/HEAD всех 23 shipped Pod repositories,
+  прежние profile restrictions, отсутствие WRITE и namespace/selector escape.
+  Список соответствует release inventory без build-only inputs.
+- PASS: 41 Node tests, 27 Python OCI tests, ShellCheck трёх release scripts,
+  Go toolchain contract и полный `web-only-release-test.sh`.
+- PASS LOCAL OCI: новый `registry-pull-authorizer`, source тот же SHA,
+  manifest `sha256:02e42ed073443c9afc11c4a16e2046e5f8f1368139d2bef23f591fd59b3cf9be`.
+  Target `registry-pull-runtime` содержит только нужный binary, distroless
+  base, UID/GID10001 и прежний command; tools/scanners туда не переносятся.
+- PASS PLAN ONLY: реальный publication CLI проверил этот OCI/context/recipe
+  и создал private план, hash
+  `25321a5719f500dc98aa8a53d5baadf75a5e9289d8069c690addbec97f5157cc`.
+- Проверены normal base/render binding и фактическое выражение local renderer:
+  dev profile использует свой exact bundle, посторонние images не меняются.
+- Проверены Context7 Go net/url docs; Go toolchain остаётся1.26.6.
+- NOT RUN: публикация и bootstrap gateway на нодах, новый live authorizer,
+  actual node pulls, двурепличный rollout и внешний SSO.
+
+Найдены preserved OCI, совпадающие с работающими admission/tool containers:
+`image-admission@sha256:c17d3c048de86a865864f138887f159feacb497107a99eb7e7ae7273e90ca8b2`
+и
+`image-admission-tools@sha256:20840aa452ad3b9b15601de041a6534d8c5ba9877e67e5f3e93d880b6d1a6fd3`.
+Пока сверены index digests с live refs, это не полная проверка/публикация
+сохранённых OCI. Их нельзя выдавать за новые build receipts: нужен отдельный
+типизированный retained-artifact path с исходными exact digests и без
+подмены build provenance либо domain admission.
+
+Дополнительное live read-only чтение `session-archive` показало worker pin
+`sha256:ca8eacdc22f2dc76a8080460659f2dd01afc9cdb61866bf7a123fae003460b49`,
+отличный от нового controller OCI. До cutover требуется проверить и согласованно
+материализовать controller/worker pin, связанный admission и idle/readback
+границы; простой patch app image этого не доказывает. Default role pin
+runtime-controller не изменён и не заменяется image контроллера.
+
+Следующие обязательные работы: retained artifact publication, точный bootstrap
+и activation pull gateway, worker/admission binding, frontend TLS cutover,
+Go rollback/полная replica матрица, certificate/OIDC migration и финальные
+review/owner gate с реальным rollout/browser readback. Main и live PodSpec
+остаются исходными; частичные успехи не закрывают этапы общего checklist.
