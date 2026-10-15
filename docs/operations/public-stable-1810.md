@@ -1919,3 +1919,20 @@ bounded read-only ожидание exact after; неизвестный итог 
 Kubernetes cluster UID связываются с sealed plan и повторно проверяются перед
 операцией. Исходный Kodex context остаётся отдельным; соседние объекты не
 меняются. Новый узел/кластер/ingress не устанавливается.
+
+На `586479a1e70c5d924abb92ad3ec210f752c82a37`20 targeted tests PASS;
+client continue PASS (только второй PUT), identity отдельный readback PASS,
+outer edge plan/apply PASS. Публичный ACME leaf выпущен для двух hostnames;
+HTTPS verify0, discovery200. Public platform до переноса маршрутов ожидаемо404.
+Identity apply завершился наблюдательным FAIL после rollout из-за ещё
+terminating owned Pod; позднейший exact readback подтвердил2/2 и прежние images.
+Platform apply успел endpoint CM и frontend rollout, затем тот же join FAIL.
+Два proxy обновлены; Helm остановился перед Grafana на source guard после
+начала исправления executor. Ни одна неизвестная mutation не повторялась.
+
+Добавлены bounded read-only serving join и явный `continue` для cutover/Helm:
+terminal исходный journal, exact after/UID/release revision для старого intent,
+новые writes только untouched before rows. Новые journals сохраняют исходные
+intents/receipts и связь с predecessor. Новый executor требует exact SHA,
+ancestry и неизменных transition models/profile.11 regression tests PASS в
+рабочем дереве. Следующий шаг — продолжить исходные планы, не re-apply.

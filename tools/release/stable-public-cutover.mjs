@@ -10,7 +10,7 @@ import { readPrivateJSON } from "../../infra/public-ingress/edge-plan.mjs";
 import { fingerprint } from "./stable-inventory.mjs";
 import { publicIdentityProfile, publicBackend, publicFrontendDeployment, publicKeycloak } from "./stable-public-identity-model.mjs";
 import { publicCanonicalRoutes, publicCutoverContent, publicCutoverRow, publicIngressSpec, publicSSOTransport } from "./stable-public-cutover-model.mjs";
-import { systemServing } from "./stable-system-helm-state.mjs";
+import { systemServing, waitSystemServing } from "./stable-system-helm-state.mjs";
 import { requireIdle } from "./runner-policy-model.mjs";
 
 const execute = promisify(execFile), root = fileURLToPath(new URL("../../", import.meta.url));
@@ -41,7 +41,7 @@ export async function publicCutover(args, port) {
     const k = args.shift(); requireValue(["--context", "--stage", "--baseline", "--plan", "--journal", "--output", "--approved-plan-sha", "--approved-executor-sha"].includes(k) &&
       !Object.hasOwn(options, k) && args.length, "PUBLIC_CUTOVER_ARGUMENTS_INVALID"); options[k] = args.shift();
   }
-  requireValue(["plan", "apply", "inspect", "readback", "rollback"].includes(mode) && options["--context"] === "k3d-kodex" &&
+  requireValue(["plan", "apply", "continue", "inspect", "readback", "rollback"].includes(mode) && options["--context"] === "k3d-kodex" &&
     options["--output"]?.startsWith("/") && (mode === "plan" ? options["--baseline"] && Object.hasOwn(scopes, options["--stage"]) && !options["--plan"] :
       options["--plan"] && !options["--stage"] && !options["--baseline"]) &&
     (["plan", "apply"].includes(mode) ? !options["--journal"] : options["--journal"]), "PUBLIC_CUTOVER_ARGUMENTS_INVALID");
@@ -177,7 +177,7 @@ export async function publicCutover(args, port) {
     "PUBLIC_CUTOVER_CREATE_SCOPE_INVALID");
   } else requireValue(plan.rows.length === scopes[plan.stage].length && plan.rows.every(row => row.uid &&
     row.field === (row.kind === "ConfigMap" ? "data" : "spec")), "PUBLIC_CUTOVER_PATCH_SCOPE_INVALID");
-  requireValue(["apply", "rollback"].includes(mode) ? options["--approved-plan-sha"] === hash : !options["--approved-plan-sha"], "PUBLIC_CUTOVER_EXACT_CONFIRMATION_REQUIRED");
+  requireValue(["apply", "continue", "rollback"].includes(mode) ? options["--approved-plan-sha"] === hash : !options["--approved-plan-sha"], "PUBLIC_CUTOVER_EXACT_CONFIRMATION_REQUIRED");
   let records = [], receipts = new Map(), intents = new Set();
   if (mode !== "apply") {
     const f = await open(options["--journal"], constants.O_RDONLY | constants.O_NOFOLLOW);
@@ -211,12 +211,14 @@ export async function publicCutover(args, port) {
     const state = await observe(row); requireValue(state.phase === "after", "PUBLIC_CUTOVER_INCOMPLETE");
     if (row.kind === "Deployment") {
       const p = deploymentProfile(row.namespace, row.name), previous = plan.serving.find(s => s.namespace === row.namespace && s.name === row.name);
-      requireValue(previous, "PUBLIC_CUTOVER_SERVING_BASELINE_MISSING"); await systemServing(p, kube, previous.proof, 2);
+      requireValue(previous, "PUBLIC_CUTOVER_SERVING_BASELINE_MISSING"); await waitSystemServing(p, kube, previous.proof, 2);
     }
   };
   await boundaryProof();
   for (const row of plan.rows) {
     const state = await observe(row); if (mode === "apply") requireValue(state.phase === "before", "PUBLIC_CUTOVER_APPLY_ALREADY_STARTED");
+    if (mode === "continue") requireValue(state.phase === "after" && intents.has(key(row)) || state.phase === "before" && !intents.has(key(row)),
+      "PUBLIC_CUTOVER_UNKNOWN_MUTATION_REQUIRES_OWNER");
   }
   if (mode === "readback") {
     for (const row of plan.rows) await prove(row);
@@ -244,15 +246,20 @@ export async function publicCutover(args, port) {
   const record = async value => { const line = JSON.stringify(value) + "\n"; await f.writeFile(line); await f.sync();
     if (recovery) { await recovery.writeFile(line); await recovery.sync(); } };
   try {
-    await record({ schema: "kodex.public-cutover-journal/v1", mode, source, planSHA256: hash });
+    await record({ schema: "kodex.public-cutover-journal/v1", mode: mode === "continue" ? "apply" : mode, source, planSHA256: hash,
+      ...(mode === "continue" ? { originalJournalSHA256: fingerprint(records) } : {}) });
     for (const row of mode === "rollback" ? [...plan.rows].reverse() : plan.rows) {
       await boundaryProof(); const state = await observe(row);
+      if (mode === "continue" && state.phase === "after") {
+        await prove(row); await record({ status: "INTENT", key: key(row) });
+        await record({ status: "APPLIED", key: key(row), uid: state.resource.metadata.uid }); continue;
+      }
       if (mode === "rollback" && state.phase === "before") continue;
       requireValue(mode === "rollback" ? state.phase === "after" : state.phase === "before", "PUBLIC_CUTOVER_PHASE_CHANGED");
-      await record({ status: mode === "apply" ? "INTENT" : "RESTORE_INTENT", key: key(row) });
-      if (mode === "apply") intents.add(key(row));
+      await record({ status: mode !== "rollback" ? "INTENT" : "RESTORE_INTENT", key: key(row) });
+      if (["apply", "continue"].includes(mode)) intents.add(key(row));
       let changed;
-      if (!row.uid && mode === "apply") changed = JSON.parse(await kube(["create", "-f", "/dev/stdin", "-o", "json"], JSON.stringify(row.resource)));
+      if (!row.uid && mode !== "rollback") changed = JSON.parse(await kube(["create", "-f", "/dev/stdin", "-o", "json"], JSON.stringify(row.resource)));
       else if (!row.uid) {
         const [api, plural] = mapping[row.kind], path = (api === "v1" ? "/api/v1" : "/apis/" + api) + "/namespaces/" + row.namespace + "/" + plural + "/" + row.name;
         await kube(["delete", "--raw", path, "-f", "/dev/stdin"], JSON.stringify({ apiVersion: "v1", kind: "DeleteOptions", preconditions: {
@@ -260,19 +267,19 @@ export async function publicCutover(args, port) {
         requireValue(!await get(row.kind, row.name, row.namespace, true), "PUBLIC_CUTOVER_DELETE_PENDING");
       } else changed = JSON.parse(await kube(["-n", row.namespace, "patch", row.kind, row.name, "--type=json", "--patch-file=/dev/stdin", "-o", "json"],
         JSON.stringify([{ op: "test", path: "/metadata/uid", value: row.uid }, { op: "test", path: "/metadata/resourceVersion", value: state.resource.metadata.resourceVersion },
-          { op: "test", path: "/" + row.field, value: state.resource[row.field] }, ...(mode === "apply" ? row.forward : row.inverse)])));
+          { op: "test", path: "/" + row.field, value: state.resource[row.field] }, ...(mode !== "rollback" ? row.forward : row.inverse)])));
       if (changed) {
-        requireValue(fingerprint(publicCutoverContent(changed)) === (mode === "apply" ? row.after : row.before), "PUBLIC_CUTOVER_ACTIVATION_UNPROVEN");
+        requireValue(fingerprint(publicCutoverContent(changed)) === (mode !== "rollback" ? row.after : row.before), "PUBLIC_CUTOVER_ACTIVATION_UNPROVEN");
         receipts.set(key(row), changed.metadata.uid);
         if (row.kind === "Deployment") {
           await kube(["-n", row.namespace, "rollout", "status", "deployment/" + row.name, "--timeout=180s"], undefined, 195000);
           const previous = plan.serving.find(s => s.namespace === row.namespace && s.name === row.name);
-          await systemServing(deploymentProfile(row.namespace, row.name), kube, previous.proof, 2);
+          await waitSystemServing(deploymentProfile(row.namespace, row.name), kube, previous.proof, 2);
         }
       }
-      await record({ status: mode === "apply" ? "APPLIED" : "RESTORED", key: key(row), uid: changed?.metadata.uid ?? state.resource?.metadata.uid });
+      await record({ status: mode !== "rollback" ? "APPLIED" : "RESTORED", key: key(row), uid: changed?.metadata.uid ?? state.resource?.metadata.uid });
     }
-    if (mode === "apply" && plan.stage === "prepare") {
+    if (mode !== "rollback" && plan.stage === "prepare") {
       for (const cert of plan.baseline.certificates) await kube(["-n", cert.metadata.namespace, "wait", "--for=condition=Ready", "certificate/" + cert.metadata.name, "--timeout=90s"], undefined, 105000);
       await leafProofs(plan.baseline);
     }

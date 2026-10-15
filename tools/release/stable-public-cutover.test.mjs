@@ -54,7 +54,7 @@ async function fixture(t) {
   };
   const invoke = (mode, file) => publicCutover([mode, "--context", "k3d-kodex", "--plan", path, "--output", dir + "/" + file,
     ...(mode === "apply" ? [] : ["--journal", dir + "/apply.jsonl"]),
-    ...(["apply", "rollback"].includes(mode) ? ["--approved-plan-sha", hash] : [])], run);
+    ...(["apply", "continue", "rollback"].includes(mode) ? ["--approved-plan-sha", hash] : [])], run);
   return { invoke, objects, trace, flags, dir };
 }
 
@@ -68,6 +68,14 @@ test("lost create ACK is inspected without replay; guarded rollback can resolve 
   const f = await fixture(t); f.flags.lost = true; await assert.rejects(f.invoke("apply", "apply.jsonl"), /FIXTURE_ACK_LOST/);
   assert.equal(f.trace.length, 1); await f.invoke("inspect", "inspect.json"); assert.equal(f.trace.length, 1);
   await f.invoke("rollback", "rollback.jsonl"); assert.equal(f.objects.size, 0); assert.equal(f.trace.length, 2);
+});
+
+test("explicit continuation does not recreate observed resources and finishes only untouched rows", async t => {
+  const f = await fixture(t); f.flags.lost = true; await assert.rejects(f.invoke("apply", "apply.jsonl"), /FIXTURE_ACK_LOST/);
+  await f.invoke("continue", "continue.jsonl"); assert.equal(f.objects.size, 4); assert.equal(f.trace.length, 4);
+  const records = (await readFile(f.dir + "/continue.jsonl", "utf8")).trim().split("\n").map(JSON.parse);
+  assert.equal(records[0].mode, "apply"); assert.equal(records.filter(r => r.status === "INTENT").length, 4);
+  assert.equal(records.at(-1).status, "COMPLETE");
 });
 
 test("foreign UID, unrelated object drift and changed owner pins prevent all recovery mutations", async t => {

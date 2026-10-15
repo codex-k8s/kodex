@@ -10,7 +10,7 @@ import { fingerprint } from "./stable-inventory.mjs";
 import { planSystemHelm } from "./stable-system-helm-plan.mjs";
 import { stableChartLocks, verifyStableChart } from "./fetch-stable-charts.mjs";
 import { matchSystemObjects, readSystemObjects, systemDesiredValues, systemRecoveryManifest,
-  systemRecoveryValues, systemServing } from "./stable-system-helm-state.mjs";
+  systemRecoveryValues, systemServing, waitSystemServing } from "./stable-system-helm-state.mjs";
 
 const execute = promisify(execFile), root = fileURLToPath(new URL("../../", import.meta.url));
 function requireValue(value, code) { if (!value) throw Error(code); }
@@ -28,10 +28,10 @@ export async function releaseSystemHelm(args, port, planPort = planSystemHelm, v
   const mode = args.shift(), options = {};
   while (args.length) {
     const key = args.shift();
-    requireValue(["--context", "--charts", "--plan", "--journal", "--output", "--approved-plan-sha"].includes(key) &&
+    requireValue(["--context", "--charts", "--plan", "--journal", "--output", "--approved-plan-sha", "--approved-executor-sha"].includes(key) &&
       !Object.hasOwn(options, key) && args.length, "SYSTEM_HELM_ARGUMENTS_INVALID"); options[key] = args.shift();
   }
-  requireValue(["apply", "inspect", "readback", "rollback"].includes(mode) && options["--context"] === "k3d-kodex" &&
+  requireValue(["apply", "continue", "inspect", "readback", "rollback"].includes(mode) && options["--context"] === "k3d-kodex" &&
     options["--plan"] && options["--output"] && options["--charts"], "SYSTEM_HELM_ARGUMENTS_INVALID");
   requireValue(mode === "apply" ? !options["--journal"] : options["--journal"], "SYSTEM_HELM_JOURNAL_REQUIRED");
   const env = Object.fromEntries(["HOME", "PATH", "LANG", "KUBECONFIG"].filter(k => process.env[k]).map(k => [k, process.env[k]]));
@@ -46,20 +46,26 @@ export async function releaseSystemHelm(args, port, planPort = planSystemHelm, v
   requireValue(/^[a-f0-9]{40}$/.test(source) && !(await run("git", ["status", "--porcelain", "--untracked-files=normal"])).trim(),
     "SYSTEM_HELM_CLEAN_SOURCE_REQUIRED");
   const document = await readPrivateJSON(options["--plan"]), { plan } = document, hash = fingerprint(plan);
+  if (plan.source !== source) {
+    requireValue(mode !== "apply" && options["--approved-executor-sha"] === source && /^[a-f0-9]{40}$/.test(plan.source ?? ""), "SYSTEM_HELM_EXECUTOR_CONFIRMATION_REQUIRED");
+    await run("git", ["merge-base", "--is-ancestor", plan.source, source]);
+    await run("git", ["diff", "--quiet", plan.source, source, "--", "tools/release/stable-system-helm-model.mjs", "tools/release/stable-public-helm-model.mjs",
+      "tools/release/stable-public-identity-model.mjs", "infra/public-ingress/identity-profile.json", "infra/stable-system/helm-profiles.json"]);
+  }
   const contextKube = (argv, input) => input === undefined ? run("kubectl", ["--context", context, "--request-timeout=15s", ...argv]) :
     run("/bin/sh", ["-c", 'cat | kubectl "$@"', "kodex-system-helm-pipe", "--context", context, "--request-timeout=15s", ...argv], input, 180000);
   const scope = scopeFactory ? await scopeFactory({ kube: contextKube, run, source, plan }) : null;
   const profiles = scope?.profiles ?? JSON.parse(await readFile(root + "infra/stable-system/helm-profiles.json", "utf8")).profiles;
   const desiredValues = scope?.desiredValues ?? ((p, v) => systemDesiredValues(v, p.values));
   const recoveryValuesFor = scope?.recoveryValues ?? systemRecoveryValues;
-  requireValue(plan.schema === (scope?.planSchema ?? "kodex.stable-system-helm-plan/v2") && document.planSHA256 === hash && plan.source === source &&
+  requireValue(plan.schema === (scope?.planSchema ?? "kodex.stable-system-helm-plan/v2") && document.planSHA256 === hash &&
     (!scope || fingerprint(plan.environment) === fingerprint(scope.environment)) &&
     plan.context === context && plan.rows?.length === profiles.length && profiles.every((p, i) => {
       const r = plan.rows[i]; return r.name === p.name && r.namespace === p.namespace && r.release === p.release &&
         r.profileSHA256 === fingerprint(p) && Number.isSafeInteger(r.sourceRevision) && r.sourceRevision > 0 &&
         Array.isArray(r.objects) && r.objects.length > 0 && r.objects.length < 512 && Array.isArray(r.serving);
     }), "SYSTEM_HELM_PLAN_IDENTITY_INVALID");
-  requireValue(["apply", "rollback"].includes(mode) ? options["--approved-plan-sha"] === hash : !options["--approved-plan-sha"],
+  requireValue(["apply", "continue", "rollback"].includes(mode) ? options["--approved-plan-sha"] === hash : !options["--approved-plan-sha"],
     "SYSTEM_HELM_EXACT_OWNER_CONFIRMATION_REQUIRED");
   const kube = (argv, input) => input === undefined ? run("kubectl", ["--context", context, "--request-timeout=15s", ...argv]) :
     run("/bin/sh", ["-c", 'cat | kubectl "$@"', "kodex-system-helm-pipe", "--context", context, "--request-timeout=15s", ...argv], input, 180000);
@@ -95,7 +101,7 @@ export async function releaseSystemHelm(args, port, planPort = planSystemHelm, v
         receipts.set(r.name, r.objects);
       }
     }
-    if (mode === "rollback" && !["COMPLETE", "UNKNOWN"].includes(journalRows.at(-1)?.status))
+    if (["continue", "rollback"].includes(mode) && !["COMPLETE", "UNKNOWN"].includes(journalRows.at(-1)?.status))
       requireValue(await processIdentity(header.pid) !== header.processIdentity, "SYSTEM_HELM_ORIGINAL_PROCESS_STILL_RUNNING");
   } else operation = randomBytes(16).toString("hex");
   const readRow = async row => {
@@ -118,7 +124,7 @@ export async function releaseSystemHelm(args, port, planPort = planSystemHelm, v
     const phase = current.phase;
     requireValue(current.status === "deployed", "SYSTEM_HELM_SERVING_INCOMPLETE");
     matchSystemObjects(row.objects, await readSystemObjects(current.profile, definitions(row), kube), [phase], receipts.get(row.name));
-    await systemServing(current.profile, kube, row.serving, phase === "after" ? 2 : undefined);
+    await waitSystemServing(current.profile, kube, row.serving, phase === "after" ? 2 : undefined);
   };
   const preflight = names => planPort(["--context", context, "--charts", options["--charts"], "--output", options["--output"] + ".preflight"], run,
     { inMemory: true, ...(scope ? { environment: scope.environment } : {}), ...(names ? { names } : {}) });
@@ -132,6 +138,9 @@ export async function releaseSystemHelm(args, port, planPort = planSystemHelm, v
   }
   const observed = [];
   if (mode !== "apply") for (const row of plan.rows) observed.push({ row, current: await readRow(row) });
+  if (mode === "continue") requireValue(observed.every(({ row, current }) =>
+    current.phase === "after" && current.status === "deployed" && intents.has(row.name) ||
+    current.phase === "before" && current.status === "deployed" && !intents.has(row.name)), "SYSTEM_HELM_UNKNOWN_MUTATION_REQUIRES_OWNER");
   if (mode === "readback") {
     requireValue(observed.every(({ current }) => current.phase === "after"), "SYSTEM_HELM_RELEASE_INCOMPLETE");
     for (const { row, current } of observed) await prove(row, current);
@@ -139,14 +148,21 @@ export async function releaseSystemHelm(args, port, planPort = planSystemHelm, v
   const output = await open(options["--output"], "wx", 0o600);
   const record = async r => { await output.writeFile(JSON.stringify(r) + "\n"); await output.sync(); };
   try {
-    await record({ schema: "kodex.stable-system-helm-journal/v1", mode, planSHA256: hash, operation,
-      ...(mode === "apply" ? { pid: process.pid, processIdentity: await processIdentity(process.pid) } : { originalJournalSHA256: fingerprint([header, ...journalRows]) }) });
+    await record({ schema: "kodex.stable-system-helm-journal/v1", mode: mode === "continue" ? "apply" : mode, planSHA256: hash, operation,
+      ...(["apply", "continue"].includes(mode) ? { pid: process.pid, processIdentity: await processIdentity(process.pid) } : {}),
+      ...(mode !== "apply" ? { originalJournalSHA256: fingerprint([header, ...journalRows]) } : {}) });
     if (["inspect", "readback"].includes(mode)) {
       await record({ status: mode === "inspect" ? "OBSERVED" : "SERVING", complete: mode === "readback",
         releases: observed.map(({ row, current }) => ({ name: row.name, phase: current.phase, status: current.status })) }); return;
     }
-    if (mode === "apply") {
+    if (["apply", "continue"].includes(mode)) {
       for (const row of plan.rows) {
+        if (mode === "continue" && intents.has(row.name)) {
+          const current = await readRow(row); requireValue(current.phase === "after", "SYSTEM_HELM_CONTINUATION_DRIFT");
+          await prove(row, current); receipts.set(row.name, current.observed);
+          await record({ status: "APPLY_INTENT", name: row.name });
+          await record({ status: "APPLIED", name: row.name, objects: current.observed }); continue;
+        }
         const fresh = await preflight([row.name]), candidate = fresh.document.plan.rows[0], runtime = fresh.runtime.get(row.name);
         requireValue(fingerprint(candidate) === fingerprint(row), "SYSTEM_HELM_PLAN_DRIFT");
         await assertSource();

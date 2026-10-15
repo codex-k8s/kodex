@@ -227,3 +227,14 @@ export async function systemServing(profile, kube, baseline, count) {
   }
   return proof;
 }
+
+// Helm/rollout может уже подтвердить новые Ready Pod, пока прежние owned
+// terminating Pod ещё завершаются. Ожидаем их join, не повторяя mutation.
+export async function waitSystemServing(profile, kube, baseline, count, timeout = 90000) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    try { return await systemServing(profile, kube, baseline, count); }
+    catch (error) { if (error.message !== "SYSTEM_HELM_SERVING_INCOMPLETE" || Date.now() >= deadline) throw error; }
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+}

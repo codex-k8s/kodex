@@ -110,7 +110,7 @@ async function fixture(t) {
     internal.names ? { ...plan, rows: rows.filter(r => internal.names.includes(r.name)) } : plan }, runtime });
   const invoke = (mode, output, extra = []) => releaseSystemHelm([mode, "--context", "k3d-kodex", "--charts", dir, "--plan", path,
     "--output", dir + "/" + output, ...(mode === "apply" ? [] : ["--journal", dir + "/apply.jsonl"]),
-    ...(["apply", "rollback"].includes(mode) ? ["--approved-plan-sha", hash] : []), ...extra], command, preflight, async () => {});
+    ...(["apply", "continue", "rollback"].includes(mode) ? ["--approved-plan-sha", hash] : []), ...extra], command, preflight, async () => {});
   const writes = () => trace.filter(r => r.program === "helm" && r.argv[0] === "upgrade" && !r.argv.includes("--dry-run=server"));
   return { dir, plan, hash, path, invoke, trace, flags, states, objects, writes };
 }
@@ -134,6 +134,15 @@ test("lost upgrade response is inspected without retry and recovered only by a n
   assert.equal(f.writes().length, 1); await f.invoke("inspect", "inspect.jsonl"); assert.equal(f.writes().length, 1);
   await f.invoke("rollback", "rollback.jsonl"); assert.equal(f.writes().length, 2);
   assert.equal(f.states.get("cert-manager").version, 12); assert.equal(f.states.get("kodex-trust-manager").version, 10);
+});
+
+test("explicit Helm continuation proves prior revision and upgrades only untouched releases", async t => {
+  const f = await fixture(t); f.flags.lostApply = true;
+  await assert.rejects(f.invoke("apply", "apply.jsonl"), /FIXTURE_UPGRADE_ACK_LOST/);
+  await f.invoke("continue", "continue.jsonl"); assert.equal(f.writes().length, 3);
+  assert.ok([...f.states.values()].every(s => s.version === 11));
+  const records = (await readFile(f.dir + "/continue.jsonl", "utf8")).trim().split("\n").map(JSON.parse);
+  assert.equal(records[0].mode, "apply"); assert.equal(records.at(-1).status, "COMPLETE");
 });
 
 test("foreign UID, credential RV and unsolicited Helm revision block rollback before writes", async t => {
