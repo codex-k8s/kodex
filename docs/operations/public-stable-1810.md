@@ -4,7 +4,7 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.1.0
+version: 1.1.1
 updated: 2026-10-15
 ---
 
@@ -802,3 +802,33 @@ NOT RUN: frontend live apply/rollback, registry publication/node pull,
 публичные TLS/SSO и browser новой поставки. Локальный Docker load служил только
 одноразовой проверке nginx, не загрузке образа в Kubernetes nodes. Существующий
 main и все hot Deployment сохранены; реальные AI/STT/device-code не запускались.
+
+## Восстановление Go-поставки без возврата опасных прав
+
+`stable-go-release.mjs` использует единственную schema `kodex.stable-go-plan/v3`,
+без декодера прежних планов. План связывает clean executor SHA, cluster/app
+namespace UID, каждый Deployment UID, before/after spec/labels, PVC/PV
+commitments, узкие inverse operations и закрытый вид восстановления. Apply и
+rollback требуют exact подтверждение плана после проектных review/owner gates.
+Rollback дополнительно читает private apply journal с совпавшим intent и
+сверяет сохранённые promoted pins по свежему owner idle read.
+
+| Переход | Проверка и результат |
+| --- | --- |
+| plan | Удаляемые Go build env имеют закрытый публичный формат; source spool init совпадает с repo-owned renderer, неизвестные values не сохраняются |
+| normal compiled runtime | Source workingDir и build HOME удаляются: в distroless нет `/workspace` и Go cache; init получает nonroot/read-only/drop ALL |
+| rollback preflight | Весь набор UID/spec/labels/PVC/pins и archive RoleBinding сверяется до первого write; чужой drift закрывает весь запрос |
+| ordinary service | CAS quiesce, join всех собственных Pods; inverse в памяти, исходные replicas/labels/spec; actual serving/readiness и повторный итоговый readback |
+| archive after partial/full cutover | CAS quiesce/join; Role только сохраняется или сужается до repo-owned safe правил; исходный source profile возвращается строго с replicas0 |
+| unknown response | Нет автоматической повторной отправки; fresh rollback наблюдает source/compiled/quiesced tuple; уже восстановленный source не патчится снова |
+| archive forward recovery | Новый план из safe paused source и текущего narrowed Role; после отдельного допуска — тот же apply, исправленный compiled OCI, две готовые реплики |
+| завершение recovery | `releaseComplete=false`, browser `NOT_RUN`; остановленный archive явно отражается `archivePaused=true`, не выдаётся за готовность |
+
+Архиватор не возвращается к прежнему startup `deletecollection` и broad Role.
+При его аварийном восстановлении архивирование временно недоступно, пока не
+выполнен новый forward plan; это не альтернативный конечный профиль цели.
+Исходные данные, provider credentials и существующие promoted pins не меняются.
+Публичного API для этих операций нет: actor — оператор разрешённого кластера
+после exact owner gate, transport — scoped Kubernetes CAS. Это deploy recovery,
+не изменение доменных агрегатов; новые domain events не создаются, результат
+читается через actual Kubernetes/owner readback и private intent journal.

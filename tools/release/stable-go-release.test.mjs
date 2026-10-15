@@ -25,7 +25,7 @@ if(i>=0){
     const draining=d.spec.replicas===0&&s.drainPolls>0;
     if(draining){s.drainPolls--;fs.writeFileSync(p,JSON.stringify(s));}
     const items=[{kind:'ReplicaSet',metadata:{uid:'rs',ownerReferences:[{kind:'Deployment',uid:d.metadata.uid,controller:true}]}},
-      ...(d.spec.replicas===0&&!draining?[]:['pod-a','pod-b']).map(uid=>({kind:'Pod',metadata:{uid,ownerReferences:[{kind:'ReplicaSet',uid:'rs',controller:true}]},
+      ...Array.from({length:draining?1:d.spec.replicas},(_,i)=>'pod-'+i).map(uid=>({kind:'Pod',metadata:{uid,ownerReferences:[{kind:'ReplicaSet',uid:'rs',controller:true}]},
         spec:d.spec.template.spec,status:{conditions:[{type:'Ready',status:'True'}],containerStatuses:[{name:d.metadata.name,ready:true,imageID:'fixture@'+digest}]}}))];
     console.log(JSON.stringify({items}));
   }else process.exit(4);
@@ -33,7 +33,7 @@ if(i>=0){
   const sql=fs.readFileSync(0,'utf8');if(!sql.includes('BEGIN TRANSACTION READ ONLY'))process.exit(5);
   if(sql.includes('stable_archive_idle')){console.log(JSON.stringify({openArchiveTasks:s.archiveBusy?1:0,transitionalStorage:0}));process.exit(0);}
   console.log(JSON.stringify({at:new Date().toISOString(),openBuilds:s.busy?1:0,pendingAdmissions:0,pendingPromotions:0,
-    activeRuntimeRuns:0,claimedRuntimeLeases:0,promotedArtifactCount:3,promotedPinsSHA256:'d'.repeat(64)}));
+    activeRuntimeRuns:0,claimedRuntimeLeases:0,promotedArtifactCount:3,promotedPinsSHA256:(s.pinsChanged?'e':'d').repeat(64)}));
 }else if(a.includes('patch')){
   const patch=JSON.parse(fs.readFileSync(0,'utf8'));
   const kind=a[a.indexOf('patch')+1],target=kind==='role'?s.role:d;
@@ -42,6 +42,7 @@ if(i>=0){
     const key=keys.pop();let parent=target;for(const k of keys)parent=parent[k];
     if(op.op==='test'){if(JSON.stringify(parent[key])!==JSON.stringify(op.value))process.exit(6);}
     else if(op.op==='replace'||op.op==='add')parent[key]=op.value;
+    else if(op.op==='remove')delete parent[key];
     else process.exit(8);
   }
   target.metadata.resourceVersion=String(Number(target.metadata.resourceVersion)+1);
@@ -54,22 +55,24 @@ if(i>=0){
   fs.writeFileSync(p,JSON.stringify(s));
   if(s.lostQuiesceResponse&&kind==='deployment'&&d.spec.replicas===0)process.exit(9);
   if(s.lostRoleResponse&&kind==='role')process.exit(9);
+  if(s.lostRestoreResponse&&kind==='deployment'&&d.spec.template.spec.containers[0].command[0].includes('run-go-hot-reload'))process.exit(9);
   console.log(kind+'/session-archive');
 }else if(a.includes('rollout'))console.log('complete');else process.exit(7);
 `;
 
-function setup() {
+function setup(name = "session-archive") {
   const directory = mkdtempSync(join(tmpdir(), "kodex-stable-cli-test-"));
   mkdirSync(join(directory, "bin"));
   writeFileSync(join(directory, "bin", "kubectl"), mock, { mode: 0o700 });
+  writeFileSync(join(directory, "bin", "git"), `#!${process.execPath}\nprocess.stdout.write(process.argv[2]==='rev-parse'?'${"f".repeat(40)}':'');\n`, { mode: 0o700 });
   const deployment = { apiVersion: "apps/v1", kind: "Deployment",
-    metadata: { name: "session-archive", namespace: "kodex-system", uid: "deployment", resourceVersion: "1", generation: 1 },
+    metadata: { name, namespace: "kodex-system", uid: "deployment", resourceVersion: "1", generation: 1 },
     spec: { replicas: 1, template: { metadata: {}, spec: {
-      containers: [{ name: "session-archive", image: "dev", command: ["/workspace/tools/dev/run-go-hot-reload.sh"],
-        args: ["services/jobs/session-archive", "./cmd/session-archive", "session-archive", "controller"],
+      containers: [{ name, image: "dev", command: ["/workspace/tools/dev/run-go-hot-reload.sh"],
+        args: [name === "session-archive" ? "services/jobs/session-archive" : "services/internal/control-plane", `./cmd/${name}`, name, "controller"],
         env: [{ name: "PRIVATE", value: "CLI_PRIVATE_SENTINEL" },
           { name: "SESSION_ARCHIVE_WORKER_IMAGE", value: "example.invalid/kodex/session-archive@sha256:" + "e".repeat(64) }], volumeMounts: [] }], volumes: [] } } },
-    status: { observedGeneration: 1, replicas: 1, readyReplicas: 1 } };
+    status: { observedGeneration: 1, replicas: 1, readyReplicas: 1, availableReplicas: 1, updatedReplicas: 1 } };
   const desiredRole = JSON.parse(execFileSync("yq", ["eval-all", "-o=json", "-I=0",
     'select(.kind == "Role" and .metadata.name == "session-archive-controller")',
     fileURLToPath(new URL("../../deploy/k8s/base/session-archive/runtime/rbac.yaml", import.meta.url))], { encoding: "utf8" }));
@@ -81,10 +84,10 @@ function setup() {
     roleRef: { apiGroup: "rbac.authorization.k8s.io", kind: "Role", name: role.metadata.name },
     subjects: [{ kind: "ServiceAccount", name: "session-archive", namespace: "kodex-system" }] };
   writeFileSync(join(directory, "fixture.json"), JSON.stringify({ deployment, role, binding }), { mode: 0o600 });
-  const release = { component: "session-archive", sourceSHA: "a".repeat(40), provenanceSHA256: "b".repeat(64),
+  const release = { component: name, sourceSHA: "a".repeat(40), provenanceSHA256: "b".repeat(64),
     image: "example.invalid/kodex/session-archive@sha256:" + "c".repeat(64) };
   writeFileSync(join(directory, "manifest.json"), JSON.stringify({ schema: "kodex.stable-go-manifest/v1",
-    targets: [{ name: "session-archive", release }] }), { mode: 0o600 });
+    targets: [{ name, release }] }), { mode: 0o600 });
   return { directory, run: args => {
     try { return { status: 0, output: execFileSync(process.execPath, [cli, ...args], {
       env: { PATH: join(directory, "bin") + ":" + process.env.PATH, FIXTURE: join(directory, "fixture.json"), TRACE: join(directory, "trace") },
@@ -266,5 +269,101 @@ test("wrong confirmation and busy owner state never perform a patch", () => {
     state.busy = true; writeFileSync(path, JSON.stringify(state));
     assert.notEqual(run([...base, fingerprint(plan)]).status, 0);
     assert.equal(readFileSync(join(directory, "trace"), "utf8").includes('"patch"'), false);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("Go rollback restores exact source spec labels replicas and preserves private env", () => {
+  const { directory, run } = setup("control-plane");
+  try {
+    const path = join(directory, "fixture.json"), original = JSON.parse(readFileSync(path, "utf8")).deployment;
+    const planPath = join(directory, "plan.json"), applyPath = join(directory, "apply.jsonl");
+    const planned = run(["plan", "--context", "fixture", "--manifest", join(directory, "manifest.json"), "--output", planPath]);
+    assert.equal(planned.status, 0, planned.output);
+    const plan = JSON.parse(readFileSync(planPath, "utf8"));
+    assert.equal(run(["apply", "--context", "fixture", "--plan", planPath, "--approved-plan-sha", fingerprint(plan), "--output", applyPath]).status, 0);
+    const result = run(["rollback", "--context", "fixture", "--plan", planPath, "--approved-plan-sha", fingerprint(plan),
+      "--journal", applyPath, "--output", join(directory, "rollback.jsonl")]);
+    assert.equal(result.status, 0, result.output);
+    const current = JSON.parse(readFileSync(path, "utf8")).deployment;
+    assert.deepEqual(current.spec, original.spec);
+    assert.equal(Object.hasOwn(current.metadata, "labels"), false);
+    assert.equal(JSON.parse(result.output).releaseComplete, false);
+    assert.equal(readFileSync(join(directory, "rollback.jsonl"), "utf8").includes("CLI_PRIVATE_SENTINEL"), false);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("archive recovery from partial or complete cutover never regrants bulk deletion or starts unsafe source", () => {
+  for (const flag of [null, "lostQuiesceResponse", "lostRoleResponse"]) {
+    const { directory, run } = setup();
+    try {
+      const path = join(directory, "fixture.json"), planPath = join(directory, "plan.json"), applyPath = join(directory, "apply.jsonl");
+      assert.equal(run(["plan", "--context", "fixture", "--manifest", join(directory, "manifest.json"), "--output", planPath]).status, 0);
+      const plan = JSON.parse(readFileSync(planPath, "utf8"));
+      const before = JSON.parse(readFileSync(path, "utf8"));
+      if (flag) { before[flag] = true; writeFileSync(path, JSON.stringify(before)); }
+      const applied = run(["apply", "--context", "fixture", "--plan", planPath, "--approved-plan-sha", fingerprint(plan), "--output", applyPath]);
+      assert.equal(applied.status === 0, !flag, applied.output);
+      const state = JSON.parse(readFileSync(path, "utf8")); if (flag) state[flag] = false; writeFileSync(path, JSON.stringify(state));
+      const recovered = run(["rollback", "--context", "fixture", "--plan", planPath, "--approved-plan-sha", fingerprint(plan),
+        "--journal", applyPath, "--output", join(directory, "rollback.jsonl")]);
+      assert.equal(recovered.status, 0, recovered.output);
+      const after = JSON.parse(readFileSync(path, "utf8"));
+      assert.equal(after.deployment.spec.replicas, 0);
+      assert.equal(after.role.rules.some(r => r.verbs.includes("deletecollection")), false);
+      assert.equal(JSON.parse(recovered.output).archivePaused, true);
+      const inspected = run(["inspect", "--context", "fixture", "--plan", planPath, "--output", join(directory, "inspect.json")]);
+      assert.equal(inspected.status, 0, inspected.output);
+      assert.equal(JSON.parse(inspected.output).results[0].phase, "QUIESCED_ROLE_READY");
+      // Возврат в две реплики требует свежего reviewed плана из safe paused
+      // source; прежний план не переотправляется как неизвестный apply.
+      const nextPlan = join(directory, "forward.json");
+      assert.equal(run(["plan", "--context", "fixture", "--manifest", join(directory, "manifest.json"), "--output", nextPlan]).status, 0);
+      const fresh = JSON.parse(readFileSync(nextPlan, "utf8"));
+      const resumed = run(["apply", "--context", "fixture", "--plan", nextPlan, "--approved-plan-sha", fingerprint(fresh), "--output", join(directory, "forward.jsonl")]);
+      assert.equal(resumed.status, 0, resumed.output);
+      assert.equal(JSON.parse(readFileSync(path, "utf8")).deployment.spec.replicas, 2);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  }
+});
+
+test("recovery refuses foreign deployment role journal or promoted pins before writes", () => {
+  for (const scenario of ["uid", "binding", "journal", "pins"]) {
+    const { directory, run } = setup();
+    try {
+      const path = join(directory, "fixture.json"), planPath = join(directory, "plan.json"), applyPath = join(directory, "apply.jsonl");
+      assert.equal(run(["plan", "--context", "fixture", "--manifest", join(directory, "manifest.json"), "--output", planPath]).status, 0);
+      const plan = JSON.parse(readFileSync(planPath, "utf8"));
+      assert.equal(run(["apply", "--context", "fixture", "--plan", planPath, "--approved-plan-sha", fingerprint(plan), "--output", applyPath]).status, 0);
+      const state = JSON.parse(readFileSync(path, "utf8"));
+      if (scenario === "uid") state.deployment.metadata.uid = "foreign";
+      if (scenario === "binding") state.binding.metadata.uid = "foreign";
+      if (scenario === "pins") state.pinsChanged = true;
+      writeFileSync(path, JSON.stringify(state));
+      if (scenario === "journal") {
+        const rows = readFileSync(applyPath, "utf8").trim().split("\n").map(JSON.parse); rows[0].planSHA256 = "0".repeat(64);
+        writeFileSync(applyPath, rows.map(JSON.stringify).join("\n") + "\n");
+      }
+      const patches = () => readFileSync(join(directory, "trace"), "utf8").split("\n").filter(r => r.includes('"patch"')).length;
+      const count = patches();
+      assert.notEqual(run(["rollback", "--context", "fixture", "--plan", planPath, "--approved-plan-sha", fingerprint(plan),
+        "--journal", applyPath, "--output", join(directory, "rollback.jsonl")]).status, 0);
+      assert.equal(patches(), count);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  }
+});
+
+test("lost restore response is resolved by observed source without repeating the patch", () => {
+  const { directory, run } = setup("control-plane");
+  try {
+    const path = join(directory, "fixture.json"), planPath = join(directory, "plan.json"), applyPath = join(directory, "apply.jsonl");
+    assert.equal(run(["plan", "--context", "fixture", "--manifest", join(directory, "manifest.json"), "--output", planPath]).status, 0);
+    const plan = JSON.parse(readFileSync(planPath, "utf8"));
+    assert.equal(run(["apply", "--context", "fixture", "--plan", planPath, "--approved-plan-sha", fingerprint(plan), "--output", applyPath]).status, 0);
+    const state = JSON.parse(readFileSync(path, "utf8")); state.lostRestoreResponse = true; writeFileSync(path, JSON.stringify(state));
+    const args = ["rollback", "--context", "fixture", "--plan", planPath, "--approved-plan-sha", fingerprint(plan), "--journal", applyPath];
+    assert.notEqual(run([...args, "--output", join(directory, "unknown.jsonl")]).status, 0);
+    const patches = () => readFileSync(join(directory, "trace"), "utf8").split("\n").filter(r => r.includes('"patch"')).length;
+    const count = patches(), observed = run([...args, "--output", join(directory, "observed.jsonl")]);
+    assert.equal(observed.status, 0, observed.output); assert.equal(patches(), count);
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });

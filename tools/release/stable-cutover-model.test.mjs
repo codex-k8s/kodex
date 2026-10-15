@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { prepareGoCutover, validateStorageProtocol } from "./stable-cutover-model.mjs";
+import { applyReverseSpec } from "./stable-reverse-patch.mjs";
 
 function fixture(name = "session-archive", module = "services/jobs/session-archive", args = ["controller"]) {
   return { kind: "Deployment", metadata: { name, namespace: "kodex-system", uid: "uid", resourceVersion: "2" },
@@ -16,19 +17,24 @@ const release = { component: "session-archive", image: "example.invalid/kodex/se
   sourceSHA: "b".repeat(40), provenanceSHA256: "c".repeat(64) };
 
 test("normal cutover preserves mode secrets and source input with exact CAS", () => {
-  const value = fixture(), original = structuredClone(value);
+  const value = fixture();
+  value.spec.template.spec.containers[0].workingDir = "/workspace/services/jobs/session-archive";
+  value.spec.template.spec.containers[0].env.push({ name: "HOME", value: "/go/build-cache/home" });
+  const original = structuredClone(value);
   const result = prepareGoCutover(value, release), after = result.patch.at(-1).value;
   assert.deepEqual(value, original);
   assert.equal(after.replicas, 2); assert.equal(after.strategy.rollingUpdate.maxUnavailable, 0);
   assert.deepEqual(after.template.spec.containers[0].command, ["/usr/local/bin/session-archive"]);
   assert.deepEqual(after.template.spec.containers[0].args, ["controller"]);
-  const expectedEnv = original.spec.template.spec.containers[0].env.slice(1);
+  const expectedEnv = structuredClone(original.spec.template.spec.containers[0].env.slice(1).filter(e => e.name !== "HOME"));
   expectedEnv.find(e => e.name === "SESSION_ARCHIVE_WORKER_IMAGE").value = release.image;
   assert.deepEqual(after.template.spec.containers[0].env, expectedEnv);
   assert.deepEqual(after.template.spec.volumes, [original.spec.template.spec.volumes[1]]);
   assert.deepEqual(after.template.spec.securityContext, original.spec.template.spec.securityContext);
   assert.deepEqual(result.patch.slice(0, 3).map(p => p.op), ["test", "test", "test"]);
   assert.equal(after.template.metadata.labels["kodex.dev/local-profile"], "stable");
+  assert.equal(Object.hasOwn(after.template.spec.containers[0], "workingDir"), false);
+  assert.deepEqual(applyReverseSpec(after, result.recovery.inverse), original.spec);
 });
 
 test("archive controller and worker share one OCI and ambiguous source pins fail closed", () => {
@@ -82,13 +88,29 @@ test("artifact spool init switches to the same compiled controller without losin
     args: ["go build ./cmd/runtime-controller; exec binary --prepare-artifact-spool /var/lib/kodex/runtime-controller/artifact-spool"],
     volumeMounts: [{ name: "dev-source", mountPath: "/workspace" }, { name: "dev-build-artifact-spool-init", mountPath: "/go/build-cache" },
       { name: "artifact-spool", mountPath: "/var/lib/kodex/runtime-controller/artifact-spool" }] }];
-  const after = prepareGoCutover(value, { ...release, component: "runtime-controller" }).patch.at(-1).value;
+  const after = prepareGoCutover(value, { ...release, component: "runtime-controller" },
+    { sourceSpoolScript: value.spec.template.spec.initContainers[0].args[0] }).patch.at(-1).value;
   const init = after.template.spec.initContainers[0];
   assert.equal(init.image, release.image);
   assert.deepEqual(init.command, ["/usr/local/bin/runtime-controller"]);
   assert.deepEqual(init.args, ["--prepare-artifact-spool", "/var/lib/kodex/runtime-controller/artifact-spool"]);
   assert.equal(init.volumeMounts.length, 1);
   assert.ok(after.template.spec.volumes.some(v => v.name === "artifact-spool"));
+});
+
+test("Go recovery material roundtrips source without copying unchanged credentials", () => {
+  const value = fixture();
+  value.spec.template.spec.containers[0].env.push({ name: "PRIVATE", value: "DO_NOT_COPY_PRIVATE_1810" });
+  const result = prepareGoCutover(value, release);
+  assert.deepEqual(applyReverseSpec(result.patch.at(-1).value, result.recovery.inverse), value.spec);
+  assert.equal(JSON.stringify(result.recovery).includes("DO_NOT_COPY_PRIVATE_1810"), false);
+  assert.equal(result.recovery.mode, "ARCHIVE_PAUSE_FORWARD_ONLY");
+  for (const env of [{ name: "GOPROXY", value: "https://user:private@example.test" },
+    { name: "GOCACHE", valueFrom: { secretKeyRef: { name: "private", key: "value" } } },
+    { name: "GOFLAGS", value: "-ldflags=private" }]) {
+    const source = fixture(); source.spec.template.spec.containers[0].env.push(env);
+    assert.throws(() => prepareGoCutover(source, release), /DEV_ENV_UNSUPPORTED/);
+  }
 });
 
 test("actual Go cutover cannot bypass the PVC protocol gate", () => {

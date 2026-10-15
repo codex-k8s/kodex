@@ -1,4 +1,5 @@
 import { fingerprint } from "./stable-inventory.mjs";
+import { reverseSpecPatch } from "./stable-reverse-patch.mjs";
 
 // Закрытый реестр текущих исполняемых путей: произвольный binary из payload
 // не получает возможность заменить штатный сервис.
@@ -20,9 +21,30 @@ const goServices = {
   "backup-controller": ["services/jobs/backup-controller", "backup-controller", "backup-controller"],
 };
 const devEnv = new Set(["GOTOOLCHAIN", "GOPATH", "GOMODCACHE", "GOCACHE", "GOSUMDB", "GOPROXY", "GOFLAGS",
-  "GOWORK", "GOTMPDIR", "KODEX_DEV_AIR_VERSION", "KODEX_DEV_AIR_SHA256"]);
+  "GOWORK", "GOTMPDIR", "HOME", "KODEX_DEV_AIR_VERSION", "KODEX_DEV_AIR_SHA256"]);
 const imagePattern = /^[a-z0-9][a-z0-9.:/_-]*@sha256:[a-f0-9]{64}$/;
 function requireValue(value, code) { if (!value) throw Error(code); }
+
+function validateRemovedEnvironment(container) {
+  const selected = (container.env ?? []).filter(e => devEnv.has(e.name));
+  requireValue(new Set(selected.map(e => e.name)).size === selected.length, "CUTOVER_DEV_ENV_UNSUPPORTED");
+  for (const { name, value, valueFrom } of selected) {
+    let safe = !valueFrom && typeof value === "string" && value.length <= 1024;
+    if (safe) {
+      if (["GOPATH", "GOMODCACHE", "GOCACHE", "GOTMPDIR"].includes(name)) safe = /^\/(?:go|tmp)(?:\/[A-Za-z0-9_.-]+)*$/.test(value) && !value.split("/").includes("..");
+      else if (name === "GOTOOLCHAIN") safe = value === "local";
+      else if (name === "GOWORK") safe = value === "off";
+      else if (name === "HOME") safe = value === "/go/build-cache/home";
+      else if (name === "KODEX_DEV_AIR_VERSION") safe = /^v[0-9]+\.[0-9]+\.[0-9]+$/.test(value);
+      else if (name === "KODEX_DEV_AIR_SHA256") safe = /^[a-f0-9]{64}$/.test(value);
+      else if (name === "GOSUMDB") safe = ["off", "sum.golang.org"].includes(value);
+      else if (name === "GOPROXY") safe = ["off", "https://proxy.golang.org,direct", "file:///go/pkg/mod/cache/download,off"].includes(value);
+      else if (name === "GOFLAGS") safe = /^(?:(?:-mod=(?:readonly|mod|vendor)|-buildvcs=false)(?: |$))*$/.test(value);
+      else safe = false;
+    }
+    requireValue(safe, "CUTOVER_DEV_ENV_UNSUPPORTED");
+  }
+}
 
 export function validateGoReleaseReference(name, release) {
   const entry = goServices[name];
@@ -32,7 +54,7 @@ export function validateGoReleaseReference(name, release) {
     release.provenanceSHA256 !== "0".repeat(64), "CUTOVER_RELEASE_INVALID");
 }
 
-export function prepareGoCutover(deployment, release, { storageClaims = [] } = {}) {
+export function prepareGoCutover(deployment, release, { storageClaims = [], sourceSpoolScript } = {}) {
   const name = deployment?.metadata?.name;
   const entry = goServices[name];
   requireValue(deployment?.kind === "Deployment" && deployment.metadata.namespace === "kodex-system" && entry,
@@ -41,6 +63,8 @@ export function prepareGoCutover(deployment, release, { storageClaims = [] } = {
     typeof deployment.metadata.resourceVersion === "string", "CUTOVER_IDENTITY_INVALID");
   validateGoReleaseReference(name, release);
   const before = deployment.spec;
+  requireValue(!Object.hasOwn(deployment.metadata.labels ?? {}, "kodex.dev/local-profile") ||
+    deployment.metadata.labels["kodex.dev/local-profile"] === "hot-reload", "CUTOVER_SOURCE_LABEL_UNSUPPORTED");
   const after = structuredClone(before);
   requireValue(!Object.hasOwn(after.selector?.matchLabels ?? {}, "kodex.dev/local-profile") &&
     !(after.selector?.matchExpressions ?? []).some(e => e.key === "kodex.dev/local-profile"), "CUTOVER_PROFILE_SELECTOR_BOUND");
@@ -60,6 +84,7 @@ export function prepareGoCutover(deployment, release, { storageClaims = [] } = {
     app.args?.[0] === entry[0] && app.args[1] === `./cmd/${entry[1]}` &&
     // clamav-egress-gateway использует то же бинарное содержимое.
     [name, entry[1]].includes(app.args[2]), "CUTOVER_SOURCE_COMMAND_MISMATCH");
+  requireValue(app.workingDir === undefined || app.workingDir === `/workspace/${entry[0]}`, "CUTOVER_SOURCE_WORKDIR_UNSUPPORTED");
   const spoolInit = name === "runtime-controller" ? pod.initContainers?.find(c => c.name === "artifact-spool-init") : undefined;
   if (spoolInit) {
     requireValue(spoolInit.command?.join(" ") === "/bin/sh -ec" && spoolInit.args?.length === 1 &&
@@ -67,11 +92,16 @@ export function prepareGoCutover(deployment, release, { storageClaims = [] } = {
       spoolInit.args[0].includes("--prepare-artifact-spool /var/lib/kodex/runtime-controller/artifact-spool") &&
       spoolInit.volumeMounts?.some(m => m.name === "artifact-spool" && m.mountPath === "/var/lib/kodex/runtime-controller/artifact-spool"),
       "CUTOVER_SPOOL_INIT_MISMATCH");
+    requireValue(typeof sourceSpoolScript === "string" && spoolInit.args[0] === sourceSpoolScript,
+      "CUTOVER_SPOOL_SOURCE_UNSUPPORTED");
+    requireValue(spoolInit.workingDir === undefined || spoolInit.workingDir === `/workspace/${entry[0]}`, "CUTOVER_SOURCE_WORKDIR_UNSUPPORTED");
+    validateRemovedEnvironment(spoolInit);
     spoolInit.image = release.image;
     spoolInit.command = ["/usr/local/bin/runtime-controller"];
     spoolInit.args = ["--prepare-artifact-spool", "/var/lib/kodex/runtime-controller/artifact-spool"];
     spoolInit.env = (spoolInit.env ?? []).filter(e => !devEnv.has(e.name));
-    spoolInit.securityContext = { ...spoolInit.securityContext, runAsUser: 10001, runAsGroup: 10001 };
+    spoolInit.securityContext = { ...spoolInit.securityContext, runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001,
+      allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } };
   }
   const devVolumes = new Set(["dev-source", "dev-go-mod", "dev-go-sumdb", "dev-go-tools", `dev-build-${name}`,
     ...(spoolInit ? ["dev-build-artifact-spool-init"] : [])]);
@@ -87,6 +117,7 @@ export function prepareGoCutover(deployment, release, { storageClaims = [] } = {
     }
   }
   const converted = [app, ...(spoolInit ? [spoolInit] : [])];
+  validateRemovedEnvironment(app);
   const others = [...pod.containers, ...(pod.initContainers ?? [])].filter(c => !converted.includes(c));
   requireValue(!others.some(c => (c.volumeMounts ?? []).some(m => removedVolumes.has(m.name))),
     "CUTOVER_DEV_VOLUME_SHARED");
@@ -101,8 +132,11 @@ export function prepareGoCutover(deployment, release, { storageClaims = [] } = {
     // Controller и worker — два режима одного проверенного binary/OCI.
     workers[0].value = release.image;
   }
-  for (const container of converted)
+  for (const container of converted) {
     container.volumeMounts = (container.volumeMounts ?? []).filter(m => !removedVolumes.has(m.name));
+    // В distroless runtime нет каталога исходников или Go build cache.
+    delete container.workingDir;
+  }
   pod.volumes = (pod.volumes ?? []).filter(v => !removedVolumes.has(v.name));
   // UID приложения из Dockerfile; fsGroup и identity sidecar не меняются.
   // Secret references и существующие supplementary groups сохраняются.
@@ -122,6 +156,18 @@ export function prepareGoCutover(deployment, release, { storageClaims = [] } = {
   if (name === "runtime-controller") after.template.metadata.annotations["kodex.dev/controller-image"] = release.image;
   return {
     name, uid: deployment.metadata.uid, beforeSpecSHA256: fingerprint(before), afterSpecSHA256: fingerprint(after),
+    recovery: {
+      // Архиватор нельзя вернуть к startup deletecollection: при аварии он
+      // остаётся остановлен с уже суженными правами до forward recovery.
+      mode: name === "session-archive" ? "ARCHIVE_PAUSE_FORWARD_ONLY" : "RESTORE_SOURCE",
+      inverse: reverseSpecPatch(before, after),
+      beforeReplicas: before.replicas ?? 1,
+      beforeLabelsPresent: Object.hasOwn(deployment.metadata, "labels"),
+      beforeProfilePresent: Object.hasOwn(deployment.metadata.labels ?? {}, "kodex.dev/local-profile"),
+      beforeLabelsSHA256: fingerprint(deployment.metadata.labels ?? {}),
+      afterLabelsSHA256: fingerprint({ ...deployment.metadata.labels, "kodex.dev/local-profile": "stable" }),
+      quiescedAfterSpecSHA256: fingerprint({ ...after, replicas: 0 }),
+    },
     ...(name === "session-archive" ? { quiescedBeforeSpecSHA256: fingerprint({ ...before, replicas: 0 }) } : {}),
     sourceSHA: release.sourceSHA,
     patch: [

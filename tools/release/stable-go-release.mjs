@@ -8,6 +8,8 @@ import { fingerprint } from "./stable-inventory.mjs";
 import { prepareGoCutover, validateGoReleaseReference } from "./stable-cutover-model.mjs";
 import { requireIdle } from "./runner-policy-model.mjs";
 import { archiveTransition, sameArchiveBoundary, ownedDeploymentPods } from "./stable-archive-transition.mjs";
+import { prepareGoRecovery } from "./stable-go-recovery.mjs";
+import { constants } from "node:fs";
 
 const execute = promisify(execFile);
 const sqlPath = fileURLToPath(new URL("../dev/supply-chain-owner-readback.sql", import.meta.url));
@@ -28,14 +30,20 @@ async function main(args) {
   const mode = args.shift(), options = {};
   while (args.length) {
     const key = args.shift();
-    requireValue(["--context", "--manifest", "--plan", "--output", "--approved-plan-sha"].includes(key) &&
+    requireValue(["--context", "--manifest", "--plan", "--output", "--approved-plan-sha", "--journal"].includes(key) &&
       !Object.hasOwn(options, key) && args.length, "STABLE_ARGUMENTS_INVALID");
     options[key] = args.shift();
   }
   const context = options["--context"];
-  requireValue(["plan", "apply", "readback", "inspect"].includes(mode) && /^[A-Za-z0-9_.:@/-]{1,160}$/.test(context ?? "") &&
-    options["--output"], "STABLE_ARGUMENTS_INVALID");
+  requireValue(["plan", "apply", "readback", "inspect", "rollback"].includes(mode) && /^[A-Za-z0-9_.:@/-]{1,160}$/.test(context ?? "") &&
+    !/prod(?:uction)?/i.test(context) && options["--output"], "STABLE_ARGUMENTS_INVALID");
+  requireValue(mode === "rollback" ? options["--journal"] : !options["--journal"], "STABLE_RECOVERY_JOURNAL_REQUIRED");
   const env = Object.fromEntries(["HOME", "PATH", "LANG", "KUBECONFIG"].filter(k => process.env[k]).map(k => [k, process.env[k]]));
+  const root = fileURLToPath(new URL("../../", import.meta.url));
+  const git = async argv => (await execute("git", argv, { cwd: root, env, timeout: 15000, maxBuffer: 1 << 20 })).stdout.trim();
+  const executorSHA = await git(["rev-parse", "HEAD"]);
+  requireValue(/^[a-f0-9]{40}$/.test(executorSHA) && await git(["status", "--porcelain", "--untracked-files=normal"]) === "",
+    "STABLE_CLEAN_SOURCE_REQUIRED");
   const kubectl = async (arguments_, input, timeout = 35000) => {
     // Node stdin — socketpair. cat создаёт настоящий pipe для /dev/stdin.
     // Полный patch не попадает в argv или вывод вызывающей стороны.
@@ -55,6 +63,7 @@ async function main(args) {
   const get = async (kind, name, namespace = "kodex-system") =>
     JSON.parse(await kubectl(["-n", namespace, "get", kind, name, "-o", "json"]));
   const clusterUID = (await get("namespace", "kube-system", "default")).metadata.uid;
+  const appUID = (await get("namespace", "kodex-system", "default")).metadata.uid;
   let desiredArchiveRole;
   const archiveRole = async () => {
     if (!desiredArchiveRole) {
@@ -88,7 +97,11 @@ async function main(args) {
   const prepare = async requested => {
     const deployment = await get("deployment", requested.name);
     const storageClaims = await storageFor(deployment);
-    return { ...prepareGoCutover(deployment, requested.release, { storageClaims }),
+    const renderer = await readFile(fileURLToPath(new URL("../dev/render-local.sh", import.meta.url)), "utf8");
+    const scripts = [...renderer.matchAll(/\.args = (\["(?:[^"\\]|\\.)*"\])/g)].map(m => JSON.parse(m[1]))
+      .filter(a => a[0].includes("--prepare-artifact-spool"));
+    requireValue(scripts.length === 1, "STABLE_SPOOL_SOURCE_UNAVAILABLE");
+    return { ...prepareGoCutover(deployment, requested.release, { storageClaims, sourceSpoolScript: scripts[0][0] }),
       storageSHA256: fingerprint(storageClaims), requested,
       ...(requested.name === "session-archive" ? { archive: (await archiveRole()).proof } : {}) };
   };
@@ -103,7 +116,7 @@ async function main(args) {
       validateGoReleaseReference(requested.name, requested.release);
       targets.push(publicPlan(await prepare(requested)));
     }
-    const plan = { schema: "kodex.stable-go-plan/v2", context, clusterUID, targets };
+    const plan = { schema: "kodex.stable-go-plan/v3", context, clusterUID, appUID, executorSHA, targets };
     await createPrivate(options["--output"], plan);
     process.stdout.write(JSON.stringify({ status: "PASS", phase: "PLAN_ONLY", targets: targets.length,
       planSHA256: fingerprint(plan) }) + "\n");
@@ -111,11 +124,17 @@ async function main(args) {
   }
   requireValue(options["--plan"] && !options["--manifest"], "STABLE_ARGUMENTS_INVALID");
   const plan = await readPrivateJSON(options["--plan"]);
-  requireValue(plan.schema === "kodex.stable-go-plan/v2" && plan.context === context && plan.clusterUID === clusterUID &&
+  requireValue(plan.schema === "kodex.stable-go-plan/v3" && plan.context === context && plan.clusterUID === clusterUID &&
+    plan.appUID === appUID && plan.executorSHA === executorSHA &&
     Array.isArray(plan.targets) && plan.targets.length > 0 && plan.targets.length <= 16 &&
     new Set(plan.targets.map(t => t.name)).size === plan.targets.length, "STABLE_PLAN_IDENTITY_MISMATCH");
   for (const item of plan.targets) {
     validateGoReleaseReference(item.name, item.requested?.release);
+    requireValue(item.requested.name === item.name && item.recovery &&
+      item.recovery.mode === (item.name === "session-archive" ? "ARCHIVE_PAUSE_FORWARD_ONLY" : "RESTORE_SOURCE") &&
+      Array.isArray(item.recovery.inverse) && Number.isSafeInteger(item.recovery.beforeReplicas) && item.recovery.beforeReplicas >= 0 &&
+      item.recovery.beforeReplicas <= 256 && ["beforeLabelsSHA256", "afterLabelsSHA256", "quiescedAfterSpecSHA256"]
+        .every(k => /^[a-f0-9]{64}$/.test(item.recovery[k] ?? "")), "STABLE_RECOVERY_PLAN_INVALID");
     if (item.name === "session-archive") requireValue(item.archive &&
       /^[a-f0-9]{64}$/.test(item.quiescedBeforeSpecSHA256 ?? ""), "STABLE_ARCHIVE_PLAN_INVALID");
   }
@@ -231,6 +250,131 @@ async function main(args) {
     } finally { await journal.close(); }
     return;
   }
+  if (mode === "rollback") {
+    requireValue(options["--approved-plan-sha"] === fingerprint(plan), "STABLE_EXACT_OWNER_CONFIRMATION_REQUIRED");
+    const input = await open(options["--journal"], constants.O_RDONLY | constants.O_NOFOLLOW);
+    let receipt;
+    try {
+      const stat = await input.stat();
+      requireValue(stat.isFile() && stat.uid === process.getuid() && stat.nlink === 1 &&
+        (stat.mode & 0o777) === 0o600 && stat.size > 0 && stat.size <= 1 << 20, "STABLE_PRIVATE_JOURNAL_REQUIRED");
+      const records = (await input.readFile("utf8")).trim().split("\n").map(JSON.parse);
+      receipt = records[0];
+      requireValue(records.length <= 256 && receipt.schema === "kodex.stable-go-apply/v1" &&
+        receipt.planSHA256 === fingerprint(plan) && receipt.status === "IN_PROGRESS", "STABLE_RECOVERY_JOURNAL_MISMATCH");
+    } finally { await input.close(); }
+    const preserved = await idle();
+    requireValue(fingerprint(preserved) === fingerprint(receipt.preserved), "STABLE_PINS_CHANGED");
+    const preflight = async item => {
+      const current = await get("deployment", item.name), recovery = prepareGoRecovery(current, item);
+      requireValue(fingerprint(await storageFor(current)) === item.storageSHA256, "STABLE_RECOVERY_STORAGE_DRIFT");
+      if (item.name === "session-archive") {
+        const boundary = (await archiveRole()).proof;
+        requireValue(sameArchiveBoundary(boundary, item.archive) || sameArchiveBoundary(boundary, item.archive, "after"),
+          "STABLE_ARCHIVE_ROLE_DRIFT");
+        requireValue(!recovery.compiled || sameArchiveBoundary(boundary, item.archive, "after"), "STABLE_ARCHIVE_ROLE_DRIFT");
+        requireValue(!recovery.unchanged || sameArchiveBoundary(boundary, item.archive), "STABLE_ARCHIVE_ROLE_DRIFT");
+      }
+      return { current, recovery };
+    };
+    // Проверяется весь набор до первого effect, включая чужие PVC/UID/Role.
+    for (const item of plan.targets) await preflight(item);
+    await createPrivate(options["--output"], { schema: "kodex.stable-go-recovery/v1", planSHA256: fingerprint(plan), status: "IN_PROGRESS" });
+    const journal = await open(options["--output"], "a");
+    const record = async row => { await journal.writeFile(JSON.stringify(row) + "\n"); await journal.sync(); };
+    const patch = async (kind, name, namespace, resource, operations) => kubectl(["-n", namespace, "patch", kind, name,
+      "--type=json", "--patch-file=/dev/stdin", "-o", "name"], JSON.stringify([
+      { op: "test", path: "/metadata/uid", value: resource.metadata.uid },
+      { op: "test", path: "/metadata/resourceVersion", value: resource.metadata.resourceVersion }, ...operations]));
+    const proof = async (item, expectedSpec) => {
+      const current = await get("deployment", item.name), pods = ownedDeploymentPods(await podList(item.name), item.uid);
+      const replicas = expectedSpec.replicas ?? 1;
+      const serving = pods.every(p => {
+        if (p.metadata.deletionTimestamp || !p.status?.conditions?.some(c => c.type === "Ready" && c.status === "True")) return false;
+        return expectedSpec.template.spec.containers.every(expected => {
+          const actual = p.spec.containers?.find(c => c.name === expected.name);
+          const status = p.status.containerStatuses?.find(c => c.name === expected.name);
+          return actual?.image === expected.image && fingerprint(actual.command ?? []) === fingerprint(expected.command ?? []) &&
+            fingerprint(actual.args ?? []) === fingerprint(expected.args ?? []) && status?.ready &&
+            (!expected.image.includes("@sha256:") || status.imageID?.endsWith(expected.image.split("@").at(-1)));
+        });
+      });
+      requireValue(current.metadata.uid === item.uid && fingerprint(current.spec) === fingerprint(expectedSpec) &&
+        fingerprint(current.metadata.labels ?? {}) === item.recovery.beforeLabelsSHA256 &&
+        current.status?.observedGeneration >= current.metadata.generation &&
+        ["replicas", "updatedReplicas", "readyReplicas", "availableReplicas"].every(k => (current.status[k] ?? 0) === replicas) &&
+        pods.length === replicas && serving,
+        "STABLE_RECOVERY_READBACK_MISMATCH");
+      requireValue(fingerprint(await storageFor(current)) === item.storageSHA256, "STABLE_RECOVERY_STORAGE_DRIFT");
+    };
+    const recovered = [];
+    let archivePaused = false;
+    try {
+      for (const item of [...plan.targets].reverse()) {
+        requireValue(fingerprint(await idle()) === fingerprint(preserved), "STABLE_PINS_CHANGED");
+        let { current, recovery } = await preflight(item);
+        if (recovery.unchanged) {
+          await proof(item, current.spec); recovered.push({ item, spec: current.spec });
+          await record({ name: item.name, status: "SOURCE_UNCHANGED" }); continue;
+        }
+        if (current.spec.replicas !== 0) {
+          await record({ name: item.name, status: "QUIESCE_ATTEMPT" });
+          await patch("deployment", item.name, "kodex-system", current, [
+            { op: "test", path: "/spec", value: current.spec }, { op: "replace", path: "/spec/replicas", value: 0 }]);
+        }
+        const expectedQuiesced = fingerprint({ ...current.spec, replicas: 0 }), expectedLabels = fingerprint(current.metadata.labels ?? {});
+        const deadline = Date.now() + 120000;
+        for (;;) {
+          current = await get("deployment", item.name);
+          requireValue(current.metadata.uid === item.uid && fingerprint(current.spec) === expectedQuiesced &&
+            fingerprint(current.metadata.labels ?? {}) === expectedLabels,
+            "STABLE_RECOVERY_QUIESCE_DRIFT");
+          const pods = ownedDeploymentPods(await podList(item.name), item.uid);
+          if (current.status?.observedGeneration >= current.metadata.generation && !(current.status.replicas ?? 0) && pods.length === 0) break;
+          requireValue(Date.now() < deadline, "STABLE_RECOVERY_QUIESCE_TIMEOUT");
+          await new Promise(resolve => setTimeout(resolve, 250));
+        }
+        // Собственное quiesce меняет только replicas; generic source0 не является
+        // отдельной фазой плана, поэтому inverse выводится из исходного snapshot.
+        requireValue(fingerprint(await idle()) === fingerprint(preserved), "STABLE_PINS_CHANGED");
+        requireValue(fingerprint(await storageFor(current)) === item.storageSHA256, "STABLE_RECOVERY_STORAGE_DRIFT");
+        if (item.name === "session-archive") {
+          const boundary = await archiveRole();
+          requireValue(sameArchiveBoundary(boundary.proof, item.archive) || sameArchiveBoundary(boundary.proof, item.archive, "after"),
+            "STABLE_ARCHIVE_ROLE_DRIFT");
+          if (!sameArchiveBoundary(boundary.proof, item.archive, "after")) {
+            await record({ name: item.name, status: "SAFE_ROLE_PATCH_ATTEMPT" });
+            await kubectl(["-n", "kodex-runtime", "patch", "role", "session-archive-controller", "--type=json", "--patch-file=/dev/stdin", "-o", "name"],
+              JSON.stringify(boundary.patch));
+          }
+          requireValue(sameArchiveBoundary((await archiveRole()).proof, item.archive, "after"), "STABLE_ARCHIVE_ROLE_DRIFT");
+          archivePaused = true;
+        }
+        const labelOperation = item.recovery.beforeLabelsPresent ?
+          { op: "add", path: "/metadata/labels", value: recovery.restoredLabels } :
+          { op: "remove", path: "/metadata/labels" };
+        await record({ name: item.name, status: "RESTORE_ATTEMPT" });
+        await patch("deployment", item.name, "kodex-system", current, [
+          { op: "test", path: "/spec", value: current.spec },
+          { op: "replace", path: "/spec", value: recovery.restoredSpec },
+          ...(Object.hasOwn(current.metadata, "labels") || item.recovery.beforeLabelsPresent ? [labelOperation] : [])]);
+        await kubectl(["-n", "kodex-system", "rollout", "status", `deployment/${item.name}`, "--timeout=600s"], undefined, 635000);
+        await proof(item, recovery.restoredSpec); recovered.push({ item, spec: recovery.restoredSpec });
+        await record({ name: item.name, status: recovery.archivePause ? "ARCHIVE_PAUSED_FORWARD_ONLY" : "SOURCE_PROFILE_RESTORED" });
+      }
+      requireValue(fingerprint(await idle()) === fingerprint(preserved), "STABLE_PINS_CHANGED");
+      for (const { item, spec } of recovered) {
+        await proof(item, spec);
+        if (item.name === "session-archive") requireValue(sameArchiveBoundary((await archiveRole()).proof, item.archive,
+          archivePaused ? "after" : "before"), "STABLE_ARCHIVE_ROLE_DRIFT");
+      }
+      const result = { status: "PASS", phase: "GO_RECOVERY", archivePaused, releaseComplete: false, browser: "NOT_RUN" };
+      await record(result); process.stdout.write(JSON.stringify(result) + "\n");
+    } catch (error) {
+      await record({ status: "FAIL_OR_UNKNOWN", code: /^[A-Z_]+$/.test(error.message ?? "") ? error.message : "STABLE_RECOVERY_FAILED" }); throw error;
+    } finally { await journal.close(); }
+    return;
+  }
   requireValue(!options["--approved-plan-sha"], "STABLE_ARGUMENTS_INVALID");
   if (mode === "inspect") {
     const results = [];
@@ -241,6 +385,12 @@ async function main(args) {
       if (specSHA256 === item.afterSpecSHA256) {
         await readback(item);
         phase = "COMPILED_TWO_READY";
+      } else if (specSHA256 === item.recovery.quiescedAfterSpecSHA256) {
+        prepareGoRecovery(current, item);
+        if (item.name === "session-archive") requireValue(sameArchiveBoundary((await archiveRole()).proof, item.archive, "after"), "STABLE_ARCHIVE_ROLE_DRIFT");
+        const pods = ownedDeploymentPods(await podList(item.name), item.uid);
+        phase = current.status?.observedGeneration >= current.metadata.generation && !(current.status.replicas ?? 0) && !pods.length ?
+          "COMPILED_PAUSED" : "COMPILED_QUIESCING";
       } else if (item.name === "session-archive" && specSHA256 === item.quiescedBeforeSpecSHA256) {
         const boundary = (await archiveRole()).proof;
         const before = sameArchiveBoundary(boundary, item.archive), after = sameArchiveBoundary(boundary, item.archive, "after");
