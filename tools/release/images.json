@@ -21,6 +21,7 @@
     {"component":"backup-controller","dockerfile":"services/jobs/backup-controller/Dockerfile"},
     {"component":"role-image-builder","dockerfile":"services/jobs/role-image-builder/Dockerfile","target":"runtime"},
     {"component":"image-admission","dockerfile":"services/jobs/role-image-builder/Dockerfile","target":"admission-runtime"},
+    {"component":"image-admission-controller","dockerfile":"services/jobs/role-image-builder/Dockerfile","target":"admission-controller-runtime"},
     {"component":"registry-pull-authorizer","dockerfile":"services/jobs/role-image-builder/Dockerfile","target":"registry-pull-runtime"},
     {"component":"agent-runner","dockerfile":"services/jobs/agent-runner/Dockerfile"},
     {"component":"role-base-documents","dockerfile":"services/jobs/agent-runner/role-base-documents.Dockerfile"}

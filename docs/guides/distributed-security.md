@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.26
+version: 1.7.27
 updated: 2026-10-15
 ---
 
@@ -1006,6 +1006,16 @@ provider, сверяет membership и полный tenant/session/turn/artifact
 фиксирует one-time consumption либо revocation и не журналирует credential.
 
 ## Проверяемое контрольное чтение и повтор служебного изменения
+
+Leader election координирует controller replicas, но не назначает доменные
+grants и не заменяет authoritative attempt/fence. До запуска второго Pod
+проверяют, что прежний binary действительно участвует в том же протоколе;
+иначе его сначала drain/join. Exact shared Lease принадлежит deploy: runtime
+не создаёт и не удаляет его, а replacement UID закрыто отклоняет. При потере
+лидерства worker отменяется и join завершается до освобождения lock либо
+используется естественный expiry без раннего release. Rollback не возвращает
+старый holder/transition. Readback доказывает actual holder UID serving Pod,
+а не выводит единственного активного контроллера из числа Ready replicas.
 
 Состояние контрольного чтения не принимает ревизию, хэш, поколение или
 произвольный хэш proof от вызывающей стороны как доказательство фактически

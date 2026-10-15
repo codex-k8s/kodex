@@ -447,7 +447,7 @@ PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
       .imagePullPolicy = "IfNotPresent"
     ) |
     with((.spec.template.spec.initContainers[]?, .spec.template.spec.containers[]?) |
-        select(.image | test("/(image-admission|registry-pull-authorizer)@sha256:"));
+      select(.image | test("/(image-admission|image-admission-controller|registry-pull-authorizer)@sha256:"));
       .image = strenv(IMAGE_ADMISSION_IMAGE) |
       .imagePullPolicy = "IfNotPresent"
     ) |

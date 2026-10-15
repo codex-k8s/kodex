@@ -87,6 +87,12 @@ class StableArchive(unittest.TestCase):
         self.assertEqual(self.receipt["target"], "registry-pull-runtime")
         self.assertEqual(self.verify().returncode, 0)
 
+    def test_standalone_admission_controller_recipe_is_supported(self):
+        self.component = "image-admission-controller"
+        self.prepare()
+        self.assertEqual(self.receipt["target"], "admission-controller-runtime")
+        self.assertEqual(self.verify().returncode, 0)
+
     def test_corrupt_layer_rejected_even_with_matching_archive_receipt(self):
         self.prepare()
         self.members["blobs/sha256/" + self.layer["digest"][7:]] = b"PRIVATE_CORRUPT_LAYER_SENTINEL"

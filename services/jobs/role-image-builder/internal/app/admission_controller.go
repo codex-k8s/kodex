@@ -31,6 +31,12 @@ func RunAdmissionController(lifecycle, shutdownBase context.Context, buildVersio
 	if err != nil {
 		return err
 	}
+	defer func() {
+		resultErr = errors.Join(resultErr, serviceruntime.RunShutdown(shutdownBase,
+			serviceruntime.ShutdownOperation{Name: "image admission tracing", Timeout: 5 * time.Second, Run: telemetry.ShutdownTracing},
+			serviceruntime.ShutdownOperation{Name: "image admission Sentry", Timeout: 5 * time.Second, Run: telemetry.FlushSentry},
+		))
+	}()
 	logger := telemetry.Logger(os.Stdout)
 	metrics := sharedobservability.NewMetrics(admissionControllerServiceName, buildVersion, nil)
 	readiness := serviceruntime.NewReadiness()
@@ -52,6 +58,9 @@ func RunAdmissionController(lifecycle, shutdownBase context.Context, buildVersio
 	}
 	controller, err := admissioncontroller.InCluster(controllerConfig, renderer, logger)
 	if err != nil {
+		return err
+	}
+	if err := controller.ConfigureLeadership(startup, config.PodUID); err != nil {
 		return err
 	}
 	if err := controller.Check(startup); err != nil {
@@ -83,8 +92,6 @@ func RunAdmissionController(lifecycle, shutdownBase context.Context, buildVersio
 		resultErr = errors.Join(resultErr, serviceruntime.RunShutdown(shutdownBase,
 			serviceruntime.ShutdownOperation{Name: "image admission technical HTTP", Timeout: config.ShutdownTimeout / 3, Run: technical.Shutdown},
 			serviceruntime.ShutdownOperation{Name: "image admission workers", Timeout: config.ShutdownTimeout / 3, Run: workers.Wait},
-			serviceruntime.ShutdownOperation{Name: "image admission tracing", Timeout: 5 * time.Second, Run: telemetry.ShutdownTracing},
-			serviceruntime.ShutdownOperation{Name: "image admission Sentry", Timeout: 5 * time.Second, Run: telemetry.FlushSentry},
 		))
 	}()
 	select {

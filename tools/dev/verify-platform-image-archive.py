@@ -33,7 +33,8 @@ try:
         component, expected = receipt['component'], receipt['imageDigest']
         require(component in ('control-plane', 'secret-broker', 'email-bridge', 'runtime-controller',
                 'integration-gateway', 'integration-synthetic', 'control-api-gateway', 'staff-control-center',
-                'egress-gateway', 'automation-scheduler', 'artifact-retention', 'session-archive', 'registry-pull-authorizer'))
+                'egress-gateway', 'automation-scheduler', 'artifact-retention', 'session-archive', 'registry-pull-authorizer',
+                'image-admission-controller'))
         require(receipt['schema'] == 'kodex.stable-local-build/v1'
                 and re.fullmatch(r'[a-f0-9]{40}', receipt['sourceSHA']) and receipt['sourceSHA'] != '0' * 40
                 and all(re.fullmatch(r'[a-f0-9]{64}', receipt[key]) and receipt[key] != '0' * 64
@@ -171,7 +172,7 @@ try:
             require(config.get('config', {}).get('Entrypoint') == ['/usr/local/bin/' + entrypoint])
         if stable:
             require(config.get('config', {}).get('User') == ('101:101' if component == 'staff-control-center' else '10001:10001'))
-            if component == 'staff-control-center':
+            if component in ('staff-control-center', 'image-admission-controller'):
                 require(config['config'].get('Labels', {}).get('org.opencontainers.image.revision') == receipt['sourceSHA'])
         layers = manifest['layers']
         require(isinstance(layers, list) and 0 < len(layers) <= 128)

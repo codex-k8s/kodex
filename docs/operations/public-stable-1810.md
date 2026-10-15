@@ -1053,3 +1053,31 @@ grants, Job или попыток; domain events не создаются.
 Рабочий main8c19ffb7 чист, live source Pod не менялись. Дополнительно остаются
 leader для image-admission orchestration, полный controller/resource профиль,
 public TLS/OIDC, проектные review/owner gate, actual delivery и browser.
+
+## Единственный активный admission orchestrator
+
+Перед двумя репликами вводится один заранее созданный Kubernetes Lease
+`image-admission-controller-leader` в `kodex-system`. Runtime identity —
+Downward API Pod UID. Role разрешает только get/update этого exact Lease;
+create/delete/list/watch Lease не выдаются. UID Lease закрепляется при startup:
+замена или отсутствие объекта закрывают readiness/renew. Lease координирует
+reconcile, но не выдаёт доменных полномочий и не заменяет owner claim/fence.
+Jobs продолжают получать grants через прежний control-plane и сохраняют
+attempt/input/UID guards. API/Proto/SQL и domain events не меняются.
+
+| Переход | Эффект и контроль |
+| --- | --- |
+| startup | Проверить существующий exact Lease/UID и Pod UID до workers; нет автоматического создания lock |
+| follower | Ready при исправной собственной инфраструктуре; никаких reconcile writes, ожидание election |
+| acquire | Один CAS победитель по resourceVersion; запустить существующий reconcile только с leader context |
+| renew | Отдельная election loop с request deadline; Lease45s, renew deadline20s, retry5s |
+| loss / shutdown | Отменить leader context и join reconcile до завершения worker; процесс не пытается стать лидером повторно |
+| takeover | Не освобождать Lease досрочно: следующий Pod ждёт expiry; прежние Jobs/PVC читаются и продолжаются по сохранённым run/owner pins |
+| terminal/retry/delete Job | Прежняя owner attempt/fence, exact managed inventory и UID/RV cleanup; leader не расширяет права |
+| recovery/rollback | Lease state не откатывать к старому holder/transition; старый binary допускается только с одним Pod после drain новых controllers |
+| readback | Два serving compiled Pod плюс текущий holder UID одного из них, сохранённые owner pins и отсутствие дублированных materializations |
+
+Client-go leader election сам по себе не является fencing доменных effects.
+Timeout/cancel и lease gap ограничивают overlap штатного shutdown, а право
+на actual admission/promotion по-прежнему проверяет авторитетный владелец.
+Нельзя объявлять fencing доказанным только по двум Ready Pod или holder label.

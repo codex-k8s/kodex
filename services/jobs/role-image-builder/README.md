@@ -4,8 +4,8 @@ title: Сборка окружений ролей
 type: service
 status: approved
 owner: backend
-version: 1.1.0
-updated: 2026-09-01
+version: 1.1.1
+updated: 2026-10-15
 ---
 
 # role-image-builder
@@ -75,6 +75,22 @@ identity отклоняет чужой image, command, env, volume либо Serv
 `render-image-admission-job.sh` остаётся встроенным deterministic renderer и
 read-only способом сравнить будущий phase manifest.
 
+Две сервисные replica используют заранее созданный exact Lease
+`kodex-system/image-admission-controller-leader`. Pod UID приходит через
+Downward API `POD_UID` и обязателен; fallback на hostname/случайный ID нет.
+Runtime может только get/update этого Lease, но не создавать/удалять его.
+UID закрепляется при startup. Только лидер запускает reconcile; перед каждым
+циклом повторно проверяется holder/UID. При потере лидерства context отменяется,
+reconcile завершается до возврата worker, процесс не перевыбирается повторно.
+Lease45s/renew20s/retry5s не освобождается досрочно: новый Pod ждёт expiry и
+продолжает существующие phase Jobs/PVC. Domain claim/fence это не заменяет.
+
+Штатный `admission-controller-runtime` содержит только compiled controller,
+Bash/jq и deterministic renderer. Scanner/signing/registry binaries остаются
+у phase images. Старый controller без election нельзя оставлять одновременно
+с новым: нужен drain исходного Pod перед двумя новыми replica. Lease state,
+holder и transition не откатываются к старому snapshot.
+
 В `trusted-cluster` controller перед созданием новой claim/promotion цепочки
 читает у control-plane только два server-owned признака доступности work.
 Пустая очередь не создаёт Job/PVC; ошибка preflight закрыто запрещает новый
@@ -101,7 +117,8 @@ authority RPC. Реальный BuildKit solve получает отдельны
 
 Для `image-admission-controller` действует тот же контракт: `/healthz`
 проверяет только процесс, а `/readyz` читает рассчитанный фоновым monitor
-снимок прямого Kubernetes API и immutable policy. Недоступность
+снимок прямого Kubernetes API, exact Lease UID и immutable policy. Follower
+остаётся Ready при исправной собственной инфраструктуре. Недоступность
 `control-plane`, registry или phase workload не делает controller Pod
 неготовым; рабочая phase Job получает типизированный отказ и повторяется через
 ограниченный reconcile.
