@@ -4,7 +4,7 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.1.8
+version: 1.1.9
 updated: 2026-10-15
 ---
 
@@ -1566,3 +1566,49 @@ server dry-run фиксируется отдельной записью посл
   issuer/client callbacks, ingress routes и replicas живого контура не менялись.
   Впереди оставшиеся public workflow, инфраструктурные компоненты, общий
   review/отдельный owner gate, actual cutover и приёмка; этапы2–8 открыты.
+
+## Публичный вход: точные Keycloak clients
+
+`stable-public-clients.mjs` реализует отдельные `plan`, `apply`, `inspect`,
+`readback`, `rollback` только для `kodex-control-center` и
+`kodex-control-center-proxy` в realm `kodex`. Состав пользователей, групп,
+ролей, mapper, scopes, grant flags и client secret не изменяется. В PUT
+попадают только `redirectUris`, `webOrigins` и прежние attributes с заменой
+единственного `post.logout.redirect.uris`; PKCE остаётсяS256. Сохранённые
+plan rows содержат эти URL и configuration hashes, не полную ClientRepresentation.
+
+| Переход | Источник полномочий и доказательство |
+| --- | --- |
+| plan | Issued SRE Kubernetes context, exact cluster UID/endpoint CM и подтверждённый Docker loopback443; существующий Keycloak service client, только token + GET |
+| apply | Clean executor, exact plan SHA после owner gate; source client UUID/clientId/configuration hash; durable intent перед каждым PUT |
+| readback | Повторный exact lookup/GET, expected configuration hash обоих клиентов; Secret/token/registration credentials не выводятся |
+| normal recovery | Все клиенты и инфраструктурные зависимости проверены до первого PUT; после acknowledged apply возвращаются только прежние URL, в обратном порядке |
+| repeated recovery | Уже исходный client hash означает отсутствие дополнительного PUT |
+| lost PUT ACK | Только inspect; повтор PUT и автоматическое recovery запрещены, пока владелец отдельно не разрешит неопределённость завершения external API |
+| concurrent drift | Изменение client scopes/PKCE/URL/configuration, Secret metadata, CA, endpoint UID или Docker binding закрывает путь до записи |
+
+Keycloak token и GET/PUT идут по HTTPS с exact SNI/CA напрямую через
+доказанный Kodex loopback upstream, без DNS/redirect/proxy fallback. Client
+credential values читаются только из двух известных ключей существующего
+`identity/keycloak-admin-client`, после plan/journal/approval validation.
+Значения остаются в памяти и не передаются через argv/env/файлы; API helper
+не вызывает bootstrap создания пользователей либо ротацию client secret.
+Secret metadata/CA source/cluster/endpoint/Docker binding повторно сверяются
+перед каждым PUT. Для coordinator доступны только два TLS phase, `before`
+и `after`: serverName происходит из exact исходного/публичного issuer плана.
+
+Admin REST API не предоставляет этому переходу server operation handle
+либо доказанного If-Match CAS. Поэтому workflow использует полный свежий
+configuration hash перед узким PUT и контроль всех неизменённых полей после
+него; final owner window исключает параллельное администрирование клиентов.
+После timeout нельзя объявлять server operation завершённой по одному GET
+и автоматически перезаписывать её результат. Normal rollback допустим
+только для клиентов с durable acknowledged apply receipt. Это явное
+ограничение recovery, а не скрытый blind retry.
+
+Context7 `/websites/keycloak_docs-api_rest-api`: официальный PUT
+`/admin/realms/{realm}/clients/{client-uuid}`, ClientRepresentation и204.
+Пять synthetic тестов покрывают minimal payload, PKCE/scopes/secret
+preservation, negative grants/URLs, normal/repeated recovery, wrong approval
+до чтения credential values и lost ACK fail-closed. Actual PUT, client
+recovery, public issuer activation и browser acceptance пока NOT RUN.
