@@ -24,7 +24,7 @@ async function createPrivate(path, value) {
 const annotationsHash = value => fingerprint(value.metadata.annotations ?? {});
 const publicChange = value => { const { patch: _patch, ...result } = value; return result; };
 
-async function main(args) {
+export async function releaseFrontend(args, commandPort) {
   const mode = args.shift(), options = {};
   while (args.length) {
     const key = args.shift();
@@ -35,13 +35,13 @@ async function main(args) {
   requireValue(["plan", "apply", "readback", "inspect", "rollback"].includes(mode) &&
     /^k3d-[a-z0-9-]+$/.test(context ?? "") && options["--output"], "FRONTEND_ARGUMENTS_INVALID");
   const env = Object.fromEntries(["HOME", "PATH", "LANG", "KUBECONFIG"].filter(k => process.env[k]).map(k => [k, process.env[k]]));
-  const run = async (program, argv, input, timeout = 35000) => {
+  const run = commandPort ?? (async (program, argv, input, timeout = 35000) => {
     try {
       const pending = execute(program, argv, { cwd: root, env, timeout, maxBuffer: 8 << 20 });
       if (input !== undefined) { pending.child.stdin.on("error", () => {}); pending.child.stdin.end(input); }
       return (await pending).stdout;
     } catch { throw Error("FRONTEND_OPERATION_FAILED_OR_UNKNOWN"); }
-  };
+  });
   const kube = (argv, input, timeout) => input === undefined ? run("kubectl", ["--context", context, "--request-timeout=30s", ...argv], undefined, timeout) :
     run("/bin/sh", ["-c", 'cat | kubectl "$@"', "kodex-frontend-pipe", "--context", context, "--request-timeout=30s", ...argv], input, timeout);
   const get = async (kind, resourceName, optional = false) => {
@@ -302,4 +302,4 @@ async function main(args) {
   finally { await journal.close(); }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
-  main(process.argv.slice(2)).catch(error => { process.stderr.write(JSON.stringify({ status: "FAIL_OR_UNKNOWN", code: /^[A-Z_]+$/.test(error.message ?? "") ? error.message : "FRONTEND_TRANSITION_FAILED" }) + "\n"); process.exitCode = 1; });
+  releaseFrontend(process.argv.slice(2)).catch(error => { process.stderr.write(JSON.stringify({ status: "FAIL_OR_UNKNOWN", code: /^[A-Z_]+$/.test(error.message ?? "") ? error.message : "FRONTEND_TRANSITION_FAILED" }) + "\n"); process.exitCode = 1; });
