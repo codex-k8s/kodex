@@ -138,7 +138,12 @@ export function publicOAuthProxy(deployment, endpoints, profile, connectIP) {
     return a;
   });
   requireValue(!control || platformWhitelist === 1, "PUBLIC_IDENTITY_PROXY_WHITELIST_INVALID");
-  if (!containers[0].args.includes("--whitelist-domain=" + profile.oidcHost)) containers[0].args.push("--whitelist-domain=" + profile.oidcHost);
+  if (!containers[0].args.includes("--whitelist-domain=" + profile.oidcHost)) {
+    // Chart помещает пользовательские flags перед своим --config. Сохраняем
+    // этот порядок и при переводе extraArgs из map в canonical repeated flags.
+    const position = containers[0].args.findIndex(a => a.startsWith("--config="));
+    containers[0].args.splice(position < 0 ? containers[0].args.length : position, 0, "--whitelist-domain=" + profile.oidcHost);
+  }
   aliases[0].hostnames = [profile.oidcHost]; return transition(deployment, spec);
 }
 

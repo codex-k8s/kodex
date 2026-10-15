@@ -4,7 +4,7 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.2.2
+version: 1.2.3
 updated: 2026-10-15
 ---
 
@@ -1806,3 +1806,30 @@ Lease/PDB и монотонное состояние Lease. Следующее �
 RV при прежних UID/config/metadata перед одним patch. Новые fixtures
 подтверждают отсутствие повторной activation; принцип закреплён в GUIDE-DOC-003.
 Новый actual admission plan/apply после commit ещё требуется.
+
+На `1aba1cb65c682f144523ac1956ab8ec33ce919da` fresh admission plan
+`38a34fa6d6b904295dcf051d8ef4311fe186069d4b843c49f8d8e1a2072e6f7b`
+получил PASS actual apply и отдельный readback: два exact compiled Pod,
+действующий holder среди их UID, свежий renewTime и lease45s; Role/refs/pins
+совпали. Сохранённые Lease/PDB reused по UID, generation не сбрасывалась.
+Все совместимые постоянно работающие Deployment теперь2/2; согласованные
+singleton остаются1. Публичная фаза и controlled replica replacement ещё открыты.
+
+## Публичные Helm values: закрытая модель
+
+Для двух OAuth proxy и Grafana добавлена отдельная модель полного render:
+разрешены только issuer/callback/exact whitelist/hostAliases, platform ingress
+host/TLS reference и Grafana signout/config checksum. Остальные Secret,
+permissions/groups/session storage, images, PVC и SQLite singleton неизменны.
+У [точного chart10.7.0](https://github.com/oauth2-proxy/manifests/blob/oauth2-proxy-10.7.0/helm/oauth2-proxy/templates/deployment.yaml)
+map extraArgs не разворачивает array values в repeated flags. Поэтому source
+map переходит в один canonical array; новый exact SSO whitelist flag расположен
+перед chart-owned config flag, без второго источника настроек.
+
+В anonymous chart fetcher добавлен закрытый профиль `public-identity`:
+только существующие oauth2-proxy10.7.0 и monitoring88.5.4 из прежних locks.
+Пятнадцать быстрых public-model/identity/fetch tests PASS. Read-only проверка
+реальных текущих values всех трёх releases прошла; это не Helm dry-run полного
+render и не public activation. Следующий шаг — связать модель с имеющимся
+Helm plan/apply/recovery и Grafana singleton/ConfigMap readback, затем завершить
+public ingress/identity/edge orchestration. Credentials/values не сохранялись.

@@ -21,6 +21,13 @@ test("chart verifier rejects changed content, permissions and symlink", async t 
   await chmod(path, 0o600); await symlink(path, dir + "/link"); await assert.rejects(verifyStableChart(dir + "/link", lock));
 });
 
+test("public identity downloads use only the two locked existing chart families", async () => {
+  const locks = await stableChartLocks("public-identity");
+  assert.deepEqual(locks.map(l => l.name), ["oauth2-proxy", "kube-prometheus-stack"]);
+  assert.equal(locks[0].version, "10.7.0");
+  await assert.rejects(stableChartLocks("arbitrary"), /CHART_PROFILE_INVALID/);
+});
+
 test("fetch neither overwrites a directory nor accepts relative targets", async t => {
   const dir = await mkdtemp(tmpdir() + "/kodex-chart-existing-"); t.after(() => rm(dir, { recursive: true, force: true }));
   let calls = 0; const port = async () => { calls++; };

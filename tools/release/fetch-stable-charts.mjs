@@ -8,8 +8,12 @@ import { promisify } from "node:util";
 
 const execute = promisify(execFile), root = fileURLToPath(new URL("../../", import.meta.url));
 function requireValue(value, code) { if (!value) throw Error(code); }
-export async function stableChartLocks() {
-  const sources = [["tools/install/components.lock.json", "cert-manager", "oci://quay.io/jetstack/charts/cert-manager"],
+export async function stableChartLocks(profile = "system") {
+  requireValue(["system", "public-identity"].includes(profile), "CHART_PROFILE_INVALID");
+  const sources = profile === "public-identity" ? [
+    ["infra/management-surfaces/charts.lock.json", "oauth2-proxy", "https://oauth2-proxy.github.io/manifests"],
+    ["infra/management-surfaces/charts.lock.json", "kube-prometheus-stack", "https://prometheus-community.github.io/helm-charts"],
+  ] : [["tools/install/components.lock.json", "cert-manager", "oci://quay.io/jetstack/charts/cert-manager"],
     ["infra/service-infrastructure/charts.lock.json", "trust-manager", "oci://quay.io/jetstack/charts/trust-manager"],
     ["infra/management-surfaces/charts.lock.json", "kube-prometheus-stack", "https://prometheus-community.github.io/helm-charts"]];
   return Promise.all(sources.map(async ([path, name, repository]) => {
@@ -35,8 +39,9 @@ export async function verifyStableChart(path, lock) {
   } finally { await f.close(); }
 }
 
-export async function fetchStableCharts(output, port) {
+export async function fetchStableCharts(output, port, profile = "system") {
   requireValue(typeof output === "string" && output.startsWith("/") && !output.split("/").includes(".."), "CHART_OUTPUT_INVALID");
+  const locks = await stableChartLocks(profile);
   // Новый приватный каталог; пользовательские Helm credentials и repositories не читаются.
   await mkdir(output, { mode: 0o700 });
   for (const sub of ["config", "cache", "data"]) await mkdir(output + "/" + sub, { mode: 0o700 });
@@ -49,7 +54,7 @@ export async function fetchStableCharts(output, port) {
   const source = (await execute("git", ["rev-parse", "HEAD"], { cwd: root, env, timeout: 10000 })).stdout.trim();
   requireValue(/^[a-f0-9]{40}$/.test(source), "CHART_SOURCE_INVALID");
   const result = [];
-  for (const lock of await stableChartLocks()) {
+  for (const lock of locks) {
     const args = ["pull", ...(lock.repository.startsWith("oci:") ? [lock.repository] : [lock.name, "--repo", lock.repository]),
       "--version", lock.version, "--destination", output];
     await run(args);
@@ -66,7 +71,7 @@ export async function fetchStableCharts(output, port) {
     await verifyStableChart(path, lock);
     result.push({ ...lock, file: files[0] });
   }
-  const manifest = { schema: "kodex.stable-charts/v1", source, charts: result };
+  const manifest = { schema: "kodex.stable-charts/v1", source, profile, charts: result };
   const f = await open(output + "/manifest.json", "wx", 0o600);
   try { await f.writeFile(JSON.stringify(manifest) + "\n"); await f.sync(); } finally { await f.close(); }
   return manifest;
@@ -75,8 +80,9 @@ export async function fetchStableCharts(output, port) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const args = process.argv.slice(2);
   (async () => {
-    requireValue(args.length === 2 && args[0] === "--output", "CHART_ARGUMENTS_INVALID");
-    const result = await fetchStableCharts(args[1]);
+    requireValue([2, 4].includes(args.length) && args[0] === "--output" &&
+      (args.length === 2 || args[2] === "--profile" && args[3] === "public-identity"), "CHART_ARGUMENTS_INVALID");
+    const result = await fetchStableCharts(args[1], undefined, args[3] ?? "system");
     console.log(JSON.stringify({ status: "PASS", ...result }));
   })().catch(error => { console.error(JSON.stringify({ status: "FAIL", code: /^[A-Z_]+$/.test(error.message ?? "") ?
     error.message : "CHART_FETCH_FAILED" })); process.exitCode = 1; });
