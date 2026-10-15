@@ -4,7 +4,7 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.1.9
+version: 1.2.0
 updated: 2026-10-15
 ---
 
@@ -58,9 +58,10 @@ hostnames; private keys не копируются между кластерам�
   платформы и OIDC, публичный доверенный certificate и renewal, согласованные
   issuer/callback/logout/origin/cookie настройки. API/WebSocket защищены;
   OAuth callback/realm assets не открывают обход к приложению.
-- [ ] **6. Применимые тесты, render и проектные review/owner gate.** Scope
-  этой задачи не наследует исключение bootstrap1797 автоматически. Нельзя
-  считать план первоначального запроса подтверждением готового PR.
+- [ ] **6. Применимые тесты, render и owner gate.** Для этой поставки владелец
+  отдельно отменил review и заранее подтвердил развёртывание15.10.2026.
+  Это явное scoped решение, а не наследование исключения bootstrap1797.
+  Exact plan, drift guards, сохранность данных и проверка результата обязательны.
 - [ ] **7. Выполнить тот же cutover и контрольное чтение.** Exact images,
   отсутствие hot reload, две ready/available сервисные реплики, сохранённые
   data/credentials/pins, работоспособность при смене одной реплики.
@@ -75,7 +76,7 @@ hostnames; private keys не копируются между кластерам�
 | preflight/plan | Решение владельца, exact контекст и live inventory | Нет writes, совпавшие source/resources/pins и baseline соседнего входа |
 | build | Проверенный source SHA, версия recipe/toolchain и registry identity | Immutable OCI и provenance, без новых runtime grants |
 | drain/idle | Владелец доменных leases/tasks, а не локальное предположение | Отсутствие незавершённой работы либо штатный bounded drain/join |
-| apply | Проверенный exact план после review и owner gate | CAS/drift, сохранённые data/credentials; нет wildcard patches |
+| apply | Проверенный exact план и явное разрешение владельца15.10.2026 без review | CAS/drift, сохранённые data/credentials; нет wildcard patches |
 | два сервисных Pod | Существующие leader/owner claim/fence и durable inbox | Один победитель effect; незапущенный Pod не считается READY |
 | leader expiry/replacement | Прежний owner lease и монотонное поколение | Старый grant/fence не оживает, новый leader не повторяет effects |
 | terminal/cancel/retry | Авторитетные существующие owner commands | Полный граф закрывается атомарно, Job/execution не размножаются |
