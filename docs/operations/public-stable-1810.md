@@ -4,7 +4,7 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.1.1
+version: 1.1.2
 updated: 2026-10-15
 ---
 
@@ -1029,3 +1029,27 @@ grants, Job или попыток; domain events не создаются.
 двумя репликами необходим собственный leader/lease protocol либо доказанная
 атомарная orchestration reservation; одной owner claim в выполняемом Job
 недостаточно для workspace cardinality. Этот пункт не объявляется готовым.
+
+На exact `b68cb3a552f890150970c8b26574867f68261c6d`:
+
+- PASS96 Node tests, без пропусков, включая пять resource-profile проверок,
+  обязательные bounded main/init, rollback прежних ресурсов и сохранение
+  sidecar. Web-only render и diff whitespace PASS. Первые локальные запуски
+  новой оснастки дали FAIL на синтаксисе yq object keys и multi-document
+  fixture; обе причины исправлены до этого SHA и полный набор повторён.
+- Реальный server-side dry-run всех12 Go Deployment с canonical resources
+  PASS, plan commitment
+  `c690cb0fbebb838854d7b796dd1f29401281adbc19503087e41b69ff3fca4bb7`.
+  Persist, rollout и запуск AI не выполнялись.
+- Read-only расчёт предложенных двух реплик12 Go, frontend и BuildKit:
+  requests5.8CPU/7.25GiB, сумма limits49.5CPU/45.25GiB. CPU limits допускают
+  overcommit и не являются резервом; Kubernetes планирует по requests.
+  Эти числа исключают registry, identity, monitoring, system controllers,
+  data workloads, соседние процессы и rolling surge, поэтому не выдаются
+  за полный бюджет сервера или доказательство готовности этапа2.
+- Проверены Context7 Kubernetes resource management / init-sidecar accounting
+  docs: resource requests/limits, memory OOM, CPU throttling и init maximum.
+
+Рабочий main8c19ffb7 чист, live source Pod не менялись. Дополнительно остаются
+leader для image-admission orchestration, полный controller/resource профиль,
+public TLS/OIDC, проектные review/owner gate, actual delivery и browser.
