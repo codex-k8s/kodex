@@ -17,7 +17,10 @@ Kodex переходит с hot reload на штатные собранные im
 Постоянные сервисы получают две реплики; новая внешняя точка входа —
 `https://platform.kodex.works`, с обязательным oauth2-proxy/Keycloak SSO.
 Уточнение владельца: PostgreSQL, NATS и S3 не реплицировать, их существующие
-данные и конфигурацию не менять. Одноразовые Job и exact runtime executions
+данные и конфигурацию не менять. Инфраструктурные singleton без безопасного
+HA сохраняются в одном экземпляре, в том числе storage provisioner и Grafana
+с существующей SQLite; смена storage backend и миграция БД ради второй
+реплики не требуются. Одноразовые Job и exact runtime executions
 не дублировать. Совместное размещение не даёт права пересоздать соседний
 кластер или его маршруты.
 
@@ -108,14 +111,14 @@ PostgreSQL/NATS/session-store/S3 по одному; их данные не тр�
 | oauth2-proxy | 2 Pod | Сохранить Redis/TLS session store, согласовать issuer/callback/logout/cookies с внешними hostnames |
 | Registry | 2 Pod на роль | Общее существующее хранилище, exact node для local RWO, общий HTTP upload secret; pull/push/promotion/evidence identities не смешиваются |
 | BuildKit и image workers | 2 Pod | Изолированные scratch/cache и существующие атомарные claim/fence; новый Pod не дублирует задачу |
-| Grafana | 2 Pod | Нельзя независимо запускать два SQLite; сначала поддерживаемая общая БД с сохранением данных и SSO |
+| Grafana | 1 Pod, инфраструктурное исключение | Сохранить существующие SQLite, PVC и SSO; не запускать двух писателей и не мигрировать БД ради второй реплики |
 | Alertmanager | 2 Pod | Настройка cluster peers и отдельных PVC через авторитетный operator, не ручной patch его StatefulSet |
 | PostgreSQL, NATS, S3, Redis, Prometheus TSDB | Без репликации | Не менять данные, volumes или количество Pod хранилищ |
 | Runtime execution, Job, CronJob, DaemonSet | По своему контракту | Не превращать один execution/одноразовую task в две работы |
 | Ingress и certificate controllers Kodex | 2 сервисные реплики | Проверить их собственный leader/storage protocol; не масштабировать соседние controllers |
 
-Inventory не выдаёт неизвестный StatefulSet за исключённую БД: Grafana и
-Alertmanager относятся к сервисам с обязательной storage review. Discovery
+Inventory не выдаёт неизвестный StatefulSet за исключённую БД: Grafana явно
+остаётся singleton по решению владельца, Alertmanager требует storage review. Discovery
 основного списка покрывает четыре платформенных namespace; cluster ingress
 и certificate controllers дополнительно проверены read-only, но полный
 release/fence matrix ещё не завершён. Пункт 2 остаётся незакрытым.
@@ -262,9 +265,22 @@ Deployment подтвердил исходные1/1; новые replica settings
    проверки и доказательство сохранности существующих PV. Без этой работы
    две Ready реплики не объявляются готовым HA storage.
 
-Решение PENDING. Цель не завершена, обязательные этапы не отмечены. До решения
-переход к применению не выполняется; текущее приложение и соседний доступ
-остаются без изменений. Уже собраны десять локальных OCI, ещё без публикации.
+Владелец выбрал вариант 1: подобные инфраструктурные singleton остаются в
+одном экземпляре. `local-path-provisioner` сохраняется с одной репликой;
+отдельная реализация HA storage controller не входит в эту работу. Обычные
+прикладные сервисы и поддерживаемые HA controllers остаются в двухрепличном
+плане. Это не означает репликацию локальных данных или отказоустойчивость
+сервера целиком.
+
+Повторное read-only чтение обнаружило 50 PVC класса `local-path`, все `Bound`:
+37 в `kodex-runtime`, 9 в `kodex-system`, 3 в `observability`, 1 в `identity`.
+Provisioner нужен для автоматического выделения и удаления локальных томов,
+в том числе состояния новых сессий агентов; сам `/workspace` сейчас `emptyDir`,
+а `/workspace/.kodex/state` — PVC. Он не обслуживает поток чтения/записи
+уже подключённых томов. Изменений ресурсов или данных при проверке не было.
+Причина ожидания решения снята; применение по-прежнему требует предусмотренных
+review и owner gates. Цель не завершена, обязательные этапы не отмечены.
+Уже собраны десять локальных OCI, ещё без публикации.
 
 Подготовка public edge дополнительно связывает исходную CA с exact cluster и
 ConfigMap UID; private keys не читаются и не копируются. Модель теперь имеет
