@@ -166,12 +166,16 @@ export async function releaseAdmission(args, commandPort) {
   const assertReferences = async () => requireValue(fingerprint(await references()) === fingerprint(plan.references), "ADMISSION_REFERENCE_DRIFT");
   const assertPins = async () => requireValue(fingerprint(await idle()) === fingerprint(preserved), "ADMISSION_PINS_CHANGED");
   const checkSupport = async (required = false) => {
+    const observed = new Map();
     for (const s of plan.support) {
       const t = support.find(t => t.kind === s.kind), actual = await get(s.kind, s.name, true);
       if (!actual) { requireValue(!required && !s.uid && !receipts.get(s.kind)?.uid, "ADMISSION_SUPPORT_MISSING"); continue; }
       requireValue(admissionSupportMatches(actual, t) && (s.uid ? actual.metadata.uid === s.uid && metadataHash(actual) === s.metadataSHA256 :
-        receipts.has(s.kind) && (!receipts.get(s.kind).uid || actual.metadata.uid === receipts.get(s.kind).uid) && actual.metadata.annotations?.[admissionIntent] === hash), "ADMISSION_SUPPORT_DRIFT");
+        receipts.has(s.kind) && (!receipts.get(s.kind).uid || actual.metadata.uid === receipts.get(s.kind).uid) &&
+        metadataHash(actual) === metadataHash({ metadata: { ...t.metadata, annotations: { [admissionIntent]: hash } } })), "ADMISSION_SUPPORT_DRIFT");
+      observed.set(s.kind, actual);
     }
+    return observed;
   };
   const observe = async () => {
     const d = await get("deployment", name), h = fingerprint(d.spec), compiled = [item.afterSpecSHA256, item.quiescedAfterSHA256].includes(h);
@@ -200,19 +204,26 @@ export async function releaseAdmission(args, commandPort) {
   };
   const prove = async after => {
     const d = await observe(), count = after ? 2 : 1, list = await pods(d);
-    requireValue(fingerprint(d.spec) === (after ? item.afterSpecSHA256 : item.beforeSpecSHA256) && d.status?.observedGeneration >= d.metadata.generation &&
-      ["replicas", "updatedReplicas", "readyReplicas", "availableReplicas"].every(k => d.status[k] === count) && list.length === count &&
-      list.every(p => !p.metadata.deletionTimestamp && p.status?.conditions?.some(c => c.type === "Ready" && c.status === "True") &&
-        p.spec.containers.some(c => c.name === name && c.image === d.spec.template.spec.containers[0].image) &&
-        p.status.containerStatuses?.some(s => s.name === name && s.ready && s.imageID?.endsWith(after ? plan.image.digest : item.sourceDigest))), "ADMISSION_SERVING_INCOMPLETE");
+    const serving = (deployment, instances) => fingerprint(deployment.spec) === (after ? item.afterSpecSHA256 : item.beforeSpecSHA256) &&
+      deployment.status?.observedGeneration >= deployment.metadata.generation &&
+      ["replicas", "updatedReplicas", "readyReplicas", "availableReplicas"].every(k => deployment.status[k] === count) && instances.length === count &&
+      instances.every(p => !p.metadata.deletionTimestamp && p.status?.conditions?.some(c => c.type === "Ready" && c.status === "True") &&
+        p.spec.containers.some(c => c.name === name && c.image === deployment.spec.template.spec.containers[0].image) &&
+        p.status.containerStatuses?.some(s => s.name === name && s.ready && s.imageID?.endsWith(after ? plan.image.digest : item.sourceDigest)));
+    requireValue(serving(d, list), "ADMISSION_SERVING_INCOMPLETE");
     const r = await rolePhase(); requireValue(fingerprint(r.rules) === (after ? item.role.afterRulesSHA256 : item.role.beforeRulesSHA256), "ADMISSION_ROLE_PHASE_MISMATCH");
     if (!after) return;
     const deadline = Date.now() + 60000;
     for (;;) {
-      await checkSupport(true);
-      const lease = await get("Lease", admissionLease), renewed = Date.parse(lease.spec?.renewTime);
+      // Используется тот же snapshot, в котором проверены exact UID/metadata,
+      // а не отдельный повторный GET с несвязанным holder.
+      const lease = (await checkSupport(true)).get("Lease"), renewed = Date.parse(lease.spec?.renewTime);
       if (list.some(p => p.metadata.uid === lease.spec.holderIdentity) && Number.isFinite(renewed) && renewed <= Date.now() + 5000 &&
-        Date.now() - renewed <= 45000 && lease.spec.leaseDurationSeconds === 45) break;
+        Date.now() - renewed <= 45000 && lease.spec.leaseDurationSeconds === 45) {
+        const current = await observe(), currentPods = await pods(current);
+        requireValue(serving(current, currentPods) && currentPods.some(p => p.metadata.uid === lease.spec.holderIdentity), "ADMISSION_SERVING_INCOMPLETE");
+        await rolePhase(); break;
+      }
       requireValue(Date.now() < deadline, "ADMISSION_CURRENT_LEADER_UNPROVEN"); await new Promise(resolve => setTimeout(resolve, 250));
     }
   };

@@ -64,6 +64,8 @@ function fixture() {
           status: { conditions: [{ type: "Ready", status: "True" }], containerStatuses: [{ name, ready: true, imageID: live.spec.template.spec.containers[0].image }] } }))] });
       }
       const r = resources.get((kinds[kind] ?? kind) + "/" + target);
+      if (kind === "Lease" && flags.disruptServing && ++flags.leaseReads === 2)
+        resources.get("Deployment/" + name).status.readyReplicas = 1;
       if (!r && !argv.includes("--ignore-not-found")) throw Error("FIXTURE_RESOURCE_NOT_FOUND");
       return r ? JSON.stringify(r) : "";
     }
@@ -228,5 +230,14 @@ test("fresh forward plan reuses retained Lease UID instead of recreating or clea
     assert.equal(writes(f).filter(t => t.argv.includes("create")).length, creates);
     assert.equal(f.resources.get("Lease/" + admissionLease).metadata.uid, lease.metadata.uid);
     assert.equal(f.resources.get("Lease/" + admissionLease).spec.leaseTransitions, lease.spec.leaseTransitions + 1);
+  } finally { rmSync(f.directory, { recursive: true, force: true }); }
+});
+
+test("leader proof rechecks currently serving pods instead of accepting an earlier ready snapshot", async () => {
+  const f = fixture();
+  try {
+    const plan = await f.plan(); await f.run("apply", "apply.jsonl", [...args(f), ...approval(plan)]);
+    f.flags.disruptServing = true; f.flags.leaseReads = 0;
+    await assert.rejects(f.run("readback", "readback.json", [...args(f), ...journal(f)]), /SERVING_INCOMPLETE/);
   } finally { rmSync(f.directory, { recursive: true, force: true }); }
 });
