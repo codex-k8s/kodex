@@ -757,3 +757,48 @@ content revision/readiness/template pins; прежний mutable dev ConfigMap �
 Обратные patches содержат только изменённые поля, не целые Deployment/env.
 Неизвестные дополнительные frontend env закрыто отклоняются до сохранения
 recovery material; допустимы только существующие публичные dev knobs.
+
+## Проверка compiled frontend и уточнение inventory
+
+На exact `8ec0c0196355344bb3c236029450f6a8edfd16e5`:
+
+- PASS: 73 Node-проверки поставки, включая реальный `nginx -t` из собранного
+  OCI, без пропусков; 30 Python-проверок OCI и полный web-only render.
+- PASS: compiled frontend собран из
+  `ae33ac92ba71d9cb775b41e0a8706d6bbd193cb4`, manifest
+  `sha256:f70b5d94bc852a35ab8161107e9ead827a1be17742f32e0d4b3f3e2ceaa0b5e5`.
+  Реальный read-only publication preflight проверил OCI graph и Git build
+  context; план публикации имеет commitment
+  `55c2598449b63868d249be65cbd52d0173d468eb72fd0b0d8f39692fbcb2ca2a`.
+- PASS: реальный frontend plan с Kubernetes server-side dry-run, без persist,
+  commitment `4d76ad128ac7a7498ab407cc6b62e4fdaa4c94223f322cd25fc703881100eb98`.
+  Проверены defaults, публичные TLS certificates/CA, текущие SSO middleware,
+  exact ingress peers и согласованная immutable runtime revision.
+- PASS: synthetic plan/apply/readback/rollback сохраняет исходный профиль;
+  неизвестный create не повторяется, подмена UID нового ресурса запрещает
+  rollback до первого write. Это не применение в рабочем кластере.
+- PASS: фактический nginx запускает проверку конфигурации под UID101 с
+  read-only root, без сети и capabilities, с одноразовыми тестовыми ключами.
+  Первый запуск оснастки использовал config digest вместо Docker image ID;
+  следующий обнаружил недостающий включаемый `public-assets.conf` в fixture.
+  Оба исхода были FAIL; после исправления оснастки та же собранная конфигурация
+  прошла проверку без изменения или ослабления nginx.
+- Изменение nginx закрывает запись query/callback codes стандартным access
+  log и снимает случайный default1MiB для artifact streaming; backend
+  сохраняет авторитетные ограничения. Проверена официальная документация
+  [NGINX command-line parameters](https://nginx.org/en/docs/switches.html)
+  через Context7. Deprecated `rootCAsSecrets` заменён современным `rootCAs`;
+  обе фактические Traefik CRD проверены read-only и поддерживают этот формат.
+
+На exact `f2d9d5b1ae799483915738e2b4d7a77de11d0852` восемь inventory unit
+tests PASS. Включены `kube-system` и `cert-manager`, которые не должны выпадать
+из требования двух реплик совместимых controllers. Exact согласованные
+`local-path-provisioner` и Grafana SQLite имеют отдельную категорию
+`SINGLETON`, не ошибочный target2. Исключение не переносится на одноимённый
+ресурс другой namespace/kind. Полная эксплуатационная матрица и бюджет
+ресурсов ещё не завершены, checkbox2 остаётся открытым.
+
+NOT RUN: frontend live apply/rollback, registry publication/node pull,
+публичные TLS/SSO и browser новой поставки. Локальный Docker load служил только
+одноразовой проверке nginx, не загрузке образа в Kubernetes nodes. Существующий
+main и все hot Deployment сохранены; реальные AI/STT/device-code не запускались.
