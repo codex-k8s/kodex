@@ -44,7 +44,7 @@ hostnames; private keys не копируются между кластерам�
   Public80/443 принадлежат внешнему ingress соседнего кластера, Kodex
   обслуживается отдельным loopback ingress. На новом hostname сейчас
   certificate hostname mismatch, штатная точка входа ещё не настроена.
-- [ ] **2. Зафиксировать точный состав релиза и матрицу реплик.** Inventory
+- [x] **2. Зафиксировать точный состав релиза и матрицу реплик.** Inventory
   Deployment/StatefulSet/Job/PVC/images/host mounts, общий бюджет ресурсов,
   leader/claim/inbox semantics, preservation digests. БД/NATS/S3 исключены.
 - [ ] **3. Собрать и проверить штатные immutable images.** Exact source,
@@ -54,7 +54,7 @@ hostnames; private keys не копируются между кластерам�
   plan/apply/readback/rollback с exact drift/idle guards; rolling/drain,
   leader handoff, отсутствие двойных execution/effects, readiness на рабочем
   пути. PKI, active grants, runtime profiles и promoted pins сохраняются.
-- [ ] **5. Подготовить публичные ingress/TLS/OIDC/SSO.** Exact маршруты
+- [x] **5. Подготовить публичные ingress/TLS/OIDC/SSO.** Exact маршруты
   платформы и OIDC, публичный доверенный certificate и renewal, согласованные
   issuer/callback/logout/origin/cookie настройки. API/WebSocket защищены;
   OAuth callback/realm assets не открывают обход к приложению.
@@ -1936,3 +1936,46 @@ terminal исходный journal, exact after/UID/release revision для ст�
 intents/receipts и связь с predecessor. Новый executor требует exact SHA,
 ancestry и неизменных transition models/profile.11 regression tests PASS в
 рабочем дереве. Следующий шаг — продолжить исходные планы, не re-apply.
+
+## Внешний вход применён: 15.10, 12:11 UTC
+
+Executor `95bf543527bdb8c83bb6f9ee62974b6e7eb62ab0`:
+
+- PASS public platform continue и отдельный readback исходного плана
+  `192fe3083363ef7e01f30b3f6dbbe2432f2c71c6312f8d5e22d1279b4c2d2228`.
+- PASS public Helm continue/отдельный readback плана
+  `668187a32d26468392f895b2da4abc69a0f55e98e4e3ff8c750554cf8117b722`:
+  оба proxy2, Grafana1, прежние images/Secret references/PVC/roles/groups.
+- PASS canonical plan/apply/отдельный readback
+  `b613722e030bb4d2749e59eceb6b3d9aaa2a0b4d116782c3cb4956088fc31fce`.
+- PASS outer edge отдельный readback: protected commitment соседних маршрутов
+  не изменился, exact units/resources соответствуют исходному журналу.
+- PASS DNS обоих новых hostnames; публичный HTTPS с системной проверкой CA/SAN,
+  без TLS skip. Unauthenticated root302 в новый SSO; bootstrap/projects/realtime401;
+  только Exact manifest200. Discovery200, issuer/token/auth URLs публичные.
+- PASS current inventory всех совместимых Deployment2/2 Ready/Available.
+  Исключения singleton прежние. Новых ИИ-запусков не было.
+
+Chrome MCP собственная вкладка52 доказала public redirect и штатную форму
+нового SSO; Console чистая. Одноразовый local-input helper не завершил ввод
+в браузер и истёк; credentials не выводились. Для завершения проверки использован
+отдельный собственный Playwright Chrome с credentials из разрешённого проектного
+источника, без trace/HAR/credential logs. Вход владельцем и штатная кнопка
+«Войти» в SPA завершились: bootstrap200, session callback200, ticket200,
+WebSocket `/api/v1/session/stream`, «Подключено», реальные сохранённые проекты
+и результаты на главной. Скриншот1440×1000 визуально проверен; блок внимания
+ограничен пятью строками. Первоначальные401 до SPA login ожидаемы; после
+callback bootstrap200. Собственный headless браузер закрыт, чужие не трогались.
+
+Один отдельный повтор fresh-login дал пустой экран и module MIME error без
+Content-Type; следующий fresh-login прошёл успешно. Этот плавающий FAIL не
+объявляется исправленным. Полная цель ещё НЕ завершена: проверить этот случай,
+logout/rejoin, controlled replica replacement и fresh network pull proof.
+Внешний адрес уже доступен для демонстрационной ручной проверки; данные не
+очищались. Public helper origin переведён на новый SSO;18 его unit tests PASS
+в рабочем дереве, затем общий targeted прогон фиксируется следующим результатом.
+
+Общий targeted прогон public/system-Helm/edge/owner-input:84 tests PASS,
+0 failed/0 skipped,17.2s на рабочем дереве `95bf543527bdb8c83bb6f9ee62974b6e7eb62ab0`
+с единственным изменением owner-input public origin и injectable reader.
+Это не blanket full acceptance; перечисленные выше открытые проверки сохраняются.

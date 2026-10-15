@@ -13,7 +13,7 @@ import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
 import { readPrivateAgentSecrets } from "./private-agent-secret-reader.mjs";
 
-export const inputOrigin = "https://sso.kodex.127.0.0.2.nip.io";
+export const inputOrigin = "https://sso.kodex.works";
 export const inputHost = "kodex.127.0.0.2.nip.io";
 export const inputPath = "/local-owner-sso";
 export const inputIntent = "KODEX_LOCAL_OWNER_SSO";
@@ -423,7 +423,7 @@ export function browserInputScript(port) {
   }`;
 }
 
-export async function main(args) {
+export async function main(args, secretReader = readPrivateAgentSecrets) {
   let material;
   let server;
   try {
@@ -494,7 +494,7 @@ export async function main(args) {
     const handler = createInputHandler({
       port,
       deadline,
-      readSecrets: readPrivateAgentSecrets,
+      readSecrets: secretReader,
       readPeer: async (socket) =>
         assertPeerUID(
           await readFile("/proc/net/tcp", "utf8"),
