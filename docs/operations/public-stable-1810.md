@@ -4,7 +4,7 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.2.1
+version: 1.2.2
 updated: 2026-10-15
 ---
 
@@ -1733,3 +1733,34 @@ bounded join только exact owned terminating source Pod при уже на�
 controller. Остальные credential profiles не расширены. Новый helper/image
 нужно собрать и активировать до поставки standalone controller; изменение
 одного исходного списка не считается его действующим разрешением в кластере.
+
+## Бэкенды без hot reload: применено
+
+На `efd1f0da3a81bfa32f7c689470a57554556c4a05`:
+
+- PASS targeted regression нового join:1 тест,0 failed/0 skipped; Go
+  registry-pull-authorizer unit PASS. До commit полный Go release CLI набор
+  дал14 PASS; результат не выдаётся за новый полный прогон на этом SHA.
+- PASS actual plan/apply оставшихся11 Go Deployment; plan
+  `67062529c71850af89b1328bf222f64d6ebc25cd2a96d0322f8975fb34b01d81`.
+  Затем отдельный readback всех11 PASS: exact served digests,2/2 Ready и
+  available, source/labels/storage/архиватор Role, без host source mounts.
+  Вместе с ранее применённым secret-broker работают12 compiled Go Deployment;
+  compiled frontend также2/2. Новые ИИ-запуски не создавались.
+- PASS bounded helper/controller builds и публикация обоих OCI:
+  helper `sha256:907b353432a635a1658dc43f1b17d13485c68a67515ccd58d104ca4763c15be0`,
+  controller `sha256:9be7574c39677abc5cb8da1658d1249e070c961f8e01a649b003093d14d9d60f`.
+  Новый helper seeded и проверен на двух узлах; activation ещё NOT RUN.
+  Bootstrap plan
+  `b30a2763cd743da4c42b294ff5a2c04f826ea493ca900c30c3572d521a5f5969`.
+- PASS current inventory `kodex-system`:0 host mounts и0 Air/Vite/dev entry
+  commands во всех Deployment. В Chrome штатные compiled JS assets200,
+  повторная загрузка без Console warning/error. Это текущий внутренний
+  адрес, не публичная приёмка.
+
+Осталось: rolling activation нового helper в уже двухрепличном registry,
+admission leader2; guarded BuildKit/role-image-builder/Keycloak2 и общий
+бюджет; полный public Helm proxy/Grafana/ingress/identity/edge apply;
+внешние TLS/SSO/API/WS/browser и replica replacement/соседний baseline.
+Главные Go/frontend cutover больше не являются NOT RUN. Этапы полного
+чеклиста2–8 ещё не закрыты: указанные зависимости и внешний вход обязательны.
