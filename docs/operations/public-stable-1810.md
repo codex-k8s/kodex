@@ -4,7 +4,7 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.1.7
+version: 1.1.8
 updated: 2026-10-15
 ---
 
@@ -1493,3 +1493,46 @@ Actual activation/recovery, public TLS/OIDC и live acceptance пока NOT RUN;
 - Actual HCC/Job/replica mutation, node restart, public TLS/OIDC, fresh pull
   и browser acceptance NOT RUN. Общие этапы2–8 не отмечены выполненными;
   данный результат завершает реализацию native workflow, не live cutover.
+
+## Публичная identity: конфигурационный план
+
+Добавлены закрытый `infra/public-ingress/identity-profile.json`, модель
+`stable-public-identity-model.mjs` и read-only CLI
+`stable-public-identity-plan.mjs --context k3d-kodex --output <private-json>`.
+Plan требует clean executor и private0700 directory, сохраняет только
+non-secret configuration/recovery deltas, source UID/RV/digests; `spec` с
+неизменяемыми credential env в документ не записывается. Перед записью плана
+все прочитанные зависимости повторно проверяются. CLI не содержит apply.
+
+Фактический контур использует `trusted-cluster`: отдельный
+`internal-rpc-authority-publisher` отсутствует, CP/gateway проверяют browser
+OIDC через общий `kodex-platform-endpoints`. Его publicOrigin, issuer/JWKS/SNI
+меняются согласованно; exact private `sso.identity.svc.cluster.local:443`
+сохраняется. Protected profile и отсутствующий publisher этим переходом не
+активируются; обнаружение publisher закрывает этот scoped plan.
+
+| Потребитель | Планируемое изменение | Сохранённая граница |
+| --- | --- | --- |
+| CP/gateway | Endpoint ConfigMap и rollout stamp | Exact refs, audience, trusted profile, credentials и authority generations не меняются |
+| Frontend | Новый immutable runtime snapshot, issuer/CSP, volume reference и stamp | API/WS relative paths, client ID, scopes, callback path и original runtime сохраняются |
+| Keycloak | Полный public hostname и отдельный TLS Secret reference | Strict backchannel, proxy headers, DB/bootstrap credentials и исходный TLS Secret сохраняются |
+| OAuth control/Grafana | Public issuer, exact private hostAlias; callback/origin платформы | Session Secrets/Redis/CA и roles/groups остаются прежними; Grafana callback остаётся прежним |
+| Inner TLS | Два новых Certificate/Secret с public DNS SAN | Тот же exact ClusterIssuer, старые leaf keys/Secrets не перезаписываются; наружный ACME остаётся у edge |
+
+Смена Pod env ConfigMap сама по себе не обновляет уже запущенный процесс:
+поэтому CP/gateway получают отдельный content-bound rollout stamp. OAuth
+Deployment desired specs пока являются контрольной моделью/dry-run, не
+разрешением patch в обход Helm: final apply должен изменить values исходных
+Helm releases и доказать соответствующий полный render. Отдельно ещё нужны
+client callbacks/post-logout через Keycloak API, Grafana signout issuer,
+public ingress/old-host canonical redirects, issued leaf/CA proof и
+исполняемое apply/readback/recovery. Эти части не объявлены реализованными
+по одному конфигурационному плану.
+
+Небезопасные issuer/TLS skip flags, широкая cookie-domain, auth skip overrides,
+inline client/cookie/Redis credentials и неизвестный Service destination
+отклоняются. Восстановление spec возвращает только изменённые поля; отдельный
+тест подтверждает отсутствие unchanged credential sentinel в inverse.
+Context7 `/keycloak/keycloak`: hostname v2 full HTTPS URL, proxy headers и
+backchannel configuration. Живые настройки не изменялись; exact SHA
+server dry-run фиксируется отдельной записью после commit.
