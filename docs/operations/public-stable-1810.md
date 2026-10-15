@@ -1536,3 +1536,33 @@ inline client/cookie/Redis credentials и неизвестный Service destina
 Context7 `/keycloak/keycloak`: hostname v2 full HTTPS URL, proxy headers и
 backchannel configuration. Живые настройки не изменялись; exact SHA
 server dry-run фиксируется отдельной записью после commit.
+
+### Проверки на `43aa050ea4ccb8b7a63953d53ad880fb23bf013a`
+
+- PASS166 Node tests,0 failed/0 skipped;31 Python OCI/archive tests и web-only
+  release render. Новые10 тестов проверяют согласованность endpoint tuple,
+  immutable frontend/CSP revision, minimal inverse без unchanged credentials,
+  обе OAuth role/group boundaries, private DNS mapping, dedicated Certificate,
+  backend refs, frontend volume/stamp и отказ planner до доступа к кластеру
+  при dirty source/неподходящем context/private output.
+- PASS actual configuration plan/server dry-run для6 Deployment,
+  endpoint ConfigMap, нового runtime ConfigMap и2 Certificate. Commitment
+  `e81753d6737604a4f3f2725ef3decb34af94653c225544202f55c4a923b72c6a`.
+  Plan имеет private0600, не содержит full Deployment spec, включает явный
+  `remaining` и `apply=NOT_RUN`. Это не доказательство issued TLS либо
+  завершённого SSO-переключения.
+- Первоначальный unit FAIL обнаружил пропуск длинных
+  `insecure-oidc-*` flags: ошибочная regex отклоняла только короткое имя.
+  Проверка исправлена для всего семейства; отрицательный сценарий включён
+  в последующий PASS. Живые настройки это не затрагивало.
+- Read-only Helm inventory: оба OAuth release используют chart10.7.0,
+  revision5 и existing credential Secret, без inline client secret. Monitoring
+  chart88.5.4/revision6 содержит signout redirect. Их public values ещё не
+  применены; будущий план привязывается к fresh revisions после infra-фазы.
+- Оба публичных DNS имени повторно разрешаются на один адрес этого сервера.
+  Working Chrome page остаётся на форме SSO с введённым содержимым; reload
+  не делался, чтобы не стереть ввод. Public browser acceptance NOT RUN.
+- Main/live source чистый и сохранён. Никакие Certificate/HCC/Helm values,
+  issuer/client callbacks, ingress routes и replicas живого контура не менялись.
+  Впереди оставшиеся public workflow, инфраструктурные компоненты, общий
+  review/отдельный owner gate, actual cutover и приёмка; этапы2–8 открыты.
