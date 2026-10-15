@@ -4,7 +4,7 @@ title: Штатная поставка Kodex и внешний доступ с S
 type: operations
 status: approved
 owner: manager
-version: 1.2.4
+version: 1.2.5
 updated: 2026-10-15
 ---
 
@@ -1979,3 +1979,34 @@ logout/rejoin, controlled replica replacement и fresh network pull proof.
 0 failed/0 skipped,17.2s на рабочем дереве `95bf543527bdb8c83bb6f9ee62974b6e7eb62ab0`
 с единственным изменением owner-input public origin и injectable reader.
 Это не blanket full acceptance; перечисленные выше открытые проверки сохраняются.
+
+## Бандл и Nginx: проверка по отдельному поручению владельца
+
+Основная цель остаётся на паузе. На source
+`9b49cde7e348866447e2d3cabcdc1f9d072cf0fd` выполнена только проверка
+production-бандла и его существующей отдачи Nginx:
+
+- PASS repo-owned `build-stable-local.sh` для `staff-control-center`.
+  Docker повторно использовал неизменные build layers; это не новый запуск
+  frontend typecheck. Получен OCI digest
+  `sha256:09033c8ff8cfc6b83e6ba0c5fbd82e941ca52d9895446d34ef10b6158d6e7331`.
+- PASS побайтовое сравнение SHA-256 всех270 файлов статики, конфигурации
+  Nginx и entrypoint из собранного OCI с каждой из двух Running/Ready реплик:
+  отличий и лишних файлов нет. Исторические Failed Pods не считаются
+  обслуживающими репликами. Первое диагностическое сравнение остановилось
+  на их наличии; после отбора Running/Ready получен указанный PASS.
+- Новая publication/rollout NOT RUN и не требуются для доставки такого же
+  бандла: действующий immutable image уже содержит его в точности. Nginx
+  читает файлы из `/usr/share/nginx/html`; source host mounts отсутствуют,
+  dev-сервер не используется. Serving digest не менялся.
+- PASS отдельный штатный вход владельца через публичный SSO и SPA:
+  главная с проектами, bootstrap200, session callback200, ticket200,
+  WebSocket stream и состояние «Подключено». Никаких новых ИИ-запусков.
+  Начальные401 до завершения SPA login ожидаемы. JS MIME error в этом
+  запуске не воспроизвёлся; прежний плавающий дефект НЕ объявлен исправленным.
+- PASS `frontend-build-context.test.mjs`:1 test. Nginx fixture test
+  NOT RUN (SKIP): для этого запуска не задан отдельный local fixture image.
+  Актуальный способ static production build проверен по официальной
+  документации Vite8 через Context7.
+
+Оставшиеся пункты основной цели не выполнялись и не отмечались завершёнными.
