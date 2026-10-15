@@ -25,7 +25,9 @@ export async function readSystemObjects(profile, rendered, kube) {
     "SYSTEM_HELM_OBJECT_SET_INVALID");
   const definitions = rendered.map(r => {
     requireValue(/^[A-Za-z][A-Za-z0-9]{0,100}$/.test(r.kind ?? "") && /^[a-z0-9./-]{1,150}$/.test(r.apiVersion ?? "") &&
-      namePattern.test(r.metadata?.name ?? "") && (!r.metadata.namespace || r.metadata.namespace === profile.namespace),
+      (namePattern.test(r.metadata?.name ?? "") || ["Role", "RoleBinding", "ClusterRole", "ClusterRoleBinding"].includes(r.kind) &&
+        /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,252}$/.test(r.metadata?.name ?? "")) &&
+      (!r.metadata.namespace || namePattern.test(r.metadata.namespace)),
     "SYSTEM_HELM_OBJECT_SCOPE_INVALID");
     return { apiVersion: r.apiVersion, kind: r.kind, metadata: { name: r.metadata.name,
       ...(r.metadata.namespace ? { namespace: r.metadata.namespace } : {}) } };
