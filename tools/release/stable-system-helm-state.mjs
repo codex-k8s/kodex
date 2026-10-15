@@ -41,17 +41,21 @@ export async function readSystemObjects(profile, rendered, kube) {
   for (const onlyMetadata of [false, true]) {
     const items = definitions.filter(r => metadataOnly(r) === onlyMetadata);
     if (!items.length) continue;
-    const format = onlyMetadata ? 'jsonpath={range .items[*]}{.apiVersion}{"|"}{.kind}{"|"}{.metadata.namespace}{"|"}{.metadata.name}{"|"}{.metadata.uid}{"|"}{.metadata.resourceVersion}{"\\n"}{end}' : "json";
+    const record = '{.apiVersion}{"|"}{.kind}{"|"}{.metadata.namespace}{"|"}{.metadata.name}{"|"}{.metadata.uid}{"|"}{.metadata.resourceVersion}{"\\n"}';
+    // kubectl возвращает одиночный object даже для входного List из одного
+    // элемента. Читаются обе формы; служебная строка корневого List отсекается.
+    const format = onlyMetadata ? 'jsonpath={range .items[*]}' + record + '{end}' + record : "json";
     // Helm владеет также exact Role в leader/trust namespaces. -n здесь
     // принудительно заменил бы namespace документов и сломал cross-namespace read.
     const raw = await kube(["get", "-f", "/dev/stdin", "--ignore-not-found", "-o", format],
       JSON.stringify({ apiVersion: "v1", kind: "List", items }));
     const resources = onlyMetadata ? raw.trim().split("\n").filter(Boolean).map(line => {
       const values = line.split("|");
+      if (values.length === 6 && values[0] === "v1" && values[1] === "List" && !values[2] && !values[3] && !values[4]) return null;
       requireValue(values.length === 6 && values.every((v, i) => i === 2 || v.length > 0), "SYSTEM_HELM_METADATA_INVALID");
       return { apiVersion: values[0], kind: values[1], metadata: { namespace: values[2] || undefined,
         name: values[3], uid: values[4], resourceVersion: values[5] } };
-    }) : JSON.parse(raw).items;
+    }).filter(Boolean) : (() => { const result = JSON.parse(raw); return result.items ?? [result]; })();
     requireValue(Array.isArray(resources) && resources.length <= items.length, "SYSTEM_HELM_OBJECT_READ_INVALID");
     const expected = new Set(items.map(systemObjectKey));
     for (const r of resources) {

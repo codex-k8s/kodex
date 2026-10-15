@@ -37,6 +37,17 @@ test("resource snapshot never requests Secret or ConfigMap data", async () => {
   assert.equal(result.size, 3); assert.equal(JSON.stringify(result.get(systemObjectKey(secret))).includes(".data"), false);
 });
 
+test("single object and List responses share exact metadata guards without reading data", async () => {
+  const d = object(), cm = object("ConfigMap", "config");
+  const result = await readSystemObjects(profile, [d, cm], async (argv, input) => {
+    const first = JSON.parse(input).items[0];
+    if (first.kind === "Deployment") return JSON.stringify(d);
+    assert.ok(argv.at(-1).includes("{end}{.apiVersion}")); assert.equal(argv.at(-1).includes(".data"), false);
+    return `v1|ConfigMap|${profile.namespace}|config|config-uid|1\nv1|List||||\n`;
+  });
+  assert.equal(result.size, 2); assert.equal(result.get(systemObjectKey(cm)).metadata.uid, "config-uid");
+});
+
 test("forward recovery retains only PDB overlays, original configuration and secrets stay intact", () => {
   const before = { replicaCount: 1, cainjector: { resources: { limits: { memory: "200Mi" } } },
     private: "PRIVATE_SECRET_SENTINEL" }, snapshot = structuredClone(before);
