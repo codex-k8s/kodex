@@ -48,6 +48,18 @@ Chrome MCP: собственная вкладка, получение списк
 
 ## Журнал
 
+### Дополнение16.10: безвозвратное удаление проектов
+
+Issue#1816 / Draft PR#1817: исправлены archive bucket, immutable lineage
+перенесённых диалогов/файлов/PVC и fanout проверки consumers. Применён
+cd6a4aba6c2af20b80854cc82a8348c090fa4aa9; unit, полный PostgreSQL baseline
+и три направления review — PASS. Один ранее owner-approved purge завершён
+обычным worker, корзина обновилась по WebSocket; другой проект и контрольный
+файл сохранены. Второй purge пока FAIL на prepared content WAITING_OWNER
+без positive object receipt после исчерпания трёх попыток. Нужен отдельный
+подтверждаемый repair/resolve, не обход guard. Подробный журнал:
+`docs/operations/project-purge-1816.md`. Это не полная готовность MVP.
+
 ### 16.10: исходное состояние
 
 - Основной checkout main `8c19ffb76328ae559698fae2806be79ef0bd64ae`, чистый.

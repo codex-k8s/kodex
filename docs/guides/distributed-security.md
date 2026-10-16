@@ -4,7 +4,7 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.29
+version: 1.7.30
 updated: 2026-10-16
 ---
 
@@ -2291,3 +2291,27 @@ content и превышение лимитов не дают CLEAN. Ограни
 Исторические format-only CLEAN сохраняются как история, но без evidence
 не открывают bytes или capability. AV не заменяет отдельный анализ
 prompt injection и не разрешает внешние действия без их Human Gate.
+
+## Очистка объектов после переноса сессии
+
+Неизменяемый location объекта не обязан совпадать с текущей областью после
+серверного переноса сессии. Cleanup подтверждает current owner через exact
+archive/task/session lineage, immutable key/version и отсутствие foreign
+references; один префикс не назначает полномочий и его несовпадение не
+разрешает переименовать квитанцию. Общий исходный `_system` key допускается
+только для той же доказанной перенесённой сессии.
+
+Это относится и к immutable subject-scoped result artifacts: exact key/revision/
+version проверяются через current artifact/run/session/SYSTEM-conversation
+lineage, а не общим разрешением `subjects/`. Identity producer в location не
+обязана совпадать с root initiator и не назначает current owner. Неперенесённый
+global PVC с прежним hash допускается к cleanup только через то же exact
+SYSTEM-session promotion правило, что у runtime-controller; отсутствие PVC
+promotion не разрешает обход consumer, organization/session labels или UID.
+
+Identity хранилища является частью cleanup: отсутствие key/version в artifact
+bucket не доказывает отсутствие архива в archive bucket. Недоступное правильное
+хранилище закрывает удаление; запасной поиск/удаление по другим buckets запрещён.
+Все активные writers и PVC consumers проверяются до external effects. Frozen
+PURGE_PENDING graph не допускает новых claims/materialization; точный PVC
+удаляется с UID precondition, а replacement не считается прежним ресурсом.

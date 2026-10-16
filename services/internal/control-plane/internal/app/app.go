@@ -76,6 +76,14 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct object storage: %w", err)
 	}
+	archiveObjects, err := s3store.New(startup, s3store.Config{
+		Endpoint: config.ObjectStorageEndpoint, Region: config.ObjectStorageRegion, Bucket: config.SessionArchiveStorageBucket,
+		AccessKeyID: strings.TrimSpace(string(accessKey)), SecretKey: strings.TrimSpace(string(secretKey)),
+		UsePathStyle: config.ObjectStorageUsePathStyle,
+	})
+	if err != nil {
+		return fmt.Errorf("construct session archive storage: %w", err)
+	}
 	repository, err := platformrepository.New(pool, config.DefaultRuntimeProvider, config.DefaultRuntimeModel, objects)
 	if err != nil {
 		return fmt.Errorf("construct platform repository: %w", err)
@@ -337,7 +345,7 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 		catalogWorker.Run,
 		renewalWorker.Run,
 		runAgentAvatarCleanup(repository, slog.Default()),
-		projectpurge.Run(repository, objects, config.RuntimeSecretNamespace, slog.Default()),
+		projectpurge.Run(repository, objects, archiveObjects, config.RuntimeSecretNamespace, slog.Default()),
 		assistantconversationpurge.Run(repository, slog.Default()),
 	)
 	workerDone := make(chan error, 1)

@@ -24,7 +24,7 @@ func TestValidObjectStorageBoundary(t *testing.T) {
 			t.Parallel()
 			config := Config{
 				ObjectStorageEndpoint: test.endpoint, ObjectStorageRegion: "us-east-1",
-				ObjectStorageBucket: "kodex-artifacts", ObjectStorageAllowInsecureLocal: test.local,
+				ObjectStorageBucket: "kodex-artifacts", SessionArchiveStorageBucket: "kodex-session-archives", ObjectStorageAllowInsecureLocal: test.local,
 			}
 			if actual := validObjectStorageBoundary(config); actual != test.valid {
 				t.Fatalf("validity = %v, want %v", actual, test.valid)
