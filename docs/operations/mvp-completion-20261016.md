@@ -116,3 +116,25 @@ Chrome MCP: собственная вкладка, получение списк
   в текущую PR-ветку. В конфликте import helper сохранены защита exact digest
   alias от перезаписи и прежний registry-pull-authorizer; добавлен только
   closed repository control-plane. Прямого push/merge в main нет.
+
+### Подготовка двухрепличного Go hot reload
+
+- Добавлены repo-owned restore-hot-go plan/apply/readback для control-plane
+  и API gateway. Сохраняются две реплики, текущая RollingUpdate strategy,
+  node selector, application env, sidecars/init, PVC/Secret/config references.
+  Исторический inverse используется только для dev toolchain/source/cache;
+  итоговое намерение заново проверяется моделью до apply.
+- Air config и выходной binary теперь могут использовать exact Pod UID:
+  две реплики не пишут в один runtime directory, Go build cache остаётся общим.
+- PASS LOCAL: четыре model/instance tests, включая отказ при foreign UID,
+  writable source, подмене application env/sidecar/storage и path injection.
+- Первый cache contract запуск FAIL: default host Go1.27.1 не соответствует
+  закреплённому toolchain. Повтор с уже установленным Go1.26.6 PASS:14 cache
+  tests и EMAIL entrypoint/Secret bootstrap contracts. Глобальный Go не менялся.
+- Disposable PostgreSQL на source `ccbda6697a6d5c086ae4309d13d18e0f393d8641`:
+  migrations/repeated up PASS; email configuration/authorization regression,
+  watermark и immutable credentials PASS. Весь выбранный email contour FAIL:
+  email receipt reconciliation fixture получает conflict при LaunchRun.
+  Этот FAIL не скрыт и должен быть устранён до итоговой приёмки.
+- Hot reload apply и serving source proof пока NOT RUN. Публичный frontend
+  пока продолжает отдавать compiled bundle через прежний Nginx.
