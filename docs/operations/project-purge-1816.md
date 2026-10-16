@@ -47,7 +47,7 @@ Worker требует исключительно текущий project prefix �
 
 ## Проверки
 
-- [ ] Unit: разные artifact/archive stores, moved-system archive, чужой/shared
+- [x] Unit: разные artifact/archive stores, moved-system archive, чужой/shared
   owner и version, active consumer, отсутствующий PVC, повтор и replacement UID.
 - [ ] Disposable PostgreSQL: archive/task/session lineage, active task guard,
   terminal cleanup и сохранность чужого проекта.
@@ -78,3 +78,35 @@ runtime artifact содержит identity producer, а created_by — root init
 exact immutable receipt и полной текущей server-owned lineage. Regression
 fixture создаёт результат через настоящий CompleteExecution и читает его
 persisted receipt, не угадывая identity producer по initiator.
+
+### Применение cd6a4aba
+
+- PASS: полная CP Go suite на Go1.26.6; полная disposable PostgreSQL suite
+  157.978s, Avatar1.889s, read-only worker/runner checks. Адресная регрессия
+  moved archive/result и project trash/session archive — PASS3.699s.
+- PASS: независимые product/security/architecture reviews точного cd6a4aba,
+  без P0/P1/P2; review не заменяет живую приёмку.
+- PASS: source-only code-first rollout CP/API gateway с сохранением двух
+  реплик, публичного SSO, sidecars и сети. Spec readback и host/Pod hashes
+  worker/owner queries совпадают; CP обе реплики2/2, рестартов0.
+- PASS: малый из двух ранее подтверждённых проектов удалён обычным worker;
+  durable receipt DONE, удалено126 строк, project отсутствует. Корзина
+  обновилась по WebSocket без reload страницы.
+- PASS: другой контрольный проект и его файл доступны200;42 байта и digest
+  не изменились. Runtime warm Pod и шесть остальных PVC сохранены.
+- FAIL: большой проект после external cleanup остановлен на owner finalize:
+  `prepared content cleanup must finish before project purge`. Никаких
+  ручных SQL UPDATE, вызовов финализации вне worker или подмены DONE нет.
+- У большого проекта два подготовленных объекта ADOPTED и один
+  WAITING_OWNER с10.10, cleanup_attempts3, без object version/ETag.
+  Worker artifact-retention установлен2/2, но этот terminal waiting state
+  автоматически повторно не забирается. Пустой HEAD неизвестного Put не
+  разрешает объявить подтверждённое удаление либо подделать receipt.
+- NOT RUN: dedicated active-writer PostgreSQL regression и полная приёмка
+  удаления обоих живых проектов; общий PWA assertion FAIL описан выше.
+
+Продолжение требует отдельного штатного аудируемого repair/resolve для
+неопределённого prepared intent с явным решением владельца. Нельзя лечить
+это отключением guard либо ручным переводом WAITING_OWNER/CLEANED.
+После разрешения этого состояния отдельно проверить finalization ADOPTED
+ledger и сохранность чужого проекта. До этого Issue и checklist не закрыты.

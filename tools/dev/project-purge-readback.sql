@@ -2,6 +2,13 @@
 -- Read-only диагностика #1816. Только состояния и счётчики; без contents/credentials.
 BEGIN TRANSACTION READ ONLY;
 SET LOCAL statement_timeout = '10s';
+SELECT jsonb_build_object('projectRef', receipt.project_ref, 'receiptState', receipt.state,
+    'requestedAt', receipt.requested_at, 'purgedAt', receipt.purged_at,
+    'deletedRows', receipt.deleted_rows, 'externalDigestPresent', receipt.objects_digest IS NOT NULL,
+    'projectPresent', EXISTS (SELECT 1 FROM control_plane.projects project
+        WHERE project.id=receipt.project_id AND project.organization_id=receipt.organization_id))
+FROM control_plane.project_purge_receipts receipt
+ORDER BY receipt.requested_at DESC,receipt.project_id LIMIT 16;
 SELECT jsonb_build_object(
     'projectRef', project.ref, 'state', project.lifecycle,
     'version', project.version, 'receiptState', receipt.state,
@@ -51,4 +58,17 @@ WHERE project.lifecycle='PURGE_PENDING' AND item.kind='OBJECT'
     AND NOT starts_with(item.target,'session-archive/v1/' || organization.ref || '/' || project.ref || '/')
 ORDER BY project.id,item.target,item.version
 LIMIT 16;
+SELECT jsonb_build_object('projectRef',project.ref,'preparedState',content.state,
+    'cleanupAttempts',content.cleanup_attempts,'writerExpired',content.writer_deadline<=clock_timestamp(),
+    'cleanupExpired',content.cleanup_deadline IS NULL OR content.cleanup_deadline<=clock_timestamp(),
+    'availableExpired',content.available_until<=clock_timestamp(),
+    'versionPresent',content.object_version<>'','etagPresent',content.object_etag<>'',
+    'lastUpdatedAt',max(content.updated_at),'count',count(*))
+FROM control_plane.prepared_content content
+JOIN control_plane.projects project ON project.id=content.project_id AND project.organization_id=content.organization_id
+WHERE project.lifecycle='PURGE_PENDING'
+GROUP BY project.ref,content.state,content.cleanup_attempts,
+    content.writer_deadline<=clock_timestamp(),content.cleanup_deadline IS NULL OR content.cleanup_deadline<=clock_timestamp(),
+    content.available_until<=clock_timestamp(),content.object_version<>'',content.object_etag<>''
+ORDER BY project.ref,content.state,content.cleanup_attempts LIMIT 32;
 COMMIT;
