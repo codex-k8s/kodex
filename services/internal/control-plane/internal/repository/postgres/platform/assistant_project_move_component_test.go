@@ -2,7 +2,9 @@ package platform
 
 import (
 	"context"
+	_ "embed"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
@@ -13,6 +15,9 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
+//go:embed testdata/sql/project_purge_moved_archive_fixture.sql
+var queryProjectPurgeMovedArchiveFixture string
+
 func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	prepareObservedWarmFixture(t, ctx, repository)
@@ -22,6 +27,18 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 	}, "control-api-gateway")
 	service, err := platformservice.New(repository)
 	if err != nil {
+		t.Fatal(err)
+	}
+	system, err := service.GetSystemAssistant(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	warmWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.report",
+	}, "runtime-controller")
+	if _, err := service.ReportWarmRuntime(ctx, warmWorker, command.WarmRuntimeInput{
+		WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: system.DesiredRuntimeRevision, State: "READY",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
@@ -66,6 +83,10 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 	}
 	if created.Conversation.Version <= turn.Conversation.Version {
 		t.Fatalf("assistant completion did not advance conversation: %#v", created.Conversation)
+	}
+	var archiveKey string
+	if err := repository.pool.QueryRow(ctx, queryProjectPurgeMovedArchiveFixture, created.Conversation.SessionRef).Scan(&archiveKey); err != nil {
+		t.Fatal("prepare immutable global archive fixture", err)
 	}
 	move := command.Command{Kind: command.MoveAssistantConversationToProject, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-move-to-existing-project", ExpectedVersion: &created.Conversation.Version},
@@ -134,5 +155,46 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 		mismatchedRuns != 0 || mismatchedEvents != 0 || mismatchedRevisions != 0 {
 		t.Fatalf("moved conversation retained foreign lineage: runs=%d events=%d revisions=%d err=%v",
 			mismatchedRuns, mismatchedEvents, mismatchedRevisions, err)
+	}
+	latest, err := service.GetProject(ctx, owner, project.Project.Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectID := gateTestProjectID(t, ctx, repository, owner, latest.Ref)
+	trashed, err := service.Execute(ctx, command.Command{Kind: command.TrashProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "purge-moved-trash", ExpectedVersion: &latest.Version}, Payload: command.ProjectLifecycleInput{Ref: latest.Ref}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.PurgeProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "purge-moved-request", ExpectedVersion: &trashed.Project.Version}, Payload: command.ProjectLifecycleInput{Ref: latest.Ref}}); err != nil {
+		t.Fatal(err)
+	}
+	candidate := ProjectPurgeCandidate{OrganizationID: owner.AuthorityTenant, OrganizationRef: strings.Split(archiveKey, "/")[2],
+		ProjectID: projectID, ProjectRef: latest.Ref}
+	item := ProjectPurgeExternalItem{Kind: "OBJECT", Target: archiveKey, Version: "fixture-version-1"}
+	if owned, err := repository.ProjectPurgeArchiveIsOwned(ctx, candidate, item); err != nil || !owned {
+		t.Fatalf("moved immutable archive lost owner: owned=%t err=%v", owned, err)
+	}
+	for _, changed := range []ProjectPurgeExternalItem{
+		{Kind: "OBJECT", Target: archiveKey, Version: "foreign-version"},
+		{Kind: "OBJECT", Target: strings.Replace(archiveKey, "/_system/", "/prj_foreign/", 1), Version: item.Version},
+	} {
+		if owned, err := repository.ProjectPurgeArchiveIsOwned(ctx, candidate, changed); err != nil || owned {
+			t.Fatal("foreign archive pins admitted", err)
+		}
+	}
+	foreignCandidate := candidate
+	foreignCandidate.ProjectRef = "prj_foreign"
+	if owned, err := repository.ProjectPurgeArchiveIsOwned(ctx, foreignCandidate, item); err != nil || owned {
+		t.Fatal("foreign project locator admitted", err)
+	}
+	inventory, err := repository.ProjectPurgeInventory(ctx, candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Внешние bytes/PVC в этой disposable fixture не создавались.
+	if err := repository.FinalizeProjectPurge(ctx, candidate, inventory); err != nil {
+		t.Fatal("finalize moved archive fixture", err)
 	}
 }

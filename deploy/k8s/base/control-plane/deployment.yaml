@@ -68,6 +68,8 @@ spec:
               valueFrom: {secretKeyRef: {name: kodex-external-s3, key: region}}
             - name: CONTROL_PLANE_OBJECT_STORAGE_BUCKET
               valueFrom: {secretKeyRef: {name: kodex-external-s3, key: bucket}}
+            - name: CONTROL_PLANE_SESSION_ARCHIVE_STORAGE_BUCKET
+              valueFrom: {configMapKeyRef: {name: session-archive-runtime, key: SESSION_ARCHIVE_OBJECT_STORAGE_BUCKET}}
             - name: CONTROL_PLANE_OBJECT_STORAGE_ACCESS_KEY_FILE
               value: /var/run/secrets/kodex/control-plane/object-storage/access-key-id
             - name: CONTROL_PLANE_OBJECT_STORAGE_SECRET_KEY_FILE

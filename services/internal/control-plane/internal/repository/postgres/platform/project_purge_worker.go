@@ -22,6 +22,9 @@ var queryProjectPurgeInventory string
 //go:embed sql/project_purge__foreign_object.sql
 var queryProjectPurgeForeignObject string
 
+//go:embed sql/project_purge__archive_owner.sql
+var queryProjectPurgeArchiveOwner string
+
 //go:embed sql/project_purge__lock_receipt.sql
 var queryProjectPurgeLockReceipt string
 
@@ -126,6 +129,14 @@ func (repository *Repository) ListPendingProjectPurges(ctx context.Context, limi
 }
 
 func (repository *Repository) ProjectPurgeInventory(ctx context.Context, candidate ProjectPurgeCandidate) ([]ProjectPurgeExternalItem, error) {
+	var activeTasks int
+	if err := repository.pool.QueryRow(ctx, queryProjectPurgeActiveTasks,
+		candidate.OrganizationID, candidate.ProjectID).Scan(&activeTasks); err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	if activeTasks != 0 {
+		return nil, errs.ErrConflict
+	}
 	rows, err := repository.pool.Query(ctx, queryProjectPurgeInventory, pgx.StrictNamedArgs{
 		"organization_id": candidate.OrganizationID, "project_id": candidate.ProjectID,
 	})
@@ -156,6 +167,18 @@ func (repository *Repository) ProjectPurgeObjectIsShared(ctx context.Context, ca
 		return false, errs.ErrUnavailable
 	}
 	return shared, nil
+}
+
+func (repository *Repository) ProjectPurgeArchiveIsOwned(ctx context.Context, candidate ProjectPurgeCandidate, item ProjectPurgeExternalItem) (bool, error) {
+	var owned bool
+	err := repository.pool.QueryRow(ctx, queryProjectPurgeArchiveOwner, pgx.StrictNamedArgs{
+		"organization_id": candidate.OrganizationID, "project_id": candidate.ProjectID,
+		"project_ref": candidate.ProjectRef, "object_key": item.Target, "object_version": item.Version,
+	}).Scan(&owned)
+	if err != nil {
+		return false, errs.ErrUnavailable
+	}
+	return owned, nil
 }
 
 func (repository *Repository) FinalizeProjectPurge(ctx context.Context, candidate ProjectPurgeCandidate, expected []ProjectPurgeExternalItem) error {
