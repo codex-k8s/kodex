@@ -80,7 +80,7 @@ export async function releasePublicEdge(args, hostFilesystem = { lstat, open }) 
       !Object.hasOwn(options, key) && args.length, "EDGE_ARGUMENTS_INVALID");
     options[key] = args.shift();
   }
-  requireValue(["apply", "readback", "rollback"].includes(mode) && options["--plan"] && options["--output"] &&
+  requireValue(["apply", "readback", "recover", "rollback"].includes(mode) && options["--plan"] && options["--output"] &&
     /^[A-Za-z0-9_.:@/-]{1,160}$/.test(options["--context"] ?? ""), "EDGE_ARGUMENTS_INVALID");
   const plan = await readPrivateJSON(resolve(options["--plan"])), hash = fingerprint(plan);
   requireValue(plan.context === options["--context"] &&
@@ -177,6 +177,29 @@ export async function releasePublicEdge(args, hostFilesystem = { lstat, open }) 
   try {
     await record({ schema: mode === "apply" ? "kodex.public-edge-apply/v1" : `kodex.public-edge-${mode}/v1`,
       planSHA256: hash, status: "IN_PROGRESS" });
+    if (mode === "recover") {
+      requireValue(prior.some(row => row.status === "PASS" && row.phase === "EDGE_RESOURCES_ONLY"),
+        "EDGE_SUCCESSFUL_APPLY_REQUIRED");
+      // Восстановление запускает только прежние exact socket units. До первого
+      // эффекта проверяются все ресурсы, UID receipts и полные тела unit-файлов.
+      for (const resource of desired) {
+        const current = await lookup(resource);
+        const receipt = prior.find(row => row.status === "RESOURCE_CREATED" && row.kind === resource.kind &&
+          row.name === resource.metadata.name);
+        requireValue(receipt && current?.metadata?.uid === receipt.uid && ownedResourceMatches(current, resource),
+          "EDGE_RECOVERY_RESOURCE_DRIFT");
+      }
+      for (const name of Object.keys(units)) await inspectUnit(name);
+      for (const name of Object.keys(units).filter(name => name.endsWith(".socket"))) {
+        requireValue((await run("systemctl", ["is-enabled", name])).trim() === "enabled", "EDGE_SOCKET_NOT_ENABLED");
+      }
+      for (const name of Object.keys(units).filter(name => name.endsWith(".socket"))) {
+        await identities(); await baseline(); await inspectUnit(name);
+        await record({ status: "SOCKET_START_ATTEMPT", name });
+        await run("sudo", ["-n", "systemctl", "start", name]);
+        await record({ status: "SOCKET_STARTED", name });
+      }
+    }
     if (mode === "apply") {
       for (const resource of desired) requireValue(await lookup(resource) === null, "EDGE_NAME_COLLISION");
       for (const name of Object.keys(units)) {

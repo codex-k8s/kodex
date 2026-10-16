@@ -50,8 +50,9 @@ const unit=p=>{if(!/^\\/etc\\/systemd\\/system\\/kodex-public-edge-https-[01]\\.
 const systemctl=argv=>{
  if(argv[0]==='show')console.log(fs.existsSync(unit('/etc/systemd/system/'+argv[1]))?'loaded':'not-found');
  else if(argv[0]==='enable'){s.enabled.push(argv.at(-1));save();}
+ else if(argv[0]==='start'){s.stopped=(s.stopped||[]).filter(n=>n!==argv[1]);save();}
  else if(argv[0]==='disable'){s.enabled=s.enabled.filter(n=>n!==argv.at(-1));save();}
- else if(argv[0]==='is-active'||argv[0]==='is-enabled'){if(!s.enabled.includes(argv[1]))process.exit(3);console.log(argv[0]==='is-active'?'active':'enabled');}
+ else if(argv[0]==='is-active'||argv[0]==='is-enabled'){if(!s.enabled.includes(argv[1])||(argv[0]==='is-active'&&(s.stopped||[]).includes(argv[1])))process.exit(3);console.log(argv[0]==='is-active'?'active':'enabled');}
  else if(!['stop','daemon-reload'].includes(argv[0]))process.exit(13);
 };
 const program=path.basename(process.argv[1]);
@@ -161,6 +162,46 @@ test("wrong approval and foreign drift never install units or create resources",
     const trace = (await readFile(join(directory, "trace"), "utf8")).trim().split("\n").map(JSON.parse);
     assert.equal(trace.some(row => row.program === "sudo" || row.args.includes("create")), false);
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("recovery starts exact installed sockets without rewriting resources or units", async () => {
+  const { directory, plan, run } = await setup();
+  try {
+    const confirmation = ["--approved-plan-sha", fingerprint(plan)], journal = join(directory, "apply.jsonl");
+    const applied = run("apply", "apply.jsonl", confirmation); assert.equal(applied.status, 0, applied.output);
+    const state = JSON.parse(await readFile(join(directory, "fixture.json"), "utf8"));
+    state.stopped = [...state.enabled];
+    await writeFile(join(directory, "fixture.json"), JSON.stringify(state));
+    const countBefore = (await readFile(join(directory, "trace"), "utf8")).trim().split("\n").length;
+    const recovered = run("recover", "recover.jsonl", ["--journal", journal, ...confirmation]);
+    assert.equal(recovered.status, 0, recovered.output);
+    const after = JSON.parse(await readFile(join(directory, "fixture.json"), "utf8"));
+    assert.deepEqual(after.objects, state.objects); assert.deepEqual(after.existing, state.existing);
+    assert.deepEqual(after.stopped, []);
+    const writes = (await readFile(join(directory, "trace"), "utf8")).trim().split("\n").slice(countBefore)
+      .map(JSON.parse).filter(row => row.program === "sudo" || row.args.includes("create") || row.args.includes("delete"));
+    assert.deepEqual(writes.map(row => row.args), state.enabled.map(name => ["-n", "systemctl", "start", name]));
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("recovery rejects replaced resources and modified units before socket start", async () => {
+  for (const drift of ["resource", "unit"]) {
+    const { directory, plan, run } = await setup();
+    try {
+      const confirmation = ["--approved-plan-sha", fingerprint(plan)], journal = join(directory, "apply.jsonl");
+      const applied = run("apply", "apply.jsonl", confirmation); assert.equal(applied.status, 0, applied.output);
+      if (drift === "resource") {
+        const state = JSON.parse(await readFile(join(directory, "fixture.json"), "utf8"));
+        state.objects["Service/kodex-public-edge"].metadata.uid = "replaced";
+        await writeFile(join(directory, "fixture.json"), JSON.stringify(state));
+      } else await writeFile(join(directory, "units", "kodex-public-edge-https-1.service"), "foreign unit\n");
+      const recovered = run("recover", "recover.jsonl", ["--journal", journal, ...confirmation]);
+      assert.notEqual(recovered.status, 0);
+      assert.match(recovered.output, drift === "resource" ? /RECOVERY_RESOURCE_DRIFT/ : /INSTALLED_UNIT_DRIFT/);
+      const trace = (await readFile(join(directory, "trace"), "utf8")).trim().split("\n").map(JSON.parse);
+      assert.equal(trace.some(row => row.program === "sudo" && row.args.includes("start")), false);
+    } finally { await rm(directory, { recursive: true, force: true }); }
+  }
 });
 
 test("lost create response is not retried and rollback resolves only the exact intent", async () => {
