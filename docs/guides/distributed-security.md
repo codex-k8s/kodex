@@ -2301,9 +2301,10 @@ references; один префикс не назначает полномочий
 разрешает переименовать квитанцию. Общий исходный `_system` key допускается
 только для той же доказанной перенесённой сессии.
 
-Это относится и к immutable subject-scoped result artifacts: exact revision,
-version и исходный actor проверяются через current artifact/run/session/
-SYSTEM-conversation lineage, а не общим разрешением `subjects/`. Неперенесённый
+Это относится и к immutable subject-scoped result artifacts: exact key/revision/
+version проверяются через current artifact/run/session/SYSTEM-conversation
+lineage, а не общим разрешением `subjects/`. Identity producer в location не
+обязана совпадать с root initiator и не назначает current owner. Неперенесённый
 global PVC с прежним hash допускается к cleanup только через то же exact
 SYSTEM-session promotion правило, что у runtime-controller; отсутствие PVC
 promotion не разрешает обход consumer, organization/session labels или UID.

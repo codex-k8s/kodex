@@ -34,7 +34,7 @@ Worker требует исключительно текущий project prefix �
 | --- | --- |
 | Owner purge | Существующие UI/API/gateway/CP command, authority, OCC, idempotency; terminal всего project graph и durable receipt |
 | Inventory | Тот же exact organization/project/receipt; незавершённый archive writer блокирует внешние эффекты |
-| Artifact cleanup | Точный project artifact prefix либо persisted subject key/revision/version с artifact/run/session/conversation lineage перенесённого SYSTEM-диалога и исходным actor; отсутствие foreign/shared owner, Delete и readback отсутствия |
+| Artifact cleanup | Точный project artifact prefix либо persisted subject key/revision/version с artifact/run/session/conversation lineage перенесённого SYSTEM-диалога; path identity producer не подменяет root initiator или owner. Отсутствие foreign/shared owner, Delete и readback отсутствия |
 | Archive cleanup | Отдельный archive store; exact persisted archive/task + session lineage и version. `_system` допустим только для подтверждённой перенесённой сессии, не по caller prefix |
 | PVC cleanup | До effects paginated проверка всех точных inventory PVC consumers; current identity/hash и UID precondition. Прежний global hash допустим только для точной SYSTEM-session/conversation frozen проекта по тому же правилу promotion runtime-controller; чужие и активные ресурсы закрыты |
 | Partial failure/retry | Никакого DONE; те же receipts/версии и идемпотентное отсутствие собственных ресурсов, без расширения scope |
@@ -71,3 +71,9 @@ PWA test при актуальном `rootCAs`: тот же FAIL воспрои�
 result artifacts после Move→Purge без нового turn. Добавлены точные
 server-owned lineage проверки и положительные/отрицательные regression
 tests; финальные результаты ниже фиксируются после запуска.
+
+Review1ed5848 выявил дополнительное ошибочное предположение: location
+runtime artifact содержит identity producer, а created_by — root initiator.
+Условие совпадения этих разных actor удалено; authority по-прежнему требует
+exact immutable receipt и полной текущей server-owned lineage. Regression
+fixture использует отдельную реальную runtime principal identity.

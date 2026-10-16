@@ -8,10 +8,12 @@ SELECT EXISTS (
       ON conversation.session_id=session.id AND conversation.organization_id=session.organization_id
     JOIN control_plane.projects project ON project.id=artifact.project_id AND project.organization_id=artifact.organization_id
     JOIN control_plane.organizations organization ON organization.id=artifact.organization_id
-    JOIN control_plane.subjects actor ON actor.id=artifact.created_by AND actor.organization_id=artifact.organization_id
     WHERE artifact.organization_id=@organization_id::uuid AND artifact.project_id=@project_id::uuid
       AND run.project_id=project.id AND session.project_id=project.id AND conversation.project_id=project.id
       AND conversation.assistant_scope='SYSTEM' AND project.ref=@project_ref AND project.lifecycle='PURGE_PENDING'
       AND content.object_key=@object_key AND @object_version<>'' AND content.object_version=@object_version
-      AND starts_with(content.object_key,'organizations/' || organization.ref || '/subjects/' || actor.ref || '/artifacts/' || artifact.ref || '/')
+      -- Subject в immutable location назначал producer; его identity может
+      -- отличаться от root initiator. Authority даёт цепочка выше, не path.
+      AND starts_with(content.object_key,'organizations/' || organization.ref || '/subjects/')
+      AND split_part(content.object_key,'/',5)='artifacts' AND split_part(content.object_key,'/',6)=artifact.ref
 );

@@ -101,7 +101,18 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.pool.QueryRow(ctx, queryProjectPurgeMovedArtifactFixture, created.Conversation.SessionRef, scanJSON, fixtureDigest).Scan(&artifactKey); err != nil {
+	workerScope, err := repository.resolveScope(ctx, worker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerScope, err := repository.resolveScope(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if workerScope.actorRef == ownerScope.actorRef {
+		t.Fatal("runtime producer fixture did not preserve a separate identity")
+	}
+	if err := repository.pool.QueryRow(ctx, queryProjectPurgeMovedArtifactFixture, created.Conversation.SessionRef, scanJSON, fixtureDigest, workerScope.actorRef).Scan(&artifactKey); err != nil {
 		t.Fatal("prepare immutable global artifact fixture", err)
 	}
 	move := command.Command{Kind: command.MoveAssistantConversationToProject, Principal: owner,
