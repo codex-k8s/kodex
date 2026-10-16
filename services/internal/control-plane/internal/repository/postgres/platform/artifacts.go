@@ -49,6 +49,17 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 		return entity.Artifact{}, errs.ErrUnavailable
 	}
 	objectKey := artifactObjectKey(scope.organizationRef, scope.actorRef, input.ProjectRef, ref, input.Digest)
+	scan, err := repository.scanArtifact(ctx, input.Reader, input.Digest, input.SizeBytes)
+	if err != nil {
+		return entity.Artifact{}, err
+	}
+	if scan.Infected {
+		input.ScanState, input.PreviewState = "QUARANTINED", "BLOCKED"
+	}
+	scanJSON, err := artifactAntivirusJSON(scan)
+	if err != nil {
+		return entity.Artifact{}, err
+	}
 	objectReceipt, err := repository.putArtifactObject(ctx, objectKey, input)
 	if err != nil {
 		return entity.Artifact{}, err
@@ -133,7 +144,7 @@ func (repository *Repository) UploadArtifact(ctx context.Context, principal valu
 	}
 	if _, err := tx.Exec(ctx, queryArtifactsUploadartifactInsertArtifactContentArtifactId,
 		ref, objectReceipt.Key, objectReceipt.VersionID, objectReceipt.ETag,
-		objectReceipt.Digest, objectReceipt.SizeBytes); err != nil {
+		objectReceipt.Digest, objectReceipt.SizeBytes, scanJSON); err != nil {
 		return entity.Artifact{}, errs.ErrUnavailable
 	}
 	item.ProjectRef = input.ProjectRef
@@ -180,6 +191,10 @@ func (repository *Repository) createProjectFile(ctx context.Context, tx pgx.Tx, 
 	if err != nil || prepared.MediaType != input.MediaType {
 		return commandOutcome{}, errs.ErrInvalid
 	}
+	scanJSON, err := artifactAntivirusJSON(prepared.Antivirus)
+	if err != nil {
+		return commandOutcome{}, err
+	}
 	if input.PreparedLedgerID == "" || input.ContentRef == "" {
 		return commandOutcome{}, errs.ErrInvalid
 	}
@@ -208,7 +223,7 @@ func (repository *Repository) createProjectFile(ctx context.Context, tx pgx.Tx, 
 	}
 	if _, err := tx.Exec(ctx, queryArtifactsUploadartifactInsertArtifactContentArtifactId,
 		prepared.Ref, prepared.ObjectKey, prepared.ObjectVersion, prepared.ObjectETag,
-		prepared.Digest, prepared.SizeBytes); err != nil {
+		prepared.Digest, prepared.SizeBytes, scanJSON); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	item.ProjectRef = input.ProjectRef
@@ -358,6 +373,13 @@ func (repository *Repository) authorizeArtifactUploadReceipt(ctx context.Context
 	if _, err := repository.resolveAssistantContext(ctx, tx, current, entity.AssistantContextDescriptor{EntityKind: "FILE", EntityRef: item.Ref}, ""); err != nil {
 		return err
 	}
+	revision, err := artifactRevisionRow(tx.QueryRow(ctx, queryArtifactRevisionGet, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "artifact_ref": item.Ref, "revision_ref": item.CurrentRevisionRef,
+	}))
+	if err != nil {
+		return err
+	}
+	item.ScanState = revision.ScanState
 	return projectArtifactEligibility(ctx, tx, current, item)
 }
 
@@ -805,7 +827,7 @@ func (repository *Repository) changeArtifactBinding(ctx context.Context, tx pgx.
 	}
 	var artifactID, projectID, projectRef string
 	var version int64
-	if err := tx.QueryRow(ctx, queryArtifactsChangeartifactbindingSelectArtifactsOrganizationIdRefScanState, scope.organizationID, payload.ArtifactRef).Scan(&artifactID, &projectID, &projectRef, &version); err != nil {
+	if err := tx.QueryRow(ctx, queryArtifactsChangeartifactbindingSelectArtifactsOrganizationIdRefScanState, scope.organizationID, payload.ArtifactRef, payload.Enabled).Scan(&artifactID, &projectID, &projectRef, &version); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	if version != *input.Mutation.ExpectedVersion {

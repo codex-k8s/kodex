@@ -18,6 +18,7 @@ import (
 )
 
 func testSessionArchiveLifecycle(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+	seedObservedCatalogFixture(t, ctx, repository)
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",

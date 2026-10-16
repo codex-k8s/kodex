@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.28
-updated: 2026-10-15
+version: 1.7.29
+updated: 2026-10-16
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -2272,3 +2272,22 @@ Git-операции с независимым readback. Его отказ не 
 Недостающий API destination добавляется только штатной owner-публикацией новой
 ENV revision с validation, полным impact, exact intended bindings и preservation
 proof остальных параметров; агент сам не расширяет policy ради обхода отказа.
+
+## Антивирусный допуск точных байтов файла
+
+Проверка формата, имени или извлечённого текста не является антивирусным
+допуском. Каждый file producer, включая avatar, runtime output и staged
+content помощника, проходит принадлежащий серверу scanner boundary.
+Отчёт связывается с immutable object key/version/ETag/digest/size в той же
+owner-транзакции; клиентский ScanState и сохранённый старый ответ не выдают
+допуска. Публичное, историческое, privileged/runtime чтение и bind используют
+одну эффективную eligibility-проекцию.
+
+Недоступный сканер, устаревшая база, rotation во время scan, timeout/cancel,
+усечённый либо расширенный поток, сигнал сканера об encrypted/unscannable
+content и превышение лимитов не дают CLEAN. Ограничения движка на распаковку должны выдавать
+закрытый verdict, а не молча пропускать остаток. Scanner socket принадлежит
+доверенному сервису, не монтируется агентам и не публикуется наружу.
+Исторические format-only CLEAN сохраняются как история, но без evidence
+не открывают bytes или capability. AV не заменяет отдельный анализ
+prompt injection и не разрешает внешние действия без их Human Gate.

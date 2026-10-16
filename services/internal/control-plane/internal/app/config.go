@@ -130,7 +130,7 @@ type Config struct {
 func loadConfig() (Config, error) {
 	config := Config{
 		SkillScannerSocket:  "/run/kodex-skill-scanner/clamd.sock",
-		SkillScannerTimeout: 15 * time.Second,
+		SkillScannerTimeout: time.Minute,
 		GRPCListen:          ":8443", TechnicalListen: ":9090",
 		ServerCertificateFile:           "/var/run/secrets/kodex/control-plane/workload-tls/tls.crt",
 		ServerPrivateKeyFile:            "/var/run/secrets/kodex/control-plane/workload-tls/tls.key",

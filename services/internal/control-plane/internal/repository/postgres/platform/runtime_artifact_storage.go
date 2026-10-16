@@ -24,8 +24,8 @@ func (repository *Repository) prepareCommandObjects(ctx context.Context, scope s
 	if input.Kind == command.ProposeAssistantPlan {
 		return nil, repository.stageAssistantPlanProposal(ctx, scope, input)
 	}
-	if input.Kind==command.UpdateAssistantPlan {
-		return nil,repository.stageAssistantPlanDraft(ctx,scope,input)
+	if input.Kind == command.UpdateAssistantPlan {
+		return nil, repository.stageAssistantPlanDraft(ctx, scope, input)
 	}
 	if input.Kind == command.ApplyAssistantPlan {
 		return nil, nil
@@ -129,6 +129,14 @@ func (repository *Repository) prepareCommandObjects(ctx context.Context, scope s
 			return nil, errs.ErrUnavailable
 		}
 		digestValue := "sha256:" + digestHex
+		scan, scanErr := repository.scanArtifact(ctx, bytes.NewReader(artifact.Content), digestValue, artifact.SizeBytes)
+		if scanErr != nil || scan.Infected {
+			repository.cleanupPreparedObjects(ctx, prepared, false)
+			if scanErr != nil {
+				return nil, scanErr
+			}
+			return nil, errs.ErrInvalid
+		}
 		key := artifactObjectKey(scope.organizationRef, scope.actorRef, stringMap(lease, "projectRef"), ref, digestValue)
 		receipt, putErr := repository.objects.Put(ctx, objectstorage.PutInput{
 			Key: key, MediaType: verdict.MediaType, Digest: digestValue,
@@ -144,6 +152,7 @@ func (repository *Repository) prepareCommandObjects(ctx context.Context, scope s
 			ObjectETag: receipt.ETag, MediaType: verdict.MediaType,
 			Digest: receipt.Digest, SizeBytes: receipt.SizeBytes,
 			ScanState: verdict.ScanState, PreviewState: verdict.PreviewState,
+			Antivirus: scan,
 		}
 		artifact.Content = nil
 	}
@@ -215,7 +224,9 @@ func preparedArtifact(artifact command.CompletedArtifact) (command.PreparedArtif
 		artifact.Prepared.Ref == "" || !objectstorage.ValidKey(artifact.Prepared.ObjectKey) ||
 		!objectstorage.ValidDigest(artifact.Prepared.Digest) || artifact.Prepared.SizeBytes != artifact.SizeBytes ||
 		artifact.Prepared.Digest != "sha256:"+strings.ToLower(strings.TrimSpace(artifact.SHA256)) ||
-		artifact.Prepared.MediaType == "" || artifact.Prepared.ScanState != artifactpolicy.ScanClean {
+		artifact.Prepared.MediaType == "" || artifact.Prepared.ScanState != artifactpolicy.ScanClean ||
+		!validArtifactAntivirus(artifact.Prepared.Antivirus) || artifact.Prepared.Antivirus.Infected ||
+		artifact.Prepared.Antivirus.Digest != artifact.Prepared.Digest || artifact.Prepared.Antivirus.SizeBytes != artifact.SizeBytes {
 		return command.PreparedArtifact{}, errs.ErrInvalid
 	}
 	return *artifact.Prepared, nil

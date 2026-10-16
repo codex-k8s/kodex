@@ -20,6 +20,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/skillpolicy"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -46,6 +47,7 @@ type Repository struct {
 	roleImages                      RoleImageConfig
 	objects                         objectstorage.Store
 	skillScanner                    skillpolicy.Scanner
+	artifactScanner                 artifactpolicy.Scanner
 	integrationDefinitions          map[string]integrationpackage.Package
 	roleImageCatalogResolver        func(entity.RoleEnvironmentSelection) (entity.RoleImageRecipeInput, error)
 	roleImageRecommendedSelection   func() (entity.RoleEnvironmentSelection, error)

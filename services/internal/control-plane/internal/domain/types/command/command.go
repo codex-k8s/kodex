@@ -503,6 +503,7 @@ type CompletedArtifact struct {
 type PreparedArtifact struct {
 	Ref, ObjectKey, ObjectVersion, ObjectETag, MediaType, Digest, ScanState, PreviewState string
 	SizeBytes                                                                             int64
+	Antivirus                                                                             value.ArtifactScan
 }
 type DelegateInput struct {
 	LeaseRef, Fence, TargetAgentRef, WorkflowStepKey, Task string

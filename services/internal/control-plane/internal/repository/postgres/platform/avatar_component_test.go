@@ -9,7 +9,6 @@ import (
 	"image"
 	"image/color"
 	"image/png"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -41,10 +40,7 @@ func (store *avatarLifecycleObjectStore) Put(ctx context.Context, input objectst
 }
 
 func TestAvatarLifecycleComponent(t *testing.T) {
-	dsn := os.Getenv("KODEX_CONTROL_PLANE_TEST_DSN")
-	if dsn == "" {
-		t.Skip("KODEX_CONTROL_PLANE_TEST_DSN is not configured")
-	}
+	dsn := isolatedAssistantComponentDSN(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, dsn)
@@ -57,6 +53,7 @@ func TestAvatarLifecycleComponent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construct repository: %v", err)
 	}
+	configureComponentArtifactScanner(t, repository)
 	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{
 		SecretName:            "runtime-provider-openai-default-r1",
 		SecretUID:             "10000000-0000-4000-8000-000000000001",

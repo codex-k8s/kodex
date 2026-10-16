@@ -9,16 +9,25 @@ DO $$ BEGIN
  END IF;
  IF EXISTS(SELECT 1 FROM public.artifact_upgrade_expected expected
    LEFT JOIN control_plane.artifact_history history ON history.ref=expected.ref
-   WHERE expected.kind='artifact' AND expected.snapshot IS DISTINCT FROM to_jsonb(history)-ARRAY['revision_id','revision_ref']) OR
+   WHERE expected.kind='artifact' AND expected.snapshot-ARRAY['scan_state','preview_state'] IS DISTINCT FROM to_jsonb(history)-ARRAY['revision_id','revision_ref','scan_state','preview_state']) OR
     EXISTS(SELECT 1 FROM public.artifact_upgrade_expected expected LEFT JOIN control_plane.artifacts artifact ON artifact.ref=expected.ref
       LEFT JOIN control_plane.artifact_content content ON content.artifact_id=artifact.id
-      WHERE expected.kind='content' AND expected.snapshot IS DISTINCT FROM to_jsonb(content)) OR
+      WHERE expected.kind='content' AND expected.snapshot IS DISTINCT FROM to_jsonb(content)-'antivirus_report') OR
     EXISTS(SELECT 1 FROM public.artifact_upgrade_expected expected LEFT JOIN control_plane.artifact_heads head ON head.ref=expected.ref
       LEFT JOIN control_plane.artifact_bindings binding ON binding.artifact_id=head.id
       WHERE expected.kind='binding' AND expected.snapshot IS DISTINCT FROM to_jsonb(binding)-ARRAY['revision_id','artifact_revision_ref','artifact_revision']) OR
     EXISTS(SELECT 1 FROM public.artifact_upgrade_expected expected LEFT JOIN control_plane.artifact_download_grants grant_row ON grant_row.ref=expected.ref
       WHERE expected.kind='grant' AND expected.snapshot IS DISTINCT FROM to_jsonb(grant_row)-ARRAY['revision_id','artifact_revision_ref','artifact_revision']) THEN
   RAISE EXCEPTION 'artifact upgrade rewrote metadata, receipt or semantic pin';
+ END IF;
+ IF EXISTS (SELECT 1 FROM public.artifact_upgrade_expected expected
+   JOIN control_plane.artifact_history history ON history.ref=expected.ref
+   JOIN control_plane.artifact_revisions revision ON revision.id=history.revision_id
+   JOIN control_plane.artifact_revision_content content ON content.revision_id=revision.id
+   WHERE expected.kind='artifact' AND (revision.scan_state<>expected.snapshot->>'scan_state'
+     OR revision.preview_state<>expected.snapshot->>'preview_state'
+     OR history.scan_state<>'QUARANTINED' OR history.preview_state<>'BLOCKED' OR content.antivirus_report IS NOT NULL)) THEN
+   RAISE EXCEPTION 'historical unverified content acquired antivirus admission';
  END IF;
 END $$;
 COMMIT;

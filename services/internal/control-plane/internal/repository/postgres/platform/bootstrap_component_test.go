@@ -140,6 +140,7 @@ func TestBootstrapComponent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construct repository: %v", err)
 	}
+	configureComponentArtifactScanner(t, repository)
 	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{
 		SecretName:            "runtime-provider-openai-default-r1",
 		SecretUID:             "10000000-0000-4000-8000-000000000001",
@@ -192,6 +193,7 @@ func TestBootstrapComponent(t *testing.T) {
 	assertBootstrapReadback(t, ctx, pool)
 	t.Run("public access query scopes", func(t *testing.T) { testPublicAccessQueryScopes(t, ctx, repository) })
 	t.Run("model catalog is version bound", func(t *testing.T) { testModelCatalogVersion(t, ctx, repository) })
+	t.Run("artifact antivirus binds exact bytes and fails closed", func(t *testing.T) { testArtifactAntivirus(t, ctx, repository) })
 	t.Run("catalog cards preserve eligible activity and counts", func(t *testing.T) { testCatalogCardProjections(t, ctx, repository) })
 	t.Run("provider usage dimensions and authority", func(t *testing.T) { testProviderUsageProjection(t, ctx, repository) })
 	t.Run("provider concurrency settings are versioned and isolated", func(t *testing.T) { testProviderAccountConcurrency(t, ctx, repository) })
@@ -4992,6 +4994,7 @@ func testIdempotencyOCCAndConcurrentRuns(t *testing.T, ctx context.Context, repo
 }
 
 func testHumanGateLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
+	seedObservedCatalogFixture(t, ctx, repository)
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
@@ -5238,6 +5241,7 @@ func testCoordinatorOwnedWorkflow(t *testing.T, ctx context.Context, service *pl
 }
 
 func testNestedDelegation(t *testing.T, ctx context.Context, repository *Repository) {
+	seedObservedCatalogFixture(t, ctx, repository)
 	t.Helper()
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
@@ -6376,6 +6380,7 @@ func createLifecycleAgent(t *testing.T, ctx context.Context, service *platformse
 
 func testDirectRunLifecycle(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
+	seedObservedCatalogFixture(t, ctx, repository)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
 		CallerWorkload: "control-api-gateway", Operation: "platform.runs.launch",

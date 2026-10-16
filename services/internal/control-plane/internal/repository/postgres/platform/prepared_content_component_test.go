@@ -45,6 +45,7 @@ func TestPreparedContentBindingComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	configureComponentArtifactScanner(t, repository)
 	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +149,11 @@ func TestPreparedContentBindingComponent(t *testing.T) {
 	if err := tx.QueryRow(ctx, `INSERT INTO control_plane.artifacts(ref,organization_id,project_id,file_name,media_type,size_bytes,digest,source,scan_state,object_receipt_ref,preview_state,revision,created_by) VALUES ($1,$2,$3,'file.txt','text/plain',3,$4,'CONTROL_CENTER','CLEAN','obj_binding_component','AVAILABLE',1,$5) RETURNING id::text,revision_id::text`, content.ArtifactRef, orgID, projectID, request.Digest, actorID).Scan(&artifactID, &revisionID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO control_plane.artifact_content(artifact_id,object_key,object_version,object_etag,digest,size_bytes) VALUES ($1,$2,$3,$4,$5,3)`, artifactID, content.Prepared.ObjectKey, content.Prepared.ObjectVersion, content.Prepared.ObjectETag, content.Prepared.Digest); err != nil {
+	scanJSON, err := artifactAntivirusJSON(content.Prepared.Antivirus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO control_plane.artifact_content(artifact_id,object_key,object_version,object_etag,digest,size_bytes,antivirus_report) VALUES ($1,$2,$3,$4,$5,3,$6)`, artifactID, content.Prepared.ObjectKey, content.Prepared.ObjectVersion, content.Prepared.ObjectETag, content.Prepared.Digest, scanJSON); err != nil {
 		t.Fatal(err)
 	}
 	if err := repository.adoptPreparedContentTx(ctx, tx, current, content.LedgerID, revisionID); err != nil {
@@ -485,6 +490,7 @@ func TestPreparedContentLedgerComponent(t *testing.T) {
 	}
 	store := &preparedObjectsFixture{Store: objectstoragetest.New()}
 	repository := &Repository{pool: pool, objects: store}
+	configureComponentArtifactScanner(t, repository)
 	binding := preparedContentBinding{ActorID: actor, OrganizationID: org, OrganizationRef: "org_ledger_component", ProjectID: project, ProjectRef: "prj_ledger_component",
 		SourceProfile: "PROJECT", SourceProfileRef: "agent_ledger_component", SourceProfileVersion: 1, SourceContextDigest: strings.Repeat("a", 64),
 		SourceLeaseRef: "lease_ledger_component", SourceLeaseGeneration: 1, SourceFenceDigest: strings.Repeat("b", 64), SourceRunRef: "run_ledger_component",

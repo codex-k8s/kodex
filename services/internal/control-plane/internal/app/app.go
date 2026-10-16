@@ -102,6 +102,9 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err := repository.ConfigureSkillScanner(skillScanner); err != nil {
 		return fmt.Errorf("configure skill scanner: %w", err)
 	}
+	if err := repository.ConfigureArtifactScanner(skillScanner); err != nil {
+		return fmt.Errorf("configure artifact scanner: %w", err)
+	}
 	if err := repository.ConfigureProviderCredential(platformrepository.ProviderCredentialConfig{
 		SecretName: config.DefaultProviderSecretName, SecretUID: config.DefaultProviderSecretUID,
 		SecretResourceVersion: config.DefaultProviderSecretVersion,

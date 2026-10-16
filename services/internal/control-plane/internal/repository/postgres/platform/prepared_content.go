@@ -121,13 +121,18 @@ func validPreparedContentRequest(request preparedContentRequest) bool {
 func scanPreparedContent(row pgx.Row) (preparedContent, string, string, error) {
 	var content preparedContent
 	var state, requestDigest string
+	var scanJSON []byte
 	err := row.Scan(&content.LedgerID, &content.ContentRef, &content.Generation, &content.ArtifactRef, &content.RevisionRef,
 		&content.FileName, &content.Prepared.MediaType, &content.Prepared.Digest, &content.Prepared.SizeBytes,
 		&content.Prepared.ScanState, &content.Prepared.PreviewState, &content.Prepared.ObjectKey,
-		&content.Prepared.ObjectVersion, &content.Prepared.ObjectETag, &state, &requestDigest)
+		&content.Prepared.ObjectVersion, &content.Prepared.ObjectETag, &state, &requestDigest, &scanJSON)
 	content.Prepared.Ref = content.ArtifactRef
 	if err != nil {
 		return preparedContent{}, "", "", err
+	}
+	content.Prepared.Antivirus, err = decodeArtifactAntivirus(scanJSON, content.Prepared.Digest, content.Prepared.SizeBytes)
+	if err != nil || content.Prepared.Antivirus.Infected {
+		return preparedContent{}, "", "", errs.ErrConflict
 	}
 	return content, state, requestDigest, nil
 }
@@ -160,6 +165,17 @@ func (repository *Repository) stagePreparedContent(ctx context.Context, request 
 	if err != nil {
 		return preparedContent{}, err
 	}
+	scan, err := repository.scanArtifact(ctx, body, request.Digest, request.SizeBytes)
+	if err != nil {
+		return preparedContent{}, err
+	}
+	if scan.Infected {
+		return preparedContent{}, errs.ErrInvalid
+	}
+	scanJSON, err := artifactAntivirusJSON(scan)
+	if err != nil {
+		return preparedContent{}, err
+	}
 	b := request.Binding
 	requestDigest := preparedContentRequestDigest(request)
 	artifactRef := b.TargetArtifactRef
@@ -184,6 +200,7 @@ func (repository *Repository) stagePreparedContent(ctx context.Context, request 
 		"source_revision_ref": b.SourceRevisionRef, "expected_artifact_version": b.ExpectedArtifactVersion,
 		"prepared_artifact_ref": artifactRef, "prepared_revision_ref": revisionRef, "file_name": request.FileName, "media_type": request.MediaType,
 		"digest": request.Digest, "size_bytes": request.SizeBytes, "scan_state": request.ScanState, "preview_state": request.PreviewState, "object_key": key,
+		"antivirus_report": scanJSON,
 	}).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		content, state, storedDigest, readErr := scanPreparedContent(repository.pool.QueryRow(ctx, queryPreparedContentReplay, pgx.StrictNamedArgs{
@@ -249,7 +266,7 @@ func (repository *Repository) stagePreparedContent(ctx context.Context, request 
 	return preparedContent{LedgerID: id, ContentRef: contentRef, ArtifactRef: artifactRef, RevisionRef: revisionRef,
 		FileName: request.FileName, Generation: 1, Prepared: command.PreparedArtifact{Ref: artifactRef, ObjectKey: key,
 			ObjectVersion: version, ObjectETag: etag, MediaType: request.MediaType, Digest: request.Digest, SizeBytes: request.SizeBytes,
-			ScanState: request.ScanState, PreviewState: request.PreviewState}}, nil
+			ScanState: request.ScanState, PreviewState: request.PreviewState, Antivirus: scan}}, nil
 }
 
 func exactPreparedReceipt(receipt objectstorage.Receipt, key, digest string, size int64) bool {

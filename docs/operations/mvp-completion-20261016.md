@@ -28,7 +28,7 @@ updated: 2026-10-16
   циклов и без подтверждения внешних действий за владельца.
 - [ ] Подтвердить Stop/retry/queue, параллельность, rejoin/restart и изоляцию
   пользователей/проектов. Исторические результаты не выдавать за свежую проверку.
-- [ ] Закрыть серверную границу допуска файлов: карантин, точные байты,
+- [x] Закрыть серверную границу допуска файлов: карантин, точные байты,
   обязательные проверки и fail-closed. Формат PDF не доказывает антивирусный допуск.
 - [ ] Подтвердить сохранность сессий и реальное восстановление резервной копии
   в изолированное место. PostgreSQL/NATS/S3 остаются одиночными экземплярами.
@@ -212,3 +212,55 @@ Chrome MCP: собственная вкладка, получение списк
 - PASS: штатный fresh owner SSO/SPA login после исправлений, bootstrap200 и
   provider accounts200; account AUTHORIZED/enabled. Это ещё не доказательство
   нового модельного выполнения или полной готовности провайдера.
+
+### 16.10: изоляция диалогов и серверный AV-допуск
+
+- PASS LOCAL на `bd17c576e5f3dc562783e3eeab6a4b6578ca0784`: fresh disposable
+  PostgreSQL — `TestAssistantParallelLifecycleComponent`,
+  `TestProjectAssistantProfilesComponent`, `TestAssistantSystemRunProjectScopeComponent`.
+  Это синтетическая lifecycle/authority проверка, не реальные ИИ-запуски.
+- Для следующего полного backend unit создан #1814 и план
+  `OPS-ARTIFACT-ANTIVIRUS-1814`. Изменения изолированы от живого hot source.
+  Все upload/avatar/runtime/prepared paths получают серверный потоковый AV;
+  evidence хранится в той же immutable object receipt, без нового FK-графа.
+- PASS LOCAL на рабочем дереве AV checkpoint: весь unit-набор Control Plane,
+  web-only render, потоковый scanner protocol, closed scanner rollout model
+  и migration CLI с точным новым профилем. Изменённых внешних OpenAPI/Proto/
+  AsyncAPI контрактов нет; новое evidence не принимается из transport payload.
+- PASS LOCAL на том же рабочем дереве: fresh PostgreSQL upload/quarantine,
+  missing/mismatched proof, parallel preview, immutable revisions, prepared
+  content stage/replay/expiry/purge, avatar lifecycle, file bindings, skills,
+  nested delegation, Human Gate и session archive. В тестах использован явно
+  синтетический scanner, который не считается живым AV-доказательством.
+- PASS LOCAL: upgrade из прежней схемы с сохранением aggregate IDs, байтовых
+  receipts, bindings, grants и raw historical scan state. Эффективный scan
+  старого format-only CLEAN — QUARANTINED. Retention удаляет точные версии.
+- Исправлены test-only зависимости от соседнего model-catalog seed и общая
+  singleton-БД avatar fixture: адресные проверки теперь независимы. В avatar
+  producer исправлен readback количества колонок immutable revision.
+  Production eligibility и scanner failure policy не ослаблялись.
+- NOT RUN на этом checkpoint: новый AV rollout, реальные clean/EICAR controls
+  в обоих экземплярах, новый browser upload и реальный модельный сценарий.
+  До них MVP checkbox допуска файлов остаётся открытым.
+
+### 16.10: AV включён; живые байтовые проверки
+
+- PASS: Draft PR#1815, отдельный backend unit #1814. Source
+  `1772fe822813d53c1c415370a53302be4737baf2` включён repo-owned migration
+  и source rollout; CP/API по2/2, source read-only и exact code digest в
+  обоих CP совпадают, рестартов нет. Публичный HTTPS/SSO сохранён.
+- PASS: свежие clean/EICAR controls на обоих clamd; EICAR вне писем/artifacts.
+  Browser: upload201/CLEAN, exact download bytes, replay того же artifact,
+  history200; безопасный активный формат QUARANTINED и download403.
+  Скриншот, Console, Network и scoped backend logs проверены.
+- PASS: real assistant UI запрос и authoritative Run SUCCEEDED. Это ещё не
+  полный проект/workflow/delegation/Human Gate и не основание закрывать пункт4.
+- PASS LOCAL: основной полный disposable PostgreSQL contour164.141s,
+  avatar1.744s и worker/runner readback после исправления двух test fixtures.
+  Прежние FAIL оснастки и их причины сохранены в плане #1814.
+- Перед migration сохранён и прочитан CP custom dump. Backup-controller в
+  установленном контуре отсутствует: полный platform backup/isolated restore
+  остаются открытым обязательным пунктом7. Наличие dump не выдаётся за restore.
+- Старые format-only CLEAN без серверного AV evidence остаются в карантине;
+  байты/история не переписаны. Новый проверенный upload и owner rebind —
+  отдельные штатные действия. Антивирус не равен semantic prompt-injection gate.

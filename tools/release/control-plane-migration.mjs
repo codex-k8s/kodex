@@ -18,6 +18,7 @@ const profiles = {
   'runtime-profile-default': { version: '20260914000100', file: '20260914000100_issue_1625_runtime_profile_default.sql', annotation: 'kodex.dev/cp-runtime-profile-default-migration-plan' },
   'prompt-service-v3': { version: '20261010150000', file: '20261010150000_prompt_service_v3_continuation.sql', annotation: 'kodex.dev/cp-prompt-service-v3-migration-plan' },
   'provider-managed-renewal': { version: '20261014000100', file: '20261014000100_provider_credential_renewal.sql', annotation: 'kodex.dev/cp-provider-managed-renewal-migration-plan' },
+  'artifact-antivirus-admission': { version: '20261016000100', file: '20261016000100_artifact_antivirus_receipts.sql', annotation: 'kodex.dev/cp-artifact-antivirus-migration-plan' },
 };
 const profileFor = (name = 'legacy') => { ensure(Object.hasOwn(profiles,name),'MIGRATION_PROFILE_INVALID'); return profiles[name]; };
 const fileDigest = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');

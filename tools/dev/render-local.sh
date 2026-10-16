@@ -1577,10 +1577,10 @@ yq -o=json -I=0 '.' "$output" | jq -s -e --arg image "$runtime_session_archive_i
       verbs:(.verbs | sort)
     }] | sort_by(.resources[0])) ==
     ([
-      {apiGroups:[""], resources:["configmaps"], verbs:["create","delete","deletecollection"]},
+      {apiGroups:[""], resources:["configmaps"], verbs:["create","delete","get"]},
       {apiGroups:[""], resources:["persistentvolumeclaims"], verbs:["create","delete","get"]},
       {apiGroups:[""], resources:["pods"], verbs:["list"]},
-      {apiGroups:["batch"], resources:["jobs"], verbs:["create","delete","deletecollection","get","list"]}
+      {apiGroups:["batch"], resources:["jobs"], verbs:["create","delete","get","list"]}
     ] | sort_by(.resources[0]))) and
   any(.[];
     .kind == "Role" and .metadata.name == "session-archive-worker" and

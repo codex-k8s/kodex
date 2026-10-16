@@ -131,8 +131,11 @@ func (repository *Repository) decorateVFSSelection(ctx context.Context, tx pgx.T
 	switch row.ResourceKind {
 	case "ARTIFACT":
 		artifact := entity.Artifact{Ref: node.EntityRef, Version: node.Version, LifecycleState: node.LifecycleState, ScanState: node.ScanState}
-		if err := projectArtifactEligibility(ctx, tx, current, &artifact); err != nil {
+		if err := projectArtifactActions(ctx, tx, current, &artifact); err != nil {
 			return err
+		}
+		if node.ScanState != "CLEAN" {
+			artifact.NextActions = slices.DeleteFunc(artifact.NextActions, func(action string) bool { return action == "DOWNLOAD" || action == "BIND" })
 		}
 		node.NextActions = artifact.NextActions
 		if node.RunRef != "" && node.Kind == "INPUT" || node.Kind == "AVATAR" || strings.HasPrefix(node.Ref, "knowledge-input:") || strings.HasPrefix(node.Ref, "skill-file:") {
