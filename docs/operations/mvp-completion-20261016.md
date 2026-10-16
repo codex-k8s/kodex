@@ -71,3 +71,27 @@ Chrome MCP: собственная вкладка, получение списк
 полные unit-файлы и enabled state. Ресурсы, маршруты, unit-файлы и сертификаты
 не перезаписываются. После эффекта выполняется обычный exact readback.
 Результаты тестов и живого применения фиксируются следующим checkpoint.
+
+### 16.10: восстановление API и подготовка exact peer rebind
+
+- PASS: все четыре затронутых Deployment восстановились до2/2 без смены
+  образов, удаления Pod и изменения данных. Отдельный readback четырёх
+  текущих exact API policies PASS.
+- PASS LOCAL на `0728f2f18b8d972b979118eb537f0bd995889eed`:
+  восемь edge-release tests, включая восстановление inactive sockets и
+  отрицательные проверки replaced UID/изменённых unit-файлов.
+- FAIL/CLOSED: живой recover остановился до первого эффекта на
+  `EDGE_PEER_NODE_DRIFT`. После перезапуска прежние exact Docker identities
+  внешнего ingress получили другие IP. Исторические разрешения не расширялись.
+- Добавлен forward-only `edge-rebind.mjs plan|apply|readback`. Новый приватный
+  план выводит адреса из прежних Docker IDs и общего прежнего bridge gateway;
+  связывает текущий protected snapshot соседнего контура, resource UID receipts,
+  CA и полные before/after unit bodies. Не меняет Kubernetes resources, TLS,
+  маршруты и исходный apply journal. Старые адреса удаляются из четырёх units,
+  новые разрешаются только как точные /32. Привилегированный worker проверяет
+  все preimage до записи и атомарно заменяет только закрытые четыре имени.
+- PASS LOCAL на рабочем дереве этого checkpoint: пять targeted rebind/worker
+  tests, включая чужой Docker ID, остановленный узел, другой bridge/network,
+  публичный/loopback/повторный IP, symlink/hardlink/path traversal, точное
+  возобновление и сохранение0644 при атомарной замене.
+- PASS: read-only rebind plan. Apply/readback/public HTTPS пока NOT RUN.
