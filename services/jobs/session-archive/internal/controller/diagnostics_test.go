@@ -42,7 +42,7 @@ func TestArchiveAPIFailureIsClosedAndExact(t *testing.T) {
 			task.SourceRelativePath = ".kodex/state/codex-home/sessions/2026/08/28/rollout-2026-08-28T23-23-39-" + task.CodexSessionID + ".jsonl"
 			task.SourceSizeBytes, task.TargetObjectKey = 1024, "SENTINEL_PRIVATE_OBJECT"
 			task.PVCName, _ = runtimecontract.SessionPVCName(task.SessionRef)
-			client := fake.NewSimpleClientset(&corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: exactWorkerNamespace, UID: "source-pvc-uid"}})
+			client := newArchiveClient(&corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: exactWorkerNamespace, UID: "source-pvc-uid"}})
 			client.PrependReactor(scenario.verb, scenario.resource, func(clienttesting.Action) (bool, runtime.Object, error) {
 				return true, nil, &apierrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReason(scenario.reason), Code: scenario.code,
 					Message: "SENTINEL_PRIVATE_MESSAGE", Details: &metav1.StatusDetails{Name: "SENTINEL_PRIVATE_RESOURCE", Causes: []metav1.StatusCause{{Message: "SENTINEL_PRIVATE_CAUSE"}}}}}
@@ -165,7 +165,11 @@ func TestWorkerTerminalDiagnosticIsBoundedAndExact(t *testing.T) {
 			controller.client = fake.NewSimpleClientset(pod)
 			var result model.Result
 			if name == "failure before cleanup" {
-				client := fake.NewSimpleClientset(pod, &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: exactWorkerNamespace, UID: uid}})
+				client := newArchiveClient(pod, &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: exactWorkerNamespace, UID: uid}})
+				job.ResourceVersion = "1"
+				client.PrependReactor("create", "jobs", func(action clienttesting.Action) (bool, runtime.Object, error) {
+					return true, job.DeepCopy(), client.Tracker().Create(action.GetResource(), job.DeepCopy(), action.GetNamespace())
+				})
 				client.PrependReactor("get", "jobs", func(action clienttesting.Action) (bool, runtime.Object, error) {
 					if _, err := client.Tracker().Get(action.GetResource(), action.GetNamespace(), action.(clienttesting.GetAction).GetName()); err != nil {
 						return false, nil, nil

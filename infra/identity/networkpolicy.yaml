@@ -33,6 +33,12 @@ spec:
   policyTypes: [Ingress, Egress]
   ingress:
     - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sso
+              app.kubernetes.io/component: identity-provider
+      ports: [{ protocol: TCP, port: 7800 }, { protocol: TCP, port: 57800 }]
+    - from:
         - namespaceSelector:
             {
               matchLabels:
@@ -56,6 +62,12 @@ spec:
                 values: [control-api-gateway, control-plane]
       ports: [{ protocol: TCP, port: 8443 }]
   egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sso
+              app.kubernetes.io/component: identity-provider
+      ports: [{ protocol: TCP, port: 7800 }, { protocol: TCP, port: 57800 }]
     - to:
         - namespaceSelector:
             { matchLabels: { kubernetes.io/metadata.name: kube-system } }

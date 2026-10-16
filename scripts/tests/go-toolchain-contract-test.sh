@@ -17,6 +17,8 @@ jq -e '
       (.component == "role-image-builder" and .target == "runtime") or
       (.component == "email-bridge" and .target == "runtime") or
       (.component == "email-bridge-migration" and .target == "migration") or
+      (.component == "integration-synthetic" and .target == "synthetic") or
+      (.component == "registry-pull-authorizer" and .target == "registry-pull-runtime") or
       (.component == "image-admission" and .target == "admission-runtime")))
 ' "$repository_root/tools/release/images.json" >/dev/null || {
   printf 'Release image inventory is invalid\n' >&2

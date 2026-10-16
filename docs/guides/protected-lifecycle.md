@@ -4,8 +4,8 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.26
-updated: 2026-10-13
+version: 1.1.27
+updated: 2026-10-15
 ---
 
 # Защищённые агрегаты и граф фонового выполнения
@@ -275,6 +275,13 @@ Late success не меняет terminal verdict; подтверждённые us
 | owner decision/expiry | receipt доставки или expiry по времени PostgreSQL, OCC/fence                                        | ровно один decision/expiry закрывает или продолжает весь граф                                        |
 
 Завершение только одного envelope при живом дочернем исполнении запрещено.
+Старт второй реплики фонового controller не является authority для общей
+очистки его Jobs. Перед retry новый exact owner claim подтверждается renew;
+старый writer разрешается только по прежней attempt/input и полной owner
+связке, удаляется с UID/RV preconditions и joined до нового writer. Cleanup
+своей попытки не удаляет replacement по имени; неизвестный Create не означает
+владения. Namespace-wide sweep по одному managed label запрещён. Матрица
+архиватора и cutover приведена в [OPS-PUBLIC-STABLE-001](../operations/public-stable-1810.md#архиватор-изоляция-попыток-двух-реплик).
 Каждый путь terminal/cancel/delete/retry/expiry повторяет одну проверку owner и
 отзывает все grants/leases/claims в той же PostgreSQL-транзакции. Путь чтения
 скрывает claim как активный, если его авторитетный граф уже завершён, даже до
@@ -304,6 +311,14 @@ keepers до закрытия RPC клиента. TTL, attempt, authority и own
 при этом не расширяются; transport 404 сам по себе не доказывает expiry.
 
 ## Решение владельца
+
+Mailbox Human Gate проверяется независимо от generic integration approval policy.
+Для email с generic `NONE` подтверждение exact mailbox gate открывает только
+исходную invocation с теми же organization/project/root/input и активной версией
+grant. Завершившийся сотрудник не блокирует этот effect, если root ещё находится
+в `WAITING_HUMAN` и точный gate одобрен; это не оживляет terminal root, отозванную
+lease либо grant. Claim и последующая email authorization используют одинаковое
+ограждение. Повторное одобрение не создаёт новую invocation или отправку.
 
 ### Ограниченное восстановление доставки runtime heartbeat
 

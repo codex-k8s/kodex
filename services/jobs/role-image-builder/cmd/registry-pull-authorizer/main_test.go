@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -108,11 +109,7 @@ func TestInstallationNodePullProfileIsBounded(t *testing.T) {
 	if profile.configFile != "/identity/pull-dockerconfigjson" {
 		t.Fatalf("installation credential path = %q", profile.configFile)
 	}
-	if len(profile.repositories) != 4 ||
-		profile.repositories[0] != "kodex/agent-runner" ||
-		profile.repositories[1] != "kodex/roles" ||
-		profile.repositories[2] != "kodex/session-archive" ||
-		profile.repositories[3] != "kodex/role-image-builder" {
+	if !reflect.DeepEqual(profile.repositories, nodePullRepositories()) || len(profile.repositories) != 24 {
 		t.Fatalf("installation repositories = %v", profile.repositories)
 	}
 }
@@ -140,6 +137,73 @@ func TestPlatformArchivePullIsLimitedToNodeIdentities(t *testing.T) {
 	}
 }
 
+func TestPlatformRepositoriesDoNotExpandOtherPullProfiles(t *testing.T) {
+	t.Parallel()
+	for name, profile := range pullProfiles() {
+		for _, repository := range nodePullRepositories() {
+			allowed := name == "kodex-node-pull-installer" ||
+				name == "kodex-image-registry-pull-probe" && repository == "kodex/control-plane" ||
+				name == "kodex-buildkit-base-pull" && repository == "kodex/agent-runner"
+			for _, operation := range []string{"manifests", "blobs"} {
+				path := "/v2/" + repository + "/" + operation + "/sha256:abc"
+				if actual := pathInRepositories(path, profile.repositories); actual != allowed {
+					t.Fatalf("profile %s repository %s allowed=%v want=%v", name, repository, actual, allowed)
+				}
+			}
+		}
+	}
+	repositories := nodePullRepositories()
+	repositories[0] = "foreign/repository"
+	if nodePullRepositories()[0] != "kodex/agent-runner" {
+		t.Fatal("caller mutation changed the node repository registry")
+	}
+}
+
+func TestPullRepositorySelectorsCannotEscapeTheirExactRepository(t *testing.T) {
+	t.Parallel()
+	for _, repository := range nodePullRepositories() {
+		for _, operation := range []string{"manifests", "blobs"} {
+			for _, selector := range []string{"", ".", "..", "../../role-image-inputs", "sha256:abc/extra", "%2fother", "\\other", "tag?other", "tag#other"} {
+				if pathInRepositories("/v2/"+repository+"/"+operation+"/"+selector, nodePullRepositories()) {
+					t.Fatalf("escaping selector accepted for repository %s", repository)
+				}
+			}
+		}
+	}
+}
+
+func TestNodeRepositoriesMatchShippedPodImagesWithoutBuildInputs(t *testing.T) {
+	t.Parallel()
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "..", "tools", "release", "images.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var inventory struct {
+		Images []struct {
+			Component string `json:"component"`
+		} `json:"images"`
+	}
+	if err := json.Unmarshal(data, &inventory); err != nil {
+		t.Fatal(err)
+	}
+	expected := map[string]bool{"kodex/roles": true, "kodex/image-admission-tools": true}
+	for _, image := range inventory.Images {
+		if image.Component != "dockerfile" && image.Component != "role-base-documents" {
+			expected["kodex/"+image.Component] = true
+		}
+	}
+	actual := make(map[string]bool)
+	for _, repository := range nodePullRepositories() {
+		if actual[repository] {
+			t.Fatal("duplicate node repository")
+		}
+		actual[repository] = true
+	}
+	if !reflect.DeepEqual(expected, actual) {
+		t.Fatalf("node repositories disagree with shipped pod images: got=%v want=%v", actual, expected)
+	}
+}
+
 func TestPlatformArchiveActualNodeAuthorization(t *testing.T) {
 	t.Parallel()
 	const host = "pull.fixture.invalid"
@@ -155,9 +219,10 @@ func TestPlatformArchiveActualNodeAuthorization(t *testing.T) {
 	}
 	certificate := &x509.Certificate{Subject: pkix.Name{CommonName: name},
 		IPAddresses: []net.IP{net.ParseIP("192.0.2.1")}, PublicKey: &key.PublicKey}
-	for _, fixture := range []struct {
+	type pullCase struct {
 		method, path, failure string
-	}{
+	}
+	cases := []pullCase{
 		{http.MethodGet, "/v2/kodex/session-archive/manifests/sha256:abc", ""},
 		{http.MethodGet, "/v2/kodex/role-image-builder/manifests/sha256:abc", ""},
 		{http.MethodHead, "/v2/kodex/role-image-builder/blobs/sha256:abc", ""},
@@ -170,8 +235,23 @@ func TestPlatformArchiveActualNodeAuthorization(t *testing.T) {
 		{http.MethodDelete, "/v2/kodex/session-archive/manifests/sha256:abc", "request_shape"},
 		{http.MethodGet, "/v2/kodex/session-archive-other/manifests/sha256:abc", "node_repository"},
 		{http.MethodGet, "/v2/kodex/session-archive/tags/list", "node_repository"},
-		{http.MethodGet, "/v2/kodex/control-plane/manifests/sha256:abc", "node_repository"},
-	} {
+		{http.MethodGet, "/v2/kodex/control-plane/manifests/sha256:abc", ""},
+		{http.MethodHead, "/v2/kodex/staff-control-center/manifests/stable-fixture", ""},
+		{http.MethodGet, "/v2/kodex/registry-pull-authorizer/blobs/sha256:abc", ""},
+		{http.MethodPost, "/v2/kodex/control-plane/blobs/uploads/", "request_shape"},
+		{http.MethodDelete, "/v2/kodex/staff-control-center/manifests/sha256:abc", "request_shape"},
+		{http.MethodGet, "/v2/kodex/control-plane-other/manifests/sha256:abc", "node_repository"},
+		{http.MethodGet, "/v2/kodex/control-plane/manifests/../secrets", "node_repository"},
+		{http.MethodGet, "/v2/kodex/control-plane/manifests/%2e%2e%2fsecrets", "node_repository"},
+		{http.MethodGet, "/v2/kodex/control-plane/tags/list", "node_repository"},
+		{http.MethodGet, "/v2/kodex/role-image-inputs/manifests/sha256:abc", "node_repository"},
+		{http.MethodGet, "/v2/evidence/role-image-admission/manifests/sha256:abc", "node_repository"},
+	}
+	for _, repository := range nodePullRepositories() {
+		cases = append(cases, pullCase{http.MethodGet, "/v2/" + repository + "/manifests/sha256:abc", ""},
+			pullCase{http.MethodHead, "/v2/" + repository + "/blobs/sha256:abc", ""})
+	}
+	for _, fixture := range cases {
 		request := httptest.NewRequest(fixture.method, "https://"+host+fixture.path, nil)
 		request.RemoteAddr = "192.0.2.1:1234"
 		request.SetBasicAuth(name, "v1.1."+base64.RawURLEncoding.EncodeToString(signature))

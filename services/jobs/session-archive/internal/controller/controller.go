@@ -18,7 +18,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/kubernetes"
@@ -82,39 +81,10 @@ func (controller *Controller) Check(ctx context.Context) error {
 	return nil
 }
 
-func (controller *Controller) CleanupStale(ctx context.Context) error {
-	selector := labels.Set{managedLabel: "true"}.AsSelector().String()
-	propagation := metav1.DeletePropagationForeground
-	if err := controller.client.BatchV1().Jobs(controller.config.WorkerNamespace).DeleteCollection(ctx,
-		metav1.DeleteOptions{PropagationPolicy: &propagation}, metav1.ListOptions{LabelSelector: selector}); err != nil {
-		return errors.New("delete stale session archive jobs")
+func (controller *Controller) Execute(ctx context.Context, task model.Task, renew func(context.Context) error) (result model.Result, resultErr error) {
+	if err := controller.cleanupPredecessors(ctx, task, renew); err != nil {
+		return model.Result{}, err
 	}
-	deadline := time.Now().Add(30 * time.Second)
-	for {
-		jobs, err := controller.client.BatchV1().Jobs(controller.config.WorkerNamespace).List(ctx, metav1.ListOptions{LabelSelector: selector})
-		if err != nil {
-			return errors.New("observe stale session archive jobs")
-		}
-		if len(jobs.Items) == 0 {
-			break
-		}
-		if time.Now().After(deadline) {
-			return errors.New("stale session archive jobs did not terminate")
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(250 * time.Millisecond):
-		}
-	}
-	if err := controller.client.CoreV1().ConfigMaps(controller.config.WorkerNamespace).DeleteCollection(ctx,
-		metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: selector}); err != nil {
-		return errors.New("delete stale session archive task inputs")
-	}
-	return nil
-}
-
-func (controller *Controller) Execute(ctx context.Context, task model.Task, renew func(context.Context) error) (model.Result, error) {
 	if task.Kind == "DELETE_PVC" {
 		return controller.deletePVC(ctx, task)
 	}
@@ -141,15 +111,37 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 	}
 	immutable := true
 	configMap := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: controller.config.WorkerNamespace,
-		Labels: map[string]string{managedLabel: "true"}, Annotations: pvcBindingAnnotation(sourcePVCUID)},
+		Labels: map[string]string{managedLabel: "true"}, Annotations: workerDiagnosticAnnotations(task, sourcePVCUID)},
 		Immutable: &immutable, Data: map[string]string{"task.json": string(raw)}}
-	if _, err := controller.client.CoreV1().ConfigMaps(controller.config.WorkerNamespace).Create(ctx, configMap, metav1.CreateOptions{}); err != nil {
+	if err := renewAuthority(ctx, renew); err != nil {
+		return model.Result{}, err
+	}
+	createdInput, err := controller.client.CoreV1().ConfigMaps(controller.config.WorkerNamespace).Create(ctx, configMap, metav1.CreateOptions{})
+	if err != nil {
 		controller.observeAPIFailure(ctx, task, archiveAPICreateInput, err)
 		return model.Result{}, errors.New("create session archive task input")
 	}
-	defer controller.cleanup(ctx, name)
+	var createdJob *batchv1.Job
+	jobCreateAttempted := false
+	defer func() {
+		// Неизвестный исход Create не даёт права удалять Job по одному имени.
+		// Следующая owner-attempt проверит immutable input и exact UID.
+		if jobCreateAttempted && createdJob == nil {
+			return
+		}
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), archiveCleanupTimeout)
+		defer cancel()
+		if err := controller.cleanupAttempt(cleanup, createdInput, createdJob, nil); err != nil {
+			result, resultErr = model.Result{}, err
+		}
+	}()
+	if err := renewAuthority(ctx, renew); err != nil {
+		return model.Result{}, err
+	}
 	job := controller.job(name, task, sourcePVCUID)
-	if _, err := controller.client.BatchV1().Jobs(controller.config.WorkerNamespace).Create(ctx, job, metav1.CreateOptions{}); err != nil {
+	jobCreateAttempted = true
+	createdJob, err = controller.client.BatchV1().Jobs(controller.config.WorkerNamespace).Create(ctx, job, metav1.CreateOptions{})
+	if err != nil {
 		controller.observeAPIFailure(ctx, task, archiveAPICreateJob, err)
 		return model.Result{}, errors.New("create session archive worker job")
 	}
@@ -394,14 +386,6 @@ func pvcBindingAnnotation(uid types.UID) map[string]string {
 		return nil
 	}
 	return map[string]string{sourcePVCUIDAnnotation: string(uid)}
-}
-
-func (controller *Controller) cleanup(ctx context.Context, name string) {
-	background, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
-	defer cancel()
-	propagation := metav1.DeletePropagationBackground
-	_ = controller.client.BatchV1().Jobs(controller.config.WorkerNamespace).Delete(background, name, metav1.DeleteOptions{PropagationPolicy: &propagation})
-	_ = controller.client.CoreV1().ConfigMaps(controller.config.WorkerNamespace).Delete(background, name, metav1.DeleteOptions{})
 }
 
 func workloadName(ref string, generation int64, attempt int32) string {

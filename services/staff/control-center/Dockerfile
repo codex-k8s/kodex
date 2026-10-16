@@ -7,7 +7,11 @@ WORKDIR /workspace/services/staff/control-center
 COPY services/staff/control-center/package.json services/staff/control-center/package-lock.json ./
 RUN npm ci --ignore-scripts
 
-COPY services/staff/control-center/index.html services/staff/control-center/eslint.config.js services/staff/control-center/openapi-ts.config.mjs services/staff/control-center/playwright.config.ts services/staff/control-center/playwright.auth.config.ts services/staff/control-center/tsconfig.app.json services/staff/control-center/tsconfig.e2e.json services/staff/control-center/tsconfig.json services/staff/control-center/tsconfig.node.json services/staff/control-center/vite.config.ts ./
+COPY services/staff/control-center/index.html services/staff/control-center/eslint.config.js services/staff/control-center/openapi-ts.config.mjs services/staff/control-center/tsconfig*.json ./
+COPY services/staff/control-center/playwright*.config.ts services/staff/control-center/vite*.config.ts ./
+# Typecheck охватывает e2e: в build stage нужны настоящие repo-owned helpers
+# и их декларации. В итоговый nginx image они не копируются.
+COPY tools/dev/provider-api-key-acceptance.mjs tools/dev/provider-api-key-acceptance.d.mts tools/dev/owner-session-storage.mjs tools/dev/owner-session-storage.d.mts tools/dev/owner-session-client.mjs tools/dev/runtime-workspace-acceptance.mjs /workspace/tools/dev/
 COPY services/staff/control-center/e2e/ e2e/
 COPY services/staff/control-center/public/ public/
 COPY services/staff/control-center/src/ src/

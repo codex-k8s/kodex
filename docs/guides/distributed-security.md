@@ -4,8 +4,8 @@ title: Безопасность распределенных сервисов и
 type: guide
 status: approved
 owner: architect
-version: 1.7.22
-updated: 2026-10-14
+version: 1.7.28
+updated: 2026-10-15
 ---
 
 # Безопасность распределенных сервисов и служебного состояния
@@ -145,6 +145,17 @@ authority; unknown поле и изменение любого binding закр�
 Для реализации проверены Context7 `/kubernetes/website` (NetworkPolicy,
 securityContext), `/grpc/grpc-go` (transport credentials, metadata/interceptors),
 `/jackc/pgx` (QueryRow/ErrNoRows) и `/pressly/goose` (transactional SQL migrations).
+
+## CAS поставки Kubernetes
+
+В SRE-переходах status update контроллера может изменить `resourceVersion`
+после quiesce без изменения конфигурации. Непосредственно перед единственным
+mutation request разрешено перечитать RV, только если UID, изменяемые поля,
+labels и несущая конфигурацию metadata остались прежними; authority/binding
+guards не снимаются. Изменившаяся конфигурация требует нового плана.
+Это новое observation до отправки, а не retry. После timeout или lost ACK
+команда не повторяется вслепую: используются исходный intent и authoritative
+inspect/recovery. Правило не меняет доменные expectedVersion/fence/grant.
 
 ## Сохранённый защищённый профиль
 
@@ -1007,6 +1018,16 @@ provider, сверяет membership и полный tenant/session/turn/artifact
 
 ## Проверяемое контрольное чтение и повтор служебного изменения
 
+Leader election координирует controller replicas, но не назначает доменные
+grants и не заменяет authoritative attempt/fence. До запуска второго Pod
+проверяют, что прежний binary действительно участвует в том же протоколе;
+иначе его сначала drain/join. Exact shared Lease принадлежит deploy: runtime
+не создаёт и не удаляет его, а replacement UID закрыто отклоняет. При потере
+лидерства worker отменяется и join завершается до освобождения lock либо
+используется естественный expiry без раннего release. Rollback не возвращает
+старый holder/transition. Readback доказывает actual holder UID serving Pod,
+а не выводит единственного активного контроллера из числа Ready replicas.
+
 Состояние контрольного чтения не принимает ревизию, хэш, поколение или
 произвольный хэш proof от вызывающей стороны как доказательство фактически
 обслуживаемого состояния. Точная идентичность workload/role выводится из
@@ -1230,6 +1251,28 @@ policy или догадка по revision такую связь не доказ
 неподписанного начального снимка не являются восстановлением.
 
 ## Применение immutable impact plan
+
+Readback и quiesce Deployment проверяют весь owner lineage Pod/ReplicaSet
+до классификации активности. Исторический `Failed|Succeeded` исключается из
+числа действующих Pod только при полном подтверждении `terminated` каждого
+regular/init/ephemeral контейнера. Отсутствующие, смешанные и неизвестные
+статусы остаются блокирующими; чужой terminal Pod не скрывается фильтром.
+История при этом не удаляется. При удалении собственного config Secret такой
+terminal consumer игнорируется только внутри доказанного owner graph уже
+восстановленного Deployment; ссылка чужого или неизвестного consumer
+блокирует удаление. Одна фаза Pod без container/owner proof не является join.
+
+Восстановление поставки не возвращает доказанно опасный startup path или уже
+отозванное массовое право. Если прежний образ не работает с суженными правами,
+компонент остаётся остановленным до отдельного forward recovery безопасной
+версии; остальные компоненты восстанавливаются только по своим exact
+UID/spec/storage commitments. Такое аварийное состояние не объявляется
+готовым релизом или успешной проверкой доступности. Recovery journal связывает
+исходный apply intent, exact план и сохранённые pins; неизвестный write сначала
+разрешается наблюдением, а не переотправкой. В recovery material сохраняются
+только изменённые публичные значения: неизменённые env/Secret references и
+полные PodSpec туда не копируются. Неизвестный удаляемый build knob или shell
+init, который мог бы скрывать credential, закрыто отклоняется до записи плана.
 
 План изменения зависимостей фиксирует точные исходные версии и дайджесты,
 но не сохраняет отозванные полномочия. Владелец повторно проверяет текущую
@@ -1703,9 +1746,15 @@ listener ports. Наличие Service, Ready endpoints и исходящего 
   descriptors, platform и exact manifest digest; private копия исходных байтов
   передаётся существующему promotion writer по mTLS/application identity.
   Controller и его worker используют один exact digest через настроенный
-  promoted pull host. Node и installer получают только закрытый repository
-  `kodex/session-archive` и `kodex/role-image-builder`, не право произвольной
-  публикации или role admission. Одинаковые guards связывают repository,
+  promoted pull host. Node и installer получают только закрытый список
+  runtime/platform repositories из `nodePullRepositories`, включая штатные
+  приложения и сам pull gateway, не право произвольной публикации или role
+  admission. Probe, BuildKit/base и input-reader сохраняют отдельные списки:
+  расширение node pull не расширяет их полномочия. Разрешены только GET/HEAD
+  manifest/blob точного repository и одного ограниченного selector; пустой
+  selector, dot segments, вложенный/escaped slash и соседний repository
+  отклоняются до upstream. Evidence, inputs, tags/list, upload и admin не
+  становятся доступными через общий prefix. Одинаковые guards связывают repository,
   entrypoint, cache input digest/tag и platform; builder использует тот же
   promoted pull host без зависимости от сохранности preload.
   Unknown исход публикации проверяется отдельным readback без повторного import;
@@ -1730,6 +1779,21 @@ control-plane. Политика строится из фактического S
 точек целевого контура либо через отдельный утвержденный шлюз исходящего
 трафика. Значения
 одного контура не переносятся в другой.
+
+В локальном контейнерном кластере адрес узла может измениться после перезапуска.
+Долгоживущий exact API egress сверяется с ready EndpointSlice и текущим ready
+control-plane node того же cluster UID. Операторский reconciler закрепляет
+namespace/policy UID и закрытый набор workload selectors; меняет только точные
+API назначения с OCC, не выдаёт Kubernetes доступ агентам и не расширяет
+остальные правила. Stale IP не является допустимым постоянным исключением.
+
+Host socket, ожидающий Docker/network-online, не включается в sockets.target
+с обычными default dependencies: это создаёт цикл через basic.target.
+Для такого конкретного relay задаются DefaultDependencies=no, shutdown ordering
+и включение в multi-user.target. IP ACL обновляется только по прежним exact
+node/container/network identities, полные canonical unit preimage проверяются
+до замены. Чужие units, routes, certificates и глобальные targets не меняются.
+Проверка сгенерированного графа не объявляется фактическим host reboot.
 
 ## Безопасное локальное обслуживание
 
@@ -2156,6 +2220,15 @@ high-watermarks. Изменение одной константы last-known-goo
 доказательством и не заменяет согласованный протокол распространения отзыва.
 
 ## Обновление сессии через forward authentication
+
+HTTP edge не записывает raw request/URI/query, headers, cookies, IP или
+browser identity в access log: OAuth callback содержит одноразовый code,
+а обычный query может содержать пользовательские данные. Метод и route
+классифицируются закрытыми enum, остальные поля — только числовой status,
+размер и duration. Неструктурированный request error log без возможности
+redaction не включается; диагностика сохраняет безопасный access outcome,
+startup/reload validation и авторитетные backend наблюдения. Это относится
+и к штатному nginx, не только к Go gateway и proxy.
 
 Если authentication proxy обновляет credentials через response cookies,
 промежуточный HTTP gateway передаёт клиенту полный ограниченный набор cookies

@@ -69,10 +69,6 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) error {
 		_ = control.Close()
 		return err
 	}
-	if err := kubernetes.CleanupStale(startup); err != nil {
-		_ = control.Close()
-		return err
-	}
 	technical, err := httpserver.New(httpserver.Config{Address: config.TechnicalListen, ReadHeaderTimeout: 2 * time.Second,
 		ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second, MaximumHeaderBytes: 32 << 10,
 		MaximumConnections: 128}, readiness, metrics.PrometheusHandler())

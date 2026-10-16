@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.8
-updated: 2026-10-13
+version: 2.2.9
+updated: 2026-10-15
 ---
 
 # Кодификация документов и задач
@@ -131,6 +131,7 @@ updated: 2026-07-28
 | `OPS-DOC-1763` | `docs/operations/assistant-prototype-debug-1763.md` |
 | `OPS-DOC-SELFDEV-001` | `docs/operations/self-development-dogfooding.md` |
 | `OPS-DOC-SELFDEV-002` | `docs/operations/self-development-handoff.md` |
+| `OPS-PUBLIC-STABLE-001` | `docs/operations/public-stable-1810.md` |
 | `QA-DOC-SELFDEV-001` | `docs/qa/full-qa-task.md` |
 | `QA-DOC-SELFDEV-002` | `docs/qa/bootstrap-1797-evidence-ledger.md` |
 | `ADR-MC-000`       | `docs/decisions/README.md`                                  |

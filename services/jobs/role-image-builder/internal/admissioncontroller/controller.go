@@ -54,6 +54,7 @@ type Controller struct {
 	now                  func() time.Time
 	lastAdmissionAttempt time.Time
 	lastPromotionAttempt time.Time
+	leader               *fixedLeaderLease
 }
 
 type WorkAvailability struct {
@@ -80,12 +81,21 @@ func New(client kubernetes.Interface, renderer Renderer, config Config, logger *
 	return &Controller{client: client, renderer: renderer, config: config, logger: logger, now: time.Now}, nil
 }
 
-func (controller *Controller) Run(ctx context.Context) error {
+func (controller *Controller) runReconciler(ctx context.Context) error {
 	ticker := time.NewTicker(controller.config.ReconcileInterval)
 	defer ticker.Stop()
 	degraded := false
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		request, cancel := context.WithTimeout(ctx, controller.config.RequestTimeout)
+		if controller.leader != nil {
+			if err := controller.leader.checkHolder(request); err != nil {
+				cancel()
+				return err
+			}
+		}
 		err := controller.Reconcile(request)
 		cancel()
 		if err != nil && !errors.Is(err, context.Canceled) && !degraded {
@@ -106,6 +116,11 @@ func (controller *Controller) Run(ctx context.Context) error {
 // Check проверяет только прямую Kubernetes infrastructure и immutable local
 // policy projection; соседний control-plane не участвует в Pod readiness.
 func (controller *Controller) Check(ctx context.Context) error {
+	if controller.leader != nil {
+		if _, err := controller.leader.check(ctx); err != nil {
+			return err
+		}
+	}
 	if err := controller.validateProofHold(controller.now().UTC()); err != nil {
 		return err
 	}

@@ -23,7 +23,7 @@ metadata:
     app.kubernetes.io/name: sso
     app.kubernetes.io/component: identity-provider
 spec:
-  replicas: 1
+  replicas: 2
   revisionHistoryLimit: 2
   strategy:
     type: RollingUpdate
@@ -40,6 +40,14 @@ spec:
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: sso
+              app.kubernetes.io/component: identity-provider
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -82,6 +90,8 @@ spec:
           ports:
             - { name: https, containerPort: 8443, protocol: TCP }
             - { name: management, containerPort: 9000, protocol: TCP }
+            - { name: cache, containerPort: 7800, protocol: TCP }
+            - { name: cache-failure, containerPort: 57800, protocol: TCP }
           env:
             - { name: KC_DB, value: postgres }
             - name: KC_DB_URL
@@ -121,7 +131,9 @@ spec:
               }
             - { name: KC_HEALTH_ENABLED, value: "true" }
             - { name: KC_METRICS_ENABLED, value: "true" }
-            - { name: KC_CACHE, value: local }
+            - { name: KC_CACHE, value: ispn }
+            - { name: KC_CACHE_STACK, value: jdbc-ping }
+            - { name: KC_CACHE_EMBEDDED_MTLS_ENABLED, value: "true" }
             - {
                 name: JAVA_OPTS_KC_HEAP,
                 value: "-XX:MaxRAMPercentage=65 -XX:InitialRAMPercentage=30",
