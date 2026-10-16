@@ -21,7 +21,7 @@ export function probe(context) {
   const execute = (args, input) => spawnSync("kubectl", ["--context", context, "-n", namespace, ...args],
     { encoding: "utf8", input, timeout: 90000, maxBuffer: 1 << 20, stdio: ["pipe", "pipe", "pipe"] });
   const get = (kind, name) => {
-    const result = execute(["get", kind, ...(name ? [name] : []), "-o", "json"]);
+    const result = execute(["get", kind, ...(name ? [name] : ["-l", "app.kubernetes.io/name=control-plane"]), "-o", "json"]);
     fail(result.status === 0, "ANTIVIRUS_KUBERNETES_READ_FAILED");
     return JSON.parse(result.stdout);
   };
