@@ -34,12 +34,12 @@ Worker требует исключительно текущий project prefix �
 | --- | --- |
 | Owner purge | Существующие UI/API/gateway/CP command, authority, OCC, idempotency; terminal всего project graph и durable receipt |
 | Inventory | Тот же exact organization/project/receipt; незавершённый archive writer блокирует внешние эффекты |
-| Artifact cleanup | Точный project artifact prefix, отсутствие foreign/shared owner, immutable version, Delete и readback отсутствия |
+| Artifact cleanup | Точный project artifact prefix либо persisted subject key/revision/version с artifact/run/session/conversation lineage перенесённого SYSTEM-диалога и исходным actor; отсутствие foreign/shared owner, Delete и readback отсутствия |
 | Archive cleanup | Отдельный archive store; exact persisted archive/task + session lineage и version. `_system` допустим только для подтверждённой перенесённой сессии, не по caller prefix |
-| PVC cleanup | До effects paginated проверка всех точных inventory PVC consumers; current identity/hash и UID precondition, отсутствие чужого/активного ресурса |
+| PVC cleanup | До effects paginated проверка всех точных inventory PVC consumers; current identity/hash и UID precondition. Прежний global hash допустим только для точной SYSTEM-session/conversation frozen проекта по тому же правилу promotion runtime-controller; чужие и активные ресурсы закрыты |
 | Partial failure/retry | Никакого DONE; те же receipts/версии и идемпотентное отсутствие собственных ресурсов, без расширения scope |
 | Finalize | Повтор inventory/receipt/project/active tasks/digest в owner transaction; защищённое удаление БД и существующее PROJECT_PURGED event |
-| Two replicas | Exact-version object deletion и UID PVC precondition; единый owner receipt/transaction определяет terminal, повтор не удаляет replacement |
+| Two replicas | Exact-version object deletion и UID PVC precondition; единый owner receipt/transaction определяет terminal. Replacement прекращает текущую попытку; следующая заново проверяет принадлежность и consumers, а не повторяет DELETE прежнего UID |
 
 Новые endpoint/grants/worker и ручной SQL UPDATE не вводятся. Используется
 обычный периодический worker. Рабочие инструкции удаления, события и authority
@@ -57,3 +57,17 @@ Worker требует исключительно текущий project prefix �
 
 Текущие состояния — read-only наблюдение, не успешное удаление. Секретные
 значения, object keys, содержимое файлов и личные данные здесь не сохраняются.
+
+## Журнал
+
+На6ab83711: полная CP Go suite PASS; полная disposable PostgreSQL suite
+PASS159.160s и Avatar suite PASS; read-only worker/runner checks PASS.
+`scripts/tests/web-only-release-test.sh` PASS. Общий
+`make test-web-only-release` FAIL на устаревшем `rootCAsSecrets` ожидании
+PWA test при актуальном `rootCAs`: тот же FAIL воспроизведён на основании
+4147a9d7, TLS в этом unit не меняется.
+
+Независимые review6ab83711 обнаружили P2: исходные global PVC и subject
+result artifacts после Move→Purge без нового turn. Добавлены точные
+server-owned lineage проверки и положительные/отрицательные regression
+tests; финальные результаты ниже фиксируются после запуска.

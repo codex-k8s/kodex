@@ -18,6 +18,9 @@ import (
 //go:embed testdata/sql/project_purge_moved_archive_fixture.sql
 var queryProjectPurgeMovedArchiveFixture string
 
+//go:embed testdata/sql/project_purge_moved_artifact_fixture.sql
+var queryProjectPurgeMovedArtifactFixture string
+
 func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
 	prepareObservedWarmFixture(t, ctx, repository)
@@ -87,6 +90,19 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 	var archiveKey string
 	if err := repository.pool.QueryRow(ctx, queryProjectPurgeMovedArchiveFixture, created.Conversation.SessionRef).Scan(&archiveKey); err != nil {
 		t.Fatal("prepare immutable global archive fixture", err)
+	}
+	var artifactKey string
+	const fixtureDigest = "sha256:2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
+	scan, err := repository.scanArtifact(ctx, strings.NewReader("x"), fixtureDigest, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scanJSON, err := artifactAntivirusJSON(scan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repository.pool.QueryRow(ctx, queryProjectPurgeMovedArtifactFixture, created.Conversation.SessionRef, scanJSON, fixtureDigest).Scan(&artifactKey); err != nil {
+		t.Fatal("prepare immutable global artifact fixture", err)
 	}
 	move := command.Command{Kind: command.MoveAssistantConversationToProject, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-move-to-existing-project", ExpectedVersion: &created.Conversation.Version},
@@ -172,6 +188,27 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 	}
 	candidate := ProjectPurgeCandidate{OrganizationID: owner.AuthorityTenant, OrganizationRef: strings.Split(archiveKey, "/")[2],
 		ProjectID: projectID, ProjectRef: latest.Ref}
+	if owned, err := repository.ProjectPurgeGlobalPVCIsOwned(ctx, candidate, created.Conversation.SessionRef); err != nil || !owned {
+		t.Fatal("moved system session lost global PVC lineage", err)
+	}
+	if owned, err := repository.ProjectPurgeGlobalPVCIsOwned(ctx, candidate, "ses_foreign"); err != nil || owned {
+		t.Fatal("foreign global PVC session admitted", err)
+	}
+	artifactItem := ProjectPurgeExternalItem{Kind: "OBJECT", Target: artifactKey, Version: "fixture-artifact-version"}
+	if owned, err := repository.ProjectPurgeSubjectArtifactIsOwned(ctx, candidate, artifactItem); err != nil || !owned {
+		t.Fatal("moved subject artifact lost lineage", err)
+	}
+	if shared, err := repository.ProjectPurgeObjectIsShared(ctx, candidate, artifactKey); err != nil || shared {
+		t.Fatal("moved subject artifact incorrectly marked foreign", err)
+	}
+	for _, changed := range []ProjectPurgeExternalItem{
+		{Kind: "OBJECT", Target: artifactKey, Version: "foreign-version"},
+		{Kind: "OBJECT", Target: artifactKey + "-foreign", Version: artifactItem.Version},
+	} {
+		if owned, err := repository.ProjectPurgeSubjectArtifactIsOwned(ctx, candidate, changed); err != nil || owned {
+			t.Fatal("foreign subject artifact admitted", err)
+		}
+	}
 	item := ProjectPurgeExternalItem{Kind: "OBJECT", Target: archiveKey, Version: "fixture-version-1"}
 	if owned, err := repository.ProjectPurgeArchiveIsOwned(ctx, candidate, item); err != nil || !owned {
 		t.Fatalf("moved immutable archive lost owner: owned=%t err=%v", owned, err)

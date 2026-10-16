@@ -2301,6 +2301,13 @@ references; один префикс не назначает полномочий
 разрешает переименовать квитанцию. Общий исходный `_system` key допускается
 только для той же доказанной перенесённой сессии.
 
+Это относится и к immutable subject-scoped result artifacts: exact revision,
+version и исходный actor проверяются через current artifact/run/session/
+SYSTEM-conversation lineage, а не общим разрешением `subjects/`. Неперенесённый
+global PVC с прежним hash допускается к cleanup только через то же exact
+SYSTEM-session promotion правило, что у runtime-controller; отсутствие PVC
+promotion не разрешает обход consumer, organization/session labels или UID.
+
 Identity хранилища является частью cleanup: отсутствие key/version в artifact
 bucket не доказывает отсутствие архива в archive bucket. Недоступное правильное
 хранилище закрывает удаление; запасной поиск/удаление по другим buckets запрещён.

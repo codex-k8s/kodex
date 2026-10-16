@@ -25,6 +25,12 @@ var queryProjectPurgeForeignObject string
 //go:embed sql/project_purge__archive_owner.sql
 var queryProjectPurgeArchiveOwner string
 
+//go:embed sql/project_purge__global_pvc_owner.sql
+var queryProjectPurgeGlobalPVCOwner string
+
+//go:embed sql/project_purge__subject_artifact_owner.sql
+var queryProjectPurgeSubjectArtifactOwner string
+
 //go:embed sql/project_purge__lock_receipt.sql
 var queryProjectPurgeLockReceipt string
 
@@ -174,6 +180,30 @@ func (repository *Repository) ProjectPurgeArchiveIsOwned(ctx context.Context, ca
 	err := repository.pool.QueryRow(ctx, queryProjectPurgeArchiveOwner, pgx.StrictNamedArgs{
 		"organization_id": candidate.OrganizationID, "project_id": candidate.ProjectID,
 		"project_ref": candidate.ProjectRef, "object_key": item.Target, "object_version": item.Version,
+	}).Scan(&owned)
+	if err != nil {
+		return false, errs.ErrUnavailable
+	}
+	return owned, nil
+}
+
+func (repository *Repository) ProjectPurgeSubjectArtifactIsOwned(ctx context.Context, candidate ProjectPurgeCandidate, item ProjectPurgeExternalItem) (bool, error) {
+	var owned bool
+	err := repository.pool.QueryRow(ctx, queryProjectPurgeSubjectArtifactOwner, pgx.StrictNamedArgs{
+		"organization_id": candidate.OrganizationID, "project_id": candidate.ProjectID,
+		"project_ref": candidate.ProjectRef, "object_key": item.Target, "object_version": item.Version,
+	}).Scan(&owned)
+	if err != nil {
+		return false, errs.ErrUnavailable
+	}
+	return owned, nil
+}
+
+func (repository *Repository) ProjectPurgeGlobalPVCIsOwned(ctx context.Context, candidate ProjectPurgeCandidate, sessionRef string) (bool, error) {
+	var owned bool
+	err := repository.pool.QueryRow(ctx, queryProjectPurgeGlobalPVCOwner, pgx.StrictNamedArgs{
+		"organization_id": candidate.OrganizationID, "project_id": candidate.ProjectID,
+		"project_ref": candidate.ProjectRef, "session_ref": sessionRef,
 	}).Scan(&owned)
 	if err != nil {
 		return false, errs.ErrUnavailable

@@ -34,6 +34,8 @@ type source interface {
 	ProjectPurgeInventory(context.Context, platform.ProjectPurgeCandidate) ([]platform.ProjectPurgeExternalItem, error)
 	ProjectPurgeObjectIsShared(context.Context, platform.ProjectPurgeCandidate, string) (bool, error)
 	ProjectPurgeArchiveIsOwned(context.Context, platform.ProjectPurgeCandidate, platform.ProjectPurgeExternalItem) (bool, error)
+	ProjectPurgeSubjectArtifactIsOwned(context.Context, platform.ProjectPurgeCandidate, platform.ProjectPurgeExternalItem) (bool, error)
+	ProjectPurgeGlobalPVCIsOwned(context.Context, platform.ProjectPurgeCandidate, string) (bool, error)
 	FinalizeProjectPurge(context.Context, platform.ProjectPurgeCandidate, []platform.ProjectPurgeExternalItem) error
 }
 
@@ -163,6 +165,11 @@ func (processor *Processor) deleteObject(ctx context.Context, candidate platform
 	store := processor.objects
 	switch {
 	case strings.HasPrefix(item.Target, artifactPrefix):
+	case strings.HasPrefix(item.Target, "organizations/"+candidate.OrganizationRef+"/subjects/"):
+		owned, err := processor.source.ProjectPurgeSubjectArtifactIsOwned(ctx, candidate, item)
+		if err != nil || !owned {
+			return errors.New("project purge artifact ownership is unconfirmed")
+		}
 	case strings.HasPrefix(item.Target, archivePrefix):
 		owned, err := processor.source.ProjectPurgeArchiveIsOwned(ctx, candidate, item)
 		if err != nil || !owned || processor.archives == nil {
@@ -248,9 +255,17 @@ func (processor *Processor) deletePVC(ctx context.Context, candidate platform.Pr
 		return errors.New("project purge PVC read failed")
 	}
 	if pvc.Labels[managedLabel] != "true" || pvc.Labels[sessionHashLabel] != shortHash(item.Version) ||
-		pvc.Annotations[organizationHashAnnotation] != shortHash(candidate.OrganizationRef) ||
-		pvc.Annotations[projectHashAnnotation] != shortHash(candidate.ProjectRef) {
+		pvc.Annotations[organizationHashAnnotation] != shortHash(candidate.OrganizationRef) {
 		return errors.New("project purge PVC ownership mismatch")
+	}
+	if pvc.Annotations[projectHashAnnotation] != shortHash(candidate.ProjectRef) {
+		if pvc.Annotations[projectHashAnnotation] != shortHash("") {
+			return errors.New("project purge PVC ownership mismatch")
+		}
+		owned, err := processor.source.ProjectPurgeGlobalPVCIsOwned(ctx, candidate, item.Version)
+		if err != nil || !owned {
+			return errors.New("project purge global PVC ownership is unconfirmed")
+		}
 	}
 	uid := pvc.UID
 	if err := pvcs.Delete(ctx, name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}}); err != nil && !apierrors.IsNotFound(err) {
