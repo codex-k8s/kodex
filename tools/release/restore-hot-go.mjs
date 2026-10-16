@@ -21,7 +21,8 @@ export function hotSpec(deployment, recovery, source) {
     deployment.spec.template.metadata.labels["kodex.dev/security-profile"] === "trusted-cluster" &&
     recovery?.name === name && recovery.uid === deployment.metadata.uid && recovery.recovery?.mode === "RESTORE_SOURCE",
   "HOT_RESTORE_BOUNDARY_INVALID");
-  const after = applyReverseSpec(deployment.spec, recovery.recovery.inverse);
+  const after = deployment.spec.template.metadata.labels["kodex.dev/local-profile"] === "hot-reload" ?
+    structuredClone(deployment.spec) : applyReverseSpec(deployment.spec, recovery.recovery.inverse);
   // Это forward development transition, не откат реплик, конфигурации или сети.
   after.replicas = deployment.spec.replicas;
   after.strategy = structuredClone(deployment.spec.strategy);
@@ -87,13 +88,15 @@ async function main(args) {
       fail(current.status.observedGeneration === current.metadata.generation && current.status.availableReplicas === current.spec.replicas &&
         current.status.updatedReplicas === current.spec.replicas && current.spec.replicas === 2, "HOT_RESTORE_TARGET_NOT_READY");
       const afterSpec = hotSpec(current, recovery.targets.find(t => t.name === name), source);
+      const afterLabels = { ...current.metadata.labels, "kodex.dev/local-profile": "hot-reload" };
       const patch = [{ op: "test", path: "/metadata/uid", value: current.metadata.uid },
         { op: "test", path: "/metadata/resourceVersion", value: current.metadata.resourceVersion },
-        { op: "test", path: "/spec", value: current.spec }, { op: "replace", path: "/spec", value: afterSpec }];
+        { op: "test", path: "/spec", value: current.spec }, { op: "test", path: "/metadata/labels", value: current.metadata.labels },
+        { op: "add", path: "/metadata/labels", value: afterLabels }, { op: "replace", path: "/spec", value: afterSpec }];
       await kube(["-n", namespace, "patch", "deployment", name, "--type=json", "--patch-file=/dev/stdin", "--dry-run=server", "-o", "name"], JSON.stringify(patch));
-      targets.push({ name, uid: current.metadata.uid, beforeSpec: current.spec, afterSpec });
+      targets.push({ name, uid: current.metadata.uid, beforeSpec: current.spec, afterSpec, beforeLabels: current.metadata.labels, afterLabels });
     }
-    const plan = { schema: "kodex.hot-go-restore/v1", context: options["--context"], clusterUID: cluster.metadata.uid, source,
+    const plan = { schema: "kodex.hot-go-restore/v2", context: options["--context"], clusterUID: cluster.metadata.uid, source,
       recoveryPlan: options["--recovery-plan"], recoverySHA256: fingerprint(recovery), targets };
     const output = await open(options["--output"], "wx", 0o600);
     try { await output.writeFile(JSON.stringify(plan)); await output.sync(); } finally { await output.close(); }
@@ -101,12 +104,13 @@ async function main(args) {
     return;
   }
   const plan = await readPrivateJSON(options["--plan"]);
-  fail(plan.schema === "kodex.hot-go-restore/v1" && plan.context === options["--context"] && plan.clusterUID === cluster.metadata.uid &&
+  fail(plan.schema === "kodex.hot-go-restore/v2" && plan.context === options["--context"] && plan.clusterUID === cluster.metadata.uid &&
     equal(await inspect(plan.source.path), plan.source) && plan.targets?.length > 0 && plan.targets.every(t => allowed.has(t.name)), "HOT_RESTORE_PLAN_DRIFT");
   const recovery = await readPrivateJSON(plan.recoveryPlan);
   fail(fingerprint(recovery) === plan.recoverySHA256, "HOT_RESTORE_RECOVERY_DRIFT");
   for (const target of plan.targets) fail(equal(hotSpec({ metadata: { name: target.name, namespace, uid: target.uid }, spec: target.beforeSpec },
-    recovery.targets.find(t => t.name === target.name), plan.source), target.afterSpec), "HOT_RESTORE_PLAN_DRIFT");
+    recovery.targets.find(t => t.name === target.name), plan.source), target.afterSpec) &&
+    equal(target.afterLabels, { ...target.beforeLabels, "kodex.dev/local-profile": "hot-reload" }), "HOT_RESTORE_PLAN_DRIFT");
   if (mode === "apply") fail(options["--approved-plan-sha"] === fingerprint(plan), "HOT_RESTORE_EXACT_APPROVAL_REQUIRED");
   const output = await open(options["--output"], "wx", 0o600);
   const record = async row => { await output.writeFile(JSON.stringify(row) + "\n"); await output.sync(); };
@@ -114,17 +118,19 @@ async function main(args) {
     await record({ schema: "kodex.hot-go-restore-journal/v1", mode, planSHA256: fingerprint(plan), sourceSHA: plan.source.revision, status: "IN_PROGRESS" });
     for (const target of plan.targets) {
       let current = await get("deployment", target.name);
-      fail(current.metadata.uid === target.uid && (equal(current.spec, target.afterSpec) || mode === "apply" && equal(current.spec, target.beforeSpec)), "HOT_RESTORE_TARGET_DRIFT");
-      if (mode === "apply" && !equal(current.spec, target.afterSpec)) {
+      fail(current.metadata.uid === target.uid && (equal(current.spec, target.afterSpec) || mode === "apply" && equal(current.spec, target.beforeSpec)) &&
+        (equal(current.metadata.labels, target.afterLabels) || mode === "apply" && equal(current.metadata.labels, target.beforeLabels)), "HOT_RESTORE_TARGET_DRIFT");
+      if (mode === "apply" && (!equal(current.spec, target.afterSpec) || !equal(current.metadata.labels, target.afterLabels))) {
         fail(equal(await inspect(plan.source.path), plan.source), "HOT_RESTORE_SOURCE_CHANGED");
         await record({ name: target.name, status: "PATCH_ATTEMPT", before: fingerprint(target.beforeSpec), after: fingerprint(target.afterSpec) });
         await kube(["-n", namespace, "patch", "deployment", target.name, "--type=json", "--patch-file=/dev/stdin", "-o", "name"], JSON.stringify([
           { op: "test", path: "/metadata/uid", value: target.uid }, { op: "test", path: "/metadata/resourceVersion", value: current.metadata.resourceVersion },
-          { op: "test", path: "/spec", value: target.beforeSpec }, { op: "replace", path: "/spec", value: target.afterSpec }]));
+          { op: "test", path: "/spec", value: current.spec }, { op: "test", path: "/metadata/labels", value: current.metadata.labels },
+          { op: "add", path: "/metadata/labels", value: target.afterLabels }, { op: "replace", path: "/spec", value: target.afterSpec }]));
         await record({ name: target.name, status: "PATCH_APPLIED" });
       }
       current = await get("deployment", target.name);
-      fail(current.metadata.uid === target.uid && equal(current.spec, target.afterSpec), "HOT_RESTORE_READBACK_MISMATCH");
+      fail(current.metadata.uid === target.uid && equal(current.spec, target.afterSpec) && equal(current.metadata.labels, target.afterLabels), "HOT_RESTORE_READBACK_MISMATCH");
       await record({ name: target.name, status: "SPEC_READBACK", ready: current.status.availableReplicas ?? 0 });
     }
     await record({ status: "PASS", phase: "SPEC_ONLY", servingRuntime: "NOT_RUN" });

@@ -138,3 +138,23 @@ Chrome MCP: собственная вкладка, получение списк
   Этот FAIL не скрыт и должен быть устранён до итоговой приёмки.
 - Hot reload apply и serving source proof пока NOT RUN. Публичный frontend
   пока продолжает отдавать compiled bundle через прежний Nginx.
+
+### 16.10: Go hot reload активирован
+
+- PASS: source `eac653967423592b14678d53a104571125b456c1` содержит публичную
+  конфигурацию и почтовый fix. Подготовлен отдельный tracked-only clone с
+  пустыми private mountpoints; исходный main не изменялся.
+- PASS: repo-owned dry-run/plan/apply и отдельный spec readback для CP/API
+  gateway; оба завершили rolling replacement с desired/updated/available2.
+  Runtime controller, secret broker, archive и frontend не менялись.
+- PASS: две CP реплики читают один exact SQL digest исправления, имеют пустой
+  masked .env и разные exact Pod UID/Air runtime directories. Монтирование
+  source read-only; ключи и Git metadata скрыты.
+- Источник дальнейших правок теперь один: checkout, реально подключённый к Pod,
+  а не первоначальный worktree PR. Та же branch/PR; начальный source SHA указан
+  выше. Новые checkpoint записывают текущую revision и actual readback.
+- Найдено несоответствие служебной root metadata: template уже hot-reload,
+  Deployment label ещё stable. Вторая ревизия restore plan синхронизирует
+  только собственный marker с CAS и поддерживает последующие source checkpoints
+  без повторного применения исторического inverse. Старые v1 планы не декодируются
+  новым исполнителем; их уже полученное evidence остаётся историческим.

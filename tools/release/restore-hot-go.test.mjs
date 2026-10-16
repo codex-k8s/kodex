@@ -44,3 +44,13 @@ test("restore rejects foreign UID, writable source, changed app config, sidecar 
   const { current, oldHot, recovery } = fixture(), wrong = recovery(oldHot); wrong.uid = "foreign";
   assert.throws(() => hotSpec(current, wrong, source), /BOUNDARY/);
 });
+
+test("subsequent source checkpoint does not replay historical inverse or duplicate dev env", () => {
+  const { current, oldHot, recovery } = fixture();
+  const first = hotSpec(current, recovery(oldHot), source);
+  const nextSource = { ...source, revision: "e".repeat(40), contentSHA256: "f".repeat(64) };
+  const second = hotSpec({ ...current, spec: first }, recovery(oldHot), nextSource);
+  assert.deepEqual(second.template.spec.containers, first.template.spec.containers);
+  assert.deepEqual(second.template.spec.volumes, first.template.spec.volumes);
+  assert.equal(second.template.metadata.annotations["kodex.dev/source-revision"], nextSource.revision);
+});
