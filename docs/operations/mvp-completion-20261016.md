@@ -16,7 +16,7 @@ updated: 2026-10-16
 
 ## Этапы
 
-- [ ] Восстановить ядро, внешний HTTPS/SSO и закрепить восстановление после
+- [x] Восстановить ядро, внешний HTTPS/SSO и закрепить восстановление после
   перезапуска. Не менять данные, сертификаты и соседние маршруты.
 - [ ] Согласовать исходники, развёрнутые образы и release evidence; сохранить
   уже применённый почтовый фикс и публичную конфигурацию.
@@ -183,3 +183,32 @@ Chrome MCP: собственная вкладка, получение списк
   ограниченный worker для четырёх exact root unit filenames.
 - PASS LOCAL на рабочем дереве checkpoint:12 model/worker tests. Live boot
   transition, timers и фактический host reboot пока NOT RUN.
+
+### 16.10: восстановление закреплено; исправлена оснастка почтового regression
+
+- PASS на executor `36190190b3b98928d8eb0f376d1f41d9e9d3edc8`: forward boot
+  apply и отдельный readback; оба root relay socket active/enabled,
+  DefaultDependencies=no, shutdown ordering, включение в multi-user.target.
+- PASS: установлены два независимых operator user timers с периодом60s;
+  первый API проход обновил пять base policies, следующий — changed0.
+  Relay controller прошёл два последовательных цикла без изменения canonical
+  units. Linger включён только для текущего оператора. Значения credentials
+  и копии kubeconfig не создавались. Runtime агентам права не выдавались.
+- PASS: systemd dependency verification для двух sockets; выданы только
+  посторонние предупреждения об устаревшем CPUAccounting в системных XFS units.
+  PASS: публичный корень302 в SSO и API401 без авторизации. Полный host reboot
+  NOT RUN: он затронул бы соседний контур и не нужен для проверки кода исправления.
+- PASS LOCAL на executor36190190b:8 edge-release CLI tests. Вместе с12
+  targeted model/worker tests подтверждены closed drift/UID/unit/path guards;
+  это не blanket full MVP acceptance.
+- Причина FAIL email receipt fixture: адресный запуск пытался LaunchRun до
+  свежего наблюдения каталога модели, которое ранее создавал соседний сценарий.
+  Исправлена только оснастка: явный штатный seed owner catalog tasks;
+  production eligibility и policy не ослаблялись.
+- PASS на рабочем дереве этого checkpoint с Go1.26.6: адресный receipt test,
+  затем весь `TestBootstrapComponent/email` на fresh disposable PostgreSQL:
+  reconciliation, watermark, exact authorization/mailbox Human Gate и immutable
+  credentials. Fresh migrations, repeated up и read-only worker/runner queries PASS.
+- PASS: штатный fresh owner SSO/SPA login после исправлений, bootstrap200 и
+  provider accounts200; account AUTHORIZED/enabled. Это ещё не доказательство
+  нового модельного выполнения или полной готовности провайдера.

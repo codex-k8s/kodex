@@ -21,6 +21,8 @@ import (
 var emailReceiptFixtureQuery string
 
 func testEmailReceiptReconciliation(t *testing.T, ctx context.Context, repository *Repository, pool *pgxpool.Pool) {
+	// Адресный запуск не наследует наблюдение каталога от соседних сценариев.
+	seedObservedCatalogFixture(t, ctx, repository)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
 		CallerWorkload: "control-api-gateway", Operation: "platform.command.email-effects.reconcile",
