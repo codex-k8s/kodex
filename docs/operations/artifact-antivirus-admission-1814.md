@@ -116,3 +116,11 @@ preview, невозможность снять старую KNOWLEDGE binding п
 На установленном контуре backup-controller отсутствует. Перед AV migration
 необходим описанный локальный CP dump; полный platform backup/restore остаётся
 незавершённым пунктом общего MVP checklist, а не неявным PASS.
+
+Checkpoint `0f654603360910834dc4bc80766cc4ef094d9e6a`: полный CP Go unit,
+26 Node tests и адресный disposable PostgreSQL контур PASS. Product и
+architecture повторно проверили этот SHA без P0/P1/P2. Живые rollout, AV,
+browser upload и backup ещё NOT RUN. Отдельный запуск direct-run/VFS
+первоначально FAIL: fixture зависел от ранее выполненного наблюдения каталога
+модели. Добавлен явный штатный seed только в test fixture; повтор direct-run,
+VFS DOWNLOAD/изоляция и concurrent-lease reads PASS на исправленном дереве.
