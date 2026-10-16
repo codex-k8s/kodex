@@ -14,7 +14,9 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
@@ -164,21 +166,84 @@ func testArtifactAntivirus(t *testing.T, ctx context.Context, repository *Reposi
 		t.Fatal(err)
 	}
 	var unverified entity.Artifact
+	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "av-legacy-project"}, Payload: command.ProjectInput{Name: "AV legacy recovery", Language: "en"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectID := gateTestProjectID(t, ctx, repository, owner, project.Project.Ref)
 	err = repository.pool.QueryRow(ctx, queryArtifactsUploadartifactInsertArtifactsRefProjectIdFileName,
-		ref, current.organizationID, "", "", "unverified.txt", "text/plain", int64(3), item.Digest,
+		ref, current.organizationID, projectID, "", "unverified.txt", "text/plain", int64(3), item.Digest,
 		"CLEAN", "obj_unproven_component", "AVAILABLE", current.actorID).Scan(
 		&unverified.Ref, &unverified.FileName, &unverified.MediaType, &unverified.SizeBytes, &unverified.Digest,
 		&unverified.ScanState, &unverified.PreviewState, &unverified.Revision, &unverified.Version, &unverified.CreatedAt, &unverified.CurrentRevisionRef)
 	if err != nil {
 		t.Fatal(err)
 	}
+	historical := unverified
 	unverified, err = service.GetArtifact(ctx, owner, ref)
-	if err != nil || unverified.ScanState != "QUARANTINED" {
+	if err != nil || unverified.ScanState != "QUARANTINED" || unverified.PreviewState != "BLOCKED" {
 		t.Fatalf("unverified revision was admitted: %s %v", unverified.ScanState, err)
 	}
 	for _, invalid := range [][]byte{nil, []byte(`{}`), []byte(`{"policy":"clamav-instream-v1","verdict":"CLEAN"}`)} {
 		if _, err := repository.pool.Exec(ctx, queryArtifactAntivirusUnprovenContent, ref, invalid); err == nil {
 			t.Fatal("missing or forged proof accepted")
 		}
+	}
+	// Существующую до cutover связь моделирует только disposable fixture;
+	// снять её пользователь должен обычной owner-командой без допуска bytes.
+	agent := createLifecycleAgent(t, ctx, service, owner, project.Project.Ref, "av-legacy-agent", "Legacy knowledge")
+	tx, err := repository.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	var artifactID, lockedProjectID string
+	var version int64
+	if err := tx.QueryRow(ctx, queryArtifactRevisionCreateLock, current.organizationID, ref).Scan(&artifactID, &lockedProjectID, &version); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, queryArtifactsChangeartifactbindingInsertArtifactBindingsArtifactIdTargetRef, artifactID, current.organizationID, current.actorID, projectID, agent.Ref); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, queryArtifactsChangeartifactbindingUpdateArtifactsVersion, artifactID); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	targets, err := service.ListArtifactBindingTargets(ctx, owner, ref, query.Filter{})
+	if err != nil || len(targets.Items) != 1 || !targets.Items[0].CanUnbind || targets.Items[0].CanBind {
+		t.Fatal("quarantine binding cleanup unavailable", err)
+	}
+	unverified, err = service.GetArtifact(ctx, owner, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bind := command.Command{Kind: command.ChangeArtifactBinding, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "av-no-new-binding", ExpectedVersion: &unverified.Version},
+		Payload: command.ArtifactBindingInput{ArtifactRef: ref, AgentRef: agent.Ref, Enabled: true}}
+	if _, err := service.Execute(ctx, bind); err == nil {
+		t.Fatal("quarantine granted a new binding")
+	}
+	bind.Mutation.IdempotencyKey = "av-remove-old-binding"
+	bind.Payload = command.ArtifactBindingInput{ArtifactRef: ref, AgentRef: agent.Ref, Enabled: false}
+	for range 2 {
+		if _, err := service.Execute(ctx, bind); err != nil {
+			t.Fatal("quarantine unbind/replay failed", err)
+		}
+	}
+	tx, err = repository.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	eventArtifact := historical
+	event := entity.RunEvent{}
+	event.Delta.Artifact = &eventArtifact
+	if err := projectArtifactResults(ctx, tx, current, &command.Result{Artifact: &historical, Event: &event}); err != nil {
+		t.Fatal(err)
+	}
+	if historical.ScanState != "QUARANTINED" || historical.PreviewState != "BLOCKED" || eventArtifact.ScanState != "QUARANTINED" || eventArtifact.PreviewState != "BLOCKED" {
+		t.Fatal("old aggregate version retained format-only CLEAN/preview")
 	}
 }

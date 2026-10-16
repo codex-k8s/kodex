@@ -827,7 +827,7 @@ func (repository *Repository) changeArtifactBinding(ctx context.Context, tx pgx.
 	}
 	var artifactID, projectID, projectRef string
 	var version int64
-	if err := tx.QueryRow(ctx, queryArtifactsChangeartifactbindingSelectArtifactsOrganizationIdRefScanState, scope.organizationID, payload.ArtifactRef).Scan(&artifactID, &projectID, &projectRef, &version); err != nil {
+	if err := tx.QueryRow(ctx, queryArtifactsChangeartifactbindingSelectArtifactsOrganizationIdRefScanState, scope.organizationID, payload.ArtifactRef, payload.Enabled).Scan(&artifactID, &projectID, &projectRef, &version); err != nil {
 		return commandOutcome{}, errs.ErrNotFound
 	}
 	if version != *input.Mutation.ExpectedVersion {

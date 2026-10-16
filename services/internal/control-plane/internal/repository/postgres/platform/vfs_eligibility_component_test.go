@@ -44,7 +44,7 @@ func testVFSEligibility(t *testing.T, ctx context.Context, repository *Repositor
 		t.Fatalf("VFS owner page: total=%d err=%v", total, err)
 	}
 	first := nodes[0]
-	if first.ResourceKind != "ARTIFACT" || first.Version < 1 || first.Revision != 1 || first.LifecycleState != "ACTIVE" || first.ScanState != "CLEAN" || !first.Selectable || first.SelectionReason != "AVAILABLE" || !slices.Contains(first.NextActions, "DELETE") {
+	if first.ResourceKind != "ARTIFACT" || first.Version < 1 || first.Revision != 1 || first.LifecycleState != "ACTIVE" || first.ScanState != "CLEAN" || !first.Selectable || first.SelectionReason != "AVAILABLE" || !slices.Contains(first.NextActions, "DELETE") || !slices.Contains(first.NextActions, "DOWNLOAD") {
 		t.Fatal("exact artifact metadata or selection lost")
 	}
 	filter.Page.Token = next

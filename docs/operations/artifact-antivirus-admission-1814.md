@@ -4,7 +4,7 @@ title: Серверный антивирусный допуск точных б�
 type: operation-plan
 status: approved
 owner: manager
-version: 1.0.0
+version: 1.0.1
 updated: 2026-10-16
 ---
 
@@ -71,6 +71,11 @@ AV не доказывает отсутствие prompt injection. Семант
 
 1. Убедиться в отсутствии активных runtime executions и неподтверждённых
    отправок; сохранить текущие UID/source/image receipts и резервную копию.
+   `tools/deploy/control-plane-pre-migration-backup.mjs --context k3d-kodex
+   --output-directory <private-directory>` сохраняет read-only custom dump
+   Control Plane с SHA-256, exact PostgreSQL instance и проверкой TOC.
+   Это не резервная копия всей платформы и не доказательство restore:
+   S3 и другие домены не копируются; restore остаётся отдельным этапом плана.
 2. `tools/deploy/artifact-scanner-release.mjs plan|apply|readback` создаёт новую
    immutable ConfigMap и меняет только scanner config/tmp в CP с двумя
    репликами. Прежняя ConfigMap не изменяется и не удаляется.
@@ -90,3 +95,24 @@ AV не доказывает отсутствие prompt injection. Семант
 
 Все code-first этапы выполняются в существующем разрешённом локальном контуре.
 До живого выполнения соответствующие пункты и EICAR остаются NOT RUN.
+
+## Проверка исходников и исправления
+
+Исходный checkpoint `c469d3da85b24a6377fd4bf4104ad42b9449faa9`
+опубликован в Draft PR#1815 поверх PR#1811. Полный Go unit Control Plane,
+адресные disposable PostgreSQL upload/avatar/prepared/immutable/preview и
+применимые regression, fresh/repeated migration и оба release render прошли
+локально. Синтетический scanner в component fixture не выдаётся за live AV.
+
+Независимая проверка выявила три проблемы старых файлов: ложную доступность
+preview, невозможность снять старую KNOWLEDGE binding после карантина и
+сохранение format-only CLEAN в receipt/event при иной aggregate version.
+Исправления сохраняют raw immutable историю, но повторно вычисляют допуск
+точной revision; снятие существующей binding не разрешает новый bind или bytes.
+Частичная VFS проекция получает действия из авторитетного snapshot, не
+выдавая неполную entity за revision. Проверка VFS включает положительный DOWNLOAD.
+Исправленный SHA и результаты повторной проверки фиксируются после commit.
+
+На установленном контуре backup-controller отсутствует. Перед AV migration
+необходим описанный локальный CP dump; полный platform backup/restore остаётся
+незавершённым пунктом общего MVP checklist, а не неявным PASS.

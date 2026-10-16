@@ -56,7 +56,7 @@ func (repository *Repository) readFileBindingArtifact(ctx context.Context, tx pg
 	}
 	var artifact entity.Artifact
 	artifact.Ref = ref
-	if err := projectArtifactEligibility(ctx, tx, current, &artifact); err != nil {
+	if err := projectArtifactActions(ctx, tx, current, &artifact); err != nil {
 		return item, err
 	}
 	err := tx.QueryRow(ctx, queryFileBindingTargetArtifact, pgx.StrictNamedArgs{
@@ -121,7 +121,7 @@ func projectFileBindingTarget(artifact fileBindingArtifact, item fileBindingAgen
 		result.BindReason = fileTargetAlreadyBound
 	}
 	switch {
-	case artifact.Lifecycle != "ACTIVE" || artifact.Scan != "CLEAN":
+	case artifact.Lifecycle != "ACTIVE":
 		result.UnbindReason = fileTargetArtifactUnavailable
 	case !item.Bound:
 		result.UnbindReason = fileTargetNotBound

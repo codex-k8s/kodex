@@ -9,7 +9,7 @@ DO $$ BEGIN
  END IF;
  IF EXISTS(SELECT 1 FROM public.artifact_upgrade_expected expected
    LEFT JOIN control_plane.artifact_history history ON history.ref=expected.ref
-   WHERE expected.kind='artifact' AND expected.snapshot-'scan_state' IS DISTINCT FROM to_jsonb(history)-ARRAY['revision_id','revision_ref','scan_state']) OR
+   WHERE expected.kind='artifact' AND expected.snapshot-ARRAY['scan_state','preview_state'] IS DISTINCT FROM to_jsonb(history)-ARRAY['revision_id','revision_ref','scan_state','preview_state']) OR
     EXISTS(SELECT 1 FROM public.artifact_upgrade_expected expected LEFT JOIN control_plane.artifacts artifact ON artifact.ref=expected.ref
       LEFT JOIN control_plane.artifact_content content ON content.artifact_id=artifact.id
       WHERE expected.kind='content' AND expected.snapshot IS DISTINCT FROM to_jsonb(content)-'antivirus_report') OR
@@ -25,7 +25,8 @@ DO $$ BEGIN
    JOIN control_plane.artifact_revisions revision ON revision.id=history.revision_id
    JOIN control_plane.artifact_revision_content content ON content.revision_id=revision.id
    WHERE expected.kind='artifact' AND (revision.scan_state<>expected.snapshot->>'scan_state'
-     OR history.scan_state<>'QUARANTINED' OR content.antivirus_report IS NOT NULL)) THEN
+     OR revision.preview_state<>expected.snapshot->>'preview_state'
+     OR history.scan_state<>'QUARANTINED' OR history.preview_state<>'BLOCKED' OR content.antivirus_report IS NOT NULL)) THEN
    RAISE EXCEPTION 'historical unverified content acquired antivirus admission';
  END IF;
 END $$;

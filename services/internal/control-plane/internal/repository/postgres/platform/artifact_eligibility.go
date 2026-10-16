@@ -70,7 +70,6 @@ func projectArtifactResults(ctx context.Context, runner queryRunner, current sco
 	type eligibleArtifact struct {
 		version int64
 		actions []string
-		scan    string
 	}
 	visible := make(map[string]eligibleArtifact, len(refs))
 	// Размер одного запроса ограничен независимо от числа ссылок в истории Run.
@@ -91,7 +90,6 @@ func projectArtifactResults(ctx context.Context, runner queryRunner, current sco
 				return errs.ErrUnavailable
 			}
 			item.actions = permittedArtifactActions(scan, lifecycle, func(permission string) bool { return contains(permissions, permission) })
-			item.scan = scan
 			visible[ref] = item
 		}
 		err = rows.Err()
@@ -126,7 +124,9 @@ func projectArtifactResults(ctx context.Context, runner queryRunner, current sco
 		(*artifact).NextActions = []string{}
 		if (*artifact).Version == item.version {
 			(*artifact).NextActions = slices.Clone(item.actions)
-			(*artifact).ScanState = item.scan
+		}
+		if err := projectArtifactRevisionEligibility(ctx, runner, current, *artifact); err != nil {
+			return err
 		}
 		if err := projectArtifactBindingRefs(ctx, runner, current, *artifact); err != nil {
 			return err
@@ -162,6 +162,18 @@ func permittedArtifactActions(scanState, lifecycle string, allowed func(string) 
 }
 
 func projectArtifactEligibility(ctx context.Context, runner queryRunner, current scope, artifact *entity.Artifact) error {
+	if err := projectArtifactActions(ctx, runner, current, artifact); err != nil {
+		return err
+	}
+	if err := projectArtifactRevisionEligibility(ctx, runner, current, artifact); err != nil {
+		return err
+	}
+	return projectArtifactBindingRefs(ctx, runner, current, artifact)
+}
+
+// Частичные VFS/access проекции получают действия из авторитетной текущей
+// строки, а не выдают неполную entity за immutable revision snapshot.
+func projectArtifactActions(ctx context.Context, runner queryRunner, current scope, artifact *entity.Artifact) error {
 	var permissions []string
 	var version int64
 	var lifecycle, scan string
@@ -175,7 +187,42 @@ func projectArtifactEligibility(ctx context.Context, runner queryRunner, current
 	artifact.NextActions = []string{}
 	if artifact.Version == version {
 		artifact.NextActions = permittedArtifactActions(scan, lifecycle, func(permission string) bool { return contains(permissions, permission) })
-		artifact.ScanState = scan
 	}
-	return projectArtifactBindingRefs(ctx, runner, current, artifact)
+	return nil
+}
+
+// Aggregate version может измениться при bind без смены body. Historical
+// receipt/event разрешается по его immutable pins, а не scan текущей иной
+// ревизии. Отсутствующий или несовпадающий pin не получает выдуманный CLEAN.
+func projectArtifactRevisionEligibility(ctx context.Context, runner queryRunner, current scope, artifact *entity.Artifact) error {
+	defer func() {
+		if artifact.ScanState != "CLEAN" {
+			artifact.NextActions = slices.DeleteFunc(artifact.NextActions, func(action string) bool { return action == "DOWNLOAD" || action == "BIND" })
+		}
+	}()
+	artifact.ScanState, artifact.PreviewState = "QUARANTINED", "BLOCKED"
+	if artifact.CurrentRevisionRef == "" || !objectDigestValid(artifact.Digest) {
+		return nil
+	}
+	revision, err := artifactRevisionRow(runner.QueryRow(ctx, queryArtifactRevisionGet, pgx.StrictNamedArgs{
+		"organization_id": current.organizationID, "artifact_ref": artifact.Ref, "revision_ref": artifact.CurrentRevisionRef,
+	}))
+	if errors.Is(err, errs.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if revision.Revision != artifact.Revision || revision.Digest != artifact.Digest || revision.SizeBytes != artifact.SizeBytes ||
+		revision.FileName != artifact.FileName || revision.MediaType != artifact.MediaType {
+		return nil
+	}
+	artifact.ScanState = revision.ScanState
+	if revision.ScanState == "CLEAN" {
+		artifact.PreviewState = "UNAVAILABLE"
+		if revision.PreviewAvailable {
+			artifact.PreviewState = "AVAILABLE"
+		}
+	}
+	return nil
 }
