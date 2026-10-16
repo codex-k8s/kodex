@@ -20,7 +20,7 @@ updated: 2026-10-16
   перезапуска. Не менять данные, сертификаты и соседние маршруты.
 - [ ] Согласовать исходники, развёрнутые образы и release evidence; сохранить
   уже применённый почтовый фикс и публичную конфигурацию.
-- [ ] Вернуть выборочный hot reload application code, сохранив внешний вход;
+- [x] Вернуть выборочный hot reload application code, сохранив внешний вход;
   доказать реально смонтированные исходники и работающую версию.
 - [ ] Завершить реальный пользовательский сценарий: проект, окружение,
   сотрудник, выполнение, файлы, продолжение, делегирование и Human Gate.
@@ -158,3 +158,28 @@ Chrome MCP: собственная вкладка, получение списк
   только собственный marker с CAS и поддерживает последующие source checkpoints
   без повторного применения исторического inverse. Старые v1 планы не декодируются
   новым исполнителем; их уже полученное evidence остаётся историческим.
+
+### Предотвращение повторения потери связности
+
+- Подтверждена первичная причина inactive relay после загрузки: systemd явно
+  удалил start двух socket jobs из-за ordering cycle
+  socket → network-online → basic → sockets.target → socket.
+- Исправлена factory генерация новых socket units: DefaultDependencies=no,
+  явный shutdown ordering и multi-user.target. Для установленного состояния
+  подготовлен отдельный immutable forward boot plan с точными before/after;
+  исходные журналы установки не переписываются.
+- Добавлен операторский API reconciler: closed set из пяти base policies и
+  четырёх созданных recovery policies, exact cluster/namespace/policy UID,
+  ready control-plane EndpointSlice и JSON Patch с UID/RV/full-spec precondition.
+  Он удаляет устаревший API IP, сохраняя все остальные ingress/egress rules.
+- Добавлена периодическая сверка public relay: прежние exact Docker IDs и
+  network IDs, canonical полные unit preimage, только текущие exact /32.
+  Частично заменённые canonical файлы после crash не требуют подмены истории;
+  неизвестные unit body, дополнительный drop-in или другой node/network закрывают
+  восстановление. Никаких изменений Kubernetes ресурсов соседнего контура.
+- Установка выполняется от штатного оператора через отдельные user timers,
+  без переноса credentials в агента. Операторский linger обеспечивает startup
+  после reboot без интерактивного входа. Внешний relay использует прежний
+  ограниченный worker для четырёх exact root unit filenames.
+- PASS LOCAL на рабочем дереве checkpoint:12 model/worker tests. Live boot
+  transition, timers и фактический host reboot пока NOT RUN.

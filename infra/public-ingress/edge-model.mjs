@@ -60,7 +60,7 @@ export function renderPublicEdge(config) {
     const protocol = `https-${index}`, upstream = 443;
     const name = `kodex-public-edge-${protocol}`;
     const peerRules = allowedPeers.map(ip => `IPAddressAllow=${ip}/32`).join("\n");
-    units[`${name}.socket`] = `[Unit]\nDescription=Kodex exact public edge ${protocol} listener\nAfter=network-online.target docker.service\nWants=network-online.target\n\n[Socket]\nListenStream=${bridgeIP}:${port}\nAccept=no\nIPAddressDeny=any\n${peerRules}\n\n[Install]\nWantedBy=sockets.target\n`;
+    units[`${name}.socket`] = `[Unit]\nDefaultDependencies=no\nBefore=shutdown.target\nConflicts=shutdown.target\nDescription=Kodex exact public edge ${protocol} listener\nAfter=network-online.target docker.service\nWants=network-online.target\n\n[Socket]\nListenStream=${bridgeIP}:${port}\nAccept=no\nIPAddressDeny=any\n${peerRules}\n\n[Install]\nWantedBy=multi-user.target\n`;
     units[`${name}.service`] = `[Unit]\nDescription=Kodex isolated ${protocol} stream relay\nRequires=${name}.socket\nAfter=network-online.target docker.service\n\n[Service]\nExecStart=/usr/lib/systemd/systemd-socket-proxyd --connections-max=2048 ${backendIP}:${upstream}\nDynamicUser=yes\nNoNewPrivileges=yes\nProtectSystem=strict\nProtectHome=yes\nPrivateTmp=yes\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\nIPAddressDeny=any\n${peerRules}\nIPAddressAllow=${backendIP}/32\nRestart=on-failure\n`;
   }
   return { schema: "kodex.public-edge/v1", resources, units,

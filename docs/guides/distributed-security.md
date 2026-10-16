@@ -1780,6 +1780,21 @@ control-plane. Политика строится из фактического S
 трафика. Значения
 одного контура не переносятся в другой.
 
+В локальном контейнерном кластере адрес узла может измениться после перезапуска.
+Долгоживущий exact API egress сверяется с ready EndpointSlice и текущим ready
+control-plane node того же cluster UID. Операторский reconciler закрепляет
+namespace/policy UID и закрытый набор workload selectors; меняет только точные
+API назначения с OCC, не выдаёт Kubernetes доступ агентам и не расширяет
+остальные правила. Stale IP не является допустимым постоянным исключением.
+
+Host socket, ожидающий Docker/network-online, не включается в sockets.target
+с обычными default dependencies: это создаёт цикл через basic.target.
+Для такого конкретного relay задаются DefaultDependencies=no, shutdown ordering
+и включение в multi-user.target. IP ACL обновляется только по прежним exact
+node/container/network identities, полные canonical unit preimage проверяются
+до замены. Чужие units, routes, certificates и глобальные targets не меняются.
+Проверка сгенерированного графа не объявляется фактическим host reboot.
+
 ## Безопасное локальное обслуживание
 
 Локальное обслуживание разрешено только отдельным owner-approved repo-owned
