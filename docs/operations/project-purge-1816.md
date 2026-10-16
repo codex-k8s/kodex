@@ -76,4 +76,5 @@ Review1ed5848 выявил дополнительное ошибочное пр�
 runtime artifact содержит identity producer, а created_by — root initiator.
 Условие совпадения этих разных actor удалено; authority по-прежнему требует
 exact immutable receipt и полной текущей server-owned lineage. Regression
-fixture использует отдельную реальную runtime principal identity.
+fixture создаёт результат через настоящий CompleteExecution и читает его
+persisted receipt, не угадывая identity producer по initiator.

@@ -73,7 +73,7 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.complete",
 	}, "runtime-controller")
-	claimAndCompleteRun(t, ctx, service, worker, runRef, "assistant-move-global-run", false)
+	claimAndCompleteRun(t, ctx, service, worker, runRef, "assistant-move-global-run", true)
 	conversations, _, err := service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{Filter: query.Filter{Page: query.Page{Size: 100}}})
 	if err != nil {
 		t.Fatalf("refresh terminal assistant conversation: %v", err)
@@ -91,29 +91,12 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 	if err := repository.pool.QueryRow(ctx, queryProjectPurgeMovedArchiveFixture, created.Conversation.SessionRef).Scan(&archiveKey); err != nil {
 		t.Fatal("prepare immutable global archive fixture", err)
 	}
-	var artifactKey string
-	const fixtureDigest = "sha256:2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881"
-	scan, err := repository.scanArtifact(ctx, strings.NewReader("x"), fixtureDigest, 1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	scanJSON, err := artifactAntivirusJSON(scan)
-	if err != nil {
-		t.Fatal(err)
-	}
-	workerScope, err := repository.resolveScope(ctx, worker)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ownerScope, err := repository.resolveScope(ctx, owner)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if workerScope.actorRef == ownerScope.actorRef {
-		t.Fatal("runtime producer fixture did not preserve a separate identity")
-	}
-	if err := repository.pool.QueryRow(ctx, queryProjectPurgeMovedArtifactFixture, created.Conversation.SessionRef, scanJSON, fixtureDigest, workerScope.actorRef).Scan(&artifactKey); err != nil {
+	var artifactKey, artifactVersion string
+	if err := repository.pool.QueryRow(ctx, queryProjectPurgeMovedArtifactFixture, created.Conversation.SessionRef).Scan(&artifactKey, &artifactVersion); err != nil {
 		t.Fatal("prepare immutable global artifact fixture", err)
+	}
+	if !strings.Contains(artifactKey, "/subjects/") {
+		t.Fatal("global runtime result lost subject-scoped location")
 	}
 	move := command.Command{Kind: command.MoveAssistantConversationToProject, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-move-to-existing-project", ExpectedVersion: &created.Conversation.Version},
@@ -205,7 +188,7 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 	if owned, err := repository.ProjectPurgeGlobalPVCIsOwned(ctx, candidate, "ses_foreign"); err != nil || owned {
 		t.Fatal("foreign global PVC session admitted", err)
 	}
-	artifactItem := ProjectPurgeExternalItem{Kind: "OBJECT", Target: artifactKey, Version: "fixture-artifact-version"}
+	artifactItem := ProjectPurgeExternalItem{Kind: "OBJECT", Target: artifactKey, Version: artifactVersion}
 	if owned, err := repository.ProjectPurgeSubjectArtifactIsOwned(ctx, candidate, artifactItem); err != nil || !owned {
 		t.Fatal("moved subject artifact lost lineage", err)
 	}
@@ -241,7 +224,11 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Внешние bytes/PVC в этой disposable fixture не создавались.
+	// Внешний PVC не создавался; bytes принадлежат object storage fixture
+	// и удаляются по точной immutable квитанции перед owner finalize.
+	if err := repository.objects.Delete(ctx, artifactKey, artifactVersion); err != nil {
+		t.Fatal(err)
+	}
 	if err := repository.FinalizeProjectPurge(ctx, candidate, inventory); err != nil {
 		t.Fatal("finalize moved archive fixture", err)
 	}
