@@ -59,8 +59,8 @@ materialization: публичные и привилегированные чте
 - [x] Все upload/avatar/runtime/prepared producers и immutable evidence в коде.
 - [x] Forward-only migration, единая eligibility, исторические UNKNOWN без допуска.
 - [x] Clamd limits/AlertExceedsMax и приватный Unix transport в конфигурации.
-- [ ] Unit и disposable PostgreSQL, негативные границы и безопасный EICAR.
-- [ ] Scoped rollout, browser screenshot/Console/Network и журналы.
+- [x] Unit и disposable PostgreSQL, негативные границы и безопасный EICAR.
+- [x] Scoped rollout, browser screenshot/Console/Network и журналы.
 
 AV не доказывает отсутствие prompt injection. Семантический анализ HR-документов
 и его отдельный серверный допуск не объявляются выполненными этой задачей.
@@ -124,3 +124,40 @@ browser upload и backup ещё NOT RUN. Отдельный запуск direct-
 первоначально FAIL: fixture зависел от ранее выполненного наблюдения каталога
 модели. Добавлен явный штатный seed только в test fixture; повтор direct-run,
 VFS DOWNLOAD/изоляция и concurrent-lease reads PASS на исправленном дереве.
+
+## 16.10: включено и проверено
+
+Развёрнутый исходник `1772fe822813d53c1c415370a53302be4737baf2`:
+два CP и два API gateway готовы, монтируют один read-only checkout;
+точный digest AV-кода сверён в обоих CP, restart count0. Clamd image
+`docker.io/clamav/clamav@sha256:0e31ce089574268aefa0b543767d66b70240ab51ed49eec53e07f18d5629d817`,
+движок1.5.4, база28154 от15.10.2026. Обязательная Goose migration
+`20261016000100` подтверждена exact Job UID/source/version.
+
+- PASS: read-only CP dump374798793 bytes, SHA-256
+  `806265cc1faaef050b6b6beb7e6dac04ce6ac4470c39ef59cc955094dc997e60`;
+  archive TOC прочитан. Full-platform backup/restore этим не подтверждается.
+- PASS: clean и безопасный EICAR на обоих scanner Unix endpoints до миграции
+  и повторно на обоих новых экземплярах после source rollout. EICAR не
+  загружался в пользовательские artifacts, письма или runtime агента.
+- PASS: fresh trusted-cluster render. Найден и исправлен stale assertion
+  RBAC архиватора: ожидание приведено к каноническим более узким правам;
+  реальные Role/manifests не расширялись.
+- PASS: браузерная загрузка42 bytes, CLEAN; скачаны те же bytes; replay
+  вернул тот же ref; история содержит одну revision. Безопасный HTML control
+  остался QUARANTINED, download403. Снимок1440×1000 проверен визуально.
+  После штатного входа ошибки JavaScript/MIME и неожиданные5xx отсутствуют;
+  начальные401 и намеренный403 не скрыты и ожидаемы.
+- PASS: отдельный реальный краткий модельный запрос через UI завершился
+  SUCCEEDED; это не полный dogfooding workflow и не отправка письма.
+- PASS: полный поддерживаемый disposable PostgreSQL contour164.141s,
+  затем отдельный avatar contour1.744s, worker/runner readback. Предыдущий
+  запуск основного contour157.314s прошёл, но wrapper FAIL на отсутствующих
+  isolated-avatar test env; wrapper исправлен. Project-assistant fixture
+  теперь явно подключает синтетический scanner. Production policy не менялась.
+
+Последние изменения оснастки после развёрнутого SHA не меняют рабочий код.
+Архитектурная, продуктовая и security проверки развёрнутого SHA — без
+P0/P1/P2. Итоговая проверка финального commit фиксируется в том же PR#1815.
+Полная HR semantic-admission цепочка, full backup/restore и итоговая ручная
+приёмка MVP не объявляются выполненными этим журналом.

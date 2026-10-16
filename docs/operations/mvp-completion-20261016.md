@@ -28,7 +28,7 @@ updated: 2026-10-16
   циклов и без подтверждения внешних действий за владельца.
 - [ ] Подтвердить Stop/retry/queue, параллельность, rejoin/restart и изоляцию
   пользователей/проектов. Исторические результаты не выдавать за свежую проверку.
-- [ ] Закрыть серверную границу допуска файлов: карантин, точные байты,
+- [x] Закрыть серверную границу допуска файлов: карантин, точные байты,
   обязательные проверки и fail-closed. Формат PDF не доказывает антивирусный допуск.
 - [ ] Подтвердить сохранность сессий и реальное восстановление резервной копии
   в изолированное место. PostgreSQL/NATS/S3 остаются одиночными экземплярами.
@@ -242,3 +242,25 @@ Chrome MCP: собственная вкладка, получение списк
 - NOT RUN на этом checkpoint: новый AV rollout, реальные clean/EICAR controls
   в обоих экземплярах, новый browser upload и реальный модельный сценарий.
   До них MVP checkbox допуска файлов остаётся открытым.
+
+### 16.10: AV включён; живые байтовые проверки
+
+- PASS: Draft PR#1815, отдельный backend unit #1814. Source
+  `1772fe822813d53c1c415370a53302be4737baf2` включён repo-owned migration
+  и source rollout; CP/API по2/2, source read-only и exact code digest в
+  обоих CP совпадают, рестартов нет. Публичный HTTPS/SSO сохранён.
+- PASS: свежие clean/EICAR controls на обоих clamd; EICAR вне писем/artifacts.
+  Browser: upload201/CLEAN, exact download bytes, replay того же artifact,
+  history200; безопасный активный формат QUARANTINED и download403.
+  Скриншот, Console, Network и scoped backend logs проверены.
+- PASS: real assistant UI запрос и authoritative Run SUCCEEDED. Это ещё не
+  полный проект/workflow/delegation/Human Gate и не основание закрывать пункт4.
+- PASS LOCAL: основной полный disposable PostgreSQL contour164.141s,
+  avatar1.744s и worker/runner readback после исправления двух test fixtures.
+  Прежние FAIL оснастки и их причины сохранены в плане #1814.
+- Перед migration сохранён и прочитан CP custom dump. Backup-controller в
+  установленном контуре отсутствует: полный platform backup/isolated restore
+  остаются открытым обязательным пунктом7. Наличие dump не выдаётся за restore.
+- Старые format-only CLEAN без серверного AV evidence остаются в карантине;
+  байты/история не переписаны. Новый проверенный upload и owner rebind —
+  отдельные штатные действия. Антивирус не равен semantic prompt-injection gate.

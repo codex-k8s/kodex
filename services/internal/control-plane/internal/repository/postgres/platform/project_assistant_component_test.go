@@ -66,6 +66,7 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	configureComponentArtifactScanner(t, repository)
 	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{
 		SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001",
 		SecretResourceVersion: "1", ContentSHA256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
