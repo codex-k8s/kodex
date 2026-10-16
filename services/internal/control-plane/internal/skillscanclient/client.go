@@ -3,8 +3,11 @@ package skillscanclient
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"io"
 	"net"
@@ -14,6 +17,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/skillpolicy"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
 
 var errProtocol = errors.New("skill malware scanner protocol failed")
@@ -84,52 +88,76 @@ func (client *Client) version(ctx context.Context) (string, error) {
 }
 
 func (client *Client) Scan(ctx context.Context, body []byte) (skillpolicy.ScanVerdict, error) {
-	ctx, cancel := context.WithTimeout(ctx, client.timeout)
-	defer cancel()
 	if len(body) > 32<<20 {
 		return skillpolicy.ScanVerdict{}, errProtocol
 	}
-	before, err := client.version(ctx)
+	report, err := client.ScanReader(ctx, bytes.NewReader(body), int64(len(body)))
 	if err != nil {
 		return skillpolicy.ScanVerdict{}, err
+	}
+	return skillpolicy.ScanVerdict{Engine: report.Engine, Infected: report.Infected}, nil
+}
+
+// ScanReader не загружает большой artifact в память и не считает усечённый
+// поток успешным. Один общий deadline охватывает VERSION/INSTREAM/VERSION.
+func (client *Client) ScanReader(ctx context.Context, body io.Reader, sizeBytes int64) (value.ArtifactScan, error) {
+	ctx, cancel := context.WithTimeout(ctx, client.timeout)
+	defer cancel()
+	if body == nil || sizeBytes < 0 || sizeBytes > 512<<20 {
+		return value.ArtifactScan{}, errProtocol
+	}
+	before, err := client.version(ctx)
+	if err != nil {
+		return value.ArtifactScan{}, err
 	}
 	connection, closeConnection, err := client.connect(ctx)
 	if err != nil {
-		return skillpolicy.ScanVerdict{}, err
+		return value.ArtifactScan{}, err
 	}
 	defer closeConnection()
 	if _, err := io.WriteString(connection, "zINSTREAM\x00"); err != nil {
-		return skillpolicy.ScanVerdict{}, errProtocol
+		return value.ArtifactScan{}, errProtocol
 	}
-	for offset := 0; offset < len(body); {
-		end := offset + 32768
-		if end > len(body) {
-			end = len(body)
+	digest := sha256.New()
+	var chunk [32768]byte
+	for remaining := sizeBytes; remaining > 0; {
+		if ctx.Err() != nil {
+			return value.ArtifactScan{}, errProtocol
+		}
+		length := min(int64(len(chunk)), remaining)
+		if _, err := io.ReadFull(body, chunk[:length]); err != nil {
+			return value.ArtifactScan{}, errProtocol
 		}
 		var size [4]byte
-		binary.BigEndian.PutUint32(size[:], uint32(end-offset))
-		if _, err := connection.Write(size[:]); err != nil {
-			return skillpolicy.ScanVerdict{}, errProtocol
+		binary.BigEndian.PutUint32(size[:], uint32(length))
+		if n, err := connection.Write(size[:]); err != nil || n != len(size) {
+			return value.ArtifactScan{}, errProtocol
 		}
-		if _, err := connection.Write(body[offset:end]); err != nil {
-			return skillpolicy.ScanVerdict{}, errProtocol
+		if n, err := connection.Write(chunk[:length]); err != nil || int64(n) != length {
+			return value.ArtifactScan{}, errProtocol
 		}
-		offset = end
+		_, _ = digest.Write(chunk[:length])
+		remaining -= length
 	}
-	if _, err := connection.Write([]byte{0, 0, 0, 0}); err != nil {
-		return skillpolicy.ScanVerdict{}, errProtocol
+	var extra [1]byte
+	if n, err := io.ReadFull(body, extra[:]); n != 0 || err != io.EOF {
+		return value.ArtifactScan{}, errProtocol
+	}
+	if n, err := connection.Write([]byte{0, 0, 0, 0}); err != nil || n != 4 {
+		return value.ArtifactScan{}, errProtocol
 	}
 	reply, err := readReply(connection)
 	if err != nil {
-		return skillpolicy.ScanVerdict{}, err
+		return value.ArtifactScan{}, err
 	}
 	infected := strings.HasPrefix(reply, "stream: ") && strings.HasSuffix(reply, " FOUND")
 	if reply != "stream: OK" && !infected {
-		return skillpolicy.ScanVerdict{}, errProtocol
+		return value.ArtifactScan{}, errProtocol
 	}
 	after, err := client.version(ctx)
 	if err != nil || before != after {
-		return skillpolicy.ScanVerdict{}, errProtocol
+		return value.ArtifactScan{}, errProtocol
 	}
-	return skillpolicy.ScanVerdict{Engine: before, Infected: infected}, nil
+	return value.ArtifactScan{Engine: before, Infected: infected, Policy: value.ArtifactAntivirusPolicy,
+		Digest: "sha256:" + hex.EncodeToString(digest.Sum(nil)), SizeBytes: sizeBytes, ScannedAt: time.Now().UTC()}, nil
 }

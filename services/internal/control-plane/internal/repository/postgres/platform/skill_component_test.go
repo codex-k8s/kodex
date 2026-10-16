@@ -17,6 +17,7 @@ import (
 )
 
 func testSkillBundleDraft(t *testing.T, ctx context.Context, repository *Repository) {
+	seedObservedCatalogFixture(t, ctx, repository)
 	owner := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
 		ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002",
 		CallerWorkload: "control-api-gateway", Operation: "platform.command.skill-bundle-drafts.create",

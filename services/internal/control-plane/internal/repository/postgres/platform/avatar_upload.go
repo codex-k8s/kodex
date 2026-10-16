@@ -46,6 +46,13 @@ func (repository *Repository) UploadAgentAvatar(
 	if reservation.state != "RESERVED" && reservation.state != "MATERIALIZED" {
 		return entity.Agent{}, errs.ErrConflict
 	}
+	scan, err := repository.scanArtifact(ctx, input.Reader, input.Digest, input.SizeBytes)
+	if err != nil {
+		return entity.Agent{}, err
+	}
+	if scan.Infected {
+		return entity.Agent{}, errs.ErrInvalid
+	}
 	receipt, err := repository.resolveOrMaterializeAvatarObject(ctx, reservation, input.ArtifactUpload)
 	if err != nil {
 		return entity.Agent{}, err
@@ -54,7 +61,7 @@ func (repository *Repository) UploadAgentAvatar(
 		cleanupErr := repository.compensateAgentAvatarObject(ctx, current, reservation.ref, receipt)
 		return entity.Agent{}, errors.Join(err, cleanupErr)
 	}
-	item, err := repository.finalizeAgentAvatarUpload(ctx, principal, current, mutation, input, reservation.ref, receipt)
+	item, err := repository.finalizeAgentAvatarUpload(ctx, principal, current, mutation, input, reservation.ref, receipt, scan)
 	if err != nil {
 		cleanupErr := repository.compensateAgentAvatarObject(ctx, current, reservation.ref, receipt)
 		return entity.Agent{}, errors.Join(err, cleanupErr)
@@ -221,7 +228,12 @@ func (repository *Repository) finalizeAgentAvatarUpload(
 	input platformrepo.AgentAvatarUpload,
 	reservationRef string,
 	receipt objectstorage.Receipt,
+	scan value.ArtifactScan,
 ) (entity.Agent, error) {
+	scanJSON, err := artifactAntivirusJSON(scan)
+	if err != nil || scan.Infected || scan.Digest != receipt.Digest || scan.SizeBytes != receipt.SizeBytes {
+		return entity.Agent{}, errs.ErrConflict
+	}
 	tx, err := repository.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return entity.Agent{}, errs.ErrUnavailable
@@ -275,12 +287,12 @@ func (repository *Repository) finalizeAgentAvatarUpload(
 		artifactRef, current.organizationID, projectID, "", fileName, mediaType, sizeBytes, digest,
 		"CLEAN", receiptRef, "AVAILABLE", current.actorID).Scan(
 		&artifact.Ref, &artifact.FileName, &artifact.MediaType, &artifact.SizeBytes, &artifact.Digest,
-		&artifact.ScanState, &artifact.PreviewState, &artifact.Revision, &artifact.Version, &artifact.CreatedAt)
+		&artifact.ScanState, &artifact.PreviewState, &artifact.Revision, &artifact.Version, &artifact.CreatedAt, &artifact.CurrentRevisionRef)
 	if err != nil {
 		return entity.Agent{}, mapWriteError(err)
 	}
 	if _, err := tx.Exec(ctx, queryArtifactsUploadartifactInsertArtifactContentArtifactId,
-		artifactRef, objectKey, objectVersion, objectETag, digest, sizeBytes); err != nil {
+		artifactRef, objectKey, objectVersion, objectETag, digest, sizeBytes, scanJSON); err != nil {
 		return entity.Agent{}, errs.ErrUnavailable
 	}
 	var item entity.Agent

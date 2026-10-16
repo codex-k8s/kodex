@@ -333,7 +333,7 @@ spec:
             sizeLimit: 1Mi
         - name: skill-scanner-tmp
           emptyDir:
-            sizeLimit: 128Mi
+            sizeLimit: 2Gi
         - name: skill-scanner-database
           persistentVolumeClaim:
             claimName: clamav-database

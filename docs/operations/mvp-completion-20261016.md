@@ -212,3 +212,33 @@ Chrome MCP: собственная вкладка, получение списк
 - PASS: штатный fresh owner SSO/SPA login после исправлений, bootstrap200 и
   provider accounts200; account AUTHORIZED/enabled. Это ещё не доказательство
   нового модельного выполнения или полной готовности провайдера.
+
+### 16.10: изоляция диалогов и серверный AV-допуск
+
+- PASS LOCAL на `bd17c576e5f3dc562783e3eeab6a4b6578ca0784`: fresh disposable
+  PostgreSQL — `TestAssistantParallelLifecycleComponent`,
+  `TestProjectAssistantProfilesComponent`, `TestAssistantSystemRunProjectScopeComponent`.
+  Это синтетическая lifecycle/authority проверка, не реальные ИИ-запуски.
+- Для следующего полного backend unit создан #1814 и план
+  `OPS-ARTIFACT-ANTIVIRUS-1814`. Изменения изолированы от живого hot source.
+  Все upload/avatar/runtime/prepared paths получают серверный потоковый AV;
+  evidence хранится в той же immutable object receipt, без нового FK-графа.
+- PASS LOCAL на рабочем дереве AV checkpoint: весь unit-набор Control Plane,
+  web-only render, потоковый scanner protocol, closed scanner rollout model
+  и migration CLI с точным новым профилем. Изменённых внешних OpenAPI/Proto/
+  AsyncAPI контрактов нет; новое evidence не принимается из transport payload.
+- PASS LOCAL на том же рабочем дереве: fresh PostgreSQL upload/quarantine,
+  missing/mismatched proof, parallel preview, immutable revisions, prepared
+  content stage/replay/expiry/purge, avatar lifecycle, file bindings, skills,
+  nested delegation, Human Gate и session archive. В тестах использован явно
+  синтетический scanner, который не считается живым AV-доказательством.
+- PASS LOCAL: upgrade из прежней схемы с сохранением aggregate IDs, байтовых
+  receipts, bindings, grants и raw historical scan state. Эффективный scan
+  старого format-only CLEAN — QUARANTINED. Retention удаляет точные версии.
+- Исправлены test-only зависимости от соседнего model-catalog seed и общая
+  singleton-БД avatar fixture: адресные проверки теперь независимы. В avatar
+  producer исправлен readback количества колонок immutable revision.
+  Production eligibility и scanner failure policy не ослаблялись.
+- NOT RUN на этом checkpoint: новый AV rollout, реальные clean/EICAR controls
+  в обоих экземплярах, новый browser upload и реальный модельный сценарий.
+  До них MVP checkbox допуска файлов остаётся открытым.

@@ -70,6 +70,7 @@ func projectArtifactResults(ctx context.Context, runner queryRunner, current sco
 	type eligibleArtifact struct {
 		version int64
 		actions []string
+		scan    string
 	}
 	visible := make(map[string]eligibleArtifact, len(refs))
 	// Размер одного запроса ограничен независимо от числа ссылок в истории Run.
@@ -90,6 +91,7 @@ func projectArtifactResults(ctx context.Context, runner queryRunner, current sco
 				return errs.ErrUnavailable
 			}
 			item.actions = permittedArtifactActions(scan, lifecycle, func(permission string) bool { return contains(permissions, permission) })
+			item.scan = scan
 			visible[ref] = item
 		}
 		err = rows.Err()
@@ -124,6 +126,7 @@ func projectArtifactResults(ctx context.Context, runner queryRunner, current sco
 		(*artifact).NextActions = []string{}
 		if (*artifact).Version == item.version {
 			(*artifact).NextActions = slices.Clone(item.actions)
+			(*artifact).ScanState = item.scan
 		}
 		if err := projectArtifactBindingRefs(ctx, runner, current, *artifact); err != nil {
 			return err
@@ -172,6 +175,7 @@ func projectArtifactEligibility(ctx context.Context, runner queryRunner, current
 	artifact.NextActions = []string{}
 	if artifact.Version == version {
 		artifact.NextActions = permittedArtifactActions(scan, lifecycle, func(permission string) bool { return contains(permissions, permission) })
+		artifact.ScanState = scan
 	}
 	return projectArtifactBindingRefs(ctx, runner, current, artifact)
 }
