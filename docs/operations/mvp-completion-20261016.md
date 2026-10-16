@@ -95,3 +95,24 @@ Chrome MCP: собственная вкладка, получение списк
   публичный/loopback/повторный IP, symlink/hardlink/path traversal, точное
   возобновление и сохранение0644 при атомарной замене.
 - PASS: read-only rebind plan. Apply/readback/public HTTPS пока NOT RUN.
+
+### 16.10: публичный вход восстановлен
+
+- PASS на executor `e2e1735e420784b998cc1b0b67d544c4726d35c0`: rebind apply и
+  отдельный readback. Все четыре relay units соответствуют новому плану,
+  sockets active/enabled, прежние node/container identities и CA сохранены.
+  Protected snapshot соседних ресурсов неизменен относительно нового плана.
+- PASS: публичный корень302 в SSO, OIDC discovery200, bootstrap без сессии401.
+- PASS: отдельный штатный вход владельца и четыре последовательных reload
+  в собственном Playwright Chrome с проверкой TLS. Bootstrap/session/ticket200,
+  пять WebSocket соединений, проекты видны, состояние «Подключено».
+  Два начальных401 до SPA login ожидаемы. Ошибок JavaScript и MIME в этом
+  прогоне нет; прежний плавающий MIME-дефект не объявляется окончательно закрытым.
+- Chrome MCP: собственная вкладка видит штатную форму SSO; одноразовый
+  защищённый ввод не завершился и истёк без выдачи credentials. Зависший вызов
+  прерван; браузерная авторизованная проверка выше относится к Playwright,
+  а не к MCP. Ни trace/HAR, ни значения credentials не сохранялись.
+- Для coherent dev source переносится mail fix `1989291611ee807c3078af32a9593737b6800aa6`
+  в текущую PR-ветку. В конфликте import helper сохранены защита exact digest
+  alias от перезаписи и прежний registry-pull-authorizer; добавлен только
+  closed repository control-plane. Прямого push/merge в main нет.

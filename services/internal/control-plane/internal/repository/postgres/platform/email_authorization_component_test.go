@@ -21,6 +21,7 @@ import (
 
 func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository, service *platformservice.Service, owner value.Principal, connection entity.IntegrationConnection, config api.Configuration) {
 	t.Helper()
+	seedObservedCatalogFixture(t, ctx, repository)
 	worker := func(workload, operation string) value.Principal {
 		return resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{ExternalActorID: "kodex-system-subject",
 			ExternalTenantID: "kodex-installation", CallerWorkload: workload, Operation: operation}, workload)
@@ -257,6 +258,50 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 	if err != nil || !decision.Allowed || decision.GateApproved || decision.Policy != "allow" || decision.AgentRef != agent.Ref || decision.ProjectRef != project.Project.Ref {
 		t.Fatalf("authorize mailbox ALLOW send without gate: %v", err)
 	}
+	checkApprovedRead := func() query.EmailAuthorization {
+		// Mailbox Human Gate действует независимо от generic approvalPolicy=NONE.
+		// До решения READ не попал в claim выше; после решения выдаётся ровно один раз.
+		readGate, err := service.GetOwnerGate(ctx, owner, stringMap(readInvocation, "gateRef"))
+		if err != nil {
+			t.Fatalf("read mailbox approval gate: %v", err)
+		}
+		approvedRead, err := service.Execute(ctx, command.Command{Kind: command.ResolveOwnerGate, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: "email-producer-read-approve", ExpectedVersion: &readGate.Version},
+			Payload:  command.GateResolutionInput{GateRef: readGate.Ref, Decision: "APPROVE"}})
+		if err != nil || approvedRead.Gate == nil || approvedRead.Gate.State != "APPROVED" {
+			t.Fatalf("approve mailbox gate with generic NONE policy: %v", err)
+		}
+		readClaims, err := service.ClaimIntegrationInvocations(ctx, gateway, "email-producer-approved-read", 32)
+		if err != nil || len(readClaims) != 1 || stringMap(readClaims[0], "invocationRef") != stringMap(readInvocation, "invocationRef") {
+			t.Fatalf("claim approved mailbox gate: count=%d err=%v", len(readClaims), err)
+		}
+		readClaim := readClaims[0]
+		readSemantic, err := api.CommandForIntegration("email.message.list", mailbox.Id, mailbox.Sender, stringMap(readClaim, "effectKey"), []byte(`{}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		readAuthorization := query.EmailAuthorization{Binding: entity.EmailExecutionBinding{
+			InvocationRef: stringMap(readClaim, "invocationRef"), LeaseRef: stringMap(readClaim, "leaseRef"),
+			Fence: stringMap(readClaim, "fence"), Generation: readClaim["generation"].(int64), ExpiresAt: readClaim["expiresAt"].(time.Time)},
+			MailboxRef: mailbox.Id, ConfigurationRevision: mailbox.Revision, Operation: "list", Sender: mailbox.Sender,
+			Folder: mailbox.Folder, SemanticInputDigest: api.Digest(readSemantic), EffectKey: readSemantic.EffectKey}
+		readDecision, err := service.ResolveEmailAuthorization(ctx, email, readAuthorization)
+		if err != nil || !readDecision.Allowed || !readDecision.GateApproved || readDecision.Policy != "human_gate" {
+			t.Fatalf("authorize exact approved mailbox gate: %v", err)
+		}
+		changedRead := readAuthorization
+		changedRead.SemanticInputDigest = strings.Repeat("e", 64)
+		if _, err := service.ResolveEmailAuthorization(ctx, email, changedRead); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatalf("mailbox approval authorized changed input: %v", err)
+		}
+		if _, err := service.ResolveEmailAuthorization(ctx, gateway, readAuthorization); !errors.Is(err, errs.ErrForbidden) {
+			t.Fatalf("mailbox approval authorized foreign workload: %v", err)
+		}
+		if repeated, err := service.ClaimIntegrationInvocations(ctx, gateway, "email-producer-read-no-duplicate", 32); err != nil || len(repeated) != 0 {
+			t.Fatalf("approved mailbox gate claimed twice: count=%d err=%v", len(repeated), err)
+		}
+		return readAuthorization
+	}
 	report := command.Command{Kind: command.ReportEmailEffect, Principal: worker("email-bridge", "platform.email.effect-receipts.report"),
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-unknown"}, Payload: command.EmailEffectReportInput{
 			Binding: binding, ExternalReceiptRef: strings.Repeat("f", 32), ExternalReceiptDigest: strings.Repeat("c", 64),
@@ -290,6 +335,31 @@ func testEmailProducer(t *testing.T, ctx context.Context, repository *Repository
 		t.Fatalf("immutable original report replay: %v", err)
 	}
 	testEmailLateReport(t, ctx, repository, service, owner, runtime, gateway, email, report.Principal, execution, connection.Ref, bounded, input)
+	// Модель завершила ход до человеческого решения; effect сохраняет exact origin.
+	if _, err := service.Execute(ctx, command.Command{Kind: command.CompleteExecution, Principal: runtime,
+		Mutation: value.Mutation{IdempotencyKey: "email-producer-original-complete"},
+		Payload: command.CompleteExecutionInput{LeaseRef: stringMap(execution, "leaseRef"), Fence: stringMap(execution, "fence"),
+			Generation: runtimeRevisionMapInt64(execution, "generation"), Success: true,
+			ResultSummary: "Waiting for the mailbox approval", Usage: turnUsageFixture()}}); err != nil {
+		t.Fatalf("complete email model turn before mailbox approval: %v", err)
+	}
+	if before, err := service.ClaimIntegrationInvocations(ctx, gateway, "email-producer-completed-before-approve", 32); err != nil || len(before) != 0 {
+		t.Fatalf("completed model bypassed mailbox approval: count=%d err=%v", len(before), err)
+	}
+	readAuthorization := checkApprovedRead()
+	revokedRead, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "email-producer-read-revoke", ExpectedVersion: &granted.Connection.Version},
+		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, CapabilityKey: "email.message.list", AgentRef: agent.Ref, Enabled: false}})
+	if err != nil || revokedRead.Connection == nil {
+		t.Fatalf("revoke approved mailbox read grant: %v", err)
+	}
+	granted = revokedRead
+	if _, err := service.ResolveEmailAuthorization(ctx, email, readAuthorization); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("approved mailbox gate revived revoked grant: %v", err)
+	}
+	if repeated, err := service.ClaimIntegrationInvocations(ctx, gateway, "email-producer-revoked-read", 32); err != nil || len(repeated) != 0 {
+		t.Fatalf("revoked mailbox gate claimed: count=%d err=%v", len(repeated), err)
+	}
 	revoked, err := service.Execute(ctx, command.Command{Kind: command.ChangeIntegrationGrant, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "email-producer-revoke", ExpectedVersion: &granted.Connection.Version},
 		Payload:  command.IntegrationGrantInput{ApprovalPolicy: "NONE", ConnectionRef: connection.Ref, CapabilityKey: "email.message.send", AgentRef: agent.Ref, Enabled: false}})

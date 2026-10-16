@@ -7,13 +7,24 @@ FROM control_plane.integration_invocations i
 JOIN control_plane.integration_connections c ON c.id=i.connection_id AND c.organization_id=i.organization_id
 JOIN control_plane.integration_definitions d ON d.stable_key=c.definition_key
 JOIN control_plane.integration_grants g ON g.id=i.grant_id AND g.organization_id=i.organization_id
-JOIN control_plane.run_nodes n ON n.id=i.node_id AND n.run_id=i.run_id AND n.state='RUNNING'
+JOIN control_plane.run_nodes n ON n.id=i.node_id AND n.run_id=i.run_id AND n.state IN ('RUNNING','SUCCEEDED')
 JOIN control_plane.runs r ON r.id=i.run_id AND r.organization_id=i.organization_id
 JOIN control_plane.runs root ON root.id=r.root_run_id AND root.organization_id=i.organization_id
 JOIN control_plane.subjects actor ON actor.id=root.initiated_by AND actor.organization_id=i.organization_id
 JOIN control_plane.agents a ON a.id=n.agent_id AND a.organization_id=i.organization_id
 JOIN control_plane.projects p ON p.id=r.project_id AND p.organization_id=i.organization_id
 WHERE i.organization_id=$1::uuid AND i.ref=$2 AND i.state='RUNNING'
+  AND root.state IN ('RUNNING','WAITING_HUMAN')
+  AND (n.state='RUNNING' OR (
+    n.state='SUCCEEDED' AND root.state='WAITING_HUMAN' AND EXISTS (
+      SELECT 1 FROM control_plane.owner_gates gate
+      WHERE gate.integration_invocation_id=i.id
+        AND gate.organization_id=i.organization_id
+        AND gate.root_run_id=r.root_run_id
+        AND gate.project_id IS NOT DISTINCT FROM r.project_id
+        AND gate.state='APPROVED'
+    )
+  ))
   AND i.claimed_workload='integration-gateway' AND i.claimed_lease_ref=$3 AND i.claimed_fence_digest=$4
   AND i.lease_ref=$3 AND i.effect_fence_digest=$4 AND i.generation=$5
   AND i.lease_expires_at=$6 AND i.lease_expires_at>clock_timestamp()
