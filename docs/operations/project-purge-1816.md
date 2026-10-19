@@ -316,12 +316,12 @@ tenant/project проверки, row locks, receipts, context и atomic PROJECT_
 проверяет точный ожидаемый SQL-шаблон и закрыто отклоняет неизвестную форму.
 Применённая20261019000100 не редактируется.
 
-- [ ] Disposable: recovery/trash/immutable moved lineage, большая история55тыс.,
+- [x] Disposable: recovery/trash/immutable moved lineage, большая история55тыс.,
   чужие события сохранены, terminal receipt и очистка private targets.
-- [ ] Migration CLI: exact new profile, replay, stale readback; unit/code checks.
-- [ ] Независимые product/security/architecture review точного SHA.
-- [ ] Private pre-migration backup, штатная migration, live worker DONE.
-- [ ] Chrome корзина/Console/Network, сохранность другого проекта и receipt.
+- [x] Migration CLI: exact new profile, replay, stale readback; unit/code checks.
+- [x] Независимые product/security/architecture review точного SHA.
+- [x] Private pre-migration backup, штатная migration, live worker DONE.
+- [x] Chrome корзина/Console/Network, сохранность другого проекта и receipt.
 
 Первый исправленный live проход дошёл до boundary validation вместо timeout:
 две организационные audit_events с project_id=NULL ссылались на сотрудника
@@ -346,3 +346,39 @@ CONSTRAINTS ALL DEFERRED. Forward000400 приводит ровно внутре
 guard на любое будущее такое рассогласование и component schema assertion.
 Применённые000100/000200/000300 не меняются. Это устранение пропущенной
 интеграции новых tables в прежний lifecycle, не отключение foreign keys.
+
+### Подтверждённое завершение19.10
+
+Исполняемый SHA5eb66f38f4659c58a9fb883d86e22a3bebeaebde. Полные CP Go tests
+и vet — PASS. Итоговые component recovery/trash — PASS5.570s;
+trash/workflow launch с owner cancel, retry и nested outcomes — PASS36.823s.
+На итоговом SHA большая история55000 событий удалена за14.418s, suite
+PASS25.811s; чужая история сохранилась. Migration CLI25 — PASS, три
+направления review итоговой дельты без P0/P1/P2. Полный повтор всех PostgreSQL
+component suites и disposable browser E2E на5eb66f38 — NOT RUN; это адресная
+проверка исправления, не новая полная приёмка MVP.
+
+Штатно применены000200/000300/000400 с exact readback PASS. Последний Job UID
+cda36fa9-333c-4795-a945-cdfa5da06790. CP source5eb66f38 доставлен scoped release,
+две обновлённые реплики готовы; host/Pod SHA256 файла000400 совпадает.
+API/PWA не пересобирались: исполняемый frontend/gateway код не менялся.
+Private pre-migration dump375950939байт, archive TOC PASS; full restore NOT RUN.
+
+Authoritative readback13:08:57UTC: receipt DONE,320270 связанных строк,
+projectPresent=false. purged_at13:06:12.261659UTC соответствует началу
+SQL statement, не отдельному измерению времени commit. Private targets/context
+пусты, PROJECT_PURGED ровно один. Chrome самостоятельно получил realtime update:
+«Корзина пуста»; после fresh reload то же. Скриншоты просмотрены, Console без
+error/warn, relevant Network200, соединение подключено.
+
+Две непроектные записи audit сохранены: count2 и SHA256 всех полей, кроме
+assistant_agent_id, совпали до/после; сняты только эти две ссылки. Контрольный
+файл другого проекта —200,42байта, прежний SHA256. Surviving recovery GET200
+после удаления: projectPresent=false, OBSERVING, cleanupPendingCount1,
+canResolve=false. Это честный технический контроль прежнего неизвестного Put,
+не незавершённое удаление проекта и не подтверждённая физическая очистка этого
+неопределённого объекта. Ledger detached, имена/тип и описательные данные сняты;
+нового owner согласия или ручных UPDATE не потребовалось.
+
+Предыдущие FAIL/NOT RUN в журнале сохранены как история; они не переименованы
+задним числом. Последующие финальные journal-коммиты не меняют исполняемый код.
