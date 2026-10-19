@@ -230,4 +230,10 @@ jq -e '
 	([.policy.authority_proof_producers[] | select(.caller_workload_id == "stt-tts-service")] | length) == 0
 ' "$canonical" >/dev/null || fail 'canonical policy invariants are invalid'
 
+node "$repository_root/tools/release/service-identity-policy.mjs" check \
+  "$canonical" \
+  "$repository_root/services/internal/control-plane/internal/app/service-identity-classification.json" \
+  "$repository_root/services/internal/control-plane/internal/app/service-identity-policy.json" >/dev/null ||
+  fail 'target-owned service identity policy is incomplete'
+
 printf 'Authority policy codegen tests passed\n'

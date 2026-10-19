@@ -245,3 +245,14 @@ scanner в общей fixture закрывает этот системный а�
 не меняется. Итоговый broad прогон выполняется отдельно, прежний FAIL не
 переименован в PASS. Дополнительная копия перед миграцией: private CP dump
 375857764байт, проверка архива PASS; full restore NOT RUN.
+
+Полный broad PostgreSQL на97098012 — PASS404.741s; forward/replay migration,
+worker grant и runner readback — PASS. Все ранее обнаруженные fixture FAIL
+исправлены без ослабления рабочих проверок.
+
+Живой Chrome выявил403 нового preview при доступной корзине: embedded
+target-owned service identity policy не материализовала два новых RPC.
+Добавлены ровно две USER/org-only classification, закреплённые digest
+исходных bindings; policy пересоздана штатным генератором. Проверка полноты
+встроена в обязательный authority codegen entrypoint; unit проверяет допуск
+gateway и отказ runtime/job callers. Blanket allowlist не вводился.
