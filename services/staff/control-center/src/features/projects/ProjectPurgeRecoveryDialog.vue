@@ -41,7 +41,7 @@ watch(
 watch(
   () => platform.trashedProjects[props.projectRef]?.version,
   (next, previous) => {
-    if (next !== previous && !recovery.submitting)
+    if (previous !== undefined && next !== previous && !recovery.submitting)
       void recovery.load(props.projectRef, true);
   },
 );
