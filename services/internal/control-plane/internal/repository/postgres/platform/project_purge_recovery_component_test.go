@@ -108,6 +108,8 @@ func TestProjectPurgeRecoveryComponent(t *testing.T) {
               'project_id',gen_random_uuid(),'project_ref','prj_forged_recovery_receipt','recovery_version',2,
               'recovery_resolution_ref','ppr_forged_resolution','recovery_resolution_digest',repeat('f',64),'recovery_resolution_actor',$2::text))).*
               FROM control_plane.project_purge_receipts receipt WHERE receipt.project_ref=$1`,
+			"duplicate-origin": `INSERT INTO control_plane.project_purge_receipts(project_id,organization_id,project_ref,deleted_by,state)
+              SELECT gen_random_uuid(),organization_id,project_ref,$2::uuid,'PENDING' FROM control_plane.project_purge_receipts WHERE project_ref=$1`,
 		} {
 			t.Run(name, func(t *testing.T) {
 				tx, err := pool.Begin(ctx)
@@ -124,7 +126,11 @@ func TestProjectPurgeRecoveryComponent(t *testing.T) {
 				if !errors.As(insertErr, &denied) {
 					t.Fatalf("runtime forged %s owner resolution without a PostgreSQL authorization rejection", name)
 				}
-				if denied.Code != "42501" {
+				expectedCode := "42501"
+				if name == "duplicate-origin" {
+					expectedCode = "23505"
+				}
+				if denied.Code != expectedCode {
 					t.Fatalf("runtime forged %s owner resolution: sqlstate=%s", name, denied.Code)
 				}
 			})
@@ -236,6 +242,27 @@ func TestProjectPurgeRecoveryComponent(t *testing.T) {
 	if err != nil || after.ProjectPresent || after.ProjectVersion != 0 || after.CleanupPendingCount != 2 || after.ResolutionRef == "" {
 		t.Fatal("project deletion lost surviving cleanup", after, err)
 	}
+	t.Run("surviving-receipt-cannot-be-deleted-or-detached", func(t *testing.T) {
+		for name, statement := range map[string]string{
+			"delete":       `DELETE FROM control_plane.project_purge_receipts WHERE project_ref=$1`,
+			"project":      `UPDATE control_plane.project_purge_receipts SET project_ref='prj_forged_recovery_origin' WHERE project_ref=$1`,
+			"organization": `UPDATE control_plane.project_purge_receipts SET organization_id=gen_random_uuid() WHERE project_ref=$1`,
+			"state":        `UPDATE control_plane.project_purge_receipts SET state='FAILED',purged_at=NULL WHERE project_ref=$1`,
+		} {
+			t.Run(name, func(t *testing.T) {
+				tx, err := pool.Begin(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_, effectErr := tx.Exec(ctx, statement, ref)
+				_ = tx.Rollback(ctx)
+				var denied *pgconn.PgError
+				if !errors.As(effectErr, &denied) || denied.Code != "42501" {
+					t.Fatalf("surviving receipt protection failed: %s", name)
+				}
+			})
+		}
+	})
 	// Только время следующей проверки меняется в изолированной fixture.
 	// Resolution, pins, state и deletion receipt остаются серверными.
 	adminConfig, err := pgx.ParseConfig(os.Getenv("KODEX_CONTROL_PLANE_TEST_ADMIN_DSN"))

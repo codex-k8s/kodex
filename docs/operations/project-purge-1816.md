@@ -222,3 +222,12 @@ egress), ещё две fixture не настраивали обязательн�
 Фикстуры переведены на существующий isolated template helper; в двух точках
 задан предусмотренный synthetic scanner. Рабочие security checks и assertions
 не отключались. Повтор выполняется на исправленной ревизии.
+
+Повторный security review5477ddad уточнил тот же P2: surviving receipt нельзя
+удалять, отвязывать от origin или выводить из поддерживаемого lifecycle.
+Добавлены DELETE/immutable origin/proof guards, закрытая матрица
+PENDING→OBJECTS_CLEARED→DONE и уникальность organization/projectRef.
+Readonly preflight живого контура: duplicate origin0. Отрицательные проверки
+после фактического disposable purge требуют42501; duplicate origin —23505.
+Адресный recovery/ADOPTED/fairness прогон после receipt guards — PASS6.564s;
+новый индекс и окончательная ревизия проверяются повторно.

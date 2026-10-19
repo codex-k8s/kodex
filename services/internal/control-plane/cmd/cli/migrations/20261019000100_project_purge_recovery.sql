@@ -8,6 +8,7 @@ ALTER TABLE control_plane.project_purge_receipts
  ADD COLUMN recovery_resolution_ref text CHECK (recovery_resolution_ref ~ '^ppr_[A-Za-z0-9_-]{8,80}$'),
  ADD COLUMN recovery_resolution_digest text CHECK (recovery_resolution_digest ~ '^[a-f0-9]{64}$'),
  ADD COLUMN recovery_resolution_actor uuid;
+CREATE UNIQUE INDEX project_purge_receipts_origin ON control_plane.project_purge_receipts(organization_id,project_ref);
 ALTER TABLE control_plane.prepared_content
  ADD COLUMN owner_resolution jsonb,
  ADD COLUMN recovery_storage_identity text CHECK (recovery_storage_identity ~ '^[a-f0-9]{64}$'),
@@ -547,11 +548,32 @@ END $migration$;
 CREATE FUNCTION control_plane.protect_project_purge_recovery_receipt() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 BEGIN
+ IF TG_OP='DELETE' THEN
+   RAISE EXCEPTION 'project purge recovery receipt cannot be deleted' USING ERRCODE='42501'; END IF;
  IF TG_OP='INSERT' THEN
    IF NEW.recovery_version IS DISTINCT FROM 1 OR NEW.recovery_resolution_ref IS NOT NULL
-      OR NEW.recovery_resolution_digest IS NOT NULL OR NEW.recovery_resolution_actor IS NOT NULL THEN
+      OR NEW.recovery_resolution_digest IS NOT NULL OR NEW.recovery_resolution_actor IS NOT NULL
+      OR NEW.state IS DISTINCT FROM 'PENDING' OR NEW.objects_digest IS NOT NULL
+      OR NEW.objects_cleared_at IS NOT NULL OR NEW.purged_at IS NOT NULL OR NEW.deleted_rows IS DISTINCT FROM 0 THEN
      RAISE EXCEPTION 'project purge recovery receipt initial state is protected' USING ERRCODE='42501'; END IF;
    RETURN NEW;
+ END IF;
+ IF NEW.state=OLD.state THEN
+   IF (to_jsonb(NEW)-ARRAY['recovery_version','recovery_resolution_ref','recovery_resolution_digest','recovery_resolution_actor']) IS DISTINCT FROM
+      (to_jsonb(OLD)-ARRAY['recovery_version','recovery_resolution_ref','recovery_resolution_digest','recovery_resolution_actor']) THEN
+     RAISE EXCEPTION 'project purge recovery receipt origin and proof are immutable' USING ERRCODE='42501'; END IF;
+ ELSIF OLD.state='PENDING' AND NEW.state='OBJECTS_CLEARED' THEN
+   IF (to_jsonb(NEW)-ARRAY['state','objects_digest','objects_cleared_at']) IS DISTINCT FROM
+      (to_jsonb(OLD)-ARRAY['state','objects_digest','objects_cleared_at']) THEN
+     RAISE EXCEPTION 'project purge recovery external proof transition is invalid' USING ERRCODE='42501'; END IF;
+ ELSIF OLD.state='OBJECTS_CLEARED' AND NEW.state='DONE' AND current_user='control_plane_owner' AND EXISTS (
+   SELECT 1 FROM control_plane.project_purge_context context
+   WHERE context.transaction_id=pg_current_xact_id_if_assigned() AND context.backend_pid=pg_backend_pid()
+     AND context.project_id=OLD.project_id) THEN
+   IF (to_jsonb(NEW)-ARRAY['state','purged_at','deleted_rows']) IS DISTINCT FROM
+      (to_jsonb(OLD)-ARRAY['state','purged_at','deleted_rows']) THEN
+     RAISE EXCEPTION 'project purge recovery completion transition is invalid' USING ERRCODE='42501'; END IF;
+ ELSE RAISE EXCEPTION 'project purge recovery receipt transition is invalid' USING ERRCODE='42501';
  END IF;
  IF (NEW.recovery_version,NEW.recovery_resolution_ref,NEW.recovery_resolution_digest,NEW.recovery_resolution_actor)
     IS DISTINCT FROM (OLD.recovery_version,OLD.recovery_resolution_ref,OLD.recovery_resolution_digest,OLD.recovery_resolution_actor)
@@ -561,8 +583,9 @@ BEGIN
 END;
 $$;
 -- +goose StatementEnd
-CREATE TRIGGER protect_project_purge_recovery_receipt BEFORE INSERT OR UPDATE ON control_plane.project_purge_receipts
+CREATE TRIGGER protect_project_purge_recovery_receipt BEFORE INSERT OR UPDATE OR DELETE ON control_plane.project_purge_receipts
  FOR EACH ROW EXECUTE FUNCTION control_plane.protect_project_purge_recovery_receipt();
+REVOKE DELETE ON control_plane.project_purge_receipts FROM control_plane_runtime;
 
 RESET ROLE;
 
