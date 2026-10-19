@@ -27,7 +27,7 @@ vi.mock("@/shared/api/mutation", () => ({
     return request({
       "Idempotency-Key": key,
       "X-CSRF-Token": "synthetic-csrf",
-      "If-Match": `"${version}"`,
+      "If-Match": `"${String(version)}"`,
     });
   },
 }));
