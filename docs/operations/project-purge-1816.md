@@ -231,3 +231,17 @@ Readonly preflight живого контура: duplicate origin0. Отрица�
 после фактического disposable purge требуют42501; duplicate origin —23505.
 Адресный recovery/ADOPTED/fairness прогон после receipt guards — PASS6.564s;
 новый индекс и окончательная ревизия проверяются повторно.
+
+На43900e24/2cfdf626/cb5b301e три независимых направления review не нашли
+P0/P1/P2. Финальный targeted PostgreSQL с текущими receipt guards/index,
+recovery/ADOPTED/fairness, prepared ledger, обычным trash/purge и проектными
+профилями — PASS37.980s. Forward/replay migration и worker/runner readback —
+PASS. Публичный compiled PWA bundle85c1a86 собран и опубликован по exact
+digest; frontend/libs/contracts между85c1a86 иcb5b301e идентичны.
+
+Повтор широкого набора на5477ddad — FAIL384.893s: остались три сценария
+общей workflow fixture без scanner. Одна настройка существующего synthetic
+scanner в общей fixture закрывает этот системный аналог; production-код
+не меняется. Итоговый broad прогон выполняется отдельно, прежний FAIL не
+переименован в PASS. Дополнительная копия перед миграцией: private CP dump
+375857764байт, проверка архива PASS; full restore NOT RUN.
