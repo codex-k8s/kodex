@@ -12,6 +12,7 @@ import {
   searchProjects,
 } from "@/features/projects/api";
 import ProjectList from "@/features/projects/ProjectList.vue";
+import ProjectPurgeRecoveryDialog from "@/features/projects/ProjectPurgeRecoveryDialog.vue";
 import ProjectFormFields from "@/features/projects/ProjectFormFields.vue";
 import { catalogInvalidated } from "@/features/catalogs/api";
 import type {
@@ -33,6 +34,10 @@ const dialog = ref(false);
 const busy = ref(false);
 const problem = ref<AppProblem>();
 const lifecycleTarget = ref<Project>();
+const recoveryTarget = ref<Project>();
+watch(trashMode, () => {
+  recoveryTarget.value = undefined;
+});
 const lifecycleAction = ref<"TRASH" | "RESTORE" | "PURGE">("TRASH");
 const purgeConfirmation = ref("");
 const lifecycleBusy = ref(false);
@@ -244,6 +249,7 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
   if (name === "clearOwnerState") {
     dialog.value = false;
     lifecycleTarget.value = undefined;
+    recoveryTarget.value = undefined;
     return;
   }
   after(() => {
@@ -348,11 +354,19 @@ onBeforeUnmount(() => {
         @trash="openLifecycle($event, 'TRASH')"
         @restore="openLifecycle($event, 'RESTORE')"
         @purge="openLifecycle($event, 'PURGE')"
+        @recovery="recoveryTarget = $event"
       />
     </div>
     <div class="projects-list-footer">
       <span ref="sentinel" class="projects-list-sentinel" aria-hidden="true" />
     </div>
+    <ProjectPurgeRecoveryDialog
+      v-if="recoveryTarget && trashMode"
+      :key="recoveryTarget.ref"
+      :project-ref="recoveryTarget.ref"
+      :project-name="recoveryTarget.name"
+      @close="recoveryTarget = undefined"
+    />
     <ModalDialog
       v-if="lifecycleTarget"
       :title="

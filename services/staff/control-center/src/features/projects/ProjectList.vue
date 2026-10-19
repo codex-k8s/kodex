@@ -5,6 +5,7 @@ import {
   Files,
   GitBranch,
   Flame,
+  Info,
   Play,
   RotateCcw,
   Trash2,
@@ -20,6 +21,7 @@ const emit = defineEmits<{
   trash: [project: Project];
   restore: [project: Project];
   purge: [project: Project];
+  recovery: [project: Project];
 }>();
 </script>
 <template>
@@ -112,7 +114,13 @@ const emit = defineEmits<{
                 new Date(project.purgeAfter).toLocaleString($i18n.locale)
               }}</time
             >
-            <span v-else-if="trashed">{{ $t("projects.purgePending") }}</span>
+            <span v-else-if="trashed" class="project-list__purge-reason">{{
+              $t(
+                project.nextActions.includes("RESOLVE_PURGE")
+                  ? "projects.recovery.required"
+                  : "projects.purgePending",
+              )
+            }}</span>
             <time
               v-else-if="project.lastActivityAt"
               data-metric="lastActivityAt"
@@ -131,6 +139,16 @@ const emit = defineEmits<{
               class="project-list__actions"
               :aria-label="project.name"
             >
+              <button
+                v-if="project.nextActions.includes('RESOLVE_PURGE')"
+                class="button project-list__recovery-button"
+                type="button"
+                @click="emit('recovery', project)"
+              >
+                <Info :size="16" aria-hidden="true" />{{
+                  $t("projects.recovery.details")
+                }}
+              </button>
               <button
                 v-if="project.nextActions.includes('RESTORE')"
                 class="icon-button"
@@ -268,7 +286,7 @@ const emit = defineEmits<{
   width: 18%;
 }
 .project-list__table--trash th:first-child {
-  width: 50%;
+  width: 35%;
 }
 .project-list__table--trash th:nth-child(2) {
   width: 16%;
@@ -277,7 +295,7 @@ const emit = defineEmits<{
   width: 24%;
 }
 .project-list__table--trash th:last-child {
-  width: 10%;
+  width: 25%;
 }
 .project-list__item + .project-list__item {
   border-top: 1px solid var(--border);
@@ -328,5 +346,37 @@ const emit = defineEmits<{
 }
 .icon-button--danger {
   color: var(--danger);
+}
+.project-list__purge-reason {
+  display: block;
+  white-space: normal;
+}
+.project-list__recovery-button {
+  white-space: normal;
+  text-align: left;
+}
+@media (max-width: 640px) {
+  .project-list__table--trash {
+    min-width: 0;
+  }
+  .project-list__table--trash thead {
+    display: none;
+  }
+  .project-list__table--trash tbody,
+  .project-list__table--trash tr,
+  .project-list__table--trash td {
+    display: block;
+    width: 100%;
+  }
+  .project-list__table--trash td {
+    padding-block: 6px;
+  }
+  .project-list__table--trash tr {
+    padding-block: 8px;
+  }
+  .project-list__table--trash .project-list__actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
 }
 </style>

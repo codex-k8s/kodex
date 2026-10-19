@@ -1251,6 +1251,45 @@ const ru = {
     purgeConfirmName: "Название проекта для подтверждения",
     purgePending: "Идёт безвозвратное удаление",
     purgeAfter: "Автоматическое удаление после",
+    recovery: {
+      title: "Продолжить удаление проекта",
+      details: "Подробнее",
+      required:
+        "Удаление приостановлено: результат загрузки неизвестен. Нужно решение владельца.",
+      reason:
+        "Загрузок с неизвестным результатом: {count}. Чтобы продолжить удаление, откажитесь от их результата.",
+      retryReason:
+        "Очистка ранее отклонённого результата требует повторной попытки.",
+      irreversible:
+        "Отказ необратим: восстановить или использовать результат этих загрузок будет нельзя.",
+      retryWarning:
+        "Повтор касается только очистки. Первоначальное решение об отказе от результата не изменится.",
+      observation:
+        "Отсутствие объекта сейчас не подтверждает полную очистку: загрузка могла завершиться позднее. Минимальный технический контроль запоздалой загрузки сохранится и после удаления проекта.",
+      acknowledge:
+        "Понимаю необратимую потерю результата и разрешаю продолжить удаление.",
+      acknowledgeRetry:
+        "Разрешаю новую попытку очистки ранее отклонённого результата.",
+      continue: "Подтвердить и продолжить",
+      submitting: "Отправляем решение…",
+      refresh: "Обновить состояние",
+      stale:
+        "Состояние изменилось. Показаны свежие данные — прочитайте их и подтвердите решение заново.",
+      uncertain:
+        "Ответ на предыдущее решение не получен. Сначала обновите состояние. Повтор после нового подтверждения использует тот же запрос и не создаёт второго решения.",
+      cleanupPending:
+        "Решение принято. Незавершённых проверок очистки: {count}. Это ещё не подтверждение полного удаления данных.",
+      state: {
+        WAITING_OWNER: "Удаление ждёт вашего решения.",
+        QUEUED: "Очистка поставлена в очередь.",
+        OBSERVING:
+          "Проверяем, не появилась ли запоздалая загрузка. Полная очистка пока не подтверждена.",
+        DELETED_CONFIRMED: "Удаление объектов подтверждено.",
+        NONE: "Дополнительное решение для удаления не требуется.",
+        BLOCKED:
+          "Очистка остановлена. Обновите состояние; если действие недоступно, обратитесь к администратору.",
+      },
+    },
   },
   project: {
     subtitle: "Работа, сотрудники и процессы этого Проекта",
@@ -6014,6 +6053,45 @@ const en = {
     purgeConfirmName: "Project name for confirmation",
     purgePending: "Permanent deletion in progress",
     purgeAfter: "Automatic removal after",
+    recovery: {
+      title: "Continue Project deletion",
+      details: "Details",
+      required:
+        "Deletion paused: an upload outcome is unknown. An owner decision is required.",
+      reason:
+        "Uploads with an unknown outcome: {count}. Abandon their result to continue deletion.",
+      retryReason:
+        "Cleanup of a previously abandoned result needs another attempt.",
+      irreversible:
+        "Abandoning the result is irreversible: these uploads cannot be restored or used.",
+      retryWarning:
+        "This retries cleanup only. The original decision to abandon the result is unchanged.",
+      observation:
+        "An absent object does not prove complete cleanup: an upload may finish later. Minimal technical monitoring for a late upload remains after Project deletion.",
+      acknowledge:
+        "I understand the irreversible loss of the result and authorize deletion to continue.",
+      acknowledgeRetry:
+        "I authorize another cleanup attempt for the previously abandoned result.",
+      continue: "Confirm and continue",
+      submitting: "Submitting decision…",
+      refresh: "Refresh status",
+      stale:
+        "The state changed. Review the refreshed details and confirm again.",
+      uncertain:
+        "The previous decision response was not received. Refresh status first. An explicitly confirmed retry reuses the same request and cannot create a second decision.",
+      cleanupPending:
+        "Decision recorded. Cleanup checks pending: {count}. Complete data deletion is not yet confirmed.",
+      state: {
+        WAITING_OWNER: "Deletion awaits your decision.",
+        QUEUED: "Cleanup is queued.",
+        OBSERVING:
+          "Watching for a late upload. Complete cleanup is not yet confirmed.",
+        DELETED_CONFIRMED: "Object deletion is confirmed.",
+        NONE: "No additional decision is required for deletion.",
+        BLOCKED:
+          "Cleanup is blocked. Refresh status; contact an administrator if no action is available.",
+      },
+    },
   },
   project: {
     subtitle: "Work, employees and processes in this Project",
