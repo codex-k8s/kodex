@@ -171,11 +171,11 @@ filename, media type и иные пользовательские metadata уд�
 
 ### Checklist продолжения
 
-- [ ] CP: forward-only schema, owner query/command, полный worker lifecycle,
+- [x] CP: forward-only schema, owner query/command, полный worker lifecycle,
   known/unknown receipt, late Put, isolation и ADOPTED finalization.
-- [ ] Gateway #1818: OpenAPI, exact RPC/client profile/authority, generated
+- [x] Gateway #1818: OpenAPI, exact RPC/client profile/authority, generated
   adapters и negative HTTP/CSRF/OCC/idempotency.
-- [ ] PWA #1819: понятная причина в корзине, preview/modal/acknowledgement,
+- [x] PWA #1819: понятная причина в корзине, preview/modal/acknowledgement,
   outside close, stale refresh без повторного согласия, realtime и mobile.
 - [ ] Применимые unit/disposable PostgreSQL/codegen/render/frontend checks,
   три направления review и source/image readback разрешённого rollout.
@@ -256,3 +256,40 @@ target-owned service identity policy не материализовала два 
 исходных bindings; policy пересоздана штатным генератором. Проверка полноты
 встроена в обязательный authority codegen entrypoint; unit проверяет допуск
 gateway и отказ runtime/job callers. Blanket allowlist не вводился.
+
+### Итог разрешённого rollout19.10
+
+Проверенный код CP578a304b, gatewayc7e9f01c, PWAfc7ead5f; три независимых
+направления review на этих SHA не нашли P0/P1/P2. Полная Go suite CP и gateway
+— PASS. Последний целевой PWA прогон15 тестов и полный ESLint — PASS;
+typecheck/production build — PASS внутри закреплённого build. Полный PostgreSQL
+PASS404.741s относится к97098012; последующая дельта CP меняет только embedded
+policy, её проверки и документацию, не SQL/worker. Проверка materialization
+policy и её5 unit — PASS. Полный disposable browser E2E — NOT RUN; известный
+общий OpenAPI validation FAIL описан в журнале #1818 и не скрыт.
+
+Миграция20261019000100 применена штатным migration tool: PASS, Job UID
+94524769-de4d-4701-bb5f-af4ccee75cf8. После применения файл не менялся.
+CP/API обслуживают sourcefc7ead5f из отдельного чистого клона; host/Pod
+SHA256 embedded policy совпадает. Compiled nginx PWA использует OCI digest
+sha256:098d53ada537ca3242a6f57f56b6a3393cd5f666dc46eb4f61f8f5e09ec48b7d.
+Публикация и оба scoped release — PASS; CP/API/PWA updated/ready2 из2.
+Существующий hot-source mask сохранён; source-mask нового клона подготовлен
+до применения. SSO и соседние компоненты не менялись.
+
+Живой Chrome: recovery GET200, ETag1, WAITING_OWNER, unknown1, canResolve=true;
+понятная причина в корзине. Desktop и390×844 просмотрены по скриншотам:
+горизонтального переполнения нет, checkbox пустой, submit disabled. Outside
+click и Escape закрывают окно; после повторного открытия checkbox пустой,
+ложного stale нет. Console без error/warn, неожиданных HTTP ошибок нет;
+realtime после восстановления подключён. Recovery POST не выполнялся.
+В ограниченной выборке backend логов последних7 минут error/fatal/panic нет.
+Файл контрольного другого проекта: HTTP200,42байта, исходный SHA256 совпал;
+карантинный файл по-прежнему403 (ожидаемый отказ).
+
+Живое решение владельца, HTTP202 после него, исчезновение проекта и последующая
+физическая очистка — NOT RUN: агент не подтверждает необратимую потерю за
+человека. «Kodex | Dev» остаётся PURGE_PENDING до отдельного checkbox и клика
+в интерфейсе. Другой ранее зависший проект уже DONE и отсутствует в списке.
+Никаких ручных UPDATE, поддельных CLEANED или сброса receipt не выполнялось.
+Последующие коммиты журналов не меняют проверенный исполняемый код.
