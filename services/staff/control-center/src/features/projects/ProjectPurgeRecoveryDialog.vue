@@ -62,6 +62,11 @@ onBeforeUnmount(() => {
   >
     <div class="purge-recovery">
       <strong class="purge-recovery__name">{{ projectName }}</strong>
+      <a
+        :href="`/projects?trash=1&purgeRecovery=${encodeURIComponent(projectRef)}`"
+        class="purge-recovery__link"
+        >{{ $t("projects.recovery.statusLink") }}</a
+      >
       <p v-if="recovery.loading" role="status">{{ $t("common.loading") }}</p>
       <ProblemNotice
         v-if="recovery.problem"
@@ -77,7 +82,10 @@ onBeforeUnmount(() => {
       <template v-if="recovery.preview">
         <p class="purge-recovery__status" role="status">
           <CheckCircle2
-            v-if="recovery.preview.state === 'DELETED_CONFIRMED'"
+            v-if="
+              recovery.preview.state === 'DELETED_CONFIRMED' &&
+              recovery.preview.cleanupPendingCount === 0
+            "
             :size="18"
             aria-hidden="true"
           />

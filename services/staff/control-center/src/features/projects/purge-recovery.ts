@@ -21,5 +21,15 @@ export function canResolvePurgeRecovery(value?: ProjectPurgeRecovery): boolean {
 export function purgeRecoveryStatusKey(value: ProjectPurgeRecovery): string {
   if (value.cleanupPendingCount > 0 && !value.canResolve)
     return "projects.recovery.cleanupPending";
-  return `projects.recovery.state.${value.state}`;
+  switch (value.state) {
+    case "WAITING_OWNER":
+    case "QUEUED":
+    case "OBSERVING":
+    case "DELETED_CONFIRMED":
+    case "NONE":
+    case "BLOCKED":
+      return `projects.recovery.state.${value.state}`;
+    default:
+      return "projects.recovery.state.BLOCKED";
+  }
 }

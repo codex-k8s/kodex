@@ -73,7 +73,9 @@ describe("Подтверждаемое продолжение удаления �
     expect(await store.resolve()).toBe(true);
     expect(store.acknowledged).toBe(false);
     expect(store.preview?.cleanupPendingCount).toBe(2);
-    expect(purgeRecoveryStatusKey(store.preview!)).toBe(
+    const preview = store.preview;
+    if (!preview) throw new Error("Missing recovery preview");
+    expect(purgeRecoveryStatusKey(preview)).toBe(
       "projects.recovery.cleanupPending",
     );
     await store.resolve();
@@ -134,7 +136,10 @@ describe("Подтверждаемое продолжение удаления �
     await loading;
     expect(store.projectRef).toBe("prj_next");
     expect(store.preview?.projectRef).toBe("prj_next");
-    expect(api.loadProjectPurgeRecovery.mock.calls[0]?.[1].aborted).toBe(true);
+    const signal: unknown = api.loadProjectPurgeRecovery.mock.calls[0]?.[1];
+    if (!(signal instanceof AbortSignal))
+      throw new Error("Missing abort signal");
+    expect(signal.aborted).toBe(true);
   });
 
   it("выход владельца закрывает старый ACK и старое согласие", async () => {

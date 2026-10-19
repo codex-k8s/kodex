@@ -1253,6 +1253,9 @@ const ru = {
     purgeAfter: "Автоматическое удаление после",
     recovery: {
       title: "Продолжить удаление проекта",
+      deletedProject: "Удаление проекта",
+      statusLink:
+        "Ссылка на состояние удаления — сохраните её для проверки позже",
       details: "Подробнее",
       required:
         "Удаление приостановлено: результат загрузки неизвестен. Нужно решение владельца.",
@@ -6055,6 +6058,8 @@ const en = {
     purgeAfter: "Automatic removal after",
     recovery: {
       title: "Continue Project deletion",
+      deletedProject: "Project deletion",
+      statusLink: "Deletion status link — save it to check again later",
       details: "Details",
       required:
         "Deletion paused: an upload outcome is unknown. An owner decision is required.",
