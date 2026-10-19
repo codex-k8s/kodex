@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -20,6 +21,9 @@ var queryProjectPurgeMovedArchiveFixture string
 
 //go:embed testdata/sql/project_purge_moved_artifact_fixture.sql
 var queryProjectPurgeMovedArtifactFixture string
+
+//go:embed testdata/sql/project_purge_large_history_fixture.sql
+var queryProjectPurgeLargeHistoryFixture string
 
 func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
@@ -171,6 +175,14 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 		t.Fatal(err)
 	}
 	projectID := gateTestProjectID(t, ctx, repository, owner, latest.Ref)
+	// Большая история воспроизводит реальный объём, а не только пустой граф.
+	if tag, err := repository.pool.Exec(ctx, queryProjectPurgeLargeHistoryFixture, runRef); err != nil || tag.RowsAffected() != 55000 {
+		t.Fatalf("prepare large purge history: %v", err)
+	}
+	var foreignEventsBefore int
+	if err := repository.pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.run_events WHERE project_id IS DISTINCT FROM $1::uuid`, projectID).Scan(&foreignEventsBefore); err != nil {
+		t.Fatal(err)
+	}
 	trashed, err := service.Execute(ctx, command.Command{Kind: command.TrashProject, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "purge-moved-trash", ExpectedVersion: &latest.Version}, Payload: command.ProjectLifecycleInput{Ref: latest.Ref}})
 	if err != nil {
@@ -229,7 +241,15 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 	if err := repository.objects.Delete(ctx, artifactKey, artifactVersion); err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.FinalizeProjectPurge(ctx, candidate, inventory); err != nil {
+	purgeCtx, cancelPurge := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelPurge()
+	started := time.Now()
+	if err := repository.FinalizeProjectPurge(purgeCtx, candidate, inventory); err != nil {
 		t.Fatal("finalize moved archive fixture", err)
+	}
+	t.Logf("purged graph with 55000 history events in %s", time.Since(started))
+	var remainingScaleEvents, foreignEventsAfter int
+	if err := repository.pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE ref LIKE 'evt_purge_scale_%'),count(*) FILTER (WHERE project_id IS DISTINCT FROM $1::uuid) FROM control_plane.run_events`, projectID).Scan(&remainingScaleEvents, &foreignEventsAfter); err != nil || remainingScaleEvents != 0 || foreignEventsAfter != foreignEventsBefore {
+		t.Fatalf("large purge crossed history boundary: remaining=%d before=%d after=%d err=%v", remainingScaleEvents, foreignEventsBefore, foreignEventsAfter, err)
 	}
 }

@@ -293,3 +293,32 @@ realtime после восстановления подключён. Recovery PO
 в интерфейсе. Другой ранее зависший проект уже DONE и отсутствует в списке.
 Никаких ручных UPDATE, поддельных CLEANED или сброса receipt не выполнялось.
 Последующие коммиты журналов не меняют проверенный исполняемый код.
+
+### Повторное зависание после решения владельца19.10
+
+Владелец сохранил решение: project version4, prepared intent OWNER_ABANDONED,
+recovery OBSERVING. Повторное согласие не требуется. Live worker обеих реплик
+доходит до finalize, но пяти­минутный budget отменяет SQL построения графа.
+PostgreSQL context указывает на динамические INSERT project_purge_targets;
+блокирующих внешних транзакций у выполняющего purge нет. История содержит
+около55тыс. run_events; прежние маленькие component fixtures этот масштаб
+не проверяли. EXPLAIN подтвердил, что прежний index condition ограничивал
+только transaction_id, а relation_id оставался join filter.
+
+Новая forward migration20261019000200 ограничивает indexed lookup точным
+catalog-owned relation_id для каждого ребра и каждой таблицы. Финальное
+удаление использует типизированное равенство всех PK-колонок сохранённого
+row_key вместо вычисления JSON для каждой пары victim/target. Устойчивый PK
+сохраняет корректность после ON DELETE SET NULL. Табличные/edge fingerprints,
+tenant/project проверки, row locks, receipts, context и atomic PROJECT_PURGED
+не меняются; отдельного события или grant нет. Rollback/timeout оставляют
+прежний PENDING, повтор использует тот же authoritative inventory. Миграция
+проверяет точный ожидаемый SQL-шаблон и закрыто отклоняет неизвестную форму.
+Применённая20261019000100 не редактируется.
+
+- [ ] Disposable: recovery/trash/immutable moved lineage, большая история55тыс.,
+  чужие события сохранены, terminal receipt и очистка private targets.
+- [ ] Migration CLI: exact new profile, replay, stale readback; unit/code checks.
+- [ ] Независимые product/security/architecture review точного SHA.
+- [ ] Private pre-migration backup, штатная migration, live worker DONE.
+- [ ] Chrome корзина/Console/Network, сохранность другого проекта и receipt.
