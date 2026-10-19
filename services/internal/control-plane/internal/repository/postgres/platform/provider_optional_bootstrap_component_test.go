@@ -2,7 +2,6 @@ package platform
 
 import (
 	"context"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -17,10 +16,7 @@ import (
 )
 
 func TestProviderOptionalBootstrapComponent(t *testing.T) {
-	dsn := os.Getenv("KODEX_CONTROL_PLANE_TEST_DSN")
-	if dsn == "" {
-		t.Skip("KODEX_CONTROL_PLANE_TEST_DSN is not configured")
-	}
+	dsn := isolatedAssistantComponentDSN(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, dsn)

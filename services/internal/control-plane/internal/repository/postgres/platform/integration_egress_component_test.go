@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/netip"
-	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -124,10 +123,7 @@ func TestIntegrationEgressShippedContext7Component(t *testing.T) {
 }
 
 func TestIntegrationEgressProjectionComponent(t *testing.T) {
-	dsn := os.Getenv("KODEX_CONTROL_PLANE_TEST_DSN")
-	if dsn == "" {
-		t.Skip("KODEX_CONTROL_PLANE_TEST_DSN is not configured")
-	}
+	dsn := isolatedAssistantComponentDSN(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, dsn)

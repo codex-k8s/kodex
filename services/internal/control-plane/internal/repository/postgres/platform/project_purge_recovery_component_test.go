@@ -18,6 +18,7 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/command"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -95,6 +96,40 @@ func TestProjectPurgeRecoveryComponent(t *testing.T) {
 	if err != nil || preview.State != "WAITING_OWNER" || preview.UnknownContentCount != 2 || !preview.CanResolve || !preview.ProjectPresent || preview.ProjectVersion < 1 {
 		t.Fatal("missing owner-safe blocked preview", preview, err)
 	}
+	t.Run("runtime-insert-cannot-forge-owner-resolution", func(t *testing.T) {
+		for name, statement := range map[string]string{
+			"ledger": `INSERT INTO control_plane.prepared_content SELECT (jsonb_populate_record(NULL::control_plane.prepared_content,to_jsonb(content)||jsonb_build_object(
+              'id',gen_random_uuid(),'idempotency_key','forged-recovery-intent','state','OWNER_ABANDONED','generation',content.generation+1,
+              'ref',NULL,'file_name',NULL,'media_type',NULL,'scan_state',NULL,'preview_state',NULL,
+              'owner_resolution',jsonb_build_object('ref','ppr_forged_resolution','actorId',$2::text,'snapshotDigest',repeat('f',64),'resolvedAt',clock_timestamp(),'projectRef',$1::text),
+              'recovery_storage_identity',$3::text,'recovery_state','OBSERVING','recovery_check_after',clock_timestamp(),'recovery_absent_at',clock_timestamp()))).*
+              FROM control_plane.prepared_content content WHERE content.origin_project_ref=$1 AND content.state='WAITING_OWNER' LIMIT 1`,
+			"receipt": `INSERT INTO control_plane.project_purge_receipts SELECT (jsonb_populate_record(NULL::control_plane.project_purge_receipts,to_jsonb(receipt)||jsonb_build_object(
+              'project_id',gen_random_uuid(),'project_ref','prj_forged_recovery_receipt','recovery_version',2,
+              'recovery_resolution_ref','ppr_forged_resolution','recovery_resolution_digest',repeat('f',64),'recovery_resolution_actor',$2::text))).*
+              FROM control_plane.project_purge_receipts receipt WHERE receipt.project_ref=$1`,
+		} {
+			t.Run(name, func(t *testing.T) {
+				tx, err := pool.Begin(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				args := []any{ref, actorID}
+				if name == "ledger" {
+					args = append(args, r.projectPurgeStorageIdentity)
+				}
+				_, insertErr := tx.Exec(ctx, statement, args...)
+				_ = tx.Rollback(ctx)
+				var denied *pgconn.PgError
+				if !errors.As(insertErr, &denied) {
+					t.Fatalf("runtime forged %s owner resolution without a PostgreSQL authorization rejection", name)
+				}
+				if denied.Code != "42501" {
+					t.Fatalf("runtime forged %s owner resolution: sqlstate=%s", name, denied.Code)
+				}
+			})
+		}
+	})
 	candidate := ProjectPurgeCandidate{OrganizationID: orgID, OrganizationRef: orgRef, ProjectID: projectID, ProjectRef: ref}
 	if _, err := r.ProjectPurgeInventory(ctx, candidate); !errors.Is(err, errs.ErrConflict) {
 		t.Fatal("unresolved uncertainty did not block ordinary project purge", err)
@@ -428,5 +463,140 @@ func TestProjectPurgeRecoveryAdoptedComponent(t *testing.T) {
 	}
 	if err := r.FinalizeProjectPurge(ctx, candidate, inventory); err != nil {
 		t.Fatal("adopted purge replay changed terminal outcome", err)
+	}
+}
+
+func TestProjectPurgeRecoveryFairnessComponent(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
+	defer cancel()
+	pool, err := pgxpool.New(ctx, isolatedAssistantComponentDSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	objects := &preparedObjectsFixture{Store: objectstoragetest.New(), fail: true}
+	r, err := New(pool, "openai-codex", "gpt-5", objects)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configureComponentArtifactScanner(t, r)
+	if err := r.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.ConfigureRoleImages(RoleImageConfig{PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64), BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3, StagingRepository: "registry.invalid/staging", PromotedRepository: "registry.invalid/roles", DefaultImageReference: "registry.invalid/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32))}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.ConfigureProjectPurgeStorage("https://storage.invalid", "fixture", "artifacts", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Bootstrap(ctx); err != nil {
+		t.Fatal(err)
+	}
+	owner := resolvedTestPrincipal(t, ctx, r, platformrepo.ProofPrincipalInput{ExternalActorID: "20000000-0000-4000-8000-000000000001", ExternalTenantID: "20000000-0000-4000-8000-000000000002", CallerWorkload: "control-api-gateway", Operation: "platform.query.projects.purge-recovery.get"}, "control-api-gateway")
+	service, err := platformservice.New(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepare := func(key string, count int) string {
+		t.Helper()
+		created, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: key + "-create"}, Payload: command.ProjectInput{Name: "Recovery fairness " + key, Language: "ru"}})
+		if err != nil || created.Project == nil {
+			t.Fatal("create fairness project", err)
+		}
+		ref := created.Project.Ref
+		var orgID, orgRef, actorID, projectID string
+		if err := pool.QueryRow(ctx, `SELECT p.organization_id::text,o.ref,p.created_by::text,p.id::text FROM control_plane.projects p JOIN control_plane.organizations o ON o.id=p.organization_id WHERE p.ref=$1`, ref).Scan(&orgID, &orgRef, &actorID, &projectID); err != nil {
+			t.Fatal(err)
+		}
+		for index := 0; index < count; index++ {
+			request := preparedContentRequest{Binding: preparedContentBinding{ActorID: actorID, OrganizationID: orgID, OrganizationRef: orgRef, ProjectID: projectID, ProjectRef: ref, SourceProfile: "PROJECT", SourceProfileRef: "agent_fairness_fixture", SourceProfileVersion: 1, SourceContextDigest: strings.Repeat("a", 64), SourceLeaseRef: "lease_fairness_fixture", SourceLeaseGeneration: 1, SourceFenceDigest: strings.Repeat("b", 64), SourceRunRef: "run_fairness_fixture", OperationKey: "operation-fairness", IntentOperation: "propose-assistant-plan", IdempotencyKey: fmt.Sprintf("%s-intent-%d", key, index), IntentDigest: strings.Repeat("c", 64)}, FileName: "fairness.txt", MediaType: "text/plain", Digest: "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", ScanState: "CLEAN", PreviewState: "AVAILABLE", SizeBytes: 3, Body: strings.NewReader("abc")}
+			if _, err := r.stagePreparedContent(ctx, request); !errors.Is(err, errs.ErrUnavailable) {
+				t.Fatal("stage uncertain fairness input", err)
+			}
+			for attempt := 0; attempt < 3; attempt++ {
+				var id string
+				var generation int64
+				var accepted bool
+				if err := pool.QueryRow(ctx, `SELECT ledger_id::text,generation FROM control_plane.prepared_content_claim('fairness-initial-cleanup',1,30)`).Scan(&id, &generation); err != nil {
+					t.Fatal(err)
+				}
+				if err := pool.QueryRow(ctx, `SELECT control_plane.prepared_content_finish($1,'fairness-initial-cleanup',$2,false,'','')`, id, generation).Scan(&accepted); err != nil || !accepted {
+					t.Fatal("finish failed fairness cleanup", err)
+				}
+			}
+		}
+		trashed, err := service.Execute(ctx, command.Command{Kind: command.TrashProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: key + "-trash", ExpectedVersion: &created.Project.Version}, Payload: command.ProjectLifecycleInput{Ref: ref}})
+		if err != nil || trashed.Project == nil {
+			t.Fatal(err)
+		}
+		if _, err := service.Execute(ctx, command.Command{Kind: command.PurgeProject, Principal: owner, Mutation: value.Mutation{IdempotencyKey: key + "-purge", ExpectedVersion: &trashed.Project.Version}, Payload: command.ProjectLifecycleInput{Ref: ref}}); err != nil {
+			t.Fatal(err)
+		}
+		preview, err := service.GetProjectPurgeRecovery(ctx, owner, ref)
+		if err != nil || !preview.CanResolve || preview.UnknownContentCount != int32(count) {
+			t.Fatal("fairness fixture has no owner decision", err)
+		}
+		if _, err := service.Execute(ctx, command.Command{Kind: command.ResolveProjectPurgeRecovery, Principal: owner, Mutation: value.Mutation{IdempotencyKey: key + "-resolve", ExpectedVersion: &preview.Version}, Payload: command.ProjectPurgeRecoveryInput{Ref: ref, SnapshotDigest: preview.SnapshotDigest, AcknowledgeUnknownOutcome: true}}); err != nil {
+			t.Fatal("resolve fairness fixture", err)
+		}
+		return ref
+	}
+	oldRef := prepare("fairness-old", 4)
+	oldClaims, err := r.ClaimProjectPurgeRecovery(ctx, "fairness-old-observer", 4)
+	if err != nil || len(oldClaims) != 4 {
+		t.Fatal("claim older project observations", err)
+	}
+	for _, claim := range oldClaims {
+		if claim.ProjectRef != oldRef {
+			t.Fatal("unexpected old fairness origin")
+		}
+		if err := r.FinishProjectPurgeRecovery(ctx, "fairness-old-observer", claim, "ABSENT"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	newRef := prepare("fairness-new", 1)
+	// Меняется только время наблюдения в точной disposable БД; решения не подделываются.
+	adminConfig, err := pgx.ParseConfig(os.Getenv("KODEX_CONTROL_PLANE_TEST_ADMIN_DSN"))
+	if err != nil || !strings.HasPrefix(pool.Config().ConnConfig.Database, "kodex_assistant_test_") {
+		t.Fatal("invalid isolated fairness fixture")
+	}
+	adminConfig.Database = pool.Config().ConnConfig.Database
+	admin, err := pgx.ConnectConfig(ctx, adminConfig)
+	if err != nil {
+		t.Fatal("connect isolated fairness fixture")
+	}
+	defer admin.Close(ctx)
+	tx, err := admin.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SET LOCAL ROLE control_plane_owner`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO control_plane.project_purge_recovery_context(transaction_id,backend_pid,ledger_id,purpose) SELECT pg_current_xact_id(),pg_backend_pid(),id,'FINISH' FROM control_plane.prepared_content WHERE origin_project_ref IN ($1,$2) AND state='OWNER_ABANDONED'`, oldRef, newRef); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `UPDATE control_plane.prepared_content SET recovery_check_after=clock_timestamp()-CASE WHEN origin_project_ref=$1 THEN interval '1 second' ELSE interval '2 minutes' END WHERE origin_project_ref IN ($1,$2) AND state='OWNER_ABANDONED'`, oldRef, newRef); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM control_plane.project_purge_recovery_context WHERE transaction_id=pg_current_xact_id() AND backend_pid=pg_backend_pid() AND purpose='FINISH'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	claims, err := r.ClaimProjectPurgeRecovery(ctx, "fairness-current-worker", 4)
+	if err != nil || len(claims) != 4 {
+		t.Fatal("claim bounded fair queue", err)
+	}
+	newCount := 0
+	for _, claim := range claims {
+		if claim.ProjectRef == newRef {
+			newCount++
+		}
+	}
+	if newCount != 1 {
+		t.Fatal("older observing project starved newer overdue cleanup")
 	}
 }

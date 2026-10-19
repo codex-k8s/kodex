@@ -65,6 +65,27 @@ CREATE TABLE control_plane.project_purge_recovery_context (
  PRIMARY KEY(transaction_id,ledger_id));
 REVOKE ALL ON control_plane.project_purge_recovery_context FROM PUBLIC,control_plane_runtime;
 
+-- Начало ledger не несёт owner decision или cleanup authority. Даже INSERT
+-- от table owner не заменяет специализированный RESOLVE-переход UPDATE.
+-- +goose StatementBegin
+CREATE FUNCTION control_plane.guard_prepared_content_recovery_insert() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+BEGIN
+ IF NEW.state IS DISTINCT FROM 'IN_FLIGHT' OR NEW.generation IS DISTINCT FROM 1
+    OR NEW.cleanup_attempts IS DISTINCT FROM 0 OR NEW.cleanup_owner IS NOT NULL OR NEW.cleanup_deadline IS NOT NULL
+    OR NEW.object_version IS DISTINCT FROM '' OR NEW.object_etag IS DISTINCT FROM ''
+    OR NEW.adopted_revision_id IS NOT NULL OR NEW.adopted_revision_ref IS NOT NULL
+    OR NEW.deletion_receipt_digest IS NOT NULL OR NEW.owner_resolution IS NOT NULL
+    OR NEW.recovery_storage_identity IS NOT NULL OR NEW.recovery_state IS DISTINCT FROM ''
+    OR NEW.recovery_check_after IS NOT NULL OR NEW.recovery_absent_at IS NOT NULL THEN
+   RAISE EXCEPTION 'prepared content initial state is protected' USING ERRCODE='42501'; END IF;
+ RETURN NEW;
+END;
+$$;
+-- +goose StatementEnd
+CREATE TRIGGER guard_prepared_content_recovery_insert BEFORE INSERT ON control_plane.prepared_content
+ FOR EACH ROW EXECUTE FUNCTION control_plane.guard_prepared_content_recovery_insert();
+
 -- +goose StatementBegin
 DO $migration$
 DECLARE definition text; marker text; replacement text;
@@ -305,14 +326,18 @@ BEGIN
     OR p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 32
     OR p_storage_identity IS NULL OR p_storage_identity !~ '^[a-f0-9]{64}$' THEN
    RAISE EXCEPTION 'invalid project purge recovery claim' USING ERRCODE='22023'; END IF;
+ -- Старый project requested_at не даёт приоритет бесконечному наблюдению:
+ -- ABSENT сдвигает due вперёд и освобождает следующий цикл другим проектам.
  FOR receipt IN SELECT r.organization_id,r.project_ref FROM control_plane.project_purge_receipts r
-   WHERE r.state IN ('PENDING','DONE') AND EXISTS (
-     SELECT 1 FROM control_plane.prepared_content c WHERE c.organization_id=r.organization_id
+   CROSS JOIN LATERAL (
+     SELECT min(c.recovery_check_after) AS next_check FROM control_plane.prepared_content c WHERE c.organization_id=r.organization_id
        AND c.origin_project_ref=r.project_ref AND c.state='OWNER_ABANDONED'
        AND c.recovery_storage_identity=p_storage_identity AND c.recovery_check_after<=clock_timestamp()
        AND (c.recovery_state IN ('PENDING','OBSERVING') OR
-         (c.recovery_state='CLAIMED' AND c.cleanup_deadline<=clock_timestamp())))
-   ORDER BY r.requested_at,r.project_id LIMIT p_limit FOR UPDATE OF r SKIP LOCKED
+         (c.recovery_state='CLAIMED' AND c.cleanup_deadline<=clock_timestamp()))
+   ) due
+   WHERE r.state IN ('PENDING','DONE') AND due.next_check IS NOT NULL
+   ORDER BY due.next_check,r.project_id LIMIT p_limit FOR UPDATE OF r SKIP LOCKED
  LOOP
    FOR item IN SELECT c.* FROM control_plane.prepared_content c
      WHERE c.organization_id=receipt.organization_id AND c.origin_project_ref=receipt.project_ref
@@ -522,6 +547,12 @@ END $migration$;
 CREATE FUNCTION control_plane.protect_project_purge_recovery_receipt() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog AS $$
 BEGIN
+ IF TG_OP='INSERT' THEN
+   IF NEW.recovery_version IS DISTINCT FROM 1 OR NEW.recovery_resolution_ref IS NOT NULL
+      OR NEW.recovery_resolution_digest IS NOT NULL OR NEW.recovery_resolution_actor IS NOT NULL THEN
+     RAISE EXCEPTION 'project purge recovery receipt initial state is protected' USING ERRCODE='42501'; END IF;
+   RETURN NEW;
+ END IF;
  IF (NEW.recovery_version,NEW.recovery_resolution_ref,NEW.recovery_resolution_digest,NEW.recovery_resolution_actor)
     IS DISTINCT FROM (OLD.recovery_version,OLD.recovery_resolution_ref,OLD.recovery_resolution_digest,OLD.recovery_resolution_actor)
     AND current_user<>'control_plane_owner' THEN
@@ -530,7 +561,7 @@ BEGIN
 END;
 $$;
 -- +goose StatementEnd
-CREATE TRIGGER protect_project_purge_recovery_receipt BEFORE UPDATE ON control_plane.project_purge_receipts
+CREATE TRIGGER protect_project_purge_recovery_receipt BEFORE INSERT OR UPDATE ON control_plane.project_purge_receipts
  FOR EACH ROW EXECUTE FUNCTION control_plane.protect_project_purge_recovery_receipt();
 
 RESET ROLE;

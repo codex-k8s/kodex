@@ -208,3 +208,17 @@ Rollback исходников после первого owner resolution не я
 ошибке остановить новый claim и исправить forward, не откатывать resolution
 либо подменять deletion receipt. До применения сохраняется отдельный private
 CP dump с проверкой архива; это не полный platform restore drill.
+
+Первый независимый review9bbab174/1c0fcaf3/85c1a86: product без P0/P1/P2;
+security и architecture нашли по одному P2. Исправлены INSERT guards
+начального ledger/receipt и справедливая очередь по ближайшему due вместо
+неизменяемого времени запроса проекта. Новые forged INSERT и fairness двух
+проектов проверены отдельными disposable регрессиями; окончательное review
+после исправлений фиксируется отдельно, старое подтверждение не переносится.
+
+Широкий `^Test.*Component$` на9bbab174 — FAIL370.584s: четыре старых
+сценария использовали общую изменённую БД (rollback core prompt/поколение
+egress), ещё две fixture не настраивали обязательный artifact scanner.
+Фикстуры переведены на существующий isolated template helper; в двух точках
+задан предусмотренный synthetic scanner. Рабочие security checks и assertions
+не отключались. Повтор выполняется на исправленной ревизии.

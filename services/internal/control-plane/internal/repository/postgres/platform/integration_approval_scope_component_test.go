@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -25,10 +24,7 @@ import (
 )
 
 func TestScopedIntegrationApprovalComponent(t *testing.T) {
-	dsn := os.Getenv("KODEX_CONTROL_PLANE_TEST_DSN")
-	if dsn == "" {
-		t.Skip("KODEX_CONTROL_PLANE_TEST_DSN is not configured")
-	}
+	dsn := isolatedAssistantComponentDSN(t)
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
 	pool, err := pgxpool.New(ctx, dsn)
