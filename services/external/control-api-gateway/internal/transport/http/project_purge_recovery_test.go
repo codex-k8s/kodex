@@ -95,6 +95,19 @@ func TestProjectPurgeRecoveryRejectsUnconfirmedOrMalformedInput(t *testing.T) {
 	}
 }
 
+func TestProjectPurgeRecoveryRejectsInvalidRecoveryETag(t *testing.T) {
+	for _, etag := range []string{`*`, `W/"3"`, `"0"`, `"-1"`, `"9007199254740992"`, `3`} {
+		client := &catalogRPCRecorder{}
+		r := managedTestRequest(http.MethodPost, projectPurgeRecoveryPath, projectPurgeResolutionBody())
+		r.Header.Set("If-Match", etag)
+		w := httptest.NewRecorder()
+		projectTrashHandler(client).ServeHTTP(w, r)
+		if w.Code != http.StatusBadRequest || client.method != "" {
+			t.Fatalf("invalid recovery ETag reached owner: status=%d", w.Code)
+		}
+	}
+}
+
 func TestProjectPurgeRecoveryPreservesOwnerRejections(t *testing.T) {
 	for code, expected := range map[codes.Code]int{codes.NotFound: 404, codes.PermissionDenied: 403, codes.Aborted: 412, codes.AlreadyExists: 409, codes.FailedPrecondition: 409, codes.Unavailable: 503} {
 		client := &catalogRPCRecorder{failure: status.Error(code, "synthetic private storage descriptor")}
@@ -120,6 +133,7 @@ func TestProjectPurgeRecoveryRejectsInvalidOwnerProjection(t *testing.T) {
 		"unsafe project version":      func(v *cp.ProjectPurgeRecovery) { v.ProjectVersion = maximumSafeJSONInteger + 1 },
 		"unexpected resolution":       func(v *cp.ProjectPurgeRecovery) { v.ResolutionRef = "object/private/path" },
 		"action inconsistent":         func(v *cp.ProjectPurgeRecovery) { v.State = "OBSERVING" },
+		"empty resolution target":     func(v *cp.ProjectPurgeRecovery) { v.UnknownContentCount, v.CleanupPendingCount = 0, 0 },
 	} {
 		t.Run(name, func(t *testing.T) {
 			value := projectPurgeRecoveryFixture()

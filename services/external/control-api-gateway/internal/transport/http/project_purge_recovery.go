@@ -24,7 +24,7 @@ func (s *Server) ResolveProjectPurgeRecovery(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	if !body.AcknowledgeUnknownOutcome || !validManagedDigest(body.SnapshotDigest) {
+	if !bool(body.AcknowledgeUnknownOutcome) || !validManagedDigest(body.SnapshotDigest) {
 		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
 		return
 	}
@@ -63,7 +63,8 @@ func projectPurgeRecoveryView(ref string, v *cp.ProjectPurgeRecovery) (generated
 		return result, false
 	}
 	state := generated.ProjectPurgeRecoveryState(v.GetState())
-	if !state.Valid() || v.GetCanResolve() && state != "WAITING_OWNER" || v.GetResolutionRef() != "" && (!opaqueHTTPReference.MatchString(v.GetResolutionRef()) || len(v.GetResolutionRef()) > 96) {
+	if !state.Valid() || v.GetCanResolve() && (state != "WAITING_OWNER" || v.GetUnknownContentCount() == 0 && v.GetCleanupPendingCount() == 0) ||
+		v.GetResolutionRef() != "" && (!opaqueHTTPReference.MatchString(v.GetResolutionRef()) || len(v.GetResolutionRef()) > 96) {
 		return result, false
 	}
 	return generated.ProjectPurgeRecovery{
