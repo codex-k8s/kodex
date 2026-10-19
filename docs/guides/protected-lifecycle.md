@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.28
+version: 1.1.29
 updated: 2026-10-19
 ---
 
@@ -17,6 +17,14 @@ updated: 2026-10-19
 не заменяет fingerprint графа, tenant boundary, row locks, lifecycle guards,
 внешний inventory proof или одну terminal-транзакцию. Истёкший budget не
 объявляется DONE и не разрешает ручное удаление receipt.
+
+Организационный audit или audit другого проекта не становится собственностью
+удаляемого проекта из-за FK на его сотрудника. В защищённой purge-транзакции
+после exact inventory proof снимается только физическая assistant_agent_id
+ссылка того же tenant на удаляемого сотрудника; audit/root actor/action/resource
+сохраняются. Собственная проектная история удаляется по прежнему owner-графу.
+Отвязка не разрешает чужую организацию, обычный runtime UPDATE или обход
+immutable guard и откатывается вместе с неуспешным terminal.
 
 Диагностика отказа worker различает подтверждённую текущую причину, прошлую
 историю и неизвестность. Exit code либо потеря локального потока не доказывают

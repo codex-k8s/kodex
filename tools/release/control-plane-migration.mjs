@@ -21,6 +21,7 @@ const profiles = {
   'artifact-antivirus-admission': { version: '20261016000100', file: '20261016000100_artifact_antivirus_receipts.sql', annotation: 'kodex.dev/cp-artifact-antivirus-migration-plan' },
   'project-purge-recovery': { version: '20261019000100', file: '20261019000100_project_purge_recovery.sql', annotation: 'kodex.dev/cp-project-purge-recovery-migration-plan' },
   'project-purge-indexed-graph': { version: '20261019000200', file: '20261019000200_project_purge_indexed_graph.sql', annotation: 'kodex.dev/cp-project-purge-indexed-graph-migration-plan' },
+  'project-purge-audit-references': { version: '20261019000300', file: '20261019000300_project_purge_audit_references.sql', annotation: 'kodex.dev/cp-project-purge-audit-references-migration-plan' },
 };
 const profileFor = (name = 'legacy') => { ensure(Object.hasOwn(profiles,name),'MIGRATION_PROFILE_INVALID'); return profiles[name]; };
 const fileDigest = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');

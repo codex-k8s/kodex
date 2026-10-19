@@ -322,3 +322,17 @@ tenant/project проверки, row locks, receipts, context и atomic PROJECT_
 - [ ] Независимые product/security/architecture review точного SHA.
 - [ ] Private pre-migration backup, штатная migration, live worker DONE.
 - [ ] Chrome корзина/Console/Network, сохранность другого проекта и receipt.
+
+Первый исправленный live проход дошёл до boundary validation вместо timeout:
+две организационные audit_events с project_id=NULL ссылались на сотрудника
+удаляемого проекта. Непроектная история не должна удаляться по этой ссылке.
+Read-only TEMP closure выявила audit_events/null2/foreign0, не меняя рабочих
+строк. Forward migration20261019000300 до построения графа снимает только
+assistant_agent_id у audit того же tenant, не принадлежащего удаляемому
+проекту, если FK указывает на его точного сотрудника. Сам audit, root actor,
+action/resource/outcome/summary и другой project сохраняются. Guard не
+ослаблен: другая организация по-прежнему закрыто отклоняется. Контекст
+создан только внутри подтверждённой purge transaction после inventory proof;
+rollback возвращает также снятые ссылки. Проектный audit удаляется как прежде.
+Synthetic global и foreign-project audit проверяют сохранение данных и NULL
+только этой физической ссылки. Применённая000200 не редактируется.

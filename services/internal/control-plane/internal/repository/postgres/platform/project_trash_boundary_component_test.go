@@ -79,6 +79,23 @@ func TestProjectTrashBoundaryComponent(t *testing.T) {
 		t.Fatalf("foreign project proof accepted for trash: %v", err)
 	}
 	agent := createLifecycleAgent(t, ctx, service, owner, projectRef, "trash-boundary-agent", "Trash boundary agent")
+	foreignProject, err := service.Execute(ctx, command.Command{
+		Kind: command.CreateProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "trash-audit-foreign-project"},
+		Payload:  command.ProjectInput{Name: "Retained audit project", Language: "en"},
+	})
+	if err != nil || foreignProject.Project == nil {
+		t.Fatal("create retained audit project", err)
+	}
+	if tag, err := pool.Exec(ctx, `INSERT INTO control_plane.audit_events(ref,organization_id,project_id,actor_id,assistant_agent_id,action,resource_kind,resource_ref,outcome,safe_summary,correlation_ref)
+		SELECT 'aud_purge_retained_'||selected.suffix,agent.organization_id,selected.project_id,agent.created_by,agent.id,
+		'UPDATE_AGENT','AGENT',agent.ref,'SUCCEEDED','Synthetic retained audit','purge_audit_fixture'
+		FROM control_plane.agents agent CROSS JOIN LATERAL (
+		  SELECT 'global'::text suffix,NULL::uuid project_id UNION ALL
+		  SELECT 'foreign',project.id FROM control_plane.projects project WHERE project.ref=$2
+		) selected WHERE agent.ref=$1`, agent.Ref, foreignProject.Project.Ref); err != nil || tag.RowsAffected() != 2 {
+		t.Fatal("prepare retained audit references", err)
+	}
 	schedule, err := service.Execute(ctx, command.Command{
 		Kind: command.CreateSchedule, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "trash-boundary-schedule"},
@@ -237,6 +254,17 @@ func TestProjectTrashBoundaryComponent(t *testing.T) {
 		remainingProjects != 0 || remainingAgents != 0 || remainingSchedules != 0 || remainingTargets != 0 || receiptState != "DONE" {
 		t.Fatalf("project purge left working rows: projects=%d agents=%d schedules=%d targets=%d receipt=%s err=%v",
 			remainingProjects, remainingAgents, remainingSchedules, remainingTargets, receiptState, err)
+	}
+	var retainedAudit int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.audit_events event
+		WHERE event.ref IN ('aud_purge_retained_global','aud_purge_retained_foreign')
+		AND event.assistant_agent_id IS NULL AND event.resource_ref=$1 AND event.safe_summary='Synthetic retained audit'
+		AND event.actor_id=(SELECT created_by FROM control_plane.projects WHERE ref=$2)
+		AND (event.project_id IS NULL OR event.project_id=(SELECT id FROM control_plane.projects WHERE ref=$2))`, agent.Ref, foreignProject.Project.Ref).Scan(&retainedAudit); err != nil || retainedAudit != 2 {
+		t.Fatalf("non-project audit was changed or deleted: retained=%d err=%v", retainedAudit, err)
+	}
+	if _, err := service.GetProject(ctx, owner, foreignProject.Project.Ref); err != nil {
+		t.Fatal("foreign audit project disappeared", err)
 	}
 	retained, err := service.Execute(ctx, command.Command{
 		Kind: command.CreateProject, Principal: owner,
