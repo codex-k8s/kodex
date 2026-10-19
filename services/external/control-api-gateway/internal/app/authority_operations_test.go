@@ -9,6 +9,8 @@ import (
 
 func TestIdentityEnvironmentSecretExactAuthorityOperations(t *testing.T) {
 	for operation, method := range map[string]string{
+		"platform.query.projects.purge-recovery.get":          controlplanev1.PlatformQueryService_GetProjectPurgeRecovery_FullMethodName,
+		"platform.command.projects.purge-recovery.resolve":    controlplanev1.PlatformCommandService_ResolveProjectPurgeRecovery_FullMethodName,
 		"platform.command.role-images.copy":                   controlplanev1.PlatformCommandService_CopyRoleImageConfiguration_FullMethodName,
 		"platform.command.integration-definitions.copy":       controlplanev1.PlatformCommandService_CopyIntegrationDefinitionConfiguration_FullMethodName,
 		"platform.command.role-images.archive-configuration":  controlplanev1.PlatformCommandService_ArchiveRoleImageConfiguration_FullMethodName,

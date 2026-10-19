@@ -3569,6 +3569,7 @@ const (
 	NextActionREFRESHAUTHORIZATION   NextAction = "REFRESH_AUTHORIZATION"
 	NextActionREQUESTBUILD           NextAction = "REQUEST_BUILD"
 	NextActionRESOLVEGATE            NextAction = "RESOLVE_GATE"
+	NextActionRESOLVEPURGE           NextAction = "RESOLVE_PURGE"
 	NextActionRESTORE                NextAction = "RESTORE"
 	NextActionRETRY                  NextAction = "RETRY"
 	NextActionREVEAL                 NextAction = "REVEAL"
@@ -3653,6 +3654,8 @@ func (e NextAction) Valid() bool {
 	case NextActionREQUESTBUILD:
 		return true
 	case NextActionRESOLVEGATE:
+		return true
+	case NextActionRESOLVEPURGE:
 		return true
 	case NextActionRESTORE:
 		return true
@@ -4141,6 +4144,51 @@ func (e ProjectMembershipCreateInputPermissions) Valid() bool {
 	case VIEW:
 		return true
 	case VIEWAUDIT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProjectPurgeRecoveryState.
+const (
+	ProjectPurgeRecoveryStateBLOCKED          ProjectPurgeRecoveryState = "BLOCKED"
+	ProjectPurgeRecoveryStateDELETEDCONFIRMED ProjectPurgeRecoveryState = "DELETED_CONFIRMED"
+	ProjectPurgeRecoveryStateNONE             ProjectPurgeRecoveryState = "NONE"
+	ProjectPurgeRecoveryStateOBSERVING        ProjectPurgeRecoveryState = "OBSERVING"
+	ProjectPurgeRecoveryStateQUEUED           ProjectPurgeRecoveryState = "QUEUED"
+	ProjectPurgeRecoveryStateWAITINGOWNER     ProjectPurgeRecoveryState = "WAITING_OWNER"
+)
+
+// Valid indicates whether the value is a known member of the ProjectPurgeRecoveryState enum.
+func (e ProjectPurgeRecoveryState) Valid() bool {
+	switch e {
+	case ProjectPurgeRecoveryStateBLOCKED:
+		return true
+	case ProjectPurgeRecoveryStateDELETEDCONFIRMED:
+		return true
+	case ProjectPurgeRecoveryStateNONE:
+		return true
+	case ProjectPurgeRecoveryStateOBSERVING:
+		return true
+	case ProjectPurgeRecoveryStateQUEUED:
+		return true
+	case ProjectPurgeRecoveryStateWAITINGOWNER:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProjectPurgeRecoveryResolutionInputAcknowledgeUnknownOutcome.
+const (
+	ProjectPurgeRecoveryResolutionInputAcknowledgeUnknownOutcomeTrue ProjectPurgeRecoveryResolutionInputAcknowledgeUnknownOutcome = true
+)
+
+// Valid indicates whether the value is a known member of the ProjectPurgeRecoveryResolutionInputAcknowledgeUnknownOutcome enum.
+func (e ProjectPurgeRecoveryResolutionInputAcknowledgeUnknownOutcome) Valid() bool {
+	switch e {
+	case ProjectPurgeRecoveryResolutionInputAcknowledgeUnknownOutcomeTrue:
 		return true
 	default:
 		return false
@@ -7782,13 +7830,13 @@ func (e SystemAssistantRuntimeState) Valid() bool {
 
 // Defines values for SystemAssistantSystem.
 const (
-	True SystemAssistantSystem = true
+	SystemAssistantSystemTrue SystemAssistantSystem = true
 )
 
 // Valid indicates whether the value is a known member of the SystemAssistantSystem enum.
 func (e SystemAssistantSystem) Valid() bool {
 	switch e {
-	case True:
+	case SystemAssistantSystemTrue:
 		return true
 	default:
 		return false
@@ -7833,19 +7881,19 @@ func (e SystemAssistantIntegrationGrantCandidatesScopeKind) Valid() bool {
 
 // Defines values for SystemAssistantIntegrationGrantInputApprovalPolicy.
 const (
-	SystemAssistantIntegrationGrantInputApprovalPolicyHUMANEACHEFFECT SystemAssistantIntegrationGrantInputApprovalPolicy = "HUMAN_EACH_EFFECT"
-	SystemAssistantIntegrationGrantInputApprovalPolicyHUMANSCOPED     SystemAssistantIntegrationGrantInputApprovalPolicy = "HUMAN_SCOPED"
-	SystemAssistantIntegrationGrantInputApprovalPolicyNONE            SystemAssistantIntegrationGrantInputApprovalPolicy = "NONE"
+	HUMANEACHEFFECT SystemAssistantIntegrationGrantInputApprovalPolicy = "HUMAN_EACH_EFFECT"
+	HUMANSCOPED     SystemAssistantIntegrationGrantInputApprovalPolicy = "HUMAN_SCOPED"
+	NONE            SystemAssistantIntegrationGrantInputApprovalPolicy = "NONE"
 )
 
 // Valid indicates whether the value is a known member of the SystemAssistantIntegrationGrantInputApprovalPolicy enum.
 func (e SystemAssistantIntegrationGrantInputApprovalPolicy) Valid() bool {
 	switch e {
-	case SystemAssistantIntegrationGrantInputApprovalPolicyHUMANEACHEFFECT:
+	case HUMANEACHEFFECT:
 		return true
-	case SystemAssistantIntegrationGrantInputApprovalPolicyHUMANSCOPED:
+	case HUMANSCOPED:
 		return true
-	case SystemAssistantIntegrationGrantInputApprovalPolicyNONE:
+	case NONE:
 		return true
 	default:
 		return false
@@ -12525,6 +12573,37 @@ type ProjectPage struct {
 	NextPageToken *string      `json:"nextPageToken,omitempty"`
 }
 
+// ProjectPurgeRecovery Авторитетный снимок surviving purge receipt. Версия относится к восстановлению, а не к удалённому проекту. Не содержит имён файлов, ключей хранилища и содержимого.
+type ProjectPurgeRecovery struct {
+	CanResolve          bool      `json:"canResolve"`
+	CleanupPendingCount int32     `json:"cleanupPendingCount"`
+	ProjectPresent      bool      `json:"projectPresent"`
+	ProjectRef          OpaqueRef `json:"projectRef"`
+
+	// ProjectVersion Ноль после удаления проекта; не используется в If-Match восстановления.
+	ProjectVersion int64 `json:"projectVersion"`
+
+	// ResolutionRef Непрозрачная ссылка решения; пуста до принятия решения.
+	ResolutionRef       string                    `json:"resolutionRef"`
+	SnapshotDigest      string                    `json:"snapshotDigest"`
+	State               ProjectPurgeRecoveryState `json:"state"`
+	UnknownContentCount int32                     `json:"unknownContentCount"`
+	Version             int64                     `json:"version"`
+}
+
+// ProjectPurgeRecoveryState defines model for ProjectPurgeRecovery.State.
+type ProjectPurgeRecoveryState string
+
+// ProjectPurgeRecoveryResolutionInput defines model for ProjectPurgeRecoveryResolutionInput.
+type ProjectPurgeRecoveryResolutionInput struct {
+	// AcknowledgeUnknownOutcome Отдельное явное согласие отказаться от неизвестного результата загрузки; не подтверждение удаления байтов.
+	AcknowledgeUnknownOutcome ProjectPurgeRecoveryResolutionInputAcknowledgeUnknownOutcome `json:"acknowledgeUnknownOutcome"`
+	SnapshotDigest            string                                                       `json:"snapshotDigest"`
+}
+
+// ProjectPurgeRecoveryResolutionInputAcknowledgeUnknownOutcome Отдельное явное согласие отказаться от неизвестного результата загрузки; не подтверждение удаления байтов.
+type ProjectPurgeRecoveryResolutionInputAcknowledgeUnknownOutcome bool
+
 // PromptContextPin defines model for PromptContextPin.
 type PromptContextPin struct {
 	AgentRef                   *OpaqueRef `json:"agentRef,omitempty"`
@@ -16905,6 +16984,13 @@ type PurgeProjectParams struct {
 	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
 }
 
+// ResolveProjectPurgeRecoveryParams defines parameters for ResolveProjectPurgeRecovery.
+type ResolveProjectPurgeRecoveryParams struct {
+	IfMatch        IfMatch        `json:"If-Match"`
+	IdempotencyKey IdempotencyKey `json:"Idempotency-Key"`
+	XCSRFToken     CsrfToken      `json:"X-CSRF-Token"`
+}
+
 // RestoreProjectParams defines parameters for RestoreProject.
 type RestoreProjectParams struct {
 	IfMatch        IfMatch        `json:"If-Match"`
@@ -18163,6 +18249,9 @@ type ChangeProjectMembershipJSONRequestBody = ProjectMembershipChangeInput
 
 // CreateMemoryRecordJSONRequestBody defines body for CreateMemoryRecord for application/json ContentType.
 type CreateMemoryRecordJSONRequestBody = MemoryRecordCreateInput
+
+// ResolveProjectPurgeRecoveryJSONRequestBody defines body for ResolveProjectPurgeRecovery for application/json ContentType.
+type ResolveProjectPurgeRecoveryJSONRequestBody = ProjectPurgeRecoveryResolutionInput
 
 // CreateRoleImageRecipeJSONRequestBody defines body for CreateRoleImageRecipe for application/json ContentType.
 type CreateRoleImageRecipeJSONRequestBody = RoleImageRecipeCreateInput
@@ -19951,6 +20040,12 @@ type ServerInterface interface {
 
 	// (POST /api/v1/projects/{projectRef}/purge)
 	PurgeProject(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params PurgeProjectParams)
+
+	// (GET /api/v1/projects/{projectRef}/purge-recovery)
+	GetProjectPurgeRecovery(w http.ResponseWriter, r *http.Request, projectRef ProjectRef)
+
+	// (POST /api/v1/projects/{projectRef}/purge-recovery)
+	ResolveProjectPurgeRecovery(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params ResolveProjectPurgeRecoveryParams)
 
 	// (POST /api/v1/projects/{projectRef}/restore)
 	RestoreProject(w http.ResponseWriter, r *http.Request, projectRef ProjectRef, params RestoreProjectParams)
@@ -36393,6 +36488,144 @@ func (siw *ServerInterfaceWrapper) PurgeProject(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// GetProjectPurgeRecovery operation middleware
+func (siw *ServerInterfaceWrapper) GetProjectPurgeRecovery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProjectPurgeRecovery(w, r, projectRef)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResolveProjectPurgeRecovery operation middleware
+func (siw *ServerInterfaceWrapper) ResolveProjectPurgeRecovery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectRef" -------------
+	var projectRef ProjectRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectRef", r.PathValue("projectRef"), &projectRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectRef", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionCookieScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ResolveProjectPurgeRecoveryParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = IfMatch
+
+	} else {
+		err := fmt.Errorf("Header parameter If-Match is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "If-Match", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "Idempotency-Key" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Idempotency-Key")]; found {
+		var IdempotencyKey IdempotencyKey
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Idempotency-Key", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Idempotency-Key", valueList[0], &IdempotencyKey, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Idempotency-Key", Err: err})
+			return
+		}
+
+		params.IdempotencyKey = IdempotencyKey
+
+	} else {
+		err := fmt.Errorf("Header parameter Idempotency-Key is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Idempotency-Key", Err: err})
+		return
+	}
+
+	// ------------- Required header parameter "X-CSRF-Token" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-CSRF-Token")]; found {
+		var XCSRFToken CsrfToken
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-CSRF-Token", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-CSRF-Token", valueList[0], &XCSRFToken, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-CSRF-Token", Err: err})
+			return
+		}
+
+		params.XCSRFToken = XCSRFToken
+
+	} else {
+		err := fmt.Errorf("Header parameter X-CSRF-Token is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "X-CSRF-Token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResolveProjectPurgeRecovery(w, r, projectRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RestoreProject operation middleware
 func (siw *ServerInterfaceWrapper) RestoreProject(w http.ResponseWriter, r *http.Request) {
 
@@ -50166,6 +50399,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/membership-candidates", wrapper.ListProjectMembershipCandidates)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/memory-records", wrapper.CreateMemoryRecord)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/purge", wrapper.PurgeProject)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/purge-recovery", wrapper.GetProjectPurgeRecovery)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/purge-recovery", wrapper.ResolveProjectPurgeRecovery)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/restore", wrapper.RestoreProject)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes", wrapper.ListRoleImageRecipes)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/v1/projects/{projectRef}/role-image-recipes", wrapper.CreateRoleImageRecipe)

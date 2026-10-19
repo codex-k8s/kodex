@@ -16,6 +16,8 @@ import (
 func TestIdentityEnvironmentRoutesRequireSessionAndCSRF(t *testing.T) {
 	for _, route := range []struct{ method, path string }{
 		{"GET", "/api/v1/system-stt/model-catalog"},
+		{"GET", "/api/v1/projects/prj_fixture01/purge-recovery"},
+		{"POST", "/api/v1/projects/prj_fixture01/purge-recovery"},
 		{"GET", "/api/v1/integration-connections/conn_fixture01/email-mailbox/configurations"},
 		{"GET", "/api/v1/integration-connections/conn_fixture01/email-mailbox/configuration"},
 		{"GET", "/api/v1/integration-connections/conn_fixture01/email-mailbox/credentials"},
@@ -116,7 +118,8 @@ func TestIdentityEnvironmentRoutesRequireSessionAndCSRF(t *testing.T) {
 					if !ok || identity.OrganizationID != claims.OrganizationID || identity.Subject != claims.Subject {
 						t.Fatal("verified authority was lost")
 					}
-					if project, hasProject := ProjectReferenceFromContext(r.Context()); hasProject != strings.HasPrefix(route.path, "/api/v1/projects/") || hasProject && project != "prj_fixture01" {
+					expectsProject := strings.HasPrefix(route.path, "/api/v1/projects/") && !strings.HasSuffix(route.path, "/purge-recovery")
+					if project, hasProject := ProjectReferenceFromContext(r.Context()); hasProject != expectsProject || hasProject && project != "prj_fixture01" {
 						t.Fatal("route project context differs from its explicit scope")
 					}
 					w.WriteHeader(http.StatusNoContent)
