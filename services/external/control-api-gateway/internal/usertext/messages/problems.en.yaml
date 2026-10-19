@@ -236,6 +236,8 @@ PROJECT_RESTORED:
   other: Project restored from trash
 PROJECT_PURGE_REQUESTED:
   other: Permanent project deletion requested
+PROJECT_PURGE_RECOVERY_RESOLVED:
+  other: Project deletion recovery confirmed
 PROJECT_PURGED:
   other: Project permanently deleted
 PROJECT_ACCESS_UPDATED:
