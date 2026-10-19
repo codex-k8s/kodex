@@ -110,3 +110,74 @@ persisted receipt, не угадывая identity producer по initiator.
 это отключением guard либо ручным переводом WAITING_OWNER/CLEANED.
 После разрешения этого состояния отдельно проверить finalization ADOPTED
 ledger и сохранность чужого проекта. До этого Issue и checklist не закрыты.
+
+## Решение владельца19.10: подтверждаемое восстановление
+
+Владелец выбрал вариант1. Полные units: CP — Issue#1816/PR#1817;
+gateway — #1818; PWA — #1819. Разработка идёт в отдельных worktree/PR,
+контракты и порядок зависимостей CP→gateway→PWA заданы здесь. Merge/ready
+не разрешены. Действующее WAITING_OWNER не снимается самим агентом.
+
+Решение — отказ владельца от неопределённого результата с сохранением
+обязательства очистки. Это не CLEANED и не доказательство отсутствия bytes.
+Используется surviving prepared_content ledger, без второго Put либо поиска
+по другим buckets. Новый OWNER_ABANDONED запрещает adopt/link/replay результата.
+Минимальные storage/key/digest/size pins остаются worker после удаления проекта;
+filename, media type и иные пользовательские metadata удаляются.
+
+### Сквозной контракт
+
+1. Owner/admin → GET `/api/v1/projects/{projectRef}/purge-recovery` →
+   `PlatformQueryService.GetProjectPurgeRecovery` → domain service → CP
+   read-only REPEATABLE READ snapshot. Actor/org из signed transport, не body.
+2. Preview `ProjectPurgeRecovery`: `projectRef`, `version` (durable recovery
+   version receipt), `snapshotDigest`, `state`, `unknownContentCount`,
+   `cleanupPendingCount`, `projectPresent`, `canResolve`, `resolutionRef`,
+   `projectVersion`. Ключи объектов/имена файлов и содержимое не выдаются.
+3. Человек читает предупреждение и отдельно подтверждает потерю результата.
+   POST того же route с `snapshotDigest`, `acknowledgeUnknownOutcome=true`,
+   If-Match recovery.version, Idempotency-Key и CSRF →
+   `PlatformCommandService.ResolveProjectPurgeRecovery` → закрытая command
+   `RESOLVE_PROJECT_PURGE_RECOVERY` → owner transaction.
+4. Owner lock order: receipt→project при наличии→exact ledgers; scope/роль
+   проверяются до OCC/idempotency effect. Нужны frozen project, terminal
+   источник, expired writer, отсутствие cleanup lease/adoption, exact digest
+   и generation. Решение, новая generation, immutable resolution receipt,
+   audit/idempotency и PROJECT_CHANGED существующего проекта атомарны.
+5. Тот же CP maintenance lifecycle исполняет отдельный bounded claim этих
+   обязательств. Storage identity неизменяема; exact positive receipt
+   сохраняется до Delete, после Delete проверяется отсутствие exact version.
+   Состояние `OWNER_ABANDONED` само по себе не выдаёт completion физической
+   очистки. После удаления проекта read/повтор доступен owner через surviving
+   purge receipt и ledger origin, не через воскрешение project.
+
+| Переход | Результат и evidence |
+| --- | --- |
+| Preview / stale / чужой actor | Нет mutation, object I/O, audit/event; чужой ресурс скрыт, stale resolve отклонён |
+| WAITING_OWNER → owner decision | OWNER_ABANDONED + durable exact resolution; не deletion receipt |
+| Claim / две реплики | SKIP LOCKED, bounded lease, monotonic generation, immutable target; один текущий claimant |
+| HEAD404 | OBSERVING и следующая ограниченная проверка; не CLEANED, без TTL удаления descriptor |
+| Positive matching HEAD | Exact version/ETag pinned до Delete; mismatch ничего не удаляет |
+| Delete + exact readback404 | DELETED_CONFIRMED для physical cleanup; generation/fence обязательны |
+| Timeout/crash/lease expiry | Descriptor/approval сохраняются; новая попытка fenced, без второго Put |
+| Retry после исчерпания | Только новое явное owner действие с fresh preview/OCC; original approval immutable |
+| Project purge | Только resolution-backed detach; cleanupPending честно остаётся в surviving receipt/read path |
+| ADOPTED purge | Ранний scrub по exact OBJECTS_CLEARED/inventory proof, до detach/revision DELETE; не fake artifact retention state |
+
+Фоновые технические переходы не создают новых внешних domain events:
+авторитетный read path — recovery snapshot surviving purge receipt; UI
+подтверждение и обычный PROJECT_PURGED используют прежний WebSocket path.
+Смена версии snapshot не принимается как новое согласие автоматически.
+
+### Checklist продолжения
+
+- [ ] CP: forward-only schema, owner query/command, полный worker lifecycle,
+  known/unknown receipt, late Put, isolation и ADOPTED finalization.
+- [ ] Gateway #1818: OpenAPI, exact RPC/client profile/authority, generated
+  adapters и negative HTTP/CSRF/OCC/idempotency.
+- [ ] PWA #1819: понятная причина в корзине, preview/modal/acknowledgement,
+  outside close, stale refresh без повторного согласия, realtime и mobile.
+- [ ] Применимые unit/disposable PostgreSQL/codegen/render/frontend checks,
+  три направления review и source/image readback разрешённого rollout.
+- [ ] Chrome screenshot/Console/Network и контроль чужого проекта. Человек
+  сам подтверждает живое разрешение неизвестной загрузки; до этого NOT RUN.
