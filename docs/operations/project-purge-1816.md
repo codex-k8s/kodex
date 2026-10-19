@@ -336,3 +336,13 @@ action/resource/outcome/summary и другой project сохраняются. 
 rollback возвращает также снятые ссылки. Проектный audit удаляется как прежде.
 Synthetic global и foreign-project audit проверяют сохранение данных и NULL
 только этой физической ссылки. Применённая000200 не редактируется.
+
+Следующий live проход дошёл до DELETE и откатился по
+required_workflow_launches_workflow_version_id_fkey. Двенадцать новых NO ACTION
+FK внутри graph не были DEFERRABLE, хотя прежний purge использует SET
+CONSTRAINTS ALL DEFERRED. Forward000400 приводит ровно внутренние связи двух
+известных новых таблиц к DEFERRABLE INITIALLY IMMEDIATE; не меняет ON DELETE,
+состав графа или commit-проверку integrity. Добавлен fail-closed runtime
+guard на любое будущее такое рассогласование и component schema assertion.
+Применённые000100/000200/000300 не меняются. Это устранение пропущенной
+интеграции новых tables в прежний lifecycle, не отключение foreign keys.

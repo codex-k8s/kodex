@@ -28,6 +28,15 @@ func TestProjectTrashBoundaryComponent(t *testing.T) {
 		t.Fatal("open disposable PostgreSQL")
 	}
 	defer pool.Close()
+	var nonDeferred int
+	if err := pool.QueryRow(ctx, `WITH RECURSIVE nodes(relation_id) AS (
+		SELECT 'control_plane.projects'::regclass::oid UNION
+		SELECT c.conrelid FROM nodes n JOIN pg_constraint c ON c.confrelid=n.relation_id
+		AND c.contype='f' AND c.connamespace='control_plane'::regnamespace
+	) SELECT count(*) FROM pg_constraint WHERE contype='f' AND confdeltype='a' AND NOT condeferrable
+	AND conrelid IN(SELECT relation_id FROM nodes) AND confrelid IN(SELECT relation_id FROM nodes)`).Scan(&nonDeferred); err != nil || nonDeferred != 0 {
+		t.Fatalf("project purge contains a non-deferred internal foreign key: count=%d err=%v", nonDeferred, err)
+	}
 	repository, err := New(pool, "openai-codex", "retired-bootstrap-model", objectstoragetest.New())
 	if err != nil {
 		t.Fatal(err)
