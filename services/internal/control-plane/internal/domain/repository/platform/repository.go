@@ -274,6 +274,7 @@ type Repository interface {
 	SearchVFS(context.Context, value.Principal, query.Filter) ([]entity.VFSNode, int64, string, error)
 	ListProjects(context.Context, value.Principal, query.Filter) ([]entity.Project, string, []string, error)
 	ListTrashedProjects(context.Context, value.Principal, query.Page) ([]entity.Project, string, error)
+	GetProjectPurgeRecovery(context.Context, value.Principal, string) (entity.ProjectPurgeRecovery, error)
 	GetProject(context.Context, value.Principal, string) (entity.Project, error)
 	ListPlatformMemberships(context.Context, value.Principal, query.Filter) ([]entity.Membership, string, error)
 	ListPlatformMembershipCandidates(context.Context, value.Principal, query.Filter) ([]entity.User, string, error)

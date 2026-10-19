@@ -5,7 +5,11 @@ SELECT project.ref, project.name, project.purpose, project.language,
        (SELECT count(*)::integer FROM control_plane.agents agent
         WHERE agent.project_id=project.id AND agent.state<>'ARCHIVED'),
        (SELECT count(*)::integer FROM control_plane.workflows workflow
-        WHERE workflow.project_id=project.id AND workflow.state<>'ARCHIVED')
+        WHERE workflow.project_id=project.id AND workflow.state<>'ARCHIVED'),
+       EXISTS (SELECT 1 FROM control_plane.prepared_content content
+        WHERE content.organization_id=project.organization_id AND content.origin_project_ref=project.ref
+          AND (content.state='WAITING_OWNER' OR
+               (content.state='OWNER_ABANDONED' AND content.recovery_state='WAITING_OWNER')))
 FROM control_plane.projects project
 WHERE project.organization_id=@organization_id::uuid
   AND project.lifecycle IN ('TRASHED', 'PURGE_PENDING')

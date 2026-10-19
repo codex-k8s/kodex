@@ -14,6 +14,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/platform"
+	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +30,9 @@ const (
 )
 
 type source interface {
+	ClaimProjectPurgeRecovery(context.Context, string, int32) ([]platform.ProjectPurgeRecoveryClaim, error)
+	PinProjectPurgeRecovery(context.Context, string, platform.ProjectPurgeRecoveryClaim, objectstorage.Receipt) error
+	FinishProjectPurgeRecovery(context.Context, string, platform.ProjectPurgeRecoveryClaim, string) error
 	PromoteDueProjectPurges(context.Context, int32) error
 	ListPendingProjectPurges(context.Context, int32) ([]platform.ProjectPurgeCandidate, error)
 	ProjectPurgeInventory(context.Context, platform.ProjectPurgeCandidate) ([]platform.ProjectPurgeExternalItem, error)
@@ -89,14 +93,25 @@ func Run(source source, objects, archives objectstorage.Store, namespace string,
 }
 
 func (processor *Processor) Cycle(ctx context.Context) error {
+	// Отдельная короткая очередь не голодает за большими inventory проектов.
+	owner := uuid.NewString()
+	claims, recoveryErr := processor.source.ClaimProjectPurgeRecovery(ctx, owner, 4)
+	var failures []error
+	if recoveryErr != nil {
+		failures = append(failures, &failure{stage: "recovery_claim", cause: recoveryErr})
+	}
+	for _, claim := range claims {
+		if err := processor.recoverObject(ctx, owner, claim); err != nil {
+			failures = append(failures, &failure{stage: "recovery_object", projectRef: claim.ProjectRef, cause: err})
+		}
+	}
 	if err := processor.source.PromoteDueProjectPurges(ctx, 8); err != nil {
-		return err
+		return errors.Join(append(failures, err)...)
 	}
 	candidates, err := processor.source.ListPendingProjectPurges(ctx, 4)
 	if err != nil {
-		return err
+		return errors.Join(append(failures, err)...)
 	}
-	var failures []error
 	for _, candidate := range candidates {
 		if err := processor.process(ctx, candidate); err != nil {
 			failures = append(failures, err)

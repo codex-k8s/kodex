@@ -28,6 +28,16 @@ type sourceFixture struct {
 	subjectArtifactOwned, globalPVCOwned bool
 }
 
+func (*sourceFixture) ClaimProjectPurgeRecovery(context.Context, string, int32) ([]platform.ProjectPurgeRecoveryClaim, error) {
+	return nil, nil
+}
+func (*sourceFixture) PinProjectPurgeRecovery(context.Context, string, platform.ProjectPurgeRecoveryClaim, objectstorage.Receipt) error {
+	return nil
+}
+func (*sourceFixture) FinishProjectPurgeRecovery(context.Context, string, platform.ProjectPurgeRecoveryClaim, string) error {
+	return nil
+}
+
 func (*sourceFixture) PromoteDueProjectPurges(context.Context, int32) error { return nil }
 func (*sourceFixture) ListPendingProjectPurges(context.Context, int32) ([]platform.ProjectPurgeCandidate, error) {
 	return nil, nil

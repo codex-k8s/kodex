@@ -135,6 +135,13 @@ func (repository *Repository) ListPendingProjectPurges(ctx context.Context, limi
 }
 
 func (repository *Repository) ProjectPurgeInventory(ctx context.Context, candidate ProjectPurgeCandidate) ([]ProjectPurgeExternalItem, error) {
+	var blocked bool
+	if err := repository.pool.QueryRow(ctx, queryProjectPurgeRecoveryBlocker, pgx.StrictNamedArgs{"organization_id": candidate.OrganizationID, "project_id": candidate.ProjectID}).Scan(&blocked); err != nil {
+		return nil, errs.ErrUnavailable
+	}
+	if blocked {
+		return nil, errs.ErrConflict
+	}
 	var activeTasks int
 	if err := repository.pool.QueryRow(ctx, queryProjectPurgeActiveTasks,
 		candidate.OrganizationID, candidate.ProjectID).Scan(&activeTasks); err != nil {

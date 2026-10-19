@@ -248,6 +248,13 @@ type Command struct {
 type ProjectInput struct{ Ref, Name, Purpose, Language string }
 
 type ProjectLifecycleInput struct{ Ref string }
+
+const ResolveProjectPurgeRecovery Kind = "RESOLVE_PROJECT_PURGE_RECOVERY"
+
+type ProjectPurgeRecoveryInput struct {
+	Ref, SnapshotDigest       string
+	AcknowledgeUnknownOutcome bool
+}
 type PlatformMembershipInput struct {
 	MembershipRef, UserRef, Role string
 	Active                       bool
@@ -592,6 +599,7 @@ type EmailMailboxInput struct {
 }
 
 type Result struct {
+	ProjectPurgeRecovery *entity.ProjectPurgeRecovery
 	// Только внутренний receipt: owner expiry committed, поздний effect запрещён.
 	ExecutionDeadlineExpired  bool `json:"executionDeadlineExpired,omitempty"`
 	ProviderQueuedWorkResults []entity.ProviderQueuedWorkCancellationResult

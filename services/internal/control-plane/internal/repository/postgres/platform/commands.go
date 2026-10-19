@@ -301,6 +301,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.updateProject(ctx, tx, scope, input.Mutation, input.Payload)
 	case command.TrashProject, command.RestoreProject, command.PurgeProject:
 		return repository.changeProjectLifecycle(ctx, tx, scope, input)
+	case command.ResolveProjectPurgeRecovery:
+		return repository.resolveProjectPurgeRecovery(ctx, tx, scope, input)
 	case command.AddPlatformMembership, command.ChangePlatformMembership, command.RemovePlatformMembership:
 		return repository.changePlatformMembership(ctx, tx, scope, input)
 	case command.AddMembership, command.ChangeMembership, command.RemoveMembership:

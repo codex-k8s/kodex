@@ -88,6 +88,9 @@ func Run(lifecycle, shutdownBase context.Context, _ string) error {
 	if err != nil {
 		return fmt.Errorf("construct platform repository: %w", err)
 	}
+	if err := repository.ConfigureProjectPurgeStorage(config.ObjectStorageEndpoint, config.ObjectStorageRegion, config.ObjectStorageBucket, config.ObjectStorageUsePathStyle); err != nil {
+		return fmt.Errorf("configure project purge storage: %w", err)
+	}
 	if err := repository.ConfigureRPCProfile(config.RPCProfile); err != nil {
 		return fmt.Errorf("configure repository RPC profile: %w", err)
 	}

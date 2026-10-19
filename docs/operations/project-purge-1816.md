@@ -4,8 +4,8 @@ title: Завершение безвозвратного удаления про
 type: operation-plan
 status: approved
 owner: manager
-version: 1.0.0
-updated: 2026-10-16
+version: 1.1.0
+updated: 2026-10-19
 ---
 
 # Issue #1816
@@ -129,7 +129,7 @@ filename, media type и иные пользовательские metadata уд�
 
 1. Owner/admin → GET `/api/v1/projects/{projectRef}/purge-recovery` →
    `PlatformQueryService.GetProjectPurgeRecovery` → domain service → CP
-   read-only REPEATABLE READ snapshot. Actor/org из signed transport, не body.
+   единый read-only SQL snapshot. Actor/org из проверенного transport, не body.
 2. Preview `ProjectPurgeRecovery`: `projectRef`, `version` (durable recovery
    version receipt), `snapshotDigest`, `state`, `unknownContentCount`,
    `cleanupPendingCount`, `projectPresent`, `canResolve`, `resolutionRef`,
@@ -181,3 +181,30 @@ filename, media type и иные пользовательские metadata уд�
   три направления review и source/image readback разрешённого rollout.
 - [ ] Chrome screenshot/Console/Network и контроль чужого проекта. Человек
   сам подтверждает живое разрешение неизвестной загрузки; до этого NOT RUN.
+
+### Проверки реализации19.10
+
+Первый целевой disposable PostgreSQL прогон: PASS6.947s —
+`TestProjectPurgeRecoveryComponent`, `TestPreparedContentBindingComponent`,
+`TestProjectTrashBoundaryComponent`; все forward migrations и повторный up
+до20261019000100 — PASS. Это синтетическая проверка, не выполнение решения
+владельца над живым проектом. После неё уточнён общий бюджет claim, включая
+истёкшие попытки; итоговый прогон фиксируется ниже на точном SHA.
+
+Полная CP Go suite и vet — PASS на текущем дереве. Contract registry7 и
+release migration CLI22 — PASS. Промежуточные ошибки запуска из неверного
+cwd/PATH и старое negative expectation policy97 исправлены, повторные
+соответствующие проверки — PASS. Эти результаты ещё не заменяют проверки
+итоговой ревизии и живого интерфейса.
+
+Для policy проверен штатный codegen97. Установленный прототип использует
+`trusted-cluster`: новый exact RPC registry приходит вместе с кодом CP и
+gateway. Подписанные protected policy/key history не переписываются. SQL
+документация PostgreSQL18 через Context7: SELECT, row locking и SKIP LOCKED;
+проверены фиксированный порядок receipt→ledger и ограниченный claim.
+
+Rollback исходников после первого owner resolution не является совместимым:
+старый enum/guard не понимает OWNER_ABANDONED. Миграция forward-only; при
+ошибке остановить новый claim и исправить forward, не откатывать resolution
+либо подменять deletion receipt. До применения сохраняется отдельный private
+CP dump с проверкой архива; это не полный platform restore drill.
