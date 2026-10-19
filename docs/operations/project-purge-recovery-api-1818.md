@@ -89,3 +89,17 @@ std-http-server generation проверяет обязательные пара�
 
 Rollback — возврат предыдущего gateway image/source. Сохранённые owner
 решения и cleanup obligations CP не отменяются, статусы БД вручную не меняются.
+
+## Итог19.10
+
+Полная Go suite наc7e9f01c — PASS; audit text key добавлен в ru/en каталоги.
+После разрешённого scoped rollout CP/API из sourcefc7ead5f — updated/ready2/2.
+Живой Chrome owner GET recovery — HTTP200, ETag1, WAITING_OWNER/unknown1;
+embedded CP policy исправлена в #1816, blanket допуск не добавлялся.
+Console без неожиданных error/warn, recovery POST не выполнялся. Реальное
+HTTP202/повтор owner решения и post-purge readback остаются NOT RUN до
+самостоятельного подтверждения человеком. Negative HTTP/OCC/CSRF/replay
+проверены unit, а не подменены запросами к живому необратимому endpoint.
+Три направления review подтвердилиc7e9f01c без P0/P1/P2. Финальная rebased
+ревизия отличается от проверенного кода только журналами; их общий source
+и evidence зафиксированы в #1816.
