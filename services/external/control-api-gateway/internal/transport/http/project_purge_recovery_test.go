@@ -9,11 +9,29 @@ import (
 
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
+	"github.com/getkin/kin-openapi/openapi3"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 const projectPurgeRecoveryPath = "/api/v1/projects/prj_fixture01/purge-recovery"
+
+func TestProjectPurgeRecoveryOpenAPIContract(t *testing.T) {
+	spec, err := openapi3.NewLoader().LoadFromFile("../../../../../../contracts/openapi/control-api-gateway/v1/openapi.yaml")
+	if err != nil {
+		t.Fatal("OpenAPI source cannot be loaded")
+	}
+	route := spec.Paths.Find("/api/v1/projects/{projectRef}/purge-recovery")
+	if route == nil || route.Get == nil || route.Post == nil || route.Get.OperationID != "getProjectPurgeRecovery" || route.Post.OperationID != "resolveProjectPurgeRecovery" {
+		t.Fatal("recovery route is missing from the generated contract")
+	}
+	if err := route.Validate(t.Context()); err != nil {
+		t.Fatalf("recovery OpenAPI validation failed: %v", err)
+	}
+	if route.Get.Responses.Status(200) == nil || route.Post.Responses.Status(202) == nil {
+		t.Fatal("recovery contract lost preview or accepted response")
+	}
+}
 
 func projectPurgeRecoveryFixture() *cp.ProjectPurgeRecovery {
 	return &cp.ProjectPurgeRecovery{ProjectRef: "prj_fixture01", Version: 9, SnapshotDigest: strings.Repeat("a", 64),

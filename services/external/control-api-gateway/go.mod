@@ -18,6 +18,7 @@ require (
 	github.com/codex-k8s/kodex/libs/go/securefile v0.0.0
 	github.com/codex-k8s/kodex/libs/go/serviceruntime v0.0.0
 	github.com/codex-k8s/kodex/libs/go/sttapi v0.0.0
+	github.com/getkin/kin-openapi v0.149.0
 	github.com/google/uuid v1.6.0
 	github.com/nats-io/nats.go v1.52.0
 	github.com/oapi-codegen/runtime v1.7.0
@@ -29,7 +30,6 @@ require (
 
 require (
 	github.com/BurntSushi/toml v1.6.0 // indirect
-	github.com/getkin/kin-openapi v0.149.0 // indirect
 	github.com/go-openapi/jsonpointer v0.22.5 // indirect
 	github.com/go-openapi/swag/jsonname v0.25.5 // indirect
 	github.com/oasdiff/yaml v0.1.1 // indirect

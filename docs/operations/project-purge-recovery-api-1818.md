@@ -65,6 +65,15 @@ signed client adapter, replay protection, HTTP error mapping, низкокард
 и `git diff --check`. Unit покрывает точный RPC, версия/ETag, receipt после
 удаления, malformed input, upstream shape, owner error mapping, session/CSRF,
 сохранение signed actor и отсутствие project authority для recovery route.
+Отдельный unit загружает исходный OpenAPI и проверяет новый path вместе с
+транзитивными request/response схемами через закреплённый `kin-openapi`.
+Его прежняя версия не меняется; зависимость становится прямой тестовой.
+
+На19.10 применимая route validation прошла. Попытка полной проверки всего
+OpenAPI тем же валидатором обнаружила прежний `$ref` sibling `description`
+в неизменённой схеме `ImageAdmissionRiskDecision`: глобальный результат
+`FAIL`, не `PASS` нового route. Массовое исправление чужих схем не входит
+в этот unit; воспроизводимая генерация Go не подменяет этот результат.
 
 После разрешённого rollout войти как owner/admin, открыть корзину и preview.
 Проверить в Network точные GET/POST, отсутствие object keys и отсутствие
