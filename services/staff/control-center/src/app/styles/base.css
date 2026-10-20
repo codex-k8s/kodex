@@ -552,6 +552,9 @@ p {
 .app-content--run-workspace > .breadcrumbs {
   flex: 0 0 auto;
 }
+.app-content--run-workspace > .provider-finance {
+  position: static;
+}
 .app-content--run-workspace > .page-frame {
   min-height: 0;
   flex: 1 1 auto;

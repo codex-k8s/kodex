@@ -242,3 +242,22 @@ CP385415 доставлен2/2. PostgreSQL workflow component набор — PAS
 профиль читается, но readiness BLOCKED/DEPENDENCY_UNAVAILABLE, публикация и
 запуск запрещены. Добавлены scan/assistant-metadata unit и readiness component
 регрессии. Unit — PASS LOCAL; доставка этой поправки и повтор live ещё NOT RUN.
+
+На c6d6235b12a8da9a5106a2feb5323c5a95f3debf: WorkflowLaunchComponent —
+PASS36.469s; BootstrapComponent/schedule_race_retry_prompt_snapshot_and_expiry,
+включая readiness regression, — PASS4.673s. Ошибочный фильтр SchedulerComponent
+не выбрал тестов и не считается PASS. CP c6d6235 доставлен2/2: live GET200,
+прежняя неисполнимая публикация BLOCKED, исправленный draft прошёл VALIDATE и
+PUBLISH обычными API (текущая версия6).
+
+LIVE: при лимите2 два exact node RUNNING, третий QUEUED; затем одновременно
+10 active provider executions и один QUEUED из11 отдельных сессий. Снижение
+до2 сохранило10 активных; Stop одного дал CANCELLED только его графу,
+active9, остальные продолжили работу, ожидающий остался QUEUED. Возврат10
+допустил ожидающий. Retry выбранного отменённого запуска создал новую попытку2
+через UI. Runtime binary SHA256 совпал с b799 provenance. Обновление CP прошло
+при активных ходах без их отмены. Полная оставшаяся проверка пункта3 ещё NOT RUN.
+
+Скриншот parallel-active выявил UX FAIL: sticky сводка лимитов перекрывала
+заголовок в фиксированном flex workspace запуска. Для этого режима снят sticky;
+обычные прокручиваемые экраны не меняются. Доставка и visual readback NOT RUN.
