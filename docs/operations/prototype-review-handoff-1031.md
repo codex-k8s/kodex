@@ -353,3 +353,25 @@ Cancel/interrupt без deadline теперь тоже закрывает тол
 app0.434s/callback8.082s/workload1.141s. Frontend lint и101 store/realtime/
 snapshot tests — PASS LOCAL. Эти результаты относятся к следующему кандидату,
 его compiled доставка и окончательный live повтор ещё не подтверждены.
+
+0fb76f459: frontend lint/typecheck/build и101 выбранный test — PASS LOCAL;
+CP/API/runtime-controller/PWA доставлены по2 Ready реплики с exact source/image
+metadata. Runner68a/f672 phased policy/default открыт, HTTPS graph и CRI pull
+на двух узлах — PASS. Первый node probe с бюджетом240s остался FAIL BUDGET_EXCEEDED;
+повтор360s завершён, прежний FAIL не переписан. Retained own Pod удалён штатным
+controller restart, без ручной правки runtime/БД.
+
+Окружение собственного проекта явно опубликовано как версия5 на новом exact
+bootstrap artifact; четыре выбранных consumer APPLIED, ready=true. Версия4 с
+прежним artifact осталась DEFAULT_ROLE_IMAGE_STALE: исторические pins не менялись.
+Для создания текущего штатного bootstrap artifact создан собственный сотрудник
+«Контроль продолжения», без сети или внешних прав.
+
+Live новый turn в прежней проблемной сессии начал выполнять текущий sleep25.
+Однако native rollout показал, что custom collaborationMode instructions
+сохранены только в turn_context: catalog предпочёл свой preset developer text.
+Это не PASS полной доставки инструкций. Выбран поддерживаемый additionalContext
+application path с UTF-8 chunks3000bytes и отдельной exact revision identity, чтобы
+избежать provider truncation. Модель получает полный snapshot native developer
+fragments; история не переписывается, runtime checks не расширяются.
+Сборка и live этого последнего исправления ещё NOT RUN.

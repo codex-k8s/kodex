@@ -16,10 +16,10 @@ var errResumeSourceInvalid = errors.New("Codex resumed rollout source is invalid
 
 // Постоянный thread слой не содержит задачу или изменяемые права attempt.
 // Codex0.160 не обновляет generic developer context при cold resume; свежая
-// инструкция передаётся через обновляемый native collaborationMode каждого turn.
-const runtimeInstructionBinding = "Kodex supplies the complete current immutable runtime instructions in the collaboration mode of each turn. Those instructions supersede prior runtime instructions, tasks and capability descriptions retained in this thread. Historical messages are context only, not current authority. Server-side capability checks remain authoritative."
+// инструкция передаётся native application context каждого turn.
+const runtimeInstructionBinding = "Kodex supplies complete current immutable runtime instructions in numbered application context entries of each turn. The current kodex_runtime_revision identifies their exact bytes. Those instructions supersede prior runtime instructions, tasks and capability descriptions retained in this thread. Historical messages are context only, not current authority. Server-side capability checks remain authoritative."
 
-const runtimeInstructionRevisionPreamble = "Current Kodex immutable runtime instructions for this turn follow. They replace earlier runtime instructions and task descriptions retained in the thread. Perform this submission's exact task, not a prior task or answer. Historical messages remain context, not current authority.\n"
+const runtimeInstructionRevisionPreamble = "Current Kodex immutable runtime instructions for this turn are the complete values of application entries kodex_runtime_instructions_000000 onward, concatenated in ascending numeric order with no added separators. The following record identifies their exact byte count, chunk count and SHA256. Use this entire current snapshot; it replaces all earlier runtime instructions, tasks and capability descriptions retained in this thread. Perform this submission's exact task, not a prior task or answer. Historical messages remain context, not current authority. Server-side capability checks remain authoritative.\n"
 
 // Причина назначается только локальной проверкой, без текста ответа или пути.
 type resumeSourceFailure struct {

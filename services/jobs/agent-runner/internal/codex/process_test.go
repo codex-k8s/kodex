@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -14,6 +15,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
@@ -345,11 +347,21 @@ func TestTurnStartPinsModelReasoningAndPersonalityOnEveryAttempt(t *testing.T) {
 			params["personality"] != "pragmatic" || params["threadId"] != "exact-thread" {
 			t.Fatalf("turn parameters = %#v, error = %v", params, err)
 		}
-		mode := params["collaborationMode"].(map[string]any)
-		settings := mode["settings"].(map[string]any)
-		if mode["mode"] != "default" || settings["model"] != input.Model || settings["reasoning_effort"] != "high" ||
-			settings["developer_instructions"] != runtimeInstructionRevisionPreamble+input.Instructions {
-			t.Fatal("turn omitted, truncated or mismatched immutable runtime instructions")
+		context := params["additionalContext"].(map[string]any)
+		var reconstructed strings.Builder
+		for index := 0; index < len(context)-1; index++ {
+			fragment := context[fmt.Sprintf("kodex_runtime_instructions_%06d", index)].(map[string]any)
+			value := fragment["value"].(string)
+			if fragment["kind"] != "application" || len(value) > currentInstructionChunkBytes || !utf8.ValidString(value) {
+				t.Fatal("invalid current instruction fragment")
+			}
+			reconstructed.WriteString(value)
+		}
+		if reconstructed.String() != input.Instructions || !strings.HasPrefix(context["kodex_runtime_revision"].(map[string]any)["value"].(string), runtimeInstructionRevisionPreamble) {
+			t.Fatal("current instructions were truncated or omitted")
+		}
+		if _, present := params["collaborationMode"]; present {
+			t.Fatal("catalog preset may replace immutable instructions")
 		}
 		input.ConfigOverlay, input.EffectiveReasoningEffort = "", "medium"
 		params, err = turnStartParams(input, "exact-thread", []byte("prompt"))
@@ -367,9 +379,6 @@ func TestTurnStartPinsModelReasoningAndPersonalityOnEveryAttempt(t *testing.T) {
 		}
 		if _, exists := params["effort"]; exists {
 			t.Fatal("non-reasoning model received invented effort")
-		}
-		if params["collaborationMode"].(map[string]any)["settings"].(map[string]any)["reasoning_effort"] != nil {
-			t.Fatal("native mode invented effort for a non-reasoning model")
 		}
 	}
 }

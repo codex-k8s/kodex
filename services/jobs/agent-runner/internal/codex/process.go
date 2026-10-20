@@ -243,7 +243,7 @@ func executeLocalWithInputProof(ctx context.Context, input model.Input, prompt [
 	}()
 	initialize := map[string]any{
 		"clientInfo": map[string]string{"name": "kodex-agent-runner", "title": "Kodex agent-runner", "version": "1"},
-		// Нужен закреплённый turn/start.collaborationMode. Это не расширяет
+		// Нужен закреплённый turn/start.additionalContext. Это не расширяет
 		// закрытый реестр методов, native tools либо серверные полномочия.
 		"capabilities": map[string]any{"experimentalApi": true, "optOutNotificationMethods": suppressedNotificationMethods},
 	}
@@ -442,16 +442,14 @@ func turnStartParams(input model.Input, threadID string, prompt []byte) (map[str
 	}
 	params := map[string]any{"threadId": threadID, "cwd": workingDirectory(input), "model": input.Model,
 		"approvalPolicy": input.CodexApprovalPolicy, "input": items}
-	// thread/resume developerInstructions не заменяет уже записанный generic
-	// developer message. collaborationMode входит в native world-state diff и
-	// доставляет полные bytes без 5KiB truncation additionalContext.
-	settings := map[string]any{"model": input.Model, "reasoning_effort": nil,
-		"developer_instructions": runtimeInstructionRevisionPreamble + input.Instructions}
-	params["collaborationMode"] = map[string]any{"mode": "default", "settings": settings}
+	current, err := currentInstructionContext(input.Instructions)
+	if err != nil {
+		return nil, err
+	}
+	params["additionalContext"] = current
 	// Resume не должен сохранять reasoning/personality предыдущей attempt.
 	if input.ReasoningMode == runtimecontract.ReasoningSupported {
 		params["effort"] = input.EffectiveReasoningEffort
-		settings["reasoning_effort"] = input.EffectiveReasoningEffort
 	}
 	if overlay.Personality != "" {
 		params["personality"] = overlay.Personality
