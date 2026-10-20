@@ -4,6 +4,7 @@ package errs
 import "errors"
 
 var (
+	ErrProviderCatalogTooLarge     = errors.New("provider catalog exceeds its bound")
 	ErrInvalid                     = errors.New("invalid input")
 	ErrUnauthorized                = errors.New("unauthorized")
 	ErrFreshAuthenticationRequired = errors.New("fresh authentication required")

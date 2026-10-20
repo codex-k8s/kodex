@@ -679,10 +679,11 @@ func validPinnedImage(reference, digest string) bool {
 }
 
 type RunnerProgressRequest struct {
-	RuntimeRevisionDigest string                      `json:"runtime_revision_digest"`
-	Progress              string                      `json:"progress"`
-	Message               *RuntimeAgentMessage        `json:"message,omitempty"`
-	ProviderProcess       *ProviderProcessObservation `json:"provider_process,omitempty"`
+	RuntimeRevisionDigest string                        `json:"runtime_revision_digest"`
+	Progress              string                        `json:"progress"`
+	Message               *RuntimeAgentMessage          `json:"message,omitempty"`
+	ProviderProcess       *ProviderProcessObservation   `json:"provider_process,omitempty"`
+	Financial             *ProviderFinancialObservation `json:"financial,omitempty"`
 }
 
 type RunnerArtifact struct {

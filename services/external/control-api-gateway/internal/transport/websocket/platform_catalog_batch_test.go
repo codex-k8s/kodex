@@ -82,7 +82,7 @@ func TestHeartbeatRunCatalogReuseBoundaries(t *testing.T) {
 			}
 			wantReads := 2
 			switch boundary {
-			case "gap", "duplicate":
+			case "gap", "duplicate", "authority-kind":
 				wantReads = 1
 			case "denied":
 				wantReads = 4
@@ -97,8 +97,11 @@ func TestHeartbeatRunCatalogReuseBoundaries(t *testing.T) {
 					resyncs++
 				}
 			}
-			if (boundary == "gap" && resyncs != 1) || (boundary != "gap" && resyncs != 0) {
-				t.Fatal("catalog reuse reinterpreted a real sequence gap")
+			// Смена полномочий теперь очищает и финансовую проекцию через
+			// authoritative rejoin, даже если последующие wakes уже стоят в FIFO.
+			wantResync := boundary == "gap" || boundary == "authority-kind"
+			if (wantResync && resyncs != 1) || (!wantResync && resyncs != 0) {
+				t.Fatal("catalog reuse lost a gap or authority resync boundary")
 			}
 		})
 	}

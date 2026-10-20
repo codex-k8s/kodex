@@ -69,9 +69,18 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	if err := repository.authorizeCommand(ctx, tx, scope, input); err != nil {
 		return command.Result{}, err
 	}
+	if err := repository.bindFinancialCallbackReceipt(ctx, tx, scope, &input); err != nil {
+		return command.Result{}, err
+	}
 	var storedDigest string
 	var storedPayload []byte
-	err = tx.QueryRow(ctx, queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation, scope.organizationID, scope.actorID, input.Mutation.Operation, input.Mutation.IdempotencyKey).Scan(&storedDigest, &storedPayload)
+	receiptQuery := queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation
+	if payload, ok := input.Payload.(command.LeaseInput); input.Kind == command.ReportExecutionProgress && ok && payload.Financial != nil {
+		// Долгий активный execution сохраняет semantic receipt; текущее право
+		// уже проверено bindFinancialCallbackReceipt, TTL не выдаёт authority.
+		receiptQuery = queryProviderFinancialReceipt
+	}
+	err = tx.QueryRow(ctx, receiptQuery, scope.organizationID, scope.actorID, input.Mutation.Operation, input.Mutation.IdempotencyKey).Scan(&storedDigest, &storedPayload)
 	if err == nil {
 		if storedDigest != input.Mutation.IntentDigest {
 			return command.Result{}, errs.ErrIdempotencyReuse

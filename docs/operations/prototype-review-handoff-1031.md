@@ -69,3 +69,54 @@ updated: 2026-10-20
 включая два generated: их нужно перегенерировать, не исправлять вручную.
 Ветка кандидата создана отдельно от обслуживающих исходников.
 Пункты 1–3 пока не объявляются PASS.
+
+### Консолидация и адресные проверки 20.10
+
+В #1822 объединяется полный вариант #1809, включающий историю #1808.
+Разрешены конфликты Proto/runtime activity/callback/runner/WS; generated
+источники получены штатными генераторами. Сохранены process-version observation,
+immutable image/admission и purge исправления более новой цепочки.
+Скрипт #1813 `mailbox-worker-pause.mjs` сохранён отдельно от уже перенесённого
+почтового доменного исправления.
+
+Финансовые миграции из ещё не развёрнутых веток перенесены в
+20261020000100/20261020000200: прежний номер второй совпадал с применённой
+миграцией renewal. Применённые renewal/purge/AV миграции не менялись.
+Строгий callback decoder принимает существующий `provider_process`, но запрещает
+его смешение с financial/message; отдельные HTTP и shared ABI регрессии добавлены.
+
+Смена AGENT/MEMBERSHIP/PLATFORM_MEMBERSHIP требует authoritative resync с floor
+точного события: полный FIFO не позволяет пропустить этот authority wake.
+SYSTEM_ASSISTANT heartbeat сохраняет адресный delta/read путь, так как не меняет
+eligibility проектных агентов финансового каталога. Новая локальная admission
+по проценту лимита не вводится; notification только будит supported read и не
+публикует произвольный upstream payload в переписку.
+
+| Изменённый переход | Authority / результат / событие / потребитель |
+| --- | --- |
+| ClaimExecution | Прежний trusted workload и owner candidate transaction; exact node/session turn переводятся в RUNNING атомарно; прежний TURN_STARTED, без нового события или права |
+| Financial progress | Тот же ReportExecutionProgress и exact lease/fence/generation, root/node/session/turn/attempt/revision/current credential; collector ordering и replay под root/account locks; PROVIDER_ACCOUNT_CHANGED только для принятого нового наблюдения в owner transaction |
+| Cancel/terminal/retry | Прежняя owner-транзакция отзывает lease; финансовый replay не оживляет граф и не выдаёт новый runtime grant; authoritative Run/Graph и прежние terminal events |
+| Authority wake / rejoin | Exact owner cursor не ниже исходного сигнала, PLATFORM_RESYNC_REQUIRED очищает financial cache и требует свежий snapshot; нет REST polling финансовой сводки |
+| Applied configuration plan | Проверенный staff actor, version/OCC/idempotency, validation перед application; receipt и изменения одной транзакции; внешний effect не подтверждается за владельца |
+
+PASS LOCAL на содержимом кандидата до merge commit: Proto lint/build/codegen,
+AsyncAPI reproduction, frontend lint/typecheck/build,42 finance/realtime и120
+assistant store/timeline tests; весь runtimecontract, runtime-controller и
+WebSocket transport. Полный agent-runner повторяется после согласования старой
+проверки подавления notification с новым wake-only поведением.
+
+PASS DISPOSABLE: bootstrap, parallel lifecycle, project profiles и system-run
+scope —173.196s; financial activity/semantic replay/terminal —4.229s после
+исправления claim. До исправления последний тест был FAIL: узел RUNNING, exact
+session turn оставался QUEUED. Проверка допуска не ослаблялась; исправлен producer
+перехода. Полный выбранный PostgreSQL контур повторяется на новом содержимом.
+Это не полный baseline пункта10 и не live acceptance всех пунктов2–3.
+
+LIVE (обслуживающая версия до консолидации): через отдельный Playwright Chrome
+подтверждены штатный SSO/API session200, bootstrap200, защищённый WebSocket,
+onboarding с готовой моделью gpt-6.1-sol/medium. Обычным запросом без refs
+системный помощник создал typed plan; validation/application200, отдельный проект
+«Готовность прототипа» создан с реальной квитанцией. Никакие письма/GitHub writes
+не выполнялись. Chrome MCP доступен для списка вкладок, но защищённый одноразовый
+ввод не завершился; Playwright результат не выдаётся за MCP результат.

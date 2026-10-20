@@ -1495,3 +1495,11 @@ func digest(value any) string {
 	hash := sha256.Sum256(encoded)
 	return hex.EncodeToString(hash[:])
 }
+
+func (service *Service) GetProviderFinancialOverview(ctx context.Context, p value.Principal) (entity.ProviderFinancialOverview, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.ProviderFinancialOverview{}, err
+	}
+	return service.repository.GetProviderFinancialOverview(ctx, p)
+}

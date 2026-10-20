@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.9
-updated: 2026-10-15
+version: 2.2.10
+updated: 2026-10-20
 ---
 
 # Кодификация документов и задач
@@ -150,6 +150,7 @@ updated: 2026-07-28
 | `GO-DOC-004`       | `docs/guides/event-delivery-go.md`                          |
 | `GO-DOC-005`       | `docs/guides/interservice-communication.md`                 |
 | `GO-DOC-006`       | `docs/guides/shared-go-libraries.md`                        |
+| `GO-DOC-007`       | `docs/guides/provider-financial-observations.md`             |
 | `GO-LIB-MAIL-POLICY-001` | `libs/go/mailpolicy/README.md` |
 | `GO-LIB-DNS-RESOLVER-001` | `libs/go/dnsresolver/README.md` |
 | `SVC-MC-005`       | `services/internal/runtime-controller/README.md`            |

@@ -32,20 +32,24 @@ func (message RuntimeAgentMessage) Validate() error {
 
 // RuntimeActivity — закрытое объединение безопасных событий provider broker.
 type RuntimeActivity struct {
-	Message         *RuntimeAgentMessage        `json:"message,omitempty"`
-	ToolCall        *NativeToolCall             `json:"tool_call,omitempty"`
-	ProviderProcess *ProviderProcessObservation `json:"provider_process,omitempty"`
+	Message         *RuntimeAgentMessage          `json:"message,omitempty"`
+	ToolCall        *NativeToolCall               `json:"tool_call,omitempty"`
+	ProviderProcess *ProviderProcessObservation   `json:"provider_process,omitempty"`
+	Financial       *ProviderFinancialObservation `json:"financial,omitempty"`
 }
 
 func (activity RuntimeActivity) Validate() error {
 	count := 0
-	for _, present := range []bool{activity.Message != nil, activity.ToolCall != nil, activity.ProviderProcess != nil} {
+	for _, present := range []bool{activity.Message != nil, activity.ToolCall != nil, activity.ProviderProcess != nil, activity.Financial != nil} {
 		if present {
 			count++
 		}
 	}
 	if count != 1 {
 		return errors.New("runtime activity is invalid")
+	}
+	if activity.Financial != nil {
+		return activity.Financial.Validate()
 	}
 	if activity.Message != nil {
 		return activity.Message.Validate()

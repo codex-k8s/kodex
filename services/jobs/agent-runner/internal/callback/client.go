@@ -335,3 +335,24 @@ func readCredential(path string) (string, error) {
 	}
 	return value, nil
 }
+
+// Optional telemetry не прерывает ход при transport/5xx, но authority rejection
+// всегда возвращается вызывающему. Запись не повторяется при неизвестном исходе.
+func (client *Client) FinancialObservation(ctx context.Context, input model.Input, observation runtimecontract.ProviderFinancialObservation) error {
+	if observation.Validate() != nil {
+		return errors.New("invalid financial observation")
+	}
+	raw, err := json.Marshal(runtimecontract.RunnerProgressRequest{RuntimeRevisionDigest: input.RuntimeRevisionDigest, Financial: &observation})
+	if err != nil {
+		return err
+	}
+	delivery, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	endpoint := *client.base
+	endpoint.Path = "/v1/executions/" + url.PathEscape(input.LeaseRef) + "/progress"
+	optional, err := client.postOnce(delivery, input, endpoint.String(), raw)
+	if optional {
+		return nil
+	}
+	return err
+}

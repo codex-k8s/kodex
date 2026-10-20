@@ -68,6 +68,39 @@ func TestRuntimeActivityMessagesAndToolLifecycleComponent(t *testing.T) {
 		t.Fatal("execution missing")
 	}
 	lease := command.LeaseInput{LeaseRef: stringMap(claims[0], "leaseRef"), Fence: stringMap(claims[0], "fence"), Generation: runtimeRevisionMapInt64(claims[0], "generation")}
+	var turnState string
+	if err := pool.QueryRow(ctx, `SELECT turn.state
+      FROM control_plane.runtime_leases lease
+      JOIN control_plane.runtime_revisions revision ON revision.id = lease.runtime_revision_id
+      JOIN control_plane.session_turns turn ON turn.id = revision.turn_id
+      WHERE lease.ref = $1`, lease.LeaseRef).Scan(&turnState); err != nil || turnState != "RUNNING" {
+		t.Fatal("execution claim did not start its exact session turn")
+	}
+	// Полный callback replay обязан сохранить account, run, audit и outbox.
+	balance := "59999.000000000000000001"
+	lease.Financial = &entity.ProviderFinancialSummary{Observation: runtimecontract.ProviderFinancialObservation{Sequence: 1, State: "AVAILABLE", Windows: []runtimecontract.ProviderFinancialWindow{{UsedPercent: new(int32(100))}}, Credits: &runtimecontract.ProviderFinancialCredits{HasCredits: new(true), Balance: &balance}}}
+	financialFirst := execute(command.ReportExecutionProgress, progress, "finance-first", nil, lease)
+	counts := func() [5]int64 {
+		t.Helper()
+		var value [5]int64
+		if err := pool.QueryRow(ctx, `SELECT (SELECT sum(version) FROM control_plane.provider_accounts), (SELECT sum(version) FROM control_plane.runs), (SELECT count(*) FROM control_plane.run_events), (SELECT count(*) FROM control_plane.audit_events), (SELECT count(*) FROM control_plane.outbox_events)`).Scan(&value[0], &value[1], &value[2], &value[3], &value[4]); err != nil {
+			t.Fatal(err)
+		}
+		return value
+	}
+	beforeReplay := counts()
+	financialReplay := execute(command.ReportExecutionProgress, progress, "finance-new-correlation", nil, lease)
+	if counts() != beforeReplay || financialFirst.Event.Ref != financialReplay.Event.Ref || financialFirst.Event.Sequence != financialReplay.Event.Sequence {
+		t.Fatal("financial replay produced a second effect")
+	}
+	lease.Financial.Observation.Credits.Balance = new("42")
+	if _, err := service.Execute(ctx, command.Command{Kind: command.ReportExecutionProgress, Principal: progress, Mutation: value.Mutation{IdempotencyKey: "activity-finance-changed"}, Payload: lease}); !errors.Is(err, errs.ErrIdempotencyReuse) {
+		t.Fatalf("changed financial sequence accepted: %v", err)
+	}
+	if counts() != beforeReplay {
+		t.Fatal("rejected financial replay changed state")
+	}
+	lease.Financial = nil
 	message := entity.RunMessage{Ref: "msg_activity_commentary", Phase: "COMMENTARY", Revision: 1, Text: "Проверяю текущую задачу.\n" + strings.Repeat("Длинный опубликованный текст. ", 200), Source: entity.MessageSource{Origin: "CALLBACK_CONTINUATION"}}
 	lease.Message = &message
 	first := execute(command.ReportExecutionProgress, progress, "message", nil, lease).Event
@@ -85,9 +118,11 @@ func TestRuntimeActivityMessagesAndToolLifecycleComponent(t *testing.T) {
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ReportExecutionProgress, Principal: progress, Mutation: value.Mutation{IdempotencyKey: "activity-message-mismatch"}, Payload: lease}); !errors.Is(err, errs.ErrIdempotencyReuse) {
 		t.Fatalf("message mutation accepted: %v", err)
 	}
-	call := command.RunToolCallInput{LeaseRef: lease.LeaseRef, Fence: lease.Fence, Generation: lease.Generation,
+	call := command.RunToolCallInput{
+		LeaseRef: lease.LeaseRef, Fence: lease.Fence, Generation: lease.Generation,
 		CallRef: "tcl_activity_pending", Tool: runtimecontract.NativeToolKindSleep, State: "RUNNING", Revision: 1,
-		SafeParameters: map[string]any{"requested_duration_ms": 50}}
+		SafeParameters: map[string]any{"requested_duration_ms": 50},
+	}
 	started := execute(command.RecordRunToolCall, tool, "tool-started", nil, call).Event
 	if started.ToolCall == nil || started.ToolCall.State != "RUNNING" || started.Delta.Execution == nil {
 		t.Fatal("started tool projection missing")
@@ -116,6 +151,12 @@ func TestRuntimeActivityMessagesAndToolLifecycleComponent(t *testing.T) {
 	}
 	if !inputFound || !messageFound || !closed {
 		t.Fatalf("history incomplete: input=%t message=%t toolClosed=%t", inputFound, messageFound, closed)
+	}
+	terminalFinancial := lease
+	terminalFinancial.Message = nil
+	terminalFinancial.Financial = &entity.ProviderFinancialSummary{Observation: runtimecontract.ProviderFinancialObservation{Sequence: 1, State: "AVAILABLE", Windows: []runtimecontract.ProviderFinancialWindow{{UsedPercent: new(int32(100))}}, Credits: &runtimecontract.ProviderFinancialCredits{HasCredits: new(true), Balance: &balance}}}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.ReportExecutionProgress, Principal: progress, Mutation: value.Mutation{IdempotencyKey: "activity-finance-after-terminal"}, Payload: terminalFinancial}); !errors.Is(err, errs.ErrForbidden) {
+		t.Fatalf("terminal financial receipt retained authority: %v", err)
 	}
 	if _, err := service.Execute(ctx, command.Command{Kind: command.ReportExecutionProgress, Principal: progress, Mutation: value.Mutation{IdempotencyKey: "activity-message-after-terminal"}, Payload: lease}); !errors.Is(err, errs.ErrForbidden) {
 		t.Fatalf("terminal lease accepted message: %v", err)

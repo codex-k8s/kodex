@@ -1583,6 +1583,15 @@ func (repository *Repository) reportProgress(ctx context.Context, tx pgx.Tx, sco
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	if payload.Financial != nil {
+		if payload.Message != nil || payload.Progress != "" {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		if err := repository.publishFinancial(ctx, tx, scope, lease, payload.Financial.Observation); err != nil {
+			return commandOutcome{}, err
+		}
+		payload.Progress = "i18n:RUNTIME_PROGRESS_RECORDED"
+	}
 	progress := truncate(payload.Progress, 2000)
 	if payload.Message != nil {
 		if payload.Progress != "" || !validPublishedMessage(payload.Message) {

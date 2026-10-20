@@ -31,3 +31,21 @@ func TestRuntimeActivityAcceptsOnlyPublishedBoundedMessage(t *testing.T) {
 		t.Fatal("ambiguous activity accepted")
 	}
 }
+
+func TestRuntimeActivityFinancialVariantStaysExclusiveWithProcessObservation(t *testing.T) {
+	financial := ProviderFinancialObservation{Sequence: 1, State: "UNAVAILABLE"}
+	if err := (RuntimeActivity{Financial: &financial}).Validate(); err != nil {
+		t.Fatalf("valid financial activity rejected: %v", err)
+	}
+	message := RuntimeAgentMessage{ItemID: "message-1", Phase: RuntimeMessageCommentary, Revision: 1, Text: "Проверяю файлы"}
+	for _, activity := range []RuntimeActivity{
+		{Financial: &financial, Message: &message},
+		{Financial: &financial, ToolCall: &NativeToolCall{}},
+		{Financial: &financial, ProviderProcess: &ProviderProcessObservation{}},
+		{Financial: &financial, Message: &message, ProviderProcess: &ProviderProcessObservation{}},
+	} {
+		if activity.Validate() == nil {
+			t.Fatal("financial activity accepted another runtime variant")
+		}
+	}
+}

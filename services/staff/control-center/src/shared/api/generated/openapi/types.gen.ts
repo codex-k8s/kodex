@@ -3854,12 +3854,45 @@ export type ProviderAccount = {
     ready: boolean;
     maximumConcurrentExecutions: number;
     usage?: ProviderAccountUsage;
+    financialSummary?: ProviderFinancialSummary;
+    financialEligible?: boolean;
     authorization?: ProviderAuthorization;
     deletion?: ProviderAccountDeletion;
     verification?: ProviderAccountVerification;
     nextActions: Array<NextAction>;
     createdAt: Timestamp;
     updatedAt: Timestamp;
+};
+
+export type ProviderFinancialSummary = {
+    observation: ProviderFinancialObservation;
+    receivedAt: Timestamp;
+    version: number;
+};
+
+export type ProviderFinancialObservation = {
+    sequence: number;
+    state: 'AVAILABLE' | 'UNAVAILABLE';
+    ordinaryUsageAllowed?: boolean;
+    spendControlReached?: boolean;
+    restriction?: 'rate_limit_reached' | 'workspace_owner_credits_depleted' | 'workspace_member_credits_depleted' | 'workspace_owner_usage_limit_reached' | 'workspace_member_usage_limit_reached';
+    windows?: Array<ProviderFinancialWindow>;
+    credits?: ProviderFinancialCredits;
+};
+
+export type ProviderFinancialWindow = {
+    usedPercent: number;
+    durationMinutes?: number;
+    resetsAt?: number;
+};
+
+export type ProviderFinancialCredits = {
+    hasCredits?: boolean;
+    unlimited?: boolean;
+    /**
+     * Точная upstream строка. Единица и денежный эквивалент не установлены.
+     */
+    balance?: string;
 };
 
 export type ProviderAccountConcurrencyInput = {
@@ -4631,6 +4664,21 @@ export type AdministrationState = {
     optionalAdapters: Array<IntegrationDefinition>;
     incidents: Array<Incident>;
     observedAt: Timestamp;
+};
+
+export type ProviderFinancialDisplayAccount = {
+    ref: OpaqueRef;
+    name: string;
+    financialSummary?: ProviderFinancialSummary;
+};
+
+export type ProviderFinancialOverview = {
+    accounts: Array<ProviderFinancialDisplayAccount>;
+    total: number;
+    exhausted: number;
+    unknown: number;
+    observedAt: string;
+    validUntil: string;
 };
 
 export type EmailMailboxCredentialInputWritable = {
