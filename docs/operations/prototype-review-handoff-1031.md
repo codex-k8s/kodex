@@ -196,3 +196,10 @@ ACTIVITY_DELIVERY установлен до точного producer defect: AddA
 не переписываются. Новый project-assistant financial component воспроизвёл
 FAIL до изменения SQL, после исправления — PASS; выбранный project/parallel/
 activity PostgreSQL контур целиком PASS,39.008s. Новый live ещё NOT RUN.
+
+Run route после потери availability snapshot во время inflight read мог
+пропустить восстановление: watcher не наблюдал завершение loading. Он теперь
+реагирует на этот точный переход; ошибки403/404 по-прежнему останавливают
+повторы, старый graph не считается свежим допуском.18 выбранных frontend
+rejoin/mutation/refresh tests — PASS LOCAL. Доставка и live подтверждение
+исправления пока NOT RUN.

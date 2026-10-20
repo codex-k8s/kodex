@@ -189,6 +189,25 @@ async function mount() {
 }
 
 describe("Восстановление точного Run route", () => {
+  it("восстанавливает exact route после потери snapshot во время уже активного чтения", async () => {
+    const { platform, state } = await mount();
+    platform.runLoading[runRef] = true;
+    platform.applyRealtimeAvailability([], projectRef);
+    await nextTick();
+    expect(state.hasAuthoritativeSnapshot.value).toBe(false);
+    expect(api.getRunGraph).toHaveBeenCalledTimes(1);
+    api.getRunGraph.mockResolvedValue({
+      data: workspace(2),
+      response: new Response(null, { status: 200 }),
+    });
+    platform.runLoading[runRef] = false;
+    await vi.waitFor(() =>
+      expect(state.hasAuthoritativeSnapshot.value).toBe(true),
+    );
+    await nextTick();
+    expect(api.getRunGraph).toHaveBeenCalledTimes(2);
+    expect(state.run.value?.version).toBe(2);
+  });
   it("не возобновляет stream после ухода со страницы во время exact readback", async () => {
     const { platform, unmount } = await mount();
     let resolve!: (value: { data: RunWorkspace; response: Response }) => void;
