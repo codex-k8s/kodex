@@ -167,6 +167,10 @@ test("source creation isolates a private caller mask and never copies ignored da
   try {
     const result = createApplicationSource(current.path, source);
     assert.equal(result.sourceCreated, true);
+    assert.equal(lstatSync(`${source.path}/.git`).isDirectory(), true);
+    assert.equal(lstatSync(`${source.path}/.env`).size, 0);
+    assert.equal(lstatSync(`${source.path}/.env`).mode & 0o777, 0o600);
+    for (const name of [".agents", ".kodex-dev"]) assert.equal(lstatSync(`${source.path}/${name}`).isDirectory(), true);
     assert.equal(inspectSource(source.path, true).mountpointsReady, true);
     assert.equal(lstatSync(source.path).mode & 0o777, 0o755);
     assert.equal(lstatSync(`${source.path}/services/staff/control-center/package-lock.json`).mode & 0o777, 0o644);
@@ -179,7 +183,6 @@ test("source creation isolates a private caller mask and never copies ignored da
     assert.equal(lstatSync(`${parent}/private-evidence`).mode & 0o777, 0o600);
   } finally {
     process.umask(previous);
-    current.git("worktree", "remove", "--force", source.path);
     rmSync(current.path, { recursive: true, force: true });
     rmSync(parent, { recursive: true, force: true });
   }

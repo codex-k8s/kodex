@@ -132,3 +132,12 @@ tracked archive этого SHA. Публикация/node pull/live на мом�
 добавлен закрытый профиль `provider-financial-observations` с exact readback
 20261020000200. Source inspector принимает также равнозначный HTTPS origin без
 `.git`; чужой репозиторий, query-параметры и другой host остаются запрещены.
+
+Миграция20261020000200 и публикация четырёх OCI — PASS LIVE. Первая доставка
+source-only — FAIL: новые Pod получили StartError на отсутствующем `.env`
+mountpoint; старые 2/2 реплики продолжали обслуживать запросы. Причина общая:
+worktree создаёт `.git`-файл, несовместимый с directory mask. Исправлен именно
+producer: новый application source — чистый локальный Git clone с публичным
+origin и штатной подготовкой пустых mask mountpoints; ignored data не копируются.
+15 regression tests подготовки — PASS LOCAL после исправления. Далее применяется
+уже собранный compiled cutover CP/API; это не называется успешным hot-reload.
