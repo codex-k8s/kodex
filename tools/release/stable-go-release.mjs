@@ -77,8 +77,15 @@ async function main(args) {
     return archiveTransition(await get("role", "session-archive-controller", "kodex-runtime"),
       await get("rolebinding", "session-archive-controller", "kodex-runtime"), desiredArchiveRole);
   };
-  const podList = async name => JSON.parse(await kubectl(["-n", "kodex-system", "get", "replicasets,pods", "-l",
-    `app.kubernetes.io/name=${name}`, "-o", "json"]));
+  const podList = async name => {
+    // У migrator то же app name, но иной component. Его завершённые Pod не
+    // являются serving replicas; lineage выбранного компонента проверяется ниже.
+    const deployment = await get("deployment", name);
+    const component = deployment.spec?.template?.metadata?.labels?.["app.kubernetes.io/component"];
+    requireValue(/^[a-z][a-z0-9-]{0,62}$/.test(component ?? ""), "STABLE_COMPONENT_LABEL_REQUIRED");
+    return JSON.parse(await kubectl(["-n", "kodex-system", "get", "replicasets,pods", "-l",
+      `app.kubernetes.io/name=${name},app.kubernetes.io/component=${component}`, "-o", "json"]));
+  };
   const storageFor = async deployment => {
     const claims = [];
     for (const v of deployment.spec.template.spec.volumes ?? []) {

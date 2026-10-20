@@ -73,7 +73,7 @@ function setup(name = "session-archive") {
   writeFileSync(join(directory, "bin", "git"), `#!${process.execPath}\nprocess.stdout.write(process.argv[2]==='rev-parse'?'${"f".repeat(40)}':'');\n`, { mode: 0o700 });
   const deployment = { apiVersion: "apps/v1", kind: "Deployment",
     metadata: { name, namespace: "kodex-system", uid: "deployment", resourceVersion: "1", generation: 1 },
-    spec: { replicas: 1, template: { metadata: {}, spec: {
+    spec: { replicas: 1, template: { metadata: { labels: { "app.kubernetes.io/component": "internal-service" } }, spec: {
       containers: [{ name, image: "dev", command: ["/workspace/tools/dev/run-go-hot-reload.sh"],
         args: [name === "session-archive" ? "services/jobs/session-archive" : "services/internal/control-plane", `./cmd/${name}`, name, "controller"],
         env: [{ name: "PRIVATE", value: "CLI_PRIVATE_SENTINEL" },
@@ -116,6 +116,9 @@ test("completed rollout waits for its old terminating pod without replaying the 
     const r = run(["apply", "--context", "fixture", "--plan", planPath, "--approved-plan-sha", fingerprint(plan), "--output", join(directory, "apply.jsonl")]);
     assert.equal(r.status, 0, r.output); assert.equal(JSON.parse(readFileSync(statePath, "utf8")).oldTerminatingPolls, 0);
     assert.equal(writes(directory).filter(a => a[a.indexOf("patch") + 1] === "deployment").length, 2);
+    const inventory = readFileSync(join(directory, "trace"), "utf8").trim().split("\n").map(JSON.parse).filter(a => a.includes("replicasets,pods"));
+    assert.ok(inventory.length > 0);
+    assert.ok(inventory.every(a => a[a.indexOf("-l") + 1] === "app.kubernetes.io/name=session-archive,app.kubernetes.io/component=internal-service"));
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 

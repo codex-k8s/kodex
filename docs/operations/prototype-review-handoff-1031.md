@@ -141,3 +141,10 @@ producer: новый application source — чистый локальный Git 
 origin и штатной подготовкой пустых mask mountpoints; ignored data не копируются.
 15 regression tests подготовки — PASS LOCAL после исправления. Далее применяется
 уже собранный compiled cutover CP/API; это не называется успешным hot-reload.
+
+CP compiled cutover фактически запущен: две Ready реплики с digest сборки ac0.
+Первый readback скрипта — FAIL `STABLE_FOREIGN_SERVING_POD`: общий app-name
+захватил завершённые pod мигратора. Исправлен selector инвентаризации по
+app-name и component из авторитетного Deployment; строгая ReplicaSet lineage
+не ослабляется.14 тестов Go release — PASS LOCAL. Незавершённая часть API
+получает отдельный новый план по фактическому состоянию, без повтора CP PATCH.
