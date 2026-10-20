@@ -113,7 +113,7 @@ export function prepareGoCutover(deployment, release, { storageClaims = [], sour
     spoolInit.securityContext = { ...spoolInit.securityContext, runAsNonRoot: true, runAsUser: 10001, runAsGroup: 10001,
       allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } };
   }
-  const devVolumes = new Set(["dev-source", "dev-go-mod", "dev-go-sumdb", "dev-go-tools", `dev-build-${name}`,
+  const devVolumes = new Set(["dev-source", "dev-application-source", "dev-go-mod", "dev-go-sumdb", "dev-go-tools", `dev-build-${name}`,
     ...(spoolInit ? ["dev-build-artifact-spool-init"] : [])]);
   const removedVolumes = new Set();
   for (const volume of pod.volumes ?? []) {

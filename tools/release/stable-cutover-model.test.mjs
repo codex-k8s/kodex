@@ -73,6 +73,17 @@ test("sidecar shared dev volumes and unrecognized host mounts block conversion",
   assert.ok(prepareGoCutover(extra, release).patch.at(-1).value.template.spec.volumes.some(v => v.secret?.secretName === "retained"));
 });
 
+test("cutover removes isolated application source and still rejects a sidecar sharing it", () => {
+  const value = fixture();
+  value.spec.template.spec.containers[0].volumeMounts[0].name = "dev-application-source";
+  value.spec.template.spec.volumes.push({ name: "dev-application-source", hostPath: { path: "/exact/application" } });
+  const after = prepareGoCutover(value, release).patch.at(-1).value;
+  assert.equal(after.template.spec.volumes.some(v => v.hostPath), false);
+  assert.equal(after.template.spec.containers[0].volumeMounts.some(m => m.mountPath === "/workspace"), false);
+  value.spec.template.spec.containers.push({ name: "sidecar", volumeMounts: [{ name: "dev-application-source", mountPath: "/workspace", readOnly: true }] });
+  assert.throws(() => prepareGoCutover(value, release), /DEV_VOLUME_SHARED/);
+});
+
 test("RWO needs exact node affinity and registries need a common upload secret", () => {
   const value = fixture("kodex-image-registry-push");
   value.spec.template.spec.volumes = [{ name: "registry", persistentVolumeClaim: { claimName: "data" } }];
