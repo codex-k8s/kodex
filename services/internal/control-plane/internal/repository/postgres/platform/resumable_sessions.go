@@ -54,7 +54,7 @@ func (repository *Repository) applyContinuationAction(ctx context.Context, runne
 	err := tx.QueryRow(ctx, queryResumableSessionGet, pgx.StrictNamedArgs{
 		"organization_id": current.organizationID, "actor_id": current.actorID,
 		"authority_project_id": current.authorityProjectID, "run_ref": run.Ref,
-	}).Scan(&item.RunRef, &item.Version, &item.SessionID, &item.SessionRef, &item.ProjectID, &item.ProjectRef, &item.TargetType, &item.TargetRef, &item.AccountRef)
+	}).Scan(&item.RunRef, &item.Version, &item.SessionID, &item.SessionRef, &item.ProjectID, &item.ProjectRef, &item.TargetType, &item.TargetRef, &item.AccountRef, &item.InputJSON)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
@@ -81,6 +81,7 @@ type resumableSessionCandidate struct {
 	Version                                              int64
 	CreatedAt                                            time.Time
 	TargetSpec                                           []byte
+	InputJSON                                            []byte
 	AgentRefs                                            []string
 	Configuration                                        entity.AgentRuntimeConfiguration
 	Overlay                                              string
@@ -98,9 +99,10 @@ func resumableSessionAfterCursor(item resumableSessionCandidate, cursor resumabl
 }
 
 type continuationTargetSnapshot struct {
-	configuration entity.AgentRuntimeConfiguration
-	overlay       string
-	err           error
+	configuration  entity.AgentRuntimeConfiguration
+	overlay        string
+	workflowInputs []entity.WorkflowInputField
+	err            error
 }
 
 type continuationValidationCache struct {
@@ -165,7 +167,7 @@ func (repository *Repository) listResumableSessions(ctx context.Context, current
 		var item resumableSessionCandidate
 		var accountCandidates, bindingModels []byte
 		if rows.Scan(&item.RunRef, &item.Version, &item.CreatedAt, &item.SessionID, &item.SessionRef, &item.ProjectID, &item.ProjectRef,
-			&item.TargetType, &item.TargetRef, &item.AccountRef, &item.TargetSpec, &item.AgentRefs,
+			&item.TargetType, &item.TargetRef, &item.AccountRef, &item.InputJSON, &item.TargetSpec, &item.AgentRefs,
 			&item.Configuration.Provider, &item.Configuration.Model, &accountCandidates, &item.Overlay,
 			&item.Binding.CatalogRevision, &item.Binding.CatalogDigest, &bindingModels, &item.Binding.Provider,
 			&item.Binding.PolicyID, &item.Binding.PolicyRef, &item.Binding.PolicyVersion, &item.Binding.PolicyDigest) != nil ||
@@ -226,7 +228,7 @@ func (repository *Repository) validatePreparedContinuationSnapshot(ctx context.C
 	if candidate.TargetType == "WORKFLOW" {
 		var version entity.WorkflowVersion
 		if json.Unmarshal(candidate.TargetSpec, &version) != nil || !validWorkflowVersion(version) ||
-			version.CoordinatorAgentRef == "" || !validWorkflowRunInput(version.Inputs, nil) {
+			version.CoordinatorAgentRef == "" || !validContinuationWorkflowInput(version.Inputs, candidate.InputJSON) {
 			return errs.ErrConflict
 		}
 	}
@@ -261,6 +263,9 @@ func (repository *Repository) validateContinuationWithTargetSnapshot(ctx context
 	if snapshot.err != nil {
 		return snapshot.err
 	}
+	if candidate.TargetType == "WORKFLOW" && !validContinuationWorkflowInput(snapshot.workflowInputs, candidate.InputJSON) {
+		return errs.ErrConflict
+	}
 	return repository.validateContinuationSessionCatalog(ctx, tx, current, candidate, snapshot.configuration, snapshot.overlay, cache)
 }
 
@@ -273,6 +278,7 @@ func (repository *Repository) readContinuationTargetSnapshot(ctx context.Context
 		return failure(err)
 	}
 	var agentRefs []string
+	var workflowInputs []entity.WorkflowInputField
 	switch candidate.TargetType {
 	case "AGENT":
 		var name string
@@ -289,10 +295,11 @@ func (repository *Repository) readContinuationTargetSnapshot(ctx context.Context
 			return failure(continuationReadError(err))
 		}
 		var version entity.WorkflowVersion
-		if json.Unmarshal(raw, &version) != nil || !validWorkflowVersion(version) || version.CoordinatorAgentRef != coordinatorRef || !validWorkflowRunInput(version.Inputs, nil) {
+		if json.Unmarshal(raw, &version) != nil || !validWorkflowVersion(version) || version.CoordinatorAgentRef != coordinatorRef {
 			return failure(errs.ErrConflict)
 		}
 		agentRefs = append(agentRefs, coordinatorRef)
+		workflowInputs = version.Inputs
 		for _, step := range version.Steps {
 			agentRefs = append(agentRefs, step.AgentRef)
 		}
@@ -315,7 +322,12 @@ func (repository *Repository) readContinuationTargetSnapshot(ctx context.Context
 	if err != nil {
 		return failure(err)
 	}
-	return continuationTargetSnapshot{configuration: configuration, overlay: overlay}
+	return continuationTargetSnapshot{configuration: configuration, overlay: overlay, workflowInputs: workflowInputs}
+}
+
+func validContinuationWorkflowInput(fields []entity.WorkflowInputField, raw []byte) bool {
+	var values map[string]any
+	return len(raw) > 0 && json.Unmarshal(raw, &values) == nil && validWorkflowRunInput(fields, values)
 }
 
 func (repository *Repository) validateContinuationSessionCatalog(ctx context.Context, tx pgx.Tx, current scope, candidate resumableSessionCandidate, configuration entity.AgentRuntimeConfiguration, overlay string, cache *continuationValidationCache) error {

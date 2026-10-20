@@ -80,6 +80,15 @@ func (repository *Repository) authorizeCommand(ctx context.Context, tx pgx.Tx, c
 			return errs.ErrInvalid
 		}
 		return nil
+	case command.ResolveProjectPurgeRecovery:
+		payload, ok := input.Payload.(command.ProjectPurgeRecoveryInput)
+		if current.authorityProjectID != "" || current.role != "OWNER" && current.role != "ADMINISTRATOR" || input.Principal.CallerWorkload != "control-api-gateway" {
+			return errs.ErrNotFound
+		}
+		if !ok || payload.Ref == "" || !exactSHA256(payload.SnapshotDigest) || !payload.AcknowledgeUnknownOutcome || input.Mutation.ExpectedVersion == nil {
+			return errs.ErrInvalid
+		}
+		return repository.authorizeProjectPurgeRecovery(ctx, tx, current, payload.Ref)
 	case command.TrashProject, command.RestoreProject, command.PurgeProject:
 		_, ok := input.Payload.(command.ProjectLifecycleInput)
 		if !ok {

@@ -46,6 +46,18 @@ func (repository *Repository) promptContinuationPreviewForActorTx(ctx context.Co
 	kind := "AGENT"
 	if targetType == "WORKFLOW" {
 		kind = "WORKFLOW_STAGE"
+		inherited, err := readSessionContinuationInput(ctx, tx, current, sessionRef, "")
+		if err != nil {
+			return entity.PromptMaterializationSnapshot{}, err
+		}
+		if input.Input != nil {
+			requestedDigest, requestedErr := runtimecontract.RuntimeBoundedInputDigest(input.Input)
+			inheritedDigest, inheritedErr := runtimecontract.RuntimeBoundedInputDigest(inherited)
+			if requestedErr != nil || inheritedErr != nil || requestedDigest != inheritedDigest {
+				return entity.PromptMaterializationSnapshot{}, errs.ErrConflict
+			}
+		}
+		selection.Input = inherited
 		workflow, err := scanWorkflow(tx.QueryRow(ctx, queryQueriesGetworkflowSelectWorkflowsOrganizationIdRefProjectId, current.organizationID, targetRef, current.role, current.actorID), true)
 		if err != nil || workflow.Published == nil {
 			return entity.PromptMaterializationSnapshot{}, errs.ErrConflict

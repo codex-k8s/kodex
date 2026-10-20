@@ -1,5 +1,123 @@
 # Независимое обновление приложений
 
+## Переход этой серверной установки на штатный профиль
+
+По решению владельца #1810 готовится отдельный переход с hot reload на
+immutable OCI и две реплики совместимых сервисов. План, exact проверки и
+текущее состояние — [OPS-PUBLIC-STABLE-001](../../docs/operations/public-stable-1810.md).
+Это не команда глобального dev bootstrap и не смена режима других установок.
+
+`fetch-stable-charts.mjs --output /absolute/new-private-directory` анонимно
+получает только три закреплённых chart существующих системных Helm release.
+SHA256 проверяется по repo-owned locks; credentials пользовательского Helm
+не используются. Каталог новый0700, архивы0600, перезаписи нет.
+`stable-system-helm-plan.mjs --context k3d-kodex --charts /absolute/directory
+--output /absolute/new-plan.json` выполняет только read-only/server dry-run.
+Закрытый профиль `infra/stable-system/helm-profiles.json` допускает две реплики
+cert-manager/cainjector/webhook/trust-manager, kube-state-metrics и Alertmanager,
+resource bounds и exact PDB. Сравниваются все объекты исходного и нового render:
+Secret, ключи, сертификаты, RBAC, PVC, images и любой посторонний объект должны
+остаться неизменными. В плане только commitments, metadata и перечень изменений;
+Helm values/render с возможными secrets остаются в памяти. Plan v2 связывает
+все165 объектов текущих chart по UID/configuration; Secret/ConfigMap читаются
+только через UID/RV, без data. Operator Prometheus без leader election остаётся1
+вместе с ранее согласованными singleton.
+
+`stable-system-helm-release.mjs apply|inspect|readback|rollback` принимает
+`--context k3d-kodex --charts /absolute/chart-directory --plan /private/v2-plan
+--output /private/new-journal`. Apply/rollback требуют `--approved-plan-sha`
+после review и отдельного owner gate; кроме apply нужен `--journal` исходного
+apply. Старые планы v1 не принимаются. Перед upgrade повторяются полный render,
+revision, UID/configuration и clean source guards. Намерение fsync записывается
+до Helm; неизвестный ответ не повторяется, проверяется exact revision/operation
+и сохранённый render/values commitment. `inspect` не означает serving acceptance.
+Readback проверяет две актуальные owned replica и прежние image IDs main/init.
+Restore выполняется новой forward revision из exact первоначальных values,
+с сохранением созданных PDB UID. Ручное снятие pending Helm lock, массовый
+rollback «на предыдущую revision», удаление PVC/Secret/PDB и force запрещены.
+Failed/pending частичный переход не выдаётся за готовность.
+
+`stable-native-plan.mjs --context k3d-kodex --output /private/new-plan.json`
+готовит отдельный read-only/server dry-run native K3s-профиля. Три текущих vendor
+image связаны с index→linux/amd64 manifest→config и source serving image IDs.
+CoreDNS/metrics-server сохраняют точные существующие AddOn/Service/RBAC;
+для устойчивости профиля планируются только два соответствующих `.skip`
+маркера. Это не `--disable` с удалением компонентов. Traefik получает
+HelmChartConfig того же HelmChart, без второго release/ingress. Полный Helm
+render разрешает только replica/resource/image/strategy и exact PDB; маршруты,
+Service, TLS, RBAC и остальные объекты неизменны. Chart скачивается только из
+существующего K3s API, проверяется lock SHA, сохраняется рядом с планом0600.
+Это пока plan: native apply/recovery/перезапуск K3s ещё не выполнены.
+
+Для двух AddOn существует `stable-native-addon-release.mjs
+apply|inspect|readback|rollback --context k3d-kodex --plan /private/v2-plan
+--output /private/new-journal`. Apply/rollback требуют `--approved-plan-sha`
+после review/отдельного owner gate. Кроме apply нужен исходный `--journal`.
+Повторный rollback после неизвестного create/patch дополнительно принимает
+`--recovery-journal` завершённого первого восстановления, чтобы не подменять
+causal receipt одним отсутствием ресурса. Непроверенное отсутствие после
+create intent закрыто отклоняется. Созданные PDB удаляются только после source
+serving proof, с exact UID/resourceVersion preconditions; `.skip` снимается
+последним по marker inode receipt. Source manifests не переписываются.
+Offline Docker tests проверяют настоящий marker worker без network/host mounts;
+осиротевший lock не сносится автоматически. Traefik этим driver не меняется:
+для HCC остаётся отдельный native controller workflow. Plan v1 не принимается.
+
+`stable-go-release.mjs` предоставляет `plan|apply|inspect|readback|rollback`;
+принимается только plan v3 с clean executor SHA. `plan` выполняет server-side
+dry-run каждого target без persist. Apply/rollback требуют отдельного допуска
+владельца на exact план после review. Для rollback обязательны исходный private
+apply journal и сохранённые pins. Обычные сервисы возвращаются к исходному
+spec/replicas, архиватор — строго к paused source с safe Role. Его доступность
+восстанавливается отдельным свежим forward plan исправленного compiled OCI,
+а не выдачей отозванного `deletecollection`. Recovery не объявляет релиз готовым.
+CPU/memory/scratch bounds main и spool-init берутся из canonical Deployment
+того же clean executor SHA. Hot toolchain requests без limits не переносятся
+в compiled профиль. Sidecar ресурсы не меняются; inverse включает прежние
+ресурсы без копирования неизменённых credentials.
+
+`stable-frontend-release.mjs` отдельно переключает nginx/TLS/Service/Ingress
+и immutable публичный runtime config; hostnames/SSO middleware сохраняются до
+самостоятельной публичной OIDC-фазы. Факт локальной сборки или synthetic
+recovery не заменяет registry/node pull и live browser приёмку.
+
+Для bootstrap самого pull gateway используется
+`stable-pull-bootstrap.mjs plan|apply|inspect|readback`. Он принимает private
+`--publication-plan` v2 только для standalone `registry-pull-authorizer`,
+связывает checked OCI и exact node identities и использует существующий
+`import-local-image.sh`. Применение требует отдельного допуска на exact план;
+`NODE_CACHE_ONLY` не означает публикацию, activation или fresh pull. При
+unknown import сначала inspect/readback, старый изменившийся план не повторяется.
+Seed не меняет Deployment; безопасный immutable cache при отмене сохраняется,
+а rollback активации gateway принадлежит отдельной registry-поставке.
+
+`stable-registry-release.mjs plan|apply|inspect|readback|rollback` управляет
+только пятью существующими registry Deployment. Для `plan` нужны `--context`,
+`--bootstrap-plan` и новый private `--output`; для остальных фаз — `--plan`,
+`--journal` исходного apply и новый `--output`. Apply/rollback дополнительно
+требуют `--approved-plan-sha` после отдельного допуска владельца. Activation
+проверяет настоящий cache readback, приостанавливает старые Pod и сохраняет
+PVC, credentials и маршруты. Три writer-роли получают отдельные immutable
+HTTP-state Secret, общие для двух реплик каждой роли. Значения не попадают
+в план/журнал. Rollback сверяет downstream drift, восстанавливает exact source
+spec и удаляет только собственные Secret без действующих consumers.
+Historical terminal Pod не считается репликой только при полном terminated
+proof всех regular/init/ephemeral containers и проверенном owner lineage.
+Это две сервисные реплики на том же диске, не HA содержимого или сервера.
+
+`stable-admission-release.mjs plan|apply|inspect|readback|rollback` отдельно
+переключает admission orchestrator. `plan` принимает `--context`, проверенный
+`--publication-plan` v2 standalone controller и новый private `--output`.
+Остальные фазы используют `--plan`; кроме apply нужен исходный `--journal`,
+а apply/rollback требуют `--approved-plan-sha` после отдельного owner gate.
+При owner idle и сохранённых pins старый binary сначала drain/join; затем
+создаются отсутствующие Lease/PDB и добавляется только exact get/update Lease.
+Проверяется не только serving digest двух Pod, но и свежий holder UID одного
+из них. Потерянные ответы не повторяются. Rollback возвращает exact source
+spec/labels и прежние Role rules после остановки новых Pod; Lease/PDB остаются,
+holder/transitions не перезаписываются. Свежий forward plan закрепляет их
+существующие UID. Уже наблюдаемое восстановление не повторяет PATCH.
+
 Задача: #1222, общий план: #1204.
 
 `scoped-release.mjs` обновляет digest образа или подготовленный source checkout

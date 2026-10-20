@@ -131,6 +131,7 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 	var callbackError error
 	var sequence uint64
 	seenMessages := make(map[string]struct{})
+	var financialSequence int64
 	toolStates := make(map[string]runtimecontract.NativeToolCall)
 	providerProcessSeen := false
 	for scanner.Scan() {
@@ -179,6 +180,11 @@ func readBoundProviderBrokerResponse(reader io.Reader, input *model.Input, write
 					return Result{}, brokerResponseError(brokerResponseMessageLimit, errProviderBrokerResponseInvalid)
 				}
 				seenMessages[message.ItemID] = struct{}{}
+			} else if financial := frame.Activity.Financial; financial != nil {
+				if financial.Sequence != financialSequence+1 {
+					return Result{}, errProviderBrokerResponseInvalid
+				}
+				financialSequence = financial.Sequence
 			} else {
 				call := *frame.Activity.ToolCall
 				if previous, exists := toolStates[call.CallID]; exists {

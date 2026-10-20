@@ -1,0 +1,47 @@
+{
+  "schema": "kodex.stable-native/v1",
+  "traefikChart": {
+    "version": "39.0.701+up39.0.7",
+    "apiPath": "/static/charts/traefik-39.0.701+up39.0.7.tgz",
+    "sha256": "1978f4c9af3551076728735250955f452eae47247e530f366bde4c92f98059c6"
+  },
+  "profiles": [
+    {
+      "name": "coredns",
+      "container": "coredns",
+      "owner": "addon",
+      "addon": "coredns",
+      "manifest": "/var/lib/rancher/k3s/server/manifests/coredns.yaml",
+      "sourceImage": "rancher/mirrored-coredns-coredns:1.14.3",
+      "repository": "docker.io/rancher/mirrored-coredns-coredns",
+      "indexDigest": "sha256:b21d26b915e10acb5bc78715c1e8b6047ab2675389b2bcc18b3a6499d90e74c0",
+      "manifestDigest": "sha256:884b72dd6d2f7d367902af420605e0288dffedb0516ce29330423ae3f8f5c6fa",
+      "configDigest": "sha256:f713ee04ec58ad6a470c729494da71cd5351fb3367cfe8fefc1951287a6706de",
+      "resources": { "requests": { "cpu": "100m", "memory": "128Mi" }, "limits": { "cpu": "500m", "memory": "256Mi" } }
+    },
+    {
+      "name": "metrics-server",
+      "container": "metrics-server",
+      "owner": "addon",
+      "addon": "metrics-server-deployment",
+      "manifest": "/var/lib/rancher/k3s/server/manifests/metrics-server/metrics-server-deployment.yaml",
+      "sourceImage": "rancher/mirrored-metrics-server:v0.8.1",
+      "repository": "docker.io/rancher/mirrored-metrics-server",
+      "indexDigest": "sha256:b2d2efaf5ac3b366ed0f839d2412a2c4279d4fc2a2a733f12c52133faed36c41",
+      "manifestDigest": "sha256:6231fb0a1ffab76c92ab880f51a0d11b290f688373647bcedff85af025dfd8a9",
+      "configDigest": "sha256:e76b3f3568b7f440dfd477c1d6de638d7769ba34c93eef999dee418eb72bc0e3",
+      "resources": { "requests": { "cpu": "100m", "memory": "128Mi" }, "limits": { "cpu": "500m", "memory": "512Mi" } }
+    },
+    {
+      "name": "traefik",
+      "container": "traefik",
+      "owner": "helmchart",
+      "sourceImage": "rancher/mirrored-library-traefik:3.6.13",
+      "repository": "docker.io/rancher/mirrored-library-traefik",
+      "indexDigest": "sha256:34d5089d0b414945342848518b383f11f5b3a645504ed87b77ffeb9d683d0e48",
+      "manifestDigest": "sha256:6f4b3a3b43d82dd33ed740cc3d6b85ccae4c311b77f114e6c55c98d5dbf9b1b1",
+      "configDigest": "sha256:e861a9b21b1200af43526c8954fc7031c9d842cb5b40bd8bef773750cdce45f4",
+      "resources": { "requests": { "cpu": "100m", "memory": "128Mi" }, "limits": { "cpu": "1", "memory": "512Mi" } }
+    }
+  ]
+}

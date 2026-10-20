@@ -1,0 +1,148 @@
+---
+id: OPS-PROJECT-PURGE-RECOVERY-UI-1819
+title: Подтверждаемое продолжение удаления проекта в PWA
+type: operations
+status: approved
+owner: developer
+version: 1.0.0
+updated: 2026-10-19
+---
+
+# Подтверждаемое продолжение удаления проекта
+
+Issue: [#1819](https://github.com/codex-k8s/kodex/issues/1819), родитель
+[#1816](https://github.com/codex-k8s/kodex/issues/1816). Решение владельца
+19.10 — вариант 1. Порядок зависимостей: CP → gateway → PWA.
+Каноническая серверная матрица —
+[план восстановления удаления](project-purge-1816.md).
+
+## Границы
+
+Это один полный PWA unit. Сервер назначает `RESOLVE_PURGE`, `canResolve`,
+версию recovery и digest; UI не вычисляет полномочия из выбранного проекта,
+идентификатора в URL или наличия строки в корзине. Операции `getProjectPurgeRecovery`
+и `resolveProjectPurgeRecovery` получены штатным OpenAPI codegen. Их exact
+organization-bound route не передаёт `X-Kodex-Project-ID`, включая случай
+совпадения с выбранным проектом. Глобальный выбор проекта не меняется.
+
+Запросы наследуют owner/document lifetime и ограниченный timeout. Модалка
+использует общий `ModalDialog`: Escape, outside close, trap/возврат focus.
+Она закрывается также во время POST, но локальный abort не объявляется
+отменой серверного решения. Согласие не выбрано при открытии, повторном
+чтении, stale и новом owner scope.
+
+## Сценарии и жизненный цикл
+
+| Событие | UI и сетевой эффект |
+| --- | --- |
+| Корзина с `RESOLVE_PURGE` | Причина остановки и действие «Подробнее»; чтение только после открытия |
+| Preview `WAITING_OWNER`, unknown >0 | Необратимость отказа, отдельный unchecked checkbox; без POST до клика человека |
+| Preview retry, unknown=0 | Повтор очистки, а не новое решение о потере данных; новое отдельное согласие |
+| Explicit submit | Exact snapshot/digest, `If-Match` recovery.version, CSRF и один idempotency key |
+| Двойной клик | Второй POST не запускается |
+| HTTP409/412 | Fresh GET и сброс согласия, без автоматического POST |
+| Неизвестный итог POST | Не показывается успех; preview снимается до readback, прежний ключ сохраняется для явного повтора того же snapshot |
+| Close/unmount/scope change | Abort и generation fence; поздний ACK не меняет новое представление, согласие очищено |
+| Ответ QUEUED/OBSERVING | Не объявляется полной очисткой; показывается число незавершённых проверок |
+| Project WebSocket update/delete | Перечитывается preview открытой модалки; POST не повторяется |
+| Техническое продвижение worker | Без секундного polling; явное «Обновить состояние» читает authoritative recovery |
+| Проект уже удалён | Сохранённая ссылка `/projects?trash=1&purgeRecovery=<projectRef>` открывает surviving receipt; generic заголовок при отсутствии строки |
+| Отзыв прав | Ошибка штатного read/command; UI не сохраняет доступный decision preview после отказа |
+
+Минимальный технический контроль запоздалого объекта не называется полной
+очисткой по одному HEAD404. Пользовательские object keys, содержимое, имена
+файлов и технический digest не отображаются. В интерфейсе сохраняется только
+разрешённая проекция; mutation attempts живут в памяти и отзываются при смене
+владельца.
+
+## Ручная проверка владельцем
+
+- [x] В корзине у заблокированного проекта понятна причина и доступно «Подробнее».
+- [x] Модалка читаема на desktop/mobile; outside click и Escape закрывают её,
+  а повторное открытие не сохраняет checkbox.
+- [x] Без отдельного согласия и явного клика POST отсутствует в Network.
+- [ ] При stale показываются свежие данные, checkbox снова пустой.
+- [x] После собственного подтверждения показывается реальное состояние,
+  не фиктивное «удалено». Ссылку на статус можно открыть после исчезновения проекта.
+- [x] Скриншот, Console и Network не содержат неожиданных ошибок и polling.
+- [x] Проверка не меняет другой проект и не нажимает подтверждение за владельца.
+
+Живые browser-проверки и owner decision выполняет корневой агент в отдельно
+разрешённом контуре; в этом unit до их выполнения `NOT RUN`.
+
+## Документация и проверки
+
+Через Context7 проверены Vue 3 `watch` cleanup/AbortController и
+`onBeforeUnmount` (официальный источник: `vuejs.org/guide/essentials/watchers.html`).
+Зависимости не обновлялись. Изменённый transport использует существующий
+generated client и document lifetime, не handwritten fetch.
+
+Результаты команд фиксируются в отчёте на точном SHA, а не выдаются за live
+acceptance. Unit покрывает consent, stale, unknown/replay, late response,
+owner invalidation, double click, generated transport/CSRF/OCC, SSR состояния
+и responsive assertions. Реальный browser screenshot остаётся отдельным доказательством.
+
+Rollback — прежний PWA bundle; серверные ограничения остаются закрытыми.
+Скрытие нового UI не отзывает уже принятое сервером решение и не отменяет
+его обязательства очистки. Секреты и персональные данные не включены.
+
+### Локальный журнал 19.10
+
+Production-код: `e2e17d290f82a2ed6358377f0ae8572e970f8610`, база
+gateway `709035789d9004e7baadc732a52ccddb6e14239e`. Последующая правка
+`String(version)` касается только lint синтетического API-теста; поведение
+production-кода не меняет.
+
+| Контур | Фактический результат |
+| --- | --- |
+| Полный `npm run test:unit -- --maxWorkers=4` | PASS: 404 файла, 4013 тестов, 57.63s |
+| Новые store/API/SSR/transport тесты после test-only исправления | PASS: 15 тестов |
+| `npm run typecheck` | PASS |
+| `npm run build` | PASS: 2798 модулей, 8.30s; прежнее предупреждение о крупном chunk, без ошибки сборки |
+| `npm run test:e2e:check` | PASS: компиляция и discovery, не выполнение browser E2E |
+| Повтор `npm run generate:openapi` | PASS: нет diff generated файлов |
+| ESLint изменённой PWA-области | PASS |
+| Полный `npm run lint` после исправления синтетического теста | PASS: без предупреждений |
+| Prettier изменённых файлов / `git diff --check` | PASS |
+| Живой Chrome desktop/mobile, Console/Network | NOT RUN: передано корневому агенту |
+| Живое подтверждение владельца и физическая очистка | NOT RUN: агент не подтверждает за человека |
+
+Первый полный unit запуск выявил timeout общего i18n-теста при чрезмерной
+параллельности; ограничение четырьмя workers позволило выполнить тест с
+исходным лимитом 5s. Отдельный промежуточный
+запуск пересёкся с регенерацией SDK и получил ошибки импорта; повтор после
+окончания codegen прошёл полностью. Первый lint выявил ошибки новых
+синтетических тестов; исправлены, без ослабления правил ESLint.
+
+### Живая проверка итогового bundle19.10
+
+Кодfc7ead5f: последние15 unit и полный lint PASS; pinned build typecheck/Vite
+PASS. Новый digest sha256:098d53ada537ca3242a6f57f56b6a3393cd5f666dc46eb4f61f8f5e09ec48b7d
+опубликован и развёрнут штатными средствами, две обновлённые реплики готовы.
+Три направления review на этом SHA без P0/P1/P2. Финальное перебазирование
+добавляет только журналы предков и текущий отчёт, не исполняемый код.
+
+Chrome desktop/390×844: скриншоты просмотрены, overflow отсутствует; видны
+имя проекта и точная причина остановки. Preview GET200, checkbox=false,
+submit disabled. Outside click и Escape закрывают окно, повторное открытие
+не сохраняет согласие. Первичная загрузка версии проекта больше не вызывает
+ложное stale. Console error/warn отсутствуют, realtime восстановился;
+в Network нет recovery POST и секундного polling. Контрольный файл другого
+проекта200/42байта с прежним SHA256; карантинный файл403 — ожидаемо.
+
+Живое stale после внешнего изменения, реальное подтверждение человека,
+последующее удаление и surviving status пока NOT RUN. На живом проекте агент
+не отмечал checkbox и не нажимал необратимое подтверждение. Synthetic
+stale/unknown/replay/послеудаления покрыты unit, это не live acceptance.
+Скриншоты сохранены локально в `.agents/purge-evidence-1816/`, без секретов.
+
+После фактического подтверждения владельцем и backend исправлений до5eb66f38:
+штатный worker завершил purge DONE/320270 связанных строк. Chrome получил
+«Корзина пуста» без reload; свежая загрузка подтвердила тот же результат.
+Скриншоты realtime/fresh просмотрены, Console без error/warn, relevant
+Network200, realtime подключён. Другой проект и42-byte файл с прежним digest
+сохранены; две непроектные записи аудита подтверждены тем же fingerprint.
+Surviving recovery link после исчезновения проекта отвечает200 и показывает
+OBSERVING/cleanupPending1 без canResolve — честное отдельное наблюдение
+неизвестной загрузки. UI bundle не менялся; изменён только backend/миграции
+и журналы. Live stale остаётся NOT RUN, а не переносится из synthetic unit.

@@ -61,6 +61,7 @@ func TestImmutableArtifactRevisionComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	configureComponentArtifactScanner(t, repository)
 	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSHA256: strings.Repeat("a", 64)}); err != nil {
 		t.Fatal(err)
 	}
@@ -158,6 +159,14 @@ func TestImmutableArtifactRevisionComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	scan, err := repository.scanArtifact(ctx, strings.NewReader(newBody), newDigest, int64(len(newBody)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	scanJSON, err := artifactAntivirusJSON(scan)
+	if err != nil {
+		t.Fatal(err)
+	}
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -167,7 +176,7 @@ func TestImmutableArtifactRevisionComponent(t *testing.T) {
 	if err := tx.QueryRow(ctx, immutableNextRevision, old.Ref, int64(len(newBody)), newDigest).Scan(&nextID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := tx.Exec(ctx, immutableNextContent, nextID, newObject.Key, newObject.VersionID); err != nil {
+	if _, err := tx.Exec(ctx, immutableNextContent, nextID, newObject.Key, newObject.VersionID, scanJSON); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := tx.Exec(ctx, immutableAdvance, old.Ref, nextID); err != nil {

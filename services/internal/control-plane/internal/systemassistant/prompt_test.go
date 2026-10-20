@@ -13,10 +13,13 @@ import (
 )
 
 func TestCorePromptGuidesProjectSwitchAndRunConfirmation(t *testing.T) {
-	if CorePromptRevision != "system-assistant-core-v53" {
+	if CorePromptRevision != "system-assistant-core-v54" {
 		t.Fatal("unexpected system assistant prompt revision")
 	}
 	for _, required := range []string{
+		"фактического исполнителя каждого этапа",
+		"Возможность `platform.run.delegate` сама по себе не создаёт разрешённых целей",
+		"Не создавай отдельный пустой ИИ-этап",
 		"get_configuration_catalog",
 		"`assistant_configuration_catalog`",
 		"`CREATE_SYSTEM_ASSISTANT_ROLE_IMAGE_RECIPE`",

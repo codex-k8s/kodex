@@ -34,7 +34,7 @@ jq -e '
     "platform.provider-credentials.readiness.check"
   ];
   .v == 1 and .policy.default_decision == "DENY" and
-	.policy_revision == 96 and .policy.authority_abi_version == 2 and
+	.policy_revision == 97 and .policy.authority_abi_version == 2 and
   ([.policy.operation_bindings[] | select(.operation_id == "platform.provider-accounts.credential.renewal.work.check" or
       .operation_id == "platform.provider-accounts.credential.renewal.authorize" or .operation_id == "platform.provider-accounts.credential.renewal.validate") |
     select(.caller_workload_id == "secret-broker" and .target_workload_id == "control-plane" and
@@ -229,5 +229,11 @@ jq -e '
       ["platform.runtime.credentials.materialize", "platform.runtime.credentials.readiness.check", "platform.runtime.credentials.system-assistant.materialize"])] | length) == 1 and
 	([.policy.authority_proof_producers[] | select(.caller_workload_id == "stt-tts-service")] | length) == 0
 ' "$canonical" >/dev/null || fail 'canonical policy invariants are invalid'
+
+node "$repository_root/tools/release/service-identity-policy.mjs" check \
+  "$canonical" \
+  "$repository_root/services/internal/control-plane/internal/app/service-identity-classification.json" \
+  "$repository_root/services/internal/control-plane/internal/app/service-identity-policy.json" >/dev/null ||
+  fail 'target-owned service identity policy is incomplete'
 
 printf 'Authority policy codegen tests passed\n'

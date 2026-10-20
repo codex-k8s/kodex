@@ -34,6 +34,25 @@ func (server *Server) ListProviderAccounts(ctx context.Context, request *control
 	if err != nil {
 		return nil, err
 	}
+	if request.GetFinancialSummaryOnly() {
+		if request.GetPage() != nil || request.GetQuery() != "" || request.GetState() != controlplanev1.ProviderAccountState_PROVIDER_ACCOUNT_STATE_UNSPECIFIED || request.GetDefinitionKey() != "" || request.GetUsageContext() != nil {
+			return nil, transportError(errs.ErrInvalid)
+		}
+		overview, err := server.service.GetProviderFinancialOverview(ctx, p)
+		if err != nil {
+			return nil, transportError(err)
+		}
+		result := &controlplanev1.ProviderFinancialOverview{Total: overview.Total, Exhausted: overview.Exhausted, Unknown: overview.Unknown, ObservedAt: timestamp(overview.ObservedAt), ValidUntil: timestamp(overview.ValidUntil)}
+		for _, account := range overview.Accounts {
+			projected := &controlplanev1.ProviderFinancialDisplayAccount{Ref: account.Ref, Name: account.Name}
+			if summary := account.FinancialSummary; summary != nil {
+				projected.FinancialSummary = &controlplanev1.ProviderFinancialSummary{Observation: castFinancialObservation(summary.Observation), ReceivedAt: timestamp(summary.ReceivedAt), Version: summary.Version}
+			}
+			result.Accounts = append(result.Accounts, projected)
+		}
+		return &controlplanev1.ListProviderAccountsResponse{FinancialSummary: result}, nil
+	}
+
 	state := ""
 	if request.GetState() != controlplanev1.ProviderAccountState_PROVIDER_ACCOUNT_STATE_UNSPECIFIED {
 		state = enumSuffix(request.GetState(), "PROVIDER_ACCOUNT_STATE_")
@@ -130,10 +149,13 @@ func castModelCapability(value entity.ModelCapability) *controlplanev1.ModelCapa
 func castProviderAccount(value entity.ProviderAccount) *controlplanev1.ProviderAccount {
 	result := &controlplanev1.ProviderAccount{
 		Deletion: castProviderAccountDeletion(value.Deletion), Verification: castProviderAccountVerification(value.Verification),
-		Ref: value.Ref, Version: value.Version, DefinitionKey: value.DefinitionKey, Name: value.Name,
+		FinancialEligible: value.FinancialEligible, Ref: value.Ref, Version: value.Version, DefinitionKey: value.DefinitionKey, Name: value.Name,
 		ExternalAccountMasked: value.ExternalAccountMasked, State: providerAccountState(value.State),
 		Enabled: value.Enabled, Ready: value.Ready, MaximumConcurrentExecutions: value.MaximumConcurrentExecutions, NextActions: nextActions(value.NextActions),
 		CreatedAt: timestamp(value.CreatedAt), UpdatedAt: timestamp(value.UpdatedAt), SafeStatusReason: value.SafeStatusReason,
+	}
+	if value.FinancialSummary != nil {
+		result.FinancialSummary = &controlplanev1.ProviderFinancialSummary{Observation: castFinancialObservation(value.FinancialSummary.Observation), ReceivedAt: timestamp(value.FinancialSummary.ReceivedAt), Version: value.FinancialSummary.Version}
 	}
 	if value.Authorization != nil {
 		result.Authorization = &controlplanev1.ProviderAuthorization{

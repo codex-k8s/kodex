@@ -76,6 +76,17 @@ func testWorkflowLaunchReadiness(t *testing.T, ctx context.Context, r *Repositor
 	if err := probe.Rollback(ctx); err != nil {
 		t.Fatal(err)
 	}
+	invalid := *workflow
+	versionCopy := *workflow.Published
+	versionCopy.Steps = append([]entity.WorkflowStep{}, versionCopy.Steps...)
+	for i := range versionCopy.Steps {
+		versionCopy.Steps[i].AgentRef = versionCopy.CoordinatorAgentRef
+		versionCopy.Steps[i].RequiredCapabilityKeys = []string{"platform.run.delegate"}
+	}
+	invalid.Published = &versionCopy
+	if err := r.projectWorkflowLaunchReadiness(ctx, tx, current, []*entity.Workflow{&invalid}); err != nil || invalid.LaunchReadiness.AllowedToSubmit || invalid.LaunchReadiness.Reason != "DEPENDENCY_UNAVAILABLE" || contains(invalid.NextActions, "LAUNCH") {
+		t.Fatalf("unexecutable configuration readiness: %+v %v", invalid.LaunchReadiness, err)
+	}
 	originalRoleImages := r.roleImages
 	changedRoleImages := originalRoleImages
 	changedRoleImages.DefaultImageReference = "registry.invalid/kodex/agent-runner@sha256:" + strings.Repeat("f", 64)

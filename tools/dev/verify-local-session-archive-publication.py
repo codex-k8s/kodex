@@ -302,9 +302,14 @@ def active_runner_policy(context, deadline):
         return document(capture(["kubectl", "--context", context, "--request-timeout=10s", "-n", "kodex-system",
             "get", kind+"/"+name, "-o=json"], deadline))
     deployment = get("deployment", "image-admission-controller")
+    labels = deployment.get("spec", {}).get("template", {}).get("metadata", {}).get("labels", {})
+    staging_profile = labels.get("kodex.dev/local-profile") == "hot-reload" or (
+        labels.get("kodex.dev/local-profile") == "stable" and
+        labels.get("kodex.dev/environment") == "staging" and
+        labels.get("app.kubernetes.io/part-of") == "kodex")
     require(deployment.get("kind") == "Deployment" and deployment.get("metadata", {}).get("namespace") == "kodex-system" and
             deployment.get("metadata", {}).get("name") == "image-admission-controller" and
-            deployment.get("spec", {}).get("template", {}).get("metadata", {}).get("labels", {}).get("kodex.dev/local-profile") == "hot-reload", "POLICY_SELECTOR_INVALID")
+            staging_profile, "POLICY_SELECTOR_INVALID")
     containers = [c for c in deployment["spec"]["template"]["spec"]["containers"] if c.get("name") == "image-admission-controller"]
     require(len(containers) == 1, "POLICY_SELECTOR_INVALID")
     entries = [e for e in containers[0].get("env", []) if e.get("name") == "IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP"]

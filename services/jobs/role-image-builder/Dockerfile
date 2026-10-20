@@ -70,3 +70,24 @@ COPY --from=build --chmod=0555 /out/registry-pull-authorizer /usr/local/bin/regi
 COPY --chmod=0555 tools/render-image-admission-job.sh /opt/kodex/render-image-admission-job.sh
 RUN command -v image-vulnerability-report-validator >/dev/null
 USER 10001:10001
+
+# Штатный pull gateway не получает сканеры, shell или builder runtime.
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:f5b485ea962d9bd1186b2f6b3a061191539b905b82ec395de78cbfae51f20e35 AS registry-pull-runtime
+ARG SOURCE_SHA=unknown
+LABEL org.opencontainers.image.source="https://github.com/codex-k8s/kodex" \
+      org.opencontainers.image.revision="$SOURCE_SHA"
+COPY --from=build --chmod=0555 /out/registry-pull-authorizer /usr/local/bin/registry-pull-authorizer
+USER 10001:10001
+ENTRYPOINT ["/usr/local/bin/registry-pull-authorizer"]
+
+# Orchestrator получает только renderer dependencies, без registry/scanner tools.
+FROM docker.io/library/alpine:3.22.1@sha256:eafc1edb577d2e9b458664a15f23ea1c370214193226069eb22921169fc7e43f AS admission-controller-runtime
+RUN apk add --no-cache bash=5.2.37-r0 jq=1.8.2-r0
+ARG SOURCE_SHA=unknown
+LABEL org.opencontainers.image.source="https://github.com/codex-k8s/kodex" \
+      org.opencontainers.image.revision="$SOURCE_SHA"
+COPY --from=build --chmod=0555 /out/image-admission-controller /usr/local/bin/image-admission-controller
+COPY --chmod=0555 tools/render-image-admission-job.sh /opt/kodex/render-image-admission-job.sh
+USER 10001:10001
+ENTRYPOINT ["/usr/local/bin/image-admission-controller"]
+CMD []

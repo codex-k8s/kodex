@@ -22,6 +22,9 @@ SELECT root.ref, run.ref, node.ref, session.ref, turn.ref, agent.ref,
            SELECT jsonb_agg(jsonb_build_object(
                'stepKey', step.value->>'Key', 'nodeRef', current_step.ref,
                'state', current_step.state, 'materializationState', current_step.materialization_state,
+               'resultGateRef', COALESCE(result_gate.ref, ''),
+               'resultGateState', COALESCE(result_gate.state, ''),
+               'resultGateDecision', COALESCE(result_gate.decision, ''),
                'ready', current_step.materialization_state = 'PLANNED'
                         AND current_step.state = 'PLANNED'
                         AND NOT EXISTS (
@@ -37,6 +40,17 @@ SELECT root.ref, run.ref, node.ref, session.ref, turn.ref, agent.ref,
              ON current_step.organization_id = node.organization_id
             AND current_step.root_run_id = root.id
             AND current_step.workflow_step_key = step.value->>'Key'
+           LEFT JOIN LATERAL (
+               SELECT gate.ref, gate.state, gate.decision
+               FROM control_plane.owner_gates gate
+               JOIN control_plane.run_nodes gate_node
+                 ON gate_node.id = gate.node_id AND gate_node.organization_id = gate.organization_id
+                AND gate_node.root_run_id = root.id AND gate_node.type = 'HUMAN_GATE'
+               WHERE gate.organization_id = node.organization_id
+                 AND gate.root_run_id = root.id AND gate_node.parent_node_id = current_step.id
+                 AND gate.integration_invocation_id IS NULL
+               ORDER BY gate.created_at DESC, gate.ref DESC LIMIT 1
+           ) result_gate ON true
        ), '[]'::jsonb)
 FROM control_plane.run_nodes node
 JOIN control_plane.runs run ON run.id = node.run_id AND run.organization_id = node.organization_id

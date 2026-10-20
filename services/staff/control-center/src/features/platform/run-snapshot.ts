@@ -162,9 +162,16 @@ function snapshotRetryPredecessors(
   const links = new Map<string, string>(),
     predecessors = new Set<string>();
   for (const edge of graph.edges) {
-    if (edge.type !== "RETRY_OF") continue;
+    if (edge.type !== "RETRY_OF" && edge.type !== "CONTINUES") continue;
     const oldNode = nodes.get(edge.sourceNodeRef),
       newNode = nodes.get(edge.targetNodeRef);
+    if (
+      edge.type === "CONTINUES" &&
+      oldNode &&
+      newNode &&
+      oldNode.runRef === newNode.runRef
+    )
+      continue;
     const old = oldNode && runs.get(oldNode.runRef),
       fresh = newNode && runs.get(newNode.runRef);
     if (
@@ -174,12 +181,20 @@ function snapshotRetryPredecessors(
       newNode.type !== "ROOT_PROCESS" ||
       old.ref !== old.rootRunRef ||
       fresh.ref !== fresh.rootRunRef ||
-      fresh.retryOfRunRef !== old.ref ||
       edge.runRef !== fresh.ref ||
       old.ref === fresh.ref ||
       links.has(fresh.ref)
     )
-      throw new Error("Invalid retry snapshot lineage");
+      throw new Error("Invalid run predecessor snapshot lineage");
+    if (
+      (edge.type === "RETRY_OF" && fresh.retryOfRunRef !== old.ref) ||
+      (edge.type === "CONTINUES" &&
+        (!old.sessionRef ||
+          fresh.sessionRef !== old.sessionRef ||
+          old.state !== "SUCCEEDED" ||
+          fresh.retryOfRunRef))
+    )
+      throw new Error("Invalid run predecessor snapshot pin");
     links.set(fresh.ref, old.ref);
     predecessors.add(old.ref);
   }

@@ -902,13 +902,13 @@ func scanWorkflow(row rowScanner, actorScoped bool) (entity.Workflow, error) {
 		return entity.Workflow{}, errs.ErrUnavailable
 	}
 	item.Draft = &entity.WorkflowVersion{}
-	if err := json.Unmarshal(draft, item.Draft); err != nil || !validWorkflowVersion(*item.Draft) {
+	if err := json.Unmarshal(draft, item.Draft); err != nil || workflowVersionStructureInvalidField(*item.Draft) != "" {
 		return entity.Workflow{}, errs.ErrUnavailable
 	}
 	normalizeWorkflowDraftIdentity(item.Ref, item.Draft)
 	if len(published) > 0 {
 		item.Published = &entity.WorkflowVersion{}
-		if err := json.Unmarshal(published, item.Published); err != nil || !validWorkflowVersion(*item.Published) || publishedRef == "" {
+		if err := json.Unmarshal(published, item.Published); err != nil || workflowVersionStructureInvalidField(*item.Published) != "" || publishedRef == "" {
 			return entity.Workflow{}, errs.ErrUnavailable
 		}
 		item.Published.VersionNumber = publishedVersion

@@ -54,6 +54,12 @@ function cliFixture(t, profile = 'legacy', missingBase = false) {
  writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20260914000100_issue_1625_runtime_profile_default.sql'),'-- Синтетическая runtime default миграция\n');
  writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20261010150000_prompt_service_v3_continuation.sql'),'-- Синтетическая additive prompt v3 миграция\n');
  writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20261014000100_provider_credential_renewal.sql'),'-- Синтетическая additive provider renewal миграция\n');
+ writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20261016000100_artifact_antivirus_receipts.sql'),'-- Синтетическая additive AV receipt миграция\n');
+ writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20261019000100_project_purge_recovery.sql'),'-- Синтетическая forward recovery миграция\n');
+ writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20261019000200_project_purge_indexed_graph.sql'),'-- Синтетическая forward indexed graph миграция\n');
+ writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20261019000300_project_purge_audit_references.sql'),'-- Синтетическая forward audit references миграция\n');
+ writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20261019000400_project_purge_deferred_graph.sql'),'-- Синтетическая forward deferred graph миграция\n');
+ writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20261020000200_provider_financial_catalog_floor.sql'),'-- Синтетическая forward financial миграция\n');
  const git=(...a)=>execFileSync('git',['-C',repo,...a],{stdio:['ignore','pipe','pipe']}).toString().trim();git('init','-q');git('remote','add','origin','https://github.com/codex-k8s/kodex.git');git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Оснастка');const rev=git('rev-parse','HEAD');
  const base=fixture(repo),render=join(dir,'render.json');delete base.metadata.uid;delete base.metadata.resourceVersion;delete base.status;writeFileSync(render,JSON.stringify(base),{mode:0o600});
  const state=join(dir,'state.json'), plan=join(dir,'plan.json'), evidence=join(dir,'evidence.jsonl');writeFileSync(state,JSON.stringify({...(missingBase?{}:{base:fixture(repo)}),deployment:{metadata:{uid:'deployment-uid',resourceVersion:'7'},spec:{replicas:2,template:{spec:{containers:[{name:'control-plane'}]}}}},calls:[],mode:'',profile,replicas:0,pods:[]}),{mode:0o600});const executable=join(dir,'kubectl');writeFileSync(executable,`#!/usr/bin/env node
@@ -61,7 +67,7 @@ const fs=require('fs'),path=${JSON.stringify(state)},s=JSON.parse(fs.readFileSyn
 if(a.includes('namespace'))out({metadata:{uid:'cluster'}});
 else if(a.includes('patch')){const p=JSON.parse(a[a.indexOf('-p')+1]);if(s.mode==='cas'){save();process.exit(1);}if(p[0].value!==s.base.metadata.uid||p[1].value!==s.base.metadata.resourceVersion)process.exit(2);s.base.metadata.annotations=p[2].value;s.base.metadata.resourceVersion='2';if(s.mode==='reservation-lost-ack'){save();process.exit(1);}out(s.base);}
 else if(a.includes('create')){s.job=JSON.parse(fs.readFileSync(0,'utf8'));s.job.metadata.uid='created';s.job.status={succeeded:1,conditions:[{type:'Complete',status:'True'}]};save();if(s.mode==='lost-ack')process.exit(1);out(s.job);}
-else if(a.includes('logs')){const versions={'mailbox-observation':'20260908000500','materialization-global':'20260913000100','default-runner-readiness':'20260913000200','artifact-retention-trigger':'20260913000300','runtime-profile-default':'20260914000100','prompt-service-v3':'20261010150000','provider-managed-renewal':'20261014000100'};save();process.stdout.write('goose: successfully migrated database to version: '+(s.logVersion??versions[s.profile]??'20260908000300')+'\\n');}
+else if(a.includes('logs')){const versions={'mailbox-observation':'20260908000500','materialization-global':'20260913000100','default-runner-readiness':'20260913000200','artifact-retention-trigger':'20260913000300','runtime-profile-default':'20260914000100','prompt-service-v3':'20261010150000','provider-managed-renewal':'20261014000100','artifact-antivirus-admission':'20261016000100','project-purge-recovery':'20261019000100','project-purge-indexed-graph':'20261019000200','project-purge-audit-references':'20261019000300','project-purge-deferred-graph':'20261019000400'};save();process.stdout.write('goose: successfully migrated database to version: '+(s.logVersion??versions[s.profile]??'20260908000300')+'\\n');}
 else if(a.includes('deployment'))out({...s.deployment,spec:{...s.deployment.spec,replicas:s.replicas}});
 else if(a.includes('pods'))out({items:s.pods});
 else if(a.includes('jobs'))out({items:[...(s.base?[s.base]:[]),...(s.job?[s.job]:[])]});
@@ -109,4 +115,56 @@ test('managed renewal migration pins exact version and never repeats Job creatio
  f.edit(s=>s.logVersion='20261014000101');result=f.run('inspect');assert.notEqual(result.status,0);assert.equal(JSON.parse(result.stdout).status,'READBACK_UNCONFIRMED');
  f.edit(s=>delete s.logVersion);result=f.run('inspect');assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).status,'PASS');
  assert.equal(f.read().calls.filter(a=>a.includes('create')).length,1);
+});
+
+test('financial observations require exact forward version and preserve additive replay',t=>{
+ const f=cliFixture(t,'provider-financial-observations');
+ assert.equal(f.run('plan').status,0);
+ f.edit(s=>{s.replicas=2;s.logVersion='20261020000100';});
+ let result=f.run('apply');assert.notEqual(result.status,0);
+ assert.equal(JSON.parse(result.stdout).status,'READBACK_UNCONFIRMED');
+ f.edit(s=>s.logVersion='20261020000200');
+ for(const phase of ['inspect','apply']){result=f.run(phase);assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).migrationVersion,'20261020000200');}
+ assert.equal(f.read().job.metadata.name,'control-plane-migrate-20261020000200');
+ assert.deepEqual(Object.keys(f.read().job.metadata.annotations),['kodex.dev/cp-provider-financial-migration-plan']);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,1);
+ assert.equal(f.read().calls.filter(a=>a.includes('deployment')).length,0);
+});
+
+test('AV admission migration pins exact forward version and preserves replay', t => {
+ const f=cliFixture(t,'artifact-antivirus-admission');assert.equal(f.run('plan').status,0);
+ for(const phase of ['apply','inspect','apply']){const result=f.run(phase);assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).migrationVersion,'20261016000100');}
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,1);
+ f.edit(s=>s.logVersion='20261014000100');const result=f.run('inspect');assert.notEqual(result.status,0);assert.equal(JSON.parse(result.stdout).status,'READBACK_UNCONFIRMED');
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,1);
+});
+
+test('purge recovery migration pins exact forward version without duplicate mutation', t => {
+ const f=cliFixture(t,'project-purge-recovery');assert.equal(f.run('plan').status,0);
+ for(const phase of ['apply','inspect','apply']){const result=f.run(phase);assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).migrationVersion,'20261019000100');}
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,1);
+ f.edit(s=>s.logVersion='20261016000100');const result=f.run('inspect');assert.notEqual(result.status,0);assert.equal(JSON.parse(result.stdout).status,'READBACK_UNCONFIRMED');
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,1);
+});
+
+test('indexed purge graph migration pins exact forward version and rejects predecessor readback', t => {
+ const f=cliFixture(t,'project-purge-indexed-graph');assert.equal(f.run('plan').status,0);
+ for(const phase of ['apply','inspect','apply']){const result=f.run(phase);assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).migrationVersion,'20261019000200');}
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,1);
+ f.edit(s=>s.logVersion='20261019000100');const result=f.run('inspect');assert.notEqual(result.status,0);assert.equal(JSON.parse(result.stdout).status,'READBACK_UNCONFIRMED');
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,1);
+});
+
+test('purge audit references migration pins exact forward version without duplicate job', t => {
+ const f=cliFixture(t,'project-purge-audit-references');assert.equal(f.run('plan').status,0);
+ for(const phase of ['apply','inspect','apply']){const result=f.run(phase);assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).migrationVersion,'20261019000300');}
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,1);
+ f.edit(s=>s.logVersion='20261019000200');const result=f.run('inspect');assert.notEqual(result.status,0);assert.equal(JSON.parse(result.stdout).status,'READBACK_UNCONFIRMED');
+});
+
+test('purge deferred graph migration pins exact forward version without duplicate job', t => {
+ const f=cliFixture(t,'project-purge-deferred-graph');assert.equal(f.run('plan').status,0);
+ for(const phase of ['apply','inspect','apply']){const result=f.run(phase);assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).migrationVersion,'20261019000400');}
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,1);
+ f.edit(s=>s.logVersion='20261019000300');const result=f.run('inspect');assert.notEqual(result.status,0);assert.equal(JSON.parse(result.stdout).status,'READBACK_UNCONFIRMED');
 });

@@ -796,17 +796,24 @@ function openCurrentStream(): void {
   openedStreamRef.value = ref;
 }
 watch(
-  [runRef, () => platform.bootstrap?.organizationRef, hasAuthoritativeSnapshot],
+  [
+    runRef,
+    () => platform.bootstrap?.organizationRef,
+    hasAuthoritativeSnapshot,
+    () => platform.runLoading[runRef.value],
+  ],
   (
-    [ref, organizationRef, hasSnapshot],
-    [previousRef, previousOrganizationRef, hadSnapshot],
+    [ref, organizationRef, hasSnapshot, loading],
+    [previousRef, previousOrganizationRef, hadSnapshot, wasLoading],
   ) => {
     if (
       ref !== previousRef ||
       !organizationRef ||
       hasSnapshot ||
-      (!hadSnapshot && organizationRef === previousOrganizationRef) ||
-      platform.runLoading[runRef.value] ||
+      (!hadSnapshot &&
+        !wasLoading &&
+        organizationRef === previousOrganizationRef) ||
+      loading ||
       platform.runProblems[runRef.value]
     )
       return;

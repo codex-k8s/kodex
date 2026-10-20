@@ -248,6 +248,13 @@ type Command struct {
 type ProjectInput struct{ Ref, Name, Purpose, Language string }
 
 type ProjectLifecycleInput struct{ Ref string }
+
+const ResolveProjectPurgeRecovery Kind = "RESOLVE_PROJECT_PURGE_RECOVERY"
+
+type ProjectPurgeRecoveryInput struct {
+	Ref, SnapshotDigest       string
+	AcknowledgeUnknownOutcome bool
+}
 type PlatformMembershipInput struct {
 	MembershipRef, UserRef, Role string
 	Active                       bool
@@ -473,6 +480,7 @@ type AssistantPlanDraftInput struct {
 }
 type AssistantInstructionsInput struct{ Instructions string }
 type LeaseInput struct {
+	Financial                         *entity.ProviderFinancialSummary
 	WorkloadInstance, LeaseRef, Fence string
 	Generation                        int64
 	Limit                             int32
@@ -503,6 +511,7 @@ type CompletedArtifact struct {
 type PreparedArtifact struct {
 	Ref, ObjectKey, ObjectVersion, ObjectETag, MediaType, Digest, ScanState, PreviewState string
 	SizeBytes                                                                             int64
+	Antivirus                                                                             value.ArtifactScan
 }
 type DelegateInput struct {
 	LeaseRef, Fence, TargetAgentRef, WorkflowStepKey, Task string
@@ -591,6 +600,7 @@ type EmailMailboxInput struct {
 }
 
 type Result struct {
+	ProjectPurgeRecovery *entity.ProjectPurgeRecovery
 	// Только внутренний receipt: owner expiry committed, поздний effect запрещён.
 	ExecutionDeadlineExpired  bool `json:"executionDeadlineExpired,omitempty"`
 	ProviderQueuedWorkResults []entity.ProviderQueuedWorkCancellationResult

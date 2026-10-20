@@ -2,8 +2,11 @@ package platform
 
 import (
 	"context"
+	_ "embed"
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -12,6 +15,15 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/query"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/value"
 )
+
+//go:embed testdata/sql/project_purge_moved_archive_fixture.sql
+var queryProjectPurgeMovedArchiveFixture string
+
+//go:embed testdata/sql/project_purge_moved_artifact_fixture.sql
+var queryProjectPurgeMovedArtifactFixture string
+
+//go:embed testdata/sql/project_purge_large_history_fixture.sql
+var queryProjectPurgeLargeHistoryFixture string
 
 func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, repository *Repository) {
 	t.Helper()
@@ -22,6 +34,18 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 	}, "control-api-gateway")
 	service, err := platformservice.New(repository)
 	if err != nil {
+		t.Fatal(err)
+	}
+	system, err := service.GetSystemAssistant(ctx, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	warmWorker := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation", CallerWorkload: "runtime-controller", Operation: "platform.runtime.warm.report",
+	}, "runtime-controller")
+	if _, err := service.ReportWarmRuntime(ctx, warmWorker, command.WarmRuntimeInput{
+		WorkloadInstance: "catalog-observed-warm-fixture", RuntimeRevision: system.DesiredRuntimeRevision, State: "READY",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	project, err := service.Execute(ctx, command.Command{Kind: command.CreateProject, Principal: owner,
@@ -53,7 +77,7 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 		ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
 		CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.complete",
 	}, "runtime-controller")
-	claimAndCompleteRun(t, ctx, service, worker, runRef, "assistant-move-global-run", false)
+	claimAndCompleteRun(t, ctx, service, worker, runRef, "assistant-move-global-run", true)
 	conversations, _, err := service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{Filter: query.Filter{Page: query.Page{Size: 100}}})
 	if err != nil {
 		t.Fatalf("refresh terminal assistant conversation: %v", err)
@@ -66,6 +90,17 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 	}
 	if created.Conversation.Version <= turn.Conversation.Version {
 		t.Fatalf("assistant completion did not advance conversation: %#v", created.Conversation)
+	}
+	var archiveKey string
+	if err := repository.pool.QueryRow(ctx, queryProjectPurgeMovedArchiveFixture, created.Conversation.SessionRef).Scan(&archiveKey); err != nil {
+		t.Fatal("prepare immutable global archive fixture", err)
+	}
+	var artifactKey, artifactVersion string
+	if err := repository.pool.QueryRow(ctx, queryProjectPurgeMovedArtifactFixture, created.Conversation.SessionRef).Scan(&artifactKey, &artifactVersion); err != nil {
+		t.Fatal("prepare immutable global artifact fixture", err)
+	}
+	if !strings.Contains(artifactKey, "/subjects/") {
+		t.Fatal("global runtime result lost subject-scoped location")
 	}
 	move := command.Command{Kind: command.MoveAssistantConversationToProject, Principal: owner,
 		Mutation: value.Mutation{IdempotencyKey: "assistant-move-to-existing-project", ExpectedVersion: &created.Conversation.Version},
@@ -134,5 +169,87 @@ func testAssistantConversationProjectMove(t *testing.T, ctx context.Context, rep
 		mismatchedRuns != 0 || mismatchedEvents != 0 || mismatchedRevisions != 0 {
 		t.Fatalf("moved conversation retained foreign lineage: runs=%d events=%d revisions=%d err=%v",
 			mismatchedRuns, mismatchedEvents, mismatchedRevisions, err)
+	}
+	latest, err := service.GetProject(ctx, owner, project.Project.Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectID := gateTestProjectID(t, ctx, repository, owner, latest.Ref)
+	// Большая история воспроизводит реальный объём, а не только пустой граф.
+	if tag, err := repository.pool.Exec(ctx, queryProjectPurgeLargeHistoryFixture, runRef); err != nil || tag.RowsAffected() != 55000 {
+		t.Fatalf("prepare large purge history: %v", err)
+	}
+	var foreignEventsBefore int
+	if err := repository.pool.QueryRow(ctx, `SELECT count(*) FROM control_plane.run_events WHERE project_id IS DISTINCT FROM $1::uuid`, projectID).Scan(&foreignEventsBefore); err != nil {
+		t.Fatal(err)
+	}
+	trashed, err := service.Execute(ctx, command.Command{Kind: command.TrashProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "purge-moved-trash", ExpectedVersion: &latest.Version}, Payload: command.ProjectLifecycleInput{Ref: latest.Ref}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Execute(ctx, command.Command{Kind: command.PurgeProject, Principal: owner,
+		Mutation: value.Mutation{IdempotencyKey: "purge-moved-request", ExpectedVersion: &trashed.Project.Version}, Payload: command.ProjectLifecycleInput{Ref: latest.Ref}}); err != nil {
+		t.Fatal(err)
+	}
+	candidate := ProjectPurgeCandidate{OrganizationID: owner.AuthorityTenant, OrganizationRef: strings.Split(archiveKey, "/")[2],
+		ProjectID: projectID, ProjectRef: latest.Ref}
+	if owned, err := repository.ProjectPurgeGlobalPVCIsOwned(ctx, candidate, created.Conversation.SessionRef); err != nil || !owned {
+		t.Fatal("moved system session lost global PVC lineage", err)
+	}
+	if owned, err := repository.ProjectPurgeGlobalPVCIsOwned(ctx, candidate, "ses_foreign"); err != nil || owned {
+		t.Fatal("foreign global PVC session admitted", err)
+	}
+	artifactItem := ProjectPurgeExternalItem{Kind: "OBJECT", Target: artifactKey, Version: artifactVersion}
+	if owned, err := repository.ProjectPurgeSubjectArtifactIsOwned(ctx, candidate, artifactItem); err != nil || !owned {
+		t.Fatal("moved subject artifact lost lineage", err)
+	}
+	if shared, err := repository.ProjectPurgeObjectIsShared(ctx, candidate, artifactKey); err != nil || shared {
+		t.Fatal("moved subject artifact incorrectly marked foreign", err)
+	}
+	for _, changed := range []ProjectPurgeExternalItem{
+		{Kind: "OBJECT", Target: artifactKey, Version: "foreign-version"},
+		{Kind: "OBJECT", Target: artifactKey + "-foreign", Version: artifactItem.Version},
+	} {
+		if owned, err := repository.ProjectPurgeSubjectArtifactIsOwned(ctx, candidate, changed); err != nil || owned {
+			t.Fatal("foreign subject artifact admitted", err)
+		}
+	}
+	item := ProjectPurgeExternalItem{Kind: "OBJECT", Target: archiveKey, Version: "fixture-version-1"}
+	if owned, err := repository.ProjectPurgeArchiveIsOwned(ctx, candidate, item); err != nil || !owned {
+		t.Fatalf("moved immutable archive lost owner: owned=%t err=%v", owned, err)
+	}
+	for _, changed := range []ProjectPurgeExternalItem{
+		{Kind: "OBJECT", Target: archiveKey, Version: "foreign-version"},
+		{Kind: "OBJECT", Target: strings.Replace(archiveKey, "/_system/", "/prj_foreign/", 1), Version: item.Version},
+	} {
+		if owned, err := repository.ProjectPurgeArchiveIsOwned(ctx, candidate, changed); err != nil || owned {
+			t.Fatal("foreign archive pins admitted", err)
+		}
+	}
+	foreignCandidate := candidate
+	foreignCandidate.ProjectRef = "prj_foreign"
+	if owned, err := repository.ProjectPurgeArchiveIsOwned(ctx, foreignCandidate, item); err != nil || owned {
+		t.Fatal("foreign project locator admitted", err)
+	}
+	inventory, err := repository.ProjectPurgeInventory(ctx, candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Внешний PVC не создавался; bytes принадлежат object storage fixture
+	// и удаляются по точной immutable квитанции перед owner finalize.
+	if err := repository.objects.Delete(ctx, artifactKey, artifactVersion); err != nil {
+		t.Fatal(err)
+	}
+	purgeCtx, cancelPurge := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelPurge()
+	started := time.Now()
+	if err := repository.FinalizeProjectPurge(purgeCtx, candidate, inventory); err != nil {
+		t.Fatal("finalize moved archive fixture", err)
+	}
+	t.Logf("purged graph with 55000 history events in %s", time.Since(started))
+	var remainingScaleEvents, foreignEventsAfter int
+	if err := repository.pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE ref LIKE 'evt_purge_scale_%'),count(*) FILTER (WHERE project_id IS DISTINCT FROM $1::uuid) FROM control_plane.run_events`, projectID).Scan(&remainingScaleEvents, &foreignEventsAfter); err != nil || remainingScaleEvents != 0 || foreignEventsAfter != foreignEventsBefore {
+		t.Fatalf("large purge crossed history boundary: remaining=%d before=%d after=%d err=%v", remainingScaleEvents, foreignEventsBefore, foreignEventsAfter, err)
 	}
 }

@@ -259,6 +259,13 @@ actor/tenant/provider-account identifiers. Событий и устойчиво�
 - WebSocket: `contracts/asyncapi/control-api-gateway/v1/asyncapi.yaml`;
 - deploy: `deploy/k8s/base/control-api-gateway`.
 
+Подтверждаемое восстановление зависшего удаления проекта (#1818):
+GET/POST `/api/v1/projects/{projectRef}/purge-recovery` сохраняют organization
+authority даже после удаления проекта. Preview содержит recovery ETag; POST
+требует отдельного согласия, exact digest, OCC, idempotency и CSRF. HTTP202
+не подтверждает физическое удаление байтов. Полная матрица и ручная проверка —
+[`OPS-PROJECT-PURGE-RECOVERY-API-1818`](../../../docs/operations/project-purge-recovery-api-1818.md).
+
 Проверенная документация внешних библиотек: gRPC-Go client streaming/flow
 control/context cancellation и oidc-client-ts session/events. Через Context7
 `/oapi-codegen/oapi-codegen` проверена stdhttp generation: generated handler

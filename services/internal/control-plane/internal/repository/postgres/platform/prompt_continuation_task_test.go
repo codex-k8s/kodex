@@ -38,7 +38,8 @@ func TestContinuationLargeRussianTaskRemainsWhole(t *testing.T) {
 	}
 	assertPlatformInstructions(t, notice.Snapshot)
 	if len(notice.Materialization.Prompt) > runtimecontract.MaximumContinuationNoticeBytes || current["task"] != task || notice.Snapshot.Variables["task"] != task ||
-		!strings.Contains(notice.Snapshot.SemanticValues["PURPOSE"], "continuation-task-projection-v1") {
+		!strings.Contains(notice.Snapshot.SemanticValues["PURPOSE"], continuationTaskProjectionRevision) ||
+		!strings.Contains(notice.Snapshot.SemanticValues["PURPOSE"], "A queued task can execute after a newer interrupt message") {
 		t.Fatal("notice lost exact task or exceeded unchanged bound")
 	}
 	messages := current["sessionContext"].([]map[string]string)

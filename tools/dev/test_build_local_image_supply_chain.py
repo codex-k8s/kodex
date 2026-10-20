@@ -84,9 +84,10 @@ elif name == "docker" and args[0] == "exec":
         sys.stdin.buffer.read()
         event("node_import", node)
         (root / ("alias-" + node)).unlink(missing_ok=True)
-    elif command[:4] == ["images", "tag", "--local", "--force"]:
-        assert command[4] == os.environ["IMPORT_REFERENCE"].split("@", 1)[0] + ":cached"
-        assert command[5] == os.environ["IMPORT_REFERENCE"]
+    elif command[:3] == ["images", "tag", "--local"]:
+        assert "--force" not in command
+        assert command[3] == os.environ["IMPORT_REFERENCE"].split("@", 1)[0] + ":cached"
+        assert command[4] == os.environ["IMPORT_REFERENCE"]
         event("node_alias", node)
         (root / ("alias-" + node)).write_text("copied-pinned-labels")
     elif command[:2] == ["images", "list"]:
@@ -338,6 +339,28 @@ class BuildLocalImageSupplyChainTest(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("OCI archive exact descriptor or name mismatch", result.stderr)
                 self.assertFalse(any(item["kind"] == "node_import" for item in self.events()))
+
+    def test_pull_helper_bootstrap_import_has_exact_closed_repository_and_pinned_alias(self):
+        import hashlib, io, tarfile
+        manifest = '{"schemaVersion":2,"layers":[]}'
+        digest = "sha256:" + hashlib.sha256(manifest.encode()).hexdigest()
+        repository = "registry.local.kodex/kodex/registry-pull-authorizer"
+        reference = repository + "@" + digest
+        archive = self.root / "helper.oci.tar"
+        index = json.dumps({"manifests": [{"digest": digest, "annotations": {
+            "io.containerd.image.name": repository + ":cached"}}]}).encode()
+        with tarfile.open(archive, "w") as output:
+            entry = tarfile.TarInfo("index.json")
+            entry.size = len(index)
+            output.addfile(entry, io.BytesIO(index))
+        result = subprocess.run(["bash", str(SCRIPT.with_name("import-local-image.sh")),
+            "--context", "k3d-import-fixture", "--archive", str(archive), "--repository", repository,
+            "--tag", repository + ":cached", "--exact-reference", reference],
+            env=dict(self.environment, IMPORT_K3D="1", IMPORT_MANIFEST=manifest, IMPORT_REFERENCE=reference, IMPORT_NAMED_ONLY="1"),
+            capture_output=True, text=True, timeout=12)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual({item["target"] for item in self.events() if item["kind"] == "node_alias"},
+                         {"k3d-import-fixture-agent-0", "k3d-import-fixture-server-0"})
 
     def test_failed_build_cancels_siblings_without_import_or_pointer(self):
         result = self.run_build(4, FAIL_BUILD="image-admission")

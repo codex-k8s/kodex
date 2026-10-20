@@ -579,6 +579,13 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignalWithReaders(ctx contex
 	if signal.Sequence != multiplexer.platformCursor+1 {
 		return multiplexer.synchronizePlatformWithRefresh(ctx, refresh)
 	}
+	// Изменение eligibility требует полного owner read; финансовая проекция
+	// не остаётся закешированной после отзыва доступа или смены config.
+	// SYSTEM_ASSISTANT не меняет project-agent eligibility финансового каталога:
+	// его heartbeat и сообщения сохраняют прежний адресный delta/rejoin путь.
+	if signal.Kind == "AGENT" || signal.Kind == "MEMBERSHIP" || signal.Kind == "PLATFORM_MEMBERSHIP" {
+		return multiplexer.synchronizePlatformWithFloor(ctx, refresh, signal.Sequence)
+	}
 	if platformSignalOutsideScope(signal, multiplexer.projectRef) {
 		return multiplexer.advancePlatformCursor(signal)
 	}
@@ -598,6 +605,9 @@ func (multiplexer *sessionMultiplexer) applyPlatformSignalWithReaders(ctx contex
 	}
 	if err != nil {
 		if status.Code(err) == codes.PermissionDenied {
+			if signal.Kind == "PROVIDER_ACCOUNT" {
+				return multiplexer.synchronizePlatformWithFloor(ctx, refresh, signal.Sequence)
+			}
 			if signal.EventName == "RUN_CHANGED" && !refresh(ctx) {
 				return false
 			}
@@ -655,8 +665,14 @@ func (multiplexer *sessionMultiplexer) synchronizePlatformWithin(ctx context.Con
 }
 
 func (multiplexer *sessionMultiplexer) synchronizePlatformWithRefresh(ctx context.Context, refresh func(context.Context) bool) bool {
+	return multiplexer.synchronizePlatformWithFloor(ctx, refresh, 0)
+}
+
+// Authority wake требует повторного owner snapshot даже при полном FIFO:
+// наличие следующих событий не доказывает допустимость прежнего finance cache.
+func (multiplexer *sessionMultiplexer) synchronizePlatformWithFloor(ctx context.Context, refresh func(context.Context) bool, minimumCursor int64) bool {
 	cursor, err := multiplexer.server.query.GetPlatformEventCursor(ctx, &controlplanev1.GetPlatformEventCursorRequest{})
-	if err != nil || cursor.GetOrganizationRef() != multiplexer.organizationRef || cursor.GetCurrentSequence() < multiplexer.platformCursor {
+	if err != nil || cursor.GetOrganizationRef() != multiplexer.organizationRef || cursor.GetCurrentSequence() < multiplexer.platformCursor || cursor.GetCurrentSequence() < minimumCursor {
 		multiplexer.platformAvailable = false
 		return multiplexer.sendStreamProblem(multiplexer.platformRequestRef, "PLATFORM", platformStreamRef, multiplexer.platformCursor, "PLATFORM_UNAVAILABLE")
 	}
@@ -667,7 +683,7 @@ func (multiplexer *sessionMultiplexer) synchronizePlatformWithRefresh(ctx contex
 	}
 	// Неприменённый последовательный FIFO не является потерей wake. Каждая
 	// проекция и cursor по-прежнему применяются только через штатный owner read.
-	if multiplexer.queuedPlatformWakesCoverCursor(current) {
+	if minimumCursor == 0 && multiplexer.queuedPlatformWakesCoverCursor(current) {
 		return true
 	}
 	if !multiplexer.send(generated.PlatformResyncEnvelope{

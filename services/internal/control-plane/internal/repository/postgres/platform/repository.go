@@ -20,6 +20,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
+	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/artifactpolicy"
 	roleimageservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/roleimage"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/skillpolicy"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
@@ -45,7 +46,9 @@ type Repository struct {
 	providerCredential              ProviderCredentialConfig
 	roleImages                      RoleImageConfig
 	objects                         objectstorage.Store
+	projectPurgeStorageIdentity     string
 	skillScanner                    skillpolicy.Scanner
+	artifactScanner                 artifactpolicy.Scanner
 	integrationDefinitions          map[string]integrationpackage.Package
 	roleImageCatalogResolver        func(entity.RoleEnvironmentSelection) (entity.RoleImageRecipeInput, error)
 	roleImageRecommendedSelection   func() (entity.RoleEnvironmentSelection, error)
@@ -167,6 +170,10 @@ func (repository *Repository) Ready(ctx context.Context) error {
 	var draftsReady bool
 	if repository.pool.QueryRow(ctx, querySecretDraftReadiness).Scan(&draftsReady) != nil || !draftsReady {
 		return errors.New("runtime secret draft schema is unavailable")
+	}
+	var recoveryReady bool
+	if repository.pool.QueryRow(ctx, queryProjectPurgeRecoveryReadiness).Scan(&recoveryReady) != nil || !recoveryReady {
+		return errors.New("project purge recovery schema is unavailable")
 	}
 	return nil
 }

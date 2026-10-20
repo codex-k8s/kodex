@@ -1095,6 +1095,13 @@ func (repository *Repository) addAssistantTurnWithAttachmentPolicy(ctx context.C
 	if candidate.ID != identity.ID {
 		return commandOutcome{}, errs.ErrConflict
 	}
+	configuration, err := repository.getRuntimeConfigurationViewTx(ctx, tx, scope, identity.Ref)
+	if err != nil {
+		return commandOutcome{}, err
+	}
+	if !configuration.Environment.Ready {
+		return commandOutcome{}, fmt.Errorf("assistant runtime environment is not ready: %w", errs.ErrConflict)
+	}
 	if identity.Scope == "SYSTEM" {
 		var runtimeReady bool
 		if err := tx.QueryRow(ctx, queryConfigurationAddassistantturncommandSelectAssistantRuntimeOrganizationId, scope.organizationID).Scan(&runtimeReady); err != nil || !runtimeReady {

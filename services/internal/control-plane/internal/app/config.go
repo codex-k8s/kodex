@@ -36,6 +36,7 @@ type Config struct {
 	ObjectStorageEndpoint           string        `env:"CONTROL_PLANE_OBJECT_STORAGE_ENDPOINT"`
 	ObjectStorageRegion             string        `env:"CONTROL_PLANE_OBJECT_STORAGE_REGION"`
 	ObjectStorageBucket             string        `env:"CONTROL_PLANE_OBJECT_STORAGE_BUCKET"`
+	SessionArchiveStorageBucket     string        `env:"CONTROL_PLANE_SESSION_ARCHIVE_STORAGE_BUCKET"`
 	ObjectStorageAccessKeyFile      string        `env:"CONTROL_PLANE_OBJECT_STORAGE_ACCESS_KEY_FILE"`
 	ObjectStorageSecretKeyFile      string        `env:"CONTROL_PLANE_OBJECT_STORAGE_SECRET_KEY_FILE"`
 	ObjectStorageUsePathStyle       bool          `env:"CONTROL_PLANE_OBJECT_STORAGE_USE_PATH_STYLE"`
@@ -130,7 +131,7 @@ type Config struct {
 func loadConfig() (Config, error) {
 	config := Config{
 		SkillScannerSocket:  "/run/kodex-skill-scanner/clamd.sock",
-		SkillScannerTimeout: 15 * time.Second,
+		SkillScannerTimeout: time.Minute,
 		GRPCListen:          ":8443", TechnicalListen: ":9090",
 		ServerCertificateFile:           "/var/run/secrets/kodex/control-plane/workload-tls/tls.crt",
 		ServerPrivateKeyFile:            "/var/run/secrets/kodex/control-plane/workload-tls/tls.key",
@@ -141,6 +142,7 @@ func loadConfig() (Config, error) {
 		PostgresMaxConnections:          16,
 		ObjectStorageRegion:             "us-east-1",
 		ObjectStorageBucket:             "kodex-artifacts",
+		SessionArchiveStorageBucket:     "kodex-session-archives",
 		ObjectStorageAccessKeyFile:      "/var/run/secrets/kodex/control-plane/object-storage/access-key-id",
 		ObjectStorageSecretKeyFile:      "/var/run/secrets/kodex/control-plane/object-storage/secret-access-key",
 		ObjectStorageUsePathStyle:       true,
@@ -330,7 +332,7 @@ func validObjectStorageBoundary(config Config) bool {
 	return (endpoint.Scheme == "https" || localInsecure) && endpoint.Host != "" &&
 		endpoint.User == nil && endpoint.RawQuery == "" && endpoint.Fragment == "" &&
 		(endpoint.Path == "" || endpoint.Path == "/") &&
-		validRuntimeIdentifier(config.ObjectStorageRegion) && validDNSLabel(config.ObjectStorageBucket)
+		validRuntimeIdentifier(config.ObjectStorageRegion) && validDNSLabel(config.ObjectStorageBucket) && validDNSLabel(config.SessionArchiveStorageBucket)
 }
 
 func validDNSLabel(value string) bool {

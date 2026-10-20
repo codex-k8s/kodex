@@ -393,6 +393,43 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Project" }
         default: { $ref: "#/components/responses/Problem" }
+  /api/v1/projects/{projectRef}/purge-recovery:
+    parameters: [{ $ref: "#/components/parameters/ProjectRef" }]
+    get:
+      tags: [Projects]
+      operationId: getProjectPurgeRecovery
+      description: Владелец или администратор организации получает закреплённый снимок зависшей очистки. Доступ сохраняется через квитанцию после удаления проекта; путь не выдаёт полномочия на проект.
+      responses:
+        "200":
+          description: Текущее состояние очистки без ключей объектов и пользовательского содержимого
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectPurgeRecovery" }
+        default: { $ref: "#/components/responses/Problem" }
+    post:
+      tags: [Projects]
+      operationId: resolveProjectPurgeRecovery
+      description: Явный отказ владельца или администратора от неизвестного результата загрузки по точному снимку. Согласие не подтверждает физическую очистку; обязательство удаления сохраняется после удаления проекта. Изменённый снимок требует нового согласия.
+      parameters:
+        [
+          { $ref: "#/components/parameters/IfMatch" },
+          { $ref: "#/components/parameters/IdempotencyKey" },
+          { $ref: "#/components/parameters/CsrfToken" },
+        ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectPurgeRecoveryResolutionInput" }
+      responses:
+        "202":
+          description: Решение сохранено; фоновая очистка продолжится отдельно
+          headers: { ETag: { $ref: "#/components/headers/ETag" } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectPurgeRecovery" }
+        default: { $ref: "#/components/responses/Problem" }
   /api/v1/projects/{projectRef}/members:
     parameters: [{ $ref: "#/components/parameters/ProjectRef" }]
     get:
@@ -9231,6 +9268,7 @@ components:
           PROMOTE,
           DELETE,
           PURGE,
+          RESOLVE_PURGE,
           COPY,
         ]
     Problem:
@@ -11145,6 +11183,34 @@ components:
         purgeAfter: { $ref: "#/components/schemas/Timestamp" }
         nextActions:
           { type: array, items: { $ref: "#/components/schemas/NextAction" } }
+    ProjectPurgeRecovery:
+      type: object
+      additionalProperties: false
+      description: Авторитетный снимок surviving purge receipt. Версия относится к восстановлению, а не к удалённому проекту. Не содержит имён файлов, ключей хранилища и содержимого.
+      required: [projectRef, version, snapshotDigest, state, unknownContentCount, cleanupPendingCount, projectPresent, canResolve, resolutionRef, projectVersion]
+      properties:
+        projectRef: { $ref: "#/components/schemas/OpaqueRef" }
+        version: { type: integer, format: int64, minimum: 1, maximum: 9007199254740991 }
+        snapshotDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        state:
+          type: string
+          enum: [WAITING_OWNER, QUEUED, OBSERVING, DELETED_CONFIRMED, NONE, BLOCKED]
+        unknownContentCount: { type: integer, format: int32, minimum: 0 }
+        cleanupPendingCount: { type: integer, format: int32, minimum: 0 }
+        projectPresent: { type: boolean }
+        canResolve: { type: boolean }
+        resolutionRef: { type: string, maxLength: 96, description: Непрозрачная ссылка решения; пуста до принятия решения. }
+        projectVersion: { type: integer, format: int64, minimum: 0, maximum: 9007199254740991, description: Ноль после удаления проекта; не используется в If-Match восстановления. }
+    ProjectPurgeRecoveryResolutionInput:
+      type: object
+      additionalProperties: false
+      required: [snapshotDigest, acknowledgeUnknownOutcome]
+      properties:
+        snapshotDigest: { type: string, pattern: "^[a-f0-9]{64}$" }
+        acknowledgeUnknownOutcome:
+          type: boolean
+          enum: [true]
+          description: Отдельное явное согласие отказаться от неизвестного результата загрузки; не подтверждение удаления байтов.
     SearchResult:
       type: object
       additionalProperties: false
@@ -16772,6 +16838,8 @@ components:
         maximumConcurrentExecutions:
           { type: integer, format: int32, minimum: 1, maximum: 256 }
         usage: { $ref: "#/components/schemas/ProviderAccountUsage" }
+        financialSummary: { $ref: "#/components/schemas/ProviderFinancialSummary" }
+        financialEligible: { type: boolean }
         authorization: { $ref: "#/components/schemas/ProviderAuthorization" }
         deletion: { $ref: "#/components/schemas/ProviderAccountDeletion" }
         verification:
@@ -16780,6 +16848,49 @@ components:
           { type: array, items: { $ref: "#/components/schemas/NextAction" } }
         createdAt: { $ref: "#/components/schemas/Timestamp" }
         updatedAt: { $ref: "#/components/schemas/Timestamp" }
+    ProviderFinancialSummary:
+      type: object
+      additionalProperties: false
+      required: [observation, receivedAt, version]
+      properties:
+        observation: { $ref: "#/components/schemas/ProviderFinancialObservation" }
+        receivedAt: { $ref: "#/components/schemas/Timestamp" }
+        version: { type: integer, format: int64, minimum: 1 }
+    ProviderFinancialObservation:
+      type: object
+      additionalProperties: false
+      required: [sequence, state]
+      properties:
+        sequence: { type: integer, format: int64, minimum: 1, maximum: 64 }
+        state: { type: string, enum: [AVAILABLE, UNAVAILABLE] }
+        ordinaryUsageAllowed: { type: boolean }
+        spendControlReached: { type: boolean }
+        restriction:
+          type: string
+          enum: [rate_limit_reached, workspace_owner_credits_depleted, workspace_member_credits_depleted, workspace_owner_usage_limit_reached, workspace_member_usage_limit_reached]
+        windows:
+          type: array
+          maxItems: 2
+          items: { $ref: "#/components/schemas/ProviderFinancialWindow" }
+        credits: { $ref: "#/components/schemas/ProviderFinancialCredits" }
+    ProviderFinancialWindow:
+      type: object
+      additionalProperties: false
+      required: [usedPercent]
+      properties:
+        usedPercent: { type: integer, format: int32, minimum: 0, maximum: 100 }
+        durationMinutes: { type: integer, format: int64, minimum: 1, maximum: 5256000 }
+        resetsAt: { type: integer, format: int64, minimum: 0, maximum: 253402300799 }
+    ProviderFinancialCredits:
+      type: object
+      additionalProperties: false
+      properties:
+        hasCredits: { type: boolean }
+        unlimited: { type: boolean }
+        balance:
+          type: string
+          pattern: '^[0-9]{1,64}(\.[0-9]{1,64})?$'
+          description: Точная upstream строка. Единица и денежный эквивалент не установлены.
     ProviderAccountConcurrencyInput:
       type: object
       additionalProperties: false
@@ -18654,3 +18765,26 @@ components:
             items: { $ref: "#/components/schemas/Incident" },
           }
         observedAt: { $ref: "#/components/schemas/Timestamp" }
+
+    ProviderFinancialDisplayAccount:
+      type: object
+      additionalProperties: false
+      required: [ref, name]
+      properties:
+        ref: { $ref: "#/components/schemas/OpaqueRef" }
+        name: { type: string, minLength: 1, maxLength: 160 }
+        financialSummary: { $ref: "#/components/schemas/ProviderFinancialSummary" }
+    ProviderFinancialOverview:
+      type: object
+      additionalProperties: false
+      required: [accounts, total, exhausted, unknown, observedAt, validUntil]
+      properties:
+        accounts:
+          type: array
+          maxItems: 3
+          items: { $ref: "#/components/schemas/ProviderFinancialDisplayAccount" }
+        total: { type: integer, format: int64, minimum: 0 }
+        exhausted: { type: integer, format: int64, minimum: 0 }
+        unknown: { type: integer, format: int64, minimum: 0 }
+        observedAt: { type: string, format: date-time }
+        validUntil: { type: string, format: date-time }

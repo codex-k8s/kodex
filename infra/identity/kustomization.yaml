@@ -8,6 +8,7 @@ resources:
   - postgresql.yaml
   - keycloak.yaml
   - networkpolicy.yaml
+  - poddisruptionbudget.yaml
 labels:
   - pairs:
       app.kubernetes.io/part-of: kodex

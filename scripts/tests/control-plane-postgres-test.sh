@@ -150,6 +150,8 @@ run_migration() {
     '
   if [[ $# -eq 0 && -z "${KODEX_CONTROL_PLANE_TEST_FILTER:-}" ]]; then
     KODEX_CONTROL_PLANE_TEST_DSN="$runtime_dsn" \
+      KODEX_CONTROL_PLANE_TEST_ADMIN_DSN="$admin_dsn" \
+      KODEX_CONTROL_PLANE_TEST_TEMPLATE_DATABASE=control_plane_component_template \
       env -u GOFLAGS GOENV=off GOWORK=off go test -p 2 -count=1 \
         ./internal/repository/postgres/platform -run '^TestAvatarLifecycleComponent$'
   fi

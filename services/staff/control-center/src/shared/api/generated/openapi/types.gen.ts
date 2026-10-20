@@ -276,7 +276,7 @@ export type SimulateAccessResult = {
     evaluatedAt: Timestamp;
 };
 
-export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'CANCEL_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'REFRESH_AUTHORIZATION' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION' | 'CREATE_CONVERSATION' | 'COMPLETE_ONBOARDING' | 'CONFIGURE_CREDENTIAL' | 'ROTATE' | 'REVEAL' | 'PROMOTE' | 'DELETE' | 'PURGE' | 'COPY';
+export type NextAction = 'OPEN' | 'EDIT' | 'UPDATE' | 'ARCHIVE' | 'RESTORE' | 'REQUEST_BUILD' | 'CANCEL_BUILD' | 'ENABLE' | 'DISABLE' | 'VALIDATE' | 'PUBLISH' | 'ROLLBACK' | 'LAUNCH' | 'ADD_TURN' | 'CANCEL' | 'RETRY' | 'RESOLVE_GATE' | 'DOWNLOAD' | 'BIND' | 'TEST' | 'REVOKE' | 'REFRESH_AUTHORIZATION' | 'APPLY_PLAN' | 'RECOVER' | 'CREATE_AGENT' | 'CREATE_PROJECT_ASSISTANT' | 'CREATE_WORKFLOW' | 'CREATE_RUN' | 'CREATE_SCHEDULE' | 'MANAGE_INTEGRATIONS' | 'MANAGE_MEMBERS' | 'UPLOAD_ARTIFACT' | 'MANAGE_CAPABILITIES' | 'MANAGE_GRANTS' | 'CREATE_PROJECT' | 'CREATE_CONNECTION' | 'CREATE_CONVERSATION' | 'COMPLETE_ONBOARDING' | 'CONFIGURE_CREDENTIAL' | 'ROTATE' | 'REVEAL' | 'PROMOTE' | 'DELETE' | 'PURGE' | 'RESOLVE_PURGE' | 'COPY';
 
 export type Problem = {
     type: string;
@@ -1062,6 +1062,36 @@ export type Project = {
     deletedAt?: Timestamp;
     purgeAfter?: Timestamp;
     nextActions: Array<NextAction>;
+};
+
+/**
+ * Авторитетный снимок surviving purge receipt. Версия относится к восстановлению, а не к удалённому проекту. Не содержит имён файлов, ключей хранилища и содержимого.
+ */
+export type ProjectPurgeRecovery = {
+    projectRef: OpaqueRef;
+    version: number;
+    snapshotDigest: string;
+    state: 'WAITING_OWNER' | 'QUEUED' | 'OBSERVING' | 'DELETED_CONFIRMED' | 'NONE' | 'BLOCKED';
+    unknownContentCount: number;
+    cleanupPendingCount: number;
+    projectPresent: boolean;
+    canResolve: boolean;
+    /**
+     * Непрозрачная ссылка решения; пуста до принятия решения.
+     */
+    resolutionRef: string;
+    /**
+     * Ноль после удаления проекта; не используется в If-Match восстановления.
+     */
+    projectVersion: number;
+};
+
+export type ProjectPurgeRecoveryResolutionInput = {
+    snapshotDigest: string;
+    /**
+     * Отдельное явное согласие отказаться от неизвестного результата загрузки; не подтверждение удаления байтов.
+     */
+    acknowledgeUnknownOutcome: true;
 };
 
 export type SearchResult = {
@@ -3824,12 +3854,45 @@ export type ProviderAccount = {
     ready: boolean;
     maximumConcurrentExecutions: number;
     usage?: ProviderAccountUsage;
+    financialSummary?: ProviderFinancialSummary;
+    financialEligible?: boolean;
     authorization?: ProviderAuthorization;
     deletion?: ProviderAccountDeletion;
     verification?: ProviderAccountVerification;
     nextActions: Array<NextAction>;
     createdAt: Timestamp;
     updatedAt: Timestamp;
+};
+
+export type ProviderFinancialSummary = {
+    observation: ProviderFinancialObservation;
+    receivedAt: Timestamp;
+    version: number;
+};
+
+export type ProviderFinancialObservation = {
+    sequence: number;
+    state: 'AVAILABLE' | 'UNAVAILABLE';
+    ordinaryUsageAllowed?: boolean;
+    spendControlReached?: boolean;
+    restriction?: 'rate_limit_reached' | 'workspace_owner_credits_depleted' | 'workspace_member_credits_depleted' | 'workspace_owner_usage_limit_reached' | 'workspace_member_usage_limit_reached';
+    windows?: Array<ProviderFinancialWindow>;
+    credits?: ProviderFinancialCredits;
+};
+
+export type ProviderFinancialWindow = {
+    usedPercent: number;
+    durationMinutes?: number;
+    resetsAt?: number;
+};
+
+export type ProviderFinancialCredits = {
+    hasCredits?: boolean;
+    unlimited?: boolean;
+    /**
+     * Точная upstream строка. Единица и денежный эквивалент не установлены.
+     */
+    balance?: string;
 };
 
 export type ProviderAccountConcurrencyInput = {
@@ -4603,6 +4666,21 @@ export type AdministrationState = {
     observedAt: Timestamp;
 };
 
+export type ProviderFinancialDisplayAccount = {
+    ref: OpaqueRef;
+    name: string;
+    financialSummary?: ProviderFinancialSummary;
+};
+
+export type ProviderFinancialOverview = {
+    accounts: Array<ProviderFinancialDisplayAccount>;
+    total: number;
+    exhausted: number;
+    unknown: number;
+    observedAt: string;
+    validUntil: string;
+};
+
 export type EmailMailboxCredentialInputWritable = {
     kind: EmailMailboxCredentialKind;
     /**
@@ -5363,6 +5441,65 @@ export type PurgeProjectResponses = {
 };
 
 export type PurgeProjectResponse = PurgeProjectResponses[keyof PurgeProjectResponses];
+
+export type GetProjectPurgeRecoveryData = {
+    body?: never;
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/purge-recovery';
+};
+
+export type GetProjectPurgeRecoveryErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type GetProjectPurgeRecoveryError = GetProjectPurgeRecoveryErrors[keyof GetProjectPurgeRecoveryErrors];
+
+export type GetProjectPurgeRecoveryResponses = {
+    /**
+     * Текущее состояние очистки без ключей объектов и пользовательского содержимого
+     */
+    200: ProjectPurgeRecovery;
+};
+
+export type GetProjectPurgeRecoveryResponse = GetProjectPurgeRecoveryResponses[keyof GetProjectPurgeRecoveryResponses];
+
+export type ResolveProjectPurgeRecoveryData = {
+    body: ProjectPurgeRecoveryResolutionInput;
+    headers: {
+        'If-Match': string;
+        'Idempotency-Key': string;
+        'X-CSRF-Token': string;
+    };
+    path: {
+        projectRef: OpaqueRef;
+    };
+    query?: never;
+    url: '/api/v1/projects/{projectRef}/purge-recovery';
+};
+
+export type ResolveProjectPurgeRecoveryErrors = {
+    /**
+     * Безопасная ошибка API
+     */
+    default: Problem;
+};
+
+export type ResolveProjectPurgeRecoveryError = ResolveProjectPurgeRecoveryErrors[keyof ResolveProjectPurgeRecoveryErrors];
+
+export type ResolveProjectPurgeRecoveryResponses = {
+    /**
+     * Решение сохранено; фоновая очистка продолжится отдельно
+     */
+    202: ProjectPurgeRecovery;
+};
+
+export type ResolveProjectPurgeRecoveryResponse = ResolveProjectPurgeRecoveryResponses[keyof ResolveProjectPurgeRecoveryResponses];
 
 export type ListProjectMembershipsData = {
     body?: never;

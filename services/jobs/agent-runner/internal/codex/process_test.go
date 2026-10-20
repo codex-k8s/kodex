@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -14,6 +15,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/agent-runner/internal/model"
@@ -339,10 +341,27 @@ func TestTurnStartPinsModelReasoningAndPersonalityOnEveryAttempt(t *testing.T) {
 		snapshot := runtimecontract.RuntimeContextSnapshot{Schema: runtimecontract.RuntimeContextSchema, OrganizationRef: input.OrganizationRef, ProjectRef: input.ProjectRef, AgentRef: input.AgentRef}
 		snapshot.Digest, _ = snapshot.ComputeDigest()
 		input.ContextSnapshot = &snapshot
+		input.Instructions = "Current immutable instruction\n" + strings.Repeat("Полная инструкция.\n", 5000) + "\nEND_CURRENT_INSTRUCTIONS"
 		params, err := turnStartParams(input, "exact-thread", []byte("exact server prompt"))
 		if err != nil || params["cwd"] != runtimecontract.RuntimeWorkspaceWorkingRoot || params["model"] != "gpt-6-astra" || params["effort"] != "high" ||
 			params["personality"] != "pragmatic" || params["threadId"] != "exact-thread" {
 			t.Fatalf("turn parameters = %#v, error = %v", params, err)
+		}
+		context := params["additionalContext"].(map[string]any)
+		var reconstructed strings.Builder
+		for index := 0; index < len(context)-1; index++ {
+			fragment := context[fmt.Sprintf("kodex_runtime_instructions_%06d", index)].(map[string]any)
+			value := fragment["value"].(string)
+			if fragment["kind"] != "application" || len(value) > currentInstructionChunkBytes || !utf8.ValidString(value) {
+				t.Fatal("invalid current instruction fragment")
+			}
+			reconstructed.WriteString(value)
+		}
+		if reconstructed.String() != input.Instructions || !strings.HasPrefix(context["kodex_runtime_revision"].(map[string]any)["value"].(string), runtimeInstructionRevisionPreamble) {
+			t.Fatal("current instructions were truncated or omitted")
+		}
+		if _, present := params["collaborationMode"]; present {
+			t.Fatal("catalog preset may replace immutable instructions")
 		}
 		input.ConfigOverlay, input.EffectiveReasoningEffort = "", "medium"
 		params, err = turnStartParams(input, "exact-thread", []byte("prompt"))

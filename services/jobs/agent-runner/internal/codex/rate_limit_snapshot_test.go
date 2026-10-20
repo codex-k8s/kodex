@@ -3,7 +3,6 @@ package codex
 import (
 	"encoding/json"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -24,7 +23,7 @@ func TestRateLimitSnapshotDoesNotAssignLocalAdmission(t *testing.T) {
 		if err := state.notification("account/rateLimits/updated", raw(`{"rateLimits":`+snapshot+`}`)); err != nil {
 			t.Fatalf("rate limit metadata rejected: %v", err)
 		}
-		if !reflect.DeepEqual(before, state.result) || state.terminals != 0 || state.turnStarted != 0 {
+		if !state.financialWake || !reflect.DeepEqual(before, state.result) || state.terminals != 0 || state.turnStarted != 0 {
 			t.Fatal("rate limit snapshot changed execution admission or result")
 		}
 		encoded, err := json.Marshal(state.result)
@@ -44,9 +43,6 @@ func TestRateLimitSnapshotDoesNotAssignLocalAdmission(t *testing.T) {
 		if state.result.Outcome != "SUCCEEDED" || state.result.FailureCode != "" {
 			t.Fatal("rate limit snapshot blocked an otherwise successful turn")
 		}
-	}
-	if !slices.Contains(suppressedNotificationMethods, "account/rateLimits/updated") {
-		t.Fatal("financial metadata notification is not suppressed")
 	}
 }
 

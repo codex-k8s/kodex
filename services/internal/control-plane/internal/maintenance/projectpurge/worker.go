@@ -14,6 +14,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/libs/go/serviceruntime"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/repository/postgres/platform"
+	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,27 +30,34 @@ const (
 )
 
 type source interface {
+	ClaimProjectPurgeRecovery(context.Context, string, int32) ([]platform.ProjectPurgeRecoveryClaim, error)
+	PinProjectPurgeRecovery(context.Context, string, platform.ProjectPurgeRecoveryClaim, objectstorage.Receipt) error
+	FinishProjectPurgeRecovery(context.Context, string, platform.ProjectPurgeRecoveryClaim, string) error
 	PromoteDueProjectPurges(context.Context, int32) error
 	ListPendingProjectPurges(context.Context, int32) ([]platform.ProjectPurgeCandidate, error)
 	ProjectPurgeInventory(context.Context, platform.ProjectPurgeCandidate) ([]platform.ProjectPurgeExternalItem, error)
 	ProjectPurgeObjectIsShared(context.Context, platform.ProjectPurgeCandidate, string) (bool, error)
+	ProjectPurgeArchiveIsOwned(context.Context, platform.ProjectPurgeCandidate, platform.ProjectPurgeExternalItem) (bool, error)
+	ProjectPurgeSubjectArtifactIsOwned(context.Context, platform.ProjectPurgeCandidate, platform.ProjectPurgeExternalItem) (bool, error)
+	ProjectPurgeGlobalPVCIsOwned(context.Context, platform.ProjectPurgeCandidate, string) (bool, error)
 	FinalizeProjectPurge(context.Context, platform.ProjectPurgeCandidate, []platform.ProjectPurgeExternalItem) error
 }
 
 type Processor struct {
 	source     source
 	objects    objectstorage.Store
+	archives   objectstorage.Store
 	kubernetes kubernetes.Interface
 	namespace  string
 }
 
-func New(source source, objects objectstorage.Store, kubernetes kubernetes.Interface, namespace string) *Processor {
-	return &Processor{source: source, objects: objects, kubernetes: kubernetes, namespace: namespace}
+func New(source source, objects, archives objectstorage.Store, kubernetes kubernetes.Interface, namespace string) *Processor {
+	return &Processor{source: source, objects: objects, archives: archives, kubernetes: kubernetes, namespace: namespace}
 }
 
 // Run не связывает readiness control-plane с Kubernetes API: сбой очистки
 // оставляет проект в PURGE_PENDING и повторяется без потери квитанции.
-func Run(source source, objects objectstorage.Store, namespace string, logger *slog.Logger) serviceruntime.Worker {
+func Run(source source, objects, archives objectstorage.Store, namespace string, logger *slog.Logger) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
@@ -61,7 +69,7 @@ func Run(source source, objects objectstorage.Store, namespace string, logger *s
 					var client kubernetes.Interface
 					client, err = kubernetes.NewForConfig(config)
 					if err == nil {
-						processor = New(source, objects, client, namespace)
+						processor = New(source, objects, archives, client, namespace)
 					}
 				}
 				if err != nil {
@@ -71,7 +79,7 @@ func Run(source source, objects objectstorage.Store, namespace string, logger *s
 			if processor != nil {
 				cycle, cancel := context.WithTimeout(ctx, 5*time.Minute)
 				if err := processor.Cycle(cycle); err != nil && !errors.Is(err, context.Canceled) {
-					logger.WarnContext(ctx, "project purge cycle failed", "error_class", "purge_cycle")
+					logFailures(ctx, logger, err)
 				}
 				cancel()
 			}
@@ -85,78 +93,144 @@ func Run(source source, objects objectstorage.Store, namespace string, logger *s
 }
 
 func (processor *Processor) Cycle(ctx context.Context) error {
+	// Отдельная короткая очередь не голодает за большими inventory проектов.
+	owner := uuid.NewString()
+	claims, recoveryErr := processor.source.ClaimProjectPurgeRecovery(ctx, owner, 4)
+	var failures []error
+	if recoveryErr != nil {
+		failures = append(failures, &failure{stage: "recovery_claim", cause: recoveryErr})
+	}
+	for _, claim := range claims {
+		if err := processor.recoverObject(ctx, owner, claim); err != nil {
+			failures = append(failures, &failure{stage: "recovery_object", projectRef: claim.ProjectRef, cause: err})
+		}
+	}
 	if err := processor.source.PromoteDueProjectPurges(ctx, 8); err != nil {
-		return err
+		return errors.Join(append(failures, err)...)
 	}
 	candidates, err := processor.source.ListPendingProjectPurges(ctx, 4)
 	if err != nil {
-		return err
+		return errors.Join(append(failures, err)...)
 	}
-	var failed bool
 	for _, candidate := range candidates {
 		if err := processor.process(ctx, candidate); err != nil {
-			failed = true
+			failures = append(failures, err)
 		}
 	}
-	if failed {
-		return errors.New("project purge external cleanup is incomplete")
+	return errors.Join(failures...)
+}
+
+type failure struct {
+	stage, projectRef string
+	cause             error
+}
+
+func (item *failure) Error() string { return "project purge stage failed" }
+func (item *failure) Unwrap() error { return item.cause }
+
+func logFailures(ctx context.Context, logger *slog.Logger, err error) {
+	if group, ok := err.(interface{ Unwrap() []error }); ok {
+		for _, child := range group.Unwrap() {
+			logFailures(ctx, logger, child)
+		}
+		return
 	}
-	return nil
+	attributes := []any{"error_class", "purge_cycle"}
+	var item *failure
+	if errors.As(err, &item) {
+		attributes = append(attributes, "safe_stage", item.stage, "project_ref", item.projectRef)
+	}
+	logger.WarnContext(ctx, "project purge cycle failed", attributes...)
 }
 
 func (processor *Processor) process(ctx context.Context, candidate platform.ProjectPurgeCandidate) error {
 	items, err := processor.source.ProjectPurgeInventory(ctx, candidate)
 	if err != nil {
-		return err
+		return &failure{stage: "inventory", projectRef: candidate.ProjectRef, cause: err}
+	}
+	if err := processor.checkPVCConsumers(ctx, items); err != nil {
+		return &failure{stage: "pvc_consumers", projectRef: candidate.ProjectRef, cause: err}
 	}
 	for _, item := range items {
 		switch item.Kind {
 		case "OBJECT":
 			if err := processor.deleteObject(ctx, candidate, item); err != nil {
-				return err
+				return &failure{stage: "object", projectRef: candidate.ProjectRef, cause: err}
 			}
 		case "PVC":
 			if err := processor.deletePVC(ctx, candidate, item); err != nil {
-				return err
+				return &failure{stage: "pvc", projectRef: candidate.ProjectRef, cause: err}
 			}
 		default:
 			return errors.New("project purge inventory kind is invalid")
 		}
 	}
-	return processor.source.FinalizeProjectPurge(ctx, candidate, items)
+	if err := processor.source.FinalizeProjectPurge(ctx, candidate, items); err != nil {
+		return &failure{stage: "finalize", projectRef: candidate.ProjectRef, cause: err}
+	}
+	return nil
 }
 
 func (processor *Processor) deleteObject(ctx context.Context, candidate platform.ProjectPurgeCandidate, item platform.ProjectPurgeExternalItem) error {
 	artifactPrefix := "organizations/" + candidate.OrganizationRef + "/projects/" + candidate.ProjectRef + "/artifacts/"
-	archivePrefix := "session-archive/v1/" + candidate.OrganizationRef + "/" + candidate.ProjectRef + "/"
-	if !objectstorage.ValidKey(item.Target) ||
-		!strings.HasPrefix(item.Target, artifactPrefix) && !strings.HasPrefix(item.Target, archivePrefix) {
+	archivePrefix := "session-archive/v1/" + candidate.OrganizationRef + "/"
+	if !objectstorage.ValidKey(item.Target) {
+		return errors.New("project purge object escaped project scope")
+	}
+	store := processor.objects
+	switch {
+	case strings.HasPrefix(item.Target, artifactPrefix):
+	case strings.HasPrefix(item.Target, "organizations/"+candidate.OrganizationRef+"/subjects/"):
+		owned, err := processor.source.ProjectPurgeSubjectArtifactIsOwned(ctx, candidate, item)
+		if err != nil || !owned {
+			return errors.New("project purge artifact ownership is unconfirmed")
+		}
+	case strings.HasPrefix(item.Target, archivePrefix):
+		owned, err := processor.source.ProjectPurgeArchiveIsOwned(ctx, candidate, item)
+		if err != nil || !owned || processor.archives == nil {
+			return errors.New("project purge archive ownership is unconfirmed")
+		}
+		store = processor.archives
+	default:
 		return errors.New("project purge object escaped project scope")
 	}
 	shared, err := processor.source.ProjectPurgeObjectIsShared(ctx, candidate, item.Target)
 	if err != nil || shared {
 		return errors.New("project purge object ownership is ambiguous")
 	}
-	receipt, err := processor.objects.Head(ctx, item.Target, item.Version)
+	receipt, err := store.Head(ctx, item.Target, item.Version)
 	if errors.Is(err, objectstorage.ErrNotFound) {
 		return nil
 	}
 	if err != nil || receipt.Key != item.Target || item.Version != "" && receipt.VersionID != item.Version {
 		return errors.New("project purge object readback failed")
 	}
-	if err := processor.objects.Delete(ctx, item.Target, receipt.VersionID); err != nil && !errors.Is(err, objectstorage.ErrNotFound) {
+	if err := store.Delete(ctx, item.Target, receipt.VersionID); err != nil && !errors.Is(err, objectstorage.ErrNotFound) {
 		return errors.New("project purge object deletion failed")
 	}
-	if _, err := processor.objects.Head(ctx, item.Target, receipt.VersionID); !errors.Is(err, objectstorage.ErrNotFound) {
+	if _, err := store.Head(ctx, item.Target, receipt.VersionID); !errors.Is(err, objectstorage.ErrNotFound) {
 		return errors.New("project purge object remains after deletion")
 	}
 	return nil
 }
 
-func (processor *Processor) deletePVC(ctx context.Context, candidate platform.ProjectPurgeCandidate, item platform.ProjectPurgeExternalItem) error {
-	name, err := runtimecontract.SessionPVCName(item.Version)
-	if err != nil || name != item.Target || processor.namespace == "" {
-		return errors.New("project purge PVC identity is invalid")
+// PURGE_PENDING закрывает новые claims/materialization. Один свежий paginated
+// snapshot проверяет ВСЕ inventory PVC до любых external effects, включая
+// отсутствующие PVC с ещё живым потребителем. Не делаем O(sessions*pods) READ.
+func (processor *Processor) checkPVCConsumers(ctx context.Context, items []platform.ProjectPurgeExternalItem) error {
+	names := make(map[string]bool)
+	for _, item := range items {
+		if item.Kind != "PVC" {
+			continue
+		}
+		name, err := runtimecontract.SessionPVCName(item.Version)
+		if err != nil || name != item.Target || processor.namespace == "" {
+			return errors.New("project purge PVC identity is invalid")
+		}
+		names[name] = true
+	}
+	if len(names) == 0 {
+		return nil
 	}
 	continueToken := ""
 	for {
@@ -169,7 +243,7 @@ func (processor *Processor) deletePVC(ctx context.Context, candidate platform.Pr
 				continue
 			}
 			for _, volume := range pod.Spec.Volumes {
-				if volume.PersistentVolumeClaim != nil && volume.PersistentVolumeClaim.ClaimName == name {
+				if volume.PersistentVolumeClaim != nil && names[volume.PersistentVolumeClaim.ClaimName] {
 					return errors.New("project purge PVC is in use")
 				}
 			}
@@ -178,6 +252,14 @@ func (processor *Processor) deletePVC(ctx context.Context, candidate platform.Pr
 		if continueToken == "" {
 			break
 		}
+	}
+	return nil
+}
+
+func (processor *Processor) deletePVC(ctx context.Context, candidate platform.ProjectPurgeCandidate, item platform.ProjectPurgeExternalItem) error {
+	name, err := runtimecontract.SessionPVCName(item.Version)
+	if err != nil || name != item.Target || processor.namespace == "" {
+		return errors.New("project purge PVC identity is invalid")
 	}
 	pvcs := processor.kubernetes.CoreV1().PersistentVolumeClaims(processor.namespace)
 	pvc, err := pvcs.Get(ctx, name, metav1.GetOptions{})
@@ -188,21 +270,32 @@ func (processor *Processor) deletePVC(ctx context.Context, candidate platform.Pr
 		return errors.New("project purge PVC read failed")
 	}
 	if pvc.Labels[managedLabel] != "true" || pvc.Labels[sessionHashLabel] != shortHash(item.Version) ||
-		pvc.Annotations[organizationHashAnnotation] != shortHash(candidate.OrganizationRef) ||
-		pvc.Annotations[projectHashAnnotation] != shortHash(candidate.ProjectRef) {
+		pvc.Annotations[organizationHashAnnotation] != shortHash(candidate.OrganizationRef) {
 		return errors.New("project purge PVC ownership mismatch")
+	}
+	if pvc.Annotations[projectHashAnnotation] != shortHash(candidate.ProjectRef) {
+		if pvc.Annotations[projectHashAnnotation] != shortHash("") {
+			return errors.New("project purge PVC ownership mismatch")
+		}
+		owned, err := processor.source.ProjectPurgeGlobalPVCIsOwned(ctx, candidate, item.Version)
+		if err != nil || !owned {
+			return errors.New("project purge global PVC ownership is unconfirmed")
+		}
 	}
 	uid := pvc.UID
 	if err := pvcs.Delete(ctx, name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}}); err != nil && !apierrors.IsNotFound(err) {
 		return errors.New("project purge PVC deletion failed")
 	}
 	for {
-		_, err := pvcs.Get(ctx, name, metav1.GetOptions{})
+		after, err := pvcs.Get(ctx, name, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
 		if err != nil {
 			return errors.New("project purge PVC deletion readback failed")
+		}
+		if after.UID != uid {
+			return errors.New("project purge PVC was replaced")
 		}
 		select {
 		case <-ctx.Done():

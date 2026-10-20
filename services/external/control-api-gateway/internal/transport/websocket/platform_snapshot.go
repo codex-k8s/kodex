@@ -12,6 +12,7 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 	httptransport "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http"
 	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/websocket/generated"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -458,8 +459,22 @@ func (server *Server) projectPlatformSnapshotPage(ctx context.Context, kind, pro
 		catalog["runtimes"] = runtimeCatalog["runtimes"]
 		return map[string]any{"catalog": catalog}, nil
 	case "PROVIDER_ACCOUNT":
-		response, readErr := server.query.ListProviderAccounts(ctx, &controlplanev1.ListProviderAccountsRequest{Page: platformPage()})
+		finance, financeErr := server.query.ListProviderAccounts(scoped, &controlplanev1.ListProviderAccountsRequest{FinancialSummaryOnly: true})
+		if financeErr != nil {
+			return nil, financeErr
+		}
+		if finance.GetFinancialSummary() == nil {
+			return nil, errPlatformSnapshotInvalid
+		}
+		financeMap, financeErr := projectSnapshotPart(finance.GetFinancialSummary(), localize)
+		if financeErr != nil {
+			return nil, financeErr
+		}
+		response, readErr := server.query.ListProviderAccounts(scoped, &controlplanev1.ListProviderAccountsRequest{Page: &controlplanev1.PageRequest{PageSize: assistantPageSize}})
 		if readErr != nil {
+			if providerCatalogOversized(readErr) {
+				return map[string]any{"catalog": map[string]any{"financialSummary": financeMap, "providerCatalogUnavailable": true}}, nil
+			}
 			return nil, readErr
 		}
 		definitions, readErr := server.query.ListProviderDefinitions(ctx, &controlplanev1.ListProviderDefinitionsRequest{Page: platformPage()})
@@ -474,6 +489,7 @@ func (server *Server) projectPlatformSnapshotPage(ctx context.Context, kind, pro
 		if projectErr != nil {
 			return nil, projectErr
 		}
+		catalog["financialSummary"] = financeMap
 		catalog["providerDefinitions"] = definitionCatalog["definitions"]
 		catalog["providerDefinitionsPage"] = definitionCatalog["page"]
 		runtimes, readErr := server.query.ListRuntimeSelections(ctx, &controlplanev1.ListRuntimeSelectionsRequest{})
@@ -610,7 +626,22 @@ func (multiplexer *sessionMultiplexer) boundedPlatformSnapshotWithin(ctx context
 			}
 			return envelope, nil
 		}
-		if envelope.Kind != generated.PlatformResourceKindSystemAssistant || pageSize == 1 {
+		if envelope.Kind == generated.PlatformResourceKindProviderAccount && pageSize == 1 {
+			catalog, ok := rawSnapshot["catalog"].(map[string]any)
+			if !ok || catalog["financialSummary"] == nil {
+				return generated.PlatformSnapshotEnvelope{}, errPlatformSnapshotInvalid
+			}
+			limited := map[string]any{"catalog": map[string]any{"financialSummary": catalog["financialSummary"], "providerCatalogUnavailable": true}}
+			envelope.Snapshot, err = typedPlatformSnapshot("PROVIDER_ACCOUNT", limited)
+			if err != nil {
+				return generated.PlatformSnapshotEnvelope{}, err
+			}
+			encoded, err = json.Marshal(envelope)
+			if err == nil && len(encoded) <= maximumFrameBytes {
+				return envelope, nil
+			}
+		}
+		if (envelope.Kind != generated.PlatformResourceKindSystemAssistant && envelope.Kind != generated.PlatformResourceKindProviderAccount) || pageSize == 1 {
 			slog.Error(platformSnapshotSizeFailure, "kind", envelope.Kind, "error_class", "frame_size", "frame_bytes", len(encoded))
 			return generated.PlatformSnapshotEnvelope{}, errPlatformSnapshotSize
 		}
@@ -653,4 +684,17 @@ func (multiplexer *sessionMultiplexer) sendPlatformBootstrap() ([]generated.Plat
 		available = append(available, generated.PlatformResourceKind(kind))
 	}
 	return available, nil
+}
+
+// Только закрытый CP outcome ограничения каталога; auth/network ошибки не подавляются.
+func providerCatalogOversized(err error) bool {
+	if status.Code(err) != codes.Unavailable {
+		return false
+	}
+	for _, detail := range status.Convert(err).Details() {
+		if info, ok := detail.(*errdetails.ErrorInfo); ok && info.Domain == "kodex.control-plane" && info.Reason == "PROVIDER_CATALOG_TOO_LARGE" && len(info.Metadata) == 0 {
+			return true
+		}
+	}
+	return false
 }

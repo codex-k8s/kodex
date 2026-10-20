@@ -4,8 +4,8 @@ title: Кодификация документов и задач
 type: governance
 status: approved
 owner: manager
-version: 2.2.8
-updated: 2026-10-13
+version: 2.2.10
+updated: 2026-10-20
 ---
 
 # Кодификация документов и задач
@@ -75,6 +75,8 @@ updated: 2026-07-28
 
 ## Реестр
 
+- `OPS-PROTOTYPE-HANDOFF-1031` — [Единый прототип перед построчным ревью](../operations/prototype-review-handoff-1031.md).
+
 | Код                | Файл                                                        |
 | ------------------ | ----------------------------------------------------------- |
 | `AGENT-DOC-001`    | `AGENTS.md`                                                 |
@@ -131,6 +133,7 @@ updated: 2026-07-28
 | `OPS-DOC-1763` | `docs/operations/assistant-prototype-debug-1763.md` |
 | `OPS-DOC-SELFDEV-001` | `docs/operations/self-development-dogfooding.md` |
 | `OPS-DOC-SELFDEV-002` | `docs/operations/self-development-handoff.md` |
+| `OPS-PUBLIC-STABLE-001` | `docs/operations/public-stable-1810.md` |
 | `QA-DOC-SELFDEV-001` | `docs/qa/full-qa-task.md` |
 | `QA-DOC-SELFDEV-002` | `docs/qa/bootstrap-1797-evidence-ledger.md` |
 | `ADR-MC-000`       | `docs/decisions/README.md`                                  |
@@ -147,6 +150,7 @@ updated: 2026-07-28
 | `GO-DOC-004`       | `docs/guides/event-delivery-go.md`                          |
 | `GO-DOC-005`       | `docs/guides/interservice-communication.md`                 |
 | `GO-DOC-006`       | `docs/guides/shared-go-libraries.md`                        |
+| `GO-DOC-007`       | `docs/guides/provider-financial-observations.md`             |
 | `GO-LIB-MAIL-POLICY-001` | `libs/go/mailpolicy/README.md` |
 | `GO-LIB-DNS-RESOLVER-001` | `libs/go/dnsresolver/README.md` |
 | `SVC-MC-005`       | `services/internal/runtime-controller/README.md`            |

@@ -234,12 +234,19 @@ func snapshotRetryPredecessors(graph *controlplanev1.RunGraph, values []*control
 	links := map[string]string{}
 	previous := map[string]bool{}
 	for _, edge := range graph.GetEdges() {
-		if edge.GetType() != controlplanev1.RunEdgeType_RUN_EDGE_TYPE_RETRY_OF {
+		if edge.GetType() != controlplanev1.RunEdgeType_RUN_EDGE_TYPE_RETRY_OF && edge.GetType() != controlplanev1.RunEdgeType_RUN_EDGE_TYPE_CONTINUES {
 			continue
 		}
 		oldNode, newNode := nodes[edge.GetSourceNodeRef()], nodes[edge.GetTargetNodeRef()]
+		if edge.GetType() == controlplanev1.RunEdgeType_RUN_EDGE_TYPE_CONTINUES && oldNode != nil && newNode != nil && oldNode.GetRunRef() == newNode.GetRunRef() {
+			continue
+		}
 		old, fresh := runs[oldNode.GetRunRef()], runs[newNode.GetRunRef()]
-		if old == nil || fresh == nil || oldNode.GetType() != controlplanev1.RunNodeType_RUN_NODE_TYPE_ROOT_PROCESS || newNode.GetType() != controlplanev1.RunNodeType_RUN_NODE_TYPE_ROOT_PROCESS || old.GetRef() != old.GetRootRunRef() || fresh.GetRef() != fresh.GetRootRunRef() || fresh.GetRetryOfRunRef() != old.GetRef() || edge.GetRunRef() != fresh.GetRef() || old.GetRef() == fresh.GetRef() || links[fresh.GetRef()] != "" {
+		if old == nil || fresh == nil || oldNode.GetType() != controlplanev1.RunNodeType_RUN_NODE_TYPE_ROOT_PROCESS || newNode.GetType() != controlplanev1.RunNodeType_RUN_NODE_TYPE_ROOT_PROCESS || old.GetRef() != old.GetRootRunRef() || fresh.GetRef() != fresh.GetRootRunRef() || edge.GetRunRef() != fresh.GetRef() || old.GetRef() == fresh.GetRef() || links[fresh.GetRef()] != "" {
+			return nil, false
+		}
+		if (edge.GetType() == controlplanev1.RunEdgeType_RUN_EDGE_TYPE_RETRY_OF && fresh.GetRetryOfRunRef() != old.GetRef()) ||
+			(edge.GetType() == controlplanev1.RunEdgeType_RUN_EDGE_TYPE_CONTINUES && (old.GetSessionRef() == "" || fresh.GetSessionRef() != old.GetSessionRef() || old.GetState() != controlplanev1.RunState_RUN_STATE_SUCCEEDED || fresh.GetRetryOfRunRef() != "")) {
 			return nil, false
 		}
 		links[fresh.GetRef()] = old.GetRef()

@@ -13,11 +13,14 @@ import (
 
 func TestCorePromptV53RecommendsScopedRepositoryCache(t *testing.T) {
 	previous, err := os.ReadFile("prompts/system-assistant-core-v52.md")
+	version53, version53Err := os.ReadFile("prompts/system-assistant-core-v53.md")
 	if err != nil || fmt.Sprintf("%x", sha256.Sum256(previous)) != "66e76fe7c279e0f97d611608a0b29071228fe88d5f4eb2aaabd46501426fe698" ||
-		CorePromptRevision != "system-assistant-core-v53" || !strings.HasPrefix(CorePrompt(), string(previous)+"\n") {
-		t.Fatal("published v52 bytes or current v53 binding changed")
+		version53Err != nil || fmt.Sprintf("%x", sha256.Sum256(version53)) != "b779cfe89738e2804d7afac4ce9dcfb9afe164b95489a1dd9ef8733e7e960fb5" ||
+		CorePromptRevision != "system-assistant-core-v54" || !strings.HasPrefix(string(version53), string(previous)+"\n") ||
+		!strings.HasPrefix(CorePrompt(), string(version53)+"\n") {
+		t.Fatal("published prompt bytes or current revision binding changed")
 	}
-	addition := strings.TrimPrefix(CorePrompt(), string(previous))
+	addition := strings.TrimPrefix(string(version53), string(previous))
 	if len(addition) > 2048 || len(CorePrompt()) > 64<<10 {
 		t.Fatal("cache recommendation exceeds its byte budget")
 	}

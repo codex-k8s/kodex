@@ -5,7 +5,7 @@ metadata:
 spec:
   serverName: staff-control-center.kodex-system.svc.cluster.local
   insecureSkipVerify: false
-  rootCAsSecrets:
-    - staff-control-center-backend-tls
+  rootCAs:
+    - secret: staff-control-center-backend-tls
   certificatesSecrets:
     - staff-control-center-ingress-client-tls

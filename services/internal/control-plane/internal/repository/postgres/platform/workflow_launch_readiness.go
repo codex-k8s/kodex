@@ -90,6 +90,12 @@ func (r *Repository) projectWorkflowLaunchReadiness(ctx context.Context, runner 
 		if !ok {
 			return errs.ErrNotFound
 		}
+		if item.Published != nil && !validWorkflowVersion(*item.Published) {
+			value.AllowedToSubmit = false
+			value.OperationalState = "BLOCKED"
+			value.Reason = "DEPENDENCY_UNAVAILABLE"
+			value.ContextDigest = digestBytes(asJSON(struct{ Workflow, Configuration string }{value.ContextDigest, workflowVersionInvalidField(*item.Published)}))
+		}
 		if value.AllowedToSubmit {
 			provider, found := providers[coordinators[item.Ref]]
 			if !found {

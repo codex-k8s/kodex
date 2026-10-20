@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { closeSync, constants, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const frontendDirectory = "services/staff/control-center";
 const frontendMountpoints = ["node_modules", "public/config"];
@@ -112,7 +113,7 @@ export function inspectSource(path, frontend = false) {
     encoding: "utf8", timeout: 10000, maxBuffer: 8 << 20, stdio: ["ignore", "pipe", "pipe"],
   }).trim();
   requireValue(git("rev-parse", "--show-toplevel") === path &&
-    ["https://github.com/codex-k8s/kodex.git", "git@github.com:codex-k8s/kodex.git"].includes(git("remote", "get-url", "origin")) &&
+    ["https://github.com/codex-k8s/kodex.git", "https://github.com/codex-k8s/kodex", "git@github.com:codex-k8s/kodex.git"].includes(git("remote", "get-url", "origin")) &&
     git("status", "--porcelain", "--untracked-files=all") === "",
   "SOURCE_CHECKOUT_NOT_EXACT");
   requirePrivateInputsAbsent(path, git);
@@ -167,9 +168,21 @@ export function createApplicationSource(repository, source) {
   catch (error) { if (error.code !== "ENOENT") throw error; }
   // Никаких chmod существующих файлов, копирования ignored data или удаления
   // частичного результата. Неудачная подготовка никогда не вызывает PATCH.
-  withSourceMask(() => execFileSync("git", ["-C", repository, "worktree", "add", "--detach", source.path, source.revision], {
+  // Для directory mask /workspace/.git нужен clone, не worktree с .git-файлом.
+  // Копируются только Git objects; ignored inputs исходного клона не читаются.
+  const run = (...args) => execFileSync("git", args, {
     encoding: "utf8", timeout: 120000, maxBuffer: 1 << 20, stdio: ["ignore", "pipe", "pipe"],
-  }));
+  });
+  withSourceMask(() => {
+    run("clone", "--shared", "--no-hardlinks", "--no-checkout", repository, source.path);
+    run("-C", source.path, "remote", "set-url", "origin", run("-C", repository, "remote", "get-url", "origin").trim());
+    run("-C", source.path, "checkout", "--detach", source.revision);
+  });
+  execFileSync("python3", ["-B", fileURLToPath(new URL("../dev/local_hot_reload.py", import.meta.url)),
+    "prepare-source-mask", "--source-root", source.path, "--cache-root", `${source.path}-cache`,
+    "--host-uid", String(process.getuid()), "--host-gid", String(process.getgid())], {
+    encoding: "utf8", timeout: 10000, stdio: ["ignore", "pipe", "pipe"],
+  });
   requireValue(inspectSource(source.path).revision === source.revision, "SOURCE_REVISION_MISMATCH");
   return { ...prepareApplicationSource(source), sourceCreated: true };
 }

@@ -24,9 +24,16 @@ export function configureApiClient(): void {
   client.interceptors.request.use((request) => {
     const localizedHeaders = new Headers(request.headers);
     localizedHeaders.set("Accept-Language", currentLocale());
-    const match = new URL(request.url).pathname.match(
-      /^\/api\/v1\/projects\/([^/]+)/,
-    );
+    const pathname = new URL(request.url).pathname;
+    // Recovery принадлежит организации и переживает удаление project scope.
+    if (/^\/api\/v1\/projects\/[^/]+\/purge-recovery$/.test(pathname)) {
+      localizedHeaders.delete(projectReferenceHeader);
+      return retainRequestSignalParents(
+        new Request(request, { headers: localizedHeaders }),
+        request,
+      );
+    }
+    const match = pathname.match(/^\/api\/v1\/projects\/([^/]+)/);
     const reference = selectedProjectRef();
     if (
       !reference ||

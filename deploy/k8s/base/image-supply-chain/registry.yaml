@@ -113,7 +113,7 @@ spec:
             - name: tmp
               mountPath: /tmp
         - name: pull-authorizer
-          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/image-admission@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          image: kodex-image-registry.kodex-system.svc.cluster.local:5000/kodex/registry-pull-authorizer@sha256:0000000000000000000000000000000000000000000000000000000000000000
           command: [/usr/local/bin/registry-pull-authorizer]
           env:
             - name: REGISTRY_PULL_HOST

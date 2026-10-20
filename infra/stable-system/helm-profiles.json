@@ -1,0 +1,60 @@
+{
+  "schema": "kodex.stable-system-helm/v1",
+  "profiles": [
+    {
+      "name": "cert-manager",
+      "namespace": "cert-manager",
+      "release": "cert-manager",
+      "deployments": ["cert-manager", "cert-manager-cainjector", "cert-manager-webhook"],
+      "values": {
+        "replicaCount": 2,
+        "resources": { "requests": { "cpu": "50m", "memory": "128Mi" }, "limits": { "cpu": "500m", "memory": "512Mi" } },
+        "podDisruptionBudget": { "enabled": true, "minAvailable": 1 },
+        "cainjector": {
+          "replicaCount": 2,
+          "resources": { "requests": { "cpu": "50m", "memory": "128Mi" }, "limits": { "cpu": "500m", "memory": "512Mi" } },
+          "podDisruptionBudget": { "enabled": true, "minAvailable": 1 }
+        },
+        "webhook": {
+          "replicaCount": 2,
+          "resources": { "requests": { "cpu": "50m", "memory": "64Mi" }, "limits": { "cpu": "500m", "memory": "256Mi" } },
+          "podDisruptionBudget": { "enabled": true, "minAvailable": 1 }
+        }
+      }
+    },
+    {
+      "name": "trust-manager",
+      "namespace": "cert-manager",
+      "release": "kodex-trust-manager",
+      "deployments": ["trust-manager"],
+      "values": {
+        "replicaCount": 2,
+        "resources": { "requests": { "cpu": "50m", "memory": "64Mi" }, "limits": { "cpu": "500m", "memory": "256Mi" } },
+        "defaultPackage": { "resources": { "requests": { "cpu": "10m", "memory": "32Mi" }, "limits": { "cpu": "100m", "memory": "128Mi" } } },
+        "app": { "leaderElection": { "enabled": true } },
+        "podDisruptionBudget": { "enabled": true, "minAvailable": 1 }
+      }
+    },
+    {
+      "name": "kube-prometheus-stack",
+      "namespace": "observability",
+      "release": "kodex-monitoring",
+      "deployments": ["kodex-monitoring-kube-state-metrics"],
+      "alertmanager": "kodex-monitoring-kube-prom-alertmanager",
+      "values": {
+        "kube-state-metrics": {
+          "replicas": 2,
+          "resources": { "requests": { "cpu": "50m", "memory": "128Mi" }, "limits": { "cpu": "500m", "memory": "512Mi" } },
+          "podDisruptionBudget": { "minAvailable": 1 }
+        },
+        "alertmanager": {
+          "podDisruptionBudget": { "enabled": true, "minAvailable": 1, "unhealthyPodEvictionPolicy": "AlwaysAllow" },
+          "alertmanagerSpec": {
+            "replicas": 2,
+            "resources": { "requests": { "cpu": "50m", "memory": "128Mi" }, "limits": { "cpu": "500m", "memory": "1Gi" } }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -564,9 +564,9 @@ func (runtime *runtime) completeFailure(base context.Context, input runtimecontr
 		}
 	}
 	if err != nil {
-		if input.ExecutionDeadline != nil && status.Code(err) == codes.PermissionDenied {
-			// Owner expiry уже committed и отозвал exact lease. Этот отказ
-			// не является outage: прежний Pod больше нельзя сохранять.
+		if status.Code(err) == codes.PermissionDenied {
+			// Owner отозвал exact lease (включая cancel/interrupt без deadline).
+			// Такой отказ не разрешает сохранять прежний Pod и его sidecars.
 			runtime.closeRevokedTurn(base, input, nil)
 			return
 		}

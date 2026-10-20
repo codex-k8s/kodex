@@ -447,7 +447,7 @@ PROVIDER_APPARMOR_PROFILE="$provider_apparmor_profile" yq -i '
       .imagePullPolicy = "IfNotPresent"
     ) |
     with((.spec.template.spec.initContainers[]?, .spec.template.spec.containers[]?) |
-        select(.image | test("/image-admission@sha256:"));
+      select(.image | test("/(image-admission|image-admission-controller|registry-pull-authorizer)@sha256:"));
       .image = strenv(IMAGE_ADMISSION_IMAGE) |
       .imagePullPolicy = "IfNotPresent"
     ) |
@@ -1577,10 +1577,10 @@ yq -o=json -I=0 '.' "$output" | jq -s -e --arg image "$runtime_session_archive_i
       verbs:(.verbs | sort)
     }] | sort_by(.resources[0])) ==
     ([
-      {apiGroups:[""], resources:["configmaps"], verbs:["create","delete","deletecollection"]},
+      {apiGroups:[""], resources:["configmaps"], verbs:["create","delete","get"]},
       {apiGroups:[""], resources:["persistentvolumeclaims"], verbs:["create","delete","get"]},
       {apiGroups:[""], resources:["pods"], verbs:["list"]},
-      {apiGroups:["batch"], resources:["jobs"], verbs:["create","delete","deletecollection","get","list"]}
+      {apiGroups:["batch"], resources:["jobs"], verbs:["create","delete","get","list"]}
     ] | sort_by(.resources[0]))) and
   any(.[];
     .kind == "Role" and .metadata.name == "session-archive-worker" and

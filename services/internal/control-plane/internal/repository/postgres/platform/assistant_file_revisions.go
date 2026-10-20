@@ -246,6 +246,10 @@ func (repository *Repository) createProjectFileRevision(ctx context.Context, tx 
 	if p.Digest != payload.Digest || p.SizeBytes != payload.SizeBytes || p.MediaType != payload.MediaType || p.ScanState != "CLEAN" {
 		return commandOutcome{}, errs.ErrConflict
 	}
+	scanJSON, err := artifactAntivirusJSON(p.Antivirus)
+	if err != nil || p.Antivirus.Infected || p.Antivirus.Digest != p.Digest || p.Antivirus.SizeBytes != p.SizeBytes {
+		return commandOutcome{}, errs.ErrConflict
+	}
 	receiptRef, err := newRef("obj")
 	if err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
@@ -255,7 +259,7 @@ func (repository *Repository) createProjectFileRevision(ctx context.Context, tx 
 		item.Source, p.ScanState, receiptRef, p.PreviewState, current.actorID).Scan(&revisionID); err != nil {
 		return commandOutcome{}, mapWriteError(err)
 	}
-	if _, err := tx.Exec(ctx, queryArtifactRevisionCreateContent, revisionID, p.ObjectKey, p.ObjectVersion, p.ObjectETag, p.Digest, p.SizeBytes); err != nil {
+	if _, err := tx.Exec(ctx, queryArtifactRevisionCreateContent, revisionID, p.ObjectKey, p.ObjectVersion, p.ObjectETag, p.Digest, p.SizeBytes, scanJSON); err != nil {
 		return commandOutcome{}, errs.ErrUnavailable
 	}
 	tag, err := tx.Exec(ctx, queryArtifactRevisionAdvanceHead, artifactID, revisionID, version)

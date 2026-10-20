@@ -1251,6 +1251,48 @@ const ru = {
     purgeConfirmName: "Название проекта для подтверждения",
     purgePending: "Идёт безвозвратное удаление",
     purgeAfter: "Автоматическое удаление после",
+    recovery: {
+      title: "Продолжить удаление проекта",
+      deletedProject: "Удаление проекта",
+      statusLink:
+        "Ссылка на состояние удаления — сохраните её для проверки позже",
+      details: "Подробнее",
+      required:
+        "Удаление приостановлено: результат загрузки неизвестен. Нужно решение владельца.",
+      reason:
+        "Загрузок с неизвестным результатом: {count}. Чтобы продолжить удаление, откажитесь от их результата.",
+      retryReason:
+        "Очистка ранее отклонённого результата требует повторной попытки.",
+      irreversible:
+        "Отказ необратим: восстановить или использовать результат этих загрузок будет нельзя.",
+      retryWarning:
+        "Повтор касается только очистки. Первоначальное решение об отказе от результата не изменится.",
+      observation:
+        "Отсутствие объекта сейчас не подтверждает полную очистку: загрузка могла завершиться позднее. Минимальный технический контроль запоздалой загрузки сохранится и после удаления проекта.",
+      acknowledge:
+        "Понимаю необратимую потерю результата и разрешаю продолжить удаление.",
+      acknowledgeRetry:
+        "Разрешаю новую попытку очистки ранее отклонённого результата.",
+      continue: "Подтвердить и продолжить",
+      submitting: "Отправляем решение…",
+      refresh: "Обновить состояние",
+      stale:
+        "Состояние изменилось. Показаны свежие данные — прочитайте их и подтвердите решение заново.",
+      uncertain:
+        "Ответ на предыдущее решение не получен. Сначала обновите состояние. Повтор после нового подтверждения использует тот же запрос и не создаёт второго решения.",
+      cleanupPending:
+        "Решение принято. Незавершённых проверок очистки: {count}. Это ещё не подтверждение полного удаления данных.",
+      state: {
+        WAITING_OWNER: "Удаление ждёт вашего решения.",
+        QUEUED: "Очистка поставлена в очередь.",
+        OBSERVING:
+          "Проверяем, не появилась ли запоздалая загрузка. Полная очистка пока не подтверждена.",
+        DELETED_CONFIRMED: "Удаление объектов подтверждено.",
+        NONE: "Дополнительное решение для удаления не требуется.",
+        BLOCKED:
+          "Очистка остановлена. Обновите состояние; если действие недоступно, обратитесь к администратору.",
+      },
+    },
   },
   project: {
     subtitle: "Работа, сотрудники и процессы этого Проекта",
@@ -3561,6 +3603,32 @@ const ru = {
     },
   },
   providers: {
+    finance: {
+      label: "Лимиты аккаунтов Codex",
+      unavailable: "Лимиты и кредиты недоступны",
+      stale: "Данные устарели",
+      limitUnknown: "Лимит недоступен",
+      remaining: "Осталось {remaining}% включённого лимита",
+      balanceUnit: "Единица баланса и денежный эквивалент не установлены",
+      spending: "Ограничение расходов провайдера",
+      restriction: "Ограничение аккаунта провайдера",
+      window: "Окно {duration}: осталось {remaining}%",
+      durationUnknown: "длительность недоступна",
+      minutes: "{duration} мин",
+      reset: "Сброс: {date}",
+      observed: "Наблюдение: {date}",
+      exhausted:
+        "Включённый лимит исчерпан: {count}. Кредиты показаны отдельно.",
+      incomplete: "Недоступные данные не сравниваются с известными остатками.",
+      creditsUnknown: "Кредиты: недоступно",
+      creditsUnlimited: "Кредиты: без ограничения",
+      creditsUnlimitedBalance: "Кредиты: без ограничения; баланс: {balance}",
+      creditsBalance: "Кредиты: {balance}",
+      creditsPresent: "Кредиты: есть; баланс недоступен",
+      creditsAbsent: "Кредиты: нет; баланс недоступен",
+    },
+    catalogUnavailableText:
+      "Каталог временно недоступен. Финансовая сводка получена отдельно.",
     catalogObserved: "Проверено",
     accountSettings: "Настройки аккаунта",
     accountSettingsTitle: "Настройки аккаунта: {name}",
@@ -6014,6 +6082,47 @@ const en = {
     purgeConfirmName: "Project name for confirmation",
     purgePending: "Permanent deletion in progress",
     purgeAfter: "Automatic removal after",
+    recovery: {
+      title: "Continue Project deletion",
+      deletedProject: "Project deletion",
+      statusLink: "Deletion status link — save it to check again later",
+      details: "Details",
+      required:
+        "Deletion paused: an upload outcome is unknown. An owner decision is required.",
+      reason:
+        "Uploads with an unknown outcome: {count}. Abandon their result to continue deletion.",
+      retryReason:
+        "Cleanup of a previously abandoned result needs another attempt.",
+      irreversible:
+        "Abandoning the result is irreversible: these uploads cannot be restored or used.",
+      retryWarning:
+        "This retries cleanup only. The original decision to abandon the result is unchanged.",
+      observation:
+        "An absent object does not prove complete cleanup: an upload may finish later. Minimal technical monitoring for a late upload remains after Project deletion.",
+      acknowledge:
+        "I understand the irreversible loss of the result and authorize deletion to continue.",
+      acknowledgeRetry:
+        "I authorize another cleanup attempt for the previously abandoned result.",
+      continue: "Confirm and continue",
+      submitting: "Submitting decision…",
+      refresh: "Refresh status",
+      stale:
+        "The state changed. Review the refreshed details and confirm again.",
+      uncertain:
+        "The previous decision response was not received. Refresh status first. An explicitly confirmed retry reuses the same request and cannot create a second decision.",
+      cleanupPending:
+        "Decision recorded. Cleanup checks pending: {count}. Complete data deletion is not yet confirmed.",
+      state: {
+        WAITING_OWNER: "Deletion awaits your decision.",
+        QUEUED: "Cleanup is queued.",
+        OBSERVING:
+          "Watching for a late upload. Complete cleanup is not yet confirmed.",
+        DELETED_CONFIRMED: "Object deletion is confirmed.",
+        NONE: "No additional decision is required for deletion.",
+        BLOCKED:
+          "Cleanup is blocked. Refresh status; contact an administrator if no action is available.",
+      },
+    },
   },
   project: {
     subtitle: "Work, employees and processes in this Project",
@@ -8192,6 +8301,34 @@ const en = {
   },
   providers: {
     ...ru.providers,
+    finance: {
+      label: "Codex account limits",
+      unavailable: "Limits and credits unavailable",
+      stale: "Data is stale",
+      limitUnknown: "Limit unavailable",
+      remaining: "{remaining}% of included limit remaining",
+      balanceUnit:
+        "Balance units and monetary equivalent have not been established",
+      spending: "Upstream spending restriction",
+      restriction: "Upstream account restriction",
+      window: "Window {duration}: {remaining}% remaining",
+      durationUnknown: "duration unavailable",
+      minutes: "{duration} min",
+      reset: "Reset: {date}",
+      observed: "Observed: {date}",
+      exhausted:
+        "Included limit exhausted: {count}. Credits are shown separately.",
+      incomplete:
+        "Unavailable data cannot be compared with known remaining limits.",
+      creditsUnknown: "Credits: unavailable",
+      creditsUnlimited: "Credits: unlimited",
+      creditsUnlimitedBalance: "Credits: unlimited; balance: {balance}",
+      creditsBalance: "Credits: {balance}",
+      creditsPresent: "Credits: available; balance unavailable",
+      creditsAbsent: "Credits: none; balance unavailable",
+    },
+    catalogUnavailableText:
+      "The catalog is unavailable. The financial summary was read separately.",
     accountSettings: "Account settings",
     accountSettingsTitle: "Account settings: {name}",
     concurrencyLimit: "Concurrent executions",

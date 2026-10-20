@@ -743,6 +743,10 @@ export const serverTokenTranslations = {
     "Permanent project deletion requested",
   ],
   PROJECT_PURGED: ["Проект удалён безвозвратно", "Project permanently deleted"],
+  PROJECT_PURGE_RECOVERY_RESOLVED: [
+    "Подтверждено продолжение удаления проекта",
+    "Project deletion recovery confirmed",
+  ],
   PROVIDER_ACCOUNT_AUTHORIZED: [
     "Учётная запись провайдера авторизована",
     "Provider account authorized",

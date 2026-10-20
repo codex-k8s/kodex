@@ -69,9 +69,18 @@ func (repository *Repository) Execute(ctx context.Context, input command.Command
 	if err := repository.authorizeCommand(ctx, tx, scope, input); err != nil {
 		return command.Result{}, err
 	}
+	if err := repository.bindFinancialCallbackReceipt(ctx, tx, scope, &input); err != nil {
+		return command.Result{}, err
+	}
 	var storedDigest string
 	var storedPayload []byte
-	err = tx.QueryRow(ctx, queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation, scope.organizationID, scope.actorID, input.Mutation.Operation, input.Mutation.IdempotencyKey).Scan(&storedDigest, &storedPayload)
+	receiptQuery := queryCommandsExecuteSelectIdempotencyReceiptsOrganizationIdActorIdOperation
+	if payload, ok := input.Payload.(command.LeaseInput); input.Kind == command.ReportExecutionProgress && ok && payload.Financial != nil {
+		// Долгий активный execution сохраняет semantic receipt; текущее право
+		// уже проверено bindFinancialCallbackReceipt, TTL не выдаёт authority.
+		receiptQuery = queryProviderFinancialReceipt
+	}
+	err = tx.QueryRow(ctx, receiptQuery, scope.organizationID, scope.actorID, input.Mutation.Operation, input.Mutation.IdempotencyKey).Scan(&storedDigest, &storedPayload)
 	if err == nil {
 		if storedDigest != input.Mutation.IntentDigest {
 			return command.Result{}, errs.ErrIdempotencyReuse
@@ -301,6 +310,8 @@ func (repository *Repository) applyCommand(ctx context.Context, tx pgx.Tx, scope
 		return repository.updateProject(ctx, tx, scope, input.Mutation, input.Payload)
 	case command.TrashProject, command.RestoreProject, command.PurgeProject:
 		return repository.changeProjectLifecycle(ctx, tx, scope, input)
+	case command.ResolveProjectPurgeRecovery:
+		return repository.resolveProjectPurgeRecovery(ctx, tx, scope, input)
 	case command.AddPlatformMembership, command.ChangePlatformMembership, command.RemovePlatformMembership:
 		return repository.changePlatformMembership(ctx, tx, scope, input)
 	case command.AddMembership, command.ChangeMembership, command.RemoveMembership:
@@ -1370,6 +1381,22 @@ const (
 
 // Закрытый код не раскрывает содержимое поля или индекс этапа.
 func workflowVersionInvalidField(version entity.WorkflowVersion) string {
+	if field := workflowVersionStructureInvalidField(version); field != "" {
+		return field
+	}
+	if !workflowRequiresDelegation(version) {
+		for _, step := range version.Steps {
+			if contains(step.RequiredCapabilityKeys, "platform.run.delegate") {
+				return workflowInvalidInvariants
+			}
+		}
+	}
+	return ""
+}
+
+// Структурно корректный, но неисполнимый профиль остаётся доступным для
+// исправления. Это не даёт ему права на публикацию или запуск.
+func workflowVersionStructureInvalidField(version entity.WorkflowVersion) string {
 	// maxLength считается в Unicode-символах, общий бюджет ниже остаётся байтовым.
 	if !validWorkflowText(version.Name, 160) || !validWorkflowText(version.Purpose, 2000) || !validWorkflowText(version.CompletionCriteria, 2000) || !utf8.ValidString(version.Instructions) {
 		return workflowInvalidInvariants
@@ -2404,6 +2431,13 @@ func (repository *Repository) addSessionTurn(ctx context.Context, tx pgx.Tx, sco
 	nested.Payload = launch
 	if err := repository.authorizeCommand(ctx, tx, scope, nested); err != nil {
 		return commandOutcome{}, err
+	}
+	if targetType == "WORKFLOW" {
+		launch.Input, err = readSessionContinuationInput(ctx, tx, scope, payload.SessionRef, payload.RunRef)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		nested.Payload = launch
 	}
 	outcome, err := repository.launchRun(ctx, tx, scope, nested)
 	if err != nil {

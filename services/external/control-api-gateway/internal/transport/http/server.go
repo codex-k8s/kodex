@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	emailbridgeapi "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
+
+	emailbridgeapi "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
@@ -328,10 +329,12 @@ func messageMap(message proto.Message) (map[string]any, error) {
 
 const maximumSafeJSONInteger = int64(1<<53 - 1)
 
-var errPublicSecretDescriptor = errors.New("public Secret descriptor revision is invalid")
-var errPublicProviderStatusReason = errors.New("public provider status reason is invalid")
-var errPublicAvatarShape = errors.New("public agent avatar response is invalid")
-var errPublicRuntimeEnvironmentShape = errors.New("public runtime environment response is invalid")
+var (
+	errPublicSecretDescriptor        = errors.New("public Secret descriptor revision is invalid")
+	errPublicProviderStatusReason    = errors.New("public provider status reason is invalid")
+	errPublicAvatarShape             = errors.New("public agent avatar response is invalid")
+	errPublicRuntimeEnvironmentShape = errors.New("public runtime environment response is invalid")
+)
 
 func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.MessageDescriptor) (normalizationErr error) {
 	if descriptor.FullName() == "controlplane.v1.RunMessage" || descriptor.FullName() == "controlplane.v1.AssistantTurn" {
@@ -510,6 +513,9 @@ func normalizeProtoJSONShape(value map[string]any, descriptor protoreflect.Messa
 }
 
 func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field protoreflect.FieldDescriptor) (any, bool) {
+	if descriptor.FullName() == "controlplane.v1.ProviderFinancialOverview" && isProto64BitInteger(field.Kind()) {
+		return float64(0), true
+	}
 	if descriptor.FullName() == "controlplane.v1.ListRunEventsResponse" {
 		if field.Kind() == protoreflect.BoolKind && field.JSONName() == "complete" {
 			return false, true
@@ -618,6 +624,12 @@ func requiredProtoScalarDefault(descriptor protoreflect.MessageDescriptor, field
 	}
 	if descriptor.FullName() == "controlplane.v1.RunSessionArchiveTask" && field.Kind() == protoreflect.Int32Kind {
 		return float64(0), field.JSONName() == "attempt"
+	}
+	if descriptor.FullName() == "controlplane.v1.ProviderFinancialWindow" && field.Kind() == protoreflect.Int32Kind {
+		return nil, false
+	}
+	if descriptor.FullName() == "controlplane.v1.ProviderFinancialCredits" && field.Kind() == protoreflect.BoolKind {
+		return false, false
 	}
 	if descriptor.FullName() == "controlplane.v1.ProviderAccount" && field.Kind() == protoreflect.BoolKind {
 		return false, field.JSONName() == "enabled" || field.JSONName() == "ready"

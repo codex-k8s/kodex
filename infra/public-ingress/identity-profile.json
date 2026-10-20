@@ -1,0 +1,12 @@
+{
+  "schema": "kodex.public-identity-profile/v1",
+  "platformHost": "platform.kodex.works",
+  "oidcHost": "sso.kodex.works",
+  "realm": "kodex",
+  "namespace": "kodex-system",
+  "identityNamespace": "identity",
+  "endpointsName": "kodex-platform-endpoints",
+  "oidcConnectAddress": "sso.identity.svc.cluster.local:443",
+  "platformCertificate": "kodex-public-platform-tls",
+  "oidcCertificate": "kodex-public-identity-tls"
+}

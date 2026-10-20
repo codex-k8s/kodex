@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -66,6 +67,7 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	configureComponentArtifactScanner(t, repository)
 	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{
 		SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001",
 		SecretResourceVersion: "1", ContentSHA256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -232,6 +234,34 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 	if _, err := pool.Exec(ctx, queryProjectAssistantProfilePinMutation, firstConversation.Ref, second.AgentRef); err == nil {
 		t.Fatal("conversation profile reassignment was accepted")
 	}
+	t.Run("stale platform base rejects a turn without creating a run", func(t *testing.T) {
+		original := repository.roleImages
+		next := original
+		next.DefaultImageReference = "registry.invalid/kodex/agent-runner@sha256:" + strings.Repeat("f", 64)
+		if err := repository.ConfigureRoleImages(next); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := repository.ConfigureRoleImages(original); err != nil {
+				t.Error(err)
+			}
+		}()
+		_, err := service.Execute(ctx, command.Command{Kind: command.AddAssistantTurn, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: "project-assistant-stale-base-turn"},
+			Payload:  command.AssistantTurnInput{ConversationRef: firstConversation.Ref, Content: "Must remain a draft until the environment upgrade", DeliveryMode: "QUEUE"}})
+		if !errors.Is(err, errs.ErrConflict) {
+			t.Fatalf("stale image entered the execution queue: %v", err)
+		}
+		history, _, err := service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{AssistantScope: "PROJECT", AssistantRef: first.AgentRef})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range history {
+			if item.Ref == firstConversation.Ref && len(item.Turns) != 0 {
+				t.Fatal("rejected turn left a runtime mutation")
+			}
+		}
+	})
 	// Глобальный warm не наблюдался: project assistant не зависит от его heartbeat.
 	turn := execute(command.AddAssistantTurn, "first-turn", command.AssistantTurnInput{
 		ConversationRef: firstConversation.Ref, Content: "Synthetic project message", DeliveryMode: "QUEUE",
@@ -259,6 +289,20 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 		stringMap(lease, "agentRef") != first.AgentRef || stringMap(lease, "projectRef") != firstProject.Ref {
 		t.Fatalf("fresh runtime lost project assistant pin: %#v", lease)
 	}
+	t.Run("project assistant financial observation uses exact claimed turn", func(t *testing.T) {
+		progress := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+			ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+			CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.progress",
+		}, "runtime-controller")
+		_, err := service.Execute(ctx, command.Command{Kind: command.ReportExecutionProgress, Principal: progress,
+			Mutation: value.Mutation{IdempotencyKey: "project-assistant-financial"},
+			Payload: command.LeaseInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"),
+				Generation: lease["generation"].(int64), Financial: &entity.ProviderFinancialSummary{
+					Observation: runtimecontract.ProviderFinancialObservation{Sequence: 1, State: "UNAVAILABLE"}}}})
+		if err != nil {
+			t.Fatalf("current assistant financial callback rejected: %v", err)
+		}
+	})
 	expectedTarget, err := service.GetAgentRuntimeConfiguration(ctx, owner, first.AgentRef)
 	if err != nil {
 		t.Fatal(err)

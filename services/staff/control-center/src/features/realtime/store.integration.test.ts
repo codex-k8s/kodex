@@ -5,6 +5,7 @@ import type {
   Run,
   RunEvent,
   RunGraph,
+  ProviderFinancialOverview,
 } from "@/shared/api/generated/openapi/types.gen";
 
 vi.mock("@/shared/config/runtime", () => ({
@@ -113,6 +114,61 @@ function socketAt(index: number): FakeWebSocket {
   const socket = FakeWebSocket.instances[index];
   if (!socket) throw new Error(`WebSocket ${String(index)} was not created`);
   return socket;
+}
+
+function financialOverview(): ProviderFinancialOverview {
+  const now = Date.now();
+  return {
+    accounts: [
+      {
+        ref: "pacc_primary",
+        name: "Основной",
+        financialSummary: {
+          version: 1,
+          receivedAt: new Date(now).toISOString(),
+          observation: {
+            sequence: 1,
+            state: "AVAILABLE",
+            windows: [{ usedPercent: 100 }],
+            credits: { hasCredits: true, balance: "59999.1234567890123456789" },
+          },
+        },
+      },
+    ],
+    total: 1,
+    exhausted: 1,
+    unknown: 0,
+    observedAt: new Date(now).toISOString(),
+    validUntil: new Date(now + 300000).toISOString(),
+  };
+}
+
+function providerSnapshot(
+  socket: FakeWebSocket,
+  finance = financialOverview(),
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    type: "PLATFORM_SNAPSHOT",
+    requestRef: requestRef(socket),
+    streamKind: "PLATFORM",
+    streamRef: "PLATFORM",
+    cursor: 3,
+    mode: "BOOTSTRAP",
+    kind: "PROVIDER_ACCOUNT",
+    snapshot: {
+      catalog: {
+        accounts: [{ ref: "pacc_primary", version: 1 }],
+        financialSummary: finance,
+        page: {},
+        nextActions: [],
+        providerDefinitions: [],
+        providerDefinitionsPage: {},
+        runtimes: [],
+        ...overrides,
+      },
+    },
+  };
 }
 
 function graph(runRef: string, sequence = 1): RunGraph {
@@ -678,6 +734,7 @@ describe("browser-session realtime multiplexer", () => {
       snapshot: {
         catalog: {
           accounts: [{ ref: "pacc_primary", version: 1 }],
+          financialSummary: financialOverview(),
           page: {},
           nextActions: [],
           providerDefinitions: [],
@@ -848,6 +905,7 @@ describe("browser-session realtime multiplexer", () => {
       snapshot: {
         catalog: {
           accounts: [{ ref: "pacc_primary", version: 1 }],
+          financialSummary: financialOverview(),
           page: {},
           nextActions: [],
           providerDefinitions: [{ key: "openai-codex" }],
@@ -865,6 +923,79 @@ describe("browser-session realtime multiplexer", () => {
       "openai-codex",
     ]);
     expect(Object.keys(platform.runtimes)).toEqual(["runtime_primary"]);
+    expect(providers.financialOverview?.exhausted).toBe(1);
+    expect(
+      providers.financialAccounts[0]?.financialSummary?.observation.credits
+        ?.balance,
+    ).toBe("59999.1234567890123456789");
+    store.closeAll();
+    expect(providers.financialComplete).toBe(false);
+    expect(providers.financialAccounts).toEqual([]);
+  });
+
+  it("после renewal заново получает finance snapshot и не принимает старый ACK", async () => {
+    const store = useRealtimeStore();
+    const providers = useProvidersStore();
+    store.openPlatform();
+    await flushProcessing();
+    const old = socketAt(0);
+    old.open();
+    old.message(providerSnapshot(old));
+    old.message({
+      type: "PLATFORM_READY",
+      requestRef: requestRef(old),
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 3,
+      availableKinds: ["PROVIDER_ACCOUNT"],
+    });
+    await flushProcessing();
+    expect(providers.financialComplete).toBe(true);
+    store.refreshSession();
+    expect(providers.financialAccounts).toEqual([]);
+    await flushProcessing();
+    const current = socketAt(1);
+    current.open();
+    expect(resumeRequest(current)).toMatchObject({
+      platformSnapshotRequired: true,
+    });
+    old.message(providerSnapshot(old));
+    await flushProcessing();
+    expect(providers.financialComplete).toBe(false);
+    current.message(providerSnapshot(current));
+    current.message({
+      type: "PLATFORM_READY",
+      requestRef: requestRef(current),
+      streamKind: "PLATFORM",
+      streamRef: "PLATFORM",
+      cursor: 3,
+      availableKinds: ["PROVIDER_ACCOUNT"],
+    });
+    await flushProcessing();
+    expect(providers.financialComplete).toBe(true);
+    store.closeAll();
+  });
+
+  it("повреждённый provider kind не применяет finance частично", async () => {
+    const store = useRealtimeStore();
+    const providers = useProvidersStore();
+    const original = financialOverview();
+    providers.applyFinancialSnapshot(original);
+    store.openPlatform();
+    await flushProcessing();
+    const socket = socketAt(0);
+    socket.open();
+    const changed = financialOverview();
+    const credits = changed.accounts[0]?.financialSummary?.observation.credits;
+    if (!credits) throw new Error("Synthetic credits are absent");
+    credits.balance = "111";
+    socket.message(providerSnapshot(socket, changed, { runtimes: null }));
+    await flushProcessing();
+    expect(socket.readyState).toBe(FakeWebSocket.CLOSED);
+    expect(
+      providers.financialOverview?.accounts[0]?.financialSummary?.observation
+        .credits?.balance,
+    ).not.toBe("111");
     store.closeAll();
   });
 
@@ -1064,10 +1195,11 @@ describe("browser-session realtime multiplexer", () => {
     const renewed = socketAt(2);
     expect(renewed.protocols).toContain(`ticket.${"n".repeat(43)}`);
     renewed.open();
+    // Cursors сохраняются, но очищенная finance требует нового owner snapshot.
     expect(resumeRequest(renewed)).toMatchObject({
       type: "SESSION_RESUME",
       platformAfterSequence: 1,
-      platformSnapshotRequired: false,
+      platformSnapshotRequired: true,
       runs: [
         { runRef: "run_realtime01", afterSequence: 2 },
         { runRef: "run_realtime02", afterSequence: 4 },

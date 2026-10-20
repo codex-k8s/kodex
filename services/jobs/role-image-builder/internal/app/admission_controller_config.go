@@ -19,6 +19,7 @@ type admissionControllerConfig struct {
 	ControlPlanePrivateKeyFile  string        `env:"IMAGE_ADMISSION_CONTROLLER_CONTROL_PLANE_PRIVATE_KEY_FILE"`
 	ApplicationGrantFile        string        `env:"IMAGE_ADMISSION_CONTROLLER_APPLICATION_GRANT_FILE"`
 	Namespace                   string        `env:"POD_NAMESPACE"`
+	PodUID                      string        `env:"POD_UID"`
 	PolicyConfigMap             string        `env:"IMAGE_ADMISSION_CONTROLLER_POLICY_CONFIG_MAP"`
 	PauseNewRuns                bool          `env:"IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS"`
 	HoldProofJobs               bool          `env:"IMAGE_ADMISSION_CONTROLLER_HOLD_PROOF_JOBS"`
@@ -50,6 +51,9 @@ func loadAdmissionControllerConfig() (admissionControllerConfig, error) {
 	}
 	if err := config.controllerConfig().Validate(); err != nil {
 		return admissionControllerConfig{}, err
+	}
+	if !admissioncontroller.ValidPodUID(config.PodUID) {
+		return admissionControllerConfig{}, errors.New("image admission controller Pod UID is invalid")
 	}
 	if config.RPCProfile != "" && config.RPCProfile != transportprofile.TrustedCluster {
 		return admissionControllerConfig{}, errors.New("image admission controller RPC profile is invalid")

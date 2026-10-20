@@ -39,14 +39,17 @@ func (repository *Repository) ListTrashedProjects(ctx context.Context, principal
 	items := make([]entity.Project, 0, limit+1)
 	for rows.Next() {
 		var item entity.Project
+		var recoveryRequired bool
 		if err := rows.Scan(&item.Ref, &item.Name, &item.Purpose, &item.Language,
 			&item.Lifecycle, &item.Version, &item.CreatedAt, &item.UpdatedAt,
-			&item.DeletedAt, &item.PurgeAfter, &item.AgentCount, &item.WorkflowCount); err != nil {
+			&item.DeletedAt, &item.PurgeAfter, &item.AgentCount, &item.WorkflowCount, &recoveryRequired); err != nil {
 			return nil, "", errs.ErrUnavailable
 		}
 		item.IntegrationState = "UNKNOWN"
 		if item.Lifecycle == "TRASHED" {
 			item.NextActions = []string{"RESTORE", "PURGE"}
+		} else if item.Lifecycle == "PURGE_PENDING" && recoveryRequired {
+			item.NextActions = []string{"RESOLVE_PURGE"}
 		}
 		items = append(items, item)
 	}

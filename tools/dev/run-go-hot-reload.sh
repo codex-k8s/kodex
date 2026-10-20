@@ -61,7 +61,8 @@ air_is_usable || fail 'Air executable is unavailable'
 
 # /tmp может быть отдельным небольшим scratch tmpfs сервиса. Исполняемый
 # Air binary хранится только в выделенном writable build cache этого workload.
-runtime_root="/go/build-cache/runtime-$name"
+runtime_root=$(sh "$repository_root/tools/dev/go-hot-instance-root.sh" "$name" "${KODEX_DEV_POD_UID:-}") ||
+  fail 'development runtime instance path is invalid'
 mkdir -p -- "$runtime_root" || fail 'cannot create writable Air runtime path'
 test -w "$runtime_root" || fail 'Air runtime path is not writable'
 chmod 0700 -- "$runtime_root" || fail 'cannot secure Air runtime path'

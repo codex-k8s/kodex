@@ -1,6 +1,6 @@
 -- name: resumable_sessions__get :one
 SELECT run.ref, run.version, session.id::text, session.ref, project.id::text, project.ref,
-       session.target_type, session.target_ref, account.ref
+       session.target_type, session.target_ref, account.ref, run.input
 FROM control_plane.runs run
 JOIN control_plane.sessions session ON session.id = run.session_id
 JOIN control_plane.projects project ON project.id = session.project_id

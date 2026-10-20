@@ -393,6 +393,8 @@ type ProviderCredentialDescriptor struct {
 }
 
 type ProviderAccount struct {
+	FinancialSummary                                                         *ProviderFinancialSummary
+	FinancialEligible                                                        bool
 	MaximumConcurrentExecutions                                              int32
 	Usage                                                                    *ProviderAccountUsage
 	Deletion                                                                 *ProviderAccountDeletion

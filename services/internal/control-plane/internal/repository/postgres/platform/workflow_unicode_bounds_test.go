@@ -10,6 +10,28 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/types/entity"
 )
 
+func TestWorkflowSelfOnlyStagesCannotRequireUnavailableDelegation(t *testing.T) {
+	v := validWorkflowFixture()
+	for i := range v.Steps {
+		v.Steps[i].AgentRef = v.CoordinatorAgentRef
+		v.Steps[i].RequiredCapabilityKeys = []string{"platform.artifact.manage"}
+	}
+	if !validWorkflowVersion(v) {
+		t.Fatal("ordinary coordinator-owned stages rejected")
+	}
+	v.Steps[0].RequiredCapabilityKeys = []string{"platform.run.delegate"}
+	if validWorkflowVersion(v) || workflowVersionInvalidField(v) != workflowInvalidInvariants {
+		t.Fatal("self-only workflow claimed an unavailable delegation path")
+	}
+	if workflowVersionStructureInvalidField(v) != "" {
+		t.Fatal("unexecutable workflow cannot be read for repair")
+	}
+	v.Steps[1].AgentRef = "agt_specialist_fixture"
+	if !validWorkflowVersion(v) {
+		t.Fatal("workflow with an actual distinct delegation target rejected")
+	}
+}
+
 func TestWorkflowUnicodeTextBounds(t *testing.T) {
 	t.Parallel()
 	fields := []struct {

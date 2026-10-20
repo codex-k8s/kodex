@@ -10,6 +10,7 @@
     {"component":"internal-rpc-authority","dockerfile":"services/internal/internal-rpc-authority/Dockerfile"},
     {"component":"runtime-controller","dockerfile":"services/internal/runtime-controller/Dockerfile"},
     {"component":"integration-gateway","dockerfile":"services/external/integration-gateway/Dockerfile"},
+    {"component":"integration-synthetic","dockerfile":"services/external/integration-gateway/Dockerfile","target":"synthetic"},
     {"component":"interaction-gateway","dockerfile":"services/external/interaction-gateway/Dockerfile"},
     {"component":"control-api-gateway","dockerfile":"services/external/control-api-gateway/Dockerfile"},
     {"component":"staff-control-center","dockerfile":"services/staff/control-center/Dockerfile"},
@@ -20,6 +21,8 @@
     {"component":"backup-controller","dockerfile":"services/jobs/backup-controller/Dockerfile"},
     {"component":"role-image-builder","dockerfile":"services/jobs/role-image-builder/Dockerfile","target":"runtime"},
     {"component":"image-admission","dockerfile":"services/jobs/role-image-builder/Dockerfile","target":"admission-runtime"},
+    {"component":"image-admission-controller","dockerfile":"services/jobs/role-image-builder/Dockerfile","target":"admission-controller-runtime"},
+    {"component":"registry-pull-authorizer","dockerfile":"services/jobs/role-image-builder/Dockerfile","target":"registry-pull-runtime"},
     {"component":"agent-runner","dockerfile":"services/jobs/agent-runner/Dockerfile"},
     {"component":"role-base-documents","dockerfile":"services/jobs/agent-runner/role-base-documents.Dockerfile"}
   ]

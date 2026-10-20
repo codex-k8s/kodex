@@ -49,6 +49,29 @@ func workflowExecutionProjectionFromLease(t *testing.T, lease map[string]any) wo
 	return execution
 }
 
+func TestWorkflowExecutionPromptResultGateIsExactAndAdvisory(t *testing.T) {
+	for _, state := range []string{"OPEN", "APPROVED", "REJECTED", "CHANGES_REQUESTED", "CANCELLED", "UNKNOWN"} {
+		snapshot, execution := workflowExecutionFixture()
+		step := &execution.Steps[0]
+		step.ResultGateRef, step.ResultGateState = "gat_current_fixture", state
+		step.ResultGateDecision = map[string]string{"APPROVED": "APPROVE", "REJECTED": "REJECT", "CHANGES_REQUESTED": "REQUEST_CHANGES", "CANCELLED": "CANCEL"}[state]
+		err := applyWorkflowExecutionPrompt(&snapshot, execution, false)
+		if state == "UNKNOWN" {
+			if err == nil {
+				t.Fatal("unknown result gate accepted")
+			}
+			continue
+		}
+		if err != nil || !strings.Contains(snapshot.SemanticValues["CONSTRAINTS"], `"ResultGateState":"`+state+`"`) || !strings.Contains(snapshot.SemanticValues["CONSTRAINTS"], "not an integration-send approval") {
+			t.Fatal("fresh result gate decision missing from bounded platform context")
+		}
+		step.ResultGateDecision = "OTHER"
+		if applyWorkflowExecutionPrompt(&snapshot, execution, false) == nil {
+			t.Fatal("contradictory gate decision accepted")
+		}
+	}
+}
+
 func TestWorkflowExecutionPromptCanonicalDataIsLossless(t *testing.T) {
 	snapshot, execution := workflowExecutionFixture()
 	snapshot.StructuredVariables["input"].(map[string]any)["values"] = map[string]any{"exact": json.Number("9007199254740993"), "owner": "preserved", "none": nil}

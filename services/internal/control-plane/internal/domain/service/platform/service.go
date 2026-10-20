@@ -1417,7 +1417,7 @@ func knownCommand(kind command.Kind) bool {
 	case command.CreateRuntimeEnvironmentDraft, command.CreateOrganizationRuntimeEnvironmentDraft, command.SaveRuntimeEnvironmentDraft, command.ValidateRuntimeEnvironmentDraft,
 		command.PrepareEnvironmentDraftImpact, command.PublishRuntimeEnvironmentDraft, command.DiscardRuntimeEnvironmentDraft, command.RebindRuntimeEnvironment, command.RebindRuntimeSecret, command.BindInteractionIdentity, command.RevokeInteractionIdentity:
 		return true
-	case command.CompleteOnboarding, command.CreateProject, command.CreateProjectFile, command.CreateProjectFileRevision, command.UpdateProject, command.TrashProject, command.RestoreProject, command.PurgeProject,
+	case command.CompleteOnboarding, command.CreateProject, command.CreateProjectFile, command.CreateProjectFileRevision, command.UpdateProject, command.TrashProject, command.RestoreProject, command.PurgeProject, command.ResolveProjectPurgeRecovery,
 		command.AddPlatformMembership, command.ChangePlatformMembership, command.RemovePlatformMembership,
 		command.AddMembership, command.ChangeMembership, command.RemoveMembership,
 		command.CreateAgent, command.UpdateAgent, command.SetAgentEnabled, command.ArchiveAgent,
@@ -1494,4 +1494,12 @@ func digest(value any) string {
 	}
 	hash := sha256.Sum256(encoded)
 	return hex.EncodeToString(hash[:])
+}
+
+func (service *Service) GetProviderFinancialOverview(ctx context.Context, p value.Principal) (entity.ProviderFinancialOverview, error) {
+	p, err := service.principal(ctx, p)
+	if err != nil {
+		return entity.ProviderFinancialOverview{}, err
+	}
+	return service.repository.GetProviderFinancialOverview(ctx, p)
 }

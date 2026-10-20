@@ -12,6 +12,7 @@ import {
   searchProjects,
 } from "@/features/projects/api";
 import ProjectList from "@/features/projects/ProjectList.vue";
+import ProjectPurgeRecoveryDialog from "@/features/projects/ProjectPurgeRecoveryDialog.vue";
 import ProjectFormFields from "@/features/projects/ProjectFormFields.vue";
 import { catalogInvalidated } from "@/features/catalogs/api";
 import type {
@@ -33,6 +34,32 @@ const dialog = ref(false);
 const busy = ref(false);
 const problem = ref<AppProblem>();
 const lifecycleTarget = ref<Project>();
+const recoveryTarget = ref<{ ref: string; name: string }>();
+watch(
+  () => [trashMode.value, route.query.purgeRecovery],
+  () => {
+    const value = route.query.purgeRecovery;
+    recoveryTarget.value =
+      trashMode.value &&
+      typeof value === "string" &&
+      /^prj_[A-Za-z0-9_-]{1,100}$/.test(value)
+        ? { ref: value, name: "" }
+        : undefined;
+  },
+  { immediate: true },
+);
+function openRecovery(project: Project): void {
+  recoveryTarget.value = { ref: project.ref, name: project.name };
+  void router.replace({
+    query: { ...route.query, trash: "1", purgeRecovery: project.ref },
+  });
+}
+function closeRecovery(): void {
+  recoveryTarget.value = undefined;
+  const next = { ...route.query };
+  delete next.purgeRecovery;
+  void router.replace({ query: next });
+}
 const lifecycleAction = ref<"TRASH" | "RESTORE" | "PURGE">("TRASH");
 const purgeConfirmation = ref("");
 const lifecycleBusy = ref(false);
@@ -244,6 +271,7 @@ const unsubscribe = platform.$onAction(({ name, args, after, onError }) => {
   if (name === "clearOwnerState") {
     dialog.value = false;
     lifecycleTarget.value = undefined;
+    recoveryTarget.value = undefined;
     return;
   }
   after(() => {
@@ -348,11 +376,23 @@ onBeforeUnmount(() => {
         @trash="openLifecycle($event, 'TRASH')"
         @restore="openLifecycle($event, 'RESTORE')"
         @purge="openLifecycle($event, 'PURGE')"
+        @recovery="openRecovery"
       />
     </div>
     <div class="projects-list-footer">
       <span ref="sentinel" class="projects-list-sentinel" aria-hidden="true" />
     </div>
+    <ProjectPurgeRecoveryDialog
+      v-if="recoveryTarget && trashMode && canViewTrash"
+      :key="recoveryTarget.ref"
+      :project-ref="recoveryTarget.ref"
+      :project-name="
+        recoveryTarget.name ||
+        items.find((project) => project.ref === recoveryTarget?.ref)?.name ||
+        $t('projects.recovery.deletedProject')
+      "
+      @close="closeRecovery"
+    />
     <ModalDialog
       v-if="lifecycleTarget"
       :title="

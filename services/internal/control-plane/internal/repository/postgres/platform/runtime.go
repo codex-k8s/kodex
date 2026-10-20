@@ -1583,6 +1583,15 @@ func (repository *Repository) reportProgress(ctx context.Context, tx pgx.Tx, sco
 	if err != nil {
 		return commandOutcome{}, err
 	}
+	if payload.Financial != nil {
+		if payload.Message != nil || payload.Progress != "" {
+			return commandOutcome{}, errs.ErrInvalid
+		}
+		if err := repository.publishFinancial(ctx, tx, scope, lease, payload.Financial.Observation); err != nil {
+			return commandOutcome{}, err
+		}
+		payload.Progress = "i18n:RUNTIME_PROGRESS_RECORDED"
+	}
 	progress := truncate(payload.Progress, 2000)
 	if payload.Message != nil {
 		if payload.Progress != "" || !validPublishedMessage(payload.Message) {
@@ -1710,6 +1719,10 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		if prepared.ObjectKey != artifactObjectKey(scope.organizationRef, scope.actorRef, stringMap(lease, "projectRef"), prepared.Ref, prepared.Digest) {
 			return commandOutcome{}, errs.ErrInvalid
 		}
+		scanJSON, scanErr := artifactAntivirusJSON(prepared.Antivirus)
+		if scanErr != nil {
+			return commandOutcome{}, scanErr
+		}
 		receiptRef, _ := newRef("obj")
 		var artifactID string
 		if err := tx.QueryRow(ctx, queryRuntimeCompleteexecutionInsertArtifactsRefProjectIdNodeId,
@@ -1720,7 +1733,7 @@ func (repository *Repository) completeExecution(ctx context.Context, tx pgx.Tx, 
 		}
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertArtifactContentArtifactId,
 			artifactID, prepared.ObjectKey, prepared.ObjectVersion, prepared.ObjectETag,
-			prepared.Digest, prepared.SizeBytes); err != nil {
+			prepared.Digest, prepared.SizeBytes, scanJSON); err != nil {
 			return commandOutcome{}, errs.ErrUnavailable
 		}
 		if _, err := tx.Exec(ctx, queryRuntimeCompleteexecutionInsertArtifactBindingsArtifactIdTargetRef, artifactID, stringMap(lease, "runRef"), scope.actorID); err != nil {

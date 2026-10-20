@@ -333,6 +333,12 @@ func withProjectReference(ctx context.Context, request *http.Request) (context.C
 	if err != nil {
 		return nil, err
 	}
+	if isProjectPurgeRecoveryPath(request) {
+		if headerReference != "" {
+			return nil, errors.New("project purge recovery requires organization scope")
+		}
+		return ctx, nil
+	}
 	if headerReference != "" && queryReference != "" && headerReference != queryReference {
 		return nil, errors.New("project references do not match")
 	}
@@ -358,6 +364,18 @@ func withProjectReference(ctx context.Context, request *http.Request) (context.C
 
 func isRealtimePath(path string) bool {
 	return path == "/api/v1/session/stream"
+}
+
+func isProjectPurgeRecoveryPath(request *http.Request) bool {
+	if request.Method != http.MethodGet && request.Method != http.MethodPost {
+		return false
+	}
+	remainder, found := strings.CutPrefix(request.URL.Path, "/api/v1/projects/")
+	if !found {
+		return false
+	}
+	reference, suffix, found := strings.Cut(remainder, "/")
+	return found && suffix == "purge-recovery" && validOpaqueProjectReference(reference)
 }
 
 func exactProjectPathReference(request *http.Request) (string, error) {

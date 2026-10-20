@@ -129,6 +129,37 @@ type snapshotQueryRecorder struct {
 	fail bool
 }
 
+func TestRunSnapshotContinuationLineage(t *testing.T) {
+	fixture := func() *cp.GetRunGraphResponse {
+		v := completeRunSnapshotFixture()
+		v.Runs[1].RootRunRef, v.Runs[1].ParentRunRef, v.Runs[1].State = v.Runs[1].Ref, "", cp.RunState_RUN_STATE_SUCCEEDED
+		v.Runs[1].SessionRef, v.Runs[1].SessionReadiness.SessionRef = v.Run.SessionRef, v.Run.SessionRef
+		v.Graph.Nodes = []*cp.RunNode{{Ref: "nod_previous", RunRef: v.Runs[1].Ref, Type: cp.RunNodeType_RUN_NODE_TYPE_ROOT_PROCESS}, {Ref: "nod_current1", RunRef: v.Run.Ref, Type: cp.RunNodeType_RUN_NODE_TYPE_ROOT_PROCESS}}
+		v.Graph.Edges = []*cp.RunEdge{{Ref: "edg_continue1", RunRef: v.Run.Ref, SourceNodeRef: "nod_previous", TargetNodeRef: "nod_current1", Type: cp.RunEdgeType_RUN_EDGE_TYPE_CONTINUES}}
+		return v
+	}
+	v := fixture()
+	if _, err := projectCompleteRunSnapshot(v, &runSubscription{rootRef: v.Run.Ref}, nil); err != nil {
+		t.Fatal("exact continuation predecessor rejected", err)
+	}
+	for name, mutate := range map[string]func(*cp.GetRunGraphResponse){
+		"missing":   func(v *cp.GetRunGraphResponse) { v.Graph.Edges = nil },
+		"session":   func(v *cp.GetRunGraphResponse) { v.Runs[1].SessionRef = "ses_foreign1" },
+		"state":     func(v *cp.GetRunGraphResponse) { v.Runs[1].State = cp.RunState_RUN_STATE_RUNNING },
+		"node":      func(v *cp.GetRunGraphResponse) { v.Graph.Nodes[0].Type = cp.RunNodeType_RUN_NODE_TYPE_AGENT_EXECUTION },
+		"retry":     func(v *cp.GetRunGraphResponse) { v.Run.RetryOfRunRef = v.Runs[1].Ref },
+		"duplicate": func(v *cp.GetRunGraphResponse) { v.Graph.Edges = append(v.Graph.Edges, v.Graph.Edges[0]) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			v := fixture()
+			mutate(v)
+			if _, err := projectCompleteRunSnapshot(v, &runSubscription{rootRef: v.Run.Ref}, nil); err == nil {
+				t.Fatal("unproven continuation accepted")
+			}
+		})
+	}
+}
+
 func (query *snapshotQueryRecorder) GetPlatformEventCursor(context.Context, *cp.GetPlatformEventCursorRequest, ...grpc.CallOption) (*cp.GetPlatformEventCursorResponse, error) {
 	return &cp.GetPlatformEventCursorResponse{OrganizationRef: "org_fixture1", CurrentSequence: 10}, nil
 }

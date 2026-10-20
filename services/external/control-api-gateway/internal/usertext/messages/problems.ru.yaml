@@ -236,6 +236,8 @@ PROJECT_RESTORED:
   other: Проект восстановлен из корзины
 PROJECT_PURGE_REQUESTED:
   other: Запрошено окончательное удаление проекта
+PROJECT_PURGE_RECOVERY_RESOLVED:
+  other: Подтверждено продолжение удаления проекта
 PROJECT_PURGED:
   other: Проект удалён безвозвратно
 PROJECT_ACCESS_UPDATED:

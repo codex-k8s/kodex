@@ -58,6 +58,10 @@ type archiveRPCFailureFixture struct {
 	called bool
 }
 
+func (client *archiveRPCFailureFixture) RenewSessionArchiveTask(_ context.Context, _ *controlplanev1.RenewSessionArchiveTaskRequest, _ ...grpc.CallOption) (*controlplanev1.RenewSessionArchiveTaskResponse, error) {
+	return &controlplanev1.RenewSessionArchiveTaskResponse{}, nil
+}
+
 func (client *archiveRPCFailureFixture) FailSessionArchiveTask(_ context.Context, request *controlplanev1.FailSessionArchiveTaskRequest, _ ...grpc.CallOption) (*controlplanev1.FailSessionArchiveTaskResponse, error) {
 	client.called = request.GetSafeErrorCode() == model.SafeErrorPVCMissing
 	return nil, status.Error(codes.PermissionDenied, "SENTINEL_PRIVATE_RPC_ERROR")

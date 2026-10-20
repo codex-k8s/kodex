@@ -36,7 +36,8 @@ case "$repository" in
   registry.local.kodex/kodex/role-image-builder|registry.local.kodex/kodex/internal-rpc-authority|\
   registry.local.kodex/kodex/image-admission|registry.local.kodex/kodex/image-admission-tools|\
   registry.local.kodex/kodex/stt-hot-reload|registry.local.kodex/kodex/integration-hot-reload|\
-  registry.local.kodex/kodex/backup-controller) ;;
+  registry.local.kodex/kodex/backup-controller|registry.local.kodex/kodex/registry-pull-authorizer|\
+  registry.local.kodex/kodex/control-plane) ;;
   *) fail 'repository is outside the closed local platform profile' ;;
 esac
 [[ "$tag" == "$repository":* ]] || fail 'tagged reference does not match repository'
@@ -93,8 +94,16 @@ verify_image_descriptor() {
 
 publish_digest_alias() {
   verify_image_descriptor "$tag"
+  local existing
+  existing=$("${ctr_command[@]}" images list "name==$exact_reference" 2>/dev/null) ||
+    fail 'immutable image alias observation failed'
+  if awk -v ref="$exact_reference" '$1 == ref {found=1} END {exit !found}' <<<"$existing"; then
+    verify_image_descriptor "$exact_reference"
+    return
+  fi
   # --local копирует весь source Image с Labels в атомарный Create, без unpinned alias.
-  "${ctr_command[@]}" images tag --local --force "$tag" "$exact_reference" >/dev/null 2>&1 ||
+  # Чужой существующий digest alias не перезаписывается, в том числе при гонке.
+  "${ctr_command[@]}" images tag --local "$tag" "$exact_reference" >/dev/null 2>&1 ||
     fail 'pinned immutable image alias publication failed'
 }
 

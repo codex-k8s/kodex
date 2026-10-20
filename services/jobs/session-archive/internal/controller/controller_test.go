@@ -18,7 +18,7 @@ import (
 func TestExecuteMissingSnapshotPVCIsIdempotentAndCreatesNoWorkerResources(t *testing.T) {
 	t.Parallel()
 
-	client := fake.NewSimpleClientset()
+	client := newArchiveClient()
 	controller, err := New(client, testConfig())
 	if err != nil {
 		t.Fatalf("create controller: %v", err)
@@ -49,7 +49,7 @@ func TestExecuteStopsPendingWorkerWhenSnapshotPVCDisappears(t *testing.T) {
 	task := testSnapshotTask()
 	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: testConfig().WorkerNamespace,
 		UID: types.UID("source-pvc-uid")}}
-	client := fake.NewSimpleClientset(pvc)
+	client := newArchiveClient(pvc)
 	controller, err := New(client, testConfig())
 	if err != nil {
 		t.Fatalf("create controller: %v", err)
@@ -87,7 +87,7 @@ func TestExecuteRejectsSnapshotPVCReplacement(t *testing.T) {
 	task := testSnapshotTask()
 	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: testConfig().WorkerNamespace,
 		UID: types.UID("source-pvc-uid")}}
-	client := fake.NewSimpleClientset(pvc)
+	client := newArchiveClient(pvc)
 	controller, err := New(client, testConfig())
 	if err != nil {
 		t.Fatalf("create controller: %v", err)
