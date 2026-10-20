@@ -39,6 +39,9 @@ import (
 const (
 	maximumRequestBytes                          = 16 << 20
 	maximumProviderCredentialRefreshRequestBytes = ((runtimecontract.MaximumProviderAuthBytes + 2) / 3 * 4) + (16 << 10)
+	runtimeProgressRejectionMessage              = "runtime progress callback rejected"
+	runtimeProgressRejectionStage                = "callback_stage"
+	runtimeProgressRejectionCode                 = "callback_code"
 )
 
 var progressCodePattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]{2,63}$`)
@@ -465,6 +468,7 @@ func (server *Server) progress(writer http.ResponseWriter, request *http.Request
 		payload.Financial != nil && (payload.Message != nil || payload.ProviderProcess != nil || payload.Progress != "" || payload.Financial.Validate() != nil) ||
 		payload.Message != nil && (payload.Progress != "" || payload.Message.Validate() != nil) ||
 		payload.ProviderProcess != nil && (payload.Message != nil || payload.Progress != runtimecontract.ProviderProcessInitializedProgress || !payload.ProviderProcess.Matches(input)) {
+		server.logger.WarnContext(request.Context(), runtimeProgressRejectionMessage, runtimeProgressRejectionStage, "PAYLOAD", runtimeProgressRejectionCode, "INVALID")
 		http.Error(writer, "invalid runtime progress", http.StatusBadRequest)
 		return
 	}
@@ -482,10 +486,12 @@ func (server *Server) progress(writer http.ResponseWriter, request *http.Request
 	}
 	_, err := server.control.Runtime.ReportExecutionProgress(ctx, projection)
 	if err != nil {
+		server.logger.WarnContext(request.Context(), runtimeProgressRejectionMessage, runtimeProgressRejectionStage, "OWNER", runtimeProgressRejectionCode, status.Code(err).String())
 		writeControlError(writer, err)
 		return
 	}
 	if payload.ProviderProcess != nil && server.coordinator.recordProviderProcess(input, *payload.ProviderProcess) != nil {
+		server.logger.WarnContext(request.Context(), runtimeProgressRejectionMessage, runtimeProgressRejectionStage, "PROCESS_OBSERVATION", runtimeProgressRejectionCode, "CONFLICT")
 		http.Error(writer, "provider process observation conflict", http.StatusConflict)
 		return
 	}

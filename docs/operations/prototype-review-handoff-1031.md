@@ -118,8 +118,8 @@ LIVE (обслуживающая версия до консолидации): ч
 onboarding с готовой моделью gpt-6.1-sol/medium. Обычным запросом без refs
 системный помощник создал typed plan; validation/application200, отдельный проект
 «Готовность прототипа» создан с реальной квитанцией. Никакие письма/GitHub writes
-не выполнялись. Chrome MCP доступен для списка вкладок, но защищённый одноразовый
-ввод не завершился; Playwright результат не выдаётся за MCP результат.
+не выполнялись. Chrome MCP доступен для списка вкладок; результат проверки UI
+через Playwright не выдаётся за MCP результат.
 
 На `ac0cb4b8cebb3bb5c6c6c73f206d0373ff30c53d` завершены: полный agent-runner,
 runtime-controller, WebSocket transport,120 assistant frontend tests и повтор
@@ -164,3 +164,21 @@ Runner ac0 собран full profile, binary provenance проверен; manife
 20 policy tests — PASS LOCAL; расширенный reader assertion — отдельный PASS LOCAL.
 Созданы11 собственных пустых проектных диалогов для следующей проверки лимита;
 это не PASS десяти одновременных выполнений.
+
+20.10: immutable runner policy и default b0 активированы штатными phased
+скриптами, API снова 2/2. После перезапуска сервера отсутствовал точный registry
+host route на двух узлах: исправление вынесено в проверяемый repo-owned helper.
+HTTPS graph и CRI pull exact digest на обоих узлах — PASS; постоянное
+восстановление этой настройки при bootstrap/restart относится к пункту8.
+
+Реальный project turn выявил устаревший опубликованный default ENV pin.
+Авторитетный readiness уже сообщал DEFAULT_ROLE_IMAGE_STALE, но AddTurn
+создавал ход. Добавлена проверка до queue/interrupt; выбранные disposable
+PostgreSQL project-profile/parallel-lifecycle проверки — PASS,36.267s.
+Новая версия окружения опубликована через штатные draft/validation/impact API,
+четыре собственных QA-потребителя переназначены, текущий ENV ready=true.
+Исторические версии не менялись, admission не обходился.
+
+Следующий canary и retry — FAIL ACTIVITY_DELIVERY до результата модели.
+Добавлена закрытая диагностика progress callback (стадия и gRPC code, без
+payload). Устранение этого дефекта и live пункты2–3 ещё не завершены.

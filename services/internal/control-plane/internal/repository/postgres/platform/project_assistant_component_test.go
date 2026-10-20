@@ -233,6 +233,34 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 	if _, err := pool.Exec(ctx, queryProjectAssistantProfilePinMutation, firstConversation.Ref, second.AgentRef); err == nil {
 		t.Fatal("conversation profile reassignment was accepted")
 	}
+	t.Run("stale platform base rejects a turn without creating a run", func(t *testing.T) {
+		original := repository.roleImages
+		next := original
+		next.DefaultImageReference = "registry.invalid/kodex/agent-runner@sha256:" + strings.Repeat("f", 64)
+		if err := repository.ConfigureRoleImages(next); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			if err := repository.ConfigureRoleImages(original); err != nil {
+				t.Error(err)
+			}
+		}()
+		_, err := service.Execute(ctx, command.Command{Kind: command.AddAssistantTurn, Principal: owner,
+			Mutation: value.Mutation{IdempotencyKey: "project-assistant-stale-base-turn"},
+			Payload:  command.AssistantTurnInput{ConversationRef: firstConversation.Ref, Content: "Must remain a draft until the environment upgrade", DeliveryMode: "QUEUE"}})
+		if !errors.Is(err, errs.ErrConflict) {
+			t.Fatalf("stale image entered the execution queue: %v", err)
+		}
+		history, _, err := service.ListAssistantConversations(ctx, owner, query.AssistantConversationFilter{AssistantScope: "PROJECT", AssistantRef: first.AgentRef})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range history {
+			if item.Ref == firstConversation.Ref && len(item.Turns) != 0 {
+				t.Fatal("rejected turn left a runtime mutation")
+			}
+		}
+	})
 	// Глобальный warm не наблюдался: project assistant не зависит от его heartbeat.
 	turn := execute(command.AddAssistantTurn, "first-turn", command.AssistantTurnInput{
 		ConversationRef: firstConversation.Ref, Content: "Synthetic project message", DeliveryMode: "QUEUE",
