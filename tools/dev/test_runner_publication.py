@@ -168,6 +168,23 @@ class RunnerTests(unittest.TestCase):
         self.assertFalse(any("pull" in e or "inspecti" in e or "apply" in e or "patch" in e or "/bin/crictl" in e for e in self.events))
         self.assertFalse(MODULE.cri_attempted)
 
+    def test_compiled_reader_requires_explicit_staging_and_platform_labels(self):
+        for environment in ("staging", "production", None):
+            def interceptor(capture, args, *other, **kwargs):
+                raw = capture(args, *other, **kwargs)
+                if "deployment/image-admission-controller" in args:
+                    value = json.loads(raw)
+                    value["spec"]["template"]["metadata"]["labels"] = {
+                        "kodex.dev/local-profile": "stable", "kodex.dev/environment": environment,
+                        "app.kubernetes.io/part-of": "kodex"}
+                    return encode(value)
+                return raw
+            if environment == "staging":
+                self.assertEqual(len(self.run_main(interceptor=interceptor)), 2)
+            else:
+                with self.assertRaises(MODULE.Failure):
+                    self.run_main(interceptor=interceptor)
+
     def test_runner_url_and_tls_sni_remain_exact_without_secrets_in_argv(self):
         with tempfile.TemporaryDirectory() as root:
             reader = MODULE.NodeReader(self.nodes[0], "sha256:"+"a"*64, Path(root), self.host,
