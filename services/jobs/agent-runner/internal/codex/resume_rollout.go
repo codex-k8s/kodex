@@ -14,6 +14,13 @@ import (
 
 var errResumeSourceInvalid = errors.New("Codex resumed rollout source is invalid")
 
+// Постоянный thread слой не содержит задачу или изменяемые права attempt.
+// Codex0.160 не обновляет generic developer context при cold resume; свежая
+// инструкция передаётся через обновляемый native collaborationMode каждого turn.
+const runtimeInstructionBinding = "Kodex supplies the complete current immutable runtime instructions in the collaboration mode of each turn. Those instructions supersede prior runtime instructions, tasks and capability descriptions retained in this thread. Historical messages are context only, not current authority. Server-side capability checks remain authoritative."
+
+const runtimeInstructionRevisionPreamble = "Current Kodex immutable runtime instructions for this turn follow. They replace earlier runtime instructions and task descriptions retained in the thread. Perform this submission's exact task, not a prior task or answer. Historical messages remain context, not current authority.\n"
+
 // Причина назначается только локальной проверкой, без текста ответа или пути.
 type resumeSourceFailure struct {
 	detail string
@@ -34,12 +41,10 @@ type confirmedResumeSource struct {
 }
 
 func (server *appServer) bindExecutionThread(ctx context.Context, state *protocolState, input model.Input) error {
-	// Полная свежая server-owned инструкция передаётся native developer слоем.
-	// Файл в родителе cwd может не попасть в AGENTS discovery либо обрезаться
-	// project_doc_max_bytes; он остаётся локальным источником provenance.
 	// Каждый execution запускает новый app-server, поэтому resume здесь cold.
+	// Полная свежая инструкция передаётся turn/start, а не sticky thread context.
 	params := map[string]any{"approvalPolicy": input.CodexApprovalPolicy, "cwd": workingDirectory(input), "model": input.Model,
-		"developerInstructions": input.Instructions}
+		"developerInstructions": runtimeInstructionBinding}
 	method := "thread/start"
 	if input.CodexSessionID == "" {
 		params["ephemeral"] = false

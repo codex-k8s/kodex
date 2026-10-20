@@ -113,7 +113,7 @@ func TestResumeLongHistoryMetadataDoesNotOverflowFrame(t *testing.T) {
 	t.Logf("synthetic metadata-only resume: frame_bytes=%d retained_history_bytes=%d", fixture.frameBytes, len(archive))
 }
 
-func TestThreadBindingCarriesFullCurrentInstructionsForStartAndResume(t *testing.T) {
+func TestThreadBindingDoesNotRetainAttemptInstructionsForStartAndResume(t *testing.T) {
 	for _, resumed := range []bool{false, true} {
 		t.Run(map[bool]string{false: "start", true: "resume"}[resumed], func(t *testing.T) {
 			fixture, state, sourceSHA := syntheticResumeHistory(t)
@@ -130,8 +130,8 @@ func TestThreadBindingCarriesFullCurrentInstructionsForStartAndResume(t *testing
 			if state.resumeSource != nil {
 				defer state.resumeSource.file.Close()
 			}
-			if len(current.Instructions) <= 32<<10 || fixture.resumeParams["developerInstructions"] != current.Instructions {
-				t.Fatal("native thread binding omitted or truncated current instructions")
+			if len(current.Instructions) <= 32<<10 || fixture.resumeParams["developerInstructions"] != runtimeInstructionBinding {
+				t.Fatal("native thread retained attempt instructions instead of stable binding")
 			}
 			if _, replaced := fixture.resumeParams["baseInstructions"]; replaced {
 				t.Fatal("runtime instructions replaced the provider built-in base")

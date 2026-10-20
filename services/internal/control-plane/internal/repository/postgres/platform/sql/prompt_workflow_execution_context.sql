@@ -43,8 +43,11 @@ SELECT root.ref, run.ref, node.ref, session.ref, turn.ref, agent.ref,
            LEFT JOIN LATERAL (
                SELECT gate.ref, gate.state, gate.decision
                FROM control_plane.owner_gates gate
+               JOIN control_plane.run_nodes gate_node
+                 ON gate_node.id = gate.node_id AND gate_node.organization_id = gate.organization_id
+                AND gate_node.root_run_id = root.id AND gate_node.type = 'HUMAN_GATE'
                WHERE gate.organization_id = node.organization_id
-                 AND gate.root_run_id = root.id AND gate.node_id = current_step.id
+                 AND gate.root_run_id = root.id AND gate_node.parent_node_id = current_step.id
                  AND gate.integration_invocation_id IS NULL
                ORDER BY gate.created_at DESC, gate.ref DESC LIMIT 1
            ) result_gate ON true

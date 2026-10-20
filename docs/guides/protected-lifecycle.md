@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.33
+version: 1.1.34
 updated: 2026-10-20
 ---
 
@@ -573,8 +573,16 @@ size/digest и читают разрешённым локальным инстр
 оригиналов; результат до terminal сохраняется разрешённым artifact/Git path.
 
 Полные current `RuntimeRevision.instructions` доставляются native
-`developerInstructions` при `thread/start` и cold `thread/resume` нового
-app-server каждого execution. Файл `/workspace/AGENTS.md` сохраняет точные
+`turn/start.collaborationMode.settings.developer_instructions` каждого хода
+с теми же model/reasoning pins. В закреплённом Codex0.160 изменение
+`thread/resume.developerInstructions` не заменяет generic developer message
+сохранённой истории. Поэтому thread/start/resume получает только устойчивую
+инструкцию привязки, без задачи или прав attempt; полная текущая инструкция
+обновляется native world-state diff и явно заменяет старые runtime instructions.
+`additionalContext` не заменяет этот путь: provider может усечь его значение.
+Experimental API handshake нужен только для закреплённого collaborationMode
+и не расширяет реестр методов, tools или серверные grants. Файл
+`/workspace/AGENTS.md` сохраняет точные
 байты для локального чтения и provenance, но не доказывает доставку модели:
 parent вне discovered project root может не читаться, а provider doc budget
 может обрезать файл. Встроенная base Codex не заменяется; старое содержимое

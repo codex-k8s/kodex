@@ -355,7 +355,7 @@ func validThreadCollaborationMetadata(raw json.RawMessage) bool {
 	if err != nil || model == "" {
 		return false
 	}
-	for key, maximum := range map[string]int{"reasoning_effort": 128, "developer_instructions": 64 << 10} {
+	for key, maximum := range map[string]int{"reasoning_effort": 128, "developer_instructions": runtimecontract.MaximumRunnerInputBytes} {
 		value, present := settings[key]
 		if !present || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
 			continue

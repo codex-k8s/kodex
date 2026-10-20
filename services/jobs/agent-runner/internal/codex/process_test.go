@@ -339,10 +339,17 @@ func TestTurnStartPinsModelReasoningAndPersonalityOnEveryAttempt(t *testing.T) {
 		snapshot := runtimecontract.RuntimeContextSnapshot{Schema: runtimecontract.RuntimeContextSchema, OrganizationRef: input.OrganizationRef, ProjectRef: input.ProjectRef, AgentRef: input.AgentRef}
 		snapshot.Digest, _ = snapshot.ComputeDigest()
 		input.ContextSnapshot = &snapshot
+		input.Instructions = "Current immutable instruction\n" + strings.Repeat("Полная инструкция.\n", 5000) + "\nEND_CURRENT_INSTRUCTIONS"
 		params, err := turnStartParams(input, "exact-thread", []byte("exact server prompt"))
 		if err != nil || params["cwd"] != runtimecontract.RuntimeWorkspaceWorkingRoot || params["model"] != "gpt-6-astra" || params["effort"] != "high" ||
 			params["personality"] != "pragmatic" || params["threadId"] != "exact-thread" {
 			t.Fatalf("turn parameters = %#v, error = %v", params, err)
+		}
+		mode := params["collaborationMode"].(map[string]any)
+		settings := mode["settings"].(map[string]any)
+		if mode["mode"] != "default" || settings["model"] != input.Model || settings["reasoning_effort"] != "high" ||
+			settings["developer_instructions"] != runtimeInstructionRevisionPreamble+input.Instructions {
+			t.Fatal("turn omitted, truncated or mismatched immutable runtime instructions")
 		}
 		input.ConfigOverlay, input.EffectiveReasoningEffort = "", "medium"
 		params, err = turnStartParams(input, "exact-thread", []byte("prompt"))
@@ -360,6 +367,9 @@ func TestTurnStartPinsModelReasoningAndPersonalityOnEveryAttempt(t *testing.T) {
 		}
 		if _, exists := params["effort"]; exists {
 			t.Fatal("non-reasoning model received invented effort")
+		}
+		if params["collaborationMode"].(map[string]any)["settings"].(map[string]any)["reasoning_effort"] != nil {
+			t.Fatal("native mode invented effort for a non-reasoning model")
 		}
 	}
 }

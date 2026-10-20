@@ -309,3 +309,22 @@ gate. В versioned guidance-v2 добавлен bounded read последнег�
 Ref/state/decision проходят закрытую проверку и входят в новый immutable prompt
 snapshot; это информация о решении, не полномочие и не send approval.
 Исторические сообщения не переписаны. Доставка и повтор live NOT RUN.
+
+Продолжение required-input процесса через UI создало новый root в той же
+сессии, отдельное делегирование и новый report.md; root WAITING_HUMAN.
+Live v2 result-gate проекция оказалась пустой: gate относится к дочернему
+HUMAN_GATE node, а не к step node напрямую. Исправлен точный parent/root/org
+join; новая disposable проверка проходит gate и проверяет APPROVED/APPROVE
+в свежем coordinator snapshot — PASS8.288s. Доставка этой поправки NOT RUN.
+
+Повтор QUEUE/INTERRUPT_ACTIVE после aed/b0 — FAIL: актуальные задачи доходят
+до физического prompt и PROVIDER_INPUT_ACKNOWLEDGED с правильным SHA, но ответ
+повторяет старое «прервано». Scoped read native rollout подтвердил текущий
+USER task и старую developer-инструкцию с прежней задачей без свежей замены.
+В точном upstream rust-v0.160.0 generic developerInstructions вставляется при
+initial context и не обновляется cold resume. Renderer v2 сам по себе не
+исправил live поведение. Новый путь использует native collaborationMode каждого
+turn/start с полными текущими instructions/model/reasoning; thread binding
+устойчивый, история не переписана, authority и sandbox не расширены.
+Проверены OpenAI App Server docs и точный upstream source. Live нового runner
+ещё NOT RUN; этот дефект не объявлен устранённым по одному unit test.
