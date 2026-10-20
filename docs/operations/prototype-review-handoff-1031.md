@@ -187,3 +187,12 @@ payload). Устранение этого дефекта и live пункты2�
 на переход с hot-reload. Для уже compiled CP/API использован image-only механизм
 с exact source/provenance и rollback; его закрытый реестр расширен на эти два
 существующих приложения.13 unit tests механизма — PASS LOCAL.
+
+ACTIVITY_DELIVERY установлен до точного producer defect: AddAssistantTurn
+вставлял session_turns.state=COMPLETED до начала исполнения. Обычный claim
+закономерно не переводил такой terminal turn в RUNNING; финансовый guard
+закрыто отклонял событие. Новый ход теперь QUEUED; claim атомарно переводит
+его в RUNNING, terminal закрывает прежним owner-путём. Исторические строки
+не переписываются. Новый project-assistant financial component воспроизвёл
+FAIL до изменения SQL, после исправления — PASS; выбранный project/parallel/
+activity PostgreSQL контур целиком PASS,39.008s. Новый live ещё NOT RUN.

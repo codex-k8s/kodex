@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
+	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
 	platformservice "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/service/platform"
@@ -288,6 +289,20 @@ func TestProjectAssistantProfilesComponent(t *testing.T) {
 		stringMap(lease, "agentRef") != first.AgentRef || stringMap(lease, "projectRef") != firstProject.Ref {
 		t.Fatalf("fresh runtime lost project assistant pin: %#v", lease)
 	}
+	t.Run("project assistant financial observation uses exact claimed turn", func(t *testing.T) {
+		progress := resolvedTestPrincipal(t, ctx, repository, platformrepo.ProofPrincipalInput{
+			ExternalActorID: "kodex-system-subject", ExternalTenantID: "kodex-installation",
+			CallerWorkload: "runtime-controller", Operation: "platform.runtime.execution.progress",
+		}, "runtime-controller")
+		_, err := service.Execute(ctx, command.Command{Kind: command.ReportExecutionProgress, Principal: progress,
+			Mutation: value.Mutation{IdempotencyKey: "project-assistant-financial"},
+			Payload: command.LeaseInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"),
+				Generation: lease["generation"].(int64), Financial: &entity.ProviderFinancialSummary{
+					Observation: runtimecontract.ProviderFinancialObservation{Sequence: 1, State: "UNAVAILABLE"}}}})
+		if err != nil {
+			t.Fatalf("current assistant financial callback rejected: %v", err)
+		}
+	})
 	expectedTarget, err := service.GetAgentRuntimeConfiguration(ctx, owner, first.AgentRef)
 	if err != nil {
 		t.Fatal(err)
