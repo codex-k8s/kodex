@@ -42,6 +42,30 @@ test("application patch preserves sidecars, trust, env, replicas and strategy", 
   assert.deepEqual(result.rollback, { name: "email-bridge", image: image("a"), expectedImage: image("b"), rollbackOf: releaseID });
 });
 
+test("stable image refresh binds source and provenance and preserves rollback metadata", () => {
+  const current = fixture();
+  current.metadata.name = "runtime-controller";
+  const app = current.spec.template.spec.containers[0];
+  app.name = "runtime-controller";
+  app.image = app.image.replace("email-bridge", "runtime-controller");
+  app.command = ["/usr/local/bin/runtime-controller"];
+  current.spec.template.metadata.labels = { "kodex.dev/local-profile": "stable" };
+  const old = { sourceSHA: "a".repeat(40), provenanceSHA256: "b".repeat(64) };
+  Object.assign(current.spec.template.metadata.annotations, { "kodex.dev/source-sha": old.sourceSHA, "kodex.dev/release-provenance-sha256": old.provenanceSHA256 });
+  const requested = { name: "runtime-controller", image: image("b").replace("email-bridge", "runtime-controller"), build: { sourceSHA: "c".repeat(40), provenanceSHA256: "d".repeat(64) } };
+  const result = planTarget(current, requested, releaseID);
+  assert.deepEqual(result.rollback.build, old);
+  const annotations = result.patch.at(-1).value;
+  assert.equal(annotations["kodex.dev/source-sha"], requested.build.sourceSHA);
+  assert.equal(annotations["kodex.dev/release-provenance-sha256"], requested.build.provenanceSHA256);
+  for (const mutate of [d => { d.spec.template.metadata.labels["kodex.dev/local-profile"] = "hot-reload"; }, d => { d.spec.template.spec.containers[0].command = ["/workspace/tools/dev/run-go-hot-reload.sh"]; }, d => { delete d.spec.template.metadata.annotations["kodex.dev/source-sha"]; }]) {
+    const invalid = structuredClone(current); mutate(invalid);
+    assert.throws(() => planTarget(invalid, requested, releaseID), /STABLE_BUILD_BOUNDARY_REQUIRED/);
+  }
+  assert.throws(() => validateManifest({ version: 1, targets: [{ ...requested, build: { ...requested.build, sourceSHA: "0".repeat(40) } }] }), /INVALID_BUILD_PROVENANCE/);
+  assert.throws(() => validateManifest({ version: 1, targets: [{ ...requested, image: image("b") }] }), /INVALID_BUILD_PROVENANCE/);
+});
+
 test("unsafe profiles, old grants and incomplete rollouts are rejected", () => {
   const mutations = [
     (d) => { d.spec.strategy = { type: "Recreate" }; },

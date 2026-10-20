@@ -65,12 +65,18 @@ export function validateManifest(value) {
   "INVALID_MANIFEST");
   const selected = new Set();
   for (const target of value.targets) {
-    requireValue(exactKeys(target, ["name"], ["image", "source", "expectedSource", "expectedImage", "rollbackOf"]) &&
+    requireValue(exactKeys(target, ["name"], ["image", "source", "expectedSource", "expectedImage", "rollbackOf", "build"]) &&
       applicationNames.has(target.name) && !selected.has(target.name) &&
       (target.image !== undefined || target.source !== undefined), "INVALID_TARGET");
     if (target.image !== undefined)
       requireValue(digestImage.test(target.image) && !target.image.endsWith("0".repeat(64)), "INVALID_TARGET_IMAGE");
     if (target.source !== undefined) requireValue(validSource(target.source), "INVALID_APPLICATION_SOURCE");
+    if (target.build !== undefined)
+      requireValue(["runtime-controller", "staff-control-center"].includes(target.name) && target.image && !target.source &&
+        exactKeys(target.build, ["sourceSHA", "provenanceSHA256"]) &&
+        /^[a-f0-9]{40}$/.test(target.build.sourceSHA) && target.build.sourceSHA !== "0".repeat(40) &&
+        /^[a-f0-9]{64}$/.test(target.build.provenanceSHA256) && target.build.provenanceSHA256 !== "0".repeat(64) &&
+        target.image.includes(`/${target.name}@sha256:`), "INVALID_BUILD_PROVENANCE");
     if (target.rollbackOf !== undefined || target.expectedImage !== undefined)
       requireValue(uuid.test(target.rollbackOf ?? "") && digestImage.test(target.expectedImage ?? ""),
         "INVALID_ROLLBACK_TARGET");
@@ -136,6 +142,17 @@ export function planTarget(deployment, target, releaseID, sourceInspector, mode 
       beforeImage === target.expectedImage, "ROLLBACK_RELEASE_MISMATCH");
   const annotations = { ...(pod.metadata?.annotations ?? {}), [releaseAnnotation]: releaseID };
   if (target.source) annotations["kodex.dev/application-source-sha"] = target.source.revision;
+  let previousBuild;
+  if (target.build) {
+    requireValue(pod.metadata?.labels?.["kodex.dev/local-profile"] === "stable" &&
+      (target.name === "staff-control-center" ? !containers[index].command && !containers[index].args :
+        JSON.stringify(containers[index].command) === JSON.stringify(["/usr/local/bin/runtime-controller"])) &&
+      /^[a-f0-9]{40}$/.test(annotations["kodex.dev/source-sha"] ?? "") &&
+      /^[a-f0-9]{64}$/.test(annotations["kodex.dev/release-provenance-sha256"] ?? ""), "STABLE_BUILD_BOUNDARY_REQUIRED");
+    previousBuild = { sourceSHA: annotations["kodex.dev/source-sha"], provenanceSHA256: annotations["kodex.dev/release-provenance-sha256"] };
+    annotations["kodex.dev/source-sha"] = target.build.sourceSHA;
+    annotations["kodex.dev/release-provenance-sha256"] = target.build.provenanceSHA256;
+  }
   const patch = [
     { op: "test", path: "/metadata/uid", value: metadata.uid },
     { op: "test", path: "/metadata/resourceVersion", value: metadata.resourceVersion },
@@ -151,6 +168,7 @@ export function planTarget(deployment, target, releaseID, sourceInspector, mode 
     name: target.name, uid: metadata.uid, beforeImage, image,
     beforeSpecSHA256: fingerprint(spec), afterSpecSHA256: fingerprint(afterSpec), patch,
     rollback: { name: target.name, image: beforeImage, expectedImage: image, rollbackOf: releaseID,
+      ...(previousBuild ? { build: previousBuild } : {}),
       ...(source ? { source: source.before, expectedSource: target.source } : {}) },
   };
 }
