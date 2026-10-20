@@ -328,3 +328,28 @@ turn/start с полными текущими instructions/model/reasoning; thre
 устойчивый, история не переписана, authority и sandbox не расширены.
 Проверены OpenAI App Server docs и точный upstream source. Live нового runner
 ещё NOT RUN; этот дефект не объявлен устранённым по одному unit test.
+
+На68a9978ac полный agent-runner — PASS LOCAL. CP с corrected result-gate join
+доставлен2/2, provenance/image readback — PASS; новый runner собран full profile,
+точный binary SHA256=8f430680d3c144ea918c8eeaaa96bdaf356df1611059477c1a7cd9622215f27c.
+Phased activation выполняется с сохранением exact admission; live пока NOT RUN.
+
+Долгое пустое открытие continuation и recovering WS — отдельный FAIL. Включённый
+owner run snapshot отклонял предыдущий root той же session: поддерживалась
+только RETRY_OF lineage. Добавлена точная root-to-root CONTINUES проверка
+owner → gateway → frontend; same-run attempt CONTINUES не расширяет eligibility.
+Новые отрицательные проверки включают foreign session/state/node/edge/retry
+и duplicate. Disposable required-input continuation с GetRunGraphSnapshot —
+PASS7.550s; CP unit PASS0.064s, gateway WS PASS3.430s,32 snapshot frontend tests
+PASS LOCAL. Authority/history atomicity не ослаблена; доставка/live NOT RUN.
+
+Выявлен retained own Pod с остановленным role-runtime: окончательный отказ
+CompleteExecution после отзыва lease очищал ресурсы только при deadline.
+Cancel/interrupt без deadline теперь тоже закрывает только exact own runtime
+и tracker; внешний отказ не повторяется и не становится receipt. Проверка и
+доставка этой поправки пока NOT RUN.
+
+Полный runtime-controller с новой non-deadline denial regression — PASS LOCAL:
+app0.434s/callback8.082s/workload1.141s. Frontend lint и101 store/realtime/
+snapshot tests — PASS LOCAL. Эти результаты относятся к следующему кандидату,
+его compiled доставка и окончательный live повтор ещё не подтверждены.

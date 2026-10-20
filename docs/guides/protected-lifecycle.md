@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.34
+version: 1.1.35
 updated: 2026-10-20
 ---
 
@@ -17,6 +17,19 @@ updated: 2026-10-20
 не заменяет fingerprint графа, tenant boundary, row locks, lifecycle guards,
 внешний inventory proof или одну terminal-транзакцию. Истёкший budget не
 объявляется DONE и не разрешает ручное удаление receipt.
+
+Readiness snapshot графа проверяет не только RETRY_OF, но и root-to-root
+CONTINUES: оба owner-readable root относятся к одной непустой session,
+предшественник SUCCEEDED, exact server-owned edge принадлежит новому root.
+Внутреннее CONTINUES между attempts одного run не даёт cross-root полномочий.
+Отсутствующее/дублирующее ребро, цикл, другая сессия или несовпадающий retry pin
+закрыто отклоняются на owner, gateway и frontend boundaries. Это проверка
+авторитетного чтения, без нового grant или события.
+
+Окончательный PermissionDenied точного CompleteExecution закрывает собственные
+runtime Pod/ticket/projection/сеть и tracker независимо от наличия deadline:
+cancel/interrupt также отзывают lease. Transient outage не подменяется отзывом,
+не даёт ложного terminal receipt и не разрешает удалить чужую attempt.
 
 Организационный audit или audit другого проекта не становится собственностью
 удаляемого проекта из-за FK на его сотрудника. В защищённой purge-транзакции

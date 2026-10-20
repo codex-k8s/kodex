@@ -243,6 +243,25 @@ func TestTrackRetriesFailureCompletionBeforeCleanup(t *testing.T) {
 	}
 }
 
+func TestFailureOwnerDenialWithoutDeadlineClosesRevokedPod(t *testing.T) {
+	input := runtimeTrackingInput()
+	input.ExecutionDeadline = nil
+	coordinator := callback.NewCoordinator()
+	done := coordinator.Register(input)
+	client := &runtimeWorkClientStub{complete: func(int) error { return status.Error(codes.PermissionDenied, "lease revoked") }}
+	turns := &turnLifecycleStub{}
+	runtime := trackingRuntime(client, turns, coordinator)
+	runtime.completeFailure(t.Context(), input, "RUNTIME_WORKLOAD_EXITED", "ROLE_RUNTIME_EXITED_NONZERO")
+	if client.count() != 1 || turns.deletions.Load() != 1 || turns.stops.Load() != 1 {
+		t.Fatal("revoked non-deadline execution retained runtime or retried authority")
+	}
+	select {
+	case <-done:
+	default:
+		t.Fatal("revoked execution tracker remained active")
+	}
+}
+
 func TestTrackMemoryFailurePreservesOwnerCompletionAndCleanup(t *testing.T) {
 	input := runtimeTrackingInput()
 	coordinator := callback.NewCoordinator()

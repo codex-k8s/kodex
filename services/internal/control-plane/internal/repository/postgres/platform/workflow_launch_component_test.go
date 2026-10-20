@@ -550,6 +550,9 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 			t.Fatalf("required-input resumable catalog: %v", err)
 		}
 		continued := execute(command.AddSessionTurn, owner, "required-cont-next", command.SessionTurnInput{SessionRef: root.SessionRef, RunRef: root.Ref, Task: "Continue original facts"}, nil).Run
+		if _, snapshot, err := service.GetRunGraphSnapshot(ctx, owner, continued.Ref); err != nil || len(snapshot.Runs) < 2 {
+			t.Fatal("continued root readiness snapshot rejected its exact predecessor", err)
+		}
 		lease := claim("required-cont-next", continued.Ref)
 		values, ok := lease["input"].(map[string]any)
 		if !ok || values["facts"] != "Exact original facts" || !strings.HasPrefix(stringMap(lease, "task"), "Continue original facts\n\n# Workflow coordination contract\n") {

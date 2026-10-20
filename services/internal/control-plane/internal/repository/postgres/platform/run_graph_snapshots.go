@@ -71,7 +71,7 @@ func (repository *Repository) attachGraphRuns(ctx context.Context, tx pgx.Tx, cu
 	return nil
 }
 
-// Retry lineage подтверждается одновременно owner rows и серверным graph edge.
+// Retry/continuation lineage подтверждается owner rows и серверным graph edge.
 // Обход ограничен уже прочитанными refs: дополнительные run reads не выполняются.
 func graphRetryPredecessors(graph *entity.RunGraph, runs map[string]entity.Run) (map[string]bool, bool) {
 	nodes := make(map[string]entity.RunNode, len(graph.Nodes))
@@ -81,14 +81,23 @@ func graphRetryPredecessors(graph *entity.RunGraph, runs map[string]entity.Run) 
 	links := map[string]string{}
 	predecessors := map[string]bool{}
 	for _, edge := range graph.Edges {
-		if edge.Type != "RETRY_OF" {
+		if edge.Type != "RETRY_OF" && edge.Type != "CONTINUES" {
 			continue
 		}
 		oldNode, oldOK := nodes[edge.SourceNodeRef]
 		newNode, newOK := nodes[edge.TargetNodeRef]
+		// CONTINUES внутри одного run также связывает agent attempts. Только
+		// отдельное root-to-root ребро доказывает predecessor другой root lineage.
+		if edge.Type == "CONTINUES" && oldOK && newOK && oldNode.RunRef == newNode.RunRef {
+			continue
+		}
 		old, oldRunOK := runs[oldNode.RunRef]
 		fresh, newRunOK := runs[newNode.RunRef]
-		if !oldOK || !newOK || !oldRunOK || !newRunOK || oldNode.Type != "ROOT_PROCESS" || newNode.Type != "ROOT_PROCESS" || old.RootRunRef != old.Ref || fresh.RootRunRef != fresh.Ref || fresh.RetryOfRunRef != old.Ref || edge.RunRef != fresh.Ref || old.Ref == fresh.Ref || links[fresh.Ref] != "" {
+		if !oldOK || !newOK || !oldRunOK || !newRunOK || oldNode.Type != "ROOT_PROCESS" || newNode.Type != "ROOT_PROCESS" || old.RootRunRef != old.Ref || fresh.RootRunRef != fresh.Ref || edge.RunRef != fresh.Ref || old.Ref == fresh.Ref || links[fresh.Ref] != "" {
+			return nil, false
+		}
+		if (edge.Type == "RETRY_OF" && fresh.RetryOfRunRef != old.Ref) ||
+			(edge.Type == "CONTINUES" && (old.SessionRef == "" || fresh.SessionRef != old.SessionRef || old.State != "SUCCEEDED" || fresh.RetryOfRunRef != "")) {
 			return nil, false
 		}
 		links[fresh.Ref] = old.Ref

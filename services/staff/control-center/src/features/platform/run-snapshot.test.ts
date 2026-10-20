@@ -263,6 +263,52 @@ describe("полный owner run snapshot", () => {
     store.applyRunReadinessSnapshot(value.graph, value.runs);
     expect(store.runs.run_child001?.state).toBe("CANCELLED");
   });
+  const continuationFixture = () => {
+    const value = retryFixture(),
+      root = requiredFixture(value.runs[0]),
+      old = requiredFixture(value.runs[1]);
+    delete root.retryOfRunRef;
+    old.state = "SUCCEEDED";
+    old.sessionRef = root.sessionRef;
+    requiredFixture(old.sessionReadiness).sessionRef = requiredFixture(
+      root.sessionRef,
+    );
+    requiredFixture(value.graph.edges[0]).type = "CONTINUES";
+    return value;
+  };
+  it("принимает continuation predecessor только по root edge и той же сессии", () => {
+    const store = usePlatformStore(),
+      value = continuationFixture();
+    store.applyRunReadinessSnapshot(value.graph, value.runs);
+    expect(store.runs.run_child001?.state).toBe("SUCCEEDED");
+  });
+  for (const name of [
+    "missing",
+    "session",
+    "state",
+    "node",
+    "retry",
+    "duplicate",
+  ] as const) {
+    it("отклоняет неподтверждённый continuation: " + name, () => {
+      const store = usePlatformStore(),
+        value = continuationFixture(),
+        old = requiredFixture(value.runs[1]);
+      if (name === "missing") value.graph.edges = [];
+      if (name === "session") old.sessionRef = "ses_foreign1";
+      if (name === "state") old.state = "RUNNING";
+      if (name === "node")
+        requiredFixture(value.graph.nodes[0]).type = "AGENT_EXECUTION";
+      if (name === "retry")
+        requiredFixture(value.runs[0]).retryOfRunRef = old.ref;
+      if (name === "duplicate")
+        value.graph.edges.push(requiredFixture(value.graph.edges[0]));
+      expect(() =>
+        store.applyRunReadinessSnapshot(value.graph, value.runs),
+      ).toThrow();
+      expect(store.runs).toEqual({});
+    });
+  }
   for (const [name, mutate] of [
     [
       "missing retry edge",

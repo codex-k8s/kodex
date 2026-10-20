@@ -52,3 +52,47 @@ func TestGraphRetrySnapshotExactLineage(t *testing.T) {
 		})
 	}
 }
+
+func TestGraphContinuationSnapshotExactLineage(t *testing.T) {
+	fixture := func() (*entity.RunGraph, map[string]entity.Run) {
+		return &entity.RunGraph{Nodes: []entity.RunNode{
+			{Ref: "nod_previous", RunRef: "run_previous", Type: "ROOT_PROCESS"},
+			{Ref: "nod_current1", RunRef: "run_current1", Type: "ROOT_PROCESS"},
+		}, Edges: []entity.RunEdge{{RunRef: "run_current1", SourceNodeRef: "nod_previous", TargetNodeRef: "nod_current1", Type: "CONTINUES"}}}, map[string]entity.Run{
+			"run_previous": {Ref: "run_previous", RootRunRef: "run_previous", SessionRef: "ses_exact001", State: "SUCCEEDED"},
+			"run_current1": {Ref: "run_current1", RootRunRef: "run_current1", SessionRef: "ses_exact001"},
+		}
+	}
+	g, r := fixture()
+	if old, ok := graphRetryPredecessors(g, r); !ok || !old["run_previous"] {
+		t.Fatal("exact continuation predecessor rejected")
+	}
+	for _, name := range []string{"session", "empty session", "state", "root", "retry", "node", "edge", "duplicate"} {
+		t.Run(name, func(t *testing.T) {
+			g, r := fixture()
+			old, fresh := r["run_previous"], r["run_current1"]
+			switch name {
+			case "session":
+				fresh.SessionRef = "ses_foreign1"
+			case "empty session":
+				old.SessionRef, fresh.SessionRef = "", ""
+			case "state":
+				old.State = "RUNNING"
+			case "root":
+				old.RootRunRef = "run_foreign1"
+			case "retry":
+				fresh.RetryOfRunRef = old.Ref
+			case "node":
+				g.Nodes[0].Type = "AGENT_EXECUTION"
+			case "edge":
+				g.Edges[0].RunRef = "run_foreign1"
+			case "duplicate":
+				g.Edges = append(g.Edges, g.Edges[0])
+			}
+			r[old.Ref], r[fresh.Ref] = old, fresh
+			if _, ok := graphRetryPredecessors(g, r); ok {
+				t.Fatal("unproven continuation accepted")
+			}
+		})
+	}
+}
