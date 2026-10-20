@@ -292,3 +292,20 @@ Unit continuation — PASS LOCAL; component/delivery/live ещё NOT RUN.
 Frontend2b50: lint/typecheck,11 адресных tests и build — PASS LOCAL.
 На старой переписке заметны повторные generic progress-карточки; это открытое
 UX-замечание для пункта11, а не якобы исправленный результат.
+
+На aed645bc0c2d0f69b1de6ff579393f95aa2714c6 unit continuation — PASS0.541s;
+WorkflowLaunchComponent + AssistantParallelLifecycleComponent — PASS45.396s.
+Новая проверка доказывает доступность required-input workflow в resumable
+каталоге, exact наследование fields в claim, новую delegation/callback цепочку
+и закрытый отказ при добавлении несовместимого обязательного поля. Первые
+итерации новой оснастки не завершали delegated graph и затем не учитывали
+штатный coordinator envelope; эти FAIL не выдавались за продуктовый PASS.
+
+После технического APPROVE реальный root завершён, но финальное сообщение
+координатора неверно утверждало отсутствие решения человека. Старый callback
+текст сформирован до APPROVE, а свежая workflow-проекция не содержала состояния
+gate. В versioned guidance-v2 добавлен bounded read последнего result gate
+точного шага/текущего root (без integration invocation и комментариев).
+Ref/state/decision проходят закрытую проверку и входят в новый immutable prompt
+snapshot; это информация о решении, не полномочие и не send approval.
+Исторические сообщения не переписаны. Доставка и повтор live NOT RUN.

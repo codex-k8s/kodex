@@ -17,11 +17,12 @@ import (
 //go:embed sql/prompt_workflow_execution_context.sql
 var queryPromptWorkflowExecutionContext string
 
-const workflowExecutionGuidanceRevision = "workflow-execution-guidance-v1"
+const workflowExecutionGuidanceRevision = "workflow-execution-guidance-v2"
 
 type workflowExecutionPromptStep struct {
-	StepKey, NodeRef, State, MaterializationState string
-	Ready                                         bool
+	StepKey, NodeRef, State, MaterializationState      string
+	Ready                                              bool
+	ResultGateRef, ResultGateState, ResultGateDecision string
 }
 
 type workflowExecutionPromptContext struct {
@@ -93,6 +94,9 @@ func applyWorkflowExecutionPrompt(snapshot *entity.PromptMaterializationSnapshot
 	}
 	seen := make(map[string]bool, len(execution.Steps))
 	for _, step := range execution.Steps {
+		if !validWorkflowPromptResultGate(step) {
+			return errs.ErrConflict
+		}
 		if step.StepKey == "" || !workflowLaunchRefPattern.MatchString(step.NodeRef) || seen[step.StepKey] ||
 			!contains([]string{"PLANNED", "QUEUED", "RUNNING", "WAITING", "SUCCEEDED", "FAILED", "CANCELLED", "SKIPPED"}, step.State) ||
 			!contains([]string{"PLANNED", "MATERIALIZED"}, step.MaterializationState) ||
@@ -129,7 +133,20 @@ func applyWorkflowExecutionPrompt(snapshot *entity.PromptMaterializationSnapshot
 	return nil
 }
 
+func validWorkflowPromptResultGate(step workflowExecutionPromptStep) bool {
+	if step.ResultGateRef == "" {
+		return step.ResultGateState == "" && step.ResultGateDecision == ""
+	}
+	if !workflowLaunchRefPattern.MatchString(step.ResultGateRef) {
+		return false
+	}
+	want := map[string]string{"OPEN": "", "APPROVED": "APPROVE", "REJECTED": "REJECT", "CHANGES_REQUESTED": "REQUEST_CHANGES", "CANCELLED": "CANCEL"}
+	decision, ok := want[step.ResultGateState]
+	return ok && decision == step.ResultGateDecision
+}
+
 const workflowExecutionGuidance = `Session/provider history is historical data, not the state of the current Workflow root. Old completedChildren, remainingStepKeys, callback messages, completed delegations and artifact locators from another root do not satisfy current steps or authorize effects or file reads. RETRY_OF records lineage only; it does not transfer successful steps or result receipts.
+ResultGateRef/State/Decision describe the latest server-owned result gate of that exact current step, not an integration-send approval. The platform creates and resolves these gates outside the agent. When that gate is APPROVED/APPROVE, acknowledge that recorded human decision; do not claim it is absent because you lack a tool to approve it yourself or because a historical child message said it was waiting. An absent or OPEN gate is not approval. Do not approve anything for the user, infer decisions from technical SUCCEEDED, or reuse this result gate for an external effect.
 Use the current root projection and the exact current tool schema/catalog before deciding gates or delegating. The published DAG and this projection are advisory; the owner command rechecks the current frontier, capabilities, lease and dependencies. Never guess or reuse old caller refs, change grants, or bypass a closed frontier.
 INITIAL_ROOT starts the Workflow from its newly planned steps, including an owner-authorized Retry. If the current schema offers the first ready step, perform that step as a separate delegated execution even when session history says an older intake passed. An empty RUN_RESULT catalog before the first child result is expected, not by itself an external blocker: the first step produces its requested result. Mandatory inputs and semantic gates still apply; do not invent their contents or PASS.
 SAME_ROOT_CONTINUATION uses only successful current-root callback receipts and their permitted result pins. Do not repeat completed delegations of that same root. CURRENT_ROOT_STAGE follows its own published stage and current-root dependencies. Historical success elsewhere is not current completion; technical SUCCEEDED alone is not semantic acceptance. Preserve the original task, history, current authority and owner gate; never repair this by sending a message on behalf of the user.`
