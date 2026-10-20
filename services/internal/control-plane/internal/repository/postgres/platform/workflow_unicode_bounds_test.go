@@ -23,6 +23,9 @@ func TestWorkflowSelfOnlyStagesCannotRequireUnavailableDelegation(t *testing.T) 
 	if validWorkflowVersion(v) || workflowVersionInvalidField(v) != workflowInvalidInvariants {
 		t.Fatal("self-only workflow claimed an unavailable delegation path")
 	}
+	if workflowVersionStructureInvalidField(v) != "" {
+		t.Fatal("unexecutable workflow cannot be read for repair")
+	}
 	v.Steps[1].AgentRef = "agt_specialist_fixture"
 	if !validWorkflowVersion(v) {
 		t.Fatal("workflow with an actual distinct delegation target rejected")

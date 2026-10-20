@@ -1381,6 +1381,22 @@ const (
 
 // Закрытый код не раскрывает содержимое поля или индекс этапа.
 func workflowVersionInvalidField(version entity.WorkflowVersion) string {
+	if field := workflowVersionStructureInvalidField(version); field != "" {
+		return field
+	}
+	if !workflowRequiresDelegation(version) {
+		for _, step := range version.Steps {
+			if contains(step.RequiredCapabilityKeys, "platform.run.delegate") {
+				return workflowInvalidInvariants
+			}
+		}
+	}
+	return ""
+}
+
+// Структурно корректный, но неисполнимый профиль остаётся доступным для
+// исправления. Это не даёт ему права на публикацию или запуск.
+func workflowVersionStructureInvalidField(version entity.WorkflowVersion) string {
 	// maxLength считается в Unicode-символах, общий бюджет ниже остаётся байтовым.
 	if !validWorkflowText(version.Name, 160) || !validWorkflowText(version.Purpose, 2000) || !validWorkflowText(version.CompletionCriteria, 2000) || !utf8.ValidString(version.Instructions) {
 		return workflowInvalidInvariants
@@ -1389,7 +1405,6 @@ func workflowVersionInvalidField(version entity.WorkflowVersion) string {
 		return workflowInvalidInvariants
 	}
 	knownSteps := make(map[string]struct{}, len(version.Steps))
-	requiresDelegation := workflowRequiresDelegation(version)
 	totalInstructions := len(version.Instructions) + len(version.CompletionCriteria)
 	for index, step := range version.Steps {
 		if strings.TrimSpace(step.Instructions) == "" || !validWorkflowText(step.Instructions, 1000) {
@@ -1419,9 +1434,6 @@ func workflowVersionInvalidField(version entity.WorkflowVersion) string {
 		}
 		for _, capability := range step.RequiredCapabilityKeys {
 			if !validCapabilityKey(capability) {
-				return workflowInvalidInvariants
-			}
-			if capability == "platform.run.delegate" && !requiresDelegation {
 				return workflowInvalidInvariants
 			}
 		}

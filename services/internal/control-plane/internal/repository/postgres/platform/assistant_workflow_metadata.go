@@ -44,7 +44,7 @@ func assistantWorkflowMetadataJSON(workflow entity.Workflow) ([]byte, error) {
 	coordinator, publishedRef := "", ""
 	var concurrency, timeout, revision int64
 	if p := workflow.Published; p != nil {
-		if p.Ref == "" || p.VersionNumber < 1 || !validWorkflowVersion(*p) {
+		if p.Ref == "" || p.VersionNumber < 1 || workflowVersionStructureInvalidField(*p) != "" {
 			return nil, errs.ErrUnavailable
 		}
 		coordinator, publishedRef = p.CoordinatorAgentRef, p.Ref

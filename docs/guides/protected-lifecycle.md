@@ -4,7 +4,7 @@ title: Защищённые агрегаты и граф фонового вып
 type: guide
 status: approved
 owner: architect
-version: 1.1.31
+version: 1.1.32
 updated: 2026-10-20
 ---
 

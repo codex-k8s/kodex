@@ -233,3 +233,12 @@ versioned core-v54 с общей рекомендацией назначать �
 не путать capability с delegationTargets и привязывать gate к результату.
 Исторические core-v52/v53 bytes сохранены. Адресные systemassistant/workflow
 unit tests — PASS LOCAL; новые доставка и основной сценарий ещё NOT RUN.
+
+CP385415 доставлен2/2. PostgreSQL workflow component набор — PASS85.053s;
+отдельный AssistantCoreInheritanceComponent — PASS10.604s. Живой read выявил
+регрессию новой проверки: structurally valid self-only профиль стал возвращать
+503 даже при открытии для исправления. Разделены структурная проверка чтения и
+проверка исполнимости. Повреждённый JSON по-прежнему отклоняется; неисполнимый
+профиль читается, но readiness BLOCKED/DEPENDENCY_UNAVAILABLE, публикация и
+запуск запрещены. Добавлены scan/assistant-metadata unit и readiness component
+регрессии. Unit — PASS LOCAL; доставка этой поправки и повтор live ещё NOT RUN.
