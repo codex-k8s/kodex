@@ -261,3 +261,34 @@ active9, остальные продолжили работу, ожидающи�
 Скриншот parallel-active выявил UX FAIL: sticky сводка лимитов перекрывала
 заголовок в фиксированном flex workspace запуска. Для этого режима снят sticky;
 обычные прокручиваемые экраны не меняются. Доставка и visual readback NOT RUN.
+
+Основной повтор run_k75KLTB1A1r4SrWIJuHHxcDw: отдельный Автор получил
+делегирование и создал report.md (art_mEG7OHc6xmd2UM7q28SXKodV,2274bytes,
+версия1,CLEAN). Полный PREVIEW200 содержит заданные факты и неизвестность,
+не утверждает общую готовность платформы. Точный внутренний Human Gate
+gat_gcQd9C4DjGzKRRdQv7IA9jEM подтверждён с техническим комментарием без
+внешних действий; root SUCCEEDED. Это не решение владельца о приёмке прототипа.
+
+LIVE изоляция: разные session refs у11 диалогов, ответы2 и3 соответствуют
+своим номерам; отдельное продолжение диалога3 вернуло3. ЧерновикA восстановился
+после перехода вB, полеB перед вводом было пустым; черновики не отправлялись.
+Активный sleep90 в диалоге8 отменён INTERRUPT_ACTIVE, замена завершена.
+Оставшийся старый QUEUE ход выполнился после interrupt, но повторил ответ
+«прервано» вместо своей задачи — FAIL семантики текущего submission. Добавлен
+versioned continuation-task-projection-v2: последовательность истории не
+определяет текущую задачу; exact Task/INPUT/history остаются прежними. Проверка
+producer exact task после приоритетного interrupt добавлена в component suite.
+
+После завершения workflow выявлен ещё FAIL: required input проверялся против
+nil, поэтому continuation не предлагался. Read/list теперь используют input
+соответствующего доступного Run, command наследует его только после свежей
+authority той же сессии. Текущая схема повторно проверяется, а несовместимое
+новое обязательное поле закрывает запуск. Preview использует те же значения.
+Матрица: owner API/session turn → AddSessionTurn → доступный SUCCEEDED Run →
+exact inherited input → прежний LaunchRun/OCC/receipt/audit/RUN_CREATED и
+CONTINUES → текущий RuntimeRevision/runner; отказ атомарный, без нового события.
+Unit continuation — PASS LOCAL; component/delivery/live ещё NOT RUN.
+
+Frontend2b50: lint/typecheck,11 адресных tests и build — PASS LOCAL.
+На старой переписке заметны повторные generic progress-карточки; это открытое
+UX-замечание для пункта11, а не якобы исправленный результат.

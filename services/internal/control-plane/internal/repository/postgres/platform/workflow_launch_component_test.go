@@ -501,6 +501,53 @@ func TestWorkflowLaunchComponent(t *testing.T) {
 		}
 		complete("frontier-coordinator-complete", current, true)
 	})
+	t.Run("workflow-required-input-session-continuation", func(t *testing.T) {
+		v := draft
+		v.Name = "Required input continuation"
+		v.Inputs = []entity.WorkflowInputField{{Key: "facts", Label: "Facts", Type: "TEXT", Required: true}}
+		v.Steps = append([]entity.WorkflowStep{}, draft.Steps...)
+		wf := execute(command.CreateWorkflow, owner, "required-cont-create", command.WorkflowInput{ProjectRef: project.Ref, Name: v.Name, CoordinatorAgentRef: coordinator.Ref, Draft: &v}, nil).Workflow
+		wf = execute(command.ValidateWorkflow, owner, "required-cont-validate", command.WorkflowInput{Ref: wf.Ref}, &wf.Version).Workflow
+		wf = execute(command.PublishWorkflow, owner, "required-cont-publish", command.WorkflowInput{Ref: wf.Ref}, &wf.Version).Workflow
+		root := execute(command.LaunchRun, owner, "required-cont-root", command.LaunchRunInput{ProjectRef: project.Ref, Target: entity.RunTarget{Type: "WORKFLOW", Ref: wf.Ref}, Task: "Original task", Input: map[string]any{"facts": "Exact original facts"}}, nil).Run
+		finish := func(key string, runRef string) {
+			current := claim(key+"-coordinator", runRef)
+			child := execute(command.DelegateExecution, worker, key+"-delegate", command.DelegateInput{LeaseRef: stringMap(current, "leaseRef"), Fence: stringMap(current, "fence"), Generation: runtimeRevisionMapInt64(current, "generation"), TargetAgentRef: specialist.Ref, WorkflowStepKey: "step", Task: "Use the inherited original facts"}, nil).Run
+			complete(key+"-coordinator-complete", current, true)
+			complete(key+"-child-complete", claim(key+"-child", child.Ref), true)
+			complete(key+"-callback-complete", claim(key+"-callback", runRef), true)
+		}
+		finish("required-cont-root", root.Ref)
+		readback := read(root.Ref)
+		if readback.State != "SUCCEEDED" || !contains(readback.NextActions, "ADD_TURN") {
+			t.Fatalf("required workflow input incorrectly blocks continuation: state=%s actions=%v", readback.State, readback.NextActions)
+		}
+		items, _, _, err := service.ListRuns(ctx, owner, query.Filter{ProjectRef: project.Ref, TargetType: "WORKFLOW", TargetRef: wf.Ref, ResumableSessionsOnly: true, Page: query.Page{Size: 20}})
+		if err != nil || len(items) != 1 || items[0].Ref != root.Ref {
+			t.Fatalf("required-input resumable catalog: %v", err)
+		}
+		continued := execute(command.AddSessionTurn, owner, "required-cont-next", command.SessionTurnInput{SessionRef: root.SessionRef, RunRef: root.Ref, Task: "Continue original facts"}, nil).Run
+		lease := claim("required-cont-next", continued.Ref)
+		values, ok := lease["input"].(map[string]any)
+		if !ok || values["facts"] != "Exact original facts" || !strings.HasPrefix(stringMap(lease, "task"), "Continue original facts\n\n# Workflow coordination contract\n") {
+			t.Fatal("continuation did not preserve server-owned exact workflow input and current task")
+		}
+		child := execute(command.DelegateExecution, worker, "required-cont-next-delegate", command.DelegateInput{LeaseRef: stringMap(lease, "leaseRef"), Fence: stringMap(lease, "fence"), Generation: runtimeRevisionMapInt64(lease, "generation"), TargetAgentRef: specialist.Ref, WorkflowStepKey: "step", Task: "Use inherited facts"}, nil).Run
+		complete("required-cont-next-coord-complete", lease, true)
+		complete("required-cont-next-child-complete", claim("required-cont-next-child", child.Ref), true)
+		complete("required-cont-next-callback-complete", claim("required-cont-next-callback", continued.Ref), true)
+		v.Inputs = append(v.Inputs, entity.WorkflowInputField{Key: "new_fact", Label: "New fact", Type: "TEXT", Required: true})
+		wf = execute(command.UpdateWorkflow, owner, "required-cont-update", command.WorkflowInput{Ref: wf.Ref, Draft: &v}, &wf.Version).Workflow
+		wf = execute(command.ValidateWorkflow, owner, "required-cont-revalidate", command.WorkflowInput{Ref: wf.Ref}, &wf.Version).Workflow
+		execute(command.PublishWorkflow, owner, "required-cont-republish", command.WorkflowInput{Ref: wf.Ref}, &wf.Version)
+		if contains(read(continued.Ref).NextActions, "ADD_TURN") {
+			t.Fatal("changed required schema remained resumable without its input")
+		}
+		_, err = service.Execute(ctx, command.Command{Kind: command.AddSessionTurn, Principal: owner, Mutation: value.Mutation{IdempotencyKey: "required-cont-missing-new-field"}, Payload: command.SessionTurnInput{SessionRef: root.SessionRef, RunRef: continued.Ref, Task: "Must not launch"}})
+		if !errors.Is(err, errs.ErrInvalid) {
+			t.Fatalf("missing new required field accepted: %v", err)
+		}
+	})
 	t.Run("workflow-input-inheritance", func(t *testing.T) {
 		inputDraft := draft
 		inputDraft.Name = "Immutable input workflow"

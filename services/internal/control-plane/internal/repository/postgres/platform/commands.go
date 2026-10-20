@@ -2432,6 +2432,13 @@ func (repository *Repository) addSessionTurn(ctx context.Context, tx pgx.Tx, sco
 	if err := repository.authorizeCommand(ctx, tx, scope, nested); err != nil {
 		return commandOutcome{}, err
 	}
+	if targetType == "WORKFLOW" {
+		launch.Input, err = readSessionContinuationInput(ctx, tx, scope, payload.SessionRef, payload.RunRef)
+		if err != nil {
+			return commandOutcome{}, err
+		}
+		nested.Payload = launch
+	}
 	outcome, err := repository.launchRun(ctx, tx, scope, nested)
 	if err != nil {
 		return commandOutcome{}, err

@@ -173,10 +173,16 @@ func TestAssistantParallelLifecycleComponent(t *testing.T) {
 	if len(immediateClaims) != 1 || stringMap(immediateClaims[0], "runRef") != aImmediate.Turns[0].RunRef {
 		t.Fatal("interrupt did not take priority over the queued followup in its own session")
 	}
+	if stringMap(immediateClaims[0], "task") != "Synthetic message a-immediate" {
+		t.Fatal("interrupt task was substituted")
+	}
 	completeClaimedExecutionWithSummary(t, ctx, service, worker, immediateClaims[0], "parallel-lifecycle-immediate", false, "Only conversation A immediate result")
 	followupClaims := claim("followup-after-immediate", 10)
 	if len(followupClaims) != 1 || stringMap(followupClaims[0], "runRef") != aQueued.Turns[0].RunRef {
 		t.Fatal("queued followup did not resume after the immediate turn")
+	}
+	if stringMap(followupClaims[0], "task") != "Synthetic message a-followup" {
+		t.Fatal("queued task was replaced by the later interrupt")
 	}
 	completeClaimedExecutionWithSummary(t, ctx, service, worker, followupClaims[0], "parallel-lifecycle-followup", false, "Only conversation A queued result")
 	assertRun(stringMap(bFirst, "runRef"), "RUNNING")

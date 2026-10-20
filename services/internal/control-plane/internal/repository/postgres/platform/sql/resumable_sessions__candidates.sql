@@ -5,7 +5,7 @@ WITH latest AS MATERIALIZED (
            session.id AS session_id, session.ref AS session_ref,
            project.id AS project_id, project.ref AS project_ref,
            session.target_type, session.target_ref, session.provider_account_id,
-           account.ref AS account_ref
+           account.ref AS account_ref, run.input AS run_input
     FROM control_plane.sessions session
     JOIN control_plane.projects project ON project.id = session.project_id
     JOIN control_plane.provider_accounts account ON account.id = session.provider_account_id
@@ -105,7 +105,7 @@ WITH latest AS MATERIALIZED (
      AND binding_policy.organization_id = binding.organization_id
 )
 SELECT ref, version, created_at, session_id::text, session_ref, project_id::text, project_ref,
-       target_type, target_ref, account_ref, target_spec, agent_refs,
+       target_type, target_ref, account_ref, run_input, target_spec, agent_refs,
        provider, model, account_candidates, overlay,
        catalog_revision, catalog_digest, models, binding_provider,
        binding_policy_id, binding_policy_ref, binding_policy_version, binding_policy_digest
