@@ -182,3 +182,8 @@ PostgreSQL project-profile/parallel-lifecycle проверки — PASS,36.267s.
 Следующий canary и retry — FAIL ACTIVITY_DELIVERY до результата модели.
 Добавлена закрытая диагностика progress callback (стадия и gRPC code, без
 payload). Устранение этого дефекта и live пункты2–3 ещё не завершены.
+
+Проверка обновления compiled CP выявила, что cutover-инструмент рассчитан только
+на переход с hot-reload. Для уже compiled CP/API использован image-only механизм
+с exact source/provenance и rollback; его закрытый реестр расширен на эти два
+существующих приложения.13 unit tests механизма — PASS LOCAL.

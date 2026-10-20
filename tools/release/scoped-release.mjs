@@ -72,7 +72,7 @@ export function validateManifest(value) {
       requireValue(digestImage.test(target.image) && !target.image.endsWith("0".repeat(64)), "INVALID_TARGET_IMAGE");
     if (target.source !== undefined) requireValue(validSource(target.source), "INVALID_APPLICATION_SOURCE");
     if (target.build !== undefined)
-      requireValue(["runtime-controller", "staff-control-center"].includes(target.name) && target.image && !target.source &&
+      requireValue(["runtime-controller", "control-plane", "control-api-gateway", "staff-control-center"].includes(target.name) && target.image && !target.source &&
         exactKeys(target.build, ["sourceSHA", "provenanceSHA256"]) &&
         /^[a-f0-9]{40}$/.test(target.build.sourceSHA) && target.build.sourceSHA !== "0".repeat(40) &&
         /^[a-f0-9]{64}$/.test(target.build.provenanceSHA256) && target.build.provenanceSHA256 !== "0".repeat(64) &&
@@ -146,7 +146,7 @@ export function planTarget(deployment, target, releaseID, sourceInspector, mode 
   if (target.build) {
     requireValue(pod.metadata?.labels?.["kodex.dev/local-profile"] === "stable" &&
       (target.name === "staff-control-center" ? !containers[index].command && !containers[index].args :
-        JSON.stringify(containers[index].command) === JSON.stringify(["/usr/local/bin/runtime-controller"])) &&
+        JSON.stringify(containers[index].command) === JSON.stringify([`/usr/local/bin/${target.name}`])) &&
       /^[a-f0-9]{40}$/.test(annotations["kodex.dev/source-sha"] ?? "") &&
       /^[a-f0-9]{64}$/.test(annotations["kodex.dev/release-provenance-sha256"] ?? ""), "STABLE_BUILD_BOUNDARY_REQUIRED");
     previousBuild = { sourceSHA: annotations["kodex.dev/source-sha"], provenanceSHA256: annotations["kodex.dev/release-provenance-sha256"] };

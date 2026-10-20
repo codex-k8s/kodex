@@ -42,17 +42,17 @@ test("application patch preserves sidecars, trust, env, replicas and strategy", 
   assert.deepEqual(result.rollback, { name: "email-bridge", image: image("a"), expectedImage: image("b"), rollbackOf: releaseID });
 });
 
-test("stable image refresh binds source and provenance and preserves rollback metadata", () => {
+for (const component of ["runtime-controller", "control-plane", "control-api-gateway"]) test(`stable ${component} image refresh binds source and provenance and preserves rollback metadata`, () => {
   const current = fixture();
-  current.metadata.name = "runtime-controller";
+  current.metadata.name = component;
   const app = current.spec.template.spec.containers[0];
-  app.name = "runtime-controller";
-  app.image = app.image.replace("email-bridge", "runtime-controller");
-  app.command = ["/usr/local/bin/runtime-controller"];
+  app.name = component;
+  app.image = app.image.replace("email-bridge", component);
+  app.command = [`/usr/local/bin/${component}`];
   current.spec.template.metadata.labels = { "kodex.dev/local-profile": "stable" };
   const old = { sourceSHA: "a".repeat(40), provenanceSHA256: "b".repeat(64) };
   Object.assign(current.spec.template.metadata.annotations, { "kodex.dev/source-sha": old.sourceSHA, "kodex.dev/release-provenance-sha256": old.provenanceSHA256 });
-  const requested = { name: "runtime-controller", image: image("b").replace("email-bridge", "runtime-controller"), build: { sourceSHA: "c".repeat(40), provenanceSHA256: "d".repeat(64) } };
+  const requested = { name: component, image: image("b").replace("email-bridge", component), build: { sourceSHA: "c".repeat(40), provenanceSHA256: "d".repeat(64) } };
   const result = planTarget(current, requested, releaseID);
   assert.deepEqual(result.rollback.build, old);
   const annotations = result.patch.at(-1).value;
