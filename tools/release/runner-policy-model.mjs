@@ -45,9 +45,11 @@ export function runnerPullReference(data, digest) {
 
 export function requireStaging(resource) {
   const m = resource?.metadata;
+  const stableDeployment = resource?.kind === "Deployment" && m?.labels?.["kodex.dev/local-profile"] === "stable" &&
+    m.labels["kodex.dev/environment"] === "staging";
   requireValue(m?.namespace === namespace && /^[a-f0-9-]{36}$/.test(m.uid ?? "") && /^\d+$/.test(m.resourceVersion ?? "") &&
     !m.deletionTimestamp && m.labels?.["app.kubernetes.io/part-of"] === "kodex" &&
-    m.labels?.["kodex.dev/local-profile"] === "hot-reload", "EXACT_STAGING_RESOURCE_REQUIRED");
+    (m.labels?.["kodex.dev/local-profile"] === "hot-reload" || stableDeployment), "EXACT_STAGING_RESOURCE_REQUIRED");
 }
 
 export function requireIdle(state, now = Date.now()) {
@@ -125,7 +127,7 @@ export function planDeployment(deployment, bundle, phase, readerImage) {
   const name = deployment.metadata.name;
   const policy = bundle.resources[0], catalog = bundle.resources[2];
   if (phase === "reader") {
-    requireValue(name === "image-admission-controller" && /^registry\.local\.kodex\/kodex\/image-admission@sha256:[a-f0-9]{64}$/.test(readerImage), "EXACT_READER_IMAGE_REQUIRED");
+    requireValue(name === "image-admission-controller" && /^registry\.local\.kodex\/kodex\/image-admission(?:-controller)?@sha256:[a-f0-9]{64}$/.test(readerImage), "EXACT_READER_IMAGE_REQUIRED");
     const pauses = app.env.filter((item) => item.name === "IMAGE_ADMISSION_CONTROLLER_PAUSE_NEW_RUNS");
     requireValue(pauses.length === 0 || pauses.length === 1 && ["false", "true"].includes(pauses[0].value) && !pauses[0].valueFrom,
       "READER_TRANSITION_STATE_REJECTED");

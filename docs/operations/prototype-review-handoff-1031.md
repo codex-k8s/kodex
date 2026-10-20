@@ -148,3 +148,19 @@ CP compiled cutover фактически запущен: две Ready репли
 app-name и component из авторитетного Deployment; строгая ReplicaSet lineage
 не ослабляется.14 тестов Go release — PASS LOCAL. Незавершённая часть API
 получает отдельный новый план по фактическому состоянию, без повтора CP PATCH.
+
+Итоговый live serving readback четырёх компонентов — PASS: source ac0cb4b8c,
+по две Ready реплики, точные runtime imageID digest и spec fingerprints.
+CP/API переведены в compiled; runtime-controller/PWA обновлены image-only с
+сохранением source/provenance metadata и rollback. Ошибочный первый source-only
+план остался FAIL, его результат не переписан. Новый API compiled план — PASS.
+SSO/public routing сохранены, зависимости не переустанавливались.
+
+Runner ac0 собран full profile, binary provenance проверен; manifest
+`sha256:b0efb2cba0c73992493ca77eada27a9d340842e8449bc1000038f2a7f2a3b41a`,
+публикация exact bytes в registry — PASS. Подготовлена новая immutable policy,
+активация пока NOT RUN. Скрипты policy поддерживают compiled staging Deployment
+и оба закрытых repo-owned имени reader; production или чужой image не допускаются.
+20 policy tests — PASS LOCAL; расширенный reader assertion — отдельный PASS LOCAL.
+Созданы11 собственных пустых проектных диалогов для следующей проверки лимита;
+это не PASS десяти одновременных выполнений.

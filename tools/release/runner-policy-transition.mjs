@@ -54,7 +54,7 @@ export function requireCompatibleReaderBeforeMaintenance(controller, readerImage
 
 export function planReaderRecovery(controller, failedPlan, evidence, recoveryImage, incident) {
   requireValue(/^https:\/\/github\.com\/codex-k8s\/kodex\/issues\/[1-9][0-9]*$/.test(incident ?? "") &&
-    /^registry\.local\.kodex\/kodex\/image-admission@sha256:[a-f0-9]{64}$/.test(recoveryImage ?? "") &&
+    /^registry\.local\.kodex\/kodex\/image-admission(?:-controller)?@sha256:[a-f0-9]{64}$/.test(recoveryImage ?? "") &&
     failedPlan?.version === 1 && failedPlan.phase === "reader" && Array.isArray(failedPlan.operations) && failedPlan.operations.length === 1,
   "READER_RECOVERY_INPUT_REJECTED");
   const operation = failedPlan.operations[0], last = evidence.at(-1);

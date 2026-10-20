@@ -14,6 +14,23 @@ const oldDigest = `sha256:${"1".repeat(64)}`, newDigest = `sha256:${"2".repeat(6
 const readerImage = `registry.local.kodex/kodex/image-admission@sha256:${"3".repeat(64)}`;
 function metadata(name) { return { name, namespace: "kodex-system", uid: "11111111-1111-4111-8111-111111111111", resourceVersion: "19", generation: 2,
   labels: { "app.kubernetes.io/part-of": "kodex", "kodex.dev/local-profile": "hot-reload", "kodex.dev/owner-intent": "true" } }; }
+test("compiled staging deployments retain exact policy transition while production remains denied", () => {
+  const cp = deployment("control-plane");
+  cp.metadata.labels["kodex.dev/local-profile"] = "stable";
+  cp.metadata.labels["kodex.dev/environment"] = "staging";
+  assert.equal(planDeployment(cp, prepared(), "control-plane").next.replicas, cp.spec.replicas);
+  for (const environment of [undefined, "production"]) {
+    const invalid = structuredClone(cp);
+    invalid.metadata.labels["kodex.dev/environment"] = environment;
+    assert.throws(() => planDeployment(invalid, prepared(), "control-plane"), /EXACT_STAGING_RESOURCE_REQUIRED/);
+  }
+  const controller = deployment("image-admission-controller");
+  const stableReader = readerImage.replace("image-admission@", "image-admission-controller@");
+  const next = planDeployment(controller, prepared(), "reader", stableReader).next;
+  assert.equal(next.template.spec.containers.find(c => c.name === "image-admission-controller").image, stableReader);
+  assert.throws(() => planDeployment(controller, prepared(), "reader", stableReader.replace("image-admission-controller@", "foreign@")), /EXACT_READER_IMAGE_REQUIRED/);
+});
+
 function fixtures() {
   const data = { toolsImage: `registry.example.test/kodex/tools@sha256:${"e".repeat(64)}`, policyRevision: "4", trustedRoleBaseDigest: oldDigest, trustedRoleBaseRepository: "registry/kodex/agent-runner",
     orchestrationRevision: "a".repeat(40), nodeReadbackImage: `pull.kodex.works/kodex/agent-runner@${oldDigest}`,pullRegistryHost:"pull.kodex.works",pullCredentialGeneration:"1", roleRuntimeContractRevision: "2", roleRuntimeContractSHA256: "e".repeat(64) };
