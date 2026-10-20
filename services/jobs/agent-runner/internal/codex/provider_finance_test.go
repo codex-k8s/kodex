@@ -2,11 +2,36 @@ package codex
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
+
+func TestTerminalConsumedByFinancialReadDoesNotWaitForAnotherNotification(t *testing.T) {
+	state := newProtocolState(testThreadID)
+	state.threadID, state.turnID = testThreadID, testTurnID
+	state.result.SessionID = testThreadID
+	state.financialEnabled, state.financialWake = true, true
+	state.financialExpectedAccount = "fixture-private-account"
+	state.financialEpoch, state.financialBoundEpoch = 1, 1
+	state.onActivity = func(runtimecontract.RuntimeActivity) error { return nil }
+	if err := state.notification("turn/started", raw(`{"threadId":"`+testThreadID+`","turn":{"id":"`+testTurnID+`","items":[],"status":"inProgress"}}`)); err != nil {
+		t.Fatal(err)
+	}
+	messages := make(chan streamEvent, 2)
+	item := `{"id":"financial-terminal-final","text":"готово","phase":"final_answer","questions":null,"type":"agentMessage"}`
+	messages <- streamEvent{message: wireMessage{kind: messageNotification, method: "turn/completed", payload: raw(`{"threadId":"` + testThreadID + `","turn":{"id":"` + testTurnID + `","items":[` + item + `],"status":"completed"}}`)}}
+	messages <- streamEvent{message: wireMessage{kind: messageResponse, id: raw(`1`), payload: raw(`{"accountId":"fixture-private-account","rateLimits":null}`)}}
+	server := &appServer{stdin: &proofRequestWriter{beforeWrite: func() {}}, messages: messages}
+	ctx, cancel := context.WithTimeout(t.Context(), 250*time.Millisecond)
+	defer cancel()
+	if err := server.waitTerminal(ctx, state); err != nil || state.terminals != 1 {
+		t.Fatalf("terminal consumed by financial RPC did not finish execution: %v", err)
+	}
+}
 
 func TestRateLimitNotificationOnlyWakesAuthoritativeRead(t *testing.T) {
 	state := newProtocolState("")

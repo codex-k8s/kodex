@@ -819,6 +819,11 @@ func (server *appServer) waitTerminal(ctx context.Context, state *protocolState)
 			if err := server.observeFinancial(ctx, state); err != nil {
 				return err
 			}
+			// Коррелированный RPC также обрабатывает notifications и может
+			// потребить terminal. Повторно проверяем условие до нового ожидания.
+			if state.terminals != 0 {
+				return nil
+			}
 		}
 		select {
 		case <-ctx.Done():

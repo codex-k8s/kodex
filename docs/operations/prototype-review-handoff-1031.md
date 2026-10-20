@@ -203,3 +203,16 @@ Run route после потери availability snapshot во время inflight
 повторы, старый graph не считается свежим допуском.18 выбранных frontend
 rejoin/mutation/refresh tests — PASS LOCAL. Доставка и live подтверждение
 исправления пока NOT RUN.
+
+CP8402 и PWAe7dab7 доставлены по две Ready реплики с exact digest/source.
+Frontend lint/typecheck/build — PASS LOCAL. Реальный project assistant прошёл
+прежний отказ финансового callback, получил текущее наблюдение лимита/кредитов
+и создал план CREATE_WORKFLOW; validation/application200, процесс опубликован
+через UI. Сценарий выполнения начат, итог ещё не принят.
+
+Выявлена вторая гонка: waitTerminal вызывал финансовый RPC, который мог
+потребить turn/completed; после возврата цикл всё равно ожидал следующее
+сообщение. Regression test воспроизвёл FAIL context canceled при уже принятом
+terminal, после повторной проверки terminal перед select — PASS. Полный
+agent-runner — PASS LOCAL. Это не отменяет реальные terminal/lease guards;
+доставка нового runner и повтор workflow остаются NOT RUN.
