@@ -97,6 +97,18 @@ function checkout(parent = tmpdir()) {
   return { path, frontend, git, revision: git("rev-parse", "HEAD") };
 }
 
+test("source inspection accepts only exact repository HTTPS aliases", () => {
+  const current = checkout();
+  try {
+    current.git("remote", "set-url", "origin", "https://github.com/codex-k8s/kodex");
+    assert.equal(inspectSource(current.path).revision, current.revision);
+    for (const remote of ["https://github.com/codex-k8s/kodex-other", "https://github.com/codex-k8s/kodex?token=x", "https://example.invalid/codex-k8s/kodex"]) {
+      current.git("remote", "set-url", "origin", remote);
+      assert.throws(() => inspectSource(current.path), /SOURCE_CHECKOUT_NOT_EXACT/);
+    }
+  } finally { rmSync(current.path, { recursive: true, force: true }); }
+});
+
 test("source preparation creates only an ignored mountpoint and is repeatable", () => {
   const current = checkout();
   try {

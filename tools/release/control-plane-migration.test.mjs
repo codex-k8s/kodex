@@ -59,6 +59,7 @@ function cliFixture(t, profile = 'legacy', missingBase = false) {
  writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20261019000200_project_purge_indexed_graph.sql'),'-- Синтетическая forward indexed graph миграция\n');
  writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20261019000300_project_purge_audit_references.sql'),'-- Синтетическая forward audit references миграция\n');
  writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20261019000400_project_purge_deferred_graph.sql'),'-- Синтетическая forward deferred graph миграция\n');
+ writeFileSync(join(repo,'services/internal/control-plane/cmd/cli/migrations/20261020000200_provider_financial_catalog_floor.sql'),'-- Синтетическая forward financial миграция\n');
  const git=(...a)=>execFileSync('git',['-C',repo,...a],{stdio:['ignore','pipe','pipe']}).toString().trim();git('init','-q');git('remote','add','origin','https://github.com/codex-k8s/kodex.git');git('add','.');git('-c','user.name=Fixture','-c','user.email=fixture@example.invalid','commit','-qm','Оснастка');const rev=git('rev-parse','HEAD');
  const base=fixture(repo),render=join(dir,'render.json');delete base.metadata.uid;delete base.metadata.resourceVersion;delete base.status;writeFileSync(render,JSON.stringify(base),{mode:0o600});
  const state=join(dir,'state.json'), plan=join(dir,'plan.json'), evidence=join(dir,'evidence.jsonl');writeFileSync(state,JSON.stringify({...(missingBase?{}:{base:fixture(repo)}),deployment:{metadata:{uid:'deployment-uid',resourceVersion:'7'},spec:{replicas:2,template:{spec:{containers:[{name:'control-plane'}]}}}},calls:[],mode:'',profile,replicas:0,pods:[]}),{mode:0o600});const executable=join(dir,'kubectl');writeFileSync(executable,`#!/usr/bin/env node
@@ -114,6 +115,20 @@ test('managed renewal migration pins exact version and never repeats Job creatio
  f.edit(s=>s.logVersion='20261014000101');result=f.run('inspect');assert.notEqual(result.status,0);assert.equal(JSON.parse(result.stdout).status,'READBACK_UNCONFIRMED');
  f.edit(s=>delete s.logVersion);result=f.run('inspect');assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).status,'PASS');
  assert.equal(f.read().calls.filter(a=>a.includes('create')).length,1);
+});
+
+test('financial observations require exact forward version and preserve additive replay',t=>{
+ const f=cliFixture(t,'provider-financial-observations');
+ assert.equal(f.run('plan').status,0);
+ f.edit(s=>{s.replicas=2;s.logVersion='20261020000100';});
+ let result=f.run('apply');assert.notEqual(result.status,0);
+ assert.equal(JSON.parse(result.stdout).status,'READBACK_UNCONFIRMED');
+ f.edit(s=>s.logVersion='20261020000200');
+ for(const phase of ['inspect','apply']){result=f.run(phase);assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).migrationVersion,'20261020000200');}
+ assert.equal(f.read().job.metadata.name,'control-plane-migrate-20261020000200');
+ assert.deepEqual(Object.keys(f.read().job.metadata.annotations),['kodex.dev/cp-provider-financial-migration-plan']);
+ assert.equal(f.read().calls.filter(a=>a.includes('create')).length,1);
+ assert.equal(f.read().calls.filter(a=>a.includes('deployment')).length,0);
 });
 
 test('AV admission migration pins exact forward version and preserves replay', t => {

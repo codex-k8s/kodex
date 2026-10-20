@@ -112,7 +112,7 @@ export function inspectSource(path, frontend = false) {
     encoding: "utf8", timeout: 10000, maxBuffer: 8 << 20, stdio: ["ignore", "pipe", "pipe"],
   }).trim();
   requireValue(git("rev-parse", "--show-toplevel") === path &&
-    ["https://github.com/codex-k8s/kodex.git", "git@github.com:codex-k8s/kodex.git"].includes(git("remote", "get-url", "origin")) &&
+    ["https://github.com/codex-k8s/kodex.git", "https://github.com/codex-k8s/kodex", "git@github.com:codex-k8s/kodex.git"].includes(git("remote", "get-url", "origin")) &&
     git("status", "--porcelain", "--untracked-files=all") === "",
   "SOURCE_CHECKOUT_NOT_EXACT");
   requirePrivateInputsAbsent(path, git);

@@ -120,3 +120,15 @@ onboarding с готовой моделью gpt-6.1-sol/medium. Обычным �
 «Готовность прототипа» создан с реальной квитанцией. Никакие письма/GitHub writes
 не выполнялись. Chrome MCP доступен для списка вкладок, но защищённый одноразовый
 ввод не завершился; Playwright результат не выдаётся за MCP результат.
+
+На `ac0cb4b8cebb3bb5c6c6c73f206d0373ff30c53d` завершены: полный agent-runner,
+runtime-controller, WebSocket transport,120 assistant frontend tests и повтор
+выбранного PostgreSQL контура — PASS,170.786s. Четыре OCI (control-plane,
+control-api-gateway,runtime-controller,staff-control-center) собраны из exact
+tracked archive этого SHA. Публикация/node pull/live на момент записи NOT RUN.
+
+Квитанция #1799 сохранена без расширения её значения: это исторический
+ограниченный Git-cycle, а не общий QA PASS. Для двух новых финансовых миграций
+добавлен закрытый профиль `provider-financial-observations` с exact readback
+20261020000200. Source inspector принимает также равнозначный HTTPS origin без
+`.git`; чужой репозиторий, query-параметры и другой host остаются запрещены.
