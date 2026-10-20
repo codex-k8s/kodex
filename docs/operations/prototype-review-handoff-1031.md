@@ -216,3 +216,20 @@ Frontend lint/typecheck/build — PASS LOCAL. Реальный project assistant
 terminal, после повторной проверки terminal перед select — PASS. Полный
 agent-runner — PASS LOCAL. Это не отменяет реальные terminal/lease guards;
 доставка нового runner и повтор workflow остаются NOT RUN.
+
+Runner b799/d6a2 активирован штатными policy/binding/default фазами. HTTPS
+граф и CRI pull на двух узлах — PASS; API открыт2/2. Два собственных старых
+QA-запуска отменены API, runtime-поды удалены. ENV проверочного проекта
+опубликован как версия3, выбранные четыре привязки APPLIED, готовность=true.
+Новый canary `run_ri1_m6XDtokSOFyLfFRmYofr` — SUCCEEDED; это live подтверждение
+устранения зависания после terminal, не общий приёмочный PASS.
+
+Повтор workflow `run_nRdrAVZydUIxyl80pymmn6Qq` дошёл до Human Gate, однако
+чтение фактического result.md выявило FAIL: файл содержит диагностику, а не
+требуемый report.md. Помощник назначил координатора всем этапам и поручил
+делегировать отсутствующему в списке исполнителю. Подтверждение не выполнялось.
+Добавлены проверка противоречивого self-only/required-delegate профиля и
+versioned core-v54 с общей рекомендацией назначать фактического исполнителя,
+не путать capability с delegationTargets и привязывать gate к результату.
+Исторические core-v52/v53 bytes сохранены. Адресные systemassistant/workflow
+unit tests — PASS LOCAL; новые доставка и основной сценарий ещё NOT RUN.

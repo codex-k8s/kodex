@@ -1389,6 +1389,7 @@ func workflowVersionInvalidField(version entity.WorkflowVersion) string {
 		return workflowInvalidInvariants
 	}
 	knownSteps := make(map[string]struct{}, len(version.Steps))
+	requiresDelegation := workflowRequiresDelegation(version)
 	totalInstructions := len(version.Instructions) + len(version.CompletionCriteria)
 	for index, step := range version.Steps {
 		if strings.TrimSpace(step.Instructions) == "" || !validWorkflowText(step.Instructions, 1000) {
@@ -1418,6 +1419,9 @@ func workflowVersionInvalidField(version entity.WorkflowVersion) string {
 		}
 		for _, capability := range step.RequiredCapabilityKeys {
 			if !validCapabilityKey(capability) {
+				return workflowInvalidInvariants
+			}
+			if capability == "platform.run.delegate" && !requiresDelegation {
 				return workflowInvalidInvariants
 			}
 		}
