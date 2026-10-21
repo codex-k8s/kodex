@@ -1,4 +1,5 @@
-// Package app содержит composition root artifact-retention.
+// Package app owns the artifact-retention process composition and bounded worker lifecycle.
+// RU: Package app владеет композицией процесса artifact-retention и ограниченным жизненным циклом workers.
 package app
 
 import (
@@ -22,8 +23,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// maximumSecretBytes caps protected credential and CA files before parsing.
+// RU: maximumSecretBytes ограничивает защищённые файлы реквизитов и CA до разбора.
 const maximumSecretBytes = 16 << 10
 
+// Run starts telemetry, verifies PostgreSQL and object storage, then owns workers and ordered shutdown.
+// RU: Run запускает telemetry, проверяет PostgreSQL и объектное хранилище, затем владеет workers и порядком остановки.
 func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultErr error) {
 	config, err := loadConfig()
 	if err != nil {
@@ -97,6 +102,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	return errors.Join(err, shutdownErr)
 }
 
+// openPostgres reads a protected DSN and CA, enforces TLS 1.3 with exact server name and pings the pool.
+// RU: openPostgres читает защищённые DSN и CA, требует TLS 1.3 с точным именем сервера и проверяет pool через Ping.
 func openPostgres(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 	rawDSN, err := securefile.Read(config.PostgresDSNFile, maximumSecretBytes)
 	if err != nil {
@@ -128,6 +135,8 @@ func openPostgres(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
+// openObjectStorage reads bounded credentials, builds the S3 client and clears credential buffers.
+// RU: openObjectStorage читает ограниченные реквизиты, создаёт S3-клиент и очищает буферы ключей.
 func openObjectStorage(ctx context.Context, config Config) (*s3store.Store, error) {
 	accessKey, err := securefile.Read(config.ObjectStorageAccessKeyFile, maximumSecretBytes)
 	if err != nil {
@@ -150,6 +159,8 @@ func openObjectStorage(ctx context.Context, config Config) (*s3store.Store, erro
 	return store, nil
 }
 
+// serveTechnical adapts the blocking technical HTTP server to a cancelable runtime worker.
+// RU: serveTechnical адаптирует блокирующий технический HTTP-сервер к отменяемому runtime worker.
 func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		done := make(chan error, 1)
@@ -163,8 +174,18 @@ func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
 	}
 }
 
-type dependencyChecker interface{ Check(context.Context) error }
+// dependencyChecker exposes the startup/readiness probe of the exact object-store adapter.
+// RU: dependencyChecker предоставляет проверку startup/readiness точного адаптера объектного хранилища.
+type dependencyChecker interface {
+	// Check verifies that the concrete dependency currently serves the required path.
+	// RU: Check проверяет, что конкретная зависимость сейчас обслуживает нужный путь.
+	Check(context.Context) error
+}
 
+// monitorReadiness periodically checks PostgreSQL, object storage and prepared statements
+// before publishing a local readiness snapshot and bounded availability metrics.
+// RU: monitorReadiness периодически проверяет PostgreSQL, объектное хранилище и prepared statements
+// перед публикацией локального снимка готовности и ограниченных метрик доступности.
 func monitorReadiness(pool *pgxpool.Pool, objects dependencyChecker, readiness *serviceruntime.Readiness, metrics *sharedobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		ticker := time.NewTicker(config.ReadinessInterval)
@@ -199,6 +220,8 @@ func monitorReadiness(pool *pgxpool.Pool, objects dependencyChecker, readiness *
 	}
 }
 
+// runRetentionLoop claims bounded purge batches, records actual completed purges and backs off while idle.
+// RU: runRetentionLoop получает ограниченные пачки очистки, учитывает реально удалённое и увеличивает паузу при простое.
 func runRetentionLoop(processor *retention.Processor, metrics *retentionMetrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		idleBackoff := serviceruntime.NewIdleBackoff(config.PollInterval, 5*time.Minute)
@@ -235,6 +258,8 @@ func runRetentionLoop(processor *retention.Processor, metrics *retentionMetrics,
 	}
 }
 
+// shouldResetRetentionBackoff resets polling after work or a failure that needs timely retry.
+// RU: shouldResetRetentionBackoff сбрасывает паузу опроса после работы или отказа, требующего скорого повтора.
 func shouldResetRetentionBackoff(processed int, err error) bool {
 	return err != nil || processed > 0
 }

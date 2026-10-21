@@ -9,6 +9,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 )
 
+// repositoryFixture records whether cleanup finalized and can inject a lost-fence error.
+// RU: repositoryFixture записывает конечный исход очистки и может вернуть ошибку утраты fence.
 type repositoryFixture struct {
 	claim       Claim
 	success     bool
@@ -16,14 +18,20 @@ type repositoryFixture struct {
 	recordError error
 }
 
+// RecordPreparedReceipt returns the injected fencing error before deletion may start.
+// RU: RecordPreparedReceipt возвращает заданную ошибку fencing до начала удаления.
 func (r *repositoryFixture) RecordPreparedReceipt(context.Context, Claim, string, objectstorage.Receipt) error {
 	return r.recordError
 }
 
+// ClaimPrepared returns the single synthetic ledger claim for the current test.
+// RU: ClaimPrepared возвращает единственный синтетический ledger claim текущего теста.
 func (r *repositoryFixture) ClaimPrepared(context.Context, string, int, int64) ([]Claim, error) {
 	return []Claim{r.claim}, nil
 }
 
+// TestPreparedCleanupLostFencePreventsDelete proves a failed receipt fence blocks object deletion.
+// RU: TestPreparedCleanupLostFencePreventsDelete доказывает, что потеря fence запрещает удаление объекта.
 func TestPreparedCleanupLostFencePreventsDelete(t *testing.T) {
 	digest := "sha256:" + strings.Repeat("a", 64)
 	receipt := objectstorage.Receipt{Key: "key", VersionID: "version", ETag: "etag", Digest: digest, SizeBytes: 3}
@@ -34,12 +42,17 @@ func TestPreparedCleanupLostFencePreventsDelete(t *testing.T) {
 		t.Fatal("lost fence allowed external delete")
 	}
 }
+
+// FinishPrepared captures a terminal cleanup outcome and increments its call count.
+// RU: FinishPrepared сохраняет конечный исход очистки и увеличивает счётчик вызовов.
 func (r *repositoryFixture) FinishPrepared(_ context.Context, _ Claim, _ string, success bool, _ objectstorage.Receipt) error {
 	r.success = success
 	r.finished++
 	return nil
 }
 
+// objectsFixture emulates one immutable object version and tracks exact deletion.
+// RU: objectsFixture имитирует одну неизменяемую версию объекта и отслеживает точное удаление.
 type objectsFixture struct {
 	receipt     objectstorage.Receipt
 	headErr     error
@@ -47,12 +60,17 @@ type objectsFixture struct {
 	deleteCount int
 }
 
+// Head returns the configured receipt until the exact version has been deleted.
+// RU: Head возвращает заданный receipt, пока точная версия не удалена.
 func (o *objectsFixture) Head(context.Context, string, string) (objectstorage.Receipt, error) {
 	if o.deleted {
 		return objectstorage.Receipt{}, objectstorage.ErrNotFound
 	}
 	return o.receipt, o.headErr
 }
+
+// Delete rejects a foreign key or version and records a successful exact deletion.
+// RU: Delete отклоняет чужой ключ либо версию и фиксирует успешное точное удаление.
 func (o *objectsFixture) Delete(_ context.Context, key, version string) error {
 	if key != o.receipt.Key || version != o.receipt.VersionID {
 		return errors.New("wrong exact deletion")
@@ -62,6 +80,10 @@ func (o *objectsFixture) Delete(_ context.Context, key, version string) error {
 	return nil
 }
 
+// TestPreparedCleanupOutcome distinguishes unknown writes from accepted receipts and
+// checks that only confirmed exact deletion or an already-absent known version succeeds.
+// RU: TestPreparedCleanupOutcome различает неизвестные записи и принятые receipts,
+// засчитывая лишь подтверждённое точное удаление либо уже отсутствующую известную версию.
 func TestPreparedCleanupOutcome(t *testing.T) {
 	digest := "sha256:" + strings.Repeat("a", 64)
 	receipt := objectstorage.Receipt{Key: "organizations/org/projects/project/artifacts/art/rev/digest", VersionID: "v1", ETag: "etag", Digest: digest, SizeBytes: 3}

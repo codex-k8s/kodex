@@ -1,4 +1,5 @@
-// Package prepared исполняет ограниченную очистку непринятого контента CP.
+// Package prepared cleans unadmitted control-plane content under exact ledger claims.
+// RU: Package prepared очищает непринятый контент control plane по точным claim записям ledger.
 package prepared
 
 import (
@@ -8,34 +9,60 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 )
 
+// ErrLostClaim signals that a fenced cleanup claim expired before an external delete.
+// RU: ErrLostClaim означает, что ограниченный claim очистки утрачен до внешнего удаления.
 var ErrLostClaim = errors.New("prepared content cleanup claim is lost")
 
+// Claim pins one cleanup attempt to a ledger row, object receipt and fencing generation.
+// RU: Claim привязывает попытку очистки к записи ledger, receipt объекта и поколению fencing.
 type Claim struct {
 	LedgerID, ObjectKey, ObjectVersion, ObjectETag, Digest string
 	SizeBytes, Generation                                  int64
 	Uncertain                                              bool
 }
 
+// Repository owns claims, receipt recording and terminal cleanup decisions in the ledger.
+// RU: Repository владеет claim, записью receipt и конечным решением об очистке в ledger.
 type Repository interface {
+	// ClaimPrepared leases a bounded batch of prepared objects to one owner.
+	// RU: ClaimPrepared выдаёт одному владельцу ограниченную пачку prepared-объектов.
 	ClaimPrepared(context.Context, string, int, int64) ([]Claim, error)
+	// FinishPrepared records the fenced outcome after exact object verification or deletion.
+	// RU: FinishPrepared фиксирует защищённый поколением исход после точной проверки или удаления объекта.
 	FinishPrepared(context.Context, Claim, string, bool, objectstorage.Receipt) error
+	// RecordPreparedReceipt fences the exact receipt before any external delete occurs.
+	// RU: RecordPreparedReceipt закрепляет точный receipt до любого внешнего удаления.
 	RecordPreparedReceipt(context.Context, Claim, string, objectstorage.Receipt) error
 }
 
+// ObjectStore exposes only exact-version inspection and deletion for cleanup.
+// RU: ObjectStore предоставляет очистке только проверку и удаление точной версии объекта.
 type ObjectStore interface {
+	// Head reads the specified object version and its immutable receipt.
+	// RU: Head читает заданную версию объекта и её неизменяемый receipt.
 	Head(context.Context, string, string) (objectstorage.Receipt, error)
+	// Delete removes only the specified object version after ledger fencing.
+	// RU: Delete удаляет только заданную версию объекта после фиксации в ledger.
 	Delete(context.Context, string, string) error
 }
 
+// Processor coordinates ledger-fenced verification and object deletion without owning storage state.
+// RU: Processor координирует проверку и удаление объекта под ledger-fence, не владея состоянием хранилища.
 type Processor struct {
 	repository Repository
 	objects    ObjectStore
 }
 
+// NewProcessor binds the authoritative ledger repository and exact-version object store.
+// RU: NewProcessor связывает авторитетный ledger repository и хранилище точных версий объектов.
 func NewProcessor(repository Repository, objects ObjectStore) *Processor {
 	return &Processor{repository: repository, objects: objects}
 }
 
+// Process handles a bounded claimed batch: uncertain writes require a positive exact receipt,
+// and deletion counts only after a fenced receipt and confirmed absence of that version.
+// RU: Process обрабатывает ограниченную пачку claim: неизвестная запись требует положительного
+// точного receipt, а удаление засчитывается лишь после его фиксации и подтверждения отсутствия версии.
 func (processor *Processor) Process(ctx context.Context, owner string, batch int, lease int64) (int, error) {
 	claims, err := processor.repository.ClaimPrepared(ctx, owner, batch, lease)
 	if err != nil {
@@ -99,6 +126,8 @@ func (processor *Processor) Process(ctx context.Context, owner string, batch int
 	return processed, resultErr
 }
 
+// exactReceipt matches an uncertain write to its key, nonempty version, ETag, digest and size.
+// RU: exactReceipt сопоставляет неизвестную запись с ключом, непустой версией, ETag, дайджестом и размером.
 func exactReceipt(claim Claim, receipt objectstorage.Receipt) bool {
 	return receipt.Key == claim.ObjectKey && receipt.VersionID != "" && receipt.ETag != "" &&
 		receipt.Digest == claim.Digest && receipt.SizeBytes == claim.SizeBytes

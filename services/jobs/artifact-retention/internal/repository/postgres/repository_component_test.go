@@ -9,6 +9,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestClaimExecutesWithRuntimeRole confirms a disposable migrated database grants the
+// runtime principal its bounded claim query without returning unrelated rows.
+// RU: TestClaimExecutesWithRuntimeRole подтверждает, что runtime principal одноразовой
+// мигрированной БД выполняет ограниченный claim-запрос без чужих записей.
 func TestClaimExecutesWithRuntimeRole(t *testing.T) {
 	dsn := os.Getenv("KODEX_ARTIFACT_RETENTION_TEST_DSN")
 	if dsn == "" {

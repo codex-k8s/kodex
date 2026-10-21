@@ -14,6 +14,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/s3store"
 )
 
+// TestSeaweedFSExactVersionAbsentE2E reads one explicitly named version from a
+// loopback-only local bucket and requires an authoritative not-found response.
+// RU: TestSeaweedFSExactVersionAbsentE2E читает явно заданную версию из локального
+// bucket только на loopback и требует авторитетный ответ об отсутствии.
 func TestSeaweedFSExactVersionAbsentE2E(t *testing.T) {
 	if os.Getenv("ARTIFACT_STORAGE_E2E") != "1" {
 		t.Skip("local artifact storage E2E is disabled")
@@ -41,6 +45,8 @@ func TestSeaweedFSExactVersionAbsentE2E(t *testing.T) {
 	}
 }
 
+// requireArtifactLoopbackEndpoint rejects credentials, paths and non-loopback E2E targets.
+// RU: requireArtifactLoopbackEndpoint отклоняет реквизиты, пути и не-loopback цели E2E.
 func requireArtifactLoopbackEndpoint(t *testing.T, raw string) string {
 	t.Helper()
 	endpoint, err := url.Parse(raw)
@@ -52,6 +58,8 @@ func requireArtifactLoopbackEndpoint(t *testing.T, raw string) string {
 	return raw
 }
 
+// readArtifactE2ESecret reads a small regular owner-protected credential file and clears raw bytes.
+// RU: readArtifactE2ESecret читает небольшой защищённый regular file с реквизитом и очищает сырые байты.
 func readArtifactE2ESecret(t *testing.T, path string) string {
 	t.Helper()
 	info, err := os.Lstat(path)

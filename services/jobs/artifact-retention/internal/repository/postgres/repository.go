@@ -1,4 +1,5 @@
-// Package postgres хранит authoritative claim и tombstone retention lifecycle.
+// Package postgres owns authoritative artifact claims and tombstone finalization transactions.
+// RU: Package postgres владеет авторитетными claim артефактов и транзакциями завершения tombstone.
 package postgres
 
 import (
@@ -12,14 +13,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Repository holds the PostgreSQL pool for fenced retention and prepared-content commands.
+// RU: Repository хранит PostgreSQL pool для защищённых команд retention и prepared-контента.
 type Repository struct {
 	pool *pgxpool.Pool
 }
 
+// New binds a caller-owned pool without starting a worker or opening another connection.
+// RU: New связывает pool вызывающего, не запуская worker и не открывая отдельное соединение.
 func New(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
+// Claim leases a bounded batch of due artifact versions to one owner with a generation.
+// RU: Claim арендует ограниченную пачку подлежащих очистке версий одному владельцу с поколением.
 func (repository *Repository) Claim(
 	ctx context.Context,
 	owner string,
@@ -49,6 +56,10 @@ func (repository *Repository) Claim(
 	return claims, nil
 }
 
+// Finalize locks the exact claim, removes its receipt and, after the last revision,
+// atomically finalizes the tombstone, revision metadata and audit event.
+// RU: Finalize блокирует точный claim, удаляет его receipt и после последней версии
+// атомарно завершает tombstone, метаданные версий и событие аудита.
 func (repository *Repository) Finalize(
 	ctx context.Context,
 	claim retention.Claim,
