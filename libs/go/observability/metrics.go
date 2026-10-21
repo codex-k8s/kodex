@@ -13,9 +13,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// unknownMethod is the single fallback operation label for any unregistered RPC method.
+// unknownMethod — единственная запасная метка операции для незарегистрированного RPC-метода.
 const unknownMethod = "unknown"
 
-// Metrics хранит ограниченные Prometheus-метрики gRPC и готовности.
+// Metrics owns an isolated registry and a copied operation allowlist for request, duration, streaming in-flight and readiness collectors.
+// Metrics владеет изолированным реестром и копией разрешённых операций для счётчиков запросов, длительности, активных потоков и готовности.
 type Metrics struct {
 	registry       *prometheus.Registry
 	allowedMethods map[string]string
@@ -25,7 +28,8 @@ type Metrics struct {
 	readiness      *prometheus.GaugeVec
 }
 
-// NewMetrics создаёт изолированный registry с закрытыми метками операций.
+// NewMetrics copies the caller's closed method map and registers technical, build, process and Go collectors without using the global Prometheus registry.
+// NewMetrics копирует закрытый словарь методов вызывающего и регистрирует технические, сборочные, процессные и Go-метрики без глобального Prometheus-реестра.
 func NewMetrics(
 	serviceName string,
 	buildVersion string,
@@ -87,8 +91,8 @@ func NewMetrics(
 	}
 }
 
-// StreamServerInterceptor учитывает полный streaming RPC, включая ранний
-// отказ до первого сообщения, и поддерживает bounded in-flight gauge.
+// StreamServerInterceptor increments in-flight before invoking the handler, releases it on unwinding and records duration and code for returned outcomes, including failures before the first message.
+// StreamServerInterceptor увеличивает активность до вызова обработчика, освобождает её при выходе и учитывает длительность и код возвращённого результата, включая отказы до первого сообщения.
 func (metrics *Metrics) StreamServerInterceptor() grpc.StreamServerInterceptor {
 	return func(
 		service any,
@@ -107,12 +111,14 @@ func (metrics *Metrics) StreamServerInterceptor() grpc.StreamServerInterceptor {
 	}
 }
 
-// PrometheusHandler возвращает HTTP handler для registry.
+// PrometheusHandler serves only this instance's registry using the standard Prometheus HTTP exposition handler.
+// PrometheusHandler публикует только реестр этого экземпляра стандартным HTTP-обработчиком Prometheus.
 func (metrics *Metrics) PrometheusHandler() http.Handler {
 	return promhttp.HandlerFor(metrics.registry, promhttp.HandlerOpts{})
 }
 
-// Register добавляет service-owned collectors в изолированный registry.
+// Register adds service-owned collectors in order and returns the first registration error; collectors already registered earlier in the call remain installed.
+// Register добавляет принадлежащие сервису метрики по порядку и возвращает первую ошибку; ранее зарегистрированные в этом вызове метрики остаются установленными.
 func (metrics *Metrics) Register(collectors ...prometheus.Collector) error {
 	for _, collector := range collectors {
 		if err := metrics.registry.Register(collector); err != nil {
@@ -122,7 +128,8 @@ func (metrics *Metrics) Register(collectors ...prometheus.Collector) error {
 	return nil
 }
 
-// UnaryServerInterceptor учитывает длительность и код завершённого RPC.
+// UnaryServerInterceptor records elapsed time and canonical returned status under a registered operation or the single unknown fallback without changing the response.
+// UnaryServerInterceptor учитывает длительность и канонический код результата под зарегистрированной операцией либо единственным unknown, не меняя ответ.
 func (metrics *Metrics) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
@@ -139,12 +146,15 @@ func (metrics *Metrics) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	}
 }
 
-// SetReady обновляет ограниченную метрику готовности.
+// SetReady replaces the readiness series with one current true or false label rather than accumulating historical states.
+// SetReady заменяет серию готовности одним текущим true или false, не накапливая прошлые состояния.
 func (metrics *Metrics) SetReady(ready bool) {
 	metrics.readiness.Reset()
 	metrics.readiness.WithLabelValues(strconv.FormatBool(ready)).Set(1)
 }
 
+// operation maps a full method through the copied allowlist and never exposes arbitrary incoming names as metric labels.
+// operation сопоставляет полный метод с копией разрешённого словаря и не выдаёт произвольные входные имена как метки метрик.
 func (metrics *Metrics) operation(fullMethod string) string {
 	if operation, ok := metrics.allowedMethods[fullMethod]; ok {
 		return operation

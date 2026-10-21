@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.44.0
+version: 1.45.0
 updated: 2026-10-21
 ---
 
@@ -1284,3 +1284,35 @@ ignore-boundaries, `gofmt` и `git diff --check` — PASS LOCAL.
 Полный `go-docs -check` — NOT RUN при известном неполном покрытии;
 browser/deploy/live — NOT RUN по прежнему scope.
 Точный scan нового коммита будет опубликован в текущем PR.
+
+## Сорок седьмая волна — комментарии общей наблюдаемости
+
+На точном запушенном SHA `5d38d31d05af1f5b166da35936264ac4d0d3010a`
+полный анализ подтвердил 6529 собственных файлов, 222 исключения, 1889
+raw-групп, 298 точных решений и 1591 неразобранную группу. Сырой SHA-256 —
+`156dff26225d28b9597b3639786881f971f845d280ecfc51ded389e72f768edb`;
+нормализованный отпечаток —
+`80efbe85c65f3192f7d0f8ed75f837fb5f6811f5446693acd20978f1c9aad395`.
+Go-реестр: 1428/21012, непокрыты 19584; пять ignore-boundaries — PASS LOCAL.
+Повторные `go test -count=1 ./...` и `go build ./...` exactkubernetessecret
+на этом SHA — PASS LOCAL.
+
+В шести файлах `observability` оставшиеся 54 объявления получили подробные
+EN→RU комментарии. Описаны захват HTTP status и panic, server-owned stream
+correlation, закрытые метки gRPC, отдельный Prometheus registry, частичный
+успех регистрации collectors, no-op профиль, глобальная установка OTel,
+точные exporter pins и независимые caller-owned shutdown contexts.
+Комментарий `CaptureException` явно оставляет безопасность переданной ошибки
+вызывающему: функция сама не выполняет редактирование текста. Runtime logs,
+HELP, ошибки и исполняемая логика не изменялись.
+Документы `/open-telemetry/opentelemetry-go` о глобальном tracer provider
+и ParentBased-выборке проверены через Context7.
+
+Рабочий Go-реестр: 1482/21012, непокрыты 19530; у observability не осталось
+объявлений без требуемого формата. Полный detector дал прежние 1889 raw,
+298 точных решений и 1591 неразобранную группу; нормализованный отпечаток
+не изменился. `go test -count=1 ./...` и `go build ./...` модуля на Go1.26.6,
+пять ignore-boundaries, `gofmt` и `git diff --check` — PASS LOCAL.
+Полный `go-docs -check` — NOT RUN при известном неполном покрытии;
+browser/deploy/live — NOT RUN по прежнему scope. Точный scan нового коммита
+будет опубликован в текущем PR.

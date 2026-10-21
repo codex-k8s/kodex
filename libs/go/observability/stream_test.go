@@ -14,13 +14,19 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// testServerStream supplies a local context while embedding unused stream methods for interceptor-only unit tests.
+// testServerStream предоставляет локальный контекст и встраивает неиспользуемые методы потока для изолированных тестов interceptor.
 type testServerStream struct {
 	grpc.ServerStream
 	ctx context.Context
 }
 
+// Context returns the exact test context without opening a network stream.
+// Context возвращает точный тестовый контекст без открытия сетевого потока.
 func (stream *testServerStream) Context() context.Context { return stream.ctx }
 
+// TestStreamCorrelationIsServerOwnedAndStable requires one canonical generated version-four UUID to remain unchanged across repeated reads within a stream.
+// TestStreamCorrelationIsServerOwnedAndStable требует сохранения одного канонического UUID четвёртой версии при повторных чтениях внутри потока.
 func TestStreamCorrelationIsServerOwnedAndStable(t *testing.T) {
 	interceptor := StreamCorrelationServerInterceptor()
 	stream := &testServerStream{ctx: t.Context()}
@@ -38,6 +44,8 @@ func TestStreamCorrelationIsServerOwnedAndStable(t *testing.T) {
 	}
 }
 
+// TestStreamMetricsObserveEarlyFailureAndReleaseInflight checks in-flight state during the handler, its release afterwards and separate completed counters for early authentication failure and success.
+// TestStreamMetricsObserveEarlyFailureAndReleaseInflight проверяет активность внутри обработчика, её освобождение после и отдельные итоговые счётчики раннего отказа авторизации и успеха.
 func TestStreamMetricsObserveEarlyFailureAndReleaseInflight(t *testing.T) {
 	const method = "/test.Service/Upload"
 	metrics := NewMetrics("test_stream", "test", map[string]string{method: "upload"})
@@ -66,6 +74,8 @@ func TestStreamMetricsObserveEarlyFailureAndReleaseInflight(t *testing.T) {
 	}
 }
 
+// TestStreamRuntimeTracesEarlyFailureWithCorrelation records one local span and verifies that an early rejection retains the assigned correlation ID and canonical gRPC status.
+// TestStreamRuntimeTracesEarlyFailureWithCorrelation записывает один локальный span и проверяет сохранение назначенного ID корреляции и канонического gRPC-статуса при раннем отказе.
 func TestStreamRuntimeTracesEarlyFailureWithCorrelation(t *testing.T) {
 	const method = "/test.Service/Upload"
 	recorder := tracetest.NewSpanRecorder()

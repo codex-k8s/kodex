@@ -10,6 +10,8 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
+// TestRuntimeConfigRejectsUnpinnedDestinations accepts the exact service telemetry configuration and rejects IP, port, plaintext and foreign-host substitutions.
+// TestRuntimeConfigRejectsUnpinnedDestinations принимает точную служебную телеметрию и отклоняет подмену IP, порта, открытого протокола и чужого узла.
 func TestRuntimeConfigRejectsUnpinnedDestinations(t *testing.T) {
 	t.Parallel()
 	valid := RuntimeConfig{
@@ -47,6 +49,8 @@ func TestRuntimeConfigRejectsUnpinnedDestinations(t *testing.T) {
 	}
 }
 
+// TestRuntimeConfigUsesNoopRuntimeWhenSDKIsDisabled constructs and shuts down disabled telemetry without exporter or DSN settings and verifies the disabled flag survives environment loading.
+// TestRuntimeConfigUsesNoopRuntimeWhenSDKIsDisabled создаёт и завершает отключённую телеметрию без exporter и DSN, проверяя сохранность флага отключения при чтении окружения.
 func TestRuntimeConfigUsesNoopRuntimeWhenSDKIsDisabled(t *testing.T) {
 	t.Setenv("OTEL_SDK_DISABLED", "true")
 	t.Setenv("DEPLOYMENT_ENVIRONMENT", "production")
@@ -76,6 +80,8 @@ func TestRuntimeConfigUsesNoopRuntimeWhenSDKIsDisabled(t *testing.T) {
 	}
 }
 
+// TestTraceHandlerAddsBoundedTraceIdentity uses a local sampled span and JSON buffer to verify both trace and span identifiers reach the supplied logger.
+// TestTraceHandlerAddsBoundedTraceIdentity использует локальный выбранный span и JSON-буфер для проверки попадания обоих идентификаторов трассы и span в переданный логгер.
 func TestTraceHandlerAddsBoundedTraceIdentity(t *testing.T) {
 	t.Parallel()
 	provider := sdktrace.NewTracerProvider(
