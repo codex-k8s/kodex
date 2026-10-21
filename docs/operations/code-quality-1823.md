@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.152.0
+version: 1.153.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,43 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто пятьдесят третья волна — единая read-only граница release-снимка
+
+На базе опубликованного SHA `b19b83412076df16d2662b618f90b63d6dc6d355`
+одинаковый префикс `inspectPhase`/`inspectRollbackPhase` вынесен в закрытый
+`requireDeliverySnapshot` того же module. Обе старые копии удалены.
+Сохранены validation плана, exact cluster/namespace/controller identity,
+neighbor snapshot, jobs binding, parameters, config UID/version/data и
+owner-promoted pins. Механическое сравнение с родительским source
+подтвердило точное совпадение обеих последовательностей проверок;
+подменено только имя внутреннего реестра фаз.
+
+| Путь | Неизменённая последовательность после общей границы |
+| --- | --- |
+| pause/reader/policy-jobs/policy-release/binding-release/open | workCompatible → controller readback → собственные policy/target/phase-order → прежние idle/executable checks |
+| rollback-pause/rollback-binding-release/rollback-policy-release/rollback-policy-jobs/rollback-reader/rollback-open | idle → workCompatible → controller/policy readback → собственные rollback order/executable checks |
+
+Это только чтение снимка: mutations, create/delete CAS, внешние вызовы,
+INTENT/fsync, UNKNOWN/resume, owner gate и terminal statuses не менялись.
+Прямой и обратный реестры фаз не объединены. Новый unit выполняет
+108 сочетаний девяти повреждений identity/guards во всех двенадцати
+фазах и дополнительно запрещает фазу противоположного направления.
+
+27 адресных unit модели/потребителей — PASS LOCAL. Расширенный запуск:
+43 release unit и 16 unit анализатора (59 всего), unit Go-checker,
+пять ignore-boundaries, node --check и diff-check — PASS LOCAL.
+Реальные release/apply/rollback, кластер/browser/provider — NOT RUN.
+Прежний diagnostics FAIL остаётся отдельным известным ограничением.
+
+Полный detector рабочего дерева: 6553 source-файла, 222 исключения,
+1865 raw-групп, 566 решений, 1299 неразобранных. Удалена одна точная
+JavaScript-группа, новых групп/исключений нет. Raw SHA-256
+`b9203083abe48ed7a8afcf281a02fa43d27252d6a32802671e1855220d7096e6`,
+отпечаток `be4563064172db33528978e8aacced455318b2b8bd6f0d4cb5970feca6320ad6`.
+Go-реестр — 5125/21073, непокрыты 15948; полный go-docs-check — NOT RUN.
+Цель и единый Draft PR не завершены; точный scan/unit нового SHA
+публикуется в том же PR.
 
 ## Сто пятьдесят вторая волна — общая запись release receipts и журналов
 
