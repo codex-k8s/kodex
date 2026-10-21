@@ -17,6 +17,8 @@ import (
 	jose "github.com/go-jose/go-jose/v4"
 )
 
+// TestBrowserCodeExchangeVerifiesBothTokensAndNonce exercises exact PKCE parameters and matching verified session claims.
+// TestBrowserCodeExchangeVerifiesBothTokensAndNonce проверяет точные параметры PKCE и совпадение проверенных claims сессии.
 func TestBrowserCodeExchangeVerifiesBothTokensAndNonce(t *testing.T) {
 	t.Parallel()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -111,6 +113,8 @@ func TestBrowserCodeExchangeVerifiesBothTokensAndNonce(t *testing.T) {
 	}
 }
 
+// TestBrowserExchangeNeverRetriesProviderFailure distinguishes invalid grants while keeping each request single-shot.
+// TestBrowserExchangeNeverRetriesProviderFailure отличает invalid grant и проверяет однократную отправку каждого запроса.
 func TestBrowserExchangeNeverRetriesProviderFailure(t *testing.T) {
 	t.Parallel()
 	for _, status := range []int{400, 429, 500} {

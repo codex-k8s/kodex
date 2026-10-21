@@ -14,6 +14,8 @@ import (
 	jose "github.com/go-jose/go-jose/v4"
 )
 
+// TestBoundedKeySetRejectsVerificationBeforeFirstSnapshot checks that missing initial keys yield typed unavailability.
+// TestBoundedKeySetRejectsVerificationBeforeFirstSnapshot проверяет typed unavailable при отсутствии первого снимка ключей.
 func TestBoundedKeySetRejectsVerificationBeforeFirstSnapshot(t *testing.T) {
 	t.Parallel()
 
@@ -26,6 +28,8 @@ func TestBoundedKeySetRejectsVerificationBeforeFirstSnapshot(t *testing.T) {
 	}
 }
 
+// TestBoundedKeySetStopsAfterLastKnownGoodWindow bounds use of prior keys after a network failure.
+// TestBoundedKeySetStopsAfterLastKnownGoodWindow ограничивает использование старых ключей после сетевого сбоя.
 func TestBoundedKeySetStopsAfterLastKnownGoodWindow(t *testing.T) {
 	t.Parallel()
 
@@ -58,6 +62,8 @@ func TestBoundedKeySetStopsAfterLastKnownGoodWindow(t *testing.T) {
 	}
 }
 
+// TestBoundedKeySetRepeatedFailuresDoNotExtendLastKnownGoodWindow keeps the grace deadline anchored to the last success.
+// TestBoundedKeySetRepeatedFailuresDoNotExtendLastKnownGoodWindow сохраняет срок допуска от последнего успеха.
 func TestBoundedKeySetRepeatedFailuresDoNotExtendLastKnownGoodWindow(t *testing.T) {
 	t.Parallel()
 
@@ -88,6 +94,8 @@ func TestBoundedKeySetRepeatedFailuresDoNotExtendLastKnownGoodWindow(t *testing.
 	}
 }
 
+// TestBoundedKeySetFailsClosedOnMalformedSnapshot ensures corrupt JWKS blocks later automatic recovery.
+// TestBoundedKeySetFailsClosedOnMalformedSnapshot проверяет блокировку после повреждённого JWKS без автоматического восстановления.
 func TestBoundedKeySetFailsClosedOnMalformedSnapshot(t *testing.T) {
 	t.Parallel()
 
@@ -117,6 +125,8 @@ func TestBoundedKeySetFailsClosedOnMalformedSnapshot(t *testing.T) {
 	}
 }
 
+// TestBoundedKeySetAcceptsKeycloakMixedUseJWKS keeps valid signing keys while ignoring separate encryption keys.
+// TestBoundedKeySetAcceptsKeycloakMixedUseJWKS сохраняет ключи подписи и игнорирует отдельные ключи шифрования.
 func TestBoundedKeySetAcceptsKeycloakMixedUseJWKS(t *testing.T) {
 	t.Parallel()
 
@@ -142,6 +152,8 @@ func TestBoundedKeySetAcceptsKeycloakMixedUseJWKS(t *testing.T) {
 	}
 }
 
+// TestBoundedKeySetRejectsJWKSWithoutSupportedSigningKey rejects a snapshot containing only encryption keys.
+// TestBoundedKeySetRejectsJWKSWithoutSupportedSigningKey отвергает снимок только с ключами шифрования.
 func TestBoundedKeySetRejectsJWKSWithoutSupportedSigningKey(t *testing.T) {
 	t.Parallel()
 
@@ -164,6 +176,8 @@ func TestBoundedKeySetRejectsJWKSWithoutSupportedSigningKey(t *testing.T) {
 	}
 }
 
+// TestBoundedKeySetRejectsDuplicateKeyIDAcrossUses checks uniqueness even when key purposes differ.
+// TestBoundedKeySetRejectsDuplicateKeyIDAcrossUses проверяет уникальность ID даже при разном назначении ключей.
 func TestBoundedKeySetRejectsDuplicateKeyIDAcrossUses(t *testing.T) {
 	t.Parallel()
 
@@ -184,6 +198,8 @@ func TestBoundedKeySetRejectsDuplicateKeyIDAcrossUses(t *testing.T) {
 	}
 }
 
+// TestBoundedKeySetRejectsMalformedSupportedSigningKey refuses unusable material advertised as RS256 signing.
+// TestBoundedKeySetRejectsMalformedSupportedSigningKey отвергает непригодный материал, заявленный как ключ RS256.
 func TestBoundedKeySetRejectsMalformedSupportedSigningKey(t *testing.T) {
 	t.Parallel()
 
@@ -204,6 +220,8 @@ func TestBoundedKeySetRejectsMalformedSupportedSigningKey(t *testing.T) {
 	}
 }
 
+// testJWKS serializes one synthetic RS256 public key for bounded-keyset tests.
+// testJWKS сериализует один искусственный открытый ключ RS256 для тестов набора ключей.
 func testJWKS(t *testing.T, keyID string) []byte {
 	t.Helper()
 	raw, err := json.Marshal(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{
@@ -215,6 +233,8 @@ func testJWKS(t *testing.T, keyID string) []byte {
 	return raw
 }
 
+// testPublicJWK generates an ephemeral RSA public key with caller-selected metadata for JWKS fixtures.
+// testPublicJWK создаёт временный открытый RSA-ключ с метаданными для тестовых JWKS.
 func testPublicJWK(t *testing.T, keyID, algorithm, use string) jose.JSONWebKey {
 	t.Helper()
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)

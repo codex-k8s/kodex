@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestSafeDisplayName checks fallback, removal of invisible controls and the visible-rune limit.
+// TestSafeDisplayName проверяет запасное имя, удаление невидимых символов и предел видимых символов.
 func TestSafeDisplayName(t *testing.T) {
 	t.Parallel()
 
@@ -22,6 +24,8 @@ func TestSafeDisplayName(t *testing.T) {
 	}
 }
 
+// TestMaskedVerifiedEmail checks that only verified, well-formed addresses yield a bounded masked hint.
+// TestMaskedVerifiedEmail проверяет маскированную подсказку только для подтверждённых корректных адресов.
 func TestMaskedVerifiedEmail(t *testing.T) {
 	t.Parallel()
 

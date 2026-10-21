@@ -22,24 +22,47 @@ import (
 )
 
 const (
-	maximumBearerBytes  = 16384
+	// maximumBearerBytes caps the raw bearer before signature or claim parsing.
+	// maximumBearerBytes ограничивает сырой bearer до разбора подписи и claims.
+	maximumBearerBytes = 16384
+	// maximumDisplayRunes caps the visible, normalized user display name.
+	// maximumDisplayRunes ограничивает число символов видимого нормализованного имени.
 	maximumDisplayRunes = 160
-	maximumEmailBytes   = 254
-	maximumGroups       = 100
-	maximumGroupRunes   = 200
-	maximumAMRValues    = 16
-	maximumAMRRunes     = 64
-	maximumACRRunes     = 160
-	ownerScope          = "kodex.owner"
-	ownerRealmRole      = "kodex-owner"
-	unknownUserName     = "i18n:OIDC_USER_NAME"
+	// maximumEmailBytes limits the untrusted email claim before masking.
+	// maximumEmailBytes ограничивает недоверенный email claim до маскирования.
+	maximumEmailBytes = 254
+	// maximumGroups caps the number of group claims accepted from the provider.
+	// maximumGroups ограничивает число групп, принимаемых от провайдера.
+	maximumGroups = 100
+	// maximumGroupRunes caps each normalized group name.
+	// maximumGroupRunes ограничивает длину каждого нормализованного имени группы.
+	maximumGroupRunes = 200
+	// maximumAMRValues caps the count of authentication methods in a token.
+	// maximumAMRValues ограничивает число методов аутентификации в токене.
+	maximumAMRValues = 16
+	// maximumAMRRunes caps each normalized authentication method label.
+	// maximumAMRRunes ограничивает длину каждого нормализованного обозначения метода.
+	maximumAMRRunes = 64
+	// maximumACRRunes caps the assurance-class claim after trimming.
+	// maximumACRRunes ограничивает длину claim класса надёжности после очистки пробелов.
+	maximumACRRunes = 160
+	// ownerScope is necessary but insufficient for the owner claim without its matching realm role.
+	// ownerScope необходим для признака владельца, но без соответствующей роли realm его недостаточно.
+	ownerScope = "kodex.owner"
+	// ownerRealmRole must accompany the owner scope before OwnerClaim is set.
+	// ownerRealmRole должна сопровождать owner scope перед установкой OwnerClaim.
+	ownerRealmRole = "kodex-owner"
+	// unknownUserName is the localization key used when no safe display name remains.
+	// unknownUserName — ключ локализации на случай отсутствия безопасного отображаемого имени.
+	unknownUserName = "i18n:OIDC_USER_NAME"
 )
 
-// ErrSigningKeysUnavailable отделяет недоступность авторитетного набора ключей
-// от некорректного bearer. Transport boundary возвращает для неё typed
-// Unavailable, не маскируя отказ соседней системы как ошибку пользователя.
+// ErrSigningKeysUnavailable distinguishes missing or blocked trusted keys from an invalid bearer token.
+// ErrSigningKeysUnavailable отличает отсутствие либо блокировку доверенных ключей от неверного bearer token.
 var ErrSigningKeysUnavailable = errors.New("OIDC signing keys are unavailable")
 
+// Config binds the issuer and JWKS to one exact TLS name, trusted CA, dial target and bounded timeout.
+// Config связывает issuer и JWKS с точным TLS-именем, доверенным CA, адресом соединения и временем ожидания.
 type Config struct {
 	Issuer         string
 	Audience       string
@@ -50,6 +73,8 @@ type Config struct {
 	Timeout        time.Duration
 }
 
+// Principal is the validated issuer-scoped identity and bounded presentation metadata derived from a bearer token.
+// Principal содержит проверенную привязанную к issuer личность и ограниченные данные показа из bearer token.
 type Principal struct {
 	Subject         string
 	OrganizationID  string
@@ -66,6 +91,8 @@ type Principal struct {
 	ExpiresAt       time.Time
 }
 
+// Verifier owns the exact OIDC transport and last verified signing-key snapshot used by bearer and browser flows.
+// Verifier владеет точным OIDC transport и последним проверенным снимком ключей для bearer и браузерного входа.
 type Verifier struct {
 	verifier  *coreoidc.IDTokenVerifier
 	keys      *boundedKeySet
@@ -74,12 +101,16 @@ type Verifier struct {
 	issuer    string
 }
 
+// exactTransport rejects requests outside the configured HTTPS issuer host and port before network access.
+// exactTransport отклоняет запросы вне заданных HTTPS-хоста и порта issuer до обращения к сети.
 type exactTransport struct {
 	next *http.Transport
 	host string
 	port string
 }
 
+// RoundTrip enforces the configured endpoint boundary before forwarding a request to the protected transport.
+// RoundTrip проверяет границу разрешённого endpoint перед передачей запроса защищённому transport.
 func (transport exactTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if request == nil || request.URL == nil || request.URL.Scheme != "https" ||
 		!strings.EqualFold(request.URL.Hostname(), transport.host) || request.URL.Port() != transport.port ||
@@ -89,6 +120,8 @@ func (transport exactTransport) RoundTrip(request *http.Request) (*http.Response
 	return transport.next.RoundTrip(request)
 }
 
+// claims holds untrusted token fields until signature, audience, issuer and semantic checks succeed.
+// claims содержит недоверенные поля токена до успешной проверки подписи, audience, issuer и смысла.
 type claims struct {
 	SessionID       string   `json:"sid"`
 	OrganizationID  string   `json:"organization_id"`
@@ -108,6 +141,8 @@ type claims struct {
 	} `json:"realm_access"`
 }
 
+// New validates the exact OIDC endpoint and CA, then starts a verifier closed to tokens until JWKS refresh succeeds.
+// New проверяет точные OIDC endpoint и CA, затем создаёт verifier, закрытый для токенов до успешного обновления JWKS.
 func New(ctx context.Context, config Config) (*Verifier, error) {
 	if ctx == nil || config.Issuer == "" || config.Audience == "" || config.TLSServerName == "" ||
 		!filepath.IsAbs(config.CAFile) || config.Timeout < time.Second || config.Timeout > 10*time.Second {
@@ -173,6 +208,8 @@ func New(ctx context.Context, config Config) (*Verifier, error) {
 	}, nil
 }
 
+// VerifyAuthorization requires a single Bearer credential and returns its verified principal and original token.
+// VerifyAuthorization требует единственный Bearer credential и возвращает проверенный principal и исходный токен.
 func (verifier *Verifier) VerifyAuthorization(ctx context.Context, authorization string) (Principal, string, error) {
 	parts := strings.Fields(authorization)
 	if len(parts) != 2 || parts[0] != "Bearer" {
@@ -182,6 +219,8 @@ func (verifier *Verifier) VerifyAuthorization(ctx context.Context, authorization
 	return principal, parts[1], err
 }
 
+// VerifyToken checks the bounded signed token and claims, including session lineage and degraded-key expiry.
+// VerifyToken проверяет ограниченный подписанный токен и claims, включая происхождение сессии и срок ключей при деградации.
 func (verifier *Verifier) VerifyToken(ctx context.Context, raw string) (Principal, error) {
 	if verifier == nil || raw == "" || len(raw) > maximumBearerBytes || strings.TrimSpace(raw) != raw {
 		return Principal{}, errors.New("OIDC bearer is invalid")
@@ -236,6 +275,8 @@ func (verifier *Verifier) VerifyToken(ctx context.Context, raw string) (Principa
 	}, nil
 }
 
+// normalizeBoundedStrings trims, validates, deduplicates and sorts a bounded list such as AMR methods.
+// normalizeBoundedStrings очищает, проверяет, удаляет повторы и сортирует ограниченный список, например AMR.
 func normalizeBoundedStrings(values []string, maximumValues, maximumRunes int) ([]string, error) {
 	if len(values) > maximumValues {
 		return nil, errors.New("too many values")
@@ -257,6 +298,8 @@ func normalizeBoundedStrings(values []string, maximumValues, maximumRunes int) (
 	return result, nil
 }
 
+// normalizeGroups rejects oversized or unsafe group claims, then deduplicates and sorts valid group names.
+// normalizeGroups отвергает слишком большие и небезопасные группы, затем удаляет повторы и сортирует имена.
 func normalizeGroups(values []string) ([]string, error) {
 	if len(values) > maximumGroups {
 		return nil, errors.New("too many OIDC groups")
@@ -278,6 +321,8 @@ func normalizeGroups(values []string) ([]string, error) {
 	return result, nil
 }
 
+// safeDisplayName chooses the first usable name, strips invisible controls and bounds the visible rune count.
+// safeDisplayName выбирает первое пригодное имя, убирает невидимые управляющие символы и ограничивает число символов.
 func safeDisplayName(name, preferredName string) string {
 	for _, candidate := range []string{name, preferredName} {
 		var normalized strings.Builder
@@ -308,6 +353,8 @@ func safeDisplayName(name, preferredName string) string {
 	return unknownUserName
 }
 
+// maskedVerifiedEmail returns only a bounded first-rune/domain hint for a verified and syntactically safe email.
+// maskedVerifiedEmail возвращает лишь ограниченную подсказку из первого символа и домена проверенного корректного email.
 func maskedVerifiedEmail(email string, verified bool) string {
 	if !verified || email == "" || len(email) > maximumEmailBytes || strings.TrimSpace(email) != email || strings.ContainsAny(email, "\r\n\t ") {
 		return ""
@@ -331,6 +378,8 @@ func maskedVerifiedEmail(email string, verified bool) string {
 	return masked
 }
 
+// validEmailDomain allows ordinary lowercase DNS labels separated by dots and rejects empty or hyphen-edge labels.
+// validEmailDomain допускает строчные DNS-метки через точки и отвергает пустые метки либо дефис на их краю.
 func validEmailDomain(domain string) bool {
 	if strings.HasPrefix(domain, ".") || strings.HasSuffix(domain, ".") || !strings.ContainsRune(domain, '.') {
 		return false
@@ -352,9 +401,8 @@ func validEmailDomain(domain string) bool {
 	return true
 }
 
-// Refresh обновляет JWKS независимо от request/readiness path. При кратком
-// сетевом отказе verifier использует bounded last-known-good, а повреждение или
-// конфликт key material закрывают авторизацию немедленно.
+// Refresh updates JWKS independently of request readiness; temporary outages have a bounded old-key window.
+// Refresh обновляет JWKS отдельно от readiness запросов; при временном сбое старые ключи действуют ограниченное время.
 func (verifier *Verifier) Refresh(ctx context.Context) error {
 	if verifier == nil || verifier.keys == nil {
 		return errors.New("OIDC verifier is unavailable")
@@ -362,10 +410,14 @@ func (verifier *Verifier) Refresh(ctx context.Context) error {
 	return verifier.keys.Refresh(ctx)
 }
 
+// containsWord checks for an exact whitespace-delimited scope rather than a substring match.
+// containsWord ищет точный scope среди слов, разделённых пробелами, а не подстроку.
 func containsWord(words, expected string) bool {
 	return contains(strings.Fields(words), expected)
 }
 
+// contains reports an exact element match in a small token claim list.
+// contains сообщает о точном совпадении элемента в небольшом списке token claims.
 func contains(values []string, expected string) bool {
 	for _, value := range values {
 		if value == expected {
@@ -375,6 +427,8 @@ func contains(values []string, expected string) bool {
 	return false
 }
 
+// Close closes only idle HTTP connections owned by the verifier; active requests retain their own lifecycle.
+// Close закрывает только неиспользуемые HTTP-соединения verifier; активные запросы живут отдельно.
 func (verifier *Verifier) Close() {
 	if verifier != nil && verifier.transport != nil {
 		verifier.transport.CloseIdleConnections()

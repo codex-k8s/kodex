@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+// TestVerifierStartsFailClosedWhenInitialJWKSIsUnavailable ensures startup survives an outage while token reads fail closed.
+// TestVerifierStartsFailClosedWhenInitialJWKSIsUnavailable проверяет запуск при сбое JWKS с закрытым отказом для токенов.
 func TestVerifierStartsFailClosedWhenInitialJWKSIsUnavailable(t *testing.T) {
 	t.Parallel()
 
