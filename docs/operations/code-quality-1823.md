@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.160.0
+version: 1.161.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,44 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто шестьдесят первая волна — конфигурация и renderer контроллера
+
+На базе опубликованного SHA `7cbb4faa244667f1a160b722ac36267a64b89b57`
+Config.Validate повторно использует существующий filepathIsCanonicalAbsolute,
+уже применявшийся NewScriptRenderer. Сохранены то же лексическое условие,
+short-circuit порядок, ошибки и остальные identity/timing checks. Это
+короткий повтор ниже порога detector, не заявленный как удалённая raw-группа.
+Новый unit закрепляет одинаковый результат обеих границ на девяти путях:
+absolute/nonexistent/root допустимы как строки, empty/relative/dot/parent/
+trailing slash/repeated separator отклоняются; проверки файлов и исполнения нет.
+
+Все 15 прежних объявлений config/renderer, включая interface method,
+private constants/types/functions и новый test, описаны EN→RU — 16/16.
+Комментарии разделяют path grammar, file availability и runtime authority;
+Config.WorkSource проверяет New, а актуальность hold — reconcile. Описаны
+явные PATH/policy subprocess environment без host secrets, policy JSON
+64KiB, stdout 2MiB и stderr 16KiB, safe phase-only error и отсутствие
+успешного Kubernetes admission от одного decode. Resource-kind/cardinality
+проверки не названы strict JSON/schema/eligibility validation. Исполняемый
+renderer, его бюджеты, скрипт, wire и политики не менялись.
+
+Полный unit/build admissioncontroller до/после — PASS LOCAL; итоговый
+JSON stream: 42 верхнеуровневых теста, 138 PASS с подтестами, 0 SKIP/FAIL.
+16 unit анализатора, unit Go-checker, пять ignore-boundaries, gofmt и
+diff-check — PASS LOCAL. Go-команды:
+`GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`. Только локальные fixtures,
+без реального owner/кластера. Полный role-image-builder unit, PostgreSQL,
+browser/deploy/live — NOT RUN.
+
+Multiset format/path/fragment/count и отпечаток групп не изменились;
+новых групп/исключений нет. Рабочий detector: 6556 source-файлов,
+222 исключения, 1860 raw-групп, 569 решений и 1291 неразобранная;
+raw SHA-256 `b3290470d613e8376fe0f74fc1582420524937a4fccea0333598dfa730abc2ee`,
+отпечаток `f45a118b35e20414c736af2de560dd62efafd39ceff511aa3e1a20a9f83169a8`.
+Go-реестр — 5368/21085, непокрыты 15717; role-image-builder — 243/560.
+Полный go-docs-check — NOT RUN. Известный diagnostics FAIL не устранён;
+точный scan/build/unit нового SHA публикуется в том же Draft PR.
 
 ## Сто шестидесятая волна — оснастка admission policy tests
 
