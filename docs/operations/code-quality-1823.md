@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.92.0
+version: 1.93.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,39 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Девяносто пятая волна — граница допуска serviceidentity
+
+На запушенном SHA `92b74975ce09a80ae572c7634c60ca2a958d7aaa`
+детектор подтвердил 6531 собственный файл, 222 исключения, 1874 raw-группы,
+407 точных решений и 1467 неразобранных; сырой SHA-256 —
+`0986f44f7a2ba498af66a3b70fa7719277f609a37c155cc6cdd7c2ebaaa670db`,
+отпечаток набора —
+`5004339fba7a83bd4d0980449fe803c4d0b4cc8cd4252d7f0c4313ca68fa44ab`.
+Go-реестр: 2980/21047, непокрыты 18067.
+
+Все 70 собственных объявлений пакета
+`libs/go/internalrpcauth/serviceidentity`, включая тестовые fixtures и
+метод интерфейса отзыва, получили предметные EN→RU комментарии. Разграничены
+допуск транспорта, точный caller/method, доменные права, отсутствие
+криптографической identity в trusted-cluster, проверка отзыва на каждом RPC
+защищённого профиля и её отсутствие у явно выбранного MVP-профиля.
+Единственный повтор каркаса unary-interceptor защищённого и trusted профилей
+вынесен в узкий `unaryAdmissionInterceptor`; сами реализации `Admit` и
+потоковые проверки остались раздельными. Сравнение групп по путям и fragment
+SHA-256 подтвердило исчезновение именно этой группы, без новых групп; diff
+исходников не изменяет порядок допуска, результата handler и context key.
+
+Рабочий detector: 6531 собственный файл, 222 исключения, 1873 raw-группы,
+407 точных решений и 1466 неразобранных; сырой SHA-256 —
+`348ff2de5dfd51235ba763bd5d8c0d06a414b118b2384767b6ea3af9fe144d4e`,
+отпечаток набора —
+`d13131e958ffdae3fa40cd4cb8e784f40a1813a09a448a5094c026122d91830e`.
+Go-реестр: 3048/21048, непокрыты 18000; пакет serviceidentity — 70/70.
+`gofmt`, `go test -count=1 ./...` и `go build ./...` всего модуля
+internalrpcauth, `git diff --check` — PASS LOCAL. Полный `go-docs -check`
+и browser/deploy/live — NOT RUN по прежним границам. Точный scan нового
+коммита будет опубликован в текущем PR.
 
 ## Девяносто четвёртая волна — полное описание integrationpackage
 
