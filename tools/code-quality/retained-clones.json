@@ -3,6 +3,102 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "03df4e6984aa1dba56620fe67fbd2e0113712f221cb5912e8a10dbb4fd3f1cc8",
+      "count": 9,
+      "reason": "Девять сравнений приходятся на перекрывающиеся окна типизированных gRPC-команд: каждая передаёт собственные FullMethodName, command kind, mutation и payload в уже общий execute, после чего приводит отдельный результат. Универсальный dispatcher стёр бы типы запроса и ответа и явность специализированных команд. Сохранён только точный fragment с проверенным числом вхождений."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "1b6be8c5b677468f1243a703cfa7180034a533c524c524e1de4adf97f9773f4f",
+      "count": 1,
+      "reason": "Сопоставлены ChangeArtifactBinding и CompleteOnboarding в общей оболочке execute. У onboarding после команды есть дополнительное защищённое чтение bootstrap state, тогда как binding возвращает изменённый artifact. Общий execute уже вынесен; объединять разные последующие read paths нецелесообразно. Сохранено одно точное окно."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "25240d81e2c97a71cd5b72ccb9b862461645f6c0c87c35feb756f0158a84f0b8",
+      "count": 2,
+      "reason": "Оба вхождения сравнивают типизированные команды подключения со специализированными командами проекта и агента. Совпадает конструкция вызова общего execute и error branch; command kind, owner scope, payload и response caster различны. Дополнительная абстракция скрыла бы границы полномочий и типы. Сохранён точный fragment с двумя вхождениями."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "466594bfa8d096f958f5dec41bd282f6d2aead6cb84b0e224853c51316f3c72b",
+      "count": 2,
+      "reason": "Перекрываются соседние artifact lifecycle wrappers и project/agent wrappers, но каждый связывает собственный полный RPC-метод, доменную команду и типизированный результат через общий execute. Параметризация самих методов вместо уже общего примитива потеряла бы проверяемое соответствие контракту. Исключены только два точных окна."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "59da38ca5ecac09b9f2555b51de59f3c80b658e59f61cf61cfe594f5dfb72f2d",
+      "count": 2,
+      "reason": "Сравниваются typed mapping интеграционного grant с командами агента: grant содержит connection, capability, approval scope и policy, команды агента несут другую область и результат. Повторяется лишь обрамление общего execute; перенос полей в универсальную таблицу смешал бы разные authority contracts. Сохранены два точных окна."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "65c49ee87b90be212ea261c069c120fef3d7bbeb82fe1b58c877ac2360152c02",
+      "count": 5,
+      "reason": "Пять пересечений возникают от коротких соседних artifact/project/agent методов, уже вызывающих единый execute. Для каждого остаются явно типизированные mutation input, специальный command kind и response caster. Общего исполняемого тела сверх execute здесь нет; сохранён точный fragment с пятью вхождениями."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "664e14e4c90d490eb870a53b2a35471de6423756b943626dfcdb64868e44eda4",
+      "count": 2,
+      "reason": "Окна пересекают artifact lifecycle wrappers и инструкции агента. Помимо общего execute у инструкций есть отдельная проверка опубликованного impact plan, у artifact — собственный lifecycle payload. Обобщение исключило бы видимый protected postcondition; сохранены два точных совпадения."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "78078d37fa8597b6ddc8f5bb58fefe7bdbae277e6686f2e95ebc9581d5445022",
+      "count": 3,
+      "reason": "CreateSchedule сопоставлен с тремя командами управления членством и агентом. У schedule собственный календарный payload и включение при создании, у остальных — разные membership/agent поля. Общий execute уже централизует допустимый command path; остаётся только типизированный mapping. Сохранены три точных окна."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "9a3f7f457c6cc155cb3a441ef2c91622dc99d1cc49b56c37155ce281c82091ae",
+      "count": 4,
+      "reason": "UpdateSchedule перекрывается с четырьмя update/create wrappers другого домена. Поля cron, timezone, DST и политики запуска не эквивалентны полям членства или агента. Общий execute уже выделен, а универсальный mapper скрыл бы отдельные контракты ввода. Сохранён точный fragment с четырьмя вхождениями."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "9e64443d7afc1de1d72efdf96e8c4c7f92d434a8acb24087c2275ee8fc3ed572",
+      "count": 1,
+      "reason": "Короткое пересечение schedule update и run launch касается формы payload→execute→error; календарная конфигурация и root run command имеют разные владельцев состояния и результаты. Общая проверка mutation уже в execute. Сохранено одно точное окно без исключения файлов."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "cc01ed0f31a8835f57268b75947662a41497d73ffb9dd6fc41d0c8d8e4614e72",
+      "count": 1,
+      "reason": "CreateIntegrationConnection и агентская команда используют похожее построение payload перед общим execute, но connection принимает лишь публичную конфигурацию без реквизитов, а агент — собственные поля и область проекта. Один универсальный payload mapper нарушил бы границу секретов. Сохранено одно точное окно."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
+      "fragmentSHA256": "f0733fee6ee792615a5208767c0289dabfe5fb7aab42ebe198ab08adf7884898",
+      "count": 1,
+      "reason": "UpdateSchedule и UpdateAgent имеют однотипное обрамление команды, но отличаются обязательным Ref и назначением полей; расписание несёт время и политики выполнения, агент — роль, runtime и описание. Общая часть уже находится в execute. Сохранено одно точное окно."
+    },
+    {
+      "format": "go",
       "firstPath": "libs/go/eventing/postgresinbox/delivery.go",
       "secondPath": "libs/go/eventing/postgresinbox/recovery.go",
       "fragmentSHA256": "e0d9f30060400bd34f638044e5f7d2462e5a23fc208537a5d8ad3568bea17fbe",
