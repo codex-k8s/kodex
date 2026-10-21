@@ -20,6 +20,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// terminalConnectionServer is a disposable loopback owner substitute with atomic
+// effect counters and a mutex-protected request copy; it issues no runtime grants.
+// terminalConnectionServer — временная loopback-замена владельца с атомарными
+// счётчиками эффектов и копией запроса под mutex; runtime grants она не выдаёт.
 type terminalConnectionServer struct {
 	cp.UnimplementedRoleImageServiceServer
 	claim                  Claim
@@ -29,6 +33,10 @@ type terminalConnectionServer struct {
 	failure                *cp.FailImageAdmissionRequest
 }
 
+// receipt builds the fixture claim's organization-scoped version+1 FAILED result
+// with its recipe/build pins and selected code, without writing artifact state.
+// receipt строит искусственный organization-scoped FAILED version+1 из claim
+// с его recipe/build и выбранным кодом, не записывая состояние артефакта.
 func (server *terminalConnectionServer) receipt(code string) *cp.RoleImageAdmissionFailure {
 	c := server.claim
 	return &cp.RoleImageAdmissionFailure{ImageArtifactRef: c.ArtifactID, Version: c.Version + 1,
@@ -37,6 +45,10 @@ func (server *terminalConnectionServer) receipt(code string) *cp.RoleImageAdmiss
 		State: "FAILED", ErrorCode: code}
 }
 
+// FailImageAdmission counts the received callback and retains a deep request copy
+// before returning the configured error or synthetic receipt for that failure code.
+// FailImageAdmission считает полученный callback и сохраняет глубокую копию запроса,
+// затем возвращает заданную ошибку либо искусственную квитанцию с кодом запроса.
 func (server *terminalConnectionServer) FailImageAdmission(_ context.Context, request *cp.FailImageAdmissionRequest) (*cp.FailImageAdmissionResponse, error) {
 	server.failCalls.Add(1)
 	server.mu.Lock()
@@ -48,17 +60,31 @@ func (server *terminalConnectionServer) FailImageAdmission(_ context.Context, re
 	return &cp.FailImageAdmissionResponse{AdmissionFailure: server.receipt(request.ErrorCode)}, nil
 }
 
+// ExpireImageAdmissionClaim counts a separately received expiry and returns the
+// fixture's ADMISSION_LEASE_EXPIRED receipt, not a retry of the fail request.
+// ExpireImageAdmissionClaim считает отдельно полученный expiry и возвращает
+// искусственную ADMISSION_LEASE_EXPIRED-квитанцию, а не повтор fail-запроса.
 func (server *terminalConnectionServer) ExpireImageAdmissionClaim(_ context.Context, _ *cp.ExpireImageAdmissionClaimRequest) (*cp.ExpireImageAdmissionClaimResponse, error) {
 	server.expireCalls.Add(1)
 	return &cp.ExpireImageAdmissionClaimResponse{AdmissionFailure: server.receipt("ADMISSION_LEASE_EXPIRED")}, nil
 }
 
+// GetImageSupplyWorkAvailability is the read-only connectivity barrier used after
+// cancellation; it returns no work and never increments terminal effect counters.
+// GetImageSupplyWorkAvailability — барьер доступности после отмены только для чтения;
+// он не выдаёт работу и не увеличивает счётчики terminal-эффектов.
 func (server *terminalConnectionServer) GetImageSupplyWorkAvailability(context.Context, *cp.GetImageSupplyWorkAvailabilityRequest) (*cp.GetImageSupplyWorkAvailabilityResponse, error) {
 	return &cp.GetImageSupplyWorkAvailabilityResponse{}, nil
 }
 
-// Две реальные TCP-фазы: подтверждённый ECONNREFUSED до listener и затем
-// тот же адрес. Fixture не выдаёт runtime authority и не вызывает живой owner.
+// terminalLoopback reserves and releases an ephemeral loopback address, observes
+// initial ECONNREFUSED and returns an idempotent starter for a synthetic gRPC server
+// at that address. Cleanup stops/joins the listener and closes the client. Plaintext
+// exists only inside this disposable fixture, not a runtime transport fallback.
+// terminalLoopback резервирует и освобождает временный loopback-адрес, наблюдает
+// исходный ECONNREFUSED и возвращает однократный запуск искусственного gRPC-сервера
+// по тому же адресу. Cleanup останавливает/ожидает listener и закрывает клиент.
+// Plaintext существует только в этой fixture, не как запасной runtime transport.
 func terminalLoopback(t *testing.T, claim Claim, code codes.Code) (*Client, *terminalConnectionServer, <-chan struct{}, func()) {
 	t.Helper()
 	reserved, err := net.Listen("tcp", "127.0.0.1:0")
@@ -103,6 +129,10 @@ func terminalLoopback(t *testing.T, claim Claim, code codes.Code) (*Client, *ter
 	return &Client{shared: &sharedclient.Client{RoleImages: cp.NewRoleImageServiceClient(connection)}, rpcDeadline: 8 * time.Second}, server, refused, start
 }
 
+// awaitConnectionRefused requires the fixture's observed ECONNREFUSED signal within
+// two seconds, avoiding an unverified sleep as evidence of pre-listener waiting.
+// awaitConnectionRefused требует сигнал наблюдённого ECONNREFUSED за две секунды,
+// не подменяя доказательство ожидания до listener непроверенным sleep.
 func awaitConnectionRefused(t *testing.T, refused <-chan struct{}) {
 	t.Helper()
 	select {
@@ -112,6 +142,10 @@ func awaitConnectionRefused(t *testing.T, refused <-chan struct{}) {
 	}
 }
 
+// awaitTerminalResult returns one callback outcome within the two-second fixture
+// budget and fails the test if the terminal wait does not finish in that bound.
+// awaitTerminalResult возвращает исход callback за две секунды бюджета fixture
+// и завершает тест ошибкой, если terminal wait не укладывается в этот срок.
 func awaitTerminalResult(t *testing.T, result <-chan error) error {
 	t.Helper()
 	select {
@@ -123,6 +157,12 @@ func awaitTerminalResult(t *testing.T, result <-chan error) error {
 	}
 }
 
+// TestAdmissionTerminalWaitPreservesFirstRequestAfterConnectionRefused observes an
+// actual refused connection before starting the disposable server, then requires
+// one unchanged terminal request and no fallback expiry or pre-readiness effect.
+// TestAdmissionTerminalWaitPreservesFirstRequestAfterConnectionRefused наблюдает
+// реальный отказ соединения до запуска временного сервера, затем требует один
+// неизменный terminal-запрос без expiry и эффекта до готовности соединения.
 func TestAdmissionTerminalWaitPreservesFirstRequestAfterConnectionRefused(t *testing.T) {
 	claim, _ := admissionRiskFixture(t, false)
 	client, server, refused, start := terminalLoopback(t, claim, codes.OK)
@@ -150,6 +190,12 @@ func TestAdmissionTerminalWaitPreservesFirstRequestAfterConnectionRefused(t *tes
 	}
 }
 
+// TestAdmissionTerminalWaitCancelAndDeadlineBeforeReadyHaveNoEffect cancels or
+// expires fail/expiry waits before the listener exists, verifies the returned code,
+// then passes a read-only barrier on the started server and asserts zero effects.
+// TestAdmissionTerminalWaitCancelAndDeadlineBeforeReadyHaveNoEffect отменяет либо
+// исчерпывает fail/expiry до listener, проверяет код, затем проходит read-only барьер
+// запущенного сервера и требует отсутствия terminal-эффектов.
 func TestAdmissionTerminalWaitCancelAndDeadlineBeforeReadyHaveNoEffect(t *testing.T) {
 	for _, operation := range []string{"fail", "expire"} {
 		for _, cancelled := range []bool{false, true} {
@@ -199,6 +245,12 @@ func TestAdmissionTerminalWaitCancelAndDeadlineBeforeReadyHaveNoEffect(t *testin
 	}
 }
 
+// TestAdmissionTerminalWaitDoesNotRetryServerUnavailable distinguishes server-returned
+// Unavailable from a pending connection: one handled callback stays an error and
+// must not be repeated or converted into an expiry command.
+// TestAdmissionTerminalWaitDoesNotRetryServerUnavailable отличает серверный
+// Unavailable от ожидания соединения: один обработанный callback остаётся ошибкой
+// и не должен повторяться либо превращаться в команду expiry.
 func TestAdmissionTerminalWaitDoesNotRetryServerUnavailable(t *testing.T) {
 	claim, _ := admissionRiskFixture(t, false)
 	client, server, _, start := terminalLoopback(t, claim, codes.Unavailable)
@@ -208,6 +260,12 @@ func TestAdmissionTerminalWaitDoesNotRetryServerUnavailable(t *testing.T) {
 	}
 }
 
+// TestAdmissionTerminalWaitPermissionDeniedUsesFreshDedicatedExpiry exercises real
+// disposable gRPC dispatch and requires one denied fail followed by exactly one
+// successful dedicated expiry, without claiming or invoking a live owner.
+// TestAdmissionTerminalWaitPermissionDeniedUsesFreshDedicatedExpiry выполняет
+// настоящий временный gRPC dispatch и требует один отклонённый fail, затем ровно
+// один успешный отдельный expiry, без нового claim или вызова живого владельца.
 func TestAdmissionTerminalWaitPermissionDeniedUsesFreshDedicatedExpiry(t *testing.T) {
 	claim, _ := admissionRiskFixture(t, false)
 	client, server, _, start := terminalLoopback(t, claim, codes.PermissionDenied)

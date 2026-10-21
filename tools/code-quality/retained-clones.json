@@ -3,6 +3,22 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "services/jobs/role-image-builder/internal/app/app.go",
+      "secondPath": "services/jobs/role-image-builder/internal/clients/imageowner/admission_terminal.go",
+      "fragmentSHA256": "4b20f718ac9435b863f7f69717162ea6d1d2f30ab3106b379506f907c497d311",
+      "count": 1,
+      "reason": "Weak-нормализация сопоставила список полей build.Config в composition root со списком pins GetImageAdmissionTerminalRequest. Первый настраивает BuildKit/TLS/workspace executor, второй читает доказательство terminal для точной owner claim. Это разные типы, источники и эффекты; общей операции копирования данных нет. Обобщённый mapper скрыл бы проверяемое назначение identity/config и read authority. Сохранено только точное окно."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/jobs/role-image-builder/internal/clients/imageowner/admission_terminal.go",
+      "secondPath": "services/jobs/role-image-builder/internal/clients/imageowner/client.go",
+      "fragmentSHA256": "5623b43b7ae820ba459837947da72dd1c827229d26d21d78389503068451dd71",
+      "count": 1,
+      "reason": "Совпадают короткая validation/deadline оболочка и явные поля двух nominal RPC: read-only GetImageAdmissionTerminal и изменяющий состояние ExpireImageAdmissionClaim. Чтение требует исходную claim-квитанцию и risk/source доказательства, expiry имеет отдельный idempotency key и FAILED receipt. Общая callback-обёртка или промежуточная нетипизированная request-модель скрыла бы различие read/command и точный mapping. Сохраняется только это окно, не методы целиком."
+    },
+    {
+      "format": "go",
       "firstPath": "services/jobs/role-image-builder/cmd/image-admission-bridge/risk_test.go",
       "secondPath": "services/jobs/role-image-builder/internal/clients/imageowner/admission_risk_test.go",
       "fragmentSHA256": "2069a37928ef767380892c4710987ad6ef7a6309635f38a147277eaff91a1970",

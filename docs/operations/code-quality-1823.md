@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.157.0
+version: 1.158.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,56 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто пятьдесят восьмая волна — весь RPC-клиент владельца образов
+
+На базе опубликованного SHA `5aae8e589432f55245771a99a4fd2480ab9c782a`
+весь `internal/clients/imageowner` получил предметные EN→RU комментарии:
+59/59 объявлений, 57 новых описаний production/tests/private sentinel/pattern.
+Package-пояснение также двуязычное. Остальные области role-image-builder
+остаются в работе: всего 174/552, не покрыты 378.
+
+Описаны отдельные admission/promotion caller profiles, только локальный
+CheckLocalAuthority вместо owner-health proof, сохранённые claim/tool/risk
+pins, разница между проверкой структуры и owner authority, exact report/SBOM
+binding, успешная version+1/attempt/fence/receipt и отказ при неизвестном
+исходе. ValidateAdmissionClaim не проверяет текущее expiry: старые снимки
+сохраняются для terminal recovery; актуальные полномочия проверяет владелец.
+WaitForReady относится только к terminal callbacks, PermissionDenied имеет
+отдельный Expire с новой deadline/key, а read-only recovery допускается
+только по итоговым закрытым кодам и точному owner proof, не по одному отказу.
+
+Ограничения не скрыты: promotion snapshot не сохраняет проверенное authority
+generation ответа; Complete локально требует лишь наличие артефакта, а
+AuthorizePromotion проверяет рост версии и наличие token/expiry, не exact
+artifact identity и текущий token lifetime. Эти условия не расширены ради
+комментариев. Тестовые пояснения различают protobuf stubs, disposable TCP/gRPC,
+неизменный первый запрос, отсутствие эффектов после cancel/deadline и
+настоящую authority/устойчивое состояние владельца. Diff production/tests
+содержит только комментарии; значения, проверки, тайм-ауты и RPC не менялись.
+
+Полный unit и build imageowner до/после — PASS LOCAL; после правок также
+полные unit/build bridge и admissionfixture — PASS LOCAL. Использованы
+`GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`. 16 unit анализатора, unit
+Go-checker, пять ignore-boundaries, gofmt и diff-check — PASS LOCAL.
+Настоящий owner/registry/provider/cluster не вызывались. Полный unit всего
+role-image-builder, PostgreSQL, browser/deploy/live — NOT RUN.
+
+Две нормализованные группы сохранены точными решениями: build.Config
+composition против GetTerminalRequest — разные источники/типы/эффекты;
+GetTerminal против Expire — read-only proof против отдельной fenced command
+с разными receipt/risk/source requirements. Новый generic mapper/callback
+скрыл бы явный nominal RPC mapping. Новых широких исключений нет.
+У второго окна после комментариев изменился fragment hash; обе стороны
+перечитаны. Это не вынос и не исчезновение исполняемого повтора.
+
+Рабочий detector: 6555 source-файлов, 222 исключения, 1865 raw-групп,
+569 решений и 1296 неразобранных; raw SHA-256
+`32ee1d108d4e868974dbdd403a3ec337ecc5144ccbd9f8c42f299974be9815f6`,
+отпечаток `b6c231c5744b17bb0229868283aa1bb7e66e4335f71c6be096e596782f141184`.
+Go-реестр — 5299/21077, непокрыты 15778; полный go-docs-check — NOT RUN.
+Известный diagnostics FAIL остаётся открытым. Итоговый scan/build/unit
+точного SHA публикуется в том же Draft PR; цель ещё не завершена.
 
 ## Сто пятьдесят седьмая волна — общая искусственная risk-fixture
 

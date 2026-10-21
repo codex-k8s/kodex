@@ -92,6 +92,14 @@ func TestAdmissionRiskFixturePreservesCanonicalBytes(t *testing.T) {
 	}
 }
 
+// TestAdmissionRiskClaimRejectsUnknownMissingAndChangedPins accepts exact synthetic
+// risk/report bindings, rejects each altered attempt/tenant/build/policy/source pin
+// and malformed risk JSON without private diagnostics, and prevents blocking report
+// acceptance without risk or a partially populated risk tuple on a normal claim.
+// TestAdmissionRiskClaimRejectsUnknownMissingAndChangedPins принимает точные
+// искусственные risk/report, отклоняет изменения attempt/tenant/build/policy/source
+// и повреждённый JSON без закрытой диагностики, запрещает принятие blocking report
+// без риска и частичную risk-связку у обычного claim.
 func TestAdmissionRiskClaimRejectsUnknownMissingAndChangedPins(t *testing.T) {
 	claim, evidence := admissionRiskFixture(t, true)
 	if ValidateAdmissionClaim(claim) != nil || ValidateAdmissionEvidence(claim, evidence) != nil {
@@ -150,6 +158,10 @@ func TestAdmissionRiskClaimRejectsUnknownMissingAndChangedPins(t *testing.T) {
 	}
 }
 
+// admissionRPCStub supplies a synthetic claim and captures record requests; corrupt
+// deliberately returns a different attempt number to exercise receipt rejection.
+// admissionRPCStub возвращает искусственный claim и сохраняет record-запросы;
+// corrupt намеренно меняет номер попытки для проверки отказа чужой квитанции.
 type admissionRPCStub struct {
 	cp.RoleImageServiceClient
 	claim   *cp.ClaimImageAdmissionResponse
@@ -157,9 +169,20 @@ type admissionRPCStub struct {
 	corrupt bool
 }
 
+// ClaimImageAdmission returns the configured synthetic response without network
+// access or a real lease, letting tests mutate its exact attempt/risk fields.
+// ClaimImageAdmission возвращает заданный искусственный ответ без сети и настоящего
+// lease, позволяя тесту менять точные поля attempt/risk.
 func (s *admissionRPCStub) ClaimImageAdmission(context.Context, *cp.ClaimImageAdmissionRequest, ...grpc.CallOption) (*cp.ClaimImageAdmissionResponse, error) {
 	return s.claim, nil
 }
+
+// RecordImageAdmission retains the request pointer and synthesizes version+1 with
+// the requested verdict/attempt/fence/receipt. corrupt alters only the returned
+// attempt number; no actual admission decision or artifact state is persisted.
+// RecordImageAdmission сохраняет указатель запроса и создаёт version+1 с его
+// verdict/attempt/fence/receipt. corrupt меняет только номер возвращённой попытки;
+// настоящее решение допуска и состояние артефакта не записываются.
 func (s *admissionRPCStub) RecordImageAdmission(_ context.Context, request *cp.RecordImageAdmissionRequest, _ ...grpc.CallOption) (*cp.RecordImageAdmissionResponse, error) {
 	s.record = request
 	state := cp.ImageAdmissionAttemptState_IMAGE_ADMISSION_ATTEMPT_STATE_ACCEPTED
@@ -175,6 +198,14 @@ func (s *admissionRPCStub) RecordImageAdmission(_ context.Context, request *cp.R
 	return &cp.RecordImageAdmissionResponse{ImageArtifact: &cp.ImageArtifact{Ref: request.ImageArtifactRef, Version: request.ExpectedVersion + 1, AdmissionAttempt: attempt}}, nil
 }
 
+// TestAdmissionRecordCarriesAttemptAndFullReportAndBindsUnaryDigest checks record
+// mapping with/without risk, changed deterministic protobuf hashes for each new
+// immutable field, rejection of a foreign attempt receipt and local rejection of
+// a mismatched report before the synthetic RPC. It does not test a live signer.
+// TestAdmissionRecordCarriesAttemptAndFullReportAndBindsUnaryDigest проверяет record
+// с риском/без него, изменение детерминированного protobuf-хеша для каждого нового
+// immutable поля, отказ чужой attempt-квитанции и отсев чужого report до искусственного
+// RPC. Настоящий signer этим тестом не проверяется.
 func TestAdmissionRecordCarriesAttemptAndFullReportAndBindsUnaryDigest(t *testing.T) {
 	for _, risk := range []bool{false, true} {
 		claim, evidence := admissionRiskFixture(t, risk)
@@ -218,6 +249,12 @@ func TestAdmissionRecordCarriesAttemptAndFullReportAndBindsUnaryDigest(t *testin
 	}
 }
 
+// TestAdmissionClaimRetainsRiskAndExactClaimedAttempt maps a synthetic owner response
+// without losing original risk, attempt or credential fields, then rejects an
+// embedded artifact attempt number that differs from the top-level claimed tuple.
+// TestAdmissionClaimRetainsRiskAndExactClaimedAttempt переносит искусственный ответ
+// владельца без потери исходных risk/attempt/credential и отклоняет номер попытки
+// вложенного артефакта, отличный от верхнеуровневой связки claim.
 func TestAdmissionClaimRetainsRiskAndExactClaimedAttempt(t *testing.T) {
 	claim, _ := admissionRiskFixture(t, true)
 	artifact := &cp.ImageArtifact{Ref: claim.ArtifactID, Version: claim.Version, ScopeKind: cp.RuntimeResourceScopeKind_RUNTIME_RESOURCE_SCOPE_KIND_ORGANIZATION,

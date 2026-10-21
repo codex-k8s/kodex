@@ -7,6 +7,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 )
 
+// TestTrustedImageOwnerDoesNotRequireIssuerOrTLSMaterial constructs both trusted
+// operation profiles without local issuer/TLS files and rejects an unknown profile.
+// Check uses local identity readiness only; no admission or promotion RPC is issued.
+// TestTrustedImageOwnerDoesNotRequireIssuerOrTLSMaterial создаёт оба trusted-профиля
+// операций без файлов локального issuer/TLS и отклоняет неизвестный профиль. Check
+// проверяет только локальную identity readiness, без admission либо promotion RPC.
 func TestTrustedImageOwnerDoesNotRequireIssuerOrTLSMaterial(t *testing.T) {
 	for _, promotion := range []bool{false, true} {
 		config := Config{RPCProfile: transportprofile.TrustedCluster, Target: "control-plane.kodex-system.svc:8443",
