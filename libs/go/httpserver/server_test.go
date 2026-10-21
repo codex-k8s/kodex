@@ -7,10 +7,18 @@ import (
 	"time"
 )
 
+// readyStub provides a constant successful snapshot without dependency I/O.
+// readyStub предоставляет неизменную готовность без I/O к зависимостям.
 type readyStub struct{}
 
+// Ready returns deterministic synthetic readiness for handler registration tests.
+// Ready возвращает устойчивую синтетическую готовность для тестов регистрации.
 func (readyStub) Ready() (bool, string) { return true, "ready" }
 
+// TestExactGETRouteRejectsQueryBodyAndUnsafeRegistration covers the allowed GET,
+// rejects query/body/non-GET inputs and prevents replacement of a standard route.
+// TestExactGETRouteRejectsQueryBodyAndUnsafeRegistration проверяет допустимый GET,
+// запрещает query/body/другой метод и подмену стандартного маршрута.
 func TestExactGETRouteRejectsQueryBodyAndUnsafeRegistration(t *testing.T) {
 	server, err := New(testConfig(), readyStub{}, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), ExactGETRoute{
 		Path: "/policy", ContentType: "application/json", Handler: http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
@@ -48,6 +56,10 @@ func TestExactGETRouteRejectsQueryBodyAndUnsafeRegistration(t *testing.T) {
 	}
 }
 
+// testConfig uses a loopback ephemeral address and minimum accepted budgets so
+// handler tests neither reserve a fixed port nor contact an external service.
+// testConfig задаёт loopback со случайным портом и минимальные бюджеты, чтобы
+// тесты handler не резервировали постоянный порт и не обращались наружу.
 func testConfig() Config {
 	return Config{
 		Address: "127.0.0.1:0", ReadHeaderTimeout: time.Second, ReadTimeout: time.Second,

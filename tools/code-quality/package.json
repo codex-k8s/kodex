@@ -1,0 +1,12 @@
+{
+  "name": "kodex-code-quality",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "duplicates": "node scan-duplicates.mjs",
+    "test": "node --test *.test.mjs"
+  },
+  "devDependencies": {
+    "jscpd": "5.4.2"
+  }
+}

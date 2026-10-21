@@ -1,4 +1,7 @@
-// Package httpserver предоставляет общий технический HTTP runtime.
+// Package httpserver owns bounded technical HTTP listeners, standard health and
+// metrics routes, and exact service-owned read routes; it contains no business API.
+// Пакет httpserver управляет ограниченными техническими HTTP-listener, маршрутами
+// здоровья/метрик и точными служебными read-маршрутами, не реализуя бизнесовый API.
 package httpserver
 
 import (
@@ -12,7 +15,10 @@ import (
 	"golang.org/x/net/netutil"
 )
 
-// Config задаёт закрытую техническую поверхность и сетевые бюджеты.
+// Config sets the listen address and bounded header/read/write/idle, header-size
+// and connection budgets. New validates all limits before reserving a listener.
+// Config задаёт адрес и пределы чтения заголовков/запроса, записи, простоя,
+// размера заголовков и числа соединений. New проверяет их до создания listener.
 type Config struct {
 	Address            string
 	ReadHeaderTimeout  time.Duration
@@ -23,26 +29,46 @@ type Config struct {
 	MaximumConnections int
 }
 
-// Readiness возвращает текущее состояние без внешнего I/O.
+// Readiness exposes a precomputed local snapshot; a Kubernetes probe must not
+// trigger external I/O or recompute dependency health through this interface.
+// Readiness предоставляет готовый локальный снимок; Kubernetes probe не должен
+// запускать внешнее I/O или заново вычислять здоровье зависимостей через этот порт.
 type Readiness interface {
+	// Ready returns admission readiness and a diagnostic reason from that snapshot;
+	// the HTTP response uses only the boolean and does not expose the reason.
+	// Ready возвращает готовность и диагностическую причину из снимка; HTTP-ответ
+	// использует только boolean и не раскрывает причину клиенту.
 	Ready() (bool, string)
 }
 
-// ExactGETRoute добавляет безопасный service-owned read-only endpoint.
+// ExactGETRoute describes a unique exact-path GET handler owned by one service.
+// New rejects collisions and requests with query, body or transfer encoding;
+// the handler remains responsible for its own application authorization.
+// ExactGETRoute описывает уникальный точный GET-маршрут конкретного сервиса.
+// New запрещает коллизии и query/body/transfer encoding; сам handler по-прежнему
+// отвечает за необходимую прикладную авторизацию.
 type ExactGETRoute struct {
 	Path        string
 	ContentType string
 	Handler     http.Handler
 }
 
-// Server владеет listener и стандартным http.Server без фоновых goroutine.
+// Server owns the listener and http.Server without starting hidden goroutines.
+// Callers sequence Listen, their startup barrier, Serve and bounded Shutdown.
+// Server владеет listener и http.Server, не создавая скрытых goroutine.
+// Вызывающий код управляет Listen, startup barrier, Serve и bounded Shutdown.
 type Server struct {
 	server             *http.Server
 	listener           net.Listener
 	maximumConnections int
 }
 
-// New валидирует конфигурацию и связывает стандартные и exact service-owned маршруты.
+// New validates budgets and dependencies, registers health/live/ready/metrics and
+// unique exact GET routes, and wraps the mux with a one-MiB body limit. It opens
+// no socket; Listen reserves the address separately before the startup barrier.
+// New проверяет бюджеты и зависимости, регистрирует health/live/ready/metrics
+// и уникальные точные GET-маршруты, ограничивая тело одним МиБ. Сокет не открыт:
+// Listen отдельно резервирует адрес перед startup barrier.
 func New(config Config, readiness Readiness, metrics http.Handler, routes ...ExactGETRoute) (*Server, error) {
 	if config.Address == "" || readiness == nil || metrics == nil ||
 		config.ReadHeaderTimeout < time.Second || config.ReadHeaderTimeout > 10*time.Second ||
@@ -103,6 +129,10 @@ func New(config Config, readiness Readiness, metrics http.Handler, routes ...Exa
 	}}, nil
 }
 
+// validExactGETRoute requires a handler, content type and bounded exact path with
+// no wildcard/query/fragment/traversal syntax or collision with a registered route.
+// validExactGETRoute требует handler, content type и ограниченный точный путь
+// без wildcard/query/fragment/traversal и без коллизии с зарегистрированным путём.
 func validExactGETRoute(route ExactGETRoute, registered map[string]struct{}) bool {
 	if route.Handler == nil || route.ContentType == "" || len(route.Path) < 2 || len(route.Path) > 128 ||
 		!strings.HasPrefix(route.Path, "/") || strings.HasSuffix(route.Path, "/") ||
@@ -113,7 +143,10 @@ func validExactGETRoute(route ExactGETRoute, registered map[string]struct{}) boo
 	return !exists
 }
 
-// Listen резервирует listener до startup barrier.
+// Listen reserves a TCP listener once and limits concurrent connections. Invalid
+// lifecycle or bind failure returns a safe error without starting Serve.
+// Listen один раз резервирует TCP-listener и ограничивает число соединений.
+// Неверный lifecycle или ошибка bind возвращает безопасную ошибку без Serve.
 func (server *Server) Listen() error {
 	if server == nil || server.server == nil || server.listener != nil {
 		return errors.New("technical HTTP server lifecycle is invalid")
@@ -126,7 +159,10 @@ func (server *Server) Listen() error {
 	return nil
 }
 
-// Serve обслуживает уже созданный listener и блокируется до остановки.
+// Serve blocks on the existing listener, treating ordinary http.Server shutdown
+// as success while preserving other server errors for its caller.
+// Serve блокируется на существующем listener, считая штатное закрытие http.Server
+// успехом и возвращая остальные серверные ошибки вызывающему коду.
 func (server *Server) Serve() error {
 	if server == nil || server.listener == nil {
 		return errors.New("technical HTTP server is not listening")
@@ -138,7 +174,10 @@ func (server *Server) Serve() error {
 	return err
 }
 
-// Shutdown ограниченно закрывает listener и активные соединения.
+// Shutdown drains the underlying server within the caller's context; a nil or
+// uninitialized receiver is a no-op suitable for partial-startup cleanup.
+// Shutdown завершает работу сервера в пределах контекста вызывающего кода;
+// nil или неинициализированный получатель допускает очистку частичного startup.
 func (server *Server) Shutdown(ctx context.Context) error {
 	if server == nil || server.server == nil {
 		return nil
@@ -146,6 +185,10 @@ func (server *Server) Shutdown(ctx context.Context) error {
 	return server.server.Shutdown(ctx)
 }
 
+// setHeaders disables storage and MIME sniffing and establishes the default
+// plain-text content type, which an exact service route may explicitly replace.
+// setHeaders запрещает кеширование и MIME sniffing и задаёт text/plain;
+// точный служебный маршрут может явно заменить этот Content-Type.
 func setHeaders(writer http.ResponseWriter) {
 	writer.Header().Set("Cache-Control", "no-store")
 	writer.Header().Set("Content-Type", "text/plain; charset=utf-8")

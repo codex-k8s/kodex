@@ -1,20 +1,27 @@
 package runtimecontract
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
-	"io"
 	"slices"
 	"strings"
 )
 
+// ProviderFailureDiagnosticSchema pins the closed diagnostic representation,
+// independently of provider versions or the success of an execution.
+// ProviderFailureDiagnosticSchema закрепляет закрытый формат диагностики
+// независимо от версии провайдера и успешности исполнения.
 const ProviderFailureDiagnosticSchema = "kodex.provider-failure-diagnostic.v1"
 
+// errProviderDiagnostic rejects malformed metadata without disclosing its values.
+// errProviderDiagnostic отклоняет неверные метаданные без раскрытия их значений.
 var errProviderDiagnostic = errors.New("provider failure diagnostic is invalid")
 
-// ProviderFailureDiagnostic — только наблюдение закрытой причины, не authority,
-// ACK провайдера, доказательство результата либо durable CP receipt.
+// ProviderFailureDiagnostic describes a closed failure reason bound to one exact
+// attempt. It is not authority, a provider ACK, proof of a business result, or a
+// durable control-plane receipt.
+// ProviderFailureDiagnostic описывает закрытую причину отказа точной попытки.
+// Это не полномочие, ACK провайдера, доказательство бизнесового результата
+// или устойчивая квитанция control-plane.
 type ProviderFailureDiagnostic struct {
 	Schema                 string `json:"schema"`
 	RuntimeRevisionDigest  string `json:"runtime_revision_digest"`
@@ -33,6 +40,12 @@ type ProviderFailureDiagnostic struct {
 	TerminalCode           string `json:"terminal_code"`
 }
 
+// Validate checks execution pins, reason allowlists and the relationships between
+// request failures, terminal failures and their diagnostic fields. It returns a
+// stable sentinel without reflecting private provider content.
+// Validate проверяет привязки, закрытые причины и связи между отказом запроса,
+// terminal-отказом и диагностическими полями. Возвращается устойчивая ошибка
+// без отражения закрытого содержимого провайдера.
 func (value ProviderFailureDiagnostic) Validate() error {
 	if value.Schema != ProviderFailureDiagnosticSchema || !sha256Pattern.MatchString(value.RuntimeRevisionDigest) ||
 		!sha256Pattern.MatchString(value.InputDigest) || !sha256Pattern.MatchString(value.ExecutionBindingDigest) ||
@@ -66,28 +79,26 @@ func (value ProviderFailureDiagnostic) Validate() error {
 	return nil
 }
 
+// Matches requires a valid diagnostic with the same three digests, session,
+// turn and attempt as the immutable input; matching alone grants no authority.
+// Matches требует корректной диагностики с теми же тремя дайджестами, сессией,
+// ходом и попыткой, что во входе; само совпадение не выдаёт полномочий.
 func (value ProviderFailureDiagnostic) Matches(input RunnerInput) bool {
 	return value.Validate() == nil && value.RuntimeRevisionDigest == input.RuntimeRevisionDigest &&
 		value.InputDigest == input.InputDigest && value.ExecutionBindingDigest == input.ExecutionBindingDigest &&
 		value.SessionRef == input.SessionRef && value.TurnRef == input.TurnRef && value.Attempt == input.Attempt
 }
 
-// Существующий recursive duplicate-key guard используется до typed decode.
-// Полный canonical JSON исключает неизвестные, отсутствующие и case-alias keys.
+// UnmarshalJSON commits the receiver only after canonical wire and semantic
+// checks pass. Failure preserves its previous value and returns the safe sentinel.
+// UnmarshalJSON заменяет получателя только после wire- и смысловых проверок.
+// Отказ сохраняет прежнее значение и возвращает безопасную устойчивую ошибку.
 func (value *ProviderFailureDiagnostic) UnmarshalJSON(raw []byte) error {
-	if len(raw) > 4096 || boundedJSONUnique(json.NewDecoder(bytes.NewReader(raw)), 0, 2) != nil {
-		return errProviderDiagnostic
-	}
 	type wire ProviderFailureDiagnostic
 	var decoded wire
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if decoder.Decode(&decoded) != nil || decoder.Decode(new(any)) != io.EOF || ProviderFailureDiagnostic(decoded).Validate() != nil {
-		return errProviderDiagnostic
-	}
-	canonical, err := json.Marshal(decoded)
-	var compact bytes.Buffer
-	if err != nil || json.Compact(&compact, raw) != nil || !bytes.Equal(compact.Bytes(), canonical) {
+	if !decodeCanonicalProviderObservation(raw, &decoded, func() bool {
+		return ProviderFailureDiagnostic(decoded).Validate() == nil
+	}) {
 		return errProviderDiagnostic
 	}
 	*value = ProviderFailureDiagnostic(decoded)
