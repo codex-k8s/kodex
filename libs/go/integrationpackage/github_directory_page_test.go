@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+// TestGitHubDirectoryListSchemaPinsAndOffsetBounds checks exact source ref, bounded offset/page,
+// closed output and refusal to reinterpret an older unpaged package revision.
+// TestGitHubDirectoryListSchemaPinsAndOffsetBounds проверяет точный ref, ограниченные смещение
+// и страницу, закрытый вывод и отказ переинтерпретировать старую версию без пагинации.
 func TestGitHubDirectoryListSchemaPinsAndOffsetBounds(t *testing.T) {
 	definitions, err := LoadShipped()
 	if err != nil {

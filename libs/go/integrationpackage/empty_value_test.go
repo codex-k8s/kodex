@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+// TestExplicitEmptyPayloadKeepsConfigurationClosed permits explicit empty plain payloads but not
+// empty connection identities or empty strings for formats that require an address or identifier.
+// TestExplicitEmptyPayloadKeepsConfigurationClosed допускает явно пустой простой payload, но не
+// пустые координаты подключения или форматы, которым нужен адрес либо идентификатор.
 func TestExplicitEmptyPayloadKeepsConfigurationClosed(t *testing.T) {
 	field := Field{Key: "content", Type: "STRING", Format: "PLAIN", Required: true, MaximumLength: 32, AllowEmpty: true}
 	capability := Capability{InputFields: []Field{field}, OutputFields: []Field{field}}

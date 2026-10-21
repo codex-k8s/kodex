@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+// TestMailboxApprovalExceptionIsEmailOnly prevents unrelated writes from inheriting the exact
+// email mailbox-policy exception or an unregistered email operation from using it.
+// TestMailboxApprovalExceptionIsEmailOnly не даёт чужим записям наследовать точное почтовое
+// исключение либо незарегистрированной почтовой операции использовать его.
 func TestMailboxApprovalExceptionIsEmailOnly(t *testing.T) {
 	definitions, err := LoadShipped()
 	if err != nil {
@@ -36,6 +40,10 @@ func TestMailboxApprovalExceptionIsEmailOnly(t *testing.T) {
 	}
 }
 
+// TestLoadShippedDefinitions checks the complete shipped registry, canonical digests and exact
+// integration/interaction ownership while keeping the OpenAPI template non-executable.
+// TestLoadShippedDefinitions проверяет весь поставленный реестр, канонические дайджесты и точных
+// владельцев интеграций и взаимодействий, оставляя шаблон OpenAPI неисполняемым.
 func TestLoadShippedDefinitions(t *testing.T) {
 	t.Parallel()
 	definitions, err := LoadShipped()
@@ -85,6 +93,10 @@ func TestLoadShippedDefinitions(t *testing.T) {
 	}
 }
 
+// TestParseRejectsAdapterRoutingMismatch rejects package claims that disagree with registered
+// Mattermost owner, execution route or readiness.
+// TestParseRejectsAdapterRoutingMismatch отклоняет заявления пакета, расходящиеся с владельцем
+// Mattermost, маршрутом исполнения или готовностью реестра.
 func TestParseRejectsAdapterRoutingMismatch(t *testing.T) {
 	t.Parallel()
 	base := shippedYAML["mattermost.yaml"]
@@ -99,6 +111,10 @@ func TestParseRejectsAdapterRoutingMismatch(t *testing.T) {
 	}
 }
 
+// TestInputSchemaDigestIsCanonicalAndClosed checks a stable digest and refusal of undeclared
+// fields in the published GitHub tool-input schema.
+// TestInputSchemaDigestIsCanonicalAndClosed проверяет устойчивый дайджест и запрет
+// необъявленных полей в опубликованной схеме ввода инструмента GitHub.
 func TestInputSchemaDigestIsCanonicalAndClosed(t *testing.T) {
 	t.Parallel()
 	definitions, err := LoadShipped()
@@ -115,6 +131,10 @@ func TestInputSchemaDigestIsCanonicalAndClosed(t *testing.T) {
 	}
 }
 
+// TestTypedOutput accepts the canonical email result projection and rejects missing, secret-bearing
+// or malformed output fields before they reach a caller.
+// TestTypedOutput допускает каноническую проекцию почтового результата и отклоняет недостающие,
+// содержащие секрет или неверные поля вывода до их выдачи вызывающему коду.
 func TestTypedOutput(t *testing.T) {
 	t.Parallel()
 	definitions, err := LoadShipped()
@@ -141,6 +161,10 @@ func TestTypedOutput(t *testing.T) {
 	}
 }
 
+// TestConfigurationRejectsUnsafeProviderOrigin rejects plaintext, IP, userinfo and path-bearing
+// base URLs for a provider connection.
+// TestConfigurationRejectsUnsafeProviderOrigin отклоняет plaintext, IP, userinfo и URL с путём
+// в базовом адресе подключения провайдера.
 func TestConfigurationRejectsUnsafeProviderOrigin(t *testing.T) {
 	t.Parallel()
 	definitions, err := LoadShipped()
@@ -160,6 +184,10 @@ func TestConfigurationRejectsUnsafeProviderOrigin(t *testing.T) {
 	}
 }
 
+// TestHTTPSJSONReadConfigurationHasExactResourcePath admits a fixed literal HTTPS path while
+// rejecting traversal, percent encoding, query or fragment and unsafe origins.
+// TestHTTPSJSONReadConfigurationHasExactResourcePath допускает фиксированный буквальный HTTPS-путь,
+// отклоняя обход, percent-encoding, query/fragment и небезопасный origin.
 func TestHTTPSJSONReadConfigurationHasExactResourcePath(t *testing.T) {
 	t.Parallel()
 	definitions, err := LoadShipped()
@@ -184,6 +212,10 @@ func TestHTTPSJSONReadConfigurationHasExactResourcePath(t *testing.T) {
 	}
 }
 
+// TestParseRejectsUnknownDuplicateAliasAndTrailingDocument closes unknown fields, repeated YAML
+// keys, anchors and multiple-document input before a package is usable.
+// TestParseRejectsUnknownDuplicateAliasAndTrailingDocument отклоняет неизвестные поля, повторы
+// YAML-ключей, anchor и несколько документов до использования пакета.
 func TestParseRejectsUnknownDuplicateAliasAndTrailingDocument(t *testing.T) {
 	t.Parallel()
 	base := shippedYAML["synthetic.yaml"]
@@ -200,6 +232,10 @@ func TestParseRejectsUnknownDuplicateAliasAndTrailingDocument(t *testing.T) {
 	}
 }
 
+// TestParseRejectsUnknownClosedRegistryValues rejects unknown adapter, risk, approval, resource,
+// field type and idempotency values instead of extending the runtime enum by input.
+// TestParseRejectsUnknownClosedRegistryValues отклоняет неизвестные адаптер, риск, подтверждение,
+// ресурс, тип поля и идемпотентность, не расширяя runtime enum из ввода.
 func TestParseRejectsUnknownClosedRegistryValues(t *testing.T) {
 	t.Parallel()
 	base := shippedYAML["synthetic.yaml"]
@@ -217,6 +253,10 @@ func TestParseRejectsUnknownClosedRegistryValues(t *testing.T) {
 	}
 }
 
+// TestDigestIsStableAndContentBound keeps comments outside the canonical digest while any
+// changed package content produces a different digest.
+// TestDigestIsStableAndContentBound исключает комментарии из канонического дайджеста,
+// тогда как изменение содержимого пакета меняет дайджест.
 func TestDigestIsStableAndContentBound(t *testing.T) {
 	t.Parallel()
 	first, err := Parse([]byte(shippedYAML["synthetic.yaml"]))
@@ -236,6 +276,10 @@ func TestDigestIsStableAndContentBound(t *testing.T) {
 	}
 }
 
+// TestTypedConfigurationScopeAndInput derives exact GitHub owner/repository scope and rejects
+// out-of-range, duplicate, fractional or undeclared tool-input fields.
+// TestTypedConfigurationScopeAndInput выводит точную область GitHub owner/repository и отклоняет
+// внедиапазонные, повторные, дробные либо необъявленные поля ввода инструмента.
 func TestTypedConfigurationScopeAndInput(t *testing.T) {
 	t.Parallel()
 	definitions, err := LoadShipped()

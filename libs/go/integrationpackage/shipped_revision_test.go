@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+// TestShippedRevisionRequiresExactCurrentPins accepts only the current email version/digest and
+// managed narrowing, without reintroducing obsolete mailbox credentials.
+// TestShippedRevisionRequiresExactCurrentPins допускает лишь текущие версию/дайджест email и
+// сужение управляемой версии без возврата устаревших реквизитов ящика.
 func TestShippedRevisionRequiresExactCurrentPins(t *testing.T) {
 	definitions, err := LoadShipped()
 	if err != nil {

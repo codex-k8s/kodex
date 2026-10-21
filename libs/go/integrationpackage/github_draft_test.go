@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+// TestGitHubPullRequestDraftInputIsOptionalAndClosed keeps draft optional and boolean only on
+// pull-request creation, without expanding update authority or accepting a stale package pin.
+// TestGitHubPullRequestDraftInputIsOptionalAndClosed оставляет draft необязательным boolean лишь
+// при создании PR, не расширяя update и не допуская устаревшую привязку пакета.
 func TestGitHubPullRequestDraftInputIsOptionalAndClosed(t *testing.T) {
 	definitions, err := LoadShipped()
 	if err != nil {
