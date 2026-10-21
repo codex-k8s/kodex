@@ -23,11 +23,15 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+// fakeVerifier records the exact verifier request and returns a chosen context.
+// RU: fakeVerifier сохраняет точный запрос проверки и возвращает заданный контекст.
 type fakeVerifier struct {
 	response *internalrpcauthorityv1.VerifyAuthorizationContextResponse
 	request  *internalrpcauthorityv1.VerifyAuthorizationContextRequest
 }
 
+// fakeIssuer records initial or continuation issuance without calling a service.
+// RU: fakeIssuer учитывает первичный или дочерний выпуск без вызова сервиса.
 type fakeIssuer struct {
 	response             *internalrpcauthorityv1.IssueAuthorizationContextResponse
 	continuationResponse *internalrpcauthorityv1.IssueContinuationAuthorizationContextResponse
@@ -35,24 +39,36 @@ type fakeIssuer struct {
 	calls                int
 }
 
+// fakeOperationResolver contains only explicitly registered full RPC methods.
+// RU: fakeOperationResolver содержит только явно зарегистрированные полные RPC-методы.
 type fakeOperationResolver map[string]string
 
+// OperationID returns an operation only for a key present in the fixture map.
+// RU: OperationID возвращает операцию лишь для ключа из тестовой карты.
 func (resolver fakeOperationResolver) OperationID(fullMethod string) (string, bool) {
 	operation, ok := resolver[fullMethod]
 	return operation, ok
 }
 
+// failingProofProvider returns one configured failure and correlation ID.
+// RU: failingProofProvider возвращает заданный отказ и correlation ID.
 type failingProofProvider struct {
 	err           error
 	correlationID string
 }
 
+// scriptedProofProvider counts proof attempts and checks the retry deadline.
+// RU: scriptedProofProvider считает попытки proof и проверяет срок повтора.
 type scriptedProofProvider struct {
 	errors          []error
 	calls           int
 	retryWasBounded bool
 }
 
+// AuthorityProof returns the next scripted result and records whether a
+// second attempt is bounded by the package retry timeout.
+// RU: AuthorityProof возвращает очередной тестовый результат и проверяет,
+// ограничена ли вторая попытка тайм-аутом повтора пакета.
 func (provider *scriptedProofProvider) AuthorityProof(
 	ctx context.Context,
 	_, _ string,
@@ -70,6 +86,8 @@ func (provider *scriptedProofProvider) AuthorityProof(
 	return "proof", "correlation", nil
 }
 
+// AuthorityProof returns the fixed local failure without issuing credentials.
+// RU: AuthorityProof возвращает фиксированный локальный отказ без выпуска удостоверений.
 func (provider failingProofProvider) AuthorityProof(
 	context.Context,
 	string,
@@ -78,6 +96,10 @@ func (provider failingProofProvider) AuthorityProof(
 	return "", provider.correlationID, provider.err
 }
 
+// VerifyAuthorizationContext retains the exact verification input for
+// assertions and returns the selected fixture response.
+// RU: VerifyAuthorizationContext сохраняет точный вход проверки для сверки
+// и возвращает выбранный тестовый ответ.
 func (verifier *fakeVerifier) VerifyAuthorizationContext(
 	_ context.Context,
 	request *internalrpcauthorityv1.VerifyAuthorizationContextRequest,
@@ -87,6 +109,8 @@ func (verifier *fakeVerifier) VerifyAuthorizationContext(
 	return verifier.response, nil
 }
 
+// IssueAuthorizationContext counts a primary issuance and returns its fixture.
+// RU: IssueAuthorizationContext считает первичный выпуск и возвращает fixture.
 func (issuer *fakeIssuer) IssueAuthorizationContext(
 	_ context.Context,
 	_ *internalrpcauthorityv1.IssueAuthorizationContextRequest,
@@ -96,6 +120,10 @@ func (issuer *fakeIssuer) IssueAuthorizationContext(
 	return issuer.response, nil
 }
 
+// IssueContinuationAuthorizationContext captures the parent-bound child
+// request and returns the selected continuation fixture.
+// RU: IssueContinuationAuthorizationContext сохраняет дочерний запрос с
+// привязкой к родителю и возвращает выбранный ответ продолжения.
 func (issuer *fakeIssuer) IssueContinuationAuthorizationContext(
 	_ context.Context,
 	request *internalrpcauthorityv1.IssueContinuationAuthorizationContextRequest,
@@ -105,6 +133,8 @@ func (issuer *fakeIssuer) IssueContinuationAuthorizationContext(
 	return issuer.continuationResponse, nil
 }
 
+// CheckReadiness is a no-op issuer fixture; tests do not exercise readiness.
+// RU: CheckReadiness — пустая fixture issuer; тесты не проверяют готовность.
 func (*fakeIssuer) CheckReadiness(
 	context.Context,
 	*internalrpcauthorityv1.AuthorizationIssuerServiceCheckReadinessRequest,
@@ -113,6 +143,8 @@ func (*fakeIssuer) CheckReadiness(
 	return nil, nil
 }
 
+// CheckReadiness is a no-op verifier fixture; tests do not exercise readiness.
+// RU: CheckReadiness — пустая fixture verifier; тесты не проверяют готовность.
 func (*fakeVerifier) CheckReadiness(
 	context.Context,
 	*internalrpcauthorityv1.AuthorizationVerifierServiceCheckReadinessRequest,
@@ -121,6 +153,12 @@ func (*fakeVerifier) CheckReadiness(
 	return nil, nil
 }
 
+// TestVerifierInterceptorRequiresBothMTLSAndAuthorizationContext checks that
+// neither mTLS nor a token alone can reach the handler and the combined case
+// carries exact method, digest, peer, and compact context to the verifier.
+// RU: TestVerifierInterceptorRequiresBothMTLSAndAuthorizationContext проверяет,
+// что отдельно mTLS или токен не достигают handler, а вместе передают verifier
+// точный метод, digest, peer и compact context.
 func TestVerifierInterceptorRequiresBothMTLSAndAuthorizationContext(t *testing.T) {
 	certificate := testCertificate(t)
 	verified := &internalrpcauthorityv1.VerifiedAuthorizationContext{Jti: "accepted"}
@@ -183,6 +221,10 @@ func TestVerifierInterceptorRequiresBothMTLSAndAuthorizationContext(t *testing.T
 	}
 }
 
+// TestIssuerInterceptorClassifiesLocalProofFailure checks sanitized codes,
+// correlation preservation, and absence of downstream effects on proof failure.
+// RU: TestIssuerInterceptorClassifiesLocalProofFailure проверяет очищенные
+// коды, сохранение correlation и отсутствие downstream-эффектов при отказе proof.
 func TestIssuerInterceptorClassifiesLocalProofFailure(t *testing.T) {
 	t.Parallel()
 
@@ -224,6 +266,10 @@ func TestIssuerInterceptorClassifiesLocalProofFailure(t *testing.T) {
 	}
 }
 
+// TestAuthorityProofRetriesOneBoundedTransientAttempt verifies one timed
+// retry for each approved transient dependency code.
+// RU: TestAuthorityProofRetriesOneBoundedTransientAttempt проверяет один
+// ограниченный по времени повтор для каждого допустимого временного кода.
 func TestAuthorityProofRetriesOneBoundedTransientAttempt(t *testing.T) {
 	t.Parallel()
 
@@ -238,6 +284,10 @@ func TestAuthorityProofRetriesOneBoundedTransientAttempt(t *testing.T) {
 	}
 }
 
+// TestAuthorityProofStopsAfterSecondTransientFailure ensures the second
+// failure terminates without another provider attempt.
+// RU: TestAuthorityProofStopsAfterSecondTransientFailure подтверждает, что
+// второй отказ завершает операцию без следующей попытки поставщика.
 func TestAuthorityProofStopsAfterSecondTransientFailure(t *testing.T) {
 	t.Parallel()
 
@@ -251,6 +301,10 @@ func TestAuthorityProofStopsAfterSecondTransientFailure(t *testing.T) {
 	}
 }
 
+// TestIssuerInterceptorOpensDownstreamOnlyAfterSuccessfulProofRetry checks
+// exactly one issuer and downstream call after a successful bounded retry.
+// RU: TestIssuerInterceptorOpensDownstreamOnlyAfterSuccessfulProofRetry
+// проверяет по одному вызову issuer и downstream после успешного повтора.
 func TestIssuerInterceptorOpensDownstreamOnlyAfterSuccessfulProofRetry(t *testing.T) {
 	t.Parallel()
 
@@ -270,6 +324,10 @@ func TestIssuerInterceptorOpensDownstreamOnlyAfterSuccessfulProofRetry(t *testin
 	}
 }
 
+// TestContinuationInterceptorUsesOnlyVerifiedParent verifies exact parent,
+// operation, request and digest binding before any child RPC is sent.
+// RU: TestContinuationInterceptorUsesOnlyVerifiedParent проверяет точную
+// привязку родителя, операции, запроса и digest до отправки дочернего RPC.
 func TestContinuationInterceptorUsesOnlyVerifiedParent(t *testing.T) {
 	t.Parallel()
 
@@ -315,6 +373,10 @@ func TestContinuationInterceptorUsesOnlyVerifiedParent(t *testing.T) {
 	}
 }
 
+// TestAuthorityProofDoesNotRetryRejectedOrCanceledRequest keeps permission
+// failures and caller-canceled contexts outside the transient retry path.
+// RU: TestAuthorityProofDoesNotRetryRejectedOrCanceledRequest исключает
+// отказ в правах и отменённый caller-контекст из пути временного повтора.
 func TestAuthorityProofDoesNotRetryRejectedOrCanceledRequest(t *testing.T) {
 	t.Parallel()
 
@@ -337,12 +399,18 @@ func TestAuthorityProofDoesNotRetryRejectedOrCanceledRequest(t *testing.T) {
 	}
 }
 
+// canceledContext returns an already-canceled context for the no-retry case.
+// RU: canceledContext возвращает уже отменённый контекст для проверки без повтора.
 func canceledContext() context.Context {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	return ctx
 }
 
+// testCertificate builds a short-lived self-signed fixture with one SPIFFE
+// URI SAN so the interceptor can exercise exact mTLS peer extraction.
+// RU: testCertificate создаёт краткоживущий самоподписанный fixture с одним
+// SPIFFE URI SAN для проверки извлечения точного mTLS peer в interceptor.
 func testCertificate(t *testing.T) *x509.Certificate {
 	t.Helper()
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)

@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.100.0
+version: 1.101.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,34 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто третья волна — основной клиент локального authority
+
+На точном запушенном SHA `df59caf01edfb01ffc8354c446c4ce91b8a4a54b`
+анализ подтвердил 6532 собственных файла, 222 исключения, 1867 raw-групп,
+468 точных решений и 1399 неразобранных; сырой SHA-256 —
+`859b751653add448082a5631128babf514ab4cb0cab4b94349708f75281b9611`,
+отпечаток набора —
+`867efe5c8c3b929cb806ab74bf785be42a98e36ac1b1f098cabd395f3189afd6`.
+Go-реестр: 3197/21049, непокрыты 17852.
+
+Все 64 объявления `authorityclient/client.go` и `client_test.go`
+документированы предметными EN→RU комментариями. Пояснены канонические
+UDS-пути, проверка UID/GID, точная привязка protobuf digest и полного RPC,
+разница между локальной диагностикой и публичным gRPC status, единственный
+bounded retry, происхождение continuation, mTLS peer и проверенные
+authorization contexts. Тестовые fixtures и сценарии описаны по их реальному
+покрытию; исполняемый код не менялся.
+
+Рабочий detector: 6532 собственных файла, 222 исключения, 1867 raw-групп,
+468 точных решений и 1399 неразобранных; сырой SHA-256 —
+`55ca1ae56cad3a25210bf2df2dfbc9f82b2f1564ece52a80dcfd2ae5d6ed0f67`,
+отпечаток набора не изменился. Go-реестр: 3261/21049,
+непокрыты 17788. `go test -count=1 ./authorityclient` и
+`go build ./authorityclient` из модуля `libs/go/internalrpcauth`, строгая
+сверка 468 decisions, `gofmt` и `git diff --check` — PASS LOCAL. Полный
+`go-docs -check` и browser/deploy/live — NOT RUN. Точный scan нового коммита
+будет опубликован в текущем PR.
 
 ## Сто вторая волна — допуск первого запроса в stream
 

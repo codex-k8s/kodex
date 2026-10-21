@@ -24,15 +24,25 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Канонические UDS-пути и имя метаданных контекста авторизации.
 const (
-	IssuerSocketPath      = "/run/kodex/internal-rpc-authority/issuer.sock"
-	VerifierSocketPath    = "/run/kodex/internal-rpc-authority/verifier.sock"
+	// IssuerSocketPath is the only accepted UDS path for local context issuance.
+	// RU: IssuerSocketPath — единственный допустимый UDS-путь локального выпуска контекста.
+	IssuerSocketPath = "/run/kodex/internal-rpc-authority/issuer.sock"
+	// VerifierSocketPath is the only accepted UDS path for local verification.
+	// RU: VerifierSocketPath — единственный допустимый UDS-путь локальной проверки.
+	VerifierSocketPath = "/run/kodex/internal-rpc-authority/verifier.sock"
+	// AuthorizationMetadata names the single outbound/inbound context header.
+	// RU: AuthorizationMetadata задаёт имя единственного заголовка контекста.
 	AuthorizationMetadata = "x-kodex-authorization"
-	proofRetryTimeout     = 500 * time.Millisecond
+	// proofRetryTimeout bounds the one retry of a transient proof failure.
+	// RU: proofRetryTimeout ограничивает единственный повтор временного отказа proof.
+	proofRetryTimeout = 500 * time.Millisecond
 )
 
-// LocalConfig задаёт проверяемую идентичность локального authority-сервера.
+// LocalConfig selects an allowlisted authority socket and the exact UID/GID
+// that the UDS transport must authenticate before serving application RPCs.
+// RU: LocalConfig выбирает разрешённый socket authority и точные UID/GID,
+// которые UDS-транспорт обязан проверить до обслуживания RPC приложения.
 type LocalConfig struct {
 	SocketPath        string
 	ExpectedServerUID uint32
@@ -40,12 +50,16 @@ type LocalConfig struct {
 	DialTimeout       time.Duration
 }
 
-// LocalConnection владеет gRPC-соединением через проверенный UDS.
+// LocalConnection owns a gRPC connection established through the checked UDS.
+// RU: LocalConnection владеет gRPC-соединением через проверенный UDS.
 type LocalConnection struct {
 	connection *grpc.ClientConn
 }
 
-// DialLocal подключается к именованному UDS с проверкой uid/gid сервера.
+// DialLocal accepts only canonical socket configuration, checks its directory,
+// authenticates the server UID/GID through UDS credentials, and waits for Ready.
+// RU: DialLocal принимает только каноническую конфигурацию socket, проверяет
+// каталог, удостоверяет UID/GID сервера через UDS и ожидает состояния Ready.
 func DialLocal(ctx context.Context, config LocalConfig) (*LocalConnection, error) {
 	if err := validateLocalConfig(config); err != nil {
 		return nil, err
@@ -86,21 +100,29 @@ func DialLocal(ctx context.Context, config LocalConfig) (*LocalConnection, error
 	return &LocalConnection{connection: connection}, nil
 }
 
-// Issuer возвращает клиент локального issuer.
+// Issuer returns the typed issuance client on this authenticated connection.
+// RU: Issuer возвращает типизированный клиент выпуска на удостоверенном соединении.
 func (connection *LocalConnection) Issuer() internalrpcauthorityv1.AuthorizationIssuerServiceClient {
 	return internalrpcauthorityv1.NewAuthorizationIssuerServiceClient(connection.connection)
 }
 
-// Verifier возвращает клиент локального verifier.
+// Verifier returns the typed verification client on this authenticated connection.
+// RU: Verifier возвращает типизированный клиент проверки на удостоверенном соединении.
 func (connection *LocalConnection) Verifier() internalrpcauthorityv1.AuthorizationVerifierServiceClient {
 	return internalrpcauthorityv1.NewAuthorizationVerifierServiceClient(connection.connection)
 }
 
-// Close закрывает локальное gRPC-соединение.
+// Close releases the underlying local gRPC connection.
+// RU: Close освобождает нижележащее локальное gRPC-соединение.
 func (connection *LocalConnection) Close() error {
 	return connection.connection.Close()
 }
 
+// validateLocalConfig rejects noncanonical paths, missing server identity,
+// out-of-range deadlines, and a missing or symlinked socket directory.
+// RU: validateLocalConfig отклоняет неканонические пути, отсутствующую
+// идентичность сервера, недопустимый тайм-аут и отсутствующий каталог socket
+// либо его подмену символической ссылкой.
 func validateLocalConfig(config LocalConfig) error {
 	if (config.SocketPath != IssuerSocketPath &&
 		config.SocketPath != VerifierSocketPath) ||
@@ -121,8 +143,13 @@ func validateLocalConfig(config LocalConfig) error {
 	return nil
 }
 
-// ProofProvider получает краткоживущее доказательство для точной операции.
+// ProofProvider obtains a short-lived proof for one registered operation and
+// full RPC method without becoming the source of transport authority itself.
+// RU: ProofProvider получает краткоживущий proof для зарегистрированной
+// операции и полного RPC-метода, не становясь источником транспортных прав.
 type ProofProvider interface {
+	// AuthorityProof returns compact proof and correlation for the exact operation.
+	// RU: AuthorityProof возвращает compact proof и correlation для точной операции.
 	AuthorityProof(
 		ctx context.Context,
 		operationID string,
@@ -130,20 +157,31 @@ type ProofProvider interface {
 	) (compactJWS string, correlationID string, err error)
 }
 
-// OperationResolver разрешает полный RPC-метод в зарегистрированную операцию.
+// OperationResolver maps a full RPC method to an explicitly registered operation.
+// RU: OperationResolver сопоставляет полный RPC-метод явно зарегистрированной операции.
 type OperationResolver interface {
+	// OperationID rejects methods without an exact registration.
+	// RU: OperationID отклоняет методы без точной регистрации.
 	OperationID(fullMethod string) (string, bool)
 }
 
+// requestDigestKey keeps the deterministic request digest private to this package.
+// RU: requestDigestKey оставляет детерминированный digest запроса внутри пакета.
 type requestDigestKey struct{}
 
-// RequestDigest возвращает digest фактического unary либо единственного
-// initial server-stream request, вычисленный до обращения к proof resolver.
+// RequestDigest reads the digest of the actual unary or sole initial
+// server-stream request, computed before the proof provider is invoked.
+// RU: RequestDigest читает digest фактического unary либо единственного
+// первичного server-stream запроса, вычисленный до обращения к поставщику proof.
 func RequestDigest(ctx context.Context) (string, bool) {
 	value, ok := ctx.Value(requestDigestKey{}).(string)
 	return value, ok && value != ""
 }
 
+// bindRequestDigest deterministically encodes a protobuf request, stores its
+// SHA-256 digest in context, and rejects non-protobuf or unencodable input.
+// RU: bindRequestDigest детерминированно кодирует protobuf-запрос, сохраняет
+// его SHA-256 digest в контексте и отклоняет неподходящий вход.
 func bindRequestDigest(ctx context.Context, request any) (context.Context, string, error) {
 	message, ok := request.(proto.Message)
 	if !ok || message == nil {
@@ -158,20 +196,35 @@ func bindRequestDigest(ctx context.Context, request any) (context.Context, strin
 	return context.WithValue(ctx, requestDigestKey{}, value), value, nil
 }
 
+// continuationSource retains the verified parent context and its compact JWS
+// only inside the interceptor-controlled context.
+// RU: continuationSource хранит проверенный контекст родителя и его compact JWS
+// только внутри контекста, управляемого interceptor.
 type continuationSource struct {
 	compact  string
 	verified *internalrpcauthorityv1.VerifiedAuthorizationContext
 }
 
+// continuationSourceKey prevents callers from forging the parent's context slot.
+// RU: continuationSourceKey не даёт caller подделать слот родительского контекста.
 type continuationSourceKey struct{}
+
+// continuationRequestKey keeps a pending child request package-private.
+// RU: continuationRequestKey оставляет ожидающий дочерний запрос внутри пакета.
 type continuationRequestKey struct{}
 
+// continuationRequest binds the intended child operation and exact request /
+// correlation identifiers until the actual protobuf request is available.
+// RU: continuationRequest связывает дочернюю операцию и точные идентификаторы
+// запроса/correlation до появления фактического protobuf-запроса.
 type continuationRequest struct {
 	operationID, fullMethod, requestID, correlationID string
 }
 
-// BindContinuation разрешает child issuance только из контекста, созданного
-// verifier interceptor после durable acceptance parent JTI.
+// BindContinuation accepts a child issuance request only from a context
+// created by the verifier after durable acceptance of the parent JTI.
+// RU: BindContinuation допускает запрос дочернего выпуска только из контекста,
+// созданного verifier после устойчивого принятия JTI родителя.
 func BindContinuation(
 	ctx context.Context,
 	operationID, fullMethod, requestID, correlationID string,
@@ -192,8 +245,12 @@ func BindContinuation(
 	}), nil
 }
 
-// ContinuationUnaryClientInterceptor выпускает exact child context в момент,
-// когда доступен фактический protobuf request.
+// ContinuationUnaryClientInterceptor matches the registered child operation
+// and parent provenance, then issues a digest-bound child context immediately
+// before invoking the downstream RPC with the actual protobuf request.
+// RU: ContinuationUnaryClientInterceptor сверяет зарегистрированную дочернюю
+// операцию и происхождение родителя, затем выпускает привязанный к digest
+// контекст перед вызовом downstream RPC с фактическим protobuf-запросом.
 func ContinuationUnaryClientInterceptor(
 	issuer internalrpcauthorityv1.AuthorizationIssuerServiceClient,
 	operations OperationResolver,
@@ -230,20 +287,30 @@ func ContinuationUnaryClientInterceptor(
 	}
 }
 
-// LocalAuthorityError отличает сбой локальной выдачи контекста от ошибки
-// downstream RPC. Внешняя граница может безопасно нормализовать только этот
-// доверенный тип, не принимая произвольный bare gRPC status за доменный ответ.
+// LocalAuthorityError distinguishes local context-issuance failure from a
+// downstream RPC error. Only this trusted type carries a sanitized diagnostic
+// for a caller to classify without trusting an arbitrary bare gRPC status.
+// RU: LocalAuthorityError отличает локальный отказ выпуска контекста от ошибки
+// downstream RPC. Только этот доверенный тип несёт очищенную диагностику;
+// произвольный bare gRPC status не становится доверенным доменным ответом.
 type LocalAuthorityError struct {
 	code          codes.Code
 	correlationID string
 	diagnostic    Diagnostic
 }
 
+// Error formats the public gRPC status with a bounded local diagnostic,
+// excluding the raw provider error and its untrusted details.
+// RU: Error форматирует публичный gRPC status с ограниченной локальной
+// диагностикой, исключая исходную ошибку поставщика и чужие details.
 func (failure *LocalAuthorityError) Error() string {
 	return failure.GRPCStatus().Err().Error() + " [" + failure.diagnostic.String() + "]"
 }
 
-// GRPCStatus сохраняет классификацию для стандартных gRPC helpers.
+// GRPCStatus exposes only the classified code and a fixed public message to
+// standard gRPC helpers; its local diagnostic is deliberately omitted.
+// RU: GRPCStatus отдаёт стандартным gRPC helpers только классифицированный код
+// и фиксированный публичный текст; локальная диагностика намеренно исключена.
 func (failure *LocalAuthorityError) GRPCStatus() *status.Status {
 	message := "authority proof is unavailable"
 	switch failure.code {
@@ -257,12 +324,18 @@ func (failure *LocalAuthorityError) GRPCStatus() *status.Status {
 	return status.New(failure.code, message)
 }
 
-// CorrelationID возвращает идентификатор exact proof request без раскрытия
-// credential или внутренней причины отказа.
+// CorrelationID returns the exact proof request identifier without exposing
+// credentials or the internal cause of the failure.
+// RU: CorrelationID возвращает идентификатор точного proof-запроса, не раскрывая
+// удостоверения или внутреннюю причину отказа.
 func (failure *LocalAuthorityError) CorrelationID() string {
 	return failure.correlationID
 }
 
+// newLocalAuthorityError preserves only transient dependency codes as-is;
+// all other failures become Unauthenticated with a sanitized diagnostic.
+// RU: newLocalAuthorityError сохраняет только временные коды зависимости;
+// остальные отказы становятся Unauthenticated с очищенной диагностикой.
 func newLocalAuthorityError(err error, correlationID string, stage DiagnosticStage) error {
 	code := authorityFailureCode(err)
 	switch code {
@@ -273,6 +346,10 @@ func newLocalAuthorityError(err error, correlationID string, stage DiagnosticSta
 	return &LocalAuthorityError{code: code, correlationID: correlationID, diagnostic: diagnosticFrom(err, stage)}
 }
 
+// authorityFailureCode maps context cancellation/deadline before consulting
+// the gRPC status embedded in the provider error.
+// RU: authorityFailureCode сначала классифицирует отмену и срок контекста,
+// затем обращается к gRPC status в ошибке поставщика.
 func authorityFailureCode(err error) codes.Code {
 	switch {
 	case errors.Is(err, context.Canceled):
@@ -284,6 +361,10 @@ func authorityFailureCode(err error) codes.Code {
 	}
 }
 
+// authorityProofWithRetry makes at most one bounded retry of a transient
+// provider failure and otherwise returns the original proof result unchanged.
+// RU: authorityProofWithRetry выполняет не более одного ограниченного повтора
+// временного отказа поставщика; иначе возвращает исходный результат proof.
 func authorityProofWithRetry(
 	ctx context.Context,
 	proofs ProofProvider,
@@ -298,6 +379,10 @@ func authorityProofWithRetry(
 	return proofs.AuthorityProof(retryCtx, operationID, method)
 }
 
+// retryableProofFailure permits a retry only while the caller context is
+// live and the classified failure is canceled, deadline, or unavailable.
+// RU: retryableProofFailure допускает повтор лишь при живом контексте caller
+// и классификации Canceled, DeadlineExceeded либо Unavailable.
 func retryableProofFailure(ctx context.Context, err error) bool {
 	if ctx == nil || ctx.Err() != nil {
 		return false
@@ -310,7 +395,10 @@ func retryableProofFailure(ctx context.Context, err error) bool {
 	}
 }
 
-// IssuerUnaryClientInterceptor выпускает и добавляет контекст перед downstream RPC.
+// IssuerUnaryClientInterceptor digests the actual request, resolves an exact
+// operation, obtains proof and authorization context, then invokes downstream.
+// RU: IssuerUnaryClientInterceptor вычисляет digest фактического запроса,
+// разрешает точную операцию, получает proof и контекст, затем вызывает downstream.
 func IssuerUnaryClientInterceptor(
 	issuer internalrpcauthorityv1.AuthorizationIssuerServiceClient,
 	operations OperationResolver,
@@ -360,10 +448,12 @@ func IssuerUnaryClientInterceptor(
 	}
 }
 
-// IssuerStreamClientInterceptor выпускает тот же exact-method контекст до
-// открытия streaming RPC. Один контекст связывает всю ограниченную сессию
-// upload/download; повторное открытие требует нового proof и проходит replay
-// protection проверяющей стороны.
+// IssuerStreamClientInterceptor issues exact-method context before opening a
+// stream, or defers it to the initial request for explicitly request-bound
+// methods. Each new stream needs a fresh proof and verifier replay protection.
+// RU: IssuerStreamClientInterceptor выпускает контекст точного метода до
+// открытия stream либо откладывает его до первого запроса для явно привязанных
+// методов. Каждый новый stream требует свежего proof и защиты verifier от replay.
 func IssuerStreamClientInterceptor(
 	issuer internalrpcauthorityv1.AuthorizationIssuerServiceClient,
 	operations OperationResolver,
@@ -400,9 +490,14 @@ func IssuerStreamClientInterceptor(
 	}
 }
 
+// verifiedContextKey keeps server-verified authorization private to this package.
+// RU: verifiedContextKey оставляет проверенную сервером авторизацию внутри пакета.
 type verifiedContextKey struct{}
 
-// VerifiedAuthorizationContext возвращает проверенный серверным interceptor контекст.
+// VerifiedAuthorizationContext exposes only context installed after the
+// server interceptor has verified transport peer and signed authorization.
+// RU: VerifiedAuthorizationContext выдаёт только контекст, установленный после
+// проверки транспортного peer и подписанной авторизации серверным interceptor.
 func VerifiedAuthorizationContext(
 	ctx context.Context,
 ) (*internalrpcauthorityv1.VerifiedAuthorizationContext, bool) {
@@ -410,7 +505,10 @@ func VerifiedAuthorizationContext(
 	return value, ok && value != nil
 }
 
-// VerifierUnaryServerInterceptor проверяет mTLS peer и подписанный контекст.
+// VerifierUnaryServerInterceptor checks the mTLS peer, one signed context,
+// exact method, and request digest before calling the protected handler.
+// RU: VerifierUnaryServerInterceptor проверяет mTLS peer, единственный
+// подписанный контекст, точный метод и digest до вызова защищённого handler.
 func VerifierUnaryServerInterceptor(
 	verifier internalrpcauthorityv1.AuthorizationVerifierServiceClient,
 ) grpc.UnaryServerInterceptor {
@@ -459,8 +557,12 @@ func VerifierUnaryServerInterceptor(
 	}
 }
 
-// VerifierStreamServerInterceptor применяет ту же exact-method, mTLS и replay
-// границу к streaming RPC и передаёт проверенный context серверному stream.
+// VerifierStreamServerInterceptor applies the mTLS, exact-method and replay
+// boundary to streaming RPCs; request-bound streams also verify the initial
+// payload digest before publishing context or sending a response.
+// RU: VerifierStreamServerInterceptor применяет mTLS, точный метод и защиту от
+// replay к stream RPC; привязанные к запросу stream дополнительно проверяют
+// digest первого сообщения до публикации контекста или отправки ответа.
 func VerifierStreamServerInterceptor(
 	verifier internalrpcauthorityv1.AuthorizationVerifierServiceClient,
 	requestBoundMethods ...string,
@@ -515,13 +617,22 @@ func VerifierStreamServerInterceptor(
 	}
 }
 
+// authorizedServerStream wraps a server stream with the verified context.
+// RU: authorizedServerStream оборачивает серверный stream проверенным контекстом.
 type authorizedServerStream struct {
 	grpc.ServerStream
 	ctx context.Context
 }
 
+// Context returns the context containing verified authorization for the
+// downstream streaming handler.
+// RU: Context возвращает контекст с проверенной авторизацией downstream handler.
 func (stream *authorizedServerStream) Context() context.Context { return stream.ctx }
 
+// verifiedMTLSPeer requires a verified TLS chain and exactly one peer
+// certificate, then returns its exact SPIFFE ID and certificate digest.
+// RU: verifiedMTLSPeer требует проверенную TLS-цепь и ровно один сертификат
+// peer, затем возвращает точный SPIFFE ID и digest сертификата.
 func verifiedMTLSPeer(
 	ctx context.Context,
 ) (*internalrpcauthorityv1.DownstreamTransportPeer, error) {
@@ -547,6 +658,10 @@ func verifiedMTLSPeer(
 	}, nil
 }
 
+// exactSPIFFEID accepts only one URI SAN with a plain spiffe scheme and host;
+// user info, query, fragment and missing identity fail closed.
+// RU: exactSPIFFEID принимает один URI SAN с простыми scheme spiffe и host;
+// user info, query, fragment и отсутствие идентичности отклоняются.
 func exactSPIFFEID(certificate *x509.Certificate) (string, error) {
 	if certificate == nil || len(certificate.URIs) != 1 {
 		return "", status.Error(codes.PermissionDenied, "mTLS SPIFFE identity rejected")
