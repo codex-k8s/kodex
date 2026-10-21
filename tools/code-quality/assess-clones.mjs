@@ -42,6 +42,8 @@ export function assessClones(summary, registry) {
     summary?.generatedBy !== "tools/code-quality/summarize-report.mjs" ||
     !Array.isArray(summary.clones) ||
     typeof summary.reportSHA256 !== "string" ||
+    (summary.cloneSetSHA256 !== undefined &&
+      !/^[0-9a-f]{64}$/.test(summary.cloneSetSHA256)) ||
     registry?.version !== 1 ||
     !Array.isArray(registry.entries)
   ) {
@@ -107,6 +109,7 @@ export function assessClones(summary, registry) {
     generatedBy: "tools/code-quality/assess-clones.mjs",
     sourceSHA: summary.sourceSHA,
     reportSHA256: summary.reportSHA256,
+    cloneSetSHA256: summary.cloneSetSHA256,
     rawGroups: summary.clones.length,
     retainedGroups: resolved.size,
     unresolvedGroups: unresolved.length,

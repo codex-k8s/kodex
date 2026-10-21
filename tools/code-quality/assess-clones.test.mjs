@@ -15,6 +15,7 @@ const summary = (clones) => ({
   generatedBy: "tools/code-quality/summarize-report.mjs",
   sourceSHA: "f".repeat(40),
   reportSHA256: "b".repeat(64),
+  cloneSetSHA256: "c".repeat(64),
   clones,
 });
 const entry = (count = 2) => ({
@@ -34,6 +35,7 @@ test("keeps every exact retained occurrence and leaves new groups unresolved", (
   ]);
   const result = assessClones(report, { version: 1, entries: [entry()] });
   assert.equal(result.rawGroups, 3);
+  assert.equal(result.cloneSetSHA256, report.cloneSetSHA256);
   assert.equal(result.retainedGroups, 2);
   assert.equal(result.unresolvedGroups, 1);
   assert.deepEqual(result.retained[0].indices, [0, 1]);
@@ -66,6 +68,12 @@ test("location-only shifts remain stable while changed fragment or count fails c
 
 test("rejects duplicate, broad or unexplained decisions", () => {
   const report = summary([clone("a.yaml", "b.yaml")]);
+  assert.throws(() =>
+    assessClones({ ...report, cloneSetSHA256: "invalid" }, {
+      version: 1,
+      entries: [],
+    }),
+  );
   assert.throws(() =>
     assessClones(report, { version: 1, entries: [entry(1), entry(1)] }),
   );

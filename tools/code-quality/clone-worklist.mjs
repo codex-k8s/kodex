@@ -11,6 +11,10 @@ function fingerprint(value) {
     .digest("hex");
 }
 
+function compareText(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function checkedLocation(value) {
   if (
     !value ||
@@ -70,7 +74,9 @@ export function buildCloneWorklist(summary) {
   if (
     summary?.generatedBy !== "tools/code-quality/summarize-report.mjs" ||
     !Array.isArray(summary.clones) ||
-    typeof summary.reportSHA256 !== "string"
+    typeof summary.reportSHA256 !== "string" ||
+    (summary.cloneSetSHA256 !== undefined &&
+      !/^[0-9a-f]{64}$/.test(summary.cloneSetSHA256))
   ) {
     throw Error("A normalized detector report is required");
   }
@@ -105,7 +111,7 @@ export function buildCloneWorklist(summary) {
 
   const clusters = [];
   for (const [pair, members] of [...pairs].sort(([left], [right]) =>
-    left.localeCompare(right),
+    compareText(left, right),
   )) {
     const parent = members.map((_, index) => index);
     const find = (index) => {
@@ -128,9 +134,13 @@ export function buildCloneWorklist(summary) {
     const [format, firstPath, secondPath] = JSON.parse(pair);
     for (const component of components.values()) {
       component.sort((left, right) => left.index - right.index);
-      const indices = component.map((member) => member.index);
       clusters.push({
-        id: fingerprint([summary.reportSHA256, indices]).slice(0, 24),
+        id: fingerprint([
+          format,
+          firstPath,
+          secondPath,
+          component.map((member) => member.fingerprint).sort(compareText),
+        ]).slice(0, 24),
         format,
         first: { path: firstPath, ...interval(component, "first") },
         second: { path: secondPath, ...interval(component, "second") },
@@ -143,11 +153,11 @@ export function buildCloneWorklist(summary) {
   }
   clusters.sort(
     (left, right) =>
-      left.first.path.localeCompare(right.first.path) ||
+      compareText(left.first.path, right.first.path) ||
       left.first.start - right.first.start ||
-      left.second.path.localeCompare(right.second.path) ||
+      compareText(left.second.path, right.second.path) ||
       left.second.start - right.second.start ||
-      left.id.localeCompare(right.id),
+      compareText(left.id, right.id),
   );
   const indices = clusters.flatMap((cluster) =>
     cluster.members.map((member) => member.index),
@@ -162,6 +172,7 @@ export function buildCloneWorklist(summary) {
   return {
     generatedBy: "tools/code-quality/clone-worklist.mjs",
     reportSHA256: summary.reportSHA256,
+    cloneSetSHA256: summary.cloneSetSHA256,
     rawGroups: summary.clones.length,
     filePairs: pairs.size,
     clusters,
@@ -179,6 +190,7 @@ if (
     JSON.stringify({
       output,
       reportSHA256: result.reportSHA256,
+      cloneSetSHA256: result.cloneSetSHA256,
       rawGroups: result.rawGroups,
       filePairs: result.filePairs,
       clusters: result.clusters.length,

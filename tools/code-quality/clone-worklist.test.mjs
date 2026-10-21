@@ -13,6 +13,7 @@ const clone = (first, second) => ({
 const summary = (clones) => ({
   generatedBy: "tools/code-quality/summarize-report.mjs",
   reportSHA256: "b".repeat(64),
+  cloneSetSHA256: "c".repeat(64),
   clones,
 });
 
@@ -28,6 +29,7 @@ test("groups only materially overlapping locations on both sides", () => {
   ]);
   const result = buildCloneWorklist(report);
   assert.equal(result.rawGroups, 7);
+  assert.equal(result.cloneSetSHA256, report.cloneSetSHA256);
   assert.equal(result.filePairs, 3);
   assert.equal(result.clusters.length, 5);
   assert.deepEqual(
@@ -42,12 +44,27 @@ test("groups only materially overlapping locations on both sides", () => {
     200,
   );
   assert.deepEqual(buildCloneWorklist(report), result);
+  assert.deepEqual(
+    buildCloneWorklist({ ...report, reportSHA256: "d".repeat(64) }).clusters.map(
+      (cluster) => cluster.id,
+    ),
+    result.clusters.map((cluster) => cluster.id),
+  );
+  assert.deepEqual(
+    buildCloneWorklist({ ...report, clones: [...report.clones].reverse() }).clusters.map(
+      (cluster) => cluster.id,
+    ),
+    result.clusters.map((cluster) => cluster.id),
+  );
   assert.equal(JSON.stringify(result).includes("fragmentSHA256"), false);
 });
 
 test("rejects malformed locations and summaries before writing a worklist", () => {
   assert.throws(() =>
     buildCloneWorklist({ ...summary([]), generatedBy: "other" }),
+  );
+  assert.throws(() =>
+    buildCloneWorklist({ ...summary([]), cloneSetSHA256: "invalid" }),
   );
   assert.throws(() =>
     buildCloneWorklist(
