@@ -2024,6 +2024,14 @@
       "fragmentSHA256": "68f7725bd96ba2b6331f133cce53c185999c0ce932afed5c74ff3b8bd99d78ad",
       "count": 1,
       "reason": "После выноса общей подготовки providerWebSocketEndpoint совпадает лишь короткая оболочка двух тестовых goroutine: принять локальный peer, создать TLS server, прочитать HTTP request. Один сценарий доказывает точность базового WebSocket handshake и кадров, другой — согласование deflate и передачу сжатых кадров. Общий callback скрывал бы отдельные проверки и terminal-пути ради нескольких строк инфраструктуры; сохраняется только это точное окно."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/egress-gateway/internal/gateway/http_proxy_test.go",
+      "secondPath": "services/external/egress-gateway/internal/gateway/provider_proxy_test.go",
+      "fragmentSHA256": "a1a5071593e6af000c971f862fb093a59dcafed82e97d49045015d4c92bc62f5",
+      "count": 1,
+      "reason": "Совпадает короткий вход в синтетическую upstream goroutine: принять peer, поднять TLS и прочитать HTTP-запрос. Первый тест проверяет обычный POST с телом и ответом 201, второй — независимость provider POST от пользовательского read-only и немедленную выдачу SSE. Общий callback ради подготовки peer скрыл бы различное управление телом, ответом и завершением; сохраняется только это точное окно, не весь файл."
     }
   ]
 }

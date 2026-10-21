@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.56.0
+version: 1.57.0
 updated: 2026-10-21
 ---
 
@@ -1670,3 +1670,36 @@ Go-реестр: 1929/21030, непокрыты 19101; build/unit всего egr
 пять ignore-boundaries, `gofmt` и `git diff --check` — PASS LOCAL.
 Полный `go-docs -check` и browser/deploy/live — NOT RUN по прежним
 границам. Точный scan нового коммита будет опубликован в текущем PR.
+
+## Пятьдесят девятая волна — HTTP proxy и discovery fixtures
+
+На точном запушенном SHA `6650b0dd0ff37bb694cdcb90e5dc5f15434f92c3`
+анализ подтвердил 6531 собственный файл, 222 исключения, 1881 raw-группу,
+301 точное решение и 1580 неразобранных; сырой SHA-256 —
+`fc6619d20558eccfd5f1607a0a4813b7d350413c9db428daaa93e2fcd4b10362`,
+отпечаток набора —
+`431cccb39f11586ad1fee9c4fc1ebb12a405c0fbaab27317b58955eeb754cfe2`.
+Go-реестр: 1944/21030, непокрыты 19086; build/unit всего egress-gateway
+на этом SHA — PASS LOCAL.
+
+Все 23 собственных объявления `gateway/http_proxy_test.go` документированы
+предметными EN→RU комментариями: точные маршруты discovery, ограниченные
+диагностические метки, преобразование HTTP/2→HTTP/1, сохранение тела и
+ошибок потока, TLS fixtures и ранний отказ write. Один обнаруженный
+cross-test clone с provider SSE сохранён точным решением: совпадает лишь
+оболочка приёма synthetic TLS upstream, а тесты проверяют разные тела,
+ответы и terminal-пути. Исключены только точные пути и fragment SHA-256,
+не файлы целиком. Тестовые условия и runtime-код не менялись.
+
+Рабочий detector: 6531 собственный файл, 222 исключения, 1881 raw-группа,
+302 точных решения и 1579 неразобранных; сырой SHA-256 —
+`5a2d29fc25371a670acd4efb7b547a73b7c4fd6e422091989f9f25fb96aaa044`,
+отпечаток набора —
+`9912d1cce5f597a97ebe5014fdd748c7524ea667c2c89a1d2a1186060a43c6ac`.
+Сравнение fragment SHA-256 и путей: новых либо исчезнувших групп нет,
+различается только расположение после комментариев. Go-реестр: 1967/21030,
+непокрыты 19063. `go test -count=1 ./...` и `go build ./...` всего
+egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
+PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
+по прежним границам. Точный scan нового коммита будет опубликован в
+текущем PR.
