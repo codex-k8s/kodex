@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+// TestManifestRequiresCompleteExactReceipts rejects backup objects without an exact version after valid readback.
+// RU: TestManifestRequiresCompleteExactReceipts отклоняет объекты без точной версии после успешной проверки манифеста.
 func TestManifestRequiresCompleteExactReceipts(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
@@ -31,6 +33,8 @@ func TestManifestRequiresCompleteExactReceipts(t *testing.T) {
 	}
 }
 
+// TestManifestRejectsAnUnboundedOrMisrepresentedConsistencyWindow rejects unsupported claims and out-of-window snapshots.
+// RU: TestManifestRejectsAnUnboundedOrMisrepresentedConsistencyWindow отклоняет неподдерживаемую модель и снимки вне окна.
 func TestManifestRejectsAnUnboundedOrMisrepresentedConsistencyWindow(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
@@ -56,6 +60,8 @@ func TestManifestRejectsAnUnboundedOrMisrepresentedConsistencyWindow(t *testing.
 	}
 }
 
+// TestRequestDigestBindsFieldPositions verifies that swapping approval and restore fields changes the digest.
+// RU: TestRequestDigestBindsFieldPositions проверяет смену дайджеста при перестановке полей подтверждения и восстановления.
 func TestRequestDigestBindsFieldPositions(t *testing.T) {
 	t.Parallel()
 	first := RequestDigest("approval", "restore", "20260828T120000Z-0123456789abcdef", "sha256:"+strings.Repeat("a", 64))
