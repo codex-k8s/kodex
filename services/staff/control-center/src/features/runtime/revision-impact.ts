@@ -21,6 +21,41 @@ import {
   requireRuntimeOrganizationRef,
 } from "./resource-scope";
 const positive = (value: number) => Number.isSafeInteger(value) && value > 0;
+type ReboundBinding = RuntimeEnvironmentRebindResult["bindings"][number];
+type BindingTarget = Pick<
+  ReboundBinding,
+  "environmentRef" | "versionRef" | "digest"
+>;
+
+function impactQuery(
+  pageToken: string | undefined,
+  query: string,
+  pageSize: number,
+) {
+  const normalizedQuery = query.trim();
+  return {
+    pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
+    ...(pageToken ? { pageToken } : {}),
+    ...(normalizedQuery ? { query: normalizedQuery } : {}),
+  };
+}
+
+function matchesBindingReceipt(
+  binding: ReboundBinding,
+  previous: RuntimeEnvironmentConsumer | undefined,
+  target: BindingTarget,
+): boolean {
+  return (
+    !!previous &&
+    binding.ref === previous.bindingRef &&
+    positive(binding.version) &&
+    binding.version > previous.bindingVersion &&
+    binding.environmentRef === target.environmentRef &&
+    binding.versionRef === target.versionRef &&
+    binding.digest === target.digest
+  );
+}
+
 function headers(value: MutationHeaders) {
   if (!value["If-Match"])
     throw new Error("Revision impact version is required");
@@ -84,11 +119,7 @@ export async function readEnvironmentImpact(
     await unwrap(
       getRuntimeEnvironmentImpact({
         path: { environmentRef, versionRef },
-        query: {
-          pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
-          ...(pageToken ? { pageToken } : {}),
-          ...(query.trim() ? { query: query.trim() } : {}),
-        },
+        query: impactQuery(pageToken, query, pageSize),
         signal: requestSignal(signal),
       }),
     )
@@ -149,15 +180,11 @@ export async function applyEnvironmentRebind(
       consumers.length ||
     result.bindings.some((binding) => {
       const old = consumers.find((item) => item.agentRef === binding.agentRef);
-      return (
-        !old ||
-        binding.ref !== old.bindingRef ||
-        !positive(binding.version) ||
-        binding.version <= old.bindingVersion ||
-        binding.environmentRef !== impact.environmentRef ||
-        binding.versionRef !== impact.targetVersionRef ||
-        binding.digest !== impact.targetDigest
-      );
+      return !matchesBindingReceipt(binding, old, {
+        environmentRef: impact.environmentRef,
+        versionRef: impact.targetVersionRef,
+        digest: impact.targetDigest,
+      });
     })
   )
     throw new Error("Environment rebind receipt mismatch");
@@ -177,11 +204,7 @@ export async function readSecretImpact(
     await unwrap(
       getRuntimeSecretImpact({
         path: { secretRef, revision },
-        query: {
-          pageSize: Math.min(100, Math.max(1, Math.floor(pageSize))),
-          ...(pageToken ? { pageToken } : {}),
-          ...(query.trim() ? { query: query.trim() } : {}),
-        },
+        query: impactQuery(pageToken, query, pageSize),
         signal: requestSignal(signal),
       }),
     )
@@ -335,12 +358,7 @@ export async function applySecretRebind(
     if (
       !old ||
       !environment ||
-      binding.ref !== old.bindingRef ||
-      !positive(binding.version) ||
-      binding.version <= old.bindingVersion ||
-      binding.environmentRef !== environment.environmentRef ||
-      binding.versionRef !== environment.versionRef ||
-      binding.digest !== environment.digest
+      !matchesBindingReceipt(binding, old, environment)
     )
       throw new Error("Secret binding receipt mismatch");
   }
