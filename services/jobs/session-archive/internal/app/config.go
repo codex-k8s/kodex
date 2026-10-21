@@ -13,10 +13,16 @@ import (
 )
 
 const (
-	serviceName          = "session-archive"
+	// serviceName identifies the controller workload in RPC authorization and telemetry.
+	// RU: serviceName определяет рабочий процесс контроллера в авторизации RPC и telemetry.
+	serviceName = "session-archive"
+	// exactWorkerNamespace fixes the only namespace allowed for archive worker resources.
+	// RU: exactWorkerNamespace задаёт единственное допустимое пространство ресурсов worker архива.
 	exactWorkerNamespace = "kodex-runtime"
 )
 
+// Config holds owner RPC transport, Kubernetes worker, object-storage and lifecycle configuration.
+// RU: Config содержит настройки owner RPC транспорта, Kubernetes-worker, объектного хранилища и жизненного цикла.
 type Config struct {
 	RPCProfile                      string        `env:"KODEX_RPC_PROFILE"`
 	Environment                     string        `env:"SESSION_ARCHIVE_ENVIRONMENT"`
@@ -46,6 +52,8 @@ type Config struct {
 	WorkerTimeout                   time.Duration `env:"SESSION_ARCHIVE_WORKER_TIMEOUT"`
 }
 
+// loadConfig applies deployment defaults, parses environment variables and validates the resulting controller settings.
+// RU: loadConfig задаёт настройки развёртывания по умолчанию, читает окружение и проверяет результат для контроллера.
 func loadConfig() (Config, error) {
 	value := Config{WorkerNamespace: exactWorkerNamespace, TechnicalListen: ":9090", ControlPlaneTarget: "control-plane.kodex-system.svc:8443",
 		ControlPlaneTLSServerName:   "control-plane.kodex-system.svc.cluster.local",
@@ -66,6 +74,8 @@ func loadConfig() (Config, error) {
 	return value, nil
 }
 
+// validate rejects unsupported profiles, unsafe paths, foreign worker namespaces and invalid storage or polling bounds.
+// RU: validate отклоняет неподдерживаемые профили, небезопасные пути, чужие пространства worker и неверные границы хранилища либо опроса.
 func (value Config) validate() error {
 	if value.RPCProfile != "" && value.RPCProfile != transportprofile.TrustedCluster {
 		return errors.New("session archive RPC profile is invalid")
@@ -95,6 +105,8 @@ func (value Config) validate() error {
 	return nil
 }
 
+// validObjectStorageBoundary validates endpoint shape and permits plaintext only for an explicitly selected exact local service.
+// RU: validObjectStorageBoundary проверяет форму адреса и допускает открытый транспорт лишь для явно выбранного точного локального сервиса.
 func validObjectStorageBoundary(config Config) bool {
 	endpoint, err := url.Parse(config.ObjectStorageEndpoint)
 	if err != nil || endpoint == nil {

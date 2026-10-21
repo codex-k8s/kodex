@@ -9,6 +9,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestArchiveReadinessRequiresSuccessfulOwnerRPC verifies readiness loss and recovery from the working claim RPC outcome.
+// RU: TestArchiveReadinessRequiresSuccessfulOwnerRPC проверяет потерю и восстановление готовности по результату рабочего claim RPC.
 func TestArchiveReadinessRequiresSuccessfulOwnerRPC(t *testing.T) {
 	readiness := serviceruntime.NewReadiness()
 	metrics := sharedobservability.NewMetrics("session_archive", "synthetic", map[string]string{})

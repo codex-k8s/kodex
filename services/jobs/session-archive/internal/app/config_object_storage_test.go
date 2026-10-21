@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+// TestValidObjectStorageBoundary permits HTTPS and the exact opted-in local origin while rejecting URL escape fields.
+// RU: TestValidObjectStorageBoundary допускает HTTPS и точный включённый локальный origin, отклоняя обходы через поля URL.
 func TestValidObjectStorageBoundary(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -33,6 +35,8 @@ func TestValidObjectStorageBoundary(t *testing.T) {
 	}
 }
 
+// TestConfigRejectsInsecureLocalOptInInProduction rejects the local-insecure flag even with an HTTPS production endpoint.
+// RU: TestConfigRejectsInsecureLocalOptInInProduction отклоняет локальный небезопасный флаг даже с production-адресом HTTPS.
 func TestConfigRejectsInsecureLocalOptInInProduction(t *testing.T) {
 	t.Parallel()
 	config := Config{
@@ -53,6 +57,8 @@ func TestConfigRejectsInsecureLocalOptInInProduction(t *testing.T) {
 	}
 }
 
+// TestConfigRejectsWorkerNamespaceOutsideRuntimeBoundary forbids worker placement outside the fixed runtime namespace.
+// RU: TestConfigRejectsWorkerNamespaceOutsideRuntimeBoundary запрещает размещать worker вне фиксированного пространства runtime.
 func TestConfigRejectsWorkerNamespaceOutsideRuntimeBoundary(t *testing.T) {
 	t.Parallel()
 	config := validTestConfig()
@@ -62,6 +68,8 @@ func TestConfigRejectsWorkerNamespaceOutsideRuntimeBoundary(t *testing.T) {
 	}
 }
 
+// validTestConfig creates a synthetic staging controller configuration for isolated validation tests.
+// RU: validTestConfig создаёт синтетические staging-настройки контроллера для изолированных тестов валидации.
 func validTestConfig() Config {
 	return Config{
 		Environment: "staging", WorkerNamespace: exactWorkerNamespace, InstanceID: "instance-1",

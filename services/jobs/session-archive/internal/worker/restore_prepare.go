@@ -9,12 +9,16 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// restoreTaskFile is the fixed controller-mounted immutable task used by the non-root restore preparer.
+// RU: restoreTaskFile задаёт фиксированное неизменяемое задание от контроллера для non-root подготовки восстановления.
 const restoreTaskFile = "/var/run/config/kodex/session-archive/task.json"
 
+// errRestorePreparation hides which identity, path or directory-ownership invariant rejected preparation.
+// RU: errRestorePreparation скрывает конкретную причину отказа идентичности, пути либо владельца каталога при подготовке.
 var errRestorePreparation = errors.New("session restore directory preparation is invalid")
 
-// PrepareRestore создаёт только корень Codex home от доверенного UID init.
-// Authority, archive receipt и filesystem paths не выбираются через CLI/env.
+// PrepareRestore uses fixed paths and the trusted init UID to create and verify only the shared Codex home directory.
+// RU: PrepareRestore использует фиксированные пути и доверенный UID init для создания и проверки лишь общего каталога Codex home.
 func PrepareRestore(ctx context.Context) error {
 	if os.Geteuid() != 10001 || ctx.Err() != nil {
 		return errRestorePreparation
@@ -60,6 +64,8 @@ func PrepareRestore(ctx context.Context) error {
 	return nil
 }
 
+// validateRestorePreparationTask accepts only a valid RESTORE task with identical task and archive source metadata.
+// RU: validateRestorePreparationTask принимает лишь корректное RESTORE-задание с одинаковыми метаданными источника в задании и архиве.
 func validateRestorePreparationTask(task model.Task) error {
 	if task.Validate() != nil || task.Kind != "RESTORE" || task.Archive == nil ||
 		task.Archive.SourceRelativePath != task.SourceRelativePath ||

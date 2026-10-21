@@ -50,10 +50,10 @@ func RequireLoopbackHTTPEndpoint(t testing.TB, raw, prefix string) string {
 	return raw
 }
 
-// readE2ECredential accepts only an absolute regular private-mode file, reads at most 16 KiB,
-// trims surrounding space and clears the mutable raw byte buffer before returning.
-// RU: readE2ECredential принимает лишь абсолютный regular file с закрытым режимом, читает
-// не более 16 КиБ, обрезает внешние пробелы и очищает изменяемый буфер байтов перед возвратом.
+// readE2ECredential accepts only an absolute regular private-mode file with at most 16 KiB of content,
+// then trims surrounding space and clears the mutable buffer after converting accepted bytes.
+// RU: readE2ECredential принимает лишь абсолютный regular file с закрытым режимом и содержимым до 16 КиБ,
+// затем обрезает внешние пробелы и очищает изменяемый буфер после преобразования принятых байтов.
 func readE2ECredential(path string) (string, credentialFailure) {
 	info, err := os.Lstat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 ||

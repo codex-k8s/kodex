@@ -17,6 +17,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 )
 
+// config holds the task/workspace mounts, protected storage credentials and bounded worker execution settings.
+// RU: config хранит пути задания и workspace, защищённые реквизиты хранилища и ограниченные настройки выполнения worker.
 type config struct {
 	Environment        string        `env:"DEPLOYMENT_ENVIRONMENT"`
 	TaskFile           string        `env:"SESSION_ARCHIVE_TASK_FILE"`
@@ -32,6 +34,8 @@ type config struct {
 	Timeout            time.Duration `env:"SESSION_ARCHIVE_WORKER_TIMEOUT"`
 }
 
+// Run validates one mounted task, opens object storage and writes a bounded result for its supported archive action.
+// RU: Run проверяет смонтированное задание, открывает объектное хранилище и пишет ограниченный результат поддерживаемого действия архива.
 func Run(lifecycle context.Context) error {
 	configuration := config{TaskFile: "/var/run/config/kodex/session-archive/task.json", Workspace: "/workspace",
 		ResultFile: "/dev/termination-log", Region: "us-east-1", Bucket: "kodex-session-archives", UsePathStyle: true,
@@ -83,6 +87,8 @@ func Run(lifecycle context.Context) error {
 	return writeResult(configuration.ResultFile, result)
 }
 
+// validateConfig checks canonical absolute paths, deployment environment, storage boundary and execution timeout.
+// RU: validateConfig проверяет канонические абсолютные пути, среду развёртывания, границу хранилища и timeout выполнения.
 func validateConfig(value config) error {
 	for _, path := range []string{value.TaskFile, value.Workspace, value.ResultFile, value.AccessKeyFile, value.SecretKeyFile} {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
@@ -99,6 +105,8 @@ func validateConfig(value config) error {
 	return nil
 }
 
+// validObjectStorageBoundary permits HTTPS or the explicitly opted-in exact staging SeaweedFS endpoint.
+// RU: validObjectStorageBoundary допускает HTTPS либо явно включённый точный staging-адрес SeaweedFS.
 func validObjectStorageBoundary(value config) bool {
 	endpoint, err := url.Parse(value.Endpoint)
 	if err != nil || endpoint == nil || endpoint.Host == "" || endpoint.User != nil ||
@@ -110,6 +118,8 @@ func validObjectStorageBoundary(value config) bool {
 	return endpoint.Scheme == "https" || localInsecure
 }
 
+// readSecret trims size-checked credential bytes, clears the conversion buffer and rejects empty or multiline values.
+// RU: readSecret обрезает реквизит после проверки размера байтов, очищает буфер преобразования и отклоняет пустые либо многострочные значения.
 func readSecret(path string) (string, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil || len(raw) == 0 || len(raw) > 16<<10 {
@@ -125,11 +135,15 @@ func readSecret(path string) (string, error) {
 	return value, nil
 }
 
+// writeFailure writes a closed result/stage while returning the original failure joined with any result-write error.
+// RU: writeFailure записывает закрытые результат и этап, возвращая исходный отказ вместе с возможной ошибкой записи результата.
 func writeFailure(path, code string, cause error) error {
 	writeErr := writeResult(path, model.Result{Success: false, SafeErrorCode: code, FailureStage: archive.ClassifyFailureStage(cause)})
 	return errors.Join(fmt.Errorf("session archive worker failed: %w", cause), writeErr)
 }
 
+// writeResult serializes at most four KiB of worker outcome JSON into the configured termination file.
+// RU: writeResult сериализует не более четырёх КиБ JSON-результата worker в настроенный файл завершения.
 func writeResult(path string, result model.Result) error {
 	raw, err := json.Marshal(result)
 	if err != nil || len(raw) > 4<<10 {

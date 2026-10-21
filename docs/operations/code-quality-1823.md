@@ -4,8 +4,8 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.132.0
-updated: 2026-10-21
+version: 1.133.0
+updated: 2026-10-22
 ---
 
 # Подготовка кода к построчному ревью
@@ -1703,6 +1703,41 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто тридцать третья волна — завершение Go-документации session-archive
+
+На опубликованном SHA `e94ec0ae027483895018d5db51ec22c3c8ce7809`
+анализ показывал 6536 собственных файлов, 222 исключения, 1876
+raw-групп, 552 адресных решения и 1324 неразобранных; Go-реестр:
+4063/21062, непокрыты 16999. Последние 74 объявления session-archive
+в `cmd`, `app` и `worker` получили предметные EN→RU комментарии.
+Описаны явные режимы запуска, fixed-path/non-root подготовка Codex home,
+границы endpoint и принятого credential value, рабочий owner RPC для
+readiness, lease/fence/generation terminal-команд, закрытые метрики и
+безопасная диагностика. Весь deployable теперь покрыт: 234/234 собственных
+объявления, 0 пропусков.
+
+Уточнён ранее добавленный комментарий `objectstoragetest.readE2ECredential`:
+реализация ограничивает принимаемый размер после чтения файла, поэтому
+пояснение больше не приписывает ей ограниченное файловое чтение. Код
+предохранителя и проверяемое поведение не менялись. Эта волна меняет
+только комментарии и форматирование деклараций.
+
+Build и `go test -count=1 ./...` всего session-archive и
+`libs/go/objectstorage` с Go1.26.6, `gofmt` и `git diff --check` — PASS LOCAL.
+Отдельные kernel/UID/full-ABI, SeaweedFS E2E, browser/deploy/live — NOT RUN.
+
+Полный detector сохранил 6536 собственных файлов, 222 исключения,
+1876 raw-групп, 552 адресных решения и 1324 неразобранных; сырой SHA-256 —
+`b9c7eb7ddd48d8b79deccfa82ac57396e13c2bef5729e0a482b358cdc497f975`,
+отпечаток набора —
+`60f8b67ce3db4efd2ef083bf78dec12114f97e40104d443c25543d0a1bc87a77`.
+Сравнение exact path pairs/fragment SHA-256 не выявило новых либо исчезнувших
+групп; изменились только позиции после комментариев. Go-реестр:
+4137/21062, непокрыты 16925. Полный `go-docs -check` — NOT RUN при
+известном неполном покрытии. Среди следующих неразобранных повторов —
+проверки object-storage endpoint в конфигурациях control-plane/session-archive;
+их policy и environment-условия требуют отдельного сравнения до выноса.
 
 ## Сто тридцать вторая волна — Kubernetes-контроллер архива
 

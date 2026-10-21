@@ -11,8 +11,12 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/worker"
 )
 
+// version is replaced at build time with the archive binary's release identifier.
+// RU: version заменяется при сборке идентификатором выпуска бинарного файла архива.
 var version = "dev"
 
+// main owns root and signal contexts and dispatches the explicit controller, worker or restore-preparation mode.
+// RU: main владеет корневым и сигнальным контекстами и выбирает явный режим контроллера, worker либо подготовки восстановления.
 func main() {
 	background := context.Background()
 	lifecycle, stop := signal.NotifyContext(background, syscall.SIGINT, syscall.SIGTERM)
