@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.97.0
+version: 1.98.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,34 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сотая волна — номинальные границы context resource API
+
+На точном запушенном SHA `ee3933c44cdd6b72127f0c8daee4d77cdee31778`
+детектор подтвердил 6532 собственных файла, 222 исключения, 1867 raw-групп,
+464 точных решения и 1403 неразобранных; сырой SHA-256 —
+`a45df499c498a71db1e85be4eecf1da31761b932aa144e4420741a2477cedd38`,
+отпечаток набора —
+`867efe5c8c3b929cb806ab74bf785be42a98e36ac1b1f098cabd395f3189afd6`.
+Go-реестр: 3133/21049, непокрыты 17916.
+
+Проверены четыре точных self-clone окна
+`control-api-gateway/internal/transport/http/context_resource_endpoints.go`.
+Здесь повторяется transport-оболочка двух номинально разных API:
+SkillBundle и MemoryRecord. Общие проверки reference/mutation/binding/page
+уже вынесены, но сами Archive/Restore/Purge, Bind/Unbind и typed list/read
+должны вызывать отдельные owner RPC и сохранять разные eligibility и
+redaction. Универсальный CRUD-dispatch расширил бы или скрыл authority
+границу. Для каждого окна записано адресное решение по file pair и fragment
+SHA-256; исходники, wire и поведение не менялись.
+
+Рабочая оценка того же raw-отчёта: 1867 raw-групп, 468 точных решений и
+1399 неразобранных; исходный SHA-256 и clone-set fingerprint не изменились.
+`assess-clones.mjs` со строгой сверкой всего реестра, все 16 unit-тестов
+инструментов и `git diff --check` — PASS LOCAL. Go build/unit не повторялись,
+поскольку исходники не менялись. Полный `go-docs -check` и
+browser/deploy/live — NOT RUN.
+После коммита будет выполнен точный readback текущего PR.
 
 ## Девяносто девятая волна — единая fixture repository помощника
 

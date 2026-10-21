@@ -3160,6 +3160,38 @@
       "fragmentSHA256": "0526a666d8c64fa6a5df65f3e7494b233d45d2e91900d9dbce5e242bea49711a",
       "count": 1,
       "reason": "Эти два автономных HTML-макета (project-a-workboard-desktop.html и project-c-run-kanban-desktop.html) фиксируют самостоятельные визуальные состояния для открытия без сборки продукта. Повторяется статический каркас/оформление снимка, а не общий runtime-путь; объединение через исполняемый helper лишило бы эти проверочные артефакты независимости. Сохранено только данное точное совпадение путей и fragment SHA-256."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "fragmentSHA256": "8217addb3fa9b193c048896e839512bf7c64fd4f6a8d6bfb2be5e5028e64616a",
+      "count": 1,
+      "reason": "Большое окно сопоставляет отдельные API SkillBundle и MemoryRecord. Каждый handler вызывает собственный типизированный owner RPC и проверяет номинальную форму ресурса; memory view дополнительно сохраняет redaction, а bundle view — свой revision. Общие проверки reference, mutation, binding и page уже вынесены в узкие helpers; универсальный CRUD-dispatch смешал бы разные owner commands и eligibility. Сохраняется только это точное окно."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "fragmentSHA256": "110e578d3eda48a16d9c1b52f78ab68e40af57f2b1921e231b18df0490963ca3",
+      "count": 1,
+      "reason": "Соседние Archive/Restore/Purge SkillBundle имеют одинаковую transport-оболочку, но три отдельные lifecycle-команды владельца и разные terminal эффекты. Входная проверка уже общая через requireContextResourceMutation; объединение command selection в универсальный handler скрыло бы специализированный RPC и изменило бы проверяемую границу перехода. Исключено только точное пересечение этих строк."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "fragmentSHA256": "7a7f706cc680e219fcedb90ab25a2db1dda82069507a4441edacc22452649df1",
+      "count": 1,
+      "reason": "BindAgentSkillBundle и UnbindAgentSkillBundle используют одну уже вынесенную проверку binding tuple, но вызывают разные owner-команды с самостоятельными условиями создания и снятия привязки. Совпадение transport-каркаса не разрешает общий write-метод; ответ каждого RPC проверяется на точный agent/resource/revision. Оставлено только данное окно."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "secondPath": "services/external/control-api-gateway/internal/transport/http/context_resource_endpoints.go",
+      "fragmentSHA256": "bc5c26ecbd5c4616e0d956c2ff10b069673a44006b2cf000097dc52e35bc35b7",
+      "count": 1,
+      "reason": "В ListSkillBundles и ListSkillBundleRevisions совпадает проверка page и накопление ref, однако первый ответ сверяет project scope каждого bundle, а второй — форму отдельной revision без project override. Общие bounds уже задаёт validContextPageResponse; слияние отображения typed views могло бы пропустить различие eligibility. Сохранено лишь это точное окно."
     }
   ]
 }
