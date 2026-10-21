@@ -12,10 +12,18 @@ import (
 )
 
 const (
-	serviceName      = "automation-scheduler"
+	// serviceName selects the protected RPC workload identity and telemetry service label.
+	// RU: serviceName задаёт identity защищённого RPC workload и метку сервиса в телеметрии.
+	serviceName = "automation-scheduler"
+	// metricsSubsystem names the service-specific metrics namespace in shared telemetry.
+	// RU: metricsSubsystem именует подсистему сервисных метрик в общей телеметрии.
 	metricsSubsystem = "automation_scheduler"
 )
 
+// Config contains the scheduler's validated endpoints, credential paths and bounded lifecycle
+// budgets; it carries no permission to mutate an occurrence without a fresh owner claim.
+// RU: Config содержит проверенные адреса, пути реквизитов и ограниченные бюджеты жизненного цикла;
+// сама по себе она не разрешает изменение occurrence без свежего claim владельца.
 type Config struct {
 	RPCProfile                  string        `env:"KODEX_RPC_PROFILE"`
 	Environment                 string        `env:"DEPLOYMENT_ENVIRONMENT"`
@@ -35,6 +43,10 @@ type Config struct {
 	DueLimit                    int           `env:"AUTOMATION_SCHEDULER_DUE_LIMIT"`
 }
 
+// loadConfig applies pinned defaults, parses the scheduler environment once and rejects an
+// unusable configuration before listeners or polling workers are started.
+// RU: loadConfig применяет закреплённые значения, один раз читает окружение планировщика и
+// отклоняет недопустимую конфигурацию до запуска listeners и работников опроса.
 func loadConfig() (Config, error) {
 	config := Config{
 		TechnicalListen:             ":9090",
@@ -61,6 +73,10 @@ func loadConfig() (Config, error) {
 	return config, nil
 }
 
+// validate permits only the empty or trusted-cluster RPC profile and enforces TLS hostname shape,
+// absolute clean credential paths and bounded timing, batch and instance settings.
+// RU: validate допускает только пустой профиль RPC или профиль доверенного кластера и проверяет
+// форму TLS-имени, абсолютные нормализованные пути и границы сроков, партии и реплики.
 func (config Config) validate() error {
 	if config.RPCProfile != "" && config.RPCProfile != transportprofile.TrustedCluster {
 		return errors.New("automation-scheduler RPC profile is invalid")

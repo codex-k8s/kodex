@@ -24,10 +24,18 @@ import (
 )
 
 const (
+	// issuerUID is the expected Unix owner of the local application-grant issuer process.
+	// RU: issuerUID задаёт ожидаемого Unix-владельца локального издателя application grant.
 	issuerUID = 29001
+	// issuerGID is the expected Unix group of the local application-grant issuer process.
+	// RU: issuerGID задаёт ожидаемую Unix-группу локального издателя application grant.
 	issuerGID = 29000
 )
 
+// Run composes telemetry, a protected control-plane client and technical HTTP before starting
+// the polling worker; it stops workers and the listener before bounded, independent telemetry cleanup.
+// RU: Run собирает телеметрию, защищённый клиент control plane и технический HTTP до запуска
+// опроса; при завершении останавливает работников и listener до независимой ограниченной очистки телеметрии.
 func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultErr error) {
 	config, err := loadConfig()
 	if err != nil {
@@ -96,6 +104,8 @@ func Run(lifecycle, shutdownBase context.Context, buildVersion string) (resultEr
 	return errors.Join(err, shutdownErr)
 }
 
+// serveTechnical owns the HTTP Serve goroutine and joins it after a bounded shutdown on cancellation.
+// RU: serveTechnical владеет goroutine HTTP Serve и дожидается её после ограниченной остановки при отмене.
 func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		done := make(chan error, 1)
@@ -112,6 +122,10 @@ func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
 	}
 }
 
+// runScheduleLoop repeatedly asks the owner for due work, records each cycle and logs only
+// transitions into or out of degradation; idle backoff and cancellation bound its polling.
+// RU: runScheduleLoop повторно запрашивает у владельца наступившие задачи, учитывает циклы и
+// пишет лог лишь при входе в деградацию или восстановлении; пауза и отмена ограничивают опрос.
 func runScheduleLoop(control *controlplaneclient.Client, ownedMetrics *schedulerobservability.Metrics, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		idleBackoff := serviceruntime.NewIdleBackoff(config.PollInterval, 5*time.Second)
@@ -140,15 +154,33 @@ func runScheduleLoop(control *controlplaneclient.Client, ownedMetrics *scheduler
 	}
 }
 
+// scheduleRuntimeClient is the narrow owner RPC surface needed to claim, renew, materialize or
+// fail one schedule occurrence; the scheduler itself does not own its authoritative state.
+// RU: scheduleRuntimeClient ограничивает RPC владельца получением, продлением, материализацией
+// и отказом одного occurrence; планировщик не владеет его авторитетным состоянием.
 type scheduleRuntimeClient interface {
+	// ClaimDueSchedules requests a bounded batch of owner-issued claims for this workload instance.
+	// RU: ClaimDueSchedules запрашивает ограниченную порцию назначенных владельцем claims для этой реплики.
 	ClaimDueSchedules(context.Context, *controlplanev1.ClaimDueSchedulesRequest, ...grpc.CallOption) (*controlplanev1.ClaimDueSchedulesResponse, error)
+	// RenewScheduleOccurrence confirms the same exact occurrence lease before materialization.
+	// RU: RenewScheduleOccurrence подтверждает ту же точную аренду occurrence до материализации.
 	RenewScheduleOccurrence(context.Context, *controlplanev1.RenewScheduleOccurrenceRequest, ...grpc.CallOption) (*controlplanev1.RenewScheduleOccurrenceResponse, error)
+	// MaterializeScheduleOccurrence asks the owner to create the execution under the renewed lease.
+	// RU: MaterializeScheduleOccurrence поручает владельцу создать исполнение под продлённой арендой.
 	MaterializeScheduleOccurrence(context.Context, *controlplanev1.MaterializeScheduleOccurrenceRequest, ...grpc.CallOption) (*controlplanev1.MaterializeScheduleOccurrenceResponse, error)
+	// FailScheduleOccurrence reports a closed failure for the exact occurrence and lease.
+	// RU: FailScheduleOccurrence сообщает закрытый отказ для точных occurrence и аренды.
 	FailScheduleOccurrence(context.Context, *controlplanev1.FailScheduleOccurrenceRequest, ...grpc.CallOption) (*controlplanev1.FailScheduleOccurrenceResponse, error)
 }
 
+// digestPattern accepts only a canonical lowercase SHA-256 hex digest in a schedule claim.
+// RU: digestPattern допускает в claim только канонический SHA-256 дайджест из строчных hex-символов.
 var digestPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
+// materializeDue requests successive one-claim rounds until DueLimit or an idle/error response;
+// it preserves the count completed before a later failure without hiding that failure.
+// RU: materializeDue запрашивает по одному claim до DueLimit, пустого ответа или ошибки;
+// сохраняет число завершённых до отказа, не скрывая сам отказ.
 func materializeDue(ctx context.Context, control scheduleRuntimeClient, metrics *schedulerobservability.Metrics, config Config) (int, error) {
 	processed := 0
 	for processed < config.DueLimit {
@@ -161,6 +193,10 @@ func materializeDue(ctx context.Context, control scheduleRuntimeClient, metrics 
 	return processed, nil
 }
 
+// materializeOne requests one owner claim, then validates and renews every claim returned before
+// asking the owner to materialize it with an occurrence/generation-scoped idempotency key.
+// RU: materializeOne запрашивает один claim владельца, затем проверяет и продлевает каждый
+// полученный claim до материализации с ключом идемпотентности occurrence/generation.
 func materializeOne(ctx context.Context, control scheduleRuntimeClient, metrics *schedulerobservability.Metrics, config Config) (int, error) {
 	rpc, cancel := context.WithTimeout(ctx, config.RPCDeadline)
 	claimed, err := control.ClaimDueSchedules(rpc, &controlplanev1.ClaimDueSchedulesRequest{WorkloadInstance: config.InstanceID, Limit: 1})
@@ -217,6 +253,10 @@ func materializeOne(ctx context.Context, control scheduleRuntimeClient, metrics 
 	return processed, nil
 }
 
+// validateScheduleClaim rejects missing version, digest or lease pins and an already expired lease
+// before the scheduler can request any materialization from the owner.
+// RU: validateScheduleClaim отклоняет отсутствующие версии, дайджесты, привязки аренды и уже
+// истёкшую аренду до запроса материализации у владельца.
 func validateScheduleClaim(claim *controlplanev1.ScheduleClaim, now time.Time) error {
 	if claim == nil || claim.GetSchedule() == nil || claim.GetSchedule().GetRef() == "" || claim.GetSchedule().GetVersion() < 1 ||
 		claim.GetOccurrenceRef() == "" || claim.GetScheduledFor() == nil || claim.GetScheduledFor().CheckValid() != nil ||
@@ -235,12 +275,18 @@ func validateScheduleClaim(claim *controlplanev1.ScheduleClaim, now time.Time) e
 	return nil
 }
 
+// claimWithLease clones the owner claim before replacing its lease with the confirmed renewal.
+// RU: claimWithLease копирует claim владельца до замены аренды подтверждённым продлением.
 func claimWithLease(claim *controlplanev1.ScheduleClaim, lease *controlplanev1.WorkLease) *controlplanev1.ScheduleClaim {
 	copy := proto.Clone(claim).(*controlplanev1.ScheduleClaim)
 	copy.Lease = lease
 	return copy
 }
 
+// failScheduleOccurrence reports a safe code and retry class using the exact lease and a stable
+// failure idempotency key; the detached bounded context survives cancellation of the poll cycle.
+// RU: failScheduleOccurrence сообщает безопасный код и класс повтора с точной арендой и устойчивым
+// ключом отказа; отдельный ограниченный контекст переживает отмену цикла опроса.
 func failScheduleOccurrence(ctx context.Context, control scheduleRuntimeClient, claim *controlplanev1.ScheduleClaim, safeErrorCode string, retryable bool, timeout time.Duration) error {
 	lease := claim.GetLease()
 	if lease == nil {
@@ -257,6 +303,10 @@ func failScheduleOccurrence(ctx context.Context, control scheduleRuntimeClient, 
 	return err
 }
 
+// retryableRPCError maps a fixed set of cancellation, contention and server gRPC codes to the
+// owner failure report's retry flag; permission and input rejections remain non-retryable.
+// RU: retryableRPCError переводит фиксированный набор кодов отмены, конкуренции и отказа сервера
+// в признак повтора для владельца; отказы прав и входных данных не повторяются.
 func retryableRPCError(err error) bool {
 	switch status.Code(err) {
 	case codes.Aborted, codes.Canceled, codes.DeadlineExceeded, codes.Internal,
