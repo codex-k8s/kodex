@@ -3,6 +3,14 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "libs/go/eventing/postgresinbox/delivery.go",
+      "secondPath": "libs/go/eventing/postgresinbox/maintenance.go",
+      "fragmentSHA256": "355af4707396fbdd423cccb6e9c129cba2904f5a9d79c3eb3fd4472617ae09e9",
+      "count": 1,
+      "reason": "Совпадает лишь начало операторских методов: вход в живой Processor, tracing, валидация запроса и вызов уже общего authorizeOperator. ReadDeliveryOutcome разрешает точное чтение по digest без owner mutation, Repair требует отдельного подтверждённого полномочия и атомарно меняет dead-letter row с CAS и receipt. Ещё один универсальный wrapper спрятал бы разницу read/write authority и разных транзакционных переходов; сохранено только точное окно, не весь метод."
+    },
+    {
+      "format": "go",
       "firstPath": "libs/go/eventing/browserstate/store.go",
       "secondPath": "libs/go/eventing/sessionrevocation/store.go",
       "fragmentSHA256": "4cdb07f1208cacfe2f216a1257af93d29bf23e5681cfe1788bc335524f8d2dc8",

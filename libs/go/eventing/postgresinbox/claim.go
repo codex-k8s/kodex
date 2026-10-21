@@ -11,11 +11,15 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// claimDecision carries either a durable broker outcome or the exclusive lease acquired in one transaction.
+// claimDecision несёт устойчивое решение для брокера либо исключительную аренду из одной транзакции.
 type claimDecision struct {
 	result Result
 	claim  *Claim
 }
 
+// claim serializes an ordering key, rejects conflicting or premature deliveries, and fences a new lease.
+// claim сериализует ключ порядка, отклоняет конфликтные или преждевременные доставки и закрепляет новую аренду.
 func (processor *Processor) claim(
 	ctx context.Context,
 	consumer Consumer,
@@ -192,7 +196,8 @@ func (processor *Processor) claim(
 	return decision, decisionErr
 }
 
-// Renew продлевает только действующий exact claim по PostgreSQL time.
+// Renew extends only the exact active claim owned by this instance using PostgreSQL time.
+// Renew продлевает только точный действующий claim этого экземпляра по времени PostgreSQL.
 func (processor *Processor) Renew(
 	ctx context.Context,
 	claim Claim,
@@ -240,6 +245,8 @@ func (processor *Processor) Renew(
 	return expiresAt, nil
 }
 
+// validateClaim rejects malformed or unfenced lease evidence before any renewal query.
+// validateClaim отклоняет неверное или неограждённое свидетельство аренды до запроса продления.
 func validateClaim(claim Claim) error {
 	if err := claim.Consumer.validate(); err != nil {
 		return err
@@ -264,6 +271,8 @@ func validateClaim(claim Claim) error {
 	return nil
 }
 
+// claimArguments binds the full exact lease identity and duration to a strict SQL query.
+// claimArguments привязывает всю точную идентичность аренды и срок к строгому SQL-запросу.
 func claimArguments(claim Claim, leaseDuration time.Duration) pgx.StrictNamedArgs {
 	return pgx.StrictNamedArgs{
 		"consumer_name":    claim.Consumer.Name,

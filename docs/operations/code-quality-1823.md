@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.70.0
+version: 1.71.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,38 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Семьдесят третья волна — чтение и захват PostgreSQL inbox
+
+На запушенном SHA `eb2f52ef7ce436f5891aa6292186f5d7a3ffdce4`
+детектор подтвердил 6531 собственный файл, 222 исключения, 1880 raw-групп,
+345 точных решений и 1535 неразобранных; сырой SHA-256 —
+`617c5fbe4b783b27e034da228adfef546d6396459caaa726088144c1cee820b5`,
+отпечаток набора —
+`bef580e91da3d91505b684bf120eb9de8f9ce6244c09972744924d3d3b80648e`.
+Go-реестр: 2356/21033, непокрыты 18677.
+
+Семнадцать объявлений `postgresinbox/blockage.go`, `claim.go` и
+`delivery.go` получили EN→RU комментарии о точной авторизации оператора,
+порядке предшественников, lease/fence, устойчивом результате доставки и
+отказах при неверной строке. Поведение и тестовые условия не менялись.
+Одно прежнее окно начала `ReadDeliveryOutcome`/`Repair` сдвинулось из-за
+комментариев. Его новый точный хеш отдельно проверен и оставлен адресным
+решением: чтение по digest и изменение dead-letter с owner authority, CAS и
+receipt нельзя скрывать под универсальной оболочкой. Общая авторизация уже
+вынесена в `authorizeOperator`.
+
+Рабочий детектор: 6531 собственный файл, 222 исключения, 1880 raw-групп,
+346 точных решений и 1534 неразобранных; сырой SHA-256 —
+`ac0d291eded21a090a71c85739a6076f59d01c58429e87b184846aab906c4b5a`,
+отпечаток набора —
+`74797b3c4026af3e7ad926709fcc7de6b74c436c873b08689353a91d54f6a306`.
+Go-реестр: 2373/21033, непокрыты 18660. `go test -count=1 ./...` и
+`go build ./...` всего eventing-модуля, 16 unit-тестов анализатора, пять
+ignore-boundaries, `gofmt` и `git diff --check` — PASS LOCAL. Component с
+disposable PostgreSQL, полный `go-docs -check` и browser/deploy/live —
+NOT RUN по прежним границам. Точный scan нового коммита будет опубликован
+в текущем PR.
 
 ## Семьдесят вторая волна — точный контракт JetStream
 

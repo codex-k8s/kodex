@@ -8,7 +8,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// GetBlockage возвращает самый ранний blocking predecessor exact event.
+// GetBlockage reads the earliest blocking predecessor for one authorized exact event.
+// GetBlockage читает самого раннего блокирующего предшественника одного авторизованного точного события.
 func (processor *Processor) GetBlockage(
 	ctx context.Context,
 	consumer Consumer,
@@ -44,7 +45,8 @@ func (processor *Processor) GetBlockage(
 	return blockage, err
 }
 
-// ListBlockages возвращает bounded страницу самых ранних predecessors каждого key.
+// ListBlockages reads a bounded cursor page of the earliest predecessors per ordering key.
+// ListBlockages читает ограниченную страницу самых ранних предшественников каждого ключа порядка.
 func (processor *Processor) ListBlockages(
 	ctx context.Context,
 	consumer Consumer,
@@ -109,10 +111,16 @@ func (processor *Processor) ListBlockages(
 	return page, nil
 }
 
+// blockageScanner accepts either a single row or an iterator row without widening the read authority.
+// blockageScanner принимает одиночную строку или строку итератора, не расширяя полномочие чтения.
 type blockageScanner interface {
+	// Scan decodes the fixed blockage column set in database order.
+	// Scan декодирует фиксированный набор столбцов блокировки в порядке базы данных.
 	Scan(...any) error
 }
 
+// scanBlockage validates the stored row before deriving its public eligibility and key digest.
+// scanBlockage проверяет сохранённую строку до вычисления доступности и дайджеста ключа.
 func scanBlockage(scanner blockageScanner, blockage *Blockage) error {
 	var eventDigest []byte
 	var orderingKey string
@@ -155,6 +163,8 @@ func scanBlockage(scanner blockageScanner, blockage *Blockage) error {
 	return nil
 }
 
+// blockageEligibility prioritizes terminal repair, predecessors, leases, and backoff over replay.
+// blockageEligibility ставит исправление, предшественников, аренду и задержку выше повторного запуска.
 func blockageEligibility(
 	blockage Blockage,
 	availableNow bool,
@@ -175,6 +185,8 @@ func blockageEligibility(
 	return BlockageReplayRequired
 }
 
+// validBlockageState restricts operator reads to the four blocking inbox states.
+// validBlockageState ограничивает операторское чтение четырьмя состояниями блокирующего inbox.
 func validBlockageState(state string) bool {
 	return state == stateReceived || state == stateProcessing ||
 		state == stateRetry || state == stateDeadLetter
