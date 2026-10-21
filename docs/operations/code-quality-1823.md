@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.67.0
+version: 1.68.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,32 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Семидесятая волна — общий порядок дайджеста действий оператора
+
+На запушенном SHA `9b8c68dc40d336eb4ee7c41ebe8bdf67e0ea2a80`
+детектор подтвердил 6531 собственный файл, 222 исключения, 1881 raw-группу,
+344 точных решения и 1537 неразобранных; сырой SHA-256 —
+`159749939304579c063bb408605fe93d571aefab85d6e52e32cf773e00c62e0d`.
+Go-реестр: 2245/21030, непокрыты 18785.
+
+В `libs/go/eventing/postgresinbox/identity.go` две почти одинаковые функции
+repair/recovery digest сведены к одному приватному кодировщику с явным
+`OperatorAction` и типизированным набором прежних полей. Отдельные функции
+repair и recovery сохранены, порядок сериализации authority, action,
+consumer, event digest, generation/fence, reason и evidence не менялся;
+ключ caller по-прежнему не включается. Unit-тест закрепляет различие
+доменов действий и исключение caller key из recovery digest.
+
+Рабочий детектор: 6531 собственный файл, 222 исключения, 1880 raw-групп,
+344 точных решения и 1536 неразобранных; сырой SHA-256 —
+`842344795f7b9cdeb06e03348c5bdaa2ff2cb0ba4a6e7d5d39583677ff556958`.
+Сравнение всех ключей `format/kind/fragmentSHA256/first.path/second.path`
+показало ровно одно исчезнувшее совпадение и ни одного нового. Go-реестр:
+2253/21033, непокрыты 18780. `go test -count=1 ./...` и
+`go build ./...` всего eventing-модуля, `gofmt`, `git diff --check` —
+PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN.
+Точный scan нового коммита будет опубликован в текущем PR.
 
 ## Шестьдесят девятая волна — точные SQL-границы
 

@@ -74,39 +74,55 @@ func buildOrderingKey(envelope eventing.Envelope) (string, error) {
 	return string(encoded), nil
 }
 
+// repairRequestDigest binds a repair attempt to its server-authorized actor and immutable evidence.
+// repairRequestDigest связывает попытку исправления с разрешённым сервером actor и неизменяемым доказательством.
 func repairRequestDigest(request RepairRequest, authority OperatorAuthority) [sha256.Size]byte {
-	hash := sha256.New()
-	writeAuthorityDigest(hash, authority)
-	writeDigestPart(hash, string(OperatorActionRepair))
-	writeDigestPart(hash, request.Consumer.Name)
-	writeDigestPart(hash, request.Consumer.Scope)
-	writeDigestPart(hash, request.EventID)
-	hash.Write(request.EventDigest[:])
-	var numbers [16]byte
-	binary.BigEndian.PutUint64(numbers[:8], request.ExpectedGeneration)
-	binary.BigEndian.PutUint64(numbers[8:], request.ExpectedFence)
-	hash.Write(numbers[:])
-	writeDigestPart(hash, request.Reason)
-	hash.Write(request.EvidenceDigest[:])
-	var result [sha256.Size]byte
-	copy(result[:], hash.Sum(nil))
-	return result
+	return operatorRequestDigest(authority, operatorDigestInput{
+		Action: OperatorActionRepair, Consumer: request.Consumer, EventID: request.EventID,
+		EventDigest: request.EventDigest, ExpectedGeneration: request.ExpectedGeneration,
+		ExpectedFence: request.ExpectedFence, Reason: request.Reason, EvidenceDigest: request.EvidenceDigest,
+	})
 }
 
+// recoveryRequestDigest binds a recovery attempt to its distinct action and immutable evidence.
+// recoveryRequestDigest связывает попытку восстановления с отдельным действием и неизменяемым доказательством.
 func recoveryRequestDigest(request RecoveryRequest, authority OperatorAuthority) [sha256.Size]byte {
+	return operatorRequestDigest(authority, operatorDigestInput{
+		Action: OperatorActionRecover, Consumer: request.Consumer, EventID: request.EventID,
+		EventDigest: request.EventDigest, ExpectedGeneration: request.ExpectedGeneration,
+		ExpectedFence: request.ExpectedFence, Reason: request.Reason, EvidenceDigest: request.EvidenceDigest,
+	})
+}
+
+// operatorDigestInput carries only the server-bound fields shared by repair and recovery digests.
+// operatorDigestInput содержит только серверно связанные поля, общие для дайджестов исправления и восстановления.
+type operatorDigestInput struct {
+	Action             OperatorAction
+	Consumer           Consumer
+	EventID            string
+	EventDigest        [sha256.Size]byte
+	ExpectedGeneration uint64
+	ExpectedFence      uint64
+	Reason             string
+	EvidenceDigest     [sha256.Size]byte
+}
+
+// operatorRequestDigest encodes the original field order while keeping action domains distinct.
+// operatorRequestDigest сохраняет прежний порядок полей, разделяя домены действий.
+func operatorRequestDigest(authority OperatorAuthority, input operatorDigestInput) [sha256.Size]byte {
 	hash := sha256.New()
 	writeAuthorityDigest(hash, authority)
-	writeDigestPart(hash, string(OperatorActionRecover))
-	writeDigestPart(hash, request.Consumer.Name)
-	writeDigestPart(hash, request.Consumer.Scope)
-	writeDigestPart(hash, request.EventID)
-	hash.Write(request.EventDigest[:])
+	writeDigestPart(hash, string(input.Action))
+	writeDigestPart(hash, input.Consumer.Name)
+	writeDigestPart(hash, input.Consumer.Scope)
+	writeDigestPart(hash, input.EventID)
+	hash.Write(input.EventDigest[:])
 	var numbers [16]byte
-	binary.BigEndian.PutUint64(numbers[:8], request.ExpectedGeneration)
-	binary.BigEndian.PutUint64(numbers[8:], request.ExpectedFence)
+	binary.BigEndian.PutUint64(numbers[:8], input.ExpectedGeneration)
+	binary.BigEndian.PutUint64(numbers[8:], input.ExpectedFence)
 	hash.Write(numbers[:])
-	writeDigestPart(hash, request.Reason)
-	hash.Write(request.EvidenceDigest[:])
+	writeDigestPart(hash, input.Reason)
+	hash.Write(input.EvidenceDigest[:])
 	var result [sha256.Size]byte
 	copy(result[:], hash.Sum(nil))
 	return result

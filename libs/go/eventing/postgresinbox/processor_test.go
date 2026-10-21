@@ -303,6 +303,8 @@ func TestEffectFailureDoesNotExposeCause(t *testing.T) {
 	}
 }
 
+// TestRepairDigestBindsFenceAndEvidence verifies that repair scope and immutable evidence affect the digest.
+// TestRepairDigestBindsFenceAndEvidence проверяет включение области исправления и неизменяемого доказательства в дайджест.
 func TestRepairDigestBindsFenceAndEvidence(t *testing.T) {
 	t.Parallel()
 	eventDigest := sha256.Sum256([]byte("event"))
@@ -339,6 +341,8 @@ func TestRepairDigestBindsFenceAndEvidence(t *testing.T) {
 	}
 }
 
+// TestRepairDigestUsesAuthorizedDurableScope excludes the caller key while binding the authorized project.
+// TestRepairDigestUsesAuthorizedDurableScope исключает ключ клиента, сохраняя привязку к разрешённому проекту.
 func TestRepairDigestUsesAuthorizedDurableScope(t *testing.T) {
 	t.Parallel()
 	request := RepairRequest{
@@ -363,6 +367,36 @@ func TestRepairDigestUsesAuthorizedDurableScope(t *testing.T) {
 	}
 }
 
+// TestOperatorRequestDigestSeparatesActions keeps recovery and repair receipts in distinct digest domains.
+// TestOperatorRequestDigestSeparatesActions сохраняет разные домены дайджестов для восстановления и исправления.
+func TestOperatorRequestDigestSeparatesActions(t *testing.T) {
+	t.Parallel()
+	authority := validOperatorAuthority("repair")
+	eventID := uuid.NewString()
+	eventDigest := sha256.Sum256([]byte("event"))
+	evidenceDigest := sha256.Sum256([]byte("evidence"))
+	repair := RepairRequest{
+		Consumer: Consumer{Name: "consumer", Scope: "v1"}, EventID: eventID,
+		EventDigest: eventDigest, ExpectedGeneration: 3, ExpectedFence: 9,
+		Reason: "cause removed", EvidenceDigest: evidenceDigest,
+	}
+	recovery := RecoveryRequest{
+		Consumer: repair.Consumer, EventID: repair.EventID, EventDigest: repair.EventDigest,
+		ExpectedGeneration: repair.ExpectedGeneration, ExpectedFence: repair.ExpectedFence,
+		Reason: repair.Reason, EvidenceDigest: repair.EvidenceDigest,
+	}
+	first := recoveryRequestDigest(recovery, authority)
+	if first == repairRequestDigest(repair, authority) {
+		t.Fatal("recovery and repair digests share an action domain")
+	}
+	recovery.IdempotencyKey = "untrusted-caller-key"
+	if first != recoveryRequestDigest(recovery, authority) {
+		t.Fatal("caller key changed the server-owned recovery digest")
+	}
+}
+
+// TestRecoveryDecisionKeepsPredecessorBlocking preserves sequence ordering during recovery.
+// TestRecoveryDecisionKeepsPredecessorBlocking сохраняет порядок последовательности при восстановлении.
 func TestRecoveryDecisionKeepsPredecessorBlocking(t *testing.T) {
 	t.Parallel()
 	row := inboxRow{State: stateRetry, EventSequence: 3, Attempts: 1, MaxAttempts: 3, AvailableNow: true}
