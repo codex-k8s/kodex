@@ -7,7 +7,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/eventing"
 )
 
-// Processor координирует durable receive/claim/effect и явный lifecycle.
+// Processor owns durable receive, claim, effect, and shutdown coordination without background workers.
+// Processor управляет устойчивым приёмом, захватом, эффектом и остановкой без фоновых исполнителей.
 type Processor struct {
 	beginner           Beginner
 	config             Config
@@ -24,7 +25,8 @@ type Processor struct {
 	joinOnce sync.Once
 }
 
-// New создаёт Processor без соединений, миграций и фоновых goroutine.
+// New validates the exact configuration and effect registry without opening connections or running migrations.
+// New проверяет точную конфигурацию и реестр эффектов без соединений и миграций.
 func New(beginner Beginner, config Config, options ...Option) (*Processor, error) {
 	config = config.withDefaults()
 	if beginner == nil {
@@ -63,7 +65,8 @@ func New(beginner Beginner, config Config, options ...Option) (*Processor, error
 	return processor, nil
 }
 
-// Process выполняет полный provider-neutral inbox flow для одного envelope.
+// Process receives, fences, applies, and finalizes one envelope; broker action is returned only with durable evidence.
+// Process принимает, ограждает, применяет и завершает конверт; действие брокеру возвращается только с устойчивыми данными.
 func (processor *Processor) Process(
 	ctx context.Context,
 	consumer Consumer,
@@ -75,17 +78,8 @@ func (processor *Processor) Process(
 	}
 	defer processor.leave()
 
-	ctx, span := processor.tracer.Start(ctx, OperationProcess)
-	outcome := OutcomeError
-	defer func() {
-		if result.Outcome != "" {
-			outcome = result.Outcome
-		} else if isContextDone(err) {
-			outcome = OutcomeCanceled
-		}
-		span.End(outcome)
-		processor.observer.Observe(OperationProcess, outcome)
-	}()
+	ctx, endObservation := processor.observeResultOperation(ctx, OperationProcess, &result, &err)
+	defer endObservation()
 
 	if err := consumer.validate(); err != nil {
 		return Result{}, err
@@ -109,7 +103,8 @@ func (processor *Processor) Process(
 	return processor.apply(ctx, record, *claimed.claim, handler)
 }
 
-// Acquire выполняет durable receive+claim для adapter с отдельным renew/apply.
+// Acquire durably receives and claims one event for an adapter that renews and applies separately.
+// Acquire устойчиво принимает и захватывает событие для адаптера с отдельным продлением и применением.
 func (processor *Processor) Acquire(
 	ctx context.Context,
 	consumer Consumer,
@@ -150,7 +145,8 @@ func (processor *Processor) Acquire(
 	return *claimed.claim, Result{}, nil
 }
 
-// ApplyClaim выполняет effect и finalization только для exact действующего claim.
+// ApplyClaim checks the exact envelope, digest, sequence, and fenced claim before effect finalization.
+// ApplyClaim проверяет точные конверт, дайджест, номер и ограждённый claim до завершения эффекта.
 func (processor *Processor) ApplyClaim(
 	ctx context.Context,
 	claim Claim,
@@ -161,17 +157,8 @@ func (processor *Processor) ApplyClaim(
 		return Result{}, err
 	}
 	defer processor.leave()
-	ctx, span := processor.tracer.Start(ctx, OperationApply)
-	outcome := OutcomeError
-	defer func() {
-		if result.Outcome != "" {
-			outcome = result.Outcome
-		} else if isContextDone(err) {
-			outcome = OutcomeCanceled
-		}
-		span.End(outcome)
-		processor.observer.Observe(OperationApply, outcome)
-	}()
+	ctx, endObservation := processor.observeResultOperation(ctx, OperationApply, &result, &err)
+	defer endObservation()
 	if err := validateClaim(claim); err != nil {
 		return Result{}, err
 	}
@@ -191,7 +178,8 @@ func (processor *Processor) ApplyClaim(
 	return processor.apply(ctx, record, claim, handler)
 }
 
-// Cancel прекращает приём новых операций; in-flight завершаются по caller context.
+// Cancel closes the admission barrier while existing calls finish under their caller contexts.
+// Cancel закрывает приём новых операций, пока текущие вызовы завершаются по контекстам вызывающих.
 func (processor *Processor) Cancel() {
 	processor.mu.Lock()
 	defer processor.mu.Unlock()
@@ -201,7 +189,8 @@ func (processor *Processor) Cancel() {
 	}
 }
 
-// Join ожидает завершения in-flight без запуска вспомогательной goroutine.
+// Join waits for all admitted calls after cancellation without creating a helper goroutine.
+// Join ожидает завершения всех принятых вызовов после отмены без вспомогательной goroutine.
 func (processor *Processor) Join(ctx context.Context) error {
 	select {
 	case <-processor.joined:
@@ -211,6 +200,8 @@ func (processor *Processor) Join(ctx context.Context) error {
 	}
 }
 
+// enter atomically rejects work after shutdown or counts it as in flight.
+// enter атомарно отклоняет работу после остановки либо учитывает её как выполняемую.
 func (processor *Processor) enter() error {
 	processor.mu.Lock()
 	defer processor.mu.Unlock()
@@ -221,6 +212,8 @@ func (processor *Processor) enter() error {
 	return nil
 }
 
+// leave decrements in-flight work and releases Join once shutdown has drained.
+// leave уменьшает число текущих операций и освобождает Join после их завершения.
 func (processor *Processor) leave() {
 	processor.mu.Lock()
 	defer processor.mu.Unlock()
@@ -232,6 +225,29 @@ func (processor *Processor) leave() {
 	}
 }
 
+// closeJoined closes the completion channel at most once across concurrent exit paths.
+// closeJoined закрывает канал завершения не более одного раза при конкурирующих выходах.
 func (processor *Processor) closeJoined() {
 	processor.joinOnce.Do(func() { close(processor.joined) })
+}
+
+// observeResultOperation preserves the process/apply trace outcome precedence at the call's exit.
+// observeResultOperation сохраняет порядок выбора исхода трассировки process/apply при завершении вызова.
+func (processor *Processor) observeResultOperation(
+	ctx context.Context,
+	operation Operation,
+	result *Result,
+	err *error,
+) (context.Context, func()) {
+	ctx, span := processor.tracer.Start(ctx, operation)
+	return ctx, func() {
+		outcome := OutcomeError
+		if result.Outcome != "" {
+			outcome = result.Outcome
+		} else if isContextDone(*err) {
+			outcome = OutcomeCanceled
+		}
+		span.End(outcome)
+		processor.observer.Observe(operation, outcome)
+	}
 }

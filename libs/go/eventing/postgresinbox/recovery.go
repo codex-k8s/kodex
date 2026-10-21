@@ -7,7 +7,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Recover сохраняет provider-neutral решение после исчерпания broker redelivery.
+// Recover records a provider-neutral directive after broker redelivery exhaustion under exact operator authority.
+// Recover сохраняет независимую от брокера директиву после исчерпания доставок под точным полномочием оператора.
 func (processor *Processor) Recover(
 	ctx context.Context,
 	request RecoveryRequest,
@@ -127,6 +128,8 @@ func (processor *Processor) Recover(
 	return RecoveryReceipt{}, err
 }
 
+// recoveryDecision prioritizes terminal, predecessor, lease, and backoff evidence before replay or ACK.
+// recoveryDecision учитывает завершение, предшественника, аренду и задержку до повтора или ACK.
 func recoveryDecision(row inboxRow, cursor cursorRow) (RecoveryDirective, string) {
 	if row.State == stateCompleted || row.State == stateStale {
 		return RecoveryACKEligible, operatorReceiptWait

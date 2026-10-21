@@ -14,6 +14,76 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// recordingOutcomeObserver captures one closed operation/outcome pair from a processor call.
+// recordingOutcomeObserver сохраняет одну закрытую пару операции и исхода вызова процессора.
+type recordingOutcomeObserver struct {
+	operation Operation
+	outcome   Outcome
+	calls     int
+}
+
+// Observe records the classified outcome without accessing event data.
+// Observe записывает классифицированный исход без доступа к данным события.
+func (observer *recordingOutcomeObserver) Observe(operation Operation, outcome Outcome) {
+	observer.operation, observer.outcome = operation, outcome
+	observer.calls++
+}
+
+// recordingOutcomeTracer returns a controlled span for lifecycle outcome assertions.
+// recordingOutcomeTracer возвращает управляемый span для проверки исходов жизненного цикла.
+type recordingOutcomeTracer struct{ span *recordingOutcomeSpan }
+
+// Start preserves the caller context and exposes the configured recording span.
+// Start сохраняет контекст вызывающего и возвращает заданный записывающий span.
+func (tracer recordingOutcomeTracer) Start(ctx context.Context, _ Operation) (context.Context, Span) {
+	return ctx, tracer.span
+}
+
+// recordingOutcomeSpan counts terminal reports from the observed processor call.
+// recordingOutcomeSpan подсчитывает итоговые сообщения наблюдаемого вызова процессора.
+type recordingOutcomeSpan struct {
+	outcome Outcome
+	calls   int
+}
+
+// End captures the closed outcome and counts the completed span.
+// End сохраняет закрытый исход и учитывает завершённый span.
+func (span *recordingOutcomeSpan) End(outcome Outcome) {
+	span.outcome = outcome
+	span.calls++
+}
+
+// TestObserveResultOperationPreservesOutcomePrecedence checks success, cancellation, and durable-result priority.
+// TestObserveResultOperationPreservesOutcomePrecedence проверяет успех, отмену и приоритет устойчивого результата.
+func TestObserveResultOperationPreservesOutcomePrecedence(t *testing.T) {
+	t.Parallel()
+	for _, test := range []struct {
+		name      string
+		operation Operation
+		result    Result
+		err       error
+		want      Outcome
+	}{
+		{"error", OperationProcess, Result{}, errors.New("synthetic failure"), OutcomeError},
+		{"canceled", OperationApply, Result{}, context.Canceled, OutcomeCanceled},
+		{"durable-result", OperationProcess, Result{Outcome: OutcomeProcessed}, context.Canceled, OutcomeProcessed},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			observer := &recordingOutcomeObserver{}
+			span := &recordingOutcomeSpan{}
+			processor := &Processor{observer: observer, tracer: recordingOutcomeTracer{span: span}}
+			result, err := test.result, test.err
+			_, finish := processor.observeResultOperation(t.Context(), test.operation, &result, &err)
+			finish()
+			if span.calls != 1 || span.outcome != test.want || observer.calls != 1 ||
+				observer.operation != test.operation || observer.outcome != test.want {
+				t.Fatalf("observed outcome = span:%s/%d observer:%s/%s/%d, want %s",
+					span.outcome, span.calls, observer.operation, observer.outcome, observer.calls, test.want)
+			}
+		})
+	}
+}
+
 func TestOrderingKeyAndDigestAreDeterministic(t *testing.T) {
 	t.Parallel()
 	envelope := validEnvelope()

@@ -11,7 +11,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// Cleanup удаляет bounded batch только безопасных completed/stale rows.
+// Cleanup deletes one bounded batch of expired completed or stale rows under processor admission.
+// Cleanup удаляет одну ограниченную порцию завершённых или устаревших строк после срока хранения.
 func (processor *Processor) Cleanup(ctx context.Context) (deleted int, err error) {
 	if err := processor.enter(); err != nil {
 		return 0, err
@@ -44,7 +45,8 @@ func (processor *Processor) Cleanup(ctx context.Context) (deleted int, err error
 	return deleted, nil
 }
 
-// Repair выполняет bounded audited REQUEUE exact dead-letter predecessor.
+// Repair requeues one exact dead-letter predecessor after owner authorization, CAS, and durable receipt checks.
+// Repair повторно запускает одного точного dead-letter предшественника после авторизации, CAS и проверки устойчивой квитанции.
 func (processor *Processor) Repair(
 	ctx context.Context,
 	request RepairRequest,
@@ -154,6 +156,8 @@ func (processor *Processor) Repair(
 	return RepairReceipt{}, err
 }
 
+// operatorReceiptInput binds an authorized operator action to immutable event and evidence coordinates.
+// operatorReceiptInput связывает разрешённое действие оператора с неизменными координатами события и свидетельства.
 type operatorReceiptInput struct {
 	Consumer           Consumer
 	RequestDigest      [sha256.Size]byte
@@ -167,6 +171,8 @@ type operatorReceiptInput struct {
 	Directive          RecoveryDirective
 }
 
+// storedOperatorReceipt is the validated durable projection used for exact idempotent replay.
+// storedOperatorReceipt — проверенная устойчивая проекция для точного идемпотентного повтора.
 type storedOperatorReceipt struct {
 	requestDigest []byte
 	receiptID     string
@@ -180,12 +186,22 @@ type storedOperatorReceipt struct {
 }
 
 const (
-	operatorReceiptRequeue     = "REQUEUE"
-	operatorReceiptRejoin      = "REJOIN"
+	// operatorReceiptRequeue records an authorized dead-letter transition back to replay.
+	// operatorReceiptRequeue фиксирует разрешённый перевод dead-letter обратно к повтору.
+	operatorReceiptRequeue = "REQUEUE"
+	// operatorReceiptRejoin records a recovery path that rejoins broker redelivery.
+	// operatorReceiptRejoin фиксирует восстановление с возвратом к доставке брокера.
+	operatorReceiptRejoin = "REJOIN"
+	// operatorReceiptTerminalize records a terminal recovery outcome without implicit ACK.
+	// operatorReceiptTerminalize фиксирует завершённый исход восстановления без неявного ACK.
 	operatorReceiptTerminalize = "TERMINALIZE"
-	operatorReceiptWait        = "WAIT"
+	// operatorReceiptWait records a recovery decision to defer the next action.
+	// operatorReceiptWait фиксирует решение восстановления отложить следующее действие.
+	operatorReceiptWait = "WAIT"
 )
 
+// repairReceipt projects a stored receipt while marking whether this request was an exact replay.
+// repairReceipt отображает сохранённую квитанцию с признаком точного повтора запроса.
 func (stored storedOperatorReceipt) repairReceipt(repeated bool) RepairReceipt {
 	return RepairReceipt{
 		RepairID:        stored.receiptID,
@@ -198,6 +214,8 @@ func (stored storedOperatorReceipt) repairReceipt(repeated bool) RepairReceipt {
 	}
 }
 
+// recoveryReceipt projects a stored directive while marking exact idempotent replay.
+// recoveryReceipt отображает сохранённую директиву с признаком точного идемпотентного повтора.
 func (stored storedOperatorReceipt) recoveryReceipt(repeated bool) RecoveryReceipt {
 	return RecoveryReceipt{
 		RecoveryID:      stored.receiptID,
@@ -211,6 +229,8 @@ func (stored storedOperatorReceipt) recoveryReceipt(repeated bool) RecoveryRecei
 	}
 }
 
+// readOperatorReceipt reads one server-scoped receipt and rejects malformed persisted evidence.
+// readOperatorReceipt читает одну квитанцию в серверной области и отклоняет повреждённые устойчивые данные.
 func (processor *Processor) readOperatorReceipt(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -251,11 +271,15 @@ func (processor *Processor) readOperatorReceipt(
 	return stored, true, nil
 }
 
+// validOperatorReceiptAction accepts only the four persisted operator transition codes.
+// validOperatorReceiptAction допускает только четыре сохраняемых кода перехода оператора.
 func validOperatorReceiptAction(action string) bool {
 	return action == operatorReceiptRequeue || action == operatorReceiptRejoin ||
 		action == operatorReceiptTerminalize || action == operatorReceiptWait
 }
 
+// validRecoveryDirective accepts only closed recovery decisions exposed to the broker adapter.
+// validRecoveryDirective допускает только закрытые решения восстановления для адаптера брокера.
 func validRecoveryDirective(directive string) bool {
 	return directive == string(RecoveryReplayRequired) ||
 		directive == string(RecoveryWaitPredecessor) ||
@@ -265,6 +289,8 @@ func validRecoveryDirective(directive string) bool {
 		directive == string(RecoveryACKEligible)
 }
 
+// insertOperatorReceipt writes the exact authorized action and evidence within the caller transaction.
+// insertOperatorReceipt записывает точное разрешённое действие и свидетельство в транзакции вызывающего.
 func (processor *Processor) insertOperatorReceipt(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -305,6 +331,8 @@ func (processor *Processor) insertOperatorReceipt(
 	return stored, nil
 }
 
+// authorityArguments binds server-assigned organization, project, operation, and key hash to SQL.
+// authorityArguments привязывает назначенные сервером организацию, проект, операцию и хеш ключа к SQL.
 func authorityArguments(authority OperatorAuthority) pgx.StrictNamedArgs {
 	return pgx.StrictNamedArgs{
 		"organization_scope": authority.Organization,
@@ -314,6 +342,8 @@ func authorityArguments(authority OperatorAuthority) pgx.StrictNamedArgs {
 	}
 }
 
+// authorizeOperator validates trusted actor identity and requires full durable scope for mutation.
+// authorizeOperator проверяет доверенного actor и требует полную устойчивую область для изменения.
 func (processor *Processor) authorizeOperator(
 	ctx context.Context,
 	target OperatorTarget,
@@ -342,6 +372,8 @@ func (processor *Processor) authorizeOperator(
 	return authority, nil
 }
 
+// observeOperator maps an authorized operation's error to closed trace and metric outcomes.
+// observeOperator сопоставляет ошибку авторизованной операции закрытым исходам трассировки и метрик.
 func (processor *Processor) observeOperator(span Span, operation Operation, err *error) {
 	outcome := OutcomeError
 	if *err == nil {

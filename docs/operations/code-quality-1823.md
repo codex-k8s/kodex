@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.75.0
+version: 1.76.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,38 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Семьдесят восьмая волна — lifecycle и наблюдение результата inbox
+
+На запушенном SHA `6b55408ffe75f83a2eb88e5873a2524bb0315eb6`
+детектор подтвердил 6531 собственный файл, 222 исключения, 1879 raw-групп,
+347 точных решений и 1532 неразобранных; сырой SHA-256 —
+`df2f70ec35a377c8eb026fa664da68f76d64d08d9f4369999939932144b41a91`,
+отпечаток набора —
+`39b6c820516e1c61effe92f605f943ca9fa9eacd5bccaa5457fba472a21f04db`.
+Go-реестр: 2617/21035, непокрыты 18418.
+
+Все 29 объявлений `postgresinbox/processor.go`, `maintenance.go` и
+`recovery.go` получили EN→RU комментарии о входном барьере, drain/Join,
+точном claim, authorizer, durable receipts, CAS и recovery-директивах.
+Общий deferred trace/outcome порядок в `Process` и `ApplyClaim` вынесен в
+package-private `observeResultOperation`; остальные проверки, типы запросов
+и разные переходы остались отдельно. Новый unit-тест проверяет исход ошибки,
+отмены и приоритет устойчивого результата над отменённым контекстом.
+
+Рабочий детектор: 6531 собственный файл, 222 исключения, 1878 raw-групп,
+347 точных решений и 1531 неразобранная; сырой SHA-256 —
+`cc97ec210702f4a043243b510f8bb4fc494f48a87953c2e4bd0a1c7554648c4c`,
+отпечаток набора —
+`ebf726068d1e5766afd6695001f1012eae178c1822ae1cdb155472d43d0db094`.
+Сравнение точных ключей показало удаление только исходного окна
+`postgresinbox/processor.go`, новых нет. Go-реестр: 2654/21043,
+непокрыты 18389; все восемь новых объявлений helper и тестовой оснастки
+также двуязычны. `go test -count=1 ./...` и `go build ./...` всего
+eventing-модуля, пять ignore-boundaries, `gofmt` и `git diff --check` —
+PASS LOCAL. Component с disposable PostgreSQL, полный `go-docs -check`
+и browser/deploy/live — NOT RUN по прежним границам. Точный scan нового
+коммита будет опубликован в текущем PR.
 
 ## Семьдесят седьмая волна — наблюдаемость PostgreSQL inbox
 
