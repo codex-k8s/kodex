@@ -2,6 +2,10 @@ package runtimesecret
 
 import "testing"
 
+// TestVersionedKubernetesName pins the deterministic name for one reference
+// and revision and rejects an invalid reference or nonpositive revision.
+// RU: TestVersionedKubernetesName закрепляет стабильное имя для одной ссылки
+// и ревизии и проверяет отказ для неверной ссылки либо неположительной ревизии.
 func TestVersionedKubernetesName(t *testing.T) {
 	name, err := VersionedKubernetesName("sec_12345678", 17)
 	if err != nil {

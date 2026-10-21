@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.4.0
+version: 1.5.2
 updated: 2026-10-21
 ---
 
@@ -43,6 +43,11 @@ npm ci --ignore-scripts --no-audit --no-fund --prefix tools/code-quality
 node --test tools/code-quality/*.test.mjs
 node tools/code-quality/scan-duplicates.mjs /absolute/private/report-directory
 node tools/code-quality/summarize-report.mjs /absolute/private/report-directory
+node tools/code-quality/clone-worklist.mjs \
+  /absolute/private/report-directory/summary.gen.json \
+  /absolute/private/report-directory/worklist.gen.json
+node tools/code-quality/check-addressed-ignores.mjs \
+  /absolute/private/report-directory/source-inventory.json
 go test ./tools/code-quality/go-docs
 go run ./tools/code-quality/go-docs -root . \
   -inventory /absolute/private/report-directory/source-inventory.json \
@@ -222,3 +227,50 @@ PASS LOCAL: `go test ./...` и `go build ./...` модуля с Go1.26.6, фор
 создали новых групп. Go-реестр:266/21000 двуязычных объявлений,
 20734 ещё не покрыты. Итоговый `-check` и полный разбор дубликатов остаются
 незавершёнными; PR остаётся Draft.
+
+## Шестая волна — адресное исключение декларативного store API
+
+В `src/features/access/store.ts` detector нашёл69 групп с участием файла:
+66 сравнений большого списка возвращаемых Pinia-полей с импортами и другим
+списком полей `platform/store.ts`, а также три перекрывающихся сравнения.
+Повторяемого алгоритма в этом декларативном `return`-объекте нет. Только он
+заключён в `jscpd:ignore-start/end`; состояние, очистка, команды и обработчики
+store остаются в поиске. После повторного сканирования групп с участием
+`access/store.ts` нет. Общий счётчик изменился с2129 до2070; это не
+объявляет остальные группы разобранными.
+
+Проверяемость исключений теперь закреплена в `tools/code-quality/ignored-clones.json`
+и `check-addressed-ignores.mjs`: все5 точных областей имеют причину, максимальный
+размер и SHA-256 содержимого. Проверка отвергает новый, исчезнувший, вложенный,
+расширенный или изменившийся marker. Синтетический unit дополнительно
+проверяет, что закреплённый jscpd действительно учитывает inline markers.
+Маркер одного Pinia `return` не служит разрешением исключать другие stores.
+
+`clone-worklist.mjs` группирует перекрывающиеся находки по точной паре файлов
+и координатам обоих фрагментов, при этом сохраняет индекс и fingerprint каждой
+сырой группы и машинно проверяет их полный взаимно-однозначный охват. Это
+только навигация: кластер не назначает общее решение по смыслу. Для baseline
+2138 групп →1153 пары файлов/1986 кластеров; для working-10 с новыми
+инструментами 6555 исходников и2070 групп →1147 пар/1977 кластеров. Повтор
+working-11 после комментариев `runtimesecret` сохранил эти числа; SHA-256
+сырого отчёта `1cc2378cd79c8dc72491a8a1d072b6a5e9bf13f71410d1bafc507d0d64af761e`.
+Отчёты хранятся локально вместе с
+сырой записью анализатора; группы без решения не скрываются.
+
+PASS LOCAL:7 Node unit-тестов инструментария, 10 unit-тестов access store,
+selected ESLint и `npm run build` PWA. Vite сохранил прежнее предупреждение
+о размере chunk. Полная приёмка и браузер здесь NOT RUN; итоговые карта
+решений и Go-comment `-check` всё ещё незавершены.
+
+Дополнительно полностью двуязычно описан модуль `runtimesecret` (10/10
+объявлений): проверка server-owned scope tuple, ограничение ссылок, стабильное
+имя immutable Kubernetes Secret и тесты. Изменены только комментарии;
+`go test ./...` и `go build ./...` модуля с Go1.26.6 — PASS LOCAL.
+Дополнительно описан `integrationgatewayauth` (37/37 объявлений, включая
+тестовые): назначаемые сервером claims, exact keyset rotation, срок жизни,
+проверка отдельного public snapshot и fixture-помощники. Изменены только
+комментарии; `go test ./...` и `go build ./...` модуля с Go1.26.6 — PASS LOCAL.
+Go-реестр на текущем дереве:313/21000 объявлений с форматом EN→RU,
+20687 остаются без него. Проверка адресных исключений на inventory
+working-11 — PASS (5/5), Node unit-тесты — PASS (7/7). Никакая из этих
+локальных проверок не означает готовности всего PR.

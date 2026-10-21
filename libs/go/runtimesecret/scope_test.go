@@ -5,6 +5,10 @@ import (
 	"testing"
 )
 
+// TestValidateScopeRequiresClosedOwnerTuple accepts only the two canonical
+// owner tuple shapes and rejects missing, oversized, malformed or mixed refs.
+// RU: TestValidateScopeRequiresClosedOwnerTuple принимает лишь две допустимые
+// формы кортежа владельца и отклоняет пустые, длинные, неверные и смешанные ссылки.
 func TestValidateScopeRequiresClosedOwnerTuple(t *testing.T) {
 	for _, kind := range []ScopeKind{ScopeOrganization, ScopeProject} {
 		project := ""
