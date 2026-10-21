@@ -28,11 +28,12 @@ func (resolver *resolverFixture) Resolve(context.Context, string) (Snapshot, err
 	return resolver.snapshot, nil
 }
 
-// TestTypedProducerKeepsSourceIdentityAndExactRender verifies source digests,
-// immutable content-addressed render and rejection of stale or unsafe DNS.
-// RU: TestTypedProducerKeepsSourceIdentityAndExactRender проверяет дайджесты
-// источников, неизменяемую отрисовку по содержимому и отказ для устаревшего либо опасного DNS.
-func TestTypedProducerKeepsSourceIdentityAndExactRender(t *testing.T) {
+// testMailConfiguration decodes the checked-in typed fixture once per test
+// invocation so both producer scenarios use the same source contract.
+// RU: testMailConfiguration читает типизированный fixture для каждого теста,
+// чтобы оба сценария отправителя использовали один исходный контракт.
+func testMailConfiguration(t *testing.T) api.Configuration {
+	t.Helper()
 	raw, err := os.ReadFile("../../../contracts/email-bridge/v1/examples/mailboxes.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -41,6 +42,15 @@ func TestTypedProducerKeepsSourceIdentityAndExactRender(t *testing.T) {
 	if err := api.Decode(raw, &configuration); err != nil {
 		t.Fatal(err)
 	}
+	return configuration
+}
+
+// TestTypedProducerKeepsSourceIdentityAndExactRender verifies source digests,
+// immutable content-addressed render and rejection of stale or unsafe DNS.
+// RU: TestTypedProducerKeepsSourceIdentityAndExactRender проверяет дайджесты
+// источников, неизменяемую отрисовку по содержимому и отказ для устаревшего либо опасного DNS.
+func TestTypedProducerKeepsSourceIdentityAndExactRender(t *testing.T) {
+	configuration := testMailConfiguration(t)
 	resolver := &resolverFixture{snapshot: Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8")}, ExpiresAt: time.Now().Add(time.Minute)}}
 	digest := strings.Repeat("a", 64)
 	document, err := Produce(t.Context(), configuration, digest, resolver)
@@ -91,14 +101,7 @@ func TestTypedProducerKeepsSourceIdentityAndExactRender(t *testing.T) {
 // RU: TestDisabledMailboxDoesNotKeepDNSOrNetworkAuthority проверяет отзыв
 // сетевых привязок выключенного ящика и сохранение лишь допуска другого активного.
 func TestDisabledMailboxDoesNotKeepDNSOrNetworkAuthority(t *testing.T) {
-	raw, err := os.ReadFile("../../../contracts/email-bridge/v1/examples/mailboxes.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var configuration api.Configuration
-	if err := api.Decode(raw, &configuration); err != nil {
-		t.Fatal(err)
-	}
+	configuration := testMailConfiguration(t)
 	resolver := &resolverFixture{snapshot: Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8")}, ExpiresAt: time.Now().Add(time.Minute)}}
 	gatewayDigest := strings.Repeat("a", 64)
 	active, err := Produce(t.Context(), configuration, gatewayDigest, resolver)

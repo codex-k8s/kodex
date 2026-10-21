@@ -920,6 +920,46 @@
       "fragmentSHA256": "232bee2872d0adb7d208d946977f1fc5d2807c6fa9c4354df37a1144741076e2",
       "count": 1,
       "reason": "Совпадение относится к последовательности mockReset в отдельных тестах platform и runtime. Каждый файл сбрасывает собственный явный набор mocked endpoints перед сценарием; объединение через общий нетипизированный реестр сделало бы тесты зависимыми от чужой поверхности API. Решение ограничено точными файлами и байтами фрагмента."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/integrationegresspolicy/admission.go",
+      "secondPath": "libs/go/mailpolicy/admission.go",
+      "fragmentSHA256": "8849e705304ddc7541bed32c21996cef16650525e4dd59a2ddfffa0f6435be25",
+      "count": 1,
+      "reason": "Совпали 11 строк каркаса двух Kubernetes ValidatingAdmissionPolicy, но mail и integration имеют разные условия выбора ConfigMap и отдельные CEL-предикаты точных payload. Новый общий конструктор ради двух политик принимал бы произвольные выражения и скрывал видовую fail-closed boundary при чтении; общий критерий допуска остаётся явно проверяемым в каждом владельце."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/integrationegresspolicy/admission.go",
+      "secondPath": "libs/go/mailpolicy/admission.go",
+      "fragmentSHA256": "748b09dfa70726d7cfe0bf9d69df1cb3c1e6865553d7ca9b6bab1087b09ef1f1",
+      "count": 1,
+      "reason": "Совпавший хвост конструктора admission binding относится к двум различным именованным политикам и разным CEL-валидациям. Перенос в общую библиотеку ради 12 строк спрятал бы точную привязку Deny к каждой политике; независимые тесты сверяют оба фактических артефакта. Исключение привязано только к этой паре и SHA фрагмента."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/access/api.ts",
+      "secondPath": "services/staff/control-center/src/features/access/api.ts",
+      "fragmentSHA256": "d054fe1565dc5a5a92e060ca72ad444bab8b211efea0589f2a6f627e90642b88",
+      "count": 1,
+      "reason": "Weak-совпадение охватывает оболочки команд создания и изменения platform membership и access binding. Каждая оболочка вызывает отдельный generated endpoint с разными path/body, а для изменения использует версию существующего ресурса и If-Match. Общие заголовки уже вынесены в mutationHeaders/versionedHeaders; универсальный dispatcher стёр бы тип и границу OCC-команды."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/access/api.ts",
+      "secondPath": "services/staff/control-center/src/features/access/api.ts",
+      "fragmentSHA256": "4b5aeed4ca5e0a18d9a0973f58e0586ebc9357b4b8d50d32b2bf41bf12d3e62b",
+      "count": 1,
+      "reason": "Окна сравнивают создание platform membership и новой версии access role, где первое является create без If-Match, а второе — OCC-изменением конкретной роли. Похожий синтаксис mutate не делает эти команды одной операцией; общие безопасные заголовки уже вынесены, а отдельные типизированные вызовы сохраняют полномочия и версию."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/access/api.ts",
+      "secondPath": "services/staff/control-center/src/features/access/api.ts",
+      "fragmentSHA256": "fa83709aec6257ba064d1610a8938d065c4150729d115f0b668a25578efffd23",
+      "count": 1,
+      "reason": "Три POST-чтения эффективного доступа, объяснения и симуляции различаются входными/выходными типами и серверной семантикой. Общий X-CSRF-Token передаётся одинаково, но общий вызов потребовал бы нетипизированного endpoint dispatcher ради нескольких строк и скрывал бы отдельные результаты. Решение ограничено одной точной группой."
     }
   ]
 }
