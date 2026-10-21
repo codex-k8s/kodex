@@ -7,6 +7,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// TestSessionStreamRouteUsesCanonicalLabel ensures only the exact session
+// stream path gets the realtime label; near matches remain unknown.
+// TestSessionStreamRouteUsesCanonicalLabel проверяет, что метку realtime
+// получает только точный путь потока, а похожие пути остаются unknown.
 func TestSessionStreamRouteUsesCanonicalLabel(t *testing.T) {
 	t.Parallel()
 	for path, expected := range map[string]string{
@@ -22,6 +26,10 @@ func TestSessionStreamRouteUsesCanonicalLabel(t *testing.T) {
 	}
 }
 
+// TestSessionStreamHTTPMetricsHaveClosedRouteLabels gathers registered metrics
+// and rejects extra route/status series from near-match request paths.
+// TestSessionStreamHTTPMetricsHaveClosedRouteLabels собирает метрики и
+// отвергает лишние серии маршрута/статуса для похожих путей запроса.
 func TestSessionStreamHTTPMetricsHaveClosedRouteLabels(t *testing.T) {
 	t.Parallel()
 	registry := prometheus.NewRegistry()
@@ -88,6 +96,10 @@ func TestSessionStreamHTTPMetricsHaveClosedRouteLabels(t *testing.T) {
 	}
 }
 
+// TestOwnerRoutesHaveClosedLabels covers owner-facing route families and
+// proves an unregistered resource path maps to the unknown bucket.
+// TestOwnerRoutesHaveClosedLabels проверяет семейства owner-маршрутов и
+// направление незарегистрированного ресурса в категорию unknown.
 func TestOwnerRoutesHaveClosedLabels(t *testing.T) {
 	t.Parallel()
 	tests := map[string]string{
@@ -111,6 +123,10 @@ func TestOwnerRoutesHaveClosedLabels(t *testing.T) {
 	}
 }
 
+// TestOwnerMetricsClosedValues verifies channel/status allowlists and the
+// fallback for an unrecognized channel label.
+// TestOwnerMetricsClosedValues проверяет списки разрешённых каналов/статусов
+// и запасную метку для неизвестного канала.
 func TestOwnerMetricsClosedValues(t *testing.T) {
 	t.Parallel()
 	for _, channel := range []string{"WORKSPACE_TEAMS", "PROVIDERS", "INTEGRATIONS", "APPROVALS", "BACKUPS", "HEALTH"} {

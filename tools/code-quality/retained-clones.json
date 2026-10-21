@@ -440,6 +440,430 @@
       "fragmentSHA256": "763599048e523d4c5b2f5a4a9f1f56d8cae928ca680acb0a4273a2f4750cb804",
       "count": 1,
       "reason": "Реестр доставки полномочий намеренно перечисляет полный набор полей отдельно для каждого workload и его точного назначения: service account, сетевые границы, ключи, trust bundle и readback должны быть видны в одном месте при security-проверке. YAML anchors или общий шаблон сделали бы это назначение неявным и добавили бы отдельную семантику раскрытия при вычислении точного source digest; совпадение оставлено только для точного фрагмента этого файла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "858575d6cd2747736ef8c4c1edbb347117b71806d800c1b941729ee6f2a46e37",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях resolveProjectPurgeRecovery / changeArtifactBinding найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "bd70d0bb530f3e403eaa7302ec23d815ba464255966d20c0636fe44434280946",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях publishConfigOverlayDraft / rollbackConfigOverlay найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "cfcf3091339b15a870fd6ad13c060d53ab6d38bfb12240a76001478c9b206aec",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях revokeProviderAccount / setProviderAccountEnabled найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "ae2ced14ae23d7e27daee4464e190dd36f261edc51e095d230ec2049af23e445",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях createSystemRuntimeEnvironmentDraft / createRuntimeEnvironmentDraft найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "e7312f561ed7f8d8cf92bbaf68d18e8de33c2772c0a3f1f2d47b692c838ee2a1",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях prepareEnvironmentDraftImpact / listManagedConfigurationGitWriteBacks найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "cee2baeb47d6a1869f237619f9b64092791df2140b0166ae22257001ebe2cf66",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях createEmailMailboxDraft / saveEmailMailboxDraft найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "52c6f1f1924c6268614fc18f16e092acfafdf2bf6b00e2c9a307d618e070ed95",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях createEmailMailboxDraft / discardEmailMailboxDraft найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "7480f4ea196cb66e8b0bb30d6fb29b07e8a2c29217e62732f44a13d5da1bc714",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях saveEmailMailboxDraft / validateEmailMailboxDraft найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "647982bdbe51a47b187e5642df309f9ed4f5d4395f3526fd09e8d46b65867687",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях listSystemRoleImageRecipes / listRoleImageRecipes найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "c06829fcd0894b1a6f2ec23f5ec411243d4f7b9158251c60f8421f3e706b5ebe",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях createSystemRoleImageRecipe / createRoleImageRecipe найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "f04582e0edfac1b465d2e51ab689f64b757cc9932d28ebb3c31d901cd53082eb",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях promoteSystemRoleImage / promoteRoleImage найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "56d0d127453c255e8f8e8bf1c81e146dade33536ecf009312bcb17a638c7334c",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях getOrganizationImageVulnerabilityReport / getImageVulnerabilityReport найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "5f2c74bdb119df7b8f723f5d344804bd979ea865b8ef015eb18c2d2eca3205a6",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях decideOrganizationImageAdmissionRisk / decideImageAdmissionRisk найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "b36430c80aadaa260b23fb3d965d41bdc984a93e33df59a358040482786554e9",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях updateAssistantPlanDraft / validateAssistantPlan найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "dfb12170d496e22cf9671a84812321745a786a305798c9f3fa68cc8cb31b1e70",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях listAuditEvents / refreshIntegrationDefinitionGitSource найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "eb0cd3e3eb750f895b6e5692ce73c47b5862eb3521446e565ccc2566f5bd9e5b",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях discardPromptTemplateDraft / validateRoleImageRevisionDraft найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "09cfeb2c8d59399d109b6637512499e79efd80062788a751b3e9970749fc5a43",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях validatePromptTemplateDraft / publishRoleImageRevisionDraft найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "e54c2fe2df7e023d41dc5e0fe82d30a55d46fa3b7efdc8c46a9569e6914c55ec",
+      "count": 2,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях validatePromptTemplateDraft / publishIntegrationDefinitionDraft; validatePromptTemplateDraft / publishSystemSTTConfigurationDraft найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "f9e1e2ffc267ea8120c816f9f93cb932ad2bfd99053e8207fa5bc22df0fbd840",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях publishPromptTemplateDraft / getRoleImageImpactPlan найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "2b8f0441eb09ad1185e95aa85f0c4643844fcc2ebbc14d59c0facd7fc0018e41",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях publishPromptTemplateDraft / publishIntegrationDefinitionDraft найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "a263bf8d820e1632efd64451ec5c337900bcc34e9de2de141cb38edd69d977f7",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях rebindPromptTemplateConsumers / refreshRoleImageGitSource найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "e21249c859b29966f10aa23b782f2a976ce139ef7ac056200ac89bcd35a6e140",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях configureRoleImageGitSource / configureIntegrationDefinitionGitSource найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "2ce6fe6d6b2c5d6b9dd8137fd5516374b8a344840e82d6338d344184b6b8a63f",
+      "count": 2,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях refreshIntegrationDefinitionGitSource / inspectOpenAPIIntegration; refreshIntegrationDefinitionGitSource / rebindIntegrationDefinitionConsumers найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "a0ca25d8435b95175495ba03f53f5174e78caf0e87c86eb0ddb6ea81fbf0ae62",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях prepareRoleImageImpactPlan / prepareRoleImageGitWriteBack найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "82c9d48b062e39a87fd9885441e18483492880b0570fea877d99ca7195021142",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях prepareIntegrationDefinitionGitWriteBack / approveManagedConfigurationGitWriteBack найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "0a41e64a6e72a7166c5888ed3bb3503b07dea2a623875978f8931e21ce80797a",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях approveManagedConfigurationGitWriteBack / rejectManagedConfigurationGitWriteBack найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "09c457070ca8cc3ebca460982bae29b005c7527668565bebd12a9874d31469cf",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях publishIntegrationDefinitionDraft / publishSystemSTTConfigurationDraft найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "98db3ba11418e75961faec45f17f0ee3faf667a74863a73eb4980cc351eff325",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях archiveIntegrationDefinitionConfiguration / unbindAgentSkillBundle найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "1e56945f47b6ee8ddb8841e0b0ee9dc6cafe3d3b320c9a939a62996138dfc510",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях getSkillBundle / archiveSkillBundle найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "05532a2a67eecd1032cac0e87571d798c4bde04b325be142a0c0956f40dfb7a3",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях listSkillBundleRevisions / archiveSkillBundle найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "0b7dbc8889926bff2629a33d5b5c6539b033679b333a249019d33a48a0c37cdf",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях purgeSkillBundle / bindAgentSkillBundle найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "dc01bf43a81f4c9efad6db274eaca86b13054e8bb45445f066ada43555009785",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях bindAgentSkillBundle / bindAgentMemoryRecord найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "ce3c9d8d30fc9dd37662bc90a54671809129312bea3a804d9435e94e62a32833",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях getMemoryRecord / archiveMemoryRecord найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "ce806dda35b826be692f720a60e8d1575a23dc0122a96a06a5b62d91078d2c90",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях getMemoryRecord / reviseMemoryRecord найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "0f5946034a3b081a3bcaf0e11d0b5e5e309287a6a1a81f641986075506179ce1",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях reviseMemoryRecord / archiveMemoryRecord найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "2feb7948e51134d0a232e9ae35b5ff84dde0fcbf3ffbcb39bdd6eddd124cb718",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях purgeMemoryRecord / bindAgentMemoryRecord найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "ac274a6f1cda3b1b55685894a6e2200282382e12d9c88fd27ff876d16af145c9",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях createSkillBundleDraft / saveSkillBundleDraft найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "45377e6289abd2106ac6a0185137e9d8ec85ad1871fe4d5b69374b57b57d4b0f",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях saveSkillBundleDraft / validateSkillBundleDraft найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "42fa3bd708691e76b4f8859398b09673a08f2a1b46ed3c92135fdca32faaa3dd",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях saveSkillBundleDraft / reviewSkillBundleDraft найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "8033f4c02abf9106af96d7904b5c6c97cc4989bc0a9a6bb57c84fc2bd00add50",
+      "count": 1,
+      "reason": "Структурное совпадение OpenAPI в отдельных операциях saveSkillBundleDraft / publishSkillBundleDraft найдено в weak mode. Каждый operationId остаётся на своём внешнем маршруте с собственными параметрами, ответом либо переходом; общий PathItem скрыл бы точную привязку маршрута и owner-проверки. Общие типы и параметры уже используют components там, где это применимо; этот фрагмент не объединяется."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "de49e9df7e33d1e2639db4ca3298b30df783252799fa922afd09c7519beef3f4",
+      "count": 1,
+      "reason": "Компоненты-параметры AuditResourceRefQuery и MembershipRef имеют разные name, in и обязательность: первый фильтрует query, второй разрешает точную ссылку из path. Общий параметр скрывал бы различие транспортной области и мог изменить обязательность на маршрутах; каждый уже вынесен в components/parameters."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "c9f66908f7121c26a7e0a8e080e8709a166efa9a2605b99dfd231ba7c8cfff05",
+      "count": 1,
+      "reason": "Компоненты AuditResourceRefQuery и RuntimeSecretRevision совпадают лишь формой поля schema в weak mode: ссылка на ресурс в query и номер ревизии в path отличаются именем, типом и обязательностью. Они уже самостоятельные components/parameters; дополнительная общая схема не несёт устойчивого смысла."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "b2e359f0117c514b3e20b35e1c185e2a7c9670991b9e824ad2546e94eed0d420",
+      "count": 1,
+      "reason": "Компоненты MembershipRef и ScheduleRef задают разные именованные path-параметры для разных владельцев ресурсов. Оба используют общий OpaqueRef для значения, но объединение самих параметров изменило бы name на одном из маршрутов; найденный структурный повтор остаётся явным."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "b86b35de9f01803def7362b4576913308fb28e29a9148213ad226d4de06c7db7",
+      "count": 1,
+      "reason": "AccessRoleVersion описывает опубликованную версию с серверными метаданными, а AccessRoleInput — вход изменений с иным набором обязательных полей. Общий object/allOf при закрытом additionalProperties поменял бы валидацию либо типы generated клиента; повтор конкретных полей оставлен в разных DTO."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "e4f3ed381fa71313b1d7a79148f27083833a669af46c70690b735f53b0881b84",
+      "count": 1,
+      "reason": "ManagedConfigurationRevision является прочитанной ревизией конфигурации, RoleImageGitSourceInput — вводом Git-источника. Detector в weak mode сопоставил структурные поля двух разных DTO; общая схема не имеет доменной обязанности и размывала бы границу чтения и команды."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "f3e36798aa67637f1a79c10e26e24218a25a99b776ff7c220d7eed7f7b33bedb",
+      "count": 1,
+      "reason": "ManagedConfiguration и ManagedConfigurationSummary имеют разные объёмы безопасного readback: полная конфигурация и краткая проекция списка. Общая object-схема рисковала бы раскрыть поля из полной модели либо изменить generated тип summary; сходные свойства не объединяются без такого контракта."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "c2a618d3133ae61b8cbfad884a480ec65d349b52a953c7d1ca9987e1d7d8e2f3",
+      "count": 1,
+      "reason": "RuntimeSecret и RuntimeEnvironmentSet описывают разные агрегаты с разными owner/visibility правилами. Их совпадающие фрагменты полей не образуют общий предметный объект; объединение схем скрыло бы отдельные проверки секрета и набора окружения."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "cee1b4c65ae07743be54c50012e6a8857875f55f417a0a1a7a4c3f866ded280e",
+      "count": 1,
+      "reason": "ImageVulnerabilityReport является заключением сканирования, а ImageAdmissionRiskDecision — отдельным решением допуска с иным источником authority. Сходные служебные поля не объединяются в общий результат: это смешало бы факт отчёта с подтверждением риска."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "ae52e04ce3752331e13b01c882585df6fcb7b7f8a862e77608534ca175fd3c30",
+      "count": 1,
+      "reason": "WorkflowInputField публикует поле процесса с обязательным key, WorkflowInputFieldInput принимает редактируемый ввод, где key необязателен. Общий object/allOf с additionalProperties false изменил бы required либо generated input/readback типы; повтор точных ограничений полей оставлен раздельно."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "3ce0d0df6eb5134eec89b010f5ba13a82db5620b077dd4d478c488e4a6c8b4c1",
+      "count": 1,
+      "reason": "Workflow содержит опубликованное состояние процесса, WorkflowDraftSnapshot — снимок изменяемого черновика. Совпадающие поля не заменяют разные lineage, версии и жизненный цикл; общий exported DTO скрыл бы различие публикации и редактирования."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "38aedd6c3bd1d2017dba05f1e8a483086bde82ab802b66a7cbb91b6f842875a6",
+      "count": 1,
+      "reason": "SystemAssistantIntegrationGrantCandidates и ProjectAssistantIntegrationGrantCandidates возвращают кандидатов разных областей полномочий. Несмотря на похожий wire-формат, владелец общесистемного и проектного профиля определяется отдельно; единая схема ответа стерла бы эту явную область в generated клиентах."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "80c0534112308b3fff0921362218abd21272337bcec0866f8d1fe324c9eb9fe2",
+      "count": 1,
+      "reason": "Schedule отражает текущее состояние автоматизации, ScheduleRevision — её закреплённую неизменяемую ревизию. Общие поля политики времени не являются одним агрегатом: чтение текущего состояния и истории ревизий имеют разные поля и версии."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "49cfb7b3d893f2f03ee4bca354ba767e39a9f2910f93ddae4df94fa3a1363966",
+      "count": 1,
+      "reason": "Schedule является серверным readback с состоянием и вычисленными полями, ScheduleInput — пользовательским входом с отдельными ограничениями preset/time и другим required-набором. Общий object/allOf изменил бы валидацию или generated тип; совпадающие политики оставлены в разных DTO."
     }
   ]
 }
