@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.96.0
+version: 1.97.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,42 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Девяносто девятая волна — единая fixture repository помощника
+
+На точном запушенном SHA `fb4981548df32ef66a294768cb33a226c350e28b`
+детектор подтвердил 6531 собственный файл, 222 исключения, 1873 raw-группы,
+464 точных решения и 1409 неразобранных; сырой SHA-256 —
+`0c268694cffc085072dc6f9f8a69fa8b71346b17d0c666d2452fdbb305b2d6a5`,
+отпечаток набора —
+`d13131e958ffdae3fa40cd4cb8e784f40a1813a09a448a5094c026122d91830e`.
+Go-реестр: 3122/21048, непокрыты 17926.
+
+Четыре component-теста `assistant_credential_scope`,
+`assistant_parallel_lifecycle`, `assistant_warm_wire` и
+`organization_runtime_environment` использовали одинаковые synthetic
+provider credential и role-image policy. Общая test-only fixture вынесена в
+тот же пакет; caller по-прежнему явно выбирает `gpt-5` либо `gpt-6.1-sol`.
+Bootstrap, tracer, owner principal, idempotency key, restart и проверяемые
+переходы остаются в отдельных сценариях. Новый helper не выполняет Bootstrap,
+поэтому повторное создание adapter после restart сохраняет прежний путь.
+Все 11 объявлений пяти затронутых файлов, включая embedded SQL и helper,
+документированы EN→RU. Шесть исходных clone-групп исчезли; часть иных окон
+переместилась к общей fixture и остаётся в рабочем списке, а не замаскирована
+широким исключением.
+
+Рабочий detector: 6532 собственных файла, 222 исключения, 1867 raw-групп,
+464 точных решения и 1403 неразобранных; сырой SHA-256 —
+`1f481f6fa06f1e5b5753a76fdf5fd3191ef960e004db86471957ba838032c6f4`,
+отпечаток набора —
+`867efe5c8c3b929cb806ab74bf785be42a98e36ac1b1f098cabd395f3189afd6`.
+Go-реестр: 3133/21049, непокрыты 17916. `gofmt`,
+`go test -count=1 ./internal/repository/postgres/platform`,
+`go build ./internal/repository/postgres/platform` и `git diff --check` —
+PASS LOCAL. `KODEX_CONTROL_PLANE_TEST_DSN` отсутствует, поэтому сами
+disposable PostgreSQL component-сценарии пропущены: NOT RUN, не PASS.
+Полный `go-docs -check` и browser/deploy/live — NOT RUN. Точный scan нового
+коммита будет опубликован в текущем PR.
 
 ## Девяносто восьмая волна — точные решения для статических макетов
 

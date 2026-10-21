@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/errs"
 	platformrepo "github.com/codex-k8s/kodex/services/internal/control-plane/internal/domain/repository/platform"
@@ -21,12 +20,28 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// queryOrganizationEnvironmentReparent moves one environment set to a project
+// only inside a disposable fixture to test scope eligibility after mutation.
+// RU: queryOrganizationEnvironmentReparent переносит один набор окружений
+// в проект лишь в disposable fixture для проверки eligibility после изменения.
+//
 //go:embed testdata/sql/organization_environment_reparent.sql
 var queryOrganizationEnvironmentReparent string
 
+// queryOrganizationEnvironmentBindingReparent points one agent binding to a
+// selected environment set within the isolated cross-scope test fixture.
+// RU: queryOrganizationEnvironmentBindingReparent переводит binding одного
+// агента на выбранный набор окружений в изолированном тесте разных scope.
+//
 //go:embed testdata/sql/organization_environment_binding_reparent.sql
 var queryOrganizationEnvironmentBindingReparent string
 
+// TestOrganizationRuntimeEnvironmentComponent verifies organization-scoped
+// environment selection, publication and rejection after reparenting while
+// using a disposable database and an explicit repository query tracer.
+// RU: TestOrganizationRuntimeEnvironmentComponent проверяет выбор и
+// публикацию окружения организации и отказ после переноса, используя
+// disposable БД и явный tracer запросов repository.
 func TestOrganizationRuntimeEnvironmentComponent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
@@ -40,24 +55,7 @@ func TestOrganizationRuntimeEnvironmentComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	repository, err := New(pool, "openai-codex", "gpt-6.1-sol", objectstoragetest.New())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.ConfigureProviderCredential(ProviderCredentialConfig{
-		SecretName: "runtime-provider-openai-default-r1", SecretUID: "10000000-0000-4000-8000-000000000001",
-		SecretResourceVersion: "1", ContentSHA256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := repository.ConfigureRoleImages(RoleImageConfig{
-		PolicyRevision: 1, RoleRuntimeContractRevision: 1, PolicySHA256: strings.Repeat("a", 64), RoleRuntimeContractSHA256: strings.Repeat("b", 64),
-		BuildLeaseDuration: time.Minute, AdmissionClaimTTL: time.Minute, PromotionClaimTTL: time.Minute, MaximumAttempts: 3,
-		StagingRepository: "registry.invalid/kodex/staging", PromotedRepository: "registry.invalid/kodex/roles",
-		DefaultImageReference: "registry.invalid/kodex/roles/system@sha256:" + strings.Repeat("c", 64), LeaseSigningKey: []byte(strings.Repeat("d", 32)),
-	}); err != nil {
-		t.Fatal(err)
-	}
+	repository := newConfiguredAssistantComponentRepository(t, pool, "gpt-6.1-sol")
 	if err := repository.Bootstrap(ctx); err != nil {
 		t.Fatal(err)
 	}
