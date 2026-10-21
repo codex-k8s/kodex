@@ -21,33 +21,56 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
+// boundStreamFixtureMethod is the exact RPC permitted by the stream fixtures.
+// RU: boundStreamFixtureMethod — точный RPC, допустимый в тестовых stream fixtures.
 const boundStreamFixtureMethod = "/fixture.Files/Stream"
 
+// boundStreamProof records the digest consumed by the proof provider and can
+// reject issuance before any underlying stream is opened.
+// RU: boundStreamProof сохраняет digest, полученный поставщиком proof, и может
+// отклонить выпуск до открытия нижележащего stream.
 type boundStreamProof struct {
 	digest  string
 	calls   int
 	failure error
 }
 
+// OperationID resolves only the exact fixture method to its test operation.
+// RU: OperationID сопоставляет тестовую операцию только точному методу fixture.
 func (proof *boundStreamProof) OperationID(method string) (string, bool) {
 	return "fixture.stream", method == boundStreamFixtureMethod
 }
+
+// AuthorityProof records the request digest carried in context and returns
+// either the fixture proof or its configured failure.
+// RU: AuthorityProof сохраняет digest запроса из контекста и возвращает
+// тестовый proof либо настроенный отказ.
 func (proof *boundStreamProof) AuthorityProof(ctx context.Context, _, _ string) (string, string, error) {
 	proof.calls++
 	proof.digest, _ = RequestDigest(ctx)
 	return "proof", "correlation", proof.failure
 }
 
+// boundStreamIssuer captures the exact issuance request for later assertions.
+// RU: boundStreamIssuer сохраняет точный запрос выпуска для последующих проверок.
 type boundStreamIssuer struct {
 	api.AuthorizationIssuerServiceClient
 	request *api.IssueAuthorizationContextRequest
 }
 
+// IssueAuthorizationContext returns a fixture JWS while retaining the request
+// digest that must match the proof provider's observed digest.
+// RU: IssueAuthorizationContext возвращает тестовый JWS, сохраняя digest
+// запроса для сравнения с digest, увиденным поставщиком proof.
 func (issuer *boundStreamIssuer) IssueAuthorizationContext(_ context.Context, request *api.IssueAuthorizationContextRequest, _ ...grpc.CallOption) (*api.IssueAuthorizationContextResponse, error) {
 	issuer.request = request
 	return &api.IssueAuthorizationContextResponse{CompactJws: "authorization"}, nil
 }
 
+// boundStreamVerifier checks method, digest, and downstream peer and can
+// reject a second use of the same context in the replay scenario.
+// RU: boundStreamVerifier проверяет метод, digest и нижележащий peer и может
+// отклонить повторное использование того же контекста в сценарии replay.
 type boundStreamVerifier struct {
 	api.AuthorizationVerifierServiceClient
 	digest string
@@ -55,6 +78,10 @@ type boundStreamVerifier struct {
 	replay bool
 }
 
+// VerifyAuthorizationContext accepts only a request matching the fixture's
+// exact binding, optionally refusing a repeated verification attempt.
+// RU: VerifyAuthorizationContext принимает только запрос с точной тестовой
+// привязкой и при необходимости отклоняет повторную попытку проверки.
 func (verifier *boundStreamVerifier) VerifyAuthorizationContext(_ context.Context, request *api.VerifyAuthorizationContextRequest, _ ...grpc.CallOption) (*api.VerifyAuthorizationContextResponse, error) {
 	verifier.calls++
 	if verifier.replay && verifier.calls > 1 {
@@ -66,6 +93,10 @@ func (verifier *boundStreamVerifier) VerifyAuthorizationContext(_ context.Contex
 	return &api.VerifyAuthorizationContextResponse{Context: &api.VerifiedAuthorizationContext{Jti: "accepted"}}, nil
 }
 
+// boundStreamFixture tracks the one source message and any response sent
+// through an underlying client or server stream.
+// RU: boundStreamFixture учитывает единственное исходное сообщение и ответы,
+// отправленные через нижележащий клиентский либо серверный stream.
 type boundStreamFixture struct {
 	ctx      context.Context
 	initial  proto.Message
@@ -74,14 +105,41 @@ type boundStreamFixture struct {
 	closed   bool
 }
 
+// Context returns the transport context used by this fixture.
+// RU: Context возвращает транспортный контекст тестового stream.
 func (stream *boundStreamFixture) Context() context.Context { return stream.ctx }
-func (*boundStreamFixture) Header() (metadata.MD, error)    { return nil, nil }
-func (*boundStreamFixture) Trailer() metadata.MD            { return nil }
-func (*boundStreamFixture) SetHeader(metadata.MD) error     { return nil }
-func (*boundStreamFixture) SendHeader(metadata.MD) error    { return nil }
-func (*boundStreamFixture) SetTrailer(metadata.MD)          {}
-func (stream *boundStreamFixture) CloseSend() error         { stream.closed = true; return nil }
-func (stream *boundStreamFixture) SendMsg(any) error        { stream.sent++; return nil }
+
+// Header supplies an empty response-header fixture.
+// RU: Header предоставляет пустые заголовки ответа в тестовом stream.
+func (*boundStreamFixture) Header() (metadata.MD, error) { return nil, nil }
+
+// Trailer supplies empty response trailers in the fixture.
+// RU: Trailer предоставляет пустые завершающие метаданные в тестовом stream.
+func (*boundStreamFixture) Trailer() metadata.MD { return nil }
+
+// SetHeader accepts a header without creating a test side effect.
+// RU: SetHeader принимает заголовок без создания тестового побочного эффекта.
+func (*boundStreamFixture) SetHeader(metadata.MD) error { return nil }
+
+// SendHeader accepts a header without recording a response message.
+// RU: SendHeader принимает заголовок, не учитывая его как сообщение ответа.
+func (*boundStreamFixture) SendHeader(metadata.MD) error { return nil }
+
+// SetTrailer accepts trailer metadata without altering stream state.
+// RU: SetTrailer принимает завершающие метаданные без изменения состояния stream.
+func (*boundStreamFixture) SetTrailer(metadata.MD) {}
+
+// CloseSend records that the fixture's request side was closed.
+// RU: CloseSend отмечает закрытие стороны запроса тестового stream.
+func (stream *boundStreamFixture) CloseSend() error { stream.closed = true; return nil }
+
+// SendMsg counts messages that escaped the verification boundary.
+// RU: SendMsg считает сообщения, прошедшие через границу проверки.
+func (stream *boundStreamFixture) SendMsg(any) error { stream.sent++; return nil }
+
+// RecvMsg delivers the initial protobuf message at most once, then returns EOF.
+// RU: RecvMsg выдаёт первичное protobuf-сообщение не более одного раза,
+// после чего возвращает EOF.
 func (stream *boundStreamFixture) RecvMsg(message any) error {
 	if stream.initial == nil || stream.received {
 		return io.EOF
@@ -91,6 +149,10 @@ func (stream *boundStreamFixture) RecvMsg(message any) error {
 	return nil
 }
 
+// streamFixtureDigest computes the deterministic protobuf digest used to
+// assert exact request binding in both client and server scenarios.
+// RU: streamFixtureDigest вычисляет детерминированный protobuf digest для
+// проверки точной привязки запроса в клиентском и серверном сценариях.
 func streamFixtureDigest(t *testing.T, message proto.Message) string {
 	t.Helper()
 	raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(message)
@@ -101,6 +163,10 @@ func streamFixtureDigest(t *testing.T, message proto.Message) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// TestRequestBoundClientStreamIssuesProofBeforeOpeningAndSending checks that
+// proof and context issuance precede open/send and a second send is refused.
+// RU: TestRequestBoundClientStreamIssuesProofBeforeOpeningAndSending проверяет,
+// что proof и выпуск контекста предшествуют открытию/отправке, а повтор запрещён.
 func TestRequestBoundClientStreamIssuesProofBeforeOpeningAndSending(t *testing.T) {
 	initial := wrapperspb.String("exact immutable source")
 	proof, issuer := &boundStreamProof{}, &boundStreamIssuer{}
@@ -143,6 +209,10 @@ func TestRequestBoundClientStreamIssuesProofBeforeOpeningAndSending(t *testing.T
 	}
 }
 
+// TestRequestBoundClientStreamDoesNotOpenAfterProofDenial checks that a denied
+// proof has no issuer call or stream-opening side effect.
+// RU: TestRequestBoundClientStreamDoesNotOpenAfterProofDenial проверяет, что
+// отказ proof не вызывает issuer и не открывает stream.
 func TestRequestBoundClientStreamDoesNotOpenAfterProofDenial(t *testing.T) {
 	proof := &boundStreamProof{failure: status.Error(codes.PermissionDenied, "denied")}
 	issuer := &boundStreamIssuer{}
@@ -160,6 +230,12 @@ func TestRequestBoundClientStreamDoesNotOpenAfterProofDenial(t *testing.T) {
 	}
 }
 
+// TestRequestBoundServerStreamVerifiesActualInitialMessageBeforeOwner covers
+// digest, mTLS, authorization metadata, missing input, and replay before owner
+// code may observe verified context or send a response.
+// RU: TestRequestBoundServerStreamVerifiesActualInitialMessageBeforeOwner
+// проверяет digest, mTLS, метаданные авторизации, отсутствие входа и replay
+// до доступа owner-кода к проверенному контексту или отправке ответа.
 func TestRequestBoundServerStreamVerifiesActualInitialMessageBeforeOwner(t *testing.T) {
 	initial := wrapperspb.String("exact immutable source")
 	certificate := testCertificate(t)
