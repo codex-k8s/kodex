@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+// TestStoreRejectsPathEscape places a credential symlink outside the root and
+// requires Read to reject it without returning the target material.
+// RU: TestStoreRejectsPathEscape помещает ссылку credential за пределы корня
+// и требует отказа Read без выдачи содержимого цели.
 func TestStoreRejectsPathEscape(t *testing.T) {
 	root := t.TempDir()
 	connection := filepath.Join(root, "connection_01")
@@ -28,6 +32,10 @@ func TestStoreRejectsPathEscape(t *testing.T) {
 	}
 }
 
+// TestStoreReadsBoundedPrivateFile checks a read-only file inside one valid
+// connection reference and clears the returned test buffer afterwards.
+// RU: TestStoreReadsBoundedPrivateFile проверяет чтение read-only файла внутри
+// допустимого подключения и затем очищает полученный тестовый буфер.
 func TestStoreReadsBoundedPrivateFile(t *testing.T) {
 	root := t.TempDir()
 	connection := filepath.Join(root, "connection_01")
@@ -51,6 +59,10 @@ func TestStoreReadsBoundedPrivateFile(t *testing.T) {
 	}
 }
 
+// TestStoreReadsProjectedExactSecretKey models Kubernetes ..data symlinks
+// whose final read-only file remains within the selected Secret root.
+// RU: TestStoreReadsProjectedExactSecretKey воспроизводит ссылки Kubernetes
+// ..data, у которых конечный read-only файл остаётся внутри корня Secret.
 func TestStoreReadsProjectedExactSecretKey(t *testing.T) {
 	root := t.TempDir()
 	data := filepath.Join(root, "..2026_08_28")
@@ -76,6 +88,10 @@ func TestStoreReadsProjectedExactSecretKey(t *testing.T) {
 	}
 }
 
+// TestStoreRejectsProjectedKeyOutsideRoot points a projected data key beyond
+// the mounted root and requires the same closed rejection as a normal file.
+// RU: TestStoreRejectsProjectedKeyOutsideRoot направляет projected-ключ за
+// пределы mount и требует закрытого отказа, как для обычного файла.
 func TestStoreRejectsProjectedKeyOutsideRoot(t *testing.T) {
 	root := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "github-token")

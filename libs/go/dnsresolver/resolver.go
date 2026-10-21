@@ -1,4 +1,9 @@
-// Package dnsresolver реализует server-owned DNS с TTL provenance и fail-closed validation.
+// Package dnsresolver resolves bounded A/AAAA and CNAME chains through
+// server-owned DNS endpoints, preserving authoritative TTLs and rejecting
+// incomplete or unsafe answers instead of serving stale snapshots.
+// RU: Пакет dnsresolver разрешает ограниченные цепочки A/AAAA и CNAME через
+// серверные DNS-серверы, сохраняет исходные TTL и отклоняет неполные либо
+// небезопасные ответы вместо выдачи устаревших снимков.
 package dnsresolver
 
 import (
@@ -17,39 +22,77 @@ import (
 	"github.com/miekg/dns"
 )
 
+// maximumResolverConfigBytes limits reads of the server-owned resolver file.
+// RU: maximumResolverConfigBytes ограничивает чтение серверного файла DNS.
 const maximumResolverConfigBytes = 16 << 10
 
-// Reason — закрытый набор исходов DNS validation.
+// Reason is a closed set of DNS failure categories exposed to observers.
+// It cannot carry a hostname, address or arbitrary provider response.
+// RU: Reason задаёт закрытый набор причин ошибок DNS для наблюдателя;
+// в нём нет имени узла, адреса или произвольного ответа провайдера.
 type Reason string
 
 const (
-	ReasonNone      Reason = "none"
-	ReasonTimeout   Reason = "timeout"
-	ReasonNXDOMAIN  Reason = "nxdomain"
+	// ReasonNone denotes a successfully validated snapshot or cache hit.
+	// RU: ReasonNone означает проверенный снимок либо попадание в кэш.
+	ReasonNone Reason = "none"
+	// ReasonTimeout covers cancelled or expired resolution and exchange failures.
+	// RU: ReasonTimeout охватывает отменённое или истёкшее разрешение и сбои обмена.
+	ReasonTimeout Reason = "timeout"
+	// ReasonNXDOMAIN records an authoritative name-error DNS response.
+	// RU: ReasonNXDOMAIN обозначает авторитетный DNS-ответ об отсутствии имени.
+	ReasonNXDOMAIN Reason = "nxdomain"
+	// ReasonTruncated denotes a failed TCP retry after a truncated UDP answer.
+	// RU: ReasonTruncated означает неудачный TCP-повтор усечённого UDP-ответа.
 	ReasonTruncated Reason = "truncated"
+	// ReasonMalformed rejects inconsistent DNS names, records or response fields.
+	// RU: ReasonMalformed отклоняет несогласованные имена, записи или поля DNS-ответа.
 	ReasonMalformed Reason = "malformed"
-	ReasonBounds    Reason = "bounds"
-	ReasonSpecial   Reason = "special_address"
-	ReasonEmpty     Reason = "empty"
+	// ReasonBounds covers query, CNAME, record and message-size limits.
+	// RU: ReasonBounds означает превышение лимитов запросов, CNAME, записей или размера.
+	ReasonBounds Reason = "bounds"
+	// ReasonSpecial rejects a snapshot containing any non-public address.
+	// RU: ReasonSpecial отклоняет снимок с любым непубличным адресом.
+	ReasonSpecial Reason = "special_address"
+	// ReasonEmpty rejects a snapshot without usable A or AAAA addresses.
+	// RU: ReasonEmpty отклоняет снимок без пригодных адресов A или AAAA.
+	ReasonEmpty Reason = "empty"
 )
 
-// Error не раскрывает hostname, resolver address или DNS answer.
+// Error carries only the closed reason; its string omits DNS names, resolver
+// endpoints and answer records so rejection can be reported without leaking them.
+// RU: Error содержит только закрытую причину; его строка не раскрывает имена,
+// адреса DNS-серверов и записи ответа при сообщении об отказе.
 type Error struct{ Reason Reason }
 
+// Error formats the fixed DNS rejection prefix and its closed reason category.
+// RU: Error формирует постоянный префикс отказа DNS и закрытую категорию причины.
 func (err *Error) Error() string { return "DNS resolution rejected: " + string(err.Reason) }
 
-// Snapshot — полный проверенный набор literal addresses с bounded expiry.
+// Snapshot aliases the shared immutable-by-contract address set and exact
+// expiry so egress and the control plane interpret the same DNS provenance.
+// RU: Snapshot ссылается на общий набор адресов и точный срок действия,
+// чтобы egress и control plane одинаково понимали происхождение DNS-данных.
 type Snapshot = shared.Snapshot
 
-// Exchanger выполняет ровно один DNS exchange к literal resolver address.
+// Exchanger executes one DNS exchange against a literal resolver endpoint.
+// The caller supplies the bounded context, message and UDP/TCP network.
+// RU: Exchanger выполняет один DNS-обмен с буквальным адресом сервера;
+// вызывающий код задаёт ограниченный контекст, сообщение и UDP либо TCP.
 type Exchanger interface {
+	// Exchange returns one response or error without choosing another server.
+	// RU: Exchange возвращает один ответ или ошибку, не выбирая другой сервер.
 	Exchange(context.Context, *dns.Msg, netip.AddrPort, string) (*dns.Msg, error)
 }
 
-// Observer принимает только закрытые outcome/reason.
+// Observer receives only bounded outcome and reason labels, never query data.
+// RU: Observer получает только ограниченные метки исхода и причины, без данных запроса.
 type Observer func(outcome string, reason Reason)
 
-// Resolver владеет A/AAAA resolution и bounded cache.
+// Resolver owns A/AAAA lookups, CNAME traversal, a bounded cache and the last
+// validation health bit; server addresses are copied at construction.
+// RU: Resolver владеет запросами A/AAAA, переходами CNAME, ограниченным кэшем
+// и признаком последней проверки; адреса серверов копируются при создании.
 type Resolver struct {
 	config    Config
 	servers   []netip.AddrPort
@@ -61,7 +104,12 @@ type Resolver struct {
 	cache     map[string]Snapshot
 }
 
-// New создаёт resolver только из literal DNS server addresses.
+// New validates all limits and one to three literal port-53 DNS servers before
+// creating a resolver. A nil exchanger uses the network client; a nil observer
+// becomes a no-op, so neither changes the validation policy.
+// RU: New проверяет все лимиты и от одного до трёх буквальных адресов DNS на
+// порту53. При nil обменнике используется сетевой клиент, а nil наблюдатель
+// не выполняет действий; это не меняет политику проверки.
 func New(config Config, servers []netip.AddrPort, exchanger Exchanger, observe Observer) (*Resolver, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
@@ -86,7 +134,12 @@ func New(config Config, servers []netip.AddrPort, exchanger Exchanger, observe O
 	}, nil
 }
 
-// LoadSystemServers bounded-разбирает /etc/resolv.conf и принимает только IP literals.
+// LoadSystemServers reads at most 16 KiB from the server-selected resolver
+// file, deduplicates up to three literal nameservers and assigns port 53.
+// It rejects malformed entries without returning resolver addresses in errors.
+// RU: LoadSystemServers читает не более16 КиБ из выбранного сервером файла,
+// убирает повторы, принимает до трёх буквальных IP DNS и назначает порт53.
+// Некорректные записи отклоняются без раскрытия адресов в ошибках.
 func LoadSystemServers(path string) ([]netip.AddrPort, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -129,19 +182,34 @@ func LoadSystemServers(path string) ([]netip.AddrPort, error) {
 	return servers, nil
 }
 
-// Healthy сообщает результат последней полной DNS validation.
+// Healthy reports whether the most recent resolution completed validation;
+// a nil resolver is unhealthy, and every rejection clears the bit.
+// RU: Healthy сообщает, прошла ли последняя попытка разрешения проверку;
+// nil resolver считается нездоровым, любой отказ сбрасывает признак.
 func (resolver *Resolver) Healthy() bool { return resolver != nil && resolver.healthy.Load() }
 
-// Resolve возвращает только полный validated snapshot; stale fallback отсутствует.
+// Resolve returns a fully validated snapshot, reusing only an unexpired cache
+// entry and rechecking its addresses; it has no stale fallback.
+// RU: Resolve возвращает полностью проверенный снимок: использует только
+// действующий кэш и повторно проверяет его адреса, без устаревшего fallback.
 func (resolver *Resolver) Resolve(ctx context.Context, hostname string) (Snapshot, error) {
 	return resolver.resolve(ctx, hostname, false)
 }
 
-// Refresh получает новый authoritative snapshot, не продлевая действующий cache.
+// Refresh bypasses the cache and replaces it only after a complete DNS check;
+// on failure it discards the old entry instead of extending its lifetime.
+// RU: Refresh обходит кэш и заменяет запись лишь после полной проверки DNS;
+// при отказе удаляет прежнюю запись вместо продления её срока.
 func (resolver *Resolver) Refresh(ctx context.Context, hostname string) (Snapshot, error) {
 	return resolver.resolve(ctx, hostname, true)
 }
 
+// resolve normalizes the host, validates both address families and publishes a
+// snapshot with the shortest authoritative TTL; only sufficiently long answers
+// enter the cache, and a cancelled or expired result is never returned.
+// RU: resolve нормализует имя, проверяет оба семейства адресов и выдаёт снимок
+// с наименьшим исходным TTL. В кэш попадают только достаточно долгие ответы;
+// отменённый либо истёкший результат не выдаётся.
 func (resolver *Resolver) resolve(ctx context.Context, hostname string, refresh bool) (Snapshot, error) {
 	if ctx.Err() != nil {
 		return resolver.reject(ReasonTimeout)
@@ -218,12 +286,20 @@ func (resolver *Resolver) resolve(ctx context.Context, hostname string, refresh 
 	return snapshot, nil
 }
 
+// discard removes one cached host under its mutex after a failed refresh.
+// RU: discard удаляет одно имя из кэша под блокировкой после неудачного обновления.
 func (resolver *Resolver) discard(hostname string) {
 	resolver.cacheMu.Lock()
 	delete(resolver.cache, hostname)
 	resolver.cacheMu.Unlock()
 }
 
+// resolveType follows one address family through bounded CNAME hops, counting
+// each exchange across both families and rejecting loops or unrelated owners.
+// It returns a negative TTL only when that family has no address records.
+// RU: resolveType проходит одно семейство через ограниченную цепочку CNAME,
+// суммарно считает запросы обоих семейств и отклоняет циклы и посторонние имена.
+// Отрицательный TTL возвращается, лишь когда у семейства нет адресных записей.
 func (resolver *Resolver) resolveType(ctx context.Context, hostname string, queryType uint16, queries *int) ([]netip.Addr, time.Duration, error) {
 	current := hostname
 	seen := map[string]struct{}{current: {}}
@@ -279,6 +355,12 @@ func (resolver *Resolver) resolveType(ctx context.Context, hostname string, quer
 	}
 }
 
+// query tries configured servers in order, retries truncated UDP answers over
+// TCP with a fresh deadline, then validates the matching response envelope.
+// Transport failures are classified without leaking server or answer details.
+// RU: query перебирает серверы по порядку, повторяет усечённый UDP через TCP
+// с новым сроком ожидания и проверяет соответствие DNS-ответа запросу.
+// Сбои транспорта классифицируются без раскрытия деталей сервера и ответа.
 func (resolver *Resolver) query(ctx context.Context, hostname string, queryType uint16) (*dns.Msg, error) {
 	request := new(dns.Msg)
 	request.SetQuestion(dns.Fqdn(hostname), queryType)
@@ -312,6 +394,10 @@ func (resolver *Resolver) query(ctx context.Context, hostname string, queryType 
 	return nil, &Error{Reason: ReasonTimeout}
 }
 
+// validateResponse requires the original question and transaction ID, rejects
+// DNS errors other than NXDOMAIN separately, and enforces record/byte bounds.
+// RU: validateResponse требует исходный вопрос и ID транзакции, отдельно
+// обозначает NXDOMAIN и ограничивает число записей и размер DNS-ответа.
 func (resolver *Resolver) validateResponse(request, response *dns.Msg) error {
 	if response == nil || !response.Response || response.Id != request.Id || response.Opcode != dns.OpcodeQuery ||
 		len(response.Question) != 1 || response.Question[0] != request.Question[0] {
@@ -329,6 +415,12 @@ func (resolver *Resolver) validateResponse(request, response *dns.Msg) error {
 	return nil
 }
 
+// parseAnswers accepts only Internet-class CNAME and the requested A or AAAA
+// records, retaining the minimum TTL per owner and rejecting mixed record
+// kinds, invalid addresses and unexpected answer types.
+// RU: parseAnswers принимает только записи Internet-class CNAME и запрошенные
+// A либо AAAA, хранит минимальный TTL каждого имени и отклоняет смешанные
+// типы записей, некорректные адреса и неожиданные типы ответа.
 func (resolver *Resolver) parseAnswers(response *dns.Msg, queryType uint16) (map[string]string, map[string][]netip.Addr, map[string]time.Duration, error) {
 	cnames := map[string]string{}
 	addresses := map[string][]netip.Addr{}
@@ -381,12 +473,20 @@ func (resolver *Resolver) parseAnswers(response *dns.Msg, queryType uint16) (map
 	return cnames, addresses, ttls, nil
 }
 
+// reject clears the last-health flag, emits only a closed reason and returns
+// no partial address snapshot to the caller.
+// RU: reject сбрасывает признак здоровья, сообщает лишь закрытую причину
+// и не возвращает вызывающему коду частичный снимок адресов.
 func (resolver *Resolver) reject(reason Reason) (Snapshot, error) {
 	resolver.healthy.Store(false)
 	resolver.observe("rejected", reason)
 	return Snapshot{}, &Error{Reason: reason}
 }
 
+// store copies addresses into the cache and evicts the earliest-expiring
+// entry at capacity; callers must hold cacheMu throughout this operation.
+// RU: store копирует адреса в кэш и при заполнении удаляет запись с ближайшим
+// сроком окончания; вызывающий код удерживает cacheMu на всём протяжении.
 func (resolver *Resolver) store(hostname string, snapshot Snapshot) {
 	snapshot.Addresses = append([]netip.Addr(nil), snapshot.Addresses...)
 	if len(resolver.cache) >= resolver.config.MaximumCacheEntries {
@@ -402,14 +502,26 @@ func (resolver *Resolver) store(hostname string, snapshot Snapshot) {
 	resolver.cache[hostname] = snapshot
 }
 
+// networkExchanger performs one context-bound UDP or TCP exchange through
+// miekg/dns, with a client timeout and a bounded UDP message size.
+// RU: networkExchanger выполняет один UDP- либо TCP-обмен через miekg/dns
+// с контекстом, сроком ожидания клиента и ограниченным размером UDP-сообщения.
 type networkExchanger struct{ timeout time.Duration }
 
+// Exchange sends the given message to the selected literal server and returns
+// its response without selecting another endpoint or validating DNS semantics.
+// RU: Exchange отправляет сообщение выбранному буквальному адресу сервера и
+// возвращает ответ, не выбирая другой сервер и не проверяя смысл DNS-записей.
 func (exchanger networkExchanger) Exchange(ctx context.Context, request *dns.Msg, server netip.AddrPort, network string) (*dns.Msg, error) {
 	client := &dns.Client{Net: network, Timeout: exchanger.timeout, UDPSize: 1232}
 	response, _, err := client.ExchangeContext(ctx, request, server.String())
 	return response, err
 }
 
+// normalizeDNSName removes the final DNS dot and applies the shared hostname
+// policy; invalid names become a closed malformed-response reason.
+// RU: normalizeDNSName убирает конечную точку DNS и применяет общую политику
+// имён; неправильное имя превращается в закрытую причину неверного ответа.
 func normalizeDNSName(value string) (string, error) {
 	value = strings.TrimSuffix(value, ".")
 	hostname, err := shared.NormalizeHostname(value)
@@ -419,6 +531,10 @@ func normalizeDNSName(value string) (string, error) {
 	return hostname, nil
 }
 
+// errorReason preserves typed resolver reasons and maps all unrelated errors
+// to malformed rather than exposing arbitrary error strings to observers.
+// RU: errorReason сохраняет типизированные причины resolver, а остальные
+// ошибки относит к malformed без передачи произвольного текста наблюдателю.
 func errorReason(err error) Reason {
 	var resolutionErr *Error
 	if errors.As(err, &resolutionErr) {
@@ -427,6 +543,10 @@ func errorReason(err error) Reason {
 	return ReasonMalformed
 }
 
+// onlyUsedOwners requires every CNAME and address owner in one answer to lie
+// on the followed chain, so unrelated records cannot influence validation.
+// RU: onlyUsedOwners требует, чтобы каждое имя CNAME и адреса в ответе входило
+// в пройденную цепочку, исключая влияние посторонних записей на проверку.
 func onlyUsedOwners(cnames map[string]string, addresses map[string][]netip.Addr, used map[string]struct{}) bool {
 	for owner := range cnames {
 		if _, ok := used[owner]; !ok {
@@ -441,6 +561,10 @@ func onlyUsedOwners(cnames map[string]string, addresses map[string][]netip.Addr,
 	return true
 }
 
+// minTTL folds owner TTLs across one CNAME chain, treating a negative current
+// value as an unset accumulator.
+// RU: minTTL сводит TTL имён одной цепочки CNAME; отрицательное текущее
+// значение означает ещё не заданный накопитель.
 func minTTL(current, candidate time.Duration) time.Duration {
 	if current < 0 || candidate < current {
 		return candidate
@@ -448,6 +572,10 @@ func minTTL(current, candidate time.Duration) time.Duration {
 	return current
 }
 
+// minimumResolvedTTL combines A and AAAA TTLs while treating a negative
+// family result as absent rather than as a short authoritative expiry.
+// RU: minimumResolvedTTL объединяет TTL A и AAAA, считая отрицательный
+// результат семейства отсутствием, а не коротким сроком действия.
 func minimumResolvedTTL(left, right time.Duration) time.Duration {
 	if left < 0 {
 		return right
@@ -458,6 +586,10 @@ func minimumResolvedTTL(left, right time.Duration) time.Duration {
 	return right
 }
 
+// uniqueSorted removes repeated addresses and sorts the remaining IPv4/IPv6
+// values for a stable snapshot independent of DNS answer order.
+// RU: uniqueSorted убирает повторяющиеся адреса и сортирует оставшиеся IPv4/IPv6
+// для стабильного снимка независимо от порядка записей в DNS-ответе.
 func uniqueSorted(values []netip.Addr) []netip.Addr {
 	seen := make(map[netip.Addr]struct{}, len(values))
 	result := make([]netip.Addr, 0, len(values))

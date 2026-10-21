@@ -2,10 +2,16 @@ package dnsresolver
 
 import "errors"
 
-// ErrInvalidConfig не содержит имён resolver или caller input.
+// ErrInvalidConfig reports a bound violation without exposing resolver names
+// or caller-controlled configuration values.
+// RU: ErrInvalidConfig сообщает о нарушении границ конфигурации без раскрытия
+// имён DNS-серверов или значений, переданных вызывающей стороной.
 var ErrInvalidConfig = errors.New("DNS resolver bounds are invalid")
 
-// Config ограничивает server-owned DNS, не назначая resolver addresses из payload.
+// Config bounds the server-owned DNS work, cache, response size and timeout.
+// The list of resolver addresses is supplied separately, never from a request.
+// RU: Config ограничивает DNS-запросы, кэш, размер ответа и время ожидания,
+// которыми управляет сервер. Адреса DNS-серверов передаются отдельно, не из запроса.
 type Config struct {
 	MinimumTTLSeconds        int `json:"minimumTTLSeconds"`
 	MaximumTTLSeconds        int `json:"maximumTTLSeconds"`
@@ -17,6 +23,10 @@ type Config struct {
 	QueryTimeoutMilliseconds int `json:"queryTimeoutMilliseconds"`
 }
 
+// Validate rejects missing, inverted or out-of-range DNS limits before any
+// exchanger or cache is constructed; it returns one value-free sentinel.
+// RU: Validate отклоняет отсутствующие, перевёрнутые и выходящие за границы
+// лимиты DNS до создания обменника или кэша; возвращает один sentinel без значений.
 func (c Config) Validate() error {
 	if c.MinimumTTLSeconds < 5 || c.MinimumTTLSeconds > 300 ||
 		c.MaximumTTLSeconds < c.MinimumTTLSeconds || c.MaximumTTLSeconds > 3600 ||

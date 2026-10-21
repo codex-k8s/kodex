@@ -12,6 +12,10 @@ import (
 	"github.com/miekg/dns"
 )
 
+// TestValidateAddressesRejectsSpecialPurposeAndMixedSnapshots checks the shared
+// public-address boundary for reserved IPv4/IPv6 and mixed DNS answer sets.
+// RU: TestValidateAddressesRejectsSpecialPurposeAndMixedSnapshots проверяет
+// отказ для зарезервированных IPv4/IPv6 и смешанных DNS-наборов.
 func TestValidateAddressesRejectsSpecialPurposeAndMixedSnapshots(t *testing.T) {
 	prohibited := []string{
 		"0.0.0.1", "10.0.0.1", "100.64.0.1", "127.0.0.1", "169.254.1.1", "172.16.0.1",
@@ -38,6 +42,10 @@ func TestValidateAddressesRejectsSpecialPurposeAndMixedSnapshots(t *testing.T) {
 	}
 }
 
+// TestResolverUsesTTLCacheAndRejectsRebinding advances the clock across a TTL
+// to prove a cached public answer cannot mask a later private DNS answer.
+// RU: TestResolverUsesTTLCacheAndRejectsRebinding переводит часы через TTL
+// и проверяет, что публичный кэш не скрывает последующий частный DNS-адрес.
 func TestResolverUsesTTLCacheAndRejectsRebinding(t *testing.T) {
 	now := time.Unix(1_000, 0)
 	exchange := &sequenceExchanger{a: []string{"93.184.216.34", "10.0.0.1"}, ttl: 5}
@@ -58,6 +66,10 @@ func TestResolverUsesTTLCacheAndRejectsRebinding(t *testing.T) {
 	}
 }
 
+// TestResolverDoesNotCacheZeroTTLAnswer requires zero-TTL responses to fail
+// closed on every lookup rather than being reused from a cache entry.
+// RU: TestResolverDoesNotCacheZeroTTLAnswer требует закрытого отказа для
+// нулевого TTL при каждом поиске вместо повторной выдачи записи кэша.
 func TestResolverDoesNotCacheZeroTTLAnswer(t *testing.T) {
 	exchange := &sequenceExchanger{a: []string{"93.184.216.34"}, ttl: 0}
 	resolver := newTestResolver(t, exchange)
@@ -71,6 +83,12 @@ func TestResolverDoesNotCacheZeroTTLAnswer(t *testing.T) {
 	}
 }
 
+// TestResolverDoesNotExtendShortTTLOrShareCachedAddresses checks that a short
+// authoritative TTL is not stretched by the cache floor and that callers
+// cannot mutate the cached address slice through a returned snapshot.
+// RU: TestResolverDoesNotExtendShortTTLOrShareCachedAddresses проверяет, что
+// нижний предел кэша не продлевает короткий TTL и вызывающий код не меняет
+// хранимые адреса через полученный снимок.
 func TestResolverDoesNotExtendShortTTLOrShareCachedAddresses(t *testing.T) {
 	now := time.Unix(1_000, 0)
 	exchange := &sequenceExchanger{a: []string{"93.184.216.34"}, ttl: 1}
@@ -94,6 +112,10 @@ func TestResolverDoesNotExtendShortTTLOrShareCachedAddresses(t *testing.T) {
 	}
 }
 
+// TestRefreshBypassesAndAtomicallyReplacesValidCache checks both successful
+// replacement and eviction of the previous entry after an unsafe refresh.
+// RU: TestRefreshBypassesAndAtomicallyReplacesValidCache проверяет замену
+// кэша после успеха и удаление прежней записи после небезопасного обновления.
 func TestRefreshBypassesAndAtomicallyReplacesValidCache(t *testing.T) {
 	now := time.Unix(1_000, 0)
 	exchange := &sequenceExchanger{a: []string{"93.184.216.34", "8.8.8.8", "10.0.0.1"}, ttl: 10}
@@ -116,6 +138,10 @@ func TestRefreshBypassesAndAtomicallyReplacesValidCache(t *testing.T) {
 	}
 }
 
+// TestResolverRejectsCancelledCacheAndExpiredResolution proves cancellation
+// blocks cache reads and an answer that expires in flight never becomes ready.
+// RU: TestResolverRejectsCancelledCacheAndExpiredResolution проверяет, что
+// отмена блокирует чтение кэша, а ответ, истёкший в пути, не становится готовым.
 func TestResolverRejectsCancelledCacheAndExpiredResolution(t *testing.T) {
 	now := time.Unix(1_000, 0)
 	exchange := &sequenceExchanger{a: []string{"93.184.216.34"}, ttl: 5}
@@ -140,6 +166,10 @@ func TestResolverRejectsCancelledCacheAndExpiredResolution(t *testing.T) {
 	}
 }
 
+// TestResolverConstructorRequiresCompleteBoundedConfiguration varies each
+// configured bound and requires the same sentinel before network access.
+// RU: TestResolverConstructorRequiresCompleteBoundedConfiguration изменяет
+// каждый лимит и ожидает один sentinel до любого обращения к сети.
 func TestResolverConstructorRequiresCompleteBoundedConfiguration(t *testing.T) {
 	valid := Config{MinimumTTLSeconds: 5, MaximumTTLSeconds: 30, MaximumCacheEntries: 8, MaximumQueries: 8, MaximumCNAMEDepth: 4, MaximumRecords: 16, MaximumMessageBytes: 4096, QueryTimeoutMilliseconds: 500}
 	for _, change := range []func(*Config){
@@ -160,6 +190,10 @@ func TestResolverConstructorRequiresCompleteBoundedConfiguration(t *testing.T) {
 	}
 }
 
+// TestResolverFollowsBoundedCNAMEAndRecoversTruncationOverTCP checks a valid
+// CNAME chain, a TCP retry after truncated UDP for A, and both address families.
+// RU: TestResolverFollowsBoundedCNAMEAndRecoversTruncationOverTCP проверяет
+// допустимую цепочку, TCP-повтор для усечённого A-ответа и оба семейства адресов.
 func TestResolverFollowsBoundedCNAMEAndRecoversTruncationOverTCP(t *testing.T) {
 	exchange := &cnameExchanger{}
 	resolver := newTestResolver(t, exchange)
@@ -172,6 +206,10 @@ func TestResolverFollowsBoundedCNAMEAndRecoversTruncationOverTCP(t *testing.T) {
 	}
 }
 
+// TestResolverRejectsCNAMEOverflow exercises both a repeated target and a
+// chain longer than the configured maximum depth.
+// RU: TestResolverRejectsCNAMEOverflow проверяет повтор цели CNAME и цепочку,
+// длина которой превышает настроенный предел.
 func TestResolverRejectsCNAMEOverflow(t *testing.T) {
 	for _, exchange := range []Exchanger{&loopExchanger{}, &longChainExchanger{}} {
 		resolver := newTestResolver(t, exchange)
@@ -181,6 +219,10 @@ func TestResolverRejectsCNAMEOverflow(t *testing.T) {
 	}
 }
 
+// TestResolverRejectsAnswerRecordOverflow requires the DNS record cap to
+// reject a syntactically valid but oversized answer before it is returned.
+// RU: TestResolverRejectsAnswerRecordOverflow требует отказа для допустимого
+// по форме ответа с избытком записей до его выдачи вызывающему коду.
 func TestResolverRejectsAnswerRecordOverflow(t *testing.T) {
 	resolver := newTestResolver(t, &recordOverflowExchanger{})
 	_, err := resolver.Resolve(context.Background(), "api.openai.com")
@@ -190,6 +232,10 @@ func TestResolverRejectsAnswerRecordOverflow(t *testing.T) {
 	}
 }
 
+// newTestResolver builds a bounded resolver with an injected exchanger and a
+// loopback literal server; fixtures never need public DNS or live providers.
+// RU: newTestResolver создаёт ограниченный resolver с подставным обменником
+// и буквальным loopback-адресом, без обращения к публичному DNS или провайдеру.
 func newTestResolver(t *testing.T, exchanger Exchanger) *Resolver {
 	t.Helper()
 	config := Config{
@@ -204,12 +250,20 @@ func newTestResolver(t *testing.T, exchanger Exchanger) *Resolver {
 	return resolver
 }
 
+// sequenceExchanger returns successive A answers to exercise TTL and DNS
+// rebinding while recording how often the network path was used.
+// RU: sequenceExchanger последовательно выдаёт A-ответы для проверки TTL и
+// смены адреса DNS, учитывая число сетевых запросов.
 type sequenceExchanger struct {
 	a      []string
 	ttl    uint32
 	aCalls int
 }
 
+// Exchange returns the next configured IPv4 address for A and an empty valid
+// response for AAAA, with the same transaction and question as the request.
+// RU: Exchange возвращает следующий IPv4 для A и пустой допустимый ответ для
+// AAAA, сохраняя ID транзакции и вопрос исходного запроса.
 func (exchange *sequenceExchanger) Exchange(_ context.Context, request *dns.Msg, _ netip.AddrPort, _ string) (*dns.Msg, error) {
 	response := new(dns.Msg)
 	response.SetReply(request)
@@ -224,8 +278,16 @@ func (exchange *sequenceExchanger) Exchange(_ context.Context, request *dns.Msg,
 	return response, nil
 }
 
+// cnameExchanger supplies a valid CNAME chain and forces an initial UDP
+// truncation so tests can observe the TCP recovery path.
+// RU: cnameExchanger выдаёт допустимую цепочку CNAME и принудительно усекает
+// первый UDP-ответ для проверки восстановления через TCP.
 type cnameExchanger struct{ tcpCalls int }
 
+// Exchange returns a truncated initial UDP answer, then a CNAME or final
+// address answer and counts TCP retries on the same test fixture.
+// RU: Exchange сначала выдаёт усечённый UDP-ответ, затем CNAME или конечный
+// адрес и считает TCP-повторы внутри того же тестового сценария.
 func (exchange *cnameExchanger) Exchange(_ context.Context, request *dns.Msg, _ netip.AddrPort, network string) (*dns.Msg, error) {
 	response := new(dns.Msg)
 	response.SetReply(request)
@@ -249,8 +311,16 @@ func (exchange *cnameExchanger) Exchange(_ context.Context, request *dns.Msg, _ 
 	return response, nil
 }
 
+// loopExchanger alternates two CNAME owners to model a resolvable-looking
+// answer that must fail when the target repeats.
+// RU: loopExchanger чередует два имени CNAME, имитируя внешне корректный
+// ответ, который должен быть отклонён после повторения цели.
 type loopExchanger struct{}
 
+// Exchange returns the opposite CNAME owner while preserving the request
+// envelope, exposing only the resolver's loop detection to the test.
+// RU: Exchange возвращает противоположное имя CNAME с сохранением оболочки
+// запроса, чтобы тест проверял именно обнаружение цикла resolver.
 func (*loopExchanger) Exchange(_ context.Context, request *dns.Msg, _ netip.AddrPort, _ string) (*dns.Msg, error) {
 	response := new(dns.Msg)
 	response.SetReply(request)
@@ -263,8 +333,16 @@ func (*loopExchanger) Exchange(_ context.Context, request *dns.Msg, _ netip.Addr
 	return response, nil
 }
 
+// longChainExchanger generates fresh CNAME targets until the configured depth
+// rejects the chain, keeping a counter per fixture instance.
+// RU: longChainExchanger создаёт новые цели CNAME до превышения предела
+// глубины, сохраняя счётчик внутри одного тестового экземпляра.
 type longChainExchanger struct{ count int }
 
+// Exchange synthesizes one new CNAME target per query with a matching DNS
+// reply envelope; it does not use external resolution.
+// RU: Exchange создаёт одну новую цель CNAME на запрос с совпадающей
+// оболочкой DNS-ответа и не обращается к внешнему resolver.
 func (exchange *longChainExchanger) Exchange(_ context.Context, request *dns.Msg, _ netip.AddrPort, _ string) (*dns.Msg, error) {
 	response := new(dns.Msg)
 	response.SetReply(request)
@@ -274,8 +352,16 @@ func (exchange *longChainExchanger) Exchange(_ context.Context, request *dns.Msg
 	return response, nil
 }
 
+// recordOverflowExchanger returns more A records than the fixture's bound to
+// verify rejection before the response is admitted as a snapshot.
+// RU: recordOverflowExchanger возвращает больше A-записей, чем разрешено
+// тестовым лимитом, для проверки отказа до допуска снимка.
 type recordOverflowExchanger struct{}
 
+// Exchange fills an otherwise matching DNS response with seventeen A records,
+// one above the fixture limit, without contacting a network endpoint.
+// RU: Exchange заполняет совпадающий с запросом DNS-ответ семнадцатью
+// A-записями, на одну выше тестового лимита, без обращения к сети.
 func (*recordOverflowExchanger) Exchange(_ context.Context, request *dns.Msg, _ netip.AddrPort, _ string) (*dns.Msg, error) {
 	response := new(dns.Msg)
 	response.SetReply(request)
