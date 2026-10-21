@@ -2,6 +2,46 @@
   "version": 1,
   "entries": [
     {
+      "format": "sql",
+      "firstPath": "deploy/k8s/base/platform-state/postgresql/10-bootstrap.sql",
+      "secondPath": "deploy/k8s/base/platform-state/postgresql/10-bootstrap.sql",
+      "fragmentSHA256": "10e74c146910a6a8868d0805f9083a6b33c8f94596f4a3c610d98952777a70fe",
+      "count": 1,
+      "reason": "Совпадает объявление таблицы goose_db_version в двух разных базах внутри одного bootstrap-файла: control_plane и internal_rpc_authority. После каждого отдельного \\connect меняются owner, права migrator и backup reader. Объединение потребовало бы динамического SQL через границу баз и скрыло бы явно проверяемые grants; сохраняется только точное окно схемы, не весь bootstrap."
+    },
+    {
+      "format": "sql",
+      "firstPath": "libs/go/eventing/postgresinbox/sql/blockage__get.sql",
+      "secondPath": "libs/go/eventing/postgresinbox/sql/blockage__list.sql",
+      "fragmentSHA256": "08dda1fca025c38698d09469966c3374d558d0f3b84e66f2aa5109e03142dac4",
+      "count": 1,
+      "reason": "Совпадают проекции полей blocker и cursor, но blockage__get ищет первого непогашенного предшественника конкретного event_id, а blockage__list ранжирует блокировки по ordering_key и ограничивает страницу курсором. Вынесение SQL-фрагмента в общий view лишило бы запросы их точных предикатов, плана и контракта :one/:many; оставлено только это совпадение."
+    },
+    {
+      "format": "sql",
+      "firstPath": "libs/go/eventing/postgresinbox/sql/effect__inspect.sql",
+      "secondPath": "libs/go/eventing/postgresinbox/sql/schema__inspect.sql",
+      "fragmentSHA256": "972d429e1fa4527bb76da7781f736f2e4a790be6865896722726eb0528c9b58d",
+      "count": 1,
+      "reason": "Общий текст ACL-проверки функции используется для разных security assertions: effect__inspect валидирует точную сигнатуру, volatility, owner и EXECUTE effect-функции, а schema__inspect проверяет privilege элемента runtime_event_ordering_key в общей схеме. Универсальная SQL-функция потребовала бы новых прав и изменила бы независимый readback; сохраняется конкретное окно."
+    },
+    {
+      "format": "sql",
+      "firstPath": "tools/dev/supply-chain-owner-readback.sql",
+      "secondPath": "tools/release/runner-policy-readback.sql",
+      "fragmentSHA256": "453249bd1a3b7934783eac57e235061f527db3f7731f4d67dc9d3d0cce80d67f",
+      "count": 1,
+      "reason": "Совпадает ограниченный агрегат promotedPinsSHA256 для owner readback, но dev-скрипт показывает простую сводку работы, а release-скрипт вычисляет строгий набор promotion blockers с проверкой superseded snapshots. Общий DB view расширил бы установку и права только ради диагностического выражения; сохраняется точная пара SQL-фрагментов."
+    },
+    {
+      "format": "sql",
+      "firstPath": "tools/release/runner-pending-promotions-readback.sql",
+      "secondPath": "tools/release/runner-policy-readback.sql",
+      "fragmentSHA256": "7d15c6a7677a4fffee984e6349ccd552296681c782f1382de6f0399e89721bc5",
+      "count": 1,
+      "reason": "Общее окно перечисляет состояния artifact, при которых promotion может ждать владельца; pending-promotions отдаёт ограниченный список ссылок и фактов для диагностики, а runner-policy сворачивает и фильтрует кандидатов для точного release gate. Объединение в общее представление смешало бы page/readback с authority-решением; исключена только эта пара и хеш."
+    },
+    {
       "format": "go",
       "firstPath": "services/external/egress-gateway/internal/app/app.go",
       "secondPath": "services/external/egress-gateway/internal/app/app.go",
