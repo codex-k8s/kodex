@@ -9,7 +9,10 @@ import (
 	"github.com/google/uuid"
 )
 
-// Envelope — канонический неизменяемый конверт доменного события.
+// Envelope carries the transport metadata and raw JSON object of one domain
+// event; producers retain the same identity and sequence across retries.
+// RU: Envelope переносит транспортные метаданные и исходный JSON-объект одного
+// доменного события; при повторе отправитель сохраняет идентичность и порядок.
 type Envelope struct {
 	EventID          string          `json:"eventId"`
 	EventName        string          `json:"eventName"`
@@ -26,7 +29,12 @@ type Envelope struct {
 	Data             json.RawMessage `json:"data"`
 }
 
-// Validate закрыто проверяет ограниченные транспортные инварианты конверта.
+// Validate checks required identifiers, positive versions, UTC microsecond
+// precision and an object-shaped payload before a broker publish or storage.
+// It does not validate the event-specific schema of Data.
+// RU: Validate проверяет обязательные идентификаторы, положительные версии,
+// точность времени UTC до микросекунды и форму объекта перед публикацией либо
+// хранением. Схему Data для конкретного события метод не проверяет.
 func (envelope Envelope) Validate() error {
 	if _, err := uuid.Parse(envelope.EventID); err != nil ||
 		envelope.EventName == "" || len(envelope.EventName) > 128 ||
@@ -60,7 +68,10 @@ func (envelope Envelope) Validate() error {
 	return nil
 }
 
-// Marshal сериализует только предварительно проверенный envelope.
+// Marshal validates the envelope before encoding it as JSON; on validation
+// or encoding failure it returns no partial transport payload.
+// RU: Marshal проверяет конверт до кодирования в JSON; при ошибке проверки
+// либо кодирования частичная транспортная нагрузка не возвращается.
 func (envelope Envelope) Marshal() ([]byte, error) {
 	if err := envelope.Validate(); err != nil {
 		return nil, err
