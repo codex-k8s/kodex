@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.153.0
+version: 1.154.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,40 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто пятьдесят четвёртая волна — комментарии stdin-валидаторов образа
+
+На базе опубликованного SHA `8d1a0ed66b8a98f4cbe3d6ce2b39d301bac8c819`
+полностью EN→RU описаны два собственных Go CLI в role-image-builder:
+`image-tool-inventory-validator` — 6/6 объявлений,
+`image-vulnerability-report-validator` — 12/12. Включены sentinel variables,
+main/validate, тестовые factories, типы и методы ошибочного reader/writer.
+Два package-пояснения также переведены в двуязычный формат.
+
+Комментарии фиксируют bounded stdin и закрытые режимы, отсутствие чтения
+credentials/RPC, strict decoders и canonical capture bytes, тишину
+validation-only режимов, safe sentinel вместо private I/O diagnostics,
+ошибку short write, обнуление принятых buffers и сохранность исходного
+scanner hash. Структурная проверка report/risk envelope явно не названа
+выданным сервером owner approval или допуском образа. Сами синтетические
+risk fixtures не создают настоящих решений и grants.
+
+Исполняемые строки, схемы, лимиты, error codes и условия тестов не менялись;
+удалены только прежние три строки package-комментариев. Полный
+`go test -count=1` и `go build` обоих CLI packages до/после — PASS LOCAL
+с `GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`. Это не полный unit всего
+role-image-builder и не запуск сканера/provider/admission. 16 unit
+анализатора, unit Go-checker, пять ignore-boundaries, gofmt и diff-check —
+PASS LOCAL; real admission, PostgreSQL, browser/deploy/live — NOT RUN.
+
+Полный detector рабочего дерева: 6553 source-файла, 222 исключения,
+1865 raw-групп, 566 решений, 1299 неразобранных. Набор групп не изменился:
+`be4563064172db33528978e8aacced455318b2b8bd6f0d4cb5970feca6320ad6`;
+raw SHA-256
+`cf0d1e9dc5b72904a8a08cc634e8921f9e4896cdf79af1c53b070e1289b32df7`.
+Go-реестр — 5143/21073, непокрыты 15930. Полный go-docs-check — NOT RUN
+при неполном общем покрытии. Цель и единый Draft PR ещё не завершены;
+точный scan/build/unit нового SHA публикуется в том же PR.
 
 ## Сто пятьдесят третья волна — единая read-only граница release-снимка
 

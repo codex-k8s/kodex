@@ -10,6 +10,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestValidateExactManifestAndBinding preserves exact capture bytes, verifies a
+// bound inventory silently and rejects malformed/oversized input or output failure safely.
+// TestValidateExactManifestAndBinding сохраняет точные байты захвата, молча проверяет
+// привязанный реестр и безопасно отклоняет неверный/слишком большой ввод и сбой вывода.
 func TestValidateExactManifestAndBinding(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	manifest := runtimecontract.ImageToolManifest{Schema: runtimecontract.ImageInventorySchema,
@@ -46,6 +50,14 @@ func TestValidateExactManifestAndBinding(t *testing.T) {
 	}
 }
 
+// failingWriter injects a private output error without accepting bytes, testing
+// that the CLI boundary replaces it with the fixed public inventory failure.
+// failingWriter создаёт закрытую ошибку вывода без принятия байтов, проверяя
+// её замену фиксированным открытым отказом реестра на границе CLI.
 type failingWriter struct{}
 
+// Write always reports zero progress and a synthetic private diagnostic;
+// it performs no filesystem or provider operation.
+// Write всегда сообщает нулевой прогресс и искусственную закрытую ошибку;
+// файловые операции и обращения к провайдеру не выполняются.
 func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("PRIVATE_SENTINEL") }
