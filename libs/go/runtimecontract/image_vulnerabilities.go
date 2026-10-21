@@ -16,25 +16,66 @@ import (
 	"unicode/utf8"
 )
 
+// ImageVulnerabilityReportSchema identifies the closed, safe projection of scanner findings.
+// ImageVulnerabilityReportSchema обозначает закрытую безопасную проекцию находок сканера.
 const ImageVulnerabilityReportSchema = "kodex.dev/image-vulnerability-report/v1"
+
+// MaximumImageVulnerabilityReportBytes bounds the complete canonical owner-facing report.
+// MaximumImageVulnerabilityReportBytes ограничивает полный канонический отчёт для владельца.
 const MaximumImageVulnerabilityReportBytes = 4 << 20
+
+// MaximumImageVulnerabilityFindings caps unique projected groups rather than their occurrence count.
+// MaximumImageVulnerabilityFindings ограничивает число уникальных групп, а не количество их вхождений.
 const MaximumImageVulnerabilityFindings = 10000
+
+// MaximumImageVulnerabilitySourceBytes bounds the exact external scanner document before projection.
+// MaximumImageVulnerabilitySourceBytes ограничивает исходный документ сканера до построения проекции.
 const MaximumImageVulnerabilitySourceBytes = 64 << 20
+
+// MaximumImageVulnerabilityProjectionInputBytes allows bounded base64 source bytes plus their binding.
+// MaximumImageVulnerabilityProjectionInputBytes ограничивает base64 исходных байтов вместе с их привязкой.
 const MaximumImageVulnerabilityProjectionInputBytes = ((MaximumImageVulnerabilitySourceBytes + 2) / 3 * 4) + MaximumImageVulnerabilityReportBytes
+
+// maximumImageVulnerabilityJSONDepth gives scanner metadata its own bounded nesting budget.
+// maximumImageVulnerabilityJSONDepth задаёт отдельный ограниченный бюджет вложенности метаданных сканера.
 const maximumImageVulnerabilityJSONDepth = 32
 
+// errImageVulnerabilities is the safe rejection for malformed, incomplete, or inconsistent reports.
+// errImageVulnerabilities обозначает безопасный отказ для неверных, неполных или несогласованных отчётов.
 var errImageVulnerabilities = errors.New("image vulnerability report is invalid")
+
+// vulnerabilityIdentifier permits bounded package and ecosystem identifiers without arbitrary metadata.
+// vulnerabilityIdentifier допускает ограниченные идентификаторы пакетов и экосистем без произвольных метаданных.
 var vulnerabilityIdentifier = regexp.MustCompile(`^[A-Za-z0-9@][A-Za-z0-9.+_:@/~-]{0,319}$`)
+
+// vulnerabilityVersion permits bounded package version expressions used by scanner findings.
+// vulnerabilityVersion допускает ограниченные выражения версий пакетов из находок сканера.
 var vulnerabilityVersion = regexp.MustCompile(`^[A-Za-z0-9<>=~^*][A-Za-z0-9.+:~_|<>=,^* -]{0,159}$`)
+
+// vulnerabilityAdvisory restricts advisory names independently of their recognized link kind.
+// vulnerabilityAdvisory ограничивает имена бюллетеней независимо от распознанного вида ссылки.
 var vulnerabilityAdvisory = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,159}$`)
+
+// vulnerabilityCVE recognizes only canonical CVE identifiers when deriving trusted advisory links.
+// vulnerabilityCVE распознаёт канонические CVE-идентификаторы для построения доверенных ссылок.
 var vulnerabilityCVE = regexp.MustCompile(`^CVE-[0-9]{4}-[0-9]{4,12}$`)
+
+// vulnerabilityGHSA recognizes the fixed GHSA identifier shape used for canonical links.
+// vulnerabilityGHSA распознаёт фиксированную форму GHSA для канонических ссылок.
 var vulnerabilityGHSA = regexp.MustCompile(`^GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}$`)
+
+// vulnerabilityGO recognizes Go advisory identifiers without accepting scanner-provided URLs.
+// vulnerabilityGO распознаёт идентификаторы Go-бюллетеней без принятия URL от сканера.
 var vulnerabilityGO = regexp.MustCompile(`^GO-[0-9]{4}-[0-9]{4,12}$`)
 
+// vulnerabilitySeverities fixes both the allowed severity values and their report ordering.
+// vulnerabilitySeverities закрепляет допустимые степени риска и их порядок в отчёте.
 var vulnerabilitySeverities = []string{"CRITICAL", "HIGH", "MEDIUM", "LOW", "NEGLIGIBLE", "UNKNOWN"}
 
-// Проекция не содержит scanner URLs, paths, headers, raw metadata или credentials.
-// Все находки сохранены; grouping не меняет количества исходных совпадений.
+// ImageVulnerabilityFinding groups equivalent findings without losing source occurrence counts;
+// arbitrary scanner URLs, paths, headers, metadata, and credentials are excluded.
+// ImageVulnerabilityFinding группирует одинаковые находки, сохраняя количество исходных совпадений;
+// произвольные URL сканера, пути, заголовки, метаданные и учётные данные исключены.
 type ImageVulnerabilityFinding struct {
 	Ref              string   `json:"ref"`
 	PackageName      string   `json:"packageName"`
@@ -51,13 +92,17 @@ type ImageVulnerabilityFinding struct {
 	Occurrences      uint32   `json:"occurrences"`
 }
 
+// ImageVulnerabilitySeverityCount preserves the number of source matches for one closed severity.
+// ImageVulnerabilitySeverityCount сохраняет количество исходных совпадений одной допустимой степени риска.
 type ImageVulnerabilitySeverityCount struct {
 	Severity   string `json:"severity"`
 	MatchCount uint32 `json:"matchCount"`
 }
 
-// Tuple связывает полный отчёт с immutable build. Lifecycle/version/receipt
-// добавляет владелец вне проекции, исключая циклический digest.
+// ImageVulnerabilityReport pins a complete safe report to immutable build and policy inputs;
+// the owner adds lifecycle, version, and receipt outside the projection to avoid a cyclic digest.
+// ImageVulnerabilityReport закрепляет полный безопасный отчёт за неизменными входами сборки и политики;
+// владелец добавляет lifecycle, version и receipt вне проекции, исключая циклический дайджест.
 type ImageVulnerabilityReport struct {
 	Schema                    string                            `json:"schema"`
 	ArtifactRef               string                            `json:"artifactRef"`
@@ -84,22 +129,34 @@ type ImageVulnerabilityReport struct {
 	Findings                  []ImageVulnerabilityFinding       `json:"findings"`
 }
 
+// vulnerabilitySafeText accepts nonempty bounded UTF-8 text without control characters.
+// vulnerabilitySafeText принимает непустой ограниченный текст UTF-8 без управляющих символов.
 func vulnerabilitySafeText(value string, maximum int) bool {
 	return value != "" && len(value) <= maximum && utf8.ValidString(value) &&
 		!strings.ContainsFunc(value, unicode.IsControl)
 }
 
+// vulnerabilityRef requires both the resource-kind prefix and the shared opaque reference syntax.
+// vulnerabilityRef требует префикс вида ресурса и общую форму непрозрачной ссылки.
 func vulnerabilityRef(value, prefix string) bool {
 	return strings.HasPrefix(value, prefix+"_") && opaqueReferencePattern.MatchString(value)
 }
 
+// vulnerabilityPin restricts positive revision pins to integers exactly representable in JavaScript.
+// vulnerabilityPin ограничивает положительные версии целыми, точно представимыми в JavaScript.
 func vulnerabilityPin(value uint64) bool { return value > 0 && value <= 9007199254740991 }
 
+// vulnerabilityScope checks organization-scope shape or project scope with both required reference shapes.
+// vulnerabilityScope проверяет форму организационной области либо проектной области с обеими нужными ссылками.
 func vulnerabilityScope(kind, organization, project string) bool {
 	return vulnerabilityRef(organization, "org") &&
 		(kind == "ORGANIZATION" && project == "" || kind == "PROJECT" && vulnerabilityRef(project, "prj"))
 }
 
+// vulnerabilityAdvisoryLink derives links only for recognized CVE, GHSA, and Go identifiers;
+// other advisory identifiers remain visible without an externally supplied URL.
+// vulnerabilityAdvisoryLink строит ссылки только по распознанным CVE, GHSA и Go-идентификаторам;
+// остальные бюллетени остаются видимыми без внешнего URL.
 func vulnerabilityAdvisoryLink(id string) (string, string) {
 	switch {
 	case vulnerabilityCVE.MatchString(id):
@@ -113,18 +170,25 @@ func vulnerabilityAdvisoryLink(id string) (string, string) {
 	}
 }
 
+// ImageVulnerabilitySHA256 hashes the exact bytes without normalizing scanner whitespace.
+// ImageVulnerabilitySHA256 хеширует точные байты без нормализации пробелов сканера.
 func ImageVulnerabilitySHA256(raw []byte) string {
 	digest := sha256.Sum256(raw)
 	return hex.EncodeToString(digest[:])
 }
 
-// Identity считается по полному canonical tuple без количества повторений.
+// imageVulnerabilityFindingRef hashes the complete finding tuple with identity and occurrence count cleared.
+// imageVulnerabilityFindingRef хеширует полный набор полей находки без идентификатора и количества повторов.
 func imageVulnerabilityFindingRef(value ImageVulnerabilityFinding) string {
 	value.Ref, value.Occurrences = "", 0
 	raw, _ := json.Marshal(value)
 	return ImageVulnerabilitySHA256(raw)
 }
 
+// Validate checks owner/build pins, ordered unique finding identities, canonical advisory links,
+// fix-available blocking flags, and all aggregate counts against the complete finding set.
+// Validate проверяет привязки владельца и сборки, порядок уникальных находок, канонические ссылки,
+// блокирующие признаки доступного исправления и все итоговые счётчики по полному набору находок.
 func (value ImageVulnerabilityReport) Validate() error {
 	if value.Schema != ImageVulnerabilityReportSchema || !vulnerabilityRef(value.ArtifactRef, "imgart") ||
 		!imageDigestPattern.MatchString(value.ImageDigest) || !lowerHexDigestPattern.MatchString(value.ReportSHA256) ||
@@ -184,6 +248,8 @@ func (value ImageVulnerabilityReport) Validate() error {
 	return nil
 }
 
+// CanonicalImageVulnerabilityReport validates and size-bounds the canonical serialized projection.
+// CanonicalImageVulnerabilityReport проверяет каноническую сериализованную проекцию и ограничивает её размер.
 func CanonicalImageVulnerabilityReport(value ImageVulnerabilityReport) ([]byte, error) {
 	if value.Validate() != nil {
 		return nil, errImageVulnerabilities
@@ -195,6 +261,10 @@ func CanonicalImageVulnerabilityReport(value ImageVulnerabilityReport) ([]byte, 
 	return raw, nil
 }
 
+// decodeVulnerabilityJSON rejects duplicate/unknown keys, trailing values, and excessive depth or size;
+// canonical callers additionally require byte equality with typed JSON serialization.
+// decodeVulnerabilityJSON отклоняет повторные и неизвестные ключи, лишние значения, глубину и размер;
+// для канонической формы дополнительно требуется равенство байтов типизированной JSON-сериализации.
 func decodeVulnerabilityJSON(raw []byte, target any, maximum int, canonical bool) error {
 	if len(raw) == 0 || len(raw) > maximum || boundedJSONUnique(json.NewDecoder(bytes.NewReader(raw)), 0, maximumImageVulnerabilityJSONDepth) != nil {
 		return errImageVulnerabilities
@@ -213,6 +283,8 @@ func decodeVulnerabilityJSON(raw []byte, target any, maximum int, canonical bool
 	return nil
 }
 
+// DecodeImageVulnerabilityReport accepts only a complete valid report in its exact canonical byte form.
+// DecodeImageVulnerabilityReport принимает только полный корректный отчёт в точной канонической форме байтов.
 func DecodeImageVulnerabilityReport(raw []byte) (ImageVulnerabilityReport, error) {
 	var value ImageVulnerabilityReport
 	if decodeVulnerabilityJSON(raw, &value, MaximumImageVulnerabilityReportBytes, true) != nil || value.Validate() != nil {
@@ -221,8 +293,10 @@ func DecodeImageVulnerabilityReport(raw []byte) (ImageVulnerabilityReport, error
 	return value, nil
 }
 
-// Envelope используется чистым worker-валидатором: claim credentials в него
-// не входят. Duplicate keys отклоняются и во внешнем scanner payload.
+// ProjectImageVulnerabilityEnvelope decodes a bounded binding plus strict base64 source bytes,
+// preserving their exact hash and excluding worker claim credentials from the envelope.
+// ProjectImageVulnerabilityEnvelope разбирает ограниченную привязку и строгие base64-байты источника,
+// сохраняя их точный хеш и не включая учётные данные worker claim в конверт.
 func ProjectImageVulnerabilityEnvelope(raw []byte) (ImageVulnerabilityReport, error) {
 	var envelope struct {
 		Binding           ImageVulnerabilityReport `json:"binding"`
@@ -243,6 +317,8 @@ func ProjectImageVulnerabilityEnvelope(raw []byte) (ImageVulnerabilityReport, er
 	return ProjectImageVulnerabilityReport(source, envelope.Binding)
 }
 
+// grypeProjectionMatch reads only the external scanner fields needed for a safe finding projection.
+// grypeProjectionMatch читает лишь поля внешнего сканера, необходимые безопасной проекции находки.
 type grypeProjectionMatch struct {
 	Artifact struct {
 		Name    string `json:"name"`
@@ -259,8 +335,10 @@ type grypeProjectionMatch struct {
 	} `json:"vulnerability"`
 }
 
-// Raw scanner JSON — внешняя схема: лишние metadata разрешены только здесь и
-// никогда не копируются в owner projection. Duplicate JSON всегда отклоняется.
+// ProjectImageVulnerabilityReport groups bounded scanner findings, derives safe advisory links,
+// and verifies exact source/policy counts; extra scanner metadata is accepted only here and never projected.
+// ProjectImageVulnerabilityReport группирует ограниченные находки, строит безопасные ссылки и сверяет
+// точные счётчики источника и политики; лишние метаданные допустимы лишь здесь и не входят в проекцию.
 func ProjectImageVulnerabilityReport(raw []byte, binding ImageVulnerabilityReport) (ImageVulnerabilityReport, error) {
 	if len(raw) == 0 || len(raw) > MaximumImageVulnerabilitySourceBytes ||
 		boundedJSONUnique(json.NewDecoder(bytes.NewReader(raw)), 0, maximumImageVulnerabilityJSONDepth) != nil {

@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+// TestHandoffRoundTripAndUnknownField preserves the single-result handoff through encoding/decoding
+// and rejects unknown fields or a digest that does not match the inline result bytes.
+// TestHandoffRoundTripAndUnknownField сохраняет передачу одного результата при сериализации и разборе,
+// отклоняя неизвестные поля и дайджест, не совпадающий с байтами встроенного результата.
 func TestHandoffRoundTripAndUnknownField(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	resultPayload := []byte("result")

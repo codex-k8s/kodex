@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+// TestSignedHandoffV2RejectsTampering checks scheduled/runtime outcome compatibility, exact archive
+// source provenance, and signature verification before rejecting a modified signed envelope.
+// TestSignedHandoffV2RejectsTampering проверяет совместимость исходов расписания и runtime, точное
+// происхождение архива и проверку подписи с последующим отказом изменённому подписанному конверту.
 func TestSignedHandoffV2RejectsTampering(t *testing.T) {
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

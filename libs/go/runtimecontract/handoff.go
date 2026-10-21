@@ -1,5 +1,7 @@
-// Package runtimecontract содержит узкие канонические wire DTO между
-// agent-runner и runtime-controller. В package нет transport или domain policy.
+// Package runtimecontract defines canonical wire DTOs between agent-runner and runtime-controller;
+// transport and domain policy remain outside this package.
+// Package runtimecontract задаёт канонические wire DTO между agent-runner и runtime-controller;
+// транспорт и доменная политика находятся за границей пакета.
 package runtimecontract
 
 import (
@@ -20,18 +22,36 @@ import (
 )
 
 const (
-	HandoffSchemaV1       = "kodex.runtime-turn-handoff.v1"
-	HandoffSchemaV2       = "kodex.runtime-turn-handoff.v2"
+	// HandoffSchemaV1 identifies the single-result terminal handoff payload.
+	// HandoffSchemaV1 обозначает завершающую передачу с одним результатом.
+	HandoffSchemaV1 = "kodex.runtime-turn-handoff.v1"
+	// HandoffSchemaV2 identifies the terminal handoff with ordered multi-kind outputs.
+	// HandoffSchemaV2 обозначает завершающую передачу с упорядоченными результатами разных видов.
+	HandoffSchemaV2 = "kodex.runtime-turn-handoff.v2"
+	// SignedHandoffSchemaV1 identifies the detached signature envelope around a handoff payload.
+	// SignedHandoffSchemaV1 обозначает конверт отделённой подписи данных завершающей передачи.
 	SignedHandoffSchemaV1 = "kodex.signed-runtime-turn-handoff.v1"
-	MaximumOutputs        = 32
-	MaximumOutputBytes    = 512 << 10
-	MaximumHandoffBytes   = 900 << 10
+	// MaximumOutputs limits the number of deliverable descriptors in one handoff.
+	// MaximumOutputs ограничивает количество описаний результатов одной передачи.
+	MaximumOutputs = 32
+	// MaximumOutputBytes bounds individual and aggregate inline output payloads.
+	// MaximumOutputBytes ограничивает отдельный и суммарный объём встроенных результатов.
+	MaximumOutputBytes = 512 << 10
+	// MaximumHandoffBytes bounds both the signed payload and its serialized envelope.
+	// MaximumHandoffBytes ограничивает подписываемые данные и сериализованный конверт.
+	MaximumHandoffBytes = 900 << 10
 )
 
+// sha256Pattern requires canonical unprefixed lowercase SHA-256 text for runtime bindings.
+// sha256Pattern требует каноническую строчную запись SHA-256 без префикса для привязок runtime.
 var sha256Pattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
+
+// uuidPattern accepts canonical lowercase UUIDs with supported version and variant bits.
+// uuidPattern допускает канонические строчные UUID с поддерживаемыми версией и вариантом.
 var uuidPattern = regexp.MustCompile(`^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$`)
 
-// HandoffV1 — exact terminal handoff одной immutable execution authority.
+// HandoffV1 binds one terminal Markdown result to exact execution, revision, input, and session pins.
+// HandoffV1 связывает один завершающий Markdown-результат с точными исполнением, версией, входом и сессией.
 type HandoffV1 struct {
 	Schema                  string    `json:"schema"`
 	ExecutionID             string    `json:"execution_id"`
@@ -57,6 +77,8 @@ type HandoffV1 struct {
 	ObservedAt              time.Time `json:"observed_at"`
 }
 
+// Validate checks required execution/session fields and the bounded Markdown payload against its digest.
+// Validate проверяет обязательные поля исполнения и сессии и ограниченный Markdown по его дайджесту.
 func (handoff HandoffV1) Validate() error {
 	resultDigest := sha256.Sum256(handoff.ResultArtifactPayload)
 	if handoff.Schema != HandoffSchemaV1 || handoff.ExecutionID == "" ||
@@ -78,6 +100,8 @@ func (handoff HandoffV1) Validate() error {
 	return nil
 }
 
+// EncodeHandoff serializes a single-result handoff only after structural and payload validation.
+// EncodeHandoff сериализует передачу одного результата после проверки структуры и содержимого.
 func EncodeHandoff(handoff HandoffV1) ([]byte, error) {
 	if err := handoff.Validate(); err != nil {
 		return nil, err
@@ -85,6 +109,8 @@ func EncodeHandoff(handoff HandoffV1) ([]byte, error) {
 	return json.Marshal(handoff)
 }
 
+// DecodeHandoff rejects unknown fields and trailing JSON before validating a single-result payload.
+// DecodeHandoff отклоняет неизвестные поля и лишний JSON до проверки данных одного результата.
 func DecodeHandoff(raw []byte) (HandoffV1, error) {
 	var handoff HandoffV1
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -101,8 +127,10 @@ func DecodeHandoff(raw []byte) (HandoffV1, error) {
 	return handoff, nil
 }
 
-// OutputV2 описывает один owner-deliverable результат. Малый Markdown может
-// быть inline; file/image и крупный Markdown передаются только immutable ref.
+// OutputV2 describes one owner-deliverable Markdown, file, or image result, with either
+// a bounded inline payload or immutable storage reference and exact digest/sequence metadata.
+// OutputV2 описывает Markdown, файл или изображение для владельца со встроенными ограниченными
+// данными либо неизменной ссылкой хранилища и точными дайджестом и порядковыми полями.
 type OutputV2 struct {
 	Kind       string `json:"kind"`
 	ID         string `json:"id"`
@@ -117,6 +145,10 @@ type OutputV2 struct {
 	Total      uint32 `json:"total"`
 }
 
+// validate checks closed output kinds, safe names, size/sequence bounds, and inline digest
+// or storage-reference shape, including Markdown encoding and image media type.
+// validate проверяет закрытые виды, безопасные имена, размер, порядок и дайджест встроенных данных
+// либо форму ссылки хранилища, включая кодировку Markdown и тип изображения.
 func (output OutputV2) validate() error {
 	if output.Kind != "FINAL_MARKDOWN" && output.Kind != "FILE" && output.Kind != "IMAGE" {
 		return errors.New("runtime output kind is invalid")
@@ -147,8 +179,10 @@ func (output OutputV2) validate() error {
 	return nil
 }
 
-// HandoffV2 связывает terminal result с exact execution/revision/input и
-// поддерживает несколько Markdown, file и image outputs.
+// HandoffV2 binds terminal outputs and archive provenance to an exact execution attempt,
+// runtime/input revisions, session, and provider binding, with an optional scheduled outcome.
+// HandoffV2 связывает результаты и происхождение архива с точной попыткой исполнения,
+// версиями runtime и входа, сессией и провайдером, включая необязательный исход расписания.
 type HandoffV2 struct {
 	Schema                 string     `json:"schema"`
 	ExecutionID            string     `json:"execution_id"`
@@ -177,6 +211,10 @@ type HandoffV2 struct {
 	ObservedAt             time.Time  `json:"observed_at"`
 }
 
+// Validate checks execution/archive pins, compatible scheduled outcomes, unique complete
+// output sequences by kind, and the aggregate inline byte budget.
+// Validate проверяет привязки исполнения и архива, совместимость исхода расписания, уникальные
+// полные последовательности результатов каждого вида и общий объём встроенных данных.
 func (handoff HandoffV2) Validate() error {
 	if handoff.Schema != HandoffSchemaV2 || handoff.ExecutionID == "" || handoff.ExecutionVersion == 0 ||
 		handoff.Fence == 0 || handoff.GrantGeneration == 0 ||
@@ -232,11 +270,17 @@ func (handoff HandoffV2) Validate() error {
 	return nil
 }
 
+// validScheduledOutcome closes the set of scheduler-visible business outcomes.
+// validScheduledOutcome задаёт закрытый набор бизнес-исходов, видимых планировщику.
 func validScheduledOutcome(value string) bool {
 	return value == "no_action" || value == "action_taken" ||
 		value == "requires_human" || value == "failed"
 }
 
+// scheduledOutcomeMatchesRuntime permits a failed scheduled result only for failed/blocked
+// runtime outcomes and requires successful runtime completion for all other scheduled results.
+// scheduledOutcomeMatchesRuntime допускает ошибку расписания лишь при FAILED или BLOCKED runtime,
+// а для остальных исходов расписания требует успешного исполнения.
 func scheduledOutcomeMatchesRuntime(scheduled, runtime string) bool {
 	if scheduled == "failed" {
 		return runtime == "FAILED" || runtime == "BLOCKED"
@@ -244,6 +288,10 @@ func scheduledOutcomeMatchesRuntime(scheduled, runtime string) bool {
 	return runtime == "SUCCEEDED"
 }
 
+// validCodexTerminalBinding requires exact session/archive provenance except for a blocked preflight
+// that has no provider archive at all.
+// validCodexTerminalBinding требует точное происхождение сессии и архива, кроме блокировки preflight,
+// при которой архив провайдера полностью отсутствует.
 func validCodexTerminalBinding(handoff HandoffV2) bool {
 	if handoff.CodexSessionID == "" && handoff.ArchiveRelativePath == "" && handoff.ArchiveSHA256 == "" && handoff.ArchiveProvenance == "" {
 		return handoff.Outcome == "BLOCKED" && strings.HasPrefix(handoff.TerminalReference, "preflight://")
@@ -253,7 +301,11 @@ func validCodexTerminalBinding(handoff HandoffV2) bool {
 		validCodexArchiveProvenance(handoff.ArchiveProvenance, handoff.ArchiveRelativePath, handoff.ArchiveSHA256)
 }
 
+// validCodexArchiveProvenance binds the canonical rollout marker to source execution UUID, path, and digest.
+// validCodexArchiveProvenance связывает канонический признак rollout с UUID исходного исполнения, путём и дайджестом.
 func validCodexArchiveProvenance(value, path, digest string) bool {
+	// prefix identifies the supported archive provenance serialization.
+	// prefix обозначает поддерживаемую сериализацию происхождения архива.
 	const prefix = "codex-app-server-rollout-v1:"
 	suffix := ":" + path + ":" + digest
 	if !strings.HasPrefix(value, prefix) || !strings.HasSuffix(value, suffix) {
@@ -263,15 +315,18 @@ func validCodexArchiveProvenance(value, path, digest string) bool {
 	return uuidPattern.MatchString(sourceExecutionID)
 }
 
+// validArchiveRelativePath accepts only the bounded dated rollout path without backslashes or traversal.
+// validArchiveRelativePath допускает лишь ограниченный датированный путь rollout без обратных слешей и traversal.
 func validArchiveRelativePath(value string) bool {
 	return regexp.MustCompile(`^\.kodex/state/codex-home/sessions/[0-9]{4}/[0-9]{2}/[0-9]{2}/rollout-[A-Za-z0-9._-]+\.jsonl$`).MatchString(value) &&
 		len(value) <= 255 &&
 		!strings.Contains(value, "\\") && !strings.Contains(value, "..")
 }
 
-// ValidateCodexArchiveIdentity проверяет, что rollout находится в каноническом
-// каталоге Codex и оканчивается exact UUID связанной сессии. Codex добавляет
-// перед UUID timestamp, поэтому полное имя файла не равно rollout-<UUID>.jsonl.
+// ValidateCodexArchiveIdentity requires a canonical Codex rollout path ending in the exact session UUID;
+// the preceding filename portion may include the provider's timestamp.
+// ValidateCodexArchiveIdentity требует канонический путь Codex rollout, заканчивающийся точным UUID сессии;
+// предшествующая часть имени может включать временную метку провайдера.
 func ValidateCodexArchiveIdentity(sessionID, relativePath string) error {
 	if !uuidPattern.MatchString(sessionID) || !validArchiveRelativePath(relativePath) ||
 		!strings.HasSuffix(relativePath, "-"+sessionID+".jsonl") {
@@ -280,8 +335,10 @@ func ValidateCodexArchiveIdentity(sessionID, relativePath string) error {
 	return nil
 }
 
-// SignedHandoffV1 — detached-authority envelope. KeyID выбирается только из
-// controller-owned закрытого trust set.
+// SignedHandoffV1 carries a detached payload signature; the controller resolves KeyID only
+// against its own explicit trusted key set.
+// SignedHandoffV1 содержит отделённую подпись данных; контроллер разрешает KeyID только
+// по собственному явному набору доверенных ключей.
 type SignedHandoffV1 struct {
 	Schema    string          `json:"schema"`
 	KeyID     string          `json:"key_id"`
@@ -289,6 +346,10 @@ type SignedHandoffV1 struct {
 	Signature string          `json:"signature"`
 }
 
+// SignHandoffV2 validates the handoff and key inputs, signs exact JSON payload bytes with Ed25519,
+// and enforces the complete serialized envelope budget.
+// SignHandoffV2 проверяет передачу и ключ, подписывает точные байты JSON через Ed25519
+// и ограничивает размер всего сериализованного конверта.
 func SignHandoffV2(handoff HandoffV2, keyID string, privateKey ed25519.PrivateKey) ([]byte, error) {
 	if handoff.Validate() != nil || keyID == "" || len(keyID) > 128 || strings.ContainsAny(keyID, "\x00\r\n") ||
 		len(privateKey) != ed25519.PrivateKeySize {
@@ -308,6 +369,10 @@ func SignHandoffV2(handoff HandoffV2, keyID string, privateKey ed25519.PrivateKe
 	return raw, nil
 }
 
+// DecodeSignedHandoffV2 bounds and decodes the envelope, verifies its payload against the controller's
+// trusted key, then validates the typed handoff while rejecting unknown fields and trailing values.
+// DecodeSignedHandoffV2 ограничивает и разбирает конверт, проверяет подпись доверенным ключом контроллера,
+// затем проверяет типизированную передачу, отклоняя неизвестные поля и лишние значения.
 func DecodeSignedHandoffV2(raw []byte, trustedKeys map[string]ed25519.PublicKey) (HandoffV2, error) {
 	if len(raw) == 0 || len(raw) > MaximumHandoffBytes {
 		return HandoffV2{}, errors.New("signed runtime handoff size is invalid")
