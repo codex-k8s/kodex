@@ -5,17 +5,15 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
-	"net/url"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/jobs/backup-controller/internal/configspec"
 	"github.com/codex-k8s/kodex/services/jobs/backup-controller/internal/manifest"
 )
@@ -31,10 +29,10 @@ func TestSeaweedFSOperationLockE2E(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	client, err := NewClient(ctx, configspec.S3{
-		Name: "backup-repository", Endpoint: requireBackupLoopbackEndpoint(t, os.Getenv("BACKUP_RESTORE_E2E_ENDPOINT")),
+		Name: "backup-repository", Endpoint: objectstoragetest.RequireLoopbackHTTPEndpoint(t, os.Getenv("BACKUP_RESTORE_E2E_ENDPOINT"), "backup E2E"),
 		Region: "us-east-1", Bucket: "kodex-backups",
-		AccessKeyID:     readBackupE2ESecret(t, os.Getenv("BACKUP_RESTORE_E2E_ACCESS_KEY_FILE")),
-		SecretAccessKey: readBackupE2ESecret(t, os.Getenv("BACKUP_RESTORE_E2E_SECRET_KEY_FILE")),
+		AccessKeyID:     objectstoragetest.ReadE2ECredential(t, os.Getenv("BACKUP_RESTORE_E2E_ACCESS_KEY_FILE"), "backup E2E"),
+		SecretAccessKey: objectstoragetest.ReadE2ECredential(t, os.Getenv("BACKUP_RESTORE_E2E_SECRET_KEY_FILE"), "backup E2E"),
 		UsePathStyle:    true, AllowInsecureLocal: true,
 	})
 	if err != nil {
@@ -70,9 +68,9 @@ func TestSeaweedFSBackupRestoreDrillReadbackE2E(t *testing.T) {
 	if os.Getenv("BACKUP_RESTORE_E2E") != "1" {
 		t.Skip("local backup restore E2E is disabled")
 	}
-	endpoint := requireBackupLoopbackEndpoint(t, os.Getenv("BACKUP_RESTORE_E2E_ENDPOINT"))
-	accessKey := readBackupE2ESecret(t, os.Getenv("BACKUP_RESTORE_E2E_ACCESS_KEY_FILE"))
-	secretKey := readBackupE2ESecret(t, os.Getenv("BACKUP_RESTORE_E2E_SECRET_KEY_FILE"))
+	endpoint := objectstoragetest.RequireLoopbackHTTPEndpoint(t, os.Getenv("BACKUP_RESTORE_E2E_ENDPOINT"), "backup E2E")
+	accessKey := objectstoragetest.ReadE2ECredential(t, os.Getenv("BACKUP_RESTORE_E2E_ACCESS_KEY_FILE"), "backup E2E")
+	secretKey := objectstoragetest.ReadE2ECredential(t, os.Getenv("BACKUP_RESTORE_E2E_SECRET_KEY_FILE"), "backup E2E")
 	backupID := strings.TrimSpace(os.Getenv("BACKUP_RESTORE_E2E_BACKUP_ID"))
 	restoreID := strings.TrimSpace(os.Getenv("BACKUP_RESTORE_E2E_RESTORE_ID"))
 	targetPrefix := strings.Trim(strings.TrimSpace(os.Getenv("BACKUP_RESTORE_E2E_TARGET_PREFIX")), "/")
@@ -171,36 +169,4 @@ func TestSeaweedFSBackupRestoreDrillReadbackE2E(t *testing.T) {
 	if remaining, err := target.listVersions(ctx, targetPrefix); err != nil || len(remaining) != 0 {
 		t.Fatal("disposable restore object cleanup readback failed")
 	}
-}
-
-func requireBackupLoopbackEndpoint(t *testing.T, raw string) string {
-	t.Helper()
-	endpoint, err := url.Parse(raw)
-	if err != nil || endpoint.Scheme != "http" || endpoint.User != nil || endpoint.RawQuery != "" ||
-		endpoint.Fragment != "" || (endpoint.Path != "" && endpoint.Path != "/") ||
-		(endpoint.Hostname() != "127.0.0.1" && endpoint.Hostname() != "localhost") || endpoint.Port() == "" {
-		t.Fatal("backup E2E endpoint must be loopback-only HTTP")
-	}
-	return raw
-}
-
-func readBackupE2ESecret(t *testing.T, secretPath string) string {
-	t.Helper()
-	info, err := os.Lstat(secretPath)
-	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 ||
-		!filepath.IsAbs(secretPath) || info.Mode().Perm()&0o077 != 0 {
-		t.Fatal("backup E2E credential file is invalid")
-	}
-	raw, err := os.ReadFile(secretPath)
-	if err != nil || len(raw) == 0 || len(raw) > 16<<10 {
-		t.Fatal("backup E2E credential cannot be read")
-	}
-	value := strings.TrimSpace(string(raw))
-	for index := range raw {
-		raw[index] = 0
-	}
-	if value == "" || strings.ContainsAny(value, "\r\n") {
-		t.Fatal(errors.New("backup E2E credential is invalid"))
-	}
-	return value
 }

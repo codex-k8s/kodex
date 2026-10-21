@@ -1,5 +1,7 @@
-// Package objectstoragetest supplies a deterministic in-memory object-storage adapter for component tests; it is not durable storage.
-// Пакет objectstoragetest предоставляет детерминированный адаптер хранилища объектов в памяти для компонентных тестов; постоянным хранилищем он не является.
+// Package objectstoragetest supplies deterministic in-memory object storage and narrowly
+// scoped local E2E input guards; neither provides durable production storage.
+// RU: Package objectstoragetest предоставляет детерминированное хранилище в памяти и
+// узкие проверки входа локальных E2E; ни то ни другое не является постоянным production-хранилищем.
 package objectstoragetest
 
 import (

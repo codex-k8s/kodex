@@ -5,14 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
+	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/s3store"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 )
@@ -21,9 +20,9 @@ func TestSeaweedFSSnapshotRestoreDeleteE2E(t *testing.T) {
 	if os.Getenv("SESSION_ARCHIVE_E2E") != "1" {
 		t.Skip("local SeaweedFS E2E is disabled")
 	}
-	endpoint := requireLoopbackEndpoint(t, os.Getenv("SESSION_ARCHIVE_E2E_ENDPOINT"))
-	accessKey := readE2ESecret(t, os.Getenv("SESSION_ARCHIVE_E2E_ACCESS_KEY_FILE"))
-	secretKey := readE2ESecret(t, os.Getenv("SESSION_ARCHIVE_E2E_SECRET_KEY_FILE"))
+	endpoint := objectstoragetest.RequireLoopbackHTTPEndpoint(t, os.Getenv("SESSION_ARCHIVE_E2E_ENDPOINT"), "E2E")
+	accessKey := objectstoragetest.ReadE2ECredential(t, os.Getenv("SESSION_ARCHIVE_E2E_ACCESS_KEY_FILE"), "E2E")
+	secretKey := objectstoragetest.ReadE2ECredential(t, os.Getenv("SESSION_ARCHIVE_E2E_SECRET_KEY_FILE"), "E2E")
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	store, err := s3store.New(ctx, s3store.Config{Endpoint: endpoint, Region: "us-east-1",
@@ -82,35 +81,4 @@ func TestSeaweedFSSnapshotRestoreDeleteE2E(t *testing.T) {
 	if _, err := store.Head(ctx, result.ObjectKey, result.ObjectVersion); !errors.Is(err, objectstorage.ErrNotFound) {
 		t.Fatalf("deleted local SeaweedFS archive version remains authoritative: %v", err)
 	}
-}
-
-func requireLoopbackEndpoint(t *testing.T, raw string) string {
-	t.Helper()
-	endpoint, err := url.Parse(raw)
-	if err != nil || endpoint.Scheme != "http" || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" ||
-		(endpoint.Path != "" && endpoint.Path != "/") || (endpoint.Hostname() != "127.0.0.1" && endpoint.Hostname() != "localhost") || endpoint.Port() == "" {
-		t.Fatal("E2E endpoint must be loopback-only HTTP")
-	}
-	return raw
-}
-
-func readE2ESecret(t *testing.T, path string) string {
-	t.Helper()
-	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 ||
-		!filepath.IsAbs(path) || info.Mode().Perm()&0o077 != 0 {
-		t.Fatal("E2E credential file is invalid")
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil || len(raw) == 0 || len(raw) > 16<<10 {
-		t.Fatal("E2E credential cannot be read")
-	}
-	value := strings.TrimSpace(string(raw))
-	for index := range raw {
-		raw[index] = 0
-	}
-	if value == "" || strings.ContainsAny(value, "\r\n") {
-		t.Fatal(errors.New("E2E credential is invalid"))
-	}
-	return value
 }

@@ -16,6 +16,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/services/jobs/backup-controller/internal/configspec"
 	"github.com/codex-k8s/kodex/services/jobs/backup-controller/internal/manifest"
 )
@@ -28,9 +29,9 @@ func TestSeaweedFSSessionArchiveBackupFixtureE2E(t *testing.T) {
 	if os.Getenv("BACKUP_SESSION_ARCHIVE_E2E") != "1" {
 		t.Skip("local session archive backup E2E is disabled")
 	}
-	endpoint := requireBackupLoopbackEndpoint(t, os.Getenv("BACKUP_SESSION_ARCHIVE_E2E_ENDPOINT"))
-	accessKey := readBackupE2ESecret(t, os.Getenv("BACKUP_SESSION_ARCHIVE_E2E_ACCESS_KEY_FILE"))
-	secretKey := readBackupE2ESecret(t, os.Getenv("BACKUP_SESSION_ARCHIVE_E2E_SECRET_KEY_FILE"))
+	endpoint := objectstoragetest.RequireLoopbackHTTPEndpoint(t, os.Getenv("BACKUP_SESSION_ARCHIVE_E2E_ENDPOINT"), "backup E2E")
+	accessKey := objectstoragetest.ReadE2ECredential(t, os.Getenv("BACKUP_SESSION_ARCHIVE_E2E_ACCESS_KEY_FILE"), "backup E2E")
+	secretKey := objectstoragetest.ReadE2ECredential(t, os.Getenv("BACKUP_SESSION_ARCHIVE_E2E_SECRET_KEY_FILE"), "backup E2E")
 	objectKey := strings.TrimSpace(os.Getenv("BACKUP_SESSION_ARCHIVE_E2E_OBJECT_KEY"))
 	if !canonicalSessionArchiveKey.MatchString(objectKey) {
 		t.Fatal("session archive fixture key is not canonical")

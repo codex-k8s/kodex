@@ -3,14 +3,13 @@ package retention
 import (
 	"context"
 	"errors"
-	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
+	"github.com/codex-k8s/kodex/libs/go/objectstorage/objectstoragetest"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/s3store"
 )
 
@@ -22,9 +21,9 @@ func TestSeaweedFSExactVersionAbsentE2E(t *testing.T) {
 	if os.Getenv("ARTIFACT_STORAGE_E2E") != "1" {
 		t.Skip("local artifact storage E2E is disabled")
 	}
-	endpoint := requireArtifactLoopbackEndpoint(t, os.Getenv("ARTIFACT_STORAGE_E2E_ENDPOINT"))
-	accessKey := readArtifactE2ESecret(t, os.Getenv("ARTIFACT_STORAGE_E2E_ACCESS_KEY_FILE"))
-	secretKey := readArtifactE2ESecret(t, os.Getenv("ARTIFACT_STORAGE_E2E_SECRET_KEY_FILE"))
+	endpoint := objectstoragetest.RequireLoopbackHTTPEndpoint(t, os.Getenv("ARTIFACT_STORAGE_E2E_ENDPOINT"), "artifact E2E")
+	accessKey := objectstoragetest.ReadE2ECredential(t, os.Getenv("ARTIFACT_STORAGE_E2E_ACCESS_KEY_FILE"), "artifact E2E")
+	secretKey := objectstoragetest.ReadE2ECredential(t, os.Getenv("ARTIFACT_STORAGE_E2E_SECRET_KEY_FILE"), "artifact E2E")
 	key := strings.TrimSpace(os.Getenv("ARTIFACT_STORAGE_E2E_OBJECT_KEY"))
 	version := strings.TrimSpace(os.Getenv("ARTIFACT_STORAGE_E2E_OBJECT_VERSION"))
 	if !objectstorage.ValidKey(key) || version == "" || strings.ContainsAny(version, "\r\n") {
@@ -43,40 +42,4 @@ func TestSeaweedFSExactVersionAbsentE2E(t *testing.T) {
 	if _, err := store.Head(ctx, key, version); !errors.Is(err, objectstorage.ErrNotFound) {
 		t.Fatalf("artifact exact object version remains authoritative: %v", err)
 	}
-}
-
-// requireArtifactLoopbackEndpoint rejects credentials, paths and non-loopback E2E targets.
-// RU: requireArtifactLoopbackEndpoint отклоняет реквизиты, пути и не-loopback цели E2E.
-func requireArtifactLoopbackEndpoint(t *testing.T, raw string) string {
-	t.Helper()
-	endpoint, err := url.Parse(raw)
-	if err != nil || endpoint.Scheme != "http" || endpoint.User != nil || endpoint.RawQuery != "" ||
-		endpoint.Fragment != "" || (endpoint.Path != "" && endpoint.Path != "/") ||
-		(endpoint.Hostname() != "127.0.0.1" && endpoint.Hostname() != "localhost") || endpoint.Port() == "" {
-		t.Fatal("artifact E2E endpoint must be loopback-only HTTP")
-	}
-	return raw
-}
-
-// readArtifactE2ESecret reads a small regular owner-protected credential file and clears raw bytes.
-// RU: readArtifactE2ESecret читает небольшой защищённый regular file с реквизитом и очищает сырые байты.
-func readArtifactE2ESecret(t *testing.T, path string) string {
-	t.Helper()
-	info, err := os.Lstat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 ||
-		!filepath.IsAbs(path) || info.Mode().Perm()&0o077 != 0 {
-		t.Fatal("artifact E2E credential file is invalid")
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil || len(raw) == 0 || len(raw) > 16<<10 {
-		t.Fatal("artifact E2E credential cannot be read")
-	}
-	value := strings.TrimSpace(string(raw))
-	for index := range raw {
-		raw[index] = 0
-	}
-	if value == "" || strings.ContainsAny(value, "\r\n") {
-		t.Fatal(errors.New("artifact E2E credential is invalid"))
-	}
-	return value
 }
