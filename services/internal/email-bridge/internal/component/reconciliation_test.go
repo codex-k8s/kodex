@@ -22,6 +22,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// pendingFixture reserves an UNKNOWN receipt with IMAP coordinates, persists its
+// synthetic owner binding and returns the exact snapshot for reconciliation tests.
+// pendingFixture резервирует UNKNOWN с координатами IMAP, сохраняет искусственную
+// привязку владельца и возвращает точный снимок для тестов сверки.
 func pendingFixture(t *testing.T, store *repository.Repository, key string, after time.Time) port.Pending {
 	t.Helper()
 	scope := port.Scope{Tenant: "tenant", Mailbox: "mailbox"}
@@ -42,10 +46,18 @@ func pendingFixture(t *testing.T, store *repository.Repository, key string, afte
 	return port.Pending{Scope: scope, Record: r, Owner: o}
 }
 
+// decisionFixture binds a one-minute synthetic NO_EFFECT_CONFIRMED decision to
+// the pending owner receipt and a fresh dummy grant; it is not an actual owner approval.
+// decisionFixture связывает минутное искусственное NO_EFFECT_CONFIRMED с ожидающей
+// квитанцией и новым условным разрешением; это не настоящее подтверждение владельца.
 func decisionFixture(p port.Pending) port.Decision {
 	return port.Decision{Ref: "decision_" + p.Record.ID, Version: 1, Actor: "owner", Grant: "fresh-grant", Receipt: p.Owner, Outcome: port.NoEffectConfirmed, ExpiresAt: time.Now().Add(time.Minute)}
 }
 
+// TestPostgresReconciliationAtomicLifecycle checks exclusive claims, one concurrent
+// commit, immutable UNKNOWN/audit and resource release only through the bound decision.
+// TestPostgresReconciliationAtomicLifecycle проверяет исключительный захват, один
+// конкурентный commit, неизменность UNKNOWN/аудита и освобождение ресурса по привязанному решению.
 func TestPostgresReconciliationAtomicLifecycle(t *testing.T) {
 	store := postgresFixture(t)
 	p := pendingFixture(t, store, "reconcile", time.Now().Add(-time.Minute))
@@ -108,6 +120,10 @@ func TestPostgresReconciliationAtomicLifecycle(t *testing.T) {
 	}
 }
 
+// TestPostgresReconciliationExpiryAndBinding rejects expired/mismatched decisions
+// and holds a row lock to ensure expiry bounds the transaction without unlocking its source.
+// TestPostgresReconciliationExpiryAndBinding отклоняет просроченные/чужие решения
+// и блокирует строку, проверяя ограничение транзакции сроком без освобождения источника.
 func TestPostgresReconciliationExpiryAndBinding(t *testing.T) {
 	store := postgresFixture(t)
 	p := pendingFixture(t, store, "expiry", time.Now().Add(-time.Minute))
@@ -157,20 +173,36 @@ func TestPostgresReconciliationExpiryAndBinding(t *testing.T) {
 	}
 }
 
+// reconciliationRPC overrides only reconciliation lookup on a generated client
+// interface, letting tests inspect exact requests and inject owner-side responses.
+// reconciliationRPC переопределяет только чтение сверки интерфейса сгенерированного
+// клиента, позволяя тестам проверять точные запросы и подставлять ответы владельца.
 type reconciliationRPC struct {
 	cp.RuntimeWorkServiceClient
 	resolve func(context.Context, *cp.ResolveEmailReconciliationRequest) (*cp.ResolveEmailReconciliationResponse, error)
 }
 
+// ResolveEmailReconciliation passes the request/context to the configured hook;
+// call options are intentionally unused because this fixture performs no real RPC.
+// ResolveEmailReconciliation передаёт запрос/контекст заданной функции;
+// параметры вызова намеренно не используются: настоящий RPC эта заглушка не выполняет.
 func (f reconciliationRPC) ResolveEmailReconciliation(ctx context.Context, r *cp.ResolveEmailReconciliationRequest, _ ...grpc.CallOption) (*cp.ResolveEmailReconciliationResponse, error) {
 	return f.resolve(ctx, r)
 }
 
+// reconciliationResponse encodes the fixture receipt and bound decision as a
+// protobuf response with UNKNOWN receipt and NO_EFFECT_CONFIRMED decision outcomes.
+// reconciliationResponse кодирует тестовую квитанцию и привязанное решение в
+// protobuf-ответ с исходами UNKNOWN у квитанции и NO_EFFECT_CONFIRMED у решения.
 func reconciliationResponse(d port.Decision) *cp.ResolveEmailReconciliationResponse {
 	o := d.Receipt
 	return &cp.ResolveEmailReconciliationResponse{Receipt: &cp.EmailEffectReceipt{Ref: o.Ref, Version: o.Version, InvocationRef: o.Invocation, ExternalReceiptRef: o.ExternalRef, ExternalReceiptDigest: o.ExternalDigest, SemanticInputDigest: o.InputDigest, EffectKey: o.EffectKey, MailboxRef: o.Mailbox, ConnectionRef: o.Connection, ConfigurationRevision: o.ConfigurationRevision, Outcome: cp.EmailEffectOutcome_EMAIL_EFFECT_OUTCOME_UNKNOWN_OUTCOME}, Decision: &cp.EmailReconciliationDecision{Ref: d.Ref, Version: d.Version, ReceiptRef: o.Ref, ReceiptVersion: o.Version, ReceiptDigest: o.ExternalDigest, InvocationRef: o.Invocation, ActorRef: d.Actor, GrantRef: d.Grant, Outcome: cp.EmailEffectOutcome_EMAIL_EFFECT_OUTCOME_NO_EFFECT_CONFIRMED, CreatedAt: timestamppb.New(time.Now().Add(-time.Minute)), ExpiresAt: timestamppb.New(d.ExpiresAt)}}
 }
 
+// TestPostgresReconciliationFakeCPConsumer exercises a real repository/worker
+// with fake owner RPC responses, requiring exact revalidation and bounded retry polling.
+// TestPostgresReconciliationFakeCPConsumer проверяет настоящий репозиторий/обработчик
+// с искусственными RPC-ответами владельца, требуя точной повторной проверки и ограниченных опросов.
 func TestPostgresReconciliationFakeCPConsumer(t *testing.T) {
 	for _, scenario := range []string{"success", "no-decision", "revoked", "changed", "expired", "digest", "unavailable"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -223,6 +255,10 @@ func TestPostgresReconciliationFakeCPConsumer(t *testing.T) {
 	}
 }
 
+// TestPostgresReconciliationBoundedSelection excludes inflight/unlinked receipts,
+// enforces batch limits and checks that claimed work does not starve remaining due rows.
+// TestPostgresReconciliationBoundedSelection исключает активные/непривязанные квитанции,
+// ограничивает размер пачки и проверяет доступность остальных строк после захвата работы.
 func TestPostgresReconciliationBoundedSelection(t *testing.T) {
 	store := postgresFixture(t)
 	for _, key := range []string{"first", "second", "third"} {
@@ -251,6 +287,10 @@ func TestPostgresReconciliationBoundedSelection(t *testing.T) {
 	}
 }
 
+// TestPostgresOwnerAcknowledgementMonotonic preserves a terminal owner version
+// across late exact UNKNOWN acknowledgements and rejects conflicting identity/outcome changes.
+// TestPostgresOwnerAcknowledgementMonotonic сохраняет итоговую версию владельца
+// при запоздавшем точном UNKNOWN и запрещает конфликтующие изменения идентичности/исхода.
 func TestPostgresOwnerAcknowledgementMonotonic(t *testing.T) {
 	store := postgresFixture(t)
 	p := pendingFixture(t, store, "monotonic", time.Now().Add(-time.Minute))
@@ -287,6 +327,10 @@ func TestPostgresOwnerAcknowledgementMonotonic(t *testing.T) {
 	}
 }
 
+// TestPostgresReconciliationCorruptSnapshot corrupts a disposable receipt's grant
+// and requires the worker to keep the source locked without consulting owner RPC.
+// TestPostgresReconciliationCorruptSnapshot портит разрешение временной квитанции
+// и требует сохранить блокировку источника без обращения к RPC владельца.
 func TestPostgresReconciliationCorruptSnapshot(t *testing.T) {
 	store := postgresFixture(t)
 	p := pendingFixture(t, store, "corrupt", time.Now().Add(-time.Minute))
@@ -307,6 +351,10 @@ func TestPostgresReconciliationCorruptSnapshot(t *testing.T) {
 	}
 }
 
+// TestPostgresReconciliationConfirmedEffect releases a source on a bound confirmed
+// decision without rewriting the original UNKNOWN receipt as a known provider outcome.
+// TestPostgresReconciliationConfirmedEffect освобождает источник по привязанному
+// подтверждённому решению, не переписывая исходный UNKNOWN в известный исход провайдера.
 func TestPostgresReconciliationConfirmedEffect(t *testing.T) {
 	store := postgresFixture(t)
 	p := pendingFixture(t, store, "confirmed-effect", time.Now().Add(-time.Minute))

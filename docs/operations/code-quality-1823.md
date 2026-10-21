@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.147.0
+version: 1.148.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,42 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто сорок восьмая волна — завершение комментариев почтового моста
+
+На базе опубликованного SHA `d9b0e2b67f8d629b53c4eedfe0d775e53c18bcc6`
+прочитаны все 15 файлов `email-bridge/internal/component`; все 122 оставшихся
+объявления получили предметные EN→RU комментарии. Полностью описан весь
+собственный Go-код email-bridge — 485/485, включая тесты и закрытые заглушки.
+
+Пояснения различают synthetic loopback SMTP/POP/IMAP и настоящую доставку,
+fixture CA и доверие рабочей среды, synthetic authority и настоящий owner RPC,
+заглушки памяти и устойчивое PostgreSQL-хранилище. Описаны UNKNOWN до
+credentials/provider, lost DATA/QUIT/APPEND acknowledgement, scoped replay,
+UIDVALIDITY/cursor boundary, COPY перед STORE/удалением, независимый bounded
+completion context, durable report source/version/claim и retirement binding.
+Тестовые SQL и правила cleanup только описаны: applied migrations, рабочий
+код, исполняемые условия и команды протоколов не менялись. Diff содержит
+добавление комментариев, замену двух старых однострочных пояснений и gofmt
+одной строки; семантических изменений нет.
+
+Полный `go test -count=1 ./...` и `go build ./...` email-bridge после всех
+комментариев — PASS LOCAL с явно unset `EMAIL_BRIDGE_TEST_DSN` и
+`EMAIL_BRIDGE_TEST_ADMIN_DSN`. Отдельный verbose прогон PostgreSQL/projection
+cases подтвердил SKIP из-за отсутствия disposable PostgreSQL — это NOT RUN,
+не PostgreSQL PASS. Настоящая почта, browser/deploy/live — NOT RUN.
+16 unit анализатора, unit Go-checker, пять ignore-boundaries, gofmt и
+`git diff --check` — PASS LOCAL.
+
+Полный detector рабочего дерева: 6546 source-файлов, 222 исключения,
+1874 raw-группы, 566 точных решений, 1308 неразобранных. Raw SHA-256:
+`a75e5e5cb9dcc5a09f50c08f7b9535ed1d38e0eba42d6d8c465e28e905541975`;
+отпечаток набора не изменился:
+`875c3a628034d35ced267cfcce9774123676d1ea9f4d11aedde6792d4efc21e9`.
+Новых исключений или выносов эта волна не добавляет. Go-реестр:
+5123/21071, непокрыты 15948. Полный `go-docs -check` — NOT RUN при
+неполном общем покрытии; единый Issue и Draft PR ещё не завершены.
+После commit точный scan/build/unit SHA публикуется в текущем PR.
 
 ## Сто сорок седьмая волна — хранилище почтовых квитанций
 

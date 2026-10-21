@@ -10,23 +10,40 @@ import (
 	"github.com/emersion/go-imap/v2/imapserver"
 )
 
+// copyFailureSession can reject IMAP COPY and count subsequent STORE calls,
+// exposing whether the non-native MOVE fallback modifies a source too early.
+// copyFailureSession умеет отклонить IMAP COPY и считать последующие STORE,
+// выявляя преждевременное изменение источника при запасной реализации MOVE.
 type copyFailureSession struct {
 	imapserver.Session
 	reject bool
 	stores *atomic.Int32
 }
 
+// Copy injects an explicit protocol refusal or delegates to the in-memory IMAP
+// session; rejected copying must leave the source untouched by later steps.
+// Copy возвращает явный отказ протокола либо делегирует IMAP-сессии в памяти;
+// при отказе копирования дальнейшие шаги должны оставить источник неизменным.
 func (s *copyFailureSession) Copy(set imap.NumSet, destination string) (*imap.CopyData, error) {
 	if s.reject {
 		return nil, &imap.Error{Type: imap.StatusResponseTypeNo, Text: "Fixture COPY rejected"}
 	}
 	return s.Session.Copy(set, destination)
 }
+
+// Store increments the shared observation counter before forwarding the flag
+// update, letting tests detect a deletion attempt even if the delegate fails.
+// Store увеличивает общий счётчик перед передачей изменения флагов, позволяя
+// обнаружить попытку удаления даже при отказе обёрнутой сессии.
 func (s *copyFailureSession) Store(w *imapserver.FetchWriter, set imap.NumSet, flags *imap.StoreFlags, opts *imap.StoreOptions) error {
 	s.stores.Add(1)
 	return s.Session.Store(w, set, flags, opts)
 }
 
+// TestIMAPMoveFallbackWaitsForCopy disables native MOVE and verifies source
+// deletion happens only after COPY succeeds, using both counters and mailbox sizes.
+// TestIMAPMoveFallbackWaitsForCopy отключает нативный MOVE и по счётчикам/размерам
+// ящиков проверяет удаление источника только после успешного COPY.
 func TestIMAPMoveFallbackWaitsForCopy(t *testing.T) {
 	for _, reject := range []bool{false, true} {
 		name := "copy-accepted"

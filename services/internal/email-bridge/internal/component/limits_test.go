@@ -11,6 +11,10 @@ import (
 	httptransport "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/transport/http"
 )
 
+// TestMessageLimitsBeforeCredentials exceeds body, attachment, recipient or
+// combined MIME budgets and requires Invalid before any credential projection read.
+// TestMessageLimitsBeforeCredentials превышает лимиты тела, вложений, получателей
+// и суммарного MIME, требуя Invalid до чтения проекции реквизитов.
 func TestMessageLimitsBeforeCredentials(t *testing.T) {
 	for name, mutate := range map[string]func(*api.Command){
 		"body": func(c *api.Command) { c.Message.BodyText = strings.Repeat("x", 65537) },
@@ -38,6 +42,10 @@ func TestMessageLimitsBeforeCredentials(t *testing.T) {
 	}
 }
 
+// TestPOPBoundsAndSnapshotValidation rejects oversized bytes and inconsistent
+// UIDL/LIST snapshots; metadata failures must stop before RETR, unlike actual-size checks.
+// TestPOPBoundsAndSnapshotValidation отклоняет лишние байты и противоречивые
+// UIDL/LIST; ошибки метаданных должны остановить RETR, в отличие от проверки фактического размера.
 func TestPOPBoundsAndSnapshotValidation(t *testing.T) {
 	for _, name := range []string{"advertised-size", "actual-size", "duplicate-number", "duplicate-uid", "duplicate-zero-size", "non-ascii-uid", "scan-limit"} {
 		t.Run(name, func(t *testing.T) {
@@ -74,6 +82,10 @@ func TestPOPBoundsAndSnapshotValidation(t *testing.T) {
 	}
 }
 
+// TestPaginationSourceBinding rejects cursors reused across tenant, mailbox,
+// connection, revision or query and verifies stable traversal within the original source.
+// TestPaginationSourceBinding отклоняет курсоры другого арендатора, ящика,
+// подключения, ревизии и запроса, проверяя стабильный обход исходного источника.
 func TestPaginationSourceBinding(t *testing.T) {
 	f := newFixture(t, "implicit")
 	s, _, _ := service(t, f, "implicit", nil)

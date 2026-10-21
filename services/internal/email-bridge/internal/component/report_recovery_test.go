@@ -16,6 +16,10 @@ import (
 	httptransport "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/transport/http"
 )
 
+// reportFixture atomically reserves a synthetic receipt and version-one recovery
+// report with a short execution lease, returning the stored report snapshot.
+// reportFixture атомарно резервирует искусственную квитанцию и отчёт восстановления
+// первой версии с короткой арендой выполнения, возвращая сохранённый снимок.
 func reportFixture(t *testing.T, store *repository.Repository, key string) port.PendingReport {
 	t.Helper()
 	digest := api.Digest(key)
@@ -32,6 +36,10 @@ func reportFixture(t *testing.T, store *repository.Repository, key string) port.
 	return p
 }
 
+// awaitReport waits until the fixture execution lease plus report grace expires,
+// stopping on test cancellation so recovery cannot compete with an active provider.
+// awaitReport ждёт окончания тестовой аренды и отсрочки отчёта с остановкой при
+// отмене теста, чтобы восстановление не конкурировало с активным провайдером.
 func awaitReport(t *testing.T, binding *api.ExecutionBinding) {
 	t.Helper()
 	timer := time.NewTimer(time.Until(binding.Lease.ExpiresAt.Add(port.ReportGrace + 10*time.Millisecond)))
@@ -43,6 +51,10 @@ func awaitReport(t *testing.T, binding *api.ExecutionBinding) {
 	}
 }
 
+// TestPostgresReportLostResponseRecovery loses initial/terminal acknowledgements,
+// replaces the adapter and verifies exact durable replay, source retirement and no resend.
+// TestPostgresReportLostResponseRecovery теряет начальные/итоговые подтверждения,
+// заменяет адаптер и проверяет точный устойчивый повтор, удаление источника и отсутствие повторной отправки.
 func TestPostgresReportLostResponseRecovery(t *testing.T) {
 	for _, phase := range []string{"initial", "terminal"} {
 		t.Run(phase, func(t *testing.T) {
@@ -108,6 +120,10 @@ func TestPostgresReportLostResponseRecovery(t *testing.T) {
 	}
 }
 
+// TestPostgresReportGenerationAndClaim fences stale completion/acknowledgement,
+// hides live work, permits one concurrent recovery claim and rejects cross-tenant acknowledgement.
+// TestPostgresReportGenerationAndClaim отсекает устаревшие завершения/подтверждения,
+// скрывает активную работу, допускает один захват восстановления и запрещает чужое подтверждение.
 func TestPostgresReportGenerationAndClaim(t *testing.T) {
 	store := postgresFixture(t)
 	p := reportFixture(t, store, "generation")
@@ -160,6 +176,10 @@ func TestPostgresReportGenerationAndClaim(t *testing.T) {
 	}
 }
 
+// TestPostgresReportAtomicValidationAndRetirement rejects changed/invalid sources
+// without orphan receipts and retires an acknowledged expired execution binding.
+// TestPostgresReportAtomicValidationAndRetirement отклоняет изменённые/неверные
+// источники без бесхозных квитанций и удаляет подтверждённую просроченную привязку выполнения.
 func TestPostgresReportAtomicValidationAndRetirement(t *testing.T) {
 	store := postgresFixture(t)
 	p := reportFixture(t, store, "validation")
@@ -193,6 +213,10 @@ func TestPostgresReportAtomicValidationAndRetirement(t *testing.T) {
 	}
 }
 
+// TestPostgresReportCorruptSourceFailsClosed changes the persisted connection
+// only in the disposable database and requires recovery selection to fail Unavailable.
+// TestPostgresReportCorruptSourceFailsClosed меняет сохранённое подключение только
+// во временной БД и требует отказа Unavailable при выборе работы восстановления.
 func TestPostgresReportCorruptSourceFailsClosed(t *testing.T) {
 	store := postgresFixture(t)
 	p := reportFixture(t, store, "corruption")

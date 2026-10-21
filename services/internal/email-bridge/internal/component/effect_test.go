@@ -12,10 +12,18 @@ import (
 	httptransport "github.com/codex-k8s/kodex/services/internal/email-bridge/internal/transport/http"
 )
 
+// effectFixture simulates owner receipt reporting with an optional inspection
+// hook; generated references and versions are fixture data, not control-plane proof.
+// effectFixture имитирует отчёт владельцу квитанции с необязательной проверкой;
+// созданные ссылки и версии — данные стенда, а не доказательство работы управляющего сервиса.
 type effectFixture struct {
 	report func(context.Context, port.Report) (port.OwnerReceipt, error)
 }
 
+// Report runs the optional hook and supplies a synthetic owner reference,
+// invocation and version, distinguishing initial UNKNOWN from a terminal outcome.
+// Report вызывает необязательную проверку и задаёт тестовую ссылку владельца,
+// вызов и версию, различая начальный UNKNOWN и окончательный исход.
 func (f effectFixture) Report(ctx context.Context, r port.Report) (port.OwnerReceipt, error) {
 	result := r.Receipt
 	if f.report != nil {
@@ -34,20 +42,41 @@ func (f effectFixture) Report(ctx context.Context, r port.Report) (port.OwnerRec
 	}
 	return result, nil
 }
+
+// Reconcile always denies fixture reconciliation; tests needing an actual owner
+// decision must install a different client rather than implicitly releasing a lock.
+// Reconcile всегда запрещает тестовую сверку; для решения владельца тест обязан
+// установить другой клиент вместо неявного снятия блокировки.
 func (effectFixture) Reconcile(context.Context, port.OwnerReceipt, string) (port.Decision, error) {
 	return port.Decision{}, errs.Denied
 }
 
+// TestDurableUnknownBeforeCPAndProvider checks receipt/report ordering against
+// the memory fixture; the separately named PostgreSQL case establishes durability.
+// TestDurableUnknownBeforeCPAndProvider проверяет порядок квитанции/отчёта в памяти;
+// устойчивость проверяется отдельно названным случаем с PostgreSQL.
 func TestDurableUnknownBeforeCPAndProvider(t *testing.T) {
 	testDurableUnknown(t, nil)
 }
 
+// failingLedger injects failure when binding a local receipt to its owner,
+// exercising the barrier that must precede credential access and provider effects.
+// failingLedger создаёт отказ при привязке локальной квитанции к владельцу,
+// проверяя барьер перед доступом к реквизитам и эффектами провайдера.
 type failingLedger struct{ port.ReconciliationRepository }
 
+// Remember always returns Unavailable without storing a binding; the fixture
+// must never be interpreted as a successful durable journal write.
+// Remember всегда возвращает Unavailable без сохранения привязки; эта заглушка
+// не должна трактоваться как успешная запись устойчивого журнала.
 func (failingLedger) Remember(context.Context, port.Scope, port.Record, port.OwnerReceipt, time.Time) error {
 	return errs.Unavailable
 }
 
+// TestOwnerBindingMustPersistBeforeProvider requires a journal-write failure
+// to stop mutation before the secret reader can reach any transport credentials.
+// TestOwnerBindingMustPersistBeforeProvider требует остановить изменение при сбое
+// записи журнала до чтения любых транспортных реквизитов.
 func TestOwnerBindingMustPersistBeforeProvider(t *testing.T) {
 	f := newFixture(t, "implicit")
 	s, sec, _ := service(t, f, "implicit", nil)
@@ -57,6 +86,10 @@ func TestOwnerBindingMustPersistBeforeProvider(t *testing.T) {
 	}
 }
 
+// TestEmptyMailboxConfigurationFailsClosed requires both readiness and send
+// requests for an unconfigured mailbox to return NotFound without reading secrets.
+// TestEmptyMailboxConfigurationFailsClosed требует NotFound без чтения секретов
+// для проверки готовности и отправки через ненастроенный ящик.
 func TestEmptyMailboxConfigurationFailsClosed(t *testing.T) {
 	f := newFixture(t, "implicit")
 	s, sec, _ := service(t, f, "implicit", nil)
@@ -68,10 +101,18 @@ func TestEmptyMailboxConfigurationFailsClosed(t *testing.T) {
 	}
 }
 
+// TestPostgresDurableUnknownBeforeCPAndProvider repeats the report-order matrix
+// using the explicitly configured disposable database; an absent fixture skips it.
+// TestPostgresDurableUnknownBeforeCPAndProvider повторяет матрицу порядка отчётов
+// в явно настроенной временной БД; отсутствие стенда приводит к пропуску.
 func TestPostgresDurableUnknownBeforeCPAndProvider(t *testing.T) {
 	testDurableUnknown(t, postgresFixture(t))
 }
 
+// testDurableUnknown verifies UNKNOWN persistence and owner acknowledgement before
+// credentials, plus terminal-report recovery without repeating the SMTP effect.
+// testDurableUnknown проверяет сохранение UNKNOWN и подтверждение владельца до
+// реквизитов, затем восстановление итогового отчёта без повторного SMTP-эффекта.
 func testDurableUnknown(t *testing.T, store port.Repository) {
 	t.Helper()
 	for _, fail := range []string{"none", "unknown-report", "terminal-report", "missing-client"} {

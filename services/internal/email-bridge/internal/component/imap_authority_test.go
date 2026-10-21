@@ -9,6 +9,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/errs"
 )
 
+// TestIMAPAuthorityBeforeCredentials removes each actor/resource folder scope,
+// gate approval or grant and requires rejection before any additional secret reads.
+// TestIMAPAuthorityBeforeCredentials убирает области папок участников/ресурса,
+// подтверждение или разрешение и требует отказа до дополнительных чтений секретов.
 func TestIMAPAuthorityBeforeCredentials(t *testing.T) {
 	f := newFixture(t, "implicit")
 	s, sec, authority := service(t, f, "implicit", nil)
