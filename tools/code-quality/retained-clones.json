@@ -960,6 +960,102 @@
       "fragmentSHA256": "fa83709aec6257ba064d1610a8938d065c4150729d115f0b668a25578efffd23",
       "count": 1,
       "reason": "Три POST-чтения эффективного доступа, объяснения и симуляции различаются входными/выходными типами и серверной семантикой. Общий X-CSRF-Token передаётся одинаково, но общий вызов потребовал бы нетипизированного endpoint dispatcher ради нескольких строк и скрывал бы отдельные результаты. Решение ограничено одной точной группой."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/runtimecontract/execution.go",
+      "secondPath": "services/internal/runtime-controller/internal/workload/envelope_reason.go",
+      "fragmentSHA256": "ec14de2fe68a91f521f56867820ceefeef424635f043d759fb4ebbb6a8869282",
+      "count": 1,
+      "reason": "Проверка JSON-схемы integration grant повторена намеренно: runtimecontract принимает или отклоняет вход, а runtime-controller после отказа только диагностирует точную причину без выдачи полномочия. Общий helper превратил бы независимую проекцию диагностики в самопроверку и скрыл дрейф; mutation-тесты сверяют её с авторитетным валидатором."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/runtimecontract/execution.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/prompt_schedule_preview_component_test.go",
+      "fragmentSHA256": "0ae0d2b54acff75eb665c330cab5e584d0e7686cee4991a91897a36b04767ece",
+      "count": 1,
+      "reason": "Weak-сопоставление сравнивает поля immutable warm-runtime digest с тестовым составлением ScheduleInput из сохранённого расписания. Перенос общих имён полей в helper создал бы зависимость runtime-контракта от теста расписания; у этих снимков разные владельцы, типы и назначение."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/runtimecontract/execution.go",
+      "secondPath": "libs/go/runtimecontract/execution.go",
+      "fragmentSHA256": "54ef9ee2c0855e4aa7cebc3011a946b61191e8e846b94541f1697b636f9df2e3",
+      "count": 1,
+      "reason": "Это перекрывающиеся окна внутри единственного явного заполнения типизированного payload для warm-runtime compatibility digest. Похожие присваивания разных полей одного struct не являются двумя операциями; вынос части полей в helper затемнил бы точный набор, влияющий на хеш совместимости."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/runtimecontract/execution.go",
+      "secondPath": "libs/go/runtimecontract/execution.go",
+      "fragmentSHA256": "fcca95cd08dd76024ad54899ad39194167619cf4a3185e5031e560f32ce607c4",
+      "count": 1,
+      "reason": "Вторая самогруппа возникла при слабой нормализации соседних присваиваний полей одного warm-runtime compatibility payload. Здесь только одна материализация дайджеста; явные поля нужны для проверки версии и состава immutable input, отдельного повторного поведения нет."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/runtimecontract/execution.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_risk.go",
+      "fragmentSHA256": "d69f2bc738c06576798cf61f09f7da09c0281c47c27710213b2463626f72b946",
+      "count": 1,
+      "reason": "Weak-режим свёл заполнение warm-runtime compatibility payload с созданием ImageRiskAcceptance из решения владельца. Первый определяет хеш совместимости запуска, второй — точную доказательную запись принятого риска; разные поля, схемы и authority не должны зависеть от общего reflection/field-copy helper."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/runtimecontract/execution.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/vfs.go",
+      "fragmentSHA256": "784cf9c72f41d8e5618e1e6db173f7f6631313196a53f12c86440b4e48e347c9",
+      "count": 1,
+      "reason": "Совпадение ограничено синтаксисом именованных полей: runtimecontract собирает immutable вход хеша, а VFS восстанавливает узел из строки проекции перед проверкой выбора. Вынесенный общий copier скрыл бы разные источники и списки полей, не устранив общей логики."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/runtimecontract/execution.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/role_images.go",
+      "fragmentSHA256": "fcca95cd08dd76024ad54899ad39194167619cf4a3185e5031e560f32ce607c4",
+      "count": 1,
+      "reason": "Сопоставлены лишь серии именованных присваиваний: вход дайджеста совместимости runtime и типизированное отображение ImageArtifact в generated gRPC DTO. Списки полей, преобразования enum и владельцы данных различаются; общий нетипизированный mapper ослабил бы проверку контракта."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/runtimecontract/execution.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/runtime.go",
+      "fragmentSHA256": "994f30f7ca9fc7c2c2e983eaa10391a3833f6f6de9a42f28de819706bb3dfd9c",
+      "count": 1,
+      "reason": "Несколько похожих именованных полей сравниваются между хешем immutable runtime input и readback-элементом каталога конфигураций помощника. Это разные типы, наборы полей и стадии жизненного цикла; weak-совпадение не даёт общего поведения для выноса."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/runtimecontract/execution.go",
+      "secondPath": "services/jobs/role-image-builder/internal/app/app.go",
+      "fragmentSHA256": "d69f2bc738c06576798cf61f09f7da09c0281c47c27710213b2463626f72b946",
+      "count": 1,
+      "reason": "Поля digest runtime input случайно похожи на передачу конфигурации в конструктор BuildKit executor после нормализации идентификаторов. Второй участок связывает точные TLS/registry параметры при startup; общий mapper между библиотекой исполнения и job создал бы ложную зависимость и скрыл security-critical поля."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/runtimecontract/execution.go",
+      "secondPath": "services/jobs/role-image-builder/internal/clients/imageowner/client.go",
+      "fragmentSHA256": "371d8b697968ded67d8e73708201cf100eca54c970eb6257ea91dfaab34c6256",
+      "count": 1,
+      "reason": "Weak-совпадение именованных полей сравнивает дайджест совместимости с terminal FailImageAdmissionRequest, где важны отдельные idempotency, fence и build attempt. Хеш входа runtime и отказ допуска образа имеют разных владельцев и не могут делить обобщённое копирование полей."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/runtimecontract/execution.go",
+      "secondPath": "services/internal/control-plane/internal/domain/service/prompt/materializer.go",
+      "fragmentSHA256": "164515b68280b8042500d28d9e1c8d2c93245f7a3544d92576be7aed4173db05",
+      "count": 1,
+      "reason": "Warm-runtime compatibility digest и перенос immutable PromptMaterializationSnapshot в Snapshot повторяют форму именованных полей, но не смысл: у prompt отдельные значения, переменные и контекст, у runtime — набор пинов исполнения. Общий copier скрыл бы обязательную полноту каждого снимка."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/runtimecontract/execution.go",
+      "secondPath": "services/internal/runtime-controller/internal/workload/envelope_reason.go",
+      "fragmentSHA256": "4498cd531b4f10df6f4d5bb8ba0c10ad0bdd7b6e8717f61de620d72a3dedd2c7",
+      "count": 1,
+      "reason": "Проверка пути файла секрета намеренно есть и у авторитетного validator RunnerInput, и у диагностической проекции runtime-controller после отказа. Проекция не разрешает выполнение и проверяется mutation-тестами против validator; общий вызов лишил бы диагностику независимости и возможности обнаружить дрейф."
     }
   ]
 }
