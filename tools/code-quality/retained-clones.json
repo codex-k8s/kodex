@@ -896,6 +896,30 @@
       "fragmentSHA256": "88de2c02fe58fc39ee3a3f7c947fe1710e1b596f626282276834c937a9bde9e3",
       "count": 1,
       "reason": "После выноса общей сверки binding-квитанции остаются похожими оболочки мутаций: окружение отправляет consumers и сравнивает targetVersionRef/digest, секрет отправляет selections, проверяет опубликованные environments и связанные binding. Их OCC-версии, серверные команды и состав квитанций различаются; общий нетипизированный dispatcher скрыл бы эти независимые проверки."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/access/store.test.ts",
+      "secondPath": "services/staff/control-center/src/features/runtime/store.test.ts",
+      "fragmentSHA256": "67772514a6e83bfab85bc61038534e99401cba5a1a1c744c6b3488e10a1f98fa",
+      "count": 2,
+      "reason": "Два перекрывающихся окна совпали только в декларациях vi.hoisted независимых unit-тестов access и runtime. Имена и mocked generated endpoints различны; weak-нормализация идентификаторов создала видимый повтор синтаксиса. Общий динамический реестр моков скрыл бы точный набор зависимостей каждого теста и усложнил проверку собственной boundary."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/platform/store.test.ts",
+      "secondPath": "services/staff/control-center/src/features/runtime/store.test.ts",
+      "fragmentSHA256": "0245fec4f289634b0450ad69e29ea73d7e9a10d1a15726a767338d5f9fa76ca8",
+      "count": 1,
+      "reason": "Это списки явных vi.mock bindings двух отдельных store-тестов: platform и runtime подменяют разные generated операции. Weak-режим видит одинаковую форму списка после переименования, но общий helper должен был бы принимать нетипизированный список имен SDK и скрыл бы точные зависимости каждого теста."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/platform/store.test.ts",
+      "secondPath": "services/staff/control-center/src/features/runtime/store.test.ts",
+      "fragmentSHA256": "232bee2872d0adb7d208d946977f1fc5d2807c6fa9c4354df37a1144741076e2",
+      "count": 1,
+      "reason": "Совпадение относится к последовательности mockReset в отдельных тестах platform и runtime. Каждый файл сбрасывает собственный явный набор mocked endpoints перед сценарием; объединение через общий нетипизированный реестр сделало бы тесты зависимыми от чужой поверхности API. Решение ограничено точными файлами и байтами фрагмента."
     }
   ]
 }
