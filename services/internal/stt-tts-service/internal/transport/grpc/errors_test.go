@@ -14,6 +14,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// TestTransportErrorDoesNotExposeProviderDiagnostics preserves the known availability status while hiding an arbitrary joined provider body.
+// RU: TestTransportErrorDoesNotExposeProviderDiagnostics сохраняет известный статус недоступности, скрывая произвольное объединённое тело провайдера.
 func TestTransportErrorDoesNotExposeProviderDiagnostics(t *testing.T) {
 	mapped := transportError(errors.Join(errs.ErrProviderUnavailable, errors.New("sensitive provider body")))
 	if status.Code(mapped) != codes.Unavailable || strings.Contains(mapped.Error(), "sensitive provider body") {
@@ -21,6 +23,8 @@ func TestTransportErrorDoesNotExposeProviderDiagnostics(t *testing.T) {
 	}
 }
 
+// TestTransportRateLimitOnlyExposesBoundedHint requires one canonical rate-limit reason and exposes RetryInfo only for a valid bounded whole-second delay.
+// RU: TestTransportRateLimitOnlyExposesBoundedHint требует одну каноническую причину ограничения частоты и выдаёт RetryInfo лишь для допустимой ограниченной целосекундной задержки.
 func TestTransportRateLimitOnlyExposesBoundedHint(t *testing.T) {
 	for _, delay := range []time.Duration{0, 17 * time.Second, 301 * time.Second, time.Millisecond, -time.Second} {
 		mapped := transportError(errors.Join(&errs.ProviderRateLimit{RetryAfter: delay}, errors.New("private provider body")))
@@ -48,6 +52,8 @@ func TestTransportRateLimitOnlyExposesBoundedHint(t *testing.T) {
 	}
 }
 
+// TestTransportErrorPreservesRequestCancellation makes caller cancellation/deadline take precedence over an accompanying provider availability error.
+// RU: TestTransportErrorPreservesRequestCancellation проверяет приоритет отмены/deadline клиента над сопутствующей ошибкой доступности провайдера.
 func TestTransportErrorPreservesRequestCancellation(t *testing.T) {
 	tests := []struct {
 		err  error

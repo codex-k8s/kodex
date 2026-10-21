@@ -52,8 +52,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// Fake заменяет только внешние authority/producer/provider, сохраняя настоящие
-// mTLS, verifier middleware, continuation client, transport, spool и decoder.
+// integrationBoundary replaces external authority/producer/provider responses while retaining real loopback mTLS, verifier middleware, continuation client, spool and decoding.
+// RU: integrationBoundary подменяет внешние ответы authority/producer/provider, сохраняя настоящие loopback mTLS, verifier middleware, continuation client, spool и декодирование.
+// Its synthetic tokens and HTTP callback do not perform live authority signing or model requests.
+// RU: Синтетические токены и HTTP обработчик не выполняют живую authority-подпись или запросы модели.
 type integrationBoundary struct {
 	av1.AuthorizationVerifierServiceClient
 	sttv1.UnimplementedTranscriptionPolicyProjectionServiceServer
@@ -70,15 +72,21 @@ type integrationBoundary struct {
 	providerTimeout    atomic.Bool
 }
 
+// integrationIssuer exposes only the fake boundary's continuation issuer through the real dependency client's generated issuer port.
+// RU: integrationIssuer предоставляет только continuation issuer фиктивной границы через generated issuer порт настоящего клиента зависимости.
 type integrationIssuer struct {
 	av1.AuthorizationIssuerServiceClient
 	boundary *integrationBoundary
 }
 
+// IssueContinuationAuthorizationContext forwards the exact fixture request and options to the synthetic continuation recorder.
+// RU: IssueContinuationAuthorizationContext передаёт точный запрос оснастки и options синтетическому регистратору continuation.
 func (issuer integrationIssuer) IssueContinuationAuthorizationContext(ctx context.Context, request *av1.IssueContinuationAuthorizationContextRequest, options ...googlegrpc.CallOption) (*av1.IssueContinuationAuthorizationContextResponse, error) {
 	return issuer.boundary.IssueContinuationAuthorizationContext(ctx, request, options...)
 }
 
+// VerifyAuthorizationContext accepts only synthetic parent/catalog tokens, enforcing the catalog's observed method and empty-request digest before returning fixture authority.
+// RU: VerifyAuthorizationContext принимает только синтетические parent/catalog токены, проверяя наблюдаемый метод каталога и дайджест пустого запроса до возврата authority оснастки.
 func (fake *integrationBoundary) VerifyAuthorizationContext(_ context.Context, request *av1.VerifyAuthorizationContextRequest, _ ...googlegrpc.CallOption) (*av1.VerifyAuthorizationContextResponse, error) {
 	if fake.deny.Load() || (request.GetCompactJws() != "test-parent" && request.GetCompactJws() != "test-catalog") {
 		return nil, status.Error(codes.PermissionDenied, "rejected")
@@ -108,6 +116,8 @@ func (fake *integrationBoundary) VerifyAuthorizationContext(_ context.Context, r
 	return &av1.VerifyAuthorizationContextResponse{Context: verified}, nil
 }
 
+// IssueContinuationAuthorizationContext records one random synthetic child token bound to the request digest after checking parent, operation and correlation shape.
+// RU: IssueContinuationAuthorizationContext сохраняет случайный синтетический child-токен с привязкой к дайджесту запроса после проверки формы parent, операции и correlation.
 func (fake *integrationBoundary) IssueContinuationAuthorizationContext(_ context.Context, request *av1.IssueContinuationAuthorizationContextRequest, _ ...googlegrpc.CallOption) (*av1.IssueContinuationAuthorizationContextResponse, error) {
 	if fake.deny.Load() || request.GetParentAuthorizationContextCompactJws() != "test-parent" || len(request.GetRequestDigestSha256()) != 64 || request.GetRequestId() == "" || request.GetCorrelationId() == "" {
 		return nil, status.Error(codes.PermissionDenied, "rejected")
@@ -122,6 +132,8 @@ func (fake *integrationBoundary) IssueContinuationAuthorizationContext(_ context
 	return &av1.IssueContinuationAuthorizationContextResponse{CompactJws: token}, nil
 }
 
+// verifyChild consumes a single-use fixture token and compares the deterministic request digest before dispatching the fake producer handler.
+// RU: verifyChild потребляет одноразовый токен оснастки и сравнивает детерминированный дайджест запроса до вызова фиктивного producer handler.
 func (fake *integrationBoundary) verifyChild(ctx context.Context, request any, _ *googlegrpc.UnaryServerInfo, handler googlegrpc.UnaryHandler) (any, error) {
 	md, _ := metadata.FromIncomingContext(ctx)
 	tokens := md.Get(authorityclient.AuthorizationMetadata)
@@ -143,6 +155,8 @@ func (fake *integrationBoundary) verifyChild(ctx context.Context, request any, _
 	return handler(ctx, request)
 }
 
+// ResolveTranscriptionPolicy returns a bounded synthetic organization policy and parameter set, rejecting disabled policy or unexpected project scope.
+// RU: ResolveTranscriptionPolicy возвращает ограниченные синтетические политику организации и параметры, отклоняя отключённую политику или неожиданный project scope.
 func (fake *integrationBoundary) ResolveTranscriptionPolicy(_ context.Context, request *sttv1.ResolveTranscriptionPolicyRequest) (*sttv1.ResolveTranscriptionPolicyResponse, error) {
 	if fake.missingPolicy.Load() {
 		return nil, status.Error(codes.FailedPrecondition, "not configured")
@@ -154,12 +168,20 @@ func (fake *integrationBoundary) ResolveTranscriptionPolicy(_ context.Context, r
 		Parameters:        &sttv1.TranscriptionParameters{Languages: []string{"ru", "en"}, Keywords: []string{"Kodex"}, Prompt: "Technical discussion", Temperature: 0, ChunkingStrategy: "auto"},
 		MaximumAudioBytes: 10 << 20, MaximumAudioDurationMilliseconds: 120000, ProviderTimeoutMilliseconds: 1000, ProviderAccountRef: "test-account", ProviderCredentialGeneration: 1, ExpiresAt: timestamppb.New(time.Now().Add(30 * time.Second))}, nil
 }
+
+// ProjectTranscriptionCredential echoes the requested configuration/account pins with a short-lived synthetic key, or models a revoked credential.
+// RU: ProjectTranscriptionCredential повторяет запрошенные координаты конфигурации/аккаунта с краткоживущим синтетическим ключом либо моделирует отзыв реквизита.
 func (fake *integrationBoundary) ProjectTranscriptionCredential(_ context.Context, request *sttv1.ProjectTranscriptionCredentialRequest) (*sttv1.ProjectTranscriptionCredentialResponse, error) {
 	if fake.missingCredential.Load() {
 		return nil, status.Error(codes.PermissionDenied, "revoked")
 	}
 	return &sttv1.ProjectTranscriptionCredentialResponse{Authority: request.Authority, ConfigRevision: request.ConfigRevision, ConfigDigestSha256: request.ConfigDigestSha256, ProviderAccountRef: request.ProviderAccountRef, ProviderCredentialGeneration: request.ProviderCredentialGeneration, ApiKey: []byte("synthetic-test-only"), ExpiresAt: timestamppb.New(time.Now().Add(10 * time.Second))}, nil
 }
+
+// Do emulates the exact provider probe/transcription routes in memory, checking synthetic bearer and projected multipart parameters while counting attempts.
+// RU: Do имитирует точные маршруты проверки/распознавания провайдера в памяти, сверяя синтетический bearer и multipart параметры проекции и считая попытки.
+// Configurable status, retry hint and timeout exercise error handling without connecting to the provider origin.
+// RU: Настраиваемые статус, подсказка повтора и timeout проверяют обработку ошибок без соединения с адресом провайдера.
 func (fake *integrationBoundary) Do(request *http.Request) (*http.Response, error) {
 	if request.URL.Scheme != "https" || request.URL.Host != "api.openai.com" || request.Header.Get("Authorization") != "Bearer synthetic-test-only" {
 		return nil, status.Error(codes.PermissionDenied, "provider boundary")
@@ -195,6 +217,10 @@ func (fake *integrationBoundary) Do(request *http.Request) (*http.Response, erro
 	return &http.Response{StatusCode: code, Header: header, Body: io.NopCloser(strings.NewReader(`{"text":"раз два три четыре пять","languages":[{"code":"ru"}]}`))}, nil
 }
 
+// TestProtectedFakeIntegration drives real loopback mTLS and stream/domain/audio paths through fake projections/provider, covering exact receipts, denial, malformed audio and bounded rate-limit/timeout handling.
+// RU: TestProtectedFakeIntegration проводит настоящие loopback mTLS и stream/domain/audio пути через фиктивные проекции/провайдера, проверяя точные квитанции, отказ, неверное аудио и ограниченные rate-limit/timeout исходы.
+// It checks no extra provider attempts and spool cleanup, not production certificate lifecycle or live model acceptance.
+// RU: Тест проверяет отсутствие лишних попыток провайдера и очистку spool, а не production-жизненный цикл сертификатов или живую приёмку модели.
 func TestProtectedFakeIntegration(t *testing.T) {
 	dir := t.TempDir()
 	certificate, pool, certFile, keyFile, caFile := integrationTLS(t, dir)
@@ -364,6 +390,8 @@ func TestProtectedFakeIntegration(t *testing.T) {
 	}
 }
 
+// serveIntegration starts a supplied fixture server on an ephemeral loopback port and registers Stop/join cleanup before returning its address.
+// RU: serveIntegration запускает сервер оснастки на временном loopback порту и регистрирует Stop/join очистку до возврата адреса.
 func serveIntegration(t *testing.T, server *googlegrpc.Server) string {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -375,6 +403,9 @@ func serveIntegration(t *testing.T, server *googlegrpc.Server) string {
 	t.Cleanup(func() { server.Stop(); <-done })
 	return listener.Addr().String()
 }
+
+// integrationTLS creates a temporary self-signed dual-use P-256 test certificate, trust pool and private fixture files for local client/server handshakes.
+// RU: integrationTLS создаёт временные самоподписанный P-256 сертификат двойного назначения, trust pool и отдельные файлы оснастки для локального client/server handshake.
 func integrationTLS(t *testing.T, dir string) (tls.Certificate, *x509.CertPool, string, string, string) {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

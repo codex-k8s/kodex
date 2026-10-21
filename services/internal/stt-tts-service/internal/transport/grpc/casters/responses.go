@@ -5,6 +5,8 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
 )
 
+// TranscriptionResponse copies text and exact domain receipt pins into the RPC response and marks the fixed completed-provider stage without including credential bytes.
+// RU: TranscriptionResponse копирует текст и точные координаты доменной квитанции в RPC ответ и отмечает фиксированный завершённый этап провайдера без байтов реквизитов.
 func TranscriptionResponse(result value.TranscriptionResult) *sttv1.TranscribeResponse {
 	receipt := result.Receipt
 	return &sttv1.TranscribeResponse{Text: result.Text, Receipt: &sttv1.TranscriptionReceipt{

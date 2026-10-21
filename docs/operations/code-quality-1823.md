@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.138.0
+version: 1.139.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,36 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто тридцать девятая волна — потоковый транспорт STT
+
+На базе опубликованного SHA `7ce0a48b9afce08c018c31e2948405825c3285b2`
+все 71 собственное объявление транспортного слоя, casters и их тестов
+получили EN→RU пояснения. Описаны admission до чтения audio, локальные
+per-instance квоты, размер/hash/commit/EOF, минимальный deadline,
+однократное освобождение spool и reservation. Комментарии не приписывают
+`awaitStreamOperation` принудительную остановку или join callback:
+после раннего возврата разблокирование зависит от нижележащего gRPC.
+Synthetic loopback mTLS/provider fixtures не названы реальной проверкой
+внешнего провайдера или подписей. Mapping casters не выдаётся за authority.
+
+Промежуточный запуск завершился FAIL: при добавлении комментария было
+случайно продублировано начало `streamReservation`; gofmt/компилятор
+и AST-анализатор отвергли синтаксис. Дублирующая строка удалена,
+последующие host build, gofmt, diff-check и полный STT build/unit
+в изолированном контейнере — PASS LOCAL. Исполняемое поведение не менялось.
+Image ID повторного прогона:
+`sha256:b1ccb773f35ceb554abdac16bbfa37b8fdfbaa3a2f57c76841f7c1b9ab7179dd`.
+Live provider и MediaRecorder — явно SKIP/NOT RUN; runtime CA pin
+предыдущей волны не исправлялся, deploy не выполнялся.
+
+Полный detector рабочего дерева: 6542 собственных файла, 222 исключения,
+1874 raw-группы, 555 точных решений, 1319 неразобранных. Сырой SHA-256:
+`4f049584059dd67accbc71e0e947a812a6b145167a03626bdf468f6a6cea6164`;
+отпечаток набора прежний:
+`af3e1c6116c5ce8d7149c0864d141081a4bfb6ac1df31fc3242f98e8f05ebc69`.
+Go-реестр: 4622/21065, непокрыты 16443; STT — 401/438.
+Полный go-docs-check и browser/live — NOT RUN; цель не завершена.
 
 ## Сто тридцать восьмая волна — авторизация и dependency RPC STT
 

@@ -25,6 +25,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// fakeStream supplies queued protobuf frames and captures responses, optionally blocking end-of-input until an explicit test release rather than context cancellation.
+// RU: fakeStream выдаёт подготовленные protobuf кадры и сохраняет ответы, при необходимости блокируя конец ввода до явного тестового освобождения, а не отмены контекста.
 type fakeStream struct {
 	ctx      context.Context
 	messages []*sttv1.TranscribeRequest
@@ -33,10 +35,24 @@ type fakeStream struct {
 	block    <-chan struct{}
 }
 
+// Context returns the fixture's chosen request lifetime for the real stream wrapper to preserve or narrow.
+// RU: Context возвращает выбранный оснасткой срок запроса для сохранения или сужения настоящей stream-обёрткой.
 func (stream *fakeStream) Context() context.Context { return stream.ctx }
-func (*fakeStream) SetHeader(metadata.MD) error     { return nil }
-func (*fakeStream) SendHeader(metadata.MD) error    { return nil }
-func (*fakeStream) SetTrailer(metadata.MD)          {}
+
+// SetHeader accepts synthetic response headers without storing or sending them.
+// RU: SetHeader принимает синтетические заголовки ответа без сохранения или отправки.
+func (*fakeStream) SetHeader(metadata.MD) error { return nil }
+
+// SendHeader accepts synthetic header sends without creating a network effect.
+// RU: SendHeader принимает синтетическую отправку заголовков без сетевого эффекта.
+func (*fakeStream) SendHeader(metadata.MD) error { return nil }
+
+// SetTrailer deliberately ignores response trailers in this frame/admission fixture.
+// RU: SetTrailer намеренно игнорирует trailer ответа в оснастке framing/admission.
+func (*fakeStream) SetTrailer(metadata.MD) {}
+
+// SendMsg captures only a typed transcription response and otherwise leaves fixture state unchanged.
+// RU: SendMsg сохраняет только типизированный ответ распознавания, иначе не меняя состояние оснастки.
 func (stream *fakeStream) SendMsg(message any) error {
 	response, ok := message.(*sttv1.TranscribeResponse)
 	if ok {
@@ -44,6 +60,9 @@ func (stream *fakeStream) SendMsg(message any) error {
 	}
 	return nil
 }
+
+// RecvMsg resets and copies the next fixture frame into a typed request, returning EOF after an optional explicit unblock at the end.
+// RU: RecvMsg сбрасывает и копирует следующий кадр оснастки в типизированный запрос, возвращая EOF после необязательной явной разблокировки конца ввода.
 func (stream *fakeStream) RecvMsg(message any) error {
 	if stream.index >= len(stream.messages) {
 		if stream.block != nil {
@@ -60,6 +79,9 @@ func (stream *fakeStream) RecvMsg(message any) error {
 	stream.index++
 	return nil
 }
+
+// Recv exposes the same synthetic frame sequence through the generated streaming server's typed receive signature.
+// RU: Recv предоставляет ту же синтетическую последовательность кадров через типизированную сигнатуру приёма generated stream server.
 func (stream *fakeStream) Recv() (*sttv1.TranscribeRequest, error) {
 	message := &sttv1.TranscribeRequest{}
 	if err := stream.RecvMsg(message); err != nil {
@@ -67,11 +89,16 @@ func (stream *fakeStream) Recv() (*sttv1.TranscribeRequest, error) {
 	}
 	return message, nil
 }
+
+// SendAndClose stores the final fixture response without closing a real transport or invoking a provider.
+// RU: SendAndClose сохраняет итоговый ответ оснастки без закрытия настоящего транспорта или вызова провайдера.
 func (stream *fakeStream) SendAndClose(response *sttv1.TranscribeResponse) error {
 	stream.response = response
 	return nil
 }
 
+// TestTranscribeRejectsMissingVerifiedContext proves direct handler entry cannot consume work without accepted authorization context.
+// RU: TestTranscribeRejectsMissingVerifiedContext доказывает невозможность обработки при прямом входе в handler без принятого context авторизации.
 func TestTranscribeRejectsMissingVerifiedContext(t *testing.T) {
 	server := newTestServer(t)
 	err := server.Transcribe(&fakeStream{ctx: t.Context()})
@@ -80,6 +107,8 @@ func TestTranscribeRejectsMissingVerifiedContext(t *testing.T) {
 	}
 }
 
+// TestServerBoundsConcurrentTranscriptions fills the declared stream/byte caps, rejects a third reservation and checks the budget against the actual Pod memory manifest.
+// RU: TestServerBoundsConcurrentTranscriptions заполняет заявленные stream/byte пределы, отклоняет третий резерв и сверяет бюджет с настоящим memory manifest Pod.
 func TestServerBoundsConcurrentTranscriptions(t *testing.T) {
 	admission := &byteAdmission{}
 	first, ok := admission.acquireStream()
@@ -106,6 +135,8 @@ func TestServerBoundsConcurrentTranscriptions(t *testing.T) {
 	}
 }
 
+// TestStreamAdmissionReservesBeforeFirstMessageAndReleasesOnTimeout blocks the first receive and checks early slot reservation, bounded timeout and released counters.
+// RU: TestStreamAdmissionReservesBeforeFirstMessageAndReleasesOnTimeout блокирует первое чтение и проверяет ранний резерв slot, ограниченный timeout и освобождённые счётчики.
 func TestStreamAdmissionReservesBeforeFirstMessageAndReleasesOnTimeout(t *testing.T) {
 	server := newTestServer(t)
 	server.requestTimeout = 40 * time.Millisecond
@@ -138,6 +169,8 @@ func TestStreamAdmissionReservesBeforeFirstMessageAndReleasesOnTimeout(t *testin
 	}
 }
 
+// TestStreamAdmissionCapsStalledStreamsBeforeHandler fills active stalled slots and proves the next stream is rejected before its handler, then joins released fixtures.
+// RU: TestStreamAdmissionCapsStalledStreamsBeforeHandler заполняет активные зависшие slot и доказывает отказ следующему потоку до handler, затем ожидает освобождённые оснастки.
 func TestStreamAdmissionCapsStalledStreamsBeforeHandler(t *testing.T) {
 	server := newTestServer(t)
 	server.principal = func(context.Context, string) (value.Principal, error) {
@@ -182,6 +215,8 @@ func TestStreamAdmissionCapsStalledStreamsBeforeHandler(t *testing.T) {
 	}
 }
 
+// TestStreamAdmissionReleasesBytesWhenStalledAfterMetadata reserves declared bytes after metadata and verifies cancellation returns both stream and byte counts.
+// RU: TestStreamAdmissionReleasesBytesWhenStalledAfterMetadata резервирует заявленные байты после metadata и проверяет возврат счётчиков потока и байтов по отмене.
 func TestStreamAdmissionReleasesBytesWhenStalledAfterMetadata(t *testing.T) {
 	server := newTestServer(t)
 	server.requestTimeout = 40 * time.Millisecond
@@ -212,6 +247,8 @@ func TestStreamAdmissionReleasesBytesWhenStalledAfterMetadata(t *testing.T) {
 	}
 }
 
+// TestStreamAdmissionDeadlineIsCappedByAuthorityExpiry chooses an authority lifetime shorter than the request budget and rejects a stalled read at that earlier deadline.
+// RU: TestStreamAdmissionDeadlineIsCappedByAuthorityExpiry выбирает срок полномочий короче бюджета запроса и отклоняет зависшее чтение по этому раннему deadline.
 func TestStreamAdmissionDeadlineIsCappedByAuthorityExpiry(t *testing.T) {
 	server := newTestServer(t)
 	server.requestTimeout = time.Second
@@ -235,6 +272,8 @@ func TestStreamAdmissionDeadlineIsCappedByAuthorityExpiry(t *testing.T) {
 	}
 }
 
+// TestReceiveAudioRequiresExactCommitAndNoTrailingMessage rejects digest drift, size drift and frames after commit rather than accepting partial or extended audio.
+// RU: TestReceiveAudioRequiresExactCommitAndNoTrailingMessage отклоняет иной дайджест, размер и кадры после commit вместо принятия частичного или расширенного аудио.
 func TestReceiveAudioRequiresExactCommitAndNoTrailingMessage(t *testing.T) {
 	audio := []byte("bounded-audio")
 	digest := sha256.Sum256(audio)
@@ -270,6 +309,8 @@ func TestReceiveAudioRequiresExactCommitAndNoTrailingMessage(t *testing.T) {
 	}
 }
 
+// TestReceiveAudioAcceptsExactCommit verifies byte-for-byte output, total size and declared SHA-256 on an exactly terminated fixture stream.
+// RU: TestReceiveAudioAcceptsExactCommit проверяет побайтовый выход, общий размер и заявленный SHA-256 точно завершённого потока оснастки.
 func TestReceiveAudioAcceptsExactCommit(t *testing.T) {
 	audio := []byte("bounded-audio")
 	digest := sha256.Sum256(audio)
@@ -286,6 +327,8 @@ func TestReceiveAudioAcceptsExactCommit(t *testing.T) {
 	}
 }
 
+// cloneMessages copies only the chunk/commit frame shapes used by these fixtures, including independent audio byte slices for mutation tests.
+// RU: cloneMessages копирует только используемые оснасткой формы chunk/commit, включая независимые аудиобайты для тестовых изменений.
 func cloneMessages(input []*sttv1.TranscribeRequest) []*sttv1.TranscribeRequest {
 	result := make([]*sttv1.TranscribeRequest, len(input))
 	for index, message := range input {
@@ -299,6 +342,8 @@ func cloneMessages(input []*sttv1.TranscribeRequest) []*sttv1.TranscribeRequest 
 	return result
 }
 
+// newTestServer constructs a locally ready server with private spool, shared stateless test service and a one-second request budget.
+// RU: newTestServer создаёт локально готовый сервер с отдельным spool, общей stateless-заглушкой и бюджетом запроса одна секунда.
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
 	readiness := serviceruntime.NewReadiness()
