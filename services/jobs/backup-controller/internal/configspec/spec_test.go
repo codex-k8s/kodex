@@ -2,6 +2,8 @@ package configspec
 
 import "testing"
 
+// TestFingerprintTargetsIsStableAndExcludesPasswords pins order-independent target binding without secret values.
+// RU: TestFingerprintTargetsIsStableAndExcludesPasswords закрепляет независимую от порядка привязку целей без секретных значений.
 func TestFingerprintTargetsIsStableAndExcludesPasswords(t *testing.T) {
 	t.Parallel()
 	targets := RestoreTargets{SchemaVersion: 1, Databases: []RestoreDatabase{
@@ -32,6 +34,8 @@ func TestFingerprintTargetsIsStableAndExcludesPasswords(t *testing.T) {
 	}
 }
 
+// TestProductionRejectsPlaintextStorageAndDatabase rejects staging-only plaintext transports in production.
+// RU: TestProductionRejectsPlaintextStorageAndDatabase отклоняет в production открытый транспорт, допустимый лишь в staging.
 func TestProductionRejectsPlaintextStorageAndDatabase(t *testing.T) {
 	t.Parallel()
 	store := S3{Name: "backup", Endpoint: "http://seaweedfs-s3.kodex-system.svc.cluster.local:8333",
