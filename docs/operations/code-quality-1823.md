@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.150.0
+version: 1.151.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,61 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто пятьдесят первая волна — локальные HTTP-примитивы
+
+На базе опубликованного SHA `8f08b88a72a090f4b777d66dff2eb1be3a5e870f`
+две одинаковые реализации единственного raw header, ответа preflight и
+bounded body read заменены узкими функциями `tools/dev/owner-ui-http.mjs`.
+Обе старые копии удалены. Диагностический отказ принадлежит вызывающему
+обработчику, origin передаётся явно; helper не создаёт capabilities,
+не читает профиль/реквизиты и не управляет одноразовым состоянием.
+
+Порядок обоих обработчиков сохранён:
+
+| Сценарий | Полномочия и результат |
+| --- | --- |
+| Проверка запроса | Прежние exact route/origin/TLS/framing и peer check до ответа; неверный ввод закрыто отклоняется |
+| Preflight | После проверок прежние CORS/no-store/204, без body и без поглощения |
+| Input | Ограниченное чтение → прежняя проверка точного тела с обнулением Buffer → свежие deadline/once checks → поглощение → повторный peer check → прежний reader/response/cleanup |
+
+Body helper добавляет await возврата прочитанных байтов; повторные deadline
+и once проверки остаются непосредственно перед поглощением. Тесты
+конкурентных запросов, истечения и исчезновения peer проходят без изменения
+условий. Origin/intent, credential selection и lifecycle различающихся
+форм не объединялись. TLS/server lifecycle и browser snippets не изменены.
+
+Три новых unit проверяют единственность raw header и caller-owned error,
+точные chunks/лимит/ошибку потока/обнуление возвращённого Buffer, а также
+preflight без body и exact private-network. Все 44 адресных unit и
+16 unit анализатора, unit Go-checker, пять ignore-boundaries, node --check,
+Prettier и diff-check — PASS LOCAL. Реальные браузер/кластер/provider,
+deploy и полная приёмка — NOT RUN.
+
+Отдельный предварительный прогон неизменённых
+`watch-image-admission{,-phase}.test.mjs` на родительском SHA — FAIL:
+19/21, два существующих отказа. Первый тест ожидает прежнюю вложенную
+ветку ADMIT_PREDECESSOR_FAILED, хотя текущий shell использует общий
+технический Fail-путь. Второй ожидает прежний vulnerability.json/v1,
+а shell producer читает vulnerability-report.json и выдаёт diagnostic v2;
+старый watch consumer по-прежнему принимает только v1. Это также
+несовместимость producer/consumer, не только имя fixture-файла. Эти файлы
+не менялись, тесты не отключены и FAIL не называется PASS; обновление
+диагностического протокола не подменяется рефакторингом с сохранением поведения.
+Для возможного выноса чтения процесса сверена Context7 Node24
+`/websites/nodejs_latest-v24_x_api`: execFileSync, args/no shell,
+encoding/stdio, timeout/killSignal/maxBuffer и error payload. Сам вынос
+этого watch-кода в данной волне не выполнялся.
+
+Полный detector рабочего дерева: 6551 source-файл, 222 исключения,
+1869 raw-групп, 566 решений и 1303 неразобранных. Сравнение
+path/fragment/count подтвердило удаление двух прежних JavaScript-групп
+без новых групп или исключений. Raw SHA-256
+`6e1a345878cb6ecb36bc87435e756ca98be62249cfeaebf954d5b12285ef025c`,
+отпечаток `beaf14d44ebc4f2b809e7944f4469de639d8b6e78a74a58ce88dd41f545c4955`.
+Go-реестр — 5125/21073, непокрыты 15948; полный go-docs-check — NOT RUN.
+Единый PR и цель остаются незавершёнными; точный scan/unit нового SHA
+публикуется в том же PR.
 
 ## Сто пятидесятая волна — устранение повторов локальной HTTP-оснастки
 

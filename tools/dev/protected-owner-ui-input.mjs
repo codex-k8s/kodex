@@ -12,6 +12,12 @@ import { createSecureContext } from "node:tls";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
 import { readPrivateAgentSecrets } from "./private-agent-secret-reader.mjs";
+import {
+  completeInputPreflight,
+  readInputBody,
+  setInputResponseHeaders,
+  singleInputHeader,
+} from "./owner-ui-http.mjs";
 
 export const inputOrigin = "https://sso.kodex.works";
 export const inputHost = "kodex.127.0.0.2.nip.io";
@@ -50,12 +56,7 @@ export function assertInputEnvironment(environment, argumentsList = []) {
 }
 
 function header(request, name) {
-  const values = [];
-  for (let index = 0; index < request.rawHeaders.length; index += 2)
-    if (request.rawHeaders[index].toLowerCase() === name)
-      values.push(request.rawHeaders[index + 1]);
-  requireInput(values.length === 1);
-  return values[0];
+  return singleInputHeader(request, name, requireInput);
 }
 
 export function assertInputRequest(request, port) {
@@ -313,29 +314,16 @@ export function createInputHandler({
       requireInput(now() < deadline && !used);
       const mode = assertInputRequest(request, port);
       await readPeer(request.socket);
-      response.setHeader("Access-Control-Allow-Origin", inputOrigin);
-      response.setHeader("Vary", "Origin");
-      response.setHeader("Cache-Control", "no-store");
-      response.setHeader("Pragma", "no-cache");
+      setInputResponseHeaders(response, inputOrigin);
       if (mode === "PREFLIGHT") {
-        response.setHeader("Access-Control-Allow-Methods", "POST");
-        response.setHeader("Access-Control-Allow-Headers", "Content-Type");
-        if (
-          request.headers["access-control-request-private-network"] === "true"
-        )
-          response.setHeader("Access-Control-Allow-Private-Network", "true");
-        response.writeHead(204);
-        response.end();
+        completeInputPreflight(request, response);
         return;
       }
-      const chunks = [];
-      let size = 0;
-      for await (const chunk of request) {
-        size += chunk.length;
-        requireInput(size <= maximumBody);
-        chunks.push(chunk);
-      }
-      const body = Buffer.concat(chunks);
+      const { body, size } = await readInputBody(
+        request,
+        maximumBody,
+        requireInput,
+      );
       try {
         parseInputBody(body);
       } finally {
