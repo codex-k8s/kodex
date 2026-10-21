@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.61.0
+version: 1.62.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,39 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Шестьдесят четвёртая волна — завершение Dockerfile-классификации
+
+На точном запушенном SHA `d738f7133f8d01791e73f9da4d4c3585cc8f871f`
+анализ подтвердил 6531 собственный файл, 222 исключения, 1881 raw-группу,
+317 точных решений и 1564 неразобранных; сырой SHA-256 —
+`ee62631dff64a402c42507720b183130da63c468444d75fac3c14e2e8300e102`,
+отпечаток набора —
+`9912d1cce5f597a97ebe5014fdd748c7524ea667c2c89a1d2a1186060a43c6ac`.
+Go-реестр: 2089/21030, непокрыты 18941; 16 unit-тестов анализатора на
+этом SHA — PASS LOCAL.
+
+Разобраны все 22 оставшиеся Dockerfile-группы, включая две self-clone,
+сдвинутые COPY-списки и разные build-команды. Проверены отличия module
+graph и runtime: control plane дополнительно собирает CLI, internal RPC
+authority явно перечисляет issuer/verifier/restore targets, STT/TTS требует
+ffmpeg, backup-controller использует PostgreSQL runtime, secret-broker
+доставляет Codex CLI, а integration-gateway имеет synthetic target.
+Совпадения относятся к структуре независимых образов; общий шаблон скрыл бы
+точный supply-chain состав и расширил build context. Для каждой пары и
+fragment SHA-256 добавлено отдельное объяснение, без исключения целых
+Dockerfile или формата. Сборочный код и образы не менялись.
+
+Рабочий detector: 6531 собственный файл, 222 исключения, 1881 raw-группа,
+339 точных решений и 1542 неразобранные; сырой SHA-256 —
+`42652723cced0b10007a141853aa11f45055e1e5d1c083bf73a0b8f4db2bcfb5`,
+отпечаток набора не изменился. Go-реестр неизменен: 2089/21030,
+непокрыты 18941. Проверка точных decisions и пяти ignore-boundaries,
+16 unit-тестов анализатора, `git diff --check` — PASS LOCAL.
+Сборка и unit-тесты application-кода на этой волне не запускались:
+application-код не менялся. Полный `go-docs -check` и browser/deploy/live —
+NOT RUN по прежним границам. Точный scan нового коммита будет
+опубликован в текущем PR.
 
 ## Шестьдесят третья волна — точные Dockerfile-совпадения
 

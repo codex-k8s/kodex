@@ -2152,6 +2152,182 @@
       "fragmentSHA256": "96351d73b16f65f22837adf1005bbccd8c6adbd1d97e28afca5d8f95737d5aa4",
       "count": 1,
       "reason": "Перекрывающееся окно второго COPY и сборки совпадает по форме у artifact-retention и egress-gateway. Команды относятся к разным Go-модулям и выходным бинарям; отдельные manifest/source-слои сохраняют точную инвалидацию кеша. Общий Dockerfile не уменьшил бы исполняемую логику."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/external/integration-gateway/Dockerfile",
+      "fragmentSHA256": "f3e9287922077c4b63e12dac944d18f56a31dc7cfa34b381ac8b895406f1f108",
+      "count": 1,
+      "reason": "Совпадает закреплённая Go builder-основа и последовательность COPY локальных модулей, но пара собирает независимые gateway/controller бинарники с собственными списками зависимостей и runtime. Общий Dockerfile скрыл бы точный build context и инвалидацию каждого слоя."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/external/interaction-gateway/Dockerfile",
+      "fragmentSHA256": "f3e9287922077c4b63e12dac944d18f56a31dc7cfa34b381ac8b895406f1f108",
+      "count": 1,
+      "reason": "Совпадает закреплённая Go builder-основа и последовательность COPY локальных модулей, но пара собирает независимые gateway/controller бинарники с собственными списками зависимостей и runtime. Общий Dockerfile скрыл бы точный build context и инвалидацию каждого слоя."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/internal/control-plane/Dockerfile",
+      "fragmentSHA256": "73ca0cd04ffbdd2b2e6a2230a0c9e146ab2db19849d2c0bb56f994f3053ca3fa",
+      "count": 1,
+      "reason": "Нормализованное окно сопоставляет начальные COPY Go-модулей control-api-gateway и control-plane. Control plane собирает ещё CLI и имеет иной набор локальных модулей; общий build stage расширил бы контекст обоих образов и связал самостоятельные deployable без общей исполняемой операции."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/internal/internal-rpc-authority/Dockerfile",
+      "fragmentSHA256": "dd471034d6d8ba87c2af677167109a8d7128ac29f2abcfd7aaa41e61e9ba543a",
+      "count": 1,
+      "reason": "Начало Dockerfile использует одинаково закреплённый Go compiler, но internal-rpc-authority копирует manifest roots и выпускает набор issuer/verifier/restore бинарей с особым runtime uid. Control API этого не делает; обобщение builder-стадии скрыло бы разные trust boundaries."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/internal/runtime-controller/Dockerfile",
+      "fragmentSHA256": "f3e9287922077c4b63e12dac944d18f56a31dc7cfa34b381ac8b895406f1f108",
+      "count": 1,
+      "reason": "Совпадает закреплённая Go builder-основа и последовательность COPY локальных модулей, но пара собирает независимые gateway/controller бинарники с собственными списками зависимостей и runtime. Общий Dockerfile скрыл бы точный build context и инвалидацию каждого слоя."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/internal/secret-broker/Dockerfile",
+      "fragmentSHA256": "a8e5a5c8ab465505ebe420076363c39692414230c475f82ab8d6a8c6fa96840a",
+      "count": 1,
+      "reason": "Совпадает форма builder-стадии и части COPY, но secret-broker добавляет Node/Codex CLI стадию и отдельную доставку бинаря, тогда как control API имеет другие Go-зависимости. Общий Dockerfile смешал бы разные runtime и security inputs."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/internal/stt-tts-service/Dockerfile",
+      "fragmentSHA256": "1882ff52b25c94ad169fb4c001e63a5ee6150ce1a07cd02edee232bcefaf13bd",
+      "count": 1,
+      "reason": "Совпадает закреплённый Go builder и локальные COPY, однако STT/TTS выпускает smoke-бинарь и Alpine runtime с ffmpeg, а control API — distroless gateway. Общий шаблон спрятал бы обязательные пакеты и разные runtime права."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/internal/email-bridge/Dockerfile",
+      "fragmentSHA256": "acd0e23573ed0ac80924ff44598827f1bd3807af4bed47b4c125a63b1e1f46d0",
+      "count": 1,
+      "reason": "COPY локальных Go-модулей пересекается по форме, но email-bridge выпускает ещё отдельный migration image, а control API — один gateway. У них разные модули, бинарники и release ownership; общий Dockerfile не создаст общего runtime-кода."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/external/control-api-gateway/Dockerfile",
+      "fragmentSHA256": "5031ec47775d09000fecad3ababa7097d57a4cb060c4bf6ae25ecccdd6da51f1",
+      "count": 1,
+      "reason": "Self-clone является перекрытием соседних COPY локальных Go-модулей control-api-gateway: detector нормализует разные имена библиотек и сопоставляет сдвинутый список сам с собой. Каждый COPY переносит свой модуль; объединение или удаление строки нарушило бы точный build context."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/internal/control-plane/Dockerfile",
+      "fragmentSHA256": "5031ec47775d09000fecad3ababa7097d57a4cb060c4bf6ae25ecccdd6da51f1",
+      "count": 1,
+      "reason": "Окно COPY локальных Go-модулей control API и control plane похоже после нормализации имён, но фактические библиотеки и выходные бинарники различны. Это перекрытие списка, не повтор исполняемой сборочной операции; отдельные Dockerfile сохраняют явные зависимости."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/jobs/role-image-builder/Dockerfile",
+      "fragmentSHA256": "c810c77148d0dba6bf34da7c1aa73c2b5871fa6f37c23f64d5146e9fe5b7b973",
+      "count": 1,
+      "reason": "Окно COPY/сборки сходно по форме, но role-image-builder выпускает несколько admission и registry бинарей, BuildKit runtime и служебные images, тогда как control API собирает gateway. Общее build-описание расширило бы dependency graph и смешало независимые права."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/internal/stt-tts-service/Dockerfile",
+      "fragmentSHA256": "3a1594eaccef300453d20d4567c81bb9820a0319ae8be03704a8f96015e0fd5b",
+      "count": 1,
+      "reason": "Перекрываются COPY Go-модулей и начало сборки, однако STT/TTS требует Alpine runtime и ffmpeg плюс smoke binary, тогда как control API имеет distroless runtime. Совместная стадия скрыла бы дополнительный системный пакет и разные выходные бинарники."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/integration-gateway/Dockerfile",
+      "secondPath": "services/external/interaction-gateway/Dockerfile",
+      "fragmentSHA256": "80cf308cfeecc25858b2d6b894120a3e0cecdd3434b14140f8e2f199241e1ea2",
+      "count": 1,
+      "reason": "Перекрывающееся окно COPY локальных Go-модулей и build-команды сопоставляет services/external/integration-gateway/Dockerfile с services/external/interaction-gateway/Dockerfile. Это разные deployable: target interaction-gateway имеет собственный набор модулей, бинарный entrypoint и runtime-зависимости. Общее build-описание скрыло бы точный состав и изменило бы границу кеша; сохраняется только данная пара."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/integration-gateway/Dockerfile",
+      "secondPath": "services/internal/control-plane/Dockerfile",
+      "fragmentSHA256": "be3d2dbd4f1b7a18a048db840e92400be539e25a9786b8417087bd6fc570fb60",
+      "count": 1,
+      "reason": "Окно COPY и go build пересекается, но integration-gateway имеет synthetic-build и Alpine runtime с git, а control-plane собирает отдельный CLI и distroless runtime. Общая сборка связала бы несовместимые пакеты и не уменьшила бы реальную логику."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/integration-gateway/Dockerfile",
+      "secondPath": "services/internal/runtime-controller/Dockerfile",
+      "fragmentSHA256": "80cf308cfeecc25858b2d6b894120a3e0cecdd3434b14140f8e2f199241e1ea2",
+      "count": 1,
+      "reason": "Перекрывающееся окно COPY локальных Go-модулей и build-команды сопоставляет services/external/integration-gateway/Dockerfile с services/internal/runtime-controller/Dockerfile. Это разные deployable: target runtime-controller имеет собственный набор модулей, бинарный entrypoint и runtime-зависимости. Общее build-описание скрыло бы точный состав и изменило бы границу кеша; сохраняется только данная пара."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/integration-gateway/Dockerfile",
+      "secondPath": "services/internal/secret-broker/Dockerfile",
+      "fragmentSHA256": "80cf308cfeecc25858b2d6b894120a3e0cecdd3434b14140f8e2f199241e1ea2",
+      "count": 1,
+      "reason": "Перекрывающееся окно COPY локальных Go-модулей и build-команды сопоставляет services/external/integration-gateway/Dockerfile с services/internal/secret-broker/Dockerfile. Это разные deployable: target secret-broker имеет собственный набор модулей, бинарный entrypoint и runtime-зависимости. Общее build-описание скрыло бы точный состав и изменило бы границу кеша; сохраняется только данная пара."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/integration-gateway/Dockerfile",
+      "secondPath": "services/jobs/backup-controller/Dockerfile",
+      "fragmentSHA256": "80cf308cfeecc25858b2d6b894120a3e0cecdd3434b14140f8e2f199241e1ea2",
+      "count": 1,
+      "reason": "Перекрывающееся окно COPY локальных Go-модулей и build-команды сопоставляет services/external/integration-gateway/Dockerfile с services/jobs/backup-controller/Dockerfile. Это разные deployable: target backup-controller имеет собственный набор модулей, бинарный entrypoint и runtime-зависимости. Общее build-описание скрыло бы точный состав и изменило бы границу кеша; сохраняется только данная пара."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/interaction-gateway/Dockerfile",
+      "secondPath": "services/internal/runtime-controller/Dockerfile",
+      "fragmentSHA256": "06e209b025a6e0db95d3b7bd0a7d8ef5ed932094e0bd9507a241fa738de3682e",
+      "count": 1,
+      "reason": "Перекрывающееся окно COPY локальных Go-модулей и build-команды сопоставляет services/external/interaction-gateway/Dockerfile с services/internal/runtime-controller/Dockerfile. Это разные deployable: target runtime-controller имеет собственный набор модулей, бинарный entrypoint и runtime-зависимости. Общее build-описание скрыло бы точный состав и изменило бы границу кеша; сохраняется только данная пара."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/interaction-gateway/Dockerfile",
+      "secondPath": "services/internal/secret-broker/Dockerfile",
+      "fragmentSHA256": "06e209b025a6e0db95d3b7bd0a7d8ef5ed932094e0bd9507a241fa738de3682e",
+      "count": 1,
+      "reason": "Перекрывающееся окно COPY локальных Go-модулей и build-команды сопоставляет services/external/interaction-gateway/Dockerfile с services/internal/secret-broker/Dockerfile. Это разные deployable: target secret-broker имеет собственный набор модулей, бинарный entrypoint и runtime-зависимости. Общее build-описание скрыло бы точный состав и изменило бы границу кеша; сохраняется только данная пара."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/interaction-gateway/Dockerfile",
+      "secondPath": "services/jobs/backup-controller/Dockerfile",
+      "fragmentSHA256": "06e209b025a6e0db95d3b7bd0a7d8ef5ed932094e0bd9507a241fa738de3682e",
+      "count": 1,
+      "reason": "Перекрывающееся окно COPY локальных Go-модулей и build-команды сопоставляет services/external/interaction-gateway/Dockerfile с services/jobs/backup-controller/Dockerfile. Это разные deployable: target backup-controller имеет собственный набор модулей, бинарный entrypoint и runtime-зависимости. Общее build-описание скрыло бы точный состав и изменило бы границу кеша; сохраняется только данная пара."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/internal/internal-rpc-authority/Dockerfile",
+      "secondPath": "services/internal/internal-rpc-authority/Dockerfile",
+      "fragmentSHA256": "2b51b162866d2b71f3233231910b2115a7716489e44aab32242e5f7d54196da3",
+      "count": 1,
+      "reason": "Self-clone образован явными соседними командами сборки разных issuer, verifier и restore бинарей internal-rpc-authority. Каждая команда указывает собственный target package и выходной файл, включая различный version ldflag; общий shell-loop скрыл бы точный supply-chain перечень исполняемых программ."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/internal/secret-broker/Dockerfile",
+      "secondPath": "services/jobs/backup-controller/Dockerfile",
+      "fragmentSHA256": "fec481d6831ccd0757cd820a083dc3fa09e01298f0855f68d8434c4667953c3a",
+      "count": 1,
+      "reason": "Короткое окно Go-модулей и сборки совпадает по форме, но secret-broker добавляет отдельную Node/Codex CLI стадию, а backup-controller использует PostgreSQL runtime image. Общий Dockerfile смешал бы разные системные зависимости и роли образов."
     }
   ]
 }
