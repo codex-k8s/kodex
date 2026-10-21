@@ -21,6 +21,8 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+// claimFixture derives a synthetic claim from the shipped capability's actual schema, scope, risk and approval policy with exact content digests.
+// RU: claimFixture выводит синтетический claim из фактических схемы, области, риска и политики подтверждения поставленной capability с точными дайджестами.
 func claimFixture(t *testing.T, key string, input map[string]any) (*Adapter, *controlplanev1.IntegrationInvocationClaim) {
 	t.Helper()
 	adapter, err := New(Config{CredentialDirectory: t.TempDir(), ProxyURL: "http://" + egressProxyHost, AllowedHosts: "chat.example.test", Timeout: time.Second}, localizerForTest(t))
@@ -65,6 +67,8 @@ func claimFixture(t *testing.T, key string, input map[string]any) (*Adapter, *co
 	}
 }
 
+// TestInvocationRejectsChangedContractScopeAndInput mutates package pins, operation, risk, approval, scope, input or effect identity and expects local rejection.
+// RU: TestInvocationRejectsChangedContractScopeAndInput меняет координаты пакета, операцию, риск, подтверждение, область, ввод или эффект и ожидает локальный отказ.
 func TestInvocationRejectsChangedContractScopeAndInput(t *testing.T) {
 	adapter, original := claimFixture(t, "mattermost.post.send", map[string]any{"message": "new message"})
 	if _, _, _, err := adapter.validateInvocation(original); err != nil {
@@ -105,6 +109,8 @@ func TestInvocationRejectsChangedContractScopeAndInput(t *testing.T) {
 	}
 }
 
+// TestSystemSubscriptionsCannotBeInvokedByAgent prevents agent invocation of inbound and gate-decision system subscription capabilities even with schema-valid input.
+// RU: TestSystemSubscriptionsCannotBeInvokedByAgent запрещает агенту вызывать системные подписки входящих и решений gate даже с вводом по схеме.
 func TestSystemSubscriptionsCannotBeInvokedByAgent(t *testing.T) {
 	for _, key := range []string{"mattermost.inbound", "mattermost.gate_decisions"} {
 		input := map[string]any{}
@@ -118,6 +124,8 @@ func TestSystemSubscriptionsCannotBeInvokedByAgent(t *testing.T) {
 	}
 }
 
+// TestInvocationReceiptAndUncertainMutation checks exact receipt hashing on creation, confirmed rejection on forbidden and unknown outcome on provider failure.
+// RU: TestInvocationReceiptAndUncertainMutation проверяет точное хеширование квитанции при создании, подтверждённый отказ доступа и неизвестный исход отказа провайдера.
 func TestInvocationReceiptAndUncertainMutation(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
@@ -153,6 +161,8 @@ func TestInvocationReceiptAndUncertainMutation(t *testing.T) {
 	}
 }
 
+// TestCredentialProjectionRequiresExactContentAndBoundedWait accepts only exact read-only projected bytes and rejects digest drift, missing files and writable credentials within budget.
+// RU: TestCredentialProjectionRequiresExactContentAndBoundedWait принимает только точные read-only спроецированные байты и в пределах бюджета отклоняет иной дайджест, отсутствие файла и writable-реквизиты.
 func TestCredentialProjectionRequiresExactContentAndBoundedWait(t *testing.T) {
 	adapter, _ := claimFixture(t, "mattermost.team.read", map[string]any{})
 	root := t.TempDir()
@@ -197,6 +207,8 @@ func TestCredentialProjectionRequiresExactContentAndBoundedWait(t *testing.T) {
 	}
 }
 
+// TestCompleteCatalogueDoesNotCrossExecutorOwnership pins Mattermost to the interaction executor and excludes the generic managed-MCP route.
+// RU: TestCompleteCatalogueDoesNotCrossExecutorOwnership закрепляет Mattermost за interaction исполнителем и исключает общий маршрут managed-MCP.
 func TestCompleteCatalogueDoesNotCrossExecutorOwnership(t *testing.T) {
 	definitions, err := integrationpackage.LoadShipped()
 	if err != nil {
@@ -207,6 +219,8 @@ func TestCompleteCatalogueDoesNotCrossExecutorOwnership(t *testing.T) {
 	}
 }
 
+// testChannel returns fresh synthetic channel coordinates for isolated operation and receipt tests.
+// RU: testChannel возвращает новые синтетические координаты канала для изолированных проверок операций и квитанций.
 func testChannel() *model.Channel {
 	return &model.Channel{Id: testChannelID, TeamId: testTeamID, Name: "channel"}
 }

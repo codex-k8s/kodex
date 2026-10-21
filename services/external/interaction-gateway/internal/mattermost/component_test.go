@@ -15,6 +15,10 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
+// configureProviderFixture installs a private synthetic projected credential and an in-memory SDK transport enforcing exact origin and bearer selection.
+// RU: configureProviderFixture устанавливает отдельные синтетические спроецированные реквизиты и SDK транспорт в памяти с проверкой точного адреса и bearer.
+// It returns matching descriptor metadata and never contacts a real provider despite the component-test filename.
+// RU: Функция возвращает соответствующие метаданные descriptor и не обращается к реальному провайдеру, несмотря на имя component-test файла.
 func configureProviderFixture(t *testing.T, adapter *Adapter, intercept func(*http.Request) (*http.Response, bool)) *controlplanev1.IntegrationCredentialRevision {
 	t.Helper()
 	root := t.TempDir()
@@ -41,6 +45,10 @@ func configureProviderFixture(t *testing.T, adapter *Adapter, intercept func(*ht
 	return &controlplanev1.IntegrationCredentialRevision{Ref: "credential", Revision: 1, SecretRef: credentialSecretPrefix + "test-token", SecretUid: "00000000-0000-4000-8000-000000000001", SecretResourceVersion: "1", ContentSha256: hex.EncodeToString(digest[:])}
 }
 
+// TestClaimCredentialProviderAndReceiptTogether combines real claim validation, projected-file reading, fake SDK replies and receipt binding for send and file read.
+// RU: TestClaimCredentialProviderAndReceiptTogether объединяет настоящие проверку claim, чтение спроецированного файла, фиктивные SDK ответы и привязку квитанции отправки и чтения файла.
+// Changing the declared credential digest must fail before any provider transport call.
+// RU: Изменение заявленного дайджеста реквизитов должно приводить к отказу до любого вызова транспорта провайдера.
 func TestClaimCredentialProviderAndReceiptTogether(t *testing.T) {
 	for _, tc := range []struct {
 		operation string
@@ -66,6 +74,8 @@ func TestClaimCredentialProviderAndReceiptTogether(t *testing.T) {
 	}
 }
 
+// TestConnectionReadinessUsesWorkingCredentialAndChannel verifies health success through the working credential/channel path and rejection of provider authorization failure.
+// RU: TestConnectionReadinessUsesWorkingCredentialAndChannel проверяет успешный health по рабочему пути реквизитов/канала и отказ при ошибке авторизации провайдера.
 func TestConnectionReadinessUsesWorkingCredentialAndChannel(t *testing.T) {
 	adapter, invocation := claimFixture(t, "mattermost.team.read", map[string]any{})
 	credential := configureProviderFixture(t, adapter, nil)
@@ -81,6 +91,8 @@ func TestConnectionReadinessUsesWorkingCredentialAndChannel(t *testing.T) {
 	}
 }
 
+// TestAcknowledgementDeliveryUsesOwnerThreadAndExactReadback checks one localized acknowledgement in the accepted thread and no further post for a changed channel.
+// RU: TestAcknowledgementDeliveryUsesOwnerThreadAndExactReadback проверяет одно локализованное подтверждение в принятой ветке и отсутствие нового сообщения при подмене канала.
 func TestAcknowledgementDeliveryUsesOwnerThreadAndExactReadback(t *testing.T) {
 	adapter, _ := claimFixture(t, "mattermost.post.send", map[string]any{"message": "new message"})
 	posts := 0

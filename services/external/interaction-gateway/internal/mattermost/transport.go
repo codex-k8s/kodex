@@ -16,23 +16,41 @@ import (
 )
 
 const (
-	egressProxyHost       = "egress-gateway.kodex-system.svc.cluster.local:8080"
-	maximumResponseBytes  = 4 << 20
+	// egressProxyHost fixes the only supported transport proxy; connection configuration cannot select another route.
+	// RU: egressProxyHost фиксирует единственный поддерживаемый proxy; настройки подключения не выбирают иной маршрут.
+	egressProxyHost = "egress-gateway.kodex-system.svc.cluster.local:8080"
+	// maximumResponseBytes bounds buffered SDK response bodies, including responses without Content-Length.
+	// RU: maximumResponseBytes ограничивает буферизуемые ответы SDK, включая ответы без Content-Length.
+	maximumResponseBytes = 4 << 20
+	// maximumWebsocketBytes caps the SDK socket's individual incoming message size before event decoding.
+	// RU: maximumWebsocketBytes ограничивает размер отдельного входящего сообщения SDK сокета до декодирования события.
 	maximumWebsocketBytes = 1 << 20
-	maximumMessageBytes   = 16 << 10
+	// maximumMessageBytes bounds accepted inbound and operation message content in bytes, not Unicode code points.
+	// RU: maximumMessageBytes ограничивает текст входящих сообщений и операций в байтах, а не Unicode codepoints.
+	maximumMessageBytes = 16 << 10
 )
 
+// noEffectError wraps a failure proven to precede dispatch or a provider response classified as rejecting the write.
+// RU: noEffectError оборачивает доказанный отказ до отправки либо ответ провайдера, классифицированный как отклонение записи.
 type noEffectError struct{ cause error }
 
+// Error retains the wrapped internal diagnostic; public outcome mapping must still replace it with a safe code.
+// RU: Error сохраняет внутреннюю диагностику причины; публичное отображение исхода обязано заменить её безопасным кодом.
 func (err *noEffectError) Error() string { return err.cause.Error() }
+
+// Unwrap preserves sentinel classification without removing the explicit no-effect marker.
+// RU: Unwrap сохраняет классификацию исходной ошибки, не удаляя явный маркер отсутствия эффекта.
 func (err *noEffectError) Unwrap() error { return err.cause }
 
-// ConfirmedNoEffect разрешает повтор только при доказанном отсутствии отправки.
+// ConfirmedNoEffect recognizes only an explicit no-effect wrapper; absence of the marker never proves successful delivery.
+// RU: ConfirmedNoEffect распознаёт только явную обёртку отсутствия эффекта; отсутствие маркера никогда не доказывает успешную доставку.
 func ConfirmedNoEffect(err error) bool {
 	var noEffect *noEffectError
 	return errors.As(err, &noEffect)
 }
 
+// deliveryRoot rejects thread coordinates on ordinary delivery and resolves an acknowledgement's exact accepted team/channel/root post.
+// RU: deliveryRoot отклоняет координаты ветки у обычной доставки и разрешает точные принятые команду/канал/корневое сообщение подтверждения.
 func deliveryRoot(ctx context.Context, client *model.Client4, channel *model.Channel, claim *controlplanev1.InteractionDeliveryClaim) (string, error) {
 	ack := claim.GetCapabilityKey() == "mattermost.acknowledgements"
 	if !ack {
@@ -54,6 +72,10 @@ func deliveryRoot(ctx context.Context, client *model.Client4, channel *model.Cha
 	return root.Id, nil
 }
 
+// createPost submits one post and checks created status, exact channel/root and optional gate tuple before returning post/thread coordinates.
+// RU: createPost отправляет одно сообщение и сверяет статус создания, точные канал/корень и необязательную связку gate до возврата координат сообщения/ветки.
+// Only defined provider rejections carry no-effect proof; transport failure or malformed success remains potentially effective.
+// RU: Только заданные отказы провайдера доказывают отсутствие эффекта; транспортный отказ или неверный успешный ответ сохраняют возможность эффекта.
 func createPost(ctx context.Context, client *model.Client4, channelID, rootID, message string, gate *gateContext) (string, string, error) {
 	input := &model.Post{ChannelId: channelID, RootId: rootID, Message: message}
 	if gate != nil {
@@ -85,6 +107,8 @@ func createPost(ctx context.Context, client *model.Client4, channelID, rootID, m
 	return post.Id, rootID, nil
 }
 
+// resolveChannel resolves configured names and verifies active exact team/channel identity, rejecting aliases and cross-team responses.
+// RU: resolveChannel разрешает заданные имена и сверяет точные активные команду/канал, отклоняя подменённые имена и ответы другой команды.
 func resolveChannel(ctx context.Context, client *model.Client4, source source) (*model.Channel, error) {
 	if !model.IsValidTeamName(source.GetTeamName()) || !model.IsValidChannelIdentifier(source.GetChannelName()) {
 		return nil, errConfiguration
@@ -106,11 +130,15 @@ func resolveChannel(ctx context.Context, client *model.Client4, source source) (
 	return channel, nil
 }
 
+// scopedTransport confines an underlying HTTP transport to one HTTPS origin and buffers bounded response bytes before SDK decoding.
+// RU: scopedTransport ограничивает нижележащий HTTP транспорт одним HTTPS адресом и буферизует ограниченный ответ до декодирования SDK.
 type scopedTransport struct {
 	host string
 	next http.RoundTripper
 }
 
+// RoundTrip rejects foreign origin/Host or embedded credentials, closes the upstream body and replaces it with a bounded in-memory reader.
+// RU: RoundTrip отклоняет чужие адрес/Host и встроенные реквизиты, закрывает исходное тело и заменяет его ограниченным чтением из памяти.
 func (transport scopedTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if request.URL.Scheme != "https" || request.URL.Host != transport.host || request.URL.User != nil || request.URL.Fragment != "" || (request.Host != "" && request.Host != transport.host) {
 		return nil, errConfiguration
@@ -134,6 +162,8 @@ func (transport scopedTransport) RoundTrip(request *http.Request) (*http.Respons
 	return response, nil
 }
 
+// scopedHTTPClient combines exact-origin transport, an operation timeout and unconditional redirect rejection without opening a connection.
+// RU: scopedHTTPClient объединяет транспорт точного адреса, timeout операции и безусловный запрет redirect без открытия соединения.
 func scopedHTTPClient(base *url.URL, transport http.RoundTripper, timeout time.Duration) *http.Client {
 	return &http.Client{
 		Transport: scopedTransport{host: base.Host, next: transport}, Timeout: timeout,
@@ -141,6 +171,8 @@ func scopedHTTPClient(base *url.URL, transport http.RoundTripper, timeout time.D
 	}
 }
 
+// validHostname accepts bounded lowercase dotted DNS names with ordinary labels, rejecting IP literals, wildcards, trailing dots and ports.
+// RU: validHostname допускает ограниченные строчные DNS-имена с точками и обычными метками, отклоняя IP, wildcard, завершающую точку и порт.
 func validHostname(host string) bool {
 	if len(host) > 253 || !strings.Contains(host, ".") || net.ParseIP(host) != nil {
 		return false
@@ -158,14 +190,22 @@ func validHostname(host string) bool {
 	return true
 }
 
+// validInboundPost checks non-bot author and post IDs, exact channel, valid root, live state and bounded nonempty text before forwarding.
+// RU: validInboundPost проверяет идентификаторы сообщения и автора не-бота, точный канал, допустимый корень, живое состояние и ограниченный непустой текст до передачи.
 func validInboundPost(post *model.Post, channelID, botID string) bool {
 	return post != nil && model.IsValidId(post.Id) && model.IsValidId(post.UserId) && post.UserId != botID && post.ChannelId == channelID && (post.RootId == "" || model.IsValidId(post.RootId)) && post.DeleteAt == 0 && strings.TrimSpace(post.Message) != "" && len(post.Message) <= maximumMessageBytes
 }
 
+// sameInboundPost requires a valid readback matching the already parsed event's identity, author, root, message and update timestamp.
+// RU: sameInboundPost требует допустимое перечитывание, совпадающее с разобранным событием по идентичности, автору, корню, тексту и времени изменения.
 func sameInboundPost(event, post *model.Post, channelID, botID string) bool {
 	return validInboundPost(post, channelID, botID) && post.Id == event.Id && post.UserId == event.UserId && post.RootId == event.RootId && post.Message == event.Message && post.UpdateAt == event.UpdateAt
 }
 
+// closeSocket closes an initialized listening SDK socket and drains both output channels until the reader closes them, including a blocked send.
+// RU: closeSocket закрывает инициализированный слушающий SDK сокет и дренирует оба выходных канала до их закрытия reader, включая заблокированную отправку.
+// It relies on the pinned SDK's channel-close lifecycle and has no independent timeout.
+// RU: Функция опирается на жизненный цикл закрытия каналов закреплённого SDK и не имеет независимого timeout.
 func closeSocket(socket *model.WebSocketClient) {
 	// SDK запускает reader внутри Listen; после закрытия сокета дренируем
 	// очереди до завершения reader, включая заблокированную отправку в канал.

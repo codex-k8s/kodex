@@ -18,20 +18,36 @@ import (
 )
 
 const (
-	testTeamID    = "tttttttttttttttttttttttttt"
+	// testTeamID supplies a valid synthetic team ID for exact provider-response matching.
+	// RU: testTeamID задаёт допустимый синтетический ID команды для точного сопоставления ответов провайдера.
+	testTeamID = "tttttttttttttttttttttttttt"
+	// testChannelID supplies the intended synthetic channel boundary for reads and writes.
+	// RU: testChannelID задаёт предполагаемую синтетическую границу канала для чтения и записи.
 	testChannelID = "cccccccccccccccccccccccccc"
-	testPostID    = "pppppppppppppppppppppppppp"
-	testUserID    = "uuuuuuuuuuuuuuuuuuuuuuuuuu"
+	// testPostID supplies a valid synthetic message/root ID without a live provider dependency.
+	// RU: testPostID задаёт допустимый синтетический ID сообщения/корня без зависимости от живого провайдера.
+	testPostID = "pppppppppppppppppppppppppp"
+	// testUserID supplies a synthetic author or bot identity chosen explicitly by each test.
+	// RU: testUserID задаёт синтетическую идентичность автора или бота, явно выбираемую каждым тестом.
+	testUserID = "uuuuuuuuuuuuuuuuuuuuuuuuuu"
 )
 
+// roundTripFunc replaces network transport with an in-process HTTP callback while exercising the real SDK and scoped transport.
+// RU: roundTripFunc заменяет сетевой транспорт локальным HTTP обработчиком, сохраняя настоящий SDK и ограниченный транспорт.
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
+// RoundTrip forwards the unchanged HTTP request to the fixture callback without opening a socket.
+// RU: RoundTrip передаёт неизменный HTTP запрос обработчику оснастки без открытия сокета.
 func (fn roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) { return fn(request) }
 
+// testResponse creates a readable in-memory response with unknown Content-Length so size checks must also inspect actual bytes.
+// RU: testResponse создаёт читаемый ответ в памяти с неизвестным Content-Length, чтобы проверка размера учитывала фактические байты.
 func testResponse(status int, body string) *http.Response {
 	return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), ContentLength: -1}
 }
 
+// testAPI installs a synthetic bearer token and exact-origin HTTP client over the supplied fixture transport.
+// RU: testAPI устанавливает синтетический bearer-токен и HTTP клиент точного адреса поверх переданного транспорта оснастки.
 func testAPI(transport http.RoundTripper) *model.Client4 {
 	base, _ := url.Parse("https://chat.example.test")
 	client := model.NewAPIv4Client(base.String())
@@ -40,6 +56,8 @@ func testAPI(transport http.RoundTripper) *model.Client4 {
 	return client
 }
 
+// TestCreatePostDistinguishesNoEffectAndUnknown checks exact creation receipts and separates explicit provider rejection from timeout, malformed or mismatched success.
+// RU: TestCreatePostDistinguishesNoEffectAndUnknown проверяет точные квитанции создания и отличает явный отказ провайдера от timeout и неверного либо чужого успешного ответа.
 func TestCreatePostDistinguishesNoEffectAndUnknown(t *testing.T) {
 	for _, tc := range []struct {
 		name              string
@@ -81,6 +99,8 @@ func TestCreatePostDistinguishesNoEffectAndUnknown(t *testing.T) {
 	}
 }
 
+// TestDeliveryPreflightConfirmsNoEffect rejects an unapproved delivery origin with explicit no-effect classification before provider dispatch.
+// RU: TestDeliveryPreflightConfirmsNoEffect отклоняет неразрешённый адрес доставки с явной классификацией отсутствия эффекта до отправки провайдеру.
 func TestDeliveryPreflightConfirmsNoEffect(t *testing.T) {
 	adapter, err := New(Config{CredentialDirectory: t.TempDir(), ProxyURL: "http://" + egressProxyHost, Timeout: time.Second}, localizerForTest(t))
 	if err != nil {
@@ -94,6 +114,8 @@ func TestDeliveryPreflightConfirmsNoEffect(t *testing.T) {
 	}
 }
 
+// TestAcknowledgementRequiresExactAcceptedThread verifies receipt/team/channel/root correlation and rejects ordinary deliveries carrying acknowledgement coordinates.
+// RU: TestAcknowledgementRequiresExactAcceptedThread проверяет корреляцию квитанции/команды/канала/корня и отклоняет обычную доставку с координатами подтверждения.
 func TestAcknowledgementRequiresExactAcceptedThread(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -124,6 +146,8 @@ func TestAcknowledgementRequiresExactAcceptedThread(t *testing.T) {
 	}
 }
 
+// TestScopedTransportRejectsRedirectsAndForeignOrigins checks that bearer-bearing requests cannot follow redirects or reach a different scheme, host or port.
+// RU: TestScopedTransportRejectsRedirectsAndForeignOrigins проверяет невозможность redirect или другого протокола, узла либо порта для запросов с bearer.
 func TestScopedTransportRejectsRedirectsAndForeignOrigins(t *testing.T) {
 	for _, destination := range []string{"https://chat.example.test/api/v4/posts", "https://other.example.test/api/v4/posts", "http://chat.example.test/api/v4/posts", "https://chat.example.test:444/api/v4/posts"} {
 		t.Run(destination, func(t *testing.T) {
@@ -151,6 +175,8 @@ func TestScopedTransportRejectsRedirectsAndForeignOrigins(t *testing.T) {
 	}
 }
 
+// TestScopedTransportBoundsChunkedResponses rejects an oversized actual body even when no Content-Length advertises its size.
+// RU: TestScopedTransportBoundsChunkedResponses отклоняет фактически слишком большое тело даже без Content-Length с его размером.
 func TestScopedTransportBoundsChunkedResponses(t *testing.T) {
 	client := testAPI(roundTripFunc(func(*http.Request) (*http.Response, error) {
 		return testResponse(200, strings.Repeat("x", maximumResponseBytes+1)), nil
@@ -161,6 +187,8 @@ func TestScopedTransportBoundsChunkedResponses(t *testing.T) {
 	}
 }
 
+// TestResolveChannelChecksExactTeamAndChannel rejects mismatched names, cross-team channel responses and archived channels after SDK resolution.
+// RU: TestResolveChannelChecksExactTeamAndChannel отклоняет несовпадающие имена, канал другой команды и архивный канал после разрешения SDK.
 func TestResolveChannelChecksExactTeamAndChannel(t *testing.T) {
 	for _, tc := range []struct {
 		name, teamName, channelName, channelTeam string
@@ -197,6 +225,8 @@ func TestResolveChannelChecksExactTeamAndChannel(t *testing.T) {
 	}
 }
 
+// TestInboundReadbackRejectsEditedForeignAndDeletedPosts requires unchanged channel, author, content, root, timestamp and live state relative to the event.
+// RU: TestInboundReadbackRejectsEditedForeignAndDeletedPosts требует неизменных канала, автора, текста, корня, времени и живого состояния относительно события.
 func TestInboundReadbackRejectsEditedForeignAndDeletedPosts(t *testing.T) {
 	event := &model.Post{Id: testPostID, ChannelId: testChannelID, UserId: testUserID, Message: "approve", UpdateAt: 10}
 	if !sameInboundPost(event, event, testChannelID, "bot") {
@@ -218,6 +248,8 @@ func TestInboundReadbackRejectsEditedForeignAndDeletedPosts(t *testing.T) {
 	}
 }
 
+// TestHostnameAndProxyHaveNoFallback rejects IP, wildcard, malformed DNS and alternate proxy configuration instead of enabling a transport fallback.
+// RU: TestHostnameAndProxyHaveNoFallback отклоняет IP, wildcard, неверный DNS и альтернативный proxy вместо включения запасного транспорта.
 func TestHostnameAndProxyHaveNoFallback(t *testing.T) {
 	for _, host := range []string{"", "localhost", "127.0.0.1", "chat.example.test.", "*.example.test", "chat..test", "chat_example.test", "chat.example.test:443", "chat.example.test/path", "chat.example.test\n"} {
 		if validHostname(host) {
@@ -230,6 +262,8 @@ func TestHostnameAndProxyHaveNoFallback(t *testing.T) {
 	}
 }
 
+// TestCloseSocketDrainsBlockedSDKReader fills a loopback fixture's SDK event queue and verifies close drains and joins the blocked reader's output channels.
+// RU: TestCloseSocketDrainsBlockedSDKReader заполняет очередь событий SDK loopback-оснастки и проверяет дренирование и закрытие выходных каналов заблокированного reader.
 func TestCloseSocketDrainsBlockedSDKReader(t *testing.T) {
 	written := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {

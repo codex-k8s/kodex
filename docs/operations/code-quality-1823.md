@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.135.0
+version: 1.136.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,47 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто тридцать шестая волна — завершение комментариев interaction-gateway
+
+На опубликованном SHA `0a87c567b41b206c243db83f59ead92ba8df309a`
+build/unit всего interaction-gateway повторены — PASS LOCAL. Оставшиеся
+143 объявления Mattermost adapter получили предметные EN→RU комментарии.
+Весь deployable теперь покрыт: 239/239 собственных объявлений, 0 пропусков;
+из них 150 принадлежат пакету Mattermost с уже имевшимися семью комментариями.
+
+Описаны точные package/capability/configuration pins, origin/proxy/TLS
+проверки, действительные пределы credential-read и невозможность стирания
+всех string-копий, readback входящих сообщений, bot-authored gate correlation,
+отличие провайдерского отказа от неизвестного эффекта и граница owner решения.
+Пояснения к file read не выдают проверку диапазона за антивирусный или
+смысловой допуск. `closeSocket` не получает выдуманный timeout: документация
+явно отмечает зависимость join от закрытия каналов закреплённого SDK.
+
+Context7 `/mattermost/mattermost` был запрошен по Go WebSocket lifecycle,
+но вернул только примеры JS-клиента: это не подтверждение Go-контракта.
+Фактические `Listen`, `Close` и закрытие `EventChannel`/`ResponseChannel`
+сверены с установленным `server/public@v0.4.3/model/websocket_client.go`.
+Исполняемый код, сетевые правила и входы тестов не менялись; только
+комментарии и форматирование деклараций.
+
+Полный detector рабочего дерева: 6540 собственных файлов, 222 исключения,
+1875 raw-групп, 555 точных решений и 1320 неразобранных; сырой SHA-256 —
+`f07b4872e68199f2a5cb53c055ac1f9cec4d36669fb22a60b31467c16b898e8a`,
+отпечаток набора —
+`3cc67f38f4cfe9cd51fbe6bb00583222380bd78e858c9976b0aa30633c699535`.
+Сравнение exact path pairs/fragment SHA-256 не нашло добавленных или
+исчезнувших групп. Go-реестр: 4376/21072, непокрыты 16696.
+
+Build и `go test -count=1 ./...` всего interaction-gateway с Go1.26.6,
+16 unit-тестов анализатора, unit Go-checker, пять ignore-boundaries,
+`gofmt` и `git diff --check` — PASS LOCAL. Уточнение классификации:
+`mattermost/component_test.go` входит в обычный локальный Go-набор и
+реально выполнен; его transport/credential/provider fixtures синтетические,
+это не проверка внешнего сервиса. Указанное в прежней волне component/live
+NOT RUN относится к настоящему внешнему контуру, а не к этому файлу.
+Живой Mattermost, browser/deploy и полный `go-docs -check` — NOT RUN;
+цель и Draft PR остаются незавершёнными.
 
 ## Сто тридцать пятая волна — аренды и композиция interaction-gateway
 
