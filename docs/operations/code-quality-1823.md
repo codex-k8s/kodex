@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.107.0
+version: 1.108.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,57 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто десятая волна — полный доменный путь STT и общий тест сроков
+
+На точном запушенном SHA `d5ffe9592dfb6998016390b9229a089f89bf733c`
+анализ подтвердил 6532 собственных файла, 222 исключения, 1884 raw-группы,
+516 точных решений и 1368 неразобранных; сырой SHA-256 —
+`bd19a0638448d19166c51c9854ac566f8be0e2f63426d2a307f42baa07059338`,
+отпечаток набора —
+`2b3b4acd144b3e89ed02acd407be25d16a14bb964a8e3f0efc0942102ccf760b`.
+Go-реестр: 3355/21050, непокрыты 17695.
+
+Все 70 существовавших объявлений доменного пакета `transcription` получили
+предметные EN→RU комментарии: ограничение аудио до реквизита, точный порядок
+проверки полномочия/политики/аудио/ключа/модели, независимые сроки,
+безопасные классы ошибок и граница локальной готовности. Отдельно проверены
+тестовые doubles и негативные сценарии. У двух тестов deadline был одинаковый
+каркас policy/credential/provider/audio; он вынесен в `deadlineFixture`,
+сохраняющий отдельные сроки caller и проверяющий ошибку конструктора. Это
+убрало одно реальное совпадение из исходного detector без широкого исключения.
+Новый helper также описан EN→RU: пакет теперь 71/71.
+
+На хосте первая попытка `go test -count=1 ./internal/domain/service/transcription`
+— **FAIL**: `ffmpeg` отсутствовал в `PATH`, вследствие чего декодер сообщал
+`audio decoder is unavailable`. Не меняя системные пакеты и не маскируя отказ,
+тест повторён в одноразовом контейнере с `ffmpeg`, исходниками только для
+чтения и `GOPROXY=off`; там — PASS LOCAL. Host
+`go build ./internal/domain/service/transcription` — PASS LOCAL. Контейнер
+использовал локальный образ `a07f231c19b0` (Go 1.26.10, Alpine 3.23),
+установил `ffmpeg` только внутрь одноразового слоя; каталог репозитория и
+кэш Go-модулей монтировались read-only, `GOPROXY=off`, `GOSUMDB=off`.
+Проверка относится только к этому пакету, а не ко всему сервису.
+
+```bash
+docker run --rm \
+  --mount type=bind,src=/home/s/projects/kodex/.agents/issue-1823-code-quality,dst=/src,readonly \
+  --mount type=bind,src=/home/s/go/pkg/mod,dst=/gomod,readonly \
+  --workdir /src/services/internal/stt-tts-service \
+  --env GOMODCACHE=/gomod --env GOPROXY=off --env GOSUMDB=off \
+  --env GOTOOLCHAIN=local --env GOWORK=off a07f231c19b0 \
+  sh -euc 'apk add --no-cache ffmpeg >/dev/null; go test -count=1 ./internal/domain/service/transcription'
+```
+
+Рабочий Go-реестр: 3426/21051, непокрыты 17625. Детектор: 6532 собственных
+файла, 222 исключения, 1883 raw-группы, 516 точных решений и 1367
+неразобранных; сырой SHA-256 —
+`edcf0241b4dfe59e83145be92284464e72b0a41c97a3eedf9dc40f26ec2e96ed`,
+отпечаток набора —
+`709e3fdfbaeb4f443348167a695e64232566eb401db342bf77324ba1881f050a`.
+Строгая сверка всех решений, `gofmt`, `git diff --check`, указанные build и
+контейнерный unit — PASS LOCAL. Полный `go-docs -check`, browser/deploy/live —
+NOT RUN. Точный scan нового коммита будет опубликован в текущем PR.
 
 ## Сто девятая волна — доменные значения и границы STT
 

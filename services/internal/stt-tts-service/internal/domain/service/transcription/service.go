@@ -13,8 +13,14 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/stt-tts-service/internal/domain/types/value"
 )
 
+// maximumTranscriptBytes rejects oversized provider text before returning a result.
+// maximumTranscriptBytes отклоняет чрезмерный текст провайдера до выдачи результата.
 const maximumTranscriptBytes = 256 << 10
 
+// Service orchestrates one stateless STT request across verified policy,
+// complete audio validation, managed credentials and a bounded provider call.
+// RU: Service проводит один STT-запрос без собственного состояния через
+// проверенную политику, полную проверку аудио, управляемые реквизиты и ограниченный вызов модели.
 type Service struct {
 	policies    PolicyResolver
 	credentials CredentialProjector
@@ -25,6 +31,10 @@ type Service struct {
 	requestTTL  time.Duration
 }
 
+// Input carries the verified principal and seekable audio for one exact request;
+// the service still rechecks permission, expiry and request binding.
+// RU: Input содержит проверенного субъекта и аудио с перемоткой для одного
+// точного запроса; сервис повторно проверяет допуск, срок и привязку запроса.
 type Input struct {
 	Principal                value.Principal
 	RequestID, CorrelationID string
@@ -36,6 +46,8 @@ type Input struct {
 	MediaType      string
 }
 
+// New rejects missing ports and a request lifetime outside the bounded service range.
+// New отклоняет отсутствующие порты и срок запроса вне ограниченного диапазона сервиса.
 func New(policies PolicyResolver, credentials CredentialProjector, provider Provider, observer Observer, requestTTL time.Duration, decoder AudioDecoder) (*Service, error) {
 	if policies == nil || credentials == nil || provider == nil || observer == nil || decoder == nil || requestTTL < time.Second || requestTTL > 20*time.Second {
 		return nil, errors.New("transcription service configuration is invalid")
@@ -43,6 +55,12 @@ func New(policies PolicyResolver, credentials CredentialProjector, provider Prov
 	return &Service{policies: policies, credentials: credentials, provider: provider, decoder: decoder, observer: observer, now: time.Now, requestTTL: requestTTL}, nil
 }
 
+// Transcribe checks the authority pins, resolves and validates policy, decodes
+// the whole audio, projects a matching credential and bounds the provider call
+// by the earliest relevant expiry; failure never returns a partial transcript.
+// RU: Transcribe проверяет закреплённые полномочия, получает и валидирует политику,
+// декодирует всё аудио, получает совпадающий реквизит и ограничивает вызов модели
+// ближайшим сроком истечения; при отказе частичный текст не возвращается.
 func (service *Service) Transcribe(ctx context.Context, input Input) (value.TranscriptionResult, error) {
 	fail := func(stage value.Stage, class value.ErrorClass, err error) (value.TranscriptionResult, error) {
 		service.observer.Observe(stage, class)
@@ -114,6 +132,10 @@ func (service *Service) Transcribe(ctx context.Context, input Input) (value.Tran
 	}}, nil
 }
 
+// CheckLocal checks decoder and provider adapter prerequisites without proving
+// delegated policy, credential or a successful external provider request.
+// RU: CheckLocal проверяет локальные зависимости декодера и адаптера модели,
+// не доказывая делегированную политику, реквизит или успешный внешний вызов.
 func (service *Service) CheckLocal(ctx context.Context) error {
 	if ctx == nil {
 		return errors.New("transcription local readiness context is required")
@@ -121,6 +143,10 @@ func (service *Service) CheckLocal(ctx context.Context) error {
 	return errors.Join(service.decoder.CheckLocal(ctx), service.provider.CheckLocal(ctx))
 }
 
+// CheckProtectedPath can verify a local policy adapter path, but deliberately
+// remains pending because it cannot prove an end-to-end delegated user request.
+// RU: CheckProtectedPath может проверить локальный путь адаптера политики, но
+// остаётся в ожидании: он не доказывает полный делегированный запрос пользователя.
 func (service *Service) CheckProtectedPath(ctx context.Context) error {
 	checker, ok := service.policies.(interface{ Check(context.Context) error })
 	if !ok {
@@ -133,11 +159,19 @@ func (service *Service) CheckProtectedPath(ctx context.Context) error {
 	return errs.ErrDelegatedProofPending
 }
 
+// Availability describes the furthest checked boundary and the earliest expiry
+// of a non-billable provider readiness observation.
+// RU: Availability содержит достигнутую границу проверки и ближайший срок
+// действия наблюдения готовности провайдера без платного распознавания.
 type Availability struct {
 	Stage      value.Stage
 	ValidUntil time.Time
 }
 
+// Catalog returns an optional local provider catalog or an empty value when
+// the adapter has no catalog capability; it does not perform remote discovery.
+// RU: Catalog возвращает необязательный локальный каталог адаптера либо пустое
+// значение без этой возможности; удалённое обнаружение не выполняется.
 func (service *Service) Catalog() modelprofile.Catalog {
 	if provider, ok := service.provider.(interface{ Catalog() modelprofile.Catalog }); ok {
 		return provider.Catalog()
@@ -145,8 +179,12 @@ func (service *Service) Catalog() modelprofile.Catalog {
 	return modelprofile.Catalog{}
 }
 
-// CheckAvailability выполняется только под тем же проверенным root authority,
-// что и Transcribe; не принимает audio и никогда не вызывает распознавание.
+// CheckAvailability uses the same verified root authority as Transcribe,
+// but accepts no audio and calls only a bounded model probe, never recognition;
+// its validity ends at the earliest principal, policy or credential expiry.
+// RU: CheckAvailability действует под тем же проверенным корневым полномочием,
+// что Transcribe, но не принимает аудио и вызывает только ограниченную проверку
+// модели; срок результата не позже истечения субъекта, политики или реквизита.
 func (service *Service) CheckAvailability(ctx context.Context, principal value.Principal, correlationID string) (Availability, error) {
 	if ctx == nil || principal.Permission != value.PermissionTranscribe || principal.ActorID == "" || principal.TenantID == "" ||
 		principal.RequestID == "" || correlationID == "" || principal.AuthorityRevision == 0 || !validSHA256(principal.AuthorityDigestSHA256) || !service.now().Before(principal.ExpiresAt) {
@@ -203,6 +241,10 @@ func (service *Service) CheckAvailability(ctx context.Context, principal value.P
 	return Availability{Stage: value.StageSuccess, ValidUntil: validUntil}, nil
 }
 
+// projectionClass keeps revoked or pending authority distinct from temporary
+// projection failure while exposing only a closed error class to telemetry.
+// RU: projectionClass отличает отозванное или ожидающее полномочие от временного
+// сбоя проекции, передавая наблюдаемости только закрытый класс ошибки.
 func projectionClass(err error) value.ErrorClass {
 	if errors.Is(err, errs.ErrGrantRevoked) || errors.Is(err, errs.ErrDelegatedProofPending) {
 		return value.ErrorDenied
@@ -210,6 +252,10 @@ func projectionClass(err error) value.ErrorClass {
 	return value.ErrorUnavailable
 }
 
+// validatePolicy rejects stale or inconsistent model, account, limit and
+// digest pins before any credential projection or billable provider call.
+// RU: validatePolicy отклоняет устаревшие или несогласованные параметры модели,
+// аккаунта, лимитов и дайджеста до получения реквизита и платного вызова.
 func validatePolicy(policy value.Policy, now time.Time) error {
 	if policy.Revision == 0 || !validSHA256(policy.DigestSHA256) || modelprofile.Validate(policy.Model, policy.Language, policy.Parameters) != nil ||
 		policy.MaximumAudioBytes < modelprofile.MinimumAudioBytes || policy.MaximumAudioBytes > modelprofile.MaximumAudioBytes ||
@@ -221,6 +267,10 @@ func validatePolicy(policy value.Policy, now time.Time) error {
 	return nil
 }
 
+// validateCredential requires the exact policy account, credential generation
+// and digest, plus unexpired independent policy and credential lifetimes.
+// RU: validateCredential требует точного совпадения аккаунта, поколения
+// реквизита и дайджеста политики, а также действующих независимых сроков.
 func validateCredential(credential value.Credential, policy value.Policy, now time.Time) error {
 	if len(credential.APIKey) < 8 || len(credential.APIKey) > 16<<10 || credential.ProviderAccountRef != policy.ProviderAccountRef ||
 		credential.ProviderCredentialGeneration != policy.ProviderCredentialGeneration ||
@@ -233,6 +283,8 @@ func validateCredential(credential value.Credential, policy value.Policy, now ti
 	return nil
 }
 
+// validSHA256 accepts only 64 lowercase hexadecimal characters for a pinned digest.
+// validSHA256 допускает для закреплённого дайджеста только 64 строчные шестнадцатеричные цифры.
 func validSHA256(input string) bool {
 	if len(input) != 64 {
 		return false
