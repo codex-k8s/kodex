@@ -2,6 +2,86 @@
   "version": 1,
   "entries": [
     {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/access.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "3a6638d19f15679b4b504a573f03cf5d7d12d1b9e3c0bf364cb339823a30ddfa",
+      "count": 1,
+      "reason": "Сопоставлены только объявления RPC внутри AccessService, PlatformQueryService; все 1 вхождения этого точного ключа проверены как списки сигнатур без тел реализации или полей message. Режим consistent нормализует имена методов и request/response типов, оставляя одинаковую грамматику rpc/returns. Полные gRPC-имена и типизированные операции самостоятельны; общий универсальный метод изменил бы публичный контракт. Сохраняется точный фрагмент и число его вхождений, не весь Proto-файл."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/access.proto",
+      "secondPath": "contracts/proto/controlplane/v1/access.proto",
+      "fragmentSHA256": "88363b7a2e7717ea146ff63ff976aca39e1a3496bb97ea21b0d7b26786291e2e",
+      "count": 1,
+      "reason": "Сопоставлены только объявления RPC внутри AccessService; все 1 вхождения этого точного ключа проверены как списки сигнатур без тел реализации или полей message. Режим consistent нормализует имена методов и request/response типов, оставляя одинаковую грамматику rpc/returns. Полные gRPC-имена и типизированные операции самостоятельны; общий универсальный метод изменил бы публичный контракт. Сохраняется точный фрагмент и число его вхождений, не весь Proto-файл."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/access.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "fa96938cdfb08c4cdfab5919c562b9de7e732c9d653c4b11ea30d6ba79fa34d2",
+      "count": 30,
+      "reason": "Сопоставлены только объявления RPC внутри AccessService, PlatformCommandService, PlatformQueryService; все 30 вхождения этого точного ключа проверены как списки сигнатур без тел реализации или полей message. Режим consistent нормализует имена методов и request/response типов, оставляя одинаковую грамматику rpc/returns. Полные gRPC-имена и типизированные операции самостоятельны; общий универсальный метод изменил бы публичный контракт. Сохраняется точный фрагмент и число его вхождений, не весь Proto-файл."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/access.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "f4140fb139883b0c0cca0acdbdcbd6454200791a355b88fed4220ddd7ed2fec4",
+      "count": 2,
+      "reason": "Сопоставлены только объявления RPC внутри AccessService, PlatformCommandService, PlatformQueryService; все 2 вхождения этого точного ключа проверены как списки сигнатур без тел реализации или полей message. Режим consistent нормализует имена методов и request/response типов, оставляя одинаковую грамматику rpc/returns. Полные gRPC-имена и типизированные операции самостоятельны; общий универсальный метод изменил бы публичный контракт. Сохраняется точный фрагмент и число его вхождений, не весь Proto-файл."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/access.proto",
+      "secondPath": "contracts/proto/controlplane/v1/role_images.proto",
+      "fragmentSHA256": "fa96938cdfb08c4cdfab5919c562b9de7e732c9d653c4b11ea30d6ba79fa34d2",
+      "count": 2,
+      "reason": "Сопоставлены только объявления RPC внутри AccessService, RoleImageService; все 2 вхождения этого точного ключа проверены как списки сигнатур без тел реализации или полей message. Режим consistent нормализует имена методов и request/response типов, оставляя одинаковую грамматику rpc/returns. Полные gRPC-имена и типизированные операции самостоятельны; общий универсальный метод изменил бы публичный контракт. Сохраняется точный фрагмент и число его вхождений, не весь Proto-файл."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/access.proto",
+      "secondPath": "contracts/proto/controlplane/v1/role_images.proto",
+      "fragmentSHA256": "31f0fd7d043345f9a79f1047046cb2910b5c7fc9b2053e326f9ed3086a0bcb53",
+      "count": 1,
+      "reason": "Сопоставлены только объявления RPC внутри AccessService, RoleImageService; все 1 вхождения этого точного ключа проверены как списки сигнатур без тел реализации или полей message. Режим consistent нормализует имена методов и request/response типов, оставляя одинаковую грамматику rpc/returns. Полные gRPC-имена и типизированные операции самостоятельны; общий универсальный метод изменил бы публичный контракт. Сохраняется точный фрагмент и число его вхождений, не весь Proto-файл."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/access.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "6186ccc10fb1a61d1cb6c42b519909e092a5835d0f4a8118553e46e581cfb4c8",
+      "count": 3,
+      "reason": "Сопоставлены только объявления RPC внутри AccessService, RuntimeSecretWorkService, RuntimeWorkService, SystemAssistantService; все 3 вхождения этого точного ключа проверены как списки сигнатур без тел реализации или полей message. Режим consistent нормализует имена методов и request/response типов, оставляя одинаковую грамматику rpc/returns. Полные gRPC-имена и типизированные операции самостоятельны; общий универсальный метод изменил бы публичный контракт. Сохраняется точный фрагмент и число его вхождений, не весь Proto-файл."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/access.proto",
+      "secondPath": "contracts/proto/controlplane/v1/role_images.proto",
+      "fragmentSHA256": "6186ccc10fb1a61d1cb6c42b519909e092a5835d0f4a8118553e46e581cfb4c8",
+      "count": 1,
+      "reason": "Сопоставлены только объявления RPC внутри AccessService, RoleImageService; все 1 вхождения этого точного ключа проверены как списки сигнатур без тел реализации или полей message. Режим consistent нормализует имена методов и request/response типов, оставляя одинаковую грамматику rpc/returns. Полные gRPC-имена и типизированные операции самостоятельны; общий универсальный метод изменил бы публичный контракт. Сохраняется точный фрагмент и число его вхождений, не весь Proto-файл."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/access.proto",
+      "secondPath": "contracts/proto/secretbroker/v1/secret_broker.proto",
+      "fragmentSHA256": "6186ccc10fb1a61d1cb6c42b519909e092a5835d0f4a8118553e46e581cfb4c8",
+      "count": 1,
+      "reason": "Сопоставлены только объявления RPC внутри AccessService, SecretBrokerService; все 1 вхождения этого точного ключа проверены как списки сигнатур без тел реализации или полей message. Режим consistent нормализует имена методов и request/response типов, оставляя одинаковую грамматику rpc/returns. Полные gRPC-имена и типизированные операции самостоятельны; общий универсальный метод изменил бы публичный контракт. Сохраняется точный фрагмент и число его вхождений, не весь Proto-файл."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "81375fc3e2c6205e780327d92f04ce422a9740bb89f4efd5e91ac137fe2426dc",
+      "count": 1,
+      "reason": "Сопоставлены только объявления RPC внутри PlatformCommandService, RuntimeWorkService; все 1 вхождения этого точного ключа проверены как списки сигнатур без тел реализации или полей message. Режим consistent нормализует имена методов и request/response типов, оставляя одинаковую грамматику rpc/returns. Полные gRPC-имена и типизированные операции самостоятельны; общий универсальный метод изменил бы публичный контракт. Сохраняется точный фрагмент и число его вхождений, не весь Proto-файл."
+    },
+    {
       "format": "sql",
       "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260828000200_session_archive.sql",
       "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260928000300_assistant_session_project_lineage.sql",
