@@ -1,3 +1,4 @@
+// Package tlshello validates the observed TLS ClientHello without terminating TLS.
 // Package tlshello проверяет фактический TLS ClientHello без завершения TLS.
 package tlshello
 
@@ -12,33 +13,64 @@ import (
 )
 
 const (
+	// tlsRecordHeaderBytes is the fixed TLS record header length.
+	// tlsRecordHeaderBytes — фиксированная длина заголовка TLS-записи.
 	tlsRecordHeaderBytes = 5
+	// handshakeHeaderBytes is the fixed handshake message header length.
+	// handshakeHeaderBytes — фиксированная длина заголовка handshake-сообщения.
 	handshakeHeaderBytes = 4
-	clientHelloType      = 1
-	handshakeRecordType  = 22
-	serverNameExtension  = 0
+	// clientHelloType identifies the first handshake message accepted here.
+	// clientHelloType обозначает первое handshake-сообщение, допускаемое здесь.
+	clientHelloType = 1
+	// handshakeRecordType excludes application data before SNI validation.
+	// handshakeRecordType исключает прикладные данные до проверки SNI.
+	handshakeRecordType = 22
+	// serverNameExtension carries the public SNI name to compare with the destination.
+	// serverNameExtension содержит открытое имя SNI для сравнения с адресатом.
+	serverNameExtension = 0
+	// encryptedClientHello identifies ECH, whose hidden destination cannot be verified.
+	// encryptedClientHello обозначает ECH со скрытым адресатом, который нельзя проверить.
 	encryptedClientHello = 0xfe0d
-	maximumTLSRecords    = 16
+	// maximumTLSRecords bounds fragmentation of the initial ClientHello.
+	// maximumTLSRecords ограничивает фрагментацию начального ClientHello.
+	maximumTLSRecords = 16
 )
 
-// Reason — закрытый набор причин ClientHello reject.
+// Reason enumerates closed rejection categories for ClientHello validation.
+// Reason перечисляет закрытые категории отказа при проверке ClientHello.
 type Reason string
 
 const (
+	// ReasonMalformed identifies invalid TLS record or handshake structure.
+	// ReasonMalformed обозначает неверную структуру TLS-записи или handshake.
 	ReasonMalformed Reason = "malformed"
+	// ReasonOversized identifies a byte or record count above the configured bound.
+	// ReasonOversized обозначает превышение заданного лимита байтов или записей.
 	ReasonOversized Reason = "oversized"
-	ReasonMissing   Reason = "missing_sni"
+	// ReasonMissing identifies a ClientHello without an SNI host name.
+	// ReasonMissing обозначает ClientHello без имени узла SNI.
+	ReasonMissing Reason = "missing_sni"
+	// ReasonDuplicate identifies repeated SNI extensions or names.
+	// ReasonDuplicate обозначает повторяющиеся расширения или имена SNI.
 	ReasonDuplicate Reason = "duplicate_sni"
-	ReasonMismatch  Reason = "sni_mismatch"
-	ReasonECH       Reason = "ech"
+	// ReasonMismatch identifies SNI different from the authorized destination.
+	// ReasonMismatch обозначает SNI, отличный от разрешённого адресата.
+	ReasonMismatch Reason = "sni_mismatch"
+	// ReasonECH identifies encrypted SNI that prevents exact destination verification.
+	// ReasonECH обозначает шифрованный SNI, мешающий точной проверке адресата.
+	ReasonECH Reason = "ech"
 )
 
-// Error не содержит недоверенные TLS bytes или hostname.
+// Error exposes only a closed reason, never untrusted TLS bytes or host names.
+// Error раскрывает только закрытую причину, без недоверенных TLS-байтов и имён узлов.
 type Error struct{ Reason Reason }
 
+// Error returns a stable diagnostic assembled from the closed reason.
+// Error возвращает устойчивую диагностику из закрытой причины.
 func (err *Error) Error() string { return "TLS ClientHello rejected: " + string(err.Reason) }
 
-// ReadAndVerify bounded-буферизует первый ClientHello и проверяет exact SNI.
+// ReadAndVerify buffers a bounded initial ClientHello and verifies its exact SNI.
+// ReadAndVerify буферизует ограниченный начальный ClientHello и проверяет точный SNI.
 func ReadAndVerify(connection net.Conn, reader *bufio.Reader, maximumBytes int, timeout time.Duration, expectedHostname string) ([]byte, error) {
 	if connection == nil || reader == nil || maximumBytes < 1024 || timeout <= 0 || expectedHostname == "" {
 		return nil, &Error{Reason: ReasonMalformed}
@@ -95,6 +127,8 @@ func ReadAndVerify(connection net.Conn, reader *bufio.Reader, maximumBytes int, 
 	return nil, &Error{Reason: ReasonOversized}
 }
 
+// parseClientHello validates field lengths and rejects duplicate or encrypted SNI extensions.
+// parseClientHello проверяет длины полей и отклоняет повторные или зашифрованные расширения SNI.
 func parseClientHello(value []byte) (string, error) {
 	parser := byteParser{value: value}
 	legacyVersion, ok := parser.take(2)
@@ -160,6 +194,8 @@ func parseClientHello(value []byte) (string, error) {
 	return hostname, nil
 }
 
+// parseServerName accepts one normalized DNS name in an exact-length SNI list.
+// parseServerName допускает одно нормализованное имя DNS в списке SNI точной длины.
 func parseServerName(value []byte) (string, error) {
 	parser := byteParser{value: value}
 	listLength, ok := parser.uint16()
@@ -191,13 +227,19 @@ func parseServerName(value []byte) (string, error) {
 	return hostname, nil
 }
 
+// byteParser tracks a cursor within the already bounded handshake bytes.
+// byteParser отслеживает позицию внутри уже ограниченных байтов handshake.
 type byteParser struct {
 	value  []byte
 	offset int
 }
 
+// remaining returns unread bytes without advancing the parser.
+// remaining возвращает число непрочитанных байтов без продвижения парсера.
 func (parser *byteParser) remaining() int { return len(parser.value) - parser.offset }
 
+// take returns an exact-length slice only if it fits inside the bounded input.
+// take возвращает срез точной длины, только если он помещается во входные данные.
 func (parser *byteParser) take(length int) ([]byte, bool) {
 	if length < 0 || length > parser.remaining() {
 		return nil, false
@@ -207,11 +249,15 @@ func (parser *byteParser) take(length int) ([]byte, bool) {
 	return value, true
 }
 
+// skip advances past an exact-length field using the same bounds check as take.
+// skip пропускает поле точной длины с той же проверкой границ, что и take.
 func (parser *byteParser) skip(length int) bool {
 	_, ok := parser.take(length)
 	return ok
 }
 
+// byte reads one byte or reports a truncated field.
+// byte читает один байт либо сообщает об обрезанном поле.
 func (parser *byteParser) byte() (byte, bool) {
 	value, ok := parser.take(1)
 	if !ok {
@@ -220,6 +266,8 @@ func (parser *byteParser) byte() (byte, bool) {
 	return value[0], true
 }
 
+// uint16 reads a network-order length or reports a truncated field.
+// uint16 читает длину в сетевом порядке либо сообщает об обрезанном поле.
 func (parser *byteParser) uint16() (uint16, bool) {
 	value, ok := parser.take(2)
 	if !ok {
