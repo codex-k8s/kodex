@@ -12,11 +12,22 @@ import (
 	"unicode/utf8"
 )
 
+// WorkflowPublicationMaximumBytes bounds a single published workflow or its
+// result schema before canonical encoding and transport.
+// RU: WorkflowPublicationMaximumBytes ограничивает размер опубликованного
+// процесса либо его схемы результата до канонического кодирования и передачи.
 const WorkflowPublicationMaximumBytes = 1 << 20
 
+// errWorkflowPublication is the closed error for invalid, noncanonical or
+// uncommitted workflow publication data.
+// RU: errWorkflowPublication — закрытый отказ для ошибочной, неканонической
+// либо не закреплённой дайджестом публикации процесса.
 var errWorkflowPublication = errors.New("workflow publication projection invalid")
 
-// Версионированный wire whitelist; eligibility и owner resolution остаются в CP.
+// WorkflowPublication is the versioned wire whitelist for one published
+// workflow; eligibility and owner resolution remain in the control plane.
+// RU: WorkflowPublication — версионированный закрытый состав передаваемого
+// процесса; допуск и определение владельца остаются в control-plane.
 type WorkflowPublication struct {
 	Version             int                        `json:"version"`
 	WorkflowRef         string                     `json:"workflow_ref"`
@@ -37,6 +48,11 @@ type WorkflowPublication struct {
 	GateDecisions       []string                   `json:"gate_decisions"`
 	ResultSchema        WorkflowPublicationSchema  `json:"result_schema"`
 }
+
+// WorkflowPublicationInput exposes one bounded user input field and its
+// declared type, options and default in the published workflow snapshot.
+// RU: WorkflowPublicationInput задаёт ограниченное пользовательское поле,
+// его тип, варианты и значение по умолчанию в опубликованном снимке.
 type WorkflowPublicationInput struct {
 	Key          string   `json:"key"`
 	Label        string   `json:"label"`
@@ -46,6 +62,11 @@ type WorkflowPublicationInput struct {
 	Required     bool     `json:"required"`
 	Options      []string `json:"options"`
 }
+
+// WorkflowPublicationStep binds an ordered agent step, dependencies, time
+// limits and possible human decisions to a published workflow version.
+// RU: WorkflowPublicationStep связывает упорядоченный этап сотрудника,
+// зависимости, лимиты времени и решения человека с версией процесса.
 type WorkflowPublicationStep struct {
 	Key                    string   `json:"key"`
 	Name                   string   `json:"name"`
@@ -62,8 +83,12 @@ type WorkflowPublicationStep struct {
 	RequiredCapabilityKeys []string `json:"required_capability_keys"`
 }
 
-// Только локальная структурная JSON Schema. $ref/$id/resolvers и произвольный
-// payload не принимаются. Пустая schema остаётся явным {}.
+// WorkflowPublicationSchema accepts only local structural JSON Schema
+// keywords; refs, external resolvers and arbitrary payloads are forbidden.
+// An empty schema remains an explicit JSON object.
+// RU: WorkflowPublicationSchema допускает только локальные структурные ключи
+// JSON Schema без ссылок, внешних разрешителей и произвольных данных;
+// пустая схема остаётся явным объектом JSON.
 type WorkflowPublicationSchema struct {
 	Type                 string                                `json:"type,omitempty"`
 	Title                string                                `json:"title,omitempty"`
@@ -81,6 +106,10 @@ type WorkflowPublicationSchema struct {
 	MaxItems             *int64                                `json:"maxItems,omitempty"`
 }
 
+// DecodeWorkflowPublicationSchema parses a bounded unique-key JSON object,
+// rejecting unknown keywords, null fields, excessive depth and invalid shapes.
+// RU: DecodeWorkflowPublicationSchema читает ограниченный JSON-объект с
+// уникальными ключами, отклоняя чужие слова, null, избыточную глубину и форму.
 func DecodeWorkflowPublicationSchema(raw []byte) (WorkflowPublicationSchema, error) {
 	var schema WorkflowPublicationSchema
 	if len(raw) == 0 || len(raw) > WorkflowPublicationMaximumBytes || !utf8.Valid(raw) || !uniqueWorkflowJSON(raw) {
@@ -97,6 +126,10 @@ func DecodeWorkflowPublicationSchema(raw []byte) (WorkflowPublicationSchema, err
 	return schema, nil
 }
 
+// EncodeWorkflowPublication validates the complete owner snapshot, emits
+// canonical JSON and returns its SHA-256 content commitment.
+// RU: EncodeWorkflowPublication проверяет полный снимок владельца,
+// выдаёт канонический JSON и его дайджест SHA-256.
 func EncodeWorkflowPublication(value WorkflowPublication) ([]byte, string, error) {
 	if !validWorkflowPublication(value) {
 		return nil, "", errWorkflowPublication
@@ -109,6 +142,10 @@ func EncodeWorkflowPublication(value WorkflowPublication) ([]byte, string, error
 	return raw, hex.EncodeToString(digest[:]), nil
 }
 
+// workflowSchemaKeywordsValid checks nested raw schema objects for forbidden
+// null values and invalid keyword shapes before trusting typed decoding.
+// RU: workflowSchemaKeywordsValid проверяет вложенные объекты схемы на
+// запрещённые null и ошибочные формы ключей до доверия типизированному разбору.
 func workflowSchemaKeywordsValid(raw []byte, depth int) bool {
 	if depth > 16 {
 		return false
@@ -145,6 +182,10 @@ func workflowSchemaKeywordsValid(raw []byte, depth int) bool {
 	return true
 }
 
+// DecodeWorkflowPublication accepts only exact canonical bytes matching the
+// supplied digest and the closed, versioned workflow whitelist.
+// RU: DecodeWorkflowPublication принимает только точные канонические байты,
+// совпадающие с переданным дайджестом и закрытым версионированным составом.
 func DecodeWorkflowPublication(raw []byte, digest string) (WorkflowPublication, error) {
 	var value WorkflowPublication
 	if len(raw) == 0 || len(raw) > WorkflowPublicationMaximumBytes || !utf8.Valid(raw) || !taskSessionDigest.MatchString(digest) || !uniqueWorkflowJSON(raw) {
@@ -162,6 +203,10 @@ func DecodeWorkflowPublication(raw []byte, digest string) (WorkflowPublication, 
 	return value, nil
 }
 
+// validWorkflowPublication checks refs, versions, ordered acyclic steps,
+// field types, gate decisions and result-schema bounds before hashing.
+// RU: validWorkflowPublication проверяет ссылки, версии, порядок и зависимости
+// этапов, типы полей, решения шлюза и пределы схемы до вычисления дайджеста.
 func validWorkflowPublication(v WorkflowPublication) bool {
 	for _, ref := range []string{v.WorkflowRef, v.ProjectRef, v.PublishedRef, v.CoordinatorAgentRef} {
 		if !taskSessionRef.MatchString(ref) {
@@ -202,7 +247,10 @@ func validWorkflowPublication(v WorkflowPublication) bool {
 	return err == nil && workflowWireText(raw) && workflowPublicationText(v)
 }
 
-// encoding/json заменяет invalid UTF-8; проверяем все исходные строки до encode.
+// workflowPublicationText validates original strings before encoding/json can
+// replace invalid UTF-8, and excludes NUL from published workflow text.
+// RU: workflowPublicationText проверяет исходные строки до возможной замены
+// неверного UTF-8 в encoding/json и исключает NUL из опубликованного текста.
 func workflowPublicationText(v WorkflowPublication) bool {
 	texts := []string{v.Name, v.Purpose, v.Instructions, v.CompletionCriteria}
 	for _, f := range v.InputFields {
@@ -221,6 +269,11 @@ func workflowPublicationText(v WorkflowPublication) bool {
 	}
 	return true
 }
+
+// workflowDecisions permits only the four registered human-gate outcomes
+// within the bounded decision list.
+// RU: workflowDecisions допускает только четыре зарегистрированных исхода
+// подтверждения человеком в ограниченном списке решений.
 func workflowDecisions(values []string) bool {
 	if len(values) > 4 {
 		return false
@@ -234,6 +287,11 @@ func workflowDecisions(values []string) bool {
 	}
 	return true
 }
+
+// validWorkflowSchema recursively validates local keyword types, limits,
+// required-property references and scalar enums without external resolution.
+// RU: validWorkflowSchema рекурсивно проверяет локальные типы и пределы,
+// ссылки required на свойства и скалярные enum без внешнего разрешения.
 func validWorkflowSchema(v *WorkflowPublicationSchema, depth int) bool {
 	if v == nil || depth > 16 || len(v.Properties) > 100 || len(v.Required) > 100 || len(v.Enum) > 100 || !utf8.ValidString(v.Title) || !utf8.ValidString(v.Description) || len(v.Title) > 1024 || len(v.Description) > 8192 {
 		return false
@@ -287,6 +345,11 @@ func validWorkflowSchema(v *WorkflowPublicationSchema, depth int) bool {
 	}
 	return true
 }
+
+// workflowWireText scans canonical JSON tokens to reject invalid UTF-8 or NUL
+// in any emitted string, including map keys and enum values.
+// RU: workflowWireText просматривает токены канонического JSON и отклоняет
+// неверный UTF-8 либо NUL в любой строке, включая ключи и enum.
 func workflowWireText(raw []byte) bool {
 	d := json.NewDecoder(bytes.NewReader(raw))
 	for {
@@ -302,6 +365,11 @@ func workflowWireText(raw []byte) bool {
 		}
 	}
 }
+
+// uniqueWorkflowJSON walks a bounded JSON tree and rejects duplicate object
+// keys or trailing values before typed workflow or schema decoding.
+// RU: uniqueWorkflowJSON обходит ограниченное дерево JSON и отклоняет
+// повторные ключи либо хвостовые значения до типизированного разбора.
 func uniqueWorkflowJSON(raw []byte) bool {
 	d := json.NewDecoder(bytes.NewReader(raw))
 	var walk func(int) bool

@@ -10,14 +10,24 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// encodeTaskSessionTestCursor wraps raw JSON bytes as an unpadded test cursor.
+// RU: encodeTaskSessionTestCursor упаковывает сырые JSON-байты в тестовый курсор без дополнения.
 func encodeTaskSessionTestCursor(raw []byte) string { return base64.RawURLEncoding.EncodeToString(raw) }
 
+// taskSessionFixture builds a selected failed run with one approved public
+// message and exact source refs for projection tests.
+// RU: taskSessionFixture создаёт выбранный завершившийся ошибкой запуск с
+// одним разрешённым публичным сообщением и точными ссылками на источник.
 func taskSessionFixture() *controlplanev1.AssistantTaskSessionPage {
 	return &controlplanev1.AssistantTaskSessionPage{RunRef: "run_selected123", ProjectRef: "prj_owned123", SessionRef: "ses_selected123", Title: "Проверить прежнюю задачу", State: controlplanev1.RunState_RUN_STATE_FAILED, RunVersion: 4, ResultSummary: "Публичный результат", SafeErrorCode: "SYNTHETIC_ERROR", SessionStorageState: "ARCHIVED", SourceSha256: strings.Repeat("a", 64), Messages: []*controlplanev1.AssistantTaskPublishedMessage{
 		{EventRef: "evt_message123", MessageRef: "msg_final123", Phase: controlplanev1.AssistantTaskMessagePhase_ASSISTANT_TASK_MESSAGE_PHASE_FINAL, Text: "Опубликованный итог", Origin: controlplanev1.AssistantTaskMessageOrigin_ASSISTANT_TASK_MESSAGE_ORIGIN_ORDINARY, SourceRunRef: "run_selected123", SourceRunVersion: 4, SessionRef: "ses_selected123", NodeRef: "nod_source123", TurnRef: "trn_source123", TurnNumber: 1, Attempt: 1, EventSequence: 48, MessageRevision: 1},
 	}}
 }
 
+// TestTaskSessionTypedProjectionDigestAndBudget verifies canonical decimal
+// encoding, deterministic sealing, size limits and tamper rejection.
+// RU: TestTaskSessionTypedProjectionDigestAndBudget проверяет канонические
+// десятичные строки, повторяемый дайджест, размер и отказ при подмене текста.
 func TestTaskSessionTypedProjectionDigestAndBudget(t *testing.T) {
 	t.Parallel()
 	page := taskSessionFixture()
@@ -42,6 +52,12 @@ func TestTaskSessionTypedProjectionDigestAndBudget(t *testing.T) {
 	}
 }
 
+// TestTaskSessionTypedProjectionRejectsUnknownAndPrivateShapes exercises
+// fail-closed behavior for foreign refs, unknown enums, private callback text
+// and inconsistent pagination or message cardinality.
+// RU: TestTaskSessionTypedProjectionRejectsUnknownAndPrivateShapes проверяет
+// отказ для чужих ссылок, неизвестных enum, приватного текста callback и
+// противоречивой пагинации либо числа сообщений.
 func TestTaskSessionTypedProjectionRejectsUnknownAndPrivateShapes(t *testing.T) {
 	t.Parallel()
 	for _, test := range []struct {
@@ -89,6 +105,10 @@ func TestTaskSessionTypedProjectionRejectsUnknownAndPrivateShapes(t *testing.T) 
 	}
 }
 
+// TestTaskSessionCursorAndCanonicalCallback accepts only the public callback
+// marker and rejects malformed, noncanonical or duplicated cursor fields.
+// RU: TestTaskSessionCursorAndCanonicalCallback допускает только публичный
+// маркер callback и отклоняет ошибочные, неканонические или повторные поля курсора.
 func TestTaskSessionCursorAndCanonicalCallback(t *testing.T) {
 	page := taskSessionFixture()
 	page.Messages[0].Phase = 1
