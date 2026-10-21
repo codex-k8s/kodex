@@ -6,8 +6,10 @@ import (
 	"net/netip"
 )
 
-// RenderFiles материализует общий immutable policy, CNI pins и Deployment patch.
-// Результат содержит только endpoint metadata, исходные descriptor values не копируются.
+// RenderFiles materializes the immutable ConfigMap, exact-IP NetworkPolicy and
+// deployment patch from a validated document; no mailbox descriptors are copied.
+// RU: RenderFiles создаёт неизменяемую ConfigMap, сетевую политику с точными IP
+// и патч развёртывания из проверенного документа без копирования описаний ящиков.
 func RenderFiles(document MailDocument) (map[string][]byte, error) {
 	if err := document.Validate(); err != nil {
 		return nil, err

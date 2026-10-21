@@ -6,10 +6,18 @@ import (
 )
 
 var (
+	// ErrEmptyAddresses rejects DNS snapshots without any resolved destination.
+	// RU: ErrEmptyAddresses отклоняет снимок DNS без единого разрешённого адреса назначения.
 	ErrEmptyAddresses = errors.New("DNS snapshot is empty")
+	// ErrSpecialAddress rejects a snapshot containing a private, reserved or otherwise unsafe address.
+	// RU: ErrSpecialAddress отклоняет снимок с частным, зарезервированным либо иным небезопасным адресом.
 	ErrSpecialAddress = errors.New("DNS snapshot contains a prohibited address")
 )
 
+// prohibitedPrefixes enumerates ranges that must never become mail egress pins,
+// including special-use IPv4 and IPv6 ranges not covered by netip predicates.
+// RU: prohibitedPrefixes перечисляет диапазоны, недопустимые для почтовых сетевых
+// привязок, включая специальные IPv4/IPv6, не охваченные проверками netip.
 var prohibitedPrefixes = []netip.Prefix{
 	netip.MustParsePrefix("0.0.0.0/8"),
 	netip.MustParsePrefix("10.0.0.0/8"),
@@ -47,9 +55,14 @@ var prohibitedPrefixes = []netip.Prefix{
 	netip.MustParsePrefix("fec0::/10"),
 }
 
+// allocatedIPv6GlobalUnicast bounds IPv6 candidates to the global unicast space.
+// RU: allocatedIPv6GlobalUnicast ограничивает IPv6-кандидаты пространством глобальной одноадресной маршрутизации.
 var allocatedIPv6GlobalUnicast = netip.MustParsePrefix("2000::/3")
 
-// ValidateAddresses отклоняет весь snapshot, если хотя бы один address запрещён.
+// ValidateAddresses rejects the entire DNS snapshot when it is empty or any
+// address is invalid, private, reserved, multicast or outside public IPv6.
+// RU: ValidateAddresses отклоняет весь снимок DNS, если он пуст либо хотя бы
+// один адрес некорректен, частный, зарезервирован, групповой или не публичный IPv6.
 func ValidateAddresses(addresses []netip.Addr) error {
 	if len(addresses) == 0 {
 		return ErrEmptyAddresses

@@ -11,6 +11,10 @@ import (
 	"github.com/google/cel-go/common/types"
 )
 
+// TestPublicationAdmissionGeneratedReadbackAndClosedBoundary checks that the
+// rendered artifact matches the typed source and CEL rejects mutated resources.
+// RU: TestPublicationAdmissionGeneratedReadbackAndClosedBoundary сверяет
+// опубликованный артефакт с типизированным источником и проверяет отказ CEL для изменённых ресурсов.
 func TestPublicationAdmissionGeneratedReadbackAndClosedBoundary(t *testing.T) {
 	policy, binding := PublicationAdmissionResources()
 	raw, err := os.ReadFile("../../../deploy/k8s/base/egress-gateway/mail/publication-admission.json")

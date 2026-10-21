@@ -12,16 +12,26 @@ import (
 	"time"
 )
 
+// resolverFixture returns one mutable DNS snapshot and counts lookups so tests
+// can distinguish active endpoint resolution from disabled-mailbox bypass.
+// RU: resolverFixture возвращает изменяемый DNS-снимок и считает запросы,
+// позволяя тестам отличать активный узел от выключенного ящика.
 type resolverFixture struct {
 	snapshot Snapshot
 	calls    int
 }
 
+// Resolve records a lookup and returns the fixture snapshot without network IO.
+// RU: Resolve учитывает запрос и возвращает тестовый снимок без обращения к сети.
 func (resolver *resolverFixture) Resolve(context.Context, string) (Snapshot, error) {
 	resolver.calls++
 	return resolver.snapshot, nil
 }
 
+// TestTypedProducerKeepsSourceIdentityAndExactRender verifies source digests,
+// immutable content-addressed render and rejection of stale or unsafe DNS.
+// RU: TestTypedProducerKeepsSourceIdentityAndExactRender проверяет дайджесты
+// источников, неизменяемую отрисовку по содержимому и отказ для устаревшего либо опасного DNS.
 func TestTypedProducerKeepsSourceIdentityAndExactRender(t *testing.T) {
 	raw, err := os.ReadFile("../../../contracts/email-bridge/v1/examples/mailboxes.yaml")
 	if err != nil {
@@ -76,6 +86,10 @@ func TestTypedProducerKeepsSourceIdentityAndExactRender(t *testing.T) {
 	}
 }
 
+// TestDisabledMailboxDoesNotKeepDNSOrNetworkAuthority checks that disabling a
+// mailbox revokes its pins while another enabled mailbox retains only its own.
+// RU: TestDisabledMailboxDoesNotKeepDNSOrNetworkAuthority проверяет отзыв
+// сетевых привязок выключенного ящика и сохранение лишь допуска другого активного.
 func TestDisabledMailboxDoesNotKeepDNSOrNetworkAuthority(t *testing.T) {
 	raw, err := os.ReadFile("../../../contracts/email-bridge/v1/examples/mailboxes.yaml")
 	if err != nil {

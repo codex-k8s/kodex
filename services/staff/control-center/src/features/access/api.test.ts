@@ -4,6 +4,9 @@ const sdk = vi.hoisted(() => ({
   explainAccess: vi.fn(),
   listPlatformMemberships: vi.fn(),
   listProjectMemberships: vi.fn(),
+  listProjects: vi.fn(),
+  listAgents: vi.fn(),
+  listWorkflows: vi.fn(),
   queryEffectiveAccess: vi.fn(),
   simulateAccess: vi.fn(),
 }));
@@ -23,6 +26,9 @@ import {
   fetchEffectiveAccess,
   fetchPlatformMemberships,
   fetchProjectMemberships,
+  fetchProjects,
+  fetchAgents,
+  fetchWorkflows,
 } from "@/features/access/api";
 
 const csrfHeaders = {
@@ -43,6 +49,35 @@ describe("access decision API", () => {
         response: new Response(null, { status: 200 }),
       });
     }
+  });
+
+  it("применяет один запрос справочника с точным scope и лимитом", async () => {
+    for (const request of [sdk.listProjects, sdk.listAgents, sdk.listWorkflows]) {
+      request.mockResolvedValue({
+        data: { items: [] },
+        response: new Response(null, { status: 200 }),
+      });
+    }
+
+    await fetchProjects("  ");
+    await fetchAgents("project_sales", "Go");
+    await fetchWorkflows("project_sales");
+
+    expect(sdk.listProjects).toHaveBeenCalledWith(
+      expect.objectContaining({ query: { query: "  ", pageSize: 100 } }),
+    );
+    expect(sdk.listAgents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { projectRef: "project_sales" },
+        query: { query: "Go", pageSize: 100 },
+      }),
+    );
+    expect(sdk.listWorkflows).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { projectRef: "project_sales" },
+        query: { pageSize: 100 },
+      }),
+    );
   });
 
   it("передаёт CSRF во все POST-запросы чтения эффективного доступа", async () => {

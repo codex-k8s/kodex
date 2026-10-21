@@ -1,10 +1,17 @@
 package mailpolicy
 
+// PublicationAdmissionName identifies the cluster admission policy and its binding
+// that constrain control-plane publication of immutable mail projection ConfigMaps.
+// RU: PublicationAdmissionName задаёт имя политики допуска и её привязки,
+// ограничивающих публикацию неизменяемых ConfigMap с почтовой проекцией.
 const PublicationAdmissionName = "egress-mail-configmap-publication"
 
-// PublicationAdmissionResources — общий source deploy policy и CP readback.
-// CEL ограничивает выданный CP ConfigMap create; семантическая JSON validation
-// и digest принадлежат typed producer/consumer, а прочие callers — своим RBAC.
+// PublicationAdmissionResources builds the shared deployment and control-plane
+// readback policy. CEL restricts the control-plane ConfigMap CREATE; typed
+// producer and consumer validate the JSON and digest, while RBAC limits callers.
+// RU: PublicationAdmissionResources строит общую политику развёртывания и
+// обратной проверки control-plane. CEL ограничивает создание ConfigMap;
+// типизированные отправитель и потребитель проверяют JSON и дайджест, а RBAC — вызывающего.
 func PublicationAdmissionResources() (map[string]any, map[string]any) {
 	policy := map[string]any{
 		"apiVersion": "admissionregistration.k8s.io/v1", "kind": "ValidatingAdmissionPolicy",
