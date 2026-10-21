@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+// webSocketExtensions builds a header fixture without granting other upgrade fields.
+// webSocketExtensions создаёт тестовый заголовок без других полей переключения протокола.
 func webSocketExtensions(values ...string) http.Header {
 	if len(values) == 0 {
 		return http.Header{}
@@ -14,6 +16,8 @@ func webSocketExtensions(values ...string) http.Header {
 	return http.Header{"Sec-Websocket-Extensions": values}
 }
 
+// TestProviderWebSocketExtensionOfferClosedPinnedProfile accepts only the bounded extension grammar.
+// TestProviderWebSocketExtensionOfferClosedPinnedProfile допускает только ограниченную грамматику расширений.
 func TestProviderWebSocketExtensionOfferClosedPinnedProfile(t *testing.T) {
 	for _, value := range []string{
 		"permessage-deflate",
@@ -49,6 +53,8 @@ func TestProviderWebSocketExtensionOfferClosedPinnedProfile(t *testing.T) {
 	}
 }
 
+// TestProviderWebSocketExtensionResponseBoundToOffer rejects unsolicited or expanded server parameters.
+// TestProviderWebSocketExtensionResponseBoundToOffer отклоняет навязанные или расширенные параметры сервера.
 func TestProviderWebSocketExtensionResponseBoundToOffer(t *testing.T) {
 	for _, test := range []struct {
 		name, offer, answer string

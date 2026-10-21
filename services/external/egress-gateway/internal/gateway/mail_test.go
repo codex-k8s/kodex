@@ -17,6 +17,8 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/mailpolicy"
 )
 
+// mailFixture binds one mail destination to the active gateway policy and digest.
+// mailFixture связывает один почтовый адресат с активной политикой и дайджестом шлюза.
 func mailFixture(t *testing.T, protocol, mode string, port int) *mailpolicy.MailActive {
 	t.Helper()
 	base := loadSTTProfile(t)
@@ -29,6 +31,8 @@ func mailFixture(t *testing.T, protocol, mode string, port int) *mailpolicy.Mail
 	return active
 }
 
+// TestMailCONNECTAllRegisteredTransportsPreserveOpaqueBytes covers exact mail ports and unmodified TLS bytes.
+// TestMailCONNECTAllRegisteredTransportsPreserveOpaqueBytes проверяет точные почтовые порты и неизменность байтов TLS.
 func TestMailCONNECTAllRegisteredTransportsPreserveOpaqueBytes(t *testing.T) {
 	for _, tc := range []struct {
 		protocol, mode, greeting string
@@ -110,6 +114,8 @@ func TestMailCONNECTAllRegisteredTransportsPreserveOpaqueBytes(t *testing.T) {
 	}
 }
 
+// TestMailCONNECTRebindingRejectsBeforeDial blocks changed DNS answers before connecting.
+// TestMailCONNECTRebindingRejectsBeforeDial блокирует изменённые ответы DNS до подключения.
 func TestMailCONNECTRebindingRejectsBeforeDial(t *testing.T) {
 	for _, addresses := range [][]netip.Addr{
 		{netip.MustParseAddr("1.1.1.1")},
@@ -129,6 +135,8 @@ func TestMailCONNECTRebindingRejectsBeforeDial(t *testing.T) {
 	}
 }
 
+// TestMailReadinessReturnsPinnedSourceAndIgnoresCallerProfile prevents client headers from replacing active policy.
+// TestMailReadinessReturnsPinnedSourceAndIgnoresCallerProfile не даёт заголовкам клиента подменить активную политику.
 func TestMailReadinessReturnsPinnedSourceAndIgnoresCallerProfile(t *testing.T) {
 	for _, ready := range []bool{false, true} {
 		resolver, dialer := &fakeResolver{}, &fakeDialer{}
@@ -151,6 +159,8 @@ func TestMailReadinessReturnsPinnedSourceAndIgnoresCallerProfile(t *testing.T) {
 	}
 }
 
+// TestMailImplicitSNIRejectsBeforeDNS rejects a foreign TLS server name before resolution.
+// TestMailImplicitSNIRejectsBeforeDNS отклоняет чужое имя сервера TLS до разрешения DNS.
 func TestMailImplicitSNIRejectsBeforeDNS(t *testing.T) {
 	resolver, dialer := &fakeResolver{}, &fakeDialer{}
 	server, err := New(t.Context(), "unused", mailFixture(t, "smtp", "implicit", 465), resolver, dialer, readyStub(true), newTestMetrics(t))

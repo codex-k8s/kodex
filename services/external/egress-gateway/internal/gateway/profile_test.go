@@ -14,6 +14,8 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
+// TestNotReadyConnectDoesNotResolveOrDial keeps external effects behind the readiness gate.
+// TestNotReadyConnectDoesNotResolveOrDial не допускает внешних действий до готовности шлюза.
 func TestNotReadyConnectDoesNotResolveOrDial(t *testing.T) {
 	resolver, dialer := &fakeResolver{}, &fakeDialer{}
 	server, err := New(context.Background(), "unused", fakePolicy{}, resolver, dialer, readyStub(false), newTestMetrics(t))
@@ -26,6 +28,8 @@ func TestNotReadyConnectDoesNotResolveOrDial(t *testing.T) {
 	}
 }
 
+// TestProfileReadinessAndConnectReadBackSameGeneration compares pinned policy metadata across listeners.
+// TestProfileReadinessAndConnectReadBackSameGeneration сравнивает закреплённую версию политики разных входов.
 func TestProfileReadinessAndConnectReadBackSameGeneration(t *testing.T) {
 	profile := loadSTTProfile(t)
 	for _, request := range []string{
@@ -56,6 +60,8 @@ func TestProfileReadinessAndConnectReadBackSameGeneration(t *testing.T) {
 	}
 }
 
+// TestListenersShareOneConnectionBudget prevents separate listeners from multiplying connection capacity.
+// TestListenersShareOneConnectionBudget исключает умножение лимита подключений разными входами.
 func TestListenersShareOneConnectionBudget(t *testing.T) {
 	first, err := New(context.Background(), "unused", fakePolicy{}, &fakeResolver{}, &fakeDialer{}, readyStub(true), newTestMetrics(t))
 	if err != nil {
@@ -90,6 +96,8 @@ func TestListenersShareOneConnectionBudget(t *testing.T) {
 	}
 }
 
+// TestSTTListenerRejectsOtherDestinationsAndCallerProfile rejects caller-supplied profile and foreign targets.
+// TestSTTListenerRejectsOtherDestinationsAndCallerProfile отклоняет профиль клиента и посторонние адресаты.
 func TestSTTListenerRejectsOtherDestinationsAndCallerProfile(t *testing.T) {
 	profile := loadSTTProfile(t)
 	for _, request := range []string{
@@ -117,6 +125,8 @@ func TestSTTListenerRejectsOtherDestinationsAndCallerProfile(t *testing.T) {
 	}
 }
 
+// exchangeProfileRequest sends one in-memory request and joins the handler before returning its response.
+// exchangeProfileRequest отправляет запрос через память и ожидает обработчик перед возвратом ответа.
 func exchangeProfileRequest(t *testing.T, server *Server, request string) *http.Response {
 	t.Helper()
 	serverSide, clientSide := net.Pipe()
@@ -140,6 +150,8 @@ func exchangeProfileRequest(t *testing.T, server *Server, request string) *http.
 	return response
 }
 
+// loadSTTProfile loads the checked-in STT policy with its exact file digest.
+// loadSTTProfile загружает версионированную политику STT с точным дайджестом файла.
 func loadSTTProfile(t *testing.T) *policy.Active {
 	t.Helper()
 	path := filepath.Join("..", "..", "..", "..", "..", "deploy", "k8s", "base", "egress-gateway", "policy.json")

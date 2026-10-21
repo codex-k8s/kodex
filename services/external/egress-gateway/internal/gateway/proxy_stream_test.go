@@ -14,6 +14,8 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
+// pacedResponseBody emits bounded chunks after a delay to exercise streaming deadlines.
+// pacedResponseBody выдаёт ограниченные фрагменты с задержкой для проверки сроков потоковой передачи.
 type pacedResponseBody struct {
 	ctx            context.Context
 	remaining      int
@@ -22,6 +24,8 @@ type pacedResponseBody struct {
 	started        bool
 }
 
+// Read waits for the next chunk or cancellation without hiding the read outcome.
+// Read ожидает следующий фрагмент либо отмену, сохраняя результат чтения.
 func (body *pacedResponseBody) Read(value []byte) (int, error) {
 	if body.remaining == 0 {
 		return 0, io.EOF
@@ -45,8 +49,12 @@ func (body *pacedResponseBody) Read(value []byte) (int, error) {
 	}
 }
 
+// Close satisfies the response-body contract without changing the test fixture.
+// Close выполняет контракт тела ответа, не изменяя тестовый объект.
 func (body *pacedResponseBody) Close() error { return nil }
 
+// TestProxyHTTPNonSSEActiveBeyondSingleWriteBudget verifies progress resets the write budget for ordinary downloads.
+// TestProxyHTTPNonSSEActiveBeyondSingleWriteBudget проверяет, что прогресс обновляет лимит записи обычной загрузки.
 func TestProxyHTTPNonSSEActiveBeyondSingleWriteBudget(t *testing.T) {
 	for _, framing := range []string{"chunked", "content_length"} {
 		t.Run(framing, func(t *testing.T) {
@@ -89,23 +97,31 @@ func TestProxyHTTPNonSSEActiveBeyondSingleWriteBudget(t *testing.T) {
 	}
 }
 
+// cancelledResponseBody blocks in Read until its parent context is cancelled.
+// cancelledResponseBody блокируется при чтении до отмены родительского контекста.
 type cancelledResponseBody struct {
 	ctx     context.Context
 	entered chan struct{}
 	closed  chan struct{}
 }
 
+// Read exposes cancellation only after the gateway enters the upstream read.
+// Read возвращает отмену только после входа шлюза в чтение upstream-ответа.
 func (body *cancelledResponseBody) Read([]byte) (int, error) {
 	close(body.entered)
 	<-body.ctx.Done()
 	return 0, body.ctx.Err()
 }
 
+// Close signals that cancellation joined and closed the upstream body.
+// Close сигнализирует, что после отмены чтение завершено и тело закрыто.
 func (body *cancelledResponseBody) Close() error {
 	close(body.closed)
 	return nil
 }
 
+// TestProxyHTTPResponseIdleAndParentCancellationJoin checks idle and parent cancellation for both stream types.
+// TestProxyHTTPResponseIdleAndParentCancellationJoin проверяет отмену по простою и родителю для обоих типов потока.
 func TestProxyHTTPResponseIdleAndParentCancellationJoin(t *testing.T) {
 	for _, mode := range []string{"non_SSE", "SSE"} {
 		for _, cause := range []string{"idle", "parent"} {
@@ -162,6 +178,8 @@ func TestProxyHTTPResponseIdleAndParentCancellationJoin(t *testing.T) {
 	}
 }
 
+// TestProxyHTTPResponseBlockedDownstreamWriteJoins checks that blocked writes finish within their budget.
+// TestProxyHTTPResponseBlockedDownstreamWriteJoins проверяет завершение заблокированной записи в пределах лимита.
 func TestProxyHTTPResponseBlockedDownstreamWriteJoins(t *testing.T) {
 	for _, mode := range []string{"non_SSE", "SSE"} {
 		t.Run(mode, func(t *testing.T) {
@@ -191,6 +209,8 @@ func TestProxyHTTPResponseBlockedDownstreamWriteJoins(t *testing.T) {
 	}
 }
 
+// TestProxyHTTPResponseWithoutBodyPreservesFraming rejects spurious framing for an empty response.
+// TestProxyHTTPResponseWithoutBodyPreservesFraming исключает лишнее обрамление пустого ответа.
 func TestProxyHTTPResponseWithoutBodyPreservesFraming(t *testing.T) {
 	for _, body := range []io.ReadCloser{nil, http.NoBody} {
 		ctx, cancel := context.WithCancelCause(t.Context())
@@ -217,6 +237,8 @@ func TestProxyHTTPResponseWithoutBodyPreservesFraming(t *testing.T) {
 	}
 }
 
+// TestProviderSSEActiveBeyondSingleWriteBudget ensures active SSE outlives one write interval.
+// TestProviderSSEActiveBeyondSingleWriteBudget проверяет, что активный SSE живёт дольше одного интервала записи.
 func TestProviderSSEActiveBeyondSingleWriteBudget(t *testing.T) {
 	ctx, cancel := context.WithCancelCause(t.Context())
 	defer cancel(nil)
@@ -245,6 +267,8 @@ func TestProviderSSEActiveBeyondSingleWriteBudget(t *testing.T) {
 	}
 }
 
+// TestProviderSSEIdleReadIsCancelledAndJoined requires a stalled upstream read to terminate on idle timeout.
+// TestProviderSSEIdleReadIsCancelledAndJoined требует завершения зависшего чтения по тайм-ауту простоя.
 func TestProviderSSEIdleReadIsCancelledAndJoined(t *testing.T) {
 	ctx, cancel := context.WithCancelCause(t.Context())
 	defer cancel(nil)
@@ -270,6 +294,8 @@ func TestProviderSSEIdleReadIsCancelledAndJoined(t *testing.T) {
 	}
 }
 
+// TestProviderSSEParentCancellationJoinsRead preserves the parent cancellation cause across a pending read.
+// TestProviderSSEParentCancellationJoinsRead сохраняет причину отмены родителя при незавершённом чтении.
 func TestProviderSSEParentCancellationJoinsRead(t *testing.T) {
 	ctx, cancel := context.WithCancelCause(t.Context())
 	defer cancel(nil)
@@ -287,6 +313,8 @@ func TestProviderSSEParentCancellationJoinsRead(t *testing.T) {
 	}
 }
 
+// TestProviderSSEBlockedWriteBudgetIsPreserved bounds a stalled downstream write independently of stream activity.
+// TestProviderSSEBlockedWriteBudgetIsPreserved ограничивает зависшую запись независимо от активности потока.
 func TestProviderSSEBlockedWriteBudgetIsPreserved(t *testing.T) {
 	server, client := net.Pipe()
 	defer server.Close()

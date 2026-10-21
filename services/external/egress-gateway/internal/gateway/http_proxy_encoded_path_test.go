@@ -19,6 +19,8 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/connect"
 )
 
+// encodedWebAccess grants read-only HTTPS access to one exact host for path tests.
+// encodedWebAccess даёт доступ на чтение по HTTPS к одному точному узлу для проверок пути.
 func encodedWebAccess(host string) runtimecontract.RuntimeProxyAccess {
 	return runtimecontract.RuntimeProxyAccess{WebAccess: runtimecontract.RuntimeWebAccess{
 		Mode:  runtimecontract.RuntimeWebAccessAllowlistReadOnly,
@@ -26,6 +28,8 @@ func encodedWebAccess(host string) runtimecontract.RuntimeProxyAccess {
 	}}
 }
 
+// TestProxyWebAccessAllowsValidatedEncodedPaths preserves approved escaping on the upstream request.
+// TestProxyWebAccessAllowsValidatedEncodedPaths сохраняет допустимое кодирование в upstream-запросе.
 func TestProxyWebAccessAllowsValidatedEncodedPaths(t *testing.T) {
 	for _, host := range []string{"registry.npmjs.org", "packages.example.com"} {
 		for _, method := range []string{http.MethodGet, http.MethodHead} {
@@ -52,6 +56,8 @@ func TestProxyWebAccessAllowsValidatedEncodedPaths(t *testing.T) {
 	}
 }
 
+// TestProxyWebAccessRejectsUnsafeEncodedPaths rejects ambiguous escaping before proxying.
+// TestProxyWebAccessRejectsUnsafeEncodedPaths отклоняет неоднозначное кодирование до проксирования.
 func TestProxyWebAccessRejectsUnsafeEncodedPaths(t *testing.T) {
 	for _, path := range []string{
 		"/@scope%252fpackage", "/nested%25252Fpath", "/%250A", "/%255c", "/%00", "/%0A", "/%0d", "/%7F", "/%C2%85",
@@ -78,6 +84,8 @@ func TestProxyWebAccessRejectsUnsafeEncodedPaths(t *testing.T) {
 	}
 }
 
+// TestProxyEncodedPathsPreserveAuthorityBoundaries ensures escaped paths do not widen host or method grants.
+// TestProxyEncodedPathsPreserveAuthorityBoundaries исключает расширение прав на узел или метод через кодированный путь.
 func TestProxyEncodedPathsPreserveAuthorityBoundaries(t *testing.T) {
 	for _, name := range []string{"no_grant", "foreign_host", "foreign_port", "POST", "PUT", "DELETE", "CONNECT", "websocket", "absolute", "opaque", "url_host", "userinfo", "fragment", "provider_only", "provider_websocket"} {
 		t.Run(name, func(t *testing.T) {
@@ -124,6 +132,8 @@ func TestProxyEncodedPathsPreserveAuthorityBoundaries(t *testing.T) {
 	}
 }
 
+// TestAuthenticatedProxyPreservesEncodedPathOnUpstreamWire checks the exact escaped path after authorization.
+// TestAuthenticatedProxyPreservesEncodedPathOnUpstreamWire проверяет точный кодированный путь после авторизации.
 func TestAuthenticatedProxyPreservesEncodedPathOnUpstreamWire(t *testing.T) {
 	for _, method := range []string{http.MethodGet, http.MethodHead} {
 		t.Run(method, func(t *testing.T) {
@@ -196,6 +206,8 @@ func TestAuthenticatedProxyPreservesEncodedPathOnUpstreamWire(t *testing.T) {
 	}
 }
 
+// TestAuthenticatedProxyRejectsUnsafeEncodedPathBeforeDNSAndDial enforces rejection before any external effect.
+// TestAuthenticatedProxyRejectsUnsafeEncodedPathBeforeDNSAndDial требует отказа до любых внешних действий.
 func TestAuthenticatedProxyRejectsUnsafeEncodedPathBeforeDNSAndDial(t *testing.T) {
 	for _, test := range []struct{ method, path string }{
 		{http.MethodGet, "/@scope%252fpackage"},
@@ -240,6 +252,8 @@ func TestAuthenticatedProxyRejectsUnsafeEncodedPathBeforeDNSAndDial(t *testing.T
 	}
 }
 
+// encodedPathAuthenticatedConnect establishes the signed test tunnel with pinned certificate roots.
+// encodedPathAuthenticatedConnect создаёт подписанный тестовый туннель с закреплёнными корневыми сертификатами.
 func encodedPathAuthenticatedConnect(t *testing.T, connection net.Conn, roots *x509.CertPool, grant string) securedReader {
 	t.Helper()
 	if _, err := io.WriteString(connection, "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n"+proxyAuthenticationHeader(grant)+"\r\n"); err != nil {

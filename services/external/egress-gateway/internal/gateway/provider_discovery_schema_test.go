@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// TestClassifyAccountsCheckShape checks supported account-list and account-map response shapes.
+// TestClassifyAccountsCheckShape проверяет допустимые формы списка и карты учётных записей.
 func TestClassifyAccountsCheckShape(t *testing.T) {
 	tests := []struct {
 		name, body, want string
@@ -77,6 +79,8 @@ func TestClassifyAccountsCheckShape(t *testing.T) {
 	}
 }
 
+// TestClassifyAccountsCheckShapeOptionalFieldTypes rejects invalid types in known optional fields.
+// TestClassifyAccountsCheckShapeOptionalFieldTypes отклоняет неверные типы известных необязательных полей.
 func TestClassifyAccountsCheckShapeOptionalFieldTypes(t *testing.T) {
 	for _, field := range []string{"plan_type", "workspace_backend_origin", "account_routing_override", "name", "profile_picture_url", "structure"} {
 		for _, value := range []string{`false`, `123`, `{}`, `[]`} {
@@ -99,6 +103,8 @@ func TestClassifyAccountsCheckShapeOptionalFieldTypes(t *testing.T) {
 	}
 }
 
+// TestClassifyAccountsCheckShapeBoundAndPrivateValues enforces the byte limit without exposing account data.
+// TestClassifyAccountsCheckShapeBoundAndPrivateValues соблюдает лимит байтов без раскрытия данных учётной записи.
 func TestClassifyAccountsCheckShapeBoundAndPrivateValues(t *testing.T) {
 	const prefix = `{"unknown":"`
 	const suffix = `"}`
