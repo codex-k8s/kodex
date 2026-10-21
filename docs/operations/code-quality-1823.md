@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.35.0
+version: 1.36.0
 updated: 2026-10-21
 ---
 
@@ -1008,3 +1008,25 @@ ignore-boundaries — PASS LOCAL.
 20112. Локальные `go test ./...`, `go build ./...`, `gofmt` и
 `git diff --check` — PASS LOCAL. Новый полный scan на коммите ещё предстоит;
 browser/deploy/live не выполнялись в границе задачи.
+
+## Тридцать восьмая волна — общий setup синтетического импорта
+
+На точном запушенном SHA `d942ca1c995b9c05214230110aca858257a6f828`
+полный анализ дал 1915 raw-групп: 156 точных решений и 1759
+неразобранных. Сырой SHA-256 отчёта —
+`03556a39c0eca25b8aeee810f4f5be8ad3759b004ef995de1e072c36df3eb3aa`;
+нормализованный отпечаток набора —
+`f8bd2aeb68baa189ce75ad68c8443ba82f0ebb96ecc399742551b6c7255530b5`.
+Go-реестр: 890/21002, непокрыты 20112; пять точных
+ignore-boundaries — PASS LOCAL.
+
+В синтетическом E2E-файле импорта OpenAPI два сценария повторяли
+одинаковую настройку viewport, pageerror, route и fixture. Общий
+`openSyntheticImportFixture` оставлен helper этого файла; сценарии,
+условия отказа и production-код не изменены. Документы Playwright
+`/microsoft/playwright` проверены через Context7: `Page.route`,
+`Route.fetch` и `Route.fulfill({ response })`. Локально прошли
+Prettier, ESLint, компиляция TypeScript E2E, сборка PWA и unit-тесты
+406/406 файлов, 4032/4032 тестов; `git diff --check` — PASS LOCAL.
+Полный поиск на коммите ещё предстоит; browser/deploy/live не выполнялись
+в границе этой задачи.

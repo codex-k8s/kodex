@@ -1,28 +1,36 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+async function openSyntheticImportFixture(
+  page: Page,
+  width: number,
+  failures: string[],
+): Promise<void> {
+  await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+  page.on("pageerror", (error) => failures.push(error.message));
+  await page.route("https://kodex.test/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.startsWith("/api/")) {
+      failures.push(`Unexpected API request ${url.pathname}`);
+      await route.abort();
+      return;
+    }
+    await route.fulfill({
+      response: await route.fetch({
+        url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
+      }),
+    });
+  });
+  await page.goto(
+    "/e2e/fixtures/ui-proof.html?fixture=assistant-openapi-import",
+  );
+}
 
 for (const width of [1440, 390]) {
   test(`публикация проверенной интеграции передаёт помощнику только ссылки, ${String(width)}px`, async ({
     page,
   }) => {
-    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
     const failures: string[] = [];
-    page.on("pageerror", (error) => failures.push(error.message));
-    await page.route("https://kodex.test/**", async (route) => {
-      const url = new URL(route.request().url());
-      if (url.pathname.startsWith("/api/")) {
-        failures.push(`Unexpected API request ${url.pathname}`);
-        await route.abort();
-        return;
-      }
-      await route.fulfill({
-        response: await route.fetch({
-          url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
-        }),
-      });
-    });
-    await page.goto(
-      "/e2e/fixtures/ui-proof.html?fixture=assistant-openapi-import",
-    );
+    await openSyntheticImportFixture(page, width, failures);
     await page.evaluate(() => {
       window.dispatchEvent(
         new CustomEvent("kodex:assistant:open", {
@@ -60,28 +68,8 @@ for (const width of [1440, 390]) {
   test(`помощник открывает защищённый импорт OpenAPI внутри диалога, ${String(width)}px`, async ({
     page,
   }) => {
-    await page.setViewportSize({
-      width,
-      height: width === 390 ? 844 : 900,
-    });
     const failures: string[] = [];
-    page.on("pageerror", (error) => failures.push(error.message));
-    await page.route("https://kodex.test/**", async (route) => {
-      const url = new URL(route.request().url());
-      if (url.pathname.startsWith("/api/")) {
-        failures.push(`Unexpected API request ${url.pathname}`);
-        await route.abort();
-        return;
-      }
-      await route.fulfill({
-        response: await route.fetch({
-          url: `http://127.0.0.1:43122${url.pathname}${url.search}`,
-        }),
-      });
-    });
-    await page.goto(
-      "/e2e/fixtures/ui-proof.html?fixture=assistant-openapi-import",
-    );
+    await openSyntheticImportFixture(page, width, failures);
     await page.locator(".assistant-fab").click();
     const assistant = page.locator("#assistant-workspace");
     await expect(assistant).toBeVisible();
