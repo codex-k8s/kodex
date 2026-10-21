@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.90.0
+version: 1.91.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,35 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Девяносто третья волна — реальный Unix peer в тестах
+
+На запушенном SHA `ab1b2baf4bb4697ca3dc48e718f1bc8f9eaa876e`
+детектор подтвердил 6531 собственный файл, 222 исключения, 1875 raw-групп,
+407 точных решений и 1468 неразобранных; сырой SHA-256 —
+`2fcb792b2fd472594418b95c29ff18c00e4523961ee2d792ada69b4d0e774e91`,
+отпечаток набора —
+`125ead9e4eb6cdebbd9d96e5a0ec44b2cd8528a44142e7d34659d424f61f0616`.
+Go-реестр: 2904/21046, непокрыты 18142.
+
+В `internalrpcauth/udscred/credentials_linux_test.go` одинаковый запуск
+реального локального Unix-сокета и server-side handshake вынесен в узкую
+тестовую fixture. Положительный тест передаёт текущий UID, отрицательный —
+заведомо иной UID; client-side handshake и проверки server result остались
+раздельными. Cleanup закрывает listener после завершения теста. Production
+код, механизм SO_PEERCRED и прикладные полномочия не менялись. Новый helper
+получил EN→RU комментарий.
+
+Рабочий анализ: 6531 собственный файл, 222 исключения, 1874 raw-группы,
+407 точных решений и 1467 неразобранных; сырой SHA-256 —
+`ec53a21c1696c2c6ab96cfc9e059f2ceed2d5b419d3fe7fcdb01d8cd871fd8ad`,
+отпечаток набора —
+`5004339fba7a83bd4d0980449fe803c4d0b4cc8cd4252d7f0c4313ca68fa44ab`.
+Исчезло ровно одно прежнее test self-overlap, новых групп нет. Go-реестр:
+2905/21047, непокрыты 18142. `gofmt`, `go test -count=1 ./...` и
+`go build ./...` всего модуля internalrpcauth, `git diff --check` — PASS
+LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN по прежним
+границам. Точный scan нового коммита публикуется в текущем PR.
 
 ## Девяносто вторая волна — закрытый реестр адаптеров
 
