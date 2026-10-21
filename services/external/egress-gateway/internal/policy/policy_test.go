@@ -8,6 +8,8 @@ import (
 	"testing"
 )
 
+// validPolicy is a bounded policy fixture with two exact destinations.
+// validPolicy — образец ограниченной политики с двумя точными адресами.
 const validPolicy = `{
   "apiVersion":"kodex.io/v1alpha1",
   "kind":"EgressGatewayPolicy",
@@ -19,6 +21,8 @@ const validPolicy = `{
   }
 }`
 
+// TestLoadRequiresImmutableRevisionAndDigest checks exact policy pins and destinations.
+// TestLoadRequiresImmutableRevisionAndDigest проверяет точные привязки и адреса policy.
 func TestLoadRequiresImmutableRevisionAndDigest(t *testing.T) {
 	var document Document
 	decoder := newStrictDecoder(strings.NewReader(validPolicy))
@@ -48,6 +52,8 @@ func TestLoadRequiresImmutableRevisionAndDigest(t *testing.T) {
 	}
 }
 
+// TestLoadRejectsUnknownDuplicateAndPartialFields checks strict JSON and required fields.
+// TestLoadRejectsUnknownDuplicateAndPartialFields проверяет строгий JSON и обязательные поля.
 func TestLoadRejectsUnknownDuplicateAndPartialFields(t *testing.T) {
 	tests := []string{
 		strings.Replace(validPolicy, `"kind":"EgressGatewayPolicy"`, `"kind":"EgressGatewayPolicy","kind":"EgressGatewayPolicy"`, 1),
@@ -62,6 +68,8 @@ func TestLoadRejectsUnknownDuplicateAndPartialFields(t *testing.T) {
 	}
 }
 
+// TestNormalizeHostnameRejectsIPWildcardAndMalformed rejects aliases and noncanonical names.
+// TestNormalizeHostnameRejectsIPWildcardAndMalformed отклоняет алиасы и неканонические имена.
 func TestNormalizeHostnameRejectsIPWildcardAndMalformed(t *testing.T) {
 	for _, value := range []string{"127.0.0.1", "[::1]", "*.example.com", "example", "-bad.example", "user@example.com", "exa_mple.com", " api.openai.com", "API.OpenAI.COM", "api.openai.com."} {
 		if _, err := NormalizeHostname(value); err == nil {
@@ -74,6 +82,8 @@ func TestNormalizeHostnameRejectsIPWildcardAndMalformed(t *testing.T) {
 	}
 }
 
+// TestLoadRejectsHostnameAliasesAndShutdownAboveDeploymentBudget closes alias and timeout bypasses.
+// TestLoadRejectsHostnameAliasesAndShutdownAboveDeploymentBudget закрывает обходы через алиасы и таймауты.
 func TestLoadRejectsHostnameAliasesAndShutdownAboveDeploymentBudget(t *testing.T) {
 	for _, value := range []string{
 		strings.Replace(validPolicy, `"api.openai.com"`, `"API.OPENAI.COM"`, 1),
@@ -87,12 +97,16 @@ func TestLoadRejectsHostnameAliasesAndShutdownAboveDeploymentBudget(t *testing.T
 	}
 }
 
+// newStrictDecoder refuses unknown fields in test fixture decoding.
+// newStrictDecoder отклоняет неизвестные поля при разборе тестовых данных.
 func newStrictDecoder(reader *strings.Reader) *json.Decoder {
 	decoder := json.NewDecoder(reader)
 	decoder.DisallowUnknownFields()
 	return decoder
 }
 
+// TestProfileIsClosedAndCoveredByDigest checks STT identity and digest binding.
+// TestProfileIsClosedAndCoveredByDigest проверяет идентичность STT и связь с дайджестом.
 func TestProfileIsClosedAndCoveredByDigest(t *testing.T) {
 	var document Document
 	if err := json.Unmarshal([]byte(validPolicy), &document); err != nil {

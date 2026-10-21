@@ -12,8 +12,12 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
+// repositoryPolicyDigest pins the checked-in deployment policy fixture.
+// repositoryPolicyDigest закрепляет образец политики из репозитория.
 const repositoryPolicyDigest = "8529a00f3e8923e59d1776ee64d1965ee1e8f891daa17b94927c816248d6f218"
 
+// TestRepositoryPolicyMatchesExpectedImmutableDigest checks file, schema, and closed STT view.
+// TestRepositoryPolicyMatchesExpectedImmutableDigest проверяет файл, схему и закрытый профиль STT.
 func TestRepositoryPolicyMatchesExpectedImmutableDigest(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..", "..")
 	value, err := os.ReadFile(filepath.Join(root, "deploy", "k8s", "base", "egress-gateway", "policy.json"))

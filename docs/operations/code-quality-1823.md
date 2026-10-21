@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.50.0
+version: 1.51.0
 updated: 2026-10-21
 ---
 
@@ -1486,5 +1486,34 @@ integration. После выноса общих операций универс�
 Go-реестр: 1724/21024, непокрыты 19300. `go test -count=1 ./...` и
 `go build ./...` всего egress-gateway на Go1.26.6, пять ignore-boundaries,
 `gofmt` и `git diff --check` — PASS LOCAL. Полный `go-docs -check`,
+browser/deploy/live — NOT RUN по прежним границам. Точный scan нового
+коммита будет опубликован в текущем PR.
+
+## Пятьдесят третья волна — каноническая egress policy
+
+На точном запушенном SHA `7ce60be27dd15ba0adc9475ebbc0214976ea14bd`
+полный анализ подтвердил 6531 собственный файл, 222 исключения, 1887
+raw-групп, 300 точных решений и 1587 неразобранных; сырой SHA-256 —
+`9037c155022b3335cec822f08b7227c163fd0220a70d537be32ccb6377543ed9`,
+отпечаток набора —
+`ce1ed3aaa32a478d4486f379df1a2d036656409cc39ec6ba3857c02175f751eb`.
+Go-реестр: 1724/21024, непокрыты 19300; полный build/unit egress-gateway
+на этом SHA — PASS LOCAL.
+
+В `egress-gateway/internal/policy` все 44 собственных объявления, включая
+тестовые fixtures, получили предметные EN→RU комментарии. Пояснены
+immutable revision/digest, закрытый профиль STT, отдельный snapshot allowlist,
+канонизация JSON, проверка вложенных duplicate keys до типизированного
+разбора и пределы DNS/ресурсов. Ни одна ветвь проверки, ошибка, поле policy
+или вычисление дайджеста не менялись. Detector до изменения не находил
+неразобранных групп с этим пакетом; рефакторинг повтора не заявляется.
+
+Рабочий анализ: 6531 собственный файл, 222 исключения, 1887 raw-групп,
+300 точных решений и 1587 неразобранных; сырой SHA-256 —
+`22f0cba875eedc833c5118ccc014b27d0a70e45183ef805236207271ca58697b`,
+отпечаток набора не изменился. Go-реестр: 1768/21024, непокрыты 19256;
+все 44 объявления policy покрыты. `go test -count=1 ./...` и
+`go build ./...` всего egress-gateway, пять ignore-boundaries, `gofmt`
+и `git diff --check` — PASS LOCAL. Полный `go-docs -check` и
 browser/deploy/live — NOT RUN по прежним границам. Точный scan нового
 коммита будет опубликован в текущем PR.
