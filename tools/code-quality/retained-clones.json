@@ -3192,6 +3192,150 @@
       "fragmentSHA256": "bc5c26ecbd5c4616e0d956c2ff10b069673a44006b2cf000097dc52e35bc35b7",
       "count": 1,
       "reason": "В ListSkillBundles и ListSkillBundleRevisions совпадает проверка page и накопление ref, однако первый ответ сверяет project scope каждого bundle, а второй — форму отдельной revision без project override. Общие bounds уже задаёт validContextPageResponse; слияние отображения typed views могло бы пропустить различие eligibility. Сохранено лишь это точное окно."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "f0a4a946900803cabeec3838b38d53fc85dc17ac11fb355ef509433fb2543b08",
+      "count": 1,
+      "reason": "Окно сопоставляет github.repository.content.create и update: оба требуют отдельного Human Gate и EFFECT_KEY, но update добавляет ожидаемый SHA и иной предел content_base64. Контракт хранит самостоятельный input/output каждого operation; общий field-шаблон скрыл бы различие create и update. Оставлено только точное окно."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "e8a8edc48587b8cdf166b63e5ebdaf7635eb18046cddbb1b7689d3f6e8a95ff7",
+      "count": 1,
+      "reason": "Пересекаются хвосты create/update содержимого репозитория и начало delete. У create и update разные входные условия, delete имеет risk DESTRUCTIVE и требует текущий SHA. Повтор формата receipt и execution не даёт оснований объединять три самостоятельных эффекта. Исключено только точное окно."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "0e005625ea58d271c09daaf359e121f7a8df4cecb273769412532a7e04ace4b9",
+      "count": 1,
+      "reason": "github.branch.list и github.actions.workflow.list имеют одинаковую грамматику ограниченного списка, но разные operation и типы объектов. Каталог определяет inputFields/outputFields по каждой операции без ссылочного field-шаблона; общий generic list не заменяет отдельное право чтения. Сохранено только это окно."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "4dc25adb78146824da3d70a9cce2d66db64a28769a3bc0ec62324b453c24ac3a",
+      "count": 1,
+      "reason": "Окна branch.list/read и commit.list/read делят pagination и READ_ONLY execution, но branch и commit имеют разные ключи, результат и точные операции допуска. Параметризация YAML в общий list/read без изменения схемы package здесь недоступна; контракт оставляет отдельные явные поля."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "b4366f11dcf4881ec2a7332e522fb107627d2faac797ac52bcbd2d82771f444a",
+      "count": 1,
+      "reason": "branch.list/read и check_run.list/read совпадают по служебным полям страницы, но check_run выбирается по ref/ID и возвращает status/conclusion, branch — по имени ветки. Это разные operation и result schema; общий шаблон скрывал бы требуемые поля и granularity доступа. Исключено точное окно."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "d808133353ce6c756491db55a0062f894da74562117e729a4c7f015804f5946a",
+      "count": 1,
+      "reason": "Пересечение branch.delete и issue.comment.delete содержит общий DESTRUCTIVE/HUMAN_EACH_EFFECT/EFFECT_KEY каркас, но разные ресурсные ключи и внешние эффекты. Серверный допуск к удалению ветки не должен выдавать право удалить комментарий; самостоятельные operation сохранены."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "aca04fb8aef469665acbd57ba1fea7687843c0ec018b483ac19bd742f1e39b10",
+      "count": 1,
+      "reason": "commit.list/read и pull_request.list/read пересекаются на общих полях страницы и READ_ONLY execution. PR требует state/head/base и возвращает другой объект, commit — ref/path; слияние операций стерло бы отдельные разрешения и входную схему. Оставлено точное окно."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "7648776184d984c394738c6ffcc53b55773e0e05c408c8d150dc01d6a6107f1e",
+      "count": 3,
+      "reason": "Три точных перекрытия между commit.list/read и списками PR reviews, workflow runs и jobs имеют лишь одинаковую форму ограниченной страницы READ_ONLY. Каждая операция выбирает собственный ресурс (commit ref, pull request, run), поля и право чтения; схема integration package требует явные поля для каждого operation. Зафиксированы только три вхождения одного fragment."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "953dcdfa6032fe5e54e034df3425be8993628dc782d21629d00d08a047f5f431",
+      "count": 1,
+      "reason": "pull_request.list/read и check_run.list/read повторяют READ_ONLY и pagination envelope, но PR и check run выбираются по разным идентификаторам и имеют несовместимые результатные поля. Публичная операция и её eligibility остаются отдельно типизированными; сохранено точное пересечение."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "ee5e5949b6f63109266cac8ae9d179286a7ea1da346e934cf6a7b62ae18508a7",
+      "count": 1,
+      "reason": "github.pull_request.create и update совпадают в bounded outputFields PR и EFFECT_KEY, но create требует head/base и допускает draft, update меняет существующий номер и optional state. Совпадающий receipt не делает входные команды эквивалентными; отдельные operation сохранены."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "e55c271dd857a82abbd14fd235a134a2b9ebe268ce4cb46fe0bd37664744855b",
+      "count": 1,
+      "reason": "Списки PR reviews и issue comments используют одну форму pagination, но scope review привязан к pull_request_number, комментарий — к issue_number. Это разные capability и ответы; общий list/read контур вне существующей схемы package не применяется. Оставлено точное окно."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "d646c3eb21e61764171fa996305edbdd9871cd14d720658868f2a91a0afe1f1b",
+      "count": 2,
+      "reason": "Два перекрытия списка PR reviews со списками Actions workflows и jobs совпадают по служебной форме READ_ONLY страницы. Review связан с PR, workflow — с репозиторием, job — с run; отдельные ключи и полномочия нельзя свести к общему operation. Сохранены два точных вхождения."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "c17ede45896ac8bb5a48371420d8f95510576176646a937d4402cf2b08ec2ca5",
+      "count": 1,
+      "reason": "PR review.list/read и Actions run.list/read повторяют только поля результата страницы и READ_ONLY execution; run имеет branch/state, review — pull_request_number. Право на чтение одного вида не переносится на другой. Оставлено точное окно."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "6ce75c66a5e63caddebdbccf650b42d9f1f0ae23ceb26a7a2fa04d02555f1f08",
+      "count": 1,
+      "reason": "PR review.create и изменение/удаление issue comment имеют похожий EFFECT_KEY/Human Gate каркас, но review создаёт оценку с event и SHA, комментарий изменяется или удаляется по точному ID. Разные эффект и owner-gate payload не объединяются. Исключено только данное окно."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "20f10d9a5906b0c57a0510dd0fce68723e2a268171dfd9f1795c4a5f9ca623b6",
+      "count": 1,
+      "reason": "Список/чтение issue comments пересекается с изменением/удалением тех же comments только по resourceScope и ID-полям. READ_ONLY без approval не является EFFECT_KEY с Human Gate; объединение формы в общий CRUD стерло бы опасную границу. Оставлено точное окно."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "dc8262aab04aca65ac21d0e28db93d537820bdc3a575e539b805a9e726c0754e",
+      "count": 1,
+      "reason": "Actions workflow.list/read и workflow.dispatch перекрываются на scope и workflow_id, но dispatch имеет risk SENSITIVE, Human Gate и EFFECT_KEY, а чтение — READ_ONLY. Общий шаблон операции скрыл бы этот переход полномочий; исключён только точный fragment."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "675b57186fbe18432f9bd7dfbbf69c2f8729d054dce582d4b6fd0303060af990",
+      "count": 1,
+      "reason": "Actions run.list/read и job.list/read повторяют служебную форму страницы, но job привязан к точному run_id, а run выбирается по branch/state и имеет собственный результат. Отдельный operation сохраняет проверяемую связь job с run; общее чтение не вводится."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "contracts/integrations/v1/definitions/github.yaml",
+      "secondPath": "contracts/integrations/v1/definitions/github.yaml",
+      "fragmentSHA256": "b49eeeacb73ba0c738d344a22fdc6f6a145aeecbc5a34f7e62edfadb001c5fd6",
+      "count": 1,
+      "reason": "Actions run.rerun и run.cancel имеют одинаковые run_id/accepted/EFFECT_KEY поля, но rerun — SENSITIVE повтор, cancel — DESTRUCTIVE остановка; оба требуют отдельное подтверждение эффекта. Общий метод скрывал бы разную семантику и audit; сохранено только точное окно."
     }
   ]
 }

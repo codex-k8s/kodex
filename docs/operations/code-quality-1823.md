@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.102.0
+version: 1.103.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,42 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто пятая волна — точные операции GitHub и диагностические утилиты
+
+На точном запушенном SHA `e342d1bef3570dde3f6be272bf853e0d5ac58ddc`
+анализ подтвердил 6532 собственных файла, 222 исключения, 1867 raw-групп,
+468 точных решений и 1399 неразобранных; сырой SHA-256 —
+`c48f7bdcb06f3513db068214c0138d8a166b38c54c956524387cbf0ebbcefccb`,
+отпечаток набора —
+`867efe5c8c3b929cb806ab74bf785be42a98e36ac1b1f098cabd395f3189afd6`.
+Go-реестр: 3277/21049, непокрыты 17772.
+
+Разобраны все 21 окна `contracts/integrations/v1/definitions/github.yaml`.
+Здесь совпадают части плоских field schemas и execution envelopes у разных
+GitHub operations. Для каждой пары проверены имена операций, входные ключи,
+тип результата, risk и approval. В частности, create/update/delete файла,
+read/list и write, workflow dispatch и run cancel не объединяются одной
+операцией: package schema хранит поля по каждой операции и не предоставляет
+ссылочный field-шаблон. В реестре 18 точных решений по fragment SHA-256;
+два повторяющихся fragment имеют соответственно три и два подтверждённых
+вхождения. Сам YAML-контракт и исполняемое поведение не менялись.
+
+Дополнительно все 8 объявлений `provider-network-probe.go`, его тестов и
+`validate-host-cidr.go` описаны предметно EN→RU. Зафиксированы точные хосты
+и CONNECT/TLS-граница неавторизованного probe, закрытые классы ошибок и
+канонический host CIDR для offline render. Исполняемый код не менялся.
+
+Рабочий detector: 6532 собственных файла, 222 исключения, 1867 raw-групп,
+489 точных решений и 1378 неразобранных; сырой SHA-256 —
+`0709f8dd25302e4a2261478519306a0023d654a1afa32684320cb497f37f3fe2`,
+отпечаток набора не изменился. Go-реестр: 3285/21049,
+непокрыты 17764. Строгая сверка всего реестра, 16 unit-тестов анализатора,
+`go test -count=1` для probe (PASS LOCAL), сборка обоих CLI (PASS LOCAL),
+`go test` для CIDR CLI (команда прошла, тестовых файлов нет), `gofmt` и
+`git diff --check` — PASS LOCAL. Полный `go-docs -check` и
+browser/deploy/live — NOT RUN. Точный scan нового коммита будет опубликован
+в текущем PR.
 
 ## Сто четвёртая волна — SQL-граница Go и именованных запросов
 
