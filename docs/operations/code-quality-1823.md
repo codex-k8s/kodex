@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.166.0
+version: 1.167.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,53 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто шестьдесят седьмая волна — выбор лидера контроллера
+
+На базе опубликованного SHA `c94d7afb6cc4772ad8d3b8a6ec315225f28c0018`
+все 21 объявление leadership.go и 16 leadership_test.go описаны EN→RU.
+Включены diagnostic constants, private lock/record/timing, адаптер work source,
+CAS-aware fake client и все шесть сценариев отказа/передачи управления.
+Два прежних inline comments также переведены без изменения кода.
+Механическое сравнение обоих файлов после удаления комментариев и gofmt
+подтвердило точное равенство с предыдущим SHA. Нового lifecycle или
+security поведения, claims, grants, lease writes и повторов не добавлялось.
+
+Комментарии различают precreated Kubernetes coordination Lease и доменные
+claim/fence/grants управляющего сервиса. ConfigureLeadership только читает
+и закрепляет UID; Get/Update сохраняют resource version для server CAS;
+Create запрещён, RecordEvent не создаёт Kubernetes Event. Run использует
+прежние 45s/20s/5s, ReleaseOnCancel=false и синхронное завершение reconciler
+перед возвратом; parent cancellation сохраняет приоритет ошибки.
+UID syntax не названа выдачей полномочий, holder check не заменяет domain fence.
+
+Тестовые комментарии точно описывают локальный fake tracker: собственный
+reactor воспроизводит CAS UID/RV, fault switch имитирует отказ renew,
+передача лидерства после естественного expiry не дублирует Jobs/PVC.
+Проверка cancel/join блокирует искусственный work source до разрешения
+завершиться и проверяет отсутствие раннего возврата. Это не live HA proof.
+
+Через Context7 /kubernetes/client-go прочитана документация election config
+и callbacks. Для точных обещаний дополнительно прочитаны локальные go doc
+закреплённого client-go v0.36.3: Run завершается и при утрате лидерства,
+ReleaseOnCancel=true требует предварительно завершить защищаемый код.
+Общие примеры Context7 с true не перенесены в существующую реализацию false.
+
+Полный unit internal/admissioncontroller до и после — PASS LOCAL; после
+42 верхних теста, 138 PASS с подтестами, 0 SKIP/FAIL. Go build пакета,
+16 unit анализатора, unit Go-checker, пять ignore-boundaries, gofmt и
+diff-check — PASS LOCAL. Go использует
+`GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`. Реальный Kubernetes,
+PostgreSQL, полный role-image-builder и browser/deploy/live — NOT RUN.
+
+Detector multiset не изменился: 6558 source-файлов, 222 исключения,
+1856 raw-групп, 569 решений и 1287 неразобранных; raw SHA-256
+`97246442731fc4b6ae2e72daa278d6e41965af8c8c7b00e11399f108f95a1fd7`,
+отпечаток `e3c9e13d3e8a4dcd01bf03a5a54d1460f6fd983f8596ce1faa4536303f790bc9`.
+Go-реестр — 5578/21104, непокрыты 15526; role-image-builder — 441/567,
+ещё 126 объявлений. Удаление clone groups не заявляется, новых исключений нет.
+Полный go-docs-check — NOT RUN, прежний diagnostics FAIL остаётся открытым.
+Точный scan/build/unit нового SHA публикуется в текущем PR; цель не завершена.
 
 ## Сто шестьдесят шестая волна — общий потоковый HTTP transport
 
