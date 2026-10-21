@@ -10,6 +10,10 @@ import (
 	"testing"
 )
 
+// TestCredentialsBindExactUnixPeer verifies that both handshake directions
+// accept the actual kernel UID/GID on a real local Unix socket.
+// RU: TestCredentialsBindExactUnixPeer проверяет, что обе стороны рукопожатия
+// принимают фактические UID/GID ядра на настоящем локальном Unix-сокете.
 func TestCredentialsBindExactUnixPeer(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "peer.sock")
 	listener, err := net.Listen("unix", path)
@@ -49,6 +53,10 @@ func TestCredentialsBindExactUnixPeer(t *testing.T) {
 	}
 }
 
+// TestCredentialsRejectWrongUID verifies closed rejection when the configured
+// peer UID differs from the actual client UID on a Unix socket.
+// RU: TestCredentialsRejectWrongUID проверяет закрытый отказ, если заданный
+// UID peer отличается от фактического UID клиента Unix-сокета.
 func TestCredentialsRejectWrongUID(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "peer.sock")
 	listener, err := net.Listen("unix", path)
