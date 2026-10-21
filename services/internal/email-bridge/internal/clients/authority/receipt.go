@@ -12,16 +12,28 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// effectAuthorityTimeout caps each owner effect/report reconciliation RPC independently of the worker cycle budget.
+// effectAuthorityTimeout ограничивает каждый owner RPC отчёта или сверки эффекта независимо от бюджета цикла worker.
 const effectAuthorityTimeout = 3 * time.Second
 
 var (
-	receiptRefPattern  = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
+	// receiptRefPattern bounds owner receipt/decision references and report idempotency keys to the accepted opaque identifier grammar.
+	// receiptRefPattern ограничивает owner receipt/decision и ключи идемпотентности отчётов допустимой грамматикой opaque-идентификатора.
+	receiptRefPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{8,128}$`)
+	// externalRefPattern pins bridge-generated receipt IDs to exactly 16 bytes encoded as lowercase hexadecimal.
+	// externalRefPattern закрепляет ID квитанций моста за ровно 16 байтами в шестнадцатеричном нижнем регистре.
 	externalRefPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
-	digestPattern      = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	// digestPattern accepts only bare lowercase SHA-256 text, without an algorithm prefix or alternate encoding.
+	// digestPattern допускает только голый текст SHA-256 в нижнем регистре, без префикса алгоритма или иной кодировки.
+	digestPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 
 var _ receipt.EffectAuthority = (*Client)(nil)
 
+// Report sends one exact invocation-bound effect observation and validates the owner's correlated receipt and nondecreasing version.
+// Live reports inherit lease expiry; recovery requires the original expired binding and gets a fresh bounded RPC context, never a new effect grant.
+// Report передаёт одно точное наблюдение эффекта с invocation и проверяет связанную квитанцию владельца и неубывающую версию.
+// Живой отчёт наследует срок lease; восстановление требует исходный истёкший binding и получает новый ограниченный RPC-контекст, не grant нового эффекта.
 func (c *Client) Report(ctx context.Context, input receipt.Report) (receipt.OwnerReceipt, error) {
 	want := input.Receipt
 	binding := Binding(input.Binding)
@@ -52,6 +64,10 @@ func (c *Client) Report(ctx context.Context, input receipt.Report) (receipt.Owne
 	return got, nil
 }
 
+// Reconcile resolves an unknown receipt's owner decision once and requires exact receipt version/digest/invocation and fresh conclusive decision metadata.
+// An optional decision reference pins the recheck; missing decisions remain NotFound, and this adapter never resends mail.
+// Reconcile однократно разрешает решение владельца по неопределённой квитанции и требует точные версию, digest, invocation и свежее определённое решение.
+// Необязательная ссылка решения фиксирует повторную проверку; отсутствующее решение остаётся NotFound, а адаптер никогда не отправляет почту повторно.
 func (c *Client) Reconcile(ctx context.Context, want receipt.OwnerReceipt, decisionRef string) (receipt.Decision, error) {
 	if c.API == nil || !validReceipt(want, true) || want.Outcome != receipt.Unknown || (decisionRef != "" && !receiptRefPattern.MatchString(decisionRef)) {
 		return receipt.Decision{}, errs.Invalid
@@ -80,6 +96,8 @@ func (c *Client) Reconcile(ctx context.Context, want receipt.OwnerReceipt, decis
 	return receipt.Decision{Ref: d.Ref, Version: d.Version, Actor: d.ActorRef, Grant: d.GrantRef, Receipt: got, Outcome: outcome, ExpiresAt: d.ExpiresAt.AsTime()}, nil
 }
 
+// effectOutcome maps only the three domain evidence outcomes to their exact Proto values, rejecting every unknown string.
+// effectOutcome переводит только три доменных исхода свидетельства в точные Proto-значения, отвергая любую неизвестную строку.
 func effectOutcome(value receipt.Outcome) (cp.EmailEffectOutcome, bool) {
 	switch value {
 	case receipt.Unknown:
@@ -93,6 +111,8 @@ func effectOutcome(value receipt.Outcome) (cp.EmailEffectOutcome, bool) {
 	}
 }
 
+// ownerReceipt rejects nil/unknown enums, maps the safe owner receipt fields and validates owner reference/version syntax.
+// ownerReceipt отвергает nil и неизвестные enum, преобразует безопасные поля квитанции и проверяет формат owner reference/version.
 func ownerReceipt(r *cp.EmailEffectReceipt) (receipt.OwnerReceipt, bool) {
 	if r == nil {
 		return receipt.OwnerReceipt{}, false
@@ -111,14 +131,22 @@ func ownerReceipt(r *cp.EmailEffectReceipt) (receipt.OwnerReceipt, bool) {
 	return value, validReceipt(value, true)
 }
 
+// validReceipt checks effect identity grammar, required correlations and positive configuration revision, adding owner ref/version requirements when requested.
+// It validates shape only; authenticated owner RPC and comparison to the expected receipt establish provenance separately.
+// validReceipt проверяет грамматику эффекта, обязательные связи и положительную ревизию конфигурации, при необходимости требуя owner ref/version.
+// Проверяется лишь форма; происхождение отдельно устанавливают аутентифицированный owner RPC и сравнение с ожидаемой квитанцией.
 func validReceipt(r receipt.OwnerReceipt, owner bool) bool {
 	return (!owner || receiptRefPattern.MatchString(r.Ref) && r.Version > 0) && externalRefPattern.MatchString(r.ExternalRef) && digestPattern.MatchString(r.ExternalDigest) && digestPattern.MatchString(r.InputDigest) && r.Invocation != "" && r.EffectKey != "" && len(r.EffectKey) <= 128 && r.Mailbox != "" && r.Connection != "" && r.ConfigurationRevision > 0
 }
 
+// sameReceipt compares immutable effect correlations only; callers separately check owner reference, version and outcome under their own rule.
+// sameReceipt сравнивает только неизменяемые связи эффекта; owner reference, версию и исход вызывающий отдельно проверяет по своему правилу.
 func sameReceipt(a, b receipt.OwnerReceipt) bool {
 	return a.Invocation == b.Invocation && a.ExternalRef == b.ExternalRef && a.ExternalDigest == b.ExternalDigest && a.InputDigest == b.InputDigest && a.EffectKey == b.EffectKey && a.Mailbox == b.Mailbox && a.Connection == b.Connection && a.ConfigurationRevision == b.ConfigurationRevision
 }
 
+// effectError preserves denied authority as a domain denial and maps all other RPC failures to a safe unavailable sentinel.
+// effectError сохраняет запрет полномочий как доменный отказ, а прочие RPC-ошибки переводит в безопасный признак недоступности.
 func effectError(err error) error {
 	if status.Code(err) == codes.PermissionDenied || status.Code(err) == codes.Unauthenticated {
 		return errs.Denied

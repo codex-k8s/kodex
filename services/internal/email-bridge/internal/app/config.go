@@ -13,8 +13,12 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/clients/mailtransport"
 )
 
+// mailEgressAddress pins the dedicated internal mail tunnel rather than the general HTTP or STT proxy ports.
+// mailEgressAddress фиксирует выделенный внутренний почтовый туннель, не порты общего HTTP- или STT-прокси.
 const mailEgressAddress = "egress-gateway.kodex-system.svc:8082"
 
+// Config carries process listeners, protected file paths and exact owner/egress/configuration pins; it contains no raw mailbox passwords.
+// Config содержит listeners процесса, пути защищённых файлов и точные привязки owner, egress и конфигурации; сырых паролей ящиков здесь нет.
 type Config struct {
 	RPCProfile                    string `env:"KODEX_RPC_PROFILE"`
 	ReconciliationIntervalSeconds int    `env:"EMAIL_BRIDGE_RECONCILIATION_INTERVAL_SECONDS"`
@@ -35,6 +39,10 @@ type Config struct {
 	ExpectedConfigurationDigest   string `env:"EMAIL_BRIDGE_EXPECTED_CONFIGURATION_DIGEST"`
 }
 
+// loadConfig applies process defaults, parses required environment fields and rejects unsupported profiles, destinations, limits or unclean paths.
+// File contents and remote readiness are checked later; parser details are replaced by bounded English diagnostics.
+// loadConfig применяет defaults процесса, разбирает обязательные поля окружения и отвергает неподдержанные профили, адреса, лимиты и неочищенные пути.
+// Содержимое файлов и удалённая готовность проверяются позже; подробности parser заменяются ограниченной английской диагностикой.
 func loadConfig() (Config, error) {
 	c := Config{ReconciliationIntervalSeconds: 15, ReconciliationBatch: 16, Listen: ":8443", Technical: ":9090", AuthorityTarget: "control-plane.kodex-system.svc.cluster.local:8443", EgressAddress: mailEgressAddress}
 	if env.ParseWithOptions(&c, env.Options{}) != nil {
@@ -60,9 +68,16 @@ func loadConfig() (Config, error) {
 	return c, nil
 }
 
+// configurationPins selects the deployment-owned publication mode and expected immutable configuration identity.
+// configurationPins выбирает назначенный развёртыванием режим публикации и ожидаемую неизменяемую идентичность конфигурации.
 func (c Config) configurationPins() configurationPins {
 	return configurationPins{mode: c.ConfigurationMode, revision: c.ExpectedConfigurationRevision, digest: c.ExpectedConfigurationDigest}
 }
+
+// tlsConfig loads bounded protected TLS material and requires a verified client certificate in the protected profile.
+// TrustedCluster explicitly returns nil for plaintext serving; this choice is not evidence of mTLS or user authorization.
+// tlsConfig читает ограниченные защищённые TLS-материалы и требует проверенный клиентский сертификат в защищённом профиле.
+// TrustedCluster явно возвращает nil для plaintext; этот выбор не доказывает mTLS или пользовательские полномочия.
 func tlsConfig(c Config) (*tls.Config, error) {
 	if c.RPCProfile == transportprofile.TrustedCluster {
 		return nil, nil
@@ -89,6 +104,11 @@ func tlsConfig(c Config) (*tls.Config, error) {
 	}
 	return &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{pair}, RootCAs: roots, ClientCAs: roots, ClientAuth: tls.RequireAndVerifyClientCert}, nil
 }
+
+// databaseDSN reads bounded protected bytes and allows only the exact database host, role, database, verify-full mode and CA path.
+// Duplicate or non-allowlisted query keys are rejected so pgx options cannot override the validated URI boundary.
+// databaseDSN читает ограниченные защищённые байты и допускает только точные host, роль, БД, verify-full и путь CA.
+// Повторные и неразрешённые query keys отклоняются, чтобы параметры pgx не переопределили проверенную URI-границу.
 func databaseDSN(path string) (string, error) {
 	raw, e := securefile.Read(path, 16384)
 	if e != nil {

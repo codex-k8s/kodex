@@ -16,6 +16,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// fakeRuntime records authorization requests and synthesizes matching scope responses or injected RPC failures without a real owner server.
+// fakeRuntime записывает запросы авторизации и создаёт совпадающие scope-ответы либо внедрённые RPC-ошибки без настоящего сервера владельца.
 type fakeRuntime struct {
 	cp.RuntimeWorkServiceClient
 	request *cp.ResolveEmailAuthorizationRequest
@@ -23,6 +25,10 @@ type fakeRuntime struct {
 	failure error
 }
 
+// ResolveEmailAuthorization clones the request, builds structurally matching scopes and applies the scenario mutation before returning.
+// Its synthetic response tests adapter shape/binding checks, not domain eligibility or transport authentication.
+// ResolveEmailAuthorization копирует запрос, создаёт структурно совпадающие scope и применяет изменение сценария перед возвратом.
+// Синтетический ответ проверяет форму и привязки адаптера, не доменный допуск или транспортную аутентификацию.
 func (f *fakeRuntime) ResolveEmailAuthorization(_ context.Context, r *cp.ResolveEmailAuthorizationRequest, _ ...grpc.CallOption) (*cp.ResolveEmailAuthorizationResponse, error) {
 	f.request = proto.Clone(r).(*cp.ResolveEmailAuthorizationRequest)
 	if f.failure != nil {
@@ -39,11 +45,15 @@ func (f *fakeRuntime) ResolveEmailAuthorization(_ context.Context, r *cp.Resolve
 	return result, nil
 }
 
+// fixtureRequest provides a future-dated synthetic invocation lease whose token matches its fence for isolated mapping tests.
+// fixtureRequest задаёт синтетический invocation lease с будущим сроком и token, совпадающим с fence, для изолированных тестов преобразования.
 func fixtureRequest() api.AuthorizationRequest {
 	ref := "inv_fixture01"
 	return api.AuthorizationRequest{InvocationToken: "fence", Operation: api.OperationHealth, MailboxId: "mailbox", ExecutionBinding: &api.ExecutionBinding{InvocationRef: &ref, Lease: api.ExecutionLease{Ref: "lease", Fence: "fence", Generation: 1, ExpiresAt: time.Now().Add(time.Minute)}}}
 }
 
+// TestExactEmailOperationMapping checks all 21 supported non-deprecated mail operations retain exact Proto operation and execution binding.
+// TestExactEmailOperationMapping проверяет сохранение точных Proto operation и execution binding для всех 21 поддержанной неустаревшей операции почты.
 func TestExactEmailOperationMapping(t *testing.T) {
 	count := 0
 	for _, op := range api.Operations() {
@@ -64,6 +74,10 @@ func TestExactEmailOperationMapping(t *testing.T) {
 	}
 }
 
+// TestEmailBindingAndSourceFailClosed rejects missing, expired, dual or mismatched lineage and malformed owner responses while allowing agentless health tests.
+// The final cases verify denied versus unavailable RPC classification without an actual owner connection.
+// TestEmailBindingAndSourceFailClosed отвергает отсутствующее, истёкшее, двойное или несовпавшее происхождение и неверные ответы, допуская health без агента.
+// Финальные сценарии проверяют различие denied и unavailable RPC без настоящего соединения с владельцем.
 func TestEmailBindingAndSourceFailClosed(t *testing.T) {
 	for _, name := range []string{"missing", "wrong-fence", "expired", "dual-source", "test-mutation", "response-generation", "response-source", "response-expiry", "unknown-policy", "unknown-scope", "test-agent"} {
 		t.Run(name, func(t *testing.T) {

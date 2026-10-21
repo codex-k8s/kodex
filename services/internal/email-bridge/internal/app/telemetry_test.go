@@ -13,6 +13,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/observability"
 )
 
+// TestTelemetryDisabledUsesCanonicalRuntime verifies disabled exporters need no DSN/CA, preserve Prometheus and support canonical cleanup.
+// TestTelemetryDisabledUsesCanonicalRuntime проверяет отсутствие требований DSN/CA при отключённых exporters, сохранение Prometheus и каноническую очистку.
 func TestTelemetryDisabledUsesCanonicalRuntime(t *testing.T) {
 	t.Setenv("DEPLOYMENT_ENVIRONMENT", "local")
 	t.Setenv("OTEL_SDK_DISABLED", "true")
@@ -39,6 +41,10 @@ func TestTelemetryDisabledUsesCanonicalRuntime(t *testing.T) {
 	}
 }
 
+// TestTelemetryEnabledRequiresCompletePinnedSettings constructs enabled telemetry from synthetic protected files and rejects missing or foreign exporter pins.
+// Construction/cleanup here do not prove live collector or Sentry availability or successful remote export.
+// TestTelemetryEnabledRequiresCompletePinnedSettings создаёт включённую телеметрию из синтетических защищённых файлов и отвергает отсутствующие или чужие привязки экспорта.
+// Создание и очистка здесь не доказывают доступность настоящего collector/Sentry или успешный удалённый экспорт.
 func TestTelemetryEnabledRequiresCompletePinnedSettings(t *testing.T) {
 	t.Setenv("DEPLOYMENT_ENVIRONMENT", "test")
 	t.Setenv("OTEL_SDK_DISABLED", "false")
@@ -79,12 +85,16 @@ func TestTelemetryEnabledRequiresCompletePinnedSettings(t *testing.T) {
 	}
 }
 
+// shutdownFixture retains the tracing context and Sentry visit flag to check cleanup budget independence.
+// shutdownFixture сохраняет контекст tracing и флаг вызова Sentry для проверки независимости бюджетов очистки.
 type shutdownFixture struct {
 	t       *testing.T
 	tracing context.Context
 	flushed bool
 }
 
+// ShutdownTracing asserts a live bounded context and injects a timeout result without consuming a real five-second deadline.
+// ShutdownTracing проверяет живой ограниченный контекст и внедряет результат timeout, не расходуя настоящий пятисекундный срок.
 func (f *shutdownFixture) ShutdownTracing(ctx context.Context) error {
 	f.tracing = ctx
 	if ctx.Err() != nil {
@@ -95,6 +105,9 @@ func (f *shutdownFixture) ShutdownTracing(ctx context.Context) error {
 	}
 	return context.DeadlineExceeded
 }
+
+// FlushSentry requires a different live bounded context after tracing failure and records that cleanup was still attempted.
+// FlushSentry требует другой живой ограниченный контекст после отказа tracing и фиксирует, что попытка очистки всё же выполнена.
 func (f *shutdownFixture) FlushSentry(ctx context.Context) error {
 	if ctx.Err() != nil || ctx == f.tracing {
 		f.t.Fatal("Sentry inherited failed tracing budget")
@@ -105,6 +118,9 @@ func (f *shutdownFixture) FlushSentry(ctx context.Context) error {
 	f.flushed = true
 	return nil
 }
+
+// TestTelemetryShutdownUsesIndependentBudgets starts with canceled lifecycle and requires Sentry cleanup despite the synthetic tracing timeout.
+// TestTelemetryShutdownUsesIndependentBudgets начинает с отменённого lifecycle и требует очистку Sentry несмотря на синтетический timeout tracing.
 func TestTelemetryShutdownUsesIndependentBudgets(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()

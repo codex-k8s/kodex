@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.142.0
+version: 1.143.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,49 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто сорок третья волна — конфигурация и owner-клиенты почты
+
+На базе опубликованного SHA `6ee10fe4bde4b34fd62504e92db40b444496c49f`
+все 115 объявлений `email-bridge/internal/app`, `clients/authority`
+и `clients/configuration`, включая тесты, получили предметные EN→RU
+комментарии. Описаны единое поколение `..data`, ограничение суммарного
+размера, копирование private bytes, exact deployment pins и watermark,
+атомарная публикация service pointer, снятие допуска при локальном отказе
+и сохранение допустимого снимка при позднем сбое owner acknowledgement.
+
+Owner-клиент отделяет structural mapping от доменного допуска, live fence
+от original expired binding recovery, immutable correlations от отдельно
+проверяемых owner ref/version/outcome. Комментарии не называют readback
+подписью, TLS-конфигурацию trusted plaintext — mTLS, синтетическую проверку
+конкуренции — PostgreSQL fencing, а bounded join attempt — принудительным
+завершением несотрудничающей зависимости. Подробно описаны закрытые
+diagnostic stage/class и независимые telemetry shutdown бюджеты.
+
+Context7: `/protocolbuffers/protobuf-go` — proto.Equal и CheckValid/AsTime;
+`/caarlos0/env` — ParseWithOptions, required/notEmpty и defaults. Первая
+попытка поиска protobuf по import path не дала нужный Go-каталог; повтор
+по canonical repository дал нужный источник. Внешние API и зависимости
+не обновлялись. При внесении комментариев gofmt выявил случайную повторную
+строку объявления теста (FAIL); строка удалена до повторного build/unit.
+Ошибочный patch также был отвергнут до изменения файлов, а не применён частично.
+
+Полный Go build/unit email-bridge до и после комментариев — PASS LOCAL,
+с явно unset EMAIL_BRIDGE_TEST_DSN и EMAIL_BRIDGE_TEST_ADMIN_DSN.
+PostgreSQL и настоящая почта — NOT RUN; synthetic loopback component_test.go
+исполнены обычным unit-запуском, не как внешняя приёмка. Gofmt,
+diff-check и пять ignore-boundaries — PASS LOCAL.
+
+Detector рабочего дерева: 6542 собственных файла, 222 исключения,
+1874 raw-группы, 561 точное решение и 1313 неразобранных. Raw SHA-256:
+`b3d0ea338a66fb1d69dae2bf1e79f6e0b831ab966702ac6cffc6a0c965e02c35`;
+отпечаток с координатами:
+`875c3a628034d35ced267cfcce9774123676d1ea9f4d11aedde6792d4efc21e9`.
+Multiset точных path/fragment/count не изменился; изменились только
+координаты окна `authority/receipt_test.go` после комментариев.
+Go-реестр: 4871/21065, непокрыты 16194; весь email-bridge — 235/481.
+Полный go-docs-check, browser/deploy/live — NOT RUN. Цель не завершена;
+точный повторный scan опубликованного SHA будет указан в PR.
 
 ## Сто сорок вторая волна — домен почтового моста
 

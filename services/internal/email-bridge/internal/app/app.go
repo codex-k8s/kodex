@@ -27,6 +27,10 @@ import (
 	"golang.org/x/net/netutil"
 )
 
+// Run composes protected files, durable receipt/configuration storage, owner RPC, mailbox services and HTTP before starting managed workers.
+// Local readiness tracks primary infrastructure rather than optional remote readback; shutdown stops listeners and attempts a bounded worker join before deferred dependency cleanup.
+// Run собирает защищённые файлы, устойчивое хранилище квитанций и конфигурации, owner RPC, сервисы ящиков и HTTP до запуска управляемых workers.
+// Локальная готовность зависит от основной инфраструктуры, не необязательного удалённого readback; shutdown останавливает listeners и ограниченно ожидает workers до отложенной очистки зависимостей.
 func Run(ctx, background context.Context, version string) (result error) {
 	stage := stageEnvironment
 	defer func() { result = failure(stage, result) }()

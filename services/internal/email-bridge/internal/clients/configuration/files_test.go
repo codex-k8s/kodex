@@ -13,6 +13,8 @@ import (
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
 )
 
+// fixture decodes the repository's mailbox example without loading any real mounted Secret or environment credential.
+// fixture разбирает пример ящика из репозитория без чтения настоящего смонтированного Secret или реквизитов окружения.
 func fixture(t *testing.T) api.Configuration {
 	t.Helper()
 	raw, err := os.ReadFile("../../../../../../contracts/email-bridge/v1/examples/mailboxes.yaml")
@@ -26,6 +28,8 @@ func fixture(t *testing.T) api.Configuration {
 	return value
 }
 
+// writeGeneration creates a private test projection with read-only synthetic credential files tied to the configuration revision.
+// writeGeneration создаёт закрытую тестовую проекцию с read-only синтетическими файлами реквизитов, связанными с ревизией конфигурации.
 func writeGeneration(t *testing.T, root, name string, value api.Configuration) string {
 	t.Helper()
 	directory := filepath.Join(root, name)
@@ -44,6 +48,8 @@ func writeGeneration(t *testing.T, root, name string, value api.Configuration) s
 	return directory
 }
 
+// switchGeneration atomically renames a prepared symlink over ..data to emulate a projected-volume generation switch.
+// switchGeneration атомарно переименовывает подготовленную ссылку поверх ..data, имитируя смену поколения проецируемого тома.
 func switchGeneration(root, name string) error {
 	next := filepath.Join(root, "..next")
 	if err := os.Symlink(name, next); err != nil {
@@ -52,6 +58,10 @@ func switchGeneration(root, name string) error {
 	return os.Rename(next, filepath.Join(root, "..data"))
 }
 
+// TestSnapshotPinsAtomicGeneration verifies matching configuration/credential bytes survive rotation and deletion of the old test directory.
+// Returned credential bytes must be independent copies, and a foreign descriptor generation must remain unavailable.
+// TestSnapshotPinsAtomicGeneration проверяет согласованность конфигурации и реквизитов после ротации и удаления прежней тестовой папки.
+// Возвращённые байты должны быть независимыми копиями, а чужое поколение descriptor — недоступным.
 func TestSnapshotPinsAtomicGeneration(t *testing.T) {
 	root := t.TempDir()
 	value := fixture(t)
@@ -92,6 +102,8 @@ func TestSnapshotPinsAtomicGeneration(t *testing.T) {
 	}
 }
 
+// TestSnapshotConcurrentMountRotation races repeated synthetic symlink switches with loads and checks each resulting snapshot is internally consistent.
+// TestSnapshotConcurrentMountRotation совмещает повторные синтетические смены symlink с чтениями и проверяет внутреннюю согласованность каждого снимка.
 func TestSnapshotConcurrentMountRotation(t *testing.T) {
 	root := t.TempDir()
 	value := fixture(t)
@@ -127,6 +139,10 @@ func TestSnapshotConcurrentMountRotation(t *testing.T) {
 	group.Wait()
 }
 
+// TestSnapshotRejectsUnsafeProjection covers missing or escaped generation/key paths, empty/writable/oversized bytes, invalid config and cancellation.
+// Every failure must reject the complete snapshot rather than publish a partial credential set.
+// TestSnapshotRejectsUnsafeProjection проверяет отсутствие и выход за границы поколения или ключа, пустые, writable и чрезмерные файлы, неверный config и отмену.
+// Каждый отказ должен отклонить снимок целиком, не публикуя частичный набор реквизитов.
 func TestSnapshotRejectsUnsafeProjection(t *testing.T) {
 	for _, name := range []string{"missing-link", "escaped-generation", "missing-key", "empty-key", "writable-key", "escaped-key", "invalid-document", "oversized-key", "cancelled"} {
 		t.Run(name, func(t *testing.T) {
