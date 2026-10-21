@@ -2,6 +2,798 @@
   "version": 1,
   "entries": [
     {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260828000200_session_archive.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260928000300_assistant_session_project_lineage.sql",
+      "fragmentSHA256": "21322db02f2a5bed9e09ff596b552067596f2ad869151c37aebfe0ede153d5da",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260828000200_session_archive.sql и 20260928000300_assistant_session_project_lineage.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260828099500_runtime_environments.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260828099500_runtime_environments.sql",
+      "fragmentSHA256": "d2136872d731fa9179aa2f2b674cad471583af758020fbf0bf48cf69b476ebfd",
+      "count": 1,
+      "reason": "Совпадение находится внутри исторической миграции 20260828099500_runtime_environments.sql, побайтно сохранённой из baseline main 66c1a8dd. Вынос или переписывание повторного SQL изменило бы зафиксированную историю схемы; самостоятельное воспроизведение этой версии должно сохранять исходные statements. Решение ограничено указанным фрагментом, его хешем и числом вхождений."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260828099500_runtime_environments.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260828099500_runtime_environments.sql",
+      "fragmentSHA256": "b99384f66126b168f7e328fb97b08d012377d17235e2b0e0c97e4427a8953a2b",
+      "count": 1,
+      "reason": "Совпадение находится внутри исторической миграции 20260828099500_runtime_environments.sql, побайтно сохранённой из baseline main 66c1a8dd. Вынос или переписывание повторного SQL изменило бы зафиксированную историю схемы; самостоятельное воспроизведение этой версии должно сохранять исходные statements. Решение ограничено указанным фрагментом, его хешем и числом вхождений."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260829000400_attachment_sets.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260829001300_attachment_set_revisions.sql",
+      "fragmentSHA256": "56fbd39bce88305c48818bb325783f5d1efb94e1afb7318a0aba425e391009ad",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260829000400_attachment_sets.sql и 20260829001300_attachment_set_revisions.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260829000400_attachment_sets.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260829001300_attachment_set_revisions.sql",
+      "fragmentSHA256": "36aab520f134e0d587bf5c0429abec7d826f3171ee9c0627c8c449b2501a9323",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260829000400_attachment_sets.sql и 20260829001300_attachment_set_revisions.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260829000400_attachment_sets.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260829001300_attachment_set_revisions.sql",
+      "fragmentSHA256": "9303df900f1aace4f703576773f309d4ca23a3ecb6ca4b75334865d57aee0594",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260829000400_attachment_sets.sql и 20260829001300_attachment_set_revisions.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260829000900_runtime_secrets.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260829001000_runtime_environment_policy.sql",
+      "fragmentSHA256": "85c33ce65bf0de42bda0333a928a41315e105904e2fe26a0ec49bfb371b5dd47",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260829000900_runtime_secrets.sql и 20260829001000_runtime_environment_policy.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260829000900_runtime_secrets.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260829001100_exact_sensitive_access.sql",
+      "fragmentSHA256": "85c33ce65bf0de42bda0333a928a41315e105904e2fe26a0ec49bfb371b5dd47",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260829000900_runtime_secrets.sql и 20260829001100_exact_sensitive_access.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260829001000_runtime_environment_policy.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260829001100_exact_sensitive_access.sql",
+      "fragmentSHA256": "0201fc8f6f42945f29ee3138aea86f065b764d2057e46b38b30a818786a74905",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260829001000_runtime_environment_policy.sql и 20260829001100_exact_sensitive_access.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260829001000_runtime_environment_policy.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260829001100_exact_sensitive_access.sql",
+      "fragmentSHA256": "d7ff3251aa6790220daed9576b9f1a09796ff6bd9517fb2d287233b0c9ba22ee",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260829001000_runtime_environment_policy.sql и 20260829001100_exact_sensitive_access.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260904000400_issue_1027_automation_scheduler.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260904000400_issue_1027_automation_scheduler.sql",
+      "fragmentSHA256": "2f0cf79278e10d4f0c5108a81d24503d7fde4a2477a32d0933d402fcb55c4e46",
+      "count": 1,
+      "reason": "Совпадение находится внутри исторической миграции 20260904000400_issue_1027_automation_scheduler.sql, побайтно сохранённой из baseline main 66c1a8dd. Вынос или переписывание повторного SQL изменило бы зафиксированную историю схемы; самостоятельное воспроизведение этой версии должно сохранять исходные statements. Решение ограничено указанным фрагментом, его хешем и числом вхождений."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260904000601_issue_1046_catalog_eligibility.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260923000200_project_trash_lifecycle.sql",
+      "fragmentSHA256": "8c8d76cca08a4ef0ee645b7e1ee0e82c9e75fae8f7067568eba177c957914ec4",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260904000601_issue_1046_catalog_eligibility.sql и 20260923000200_project_trash_lifecycle.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260904000601_issue_1046_catalog_eligibility.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260923000200_project_trash_lifecycle.sql",
+      "fragmentSHA256": "a0a47474f50395d7260f61c02d056dfd1c214a32773d93e1664746aad235ce3c",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260904000601_issue_1046_catalog_eligibility.sql и 20260923000200_project_trash_lifecycle.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260904000620_issue_1046_email_mailbox_approval.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20261004000400_integration_grant_approval_policy.sql",
+      "fragmentSHA256": "67b228310fa3bc9f7bbd96d297edc8aecdbf4aadf6f82c605fd6a02b87c7f8c7",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260904000620_issue_1046_email_mailbox_approval.sql и 20261004000400_integration_grant_approval_policy.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260904000646_issue_1046_integration_grant_admission.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260908000300_email_legacy_package_admission.sql",
+      "fragmentSHA256": "ba26a9edff8a3ca81988ca6f18a410878aba7ac8df1bdb5607e336771139b251",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260904000646_issue_1046_integration_grant_admission.sql и 20260908000300_email_legacy_package_admission.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260904000646_issue_1046_integration_grant_admission.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260908000300_email_legacy_package_admission.sql",
+      "fragmentSHA256": "7af6219683d6be1abe8d9fdf582e6906efd6f836f503839a9514ed84a4c207d0",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260904000646_issue_1046_integration_grant_admission.sql и 20260908000300_email_legacy_package_admission.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260904000647_issue_1078_workflow_launch_readiness.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260913000200_issue_1548_default_runner_readiness.sql",
+      "fragmentSHA256": "801f441c40aa40886b9cc70573b962514759dfeec7a57c4d47a2462b65ea4a6e",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260904000647_issue_1078_workflow_launch_readiness.sql и 20260913000200_issue_1548_default_runner_readiness.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260905000642_issue_1046_runtime_file_catalog.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20261007135000_workflow_coordinator_result_catalog.sql",
+      "fragmentSHA256": "91383f44d6b12ff5bf641e667162ebe212811203fe3130475f502ff857db6017",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260905000642_issue_1046_runtime_file_catalog.sql и 20261007135000_workflow_coordinator_result_catalog.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260905000642_issue_1046_runtime_file_catalog.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20261007135000_workflow_coordinator_result_catalog.sql",
+      "fragmentSHA256": "959b36b96dfeb909a143018cc609c9a85bfba0870ec622182da3227caa932b1d",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260905000642_issue_1046_runtime_file_catalog.sql и 20261007135000_workflow_coordinator_result_catalog.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260905000642_issue_1046_runtime_file_catalog.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20261010120000_artifact_immutable_revisions.sql",
+      "fragmentSHA256": "9e1610e519fd659c33af741730d939c1082f9bf4febc489b8784ed5347a8f4ed",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260905000642_issue_1046_runtime_file_catalog.sql и 20261010120000_artifact_immutable_revisions.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260906000651_issue_1092_assistant_context_eligibility.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "fragmentSHA256": "0d48dbbf82dc14e386c278aa6a35856afc0910220e7d4bc2bdc04b0c5c65e56e",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260906000651_issue_1092_assistant_context_eligibility.sql и 20260923000400_assistant_agent_update_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260906000651_issue_1092_assistant_context_eligibility.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000300_assistant_schedule_update.sql",
+      "fragmentSHA256": "6e2649b887829530926bc2e4e50a0c6ec5529dd6edfd9aa356ffd481fbc2b574",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260906000651_issue_1092_assistant_context_eligibility.sql и 20260924000300_assistant_schedule_update.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260906000651_issue_1092_assistant_context_eligibility.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "fragmentSHA256": "7c9a81d4550c93c5844da03bec2c28762035d773e1d7708759a6296125adb818",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260906000651_issue_1092_assistant_context_eligibility.sql и 20260923000400_assistant_agent_update_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260906000651_issue_1092_assistant_context_eligibility.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260923000600_assistant_role_image_context.sql",
+      "fragmentSHA256": "7638177d3e2ad1bb3bee6cfb198aa1bad2933e2ff563b6c1961d8b9edd1de120",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260906000651_issue_1092_assistant_context_eligibility.sql и 20260923000600_assistant_role_image_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260906000651_issue_1092_assistant_context_eligibility.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260926000200_assistant_recipient_integration_grant.sql",
+      "fragmentSHA256": "dc8ec9ae64a8bcd64b5d24e360e4dfe457615b345a59a2fb4b307ed26f1775f0",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260906000651_issue_1092_assistant_context_eligibility.sql и 20260926000200_assistant_recipient_integration_grant.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000300_project_purge_database.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260928000200_project_purge_stable_row_keys.sql",
+      "fragmentSHA256": "8884901e2f149714f5d1f3d2a3b4a7ffb01327f5ea5532b69dc1eeff9afff731",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000300_project_purge_database.sql и 20260928000200_project_purge_stable_row_keys.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000300_project_purge_database.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924001400_project_purge_graph_refresh.sql",
+      "fragmentSHA256": "d288b675ef61fcefdcacdf17ca1963847a24ef8f766c3052114271503769f894",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000300_project_purge_database.sql и 20260924001400_project_purge_graph_refresh.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000300_project_purge_database.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260928000200_project_purge_stable_row_keys.sql",
+      "fragmentSHA256": "1f26945639056b37f6cebf1db3b43becb1993e7b23b5eff13486cb0f2e19b7d5",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000300_project_purge_database.sql и 20260928000200_project_purge_stable_row_keys.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000300_project_purge_database.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924001400_project_purge_graph_refresh.sql",
+      "fragmentSHA256": "756262abbe0f7ba4af02de459ffd3e015106d96722f15072052ae6cbc4fe501c",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000300_project_purge_database.sql и 20260924001400_project_purge_graph_refresh.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000300_project_purge_database.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260928000200_project_purge_stable_row_keys.sql",
+      "fragmentSHA256": "2b9149268b8e9227e05f8721589e7574bba2ecae6e7d0a860654208a89461e53",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000300_project_purge_database.sql и 20260928000200_project_purge_stable_row_keys.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000300_project_purge_database.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260928000200_project_purge_stable_row_keys.sql",
+      "fragmentSHA256": "01b80e99dee720136e7a5ea8159e067b2826ab60f7567dc473eab205e07f1d33",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000300_project_purge_database.sql и 20260928000200_project_purge_stable_row_keys.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260923000500_assistant_environment_draft_context.sql",
+      "fragmentSHA256": "7c1f6e854abf24df4345855699a72cb7c84939d85d51a86d9a507cc1f625de46",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260923000500_assistant_environment_draft_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260923000600_assistant_role_image_context.sql",
+      "fragmentSHA256": "7c1f6e854abf24df4345855699a72cb7c84939d85d51a86d9a507cc1f625de46",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260923000600_assistant_role_image_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000200_assistant_connection_update.sql",
+      "fragmentSHA256": "7c1f6e854abf24df4345855699a72cb7c84939d85d51a86d9a507cc1f625de46",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260924000200_assistant_connection_update.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000300_assistant_schedule_update.sql",
+      "fragmentSHA256": "f35e9935fc9a0ddbd47d93b64279144b88150ba3a67f690bebd144ad6639281b",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260924000300_assistant_schedule_update.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000400_assistant_workflow_update.sql",
+      "fragmentSHA256": "f35e9935fc9a0ddbd47d93b64279144b88150ba3a67f690bebd144ad6639281b",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260924000400_assistant_workflow_update.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000500_assistant_environment_revision.sql",
+      "fragmentSHA256": "f35e9935fc9a0ddbd47d93b64279144b88150ba3a67f690bebd144ad6639281b",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260924000500_assistant_environment_revision.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000600_assistant_agent_environment_binding.sql",
+      "fragmentSHA256": "f35e9935fc9a0ddbd47d93b64279144b88150ba3a67f690bebd144ad6639281b",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260924000600_assistant_agent_environment_binding.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000700_assistant_role_image_update.sql",
+      "fragmentSHA256": "f35e9935fc9a0ddbd47d93b64279144b88150ba3a67f690bebd144ad6639281b",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260924000700_assistant_role_image_update.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260925000100_assistant_integration_definition_publish.sql",
+      "fragmentSHA256": "f35e9935fc9a0ddbd47d93b64279144b88150ba3a67f690bebd144ad6639281b",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260925000100_assistant_integration_definition_publish.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260925000200_assistant_instruction_draft_context.sql",
+      "fragmentSHA256": "f35e9935fc9a0ddbd47d93b64279144b88150ba3a67f690bebd144ad6639281b",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260925000200_assistant_instruction_draft_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260926000200_assistant_recipient_integration_grant.sql",
+      "fragmentSHA256": "f35e9935fc9a0ddbd47d93b64279144b88150ba3a67f690bebd144ad6639281b",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260926000200_assistant_recipient_integration_grant.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260927000100_assistant_role_image_detail_context.sql",
+      "fragmentSHA256": "66abc606f304f6087654c40267ab57d403bbad90cb96b12ccf263497c3ba5f69",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260927000100_assistant_role_image_detail_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260927000200_assistant_role_image_launch_context.sql",
+      "fragmentSHA256": "66abc606f304f6087654c40267ab57d403bbad90cb96b12ccf263497c3ba5f69",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260927000200_assistant_role_image_launch_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260923000500_assistant_environment_draft_context.sql",
+      "fragmentSHA256": "ffe46f3722a9353d2eada47923d95fd358e33896b7dcca955f0640e0bb79ce65",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260923000500_assistant_environment_draft_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260923000600_assistant_role_image_context.sql",
+      "fragmentSHA256": "e8d226751336904d33098166bd5a5a3c8afb0e51e68dd5ebbc086c25c8b5dddd",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260923000600_assistant_role_image_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260923000600_assistant_role_image_context.sql",
+      "fragmentSHA256": "cc3de59dce19cfb6a0002602200106b5b05250a08ee9511fb9e1f3d6a2de2bc0",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260923000600_assistant_role_image_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260926000200_assistant_recipient_integration_grant.sql",
+      "fragmentSHA256": "cc3de59dce19cfb6a0002602200106b5b05250a08ee9511fb9e1f3d6a2de2bc0",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260926000200_assistant_recipient_integration_grant.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000400_assistant_agent_update_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260927000200_assistant_role_image_launch_context.sql",
+      "fragmentSHA256": "cc3de59dce19cfb6a0002602200106b5b05250a08ee9511fb9e1f3d6a2de2bc0",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000400_assistant_agent_update_context.sql и 20260927000200_assistant_role_image_launch_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000600_assistant_role_image_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000200_assistant_connection_update.sql",
+      "fragmentSHA256": "2b4aa59c164c9651abcbc3a8db7cae0d0235bbc85ea10ac6cb1841c238df1666",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000600_assistant_role_image_context.sql и 20260924000200_assistant_connection_update.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000600_assistant_role_image_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000300_assistant_schedule_update.sql",
+      "fragmentSHA256": "2b4aa59c164c9651abcbc3a8db7cae0d0235bbc85ea10ac6cb1841c238df1666",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000600_assistant_role_image_context.sql и 20260924000300_assistant_schedule_update.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000600_assistant_role_image_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000200_assistant_connection_update.sql",
+      "fragmentSHA256": "ce0b056c3ac1dd09a93acd6a1794ce02faf3ff569bacb27ca816633018fed2be",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000600_assistant_role_image_context.sql и 20260924000200_assistant_connection_update.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000600_assistant_role_image_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000500_assistant_environment_revision.sql",
+      "fragmentSHA256": "ce0b056c3ac1dd09a93acd6a1794ce02faf3ff569bacb27ca816633018fed2be",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000600_assistant_role_image_context.sql и 20260924000500_assistant_environment_revision.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260923000600_assistant_role_image_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000700_assistant_role_image_update.sql",
+      "fragmentSHA256": "0664585d584ef341ed076e91987cf7d39d27e65d67696c6d2ebaafdbceda3df4",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260923000600_assistant_role_image_context.sql и 20260924000700_assistant_role_image_update.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924000200_assistant_connection_update.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000300_assistant_schedule_update.sql",
+      "fragmentSHA256": "5930178ffc66b1ea698dbf7a1081c971e3c9a448451b9f5af27f8e0328e0e16c",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924000200_assistant_connection_update.sql и 20260924000300_assistant_schedule_update.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924000300_assistant_schedule_update.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000400_assistant_workflow_update.sql",
+      "fragmentSHA256": "88279f16afe166742e44052c18d137c98c716719d9e4e118dab992fa0d2fb673",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924000300_assistant_schedule_update.sql и 20260924000400_assistant_workflow_update.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924000300_assistant_schedule_update.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000500_assistant_environment_revision.sql",
+      "fragmentSHA256": "88279f16afe166742e44052c18d137c98c716719d9e4e118dab992fa0d2fb673",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924000300_assistant_schedule_update.sql и 20260924000500_assistant_environment_revision.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924000300_assistant_schedule_update.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000600_assistant_agent_environment_binding.sql",
+      "fragmentSHA256": "88279f16afe166742e44052c18d137c98c716719d9e4e118dab992fa0d2fb673",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924000300_assistant_schedule_update.sql и 20260924000600_assistant_agent_environment_binding.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924000300_assistant_schedule_update.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000700_assistant_role_image_update.sql",
+      "fragmentSHA256": "b359506b0d5fcb3cf01de89aa6f436af1ceef1f59ae09b60bd3dabde5d0dbf62",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924000300_assistant_schedule_update.sql и 20260924000700_assistant_role_image_update.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924000300_assistant_schedule_update.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260925000100_assistant_integration_definition_publish.sql",
+      "fragmentSHA256": "f37941769eff12461ff402cb34b3e09e13b35353013aba558e07a51c0f8a5695",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924000300_assistant_schedule_update.sql и 20260925000100_assistant_integration_definition_publish.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924000300_assistant_schedule_update.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260925000200_assistant_instruction_draft_context.sql",
+      "fragmentSHA256": "f37941769eff12461ff402cb34b3e09e13b35353013aba558e07a51c0f8a5695",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924000300_assistant_schedule_update.sql и 20260925000200_assistant_instruction_draft_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924000300_assistant_schedule_update.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260926000200_assistant_recipient_integration_grant.sql",
+      "fragmentSHA256": "f37941769eff12461ff402cb34b3e09e13b35353013aba558e07a51c0f8a5695",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924000300_assistant_schedule_update.sql и 20260926000200_assistant_recipient_integration_grant.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924000300_assistant_schedule_update.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260927000100_assistant_role_image_detail_context.sql",
+      "fragmentSHA256": "f37941769eff12461ff402cb34b3e09e13b35353013aba558e07a51c0f8a5695",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924000300_assistant_schedule_update.sql и 20260927000100_assistant_role_image_detail_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924000300_assistant_schedule_update.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000400_assistant_workflow_update.sql",
+      "fragmentSHA256": "41c3274379f4e984c455f36a2414b85199dc56242f1c829274b6c5a09bb64fd1",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924000300_assistant_schedule_update.sql и 20260924000400_assistant_workflow_update.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924000500_assistant_environment_revision.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000600_assistant_agent_environment_binding.sql",
+      "fragmentSHA256": "231978429802b47d07597fc8bef4248feb0052249ae9b4e7d6f1f2c9f965a929",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924000500_assistant_environment_revision.sql и 20260924000600_assistant_agent_environment_binding.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924000500_assistant_environment_revision.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260925000200_assistant_instruction_draft_context.sql",
+      "fragmentSHA256": "fb844915de4dedd48bdb589659079fdf75674755e85208083ac5a69bccd74659",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924000500_assistant_environment_revision.sql и 20260925000200_assistant_instruction_draft_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924000600_assistant_agent_environment_binding.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260924000700_assistant_role_image_update.sql",
+      "fragmentSHA256": "c8351b5d898f1f6fea22938a5064b69a4ccb4326c00e84d6539ed8cea75dafac",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924000600_assistant_agent_environment_binding.sql и 20260924000700_assistant_role_image_update.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924000700_assistant_role_image_update.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260925000100_assistant_integration_definition_publish.sql",
+      "fragmentSHA256": "1e312334b4f7c8d10356dcb316daec082f15c81195490ad407f3c3b8cb7843a1",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924000700_assistant_role_image_update.sql и 20260925000100_assistant_integration_definition_publish.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924000700_assistant_role_image_update.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260925000200_assistant_instruction_draft_context.sql",
+      "fragmentSHA256": "eef52f2e9fe19674fb5af4154a9d56f9a61fd83a8296922241d5b2906a72b10b",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924000700_assistant_role_image_update.sql и 20260925000200_assistant_instruction_draft_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924001400_project_purge_graph_refresh.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20261003000600_project_assistant_profiles.sql",
+      "fragmentSHA256": "52af3ddd4ecebb9e9c2419e740955eaee6907021549d0ff9729ae2fe5c9bda6f",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924001400_project_purge_graph_refresh.sql и 20261003000600_project_assistant_profiles.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924001400_project_purge_graph_refresh.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20261010120000_artifact_immutable_revisions.sql",
+      "fragmentSHA256": "52af3ddd4ecebb9e9c2419e740955eaee6907021549d0ff9729ae2fe5c9bda6f",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924001400_project_purge_graph_refresh.sql и 20261010120000_artifact_immutable_revisions.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260924001400_project_purge_graph_refresh.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20261005000200_image_admission_risk_decisions.sql",
+      "fragmentSHA256": "5e87d8c39f1fbfae91635ab9eba1b2cda1ea0f4e0c2916a418f388fdab56fabd",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260924001400_project_purge_graph_refresh.sql и 20261005000200_image_admission_risk_decisions.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260925000100_assistant_integration_definition_publish.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260925000200_assistant_instruction_draft_context.sql",
+      "fragmentSHA256": "24ba69002f526a2358aacdad03137323bfe5e3dd1b2f8e34c8355fd469739c2f",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260925000100_assistant_integration_definition_publish.sql и 20260925000200_assistant_instruction_draft_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260925000100_assistant_integration_definition_publish.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260926000200_assistant_recipient_integration_grant.sql",
+      "fragmentSHA256": "24ba69002f526a2358aacdad03137323bfe5e3dd1b2f8e34c8355fd469739c2f",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260925000100_assistant_integration_definition_publish.sql и 20260926000200_assistant_recipient_integration_grant.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260925000100_assistant_integration_definition_publish.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260927000100_assistant_role_image_detail_context.sql",
+      "fragmentSHA256": "81e2f08f3f7f4f941558f1428e2c0810ed599ff4b7987c715ab4357d753dd59e",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260925000100_assistant_integration_definition_publish.sql и 20260927000100_assistant_role_image_detail_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260925000200_assistant_instruction_draft_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260926000200_assistant_recipient_integration_grant.sql",
+      "fragmentSHA256": "906c18c07f84ce060ebb3a126243fcdf1b8350565b410e278319b6c5ee70ff6d",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260925000200_assistant_instruction_draft_context.sql и 20260926000200_assistant_recipient_integration_grant.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260925000200_assistant_instruction_draft_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260927000100_assistant_role_image_detail_context.sql",
+      "fragmentSHA256": "e9142ffcd6a44e9b78878145fdb887cb5f61bea0a3bddb99a5b0b0a963a35fe3",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260925000200_assistant_instruction_draft_context.sql и 20260927000100_assistant_role_image_detail_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260926000200_assistant_recipient_integration_grant.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260927000100_assistant_role_image_detail_context.sql",
+      "fragmentSHA256": "7b6ea1d90a667c8b5546cd1fa0c6cc7e437edf0c51a724c314f3ffb703580876",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260926000200_assistant_recipient_integration_grant.sql и 20260927000100_assistant_role_image_detail_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260927000100_assistant_role_image_detail_context.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260927000200_assistant_role_image_launch_context.sql",
+      "fragmentSHA256": "d37c2f970ce008c07918a896329d797d3aab86359a51681a056d21a5220f4a1d",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260927000100_assistant_role_image_detail_context.sql и 20260927000200_assistant_role_image_launch_context.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260928000300_assistant_session_project_lineage.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260928000300_assistant_session_project_lineage.sql",
+      "fragmentSHA256": "d60c7bb95833a4b3dea62adb8207c1b60f64689af638163f63e9130188d65f78",
+      "count": 1,
+      "reason": "Совпадение находится внутри исторической миграции 20260928000300_assistant_session_project_lineage.sql, побайтно сохранённой из baseline main 66c1a8dd. Вынос или переписывание повторного SQL изменило бы зафиксированную историю схемы; самостоятельное воспроизведение этой версии должно сохранять исходные statements. Решение ограничено указанным фрагментом, его хешем и числом вхождений."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260928000300_assistant_session_project_lineage.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260928000300_assistant_session_project_lineage.sql",
+      "fragmentSHA256": "e889082e2f0f7705c1ff820d4898e158381f1a4a72141c015878dee2027a5927",
+      "count": 1,
+      "reason": "Совпадение находится внутри исторической миграции 20260928000300_assistant_session_project_lineage.sql, побайтно сохранённой из baseline main 66c1a8dd. Вынос или переписывание повторного SQL изменило бы зафиксированную историю схемы; самостоятельное воспроизведение этой версии должно сохранять исходные statements. Решение ограничено указанным фрагментом, его хешем и числом вхождений."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20260928000300_assistant_session_project_lineage.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20260928000300_assistant_session_project_lineage.sql",
+      "fragmentSHA256": "fcc2bedffaa7b31aace1bd772bffb7a83ddc3e26e83ca3a4de9ac0f08bd893a0",
+      "count": 1,
+      "reason": "Совпадение находится внутри исторической миграции 20260928000300_assistant_session_project_lineage.sql, побайтно сохранённой из baseline main 66c1a8dd. Вынос или переписывание повторного SQL изменило бы зафиксированную историю схемы; самостоятельное воспроизведение этой версии должно сохранять исходные statements. Решение ограничено указанным фрагментом, его хешем и числом вхождений."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20261003000700_organization_role_image_ownership.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20261003000800_organization_runtime_secret_ownership.sql",
+      "fragmentSHA256": "d0993e42f630c8ff4af07a006eaf0baf96e83533c6e7620449f14792bec62533",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20261003000700_organization_role_image_ownership.sql и 20261003000800_organization_runtime_secret_ownership.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20261004001500_project_assistant_connection_purpose.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20261006000400_project_assistant_integration_grants.sql",
+      "fragmentSHA256": "0e3ce82fa7c6e4b8be755060b942bf7f5f0aa2b7a2c100ee176acfe6a8b3f333",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20261004001500_project_assistant_connection_purpose.sql и 20261006000400_project_assistant_integration_grants.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20261005000200_image_admission_risk_decisions.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20261006000300_required_workflow_launch.sql",
+      "fragmentSHA256": "480e8e9dca24b997b49d1fcd0852961baecb25959529bacea80f12b48a15cbfa",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20261005000200_image_admission_risk_decisions.sql и 20261006000300_required_workflow_launch.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20261005000200_image_admission_risk_decisions.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20261010130000_prepared_content_ledger.sql",
+      "fragmentSHA256": "d3956c188c075957fe81b4db45d0f8a0af81bbd72cddb4a143eb46a6e805833f",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20261005000200_image_admission_risk_decisions.sql и 20261010130000_prepared_content_ledger.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20261010120000_artifact_immutable_revisions.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20261016000100_artifact_antivirus_receipts.sql",
+      "fragmentSHA256": "e5ec02ba595afa6c9123e508ea9413b84c4274dddc260b4e994d12dc3fcf39bb",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20261010120000_artifact_immutable_revisions.sql и 20261016000100_artifact_antivirus_receipts.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/control-plane/cmd/cli/migrations/20261010120000_artifact_immutable_revisions.sql",
+      "secondPath": "services/internal/control-plane/cmd/cli/migrations/20261010120000_artifact_immutable_revisions.sql",
+      "fragmentSHA256": "2275c04679683550fd33ceeca4e40776b2841ba349fd2dbe8ed9b9055255e348",
+      "count": 1,
+      "reason": "Совпадение находится внутри исторической миграции 20261010120000_artifact_immutable_revisions.sql, побайтно сохранённой из baseline main 66c1a8dd. Вынос или переписывание повторного SQL изменило бы зафиксированную историю схемы; самостоятельное воспроизведение этой версии должно сохранять исходные statements. Решение ограничено указанным фрагментом, его хешем и числом вхождений."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260823000100_internal_rpc_authority_baseline.sql",
+      "secondPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260823000100_internal_rpc_authority_baseline.sql",
+      "fragmentSHA256": "234088b767140f5e8379fbcc9d16a76ca717c24d9ece4763c60f3b1b04145dc2",
+      "count": 1,
+      "reason": "Совпадение находится внутри исторической миграции 20260823000100_internal_rpc_authority_baseline.sql, побайтно сохранённой из baseline main 66c1a8dd. Вынос или переписывание повторного SQL изменило бы зафиксированную историю схемы; самостоятельное воспроизведение этой версии должно сохранять исходные statements. Решение ограничено указанным фрагментом, его хешем и числом вхождений."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260823000100_internal_rpc_authority_baseline.sql",
+      "secondPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260908000100_authority_bounded_freshness.sql",
+      "fragmentSHA256": "b614b20298784d1d5f139a35fdc858270ff73391c57f2a84e34fbeb7951d5f0e",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260823000100_internal_rpc_authority_baseline.sql и 20260908000100_authority_bounded_freshness.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260823000100_internal_rpc_authority_baseline.sql",
+      "secondPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260908000100_authority_bounded_freshness.sql",
+      "fragmentSHA256": "d31c3965b8580e3ae50ae0193f1be9b4f4e77e800f8748e8adb01bf528b90882",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260823000100_internal_rpc_authority_baseline.sql и 20260908000100_authority_bounded_freshness.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260823000100_internal_rpc_authority_baseline.sql",
+      "secondPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260909000100_authority_rotation_lifecycle.sql",
+      "fragmentSHA256": "2dccd6aeaf3ce9cbb1ce39a870a36693ae00cacb4497b4f894b9a0b44bf97379",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260823000100_internal_rpc_authority_baseline.sql и 20260909000100_authority_rotation_lifecycle.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260823000100_internal_rpc_authority_baseline.sql",
+      "secondPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260909000100_authority_rotation_lifecycle.sql",
+      "fragmentSHA256": "76c50a48e51e35b2fb95f3ef9d737b0f3f1de131bb271c19ecde65b48e5d87da",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260823000100_internal_rpc_authority_baseline.sql и 20260909000100_authority_rotation_lifecycle.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260823000100_internal_rpc_authority_baseline.sql",
+      "secondPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260908000100_authority_bounded_freshness.sql",
+      "fragmentSHA256": "3a6674d5e2beb4e515254ddc28ff96c8c082fa51c420b26c13326efb11db9482",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260823000100_internal_rpc_authority_baseline.sql и 20260908000100_authority_bounded_freshness.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260906000100_workload_database_boundary.sql",
+      "secondPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260907000100_snapshot_workload_signer_boundary.sql",
+      "fragmentSHA256": "cddb52fd4f073b9a735e8488a43a64427a0491a045e711fa176ea6d7046b46b8",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260906000100_workload_database_boundary.sql и 20260907000100_snapshot_workload_signer_boundary.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260909000100_authority_rotation_lifecycle.sql",
+      "secondPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260909000200_authority_normal_rotation_operation.sql",
+      "fragmentSHA256": "e26963eb4ad0d3bd97fd257fc7deb1f1f90e7af5cb949baf9d0789374329b6c1",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260909000100_authority_rotation_lifecycle.sql и 20260909000200_authority_normal_rotation_operation.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260909000300_authority_snapshot_predecessor.sql",
+      "secondPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260912000100_authority_legacy_registry_provenance.sql",
+      "fragmentSHA256": "70eefedfbbbea162f90ef26f52a84c09aa978afb135ffd076bc57b73810d8a05",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260909000300_authority_snapshot_predecessor.sql и 20260912000100_authority_legacy_registry_provenance.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260909000300_authority_snapshot_predecessor.sql",
+      "secondPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260912000100_authority_legacy_registry_provenance.sql",
+      "fragmentSHA256": "e27cca43eca074355d22bb3dd3135466c6f170c550728a69a8a464a8d55e654d",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260909000300_authority_snapshot_predecessor.sql и 20260912000100_authority_legacy_registry_provenance.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
+      "format": "sql",
+      "firstPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260912000100_authority_legacy_registry_provenance.sql",
+      "secondPath": "services/internal/internal-rpc-authority/cmd/cli/migrations/20260912000200_authority_legacy_proof_budget.sql",
+      "fragmentSHA256": "1849ce920a22fc56b35b589aebd1442b52736e30ba1e1c85cab935db9cdb144b",
+      "count": 1,
+      "reason": "Фрагменты принадлежат историческим миграциям 20260912000100_authority_legacy_registry_provenance.sql и 20260912000200_authority_legacy_proof_budget.sql; оба файла побайтно совпадают с baseline main 66c1a8dd. Каждая версия должна воспроизводить свой переход независимо от текущих helpers. Вынос потребовал бы изменения зафиксированного SQL, поэтому сохраняется эта точная пара фрагментов; текущие repository queries этим решением не исключаются."
+    },
+    {
       "format": "yaml",
       "firstPath": ".github/workflows/deploy-production.yml",
       "secondPath": ".github/workflows/deploy-production.yml",
