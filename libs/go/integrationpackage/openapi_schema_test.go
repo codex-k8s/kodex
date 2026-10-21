@@ -2,6 +2,8 @@ package integrationpackage
 
 import "testing"
 
+// TestValidateOpenAPIInputSchema checks valid nested input and rejects unknown, mistyped, or missing fields.
+// TestValidateOpenAPIInputSchema проверяет допустимый вложенный ввод и отклоняет неизвестные, неверно типизированные и пропущенные поля.
 func TestValidateOpenAPIInputSchema(t *testing.T) {
 	schema := map[string]any{
 		"type": "object", "additionalProperties": false,
@@ -31,6 +33,8 @@ func TestValidateOpenAPIInputSchema(t *testing.T) {
 	}
 }
 
+// TestValidateOpenAPIInputSchemaRejectsExternalReferences rejects remote and dynamic refs and open nested objects.
+// TestValidateOpenAPIInputSchemaRejectsExternalReferences отклоняет внешние и динамические ссылки и незакрытые вложенные объекты.
 func TestValidateOpenAPIInputSchemaRejectsExternalReferences(t *testing.T) {
 	for name, schema := range map[string]map[string]any{
 		"external ref": {"type": "object", "additionalProperties": false, "properties": map[string]any{"x": map[string]any{"$ref": "https://example.invalid/schema"}}},

@@ -11,12 +11,20 @@ import (
 	"strings"
 )
 
+// maximumJSONDepth bounds token traversal before a package JSON document reaches typed decoding.
+// maximumJSONDepth ограничивает обход токенов до типизированного декодирования JSON пакета.
 const maximumJSONDepth = 64
 
+// errPackageJSON is the safe error returned for ambiguous, malformed, or oversized package JSON.
+// errPackageJSON — безопасная ошибка для неоднозначного, некорректного или слишком большого JSON пакета.
 var errPackageJSON = errors.New("integration package JSON is invalid")
 
+// packageJSONKeys enumerates declared package fields so unknown names fail before case-folding can occur.
+// packageJSONKeys перечисляет объявленные поля пакета для отказа неизвестным именам до возможного сворачивания регистра.
 var packageJSONKeys = packageJSONFieldNames(reflect.TypeFor[Package]())
 
+// packageJSONFieldNames collects exact JSON tags recursively through nested package structs and slices.
+// packageJSONFieldNames собирает точные JSON-теги через вложенные структуры и срезы пакета.
 func packageJSONFieldNames(value reflect.Type) map[string]bool {
 	result := map[string]bool{}
 	var visit func(reflect.Type)
@@ -41,8 +49,8 @@ func packageJSONFieldNames(value reflect.Type) map[string]bool {
 	return result
 }
 
-// Private worker snapshot — canonical JSON; YAML parser здесь не требуется.
-// Первый проход закрыто отклоняет дубли на любой глубине и лишние документы.
+// parsePackageJSON rejects duplicate and unknown keys before typed decoding, then validates and hashes canonical JSON.
+// parsePackageJSON отклоняет дубли и неизвестные ключи до типизированного разбора, затем проверяет и хеширует канонический JSON.
 func parsePackageJSON(raw []byte) (Package, error) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
@@ -70,6 +78,8 @@ func parsePackageJSON(raw []byte) (Package, error) {
 	return result, nil
 }
 
+// uniqueJSONValue traverses one bounded JSON value, rejecting repeated keys and unknown package fields outside inputSchema.
+// uniqueJSONValue обходит одно ограниченное значение JSON, отклоняя повторные ключи и неизвестные поля пакета вне inputSchema.
 func uniqueJSONValue(decoder *json.Decoder, depth int, schema bool) error {
 	if depth > maximumJSONDepth {
 		return errPackageJSON
