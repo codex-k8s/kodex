@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.126.0
+version: 1.127.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,32 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто двадцать седьмая волна — PostgreSQL snapshot и isolated restore
+
+На опубликованном SHA `908677acf8c03df3e9bb47fed06f6ab99327d4b5`
+анализ показывал 6534 собственных файла, 222 исключения, 1879
+raw-групп, 552 адресных решения и 1327 неразобранных; Go-реестр:
+3823/21060, непокрыты 17237. Все 24 объявления
+`backup-controller/internal/postgresbackup`, включая четыре встроенных
+SQL-источника и три теста, получили предметные EN→RU комментарии.
+Описаны единый repeatable-read snapshot для data/schema dump,
+ограничение и дайджест файлов, закрытый `.pgpass` вместо пароля в argv,
+разделение TLS SNI и connect address, отказ от существующей цели
+восстановления и проверка версии восстановленной схемы. SQL, команды,
+окружение CLI и исполняемая логика не менялись.
+
+`go test -count=1 ./...` и `go build ./...` всего backup-controller,
+`gofmt` и `git diff --check` — PASS LOCAL. Go-реестр: 3847/21060,
+непокрыты 17213; в `postgresbackup` пропусков нет.
+Полный detector сохранил 6534 собственных файла, 222 исключения,
+1879 raw-групп, 552 адресных решения и 1327 неразобранных;
+сырой SHA-256 —
+`8400ed8b135628be1a3c530171fc2024ca20753a9170535f26c46de2d91acbbf`,
+отпечаток набора не изменился:
+`2c6abf1783f58ea7b9a8c05f176b03959e33f463f664d450f2b7f0b156727456`.
+Полный `go-docs -check`, browser/deploy/live — NOT RUN по границе задачи.
+Точный scan нового коммита будет опубликован в том же PR.
 
 ## Сто двадцать шестая волна — запуск, метрики и retention backup-controller
 

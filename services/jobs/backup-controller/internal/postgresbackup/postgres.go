@@ -1,4 +1,5 @@
-// Package postgresbackup управляет консистентными logical dump и isolated restore.
+// Package postgresbackup creates bounded PostgreSQL logical dumps and verifies isolated restores.
+// RU: Package postgresbackup создаёт ограниченные логические дампы PostgreSQL и проверяет изолированное восстановление.
 package postgresbackup
 
 import (
@@ -27,15 +28,25 @@ import (
 
 var (
 	//go:embed sql/backup__export_snapshot.sql
+	// exportSnapshotSQL pins the read-only transaction snapshot used by both dump commands.
+	// RU: exportSnapshotSQL закрепляет снимок read-only транзакции для обеих команд выгрузки.
 	exportSnapshotSQL string
 	//go:embed sql/backup__server_version.sql
+	// serverVersionSQL obtains the server version checked against supported major releases.
+	// RU: serverVersionSQL получает версию сервера для сверки с поддерживаемыми основными выпусками.
 	serverVersionSQL string
 	//go:embed sql/goose_schema__current_version.sql
+	// gooseVersionSQL reads the current migration version from the source or restored schema.
+	// RU: gooseVersionSQL читает текущую версию миграций исходной либо восстановленной схемы.
 	gooseVersionSQL string
 	//go:embed sql/restore__database_exists.sql
+	// databaseExistsSQL checks the restore target before creating a new isolated database.
+	// RU: databaseExistsSQL проверяет целевую БД до создания нового изолированного восстановления.
 	databaseExistsSQL string
 )
 
+// Snapshot records source schema identity, snapshot timing and bounded dump and schema artifacts.
+// RU: Snapshot фиксирует исходную схему, время снимка и ограниченные файлы дампа и схемы.
 type Snapshot struct {
 	Name, SchemaKind, SchemaVersion, ServerVersion string
 	StartedAt, FinishedAt                          time.Time
@@ -45,15 +56,21 @@ type Snapshot struct {
 	SchemaSize                                     int64
 }
 
+// RestoreReadback records the restored schema version and exact target identity digest.
+// RU: RestoreReadback фиксирует версию восстановленной схемы и дайджест точной идентичности цели.
 type RestoreReadback struct {
 	Name, SchemaVersion, TargetDigest string
 }
 
+// Manager owns resolved PostgreSQL CLI paths and the maximum allowed database dump size.
+// RU: Manager хранит разрешённые пути PostgreSQL CLI и максимальный размер дампа БД.
 type Manager struct {
 	pgDump, pgRestore, createDB string
 	maximumDatabaseBytes        int64
 }
 
+// New requires the three PostgreSQL tools and rejects an undersized dump boundary.
+// RU: New требует три инструмента PostgreSQL и отклоняет слишком малую границу размера дампа.
 func New(maximumDatabaseBytes int64) (*Manager, error) {
 	if maximumDatabaseBytes < 1<<20 {
 		return nil, errors.New("maximum database backup size is invalid")
@@ -74,6 +91,8 @@ func New(maximumDatabaseBytes int64) (*Manager, error) {
 		maximumDatabaseBytes: maximumDatabaseBytes}, nil
 }
 
+// Check connects to every declared source and rejects unsupported server versions.
+// RU: Check подключается к каждому исходному серверу и отклоняет неподдерживаемые версии.
 func (manager *Manager) Check(ctx context.Context, databases []configspec.Database) error {
 	if manager == nil || len(databases) == 0 {
 		return errors.New("PostgreSQL backup manager is invalid")
@@ -93,6 +112,8 @@ func (manager *Manager) Check(ctx context.Context, databases []configspec.Databa
 	return nil
 }
 
+// Backup exports one repeatable-read snapshot for data and schema dumps, then bounds and hashes both files.
+// RU: Backup экспортирует единый снимок repeatable-read для данных и схемы, затем ограничивает и хеширует оба файла.
 func (manager *Manager) Backup(ctx context.Context, database configspec.Database, workDirectory string) (Snapshot, error) {
 	startedAt := time.Now().UTC()
 	connection, err := connect(ctx, database)
@@ -159,6 +180,8 @@ func (manager *Manager) Backup(ctx context.Context, database configspec.Database
 	}, nil
 }
 
+// Restore refuses an existing target, creates an isolated database and validates the restored schema version.
+// RU: Restore отклоняет существующую цель, создаёт изолированную БД и проверяет версию восстановленной схемы.
 func (manager *Manager) Restore(ctx context.Context, target configspec.RestoreDatabase, source configspec.Database, dumpPath string, expectedSchemaVersion string) (RestoreReadback, error) {
 	admin := databaseFromTarget(target, target.AdminDatabase)
 	connection, err := connect(ctx, admin)
@@ -211,6 +234,8 @@ func (manager *Manager) Restore(ctx context.Context, target configspec.RestoreDa
 		TargetDigest: "sha256:" + hex.EncodeToString(digest[:])}, nil
 }
 
+// run executes a resolved PostgreSQL tool with only explicit environment entries and discards its raw output.
+// RU: run запускает разрешённый PostgreSQL-инструмент лишь с явным окружением и не раскрывает его сырой вывод.
 func (manager *Manager) run(ctx context.Context, executable string, arguments, environment []string) error {
 	command := exec.CommandContext(ctx, executable, arguments...)
 	command.Env = environment
@@ -222,6 +247,8 @@ func (manager *Manager) run(ctx context.Context, executable string, arguments, e
 	return nil
 }
 
+// connect builds a credential-free URL, sets the password separately and applies exact TLS identity when required.
+// RU: connect строит URL без реквизита, отдельно задаёт пароль и применяет точную идентичность TLS при необходимости.
 func connect(ctx context.Context, database configspec.Database) (*pgx.Conn, error) {
 	connectionURL := &url.URL{Scheme: "postgresql", User: url.User(database.User),
 		Host: net.JoinHostPort(database.Host, strconv.Itoa(int(database.Port))), Path: database.Database}
@@ -245,6 +272,8 @@ func connect(ctx context.Context, database configspec.Database) (*pgx.Conn, erro
 	return pgx.ConnectConfig(ctx, config)
 }
 
+// loadTLS trusts only the configured CA, checks the exact server name and optionally loads a client certificate.
+// RU: loadTLS доверяет лишь заданной CA, проверяет точное имя сервера и при необходимости загружает клиентский сертификат.
 func loadTLS(serverName, caFile, certificateFile, keyFile string) (*tls.Config, error) {
 	ca, err := os.ReadFile(caFile)
 	if err != nil {
@@ -265,6 +294,8 @@ func loadTLS(serverName, caFile, certificateFile, keyFile string) (*tls.Config, 
 	return config, nil
 }
 
+// readSchemaVersion selects Goose readback or the declared schema marker inside the read-only transaction.
+// RU: readSchemaVersion выбирает чтение Goose либо объявленный маркер схемы внутри read-only транзакции.
 func readSchemaVersion(ctx context.Context, transaction pgx.Tx, kind, declared string) (string, error) {
 	switch kind {
 	case "goose":
@@ -280,6 +311,8 @@ func readSchemaVersion(ctx context.Context, transaction pgx.Tx, kind, declared s
 	}
 }
 
+// databaseEnvironment limits CLI settings and separates the TLS server name from its connect address.
+// RU: databaseEnvironment ограничивает окружение CLI и отделяет имя TLS-сервера от адреса подключения.
 func databaseEnvironment(database configspec.Database, pgpass, selectedDatabase string) []string {
 	environment := []string{
 		"PGHOST=" + databaseCLIHost(database),
@@ -303,6 +336,8 @@ func databaseEnvironment(database configspec.Database, pgpass, selectedDatabase 
 	return environment
 }
 
+// databaseCLIHost uses the verified TLS name for libpq and otherwise uses the configured host.
+// RU: databaseCLIHost передаёт libpq проверяемое имя TLS, иначе использует настроенный хост.
 func databaseCLIHost(database configspec.Database) string {
 	if database.TLSMode == "verify-full" {
 		return database.TLSServerName
@@ -310,6 +345,8 @@ func databaseCLIHost(database configspec.Database) string {
 	return database.Host
 }
 
+// writePGPass escapes separator characters and writes a private file instead of passing a password in argv.
+// RU: writePGPass экранирует разделители и пишет закрытый файл вместо передачи пароля в аргументах процесса.
 func writePGPass(directory, host string, port uint16, database, user, password string) (string, error) {
 	escape := func(value string) string {
 		value = strings.ReplaceAll(value, `\`, `\\`)
@@ -323,6 +360,8 @@ func writePGPass(directory, host string, port uint16, database, user, password s
 	return path, nil
 }
 
+// digestFile hashes at most the configured byte boundary and rejects oversized artifacts.
+// RU: digestFile хеширует не больше заданного числа байтов и отклоняет слишком большие файлы.
 func digestFile(path string, maximumBytes int64) (string, int64, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -337,6 +376,8 @@ func digestFile(path string, maximumBytes int64) (string, int64, error) {
 	return "sha256:" + hex.EncodeToString(hash.Sum(nil)), size, nil
 }
 
+// supportedServerVersion accepts only six-digit PostgreSQL server numbers from major releases 17 and 18.
+// RU: supportedServerVersion принимает лишь шестизначные номера PostgreSQL основных версий 17 и 18.
 func supportedServerVersion(value string) bool {
 	if !regexp.MustCompile(`^[0-9]{6}$`).MatchString(value) {
 		return false
@@ -345,6 +386,8 @@ func supportedServerVersion(value string) bool {
 	return err == nil && major >= 17 && major <= 18
 }
 
+// databaseFromTarget maps one restore target into the shared connection profile for its selected database.
+// RU: databaseFromTarget переводит цель восстановления в общий профиль подключения для выбранной БД.
 func databaseFromTarget(target configspec.RestoreDatabase, database string) configspec.Database {
 	return configspec.Database{
 		Name: target.Name, Host: target.Host, Port: target.Port, Database: database,
