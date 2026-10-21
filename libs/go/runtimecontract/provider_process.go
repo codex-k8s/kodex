@@ -109,6 +109,8 @@ func (value ProviderProcessObservation) Matches(input RunnerInput) bool {
 // значения; иные имена или пропущенные поля не восстанавливают частичное
 // наблюдение. Любой отказ сохраняет прежнее значение получателя.
 func (value *ProviderProcessObservation) UnmarshalJSON(raw []byte) error {
+	// wire preserves the typed layout without inheriting this decoding method.
+	// wire сохраняет типизированную структуру, не наследуя этот метод разбора.
 	type wire ProviderProcessObservation
 	var decoded wire
 	if !decodeCanonicalProviderObservation(raw, &decoded, func() bool {

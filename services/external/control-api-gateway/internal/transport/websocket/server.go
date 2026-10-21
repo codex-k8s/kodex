@@ -55,6 +55,13 @@ var (
 	errPeerClosed       = errors.New("realtime peer closed")
 )
 
+// jscpd:ignore-start
+// queryClient keeps explicit generated RPC signatures for independent resource
+// queries. The repeated syntax is a typed contract, not duplicated executable
+// logic; a generic dispatcher would discard method-specific request/response types.
+// queryClient сохраняет явные generated RPC-сигнатуры независимых запросов.
+// Повторяется типизированный контракт, а не исполняемая логика; универсальный
+// dispatcher потерял бы отдельные типы запросов и ответов каждого метода.
 type queryClient interface {
 	GetBootstrapState(context.Context, *controlplanev1.GetBootstrapStateRequest, ...grpc.CallOption) (*controlplanev1.GetBootstrapStateResponse, error)
 	GetOverview(context.Context, *controlplanev1.GetOverviewRequest, ...grpc.CallOption) (*controlplanev1.GetOverviewResponse, error)
@@ -82,6 +89,8 @@ type queryClient interface {
 	ListRunEvents(context.Context, *controlplanev1.ListRunEventsRequest, ...grpc.CallOption) (*controlplanev1.ListRunEventsResponse, error)
 	GetPlatformEventCursor(context.Context, *controlplanev1.GetPlatformEventCursorRequest, ...grpc.CallOption) (*controlplanev1.GetPlatformEventCursorResponse, error)
 }
+
+// jscpd:ignore-end
 
 type assistantQueryClient interface {
 	GetSystemAssistant(context.Context, *controlplanev1.GetSystemAssistantRequest, ...grpc.CallOption) (*controlplanev1.GetSystemAssistantResponse, error)

@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"unicode"
 )
@@ -71,8 +72,10 @@ func bilingual(comment *ast.CommentGroup) bool {
 	return false
 }
 
-// inspectFile records top-level declarations and named interface methods in source order.
-// inspectFile фиксирует объявления верхнего уровня и методы интерфейсов по порядку исходника.
+// inspectFile records top-level declarations, local named types and interface
+// methods in source order; ordinary local variables are not separate entities.
+// inspectFile фиксирует верхнеуровневые объявления, локальные именованные типы
+// и методы интерфейсов по порядку; обычные локальные переменные не отдельные сущности.
 func inspectFile(filename string, source []byte) ([]declaration, error) {
 	positions := token.NewFileSet()
 	file, err := parser.ParseFile(positions, filename, source, parser.ParseComments|parser.AllErrors)
@@ -85,6 +88,25 @@ func inspectFile(filename string, source []byte) ([]declaration, error) {
 			return
 		}
 		declarations = append(declarations, declaration{Path: filename, Line: positions.Position(at).Line, Kind: kind, Name: name, Bilingual: bilingual(comment)})
+	}
+	seenTypes := make(map[*ast.TypeSpec]bool)
+	recordType := func(spec *ast.TypeSpec, fallback *ast.CommentGroup) {
+		if seenTypes[spec] {
+			return
+		}
+		seenTypes[spec] = true
+		comment := spec.Doc
+		if comment == nil {
+			comment = fallback
+		}
+		add("type", spec.Name.Name, spec.Pos(), comment)
+		if contract, ok := spec.Type.(*ast.InterfaceType); ok {
+			for _, method := range contract.Methods.List {
+				for _, name := range method.Names {
+					add("interface-method", spec.Name.Name+"."+name.Name, name.Pos(), method.Doc)
+				}
+			}
+		}
 	}
 	for _, node := range file.Decls {
 		switch node := node.(type) {
@@ -111,18 +133,7 @@ func inspectFile(filename string, source []byte) ([]declaration, error) {
 			for _, spec := range node.Specs {
 				switch spec := spec.(type) {
 				case *ast.TypeSpec:
-					comment := spec.Doc
-					if comment == nil {
-						comment = node.Doc
-					}
-					add("type", spec.Name.Name, spec.Pos(), comment)
-					if contract, ok := spec.Type.(*ast.InterfaceType); ok {
-						for _, method := range contract.Methods.List {
-							for _, name := range method.Names {
-								add("interface-method", spec.Name.Name+"."+name.Name, name.Pos(), method.Doc)
-							}
-						}
-					}
+					recordType(spec, node.Doc)
 				case *ast.ValueSpec:
 					comment := spec.Doc
 					if comment == nil {
@@ -139,6 +150,17 @@ func inspectFile(filename string, source []byte) ([]declaration, error) {
 			}
 		}
 	}
+	ast.Inspect(file, func(node ast.Node) bool {
+		if declaration, ok := node.(*ast.GenDecl); ok {
+			for _, spec := range declaration.Specs {
+				if namedType, ok := spec.(*ast.TypeSpec); ok {
+					recordType(namedType, declaration.Doc)
+				}
+			}
+		}
+		return true
+	})
+	sort.SliceStable(declarations, func(i, j int) bool { return declarations[i].Line < declarations[j].Line })
 	return declarations, nil
 }
 

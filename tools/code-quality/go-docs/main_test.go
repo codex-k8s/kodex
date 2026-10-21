@@ -51,3 +51,14 @@ func TestInspectFileRejectsIdentifierOnly(t *testing.T) {
 		t.Fatal("identifier-only comment passed the bilingual format check")
 	}
 }
+
+// TestInspectFileIncludesLocalWireAlias prevents function-local named types from
+// disappearing from documentation coverage while ignoring ordinary local values.
+// TestInspectFileIncludesLocalWireAlias не даёт скрыть локальные именованные типы
+// из покрытия комментариями, не считая обычные локальные значения сущностями.
+func TestInspectFileIncludesLocalWireAlias(t *testing.T) {
+	declarations, err := inspectFile("example.go", []byte("package example\nfunc Decode(){\ntype wire string\nvar local wire\n_ = local\n}"))
+	if err != nil || len(declarations) != 2 || declarations[1].Name != "wire" || declarations[1].Bilingual {
+		t.Fatal("local wire alias was lost or incorrectly documented")
+	}
+}

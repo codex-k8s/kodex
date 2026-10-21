@@ -94,6 +94,8 @@ func (value ProviderFailureDiagnostic) Matches(input RunnerInput) bool {
 // UnmarshalJSON заменяет получателя только после wire- и смысловых проверок.
 // Отказ сохраняет прежнее значение и возвращает безопасную устойчивую ошибку.
 func (value *ProviderFailureDiagnostic) UnmarshalJSON(raw []byte) error {
+	// wire preserves fields and order without recursively invoking UnmarshalJSON.
+	// wire сохраняет поля и порядок без рекурсивного вызова UnmarshalJSON.
 	type wire ProviderFailureDiagnostic
 	var decoded wire
 	if !decodeCanonicalProviderObservation(raw, &decoded, func() bool {
