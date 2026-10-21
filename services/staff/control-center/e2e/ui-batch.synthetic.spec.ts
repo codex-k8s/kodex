@@ -1,3 +1,4 @@
+import { syntheticRuntimeConfig } from "./synthetic-runtime-route";
 import { expect, test } from "@playwright/test";
 import {
   assistantDialog,
@@ -75,20 +76,7 @@ test("synthetic: terminal integration page требует строку cursor и
     const url = new URL(route.request().url());
     if (url.pathname === "/config/runtime-config.json") {
       await route.fulfill({
-        json: {
-          revision: "0".repeat(64),
-          environment: "synthetic",
-          apiBaseUrl: "/",
-          realtimeUrl: "/api/v1",
-          requestTimeoutMs: 10000,
-          oidc: {
-            authority: "https://identity.invalid",
-            clientId: "synthetic",
-            redirectUri: "/auth/callback",
-            postLogoutRedirectUri: "/",
-            scope: "openid",
-          },
-        },
+        json: syntheticRuntimeConfig(),
       });
       return;
     }

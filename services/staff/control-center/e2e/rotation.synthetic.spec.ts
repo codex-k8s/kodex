@@ -1,3 +1,4 @@
+import { handleSyntheticRuntimeRequest } from "./synthetic-runtime-route";
 import { expect, test } from "@playwright/test";
 import type {
   RuntimeSecret,
@@ -75,30 +76,7 @@ for (const width of [390, 2900]) {
     await page.route("**/*", async (route) => {
       const request = route.request();
       const url = new URL(request.url());
-      if (url.origin !== "https://kodex.test") {
-        failures.push("Unexpected origin");
-        await route.abort();
-        return;
-      }
-      if (url.pathname === "/config/runtime-config.json") {
-        await route.fulfill({
-          json: {
-            revision: "0".repeat(64),
-            environment: "synthetic",
-            apiBaseUrl: "/",
-            realtimeUrl: "/api/v1",
-            requestTimeoutMs: 10000,
-            oidc: {
-              authority: "https://identity.invalid",
-              clientId: "synthetic",
-              redirectUri: "/auth/callback",
-              postLogoutRedirectUri: "/",
-              scope: "openid",
-            },
-          },
-        });
-        return;
-      }
+      if (await handleSyntheticRuntimeRequest(route, url, failures)) return;
       if (request.method() === "POST") {
         expect(request.headers()["x-csrf-token"]).toBeTruthy();
         expect(request.headers()["idempotency-key"]).toBeTruthy();

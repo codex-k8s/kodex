@@ -1,3 +1,4 @@
+import { handleSyntheticRuntimeRequest } from "./synthetic-runtime-route";
 import { expect, test } from "@playwright/test";
 import { browserHTTPConsoleStatus } from "./synthetic-diagnostics";
 import type {
@@ -71,30 +72,7 @@ for (const width of [390, 2900]) {
     const attempts: { key?: string; version?: string; body: unknown }[] = [];
     await page.route("**/*", async (route) => {
       const url = new URL(route.request().url());
-      if (url.origin !== "https://kodex.test") {
-        failures.push("Unexpected origin");
-        await route.abort();
-        return;
-      }
-      if (url.pathname === "/config/runtime-config.json") {
-        await route.fulfill({
-          json: {
-            revision: "0".repeat(64),
-            environment: "synthetic",
-            apiBaseUrl: "/",
-            realtimeUrl: "/api/v1",
-            requestTimeoutMs: 10000,
-            oidc: {
-              authority: "https://identity.invalid",
-              clientId: "synthetic",
-              redirectUri: "/auth/callback",
-              postLogoutRedirectUri: "/",
-              scope: "openid",
-            },
-          },
-        });
-        return;
-      }
+      if (await handleSyntheticRuntimeRequest(route, url, failures)) return;
       if (
         url.pathname ===
         "/api/v1/managed-configurations/configuration/git-write-backs"

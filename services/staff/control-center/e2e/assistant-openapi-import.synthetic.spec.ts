@@ -1,3 +1,4 @@
+import { syntheticRuntimeConfig } from "./synthetic-runtime-route";
 import { expect, test, type Page } from "@playwright/test";
 
 async function openSyntheticImportFixture(
@@ -127,20 +128,7 @@ test("после защищённого импорта помощник пока
     const url = new URL(request.url());
     if (url.pathname === "/config/runtime-config.json") {
       await route.fulfill({
-        json: {
-          revision: "0".repeat(64),
-          environment: "synthetic",
-          apiBaseUrl: "/",
-          realtimeUrl: "/api/v1",
-          requestTimeoutMs: 10000,
-          oidc: {
-            authority: "https://identity.invalid",
-            clientId: "synthetic",
-            redirectUri: "/auth/callback",
-            postLogoutRedirectUri: "/",
-            scope: "openid",
-          },
-        },
+        json: syntheticRuntimeConfig(),
       });
       return;
     }
