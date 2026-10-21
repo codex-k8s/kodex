@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.53.0
+version: 1.54.0
 updated: 2026-10-21
 ---
 
@@ -1575,6 +1575,35 @@ Go-реестр: 1855/21026, непокрыты 19171; build/unit всего egr
 отпечаток набора —
 `5137dd91e6365a1dbca534ecf275c1e0d2ac9c341b940239a3c8ee7af61113fa`.
 Go-реестр: 1889/21027, непокрыты 19138. `go test -count=1 ./...` и
+`go build ./...` всего egress-gateway, пять ignore-boundaries, `gofmt`
+и `git diff --check` — PASS LOCAL. Полный `go-docs -check` и
+browser/deploy/live — NOT RUN по прежним границам. Точный scan нового
+коммита будет опубликован в текущем PR.
+
+## Пятьдесят шестая волна — тесты WebSocket pump
+
+На точном запушенном SHA `763b777a516ae3f730a3a66a2318c8a6da4231bb`
+анализ подтвердил 6531 собственный файл, 222 исключения, 1883 raw-группы,
+300 точных решений и 1583 неразобранные; сырой SHA-256 —
+`34167c5cf6eb49d2aa0ab4276331ba85a3b91f43a12e5577a465ca43f26c3579`,
+отпечаток набора —
+`5137dd91e6365a1dbca534ecf275c1e0d2ac9c341b940239a3c8ee7af61113fa`.
+Go-реестр: 1889/21027, непокрыты 19138; build/unit всего egress-gateway
+на этом SHA — PASS LOCAL.
+
+В `egress-gateway/internal/gateway/proxy_websocket_test.go` общая тестовая
+подготовка net.Pipe и отменяемого WebSocket pump вынесена в
+`startWebSocketPump`. Разные лимиты, проверки закрытия по terminal boundary
+и учёт реально прошедшего трафика остались в исходных тестах. Одна точная
+detector-группа исчезла без новых. Все 19 собственных объявлений файла,
+включая методы синтетических соединений, документированы предметно EN→RU.
+
+Рабочий detector: 6531 собственный файл, 222 исключения, 1882 raw-группы,
+300 точных решений и 1582 неразобранные; сырой SHA-256 —
+`1e044efee9480a4e76ce53e9c09324a45f807e1368f1b9ee7c3f7eebf13bf127`,
+отпечаток набора —
+`931a82717a1b84190add8f9bf22fb4c0d69187d879b13607f4c9573bd9f3498c`.
+Go-реестр: 1908/21028, непокрыты 19120. `go test -count=1 ./...` и
 `go build ./...` всего egress-gateway, пять ignore-boundaries, `gofmt`
 и `git diff --check` — PASS LOCAL. Полный `go-docs -check` и
 browser/deploy/live — NOT RUN по прежним границам. Точный scan нового
