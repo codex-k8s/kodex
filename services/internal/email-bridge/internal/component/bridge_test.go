@@ -19,7 +19,6 @@ import (
 	"math/big"
 	"net"
 	"net/http"
-	"net/http/httptest"
 	"net/textproto"
 	"net/url"
 	"os"
@@ -802,14 +801,7 @@ func TestUnknownTimeoutTLSAndDuplicate(t *testing.T) {
 func TestHTTPSBoundary(t *testing.T) {
 	f := newFixture(t, "implicit")
 	s, _, _ := service(t, f, "implicit", nil)
-	server := httptest.NewUnstartedServer(httptransport.Handler{Service: s})
-	ca := x509.NewCertPool()
-	ca.AppendCertsFromPEM(f.ca)
-	server.TLS = &tls.Config{Certificates: []tls.Certificate{f.cert}, ClientCAs: ca, ClientAuth: tls.RequireAndVerifyClientCert, MinVersion: tls.VersionTLS12}
-	server.StartTLS()
-	defer server.Close()
-	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: ca, Certificates: []tls.Certificate{f.cert}, MinVersion: tls.VersionTLS12}}}
-	defer client.CloseIdleConnections()
+	server, client := httpsFixture(t, f, httptransport.Handler{Service: s})
 	raw, _ := json.Marshal(send(api.OperationSend, "https").Message)
 	request, _ := http.NewRequestWithContext(t.Context(), "POST", server.URL+"/v1/messages?sender=sender%40example.test", bytes.NewReader(raw))
 	request.Header.Set("Content-Type", "application/json")

@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.148.0
+version: 1.149.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,41 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто сорок девятая волна — общая локальная mTLS-оснастка почты
+
+На базе опубликованного SHA `7474cf84749ec9b833738fcab526d6c3008d7fe2`
+две одинаковые настройки HTTPS server/client из `TestHTTPSBoundary` и
+`httpsInvoker` заменены одним package-private `httpsFixture` в отдельном
+test-файле. Production-код, handler/mapping, authority и запросы не менялись.
+Сохранены точный fixture CA, server/client certificate, обязательный
+`RequireAndVerifyClientCert`, TLS1.2 minimum и закрытие idle client перед
+server; обе старые копии удалены. В первом тесте defer заменён `t.Cleanup`,
+сохраняя закрытие response bodies раньше client/server и server раньше
+provider-fixture cleanup. Общая библиотека для двух тестов одного unit
+не создавалась.
+
+Новый unit допускает штатный тестовый client и проверяет три отказа до
+handler: отсутствующий client certificate, чужой client certificate и
+чужой доверенный CA клиента. Проверяются ошибка TLS и неизменный счётчик
+вызовов handler; настройки не ослабляются ради прохождения теста. Обе новые
+декларации EN→RU описаны. Email-bridge теперь полностью покрыт — 487/487,
+включая component fixtures 124/124.
+
+Адресные HTTPS/catalog unit, новый TLS-negative unit, полный
+`go test -count=1 ./...` и `go build ./...` email-bridge — PASS LOCAL,
+с явно unset PostgreSQL test DSN. 16 unit анализатора, unit Go-checker,
+пять ignore-boundaries, gofmt и diff-check — PASS LOCAL. PostgreSQL
+component, настоящая почта, browser/deploy/live — NOT RUN.
+
+Полный detector рабочего дерева: 6547 source-файлов, 222 исключения,
+1874 raw-группы, 566 решений и 1308 неразобранных; raw SHA-256
+`06de0bde0e99ec1f208c79a4f4fe1b5effa12d608013bd4b10d3a92f39b9760f`,
+отпечаток `875c3a628034d35ced267cfcce9774123676d1ea9f4d11aedde6792d4efc21e9`.
+Короткий вынос ниже самостоятельного порога detector и не объявляется
+уменьшением raw-счётчика. Go-реестр 5125/21073, непокрыты 15948;
+полный `go-docs -check` — NOT RUN. Единый PR/Issue остаётся незавершённым;
+точный scan/build/unit нового SHA публикуется в том же PR.
 
 ## Сто сорок восьмая волна — завершение комментариев почтового моста
 

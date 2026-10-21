@@ -2,11 +2,8 @@ package component
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	api "github.com/codex-k8s/kodex/libs/go/emailbridgeapi"
@@ -25,14 +22,7 @@ func httpsInvoker(t *testing.T, f *providerFixture, s *mail.Service, current ...
 	if len(current) == 1 {
 		handler.Current = current[0]
 	}
-	server := httptest.NewUnstartedServer(handler)
-	ca := x509.NewCertPool()
-	ca.AppendCertsFromPEM(f.ca)
-	server.TLS = &tls.Config{Certificates: []tls.Certificate{f.cert}, ClientCAs: ca, ClientAuth: tls.RequireAndVerifyClientCert, MinVersion: tls.VersionTLS12}
-	server.StartTLS()
-	t.Cleanup(server.Close)
-	httpClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: ca, Certificates: []tls.Certificate{f.cert}, MinVersion: tls.VersionTLS12}}}
-	t.Cleanup(httpClient.CloseIdleConnections)
+	server, httpClient := httpsFixture(t, f, handler)
 	client, err := api.NewClient(server.URL, api.WithHTTPClient(httpClient))
 	if err != nil {
 		t.Fatal(err)
