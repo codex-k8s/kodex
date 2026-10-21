@@ -22,23 +22,39 @@ import (
 )
 
 const (
+	// manifestMediaType identifies the OCI manifest pushed under the exact source commit tag.
+	// RU: manifestMediaType обозначает OCI-манифест, публикуемый под тегом точного коммита.
 	manifestMediaType = "application/vnd.oci.image.manifest.v1+json"
-	configMediaType   = "application/vnd.kodex.role-image-input.config.v1+json"
-	payloadMediaType  = "application/vnd.kodex.role-image-input.v1"
-	maximumResponse   = 1 << 20
+	// configMediaType identifies the empty role-input configuration object in the manifest.
+	// RU: configMediaType обозначает пустой объект конфигурации входных данных роли в манифесте.
+	configMediaType = "application/vnd.kodex.role-image-input.config.v1+json"
+	// payloadMediaType identifies the tar layer binding the role input to a source digest.
+	// RU: payloadMediaType обозначает tar-слой, связывающий входные данные роли с дайджестом исходников.
+	payloadMediaType = "application/vnd.kodex.role-image-input.v1"
+	// maximumResponse caps Docker configuration input and registry response bodies.
+	// RU: maximumResponse ограничивает размер Docker-конфигурации и ответов реестра.
+	maximumResponse = 1 << 20
 )
 
 var (
+	// repositoryPattern admits only a registry host followed by a nonempty repository path.
+	// RU: repositoryPattern допускает только хост реестра с непустым путём репозитория.
 	repositoryPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9.:-]+/[a-z0-9][a-z0-9._/-]*$`)
-	sourcePattern     = regexp.MustCompile(`^[a-f0-9]{40}$`)
+	// sourcePattern requires an exact lowercase 40-character source commit identifier.
+	// RU: sourcePattern требует точный 40-символьный идентификатор коммита в нижнем регистре.
+	sourcePattern = regexp.MustCompile(`^[a-f0-9]{40}$`)
 )
 
+// descriptor records the content type, digest and size of one OCI manifest object.
+// RU: descriptor хранит тип содержимого, дайджест и размер одного объекта OCI-манифеста.
 type descriptor struct {
 	MediaType string `json:"mediaType"`
 	Digest    string `json:"digest"`
 	Size      int64  `json:"size"`
 }
 
+// manifest binds the configuration and sole payload layer published for a source commit.
+// RU: manifest связывает конфигурацию и единственный опубликованный для коммита payload-слой.
 type manifest struct {
 	SchemaVersion int          `json:"schemaVersion"`
 	MediaType     string       `json:"mediaType"`
@@ -46,6 +62,8 @@ type manifest struct {
 	Layers        []descriptor `json:"layers"`
 }
 
+// dockerConfig reads inline registry credentials and detects unsupported credential helpers.
+// RU: dockerConfig читает встроенные реквизиты реестра и выявляет неподдерживаемые credential helpers.
 type dockerConfig struct {
 	Auths map[string]struct {
 		Auth string `json:"auth"`
@@ -54,12 +72,16 @@ type dockerConfig struct {
 	CredHelpers map[string]string `json:"credHelpers"`
 }
 
+// publisher owns the bounded registry client, exact target repository and Basic Auth credentials.
+// RU: publisher владеет ограниченным клиентом реестра, точным целевым репозиторием и реквизитами Basic Auth.
 type publisher struct {
 	client             *http.Client
 	host, repository   string
 	username, password string
 }
 
+// main validates the target and source, constructs deterministic input, then publishes and reports its digests.
+// RU: main проверяет цель и исходники, создаёт детерминированный payload, публикует его и выводит дайджесты.
 func main() {
 	var repository, sourceSHA, dockerConfigFile string
 	flag.StringVar(&repository, "repository", "", "target OCI repository")
@@ -107,11 +129,15 @@ func main() {
 	}
 }
 
+// fatal emits a fixed operation label without sensitive details and terminates the CLI.
+// RU: fatal выводит фиксированное название операции без чувствительных деталей и завершает CLI.
 func fatal(message string) {
 	_, _ = fmt.Fprintln(os.Stderr, "Role image input publisher failed: "+message)
 	os.Exit(1)
 }
 
+// defaultDockerConfigFile resolves only an absolute Docker configuration path from the environment or home.
+// RU: defaultDockerConfigFile находит только абсолютный путь Docker-конфигурации из окружения или home.
 func defaultDockerConfigFile() (string, error) {
 	if directory := os.Getenv("DOCKER_CONFIG"); directory != "" {
 		if !filepath.IsAbs(directory) || filepath.Clean(directory) != directory {
@@ -126,6 +152,8 @@ func defaultDockerConfigFile() (string, error) {
 	return filepath.Join(home, ".docker", "config.json"), nil
 }
 
+// newPublisher validates the repository and inline Docker auth, rejecting helper stores and redirects.
+// RU: newPublisher проверяет репозиторий и встроенную Docker-аутентификацию, запрещая helper stores и редиректы.
 func newPublisher(repository, configFile string) (*publisher, error) {
 	host, path, found := strings.Cut(repository, "/")
 	if !found || host == "" || path == "" || !filepath.IsAbs(configFile) ||
@@ -168,6 +196,8 @@ func newPublisher(repository, configFile string) (*publisher, error) {
 	}, nil
 }
 
+// roleImageInput creates a deterministic tar with only the SHA-256 of the exact source commit.
+// RU: roleImageInput создаёт детерминированный tar только с SHA-256 точного исходного коммита.
 func roleImageInput(sourceSHA string) ([]byte, string, error) {
 	sourceDigest := sha256Hex([]byte(sourceSHA))
 	var output bytes.Buffer
@@ -188,6 +218,8 @@ func roleImageInput(sourceSHA string) ([]byte, string, error) {
 	return output.Bytes(), sourceDigest, nil
 }
 
+// publish stores the config and payload blobs, then binds them in an OCI manifest under the source tag.
+// RU: publish сохраняет конфигурацию и payload, затем связывает их OCI-манифестом под тегом исходников.
 func (instance *publisher) publish(ctx context.Context, tag string, payload []byte) (string, error) {
 	config := []byte("{}")
 	configDigest := "sha256:" + sha256Hex(config)
@@ -222,6 +254,8 @@ func (instance *publisher) publish(ctx context.Context, tag string, payload []by
 	return manifestDigest, nil
 }
 
+// putBlob reuses an existing exact digest or uploads the bytes through a repository-bound location.
+// RU: putBlob использует существующий точный дайджест либо загружает байты по адресу внутри репозитория.
 func (instance *publisher) putBlob(ctx context.Context, digest string, value []byte) error {
 	target := "https://" + instance.host + "/v2/" + instance.repository + "/blobs/" + digest
 	response, err := instance.do(ctx, http.MethodHead, target, "", nil)
@@ -265,6 +299,8 @@ func (instance *publisher) putBlob(ctx context.Context, digest string, value []b
 	return nil
 }
 
+// uploadLocation resolves a registry upload reference while forbidding scheme, host or repository escape.
+// RU: uploadLocation разрешает адрес загрузки реестра, запрещая выход за схему, хост и репозиторий.
 func (instance *publisher) uploadLocation(value string) (*url.URL, error) {
 	base, _ := url.Parse("https://" + instance.host)
 	location, err := url.Parse(value)
@@ -279,6 +315,8 @@ func (instance *publisher) uploadLocation(value string) (*url.URL, error) {
 	return location, nil
 }
 
+// do sends an authenticated bounded registry request and hides upstream error details from callers.
+// RU: do отправляет аутентифицированный ограниченный запрос к реестру и скрывает детали upstream-ошибки.
 func (instance *publisher) do(ctx context.Context, method, target, mediaType string, body []byte) (*http.Response, error) {
 	request, err := http.NewRequestWithContext(ctx, method, target, bytes.NewReader(body))
 	if err != nil {
@@ -304,6 +342,8 @@ func (instance *publisher) do(ctx context.Context, method, target, mediaType str
 	return response, nil
 }
 
+// sha256Hex returns the lowercase hexadecimal SHA-256 digest of the exact input bytes.
+// RU: sha256Hex возвращает шестнадцатеричный SHA-256 в нижнем регистре для точных входных байтов.
 func sha256Hex(value []byte) string {
 	digest := sha256.Sum256(value)
 	return hex.EncodeToString(digest[:])

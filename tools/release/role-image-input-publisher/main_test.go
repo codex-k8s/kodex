@@ -9,6 +9,8 @@ import (
 	"testing"
 )
 
+// TestRoleImageInputIsDeterministicAndSourceBound checks repeatability and the sole exact-commit tar entry.
+// RU: TestRoleImageInputIsDeterministicAndSourceBound проверяет повторяемость и единственную tar-запись точного коммита.
 func TestRoleImageInputIsDeterministicAndSourceBound(t *testing.T) {
 	source := "0123456789abcdef0123456789abcdef01234567"
 	first, sourceDigest, err := roleImageInput(source)
