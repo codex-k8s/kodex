@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.59.0
+version: 1.60.0
 updated: 2026-10-21
 ---
 
@@ -1699,6 +1699,35 @@ cross-test clone с provider SSE сохранён точным решением:
 Сравнение fragment SHA-256 и путей: новых либо исчезнувших групп нет,
 различается только расположение после комментариев. Go-реестр: 1967/21030,
 непокрыты 19063. `go test -count=1 ./...` и `go build ./...` всего
+egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
+PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
+по прежним границам. Точный scan нового коммита будет опубликован в
+текущем PR.
+
+## Шестьдесят вторая волна — HTTP proxy и диагностика ответов
+
+На точном запушенном SHA `f0cdda1abcb84f1b3e783cd6f1d2f6b35e57f1a9`
+анализ подтвердил 6531 собственный файл, 222 исключения, 1881 raw-группу,
+302 точных решения и 1579 неразобранных; сырой SHA-256 —
+`e3cf248a624772c1b996944d725deaa26dbd10c1d162892bfa80c84fc99193e3`,
+отпечаток набора —
+`9912d1cce5f597a97ebe5014fdd748c7524ea667c2c89a1d2a1186060a43c6ac`.
+Go-реестр: 2043/21030, непокрыты 18987; build/unit всего egress-gateway
+на этом SHA — PASS LOCAL.
+
+Все 46 собственных объявлений `gateway/http_proxy.go` и
+`gateway/provider_responses_diagnostic.go` документированы предметно EN→RU.
+Пояснены границы авторитетного допуска отдельно от классификации диагностики,
+точный путь и TLS upstream, ограничения заголовка, отсутствие сырых данных в
+логах, bounded capture ответа discovery и жизненный цикл WebSocket-ответа.
+Порядок проверок, допустимые маршруты и исполняемый код не менялись;
+detector-групп не добавлено.
+
+Рабочий detector: 6531 собственный файл, 222 исключения, 1881 raw-группа,
+302 точных решения и 1579 неразобранных; сырой SHA-256 —
+`e4002e3f5ec8a48e254d3edd0e3f4d1cd83f2c279f748ab753a121fd1edc0f0a`,
+отпечаток набора не изменился. Go-реестр: 2089/21030,
+непокрыты 18941. `go test -count=1 ./...` и `go build ./...` всего
 egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
