@@ -8,6 +8,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 )
 
+// TestFailureStageRequiresErrorIdentity accepts wrapped sentinels and rejects forged text and missing errors.
+// RU: TestFailureStageRequiresErrorIdentity принимает обёрнутые ошибки-маркеры и отклоняет подделку текста и отсутствие ошибки.
 func TestFailureStageRequiresErrorIdentity(t *testing.T) {
 	t.Parallel()
 	for _, scenario := range []struct {

@@ -8,6 +8,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 )
 
+// TestFromProtoAcceptsCanonicalTimestampedCodexArchive accepts the timestamped rollout path for its own session.
+// RU: TestFromProtoAcceptsCanonicalTimestampedCodexArchive принимает датированный путь rollout для его собственной сессии.
 func TestFromProtoAcceptsCanonicalTimestampedCodexArchive(t *testing.T) {
 	t.Parallel()
 
@@ -17,6 +19,8 @@ func TestFromProtoAcceptsCanonicalTimestampedCodexArchive(t *testing.T) {
 	}
 }
 
+// TestFromProtoRejectsArchiveFromAnotherCodexSession rejects a path whose embedded session differs from the task.
+// RU: TestFromProtoRejectsArchiveFromAnotherCodexSession отклоняет путь с идентичностью сессии, отличной от задания.
 func TestFromProtoRejectsArchiveFromAnotherCodexSession(t *testing.T) {
 	t.Parallel()
 
@@ -27,6 +31,8 @@ func TestFromProtoRejectsArchiveFromAnotherCodexSession(t *testing.T) {
 	}
 }
 
+// TestFromProtoRejectsPVCFromAnotherSession requires the server-derived volume name for the exact session.
+// RU: TestFromProtoRejectsPVCFromAnotherSession требует производное от сервера имя тома точной сессии.
 func TestFromProtoRejectsPVCFromAnotherSession(t *testing.T) {
 	t.Parallel()
 
@@ -37,6 +43,8 @@ func TestFromProtoRejectsPVCFromAnotherSession(t *testing.T) {
 	}
 }
 
+// validSnapshotProto constructs a synthetic snapshot with consistent session path and derived PVC identity.
+// RU: validSnapshotProto создаёт синтетический снимок с согласованным путём сессии и производной идентичностью PVC.
 func validSnapshotProto() *controlplanev1.SessionArchiveTask {
 	const codexSessionID = "00000000-0000-4000-8000-000000000003"
 	input := &controlplanev1.SessionArchiveTask{

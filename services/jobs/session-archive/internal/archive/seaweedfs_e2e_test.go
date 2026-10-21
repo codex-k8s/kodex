@@ -16,6 +16,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 )
 
+// TestSeaweedFSSnapshotRestoreDeleteE2E verifies local versioned storage across snapshot, restore and confirmed deletion.
+// RU: TestSeaweedFSSnapshotRestoreDeleteE2E проверяет локальное версионированное хранение через снимок, восстановление и подтверждённое удаление.
 func TestSeaweedFSSnapshotRestoreDeleteE2E(t *testing.T) {
 	if os.Getenv("SESSION_ARCHIVE_E2E") != "1" {
 		t.Skip("local SeaweedFS E2E is disabled")
