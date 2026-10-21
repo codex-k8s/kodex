@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.155.0
+version: 1.155.1
 updated: 2026-10-22
 ---
 
@@ -1711,6 +1711,11 @@ PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 и `registry-pull-authorizer` — 40/40. Покрыты production/tests, каждая
 константа, типы, функции и локальный именованный тип таблицы запросов.
 Остальные объявления role-image-builder остаются в работе.
+
+Уточнение после `2f6d489ebce8f82231a9284d1f8d4372e8d2648c`:
+проверки размера Docker config и evidence credential выполняются после
+полного чтения reader/os.ReadFile. Комментарии прямо указывают это и не
+обещают bounded-memory чтение этих файлов; исполняемый код не меняется.
 
 Комментарии фиксируют точный выбор профилей, mTLS до forwarding,
 отдельные operation/application credentials, challenge только при

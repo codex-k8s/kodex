@@ -318,11 +318,11 @@ func authorizedNodePull(request *http.Request, certificate *x509.Certificate, re
 // выбора алгоритма из данных запроса.
 const cryptoHashSHA256 = 5 // crypto.SHA256; kept constant to avoid mutable algorithm selection.
 
-// dockerCredentialMatches bounds the selected Docker config to one MiB and
-// one/two allowed hosts, preferring the public host before comparing decoded credentials.
+// dockerCredentialMatches rejects configs over one MiB after reading and permits
+// one/two known hosts, preferring the public host before comparing decoded credentials.
 // It uses ordinary JSON decoding, not a duplicate-key-rejecting parser.
-// dockerCredentialMatches ограничивает выбранную Docker-конфигурацию одним МиБ
-// и одним/двумя допустимыми хостами, предпочитая внешний хост при сравнении реквизитов.
+// dockerCredentialMatches после чтения отклоняет конфигурацию свыше одного МиБ
+// и допускает один/два известных хоста, предпочитая внешний при сравнении реквизитов.
 // Используется обычный JSON-разбор, а не декодер с запретом повторяющихся ключей.
 func dockerCredentialMatches(path, username, password, registryHost string) bool {
 	value, err := os.ReadFile(path)

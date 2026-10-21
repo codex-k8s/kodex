@@ -238,11 +238,11 @@ func authorizedEvidenceCredential(commonName, authorization string) bool {
 	return authorizedEvidenceCredentialWithReader(commonName, authorization, os.ReadFile)
 }
 
-// authorizedEvidenceCredentialWithReader selects only known identity files,
-// bounds their bytes, trims terminal CR/LF and compares the canonical Basic header.
+// authorizedEvidenceCredentialWithReader selects known identity files, rejects
+// empty/over-4-KiB values after reading, trims terminal CR/LF and compares canonical Basic.
 // Reader injection supports synthetic tests and does not accept caller-selected paths.
-// authorizedEvidenceCredentialWithReader выбирает файлы только известных идентичностей,
-// ограничивает байты, убирает конечные CR/LF и сравнивает канонический Basic-заголовок.
+// authorizedEvidenceCredentialWithReader выбирает файлы известных идентичностей и после чтения
+// отклоняет пустые/свыше 4 КиБ значения, убирает конечные CR/LF и сравнивает канонический Basic.
 // Подмена reader нужна тестам и не разрешает путь из запроса клиента.
 func authorizedEvidenceCredentialWithReader(
 	commonName string,
