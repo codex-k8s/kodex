@@ -1,4 +1,5 @@
-// Package app содержит composition root backup-controller.
+// Package app composes backup-controller commands, readiness, workers and bounded shutdown.
+// RU: Package app собирает команды backup-controller, готовность, workers и ограниченное завершение.
 package app
 
 import (
@@ -20,6 +21,8 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/backup-controller/internal/s3backup"
 )
 
+// Run validates command configuration, handles fingerprint-only requests or starts the controller.
+// RU: Run проверяет настройки команды, выполняет только вычисление fingerprint либо запускает контроллер.
 func Run(lifecycle, shutdownBase context.Context, command, buildVersion string) error {
 	config, err := loadConfig(command)
 	if err != nil {
@@ -52,6 +55,8 @@ func Run(lifecycle, shutdownBase context.Context, command, buildVersion string) 
 	return serve(lifecycle, shutdownBase, controller, config, sharedMetrics, metrics, logger)
 }
 
+// buildRunner selects the command's protected credential set and wires S3, PostgreSQL and business metrics.
+// RU: buildRunner выбирает защищённые реквизиты команды и связывает S3, PostgreSQL и бизнес-метрики.
 func buildRunner(ctx context.Context, config Config, command, buildVersion string,
 	metrics *serviceobservability.Metrics) (*runner.Runner, error) {
 	credentials := configspec.Credentials{SchemaVersion: 1}
@@ -84,6 +89,8 @@ func buildRunner(ctx context.Context, config Config, command, buildVersion strin
 		buildVersion, config.ReleaseRevision, metrics)
 }
 
+// runOnce executes one bounded backup, verify, retention or owner-approved restore-drill command.
+// RU: runOnce выполняет одну ограниченную команду копирования, проверки, хранения либо подтверждённого восстановления.
 func runOnce(ctx context.Context, controller *runner.Runner, config Config, command string) error {
 	operation, cancel := context.WithTimeout(ctx, config.BackupTimeout)
 	defer cancel()
@@ -115,6 +122,8 @@ func runOnce(ctx context.Context, controller *runner.Runner, config Config, comm
 	}
 }
 
+// serve passes the startup barrier before exposing readiness and joining technical and backup workers at shutdown.
+// RU: serve проходит стартовый барьер до публикации готовности и дожидается технического и backup workers при остановке.
 func serve(lifecycle, shutdownBase context.Context, controller *runner.Runner, config Config,
 	sharedMetrics *sharedobservability.Metrics, metrics *serviceobservability.Metrics, logger *slog.Logger) error {
 	startup, cancelStartup := context.WithTimeout(lifecycle, config.StartupTimeout)
@@ -166,6 +175,8 @@ func serve(lifecycle, shutdownBase context.Context, controller *runner.Runner, c
 	return errors.Join(err, shutdownErr)
 }
 
+// serveTechnical adapts the technical HTTP server to the owned cancellable worker lifecycle.
+// RU: serveTechnical подключает технический HTTP-сервер к управляемому отменяемому жизненному циклу worker.
 func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
 	return func(ctx context.Context) error {
 		done := make(chan error, 1)
@@ -179,6 +190,8 @@ func serveTechnical(server *httpserver.Server) serviceruntime.Worker {
 	}
 }
 
+// monitorReadiness periodically checks dependencies and readback before updating readiness and last-success gauges.
+// RU: monitorReadiness периодически проверяет зависимости и readback до обновления готовности и метрик последних успехов.
 func monitorReadiness(controller *runner.Runner, readiness *serviceruntime.Readiness,
 	sharedMetrics *sharedobservability.Metrics, serviceMetrics *serviceobservability.Metrics,
 	logger *slog.Logger, config Config) serviceruntime.Worker {
@@ -219,6 +232,8 @@ func monitorReadiness(controller *runner.Runner, readiness *serviceruntime.Readi
 	}
 }
 
+// runBackupLoop schedules due backups, accounts for retention after success and reports degraded transitions.
+// RU: runBackupLoop запускает положенные по сроку копии, учитывает retention после успеха и сообщает о деградации.
 func runBackupLoop(controller *runner.Runner, metrics *serviceobservability.Metrics,
 	status *statusStore, logger *slog.Logger, config Config) serviceruntime.Worker {
 	return func(ctx context.Context) error {
