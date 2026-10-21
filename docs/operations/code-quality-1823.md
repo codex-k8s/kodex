@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.146.0
+version: 1.147.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,44 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто сорок седьмая волна — хранилище почтовых квитанций
+
+На базе опубликованного SHA `34ae1faa58306e88eff9452ee8cbbf9b6e040e98`
+все 32 существовавших объявления `email-bridge/internal/repository` получили
+предметные EN→RU комментарии после чтения каждого встроенного SQL.
+Описаны начальный unknown receipt до внешнего эффекта, scoped replay,
+монотонный configuration watermark, exact report version/source/status,
+lease-plus-grace, отдельные Remember/claim/decision commit и сохранение
+частичного прогресса. Schema readiness описана по фактическим session_user,
+RLS и privilege predicates, а не как абстрактный Ping.
+
+Одинаковый 17-колоночный Scan из reserve/get вынесен в узкий локальный
+`scanRecord` (`scan.go`). Обе прежние копии удалены атомарно; SQL, параметры,
+порядок вызовов и driver/domain error mapping не менялись. Механическое
+сравнение строк Scan из опубликованного родителя подтвердило точное
+сохранение всех аргументов. Новый unit проверяет порядок и типы всех полей,
+частично заполненный record с ошибкой и ErrNoRows без подключения к БД.
+Новые четыре объявления helper/оснастки также полностью EN→RU описаны;
+итог репозитория — 36/36. Отдельной detector-группы этих коротких копий
+не было, поэтому вынос не объявляется уменьшением raw-счётчика.
+
+Context7 `/jackc/pgx/v5.10.0`: сверены QueryRow/Scan/ErrNoRows.
+Запрос StrictNamedArgs не дал документации; запрет missing/extra names
+дополнительно проверен по `named_args.go` закреплённого pgx v5.10.0.
+Все SQL и applied migrations оставлены без изменений; PostgreSQL не запускался.
+
+Полный Go build/unit email-bridge — PASS LOCAL с явно unset PostgreSQL
+test DSN; synthetic loopback cases и новый scan unit прошли. PostgreSQL
+component/live, настоящая почта, browser/deploy — NOT RUN. 16 unit
+анализатора, unit Go-checker, пять ignore-boundaries, gofmt и diff-check —
+PASS LOCAL. Полный detector рабочего дерева: 6546 source-файлов,
+222 исключения, 1874 raw-группы, 566 решений и 1308 неразобранных;
+raw SHA-256 `9413aff55167388464dd2002dbe5dfb1206cf9aba5b77e16f9f139125822c9de`,
+отпечаток `875c3a628034d35ced267cfcce9774123676d1ea9f4d11aedde6792d4efc21e9`.
+Go-реестр: 5001/21071, непокрыты 16070; email-bridge — 363/485,
+все его оставшиеся 122 пропуска находятся в internal/component tests.
+Полный go-docs-check — NOT RUN; общий Issue и PR ещё не завершены.
 
 ## Сто сорок шестая волна — почтовые транспорты
 
