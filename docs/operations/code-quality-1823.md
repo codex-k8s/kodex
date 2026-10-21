@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.65.0
+version: 1.66.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,33 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Шестьдесят восьмая волна — завершение комментариев egress gateway
+
+На запушенном SHA `fa6b7ebe287b4102c3ceb689fefb1c058b862ec9`
+детектор подтвердил 6531 собственный файл, 222 исключения, 1881 raw-группу,
+339 точных решений и 1542 неразобранные; сырой SHA-256 —
+`cf3187a216cc0552bc5063b8ad6b85cd5f2c4e61d2433fa567e3696e12159413`.
+Go-реестр: 2205/21030, непокрыты 18825.
+
+Все 40 оставшихся собственных Go-объявлений модуля egress-gateway в
+`internal/observability`, `internal/runtimepolicy` и шести `cmd`
+получили предметные EN→RU комментарии. Пояснены закрытые labels метрик,
+signed execution grant, запрет unauthenticated CONNECT, отдельные
+projection/admission-команды и владение корневыми контекстами. Исполняемый
+код не менялся; весь модуль egress-gateway теперь не имеет непокрытых
+Go-объявлений.
+
+Рабочий детектор: 6531 собственный файл, 222 исключения, 1881 raw-группа,
+339 точных решений и 1542 неразобранные; сырой SHA-256 —
+`9cad3920928bc2d5b92949e47573dbf0241b7df9e5eadc6422e0cf9270cfc272`.
+Нормализованный SHA с позициями изменился, но сравнение всех 1881 ключей
+`format/kind/fragmentSHA256/first.path/second.path` с предыдущим SHA
+подтвердило отсутствие новых и исчезнувших групп. Go-реестр: 2245/21030,
+непокрыты 18785. `go test -count=1 ./...` и `go build ./...` всего
+egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
+PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN.
+Точный scan нового коммита будет опубликован в текущем PR.
 
 ## Шестьдесят седьмая волна — TLS ClientHello и точный SNI
 

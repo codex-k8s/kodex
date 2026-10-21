@@ -8,12 +8,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// connectionLabels identifies the closed metric dimensions expected by tests.
+// connectionLabels задаёт закрытые измерения метрики, ожидаемые тестами.
 type connectionLabels struct {
 	outcome string
 	stage   string
 	reason  string
 }
 
+// TestConnectionProxyLabels checks exact counts for proxy and tunnel outcomes.
+// TestConnectionProxyLabels проверяет точные счётчики исходов прокси и туннеля.
 func TestConnectionProxyLabels(t *testing.T) {
 	metrics, registry := newTestMetrics(t)
 	// Матрица соответствует закрытым исходам HTTP proxy и WebSocket tunnel.
@@ -42,6 +46,8 @@ func TestConnectionProxyLabels(t *testing.T) {
 	}
 }
 
+// TestConnectionUnknownLabelsRemainBounded collapses untrusted labels to finite fallback values.
+// TestConnectionUnknownLabelsRemainBounded сводит недоверенные метки к конечным запасным значениям.
 func TestConnectionUnknownLabelsRemainBounded(t *testing.T) {
 	metrics, registry := newTestMetrics(t)
 	const unknownEvents = 128
@@ -67,6 +73,8 @@ func TestConnectionUnknownLabelsRemainBounded(t *testing.T) {
 	}
 }
 
+// newTestMetrics registers collectors in an isolated registry for each test.
+// newTestMetrics регистрирует коллекторы в отдельном реестре для каждого теста.
 func newTestMetrics(t *testing.T) (*Metrics, *prometheus.Registry) {
 	t.Helper()
 	registry := prometheus.NewRegistry()
@@ -84,6 +92,8 @@ func newTestMetrics(t *testing.T) (*Metrics, *prometheus.Registry) {
 	return metrics, registry
 }
 
+// gatherConnectionCounters reads exact label tuples from the isolated registry.
+// gatherConnectionCounters читает точные наборы меток из отдельного реестра.
 func gatherConnectionCounters(t *testing.T, registry *prometheus.Registry) map[connectionLabels]float64 {
 	t.Helper()
 	families, err := registry.Gather()

@@ -7,6 +7,8 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
+// main prints the digest of exactly one policy file without exposing its contents.
+// main выводит дайджест ровно одного файла политики без раскрытия его содержимого.
 func main() {
 	if len(os.Args) != 2 {
 		fmt.Fprintln(os.Stderr, "usage: policy-digest policy-file")

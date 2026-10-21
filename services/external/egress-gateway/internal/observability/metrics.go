@@ -1,4 +1,5 @@
-// Package observability хранит service-owned bounded-cardinality metrics.
+// Package observability owns gateway metrics with bounded label cardinality.
+// Package observability содержит метрики шлюза с ограниченной кардинальностью меток.
 package observability
 
 import (
@@ -7,10 +8,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// RegisterCollectors регистрирует service-owned collectors в общем registry.
+// RegisterCollectors registers service-owned collectors in the shared registry.
+// RegisterCollectors регистрирует принадлежащие сервису коллекторы в общем реестре.
 type RegisterCollectors func(...prometheus.Collector) error
 
-// Metrics содержит только gateway-specific collectors с закрытыми labels.
+// Metrics holds only gateway-specific collectors with closed label sets.
+// Metrics содержит только коллекторы шлюза с закрытыми наборами меток.
 type Metrics struct {
 	connections  *prometheus.CounterVec
 	dns          *prometheus.CounterVec
@@ -19,7 +22,8 @@ type Metrics struct {
 	policyActive prometheus.Gauge
 }
 
-// New создаёт collectors и регистрирует их в общем service registry.
+// New creates gateway collectors and registers them through the service registry.
+// New создаёт коллекторы шлюза и регистрирует их через реестр сервиса.
 func New(register RegisterCollectors) (*Metrics, error) {
 	metrics := &Metrics{
 		connections: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -52,25 +56,30 @@ func New(register RegisterCollectors) (*Metrics, error) {
 	return metrics, nil
 }
 
-// Connection учитывает только нормализованные закрытые значения.
+// Connection counts a tunnel outcome after normalizing every label to a closed set.
+// Connection учитывает исход туннеля после нормализации каждой метки в закрытый набор.
 func (metrics *Metrics) Connection(outcome, stage, reason string) {
 	metrics.connections.WithLabelValues(normalizeOutcome(outcome), normalizeStage(stage), normalizeReason(reason)).Inc()
 }
 
-// DNSObserver адаптирует закрытые DNS outcome/reason без hostname/IP labels.
+// DNSObserver records closed DNS outcome and reason without host or IP labels.
+// DNSObserver фиксирует закрытые исход и причину DNS без меток узла и IP.
 func (metrics *Metrics) DNSObserver(outcome, reason string) {
 	metrics.dns.WithLabelValues(normalizeDNSOutcome(outcome), normalizeReason(reason)).Inc()
 }
 
-// Dial учитывает literal dial outcome.
+// Dial counts literal-address dial outcomes without recording destinations.
+// Dial учитывает исходы подключения по буквальному адресу без записи адресатов.
 func (metrics *Metrics) Dial(outcome, reason string) {
 	metrics.dials.WithLabelValues(normalizeDialOutcome(outcome), normalizeReason(reason)).Inc()
 }
 
-// AddActive обновляет gauge активных соединений.
+// AddActive adjusts the gauge for currently accepted tunnel connections.
+// AddActive изменяет показатель текущих принятых туннельных соединений.
 func (metrics *Metrics) AddActive(delta float64) { metrics.active.Add(delta) }
 
-// SetPolicyActive фиксирует startup policy validation.
+// SetPolicyActive reflects whether startup policy validation succeeded.
+// SetPolicyActive отражает результат проверки политики при запуске.
 func (metrics *Metrics) SetPolicyActive(active bool) {
 	if active {
 		metrics.policyActive.Set(1)
@@ -79,7 +88,8 @@ func (metrics *Metrics) SetPolicyActive(active bool) {
 	metrics.policyActive.Set(0)
 }
 
-// RegisterMailReadiness читает фактическую TTL-aware readiness без labels из source.
+// RegisterMailReadiness samples live TTL-aware mail readiness without source-derived labels.
+// RegisterMailReadiness получает актуальную готовность почты с учётом TTL без меток из источника.
 func RegisterMailReadiness(register RegisterCollectors, ready func() (bool, string)) error {
 	return register(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace: "kodex", Subsystem: "egress_gateway", Name: "mail_ready",
@@ -92,7 +102,8 @@ func RegisterMailReadiness(register RegisterCollectors, ready func() (bool, stri
 	}))
 }
 
-// RegisterIntegrationReadiness сообщает состояние отдельного OpenAPI listener.
+// RegisterIntegrationReadiness reports readiness of the separate OpenAPI listener.
+// RegisterIntegrationReadiness сообщает готовность отдельного входа OpenAPI.
 func RegisterIntegrationReadiness(register RegisterCollectors, ready func() (bool, string)) error {
 	return register(prometheus.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace: "kodex", Subsystem: "egress_gateway", Name: "integration_ready",
@@ -105,6 +116,8 @@ func RegisterIntegrationReadiness(register RegisterCollectors, ready func() (boo
 	}))
 }
 
+// normalizeOutcome maps arbitrary connection outcomes to approved metric labels.
+// normalizeOutcome переводит произвольные исходы соединения в разрешённые метки метрик.
 func normalizeOutcome(value string) string {
 	switch value {
 	case "completed", "rejected", "failed", "cancelled":
@@ -114,6 +127,8 @@ func normalizeOutcome(value string) string {
 	}
 }
 
+// normalizeDNSOutcome maps DNS outcomes to a fixed metric vocabulary.
+// normalizeDNSOutcome переводит исходы DNS в фиксированный словарь метрик.
 func normalizeDNSOutcome(value string) string {
 	switch value {
 	case "validated", "cache_hit", "rejected":
@@ -123,6 +138,8 @@ func normalizeDNSOutcome(value string) string {
 	}
 }
 
+// normalizeDialOutcome maps external dial results to a fixed metric vocabulary.
+// normalizeDialOutcome переводит исходы внешнего подключения в фиксированный словарь метрик.
 func normalizeDialOutcome(value string) string {
 	switch value {
 	case "success", "failure":
@@ -132,6 +149,8 @@ func normalizeDialOutcome(value string) string {
 	}
 }
 
+// normalizeStage keeps connection stage labels within a fixed operational set.
+// normalizeStage ограничивает метки этапов соединения фиксированным рабочим набором.
 func normalizeStage(value string) string {
 	switch value {
 	case "accept", "connect", "clienthello", "dns", "dial", "tunnel", "proxy", "shutdown":
@@ -141,6 +160,8 @@ func normalizeStage(value string) string {
 	}
 }
 
+// normalizeReason collapses unrecognized failure text to a single bounded label.
+// normalizeReason сводит неизвестный текст причины к одной ограниченной метке.
 func normalizeReason(value string) string {
 	switch value {
 	case "none", "malformed", "method", "authority", "body", "credentials", "oversized", "policy",

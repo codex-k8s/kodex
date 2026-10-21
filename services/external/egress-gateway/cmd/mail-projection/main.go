@@ -15,6 +15,8 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
+// main runs the bounded mail projection command and reports a closed failure.
+// main запускает ограниченную команду почтовой проекции и сообщает закрытую ошибку.
 func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -24,6 +26,8 @@ func main() {
 	}
 }
 
+// run validates mailbox source and base policy before writing private projection files.
+// run проверяет источник почты и базовую политику до записи закрытых файлов проекции.
 func run(ctx context.Context) error {
 	source := flag.String("configuration", "", "exact typed mailbox configuration file")
 	baseFile := flag.String("policy", "", "gateway policy file")
