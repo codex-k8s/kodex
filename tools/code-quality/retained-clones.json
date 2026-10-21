@@ -2,6 +2,46 @@
   "version": 1,
   "entries": [
     {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/access.proto",
+      "secondPath": "contracts/proto/controlplane/v1/role_images.proto",
+      "fragmentSHA256": "cb952c197b7b92af0a0221cf89f9028404b371660ed7ad99bf2228825c445e6a",
+      "count": 1,
+      "reason": "Окно включает package/import/go_package и однотипный список RPC AccessService и RoleImageService после нормализации имён. Первый управляет allow-only ролями и bindings, второй — отдельным lifecycle рецептов, сборки и допуска образов. Общей исполняемой реализации здесь нет; объединение RPC или generic endpoint смешало бы разные полномочия и nominal request/response типы."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/secretbroker/v1/secret_broker.proto",
+      "fragmentSHA256": "c2bc5b6ce7283d7c65c926c579e3a59b9c6ce681cf7f048996148cdea0a72e8a",
+      "count": 1,
+      "reason": "RuntimeResourceScopeKind объявлен в разных Proto packages: controlplane.v1 и secretbroker.v1. Брокер намеренно имеет собственную transport enum с exact caster и одноразовой secret-operation boundary, control-plane владеет областью ресурса. Совпавшие числа и синтаксис service RPC не позволяют импортом одного enum подменять две границы. Сохранено только точное окно."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/role_images.proto",
+      "fragmentSHA256": "f79430487fdebb08857123ed2754137744897e063ae0492dfb852c87c83a9b41",
+      "count": 1,
+      "reason": "Совпала грамматика последних query RPC PlatformQueryService и claim/admission/promotion методов RoleImageService. Query читает impact/configuration projections, а image методы исполняют fenced lifecycle сборки и допуска. Универсальный метод или объединённый service изменил бы authority и wire-контракт; повтор списка сигнатур не является общей бизнес-логикой."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/secretbroker/v1/secret_broker.proto",
+      "fragmentSHA256": "f79430487fdebb08857123ed2754137744897e063ae0492dfb852c87c83a9b41",
+      "count": 1,
+      "reason": "Нормализованный список impact/configuration query RPC сравнивается с Create/Rotate/Reveal и draft операциями SecretBrokerService. Последние являются отдельной plaintext boundary с одноразовыми operation grants; клиентское чтение control-plane не получает эту способность. Извлечение общего RPC изменило бы типы, принадлежность состояния и проверку полномочий."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/internalrpcauthority/v1/authority.proto",
+      "fragmentSHA256": "c7fa31f81ec3acfe0bc5ff9c0136218b4a925dec863e47764d651f870f9ae50f",
+      "count": 1,
+      "reason": "Слабая нормализация сопоставила последовательные числа UI NextAction с AuthorizationErrorReason и краями соседних enum. NextAction задаёт допустимые пользовательские действия, error reason — закрытый машинный detail причины отказа authority. Это независимые nominal wire enum; общий тип ошибочно связал бы интерфейсные действия и security диагностику. Самих одинаковых исполняемых веток здесь нет."
+    },
+    {
       "format": "yaml",
       "firstPath": "deploy/k8s/base/artifact-retention/networkpolicy.yaml",
       "secondPath": "deploy/k8s/base/stt-tts-service/networkpolicy.yaml",

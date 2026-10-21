@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.144.0
+version: 1.145.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,35 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто сорок пятая волна — оставшиеся совпадения Proto
+
+На точном опубликованном SHA `4e40798f49423940c38a9f044e694b42bbdeaf52`
+повторный полный detector подтвердил 6544 собственных файла, 222 исключения,
+1874 raw-группы, 561 точное решение и 1313 неразобранных. Raw SHA-256:
+`339e6305ca0e844650fdd7364dccb01abc811e76c4be1e38a8bd8959ca6d11eb`;
+отпечаток `875c3a628034d35ced267cfcce9774123676d1ea9f4d11aedde6792d4efc21e9`.
+Повторный build/unit observability и email-bridge на этом SHA — PASS LOCAL;
+пять ignore-boundaries также PASS. PostgreSQL и живая почта — NOT RUN.
+
+Вручную разобраны все пять оставшихся protobuf-групп. Окно AccessService
+и RoleImageService содержит только нормализованную грамматику service/RPC;
+окна PlatformQueryService с image lifecycle и SecretBrokerService смешивают
+чтение с fenced claim/promotion либо одноразовой plaintext-operation boundary.
+RuntimeResourceScopeKind имеет самостоятельные transport enum в разных
+packages с явным caster; NextAction и AuthorizationErrorReason — разные
+nominal wire-наборы, совпавшие по форме последовательных чисел.
+Объединение здесь меняло бы полномочия, принадлежность состояния или типы,
+а не убирало дублирование исполняемой логики.
+
+Добавлены пять самостоятельных точных path/fragment/count решений;
+Proto source и generated output не редактировались. Проверка полного
+отчёта с новым реестром: 1874 raw-группы, 566 решений, 1308 неразобранных,
+среди последних protobuf отсутствует. 16 unit анализатора, unit Go-checker
+и diff-check — PASS LOCAL. Go-покрытие прежнее: 4905/21067,
+непокрыты 16162; новая логика и декларации этой волной не добавлялись.
+Полный go-docs-check, component/live, browser/deploy — NOT RUN.
+Завершение разбора одного формата не означает завершения общего Issue.
 
 ## Сто сорок четвёртая волна — CLI почты и общий SQLSTATE classifier
 
