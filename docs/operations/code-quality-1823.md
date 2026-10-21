@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.98.0
+version: 1.99.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,35 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто первая волна — локальная диагностика authority client
+
+На точном запушенном SHA `ddd02b92ba250198012636f07b7824d6d50fbd53`
+анализ подтвердил 6532 собственных файла, 222 исключения, 1867 raw-групп,
+468 точных решений и 1399 неразобранных; сырой SHA-256 —
+`20278a1c41fad23f4f29704099d3c4fa3c09f79c600ec819cb3e5dc2981fe709`,
+отпечаток набора —
+`867efe5c8c3b929cb806ab74bf785be42a98e36ac1b1f098cabd395f3189afd6`.
+Go-реестр: 3133/21049, непокрыты 17916.
+
+Все 27 объявлений `authorityclient/diagnostic.go` и
+`authorityclient/diagnostic_test.go` теперь описаны предметными EN→RU
+комментариями. Документированы закрытые стадии и enum-нормализация,
+ограничение типизированных details стадиями issuer, очистка исходной ошибки
+поставщика, сохранение прежней bounded retry policy и тестовые отказные
+границы без вызова целевого RPC. Исполняемый код не менялся.
+
+Рабочий detector: 6532 собственных файла, 222 исключения, 1867 raw-групп,
+468 точных решений и 1399 неразобранных; сырой SHA-256 —
+`4df64c56acdb4428bf7086f94fd2266a7a2d445fae97633d9af39cb746e2de58`,
+отпечаток набора не изменился. Go-реестр: 3160/21049,
+непокрыты 17889. `go test -count=1 ./authorityclient` и
+`go build ./authorityclient` из корня модуля `libs/go/internalrpcauth`,
+строгая сверка 468 decisions, `gofmt` и `git diff --check` — PASS LOCAL.
+Первые пробные команды из неверного корня модуля получили setup failure;
+повтор по правильной границе модуля прошёл. Полный `go-docs -check` и
+browser/deploy/live — NOT RUN. Точный scan нового коммита будет опубликован
+в текущем PR.
 
 ## Сотая волна — номинальные границы context resource API
 
