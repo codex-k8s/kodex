@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.101.0
+version: 1.102.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,32 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто четвёртая волна — SQL-граница Go и именованных запросов
+
+На точном запушенном SHA `ce3dff409b090d41c6353f9c8a41ecf7e7647615`
+анализ подтвердил 6532 собственных файла, 222 исключения, 1867 raw-групп,
+468 точных решений и 1399 неразобранных; сырой SHA-256 —
+`142b5263dfb586abdf43655a8d1040a81417f4c34c6b10f959b315908ec807fa`,
+отпечаток набора —
+`867efe5c8c3b929cb806ab74bf785be42a98e36ac1b1f098cabd395f3189afd6`.
+Go-реестр: 3261/21049, непокрыты 17788.
+
+Все 16 объявлений `tools/check-sql-boundary/main.go` и `main_test.go`
+получили предметные EN→RU комментарии. Пояснены границы эвристики SQL,
+проверка заголовка именованного запроса, точный `go:embed`, исключение
+testdata и тестовых Go-файлов, а также реальные роли fixtures. Порядок обхода,
+шаблоны и исполняемое поведение не менялись.
+
+Рабочий detector: 6532 собственных файла, 222 исключения, 1867 raw-групп,
+468 точных решений и 1399 неразобранных; сырой SHA-256 —
+`22dc3ba84748b51ae3e0b4700adba273e50c36f4ebddf0c7856b1d3cfd280fef`,
+отпечаток набора не изменился. Go-реестр: 3277/21049,
+непокрыты 17772. `go test -count=1 ./tools/check-sql-boundary` и
+`go build ./tools/check-sql-boundary`, строгая сверка 468 decisions,
+`gofmt` и `git diff --check` — PASS LOCAL. Полный `go-docs -check` и
+browser/deploy/live — NOT RUN. Точный scan нового коммита будет опубликован
+в текущем PR.
 
 ## Сто третья волна — основной клиент локального authority
 

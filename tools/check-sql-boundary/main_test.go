@@ -8,18 +8,34 @@ import (
 	"testing"
 )
 
+// selectQueryFixture supplies a production-shaped SELECT literal to the detector.
+// RU: selectQueryFixture передаёт детектору строку с формой production SELECT.
+//
 //go:embed testdata/select.sql
 var selectQueryFixture string
 
+// commonTableExpressionFixture supplies a WITH-query literal to the detector.
+// RU: commonTableExpressionFixture передаёт детектору строку WITH-запроса.
+//
 //go:embed testdata/common_table_expression.sql
 var commonTableExpressionFixture string
 
+// updateQueryFixture supplies an UPDATE literal to the detector.
+// RU: updateQueryFixture передаёт детектору строку UPDATE-запроса.
+//
 //go:embed testdata/update.sql
 var updateQueryFixture string
 
+// grantQueryFixture supplies a GRANT literal to the detector.
+// RU: grantQueryFixture передаёт детектору строку GRANT-запроса.
+//
 //go:embed testdata/grant.sql
 var grantQueryFixture string
 
+// TestSQLLiteralBoundary checks representative SQL statements and benign
+// lookalikes so the heuristic does not flag ordinary identifiers or routes.
+// RU: TestSQLLiteralBoundary проверяет SQL-операторы и безопасные похожие
+// строки, чтобы эвристика не помечала обычные идентификаторы и маршруты.
 func TestSQLLiteralBoundary(t *testing.T) {
 	t.Parallel()
 
@@ -46,6 +62,10 @@ func TestSQLLiteralBoundary(t *testing.T) {
 	}
 }
 
+// TestValidateQueryHeader checks both a filename-matched query header and a
+// header whose declared query name conflicts with its file.
+// RU: TestValidateQueryHeader проверяет заголовок с совпадающим именем файла
+// и заголовок, где объявленное имя противоречит файлу.
 func TestValidateQueryHeader(t *testing.T) {
 	t.Parallel()
 
@@ -60,6 +80,10 @@ func TestValidateQueryHeader(t *testing.T) {
 	}
 }
 
+// TestInspectRepositoryIgnoresSQLLiteralsInTests ensures a test-only Go
+// string does not become a production SQL ownership violation.
+// RU: TestInspectRepositoryIgnoresSQLLiteralsInTests подтверждает, что строка
+// в тестовом Go-файле не считается нарушением production SQL-границы.
 func TestInspectRepositoryIgnoresSQLLiteralsInTests(t *testing.T) {
 	t.Parallel()
 
