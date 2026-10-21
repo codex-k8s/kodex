@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/codex-k8s/kodex/libs/go/runtimecontract"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
 
 	corev1 "k8s.io/api/core/v1"
@@ -22,6 +21,8 @@ import (
 	clienttesting "k8s.io/client-go/testing"
 )
 
+// TestArchiveAPIFailureIsClosedAndExact keeps API diagnostics bounded, tied to the task and free of private status details.
+// RU: TestArchiveAPIFailureIsClosedAndExact сохраняет ограниченную привязанную к заданию диагностику API без закрытых подробностей статуса.
 func TestArchiveAPIFailureIsClosedAndExact(t *testing.T) {
 	for _, scenario := range []struct {
 		name, verb, resource, stage, reason string
@@ -34,14 +35,8 @@ func TestArchiveAPIFailureIsClosedAndExact(t *testing.T) {
 		{"job read timeout", "get", "jobs", "OBSERVE_JOB", "ServerTimeout", 504},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
-			task := testSnapshotTask()
-			task.OrganizationRef, task.SessionRef, task.ProviderAccountRef, task.RuntimeRevisionRef = "org_fixture01", "ses_fixture01", "pva_fixture01", "rrev_fixture01"
-			task.RuntimeRevisionVersion = 1
-			task.RuntimeRevisionDigest, task.InputDigest, task.SourceSHA256 = strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("c", 64)
-			task.CodexSessionID = "00000000-0000-4000-8000-000000000003"
-			task.SourceRelativePath = ".kodex/state/codex-home/sessions/2026/08/28/rollout-2026-08-28T23-23-39-" + task.CodexSessionID + ".jsonl"
-			task.SourceSizeBytes, task.TargetObjectKey = 1024, "SENTINEL_PRIVATE_OBJECT"
-			task.PVCName, _ = runtimecontract.SessionPVCName(task.SessionRef)
+			task := fullArchiveTask()
+			task.TargetObjectKey = "SENTINEL_PRIVATE_OBJECT"
 			client := newArchiveClient(&corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: exactWorkerNamespace, UID: "source-pvc-uid"}})
 			client.PrependReactor(scenario.verb, scenario.resource, func(clienttesting.Action) (bool, runtime.Object, error) {
 				return true, nil, &apierrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReason(scenario.reason), Code: scenario.code,
@@ -89,6 +84,8 @@ func TestArchiveAPIFailureIsClosedAndExact(t *testing.T) {
 	}
 }
 
+// TestWorkerTerminalDiagnosticIsBoundedAndExact validates terminal lineage and closed redacted diagnostics across success and failure cases.
+// RU: TestWorkerTerminalDiagnosticIsBoundedAndExact проверяет конечное происхождение и закрытую очищенную диагностику для успешных и отказных сценариев.
 func TestWorkerTerminalDiagnosticIsBoundedAndExact(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{"failure", "failure before cleanup", "source identity", "source digest", "object write", "object readback", "unknown failure stage", "success", "exit zero malformed", "status conflict", "foreign pod", "forged task", "forged attempt", "replaced pvc", "unknown reason", "missing result"} {
@@ -96,14 +93,8 @@ func TestWorkerTerminalDiagnosticIsBoundedAndExact(t *testing.T) {
 			var logs bytes.Buffer
 			cfg := testConfig()
 			cfg.Logger = slog.New(slog.NewJSONHandler(&logs, nil))
-			task := testSnapshotTask()
-			task.OrganizationRef, task.SessionRef = "org_fixture01", "ses_fixture01"
-			task.ProviderAccountRef, task.RuntimeRevisionRef, task.RuntimeRevisionVersion = "pva_fixture01", "rrev_fixture01", 1
-			task.RuntimeRevisionDigest, task.InputDigest, task.SourceSHA256 = strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("c", 64)
-			task.CodexSessionID = "00000000-0000-4000-8000-000000000003"
-			task.SourceRelativePath = ".kodex/state/codex-home/sessions/2026/08/28/rollout-2026-08-28T23-23-39-" + task.CodexSessionID + ".jsonl"
-			task.SourceSizeBytes, task.TargetObjectKey = 1024, "fixture/object.tar"
-			task.PVCName, _ = runtimecontract.SessionPVCName(task.SessionRef)
+			task := fullArchiveTask()
+			task.TargetObjectKey = "fixture/object.tar"
 			controller, err := New(fake.NewSimpleClientset(), cfg)
 			if err != nil {
 				t.Fatal(err)

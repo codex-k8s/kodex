@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.131.0
+version: 1.132.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,39 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто тридцать вторая волна — Kubernetes-контроллер архива
+
+На опубликованном SHA `8e5bb67a10c100c9a0017a5d910abf629013fb2b`
+анализ показывал 6536 собственных файлов, 222 исключения, 1877
+raw-групп, 552 адресных решения и 1325 неразобранных; Go-реестр:
+3972/21061, непокрыты 17089. Полный пакет
+`session-archive/internal/controller` теперь покрыт предметными EN→RU
+комментариями: 91/91 объявление. Пояснены exact namespace и PVC UID,
+renew перед эффектами, неизвестный исход создания Job, проверка immutable
+predecessor input, UID/resourceVersion preconditions и ожидание Job/Pods,
+restricted worker и безопасная диагностика без сырого API status/message.
+Семантика Kubernetes DeleteOptions/Preconditions сверена через Context7
+`/kubernetes/client-go`. Production-ветви и manifests не менялись.
+
+Два теста исчезновения/подмены PVC теперь используют общий
+`startPendingSnapshotWorker` с прежними UID, интервалом опроса и запуском
+асинхронной оснастки. Диагностические тесты используют уже существующий
+`fullArchiveTask`, меняя только прежний конкретный object key. Assertions
+изолированного завершения, запрета чужого удаления и redaction сохранены.
+
+Build и `go test -count=1 ./...` всего session-archive с Go1.26.6,
+`gofmt` и `git diff --check` — PASS LOCAL. Kernel/UID/full-ABI,
+SeaweedFS E2E, browser/deploy/live — NOT RUN по границе задачи.
+
+Полный detector: 6536 собственных файлов, 222 исключения, 1876
+raw-групп, 552 адресных решения и 1324 неразобранных; сырой SHA-256 —
+`ed239a2f33a65b0536b333976984eba0f301c9ce0296a64c0a08c6d5b8eded87`,
+отпечаток набора —
+`fe70cb649272237aea6b1f75c5787d4dcc0cd9986c6ae98303766b016f024a3c`.
+Сравнение exact path pairs/fragment SHA-256 подтвердило удаление одной
+145-token группы без появления других. Go-реестр: 4063/21062,
+непокрыты 16999. Полный `go-docs -check` — NOT RUN при неполном покрытии.
 
 ## Сто тридцать первая волна — модель и архив сессии
 

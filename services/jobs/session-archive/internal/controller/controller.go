@@ -25,13 +25,25 @@ import (
 )
 
 const (
-	managedLabel           = "session-archive.kodex.dev/managed"
-	exactWorkerNamespace   = "kodex-runtime"
+	// managedLabel identifies resources created for a claimed archive task.
+	// RU: managedLabel обозначает ресурсы, созданные для полученного задания архивирования.
+	managedLabel = "session-archive.kodex.dev/managed"
+	// exactWorkerNamespace confines archive worker resources to the runtime namespace.
+	// RU: exactWorkerNamespace ограничивает ресурсы worker архива пространством runtime.
+	exactWorkerNamespace = "kodex-runtime"
+	// restoreInputAnnotation binds a restore volume to the immutable task input digest.
+	// RU: restoreInputAnnotation связывает том восстановления с дайджестом неизменяемого входа задания.
 	restoreInputAnnotation = "session-archive.kodex.dev/restore-input-digest"
+	// sourcePVCUIDAnnotation records the concrete source volume observed for an attempt.
+	// RU: sourcePVCUIDAnnotation фиксирует конкретный исходный том, наблюдавшийся для попытки.
 	sourcePVCUIDAnnotation = "session-archive.kodex.dev/source-pvc-uid"
-	defaultPollInterval    = 2 * time.Second
+	// defaultPollInterval spaces worker Job and source-volume observations.
+	// RU: defaultPollInterval задаёт интервал наблюдения Job worker и исходного тома.
+	defaultPollInterval = 2 * time.Second
 )
 
+// Config supplies the archive worker's namespace, image, storage, identity and execution limits.
+// RU: Config задаёт пространство, образ, хранилище, идентичность и пределы выполнения worker архива.
 type Config struct {
 	Logger                                                                               *slog.Logger
 	WorkerNamespace, Environment, WorkerImage, WorkerServiceAccount, ObjectStorageSecret string
@@ -41,6 +53,8 @@ type Config struct {
 	WorkerTimeout                                                                        time.Duration
 }
 
+// Controller owns the Kubernetes client and bounded worker settings for claimed archive tasks.
+// RU: Controller хранит клиент Kubernetes и ограниченные настройки worker для полученных заданий архива.
 type Controller struct {
 	client     kubernetes.Interface
 	config     Config
@@ -48,6 +62,8 @@ type Controller struct {
 	poll       time.Duration
 }
 
+// InCluster constructs a five-second Kubernetes client from the controller's in-cluster identity.
+// RU: InCluster создаёт Kubernetes-клиент с пятисекундным timeout из внутрикластерной идентичности контроллера.
 func InCluster(config Config) (*Controller, error) {
 	restConfig, err := rest.InClusterConfig()
 	if err != nil {
@@ -61,6 +77,8 @@ func InCluster(config Config) (*Controller, error) {
 	return New(client, config)
 }
 
+// New validates the exact worker namespace, storage quantity and one-to-fifteen-minute execution budget.
+// RU: New проверяет точное пространство worker, объём хранилища и бюджет выполнения от одной до пятнадцати минут.
 func New(client kubernetes.Interface, config Config) (*Controller, error) {
 	pvcRequest, quantityErr := resource.ParseQuantity(config.SessionPVCSize)
 	if client == nil || config.WorkerNamespace != exactWorkerNamespace || config.Environment == "" || config.WorkerImage == "" ||
@@ -73,6 +91,8 @@ func New(client kubernetes.Interface, config Config) (*Controller, error) {
 	return &Controller{client: client, config: config, pvcRequest: pvcRequest, poll: defaultPollInterval}, nil
 }
 
+// Check probes the namespaced Job-list API path used to observe archive workers.
+// RU: Check проверяет namespaced API списка Job, используемый для наблюдения worker архива.
 func (controller *Controller) Check(ctx context.Context) error {
 	_, err := controller.client.BatchV1().Jobs(controller.config.WorkerNamespace).List(ctx, metav1.ListOptions{Limit: 1})
 	if err != nil {
@@ -81,6 +101,8 @@ func (controller *Controller) Check(ctx context.Context) error {
 	return nil
 }
 
+// Execute renews the claimed task, fences predecessor cleanup and tracks one worker attempt against its source PVC UID.
+// RU: Execute продлевает полученное задание, ограждает очистку предшественников и связывает попытку worker с UID исходного PVC.
 func (controller *Controller) Execute(ctx context.Context, task model.Task, renew func(context.Context) error) (result model.Result, resultErr error) {
 	if err := controller.cleanupPredecessors(ctx, task, renew); err != nil {
 		return model.Result{}, err
@@ -180,6 +202,8 @@ func (controller *Controller) Execute(ctx context.Context, task model.Task, rene
 	}
 }
 
+// bindSessionPVC resolves a live volume UID or returns a closed missing-volume result.
+// RU: bindSessionPVC определяет UID живого тома либо возвращает закрытый результат отсутствия тома.
 func (controller *Controller) bindSessionPVC(ctx context.Context, name string) (types.UID, *model.Result, error) {
 	pvc, err := controller.client.CoreV1().PersistentVolumeClaims(controller.config.WorkerNamespace).Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
@@ -197,6 +221,8 @@ func (controller *Controller) bindSessionPVC(ctx context.Context, name string) (
 	return pvc.UID, nil, nil
 }
 
+// observeSessionPVC rejects a missing, deleting or replaced source volume during an attempt.
+// RU: observeSessionPVC отклоняет отсутствующий, удаляемый либо подменённый исходный том во время попытки.
 func (controller *Controller) observeSessionPVC(ctx context.Context, name string, expectedUID types.UID) (*model.Result, error) {
 	pvc, err := controller.client.CoreV1().PersistentVolumeClaims(controller.config.WorkerNamespace).Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
@@ -214,10 +240,14 @@ func (controller *Controller) observeSessionPVC(ctx context.Context, name string
 	return nil, nil
 }
 
+// pvcFailure builds a worker failure result from an already selected closed PVC error code.
+// RU: pvcFailure создаёт результат отказа worker из уже выбранного закрытого кода ошибки PVC.
 func pvcFailure(code string) *model.Result {
 	return &model.Result{Success: false, SafeErrorCode: code}
 }
 
+// ensureRestorePVC creates or validates the session-derived restore volume with owner metadata and input digest.
+// RU: ensureRestorePVC создаёт либо проверяет производный от сессии том восстановления с метаданными владельца и дайджестом входа.
 func (controller *Controller) ensureRestorePVC(ctx context.Context, task model.Task) error {
 	volumeLabels, volumeAnnotations, err := runtimecontract.SessionVolumeMetadata(task.OrganizationRef, task.ProjectRef, task.SessionRef)
 	if err != nil {
@@ -255,6 +285,8 @@ func (controller *Controller) ensureRestorePVC(ctx context.Context, task model.T
 	return controller.validateRestorePVC(created, task)
 }
 
+// validateRestorePVC checks owner pins, restore input, storage class, capacity and access mode before reuse.
+// RU: validateRestorePVC проверяет привязки владельца, вход восстановления, класс, объём и режим доступа до повторного использования.
 func (controller *Controller) validateRestorePVC(pvc *corev1.PersistentVolumeClaim, task model.Task) error {
 	wantedLabels, wantedAnnotations, err := runtimecontract.SessionVolumeMetadata(task.OrganizationRef, task.ProjectRef, task.SessionRef)
 	if err != nil {
@@ -282,6 +314,8 @@ func (controller *Controller) validateRestorePVC(pvc *corev1.PersistentVolumeCla
 	return nil
 }
 
+// deletePVC requires an archive binding, rejects observed live consumers and confirms absence after UID-guarded deletion.
+// RU: deletePVC требует привязку архива, отклоняет наблюдаемых живых потребителей и подтверждает отсутствие после удаления с UID.
 func (controller *Controller) deletePVC(ctx context.Context, task model.Task) (model.Result, error) {
 	if task.Archive == nil {
 		return model.Result{}, errors.New("PVC deletion lacks an archive receipt")
@@ -326,6 +360,8 @@ func (controller *Controller) deletePVC(ctx context.Context, task model.Task) (m
 	}
 }
 
+// job builds one non-retrying restricted worker with task/storage mounts and restore-specific preparation.
+// RU: job создаёт один ограниченный worker без повторов с томами задания и хранилища и отдельной подготовкой восстановления.
 func (controller *Controller) job(name string, task model.Task, sourcePVCUID types.UID) *batchv1.Job {
 	zero, deadline, ttl := int32(0), int64(controller.config.WorkerTimeout/time.Second), int32(300)
 	falseValue := false
@@ -343,8 +379,8 @@ func (controller *Controller) job(name string, task model.Task, sourcePVCUID typ
 		// геометрию путей для snapshot и restore.
 		mounts = append(mounts, corev1.VolumeMount{Name: "session", MountPath: "/workspace/.kodex/state"})
 	}
-	// RESTORE создаёт rollout от UID native writer: app-server и capture
-	// исполняются в provider-runtime, а не в контейнере main runner.
+	// workerUID matches the provider-runtime native writer so restored rollout ownership permits later capture.
+	// RU: workerUID совпадает с native writer в provider-runtime, чтобы владелец восстановленного rollout допускал последующий capture.
 	const workerUID int64 = 10002
 	container := corev1.Container{Name: "worker", Image: controller.config.WorkerImage, Args: []string{"worker"},
 		Env: []corev1.EnvVar{{Name: "DEPLOYMENT_ENVIRONMENT", Value: controller.config.Environment},
@@ -381,6 +417,8 @@ func (controller *Controller) job(name string, task model.Task, sourcePVCUID typ
 	return job
 }
 
+// pvcBindingAnnotation omits absent bindings and otherwise records the exact observed volume UID.
+// RU: pvcBindingAnnotation опускает отсутствующую привязку либо фиксирует точный наблюдавшийся UID тома.
 func pvcBindingAnnotation(uid types.UID) map[string]string {
 	if uid == "" {
 		return nil
@@ -388,13 +426,27 @@ func pvcBindingAnnotation(uid types.UID) map[string]string {
 	return map[string]string{sourcePVCUIDAnnotation: string(uid)}
 }
 
+// workloadName derives a stable bounded resource name from task, content generation and attempt.
+// RU: workloadName выводит устойчивое ограниченное имя ресурса из задания, поколения содержимого и попытки.
 func workloadName(ref string, generation int64, attempt int32) string {
 	digest := sha256.Sum256([]byte(fmt.Sprintf("%s\x00%d\x00%d", ref, generation, attempt)))
 	return "session-archive-" + hex.EncodeToString(digest[:8])
 }
+
+// restricted disables privilege escalation and writable root filesystem while dropping all capabilities for one UID.
+// RU: restricted запрещает повышение привилегий и запись в корневую ФС, удаляя все capabilities для одного UID.
 func restricted(uid int64) *corev1.SecurityContext {
 	return &corev1.SecurityContext{RunAsNonRoot: boolPtr(true), RunAsUser: &uid, RunAsGroup: &uid, AllowPrivilegeEscalation: boolPtr(false), ReadOnlyRootFilesystem: boolPtr(true), Capabilities: &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}}
 }
-func boolPtr(value bool) *bool                 { return &value }
-func int64Ptr(value int64) *int64              { return &value }
+
+// boolPtr provides an explicit optional Kubernetes boolean field without shared mutable storage.
+// RU: boolPtr задаёт явное необязательное булево поле Kubernetes без общей изменяемой памяти.
+func boolPtr(value bool) *bool { return &value }
+
+// int64Ptr provides an explicit optional Kubernetes integer field for the generated worker specification.
+// RU: int64Ptr задаёт явное необязательное целочисленное поле Kubernetes для создаваемой спецификации worker.
+func int64Ptr(value int64) *int64 { return &value }
+
+// quantity parses a programmer-owned fixed resource literal used in worker limits and volumes.
+// RU: quantity разбирает фиксированный ресурсный литерал из кода для лимитов и томов worker.
 func quantity(value string) *resource.Quantity { result := resource.MustParse(value); return &result }

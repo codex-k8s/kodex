@@ -15,6 +15,8 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// TestExecuteMissingSnapshotPVCIsIdempotentAndCreatesNoWorkerResources repeats a missing-volume result without creating work.
+// RU: TestExecuteMissingSnapshotPVCIsIdempotentAndCreatesNoWorkerResources повторяет результат отсутствия тома без создания работы.
 func TestExecuteMissingSnapshotPVCIsIdempotentAndCreatesNoWorkerResources(t *testing.T) {
 	t.Parallel()
 
@@ -43,21 +45,14 @@ func TestExecuteMissingSnapshotPVCIsIdempotentAndCreatesNoWorkerResources(t *tes
 	}
 }
 
+// TestExecuteStopsPendingWorkerWhenSnapshotPVCDisappears stops only the bound attempt when its source volume disappears.
+// RU: TestExecuteStopsPendingWorkerWhenSnapshotPVCDisappears останавливает связанную попытку при исчезновении исходного тома.
 func TestExecuteStopsPendingWorkerWhenSnapshotPVCDisappears(t *testing.T) {
 	t.Parallel()
 
 	task := testSnapshotTask()
-	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: testConfig().WorkerNamespace,
-		UID: types.UID("source-pvc-uid")}}
-	client := newArchiveClient(pvc)
-	controller, err := New(client, testConfig())
-	if err != nil {
-		t.Fatalf("create controller: %v", err)
-	}
-	controller.poll = 5 * time.Millisecond
-	result := executeAsync(controller, task)
+	client, _, job, result := startPendingSnapshotWorker(t, task)
 	jobName := workloadName(task.TaskRef, task.ContentGeneration, task.Attempt)
-	job := waitForJob(t, client, jobName)
 	if job.Namespace != exactWorkerNamespace {
 		t.Fatalf("created worker Job namespace = %q", job.Namespace)
 	}
@@ -81,21 +76,14 @@ func TestExecuteStopsPendingWorkerWhenSnapshotPVCDisappears(t *testing.T) {
 	assertWorkerResourcesRemoved(t, client, jobName)
 }
 
+// TestExecuteRejectsSnapshotPVCReplacement rejects a new PVC UID even when its name matches the original task.
+// RU: TestExecuteRejectsSnapshotPVCReplacement отклоняет новый UID PVC даже при прежнем имени тома задания.
 func TestExecuteRejectsSnapshotPVCReplacement(t *testing.T) {
 	t.Parallel()
 
 	task := testSnapshotTask()
-	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: testConfig().WorkerNamespace,
-		UID: types.UID("source-pvc-uid")}}
-	client := newArchiveClient(pvc)
-	controller, err := New(client, testConfig())
-	if err != nil {
-		t.Fatalf("create controller: %v", err)
-	}
-	controller.poll = 5 * time.Millisecond
-	result := executeAsync(controller, task)
+	client, pvc, job, result := startPendingSnapshotWorker(t, task)
 	jobName := workloadName(task.TaskRef, task.ContentGeneration, task.Attempt)
-	job := waitForJob(t, client, jobName)
 	if job.Annotations[sourcePVCUIDAnnotation] != "source-pvc-uid" {
 		t.Fatalf("job source PVC binding = %#v", job.Annotations)
 	}
@@ -114,6 +102,8 @@ func TestExecuteRejectsSnapshotPVCReplacement(t *testing.T) {
 	assertWorkerResourcesRemoved(t, client, jobName)
 }
 
+// TestEnsureRestorePVCCreatesBoundedCanonicalVolume checks storage and owner pins and rejects a different restore input.
+// RU: TestEnsureRestorePVCCreatesBoundedCanonicalVolume проверяет объём и привязки владельца и отклоняет другой вход восстановления.
 func TestEnsureRestorePVCCreatesBoundedCanonicalVolume(t *testing.T) {
 	t.Parallel()
 
@@ -150,6 +140,8 @@ func TestEnsureRestorePVCCreatesBoundedCanonicalVolume(t *testing.T) {
 	}
 }
 
+// TestWorkerJobUsesSessionVolumeGroupWithoutServiceAccountToken checks runtime namespace, shared volume group and absent API token.
+// RU: TestWorkerJobUsesSessionVolumeGroupWithoutServiceAccountToken проверяет пространство runtime, общую группу тома и отсутствие API-токена.
 func TestWorkerJobUsesSessionVolumeGroupWithoutServiceAccountToken(t *testing.T) {
 	t.Parallel()
 
@@ -178,6 +170,8 @@ func TestWorkerJobUsesSessionVolumeGroupWithoutServiceAccountToken(t *testing.T)
 	}
 }
 
+// TestWorkerIdentityKeepsRestoredSourceOwnedByNativeWriter pins worker UID and restricted restore-preparer mounts and resources.
+// RU: TestWorkerIdentityKeepsRestoredSourceOwnedByNativeWriter закрепляет UID worker и ограниченные тома и ресурсы подготовки восстановления.
 func TestWorkerIdentityKeepsRestoredSourceOwnedByNativeWriter(t *testing.T) {
 	t.Parallel()
 	controller, err := New(fake.NewSimpleClientset(), testConfig())
@@ -233,6 +227,8 @@ func TestWorkerIdentityKeepsRestoredSourceOwnedByNativeWriter(t *testing.T) {
 	}
 }
 
+// TestNewRejectsWorkerNamespaceOutsideRuntimeBoundary rejects controller setup outside the exact worker namespace.
+// RU: TestNewRejectsWorkerNamespaceOutsideRuntimeBoundary отклоняет настройки контроллера вне точного пространства worker.
 func TestNewRejectsWorkerNamespaceOutsideRuntimeBoundary(t *testing.T) {
 	t.Parallel()
 	config := testConfig()
@@ -242,6 +238,8 @@ func TestNewRejectsWorkerNamespaceOutsideRuntimeBoundary(t *testing.T) {
 	}
 }
 
+// assertEnvironmentValue requires one named worker environment setting to retain its expected value.
+// RU: assertEnvironmentValue требует ожидаемого значения именованной настройки окружения worker.
 func assertEnvironmentValue(t *testing.T, values []corev1.EnvVar, name, expected string) {
 	t.Helper()
 	for _, value := range values {
@@ -255,11 +253,15 @@ func assertEnvironmentValue(t *testing.T, values []corev1.EnvVar, name, expected
 	t.Fatalf("environment %s is absent", name)
 }
 
+// executionResult carries both controller business output and execution failure across the test goroutine boundary.
+// RU: executionResult переносит бизнес-результат контроллера и ошибку выполнения через границу тестовой goroutine.
 type executionResult struct {
 	result model.Result
 	err    error
 }
 
+// executeAsync runs one synthetic task with an always-successful renewal callback and a buffered result channel.
+// RU: executeAsync запускает синтетическое задание с успешным callback продления и буферизованным каналом результата.
 func executeAsync(controller *Controller, task model.Task) <-chan executionResult {
 	result := make(chan executionResult, 1)
 	go func() {
@@ -269,6 +271,25 @@ func executeAsync(controller *Controller, task model.Task) <-chan executionResul
 	return result
 }
 
+// startPendingSnapshotWorker creates a bound source PVC and starts one short-polling isolated worker fixture.
+// RU: startPendingSnapshotWorker создаёт связанный исходный PVC и запускает изолированную оснастку worker с коротким опросом.
+func startPendingSnapshotWorker(t *testing.T, task model.Task) (*fake.Clientset, *corev1.PersistentVolumeClaim, *batchv1.Job, <-chan executionResult) {
+	t.Helper()
+	pvc := &corev1.PersistentVolumeClaim{ObjectMeta: metav1.ObjectMeta{Name: task.PVCName, Namespace: testConfig().WorkerNamespace,
+		UID: types.UID("source-pvc-uid")}}
+	client := newArchiveClient(pvc)
+	controller, err := New(client, testConfig())
+	if err != nil {
+		t.Fatalf("create controller: %v", err)
+	}
+	controller.poll = 5 * time.Millisecond
+	result := executeAsync(controller, task)
+	job := waitForJob(t, client, workloadName(task.TaskRef, task.ContentGeneration, task.Attempt))
+	return client, pvc, job, result
+}
+
+// waitForJob waits at most one second for the exact synthetic worker Job to appear.
+// RU: waitForJob ожидает появления точной синтетической Job worker не более одной секунды.
 func waitForJob(t *testing.T, client *fake.Clientset, name string) *batchv1.Job {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
@@ -283,6 +304,8 @@ func waitForJob(t *testing.T, client *fake.Clientset, name string) *batchv1.Job 
 	return nil
 }
 
+// waitForResult enforces the one-second completion budget of an asynchronous controller fixture.
+// RU: waitForResult обеспечивает секундный бюджет завершения асинхронной оснастки контроллера.
 func waitForResult(t *testing.T, result <-chan executionResult) executionResult {
 	t.Helper()
 	select {
@@ -294,6 +317,8 @@ func waitForResult(t *testing.T, result <-chan executionResult) executionResult 
 	}
 }
 
+// assertWorkerResourcesRemoved requires both the named worker Job and immutable task input to be absent.
+// RU: assertWorkerResourcesRemoved требует отсутствия именованной Job worker и неизменяемого входа задания.
 func assertWorkerResourcesRemoved(t *testing.T, client *fake.Clientset, name string) {
 	t.Helper()
 	if _, err := client.BatchV1().Jobs(testConfig().WorkerNamespace).Get(context.Background(), name, metav1.GetOptions{}); err == nil {
@@ -304,11 +329,15 @@ func assertWorkerResourcesRemoved(t *testing.T, client *fake.Clientset, name str
 	}
 }
 
+// testSnapshotTask supplies minimal execution-fixture fields; fullArchiveTask adds the validated owner pins when needed.
+// RU: testSnapshotTask задаёт минимальные поля оснастки выполнения; fullArchiveTask при необходимости добавляет проверяемые привязки владельца.
 func testSnapshotTask() model.Task {
 	return model.Task{TaskRef: "sat_00000000-0000-4000-8000-000000000001", Kind: "SNAPSHOT",
 		ContentGeneration: 1, Attempt: 1, PVCName: "runtime-session-0123456789abcdef"}
 }
 
+// testConfig supplies bounded synthetic worker settings and non-routable object-storage configuration.
+// RU: testConfig задаёт ограниченные синтетические настройки worker и немаршрутизируемые параметры объектного хранилища.
 func testConfig() Config {
 	return Config{WorkerNamespace: "kodex-runtime", Environment: "staging", WorkerImage: "example.invalid/session-archive@sha256:" + strings.Repeat("0", 64),
 		WorkerServiceAccount: "session-archive-worker", SessionPVCSize: "20Gi", ObjectStorageSecret: "object-storage",
