@@ -28,17 +28,23 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/runtimepolicy"
 )
 
+// challengePolicyFixture counts authenticated checks and can shorten challenge write timeouts.
+// challengePolicyFixture считает проверки аутентификации и может сократить срок записи challenge.
 type challengePolicyFixture struct {
 	AuthenticatedAccessPolicy
 	calls        atomic.Int32
 	writeTimeout int
 }
 
+// AuthorizeAuthenticated records each credential check before delegating to the real runtime policy.
+// AuthorizeAuthenticated учитывает проверку реквизита перед вызовом реальной runtime policy.
 func (fixture *challengePolicyFixture) AuthorizeAuthenticated(host string, port int, credential string) (runtimecontract.RuntimeProxyAccess, bool) {
 	fixture.calls.Add(1)
 	return fixture.AuthenticatedAccessPolicy.AuthorizeAuthenticated(host, port, credential)
 }
 
+// Limits keeps production limits except for the optional test-specific write deadline.
+// Limits сохраняет штатные пределы, кроме заданного тестом срока записи.
 func (fixture *challengePolicyFixture) Limits() policy.Limits {
 	limits := fixture.AuthenticatedAccessPolicy.Limits()
 	if fixture.writeTimeout != 0 {
@@ -47,7 +53,9 @@ func (fixture *challengePolicyFixture) Limits() policy.Limits {
 	return limits
 }
 
-func authenticatedChallengeFixture(t *testing.T) (*Server, *challengePolicyFixture, *fakeResolver, *fakeDialer, string) {
+// authenticatedRuntimePolicyFixture loads the checked egress policy with a deterministic synthetic signing key.
+// authenticatedRuntimePolicyFixture загружает проверенную egress policy с постоянным синтетическим ключом подписи.
+func authenticatedRuntimePolicyFixture(t *testing.T) (*runtimepolicy.Active, []byte) {
 	t.Helper()
 	path := filepath.Join("..", "..", "..", "..", "..", "deploy/k8s/base/egress-gateway/policy.json")
 	digest, err := policy.DigestFile(path)
@@ -63,6 +71,14 @@ func authenticatedChallengeFixture(t *testing.T) (*Server, *challengePolicyFixtu
 	if err != nil {
 		t.Fatal(err)
 	}
+	return active, key
+}
+
+// authenticatedChallengeFixture assembles a signed grant, proxy authority, and isolated listener for challenge tests.
+// authenticatedChallengeFixture собирает подписанный grant, доверенный proxy и изолированный listener для тестов challenge.
+func authenticatedChallengeFixture(t *testing.T) (*Server, *challengePolicyFixture, *fakeResolver, *fakeDialer, string) {
+	t.Helper()
+	active, key := authenticatedRuntimePolicyFixture(t)
 	access := runtimecontract.RuntimeWebAccess{Mode: runtimecontract.RuntimeWebAccessAllowlistReadOnly,
 		Rules: []runtimecontract.RuntimeWebAccessRule{{DomainPattern: "example.com", Protocol: "HTTPS", Port: 443, HTTPMethods: []string{"GET", "HEAD"}}}}
 	grant, err := runtimecontract.SignRuntimeWebAccessGrant(key, "synthetic-execution", strings.Repeat("a", 64), access)
@@ -80,10 +96,14 @@ func authenticatedChallengeFixture(t *testing.T) (*Server, *challengePolicyFixtu
 	return server, fixture, resolver, dialer, grant
 }
 
+// proxyAuthenticationHeader encodes a synthetic grant as an HTTP Basic proxy credential.
+// proxyAuthenticationHeader кодирует синтетический grant как HTTP Basic-реквизит прокси.
 func proxyAuthenticationHeader(credential string) string {
 	return "Proxy-Authorization: Basic " + base64.StdEncoding.EncodeToString([]byte("kodex:"+credential)) + "\r\n"
 }
 
+// TestAuthenticatedProxyChallengesWithoutAuthorityOrUpstreamDial rejects missing or invalid grants before dial.
+// TestAuthenticatedProxyChallengesWithoutAuthorityOrUpstreamDial отклоняет отсутствующие и неверные grant до соединения.
 func TestAuthenticatedProxyChallengesWithoutAuthorityOrUpstreamDial(t *testing.T) {
 	const envelope = "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n"
 	for _, name := range []string{"absent", "invalid_signature", "retired_signer", "wrong_host", "malformed", "duplicate", "body", "oversized"} {
@@ -152,6 +172,8 @@ func TestAuthenticatedProxyChallengesWithoutAuthorityOrUpstreamDial(t *testing.T
 	}
 }
 
+// TestProxyAuthenticationChallengeWriteIsBounded checks that an unwritable challenge cannot stall indefinitely.
+// TestProxyAuthenticationChallengeWriteIsBounded проверяет ограничение ожидания записи challenge.
 func TestProxyAuthenticationChallengeWriteIsBounded(t *testing.T) {
 	server, active, resolver, dialer, _ := authenticatedChallengeFixture(t)
 	active.writeTimeout = 20
@@ -171,6 +193,8 @@ func TestProxyAuthenticationChallengeWriteIsBounded(t *testing.T) {
 	}
 }
 
+// TestDefaultGitNegotiatesProxyChallengeWithinExactTLSAndGrant checks Git's proxy retry and pinned TLS trust.
+// TestDefaultGitNegotiatesProxyChallengeWithinExactTLSAndGrant проверяет повтор Git через proxy и закреплённое TLS-доверие.
 func TestDefaultGitNegotiatesProxyChallengeWithinExactTLSAndGrant(t *testing.T) {
 	git, err := exec.LookPath("git")
 	if err != nil {
@@ -227,17 +251,23 @@ func TestDefaultGitNegotiatesProxyChallengeWithinExactTLSAndGrant(t *testing.T) 
 	}
 }
 
+// challengeWriteNotice signals when an authentication challenge begins writing to the client.
+// challengeWriteNotice сообщает тесту о начале записи challenge клиенту.
 type challengeWriteNotice struct {
 	net.Conn
 	started chan struct{}
 	once    sync.Once
 }
 
+// Write notifies once and forwards the original challenge bytes unchanged.
+// Write уведомляет один раз и передаёт исходные байты challenge без изменений.
 func (connection *challengeWriteNotice) Write(data []byte) (int, error) {
 	connection.once.Do(func() { close(connection.started) })
 	return connection.Conn.Write(data)
 }
 
+// TestShutdownCancelsAndJoinsPendingAuthenticationChallenge joins a blocked challenge writer on shutdown.
+// TestShutdownCancelsAndJoinsPendingAuthenticationChallenge завершает блокирующую запись challenge при остановке.
 func TestShutdownCancelsAndJoinsPendingAuthenticationChallenge(t *testing.T) {
 	server, active, resolver, dialer, _ := authenticatedChallengeFixture(t)
 	peer, client := net.Pipe()
@@ -274,6 +304,8 @@ func TestShutdownCancelsAndJoinsPendingAuthenticationChallenge(t *testing.T) {
 	}
 }
 
+// TestAuthenticationChallengeKeepsClosedCredentialMetricReason keeps denial metrics free of raw credential detail.
+// TestAuthenticationChallengeKeepsClosedCredentialMetricReason не допускает сырой реквизит в метрики отказа.
 func TestAuthenticationChallengeKeepsClosedCredentialMetricReason(t *testing.T) {
 	if connectReason(&connect.Error{Reason: connect.ReasonAuthenticationRequired}) != string(connect.ReasonCredentials) {
 		t.Fatal("authentication challenge changed the closed credential metric reason")

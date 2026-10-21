@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.54.0
+version: 1.55.0
 updated: 2026-10-21
 ---
 
@@ -1604,6 +1604,40 @@ detector-группа исчезла без новых. Все 19 собстве
 отпечаток набора —
 `931a82717a1b84190add8f9bf22fb4c0d69187d879b13607f4c9573bd9f3498c`.
 Go-реестр: 1908/21028, непокрыты 19120. `go test -count=1 ./...` и
+`go build ./...` всего egress-gateway, пять ignore-boundaries, `gofmt`
+и `git diff --check` — PASS LOCAL. Полный `go-docs -check` и
+browser/deploy/live — NOT RUN по прежним границам. Точный scan нового
+коммита будет опубликован в текущем PR.
+
+## Пятьдесят седьмая волна — тестовые runtime policy и WebSocket endpoint
+
+На точном запушенном SHA `648dd640f7f6edf692aa06e7b7d740b1ccb687ea`
+анализ подтвердил 6531 собственный файл, 222 исключения, 1882 raw-группы,
+300 точных решений и 1582 неразобранные; сырой SHA-256 —
+`8b49289d8765b97028758ea1ec506c8f51f8815e23669ca9af5b03838d007c26`,
+отпечаток набора —
+`931a82717a1b84190add8f9bf22fb4c0d69187d879b13607f4c9573bd9f3498c`.
+Go-реестр: 1908/21028, непокрыты 19120; build/unit всего egress-gateway
+на этом SHA — PASS LOCAL.
+
+В `provider_proxy_test.go` и `proxy_auth_test.go` повтор загрузки точной
+активной egress policy и ключа тестового grant вынесен в
+`authenticatedRuntimePolicyFixture`. Подготовка TLS-доверия, CONNECT-клиента
+и точного provider path для двух WebSocket-сценариев вынесена в
+`providerWebSocketEndpoint`. Исчезли две исходные detector-группы; появился
+один короткий остаточный self-clone оболочек upstream goroutine. У тестов
+разные проверки handshake, deflate и terminal-пути; callback ради нескольких
+строк скрыл бы эти проверки. Остаток сохранён одним точным решением по
+fragment SHA-256 и одной occurrence, без исключения файла. Все 20
+собственных объявлений двух файлов, включая новые helpers, покрыты
+предметными EN→RU комментариями.
+
+Рабочий detector: 6531 собственный файл, 222 исключения, 1881 raw-группа,
+301 точное решение и 1580 неразобранных; сырой SHA-256 —
+`8f5049260803de885dfdb0040a50b8bbc5381de53fe01a658f577099e7f8d436`,
+отпечаток набора —
+`431cccb39f11586ad1fee9c4fc1ebb12a405c0fbaab27317b58955eeb754cfe2`.
+Go-реестр: 1929/21030, непокрыты 19101. `go test -count=1 ./...` и
 `go build ./...` всего egress-gateway, пять ignore-boundaries, `gofmt`
 и `git diff --check` — PASS LOCAL. Полный `go-docs -check` и
 browser/deploy/live — NOT RUN по прежним границам. Точный scan нового

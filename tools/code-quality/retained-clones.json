@@ -2016,6 +2016,14 @@
       "fragmentSHA256": "9c7dc4e6764113457b977daa2aec24288991cc62ae42b25c1bfa1a1692af9a66",
       "count": 1,
       "reason": "Weak-совпадение пересекает разные методы одного fakeAPI: GetObject возвращает подготовленное тело, HeadObject — метаданные, DeleteObject — пустой результат и запись цели. После комментариев физическая длина окна превысила порог строк, но общей функции или поведения между разными сигнатурами нет."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/external/egress-gateway/internal/gateway/provider_proxy_test.go",
+      "secondPath": "services/external/egress-gateway/internal/gateway/provider_proxy_test.go",
+      "fragmentSHA256": "68f7725bd96ba2b6331f133cce53c185999c0ce932afed5c74ff3b8bd99d78ad",
+      "count": 1,
+      "reason": "После выноса общей подготовки providerWebSocketEndpoint совпадает лишь короткая оболочка двух тестовых goroutine: принять локальный peer, создать TLS server, прочитать HTTP request. Один сценарий доказывает точность базового WebSocket handshake и кадров, другой — согласование deflate и передачу сжатых кадров. Общий callback скрывал бы отдельные проверки и terminal-пути ради нескольких строк инфраструктуры; сохраняется только это точное окно."
     }
   ]
 }
