@@ -3,6 +3,14 @@
   "entries": [
     {
       "format": "go",
+      "firstPath": "libs/go/eventing/postgresinbox/errors.go",
+      "secondPath": "libs/go/eventing/postgresinbox/errors.go",
+      "fragmentSHA256": "223c44cd28dba59a904fca7abb9f0d6e09fab616dc2acaa4cd7e0a562a4dc7a1",
+      "count": 1,
+      "reason": "Два окна сдвинуты на три строки внутри одного списка отдельных именованных sentinel-ошибок и перекрываются на 61 из 64 строк. Это одно объявление var, а не повтор исполнения; каждый sentinel имеет отдельную устойчивую идентичность для errors.Is и свой безопасный текст. Объединение ошибок или фабрика с динамическим именем потеряли бы явный API. Исключено только это самоперекрытие после повторного измерения."
+    },
+    {
+      "format": "go",
       "firstPath": "libs/go/eventing/postgresinbox/delivery.go",
       "secondPath": "libs/go/eventing/postgresinbox/maintenance.go",
       "fragmentSHA256": "355af4707396fbdd423cccb6e9c129cba2904f5a9d79c3eb3fd4472617ae09e9",
