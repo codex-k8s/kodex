@@ -2,17 +2,16 @@ package main
 
 import (
 	"crypto/subtle"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
-	"errors"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/codex-k8s/kodex/libs/go/httpserver/streamproxy"
 )
 
 const (
@@ -70,7 +69,7 @@ func main() {
 		log.Fatal(serverError)
 	}
 	backend, _ := url.Parse(profile.backend)
-	client := newRegistryProxyClient()
+	client := streamproxy.NewClient(registryStreamTimeout)
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.TLS == nil || len(request.TLS.PeerCertificates) == 0 ||
 			len(request.TLS.VerifiedChains) == 0 {
@@ -96,30 +95,11 @@ func main() {
 			writeEvidenceCredentialDenial(writer, request.Header.Values("Authorization"))
 			return
 		}
-		target := *backend
-		target.Path, target.RawQuery = request.URL.Path, request.URL.RawQuery
-		upstream, err := http.NewRequestWithContext(request.Context(), request.Method, target.String(), request.Body)
-		if err != nil {
-			http.Error(writer, "upstream request rejected", http.StatusBadGateway)
-			return
-		}
-		upstream.Header = request.Header.Clone()
-		upstream.Header.Del("Authorization")
-		response, err := client.Do(upstream)
-		if err != nil {
-			http.Error(writer, "upstream unavailable", http.StatusBadGateway)
-			return
-		}
-		defer response.Body.Close()
-		for key, values := range response.Header {
-			for _, value := range values {
-				writer.Header().Add(key, value)
-			}
-		}
-		writer.WriteHeader(response.StatusCode)
-		_, _ = io.Copy(writer, io.LimitReader(response.Body, 1<<30))
+		streamproxy.Forward(writer, request, backend, request.Body, client, 1<<30)
 	})
-	server := newRegistryProxyServer(profile.address, handler, pool)
+	server := streamproxy.NewMTLSServer(profile.address, handler, pool, streamproxy.Timeouts{
+		Header: registryHeaderTimeout, Stream: registryStreamTimeout, Idle: registryIdleTimeout,
+	})
 	if err := server.ListenAndServeTLS("/identity/tls.crt", "/identity/tls.key"); err != nil {
 		log.Fatal(serverError)
 	}
@@ -136,39 +116,6 @@ func writeEvidenceCredentialDenial(writer http.ResponseWriter, authorization []s
 		status = http.StatusUnauthorized
 	}
 	http.Error(writer, "request forbidden", status)
-}
-
-// newRegistryProxyClient bounds complete upstream transfers and rejects redirects,
-// preventing a registry response from choosing another backend destination.
-// newRegistryProxyClient ограничивает полную передачу и запрещает перенаправления,
-// не позволяя ответу реестра выбрать другой сервер назначения.
-func newRegistryProxyClient() *http.Client {
-	return &http.Client{
-		Timeout: registryStreamTimeout,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return errors.New("redirect rejected")
-		},
-	}
-}
-
-// newRegistryProxyServer requires TLS 1.3 and a certificate verified by the supplied
-// client CA, with separate header/transfer/idle deadlines; it does not start listening.
-// newRegistryProxyServer требует TLS 1.3 и сертификат, проверенный переданным клиентским
-// CA, задаёт отдельные сроки заголовков/передачи/простоя и не запускает прослушивание.
-func newRegistryProxyServer(address string, handler http.Handler, pool *x509.CertPool) *http.Server {
-	return &http.Server{
-		Addr:              address,
-		Handler:           handler,
-		ReadHeaderTimeout: registryHeaderTimeout,
-		ReadTimeout:       registryStreamTimeout,
-		WriteTimeout:      registryStreamTimeout,
-		IdleTimeout:       registryIdleTimeout,
-		TLSConfig: &tls.Config{
-			MinVersion: tls.VersionTLS13,
-			ClientAuth: tls.RequireAndVerifyClientCert,
-			ClientCAs:  pool,
-		},
-	} //nolint:gosec // exact client CA and TLS 1.3.
 }
 
 // logRegistryDenial emits the selected closed profile/reason and normalized method,

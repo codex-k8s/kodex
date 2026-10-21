@@ -22,41 +22,14 @@ import (
 	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/nodepullidentity"
 )
 
-// TestPullRegistryProxyTimeoutsBoundLargeBlobStreams pins transfer/idle/header
-// budgets, redirect refusal and the exact supplied client CA/TLS configuration.
-// TestPullRegistryProxyTimeoutsBoundLargeBlobStreams закрепляет бюджеты передачи/простоя/
-// заголовков, отказ перенаправлению и точные настройки переданного клиентского CA/TLS.
+// TestPullRegistryProxyTimeoutsBoundLargeBlobStreams pins the pull command's header, active-stream and idle budgets.
+// Common client/server mechanics are covered by streamproxy tests while pull-specific policy tests remain here.
+// TestPullRegistryProxyTimeoutsBoundLargeBlobStreams закрепляет бюджеты заголовков, активного потока и простоя pull-команды.
+// Общая механика клиента и сервера покрыта тестами streamproxy, а отдельная политика чтения проверяется здесь.
 func TestPullRegistryProxyTimeoutsBoundLargeBlobStreams(t *testing.T) {
 	t.Parallel()
-	client := newPullRegistryProxyClient()
-	if client.Timeout != 15*time.Minute {
-		t.Fatalf("client timeout = %s, want 15m", client.Timeout)
-	}
-	if client.CheckRedirect == nil {
-		t.Fatal("redirect rejection is not configured")
-	}
-	if err := client.CheckRedirect(&http.Request{}, nil); err == nil {
-		t.Fatal("redirect was accepted")
-	}
-
-	pool := x509.NewCertPool()
-	server := newPullRegistryProxyServer(":0", http.NotFoundHandler(), pool)
-	if server.ReadHeaderTimeout != 5*time.Second ||
-		server.ReadTimeout != 15*time.Minute ||
-		server.WriteTimeout != 15*time.Minute ||
-		server.IdleTimeout != 30*time.Second {
-		t.Fatalf(
-			"server timeouts = header:%s read:%s write:%s idle:%s",
-			server.ReadHeaderTimeout,
-			server.ReadTimeout,
-			server.WriteTimeout,
-			server.IdleTimeout,
-		)
-	}
-	if server.TLSConfig == nil || server.TLSConfig.MinVersion != tls.VersionTLS13 ||
-		server.TLSConfig.ClientAuth != tls.RequireAndVerifyClientCert ||
-		server.TLSConfig.ClientCAs != pool {
-		t.Fatal("mTLS boundary changed while configuring pull stream timeouts")
+	if pullRegistryHeaderTimeout != 5*time.Second || pullRegistryStreamTimeout != 15*time.Minute || pullRegistryIdleTimeout != 30*time.Second {
+		t.Fatal("pull registry transfer budgets changed")
 	}
 }
 

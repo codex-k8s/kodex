@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.165.0
+version: 1.166.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,72 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто шестьдесят шестая волна — общий потоковый HTTP transport
+
+На базе опубликованного SHA `937aa4d8e47b8ac0a151645c39e70c6d918ee1da`
+устранены три registry pull/write группы: forwarding, client/server construction
+и повтор transport assertions. Два независимых production consumer используют
+подпакет streamproxy существующей библиотеки libs/go/httpserver, без нового
+модуля, dependency или расширения technical server routes. Старые четыре
+конструктора удалены, совместимых wrappers и двойной реализации нет.
+
+NewClient сохраняет timeout и отказ redirects, NewMTLSServer — TLS1.3,
+RequireAndVerifyClientCert, exact переданный CA pool и caller-owned budgets.
+Сами 5s/15min/30s constants остаются у команд. Их прежние unit names теперь
+проверяют эти независимые policy values; единый библиотечный unit проверяет
+общую construction семантику также на другом наборе budgets. Переноса
+сертификатов, credentials, profile allowlists или принятия решений нет.
+
+Forward содержит прежнее копирование caller-owned backend с path/query,
+клонирование headers без Authorization, client.Do, close response body,
+headers/status и io.Copy с прежним лимитом 1GiB. Write передаёт request.Body,
+pull — nil, как раньше. Механическое восстановление исходных call sites
+и конструкторов дало прежний non-comment source обоих main. Отдельно тело
+общего Forward после подстановки body/limit точно совпало с каждой прежней
+копией. Authority, fixed targets, credential readers, status/challenge,
+ListenAndServeTLS и lifecycle не менялись.
+
+Новые synthetic units проверяют exact backend/path/query/context/method,
+передачу upload bytes и отсутствие read body, сохранность исходных headers
+и URL, удаление Authorization, multi-value response headers, status, bounded
+copy и Close. Invalid request останавливается до transport; transport error
+даёт один вызов и прежний безопасный 502. Ошибка чтения после headers
+сохраняет прежние status/partial body, без retry и утечки причины. Ни один
+новый unit не открывает listener, реестр или TLS handshake.
+
+Все 12 новых объявлений библиотеки EN→RU. Удалены четыре прежних объявления
+конструкторов, поэтому global denominator вырос на восемь, а missing не
+изменился: 5541/21104, непокрыты 15563. Все libs/go — 2504/2504,
+registry-write — 23/23, registry-pull — 38/38; role-image-builder — 404/567
+(163 ещё не описаны). Снижение счётчика описанных объявлений команд связано
+с удалением копий, не с потерей комментариев. README различает stateless
+subpackage и technical server: no authorization/defaults/validation, no hidden
+goroutine/root context, caller-owned Serve/Shutdown. Стандартный transport
+с прежними proxy settings не назван destination allowlist.
+
+Через Context7 /websites/pkg_go_dev_net_http сверены request context/body
+ownership и server timeout semantics; локальный go doc Go1.26.6 подтвердил
+Client.Timeout и RequireAndVerifyClientCert. Runtime policy не усиливалась
+и не ослаблялась под видом рефакторинга.
+
+Полный unit/build libs/go/httpserver — PASS LOCAL: 6 верхних тестов,
+8 PASS с подтестами. Обе команды registry unit/build — PASS LOCAL:
+21 верхний тест, 26 PASS с подтестами. В сумме 34 PASS, 0 SKIP/FAIL.
+До изменений unit обеих команд также PASS. 16 unit анализатора, unit
+Go-checker, пять ignore-boundaries, gofmt и diff-check — PASS LOCAL.
+Go-команды используют `GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`.
+Full role-image-builder, PostgreSQL, browser/deploy/live — NOT RUN.
+
+Detector: 6558 source-файлов, 222 исключения, 1856 raw-групп,
+569 точных решений и 1287 неразобранных; raw SHA-256
+`9b1fb259e41b8021ac4341fefb4a3d4f1b6c00c6bb683588991e75cd236eeae9`,
+отпечаток `e3c9e13d3e8a4dcd01bf03a5a54d1460f6fd983f8596ce1faa4536303f790bc9`.
+Multiset comparison подтвердил удаление ровно трёх прежних path/fragment/count
+групп dca305dd/92bfa10a/336c2064, без новых или изменённых остаточных групп.
+Новых исключений нет. Полный go-docs-check — NOT RUN при неполном охвате;
+прежний diagnostics FAIL остаётся открытым. Точный scan/build/unit нового
+SHA публикуется в текущем PR; вся цель пока не завершена.
 
 ## Сто шестьдесят пятая волна — buildctl и завершение пакета build
 

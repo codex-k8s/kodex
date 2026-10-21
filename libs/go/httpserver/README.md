@@ -4,8 +4,8 @@ title: Технический HTTP server
 type: component
 status: approved
 owner: backend
-version: 1.1.0
-updated: 2026-10-21
+version: 1.2.0
+updated: 2026-10-22
 ---
 
 # `httpserver`
@@ -33,3 +33,29 @@ read-header/read/write/idle timeouts и размер headers; маршруты �
 metric registry или logging. Совместимое расширение может усиливать safe
 defaults без добавления бизнесовых endpoints; переименование маршрутов либо
 изменение lifecycle требует миграции всех потребителей.
+
+## Подпакет `streamproxy`
+
+Отдельный stateless-подпакет разделяет транспорт двух независимых registry
+authorizers, не добавляя маршруты в технический сервер. `NewClient` задаёт
+переданный timeout и запрещает redirects; стандартный transport, включая
+его proxy-настройки, не меняется. `Timeouts` и `NewMTLSServer` собирают
+`http.Server` с TLS1.3, `RequireAndVerifyClientCert`, переданным pool CA
+и бюджетами заголовков/потока/простоя. Проверка конфигурации, открытие listener,
+Serve/Shutdown и cancel/join принадлежат composition root.
+
+`Forward` вызывается только после service-owned авторизации. Он сохраняет
+фиксированный backend вызывающего, копирует path/query и headers без
+Authorization, передаёт выбранное body или nil и ограничивает ответ заданным
+числом байт. Тело ответа закрывается; прежние ошибки копирования после
+отправленного статуса не превращаются в новый ответ или retry. Значения
+timeouts/limit не нормализуются и не получают новых defaults.
+
+Это не универсальный защищённый reverse proxy: он не выбирает CN, CA,
+репозитории, методы, credential files или destination allowlist, не фильтрует
+hop headers и не усиливает прежние URL/body semantics. Владельцы вызывают
+его с собственным доверенным backend и бюджетом, оставляя authority до
+вызова. Подпакет не создаёт goroutines, root context, метрики или логи и
+возвращает прежние закрытые upstream diagnostics без исходной ошибки.
+Изменение wire/authority требует отдельного изменения обоих потребителей;
+совместимые обёртки старых конструкторов не оставлены.

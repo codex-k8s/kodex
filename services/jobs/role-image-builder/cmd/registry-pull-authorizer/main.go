@@ -3,12 +3,9 @@ package main
 import (
 	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -18,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex-k8s/kodex/libs/go/httpserver/streamproxy"
 	"github.com/codex-k8s/kodex/services/jobs/role-image-builder/internal/nodepullidentity"
 )
 
@@ -78,7 +76,7 @@ func main() {
 		}
 	}
 	backend, _ := url.Parse("http://127.0.0.1:5006")
-	client := newPullRegistryProxyClient()
+	client := streamproxy.NewClient(pullRegistryStreamTimeout)
 	handler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		certificate, failure := pullClientCertificate(request)
 		decision := denyPullRequest(failure)
@@ -90,66 +88,14 @@ func main() {
 			writePullAuthorizationDenial(writer, decision)
 			return
 		}
-		target := *backend
-		target.Path, target.RawQuery = request.URL.Path, request.URL.RawQuery
-		upstream, err := http.NewRequestWithContext(request.Context(), request.Method, target.String(), nil)
-		if err != nil {
-			http.Error(writer, "upstream request rejected", http.StatusBadGateway)
-			return
-		}
-		upstream.Header = request.Header.Clone()
-		upstream.Header.Del("Authorization")
-		response, err := client.Do(upstream)
-		if err != nil {
-			http.Error(writer, "upstream unavailable", http.StatusBadGateway)
-			return
-		}
-		defer response.Body.Close()
-		for key, values := range response.Header {
-			for _, value := range values {
-				writer.Header().Add(key, value)
-			}
-		}
-		writer.WriteHeader(response.StatusCode)
-		_, _ = io.Copy(writer, io.LimitReader(response.Body, 1<<30))
+		streamproxy.Forward(writer, request, backend, nil, client, 1<<30)
 	})
-	server := newPullRegistryProxyServer(":5000", handler, pool)
+	server := streamproxy.NewMTLSServer(":5000", handler, pool, streamproxy.Timeouts{
+		Header: pullRegistryHeaderTimeout, Stream: pullRegistryStreamTimeout, Idle: pullRegistryIdleTimeout,
+	})
 	if err := server.ListenAndServeTLS("/identity/tls.crt", "/identity/tls.key"); err != nil {
 		log.Fatal(pullServerError)
 	}
-}
-
-// newPullRegistryProxyClient bounds the entire upstream transfer and refuses
-// redirects instead of allowing the registry response to select a different host.
-// newPullRegistryProxyClient ограничивает всю передачу и отклоняет перенаправления,
-// не позволяя ответу реестра выбрать другой хост.
-func newPullRegistryProxyClient() *http.Client {
-	return &http.Client{
-		Timeout: pullRegistryStreamTimeout,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return errors.New("redirect rejected")
-		},
-	}
-}
-
-// newPullRegistryProxyServer configures TLS 1.3 with mandatory client-chain
-// verification and distinct header/stream/idle deadlines without starting the server.
-// newPullRegistryProxyServer настраивает TLS 1.3 с обязательной проверкой клиентской
-// цепочки и отдельными сроками заголовков/потока/простоя, не запуская сервер.
-func newPullRegistryProxyServer(address string, handler http.Handler, pool *x509.CertPool) *http.Server {
-	return &http.Server{
-		Addr:              address,
-		Handler:           handler,
-		ReadHeaderTimeout: pullRegistryHeaderTimeout,
-		ReadTimeout:       pullRegistryStreamTimeout,
-		WriteTimeout:      pullRegistryStreamTimeout,
-		IdleTimeout:       pullRegistryIdleTimeout,
-		TLSConfig: &tls.Config{
-			MinVersion: tls.VersionTLS13,
-			ClientAuth: tls.RequireAndVerifyClientCert,
-			ClientCAs:  pool,
-		},
-	} //nolint:gosec // exact client CAs and TLS 1.3.
 }
 
 // pullClientCertificate selects the leaf from a nonempty TLS peer list and
