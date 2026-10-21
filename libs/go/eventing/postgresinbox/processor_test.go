@@ -591,6 +591,77 @@ func TestRecoveryCoordinatesAreFencedAsPair(t *testing.T) {
 	}
 }
 
+// TestOperatorRequestEvidenceValidationPreservesActionRules checks shared input rejection and distinct fence policies.
+// TestOperatorRequestEvidenceValidationPreservesActionRules проверяет общий отказ входных данных и разные правила fence.
+func TestOperatorRequestEvidenceValidationPreservesActionRules(t *testing.T) {
+	t.Parallel()
+	repair := RepairRequest{
+		Consumer:           Consumer{Name: "consumer", Scope: "v1"},
+		IdempotencyKey:     "operator-key-1",
+		EventID:            uuid.NewString(),
+		EventDigest:        sha256.Sum256([]byte("event")),
+		ExpectedGeneration: 3,
+		ExpectedFence:      9,
+		Reason:             "durable evidence inspected",
+		EvidenceDigest:     sha256.Sum256([]byte("evidence")),
+	}
+	recovery := RecoveryRequest{
+		Consumer: repair.Consumer, IdempotencyKey: repair.IdempotencyKey,
+		EventID: repair.EventID, EventDigest: repair.EventDigest,
+		ExpectedGeneration: repair.ExpectedGeneration, ExpectedFence: repair.ExpectedFence,
+		Reason: repair.Reason, EvidenceDigest: repair.EvidenceDigest,
+	}
+	if err := repair.validate(); err != nil {
+		t.Fatalf("valid repair rejected: %v", err)
+	}
+	if err := recovery.validate(); err != nil {
+		t.Fatalf("valid recovery rejected: %v", err)
+	}
+	for _, test := range []struct {
+		name   string
+		mutate func(*RepairRequest, *RecoveryRequest)
+	}{
+		{"short-key", func(r *RepairRequest, v *RecoveryRequest) { r.IdempotencyKey, v.IdempotencyKey = "short", "short" }},
+		{"long-key", func(r *RepairRequest, v *RecoveryRequest) {
+			value := strings.Repeat("a", maximumIdempotencyKeyLength+1)
+			r.IdempotencyKey, v.IdempotencyKey = value, value
+		}},
+		{"event-id", func(r *RepairRequest, v *RecoveryRequest) { r.EventID, v.EventID = "not-a-uuid", "not-a-uuid" }},
+		{"event-digest", func(r *RepairRequest, v *RecoveryRequest) {
+			r.EventDigest, v.EventDigest = [sha256.Size]byte{}, [sha256.Size]byte{}
+		}},
+		{"evidence-digest", func(r *RepairRequest, v *RecoveryRequest) {
+			r.EvidenceDigest, v.EvidenceDigest = [sha256.Size]byte{}, [sha256.Size]byte{}
+		}},
+		{"reason", func(r *RepairRequest, v *RecoveryRequest) { r.Reason, v.Reason = " padded ", " padded " }},
+		{"generation-overflow", func(r *RepairRequest, v *RecoveryRequest) {
+			r.ExpectedGeneration, v.ExpectedGeneration = math.MaxInt64+1, math.MaxInt64+1
+		}},
+		{"fence-overflow", func(r *RepairRequest, v *RecoveryRequest) {
+			r.ExpectedFence, v.ExpectedFence = math.MaxInt64+1, math.MaxInt64+1
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			changedRepair, changedRecovery := repair, recovery
+			test.mutate(&changedRepair, &changedRecovery)
+			if err := changedRepair.validate(); !errors.Is(err, ErrInvalidRepair) {
+				t.Fatalf("repair error = %v", err)
+			}
+			if err := changedRecovery.validate(); !errors.Is(err, ErrInvalidRecovery) {
+				t.Fatalf("recovery error = %v", err)
+			}
+		})
+	}
+	repair.ExpectedGeneration, repair.ExpectedFence = 0, 0
+	recovery.ExpectedGeneration, recovery.ExpectedFence = 0, 0
+	if err := repair.validate(); !errors.Is(err, ErrInvalidRepair) {
+		t.Fatalf("unfenced repair error = %v", err)
+	}
+	if err := recovery.validate(); err != nil {
+		t.Fatalf("initial unclaimed recovery rejected: %v", err)
+	}
+}
+
 func TestRepairDeniedWithoutAuthorizer(t *testing.T) {
 	t.Parallel()
 	processor, err := New(failingBeginner{}, validConfig())

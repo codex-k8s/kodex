@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.73.0
+version: 1.74.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,40 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Семьдесят шестая волна — типы и общая проверка входа оператора
+
+На запушенном SHA `e7e1049a7beb6a479c2dddcc732d5af1e3a2053e`
+детектор подтвердил 6531 собственный файл, 222 исключения, 1880 raw-групп,
+347 точных решений и 1533 неразобранных; сырой SHA-256 —
+`730a03c7d6f1640b8891a9eed4fe236eb4683463ac77efd7b6905a7893548b23`,
+отпечаток набора —
+`250d9d4aa977d602348d690c4cd580cf2b45b3cc0d0dab4f0736ae2f3cc90f9d`.
+Go-реестр: 2464/21033, непокрыты 18569.
+
+Все 121 объявление `postgresinbox/types.go` получили предметные EN→RU
+комментарии о лимитах, закрытых состояниях, устойчивом broker result,
+lease/fence, операторских полномочиях и разных recovery/repair правилах.
+Точное дублирование проверок общих полей `RepairRequest`/`RecoveryRequest`
+вынесено в package-private `validOperatorRequestEvidence`, которое не
+проверяет и не выдаёт authority. Предварительная проверка `Consumer`
+и прежние action-specific ошибки сохранены; repair требует ненулевые
+generation/fence, recovery допускает только оба ненулевых либо оба нулевых.
+Новый unit-тест проверяет общие ошибочные поля и оба разных правила.
+
+Рабочий детектор: 6531 собственный файл, 222 исключения, 1879 raw-групп,
+347 точных решений и 1532 неразобранных; сырой SHA-256 —
+`315501ccb89738a3eef3ec415c9606494f1d24a65adc57b4d5d8474762f84b2d`,
+отпечаток набора —
+`39b6c820516e1c61effe92f605f943ca9fa9eacd5bccaa5457fba472a21f04db`.
+Сравнение точных ключей показало удаление именно одного исходного окна
+`postgresinbox/types.go` без появления новых. Go-реестр: 2587/21035,
+непокрыты 18448; две новые декларации helper и теста также двуязычны.
+`go test -count=1 ./...` и `go build ./...` всего eventing-модуля,
+пять ignore-boundaries, `gofmt` и `git diff --check` — PASS LOCAL.
+Component с disposable PostgreSQL, полный `go-docs -check` и
+browser/deploy/live — NOT RUN по прежним границам. Точный scan нового
+коммита будет опубликован в текущем PR.
 
 ## Семьдесят пятая волна — идентичность, приём и готовность inbox
 
