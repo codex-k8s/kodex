@@ -12,6 +12,10 @@ import (
 	"time"
 )
 
+// TestRegistryProxyTimeoutsBoundLargeBlobStreams pins the client/server transfer
+// budgets and redirect/mTLS settings without starting a real registry listener.
+// TestRegistryProxyTimeoutsBoundLargeBlobStreams закрепляет бюджеты передачи
+// и настройки перенаправлений/mTLS без запуска настоящего реестра.
 func TestRegistryProxyTimeoutsBoundLargeBlobStreams(t *testing.T) {
 	t.Parallel()
 	client := newRegistryProxyClient()
@@ -46,6 +50,10 @@ func TestRegistryProxyTimeoutsBoundLargeBlobStreams(t *testing.T) {
 	}
 }
 
+// TestAllowedRegistryWriteIsClosed accepts representative staging upload paths
+// and rejects foreign/nested repositories, tags, catalog and deletion.
+// TestAllowedRegistryWriteIsClosed допускает примеры staging-загрузок и запрещает
+// чужие/вложенные репозитории, теги, каталог и удаление.
 func TestAllowedRegistryWriteIsClosed(t *testing.T) {
 	t.Parallel()
 	for _, request := range []struct{ method, path string }{
@@ -73,6 +81,10 @@ func TestAllowedRegistryWriteIsClosed(t *testing.T) {
 	}
 }
 
+// TestEvidenceAuthorizationIsClosedByIdentityMethodAndRepository separates
+// admission writes from promotion reads and denies foreign identities or targets.
+// TestEvidenceAuthorizationIsClosedByIdentityMethodAndRepository разделяет
+// запись допуска и чтение продвижения, запрещая чужие идентичности и назначения.
 func TestEvidenceAuthorizationIsClosedByIdentityMethodAndRepository(t *testing.T) {
 	t.Parallel()
 	sequence := []struct{ method, path string }{
@@ -103,6 +115,10 @@ func TestEvidenceAuthorizationIsClosedByIdentityMethodAndRepository(t *testing.T
 	}
 }
 
+// TestEvidenceApplicationCredentialIsExact injects dummy files and requires the
+// canonical case-sensitive Basic value, rejecting missing or altered credentials.
+// TestEvidenceApplicationCredentialIsExact подставляет условные файлы и требует
+// канонический регистрозависимый Basic, отклоняя отсутствующие и изменённые реквизиты.
 func TestEvidenceApplicationCredentialIsExact(t *testing.T) {
 	t.Parallel()
 	reader := func(path string) ([]byte, error) {
@@ -138,6 +154,10 @@ func TestEvidenceApplicationCredentialIsExact(t *testing.T) {
 	}
 }
 
+// TestEvidenceApplicationCredentialDenialChallengesOnlyMissingCredential checks
+// the 401 challenge versus 403 refusal and the same non-sensitive response body.
+// TestEvidenceApplicationCredentialDenialChallengesOnlyMissingCredential проверяет
+// различие 401 с запросом реквизитов и 403, а также одинаковый безопасный текст ответа.
 func TestEvidenceApplicationCredentialDenialChallengesOnlyMissingCredential(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -176,6 +196,10 @@ func TestEvidenceApplicationCredentialDenialChallengesOnlyMissingCredential(t *t
 	}
 }
 
+// TestNormalizeMethodHasBoundedCardinality maps arbitrary/newline input to OTHER
+// while preserving GET, preventing uncontrolled diagnostic method values.
+// TestNormalizeMethodHasBoundedCardinality заменяет произвольный ввод/перенос строки
+// на OTHER, сохраняя GET и не допуская неограниченных диагностических методов.
 func TestNormalizeMethodHasBoundedCardinality(t *testing.T) {
 	t.Parallel()
 	if normalizeMethod("UNBOUNDED\nINPUT") != "OTHER" {

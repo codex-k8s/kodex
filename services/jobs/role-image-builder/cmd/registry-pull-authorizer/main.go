@@ -22,25 +22,49 @@ import (
 )
 
 const (
-	pullServerError                  = "registry pull authorizer failed"
+	// pullServerError is the fixed startup/serving diagnostic without identity-file details.
+	// pullServerError — фиксированная диагностика запуска/обслуживания без подробностей файлов идентичности.
+	pullServerError = "registry pull authorizer failed"
+	// pullBasicAuthenticationChallenge is offered only for a missing profile credential.
+	// pullBasicAuthenticationChallenge выдаётся только при отсутствии реквизитов профиля.
 	pullBasicAuthenticationChallenge = `Basic realm="kodex-registry"`
-	internalPullRegistryHost         = "kodex-image-registry.kodex-system.svc.cluster.local:5000"
-	pullRegistryHeaderTimeout        = 5 * time.Second
-	pullRegistryStreamTimeout        = 15 * time.Minute
-	pullRegistryIdleTimeout          = 30 * time.Second
+	// internalPullRegistryHost is the only internal alias permitted beside the configured public registry.
+	// internalPullRegistryHost — единственный внутренний псевдоним помимо настроенного внешнего реестра.
+	internalPullRegistryHost = "kodex-image-registry.kodex-system.svc.cluster.local:5000"
+	// pullRegistryHeaderTimeout bounds header acquisition separately from blob streaming.
+	// pullRegistryHeaderTimeout ограничивает получение заголовков отдельно от передачи blob.
+	pullRegistryHeaderTimeout = 5 * time.Second
+	// pullRegistryStreamTimeout bounds both upstream and downstream active registry transfers.
+	// pullRegistryStreamTimeout ограничивает активную передачу реестра в обоих направлениях.
+	pullRegistryStreamTimeout = 15 * time.Minute
+	// pullRegistryIdleTimeout closes inactive keep-alive connections without shortening active transfers.
+	// pullRegistryIdleTimeout закрывает простаивающие keep-alive соединения, не сокращая активные передачи.
+	pullRegistryIdleTimeout = 30 * time.Second
 )
 
+// pullProfile assigns a fixed Docker-config file and repository allowlist to
+// one known certificate CN; clients cannot choose either through request fields.
+// pullProfile назначает известному CN сертификата файл Docker-конфигурации и список
+// репозиториев; клиент не выбирает их полями запроса.
 type pullProfile struct {
 	configFile   string
 	repositories []string
 }
 
+// pullAuthorizationDecision represents either empty-field success or a closed
+// failure/status/challenge; the challenge is not itself an authorization grant.
+// pullAuthorizationDecision содержит пустые поля при успехе либо закрытый отказ,
+// статус и запрос реквизитов; такой запрос сам по себе не выдаёт разрешение.
 type pullAuthorizationDecision struct {
 	failure       string
 	statusCode    int
 	authChallenge string
 }
 
+// main builds the fixed loopback pull proxy with both client CA roots, then
+// authorizes each GET/HEAD before forwarding without its Authorization header.
+// main создаёт фиксированный локальный pull-прокси с двумя клиентскими CA и
+// разрешает каждый GET/HEAD перед передачей без заголовка Authorization.
 func main() {
 	registryHost := os.Getenv("REGISTRY_PULL_HOST")
 	if !strings.Contains(registryHost, ".") || strings.ContainsAny(registryHost, "/:@?# \\\r\n\t") {
@@ -95,6 +119,10 @@ func main() {
 	}
 }
 
+// newPullRegistryProxyClient bounds the entire upstream transfer and refuses
+// redirects instead of allowing the registry response to select a different host.
+// newPullRegistryProxyClient ограничивает всю передачу и отклоняет перенаправления,
+// не позволяя ответу реестра выбрать другой хост.
 func newPullRegistryProxyClient() *http.Client {
 	return &http.Client{
 		Timeout: pullRegistryStreamTimeout,
@@ -104,6 +132,10 @@ func newPullRegistryProxyClient() *http.Client {
 	}
 }
 
+// newPullRegistryProxyServer configures TLS 1.3 with mandatory client-chain
+// verification and distinct header/stream/idle deadlines without starting the server.
+// newPullRegistryProxyServer настраивает TLS 1.3 с обязательной проверкой клиентской
+// цепочки и отдельными сроками заголовков/потока/простоя, не запуская сервер.
 func newPullRegistryProxyServer(address string, handler http.Handler, pool *x509.CertPool) *http.Server {
 	return &http.Server{
 		Addr:              address,
@@ -120,6 +152,10 @@ func newPullRegistryProxyServer(address string, handler http.Handler, pool *x509
 	} //nolint:gosec // exact client CAs and TLS 1.3.
 }
 
+// pullClientCertificate selects the leaf from a nonempty TLS peer list and
+// reports missing state/identity; it relies on the server's prior chain verification.
+// pullClientCertificate выбирает первый сертификат непустой TLS-цепочки и сообщает
+// отсутствие состояния/идентичности; проверка цепочки предполагается выполненной сервером.
 func pullClientCertificate(request *http.Request) (*x509.Certificate, string) {
 	if request == nil || request.TLS == nil {
 		return nil, "tls_state"
@@ -132,6 +168,10 @@ func pullClientCertificate(request *http.Request) (*x509.Certificate, string) {
 	return request.TLS.PeerCertificates[0], ""
 }
 
+// decidePullAuthorization first closes the method/path shape, then applies a
+// known CN profile or node signature/IP binding and that identity's repository list.
+// decidePullAuthorization сначала проверяет форму метода/пути, затем профиль известного
+// CN либо подпись/IP узла и соответствующий идентичности список репозиториев.
 func decidePullAuthorization(
 	request *http.Request,
 	certificate *x509.Certificate,
@@ -154,6 +194,10 @@ func decidePullAuthorization(
 	return pullAuthorizationDecision{}
 }
 
+// pullProfiles returns fresh mappings for probe, base/input readers and installer;
+// ordinary nodes use the separate certificate-bound credential path instead.
+// pullProfiles возвращает новые соответствия для probe, чтения базы/входов и установщика;
+// обычные узлы используют отдельную проверку реквизитов с привязкой к сертификату.
 func pullProfiles() map[string]pullProfile {
 	return map[string]pullProfile{
 		"kodex-image-registry-pull-probe": {"/identity/probe-dockerconfig.json", []string{"kodex/control-plane"}},
@@ -163,8 +207,10 @@ func pullProfiles() map[string]pullProfile {
 	}
 }
 
-// Только узлы и установщик читают штатные platform images. Probe, BuildKit
-// и input-reader сохраняют собственные точные списки и прежние credentials.
+// nodePullRepositories returns a fresh closed list of shipped platform images;
+// probe, BuildKit and input-reader profiles retain their own narrower lists.
+// nodePullRepositories возвращает новый закрытый список поставляемых образов платформы;
+// профили probe, BuildKit и input-reader сохраняют собственные более узкие списки.
 func nodePullRepositories() []string {
 	return []string{
 		"kodex/agent-runner", "kodex/roles", "kodex/session-archive", "kodex/role-image-builder",
@@ -177,6 +223,10 @@ func nodePullRepositories() []string {
 	}
 }
 
+// decidePullProfileAuthorization requires the fixed Docker-config credential
+// before repository eligibility; only an absent header gets a 401 Basic challenge.
+// decidePullProfileAuthorization требует реквизиты фиксированной Docker-конфигурации
+// до проверки репозитория; только отсутствие заголовка вызывает Basic-запрос с кодом 401.
 func decidePullProfileAuthorization(
 	request *http.Request,
 	profile pullProfile,
@@ -202,6 +252,10 @@ func decidePullProfileAuthorization(
 	return pullAuthorizationDecision{}
 }
 
+// denyPullRequest preserves empty success and maps every nonempty caller-owned
+// failure code to Forbidden without an authentication challenge.
+// denyPullRequest сохраняет пустой успех и превращает любой непустой код отказа
+// вызывающей стороны в Forbidden без запроса аутентификации.
 func denyPullRequest(failure string) pullAuthorizationDecision {
 	if failure == "" {
 		return pullAuthorizationDecision{}
@@ -209,6 +263,10 @@ func denyPullRequest(failure string) pullAuthorizationDecision {
 	return pullAuthorizationDecision{failure: failure, statusCode: http.StatusForbidden}
 }
 
+// writePullAuthorizationDenial emits only the decision's status/challenge and
+// fixed denial text, not the internal failure reason or supplied credentials.
+// writePullAuthorizationDenial выдаёт лишь статус/запрос реквизитов из решения
+// и фиксированный отказ, не раскрывая внутреннюю причину и полученные реквизиты.
 func writePullAuthorizationDenial(writer http.ResponseWriter, decision pullAuthorizationDecision) {
 	if decision.authChallenge != "" {
 		writer.Header().Set("WWW-Authenticate", decision.authChallenge)
@@ -216,6 +274,12 @@ func writePullAuthorizationDenial(writer http.ResponseWriter, decision pullAutho
 	http.Error(writer, "request denied", decision.statusCode)
 }
 
+// authorizedNodePull binds the remote IP to the certificate and verifies a
+// v1 generation/CN-bound RSA-PSS credential over the selected registry host.
+// Certificate trust/lifetime belongs to TLS verification, not this helper.
+// authorizedNodePull связывает удалённый IP с сертификатом и проверяет RSA-PSS
+// реквизиты v1 с поколением/CN и выбранным хостом реестра.
+// Доверие и срок сертификата проверяет TLS, а не этот помощник.
 func authorizedNodePull(request *http.Request, certificate *x509.Certificate, registryHost string) bool {
 	remote, _, err := net.SplitHostPort(request.RemoteAddr)
 	if err != nil || net.ParseIP(remote) == nil {
@@ -248,8 +312,18 @@ func authorizedNodePull(request *http.Request, certificate *x509.Certificate, re
 	return rsa.VerifyPSS(publicKey, cryptoHashSHA256, digest[:], signature, nil) == nil
 }
 
+// cryptoHashSHA256 fixes the RSA-PSS hash identifier to crypto.SHA256 rather
+// than accepting an algorithm supplied through request data.
+// cryptoHashSHA256 фиксирует идентификатор RSA-PSS хеша crypto.SHA256 вместо
+// выбора алгоритма из данных запроса.
 const cryptoHashSHA256 = 5 // crypto.SHA256; kept constant to avoid mutable algorithm selection.
 
+// dockerCredentialMatches bounds the selected Docker config to one MiB and
+// one/two allowed hosts, preferring the public host before comparing decoded credentials.
+// It uses ordinary JSON decoding, not a duplicate-key-rejecting parser.
+// dockerCredentialMatches ограничивает выбранную Docker-конфигурацию одним МиБ
+// и одним/двумя допустимыми хостами, предпочитая внешний хост при сравнении реквизитов.
+// Используется обычный JSON-разбор, а не декодер с запретом повторяющихся ключей.
 func dockerCredentialMatches(path, username, password, registryHost string) bool {
 	value, err := os.ReadFile(path)
 	if err != nil || len(value) > 1<<20 {
@@ -276,6 +350,10 @@ func dockerCredentialMatches(path, username, password, registryHost string) bool
 	return ok && err == nil && string(decoded) == username+":"+password
 }
 
+// pathInRepositories accepts the registry root or manifests/blobs with a valid
+// single selector in a listed repository; authentication remains the caller's responsibility.
+// pathInRepositories допускает корень реестра либо manifests/blobs с корректным
+// одиночным селектором заданного репозитория; аутентификацию обеспечивает вызывающий код.
 func pathInRepositories(path string, repositories []string) bool {
 	if path == "/v2/" {
 		return true
@@ -291,6 +369,10 @@ func pathInRepositories(path string, repositories []string) bool {
 	return false
 }
 
+// validPullSelector bounds a selector to 128 allowed ASCII characters and
+// rejects empty/dot path components, slashes, escapes, queries and fragments.
+// validPullSelector ограничивает селектор 128 допустимыми ASCII-символами и
+// запрещает пустые/точечные компоненты, слеши, экранирование, запросы и фрагменты.
 func validPullSelector(selector string) bool {
 	if selector == "" || len(selector) > 128 || selector == "." || selector == ".." {
 		return false

@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.154.0
+version: 1.155.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,51 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто пятьдесят пятая волна — комментарии registry authorizer
+
+На базе опубликованного SHA `b4460cd7eb462d652dfbd601e1e6abac45bdc3d1`
+полностью EN→RU описаны `registry-write-authorizer` — 25/25 объявлений
+и `registry-pull-authorizer` — 40/40. Покрыты production/tests, каждая
+константа, типы, функции и локальный именованный тип таблицы запросов.
+Остальные объявления role-image-builder остаются в работе.
+
+Комментарии фиксируют точный выбор профилей, mTLS до forwarding,
+отдельные operation/application credentials, challenge только при
+отсутствии реквизитов, запрет redirect и удаление Authorization перед
+loopback backend. Описаны CN/IP/generation/registry-host binding RSA-PSS
+для узлов, раздельные списки репозиториев, точные selector правила,
+header/stream/idle deadlines и нормализация диагностического метода.
+
+Ограничения не скрыты: pullClientCertificate лишь выбирает leaf и
+полагается на ранее выполненную сервером проверку TLS; synthetic chain
+test не является рукопожатием. Staging write helper распознаёт префиксы
+blobs/manifests без самостоятельной проверки оставшегося selector;
+pull helper выполняет отдельную строгую проверку одиночного selector.
+Docker config использует обычный JSON-разбор, а не duplicate-key guard.
+Эти различия не объединялись и не изменялись ради комментариев.
+
+Исполняемые условия, credential paths, allowlists, headers и error codes
+не менялись. Diff содержит комментарии и gofmt-выравнивание const-групп.
+Полный `go test -count=1` и `go build` обоих command packages до/после —
+PASS LOCAL (`GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`); тесты используют
+искусственные сертификаты, подписи, временные Docker-config и HTTP recorder.
+Настоящий registry/listener, кластер, image publication/admission и
+полный role-image-builder unit — NOT RUN. 16 unit анализатора,
+unit Go-checker, пять ignore-boundaries, gofmt и diff-check — PASS LOCAL.
+
+Полный detector рабочего дерева: 6553 source-файла, 222 исключения,
+1865 raw-групп, 566 решений и 1299 неразобранных; raw SHA-256
+`49aa8678b4907de50d406ccd71e55e9aefa7ec0d872c17903a1fcad4dce6eac3`,
+отпечаток `c435890333254b3915a963bc224884efb65e2322c24b86c57c1bb39b15944fd2`.
+У двух прежних окон constructor/test изменились raw fragment hashes после
+вставки комментариев между совпадающими частями; эти окна перечитаны,
+остаются неразобранными и не названы устранёнными либо новыми выносами.
+Новых исключений эта волна не добавляет.
+Go-реестр — 5208/21073, непокрыты 15865. Полный go-docs-check — NOT RUN.
+Цель и единый Draft PR не завершены; точный scan/build/unit нового SHA
+публикуется в том же PR. Известный diagnostics FAIL остаётся отдельно
+зафиксированным и не объявляется устранённым.
 
 ## Сто пятьдесят четвёртая волна — комментарии stdin-валидаторов образа
 
