@@ -160,6 +160,19 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     return view;
   }
 
+  async function mutateAgentView(
+    agentRef: string,
+    agentVersion: number,
+    request: (headers: MutationHeaders) => Promise<{
+      data?: AgentRuntimeConfigurationView;
+      error?: unknown;
+      response?: Response;
+    }>,
+  ): Promise<AgentRuntimeConfigurationView> {
+    const result = await mutate(request, agentVersion);
+    return applyAgentView(agentRef, result.data);
+  }
+
   function applyEnvironmentSnapshot(
     projectRef: string | undefined,
     values: RuntimeEnvironmentSet[],
@@ -227,17 +240,14 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     input: AgentRuntimeConfigurationInput,
     agentVersion: number,
   ): Promise<AgentRuntimeConfigurationView> {
-    const result = await mutate(
-      (headers) =>
-        publishAgentRuntimeConfiguration({
-          path: { agentRef },
-          body: input,
-          headers: versionHeaders(headers),
-          signal: requestSignal(),
-        }),
-      agentVersion,
+    return mutateAgentView(agentRef, agentVersion, (headers) =>
+      publishAgentRuntimeConfiguration({
+        path: { agentRef },
+        body: input,
+        headers: versionHeaders(headers),
+        signal: requestSignal(),
+      }),
     );
-    return applyAgentView(agentRef, result.data);
   }
 
   async function saveOverlayDraft(
@@ -245,17 +255,14 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     content: string,
     agentVersion: number,
   ): Promise<AgentRuntimeConfigurationView> {
-    const result = await mutate(
-      (headers) =>
-        createConfigOverlayDraft({
-          path: { agentRef },
-          body: { content },
-          headers: versionHeaders(headers),
-          signal: requestSignal(),
-        }),
-      agentVersion,
+    return mutateAgentView(agentRef, agentVersion, (headers) =>
+      createConfigOverlayDraft({
+        path: { agentRef },
+        body: { content },
+        headers: versionHeaders(headers),
+        signal: requestSignal(),
+      }),
     );
-    return applyAgentView(agentRef, result.data);
   }
 
   async function changeOverlay(
@@ -267,16 +274,13 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
       action === "VALIDATE"
         ? validateConfigOverlayDraft
         : publishConfigOverlayDraft;
-    const result = await mutate(
-      (headers) =>
-        request({
-          path: { agentRef },
-          headers: versionHeaders(headers),
-          signal: requestSignal(),
-        }),
-      agentVersion,
+    return mutateAgentView(agentRef, agentVersion, (headers) =>
+      request({
+        path: { agentRef },
+        headers: versionHeaders(headers),
+        signal: requestSignal(),
+      }),
     );
-    return applyAgentView(agentRef, result.data);
   }
 
   async function restoreOverlay(
@@ -284,17 +288,14 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     publishedOverlayRef: string,
     agentVersion: number,
   ): Promise<AgentRuntimeConfigurationView> {
-    const result = await mutate(
-      (headers) =>
-        rollbackConfigOverlay({
-          path: { agentRef },
-          body: { publishedOverlayRef },
-          headers: versionHeaders(headers),
-          signal: requestSignal(),
-        }),
-      agentVersion,
+    return mutateAgentView(agentRef, agentVersion, (headers) =>
+      rollbackConfigOverlay({
+        path: { agentRef },
+        body: { publishedOverlayRef },
+        headers: versionHeaders(headers),
+        signal: requestSignal(),
+      }),
     );
-    return applyAgentView(agentRef, result.data);
   }
 
   async function bindEnvironment(
@@ -302,17 +303,14 @@ export const useRuntimeStore = defineStore("runtime-configuration", () => {
     environmentRef: string,
     agentVersion: number,
   ): Promise<AgentRuntimeConfigurationView> {
-    const result = await mutate(
-      (headers) =>
-        bindAgentRuntimeEnvironment({
-          path: { agentRef },
-          body: { environmentRef },
-          headers: versionHeaders(headers),
-          signal: requestSignal(),
-        }),
-      agentVersion,
+    return mutateAgentView(agentRef, agentVersion, (headers) =>
+      bindAgentRuntimeEnvironment({
+        path: { agentRef },
+        body: { environmentRef },
+        headers: versionHeaders(headers),
+        signal: requestSignal(),
+      }),
     );
-    return applyAgentView(agentRef, result.data);
   }
 
   async function searchEnvironmentPage(
