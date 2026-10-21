@@ -1,0 +1,68 @@
+package httptransport
+
+import (
+	"net/http"
+
+	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
+	generated "github.com/codex-k8s/kodex/services/external/control-api-gateway/internal/transport/http/generated"
+)
+
+// requireContextResourceMutation checks a skill/memory resource reference before
+// parsing versioned mutation headers. It preserves the handlers' validation order
+// and safe HTTP400 response; resource ownership remains with the called owner RPC.
+// requireContextResourceMutation проверяет ссылку навыка/памяти до заголовков
+// versioned mutation. Порядок и безопасный HTTP400 сохранены; владение ресурсом
+// по-прежнему проверяет вызванный RPC владельца состояния.
+func requireContextResourceMutation(w http.ResponseWriter, ref, key, etag string) (*controlplanev1.MutationContext, bool) {
+	if !opaqueHTTPReference.MatchString(ref) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return nil, false
+	}
+	return requireVersionedMutation(w, key, etag)
+}
+
+// requireContextBindingMutation decodes a binding body, checks its three exact
+// references and safe binding-version range, then validates mutation headers.
+// No RPC or authority decision occurs here; all four bind/unbind handlers retain
+// their explicit typed commands and response-binding checks.
+// requireContextBindingMutation разбирает body привязки, проверяет три точные
+// ссылки и безопасный диапазон версии binding, затем заголовки mutation.
+// Здесь нет RPC или решения о полномочиях; четыре bind/unbind handler сохраняют
+// явные типизированные команды и проверки привязки ответа.
+func requireContextBindingMutation(w http.ResponseWriter, r *http.Request, agent, resource, key, etag string) (generated.AgentContextBindingInput, *controlplanev1.MutationContext, bool) {
+	body, ok := decodeJSON[generated.AgentContextBindingInput](w, r)
+	if !ok {
+		return body, nil, false
+	}
+	if !opaqueHTTPReference.MatchString(agent) || !opaqueHTTPReference.MatchString(resource) || !opaqueHTTPReference.MatchString(body.RevisionRef) || body.ExpectedBindingVersion < 0 || body.ExpectedBindingVersion > maximumSafeJSONInteger {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return body, nil, false
+	}
+	mutation, ok := requireVersionedMutation(w, key, etag)
+	return body, mutation, ok
+}
+
+// requireSkillRevisionDigestMutation preserves the shared input sequence for
+// validate/publish/discard: exact resource/revision shape, existing body decoder,
+// digest format, then versioned headers. It never chooses the lifecycle command
+// or treats a caller-supplied digest as proof of scan/review/admission.
+// requireSkillRevisionDigestMutation сохраняет порядок validate/publish/discard:
+// форма resource/revision, прежний body decoder, формат digest, затем versioned
+// headers. Он не выбирает lifecycle-команду и не считает digest от клиента
+// доказательством scan/review/admission.
+func requireSkillRevisionDigestMutation(w http.ResponseWriter, r *http.Request, resource, revision, key, etag string) (generated.ContextRevisionDigestInput, *controlplanev1.MutationContext, bool) {
+	if !opaqueHTTPReference.MatchString(resource) || !opaqueHTTPReference.MatchString(revision) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return generated.ContextRevisionDigestInput{}, nil, false
+	}
+	body, ok := decodeJSON[generated.ContextRevisionDigestInput](w, r)
+	if !ok {
+		return body, nil, false
+	}
+	if !validManagedDigest(body.ExpectedDigest) {
+		writeLocalProblem(w, http.StatusBadRequest, "INVALID_REQUEST", false)
+		return body, nil, false
+	}
+	mutation, ok := requireVersionedMutation(w, key, etag)
+	return body, mutation, ok
+}

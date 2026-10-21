@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.1.0
+version: 1.2.0
 updated: 2026-10-21
 ---
 
@@ -126,3 +126,53 @@ Unit нового inventory/Go checker — PASS LOCAL. Полный контур
 
 Следующий этап: продолжить разбор baseline, вынос поведения и подробные
 комментарии остальных Go-пакетов. Единый PR остаётся Draft до полного объёма.
+
+## Третья волна — HTTP context, lifecycle runtime и PWA grant
+
+Общие transport-проверки вынесены только внутри gateway:
+
+| Путь | Сохранённый порядок до прежнего RPC |
+| --- | --- |
+| Archive/Restore/Purge SkillBundle —3 команды | resource ref → versioned headers → отдельный typed RPC → прежний view/ETag |
+| Archive/Restore/Purge MemoryRecord —3 команды | resource ref → versioned headers → отдельный typed RPC → прежний memory/redaction view |
+| Bind/Unbind SkillBundle —2 команды | decode body → agent/resource/revision refs и binding version → mutation headers → прежний bind/unbind RPC → exact response binding |
+| Bind/Unbind MemoryRecord —2 команды | тот же локальный синтаксический порядок, но собственные memory RPC и resource refs |
+| Validate/Publish/Discard SkillDraft —3 команды | bundle/revision refs → прежний body decoder → digest → headers → отдельная специализированная команда |
+
+`requireContextResourceMutation`, `requireContextBindingMutation` и
+`requireSkillRevisionDigestMutation` не выбирают actor/tenant, не выдают grants
+и не создают события. Проверенный transport context, owner RPC, owner transaction,
+OCC/idempotency/audit/event path не менялись. ReviewSkillBundleDraft с иным body
+и decision остаётся отдельным. Typed RPC/response mapping не скрыт универсальным
+dispatcher. Новые unit-тесты проверяют отказ до RPC и сохранение точных pins;
+существующая таблица всех маршрутов проверяет реальные generated request mappings.
+
+В PWA совпадающая wire-часть SYSTEM/PROJECT grant plans вынесена в
+`integration-grant-plan-fields.ts`. Owner/scope/project/profile/agent-version
+проверки остаются в отдельных variant-specific функциях. Общие проверки
+before/after, закрытых ключей/policies, exact connection/version и APPLIED receipt
+не стали серверной authority и не разрешают effect. Оба прежних публичных API
+сохранены и используются с явным типом операции.
+
+PASS LOCAL:8 существующих PWA unit tests, selected ESLint, typecheck/production
+build. Воспроизводимая дополнительная проверка
+`node tools/code-quality/check-integration-grant-refactor.mjs` сравнивает9001
+вариант со source dc881e2e8 из Git: owner/fresh/applied/receipt, поля всех
+снимков, чужие pins, неизвестные ключи, типы и числовые границы. Отдельные
+положительные fixtures исключают ложный успех «обе стороны всегда отвергают».
+Compiler diagnostics отклоняются до исполнения. Это конечная выборка, не
+формальное доказательство всех возможных входов. Начальные ошибки оснастки
+structuredClone/ESLint cwd и временный syntax после правки устранены; они
+не выдавались за product PASS. Build сохраняет предупреждение о крупном chunk.
+
+Полностью двуязычно описаны serviceruntime20/20 и HTTP context resource family
+63/63 (commands/endpoints/views/fixture tests/new helpers). Runtime context,
+cancel/join и cooperative shutdown бюджеты описаны по фактическому коду;
+никакой принудительной отмены callback, которой нет в коде, не обещается.
+Unit/build serviceruntime и полный gateway — PASS LOCAL; последний HTTP11.358s.
+
+Working-4:21000 Go-объявлений,168 с новым форматом,20832 пока без полного
+формата. Detector:2132 группы,926 Go/255 TypeScript. Число групп не обязано
+монотонно падать: фиксированный minLines учитывает физический span, а подробные
+комментарии увеличивают число строк между теми же code tokens. Порог не повышался.
+Остальные группы и Go-пакеты остаются в работе; полный `-check` ещё не PASS.

@@ -21,9 +21,18 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// contextSkillSpec is a synthetic editable specification without server-owned scan/provenance.
+// contextSkillSpec — синтетическая редактируемая спецификация без server-owned scan/provenance.
 const contextSkillSpec = `{"name":"Fixture skill","description":"Fixture","files":[{"path":"SKILL.md","artifactRef":"art_fixture01","artifactRevision":2}]}`
+
+// contextMemorySpec supplies synthetic source/retention inputs, not an approved owner receipt.
+// contextMemorySpec задаёт synthetic source/retention, а не подтверждённую owner-квитанцию.
 const contextMemorySpec = `{"title":"Fixture memory","summary":"Fixture summary","sourceRunRef":"run_fixture01","retentionUntil":"2027-09-05T00:00:00Z"}`
 
+// contextFixtures returns independent synthetic bundle, memory and binding
+// objects with matching metadata, avoiding real persistence or scan authority.
+// contextFixtures возвращает независимые синтетические bundle, memory и binding
+// с согласованными metadata, без реального хранения и полномочий сканирования.
 func contextFixtures() (*controlplanev1.SkillBundle, *controlplanev1.KodexMemoryRecord, *controlplanev1.AgentContextBinding) {
 	stamp := timestamppb.New(time.Date(2026, 9, 5, 0, 0, 0, 0, time.UTC))
 	provenance := &controlplanev1.ContextProvenance{ActorRef: "usr_fixture01", SourceKind: "USER", SourceRef: "run_fixture01", SourceRevision: "1", Digest: strings.Repeat("a", 64), CreatedAt: stamp}
@@ -36,6 +45,10 @@ func contextFixtures() (*controlplanev1.SkillBundle, *controlplanev1.KodexMemory
 	return skill, memory, binding
 }
 
+// contextRPCRecorder captures typed requests and supplies deterministic fake responses;
+// failure/corruption hooks test mapping and validation without external service calls.
+// contextRPCRecorder сохраняет typed-запросы и выдаёт устойчивые fake-ответы;
+// failure/corruption hooks проверяют mapping и validation без внешних сервисов.
 type contextRPCRecorder struct {
 	grpc.ClientConnInterface
 	method  string
@@ -44,6 +57,12 @@ type contextRPCRecorder struct {
 	corrupt func(proto.Message)
 }
 
+// Invoke records a cloned request, applies an optional synthetic RPC failure and
+// fills only known fixture response fields. A corruption hook exercises consumer
+// validation; none of these observations proves a real owner state transition.
+// Invoke сохраняет копию запроса, применяет synthetic RPC-отказ и заполняет
+// известные поля fixture-ответа. Hook повреждения проверяет consumer validation;
+// ни одно такое наблюдение не доказывает переход реального owner-состояния.
 func (client *contextRPCRecorder) Invoke(_ context.Context, method string, request, response any, _ ...grpc.CallOption) error {
 	client.method, client.request = method, proto.Clone(request.(proto.Message))
 	if client.failure != nil {
@@ -103,11 +122,21 @@ func (client *contextRPCRecorder) Invoke(_ context.Context, method string, reque
 	}
 	return nil
 }
+
+// contextHandler wires the generated HTTP router to synthetic typed CP clients.
+// It tests transport mapping directly, not SSO/middleware or live owner authority.
+// contextHandler связывает generated HTTP-router с synthetic typed CP-клиентами.
+// Он проверяет transport mapping, а не SSO/middleware или живую owner authority.
 func contextHandler(client *contextRPCRecorder) http.Handler {
 	return generated.Handler(&Server{control: &controlplaneclient.Client{Query: controlplanev1.NewPlatformQueryServiceClient(client), Command: controlplanev1.NewPlatformCommandServiceClient(client)}})
 }
 
-// Формы CP 7df60ddef: USER_SUMMARY, optional source run и отдельная redaction каждой revision.
+// TestMemoryOwnerProjectionHTTP covers single/catalog/history projection of
+// active through purged memory, optional source-run provenance and per-revision
+// redaction without replacing owner metadata with transport-generated values.
+// TestMemoryOwnerProjectionHTTP проверяет single/catalog/history для состояний
+// памяти от active до purged, optional source-run provenance и redaction каждой
+// ревизии без замены owner metadata выдуманными transport-значениями.
 func TestMemoryOwnerProjectionHTTP(t *testing.T) {
 	for _, state := range []controlplanev1.ContextResourceState{
 		controlplanev1.ContextResourceState_CONTEXT_RESOURCE_STATE_ACTIVE,
@@ -189,6 +218,12 @@ func TestMemoryOwnerProjectionHTTP(t *testing.T) {
 	}
 }
 
+// TestContextResourceEveryTypedRoute verifies every registered resource route,
+// exact generated RPC, reference/body/page/header mapping and distinct agent OCC
+// versus binding version; all responses come from the synthetic recorder.
+// TestContextResourceEveryTypedRoute проверяет все resource-маршруты, точный
+// generated RPC, перенос ссылок/body/page/headers и раздельные agent OCC/binding
+// версии; все ответы получены от синтетического recorder.
 func TestContextResourceEveryTypedRoute(t *testing.T) {
 	cases := []struct {
 		method, path, body, rpc string
@@ -267,6 +302,10 @@ func TestContextResourceEveryTypedRoute(t *testing.T) {
 	}
 }
 
+// TestContextSkillNameUsesUnicodeCharacters checks the160/161-rune boundary on
+// both input and output and requires accepted multibyte names to remain unchanged.
+// TestContextSkillNameUsesUnicodeCharacters проверяет предел160/161 символ
+// на входе/выходе и неизменность допустимого многобайтного имени.
 func TestContextSkillNameUsesUnicodeCharacters(t *testing.T) {
 	for _, size := range []int{160, 161} {
 		name := strings.Repeat("я", size)
@@ -284,6 +323,12 @@ func TestContextSkillNameUsesUnicodeCharacters(t *testing.T) {
 	}
 }
 
+// TestContextResourceInputRejectsAuthorityAndMalformedBeforeRPC rejects forged
+// provenance/scan state, unsafe manifests, bad versions and invalid enum/page/review
+// inputs with HTTP400 and no recorded owner request.
+// TestContextResourceInputRejectsAuthorityAndMalformedBeforeRPC запрещает подделку
+// provenance/scan state, опасный manifest, неверные версии, enum/page/review
+// с HTTP400 без зафиксированного owner-запроса.
 func TestContextResourceInputRejectsAuthorityAndMalformedBeforeRPC(t *testing.T) {
 	for _, tc := range []struct{ name, method, path, body string }{
 		{"provenance", "POST", "/api/v1/projects/prj_fixture01/memory-records", `{"specification":` + contextMemorySpec + `,"provenance":{"actorRef":"usr_forged01"}}`},
@@ -309,6 +354,12 @@ func TestContextResourceInputRejectsAuthorityAndMalformedBeforeRPC(t *testing.T)
 	}
 }
 
+// TestContextResourceNewDraftOCCAndBodyMapping distinguishes absent-resource
+// creation from a new draft of an existing bundle, preserving optional OCC and
+// rejecting a version header when create requires absence or vice versa.
+// TestContextResourceNewDraftOCCAndBodyMapping различает создание ресурса
+// и draft существующего bundle, сохраняет optional OCC и запрещает header
+// версии при ожидаемом отсутствии ресурса и обратный несовместимый случай.
 func TestContextResourceNewDraftOCCAndBodyMapping(t *testing.T) {
 	client := &contextRPCRecorder{}
 	w := httptest.NewRecorder()
@@ -340,6 +391,10 @@ func TestContextResourceNewDraftOCCAndBodyMapping(t *testing.T) {
 	}
 }
 
+// TestContextMemoryTitleUsesUnicodeCharacters covers the same160-rune title
+// limit in command input and read projection without truncating accepted text.
+// TestContextMemoryTitleUsesUnicodeCharacters проверяет предел title160 символов
+// на входе команды и в read-проекции без усечения принятого текста.
 func TestContextMemoryTitleUsesUnicodeCharacters(t *testing.T) {
 	for _, length := range []int{160, 161} {
 		title := strings.Repeat("я", length)
@@ -366,6 +421,12 @@ func TestContextMemoryTitleUsesUnicodeCharacters(t *testing.T) {
 	}
 }
 
+// TestContextResourceAuthorityAndUnimplementedRemainFailures preserves mapped
+// owner denial/not-found/auth/OCC/unavailable/unimplemented statuses and prevents
+// private RPC error details from appearing in the HTTP body.
+// TestContextResourceAuthorityAndUnimplementedRemainFailures сохраняет отображение
+// owner denial/not-found/auth/OCC/unavailable/unimplemented и не допускает
+// закрытые подробности RPC-ошибки в HTTP body.
 func TestContextResourceAuthorityAndUnimplementedRemainFailures(t *testing.T) {
 	for code, want := range map[codes.Code]int{codes.PermissionDenied: 403, codes.NotFound: 404, codes.Unauthenticated: 401, codes.Aborted: 412, codes.Unavailable: 503, codes.Unimplemented: 500} {
 		for _, path := range []string{"/api/v1/skill-bundles/skl_fixture01/archive", "/api/v1/memory-records/mem_fixture01/purge"} {
@@ -379,6 +440,12 @@ func TestContextResourceAuthorityAndUnimplementedRemainFailures(t *testing.T) {
 	}
 }
 
+// TestContextResourceRejectsCorruptOrUnredactedSnapshot requires502 for a foreign
+// ref/project, invalid state/provenance/path or inconsistent redaction, rather
+// than emitting an upstream value that does not satisfy the typed read contract.
+// TestContextResourceRejectsCorruptOrUnredactedSnapshot требует502 для чужого
+// ref/project, неверного state/provenance/path или redaction вместо выдачи
+// upstream значения, не соответствующего типизированному read-контракту.
 func TestContextResourceRejectsCorruptOrUnredactedSnapshot(t *testing.T) {
 	for _, tc := range []struct {
 		name, path string

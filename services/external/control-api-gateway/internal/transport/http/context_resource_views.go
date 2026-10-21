@@ -12,6 +12,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// contextTimestamp requires a present, valid protobuf timestamp and converts it
+// to time.Time; nil or out-of-range metadata is not replaced with a made-up date.
+// contextTimestamp требует присутствующий корректный protobuf timestamp
+// и преобразует его в time.Time; nil или неверная дата не подменяется выдуманной.
 func contextTimestamp(value *timestamppb.Timestamp) (time.Time, bool) {
 	if value == nil || value.CheckValid() != nil {
 		return time.Time{}, false
@@ -19,6 +23,10 @@ func contextTimestamp(value *timestamppb.Timestamp) (time.Time, bool) {
 	return value.AsTime(), true
 }
 
+// contextOptionalText represents an empty optional field as nil and otherwise
+// returns a pointer to the unchanged string without trimming or normalization.
+// contextOptionalText представляет пустое необязательное поле как nil, иначе
+// возвращает указатель на неизменённую строку без обрезки и нормализации.
 func contextOptionalText(value string) *string {
 	if value == "" {
 		return nil
@@ -26,6 +34,12 @@ func contextOptionalText(value string) *string {
 	return &value
 }
 
+// contextProvenanceView validates provenance time, actor, bounded source metadata
+// and digest before projecting optional strings. This is wire validation, not
+// proof that an actor owns the referenced source or may change the resource.
+// contextProvenanceView проверяет время, actor, ограниченные source-поля и digest
+// до преобразования optional строк. Это wire-проверка, а не доказательство
+// владения источником или права изменить ресурс.
 func contextProvenanceView(value *controlplanev1.ContextProvenance) (generated.ContextProvenance, bool) {
 	created, ok := contextTimestamp(value.GetCreatedAt())
 	if !ok || !opaqueHTTPReference.MatchString(value.GetActorRef()) || value.GetSourceKind() == "" || len(value.GetSourceKind()) > 64 || len(value.GetSourceRef()) > 128 || len(value.GetSourceRevision()) > 128 || !validManagedDigest(value.GetDigest()) {
@@ -34,6 +48,10 @@ func contextProvenanceView(value *controlplanev1.ContextProvenance) (generated.C
 	return generated.ContextProvenance{ActorRef: value.GetActorRef(), SourceKind: value.GetSourceKind(), SourceRef: contextOptionalText(value.GetSourceRef()), SourceRevision: contextOptionalText(value.GetSourceRevision()), Digest: value.GetDigest(), CreatedAt: created}, true
 }
 
+// contextResourceState accepts only ACTIVE through PURGED and strips the exact
+// protobuf prefix; unspecified or unknown numeric states cannot reach the UI.
+// contextResourceState допускает только ACTIVE–PURGED и снимает точный protobuf
+// префикс; unspecified и неизвестное числовое состояние не попадает в UI.
 func contextResourceState(value controlplanev1.ContextResourceState) (generated.ContextResourceState, bool) {
 	if value < controlplanev1.ContextResourceState_CONTEXT_RESOURCE_STATE_ACTIVE || value > controlplanev1.ContextResourceState_CONTEXT_RESOURCE_STATE_PURGED {
 		return "", false
@@ -41,6 +59,14 @@ func contextResourceState(value controlplanev1.ContextResourceState) (generated.
 	return generated.ContextResourceState(strings.TrimPrefix(value.String(), "CONTEXT_RESOURCE_STATE_")), true
 }
 
+// skillRevisionView validates revision/provenance, enums, optional references
+// and scan/review times, then checks bounded file metadata and diagnostics.
+// Case-folded path uniqueness and the64MiB aggregate limit are enforced before
+// returning a successful view; callers must not publish a value when ok is false.
+// skillRevisionView проверяет revision/provenance, enum, optional ссылки
+// и scan/review timestamps, затем ограниченные file metadata и diagnostics.
+// Уникальность путей без учёта регистра и общий предел64МиБ проверяются
+// до успеха; при ok=false вызывающий код не должен публиковать значение.
 func skillRevisionView(value *controlplanev1.SkillBundleRevision) (generated.SkillBundleRevision, bool) {
 	provenance, ok := contextProvenanceView(value.GetProvenance())
 	if !ok || !opaqueHTTPReference.MatchString(value.GetRef()) || !validManagedVersion(value.GetRevision()) || !validManagedDigest(value.GetDigest()) ||
@@ -90,6 +116,12 @@ func skillRevisionView(value *controlplanev1.SkillBundleRevision) (generated.Ski
 	return result, true
 }
 
+// skillBundleView validates resource refs, version, state and timestamps, then
+// independently converts present current/draft revisions without inventing an
+// absent revision or accepting a partially invalid one.
+// skillBundleView проверяет ссылки, версию, состояние и timestamps, затем
+// независимо преобразует присутствующие current/draft ревизии без выдумывания
+// отсутствующей ревизии или принятия частично неверной.
 func skillBundleView(value *controlplanev1.SkillBundle) (generated.SkillBundle, bool) {
 	state, ok := contextResourceState(value.GetState())
 	created, cok := contextTimestamp(value.GetCreatedAt())
@@ -115,6 +147,12 @@ func skillBundleView(value *controlplanev1.SkillBundle) (generated.SkillBundle, 
 	return result, true
 }
 
+// memoryRevisionView requires valid provenance, retention, revision and digest;
+// it bounds title by Unicode runes and summary by bytes, rejects NUL and requires
+// a redacted revision to have no summary while preserving allowed empty parents.
+// memoryRevisionView требует корректные provenance, retention, revision и digest;
+// title ограничен Unicode-символами, summary — байтами. NUL запрещён, redacted
+// ревизия не содержит summary; допустимый пустой parent сохраняется.
 func memoryRevisionView(value *controlplanev1.MemoryRecordRevision) (generated.MemoryRecordRevision, bool) {
 	provenance, ok := contextProvenanceView(value.GetProvenance())
 	retention, rok := contextTimestamp(value.GetRetentionUntil())
@@ -125,6 +163,12 @@ func memoryRevisionView(value *controlplanev1.MemoryRecordRevision) (generated.M
 	return generated.MemoryRecordRevision{Ref: value.GetRef(), Revision: value.GetRevision(), Title: value.GetTitle(), Summary: value.GetSummary(), Digest: value.GetDigest(), ParentRevisionRef: contextOptionalText(value.GetParentRevisionRef()), Provenance: provenance, RetentionUntil: retention, Redacted: value.GetRedacted()}, true
 }
 
+// memoryRecordView validates state/time/resource pins and the current revision.
+// Optional agent refs retain their own syntax check; EXPIRED/PURGED records must
+// carry a redacted revision rather than exposing their former summary.
+// memoryRecordView проверяет state/time/resource и текущую ревизию.
+// Необязательный agent ref сохраняет проверку формы; EXPIRED/PURGED должны
+// содержать redacted-ревизию, не раскрывая прежний summary.
 func memoryRecordView(value *controlplanev1.KodexMemoryRecord) (generated.KodexMemoryRecord, bool) {
 	state, ok := contextResourceState(value.GetState())
 	created, cok := contextTimestamp(value.GetCreatedAt())
@@ -137,6 +181,10 @@ func memoryRecordView(value *controlplanev1.KodexMemoryRecord) (generated.KodexM
 	return generated.KodexMemoryRecord{Ref: value.GetRef(), Version: value.GetVersion(), ProjectRef: value.GetProjectRef(), AgentRef: contextOptionalText(value.GetAgentRef()), State: state, CurrentRevision: revision, CreatedAt: created, UpdatedAt: updated}, true
 }
 
+// writeSkillBundle publishes only a valid bundle matching the requested ref,
+// using its exact version as ETag; a mismatched upstream value yields502 instead.
+// writeSkillBundle публикует только корректный bundle с запрошенным ref
+// и его точной версией в ETag; неверный upstream ответ заменяется502.
 func writeSkillBundle(w http.ResponseWriter, value *controlplanev1.SkillBundle, ref string, status int) {
 	result, ok := skillBundleView(value)
 	if !ok || ref != "" && result.Ref != ref {
@@ -147,6 +195,10 @@ func writeSkillBundle(w http.ResponseWriter, value *controlplanev1.SkillBundle, 
 	writeJSON(w, status, result)
 }
 
+// writeMemoryRecord applies the memory-specific converter and exact ref check
+// before writing ETag/body; conversion failure never emits a partial memory view.
+// writeMemoryRecord применяет memory-specific преобразование и точный ref
+// до ETag/body; ошибка не выдаёт частичное представление памяти.
 func writeMemoryRecord(w http.ResponseWriter, value *controlplanev1.KodexMemoryRecord, ref string, status int) {
 	result, ok := memoryRecordView(value)
 	if !ok || ref != "" && result.Ref != ref {
@@ -157,15 +209,26 @@ func writeMemoryRecord(w http.ResponseWriter, value *controlplanev1.KodexMemoryR
 	writeJSON(w, status, result)
 }
 
+// writeAgentContextBinding requires exact agent/resource/revision and valid
+// binding metadata before writing JSON. It deliberately emits no agent ETag:
+// the command's If-Match pins the agent, while the response version is the binding.
+// writeAgentContextBinding требует точные agent/resource/revision и корректные
+// metadata до JSON. ETag агента намеренно не выдаётся: If-Match команды
+// закрепляет агента, а версия ответа принадлежит binding.
 func writeAgentContextBinding(w http.ResponseWriter, value *controlplanev1.AgentContextBinding, agent, resource, revision string) {
 	if !validAgentContextBinding(value, agent) || value.GetResourceRef() != resource || value.GetRevisionRef() != revision {
 		writeLocalProblem(w, http.StatusBadGateway, "INVALID_UPSTREAM_RESPONSE", false)
 		return
 	}
-	// If-Match этой операции относится к agent, а CP возвращает только binding version.
 	writeJSON(w, http.StatusOK, generated.AgentContextBinding{Ref: value.GetRef(), Version: value.GetVersion(), AgentRef: agent, ResourceRef: resource, RevisionRef: revision, Digest: value.GetDigest()})
 }
 
+// validAgentContextBinding checks wire shape, positive version, digest and exact
+// agent equality; resource/revision equality is enforced by the writing caller
+// and these response checks never establish owner authority.
+// validAgentContextBinding проверяет wire-форму, положительную версию, digest
+// и точное равенство agent; resource/revision сравнивает вызывающий writer,
+// а полномочий владельца эти проверки ответа не выдают.
 func validAgentContextBinding(value *controlplanev1.AgentContextBinding, agent string) bool {
 	return opaqueHTTPReference.MatchString(value.GetRef()) && validManagedVersion(value.GetVersion()) && value.GetAgentRef() == agent && opaqueHTTPReference.MatchString(value.GetResourceRef()) && opaqueHTTPReference.MatchString(value.GetRevisionRef()) && validManagedDigest(value.GetDigest())
 }

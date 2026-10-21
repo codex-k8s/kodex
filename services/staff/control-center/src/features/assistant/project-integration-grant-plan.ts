@@ -5,6 +5,12 @@ import type {
   SystemAssistantIntegrationGrantCandidate,
   ProjectAssistantIntegrationGrantCandidates,
 } from "@/shared/api/generated/openapi/types.gen";
+import {
+  integrationGrantFieldsMatch,
+  integrationGrantCandidateFieldsMatch,
+  integrationGrantReceiptRef,
+  integrationGrantAppliedFieldsMatch,
+} from "./integration-grant-plan-fields";
 
 const readonlyKeys = [
   "connectionRef",
@@ -24,14 +30,6 @@ const readonlyKeys = [
   "defaultApprovalPolicy",
   "allowedApprovalPolicies",
 ] as const;
-const editableKeys = [
-  "enabled",
-  "approvalPolicy",
-  "approvalScopePaths",
-] as const;
-const policies = ["NONE", "HUMAN_EACH_EFFECT", "HUMAN_SCOPED"];
-const equal = (left: unknown, right: unknown) =>
-  JSON.stringify(left) === JSON.stringify(right);
 export function isProjectAssistantConnectionScope(
   value: unknown,
 ): value is "ORGANIZATION" {
@@ -42,9 +40,7 @@ export function projectIntegrationGrantPlanOwner(
   operation: AssistantPlanOperationInput,
   organizationRef: string | undefined,
 ): boolean {
-  const { parameters, before, after, target } = operation;
-  const allowed = parameters.allowedApprovalPolicies;
-  const fields = new Set<string>([...readonlyKeys, ...editableKeys]);
+  const { parameters } = operation;
   return Boolean(
     organizationRef &&
     operation.type === "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT" &&
@@ -62,55 +58,7 @@ export function projectIntegrationGrantPlanOwner(
     parameters.organizationRef === organizationRef &&
     typeof parameters.projectAssistantRef === "string" &&
     parameters.projectAssistantRef.length > 0 &&
-    typeof parameters.connectionRef === "string" &&
-    parameters.connectionRef.length > 0 &&
-    typeof parameters.capabilityKey === "string" &&
-    parameters.capabilityKey.length > 0 &&
-    target.kind === "INTEGRATION_CONNECTION" &&
-    target.ref === parameters.connectionRef &&
-    Number.isSafeInteger(operation.expectedVersion) &&
-    (operation.expectedVersion ?? 0) >= 1 &&
-    target.version === operation.expectedVersion &&
-    typeof parameters.definitionVersion === "string" &&
-    parameters.definitionVersion.length > 0 &&
-    typeof parameters.definitionDigest === "string" &&
-    /^[a-f0-9]{64}$/.test(parameters.definitionDigest) &&
-    typeof parameters.grantRef === "string" &&
-    Number.isSafeInteger(parameters.grantVersion) &&
-    (parameters.grantVersion as number) >= 0 &&
-    !!parameters.grantRef === (parameters.grantVersion as number) > 0 &&
-    Array.isArray(allowed) &&
-    allowed.length > 0 &&
-    new Set(allowed).size === allowed.length &&
-    allowed.every(
-      (policy) => typeof policy === "string" && policies.includes(policy),
-    ) &&
-    allowed.includes(parameters.defaultApprovalPolicy) &&
-    [parameters, before, after].every((snapshot) =>
-      Object.keys(snapshot).every((key) => fields.has(key)),
-    ) &&
-    readonlyKeys.every(
-      (key) =>
-        equal(parameters[key], before[key]) &&
-        equal(parameters[key], after[key]),
-    ) &&
-    editableKeys.every((key) => equal(parameters[key], after[key])) &&
-    typeof parameters.enabled === "boolean" &&
-    typeof before.enabled === "boolean" &&
-    typeof parameters.approvalPolicy === "string" &&
-    allowed.includes(parameters.approvalPolicy) &&
-    typeof before.approvalPolicy === "string" &&
-    policies.includes(before.approvalPolicy) &&
-    [parameters.approvalScopePaths, before.approvalScopePaths].every(
-      (paths) =>
-        Array.isArray(paths) &&
-        paths.length <= 16 &&
-        new Set(paths).size === paths.length &&
-        paths.every(
-          (path) =>
-            typeof path === "string" && path.length > 0 && path.length <= 160,
-        ),
-    ),
+    integrationGrantFieldsMatch(operation, readonlyKeys),
   );
 }
 
@@ -119,7 +67,7 @@ export function projectIntegrationGrantPlanCandidate(
   page: ProjectAssistantIntegrationGrantCandidates,
   candidate: SystemAssistantIntegrationGrantCandidate,
 ): boolean {
-  const { parameters, before } = operation;
+  const { parameters } = operation;
   return (
     page.organizationRef === parameters.organizationRef &&
     isProjectAssistantConnectionScope(page.scopeKind) &&
@@ -128,23 +76,7 @@ export function projectIntegrationGrantPlanCandidate(
     page.assistantProfileRef === parameters.assistantProfileRef &&
     page.assistantVersion === parameters.agentVersion &&
     page.profileVersion === parameters.profileVersion &&
-    page.connectionRef === parameters.connectionRef &&
-    page.connectionVersion === operation.expectedVersion &&
-    page.definitionVersion === parameters.definitionVersion &&
-    page.definitionDigest === parameters.definitionDigest &&
-    candidate.capability.key === parameters.capabilityKey &&
-    candidate.grantable &&
-    (candidate.currentGrantRef ?? "") === parameters.grantRef &&
-    candidate.currentGrantVersion === parameters.grantVersion &&
-    candidate.currentGrantEnabled === before.enabled &&
-    (candidate.currentApprovalPolicy ?? candidate.capability.approvalPolicy) ===
-      before.approvalPolicy &&
-    equal(candidate.currentApprovalScopePaths, before.approvalScopePaths) &&
-    candidate.capability.approvalPolicy === parameters.defaultApprovalPolicy &&
-    equal(
-      candidate.capability.allowedApprovalPolicies,
-      parameters.allowedApprovalPolicies,
-    )
+    integrationGrantCandidateFieldsMatch(operation, page, candidate)
   );
 }
 
@@ -153,24 +85,12 @@ export function projectIntegrationGrantReceiptRef(
   operationRef: string,
   receipt: AssistantPlanReceipt | undefined = plan.receipt,
 ): string | undefined {
-  const operation = plan.operations.find((item) => item.ref === operationRef);
-  if (
-    plan.state !== "APPLIED" ||
-    operation?.type !== "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT" ||
-    !operation.selected ||
-    receipt?.outcome !== "APPLIED" ||
-    receipt.planRef !== plan.ref ||
-    receipt.planRevision !== plan.revision
-  )
-    return undefined;
-  const matches = receipt.operationReceipts.filter(
-    (item) =>
-      item.operationRef === operationRef &&
-      (["APPLIED"] as readonly string[]).includes(item.outcome),
+  return integrationGrantReceiptRef(
+    plan,
+    operationRef,
+    "CHANGE_PROJECT_ASSISTANT_INTEGRATION_GRANT",
+    receipt,
   );
-  return matches.length === 1 && matches[0]?.resourceRef
-    ? matches[0].resourceRef
-    : undefined;
 }
 
 export function projectIntegrationGrantAppliedCandidate(
@@ -189,16 +109,6 @@ export function projectIntegrationGrantAppliedCandidate(
     page.assistantProfileRef === parameters.assistantProfileRef &&
     page.assistantVersion === parameters.agentVersion &&
     page.profileVersion === parameters.profileVersion &&
-    page.connectionRef === parameters.connectionRef &&
-    page.connectionVersion >=
-      (operation.expectedVersion ?? Number.POSITIVE_INFINITY) &&
-    page.definitionVersion === parameters.definitionVersion &&
-    page.definitionDigest === parameters.definitionDigest &&
-    candidate.capability.key === parameters.capabilityKey &&
-    candidate.currentGrantRef === grantRef &&
-    candidate.currentGrantVersion >= 1 &&
-    candidate.currentGrantEnabled === parameters.enabled &&
-    candidate.currentApprovalPolicy === parameters.approvalPolicy &&
-    equal(candidate.currentApprovalScopePaths, parameters.approvalScopePaths)
+    integrationGrantAppliedFieldsMatch(operation, page, candidate, grantRef)
   );
 }
