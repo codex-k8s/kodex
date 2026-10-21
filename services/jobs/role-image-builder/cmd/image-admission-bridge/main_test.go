@@ -6,6 +6,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 )
 
+// TestImageOwnerProfileIsExplicit checks trusted-cluster configuration in both
+// modes without TLS credentials, and rejects unknown profiles or an unconfigured
+// protected default. It only builds config values and never dials the target.
+// TestImageOwnerProfileIsExplicit проверяет настройки trusted-cluster в обоих
+// режимах без TLS-реквизитов и отказ для неизвестного профиля либо незаполненного
+// защищённого варианта. Тест лишь собирает конфигурацию и не соединяется с target.
 func TestImageOwnerProfileIsExplicit(t *testing.T) {
 	t.Setenv("KODEX_RPC_PROFILE", transportprofile.TrustedCluster)
 	t.Setenv("IMAGE_OWNER_CONTROL_PLANE_TARGET", "control-plane.kodex-system.svc:8443")

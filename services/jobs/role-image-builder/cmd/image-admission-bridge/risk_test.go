@@ -19,6 +19,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// bridgeRiskFixture builds canonical synthetic report/claim evidence with matching
+// recipe, build, policy and attempt bindings. The risk variant adds a fabricated
+// exact-image decision for validation tests, not a real owner approval or grant.
+// bridgeRiskFixture создаёт канонические искусственные report/claim с согласованными
+// рецептом, сборкой, политикой и попыткой. Вариант риска добавляет вымышленное решение
+// для точного образа ради тестов проверки, а не реальное owner approval или grant.
 func bridgeRiskFixture(t *testing.T, risk bool) (imageowner.Claim, imageowner.AdmissionEvidence) {
 	t.Helper()
 	hex := strings.Repeat("a", 64)
@@ -67,6 +73,12 @@ func bridgeRiskFixture(t *testing.T, risk bool) (imageowner.Claim, imageowner.Ad
 	return claim, evidence
 }
 
+// TestClaimStateRetainsExactAttemptRiskAndNoClobberRecovery proves exact replay
+// preserves the full private claim and receipt keys, while token/fence/attempt
+// replacement fails without changing bytes and distinct attempts get distinct keys.
+// TestClaimStateRetainsExactAttemptRiskAndNoClobberRecovery проверяет сохранность
+// полного закрытого claim и ключей при точном повторе, отказ замены token/fence/attempt
+// без изменения байтов и разные ключи для разных попыток.
 func TestClaimStateRetainsExactAttemptRiskAndNoClobberRecovery(t *testing.T) {
 	claim, _ := bridgeRiskFixture(t, true)
 	path := filepath.Join(t.TempDir(), "owner-claim.json")
@@ -112,6 +124,12 @@ func TestClaimStateRetainsExactAttemptRiskAndNoClobberRecovery(t *testing.T) {
 	}
 }
 
+// TestConcurrentClaimPublicationKeepsOneImmutableWinner races two synthetic claims
+// at one temporary path and requires exactly one successful publisher plus a complete
+// winning snapshot, never a mixture; it does not contact the owner service.
+// TestConcurrentClaimPublicationKeepsOneImmutableWinner одновременно публикует два
+// искусственных claim в один временный путь и требует одного победителя с полным
+// снимком без смешивания данных; сервис владельца не вызывается.
 func TestConcurrentClaimPublicationKeepsOneImmutableWinner(t *testing.T) {
 	first, _ := bridgeRiskFixture(t, false)
 	second := first
@@ -133,6 +151,12 @@ func TestConcurrentClaimPublicationKeepsOneImmutableWinner(t *testing.T) {
 	}
 }
 
+// TestReportFilesCarryOnlyCanonicalExactClaimEvidence reloads synthetic report files
+// with and without risk acceptance, verifies the claim overrides an unrelated env
+// risk digest, and rejects an unknown private report field without echoing it.
+// TestReportFilesCarryOnlyCanonicalExactClaimEvidence читает искусственные отчёты
+// с принятием риска и без него, проверяет приоритет claim над чужим env-хешем риска
+// и отказ для неизвестного закрытого поля отчёта без его раскрытия в ошибке.
 func TestReportFilesCarryOnlyCanonicalExactClaimEvidence(t *testing.T) {
 	for _, risk := range []bool{false, true} {
 		claim, evidence := bridgeRiskFixture(t, risk)
@@ -161,6 +185,12 @@ func TestReportFilesCarryOnlyCanonicalExactClaimEvidence(t *testing.T) {
 	}
 }
 
+// TestReportInputIsBoundedPrivateRegularAndNoFollow checks a valid small private
+// file and rejection of symlinks, FIFOs, oversize, public modes and empty contents
+// using temporary files, without invoking a scanner or reading real credentials.
+// TestReportInputIsBoundedPrivateRegularAndNoFollow проверяет малый закрытый файл
+// и отказ для ссылок, FIFO, превышения размера, открытого режима и пустого содержимого
+// на временных файлах, без запуска сканера или чтения настоящих реквизитов.
 func TestReportInputIsBoundedPrivateRegularAndNoFollow(t *testing.T) {
 	for _, scenario := range []string{"valid", "symlink", "fifo", "oversized", "public", "empty"} {
 		t.Run(scenario, func(t *testing.T) {
@@ -200,7 +230,17 @@ func TestReportInputIsBoundedPrivateRegularAndNoFollow(t *testing.T) {
 	}
 }
 
+// TestBridgeDiagnosticNeverPrintsRemoteCredentialsOrPayload checks direct/wrapped
+// synthetic gRPC errors and a plain local error: output retains only the status
+// code, excluding the fabricated credential, report and internal-address detail.
+// TestBridgeDiagnosticNeverPrintsRemoteCredentialsOrPayload проверяет прямые
+// и обёрнутые искусственные gRPC-ошибки и локальную ошибку: остаётся лишь код
+// без вымышленных реквизитов, отчёта и внутреннего адреса из подробностей.
 func TestBridgeDiagnosticNeverPrintsRemoteCredentialsOrPayload(t *testing.T) {
+	// privateDetail is deliberately sensitive-looking synthetic error text whose
+	// absence from every projected diagnostic is asserted below.
+	// privateDetail — намеренно похожий на закрытые данные искусственный текст;
+	// ниже проверяется его отсутствие во всех сформированных сообщениях.
 	const privateDetail = "private-fixture-token raw-report internal-url"
 	for _, code := range []codes.Code{codes.Internal, codes.Unavailable, codes.Unknown, codes.DataLoss, codes.InvalidArgument, codes.PermissionDenied} {
 		for _, err := range []error{status.Error(code, privateDetail), fmt.Errorf("%s: %w", privateDetail, status.Error(code, privateDetail))} {

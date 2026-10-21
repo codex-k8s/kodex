@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.155.1
+version: 1.156.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,52 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто пятьдесят шестая волна — мост допуска и точки входа образов
+
+На базе опубликованного SHA `806a66f216168113feb098f9818b8558a5869b72`
+полностью EN→RU описан `cmd/image-admission-bridge` — 25/25 объявлений,
+включая private constant внутри теста. Дополнительно описаны version/main
+двух команд `image-admission-controller` и `role-image-builder` — по 2/2.
+Всего role-image-builder — 112/548, остальные 436 остаются в работе.
+
+Комментарии различают первый неизменяемый claim и изменяемый promotion,
+точные attempt-scoped idempotency receipts, привязку inventory/report/risk
+к сохранённому claim, проверку клиента до dispatch и безопасную проекцию
+ошибки в gRPC-код. У immutable publication описаны exclusive private temp,
+file fsync, hard link и directory fsync; mutable writeState прямо не назван
+эквивалентной no-clobber/durable/private-file границей. Чтение state/report
+отличается от digest readers: последние читают файл целиком до проверки
+значения, без ограничения I/O и проверки private metadata. Изменяемое
+evidence до финальной validation при ошибке не считается допущенным.
+
+В тестовых комментариях отделены искусственные risk decision/credentials
+от реального approval и grants, concurrent file publication от RPC,
+file/JSON validation от проверки полномочий claim. Точки входа описывают
+сигнальную отмену lifecycle и отдельный base для ограниченного shutdown;
+linker version проверен по существующему Dockerfile. Production и тестовые
+условия не менялись: diff — только комментарии, прежние две строки
+русского пояснения заменены полным двуязычным описанием.
+
+До/после `go test -count=1` и `go build` bridge — PASS LOCAL. После правок
+сборка всех трёх command packages — PASS LOCAL; два composition main
+пакета не имеют собственных test files, это не unit-проверка их app/runtime.
+16 unit анализатора, unit Go-checker, пять ignore-boundaries, gofmt и
+diff-check — PASS LOCAL. Команды исполнялись с
+`GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`. Тесты bridge используют
+временные файлы и искусственные снимки; RPC, registry, кластер, promotion,
+полный unit role-image-builder и browser/deploy/live — NOT RUN.
+
+Полный detector рабочего дерева: 6553 source-файла, 222 исключения,
+1865 raw-групп, 566 решений и 1299 неразобранных; raw SHA-256
+`fc10e4dbeb9ef6bc1c21883ce71121222923ba5c32e09a05911cd6232ba2b197`,
+отпечаток `c6e6911629ed6af6095d04f312cd79bf9c8d3d2496eeeba77dd46a9744183e41`.
+Одно прежнее окно risk_test/imageowner admission_risk_test поменяло
+fragment hash после комментариев внутри исходного диапазона; группа
+остаётся неразобранной, не названа выносом или новым совпадением.
+Новые исключения не добавлены. Go-реестр — 5237/21073, непокрыты 15836;
+полный go-docs-check — NOT RUN. Известный diagnostics FAIL остаётся
+открытым. Точный scan/build/unit нового SHA публикуется в том же PR.
 
 ## Сто пятьдесят пятая волна — комментарии registry authorizer
 
