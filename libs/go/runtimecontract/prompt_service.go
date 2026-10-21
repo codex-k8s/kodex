@@ -11,25 +11,37 @@ import (
 	"unicode/utf8"
 )
 
+// PromptServiceRevision identifies the currently emitted owner-sealed prompt format.
+// PromptServiceRevision обозначает текущий формат prompt, заверенного владельцем.
 const PromptServiceRevision = "prompt-service-v3"
 
+// pinnedPromptServiceRevisionV2 preserves decoding of already sealed v2 snapshots.
+// pinnedPromptServiceRevisionV2 сохраняет чтение уже заверенных снимков версии v2.
 const pinnedPromptServiceRevisionV2 = "prompt-service-v2"
 
-// Существующие owner-sealed снимки v2 сохраняют прежнюю интерпретацию.
-// Неизвестные версии закрыто отклоняются без поиска совместимого decoder.
+// supportedPromptServiceRevision accepts only the current format and previously sealed v2;
+// unknown revisions fail closed rather than selecting a permissive decoder.
+// supportedPromptServiceRevision допускает лишь текущий формат и ранее заверенную v2;
+// неизвестные версии закрыто отклоняются без выбора более мягкого декодера.
 func supportedPromptServiceRevision(revision string) bool {
 	return revision == PromptServiceRevision || revision == pinnedPromptServiceRevisionV2
 }
 
-// PromptRuntimeContractVersion допускает ровно числовую owner version 1
-// до и после JSON persistence, без округления дроби или разбора строки.
+// PromptRuntimeContractVersion accepts exactly numeric owner version 1 before or after JSON persistence,
+// without rounding fractions or parsing string values.
+// PromptRuntimeContractVersion принимает ровно числовую owner version 1 до и после сохранения JSON,
+// без округления дроби или преобразования строки.
 func PromptRuntimeContractVersion(value any) bool {
 	raw, err := json.Marshal(value)
 	return err == nil && string(raw) == "1"
 }
 
+// errPromptService is the closed-failure result for malformed prompt materialization.
+// errPromptService обозначает закрытый отказ при неверной материализации prompt.
 var errPromptService = errors.New("runtime prompt service materialization is invalid")
 
+// PromptServiceSection records a platform slot or a user template with explicit provenance.
+// PromptServiceSection хранит платформенный слот или пользовательский шаблон с явным происхождением.
 type PromptServiceSection struct {
 	UserKind       string `json:"userKind,omitempty"`
 	TemplateRef    string `json:"templateRef,omitempty"`
@@ -39,14 +51,18 @@ type PromptServiceSection struct {
 	Content        string `json:"content"`
 }
 
+// PromptServiceEnvelope groups versioned, localized sections validated against the runner snapshot.
+// PromptServiceEnvelope объединяет версионированные разделы с локалью, сверяемые со снимком runner.
 type PromptServiceEnvelope struct {
 	Revision string                 `json:"revision"`
 	Locale   string                 `json:"locale"`
 	Sections []PromptServiceSection `json:"sections"`
 }
 
-// DecodePromptService принимает только provenance из связанного owner snapshot,
-// а не marker внутри пользовательского текста. Неизвестная revision закрыто отклоняется.
+// DecodePromptService validates the sealed template digest, exact slots, JSON shape, and provenance;
+// a marker in user text cannot grant platform authority, and unknown revisions fail closed.
+// DecodePromptService проверяет заверенный дайджест шаблона, точные слоты, форму JSON и происхождение;
+// маркер в тексте пользователя не даёт платформенных полномочий, неизвестные версии отклоняются.
 func DecodePromptService(input RunnerInput) (PromptServiceEnvelope, error) {
 	var value PromptServiceEnvelope
 	if !supportedPromptServiceRevision(input.PromptServiceTemplateRevision) ||
@@ -145,14 +161,18 @@ func DecodePromptService(input RunnerInput) (PromptServiceEnvelope, error) {
 	return value, nil
 }
 
-// encoding/json принимает последнее значение duplicate key; на authority boundary
-// до typed decode запрещаем неоднозначную JSON форму целиком.
+// promptJSONUnique rejects duplicate JSON keys before typed decoding, where encoding/json would
+// otherwise keep the last value and make the authority-bearing prompt ambiguous.
+// promptJSONUnique отклоняет повторяющиеся ключи JSON до типизированного разбора, при котором
+// encoding/json оставил бы последнее значение и сделал полномочный prompt неоднозначным.
 func promptJSONUnique(decoder *json.Decoder, depth int) error {
 	return boundedJSONUnique(decoder, depth, 8)
 }
 
-// Общая проверка неоднозначных ключей сохраняет независимый лимит каждой
-// закрытой схемы; scanner metadata не наследует глубину prompt sections.
+// boundedJSONUnique walks JSON containers with a caller-specific depth limit and rejects
+// repeated object keys; scanner metadata does not inherit the prompt-section depth budget.
+// boundedJSONUnique обходит контейнеры JSON с отдельным лимитом глубины и отклоняет
+// повторные ключи объекта; метаданные сканера не наследуют лимит разделов prompt.
 func boundedJSONUnique(decoder *json.Decoder, depth, maximumDepth int) error {
 	if depth > maximumDepth {
 		return errPromptService

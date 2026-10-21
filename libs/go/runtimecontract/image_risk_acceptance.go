@@ -7,14 +7,26 @@ import (
 	"time"
 )
 
+// ImageRiskAcceptanceSchema pins the only accepted owner decision schema.
+// ImageRiskAcceptanceSchema закрепляет единственную допустимую схему решения владельца.
 const ImageRiskAcceptanceSchema = "kodex.dev/image-risk-acceptance/v1"
+
+// MaximumImageRiskAcceptanceBytes bounds the complete serialized decision.
+// MaximumImageRiskAcceptanceBytes ограничивает размер всего сериализованного решения.
 const MaximumImageRiskAcceptanceBytes = 16 << 10
+
+// MaximumImageRiskReasonBytes bounds the owner's human-readable justification.
+// MaximumImageRiskReasonBytes ограничивает размер текстового обоснования владельца.
 const MaximumImageRiskReasonBytes = 2048
 
+// errImageRiskAcceptance is the closed-failure result for malformed or mismatched decisions.
+// errImageRiskAcceptance обозначает закрытый отказ для неверного или несоответствующего решения.
 var errImageRiskAcceptance = errors.New("image risk acceptance is invalid")
 
-// Binding содержит только назначенные владельцем поля. Worker не создаёт
-// решение и не заменяет transport authority проверкой этих идентификаторов.
+// ImageRiskAcceptance binds an owner decision to one image, report, build, and policy revision;
+// a worker neither creates this decision nor derives transport authority from its identifiers.
+// ImageRiskAcceptance связывает решение владельца с конкретными образом, отчётом, сборкой и версией политики;
+// worker не создаёт решение и не выводит полномочия транспорта из его идентификаторов.
 type ImageRiskAcceptance struct {
 	Schema                       string `json:"schema"`
 	DecisionRef                  string `json:"decisionRef"`
@@ -43,6 +55,8 @@ type ImageRiskAcceptance struct {
 	DecidedAt                    string `json:"decidedAt"`
 }
 
+// Validate rejects incomplete, noncanonical, or unpinned risk-acceptance fields before use.
+// Validate отклоняет неполные, неканонические или не закреплённые по версии поля решения до использования.
 func (value ImageRiskAcceptance) Validate() error {
 	decidedAt, err := time.Parse(time.RFC3339Nano, value.DecidedAt)
 	if err != nil || decidedAt.IsZero() || decidedAt.UTC().Format(time.RFC3339Nano) != value.DecidedAt ||
@@ -63,6 +77,8 @@ func (value ImageRiskAcceptance) Validate() error {
 	return nil
 }
 
+// CanonicalImageRiskAcceptance validates and size-bounds the JSON used for a decision digest.
+// CanonicalImageRiskAcceptance проверяет и ограничивает размер JSON, используемого для дайджеста решения.
 func CanonicalImageRiskAcceptance(value ImageRiskAcceptance) ([]byte, error) {
 	if value.Validate() != nil {
 		return nil, errImageRiskAcceptance
@@ -74,6 +90,8 @@ func CanonicalImageRiskAcceptance(value ImageRiskAcceptance) ([]byte, error) {
 	return raw, nil
 }
 
+// DecodeImageRiskAcceptance accepts only a bounded, strict JSON decision with valid fields.
+// DecodeImageRiskAcceptance принимает только ограниченное строгое JSON-решение с допустимыми полями.
 func DecodeImageRiskAcceptance(raw []byte) (ImageRiskAcceptance, error) {
 	var value ImageRiskAcceptance
 	if decodeVulnerabilityJSON(raw, &value, MaximumImageRiskAcceptanceBytes, true) != nil || value.Validate() != nil {
@@ -82,6 +100,8 @@ func DecodeImageRiskAcceptance(raw []byte) (ImageRiskAcceptance, error) {
 	return value, nil
 }
 
+// VerifyImageRiskAcceptanceReportEnvelope rejects a decision/report envelope whose pinned facts disagree.
+// VerifyImageRiskAcceptanceReportEnvelope отклоняет пару решения и отчёта при несовпадении закреплённых фактов.
 func VerifyImageRiskAcceptanceReportEnvelope(raw []byte) error {
 	var envelope struct {
 		RiskAcceptance ImageRiskAcceptance      `json:"riskAcceptance"`
@@ -94,8 +114,10 @@ func VerifyImageRiskAcceptanceReportEnvelope(raw []byte) error {
 	return nil
 }
 
-// Проверка общего tuple дополняет, а не заменяет проверку owner receipt,
-// предыдущего evidence manifest и свежего admission attempt/fence.
+// ImageRiskAcceptanceMatchesReport compares the shared decision/report tuple; owner receipt,
+// previous evidence manifest, and fresh admission attempt/fence still require separate checks.
+// ImageRiskAcceptanceMatchesReport сравнивает общий набор полей решения и отчёта; owner receipt,
+// предыдущий evidence manifest и свежие admission attempt/fence проверяются отдельно.
 func ImageRiskAcceptanceMatchesReport(decision ImageRiskAcceptance, report ImageVulnerabilityReport) bool {
 	projection, err := CanonicalImageVulnerabilityReport(report)
 	return err == nil && decision.Validate() == nil && report.BlockingMatchCount > 0 &&
