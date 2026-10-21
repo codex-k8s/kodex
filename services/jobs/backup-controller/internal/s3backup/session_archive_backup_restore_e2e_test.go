@@ -102,17 +102,7 @@ func putSessionArchiveFixture(t *testing.T, ctx context.Context, client *Client,
 func findSessionArchiveBackup(t *testing.T, ctx context.Context, endpoint, accessKey, secretKey,
 	objectKey string, expected []byte, startedAt time.Time) string {
 	t.Helper()
-	destination, err := NewClient(ctx, configspec.S3{
-		Name: "backup-repository", Endpoint: endpoint, Region: "us-east-1", Bucket: "kodex-backups",
-		AccessKeyID: accessKey, SecretAccessKey: secretKey, UsePathStyle: true, AllowInsecureLocal: true,
-	})
-	if err != nil {
-		t.Fatal("initialize local backup repository")
-	}
-	repository, err := NewRepository(destination, "kodex")
-	if err != nil || repository.Check(ctx, nil) != nil {
-		t.Fatal("local backup repository is unavailable")
-	}
+	repository := newLocalBackupE2ERepository(t, ctx, endpoint, accessKey, secretKey)
 	backups, _, err := repository.Catalog(ctx)
 	if err != nil {
 		t.Fatal("read verified backup catalog")
