@@ -3,6 +3,46 @@
   "entries": [
     {
       "format": "yaml",
+      "firstPath": ".github/workflows/deploy-production.yml",
+      "secondPath": ".github/workflows/deploy-production.yml",
+      "fragmentSHA256": "6b7a417e83e52b53c5e421684ec26f39475f7803b485d5a0fbf427d3434e721c",
+      "count": 1,
+      "reason": "Детектор сопоставил один и тот же непрерывный список переменных шага render immutable release manifest со сдвигом в одну строку. Это перекрытие внутри одного YAML-блока, а не два независимых куска логики; вынесение переменных изменило бы явную привязку GitHub vars к окружению шага."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "buf.gen.local.yaml",
+      "secondPath": "buf.gen.local.yaml",
+      "fragmentSHA256": "0159a72850e693759ae8b8edb45a17d1e2c052eaccfe9f113eee031b85b4bb6f",
+      "count": 1,
+      "reason": "Перекрывающиеся окна перечисляют самостоятельные локальные Proto и gRPC plugins с разными executable, выходами, модулями и типами. Общий блок не представляет единую операцию генерации: явное перечисление сохраняет соответствие generator к конкретному contract и не даёт случайно поменять output."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "buf.gen.yaml",
+      "secondPath": "buf.gen.yaml",
+      "fragmentSHA256": "c95be57ab22cf8c78417b080f6e136cbcfc345fb9b84fc3cb60e479beef9806f",
+      "count": 1,
+      "reason": "Окна проходят через соседние remote plugin-записи internal RPC authority и secretbroker: их Proto types и output modules различаются. Сходный набор полей обязателен формату Buf; объединение этих записей скрывало бы независимое закрепление версии и направления генерации."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "buf.gen.yaml",
+      "secondPath": "buf.gen.yaml",
+      "fragmentSHA256": "a29590758851b7dfcf663b9629ef517598576f84d769a65cfbf34e3d6505cb71",
+      "count": 1,
+      "reason": "Перекрывающиеся окна охватывают несколько соседних remote plugin-записей internal RPC authority, controlplane, secretbroker и STT, а не два одинаковых исполняемых блока. Каждая запись задаёт собственные generator, версию, output module и type; явная форма Buf сохраняет их раздельную проверяемость."
+    },
+    {
+      "format": "yaml",
+      "firstPath": "buf.gen.yaml",
+      "secondPath": "buf.gen.yaml",
+      "fragmentSHA256": "238f31e3949db194efc0fa6f19b4b968ff617de9e985bdd8473adef56471e672",
+      "count": 1,
+      "reason": "Детектор сопоставил окна нескольких соседних remote plugin-записей controlplane, secretbroker и STT с различными type и output modules. Их одинаковая YAML-структура задаётся форматом Buf; общий helper превратил бы явные привязки type/module в косвенную настройку без сокращения исполняемого кода."
+    },
+    {
+      "format": "yaml",
       "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
       "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
       "fragmentSHA256": "a49749d2a837031a55225387fffcad619d4020c753a4ba682faec321151de13f",
