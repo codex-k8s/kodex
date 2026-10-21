@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.164.0
+version: 1.165.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,54 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто шестьдесят пятая волна — buildctl и завершение пакета build
+
+На базе опубликованного SHA `789c75a88141696643ac3ac951b9a52b9f6fe23f`
+три одинаковых buildctl transport prefix вынесены в приватный
+Executor.buildctlCommand. Он создаёт свежий exec.Cmd с прежними Binary,
+ctx и десятью аргументами addr/CA/cert/key/servername, но не запускает
+команду. Worker readiness, tiny local readiness export и staging build
+сохраняют собственные subcommand/arguments, Env, stdout/stderr, Start/Run/Wait,
+progress reader и cleanup. Нет нового shell, fallback, retry или назначения.
+
+Механическое обратное преобразование ровно трёх call sites и удаление helper
+дали прежний non-comment Go source после gofmt. Новый unit проверяет
+полный порядок prefix и suffix для debug/build, отсутствие запущенного
+процесса и настроенных Env/streams/Dir, наличие context Cancel и независимость
+argument storage в обе стороны и между командами. Настоящий buildctl не
+вызывался, учётные данные не читались.
+
+Завершены 58 прежних и два новых объявления: buildkit.go — 45/45,
+base_allowlist.go — 6/6, их tests — 2/2 и 3/3, inventory tests — 4/4.
+Весь internal/build теперь 132/132 с EN→RU комментариями; role-image-builder
+остаётся незавершённым — 408/571, ещё 163 объявления вне этого пакета.
+Описаны реальные эффекты и ограничения: Prepared хранит pointer на вход,
+Close не останавливает процессы, phase channel неблокирующий, metadata
+читается до size check, local provenance hash не проверяет подпись SLSA.
+Owner/DNS/repository validators не названы авторизацией или полными parsers;
+Lstat/Open не названы race-free, установка owner block не объявлена offline.
+Каталог проверяет точные base tuples, но availability flags не фильтрует.
+
+Через Context7 /moby/buildkit сверена официальная buildctl reference:
+глобальные addr/tlscacert/tlscert/tlskey/tlsservername перед subcommand,
+local/image exporters и rawjson. Версия CLI и runtime policy не менялись.
+
+Полный unit/build internal/build после изменений — PASS LOCAL: 29 верхних
+тестов, 64 PASS с подтестами, 0 SKIP/FAIL. До изменений unit пакета также
+PASS. 16 unit анализатора, unit Go-checker, пять ignore-boundaries,
+gofmt и diff-check — PASS LOCAL. Go-команды используют
+`GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`. Полный role-image-builder,
+PostgreSQL, browser/deploy/live — NOT RUN; scoped задача их не запускает.
+
+Повтор prefix ниже detector threshold: удаление raw-группы не заявляется.
+Detector не изменил multiset: 6556 source-файлов, 222 исключения,
+1859 raw-групп, 569 решений и 1290 неразобранных; raw SHA-256
+`0e17f3f18e7fbcc734d4fc5b31e774bf9445288da684c720274f0b47477064a2`,
+отпечаток `9a3e8fcd954e7313651df38a333f6c33900c3a948945c2af46c4cea91b7069f3`.
+Go-реестр — 5533/21096, непокрыты 15563. Новых исключений нет.
+Полный go-docs-check — NOT RUN; прежний diagnostics FAIL остаётся открытым.
+Точный scan/build/unit нового SHA публикуется в том же PR; цель не завершена.
 
 ## Сто шестьдесят четвёртая волна — materializer и закрытая диагностика
 

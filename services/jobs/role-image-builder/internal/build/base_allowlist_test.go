@@ -7,6 +7,10 @@ import (
 	"testing"
 )
 
+// TestLoadBaseAllowlistAcceptsOnlyExactCatalogDigests loads two local bases and rejects a cross-repository digest match.
+// The fixture verifies exact tuple membership without contacting either registry.
+// TestLoadBaseAllowlistAcceptsOnlyExactCatalogDigests загружает две локальные базы и отклоняет дайджест от другого реестрового пути.
+// Фикстура проверяет принадлежность точной пары без обращения к реестрам.
 func TestLoadBaseAllowlistAcceptsOnlyExactCatalogDigests(t *testing.T) {
 	digestA := "sha256:" + strings.Repeat("a", 64)
 	digestB := "sha256:" + strings.Repeat("b", 64)
@@ -37,6 +41,10 @@ func TestLoadBaseAllowlistAcceptsOnlyExactCatalogDigests(t *testing.T) {
 	}
 }
 
+// TestLoadBaseAllowlistRejectsUnknownFieldsAndDuplicateBase checks rejection of an unknown field and repeated base tuple.
+// Different catalog keys must not make the same reference/digest pair acceptable twice.
+// TestLoadBaseAllowlistRejectsUnknownFieldsAndDuplicateBase проверяет отклонение неизвестного поля и повторной пары базы.
+// Разные ключи каталога не должны позволять дважды принять одну пару ссылки и дайджеста.
 func TestLoadBaseAllowlistRejectsUnknownFieldsAndDuplicateBase(t *testing.T) {
 	digest := "sha256:" + strings.Repeat("a", 64)
 	for name, document := range map[string]string{

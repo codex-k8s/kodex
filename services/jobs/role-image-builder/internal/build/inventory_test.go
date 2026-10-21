@@ -7,6 +7,10 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// TestFinalInventoryProbeIsTrustedReadOnlyAndAfterUserSource checks rendered ordering, runner restoration and read-only probing.
+// It also rejects owner aliases that shadow trusted stages, without building or admitting an image.
+// TestFinalInventoryProbeIsTrustedReadOnlyAndAfterUserSource проверяет порядок текста, восстановление доверенного runner и проверку только для чтения.
+// Дополнительно отклоняются псевдонимы владельца, перекрывающие доверенные этапы; сборка и допуск образа не выполняются.
 func TestFinalInventoryProbeIsTrustedReadOnlyAndAfterUserSource(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	input := &controlplanev1.RoleImageBuildInput{Dockerfile: "FROM registry.invalid/base@sha256:" + digest + " AS owner\nRUN printf owner\n", SpecSha256: digest, ImmutableBuildSha256: digest, RoleRuntimeContractSha256: digest, FrontendSha256: digest}
