@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestAdmissionTechnicalCommandsBindCanonicalExactTuple keeps failure commands within the admission workload.
+// TestAdmissionTechnicalCommandsBindCanonicalExactTuple удерживает команды отказа в нагрузке допуска.
 func TestAdmissionTechnicalCommandsBindCanonicalExactTuple(t *testing.T) {
 	for _, operation := range []string{"platform.role-images.admission.fail", "platform.role-images.admission.expire", "platform.role-images.admission.terminal.get"} {
 		method := controlplaneclient.ImageAdmissionOperations()[operation]
@@ -20,6 +22,8 @@ func TestAdmissionTechnicalCommandsBindCanonicalExactTuple(t *testing.T) {
 	}
 }
 
+// TestControllerRecoveryHasDedicatedReadOnlyProfile isolates recovery reads from other workloads.
+// TestControllerRecoveryHasDedicatedReadOnlyProfile изолирует чтение восстановления от иных нагрузок.
 func TestControllerRecoveryHasDedicatedReadOnlyProfile(t *testing.T) {
 	operation := "platform.role-images.admission.recovery-terminal.get"
 	method := controlplaneclient.ImageAdmissionControllerOperations()[operation]

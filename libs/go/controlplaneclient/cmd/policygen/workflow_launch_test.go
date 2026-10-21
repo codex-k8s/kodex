@@ -7,6 +7,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 )
 
+// TestWorkflowLaunchClosedControllerProfile confines workflow launch to registered runtime operations.
+// TestWorkflowLaunchClosedControllerProfile ограничивает запуск workflow зарегистрированными runtime-операциями.
 func TestWorkflowLaunchClosedControllerProfile(t *testing.T) {
 	catalogMethod := controlplaneclient.RuntimeOperations()["platform.runtime.execution.workflow.catalog"]
 	if catalogMethod != controlplanev1.RuntimeWorkService_GetExecutionWorkflowCatalog_FullMethodName {

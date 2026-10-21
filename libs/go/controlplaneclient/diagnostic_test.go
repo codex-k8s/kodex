@@ -14,17 +14,23 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// diagnosticResolver records proof resolution calls and returns a chosen failure.
+// diagnosticResolver считает вызовы разрешения доказательства и возвращает заданный отказ.
 type diagnosticResolver struct {
 	api.AuthorityProofResolverServiceClient
 	err   error
 	calls int
 }
 
+// ResolveAuthorityProof simulates the resolver response for diagnostic tests.
+// ResolveAuthorityProof имитирует ответ resolver для диагностических проверок.
 func (resolver *diagnosticResolver) ResolveAuthorityProof(context.Context, *api.ResolveAuthorityProofRequest, ...grpc.CallOption) (*api.ResolveAuthorityProofResponse, error) {
 	resolver.calls++
 	return &api.ResolveAuthorityProofResponse{}, resolver.err
 }
 
+// TestProofProviderReportsExactPreIssuerFailure checks stage labels and credential redaction.
+// TestProofProviderReportsExactPreIssuerFailure проверяет этапы отказа и сокрытие гранта.
 func TestProofProviderReportsExactPreIssuerFailure(t *testing.T) {
 	const secret = "PRIVATE-credential-path-message-sentinel"
 	for _, stage := range []authorityclient.DiagnosticStage{authorityclient.StageProofOperation, authorityclient.StageGrantMissing, authorityclient.StageGrantRead, authorityclient.StageProofResolve, authorityclient.StageProofResponse} {

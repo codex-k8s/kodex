@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestRoleImageImpactProfilesBindExactOwnerResource checks exact resource and version pins.
+// TestRoleImageImpactProfilesBindExactOwnerResource проверяет точную привязку ресурса и версии.
 func TestRoleImageImpactProfilesBindExactOwnerResource(t *testing.T) {
 	for operation, want := range map[string]requestProfile{
 		"platform.command.role-image-impact-plans.prepare": {Mode: "UNARY_PROTO_SHA256", Resource: "REQUIRED", Version: "REQUIRED", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"},

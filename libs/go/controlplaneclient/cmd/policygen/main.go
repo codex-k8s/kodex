@@ -14,6 +14,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 )
 
+// Endpoint constants pin the identities and methods emitted into the machine policy.
+// Константы endpoint закрепляют удостоверения и методы создаваемой машинной политики.
 const (
 	resolverMethod       = "/internalrpcauthority.v1.AuthorityProofResolverService/ResolveAuthorityProof"
 	controlPlaneID       = "control-plane"
@@ -31,12 +33,16 @@ const (
 	sttTranscribeMethod  = "/stt.v1.SpeechToTextService/Transcribe"
 )
 
+// document is the versioned policy envelope written as JSON.
+// document задаёт версионированную оболочку политики в JSON.
 type document struct {
 	Version        int    `json:"v"`
 	PolicyRevision uint64 `json:"policy_revision"`
 	Policy         policy `json:"policy"`
 }
 
+// policy holds closed proof-producer and operation-binding registries.
+// policy содержит закрытые реестры источников доказательств и привязок операций.
 type policy struct {
 	AuthorityABIVersion     uint32     `json:"authority_abi_version"`
 	TrustDomain             string     `json:"trust_domain"`
@@ -48,6 +54,8 @@ type policy struct {
 	OperationBindings       []binding  `json:"operation_bindings"`
 }
 
+// producer describes how one caller obtains an authority proof from its owner.
+// producer описывает получение доказательства полномочий вызывающим субъектом.
 type producer struct {
 	ProducerID                         string   `json:"producer_id"`
 	CallerWorkloadID                   string   `json:"caller_workload_id"`
@@ -75,6 +83,8 @@ type producer struct {
 	ServerResolvedFields               []string `json:"server_resolved_fields"`
 }
 
+// binding pins one operation to its caller, target, permission, and request profile.
+// binding закрепляет операцию за вызывающим субъектом, целью, правом и профилем запроса.
 type binding struct {
 	OperationID         string               `json:"operation_id"`
 	CallerWorkloadID    string               `json:"caller_workload_id"`
@@ -96,6 +106,8 @@ type binding struct {
 	Continuation        *continuationProfile `json:"continuation,omitempty"`
 }
 
+// requestProfile defines which request pins must be supplied for an operation.
+// requestProfile задаёт обязательные поля привязки запроса для операции.
 type requestProfile struct {
 	Mode        string `json:"mode"`
 	Resource    string `json:"resource"`
@@ -104,17 +116,23 @@ type requestProfile struct {
 	Idempotency string `json:"idempotency"`
 }
 
+// continuationProfile pins a delegated operation to its parent operation.
+// continuationProfile привязывает делегированную операцию к родительской.
 type continuationProfile struct {
 	ParentOperationID string `json:"parent_operation_id"`
 	ParentFullMethod  string `json:"parent_full_method"`
 }
 
+// localPeer records the expected Unix identity on the local transport.
+// localPeer хранит ожидаемую Unix-идентичность локального соединения.
 type localPeer struct {
 	UID         uint32 `json:"uid"`
 	PrimaryGID  uint32 `json:"primary_gid"`
 	SharedFSGID uint32 `json:"shared_fs_gid"`
 }
 
+// profile collects one workload's proof and target binding inputs before emission.
+// profile собирает исходные параметры доказательства и цели одной нагрузки.
 type profile struct {
 	ProducerID, WorkloadID, Credential, CredentialIssuer, CredentialAudience, CredentialTrust  string
 	TargetWorkloadID, TargetSPIFFEID, TargetAudience, TargetTLSServerName, TargetTrustBundleID string
@@ -124,6 +142,8 @@ type profile struct {
 	Continuation                                                                               *continuationProfile
 }
 
+// main validates generator inputs and writes a deterministically ordered policy.
+// main проверяет параметры генератора и записывает детерминированную политику.
 func main() {
 	output := flag.String("output", "", "path to the resulting authority-policy.json")
 	oidcIssuer := flag.String("oidc-issuer", "", "exact OIDC issuer for this installation")
@@ -265,6 +285,8 @@ func main() {
 	}
 }
 
+// continuationWorker binds STT continuation operations to their signed parent.
+// continuationWorker связывает продолжение STT с подписанной родительской операцией.
 func continuationWorker(producerID string, operations map[string]string, targetID, targetPeer, targetAudience, targetTLS string) profile {
 	result := targetedWorker(sttID, producerID, operations, targetID, targetPeer, targetAudience, targetTLS)
 	result.AuthoritySources = []string{"DOMAIN_STATE", "OIDC_SESSION", "RUNTIME_EXECUTION"}
@@ -273,6 +295,8 @@ func continuationWorker(producerID string, operations map[string]string, targetI
 	return result
 }
 
+// requiredProjects marks every supplied operation as requiring a project reference.
+// requiredProjects отмечает каждую операцию как требующую ссылку на проект.
 func requiredProjects(operations map[string]string) map[string]struct{} {
 	result := make(map[string]struct{}, len(operations))
 	for operation := range operations {
@@ -281,6 +305,8 @@ func requiredProjects(operations map[string]string) map[string]struct{} {
 	return result
 }
 
+// operationRequestProfile selects exact pin requirements before generic fallback rules.
+// operationRequestProfile выбирает точные требования привязки перед общими правилами.
 func operationRequestProfile(operationID, fullMethod string) requestProfile {
 	// Полный nested execution/catalog pin покрывается canonical Proto digest.
 	// Отдельные resource/version/attempt headers здесь не назначают полномочия.
@@ -399,6 +425,8 @@ func operationRequestProfile(operationID, fullMethod string) requestProfile {
 	return requestProfile{Mode: mode, Resource: required(resource), Version: required(version), Attempt: required(attempt), Idempotency: required(idempotency)}
 }
 
+// permissionForOperation maps exceptional operations to their canonical permission.
+// permissionForOperation сопоставляет особые операции с каноническим правом.
 func permissionForOperation(operationID string) string {
 	permissions := map[string]string{
 		"platform.stt.model-catalog.get":                       "system.configuration.manage",
@@ -420,6 +448,8 @@ func permissionForOperation(operationID string) string {
 	return operationID
 }
 
+// worker creates a platform-grant producer profile for one workload.
+// worker создаёт профиль нагрузки с платформенным грантом.
 func worker(workloadID, producerID string, operations map[string]string) profile {
 	return profile{
 		ProducerID: producerID, WorkloadID: workloadID, Credential: "PLATFORM_WORKER_GRANT",
@@ -430,6 +460,8 @@ func worker(workloadID, producerID string, operations map[string]string) profile
 	}
 }
 
+// targetedWorker redirects a worker profile to a pinned downstream workload.
+// targetedWorker направляет профиль нагрузки к закреплённому целевому сервису.
 func targetedWorker(
 	workloadID string,
 	producerID string,
@@ -448,6 +480,8 @@ func targetedWorker(
 	return result
 }
 
+// delegatedTargetedWorker adds domain and session authority to a targeted worker.
+// delegatedTargetedWorker добавляет целевому worker полномочия домена и сессии.
 func delegatedTargetedWorker(
 	workloadID string,
 	producerID string,
@@ -468,10 +502,14 @@ func delegatedTargetedWorker(
 	return result
 }
 
+// workloadSPIFFE derives the in-cluster SPIFFE identifier for a workload.
+// workloadSPIFFE формирует внутрикластерный SPIFFE-идентификатор нагрузки.
 func workloadSPIFFE(workloadID string) string {
 	return "spiffe://kodex.local/ns/kodex-system/sa/" + workloadID
 }
 
+// sortedKeys returns stable operation ordering for deterministic policy output.
+// sortedKeys возвращает стабильный порядок операций для политики.
 func sortedKeys(values map[string]string) []string {
 	result := make([]string, 0, len(values))
 	for key := range values {
@@ -481,6 +519,8 @@ func sortedKeys(values map[string]string) []string {
 	return result
 }
 
+// fatal reports a generation failure on stderr and exits unsuccessfully.
+// fatal сообщает об ошибке генерации и завершает процесс с отказом.
 func fatal(format string, values ...any) {
 	_, _ = fmt.Fprintf(os.Stderr, "authority policy generation failed: "+format+"\n", values...)
 	os.Exit(1)

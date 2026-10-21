@@ -6,6 +6,8 @@ import (
 	cp "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// TestRevisionImpactRequestProfiles checks write and read pin requirements separately.
+// TestRevisionImpactRequestProfiles отдельно проверяет привязки записи и чтения.
 func TestRevisionImpactRequestProfiles(t *testing.T) {
 	prepare := operationRequestProfile("platform.command.environment-draft-impact.prepare", cp.PlatformCommandService_PrepareEnvironmentDraftImpact_FullMethodName)
 	if prepare != (requestProfile{Mode: "UNARY_PROTO_SHA256", Resource: "REQUIRED", Version: "REQUIRED", Attempt: "FORBIDDEN", Idempotency: "REQUIRED"}) {

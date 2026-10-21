@@ -13,10 +13,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// DialServiceIdentity создаёт отдельный явный профиль обычных RPC. Эти вызовы
-// не читают platform grant и не обращаются к UDS issuer или proof resolver.
-// Переходный client сохраняет прежние зависимости только для явного выпуска
-// proof к другим target; ошибка service-v1 не включает legacy fallback.
+// DialServiceIdentity replaces the ordinary RPC connection with an exact TLS service-v1 client after validating operations.
+// DialServiceIdentity заменяет соединение обычных RPC на точный TLS-клиент service-v1 после проверки операций.
+// Other explicitly requested proof paths retain their separate dependencies; a failed service-v1 call is never retried via them.
+// Иные явно запрошенные proof-пути сохраняют отдельные зависимости; ошибка service-v1 не повторяется через них.
 func DialServiceIdentity(ctx context.Context, config Config) (*Client, error) {
 	if ctx == nil || ctx.Err() != nil {
 		return nil, errors.New("control-plane client context unavailable")
@@ -62,6 +62,8 @@ func DialServiceIdentity(ctx context.Context, config Config) (*Client, error) {
 	return client, nil
 }
 
+// serviceProjectOperations requires each project-scoped operation to exist in either the ordinary or proof registry.
+// serviceProjectOperations требует наличия каждой проектной операции в обычном реестре либо реестре proof.
 func serviceProjectOperations(operations operationSet, proofOperations map[string]string, required map[string]struct{}) (map[string]struct{}, error) {
 	projects := make(map[string]struct{}, len(required))
 	for operation := range required {
@@ -83,10 +85,14 @@ func serviceProjectOperations(operations operationSet, proofOperations map[strin
 	return projects, nil
 }
 
+// serviceIdentityStream fixes the service-v1 profile for the closed set of permitted upload and download streams.
+// serviceIdentityStream закрепляет профиль service-v1 для закрытого набора разрешённых потоков загрузки и скачивания.
 func serviceIdentityStream(operations operationSet, projects map[string]struct{}) grpc.StreamClientInterceptor {
 	return serviceStream(operations, projects, "service-v1", "")
 }
 
+// serviceStream rejects unsupported stream methods or directions before applying the same operation and metadata checks as unary RPC.
+// serviceStream отвергает неизвестные методы и направления потоков до общих проверок операции и метаданных unary RPC.
 func serviceStream(operations operationSet, projects map[string]struct{}, profile, caller string) grpc.StreamClientInterceptor {
 	return func(ctx context.Context, desc *grpc.StreamDesc, conn *grpc.ClientConn, method string, next grpc.Streamer, options ...grpc.CallOption) (grpc.ClientStream, error) {
 		serverStream := (method == cp.RuntimeWorkService_StreamExecutionArtifact_FullMethodName ||
@@ -108,10 +114,14 @@ func serviceStream(operations operationSet, projects map[string]struct{}, profil
 	}
 }
 
+// serviceIdentityUnary binds ordinary unary calls to the service-v1 profile without a synthetic trusted caller.
+// serviceIdentityUnary привязывает обычные unary-вызовы к профилю service-v1 без искусственного trusted caller.
 func serviceIdentityUnary(operations operationSet, projects map[string]struct{}) grpc.UnaryClientInterceptor {
 	return serviceUnary(operations, projects, "service-v1", "")
 }
 
+// serviceUnary replaces stale outgoing authority headers and forwards only a registered operation with explicit grant and project pins.
+// serviceUnary заменяет прежние заголовки полномочий и отправляет лишь зарегистрированную операцию с явными grant и project pins.
 func serviceUnary(operations operationSet, projects map[string]struct{}, profile, caller string) grpc.UnaryClientInterceptor {
 	return func(ctx context.Context, method string, request, response any, connection *grpc.ClientConn, invoke grpc.UnaryInvoker, options ...grpc.CallOption) error {
 		operation, ok := operations[method]

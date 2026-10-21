@@ -21,13 +21,24 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// maximumCredentialBytes bounds an application grant read from a file or request.
+// maximumCredentialBytes ограничивает размер гранта приложения из файла или запроса.
 const maximumCredentialBytes = 16 << 10
 
+// maximumProtectedResponseBytes bounds responses on the protected connection.
+// maximumProtectedResponseBytes ограничивает ответы защищённого соединения.
 const maximumProtectedResponseBytes = 33 << 20
 
+// applicationGrantContextKey isolates the request grant from unrelated context values.
+// applicationGrantContextKey отделяет грант запроса от иных значений контекста.
 type applicationGrantContextKey struct{}
+
+// projectReferenceContextKey isolates the validated project reference in context.
+// projectReferenceContextKey отделяет проверенную ссылку на проект в контексте.
 type projectReferenceContextKey struct{}
 
+// WithApplicationGrant attaches a bounded grant to one outgoing request context.
+// WithApplicationGrant добавляет ограниченный по размеру грант в контекст одного запроса.
 func WithApplicationGrant(ctx context.Context, grant string) (context.Context, error) {
 	if ctx == nil || grant == "" || len(grant) > maximumCredentialBytes || strings.TrimSpace(grant) != grant {
 		return nil, errors.New("request application grant is invalid")
@@ -35,6 +46,8 @@ func WithApplicationGrant(ctx context.Context, grant string) (context.Context, e
 	return context.WithValue(ctx, applicationGrantContextKey{}, grant), nil
 }
 
+// WithProjectReference attaches a syntactically valid project reference to a request.
+// WithProjectReference добавляет синтаксически допустимую ссылку на проект к запросу.
 func WithProjectReference(ctx context.Context, reference string) (context.Context, error) {
 	if ctx == nil || !validOpaqueReference(reference, "prj") {
 		return nil, errors.New("request project reference is invalid")
@@ -42,6 +55,8 @@ func WithProjectReference(ctx context.Context, reference string) (context.Contex
 	return context.WithValue(ctx, projectReferenceContextKey{}, reference), nil
 }
 
+// validOpaqueReference checks the bounded opaque identifier syntax for a prefix.
+// validOpaqueReference проверяет ограниченный формат непрозрачного идентификатора.
 func validOpaqueReference(reference, prefix string) bool {
 	if len(reference) < len(prefix)+9 || len(reference) > 96 || !strings.HasPrefix(reference, prefix+"_") {
 		return false
@@ -56,6 +71,8 @@ func validOpaqueReference(reference, prefix string) bool {
 	return true
 }
 
+// Config defines the protected connection, proof resolver, and operation mapping.
+// Config задаёт защищённое соединение, разрешение доказательств и карту операций.
 type Config struct {
 	RPCProfile, CallerWorkload                                                 string
 	ServiceIdentity                                                            bool
@@ -69,6 +86,8 @@ type Config struct {
 	UnaryClientInterceptor                                                     grpc.UnaryClientInterceptor
 }
 
+// Client owns generated service clients and their authority-bearing connections.
+// Client владеет типизированными клиентами сервисов и их полномочными соединениями.
 type Client struct {
 	trustedCluster          bool
 	serviceIdentity         bool
@@ -94,13 +113,19 @@ type Client struct {
 	grantFile               string
 }
 
+// operationSet maps exact gRPC methods back to registered operation IDs.
+// operationSet сопоставляет точные методы gRPC с зарегистрированными операциями.
 type operationSet map[string]string
 
+// OperationID resolves a full method only when it is present in the closed set.
+// OperationID возвращает операцию лишь для метода из закрытого набора.
 func (operations operationSet) OperationID(fullMethod string) (string, bool) {
 	value, ok := operations[fullMethod]
 	return value, ok
 }
 
+// Dial builds the configured protected control-plane client and proof path.
+// Dial создаёт настроенный защищённый клиент control-plane и путь доказательства.
 func Dial(ctx context.Context, config Config) (*Client, error) {
 	if config.RPCProfile != "" {
 		return dialTrustedCluster(ctx, config)
@@ -200,6 +225,8 @@ func (client *Client) bindServices(protected *grpc.ClientConn) {
 	// jscpd:ignore-end
 }
 
+// validateOperations rejects empty or duplicate method registrations.
+// validateOperations отклоняет пустые и повторно зарегистрированные методы.
 func validateOperations(source map[string]string) (operationSet, error) {
 	result := make(operationSet, len(source))
 	for operation, method := range source {
@@ -214,6 +241,8 @@ func validateOperations(source map[string]string) (operationSet, error) {
 	return result, nil
 }
 
+// AuthorityProof resolves a signed proof for the exact registered operation and request.
+// AuthorityProof получает подписанное доказательство для точной операции и запроса.
 func (client *Client) AuthorityProof(ctx context.Context, operationID, fullMethod string) (string, string, error) {
 	if client.trustedCluster {
 		return "", "", errors.New("authority proof is unavailable in trusted cluster profile")
@@ -248,6 +277,8 @@ func (client *Client) AuthorityProof(ctx context.Context, operationID, fullMetho
 	return resolved.GetAuthorityProofCompactJws(), correlation, nil
 }
 
+// Check verifies the local authority path and an actual protected bootstrap read.
+// Check проверяет локальный путь полномочий и реальное защищённое чтение bootstrap.
 func (client *Client) Check(ctx context.Context) error {
 	if !client.serviceIdentity {
 		if err := client.CheckLocalAuthority(ctx); err != nil {
@@ -264,8 +295,8 @@ func (client *Client) Check(ctx context.Context) error {
 	return nil
 }
 
-// CheckProviderCredentialMaterializer проверяет полный рабочий путь
-// control-plane -> proof resolver -> local issuer -> secret-broker verifier.
+// CheckProviderCredentialMaterializer checks the credential materializer work path.
+// CheckProviderCredentialMaterializer проверяет рабочий путь материализации учётных данных.
 func (client *Client) CheckProviderCredentialMaterializer(ctx context.Context) error {
 	if err := client.CheckLocalAuthority(ctx); err != nil {
 		return err
@@ -286,9 +317,8 @@ func (client *Client) CheckProviderCredentialMaterializer(ctx context.Context) e
 	return nil
 }
 
-// CheckLocalAuthority проверяет только sidecar текущего workload. Этот путь
-// допустим для локальной readiness; соседний control-plane проверяется
-// отдельной диагностикой и на рабочем запросе.
+// CheckLocalAuthority checks this workload's issuer sidecar, not remote services.
+// CheckLocalAuthority проверяет sidecar текущей нагрузки, но не соседние сервисы.
 func (client *Client) CheckLocalAuthority(ctx context.Context) error {
 	if client.serviceIdentity {
 		return nil
@@ -300,6 +330,8 @@ func (client *Client) CheckLocalAuthority(ctx context.Context) error {
 	return nil
 }
 
+// Close releases each connection owned by the client and combines close errors.
+// Close освобождает все соединения клиента и объединяет ошибки закрытия.
 func (client *Client) Close() error {
 	if client == nil {
 		return nil
@@ -317,6 +349,8 @@ func (client *Client) Close() error {
 	return result
 }
 
+// readCredential reads one bounded file credential and rejects blank or multiline data.
+// readCredential читает ограниченный файловый грант и отвергает пустые и многострочные данные.
 func readCredential(path string) (string, error) {
 	value, err := os.ReadFile(path)
 	if err != nil || len(value) == 0 || len(value) > maximumCredentialBytes {
@@ -332,6 +366,8 @@ func readCredential(path string) (string, error) {
 	return result, nil
 }
 
+// transportCredentials loads a client identity and pins TLS to the specified CA and name.
+// transportCredentials загружает удостоверение клиента и привязывает TLS к CA и имени.
 func transportCredentials(serverName, caFile, certificateFile, privateKeyFile string) (credentials.TransportCredentials, error) {
 	certificate, err := tls.LoadX509KeyPair(certificateFile, privateKeyFile)
 	if err != nil {
