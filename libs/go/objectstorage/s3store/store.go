@@ -1,4 +1,7 @@
-// Package s3store реализует objectstorage.Store поверх AWS S3 API.
+// Package s3store implements objectstorage.Store over the AWS S3 API while
+// preserving versioned receipts and validating digest metadata on reads.
+// RU: Пакет s3store реализует objectstorage.Store поверх AWS S3 API,
+// сохраняя версионированные квитанции и проверяя метаданные дайджеста при чтении.
 package s3store
 
 import (
@@ -17,27 +20,53 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 )
 
+// digestMetadataKey names the immutable object digest stored in S3 metadata.
+// RU: digestMetadataKey задаёт имя дайджеста объекта в метаданных S3.
 const digestMetadataKey = "kodex-sha256"
 
+// Config contains the exact endpoint, bucket, region and static credentials
+// used by one S3 adapter; validation forbids credentials embedded in the URL.
+// RU: Config содержит точный узел, бакет, регион и учётные данные одного
+// адаптера S3; проверка запрещает учётные данные внутри URL.
 type Config struct {
 	Endpoint, Region, Bucket string
 	AccessKeyID, SecretKey   string
 	UsePathStyle             bool
 }
 
+// api narrows the SDK surface so store behavior can be tested without S3 IO.
+// RU: api ограничивает поверхность SDK для проверки поведения без обращения к S3.
 type api interface {
+	// HeadBucket checks whether the configured bucket is reachable.
+	// RU: HeadBucket проверяет доступность настроенного бакета.
 	HeadBucket(context.Context, *s3.HeadBucketInput, ...func(*s3.Options)) (*s3.HeadBucketOutput, error)
+	// PutObject issues one upload attempt for an immutable owner intent.
+	// RU: PutObject выполняет одну попытку загрузки для неизменяемого намерения владельца.
 	PutObject(context.Context, *s3.PutObjectInput, ...func(*s3.Options)) (*s3.PutObjectOutput, error)
+	// GetObject retrieves bytes and exact version metadata for validation.
+	// RU: GetObject получает байты и метаданные точной версии для проверки.
 	GetObject(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+	// HeadObject reads metadata for the version-pinned upload receipt.
+	// RU: HeadObject читает метаданные квитанции загрузки с закреплённой версией.
 	HeadObject(context.Context, *s3.HeadObjectInput, ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
+	// DeleteObject removes one selected key or version as directed by its owner.
+	// RU: DeleteObject удаляет выбранный ключ либо версию по команде владельца.
 	DeleteObject(context.Context, *s3.DeleteObjectInput, ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
 }
 
+// Store binds the narrowed S3 client to one bucket while implementing the
+// objectstorage boundary with typed receipts and closed errors.
+// RU: Store связывает ограниченный клиент S3 с одним бакетом и реализует
+// границу objectstorage через типизированные квитанции и закрытые ошибки.
 type Store struct {
 	client api
 	bucket string
 }
 
+// New validates adapter configuration and constructs a path-style-capable S3
+// client; it does not perform a bucket readiness probe until Check.
+// RU: New проверяет параметры адаптера и создаёт S3-клиент с поддержкой
+// path-style; доступность бакета отдельно проверяется методом Check.
 func New(ctx context.Context, config Config) (*Store, error) {
 	if err := validateConfig(config); err != nil {
 		return nil, err
@@ -56,6 +85,10 @@ func New(ctx context.Context, config Config) (*Store, error) {
 	return &Store{client: client, bucket: config.Bucket}, nil
 }
 
+// validateConfig rejects missing credentials and endpoints with userinfo,
+// query, fragment or unexpected path before passing the URL to the SDK.
+// RU: validateConfig отклоняет отсутствие учётных данных и URL с userinfo,
+// query, fragment или лишним путём до передачи адреса в SDK.
 func validateConfig(config Config) error {
 	endpoint, err := url.Parse(config.Endpoint)
 	if err != nil || (endpoint.Scheme != "https" && endpoint.Scheme != "http") || endpoint.Host == "" ||
@@ -66,6 +99,10 @@ func validateConfig(config Config) error {
 	return nil
 }
 
+// Check probes the exact configured bucket and returns a closed unavailable
+// error when the store or remote bucket cannot be used.
+// RU: Check проверяет точный настроенный бакет и возвращает закрытый отказ
+// недоступности при ошибке клиента либо удалённого бакета.
 func (store *Store) Check(ctx context.Context) error {
 	if store == nil || store.client == nil || store.bucket == "" {
 		return objectstorage.ErrUnavailable
@@ -76,6 +113,12 @@ func (store *Store) Check(ctx context.Context) error {
 	return nil
 }
 
+// Put makes one non-retried S3 write for the owner's immutable intent, then
+// reads back the exact version and compares its size and digest before receipt.
+// An unknown write outcome never triggers a second SDK upload attempt.
+// RU: Put выполняет одну попытку S3-записи, затем перечитывает точную версию
+// и сверяет размер с дайджестом до выдачи квитанции; неизвестный исход не
+// запускает повторную загрузку средствами SDK.
 func (store *Store) Put(ctx context.Context, input objectstorage.PutInput) (objectstorage.Receipt, error) {
 	if !validPut(input) {
 		return objectstorage.Receipt{}, objectstorage.ErrInvalid
@@ -105,11 +148,19 @@ func (store *Store) Put(ctx context.Context, input objectstorage.PutInput) (obje
 	return receipt, nil
 }
 
+// validPut checks the object key, digest, media type, nonnegative size and
+// body presence before a write can cross the S3 boundary.
+// RU: validPut проверяет ключ, дайджест, тип содержимого, размер и наличие
+// тела до перехода операции через границу S3.
 func validPut(input objectstorage.PutInput) bool {
 	return objectstorage.ValidKey(input.Key) && objectstorage.ValidDigest(input.Digest) &&
 		input.MediaType != "" && input.SizeBytes >= 0 && input.Body != nil
 }
 
+// Get retrieves a selected key/version, enables checksum response data and
+// refuses to expose a body whose digest or size metadata is invalid.
+// RU: Get читает выбранный ключ и версию с контрольными данными ответа и
+// не выдаёт тело при ошибочных метаданных дайджеста либо размера.
 func (store *Store) Get(ctx context.Context, key, versionID string) (objectstorage.Object, error) {
 	if !objectstorage.ValidKey(key) {
 		return objectstorage.Object{}, objectstorage.ErrInvalid
@@ -133,6 +184,10 @@ func (store *Store) Get(ctx context.Context, key, versionID string) (objectstora
 	return objectstorage.Object{Receipt: objectstorage.Receipt{Key: key, VersionID: aws.ToString(output.VersionId), ETag: strings.Trim(aws.ToString(output.ETag), "\""), Digest: digest, SizeBytes: *output.ContentLength}, Body: output.Body}, nil
 }
 
+// Head reads one key/version and returns only a receipt with valid digest
+// and length metadata; missing or malformed metadata is a conflict.
+// RU: Head читает ключ и версию и возвращает квитанцию лишь при корректных
+// метаданных дайджеста и длины; отсутствие или порча означает конфликт.
 func (store *Store) Head(ctx context.Context, key, versionID string) (objectstorage.Receipt, error) {
 	if !objectstorage.ValidKey(key) {
 		return objectstorage.Receipt{}, objectstorage.ErrInvalid
@@ -152,6 +207,10 @@ func (store *Store) Head(ctx context.Context, key, versionID string) (objectstor
 	return objectstorage.Receipt{Key: key, VersionID: aws.ToString(output.VersionId), ETag: strings.Trim(aws.ToString(output.ETag), "\""), Digest: digest, SizeBytes: *output.ContentLength}, nil
 }
 
+// Delete sends one deletion request for a valid key and optional exact
+// version; ownership and authorization must already be established upstream.
+// RU: Delete отправляет запрос удаления корректного ключа и необязательной
+// точной версии; владелец и полномочия должны быть проверены вызывающим слоем.
 func (store *Store) Delete(ctx context.Context, key, versionID string) error {
 	if !objectstorage.ValidKey(key) {
 		return objectstorage.ErrInvalid
@@ -166,6 +225,10 @@ func (store *Store) Delete(ctx context.Context, key, versionID string) error {
 	return nil
 }
 
+// mapError converts recognized S3 missing-key and bucket failures into the
+// closed objectstorage error vocabulary without leaking provider internals.
+// RU: mapError переводит известные ошибки отсутствия ключа и бакета S3 в
+// закрытый набор ошибок objectstorage без раскрытия деталей провайдера.
 func mapError(err error) error {
 	var notFound *types.NoSuchKey
 	if errors.As(err, &notFound) {

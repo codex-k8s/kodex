@@ -15,8 +15,10 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 )
 
-// 503 и обрыв после принятия тела являются неизвестным исходом записи:
-// отсутствие receipt не разрешает SDK отправить второй versioned Put.
+// TestPutUnknownOutcomeIsNeverRetriedBySDK covers HTTP 503 and a disconnect
+// after the body was accepted: no receipt permits a second versioned Put.
+// RU: TestPutUnknownOutcomeIsNeverRetriedBySDK проверяет 503 и разрыв после
+// принятия тела: отсутствие квитанции не разрешает повторную запись SDK.
 func TestPutUnknownOutcomeIsNeverRetriedBySDK(t *testing.T) {
 	for _, name := range []string{"http-503", "transport-after-body"} {
 		t.Run(name, func(t *testing.T) {
@@ -59,6 +61,10 @@ func TestPutUnknownOutcomeIsNeverRetriedBySDK(t *testing.T) {
 	}
 }
 
+// TestHeadRetainsSDKReadRetry verifies that disabling ambiguous write retries
+// does not disable the SDK's bounded retry for safe metadata reads.
+// RU: TestHeadRetainsSDKReadRetry проверяет, что запрет повтора записи с
+// неизвестным исходом не отключает ограниченный повтор безопасного чтения.
 func TestHeadRetainsSDKReadRetry(t *testing.T) {
 	var reads atomic.Int64
 	digest := "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
