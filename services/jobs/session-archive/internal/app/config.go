@@ -3,13 +3,13 @@ package app
 import (
 	"errors"
 	"net"
-	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
+	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 )
 
 const (
@@ -108,14 +108,8 @@ func (value Config) validate() error {
 // validObjectStorageBoundary validates endpoint shape and permits plaintext only for an explicitly selected exact local service.
 // RU: validObjectStorageBoundary проверяет форму адреса и допускает открытый транспорт лишь для явно выбранного точного локального сервиса.
 func validObjectStorageBoundary(config Config) bool {
-	endpoint, err := url.Parse(config.ObjectStorageEndpoint)
-	if err != nil || endpoint == nil {
-		return false
-	}
-	localInsecure := config.ObjectStorageAllowInsecureLocal && endpoint.Scheme == "http" &&
-		endpoint.Hostname() == "seaweedfs-s3.kodex-system.svc.cluster.local" &&
-		endpoint.Port() == "8333"
-	return (endpoint.Scheme == "https" || localInsecure) && endpoint.Host != "" &&
-		endpoint.User == nil && endpoint.RawQuery == "" && endpoint.Fragment == "" &&
-		(endpoint.Path == "" || endpoint.Path == "/")
+	return objectstorage.ValidEndpoint(config.ObjectStorageEndpoint, objectstorage.EndpointPolicy{
+		AllowPlaintext:    config.ObjectStorageAllowInsecureLocal,
+		PlaintextHostname: "seaweedfs-s3.kodex-system.svc.cluster.local", PlaintextPort: "8333",
+	})
 }

@@ -113,9 +113,9 @@ func TestValidateConfigAllowsOnlyExplicitExactLocalObjectStorage(t *testing.T) {
 	}
 }
 
-// TestValidateConfigRejectsLocalExceptionInProduction rejects plaintext storage even when the local opt-in flag is set.
-// RU: TestValidateConfigRejectsLocalExceptionInProduction отклоняет открытый транспорт хранилища даже при включённом локальном флаге.
-func TestValidateConfigRejectsLocalExceptionInProduction(t *testing.T) {
+// TestValidateConfigRejectsLocalExceptionOutsideStaging rejects plaintext storage in local and production even with the opt-in flag set.
+// RU: TestValidateConfigRejectsLocalExceptionOutsideStaging отклоняет открытый транспорт хранилища в local и production даже при включённом флаге.
+func TestValidateConfigRejectsLocalExceptionOutsideStaging(t *testing.T) {
 	t.Parallel()
 
 	value := config{
@@ -123,7 +123,10 @@ func TestValidateConfigRejectsLocalExceptionInProduction(t *testing.T) {
 		Endpoint: "http://seaweedfs-s3.kodex-system.svc.cluster.local:8333", Region: "us-east-1", Bucket: "archives",
 		AccessKeyFile: "/access-key", SecretKeyFile: "/secret-key", AllowInsecureLocal: true, Timeout: time.Minute,
 	}
-	if err := validateConfig(value); err == nil {
-		t.Fatal("worker accepted the local plaintext exception in production")
+	for _, environment := range []string{"local", "production"} {
+		value.Environment = environment
+		if err := validateConfig(value); err == nil {
+			t.Fatalf("worker accepted the plaintext exception in %s", environment)
+		}
 	}
 }

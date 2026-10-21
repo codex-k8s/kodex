@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.133.0
+version: 1.134.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,48 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто тридцать четвёртая волна — общая проверка адреса хранилища
+
+На опубликованном SHA `d05f221d611087603e7f78ff390b4c00127cb219`
+анализ показывал 6536 собственных файлов, 222 исключения, 1876 raw-групп,
+552 адресных решения и 1324 неразобранных; Go-реестр: 4137/21062,
+непокрыты 16925. Повтор разбора URL из control-plane и двух режимов
+session-archive вынесен в `objectstorage.ValidEndpoint` с узкой типизированной
+`EndpointPolicy`. Библиотека не знает инфраструктурного адреса и среды,
+не читает env, не выполняет DNS/I/O и не выдаёт сетевые полномочия.
+
+Сохранены прежние проверки userinfo, непустых query/fragment, корневого
+декодированного пути и схемы. Пустой `?` остаётся допустимым. Точный локальный
+hostname/порт и opt-in назначает вызывающий сервис. Worker по-прежнему
+допускает HTTP только в staging, app запрещает production opt-in отдельно;
+control-plane сохраняет свой прежний конфигурационный флаг без добавления
+новой environment-политики. Регион и оба бакета проверяет прежний CP wrapper.
+Более общий транспортный контракт S3-адаптера не менялся. Контракты lifecycle,
+RPC, транзакции, события и сетевые ресурсы неизменны.
+
+Добавлены unit-матрица формы URL/точного origin/неполного opt-in, проверка
+сохранения CP-валидации региона и бакетов, отрицательные worker-сценарии
+для local и production. Новые объявления и затронутые CP helpers описаны
+EN→RU; README существующего модуля фиксирует API и ограничения.
+Context7 `/websites/pkg_go_dev_go1_25_3`: сверены `net/url.Parse`,
+`Hostname`, `Port`, `Path`, `RawQuery`, `ForceQuery` и `User`.
+
+Build и `go test -count=1 ./...` всего objectstorage, control-plane и
+session-archive с Go1.26.6 — PASS LOCAL. Unit проверяющих утилит,
+пять адресных ignore-boundaries, `gofmt` и `git diff --check` — PASS LOCAL.
+PostgreSQL component, SeaweedFS E2E, kernel/full-ABI, browser/deploy/live —
+NOT RUN; unit-команда не подтверждает пропущенные optional suites.
+
+Полный detector рабочего дерева: 6538 собственных файлов, 222 исключения,
+1875 raw-групп, 552 адресных решения и 1323 неразобранных; сырой SHA-256 —
+`4ddec150bc53db9668109c7eb3c1156c366c89c886e22ce9927701d18522a2ec`,
+отпечаток набора —
+`d361923343f8352e84b0d984c5be38f4923d522dee576493f6e8f16f04d96168`.
+Исчезла одна точная группа 133 tokens из CP/session-archive app config;
+новых exact path/fragment групп нет. Go-реестр: 4144/21067,
+непокрыты 16923. Полный `go-docs -check` — NOT RUN при известном
+неполном покрытии; задача и единый Draft PR остаются незавершёнными.
 
 ## Сто тридцать третья волна — завершение Go-документации session-archive
 

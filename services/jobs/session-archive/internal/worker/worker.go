@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 	"github.com/codex-k8s/kodex/libs/go/objectstorage/s3store"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/archive"
 	"github.com/codex-k8s/kodex/services/jobs/session-archive/internal/model"
@@ -108,14 +108,10 @@ func validateConfig(value config) error {
 // validObjectStorageBoundary permits HTTPS or the explicitly opted-in exact staging SeaweedFS endpoint.
 // RU: validObjectStorageBoundary допускает HTTPS либо явно включённый точный staging-адрес SeaweedFS.
 func validObjectStorageBoundary(value config) bool {
-	endpoint, err := url.Parse(value.Endpoint)
-	if err != nil || endpoint == nil || endpoint.Host == "" || endpoint.User != nil ||
-		endpoint.RawQuery != "" || endpoint.Fragment != "" || endpoint.Path != "" && endpoint.Path != "/" {
-		return false
-	}
-	localInsecure := value.AllowInsecureLocal && value.Environment == "staging" && endpoint.Scheme == "http" &&
-		endpoint.Hostname() == "seaweedfs-s3.kodex-system.svc.cluster.local" && endpoint.Port() == "8333"
-	return endpoint.Scheme == "https" || localInsecure
+	return objectstorage.ValidEndpoint(value.Endpoint, objectstorage.EndpointPolicy{
+		AllowPlaintext:    value.AllowInsecureLocal && value.Environment == "staging",
+		PlaintextHostname: "seaweedfs-s3.kodex-system.svc.cluster.local", PlaintextPort: "8333",
+	})
 }
 
 // readSecret trims size-checked credential bytes, clears the conversion buffer and rejects empty or multiline values.

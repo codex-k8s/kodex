@@ -11,6 +11,7 @@ import (
 
 	"github.com/caarlos0/env/v11"
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/authorityclient"
+	"github.com/codex-k8s/kodex/libs/go/objectstorage"
 )
 
 const (
@@ -321,17 +322,15 @@ func validProviderCredentialBoundary(config Config) bool {
 		config.SecretBrokerTLSServerName != config.ProviderResolverTLSServerName
 }
 
+// validObjectStorageBoundary checks endpoint syntax against the exact opted-in local origin and validates region and both bucket names.
+// RU: validObjectStorageBoundary проверяет синтаксис адреса с точным явно включённым локальным исключением, а также регион и имена обоих бакетов.
+// The caller supplies the opt-in flag; this predicate neither selects an environment nor performs storage or network access.
+// RU: Флаг явного разрешения передаёт вызывающая сторона; этот предикат не выбирает среду и не обращается к хранилищу или сети.
 func validObjectStorageBoundary(config Config) bool {
-	endpoint, err := url.Parse(config.ObjectStorageEndpoint)
-	if err != nil || endpoint == nil {
-		return false
-	}
-	localInsecure := config.ObjectStorageAllowInsecureLocal && endpoint.Scheme == "http" &&
-		endpoint.Hostname() == "seaweedfs-s3.kodex-system.svc.cluster.local" &&
-		endpoint.Port() == "8333"
-	return (endpoint.Scheme == "https" || localInsecure) && endpoint.Host != "" &&
-		endpoint.User == nil && endpoint.RawQuery == "" && endpoint.Fragment == "" &&
-		(endpoint.Path == "" || endpoint.Path == "/") &&
+	return objectstorage.ValidEndpoint(config.ObjectStorageEndpoint, objectstorage.EndpointPolicy{
+		AllowPlaintext:    config.ObjectStorageAllowInsecureLocal,
+		PlaintextHostname: "seaweedfs-s3.kodex-system.svc.cluster.local", PlaintextPort: "8333",
+	}) &&
 		validRuntimeIdentifier(config.ObjectStorageRegion) && validDNSLabel(config.ObjectStorageBucket) && validDNSLabel(config.SessionArchiveStorageBucket)
 }
 
