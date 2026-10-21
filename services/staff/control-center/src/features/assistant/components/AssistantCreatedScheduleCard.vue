@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 import { readSchedule } from "@/features/automations/api";
 import { assistantCreatedScheduleTarget } from "@/features/assistant/model";
+import { watchAssistantReadback } from "@/features/assistant/readback-lifecycle";
 import type {
   AssistantPlan,
   Schedule,
@@ -37,46 +38,19 @@ const nextRunLabel = computed(() => {
     timeZone: current.timezone,
   }).format(date)} (${current.timezone})`;
 });
-let refresh: (() => Promise<void>) | undefined;
-
-watch(
-  target,
-  (value, _previous, onCleanup) => {
+const refresh = watchAssistantReadback(target, {
+  loading,
+  problem,
+  reset: () => {
     schedule.value = undefined;
-    loading.value = false;
-    problem.value = false;
-    if (!value) return;
-    const controller = new AbortController();
-    onCleanup(() => {
-      controller.abort();
-      refresh = undefined;
-    });
-    refresh = async () => {
-      if (controller.signal.aborted) return;
-      loading.value = true;
-      try {
-        const next = await readSchedule(value.scheduleRef, controller.signal);
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
-        if (controller.signal.aborted) return;
-        if (
-          next.ref !== value.scheduleRef ||
-          next.projectRef !== value.projectRef
-        )
-          throw new Error("Assistant schedule readback mismatch");
-        schedule.value = next;
-        problem.value = false;
-      } catch {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
-        if (!controller.signal.aborted) problem.value = true;
-      } finally {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- onCleanup может прервать запрос во время await.
-        if (!controller.signal.aborted) loading.value = false;
-      }
-    };
-    void refresh();
   },
-  { immediate: true },
-);
+  read: (value, signal) => readSchedule(value.scheduleRef, signal),
+  apply: (value, next) => {
+    if (next.ref !== value.scheduleRef || next.projectRef !== value.projectRef)
+      throw new Error("Assistant schedule readback mismatch");
+    schedule.value = next;
+  },
+});
 </script>
 
 <template>
@@ -107,7 +81,7 @@ watch(
         class="button"
         type="button"
         :disabled="loading"
-        @click="refresh?.()"
+        @click="refresh()"
       >
         {{ $t("common.refresh") }}
       </button>
