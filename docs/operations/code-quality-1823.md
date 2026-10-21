@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.162.0
+version: 1.163.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,46 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто шестьдесят третья волна — оснастка build context
+
+На базе опубликованного SHA `a9e5526894966a1de222484eff347a938193e308`
+две одинаковые подготовки архива заменены contextArchiveFixture того же
+test file: точная запись raw в context.tar 0600, SHA-256 тех же байтов
+и отдельный пустой destination 0700 в прежнем порядке. ExtractContext,
+ожидаемый source binding и assertions остаются у тестов. Helper не
+валидирует/исправляет tar и не извлекает содержимое. Новый unit проверяет
+точные бинарные байты/хеш, private regular file, private empty directory
+даже для не-tar входа. Production extractor не менялся.
+
+Все шесть собственных объявлений context.go и десять context_test.go,
+включая два новых, описаны EN→RU — 16/16. Явно описаны отдельные лимиты
+raw stream, суммарного payload, entry size и visited headers (не отдельный
+лимит всех implicit parent directories). Ordinary os.Open не назван
+no-follow/private-file проверкой; destination требует caller isolation.
+Хешируются байты того же потока и дочитываемый хвост, но файлы пишутся до
+итоговой проверки: при ошибке остаётся partial output, не готовый контекст.
+Лексическая containment не заявлена защитой произвольного старого дерева
+от symlink races. Static Dockerfile/install-script assertions и synthetic
+provenance hash не названы real BuildKit/offline install/signature proof.
+
+Полный unit/build internal/build до/после — PASS LOCAL. После правок:
+26 верхнеуровневых тестов, 54 PASS с подтестами, 0 SKIP/FAIL. Только
+временные файлы, synthetic HTTP RoundTripper, текстовые fixtures и shell
+вывода progress; реальные registry/BuildKit/tool installation не вызывались.
+16 unit анализатора, unit Go-checker, пять ignore-boundaries, gofmt и
+diff-check — PASS LOCAL. Go-команды:
+`GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`. Полный role-image-builder unit,
+PostgreSQL, browser/deploy/live — NOT RUN.
+
+Одна исходная detector-группа исчезла; других изменённых/new path/fragment/
+count групп нет, исключения не добавлялись. Рабочий detector: 6556 source-
+файлов, 222 исключения, 1859 raw-групп, 569 решений и 1290 неразобранных;
+raw SHA-256 `9c073a2abc112f675c3f6ad2bc1d792e58a95f0565a9df340b33fc15293a2dd4`,
+отпечаток `9a3e8fcd954e7313651df38a333f6c33900c3a948945c2af46c4cea91b7069f3`.
+Go-реестр — 5417/21087, непокрыты 15670; role-image-builder — 292/562.
+Полный go-docs-check — NOT RUN. Известный diagnostics FAIL остаётся
+открытым; точный scan/build/unit нового SHA публикуется в том же PR.
 
 ## Сто шестьдесят вторая волна — work source, builder RPC и terminal cleanup
 
