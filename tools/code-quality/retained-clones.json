@@ -880,6 +880,22 @@
       "fragmentSHA256": "d603bd6c4a0c37874aba713acdd83e419102ac84913fa234b03c73910c703451",
       "count": 1,
       "reason": "Последнее перекрывающееся окно той же пары сравнивает хвост адресов полей querySet с хвостом аргументов rows.Scan runtime-кандидата. Это синтаксическое совпадение после нормализации идентификаторов: SQL-loader и чтение строки разных владельцев не разделяют семантику, порядок полей и ответственность; общий helper здесь был бы ложной связью."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/runtime/revision-impact.ts",
+      "secondPath": "services/staff/control-center/src/features/runtime/revision-impact.ts",
+      "fragmentSHA256": "c586c49813f351b6e12b3323e1a1fa5fcac729eca55b7d049ae657791e86f6a9",
+      "count": 1,
+      "reason": "После выноса общего impactQuery остаются похожими оболочки чтения окружения и секрета. Это разные типизированные generated endpoints с разными path, owner-полями результата, версиями и проверкой состава потребителей. Универсальный вызов со свободным результатом размыл бы отдельные проверки границы и ошибку каждого сценария; совпадение ограничено точным фрагментом."
+    },
+    {
+      "format": "typescript",
+      "firstPath": "services/staff/control-center/src/features/runtime/revision-impact.ts",
+      "secondPath": "services/staff/control-center/src/features/runtime/revision-impact.ts",
+      "fragmentSHA256": "88de2c02fe58fc39ee3a3f7c947fe1710e1b596f626282276834c937a9bde9e3",
+      "count": 1,
+      "reason": "После выноса общей сверки binding-квитанции остаются похожими оболочки мутаций: окружение отправляет consumers и сравнивает targetVersionRef/digest, секрет отправляет selections, проверяет опубликованные environments и связанные binding. Их OCC-версии, серверные команды и состав квитанций различаются; общий нетипизированный dispatcher скрыл бы эти независимые проверки."
     }
   ]
 }
