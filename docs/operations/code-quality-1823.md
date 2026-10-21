@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.57.0
+version: 1.58.0
 updated: 2026-10-21
 ---
 
@@ -1699,6 +1699,35 @@ cross-test clone с provider SSE сохранён точным решением:
 Сравнение fragment SHA-256 и путей: новых либо исчезнувших групп нет,
 различается только расположение после комментариев. Go-реестр: 1967/21030,
 непокрыты 19063. `go test -count=1 ./...` и `go build ./...` всего
+egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
+PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
+по прежним границам. Точный scan нового коммита будет опубликован в
+текущем PR.
+
+## Шестидесятая волна — профиль WebSocket, discovery и TLS authority
+
+На точном запушенном SHA `f5ad4cc0fd5bc9d5681a83ecd0d42f3c471be2d8`
+анализ подтвердил 6531 собственный файл, 222 исключения, 1881 raw-группу,
+302 точных решения и 1579 неразобранных; сырой SHA-256 —
+`5f6cfb0412c02dd72fe65ed1c582ed15b2798364a751ef8179c42b11cf7388bb`,
+отпечаток набора —
+`9912d1cce5f597a97ebe5014fdd748c7524ea667c2c89a1d2a1186060a43c6ac`.
+Go-реестр: 1967/21030, непокрыты 19063; build/unit всего egress-gateway
+на этом SHA — PASS LOCAL.
+
+Все 19 объявлений трёх production-файлов `provider_websocket_extensions.go`,
+`provider_discovery_schema.go` и `tls_intercept.go` получили предметные EN→RU
+комментарии. Зафиксированы закрытый RFC 7692 профиль, граница диагностики
+JSON без раскрытия полей и назначение отдельного CA только для точного
+execution-scoped TLS leaf. Существовавшие русские пояснения сохранены в
+двуязычной форме. Исполняемые ветви, сроки сертификата и допуск не менялись;
+новых detector-групп нет.
+
+Рабочий detector: 6531 собственный файл, 222 исключения, 1881 raw-группа,
+302 точных решения и 1579 неразобранных; сырой SHA-256 —
+`f961f00e22360002f3fb49e89b0f9fc5de7a3b5692422e15f99ffb1b7de5cf4f`,
+отпечаток набора не изменился. Go-реестр: 1986/21030,
+непокрыты 19044. `go test -count=1 ./...` и `go build ./...` всего
 egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
