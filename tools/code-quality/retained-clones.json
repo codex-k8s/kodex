@@ -864,6 +864,22 @@
       "fragmentSHA256": "49cfb7b3d893f2f03ee4bca354ba767e39a9f2910f93ddae4df94fa3a1363966",
       "count": 1,
       "reason": "Schedule является серверным readback с состоянием и вычисленными полями, ScheduleInput — пользовательским входом с отдельными ограничениями preset/time и другим required-набором. Общий object/allOf изменил бы валидацию или generated тип; совпадающие политики оставлены в разных DTO."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/eventing/postgresinbox/queries.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime.go",
+      "fragmentSHA256": "6cbf72692524bb3369f573a113b69993b25dbc5785d8e9bbc7a6f60778bfcd15",
+      "count": 11,
+      "reason": "В postgresinbox это список адресов полей querySet для сопоставления с проверенными SQL-файлами, а в control-plane — аргументы rows.Scan для большого снимка кандидата исполнения. Режим weak свёл разные имена указателей к одному фрагменту в 11 перекрывающихся окнах. Общего поведения или типа между библиотекой событий и владельцем runtime нет; вынос связал бы независимые слои и ослабил явность порядка колонок."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/eventing/postgresinbox/queries.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime.go",
+      "fragmentSHA256": "d603bd6c4a0c37874aba713acdd83e419102ac84913fa234b03c73910c703451",
+      "count": 1,
+      "reason": "Последнее перекрывающееся окно той же пары сравнивает хвост адресов полей querySet с хвостом аргументов rows.Scan runtime-кандидата. Это синтаксическое совпадение после нормализации идентификаторов: SQL-loader и чтение строки разных владельцев не разделяют семантику, порядок полей и ответственность; общий helper здесь был бы ложной связью."
     }
   ]
 }
