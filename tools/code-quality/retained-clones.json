@@ -2032,6 +2032,126 @@
       "fragmentSHA256": "a1a5071593e6af000c971f862fb093a59dcafed82e97d49045015d4c92bc62f5",
       "count": 1,
       "reason": "Совпадает короткий вход в синтетическую upstream goroutine: принять peer, поднять TLS и прочитать HTTP-запрос. Первый тест проверяет обычный POST с телом и ответом 201, второй — независимость provider POST от пользовательского read-only и немедленную выдачу SSE. Общий callback ради подготовки peer скрыл бы различное управление телом, ответом и завершением; сохраняется только это точное окно, не весь файл."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/control-api-gateway/Dockerfile",
+      "secondPath": "services/external/egress-gateway/Dockerfile",
+      "fragmentSHA256": "fcd0a9a1f74ee523478c7ee59f1a6aca967275bc20ae8ccd53f0492bda56da9f",
+      "count": 1,
+      "reason": "Совпадает окно COPY локальных Go-модулей, но control-api-gateway копирует свой набор зависимостей целиком, а egress-gateway разделяет go.mod и исходники ради отдельного кеша. Общий Dockerfile изменил бы build context и слой зависимостей; сохраняется только это точное окно."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/egress-gateway/Dockerfile",
+      "secondPath": "services/jobs/automation-scheduler/Dockerfile",
+      "fragmentSHA256": "e6af3a511ec32303080f2cb6e885df0d87764bd0bfe060af956794488df72536",
+      "count": 1,
+      "reason": "Совпадает закреплённая Go builder-основа и начало копирования go.mod, но automation-scheduler и egress-gateway имеют разные графы модулей, бинарные entrypoint и владельцев образов. Общая стадия потребовала бы шаблонизацию Dockerfile вместо переиспользования исполняемого кода; сохраняется только это окно."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/egress-gateway/Dockerfile",
+      "secondPath": "services/jobs/role-image-builder/Dockerfile",
+      "fragmentSHA256": "9b7dc4e821e06e6e1d62e6f2af55967d0c48dbb9eb612e7d333c04cd70272fac",
+      "count": 1,
+      "reason": "Совпадает начало builder-стадии с копированием зависимостей, но role-image-builder собирает несколько admission и registry бинарей и использует отдельный BuildKit runtime, а egress-gateway выпускает один distroless listener. Общая стадия расширила бы build context и связала разные security boundaries."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/egress-gateway/Dockerfile",
+      "secondPath": "services/jobs/session-archive/Dockerfile",
+      "fragmentSHA256": "d814b6701df4dc1489a630ac9c9fe8a9e47895ba444c58c5b00431cfb7f85d5c",
+      "count": 1,
+      "reason": "Нормализованный detector сопоставляет длинную форму двух двухстадийных Go-сборок. Списки локальных модулей, target package, образуемые бинарники и deploy ownership session-archive и egress-gateway различны. Универсальный Dockerfile потребовал бы новую генерацию и скрывал бы точный набор COPY; сохраняется только эта пара."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/egress-gateway/Dockerfile",
+      "secondPath": "services/jobs/automation-scheduler/Dockerfile",
+      "fragmentSHA256": "e503b24e3d18d18b38e21c28c98176a88357c46c05f7906f5b4afa55488fcf65",
+      "count": 1,
+      "reason": "Перекрывающееся окно manifest-first COPY и go mod download относится к двум разным графам зависимостей. Scheduler и egress имеют разные go.mod/go.sum и самостоятельную инвалидацию кеша; перенос в общий образ сделал бы зависимости неявными. Это второе точное окно той же пары, не исключение файлов."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/egress-gateway/Dockerfile",
+      "secondPath": "services/jobs/artifact-retention/Dockerfile",
+      "fragmentSHA256": "0ec4f855606bbcba27579d2d778649a40d37aed6ba78d0c4151467da7f62bd47",
+      "count": 1,
+      "reason": "Окно manifest-first копирования Go-модулей похоже у artifact-retention и egress-gateway, но каждый образ закрепляет собственный go.mod/go.sum и зависимости. Единый COPY-блок связал бы две deployable и изменил бы инвалидацию кеша; оставляется только указанное совпадение."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/egress-gateway/Dockerfile",
+      "secondPath": "services/jobs/role-image-builder/Dockerfile",
+      "fragmentSHA256": "af5f9b10b38cc6f1d15747eb9a39c4c75f424e769987b2e29b2a9ca5e2b9f618",
+      "count": 1,
+      "reason": "Окно копирования исходников во вторую builder-стадию совпадает по форме, но role-image-builder содержит отдельные admission, registry и BuildKit цели, а egress — один listener и distroless runtime. Общий слой расширил бы файловую и сборочную область каждого образа; оставляется точная пара."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/egress-gateway/Dockerfile",
+      "secondPath": "services/external/integration-gateway/Dockerfile",
+      "fragmentSHA256": "6b17c2b7c6240fc797830a760791f8c63e6facc75d2f4d7cdaa9235dbc3a2d42",
+      "count": 1,
+      "reason": "Совпадает стандартное окно COPY локальных Go-модулей перед сборкой, но integration-gateway имеет Alpine runtime с git и отдельную synthetic-цель, тогда как egress-gateway имеет distroless runtime без git. Общий слой потребовал бы расширить build context и скрыть точный перечень зависимостей; сохраняется только эта пара путей и fragment SHA-256."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/egress-gateway/Dockerfile",
+      "secondPath": "services/external/interaction-gateway/Dockerfile",
+      "fragmentSHA256": "6b17c2b7c6240fc797830a760791f8c63e6facc75d2f4d7cdaa9235dbc3a2d42",
+      "count": 1,
+      "reason": "Совпадает стандартное окно COPY локальных Go-модулей перед сборкой, но interaction-gateway и egress-gateway собирают независимые бинарники с различными module COPY и маршрутизацией. Общий слой потребовал бы расширить build context и скрыть точный перечень зависимостей; сохраняется только эта пара путей и fragment SHA-256."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/egress-gateway/Dockerfile",
+      "secondPath": "services/internal/control-plane/Dockerfile",
+      "fragmentSHA256": "6b17c2b7c6240fc797830a760791f8c63e6facc75d2f4d7cdaa9235dbc3a2d42",
+      "count": 1,
+      "reason": "Совпадает стандартное окно COPY локальных Go-модулей перед сборкой, но control-plane собирает также CLI и использует иной набор зависимостей, а egress-gateway выпускает один listener. Общий слой потребовал бы расширить build context и скрыть точный перечень зависимостей; сохраняется только эта пара путей и fragment SHA-256."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/egress-gateway/Dockerfile",
+      "secondPath": "services/internal/email-bridge/Dockerfile",
+      "fragmentSHA256": "6b17c2b7c6240fc797830a760791f8c63e6facc75d2f4d7cdaa9235dbc3a2d42",
+      "count": 1,
+      "reason": "Совпадает стандартное окно COPY локальных Go-модулей перед сборкой, но email-bridge дополнительно выпускает migration image, а egress-gateway — один listener. Общий слой потребовал бы расширить build context и скрыть точный перечень зависимостей; сохраняется только эта пара путей и fragment SHA-256."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/egress-gateway/Dockerfile",
+      "secondPath": "services/internal/runtime-controller/Dockerfile",
+      "fragmentSHA256": "6b17c2b7c6240fc797830a760791f8c63e6facc75d2f4d7cdaa9235dbc3a2d42",
+      "count": 1,
+      "reason": "Совпадает стандартное окно COPY локальных Go-модулей перед сборкой, но runtime-controller и egress-gateway владеют разными наборами модулей и самостоятельными release-бинарями. Общий слой потребовал бы расширить build context и скрыть точный перечень зависимостей; сохраняется только эта пара путей и fragment SHA-256."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/egress-gateway/Dockerfile",
+      "secondPath": "services/internal/secret-broker/Dockerfile",
+      "fragmentSHA256": "6b17c2b7c6240fc797830a760791f8c63e6facc75d2f4d7cdaa9235dbc3a2d42",
+      "count": 1,
+      "reason": "Совпадает стандартное окно COPY локальных Go-модулей перед сборкой, но secret-broker добавляет отдельную Node/Codex CLI стадию и переносит её в runtime, а egress-gateway этого не делает. Общий слой потребовал бы расширить build context и скрыть точный перечень зависимостей; сохраняется только эта пара путей и fragment SHA-256."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/egress-gateway/Dockerfile",
+      "secondPath": "services/jobs/automation-scheduler/Dockerfile",
+      "fragmentSHA256": "52b8b9e35a120140d94a2523f3a2aaeb0bf94afe565e6d8c4620d42bef082dcc",
+      "count": 1,
+      "reason": "Перекрывающееся окно повторного COPY исходников и сборки похоже у automation-scheduler и egress-gateway, однако target package, список локальных модулей и бинарные entrypoint различны. Совместный Dockerfile скрыл бы точный состав каждого образа и не создал бы общего runtime-примитива."
+    },
+    {
+      "format": "docker",
+      "firstPath": "services/external/egress-gateway/Dockerfile",
+      "secondPath": "services/jobs/artifact-retention/Dockerfile",
+      "fragmentSHA256": "96351d73b16f65f22837adf1005bbccd8c6adbd1d97e28afca5d8f95737d5aa4",
+      "count": 1,
+      "reason": "Перекрывающееся окно второго COPY и сборки совпадает по форме у artifact-retention и egress-gateway. Команды относятся к разным Go-модулям и выходным бинарям; отдельные manifest/source-слои сохраняют точную инвалидацию кеша. Общий Dockerfile не уменьшил бы исполняемую логику."
     }
   ]
 }

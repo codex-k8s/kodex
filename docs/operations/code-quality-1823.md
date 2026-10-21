@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.60.0
+version: 1.61.0
 updated: 2026-10-21
 ---
 
@@ -1701,6 +1701,39 @@ cross-test clone с provider SSE сохранён точным решением:
 непокрыты 19063. `go test -count=1 ./...` и `go build ./...` всего
 egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
+по прежним границам. Точный scan нового коммита будет опубликован в
+текущем PR.
+
+## Шестьдесят третья волна — точные Dockerfile-совпадения
+
+На точном запушенном SHA `e204131e892799c3de26f8033e551320329e0ab9`
+анализ подтвердил 6531 собственный файл, 222 исключения, 1881 raw-группу,
+302 точных решения и 1579 неразобранных; сырой SHA-256 —
+`6ae0c8a7db3ed72189f0dc5a15019f14d736e9c1a076dc2868bfaf89795ada2f`,
+отпечаток набора —
+`9912d1cce5f597a97ebe5014fdd748c7524ea667c2c89a1d2a1186060a43c6ac`.
+Go-реестр: 2089/21030, непокрыты 18941; build/unit всего egress-gateway
+на этом SHA — PASS LOCAL.
+
+Проверены 15 совпадений Dockerfile egress-gateway с одиннадцатью другими
+deployable. Окна относятся к закреплённой Go builder-основе, точному списку
+COPY локальных модулей и build-командам. У каждого deployable свои module
+graph, cache boundary, target binary, runtime base и deploy ownership;
+отдельные образы BuildKit, migration и synthetic имеют дополнительные
+отказные/security границы. Общий Dockerfile или сборочный слой расширил бы
+контекст и скрыл явный список зависимостей, а шаблонизация кодогенерации
+исключена владельцем из этой задачи. Для каждой пары сохранено только точное
+окно по двум путям и fragment SHA-256, с отдельным объяснением; целые
+Dockerfile и формат `docker` не исключались. Исполняемые образы не менялись.
+
+Рабочий detector: 6531 собственный файл, 222 исключения, 1881 raw-группа,
+317 точных решений и 1564 неразобранных; сырой SHA-256 —
+`1c9418f78c2db34fe37f9142c7753b18789ffcd77ccc021d6932037c8109a042`,
+отпечаток набора не изменился. Go-реестр неизменен: 2089/21030,
+непокрыты 18941. Проверка точных decisions и пяти ignore-boundaries,
+16 unit-тестов анализатора, `git diff --check` — PASS LOCAL. Сборка и
+unit-тесты application-кода на этой волне не запускались: application-код
+не менялся. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
 
