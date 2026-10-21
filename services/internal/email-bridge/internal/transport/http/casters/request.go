@@ -9,6 +9,10 @@ import (
 	"github.com/codex-k8s/kodex/services/internal/email-bridge/internal/domain/errs"
 )
 
+// Command decodes a bounded mailbox operation or a sender-scoped health/receipt/send request; it rejects malformed inputs before a domain command is executed.
+// Command разбирает ограниченную по размеру почтовую команду либо запрос здоровья, квитанции или отправки в области отправителя; ошибочный ввод отклоняется до исполнения доменной команды.
+// The boolean reports whether the request used the sender-scoped route; mailbox ownership and send permission are enforced by the downstream service.
+// Булево значение показывает, использован ли маршрут с областью отправителя; владение ящиком и право отправки проверяет нижележащий сервис.
 func Command(r *http.Request, c api.Configuration) (api.Command, bool, error) {
 	var cmd api.Command
 	if r.URL.Path == "/v1/mailbox-operations" && r.Method == http.MethodPost {

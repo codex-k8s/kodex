@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "format": "yaml",
+      "firstPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "secondPath": "contracts/openapi/control-api-gateway/v1/openapi.yaml",
+      "fragmentSHA256": "a49749d2a837031a55225387fffcad619d4020c753a4ba682faec321151de13f",
+      "count": 1,
+      "reason": "Операции validateConfigOverlayDraft и publishConfigOverlayDraft имеют общий набор ссылок на параметры и форму ответа, но выполняют разные переходы состояния. Параметры уже вынесены в components; дальнейшее объединение двух самостоятельных path/method скрывало бы разные operationId, смысл ответа и authority boundary."
+    }
+  ]
+}

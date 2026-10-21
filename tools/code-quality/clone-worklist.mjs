@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { reportPaths, writePrivateReport } from "./report-io.mjs";
 
 function fingerprint(value) {
   return crypto
@@ -171,23 +172,9 @@ if (
   process.argv[1] &&
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
-  const input = process.argv[2];
-  const output = process.argv[3];
-  if (
-    !input ||
-    !output ||
-    !path.isAbsolute(input) ||
-    !path.isAbsolute(output) ||
-    !output.endsWith(".gen.json")
-  ) {
-    throw Error(
-      "Absolute input report and output .gen.json paths are required",
-    );
-  }
+  const { input, output } = reportPaths(process.argv.slice(2));
   const result = buildCloneWorklist(JSON.parse(fs.readFileSync(input, "utf8")));
-  fs.writeFileSync(output, JSON.stringify(result, null, 2) + "\n", {
-    mode: 0o600,
-  });
+  writePrivateReport(output, result);
   console.log(
     JSON.stringify({
       output,

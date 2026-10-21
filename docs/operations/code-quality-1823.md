@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.9.0
+version: 1.10.0
 updated: 2026-10-21
 ---
 
@@ -46,6 +46,9 @@ node tools/code-quality/summarize-report.mjs /absolute/private/report-directory
 node tools/code-quality/clone-worklist.mjs \
   /absolute/private/report-directory/summary.gen.json \
   /absolute/private/report-directory/worklist.gen.json
+node tools/code-quality/assess-clones.mjs \
+  /absolute/private/report-directory/summary.gen.json \
+  /absolute/private/report-directory/assessment.gen.json
 node tools/code-quality/check-addressed-ignores.mjs \
   /absolute/private/report-directory/source-inventory.json
 go test ./tools/code-quality/go-docs
@@ -354,3 +357,46 @@ Go1.26.6 — PASS LOCAL, включая существующий тест CEL ex
 `gofmt` и `git diff --check` — PASS LOCAL. Go-реестр текущего дерева:
 398/21000 EN→RU,20602 ещё не покрыты. Повтор detector после комментариев
 и полный Go checker ещё не выполнены; PR остаётся Draft.
+
+## Одиннадцатая волна — точный реестр сохранённых повторов
+
+`assess-clones.mjs` делит нормализованные группы на сохранённые по
+обоснованному решению и ещё не разобранные. Решение в
+`retained-clones.json` привязано к формату, точной паре исходных файлов,
+SHA-256 фрагмента и числу вхождений. Сдвиг строк из-за комментариев не
+обесценивает решение; изменение фрагмента, появление нового вхождения,
+удаление прежнего или дублирование решения приводит к закрытому отказу.
+Это адресное исключение именно из рабочего списка нерешённых совпадений,
+а не игнорирование файла в `jscpd`: исходный отчёт сохраняет все группы.
+Каждому решению нужен развернутый смысловой комментарий; автоматическая
+похожесть сама по себе решением не считается.
+
+Первое решение касается одинаковой формы параметров и ответа в двух разных
+операциях OpenAPI `validateConfigOverlayDraft` и
+`publishConfigOverlayDraft`. Параметры уже вынесены в components; объединение
+самостоятельных операций скрыло бы разные переходы состояния и их
+`operationId`. На повторном отчёте working-22 с SHA raw report
+`90bb21a82bc057738cc57ab2ab8e9768af9dddba27c9845e6131a73710a6fe03`
+ровно 1 из 2068 групп классифицирована как сохранённая, 2067 остаются
+неразобранными. Это не общее исключение для YAML или контракта.
+
+Первый запуск анализатора обнаружил новый повтор между CLI собственного
+инструмента и `clone-worklist.mjs`; общий разбор путей и приватная запись
+отчёта вынесены в `report-io.mjs`. Повторный поиск после выноса вернулся
+к 2068 группам. Форматы и содержание обоих отчётов сохранены.
+
+Полностью двуязычно описаны `internalrpcauth/transportprofile` (1/1),
+`objectstorage/objectstoragetest` (9/9) и HTTP caster почтового адаптера
+(1/1). В тесте `serviceidentity` уточнено закреплённое число записей
+сгенерированной политики: файл в исходном `main` содержит 417, тогда как
+тест ожидал 412 и падал до наших изменений; два теста получили пояснения.
+Исполняемая политика и runtime-код не менялись.
+
+PASS LOCAL на рабочем дереве: 12 Node unit-тестов анализатора и проверяющих
+инструментов, `go test ./...` и `go build ./...` в модулях
+`internalrpcauth`, `objectstorage`, `email-bridge`, а также
+`git diff --check`. У `objectstoragetest` и `transportprofile` нет своих
+тестовых файлов; успешный `go test` там доказывает компиляцию, а не
+поведенческий тест. Go-реестр: 411/21000 EN→RU, 20589 ещё не покрыты.
+Полный Go `-check`, классификация остальных групп и итоговая проверка на
+конечном SHA пока не завершены; PR остаётся Draft.
