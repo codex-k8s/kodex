@@ -3608,6 +3608,14 @@
       "fragmentSHA256": "1f27fda9c33812a9700e47a213b0b3639352ccd15f87d0895c635dbebc9ecb95",
       "count": 1,
       "reason": "job.read выдаёт проекцию одного job по job_id, а job.retry выполняет новый эффект для того же ID. Равенство outputFields не переносит READ_ONLY в SENSITIVE/EFFECT_KEY; операции и approval остаются самостоятельными."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/jobs/backup-controller/internal/s3backup/store.go",
+      "secondPath": "services/jobs/backup-controller/internal/s3backup/store.go",
+      "fragmentSHA256": "ec6c2a9499b470b79c3fb757f163b2a08f86392a72491cfd2498505f9f30ae9a",
+      "count": 1,
+      "reason": "Окно сопоставляет только одинаковый хвост обхода квитанций и начало следующей функции. inventory отклоняет множественные версии и delete markers, currentInventory выбирает последнюю живую версию с учётом маркеров; общий цикл скрыл бы противоположные правила допустимости. Сохранено точное окно, не файл."
     }
   ]
 }
