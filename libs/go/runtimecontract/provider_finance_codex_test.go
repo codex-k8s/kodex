@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// TestCodexFinancialSupportedSubset preserves supported credit precision and sparse-field presence while proving private provider metadata is absent from the serialized projection.
+// TestCodexFinancialSupportedSubset сохраняет точность кредитов и присутствие разреженных полей, подтверждая отсутствие частных метаданных провайдера в сериализованной проекции.
 func TestCodexFinancialSupportedSubset(t *testing.T) {
 	raw := json.RawMessage(`{"accountId":"discard-me","ordinaryUsageAllowed":false,"rateLimits":{"limitId":"codex","primary":{"usedPercent":100,"windowDurationMins":10080,"resetsAt":1800000000},"credits":{"hasCredits":true,"unlimited":false,"balance":"59999.1234567890123456789"},"spendControlReached":false,"rateLimitReachedType":"rate_limit_reached"},"rateLimitUpsell":{"private":"discard-me"}}`)
 	value := ParseCodexFinancialObservation(raw, 1)
@@ -26,6 +28,8 @@ func TestCodexFinancialSupportedSubset(t *testing.T) {
 	}
 }
 
+// TestCodexFinancialRejectsMalformedAndAmbiguous leaves invalid envelopes unavailable and selects the exact codex bucket without conflating unlimited credits with included limits.
+// TestCodexFinancialRejectsMalformedAndAmbiguous оставляет некорректные конверты недоступными и выбирает точный раздел codex, не смешивая безлимитные кредиты с включёнными лимитами.
 func TestCodexFinancialRejectsMalformedAndAmbiguous(t *testing.T) {
 	cases := []string{
 		`{}`, `{"rateLimits":null}`,
@@ -46,6 +50,8 @@ func TestCodexFinancialRejectsMalformedAndAmbiguous(t *testing.T) {
 	}
 }
 
+// TestFinancialPresenceFieldsRemainIndependent preserves measured zero and false values while keeping malformed or null sibling fields absent after serialization.
+// TestFinancialPresenceFieldsRemainIndependent сохраняет измеренные ноль и false, оставляя некорректные или null соседние поля отсутствующими после сериализации.
 func TestFinancialPresenceFieldsRemainIndependent(t *testing.T) {
 	value := ParseCodexFinancialObservation(json.RawMessage(`{"rateLimits":{"primary":{"usedPercent":0,"windowDurationMins":"invalid","resetsAt":null},"secondary":{"usedPercent":100,"resetsAt":1800000000},"credits":{"hasCredits":false,"unlimited":null,"balance":"malformed"},"spendControlReached":false},"ordinaryUsageAllowed":null}`), 1)
 	if value.State != "AVAILABLE" || len(value.Windows) != 2 || value.Windows[0].UsedPercent == nil || *value.Windows[0].UsedPercent != 0 || value.Windows[0].DurationMinutes != nil || value.Windows[0].ResetsAt != nil || value.Windows[1].ResetsAt == nil || value.Credits == nil || value.Credits.HasCredits == nil || *value.Credits.HasCredits || value.Credits.Unlimited != nil || value.Credits.Balance != nil || value.SpendControlReached == nil || *value.SpendControlReached || value.OrdinaryUsageAllowed != nil {
@@ -57,6 +63,8 @@ func TestFinancialPresenceFieldsRemainIndependent(t *testing.T) {
 	}
 }
 
+// TestCodexFinancialUnknownWireFieldsCloseProjection makes unknown fields close the measurement projection while allowing known presentation metadata to be discarded safely.
+// TestCodexFinancialUnknownWireFieldsCloseProjection закрывает проекцию измерений при неизвестных полях, разрешая безопасно отбрасывать известные метаданные отображения.
 func TestCodexFinancialUnknownWireFieldsCloseProjection(t *testing.T) {
 	for _, raw := range []string{
 		`{"rateLimits":{},"paidContinuationAllowed":true}`,

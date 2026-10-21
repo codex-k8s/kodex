@@ -2,6 +2,8 @@ package runtimecontract
 
 import "testing"
 
+// TestRuntimeProviderRoutesAreExactAndIndependentOfUserAccess distinguishes supported HTTP and WebSocket tuples from foreign hosts, methods and extended paths.
+// TestRuntimeProviderRoutesAreExactAndIndependentOfUserAccess отличает поддерживаемые HTTP- и WebSocket-наборы от чужих узлов, методов и расширенных путей.
 func TestRuntimeProviderRoutesAreExactAndIndependentOfUserAccess(t *testing.T) {
 	for _, row := range []struct {
 		host, path, method string
@@ -30,6 +32,8 @@ func TestRuntimeProviderRoutesAreExactAndIndependentOfUserAccess(t *testing.T) {
 	}
 }
 
+// TestRuntimeProviderAccountsCheckIsExactHTTPOnly rejects route aliases and WebSocket use for the account bootstrap endpoint without granting user web access.
+// TestRuntimeProviderAccountsCheckIsExactHTTPOnly отклоняет псевдонимы маршрута и WebSocket для адреса подготовки аккаунта, не выдавая пользовательский веб-доступ.
 func TestRuntimeProviderAccountsCheckIsExactHTTPOnly(t *testing.T) {
 	const path = "/backend-api/wham/accounts/check"
 	for _, row := range []struct {
@@ -69,6 +73,8 @@ func TestRuntimeProviderAccountsCheckIsExactHTTPOnly(t *testing.T) {
 	}
 }
 
+// TestRuntimeProviderStandaloneSearchIsExactHTTPOnly tests each supported search tuple against host, method and path mutations and keeps provider search separate from user web permission.
+// TestRuntimeProviderStandaloneSearchIsExactHTTPOnly проверяет каждый допустимый поиск изменением узла, метода и пути, сохраняя отделение поиска провайдера от пользовательского веб-права.
 func TestRuntimeProviderStandaloneSearchIsExactHTTPOnly(t *testing.T) {
 	// SearchClient rust-v0.160.0 выполняет POST alpha/search относительно
 	// default base URL, назначенного типом credential у ModelProviderInfo.
@@ -127,6 +133,8 @@ func TestRuntimeProviderStandaloneSearchIsExactHTTPOnly(t *testing.T) {
 	}
 }
 
+// TestRuntimeEnvironmentRejectsTrustAndVerificationOverrides prevents user variables from replacing CA trust, disabling TLS checks or injecting a bypass proxy.
+// TestRuntimeEnvironmentRejectsTrustAndVerificationOverrides запрещает пользовательским переменным заменять доверие CA, отключать TLS-проверки или внедрять обходной прокси.
 func TestRuntimeEnvironmentRejectsTrustAndVerificationOverrides(t *testing.T) {
 	for _, name := range []string{"CURL_CA_BUNDLE", "REQUESTS_CA_BUNDLE", "NODE_EXTRA_CA_CERTS", "GIT_SSL_CAINFO",
 		"NODE_TLS_REJECT_UNAUTHORIZED", "GIT_SSL_NO_VERIFY", "PYTHONHTTPSVERIFY", "CURL_SSL_BACKEND", "ALL_PROXY"} {

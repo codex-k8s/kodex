@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// riskAcceptanceTestValue derives a synthetic risk decision from the canonical vulnerability fixture with exact report, admission, build and policy pins.
+// riskAcceptanceTestValue создаёт синтетическое решение о риске из канонического примера уязвимостей с точными привязками отчёта, допуска, сборки и политики.
 func riskAcceptanceTestValue(t *testing.T) ImageRiskAcceptance {
 	t.Helper()
 	report := vulnerabilityTestReport(t)
@@ -23,6 +25,8 @@ func riskAcceptanceTestValue(t *testing.T) ImageRiskAcceptance {
 		DecidedByActorRef: "act_abcdefgh", DecidedAt: "2026-10-05T06:00:00.123456789Z"}
 }
 
+// TestImageRiskAcceptanceExactBindingAndCanonicalRoundTrip preserves the canonical decision exactly and rejects a decision referring to another report projection digest.
+// TestImageRiskAcceptanceExactBindingAndCanonicalRoundTrip точно сохраняет каноническое решение и отклоняет решение с дайджестом другой проекции отчёта.
 func TestImageRiskAcceptanceExactBindingAndCanonicalRoundTrip(t *testing.T) {
 	value := riskAcceptanceTestValue(t)
 	raw, err := CanonicalImageRiskAcceptance(value)
@@ -42,6 +46,8 @@ func TestImageRiskAcceptanceExactBindingAndCanonicalRoundTrip(t *testing.T) {
 	}
 }
 
+// TestImageRiskAcceptanceRejectsUnsafeOrIncompleteBinding rejects missing authority metadata, unsafe reasons, noncanonical timestamps and ambiguous or oversized decision encodings.
+// TestImageRiskAcceptanceRejectsUnsafeOrIncompleteBinding отклоняет неполные метаданные полномочий, небезопасные обоснования, неканоническое время и неоднозначные либо чрезмерные представления решения.
 func TestImageRiskAcceptanceRejectsUnsafeOrIncompleteBinding(t *testing.T) {
 	mutations := map[string]func(*ImageRiskAcceptance){
 		"reject action":          func(v *ImageRiskAcceptance) { v.Action = "REJECT_RISK" },
@@ -83,6 +89,8 @@ func TestImageRiskAcceptanceRejectsUnsafeOrIncompleteBinding(t *testing.T) {
 	}
 }
 
+// TestImageRiskAcceptanceRejectsChangedOwnerBuildPolicyAndImage mutates each immutable owner, artifact, build and policy field to prove a decision cannot be reused for another tuple.
+// TestImageRiskAcceptanceRejectsChangedOwnerBuildPolicyAndImage меняет каждое неизменяемое поле владельца, артефакта, сборки и политики, доказывая запрет повторного использования решения для другого набора.
 func TestImageRiskAcceptanceRejectsChangedOwnerBuildPolicyAndImage(t *testing.T) {
 	mutations := map[string]func(*ImageRiskAcceptance){
 		"organization":   func(v *ImageRiskAcceptance) { v.OrganizationRef = "org_ijklmnop" },

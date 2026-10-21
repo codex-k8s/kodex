@@ -8,7 +8,8 @@ import (
 	"unicode/utf8"
 )
 
-// Поля supported codex bucket проверяются независимо; unknown не становится zero.
+// ParseCodexFinancialObservation selects the supported codex bucket and projects independently present measurements, returning UNAVAILABLE for an ambiguous or unsupported envelope without inferring paid-continuation permission.
+// ParseCodexFinancialObservation выбирает поддерживаемый раздел codex и проецирует независимо присутствующие измерения, возвращая UNAVAILABLE для неоднозначного или неподдерживаемого конверта без вывода о праве платного продолжения.
 func ParseCodexFinancialObservation(raw json.RawMessage, sequence int64) ProviderFinancialObservation {
 	unavailable := ProviderFinancialObservation{Sequence: sequence, State: "UNAVAILABLE"}
 	if len(raw) > 64<<10 || !utf8.Valid(raw) || financialJSONKeys(raw) != nil {
@@ -81,8 +82,8 @@ func ParseCodexFinancialObservation(raw json.RawMessage, sequence int64) Provide
 	return value
 }
 
-// Allowlist закреплён account.rs Codex0.160.0; новые wire поля требуют проверки
-// контракта. Известные presentation metadata не переносятся в проекцию.
+// financialKnownFields accepts only exact keys from the caller's closed set; callers choose which supported presentation metadata to discard instead of projecting it.
+// financialKnownFields принимает только точные ключи из закрытого набора вызывающего; вызывающие выбирают, какие поддерживаемые метаданные отображения отбросить, а не включать в проекцию.
 func financialKnownFields(object map[string]json.RawMessage, allowed ...string) bool {
 	for key := range object {
 		known := false
@@ -99,6 +100,8 @@ func financialKnownFields(object map[string]json.RawMessage, allowed ...string) 
 	return true
 }
 
+// financialBool returns a pointer only for a JSON boolean, preserving absent, null and malformed fields as unknown rather than false.
+// financialBool возвращает указатель только для логического JSON-значения, сохраняя отсутствующие, null и некорректные поля как неизвестные, а не false.
 func financialBool(raw json.RawMessage) *bool {
 	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return nil
@@ -110,6 +113,8 @@ func financialBool(raw json.RawMessage) *bool {
 	return &value
 }
 
+// financialInteger returns an integral JSON value within inclusive bounds and treats absent, null, malformed and out-of-range values as unknown.
+// financialInteger возвращает целое JSON-значение в замкнутом диапазоне и трактует отсутствующие, null, некорректные и выходящие за границы значения как неизвестные.
 func financialInteger(raw json.RawMessage, minimum, maximum int64) *int64 {
 	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 		return nil
@@ -121,7 +126,8 @@ func financialInteger(raw json.RawMessage, minimum, maximum int64) *int64 {
 	return &value
 }
 
-// Закрываем повторные ключи до декодирования финансовых полей.
+// financialJSONKeys walks one JSON value before semantic decoding, rejecting duplicate object keys, excessive nesting and trailing tokens without altering number representations.
+// financialJSONKeys обходит одно JSON-значение до смыслового разбора, отклоняя повторные ключи объектов, чрезмерную вложенность и остаточные токены без изменения числовых представлений.
 func financialJSONKeys(raw []byte) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()

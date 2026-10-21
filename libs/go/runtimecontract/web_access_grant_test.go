@@ -2,6 +2,8 @@ package runtimecontract
 
 import "testing"
 
+// TestRuntimeWebAccessAllowsHostScopedWildcards distinguishes exact, single-level and recursive domain patterns and rejects apex, nesting or suffix confusion where inappropriate.
+// TestRuntimeWebAccessAllowsHostScopedWildcards различает точные, одноуровневые и рекурсивные доменные шаблоны, отклоняя недопустимые основной домен, вложенность и сходный суффикс.
 func TestRuntimeWebAccessAllowsHostScopedWildcards(t *testing.T) {
 	t.Parallel()
 
@@ -34,6 +36,8 @@ func TestRuntimeWebAccessAllowsHostScopedWildcards(t *testing.T) {
 	}
 }
 
+// TestRuntimeWebAccessAllowsRequestHonorsMethodPolicy permits an exact read-only GET but rejects a write method and an unlisted hostname.
+// TestRuntimeWebAccessAllowsRequestHonorsMethodPolicy разрешает точный GET для чтения, но отклоняет метод записи и неперечисленный узел.
 func TestRuntimeWebAccessAllowsRequestHonorsMethodPolicy(t *testing.T) {
 	readOnly := RuntimeWebAccess{Mode: RuntimeWebAccessAllowlistReadOnly, Rules: []RuntimeWebAccessRule{{
 		DomainPattern: "example.com", Protocol: RuntimeWebProtocolHTTPS, Port: 443,

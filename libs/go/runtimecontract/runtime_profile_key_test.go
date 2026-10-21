@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestRuntimeProfileKeyUsesSelectionContract accepts bounded stable profile keys without widening the stricter grammar of agent, role, account and configuration references.
+// TestRuntimeProfileKeyUsesSelectionContract принимает ограниченные устойчивые ключи профиля, не расширяя строгую грамматику ссылок сотрудника, роли, аккаунта и конфигурации.
 func TestRuntimeProfileKeyUsesSelectionContract(t *testing.T) {
 	for _, key := range []string{"builtin-safe-runtime", "profile_abcdefgh", "Ab_-0123", strings.Repeat("A", 128)} {
 		input := validRunnerInputFixture()

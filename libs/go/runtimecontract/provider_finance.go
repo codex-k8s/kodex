@@ -8,8 +8,8 @@ import (
 	"unicode/utf8"
 )
 
-// ProviderFinancialObservation — безопасный subset supported account/rateLimits/read.
-// Identity и время получения назначает владелец lease; денежная единица неизвестна.
+// ProviderFinancialObservation carries only supported account-limit measurements; the lease owner assigns identity and receipt time separately, and no currency is inferred.
+// ProviderFinancialObservation передаёт только поддерживаемые измерения лимитов аккаунта; владелец аренды отдельно назначает идентичность и время получения, валюта не предполагается.
 type ProviderFinancialObservation struct {
 	Sequence             int64                     `json:"sequence"`
 	State                string                    `json:"state"`
@@ -19,21 +19,29 @@ type ProviderFinancialObservation struct {
 	SpendControlReached  *bool                     `json:"spendControlReached,omitempty"`
 	Restriction          string                    `json:"restriction,omitempty"`
 }
+
+// ProviderFinancialWindow records a measured usage percentage with optional duration and reset time; absent pointers remain unknown rather than zero.
+// ProviderFinancialWindow хранит измеренный процент расхода с необязательными длительностью и временем сброса; отсутствующие указатели означают неизвестное значение, а не ноль.
 type ProviderFinancialWindow struct {
 	UsedPercent     *int32 `json:"usedPercent"`
 	DurationMinutes *int64 `json:"durationMinutes,omitempty"`
 	ResetsAt        *int64 `json:"resetsAt,omitempty"`
 }
+
+// ProviderFinancialCredits keeps credit availability, unlimited status and exact decimal balance independently optional without converting the balance to floating point.
+// ProviderFinancialCredits хранит независимо необязательные наличие кредитов, безлимитность и точный десятичный баланс без преобразования баланса в число с плавающей точкой.
 type ProviderFinancialCredits struct {
 	HasCredits *bool   `json:"hasCredits,omitempty"`
 	Unlimited  *bool   `json:"unlimited,omitempty"`
 	Balance    *string `json:"balance,omitempty"`
 }
 
+// financialBalance admits a bounded nonnegative plain decimal representation, excluding signs, exponents and currency annotations.
+// financialBalance допускает ограниченную неотрицательную обычную десятичную запись без знаков, экспонент и обозначений валюты.
 var financialBalance = regexp.MustCompile(`^[0-9]{1,64}(\.[0-9]{1,64})?$`)
 
-// Stored/callback projection проверяется отдельно от upstream ответа. Ни один
-// consumer не удаляет неизвестные поля до semantic validation.
+// ParseProviderFinancialObservation validates the bounded stored or callback projection with exact field names, duplicate-key rejection and semantic checks before returning any measurements.
+// ParseProviderFinancialObservation проверяет ограниченную сохранённую или callback-проекцию с точными именами полей, запретом повторных ключей и смысловыми проверками до возврата измерений.
 func ParseProviderFinancialObservation(raw []byte) (ProviderFinancialObservation, error) {
 	const maximumProjectionBytes = 4 << 10
 	invalid := errors.New("provider financial projection is invalid")
@@ -61,7 +69,8 @@ func ParseProviderFinancialObservation(raw []byte) (ProviderFinancialObservation
 		(json.Unmarshal(value, &credits) != nil || !financialKnownFields(credits, "hasCredits", "unlimited", "balance")) {
 		return ProviderFinancialObservation{}, invalid
 	}
-	// Alias исключает повторный вызов UnmarshalJSON при проверке wire payload.
+	// plainObservation avoids recursively invoking the custom decoder while preserving the wire layout for strict field decoding.
+	// plainObservation исключает рекурсивный вызов собственного декодера, сохраняя формат данных для строгого разбора полей.
 	type plainObservation ProviderFinancialObservation
 	var decoded plainObservation
 	decoder := json.NewDecoder(bytes.NewReader(raw))
@@ -72,7 +81,8 @@ func ParseProviderFinancialObservation(raw []byte) (ProviderFinancialObservation
 	return ProviderFinancialObservation(decoded), nil
 }
 
-// Вложенный callback проходит ту же закрытую проверку, что stored projection.
+// UnmarshalJSON applies the same closed projection parser to nested callback values and assigns the receiver only after complete validation.
+// UnmarshalJSON применяет тот же закрытый разбор проекции к вложенным callback-значениям и изменяет получателя только после полной проверки.
 func (value *ProviderFinancialObservation) UnmarshalJSON(raw []byte) error {
 	observation, err := ParseProviderFinancialObservation(raw)
 	if err != nil {
@@ -82,6 +92,8 @@ func (value *ProviderFinancialObservation) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
+// Validate enforces sequence, state, window and balance bounds, forbids measurements in UNAVAILABLE observations and restricts provider restriction codes to a closed set.
+// Validate проверяет границы последовательности, состояния, окон и баланса, запрещает измерения при UNAVAILABLE и ограничивает причины отказа закрытым набором кодов провайдера.
 func (value ProviderFinancialObservation) Validate() error {
 	if value.Sequence < 1 || value.Sequence > 64 || (value.State != "AVAILABLE" && value.State != "UNAVAILABLE") || len(value.Windows) > 2 {
 		return errors.New("provider financial observation is invalid")

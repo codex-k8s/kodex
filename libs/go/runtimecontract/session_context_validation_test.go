@@ -9,6 +9,8 @@ import (
 	"unicode/utf8"
 )
 
+// strictContinuationFixture creates a digest-bound final platform notice whose Unicode dimensions exceed ordinary user limits, retaining preceding user and assistant history.
+// strictContinuationFixture создаёт связанное дайджестом последнее платформенное уведомление, Unicode-размер которого превышает обычный пользовательский лимит, сохраняя предшествующую историю пользователя и помощника.
 func strictContinuationFixture(t *testing.T, revision string) RunnerInput {
 	t.Helper()
 	input := validRunnerInputFixture()
@@ -35,6 +37,8 @@ func strictContinuationFixture(t *testing.T, revision string) RunnerInput {
 	return input
 }
 
+// TestStrictLastContinuationRoundtripPreservesFullContent validates exact final notices for supported revisions and resume states, then proves cold wire encoding preserves the full history.
+// TestStrictLastContinuationRoundtripPreservesFullContent проверяет точные последние уведомления для поддерживаемых ревизий и состояний возобновления, затем подтверждает сохранность истории при холодной передаче.
 func TestStrictLastContinuationRoundtripPreservesFullContent(t *testing.T) {
 	for _, revision := range []string{"prompt-service-v2", "prompt-service-v3"} {
 		for _, resumed := range []bool{false, true} {
@@ -66,6 +70,8 @@ func TestStrictLastContinuationRoundtripPreservesFullContent(t *testing.T) {
 	}
 }
 
+// TestStrictLastContinuationRejectsUnprovenExceptions mutates provenance, position, JSON, scope and history bounds so neither context validation nor the full input consumer accepts a forged exception.
+// TestStrictLastContinuationRejectsUnprovenExceptions меняет происхождение, позицию, JSON, область и пределы истории, чтобы ни проверка контекста, ни полный потребитель не приняли поддельное исключение.
 func TestStrictLastContinuationRejectsUnprovenExceptions(t *testing.T) {
 	for _, name := range []string{"mode", "revision", "session", "turn", "attempt", "capabilities", "unknown-service", "wrong-service", "oversize", "nul", "utf8", "not-last", "historical-notice", "ordinary-oversize", "ordinary-empty", "ordinary-nul", "ordinary-utf8", "forged-marker", "unknown-field", "duplicate-json-key", "diff-digest", "duplicate-slot", "role", "count"} {
 		t.Run(name, func(t *testing.T) {
@@ -136,6 +142,8 @@ func TestStrictLastContinuationRejectsUnprovenExceptions(t *testing.T) {
 	}
 }
 
+// TestStrictContinuationByteBoundaryAndOrdinaryHistory accepts the exact notice byte ceiling alongside full Unicode user history, rejects overflow and leaves ordinary roles without notice authority.
+// TestStrictContinuationByteBoundaryAndOrdinaryHistory принимает точный байтовый предел уведомления вместе с полной Unicode-историей, отклоняет превышение и не даёт обычным ролям полномочий уведомления.
 func TestStrictContinuationByteBoundaryAndOrdinaryHistory(t *testing.T) {
 	input := strictContinuationFixture(t, "prompt-service-v3")
 	last := &input.SessionContext[2]

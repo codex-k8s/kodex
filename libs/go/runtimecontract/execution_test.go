@@ -9,6 +9,8 @@ import (
 	"unicode/utf8"
 )
 
+// TestRunnerV7RejectsOldABIAndEffortTampering accepts the current fixture but rejects an old ABI or missing and altered reasoning bindings.
+// TestRunnerV7RejectsOldABIAndEffortTampering принимает текущий пример, но отклоняет старый ABI, отсутствующие и изменённые привязки рассуждений.
 func TestRunnerV7RejectsOldABIAndEffortTampering(t *testing.T) {
 	input := validRunnerInputFixture()
 	refreshRunnerInputBindings(&input)
@@ -29,6 +31,8 @@ func TestRunnerV7RejectsOldABIAndEffortTampering(t *testing.T) {
 	}
 }
 
+// TestRunnerInputArtifactCatalogIsVersionBoundedAndUnique requires pinned manifest and file versions, unique references and safe names without granting artifact writes.
+// TestRunnerInputArtifactCatalogIsVersionBoundedAndUnique требует закреплённых версий манифеста и файлов, уникальных ссылок и безопасных имён без выдачи права записи артефактов.
 func TestRunnerInputArtifactCatalogIsVersionBoundedAndUnique(t *testing.T) {
 	input := validRunnerInputFixture()
 	input.Capabilities = nil
@@ -83,6 +87,8 @@ func TestRunnerInputArtifactCatalogIsVersionBoundedAndUnique(t *testing.T) {
 	}
 }
 
+// TestWarmCompatibilityDigestIgnoresTurnIdentityAndRejectsRuntimeDrift keeps warm reuse independent of turn identity while binding model, session and workspace policy.
+// TestWarmCompatibilityDigestIgnoresTurnIdentityAndRejectsRuntimeDrift сохраняет независимость прогретого процесса от идентичности хода, но закрепляет модель, сессию и политику рабочего пространства.
 func TestWarmCompatibilityDigestIgnoresTurnIdentityAndRejectsRuntimeDrift(t *testing.T) {
 	turn := validRunnerInputFixture()
 	turn.AssistantScope = AssistantScopeSystem
@@ -124,6 +130,8 @@ func TestWarmCompatibilityDigestIgnoresTurnIdentityAndRejectsRuntimeDrift(t *tes
 	}
 }
 
+// TestRunnerInputAcceptsImmutableSystemRuntimeRevision accepts an exact system revision locator and rejects a mutable latest alias.
+// TestRunnerInputAcceptsImmutableSystemRuntimeRevision принимает точную ссылку на системную ревизию и отклоняет изменяемый псевдоним latest.
 func TestRunnerInputAcceptsImmutableSystemRuntimeRevision(t *testing.T) {
 	input := validRunnerInputFixture()
 	input.RuntimeRevisionRef = "system-assistant-runtime-" + strings.Repeat("a", 64)
@@ -137,6 +145,8 @@ func TestRunnerInputAcceptsImmutableSystemRuntimeRevision(t *testing.T) {
 	}
 }
 
+// TestRunnerInputNestedCatalogMatchesV6SchemaBoundary checks valid history and integration grants, rejecting unknown roles, risk values and duplicate capabilities.
+// TestRunnerInputNestedCatalogMatchesV6SchemaBoundary проверяет допустимые историю и права интеграции, отклоняя неизвестные роли, значения риска и повторяющиеся возможности.
 func TestRunnerInputNestedCatalogMatchesV6SchemaBoundary(t *testing.T) {
 	valid := validRunnerInputFixture()
 	valid.SessionContext = []RunnerSessionMessage{{Role: "USER", Content: "bounded context"}}
@@ -174,6 +184,8 @@ func TestRunnerInputNestedCatalogMatchesV6SchemaBoundary(t *testing.T) {
 	}
 }
 
+// TestRunnerInputRequiresExactRevisionAndSTTBindings rejects incomplete runtime pins and requires the exact STT configuration revision when that capability is present.
+// TestRunnerInputRequiresExactRevisionAndSTTBindings отклоняет неполные привязки исполнения и требует точной ревизии конфигурации STT при наличии этой возможности.
 func TestRunnerInputRequiresExactRevisionAndSTTBindings(t *testing.T) {
 	for name, mutate := range map[string]func(*RunnerInput){
 		"organization":           func(input *RunnerInput) { input.OrganizationRef = "" },
@@ -211,6 +223,8 @@ func TestRunnerInputRequiresExactRevisionAndSTTBindings(t *testing.T) {
 	}
 }
 
+// TestRunnerInputRejectsRuntimeMaterializationDriftAndRevokedGrant changes individual materialized fields without resealing and requires validation to reject every mismatch.
+// TestRunnerInputRejectsRuntimeMaterializationDriftAndRevokedGrant меняет отдельные материализованные поля без пересчёта привязок и требует отклонения каждого расхождения.
 func TestRunnerInputRejectsRuntimeMaterializationDriftAndRevokedGrant(t *testing.T) {
 	base := validRunnerInputFixture()
 	base.Capabilities = []string{"crm.read"}
@@ -254,6 +268,8 @@ func TestRunnerInputRejectsRuntimeMaterializationDriftAndRevokedGrant(t *testing
 	}
 }
 
+// TestTokenUsageValidationRejectsInconsistentCounters accepts balanced usage and rejects negative totals or cache and reasoning counts exceeding their parent counters.
+// TestTokenUsageValidationRejectsInconsistentCounters принимает согласованный расход и отклоняет отрицательные значения либо счётчики кэша и рассуждений сверх родительских итогов.
 func TestTokenUsageValidationRejectsInconsistentCounters(t *testing.T) {
 	valid := TokenUsage{TotalTokens: 120, InputTokens: 100, CachedInputTokens: 40,
 		CacheWriteInputTokens: 10, OutputTokens: 20, ReasoningOutputTokens: 5, ModelContextWindow: 200000}
@@ -276,6 +292,8 @@ func TestTokenUsageValidationRejectsInconsistentCounters(t *testing.T) {
 	}
 }
 
+// TestRunnerCompletionArchiveBindingIsCompleteAndBounded accepts complete archive metadata but rejects a foreign session path and an absent byte count.
+// TestRunnerCompletionArchiveBindingIsCompleteAndBounded принимает полные метаданные архива, но отклоняет путь чужой сессии и отсутствующий размер.
 func TestRunnerCompletionArchiveBindingIsCompleteAndBounded(t *testing.T) {
 	request := RunnerCompletionRequest{RuntimeRevisionDigest: strings.Repeat("b", 64), Attempt: 1, Success: true,
 		ResultSummary: "done", CodexSessionID: "00000000-0000-4000-8000-000000000001",
@@ -295,6 +313,8 @@ func TestRunnerCompletionArchiveBindingIsCompleteAndBounded(t *testing.T) {
 	}
 }
 
+// TestProviderCredentialRefreshRequestIsExactAndBounded accepts a synthetic refresh envelope and rejects broken references, digests, JSON and size bounds.
+// TestProviderCredentialRefreshRequestIsExactAndBounded принимает синтетический конверт обновления и отклоняет нарушения ссылок, дайджестов, JSON и ограничения размера.
 func TestProviderCredentialRefreshRequestIsExactAndBounded(t *testing.T) {
 	valid := RunnerProviderCredentialRefreshRequest{
 		RuntimeRevisionDigest:         strings.Repeat("a", 64),
@@ -333,6 +353,8 @@ func TestProviderCredentialRefreshRequestIsExactAndBounded(t *testing.T) {
 	}
 }
 
+// TestSessionPVCNameIsStableAndRejectsInvalidReference checks a deterministic bounded claim name and rejects malformed session references.
+// TestSessionPVCNameIsStableAndRejectsInvalidReference проверяет устойчивое ограниченное имя тома и отклоняет некорректные ссылки на сессии.
 func TestSessionPVCNameIsStableAndRejectsInvalidReference(t *testing.T) {
 	first, err := SessionPVCName("ses_abcdefgh")
 	if err != nil {
@@ -347,6 +369,8 @@ func TestSessionPVCNameIsStableAndRejectsInvalidReference(t *testing.T) {
 	}
 }
 
+// validRunnerInputFixture builds a self-contained pinned execution input with synthetic identities and refreshed digests, without reading credentials or live state.
+// validRunnerInputFixture собирает автономный закреплённый вход исполнения с синтетическими идентификаторами и пересчитанными дайджестами без чтения реквизитов и живого состояния.
 func validRunnerInputFixture() RunnerInput {
 	imageDigest := "sha256:" + strings.Repeat("a", 64)
 	image := RuntimeEnvironmentImage{ArtifactRef: "imgart_abcdefgh", RecipeRef: "imgrec_abcdefgh",
@@ -399,10 +423,14 @@ func validRunnerInputFixture() RunnerInput {
 	return input
 }
 
+// refreshRunnerInputBindings reseals both transport bindings after an intentional fixture mutation; callers assert the resulting validity themselves.
+// refreshRunnerInputBindings пересчитывает обе транспортные привязки после намеренного изменения примера; итоговую допустимость проверяют вызывающие тесты.
 func refreshRunnerInputBindings(input *RunnerInput) {
 	input.ExecutionBindingDigest, input.MCPBindingDigest, _ = RuntimeExecutionBindingDigests(*input)
 }
 
+// TestRunnerDelegationUnicodeNativeInput preserves multibyte instructions and their revision digest through encoding while rejecting byte overflow and unbound edits.
+// TestRunnerDelegationUnicodeNativeInput сохраняет многобайтные инструкции и дайджест ревизии при кодировании, отклоняя превышение байтового лимита и несвязанные изменения.
 func TestRunnerDelegationUnicodeNativeInput(t *testing.T) {
 	input := validRunnerInputFixture()
 	text := strings.Repeat("a", 454) + strings.Repeat("я", 449)
@@ -439,6 +467,8 @@ func TestRunnerDelegationUnicodeNativeInput(t *testing.T) {
 	}
 }
 
+// TestRunnerHumanTextUnicodeBounds checks human fields by codepoints for ASCII, Cyrillic and emoji without relaxing the grammar of protocol identifiers.
+// TestRunnerHumanTextUnicodeBounds проверяет пользовательские поля по кодовым точкам для ASCII, кириллицы и эмодзи, не ослабляя грамматику протокольных идентификаторов.
 func TestRunnerHumanTextUnicodeBounds(t *testing.T) {
 	for _, field := range []struct {
 		name  string
@@ -493,6 +523,8 @@ func TestRunnerHumanTextUnicodeBounds(t *testing.T) {
 	}
 }
 
+// TestRunnerWorkspaceQuotaMatchesImmutableEnvironmentBudget requires workspace limits to match the pinned environment even when a mismatching policy has a valid self-digest.
+// TestRunnerWorkspaceQuotaMatchesImmutableEnvironmentBudget требует совпадения лимитов рабочего пространства с закреплённым окружением даже при корректном собственном дайджесте несовпадающей политики.
 func TestRunnerWorkspaceQuotaMatchesImmutableEnvironmentBudget(t *testing.T) {
 	input := validRunnerInputFixture()
 	input.EnvironmentPolicy.Resources.WorkspaceLimits = &RuntimeWorkspaceLimits{MaxBytes: 4096, MaxFiles: 10}

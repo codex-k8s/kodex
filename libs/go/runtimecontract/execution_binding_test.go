@@ -2,6 +2,8 @@ package runtimecontract
 
 import "testing"
 
+// TestExecutionBindingAllowsOnlySystemAssistantWithoutProject permits projectless system scope, separates its digests from project scope and rejects an ordinary projectless execution.
+// TestExecutionBindingAllowsOnlySystemAssistantWithoutProject разрешает системную область без проекта, отделяет её дайджесты от проектных и отклоняет обычное исполнение без проекта.
 func TestExecutionBindingAllowsOnlySystemAssistantWithoutProject(t *testing.T) {
 	input := validRunnerInputFixture()
 	input.ProjectRef = ""

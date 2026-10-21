@@ -14,22 +14,38 @@ import (
 )
 
 const (
-	ReasoningSupported       = "SUPPORTED"
-	ReasoningUnsupported     = "UNSUPPORTED"
-	OverlaySyntaxInvalid     = "CONFIG_OVERLAY_SYNTAX_INVALID"
-	OverlayKeyForbidden      = "CONFIG_OVERLAY_KEY_FORBIDDEN"
-	OverlayValueInvalid      = "CONFIG_OVERLAY_VALUE_INVALID"
+	// ReasoningSupported requires an explicit effective reasoning value supplied by the configuration owner.
+	// ReasoningSupported требует явного действующего значения рассуждений от владельца конфигурации.
+	ReasoningSupported = "SUPPORTED"
+	// ReasoningUnsupported permits only the absence of both effective and overlay reasoning values.
+	// ReasoningUnsupported разрешает лишь отсутствие действующего значения и настройки рассуждений.
+	ReasoningUnsupported = "UNSUPPORTED"
+	// OverlaySyntaxInvalid identifies encoding, size or TOML syntax failures without exposing input values.
+	// OverlaySyntaxInvalid обозначает ошибки кодировки, размера или синтаксиса TOML без раскрытия входных значений.
+	OverlaySyntaxInvalid = "CONFIG_OVERLAY_SYNTAX_INVALID"
+	// OverlayKeyForbidden identifies keys or content outside the editable overlay boundary.
+	// OverlayKeyForbidden обозначает ключи или содержимое вне границы редактируемых настроек.
+	OverlayKeyForbidden = "CONFIG_OVERLAY_KEY_FORBIDDEN"
+	// OverlayValueInvalid identifies a known overlay key with an unacceptable type or value.
+	// OverlayValueInvalid обозначает известный ключ с недопустимым типом или значением.
+	OverlayValueInvalid = "CONFIG_OVERLAY_VALUE_INVALID"
+	// OverlayEffortUnsupported distinguishes structurally valid effort values absent from the selected model's allowed set.
+	// OverlayEffortUnsupported выделяет структурно допустимые степени рассуждения, отсутствующие в разрешённом наборе выбранной модели.
 	OverlayEffortUnsupported = "CONFIG_OVERLAY_EFFORT_UNSUPPORTED"
 )
 
+// overlayEffortPattern bounds the structural shape of effort identifiers without deciding model compatibility.
+// overlayEffortPattern ограничивает структурную форму идентификаторов рассуждений без решения о совместимости модели.
 var overlayEffortPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
 
-// Режимы закреплены по openai/codex rust-v0.160.0, WebSearchMode.
-// Hosted search не выдаёт shell/network authority и не ограничивается sandbox allowlist.
+// ValidWebSearchMode checks the closed hosted-search mode set; selecting a mode neither grants shell egress nor applies sandbox domain rules to hosted search.
+// ValidWebSearchMode проверяет закрытый набор режимов серверного поиска; выбор режима не даёт shell-доступа в сеть и не применяет доменные правила sandbox к серверному поиску.
 func ValidWebSearchMode(mode string) bool {
 	return slices.Contains([]string{"disabled", "cached", "indexed", "live"}, mode)
 }
 
+// ValidateEffectiveReasoningEffort validates the overlay and requires a structurally valid owner effort matching any explicit override, or no effort for an unsupported model.
+// ValidateEffectiveReasoningEffort проверяет настройки и требует структурно допустимую степень владельца, совпадающую с явным переопределением, либо отсутствие степени у неподдерживаемой модели.
 func ValidateEffectiveReasoningEffort(overlay, effective, mode string) error {
 	parsed, err := ParseConfigOverlay(overlay)
 	if err != nil {
@@ -44,6 +60,8 @@ func ValidateEffectiveReasoningEffort(overlay, effective, mode string) error {
 	return nil
 }
 
+// ConfigOverlayDiagnostic reports a safe code, allowlisted key and source position without copying parser messages or raw input values.
+// ConfigOverlayDiagnostic сообщает безопасный код, разрешённый ключ и позицию без копирования сообщений анализатора и исходных значений.
 type ConfigOverlayDiagnostic struct {
 	Code    string `json:"code"`
 	Key     string `json:"key"`
@@ -52,6 +70,8 @@ type ConfigOverlayDiagnostic struct {
 	Message string `json:"message"`
 }
 
+// ConfigOverlayField describes one editable field's type, allowed values, default and editor hints for the shared schema and validator.
+// ConfigOverlayField описывает тип, разрешённые значения, default и подсказки одного редактируемого поля для общей схемы и проверки.
 type ConfigOverlayField struct {
 	Key           string   `json:"key"`
 	ValueType     string   `json:"valueType"`
@@ -62,6 +82,8 @@ type ConfigOverlayField struct {
 	Hover         string   `json:"hover"`
 }
 
+// ConfigOverlaySchema publishes the bounded editor contract with a digest-derived revision so model-capability changes invalidate stale schema pins.
+// ConfigOverlaySchema публикует ограниченный контракт редактора с ревизией от дайджеста, чтобы изменения возможностей модели делали старые привязки схемы неактуальными.
 type ConfigOverlaySchema struct {
 	Revision     string               `json:"revision"`
 	Digest       string               `json:"digest"`
@@ -69,9 +91,8 @@ type ConfigOverlaySchema struct {
 	MaximumBytes int32                `json:"maximumBytes"`
 }
 
-// OverlaySchema использует model-specific пересечение, рассчитанное owner.
-// Пустой список не разрешает UI придумывать effort; structural parser отдельно
-// проверяет форму строки перед обязательной owner-проверкой совместимости.
+// OverlaySchema builds a digest-pinned field catalog from owner-computed model efforts and default; an empty capability set does not authorize invented effort values.
+// OverlaySchema строит закреплённый дайджестом каталог из рассчитанных владельцем степеней и default модели; пустой набор возможностей не разрешает выдумывать значения.
 func OverlaySchema(efforts []string, defaultEffort string) ConfigOverlaySchema {
 	fields := overlayFields(efforts, defaultEffort)
 	schema := ConfigOverlaySchema{Fields: fields, MaximumBytes: MaximumConfigOverlayBytes}
@@ -82,6 +103,8 @@ func OverlaySchema(efforts []string, defaultEffort string) ConfigOverlaySchema {
 	return schema
 }
 
+// overlayFields returns the closed editable preference list and clones the model effort slice so editor metadata does not alias the caller's list.
+// overlayFields возвращает закрытый список редактируемых настроек и копирует степени модели, чтобы метаданные редактора не разделяли список вызывающего.
 func overlayFields(efforts []string, defaultEffort string) []ConfigOverlayField {
 	return []ConfigOverlayField{
 		{Key: "model_reasoning_effort", ValueType: "string", AllowedValues: slices.Clone(efforts), DefaultValue: defaultEffort,
@@ -97,15 +120,18 @@ func overlayFields(efforts []string, defaultEffort string) []ConfigOverlayField 
 	}
 }
 
+// overlayPositionProbe deliberately fails primitive decoding to obtain the TOML library's source position without exposing the original value.
+// overlayPositionProbe намеренно прерывает разбор примитива для получения позиции из TOML-библиотеки без раскрытия исходного значения.
 type overlayPositionProbe struct{}
 
+// UnmarshalTOML returns a fixed failure which the TOML decoder wraps with the primitive's exact position.
+// UnmarshalTOML возвращает фиксированный отказ, который TOML-декодер дополняет точной позицией примитива.
 func (*overlayPositionProbe) UnmarshalTOML(any) error {
 	return errors.New("overlay diagnostic location")
 }
 
-// DiagnoseConfigOverlay не возвращает Message/LastKey из parser: они могут
-// содержать исходные значения. PrimitiveDecode сохраняет точную позицию TOML,
-// включая dotted/quoted keys и inline tables, без второго самописного parser.
+// DiagnoseConfigOverlay produces at most sixteen safe field diagnostics with TOML positions, validates optional model efforts and protected content, and never returns parser Message or LastKey values.
+// DiagnoseConfigOverlay формирует не более шестнадцати безопасных диагностик с TOML-позициями, проверяет необязательные степени модели и защищённое содержимое, не возвращая значения Message и LastKey анализатора.
 func DiagnoseConfigOverlay(raw string, efforts []string) []ConfigOverlayDiagnostic {
 	if len(raw) > MaximumConfigOverlayBytes || !utf8.ValidString(raw) || strings.ContainsRune(raw, '\x00') {
 		return []ConfigOverlayDiagnostic{{Code: OverlaySyntaxInvalid, Message: "Overlay size or encoding is invalid"}}

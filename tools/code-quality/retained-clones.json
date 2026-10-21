@@ -1877,7 +1877,7 @@
       "format": "go",
       "firstPath": "libs/go/runtimecontract/execution.go",
       "secondPath": "services/internal/runtime-controller/internal/workload/envelope_reason.go",
-      "fragmentSHA256": "ec14de2fe68a91f521f56867820ceefeef424635f043d759fb4ebbb6a8869282",
+      "fragmentSHA256": "bfe0ef1c320590d792d1d4dacdcfa2e66e2147441ca784a739ee9ca38c9c61dd",
       "count": 1,
       "reason": "Проверка JSON-схемы integration grant повторена намеренно: runtimecontract принимает или отклоняет вход, а runtime-controller после отказа только диагностирует точную причину без выдачи полномочия. Общий helper превратил бы независимую проекцию диагностики в самопроверку и скрыл дрейф; mutation-тесты сверяют её с авторитетным валидатором."
     },
@@ -1965,7 +1965,7 @@
       "format": "go",
       "firstPath": "libs/go/runtimecontract/execution.go",
       "secondPath": "services/internal/runtime-controller/internal/workload/envelope_reason.go",
-      "fragmentSHA256": "4498cd531b4f10df6f4d5bb8ba0c10ad0bdd7b6e8717f61de620d72a3dedd2c7",
+      "fragmentSHA256": "79e75581f4752e030d2003a49a900facdc70d21d8c3203cd2f6d64403e83a8b9",
       "count": 1,
       "reason": "Проверка пути файла секрета намеренно есть и у авторитетного validator RunnerInput, и у диагностической проекции runtime-controller после отказа. Проекция не разрешает выполнение и проверяется mutation-тестами против validator; общий вызов лишил бы диагностику независимости и возможности обнаружить дрейф."
     },

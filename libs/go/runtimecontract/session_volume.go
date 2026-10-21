@@ -6,8 +6,8 @@ import (
 	"errors"
 )
 
-// SessionVolumeMetadata связывает исходный и восстановленный private том с
-// одним exact owner/session. Это metadata, не источник полномочий.
+// SessionVolumeMetadata validates owner references and returns hashed organization, optional-project and session metadata for original and restored private volumes; metadata does not confer authority.
+// SessionVolumeMetadata проверяет ссылки владельца и возвращает хэшированные метаданные организации, необязательного проекта и сессии для исходных и восстановленных частных томов; метаданные не дают полномочий.
 func SessionVolumeMetadata(organizationRef, projectRef, sessionRef string) (map[string]string, map[string]string, error) {
 	if !opaqueReferencePattern.MatchString(organizationRef) || !opaqueReferencePattern.MatchString(sessionRef) ||
 		(projectRef != "" && !opaqueReferencePattern.MatchString(projectRef)) {

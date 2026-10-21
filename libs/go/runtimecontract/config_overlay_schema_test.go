@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// TestOverlayDiagnosticsPreservePositionsWithoutValues checks positions for syntax, quoted, dotted and nested keys while ensuring diagnostic JSON omits private input values.
+// TestOverlayDiagnosticsPreservePositionsWithoutValues проверяет позиции синтаксических, кавычечных, составных и вложенных ключей, подтверждая отсутствие частных входных значений в JSON-диагностике.
 func TestOverlayDiagnosticsPreservePositionsWithoutValues(t *testing.T) {
 	for name, test := range map[string]struct {
 		raw, code, key string
@@ -34,6 +36,8 @@ func TestOverlayDiagnosticsPreservePositionsWithoutValues(t *testing.T) {
 	}
 }
 
+// TestOverlaySchemaMatchesValidatorAndModelCapabilities accepts advertised field values, binds capability changes into the schema digest and distinguishes structural parsing from model-effort eligibility.
+// TestOverlaySchemaMatchesValidatorAndModelCapabilities принимает объявленные значения, связывает изменения возможностей с дайджестом схемы и отделяет структурный разбор от допустимости степени для модели.
 func TestOverlaySchemaMatchesValidatorAndModelCapabilities(t *testing.T) {
 	schema := OverlaySchema([]string{"medium", "max"}, "medium")
 	if schema.Revision != "cos_"+schema.Digest || len(schema.Digest) != 64 || len(schema.Fields) != 5 || schema.MaximumBytes != 65536 {
@@ -61,6 +65,8 @@ func TestOverlaySchemaMatchesValidatorAndModelCapabilities(t *testing.T) {
 	}
 }
 
+// TestEffectiveReasoningEffortRequiresOwnerValue rejects missing or inconsistent effective effort and permits absence only for models explicitly marked unsupported.
+// TestEffectiveReasoningEffortRequiresOwnerValue отклоняет отсутствующую или несогласованную действующую степень и разрешает её отсутствие лишь у явно неподдерживаемых моделей.
 func TestEffectiveReasoningEffortRequiresOwnerValue(t *testing.T) {
 	if ValidateEffectiveReasoningEffort("", "", ReasoningUnsupported) != nil {
 		t.Fatal("non-reasoning model rejected")

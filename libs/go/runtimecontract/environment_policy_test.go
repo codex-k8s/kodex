@@ -1,10 +1,15 @@
 package runtimecontract
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
 
+// TestEnvironmentWorkspaceLimitsDigestAndImmutableCopy pins narrower quotas into the resource digest,
+// checks ownership of the copied limit object, and rejects quota expansion beyond the platform ceiling.
+// TestEnvironmentWorkspaceLimitsDigestAndImmutableCopy закрепляет меньшие квоты в дайджесте ресурсов,
+// проверяет отдельную копию лимитов и отклоняет превышение платформенного предела.
 func TestEnvironmentWorkspaceLimitsDigestAndImmutableCopy(t *testing.T) {
 	base := DefaultRuntimeEnvironmentPolicy()
 	baseDigest := base.ResourcesDigest
@@ -28,6 +33,10 @@ func TestEnvironmentWorkspaceLimitsDigestAndImmutableCopy(t *testing.T) {
 	}
 }
 
+// TestRuntimeEnvironmentPolicyFromInputMaterializesExactBoundary verifies typed owner input becomes
+// exact service egress, a fixed volume path, component digests, and an execution identity without API rules.
+// TestRuntimeEnvironmentPolicyFromInputMaterializesExactBoundary проверяет превращение входа владельца
+// в точные служебные связи, путь тома, дайджесты и идентичность исполнения без правил API.
 func TestRuntimeEnvironmentPolicyFromInputMaterializesExactBoundary(t *testing.T) {
 	t.Parallel()
 	defaults := DefaultRuntimeEnvironmentPolicy()
@@ -82,6 +91,8 @@ func TestRuntimeEnvironmentPolicyFromInputMaterializesExactBoundary(t *testing.T
 	}
 }
 
+// TestRuntimeEnvironmentPolicyNetworkDigestsMatchMigration protects the persisted default network digest.
+// TestRuntimeEnvironmentPolicyNetworkDigestsMatchMigration защищает сохранённый дайджест сети по умолчанию.
 func TestRuntimeEnvironmentPolicyNetworkDigestsMatchMigration(t *testing.T) {
 	t.Parallel()
 
@@ -91,6 +102,54 @@ func TestRuntimeEnvironmentPolicyNetworkDigestsMatchMigration(t *testing.T) {
 	}
 }
 
+// TestRuntimeEnvironmentDefaultEntryPointsKeepCanonicalDigests pins all persisted default digests
+// across normalization and owner-input entrypoints and prevents shared mutable network defaults.
+// TestRuntimeEnvironmentDefaultEntryPointsKeepCanonicalDigests закрепляет сохранённые default-дайджесты
+// для нормализации и входа владельца и запрещает общие изменяемые сетевые настройки.
+func TestRuntimeEnvironmentDefaultEntryPointsKeepCanonicalDigests(t *testing.T) {
+	defaults := DefaultRuntimeEnvironmentPolicyWithoutDigests()
+	for name, build := range map[string]func() (RuntimeEnvironmentPolicy, error){
+		"direct": func() (RuntimeEnvironmentPolicy, error) { return DefaultRuntimeEnvironmentPolicy(), nil },
+		"zero": func() (RuntimeEnvironmentPolicy, error) {
+			return NormalizeRuntimeEnvironmentPolicy(RuntimeEnvironmentPolicy{})
+		},
+		"raw defaults": func() (RuntimeEnvironmentPolicy, error) { return NormalizeRuntimeEnvironmentPolicy(defaults) },
+		"owner input": func() (RuntimeEnvironmentPolicy, error) {
+			return RuntimeEnvironmentPolicyFromInput(RuntimeEnvironmentPolicyInput{
+				Resources: defaults.Resources, KubernetesAccess: RuntimeKubernetesAccessNone,
+				NetworkDestinations: []string{RuntimeEgressDNS, RuntimeEgressProviderProxy, RuntimeEgressRuntimeCallback},
+			})
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			policy, err := build()
+			if err != nil || !reflect.DeepEqual(policy, DefaultRuntimeEnvironmentPolicy()) {
+				t.Fatal("default policy entrypoints disagree")
+			}
+			actual := []string{policy.ResourcesDigest, policy.VolumesDigest, policy.NetworkDigest, policy.RBACDigest}
+			expected := []string{
+				"5cc6a50ed6896a06cea6acf2149f22c3d37fb52b6ef75f6305375d1bdde483b6",
+				"d21f6a8d7834847c8c5e02c88ff36a1114ecbfdf43f0c6668fceff28334b3634",
+				"7d4998b5d8c1db3a90002ea8e56bc4c1103a5facbf5eba9b313355f3b55ca765",
+				"1b72c0704ea77cc1536f61d4e882306f12967fd39425fa6ea8d3f68500461d2e",
+			}
+			digest, digestErr := RuntimeEnvironmentPolicyDigest(policy)
+			if !reflect.DeepEqual(actual, expected) || digestErr != nil || digest != "853fcfb2a8c5dccbbede567c4688264ca4f6762c117ee0cf271e8186038ff20e" {
+				t.Fatal("persisted default policy digests changed")
+			}
+		})
+	}
+	other := DefaultRuntimeEnvironmentPolicyWithoutDigests()
+	defaults.Network.Egress[0].Port = 1
+	if other.Network.Egress[0].Port != 53 {
+		t.Fatal("default policies share mutable egress")
+	}
+}
+
+// TestRuntimeEnvironmentPolicyRejectsPrivilegeExpansion rejects resource, mount, network, destination,
+// and namespace changes outside the platform's closed admission boundary.
+// TestRuntimeEnvironmentPolicyRejectsPrivilegeExpansion отклоняет ресурсы, тома, сеть, назначения
+// и пространство имён за пределами закрытой платформенной границы допуска.
 func TestRuntimeEnvironmentPolicyRejectsPrivilegeExpansion(t *testing.T) {
 	t.Parallel()
 	defaults := DefaultRuntimeEnvironmentPolicy()
@@ -132,6 +191,10 @@ func TestRuntimeEnvironmentPolicyRejectsPrivilegeExpansion(t *testing.T) {
 	}
 }
 
+// TestRuntimeEnvironmentPolicyInputRequiresClosedDestinationSet rejects unsupported Kubernetes access
+// and any additional service destination before policy materialization.
+// TestRuntimeEnvironmentPolicyInputRequiresClosedDestinationSet отклоняет неподдерживаемый Kubernetes-доступ
+// и любое дополнительное служебное назначение до материализации политики.
 func TestRuntimeEnvironmentPolicyInputRequiresClosedDestinationSet(t *testing.T) {
 	t.Parallel()
 	resources := DefaultRuntimeEnvironmentPolicy().Resources
@@ -151,6 +214,10 @@ func TestRuntimeEnvironmentPolicyInputRequiresClosedDestinationSet(t *testing.T)
 	}
 }
 
+// TestRetiredKubernetesAccessCannotIssueExecutionRules rejects unsupported profiles even with a valid
+// self-consistent digest, preventing them from producing effective execution rules.
+// TestRetiredKubernetesAccessCannotIssueExecutionRules отклоняет неподдерживаемые профили даже с верным
+// согласованным дайджестом, запрещая им создавать эффективные правила исполнения.
 func TestRetiredKubernetesAccessCannotIssueExecutionRules(t *testing.T) {
 	t.Parallel()
 	profile := RuntimeKubernetesAccessProfile{Kind: "UNSUPPORTED", Namespace: RuntimeKubernetesNamespace}
@@ -173,6 +240,10 @@ func TestRetiredKubernetesAccessCannotIssueExecutionRules(t *testing.T) {
 	}
 }
 
+// TestRuntimeEnvironmentPolicyAllowsExactHTTPMethodSubset preserves an explicit allowlist subset
+// while rejecting empty/duplicate method lists and write methods in read-only mode.
+// TestRuntimeEnvironmentPolicyAllowsExactHTTPMethodSubset сохраняет явное подмножество методов,
+// отклоняя пустые и повторные списки и методы записи в режиме чтения.
 func TestRuntimeEnvironmentPolicyAllowsExactHTTPMethodSubset(t *testing.T) {
 	t.Parallel()
 	defaults := DefaultRuntimeEnvironmentPolicy()

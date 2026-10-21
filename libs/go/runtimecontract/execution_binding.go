@@ -7,6 +7,8 @@ import (
 	"errors"
 )
 
+// runtimeCallbackMethods pins the closed callback operation set into each execution digest; this list does not itself authorize a request.
+// runtimeCallbackMethods закрепляет закрытый набор callback-операций в дайджесте исполнения; сам список не авторизует запрос.
 var runtimeCallbackMethods = [...]string{
 	"GET artifact",
 	"POST complete",
@@ -16,6 +18,8 @@ var runtimeCallbackMethods = [...]string{
 	"POST provider-credential-refresh",
 }
 
+// runtimeExecutionIdentity collects the scope, attempt, lease and revision fields required before computing an execution binding.
+// runtimeExecutionIdentity собирает область, попытку, аренду и ревизию, обязательные перед вычислением привязки исполнения.
 type runtimeExecutionIdentity struct {
 	OrganizationRef        string `json:"organization_ref"`
 	ProjectRef             string `json:"project_ref"`
@@ -33,6 +37,8 @@ type runtimeExecutionIdentity struct {
 	InputDigest            string `json:"input_digest"`
 }
 
+// RuntimeExecutionBindingDigests validates required turn identity and hashes the full materialization with separate callback and MCP method bindings, excluding the resulting digests themselves.
+// RuntimeExecutionBindingDigests проверяет обязательную идентичность хода и хэширует полную материализацию с отдельными привязками callback и MCP, исключая из входа сами результирующие дайджесты.
 func RuntimeExecutionBindingDigests(input RunnerInput) (string, string, error) {
 	if input.validateAssistantScope() != nil {
 		return "", "", errors.New("runtime execution assistant scope is invalid")

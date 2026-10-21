@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// TestRuntimeWorkflowLaunchCatalogRequiresExactOrdinaryCapability exposes launch tools only to an ordinary project turn with the exact launch capability, excluding delegation-only and assistant scopes.
+// TestRuntimeWorkflowLaunchCatalogRequiresExactOrdinaryCapability открывает инструменты запуска только обычному проектному ходу с точным правом запуска, исключая одно делегирование и области помощника.
 func TestRuntimeWorkflowLaunchCatalogRequiresExactOrdinaryCapability(t *testing.T) {
 	input := RunnerInput{Mode: RunnerModeTurn, AssistantScope: AssistantScopeNone, ProjectRef: "prj_fixture", Capabilities: []string{"platform.run.launch"}}
 	for name, change := range map[string]func(*RunnerInput){
@@ -37,6 +39,8 @@ func TestRuntimeWorkflowLaunchCatalogRequiresExactOrdinaryCapability(t *testing.
 	}
 }
 
+// TestRuntimeMCPFilesRequireExactExecutionCatalog exposes file tools only for a project turn with current lease metadata and a valid pinned file catalog.
+// TestRuntimeMCPFilesRequireExactExecutionCatalog открывает файловые инструменты лишь проектному ходу с текущими метаданными аренды и допустимым закреплённым каталогом файлов.
 func TestRuntimeMCPFilesRequireExactExecutionCatalog(t *testing.T) {
 	input := RunnerInput{Mode: RunnerModeTurn, ProjectRef: "prj_fixture", LeaseRef: "lea_fixture", LeaseFence: "fence", LeaseGeneration: 1, FileCatalog: &RuntimeFileCatalog{Ref: "vfc_fixture1", Digest: strings.Repeat("a", 64), Purposes: []string{FilePurposeProject}}}
 	for name, change := range map[string]func(*RunnerInput){

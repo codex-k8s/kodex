@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// TestFinancialObservationPreservesUnknownAndPaid validates precise balances and unknown or unlimited credits without treating exhausted included usage as a local paid-work prohibition.
+// TestFinancialObservationPreservesUnknownAndPaid проверяет точные балансы и неизвестные либо безлимитные кредиты, не превращая исчерпание включённого расхода в локальный запрет платной работы.
 func TestFinancialObservationPreservesUnknownAndPaid(t *testing.T) {
 	balance := "59999.12345678901234567890123456789"
 	ordinary := false
@@ -27,6 +29,8 @@ func TestFinancialObservationPreservesUnknownAndPaid(t *testing.T) {
 	}
 }
 
+// TestFinancialObservationBounds rejects unsupported states, out-of-range measurements and fabricated restrictions, while accepting a measurement-free unavailable observation.
+// TestFinancialObservationBounds отклоняет неподдерживаемые состояния, измерения вне границ и выдуманные ограничения, принимая недоступное наблюдение без измерений.
 func TestFinancialObservationBounds(t *testing.T) {
 	invalidBalance := "1e9"
 	invalidReset := int64(-1)
@@ -53,6 +57,8 @@ func TestFinancialObservationBounds(t *testing.T) {
 	}
 }
 
+// TestFinancialProjectionStrictReadPreservesPaidAndPresence round-trips precise credit data and rejects ambiguous, oversized or unknown projections without returning partial data or private diagnostics.
+// TestFinancialProjectionStrictReadPreservesPaidAndPresence точно сохраняет данные кредитов и отклоняет неоднозначные, чрезмерные или неизвестные проекции без частичного результата и частных диагностических данных.
 func TestFinancialProjectionStrictReadPreservesPaidAndPresence(t *testing.T) {
 	raw := []byte(`{"sequence":64,"state":"AVAILABLE","windows":[{"usedPercent":100}],"credits":{"hasCredits":true,"balance":"59999.123456789012345678901"},"ordinaryUsageAllowed":false}`)
 	observation, err := ParseProviderFinancialObservation(raw)
