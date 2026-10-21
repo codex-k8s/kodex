@@ -96,3 +96,25 @@ func TestPublicationAdmissionAndCreationBoundary(t *testing.T) {
 		})
 	}
 }
+
+// TestAdmissionResourcesUseIndependentMaps prevents one generated policy or binding from mutating another.
+// TestAdmissionResourcesUseIndependentMaps исключает изменение одной сформированной политики или binding через другую.
+func TestAdmissionResourcesUseIndependentMaps(t *testing.T) {
+	t.Parallel()
+	publication, publicationBinding := PublicationAdmissionResources()
+	boundary, boundaryBinding := CreationBoundaryResources()
+	publicationConstraints := publication["spec"].(map[string]any)["matchConstraints"].(map[string]any)
+	publicationConstraints["namespaceSelector"].(map[string]any)["injected"] = true
+	publicationBinding["spec"].(map[string]any)["policyName"] = "other"
+	boundaryConstraints := boundary["spec"].(map[string]any)["matchConstraints"].(map[string]any)
+	if len(boundaryConstraints["namespaceSelector"].(map[string]any)) != 0 ||
+		boundaryBinding["spec"].(map[string]any)["policyName"] != CreationBoundaryName {
+		t.Fatal("admission resources share mutable maps across policy kinds")
+	}
+	freshPublication, freshBinding := PublicationAdmissionResources()
+	freshConstraints := freshPublication["spec"].(map[string]any)["matchConstraints"].(map[string]any)
+	if len(freshConstraints["namespaceSelector"].(map[string]any)) != 0 ||
+		freshBinding["spec"].(map[string]any)["policyName"] != PublicationAdmissionName {
+		t.Fatal("admission resources share mutable maps across calls")
+	}
+}

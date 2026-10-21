@@ -12,6 +12,27 @@ const PublicationAdmissionName = "egress-integration-configmap-publication"
 // видовые политики дополнительно проверяют форму данных и labels.
 const CreationBoundaryName = "control-plane-egress-configmap-boundary"
 
+// configMapCreateConstraints creates a fresh exact ConfigMap CREATE match rule for one admission policy.
+// configMapCreateConstraints создаёт новый точный match rule создания ConfigMap для одной политики допуска.
+func configMapCreateConstraints() map[string]any {
+	return map[string]any{
+		"matchPolicy": "Equivalent", "namespaceSelector": map[string]any{}, "objectSelector": map[string]any{},
+		"resourceRules": []any{map[string]any{"apiGroups": []any{""}, "apiVersions": []any{"v1"},
+			"operations": []any{"CREATE"}, "resources": []any{"configmaps"}, "scope": "*"}},
+	}
+}
+
+// configMapAdmissionBinding creates a fresh deny-only binding for one exact named admission policy.
+// configMapAdmissionBinding создаёт новый binding с действием Deny для одной точно названной политики допуска.
+func configMapAdmissionBinding(name string) map[string]any {
+	return map[string]any{
+		"apiVersion": "admissionregistration.k8s.io/v1", "kind": "ValidatingAdmissionPolicyBinding",
+		"metadata": map[string]any{"name": name},
+		"spec": map[string]any{"policyName": name, "validationActions": []any{"Deny"},
+			"matchResources": map[string]any{"matchPolicy": "Equivalent", "namespaceSelector": map[string]any{}, "objectSelector": map[string]any{}}},
+	}
+}
+
 // PublicationAdmissionResources renders a fail-closed VAP and binding for
 // one exact immutable integration projection shape. The consumer must still
 // validate the complete document and DNS pins before using the payload.
@@ -23,13 +44,9 @@ func PublicationAdmissionResources() (map[string]any, map[string]any) {
 		"apiVersion": "admissionregistration.k8s.io/v1", "kind": "ValidatingAdmissionPolicy",
 		"metadata": map[string]any{"name": PublicationAdmissionName},
 		"spec": map[string]any{
-			"failurePolicy": "Fail",
-			"matchConstraints": map[string]any{
-				"matchPolicy": "Equivalent", "namespaceSelector": map[string]any{}, "objectSelector": map[string]any{},
-				"resourceRules": []any{map[string]any{"apiGroups": []any{""}, "apiVersions": []any{"v1"},
-					"operations": []any{"CREATE"}, "resources": []any{"configmaps"}, "scope": "*"}},
-			},
-			"matchConditions": []any{map[string]any{"name": "control-plane-integration-create", "expression": "request.userInfo.username == 'system:serviceaccount:kodex-system:control-plane' && object.metadata.name.startsWith('egress-gateway-integration-')"}},
+			"failurePolicy":    "Fail",
+			"matchConstraints": configMapCreateConstraints(),
+			"matchConditions":  []any{map[string]any{"name": "control-plane-integration-create", "expression": "request.userInfo.username == 'system:serviceaccount:kodex-system:control-plane' && object.metadata.name.startsWith('egress-gateway-integration-')"}},
 			"validations": []any{
 				map[string]any{"expression": "object.metadata.namespace == 'kodex-system' && object.metadata.name.matches('^egress-gateway-integration-[a-f0-9]{24}$')", "message": "control-plane may only create exact integration projection ConfigMaps", "reason": "Forbidden"},
 				map[string]any{"expression": "has(object.immutable) && object.immutable == true && (!has(object.binaryData) || size(object.binaryData) == 0)", "message": "integration projection ConfigMaps must be immutable", "reason": "Forbidden"},
@@ -38,12 +55,7 @@ func PublicationAdmissionResources() (map[string]any, map[string]any) {
 			},
 		},
 	}
-	binding := map[string]any{
-		"apiVersion": "admissionregistration.k8s.io/v1", "kind": "ValidatingAdmissionPolicyBinding",
-		"metadata": map[string]any{"name": PublicationAdmissionName},
-		"spec": map[string]any{"policyName": PublicationAdmissionName, "validationActions": []any{"Deny"},
-			"matchResources": map[string]any{"matchPolicy": "Equivalent", "namespaceSelector": map[string]any{}, "objectSelector": map[string]any{}}},
-	}
+	binding := configMapAdmissionBinding(PublicationAdmissionName)
 	return policy, binding
 }
 
@@ -58,24 +70,15 @@ func CreationBoundaryResources() (map[string]any, map[string]any) {
 		"apiVersion": "admissionregistration.k8s.io/v1", "kind": "ValidatingAdmissionPolicy",
 		"metadata": map[string]any{"name": CreationBoundaryName},
 		"spec": map[string]any{
-			"failurePolicy": "Fail",
-			"matchConstraints": map[string]any{
-				"matchPolicy": "Equivalent", "namespaceSelector": map[string]any{}, "objectSelector": map[string]any{},
-				"resourceRules": []any{map[string]any{"apiGroups": []any{""}, "apiVersions": []any{"v1"},
-					"operations": []any{"CREATE"}, "resources": []any{"configmaps"}, "scope": "*"}},
-			},
-			"matchConditions": []any{map[string]any{"name": "control-plane-create", "expression": "request.userInfo.username == 'system:serviceaccount:kodex-system:control-plane'"}},
+			"failurePolicy":    "Fail",
+			"matchConstraints": configMapCreateConstraints(),
+			"matchConditions":  []any{map[string]any{"name": "control-plane-create", "expression": "request.userInfo.username == 'system:serviceaccount:kodex-system:control-plane'"}},
 			"validations": []any{map[string]any{
 				"expression": "object.metadata.namespace == 'kodex-system' && (object.metadata.name.matches('^egress-gateway-mail-[a-f0-9]{24}$') || object.metadata.name.matches('^egress-gateway-integration-[a-f0-9]{24}$'))",
 				"message":    "control-plane may only create registered egress projection ConfigMaps", "reason": "Forbidden",
 			}},
 		},
 	}
-	binding := map[string]any{
-		"apiVersion": "admissionregistration.k8s.io/v1", "kind": "ValidatingAdmissionPolicyBinding",
-		"metadata": map[string]any{"name": CreationBoundaryName},
-		"spec": map[string]any{"policyName": CreationBoundaryName, "validationActions": []any{"Deny"},
-			"matchResources": map[string]any{"matchPolicy": "Equivalent", "namespaceSelector": map[string]any{}, "objectSelector": map[string]any{}}},
-	}
+	binding := configMapAdmissionBinding(CreationBoundaryName)
 	return policy, binding
 }
