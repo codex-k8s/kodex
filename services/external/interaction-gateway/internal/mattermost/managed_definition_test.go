@@ -1,6 +1,8 @@
 package mattermost
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"sync"
@@ -12,6 +14,27 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// invalidPackageFixture serializes a deliberately invalid managed definition with its exact
+// raw digest, so gateway rejection cannot pass solely because of a detached digest.
+// RU: invalidPackageFixture сериализует намеренно недопустимое управляемое определение
+// с точным дайджестом, чтобы отказ шлюза не сводился к несовпадению дайджеста.
+func invalidPackageFixture(t *testing.T, candidate integrationpackage.Package) ([]byte, string) {
+	t.Helper()
+	raw, err := json.Marshal(candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := integrationpackage.Parse(raw); err == nil {
+		t.Fatal("invalid managed fixture passed package validation")
+	}
+	digest := sha256.Sum256(raw)
+	return raw, hex.EncodeToString(digest[:])
+}
+
+// managedPackageFixture narrows one shipped definition for managed connection tests;
+// gated fixtures deliberately violate validation and remain digest-bound negative inputs.
+// RU: managedPackageFixture сужает поставленное определение для тестов управляемого подключения;
+// gated-оснастки намеренно нарушают валидацию, сохраняя привязку отрицательного входа к дайджесту.
 func managedPackageFixture(t *testing.T, baseline integrationpackage.Package, origin string, gated bool) (integrationpackage.Package, []byte) {
 	t.Helper()
 	raw, err := json.Marshal(baseline)
@@ -31,6 +54,10 @@ func managedPackageFixture(t *testing.T, baseline integrationpackage.Package, or
 			candidate.Spec.Capabilities[index].ApprovalPolicy = "HUMAN_EACH_EFFECT"
 		}
 	}
+	if gated {
+		raw, candidate.Digest = invalidPackageFixture(t, candidate)
+		return candidate, raw
+	}
 	raw, err = json.Marshal(candidate)
 	if err != nil {
 		t.Fatal(err)
@@ -42,6 +69,10 @@ func managedPackageFixture(t *testing.T, baseline integrationpackage.Package, or
 	return parsed, raw
 }
 
+// TestManagedMattermostPackagesDoNotReplaceConcurrentConnections verifies that UI and Git
+// revisions can execute concurrently without mutating the shipped adapter definition.
+// RU: TestManagedMattermostPackagesDoNotReplaceConcurrentConnections проверяет параллельные
+// UI/Git-версии без изменения поставленного определения адаптера.
 func TestManagedMattermostPackagesDoNotReplaceConcurrentConnections(t *testing.T) {
 	adapter, original := claimFixture(t, "mattermost.team.read", map[string]any{})
 	baseline := adapter.definition.Digest
@@ -78,6 +109,10 @@ func TestManagedMattermostPackagesDoNotReplaceConcurrentConnections(t *testing.T
 	}
 }
 
+// TestManagedMattermostRejectsDetachedPackageAndUngatedHealth verifies that malformed,
+// detached and forbidden-gate definitions fail before any provider request.
+// RU: TestManagedMattermostRejectsDetachedPackageAndUngatedHealth проверяет отказ для
+// некорректных, отсоединённых и запрещённых gate-определений до обращения к провайдеру.
 func TestManagedMattermostRejectsDetachedPackageAndUngatedHealth(t *testing.T) {
 	adapter, original := claimFixture(t, "mattermost.team.read", map[string]any{})
 	credential := configureProviderFixture(t, adapter, func(*http.Request) (*http.Response, bool) {
