@@ -17,6 +17,10 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
+// terminalWorkSource provides a controlled proof/error and after-read mutation
+// hook for fake Kubernetes races, counting reads without a real owner connection.
+// terminalWorkSource задаёт proof/error и after-read mutation для гонок fake
+// Kubernetes, считая чтения без настоящего соединения с владельцем.
 type terminalWorkSource struct {
 	proof     RecoveryTerminalProof
 	err       error
@@ -24,9 +28,19 @@ type terminalWorkSource struct {
 	afterRead func()
 }
 
+// GetAvailability advertises only synthetic admission work, keeping independent
+// promotion creation out of the terminal-cleanup scenario under test.
+// GetAvailability объявляет только искусственную admission-работу, исключая
+// независимое создание promotion из проверяемого terminal-cleanup сценария.
 func (*terminalWorkSource) GetAvailability(context.Context) (WorkAvailability, error) {
 	return WorkAvailability{AdmissionAvailable: true}, nil
 }
+
+// GetRecoveryTerminal counts the read, performs the configured race hook and
+// returns the supplied proof unchanged, so a deliberately wrong run remains wrong
+// rather than being silently replaced by the requested run argument.
+// GetRecoveryTerminal считает чтение, выполняет заданный race hook и возвращает
+// proof без исправлений: намеренно чужой run не заменяется запрошенным аргументом.
 func (s *terminalWorkSource) GetRecoveryTerminal(_ context.Context, runID string) (RecoveryTerminalProof, error) {
 	s.calls++
 	if s.afterRead != nil {
@@ -35,6 +49,18 @@ func (s *terminalWorkSource) GetRecoveryTerminal(_ context.Context, runID string
 	return s.proof, s.err
 }
 
+// TestControllerOriginalOwnerTerminalProofClosesStaleWorkspace creates a durable
+// failed-predecessor cursor before reading a synthetic owner proof. Exact/TTL-cleaned
+// terminal cases remove the old workspace/Jobs and permit a later fresh claim;
+// denial, wrong proof, live Jobs and post-read UID/version/cursor races preserve
+// the workspace. Fake reactors require delete UID/version wiring, not live API
+// enforcement or a real owner-issued credential.
+// TestControllerOriginalOwnerTerminalProofClosesStaleWorkspace создаёт устойчивый
+// failed-predecessor cursor до чтения искусственного owner proof. Точный и TTL-
+// очищенный terminal удаляют старые workspace/Jobs и допускают последующий claim;
+// отказ, чужой proof, живые Jobs и post-read UID/version/cursor гонки сохраняют
+// workspace. Fake reactors требуют mapping UID/version удаления, не настоящее
+// применение API-проверки либо реквизиты, выданные владельцем.
 func TestControllerOriginalOwnerTerminalProofClosesStaleWorkspace(t *testing.T) {
 	for _, scenario := range []string{"valid", "valid-ttl", "denied", "unknown", "wrong-run", "bad-fence", "active-job", "workspace-changed", "workspace-version-changed", "job-changed", "job-uid-changed", "job-version-changed"} {
 		t.Run(scenario, func(t *testing.T) {

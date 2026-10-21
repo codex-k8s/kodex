@@ -9,6 +9,12 @@ import (
 	sharedclient "github.com/codex-k8s/kodex/libs/go/controlplaneclient"
 )
 
+// WorkSourceConfig supplies the shared transport/profile/identity paths and the
+// controller's per-read deadline. It carries configuration references, not loaded
+// private credential bytes or an admission/promotion claim.
+// WorkSourceConfig задаёт transport/profile/identity пути общего клиента и срок
+// чтения контроллера. Значение содержит ссылки конфигурации, не загруженные
+// закрытые реквизиты и не admission/promotion claim.
 type WorkSourceConfig struct {
 	RPCProfile                                                                 string
 	Target, TLSServerName, CAFile, ClientCertificateFile, ClientPrivateKeyFile string
@@ -17,17 +23,37 @@ type WorkSourceConfig struct {
 	DialTimeout, RPCDeadline                                                   time.Duration
 }
 
+// ControlPlaneWorkSource owns the registered controller client for availability
+// and recovery-terminal reads, keeping those reads separate from phase Job commands.
+// ControlPlaneWorkSource владеет зарегистрированным клиентом чтения availability
+// и recovery terminal, отдельно от команд phase Jobs.
 type ControlPlaneWorkSource struct {
 	client      *sharedclient.Client
 	rpcDeadline time.Duration
 }
 
+// LegacyPollingWorkSource preserves the existing unconditional polling trigger;
+// it does not read authoritative availability or provide recovery-terminal proof.
+// Phase Jobs still need their independent owner claim/authorization path.
+// LegacyPollingWorkSource сохраняет существующий безусловный polling trigger;
+// он не читает authoritative availability и не выдаёт recovery-terminal proof.
+// Phase Jobs по-прежнему требуют отдельного owner claim/authorization.
 type LegacyPollingWorkSource struct{}
 
+// GetAvailability advertises both polling phases without I/O or actual work lookup;
+// true here is a scheduling hint, not an owner-issued lease or image admission.
+// GetAvailability объявляет обе polling-фазы без I/O и поиска настоящей работы;
+// true здесь — повод планирования, не lease владельца и не допуск образа.
 func (LegacyPollingWorkSource) GetAvailability(context.Context) (WorkAvailability, error) {
 	return WorkAvailability{AdmissionAvailable: true, PromotionAvailable: true}, nil
 }
 
+// DialWorkSource selects the fixed controller operation registration and service
+// identity path through the shared client. After construction it requires a positive
+// read deadline and closes the acquired client if that check fails; it claims no work.
+// DialWorkSource выбирает фиксированную регистрацию операций контроллера и service
+// identity через общий клиент. После создания требуется положительный срок чтения;
+// при его ошибке полученный клиент закрывается. Работа здесь не забирается.
 func DialWorkSource(ctx context.Context, config WorkSourceConfig) (*ControlPlaneWorkSource, error) {
 	client, err := sharedclient.Dial(ctx, sharedclient.Config{
 		ServiceIdentity: true, RPCProfile: config.RPCProfile, CallerWorkload: "image-admission-controller",
@@ -47,6 +73,12 @@ func DialWorkSource(ctx context.Context, config WorkSourceConfig) (*ControlPlane
 	return &ControlPlaneWorkSource{client: client, rpcDeadline: config.RPCDeadline}, nil
 }
 
+// GetAvailability reads the owner's two availability booleans within the configured
+// deadline, returning an empty result with RPC errors instead of inventing work.
+// A successful availability hint still does not reserve an admission or promotion.
+// GetAvailability читает два owner availability-флага с заданным сроком, возвращая
+// пустой результат при RPC-ошибке, а не вымышленную работу. Успешная подсказка
+// доступности также не резервирует admission либо promotion.
 func (source *ControlPlaneWorkSource) GetAvailability(ctx context.Context) (WorkAvailability, error) {
 	callCtx, cancel := context.WithTimeout(ctx, source.rpcDeadline)
 	defer cancel()
@@ -61,10 +93,22 @@ func (source *ControlPlaneWorkSource) GetAvailability(ctx context.Context) (Work
 	}, nil
 }
 
+// Close releases the owned shared connection; the caller remains responsible for
+// stopping concurrent controller reads before closing the source.
+// Close освобождает соединение общего клиента; вызывающий код должен предварительно
+// остановить конкурентные чтения контроллера.
 func (source *ControlPlaneWorkSource) Close() error {
 	return source.client.Close()
 }
 
+// GetRecoveryTerminal reads the owner proof for the requested run, rejects absent
+// artifacts/unknown terminal states and projects the version/fence/attempt fields
+// required by local recovery validation. This subset is not the full owner claim,
+// tenant/policy/risk proof and does not itself authorize Kubernetes deletion.
+// GetRecoveryTerminal читает owner proof запрошенного run, отклоняет отсутствие
+// артефакта/неизвестное terminal-состояние и переносит version/fence/attempt
+// для локальной проверки recovery. Эта проекция не является полным owner claim,
+// tenant/policy/risk proof и сама не разрешает удаление Kubernetes-ресурсов.
 func (source *ControlPlaneWorkSource) GetRecoveryTerminal(ctx context.Context, runID string) (RecoveryTerminalProof, error) {
 	callCtx, cancel := context.WithTimeout(ctx, source.rpcDeadline)
 	defer cancel()

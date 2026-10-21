@@ -7,6 +7,12 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 )
 
+// TestTrustedBuilderDoesNotRequireIssuerOrTLSMaterial constructs the registered
+// trusted builder without local issuer/TLS files and rejects external or wrong
+// service destinations. It calls only local authority readiness, not a build RPC.
+// TestTrustedBuilderDoesNotRequireIssuerOrTLSMaterial создаёт зарегистрированный
+// trusted builder без файлов локального issuer/TLS и отклоняет внешний/чужой service
+// target. Вызывается только local authority readiness, не RPC сборки.
 func TestTrustedBuilderDoesNotRequireIssuerOrTLSMaterial(t *testing.T) {
 	config := Config{RPCProfile: transportprofile.TrustedCluster, Target: "control-plane.kodex-system.svc:8443",
 		DialTimeout: time.Second, RPCDeadline: time.Second}

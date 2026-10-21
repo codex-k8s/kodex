@@ -10,8 +10,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// Proof относится к original claim receipt и завершённой owner attempt,
-// а не к текущему latest build или к отказу устаревшего callback.
+// RecoveryTerminalProof carries the run's original claim/attempt and monotonic
+// terminal version/fence projection, not a latest-build snapshot or denied callback.
+// The trusted source owns full proof resolution; this local subset contains no
+// complete tenant/policy/risk envelope or independent authorization credential.
+// RecoveryTerminalProof переносит исходные claim/attempt запуска и монотонные
+// terminal version/fence, не latest-build snapshot либо отклонённый callback.
+// Полное доказательство разрешает доверенный source; локальная проекция не содержит
+// полные tenant/policy/risk и самостоятельные реквизиты полномочий.
 type RecoveryTerminalProof struct {
 	RunID, State, ArtifactRef, BuildRef, AttemptRef        string
 	Attempt                                                uint32
@@ -19,16 +25,46 @@ type RecoveryTerminalProof struct {
 	TerminalVersion, TerminalFence, TerminalAttemptVersion uint64
 }
 
+// RecoveryTerminalSource is the optional owner-read capability used to resolve
+// a stale recovery workspace; ordinary availability alone cannot supply this proof.
+// RecoveryTerminalSource — необязательная способность чтения owner proof
+// для старого recovery workspace; одной availability для этого недостаточно.
 type RecoveryTerminalSource interface {
+	// GetRecoveryTerminal resolves the original run's terminal proof or an error;
+	// denial/unavailability must not be substituted with a fabricated terminal state.
+	// GetRecoveryTerminal получает terminal proof исходного run либо ошибку;
+	// отказ/недоступность нельзя заменять вымышленным terminal-состоянием.
 	GetRecoveryTerminal(context.Context, string) (RecoveryTerminalProof, error)
 }
 
+// validRecoveryTerminal checks the exact requested run, four terminal states,
+// nonempty references/positive claim tuple, an advancing artifact version and a
+// nonregressing fence with terminal attempt version above one. These structural
+// checks do not authenticate the source or replace the owner's full binding checks.
+// validRecoveryTerminal проверяет точный run, четыре terminal-состояния, непустые
+// ссылки/положительную claim-связку, рост версии артефакта, неуменьшающийся fence
+// и terminal attempt version выше единицы. Структурная проверка не аутентифицирует
+// source и не заменяет полные binding-проверки владельца.
 func validRecoveryTerminal(proof RecoveryTerminalProof, runID string) bool {
 	return proof.RunID == runID && slicesContains([]string{"ACCEPTED", "REJECTED", "FAILED", "CANCELLED"}, proof.State) &&
 		proof.ArtifactRef != "" && proof.BuildRef != "" && proof.AttemptRef != "" && proof.Attempt > 0 && proof.ClaimVersion > 0 && proof.ClaimFence > 0 && proof.ClaimGeneration > 0 &&
 		proof.TerminalVersion > proof.ClaimVersion && proof.TerminalFence >= proof.ClaimFence && proof.TerminalAttemptVersion > 1
 }
 
+// cleanupOwnerTerminalRecovery first requires the optional source's valid terminal
+// proof, then re-reads the exact workspace cursor/UID/version and current managed
+// non-promotion Jobs against the observed inventory. Missing TTL-cleaned Jobs are
+// tolerated; changed/new/nonterminal or wrong-lineage Jobs block cleanup. Deletes
+// use UID/resourceVersion preconditions, tolerate NotFound and are sequential, not
+// atomic: an error may follow earlier deletions. Only successful completion removes
+// the workspace and advances local retry time; no owner state is mutated here.
+// cleanupOwnerTerminalRecovery сначала требует корректный terminal proof source,
+// затем перечитывает точные cursor/UID/version workspace и текущие managed Jobs
+// кроме promotion относительно исходного списка. Удалённые TTL Jobs допустимы;
+// изменённые/новые/нетерминальные и чужая lineage останавливают cleanup. Удаления
+// имеют UID/resourceVersion preconditions, допускают NotFound и последовательны,
+// не атомарны: ошибка возможна после части удалений. Лишь полный успех удаляет
+// workspace и сдвигает локальный retry time; состояние владельца здесь не меняется.
 func (controller *Controller) cleanupOwnerTerminalRecovery(ctx context.Context, workspace *corev1.PersistentVolumeClaim, runID string, originalJobs []batchv1.Job) (bool, error) {
 	source, available := controller.config.WorkSource.(RecoveryTerminalSource)
 	if !available {

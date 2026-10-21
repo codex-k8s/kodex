@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.161.0
+version: 1.162.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,50 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто шестьдесят вторая волна — work source, builder RPC и terminal cleanup
+
+На базе опубликованного SHA `ff8da2d5a0ce6799aeee73aae299be25d36d4858`
+полностью EN→RU описаны work_source.go — 8/8, recovery_terminal.go — 5/5,
+его test — 4/4 и весь internal/clients/controlplane — 16/16. Добавлены
+33 предметных описания production/tests/private/interface declarations
+и двуязычное package-пояснение. Исполняемые строки не менялись.
+
+Комментарии отделяют availability hints от claim/authorization и
+структурный terminal proof от полного owner tenant/policy/risk binding.
+Существующий LegacyPollingWorkSource описан как безусловный polling trigger,
+не как авторитетное чтение; смена существующего профиля не выполнялась
+под видом comment-only рефакторинга. Описаны local authority против full
+bootstrap readiness, builder deadline 1..15s и отдельная положительная
+deadline work source, nil-safe Close, отсутствие автоматического retry,
+shallow protobuf Input и ограниченность локальных Report/Renew/Complete/Fail
+response checks. Эти проверки не названы более строгими, чем фактический код.
+
+Recovery cleanup описан по точному порядку: owner read, structural proof,
+fresh PVC cursor/UID/resourceVersion, bounded current Job inventory, сравнение
+с исходным набором и lineage, последовательные UID/version deletes, затем
+workspace и local retry time. TTL-отсутствие допустимо, partial deletion при
+последующей ошибке возможно; операция не названа атомарной транзакцией
+владельца. Test proof/cursor race hooks и fake API reactors не выдают
+настоящие credentials и не доказывают enforcement реального API server.
+
+Полные unit/build admissioncontroller и controlplane adapter до/после —
+PASS LOCAL; итоговый поток — 43 верхнеуровневых теста, 139 PASS с подтестами,
+0 SKIP/FAIL. Adapter test проверяет trusted construction/local authority,
+не исполняет реальные builder RPC. Остальные fixtures — local CEL/shell/
+kustomize/fake Kubernetes, без apply/живого owner. 16 unit анализатора,
+unit Go-checker, пять ignore-boundaries, gofmt и diff-check — PASS LOCAL.
+Все Go-команды: `GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`.
+Полный role-image-builder unit, PostgreSQL, browser/deploy/live — NOT RUN.
+
+Detector multiset/fingerprint неизменны: 6556 source-файлов, 222 исключения,
+1860 raw-групп, 569 решений и 1291 неразобранная; raw SHA-256
+`5d6c627922979fff9e8e1666a95acc34a799dbe5a5daa38072e5808054cd2e72`,
+отпечаток `f45a118b35e20414c736af2de560dd62efafd39ceff511aa3e1a20a9f83169a8`.
+Go-реестр — 5401/21085, непокрыты 15684; role-image-builder — 276/560.
+Новых групп, выносов и исключений нет. Полный go-docs-check — NOT RUN.
+Известный diagnostics FAIL не устранён; точный scan/build/unit нового SHA
+публикуется в том же Draft PR, цель не завершена.
 
 ## Сто шестьдесят первая волна — конфигурация и renderer контроллера
 
