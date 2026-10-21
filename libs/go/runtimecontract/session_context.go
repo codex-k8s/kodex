@@ -12,15 +12,20 @@ import (
 	"unicode/utf8"
 )
 
+// MaximumContinuationNoticeBytes bounds the owner-sealed continuation message.
+// MaximumContinuationNoticeBytes ограничивает размер заверенного владельцем сообщения продолжения.
 const MaximumContinuationNoticeBytes = 64 << 10
 
+// ErrRuntimeSessionContext denotes an invalid session history or continuation notice.
+// ErrRuntimeSessionContext обозначает неверную историю сессии или сообщение продолжения.
 var ErrRuntimeSessionContext = errors.New("runtime session context is invalid")
 
-// ValidateRuntimeSessionContext отделяет owner-sealed последний notice от
-// обычного USER ввода. Role/JSON marker сами по себе исключение не дают:
-// CurrentContinuationNotice проверяет полный semantic envelope и exact текущие
-// revision/session/turn/attempt/diff/capabilities. Execution consumer отдельно
-// проверяет owner RuntimeRevision и execution binding. История не изменяется.
+// ValidateRuntimeSessionContext distinguishes a sealed final continuation notice from ordinary
+// USER input only after semantic validation of its revision, session, turn, attempt, diff, and capabilities;
+// the execution consumer separately checks owner revision and binding without rewriting history.
+// ValidateRuntimeSessionContext отличает заверенное последнее сообщение продолжения от обычного
+// ввода USER только после проверки версии, сессии, хода, попытки, diff и возможностей;
+// потребитель исполнения отдельно проверяет версию владельца и привязку, не меняя историю.
 func ValidateRuntimeSessionContext(input RunnerInput) (bool, error) {
 	if len(input.SessionContext) > 128 {
 		return false, ErrRuntimeSessionContext
@@ -48,6 +53,8 @@ func ValidateRuntimeSessionContext(input RunnerInput) (bool, error) {
 	return notice, nil
 }
 
+// continuationDescriptor identifies one prior or current component value in a sealed diff.
+// continuationDescriptor определяет прежнее или текущее значение компонента в заверенном diff.
 type continuationDescriptor struct {
 	Ref     string `json:"ref,omitempty"`
 	Version int64  `json:"version,omitempty"`
@@ -55,6 +62,8 @@ type continuationDescriptor struct {
 	Value   string `json:"value,omitempty"`
 }
 
+// continuationChange records one ordered component transition to current context.
+// continuationChange хранит один упорядоченный переход компонента к текущему контексту.
 type continuationChange struct {
 	Component string                   `json:"component"`
 	Previous  []continuationDescriptor `json:"previous"`
@@ -62,6 +71,8 @@ type continuationChange struct {
 	Action    string                   `json:"action"`
 }
 
+// continuationDiff pins revision, session, turn, attempt, and canonical change digest.
+// continuationDiff закрепляет версию, сессию, ход, попытку и канонический дайджест изменений.
 type continuationDiff struct {
 	PreviousRevisionRef string               `json:"previousRevisionRef"`
 	CurrentRevisionRef  string               `json:"currentRevisionRef"`
@@ -72,9 +83,10 @@ type continuationDiff struct {
 	Digest              string               `json:"digest"`
 }
 
-// CurrentContinuationNotice проверяет последнее сообщение owner-sealed input.
-// Результат используется только для доставки контекста и не выдаёт полномочия;
-// caller обязан проверить полный RuntimeRevision и execution binding.
+// CurrentContinuationNotice validates only the last owner-sealed context message and reports
+// its presence for delivery; callers must independently verify RuntimeRevision and execution binding.
+// CurrentContinuationNotice проверяет лишь последнее заверенное владельцем сообщение контекста
+// для доставки; вызывающий код отдельно проверяет RuntimeRevision и привязку исполнения.
 func CurrentContinuationNotice(input RunnerInput) (bool, error) {
 	if len(input.SessionContext) == 0 {
 		return false, nil
@@ -136,6 +148,8 @@ func CurrentContinuationNotice(input RunnerInput) (bool, error) {
 	return true, nil
 }
 
+// validateContinuationDiff checks unique ordered changes and a digest bound to the current attempt.
+// validateContinuationDiff проверяет уникальные упорядоченные изменения и дайджест текущей попытки.
 func validateContinuationDiff(content string, input RunnerInput) error {
 	if promptJSONUnique(json.NewDecoder(strings.NewReader(content)), 0) != nil {
 		return errPromptService

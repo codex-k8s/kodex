@@ -6,13 +6,21 @@ import (
 )
 
 const (
+	// MaximumRuntimeMessageBytes bounds one published agent message.
+	// MaximumRuntimeMessageBytes ограничивает размер одного опубликованного сообщения агента.
 	MaximumRuntimeMessageBytes = 64 << 10
-	RuntimeMessageCommentary   = "COMMENTARY"
-	RuntimeMessageFinal        = "FINAL"
+	// RuntimeMessageCommentary identifies an intermediate published reply.
+	// RuntimeMessageCommentary обозначает опубликованный промежуточный ответ.
+	RuntimeMessageCommentary = "COMMENTARY"
+	// RuntimeMessageFinal identifies a published final reply.
+	// RuntimeMessageFinal обозначает опубликованный итоговый ответ.
+	RuntimeMessageFinal = "FINAL"
 )
 
-// RuntimeAgentMessage содержит только опубликованный completed item.
-// Reasoning, сырой protocol envelope и служебные credentials не передаются.
+// RuntimeAgentMessage contains only a completed published item, excluding reasoning,
+// raw protocol envelopes, and service credentials.
+// RuntimeAgentMessage содержит лишь завершённый опубликованный элемент без рассуждений,
+// сырых протокольных конвертов и служебных учётных данных.
 type RuntimeAgentMessage struct {
 	ItemID   string `json:"item_id"`
 	Phase    string `json:"phase"`
@@ -20,6 +28,8 @@ type RuntimeAgentMessage struct {
 	Text     string `json:"text"`
 }
 
+// Validate rejects unpublished phases, invalid item identity, encoding, and oversized text.
+// Validate отклоняет неразрешённые фазы, неверный идентификатор, кодировку и слишком большой текст.
 func (message RuntimeAgentMessage) Validate() error {
 	if !nativeToolCallIDPattern.MatchString(message.ItemID) ||
 		(message.Phase != RuntimeMessageCommentary && message.Phase != RuntimeMessageFinal) ||
@@ -30,7 +40,8 @@ func (message RuntimeAgentMessage) Validate() error {
 	return nil
 }
 
-// RuntimeActivity — закрытое объединение безопасных событий provider broker.
+// RuntimeActivity is a closed union of safe provider-broker observations.
+// RuntimeActivity — закрытое объединение безопасных наблюдений от provider broker.
 type RuntimeActivity struct {
 	Message         *RuntimeAgentMessage          `json:"message,omitempty"`
 	ToolCall        *NativeToolCall               `json:"tool_call,omitempty"`
@@ -38,6 +49,8 @@ type RuntimeActivity struct {
 	Financial       *ProviderFinancialObservation `json:"financial,omitempty"`
 }
 
+// Validate requires exactly one activity variant and validates its own envelope.
+// Validate требует ровно один вариант события и проверяет его собственный конверт.
 func (activity RuntimeActivity) Validate() error {
 	count := 0
 	for _, present := range []bool{activity.Message != nil, activity.ToolCall != nil, activity.ProviderProcess != nil, activity.Financial != nil} {

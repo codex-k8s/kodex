@@ -11,13 +11,18 @@ import (
 )
 
 const (
+	// runtimeWebAccessGrantVersion pins the proxy grant payload schema.
+	// runtimeWebAccessGrantVersion закрепляет схему разрешения для proxy.
 	runtimeWebAccessGrantVersion = 1
-	maximumWebAccessGrantBytes   = 16 << 10
+	// maximumWebAccessGrantBytes bounds the decoded proxy grant payload.
+	// maximumWebAccessGrantBytes ограничивает размер разобранного разрешения proxy.
+	maximumWebAccessGrantBytes = 16 << 10
 )
 
-// RuntimeWebAccessGrant связывает доступ proxy с exact execution lease и
-// immutable digest сетевой policy. Значение переносится только в
-// Proxy-Authorization и не должно попадать в логи или пользовательские events.
+// RuntimeWebAccessGrant binds proxy access to the exact workload and immutable network-policy digest;
+// its signed value travels only in Proxy-Authorization, never in logs or user events.
+// RuntimeWebAccessGrant связывает доступ proxy с точной нагрузкой и неизменным дайджестом сетевой политики;
+// подписанное значение передаётся лишь в Proxy-Authorization, не в логах или событиях пользователя.
 type RuntimeWebAccessGrant struct {
 	Version       int              `json:"v"`
 	Audience      string           `json:"aud"`
@@ -26,6 +31,8 @@ type RuntimeWebAccessGrant struct {
 	WebAccess     RuntimeWebAccess `json:"web_access"`
 }
 
+// SignRuntimeWebAccessGrant validates bounded claims and signs their JSON bytes with HMAC-SHA256.
+// SignRuntimeWebAccessGrant проверяет ограниченные поля и подписывает их JSON-байты через HMAC-SHA256.
 func SignRuntimeWebAccessGrant(key []byte, workloadRef, networkDigest string, access RuntimeWebAccess) (string, error) {
 	claims := RuntimeWebAccessGrant{Version: runtimeWebAccessGrantVersion, Audience: "kodex-runtime-egress",
 		WorkloadRef: workloadRef, NetworkDigest: networkDigest, WebAccess: access}
@@ -41,6 +48,8 @@ func SignRuntimeWebAccessGrant(key []byte, workloadRef, networkDigest string, ac
 	return base64.RawURLEncoding.EncodeToString(payload) + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil)), nil
 }
 
+// VerifyRuntimeWebAccessGrant verifies size, encoding, constant-time MAC, and strict claim shape.
+// VerifyRuntimeWebAccessGrant проверяет размер, кодировку, MAC в постоянное время и строгую форму полей.
 func VerifyRuntimeWebAccessGrant(key []byte, token string) (RuntimeWebAccessGrant, error) {
 	if len(key) < 32 || len(token) == 0 || len(token) > maximumWebAccessGrantBytes*2 {
 		return RuntimeWebAccessGrant{}, errors.New("runtime web access grant is invalid")
@@ -68,6 +77,8 @@ func VerifyRuntimeWebAccessGrant(key []byte, token string) (RuntimeWebAccessGran
 	return claims, nil
 }
 
+// validateRuntimeWebAccessGrant rejects wrong audience, workload, digest, or access policy.
+// validateRuntimeWebAccessGrant отклоняет неверные audience, нагрузку, дайджест или политику доступа.
 func validateRuntimeWebAccessGrant(claims RuntimeWebAccessGrant) error {
 	if claims.Version != runtimeWebAccessGrantVersion || claims.Audience != "kodex-runtime-egress" ||
 		claims.WorkloadRef == "" || len(claims.WorkloadRef) > 512 ||
@@ -81,13 +92,16 @@ func validateRuntimeWebAccessGrant(claims RuntimeWebAccessGrant) error {
 	return nil
 }
 
+// RuntimeWebAccessAllowsHost checks a domain rule or unrestricted public-mode host access.
+// RuntimeWebAccessAllowsHost проверяет доменное правило или доступ к хосту в полном публичном режиме.
 func RuntimeWebAccessAllowsHost(access RuntimeWebAccess, hostname string) bool {
 	return runtimeWebAccessRule(access, hostname) != nil || access.Mode == RuntimeWebAccessFullPublic
 }
 
-// RuntimeWebAccessAllowsRequest проверяет exact HTTP method уже после TLS
-// termination управляемым proxy. Проверка одного hostname на CONNECT-границе
-// недостаточна: иначе режим read-only превращается в unrestricted tunnel.
+// RuntimeWebAccessAllowsRequest checks the exact HTTP method after managed proxy TLS termination;
+// checking only the CONNECT hostname would turn read-only access into an unrestricted tunnel.
+// RuntimeWebAccessAllowsRequest проверяет точный HTTP-метод после TLS-терминации управляемым proxy;
+// проверка лишь CONNECT-хоста превратила бы режим чтения в неограниченный туннель.
 func RuntimeWebAccessAllowsRequest(access RuntimeWebAccess, hostname, method string) bool {
 	method = strings.ToUpper(strings.TrimSpace(method))
 	if access.Mode == RuntimeWebAccessFullPublic {
@@ -100,6 +114,8 @@ func RuntimeWebAccessAllowsRequest(access RuntimeWebAccess, hostname, method str
 	return containsString(rule.HTTPMethods, method)
 }
 
+// runtimeWebAccessRule selects an exact, one-level, or recursive domain rule after normalization.
+// runtimeWebAccessRule выбирает точное, одноуровневое или рекурсивное доменное правило после нормализации.
 func runtimeWebAccessRule(access RuntimeWebAccess, hostname string) *RuntimeWebAccessRule {
 	hostname = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(hostname), "."))
 	if !validRuntimeDomainPattern(hostname) {
