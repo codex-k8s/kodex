@@ -1056,6 +1056,38 @@
       "fragmentSHA256": "4498cd531b4f10df6f4d5bb8ba0c10ad0bdd7b6e8717f61de620d72a3dedd2c7",
       "count": 1,
       "reason": "Проверка пути файла секрета намеренно есть и у авторитетного validator RunnerInput, и у диагностической проекции runtime-controller после отказа. Проекция не разрешает выполнение и проверяется mutation-тестами против validator; общий вызов лишил бы диагностику независимости и возможности обнаружить дрейф."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/objectstorage/s3store/store.go",
+      "secondPath": "services/jobs/backup-controller/internal/s3backup/store.go",
+      "fragmentSHA256": "83e0cc825308788114ace02928e8adc05d6a148fd1d4c9fc842ce7752c59f18e",
+      "count": 1,
+      "reason": "Сопоставлены сигнатуры SDK-методов двух узких локальных интерфейсов. Адаптер общих объектов использует Head/Get/Put/Delete, а backup дополнительно требует GetBucketVersioning и ListObjectVersions с отдельным жизненным циклом. Общая новая библиотека ради частей интерфейса связала бы независимую job с адаптером и скрыла нужную тесту поверхность."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/objectstorage/s3store/store.go",
+      "secondPath": "services/jobs/backup-controller/internal/s3backup/store.go",
+      "fragmentSHA256": "70a63f5fb784ad80865066679aafe04cc6cdcd66979441b3ac280702ca9fe3cf",
+      "count": 1,
+      "reason": "Второе перекрывающееся окно тех же локальных интерфейсов содержит только объявления SDK-методов, не реализацию чтения либо записи. Backup хранит собственные требования к versioned bucket и retention; перенос этих нескольких сигнатур в общий пакет не сократил бы поведение и создал ненужную связь."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/objectstorage/s3store/store.go",
+      "secondPath": "services/jobs/backup-controller/internal/s3backup/store.go",
+      "fragmentSHA256": "977d51d702f932b00c2cc91ff8a5843edbe4b77df4cffd028a01d50d59455367",
+      "count": 1,
+      "reason": "Третье окно после двуязычных комментариев остаётся перечнем сигнатур локальных интерфейсов S3. Один контракт обслуживает artifact IO, другой — резервные версии бакета; общий exported interface увеличил бы зависимость между unit ради нескольких одинаковых методов SDK без общей операции."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/objectstorage/s3store/store_test.go",
+      "secondPath": "libs/go/objectstorage/s3store/store_test.go",
+      "fragmentSHA256": "9c7dc4e6764113457b977daa2aec24288991cc62ae42b25c1bfa1a1692af9a66",
+      "count": 1,
+      "reason": "Weak-совпадение пересекает разные методы одного fakeAPI: GetObject возвращает подготовленное тело, HeadObject — метаданные, DeleteObject — пустой результат и запись цели. После комментариев физическая длина окна превысила порог строк, но общей функции или поведения между разными сигнатурами нет."
     }
   ]
 }
