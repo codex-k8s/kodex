@@ -8,6 +8,8 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/internalrpcauth/transportprofile"
 )
 
+// TestTrustedAdmissionDoesNotReplaceExecutionGrant checks that exact trusted-cluster headers still need the independent execution fence and reject ambiguous caller headers.
+// TestTrustedAdmissionDoesNotReplaceExecutionGrant проверяет, что даже точные заголовки trusted-cluster требуют независимого fence выполнения и отклоняют неоднозначные заголовки вызывающего лица.
 func TestTrustedAdmissionDoesNotReplaceExecutionGrant(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/v1/mailbox-operations", nil)
 	request.Header.Set("X-Kodex-Rpc-Profile", transportprofile.TrustedCluster)
