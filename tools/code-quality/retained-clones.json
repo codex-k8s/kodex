@@ -8,6 +8,14 @@
       "fragmentSHA256": "a49749d2a837031a55225387fffcad619d4020c753a4ba682faec321151de13f",
       "count": 1,
       "reason": "Операции validateConfigOverlayDraft и publishConfigOverlayDraft имеют общий набор ссылок на параметры и форму ответа, но выполняют разные переходы состояния. Параметры уже вынесены в components; дальнейшее объединение двух самостоятельных path/method скрывало бы разные operationId, смысл ответа и authority boundary."
+    },
+    {
+      "format": "go",
+      "firstPath": "services/internal/control-plane/internal/transport/grpc/managed_draft.go",
+      "secondPath": "services/internal/control-plane/internal/transport/grpc/managed_draft.go",
+      "fragmentSHA256": "1babefcb97bf46039f206e523aae24ded9a83d08911bf56e38d030c9ce292c73",
+      "count": 1,
+      "reason": "Восемь специализированных RPC-методов черновиков сохраняют явное соответствие полного метода, закрытого command.Kind и типизированного generated ответа. Общие разбор ссылок и исполнение уже вынесены в managedRevisionInput и managedMutation. Дальнейшее объединение потребовало бы нетипизированного диспетчера и размыло бы независимые команды публикации, сохранения и отказа."
     }
   ]
 }

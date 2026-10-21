@@ -41,7 +41,7 @@ test("keeps every exact retained occurrence and leaves new groups unresolved", (
   assert.equal(result.retained[0].key[3], digest);
 });
 
-test("line shifts remain stable while changed fragment or count fails closed", () => {
+test("location-only shifts remain stable while changed fragment or count fails closed", () => {
   const moved = clone("a.yaml", "b.yaml");
   moved.first.start = 100;
   moved.first.end = 118;
