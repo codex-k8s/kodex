@@ -5,6 +5,34 @@ export interface PreparedAssistantWorkflowInput {
   problems: Record<string, boolean>;
 }
 
+// Сохраняет прежнее строковое представление полей и отдельно отмечает
+// сложные значения: их нельзя незаметно принять как допустимый ввод.
+export function assistantWorkflowInputDraft(input: unknown): {
+  rawInput: Record<string, string>;
+  invalidKeys: Set<string>;
+} {
+  const entries =
+    typeof input === "object" && input !== null && !Array.isArray(input)
+      ? Object.entries(input)
+      : [];
+  return {
+    invalidKeys: new Set(
+      entries
+        .filter(
+          ([, value]) =>
+            value !== null &&
+            typeof value !== "string" &&
+            typeof value !== "number" &&
+            typeof value !== "boolean",
+        )
+        .map(([key]) => key),
+    ),
+    rawInput: Object.fromEntries(
+      entries.map(([key, value]) => [key, String(value)]),
+    ),
+  };
+}
+
 function validCalendarDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
