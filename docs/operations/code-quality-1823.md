@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.76.0
+version: 1.77.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,34 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Семьдесят девятая волна — транзакционная граница inbox
+
+На запушенном SHA `392270db8dc1362165034756c83db74c42adbc2b`
+детектор подтвердил 6531 собственный файл, 222 исключения, 1878 raw-групп,
+347 точных решений и 1531 неразобранную; сырой SHA-256 —
+`6a1ffae2167335e9e8cbf986cfac3f4ebca639697e74681219131d5d17db44f4`,
+отпечаток набора —
+`ebf726068d1e5766afd6695001f1012eae178c1822ae1cdb155472d43d0db094`.
+Go-реестр: 2654/21043, непокрыты 18389.
+
+Все 20 собственных объявлений `postgresinbox/repository.go` получили
+EN→RU комментарии: объяснены serializable-транзакция, ограниченный retry,
+отдельный budget для commit/rollback, exact search path, порядок блокировки
+курсор→inbox и разные read/for-update запросы. Исполняемый код и SQL не
+менялись. Повторный детектор сохранил те же 1878 нормализованных ключей
+совпадений; изменились только координаты окон ниже новых комментариев.
+
+Рабочий детектор: 6531 собственный файл, 222 исключения, 1878 raw-групп,
+347 точных решений и 1531 неразобранная; сырой SHA-256 —
+`c79966be149521bddd497f61dd42617dee082fed1d67a471ed908e85aed9de15`,
+отпечаток с координатами —
+`f875f3e07faf11fb4c8c6f14a98e28d38e490eba72bd93dcdeaf9ca23ed74d37`.
+Go-реестр: 2674/21043, непокрыты 18369. `go test -count=1 ./...`
+и `go build ./...` всего eventing-модуля, пять ignore-boundaries,
+`gofmt` и `git diff --check` — PASS LOCAL. Component с disposable
+PostgreSQL, полный `go-docs -check` и browser/deploy/live — NOT RUN по
+прежним границам. Точный scan нового коммита будет опубликован в текущем PR.
 
 ## Семьдесят восьмая волна — lifecycle и наблюдение результата inbox
 

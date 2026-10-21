@@ -10,24 +10,39 @@ import (
 )
 
 const (
+	// sqlStateSerializationFailure permits a bounded retry of a rolled-back serializable transaction.
+	// sqlStateSerializationFailure допускает ограниченный повтор откатанной serializable-транзакции.
 	sqlStateSerializationFailure = "40001"
-	sqlStateDeadlockDetected     = "40P01"
-	sqlStateUniqueViolation      = "23505"
+	// sqlStateDeadlockDetected permits a bounded retry after PostgreSQL aborts a lock cycle.
+	// sqlStateDeadlockDetected допускает ограниченный повтор после остановки PostgreSQL цикла блокировок.
+	sqlStateDeadlockDetected = "40P01"
+	// sqlStateUniqueViolation identifies a competing insert for explicit receive or receipt replay.
+	// sqlStateUniqueViolation обозначает конкурирующую вставку для явного повтора приёма или квитанции.
+	sqlStateUniqueViolation = "23505"
 )
 
+// mutationLockResource names the two row classes in the canonical mutation lock order.
+// mutationLockResource обозначает два класса строк в каноническом порядке блокировок изменения.
 type mutationLockResource uint8
 
 const (
+	// mutationLockCursor requires the ordering cursor to be locked before its inbox row.
+	// mutationLockCursor требует блокировать курсор порядка перед строкой inbox.
 	mutationLockCursor mutationLockResource = iota + 1
+	// mutationLockInbox is the second lock after the owning ordering cursor.
+	// mutationLockInbox — вторая блокировка после принадлежащего событию курсора.
 	mutationLockInbox
 )
 
-// canonicalMutationLockOrder закрепляет единый порядок для multi-row mutators.
+// canonicalMutationLockOrder pins the cursor-before-inbox order for multi-row mutations.
+// canonicalMutationLockOrder закрепляет блокировку курсора перед inbox для изменений нескольких строк.
 var canonicalMutationLockOrder = [...]mutationLockResource{
 	mutationLockCursor,
 	mutationLockInbox,
 }
 
+// cursorRow carries the locked ordering watermark and next lease fence.
+// cursorRow содержит заблокированный watermark порядка и следующий fence аренды.
 type cursorRow struct {
 	LastSequence    uint64
 	LastEventID     *string
@@ -35,6 +50,8 @@ type cursorRow struct {
 	NextFence       uint64
 }
 
+// inboxRow is the canonical durable event projection, including lease and retry evidence.
+// inboxRow — каноническая устойчивая проекция события с данными аренды и повтора.
 type inboxRow struct {
 	EventID         string
 	EventDigest     []byte
@@ -59,6 +76,8 @@ type inboxRow struct {
 	LeaseActive     bool
 }
 
+// transact runs one serializable operation with pinned search path and independently bounded finalization.
+// transact выполняет операцию serializable с закреплённым search path и отдельно ограниченным завершением.
 func (processor *Processor) transact(
 	ctx context.Context,
 	operation func(pgx.Tx) error,
@@ -108,6 +127,8 @@ func (processor *Processor) transact(
 	return nil
 }
 
+// retryTransaction retries only serialization or deadlock failures within the fixed attempt budget.
+// retryTransaction повторяет только ошибки сериализации или deadlock в фиксированном лимите попыток.
 func (processor *Processor) retryTransaction(
 	ctx context.Context,
 	operation func(pgx.Tx) error,
@@ -122,6 +143,8 @@ func (processor *Processor) retryTransaction(
 	return err
 }
 
+// setSearchPath verifies the exact schema and stable runtime identity inside the active transaction.
+// setSearchPath проверяет точную схему и устойчивую runtime-идентичность внутри действующей транзакции.
 func (processor *Processor) setSearchPath(ctx context.Context, tx pgx.Tx) error {
 	var applied string
 	var identityStable bool
@@ -140,6 +163,8 @@ func (processor *Processor) setSearchPath(ctx context.Context, tx pgx.Tx) error 
 	return nil
 }
 
+// ensureAndLockCursor creates an absent ordering cursor and locks it before reading its watermark.
+// ensureAndLockCursor создаёт отсутствующий курсор порядка и блокирует его до чтения watermark.
 func (processor *Processor) ensureAndLockCursor(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -167,6 +192,8 @@ func (processor *Processor) ensureAndLockCursor(
 	return row, nil
 }
 
+// getInboxByEvent locks the exact event row for a mutation under its consumer scope.
+// getInboxByEvent блокирует точную строку события для изменения в области потребителя.
 func (processor *Processor) getInboxByEvent(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -176,6 +203,8 @@ func (processor *Processor) getInboxByEvent(
 	return processor.getInbox(ctx, tx, processor.queries.inboxGetByEventForUpdate, consumer, eventID)
 }
 
+// readInboxByEvent reads immutable event identity before cursor-first mutation locks.
+// readInboxByEvent читает неизменную идентичность события до блокировок изменения по порядку курсора.
 func (processor *Processor) readInboxByEvent(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -185,7 +214,8 @@ func (processor *Processor) readInboxByEvent(
 	return processor.getInbox(ctx, tx, processor.queries.inboxGetByEvent, consumer, eventID)
 }
 
-// lockCursorThenInbox разрешает immutable key без lock, затем берёт cursor и inbox.
+// lockCursorThenInbox reads immutable identity, locks cursor then inbox, and rejects changed evidence.
+// lockCursorThenInbox читает неизменную идентичность, блокирует курсор и inbox, затем отклоняет расхождение данных.
 func (processor *Processor) lockCursorThenInbox(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -219,6 +249,8 @@ func (processor *Processor) lockCursorThenInbox(
 	return cursor, row, nil
 }
 
+// getInbox binds exact consumer and event coordinates to either locked or read-only SQL.
+// getInbox привязывает точные координаты потребителя и события к блокирующему либо читающему SQL.
 func (processor *Processor) getInbox(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -267,6 +299,8 @@ func scanInboxRow(source pgx.Row) (inboxRow, error) {
 	return row, err
 }
 
+// getInboxBySequence locks one event under an ordering key and sequence to detect competing identity.
+// getInboxBySequence блокирует событие по ключу порядка и номеру для выявления конкурирующей идентичности.
 func (processor *Processor) getInboxBySequence(
 	ctx context.Context,
 	tx pgx.Tx,
@@ -286,6 +320,8 @@ func (processor *Processor) getInboxBySequence(
 	))
 }
 
+// isRetryableTransactionError recognizes only PostgreSQL serialization and deadlock abort codes.
+// isRetryableTransactionError распознаёт только коды отмены PostgreSQL при сериализации и deadlock.
 func isRetryableTransactionError(err error) bool {
 	var pgError *pgconn.PgError
 	if !errors.As(err, &pgError) {
@@ -295,6 +331,8 @@ func isRetryableTransactionError(err error) bool {
 		pgError.Code == sqlStateDeadlockDetected
 }
 
+// isUniqueViolation distinguishes a competing insert from other storage failures.
+// isUniqueViolation отличает конкурирующую вставку от прочих ошибок хранилища.
 func isUniqueViolation(err error) bool {
 	var pgError *pgconn.PgError
 	return errors.As(err, &pgError) && pgError.Code == sqlStateUniqueViolation
