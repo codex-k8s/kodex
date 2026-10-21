@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.84.0
+version: 1.85.0
 updated: 2026-10-21
 ---
 
@@ -1703,6 +1703,31 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Восемьдесят седьмая волна — номинальные Proto-типы и границы RPC
+
+На запушенном SHA `c1f75c88aec565f61dd91c611b1260cd5dc83d14`
+детектор подтвердил 6531 собственный файл, 222 исключения, 1878 raw-групп,
+384 точных решения и 1494 неразобранных; сырой SHA-256 —
+`ee41eb8c034c6dfb3e7198b5740cd65dfbf8818c70c21d72cf9709048bc96410`,
+отпечаток набора —
+`8676f65dc27d3d5f1b9c6161ef268b34b023ba97b2f3ffaa07cd53c99355d1f3`.
+Go-реестр: 2785/21043, непокрыты 18258.
+
+Разобраны все 25 самоперекрытий `control_plane.proto`: списки сигнатур
+разных сервисных trust boundaries, независимые enum wire values и поля
+номинально разных request/response. В частности, query/command и secret
+work не объединяются в универсальный RPC; API-key request не смешивается с
+refresh request без секретных bytes; lifecycle task и readback сохраняют
+разные полномочия. Для каждого окна сохранено адресное решение с точным
+fragment SHA-256, путём и одним проверенным вхождением. Proto, generated
+adapters и исполняемый код не менялись.
+
+Повторный анализ на тех же исходниках: 1878 raw-групп, 409 точных решений,
+1469 неразобранных; отпечаток исходников не изменился. 16 unit-тестов
+анализатора и `git diff --check` — PASS LOCAL. Приложение в этой волне не
+менялось, поэтому его build/unit не повторялись. Полный `go-docs -check`
+и browser/deploy/live — NOT RUN по прежним границам.
 
 ## Восемьдесят шестая волна — типизированные gRPC-команды
 

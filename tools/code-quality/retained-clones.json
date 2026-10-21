@@ -2,6 +2,206 @@
   "version": 1,
   "entries": [
     {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "18ae55d2e02b511a66392c0c6c486830f5b8f40b3b00b57b9f7ec9a13b247fe3",
+      "count": 1,
+      "reason": "Два окна лежат внутри объявления PlatformQueryService: режим weak нормализует разные имена RPC и request/response, совпадает только грамматика списка сигнатур. Отдельные методы сохраняют собственные operation и eligibility; объединять их в один RPC нельзя без изменения публичного контракта."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "f616fb55f6129bae4b24379e580243a481f4f4f8b0579b8780e709069e6ee05b",
+      "count": 1,
+      "reason": "Сравниваются сигнатуры PlatformQueryService и PlatformCommandService. Query и state-changing command имеют разные permission, idempotency и эффекты; общая строковая форма rpc/returns не является общим исполнением. Сохранено только это точное окно без изменения Proto."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "7bcd45a41db7968c3761cfa74466b926f9e64dd051e1e4a982e6e1d49ea511d9",
+      "count": 1,
+      "reason": "Сигнатуры PlatformQueryService перекрываются с RuntimeSecretWorkService, доступным отдельному workload и одноразовым secret grant. Универсальный RPC смешал бы публичное чтение с защищённой материализацией секрета; совпадает лишь синтаксис Proto."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "4fde555f32d7f373699573ebcf6eec6e9d53e947b7be2a3bf7921a594671dcad",
+      "count": 1,
+      "reason": "Сигнатуры PlatformQueryService и SystemAssistantService похожи после нормализации имён, но assistant lifecycle, conversation и turn commands имеют отдельный owner и authority. Извлечь общий Proto метод без смены номинальных типов и полномочий нельзя."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "9182149c60e4ba0eed010f4d296884610e4eb09eeec0b9c4fe9d5fa27e9e50a7",
+      "count": 1,
+      "reason": "Сравнение PlatformQueryService и RuntimeWorkService относится только к форме RPC-деклараций. RuntimeWork вызывается под fenced execution lease и имеет отдельные эффекты, query path читает actor-visible состояние; синтаксическое совпадение не является общей реализацией."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "bb94e413d4b683bdb7d2fef7a7ba54dac64fe394b0f77c91626f1267ea85a71e",
+      "count": 1,
+      "reason": "PlatformQueryService сопоставлен с RuntimeSecretDraftWorkService. Последний обслуживает exact secret draft operation и materialization grant, первый — клиентские чтения; нормализация имён скрыла разную trust boundary. Сохранено только точное окно."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "3ab0a0b282aa115abe6bb20c542c8ba4242b5dfd69458a7966a644377558a9ab",
+      "count": 1,
+      "reason": "PlatformQueryService и SessionArchiveWorkService имеют сходные строки RPC, но archive worker владеет fenced session task, PVC/object lifecycle и lease; query methods не выдают такие полномочия. Общий метод разрушил бы отдельную сервисную границу."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "98febb81f4be3d1e1eb734b7e8d7a495d7e9ec551c7657a2ed7dc609baee7346",
+      "count": 1,
+      "reason": "Сравниваются RPC PlatformQueryService и ManagedConfigurationSourceWorkService. Source worker запускает owner-managed Git configuration task с lease и durable completion, а query service не меняет состояние. Совпадает только синтаксис объявления."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "942753857c9c065b8447a9eff1c380a71450bc80a0dea9b4f54538fd1304f435",
+      "count": 1,
+      "reason": "PlatformQueryService и ProviderCredentialRenewalWorkService различаются actor и authority: renewal проверяет managed OAuth credential observation, query service читает пользовательские проекции. Одинаковая форма RPC не даёт безопасного общего контракта."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "2e99c81e73be087a11e74e8b21f57441920ec5a42a053a0a94bed9237c6225a3",
+      "count": 1,
+      "reason": "Сигнатуры PlatformQueryService и InteractionWorkService похожи в weak-режиме, но interaction delivery и accept имеют отдельные channel/workload границы и эффекты, query service их не наследует. Сохранено только точное окно."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "8bc140664481bb519018b72e31df3772feab97b3ebeddd0f8f23d2e7af89f65d",
+      "count": 1,
+      "reason": "ManagedConfigurationGitWriteBackWorkService и SessionArchiveWorkService оба объявляют claim/renew/complete RPC, однако владеют разными task, grant, receipt и terminal lifecycle. Обобщённый work RPC скрывал бы owner и authority каждого процесса."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "fccbfbff70fea8c37697bc736b811d54a125e39bdc04b898439aaaad53ddf7bc",
+      "count": 1,
+      "reason": "ManagedConfigurationSourceWorkService и RuntimeWorkService совпадают по грамматике нескольких RPC. Первый обслуживает Git-source owner task, второй — leased execution и другие runtime effects; их service/method identity раздельна и не может быть сведена к универсальной операции."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "668eaaa320e949e68fee2904a780a58cc4b6a8bcf0405ca948b8b0dc93343aa7",
+      "count": 1,
+      "reason": "Перекрылись числовые объявления ProjectPermission и ProviderUsageState после нормализации enum identifiers. Значения первого являются permission wire contract, второго — состоянием доступности провайдера; одинаковые номера не означают общую сущность или безопасное слияние."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "6f1a25fb5f29044de22e7707e6aeb302664c9e10de8ec2f989f12596bbb1354a",
+      "count": 1,
+      "reason": "Окно NextAction совпало с объявлениями AssistantPlanOperation из-за последовательных enum-значений и слабой нормализации имён. Эти enum принадлежат разным сообщениям и потребителям; общий enum ошибочно связал бы UI hint с plan command."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "cad5b12b76c8969e820d3499c1117be10e877aa1a70318342f03df915f76f20c",
+      "count": 1,
+      "reason": "NextAction и OwnerGateDecision имеют одинаковую форму enum-констант, но owner gate decision — авторитетный результат человеческого решения, NextAction — подсказка интерфейсу. Общий тип или перенумерация нарушили бы wire и authority contract."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "a6f65529b4436607dce479adf977c40e7fbf3b9dcac9199fa8ea05c8a9f62c22",
+      "count": 1,
+      "reason": "CreateWorkflowRequest и StartProviderAccountDeviceAuthorizationRequest содержат повторяющиеся объявления MutationContext и ссылочных полей, но создают workflow и начинают device authorization разных владельцев. Отдельные request-типы обязательны для typed RPC и безопасной маршрутизации."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "093629c81c893a558b98d977bcaa011c583e654cf209f4e5f5f5822dc92d491b",
+      "count": 1,
+      "reason": "ListSchedulesResponse и CreateScheduleResponse повторяют поля расписания, но один ответ содержит страницу/коллекцию, другой — результат одной команды. Отдельные номинальные response-типы нужны для разных RPC cardinality и generated API."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "b40c72c0ff601a5537988f4612a4f3b1579a3f73875dac047ca453eaeb2d9396",
+      "count": 1,
+      "reason": "Два запроса кандидатов integration grant похожи по context/query/page, но один выбирает connection, другой project с разными server-derived eligibility и ответами. Общий request-супертип скрывал бы разные selectors и изменил Proto API."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "bd1ffdb0871f820db89e85e840bf7aaa14997a641ffae6e481c6bd5c30e5e5d0",
+      "count": 1,
+      "reason": "SavePromptTemplateDraftRequest и SaveRoleImageRevisionDraftRequest совпадают полями revision/content, но проверки шаблона и образа, формат, допуск и потребители различны. Раздельные RPC request-типы удерживают exact configuration kind и wire compatibility."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "f13340cc4add0a8baafb695e3e59f2e01d818389a77bde668d0448a1277da890",
+      "count": 1,
+      "reason": "Соседние сообщения SessionArchive task имеют сходные task/lease/ref поля, но FailSessionArchiveTaskRequest и completion responses представляют разные направления и terminal эффекты. Извлечение общего message изменило бы публичные поля и порядок проверки fence."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "c4986a898e146f92004b78f8e23e24229636021c68990099c1cc92af42f70c91",
+      "count": 1,
+      "reason": "AuthorizeProviderAccountAPIKeyRequest и RefreshProviderAccountAuthorizationRequest сходны по mutation/account_ref, но первый принимает секретные bytes, второй не вправе принимать ключ. Слияние типов ослабило бы секретную границу и изменило wire контракт."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "0c2853879032eb64bde4e31c0d60a25219dbac76f913c3b74258d3eec2cd93bb",
+      "count": 1,
+      "reason": "Ответы публикации prompt template и integration definition похожи полями managed configuration/revision, однако publication type и дополнительные impact plan различаются. Номинальные response-типы сохраняют отдельные RPC и совместимость существующих клиентов."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "9eded7646f5a5437895edd707231c6e60fae62a4c0f55d151b5d7b86209b8051",
+      "count": 1,
+      "reason": "RebindPromptTemplateConsumersResponse и GetRoleImageImpactPlanResponse попали в пересечение повторяющихся полей managed configuration/plan, но rebind изменяет binding, а impact plan только читает рассчитанные последствия. Нельзя смешивать command и query responses."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "77792cf3d32062d4000e98edd3ff4df2e897e08c9f266c7f2af99a07e7b63b15",
+      "count": 1,
+      "reason": "CreateIntegrationDefinitionDraftResponse и CreateSystemSTTConfigurationDraftResponse имеют близкую форму configuration/revision, но относятся к разным управляемым видам и правилам публикации. Раздельные Proto response-типы закрепляют kind конкретного RPC."
+    },
+    {
+      "format": "protobuf",
+      "firstPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "secondPath": "contracts/proto/controlplane/v1/control_plane.proto",
+      "fragmentSHA256": "0107fac43285b2239750d6288c717a637b92b9ebb2f7c98e319aa87a79799f26",
+      "count": 1,
+      "reason": "Перекрылись соседние skill-bundle lifecycle и binding messages с повторяющимися mutation/ref полями. Archive/restore/purge и bind/unbind имеют разные authority, expected version и result type; общий универсальный message скрыл бы эти различия."
+    },
+    {
       "format": "go",
       "firstPath": "services/internal/control-plane/internal/transport/grpc/commands_assets_integrations.go",
       "secondPath": "services/internal/control-plane/internal/transport/grpc/commands_core.go",
