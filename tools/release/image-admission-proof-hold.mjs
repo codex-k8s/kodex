@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import {execFileSync} from 'node:child_process';
-import {constants,closeSync,fsyncSync,lstatSync,openSync,readFileSync,rmSync,writeFileSync,writeSync} from 'node:fs';
+import {lstatSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {fingerprint} from './scoped-release.mjs';
+import {appendPrivateJSONLineSync as append,createPrivatePrettyJSONSync as privateWrite} from './private-json-write.mjs';
 
 export const holdEnvironment='IMAGE_ADMISSION_CONTROLLER_HOLD_PROOF_JOBS';
 export const holdUntilEnvironment='IMAGE_ADMISSION_CONTROLLER_PROOF_HOLD_UNTIL';
@@ -17,8 +18,6 @@ const exists=path=>{try{return lstatSync(path).isFile();}catch(error){if(error.c
 
 function privateRead(path) {const stat=lstatSync(path);requireValue(stat.isFile()&&(stat.mode&0o077)===0&&stat.size>0&&stat.size<=1<<20,'PRIVATE_FILE_REQUIRED');return JSON.parse(readFileSync(path,'utf8'));}
 function privateRows(path) {const stat=lstatSync(path);requireValue(stat.isFile()&&(stat.mode&0o077)===0&&stat.size>0&&stat.size<=1<<20,'PRIVATE_FILE_REQUIRED');return readFileSync(path,'utf8').trim().split('\n').map(JSON.parse);}
-function privateWrite(path,value) {const fd=openSync(path,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL,0o600);try{writeSync(fd,JSON.stringify(value,null,2)+'\n');fsyncSync(fd);}finally{closeSync(fd);}}
-function append(path,value,newFile=false) {const fd=openSync(path,newFile?constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL:constants.O_WRONLY|constants.O_APPEND|constants.O_NOFOLLOW,0o600);try{writeSync(fd,JSON.stringify(value)+'\n');fsyncSync(fd);}finally{closeSync(fd);}}
 function journal(path,plan) {const stat=lstatSync(path);requireValue(stat.isFile()&&(stat.mode&0o077)===0&&stat.size>0&&stat.size<=1<<20,'PRIVATE_JOURNAL_REQUIRED');const rows=readFileSync(path,'utf8').trim().split('\n').map(JSON.parse);requireValue(rows[0]?.status==='INTENT'&&rows[0].intent===plan.intent&&rows[0].planSHA256===fingerprint(plan),'JOURNAL_IDENTITY_REJECTED');return rows;}
 
 function validateDeployment(deployment) {

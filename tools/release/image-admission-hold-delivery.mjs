@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {execFileSync,spawn} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
-import {constants,closeSync,fsyncSync,lstatSync,mkdtempSync,openSync,readFileSync,readlinkSync,realpathSync,rmSync,writeFileSync,writeSync} from 'node:fs';
+import {lstatSync,mkdtempSync,readFileSync,readlinkSync,realpathSync,rmSync,writeFileSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
@@ -11,6 +11,7 @@ import {readHostProcess} from './authority-executable-readback.mjs';
 import {validateHoldCapability} from './image-admission-hold-capability.mjs';
 import {validateQuiescePlan,validateQuiesceReceipt} from './image-admission-quiesce-model.mjs';
 import {fingerprint} from './scoped-release.mjs';
+import {appendPrivateJSONLineSync as append,createPrivatePrettyJSONSync as privateWrite} from './private-json-write.mjs';
 import {applyIssuerAdmissionTransition} from './runner-policy-model.mjs';
 import {
  buildDeliveryPlan,controllerName,inspectPhase,inspectRollbackPhase,jobsPolicyName,mutationFor,namespace,
@@ -37,14 +38,6 @@ function privateRead(path) {
 function privateRows(path) {
  const stat=lstatSync(path);requireValue(stat.isFile()&&(stat.mode&0o077)===0&&stat.size>0&&stat.size<=8<<20,'PRIVATE_JOURNAL_REQUIRED');
  return readFileSync(path,'utf8').trim().split('\n').map(JSON.parse);
-}
-function privateWrite(path,value) {
- const fd=openSync(path,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL,0o600);
- try{writeSync(fd,JSON.stringify(value,null,2)+'\n');fsyncSync(fd);}finally{closeSync(fd);}
-}
-function append(path,value,newFile=false) {
- const fd=openSync(path,newFile?constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL:constants.O_WRONLY|constants.O_APPEND|constants.O_NOFOLLOW,0o600);
- try{writeSync(fd,JSON.stringify(value)+'\n');fsyncSync(fd);}finally{closeSync(fd);}
 }
 function journal(path,plan) {
  const stat=lstatSync(path);requireValue(stat.isFile()&&(stat.mode&0o077)===0&&stat.size>0&&stat.size<=8<<20,'PRIVATE_JOURNAL_REQUIRED');

@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import {execFileSync} from 'node:child_process';
-import {constants,closeSync,fsyncSync,lstatSync,openSync,readFileSync,rmSync,writeFileSync,writeSync} from 'node:fs';
+import {lstatSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {fingerprint} from './scoped-release.mjs';
+import {appendPrivateJSONLineSync as append,createPrivatePrettyJSONSync as write} from './private-json-write.mjs';
 import {buildQuiesceOpenPlan,buildQuiescePlan,classifyNoWorkLog,controllerName,inspectQuiesceOpen,inspectQuiescePhase,inspectQuiesceRecovery,namespace,phases,quiesceMutation,quiesceOpenMutation,quiesceRecoveryMutation,validateQuiesceOpenPlan,validateQuiescePlan,validateQuiesceReceipt} from './image-admission-quiesce-model.mjs';
 import {controllerPodState,inspectPhase as inspectDeliveryPhase,phases as deliveryPhases,validateDeliveryPlan} from './image-admission-hold-delivery-model.mjs';
 import {captureDeliveryState,readControllerExecutable} from './image-admission-hold-delivery.mjs';
@@ -14,8 +15,6 @@ const safeCode=error=>/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'IMA
 const exists=path=>{try{return lstatSync(path).isFile();}catch(error){if(error.code==='ENOENT')return false;throw error;}};
 function read(path){const stat=lstatSync(path);requireValue(stat.isFile()&&(stat.mode&0o077)===0&&stat.size>0&&stat.size<=8<<20,'PRIVATE_FILE_REQUIRED');return JSON.parse(readFileSync(path,'utf8'));}
 function rows(path){if(!exists(path))return [];const stat=lstatSync(path);requireValue(stat.isFile()&&(stat.mode&0o077)===0&&stat.size>0&&stat.size<=8<<20,'PRIVATE_JOURNAL_REQUIRED');return readFileSync(path,'utf8').trim().split('\n').map(JSON.parse);}
-function write(path,value){const fd=openSync(path,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL,0o600);try{writeSync(fd,JSON.stringify(value,null,2)+'\n');fsyncSync(fd);}finally{closeSync(fd);}}
-function append(path,value,newFile=false){const fd=openSync(path,newFile?constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL:constants.O_WRONLY|constants.O_APPEND|constants.O_NOFOLLOW,0o600);try{writeSync(fd,JSON.stringify(value)+'\n');fsyncSync(fd);}finally{closeSync(fd);}}
 const ownedBy=(resource,ownerUID)=>(resource.metadata?.ownerReferences??[]).some(item=>item.uid===ownerUID&&item.controller===true);
 function runtime(context,k3sSudo){const invoke=(args,input=null,timeout=30_000)=>execFileSync(k3sSudo?'sudo':'kubectl',k3sSudo?['-n','k3s','kubectl','--context',context,...args]:['--context',context,...args],{input,encoding:'utf8',stdio:[input===null?'ignore':'pipe','pipe','pipe'],timeout,maxBuffer:32<<20}).trim();
  const get=(kind,name,namespaced=true)=>JSON.parse(invoke(['get',kind,name,...(namespaced?['-n',namespace]:[]),'-o','json']));

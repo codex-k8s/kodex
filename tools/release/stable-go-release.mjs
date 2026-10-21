@@ -10,6 +10,7 @@ import { requireIdle } from "./runner-policy-model.mjs";
 import { archiveTransition, sameArchiveBoundary, activeDeploymentPods } from "./stable-archive-transition.mjs";
 import { prepareGoRecovery } from "./stable-go-recovery.mjs";
 import { constants } from "node:fs";
+import { createPrivateJSON as createPrivate } from "./private-json-write.mjs";
 
 const execute = promisify(execFile);
 const sqlPath = fileURLToPath(new URL("../dev/supply-chain-owner-readback.sql", import.meta.url));
@@ -20,12 +21,6 @@ function publicPlan(target) {
   const { patch: _patch, ...result } = target;
   return result;
 }
-async function createPrivate(path, value) {
-  const file = await open(path, "wx", 0o600);
-  try { await file.writeFile(JSON.stringify(value) + "\n"); await file.sync(); }
-  finally { await file.close(); }
-}
-
 async function main(args) {
   const mode = args.shift(), options = {};
   while (args.length) {

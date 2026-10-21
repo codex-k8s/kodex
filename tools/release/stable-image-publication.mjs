@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import { readPrivateJSON } from "../../infra/public-ingress/edge-plan.mjs";
 import { fingerprint } from "./stable-inventory.mjs";
 import { retainedPublicationImage, retainedServingEvidence } from "./stable-retained-artifact.mjs";
+import { createPrivateJSON as createPrivate } from "./private-json-write.mjs";
 
 const execute = promisify(execFile), root = fileURLToPath(new URL("../../", import.meta.url));
 const namespace = "kodex-system", secretName = "kodex-image-promotion-writer";
@@ -60,11 +61,6 @@ async function sourceArchiveHash(sourceSHA) {
     requireValue(await done, "STABLE_SOURCE_ARCHIVE_FAILED");
     return hash.digest("hex");
   } finally { clearTimeout(timer); if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); await done; }
-}
-
-async function createPrivate(path, value) {
-  const file = await open(path, "wx", 0o600);
-  try { await file.writeFile(JSON.stringify(value) + "\n"); await file.sync(); } finally { await file.close(); }
 }
 
 async function main(args) {

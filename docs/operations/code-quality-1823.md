@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.151.0
+version: 1.152.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,55 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто пятьдесят вторая волна — общая запись release receipts и журналов
+
+На базе опубликованного SHA `b1b0250e2018b2cffbd8e17973050bb1d2e9e71a`
+четыре синхронных release-сценария используют один pretty JSON writer и
+один JSONL appender из `tools/release/private-json-write.mjs`; две
+асинхронные команды — один компактный JSON writer. Удалены все восемь
+соответствующих sync-определений и две async-копии. Импортные aliases
+сохраняют прежние локальные имена и call sites.
+
+Сохранены wx/O_EXCL, mode0600, O_APPEND|O_NOFOLLOW без O_CREAT при resume,
+точные pretty/compact/newline bytes, fsync и finally-close. Лимиты чтения
+1MiB/8MiB, правила проверки journal identity, capabilities, plan hash,
+OCC и owner gate не объединялись и остаются в сценариях. Helpers не
+назначают статусы и не выполняют Kubernetes/Docker/RPC. Sync writer
+по-прежнему делает один writeSync; новых retries или обещания fsync
+каталога не добавлено.
+
+| Сценарий | Неизменённая последовательность |
+| --- | --- |
+| План/receipt | Проверки вызывающего → эксклюзивное создание → прежняя сериализация → file fsync → close |
+| Первое изменение | Прежние lifecycle/authority checks → эксклюзивный INTENT с fsync → прежняя внешняя операция |
+| Report/resume | Прежняя проверка exact journal → append с fsync; uncertain state не разрешает повтор mutation |
+
+Три новых unit на временных искусственных файлах проверяют точный формат,
+0600, EEXIST, отсутствие создания при resume, запрет symlink append и
+неуспешную сериализацию без подмены пустого файла успешным receipt.
+Полный адресный набор шести потребителей и helper: 64 случая, 63 PASS
+LOCAL и один прежний SKIP capability-free container. Baseline до правок:
+61 случай, 60 PASS LOCAL и тот же SKIP. Отдельный контейнерный сценарий —
+NOT RUN; mock CLI/worker тесты не объявляются реальной публикацией образа.
+16 unit анализатора, unit Go-checker, пять ignore-boundaries, node --check
+всех шести сценариев/helper, Prettier новых файлов и diff-check — PASS LOCAL.
+Реальные apply/rollback, кластер, browser/provider и полная приёмка — NOT RUN.
+
+Context7 `/websites/nodejs_latest-v24_x_api`: сверены filesystem flags,
+wx/O_EXCL, O_APPEND/O_NOFOLLOW, writeSync bytesWritten и fsync. Проверки
+допуска не заменены универсальным файловым helper.
+
+Полный detector рабочего дерева: 6553 source-файла, 222 исключения,
+1866 raw-групп, 566 решений, 1300 неразобранных. Сравнение
+path/fragment/count подтверждает удаление трёх JavaScript-групп без
+новых групп или исключений. Raw SHA-256
+`6738cc69a4211d9ef49c3f7da980ff4a2345c380e160e053727233496f5a92d1`,
+отпечаток `032687ac58ed5f2d852491da2aba25e629fc32938c011e9e86c9476d55cef338`.
+Go-реестр — 5125/21073, непокрыты 15948; полный go-docs-check — NOT RUN.
+Цель/единый Draft PR остаются незавершёнными; точный scan/unit нового SHA
+публикуется в том же PR. Известный отдельный diagnostics FAIL из волны151
+не скрывается и этой волной не изменён.
 
 ## Сто пятьдесят первая волна — локальные HTTP-примитивы
 
