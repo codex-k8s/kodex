@@ -14,6 +14,8 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
+// OpenAPIImportChoice records a human owner's operation-specific risk, approval and idempotency choice;
+// it is never accepted as authority from an MCP tool invocation.
 // OpenAPIImportChoice является выбором владельца, а не входом MCP-вызова.
 // Сервер обязан проверить полномочия владельца перед сохранением результата.
 type OpenAPIImportChoice struct {
@@ -23,6 +25,8 @@ type OpenAPIImportChoice struct {
 	IdempotencyHeader string `json:"idempotencyHeader,omitempty"`
 }
 
+// OpenAPIImportOptions captures the proposed package identity, health operation and bounded owner choices.
+// OpenAPIImportOptions хранит предложенную идентичность пакета, health-операцию и ограниченный выбор владельца.
 type OpenAPIImportOptions struct {
 	Version           string                `json:"version"`
 	Name              string                `json:"name"`
@@ -31,11 +35,15 @@ type OpenAPIImportOptions struct {
 	Choices           []OpenAPIImportChoice `json:"choices"`
 }
 
+// OpenAPIImportPayload separates the untrusted source document from its proposed import options.
+// OpenAPIImportPayload отделяет недоверенный исходный документ от предложенных параметров импорта.
 type OpenAPIImportPayload struct {
 	Source  string               `json:"source"`
 	Options OpenAPIImportOptions `json:"options"`
 }
 
+// DraftOpenAPIPackageFromJSON decodes one size-bounded, closed JSON import envelope before drafting;
+// it does not persist the source document or publish an integration.
 // DraftOpenAPIPackageFromJSON принимает строго ограниченный импортный
 // envelope из защищённой формы. Исходный документ не сохраняется в package.
 func DraftOpenAPIPackageFromJSON(ctx context.Context, raw []byte) (Package, error) {
@@ -51,6 +59,8 @@ func DraftOpenAPIPackageFromJSON(ctx context.Context, raw []byte) (Package, erro
 	return DraftOpenAPIPackage(ctx, []byte(payload.Source), payload.Options)
 }
 
+// DraftOpenAPIPackage builds a validated draft from locally inspected operations and explicit owner
+// choices; publication, connection binding and network admission remain separate owner transitions.
 // DraftOpenAPIPackage создаёт только проверенный черновик. Публикация,
 // привязка подключения и сетевой допуск остаются отдельными owner-переходами.
 func DraftOpenAPIPackage(ctx context.Context, raw []byte, options OpenAPIImportOptions) (Package, error) {
@@ -193,6 +203,10 @@ func DraftOpenAPIPackage(ctx context.Context, raw []byte, options OpenAPIImportO
 	return result, nil
 }
 
+// openAPIImportSecurity resolves operation-level overrides and admits only no authentication,
+// bearer authentication or one safe header API key without OAuth scopes or alternative schemes.
+// openAPIImportSecurity учитывает переопределение операции и допускает лишь отсутствие авторизации,
+// bearer или один безопасный API-key заголовок без OAuth scope и альтернативных схем.
 func openAPIImportSecurity(document *openapi3.T, operation *openapi3.Operation) (string, string, error) {
 	requirements := document.Security
 	if operation.Security != nil {
@@ -220,6 +234,10 @@ func openAPIImportSecurity(document *openapi3.T, operation *openapi3.Operation) 
 	return "", "", errors.New("OpenAPI security scheme is unsupported")
 }
 
+// openAPIImportInput translates supported path, query and JSON-body fields into a closed input schema;
+// duplicate parameters and unsupported serialization stop import before publication.
+// openAPIImportInput переводит поддержанные path, query и JSON-body поля в закрытую схему ввода;
+// повторные параметры и неподдержанная сериализация останавливают импорт до публикации.
 func openAPIImportInput(path *openapi3.PathItem, operation *openapi3.Operation) (map[string]any, error) {
 	properties := map[string]any{}
 	requiredRoot := []any{}
@@ -284,6 +302,10 @@ func openAPIImportInput(path *openapi3.PathItem, operation *openapi3.Operation) 
 	return result, nil
 }
 
+// openAPIImportSchema recursively narrows an OpenAPI schema to supported closed JSON keywords,
+// rejecting cycles, excessive depth, unbounded arrays and unconstrained object properties.
+// openAPIImportSchema рекурсивно сужает OpenAPI-схему до поддержанных закрытых JSON-ключей,
+// отклоняя циклы, чрезмерную глубину, неограниченные массивы и свободные свойства объектов.
 func openAPIImportSchema(ref *openapi3.SchemaRef, depth int, active map[*openapi3.Schema]bool) (map[string]any, error) {
 	if depth > 12 || ref == nil || ref.Value == nil || active[ref.Value] {
 		return nil, errors.New("OpenAPI import schema is recursive or incomplete")

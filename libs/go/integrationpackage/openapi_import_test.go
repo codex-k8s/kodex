@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+// openAPIImportFixture supplies one parameter-free health read and one scoped write for draft tests.
+// openAPIImportFixture задаёт health-чтение без параметров и запись с ограниченной областью для тестов черновика.
 const openAPIImportFixture = `openapi: 3.1.0
 info: {title: Заявки, version: 1.0.0}
 servers:
@@ -40,6 +42,8 @@ paths:
         '200': {description: OK}
 `
 
+// openAPIImportOptions selects the fixture operations with distinct read and human-gated write policies.
+// openAPIImportOptions выбирает операции примера с раздельными политиками чтения и записи через подтверждение.
 func openAPIImportOptions() OpenAPIImportOptions {
 	return OpenAPIImportOptions{Version: "1.0.0", HealthOperationID: "getHealth", Choices: []OpenAPIImportChoice{
 		{OperationID: "getHealth", Risk: "READ", ApprovalPolicy: "NONE"},
@@ -47,6 +51,8 @@ func openAPIImportOptions() OpenAPIImportOptions {
 	}}
 }
 
+// TestDraftOpenAPIPackageFromJSONRequiresClosedBoundedEnvelope rejects extra, trailing or oversized import data.
+// TestDraftOpenAPIPackageFromJSONRequiresClosedBoundedEnvelope отклоняет лишние, хвостовые и слишком большие данные импорта.
 func TestDraftOpenAPIPackageFromJSONRequiresClosedBoundedEnvelope(t *testing.T) {
 	payload, err := json.Marshal(OpenAPIImportPayload{Source: openAPIImportFixture, Options: openAPIImportOptions()})
 	if err != nil {
@@ -69,6 +75,8 @@ func TestDraftOpenAPIPackageFromJSONRequiresClosedBoundedEnvelope(t *testing.T) 
 	}
 }
 
+// TestDraftOpenAPIPackagePinsSelectedOperationsAndSource checks the source digest, exact server and typed write scope.
+// TestDraftOpenAPIPackagePinsSelectedOperationsAndSource проверяет дайджест, точный сервер и типизированную область записи.
 func TestDraftOpenAPIPackagePinsSelectedOperationsAndSource(t *testing.T) {
 	definition, err := DraftOpenAPIPackage(t.Context(), []byte(openAPIImportFixture), openAPIImportOptions())
 	if err != nil {
@@ -109,6 +117,8 @@ func TestDraftOpenAPIPackagePinsSelectedOperationsAndSource(t *testing.T) {
 	}
 }
 
+// TestDraftOpenAPIPackageRejectsUnsafeSelections blocks invalid health, risk, approval, duplicate and foreign choices.
+// TestDraftOpenAPIPackageRejectsUnsafeSelections блокирует неверные health, риск, подтверждение, повторы и чужие операции.
 func TestDraftOpenAPIPackageRejectsUnsafeSelections(t *testing.T) {
 	for name, mutate := range map[string]func(*OpenAPIImportOptions){
 		"missing health":  func(value *OpenAPIImportOptions) { value.HealthOperationID = "updateTicket" },
@@ -141,6 +151,8 @@ func TestDraftOpenAPIPackageRejectsUnsafeSelections(t *testing.T) {
 	}
 }
 
+// TestDraftOpenAPIPackageDerivesOnlySupportedAuthentication admits bearer or header API keys, not basic or cookies.
+// TestDraftOpenAPIPackageDerivesOnlySupportedAuthentication допускает bearer и API-key заголовок, но не basic или cookie.
 func TestDraftOpenAPIPackageDerivesOnlySupportedAuthentication(t *testing.T) {
 	bearer := strings.Replace(openAPIImportFixture, "paths:\n", `components:
   securitySchemes:

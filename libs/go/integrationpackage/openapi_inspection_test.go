@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// openAPIFixture contains a bounded read/write document without a parameter-free health read.
+// openAPIFixture содержит ограниченный документ чтения и записи без health-операции без параметров.
 const openAPIFixture = `openapi: 3.1.0
 info:
   title: Заявки
@@ -40,6 +42,8 @@ paths:
         '200': {description: OK}
 `
 
+// TestInspectOpenAPI checks source metadata and candidate decisions without granting health readiness.
+// TestInspectOpenAPI проверяет метаданные источника и кандидатов без выдачи health-готовности.
 func TestInspectOpenAPI(t *testing.T) {
 	result, err := InspectOpenAPI(t.Context(), []byte(openAPIFixture))
 	if err != nil {
@@ -55,6 +59,8 @@ func TestInspectOpenAPI(t *testing.T) {
 	}
 }
 
+// TestInspectOpenAPIIdentifiesParameterFreeHealthRead selects only a GET callable with empty input.
+// TestInspectOpenAPIIdentifiesParameterFreeHealthRead выделяет только GET с пустым вводом.
 func TestInspectOpenAPIIdentifiesParameterFreeHealthRead(t *testing.T) {
 	result, err := InspectOpenAPI(t.Context(), []byte(openAPIImportFixture))
 	if err != nil || len(result.Operations) != 2 || !result.Operations[0].HealthCandidate || result.Operations[1].HealthCandidate {
@@ -62,6 +68,8 @@ func TestInspectOpenAPIIdentifiesParameterFreeHealthRead(t *testing.T) {
 	}
 }
 
+// TestInspectOpenAPIRejectsUnpinnedOrUnsafeServer keeps missing, mutable and non-HTTPS origins out of candidates.
+// TestInspectOpenAPIRejectsUnpinnedOrUnsafeServer исключает из кандидатов отсутствующие, изменяемые и не-HTTPS origin.
 func TestInspectOpenAPIRejectsUnpinnedOrUnsafeServer(t *testing.T) {
 	for name, raw := range map[string]string{
 		"missing":  strings.Replace(openAPIFixture, "servers:\n  - url: https://api.example.test\n", "", 1),
@@ -83,6 +91,8 @@ func TestInspectOpenAPIRejectsUnpinnedOrUnsafeServer(t *testing.T) {
 	}
 }
 
+// TestInspectOpenAPIResolvesOnlyLocalReferences permits a same-document schema without enabling remote fetches.
+// TestInspectOpenAPIResolvesOnlyLocalReferences допускает локальную схему без удалённой загрузки.
 func TestInspectOpenAPIResolvesOnlyLocalReferences(t *testing.T) {
 	raw := strings.Replace(openAPIFixture, "schema: {type: string}",
 		"schema: {$ref: '#/components/schemas/ApplicationId'}", 1)
@@ -103,6 +113,8 @@ func TestInspectOpenAPIResolvesOnlyLocalReferences(t *testing.T) {
 	}
 }
 
+// TestInspectOpenAPIRejectsUnsafeDocument closes duplicate-key, external-ref, alias and multi-document inputs.
+// TestInspectOpenAPIRejectsUnsafeDocument закрыто отклоняет повторные ключи, внешние ссылки, alias и несколько документов.
 func TestInspectOpenAPIRejectsUnsafeDocument(t *testing.T) {
 	for name, raw := range map[string]string{
 		"duplicate key":      strings.Replace(openAPIFixture, "  version: 1.0.0", "  version: 1.0.0\n  version: 2.0.0", 1),
@@ -119,6 +131,8 @@ func TestInspectOpenAPIRejectsUnsafeDocument(t *testing.T) {
 	}
 }
 
+// TestInspectOpenAPIMarksUnsupportedMethod keeps a visible HEAD operation unavailable for import.
+// TestInspectOpenAPIMarksUnsupportedMethod оставляет HEAD видимым, но недоступным для импорта.
 func TestInspectOpenAPIMarksUnsupportedMethod(t *testing.T) {
 	raw := strings.Replace(openAPIFixture, "    patch:\n", "    head:\n", 1)
 	result, err := InspectOpenAPI(t.Context(), []byte(raw))
@@ -132,6 +146,8 @@ func TestInspectOpenAPIMarksUnsupportedMethod(t *testing.T) {
 	}
 }
 
+// TestInspectOpenAPIMarksNonJSONSuccessResponseUnsupported rejects a response the adapter cannot project.
+// TestInspectOpenAPIMarksNonJSONSuccessResponseUnsupported отклоняет ответ, который адаптер не может проецировать.
 func TestInspectOpenAPIMarksNonJSONSuccessResponseUnsupported(t *testing.T) {
 	raw := strings.Replace(openAPIFixture, "'200': {description: OK}",
 		"'200': {description: OK, content: {text/plain: {schema: {type: string}}}}", 1)
@@ -146,6 +162,8 @@ func TestInspectOpenAPIMarksNonJSONSuccessResponseUnsupported(t *testing.T) {
 	}
 }
 
+// TestInspectOpenAPIMarksOperationsRejectedByImporter aligns inspection candidates with auth and schema import rules.
+// TestInspectOpenAPIMarksOperationsRejectedByImporter согласует кандидатов с правилами импорта авторизации и схемы.
 func TestInspectOpenAPIMarksOperationsRejectedByImporter(t *testing.T) {
 	for name, fixture := range map[string]struct {
 		raw, reason string
