@@ -11,10 +11,20 @@ import (
 // RU: Store абстрагирует операции байтового кэша и проверку соединения;
 // область ключа и допустимость значения остаются ответственностью вызывающего кода.
 type Store interface {
+	// Get returns bytes for one key or ErrMiss when the key is absent.
+	// RU: Get возвращает байты одного ключа либо ErrMiss при его отсутствии.
 	Get(context.Context, string) ([]byte, error)
+	// Set writes exact bytes with an explicit positive expiration interval.
+	// RU: Set записывает точные байты с явно положительным сроком хранения.
 	Set(context.Context, string, []byte, time.Duration) error
+	// Delete removes one key without changing the authoritative source.
+	// RU: Delete удаляет один ключ, не изменяя авторитетный источник.
 	Delete(context.Context, string) error
+	// Check probes the store's usable transport before declaring readiness.
+	// RU: Check проверяет рабочее соединение с хранилищем до объявления готовности.
 	Check(context.Context) error
+	// Close releases the store after all callers have stopped using it.
+	// RU: Close освобождает хранилище после остановки всех его пользователей.
 	Close() error
 }
 
@@ -29,7 +39,13 @@ var ErrMiss = errors.New("cache miss")
 // RU: Codec преобразует принадлежащее сервису значение в байты кэша и обратно;
 // проверка происхождения и области возлагается на конкретный декодер вызывающего кода.
 type Codec[T any] interface {
+	// Marshal encodes a caller-owned value for a bounded cache write.
+	// RU: Marshal кодирует принадлежащее вызывающему коду значение для записи в кэш.
 	Marshal(T) ([]byte, error)
+	// Unmarshal decodes and validates cache bytes, including required scope
+	// and provenance checks before a hit may be returned to a caller.
+	// RU: Unmarshal декодирует и проверяет байты кэша, включая область и
+	// происхождение до выдачи попадания вызывающему коду.
 	Unmarshal([]byte) (T, error)
 }
 
@@ -44,6 +60,8 @@ type Loader[T any] func(context.Context) (T, error)
 // RU: Source является узким портом авторитетного чтения после промаха, ошибки
 // либо неверных байтов кэша; реализация сама задаёт запрос в области владельца.
 type Source[T any] interface {
+	// Get reads from the authoritative source using the original request context.
+	// RU: Get читает авторитетный источник с исходным контекстом запроса.
 	Get(context.Context) (T, error)
 }
 
