@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.7.0
+version: 1.8.0
 updated: 2026-10-21
 ---
 
@@ -315,3 +315,22 @@ groups против2070 на предыдущем чистом SHA; worklist1146
 Это промежуточное измерение грязного дерева, не результат итогового SHA.
 Адресные исключения5/5 проходят проверку. Остальные группы и Go-комментарии
 не объявляются готовыми; браузер/deploy/live NOT RUN по текущему scope.
+
+## Девятая волна — датированный каталог STT
+
+В `libs/go/sttapi` полностью двуязычно описаны24/24 собственных объявления,
+включая package docs, границу защищённого availability stream, безопасное
+преобразование каталога, параметры и закрытую проверку model hints, ошибки
+и оба теста. Generated protobuf-файлы не менялись. Проверена текущая
+[документация API транскрипции](https://developers.openai.com/api/reference/resources/audio/subresources/transcriptions/methods/create)
+через Context7 `/websites/developers_openai_api_reference`: локальный реестр
+с `ObservedAt` от05.09.2026 остаётся именно датированным снимком, не
+live-проверкой аккаунта и не обещанием текущего перечня внешних моделей.
+Поведение адаптера этой задачей не менялось.
+
+`go test ./...` и `go build ./...` модуля с Go1.26.6 — PASS LOCAL; тесты
+реально есть только в `modelprofile`, остальные handwritten-пакеты и generated
+protobuf компилируются без тестовых файлов. `gofmt` и `git diff --check` —
+PASS LOCAL. Go-реестр на текущем дереве:370/21000 EN→RU,20630 остаются.
+Повтор clone detector после этих комментариев и итоговый `-check` ещё не
+выполнены; весь PR по-прежнему в работе.
