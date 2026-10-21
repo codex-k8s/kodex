@@ -193,11 +193,11 @@ func (executor *Executor) Prepare(
 		reason = inputReasonOwnerDockerfile
 	}
 	if reason != "" {
-		return nil, "INPUT_FETCH_REJECTED", rejectInput(reason, ErrInvalidContext)
+		return nil, inputFetchRejectedDiagnostic, rejectInput(reason, ErrInvalidContext)
 	}
 	root, err := os.MkdirTemp(executor.config.WorkspaceRoot, "image-build-")
 	if err != nil {
-		return nil, "INPUT_FETCH_REJECTED", rejectInput(inputReasonWorkspaceCreate, ErrInvalidContext)
+		return nil, inputFetchRejectedDiagnostic, rejectInput(inputReasonWorkspaceCreate, ErrInvalidContext)
 	}
 	prepared := &Prepared{root: root, contextDirectory: filepath.Join(root, "context"),
 		dockerfile: filepath.Join(root, "dockerfile"), installation: filepath.Join(root, "installation"),
@@ -213,7 +213,7 @@ func (executor *Executor) Prepare(
 		return nil, diagnostic, err
 	}
 	if err := verifyPinnedInputs(prepared.contextDirectory, input); err != nil {
-		return nil, "INPUT_DIGEST_MISMATCH", err
+		return nil, inputDigestMismatchDiagnostic, err
 	}
 	if err := os.MkdirAll(prepared.dockerfile, 0o700); err != nil {
 		return nil, "ARCHIVE_REJECTED", ErrInvalidContext

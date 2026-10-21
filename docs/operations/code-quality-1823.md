@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.163.0
+version: 1.164.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,71 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто шестьдесят четвёртая волна — materializer и закрытая диагностика
+
+На базе опубликованного SHA `85c066eeac2e66a239ec1e0ad775859ae07d0e0f`
+одинаковая последовательность package/tool materialization вынесена в
+materializePinnedInput того же unit: exact reference, затем plain payload SHA,
+затем downloadExact с maximumFileBytes. Исходный порядок packages→tools,
+архив/context callback/extraction до них, transport/mTLS/repository scope
+и возвращаемые stage/reason не менялись.
+
+| Вход | Прежнее преобразование SHA | Прежний destination | Лимит |
+| --- | --- | --- | --- |
+| package | TrimPrefix(GetDigest(), sha256:) | context/.kodex/packages/SHA | 128MiB |
+| tool | GetSha256() без преобразования | context/.kodex/tools/SHA | 128MiB |
+
+Только чистое построение имени каталога теперь выполняется в аргументе
+helper; HTTP и filesystem effects по-прежнему следуют после обеих проверок.
+Context archive остаётся отдельным путём со своим большим лимитом.
+Две повторные diagnostic stage строки вынесены в package-private constants
+и используются также тремя прежними возвратами Executor.Prepare. Независимые
+строковые ожидания тестов сохранены. Механическое сравнение подтвердило
+прежние digest transforms/directories/limit/reference-before-SHA, все
+11 прежних reason/summary constants и точные значения двух stage aliases.
+
+Два новых unit проверяют helper: успешные exact manifest→blob GET по
+in-memory transport с точными bytes/digest-named файлами в обоих каталогах
+и без .part; отдельно ref-before-SHA, SHA-before-HTTP, synthetic HTTP403,
+прежние sentinel/reason/stage и отсутствие созданного destination. Счётчик
+подтверждает 0/0/1 transport calls для отказов, без настоящей сети.
+
+Все 56 объявлений materializer.go (18), его tests (11), input_rejection.go
+(19) и его tests (8) описаны EN→RU, включая семь новых. Локальная test
+constant progress дополнительно описана, но обычные local values не входят
+в AST denominator. Остальные 44 объявления buildkit.go ещё не описаны:
+в нём изменены только три literal→constant ссылки. Role-image-builder
+остаётся в работе — 348/569, не полная готовность unit.
+
+Комментарии явно сохраняют ограничения: CA/auth читаются целиком до size
+checks, обычный JSON unmarshal не strict duplicate/private-file validator,
+netDialer не отдельный host/IP allowlist, request требует caller-owned
+fixed target, Check проверяет root transport route, не полный payload.
+Verified .part rename может заменить target и не выполняет fsync; partial
+workspace cleanup остаётся caller-owned, не транзакцией публикации образа.
+Error projection перепроверяет whitelist и не сериализует private cause.
+
+Через Context7 /websites/pkg_go_dev_go1_25_3 сверены Client.Timeout/body,
+CheckRedirect, Transport.Proxy=nil и request context. Старый каталог
+дополнен локальными go doc закреплённого Go1.26.6 для Timeout/CheckRedirect
+и os.Rename; это не обновление SDK или изменение transport policy.
+
+Полный unit/build internal/build до/после — PASS LOCAL; после изменений
+28 верхнеуровневых тестов, 61 PASS с подтестами, 0 SKIP/FAIL. 16 unit
+анализатора, unit Go-checker, пять ignore-boundaries, gofmt и diff-check —
+PASS LOCAL. Go-команды: `GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`.
+Настоящие registry/BuildKit/install не вызывались; полный role-image-builder
+unit, PostgreSQL, browser/deploy/live — NOT RUN.
+
+Это короткий повтор ниже detector threshold, не удалённая raw-группа.
+Multiset/fingerprint не изменились: 6556 source-файлов, 222 исключения,
+1859 raw-групп, 569 решений и 1290 неразобранных; raw SHA-256
+`dc33e7e8c900053e08ace6c9e29ce1ae7e06bd26ca42169cb2db54bcd404ec12`,
+отпечаток `9a3e8fcd954e7313651df38a333f6c33900c3a948945c2af46c4cea91b7069f3`.
+Go-реестр — 5473/21094, непокрыты 15621. Новых групп и исключений нет.
+Полный go-docs-check — NOT RUN; известный diagnostics FAIL остаётся
+открытым. Точный scan/build/unit нового SHA публикуется в том же PR.
 
 ## Сто шестьдесят третья волна — оснастка build context
 

@@ -12,8 +12,18 @@ import (
 	controlplanev1 "github.com/codex-k8s/kodex/libs/go/controlplaneapi/gen/controlplane/v1"
 )
 
+// rejectionPrivateSentinel is fabricated private-looking input/error content whose
+// absence from outward projections is asserted; it is not a real credential.
+// rejectionPrivateSentinel — вымышленные похожие на закрытые данные input/error,
+// отсутствие которых проверяется в публичной проекции; это не настоящие реквизиты.
 const rejectionPrivateSentinel = "private-value-DO-NOT-PUBLISH"
 
+// rejectionFixture builds matching synthetic owner/digest/toolchain/runtime pins
+// and a temporary executor without loading credentials or opening a registry
+// connection. Tests explicitly inject any fake HTTP client they need.
+// rejectionFixture создаёт совпадающие искусственные owner/digest/toolchain/runtime
+// и временный executor без чтения реквизитов либо registry-соединения. Нужный
+// fake HTTP client тесты устанавливают явно.
 func rejectionFixture(t *testing.T) (*Executor, *controlplanev1.RoleImageBuildInput) {
 	t.Helper()
 	digest := strings.Repeat("a", 64)
@@ -38,6 +48,12 @@ func rejectionFixture(t *testing.T) (*Executor, *controlplanev1.RoleImageBuildIn
 	return executor, input
 }
 
+// TestPrepareClosedInputRejectionReasons varies owner/pin/input/workspace failures,
+// requires the original stage/sentinel/reason, prevents the context-report callback
+// and checks that private data is not echoed by the outward projection.
+// TestPrepareClosedInputRejectionReasons меняет owner/pin/input/workspace failures,
+// требует прежние stage/sentinel/reason, запрещает context-report callback
+// и проверяет отсутствие закрытых данных в публичной проекции.
 func TestPrepareClosedInputRejectionReasons(t *testing.T) {
 	t.Parallel()
 	executor, _ := rejectionFixture(t)
@@ -98,6 +114,10 @@ func TestPrepareClosedInputRejectionReasons(t *testing.T) {
 	}
 }
 
+// TestMaterializerUpfrontClosedReasons rejects nil input and relative/unclean roots
+// before HTTP, retaining the materializer sentinel and original public stage.
+// TestMaterializerUpfrontClosedReasons отклоняет nil input и relative/unclean root
+// до HTTP, сохраняя materializer sentinel и прежний публичный stage.
 func TestMaterializerUpfrontClosedReasons(t *testing.T) {
 	t.Parallel()
 	executor, input := rejectionFixture(t)
@@ -118,12 +138,26 @@ func TestMaterializerUpfrontClosedReasons(t *testing.T) {
 	}
 }
 
+// rejectedInputTransport returns a synthetic forbidden response containing the
+// private sentinel, without a socket, registry identity or real server.
+// rejectedInputTransport задаёт искусственный forbidden response с private sentinel
+// без socket, registry identity и настоящего сервера.
 type rejectedInputTransport struct{}
 
+// RoundTrip returns the fake 403/private body regardless of request, separating
+// failure projection tests from real transport and authentication behavior.
+// RoundTrip возвращает fake 403/private body независимо от запроса, отделяя
+// проекцию ошибки от настоящего transport/authentication поведения.
 func (rejectedInputTransport) RoundTrip(*http.Request) (*http.Response, error) {
 	return &http.Response{StatusCode: http.StatusForbidden, Body: io.NopCloser(strings.NewReader(rejectionPrivateSentinel))}, nil
 }
 
+// TestValidPinnedInputPreservesHTTPRejectionDiagnostic supplies valid project or
+// organization pins and a fake forbidden transport, requiring the existing fetch/
+// integrity stage rather than reclassifying the failure as malformed local metadata.
+// TestValidPinnedInputPreservesHTTPRejectionDiagnostic задаёт верные project либо
+// organization pins и fake forbidden transport, требуя прежний fetch/integrity stage,
+// а не ошибочную классификацию как повреждённые локальные metadata.
 func TestValidPinnedInputPreservesHTTPRejectionDiagnostic(t *testing.T) {
 	t.Parallel()
 	for _, project := range []bool{false, true} {
@@ -140,6 +174,12 @@ func TestValidPinnedInputPreservesHTTPRejectionDiagnostic(t *testing.T) {
 	}
 }
 
+// TestInputRejectionPublicSummaryIsClosed checks known reasons through private
+// wrappers and excludes nil/unrelated/unknown/joined candidates from public output;
+// Error on the typed rejection must also hide an unknown private reason.
+// TestInputRejectionPublicSummaryIsClosed проверяет известные причины сквозь private
+// wrappers и исключает nil/посторонние/неизвестные/joined candidates из публичного
+// вывода; Error самого typed rejection также скрывает неизвестную закрытую причину.
 func TestInputRejectionPublicSummaryIsClosed(t *testing.T) {
 	t.Parallel()
 	for _, reason := range []string{inputReasonOwnerScope, inputReasonSHASchema, inputReasonFrontendPin,
