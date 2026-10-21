@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.159.0
+version: 1.160.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,50 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто шестидесятая волна — оснастка admission policy tests
+
+На базе опубликованного SHA `6afbdbf2fb4f13df58a74111ad32f40712682531`
+два повторных построения policy map заменены чистым admissionPoliciesByName,
+а пять конструкторов ScriptRenderer в policy/workspace tests — одним
+newTestScriptRenderer того же пакета. Исходные read errors, порядок owner
+policy/runID/Render/prepare и jq skips остались у потребителей. Новый helper
+не выполняет render и не выбирает входы. Механически подтверждены пять
+прежних конструкторов против пяти вызовов и двух прежних map loops против
+двух consumer calls. Первичные selection loops в других сценариях не
+заменялись: там важен первый match, map сохраняет прежний last-name-wins.
+
+Новый unit индекса проверяет overwrite последнего имени, независимость
+map от исходного списка и выделенный пустой результат для nil. Все
+собственные объявления policy_test.go — 20/20 и workspace test — 1/1
+получили предметные EN→RU комментарии; production-код не менялся.
+Описаны локальные dynamic CEL conditions/variables/validations, отличие
+error-free false assertion от закрытого отказа по отдельным type errors,
+synthetic actor/owner-intent вместо authority и неполнота эмуляции admission
+API server. YAML decoder 64KiB описан как буфер, не total input bound.
+
+Для точности описания CEL через Context7 /cel-expr/cel-go сверены
+NewEnv/Variable/DynType/ext.Strings, Compile/issues.Err, Program/Eval.
+Сверялись README и примеры исходного cel-go; зависимость остаётся на
+прежнем github.com/google/cel-go v0.30.0, новых API и upgrades нет.
+
+Полный unit/build admissioncontroller до/после — PASS LOCAL. После правок:
+41 верхнеуровневый тест, 128 PASS с подтестами, 0 SKIP и 0 FAIL. Набор
+исполняет локальные shell/kustomize/CEL fixtures, не apply/owner/кластер.
+16 unit анализатора, unit Go-checker, пять ignore-boundaries, gofmt и
+diff-check — PASS LOCAL. Go-команды:
+`GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`. Полный role-image-builder unit,
+PostgreSQL, browser/deploy/live — NOT RUN.
+
+Две исходные detector-группы исчезли; сравнение multiset
+format/path/fragment/count не обнаружило других изменений и новых групп.
+Новых исключений нет. Рабочий detector: 6555 source-файлов, 222 исключения,
+1860 raw-групп, 569 решений и 1291 неразобранная; raw SHA-256
+`98fa0bbbe8347447e7b7006dfcfe9f99d156ee0d6d11f2ffdeff064e9913a440`,
+отпечаток `f45a118b35e20414c736af2de560dd62efafd39ceff511aa3e1a20a9f83169a8`.
+Go-реестр — 5352/21084, непокрыты 15732; role-image-builder — 227/559.
+Полный go-docs-check — NOT RUN. Известный diagnostics FAIL не закрывается
+этим выносом. Точный scan/build/unit нового SHA публикуется в том же PR.
 
 ## Сто пятьдесят девятая волна — оснастка controller unit
 

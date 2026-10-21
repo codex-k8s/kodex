@@ -1,12 +1,19 @@
 package admissioncontroller
 
 import (
-	"path/filepath"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+// TestWorkspaceStoragePolicyRejectsChangedPVCBoundary accepts the exact locally
+// rendered claim PVC, then rejects storage/access/source/selector mutations on deep
+// copies. Selected missing/type errors remain closed refusals rather than successful
+// evaluations; this is local CEL testing, not a real provisioner or admission call.
+// TestWorkspaceStoragePolicyRejectsChangedPVCBoundary принимает точный локально
+// созданный claim PVC, затем отклоняет изменения storage/access/source/selector
+// в глубоких копиях. Отдельные ошибки отсутствия/типов остаются закрытым отказом,
+// а не успешной проверкой; это локальный CEL, не настоящий provisioner/admission call.
 func TestWorkspaceStoragePolicyRejectsChangedPVCBoundary(t *testing.T) {
 	policies, err := readAdmissionPolicies()
 	if err != nil {
@@ -19,10 +26,7 @@ func TestWorkspaceStoragePolicyRejectsChangedPVCBoundary(t *testing.T) {
 		}
 	}
 	ownerPolicy := completeTestPolicy()
-	renderer, err := NewScriptRenderer(filepath.Join(repositoryRoot(), "tools", "render-image-admission-job.sh"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	renderer := newTestScriptRenderer(t)
 	runID := "v20260822120000-" + testOrchestrationRevision
 	rendered, err := renderer.Render(t.Context(), ownerPolicy, "production", runID, "claim")
 	if err != nil {
