@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.51.0
+version: 1.52.0
 updated: 2026-10-21
 ---
 
@@ -1513,6 +1513,38 @@ immutable revision/digest, закрытый профиль STT, отдельны
 `22f0cba875eedc833c5118ccc014b27d0a70e45183ef805236207271ca58697b`,
 отпечаток набора не изменился. Go-реестр: 1768/21024, непокрыты 19256;
 все 44 объявления policy покрыты. `go test -count=1 ./...` и
+`go build ./...` всего egress-gateway, пять ignore-boundaries, `gofmt`
+и `git diff --check` — PASS LOCAL. Полный `go-docs -check` и
+browser/deploy/live — NOT RUN по прежним границам. Точный scan нового
+коммита будет опубликован в текущем PR.
+
+## Пятьдесят четвёртая волна — почтовая и интеграционная egress policy
+
+На точном запушенном SHA `cbaf3c3dd6d90927c3bf3c941e7e5c6b0f27b1fc`
+анализ подтвердил 6531 собственный файл, 222 исключения, 1887 raw-групп,
+300 точных решений и 1587 неразобранных; сырой SHA-256 —
+`fd0cde850fab0715e767d14a0e787fd3ea164169aa91a37891050ef61d0ad3fa`,
+отпечаток набора —
+`ce1ed3aaa32a478d4486f379df1a2d036656409cc39ec6ba3857c02175f751eb`.
+Go-реестр: 1768/21024, непокрыты 19256; build/unit всего egress-gateway
+на этом SHA — PASS LOCAL.
+
+В тестах `egress-gateway/internal/mailpolicy` загрузка одного и того же
+проверенного снимка вынесена в `loadFixtureDocument`/`fixtureActive`.
+Отдельные сценарии смены DNS, короткого TTL, атомарного обновления и пустого
+почтового источника сохранены; их порядок, таймеры и проверки не объединены.
+Исходные три detector-группы (две поперечные с integrationpolicy и одна
+внутри mailpolicy) исчезли без новых групп; точный diff отпечатков это
+подтверждает. Общий production-код политик и сетевые разрешения не менялись.
+
+Все 56 собственных объявлений mailpolicy и 31 integrationpolicy, включая
+методы интерфейсов и тесты, теперь имеют предметные EN→RU комментарии.
+Рабочий detector: 6531 собственный файл, 222 исключения, 1884 raw-группы,
+300 точных решений и 1584 неразобранные; сырой SHA-256 —
+`87d752af8603bb2bbbc7f3b148b5a55df0bef73093302062f6795857ff3fc5d8`,
+отпечаток набора —
+`965a665c6cfd11847b5526570162002ba93f614d8f6a4d2e2143d486d8009aca`.
+Go-реестр: 1855/21026, непокрыты 19171. `go test -count=1 ./...` и
 `go build ./...` всего egress-gateway, пять ignore-boundaries, `gofmt`
 и `git diff --check` — PASS LOCAL. Полный `go-docs -check` и
 browser/deploy/live — NOT RUN по прежним границам. Точный scan нового

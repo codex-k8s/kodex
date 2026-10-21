@@ -15,20 +15,28 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
+// fixtureResolver returns a mutable DNS snapshot and counts producer lookups.
+// fixtureResolver возвращает изменяемый DNS-снимок и считает запросы producer.
 type fixtureResolver struct {
 	snapshot dnsresolver.Snapshot
 	calls    int
 }
 
+// Resolve returns the selected snapshot without external DNS access.
+// Resolve возвращает выбранный снимок без обращения к внешнему DNS.
 func (r *fixtureResolver) Resolve(context.Context, string) (dnsresolver.Snapshot, error) {
 	r.calls++
 	return r.snapshot, nil
 }
 
+// Refresh reuses the fixture lookup while preserving call counting.
+// Refresh использует тестовый поиск и сохраняет подсчёт вызовов.
 func (r *fixtureResolver) Refresh(ctx context.Context, hostname string) (dnsresolver.Snapshot, error) {
 	return r.Resolve(ctx, hostname)
 }
 
+// fixtureBase loads the checked-in immutable gateway policy for projection tests.
+// fixtureBase загружает закреплённую gateway-политику для тестов проекции.
 func fixtureBase(t *testing.T) *policy.Active {
 	t.Helper()
 	path := "../../../../../deploy/k8s/base/egress-gateway/policy.json"
@@ -43,11 +51,37 @@ func fixtureBase(t *testing.T) *policy.Active {
 	return active
 }
 
+// fixtureDocument builds one exact STARTTLS destination pinned to a public address.
+// fixtureDocument создаёт один точный STARTTLS-адрес с закреплённым публичным IP.
 func fixtureDocument(t *testing.T) MailDocument {
 	t.Helper()
 	return MailDocument{Schema: MailSchema, ConfigurationRevision: 1, ConfigurationDigest: strings.Repeat("a", 64), GatewayPolicyDigest: fixtureBase(t).Digest(), Destinations: []MailDestination{{Hostname: "mail.example.test", Port: 587, Protocol: "smtp", TLSMode: "starttls", Addresses: []string{"8.8.8.8"}}}}
 }
 
+// loadFixtureDocument validates one supplied mail projection against the checked-in base.
+// loadFixtureDocument проверяет переданную почтовую проекцию по закреплённой базе.
+func loadFixtureDocument(t *testing.T, doc MailDocument) *MailActive {
+	t.Helper()
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	active, err := LoadMail(raw, doc.Digest(), fixtureBase(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return active
+}
+
+// fixtureActive loads the same exact mail projection for DNS readiness tests.
+// fixtureActive загружает одну точную почтовую проекцию для проверок DNS-готовности.
+func fixtureActive(t *testing.T) *MailActive {
+	t.Helper()
+	return loadFixtureDocument(t, fixtureDocument(t))
+}
+
+// TestClosedMailTransportRegistry rejects unregistered protocols, ports, and TLS modes.
+// TestClosedMailTransportRegistry отклоняет незарегистрированные протоколы, порты и режимы TLS.
 func TestClosedMailTransportRegistry(t *testing.T) {
 	for _, p := range []struct {
 		name            string
@@ -67,6 +101,8 @@ func TestClosedMailTransportRegistry(t *testing.T) {
 	}
 }
 
+// TestMailPolicyStrictLoading checks exact destinations, source digest, and strict JSON.
+// TestMailPolicyStrictLoading проверяет точные адреса, дайджест источника и строгий JSON.
 func TestMailPolicyStrictLoading(t *testing.T) {
 	base := fixtureBase(t)
 	doc := fixtureDocument(t)
@@ -104,6 +140,8 @@ func TestMailPolicyStrictLoading(t *testing.T) {
 	}
 }
 
+// TestProducerBindsRealMailboxSourceAndRejectsStaleDNS checks source identity without leaking mailbox metadata.
+// TestProducerBindsRealMailboxSourceAndRejectsStaleDNS проверяет источник без утечки метаданных ящика.
 func TestProducerBindsRealMailboxSourceAndRejectsStaleDNS(t *testing.T) {
 	raw, err := os.ReadFile("../../../../../contracts/email-bridge/v1/examples/mailboxes.yaml")
 	if err != nil {
@@ -131,13 +169,11 @@ func TestProducerBindsRealMailboxSourceAndRejectsStaleDNS(t *testing.T) {
 	}
 }
 
+// TestMailReadinessRevokesOnRebindingAndEmptySource denies changed DNS and empty projections.
+// TestMailReadinessRevokesOnRebindingAndEmptySource запрещает сменённый DNS и пустую проекцию.
 func TestMailReadinessRevokesOnRebindingAndEmptySource(t *testing.T) {
 	doc := fixtureDocument(t)
-	raw, _ := json.Marshal(doc)
-	active, err := LoadMail(raw, doc.Digest(), fixtureBase(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	active := loadFixtureDocument(t, doc)
 	resolver := &fixtureResolver{snapshot: dnsresolver.Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8")}, ExpiresAt: time.Now().Add(time.Minute)}}
 	r := NewReadiness(active, resolver)
 	r.Check(context.Background())
@@ -150,15 +186,11 @@ func TestMailReadinessRevokesOnRebindingAndEmptySource(t *testing.T) {
 		t.Fatal("rebound DNS ready")
 	}
 	empty := []byte(`{"version":"email-bridge/v1","revision":1,"managed_by":"git","source":"fixture","mailboxes":[]}`)
-	doc, err = Produce(context.Background(), empty, fixtureBase(t), resolver)
+	produced, err := Produce(context.Background(), empty, fixtureBase(t), resolver)
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, _ = json.Marshal(doc)
-	active, err = LoadMail(raw, doc.Digest(), fixtureBase(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	active = loadFixtureDocument(t, produced)
 	r = NewReadiness(active, resolver)
 	r.Check(context.Background())
 	if ready, _ := r.Ready(); ready {
@@ -166,13 +198,10 @@ func TestMailReadinessRevokesOnRebindingAndEmptySource(t *testing.T) {
 	}
 }
 
+// TestReadinessExpiresWithoutRefreshAndWorkerJoins checks expiry and cancellation cleanup.
+// TestReadinessExpiresWithoutRefreshAndWorkerJoins проверяет истечение и остановку worker.
 func TestReadinessExpiresWithoutRefreshAndWorkerJoins(t *testing.T) {
-	doc := fixtureDocument(t)
-	raw, _ := json.Marshal(doc)
-	active, err := LoadMail(raw, doc.Digest(), fixtureBase(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	active := fixtureActive(t)
 	resolver := &fixtureResolver{snapshot: dnsresolver.Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8")}, ExpiresAt: time.Now().Add(-time.Second)}}
 	r := NewReadiness(active, resolver)
 	r.validUntil.Store(time.Now().Add(-time.Second).UnixNano())
@@ -196,27 +225,30 @@ func TestReadinessExpiresWithoutRefreshAndWorkerJoins(t *testing.T) {
 	}
 }
 
+// expiringResolver issues short-lived snapshots to exercise refresh scheduling.
+// expiringResolver выдаёт краткоживущие снимки для проверки графика обновления.
 type expiringResolver struct {
 	calls atomic.Int64
 	ttl   time.Duration
 }
 
+// Resolve returns a fresh public address with the configured short TTL.
+// Resolve возвращает свежий публичный адрес с заданным коротким TTL.
 func (r *expiringResolver) Resolve(context.Context, string) (dnsresolver.Snapshot, error) {
 	r.calls.Add(1)
 	return dnsresolver.Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8")}, ExpiresAt: time.Now().Add(r.ttl)}, nil
 }
 
+// Refresh uses the same expiring snapshot path and increments its call count.
+// Refresh использует тот же путь снимка с истечением и увеличивает счётчик.
 func (r *expiringResolver) Refresh(ctx context.Context, hostname string) (dnsresolver.Snapshot, error) {
 	return r.Resolve(ctx, hostname)
 }
 
+// TestReadinessRefreshesBeforeShortAuthoritativeTTLExpires checks continuous readiness under rapid renewals.
+// TestReadinessRefreshesBeforeShortAuthoritativeTTLExpires проверяет готовность при частом продлении TTL.
 func TestReadinessRefreshesBeforeShortAuthoritativeTTLExpires(t *testing.T) {
-	doc := fixtureDocument(t)
-	raw, _ := json.Marshal(doc)
-	active, err := LoadMail(raw, doc.Digest(), fixtureBase(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	active := fixtureActive(t)
 	resolver := &expiringResolver{ttl: 400 * time.Millisecond}
 	r := NewReadiness(active, resolver)
 	ctx, cancel := context.WithCancel(t.Context())
@@ -251,12 +283,16 @@ func TestReadinessRefreshesBeforeShortAuthoritativeTTLExpires(t *testing.T) {
 	}
 }
 
+// blockingRefreshResolver pauses the second lookup to inspect the old valid pin.
+// blockingRefreshResolver задерживает второй поиск для проверки прежнего действующего pin.
 type blockingRefreshResolver struct {
 	calls   atomic.Int64
 	started chan struct{}
 	release chan struct{}
 }
 
+// Resolve blocks the second call until released or its context is canceled.
+// Resolve блокирует второй вызов до разрешения или отмены контекста.
 func (r *blockingRefreshResolver) Resolve(ctx context.Context, _ string) (dnsresolver.Snapshot, error) {
 	if r.calls.Add(1) == 2 {
 		close(r.started)
@@ -269,17 +305,16 @@ func (r *blockingRefreshResolver) Resolve(ctx context.Context, _ string) (dnsres
 	return dnsresolver.Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8")}, ExpiresAt: time.Now().Add(2 * time.Second)}, nil
 }
 
+// Refresh delegates to the controlled lookup for atomicity testing.
+// Refresh направляет вызов в управляемый поиск для проверки атомарности.
 func (r *blockingRefreshResolver) Refresh(ctx context.Context, hostname string) (dnsresolver.Snapshot, error) {
 	return r.Resolve(ctx, hostname)
 }
 
+// TestReadinessRefreshIsAppliedAtomically keeps the last valid pin during an in-flight refresh.
+// TestReadinessRefreshIsAppliedAtomically сохраняет последний действующий pin при обновлении.
 func TestReadinessRefreshIsAppliedAtomically(t *testing.T) {
-	doc := fixtureDocument(t)
-	raw, _ := json.Marshal(doc)
-	active, err := LoadMail(raw, doc.Digest(), fixtureBase(t))
-	if err != nil {
-		t.Fatal(err)
-	}
+	active := fixtureActive(t)
 	resolver := &blockingRefreshResolver{started: make(chan struct{}), release: make(chan struct{})}
 	r := NewReadiness(active, resolver)
 	ctx, cancel := context.WithCancel(t.Context())

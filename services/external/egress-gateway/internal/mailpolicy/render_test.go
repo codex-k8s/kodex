@@ -8,6 +8,8 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
+// TestProjectionSchemaAndExactCNIArtifacts matches rendered policy, schema, and network pins.
+// TestProjectionSchemaAndExactCNIArtifacts сверяет policy, схему и сетевые pins артефактов.
 func TestProjectionSchemaAndExactCNIArtifacts(t *testing.T) {
 	doc := fixtureDocument(t)
 	files, err := RenderFiles(doc)
@@ -79,6 +81,8 @@ func TestProjectionSchemaAndExactCNIArtifacts(t *testing.T) {
 	}
 }
 
+// TestBootstrapProjectionIsReproducible checks checked-in bootstrap artifacts without DNS work.
+// TestBootstrapProjectionIsReproducible проверяет артефакты bootstrap без DNS-запросов.
 func TestBootstrapProjectionIsReproducible(t *testing.T) {
 	var cm struct{ Data map[string]string }
 	raw, err := os.ReadFile("../../../../../deploy/k8s/base/control-plane/email-configuration.yaml")

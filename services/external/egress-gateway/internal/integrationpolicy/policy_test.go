@@ -13,6 +13,8 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
+// base loads the checked-in gateway policy for integration projection tests.
+// base загружает закреплённую gateway-политику для тестов интеграций.
 func base(t *testing.T) *policy.Active {
 	t.Helper()
 	path := "../../../../../deploy/k8s/base/egress-gateway/policy.json"
@@ -27,6 +29,8 @@ func base(t *testing.T) *policy.Active {
 	return active
 }
 
+// document builds one exact public-address integration projection.
+// document создаёт проекцию интеграции с одним точным публичным адресом.
 func document(t *testing.T) shared.Document {
 	t.Helper()
 	host := "api.example.test"
@@ -35,6 +39,8 @@ func document(t *testing.T) shared.Document {
 		Destinations: []shared.Destination{{Hostname: host, Port: 443, Addresses: []string{"8.8.8.8"}}}}
 }
 
+// TestStrictIntegrationPolicyAndExactLiteral checks exact origin, digest, DNS pin, and strict JSON.
+// TestStrictIntegrationPolicyAndExactLiteral проверяет origin, дайджест, DNS-pin и строгий JSON.
 func TestStrictIntegrationPolicyAndExactLiteral(t *testing.T) {
 	doc := document(t)
 	raw, err := json.Marshal(doc)
@@ -67,21 +73,30 @@ func TestStrictIntegrationPolicyAndExactLiteral(t *testing.T) {
 	}
 }
 
+// resolverFixture serves one or several mutable DNS snapshots without network access.
+// resolverFixture отдаёт один или несколько изменяемых DNS-снимков без сети.
 type resolverFixture struct {
 	snapshot  dnsresolver.Snapshot
 	snapshots map[string]dnsresolver.Snapshot
 }
 
+// Resolve selects a host-specific snapshot or the fixture default.
+// Resolve выбирает снимок конкретного узла либо значение по умолчанию.
 func (r *resolverFixture) Resolve(_ context.Context, host string) (dnsresolver.Snapshot, error) {
 	if r.snapshots != nil {
 		return r.snapshots[host], nil
 	}
 	return r.snapshot, nil
 }
+
+// Refresh reuses the fixture lookup for readiness checks.
+// Refresh использует тестовый поиск для проверки готовности.
 func (r *resolverFixture) Refresh(ctx context.Context, host string) (dnsresolver.Snapshot, error) {
 	return r.Resolve(ctx, host)
 }
 
+// TestReadinessIsIndependentPerIntegrationDestination isolates healthy and failed origins.
+// TestReadinessIsIndependentPerIntegrationDestination разделяет доступные и отказавшие origin.
 func TestReadinessIsIndependentPerIntegrationDestination(t *testing.T) {
 	doc := document(t)
 	doc.Destinations = append(doc.Destinations, shared.Destination{Hostname: "other.example.test", Port: 443, Addresses: []string{"9.9.9.9"}})
@@ -116,6 +131,8 @@ func TestReadinessIsIndependentPerIntegrationDestination(t *testing.T) {
 	}
 }
 
+// TestReadinessClosesOnDNSRebindingAndEmptyFirstRun denies changed or absent pins.
+// TestReadinessClosesOnDNSRebindingAndEmptyFirstRun отклоняет сменённые и отсутствующие pins.
 func TestReadinessClosesOnDNSRebindingAndEmptyFirstRun(t *testing.T) {
 	doc := document(t)
 	raw, _ := json.Marshal(doc)
@@ -148,6 +165,8 @@ func TestReadinessClosesOnDNSRebindingAndEmptyFirstRun(t *testing.T) {
 	}
 }
 
+// TestReadinessAcceptsOnlyFreshPublicDNSWithPinnedOverlap accepts rotation but rejects private answers.
+// TestReadinessAcceptsOnlyFreshPublicDNSWithPinnedOverlap допускает ротацию, но отвергает частные адреса.
 func TestReadinessAcceptsOnlyFreshPublicDNSWithPinnedOverlap(t *testing.T) {
 	doc := document(t)
 	raw, _ := json.Marshal(doc)

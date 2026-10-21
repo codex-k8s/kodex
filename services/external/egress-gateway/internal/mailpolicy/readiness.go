@@ -9,24 +9,35 @@ import (
 	"github.com/codex-k8s/kodex/libs/go/dnsresolver"
 )
 
+// minimumRefreshDelay prevents a short TTL from creating a tight refresh loop.
+// minimumRefreshDelay не даёт короткому TTL превратить обновление в тесный цикл.
 const minimumRefreshDelay = 100 * time.Millisecond
 
-// Readiness не расширяет pins и не влияет на независимые HTTPS/STT listeners.
+// Readiness tracks the expiry of exact mail DNS pins without affecting other listeners.
+// Readiness отслеживает срок точных почтовых DNS-pins, не затрагивая другие listeners.
 type Readiness struct {
 	policy     *MailActive
 	resolver   ReadinessResolver
 	validUntil atomic.Int64
 }
 
+// ReadinessResolver can refresh authoritative DNS snapshots for readiness.
+// ReadinessResolver обновляет авторитетные снимки DNS для проверки готовности.
 type ReadinessResolver interface {
 	Resolver
+	// Refresh obtains a fresh authoritative snapshot for a mail hostname.
+	// Refresh получает свежий авторитетный снимок для почтового узла.
 	Refresh(context.Context, string) (dnsresolver.Snapshot, error)
 }
 
+// NewReadiness binds one mail projection to its DNS resolver.
+// NewReadiness связывает одну почтовую проекцию с её DNS-resolver.
 func NewReadiness(active *MailActive, resolver ReadinessResolver) *Readiness {
 	return &Readiness{policy: active, resolver: resolver}
 }
 
+// Ready expires the mail listener when its last validated DNS snapshot expires.
+// Ready снимает готовность почты после истечения последнего проверенного DNS-снимка.
 func (r *Readiness) Ready() (bool, string) {
 	if r != nil && time.Now().UnixNano() < r.validUntil.Load() {
 		return true, "ready"
@@ -34,6 +45,8 @@ func (r *Readiness) Ready() (bool, string) {
 	return false, "mail projection is not ready"
 }
 
+// Check requires every configured mail destination and DNS answer to remain pinned.
+// Check требует действительных pins для каждого почтового назначения и DNS-ответа.
 func (r *Readiness) Check(ctx context.Context) {
 	if r.policy == nil || !r.policy.Configured() || r.resolver == nil {
 		r.validUntil.Store(0)
@@ -63,6 +76,8 @@ func (r *Readiness) Check(ctx context.Context) {
 	r.validUntil.Store(earliest.UnixNano())
 }
 
+// nextRefreshDelay schedules a bounded refresh before the current pin expires.
+// nextRefreshDelay назначает ограниченное обновление до истечения текущего pin.
 func (r *Readiness) nextRefreshDelay(maximum time.Duration) time.Duration {
 	remaining := time.Until(time.Unix(0, r.validUntil.Load()))
 	if remaining <= 0 {
@@ -82,6 +97,8 @@ func (r *Readiness) nextRefreshDelay(maximum time.Duration) time.Duration {
 	return delay
 }
 
+// Run repeatedly refreshes readiness and revokes it when the worker exits.
+// Run периодически обновляет готовность и отзывает её при выходе worker.
 func (r *Readiness) Run(interval time.Duration) func(context.Context) error {
 	return func(ctx context.Context) error {
 		defer r.validUntil.Store(0)

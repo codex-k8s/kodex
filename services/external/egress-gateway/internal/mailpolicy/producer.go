@@ -8,10 +8,12 @@ import (
 	"github.com/codex-k8s/kodex/services/external/egress-gateway/internal/policy"
 )
 
+// Resolver is the DNS lookup contract of the shared mail projection producer.
+// Resolver — контракт DNS-поиска общего producer почтовой проекции.
 type Resolver = shared.Resolver
 
-// Produce адаптирует CLI document и проверенный gateway policy к общему
-// typed producer. Правила pins и render имеют единственную реализацию в libs/go.
+// Produce decodes the mailbox source and delegates pinning to the shared producer.
+// Produce разбирает источник ящиков и передаёт закрепление адресов общему producer.
 func Produce(ctx context.Context, raw []byte, base *policy.Active, resolver Resolver) (MailDocument, error) {
 	var configuration api.Configuration
 	if base == nil || api.Decode(raw, &configuration) != nil {
@@ -20,6 +22,8 @@ func Produce(ctx context.Context, raw []byte, base *policy.Active, resolver Reso
 	return shared.Produce(ctx, configuration, base.Digest(), resolver)
 }
 
+// RenderFiles emits deployment artifacts from one validated mail projection.
+// RenderFiles создаёт артефакты установки из одной проверенной почтовой проекции.
 func RenderFiles(document MailDocument) (map[string][]byte, error) {
 	return shared.RenderFiles(document)
 }
