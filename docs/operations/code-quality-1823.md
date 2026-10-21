@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.158.0
+version: 1.159.0
 updated: 2026-10-22
 ---
 
@@ -1703,6 +1703,53 @@ egress-gateway, пять ignore-boundaries, `gofmt` и `git diff --check` —
 PASS LOCAL. Полный `go-docs -check` и browser/deploy/live — NOT RUN
 по прежним границам. Точный scan нового коммита будет опубликован в
 текущем PR.
+
+## Сто пятьдесят девятая волна — оснастка controller unit
+
+На базе опубликованного SHA `99c3599aa8fecda9317b8d1ea871f8080374c8e6`
+14 одинаковых конструкторов в `admissioncontroller/controller_test.go`
+заменены `newTestController`: точные client/renderer/config остаются
+аргументами, общий только прежний discard logger и t.Fatal ошибки.
+Механическое сравнение до/после подтвердило прежний порядок и все 14
+caller bindings, включая invalidRenderer и restarted controller. Никаких
+автоматических Reconcile, выбора часов, новой policy либо work source
+helper не добавляет. Часы и шаги сценариев остались в самих тестах.
+
+Два одинаковых Get/UpdateStatus вынесены в mutateJobStatus того же test file;
+markJobSucceeded/Failed по-прежнему меняют только свой счётчик и Conditions.
+Status не заменяется целиком, остальные counters/metadata/spec сохраняются.
+Два новых unit проверяют identity/config/initial state без скрытых fake API
+actions и последовательное сохранение несвязанных полей Job при success/fail.
+Production-код и реальные Kubernetes-ресурсы не менялись.
+
+Все 28 прежних объявлений файла и четыре новых получили содержательные
+EN→RU комментарии — 32/32. Описания различают fake policy owner-intent
+и настоящее approval, имитацию успешного recovery Job и реальный admission
+receipt, fake DeleteOptions mapping и проверку UID настоящим API server.
+Test renderer не объявляется доказательством production shell renderer.
+
+Полный unit и build admissioncontroller до/после — PASS LOCAL.
+Итоговый JSON unit stream: 40 верхнеуровневых тестов, 127 PASS с подтестами,
+0 SKIP, 0 FAIL. Полный набор включает локальные CEL/shell/kustomize fixtures,
+без apply, живого кластера и реального owner. Адресный новый/controller набор,
+16 unit анализатора, unit Go-checker, пять ignore-boundaries, gofmt и
+diff-check — PASS LOCAL. Go-команды:
+`GOENV=off GOWORK=off GOTOOLCHAIN=go1.26.6`. Полный unit всего
+role-image-builder, PostgreSQL, browser/deploy/live — NOT RUN.
+
+Шесть прежних detector-окон в файле заменились тремя меньшими остаточными
+окнами начала разных controller-сценариев; других добавленных либо
+удалённых path/fragment/count групп нет. Остатки ещё не разобраны,
+новых исключений не добавлено. Это три группы net decrease, не шесть
+полностью устранённых совпадений.
+
+Рабочий detector: 6555 source-файлов, 222 исключения, 1862 raw-группы,
+569 решений и 1293 неразобранных; raw SHA-256
+`72e10490924127e5c92ca7f303f3688d64cae474c0eb72486df4cdf5979ba88c`,
+отпечаток `240ac2ae85bf006b565b7d54611bb825edfcac2d2f7d7c631b758701e0e31903`.
+Go-реестр — 5331/21081, непокрыты 15750; role-image-builder — 206/556.
+Полный go-docs-check — NOT RUN. Известный diagnostics FAIL не устранён
+этой test-only волной; финальный scan/build/unit точного SHA — в том же PR.
 
 ## Сто пятьдесят восьмая волна — весь RPC-клиент владельца образов
 
