@@ -1,48 +1,65 @@
-// Package exactkubernetessecret предоставляет только CAS/readback одного
-// заранее зарегистрированного namespaced Secret. Вызовы не принимают namespace,
-// resource name или key и поэтому не являются универсальным Secret API.
+// Package exactkubernetessecret provides readback and compare-and-swap for one preconfigured namespaced Secret without accepting resource locators in operations.
+// Package exactkubernetessecret предоставляет чтение и compare-and-swap одного заранее настроенного Secret в пространстве имён без приёма ссылок ресурса в операциях.
 package exactkubernetessecret
 
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"os"
 	"regexp"
-	"strings"
 	"time"
 )
 
 const (
+	// KubernetesAPIAddress fixes the in-cluster HTTPS origin and port; callers cannot select another API host.
+	// KubernetesAPIAddress закрепляет внутрикластерный HTTPS-origin и порт без выбора другого API-узла вызывающим.
 	KubernetesAPIAddress = "https://kubernetes.default.svc:443"
+	// KubernetesServerName pins the TLS name verified against the mounted Kubernetes CA.
+	// KubernetesServerName закрепляет TLS-имя, проверяемое по смонтированному Kubernetes CA.
 	KubernetesServerName = "kubernetes.default.svc"
-	KubernetesNamespace  = "kodex-system"
-	KubernetesCAFile     = "/var/run/config/kubernetes.io/serviceaccount/ca.crt"
-	KubernetesTokenFile  = "/var/run/secrets/tokens/kubernetes-api/token"
+	// KubernetesNamespace fixes the only namespace addressed by these clients.
+	// KubernetesNamespace закрепляет единственное пространство имён, к которому обращаются клиенты.
+	KubernetesNamespace = "kodex-system"
+	// KubernetesCAFile selects the mounted API trust bundle rather than caller-provided or environment-selected roots.
+	// KubernetesCAFile выбирает смонтированный API-набор доверия вместо корней от вызывающего или окружения.
+	KubernetesCAFile = "/var/run/config/kubernetes.io/serviceaccount/ca.crt"
+	// KubernetesTokenFile selects the projected token reread on every request to support rotation.
+	// KubernetesTokenFile выбирает проецируемый токен, заново читаемый каждым запросом для поддержки ротации.
+	KubernetesTokenFile = "/var/run/secrets/tokens/kubernetes-api/token"
+	// maximumResponseBytes bounds both decoded Secret responses and discarded response bodies.
+	// maximumResponseBytes ограничивает разбираемые ответы Secret и отбрасываемые тела ответов.
 	maximumResponseBytes = 2 << 20
 )
 
+// dnsSubdomain validates the lowercase dotted DNS-subdomain shape before the resource-name byte ceiling is applied.
+// dnsSubdomain проверяет строчную точечную DNS-форму до применения байтового предела имени ресурса.
 var dnsSubdomain = regexp.MustCompile(`^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?(?:\.[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)*$`)
+
+// dataKey admits bounded Secret data keys without path separators.
+// dataKey допускает ограниченные ключи данных Secret без разделителей пути.
 var dataKey = regexp.MustCompile(`^[A-Za-z0-9](?:[-._A-Za-z0-9]{0,252}[A-Za-z0-9])?$`)
 
+// Config binds the single-value client to one resource and data key with a bounded request timeout.
+// Config связывает клиент одного значения с единственным ресурсом и ключом данных, задавая ограниченный таймаут запроса.
 type Config struct {
 	ResourceName string
 	DataKey      string
 	Timeout      time.Duration
 }
 
+// Snapshot returns the served resource version and cloned secret bytes, which callers must keep out of logs and public responses.
+// Snapshot возвращает обслуженную версию ресурса и копию байтов секрета, которые вызывающий не должен выводить в логи и публичные ответы.
 type Snapshot struct {
 	ResourceVersion string
 	Data            []byte
 }
 
+// metadata tracks exact resource identity while preserving unrelated Kubernetes metadata for compare-and-swap updates.
+// metadata хранит точную идентичность ресурса, сохраняя посторонние Kubernetes-метаданные при compare-and-swap.
 type metadata struct {
 	Name            string
 	Namespace       string
@@ -50,6 +67,8 @@ type metadata struct {
 	raw             map[string]json.RawMessage
 }
 
+// UnmarshalJSON extracts known identity fields and retains the raw map so labels, annotations and ownership metadata survive an update.
+// UnmarshalJSON извлекает известные поля идентичности и сохраняет исходный словарь, чтобы обновление не потеряло метки, аннотации и метаданные владения.
 func (value *metadata) UnmarshalJSON(raw []byte) error {
 	var preserved map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &preserved); err != nil {
@@ -68,6 +87,8 @@ func (value *metadata) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
+// MarshalJSON copies preserved metadata and overlays the current exact name, namespace and resourceVersion without mutating the raw map.
+// MarshalJSON копирует сохранённые метаданные и накладывает текущие точные имя, пространство имён и resourceVersion без изменения исходного словаря.
 func (value metadata) MarshalJSON() ([]byte, error) {
 	preserved := make(map[string]json.RawMessage, len(value.raw)+3)
 	for key, raw := range value.raw {
@@ -85,6 +106,8 @@ func (value metadata) MarshalJSON() ([]byte, error) {
 	return json.Marshal(preserved)
 }
 
+// secretDocument models the accepted mutable Opaque Secret response, including private bytes and preserved metadata required for exact updates.
+// secretDocument описывает принимаемый изменяемый Opaque Secret, включая частные байты и сохраняемые метаданные для точного обновления.
 type secretDocument struct {
 	APIVersion string            `json:"apiVersion"`
 	Kind       string            `json:"kind"`
@@ -94,44 +117,41 @@ type secretDocument struct {
 	Data       map[string][]byte `json:"data"`
 }
 
+// Client owns the HTTP transport and fixed single-resource configuration; operations cannot change namespace, Secret name or data key.
+// Client владеет HTTP-транспортом и фиксированной настройкой одного ресурса; операции не меняют пространство имён, имя Secret и ключ данных.
 type Client struct {
 	config Config
 	client *http.Client
 }
 
+// New validates the bound resource and timeout before loading API trust and creating a TLS-only client with redirects disabled.
+// New проверяет закреплённый ресурс и таймаут до чтения доверия API и создания TLS-клиента с запрещёнными перенаправлениями.
 func New(config Config) (*Client, error) {
 	if !validConfig(config) {
 		return nil, errors.New("exact Kubernetes Secret configuration is invalid")
 	}
-	caRaw, err := os.ReadFile(KubernetesCAFile)
-	if err != nil || len(caRaw) == 0 || len(caRaw) > 1<<20 {
-		return nil, errors.New("read exact Kubernetes API CA")
+	httpClient, err := newKubernetesHTTPClient(config.Timeout)
+	if err != nil {
+		return nil, err
 	}
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(caRaw) {
-		return nil, errors.New("parse exact Kubernetes API CA")
-	}
-	transport := &http.Transport{TLSClientConfig: &tls.Config{
-		MinVersion: tls.VersionTLS13, ServerName: KubernetesServerName, RootCAs: roots,
-	}, ForceAttemptHTTP2: true, MaxIdleConns: 4, MaxIdleConnsPerHost: 2, IdleConnTimeout: 30 * time.Second}
-	return &Client{config: config, client: &http.Client{
-		Transport: transport, Timeout: config.Timeout,
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return errors.New("exact Kubernetes API redirect is forbidden")
-		},
-	}}, nil
+	return &Client{config: config, client: httpClient}, nil
 }
 
+// validConfig requires a valid exact resource name, one allowed key token and a timeout between one and ten seconds inclusive.
+// validConfig требует допустимого точного имени ресурса, одного разрешённого ключа и таймаута от одной до десяти секунд включительно.
 func validConfig(config Config) bool {
 	return validResourceName(config.ResourceName) && dataKey.MatchString(config.DataKey) &&
 		config.Timeout >= time.Second && config.Timeout <= 10*time.Second
 }
 
+// validResourceName applies the Kubernetes DNS-subdomain grammar and the 253-byte resource-name ceiling.
+// validResourceName применяет Kubernetes DNS-грамматику и предел имени ресурса в 253 байта.
 func validResourceName(value string) bool {
 	return len(value) <= 253 && dnsSubdomain.MatchString(value)
 }
 
-// Read получает только зарегистрированный Secret и отклоняет лишние data keys.
+// Read accepts only the configured Secret with one exact data key and returns cloned bytes with the served resource version.
+// Read принимает только настроенный Secret с одним точным ключом и возвращает копию байтов с обслуженной версией ресурса.
 func (client *Client) Read(ctx context.Context) (Snapshot, error) {
 	secret, err := client.read(ctx)
 	if err != nil {
@@ -140,7 +160,8 @@ func (client *Client) Read(ctx context.Context) (Snapshot, error) {
 	return Snapshot{ResourceVersion: secret.Metadata.ResourceVersion, Data: bytes.Clone(secret.Data[client.config.DataKey])}, nil
 }
 
-// CompareAndSwap обновляет только зарегистрированный data key с exact resourceVersion.
+// CompareAndSwap rereads the bound Secret, requires the expected version, updates only its registered key and verifies a new served version with exact bytes after PUT.
+// CompareAndSwap заново читает закреплённый Secret, требует ожидаемую версию, обновляет лишь зарегистрированный ключ и после PUT проверяет новую обслуженную версию с точными байтами.
 func (client *Client) CompareAndSwap(ctx context.Context, expectedResourceVersion string, data []byte) (Snapshot, error) {
 	if expectedResourceVersion == "" || len(data) == 0 || len(data) > 1<<20 {
 		return Snapshot{}, errors.New("exact Kubernetes Secret CAS input is invalid")
@@ -181,11 +202,15 @@ func (client *Client) CompareAndSwap(ctx context.Context, expectedResourceVersio
 	return served, nil
 }
 
+// Check exercises the same read and validation path as normal use without returning secret bytes to the readiness caller.
+// Check выполняет тот же путь чтения и проверки, что рабочий вызов, не возвращая байты секрета проверяющему готовность.
 func (client *Client) Check(ctx context.Context) error {
 	_, err := client.Read(ctx)
 	return err
 }
 
+// read requires HTTP success, bounded single JSON and the exact mutable Opaque resource and key binding before returning private contents.
+// read требует успешного HTTP, одного ограниченного JSON и точной привязки изменяемого Opaque-ресурса и ключа до возврата частного содержимого.
 func (client *Client) read(ctx context.Context) (secretDocument, error) {
 	request, err := client.request(ctx, http.MethodGet, nil)
 	if err != nil {
@@ -217,24 +242,20 @@ func (client *Client) read(ctx context.Context) (secretDocument, error) {
 	return secret, nil
 }
 
+// request rereads the mounted bearer token and builds the configured namespaced Secret URL with caller context; no alternate host or resource is accepted.
+// request заново читает смонтированный bearer-токен и строит URL настроенного Secret с контекстом вызывающего; другой узел или ресурс не принимается.
 func (client *Client) request(ctx context.Context, method string, body io.Reader) (*http.Request, error) {
-	tokenRaw, err := os.ReadFile(KubernetesTokenFile)
+	token, err := readKubernetesAPIToken()
 	if err != nil {
-		return nil, errors.New("read exact Kubernetes API token")
+		return nil, err
 	}
-	token := strings.TrimSpace(string(tokenRaw))
-	if token == "" || len(token) > 16<<10 || strings.ContainsAny(token, "\r\n") {
-		return nil, errors.New("exact Kubernetes API token is invalid")
-	}
-	endpoint := KubernetesAPIAddress + "/api/v1/namespaces/" + url.PathEscape(KubernetesNamespace) +
-		"/secrets/" + url.PathEscape(client.config.ResourceName)
-	request, err := http.NewRequestWithContext(ctx, method, endpoint, body)
+	request, err := newKubernetesSecretRequest(ctx, method, client.config.ResourceName, token, body)
 	if err != nil {
 		return nil, fmt.Errorf("construct exact Kubernetes Secret request: %w", err)
 	}
-	request.Header.Set("Authorization", "Bearer "+token)
-	request.Header.Set("Accept", "application/json")
 	return request, nil
 }
 
+// Close releases idle transport connections without cancelling requests already in flight.
+// Close освобождает простаивающие соединения транспорта без отмены уже выполняющихся запросов.
 func (client *Client) Close() { client.client.CloseIdleConnections() }

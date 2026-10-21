@@ -3,49 +3,50 @@ package exactkubernetessecret
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
-	"net/url"
-	"os"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 )
 
 const (
+	// generationAnnotation records the map generation in metadata for comparison with the stored data marker.
+	// generationAnnotation хранит поколение словаря в метаданных для сравнения с маркером в данных.
 	generationAnnotation = "kodex.dev/secret-generation"
-	generationDataKey    = "_generation"
+	// generationDataKey reserves the internal entry omitted from returned application snapshots.
+	// generationDataKey резервирует внутреннюю запись, исключаемую из выдаваемых прикладных снимков.
+	generationDataKey = "_generation"
 )
 
-// MapConfig связывает клиент с одним Secret и закрытым набором data keys.
+// MapConfig binds the client to one preexisting Secret, a closed key set and a bounded HTTP timeout.
+// MapConfig связывает клиент с одним существующим Secret, закрытым набором ключей и ограниченным HTTP-таймаутом.
 type MapConfig struct {
 	ResourceName    string
 	AllowedDataKeys []string
 	Timeout         time.Duration
 }
 
-// MapSnapshot содержит монотонное поколение и прикладные data keys exact
-// readback Secret без внутреннего generation marker.
+// MapSnapshot carries the served version, generation and cloned application secret bytes without the internal marker; it is not a public API response.
+// MapSnapshot содержит обслуженные версию, поколение и копии прикладных байтов секретов без внутреннего маркера; это не публичный API-ответ.
 type MapSnapshot struct {
 	ResourceVersion string
 	Generation      uint64
 	Data            map[string][]byte
 }
 
-// MapClient не предоставляет list, create или delete и не принимает resource
-// name во время вызова.
+// MapClient owns a fixed Secret and key allowlist and provides no list, create, delete or per-operation resource selection.
+// MapClient владеет фиксированным Secret и списком ключей, не предоставляя list, create, delete и выбор ресурса в операции.
 type MapClient struct {
 	config  MapConfig
 	allowed map[string]struct{}
 	client  *http.Client
 }
 
-// NewMap создаёт клиент одного заранее созданного Secret.
+// NewMap validates resource, distinct application keys and timeout before loading trust; only the client adds the internal generation key.
+// NewMap проверяет ресурс, уникальные прикладные ключи и таймаут до чтения доверия; только клиент добавляет внутренний ключ поколения.
 func NewMap(config MapConfig) (*MapClient, error) {
 	allowed := make(map[string]struct{}, len(config.AllowedDataKeys))
 	for _, key := range config.AllowedDataKeys {
@@ -60,27 +61,15 @@ func NewMap(config MapConfig) (*MapClient, error) {
 		config.Timeout < time.Second || config.Timeout > 10*time.Second {
 		return nil, errors.New("exact Kubernetes Secret map configuration is invalid")
 	}
-	caRaw, err := os.ReadFile(KubernetesCAFile)
-	if err != nil || len(caRaw) == 0 || len(caRaw) > 1<<20 {
-		return nil, errors.New("read exact Kubernetes API CA")
+	httpClient, err := newKubernetesHTTPClient(config.Timeout)
+	if err != nil {
+		return nil, err
 	}
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(caRaw) {
-		return nil, errors.New("parse exact Kubernetes API CA")
-	}
-	transport := &http.Transport{TLSClientConfig: &tls.Config{
-		MinVersion: tls.VersionTLS13, ServerName: KubernetesServerName, RootCAs: roots,
-	}, ForceAttemptHTTP2: true, MaxIdleConns: 4, MaxIdleConnsPerHost: 2, IdleConnTimeout: 30 * time.Second}
-	return &MapClient{config: config, allowed: allowed, client: &http.Client{
-		Transport: transport, Timeout: config.Timeout,
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return errors.New("exact Kubernetes API redirect is forbidden")
-		},
-	}}, nil
+	return &MapClient{config: config, allowed: allowed, client: httpClient}, nil
 }
 
-// Read читает только зарегистрированный Secret. Поколение 0 разрешено только
-// для заранее созданного пустого bootstrap-ресурса.
+// Read validates the fixed Secret and matching generation markers, returning copied application entries; generation zero is accepted only for empty bootstrap data.
+// Read проверяет фиксированный Secret и совпадение маркеров поколения, возвращая копии прикладных записей; нулевое поколение допустимо лишь для пустых начальных данных.
 func (client *MapClient) Read(ctx context.Context) (MapSnapshot, error) {
 	secret, generation, err := client.read(ctx)
 	if err != nil {
@@ -93,8 +82,8 @@ func (client *MapClient) Read(ctx context.Context) (MapSnapshot, error) {
 	}, nil
 }
 
-// CompareAndSwap обновляет весь закрытый набор keys и увеличивает generation
-// ровно на единицу.
+// CompareAndSwap requires expected version and generation, replaces the allowed data with incremented markers and verifies exact served readback after PUT.
+// CompareAndSwap требует ожидаемые версию и поколение, заменяет допустимые данные с увеличением маркеров и после PUT проверяет точный обслуженный снимок.
 func (client *MapClient) CompareAndSwap(
 	ctx context.Context,
 	expectedResourceVersion string,
@@ -155,15 +144,19 @@ func (client *MapClient) CompareAndSwap(
 	return served, nil
 }
 
-// Check подтверждает доступность и форму exact Secret.
+// Check runs the full map read and generation validation without returning secret contents to the readiness caller.
+// Check выполняет полное чтение словаря и проверку поколения, не возвращая содержимое секретов проверяющему готовность.
 func (client *MapClient) Check(ctx context.Context) error {
 	_, err := client.Read(ctx)
 	return err
 }
 
-// Close освобождает простаивающие connections.
+// Close releases idle HTTP connections while leaving in-flight cancellation to request contexts.
+// Close освобождает простаивающие HTTP-соединения, оставляя отмену выполняющихся запросов их контекстам.
 func (client *MapClient) Close() { client.client.CloseIdleConnections() }
 
+// read checks the bounded exact mutable Opaque Secret, matching annotation and data generations and the closed key set before exposing contents.
+// read проверяет ограниченный точный изменяемый Opaque Secret, совпадение поколений аннотации и данных и закрытый набор ключей до раскрытия содержимого.
 func (client *MapClient) read(ctx context.Context) (secretDocument, uint64, error) {
 	request, err := client.request(ctx, http.MethodGet, nil)
 	if err != nil {
@@ -202,26 +195,22 @@ func (client *MapClient) read(ctx context.Context) (secretDocument, uint64, erro
 	return secret, generation, nil
 }
 
+// request refreshes the projected token for each call and builds only the fixed Secret endpoint, preserving the map client's bounded construction diagnostic.
+// request обновляет проецируемый токен каждым вызовом и строит лишь фиксированный адрес Secret, сохраняя ограниченную диагностику построения клиента словаря.
 func (client *MapClient) request(ctx context.Context, method string, body io.Reader) (*http.Request, error) {
-	tokenRaw, err := os.ReadFile(KubernetesTokenFile)
+	token, err := readKubernetesAPIToken()
 	if err != nil {
-		return nil, errors.New("read exact Kubernetes API token")
+		return nil, err
 	}
-	token := strings.TrimSpace(string(tokenRaw))
-	if token == "" || len(token) > 16<<10 || strings.ContainsAny(token, "\r\n") {
-		return nil, errors.New("exact Kubernetes API token is invalid")
-	}
-	endpoint := KubernetesAPIAddress + "/api/v1/namespaces/" + url.PathEscape(KubernetesNamespace) +
-		"/secrets/" + url.PathEscape(client.config.ResourceName)
-	request, err := http.NewRequestWithContext(ctx, method, endpoint, body)
+	request, err := newKubernetesSecretRequest(ctx, method, client.config.ResourceName, token, body)
 	if err != nil {
 		return nil, errors.New("construct exact Kubernetes Secret map request")
 	}
-	request.Header.Set("Authorization", "Bearer "+token)
-	request.Header.Set("Accept", "application/json")
 	return request, nil
 }
 
+// validData accepts a nonempty subset of registered keys with nonempty bounded values, including the internal marker only when registered in the client's set.
+// validData принимает непустое подмножество зарегистрированных ключей с непустыми ограниченными значениями, включая внутренний маркер лишь при регистрации в наборе клиента.
 func (client *MapClient) validData(values map[string][]byte) bool {
 	if len(values) == 0 || len(values) > len(client.allowed) {
 		return false
@@ -234,6 +223,8 @@ func (client *MapClient) validData(values map[string][]byte) bool {
 	return true
 }
 
+// mapGeneration reads the decimal generation annotation, treating absent annotations or key as bootstrap zero and rejecting malformed maps or numbers.
+// mapGeneration читает десятичную аннотацию поколения, трактуя отсутствие аннотаций или ключа как начальный ноль и отклоняя некорректные словари и числа.
 func mapGeneration(raw json.RawMessage) (uint64, error) {
 	if len(raw) == 0 {
 		return 0, nil
@@ -253,6 +244,8 @@ func mapGeneration(raw json.RawMessage) (uint64, error) {
 	return generation, nil
 }
 
+// dataGeneration accepts zero only for empty bootstrap data and otherwise requires a positive decimal internal marker.
+// dataGeneration принимает ноль лишь для пустых начальных данных, в остальных случаях требуя положительного десятичного внутреннего маркера.
 func dataGeneration(data map[string][]byte) (uint64, error) {
 	if len(data) == 0 {
 		return 0, nil
@@ -268,6 +261,8 @@ func dataGeneration(data map[string][]byte) (uint64, error) {
 	return generation, nil
 }
 
+// cloneData copies the map and each byte slice so returned snapshots cannot mutate stored secret data.
+// cloneData копирует словарь и каждый байтовый срез, чтобы выданные снимки не меняли хранимые секретные данные.
 func cloneData(values map[string][]byte) map[string][]byte {
 	clone := make(map[string][]byte, len(values))
 	for key, value := range values {
@@ -276,12 +271,16 @@ func cloneData(values map[string][]byte) map[string][]byte {
 	return clone
 }
 
+// publicMapData removes the internal generation marker from an independent map copy; remaining application values are still secret bytes.
+// publicMapData удаляет внутренний маркер поколения из независимой копии словаря; оставшиеся прикладные значения по-прежнему являются секретными байтами.
 func publicMapData(values map[string][]byte) map[string][]byte {
 	result := cloneData(values)
 	delete(result, generationDataKey)
 	return result
 }
 
+// equalData compares map cardinality and bytes in deterministic key order without modifying either input.
+// equalData сравнивает количество записей и байты в устойчивом порядке ключей без изменения входов.
 func equalData(left, right map[string][]byte) bool {
 	if len(left) != len(right) {
 		return false

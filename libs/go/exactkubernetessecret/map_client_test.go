@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+// TestMapGeneration parses valid decimal annotation generations and rejects malformed JSON, negative values and nonnumeric text.
+// TestMapGeneration разбирает допустимые десятичные поколения аннотаций и отклоняет некорректный JSON, отрицательные значения и нечисловой текст.
 func TestMapGeneration(t *testing.T) {
 	t.Parallel()
 
@@ -28,6 +30,8 @@ func TestMapGeneration(t *testing.T) {
 	}
 }
 
+// TestDataGenerationRejectsBootstrapMarkerInsideData prevents nonempty stored data from masquerading as an empty generation-zero bootstrap.
+// TestDataGenerationRejectsBootstrapMarkerInsideData запрещает непустым хранимым данным маскироваться под пустое начальное состояние нулевого поколения.
 func TestDataGenerationRejectsBootstrapMarkerInsideData(t *testing.T) {
 	t.Parallel()
 
@@ -36,6 +40,8 @@ func TestDataGenerationRejectsBootstrapMarkerInsideData(t *testing.T) {
 	}
 }
 
+// TestPublicMapDataExcludesInternalGenerationMarker returns only application entries while proving marker removal does not mutate the stored map.
+// TestPublicMapDataExcludesInternalGenerationMarker возвращает лишь прикладные записи и подтверждает, что удаление маркера не меняет хранимый словарь.
 func TestPublicMapDataExcludesInternalGenerationMarker(t *testing.T) {
 	t.Parallel()
 
@@ -52,6 +58,8 @@ func TestPublicMapDataExcludesInternalGenerationMarker(t *testing.T) {
 	}
 }
 
+// TestMapClientValidDataUsesExactKeys accepts registered optional subsets and rejects empty maps, unknown keys and empty values.
+// TestMapClientValidDataUsesExactKeys принимает зарегистрированные необязательные подмножества и отклоняет пустые словари, неизвестные ключи и пустые значения.
 func TestMapClientValidDataUsesExactKeys(t *testing.T) {
 	t.Parallel()
 

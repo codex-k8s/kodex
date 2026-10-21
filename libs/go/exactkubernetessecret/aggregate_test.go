@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+// TestAggregateRejectsDigestMismatchAndGenerationRollback rejects changed private bytes and a nonincremented generation while accepting the next forward generation.
+// TestAggregateRejectsDigestMismatchAndGenerationRollback отклоняет изменённые частные байты и неувеличенное поколение, принимая следующее поколение вперёд.
 func TestAggregateRejectsDigestMismatchAndGenerationRollback(t *testing.T) {
 	t.Parallel()
 	document := NewAggregate()
@@ -42,6 +44,8 @@ func TestAggregateRejectsDigestMismatchAndGenerationRollback(t *testing.T) {
 	}
 }
 
+// TestExactClientConfigAllowsOnlyBoundResourceShape accepts a registered resource and key but rejects traversal-shaped names before any transport is constructed.
+// TestExactClientConfigAllowsOnlyBoundResourceShape принимает зарегистрированные ресурс и ключ, но отклоняет имена с обходом пути до построения транспорта.
 func TestExactClientConfigAllowsOnlyBoundResourceShape(t *testing.T) {
 	t.Parallel()
 	if !validConfig(Config{ResourceName: "integration-gateway-provider-credentials", DataKey: "state.json", Timeout: 5 * time.Second}) {
@@ -53,6 +57,8 @@ func TestExactClientConfigAllowsOnlyBoundResourceShape(t *testing.T) {
 	}
 }
 
+// TestValidResourceNameUsesKubernetesDNSSubdomainBoundary checks long and dotted valid names and rejects empty, uppercase, malformed or oversized alternatives.
+// TestValidResourceNameUsesKubernetesDNSSubdomainBoundary проверяет длинные и точечные допустимые имена и отклоняет пустые, регистрозависимо неверные, некорректные и чрезмерные варианты.
 func TestValidResourceNameUsesKubernetesDNSSubdomainBoundary(t *testing.T) {
 	t.Parallel()
 

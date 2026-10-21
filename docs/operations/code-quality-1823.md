@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.43.0
+version: 1.44.0
 updated: 2026-10-21
 ---
 
@@ -1237,4 +1237,50 @@ renderer выводит обычные значения и ссылки на с�
 unit-тесты Go-проверки комментариев, пять ignore-boundaries, `gofmt` и
 `git diff --check` — PASS LOCAL. Полное покрытие всего репозитория не
 достигнуто; `go-docs -check`, browser/deploy/live не выполнялись.
+Точный scan нового коммита будет опубликован в текущем PR.
+
+## Сорок шестая волна — общий транспорт точечного Secret API
+
+На точном запушенном SHA `1af4c2fac0657b5ac76b6896eee0b81fa5cad7cd`
+полный анализ подтвердил 6527 собственных файлов, 222 исключения, 1891
+raw-группу, 298 точных решений и 1593 неразобранные группы. Сырой SHA-256 —
+`2789a32fa42aefa88bcf692911d009ef90dec1e17cd9fac2f82c91a48b5eebbb`;
+нормализованный отпечаток —
+`a8968d1a668bca83989b60261122ec3ea37e5df08742a91a7975b428a351670e`.
+Go-реестр: 1358/21004, непокрыты 19646; пять ignore-boundaries — PASS LOCAL.
+Повторные `go test -count=1 ./...` и `go build ./...` runtimecontract на этом
+SHA — PASS LOCAL; исходники frontend после `72b4f9120` не изменялись.
+
+Два полных повтора в `exactkubernetessecret` вынесены в локальный модулю
+`transport.go`: загрузка смонтированного CA и создание защищённого клиента;
+чтение сменяемого токена и построение точного Secret-запроса. `New` и `NewMap`
+по-прежнему проверяют собственные Config до чтения CA. Нет singleton:
+каждый клиент получает собственные HTTP transport и TLS config. Прежние
+TLS1.3, точный SNI, CA, таймаут, отсутствие proxy, лимиты соединений и запрет
+redirect сохранены. Токен читается заново каждым запросом, не кэшируется.
+
+Карта пути: заранее проверенный Config → прежний public Read/CAS/Check
+→ private request с неизменными namespace/resource → общие token/request
+helpers → тот же HTTPS Kubernetes API → прежние раздельные проверки
+resourceVersion, data keys, generation и served readback. Helper не создаёт
+публичного универсального Secret API. CAS-переходы, ошибки, metadata
+preservation, методы GET/PUT, внешние полномочия и deployment не менялись;
+новых событий нет, авторитетное чтение — прежний точный Read.
+
+Все 62 прежних объявления пяти файлов и восемь новых объявлений двух файлов
+получили EN→RU описание: модуль теперь 70/70. Четыре новых unit-теста
+проверяют transport/TLS/redirect и пределы соединений; отдельность экземпляров;
+отказ конфигурации до CA read; точный URL, заголовки, тело и отмену запроса.
+Использованы только синтетические данные, HTTP-запросы не отправлялись.
+Документы `/websites/pkg_go_dev_net_http` о `Transport.Proxy`,
+`TLSClientConfig` и `CloseIdleConnections` проверены через Context7.
+
+Рабочий полный анализ: 6529 собственных файлов, 222 исключения, 1889
+raw-групп, 298 точных решений и 1591 неразобранная группа. Исчезли только
+две разобранные группы; новых групп и новых исключений нет. Go-реестр:
+1428/21012, непокрыты 19584. `go test -count=1 ./...` и `go build ./...`
+модуля на Go1.26.6, 16 Node unit, Go unit проверяющей утилиты, пять
+ignore-boundaries, `gofmt` и `git diff --check` — PASS LOCAL.
+Полный `go-docs -check` — NOT RUN при известном неполном покрытии;
+browser/deploy/live — NOT RUN по прежнему scope.
 Точный scan нового коммита будет опубликован в текущем PR.
