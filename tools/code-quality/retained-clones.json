@@ -2,6 +2,14 @@
   "version": 1,
   "entries": [
     {
+      "format": "go",
+      "firstPath": "libs/go/eventing/browserstate/store.go",
+      "secondPath": "libs/go/eventing/sessionrevocation/store.go",
+      "fragmentSHA256": "4cdb07f1208cacfe2f216a1257af93d29bf23e5681cfe1788bc335524f8d2dc8",
+      "count": 1,
+      "reason": "Совпадает только присваивание общих полей JetStream StreamConfig, а целевые контракты различаются: browserstate хранит 64 KiB opaque ciphertext 13 часов с CAS/readback и дополнительно отклоняет AllowMsgTTL, Sealed и DiscardNewPerSubject; sessionrevocation хранит короткий маркер 2 часа и имеет иной exact readiness. Универсальный конфигуратор потребовал бы передавать имена, TTL, размеры и отдельные safety-флаги, скрывая два самостоятельных security boundary. Сохранено одно точное окно, не оба пакета."
+    },
+    {
       "format": "sql",
       "firstPath": "deploy/k8s/base/platform-state/postgresql/10-bootstrap.sql",
       "secondPath": "deploy/k8s/base/platform-state/postgresql/10-bootstrap.sql",

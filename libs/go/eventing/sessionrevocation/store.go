@@ -1,4 +1,5 @@
-// Package sessionrevocation хранит авторитетный отзыв browser sessions в NATS JetStream.
+// Package sessionrevocation stores authoritative browser-session revocation in NATS JetStream.
+// Package sessionrevocation хранит авторитетный отзыв браузерных сеансов в NATS JetStream.
 package sessionrevocation
 
 import (
@@ -15,29 +16,59 @@ import (
 )
 
 const (
-	StreamName    = "CONTROL_API_SESSION_REVOCATIONS"
+	// StreamName pins the separate stream that records session revocations.
+	// StreamName закрепляет отдельный поток записей об отзыве сеансов.
+	StreamName = "CONTROL_API_SESSION_REVOCATIONS"
+	// SubjectFilter restricts the stream to exact revocation subjects.
+	// SubjectFilter ограничивает поток точными subject-ами отзыва.
 	SubjectFilter = "kodex.control_api.session_revocation.*"
+	// subjectPrefix derives one record subject from a validated session identifier.
+	// subjectPrefix формирует subject записи из проверенного идентификатора сеанса.
 	subjectPrefix = "kodex.control_api.session_revocation."
-	revokedValue  = "revoked-v1"
+	// revokedValue is the only accepted durable payload for a revoked session.
+	// revokedValue — единственное допускаемое постоянное содержимое записи об отзыве.
+	revokedValue = "revoked-v1"
 )
 
 const (
+	// maximumRevocations bounds the number of retained revocation records.
+	// maximumRevocations ограничивает число сохраняемых записей об отзыве.
 	maximumRevocations = 100_000
-	maximumBytes       = 16 << 20
-	maximumValueBytes  = 1024
-	revocationMaxAge   = 2 * time.Hour
+	// maximumBytes bounds aggregate storage for revocation records.
+	// maximumBytes ограничивает общий объём записей об отзыве.
+	maximumBytes = 16 << 20
+	// maximumValueBytes bounds the size of an individual revocation payload.
+	// maximumValueBytes ограничивает размер отдельного сообщения об отзыве.
+	maximumValueBytes = 1024
+	// revocationMaxAge determines how long revocation proof remains available.
+	// revocationMaxAge определяет срок доступности доказательства отзыва.
+	revocationMaxAge = 2 * time.Hour
 )
 
+// streamAccess is the minimum interface for exact stream readback.
+// streamAccess — минимальный интерфейс точного чтения потока.
 type streamAccess interface {
+	// Info returns the served stream configuration for readiness validation.
+	// Info возвращает действующую конфигурацию потока для проверки готовности.
 	Info(context.Context, ...jetstream.StreamInfoOpt) (*jetstream.StreamInfo, error)
+	// GetLastMsgForSubject reads the latest revocation value of one session.
+	// GetLastMsgForSubject читает последнее значение отзыва одного сеанса.
 	GetLastMsgForSubject(context.Context, string) (*jetstream.RawStreamMsg, error)
 }
 
+// jetStreamAccess limits the store to opening its stream and publishing records.
+// jetStreamAccess ограничивает хранилище открытием потока и публикацией записей.
 type jetStreamAccess interface {
+	// Stream opens the named existing stream without creating it.
+	// Stream открывает названный существующий поток без его создания.
 	Stream(context.Context, string) (jetstream.Stream, error)
+	// PublishMsg returns one broker acknowledgement for a revocation write.
+	// PublishMsg возвращает одно подтверждение брокера для записи отзыва.
 	PublishMsg(context.Context, *nats.Msg, ...jetstream.PublishOpt) (*jetstream.PubAck, error)
 }
 
+// Store owns the pinned revocation stream and bounded broker operations.
+// Store владеет закреплённым потоком отзывов и ограниченными операциями брокера.
 type Store struct {
 	jetstream jetStreamAccess
 	stream    streamAccess
@@ -45,7 +76,8 @@ type Store struct {
 	timeout   time.Duration
 }
 
-// StreamConfig возвращает один канонический контракт bootstrap/readback.
+// StreamConfig provides one canonical stream contract for bootstrap and readback.
+// StreamConfig возвращает один канонический контракт потока для bootstrap и чтения.
 func StreamConfig(connection natsjetstream.Config) natsjetstream.Config {
 	connection.Stream = StreamName
 	connection.Subjects = []string{SubjectFilter}
@@ -59,6 +91,8 @@ func StreamConfig(connection natsjetstream.Config) natsjetstream.Config {
 	return connection
 }
 
+// New opens the preexisting stream and verifies its served retention contract.
+// New открывает существующий поток и проверяет его действующий контракт хранения.
 func New(ctx context.Context, connection *nats.Conn, replicas int, timeout time.Duration) (*Store, error) {
 	if connection == nil || replicas < 1 || replicas > 5 || timeout < 100*time.Millisecond || timeout > 10*time.Second {
 		return nil, errors.New("session revocation store configuration is invalid")
@@ -78,6 +112,8 @@ func New(ctx context.Context, connection *nats.Conn, replicas int, timeout time.
 	return store, nil
 }
 
+// Check rejects changes to the served stream that weaken revocation durability.
+// Check отклоняет изменения действующего потока, ослабляющие сохранность отзывов.
 func (store *Store) Check(ctx context.Context) error {
 	if store == nil || store.jetstream == nil || store.stream == nil {
 		return errors.New("session revocation store is unavailable")
@@ -94,6 +130,8 @@ func (store *Store) Check(ctx context.Context) error {
 	return nil
 }
 
+// Revoke publishes one idempotent revocation and recovers uncertain ACK by readback.
+// Revoke публикует один идемпотентный отзыв и проверяет чтением неопределённый ACK.
 func (store *Store) Revoke(ctx context.Context, sessionID string) error {
 	if store == nil || store.jetstream == nil || uuid.Validate(sessionID) != nil {
 		return errors.New("session revocation input is invalid")
@@ -112,8 +150,10 @@ func (store *Store) Revoke(ctx context.Context, sessionID string) error {
 	return nil
 }
 
-// ConsumeOnce атомарно закрывает browser session. Только первый caller,
-// записавший revocation при отсутствии прежней записи, получает won=true.
+// ConsumeOnce atomically closes a browser session using subject-level CAS.
+// ConsumeOnce атомарно закрывает браузерный сеанс через CAS по subject.
+// Only the first caller to persist a revocation for an empty subject wins.
+// Побеждает только первый caller, записавший отзыв в пустой subject.
 func (store *Store) ConsumeOnce(ctx context.Context, sessionID string) (bool, error) {
 	if store == nil || store.jetstream == nil || uuid.Validate(sessionID) != nil {
 		return false, errors.New("session consumption input is invalid")
@@ -138,6 +178,8 @@ func (store *Store) ConsumeOnce(ctx context.Context, sessionID string) (bool, er
 	return false, errors.New("persist session consumption")
 }
 
+// Revoked reads and validates the exact durable marker for one session.
+// Revoked читает и проверяет точный постоянный маркер одного сеанса.
 func (store *Store) Revoked(ctx context.Context, sessionID string) (bool, error) {
 	if store == nil || store.stream == nil || uuid.Validate(sessionID) != nil {
 		return false, errors.New("session revocation input is invalid")
@@ -157,8 +199,12 @@ func (store *Store) Revoked(ctx context.Context, sessionID string) (bool, error)
 	return true, nil
 }
 
+// subject derives the revocation subject from an already validated session identifier.
+// subject формирует subject отзыва из уже проверенного идентификатора сеанса.
 func subject(sessionID string) string { return subjectPrefix + sessionID }
 
+// compatible rejects stream drift that could evict or forge revocation state.
+// compatible отклоняет изменение потока, способное вытеснить или подменить состояние отзыва.
 func compatible(actual jetstream.StreamConfig, replicas int) bool {
 	expectedSubjects := []string{SubjectFilter}
 	actualSubjects := slices.Clone(actual.Subjects)
