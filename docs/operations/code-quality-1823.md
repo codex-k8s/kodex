@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.47.0
+version: 1.48.0
 updated: 2026-10-21
 ---
 
@@ -1379,3 +1379,41 @@ QueryRow сохраняет свой момент выполнения, `pgx.Err
 `gofmt` и `git diff --check` — PASS LOCAL. Полный `go-docs -check` и
 browser/deploy/live — NOT RUN. Точный scan нового коммита будет опубликован
 в текущем PR.
+
+## Пятидесятая волна — точные claim-аргументы inbox-переходов
+
+На точном запушенном SHA `32838950d04d4b32cb9cfff738a2a36750d133d8`
+анализ подтвердил 6530 собственных файлов, 222 исключения, 1889 raw-групп,
+298 точных решений и 1591 неразобранную группу; сырой SHA-256 —
+`055911bdd5d91e86ca48669ef293e89e1b48dbbe275a144a1f9f27451dd13bc8`,
+нормализованный отпечаток —
+`4a321b8ca1a9b4fff17221d506298006ee93207c615be1342936b83796ef2195`.
+Go-реестр: 1555/21016, непокрыты 19461; полный build/unit eventing на этом
+SHA — PASS LOCAL.
+
+В `eventing/postgresinbox/apply.go` три inbox-перехода `complete`,
+`markRetry`, `markDeadLetter` используют общий закрытый набор координат
+consumer/event/digest/lease через `pgx.StrictNamedArgs`; каждый добавляет
+собственные параметры. `advanceCursor` сохраняет отдельный набор аргументов.
+Единая проверка `requireOneClaimMutation` сохраняет прежнее отображение ошибки
+БД и отказ `ErrStaleClaim`, если изменена не ровно одна строка. Это private
+SQL-result helper, а не общий выбор доменной команды. Маршрут: проверенный
+`Claim` и прежний savepoint либо внешняя транзакция → специализированный SQL
+с точным fence → проверка `RowsAffected` → прежнее transaction/effect/cursor
+решение. Порядок блокировок, rollback и commit, authority, события и broker
+action не изменялись.
+
+Новый unit без БД сверяет все восемь координат, отдельность аргументных map,
+точное соответствие трёх embedded SQL-шаблонов через
+`StrictNamedArgs.RewriteQuery`, результаты для 0/1/2 строк и безопасную
+обёртку ошибки. Все 12 объявлений затронутого файла и тестов получили
+содержательные EN→RU комментарии. Через Context7 проверены `/jackc/pgx`:
+строгие named args и `pgconn.CommandTag.RowsAffected`.
+
+Рабочий detector: 6531 собственный файл, 222 исключения, 1888 raw-групп,
+298 точных решений и 1590 неразобранных. Удалена ровно одна исходная
+self-clone группа `apply.go` без новых групп; нормализованный набор изменился
+только на неё. Go-реестр: 1567/21020, непокрыты 19453. `go test -count=1
+./...` всего eventing, пять ignore-boundaries, `gofmt` и `git diff --check`
+— PASS LOCAL. Полный `go-docs -check`, browser/deploy/live — NOT RUN.
+Точный scan нового коммита будет опубликован в текущем PR.

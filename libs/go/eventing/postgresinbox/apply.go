@@ -6,8 +6,11 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
+// apply fences a leased event, runs its effect in a savepoint, and commits the inbox/cursor result with the effect.
+// apply проверяет ограждение арендованного события, исполняет effect в savepoint и фиксирует inbox/cursor вместе с ним.
 func (processor *Processor) apply(
 	ctx context.Context,
 	record eventRecord,
@@ -123,6 +126,8 @@ func (processor *Processor) apply(
 	return result, durableErr
 }
 
+// claimMatchesRow requires the locked inbox row to match every event, ordering and lease-fence coordinate of the claim.
+// claimMatchesRow требует совпадения строки inbox со всеми координатами события, порядка и lease fence из claim.
 func claimMatchesRow(claim Claim, row inboxRow) bool {
 	return row.State == stateProcessing &&
 		row.EventID == claim.EventID &&
@@ -135,31 +140,21 @@ func claimMatchesRow(claim Claim, row inboxRow) bool {
 		sameDigest(row.EventDigest, claim.EventDigest[:])
 }
 
+// complete marks exactly one fenced inbox row complete and sets its retention horizon inside the effect savepoint.
+// complete отмечает ровно одну защищённую строку inbox завершённой и задаёт срок хранения внутри savepoint effect.
 func (processor *Processor) complete(ctx context.Context, tx pgx.Tx, claim Claim) error {
+	arguments := claimMutationArguments(claim)
+	arguments["retention_seconds"] = processor.config.RetentionHorizon.Seconds()
 	tag, err := tx.Exec(
 		ctx,
 		processor.queries.inboxComplete,
-		pgx.StrictNamedArgs{
-			"consumer_name":     claim.Consumer.Name,
-			"consumer_scope":    claim.Consumer.Scope,
-			"event_id":          claim.EventID,
-			"event_digest":      claim.EventDigest[:],
-			"lease_owner":       claim.LeaseOwner,
-			"lease_token":       claim.LeaseToken,
-			"lease_generation":  claim.LeaseGeneration,
-			"lease_fence":       claim.LeaseFence,
-			"retention_seconds": processor.config.RetentionHorizon.Seconds(),
-		},
+		arguments,
 	)
-	if err != nil {
-		return wrapSafe(errorTextDatabaseOperation, err)
-	}
-	if tag.RowsAffected() != 1 {
-		return ErrStaleClaim
-	}
-	return nil
+	return requireOneClaimMutation(tag, err)
 }
 
+// advanceCursor moves exactly one ordering cursor to the completed event within the same savepoint.
+// advanceCursor продвигает ровно один cursor порядка к завершённому событию в том же savepoint.
 func (processor *Processor) advanceCursor(ctx context.Context, tx pgx.Tx, claim Claim) error {
 	tag, err := tx.Exec(
 		ctx,
@@ -173,67 +168,64 @@ func (processor *Processor) advanceCursor(ctx context.Context, tx pgx.Tx, claim 
 			"event_digest":   claim.EventDigest[:],
 		},
 	)
-	if err != nil {
-		return wrapSafe(errorTextDatabaseOperation, err)
-	}
-	if tag.RowsAffected() != 1 {
-		return ErrStaleClaim
-	}
-	return nil
+	return requireOneClaimMutation(tag, err)
 }
 
+// markRetry records a fenced retry with bounded backoff and a safe error code after the effect savepoint rolls back.
+// markRetry фиксирует защищённый повтор с ограниченной задержкой и безопасным кодом ошибки после отката effect savepoint.
 func (processor *Processor) markRetry(
 	ctx context.Context,
 	tx pgx.Tx,
 	claim Claim,
 	errorCode string,
 ) error {
+	arguments := claimMutationArguments(claim)
+	arguments["backoff_seconds"] = processor.backoff(claim.Attempts).Seconds()
+	arguments["error_code"] = normalizeErrorCode(errorCode)
 	tag, err := tx.Exec(
 		ctx,
 		processor.queries.inboxMarkRetry,
-		pgx.StrictNamedArgs{
-			"consumer_name":    claim.Consumer.Name,
-			"consumer_scope":   claim.Consumer.Scope,
-			"event_id":         claim.EventID,
-			"event_digest":     claim.EventDigest[:],
-			"lease_owner":      claim.LeaseOwner,
-			"lease_token":      claim.LeaseToken,
-			"lease_generation": claim.LeaseGeneration,
-			"lease_fence":      claim.LeaseFence,
-			"backoff_seconds":  processor.backoff(claim.Attempts).Seconds(),
-			"error_code":       normalizeErrorCode(errorCode),
-		},
+		arguments,
 	)
-	if err != nil {
-		return wrapSafe(errorTextDatabaseOperation, err)
-	}
-	if tag.RowsAffected() != 1 {
-		return ErrStaleClaim
-	}
-	return nil
+	return requireOneClaimMutation(tag, err)
 }
 
+// markDeadLetter records a fenced terminal failure after the effect savepoint rolls back without advancing the cursor.
+// markDeadLetter фиксирует защищённый конечный отказ после отката effect savepoint, не продвигая cursor.
 func (processor *Processor) markDeadLetter(
 	ctx context.Context,
 	tx pgx.Tx,
 	claim Claim,
 	errorCode string,
 ) error {
+	arguments := claimMutationArguments(claim)
+	arguments["error_code"] = normalizeErrorCode(errorCode)
 	tag, err := tx.Exec(
 		ctx,
 		processor.queries.inboxMarkDeadLetter,
-		pgx.StrictNamedArgs{
-			"consumer_name":    claim.Consumer.Name,
-			"consumer_scope":   claim.Consumer.Scope,
-			"event_id":         claim.EventID,
-			"event_digest":     claim.EventDigest[:],
-			"lease_owner":      claim.LeaseOwner,
-			"lease_token":      claim.LeaseToken,
-			"lease_generation": claim.LeaseGeneration,
-			"lease_fence":      claim.LeaseFence,
-			"error_code":       normalizeErrorCode(errorCode),
-		},
+		arguments,
 	)
+	return requireOneClaimMutation(tag, err)
+}
+
+// claimMutationArguments binds the exact consumer, event and lease fence to one inbox transition.
+// claimMutationArguments привязывает точные consumer, event и lease fence к одному переходу inbox.
+func claimMutationArguments(claim Claim) pgx.StrictNamedArgs {
+	return pgx.StrictNamedArgs{
+		"consumer_name":    claim.Consumer.Name,
+		"consumer_scope":   claim.Consumer.Scope,
+		"event_id":         claim.EventID,
+		"event_digest":     claim.EventDigest[:],
+		"lease_owner":      claim.LeaseOwner,
+		"lease_token":      claim.LeaseToken,
+		"lease_generation": claim.LeaseGeneration,
+		"lease_fence":      claim.LeaseFence,
+	}
+}
+
+// requireOneClaimMutation preserves the database error or rejects a nonunique fenced transition as stale.
+// requireOneClaimMutation сохраняет ошибку БД либо отвергает неединственный защищённый переход как устаревший.
+func requireOneClaimMutation(tag pgconn.CommandTag, err error) error {
 	if err != nil {
 		return wrapSafe(errorTextDatabaseOperation, err)
 	}
@@ -243,6 +235,8 @@ func (processor *Processor) markDeadLetter(
 	return nil
 }
 
+// backoff doubles the retry delay for later attempts but saturates at the configured maximum without overflow.
+// backoff удваивает задержку следующих попыток, но останавливается на заданном максимуме без переполнения.
 func (processor *Processor) backoff(attempt uint32) time.Duration {
 	backoff := processor.config.InitialBackoff
 	if attempt <= 1 {
@@ -261,6 +255,8 @@ func (processor *Processor) backoff(attempt uint32) time.Duration {
 	return backoff
 }
 
+// normalizeErrorCode accepts only a bounded safe code and replaces invalid input with the fixed failure code.
+// normalizeErrorCode принимает только ограниченный безопасный код и заменяет неверный ввод постоянным кодом отказа.
 func normalizeErrorCode(code string) string {
 	if len(code) == 0 || len(code) > maximumErrorCodeLength ||
 		!errorCodePattern.MatchString(code) {
