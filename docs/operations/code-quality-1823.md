@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.6.1
+version: 1.7.0
 updated: 2026-10-21
 ---
 
@@ -294,3 +294,24 @@ Redis-клиент использует TLS1.3 с точным SNI и безоп
 поведения. `gofmt` и `git diff --check` — PASS LOCAL. Текущий Go-реестр:
 346/21000 с форматом EN→RU;20654 пока не покрыты. Полный checker всё ещё
 НЕ PASS; группы дубликатов этой волной не разбирались.
+
+## Восьмая волна — общий выбор create/update в PWA
+
+В `features/platform/save-versioned-resource.ts` вынесен общий выбор между
+однократным OCC-обновлением существующего ресурса и созданием. Семь методов
+`platform/store.ts` теперь передают ему свои типизированные generated-запросы:
+project membership, platform membership, project, agent, role image recipe,
+workflow и schedule. Точные path/body, versioned/create headers, signal,
+readback и обновление соответствующего store остались на прежних местах.
+При ошибке обновления создание не запускается. Новая общая функция не выбирает
+actor, tenant, resource authority, retry или server decision.
+
+PASS LOCAL на текущем рабочем дереве: 67 unit-тестов двух выбранных PWA suites
+(включая три проверки helper), selected ESLint, TypeScript typecheck,
+`npm run build`, Prettier и `git diff --check`. В Vite по-прежнему есть
+предупреждение о большом chunk. Повтор анализатора working-15: 6557
+собственных source-файлов, 181 generated/lockfile исключение, 2068 clone
+groups против2070 на предыдущем чистом SHA; worklist1146 пар/1975 кластеров.
+Это промежуточное измерение грязного дерева, не результат итогового SHA.
+Адресные исключения5/5 проходят проверку. Остальные группы и Go-комментарии
+не объявляются готовыми; браузер/deploy/live NOT RUN по текущему scope.
