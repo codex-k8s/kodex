@@ -18,6 +18,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// TestHandlePinsDialToValidatedLiteralAndForwardsOriginalHello verifies DNS pinning and byte-exact TLS forwarding.
+// TestHandlePinsDialToValidatedLiteralAndForwardsOriginalHello проверяет фиксацию DNS-адреса и точную передачу TLS-байтов.
 func TestHandlePinsDialToValidatedLiteralAndForwardsOriginalHello(t *testing.T) {
 	resolver := &fakeResolver{snapshot: dnsresolver.Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("93.184.216.34")}, ExpiresAt: time.Now().Add(time.Minute)}}
 	dialer := &fakeDialer{peers: make(chan net.Conn, 1)}
@@ -58,6 +60,8 @@ func TestHandlePinsDialToValidatedLiteralAndForwardsOriginalHello(t *testing.T) 
 	}
 }
 
+// TestHandleRejectsSNIMismatchBeforeResolutionAndDial keeps mismatched TLS names outside the DNS and dial boundary.
+// TestHandleRejectsSNIMismatchBeforeResolutionAndDial не допускает несовпадающее TLS-имя до разрешения DNS и соединения.
 func TestHandleRejectsSNIMismatchBeforeResolutionAndDial(t *testing.T) {
 	resolver := &fakeResolver{snapshot: dnsresolver.Snapshot{Addresses: []netip.Addr{netip.MustParseAddr("93.184.216.34")}, ExpiresAt: time.Now().Add(time.Minute)}}
 	dialer := &fakeDialer{peers: make(chan net.Conn, 1)}
@@ -79,6 +83,8 @@ func TestHandleRejectsSNIMismatchBeforeResolutionAndDial(t *testing.T) {
 	}
 }
 
+// TestHandleRejectsDNSFailureWithoutExternalDial ensures resolver errors cannot initiate an external connection.
+// TestHandleRejectsDNSFailureWithoutExternalDial проверяет, что ошибка DNS не приводит к внешнему соединению.
 func TestHandleRejectsDNSFailureWithoutExternalDial(t *testing.T) {
 	resolver := &fakeResolver{err: &dnsresolver.Error{Reason: dnsresolver.ReasonTimeout}}
 	dialer := &fakeDialer{peers: make(chan net.Conn, 1)}
@@ -106,6 +112,8 @@ func TestHandleRejectsDNSFailureWithoutExternalDial(t *testing.T) {
 	_ = clientSide.Close()
 }
 
+// TestDialFallsBackAcrossAddressFamiliesWithinOneBudget checks IPv4 fallback and cancellation under one deadline.
+// TestDialFallsBackAcrossAddressFamiliesWithinOneBudget проверяет переход на IPv4 и отмену в пределах одного срока.
 func TestDialFallsBackAcrossAddressFamiliesWithinOneBudget(t *testing.T) {
 	dialer := newDualStackDialer()
 	server, err := New(context.Background(), "unused", fakePolicy{}, &fakeResolver{}, dialer, readyStub(true), newTestMetrics(t))
@@ -137,19 +145,12 @@ func TestDialFallsBackAcrossAddressFamiliesWithinOneBudget(t *testing.T) {
 	defer peer.Close()
 }
 
+// TestShutdownCancelsPendingClientHelloAndJoins checks that shutdown joins a stalled TLS handshake.
+// TestShutdownCancelsPendingClientHelloAndJoins проверяет завершение зависшего TLS-рукопожатия при остановке.
 func TestShutdownCancelsPendingClientHelloAndJoins(t *testing.T) {
 	resolver := &fakeResolver{healthy: true}
 	dialer := &fakeDialer{peers: make(chan net.Conn, 1)}
-	server, err := New(context.Background(), "127.0.0.1:0", fakePolicy{}, resolver, dialer, readyStub(true), newTestMetrics(t))
-	if err != nil || server.Listen() != nil {
-		t.Fatalf("listen failed: %v", err)
-	}
-	serveDone := make(chan error, 1)
-	go func() { serveDone <- server.Serve() }()
-	client, err := net.Dial("tcp", server.Address().String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	server, serveDone, client := startedServerConnection(t, resolver, dialer)
 	_, _ = io.WriteString(client, "CONNECT api.openai.com:443 HTTP/1.1\r\nHost: api.openai.com:443\r\n\r\n")
 	_, _ = bufio.NewReader(client).ReadString('\n')
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -163,21 +164,14 @@ func TestShutdownCancelsPendingClientHelloAndJoins(t *testing.T) {
 	_ = client.Close()
 }
 
+// TestDrainPreservesEstablishedTunnelUntilEffectCompletes keeps an accepted connection usable during drain.
+// TestDrainPreservesEstablishedTunnelUntilEffectCompletes проверяет работу принятого соединения во время drain.
 func TestDrainPreservesEstablishedTunnelUntilEffectCompletes(t *testing.T) {
 	resolver := &fakeResolver{snapshot: dnsresolver.Snapshot{
 		Addresses: []netip.Addr{netip.MustParseAddr("93.184.216.34")}, ExpiresAt: time.Now().Add(time.Minute),
 	}}
 	dialer := &fakeDialer{peers: make(chan net.Conn, 1)}
-	server, err := New(context.Background(), "127.0.0.1:0", fakePolicy{}, resolver, dialer, readyStub(true), newTestMetrics(t))
-	if err != nil || server.Listen() != nil {
-		t.Fatalf("listen failed: %v", err)
-	}
-	serveDone := make(chan error, 1)
-	go func() { serveDone <- server.Serve() }()
-	client, err := net.Dial("tcp", server.Address().String())
-	if err != nil {
-		t.Fatal(err)
-	}
+	server, serveDone, client := startedServerConnection(t, resolver, dialer)
 	defer client.Close()
 	if _, err := io.WriteString(client, "CONNECT api.openai.com:443 HTTP/1.1\r\nHost: api.openai.com:443\r\n\r\n"); err != nil {
 		t.Fatal(err)
@@ -234,6 +228,28 @@ func TestDrainPreservesEstablishedTunnelUntilEffectCompletes(t *testing.T) {
 	}
 }
 
+// startedServerConnection starts a local listener and returns its server, Serve result, and CONNECT client.
+// startedServerConnection запускает локальный listener и возвращает сервер, результат Serve и CONNECT-клиент.
+func startedServerConnection(t *testing.T, resolver *fakeResolver, dialer *fakeDialer) (*Server, <-chan error, net.Conn) {
+	t.Helper()
+	server, err := New(context.Background(), "127.0.0.1:0", fakePolicy{}, resolver, dialer, readyStub(true), newTestMetrics(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := server.Listen(); err != nil {
+		t.Fatal(err)
+	}
+	serveDone := make(chan error, 1)
+	go func() { serveDone <- server.Serve() }()
+	client, err := net.Dial("tcp", server.Address().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return server, serveDone, client
+}
+
+// TestShutdownDeadlineForcesEstablishedTunnelClosed checks bounded shutdown of a blocked established tunnel.
+// TestShutdownDeadlineForcesEstablishedTunnelClosed проверяет ограниченную по времени остановку занятого туннеля.
 func TestShutdownDeadlineForcesEstablishedTunnelClosed(t *testing.T) {
 	server, err := New(context.Background(), "unused", fakePolicy{}, &fakeResolver{}, &fakeDialer{}, readyStub(true), newTestMetrics(t))
 	if err != nil {
@@ -264,6 +280,8 @@ func TestShutdownDeadlineForcesEstablishedTunnelClosed(t *testing.T) {
 	}
 }
 
+// TestCompatibilityReadinessUsesEffectiveStateAndNeverDials reads readiness without touching DNS or external peers.
+// TestCompatibilityReadinessUsesEffectiveStateAndNeverDials читает готовность без DNS и внешних соединений.
 func TestCompatibilityReadinessUsesEffectiveStateAndNeverDials(t *testing.T) {
 	for _, test := range []struct {
 		ready    bool
@@ -298,6 +316,8 @@ func TestCompatibilityReadinessUsesEffectiveStateAndNeverDials(t *testing.T) {
 	}
 }
 
+// TestCompatibilityListenerRejectsOtherPathsWithoutChangingCONNECT rejects noncanonical readiness requests without dialing.
+// TestCompatibilityListenerRejectsOtherPathsWithoutChangingCONNECT отклоняет иной путь готовности без соединения.
 func TestCompatibilityListenerRejectsOtherPathsWithoutChangingCONNECT(t *testing.T) {
 	resolver := &fakeResolver{}
 	dialer := &fakeDialer{peers: make(chan net.Conn, 1)}
@@ -321,6 +341,8 @@ func TestCompatibilityListenerRejectsOtherPathsWithoutChangingCONNECT(t *testing
 	}
 }
 
+// TestReadinessOnlyListenerReturns503AndRejectsCONNECT keeps a degraded listener incapable of proxying traffic.
+// TestReadinessOnlyListenerReturns503AndRejectsCONNECT не допускает проксирования через listener с нарушенной готовностью.
 func TestReadinessOnlyListenerReturns503AndRejectsCONNECT(t *testing.T) {
 	server, err := NewReadinessOnly(context.Background(), "unused", readyStub(false), newTestMetrics(t))
 	if err != nil {
@@ -350,17 +372,30 @@ func TestReadinessOnlyListenerReturns503AndRejectsCONNECT(t *testing.T) {
 	}
 }
 
+// readyStub exposes a fixed readiness state for listener tests.
+// readyStub задаёт фиксированное состояние готовности в тестах listener.
 type readyStub bool
 
+// Ready returns the fixture state without consulting runtime dependencies.
+// Ready возвращает состояние заглушки без обращения к runtime-зависимостям.
 func (value readyStub) Ready() (bool, string) { return bool(value), "test" }
 
+// scopedReadyStub permits readiness for only one destination hostname.
+// scopedReadyStub разрешает готовность только для одного имени назначения.
 type scopedReadyStub struct{ hostname string }
 
+// Ready exposes generic readiness while destination-specific checks remain separate.
+// Ready возвращает общую готовность отдельно от проверки конкретного назначения.
 func (value scopedReadyStub) Ready() (bool, string) { return true, "ready" }
+
+// ReadyFor compares the requested destination with the allowed fixture hostname.
+// ReadyFor сравнивает назначение с разрешённым именем из тестовой заглушки.
 func (value scopedReadyStub) ReadyFor(hostname string) (bool, string) {
 	return hostname == value.hostname, "destination readiness"
 }
 
+// TestConnectReadinessUsesExactDestination checks that a healthy host cannot authorize another CONNECT destination.
+// TestConnectReadinessUsesExactDestination проверяет, что готовность одного хоста не разрешает другое CONNECT-назначение.
 func TestConnectReadinessUsesExactDestination(t *testing.T) {
 	server := &Server{readiness: scopedReadyStub{hostname: "healthy.example.test"}}
 	if !server.readyFor("healthy.example.test") || server.readyFor("unhealthy.example.test") {
@@ -368,6 +403,8 @@ func TestConnectReadinessUsesExactDestination(t *testing.T) {
 	}
 }
 
+// newTestMetrics isolates gateway metrics in a fresh registry for each test.
+// newTestMetrics изолирует метрики шлюза в отдельном реестре для каждого теста.
 func newTestMetrics(t *testing.T) *observability.Metrics {
 	t.Helper()
 	registry := prometheus.NewRegistry()
@@ -385,17 +422,25 @@ func newTestMetrics(t *testing.T) *observability.Metrics {
 	return metrics
 }
 
+// fakePolicy permits only the fixture provider endpoint and supplies bounded listener limits.
+// fakePolicy разрешает только тестовую точку провайдера и задаёт ограниченные лимиты listener.
 type fakePolicy struct{}
 
+// pinnedIntegrationPolicy narrows the fixture policy to one approved literal address.
+// pinnedIntegrationPolicy ограничивает тестовую политику одним разрешённым IP-адресом.
 type pinnedIntegrationPolicy struct {
 	fakePolicy
 	address netip.Addr
 }
 
+// AllowsLiteral accepts only the configured provider host, port, and pinned address.
+// AllowsLiteral принимает только заданные хост, порт и закреплённый адрес провайдера.
 func (value pinnedIntegrationPolicy) AllowsLiteral(host string, port int, address netip.Addr) bool {
 	return host == "api.openai.com" && port == 443 && address == value.address
 }
 
+// TLSMode requires implicit TLS for the approved provider endpoint.
+// TLSMode требует неявный TLS для разрешённой точки провайдера.
 func (value pinnedIntegrationPolicy) TLSMode(host string, port int) string {
 	if host == "api.openai.com" && port == 443 {
 		return "implicit"
@@ -403,6 +448,8 @@ func (value pinnedIntegrationPolicy) TLSMode(host string, port int) string {
 	return ""
 }
 
+// TestIntegrationCONNECTDialsOnlyFreshPinnedDNSIntersection rejects private or unpinned fresh DNS answers.
+// TestIntegrationCONNECTDialsOnlyFreshPinnedDNSIntersection отклоняет частные и незакреплённые свежие DNS-ответы.
 func TestIntegrationCONNECTDialsOnlyFreshPinnedDNSIntersection(t *testing.T) {
 	pin := netip.MustParseAddr("8.8.8.8")
 	newAddress := netip.MustParseAddr("9.9.9.9")
@@ -456,9 +503,14 @@ func TestIntegrationCONNECTDialsOnlyFreshPinnedDNSIntersection(t *testing.T) {
 	}
 }
 
+// Allows restricts fixture traffic to the expected provider host and HTTPS port.
+// Allows ограничивает тестовый трафик ожидаемым хостом провайдера и портом HTTPS.
 func (fakePolicy) Allows(hostname string, port int) bool {
 	return hostname == "api.openai.com" && port == 443
 }
+
+// Limits supplies small finite time and connection budgets for gateway tests.
+// Limits задаёт конечные бюджеты времени и соединений для тестов шлюза.
 func (fakePolicy) Limits() policy.Limits {
 	return policy.Limits{
 		MaximumHeaderBytes: 4096, MaximumClientHelloBytes: 64 << 10,
@@ -469,6 +521,8 @@ func (fakePolicy) Limits() policy.Limits {
 	}
 }
 
+// fakeResolver records resolution calls while returning a controlled snapshot or error.
+// fakeResolver считает обращения к DNS и возвращает заданный снимок либо ошибку.
 type fakeResolver struct {
 	mu       sync.Mutex
 	snapshot dnsresolver.Snapshot
@@ -477,6 +531,8 @@ type fakeResolver struct {
 	healthy  bool
 }
 
+// Resolve records one lookup and returns the fixture result under a mutex.
+// Resolve учитывает одно разрешение имени и под mutex возвращает тестовый результат.
 func (resolver *fakeResolver) Resolve(context.Context, string) (dnsresolver.Snapshot, error) {
 	resolver.mu.Lock()
 	defer resolver.mu.Unlock()
@@ -487,14 +543,21 @@ func (resolver *fakeResolver) Resolve(context.Context, string) (dnsresolver.Snap
 	resolver.healthy = true
 	return resolver.snapshot, nil
 }
+
+// Healthy reports whether the fixture resolver completed a successful lookup.
+// Healthy сообщает, выполнил ли тестовый DNS resolver успешное разрешение.
 func (resolver *fakeResolver) Healthy() bool { return resolver.healthy }
 
+// fakeDialer records literal targets and connects each request to an in-memory peer.
+// fakeDialer записывает IP-назначения и соединяет каждый запрос с локальной стороной net.Pipe.
 type fakeDialer struct {
 	mu      sync.Mutex
 	targets []netip.AddrPort
 	peers   chan net.Conn
 }
 
+// dualStackDialer holds IPv6 until cancellation while allowing the IPv4 fallback to connect.
+// dualStackDialer задерживает IPv6 до отмены, позволяя резервному IPv4-соединению состояться.
 type dualStackDialer struct {
 	ipv6Started chan struct{}
 	ipv6Done    chan struct{}
@@ -503,6 +566,8 @@ type dualStackDialer struct {
 	doneOnce    sync.Once
 }
 
+// newDualStackDialer initializes synchronization channels for the fallback fixture.
+// newDualStackDialer создаёт каналы синхронизации для теста резервного соединения.
 func newDualStackDialer() *dualStackDialer {
 	return &dualStackDialer{
 		ipv6Started: make(chan struct{}),
@@ -511,6 +576,8 @@ func newDualStackDialer() *dualStackDialer {
 	}
 }
 
+// DialContext blocks IPv6 and establishes IPv4 only after the competing attempt begins.
+// DialContext блокирует IPv6 и устанавливает IPv4 лишь после начала конкурирующей попытки.
 func (dialer *dualStackDialer) DialContext(ctx context.Context, target netip.AddrPort) (net.Conn, error) {
 	if target.Addr().Is6() {
 		dialer.startedOnce.Do(func() { close(dialer.ipv6Started) })
@@ -528,6 +595,8 @@ func (dialer *dualStackDialer) DialContext(ctx context.Context, target netip.Add
 	}
 }
 
+// DialContext records the literal endpoint and returns an in-memory connection.
+// DialContext сохраняет точное назначение и возвращает локальное соединение.
 func (dialer *fakeDialer) DialContext(_ context.Context, target netip.AddrPort) (net.Conn, error) {
 	dialer.mu.Lock()
 	dialer.targets = append(dialer.targets, target)
@@ -537,6 +606,8 @@ func (dialer *fakeDialer) DialContext(_ context.Context, target netip.AddrPort) 
 	return server, nil
 }
 
+// gatewayClientHello builds a minimal TLS ClientHello with one SNI name for proxy tests.
+// gatewayClientHello создаёт минимальный TLS ClientHello с одним SNI-именем для тестов прокси.
 func gatewayClientHello(hostname string) []byte {
 	body := append([]byte{3, 3}, make([]byte, 32)...)
 	body = append(body, 0, 0, 2, 0x13, 0x01, 1, 0)

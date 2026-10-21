@@ -4,7 +4,7 @@ title: Подготовка кода к построчному ревью
 type: operations
 status: approved
 owner: developer
-version: 1.52.0
+version: 1.53.0
 updated: 2026-10-21
 ---
 
@@ -1545,6 +1545,36 @@ Go-реестр: 1768/21024, непокрыты 19256; build/unit всего egr
 отпечаток набора —
 `965a665c6cfd11847b5526570162002ba93f614d8f6a4d2e2143d486d8009aca`.
 Go-реестр: 1855/21026, непокрыты 19171. `go test -count=1 ./...` и
+`go build ./...` всего egress-gateway, пять ignore-boundaries, `gofmt`
+и `git diff --check` — PASS LOCAL. Полный `go-docs -check` и
+browser/deploy/live — NOT RUN по прежним границам. Точный scan нового
+коммита будет опубликован в текущем PR.
+
+## Пятьдесят пятая волна — тесты жизненного цикла CONNECT-сервера
+
+На точном запушенном SHA `1e3be83e4bfeac94b0c825a6a811839daaa52b85`
+анализ подтвердил 6531 собственный файл, 222 исключения, 1884 raw-группы,
+300 точных решений и 1584 неразобранные; сырой SHA-256 —
+`91268693bf469e1acdadd325489cd0c4b01b257054301cfc67f3d08ef5599125`,
+отпечаток набора —
+`965a665c6cfd11847b5526570162002ba93f614d8f6a4d2e2143d486d8009aca`.
+Go-реестр: 1855/21026, непокрыты 19171; build/unit всего egress-gateway
+на этом SHA — PASS LOCAL.
+
+В `egress-gateway/internal/gateway/server_test.go` повтор создания сервера,
+локального listener, Serve-горутины и CONNECT-клиента вынесен в
+`startedServerConnection`. Различные проверки двух lifecycle-сценариев —
+отмена зависшего ClientHello и сохранение действующего туннеля во время drain —
+остались на местах. Ровно одна точная detector-группа исчезла, новых нет;
+проверено сравнением fragment SHA-256 и путей. Все 34 собственных объявления
+этого файла, включая новый helper, покрыты предметными EN→RU комментариями.
+
+Рабочий detector: 6531 собственный файл, 222 исключения, 1883 raw-группы,
+300 точных решений и 1583 неразобранные; сырой SHA-256 —
+`692ad41f24b79e4fc62306465e0dcf84d17ccbf9f6f0543f23108a18b882c082`,
+отпечаток набора —
+`5137dd91e6365a1dbca534ecf275c1e0d2ac9c341b940239a3c8ee7af61113fa`.
+Go-реестр: 1889/21027, непокрыты 19138. `go test -count=1 ./...` и
 `go build ./...` всего egress-gateway, пять ignore-boundaries, `gofmt`
 и `git diff --check` — PASS LOCAL. Полный `go-docs -check` и
 browser/deploy/live — NOT RUN по прежним границам. Точный scan нового
