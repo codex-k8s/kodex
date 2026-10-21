@@ -3,9 +3,11 @@ package postgresinbox
 import (
 	"context"
 	_ "embed"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -107,6 +109,39 @@ func TestStrictNamedArgumentsMatchEveryProductionQuery(t *testing.T) {
 				t.Fatalf("RewriteQuery() error = %v", rewriteErr)
 			}
 		})
+	}
+}
+
+// TestLoadQueriesBindsEachSQLToItsRepositoryField derives the documented SQL
+// name from every querySet field and rejects swapped or unbound SQL targets.
+// RU: TestLoadQueriesBindsEachSQLToItsRepositoryField выводит имя SQL из
+// каждого поля querySet и отклоняет переставленные либо пустые назначения.
+func TestLoadQueriesBindsEachSQLToItsRepositoryField(t *testing.T) {
+	t.Parallel()
+	queries, err := loadQueries()
+	if err != nil {
+		t.Fatal(err)
+	}
+	kind, values := reflect.TypeOf(queries), reflect.ValueOf(queries)
+	for index := range kind.NumField() {
+		field := kind.Field(index)
+		var name strings.Builder
+		seenBoundary := false
+		for _, character := range field.Name {
+			if unicode.IsUpper(character) {
+				if seenBoundary {
+					name.WriteByte('_')
+				} else {
+					name.WriteString("__")
+					seenBoundary = true
+				}
+				character = unicode.ToLower(character)
+			}
+			name.WriteRune(character)
+		}
+		if !seenBoundary || !strings.HasPrefix(values.Field(index).String(), "-- name: "+name.String()+" ") {
+			t.Errorf("repository query %s is bound to different SQL", field.Name)
+		}
 	}
 }
 

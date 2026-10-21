@@ -206,76 +206,46 @@ type querySet struct {
 	schemaProbe                 string
 }
 
-// loadQueries validates every embedded query's name and cardinality before exposing the complete set.
-// loadQueries проверяет имя и кардинальность каждого встроенного запроса до выдачи полного набора.
+// loadQueries validates every embedded query's name and cardinality and binds
+// it to exactly one repository field in the same explicit manifest.
+// RU: loadQueries проверяет имя и кардинальность каждого встроенного запроса
+// и связывает его ровно с одним полем репозитория в едином явном реестре.
 func loadQueries() (querySet, error) {
+	queries := querySet{}
 	definitions := []struct {
 		filename    string
 		name        string
 		cardinality string
 		raw         string
+		target      *string
 	}{
-		{"schema__set_search_path.sql", "schema__set_search_path", ":one", rawSchemaSetSearchPath},
-		{"cursor__ensure.sql", "cursor__ensure", ":exec", rawCursorEnsure},
-		{"cursor__get_for_update.sql", "cursor__get_for_update", ":one", rawCursorGetForUpdate},
-		{"cursor__take_fence.sql", "cursor__take_fence", ":one", rawCursorTakeFence},
-		{"cursor__advance.sql", "cursor__advance", ":exec", rawCursorAdvance},
-		{"inbox__get_by_event_for_update.sql", "inbox__get_by_event_for_update", ":one", rawInboxGetByEventForUpdate},
-		{"inbox__get_by_event.sql", "inbox__get_by_event", ":one", rawInboxGetByEvent},
-		{"inbox__get_by_sequence_for_update.sql", "inbox__get_by_sequence_for_update", ":one", rawInboxGetBySequenceForUpdate},
-		{"inbox__insert_received.sql", "inbox__insert_received", ":one", rawInboxInsertReceived},
-		{"inbox__insert_stale.sql", "inbox__insert_stale", ":one", rawInboxInsertStale},
-		{"inbox__claim.sql", "inbox__claim", ":one", rawInboxClaim},
-		{"inbox__complete.sql", "inbox__complete", ":exec", rawInboxComplete},
-		{"inbox__mark_retry.sql", "inbox__mark_retry", ":exec", rawInboxMarkRetry},
-		{"inbox__mark_dead_letter.sql", "inbox__mark_dead_letter", ":exec", rawInboxMarkDeadLetter},
-		{"inbox__expire_to_dead_letter.sql", "inbox__expire_to_dead_letter", ":exec", rawInboxExpireToDeadLetter},
-		{"inbox__renew.sql", "inbox__renew", ":one", rawInboxRenew},
-		{"inbox__cleanup.sql", "inbox__cleanup", ":one", rawInboxCleanup},
-		{"operator__get_receipt.sql", "operator__get_receipt", ":one", rawOperatorGetReceipt},
-		{"operator__insert_receipt.sql", "operator__insert_receipt", ":one", rawOperatorInsertReceipt},
-		{"inbox__requeue.sql", "inbox__requeue", ":exec", rawInboxRequeue},
-		{"inbox__recover_rejoin.sql", "inbox__recover_rejoin", ":exec", rawInboxRecoverRejoin},
-		{"blockage__get.sql", "blockage__get", ":one", rawBlockageGet},
-		{"blockage__list.sql", "blockage__list", ":many", rawBlockageList},
-		{"delivery__read_outcome.sql", "delivery__read_outcome", ":one", rawDeliveryReadOutcome},
-		{"effect__inspect.sql", "effect__inspect", ":one", rawEffectInspect},
-		{"schema__inspect.sql", "schema__inspect", ":many", rawSchemaInspect},
-		{"schema__probe.sql", "schema__probe", ":one", rawSchemaProbe},
-	}
-
-	queries := querySet{}
-	targets := []*string{
-		&queries.schemaSetSearchPath,
-		&queries.cursorEnsure,
-		&queries.cursorGetForUpdate,
-		&queries.cursorTakeFence,
-		&queries.cursorAdvance,
-		&queries.inboxGetByEventForUpdate,
-		&queries.inboxGetByEvent,
-		&queries.inboxGetBySequenceForUpdate,
-		&queries.inboxInsertReceived,
-		&queries.inboxInsertStale,
-		&queries.inboxClaim,
-		&queries.inboxComplete,
-		&queries.inboxMarkRetry,
-		&queries.inboxMarkDeadLetter,
-		&queries.inboxExpireToDeadLetter,
-		&queries.inboxRenew,
-		&queries.inboxCleanup,
-		&queries.operatorGetReceipt,
-		&queries.operatorInsertReceipt,
-		&queries.inboxRequeue,
-		&queries.inboxRecoverRejoin,
-		&queries.blockageGet,
-		&queries.blockageList,
-		&queries.deliveryReadOutcome,
-		&queries.effectInspect,
-		&queries.schemaInspect,
-		&queries.schemaProbe,
-	}
-	if len(definitions) != len(targets) {
-		return querySet{}, ErrInvalidConfiguration
+		{"schema__set_search_path.sql", "schema__set_search_path", ":one", rawSchemaSetSearchPath, &queries.schemaSetSearchPath},
+		{"cursor__ensure.sql", "cursor__ensure", ":exec", rawCursorEnsure, &queries.cursorEnsure},
+		{"cursor__get_for_update.sql", "cursor__get_for_update", ":one", rawCursorGetForUpdate, &queries.cursorGetForUpdate},
+		{"cursor__take_fence.sql", "cursor__take_fence", ":one", rawCursorTakeFence, &queries.cursorTakeFence},
+		{"cursor__advance.sql", "cursor__advance", ":exec", rawCursorAdvance, &queries.cursorAdvance},
+		{"inbox__get_by_event_for_update.sql", "inbox__get_by_event_for_update", ":one", rawInboxGetByEventForUpdate, &queries.inboxGetByEventForUpdate},
+		{"inbox__get_by_event.sql", "inbox__get_by_event", ":one", rawInboxGetByEvent, &queries.inboxGetByEvent},
+		{"inbox__get_by_sequence_for_update.sql", "inbox__get_by_sequence_for_update", ":one", rawInboxGetBySequenceForUpdate, &queries.inboxGetBySequenceForUpdate},
+		{"inbox__insert_received.sql", "inbox__insert_received", ":one", rawInboxInsertReceived, &queries.inboxInsertReceived},
+		{"inbox__insert_stale.sql", "inbox__insert_stale", ":one", rawInboxInsertStale, &queries.inboxInsertStale},
+		{"inbox__claim.sql", "inbox__claim", ":one", rawInboxClaim, &queries.inboxClaim},
+		{"inbox__complete.sql", "inbox__complete", ":exec", rawInboxComplete, &queries.inboxComplete},
+		{"inbox__mark_retry.sql", "inbox__mark_retry", ":exec", rawInboxMarkRetry, &queries.inboxMarkRetry},
+		{"inbox__mark_dead_letter.sql", "inbox__mark_dead_letter", ":exec", rawInboxMarkDeadLetter, &queries.inboxMarkDeadLetter},
+		{"inbox__expire_to_dead_letter.sql", "inbox__expire_to_dead_letter", ":exec", rawInboxExpireToDeadLetter, &queries.inboxExpireToDeadLetter},
+		{"inbox__renew.sql", "inbox__renew", ":one", rawInboxRenew, &queries.inboxRenew},
+		{"inbox__cleanup.sql", "inbox__cleanup", ":one", rawInboxCleanup, &queries.inboxCleanup},
+		{"operator__get_receipt.sql", "operator__get_receipt", ":one", rawOperatorGetReceipt, &queries.operatorGetReceipt},
+		{"operator__insert_receipt.sql", "operator__insert_receipt", ":one", rawOperatorInsertReceipt, &queries.operatorInsertReceipt},
+		{"inbox__requeue.sql", "inbox__requeue", ":exec", rawInboxRequeue, &queries.inboxRequeue},
+		{"inbox__recover_rejoin.sql", "inbox__recover_rejoin", ":exec", rawInboxRecoverRejoin, &queries.inboxRecoverRejoin},
+		{"blockage__get.sql", "blockage__get", ":one", rawBlockageGet, &queries.blockageGet},
+		{"blockage__list.sql", "blockage__list", ":many", rawBlockageList, &queries.blockageList},
+		{"delivery__read_outcome.sql", "delivery__read_outcome", ":one", rawDeliveryReadOutcome, &queries.deliveryReadOutcome},
+		{"effect__inspect.sql", "effect__inspect", ":one", rawEffectInspect, &queries.effectInspect},
+		{"schema__inspect.sql", "schema__inspect", ":many", rawSchemaInspect, &queries.schemaInspect},
+		{"schema__probe.sql", "schema__probe", ":one", rawSchemaProbe, &queries.schemaProbe},
 	}
 	for index := range definitions {
 		loaded, err := loadQuery(
@@ -287,7 +257,7 @@ func loadQueries() (querySet, error) {
 		if err != nil {
 			return querySet{}, err
 		}
-		*targets[index] = loaded
+		*definitions[index].target = loaded
 	}
 	return queries, nil
 }

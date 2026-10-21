@@ -2187,19 +2187,67 @@
     },
     {
       "format": "go",
-      "firstPath": "libs/go/eventing/postgresinbox/queries.go",
-      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime.go",
-      "fragmentSHA256": "6cbf72692524bb3369f573a113b69993b25dbc5785d8e9bbc7a6f60778bfcd15",
-      "count": 11,
-      "reason": "В postgresinbox это список адресов полей querySet для сопоставления с проверенными SQL-файлами, а в control-plane — аргументы rows.Scan для большого снимка кандидата исполнения. Режим weak свёл разные имена указателей к одному фрагменту в 11 перекрывающихся окнах. Общего поведения или типа между библиотекой событий и владельцем runtime нет; вынос связал бы независимые слои и ослабил явность порядка колонок."
+      "firstPath": "libs/go/eventing/postgresinbox/repository.go",
+      "secondPath": "libs/go/eventing/postgresinbox/repository.go",
+      "fragmentSHA256": "14c2a7bb9956b502386609e5d9eb10aa533afc4bd231b6c983df546c4997e5ba",
+      "count": 1,
+      "reason": "Это два перекрывающихся окна внутри одного списка аргументов Scan для одной строки inbox. Они не представляют два независимых участка поведения: смещение на одну строку создаёт совпадение после нормализации имён полей. Вынос самостоятельного helper из одного списка не уберёт повторения и скроет обязательный порядок SQL-колонок."
     },
     {
       "format": "go",
-      "firstPath": "libs/go/eventing/postgresinbox/queries.go",
-      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime.go",
-      "fragmentSHA256": "d603bd6c4a0c37874aba713acdd83e419102ac84913fa234b03c73910c703451",
+      "firstPath": "libs/go/eventing/postgresinbox/repository.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/commands.go",
+      "fragmentSHA256": "a04cc70328bf348273613635fd8993cfe5181742582ed43d569c1e27513b3335",
       "count": 1,
-      "reason": "Последнее перекрывающееся окно той же пары сравнивает хвост адресов полей querySet с хвостом аргументов rows.Scan runtime-кандидата. Это синтаксическое совпадение после нормализации идентификаторов: SQL-loader и чтение строки разных владельцев не разделяют семантику, порядок полей и ответственность; общий helper здесь был бы ложной связью."
+      "reason": "В обоих файлах Scan получает последовательность адресов полей разных SQL-проекций. Weak-нормализация стирает имена и типы, но схемы, порядок столбцов и владельцы данных различаются. Общий helper объединил бы независимые хранилища и сделал контроль порядка колонок непрозрачным."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/eventing/postgresinbox/repository.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/configuration.go",
+      "fragmentSHA256": "a04cc70328bf348273613635fd8993cfe5181742582ed43d569c1e27513b3335",
+      "count": 1,
+      "reason": "Совпадение состоит из адресов полей в Scan двух несвязанных SQL-проекций. Имена полей удалены weak-режимом детектора, хотя порядок столбцов и предметная семантика различаются. Унификация с библиотекой inbox нарушила бы границу владельца данных и не устранила бы реальное дублирование поведения."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/eventing/postgresinbox/repository.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/role_images_helpers.go",
+      "fragmentSHA256": "a04cc70328bf348273613635fd8993cfe5181742582ed43d569c1e27513b3335",
+      "count": 4,
+      "reason": "Четыре окна сравнивают аргументы Scan для inbox с аргументами чтения иных строк образов ролей. Совпадение вызвано нормализацией адресов разных полей и наложением окон. У таблиц разные SQL-схемы и жизненные циклы; общий decoder не может сохранить явное соответствие колонок."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/eventing/postgresinbox/repository.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime.go",
+      "fragmentSHA256": "a04cc70328bf348273613635fd8993cfe5181742582ed43d569c1e27513b3335",
+      "count": 27,
+      "reason": "Это перекрывающиеся окна длинных списков адресов аргументов Scan для inbox и runtime-кандидатов. Weak-режим стирает различия имён полей, но структуры строк, типы и порядок колонок независимы. Общий helper между библиотекой событий и control-plane создал бы ложную связь и ослабил проверяемость SQL-проекций."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/eventing/postgresinbox/repository.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/runtime_secrets.go",
+      "fragmentSHA256": "a04cc70328bf348273613635fd8993cfe5181742582ed43d569c1e27513b3335",
+      "count": 2,
+      "reason": "Два окна состоят из синтаксически похожих адресов полей при чтении inbox и runtime-секретов. После удаления имён weak-режим теряет принципиальные различия в схеме и области полномочий. Унификация декодеров недопустимо смешала бы независимые поля и границы доступа."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/eventing/postgresinbox/repository.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/session_archive.go",
+      "fragmentSHA256": "a04cc70328bf348273613635fd8993cfe5181742582ed43d569c1e27513b3335",
+      "count": 2,
+      "reason": "Два совпадения созданы нормализацией последовательностей адресов полей при Scan inbox и архива сессий. SQL-проекции имеют разные владельцы, колонки и назначение; общий mapper здесь скрыл бы порядок чтения и не сохранил бы типовую безопасность."
+    },
+    {
+      "format": "go",
+      "firstPath": "libs/go/eventing/postgresinbox/repository.go",
+      "secondPath": "services/internal/control-plane/internal/repository/postgres/platform/session_archive.go",
+      "fragmentSHA256": "fbb6413a4511d816d6909740401f81b02840cee64d595f7474dd25d240f7fb8b",
+      "count": 1,
+      "reason": "Хвост перекрывающегося окна Scan inbox совпадает по форме с другим участком Scan архива сессии после weak-нормализации. Реальные поля, порядок SQL-колонок и границы владельцев не совпадают; перенос такого фрагмента в общую библиотеку был бы ложной абстракцией."
     },
     {
       "format": "typescript",
